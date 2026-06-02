@@ -1,0 +1,16 @@
+{
+  // 엔진 테스트 전용 — Node 환경(node:test, tsx 런타임). 앱(RN) 타입체크와 분리한다.
+  "compilerOptions": {
+    "strict": true,
+    "module": "NodeNext",
+    "moduleResolution": "nodenext",
+    "target": "ESNext",
+    "lib": ["ESNext"],
+    "types": ["node"],
+    "allowImportingTsExtensions": true,
+    "noEmit": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true
+  },
+  "include": ["engine/**/*.ts"]
+}
