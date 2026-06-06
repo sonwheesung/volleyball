@@ -1,13 +1,15 @@
 import { useLocalSearchParams } from 'expo-router';
 import { Text, View } from 'react-native';
 import { Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
-import { getPlayer } from '../../data/league';
+import { getEvolvedPlayer } from '../../data/league';
 import { overall } from '../../engine/overall';
 import { deriveRatings } from '../../engine/ratings';
+import { useGameStore } from '../../store/useGameStore';
 
 export default function PlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const p = id ? getPlayer(id) : undefined;
+  const currentDay = useGameStore((s) => s.currentDay);
+  const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
 
   if (!p) {
     return (

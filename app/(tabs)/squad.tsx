@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Text } from 'react-native';
 import { Card, Muted, Row, Screen, Title, theme } from '../../components/Screen';
 import { RosterList } from '../../components/RosterList';
-import { getTeamCoach, getTeamPlayers } from '../../data/league';
+import { getEvolvedTeamPlayers, getTeamCoach } from '../../data/league';
 import { useGameStore } from '../../store/useGameStore';
 
 const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
@@ -10,7 +10,8 @@ const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸�
 export default function Squad() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
-  const players = getTeamPlayers(teamId);
+  const currentDay = useGameStore((s) => s.currentDay);
+  const players = getEvolvedTeamPlayers(teamId, currentDay);
   const coach = getTeamCoach(teamId);
 
   return (

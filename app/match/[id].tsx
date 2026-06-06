@@ -3,7 +3,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, theme } from '../../components/Screen';
-import { getFixture, getTeam, getTeamPlayers } from '../../data/league';
+import { getEvolvedTeamPlayers, getFixture, getTeam } from '../../data/league';
 import { teamOverall } from '../../engine/overall';
 import { simulateMatchSimple, type PointLog } from '../../engine/simMatch';
 import { useGameStore } from '../../store/useGameStore';
@@ -27,8 +27,8 @@ export default function MatchBoard() {
     if (!fixture) return null;
     const home = getTeam(fixture.homeTeamId)!;
     const away = getTeam(fixture.awayTeamId)!;
-    const homeOvr = teamOverall(getTeamPlayers(home.id));
-    const awayOvr = teamOverall(getTeamPlayers(away.id));
+    const homeOvr = teamOverall(getEvolvedTeamPlayers(home.id, fixture.dayIndex));
+    const awayOvr = teamOverall(getEvolvedTeamPlayers(away.id, fixture.dayIndex));
     const sim = simulateMatchSimple(fixture.seed, homeOvr, awayOvr);
 
     // 프레임마다 "직전까지 완료된 세트 수" 부여

@@ -4,8 +4,8 @@ import { createRng } from './rng';
 import { applyTrainingDay, TRAINABLE_STATS } from './training';
 import type { Player, Position, TrainableStat, TrainingFocus } from '../types';
 
-// 월 24회 훈련(주 5~6회) 가정 → 개월 = 일수 / 24
-const PER_MONTH = 24;
+// 매 캘린더일 훈련 → 개월 = 일수 / 30
+const PER_MONTH = 30;
 
 function makePlayer(opts: {
   age: number;

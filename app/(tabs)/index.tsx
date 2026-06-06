@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
-import { SEASON, getTeam, getTeamCoach, getTeamPlayers } from '../../data/league';
+import { SEASON, getEvolvedTeamPlayers, getTeam, getTeamCoach } from '../../data/league';
 import { teamOverall } from '../../engine/overall';
 import { teamScheduleEntries } from '../../engine/season';
 import { useGameStore } from '../../store/useGameStore';
@@ -12,11 +12,12 @@ const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸�
 export default function Dashboard() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
+  const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
   const resetSave = useGameStore((s) => s.resetSave);
 
   const team = getTeam(teamId);
-  const players = getTeamPlayers(teamId);
+  const players = getEvolvedTeamPlayers(teamId, currentDay);
   const coach = getTeamCoach(teamId);
   const ovr = teamOverall(players);
 

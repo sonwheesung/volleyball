@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../../components/Screen';
 import { RosterList } from '../../components/RosterList';
-import { getTeam, getTeamCoach, getTeamPlayers } from '../../data/league';
+import { getEvolvedTeamPlayers, getTeam, getTeamCoach } from '../../data/league';
 import { teamOverall } from '../../engine/overall';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -13,6 +13,7 @@ export default function TeamDetail() {
   const router = useRouter();
   const selectTeam = useGameStore((s) => s.selectTeam);
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
+  const currentDay = useGameStore((s) => s.currentDay);
 
   const team = id ? getTeam(id) : undefined;
   if (!team) {
@@ -23,7 +24,7 @@ export default function TeamDetail() {
     );
   }
 
-  const players = getTeamPlayers(team.id);
+  const players = getEvolvedTeamPlayers(team.id, currentDay);
   const coach = getTeamCoach(team.id);
   const ovr = teamOverall(players);
   const isCurrent = selectedTeamId === team.id;

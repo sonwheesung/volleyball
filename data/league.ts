@@ -5,6 +5,7 @@
 import type { Coach, Fixture, Player, Team } from '../types';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
+import { evolvePlayer } from '../engine/progression';
 
 const LEAGUE_SEED = 20251018;
 const SEASON_SEED = 777;
@@ -31,4 +32,34 @@ export const getTeamPlayers = (teamId: string): Player[] => {
 export const getTeamCoach = (teamId: string): Coach | undefined => {
   const t = teamMap.get(teamId);
   return t ? coachMap.get(t.coachId) : undefined;
+};
+
+// ─── 진화(성장/노쇠) 적용 선수 — currentDay 기준, 날짜별 캐시 ───
+// 모든 팀 전원을 각자 감독 선호대로 진화시킨다(시드 리플레이).
+
+let evoCache: { day: number; map: Map<string, Player> } | null = null;
+
+export function evolvedPlayers(day: number): Map<string, Player> {
+  if (evoCache && evoCache.day === day) return evoCache.map;
+  const map = new Map<string, Player>();
+  for (const team of LEAGUE.teams) {
+    const coach = coachMap.get(team.coachId);
+    if (!coach) continue;
+    for (const pid of team.players) {
+      const base = playerMap.get(pid);
+      if (base) map.set(pid, evolvePlayer(base, coach.trainingFocus, day));
+    }
+  }
+  evoCache = { day, map };
+  return map;
+}
+
+export const getEvolvedPlayer = (id: string, day: number): Player | undefined =>
+  evolvedPlayers(day).get(id);
+
+export const getEvolvedTeamPlayers = (teamId: string, day: number): Player[] => {
+  const t = teamMap.get(teamId);
+  if (!t) return [];
+  const m = evolvedPlayers(day);
+  return t.players.map((pid) => m.get(pid)).filter((p): p is Player => !!p);
 };

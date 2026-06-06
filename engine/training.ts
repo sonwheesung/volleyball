@@ -12,7 +12,7 @@ import type {
 } from '../types';
 import type { Rng } from './rng';
 
-export const BASE = 0.04; // 마스터 속도 손잡이 (TRAINING_SYSTEM 1.4)
+export const BASE = 0.032; // 마스터 속도 손잡이 (TRAINING_SYSTEM 1.4) — 매일 훈련 가정
 
 export const TRAINABLE_STATS: TrainableStat[] = [
   'jump', 'agility', 'staminaMax', 'staminaRegen',
