@@ -5,7 +5,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { commitPlayerBase, commitRosters, resetLeagueBase } from '../data/league';
+import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
@@ -105,7 +105,8 @@ export const useGameStore = create<GameState>()(
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
-        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks);
+        const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
+        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf);
         for (const p of drafted.picked) snapshot[p.id] = p;
 
         // 3) 클래스 소진 등 남은 빈자리 신인 자동 충원

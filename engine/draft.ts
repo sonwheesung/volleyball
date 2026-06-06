@@ -2,10 +2,10 @@
 // 순번: 하위 팀 가중 추첨(1라운드) → 이후 라운드 동일 순서(KOVO식 간소화).
 // 해석: 내 위시리스트 우선(순번 내에서) + 나머지는 AI 자동 지명.
 
-import type { Player, Position } from '../types';
+import type { CoachStyle, Player, Position } from '../types';
 import type { Rng } from './rng';
 import { overall } from './overall';
-import { ROSTER_IDEAL } from './aiGM';
+import { positionGap, ROSTER_IDEAL, wantScore } from './aiGM';
 
 type Lookup = (id: string) => Player | undefined;
 
@@ -71,13 +71,25 @@ export function prospectValue(p: Player): number {
   return overall(p) * 0.4 + pot * 0.6;
 }
 
-/** AI 지명: 필요 포지션 우선, 그 중 종합 가치 최고 */
-export function aiDraftPick(available: Player[], rosterIds: string[], get: Lookup): Player | null {
+/** AI 지명: 팀 부족도 + 감독 성향 + 신인 가치(포텐 비중) 종합으로 "원하는 선수" 선택 */
+export function aiDraftPick(
+  available: Player[],
+  rosterIds: string[],
+  get: Lookup,
+  style: CoachStyle,
+): Player | null {
   if (available.length === 0) return null;
-  const needs = new Set(neededPositions(rosterIds, get));
-  const needed = available.filter((p) => needs.has(p.position));
-  const pool = needed.length > 0 ? needed : available;
-  return pool.slice().sort((a, b) => prospectValue(b) - prospectValue(a))[0];
+  const gap = positionGap(rosterIds, get);
+  let best: Player | null = null;
+  let bestScore = -1;
+  for (const p of available) {
+    const sc = wantScore(p, prospectValue(p), gap, style);
+    if (sc > bestScore) {
+      bestScore = sc;
+      best = p;
+    }
+  }
+  return best;
 }
 
 /**
@@ -93,6 +105,7 @@ export function resolveDraft(
   snapshotLookup: Lookup,
   myTeam: string,
   wishlist: string[],
+  styleOf: (teamId: string) => CoachStyle,
 ): { rosters: Record<string, string[]>; picked: Player[] } {
   const rosters: Record<string, string[]> = {};
   for (const k of Object.keys(rostersIn)) rosters[k] = [...rostersIn[k]];
@@ -114,7 +127,7 @@ export function resolveDraft(
         }
       }
     }
-    if (!chosen) chosen = aiDraftPick(available, rosters[teamId] ?? [], get);
+    if (!chosen) chosen = aiDraftPick(available, rosters[teamId] ?? [], get, styleOf(teamId));
     if (!chosen) continue;
     const idx = available.findIndex((a) => a.id === chosen!.id);
     available.splice(idx, 1);

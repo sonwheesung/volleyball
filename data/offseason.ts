@@ -9,7 +9,9 @@ import { rolloverLeague, renewedContract } from '../engine/rollover';
 import { aiKeepsFA, aiFillFromPool } from '../engine/aiGM';
 import { assignFAGrades } from '../engine/faMarket';
 import { needsCompensationPlayer, pickCompensation } from '../engine/compensation';
-import { currentBasePlayers, currentRosters, focusOf } from './league';
+import { currentBasePlayers, currentRosters, focusOf, getTeam } from './league';
+
+const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
 
 export interface Offseason {
   snapshot: Record<string, Player>;     // 롤오버된 선수(레지스트리)
@@ -110,7 +112,7 @@ export function resolvePreDraft(
     rosters[prev] = [...rosters[prev], compId];
   }
 
-  // AI가 남은 풀에서 충원
-  const aiFilled = aiFillFromPool(rosters, [...remainingPool], snapshot, myTeam);
+  // AI가 남은 풀에서 충원(팀 사정·성향 반영)
+  const aiFilled = aiFillFromPool(rosters, [...remainingPool], snapshot, myTeam, styleOf);
   return { snapshot, rosters: aiFilled.rosters, prevTeamOf };
 }

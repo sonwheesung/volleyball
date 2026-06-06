@@ -52,8 +52,23 @@ test('aiDraftPick: 필요 포지션 + 종합가치 우선', () => {
   const oh = mk('oh', 'OH', 60, 95);
   [lowS, hiS, oh].forEach((p) => (snap[p.id] = p));
   // 로스터에 S 없음 → S 필요. 가치 높은 hiS 선택
-  const pick = aiDraftPick([lowS, hiS, oh], [], (id) => snap[id]);
+  const pick = aiDraftPick([lowS, hiS, oh], [], (id) => snap[id], 'balanced');
   assert.ok(pick && (pick.id === 'hiS' || pick.id === 'oh'));
+});
+
+test('aiDraftPick: 부족 포지션을 더 원함(무조건 OVR 아님)', () => {
+  const snap: Record<string, Player> = {};
+  // 로스터에 OH 이미 5명(이상치) → OH 잉여, S 0명 → S 절실
+  const roster: string[] = [];
+  for (let i = 0; i < 5; i++) {
+    const oh = mk(`oh${i}`, 'OH', 70, 80);
+    snap[oh.id] = oh;
+    roster.push(oh.id);
+  }
+  const star = mk('star', 'OH', 75, 95); // 잉여 포지션의 최고 OVR
+  const needS = mk('needS', 'S', 58, 80); // 절실 포지션, 낮은 OVR
+  const pick = aiDraftPick([star, needS], roster, (id) => snap[id], 'balanced');
+  assert.equal(pick?.id, 'needS', 'OVR 낮아도 부족 포지션(S)을 택함');
 });
 
 test('resolveDraft: 내 위시리스트 우선, 순번 존중', () => {
@@ -63,12 +78,13 @@ test('resolveDraft: 내 위시리스트 우선, 순번 존중', () => {
   const cls = [A, B, C];
   const rosters = { me: [] as string[], ai: [] as string[] };
   // ai 먼저, 그다음 나
-  const r1 = resolveDraft(['ai', 'me'], cls, rosters, () => undefined, 'me', ['C']);
+  const style = () => 'balanced' as const;
+  const r1 = resolveDraft(['ai', 'me'], cls, rosters, () => undefined, 'me', ['C'], style);
   assert.deepEqual(r1.rosters.ai, ['A'], 'AI는 최고가치 A');
   assert.deepEqual(r1.rosters.me, ['C'], '나는 위시 C');
 
   // 위시 없으면 가치순 자동
-  const r2 = resolveDraft(['ai', 'me'], cls, rosters, () => undefined, 'me', []);
+  const r2 = resolveDraft(['ai', 'me'], cls, rosters, () => undefined, 'me', [], style);
   assert.deepEqual(r2.rosters.ai, ['A']);
   assert.deepEqual(r2.rosters.me, ['B'], '위시 없으면 다음 가치 B');
 });
