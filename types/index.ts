@@ -52,10 +52,21 @@ export interface Player {
   career: CareerStats;
 }
 
+/** 감독 — 플레이어가 선임하는 별개 존재 (MATCH_SYSTEM 8장) */
+export interface Coach {
+  id: string;
+  name: string;
+  age: number;
+  charisma: number;        // 타임아웃 기세 수렴 폭
+  style: CoachStyle;       // 자동 운영 성향
+  teamId: string;
+}
+
 export interface Team {
   id: string;
   name: string;
   players: string[];       // player ids
+  coachId: string;
   coachStyle: CoachStyle;
   foreignSlots: number;    // 외국인 보유 한도
 }
@@ -71,3 +82,25 @@ export interface MatchState {
   rotation: { home: number; away: number };     // 0..5
   over: boolean;
 }
+
+// ─── 일정/시즌 ───────────────────────────────────────────────
+
+export interface Fixture {
+  id: string;
+  round: number;
+  dayIndex: number;        // 시즌 시작일로부터의 경과 일수
+  homeTeamId: string;
+  awayTeamId: string;
+  seed: number;            // 경기별 결정론 시드
+}
+
+export interface MatchResult {
+  fixtureId: string;
+  homeSets: number;
+  awaySets: number;
+}
+
+/** 선택한 팀 기준 캘린더에 표시되는 일정 항목 */
+export type ScheduleEntry =
+  | { kind: 'match'; dayIndex: number; fixture: Fixture; isHome: boolean; opponentId: string }
+  | { kind: 'event'; dayIndex: number; title: string };
