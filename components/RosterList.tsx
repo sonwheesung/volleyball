@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Player, Position } from '../types';
 import { overall } from '../engine/overall';
+import { formatMoney } from '../engine/salary';
 import { OvrBadge, PosTag, theme } from './Screen';
 
 const POS_ORDER: Record<Position, number> = { S: 0, OH: 1, OP: 2, MB: 3, L: 4 };
@@ -31,7 +32,10 @@ export function RosterList({ players }: { players: Player[] }) {
               {p.age}세 · {p.height}cm
             </Text>
           </View>
-          <OvrBadge value={overall(p)} />
+          <View style={{ alignItems: 'flex-end', gap: 3 }}>
+            <OvrBadge value={overall(p)} />
+            <Text style={styles.salary}>{formatMoney(p.contract.salary)}</Text>
+          </View>
         </Pressable>
       ))}
     </View>
@@ -51,4 +55,5 @@ const styles = StyleSheet.create({
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   foreign: { color: theme.bad, fontSize: 11, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
+  salary: { color: theme.muted, fontSize: 12, fontWeight: '700' },
 });

@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
 import { SEASON, getEvolvedTeamPlayers, getTeam, getTeamCoach } from '../../data/league';
 import { teamOverall } from '../../engine/overall';
+import { formatMoney } from '../../engine/salary';
 import { teamScheduleEntries } from '../../engine/season';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -20,6 +21,7 @@ export default function Dashboard() {
   const players = getEvolvedTeamPlayers(teamId, currentDay);
   const coach = getTeamCoach(teamId);
   const ovr = teamOverall(players);
+  const payroll = players.reduce((s, p) => s + p.contract.salary, 0);
 
   const record = useMemo(() => {
     const entries = teamScheduleEntries(SEASON, teamId);
@@ -66,6 +68,15 @@ export default function Dashboard() {
           </Row>
         </Card>
       ) : null}
+
+      <Card>
+        <Row>
+          <Muted>팀 총연봉</Muted>
+          <Text style={{ color: payroll > team.budget ? theme.bad : theme.text, fontWeight: '800' }}>
+            {formatMoney(payroll)} / {formatMoney(team.budget)}
+          </Text>
+        </Row>
+      </Card>
 
       <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
       <Button label="선수단 보기" variant="ghost" onPress={() => router.push('/(tabs)/squad')} />

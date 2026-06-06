@@ -3,6 +3,7 @@
 
 import { createRng, type Rng } from '../engine/rng';
 import { TRAINABLE_STATS } from '../engine/training';
+import { computeSalary } from '../engine/salary';
 import type {
   CareerStats,
   Coach,
@@ -126,7 +127,12 @@ function makePlayer(rng: Rng, id: string, pos: Position, isForeign: boolean): Pl
     potential[s] = Math.min(99, base + Math.max(0, head));
   }
 
-  return {
+  // 계약: 0~3시즌 전 서명 → 현재 능력과 자연 불일치
+  const yearsAgo = rng.int(0, 3);
+  const signedAtAge = Math.max(18, age - yearsAgo);
+  const remaining = rng.int(1, 3);
+
+  const player: Player = {
     id,
     name,
     age,
@@ -137,9 +143,12 @@ function makePlayer(rng: Rng, id: string, pos: Position, isForeign: boolean): Pl
     potential,
     talentBase,
     catTalent,
+    contract: { salary: 0, years: yearsAgo + remaining, remaining, signedAtAge },
     peakAge: pos === 'MB' ? 26 : 28,
     career: emptyCareer(),
   };
+  player.contract.salary = computeSalary(player, signedAtAge, rng);
+  return player;
 }
 
 export function generateLeague(seed: number): League {
@@ -154,11 +163,13 @@ export function generateLeague(seed: number): League {
 
     // 외국인 1명: OP 중 한 자리
     let foreignAssigned = false;
+    let teamSalary = 0;
     ROSTER.forEach((pos, pi) => {
       const isForeign = pos === 'OP' && !foreignAssigned ? (foreignAssigned = true) : false;
-      const pid = `${teamId}p${pi}`;
-      players.push(makePlayer(rng, pid, pos, isForeign));
-      playerIds.push(pid);
+      const pl = makePlayer(rng, `${teamId}p${pi}`, pos, isForeign);
+      players.push(pl);
+      playerIds.push(pl.id);
+      teamSalary += pl.contract.salary;
     });
 
     // 아키타입을 팀마다 다르게 배정 (분화 보장)
@@ -182,6 +193,7 @@ export function generateLeague(seed: number): League {
       coachId,
       coachStyle: arch.style,
       foreignSlots: 1,
+      budget: Math.round((teamSalary * 1.12) / 1000) * 1000, // 총연봉 + 12% 여유
     });
   });
 

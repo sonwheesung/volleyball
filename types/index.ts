@@ -55,9 +55,20 @@ export interface Player {
   talentBase: number;                                // 종합 성장 재능 0.7~1.3 (숨김)
   catTalent: { physical: number; skill: number; mental: number };  // 분야별 0.85~1.15
 
+  // 계약 (SALARY_SYSTEM) — 연봉은 서명 시점 가치로 고착
+  contract: Contract;
+
   // 메타
   peakAge: number;     // 전성기 나이(노쇠 곡선용)
   career: CareerStats;
+}
+
+/** 다년 계약 — 연봉은 서명 시점 시장가치로 고정 (단위: 만원) */
+export interface Contract {
+  salary: number;       // 연봉 (만원)
+  years: number;        // 총 계약 연수
+  remaining: number;    // 잔여 연수
+  signedAtAge: number;  // 서명 당시 나이(시장가치 산정 기준)
 }
 
 // 훈련으로 성장하는 스탯 (키는 고정 → 제외) — TRAINING_SYSTEM 1.1
@@ -96,6 +107,7 @@ export interface Team {
   coachId: string;
   coachStyle: CoachStyle;
   foreignSlots: number;    // 외국인 보유 한도
+  budget: number;          // 팀 총예산 (만원, 느슨한 제약)
 }
 
 export type Side = 'home' | 'away';

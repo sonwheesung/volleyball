@@ -32,6 +32,7 @@ function makePlayer(opts: {
     potential,
     talentBase: opts.talentBase,
     catTalent: { physical: 1.0, skill: 1.0, mental: 1.0 },
+    contract: { salary: 0, years: 1, remaining: 1, signedAtAge: opts.age },
     peakAge: 28,
     career: { seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
   };

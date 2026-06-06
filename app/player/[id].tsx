@@ -5,7 +5,10 @@ import { getEvolvedPlayer } from '../../data/league';
 import { getPlayerProduction } from '../../data/production';
 import { overall } from '../../engine/overall';
 import { deriveRatings } from '../../engine/ratings';
+import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
 import { useGameStore } from '../../store/useGameStore';
+
+const STATUS_COLOR = { 꿀계약: theme.good, 적정: theme.muted, 고연봉: theme.bad } as const;
 
 export default function PlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -23,6 +26,8 @@ export default function PlayerDetail() {
   }
 
   const r = deriveRatings(p);
+  const market = marketValue(p, prod);
+  const status = contractStatus(p.contract.salary, market);
 
   return (
     <Screen title={p.name}>
@@ -35,6 +40,28 @@ export default function PlayerDetail() {
           <OvrBadge value={overall(p)} />
         </Row>
         <Muted>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
+      </Card>
+
+      <Title>계약</Title>
+      <Card>
+        <Row>
+          <Muted>연봉</Muted>
+          <Text style={{ color: theme.text, fontSize: 18, fontWeight: '800' }}>
+            {formatMoney(p.contract.salary)}
+          </Text>
+        </Row>
+        <Row>
+          <Muted>시장가치</Muted>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>{formatMoney(market)}</Text>
+        </Row>
+        <Row>
+          <Muted>잔여 계약</Muted>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>{p.contract.remaining}년</Text>
+        </Row>
+        <Row>
+          <Muted>평가</Muted>
+          <Text style={{ color: STATUS_COLOR[status], fontWeight: '800' }}>{status}</Text>
+        </Row>
       </Card>
 
       {prod && prod.matches > 0 ? (
