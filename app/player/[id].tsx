@@ -47,13 +47,15 @@ export default function PlayerDetail() {
         <Muted style={{ marginBottom: 2 }}>신체</Muted>
         <StatBar label="점프력" value={p.jump} />
         <StatBar label="민첩성" value={p.agility} />
-        <StatBar label="체력" value={p.stamina} />
+        <StatBar label="체력" value={p.staminaMax} />
+        <StatBar label="체젠" value={p.staminaRegen} />
         <View style={{ height: 6 }} />
         <Muted style={{ marginBottom: 2 }}>공통 / 멘탈</Muted>
         <StatBar label="반응속도" value={p.reaction} />
         <StatBar label="위치선정" value={p.positioning} />
         <StatBar label="집중력" value={p.focus} />
         <StatBar label="기복" value={p.consistency} />
+        <StatBar label="VQ" value={p.vq} />
       </Card>
 
       <Title>기술치</Title>

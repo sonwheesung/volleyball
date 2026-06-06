@@ -2,7 +2,16 @@
 // 시드 RNG로 팀·선수·감독을 결정론적으로 생성한다. 같은 시드 = 같은 리그.
 
 import { createRng, type Rng } from '../engine/rng';
-import type { CareerStats, Coach, CoachStyle, Player, Position, Team } from '../types';
+import { TRAINABLE_STATS } from '../engine/training';
+import type {
+  CareerStats,
+  Coach,
+  CoachStyle,
+  Player,
+  Position,
+  TrainableStat,
+  TrainingFocus,
+} from '../types';
 import { COACH_NAMES, FOREIGN_NAMES, GIVEN, SURNAMES, TEAM_NAMES } from './names';
 
 export interface League {
@@ -10,6 +19,8 @@ export interface League {
   players: Player[];
   coaches: Coach[];
 }
+
+import type { Team } from '../types';
 
 // 한 팀의 포지션 구성 (16인) — KOVO 여자부 등록 규모 기준.
 // 세터 3 / 아웃사이드 5 / 아포짓 2(외국인 1) / 미들 4 / 리베로 2
@@ -21,7 +32,16 @@ const ROSTER: Position[] = [
   'L', 'L',
 ];
 
-const STYLES: CoachStyle[] = ['attack', 'defense', 'balanced'];
+// 감독 아키타입 7종 (TRAINING_SYSTEM 3.1) → 팀마다 1개씩 배정(분화 보장)
+const ARCHETYPES: { name: string; focus: TrainingFocus; style: CoachStyle }[] = [
+  { name: '체력파', focus: { primary: [1, 2], secondary: [3, 4, 12] }, style: 'balanced' },
+  { name: '기본기파', focus: { primary: [4, 6], secondary: [5, 7, 9] }, style: 'balanced' },
+  { name: '전술파', focus: { primary: [10, 11], secondary: [6, 9, 12] }, style: 'defense' },
+  { name: '공격파', focus: { primary: [4, 1], secondary: [5, 9, 3] }, style: 'attack' },
+  { name: '수비파', focus: { primary: [6, 7], secondary: [8, 2, 3] }, style: 'defense' },
+  { name: '스파르타', focus: { primary: [2, 3], secondary: [1, 12, 6] }, style: 'balanced' },
+  { name: '밸런스', focus: { primary: [4, 6], secondary: [1, 10, 12] }, style: 'balanced' },
+];
 
 const emptyCareer = (): CareerStats => ({
   seasons: 0, matches: 0, sets: 0, points: 0,
@@ -43,41 +63,80 @@ function heightFor(rng: Rng, pos: Position): number {
   }
 }
 
+/** 재능 등급 분포 (TRAINING_SYSTEM 1.2) → talentBase */
+function rollTalent(rng: Rng): number {
+  const r = rng.next();
+  if (r < 0.03) return 1.25 + rng.next() * 0.15; // S
+  if (r < 0.15) return 1.12 + rng.next() * 0.13; // A
+  if (r < 0.60) return 0.95 + rng.next() * 0.17; // B
+  if (r < 0.90) return 0.80 + rng.next() * 0.15; // C
+  return 0.60 + rng.next() * 0.20;               // D
+}
+
 function makePlayer(rng: Rng, id: string, pos: Position, isForeign: boolean): Player {
   const name = isForeign
     ? FOREIGN_NAMES[rng.int(0, FOREIGN_NAMES.length - 1)]
     : SURNAMES[rng.int(0, SURNAMES.length - 1)] + GIVEN[rng.int(0, GIVEN.length - 1)];
 
-  // 포지션별 core 스탯 집합 (5.3 가중치 단순화)
+  // 포지션별 core 스탯 (5.3 가중치 단순화)
   const core: Record<Position, Partial<Record<keyof Player, boolean>>> = {
-    S: { skSet: true, focus: true },
+    S: { skSet: true, vq: true, focus: true },
     OH: { skSpike: true, skReceive: true, skServe: true },
     OP: { skSpike: true, skServe: true, jump: true },
     MB: { skBlock: true, skSpike: true, jump: true },
     L: { skDig: true, skReceive: true, agility: true },
   };
   const c = core[pos];
+  const age = rng.int(19, 34);
 
-  return {
-    id,
-    name,
-    age: rng.int(19, 34),
-    position: pos,
-    isForeign,
+  // 현재 스탯
+  const cur = {
     height: heightFor(rng, pos),
     jump: rollStat(rng, !!c.jump),
     agility: rollStat(rng, !!c.agility),
-    stamina: rng.int(55, 88),
+    staminaMax: rng.int(55, 88),
+    staminaRegen: rng.int(50, 85),
     reaction: rng.int(52, 86),
     positioning: rng.int(50, 85),
     focus: rollStat(rng, !!c.focus),
     consistency: rng.int(50, 85),
+    vq: rollStat(rng, !!c.vq),
     skSpike: rollStat(rng, !!c.skSpike),
     skBlock: rollStat(rng, !!c.skBlock),
     skDig: rollStat(rng, !!c.skDig),
     skReceive: rollStat(rng, !!c.skReceive),
     skSet: rollStat(rng, !!c.skSet),
     skServe: rollStat(rng, !!c.skServe),
+  };
+
+  // 재능
+  const talentBase = rollTalent(rng);
+  const catTalent = {
+    physical: 0.85 + rng.next() * 0.3,
+    skill: 0.85 + rng.next() * 0.3,
+    mental: 0.85 + rng.next() * 0.3,
+  };
+
+  // 스탯별 포텐셜: 어릴수록·재능 좋을수록 헤드룸 큼
+  const youth = Math.max(0, Math.min(1, (26 - age) / 8));
+  const potential = {} as Record<TrainableStat, number>;
+  for (const s of TRAINABLE_STATS) {
+    const base = (cur as Record<string, number>)[s];
+    const head = Math.round((4 + rng.int(0, 12)) * (0.4 + 0.6 * youth) * talentBase);
+    potential[s] = Math.min(99, base + Math.max(0, head));
+  }
+
+  return {
+    id,
+    name,
+    age,
+    position: pos,
+    isForeign,
+    ...cur,
+    xp: {},
+    potential,
+    talentBase,
+    catTalent,
     peakAge: pos === 'MB' ? 26 : 28,
     career: emptyCareer(),
   };
@@ -102,14 +161,17 @@ export function generateLeague(seed: number): League {
       playerIds.push(pid);
     });
 
+    // 아키타입을 팀마다 다르게 배정 (분화 보장)
+    const arch = ARCHETYPES[ti % ARCHETYPES.length];
     const coachId = `${teamId}c`;
-    const style = STYLES[rng.int(0, STYLES.length - 1)];
     coaches.push({
       id: coachId,
       name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)],
       age: rng.int(45, 64),
       charisma: rng.int(45, 95),
-      style,
+      style: arch.style,
+      archetype: arch.name,
+      trainingFocus: arch.focus,
       teamId,
     });
 
@@ -118,7 +180,7 @@ export function generateLeague(seed: number): League {
       name: teamName,
       players: playerIds,
       coachId,
-      coachStyle: style,
+      coachStyle: arch.style,
       foreignSlots: 1,
     });
   });

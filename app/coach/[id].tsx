@@ -1,6 +1,8 @@
 import { useLocalSearchParams } from 'expo-router';
-import { Card, Muted, Row, Screen, StatBar, Title } from '../../components/Screen';
+import { Text } from 'react-native';
+import { Card, Muted, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
 import { getCoach, getTeam } from '../../data/league';
+import { TRAINING_NAME } from '../../engine/training';
 
 const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
 const STYLE_DESC = {
@@ -42,6 +44,21 @@ export default function CoachDetail() {
         <StatBar label="카리스마" value={c.charisma} />
         <Muted style={{ marginTop: 4 }}>
           카리스마가 높을수록 타임아웃 때 경기 흐름(기세)을 강하게 끌어온다.
+        </Muted>
+      </Card>
+
+      <Title>훈련 성향 · {c.archetype}</Title>
+      <Card>
+        <Muted>핵심 훈련 (집중 육성)</Muted>
+        <Text style={{ color: theme.accent, fontWeight: '700' }}>
+          {c.trainingFocus.primary.map((id) => TRAINING_NAME[id]).join(' · ')}
+        </Text>
+        <Muted style={{ marginTop: 6 }}>보조 훈련</Muted>
+        <Text style={{ color: theme.text }}>
+          {c.trainingFocus.secondary.map((id) => TRAINING_NAME[id]).join(' · ')}
+        </Text>
+        <Muted style={{ marginTop: 6 }}>
+          이 성향에 따라 선수들이 서로 다른 스탯으로 천천히 성장한다.
         </Muted>
       </Card>
     </Screen>

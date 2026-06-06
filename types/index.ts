@@ -26,10 +26,11 @@ export interface Player {
   isForeign: boolean;
 
   // 밑단 — 신체 (5.1)
-  height: number;      // 고정 (나이 무관)
-  jump: number;        // 노쇠 시 하락
-  agility: number;     // 노쇠 시 하락
-  stamina: number;     // 노쇠 시 하락
+  height: number;       // 고정 (나이 무관)
+  jump: number;         // 노쇠 시 하락
+  agility: number;      // 노쇠 시 하락
+  staminaMax: number;   // 체력(보유 상한) — 노쇠 시 하락
+  staminaRegen: number; // 체젠(회복 속도) — 노쇠 시 하락
 
   // 밑단 — 공통
   reaction: number;    // 완만한 곡선
@@ -38,6 +39,7 @@ export interface Player {
   // 밑단 — 멘탈
   focus: number;       // 집중력(clutch)
   consistency: number; // 기복
+  vq: number;          // 배구 IQ (MATCH_SYSTEM 0장)
 
   // 기술치 (훈련·경기로 성장하는 순수 기술)
   skSpike: number;
@@ -47,9 +49,32 @@ export interface Player {
   skSet: number;
   skServe: number;
 
+  // 성장 (TRAINING_SYSTEM)
+  xp: Partial<Record<TrainableStat, number>>;        // 스탯별 숨은 XP 바 (0~1)
+  potential: Record<TrainableStat, number>;          // 스탯별 숨은 상한
+  talentBase: number;                                // 종합 성장 재능 0.7~1.3 (숨김)
+  catTalent: { physical: number; skill: number; mental: number };  // 분야별 0.85~1.15
+
   // 메타
   peakAge: number;     // 전성기 나이(노쇠 곡선용)
   career: CareerStats;
+}
+
+// 훈련으로 성장하는 스탯 (키는 고정 → 제외) — TRAINING_SYSTEM 1.1
+export type TrainableStat =
+  | 'jump' | 'agility' | 'staminaMax' | 'staminaRegen'
+  | 'reaction' | 'positioning'
+  | 'focus' | 'consistency' | 'vq'
+  | 'skSpike' | 'skBlock' | 'skDig' | 'skReceive' | 'skSet' | 'skServe';
+
+export type TrainingCategory = 'physical' | 'skill' | 'mental';
+
+export type TrainingId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12;
+
+/** 감독 훈련 선호 — 핵심 2 + 보조 3 (TRAINING_SYSTEM 3장) */
+export interface TrainingFocus {
+  primary: [TrainingId, TrainingId];
+  secondary: [TrainingId, TrainingId, TrainingId];
 }
 
 /** 감독 — 플레이어가 선임하는 별개 존재 (MATCH_SYSTEM 8장) */
@@ -57,8 +82,10 @@ export interface Coach {
   id: string;
   name: string;
   age: number;
-  charisma: number;        // 타임아웃 기세 수렴 폭
-  style: CoachStyle;       // 자동 운영 성향
+  charisma: number;          // 타임아웃 기세 수렴 폭 (경기 운영)
+  style: CoachStyle;         // 자동 운영 성향 (경기 운영)
+  archetype: string;         // 훈련 아키타입 명칭 (표시용)
+  trainingFocus: TrainingFocus; // 훈련 선호 (핵심2+보조3)
   teamId: string;
 }
 
