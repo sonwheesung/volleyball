@@ -27,6 +27,8 @@ const seedRosters = (): Record<string, string[]> =>
 let rosters: Record<string, string[]> = seedRosters();
 let playerFocus = new Map<string, TrainingFocus>();
 let evoCache: { day: number; map: Map<string, Player> } | null = null;
+let _baseVersion = 0; // 선수/로스터 베이스가 바뀔 때마다 증가(파생 캐시 무효화용)
+export const baseVersion = (): number => _baseVersion;
 
 function rebuildFocus(): void {
   playerFocus = new Map();
@@ -75,6 +77,7 @@ export const currentBasePlayers = (): Player[] => {
 export function commitPlayerBase(snapshot: Record<string, Player>): void {
   for (const id of Object.keys(snapshot)) playerMap.set(id, snapshot[id]);
   evoCache = null;
+  _baseVersion++;
 }
 
 /** 가변 로스터 반영 */
@@ -82,6 +85,7 @@ export function commitRosters(next: Record<string, string[]>): void {
   rosters = next;
   rebuildFocus();
   evoCache = null;
+  _baseVersion++;
 }
 
 export const currentRosters = (): Record<string, string[]> => rosters;
@@ -93,6 +97,7 @@ export function resetLeagueBase(): void {
   rosters = seedRosters();
   rebuildFocus();
   evoCache = null;
+  _baseVersion++;
 }
 
 // ─── 진화(성장/노쇠) 적용 선수 — currentDay 기준, 날짜별 캐시 ───

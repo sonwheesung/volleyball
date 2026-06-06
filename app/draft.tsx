@@ -31,7 +31,7 @@ export default function DraftCenter() {
     () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, protectedIds, season + 1),
     [my, resignDecisions, contractOverrides, faSignings, protectedIds, season],
   );
-  const standings = useMemo(() => computeStandings(), [season]);
+  const standings = useMemo(() => computeStandings(Number.MAX_SAFE_INTEGER), [season]);
 
   // 미리보기: 내가 실제로 지명하게 될 신인
   const clsById = useMemo(() => new Map(ctx.cls.map((p) => [p.id, p])), [ctx]);
