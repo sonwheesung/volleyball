@@ -5,13 +5,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { commitPlayerBase, commitRosters, currentRosters, resetLeagueBase } from '../data/league';
-import { buildOffseason } from '../data/offseason';
+import { commitPlayerBase, commitRosters, resetLeagueBase } from '../data/league';
+import { buildDraftContext } from '../data/draftSetup';
 import { fillRosters } from '../data/rookies';
-import { aiFillFromPool } from '../engine/aiGM';
-import { assignFAGrades } from '../engine/faMarket';
-import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
-import { renewedContract } from '../engine/rollover';
+import { resolveDraft } from '../engine/draft';
+import { PROTECT_COUNT } from '../engine/compensation';
 import type { Contract, MatchResult, Player } from '../types';
 
 interface GameState {
@@ -27,6 +25,7 @@ interface GameState {
   resignDecisions: Record<string, boolean>;    // 내 FA 잔류(true)/포기(false), 기본=잔류
   faSignings: string[];                        // 오프시즌에 영입하기로 한 풀 FA id
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
+  draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -38,6 +37,7 @@ interface GameState {
   signFA: (playerId: string) => void;
   unsignFA: (playerId: string) => void;
   toggleProtect: (playerId: string) => void;
+  toggleDraftPick: (playerId: string) => void;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -54,6 +54,7 @@ const freshSave = {
   resignDecisions: {} as Record<string, boolean>,
   faSignings: [] as string[],
   protectedIds: [] as string[],
+  draftPicks: [] as string[],
 };
 
 export const useGameStore = create<GameState>()(
@@ -87,60 +88,34 @@ export const useGameStore = create<GameState>()(
           if (s.protectedIds.length >= PROTECT_COUNT) return s; // 정원 초과 무시
           return { protectedIds: [...s.protectedIds, playerId] };
         }),
+      toggleDraftPick: (playerId) =>
+        set((s) =>
+          s.draftPicks.includes(playerId)
+            ? { draftPicks: s.draftPicks.filter((id) => id !== playerId) }
+            : { draftPicks: [...s.draftPicks, playerId] },
+        ),
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, protectedIds } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, protectedIds, draftPicks } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
-        // 영입 전 소속(보상 대상팀 판정)
-        const committed = currentRosters();
-        const prevTeamOf: Record<string, string> = {};
-        for (const tid of Object.keys(committed)) for (const id of committed[tid]) prevTeamOf[id] = tid;
+        // 1) 롤오버·은퇴·FA(영입/보상/AI충원)·순번·클래스 (드래프트 센터와 동일 소스)
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, protectedIds, nextSeason);
+        const snapshot = ctx.snapshot;
 
-        // 1) 롤오버 + 은퇴 + FA 풀 형성 (FA 센터 프리뷰와 동일 소스)
-        const off = buildOffseason(my, resignDecisions, contractOverrides, nextSeason);
-        const snapshot = off.snapshot;
-        const rosters: Record<string, string[]> = { ...off.rosters };
-        const grades = assignFAGrades(off.pool.map((id) => snapshot[id]).filter(Boolean) as Player[]);
+        // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
+        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks);
+        for (const p of drafted.picked) snapshot[p.id] = p;
 
-        // 2) 내가 선택한 FA 영입
-        const remainingPool = new Set(off.pool);
-        for (const id of faSignings) {
-          if (!remainingPool.has(id)) continue;
-          const p = snapshot[id];
-          if (!p) continue;
-          snapshot[id] = { ...p, contract: renewedContract(p) };
-          rosters[my] = [...(rosters[my] ?? []), id];
-          remainingPool.delete(id);
-        }
-
-        // 2.5) 보상선수: A/B 영입마다 내 비보호 1명이 원소속팀으로
-        const taken: string[] = [];
-        for (const id of faSignings) {
-          if (off.pool.indexOf(id) < 0) continue;
-          const grade = grades.get(id);
-          if (!grade || !needsCompensationPlayer(grade)) continue;
-          const prev = prevTeamOf[id];
-          if (!prev || prev === my || !rosters[prev]) continue;
-          const compId = pickCompensation(rosters[my] ?? [], protectedIds, snapshot, [...taken, id]);
-          if (!compId) continue;
-          taken.push(compId);
-          rosters[my] = (rosters[my] ?? []).filter((x) => x !== compId);
-          rosters[prev] = [...rosters[prev], compId];
-        }
-
-        // 3) AI가 남은 풀에서 빈자리 충원
-        const aiFilled = aiFillFromPool(rosters, [...remainingPool], snapshot, my);
-
-        // 4) 그래도 빈 자리는 신인으로
-        const filled = fillRosters(aiFilled.rosters, (id) => snapshot[id], nextSeason);
+        // 3) 클래스 소진 등 남은 빈자리 신인 자동 충원
+        const filled = fillRosters(drafted.rosters, (id) => snapshot[id], nextSeason);
         for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
 
-        // 5) 이적자 현 구단 근속 리셋(프랜차이즈 판정)
+        // 4) 이적자 현 구단 근속 리셋(프랜차이즈 판정)
         for (const tid of Object.keys(filled.rosters)) {
           for (const id of filled.rosters[tid]) {
-            const prev = prevTeamOf[id];
+            const prev = ctx.prevTeamOf[id];
             if (prev && prev !== tid && snapshot[id]) snapshot[id] = { ...snapshot[id], clubTenure: 0 };
           }
         }
@@ -156,6 +131,7 @@ export const useGameStore = create<GameState>()(
           resignDecisions: {},
           faSignings: [],
           protectedIds: [],
+          draftPicks: [],
           playerBase: snapshot,
           rosters: filled.rosters,
         });
@@ -181,6 +157,7 @@ export const useGameStore = create<GameState>()(
         resignDecisions: s.resignDecisions,
         faSignings: s.faSignings,
         protectedIds: s.protectedIds,
+        draftPicks: s.draftPicks,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);

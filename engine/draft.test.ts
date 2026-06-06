@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRng } from './rng';
-import { lotteryRound1, neededPositions, aiDraftPick } from './draft';
+import { lotteryRound1, neededPositions, aiDraftPick, resolveDraft } from './draft';
 import { TRAINABLE_STATS } from './training';
 import type { Player, Position, TrainableStat } from '../types';
 
@@ -40,7 +40,7 @@ test('lotteryRound1: 하위 팀이 평균적으로 앞 순번', () => {
 
 test('neededPositions: 이상 구성 대비 부족분', () => {
   const snap: Record<string, Player> = { s1: mk('s1', 'S', 50) };
-  const needs = neededPositions(['s1'], snap);
+  const needs = neededPositions(['s1'], (id) => snap[id]);
   // S 이상 3명 중 1명 보유 → S 2개 부족 포함
   assert.equal(needs.filter((p) => p === 'S').length, 2);
 });
@@ -52,6 +52,23 @@ test('aiDraftPick: 필요 포지션 + 종합가치 우선', () => {
   const oh = mk('oh', 'OH', 60, 95);
   [lowS, hiS, oh].forEach((p) => (snap[p.id] = p));
   // 로스터에 S 없음 → S 필요. 가치 높은 hiS 선택
-  const pick = aiDraftPick([lowS, hiS, oh], [], snap);
+  const pick = aiDraftPick([lowS, hiS, oh], [], (id) => snap[id]);
   assert.ok(pick && (pick.id === 'hiS' || pick.id === 'oh'));
+});
+
+test('resolveDraft: 내 위시리스트 우선, 순번 존중', () => {
+  const A = mk('A', 'OH', 60, 95); // 최고 가치 → AI가 먼저
+  const B = mk('B', 'OH', 55, 90);
+  const C = mk('C', 'S', 45, 70);  // 낮은 가치(세터)
+  const cls = [A, B, C];
+  const rosters = { me: [] as string[], ai: [] as string[] };
+  // ai 먼저, 그다음 나
+  const r1 = resolveDraft(['ai', 'me'], cls, rosters, () => undefined, 'me', ['C']);
+  assert.deepEqual(r1.rosters.ai, ['A'], 'AI는 최고가치 A');
+  assert.deepEqual(r1.rosters.me, ['C'], '나는 위시 C');
+
+  // 위시 없으면 가치순 자동
+  const r2 = resolveDraft(['ai', 'me'], cls, rosters, () => undefined, 'me', []);
+  assert.deepEqual(r2.rosters.ai, ['A']);
+  assert.deepEqual(r2.rosters.me, ['B'], '위시 없으면 다음 가치 B');
 });

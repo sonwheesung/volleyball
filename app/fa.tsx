@@ -28,7 +28,6 @@ export default function FACenter() {
   const signFA = useGameStore((s) => s.signFA);
   const unsignFA = useGameStore((s) => s.unsignFA);
   const toggleProtect = useGameStore((s) => s.toggleProtect);
-  const endSeason = useGameStore((s) => s.endSeason);
 
   // 이전 소속(표시용) — 풀 형성 전 로스터 기준
   const prevTeamOf = useMemo(() => {
@@ -74,8 +73,7 @@ export default function FACenter() {
   }).length;
 
   const onFinish = () => {
-    endSeason();
-    router.replace('/(tabs)');
+    router.push('/draft');
   };
 
   return (
@@ -99,7 +97,7 @@ export default function FACenter() {
         </Row>
       </Card>
 
-      <Button label="다음 시즌 시작" onPress={onFinish} />
+      <Button label="신인 드래프트로 →" onPress={onFinish} />
 
       {compNeeded > 0 ? (
         <Card>

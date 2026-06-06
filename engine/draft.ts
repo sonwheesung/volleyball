@@ -1,17 +1,16 @@
 // 신인 드래프트 (FA_SYSTEM 3장). 순수 함수.
-// 순번: 하위 팀 가중 추첨(1라운드) → 이후 라운드는 같은 순서(KOVO식 간소화).
+// 순번: 하위 팀 가중 추첨(1라운드) → 이후 라운드 동일 순서(KOVO식 간소화).
+// 해석: 내 위시리스트 우선(순번 내에서) + 나머지는 AI 자동 지명.
 
 import type { Player, Position } from '../types';
 import type { Rng } from './rng';
 import { overall } from './overall';
 import { ROSTER_IDEAL } from './aiGM';
 
-/**
- * 1라운드 순번 = 하위 팀 가중 추첨.
- * worstFirst: 성적 하위→상위 팀 id. 하위일수록 앞 순번 확률↑.
- */
+type Lookup = (id: string) => Player | undefined;
+
+/** 1라운드 순번 = 하위 팀 가중 추첨 */
 export function lotteryRound1(worstFirst: string[], rng: Rng): string[] {
-  // 가중치: 하위(앞)일수록 큼 (n, n-1, ... ,1)
   const pool = worstFirst.map((id, i) => ({ id, w: worstFirst.length - i }));
   const order: string[] = [];
   while (pool.length) {
@@ -31,17 +30,32 @@ export function lotteryRound1(worstFirst: string[], rng: Rng): string[] {
   return order;
 }
 
-/** 팀별 빈 자리 수 (현재 로스터 vs 이상 구성) */
-export function teamNeeds(rosterIds: string[], snapshot: Record<string, Player>): number {
-  const total = Object.values(ROSTER_IDEAL).reduce((a, b) => a + b, 0);
-  return Math.max(0, total - rosterIds.length);
+/** 전체 지명 순번(슬롯별 teamId) — 라운드 반복, 빈자리 채울 때까지 */
+export function buildDraftOrder(
+  round1: string[],
+  holes: Record<string, number>,
+  maxSlots: number,
+): string[] {
+  const remaining: Record<string, number> = { ...holes };
+  const order: string[] = [];
+  let any = true;
+  while (any && order.length < maxSlots) {
+    any = false;
+    for (const t of round1) {
+      if ((remaining[t] ?? 0) > 0 && order.length < maxSlots) {
+        order.push(t);
+        remaining[t]--;
+        any = true;
+      }
+    }
+  }
+  return order;
 }
 
-/** 부족 포지션 (이상 대비) */
-export function neededPositions(rosterIds: string[], snapshot: Record<string, Player>): Position[] {
+export function neededPositions(rosterIds: string[], get: Lookup): Position[] {
   const have: Record<Position, number> = { S: 0, OH: 0, OP: 0, MB: 0, L: 0 };
   for (const id of rosterIds) {
-    const p = snapshot[id];
+    const p = get(id);
     if (p) have[p.position]++;
   }
   const out: Position[] = [];
@@ -51,19 +65,61 @@ export function neededPositions(rosterIds: string[], snapshot: Record<string, Pl
   return out;
 }
 
-/** AI 지명: 필요 포지션 우선, 그 중 종합 가치(현재+포텐) 최고 */
-export function aiDraftPick(
-  available: Player[],
-  rosterIds: string[],
-  snapshot: Record<string, Player>,
-): Player | null {
+/** 신인 종합 가치 = 현재 + 포텐(포텐 비중↑) */
+export function prospectValue(p: Player): number {
+  const pot = Math.max(...Object.values(p.potential));
+  return overall(p) * 0.4 + pot * 0.6;
+}
+
+/** AI 지명: 필요 포지션 우선, 그 중 종합 가치 최고 */
+export function aiDraftPick(available: Player[], rosterIds: string[], get: Lookup): Player | null {
   if (available.length === 0) return null;
-  const needs = new Set(neededPositions(rosterIds, snapshot));
-  const value = (p: Player) => {
-    const pot = Math.max(...Object.values(p.potential));
-    return overall(p) * 0.4 + pot * 0.6; // 신인은 포텐 비중↑
-  };
+  const needs = new Set(neededPositions(rosterIds, get));
   const needed = available.filter((p) => needs.has(p.position));
   const pool = needed.length > 0 ? needed : available;
-  return pool.slice().sort((a, b) => value(b) - value(a))[0];
+  return pool.slice().sort((a, b) => prospectValue(b) - prospectValue(a))[0];
+}
+
+/**
+ * 드래프트 해석(순수). 순번대로 진행:
+ * - 내 슬롯: 위시리스트(우선순위) 중 남아있는 첫 선수, 없으면 AI 로직
+ * - AI 슬롯: aiDraftPick
+ * 반환: 갱신 로스터 + 지명된 선수 목록(레지스트리 추가용)
+ */
+export function resolveDraft(
+  order: string[],
+  cls: Player[],
+  rostersIn: Record<string, string[]>,
+  snapshotLookup: Lookup,
+  myTeam: string,
+  wishlist: string[],
+): { rosters: Record<string, string[]>; picked: Player[] } {
+  const rosters: Record<string, string[]> = {};
+  for (const k of Object.keys(rostersIn)) rosters[k] = [...rostersIn[k]];
+  const clsById = new Map(cls.map((p) => [p.id, p]));
+  const get: Lookup = (id) => snapshotLookup(id) ?? clsById.get(id);
+
+  const available = [...cls];
+  const wl = [...wishlist];
+  const picked: Player[] = [];
+
+  for (const teamId of order) {
+    let chosen: Player | null = null;
+    if (teamId === myTeam) {
+      for (const id of wl) {
+        const idx = available.findIndex((a) => a.id === id);
+        if (idx >= 0) {
+          chosen = available[idx];
+          break;
+        }
+      }
+    }
+    if (!chosen) chosen = aiDraftPick(available, rosters[teamId] ?? [], get);
+    if (!chosen) continue;
+    const idx = available.findIndex((a) => a.id === chosen!.id);
+    available.splice(idx, 1);
+    rosters[teamId] = [...(rosters[teamId] ?? []), chosen.id];
+    picked.push(chosen);
+  }
+  return { rosters, picked };
 }

@@ -6,7 +6,9 @@ import type { Contract, Player } from '../types';
 import { createRng } from '../engine/rng';
 import { applyRetirements } from '../engine/retire';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
-import { aiKeepsFA } from '../engine/aiGM';
+import { aiKeepsFA, aiFillFromPool } from '../engine/aiGM';
+import { assignFAGrades } from '../engine/faMarket';
+import { needsCompensationPlayer, pickCompensation } from '../engine/compensation';
 import { currentBasePlayers, currentRosters, focusOf } from './league';
 
 export interface Offseason {
@@ -53,4 +55,62 @@ export function buildOffseason(
     rosters[teamId] = keep;
   }
   return { snapshot, rosters, pool, retired: afterRetire.retired };
+}
+
+export interface PreDraft {
+  snapshot: Record<string, Player>;
+  rosters: Record<string, string[]>;     // FA 영입·보상·AI 충원까지 반영(드래프트 전)
+  prevTeamOf: Record<string, string>;
+}
+
+/**
+ * 드래프트 직전 상태: 롤오버·은퇴·FA(내 영입+보상+AI 충원)까지 적용.
+ * 드래프트 센터 프리뷰와 endSeason 이 공유(미리보기=결과 보장).
+ */
+export function resolvePreDraft(
+  myTeam: string,
+  resignDecisions: Record<string, boolean>,
+  overrides: Record<string, Contract>,
+  faSignings: string[],
+  protectedIds: string[],
+  nextSeason: number,
+): PreDraft {
+  const committed = currentRosters();
+  const prevTeamOf: Record<string, string> = {};
+  for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
+
+  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason);
+  const snapshot = off.snapshot;
+  const rosters: Record<string, string[]> = { ...off.rosters };
+  const grades = assignFAGrades(off.pool.map((id) => snapshot[id]).filter(Boolean) as Player[]);
+
+  // 내 FA 영입
+  const remainingPool = new Set(off.pool);
+  for (const id of faSignings) {
+    if (!remainingPool.has(id)) continue;
+    const p = snapshot[id];
+    if (!p) continue;
+    snapshot[id] = { ...p, contract: renewedContract(p) };
+    rosters[myTeam] = [...(rosters[myTeam] ?? []), id];
+    remainingPool.delete(id);
+  }
+
+  // 보상선수(A/B): 내 비보호 1명 → 원소속팀
+  const taken: string[] = [];
+  for (const id of faSignings) {
+    if (off.pool.indexOf(id) < 0) continue;
+    const g = grades.get(id);
+    if (!g || !needsCompensationPlayer(g)) continue;
+    const prev = prevTeamOf[id];
+    if (!prev || prev === myTeam || !rosters[prev]) continue;
+    const compId = pickCompensation(rosters[myTeam] ?? [], protectedIds, snapshot, [...taken, id]);
+    if (!compId) continue;
+    taken.push(compId);
+    rosters[myTeam] = (rosters[myTeam] ?? []).filter((x) => x !== compId);
+    rosters[prev] = [...rosters[prev], compId];
+  }
+
+  // AI가 남은 풀에서 충원
+  const aiFilled = aiFillFromPool(rosters, [...remainingPool], snapshot, myTeam);
+  return { snapshot, rosters: aiFilled.rosters, prevTeamOf };
 }
