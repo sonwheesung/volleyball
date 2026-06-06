@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
 import { SEASON, getEvolvedTeamPlayers, getTeam, getTeamCoach } from '../../data/league';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
+import { computeStandings } from '../../data/standings';
 import { teamOverall } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
 import { teamScheduleEntries } from '../../engine/season';
@@ -43,6 +44,9 @@ export default function Dashboard() {
     return { w, l };
   }, [teamId, results]);
 
+  const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
+  const myRank = standings.findIndex((s) => s.teamId === teamId) + 1;
+
   if (!team) return null;
 
   return (
@@ -79,6 +83,15 @@ export default function Dashboard() {
           <Muted>팀 총연봉</Muted>
           <Text style={{ color: payroll > team.budget ? theme.bad : theme.text, fontWeight: '800' }}>
             {formatMoney(payroll)} / {formatMoney(team.budget)}
+          </Text>
+        </Row>
+      </Card>
+
+      <Card onPress={() => router.push('/(tabs)/history')}>
+        <Row>
+          <Muted>리그 순위</Muted>
+          <Text style={{ color: theme.text, fontWeight: '800' }}>
+            {myRank > 0 ? `${myRank}위 / ${standings.length}` : '-'} ›
           </Text>
         </Row>
       </Card>

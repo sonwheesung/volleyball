@@ -18,7 +18,6 @@ export default function Office() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
-  const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
   const released = useGameStore((s) => s.released);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
@@ -40,7 +39,7 @@ export default function Office() {
   const faGrades = assignFAGrades(faList);
 
   const onResign = (p: Player) => {
-    const market = marketValue(p, getPlayerProduction(p.id, results));
+    const market = marketValue(p, getPlayerProduction(p.id, currentDay));
     if (!canAfford(total - p.contract.salary, market, { franchise: isFranchise(p) })) {
       Alert.alert(
         '샐러리캡 초과',
@@ -87,7 +86,7 @@ export default function Office() {
 
       <Title>계약 관리</Title>
       {roster.map((p) => {
-        const market = marketValue(p, getPlayerProduction(p.id, results));
+        const market = marketValue(p, getPlayerProduction(p.id, currentDay));
         const status = contractStatus(p.contract.salary, market);
         return (
           <View key={p.id} style={styles.row}>
@@ -126,7 +125,7 @@ export default function Office() {
           </Muted>
           {faList.map((p) => {
             const grade = faGrades.get(p.id)!;
-            const ask = askingPrice(marketValue(p, getPlayerProduction(p.id, results)), grade);
+            const ask = askingPrice(marketValue(p, getPlayerProduction(p.id, currentDay)), grade);
             const keep = resignDecisions[p.id] !== false;
             return (
               <View key={p.id} style={styles.row}>

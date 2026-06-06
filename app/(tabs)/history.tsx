@@ -1,10 +1,12 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, Screen, Title, theme } from '../../components/Screen';
-import { getTeam } from '../../data/league';
+import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Screen';
+import { getPlayer, getTeam, teamPlayerIds } from '../../data/league';
+import { leagueProduction } from '../../data/production';
 import { computeStandings, seasonResults } from '../../data/standings';
 import { dateForDay, formatDate } from '../../lib/calendar';
 import { useGameStore } from '../../store/useGameStore';
+import type { ProdLine } from '../../engine/production';
 
 const short = (teamId: string) => {
   const n = getTeam(teamId)?.name ?? '';
@@ -22,6 +24,16 @@ export default function History() {
     () => seasonResults(currentDay).slice().sort((a, b) => b.dayIndex - a.dayIndex),
     [currentDay, season],
   );
+  const leaders = useMemo(() => {
+    const prod = leagueProduction(currentDay);
+    const rows = [...prod.entries()].map(([id, l]) => ({ id, l }));
+    const top = (key: keyof ProdLine, n = 5) =>
+      rows
+        .filter((r) => (r.l[key] as number) > 0)
+        .sort((a, b) => (b.l[key] as number) - (a.l[key] as number))
+        .slice(0, n);
+    return { points: top('points'), blocks: top('blocks'), digs: top('digs'), assists: top('assists') };
+  }, [currentDay, season]);
 
   return (
     <Screen title={`${season + 1}시즌 기록`}>
@@ -53,6 +65,36 @@ export default function History() {
           );
         })}
       </Card>
+
+      <Title>개인 기록 리더보드</Title>
+      {([
+        { label: '득점', list: leaders.points, key: 'points' as const },
+        { label: '블로킹', list: leaders.blocks, key: 'blocks' as const },
+        { label: '디그', list: leaders.digs, key: 'digs' as const },
+        { label: '세트', list: leaders.assists, key: 'assists' as const },
+      ]).map((cat) => (
+        <Card key={cat.label}>
+          <Text style={{ color: theme.text, fontWeight: '800', marginBottom: 2 }}>{cat.label} TOP 5</Text>
+          {cat.list.length === 0 ? (
+            <Muted style={{ fontSize: 12 }}>기록 없음</Muted>
+          ) : (
+            cat.list.map((r, i) => {
+              const p = getPlayer(r.id);
+              const mine = !!teamId && teamPlayerIds(teamId).includes(r.id);
+              return (
+                <View key={r.id} style={styles.lbRow}>
+                  <Text style={styles.lbRank}>{i + 1}</Text>
+                  {p ? <PosTag pos={p.position} /> : null}
+                  <Text style={[styles.lbName, mine && styles.mine]} numberOfLines={1}>
+                    {p?.name ?? r.id}
+                  </Text>
+                  <Text style={styles.lbVal}>{r.l[cat.key]}</Text>
+                </View>
+              );
+            })
+          )}
+        </Card>
+      ))}
 
       <Title>경기 결과 (전 구단)</Title>
       {results.length === 0 ? (
@@ -95,4 +137,9 @@ const styles = StyleSheet.create({
   mTeam: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
   score: { color: theme.text, fontSize: 16, fontWeight: '800', minWidth: 50, textAlign: 'center' },
   win: { color: theme.good, fontWeight: '800' },
+  lbRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  lbRank: { width: 18, color: theme.muted, fontSize: 13, fontWeight: '700' },
+  lbName: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
+  lbVal: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 36, textAlign: 'right' },
 });
+

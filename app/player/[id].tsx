@@ -15,10 +15,9 @@ const STATUS_COLOR = { 꿀계약: theme.good, 적정: theme.muted, 고연봉: th
 export default function PlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const currentDay = useGameStore((s) => s.currentDay);
-  const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
-  const prod = id ? getPlayerProduction(id, results) : undefined;
+  const prod = id ? getPlayerProduction(id, currentDay) : undefined;
 
   if (!p) {
     return (
