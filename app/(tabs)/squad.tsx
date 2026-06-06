@@ -3,6 +3,7 @@ import { Text } from 'react-native';
 import { Card, Muted, Row, Screen, Title, theme } from '../../components/Screen';
 import { RosterList } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeamCoach } from '../../data/league';
+import { activeRoster } from '../../data/roster';
 import { useGameStore } from '../../store/useGameStore';
 
 const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
@@ -11,7 +12,9 @@ export default function Squad() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
-  const players = getEvolvedTeamPlayers(teamId, currentDay);
+  const overrides = useGameStore((s) => s.contractOverrides);
+  const released = useGameStore((s) => s.released);
+  const players = activeRoster(getEvolvedTeamPlayers(teamId, currentDay), overrides, released);
   const coach = getTeamCoach(teamId);
 
   return (

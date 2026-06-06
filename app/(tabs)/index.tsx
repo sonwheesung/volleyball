@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
 import { SEASON, getEvolvedTeamPlayers, getTeam, getTeamCoach } from '../../data/league';
+import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { teamOverall } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
 import { teamScheduleEntries } from '../../engine/season';
@@ -15,13 +16,16 @@ export default function Dashboard() {
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
+  const overrides = useGameStore((s) => s.contractOverrides);
+  const released = useGameStore((s) => s.released);
   const resetSave = useGameStore((s) => s.resetSave);
 
   const team = getTeam(teamId);
-  const players = getEvolvedTeamPlayers(teamId, currentDay);
+  const basePlayers = getEvolvedTeamPlayers(teamId, currentDay);
+  const roster = activeRoster(basePlayers, overrides, released);
   const coach = getTeamCoach(teamId);
-  const ovr = teamOverall(players);
-  const payroll = players.reduce((s, p) => s + p.contract.salary, 0);
+  const ovr = teamOverall(basePlayers); // 전력은 전체 스쿼드 기준(경기 엔진과 일치)
+  const payroll = sumPayroll(roster);   // 페이롤은 활성 계약 기준
 
   const record = useMemo(() => {
     const entries = teamScheduleEntries(SEASON, teamId);

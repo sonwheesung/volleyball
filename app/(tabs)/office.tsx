@@ -1,11 +1,141 @@
-import { Card, Muted, Screen } from '../../components/Screen';
+import { useRouter } from 'expo-router';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../../components/Screen';
+import { getEvolvedTeamPlayers, getPlayer, getTeam } from '../../data/league';
+import { getPlayerProduction } from '../../data/production';
+import { activeRoster, payroll } from '../../data/roster';
+import { overall } from '../../engine/overall';
+import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
+import { useGameStore } from '../../store/useGameStore';
+import type { Contract, Player } from '../../types';
+
+const STATUS_COLOR = { 꿀계약: theme.good, 적정: theme.muted, 고연봉: theme.bad } as const;
+const RESIGN_YEARS = 3;
 
 export default function Office() {
+  const router = useRouter();
+  const teamId = useGameStore((s) => s.selectedTeamId)!;
+  const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
+  const overrides = useGameStore((s) => s.contractOverrides);
+  const released = useGameStore((s) => s.released);
+  const reSign = useGameStore((s) => s.reSign);
+  const release = useGameStore((s) => s.release);
+  const unrelease = useGameStore((s) => s.unrelease);
+
+  const team = getTeam(teamId);
+  const evolved = getEvolvedTeamPlayers(teamId, currentDay);
+  const roster = activeRoster(evolved, overrides, released).sort(
+    (a, b) => b.contract.salary - a.contract.salary,
+  );
+  const total = payroll(roster);
+  const budget = team?.budget ?? 0;
+  const releasedPlayers = released.map((id) => getPlayer(id)).filter((p): p is Player => !!p);
+
+  const onResign = (p: Player) => {
+    const market = marketValue(p, getPlayerProduction(p.id, results));
+    const contract: Contract = {
+      salary: market,
+      years: RESIGN_YEARS,
+      remaining: RESIGN_YEARS,
+      signedAtAge: p.age,
+    };
+    Alert.alert(
+      '재계약',
+      `${p.name}\n연봉 ${formatMoney(p.contract.salary)} → ${formatMoney(market)} · ${RESIGN_YEARS}년 연장`,
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '재계약', onPress: () => reSign(p.id, contract) },
+      ],
+    );
+  };
+
+  const onRelease = (p: Player) => {
+    Alert.alert('방출', `${p.name} 방출\n연봉 ${formatMoney(p.contract.salary)} 절감 (되돌릴 수 있음)`, [
+      { text: '취소', style: 'cancel' },
+      { text: '방출', style: 'destructive', onPress: () => release(p.id) },
+    ]);
+  };
+
   return (
     <Screen title="단장 업무">
       <Card>
-        <Muted>드래프트 · FA · 트레이드 · 외국인 영입 · 감독 선임. 단장 의사결정 루프. (Phase 5)</Muted>
+        <Row>
+          <Muted>팀 총연봉 / 예산</Muted>
+          <Text style={{ color: total > budget ? theme.bad : theme.text, fontSize: 16, fontWeight: '800' }}>
+            {formatMoney(total)} / {formatMoney(budget)}
+          </Text>
+        </Row>
+        <Muted style={{ fontSize: 12 }}>
+          잔여 {formatMoney(Math.max(0, budget - total))} · 선수 {roster.length}명
+        </Muted>
       </Card>
+
+      <Title>계약 관리</Title>
+      {roster.map((p) => {
+        const market = marketValue(p, getPlayerProduction(p.id, results));
+        const status = contractStatus(p.contract.salary, market);
+        return (
+          <View key={p.id} style={styles.row}>
+            <Pressable
+              style={styles.info}
+              onPress={() => router.push(`/player/${p.id}`)}
+            >
+              <PosTag pos={p.position} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>{p.name}</Text>
+                <Text style={styles.sub}>
+                  {p.age}세 · {formatMoney(p.contract.salary)} · 잔여 {p.contract.remaining}년 ·{' '}
+                  <Text style={{ color: STATUS_COLOR[status] }}>{status}</Text>
+                </Text>
+              </View>
+              <OvrBadge value={overall(p)} />
+            </Pressable>
+            <View style={styles.actions}>
+              <Pressable onPress={() => onResign(p)} style={[styles.btn, { borderColor: theme.accent }]}>
+                <Text style={[styles.btnText, { color: theme.accent }]}>재계약</Text>
+              </Pressable>
+              <Pressable onPress={() => onRelease(p)} style={[styles.btn, { borderColor: theme.bad }]}>
+                <Text style={[styles.btnText, { color: theme.bad }]}>방출</Text>
+              </Pressable>
+            </View>
+          </View>
+        );
+      })}
+
+      {releasedPlayers.length > 0 ? (
+        <>
+          <Title>방출 선수</Title>
+          {releasedPlayers.map((p) => (
+            <View key={p.id} style={styles.row}>
+              <View style={styles.info}>
+                <PosTag pos={p.position} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.name, { color: theme.muted }]}>{p.name}</Text>
+                  <Text style={styles.sub}>{p.age}세 · {formatMoney(p.contract.salary)}</Text>
+                </View>
+              </View>
+              <Pressable onPress={() => unrelease(p.id)} style={[styles.btn, { borderColor: theme.good }]}>
+                <Text style={[styles.btnText, { color: theme.good }]}>복귀</Text>
+              </Pressable>
+            </View>
+          ))}
+        </>
+      ) : null}
+
+      <Muted style={{ fontSize: 12 }}>
+        FA 영입은 다중 시즌(계약 만료) 도입과 함께 추가됩니다.
+      </Muted>
     </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, gap: 10 },
+  info: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  name: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
+  actions: { flexDirection: 'row', gap: 8 },
+  btn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
+  btnText: { fontSize: 14, fontWeight: '800' },
+});

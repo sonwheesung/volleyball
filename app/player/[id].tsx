@@ -3,6 +3,7 @@ import { Text, View } from 'react-native';
 import { Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
 import { getEvolvedPlayer } from '../../data/league';
 import { getPlayerProduction } from '../../data/production';
+import { effectiveContract } from '../../data/roster';
 import { overall } from '../../engine/overall';
 import { deriveRatings } from '../../engine/ratings';
 import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
@@ -14,6 +15,7 @@ export default function PlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
+  const overrides = useGameStore((s) => s.contractOverrides);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
   const prod = id ? getPlayerProduction(id, results) : undefined;
 
@@ -26,8 +28,9 @@ export default function PlayerDetail() {
   }
 
   const r = deriveRatings(p);
+  const contract = effectiveContract(p, overrides);
   const market = marketValue(p, prod);
-  const status = contractStatus(p.contract.salary, market);
+  const status = contractStatus(contract.salary, market);
 
   return (
     <Screen title={p.name}>
@@ -47,7 +50,7 @@ export default function PlayerDetail() {
         <Row>
           <Muted>연봉</Muted>
           <Text style={{ color: theme.text, fontSize: 18, fontWeight: '800' }}>
-            {formatMoney(p.contract.salary)}
+            {formatMoney(contract.salary)}
           </Text>
         </Row>
         <Row>
@@ -56,7 +59,7 @@ export default function PlayerDetail() {
         </Row>
         <Row>
           <Muted>잔여 계약</Muted>
-          <Text style={{ color: theme.text, fontWeight: '700' }}>{p.contract.remaining}년</Text>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>{contract.remaining}년</Text>
         </Row>
         <Row>
           <Muted>평가</Muted>
