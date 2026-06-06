@@ -7,6 +7,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import {
   commitPlayerBase,
+  commitRosters,
   currentBasePlayers,
   focusOf,
   resetLeagueBase,
@@ -23,6 +24,7 @@ interface GameState {
   contractOverrides: Record<string, Contract>;
   released: string[];
   playerBase: Record<string, Player> | null;   // 시즌 시작 시점 선수 스냅샷(null=시드)
+  rosters: Record<string, string[]> | null;    // 가변 팀 구성(null=시드)
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -42,6 +44,7 @@ const freshSave = {
   contractOverrides: {} as Record<string, Contract>,
   released: [] as string[],
   playerBase: null as Record<string, Player> | null,
+  rosters: null as Record<string, string[]> | null,
 };
 
 export const useGameStore = create<GameState>()(
@@ -92,9 +95,11 @@ export const useGameStore = create<GameState>()(
         contractOverrides: s.contractOverrides,
         released: s.released,
         playerBase: s.playerBase,
+        rosters: s.rosters,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);
+        if (state?.rosters) commitRosters(state.rosters);
         useGameStore.setState({ hydrated: true });
       },
     },
