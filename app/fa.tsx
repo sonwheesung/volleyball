@@ -2,8 +2,8 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
-import { currentRosters, getTeam } from '../data/league';
-import { buildOffseason } from '../data/offseason';
+import { getTeam } from '../data/league';
+import { faMarketPreview } from '../data/offseason';
 import { LEAGUE_CAP } from '../engine/cap';
 import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
 import { assignFAGrades, askingPrice } from '../engine/faMarket';
@@ -11,11 +11,11 @@ import { overall } from '../engine/overall';
 import { formatMoney, marketValue } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 
-function shortTeam(teamId: string): string {
+const shortTeam = (teamId: string) => {
   const n = getTeam(teamId)?.name ?? '';
-  const parts = n.split(' ');
-  return parts.length > 1 ? parts[1] : n;
-}
+  const p = n.split(' ');
+  return p.length > 1 ? p[1] : n;
+};
 
 export default function FACenter() {
   const router = useRouter();
@@ -24,89 +24,72 @@ export default function FACenter() {
   const resignDecisions = useGameStore((s) => s.resignDecisions);
   const contractOverrides = useGameStore((s) => s.contractOverrides);
   const faSignings = useGameStore((s) => s.faSignings);
+  const faAggressive = useGameStore((s) => s.faAggressive);
   const protectedIds = useGameStore((s) => s.protectedIds);
   const signFA = useGameStore((s) => s.signFA);
   const unsignFA = useGameStore((s) => s.unsignFA);
+  const setAggressive = useGameStore((s) => s.setAggressive);
   const toggleProtect = useGameStore((s) => s.toggleProtect);
 
-  // 이전 소속(표시용) — 풀 형성 전 로스터 기준
-  const prevTeamOf = useMemo(() => {
-    const m: Record<string, string> = {};
-    const rs = currentRosters();
-    for (const tid of Object.keys(rs)) for (const id of rs[tid]) m[id] = tid;
-    return m;
-  }, [season]);
-
-  const off = useMemo(
-    () => buildOffseason(my, resignDecisions, contractOverrides, season + 1),
-    [my, resignDecisions, contractOverrides, season],
+  // 경쟁 결과 미리보기(결정론) — 영입 성공/실패 예상
+  const pv = useMemo(
+    () => faMarketPreview(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1),
+    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season],
   );
+  const snap = pv.snapshot;
 
-  const poolPlayers = off.pool
-    .map((id) => off.snapshot[id])
-    .filter(Boolean)
-    .sort((a, b) => overall(b) - overall(a));
+  const poolPlayers = pv.pool.map((id) => snap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
   const grades = assignFAGrades(poolPlayers);
+  const myRoster = pv.myRoster.map((id) => snap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
 
-  // 내 로스터(보호명단 대상) + 예상 보상선수
-  const myRosterIds = off.rosters[my] ?? [];
-  const myRoster = myRosterIds
-    .map((id) => off.snapshot[id])
-    .filter(Boolean)
-    .sort((a, b) => overall(b) - overall(a));
-  // 캡 사용량 = 내 로스터 연봉 + 영입 예정 요구연봉
-  const myPayroll = myRosterIds.reduce((s, id) => s + (off.snapshot[id]?.contract.salary ?? 0), 0);
-  const askOf = (id: string) => {
-    const p = off.snapshot[id];
-    const g = grades.get(id);
-    return p && g ? askingPrice(marketValue(p), g) : 0;
-  };
-  const signCost = faSignings.reduce((s, id) => s + askOf(id), 0);
-  const projected = myPayroll + signCost;
+  const myPayroll = pv.myRoster.reduce((s, id) => s + (snap[id]?.contract.salary ?? 0), 0);
+  const signedCost = [...pv.signedByMe].reduce((s, id) => s + (snap[id]?.contract.salary ?? 0), 0);
+  const projected = myPayroll + signedCost;
 
-  const projectedComp = pickCompensation(myRosterIds, protectedIds, off.snapshot, []);
-  const projectedCompName = projectedComp ? off.snapshot[projectedComp]?.name : null;
-  // A/B 영입 수(보상선수 필요 건수)
-  const compNeeded = faSignings.filter((id) => {
+  const projectedComp = pickCompensation(pv.myRoster, protectedIds, snap, []);
+  const projectedCompName = projectedComp ? snap[projectedComp]?.name : null;
+  const compNeeded = [...pv.signedByMe].filter((id) => {
     const g = grades.get(id);
     return g ? needsCompensationPlayer(g) : false;
   }).length;
-
-  const onFinish = () => {
-    router.push('/draft');
-  };
 
   return (
     <Screen title={`${season + 1}→${season + 2}시즌 FA 시장`}>
       <Card>
         <Row>
-          <Muted>영입 선택 / FA 풀</Muted>
+          <Muted>영입 성공 / 시도</Muted>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
-            {faSignings.length}명 / {poolPlayers.length}명
+            {pv.signedByMe.size} / {faSignings.length}
           </Text>
         </Row>
         <Muted style={{ fontSize: 12 }}>
-          타 구단이 풀어준 FA와 내가 포기한 선수가 풀에 나옵니다. 영입 후 "다음 시즌 시작"으로 확정.
-          남은 자리는 AI·신인으로 채워집니다.
+          영입을 눌러도 선수는 팀 전력·출전기회·충성도·연봉을 보고 결정합니다. 다른 구단과 경합에서
+          질 수 있어요. 캡 안에서만 가능.
         </Muted>
         <Row>
-          <Muted>샐러리캡</Muted>
+          <Muted>샐러리캡(예상)</Muted>
           <Text style={{ color: projected > LEAGUE_CAP ? theme.bad : theme.text, fontWeight: '800' }}>
             {formatMoney(projected)} / {formatMoney(LEAGUE_CAP)}
           </Text>
         </Row>
+        <Pressable
+          onPress={() => setAggressive(!faAggressive)}
+          style={[styles.toggle, faAggressive && { borderColor: theme.warn, backgroundColor: theme.warn + '20' }]}
+        >
+          <Text style={{ color: faAggressive ? theme.warn : theme.muted, fontWeight: '800' }}>
+            공격적 영입 {faAggressive ? 'ON' : 'OFF'} (연봉 +20% 제시 → 경쟁 우위)
+          </Text>
+        </Pressable>
       </Card>
 
-      <Button label="신인 드래프트로 →" onPress={onFinish} />
+      <Button label="신인 드래프트로 →" onPress={() => router.push('/draft')} />
 
       {compNeeded > 0 ? (
         <Card>
           <Text style={{ color: theme.warn, fontSize: 13, fontWeight: '700' }}>
             A/B 영입 {compNeeded}명 → 보호명단 밖 {compNeeded}명이 원소속팀으로 갑니다.
           </Text>
-          {projectedCompName ? (
-            <Muted style={{ fontSize: 12 }}>현재 보상 1순위: {projectedCompName}</Muted>
-          ) : null}
+          {projectedCompName ? <Muted style={{ fontSize: 12 }}>현재 보상 1순위: {projectedCompName}</Muted> : null}
         </Card>
       ) : null}
 
@@ -132,16 +115,18 @@ export default function FACenter() {
 
       <Title>FA 시장 ({poolPlayers.length}명)</Title>
       {poolPlayers.length === 0 ? (
-        <Card>
-          <Muted>이번 오프시즌 풀린 FA가 없습니다.</Muted>
-        </Card>
+        <Card><Muted>이번 오프시즌 풀린 FA가 없습니다.</Muted></Card>
       ) : (
         poolPlayers.map((p) => {
           const grade = grades.get(p.id)!;
           const ask = askingPrice(marketValue(p), grade);
-          const signed = faSignings.includes(p.id);
-          const prev = prevTeamOf[p.id];
-          const overCap = !signed && projected + ask > LEAGUE_CAP;
+          const targeted = faSignings.includes(p.id);
+          const won = pv.signedByMe.has(p.id);
+          const lost = pv.lostTo[p.id];
+          let badge: { t: string; c: string } | null = null;
+          if (won) badge = { t: '영입 성공', c: theme.good };
+          else if (targeted && lost) badge = { t: `실패 → ${shortTeam(lost)}`, c: theme.bad };
+          else if (targeted) badge = { t: '경합/불발', c: theme.warn };
           return (
             <View key={p.id} style={styles.row}>
               <View style={styles.info}>
@@ -152,23 +137,22 @@ export default function FACenter() {
                     {p.isForeign ? <Text style={{ color: theme.bad }}> 외</Text> : null}
                   </Text>
                   <Text style={styles.sub}>
-                    {p.age}세 · {ask ? formatMoney(ask) : ''} {prev ? `· ${shortTeam(prev)}` : ''}
+                    {p.age}세 · 요구 {formatMoney(ask)}
                     {needsCompensationPlayer(grade) ? ' · 보상선수' : ''}
                   </Text>
+                  {badge ? <Text style={{ color: badge.c, fontSize: 12, fontWeight: '800', marginTop: 2 }}>{badge.t}</Text> : null}
                 </View>
                 <OvrBadge value={overall(p)} />
               </View>
               <Pressable
-                disabled={overCap}
-                onPress={() => (signed ? unsignFA(p.id) : signFA(p.id))}
+                onPress={() => (targeted ? unsignFA(p.id) : signFA(p.id))}
                 style={[
                   styles.btn,
-                  { borderColor: signed ? theme.bad : theme.accent, backgroundColor: signed ? theme.bad + '22' : theme.accent + '22' },
-                  overCap && { opacity: 0.4 },
+                  { borderColor: targeted ? theme.bad : theme.accent, backgroundColor: targeted ? theme.bad + '22' : theme.accent + '22' },
                 ]}
               >
-                <Text style={[styles.btnText, { color: signed ? theme.bad : theme.accent }]}>
-                  {signed ? '취소' : overCap ? '캡초과' : '영입'}
+                <Text style={[styles.btnText, { color: targeted ? theme.bad : theme.accent }]}>
+                  {targeted ? '취소' : '영입 시도'}
                 </Text>
               </Pressable>
             </View>
@@ -186,10 +170,10 @@ const styles = StyleSheet.create({
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   btn: { borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
   btnText: { fontSize: 14, fontWeight: '800' },
+  toggle: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 8, alignItems: 'center', marginTop: 4 },
   protectRow: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: theme.card, borderRadius: 10, borderWidth: 1, borderColor: theme.border,
     paddingHorizontal: 12, paddingVertical: 8,
   },
 });
-

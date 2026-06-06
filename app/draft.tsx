@@ -27,9 +27,10 @@ export default function DraftCenter() {
   const toggleDraftPick = useGameStore((s) => s.toggleDraftPick);
   const endSeason = useGameStore((s) => s.endSeason);
 
+  const faAggressive = useGameStore((s) => s.faAggressive);
   const ctx = useMemo(
-    () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, protectedIds, season + 1),
-    [my, resignDecisions, contractOverrides, faSignings, protectedIds, season],
+    () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1),
+    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season],
   );
   const standings = useMemo(() => computeStandings(Number.MAX_SAFE_INTEGER), [season]);
 

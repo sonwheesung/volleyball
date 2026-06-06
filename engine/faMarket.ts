@@ -36,6 +36,26 @@ export function askingPrice(market: number, grade: FAGrade): number {
   return Math.round((market * PREMIUM[grade]) / 100) * 100;
 }
 
+// ─── 선수의 오퍼 평가(수락 판정) ───
+export interface OfferCtx {
+  teamOvr: number;     // 영입 구단 전력
+  posGap: number;      // 그 팀의 해당 포지션 부족도(출전 기회)
+  isOriginal: boolean; // 원소속 구단인가
+  isFranchise: boolean;// 프랜차이즈(원소속 장기근속)인가
+  offerSalary: number; // 제시 연봉
+  asking: number;      // 요구 연봉
+  rand: number;        // 0~1 결정론 난수
+}
+
+/** 선수가 한 오퍼를 얼마나 선호하는지(높을수록 수락) */
+export function offerScore(c: OfferCtx): number {
+  const salaryRatio = Math.max(0.6, Math.min(1.6, c.offerSalary / Math.max(1, c.asking)));
+  const strength = Math.max(0, Math.min(1.4, (c.teamOvr - 58) / 18)); // 전력 매력
+  const playingTime = c.posGap > 0 ? Math.min(1, 0.4 + 0.25 * c.posGap) : 0.15; // 출전 기회
+  const loyalty = c.isOriginal ? (c.isFranchise ? 1.0 : 0.5) : 0;
+  return 0.35 * salaryRatio + 0.3 * strength + 0.2 * playingTime + 0.15 * loyalty + 0.05 * c.rand;
+}
+
 /** 자격 FA 목록 + 등급 (한 오프시즌 스냅샷) */
 export function listFreeAgents(players: Player[]): { player: Player; grade: FAGrade }[] {
   const pool = players.filter(isFAEligible);

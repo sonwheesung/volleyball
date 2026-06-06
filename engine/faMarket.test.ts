@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isFAEligible, assignFAGrades, askingPrice, listFreeAgents } from './faMarket';
+import { isFAEligible, assignFAGrades, askingPrice, listFreeAgents, offerScore } from './faMarket';
 import { TRAINABLE_STATS } from './training';
 import type { Player, TrainableStat } from '../types';
 
@@ -36,6 +36,14 @@ test('등급: 연봉 순위로 A/B/C', () => {
 test('요구연봉: 등급 프리미엄 A>B>C', () => {
   assert.ok(askingPrice(40000, 'A') > askingPrice(40000, 'B'));
   assert.ok(askingPrice(40000, 'B') > askingPrice(40000, 'C'));
+});
+
+test('offerScore: 연봉↑·전력↑·출전기회↑·충성도↑ 일수록 선호', () => {
+  const base = { teamOvr: 70, posGap: 1, isOriginal: false, isFranchise: false, offerSalary: 40000, asking: 40000, rand: 0.5 };
+  assert.ok(offerScore({ ...base, offerSalary: 50000 }) > offerScore(base), '연봉↑');
+  assert.ok(offerScore({ ...base, teamOvr: 80 }) > offerScore(base), '전력↑');
+  assert.ok(offerScore({ ...base, posGap: 3 }) > offerScore({ ...base, posGap: 0 }), '출전기회↑');
+  assert.ok(offerScore({ ...base, isOriginal: true, isFranchise: true }) > offerScore(base), '충성도↑');
 });
 
 test('listFreeAgents: 자격자만 + 등급 부여', () => {

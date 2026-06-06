@@ -23,7 +23,8 @@ interface GameState {
   playerBase: Record<string, Player> | null;   // 시즌 시작 시점 선수 스냅샷(null=시드)
   rosters: Record<string, string[]> | null;    // 가변 팀 구성(null=시드)
   resignDecisions: Record<string, boolean>;    // 내 FA 잔류(true)/포기(false), 기본=잔류
-  faSignings: string[];                        // 오프시즌에 영입하기로 한 풀 FA id
+  faSignings: string[];                        // 오프시즌에 영입 시도할 풀 FA id
+  faAggressive: boolean;                       // 공격적 영입(연봉↑로 경쟁 우위)
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
   archive: { season: number; championId: string }[]; // 역대 우승
@@ -37,6 +38,7 @@ interface GameState {
   setResign: (playerId: string, keep: boolean) => void;
   signFA: (playerId: string) => void;
   unsignFA: (playerId: string) => void;
+  setAggressive: (on: boolean) => void;
   toggleProtect: (playerId: string) => void;
   toggleDraftPick: (playerId: string) => void;
   recordChampion: (season: number, championId: string) => void;
@@ -55,6 +57,7 @@ const freshSave = {
   rosters: null as Record<string, string[]> | null,
   resignDecisions: {} as Record<string, boolean>,
   faSignings: [] as string[],
+  faAggressive: false,
   protectedIds: [] as string[],
   draftPicks: [] as string[],
   archive: [] as { season: number; championId: string }[],
@@ -84,6 +87,7 @@ export const useGameStore = create<GameState>()(
         set((s) => (s.faSignings.includes(playerId) ? s : { faSignings: [...s.faSignings, playerId] })),
       unsignFA: (playerId) =>
         set((s) => ({ faSignings: s.faSignings.filter((id) => id !== playerId) })),
+      setAggressive: (on) => set({ faAggressive: on }),
       toggleProtect: (playerId) =>
         set((s) => {
           if (s.protectedIds.includes(playerId))
@@ -105,12 +109,12 @@ export const useGameStore = create<GameState>()(
         ),
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, protectedIds, draftPicks } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
-        // 1) 롤오버·은퇴·FA(영입/보상/AI충원)·순번·클래스 (드래프트 센터와 동일 소스)
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, protectedIds, nextSeason);
+        // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
@@ -140,6 +144,7 @@ export const useGameStore = create<GameState>()(
           released: [],
           resignDecisions: {},
           faSignings: [],
+          faAggressive: false,
           protectedIds: [],
           draftPicks: [],
           playerBase: snapshot,
@@ -166,6 +171,7 @@ export const useGameStore = create<GameState>()(
         rosters: s.rosters,
         resignDecisions: s.resignDecisions,
         faSignings: s.faSignings,
+        faAggressive: s.faAggressive,
         protectedIds: s.protectedIds,
         draftPicks: s.draftPicks,
         archive: s.archive,
