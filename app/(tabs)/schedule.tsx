@@ -87,9 +87,9 @@ export default function Schedule() {
       ) : (
         <Card>
           <Title>시즌 종료</Title>
-          <Muted>정규리그 일정을 모두 마쳤습니다. FA 센터에서 자격 선수를 영입하고 다음 시즌을
-            시작하세요. (모든 선수 나이 +1, 성장·노쇠 반영, 계약 -1년)</Muted>
-          <Button label="오프시즌 · FA 센터" onPress={() => router.push('/fa')} />
+          <Muted>정규리그 일정을 모두 마쳤습니다. 포스트시즌(상위 3팀)을 치른 뒤 오프시즌으로
+            넘어갑니다. (이후 나이 +1·성장/노쇠·계약 -1년)</Muted>
+          <Button label="포스트시즌 →" onPress={() => router.push('/playoffs')} />
         </Card>
       )}
 

@@ -26,6 +26,7 @@ interface GameState {
   faSignings: string[];                        // 오프시즌에 영입하기로 한 풀 FA id
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
+  archive: { season: number; championId: string }[]; // 역대 우승
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -38,6 +39,7 @@ interface GameState {
   unsignFA: (playerId: string) => void;
   toggleProtect: (playerId: string) => void;
   toggleDraftPick: (playerId: string) => void;
+  recordChampion: (season: number, championId: string) => void;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -55,6 +57,7 @@ const freshSave = {
   faSignings: [] as string[],
   protectedIds: [] as string[],
   draftPicks: [] as string[],
+  archive: [] as { season: number; championId: string }[],
 };
 
 export const useGameStore = create<GameState>()(
@@ -93,6 +96,12 @@ export const useGameStore = create<GameState>()(
           s.draftPicks.includes(playerId)
             ? { draftPicks: s.draftPicks.filter((id) => id !== playerId) }
             : { draftPicks: [...s.draftPicks, playerId] },
+        ),
+      recordChampion: (season, championId) =>
+        set((s) =>
+          s.archive.some((a) => a.season === season)
+            ? s
+            : { archive: [...s.archive, { season, championId }] },
         ),
 
       endSeason: () => {
@@ -159,6 +168,7 @@ export const useGameStore = create<GameState>()(
         faSignings: s.faSignings,
         protectedIds: s.protectedIds,
         draftPicks: s.draftPicks,
+        archive: s.archive,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);

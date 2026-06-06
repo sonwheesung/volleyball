@@ -18,6 +18,7 @@ export default function History() {
   const teamId = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
+  const archive = useGameStore((s) => s.archive);
 
   const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
   const results = useMemo(
@@ -37,6 +38,22 @@ export default function History() {
 
   return (
     <Screen title={`${season + 1}시즌 기록`}>
+      {archive.length > 0 ? (
+        <>
+          <Title>역대 우승</Title>
+          <Card>
+            {archive.slice().reverse().map((a) => (
+              <View key={a.season} style={styles.row}>
+                <Text style={[styles.team, { flex: 0, width: 70 }]}>{a.season + 1}시즌</Text>
+                <Text style={[styles.team, a.championId === teamId && styles.mine]}>
+                  🏆 {getTeam(a.championId)?.name ?? a.championId}
+                </Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
       <Title>순위표</Title>
       <Card>
         <View style={[styles.row, styles.head]}>
