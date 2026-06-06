@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { currentRosters, getTeam } from '../data/league';
 import { buildOffseason } from '../data/offseason';
+import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
 import { assignFAGrades, askingPrice } from '../engine/faMarket';
 import { overall } from '../engine/overall';
 import { formatMoney, marketValue } from '../engine/salary';
@@ -22,8 +23,10 @@ export default function FACenter() {
   const resignDecisions = useGameStore((s) => s.resignDecisions);
   const contractOverrides = useGameStore((s) => s.contractOverrides);
   const faSignings = useGameStore((s) => s.faSignings);
+  const protectedIds = useGameStore((s) => s.protectedIds);
   const signFA = useGameStore((s) => s.signFA);
   const unsignFA = useGameStore((s) => s.unsignFA);
+  const toggleProtect = useGameStore((s) => s.toggleProtect);
   const endSeason = useGameStore((s) => s.endSeason);
 
   // 이전 소속(표시용) — 풀 형성 전 로스터 기준
@@ -44,6 +47,20 @@ export default function FACenter() {
     .filter(Boolean)
     .sort((a, b) => overall(b) - overall(a));
   const grades = assignFAGrades(poolPlayers);
+
+  // 내 로스터(보호명단 대상) + 예상 보상선수
+  const myRosterIds = off.rosters[my] ?? [];
+  const myRoster = myRosterIds
+    .map((id) => off.snapshot[id])
+    .filter(Boolean)
+    .sort((a, b) => overall(b) - overall(a));
+  const projectedComp = pickCompensation(myRosterIds, protectedIds, off.snapshot, []);
+  const projectedCompName = projectedComp ? off.snapshot[projectedComp]?.name : null;
+  // A/B 영입 수(보상선수 필요 건수)
+  const compNeeded = faSignings.filter((id) => {
+    const g = grades.get(id);
+    return g ? needsCompensationPlayer(g) : false;
+  }).length;
 
   const onFinish = () => {
     endSeason();
@@ -67,6 +84,37 @@ export default function FACenter() {
 
       <Button label="다음 시즌 시작" onPress={onFinish} />
 
+      {compNeeded > 0 ? (
+        <Card>
+          <Text style={{ color: theme.warn, fontSize: 13, fontWeight: '700' }}>
+            A/B 영입 {compNeeded}명 → 보호명단 밖 {compNeeded}명이 원소속팀으로 갑니다.
+          </Text>
+          {projectedCompName ? (
+            <Muted style={{ fontSize: 12 }}>현재 보상 1순위: {projectedCompName}</Muted>
+          ) : null}
+        </Card>
+      ) : null}
+
+      <Title>보호선수 명단 ({protectedIds.length}/{PROTECT_COUNT})</Title>
+      <Muted style={{ fontSize: 12 }}>보호하지 않은 선수가 보상선수로 지명될 수 있습니다.</Muted>
+      {myRoster.map((p) => {
+        const prot = protectedIds.includes(p.id);
+        return (
+          <Pressable
+            key={p.id}
+            onPress={() => toggleProtect(p.id)}
+            style={[styles.protectRow, prot && { borderColor: theme.good, backgroundColor: theme.good + '18' }]}
+          >
+            <PosTag pos={p.position} />
+            <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{p.name}</Text>
+            <OvrBadge value={overall(p)} />
+            <Text style={{ color: prot ? theme.good : theme.muted, fontWeight: '800', width: 36, textAlign: 'right' }}>
+              {prot ? '보호' : '—'}
+            </Text>
+          </Pressable>
+        );
+      })}
+
       <Title>FA 시장 ({poolPlayers.length}명)</Title>
       {poolPlayers.length === 0 ? (
         <Card>
@@ -89,6 +137,7 @@ export default function FACenter() {
                   </Text>
                   <Text style={styles.sub}>
                     {p.age}세 · {ask ? formatMoney(ask) : ''} {prev ? `· ${shortTeam(prev)}` : ''}
+                    {needsCompensationPlayer(grade) ? ' · 보상선수' : ''}
                   </Text>
                 </View>
                 <OvrBadge value={overall(p)} />
@@ -119,4 +168,10 @@ const styles = StyleSheet.create({
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   btn: { borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
   btnText: { fontSize: 14, fontWeight: '800' },
+  protectRow: {
+    flexDirection: 'row', alignItems: 'center', gap: 10,
+    backgroundColor: theme.card, borderRadius: 10, borderWidth: 1, borderColor: theme.border,
+    paddingHorizontal: 12, paddingVertical: 8,
+  },
 });
+
