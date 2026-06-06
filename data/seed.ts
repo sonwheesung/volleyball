@@ -158,6 +158,69 @@ export function makePlayer(
   return player;
 }
 
+// 신인(유망주) 생성 — 현재 OVR은 낮게(육성 대상), 포텐셜은 높게.
+// 드래프트 클래스 + 자동 충원 공용. KOVO 신인 기준(대부분 즉전감 아님).
+export function makeProspect(rng: Rng, id: string, pos: Position): Player {
+  const name = SURNAMES[rng.int(0, SURNAMES.length - 1)] + GIVEN[rng.int(0, GIVEN.length - 1)];
+  const age = rng.int(18, 20);
+  const core: Record<Position, Partial<Record<keyof Player, boolean>>> = {
+    S: { skSet: true, vq: true, focus: true },
+    OH: { skSpike: true, skReceive: true, skServe: true },
+    OP: { skSpike: true, skServe: true, jump: true },
+    MB: { skBlock: true, skSpike: true, jump: true },
+    L: { skDig: true, skReceive: true, agility: true },
+  };
+  const c = core[pos];
+
+  // 재능을 먼저 굴려 현재 피지컬·기술에 반영(즉전감 대형 신인 vs 프로젝트형 분화)
+  const talentBase = rollTalent(rng);
+  const catTalent = {
+    physical: 0.85 + rng.next() * 0.3,
+    skill: 0.85 + rng.next() * 0.3,
+    mental: 0.85 + rng.next() * 0.3,
+  };
+  const boost = Math.round((talentBase - 0.95) * 16); // 재능 보너스 (대략 -5 ~ +7)
+  const clamp = (v: number) => Math.max(30, Math.min(80, v));
+  const sk = (isCore: boolean) => clamp((isCore ? rng.int(46, 64) : rng.int(36, 54)) + boost);
+
+  const cur = {
+    height: heightFor(rng, pos),
+    jump: clamp((c.jump ? rng.int(56, 76) : rng.int(48, 68)) + boost),
+    agility: clamp((c.agility ? rng.int(56, 76) : rng.int(48, 68)) + boost),
+    staminaMax: rng.int(50, 74),
+    staminaRegen: rng.int(48, 72),
+    reaction: clamp(rng.int(44, 62) + boost),
+    positioning: rng.int(34, 52),   // 경험 부족(전원 낮게)
+    focus: c.focus ? rng.int(48, 64) : rng.int(42, 58),
+    consistency: rng.int(38, 56),   // 기복 큼(전원 낮게)
+    vq: rng.int(32, 50),            // 배구 IQ 낮게 시작(경험으로 성장)
+    skSpike: sk(!!c.skSpike),
+    skBlock: sk(!!c.skBlock),
+    skDig: sk(!!c.skDig),
+    skReceive: sk(!!c.skReceive),
+    skSet: sk(!!c.skSet),
+    skServe: sk(!!c.skServe),
+  };
+  const potential = {} as Record<TrainableStat, number>;
+  for (const s of TRAINABLE_STATS) {
+    const base = (cur as Record<string, number>)[s];
+    const head = Math.round((12 + rng.int(0, 18)) * talentBase); // 큰 성장 여지
+    potential[s] = Math.min(99, base + Math.max(0, head));
+  }
+
+  const player: Player = {
+    id, name, age, position: pos, isForeign: false,
+    ...cur,
+    xp: {}, potential, talentBase, catTalent,
+    contract: { salary: 0, years: 3, remaining: 3, signedAtAge: age },
+    clubTenure: 0,
+    peakAge: pos === 'MB' ? 26 : 28,
+    career: emptyCareer(),
+  };
+  player.contract.salary = computeSalary(player, age, rng);
+  return player;
+}
+
 export function generateLeague(seed: number): League {
   const rng = createRng(seed);
   const teams: Team[] = [];

@@ -4,7 +4,7 @@
 
 import { createRng } from '../engine/rng';
 import { ROSTER_IDEAL } from '../engine/aiGM';
-import { makePlayer } from './seed';
+import { makeProspect } from './seed';
 import type { Player, Position } from '../types';
 
 const IDEAL = ROSTER_IDEAL;
@@ -37,7 +37,7 @@ export function fillRosters(
       const need = IDEAL[pos] - have[pos];
       for (let i = 0; i < need; i++) {
         const id = `s${season}r${counter++}`;
-        const rookie = makePlayer(rng, id, pos, false, rng.int(18, 20));
+        const rookie = makeProspect(rng, id, pos);
         newPlayers.push(rookie);
         ids.push(id);
       }
