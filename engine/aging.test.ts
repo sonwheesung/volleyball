@@ -22,6 +22,7 @@ function makePlayer(age: number, startVal = 70): Player {
     xp: {}, potential, talentBase: 1.0,
     catTalent: { physical: 1, skill: 1, mental: 1 },
     contract: { salary: 0, years: 1, remaining: 1, signedAtAge: age },
+    clubTenure: 5,
     peakAge: 28,
     career: { seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
   };

@@ -7,6 +7,7 @@ import type { Player, Position } from '../types';
 import type { Rng } from './rng';
 import type { ProdLine } from './production';
 import { overall } from './overall';
+import { clampSalary } from './cap';
 
 const BASE = 28000;          // 중립 배수에서 ~2.8억
 const MIN_SALARY = 3000;     // 최저 (0.3억)
@@ -51,7 +52,7 @@ function perfFactor(p: Player, prod?: ProdLine): number {
  */
 export function marketValue(p: Player, prod?: ProdLine): number {
   const v = BASE * abilityMul(p) * ageEarnMul(p.age) * POSITION_MUL[p.position] * foreignMul(p) * perfFactor(p, prod);
-  return roundTo100(Math.max(MIN_SALARY, v));
+  return clampSalary(roundTo100(Math.max(MIN_SALARY, v)), p);
 }
 
 /**
@@ -63,7 +64,7 @@ export function computeSalary(p: Player, signedAtAge: number, rng?: Rng): number
   let v = BASE * abilityMul(p) * ageEarnMul(signedAtAge) * POSITION_MUL[p.position] * foreignMul(p) * noise;
   // 루키스케일: 어린 나이에 서명한 신인은 상한
   if (signedAtAge <= 22) v = Math.min(v, ROOKIE_CAP);
-  return roundTo100(Math.max(MIN_SALARY, v));
+  return clampSalary(roundTo100(Math.max(MIN_SALARY, v)), p);
 }
 
 export type ContractStatus = '꿀계약' | '적정' | '고연봉';

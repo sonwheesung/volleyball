@@ -137,6 +137,14 @@ export const useGameStore = create<GameState>()(
         const filled = fillRosters(aiFilled.rosters, (id) => snapshot[id], nextSeason);
         for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
 
+        // 5) 이적자 현 구단 근속 리셋(프랜차이즈 판정)
+        for (const tid of Object.keys(filled.rosters)) {
+          for (const id of filled.rosters[tid]) {
+            const prev = prevTeamOf[id];
+            if (prev && prev !== tid && snapshot[id]) snapshot[id] = { ...snapshot[id], clubTenure: 0 };
+          }
+        }
+
         commitPlayerBase(snapshot);
         commitRosters(filled.rosters);
         set({

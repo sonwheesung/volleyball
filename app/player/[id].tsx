@@ -4,6 +4,7 @@ import { Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } fro
 import { getEvolvedPlayer } from '../../data/league';
 import { getPlayerProduction } from '../../data/production';
 import { effectiveContract } from '../../data/roster';
+import { isFranchise } from '../../engine/cap';
 import { overall } from '../../engine/overall';
 import { deriveRatings } from '../../engine/ratings';
 import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
@@ -39,6 +40,7 @@ export default function PlayerDetail() {
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
             <PosTag pos={p.position} full />
             {p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700' }}>외국인</Text> : null}
+            {isFranchise(p) ? <Text style={{ color: theme.warn, fontWeight: '700' }}>프랜차이즈</Text> : null}
           </View>
           <OvrBadge value={overall(p)} />
         </Row>

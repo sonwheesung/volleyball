@@ -57,6 +57,7 @@ export interface Player {
 
   // 계약 (SALARY_SYSTEM) — 연봉은 서명 시점 가치로 고착
   contract: Contract;
+  clubTenure: number;   // 현 구단 연속 근속 시즌(프랜차이즈 판정) — 이적 시 0
 
   // 메타
   peakAge: number;     // 전성기 나이(노쇠 곡선용)

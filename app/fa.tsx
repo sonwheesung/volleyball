@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { currentRosters, getTeam } from '../data/league';
 import { buildOffseason } from '../data/offseason';
+import { LEAGUE_CAP } from '../engine/cap';
 import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
 import { assignFAGrades, askingPrice } from '../engine/faMarket';
 import { overall } from '../engine/overall';
@@ -54,6 +55,16 @@ export default function FACenter() {
     .map((id) => off.snapshot[id])
     .filter(Boolean)
     .sort((a, b) => overall(b) - overall(a));
+  // 캡 사용량 = 내 로스터 연봉 + 영입 예정 요구연봉
+  const myPayroll = myRosterIds.reduce((s, id) => s + (off.snapshot[id]?.contract.salary ?? 0), 0);
+  const askOf = (id: string) => {
+    const p = off.snapshot[id];
+    const g = grades.get(id);
+    return p && g ? askingPrice(marketValue(p), g) : 0;
+  };
+  const signCost = faSignings.reduce((s, id) => s + askOf(id), 0);
+  const projected = myPayroll + signCost;
+
   const projectedComp = pickCompensation(myRosterIds, protectedIds, off.snapshot, []);
   const projectedCompName = projectedComp ? off.snapshot[projectedComp]?.name : null;
   // A/B 영입 수(보상선수 필요 건수)
@@ -80,6 +91,12 @@ export default function FACenter() {
           타 구단이 풀어준 FA와 내가 포기한 선수가 풀에 나옵니다. 영입 후 "다음 시즌 시작"으로 확정.
           남은 자리는 AI·신인으로 채워집니다.
         </Muted>
+        <Row>
+          <Muted>샐러리캡</Muted>
+          <Text style={{ color: projected > LEAGUE_CAP ? theme.bad : theme.text, fontWeight: '800' }}>
+            {formatMoney(projected)} / {formatMoney(LEAGUE_CAP)}
+          </Text>
+        </Row>
       </Card>
 
       <Button label="다음 시즌 시작" onPress={onFinish} />
@@ -126,6 +143,7 @@ export default function FACenter() {
           const ask = askingPrice(marketValue(p), grade);
           const signed = faSignings.includes(p.id);
           const prev = prevTeamOf[p.id];
+          const overCap = !signed && projected + ask > LEAGUE_CAP;
           return (
             <View key={p.id} style={styles.row}>
               <View style={styles.info}>
@@ -143,14 +161,16 @@ export default function FACenter() {
                 <OvrBadge value={overall(p)} />
               </View>
               <Pressable
+                disabled={overCap}
                 onPress={() => (signed ? unsignFA(p.id) : signFA(p.id))}
                 style={[
                   styles.btn,
                   { borderColor: signed ? theme.bad : theme.accent, backgroundColor: signed ? theme.bad + '22' : theme.accent + '22' },
+                  overCap && { opacity: 0.4 },
                 ]}
               >
                 <Text style={[styles.btnText, { color: signed ? theme.bad : theme.accent }]}>
-                  {signed ? '취소' : '영입'}
+                  {signed ? '취소' : overCap ? '캡초과' : '영입'}
                 </Text>
               </Pressable>
             </View>

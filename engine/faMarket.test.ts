@@ -14,6 +14,7 @@ function mk(id: string, seasons: number, remaining: number, salary: number): Pla
     focus: v, consistency: v, vq: v, skSpike: v, skBlock: v, skDig: v, skReceive: v, skSet: v, skServe: v,
     xp: {}, potential, talentBase: 1, catTalent: { physical: 1, skill: 1, mental: 1 },
     contract: { salary, years: 3, remaining, signedAtAge: 22 },
+    clubTenure: 5,
     peakAge: 28,
     career: { seasons, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
   };

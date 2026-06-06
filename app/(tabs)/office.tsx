@@ -5,6 +5,7 @@ import { getEvolvedTeamPlayers, getPlayer, getTeam } from '../../data/league';
 import { getPlayerProduction } from '../../data/production';
 import { activeRoster, payroll } from '../../data/roster';
 import { overall } from '../../engine/overall';
+import { canAfford, isFranchise, LEAGUE_CAP } from '../../engine/cap';
 import { assignFAGrades, askingPrice, willBeFA } from '../../engine/faMarket';
 import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
 import { useGameStore } from '../../store/useGameStore';
@@ -32,13 +33,21 @@ export default function Office() {
     (a, b) => b.contract.salary - a.contract.salary,
   );
   const total = payroll(roster);
-  const budget = team?.budget ?? 0;
+  const budget = LEAGUE_CAP;
+  void team;
   const releasedPlayers = released.map((id) => getPlayer(id)).filter((p): p is Player => !!p);
   const faList = roster.filter(willBeFA);
   const faGrades = assignFAGrades(faList);
 
   const onResign = (p: Player) => {
     const market = marketValue(p, getPlayerProduction(p.id, results));
+    if (!canAfford(total - p.contract.salary, market, { franchise: isFranchise(p) })) {
+      Alert.alert(
+        '샐러리캡 초과',
+        `${p.name} 재계약(${formatMoney(market)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`,
+      );
+      return;
+    }
     const contract: Contract = {
       salary: market,
       years: RESIGN_YEARS,
@@ -92,6 +101,7 @@ export default function Office() {
                 <Text style={styles.sub}>
                   {p.age}세 · {formatMoney(p.contract.salary)} · 잔여 {p.contract.remaining}년 ·{' '}
                   <Text style={{ color: STATUS_COLOR[status] }}>{status}</Text>
+                  {isFranchise(p) ? <Text style={{ color: theme.warn }}> · 프랜차이즈</Text> : null}
                 </Text>
               </View>
               <OvrBadge value={overall(p)} />

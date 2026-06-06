@@ -150,6 +150,7 @@ export function makePlayer(
     talentBase,
     catTalent,
     contract: { salary: 0, years: yearsAgo + remaining, remaining, signedAtAge },
+    clubTenure: Math.max(0, age - 19), // 시드는 자팀 육성(홈그로운) 가정
     peakAge: pos === 'MB' ? 26 : 28,
     career: { ...emptyCareer(), seasons: Math.max(0, age - 19) }, // 데뷔 추정
   };

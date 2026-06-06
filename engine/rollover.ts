@@ -30,7 +30,9 @@ export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Co
   if (remaining > 0) contract = { ...cur, remaining };
   else if (career.seasons >= FIRST_FA_SEASONS) contract = { ...cur, remaining: 0 }; // FA 공시
   else contract = renewedContract(aged); // 영건 자동연장
-  return { ...aged, contract, career };
+  // 현 구단 근속 +1 (이적 시 store 에서 0으로 리셋)
+  const clubTenure = (aged.clubTenure ?? 0) + 1;
+  return { ...aged, contract, career, clubTenure };
 }
 
 /** 리그 전체 롤오버 → 다음 시즌 base 스냅샷 */
