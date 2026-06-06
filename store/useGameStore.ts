@@ -7,8 +7,10 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
+import { leagueProduction } from '../data/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
+import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
 import type { Contract, MatchResult, Player } from '../types';
 
@@ -125,6 +127,15 @@ export const useGameStore = create<GameState>()(
         // 3) 클래스 소진 등 남은 빈자리 신인 자동 충원
         const filled = fillRosters(drafted.rosters, (id) => snapshot[id], nextSeason);
         for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
+
+        // 3.5) 이번 시즌 경기 출전·생산 → 성장 경험치 적립
+        const seasonProd = leagueProduction(Number.MAX_SAFE_INTEGER);
+        for (const tid of Object.keys(filled.rosters)) {
+          for (const id of filled.rosters[tid]) {
+            const pr = seasonProd.get(id);
+            if (pr && snapshot[id]) snapshot[id] = applyMatchXp(snapshot[id], pr);
+          }
+        }
 
         // 4) 이적자 현 구단 근속 리셋(프랜차이즈 판정)
         for (const tid of Object.keys(filled.rosters)) {

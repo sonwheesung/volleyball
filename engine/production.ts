@@ -1,19 +1,20 @@
 // 개인 생산 기록 귀속 (SALARY_SYSTEM 1장). 순수 함수 + 시드 결정론.
-// SOLID: 경기 "구현"이 아니라 SimResult "형태"에만 의존 →
-//        경기 엔진을 바꿔도 이 모듈은 영향 없음. 단일 책임 = 득점/세트/디그 귀속.
+// 선발 라인업(코트 위 7명)만 정상 생산 → "뛴 선수만 기록/성장".
+// 큰 점수차(블로아웃)의 가비지타임엔 벤치/유망주가 출전해 생산(감독 육성 판단).
 
 import type { Player, Position } from '../types';
 import { createRng } from './rng';
+import { overall } from './overall';
 import type { SimResult } from './simMatch';
 
 export interface ProdLine {
-  matches: number;
+  matches: number;  // 출전
   points: number;   // 득점(공격+블록+에이스)
-  spikes: number;   // 공격 성공
-  blocks: number;   // 블로킹 득점
-  aces: number;     // 서브 에이스
+  spikes: number;
+  blocks: number;
+  aces: number;
   assists: number;  // 세트(세터)
-  digs: number;     // 디그(수비)
+  digs: number;
 }
 
 export const emptyProd = (): ProdLine => ({
@@ -23,43 +24,59 @@ export const emptyProd = (): ProdLine => ({
 export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {
   const x = a ?? emptyProd();
   return {
-    matches: x.matches + b.matches,
-    points: x.points + b.points,
-    spikes: x.spikes + b.spikes,
-    blocks: x.blocks + b.blocks,
-    aces: x.aces + b.aces,
-    assists: x.assists + b.assists,
-    digs: x.digs + b.digs,
+    matches: x.matches + b.matches, points: x.points + b.points,
+    spikes: x.spikes + b.spikes, blocks: x.blocks + b.blocks, aces: x.aces + b.aces,
+    assists: x.assists + b.assists, digs: x.digs + b.digs,
   };
 }
 
-// 포지션별 역할 점유 (placeholder — SALARY_SYSTEM 1.1)
+// 코트 위 인원(선발) — 1S·2OH·1OP·2MB·1L = 7
+const ON_COURT: Record<Position, number> = { S: 1, OH: 2, OP: 1, MB: 2, L: 1 };
+
 const ATTACK: Record<Position, number> = { OP: 1.0, OH: 0.9, MB: 0.6, S: 0.1, L: 0 };
 const BLOCK: Record<Position, number> = { MB: 1.0, OH: 0.6, OP: 0.6, S: 0.3, L: 0 };
 const SERVE: Record<Position, number> = { OP: 1, OH: 1, MB: 1, S: 1, L: 0.1 };
 const DIG: Record<Position, number> = { L: 1.0, OH: 0.6, S: 0.5, MB: 0.4, OP: 0.3 };
 
-function pick(players: Player[], weight: (p: Player) => number, r: number): Player | null {
+/** 선발(코트 위 7) / 벤치 분리 — 포지션별 OVR 상위가 선발 */
+export function splitLineup(players: Player[]): { starters: Player[]; bench: Player[] } {
+  const byPos: Record<Position, Player[]> = { S: [], OH: [], OP: [], MB: [], L: [] };
+  for (const p of players) byPos[p.position].push(p);
+  const starters: Player[] = [];
+  const bench: Player[] = [];
+  (Object.keys(byPos) as Position[]).forEach((pos) => {
+    const sorted = byPos[pos].sort((a, b) => overall(b) - overall(a));
+    starters.push(...sorted.slice(0, ON_COURT[pos]));
+    bench.push(...sorted.slice(ON_COURT[pos]));
+  });
+  return { starters, bench };
+}
+
+/** 큰 점수차일수록 가비지타임 비중↑ (벤치 출전) */
+function garbageFrac(sim: SimResult): number {
+  const lead = Math.abs(sim.homeSets - sim.awaySets);
+  if (lead >= 3) return 0.2; // 3-0
+  if (lead === 2) return 0.08; // 3-1
+  return 0;
+}
+
+function pick(pool: Player[], weight: (p: Player) => number, r: number): Player | null {
   let total = 0;
   const ws: number[] = [];
-  for (const p of players) {
+  for (const p of pool) {
     const w = Math.max(0, weight(p));
     ws.push(w);
     total += w;
   }
   if (total <= 0) return null;
   let t = r * total;
-  for (let i = 0; i < players.length; i++) {
+  for (let i = 0; i < pool.length; i++) {
     t -= ws[i];
-    if (t <= 0) return players[i];
+    if (t <= 0) return pool[i];
   }
-  return players[players.length - 1];
+  return pool[pool.length - 1];
 }
 
-/**
- * 한 경기 결과(SimResult)를 선수별 생산으로 귀속한다(불변, 결정론).
- * seed 로 파생 RNG를 만들어 경기 애니메이션과 독립적으로 동작.
- */
 export function attributeProduction(
   sim: SimResult,
   home: Player[],
@@ -67,6 +84,11 @@ export function attributeProduction(
   seed: number,
 ): Map<string, ProdLine> {
   const rng = createRng((seed ^ 0x9e3779b9) >>> 0);
+  const H = splitLineup(home);
+  const A = splitLineup(away);
+  const total = sim.points.length;
+  const gp = Math.round(total * garbageFrac(sim));
+
   const tally = new Map<string, ProdLine>();
   const bump = (id: string, f: (l: ProdLine) => void) => {
     const l = tally.get(id) ?? emptyProd();
@@ -74,13 +96,18 @@ export function attributeProduction(
     tally.set(id, l);
   };
 
-  for (const pt of sim.points) {
-    const off = pt.scorer === 'home' ? home : away;
-    const def = pt.scorer === 'home' ? away : home;
+  sim.points.forEach((pt, i) => {
+    const garbage = i >= total - gp;
+    const offHome = pt.scorer === 'home';
+    const offStart = offHome ? H.starters : A.starters;
+    const offBench = offHome ? H.bench : A.bench;
+    const defStart = offHome ? A.starters : H.starters;
+    const defBench = offHome ? A.bench : H.bench;
+    const off = garbage && offBench.length ? offBench : offStart;
+    const def = garbage && defBench.length ? defBench : defStart;
     const roll = rng.next();
 
     if (roll < 0.62) {
-      // 공격 성공
       const hitter = pick(off, (p) => ATTACK[p.position] * p.skSpike, rng.next());
       if (hitter) bump(hitter.id, (l) => { l.points++; l.spikes++; });
       const setter = pick(off, (p) => (p.position === 'S' ? p.skSet : 0), rng.next());
@@ -88,19 +115,18 @@ export function attributeProduction(
       const digger = pick(def, (p) => DIG[p.position] * p.skDig, rng.next());
       if (digger) bump(digger.id, (l) => { l.digs++; });
     } else if (roll < 0.75) {
-      // 블로킹 득점
       const blocker = pick(off, (p) => BLOCK[p.position] * p.skBlock, rng.next());
       if (blocker) bump(blocker.id, (l) => { l.points++; l.blocks++; });
     } else if (roll < 0.85) {
-      // 서브 에이스
       const server = pick(off, (p) => SERVE[p.position] * p.skServe, rng.next());
       if (server) bump(server.id, (l) => { l.points++; l.aces++; });
     }
     // else: 상대 범실 — 무귀속
-  }
+  });
 
-  // 출전(근사): 양 팀 로스터 전원 +1경기
-  for (const p of [...home, ...away]) bump(p.id, (l) => { l.matches++; });
+  // 출전: 선발은 항상, 벤치는 가비지타임 있었을 때
+  for (const p of [...H.starters, ...A.starters]) bump(p.id, (l) => { l.matches++; });
+  if (gp > 0) for (const p of [...H.bench, ...A.bench]) bump(p.id, (l) => { l.matches++; });
 
   return tally;
 }
