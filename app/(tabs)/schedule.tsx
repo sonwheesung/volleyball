@@ -4,50 +4,50 @@ import { Alert, Text, View } from 'react-native';
 import { Calendar } from '../../components/Calendar';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
 import { SEASON, getEvolvedTeamPlayers, getTeam } from '../../data/league';
+import { planNextAction } from '../../engine/advance';
 import { teamOverall } from '../../engine/overall';
 import { teamScheduleEntries } from '../../engine/season';
 import { dateForDay, formatDate } from '../../lib/calendar';
 import { useGameStore } from '../../store/useGameStore';
-import type { ScheduleEntry } from '../../types';
-
-type MatchEntry = Extract<ScheduleEntry, { kind: 'match' }>;
 
 export default function Schedule() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
-  const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
   const setDay = useGameStore((s) => s.setDay);
 
   const entries = useMemo(() => teamScheduleEntries(SEASON, teamId), [teamId]);
-  const matches = useMemo(
-    () => entries.filter((e): e is MatchEntry => e.kind === 'match'),
-    [entries],
-  );
 
-  // 다음에 치를 경기 (아직 결과 없는 가장 이른 경기)
-  const nextMatch = matches.find((m) => !results[m.fixture.id]);
+  // "진행" 의사결정은 순수 오케스트레이터에 위임
+  const action = planNextAction(SEASON, teamId, results);
+  const nextFixture = action.kind === 'match' ? action.fixture : null;
 
-  const playedCount = matches.filter((m) => results[m.fixture.id]).length;
-  const focusDayIndex = nextMatch?.dayIndex ?? matches[matches.length - 1]?.dayIndex ?? 0;
+  const totalMatches = SEASON.filter((f) => f.homeTeamId === teamId || f.awayTeamId === teamId).length;
+  const playedCount = SEASON.filter(
+    (f) => (f.homeTeamId === teamId || f.awayTeamId === teamId) && results[f.id],
+  ).length;
+  const focusDayIndex = nextFixture?.dayIndex ?? 0;
 
   const onAdvance = () => {
-    if (!nextMatch) {
+    if (!nextFixture) {
       Alert.alert('시즌 종료', '정규리그 모든 일정을 마쳤습니다.');
       return;
     }
-    // 경기일까지 진행(사이 기간은 자동 훈련으로 처리됨) → 경기 화면
-    setDay(nextMatch.dayIndex);
-    router.push(`/match/${nextMatch.fixture.id}`);
+    setDay(nextFixture.dayIndex); // 경기일까지 진행(사이 기간은 자동 훈련/노쇠 재계산)
+    router.push(`/match/${nextFixture.id}`);
   };
 
-  const preview = nextMatch
-    ? {
-        oppName: getTeam(nextMatch.opponentId)?.name ?? '',
-        isHome: nextMatch.isHome,
-        myOvr: teamOverall(getEvolvedTeamPlayers(teamId, nextMatch.dayIndex)),
-        oppOvr: teamOverall(getEvolvedTeamPlayers(nextMatch.opponentId, nextMatch.dayIndex)),
-      }
+  const preview = nextFixture
+    ? (() => {
+        const isHome = nextFixture.homeTeamId === teamId;
+        const oppId = isHome ? nextFixture.awayTeamId : nextFixture.homeTeamId;
+        return {
+          isHome,
+          oppName: getTeam(oppId)?.name ?? '',
+          myOvr: teamOverall(getEvolvedTeamPlayers(teamId, nextFixture.dayIndex)),
+          oppOvr: teamOverall(getEvolvedTeamPlayers(oppId, nextFixture.dayIndex)),
+        };
+      })()
     : null;
 
   return (
@@ -56,14 +56,14 @@ export default function Schedule() {
         <Row>
           <Muted>정규리그 진행</Muted>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
-            {playedCount} / {matches.length} 경기
+            {playedCount} / {totalMatches} 경기
           </Text>
         </Row>
       </Card>
 
-      {nextMatch && preview ? (
+      {nextFixture && preview ? (
         <Card>
-          <Muted>다음 경기 · {formatDate(dateForDay(nextMatch.dayIndex))}</Muted>
+          <Muted>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</Muted>
           <Row>
             <Text style={{ color: theme.text, fontSize: 18, fontWeight: '800' }}>
               {preview.isHome ? '홈' : '원정'} vs {preview.oppName}
@@ -81,9 +81,7 @@ export default function Schedule() {
             </View>
           </Row>
           <Button label="경기 시작" onPress={onAdvance} />
-          <Muted style={{ fontSize: 12 }}>
-            경기 사이 기간 동안 모든 선수가 자동으로 훈련합니다.
-          </Muted>
+          <Muted style={{ fontSize: 12 }}>경기 사이 기간 동안 모든 선수가 자동으로 훈련합니다.</Muted>
         </Card>
       ) : (
         <Card>

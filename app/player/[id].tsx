@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Text, View } from 'react-native';
 import { Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
 import { getEvolvedPlayer } from '../../data/league';
+import { getPlayerProduction } from '../../data/production';
 import { overall } from '../../engine/overall';
 import { deriveRatings } from '../../engine/ratings';
 import { useGameStore } from '../../store/useGameStore';
@@ -9,7 +10,9 @@ import { useGameStore } from '../../store/useGameStore';
 export default function PlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
+  const prod = id ? getPlayerProduction(id, results) : undefined;
 
   if (!p) {
     return (
@@ -33,6 +36,36 @@ export default function PlayerDetail() {
         </Row>
         <Muted>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
       </Card>
+
+      {prod && prod.matches > 0 ? (
+        <>
+          <Title>이번 시즌 기록</Title>
+          <Card>
+            <Row>
+              <Muted>경기</Muted>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>{prod.matches}경기</Text>
+            </Row>
+            <Row>
+              <Muted>득점</Muted>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>
+                {prod.points}점 (스{prod.spikes}·블{prod.blocks}·서{prod.aces})
+              </Text>
+            </Row>
+            {p.position === 'S' || prod.assists > 0 ? (
+              <Row>
+                <Muted>세트</Muted>
+                <Text style={{ color: theme.text, fontWeight: '700' }}>{prod.assists}</Text>
+              </Row>
+            ) : null}
+            {p.position === 'L' || prod.digs > 0 ? (
+              <Row>
+                <Muted>디그</Muted>
+                <Text style={{ color: theme.text, fontWeight: '700' }}>{prod.digs}</Text>
+              </Row>
+            ) : null}
+          </Card>
+        </>
+      ) : null}
 
       <Title>종합 스탯 (윗단)</Title>
       <Card>
