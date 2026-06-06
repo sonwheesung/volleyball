@@ -4,10 +4,16 @@
 
 import type { Contract, Player, TrainingFocus } from '../types';
 import { evolvePlayer } from './progression';
+import { FIRST_FA_SEASONS } from './faMarket';
 import { marketValue } from './salary';
 
 export const SEASON_LENGTH = 164; // 한 시즌 캘린더 일수(진화량 기준)
 const RENEW_YEARS = 2;
+
+/** 시장가치로 재계약된 계약(자동연장·잔류) */
+export function renewedContract(p: Player): Contract {
+  return { salary: marketValue(p), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: p.age };
+}
 
 /** 한 선수의 시즌 롤오버. override = 시즌 중 재계약된 계약(있으면 우선) */
 export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Contract): Player {
@@ -15,15 +21,15 @@ export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Co
   const grown = evolvePlayer(base, focus, SEASON_LENGTH);
   // 2) 나이 +1
   const aged: Player = { ...grown, age: grown.age + 1 };
-  // 3) 계약: 재계약 반영 → 잔여 -1 → 만료 시 시장가치로 자동 재계약(로스터 붕괴 방지)
+  // 3) 경력 +1 (FA 자격 기준)
+  const career = { ...aged.career, seasons: aged.career.seasons + 1 };
+  // 4) 계약: 잔여 -1. 만료 시 — FA 자격자면 미계약(FA), 아니면 자동연장(영건 보유)
   const cur = override ?? aged.contract;
   const remaining = cur.remaining - 1;
-  const contract: Contract =
-    remaining <= 0
-      ? { salary: marketValue(aged), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: aged.age }
-      : { ...cur, remaining };
-  // 경력 시즌 +1 (FA 자격 기준)
-  const career = { ...aged.career, seasons: aged.career.seasons + 1 };
+  let contract: Contract;
+  if (remaining > 0) contract = { ...cur, remaining };
+  else if (career.seasons >= FIRST_FA_SEASONS) contract = { ...cur, remaining: 0 }; // FA 공시
+  else contract = renewedContract(aged); // 영건 자동연장
   return { ...aged, contract, career };
 }
 

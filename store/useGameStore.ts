@@ -16,7 +16,7 @@ import {
 import { fillRosters } from '../data/rookies';
 import { createRng } from '../engine/rng';
 import { applyRetirements } from '../engine/retire';
-import { rolloverLeague } from '../engine/rollover';
+import { rolloverLeague, renewedContract } from '../engine/rollover';
 import type { Contract, MatchResult, Player } from '../types';
 
 interface GameState {
@@ -29,6 +29,7 @@ interface GameState {
   released: string[];
   playerBase: Record<string, Player> | null;   // 시즌 시작 시점 선수 스냅샷(null=시드)
   rosters: Record<string, string[]> | null;    // 가변 팀 구성(null=시드)
+  resignDecisions: Record<string, boolean>;    // 내 FA 잔류(true)/포기(false), 기본=잔류
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -36,6 +37,7 @@ interface GameState {
   reSign: (playerId: string, contract: Contract) => void;
   release: (playerId: string) => void;
   unrelease: (playerId: string) => void;
+  setResign: (playerId: string, keep: boolean) => void;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -49,6 +51,7 @@ const freshSave = {
   released: [] as string[],
   playerBase: null as Record<string, Player> | null,
   rosters: null as Record<string, string[]> | null,
+  resignDecisions: {} as Record<string, boolean>,
 };
 
 export const useGameStore = create<GameState>()(
@@ -69,29 +72,49 @@ export const useGameStore = create<GameState>()(
         set((s) => (s.released.includes(playerId) ? s : { released: [...s.released, playerId] })),
       unrelease: (playerId) =>
         set((s) => ({ released: s.released.filter((id) => id !== playerId) })),
+      setResign: (playerId, keep) =>
+        set((s) => ({ resignDecisions: { ...s.resignDecisions, [playerId]: keep } })),
 
       endSeason: () => {
-        const nextSeason = get().season + 1;
-        // 1) 성장/노쇠/나이/계약 롤오버
-        const snapshot = rolloverLeague(currentBasePlayers(), focusOf, get().contractOverrides);
-        // 2) 은퇴 (결정론 시드)
+        const { season, contractOverrides, selectedTeamId, resignDecisions } = get();
+        const nextSeason = season + 1;
+        // 1) 성장/노쇠/나이/계약 롤오버 (자격자는 만료=FA)
+        const snapshot = rolloverLeague(currentBasePlayers(), focusOf, contractOverrides);
+        // 2) 은퇴
         const retireRng = createRng(70000 + nextSeason * 977);
         const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng);
-        // 3) 빈 자리 신인 충원
-        const filled = fillRosters(afterRetire.rosters, (id) => snapshot[id], nextSeason);
+        // 3) FA 처리: 내 팀은 잔류/포기 결정, AI는 자동 잔류
+        const rosters: Record<string, string[]> = {};
+        for (const teamId of Object.keys(afterRetire.rosters)) {
+          const keep: string[] = [];
+          for (const id of afterRetire.rosters[teamId]) {
+            const p = snapshot[id];
+            if (!p) continue;
+            if (p.contract.remaining <= 0) {
+              // FA: 내 팀이 '포기'면 떠남, 그 외(잔류/AI)는 재계약
+              if (teamId === selectedTeamId && resignDecisions[id] === false) continue;
+              snapshot[id] = { ...p, contract: renewedContract(p) };
+            }
+            keep.push(id);
+          }
+          rosters[teamId] = keep;
+        }
+        // 4) 빈 자리 신인 충원
+        const filled = fillRosters(rosters, (id) => snapshot[id], nextSeason);
         for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
 
         commitPlayerBase(snapshot);
         commitRosters(filled.rosters);
-        set((s) => ({
-          season: s.season + 1,
+        set({
+          season: nextSeason,
           currentDay: 0,
           results: {},
           contractOverrides: {},
           released: [],
+          resignDecisions: {},
           playerBase: snapshot,
           rosters: filled.rosters,
-        }));
+        });
       },
 
       resetSave: () => {
@@ -111,6 +134,7 @@ export const useGameStore = create<GameState>()(
         released: s.released,
         playerBase: s.playerBase,
         rosters: s.rosters,
+        resignDecisions: s.resignDecisions,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);

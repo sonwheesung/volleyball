@@ -4,7 +4,7 @@ import { rolloverPlayer } from './rollover';
 import { TRAINABLE_STATS } from './training';
 import type { Player, Position, TrainableStat, TrainingFocus } from '../types';
 
-function makePlayer(age: number, opts: { remaining?: number; skSpike?: number; jump?: number; pos?: Position } = {}): Player {
+function makePlayer(age: number, opts: { remaining?: number; skSpike?: number; jump?: number; pos?: Position; seasons?: number } = {}): Player {
   const potential = {} as Record<TrainableStat, number>;
   for (const s of TRAINABLE_STATS) potential[s] = 92;
   const v = 60;
@@ -16,7 +16,7 @@ function makePlayer(age: number, opts: { remaining?: number; skSpike?: number; j
     xp: {}, potential, talentBase: 1.2, catTalent: { physical: 1, skill: 1, mental: 1 },
     contract: { salary: 30000, years: 3, remaining: opts.remaining ?? 3, signedAtAge: age },
     peakAge: 28,
-    career: { seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
+    career: { seasons: opts.seasons ?? 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
   };
 }
 
@@ -39,6 +39,13 @@ test('계약 잔여가 1년 줄고, 만료 시 자동 재계약', () => {
   const renew = rolloverPlayer(makePlayer(24, { remaining: 1 }), FOCUS);
   assert.ok(renew.contract.remaining >= 2, '만료 → 재계약 연수');
   assert.equal(renew.contract.signedAtAge, 25, '새 나이로 서명');
+});
+
+test('FA 자격자는 만료 시 자동연장 안 됨(FA 공시), 영건은 자동연장', () => {
+  const fa = rolloverPlayer(makePlayer(28, { remaining: 1, seasons: 8 }), FOCUS);
+  assert.equal(fa.contract.remaining, 0, 'FA = 미계약 만료');
+  const young = rolloverPlayer(makePlayer(22, { remaining: 1, seasons: 2 }), FOCUS);
+  assert.ok(young.contract.remaining >= 2, '영건 자동연장');
 });
 
 test('여러 시즌: 어린 선수는 핵심 스탯이 성장한다', () => {

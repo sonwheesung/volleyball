@@ -5,6 +5,7 @@ import { getEvolvedTeamPlayers, getPlayer, getTeam } from '../../data/league';
 import { getPlayerProduction } from '../../data/production';
 import { activeRoster, payroll } from '../../data/roster';
 import { overall } from '../../engine/overall';
+import { assignFAGrades, askingPrice, willBeFA } from '../../engine/faMarket';
 import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
 import { useGameStore } from '../../store/useGameStore';
 import type { Contract, Player } from '../../types';
@@ -19,9 +20,11 @@ export default function Office() {
   const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
   const released = useGameStore((s) => s.released);
+  const resignDecisions = useGameStore((s) => s.resignDecisions);
   const reSign = useGameStore((s) => s.reSign);
   const release = useGameStore((s) => s.release);
   const unrelease = useGameStore((s) => s.unrelease);
+  const setResign = useGameStore((s) => s.setResign);
 
   const team = getTeam(teamId);
   const evolved = getEvolvedTeamPlayers(teamId, currentDay);
@@ -31,6 +34,8 @@ export default function Office() {
   const total = payroll(roster);
   const budget = team?.budget ?? 0;
   const releasedPlayers = released.map((id) => getPlayer(id)).filter((p): p is Player => !!p);
+  const faList = roster.filter(willBeFA);
+  const faGrades = assignFAGrades(faList);
 
   const onResign = (p: Player) => {
     const market = marketValue(p, getPlayerProduction(p.id, results));
@@ -103,6 +108,48 @@ export default function Office() {
         );
       })}
 
+      {faList.length > 0 ? (
+        <>
+          <Title>FA 예정 (시즌 종료 시)</Title>
+          <Muted style={{ fontSize: 12 }}>
+            잔류하려면 요구연봉(시장가치×등급 프리미엄)을 지불합니다. 포기하면 떠납니다.
+          </Muted>
+          {faList.map((p) => {
+            const grade = faGrades.get(p.id)!;
+            const ask = askingPrice(marketValue(p, getPlayerProduction(p.id, results)), grade);
+            const keep = resignDecisions[p.id] !== false;
+            return (
+              <View key={p.id} style={styles.row}>
+                <View style={styles.info}>
+                  <PosTag pos={p.position} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.name}>
+                      {p.name} <Text style={{ color: theme.accent }}>{grade}등급</Text>
+                    </Text>
+                    <Text style={styles.sub}>{p.age}세 · 요구 {formatMoney(ask)}</Text>
+                  </View>
+                  <OvrBadge value={overall(p)} />
+                </View>
+                <View style={styles.actions}>
+                  <Pressable
+                    onPress={() => setResign(p.id, true)}
+                    style={[styles.btn, { borderColor: keep ? theme.good : theme.border, backgroundColor: keep ? theme.good + '22' : 'transparent' }]}
+                  >
+                    <Text style={[styles.btnText, { color: keep ? theme.good : theme.muted }]}>잔류</Text>
+                  </Pressable>
+                  <Pressable
+                    onPress={() => setResign(p.id, false)}
+                    style={[styles.btn, { borderColor: !keep ? theme.bad : theme.border, backgroundColor: !keep ? theme.bad + '22' : 'transparent' }]}
+                  >
+                    <Text style={[styles.btnText, { color: !keep ? theme.bad : theme.muted }]}>포기</Text>
+                  </Pressable>
+                </View>
+              </View>
+            );
+          })}
+        </>
+      ) : null}
+
       {releasedPlayers.length > 0 ? (
         <>
           <Title>방출 선수</Title>
@@ -124,7 +171,7 @@ export default function Office() {
       ) : null}
 
       <Muted style={{ fontSize: 12 }}>
-        FA 영입은 다중 시즌(계약 만료) 도입과 함께 추가됩니다.
+        타 구단 FA 영입과 보상선수/보호명단은 다음 업데이트에 추가됩니다.
       </Muted>
     </Screen>
   );
