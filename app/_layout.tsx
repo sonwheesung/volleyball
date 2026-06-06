@@ -20,6 +20,7 @@ export default function RootLayout() {
         <Stack.Screen name="team/[id]" options={{ title: '구단 정보' }} />
         <Stack.Screen name="player/[id]" options={{ title: '선수 정보' }} />
         <Stack.Screen name="coach/[id]" options={{ title: '감독 정보' }} />
+        <Stack.Screen name="fa" options={{ title: 'FA 센터' }} />
         <Stack.Screen name="match/[id]" options={{ title: '경기', presentation: 'fullScreenModal' }} />
       </Stack>
     </SafeAreaProvider>

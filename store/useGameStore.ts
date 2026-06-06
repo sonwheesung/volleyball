@@ -5,18 +5,11 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import {
-  commitPlayerBase,
-  commitRosters,
-  currentBasePlayers,
-  currentRosters,
-  focusOf,
-  resetLeagueBase,
-} from '../data/league';
+import { commitPlayerBase, commitRosters, resetLeagueBase } from '../data/league';
+import { buildOffseason } from '../data/offseason';
 import { fillRosters } from '../data/rookies';
-import { createRng } from '../engine/rng';
-import { applyRetirements } from '../engine/retire';
-import { rolloverLeague, renewedContract } from '../engine/rollover';
+import { aiFillFromPool } from '../engine/aiGM';
+import { renewedContract } from '../engine/rollover';
 import type { Contract, MatchResult, Player } from '../types';
 
 interface GameState {
@@ -30,6 +23,7 @@ interface GameState {
   playerBase: Record<string, Player> | null;   // 시즌 시작 시점 선수 스냅샷(null=시드)
   rosters: Record<string, string[]> | null;    // 가변 팀 구성(null=시드)
   resignDecisions: Record<string, boolean>;    // 내 FA 잔류(true)/포기(false), 기본=잔류
+  faSignings: string[];                        // 오프시즌에 영입하기로 한 풀 FA id
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -38,6 +32,8 @@ interface GameState {
   release: (playerId: string) => void;
   unrelease: (playerId: string) => void;
   setResign: (playerId: string, keep: boolean) => void;
+  signFA: (playerId: string) => void;
+  unsignFA: (playerId: string) => void;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -52,6 +48,7 @@ const freshSave = {
   playerBase: null as Record<string, Player> | null,
   rosters: null as Record<string, string[]> | null,
   resignDecisions: {} as Record<string, boolean>,
+  faSignings: [] as string[],
 };
 
 export const useGameStore = create<GameState>()(
@@ -74,33 +71,37 @@ export const useGameStore = create<GameState>()(
         set((s) => ({ released: s.released.filter((id) => id !== playerId) })),
       setResign: (playerId, keep) =>
         set((s) => ({ resignDecisions: { ...s.resignDecisions, [playerId]: keep } })),
+      signFA: (playerId) =>
+        set((s) => (s.faSignings.includes(playerId) ? s : { faSignings: [...s.faSignings, playerId] })),
+      unsignFA: (playerId) =>
+        set((s) => ({ faSignings: s.faSignings.filter((id) => id !== playerId) })),
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings } = get();
         const nextSeason = season + 1;
-        // 1) 성장/노쇠/나이/계약 롤오버 (자격자는 만료=FA)
-        const snapshot = rolloverLeague(currentBasePlayers(), focusOf, contractOverrides);
-        // 2) 은퇴
-        const retireRng = createRng(70000 + nextSeason * 977);
-        const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng);
-        // 3) FA 처리: 내 팀은 잔류/포기 결정, AI는 자동 잔류
-        const rosters: Record<string, string[]> = {};
-        for (const teamId of Object.keys(afterRetire.rosters)) {
-          const keep: string[] = [];
-          for (const id of afterRetire.rosters[teamId]) {
-            const p = snapshot[id];
-            if (!p) continue;
-            if (p.contract.remaining <= 0) {
-              // FA: 내 팀이 '포기'면 떠남, 그 외(잔류/AI)는 재계약
-              if (teamId === selectedTeamId && resignDecisions[id] === false) continue;
-              snapshot[id] = { ...p, contract: renewedContract(p) };
-            }
-            keep.push(id);
-          }
-          rosters[teamId] = keep;
+        const my = selectedTeamId ?? '';
+
+        // 1) 롤오버 + 은퇴 + FA 풀 형성 (FA 센터 프리뷰와 동일 소스)
+        const off = buildOffseason(my, resignDecisions, contractOverrides, nextSeason);
+        const snapshot = off.snapshot;
+        const rosters: Record<string, string[]> = { ...off.rosters };
+
+        // 2) 내가 선택한 FA 영입
+        const remainingPool = new Set(off.pool);
+        for (const id of faSignings) {
+          if (!remainingPool.has(id)) continue;
+          const p = snapshot[id];
+          if (!p) continue;
+          snapshot[id] = { ...p, contract: renewedContract(p) };
+          rosters[my] = [...(rosters[my] ?? []), id];
+          remainingPool.delete(id);
         }
-        // 4) 빈 자리 신인 충원
-        const filled = fillRosters(rosters, (id) => snapshot[id], nextSeason);
+
+        // 3) AI가 남은 풀에서 빈자리 충원
+        const aiFilled = aiFillFromPool(rosters, [...remainingPool], snapshot, my);
+
+        // 4) 그래도 빈 자리는 신인으로
+        const filled = fillRosters(aiFilled.rosters, (id) => snapshot[id], nextSeason);
         for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
 
         commitPlayerBase(snapshot);
@@ -112,6 +113,7 @@ export const useGameStore = create<GameState>()(
           contractOverrides: {},
           released: [],
           resignDecisions: {},
+          faSignings: [],
           playerBase: snapshot,
           rosters: filled.rosters,
         });
@@ -135,6 +137,7 @@ export const useGameStore = create<GameState>()(
         playerBase: s.playerBase,
         rosters: s.rosters,
         resignDecisions: s.resignDecisions,
+        faSignings: s.faSignings,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);

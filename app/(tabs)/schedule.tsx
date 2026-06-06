@@ -16,7 +16,6 @@ export default function Schedule() {
   const season = useGameStore((s) => s.season);
   const results = useGameStore((s) => s.results);
   const setDay = useGameStore((s) => s.setDay);
-  const endSeason = useGameStore((s) => s.endSeason);
 
   const entries = useMemo(() => teamScheduleEntries(SEASON, teamId), [teamId]);
 
@@ -88,9 +87,9 @@ export default function Schedule() {
       ) : (
         <Card>
           <Title>시즌 종료</Title>
-          <Muted>정규리그 일정을 모두 마쳤습니다. 다음 시즌으로 넘어가면 모든 선수가 한 살 먹고,
-            한 시즌치 성장·노쇠가 반영되며 계약이 1년 줄어듭니다.</Muted>
-          <Button label="다음 시즌 시작" onPress={endSeason} />
+          <Muted>정규리그 일정을 모두 마쳤습니다. FA 센터에서 자격 선수를 영입하고 다음 시즌을
+            시작하세요. (모든 선수 나이 +1, 성장·노쇠 반영, 계약 -1년)</Muted>
+          <Button label="오프시즌 · FA 센터" onPress={() => router.push('/fa')} />
         </Card>
       )}
 

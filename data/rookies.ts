@@ -3,11 +3,11 @@
 // 결정론: 시즌 번호 시드.
 
 import { createRng } from '../engine/rng';
+import { ROSTER_IDEAL } from '../engine/aiGM';
 import { makePlayer } from './seed';
 import type { Player, Position } from '../types';
 
-// 팀 포지션 이상 구성(16인) — seed ROSTER 와 동일
-const IDEAL: Record<Position, number> = { S: 3, OH: 5, OP: 2, MB: 4, L: 2 };
+const IDEAL = ROSTER_IDEAL;
 const FILL_ORDER: Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
 
 function countByPos(players: Player[]): Record<Position, number> {
