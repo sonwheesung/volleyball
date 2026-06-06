@@ -151,7 +151,7 @@ export function makePlayer(
     catTalent,
     contract: { salary: 0, years: yearsAgo + remaining, remaining, signedAtAge },
     peakAge: pos === 'MB' ? 26 : 28,
-    career: emptyCareer(),
+    career: { ...emptyCareer(), seasons: Math.max(0, age - 19) }, // 데뷔 추정
   };
   player.contract.salary = computeSalary(player, signedAtAge, rng);
   return player;

@@ -22,7 +22,9 @@ export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Co
     remaining <= 0
       ? { salary: marketValue(aged), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: aged.age }
       : { ...cur, remaining };
-  return { ...aged, contract };
+  // 경력 시즌 +1 (FA 자격 기준)
+  const career = { ...aged.career, seasons: aged.career.seasons + 1 };
+  return { ...aged, contract, career };
 }
 
 /** 리그 전체 롤오버 → 다음 시즌 base 스냅샷 */
