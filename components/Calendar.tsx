@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { dayKey, formatMonth, monthGrid, WEEKDAYS } from '../lib/calendar';
 import { dateForDay } from '../lib/calendar';
@@ -21,6 +21,12 @@ interface Props {
 export function Calendar({ entries, results, focusDayIndex }: Props) {
   const focusDate = dateForDay(focusDayIndex);
   const [ym, setYm] = useState({ y: focusDate.getFullYear(), m: focusDate.getMonth() });
+
+  // 진행으로 현재(다음 일정) 날짜가 바뀌면 캘린더를 그 달로 따라오게 한다
+  useEffect(() => {
+    setYm({ y: focusDate.getFullYear(), m: focusDate.getMonth() });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [focusDayIndex]);
 
   // 날짜 키 → 항목
   const byKey = new Map<string, ScheduleEntry[]>();

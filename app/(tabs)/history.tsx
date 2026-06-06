@@ -1,7 +1,8 @@
+import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Screen';
-import { getPlayer, getTeam, teamPlayerIds } from '../../data/league';
+import { currentRosters, getPlayer, getTeam, teamPlayerIds } from '../../data/league';
 import { leagueProduction } from '../../data/production';
 import { computeStandings, seasonResults } from '../../data/standings';
 import { dateForDay, formatDate } from '../../lib/calendar';
@@ -15,6 +16,7 @@ const short = (teamId: string) => {
 };
 
 export default function History() {
+  const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
@@ -25,6 +27,14 @@ export default function History() {
     () => seasonResults(currentDay).slice().sort((a, b) => b.dayIndex - a.dayIndex),
     [currentDay, season],
   );
+  // 선수 → 소속팀 (리더보드 팀 표시)
+  const teamOfPlayer = useMemo(() => {
+    const m: Record<string, string> = {};
+    const rs = currentRosters();
+    for (const tid of Object.keys(rs)) for (const id of rs[tid]) m[id] = tid;
+    return m;
+  }, [currentDay, season]);
+
   const leaders = useMemo(() => {
     const prod = leagueProduction(currentDay);
     const rows = [...prod.entries()].map(([id, l]) => ({ id, l }));
@@ -105,6 +115,9 @@ export default function History() {
                   <Text style={[styles.lbName, mine && styles.mine]} numberOfLines={1}>
                     {p?.name ?? r.id}
                   </Text>
+                  <Text style={styles.lbTeam} numberOfLines={1}>
+                    {teamOfPlayer[r.id] ? short(teamOfPlayer[r.id]) : '-'}
+                  </Text>
                   <Text style={styles.lbVal}>{r.l[cat.key]}</Text>
                 </View>
               );
@@ -121,7 +134,11 @@ export default function History() {
           const mine = r.homeTeamId === teamId || r.awayTeamId === teamId;
           const homeWin = r.homeSets > r.awaySets;
           return (
-            <View key={r.fixtureId} style={[styles.match, mine && { borderColor: theme.accent, borderWidth: 1 }]}>
+            <Pressable
+              key={r.fixtureId}
+              onPress={() => router.push(`/matchresult/${r.fixtureId}`)}
+              style={({ pressed }) => [styles.match, mine && { borderColor: theme.accent, borderWidth: 1 }, pressed && { opacity: 0.6 }]}
+            >
               <Text style={styles.date}>{formatDate(dateForDay(r.dayIndex))}</Text>
               <View style={styles.matchRow}>
                 <Text style={[styles.mTeam, { textAlign: 'right' }, homeWin && styles.win]} numberOfLines={1}>
@@ -132,7 +149,7 @@ export default function History() {
                   {short(r.awayTeamId)}
                 </Text>
               </View>
-            </View>
+            </Pressable>
           );
         })
       )}
@@ -157,6 +174,7 @@ const styles = StyleSheet.create({
   lbRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   lbRank: { width: 18, color: theme.muted, fontSize: 13, fontWeight: '700' },
   lbName: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
+  lbTeam: { color: theme.muted, fontSize: 12, width: 52, textAlign: 'right' },
   lbVal: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 36, textAlign: 'right' },
 });
 

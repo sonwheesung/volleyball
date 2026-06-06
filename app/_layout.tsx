@@ -24,6 +24,7 @@ export default function RootLayout() {
         <Stack.Screen name="fa" options={{ title: 'FA 센터' }} />
         <Stack.Screen name="draft" options={{ title: '신인 드래프트' }} />
         <Stack.Screen name="match/[id]" options={{ title: '경기', presentation: 'fullScreenModal' }} />
+        <Stack.Screen name="matchresult/[id]" options={{ title: '경기 상세' }} />
       </Stack>
     </SafeAreaProvider>
   );
