@@ -13,8 +13,10 @@ import { useGameStore } from '../../store/useGameStore';
 export default function Schedule() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
+  const season = useGameStore((s) => s.season);
   const results = useGameStore((s) => s.results);
   const setDay = useGameStore((s) => s.setDay);
+  const endSeason = useGameStore((s) => s.endSeason);
 
   const entries = useMemo(() => teamScheduleEntries(SEASON, teamId), [teamId]);
 
@@ -51,7 +53,7 @@ export default function Schedule() {
     : null;
 
   return (
-    <Screen title="시즌 일정">
+    <Screen title={`${season + 1}시즌 일정`}>
       <Card>
         <Row>
           <Muted>정규리그 진행</Muted>
@@ -86,7 +88,9 @@ export default function Schedule() {
       ) : (
         <Card>
           <Title>시즌 종료</Title>
-          <Muted>정규리그 일정을 모두 마쳤습니다.</Muted>
+          <Muted>정규리그 일정을 모두 마쳤습니다. 다음 시즌으로 넘어가면 모든 선수가 한 살 먹고,
+            한 시즌치 성장·노쇠가 반영되며 계약이 1년 줄어듭니다.</Muted>
+          <Button label="다음 시즌 시작" onPress={endSeason} />
         </Card>
       )}
 

@@ -2,7 +2,7 @@
 // 선수/팀/감독/일정은 시드에서 항상 재현되므로 저장할 필요가 없다.
 // (세이브로는 selectedTeamId·진행도·경기결과만 보존 — store 참고)
 
-import type { Coach, Fixture, Player, Team } from '../types';
+import type { Coach, Fixture, Player, Team, TrainingFocus } from '../types';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
 import { evolvePlayer } from '../engine/progression';
@@ -33,6 +33,31 @@ export const getTeamCoach = (teamId: string): Coach | undefined => {
   const t = teamMap.get(teamId);
   return t ? coachMap.get(t.coachId) : undefined;
 };
+
+// 선수 → 소속팀 감독 훈련선호 (롤오버/진화의 성장 방향)
+const playerFocus = new Map<string, TrainingFocus>();
+for (const t of LEAGUE.teams) {
+  const focus = coachMap.get(t.coachId)?.trainingFocus;
+  if (focus) for (const pid of t.players) playerFocus.set(pid, focus);
+}
+export const focusOf = (p: Player): TrainingFocus =>
+  playerFocus.get(p.id) ?? { primary: [4, 6], secondary: [1, 10, 12] };
+
+// ─── 시즌 경계 스냅샷(커밋) — 다중 시즌 롤오버 ───
+// 시즌이 끝나면 그 시점 선수 상태를 base 로 커밋. 시즌 내 진화는 이 base 에서 리플레이.
+
+export const currentBasePlayers = (): Player[] => [...playerMap.values()];
+
+export function commitPlayerBase(snapshot: Record<string, Player>): void {
+  for (const id of Object.keys(snapshot)) playerMap.set(id, snapshot[id]);
+  evoCache = null;
+}
+
+/** 세이브 초기화 시 시드 상태로 복원 */
+export function resetLeagueBase(): void {
+  for (const p of LEAGUE.players) playerMap.set(p.id, p);
+  evoCache = null;
+}
 
 // ─── 진화(성장/노쇠) 적용 선수 — currentDay 기준, 날짜별 캐시 ───
 // 모든 팀 전원을 각자 감독 선호대로 진화시킨다(시드 리플레이).

@@ -15,6 +15,7 @@ export default function Dashboard() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
+  const season = useGameStore((s) => s.season);
   const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
   const released = useGameStore((s) => s.released);
@@ -54,7 +55,7 @@ export default function Dashboard() {
             <OvrBadge value={ovr} />
           </View>
           <View style={{ alignItems: 'flex-end' }}>
-            <Muted>정규리그 성적</Muted>
+            <Muted>{season + 1}시즌 성적</Muted>
             <Text style={{ color: theme.text, fontSize: 26, fontWeight: '900' }}>
               {record.w}승 {record.l}패
             </Text>
