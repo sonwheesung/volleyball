@@ -74,7 +74,13 @@ function rollTalent(rng: Rng): number {
   return 0.60 + rng.next() * 0.20;               // D
 }
 
-function makePlayer(rng: Rng, id: string, pos: Position, isForeign: boolean): Player {
+export function makePlayer(
+  rng: Rng,
+  id: string,
+  pos: Position,
+  isForeign: boolean,
+  ageOverride?: number,
+): Player {
   const name = isForeign
     ? FOREIGN_NAMES[rng.int(0, FOREIGN_NAMES.length - 1)]
     : SURNAMES[rng.int(0, SURNAMES.length - 1)] + GIVEN[rng.int(0, GIVEN.length - 1)];
@@ -88,7 +94,7 @@ function makePlayer(rng: Rng, id: string, pos: Position, isForeign: boolean): Pl
     L: { skDig: true, skReceive: true, agility: true },
   };
   const c = core[pos];
-  const age = rng.int(19, 34);
+  const age = ageOverride ?? rng.int(19, 34);
 
   // 현재 스탯
   const cur = {

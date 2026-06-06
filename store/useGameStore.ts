@@ -9,9 +9,13 @@ import {
   commitPlayerBase,
   commitRosters,
   currentBasePlayers,
+  currentRosters,
   focusOf,
   resetLeagueBase,
 } from '../data/league';
+import { fillRosters } from '../data/rookies';
+import { createRng } from '../engine/rng';
+import { applyRetirements } from '../engine/retire';
 import { rolloverLeague } from '../engine/rollover';
 import type { Contract, MatchResult, Player } from '../types';
 
@@ -67,8 +71,18 @@ export const useGameStore = create<GameState>()(
         set((s) => ({ released: s.released.filter((id) => id !== playerId) })),
 
       endSeason: () => {
+        const nextSeason = get().season + 1;
+        // 1) 성장/노쇠/나이/계약 롤오버
         const snapshot = rolloverLeague(currentBasePlayers(), focusOf, get().contractOverrides);
+        // 2) 은퇴 (결정론 시드)
+        const retireRng = createRng(70000 + nextSeason * 977);
+        const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng);
+        // 3) 빈 자리 신인 충원
+        const filled = fillRosters(afterRetire.rosters, (id) => snapshot[id], nextSeason);
+        for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
+
         commitPlayerBase(snapshot);
+        commitRosters(filled.rosters);
         set((s) => ({
           season: s.season + 1,
           currentDay: 0,
@@ -76,6 +90,7 @@ export const useGameStore = create<GameState>()(
           contractOverrides: {},
           released: [],
           playerBase: snapshot,
+          rosters: filled.rosters,
         }));
       },
 
