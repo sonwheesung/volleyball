@@ -272,37 +272,52 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
       .map((i, k) => ({ side: att, idx: i, x: clampN(ahx + (k - 1) * 34, 24, COURT_W - 24), y: coverY }));
     wp.push({ ...spot(att, atkIdx, 'toss'), movers: coverMovers }); // 토스 → 공격수 + 커버 형성(미끼 제외)
 
+    // 스파이크 경로(의도 코스)가 블록 폭 안이면 블록에 걸리고, 각으로 빠지면 안 걸린다(여자배구: 원터치 빈번)
+    const ap = sw[att].pos[atkIdx];
+    const blockW = (tosserIdx === sw[att].setterIdx ? 0.16 : 0.24) * COURT_W; // 인시스템 2장(좁게)/아웃 3장(넓게)
+    const intended = spikeTarget(def, rng, att === r.scorer); // 공격수가 원한 코스
+    const intoBlock = Math.abs(intended.x - ap.x) < blockW;
+    const netY = (def === 'home' ? 0.52 : 0.48) * COURT_H;
+    const sCross = Math.abs(intended.y - ap.y) < 1 ? 0.3 : (netY - ap.y) / (intended.y - ap.y);
+    const blockNet = { x: clampN(ap.x + (intended.x - ap.x) * sCross, 12, COURT_W - 12), y: netY };
+    const dBacks = sw[def].backers.length ? sw[def].backers : [0, 1, 2, 3, 4, 5].filter((i) => i !== sw[def].setterIdx);
+    const nearestDig = (tg: { x: number; y: number }) => dBacks.reduce((b, i) => (d2(sw[def].pos[i], tg) < d2(sw[def].pos[b], tg) ? i : b), dBacks[0]);
+
     if (att === r.scorer) {
-      const v = rng.next();
-      if (v < 0.2) {
-        // 터치아웃: 공격수는 코트로 강타(의도 궤적)했는데 네트서 블록에 스쳐 아웃 → 공격 득점
-        const intended = spikeTarget(def, rng, true); // 본인이 원한 코스(코트 깊은 곳)
-        const ap = sw[att].pos[atkIdx];
-        const netY = (def === 'home' ? 0.52 : 0.48) * COURT_H;
-        const s = Math.abs(intended.y - ap.y) < 1 ? 0.3 : (netY - ap.y) / (intended.y - ap.y);
-        const blockNet = { x: clampN(ap.x + (intended.x - ap.x) * s, 12, COURT_W - 12), y: netY };
-        wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 점선=의도(코트), 실제=네트서 블록 터치
-        wp.push({ x: ap.x < COURT_W / 2 ? COURT_W + 12 : -12, y: (def === 'home' ? 0.78 : 0.22) * COURT_H, side: def, idx: -1, kind: 'fault' }); // 블록 맞고 옆으로 아웃
-      } else if (v < 0.55) {
-        // 디그 실패: 가까운 수비 2명이 덤비지만 못 닿음
-        const t = spikeTarget(def, rng, true);
-        wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, t, 2, 0.62), ...coverMovers] });
+      if (intoBlock) {
+        // 블로킹 아웃(터치아웃): 블록 맞고 옆으로 아웃 → 공격 득점. 점선=의도(코트)
+        wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
+        wp.push({ x: ap.x < COURT_W / 2 ? COURT_W + 12 : -12, y: (def === 'home' ? 0.78 : 0.22) * COURT_H, side: def, idx: -1, kind: 'fault' });
       } else {
-        // 클린 킬: 빈 곳(가까운 수비가 쫓지만 못 닿음)
-        const t = spikeTarget(def, rng, true);
-        wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, t, 1, 0.5), ...coverMovers] });
+        // 클린 킬: 블록을 각으로 피해 코트로 (수비 못 닿음)
+        wp.push({ x: intended.x, y: intended.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, intended, 1, 0.5), ...coverMovers] });
       }
       break;
     }
 
-    // 디그 성공: 후위 수비(세터 제외)가 받아 세터가 토스할 수 있게, 1명 더 쫓아 커버 + att 커버
-    const t = spikeTarget(def, rng, false);
-    const dBacks = sw[def].backers.length ? sw[def].backers : [0, 1, 2, 3, 4, 5].filter((i) => i !== sw[def].setterIdx);
-    const digIdx = dBacks.reduce((b, i) => (d2(sw[def].pos[i], t) < d2(sw[def].pos[b], t) ? i : b), dBacks[0]);
-    const digger: Mover = { side: def, idx: digIdx, x: t.x, y: t.y };
-    const cover = chasersTo(def, t, 2, 0.5).find((m) => m.idx !== digIdx);
-    wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [digger, ...(cover ? [cover] : []), ...coverMovers] });
-    firstTouch = digIdx; // 다음 공격(def)의 첫 터치 = 디그한 선수
+    // att !== scorer (def가 득점하거나 랠리 지속)
+    if (intoBlock && rng.next() < 0.55) {
+      // 스터프 블록: 막혀서 자기 코트로 떨어짐 → 블로킹 당함(def 득점, 랠리 종료)
+      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
+      wp.push({ x: clampN(ap.x + rng.range(-0.08, 0.08) * COURT_W, 12, COURT_W - 12), y: (att === 'home' ? 0.78 : 0.22) * COURT_H, side: att, idx: -1, kind: 'fault' });
+      break;
+    }
+
+    if (intoBlock) {
+      // 원터치(소프트 블록): 블록 스치고 def 코트로 떨어진 걸 디그 → 전환
+      const dt = { x: clampN(blockNet.x + rng.range(-0.06, 0.06) * COURT_W, 16, COURT_W - 16), y: (def === 'home' ? 0.64 : 0.36) * COURT_H };
+      const digIdx = nearestDig(dt);
+      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치
+      wp.push({ x: dt.x, y: dt.y, side: def, idx: -1, kind: 'pass', movers: [{ side: def, idx: digIdx, x: dt.x, y: dt.y }] }); // 디그
+      firstTouch = digIdx;
+    } else {
+      // 클린 디그: 블록 피한 강타를 후위가 받아 전환
+      const t = intended;
+      const digIdx = nearestDig(t);
+      const cover = chasersTo(def, t, 2, 0.5).find((m) => m.idx !== digIdx);
+      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [{ side: def, idx: digIdx, x: t.x, y: t.y }, ...(cover ? [cover] : []), ...coverMovers] });
+      firstTouch = digIdx;
+    }
     att = def;
   }
   return wp;
