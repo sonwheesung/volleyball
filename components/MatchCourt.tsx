@@ -67,8 +67,9 @@ function playerAt(L: Lineups, side: Side, rot: number, zone: number): Player {
 const LANE: Record<Position, number> = { OH: 0, L: 1, MB: 2, S: 3, OP: 4 };
 interface Switched { pos: Record<number, { x: number; y: number }>; setterIdx: number; frontHitters: number[]; backers: number[] }
 
-/** 로테이션 정렬 → 전문 포지션 좌표(선수 인덱스별). 전위=네트 라인, 후위=수비 라인, 세터=네트 중앙우 */
-function switchedSpots(side: Side, lu: ReturnType<typeof buildLineup>, rot: number): Switched {
+/** 로테이션 정렬 → 전문 포지션 좌표(선수 인덱스별). 전위=네트 라인, 후위=수비 라인.
+ *  offense=true(자기 팀 공격)일 때만 세터가 네트로 침투, 수비 시엔 자기 수비 위치(리시브 준비). */
+function switchedSpots(side: Side, lu: ReturnType<typeof buildLineup>, rot: number, offense: boolean): Switched {
   const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
   const back = [1, 5, 6].map((z) => lineupIdxAt(rot, z));
   const posOf = (i: number) => lu.six[i].position;
@@ -79,8 +80,17 @@ function switchedSpots(side: Side, lu: ReturnType<typeof buildLineup>, rot: numb
   [...front].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * COURT_W, y: yF }; });
   [...back].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * COURT_W, y: yB }; });
   const setterIdx = lu.six.findIndex((p) => p.position === 'S');
-  if (setterIdx >= 0) pos[setterIdx] = { x: (side === 'home' ? 0.63 : 0.37) * COURT_W, y: (side === 'home' ? 0.57 : 0.43) * COURT_H };
+  if (offense && setterIdx >= 0) pos[setterIdx] = { x: (side === 'home' ? 0.63 : 0.37) * COURT_W, y: (side === 'home' ? 0.57 : 0.43) * COURT_H }; // 공격 시에만 네트 침투
   return { pos, setterIdx, frontHitters: front.filter((i) => i !== setterIdx), backers: back.filter((i) => i !== setterIdx) };
+}
+
+/** 현재 구간에서 공격(세팅) 중인 측 — 그 팀 세터만 네트로 침투 */
+function offenseSideOf(seg: { from: WP; to: WP } | null): Side | null {
+  if (!seg) return null;
+  const k = seg.to.kind;
+  if (k === 'serve' || k === 'pass' || k === 'toss') return seg.to.side;
+  if (k === 'spike') return seg.from.side;
+  return null;
 }
 
 interface Rally {
@@ -149,8 +159,8 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
   const rotOf = (s: Side) => (s === 'home' ? r.homeRot : r.awayRot);
   const sw: Record<Side, Switched> = {
-    home: switchedSpots('home', L.home, r.homeRot),
-    away: switchedSpots('away', L.away, r.awayRot),
+    home: switchedSpots('home', L.home, r.homeRot, true),
+    away: switchedSpots('away', L.away, r.awayRot, true),
   };
   const spot = (s: Side, i: number, kind: Move): WP => ({ ...sw[s].pos[i], side: s, idx: i, kind });
 
@@ -342,7 +352,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     const count = seg.from.idx === attSetterIdx ? 2 : 3;
     const blockRot = blockSide === 'home' ? stage.homeRot : stage.awayRot;
     const blockLu = blockSide === 'home' ? lineups.home : lineups.away;
-    const blockSw = switchedSpots(blockSide, blockLu, blockRot);
+    const blockSw = switchedSpots(blockSide, blockLu, blockRot, false);
     const front = [2, 3, 4].map((z) => lineupIdxAt(blockRot, z));
     const ax = seg.to.x; // 공격수 화면 x
     const yNet = (blockSide === 'home' ? 0.575 : 0.425) * COURT_H;
@@ -365,10 +375,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   };
 
   type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean };
+  const offSide = offenseSideOf(seg);
   const buildMarkers = (side: Side): Mk[] => {
     const rot = side === 'home' ? stage.homeRot : stage.awayRot;
     const lu = side === 'home' ? lineups.home : lineups.away;
-    const sw = inPlay ? switchedSpots(side, lu, rot) : null; // 서브 후엔 전문 포지션
+    const sw = inPlay ? switchedSpots(side, lu, rot, side === offSide) : null; // 공격 측만 세터 네트 침투
     const arr: Mk[] = [];
     for (let i = 0; i < 6; i++) {
       const zone = ((i - rot) % 6 + 6) % 6 + 1;     // 이 선수가 현재 선 존
