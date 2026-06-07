@@ -177,6 +177,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const [fast, setFast] = useState(false);
 
   const prog = useRef(new Animated.Value(0)).current; // 현재 구간 진행도 0..1
+  const serverY = useRef(new Animated.Value(0)).current; // 서버 마커 Y(코트 안↔엔드라인 뒤)
+  const prevServ = useRef<Side | null>(null);
   const finishedOnce = useRef(false);
 
   const finished = idx >= total;
@@ -224,6 +226,19 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   // 마커 배치는 현재 진행 중 랠리(idx) 기준
   const stage = rallies[Math.min(idx, total - 1)];
 
+  // 서버 마커: 코트 안 ↔ 엔드라인 뒤를 부드럽게 슬라이드(순간이동 방지)
+  const servSide: Side | null = finished ? null : stage.serving;
+  const serverTargetY = servSide
+    ? (seg && seg.to.kind === 'serve' ? serveOutY(servSide) : zonePx(servSide, 1).y)
+    : 0;
+  useEffect(() => {
+    if (servSide == null) return;
+    if (prevServ.current !== servSide) { serverY.setValue(serverTargetY); prevServ.current = servSide; return; }
+    const a = Animated.timing(serverY, { toValue: serverTargetY, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: true });
+    a.start();
+    return () => a.stop();
+  }, [servSide, serverTargetY, serverY]);
+
   const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
 
   const markers = (side: Side) => {
@@ -233,17 +248,20 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       const { x, y } = zonePx(side, z);
       const isServer = stage.serving === side && z === 1;
       const serving = isServer && !finished;
-      const onServe = !!seg && seg.to.kind === 'serve' && isServer; // 서브 순간 = 코트 밖
+      // 서버는 translateY(serverY)로 이동. 단, 서브권이 막 바뀐 첫 프레임엔 정적(플래시 방지)
+      const useAnim = serving && prevServ.current === stage.serving;
       const mine = mineSide === side;
       const color = p ? POS_COLOR[p.position] : theme.muted;
       const jumping = jl.some((j) => j.side === side && j.zone === z);
+      const scale = jumping ? jumpScale : 1;
       return (
         <Animated.View key={`${side}-${z}`} style={[styles.marker, {
-          left: x - MR, top: (onServe ? serveOutY(side) : y) - MR,
+          left: x - MR,
+          top: useAnim ? -MR : y - MR,
           backgroundColor: color + (mine ? 'ee' : '99'),
           borderColor: serving ? theme.warn : mine ? theme.text : 'transparent',
           borderWidth: serving ? 2.5 : mine ? 1.5 : 0,
-          transform: [{ scale: jumping ? jumpScale : 1 }],
+          transform: useAnim ? [{ translateY: serverY }, { scale }] : [{ scale }],
         }]}>
           <Text style={styles.markerTxt}>{p?.position ?? ''}</Text>
         </Animated.View>
