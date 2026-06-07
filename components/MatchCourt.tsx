@@ -98,17 +98,21 @@ function reconstruct(sim: SimResult): Rally[] {
 
 // 공 이동 종류 — 구간별 속도/이징이 다르다
 type Move = 'start' | 'serve' | 'pass' | 'toss' | 'spike';
-type WP = { x: number; y: number; kind: Move };
+type WP = { x: number; y: number; side: Side; zone: number; kind: Move };
 
 // 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게.
 const DUR: Record<Move, number> = { start: 0, serve: 300, pass: 240, toss: 540, spike: 150 };
+// 구간별 포물선 높이(px) / 공 크기 피크 — 토스가 가장 크게 휘고 커진다
+const ARC: Record<Move, number> = { start: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03 };
+const BALL_SCALE: Record<Move, number> = { start: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15 };
+const JUMP = 1.45; // 점프 시 마커 확대
 
 /** 한 랠리의 공 이동 경로 — 득점 측에서 끝남 */
 function ballPath(r: Rally, seed: number): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
-  const at = (s: Side, z: number, kind: Move): WP => ({ ...zonePx(s, z), kind });
-  const floor = (s: Side, z: number): WP => ({ x: zonePx(s, z).x, y: (s === 'home' ? 0.96 : 0.04) * COURT_H, kind: 'spike' });
+  const at = (s: Side, z: number, kind: Move): WP => ({ ...zonePx(s, z), side: s, zone: z, kind });
+  const floor = (s: Side, z: number): WP => ({ x: zonePx(s, z).x, y: (s === 'home' ? 0.96 : 0.04) * COURT_H, side: s, zone: z, kind: 'spike' });
 
   const serving = r.serving;
   const recv = other(serving);
@@ -133,6 +137,16 @@ function ballPath(r: Rally, seed: number): WP[] {
 const easingFor = (k: Move) =>
   k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' ? Easing.in(Easing.quad) : Easing.linear;
 
+/** 이 구간에 점프하는 마커들 — 서브(서버)·토스(세터)·스파이크(공격수+상대 전위 블로커) */
+function jumpers(from: WP, to: WP): { side: Side; zone: number }[] {
+  if (to.kind === 'serve' || to.kind === 'toss') return [{ side: from.side, zone: from.zone }];
+  if (to.kind === 'spike') {
+    const opp = other(from.side);
+    return [{ side: from.side, zone: from.zone }, ...[2, 3, 4].map((z) => ({ side: opp, zone: z }))];
+  }
+  return [];
+}
+
 interface Props {
   sim: SimResult;
   home: Player[];
@@ -148,36 +162,38 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const total = rallies.length;
 
   const [idx, setIdx] = useState(0);      // 현재 진행 중인 랠리
+  const [segIdx, setSegIdx] = useState(0);// 랠리 내 공 이동 구간
   const [shown, setShown] = useState(-1); // 점수에 반영된 마지막 랠리
   const [playing, setPlaying] = useState(true);
   const [fast, setFast] = useState(false);
 
-  const ball = useRef(new Animated.ValueXY(zonePx('home', 1))).current;
+  const prog = useRef(new Animated.Value(0)).current; // 현재 구간 진행도 0..1
   const finishedOnce = useRef(false);
 
   const finished = idx >= total;
+  const path = useMemo(() => (finished ? [] : ballPath(rallies[idx], seed)), [finished, rallies, idx, seed]);
+  const segCount = Math.max(0, path.length - 1);
 
-  // 랠리 애니메이션 (랠리 단위)
+  // 구간 단위 진행 (위치·포물선·크기·점프를 prog 하나로 동기화)
   useEffect(() => {
     if (!playing || finished) return;
-    const path = ballPath(rallies[idx], seed);
-    ball.setValue({ x: path[0].x, y: path[0].y });
-    const steps = path.slice(1).map((p) =>
-      Animated.timing(ball, {
-        toValue: { x: p.x, y: p.y },
-        duration: DUR[p.kind] * (fast ? 0.4 : 1),
-        easing: easingFor(p.kind),
-        useNativeDriver: true,
-      }),
-    );
-    const seq = Animated.sequence(steps);
-    seq.start(({ finished: done }) => {
-      if (!done) return;
+    if (segIdx >= segCount) {
       setShown(idx);
       setIdx((i) => i + 1);
+      setSegIdx(0);
+      return;
+    }
+    const to = path[segIdx + 1];
+    prog.setValue(0);
+    const anim = Animated.timing(prog, {
+      toValue: 1,
+      duration: DUR[to.kind] * (fast ? 0.4 : 1),
+      easing: easingFor(to.kind),
+      useNativeDriver: true,
     });
-    return () => seq.stop();
-  }, [idx, playing, fast, finished, rallies, seed, ball]);
+    anim.start(({ finished: done }) => { if (done) setSegIdx((s) => s + 1); });
+    return () => anim.stop();
+  }, [idx, segIdx, playing, fast, finished, segCount, path, prog]);
 
   useEffect(() => {
     if (finished && !finishedOnce.current) {
@@ -185,6 +201,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       onFinished?.();
     }
   }, [finished, onFinished]);
+
+  const seg = !finished && segIdx < segCount ? { from: path[segIdx], to: path[segIdx + 1] } : null;
+  const jl = seg ? jumpers(seg.from, seg.to) : [];
 
   // 화면에 표시할 상태
   const view = shown >= 0 ? rallies[Math.min(shown, total - 1)] : null;
@@ -196,6 +215,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   // 마커 배치는 현재 진행 중 랠리(idx) 기준
   const stage = rallies[Math.min(idx, total - 1)];
 
+  const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
+
   const markers = (side: Side) => {
     const rot = side === 'home' ? stage.homeRot : stage.awayRot;
     return [1, 2, 3, 4, 5, 6].map((z) => {
@@ -204,18 +225,35 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       const serving = stage.serving === side && z === 1 && !finished;
       const mine = mineSide === side;
       const color = p ? POS_COLOR[p.position] : theme.muted;
+      const jumping = jl.some((j) => j.side === side && j.zone === z);
       return (
-        <View key={`${side}-${z}`} style={[styles.marker, {
+        <Animated.View key={`${side}-${z}`} style={[styles.marker, {
           left: x - MR, top: y - MR,
           backgroundColor: color + (mine ? 'ee' : '99'),
           borderColor: serving ? theme.warn : mine ? theme.text : 'transparent',
           borderWidth: serving ? 2.5 : mine ? 1.5 : 0,
+          transform: [{ scale: jumping ? jumpScale : 1 }],
         }]}>
           <Text style={styles.markerTxt}>{p?.position ?? ''}</Text>
-        </View>
+        </Animated.View>
       );
     });
   };
+
+  // 공 transform — 포물선(translateY에 아치 가산) + 크기(떴다 떨어지는 원근감)
+  const last = path.length ? path[path.length - 1] : zonePx('home', 1);
+  const ballTransform = seg
+    ? [
+        { translateX: prog.interpolate({ inputRange: [0, 1], outputRange: [seg.from.x, seg.to.x] }) },
+        {
+          translateY: Animated.add(
+            prog.interpolate({ inputRange: [0, 1], outputRange: [seg.from.y, seg.to.y] }),
+            prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -ARC[seg.to.kind], 0] }),
+          ),
+        },
+        { scale: prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, BALL_SCALE[seg.to.kind], 1] }) },
+      ]
+    : [{ translateX: last.x }, { translateY: last.y }];
 
   return (
     <View style={{ gap: 10 }}>
@@ -228,7 +266,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
         <View style={[styles.attackLine, { top: COURT_H * 0.66 }]} />
         {markers('away')}
         {markers('home')}
-        <Animated.View style={[styles.ball, { transform: ball.getTranslateTransform() }]} />
+        <Animated.View style={[styles.ball, { transform: ballTransform }]} />
         {finished ? (
           <View style={styles.finishOverlay}>
             <Text style={styles.finishTxt}>경기 종료</Text>
@@ -240,7 +278,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       <View style={styles.controls}>
         <Ctrl label={playing ? '⏸' : '▶'} onPress={() => setPlaying((p) => !p)} />
         <Ctrl label={fast ? '2x ✓' : '2x'} on={fast} onPress={() => setFast((f) => !f)} />
-        <Ctrl label="⏭ 결과" onPress={() => { setPlaying(false); setShown(total - 1); setIdx(total); }} />
+        <Ctrl label="⏭ 결과" onPress={() => { setPlaying(false); setShown(total - 1); setIdx(total); setSegIdx(0); }} />
       </View>
 
       {/* 진행 바 */}
