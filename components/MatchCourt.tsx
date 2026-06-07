@@ -97,14 +97,15 @@ function reconstruct(sim: SimResult): Rally[] {
 }
 
 // 공 이동 종류 — 구간별 속도/이징이 다르다
-type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike';
+type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
 type WP = { x: number; y: number; side: Side; zone: number; kind: Move };
 
 // 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게. walk=서버가 엔드라인 뒤로, return=공이 서버에게.
-const DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150 };
+const DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 320 };
 // 구간별 포물선 높이(px) / 공 크기 피크 — 토스가 가장 크게 휘고 커진다
-const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03 };
-const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15 };
+const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06 };
+const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1 };
+const RECV_FAULT = 0.05; // 리시브 미스(투터치 등) 확률 — 지는 쪽 한정
 const JUMP = 1.45; // 점프 시 마커 확대
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
 const COURT_PAD = SERVE_OUT + 10; // 코트 밖 서브 공간 확보용 상하 여백
@@ -127,8 +128,15 @@ function ballPath(r: Rally, seed: number, prevLast?: { x: number; y: number }): 
     wp.push(at(serving, 1, 'start')); // 서버 자리(코트 안)
   }
   wp.push({ x: zonePx(serving, 1).x, y: serveOutY(serving), side: serving, zone: 1, kind: 'walk' }); // 공 들고 엔드라인 뒤로
-  wp.push(at(recv, pick([6, 5, 1]), 'serve')); // 서브 → 리시브
+  const recvZone = pick([6, 5, 1]);
+  wp.push(at(recv, recvZone, 'serve')); // 서브 → 리시브
   let att: Side = recv;
+
+  // 리시브 미스(투터치 등): 지는 쪽이 가끔 리시브를 흘려 자기 코트에 떨어뜨림 → 서브측 득점
+  if (recv !== r.scorer && rng.next() < RECV_FAULT) {
+    wp.push({ x: zonePx(recv, recvZone).x, y: (recv === 'home' ? 0.82 : 0.18) * COURT_H, side: recv, zone: recvZone, kind: 'fault' });
+    return wp;
+  }
 
   for (let hop = 0; hop < 6; hop++) {
     const def = other(att);
@@ -142,7 +150,7 @@ function ballPath(r: Rally, seed: number, prevLast?: { x: number; y: number }): 
 }
 
 const easingFor = (k: Move) =>
-  k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' ? Easing.in(Easing.quad) : Easing.linear;
+  k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : Easing.linear;
 
 /** 이 구간에 점프하는 마커들 — 서브(서버)·토스(세터)·스파이크(공격수+상대 전위 블로커) */
 function jumpers(from: WP, to: WP): { side: Side; zone: number }[] {
