@@ -84,21 +84,21 @@ function switchedSpots(side: Side, lu: ReturnType<typeof buildLineup>, rot: numb
   return { pos, setterIdx, frontHitters: front.filter((i) => i !== setterIdx), backers: back.filter((i) => i !== setterIdx) };
 }
 
-/** 서브 받기 전 리시브 대형 — 세터는 네트로 릴리즈, 패서들이 펼쳐 받고, 전위 공격수는 네트 대기 */
+// 서브 전 "로테이션 합법" 좌표(home 분수). 전위=네트 라인, 후위=패싱 라인(W), 좌<중<우·전<후 순서 유지.
+const FR_FRAC: Record<number, [number, number]> = {
+  4: [0.22, 0.6], 3: [0.5, 0.6], 2: [0.78, 0.6], // 전위(네트)
+  5: [0.18, 0.8], 6: [0.5, 0.86], 1: [0.82, 0.8], // 후위(패싱 W)
+};
+/** 서브 전 대형 — 오버랩(로테이션) 룰을 지키는 합법 위치. 후위 세터는 자기 존 안에서 네트 쪽으로만 당겨 릴리즈 준비. */
 function receiveFormation(side: Side, lu: ReturnType<typeof buildLineup>, rot: number): Record<number, { x: number; y: number }> {
-  const mir = (f: number) => (side === 'home' ? f : 1 - f) * COURT_W;
-  const yNet = (side === 'home' ? 0.6 : 0.4) * COURT_H;
-  const yRel = (side === 'home' ? 0.56 : 0.44) * COURT_H;
-  const yDeep = (side === 'home' ? 0.82 : 0.18) * COURT_H;
-  const pos: Record<number, { x: number; y: number }> = {};
   const setterIdx = lu.six.findIndex((p) => p.position === 'S');
-  if (setterIdx >= 0) pos[setterIdx] = { x: mir(0.64), y: yRel }; // 세터 릴리즈(네트)
-  const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
-  const netAttackers = front.filter((i) => i !== setterIdx && (lu.six[i].position === 'MB' || lu.six[i].position === 'OP'));
-  const naX = netAttackers.length <= 1 ? [0.46] : [0.4, 0.66];
-  netAttackers.forEach((i, k) => { pos[i] = { x: mir(naX[k] ?? 0.5), y: yNet }; }); // 전위 공격수 네트 대기
-  const passers = [0, 1, 2, 3, 4, 5].filter((i) => i !== setterIdx && !netAttackers.includes(i));
-  passers.forEach((i, k) => { const f = passers.length === 1 ? 0.5 : 0.2 + (0.6 * k) / (passers.length - 1); pos[i] = { x: mir(f), y: yDeep }; }); // 패서 펼침
+  const pos: Record<number, { x: number; y: number }> = {};
+  for (let i = 0; i < 6; i++) {
+    const zone = ((i - rot) % 6 + 6) % 6 + 1; // 이 선수의 로테이션 존
+    let [xf, yf] = FR_FRAC[zone];
+    if (i === setterIdx && (zone === 1 || zone === 5 || zone === 6)) yf -= 0.12; // 후위 세터: 네트쪽으로(전위보다 뒤 유지=합법)
+    pos[i] = { x: (side === 'home' ? xf : 1 - xf) * COURT_W, y: (side === 'home' ? yf : 1 - yf) * COURT_H };
+  }
   return pos;
 }
 
@@ -411,14 +411,13 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
 
   type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean };
   const offSide = offenseSideOf(seg);
-  const recvSide = other(stage.serving); // 서브 받는 팀
   const buildMarkers = (side: Side): Mk[] => {
     const rot = side === 'home' ? stage.homeRot : stage.awayRot;
     const lu = side === 'home' ? lineups.home : lineups.away;
-    // 인플레이: 전문 포지션(공격 측만 세터 침투). 서브 전: 받는 팀=리시브 대형 / 서브 팀=베이스
+    // 서브 전: 양 팀 모두 로테이션 합법 대형. 인플레이(서브 후): 전문 포지션 스위칭(오버랩 무관)
     const posMap = inPlay
       ? switchedSpots(side, lu, rot, side === offSide).pos
-      : (side === recvSide ? receiveFormation(side, lu, rot) : switchedSpots(side, lu, rot, false).pos);
+      : receiveFormation(side, lu, rot);
     const arr: Mk[] = [];
     for (let i = 0; i < 6; i++) {
       const zone = ((i - rot) % 6 + 6) % 6 + 1;     // 이 선수가 현재 선 존
