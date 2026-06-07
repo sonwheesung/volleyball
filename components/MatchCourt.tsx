@@ -444,6 +444,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     chosen.forEach((bi, k) => { moveMap[`${dSide}-${bi}`] = { x: clampN(ax + spread[k], 24, COURT_W - 24), y: yNet }; });
     front.filter((i) => !chosen.includes(i)).forEach((ri) => { moveMap[`${dSide}-${ri}`] = { x: dSw.pos[ri].x, y: yOff }; }); // 블록 안 가는 전위는 빠짐
     moveMap[`${attSide}-${seg.from.idx}`] = { x: seg.from.x, y: seg.from.y }; // 토스한 선수는 패스 지점에서 세트
+
+    // 공격 커버: 토스 받는 동안(스파이크 전) 토스 안 온 선수들이 공격수 뒤로 모임(블록 리바운드 대비)
+    const hitIdx = seg.to.idx;
+    const attRot = attSide === 'home' ? stage.homeRot : stage.awayRot;
+    const attSw = switchedSpots(attSide, attLu, attRot, true);
+    const coverY = (attSide === 'home' ? 0.7 : 0.3) * COURT_H;
+    [0, 1, 2, 3, 4, 5].filter((i) => i !== hitIdx && i !== seg.from.idx)
+      .sort((a, b) => Math.abs(attSw.pos[a].x - ax) - Math.abs(attSw.pos[b].x - ax)).slice(0, 3)
+      .forEach((i, k) => { moveMap[`${attSide}-${i}`] = { x: clampN(ax + (k - 1) * 34, 24, COURT_W - 24), y: coverY }; });
   }
   if (seg && seg.to.movers) for (const m of seg.to.movers) moveMap[`${m.side}-${m.idx}`] = { x: m.x, y: m.y };
 
