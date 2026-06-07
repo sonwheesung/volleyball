@@ -128,7 +128,8 @@ function reconstruct(sim: SimResult): Rally[] {
 
 // 공 이동 종류 — 구간별 속도/이징이 다르다
 type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
-type WP = { x: number; y: number; side: Side; idx: number; kind: Move };
+// defender: 이 구간에 공 쪽으로 움직이는 수비수(디그/커버/실패 시도)
+type WP = { x: number; y: number; side: Side; idx: number; kind: Move; defender?: { side: Side; idx: number; x: number; y: number } };
 
 // 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게. walk=서버가 엔드라인 뒤로, return=공이 서버에게.
 const DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 320 };
@@ -137,6 +138,7 @@ const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H
 const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1 };
 const RECV_FAULT = 0.05; // 리시브 미스(투터치 등) 확률 — 지는 쪽 한정
 const JUMP = 1.45; // 점프 시 마커 확대
+const SPEED = 2; // 전체 경기 속도 배수(클수록 느림). 2 = 2배 느리게
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
 const COURT_PAD = SERVE_OUT + 10; // 코트 밖 서브 공간 확보용 상하 여백
 const serveOutY = (side: Side) => (side === 'home' ? COURT_H + SERVE_OUT : -SERVE_OUT);
@@ -185,16 +187,44 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     const hitters = sw[att].frontHitters.filter((i) => i !== tosserIdx);
     const atkIdx = pick(hitters.length ? hitters : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
     wp.push(spot(att, atkIdx, 'toss')); // 토스 → 공격수(토스한 선수와 다름)
+    const backs = sw[def].backers.length ? sw[def].backers : [0];
+    const nearestBack = (x: number) => backs.reduce((b, i) => (Math.abs(sw[def].pos[i].x - x) < Math.abs(sw[def].pos[b].x - x) ? i : b), backs[0]);
+
     if (att === r.scorer) {
-      const t = spikeTarget(def, rng, true); // 득점: 빈 곳에 다양한 코스로 꽂힘
-      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike' });
+      const v = rng.next();
+      const ahx = wp[wp.length - 1].x; // 공격수 x
+      if (v < 0.2) {
+        // 터치아웃: 블록 맞고 코트 밖으로 → 공격 득점
+        const fr = [2, 3, 4].map((z) => lineupIdxAt(rotOf(def), z));
+        const blk = fr.reduce((b, i) => (Math.abs(sw[def].pos[i].x - ahx) < Math.abs(sw[def].pos[b].x - ahx) ? i : b), fr[0]);
+        wp.push(spot(def, blk, 'spike')); // 블록 터치(네트)
+        const outX = ahx < COURT_W / 2 ? -SERVE_OUT : COURT_W + SERVE_OUT; // 사이드 밖
+        wp.push({ x: outX, y: (def === 'home' ? 0.85 : 0.15) * COURT_H, side: def, idx: -1, kind: 'fault' }); // 아웃
+      } else if (v < 0.55) {
+        // 디그 실패: 수비가 덤비지만 닿지 못함(공은 옆/뒤에 떨어짐)
+        const t = spikeTarget(def, rng, true);
+        const ni = nearestBack(t.x);
+        const dp = sw[def].pos[ni];
+        wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', defender: { side: def, idx: ni, x: dp.x + (t.x - dp.x) * 0.6, y: dp.y + (t.y - dp.y) * 0.6 } });
+      } else {
+        // 클린 킬: 빈 곳
+        const t = spikeTarget(def, rng, true);
+        wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike' });
+      }
       break;
     }
-    // 디그: 다양한 코스로 때리고 → 가장 가까운 후위 수비가 그 자리로 이동해 받음
+
+    // 랠리 지속(디그 성공): 가장 가까운 후위 수비가 낙구점으로 이동해 받음
     const t = spikeTarget(def, rng, false);
-    const backs = sw[def].backers.length ? sw[def].backers : [0];
-    const dIdx = backs.reduce((b, i) => (Math.abs(sw[def].pos[i].x - t.x) < Math.abs(sw[def].pos[b].x - t.x) ? i : b), backs[0]);
-    wp.push({ x: t.x, y: t.y, side: def, idx: dIdx, kind: 'spike' });
+    const dIdx = nearestBack(t.x);
+    wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', defender: { side: def, idx: dIdx, x: t.x, y: t.y } });
+    if (rng.next() < 0.3) {
+      // 커버: 1차 디그가 흘러 다른 수비가 살림(짧게 연결)
+      const others = backs.filter((i) => i !== dIdx);
+      const ci = others.length ? pick(others) : dIdx;
+      const cp = sw[def].pos[ci];
+      wp.push({ x: cp.x, y: cp.y, side: def, idx: -1, kind: 'pass', defender: { side: def, idx: ci, x: cp.x, y: cp.y } });
+    }
     att = def;
   }
   return wp;
@@ -264,7 +294,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     prog.setValue(0);
     const anim = Animated.timing(prog, {
       toValue: 1,
-      duration: DUR[to.kind] * (fast ? 0.4 : 1),
+      duration: DUR[to.kind] * (fast ? 0.4 : 1) * SPEED,
       easing: easingFor(to.kind),
       useNativeDriver: true,
     });
@@ -321,10 +351,10 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     const spread = count === 2 ? [-12, 12] : [-20, 0, 20];
     sorted.slice(0, count).forEach((bi, k) => { blockTargets[bi] = { x: clampN(ax + spread[k], 24, COURT_W - 24), y: yNet }; });
     sorted.slice(count).forEach((ri) => { blockTargets[ri] = { x: blockSw.pos[ri].x, y: yOff }; }); // 블록 안 하는 전위는 빠짐
-  } else if (seg && segKind === 'spike' && seg.to.idx >= 0) {
-    digSide = seg.to.side;
-    digIdx = seg.to.idx;
-    digPos = { x: seg.to.x, y: seg.to.y };
+  } else if (seg && seg.to.defender) {
+    digSide = seg.to.defender.side;
+    digIdx = seg.to.defender.idx;
+    digPos = { x: seg.to.defender.x, y: seg.to.defender.y };
   }
 
   // 마커는 "선수(라인업 인덱스)" 단위로 그린다 → 로테이션·서버 in/out 등 위치가 바뀌면
@@ -369,7 +399,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       const last = posLast.current[m.key];
       if (last && (last.x !== m.tx || last.y !== m.ty)) {
         posLast.current[m.key] = { x: m.tx, y: m.ty };
-        Animated.timing(v, { toValue: { x: m.tx, y: m.ty }, duration: 300, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+        Animated.timing(v, { toValue: { x: m.tx, y: m.ty }, duration: 300 * (fast ? 0.4 : 1) * SPEED, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
