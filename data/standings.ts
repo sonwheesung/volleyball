@@ -3,7 +3,7 @@
 // 성능: 전 경기 1회 계산 후 baseVersion 으로 캐시.
 
 import type { Fixture } from '../types';
-import { baseVersion, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
+import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 import { simulateMatch } from '../engine/match';
 
 export interface ResultRow {
@@ -44,7 +44,9 @@ function allResults(): ResultRow[] {
     const squad: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
     for (const t of LEAGUE.teams) squad[t.id] = getEvolvedTeamPlayers(t.id, day);
     for (const f of byDay.get(day)!) {
-      const sim = simulateMatch(f.seed, squad[f.homeTeamId], squad[f.awayTeamId]);
+      const sim = simulateMatch(f.seed, squad[f.homeTeamId], squad[f.awayTeamId], {
+        home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId),
+      });
       rows.push({
         fixtureId: f.id,
         round: f.round,

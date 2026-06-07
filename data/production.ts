@@ -5,7 +5,7 @@
 import type { Fixture } from '../types';
 import { simulateMatch } from '../engine/match';
 import { attributeProduction, mergeProd, type ProdLine } from '../engine/production';
-import { baseVersion, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
+import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 
 interface ProdRow {
   dayIndex: number;
@@ -31,7 +31,9 @@ function allProdRows(): ProdRow[] {
     const roster: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
     for (const t of LEAGUE.teams) roster[t.id] = getEvolvedTeamPlayers(t.id, day);
     for (const f of byDay.get(day)!) {
-      const sim = simulateMatch(f.seed, roster[f.homeTeamId], roster[f.awayTeamId]);
+      const sim = simulateMatch(f.seed, roster[f.homeTeamId], roster[f.awayTeamId], {
+        home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId),
+      });
       const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed);
       rows.push({ dayIndex: f.dayIndex, lines });
     }

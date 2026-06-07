@@ -1,7 +1,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Screen';
-import { getEvolvedTeamPlayers, getFixture, getTeam } from '../../data/league';
+import { coachInfoOf, getEvolvedTeamPlayers, getFixture, getTeam } from '../../data/league';
 import { attributeProduction, emptyProd, type ProdLine } from '../../engine/production';
 import { simulateMatch } from '../../engine/match';
 import type { Player } from '../../types';
@@ -20,7 +20,9 @@ export default function MatchResult() {
 
   const home = getEvolvedTeamPlayers(fixture.homeTeamId, fixture.dayIndex);
   const away = getEvolvedTeamPlayers(fixture.awayTeamId, fixture.dayIndex);
-  const sim = simulateMatch(fixture.seed, home, away);
+  const sim = simulateMatch(fixture.seed, home, away, {
+    home: coachInfoOf(fixture.homeTeamId), away: coachInfoOf(fixture.awayTeamId),
+  });
   const box = attributeProduction(sim, home, away, fixture.seed);
 
   const homeName = getTeam(fixture.homeTeamId)?.name ?? '';

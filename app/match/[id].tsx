@@ -4,7 +4,7 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
-import { getEvolvedTeamPlayers, getFixture, getTeam } from '../../data/league';
+import { coachInfoOf, getEvolvedTeamPlayers, getFixture, getTeam } from '../../data/league';
 import { teamOverall } from '../../engine/overall';
 import { simulateMatch } from '../../engine/match';
 import { useGameStore } from '../../store/useGameStore';
@@ -41,7 +41,7 @@ export default function MatchBoard() {
     }
     const homeSquad = getEvolvedTeamPlayers(home.id, dayIndex);
     const awaySquad = getEvolvedTeamPlayers(away.id, dayIndex);
-    const sim = simulateMatch(seed, homeSquad, awaySquad);
+    const sim = simulateMatch(seed, homeSquad, awaySquad, { home: coachInfoOf(home.id), away: coachInfoOf(away.id) });
     return {
       home, away, homeSquad, awaySquad, seed, sim,
       homeOvr: teamOverall(homeSquad), awayOvr: teamOverall(awaySquad),

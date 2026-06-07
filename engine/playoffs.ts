@@ -3,7 +3,7 @@
 // 상위 시드(hi)에 홈 어드밴티지(능력 배수 +).
 
 import type { Player } from '../types';
-import { simulateMatch } from './match';
+import { simulateMatch, type CoachInfo } from './match';
 
 export interface SeriesGame {
   hiSets: number;
@@ -20,13 +20,16 @@ export interface Series {
 const HI_EDGE = 1.03; // 상위 시드 어드밴티지(능력 배수)
 
 /** 한 시리즈(best-of, target선승). hi=상위 시드(home). 결정론(seed). */
-export function playSeries(seed: number, hi: Player[], lo: Player[], target: number): Series {
+export function playSeries(
+  seed: number, hi: Player[], lo: Player[], target: number,
+  hiCoach?: CoachInfo, loCoach?: CoachInfo,
+): Series {
   let hiWins = 0;
   let loWins = 0;
   const games: SeriesGame[] = [];
   let g = 0;
   while (hiWins < target && loWins < target) {
-    const r = simulateMatch(seed + g * 1009, hi, lo, { home: HI_EDGE, away: 1 });
+    const r = simulateMatch(seed + g * 1009, hi, lo, { edge: { home: HI_EDGE, away: 1 }, home: hiCoach, away: loCoach });
     games.push({ hiSets: r.homeSets, loSets: r.awaySets });
     if (r.homeSets > r.awaySets) hiWins++;
     else loWins++;

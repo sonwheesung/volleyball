@@ -68,6 +68,18 @@ test('전력 우위 팀이 과반 이상 승리', () => {
   assert.ok(strongWins / N > 0.7, `강팀 승률 ${strongWins}/${N} > 70%`);
 });
 
+test('감독 옵션: 결정론 + 유효 스코어 유지', () => {
+  const opts = { home: { style: 'attack' as const, charisma: 80 }, away: { style: 'defense' as const, charisma: 40 } };
+  const r1 = simulateMatch(555, team('H', 72), team('A', 72), opts);
+  const r2 = simulateMatch(555, team('H', 72), team('A', 72), opts);
+  assert.deepEqual(r1, r2, '같은 시드·옵션 = 동일');
+  assert.ok(r1.homeSets === 3 || r1.awaySets === 3);
+  r1.setScores.forEach((sc, i) => {
+    assert.ok(Math.max(sc.home, sc.away) >= targetPoints(i + 1));
+    assert.ok(Math.abs(sc.home - sc.away) >= 2);
+  });
+});
+
 test('구조적 홈 편향 없음: 동일 전력 ≈ 5:5', () => {
   let homeWins = 0;
   const N = 400;

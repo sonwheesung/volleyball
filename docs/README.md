@@ -10,7 +10,7 @@
 
 | 문서 | 범위 | 핵심 엔진 파일 |
 |---|---|---|
-| [MATCH_SYSTEM](./MATCH_SYSTEM.md) | 경기 시뮬(로테이션·서브·랠리·블로킹·기세·감독) | `engine/match.ts`·`rally.ts`·`lineup.ts`·`rotation.ts`(풀 랠리 체인 v1) |
+| [MATCH_SYSTEM](./MATCH_SYSTEM.md) | 경기 시뮬(로테이션·서브타입·랠리·블로킹3축·찬스볼·체력·기세·타임아웃·감독) | `engine/match.ts`·`rally.ts`·`lineup.ts`·`rotation.ts`(풀 랠리 체인 v2) |
 | [TRAINING_SYSTEM](./TRAINING_SYSTEM.md) | 훈련·성장·노쇠·재능·경기경험 성장 | `engine/training.ts`, `aging.ts`, `experience.ts`, `progression.ts` |
 | [SALARY_SYSTEM](./SALARY_SYSTEM.md) | 개인 생산 귀속·시장가치·계약 고착·루키스케일 | `engine/salary.ts`, `production.ts`, `data/production.ts` |
 | [FA_SYSTEM](./FA_SYSTEM.md) | FA(등급·보상·보호명단·프랜차이즈)·드래프트·세대교체·캡·AI GM | `engine/faMarket.ts`, `compensation.ts`, `cap.ts`, `draft.ts`, `aiGM.ts`, `rollover.ts`, `retire.ts` |
@@ -32,8 +32,8 @@
 | 롤오버·은퇴·유망주 충원(세대교체) | ✅ |
 | 순위표·개인 리더보드·경기 상세·대시보드 | ✅ |
 | 포스트시즌 + 역대 우승 아카이브 | ✅ |
-| 경기 엔진 v1.1: 공격 종류(4장)·블로킹 3축(5.2)·체력(7.1) | ✅ |
-| 서브타입(2장)·공격방법 세분(5.1)·찬스볼(6장)·타임아웃·감독성향(7.4/8장)·케미/부상(9장) | ❌ 미구현(보류) |
+| 경기 엔진 v2: 서브타입(2장)·공격종류(4장)·블로킹3축/블록아웃(5장)·찬스볼(6장)·체력/타임아웃(7장)·감독성향(8장)·케미/부상(9장) | ✅ |
+| 경기 엔진 잔여: 개별 모듈 분리(10장)·스위칭(1.5)·부상의 시즌 결장 반영 | ❌ 보류 |
 | 트레이드 | ❌ 미구현 |
 | MVP·개인 타이틀·명예의전당·영구결번 | ❌ 미구현 |
 | 감독 훈련선호 커스터마이즈 / 라인업·경기 직접 개입 | ❌ 자동 완성 후 "오버라이드"로 개방 예정 |

@@ -4,6 +4,7 @@
 // 시즌 내 진화는 스냅샷에서 currentDay 만큼 리플레이.
 
 import type { Coach, Fixture, Player, Team, TrainingFocus } from '../types';
+import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
 import { evolvePlayer } from '../engine/progression';
@@ -54,6 +55,12 @@ export const getTeamPlayers = (teamId: string): Player[] =>
 export const getTeamCoach = (teamId: string): Coach | undefined => {
   const t = teamMap.get(teamId);
   return t ? coachMap.get(t.coachId) : undefined;
+};
+
+/** 경기 엔진용 감독 정보(성향·카리스마) — MATCH_SYSTEM 8장 */
+export const coachInfoOf = (teamId: string): CoachInfo | undefined => {
+  const c = getTeamCoach(teamId);
+  return c ? { style: c.style, charisma: c.charisma } : undefined;
 };
 
 /** 선수 → 소속팀 감독 훈련선호 (롤오버/진화 성장 방향) */
