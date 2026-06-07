@@ -13,8 +13,8 @@ const LEAGUE_SEED = 20251018;
 const SEASON_SEED = 777;
 const DEFAULT_FOCUS: TrainingFocus = { primary: [4, 6], secondary: [1, 10, 12] };
 
-export const LEAGUE = generateLeague(LEAGUE_SEED);
-export const SEASON: Fixture[] = generateSeason(LEAGUE.teams.map((t) => t.id), SEASON_SEED);
+export let LEAGUE = generateLeague(LEAGUE_SEED);
+export let SEASON: Fixture[] = generateSeason(LEAGUE.teams.map((t) => t.id), SEASON_SEED);
 
 const teamMap = new Map(LEAGUE.teams.map((t) => [t.id, t]));
 const playerMap = new Map<string, Player>(LEAGUE.players.map((p) => [p.id, p]));
@@ -101,6 +101,27 @@ export const defaultRosters = seedRosters;
 /** 세이브 초기화 시 시드 상태로 복원 */
 export function resetLeagueBase(): void {
   for (const p of LEAGUE.players) playerMap.set(p.id, p);
+  rosters = seedRosters();
+  rebuildFocus();
+  evoCache = null;
+  _baseVersion++;
+}
+
+/**
+ * 시뮬 전용: 리그/시즌을 새 시드로 통째로 재생성(독립 유니버스).
+ * 앱/세이브 경로는 사용하지 않는다 — `tools/simLeague.ts` 다중 유니버스 통계용.
+ */
+export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
+  LEAGUE = generateLeague(leagueSeed);
+  SEASON = generateSeason(LEAGUE.teams.map((t) => t.id), seasonSeed);
+  teamMap.clear();
+  for (const t of LEAGUE.teams) teamMap.set(t.id, t);
+  playerMap.clear();
+  for (const p of LEAGUE.players) playerMap.set(p.id, p);
+  coachMap.clear();
+  for (const c of LEAGUE.coaches) coachMap.set(c.id, c);
+  fixtureMap.clear();
+  for (const f of SEASON) fixtureMap.set(f.id, f);
   rosters = seedRosters();
   rebuildFocus();
   evoCache = null;
