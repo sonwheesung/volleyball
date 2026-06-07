@@ -414,11 +414,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     const fHome = fanSide === 'home';
     const fRot = fHome ? stage.homeRot : stage.awayRot;
     const back = [1, 5, 6].map((z) => lineupIdxAt(fRot, z));
-    const slots = [
-      { x: clampN(fanAx - 0.26 * COURT_W, 18, COURT_W - 18), y: (fHome ? 0.82 : 0.18) * COURT_H }, // 좌(크로스/라인) 깊게
-      { x: clampN(fanAx, 18, COURT_W - 18), y: (fHome ? 0.68 : 0.32) * COURT_H },                  // 중앙(팁/블록 뒤) 얕게
-      { x: clampN(fanAx + 0.26 * COURT_W, 18, COURT_W - 18), y: (fHome ? 0.82 : 0.18) * COURT_H }, // 우(라인/크로스) 깊게
-    ].sort((a, b) => a.x - b.x);
+    // 코트 전체 폭(좌·중·우)을 커버하되 공격 방향으로만 살짝 치우침 → 안 뭉침. 가운데 얕게(팁)·양쪽 깊게(라인/크로스)
+    const shift = (fanAx - 0.5 * COURT_W) * 0.3;
+    const sx = [0.22, 0.5, 0.78].map((b) => clampN(b * COURT_W + shift, 22, COURT_W - 22));
+    const yDeep = (fHome ? 0.84 : 0.16) * COURT_H;
+    const yMid = (fHome ? 0.72 : 0.28) * COURT_H;
+    const slots = [{ x: sx[0], y: yDeep }, { x: sx[1], y: yMid }, { x: sx[2], y: yDeep }];
     back.slice().sort((a, b) => ZONE_X[((a - fRot) % 6 + 6) % 6 + 1] - ZONE_X[((b - fRot) % 6 + 6) % 6 + 1])
       .forEach((bi, k) => { moveMap[`${fanSide}-${bi}`] = slots[k]; });
   }
