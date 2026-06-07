@@ -33,10 +33,12 @@ export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {
 // 코트 위 인원(선발) — 1S·2OH·1OP·2MB·1L = 7
 const ON_COURT: Record<Position, number> = { S: 1, OH: 2, OP: 1, MB: 2, L: 1 };
 
-const ATTACK: Record<Position, number> = { OP: 1.0, OH: 0.9, MB: 0.6, S: 0.1, L: 0 };
+// 공격 점유 — OP(아포짓)가 확실한 1옵션, OH 좌우, MB(센터)는 속공 위주로 비중 낮음(실제 여자배구)
+const ATTACK: Record<Position, number> = { OP: 1.38, OH: 0.98, MB: 0.28, S: 0.08, L: 0 };
 const BLOCK: Record<Position, number> = { MB: 1.0, OH: 0.6, OP: 0.6, S: 0.3, L: 0 };
 const SERVE: Record<Position, number> = { OP: 1, OH: 1, MB: 1, S: 1, L: 0.1 };
-const DIG: Record<Position, number> = { L: 1.0, OH: 0.6, S: 0.5, MB: 0.4, OP: 0.3 };
+const DIG: Record<Position, number> = { L: 1.3, OH: 0.6, S: 0.5, MB: 0.4, OP: 0.3 };
+const ATK_FOCUS = 2.0; // 공격 집중도 — 좋은 공격수에게 세트 몰림(1옵션 에이스 부각)
 
 /** 선발(코트 위 7) / 벤치 분리 — 포지션별 OVR 상위가 선발 */
 export function splitLineup(players: Player[]): { starters: Player[]; bench: Player[] } {
@@ -107,17 +109,18 @@ export function attributeProduction(
     const def = garbage && defBench.length ? defBench : defStart;
     const roll = rng.next();
 
+    // 득점 유형 비율 = 밸런싱된 엔진 실측에 맞춤(공격킬+블록아웃 62% / 스터프 10% / 에이스 6% / 상대범실 22%)
     if (roll < 0.62) {
-      const hitter = pick(off, (p) => ATTACK[p.position] * p.skSpike, rng.next());
+      const hitter = pick(off, (p) => ATTACK[p.position] * p.skSpike ** ATK_FOCUS, rng.next());
       if (hitter) bump(hitter.id, (l) => { l.points++; l.spikes++; });
       const setter = pick(off, (p) => (p.position === 'S' ? p.skSet : 0), rng.next());
       if (setter) bump(setter.id, (l) => { l.assists++; });
       const digger = pick(def, (p) => DIG[p.position] * p.skDig, rng.next());
       if (digger) bump(digger.id, (l) => { l.digs++; });
-    } else if (roll < 0.75) {
+    } else if (roll < 0.72) {
       const blocker = pick(off, (p) => BLOCK[p.position] * p.skBlock, rng.next());
       if (blocker) bump(blocker.id, (l) => { l.points++; l.blocks++; });
-    } else if (roll < 0.85) {
+    } else if (roll < 0.78) {
       const server = pick(off, (p) => SERVE[p.position] * p.skServe, rng.next());
       if (server) bump(server.id, (l) => { l.points++; l.aces++; });
     }
