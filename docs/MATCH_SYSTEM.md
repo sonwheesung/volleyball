@@ -17,7 +17,7 @@
 | 랠리 판정(서브→리시브→세트→공격→블록/디그 루프) | ✅ 구현 | `engine/rally.ts` `playRally` |
 | 코트 라인업(주전 6 로테이션 배열 + 리베로) | ✅ 구현 | `engine/lineup.ts` `buildLineup` (5-1 대각 배치) |
 | 로테이션·사이드아웃 회전(1.1) | ✅ 적용 | `engine/rotation.ts` 를 `match.ts`/`rally.ts`가 사용 |
-| 세터 승수 / 리베로 후위 수비(1.3 추상화) | ✅ 구현 | `rally.ts` `setterOf`·`defenders`(후위 MB→리베로 치환) |
+| 세터 승수 / 리베로 후위 수비·교체(1.3) | ✅ 구현 | `rally.ts` `defenders`·보드 `playerAt`: **후위(1·5·6) MB↔리베로 교체**, 리베로 전위 불가, 서브 선수는 실제(리베로 서브 불가) |
 | VQ 포지션 폴트(1.4) | ✅ 구현(간이) | `rally.ts` 평균 VQ → `faultP` |
 | 기세(momentum, 7.2) | ✅ 구현(간이) | 팀별 0~100, 연속득점 가속, `momFactor` 능력 배수 |
 | **공격 종류(4장)** | ✅ 구현(간이) | `rally.ts` `chooseAtk`/`pickAttacker` — 속공/시간차/오픈/백어택, `BLOCK_AVOID` |

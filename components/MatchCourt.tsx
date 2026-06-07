@@ -55,11 +55,11 @@ interface Lineups {
   away: ReturnType<typeof buildLineup>;
 }
 
-/** 사이드 라인업에서 zone 의 선수 (후위 5·6 MB는 리베로로 치환) */
+/** 사이드 라인업에서 zone 의 선수 (후위 1·5·6 MB는 리베로로 교체. 리베로는 전위 불가) */
 function playerAt(L: Lineups, side: Side, rot: number, zone: number): Player {
   const lu = side === 'home' ? L.home : L.away;
   let p = lu.six[lineupIdxAt(rot, zone)];
-  if ((zone === 5 || zone === 6) && lu.libero && p?.position === 'MB') p = lu.libero;
+  if ((zone === 1 || zone === 5 || zone === 6) && lu.libero && p?.position === 'MB') p = lu.libero;
   return p;
 }
 
@@ -465,8 +465,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     const arr: Mk[] = [];
     for (let i = 0; i < 6; i++) {
       const zone = ((i - rot) % 6 + 6) % 6 + 1;     // 이 선수가 현재 선 존
-      const p = playerAt(lineups, side, rot, zone);  // 후위 MB→리베로 치환 포함
       const isServer = !finished && stage.serving === side && zone === 1;
+      const p = isServer ? lu.six[i] : playerAt(lineups, side, rot, zone); // 서버는 실제 선수(리베로는 서브 불가), 그 외 후위 MB→리베로
       const b = posMap[i] ?? zonePx(side, zone);
       let tx = b.x;
       let ty = b.y;
