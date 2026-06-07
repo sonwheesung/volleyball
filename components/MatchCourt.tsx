@@ -27,6 +27,16 @@ const GRID: Record<number, [number, 'F' | 'B']> = {
 const COLX = [0.18, 0.5, 0.82];
 
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
+const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/** 스파이크 코스 — 상대 코트의 다양한 위치(좌우·깊이). deep=득점성(깊고 빈 곳) */
+function spikeTarget(def: Side, rng: ReturnType<typeof createRng>, deep: boolean): { x: number; y: number } {
+  const x = (0.12 + rng.next() * 0.76) * COURT_W;
+  const near = deep ? 0.72 : 0.55;
+  const span = deep ? 0.24 : 0.4;
+  const f = def === 'home' ? near + rng.next() * span : 1 - near - rng.next() * span;
+  return { x, y: f * COURT_H };
+}
 
 /** 존 중심 좌표(px) — 홈은 하단, 원정은 상단(좌우·전후 점대칭) */
 function zonePx(side: Side, zone: number): { x: number; y: number } {
@@ -141,7 +151,6 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     away: switchedSpots('away', L.away, r.awayRot),
   };
   const spot = (s: Side, i: number, kind: Move): WP => ({ ...sw[s].pos[i], side: s, idx: i, kind });
-  const floorAt = (s: Side, i: number): WP => ({ x: sw[s].pos[i].x, y: (s === 'home' ? 0.96 : 0.04) * COURT_H, side: s, idx: -1, kind: 'spike' });
 
   const serving = r.serving;
   const recv = other(serving);
@@ -171,8 +180,16 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     wp.push(spot(att, sIdx, 'pass')); // 세터에게(스위칭 네트 위치)
     const hitters = sw[att].frontHitters.length ? sw[att].frontHitters : [sIdx];
     wp.push(spot(att, pick(hitters), 'toss')); // 토스 → 공격수(세터와 다른 위치)
-    if (att === r.scorer) { wp.push(floorAt(def, pick(sw[def].backers.length ? sw[def].backers : [0]))); break; }
-    wp.push(spot(def, pick(sw[def].backers.length ? sw[def].backers : [0]), 'spike')); // 디그수에게 전환
+    if (att === r.scorer) {
+      const t = spikeTarget(def, rng, true); // 득점: 빈 곳에 다양한 코스로 꽂힘
+      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike' });
+      break;
+    }
+    // 디그: 다양한 코스로 때리고 → 가장 가까운 후위 수비가 그 자리로 이동해 받음
+    const t = spikeTarget(def, rng, false);
+    const backs = sw[def].backers.length ? sw[def].backers : [0];
+    const dIdx = backs.reduce((b, i) => (Math.abs(sw[def].pos[i].x - t.x) < Math.abs(sw[def].pos[b].x - t.x) ? i : b), backs[0]);
+    wp.push({ x: t.x, y: t.y, side: def, idx: dIdx, kind: 'spike' });
     att = def;
   }
   return wp;
@@ -275,6 +292,25 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const jl = seg ? jumpersFor(seg.from, seg.to, stage.homeRot, stage.awayRot) : [];
   const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
 
+  // 수비 움직임: 토스 때 상대 블로커가 공격수 쪽 네트로 형성, 스파이크 때 디그수가 낙구점으로 이동
+  let blockSide: Side | null = null;
+  const blockTargets: Record<number, { x: number; y: number }> = {};
+  let digSide: Side | null = null;
+  let digIdx = -1;
+  let digPos = { x: 0, y: 0 };
+  if (seg && segKind === 'toss') {
+    blockSide = other(seg.to.side);
+    const rot = blockSide === 'home' ? stage.homeRot : stage.awayRot;
+    const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
+    const ax = seg.to.x; // 공격수 화면 x
+    const yNet = (blockSide === 'home' ? 0.575 : 0.425) * COURT_H;
+    front.forEach((fi, k) => { blockTargets[fi] = { x: clampN(ax + (k - 1) * 18, 24, COURT_W - 24), y: yNet }; });
+  } else if (seg && segKind === 'spike' && seg.to.idx >= 0) {
+    digSide = seg.to.side;
+    digIdx = seg.to.idx;
+    digPos = { x: seg.to.x, y: seg.to.y };
+  }
+
   // 마커는 "선수(라인업 인덱스)" 단위로 그린다 → 로테이션·서버 in/out 등 위치가 바뀌면
   // 무조건 슬라이드(절대 순간이동 금지). 각 마커는 자기 Animated 위치를 목표로 이동한다.
   const getPos = (key: string, init: { x: number; y: number }) => {
@@ -295,7 +331,13 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       const base = sw ? sw.pos[i] : zonePx(side, zone);
       let tx = base.x;
       let ty = base.y;
-      if (isServer && (segKind === 'walk' || segKind === 'serve')) { tx = zonePx(side, 1).x; ty = serveOutY(side); } // 서브 시 엔드라인 뒤
+      if (isServer && (segKind === 'walk' || segKind === 'serve')) {
+        tx = zonePx(side, 1).x; ty = serveOutY(side); // 서브 시 엔드라인 뒤
+      } else if (blockSide === side && blockTargets[i]) {
+        tx = blockTargets[i].x; ty = blockTargets[i].y; // 블로커 형성
+      } else if (digSide === side && i === digIdx) {
+        tx = digPos.x; ty = digPos.y; // 디그수가 낙구점으로 이동
+      }
       const jumping = jl.some((j) => j.side === side && j.idx === i);
       arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer });
     }
