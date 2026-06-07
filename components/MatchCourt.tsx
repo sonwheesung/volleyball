@@ -174,7 +174,8 @@ function reconstruct(sim: SimResult): Rally[] {
 type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
 type Mover = { side: Side; idx: number; x: number; y: number };
 // movers: 이 구간에 특정 위치로 움직이는 선수들(디그·커버·쫓기·세트 등)
-type WP = { x: number; y: number; side: Side; idx: number; kind: Move; movers?: Mover[] };
+// aim: 점선(의도) 궤적의 끝점. 실제 공은 x/y로 가지만 궤적은 aim까지 그린다(터치아웃 등)
+type WP = { x: number; y: number; side: Side; idx: number; kind: Move; movers?: Mover[]; aim?: { x: number; y: number } };
 
 // 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게. walk=서버가 엔드라인 뒤로, return=공이 서버에게.
 const DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 320 };
@@ -271,11 +272,14 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     if (att === r.scorer) {
       const v = rng.next();
       if (v < 0.2) {
-        // 터치아웃: 블록 맞고 코트 밖으로 → 공격 득점
-        const fr = [2, 3, 4].map((z) => lineupIdxAt(rotOf(def), z));
-        const blk = fr.reduce((b, i) => (Math.abs(sw[def].pos[i].x - ahx) < Math.abs(sw[def].pos[b].x - ahx) ? i : b), fr[0]);
-        wp.push({ ...sw[def].pos[blk], side: def, idx: blk, kind: 'spike', movers: coverMovers }); // 블록 터치
-        wp.push({ x: ahx < COURT_W / 2 ? -12 : COURT_W + 12, y: (def === 'home' ? 0.8 : 0.2) * COURT_H, side: def, idx: -1, kind: 'fault' }); // 아웃
+        // 터치아웃: 공격수는 코트로 강타(의도 궤적)했는데 네트서 블록에 스쳐 아웃 → 공격 득점
+        const intended = spikeTarget(def, rng, true); // 본인이 원한 코스(코트 깊은 곳)
+        const ap = sw[att].pos[atkIdx];
+        const netY = (def === 'home' ? 0.52 : 0.48) * COURT_H;
+        const s = Math.abs(intended.y - ap.y) < 1 ? 0.3 : (netY - ap.y) / (intended.y - ap.y);
+        const blockNet = { x: clampN(ap.x + (intended.x - ap.x) * s, 12, COURT_W - 12), y: netY };
+        wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 점선=의도(코트), 실제=네트서 블록 터치
+        wp.push({ x: ap.x < COURT_W / 2 ? COURT_W + 12 : -12, y: (def === 'home' ? 0.78 : 0.22) * COURT_H, side: def, idx: -1, kind: 'fault' }); // 블록 맞고 옆으로 아웃
       } else if (v < 0.55) {
         // 디그 실패: 가까운 수비 2명이 덤비지만 못 닿음
         const t = spikeTarget(def, rng, true);
@@ -506,14 +510,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       ]
     : [{ translateX: last.x }, { translateY: last.y }];
 
-  // 공 궤적(흰 점선) — 현재 구간의 포물선 경로 위 점들
-  const trailDots = seg
+  // 공 궤적(흰 점선) — 경기 중(인플레이)에만. 끝점은 의도(aim)가 있으면 그쪽으로(터치아웃: 점선=의도 코스)
+  const aimEnd = seg ? seg.to.aim ?? seg.to : null;
+  const trailDots = seg && inPlay && aimEnd
     ? Array.from({ length: 17 }, (_, k) => {
         const s = k / 16;
         return {
           key: k,
-          x: seg.from.x + (seg.to.x - seg.from.x) * s,
-          y: seg.from.y + (seg.to.y - seg.from.y) * s - arcH * 4 * s * (1 - s),
+          x: seg.from.x + (aimEnd.x - seg.from.x) * s,
+          y: seg.from.y + (aimEnd.y - seg.from.y) * s - arcH * 4 * s * (1 - s),
         };
       })
     : [];
