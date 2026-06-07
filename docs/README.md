@@ -10,7 +10,7 @@
 
 | 문서 | 범위 | 핵심 엔진 파일 |
 |---|---|---|
-| [MATCH_SYSTEM](./MATCH_SYSTEM.md) | 경기 시뮬(로테이션·서브·랠리·블로킹·기세·감독) | `engine/simMatch.ts`(현행 간이), `rotation.ts` / `rally.ts`·`match.ts`(스텁) |
+| [MATCH_SYSTEM](./MATCH_SYSTEM.md) | 경기 시뮬(로테이션·서브·랠리·블로킹·기세·감독) | `engine/match.ts`·`rally.ts`·`lineup.ts`·`rotation.ts`(풀 랠리 체인 v1) |
 | [TRAINING_SYSTEM](./TRAINING_SYSTEM.md) | 훈련·성장·노쇠·재능·경기경험 성장 | `engine/training.ts`, `aging.ts`, `experience.ts`, `progression.ts` |
 | [SALARY_SYSTEM](./SALARY_SYSTEM.md) | 개인 생산 귀속·시장가치·계약 고착·루키스케일 | `engine/salary.ts`, `production.ts`, `data/production.ts` |
 | [FA_SYSTEM](./FA_SYSTEM.md) | FA(등급·보상·보호명단·프랜차이즈)·드래프트·세대교체·캡·AI GM | `engine/faMarket.ts`, `compensation.ts`, `cap.ts`, `draft.ts`, `aiGM.ts`, `rollover.ts`, `retire.ts` |
@@ -22,7 +22,8 @@
 
 | 시스템 | 상태 |
 |---|---|
-| 경기 시뮬(OVR 간이) + 시즌 자동 진행 | ✅ |
+| 풀 랠리 체인 경기 엔진(v1: 로테이션·서브·랠리루프·블록/디그·기세·VQ폴트) | ✅ |
+| 시즌 자동 진행(엔진 적용, 관전==순위==생산 일치) | ✅ |
 | 훈련·노쇠·재능 성장 (전 구단, 일자별 리플레이) | ✅ |
 | 경기 출전·생산 → 성장 경험치 | ✅ |
 | 개인 생산 귀속(선발 라인업) + 시장가치·계약 | ✅ |
@@ -31,7 +32,7 @@
 | 롤오버·은퇴·유망주 충원(세대교체) | ✅ |
 | 순위표·개인 리더보드·경기 상세·대시보드 | ✅ |
 | 포스트시즌 + 역대 우승 아카이브 | ✅ |
-| 풀 랠리 체인 경기 엔진(MATCH_SYSTEM 전체) | ❌ 목표안(simMatch로 대체 중) |
+| 서브타입·공격방법·3축 블로킹·찬스볼·타임아웃·체력 hop(MATCH v2) | ❌ 미구현(보류) |
 | 트레이드 | ❌ 미구현 |
 | MVP·개인 타이틀·명예의전당·영구결번 | ❌ 미구현 |
 | 감독 훈련선호 커스터마이즈 / 라인업·경기 직접 개입 | ❌ 자동 완성 후 "오버라이드"로 개방 예정 |

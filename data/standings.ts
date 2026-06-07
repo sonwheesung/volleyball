@@ -4,8 +4,7 @@
 
 import type { Fixture } from '../types';
 import { baseVersion, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
-import { teamOverall } from '../engine/overall';
-import { simulateMatchSimple } from '../engine/simMatch';
+import { simulateMatch } from '../engine/match';
 
 export interface ResultRow {
   fixtureId: string;
@@ -42,10 +41,10 @@ function allResults(): ResultRow[] {
 
   const rows: ResultRow[] = [];
   for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
-    const ovr: Record<string, number> = {};
-    for (const t of LEAGUE.teams) ovr[t.id] = teamOverall(getEvolvedTeamPlayers(t.id, day));
+    const squad: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
+    for (const t of LEAGUE.teams) squad[t.id] = getEvolvedTeamPlayers(t.id, day);
     for (const f of byDay.get(day)!) {
-      const sim = simulateMatchSimple(f.seed, ovr[f.homeTeamId], ovr[f.awayTeamId]);
+      const sim = simulateMatch(f.seed, squad[f.homeTeamId], squad[f.awayTeamId]);
       rows.push({
         fixtureId: f.id,
         round: f.round,

@@ -9,25 +9,39 @@
 ## ★ 구현 현황 (2026-06 기준)
 
 > 이 장은 "설계(아래 전체) vs 실제 코드"의 간극을 명시한다. 일관성 검증 시 여기를 먼저 본다.
-> **현재 경기 엔진은 이 문서의 풀 랠리 체인이 아니라 OVR 기반 간이 시뮬이다.**
+> **풀 랠리 체인 엔진(v1)이 구현되어 게임 전 경로에 적용됨.** OVR 간이 시뮬(`simMatch`)은 폐기 경로.
 
 | 영역 | 상태 | 실제 파일 / 메모 |
 |---|---|---|
-| **간이 경기 시뮬** | ✅ 구현 | `engine/simMatch.ts` — `simulateMatchSimple(seed, homeOvr, awayOvr)` |
-| 로테이션 규칙 | ✅ 구현(미사용) | `engine/rotation.ts` — `rotate/frontRow/backRow/serverIndex`. 간이 시뮬은 아직 호출 안 함 |
-| 풀 랠리 체인(서브→리시브→세트→공격→블록/디그 루프) | ❌ 미구현 | `engine/rally.ts`·`engine/match.ts` 는 **스텁** |
-| serve/receive/set/spike/block 개별 모듈 | ❌ 없음 | 10장 모듈 매핑은 목표안. 생산 귀속은 `engine/production.ts`가 사후 확률로 대체 |
-| VQ 포지션 폴트 / 기세(momentum) / 타임아웃 / 체력 hop | ❌ 미구현 | 7·8장은 풀 엔진 도입 시 |
+| **풀 랠리 체인 엔진(v1)** | ✅ 구현·적용 | `engine/match.ts` `simulateMatch(seed, home[], away[], edge?)` → `SimResult` |
+| 랠리 판정(서브→리시브→세트→공격→블록/디그 루프) | ✅ 구현 | `engine/rally.ts` `playRally` |
+| 코트 라인업(주전 6 로테이션 배열 + 리베로) | ✅ 구현 | `engine/lineup.ts` `buildLineup` (5-1 대각 배치) |
+| 로테이션·사이드아웃 회전(1.1) | ✅ 적용 | `engine/rotation.ts` 를 `match.ts`/`rally.ts`가 사용 |
+| 세터 승수 / 리베로 후위 수비(1.3 추상화) | ✅ 구현 | `rally.ts` `setterOf`·`defenders`(후위 MB→리베로 치환) |
+| VQ 포지션 폴트(1.4) | ✅ 구현(간이) | `rally.ts` 평균 VQ → `faultP` |
+| 기세(momentum, 7.2) | ✅ 구현(간이) | 팀별 0~100, 연속득점 가속, `momFactor` 능력 배수 |
+| 홈/시드 어드밴티지 | ✅ 구현 | `edge:{home,away}` 능력 배수(플레이오프 hi 시드 1.03) |
+| 간이 시뮬(폐기 경로) | ⚠️ 잔존 | `engine/simMatch.ts` — 타입(`SimResult/PointLog`)만 재사용, 호출처 없음 |
+| serve/receive/set/spike/block 개별 모듈 | ❌ 없음 | v1은 `rally.ts` 한 곳에 통합. 10장 모듈 분리는 후순위 |
+| 서브타입 세분(2장)·공격방법(5.1)·3축 블로킹(5.2)·찬스볼(6장) | ❌ 미구현(보류) | v2 확장 대상 |
+| 타임아웃(7.4)·체력 hop(7.1)·감독 카리스마(8장) | ❌ 미구현(보류) | 선택적 개입 + 체력 시스템 도입 시 |
 | 케미·부상(9장) | ❌ 미구현 | 후순위 |
 
-### 간이 시뮬(`simulateMatchSimple`) 실제 로직
-- 팀 OVR(`overall` 상위 7인 평균)만 입력. 개별 랠리/스탯 판정 없음.
-- `pHome = clamp(homeOvr/(homeOvr+awayOvr), 0.32, 0.68)` + 랠리당 노이즈 `±0.04`(런 느낌).
-- 점수 단위로 굴려 25점(5세트 15점)·2점차·3선승까지 진행 → `SimResult{ homeSets, awaySets, setScores, points[] }`.
-- 개인 기록은 경기 후 **`engine/production.ts`가 `SimResult.points`를 포지션·기술 가중으로 귀속**(생산 시스템, `docs/SALARY_SYSTEM.md` 1장).
+### v1 엔진 실제 로직 요약 (`simulateMatch`)
+- 입력: 양 팀 **로스터 Player[]**(코트 6+리베로는 `buildLineup`이 OVR로 자동 선발) + 시드.
+- 세트마다 기세 50·회전 0 리셋, 서브권 홀수세트 홈·짝수세트 원정. 랠리포인트제 25/15·듀스·3선승.
+- 한 랠리: 서브(에이스/범실/인플레이) → 포지션 폴트 → 리시브 품질로 시작하는 공격 루프
+  (세터 승수 × 리시브품질 × 기세 → 공격력 vs 블록·디그) → 디그 성공 시 공수 전환 hop(최대 8).
+- 사이드아웃 시 득점팀 회전 + 서브권 이전. 출력은 `SimResult`(간이판과 동일 계약).
+- **일관성 보장:** 관전(`app/match/[id]`)·순위(`data/standings`)·생산(`data/production`)·플레이오프가
+  모두 동일 `simulateMatch` + 동일 입력(`getEvolvedTeamPlayers(team, dayIndex)`)을 써서
+  관전 결과 == 순위 재시뮬 == 생산 귀속이 항상 일치(결정론). 검증 완료(불일치 0).
+- 개인 기록 귀속은 여전히 **`engine/production.ts`가 `SimResult.points`를 사후 확률로** 산출
+  (`docs/SALARY_SYSTEM.md` 1장). v2에서 엔진이 실제 타자/블로커 이벤트를 직접 출력하도록 강화 가능.
 
-> 즉 아래 1~9장은 **풀 엔진 목표 설계**다. Phase 0에서 simMatch로 시즌 루프를 먼저
-> 돌리고, 추후 이 문서대로 랠리 체인으로 교체한다(SimResult 타입 계약 유지 → 생산·성장은 무영향).
+> 모든 계수(serve/block/dig 확률, 기세 폭, edge)는 placeholder — 밸런싱 단계 튜닝.
+> 분포 점검(7팀 시드): 강(71)vs약(66) 홈승 ~67%, 동일전력 ~50%(구조적 편향 없음),
+> 평균 ~4세트/경기, ~175점/경기. 테스트: `engine/match.test.ts`(결정론·유효스코어·전력우위·무편향).
 
 ---
 

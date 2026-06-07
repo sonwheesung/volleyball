@@ -5,7 +5,8 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, theme } from '../../components/Screen';
 import { getEvolvedTeamPlayers, getFixture, getTeam } from '../../data/league';
 import { teamOverall } from '../../engine/overall';
-import { simulateMatchSimple, type PointLog } from '../../engine/simMatch';
+import { simulateMatch } from '../../engine/match';
+import { type PointLog } from '../../engine/simMatch';
 import { useGameStore } from '../../store/useGameStore';
 
 interface Frame extends PointLog {
@@ -44,9 +45,11 @@ export default function MatchBoard() {
       dayIndex = fixture.dayIndex;
       seed = fixture.seed;
     }
-    const homeOvr = teamOverall(getEvolvedTeamPlayers(home.id, dayIndex));
-    const awayOvr = teamOverall(getEvolvedTeamPlayers(away.id, dayIndex));
-    const sim = simulateMatchSimple(seed, homeOvr, awayOvr);
+    const homeSquad = getEvolvedTeamPlayers(home.id, dayIndex);
+    const awaySquad = getEvolvedTeamPlayers(away.id, dayIndex);
+    const homeOvr = teamOverall(homeSquad);
+    const awayOvr = teamOverall(awaySquad);
+    const sim = simulateMatch(seed, homeSquad, awaySquad);
 
     // 프레임마다 "직전까지 완료된 세트 수" 부여
     let hs = 0;

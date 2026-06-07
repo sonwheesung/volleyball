@@ -3,9 +3,8 @@
 // SOLID: 엔진 순수 함수(simMatch·production·overall)를 합성.
 
 import type { Fixture } from '../types';
-import { simulateMatchSimple } from '../engine/simMatch';
+import { simulateMatch } from '../engine/match';
 import { attributeProduction, mergeProd, type ProdLine } from '../engine/production';
-import { teamOverall } from '../engine/overall';
 import { baseVersion, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 
 interface ProdRow {
@@ -30,13 +29,9 @@ function allProdRows(): ProdRow[] {
   const rows: ProdRow[] = [];
   for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
     const roster: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
-    const ovr: Record<string, number> = {};
-    for (const t of LEAGUE.teams) {
-      roster[t.id] = getEvolvedTeamPlayers(t.id, day);
-      ovr[t.id] = teamOverall(roster[t.id]);
-    }
+    for (const t of LEAGUE.teams) roster[t.id] = getEvolvedTeamPlayers(t.id, day);
     for (const f of byDay.get(day)!) {
-      const sim = simulateMatchSimple(f.seed, ovr[f.homeTeamId], ovr[f.awayTeamId]);
+      const sim = simulateMatch(f.seed, roster[f.homeTeamId], roster[f.awayTeamId]);
       const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed);
       rows.push({ dayIndex: f.dayIndex, lines });
     }

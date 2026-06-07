@@ -44,8 +44,7 @@
 advance(targetDay):
   for 지나간 매치데이의 각 fixture:
     home/away = getEvolvedTeamPlayers(teamId, fixture.dayIndex)   // 그날 스탯
-    ovr = teamOverall(상위7)
-    sim = simulateMatchSimple(fixture.seed, homeOvr, awayOvr)      // 경기 엔진
+    sim = simulateMatch(fixture.seed, home, away)                 // 풀 랠리 체인 엔진
     recordResult(sim)                                             // 세이브
   setDay(targetDay)
 ```
