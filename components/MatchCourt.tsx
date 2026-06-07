@@ -53,6 +53,26 @@ function playerAt(L: Lineups, side: Side, rot: number, zone: number): Player {
   return p;
 }
 
+// 스위칭(1.5) — 서브 직후 전문 포지션 좌→우 선호(세터는 네트로 침투)
+const LANE: Record<Position, number> = { OH: 0, L: 1, MB: 2, S: 3, OP: 4 };
+interface Switched { pos: Record<number, { x: number; y: number }>; setterIdx: number; frontHitters: number[]; backers: number[] }
+
+/** 로테이션 정렬 → 전문 포지션 좌표(선수 인덱스별). 전위=네트 라인, 후위=수비 라인, 세터=네트 중앙우 */
+function switchedSpots(side: Side, lu: ReturnType<typeof buildLineup>, rot: number): Switched {
+  const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
+  const back = [1, 5, 6].map((z) => lineupIdxAt(rot, z));
+  const posOf = (i: number) => lu.six[i].position;
+  const X3 = side === 'home' ? [0.2, 0.5, 0.8] : [0.8, 0.5, 0.2];
+  const yF = (side === 'home' ? 0.6 : 0.4) * COURT_H;
+  const yB = (side === 'home' ? 0.86 : 0.14) * COURT_H;
+  const pos: Record<number, { x: number; y: number }> = {};
+  [...front].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * COURT_W, y: yF }; });
+  [...back].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * COURT_W, y: yB }; });
+  const setterIdx = lu.six.findIndex((p) => p.position === 'S');
+  if (setterIdx >= 0) pos[setterIdx] = { x: (side === 'home' ? 0.63 : 0.37) * COURT_W, y: (side === 'home' ? 0.57 : 0.43) * COURT_H };
+  return { pos, setterIdx, frontHitters: front.filter((i) => i !== setterIdx), backers: back.filter((i) => i !== setterIdx) };
+}
+
 interface Rally {
   setNo: number;
   home: number;       // 누적 점수
@@ -98,7 +118,7 @@ function reconstruct(sim: SimResult): Rally[] {
 
 // 공 이동 종류 — 구간별 속도/이징이 다르다
 type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
-type WP = { x: number; y: number; side: Side; zone: number; kind: Move };
+type WP = { x: number; y: number; side: Side; idx: number; kind: Move };
 
 // 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게. walk=서버가 엔드라인 뒤로, return=공이 서버에게.
 const DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 320 };
@@ -111,39 +131,48 @@ const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
 const COURT_PAD = SERVE_OUT + 10; // 코트 밖 서브 공간 확보용 상하 여백
 const serveOutY = (side: Side) => (side === 'home' ? COURT_H + SERVE_OUT : -SERVE_OUT);
 
-/** 한 랠리의 공 이동 경로 — 득점 측에서 끝남. prevLast: 직전 랠리 낙구점(공 순간이동 방지) */
-function ballPath(r: Rally, seed: number, prevLast?: { x: number; y: number }): WP[] {
+/** 한 랠리의 공 이동 경로 — 스위칭(전문 포지션) 기반. prevLast: 직전 낙구점(공 순간이동 방지) */
+function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y: number }): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
-  const at = (s: Side, z: number, kind: Move): WP => ({ ...zonePx(s, z), side: s, zone: z, kind });
-  const floor = (s: Side, z: number): WP => ({ x: zonePx(s, z).x, y: (s === 'home' ? 0.96 : 0.04) * COURT_H, side: s, zone: z, kind: 'spike' });
+  const rotOf = (s: Side) => (s === 'home' ? r.homeRot : r.awayRot);
+  const sw: Record<Side, Switched> = {
+    home: switchedSpots('home', L.home, r.homeRot),
+    away: switchedSpots('away', L.away, r.awayRot),
+  };
+  const spot = (s: Side, i: number, kind: Move): WP => ({ ...sw[s].pos[i], side: s, idx: i, kind });
+  const floorAt = (s: Side, i: number): WP => ({ x: sw[s].pos[i].x, y: (s === 'home' ? 0.96 : 0.04) * COURT_H, side: s, idx: -1, kind: 'spike' });
 
   const serving = r.serving;
   const recv = other(serving);
+  const serverIdx = lineupIdxAt(rotOf(serving), 1);
   const wp: WP[] = [];
   if (prevLast) {
-    wp.push({ x: prevLast.x, y: prevLast.y, side: serving, zone: 1, kind: 'start' }); // 직전 낙구점
-    wp.push(at(serving, 1, 'return')); // 공이 서버에게 돌아옴(순간이동 방지)
+    wp.push({ x: prevLast.x, y: prevLast.y, side: serving, idx: serverIdx, kind: 'start' }); // 직전 낙구점
+    wp.push({ ...zonePx(serving, 1), side: serving, idx: serverIdx, kind: 'return' }); // 공이 서버에게
   } else {
-    wp.push(at(serving, 1, 'start')); // 서버 자리(코트 안)
+    wp.push({ ...zonePx(serving, 1), side: serving, idx: serverIdx, kind: 'start' });
   }
-  wp.push({ x: zonePx(serving, 1).x, y: serveOutY(serving), side: serving, zone: 1, kind: 'walk' }); // 공 들고 엔드라인 뒤로
-  const recvZone = pick([6, 5, 1]);
-  wp.push(at(recv, recvZone, 'serve')); // 서브 → 리시브
+  wp.push({ x: zonePx(serving, 1).x, y: serveOutY(serving), side: serving, idx: serverIdx, kind: 'walk' }); // 엔드라인 뒤로
+
+  const recvIdx = pick(sw[recv].backers.length ? sw[recv].backers : [serverIdx]);
+  wp.push(spot(recv, recvIdx, 'serve')); // 서브 → 리시버(스위칭 후위)
   let att: Side = recv;
 
   // 리시브 미스(투터치 등): 지는 쪽이 가끔 리시브를 흘려 자기 코트에 떨어뜨림 → 서브측 득점
   if (recv !== r.scorer && rng.next() < RECV_FAULT) {
-    wp.push({ x: zonePx(recv, recvZone).x, y: (recv === 'home' ? 0.82 : 0.18) * COURT_H, side: recv, zone: recvZone, kind: 'fault' });
+    wp.push({ x: sw[recv].pos[recvIdx].x, y: (recv === 'home' ? 0.82 : 0.18) * COURT_H, side: recv, idx: -1, kind: 'fault' });
     return wp;
   }
 
   for (let hop = 0; hop < 6; hop++) {
     const def = other(att);
-    wp.push(at(att, 3, 'pass')); // 리시브/디그 → 세터(zone3)
-    wp.push(at(att, pick([4, 2]), 'toss')); // 토스 → 공격수(세터와 다른 윙, 본인한테 토스 안 함)
-    if (att === r.scorer) { wp.push(floor(def, pick([5, 6, 1]))); break; } // 스파이크 성공 → 상대 코트 낙구
-    wp.push(at(def, pick([6, 5, 1]), 'spike')); // 막혀/디그되어 상대로 전환(역공)
+    const sIdx = sw[att].setterIdx >= 0 ? sw[att].setterIdx : pick(sw[att].frontHitters);
+    wp.push(spot(att, sIdx, 'pass')); // 세터에게(스위칭 네트 위치)
+    const hitters = sw[att].frontHitters.length ? sw[att].frontHitters : [sIdx];
+    wp.push(spot(att, pick(hitters), 'toss')); // 토스 → 공격수(세터와 다른 위치)
+    if (att === r.scorer) { wp.push(floorAt(def, pick(sw[def].backers.length ? sw[def].backers : [0]))); break; }
+    wp.push(spot(def, pick(sw[def].backers.length ? sw[def].backers : [0]), 'spike')); // 디그수에게 전환
     att = def;
   }
   return wp;
@@ -153,11 +182,13 @@ const easingFor = (k: Move) =>
   k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : Easing.linear;
 
 /** 이 구간에 점프하는 마커들 — 서브(서버)·토스(세터)·스파이크(공격수+상대 전위 블로커) */
-function jumpers(from: WP, to: WP): { side: Side; zone: number }[] {
-  if (to.kind === 'serve' || to.kind === 'toss') return [{ side: from.side, zone: from.zone }];
+function jumpersFor(from: WP, to: WP, homeRot: number, awayRot: number): { side: Side; idx: number }[] {
+  if (to.kind === 'serve' || to.kind === 'toss') return [{ side: from.side, idx: from.idx }];
   if (to.kind === 'spike') {
     const opp = other(from.side);
-    return [{ side: from.side, zone: from.zone }, ...[2, 3, 4].map((z) => ({ side: opp, zone: z }))];
+    const rot = opp === 'home' ? homeRot : awayRot;
+    const blockers = [2, 3, 4].map((z) => lineupIdxAt(rot, z)); // 상대 전위 3
+    return [{ side: from.side, idx: from.idx }, ...blockers.map((idx) => ({ side: opp, idx }))];
   }
   return [];
 }
@@ -191,11 +222,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   // 직전 랠리 낙구점 → 새 랠리 공 시작점으로 이어 붙여 공이 순간이동하지 않게
   const prevLast = useMemo(() => {
     if (finished || idx <= 0) return undefined;
-    const pp = ballPath(rallies[idx - 1], seed);
+    const pp = ballPath(rallies[idx - 1], seed, lineups);
     const w = pp[pp.length - 1];
     return { x: w.x, y: w.y };
-  }, [finished, rallies, idx, seed]);
-  const path = useMemo(() => (finished ? [] : ballPath(rallies[idx], seed, prevLast)), [finished, rallies, idx, seed, prevLast]);
+  }, [finished, rallies, idx, seed, lineups]);
+  const path = useMemo(() => (finished ? [] : ballPath(rallies[idx], seed, lineups, prevLast)), [finished, rallies, idx, seed, lineups, prevLast]);
   const segCount = Math.max(0, path.length - 1);
 
   // 구간 단위 진행 (위치·포물선·크기·점프를 prog 하나로 동기화)
@@ -227,7 +258,6 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   }, [finished, onFinished]);
 
   const seg = !finished && segIdx < segCount ? { from: path[segIdx], to: path[segIdx + 1] } : null;
-  const jl = seg ? jumpers(seg.from, seg.to) : [];
 
   // 화면에 표시할 상태
   const view = shown >= 0 ? rallies[Math.min(shown, total - 1)] : null;
@@ -240,6 +270,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const stage = rallies[Math.min(idx, total - 1)];
 
   const segKind: Move | null = seg ? seg.to.kind : null;
+  // 서브 이후(공 인플레이)엔 전 선수가 전문 포지션으로 스위칭
+  const inPlay = segKind === 'serve' || segKind === 'pass' || segKind === 'toss' || segKind === 'spike' || segKind === 'fault';
+  const jl = seg ? jumpersFor(seg.from, seg.to, stage.homeRot, stage.awayRot) : [];
   const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
 
   // 마커는 "선수(라인업 인덱스)" 단위로 그린다 → 로테이션·서버 in/out 등 위치가 바뀌면
@@ -252,15 +285,19 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean };
   const buildMarkers = (side: Side): Mk[] => {
     const rot = side === 'home' ? stage.homeRot : stage.awayRot;
+    const lu = side === 'home' ? lineups.home : lineups.away;
+    const sw = inPlay ? switchedSpots(side, lu, rot) : null; // 서브 후엔 전문 포지션
     const arr: Mk[] = [];
     for (let i = 0; i < 6; i++) {
       const zone = ((i - rot) % 6 + 6) % 6 + 1;     // 이 선수가 현재 선 존
       const p = playerAt(lineups, side, rot, zone);  // 후위 MB→리베로 치환 포함
       const isServer = !finished && stage.serving === side && zone === 1;
-      const base = zonePx(side, zone);
-      const ty = isServer && (segKind === 'walk' || segKind === 'serve') ? serveOutY(side) : base.y; // 서브 시 엔드라인 뒤
-      const jumping = jl.some((j) => j.side === side && j.zone === zone);
-      arr.push({ key: `${side}-${i}`, side, p, tx: base.x, ty, jumping, isServer });
+      const base = sw ? sw.pos[i] : zonePx(side, zone);
+      let tx = base.x;
+      let ty = base.y;
+      if (isServer && (segKind === 'walk' || segKind === 'serve')) { tx = zonePx(side, 1).x; ty = serveOutY(side); } // 서브 시 엔드라인 뒤
+      const jumping = jl.some((j) => j.side === side && j.idx === i);
+      arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer });
     }
     return arr;
   };
