@@ -155,7 +155,7 @@ function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng): { str: number } 
   const fr = front(df);
   if (!fr.length) return { str: 0.4 };
   const readiness = fr.reduce((s, p) => s + (n(p.reaction) + n(p.vq)) / 2, 0) / fr.length;
-  const isRead = rng.next() < clamp(0.15 + 0.75 * readiness, 0.05, 0.9);
+  const isRead = rng.next() < clamp(0.2 + 0.5 * readiness, 0.05, 0.9);
   let count = atk === 'quick' ? 1 : atk === 'open' ? (rng.next() < 0.5 ? 2 : 3)
     : atk === 'tempo' ? (rng.next() < 0.6 ? 1 : 2) : (rng.next() < 0.5 ? 1 : 2);
   count = Math.min(count, fr.length);
@@ -163,7 +163,7 @@ function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng): { str: number } 
   const vals = sorted.map((p) => n(R(p).block) * eff(df, p));
   for (const p of sorted) drain(df, p, 0.4);
   const skill = 0.5 * Math.max(...vals) + 0.5 * (vals.reduce((a, b) => a + b, 0) / vals.length);
-  const fooled = FAKE[atk] && !isRead ? 0.55 : 1.0;
+  const fooled = FAKE[atk] && !isRead ? 0.7 : 1.0;
   return { str: skill * (0.72 + 0.14 * count) * fooled * momFactor(df.momentum) };
 }
 
