@@ -232,6 +232,7 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     return wp;
   }
 
+  let firstTouch = recvIdx; // 이번 공격의 첫 터치(리시브/디그)한 선수 — 토스는 다른 선수가
   for (let hop = 0; hop < 6; hop++) {
     const def = other(att);
     // 리시브/디그 패스는 세터 자리 주변 "일정 범위"에서 랜덤하게 떨어진다(정확히 안 감)
@@ -245,13 +246,14 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
       x: clampN(ideal.x + Math.cos(ang) * mag, 0.12 * COURT_W, 0.88 * COURT_W),
       y: clampN(ideal.y + Math.sin(ang) * mag * 0.7, yLo, yHi),
     };
-    // 세터가 닿는 거리면 세터가, 아니면 패스 지점에 가장 가까운 다른 선수가 대신 토스
+    // 세터가 닿으면 세터가, 아니면 가장 가까운 다른 선수가 토스. 단 첫 터치한 선수는 제외(같은 선수가 리시브+토스 금지)
     let tosserIdx: number;
-    if (sIdx >= 0 && mag <= 0.12 * COURT_W) {
+    if (sIdx >= 0 && sIdx !== firstTouch && mag <= 0.12 * COURT_W) {
       tosserIdx = sIdx;
     } else {
-      const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== sIdx);
-      tosserIdx = cand.reduce((b, i) => (d2(sw[att].pos[i], passSpot) < d2(sw[att].pos[b], passSpot) ? i : b), cand[0]);
+      const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== sIdx && i !== firstTouch);
+      const pool = cand.length ? cand : [0, 1, 2, 3, 4, 5].filter((i) => i !== firstTouch);
+      tosserIdx = pool.reduce((b, i) => (d2(sw[att].pos[i], passSpot) < d2(sw[att].pos[b], passSpot) ? i : b), pool[0]);
     }
     // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트
     wp.push({ x: passSpot.x, y: passSpot.y, side: att, idx: tosserIdx, kind: 'pass', movers: [{ side: att, idx: tosserIdx, x: passSpot.x, y: passSpot.y }] });
@@ -286,11 +288,14 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
       break;
     }
 
-    // 디그 성공: 가까운 수비가 받고, 1명 더 쫓아 커버 + att 커버
+    // 디그 성공: 후위 수비(세터 제외)가 받아 세터가 토스할 수 있게, 1명 더 쫓아 커버 + att 커버
     const t = spikeTarget(def, rng, false);
-    const digger = chasersTo(def, t, 1, 1)[0];
-    const cover = chasersTo(def, t, 2, 0.5)[1];
+    const dBacks = sw[def].backers.length ? sw[def].backers : [0, 1, 2, 3, 4, 5].filter((i) => i !== sw[def].setterIdx);
+    const digIdx = dBacks.reduce((b, i) => (d2(sw[def].pos[i], t) < d2(sw[def].pos[b], t) ? i : b), dBacks[0]);
+    const digger: Mover = { side: def, idx: digIdx, x: t.x, y: t.y };
+    const cover = chasersTo(def, t, 2, 0.5).find((m) => m.idx !== digIdx);
     wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [digger, ...(cover ? [cover] : []), ...coverMovers] });
+    firstTouch = digIdx; // 다음 공격(def)의 첫 터치 = 디그한 선수
     att = def;
   }
   return wp;
