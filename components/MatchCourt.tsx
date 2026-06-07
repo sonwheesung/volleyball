@@ -260,14 +260,17 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     wp.push({ x: passSpot.x, y: passSpot.y, side: att, idx: tosserIdx, kind: 'pass', movers: [{ side: att, idx: tosserIdx, x: passSpot.x, y: passSpot.y }] });
     const hitters = sw[att].frontHitters.filter((i) => i !== tosserIdx);
     const atkIdx = pick(hitters.length ? hitters : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
-    wp.push(spot(att, atkIdx, 'toss')); // 토스 → 공격수(토스한 선수와 다름)
 
     const ahx = sw[att].pos[atkIdx].x; // 공격수 x
-    // 공격 커버(블로킹 당할 대비): 토스 안 온 att 선수들이 공격수 주변/뒤로
+    // 미끼(속공/페이크): 토스 안 온 전위 공격수 일부는 공격하는 척 네트에 남아 커버 못 옴(시드 기반 가변)
+    const attFront = [2, 3, 4].map((z) => lineupIdxAt(rotOf(att), z));
+    const decoys = attFront.filter((i) => i !== atkIdx && i !== tosserIdx && rng.next() < 0.6);
+    // 공격 커버: 공격수·세터·미끼 제외한 선수들이 공격수 뒤로(인원 가변, 최대 3)
     const coverY = (att === 'home' ? 0.7 : 0.3) * COURT_H;
-    const coverMovers: Mover[] = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx)
+    const coverMovers: Mover[] = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && !decoys.includes(i))
       .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
       .map((i, k) => ({ side: att, idx: i, x: clampN(ahx + (k - 1) * 34, 24, COURT_W - 24), y: coverY }));
+    wp.push({ ...spot(att, atkIdx, 'toss'), movers: coverMovers }); // 토스 → 공격수 + 커버 형성(미끼 제외)
 
     if (att === r.scorer) {
       const v = rng.next();
@@ -445,15 +448,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     chosen.forEach((bi, k) => { moveMap[`${dSide}-${bi}`] = { x: clampN(ax + spread[k], 24, COURT_W - 24), y: yNet }; });
     front.filter((i) => !chosen.includes(i)).forEach((ri) => { moveMap[`${dSide}-${ri}`] = { x: dSw.pos[ri].x, y: yOff }; }); // 블록 안 가는 전위는 빠짐
     moveMap[`${attSide}-${seg.from.idx}`] = { x: seg.from.x, y: seg.from.y }; // 토스한 선수는 패스 지점에서 세트
-
-    // 공격 커버: 토스 받는 동안(스파이크 전) 토스 안 온 선수들이 공격수 뒤로 모임(블록 리바운드 대비)
-    const hitIdx = seg.to.idx;
-    const attRot = attSide === 'home' ? stage.homeRot : stage.awayRot;
-    const attSw = switchedSpots(attSide, attLu, attRot, true);
-    const coverY = (attSide === 'home' ? 0.7 : 0.3) * COURT_H;
-    [0, 1, 2, 3, 4, 5].filter((i) => i !== hitIdx && i !== seg.from.idx)
-      .sort((a, b) => Math.abs(attSw.pos[a].x - ax) - Math.abs(attSw.pos[b].x - ax)).slice(0, 3)
-      .forEach((i, k) => { moveMap[`${attSide}-${i}`] = { x: clampN(ax + (k - 1) * 34, 24, COURT_W - 24), y: coverY }; });
+    // (공격 커버는 토스 WP의 movers로 처리 — 미끼 제외, 인원 가변)
   }
   if (seg && seg.to.movers) for (const m of seg.to.movers) moveMap[`${m.side}-${m.idx}`] = { x: m.x, y: m.y };
 
