@@ -398,8 +398,27 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const jl = seg ? jumpersFor(seg.from, seg.to, stage.homeRot, stage.awayRot) : [];
   const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
 
-  // 이 구간에 특정 선수들이 이동할 목표 좌표(블로커 형성/디그/커버/쫓기/세트). key=`side-idx`
+  // 이 구간에 특정 선수들이 이동할 목표 좌표(블로커 형성/디그/커버/쫓기/세트/부채꼴). key=`side-idx`
   const moveMap: Record<string, { x: number; y: number }> = {};
+
+  // 수비 후위 부채꼴: 공격 빌드업(토스)·스파이크 때 공격수 x 중심으로 펼친다(가운데 얕게=팁, 양쪽 깊게=라인/크로스)
+  let fanSide: Side | null = null;
+  let fanAx = 0;
+  if (seg && segKind === 'toss') { fanSide = other(seg.to.side); fanAx = seg.to.x; }
+  else if (seg && segKind === 'spike') { fanSide = other(seg.from.side); fanAx = seg.from.x; }
+  if (fanSide) {
+    const fHome = fanSide === 'home';
+    const fRot = fHome ? stage.homeRot : stage.awayRot;
+    const back = [1, 5, 6].map((z) => lineupIdxAt(fRot, z));
+    const slots = [
+      { x: clampN(fanAx - 0.26 * COURT_W, 18, COURT_W - 18), y: (fHome ? 0.82 : 0.18) * COURT_H }, // 좌(크로스/라인) 깊게
+      { x: clampN(fanAx, 18, COURT_W - 18), y: (fHome ? 0.68 : 0.32) * COURT_H },                  // 중앙(팁/블록 뒤) 얕게
+      { x: clampN(fanAx + 0.26 * COURT_W, 18, COURT_W - 18), y: (fHome ? 0.82 : 0.18) * COURT_H }, // 우(라인/크로스) 깊게
+    ].sort((a, b) => a.x - b.x);
+    back.slice().sort((a, b) => ZONE_X[((a - fRot) % 6 + 6) % 6 + 1] - ZONE_X[((b - fRot) % 6 + 6) % 6 + 1])
+      .forEach((bi, k) => { moveMap[`${fanSide}-${bi}`] = slots[k]; });
+  }
+
   if (seg && segKind === 'toss') {
     // 블로커 형성: 공격수에 가까운 count명이 자연 좌우 순서를 유지하며(안 겹침) 모인다
     const attSide = seg.to.side;
