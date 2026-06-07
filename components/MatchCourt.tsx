@@ -97,15 +97,14 @@ function reconstruct(sim: SimResult): Rally[] {
 }
 
 // 공 이동 종류 — 구간별 속도/이징이 다르다
-type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
+type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike';
 type WP = { x: number; y: number; side: Side; zone: number; kind: Move };
 
 // 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게. walk=서버가 엔드라인 뒤로, return=공이 서버에게.
-const DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 360 };
+const DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150 };
 // 구간별 포물선 높이(px) / 공 크기 피크 — 토스가 가장 크게 휘고 커진다
-const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06 };
-const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1 };
-const TWO_TOUCH = 0.06; // 투터치 반칙 확률(지는 쪽 공격 시)
+const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03 };
+const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15 };
 const JUMP = 1.45; // 점프 시 마커 확대
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
 const COURT_PAD = SERVE_OUT + 10; // 코트 밖 서브 공간 확보용 상하 여백
@@ -117,7 +116,6 @@ function ballPath(r: Rally, seed: number, prevLast?: { x: number; y: number }): 
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
   const at = (s: Side, z: number, kind: Move): WP => ({ ...zonePx(s, z), side: s, zone: z, kind });
   const floor = (s: Side, z: number): WP => ({ x: zonePx(s, z).x, y: (s === 'home' ? 0.96 : 0.04) * COURT_H, side: s, zone: z, kind: 'spike' });
-  const ownFloor = (s: Side): WP => ({ x: zonePx(s, 6).x, y: (s === 'home' ? 0.8 : 0.2) * COURT_H, side: s, zone: 6, kind: 'fault' });
 
   const serving = r.serving;
   const recv = other(serving);
@@ -135,13 +133,7 @@ function ballPath(r: Rally, seed: number, prevLast?: { x: number; y: number }): 
   for (let hop = 0; hop < 6; hop++) {
     const def = other(att);
     wp.push(at(att, 3, 'pass')); // 리시브/디그 → 세터(zone3)
-    // 투터치 반칙: 지는 쪽이 가끔 같은 선수가 토스+재터치 → 자기 코트 낙구(실점)
-    if (att !== r.scorer && rng.next() < TWO_TOUCH) {
-      wp.push(at(att, 3, 'toss'));  // 같은 선수가 다시 터치(투터치) — 세터 마커 점프
-      wp.push(ownFloor(att));       // 자기 코트에 떨어짐 = 실점
-      break;
-    }
-    wp.push(at(att, pick([4, 2]), 'toss')); // 토스 → 공격수(세터와 다른 윙)
+    wp.push(at(att, pick([4, 2]), 'toss')); // 토스 → 공격수(세터와 다른 윙, 본인한테 토스 안 함)
     if (att === r.scorer) { wp.push(floor(def, pick([5, 6, 1]))); break; } // 스파이크 성공 → 상대 코트 낙구
     wp.push(at(def, pick([6, 5, 1]), 'spike')); // 막혀/디그되어 상대로 전환(역공)
     att = def;
@@ -150,7 +142,7 @@ function ballPath(r: Rally, seed: number, prevLast?: { x: number; y: number }): 
 }
 
 const easingFor = (k: Move) =>
-  k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : Easing.linear;
+  k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' ? Easing.in(Easing.quad) : Easing.linear;
 
 /** 이 구간에 점프하는 마커들 — 서브(서버)·토스(세터)·스파이크(공격수+상대 전위 블로커) */
 function jumpers(from: WP, to: WP): { side: Side; zone: number }[] {
