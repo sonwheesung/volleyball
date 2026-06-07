@@ -3,7 +3,7 @@
 // → 마커를 실제 코트 위치에 놓고 공을 득점 결과와 일치하게 애니메이션.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Easing, StyleSheet, Text, View } from 'react-native';
 import { theme } from './Screen';
 import { buildLineup } from '../engine/lineup';
 import { createRng } from '../engine/rng';
@@ -96,35 +96,42 @@ function reconstruct(sim: SimResult): Rally[] {
   return out;
 }
 
-/** 한 랠리의 공 이동 경로(px 좌표열) — 득점 측에서 끝남 */
-function ballPath(r: Rally, seed: number): { x: number; y: number }[] {
+// 공 이동 종류 — 구간별 속도/이징이 다르다
+type Move = 'start' | 'serve' | 'pass' | 'toss' | 'spike';
+type WP = { x: number; y: number; kind: Move };
+
+// 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게.
+const DUR: Record<Move, number> = { start: 0, serve: 300, pass: 240, toss: 540, spike: 150 };
+
+/** 한 랠리의 공 이동 경로 — 득점 측에서 끝남 */
+function ballPath(r: Rally, seed: number): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
-  const P = (s: Side, z: number) => zonePx(s, z);
-  const floor = (s: Side, z: number) => {
-    const f = zonePx(s, z);
-    return { x: f.x, y: (s === 'home' ? 0.96 : 0.04) * COURT_H };
-  };
+  const at = (s: Side, z: number, kind: Move): WP => ({ ...zonePx(s, z), kind });
+  const floor = (s: Side, z: number): WP => ({ x: zonePx(s, z).x, y: (s === 'home' ? 0.96 : 0.04) * COURT_H, kind: 'spike' });
 
   const serving = r.serving;
   const recv = other(serving);
-  const wp: { x: number; y: number }[] = [];
-  wp.push(P(serving, 1));            // 서브 지점
-  wp.push(P(recv, pick([6, 5, 1]))); // 리시브
-  wp.push(P(recv, 3));               // 토스
+  const wp: WP[] = [];
+  wp.push(at(serving, 1, 'start'));         // 서브 지점
+  wp.push(at(recv, pick([6, 5, 1]), 'serve')); // 서브 → 리시브
+  wp.push(at(recv, 3, 'pass'));             // 리시브 → 세터
   let att: Side = recv;
-  wp.push(P(att, pick([4, 2, 3])));  // 공격 임팩트
+  wp.push(at(att, pick([4, 2, 3]), 'toss')); // 토스 → 공격수(느리게)
 
   for (let hop = 0; hop < 6; hop++) {
     const def = other(att);
-    if (att === r.scorer) { wp.push(floor(def, pick([5, 6, 1]))); break; } // 득점 → 상대 코트로 낙구
-    wp.push(P(def, pick([6, 5, 1]))); // 디그
-    wp.push(P(def, 3));               // 토스
-    wp.push(P(def, pick([4, 2, 3]))); // 역공
+    if (att === r.scorer) { wp.push(floor(def, pick([5, 6, 1]))); break; } // 스파이크 → 낙구
+    wp.push(at(def, pick([6, 5, 1]), 'spike')); // 강타가 디그로 (빠르게 넘어감)
+    wp.push(at(def, 3, 'pass'));               // 디그 → 세터
+    wp.push(at(def, pick([4, 2, 3]), 'toss')); // 토스 → 역공(느리게)
     att = def;
   }
   return wp;
 }
+
+const easingFor = (k: Move) =>
+  k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' ? Easing.in(Easing.quad) : Easing.linear;
 
 interface Props {
   sim: SimResult;
@@ -154,9 +161,14 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   useEffect(() => {
     if (!playing || finished) return;
     const path = ballPath(rallies[idx], seed);
-    ball.setValue(path[0]);
+    ball.setValue({ x: path[0].x, y: path[0].y });
     const steps = path.slice(1).map((p) =>
-      Animated.timing(ball, { toValue: p, duration: fast ? 90 : 240, useNativeDriver: true }),
+      Animated.timing(ball, {
+        toValue: { x: p.x, y: p.y },
+        duration: DUR[p.kind] * (fast ? 0.4 : 1),
+        easing: easingFor(p.kind),
+        useNativeDriver: true,
+      }),
     );
     const seq = Animated.sequence(steps);
     seq.start(({ finished: done }) => {
