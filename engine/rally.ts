@@ -14,8 +14,8 @@ import { frontRow, backRow, serverIndex } from './rotation';
 const n = (v: number) => v / 100;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** 기세 → 능력 승수 (7.2). 0.92~1.08 */
-export const momFactor = (m: number) => 0.92 + 0.0016 * m;
+/** 기세 → 능력 승수 (7.2). 0.90~1.10 (런 스노볼 → 스윕↑) */
+export const momFactor = (m: number) => 0.9 + 0.002 * m;
 
 const ATTACK_SHARE: Record<Position, number> = { OP: 1.0, OH: 0.9, MB: 0.6, S: 0.1, L: 0 };
 const CAP = 8; // 랠리 hop 상한(7.3)
@@ -28,8 +28,8 @@ const INJ_EFF = 0.5; // 부상 시 효율 배수(9.3)
 
 // ── 서브 타입 (2장) ── [에이스 기저, 범실 기저]
 type ServeT = 'safe' | 'float' | 'jumpfloat' | 'spike';
-const SERVE_ACE: Record<ServeT, number> = { safe: 0.01, float: 0.04, jumpfloat: 0.07, spike: 0.13 };
-const SERVE_ERR: Record<ServeT, number> = { safe: 0.01, float: 0.03, jumpfloat: 0.06, spike: 0.12 };
+const SERVE_ACE: Record<ServeT, number> = { safe: 0.005, float: 0.02, jumpfloat: 0.04, spike: 0.08 };
+const SERVE_ERR: Record<ServeT, number> = { safe: 0.02, float: 0.05, jumpfloat: 0.09, spike: 0.16 };
 const SERVE_DIFF: Record<ServeT, number> = { safe: -0.1, float: 0.04, jumpfloat: 0.1, spike: 0.18 }; // 리시브 난이도(q 하락)
 
 // ── 공격 종류 (4장) ── blockAvoid: 막기 어려움. atkErr: 빠른 공격일수록 범실 리스크↑(트레이드오프)
@@ -186,8 +186,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const st = chooseServe(sp, serv.style, rng);
   const svPow = n(R(sp).serve) * momFactor(serv.momentum) * eg(serving) * eff(serv, sp);
   const recvSkill = strength(defenders(recv), (r) => r.receive, R, recv) * momFactor(recv.momentum) * eg(recvSide);
-  const aceP = clamp(SERVE_ACE[st] * (0.5 + svPow) + 0.12 * (svPow - recvSkill), 0.005, 0.32);
-  const errP = clamp(SERVE_ERR[st] * (1.3 - 0.5 * n(sp.focus)), 0.005, 0.16);
+  const aceP = clamp(SERVE_ACE[st] * (0.5 + svPow) + 0.12 * (svPow - recvSkill), 0.003, 0.18);
+  const errP = clamp(SERVE_ERR[st] * (1.3 - 0.5 * n(sp.focus)), 0.01, 0.24);
   const s0 = rng.next();
   if (s0 < aceP) return serving;            // 서브 에이스
   if (s0 < aceP + errP) return recvSide;    // 서브 범실
@@ -217,12 +217,15 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const setMul = (0.85 + 0.3 * setQ + chem) * chanceBall;
     const qf = 0.6 + 0.5 * q;
     const atkStyleMul = at.style === 'attack' ? 1.03 : 1; // 공격형: 화력 소폭↑
-    const attackPower = n(R(attacker).spike) * setMul * BLOCK_AVOID[atk] * qf * momFactor(at.momentum) * eg(att) * eff(at, attacker) * atkStyleMul;
+    const serveDisadv = att === serving ? 0.9 : 1; // 서브한 팀은 전환 공격 불리(서브 직후 out-of-system) → 사이드아웃↑
+    const attackPower = n(R(attacker).spike) * setMul * BLOCK_AVOID[atk] * qf * momFactor(at.momentum) * eg(att) * eff(at, attacker) * atkStyleMul * serveDisadv;
     const blk = blockEval(df, atk, R, rng);
+    const firstBall = hop === 0; // 리시브 후 첫 공격(인시스템) — 서브한 팀의 블록이 미완성
+    const blkStr = blk.str * (firstBall ? 0.74 : 1);
 
-    // 빠른 공격일수록 범실 위험↑(트레이드오프). 기복(consistency)이 낮추고, VQ가 보정
-    const errP2 = clamp(0.1 + ATK_ERR[atk] - 0.06 * n(attacker.consistency) - 0.03 * n(attacker.vq), 0.03, 0.18);
-    const blockP = clamp(0.1 + 0.32 * (blk.str - attackPower), 0.02, 0.4);
+    // 좋은 패스(높은 q)면 깔끔히 결정(범실↓→사이드아웃↑), 난조면 범실 급증. 기복·VQ가 낮춤
+    const errP2 = clamp(0.16 - 0.09 * q + ATK_ERR[atk] - 0.05 * n(attacker.consistency) - 0.03 * n(attacker.vq), 0.04, 0.28);
+    const blockP = clamp(0.07 + 0.4 * (blkStr - attackPower), 0.02, 0.4);
     const r1 = rng.next();
     if (r1 < errP2) return other(att);                          // 공격 범실
     if (r1 < errP2 + blockP) {
@@ -230,7 +233,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       const blockOutP = clamp(0.12 + 0.35 * n(attacker.vq) - 0.15, 0.04, 0.4);
       if (rng.next() < blockOutP) return att;                    // 블록아웃 득점
       const stuffPref = df.style === 'attack' ? 0.06 : df.style === 'defense' ? -0.06 : 0;
-      const stuffProb = clamp(0.35 + stuffPref + 0.7 * (blk.str - attackPower), 0.05, 0.85);
+      const stuffProb = clamp(0.27 + stuffPref + 0.7 * (blkStr - attackPower), 0.05, 0.8);
       if (rng.next() < stuffProb) return other(att);            // 스터프 블록 득점
       q = clamp(0.7 + rng.range(-0.1, 0.1), 0.4, 0.92);          // 소프트 블록 → 수비측 좋은 전환
       att = other(att);
@@ -239,7 +242,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
 
     const defStyleBonus = df.style === 'defense' ? 0.05 : 0; // 수비형: 디그 이점
     const digStr = strength(defenders(df), (r) => r.dig, R, df) * momFactor(df.momentum);
-    const digP = clamp(0.33 + defStyleBonus + 0.45 * (digStr - attackPower), 0.05, 0.85);
+    const digP = clamp(0.46 + defStyleBonus + 0.6 * (digStr - attackPower), 0.05, 0.9); // 디그↑(랠리 길게)·스킬 민감도↑
     if (rng.next() < digP) {
       q = clamp(0.4 + 0.4 * (digStr - attackPower) + rng.range(-0.1, 0.1), 0.1, 0.85);
       att = other(att);
