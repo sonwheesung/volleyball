@@ -14,22 +14,39 @@ interface Frame extends PointLog {
 }
 
 export default function MatchBoard() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, sandbox, home: homeParam, away: awayParam, seed: seedParam } = useLocalSearchParams<{
+    id: string; sandbox?: string; home?: string; away?: string; seed?: string;
+  }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
+  const currentDay = useGameStore((s) => s.currentDay);
   const recordResult = useGameStore((s) => s.recordResult);
   const recorded = useRef(false);
 
-  const fixture = id ? getFixture(id) : undefined;
+  // 테스트(미적용) 경기: 일정과 무관하게 임의 팀끼리 돌려보고 결과를 저장하지 않는다.
+  const isSandbox = sandbox === '1';
+  const fixture = id && !isSandbox ? getFixture(id) : undefined;
 
   const data = useMemo(() => {
-    if (!fixture) return null;
-    const home = getTeam(fixture.homeTeamId)!;
-    const away = getTeam(fixture.awayTeamId)!;
-    const homeOvr = teamOverall(getEvolvedTeamPlayers(home.id, fixture.dayIndex));
-    const awayOvr = teamOverall(getEvolvedTeamPlayers(away.id, fixture.dayIndex));
-    const sim = simulateMatchSimple(fixture.seed, homeOvr, awayOvr);
+    let home, away, dayIndex: number, seed: number;
+    if (isSandbox) {
+      home = homeParam ? getTeam(homeParam) : undefined;
+      away = awayParam ? getTeam(awayParam) : undefined;
+      if (!home || !away) return null;
+      dayIndex = currentDay;            // 현재 시점 스탯으로 시뮬
+      seed = Number(seedParam) || 1;
+    } else {
+      if (!fixture) return null;
+      home = getTeam(fixture.homeTeamId);
+      away = getTeam(fixture.awayTeamId);
+      if (!home || !away) return null;
+      dayIndex = fixture.dayIndex;
+      seed = fixture.seed;
+    }
+    const homeOvr = teamOverall(getEvolvedTeamPlayers(home.id, dayIndex));
+    const awayOvr = teamOverall(getEvolvedTeamPlayers(away.id, dayIndex));
+    const sim = simulateMatchSimple(seed, homeOvr, awayOvr);
 
     // 프레임마다 "직전까지 완료된 세트 수" 부여
     let hs = 0;
@@ -44,7 +61,7 @@ export default function MatchBoard() {
       return frame;
     });
     return { home, away, homeOvr, awayOvr, sim, frames };
-  }, [fixture]);
+  }, [fixture, isSandbox, homeParam, awayParam, seedParam, currentDay]);
 
   const [idx, setIdx] = useState(0);
   const [playing, setPlaying] = useState(true);
@@ -60,9 +77,9 @@ export default function MatchBoard() {
     return () => clearInterval(t);
   }, [playing, fast, finished, total]);
 
-  // 종료 시 결과 1회 기록
+  // 종료 시 결과 1회 기록 (테스트 경기는 저장하지 않음)
   useEffect(() => {
-    if (finished && data && fixture && !recorded.current) {
+    if (finished && data && fixture && !isSandbox && !recorded.current) {
       recorded.current = true;
       recordResult({
         fixtureId: fixture.id,
@@ -73,7 +90,7 @@ export default function MatchBoard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [finished]);
 
-  if (!fixture || !data) {
+  if (!data) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + 16 }]}>
         <Muted>존재하지 않는 경기입니다.</Muted>
@@ -96,6 +113,7 @@ export default function MatchBoard() {
 
   return (
     <View style={[styles.root, { paddingTop: insets.top + 12, paddingBottom: insets.bottom + 12 }]}>
+      {isSandbox ? <Text style={styles.sandboxTag}>테스트 경기 · 결과 미적용</Text> : null}
       <Text style={styles.setNo}>{finished ? '경기 종료' : `${cur.setNo}세트`}</Text>
 
       {/* 스코어보드 */}
@@ -184,6 +202,7 @@ function TeamCol({
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg, paddingHorizontal: 20, gap: 14 },
   setNo: { color: theme.accent, fontSize: 15, fontWeight: '800', textAlign: 'center' },
+  sandboxTag: { color: theme.warn, fontSize: 12, fontWeight: '800', textAlign: 'center' },
   board: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   teamCol: { flex: 1, gap: 3 },
   teamName: { color: theme.text, fontSize: 16, fontWeight: '800' },

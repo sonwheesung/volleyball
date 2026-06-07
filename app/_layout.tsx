@@ -23,6 +23,7 @@ export default function RootLayout() {
         <Stack.Screen name="playoffs" options={{ title: '포스트시즌' }} />
         <Stack.Screen name="fa" options={{ title: 'FA 센터' }} />
         <Stack.Screen name="draft" options={{ title: '신인 드래프트' }} />
+        <Stack.Screen name="exhibition" options={{ title: '테스트 경기' }} />
         <Stack.Screen name="match/[id]" options={{ title: '경기', presentation: 'fullScreenModal' }} />
         <Stack.Screen name="matchresult/[id]" options={{ title: '경기 상세' }} />
       </Stack>
