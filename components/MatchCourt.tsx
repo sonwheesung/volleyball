@@ -97,14 +97,14 @@ function reconstruct(sim: SimResult): Rally[] {
 }
 
 // 공 이동 종류 — 구간별 속도/이징이 다르다
-type Move = 'start' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
+type Move = 'start' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
 type WP = { x: number; y: number; side: Side; zone: number; kind: Move };
 
-// 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게.
-const DUR: Record<Move, number> = { start: 0, serve: 300, pass: 240, toss: 540, spike: 150, fault: 360 };
+// 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게. walk=서버가 엔드라인 뒤로.
+const DUR: Record<Move, number> = { start: 0, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 360 };
 // 구간별 포물선 높이(px) / 공 크기 피크 — 토스가 가장 크게 휘고 커진다
-const ARC: Record<Move, number> = { start: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06 };
-const BALL_SCALE: Record<Move, number> = { start: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1 };
+const ARC: Record<Move, number> = { start: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06 };
+const BALL_SCALE: Record<Move, number> = { start: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1 };
 const TWO_TOUCH = 0.06; // 투터치 반칙 확률(지는 쪽 공격 시)
 const JUMP = 1.45; // 점프 시 마커 확대
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
@@ -122,7 +122,8 @@ function ballPath(r: Rally, seed: number): WP[] {
   const serving = r.serving;
   const recv = other(serving);
   const wp: WP[] = [];
-  wp.push({ x: zonePx(serving, 1).x, y: serveOutY(serving), side: serving, zone: 1, kind: 'start' }); // 서브: 엔드라인 뒤(코트 밖)
+  wp.push(at(serving, 1, 'start')); // 서버 자리(코트 안)
+  wp.push({ x: zonePx(serving, 1).x, y: serveOutY(serving), side: serving, zone: 1, kind: 'walk' }); // 공 들고 엔드라인 뒤로
   wp.push(at(recv, pick([6, 5, 1]), 'serve')); // 서브 → 리시브
   let att: Side = recv;
 
@@ -226,18 +227,22 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   // 마커 배치는 현재 진행 중 랠리(idx) 기준
   const stage = rallies[Math.min(idx, total - 1)];
 
-  // 서버 마커: 코트 안 ↔ 엔드라인 뒤를 부드럽게 슬라이드(순간이동 방지)
+  // 서버 마커: 자기 자리(코트 안) → walk/serve 구간엔 엔드라인 뒤 → 끝나면 다시 들어옴.
+  // 공의 walk 구간과 같은 시간으로 애니메이트해 동기화(순간이동 방지).
   const servSide: Side | null = finished ? null : stage.serving;
-  const serverTargetY = servSide
-    ? (seg && seg.to.kind === 'serve' ? serveOutY(servSide) : zonePx(servSide, 1).y)
-    : 0;
+  const segKind: Move | null = seg ? seg.to.kind : null;
+  const serverBaseY = servSide ? zonePx(servSide, 1).y : 0;
+  const serverTargetY = segKind === 'walk' || segKind === 'serve' ? serveOutY(servSide ?? 'home') : serverBaseY;
   useEffect(() => {
     if (servSide == null) return;
-    if (prevServ.current !== servSide) { serverY.setValue(serverTargetY); prevServ.current = servSide; return; }
-    const a = Animated.timing(serverY, { toValue: serverTargetY, duration: 220, easing: Easing.out(Easing.quad), useNativeDriver: true });
+    // 서브권이 바뀌면(다른 선수) 새 서버를 자기 자리에 스냅 후, 거기서 걸어나가게 한다
+    if (prevServ.current !== servSide) { serverY.setValue(serverBaseY); prevServ.current = servSide; }
+    const dur = segKind ? DUR[segKind] * (fast ? 0.4 : 1) : 200;
+    const a = Animated.timing(serverY, { toValue: serverTargetY, duration: Math.max(120, dur), easing: Easing.out(Easing.quad), useNativeDriver: true });
     a.start();
     return () => a.stop();
-  }, [servSide, serverTargetY, serverY]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [servSide, serverTargetY, segKind, fast]);
 
   const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
 
