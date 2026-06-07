@@ -9,7 +9,7 @@ import type { Ratings } from './ratings';
 import { createRng } from './rng';
 import { deriveRatings } from './ratings';
 import { buildLineup } from './lineup';
-import { playRally, momFactor, type RallyTeam, type Edge } from './rally';
+import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge } from './rally';
 import { rotate } from './rotation';
 
 export function targetPoints(setNo: number): number {
@@ -46,9 +46,23 @@ export function simulateMatch(
     return r;
   };
 
-  const home: RallyTeam = { six: homeLineup.six, libero: homeLineup.libero, rotation: 0, momentum: START_MOMENTUM };
-  const away: RallyTeam = { six: awayLineup.six, libero: awayLineup.libero, rotation: 0, momentum: START_MOMENTUM };
+  // 코트 인원(선발+리베로) 체력 — 경기 내내 누적, 랠리/세트 사이 회복(7.1)
+  const onCourt = (lu: typeof homeLineup) => [...lu.six, ...(lu.libero ? [lu.libero] : [])];
+  const homeStam = new Map<string, number>();
+  const awayStam = new Map<string, number>();
+  for (const p of onCourt(homeLineup)) homeStam.set(p.id, 1);
+  for (const p of onCourt(awayLineup)) awayStam.set(p.id, 1);
+
+  const home: RallyTeam = { six: homeLineup.six, libero: homeLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: homeStam };
+  const away: RallyTeam = { six: awayLineup.six, libero: awayLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: awayStam };
   const teamOf = (s: Side) => (s === 'home' ? home : away);
+
+  // 랠리 사이 회복 — 체젠(staminaRegen) 높을수록 빨리 회복
+  const recover = (lu: typeof homeLineup, m: Map<string, number>, scale: number) => {
+    for (const p of onCourt(lu)) {
+      m.set(p.id, Math.min(1, (m.get(p.id) ?? 1) + scale * (0.4 + p.staminaRegen / 100)));
+    }
+  };
 
   const points: PointLog[] = [];
   const setScores: { home: number; away: number }[] = [];
@@ -66,6 +80,8 @@ export function simulateMatch(
     away.momentum = START_MOMENTUM;
     home.rotation = 0;
     away.rotation = 0;
+    recover(homeLineup, homeStam, 0.5); // 세트 사이 휴식(부분 회복)
+    recover(awayLineup, awayStam, 0.5);
     let serving: Side = setNo % 2 === 1 ? 'home' : 'away';
 
     let lastScorer: Side | null = null;
@@ -90,6 +106,10 @@ export function simulateMatch(
         teamOf(winner).rotation = rotate(teamOf(winner).rotation);
         serving = winner;
       }
+
+      // 랠리 사이 체력 회복(7.1)
+      recover(homeLineup, homeStam, STAM_REGEN_BASE);
+      recover(awayLineup, awayStam, STAM_REGEN_BASE);
     }
 
     setScores.push({ home: h, away: a });
