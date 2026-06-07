@@ -39,6 +39,7 @@ const BLOCK: Record<Position, number> = { MB: 1.0, OH: 0.6, OP: 0.6, S: 0.3, L: 
 const SERVE: Record<Position, number> = { OP: 1, OH: 1, MB: 1, S: 1, L: 0.1 };
 const DIG: Record<Position, number> = { L: 1.3, OH: 0.6, S: 0.5, MB: 0.4, OP: 0.3 };
 const ATK_FOCUS = 2.0; // 공격 집중도 — 좋은 공격수에게 세트 몰림(1옵션 에이스 부각)
+const BLK_FOCUS = 2.5; // 블록 집중도 — 좋은 블로커(센터)가 팀 블록 점유↑ → 스킬→블록 기울기 확보
 
 /** 선발(코트 위 7) / 벤치 분리 — 포지션별 OVR 상위가 선발 */
 export function splitLineup(players: Player[]): { starters: Player[]; bench: Player[] } {
@@ -118,7 +119,7 @@ export function attributeProduction(
       const digger = pick(def, (p) => DIG[p.position] * p.skDig, rng.next());
       if (digger) bump(digger.id, (l) => { l.digs++; });
     } else if (roll < 0.72) {
-      const blocker = pick(off, (p) => BLOCK[p.position] * p.skBlock, rng.next());
+      const blocker = pick(off, (p) => BLOCK[p.position] * p.skBlock ** BLK_FOCUS, rng.next());
       if (blocker) bump(blocker.id, (l) => { l.points++; l.blocks++; });
     } else if (roll < 0.78) {
       const server = pick(off, (p) => SERVE[p.position] * p.skServe, rng.next());
