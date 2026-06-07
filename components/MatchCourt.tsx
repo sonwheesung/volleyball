@@ -84,20 +84,36 @@ function switchedSpots(side: Side, lu: ReturnType<typeof buildLineup>, rot: numb
   return { pos, setterIdx, frontHitters: front.filter((i) => i !== setterIdx), backers: back.filter((i) => i !== setterIdx) };
 }
 
-// 서브 전 "로테이션 합법" 좌표(home 분수). 전위=네트 라인, 후위=패싱 라인(W), 좌<중<우·전<후 순서 유지.
-const FR_FRAC: Record<number, [number, number]> = {
-  4: [0.22, 0.6], 3: [0.5, 0.6], 2: [0.78, 0.6], // 전위(네트)
-  5: [0.18, 0.8], 6: [0.5, 0.86], 1: [0.82, 0.8], // 후위(패싱 W)
-};
-/** 서브 전 대형 — 오버랩(로테이션) 룰을 지키는 합법 위치. 후위 세터는 자기 존 안에서 네트 쪽으로만 당겨 릴리즈 준비. */
+// 존별 자연 x(좌우 순서·블로커 정렬용 기준)
+const ZONE_X: Record<number, number> = { 4: 0.22, 3: 0.5, 2: 0.78, 5: 0.18, 6: 0.5, 1: 0.82 };
+/** 서브 받기 전 대형 — 3-패서 리시브: 리베로+OH가 좌·중·우를 커버(빈 곳 없음),
+ *  전위 공격수는 네트 대기, 세터는 네트 사이드 코너에 숨었다 서브 순간 세팅 자리로 침투. */
 function receiveFormation(side: Side, lu: ReturnType<typeof buildLineup>, rot: number): Record<number, { x: number; y: number }> {
+  const zoneOf = (i: number) => ((i - rot) % 6 + 6) % 6 + 1;
+  const mx = (f: number) => (side === 'home' ? f : 1 - f) * COURT_W;
+  const my = (f: number) => (side === 'home' ? f : 1 - f) * COURT_H;
+  const baseX = (i: number) => ZONE_X[zoneOf(i)];
   const setterIdx = lu.six.findIndex((p) => p.position === 'S');
   const pos: Record<number, { x: number; y: number }> = {};
-  for (let i = 0; i < 6; i++) {
-    const zone = ((i - rot) % 6 + 6) % 6 + 1; // 이 선수의 로테이션 존
-    let [xf, yf] = FR_FRAC[zone];
-    if (i === setterIdx && (zone === 1 || zone === 5 || zone === 6)) yf -= 0.12; // 후위 세터: 네트쪽으로(전위보다 뒤 유지=합법)
-    pos[i] = { x: (side === 'home' ? xf : 1 - xf) * COURT_W, y: (side === 'home' ? yf : 1 - yf) * COURT_H };
+
+  // 패서 3명: 리베로/OH 우선, 부족하면 보충
+  const passers = [0, 1, 2, 3, 4, 5].filter((i) => i !== setterIdx && (lu.six[i].position === 'L' || lu.six[i].position === 'OH'));
+  for (const i of [0, 1, 2, 3, 4, 5]) { if (passers.length >= 3) break; if (i !== setterIdx && !passers.includes(i)) passers.push(i); }
+  const recv = passers.slice(0, 3);
+  const netAtt = [0, 1, 2, 3, 4, 5].filter((i) => i !== setterIdx && !recv.includes(i));
+
+  // 패서 좌·중·우 펼침(W, 자연 x순 → 교차 방지)
+  const pLane: [number, number][] = [[0.2, 0.78], [0.5, 0.85], [0.8, 0.78]];
+  recv.slice().sort((a, b) => baseX(a) - baseX(b)).forEach((i, k) => { const [xf, yf] = pLane[k] ?? [0.5, 0.82]; pos[i] = { x: mx(xf), y: my(yf) }; });
+  // 네트 공격수 대기
+  const naLane: [number, number][] = netAtt.length <= 1 ? [[0.5, 0.6]] : netAtt.length === 2 ? [[0.34, 0.6], [0.66, 0.6]] : [[0.26, 0.6], [0.5, 0.6], [0.74, 0.6]];
+  netAtt.slice().sort((a, b) => baseX(a) - baseX(b)).forEach((i, k) => { const [xf, yf] = naLane[k] ?? [0.5, 0.6]; pos[i] = { x: mx(xf), y: my(yf) }; });
+  // 세터: 네트 사이드 코너에 숨음(후위면 약간 뒤) → 서브 순간 스위칭으로 세팅 자리 침투
+  if (setterIdx >= 0) {
+    const sz = zoneOf(setterIdx);
+    const sxf = sz === 1 || sz === 2 ? 0.84 : sz === 4 || sz === 5 ? 0.16 : 0.5;
+    const syf = sz === 2 || sz === 3 || sz === 4 ? 0.58 : 0.64;
+    pos[setterIdx] = { x: mx(sxf), y: my(syf) };
   }
   return pos;
 }
