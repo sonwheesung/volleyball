@@ -176,10 +176,15 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
 
   for (let hop = 0; hop < 6; hop++) {
     const def = other(att);
-    const sIdx = sw[att].setterIdx >= 0 ? sw[att].setterIdx : pick(sw[att].frontHitters);
-    wp.push(spot(att, sIdx, 'pass')); // 세터에게(스위칭 네트 위치)
-    const hitters = sw[att].frontHitters.length ? sw[att].frontHitters : [sIdx];
-    wp.push(spot(att, pick(hitters), 'toss')); // 토스 → 공격수(세터와 다른 위치)
+    // 인시스템(세터 토스) vs 아웃오브시스템(다른 선수가 띄움). 첫 공격은 대개 세터.
+    const setterToss = hop === 0 ? rng.next() < 0.8 : rng.next() < 0.5;
+    const fallback = sw[att].setterIdx >= 0 ? sw[att].setterIdx : (sw[att].frontHitters[0] ?? 0);
+    const tosserIdx = setterToss && sw[att].setterIdx >= 0 ? sw[att].setterIdx
+      : (sw[att].frontHitters.length ? pick(sw[att].frontHitters) : fallback);
+    wp.push(spot(att, tosserIdx, 'pass')); // 세터(또는 연결한 선수)에게
+    const hitters = sw[att].frontHitters.filter((i) => i !== tosserIdx);
+    const atkIdx = pick(hitters.length ? hitters : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
+    wp.push(spot(att, atkIdx, 'toss')); // 토스 → 공격수(토스한 선수와 다름)
     if (att === r.scorer) {
       const t = spikeTarget(def, rng, true); // 득점: 빈 곳에 다양한 코스로 꽂힘
       wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike' });
@@ -299,12 +304,23 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   let digIdx = -1;
   let digPos = { x: 0, y: 0 };
   if (seg && segKind === 'toss') {
-    blockSide = other(seg.to.side);
-    const rot = blockSide === 'home' ? stage.homeRot : stage.awayRot;
-    const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
+    const attSide = seg.to.side;
+    blockSide = other(attSide);
+    const attLu = attSide === 'home' ? lineups.home : lineups.away;
+    const attSetterIdx = attLu.six.findIndex((p) => p.position === 'S');
+    // 세터 토스(인시스템)=2장(어디 올지 모름), 다른 선수 토스(아웃오브시스템)=3장(공격 뻔함)
+    const count = seg.from.idx === attSetterIdx ? 2 : 3;
+    const blockRot = blockSide === 'home' ? stage.homeRot : stage.awayRot;
+    const blockLu = blockSide === 'home' ? lineups.home : lineups.away;
+    const blockSw = switchedSpots(blockSide, blockLu, blockRot);
+    const front = [2, 3, 4].map((z) => lineupIdxAt(blockRot, z));
     const ax = seg.to.x; // 공격수 화면 x
     const yNet = (blockSide === 'home' ? 0.575 : 0.425) * COURT_H;
-    front.forEach((fi, k) => { blockTargets[fi] = { x: clampN(ax + (k - 1) * 18, 24, COURT_W - 24), y: yNet }; });
+    const yOff = (blockSide === 'home' ? 0.66 : 0.34) * COURT_H; // release 시 빠지는 깊이
+    const sorted = front.slice().sort((a, b) => Math.abs(blockSw.pos[a].x - ax) - Math.abs(blockSw.pos[b].x - ax));
+    const spread = count === 2 ? [-12, 12] : [-20, 0, 20];
+    sorted.slice(0, count).forEach((bi, k) => { blockTargets[bi] = { x: clampN(ax + spread[k], 24, COURT_W - 24), y: yNet }; });
+    sorted.slice(count).forEach((ri) => { blockTargets[ri] = { x: blockSw.pos[ri].x, y: yOff }; }); // 블록 안 하는 전위는 빠짐
   } else if (seg && segKind === 'spike' && seg.to.idx >= 0) {
     digSide = seg.to.side;
     digIdx = seg.to.idx;
