@@ -9,7 +9,7 @@ import type { Ratings } from './ratings';
 import { createRng } from './rng';
 import { deriveRatings } from './ratings';
 import { buildLineup } from './lineup';
-import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge } from './rally';
+import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge, type RallyStats } from './rally';
 import { rotate } from './rotation';
 
 export function targetPoints(setNo: number): number {
@@ -27,7 +27,7 @@ const TIMEOUTS_PER_SET = 2;
 const TO_THRESHOLD: Record<CoachStyle, number> = { defense: 3, balanced: 4, attack: 5 };
 
 export interface CoachInfo { style: CoachStyle; charisma: number }
-export interface MatchOpts { edge?: Edge; home?: CoachInfo; away?: CoachInfo }
+export interface MatchOpts { edge?: Edge; home?: CoachInfo; away?: CoachInfo; stats?: RallyStats }
 
 const DEFAULT_COACH: CoachInfo = { style: 'balanced', charisma: 50 };
 
@@ -100,7 +100,8 @@ export function simulateMatch(
     let streak = 0;
 
     while (!isSetOver(h, a, setNo)) {
-      const winner = playRally(serving, home, away, R, rng, edge);
+      const winner = playRally(serving, home, away, R, rng, edge, opts.stats);
+      if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner });
 

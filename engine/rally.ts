@@ -167,11 +167,24 @@ function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng): { str: number } 
   return { str: skill * (0.72 + 0.14 * count) * fooled * momFactor(df.momentum) };
 }
 
+/** 선택적 통계 수집 — 비우면(undefined) 아무 영향 없음(결과 불변). 밸런싱 측정 전용. */
+export interface RallyStats {
+  rallies: number; sideouts: number;
+  serves: number; aces: number; serveErrs: number; faults: number;
+  attacks: number; kills: number; attackErrs: number; stuffs: number; blockouts: number; digs: number; softblocks: number;
+}
+export const newRallyStats = (): RallyStats => ({
+  rallies: 0, sideouts: 0,
+  serves: 0, aces: 0, serveErrs: 0, faults: 0,
+  attacks: 0, kills: 0, attackErrs: 0, stuffs: 0, blockouts: 0, digs: 0, softblocks: 0,
+});
+
 /**
  * 한 랠리를 끝까지 시뮬 → 득점한 쪽 반환.
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
+ * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE): Side {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats): Side {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
   const eg = (s: Side) => (s === 'home' ? edge.home : edge.away);
@@ -188,14 +201,15 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const recvSkill = strength(defenders(recv), (r) => r.receive, R, recv) * momFactor(recv.momentum) * eg(recvSide);
   const aceP = clamp(SERVE_ACE[st] * (0.5 + svPow) + 0.12 * (svPow - recvSkill), 0.003, 0.18);
   const errP = clamp(SERVE_ERR[st] * (1.3 - 0.5 * n(sp.focus)) * (serv.style === 'balanced' ? 0.92 : 1), 0.01, 0.24);
+  if (stats) { stats.rallies++; stats.serves++; }
   const s0 = rng.next();
-  if (s0 < aceP) return serving;            // 서브 에이스
-  if (s0 < aceP + errP) return recvSide;    // 서브 범실
+  if (s0 < aceP) { if (stats) stats.aces++; return serving; }            // 서브 에이스
+  if (s0 < aceP + errP) { if (stats) stats.serveErrs++; return recvSide; } // 서브 범실
 
   // ── 포지션 폴트 (1.4) ──
   for (const side of [serving, recvSide] as Side[]) {
     const t = teamOf(side);
-    if (rng.next() < clamp(0.012 * (1 - teamVQ(t)), 0, 0.02)) return other(side);
+    if (rng.next() < clamp(0.012 * (1 - teamVQ(t)), 0, 0.02)) { if (stats) stats.faults++; return other(side); }
   }
 
   // ── 랠리 루프 (4·5·6장) ── 서브 난이도만큼 첫 리시브 품질 하락
@@ -227,15 +241,17 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const balancedDiscipline = at.style === 'balanced' ? 0.012 : 0; // 밸런스형: 기본기(범실↓)
     const errP2 = clamp(0.16 - 0.09 * q + ATK_ERR[atk] - 0.05 * n(attacker.consistency) - 0.03 * n(attacker.vq) - balancedDiscipline, 0.04, 0.28);
     const blockP = clamp(0.07 + 0.4 * (blkStr - attackPower), 0.02, 0.4);
+    if (stats) stats.attacks++;
     const r1 = rng.next();
-    if (r1 < errP2) return other(att);                          // 공격 범실
+    if (r1 < errP2) { if (stats) stats.attackErrs++; return other(att); }   // 공격 범실
     if (r1 < errP2 + blockP) {
       // 공격방법(5.1): 영리한 공격수는 블록아웃/툴샷으로 살린다(VQ↑일수록)
       const blockOutP = clamp(0.12 + 0.35 * n(attacker.vq) - 0.15, 0.04, 0.4);
-      if (rng.next() < blockOutP) return att;                    // 블록아웃 득점
+      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; return att; }   // 블록아웃 득점
       const stuffPref = df.style === 'attack' ? 0.04 : df.style === 'defense' ? -0.04 : 0;
       const stuffProb = clamp(0.27 + stuffPref + 0.7 * (blkStr - attackPower), 0.05, 0.8);
-      if (rng.next() < stuffProb) return other(att);            // 스터프 블록 득점
+      if (rng.next() < stuffProb) { if (stats) stats.stuffs++; return other(att); }  // 스터프 블록 득점
+      if (stats) stats.softblocks++;
       q = clamp(0.7 + rng.range(-0.1, 0.1), 0.4, 0.92);          // 소프트 블록 → 수비측 좋은 전환
       att = other(att);
       continue;
@@ -245,10 +261,12 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const digStr = strength(defenders(df), (r) => r.dig, R, df) * momFactor(df.momentum);
     const digP = clamp(0.46 + defStyleBonus + 0.6 * (digStr - attackPower), 0.05, 0.9); // 디그↑(랠리 길게)·스킬 민감도↑
     if (rng.next() < digP) {
+      if (stats) stats.digs++;
       q = clamp(0.4 + 0.4 * (digStr - attackPower) + rng.range(-0.1, 0.1), 0.1, 0.85);
       att = other(att);
       continue;
     }
+    if (stats) stats.kills++;
     return att;                                                 // 공격 성공(kill)
   }
   return att;
