@@ -106,6 +106,9 @@ const DUR: Record<Move, number> = { start: 0, serve: 300, pass: 240, toss: 540, 
 const ARC: Record<Move, number> = { start: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03 };
 const BALL_SCALE: Record<Move, number> = { start: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15 };
 const JUMP = 1.45; // 점프 시 마커 확대
+const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
+const COURT_PAD = SERVE_OUT + 10; // 코트 밖 서브 공간 확보용 상하 여백
+const serveOutY = (side: Side) => (side === 'home' ? COURT_H + SERVE_OUT : -SERVE_OUT);
 
 /** 한 랠리의 공 이동 경로 — 득점 측에서 끝남 */
 function ballPath(r: Rally, seed: number): WP[] {
@@ -117,7 +120,7 @@ function ballPath(r: Rally, seed: number): WP[] {
   const serving = r.serving;
   const recv = other(serving);
   const wp: WP[] = [];
-  wp.push(at(serving, 1, 'start'));         // 서브 지점
+  wp.push({ x: zonePx(serving, 1).x, y: serveOutY(serving), side: serving, zone: 1, kind: 'start' }); // 서브: 엔드라인 뒤(코트 밖)
   wp.push(at(recv, pick([6, 5, 1]), 'serve')); // 서브 → 리시브
   wp.push(at(recv, 3, 'pass'));             // 리시브 → 세터
   let att: Side = recv;
@@ -178,10 +181,10 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   useEffect(() => {
     if (!playing || finished) return;
     if (segIdx >= segCount) {
+      // 득점 → 점수 반영 후 잠시 멈춤(공은 낙구 지점에 정지) → 다음 랠리
       setShown(idx);
-      setIdx((i) => i + 1);
-      setSegIdx(0);
-      return;
+      const t = setTimeout(() => { setIdx((i) => i + 1); setSegIdx(0); }, fast ? 200 : 650);
+      return () => clearTimeout(t);
     }
     const to = path[segIdx + 1];
     prog.setValue(0);
@@ -222,13 +225,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     return [1, 2, 3, 4, 5, 6].map((z) => {
       const p = playerAt(lineups, side, rot, z);
       const { x, y } = zonePx(side, z);
-      const serving = stage.serving === side && z === 1 && !finished;
+      const isServer = stage.serving === side && z === 1;
+      const serving = isServer && !finished;
+      const onServe = !!seg && seg.to.kind === 'serve' && isServer; // 서브 순간 = 코트 밖
       const mine = mineSide === side;
       const color = p ? POS_COLOR[p.position] : theme.muted;
       const jumping = jl.some((j) => j.side === side && j.zone === z);
       return (
         <Animated.View key={`${side}-${z}`} style={[styles.marker, {
-          left: x - MR, top: y - MR,
+          left: x - MR, top: (onServe ? serveOutY(side) : y) - MR,
           backgroundColor: color + (mine ? 'ee' : '99'),
           borderColor: serving ? theme.warn : mine ? theme.text : 'transparent',
           borderWidth: serving ? 2.5 : mine ? 1.5 : 0,
@@ -258,6 +263,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   return (
     <View style={{ gap: 10 }}>
       {/* 코트 */}
+      <View style={styles.courtWrap}>
       <View style={styles.court}>
         <View style={[styles.half, styles.halfAway]} />
         <View style={[styles.half, styles.halfHome]} />
@@ -272,6 +278,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
             <Text style={styles.finishTxt}>경기 종료</Text>
           </View>
         ) : null}
+      </View>
       </View>
 
       {/* 플레이 컨트롤 */}
@@ -312,9 +319,10 @@ function Ctrl({ label, onPress, on }: { label: string; onPress: () => void; on?:
 const MR = 15; // 마커 반지름
 
 const styles = StyleSheet.create({
+  courtWrap: { paddingVertical: COURT_PAD, alignItems: 'center' },
   court: {
     width: COURT_W, height: COURT_H, alignSelf: 'center',
-    borderRadius: 10, borderWidth: 2, borderColor: theme.muted, overflow: 'hidden',
+    borderRadius: 10, borderWidth: 2, borderColor: theme.muted, overflow: 'visible',
   },
   half: { position: 'absolute', left: 0, right: 0, height: COURT_H / 2 },
   halfAway: { top: 0, backgroundColor: '#3a2a1a' },
