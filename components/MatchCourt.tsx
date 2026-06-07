@@ -435,18 +435,31 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
 
   // 공 transform — 포물선(translateY에 아치 가산) + 크기(떴다 떨어지는 원근감)
   const last = path.length ? path[path.length - 1] : zonePx('home', 1);
+  const arcH = seg ? ARC[seg.to.kind] : 0;
   const ballTransform = seg
     ? [
         { translateX: prog.interpolate({ inputRange: [0, 1], outputRange: [seg.from.x, seg.to.x] }) },
         {
           translateY: Animated.add(
             prog.interpolate({ inputRange: [0, 1], outputRange: [seg.from.y, seg.to.y] }),
-            prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, -ARC[seg.to.kind], 0] }),
+            prog.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, -0.75 * arcH, -arcH, -0.75 * arcH, 0] }),
           ),
         },
         { scale: prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, BALL_SCALE[seg.to.kind], 1] }) },
       ]
     : [{ translateX: last.x }, { translateY: last.y }];
+
+  // 공 궤적(흰 점선) — 현재 구간의 포물선 경로 위 점들
+  const trailDots = seg
+    ? Array.from({ length: 17 }, (_, k) => {
+        const s = k / 16;
+        return {
+          key: k,
+          x: seg.from.x + (seg.to.x - seg.from.x) * s,
+          y: seg.from.y + (seg.to.y - seg.from.y) * s - arcH * 4 * s * (1 - s),
+        };
+      })
+    : [];
 
   return (
     <View style={{ gap: 10 }}>
@@ -474,6 +487,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
             </Animated.View>
           );
         })}
+        {trailDots.map((d) => (
+          <View key={d.key} style={[styles.trailDot, { left: d.x - 1.5, top: d.y - 1.5 }]} />
+        ))}
         <Animated.View style={[styles.ball, { transform: ballTransform }]} />
         {finished ? (
           <View style={styles.finishOverlay}>
@@ -540,6 +556,10 @@ const styles = StyleSheet.create({
     position: 'absolute', left: 0, top: 0, width: 12, height: 12, borderRadius: 6,
     marginLeft: -6, marginTop: -6, backgroundColor: '#ffd23f',
     borderWidth: 1, borderColor: '#b8860b',
+  },
+  trailDot: {
+    position: 'absolute', width: 3, height: 3, borderRadius: 1.5,
+    backgroundColor: '#ffffffcc',
   },
   finishOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
   finishTxt: { color: theme.text, fontSize: 22, fontWeight: '900', backgroundColor: '#000a', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
