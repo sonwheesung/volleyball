@@ -97,22 +97,22 @@ function reconstruct(sim: SimResult): Rally[] {
 }
 
 // 공 이동 종류 — 구간별 속도/이징이 다르다
-type Move = 'start' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
+type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
 type WP = { x: number; y: number; side: Side; zone: number; kind: Move };
 
-// 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게. walk=서버가 엔드라인 뒤로.
-const DUR: Record<Move, number> = { start: 0, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 360 };
+// 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게. walk=서버가 엔드라인 뒤로, return=공이 서버에게.
+const DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 360 };
 // 구간별 포물선 높이(px) / 공 크기 피크 — 토스가 가장 크게 휘고 커진다
-const ARC: Record<Move, number> = { start: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06 };
-const BALL_SCALE: Record<Move, number> = { start: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1 };
+const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06 };
+const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1 };
 const TWO_TOUCH = 0.06; // 투터치 반칙 확률(지는 쪽 공격 시)
 const JUMP = 1.45; // 점프 시 마커 확대
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
 const COURT_PAD = SERVE_OUT + 10; // 코트 밖 서브 공간 확보용 상하 여백
 const serveOutY = (side: Side) => (side === 'home' ? COURT_H + SERVE_OUT : -SERVE_OUT);
 
-/** 한 랠리의 공 이동 경로 — 득점 측에서 끝남 */
-function ballPath(r: Rally, seed: number): WP[] {
+/** 한 랠리의 공 이동 경로 — 득점 측에서 끝남. prevLast: 직전 랠리 낙구점(공 순간이동 방지) */
+function ballPath(r: Rally, seed: number, prevLast?: { x: number; y: number }): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
   const at = (s: Side, z: number, kind: Move): WP => ({ ...zonePx(s, z), side: s, zone: z, kind });
@@ -122,7 +122,12 @@ function ballPath(r: Rally, seed: number): WP[] {
   const serving = r.serving;
   const recv = other(serving);
   const wp: WP[] = [];
-  wp.push(at(serving, 1, 'start')); // 서버 자리(코트 안)
+  if (prevLast) {
+    wp.push({ x: prevLast.x, y: prevLast.y, side: serving, zone: 1, kind: 'start' }); // 직전 낙구점
+    wp.push(at(serving, 1, 'return')); // 공이 서버에게 돌아옴(순간이동 방지)
+  } else {
+    wp.push(at(serving, 1, 'start')); // 서버 자리(코트 안)
+  }
   wp.push({ x: zonePx(serving, 1).x, y: serveOutY(serving), side: serving, zone: 1, kind: 'walk' }); // 공 들고 엔드라인 뒤로
   wp.push(at(recv, pick([6, 5, 1]), 'serve')); // 서브 → 리시브
   let att: Side = recv;
@@ -178,12 +183,19 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const [fast, setFast] = useState(false);
 
   const prog = useRef(new Animated.Value(0)).current; // 현재 구간 진행도 0..1
-  const serverY = useRef(new Animated.Value(0)).current; // 서버 마커 Y(코트 안↔엔드라인 뒤)
-  const prevServ = useRef<Side | null>(null);
+  const posRefs = useRef<Record<string, Animated.ValueXY>>({}); // 마커별 위치(선수 단위)
+  const posLast = useRef<Record<string, { x: number; y: number }>>({});
   const finishedOnce = useRef(false);
 
   const finished = idx >= total;
-  const path = useMemo(() => (finished ? [] : ballPath(rallies[idx], seed)), [finished, rallies, idx, seed]);
+  // 직전 랠리 낙구점 → 새 랠리 공 시작점으로 이어 붙여 공이 순간이동하지 않게
+  const prevLast = useMemo(() => {
+    if (finished || idx <= 0) return undefined;
+    const pp = ballPath(rallies[idx - 1], seed);
+    const w = pp[pp.length - 1];
+    return { x: w.x, y: w.y };
+  }, [finished, rallies, idx, seed]);
+  const path = useMemo(() => (finished ? [] : ballPath(rallies[idx], seed, prevLast)), [finished, rallies, idx, seed, prevLast]);
   const segCount = Math.max(0, path.length - 1);
 
   // 구간 단위 진행 (위치·포물선·크기·점프를 prog 하나로 동기화)
@@ -227,52 +239,46 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   // 마커 배치는 현재 진행 중 랠리(idx) 기준
   const stage = rallies[Math.min(idx, total - 1)];
 
-  // 서버 마커: 자기 자리(코트 안) → walk/serve 구간엔 엔드라인 뒤 → 끝나면 다시 들어옴.
-  // 공의 walk 구간과 같은 시간으로 애니메이트해 동기화(순간이동 방지).
-  const servSide: Side | null = finished ? null : stage.serving;
   const segKind: Move | null = seg ? seg.to.kind : null;
-  const serverBaseY = servSide ? zonePx(servSide, 1).y : 0;
-  const serverTargetY = segKind === 'walk' || segKind === 'serve' ? serveOutY(servSide ?? 'home') : serverBaseY;
-  useEffect(() => {
-    if (servSide == null) return;
-    // 서브권이 바뀌면(다른 선수) 새 서버를 자기 자리에 스냅 후, 거기서 걸어나가게 한다
-    if (prevServ.current !== servSide) { serverY.setValue(serverBaseY); prevServ.current = servSide; }
-    const dur = segKind ? DUR[segKind] * (fast ? 0.4 : 1) : 200;
-    const a = Animated.timing(serverY, { toValue: serverTargetY, duration: Math.max(120, dur), easing: Easing.out(Easing.quad), useNativeDriver: true });
-    a.start();
-    return () => a.stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [servSide, serverTargetY, segKind, fast]);
-
   const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
 
-  const markers = (side: Side) => {
-    const rot = side === 'home' ? stage.homeRot : stage.awayRot;
-    return [1, 2, 3, 4, 5, 6].map((z) => {
-      const p = playerAt(lineups, side, rot, z);
-      const { x, y } = zonePx(side, z);
-      const isServer = stage.serving === side && z === 1;
-      const serving = isServer && !finished;
-      // 서버는 translateY(serverY)로 이동. 단, 서브권이 막 바뀐 첫 프레임엔 정적(플래시 방지)
-      const useAnim = serving && prevServ.current === stage.serving;
-      const mine = mineSide === side;
-      const color = p ? POS_COLOR[p.position] : theme.muted;
-      const jumping = jl.some((j) => j.side === side && j.zone === z);
-      const scale = jumping ? jumpScale : 1;
-      return (
-        <Animated.View key={`${side}-${z}`} style={[styles.marker, {
-          left: x - MR,
-          top: useAnim ? -MR : y - MR,
-          backgroundColor: color + (mine ? 'ee' : '99'),
-          borderColor: serving ? theme.warn : mine ? theme.text : 'transparent',
-          borderWidth: serving ? 2.5 : mine ? 1.5 : 0,
-          transform: useAnim ? [{ translateY: serverY }, { scale }] : [{ scale }],
-        }]}>
-          <Text style={styles.markerTxt}>{p?.position ?? ''}</Text>
-        </Animated.View>
-      );
-    });
+  // 마커는 "선수(라인업 인덱스)" 단위로 그린다 → 로테이션·서버 in/out 등 위치가 바뀌면
+  // 무조건 슬라이드(절대 순간이동 금지). 각 마커는 자기 Animated 위치를 목표로 이동한다.
+  const getPos = (key: string, init: { x: number; y: number }) => {
+    if (!posRefs.current[key]) { posRefs.current[key] = new Animated.ValueXY(init); posLast.current[key] = init; }
+    return posRefs.current[key];
   };
+
+  type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean };
+  const buildMarkers = (side: Side): Mk[] => {
+    const rot = side === 'home' ? stage.homeRot : stage.awayRot;
+    const arr: Mk[] = [];
+    for (let i = 0; i < 6; i++) {
+      const zone = ((i - rot) % 6 + 6) % 6 + 1;     // 이 선수가 현재 선 존
+      const p = playerAt(lineups, side, rot, zone);  // 후위 MB→리베로 치환 포함
+      const isServer = !finished && stage.serving === side && zone === 1;
+      const base = zonePx(side, zone);
+      const ty = isServer && (segKind === 'walk' || segKind === 'serve') ? serveOutY(side) : base.y; // 서브 시 엔드라인 뒤
+      const jumping = jl.some((j) => j.side === side && j.zone === zone);
+      arr.push({ key: `${side}-${i}`, side, p, tx: base.x, ty, jumping, isServer });
+    }
+    return arr;
+  };
+  const allMarkers = [...buildMarkers('home'), ...buildMarkers('away')];
+
+  // 목표가 바뀐 마커만 부드럽게 이동(순간이동 금지)
+  const posSig = allMarkers.map((m) => `${m.key}:${Math.round(m.tx)},${Math.round(m.ty)}`).join('|');
+  useEffect(() => {
+    for (const m of allMarkers) {
+      const v = getPos(m.key, { x: m.tx, y: m.ty });
+      const last = posLast.current[m.key];
+      if (last && (last.x !== m.tx || last.y !== m.ty)) {
+        posLast.current[m.key] = { x: m.tx, y: m.ty };
+        Animated.timing(v, { toValue: { x: m.tx, y: m.ty }, duration: 300, easing: Easing.out(Easing.quad), useNativeDriver: true }).start();
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [posSig]);
 
   // 공 transform — 포물선(translateY에 아치 가산) + 크기(떴다 떨어지는 원근감)
   const last = path.length ? path[path.length - 1] : zonePx('home', 1);
@@ -299,8 +305,22 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
         <View style={styles.net} />
         <View style={[styles.attackLine, { top: COURT_H * 0.34 }]} />
         <View style={[styles.attackLine, { top: COURT_H * 0.66 }]} />
-        {markers('away')}
-        {markers('home')}
+        {allMarkers.map((m) => {
+          const pos = getPos(m.key, { x: m.tx, y: m.ty });
+          const mine = mineSide === m.side;
+          const color = m.p ? POS_COLOR[m.p.position] : theme.muted;
+          return (
+            <Animated.View key={m.key} style={[styles.marker, {
+              left: -MR, top: -MR,
+              backgroundColor: color + (mine ? 'ee' : '99'),
+              borderColor: m.isServer ? theme.warn : mine ? theme.text : 'transparent',
+              borderWidth: m.isServer ? 2.5 : mine ? 1.5 : 0,
+              transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.jumping ? jumpScale : 1 }],
+            }]}>
+              <Text style={styles.markerTxt}>{m.p?.position ?? ''}</Text>
+            </Animated.View>
+          );
+        })}
         <Animated.View style={[styles.ball, { transform: ballTransform }]} />
         {finished ? (
           <View style={styles.finishOverlay}>
