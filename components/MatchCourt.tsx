@@ -186,14 +186,30 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     return wp;
   }
 
+  const d2 = (a: { x: number; y: number }, p: { x: number; y: number }) => (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
   for (let hop = 0; hop < 6; hop++) {
     const def = other(att);
-    // 인시스템(세터 토스) vs 아웃오브시스템(다른 선수가 띄움). 첫 공격은 대개 세터.
-    const setterToss = hop === 0 ? rng.next() < 0.8 : rng.next() < 0.5;
-    const fallback = sw[att].setterIdx >= 0 ? sw[att].setterIdx : (sw[att].frontHitters[0] ?? 0);
-    const tosserIdx = setterToss && sw[att].setterIdx >= 0 ? sw[att].setterIdx
-      : (sw[att].frontHitters.length ? pick(sw[att].frontHitters) : fallback);
-    wp.push(spot(att, tosserIdx, 'pass')); // 세터(또는 연결한 선수)에게
+    // 리시브/디그 패스는 세터 자리 주변 "일정 범위"에서 랜덤하게 떨어진다(정확히 안 감)
+    const sIdx = sw[att].setterIdx;
+    const ideal = sIdx >= 0 ? sw[att].pos[sIdx] : sw[att].pos[sw[att].frontHitters[0] ?? 0];
+    const ang = rng.range(0, Math.PI * 2);
+    const mag = rng.next() ** 1.7 * (0.2 * COURT_W); // 대부분 가깝게, 가끔 멀리(난조)
+    const yLo = (att === 'home' ? 0.52 : 0.26) * COURT_H;
+    const yHi = (att === 'home' ? 0.74 : 0.48) * COURT_H;
+    const passSpot = {
+      x: clampN(ideal.x + Math.cos(ang) * mag, 0.12 * COURT_W, 0.88 * COURT_W),
+      y: clampN(ideal.y + Math.sin(ang) * mag * 0.7, yLo, yHi),
+    };
+    // 세터가 닿는 거리면 세터가, 아니면 패스 지점에 가장 가까운 다른 선수가 대신 토스
+    let tosserIdx: number;
+    if (sIdx >= 0 && mag <= 0.12 * COURT_W) {
+      tosserIdx = sIdx;
+    } else {
+      const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== sIdx);
+      tosserIdx = cand.reduce((b, i) => (d2(sw[att].pos[i], passSpot) < d2(sw[att].pos[b], passSpot) ? i : b), cand[0]);
+    }
+    // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트
+    wp.push({ x: passSpot.x, y: passSpot.y, side: att, idx: tosserIdx, kind: 'pass', defender: { side: att, idx: tosserIdx, x: passSpot.x, y: passSpot.y } });
     const hitters = sw[att].frontHitters.filter((i) => i !== tosserIdx);
     const atkIdx = pick(hitters.length ? hitters : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
     wp.push(spot(att, atkIdx, 'toss')); // 토스 → 공격수(토스한 선수와 다름)
@@ -396,6 +412,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
         tx = digPos.x; ty = digPos.y; // 디그수가 낙구점으로 이동
       }
       const jumping = jl.some((j) => j.side === side && j.idx === i);
+      if (jumping) { const lp = posLast.current[`${side}-${i}`]; if (lp) { tx = lp.x; ty = lp.y; } } // 점프 중엔 제자리(착지 후 이동)
       arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer });
     }
     return arr;
