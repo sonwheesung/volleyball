@@ -54,12 +54,13 @@ export default function Schedule() {
     ? (() => {
         const isHome = nextFixture.homeTeamId === teamId;
         const oppId = isHome ? nextFixture.awayTeamId : nextFixture.homeTeamId;
-        return {
-          isHome,
-          oppName: getTeam(oppId)?.name ?? '',
-          myOvr: teamOverall(getEvolvedTeamPlayers(teamId, nextFixture.dayIndex)),
-          oppOvr: teamOverall(getEvolvedTeamPlayers(oppId, nextFixture.dayIndex)),
-        };
+        const myOvr = teamOverall(getEvolvedTeamPlayers(teamId, nextFixture.dayIndex));
+        const oppOvr = teamOverall(getEvolvedTeamPlayers(oppId, nextFixture.dayIndex));
+        // 중요 경기 판정(Phase 4): 접전 예상 / 강팀 상대 / 시즌 막바지 → 직접 지휘 권장
+        const margin = Math.abs(myOvr - oppOvr);
+        const late = totalMatches > 0 && playedCount / totalMatches >= 0.8;
+        const reason = margin <= 3 ? '접전 예상' : oppOvr >= 76 ? '강팀 상대' : late ? '시즌 막바지' : null;
+        return { isHome, oppName: getTeam(oppId)?.name ?? '', myOvr, oppOvr, important: !!reason, reason };
       })()
     : null;
 
@@ -76,7 +77,14 @@ export default function Schedule() {
 
       {nextFixture && preview ? (
         <Card>
-          <Muted>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</Muted>
+          <Row>
+            <Muted>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</Muted>
+            {preview.important ? (
+              <View style={styles.bigMatch}>
+                <Text style={styles.bigMatchText}>⭐ 중요 · {preview.reason}</Text>
+              </View>
+            ) : null}
+          </Row>
           <Row>
             <Text style={{ color: theme.text, fontSize: 18, fontWeight: '800' }}>
               {preview.isHome ? '홈' : '원정'} vs {preview.oppName}
@@ -93,8 +101,12 @@ export default function Schedule() {
               <OvrBadge value={preview.oppOvr} />
             </View>
           </Row>
-          <Button label="경기 시작" onPress={onAdvance} />
-          <Muted style={{ fontSize: 12 }}>경기 사이 기간 동안 모든 선수가 자동으로 훈련합니다.</Muted>
+          <Button label={preview.important ? '직접 지휘 →' : '경기 시작'} onPress={onAdvance} />
+          <Muted style={{ fontSize: 12 }}>
+            {preview.important
+              ? '경기 보드에서 작전 방침(핀치 서버·블로킹·수비)을 조정할 수 있습니다.'
+              : '경기 사이 기간 동안 모든 선수가 자동으로 훈련합니다.'}
+          </Muted>
         </Card>
       ) : (
         <Card>
@@ -148,4 +160,6 @@ const styles = StyleSheet.create({
   mteam: { flex: 1, color: theme.text, fontSize: 13, fontWeight: '600' },
   mscore: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 34, textAlign: 'center' },
   win: { color: theme.good, fontWeight: '800' },
+  bigMatch: { backgroundColor: theme.warn + '26', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  bigMatchText: { color: theme.warn, fontSize: 12, fontWeight: '800' },
 });
