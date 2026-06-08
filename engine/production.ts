@@ -53,7 +53,8 @@ export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {
 const ON_COURT: Record<Position, number> = { S: 1, OH: 2, OP: 1, MB: 2, L: 1 };
 
 // 공격 점유 — OP(아포짓)가 확실한 1옵션, OH 좌우, MB(센터)는 속공 위주로 비중 낮음(실제 여자배구)
-const ATTACK: Record<Position, number> = { OP: 1.38, OH: 0.98, MB: 0.28, S: 0.08, L: 0 };
+// 엔진(rally.chooseAtk)의 실제 공격 분포(센터 ~18%)에 맞춰 MB 비중 상향(2026-06)
+const ATTACK: Record<Position, number> = { OP: 1.38, OH: 0.98, MB: 0.42, S: 0.08, L: 0 };
 const BLOCK: Record<Position, number> = { MB: 1.0, OH: 0.6, OP: 0.6, S: 0.3, L: 0 };
 const SERVE: Record<Position, number> = { OP: 1, OH: 1, MB: 1, S: 1, L: 0.1 };
 const DIG: Record<Position, number> = { L: 1.3, OH: 0.6, S: 0.5, MB: 0.4, OP: 0.3 };

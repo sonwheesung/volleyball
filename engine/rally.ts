@@ -115,13 +115,14 @@ function chooseServe(p: Player, style: CoachStyle, rng: Rng): ServeT {
 /** 공격 종류 선택 (4장) — 리시브 품질·세터 능력·감독 성향 */
 function chooseAtk(q: number, setQ: number, setVQ: number, style: CoachStyle, rng: Rng): Atk {
   if (q < CHANCE_Q) return rng.next() < 0.7 ? 'open' : 'back'; // 찬스볼(6장): 빠른 공격 불가
-  const fast = clamp((q - 0.5) * 2, 0, 1) * (0.4 + 0.6 * setQ) * (0.5 + 0.5 * setVQ);
+  // 좋은 패스일수록 센터 속공↑(현실 여자배구 센터 비중 ~15~20%로 상향, 2026-06)
+  const fast = clamp((q - 0.44) * 2, 0, 1) * (0.4 + 0.6 * setQ) * (0.5 + 0.5 * setVQ);
   const fastBias = style === 'attack' ? 1.2 : style === 'defense' ? 0.85 : 1;
   const w: Record<Atk, number> = {
     open: style === 'defense' ? 1.15 : 1.0,
     back: 0.35 * (q > 0.4 ? 1 : 0.25),
-    quick: 1.1 * fast * fastBias,
-    tempo: 0.7 * fast * fastBias,
+    quick: 1.6 * fast * fastBias,
+    tempo: 1.0 * fast * fastBias,
   };
   const tot = w.open + w.back + w.quick + w.tempo;
   let r = rng.next() * tot;
@@ -181,6 +182,7 @@ export interface RallyStats {
   atkQuick: number; atkTempo: number; atkOpen: number; atkBack: number;
   goodAtk: number; goodCenter: number;   // 좋은 패스(q≥0.6)에서 공격수·센터 비중
   badAtk: number; badCenter: number;     // 난조 패스(q<0.45)에서
+  srvSafe: number; srvFloat: number; srvJump: number; srvSpike: number; // 서브 타입 분포
 }
 export const newRallyStats = (): RallyStats => ({
   rallies: 0, sideouts: 0,
@@ -188,6 +190,7 @@ export const newRallyStats = (): RallyStats => ({
   attacks: 0, kills: 0, attackErrs: 0, stuffs: 0, blockouts: 0, digs: 0, softblocks: 0,
   atkQuick: 0, atkTempo: 0, atkOpen: 0, atkBack: 0,
   goodAtk: 0, goodCenter: 0, badAtk: 0, badCenter: 0,
+  srvSafe: 0, srvFloat: 0, srvJump: 0, srvSpike: 0,
 });
 
 /**
@@ -212,7 +215,11 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const recvSkill = strength(defenders(recv), (r) => r.receive, R, recv) * momFactor(recv.momentum) * eg(recvSide);
   const aceP = clamp(SERVE_ACE[st] * (0.5 + svPow) + 0.12 * (svPow - recvSkill), 0.003, 0.18);
   const errP = clamp(SERVE_ERR[st] * (1.3 - 0.5 * n(sp.focus)) * (serv.style === 'balanced' ? 0.92 : 1), 0.01, 0.24);
-  if (stats) { stats.rallies++; stats.serves++; }
+  if (stats) {
+    stats.rallies++; stats.serves++;
+    if (st === 'safe') stats.srvSafe++; else if (st === 'float') stats.srvFloat++;
+    else if (st === 'jumpfloat') stats.srvJump++; else stats.srvSpike++;
+  }
   const sideKo = (s: Side) => (s === 'home' ? '홈' : '원정');
   if (trace) trace.push(`서브 [${sideKo(serving)}] ${sp.name}(${sp.position}) · ${SERVE_KO[st]}`);
   const s0 = rng.next();

@@ -70,6 +70,8 @@ function main(): void {
   log(`  소프트블록(튕겨 전환) ${pct(S.softblocks, S.attacks)} (공격 시도 대비)`);
   log(`  디그(공 튕겨 전환) ${pct(S.digs, S.attacks)} (공격 시도 대비)`);
   log(`  서브 에이스       ${pct(S.aces, S.rallies)}`);
+  log('\n[서브 타입 분포 — 변형 다양성]');
+  log(`  안전서브 ${pct(S.srvSafe, S.serves)}  플로터 ${pct(S.srvFloat, S.serves)}  점프플로터 ${pct(S.srvJump, S.serves)}  스파이크서브 ${pct(S.srvSpike, S.serves)}`);
 }
 
 main();
