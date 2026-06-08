@@ -10,12 +10,14 @@ import { createRng } from './rng';
 import { deriveRatings } from './ratings';
 import { buildLineup } from './lineup';
 import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge, type RallyStats } from './rally';
-import { rotate, serverIndex } from './rotation';
+import { rotate, serverIndex, frontRow, backRow } from './rotation';
 
 // 작전 교체 (MATCH_SYSTEM 1.3b)
 const SUBS_PER_SET = 6;          // 세트당 정규 교체 횟수(리베로 교체는 별도)
 const PINCH_SERVE_GAP = 12;      // 핀치 서버: 벤치-선발 서브 레이팅 차 임계
-const DEFAULT_POLICY: SubPolicy = { pinchServer: true, blockSub: false, defSub: false };
+const BLOCK_SUB_GAP = 12;        // 블로킹 강화: 벤치-전위 블록 레이팅 차 임계
+const DEF_SUB_GAP = 12;          // 수비 강화: 벤치-후위 리시브 레이팅 차 임계
+const DEFAULT_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSub: true };
 
 export function targetPoints(setNo: number): number {
   return setNo >= 5 ? 15 : 25;
@@ -78,14 +80,21 @@ export function simulateMatch(
   const charismaOf = (s: Side) => (s === 'home' ? hc.charisma : ac.charisma);
   const policyOf = (s: Side) => (s === 'home' ? (opts.homePolicy ?? DEFAULT_POLICY) : (opts.awayPolicy ?? DEFAULT_POLICY));
 
-  // 핀치 서버 후보(벤치, 리베로·선발 제외) — 서브 레이팅 최고 1명. 경기 중 고정.
-  const benchServer = (players: Player[], lu: ReturnType<typeof buildLineup>): Player | null => {
+  // 벤치 역할별 스페셜리스트(선발·리베로 제외) — 서브/블록/수비 최고 1명씩. 경기 중 고정.
+  const benchSpecialists = (players: Player[], lu: ReturnType<typeof buildLineup>) => {
     const onIds = new Set(lu.six.map((p) => p.id));
     if (lu.libero) onIds.add(lu.libero.id);
-    const bench = players.filter((p) => !onIds.has(p.id) && p.position !== 'L');
-    return bench.length ? bench.reduce((best, p) => (R(p).serve > R(best).serve ? p : best)) : null;
+    const pool = players.filter((p) => !onIds.has(p.id) && p.position !== 'L');
+    const best = (score: (p: Player) => number): Player | null =>
+      pool.length ? pool.reduce((b, p) => (score(p) > score(b) ? p : b)) : null;
+    return {
+      server: best((p) => R(p).serve),
+      blocker: best((p) => R(p).block),
+      defender: best((p) => R(p).receive + R(p).dig),
+    };
   };
-  const pinchOf = { home: benchServer(homePlayers, homeLineup), away: benchServer(awayPlayers, awayLineup) };
+  const bench = { home: benchSpecialists(homePlayers, homeLineup), away: benchSpecialists(awayPlayers, awayLineup) };
+  const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 
   // 랠리 사이 회복 — 체젠(staminaRegen) 높을수록 빨리 회복
   const recover = (lu: typeof homeLineup, m: Map<string, number>, scale: number) => {
@@ -117,25 +126,65 @@ export function simulateMatch(
     let lastScorer: Side | null = null;
     let streak = 0;
 
-    // 작전 교체 상태(세트 단위): 예산 + 핀치 활성
+    // 작전 교체 상태(세트 단위): 예산 + 활성 교체(slotIdx → 원선발·종류)
     const subBudget = { home: SUBS_PER_SET, away: SUBS_PER_SET };
-    const pinchActive: Record<Side, { idx: number; orig: Player } | null> = { home: null, away: null };
+    type SubKind = 'pinch' | 'block' | 'def';
+    const activeSubs: Record<Side, Map<number, { orig: Player; kind: SubKind }>> = { home: new Map(), away: new Map() };
+    const subIn = (side: Side, slot: number, player: Player | null, kind: SubKind): void => {
+      if (!player) return;
+      const st = teamOf(side);
+      if (activeSubs[side].has(slot) || subBudget[side] < 2 || st.six[slot].id === player.id) return;
+      activeSubs[side].set(slot, { orig: st.six[slot], kind });
+      st.six[slot] = player;
+      if (!st.stam.has(player.id)) st.stam.set(player.id, 1);
+      subBudget[side] -= 1; // IN
+    };
+    const subOut = (side: Side, slot: number): void => {
+      const st = teamOf(side);
+      const rec = activeSubs[side].get(slot);
+      if (!rec) return;
+      st.six[slot] = rec.orig;
+      activeSubs[side].delete(slot);
+      subBudget[side] -= 1; // OUT (왕복 2회)
+    };
 
     while (!isSetOver(h, a, setNo)) {
-      // 핀치 서버(1.3b): 약한 서버 차례 + 벤치 서버가 월등 + 예산 → 투입(IN). 결정론(상태 기반).
-      const stv = teamOf(serving);
-      if (policyOf(serving).pinchServer && !pinchActive[serving] && subBudget[serving] >= 2 && pinchOf[serving]) {
-        const idx = serverIndex(stv.rotation);
-        const natural = stv.six[idx];
-        const cand = pinchOf[serving]!;
-        if (natural.id !== cand.id && R(cand).serve - R(natural).serve >= PINCH_SERVE_GAP) {
-          pinchActive[serving] = { idx, orig: natural };
-          stv.six[idx] = cand;
-          if (!stv.stam.has(cand.id)) stv.stam.set(cand.id, 1);
-          subBudget[serving] -= 1; // IN
+      // ── 작전 교체 평가 (1.3b) — 결정론(상태 기반, RNG 무관) ──
+      // 1) 복원: 슬롯이 더는 조건에 안 맞으면 OUT
+      for (const side of ['home', 'away'] as Side[]) {
+        const inFront = (slot: number) => frontRow(teamOf(side).rotation).includes(slot);
+        for (const [slot, rec] of [...activeSubs[side]]) {
+          if (rec.kind === 'pinch' && side !== serving) subOut(side, slot);   // 서브권 상실
+          else if (rec.kind === 'block' && !inFront(slot)) subOut(side, slot); // 블로커 후위行
+          else if (rec.kind === 'def' && inFront(slot)) subOut(side, slot);    // 수비수 전위行
         }
       }
-      const servedBy = serving;
+      // 2a) 핀치 서버 — 서브 측 약한 서버 차례
+      {
+        const sv = serving; const st = teamOf(sv); const slot = serverIndex(st.rotation);
+        if (policyOf(sv).pinchServer && bench[sv].server && !activeSubs[sv].has(slot)
+          && R(bench[sv].server!).serve - R(st.six[slot]).serve >= PINCH_SERVE_GAP) {
+          subIn(sv, slot, bench[sv].server, 'pinch');
+        }
+      }
+      // 2b) 블로킹 강화 — 막판 접전, 전위 약한 블로커
+      const crunch = Math.max(h, a) >= targetPoints(setNo) - 4 && Math.abs(h - a) <= 2;
+      if (crunch) for (const side of ['home', 'away'] as Side[]) {
+        const st = teamOf(side);
+        if (!policyOf(side).blockSub || !bench[side].blocker) continue;
+        let weakSlot = -1, weakBlk = Infinity;
+        for (const slot of frontRow(st.rotation)) { const b = R(st.six[slot]).block; if (b < weakBlk) { weakBlk = b; weakSlot = slot; } }
+        if (weakSlot >= 0 && R(bench[side].blocker!).block - weakBlk >= BLOCK_SUB_GAP) subIn(side, weakSlot, bench[side].blocker, 'block');
+      }
+      // 2c) 수비 강화 — 받는 측 후위 약한 리시버(MB 제외, MB는 리베로가 커버)
+      {
+        const rs = other(serving); const st = teamOf(rs);
+        if (policyOf(rs).defSub && bench[rs].defender) {
+          let weakSlot = -1, weakRcv = Infinity;
+          for (const slot of backRow(st.rotation)) { const p = st.six[slot]; if (p.position === 'MB') continue; const rc = R(p).receive; if (rc < weakRcv) { weakRcv = rc; weakSlot = slot; } }
+          if (weakSlot >= 0 && R(bench[rs].defender!).receive - weakRcv >= DEF_SUB_GAP) subIn(rs, weakSlot, bench[rs].defender, 'def');
+        }
+      }
       const winner = playRally(serving, home, away, R, rng, edge, opts.stats);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
@@ -155,15 +204,6 @@ export function simulateMatch(
         serving = winner;
       }
 
-      // 핀치 서버 OUT(1.3b): 서브권을 잃으면 원복(예산 추가 1 소모 = 왕복 2회)
-      if (pinchActive[servedBy] && winner !== servedBy) {
-        const t = teamOf(servedBy);
-        const pa = pinchActive[servedBy]!;
-        t.six[pa.idx] = pa.orig;
-        subBudget[servedBy] -= 1; // OUT
-        pinchActive[servedBy] = null;
-      }
-
       // 타임아웃 (7.4/8장): 상대 연속득점이 임계 도달 + 잔여 보유 → 지는 팀 감독 호출.
       // 양 팀 기세를 50으로 수렴(폭 = 호출 감독 카리스마). 좋은 흐름일 때 부르면 손해.
       if (!isSetOver(h, a, setNo) && streak >= TO_THRESHOLD[teamOf(loserSide).style] && timeouts[loserSide] > 0) {
@@ -180,10 +220,10 @@ export function simulateMatch(
       recover(awayLineup, awayStam, STAM_REGEN_BASE);
     }
 
-    // 세트 종료: 활성 핀치 원복(다음 세트 라인업 초기화)
+    // 세트 종료: 활성 교체 전부 원복(다음 세트 라인업 초기화)
     for (const side of ['home', 'away'] as Side[]) {
-      const pa = pinchActive[side];
-      if (pa) { teamOf(side).six[pa.idx] = pa.orig; pinchActive[side] = null; }
+      for (const [slot, rec] of activeSubs[side]) teamOf(side).six[slot] = rec.orig;
+      activeSubs[side].clear();
     }
 
     setScores.push({ home: h, away: a });
