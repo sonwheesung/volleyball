@@ -85,6 +85,13 @@ export interface FAPref {
   preferredTeamId?: string; // 연고/선호팀(있으면 그 팀에 home 가중)
 }
 
+/** 경기 중 작전 교체 방침 (MATCH_SYSTEM 1.3b) — 프리셋/방침 레벨, AI 자동 + 플레이어 토글 */
+export interface SubPolicy {
+  pinchServer: boolean; // 약한 서버(세터 등) 차례에 벤치 서브 스페셜리스트 투입
+  blockSub: boolean;    // (페이즈2) 접전 시 전위 블로킹 강화
+  defSub: boolean;      // (페이즈3) 후위 수비 강화(리시브 약한 선발 교체)
+}
+
 /** 다년 계약 — 연봉은 서명 시점 시장가치로 고정 (단위: 만원) */
 export interface Contract {
   salary: number;       // 연봉 (만원)
