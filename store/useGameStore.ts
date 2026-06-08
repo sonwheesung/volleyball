@@ -5,14 +5,14 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase } from '../data/league';
+import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, MatchResult, Player, SubPolicy } from '../types';
+import type { Contract, MatchResult, Player, SubPolicy, TrainingFocus } from '../types';
 
 const DEFAULT_SUB_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSub: true };
 
@@ -33,6 +33,7 @@ interface GameState {
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
   archive: { season: number; championId: string }[]; // 역대 우승
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
+  trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -48,6 +49,7 @@ interface GameState {
   toggleDraftPick: (playerId: string) => void;
   recordChampion: (season: number, championId: string) => void;
   setSubPolicy: (policy: Partial<SubPolicy>) => void;
+  setTrainingFocus: (focus: TrainingFocus | null) => void;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -68,6 +70,7 @@ const freshSave = {
   draftPicks: [] as string[],
   archive: [] as { season: number; championId: string }[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
+  trainingFocus: null as TrainingFocus | null,
 };
 
 export const useGameStore = create<GameState>()(
@@ -115,6 +118,11 @@ export const useGameStore = create<GameState>()(
             : { archive: [...s.archive, { season, championId }] },
         ),
       setSubPolicy: (policy) => set((s) => ({ subPolicy: { ...s.subPolicy, ...policy } })),
+      setTrainingFocus: (focus) => {
+        const tid = get().selectedTeamId;
+        if (tid) setFocusOverride(tid, focus);
+        set({ trainingFocus: focus });
+      },
 
       endSeason: () => {
         const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks } = get();
@@ -193,10 +201,12 @@ export const useGameStore = create<GameState>()(
         draftPicks: s.draftPicks,
         archive: s.archive,
         subPolicy: s.subPolicy,
+        trainingFocus: s.trainingFocus,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);
         if (state?.rosters) commitRosters(state.rosters);
+        if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
         useGameStore.setState({ hydrated: true });
       },
     },

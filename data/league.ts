@@ -27,18 +27,34 @@ const seedRosters = (): Record<string, string[]> =>
 
 let rosters: Record<string, string[]> = seedRosters();
 let playerFocus = new Map<string, TrainingFocus>();
+let focusOverride: Record<string, TrainingFocus> = {}; // 단장이 고른 팀별 훈련 방향(감독 기본 대체)
 let evoCache: { day: number; map: Map<string, Player> } | null = null;
 let _baseVersion = 0; // 선수/로스터 베이스가 바뀔 때마다 증가(파생 캐시 무효화용)
 export const baseVersion = (): number => _baseVersion;
 
+/** 팀의 실제 훈련 방향 — 단장 오버라이드 우선, 없으면 감독 기본 */
+function teamFocus(teamId: string): TrainingFocus {
+  return focusOverride[teamId] ?? coachMap.get(teamMap.get(teamId)?.coachId ?? '')?.trainingFocus ?? DEFAULT_FOCUS;
+}
+
 function rebuildFocus(): void {
   playerFocus = new Map();
   for (const t of LEAGUE.teams) {
-    const focus = coachMap.get(t.coachId)?.trainingFocus;
-    if (focus) for (const pid of rosters[t.id] ?? []) playerFocus.set(pid, focus);
+    const focus = teamFocus(t.id);
+    for (const pid of rosters[t.id] ?? []) playerFocus.set(pid, focus);
   }
 }
 rebuildFocus();
+
+/** 단장 훈련 방향 설정(null=감독 기본 복원). 진화 캐시 무효화 → 즉시 반영. */
+export function setFocusOverride(teamId: string, focus: TrainingFocus | null): void {
+  if (focus) focusOverride[teamId] = focus;
+  else delete focusOverride[teamId];
+  rebuildFocus();
+  evoCache = null;
+  _baseVersion++;
+}
+export const getFocusOverride = (teamId: string): TrainingFocus | null => focusOverride[teamId] ?? null;
 
 export const getTeam = (id: string): Team | undefined => teamMap.get(id);
 export const getPlayer = (id: string): Player | undefined => playerMap.get(id);
@@ -102,6 +118,7 @@ export const defaultRosters = seedRosters;
 export function resetLeagueBase(): void {
   for (const p of LEAGUE.players) playerMap.set(p.id, p);
   rosters = seedRosters();
+  focusOverride = {};
   rebuildFocus();
   evoCache = null;
   _baseVersion++;
@@ -123,6 +140,7 @@ export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
   fixtureMap.clear();
   for (const f of SEASON) fixtureMap.set(f.id, f);
   rosters = seedRosters();
+  focusOverride = {};
   rebuildFocus();
   evoCache = null;
   _baseVersion++;
@@ -134,11 +152,10 @@ export function evolvedPlayers(day: number): Map<string, Player> {
   if (evoCache && evoCache.day === day) return evoCache.map;
   const map = new Map<string, Player>();
   for (const team of LEAGUE.teams) {
-    const coach = coachMap.get(team.coachId);
-    if (!coach) continue;
+    const focus = teamFocus(team.id); // 단장 오버라이드 우선
     for (const pid of rosters[team.id] ?? []) {
       const base = playerMap.get(pid);
-      if (base) map.set(pid, evolvePlayer(base, coach.trainingFocus, day));
+      if (base) map.set(pid, evolvePlayer(base, focus, day));
     }
   }
   evoCache = { day, map };

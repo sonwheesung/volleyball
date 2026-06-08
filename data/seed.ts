@@ -34,8 +34,9 @@ const ROSTER: Position[] = [
   'L', 'L',
 ];
 
-// 감독 아키타입 7종 (TRAINING_SYSTEM 3.1) → 팀마다 1개씩 배정(분화 보장)
-const ARCHETYPES: { name: string; focus: TrainingFocus; style: CoachStyle }[] = [
+// 감독 아키타입 7종 (TRAINING_SYSTEM 3.1) → 팀마다 1개씩 배정(분화 보장). UI 훈련방향 선택지로도 재사용.
+export interface Archetype { name: string; focus: TrainingFocus; style: CoachStyle }
+export const ARCHETYPES: Archetype[] = [
   { name: '체력파', focus: { primary: [1, 2], secondary: [3, 4, 12] }, style: 'balanced' },
   { name: '기본기파', focus: { primary: [4, 6], secondary: [5, 7, 9] }, style: 'balanced' },
   { name: '전술파', focus: { primary: [10, 11], secondary: [6, 9, 12] }, style: 'defense' },
