@@ -12,7 +12,9 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, MatchResult, Player } from '../types';
+import type { Contract, MatchResult, Player, SubPolicy } from '../types';
+
+const DEFAULT_SUB_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSub: true };
 
 interface GameState {
   hydrated: boolean;
@@ -30,6 +32,7 @@ interface GameState {
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
   archive: { season: number; championId: string }[]; // 역대 우승
+  subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -44,6 +47,7 @@ interface GameState {
   toggleProtect: (playerId: string) => void;
   toggleDraftPick: (playerId: string) => void;
   recordChampion: (season: number, championId: string) => void;
+  setSubPolicy: (policy: Partial<SubPolicy>) => void;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -63,6 +67,7 @@ const freshSave = {
   protectedIds: [] as string[],
   draftPicks: [] as string[],
   archive: [] as { season: number; championId: string }[],
+  subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
 };
 
 export const useGameStore = create<GameState>()(
@@ -109,6 +114,7 @@ export const useGameStore = create<GameState>()(
             ? s
             : { archive: [...s.archive, { season, championId }] },
         ),
+      setSubPolicy: (policy) => set((s) => ({ subPolicy: { ...s.subPolicy, ...policy } })),
 
       endSeason: () => {
         const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks } = get();
@@ -186,6 +192,7 @@ export const useGameStore = create<GameState>()(
         protectedIds: s.protectedIds,
         draftPicks: s.draftPicks,
         archive: s.archive,
+        subPolicy: s.subPolicy,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);
