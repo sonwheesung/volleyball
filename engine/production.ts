@@ -132,5 +132,10 @@ export function attributeProduction(
   for (const p of [...H.starters, ...A.starters]) bump(p.id, (l) => { l.matches++; });
   if (gp > 0) for (const p of [...H.bench, ...A.bench]) bump(p.id, (l) => { l.matches++; });
 
+  // 작전 교체 출전(핀치 서버·블로킹·수비 교체) → 코트타임 비례 경험 XP(1.3c). 풀세트≈한 경기.
+  if (sim.subUse) {
+    for (const id in sim.subUse) bump(id, (l) => { l.matches += Math.min(1, sim.subUse![id] / 40); });
+  }
+
   return tally;
 }

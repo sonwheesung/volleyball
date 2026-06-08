@@ -17,6 +17,7 @@ export interface SimResult {
   awaySets: number;
   setScores: { home: number; away: number }[];
   points: PointLog[];
+  subUse?: Record<string, number>; // 작전 교체로 코트에 선 선수 id → 출전 랠리 수(출전 성장 XP용)
 }
 
 function targetPoints(setNo: number): number {

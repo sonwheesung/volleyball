@@ -105,6 +105,7 @@ export function simulateMatch(
 
   const points: PointLog[] = [];
   const setScores: { home: number; away: number }[] = [];
+  const subUse: Record<string, number> = {}; // 교체 출전 선수 id → 출전 랠리 수(출전 성장 XP용)
   let homeSets = 0;
   let awaySets = 0;
   let setNo = 1;
@@ -185,6 +186,13 @@ export function simulateMatch(
           if (weakSlot >= 0 && R(bench[rs].defender!).receive - weakRcv >= DEF_SUB_GAP) subIn(rs, weakSlot, bench[rs].defender, 'def');
         }
       }
+      // 교체 출전 기록(이 랠리에 코트에 선 교체 선수) — 출전 성장 XP용(경기 결과엔 무영향)
+      for (const side of ['home', 'away'] as Side[]) {
+        for (const slot of activeSubs[side].keys()) {
+          const id = teamOf(side).six[slot].id;
+          subUse[id] = (subUse[id] ?? 0) + 1;
+        }
+      }
       const winner = playRally(serving, home, away, R, rng, edge, opts.stats);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
@@ -231,7 +239,7 @@ export function simulateMatch(
     setNo++;
   }
 
-  return { homeSets, awaySets, setScores, points };
+  return { homeSets, awaySets, setScores, points, subUse };
 }
 
 // momFactor 재노출(테스트/튜닝용)
