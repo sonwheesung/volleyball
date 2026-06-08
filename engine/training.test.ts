@@ -53,16 +53,18 @@ function daysToPlusOne(p: Player, seed: number): number {
   return -1;
 }
 
-test('보통 선수(24세·재능1.0): 핵심 스탯 +1 ≈ 4개월', () => {
+// 2026-06 리밸런스: 유망주가 커리어 내 포텐 도달하도록 성장 속도 상향(BASE 0.18·POS_FLOOR 0.24).
+// 핵심 스탯 +1 페이싱이 "수 개월"에서 "수 주"로 빨라짐(육성 붕괴 해소). simPlayers로 결과 검증됨.
+test('보통 선수(24세·재능1.0): 핵심 스탯 +1 ≈ 0.5~1.3개월', () => {
   const days = daysToPlusOne(makePlayer({ age: 24, talentBase: 1.0 }), 111);
   const months = days / PER_MONTH;
-  assert.ok(months >= 3 && months <= 5.5, `보통 +1 = ${days}일(${months.toFixed(1)}개월)`);
+  assert.ok(months >= 0.4 && months <= 1.5, `보통 +1 = ${days}일(${months.toFixed(1)}개월)`);
 });
 
-test('어리고 특급(19세·재능1.3): 핵심 스탯 +1 ≈ 2~3개월', () => {
+test('어리고 특급(19세·재능1.3): 핵심 스탯 +1 ≈ 0.3~0.8개월', () => {
   const days = daysToPlusOne(makePlayer({ age: 19, talentBase: 1.3 }), 111);
   const months = days / PER_MONTH;
-  assert.ok(months >= 1.8 && months <= 3.4, `특급 +1 = ${days}일(${months.toFixed(1)}개월)`);
+  assert.ok(months >= 0.2 && months <= 1.0, `특급 +1 = ${days}일(${months.toFixed(1)}개월)`);
 });
 
 test('어린 특급이 보통보다 확실히 빠르다', () => {

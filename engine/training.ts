@@ -12,7 +12,8 @@ import type {
 } from '../types';
 import type { Rng } from './rng';
 
-export const BASE = 0.032; // 마스터 속도 손잡이 (TRAINING_SYSTEM 1.4) — 매일 훈련 가정
+export const BASE = 0.18; // 마스터 속도 손잡이 (TRAINING_SYSTEM 1.4) — 유망주가 20대 중반에 포텐 도달하도록 상향(2026-06)
+export const POS_FLOOR = 0.24; // 포지션 인식 성장 바닥 — 감독 선호와 무관하게 포지션 핵심 스탯은 항상 성장
 
 export const TRAINABLE_STATS: TrainableStat[] = [
   'jump', 'agility', 'staminaMax', 'staminaRegen',
@@ -138,10 +139,11 @@ export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng): Pla
   };
 
   for (const t of TRAININGS) {
-    const share = coachShare(t.id, focus);
-    if (share <= 0) continue;
     const pos = posRelevance(t.id, p.position);
-    if (pos <= 0) continue;
+    if (pos <= 0) continue; // 포지션 무관(리베로 블로킹 등) → 성장 0 유지
+    // 포지션 인식: 감독 선호(coachShare)와 포지션 바닥(POS_FLOOR) 중 큰 값.
+    // → 포지션 핵심 스탯은 감독과 무관하게 항상 크고, 감독이 속도·부가 방향을 더한다.
+    const share = Math.max(coachShare(t.id, focus), POS_FLOOR);
     // 주 스탯
     addXp(t.primary, BASE * 1.0 * pos * share * rng.range(0.85, 1.15));
     // 부 스탯
