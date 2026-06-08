@@ -184,6 +184,20 @@ export interface RallyStats {
   badAtk: number; badCenter: number;     // 난조 패스(q<0.45)에서
   srvSafe: number; srvFloat: number; srvJump: number; srvSpike: number; // 서브 타입 분포
 }
+
+/** 포지션별 동작 계측(서브/세트/공격/속공/블로킹 처리자) — 포지션 역할 검증용 */
+export interface PosStats {
+  serve: Record<Position, number>;
+  set: Record<Position, number>;
+  attack: Record<Position, number>;
+  quick: Record<Position, number>;  // 속공/시간차 공격수
+  block: Record<Position, number>;  // 전위 주 블로커
+}
+const zeroPos = (): Record<Position, number> => ({ S: 0, OH: 0, OP: 0, MB: 0, L: 0 });
+export const newPosStats = (): PosStats => ({
+  serve: zeroPos(), set: zeroPos(), attack: zeroPos(), quick: zeroPos(), block: zeroPos(),
+});
+
 export const newRallyStats = (): RallyStats => ({
   rallies: 0, sideouts: 0,
   serves: 0, aces: 0, serveErrs: 0, faults: 0,
@@ -198,7 +212,7 @@ export const newRallyStats = (): RallyStats => ({
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
  * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[]): Side {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats): Side {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
   const eg = (s: Side) => (s === 'home' ? edge.home : edge.away);
@@ -220,6 +234,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     if (st === 'safe') stats.srvSafe++; else if (st === 'float') stats.srvFloat++;
     else if (st === 'jumpfloat') stats.srvJump++; else stats.srvSpike++;
   }
+  if (pos) pos.serve[sp.position]++;
   const sideKo = (s: Side) => (s === 'home' ? '홈' : '원정');
   if (trace) trace.push(`서브 [${sideKo(serving)}] ${sp.name}(${sp.position}) · ${SERVE_KO[st]}`);
   const s0 = rng.next();
@@ -254,6 +269,13 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       const center = atk === 'quick' || atk === 'tempo';
       if (q >= 0.6) { stats.goodAtk++; if (center) stats.goodCenter++; }
       else if (q < 0.45) { stats.badAtk++; if (center) stats.badCenter++; }
+    }
+    if (pos) {
+      pos.set[setter.position]++;
+      pos.attack[attacker.position]++;
+      if (atk === 'quick' || atk === 'tempo') pos.quick[attacker.position]++;
+      const fr = front(df);
+      if (fr.length) { const lead = fr.reduce((b, p) => (R(p).block > R(b).block ? p : b)); pos.block[lead.position]++; }
     }
     if (trace) trace.push(`  세트 [${sideKo(att)}] ${setter.name}(S) → ${ATK_KO[atk]} : ${attacker.name}(${attacker.position})`);
 

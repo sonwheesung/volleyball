@@ -7,7 +7,8 @@
 
 import { LEAGUE, getEvolvedTeamPlayers, coachInfoOf, getTeam, resetLeagueBase } from '../data/league';
 import { simulateMatch } from '../engine/match';
-import { newRallyStats, type RallyStats } from '../engine/rally';
+import { newRallyStats, newPosStats, type RallyStats, type PosStats } from '../engine/rally';
+import type { Position } from '../types';
 import { buildLineup } from '../engine/lineup';
 import { frontRow, backRow } from '../engine/rotation';
 import type { Player } from '../types';
@@ -43,12 +44,13 @@ function main(): void {
 
   // (3) 집계 — 라운드로빈 reps회
   const S: RallyStats = newRallyStats();
+  const P: PosStats = newPosStats();
   let seed = 700000;
   for (let r = 0; r < reps; r++) {
     for (let i = 0; i < ids.length; i++) for (let j = 0; j < ids.length; j++) {
       if (i === j) continue;
       seed += 7;
-      simulateMatch(seed, sq[ids[i]], sq[ids[j]], { home: coachInfoOf(ids[i]), away: coachInfoOf(ids[j]), stats: S });
+      simulateMatch(seed, sq[ids[i]], sq[ids[j]], { home: coachInfoOf(ids[i]), away: coachInfoOf(ids[j]), stats: S, pos: P });
     }
   }
   const totalAtk = S.atkQuick + S.atkTempo + S.atkOpen + S.atkBack;
@@ -72,6 +74,22 @@ function main(): void {
   log(`  서브 에이스       ${pct(S.aces, S.rallies)}`);
   log('\n[서브 타입 분포 — 변형 다양성]');
   log(`  안전서브 ${pct(S.srvSafe, S.serves)}  플로터 ${pct(S.srvFloat, S.serves)}  점프플로터 ${pct(S.srvJump, S.serves)}  스파이크서브 ${pct(S.srvSpike, S.serves)}`);
+
+  // (4) 포지션별 동작 검증 — 누가 서브/세트/공격/속공/블로킹을 하는가
+  const POS: Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
+  const sum = (m: Record<Position, number>) => POS.reduce((a, p) => a + m[p], 0);
+  const row = (label: string, m: Record<Position, number>) => {
+    const t = sum(m);
+    log(`  ${label.padEnd(14)} ` + POS.map((p) => `${p} ${pct(m[p], t)}`).join('  '));
+  };
+  log('\n═══ 포지션별 동작 검증 (누가 그 동작을 하는가) ═══');
+  row('서브', P.serve);
+  row('세트(토스)', P.set);
+  row('공격', P.attack);
+  row('속공/시간차', P.quick);
+  row('주 블로커', P.block);
+  log('\n[기대치] 세트→S 100% · 속공→MB 위주 · 주블로커→MB 최다 · 서브/공격에 L 0% · 리시브/디그는 팀 단위(아래 생산)');
+  log('  ※ 리시브·디그는 엔진이 그룹 강도로 처리(개별 처리자 없음) → 개인 귀속은 production.ts(리베로 디그 4.5/세트 검증됨)');
 }
 
 main();

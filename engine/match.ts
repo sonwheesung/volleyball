@@ -9,7 +9,7 @@ import type { Ratings } from './ratings';
 import { createRng } from './rng';
 import { deriveRatings } from './ratings';
 import { buildLineup } from './lineup';
-import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge, type RallyStats } from './rally';
+import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge, type RallyStats, type PosStats } from './rally';
 import { rotate, serverIndex, frontRow, backRow } from './rotation';
 
 // 작전 교체 (MATCH_SYSTEM 1.3b)
@@ -35,7 +35,7 @@ const TO_THRESHOLD: Record<CoachStyle, number> = { defense: 3, balanced: 4, atta
 
 export interface CoachInfo { style: CoachStyle; charisma: number }
 export interface MatchOpts {
-  edge?: Edge; home?: CoachInfo; away?: CoachInfo; stats?: RallyStats; trace?: string[];
+  edge?: Edge; home?: CoachInfo; away?: CoachInfo; stats?: RallyStats; trace?: string[]; pos?: PosStats;
   homePolicy?: SubPolicy; awayPolicy?: SubPolicy; // 작전 교체 방침(미지정 시 기본)
 }
 
@@ -163,7 +163,9 @@ export function simulateMatch(
       // 2a) 핀치 서버 — 서브 측 약한 서버 차례
       {
         const sv = serving; const st = teamOf(sv); const slot = serverIndex(st.rotation);
+        // 세터는 핀치 서버로 빼지 않는다(코트에 세터 유지 → 공격 운영 보존). 현실 코치 행동.
         if (policyOf(sv).pinchServer && bench[sv].server && !activeSubs[sv].has(slot)
+          && st.six[slot].position !== 'S'
           && R(bench[sv].server!).serve - R(st.six[slot]).serve >= PINCH_SERVE_GAP) {
           subIn(sv, slot, bench[sv].server, 'pinch');
         }
@@ -174,7 +176,7 @@ export function simulateMatch(
         const st = teamOf(side);
         if (!policyOf(side).blockSub || !bench[side].blocker) continue;
         let weakSlot = -1, weakBlk = Infinity;
-        for (const slot of frontRow(st.rotation)) { const b = R(st.six[slot]).block; if (b < weakBlk) { weakBlk = b; weakSlot = slot; } }
+        for (const slot of frontRow(st.rotation)) { if (st.six[slot].position === 'S') continue; const b = R(st.six[slot]).block; if (b < weakBlk) { weakBlk = b; weakSlot = slot; } }
         if (weakSlot >= 0 && R(bench[side].blocker!).block - weakBlk >= BLOCK_SUB_GAP) subIn(side, weakSlot, bench[side].blocker, 'block');
       }
       // 2c) 수비 강화 — 받는 측 후위 약한 리시버(MB 제외, MB는 리베로가 커버)
@@ -182,7 +184,7 @@ export function simulateMatch(
         const rs = other(serving); const st = teamOf(rs);
         if (policyOf(rs).defSub && bench[rs].defender) {
           let weakSlot = -1, weakRcv = Infinity;
-          for (const slot of backRow(st.rotation)) { const p = st.six[slot]; if (p.position === 'MB') continue; const rc = R(p).receive; if (rc < weakRcv) { weakRcv = rc; weakSlot = slot; } }
+          for (const slot of backRow(st.rotation)) { const p = st.six[slot]; if (p.position === 'MB' || p.position === 'S') continue; const rc = R(p).receive; if (rc < weakRcv) { weakRcv = rc; weakSlot = slot; } }
           if (weakSlot >= 0 && R(bench[rs].defender!).receive - weakRcv >= DEF_SUB_GAP) subIn(rs, weakSlot, bench[rs].defender, 'def');
         }
       }
@@ -194,7 +196,7 @@ export function simulateMatch(
         }
       }
       if (opts.trace) opts.trace.push(`[${h}:${a}] 서브권 ${serving === 'home' ? '홈' : '원정'} (로테이션 H${home.rotation}/A${away.rotation})`);
-      const winner = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace);
+      const winner = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner });
