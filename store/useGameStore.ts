@@ -8,6 +8,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
+import { accrueCareer } from '../engine/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
@@ -147,7 +148,7 @@ export const useGameStore = create<GameState>()(
         for (const tid of Object.keys(filled.rosters)) {
           for (const id of filled.rosters[tid]) {
             const pr = seasonProd.get(id);
-            if (pr && snapshot[id]) snapshot[id] = applyMatchXp(snapshot[id], pr);
+            if (pr && snapshot[id]) snapshot[id] = accrueCareer(applyMatchXp(snapshot[id], pr), pr); // 성장 XP + 통산 기록 누적
           }
         }
 

@@ -21,6 +21,25 @@ export const emptyProd = (): ProdLine => ({
   matches: 0, points: 0, spikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0,
 });
 
+/** 시즌 생산을 선수 통산 기록(CareerStats)에 누적한 새 선수 — 백년 누적 서사의 토대.
+ *  career.seasons 는 rollover가 증가시키므로 여기선 생산 스탯만 더한다. 밸런스 무영향(기록용). */
+export function accrueCareer(p: Player, prod: ProdLine | undefined): Player {
+  if (!prod || prod.matches <= 0) return p;
+  const c = p.career;
+  return {
+    ...p,
+    career: {
+      ...c,
+      matches: c.matches + Math.round(prod.matches),
+      points: c.points + prod.points,
+      spikes: c.spikes + prod.spikes,
+      blocks: c.blocks + prod.blocks,
+      digs: c.digs + prod.digs,
+      aces: c.aces + prod.aces,
+    },
+  };
+}
+
 export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {
   const x = a ?? emptyProd();
   return {

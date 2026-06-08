@@ -14,6 +14,7 @@ import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
+import { accrueCareer } from '../engine/production';
 import { applyMatchXp } from '../engine/experience';
 import { overall } from '../engine/overall';
 import type { Position } from '../types';
@@ -33,7 +34,7 @@ function advanceOffseason(season: number): void {
   for (const tid of Object.keys(filled.rosters)) {
     for (const id of filled.rosters[tid]) {
       const pr = seasonProd.get(id);
-      if (pr && snapshot[id]) snapshot[id] = applyMatchXp(snapshot[id], pr);
+      if (pr && snapshot[id]) snapshot[id] = accrueCareer(applyMatchXp(snapshot[id], pr), pr);
     }
   }
   for (const tid of Object.keys(filled.rosters)) {
@@ -168,6 +169,14 @@ function main(): void {
     if (!t.n) continue;
     const label = k === 'star' ? '스타(≥80)' : k === 'reg' ? '주전(72~79)' : '미달(<72)';
     log(`  ${label.padEnd(12)} ${String(t.n).padStart(4)}   ${pct(t.stay, t.n).padStart(6)}       ${pct(t.move, t.n).padStart(6)}   ${pct(t.retire, t.n).padStart(6)}`);
+  }
+
+  // [4] 통산 기록 누적 검증 — 현역 선수 통산 득점 상위(시드값보다 커지면 누적 작동)
+  const finalBase = currentBasePlayers();
+  const topCareer = [...finalBase].sort((a, b) => b.career.points - a.career.points).slice(0, 5);
+  log(`\n[4] 통산 기록 누적 (현역 통산 득점 상위 5)`);
+  for (const p of topCareer) {
+    log(`  ${p.name.padEnd(10)} ${p.position.padEnd(2)} ${p.age}세 — 통산 득점 ${p.career.points}  블록 ${p.career.blocks}  디그 ${p.career.digs}  (${p.career.seasons}시즌 ${p.career.matches}경기)`);
   }
 }
 

@@ -8,6 +8,7 @@ import { computeStandings, seasonResults } from '../../data/standings';
 import { dateForDay, formatDate } from '../../lib/calendar';
 import { useGameStore } from '../../store/useGameStore';
 import type { ProdLine } from '../../engine/production';
+import type { CareerStats, Player } from '../../types';
 
 const short = (teamId: string) => {
   const n = getTeam(teamId)?.name ?? '';
@@ -44,6 +45,18 @@ export default function History() {
         .sort((a, b) => (b.l[key] as number) - (a.l[key] as number))
         .slice(0, n);
     return { points: top('points'), blocks: top('blocks'), digs: top('digs'), assists: top('assists') };
+  }, [currentDay, season]);
+
+  // 통산 기록(현역) — 시즌 누적이 쌓인 "백년" 리더보드
+  const careerLeaders = useMemo(() => {
+    const all: Player[] = [];
+    const rs = currentRosters();
+    for (const tid of Object.keys(rs)) for (const id of rs[tid]) { const p = getPlayer(id); if (p) all.push(p); }
+    const top = (key: keyof CareerStats, n = 5) =>
+      all.filter((p) => (p.career[key] as number) > 0)
+        .sort((a, b) => (b.career[key] as number) - (a.career[key] as number))
+        .slice(0, n);
+    return { points: top('points'), blocks: top('blocks'), digs: top('digs') };
   }, [currentDay, season]);
 
   return (
@@ -119,6 +132,33 @@ export default function History() {
                     {teamOfPlayer[r.id] ? short(teamOfPlayer[r.id]) : '-'}
                   </Text>
                   <Text style={styles.lbVal}>{r.l[cat.key]}</Text>
+                </View>
+              );
+            })
+          )}
+        </Card>
+      ))}
+
+      <Title>통산 기록 · 현역 (백년 누적)</Title>
+      {([
+        { label: '통산 득점', list: careerLeaders.points, key: 'points' as const },
+        { label: '통산 블로킹', list: careerLeaders.blocks, key: 'blocks' as const },
+        { label: '통산 디그', list: careerLeaders.digs, key: 'digs' as const },
+      ]).map((cat) => (
+        <Card key={cat.label}>
+          <Text style={{ color: theme.text, fontWeight: '800', marginBottom: 2 }}>{cat.label} TOP 5</Text>
+          {cat.list.length === 0 ? (
+            <Muted style={{ fontSize: 12 }}>기록 없음</Muted>
+          ) : (
+            cat.list.map((p, i) => {
+              const mine = !!teamId && teamPlayerIds(teamId).includes(p.id);
+              return (
+                <View key={p.id} style={styles.lbRow}>
+                  <Text style={styles.lbRank}>{i + 1}</Text>
+                  <PosTag pos={p.position} />
+                  <Text style={[styles.lbName, mine && styles.mine]} numberOfLines={1}>{p.name}</Text>
+                  <Text style={styles.lbTeam} numberOfLines={1}>{p.career.seasons}시즌</Text>
+                  <Text style={styles.lbVal}>{p.career[cat.key].toLocaleString()}</Text>
                 </View>
               );
             })
