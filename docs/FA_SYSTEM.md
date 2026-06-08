@@ -14,8 +14,9 @@
 |---|---|---|---|
 | ① | 롤오버·은퇴·유망주 풀·가변 로스터 | ✅ | `engine/rollover.ts`(`SEASON_LENGTH=164`), `engine/retire.ts`, `data/rookies.ts`, `data/league.ts` |
 | ② | 자격·등급·요구연봉·offerScore·수락 | ✅ | `engine/faMarket.ts` |
+| ② | **선수별 FA 성향(이적 동기 차등)** | ✅ | `engine/faMarket.ts`(`rollFAPref`/아키타입 5종) |
 | ② | 보상선수·보호명단 | ✅ | `engine/compensation.ts`(`PROTECT_COUNT=6`) |
-| ② | 샐러리캡·프랜차이즈 예외 | ✅ | `engine/cap.ts` |
+| ② | 샐러리캡(영입+재계약 모두)·프랜차이즈 예외 | ✅ | `engine/cap.ts`, `data/offseason.ts`(재계약 캡 적용) |
 | ② | 경쟁 시장 해석(입찰→수락→보상) | ✅ | `data/offseason.ts`(`resolveFAMarket`/`faMarketPreview`) |
 | ③ | 신인 드래프트(로터리·AI 픽) | ✅ | `engine/draft.ts`, `app/draft.tsx` |
 | ④ | AI 구단 의사결정(니즈 기반) | ✅ | `engine/aiGM.ts` |
@@ -30,8 +31,12 @@
 - 등급: 연봉 순위 **상위 35% A / 다음 35% B / 나머지 C**.
 - 요구연봉 프리미엄 `PREMIUM = A 1.25 / B 1.15 / C 1.1`(2.2표의 보상 배수와는 별개).
 - 보상금 `compensationMoney = A 2.0× / B 1.0× / C 0`, 보상선수는 **A·B만** 필요.
-- `offerScore = 0.35·연봉비 + 0.30·팀전력 + 0.20·출전기회 + 0.15·충성도 + 0.05·rand`.
+- `offerScore = w.money·연봉 + w.win·우승권 + w.loyalty·충성 + w.play·출전 + w.home·연고 + 0.05·rand`.
+  **선수별 가중치 `w`** 가 동기를 차등화(2.5b). `우승권 = 0.7·전력 + 0.3·prestige`(최근 성적).
 - AI 잔류 판단 `aiKeepsFA`: 나이<32 AND OVR≥70. 로스터 이상치 `ROSTER_IDEAL{S3,OH5,OP2,MB4,L2}=16`.
+- **재계약에도 샐러리캡 적용**: 만료 FA 잔류는 가치순으로 팀 캡(35억) 한도 내에서만. 초과분은 잔류 못 하고
+  FA 시장으로(`data/offseason.ts buildOffseason`). 재계약 연봉은 개인상한 클램프(`renewedContract`→`clampSalary`).
+  단, 현재 연봉 수준에선 캡이 거의 안 걸려 왕조 억제 효과는 미미(향후 연봉 인플레 시 작동).
 
 > 6장 데이터 모델(`clubTenure`/`career.seasons` 등)은 반영됨. 7장 모듈 매핑의 `leagueState.ts`는
 > 실제로는 `data/league.ts`(가변 로스터·레지스트리·`baseVersion` 캐시 무효화)로 구현.
@@ -113,6 +118,28 @@ offerScore = wSal·연봉/asking + wYrs·계약연수 + wWin·팀전력
            + wPlay·출전기회(포지션 뎁스 역수) + wLoyal·충성도(원소속·프랜차이즈) + wAge·나이적합
 선수는 최고 offerScore 수락. 동점·근소차는 원소속 우선.
 ```
+
+### 2.5b 선수별 FA 성향 (이적 동기 차등) ★ — 2026-06 구현
+
+현실의 FA는 선수마다 동기가 다르다. "돈 좇는 선수 / 우승 좇는 선수 / 남고 싶은 선수 /
+출전 보장 원하는 선수 / 연고(드림팀) 가려는 선수." 이를 **선수별 가중치 프로필 `faPref`** 로 모델.
+
+- **생성(결정론)**: `rollFAPref(rng, teamCount)` — 선수 **id 기반 별도 RNG**로 생성해 리그 시드
+  메인 스트림을 건드리지 않음(기존 경기/스탯 결과 불변, FA 의사결정만 변화). `makePlayer`/`makeProspect`.
+- **아키타입 5종 + 분포**: 머니 34% / 윈나우(우승권) 16% / 충성 26% / 출전 14% / 연고 10%.
+  각자 한 동기를 크게(0.42~0.55) 두고 나머지는 옅게 + 개인 노이즈 → 정규화(합 1).
+- **연고/선호팀**: `preferredTeamId` 1곳. `home` 가중이 큰 연고형이 강하게 끌림.
+- **우승권 신호(prestige)**: 직전 시즌 정규순위 + 우승 여부(`data/offseason.ts teamPrestige`, 우승=1).
+  offerScore의 `win` 항 = `0.7·전력 + 0.3·prestige`.
+
+**밸런싱 기록 (200시즌 + 24유니버스×40시즌 검증):**
+- 초기 시도(prestige 0.55, 윈나우 22%): **부익부 폭주** — parity std 10.8→16.9, 왕조 13→17연패.
+  원인: 우승→prestige↑→우승권FA가 강팀에 몰림→계속 우승. 캡으로 강팀이 선수를 풀어도 우승권FA로
+  싸게 리로드해 캡이 무력. **prestige 자기강화 항이 주범.**
+- 조정(prestige 0.30, 윈나우 16%↓·충성 26%↑): parity std 4.55, 왕조 평균 8(최대 12),
+  **순위 지속성 r = −0.08±0.40(서열 고착 없음)**, 우승경험 6.3/7, 반등 100%. → 채택.
+- 교훈: 단일 유니버스 r은 표본 7개라 노이즈 큼(한 팀만 강하고 나머지 동률이면 r 폭등) →
+  **밸런스 판단은 다중 유니버스 평균으로.** `npx tsx tools/simLeague.ts 40 24`.
 
 ### 2.6 FA 센터 UI (실제 하는 느낌)
 시즌 종료 → **FA 센터**:

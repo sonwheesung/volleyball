@@ -1,6 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isFAEligible, assignFAGrades, askingPrice, listFreeAgents, offerScore } from './faMarket';
+import { isFAEligible, assignFAGrades, askingPrice, listFreeAgents, offerScore, rollFAPref, DEFAULT_FA_WEIGHTS } from './faMarket';
+import { createRng } from './rng';
 import { TRAINABLE_STATS } from './training';
 import type { Player, TrainableStat } from '../types';
 
@@ -38,12 +39,38 @@ test('요구연봉: 등급 프리미엄 A>B>C', () => {
   assert.ok(askingPrice(40000, 'B') > askingPrice(40000, 'C'));
 });
 
-test('offerScore: 연봉↑·전력↑·출전기회↑·충성도↑ 일수록 선호', () => {
-  const base = { teamOvr: 70, posGap: 1, isOriginal: false, isFranchise: false, offerSalary: 40000, asking: 40000, rand: 0.5 };
+test('offerScore: 연봉↑·전력↑·출전기회↑·충성도↑·우승권↑·선호팀 일수록 선호', () => {
+  const base = {
+    teamOvr: 70, prestige: 0.3, posGap: 1, isOriginal: false, isFranchise: false,
+    isPreferred: false, offerSalary: 40000, asking: 40000, w: DEFAULT_FA_WEIGHTS, rand: 0.5,
+  };
   assert.ok(offerScore({ ...base, offerSalary: 50000 }) > offerScore(base), '연봉↑');
   assert.ok(offerScore({ ...base, teamOvr: 80 }) > offerScore(base), '전력↑');
+  assert.ok(offerScore({ ...base, prestige: 0.9 }) > offerScore(base), '우승권↑');
   assert.ok(offerScore({ ...base, posGap: 3 }) > offerScore({ ...base, posGap: 0 }), '출전기회↑');
   assert.ok(offerScore({ ...base, isOriginal: true, isFranchise: true }) > offerScore(base), '충성도↑');
+  assert.ok(offerScore({ ...base, isPreferred: true }) > offerScore(base), '선호팀');
+});
+
+test('offerScore: 성향에 따라 같은 두 오퍼의 선호가 갈린다(머니 vs 윈나우)', () => {
+  // A팀: 고연봉·약체(우승권X) / B팀: 저연봉·강호(우승권O)
+  const teamA = { teamOvr: 62, prestige: 0.1, offerSalary: 60000 };
+  const teamB = { teamOvr: 82, prestige: 0.95, offerSalary: 38000 };
+  const common = { posGap: 1, isOriginal: false, isFranchise: false, isPreferred: false, asking: 40000, rand: 0.5 };
+  const money = { money: 0.7, win: 0.1, loyalty: 0.05, play: 0.1, home: 0.05 };
+  const winnow = { money: 0.1, win: 0.7, loyalty: 0.05, play: 0.1, home: 0.05 };
+  const scoreFor = (w: typeof money, t: typeof teamA) => offerScore({ ...common, ...t, w });
+  assert.ok(scoreFor(money, teamA) > scoreFor(money, teamB), '머니형은 고연봉 약체 선택');
+  assert.ok(scoreFor(winnow, teamB) > scoreFor(winnow, teamA), '윈나우형은 저연봉 강호 선택');
+});
+
+test('rollFAPref: 결정론 + 가중치 합≈1 + 선호팀 지정', () => {
+  const a = rollFAPref(createRng(12345), 7);
+  const b = rollFAPref(createRng(12345), 7);
+  assert.deepEqual(a, b, '같은 시드 = 같은 성향');
+  const sum = a.w.money + a.w.win + a.w.loyalty + a.w.play + a.w.home;
+  assert.ok(Math.abs(sum - 1) < 1e-9, '가중치 합 1');
+  assert.ok(/^t[0-6]$/.test(a.preferredTeamId ?? ''), '선호팀 t0~t6');
 });
 
 test('listFreeAgents: 자격자만 + 등급 부여', () => {

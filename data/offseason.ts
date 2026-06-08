@@ -7,12 +7,30 @@ import { createRng } from '../engine/rng';
 import { applyRetirements } from '../engine/retire';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
 import { aiKeepsFA, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
-import { assignFAGrades, askingPrice, offerScore } from '../engine/faMarket';
+import { assignFAGrades, askingPrice, offerScore, prefWeightsOf } from '../engine/faMarket';
 import { needsCompensationPlayer, pickCompensation } from '../engine/compensation';
-import { canAfford, isFranchise, LEAGUE_CAP } from '../engine/cap';
+import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { marketValue } from '../engine/salary';
 import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf } from './league';
+import { computeStandings } from './standings';
+import { buildPlayoffs } from './playoffs';
+
+/**
+ * 팀별 "우승권" 신호(0..1) — 직전 시즌 정규 순위 + 우승 여부.
+ * 우승팀=1, 그 외는 순위 비례(1위≈0.85 … 꼴찌 0). offerScore 의 win 항에 주입.
+ */
+function teamPrestige(prevSeason: number): Record<string, number> {
+  const standings = computeStandings(Number.MAX_SAFE_INTEGER);
+  const N = standings.length;
+  const champ = buildPlayoffs(Math.max(0, prevSeason)).championId;
+  const out: Record<string, number> = {};
+  standings.forEach((s, i) => {
+    const base = N <= 1 ? 1 : 1 - i / (N - 1);
+    out[s.teamId] = s.teamId === champ ? 1 : base * 0.85;
+  });
+  return out;
+}
 
 const RENEW_FA_YEARS = 2;
 const AGGRESSIVE_MULT = 1.2;
@@ -36,6 +54,7 @@ export function resolveFAMarket(
   protectedIds: string[],
   prevTeamOf: Record<string, string>,
   season: number,
+  prestige: Record<string, number>,
 ): FAMarketResult {
   const snapshot = off.snapshot;
   const rosters: Record<string, string[]> = {};
@@ -75,11 +94,14 @@ export function resolveFAMarket(
       if (!ok) continue;
       const score = offerScore({
         teamOvr: ovr[t],
+        prestige: prestige[t] ?? 0,
         posGap: gap,
         isOriginal: prevTeamOf[id] === t,
         isFranchise: isFranchise(p) && prevTeamOf[id] === t,
+        isPreferred: p.faPref?.preferredTeamId === t,
         offerSalary: offer,
         asking,
+        w: prefWeightsOf(p),
         rand: rng.next(),
       });
       bids.push({ teamId: t, offer, score });
@@ -87,12 +109,13 @@ export function resolveFAMarket(
     if (bids.length === 0) continue; // 미계약
     bids.sort((a, b) => b.score - a.score);
     const win = bids[0];
+    const finalSalary = clampSalary(win.offer, p); // 개인 상한(프랜차이즈 예외) 적용
     snapshot[id] = {
       ...p,
-      contract: { salary: win.offer, years: RENEW_FA_YEARS, remaining: RENEW_FA_YEARS, signedAtAge: p.age },
+      contract: { salary: finalSalary, years: RENEW_FA_YEARS, remaining: RENEW_FA_YEARS, signedAtAge: p.age },
     };
     rosters[win.teamId] = [...rosters[win.teamId], id];
-    payroll[win.teamId] += win.offer;
+    payroll[win.teamId] += finalSalary;
     ovr[win.teamId] = teamOverall(rosters[win.teamId].map(get).filter((q): q is Player => !!q));
     if (win.teamId === myTeam) signedByMe.push(id);
     else if (wanted.has(id)) lostTo[id] = win.teamId;
@@ -140,22 +163,33 @@ export function buildOffseason(
   const rosters: Record<string, string[]> = {};
   const pool: string[] = [];
   for (const teamId of Object.keys(afterRetire.rosters)) {
+    // 1) 계약 남은 선수는 무조건 보유 + 팀 연봉 누적
     const keep: string[] = [];
+    let payroll = 0;
+    const expiring: Player[] = [];
     for (const id of afterRetire.rosters[teamId]) {
       const p = snapshot[id];
       if (!p) continue;
-      if (p.contract.remaining <= 0) {
-        const retain = teamId === myTeam ? resignDecisions[id] !== false : aiKeepsFA(p);
-        if (retain) {
-          snapshot[id] = { ...p, contract: renewedContract(p) };
-          keep.push(id);
-        } else {
-          pool.push(id); // FA 풀(로스터에서 제외)
-        }
+      if (p.contract.remaining <= 0) expiring.push(p);
+      else { keep.push(id); payroll += p.contract.salary; }
+    }
+    // 2) 만료자: 잔류 의사(내 팀=단장 결정 / AI=aiKeepsFA) 있는 선수를 가치 높은 순으로,
+    //    팀 샐러리캡 한도 내에서만 재계약. 캡 초과분은 잔류 못 하고 FA 시장으로(왕조 억제 레버).
+    const wantRetain = expiring
+      .filter((p) => (teamId === myTeam ? resignDecisions[p.id] !== false : aiKeepsFA(p)))
+      .sort((a, b) => overall(b) - overall(a));
+    const retainSet = new Set(wantRetain.map((p) => p.id));
+    for (const p of wantRetain) {
+      const renewed = renewedContract(p);
+      if (payroll + renewed.salary <= LEAGUE_CAP) {
+        snapshot[p.id] = { ...p, contract: renewed };
+        keep.push(p.id);
+        payroll += renewed.salary;
       } else {
-        keep.push(id);
+        pool.push(p.id); // 캡 초과 → 잔류 불가
       }
     }
+    for (const p of expiring) if (!retainSet.has(p.id)) pool.push(p.id); // 잔류 의사 없던 만료자
     rosters[teamId] = keep;
   }
   return { snapshot, rosters, pool, retired: afterRetire.retired };
@@ -185,7 +219,8 @@ export function resolvePreDraft(
   for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
 
   const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason);
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason);
+  const prestige = teamPrestige(nextSeason - 1);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige);
   return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf };
 }
 
@@ -212,6 +247,7 @@ export function faMarketPreview(
   const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason);
   const pool = [...off.pool];
   const myRoster = [...(off.rosters[myTeam] ?? [])];
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason);
+  const prestige = teamPrestige(nextSeason - 1);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige);
   return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo };
 }

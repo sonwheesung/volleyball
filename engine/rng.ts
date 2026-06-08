@@ -15,6 +15,16 @@ export interface Rng {
   state(): number;
 }
 
+/** 문자열 → 32비트 시드 (FNV-1a). id 기반 결정론 서브스트림용. */
+export function strSeed(s: string): number {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+
 /**
  * mulberry32 — 빠르고 통계적으로 충분한 32비트 PRNG.
  * @param seed 32비트 정수 시드

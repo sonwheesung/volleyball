@@ -1,8 +1,9 @@
 // 가상 리그 시드 데이터 생성기 (Phase 2 간이판).
 // 시드 RNG로 팀·선수·감독을 결정론적으로 생성한다. 같은 시드 = 같은 리그.
 
-import { createRng, type Rng } from '../engine/rng';
+import { createRng, strSeed, type Rng } from '../engine/rng';
 import { TRAINABLE_STATS } from '../engine/training';
+import { rollFAPref } from '../engine/faMarket';
 import { computeSalary } from '../engine/salary';
 import type {
   CareerStats,
@@ -155,6 +156,7 @@ export function makePlayer(
     career: { ...emptyCareer(), seasons: Math.max(0, age - 19) }, // 데뷔 추정
   };
   player.contract.salary = computeSalary(player, signedAtAge, rng);
+  player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length);
   return player;
 }
 
@@ -218,6 +220,7 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
     career: emptyCareer(),
   };
   player.contract.salary = computeSalary(player, age, rng);
+  player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length);
   return player;
 }
 

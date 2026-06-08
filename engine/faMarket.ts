@@ -1,9 +1,51 @@
 // FA 시장 — 자격·등급·요구연봉 (FA_SYSTEM 2장). 순수 함수.
 // 협상/수락·보상은 후속(2b/2c). 여기선 "누가 FA가 되고, 어느 등급이며, 얼마를 원하나".
 
-import type { Player } from '../types';
+import type { FAArchetype, FAPref, FAWeights, Player } from '../types';
+import type { Rng } from './rng';
 
 export type FAGrade = 'A' | 'B' | 'C';
+
+// ─── FA 성향 프로필 (선수마다 다른 이적 동기) ───
+
+/** 아키타입별 기준 가중치(합 1.0). 한 동기를 크게, 나머지는 옅게. */
+const ARCH_BASE: Record<FAArchetype, FAWeights> = {
+  money:    { money: 0.55, win: 0.15, loyalty: 0.05, play: 0.15, home: 0.10 },
+  winnow:   { money: 0.20, win: 0.42, loyalty: 0.13, play: 0.15, home: 0.10 },
+  loyal:    { money: 0.15, win: 0.10, loyalty: 0.55, play: 0.10, home: 0.10 },
+  minutes:  { money: 0.20, win: 0.10, loyalty: 0.05, play: 0.55, home: 0.10 },
+  hometown: { money: 0.20, win: 0.15, loyalty: 0.10, play: 0.10, home: 0.45 },
+};
+
+/** 리그 평균에 가까운 기본 가중치(faPref 없는 선수 폴백) */
+export const DEFAULT_FA_WEIGHTS: FAWeights = { money: 0.4, win: 0.3, loyalty: 0.15, play: 0.1, home: 0.05 };
+
+function rollArchetype(r: number): FAArchetype {
+  if (r < 0.34) return 'money';   // 34% 머니
+  if (r < 0.50) return 'winnow';  // 16% 윈나우 (부익부 억제 위해 축소)
+  if (r < 0.76) return 'loyal';   // 26% 충성 (parity 위해 확대)
+  if (r < 0.90) return 'minutes'; // 14% 출전
+  return 'hometown';              // 10% 연고
+}
+
+/** 선수 1명의 FA 성향(결정론). teamCount 로 선호팀 1곳 지정. */
+export function rollFAPref(rng: Rng, teamCount: number): FAPref {
+  const archetype = rollArchetype(rng.next());
+  const base = ARCH_BASE[archetype];
+  const keys: (keyof FAWeights)[] = ['money', 'win', 'loyalty', 'play', 'home'];
+  const noisy = {} as FAWeights;
+  let sum = 0;
+  for (const k of keys) { const v = Math.max(0, base[k] + (rng.next() - 0.5) * 0.1); noisy[k] = v; sum += v; }
+  const w = {} as FAWeights;
+  for (const k of keys) w[k] = noisy[k] / (sum || 1);
+  const preferredTeamId = teamCount > 0 ? `t${rng.int(0, teamCount - 1)}` : undefined;
+  return { archetype, w, preferredTeamId };
+}
+
+/** 선수의 동기 가중치(없으면 기본) */
+export function prefWeightsOf(p: Player): FAWeights {
+  return p.faPref?.w ?? DEFAULT_FA_WEIGHTS;
+}
 
 export const FIRST_FA_SEASONS = 6; // 최초 FA 자격(이후 다년 계약 만료마다 재자격)
 
@@ -39,21 +81,33 @@ export function askingPrice(market: number, grade: FAGrade): number {
 // ─── 선수의 오퍼 평가(수락 판정) ───
 export interface OfferCtx {
   teamOvr: number;     // 영입 구단 전력
+  prestige: number;    // 영입 구단 최근 성적(우승권) 0..1
   posGap: number;      // 그 팀의 해당 포지션 부족도(출전 기회)
   isOriginal: boolean; // 원소속 구단인가
   isFranchise: boolean;// 프랜차이즈(원소속 장기근속)인가
+  isPreferred: boolean;// 선수의 선호/연고 팀인가
   offerSalary: number; // 제시 연봉
   asking: number;      // 요구 연봉
+  w: FAWeights;        // 선수의 동기 가중치(prefWeightsOf)
   rand: number;        // 0~1 결정론 난수
 }
 
-/** 선수가 한 오퍼를 얼마나 선호하는지(높을수록 수락) */
+/**
+ * 선수가 한 오퍼를 얼마나 선호하는지(높을수록 수락).
+ * 각 동기 항을 0..1로 정규화해 선수별 가중치(w)로 합산 → 같은 오퍼도 선수마다 다르게 평가.
+ */
 export function offerScore(c: OfferCtx): number {
-  const salaryRatio = Math.max(0.6, Math.min(1.6, c.offerSalary / Math.max(1, c.asking)));
-  const strength = Math.max(0, Math.min(1.4, (c.teamOvr - 58) / 18)); // 전력 매력
-  const playingTime = c.posGap > 0 ? Math.min(1, 0.4 + 0.25 * c.posGap) : 0.15; // 출전 기회
-  const loyalty = c.isOriginal ? (c.isFranchise ? 1.0 : 0.5) : 0;
-  return 0.35 * salaryRatio + 0.3 * strength + 0.2 * playingTime + 0.15 * loyalty + 0.05 * c.rand;
+  const ratio = Math.max(0.6, Math.min(1.6, c.offerSalary / Math.max(1, c.asking)));
+  const moneyT = (ratio - 0.6) / 1.0;                                   // 0.6~1.6 → 0..1
+  const strength = Math.max(0, Math.min(1, (c.teamOvr - 58) / 18));     // 전력
+  // 우승권 매력 = 현재 전력 위주 + 최근 성적 소폭. prestige(우승 기록)는 자기강화 항이라
+  // 비중을 낮춰야 왕조 부익부 루프가 폭주하지 않는다(밸런싱: 200시즌 parity).
+  const winT = Math.max(0, Math.min(1, 0.7 * strength + 0.3 * c.prestige));
+  const playT = c.posGap > 0 ? Math.min(1, 0.4 + 0.25 * c.posGap) : 0.15;     // 출전 기회
+  const loyT = c.isOriginal ? (c.isFranchise ? 1 : 0.5) : 0;            // 잔류
+  const homeT = c.isPreferred ? 1 : 0;                                  // 연고/선호팀
+  const w = c.w;
+  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + 0.05 * c.rand;
 }
 
 /** 자격 FA 목록 + 등급 (한 오프시즌 스냅샷) */

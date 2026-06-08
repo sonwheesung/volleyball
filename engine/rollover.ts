@@ -5,14 +5,15 @@
 import type { Contract, Player, TrainingFocus } from '../types';
 import { evolvePlayer } from './progression';
 import { FIRST_FA_SEASONS } from './faMarket';
+import { clampSalary } from './cap';
 import { marketValue } from './salary';
 
 export const SEASON_LENGTH = 164; // 한 시즌 캘린더 일수(진화량 기준)
 const RENEW_YEARS = 2;
 
-/** 시장가치로 재계약된 계약(자동연장·잔류) */
+/** 시장가치로 재계약된 계약(자동연장·잔류). 개인 연봉 상한(프랜차이즈 예외) 적용. */
 export function renewedContract(p: Player): Contract {
-  return { salary: marketValue(p), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: p.age };
+  return { salary: clampSalary(marketValue(p), p), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: p.age };
 }
 
 /** 한 선수의 시즌 롤오버. override = 시즌 중 재계약된 계약(있으면 우선) */

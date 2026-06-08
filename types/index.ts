@@ -62,6 +62,27 @@ export interface Player {
   // 메타
   peakAge: number;     // 전성기 나이(노쇠 곡선용)
   career: CareerStats;
+
+  // FA 성향 (FA_SYSTEM 2.5) — 선수마다 이적 동기가 다르다. id 시드로 결정론 생성.
+  faPref?: FAPref;
+}
+
+/** FA 의사결정 아키타입 — 무엇을 가장 중시하는가 */
+export type FAArchetype = 'money' | 'winnow' | 'loyal' | 'minutes' | 'hometown';
+
+/** 동기별 가중치 (합 ≈ 1). offerScore 의 각 항에 곱해진다. */
+export interface FAWeights {
+  money: number;    // 연봉
+  win: number;      // 우승권(최근 성적+전력)
+  loyalty: number;  // 잔류(원소속·프랜차이즈)
+  play: number;     // 출전 기회
+  home: number;     // 연고/선호팀
+}
+
+export interface FAPref {
+  archetype: FAArchetype;
+  w: FAWeights;
+  preferredTeamId?: string; // 연고/선호팀(있으면 그 팀에 home 가중)
 }
 
 /** 다년 계약 — 연봉은 서명 시점 시장가치로 고정 (단위: 만원) */

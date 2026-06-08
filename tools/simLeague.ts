@@ -52,6 +52,7 @@ interface UniResult {
   ids: string[];
   titles: Record<string, number>;
   rankSum: Record<string, number>;
+  rankHistory: Record<string, number[]>; // 시즌별 순위(1..N) — 초기/후기 지속성 분석용
   champByYear: string[];
   champSeasons: Record<string, number[]>;
   lastSeasons: Record<string, number[]>;
@@ -64,9 +65,10 @@ function runUniverse(seasons: number, onProgress?: (s: number) => void): UniResu
   const ids = LEAGUE.teams.map((t) => t.id);
   const titles: Record<string, number> = {};
   const rankSum: Record<string, number> = {};
+  const rankHistory: Record<string, number[]> = {};
   const champSeasons: Record<string, number[]> = {};
   const lastSeasons: Record<string, number[]> = {};
-  for (const id of ids) { titles[id] = 0; rankSum[id] = 0; champSeasons[id] = []; lastSeasons[id] = []; }
+  for (const id of ids) { titles[id] = 0; rankSum[id] = 0; rankHistory[id] = []; champSeasons[id] = []; lastSeasons[id] = []; }
   const champByYear: string[] = [];
   let curTeam = '', curStreak = 0, longestStreak = 0, longestTeam = '';
   const N = ids.length;
@@ -75,6 +77,7 @@ function runUniverse(seasons: number, onProgress?: (s: number) => void): UniResu
     const standings = computeStandings(Number.MAX_SAFE_INTEGER);
     standings.forEach((st, rank) => {
       rankSum[st.teamId] += rank + 1;
+      rankHistory[st.teamId].push(rank + 1);
       if (rank + 1 === N) lastSeasons[st.teamId].push(s);
     });
     const champ = buildPlayoffs(s).championId ?? standings[0].teamId;
@@ -86,7 +89,7 @@ function runUniverse(seasons: number, onProgress?: (s: number) => void): UniResu
     if (onProgress) onProgress(s);
     advanceOffseason(s);
   }
-  return { ids, titles, rankSum, champByYear, champSeasons, lastSeasons, longestStreak, longestTeam };
+  return { ids, titles, rankSum, rankHistory, champByYear, champSeasons, lastSeasons, longestStreak, longestTeam };
 }
 
 const stdev = (xs: number[]): number => {
@@ -94,6 +97,30 @@ const stdev = (xs: number[]): number => {
   return Math.sqrt(xs.reduce((a, b) => a + (b - m) ** 2, 0) / xs.length);
 };
 const mean = (xs: number[]): number => xs.reduce((a, b) => a + b, 0) / xs.length;
+
+/** 피어슨 상관계수 */
+function pearson(xs: number[], ys: number[]): number {
+  const n = xs.length;
+  if (n < 2) return 0;
+  const mx = mean(xs), my = mean(ys);
+  let sxy = 0, sxx = 0, syy = 0;
+  for (let i = 0; i < n; i++) { const dx = xs[i] - mx, dy = ys[i] - my; sxy += dx * dy; sxx += dx * dx; syy += dy * dy; }
+  if (sxx === 0 || syy === 0) return 0;
+  return sxy / Math.sqrt(sxx * syy);
+}
+
+/** 초기 vs 후기 윈도 평균순위 + 지속성 상관 (드래프트·육성의 평균회귀 진단) */
+function persistence(u: UniResult, seasons: number) {
+  const w = Math.max(1, Math.floor(seasons / 4)); // 앞 1/4 vs 뒤 1/4
+  const early: Record<string, number> = {}, late: Record<string, number> = {};
+  for (const id of u.ids) {
+    const h = u.rankHistory[id];
+    early[id] = mean(h.slice(0, w));
+    late[id] = mean(h.slice(seasons - w));
+  }
+  const corr = pearson(u.ids.map((id) => early[id]), u.ids.map((id) => late[id]));
+  return { w, early, late, corr };
+}
 
 /** 한 유니버스의 구조적 지표(팀 이름 무관, 유니버스 간 집계용) */
 function metrics(u: UniResult, seasons: number) {
@@ -132,28 +159,40 @@ function singleReport(seasons: number): void {
     if (later !== undefined) { cases++; log(`  ${teamName(id)}: ${lasts[0]}→${later}시즌 (${later - lasts[0]}년 후)`); }
   }
   if (!cases) log('  (없음)');
+
+  // 초기 상위권 지속성 — 드래프트·육성의 평균회귀 진단
+  const p = persistence(u, seasons);
+  log(`\n▸ 순위 지속성 (앞 ${p.w}시즌 vs 뒤 ${p.w}시즌 평균순위):`);
+  for (const id of [...u.ids].sort((a, b) => p.early[a] - p.early[b])) {
+    const e = p.early[id], l = p.late[id];
+    const arrow = l < e - 0.5 ? '↑상승' : l > e + 0.5 ? '↓하락' : '─유지';
+    log(`  ${teamName(id).padEnd(16)} 초기 ${e.toFixed(1)}위 → 후기 ${l.toFixed(1)}위  ${arrow}`);
+  }
+  log(`  지속성 상관계수 r=${p.corr.toFixed(2)}  (0≈건강한 평균회귀 / +1≈초기서열 고착 / −1≈완전역전)`);
 }
 
 function multiReport(seasons: number, universes: number): void {
   process.stderr.write(`▶ ${universes}개 독립 유니버스 × ${seasons}시즌 (풀 엔진)\n`);
-  const parity: number[] = [], dynasty: number[] = [], teamsWon: number[] = [], topShare: number[] = [];
+  const parity: number[] = [], dynasty: number[] = [], teamsWon: number[] = [], topShare: number[] = [], persist: number[] = [];
   let comebacks = 0, allWon = 0, N = 0;
-  log(`# universe, parityStd, dynasty, teamsWon/N, topShare%, comeback`);
+  log(`# universe, parityStd, dynasty, teamsWon/N, topShare%, persistR, comeback`);
   for (let uIdx = 0; uIdx < universes; uIdx++) {
     reseedLeague(20251018 + uIdx * 101, 777 + uIdx * 13);
     const u = runUniverse(seasons);
     const m = metrics(u, seasons);
     N = m.N;
-    parity.push(m.parityStd); dynasty.push(m.dynasty); teamsWon.push(m.teamsWon); topShare.push(m.topShare);
+    const pr = persistence(u, seasons).corr;
+    parity.push(m.parityStd); dynasty.push(m.dynasty); teamsWon.push(m.teamsWon); topShare.push(m.topShare); persist.push(pr);
     if (m.comeback) comebacks++;
     if (m.teamsWon === m.N) allWon++;
     // 유니버스별 즉시 기록(도중 부분집계 가능)
-    log(`u${String(uIdx).padStart(3)}: parityStd ${m.parityStd.toFixed(1)}  dynasty ${m.dynasty}  won ${m.teamsWon}/${m.N}  top ${(m.topShare * 100).toFixed(0)}%  ${m.comeback ? '반등O' : '반등X'}`);
+    log(`u${String(uIdx).padStart(3)}: parityStd ${m.parityStd.toFixed(1)}  dynasty ${m.dynasty}  won ${m.teamsWon}/${m.N}  top ${(m.topShare * 100).toFixed(0)}%  r ${pr.toFixed(2)}  ${m.comeback ? '반등O' : '반등X'}`);
     process.stderr.write(`  …유니버스 ${uIdx + 1}/${universes}\n`);
   }
   log(`\n═══ 집계: ${universes}개 유니버스 × ${seasons}시즌 (${N}팀, 풀 엔진) ═══`);
   log(`▸ parity 표준편차: 평균 ${mean(parity).toFixed(2)} ± ${stdev(parity).toFixed(2)}  (낮을수록 균형, 완전균등 기대 0)`);
   log(`▸ 최장 왕조(연속우승): 평균 ${mean(dynasty).toFixed(1)}  최대 ${Math.max(...dynasty)}`);
+  log(`▸ 순위 지속성 r: 평균 ${mean(persist).toFixed(2)} ± ${stdev(persist).toFixed(2)}  (0≈평균회귀 / +1≈서열고착)`);
   log(`▸ 우승 경험 팀: 평균 ${mean(teamsWon).toFixed(1)}/${N}  ·  전팀우승 유니버스 ${(allWon / universes * 100).toFixed(0)}%`);
   log(`▸ 1위팀 우승 점유율: 평균 ${(mean(topShare) * 100).toFixed(0)}%  (낮을수록 분산)`);
   log(`▸ "꼴찌→나중 우승" 발생 유니버스: ${(comebacks / universes * 100).toFixed(0)}%`);
