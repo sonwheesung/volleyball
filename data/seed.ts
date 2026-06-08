@@ -81,6 +81,7 @@ export function makePlayer(
   pos: Position,
   isForeign: boolean,
   ageOverride?: number,
+  bias = 0, // 팀 전력 티어(시드 전용) — 그 팀 선수 능력을 ±이동해 팀 OVR 분포를 넓힘
 ): Player {
   const name = isForeign
     ? FOREIGN_NAMES[rng.int(0, FOREIGN_NAMES.length - 1)]
@@ -116,6 +117,15 @@ export function makePlayer(
     skSet: rollStat(rng, !!c.skSet),
     skServe: rollStat(rng, !!c.skServe),
   };
+
+  // 팀 전력 티어 적용 — OVR에 기여하는 능력만 ±이동(키·체력 제외). 시드 로스터 한정.
+  if (bias !== 0) {
+    const adj = (v: number) => Math.max(20, Math.min(95, Math.round(v + bias)));
+    for (const k of ['jump', 'agility', 'reaction', 'positioning', 'focus', 'consistency', 'vq',
+      'skSpike', 'skBlock', 'skDig', 'skReceive', 'skSet', 'skServe'] as (keyof typeof cur)[]) {
+      cur[k] = adj(cur[k]);
+    }
+  }
 
   // 재능
   const talentBase = rollTalent(rng);
@@ -224,22 +234,32 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
   return player;
 }
 
+// 팀 전력 티어 — 시드 로스터의 팀 OVR 분포를 넓혀(압축 66~71 → ~62~76) 강·약팀을 만든다.
+// 대칭 분포라 리그 평균은 유지. 드래프트(꼴찌 우선)·노쇠·FA로 수십 시즌 뒤 평균회귀(parity 유지).
+const TIER_SPREAD = 3;
+
 export function generateLeague(seed: number): League {
   const rng = createRng(seed);
   const teams: Team[] = [];
   const players: Player[] = [];
   const coaches: Coach[] = [];
 
+  // 팀별 전력 티어(대칭) — rng로 팀 배정 셔플 → 시드마다 강팀이 달라짐
+  const N = TEAM_NAMES.length;
+  const tiers = TEAM_NAMES.map((_, i) => (N <= 1 ? 0 : (i / (N - 1) - 0.5) * 2 * TIER_SPREAD));
+  for (let i = tiers.length - 1; i > 0; i--) { const j = rng.int(0, i); [tiers[i], tiers[j]] = [tiers[j], tiers[i]]; }
+
   TEAM_NAMES.forEach((teamName, ti) => {
     const teamId = `t${ti}`;
     const playerIds: string[] = [];
+    const teamBias = tiers[ti];
 
     // 외국인 1명: OP 중 한 자리
     let foreignAssigned = false;
     let teamSalary = 0;
     ROSTER.forEach((pos, pi) => {
       const isForeign = pos === 'OP' && !foreignAssigned ? (foreignAssigned = true) : false;
-      const pl = makePlayer(rng, `${teamId}p${pi}`, pos, isForeign);
+      const pl = makePlayer(rng, `${teamId}p${pi}`, pos, isForeign, undefined, teamBias);
       players.push(pl);
       playerIds.push(pl.id);
       teamSalary += pl.contract.salary;
