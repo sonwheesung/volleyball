@@ -13,7 +13,10 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, MatchResult, Player, SubPolicy, TrainingFocus } from '../types';
+import type { Contract, HofEntry, MatchResult, Player, SubPolicy, TrainingFocus } from '../types';
+
+const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
+const LEGEND_POINTS = 9000; // 영구결번급
 
 const DEFAULT_SUB_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSub: true };
 
@@ -33,6 +36,7 @@ interface GameState {
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
   archive: { season: number; championId: string }[]; // 역대 우승
+  hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
   trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
 
@@ -70,6 +74,7 @@ const freshSave = {
   protectedIds: [] as string[],
   draftPicks: [] as string[],
   archive: [] as { season: number; championId: string }[],
+  hallOfFame: [] as HofEntry[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
   trainingFocus: null as TrainingFocus | null,
 };
@@ -126,7 +131,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -149,6 +154,21 @@ export const useGameStore = create<GameState>()(
           for (const id of filled.rosters[tid]) {
             const pr = seasonProd.get(id);
             if (pr && snapshot[id]) snapshot[id] = accrueCareer(applyMatchXp(snapshot[id], pr), pr); // 성장 XP + 통산 기록 누적
+          }
+        }
+
+        // 3.6) 은퇴 레전드 명예의전당 등재(마지막 시즌까지 누적 후 기준 충족 시)
+        const hofAdds: HofEntry[] = [];
+        for (const id of ctx.retired) {
+          const base = snapshot[id];
+          if (!base) continue;
+          const c = accrueCareer(base, seasonProd.get(id)).career;
+          if (c.points >= HOF_POINTS) {
+            hofAdds.push({
+              id, name: base.name, position: base.position, teamId: ctx.prevTeamOf[id] ?? '',
+              seasons: c.seasons, points: c.points, blocks: c.blocks, digs: c.digs,
+              retiredSeason: season, legend: c.points >= LEGEND_POINTS,
+            });
           }
         }
 
@@ -175,6 +195,7 @@ export const useGameStore = create<GameState>()(
           draftPicks: [],
           playerBase: snapshot,
           rosters: filled.rosters,
+          hallOfFame: [...hallOfFame, ...hofAdds],
         });
       },
 
@@ -201,6 +222,7 @@ export const useGameStore = create<GameState>()(
         protectedIds: s.protectedIds,
         draftPicks: s.draftPicks,
         archive: s.archive,
+        hallOfFame: s.hallOfFame,
         subPolicy: s.subPolicy,
         trainingFocus: s.trainingFocus,
       }),

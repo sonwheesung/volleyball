@@ -22,6 +22,7 @@ export default function History() {
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
   const archive = useGameStore((s) => s.archive);
+  const hallOfFame = useGameStore((s) => s.hallOfFame);
 
   const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
   const results = useMemo(
@@ -71,6 +72,29 @@ export default function History() {
                 <Text style={[styles.team, a.championId === teamId && styles.mine]}>
                   🏆 {getTeam(a.championId)?.name ?? a.championId}
                 </Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
+      {hallOfFame.length > 0 ? (
+        <>
+          <Title>명예의전당 · 은퇴 레전드</Title>
+          <Card>
+            {[...hallOfFame].sort((a, b) => b.points - a.points).map((h) => (
+              <View key={h.id} style={styles.hofRow}>
+                <PosTag pos={h.position} />
+                <View style={{ flex: 1 }}>
+                  <Text style={[styles.team, h.teamId === teamId && styles.mine]} numberOfLines={1}>
+                    {h.legend ? '🎖️ ' : '🏅 '}{h.name}
+                    {h.legend ? <Text style={{ color: theme.warn, fontSize: 11 }}>  영구결번</Text> : null}
+                  </Text>
+                  <Muted style={{ fontSize: 11 }}>
+                    {short(h.teamId)} · {h.seasons}시즌 · {h.retiredSeason + 1}시즌 은퇴
+                  </Muted>
+                </View>
+                <Text style={styles.lbVal}>{h.points.toLocaleString()}점</Text>
               </View>
             ))}
           </Card>
@@ -216,5 +240,6 @@ const styles = StyleSheet.create({
   lbName: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
   lbTeam: { color: theme.muted, fontSize: 12, width: 52, textAlign: 'right' },
   lbVal: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 36, textAlign: 'right' },
+  hofRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
 });
 

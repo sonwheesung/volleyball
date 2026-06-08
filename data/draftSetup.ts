@@ -15,6 +15,7 @@ export interface DraftContext {
   snapshot: Record<string, Player>;
   rosters: Record<string, string[]>;     // 드래프트 전
   prevTeamOf: Record<string, string>;
+  retired: string[];                      // 오프시즌 은퇴자 id(명예의전당)
   order: string[];                        // 슬롯별 teamId
   cls: Player[];                          // 드래프트 클래스
   myHoles: number;
@@ -48,6 +49,7 @@ export function buildDraftContext(
     snapshot: pre.snapshot,
     rosters: pre.rosters,
     prevTeamOf: pre.prevTeamOf,
+    retired: pre.retired,
     order,
     cls,
     myHoles: holes[myTeam] ?? 0,

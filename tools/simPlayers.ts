@@ -19,8 +19,8 @@ import { applyMatchXp } from '../engine/experience';
 import { overall } from '../engine/overall';
 import type { Position } from '../types';
 
-/** 한 시즌 오프시즌 진행 — simLeague.advanceOffseason 과 동일(전 구단 AI) */
-function advanceOffseason(season: number): void {
+/** 한 시즌 오프시즌 진행 — store.endSeason 재현. 은퇴 명예의전당 등재 후보 반환(검증용). */
+function advanceOffseason(season: number): { name: string; points: number; seasons: number; legend: boolean }[] {
   const nextSeason = season + 1;
   const my = '';
   const ctx = buildDraftContext(my, {}, {}, [], false, [], nextSeason);
@@ -43,8 +43,18 @@ function advanceOffseason(season: number): void {
       if (prev && prev !== tid && snapshot[id]) snapshot[id] = { ...snapshot[id], clubTenure: 0 };
     }
   }
+  // 은퇴 명예의전당 등재(store.endSeason 3.6 재현) — 검증용 반환
+  const hof: { name: string; points: number; seasons: number; legend: boolean }[] = [];
+  for (const id of ctx.retired) {
+    const base = snapshot[id];
+    if (!base) continue;
+    const c = accrueCareer(base, seasonProd.get(id)).career;
+    if (c.points >= 4000) hof.push({ name: base.name, points: c.points, seasons: c.seasons, legend: c.points >= 9000 });
+  }
+
   commitPlayerBase(snapshot);
   commitRosters(filled.rosters);
+  return hof;
 }
 
 interface Obs {
@@ -63,6 +73,7 @@ function main(): void {
 
   // 시즌별 전 선수 관측 기록
   const hist = new Map<string, Obs[]>();
+  const hof: { name: string; points: number; seasons: number; legend: boolean }[] = [];
   for (let s = 0; s < seasons; s++) {
     const base = currentBasePlayers();
     const rosters = currentRosters();
@@ -76,7 +87,7 @@ function main(): void {
       });
       hist.set(p.id, arr);
     }
-    advanceOffseason(s);
+    hof.push(...advanceOffseason(s));
   }
 
   log(`\n═══ 선수 운용 진단 · ${seasons}시즌 (고정 시드, 전 구단 AI) ═══`);
@@ -177,6 +188,13 @@ function main(): void {
   log(`\n[4] 통산 기록 누적 (현역 통산 득점 상위 5)`);
   for (const p of topCareer) {
     log(`  ${p.name.padEnd(10)} ${p.position.padEnd(2)} ${p.age}세 — 통산 득점 ${p.career.points}  블록 ${p.career.blocks}  디그 ${p.career.digs}  (${p.career.seasons}시즌 ${p.career.matches}경기)`);
+  }
+
+  // [5] 명예의전당 — 은퇴 레전드 보존 검증
+  const legends = hof.filter((h) => h.legend).length;
+  log(`\n[5] 명예의전당 등재(은퇴 통산 4000점+) ${hof.length}명 (영구결번 ${legends}명)`);
+  for (const h of [...hof].sort((a, b) => b.points - a.points).slice(0, 5)) {
+    log(`  ${h.legend ? '🎖️' : '🏅'} ${h.name.padEnd(10)} 통산 ${h.points}점 (${h.seasons}시즌)`);
   }
 }
 

@@ -199,6 +199,7 @@ export interface PreDraft {
   snapshot: Record<string, Player>;
   rosters: Record<string, string[]>;     // FA 영입·보상·AI 충원까지 반영(드래프트 전)
   prevTeamOf: Record<string, string>;
+  retired: string[];                     // 이번 오프시즌 은퇴자 id(명예의전당 등재용)
 }
 
 /**
@@ -221,7 +222,7 @@ export function resolvePreDraft(
   const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason);
   const prestige = teamPrestige(nextSeason - 1);
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige);
-  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf };
+  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired };
 }
 
 /** FA 센터 미리보기: 풀 + 내 영입 성공/실패 예상 (resolvePreDraft와 동일 소스) */

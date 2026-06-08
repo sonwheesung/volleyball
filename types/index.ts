@@ -85,6 +85,20 @@ export interface FAPref {
   preferredTeamId?: string; // 연고/선호팀(있으면 그 팀에 home 가중)
 }
 
+/** 명예의전당 등재 — 은퇴 레전드의 통산 기록 영구 보존 (백년 서사) */
+export interface HofEntry {
+  id: string;
+  name: string;
+  position: Position;
+  teamId: string;        // 마지막 소속(영구결번 구단)
+  seasons: number;
+  points: number;
+  blocks: number;
+  digs: number;
+  retiredSeason: number; // 0-based
+  legend: boolean;       // 영구결번급(예외적 커리어)
+}
+
 /** 경기 중 작전 교체 방침 (MATCH_SYSTEM 1.3b) — 프리셋/방침 레벨, AI 자동 + 플레이어 토글 */
 export interface SubPolicy {
   pinchServer: boolean; // 약한 서버(세터 등) 차례에 벤치 서브 스페셜리스트 투입
