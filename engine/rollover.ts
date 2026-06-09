@@ -4,6 +4,7 @@
 
 import type { Contract, Player, TrainingFocus } from '../types';
 import { evolvePlayer } from './progression';
+import { type StaffEffects, NO_EFFECTS } from './staff';
 import { FIRST_FA_SEASONS } from './faMarket';
 import { clampSalary } from './cap';
 import { marketValue } from './salary';
@@ -16,10 +17,10 @@ export function renewedContract(p: Player): Contract {
   return { salary: clampSalary(marketValue(p), p), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: p.age };
 }
 
-/** 한 선수의 시즌 롤오버. override = 시즌 중 재계약된 계약(있으면 우선) */
-export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Contract): Player {
-  // 1) 시즌치 성장/노쇠 누적
-  const grown = evolvePlayer(base, focus, SEASON_LENGTH);
+/** 한 선수의 시즌 롤오버. override = 시즌 중 재계약된 계약(있으면 우선). effects = 전문 코치 효과(STAFF) */
+export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Contract, effects: StaffEffects = NO_EFFECTS): Player {
+  // 1) 시즌치 성장/노쇠 누적 — 전문 코치 효과(속도·포텐 상한·노쇠 지연)를 영구 반영
+  const grown = evolvePlayer(base, focus, SEASON_LENGTH, effects);
   // 2) 나이 +1
   const aged: Player = { ...grown, age: grown.age + 1 };
   // 3) 경력 +1 (FA 자격 기준)
@@ -41,8 +42,9 @@ export function rolloverLeague(
   players: Player[],
   focusOf: (p: Player) => TrainingFocus,
   overrides: Record<string, Contract>,
+  effectsOf?: (p: Player) => StaffEffects,
 ): Record<string, Player> {
   const out: Record<string, Player> = {};
-  for (const p of players) out[p.id] = rolloverPlayer(p, focusOf(p), overrides[p.id]);
+  for (const p of players) out[p.id] = rolloverPlayer(p, focusOf(p), overrides[p.id], effectsOf?.(p));
   return out;
 }

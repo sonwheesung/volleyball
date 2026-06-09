@@ -6,7 +6,8 @@ import {
   availableCoaches, availableAssistants, availableScouts,
   staffSpend, staffBudget, staffBudgetLeft,
 } from '../data/league';
-import { SPECIALTY_KO } from '../engine/staff';
+import { SPECIALTY_KO, SPECIALTY_DESC } from '../engine/staff';
+import { coachSlots } from '../data/league';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 
@@ -83,28 +84,28 @@ export default function Staff() {
       ))}
 
       {/* 전문 코치 */}
-      <Title>전문 코치 ({asst.length})</Title>
-      <Muted style={{ marginBottom: 4 }}>분야별 훈련 성장을 가속 (같은 분야 최고 1명만 적용)</Muted>
+      <Title>전문 코치 ({asst.length}/{coachSlots()})</Title>
+      <Muted style={{ marginBottom: 4 }}>분야별 효과(같은 분야 최고 1명). 슬롯 {coachSlots()}개 — 어떤 코치를 둘지 선택.</Muted>
       {asst.map((a) => (
         <Card key={a.id}>
           <Row>
             <View style={{ flex: 1 }}>
-              <Title>{a.name}</Title>
-              <Muted style={{ marginTop: 2 }}>{SPECIALTY_KO[a.specialty]} · 역량 {a.rating} · 부스트 +{Math.round(0.4 * a.rating / 100 * 100)}% · 연봉 {formatMoney(a.salary)}만</Muted>
+              <Title>{SPECIALTY_KO[a.specialty]} · {a.name}</Title>
+              <Muted style={{ marginTop: 2 }}>{SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}만</Muted>
             </View>
             <Button label="방출" variant="ghost" onPress={() => releaseAssistant(a.id)} />
           </Row>
         </Card>
       ))}
-      <Muted style={{ marginTop: 8, marginBottom: 4 }}>코치 시장</Muted>
+      <Muted style={{ marginTop: 8, marginBottom: 4 }}>코치 시장 {asst.length >= coachSlots() ? '(슬롯 가득 — 방출 후 영입)' : ''}</Muted>
       {availableAssistants().map((a) => (
         <Card key={a.id}>
           <Row>
             <View style={{ flex: 1 }}>
-              <Title>{a.name}</Title>
-              <Muted style={{ marginTop: 2 }}>{SPECIALTY_KO[a.specialty]} · 역량 {a.rating} · 부스트 +{Math.round(0.4 * a.rating / 100 * 100)}% · 연봉 {formatMoney(a.salary)}만</Muted>
+              <Title>{SPECIALTY_KO[a.specialty]} · {a.name}</Title>
+              <Muted style={{ marginTop: 2 }}>{SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}만</Muted>
             </View>
-            <Button label="영입" onPress={() => tryHireAsst(a.id, a.name, a.salary)} />
+            <Button label="영입" onPress={() => tryHireAsst(a.id, a.name, a.salary)} disabled={asst.length >= coachSlots()} />
           </Row>
         </Card>
       ))}

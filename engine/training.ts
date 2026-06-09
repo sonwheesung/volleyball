@@ -114,7 +114,7 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
  * 훈련 1회를 선수 한 명에게 적용한 새 선수를 반환(불변).
  * focus = 감독의 훈련 선호. rng = 시드 RNG(결정론).
  */
-export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boosts?: Partial<Record<TrainingId, number>>): Player {
+export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boosts?: Partial<Record<TrainingId, number>>, potBonus?: Partial<Record<TrainableStat, number>>): Player {
   const next = { ...p } as Player;
   const stats = next as unknown as Record<TrainableStat, number>;
   const xp: Partial<Record<TrainableStat, number>> = { ...p.xp };
@@ -122,7 +122,7 @@ export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boos
   const addXp = (stat: TrainableStat, effort: number) => {
     if (effort <= 0) return;
     const cur = stats[stat];
-    const pot = p.potential[stat] ?? cur;
+    const pot = Math.min(99, (p.potential[stat] ?? cur) + (potBonus?.[stat] ?? 0)); // 기량/멘탈 코치가 상한 +
     if (cur >= pot) return; // 상한 도달 → 성장 없음
     const head = clamp01((pot - cur) / 12);
     if (head <= 0) return;

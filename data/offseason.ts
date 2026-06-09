@@ -12,7 +12,7 @@ import { needsCompensationPlayer, pickCompensation } from '../engine/compensatio
 import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { marketValue } from '../engine/salary';
 import { overall, teamOverall } from '../engine/overall';
-import { currentBasePlayers, currentRosters, focusOf } from './league';
+import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
 
@@ -156,7 +156,7 @@ export function buildOffseason(
   contractOverrides: Record<string, Contract>,
   nextSeason: number,
 ): Offseason {
-  const snapshot = rolloverLeague(currentBasePlayers(), focusOf, contractOverrides);
+  const snapshot = rolloverLeague(currentBasePlayers(), focusOf, contractOverrides, effectsOf);
   const retireRng = createRng(70000 + nextSeason * 977);
   const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng);
 

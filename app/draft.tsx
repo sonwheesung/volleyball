@@ -37,7 +37,7 @@ export default function DraftCenter() {
   // 미리보기: 내가 실제로 지명하게 될 신인
   const clsById = useMemo(() => new Map(ctx.cls.map((p) => [p.id, p])), [ctx]);
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-  const preview = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => ctx.snapshot[id], my, draftPicks, styleOf);
+  const preview = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => ctx.snapshot[id], my, draftPicks, styleOf, teamScoutReveal);
   const beforeMy = new Set(ctx.rosters[my] ?? []);
   const myDrafted = (preview.rosters[my] ?? [])
     .filter((id) => !beforeMy.has(id))

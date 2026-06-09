@@ -27,8 +27,8 @@ function decayRate(age: number): number {
  * 하루치 노쇠를 선수 한 명에게 적용한 새 선수를 반환(불변).
  * 체력·근력만 음수로 적립 → -1 도달 시 스탯 -1 (FLOOR 까지).
  */
-export function applyAgingDay(p: Player, rng: Rng): Player {
-  const rate = decayRate(p.age);
+export function applyAgingDay(p: Player, rng: Rng, ageSlow = 0): Player {
+  const rate = decayRate(p.age) * (1 - Math.max(0, Math.min(0.6, ageSlow))); // 체력 코치가 노쇠 둔화(전성기 연장)
   if (rate <= 0) return p;
 
   const next = { ...p } as Player;

@@ -7,7 +7,7 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
-  hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState } from '../data/league';
+  hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
 import { accrueCareer } from '../engine/production';
@@ -188,7 +188,7 @@ export const useGameStore = create<GameState>()(
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
         const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf);
+        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf, teamScoutReveal);
         for (const p of drafted.picked) snapshot[p.id] = p;
 
         // 3) 클래스 소진 등 남은 빈자리 신인 자동 충원

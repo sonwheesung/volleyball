@@ -3,11 +3,19 @@
 // 해석: 내 위시리스트 우선(순번 내에서) + 나머지는 AI 자동 지명.
 
 import type { CoachStyle, Player, Position } from '../types';
-import type { Rng } from './rng';
+import { type Rng, strSeed } from './rng';
 import { overall } from './overall';
 import { positionGap, ROSTER_IDEAL, wantScore } from './aiGM';
 
 type Lookup = (id: string) => Player | undefined;
+
+/** 스카우팅 평가 노이즈 — 공개도(reveal) 낮을수록 유망주 가치 오판↑. 결정론(id+팀 해시). */
+const SCOUT_NOISE = 0.2;
+const hash01 = (s: string): number => (strSeed(s) % 100000) / 100000;
+function scoutMult(playerId: string, teamId: string, reveal: number): number {
+  if (reveal >= 1) return 1;
+  return 1 + (hash01(`${playerId}:${teamId}`) * 2 - 1) * SCOUT_NOISE * (1 - reveal);
+}
 
 /** 1라운드 순번 = 하위 팀 가중 추첨 */
 export function lotteryRound1(worstFirst: string[], rng: Rng): string[] {
@@ -77,13 +85,15 @@ export function aiDraftPick(
   rosterIds: string[],
   get: Lookup,
   style: CoachStyle,
+  teamId = '',
+  reveal = 1, // 스카우팅 공개도(1=정밀, 낮을수록 오판)
 ): Player | null {
   if (available.length === 0) return null;
   const gap = positionGap(rosterIds, get);
   let best: Player | null = null;
   let bestScore = -1;
   for (const p of available) {
-    const sc = wantScore(p, prospectValue(p), gap, style);
+    const sc = wantScore(p, prospectValue(p), gap, style) * scoutMult(p.id, teamId, reveal);
     if (sc > bestScore) {
       bestScore = sc;
       best = p;
@@ -106,6 +116,7 @@ export function resolveDraft(
   myTeam: string,
   wishlist: string[],
   styleOf: (teamId: string) => CoachStyle,
+  revealOf: (teamId: string) => number = () => 1, // 팀 스카우팅 공개도(기본 1=정밀)
 ): { rosters: Record<string, string[]>; picked: Player[] } {
   const rosters: Record<string, string[]> = {};
   for (const k of Object.keys(rostersIn)) rosters[k] = [...rostersIn[k]];
@@ -127,7 +138,7 @@ export function resolveDraft(
         }
       }
     }
-    if (!chosen) chosen = aiDraftPick(available, rosters[teamId] ?? [], get, styleOf(teamId));
+    if (!chosen) chosen = aiDraftPick(available, rosters[teamId] ?? [], get, styleOf(teamId), teamId, revealOf(teamId));
     if (!chosen) continue;
     const idx = available.findIndex((a) => a.id === chosen!.id);
     available.splice(idx, 1);

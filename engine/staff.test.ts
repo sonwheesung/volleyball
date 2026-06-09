@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { trainingBoosts, scoutReveal, SPECIALTY_TRAININGS, assistantBoost, headCoachSalary, assistantSalary, scoutSalary, STAFF_BUDGET } from './staff';
+import { trainingBoosts, staffEffects, NO_EFFECTS, scoutReveal, SPECIALTY_TRAININGS, assistantBoost, potRaise, headCoachSalary, assistantSalary, scoutSalary, STAFF_BUDGET, COACH_SLOTS } from './staff';
 import { evolvePlayer } from './progression';
 import type { AssistantCoach, Scout, Player, Position, TrainableStat, TrainingFocus } from '../types';
 import { TRAINABLE_STATS } from './training';
@@ -26,22 +26,30 @@ test('trainingBoosts: 분야→훈련 매핑, 같은 분야 최고 1명만', () 
   assert.equal(b[6], undefined, '수비 훈련은 부스트 없음');
 });
 
-test('전문 코치 부스트: 공격코치 있으면 skSpike 더 빨리 성장', () => {
+test('공격코치(기량): skSpike 더 빨리 + 포텐 상한 위로 더 높이 성장', () => {
   const base = mkPlayer('OH');
+  base.skSpike = 80; base.potential.skSpike = 84; // 상한 근접
   const focus: TrainingFocus = { primary: [4, 6], secondary: [1, 10, 12] };
-  const plain = evolvePlayer(base, focus, 200);
-  const boosted = evolvePlayer(base, focus, 200, trainingBoosts([asst('attack', 90)]));
-  assert.ok(boosted.skSpike > plain.skSpike, `부스트 skSpike ${boosted.skSpike} > 기본 ${plain.skSpike}`);
+  const plain = evolvePlayer(base, focus, 600);
+  const coached = evolvePlayer(base, focus, 600, staffEffects([asst('attack', 90)]));
+  assert.ok(plain.skSpike <= 84, '기본은 포텐 84에서 멈춤');
+  assert.ok(coached.skSpike > 84, `코치는 상한을 넘어 성장(${coached.skSpike} > 84, +${potRaise(90)})`);
 });
 
-test('전문 코치 부스트 없으면(undefined) 성장 불변(결정론)', () => {
+test('체력코치(노쇠 지연): 나이든 선수 jump 덜 하락', () => {
+  const base = mkPlayer('MB'); base.age = 34; base.jump = 80;
+  const focus: TrainingFocus = { primary: [1, 8], secondary: [2, 3, 12] };
+  const plain = evolvePlayer(base, focus, 300);
+  const coached = evolvePlayer(base, focus, 300, staffEffects([asst('stamina', 90)]));
+  assert.ok(coached.jump > plain.jump, `체력코치 jump ${coached.jump} > 기본 ${plain.jump}(덜 하락)`);
+});
+
+test('코치 효과 없으면(NO_EFFECTS) 성장 불변(결정론)', () => {
   const base = mkPlayer('MB');
   const focus: TrainingFocus = { primary: [8, 1], secondary: [4, 3, 12] };
   const a = evolvePlayer(base, focus, 150);
-  const b = evolvePlayer(base, focus, 150, undefined);
-  const c = evolvePlayer(base, focus, 150, {});
-  assert.deepEqual(a, b, 'boosts undefined = 기존');
-  assert.deepEqual(a, c, 'boosts {} = 기존');
+  const b = evolvePlayer(base, focus, 150, NO_EFFECTS);
+  assert.deepEqual(a, b, 'NO_EFFECTS = 기존');
 });
 
 test('scoutReveal: 스카우터 없으면 0, 많을수록 증가, 0~1 범위', () => {

@@ -8,7 +8,7 @@
 // SOLID: 엔진/데이터 순수 함수만 합성(UI·store 무의존).
 
 import {
-  LEAGUE, getTeam, resetLeagueBase, reseedLeague, commitPlayerBase, commitRosters,
+  LEAGUE, getTeam, resetLeagueBase, reseedLeague, commitPlayerBase, commitRosters, teamScoutReveal,
 } from '../data/league';
 import { computeStandings } from '../data/standings';
 import { buildPlayoffs } from '../data/playoffs';
@@ -21,13 +21,13 @@ import { applyMatchXp } from '../engine/experience';
 const teamName = (id: string): string => getTeam(id)?.name ?? id;
 
 /** 한 시즌의 오프시즌(롤오버·은퇴·경쟁FA·드래프트·충원·성장XP·이적근속리셋) — store.endSeason 재현, 전 구단 AI */
-function advanceOffseason(season: number): void {
+export function advanceOffseason(season: number): void {
   const nextSeason = season + 1;
   const my = '';
   const ctx = buildDraftContext(my, {}, {}, [], false, [], nextSeason);
   const snapshot = ctx.snapshot;
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf);
+  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf, teamScoutReveal);
   for (const p of drafted.picked) snapshot[p.id] = p;
   const filled = fillRosters(drafted.rosters, (id) => snapshot[id], nextSeason);
   for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
@@ -48,7 +48,7 @@ function advanceOffseason(season: number): void {
   commitRosters(filled.rosters);
 }
 
-interface UniResult {
+export interface UniResult {
   ids: string[];
   titles: Record<string, number>;
   rankSum: Record<string, number>;
@@ -61,7 +61,7 @@ interface UniResult {
 }
 
 /** 현재 리그 상태로 N시즌 진행 — 호출 전에 resetLeagueBase()/reseedLeague() 로 상태 설정 */
-function runUniverse(seasons: number, onProgress?: (s: number) => void): UniResult {
+export function runUniverse(seasons: number, onProgress?: (s: number) => void): UniResult {
   const ids = LEAGUE.teams.map((t) => t.id);
   const titles: Record<string, number> = {};
   const rankSum: Record<string, number> = {};
@@ -205,4 +205,5 @@ function main(): void {
   else multiReport(seasons, universes);
 }
 
-main();
+// 직접 실행할 때만 main()을 돈다(다른 도구가 runUniverse만 import할 때 부작용 방지)
+if ((process.argv[1] ?? '').includes('simLeague')) main();

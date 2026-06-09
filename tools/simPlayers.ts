@@ -8,7 +8,7 @@
 
 import {
   getTeam, resetLeagueBase, commitPlayerBase, commitRosters,
-  currentBasePlayers, currentRosters,
+  currentBasePlayers, currentRosters, teamScoutReveal,
 } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
@@ -26,7 +26,7 @@ function advanceOffseason(season: number): { name: string; points: number; seaso
   const ctx = buildDraftContext(my, {}, {}, [], false, [], nextSeason);
   const snapshot = ctx.snapshot;
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf);
+  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf, teamScoutReveal);
   for (const p of drafted.picked) snapshot[p.id] = p;
   const filled = fillRosters(drafted.rosters, (id) => snapshot[id], nextSeason);
   for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;

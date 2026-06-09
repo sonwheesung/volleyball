@@ -8,7 +8,7 @@ import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
 import { evolvePlayer } from '../engine/progression';
-import { STAFF_BUDGET, trainingBoosts, scoutReveal } from '../engine/staff';
+import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, type StaffEffects, NO_EFFECTS } from '../engine/staff';
 
 const LEAGUE_SEED = 20251018;
 const SEASON_SEED = 777;
@@ -35,6 +35,7 @@ const seedRosters = (): Record<string, string[]> =>
 
 let rosters: Record<string, string[]> = seedRosters();
 let playerFocus = new Map<string, TrainingFocus>();
+let playerEffects = new Map<string, StaffEffects>(); // 선수 → 소속팀 전문코치 종합 효과
 let focusOverride: Record<string, TrainingFocus> = {}; // 단장이 고른 팀별 훈련 방향(감독 기본 대체)
 let evoCache: { day: number; map: Map<string, Player> } | null = null;
 let _baseVersion = 0; // 선수/로스터 베이스가 바뀔 때마다 증가(파생 캐시 무효화용)
@@ -63,9 +64,11 @@ function teamScoutsOf(teamId: string): Scout[] {
 
 function rebuildFocus(): void {
   playerFocus = new Map();
+  playerEffects = new Map();
   for (const t of LEAGUE.teams) {
     const focus = teamFocus(t.id);
-    for (const pid of rosters[t.id] ?? []) playerFocus.set(pid, focus);
+    const effects = staffEffects(teamAssistantsOf(t.id));
+    for (const pid of rosters[t.id] ?? []) { playerFocus.set(pid, focus); playerEffects.set(pid, effects); }
   }
 }
 rebuildFocus();
@@ -141,12 +144,14 @@ export function hireHeadCoach(teamId: string, coachId: string): boolean {
   invalidateStaff(true); // 성향·훈련선호 바뀜
   return true;
 }
+export const coachSlots = (): number => COACH_SLOTS;
 export function hireAssistant(teamId: string, id: string): boolean {
   const a = assistantMap.get(id);
   if (!a || isAsstHired(id)) return false;
+  if ((teamAssistantIds[teamId]?.length ?? 0) >= COACH_SLOTS) return false; // 슬롯 초과
   if (staffSpend(teamId) + a.salary > STAFF_BUDGET) return false;
   teamAssistantIds[teamId] = [...(teamAssistantIds[teamId] ?? []), id];
-  invalidateStaff(true); // 훈련 부스트 바뀜
+  invalidateStaff(true); // 코치 효과 바뀜
   return true;
 }
 export function releaseAssistant(teamId: string, id: string): void {
@@ -177,6 +182,9 @@ export const getStaffState = () => ({ head: { ...headCoachOverride }, asst: { ..
 
 /** 선수 → 소속팀 감독 훈련선호 (롤오버/진화 성장 방향) */
 export const focusOf = (p: Player): TrainingFocus => playerFocus.get(p.id) ?? DEFAULT_FOCUS;
+
+/** 선수 → 소속팀 전문코치 종합 효과 (롤오버 영구 성장에 반영) */
+export const effectsOf = (p: Player): StaffEffects => playerEffects.get(p.id) ?? NO_EFFECTS;
 
 // ─── 세이브 동기화 (레지스트리/로스터) ───
 
@@ -257,10 +265,10 @@ export function evolvedPlayers(day: number): Map<string, Player> {
   const map = new Map<string, Player>();
   for (const team of LEAGUE.teams) {
     const focus = teamFocus(team.id); // 단장 오버라이드 우선
-    const boosts = trainingBoosts(teamAssistantsOf(team.id)); // 전문 코치 부스트
+    const effects = staffEffects(teamAssistantsOf(team.id)); // 전문 코치 효과(속도·포텐·노쇠)
     for (const pid of rosters[team.id] ?? []) {
       const base = playerMap.get(pid);
-      if (base) map.set(pid, evolvePlayer(base, focus, day, boosts));
+      if (base) map.set(pid, evolvePlayer(base, focus, day, effects));
     }
   }
   evoCache = { day, map };
