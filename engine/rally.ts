@@ -65,9 +65,16 @@ const back = (t: RallyTeam) => backRow(t.rotation).map((i) => t.six[i]).filter(B
 const server = (t: RallyTeam) => t.six[serverIndex(t.rotation)];
 const setterOf = (t: RallyTeam) => t.six.find((p) => p.position === 'S') ?? t.six[0];
 
-/** 후위 수비수 — 후위 MB는 리베로로 대체(1.3 추상화) */
+/** 후위 수비수 — 후위 MB는 리베로로 대체(1.3 추상화). 디그(전체 코트 수비) 담당. */
 function defenders(t: RallyTeam): Player[] {
   return back(t).map((p) => (p.position === 'MB' && t.libero ? t.libero : p));
+}
+
+/** 서브 리시브 담당 — 리베로 + 아웃사이드(OH) 전원(W형). 세터·OP·MB는 숨김(현실 KOVO 5-1). */
+function receivers(t: RallyTeam): Player[] {
+  const ohs = t.six.filter((p) => p.position === 'OH');
+  const grp = t.libero ? [t.libero, ...ohs] : ohs;
+  return grp.length ? grp : defenders(t);
 }
 
 /** 체력·부상 효율 */
@@ -226,7 +233,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   drain(serv, sp, 1);
   const st = chooseServe(sp, serv.style, rng);
   const svPow = n(R(sp).serve) * momFactor(serv.momentum) * eg(serving) * eff(serv, sp);
-  const recvSkill = strength(defenders(recv), (r) => r.receive, R, recv) * momFactor(recv.momentum) * eg(recvSide);
+  const recvSkill = strength(receivers(recv), (r) => r.receive, R, recv) * momFactor(recv.momentum) * eg(recvSide);
   const aceP = clamp(SERVE_ACE[st] * (0.5 + svPow) + 0.12 * (svPow - recvSkill), 0.003, 0.18);
   const errP = clamp(SERVE_ERR[st] * (1.3 - 0.5 * n(sp.focus)) * (serv.style === 'balanced' ? 0.92 : 1), 0.01, 0.24);
   if (stats) {
