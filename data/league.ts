@@ -3,11 +3,12 @@
 // rosters    = 팀 구성(가변). 시드 기본값에서 은퇴/영입/드래프트로 바뀐다.
 // 시즌 내 진화는 스냅샷에서 currentDay 만큼 리플레이.
 
-import type { Coach, Fixture, Player, Team, TrainingFocus } from '../types';
+import type { AssistantCoach, Coach, Fixture, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
 import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
 import { evolvePlayer } from '../engine/progression';
+import { STAFF_BUDGET, trainingBoosts, scoutReveal } from '../engine/staff';
 
 const LEAGUE_SEED = 20251018;
 const SEASON_SEED = 777;
@@ -19,7 +20,14 @@ export let SEASON: Fixture[] = generateSeason(LEAGUE.teams.map((t) => t.id), SEA
 const teamMap = new Map(LEAGUE.teams.map((t) => [t.id, t]));
 const playerMap = new Map<string, Player>(LEAGUE.players.map((p) => [p.id, p]));
 const coachMap = new Map(LEAGUE.coaches.map((c) => [c.id, c]));
+let assistantMap = new Map(LEAGUE.assistants.map((a) => [a.id, a]));
+let scoutMap = new Map(LEAGUE.scouts.map((s) => [s.id, s]));
 const fixtureMap = new Map(SEASON.map((f) => [f.id, f]));
+
+// ─── 스태프 계약(STAFF_SYSTEM) — 단장이 영입한 감독/코치/스카우터 ───
+let headCoachOverride: Record<string, string> = {};                 // teamId → 영입 감독 id(시드 감독 대체)
+let teamAssistantIds: Record<string, string[]> = {};                // teamId → 영입 코치 ids
+let teamScoutIds: Record<string, string[]> = {};                    // teamId → 영입 스카우터 ids
 
 // ─── 가변 로스터 + 캐시 ───
 const seedRosters = (): Record<string, string[]> =>
@@ -32,9 +40,25 @@ let evoCache: { day: number; map: Map<string, Player> } | null = null;
 let _baseVersion = 0; // 선수/로스터 베이스가 바뀔 때마다 증가(파생 캐시 무효화용)
 export const baseVersion = (): number => _baseVersion;
 
-/** 팀의 실제 훈련 방향 — 단장 오버라이드 우선, 없으면 감독 기본 */
+/** 팀의 실제 훈련 방향 — 단장 오버라이드 우선, 없으면 (영입/시드) 감독 기본 */
 function teamFocus(teamId: string): TrainingFocus {
-  return focusOverride[teamId] ?? coachMap.get(teamMap.get(teamId)?.coachId ?? '')?.trainingFocus ?? DEFAULT_FOCUS;
+  return focusOverride[teamId] ?? teamHeadCoach(teamId)?.trainingFocus ?? DEFAULT_FOCUS;
+}
+
+/** 팀 현재 감독 — 영입 오버라이드 우선, 없으면 시드 감독 */
+function teamHeadCoach(teamId: string): Coach | undefined {
+  const ov = headCoachOverride[teamId];
+  if (ov && coachMap.has(ov)) return coachMap.get(ov);
+  return coachMap.get(teamMap.get(teamId)?.coachId ?? '');
+}
+
+/** 팀 보조코치 목록 */
+function teamAssistantsOf(teamId: string): AssistantCoach[] {
+  return (teamAssistantIds[teamId] ?? []).map((id) => assistantMap.get(id)).filter((a): a is AssistantCoach => !!a);
+}
+/** 팀 스카우터 목록 */
+function teamScoutsOf(teamId: string): Scout[] {
+  return (teamScoutIds[teamId] ?? []).map((id) => scoutMap.get(id)).filter((s): s is Scout => !!s);
 }
 
 function rebuildFocus(): void {
@@ -68,16 +92,88 @@ export const getTeamPlayers = (teamId: string): Player[] =>
     .map((pid) => playerMap.get(pid))
     .filter((p): p is Player => !!p);
 
-export const getTeamCoach = (teamId: string): Coach | undefined => {
-  const t = teamMap.get(teamId);
-  return t ? coachMap.get(t.coachId) : undefined;
-};
+export const getTeamCoach = (teamId: string): Coach | undefined => teamHeadCoach(teamId);
 
-/** 경기 엔진용 감독 정보(성향·카리스마) — MATCH_SYSTEM 8장 */
+/** 경기 엔진용 감독 정보(성향·카리스마) — MATCH_SYSTEM 8장. 영입 감독 반영. */
 export const coachInfoOf = (teamId: string): CoachInfo | undefined => {
-  const c = getTeamCoach(teamId);
+  const c = teamHeadCoach(teamId);
   return c ? { style: c.style, charisma: c.charisma } : undefined;
 };
+
+// ─── 스태프 시장·계약(STAFF_SYSTEM) ───
+const isCoachHired = (id: string) => Object.values(headCoachOverride).includes(id);
+const isAsstHired = (id: string) => Object.values(teamAssistantIds).some((a) => a.includes(id));
+const isScoutHired = (id: string) => Object.values(teamScoutIds).some((a) => a.includes(id));
+
+/** 영입 가능한 프리 감독(teamId=null, 미계약) */
+export const availableCoaches = (): Coach[] => LEAGUE.coaches.filter((c) => c.teamId === null && !isCoachHired(c.id));
+export const availableAssistants = (): AssistantCoach[] => LEAGUE.assistants.filter((a) => !isAsstHired(a.id));
+export const availableScouts = (): Scout[] => LEAGUE.scouts.filter((s) => !isScoutHired(s.id));
+
+export const teamAssistants = (teamId: string): AssistantCoach[] => teamAssistantsOf(teamId);
+export const teamScouts = (teamId: string): Scout[] => teamScoutsOf(teamId);
+
+/** 팀 스태프 연봉 지출 합(만원) — 현 감독 + 코치 + 스카우터 */
+export function staffSpend(teamId: string): number {
+  const head = teamHeadCoach(teamId)?.salary ?? 0;
+  const ac = teamAssistantsOf(teamId).reduce((s, a) => s + a.salary, 0);
+  const sc = teamScoutsOf(teamId).reduce((s, x) => s + x.salary, 0);
+  return head + ac + sc;
+}
+export const staffBudget = (): number => STAFF_BUDGET;
+export const staffBudgetLeft = (teamId: string): number => STAFF_BUDGET - staffSpend(teamId);
+
+/** 드래프트 유망주 공개도 0~1 (스카우터 기반) */
+export const teamScoutReveal = (teamId: string): number => scoutReveal(teamScoutsOf(teamId));
+
+function invalidateStaff(affectsTraining: boolean): void {
+  if (affectsTraining) { rebuildFocus(); evoCache = null; }
+  _baseVersion++;
+}
+
+/** 감독 영입(시드 감독 대체). 예산 초과면 거부(false). */
+export function hireHeadCoach(teamId: string, coachId: string): boolean {
+  const c = coachMap.get(coachId);
+  if (!c || (c.teamId !== null) || isCoachHired(coachId)) return false;
+  const newSpend = staffSpend(teamId) - (teamHeadCoach(teamId)?.salary ?? 0) + c.salary;
+  if (newSpend > STAFF_BUDGET) return false;
+  headCoachOverride[teamId] = coachId;
+  invalidateStaff(true); // 성향·훈련선호 바뀜
+  return true;
+}
+export function hireAssistant(teamId: string, id: string): boolean {
+  const a = assistantMap.get(id);
+  if (!a || isAsstHired(id)) return false;
+  if (staffSpend(teamId) + a.salary > STAFF_BUDGET) return false;
+  teamAssistantIds[teamId] = [...(teamAssistantIds[teamId] ?? []), id];
+  invalidateStaff(true); // 훈련 부스트 바뀜
+  return true;
+}
+export function releaseAssistant(teamId: string, id: string): void {
+  teamAssistantIds[teamId] = (teamAssistantIds[teamId] ?? []).filter((x) => x !== id);
+  invalidateStaff(true);
+}
+export function hireScout(teamId: string, id: string): boolean {
+  const s = scoutMap.get(id);
+  if (!s || isScoutHired(id)) return false;
+  if (staffSpend(teamId) + s.salary > STAFF_BUDGET) return false;
+  teamScoutIds[teamId] = [...(teamScoutIds[teamId] ?? []), id];
+  invalidateStaff(false); // 드래프트 표시만 — 훈련 무관
+  return true;
+}
+export function releaseScout(teamId: string, id: string): void {
+  teamScoutIds[teamId] = (teamScoutIds[teamId] ?? []).filter((x) => x !== id);
+  invalidateStaff(false);
+}
+
+/** 세이브 동기화 — 스토어에서 영입 상태 주입 */
+export function commitStaff(head: Record<string, string>, asst: Record<string, string[]>, scout: Record<string, string[]>): void {
+  headCoachOverride = { ...head };
+  teamAssistantIds = { ...asst };
+  teamScoutIds = { ...scout };
+  rebuildFocus(); evoCache = null; _baseVersion++;
+}
+export const getStaffState = () => ({ head: { ...headCoachOverride }, asst: { ...teamAssistantIds }, scout: { ...teamScoutIds } });
 
 /** 선수 → 소속팀 감독 훈련선호 (롤오버/진화 성장 방향) */
 export const focusOf = (p: Player): TrainingFocus => playerFocus.get(p.id) ?? DEFAULT_FOCUS;
@@ -119,6 +215,9 @@ export function resetLeagueBase(): void {
   for (const p of LEAGUE.players) playerMap.set(p.id, p);
   rosters = seedRosters();
   focusOverride = {};
+  headCoachOverride = {};
+  teamAssistantIds = {};
+  teamScoutIds = {};
   rebuildFocus();
   evoCache = null;
   _baseVersion++;
@@ -137,10 +236,15 @@ export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
   for (const p of LEAGUE.players) playerMap.set(p.id, p);
   coachMap.clear();
   for (const c of LEAGUE.coaches) coachMap.set(c.id, c);
+  assistantMap = new Map(LEAGUE.assistants.map((a) => [a.id, a]));
+  scoutMap = new Map(LEAGUE.scouts.map((s) => [s.id, s]));
   fixtureMap.clear();
   for (const f of SEASON) fixtureMap.set(f.id, f);
   rosters = seedRosters();
   focusOverride = {};
+  headCoachOverride = {};
+  teamAssistantIds = {};
+  teamScoutIds = {};
   rebuildFocus();
   evoCache = null;
   _baseVersion++;
@@ -153,9 +257,10 @@ export function evolvedPlayers(day: number): Map<string, Player> {
   const map = new Map<string, Player>();
   for (const team of LEAGUE.teams) {
     const focus = teamFocus(team.id); // 단장 오버라이드 우선
+    const boosts = trainingBoosts(teamAssistantsOf(team.id)); // 전문 코치 부스트
     for (const pid of rosters[team.id] ?? []) {
       const base = playerMap.get(pid);
-      if (base) map.set(pid, evolvePlayer(base, focus, day));
+      if (base) map.set(pid, evolvePlayer(base, focus, day, boosts));
     }
   }
   evoCache = { day, map };

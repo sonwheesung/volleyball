@@ -131,7 +131,7 @@ export interface TrainingFocus {
   secondary: [TrainingId, TrainingId, TrainingId];
 }
 
-/** 감독 — 플레이어가 선임하는 별개 존재 (MATCH_SYSTEM 8장) */
+/** 감독 — 플레이어가 선임하는 별개 존재 (MATCH_SYSTEM 8장, STAFF_SYSTEM) */
 export interface Coach {
   id: string;
   name: string;
@@ -140,7 +140,32 @@ export interface Coach {
   style: CoachStyle;         // 자동 운영 성향 (경기 운영)
   archetype: string;         // 훈련 아키타입 명칭 (표시용)
   trainingFocus: TrainingFocus; // 훈련 선호 (핵심2+보조3)
-  teamId: string;
+  salary: number;            // 연봉(만원) — 스태프 예산 차감
+  teamId: string | null;     // 소속(null=프리에이전트 풀)
+}
+
+/** 전문 코치 분야 (STAFF_SYSTEM) — 해당 분야 훈련 성장 부스트 */
+export type CoachSpecialty = 'attack' | 'defense' | 'stamina' | 'setter' | 'mental';
+
+/** 전문 코치(보조) — 특정 훈련 분야를 빠르게 키운다 */
+export interface AssistantCoach {
+  id: string;
+  name: string;
+  age: number;
+  specialty: CoachSpecialty;
+  rating: number;            // 0~100 역량 → 부스트·연봉
+  salary: number;            // 연봉(만원)
+  teamId: string | null;     // 소속(null=프리)
+}
+
+/** 스카우터 — 드래프트 유망주 능력 공개도를 높인다 */
+export interface Scout {
+  id: string;
+  name: string;
+  age: number;
+  scouting: number;          // 0~100 → 유망주 스탯 공개도
+  salary: number;            // 연봉(만원)
+  teamId: string | null;     // 소속(null=프리)
 }
 
 export interface Team {

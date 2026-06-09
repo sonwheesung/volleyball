@@ -114,7 +114,7 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
  * 훈련 1회를 선수 한 명에게 적용한 새 선수를 반환(불변).
  * focus = 감독의 훈련 선호. rng = 시드 RNG(결정론).
  */
-export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng): Player {
+export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boosts?: Partial<Record<TrainingId, number>>): Player {
   const next = { ...p } as Player;
   const stats = next as unknown as Record<TrainableStat, number>;
   const xp: Partial<Record<TrainableStat, number>> = { ...p.xp };
@@ -144,11 +144,12 @@ export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng): Pla
     // 포지션 인식: 감독 선호(coachShare)와 포지션 바닥(POS_FLOOR) 중 큰 값.
     // → 포지션 핵심 스탯은 감독과 무관하게 항상 크고, 감독이 속도·부가 방향을 더한다.
     const share = Math.max(coachShare(t.id, focus), POS_FLOOR);
+    const boost = boosts?.[t.id] ?? 1; // 전문 코치 부스트(STAFF_SYSTEM) — 미지정 시 1(불변)
     // 주 스탯
-    addXp(t.primary, BASE * 1.0 * pos * share * rng.range(0.85, 1.15));
+    addXp(t.primary, BASE * 1.0 * pos * share * boost * rng.range(0.85, 1.15));
     // 부 스탯
     for (const sec of t.secondary) {
-      addXp(sec, BASE * 0.4 * pos * share * rng.range(0.85, 1.15));
+      addXp(sec, BASE * 0.4 * pos * share * boost * rng.range(0.85, 1.15));
     }
   }
 

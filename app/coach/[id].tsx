@@ -33,7 +33,7 @@ export default function CoachDetail() {
     );
   }
 
-  const team = getTeam(c.teamId);
+  const team = c.teamId ? getTeam(c.teamId) : undefined;
   const isMine = !!selectedTeamId && c.teamId === selectedTeamId;
   // 실제 적용 중인 방향: 단장 오버라이드 우선, 없으면 감독 기본
   const applied: TrainingFocus = isMine && trainingFocus ? trainingFocus : c.trainingFocus;

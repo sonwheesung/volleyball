@@ -84,6 +84,14 @@ export default function Office() {
         </Muted>
       </Card>
 
+      <Card onPress={() => router.push('/staff')}>
+        <Row>
+          <Title>스태프 계약</Title>
+          <Muted>감독 · 코치 · 스카우터 →</Muted>
+        </Row>
+        <Muted style={{ fontSize: 12, marginTop: 2 }}>감독 영입 · 전문 코치(훈련 부스트) · 스카우터(드래프트 공개도)</Muted>
+      </Card>
+
       <Title>계약 관리</Title>
       {roster.map((p) => {
         const market = marketValue(p, getPlayerProduction(p.id, currentDay));

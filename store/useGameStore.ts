@@ -5,7 +5,9 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride } from '../data/league';
+import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
+  hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
+  hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
 import { accrueCareer } from '../engine/production';
@@ -39,6 +41,9 @@ interface GameState {
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
   trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
+  staffHead: Record<string, string>;           // teamId → 영입 감독 id(STAFF_SYSTEM)
+  staffAssistants: Record<string, string[]>;   // teamId → 영입 코치 ids
+  staffScouts: Record<string, string[]>;       // teamId → 영입 스카우터 ids
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -55,6 +60,11 @@ interface GameState {
   recordChampion: (season: number, championId: string) => void;
   setSubPolicy: (policy: Partial<SubPolicy>) => void;
   setTrainingFocus: (focus: TrainingFocus | null) => void;
+  hireCoach: (coachId: string) => boolean;
+  hireAssistant: (id: string) => boolean;
+  releaseAssistant: (id: string) => void;
+  hireScout: (id: string) => boolean;
+  releaseScout: (id: string) => void;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -77,6 +87,9 @@ const freshSave = {
   hallOfFame: [] as HofEntry[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
   trainingFocus: null as TrainingFocus | null,
+  staffHead: {} as Record<string, string>,
+  staffAssistants: {} as Record<string, string[]>,
+  staffScouts: {} as Record<string, string[]>,
 };
 
 export const useGameStore = create<GameState>()(
@@ -128,6 +141,40 @@ export const useGameStore = create<GameState>()(
         const tid = get().selectedTeamId;
         if (tid) setFocusOverride(tid, focus);
         set({ trainingFocus: focus });
+      },
+      // 스태프 계약(STAFF_SYSTEM) — league가 예산·중복을 판정하고, 성공 시 상태를 동기화
+      hireCoach: (coachId) => {
+        const tid = get().selectedTeamId;
+        if (!tid) return false;
+        const ok = hireHeadCoach(tid, coachId);
+        if (ok) { const s = getStaffState(); set({ staffHead: s.head, staffAssistants: s.asst, staffScouts: s.scout }); }
+        return ok;
+      },
+      hireAssistant: (id) => {
+        const tid = get().selectedTeamId;
+        if (!tid) return false;
+        const ok = hireAsstLeague(tid, id);
+        if (ok) set({ staffAssistants: getStaffState().asst });
+        return ok;
+      },
+      releaseAssistant: (id) => {
+        const tid = get().selectedTeamId;
+        if (!tid) return;
+        releaseAsstLeague(tid, id);
+        set({ staffAssistants: getStaffState().asst });
+      },
+      hireScout: (id) => {
+        const tid = get().selectedTeamId;
+        if (!tid) return false;
+        const ok = hireScoutLeague(tid, id);
+        if (ok) set({ staffScouts: getStaffState().scout });
+        return ok;
+      },
+      releaseScout: (id) => {
+        const tid = get().selectedTeamId;
+        if (!tid) return;
+        releaseScoutLeague(tid, id);
+        set({ staffScouts: getStaffState().scout });
       },
 
       endSeason: () => {
@@ -225,11 +272,15 @@ export const useGameStore = create<GameState>()(
         hallOfFame: s.hallOfFame,
         subPolicy: s.subPolicy,
         trainingFocus: s.trainingFocus,
+        staffHead: s.staffHead,
+        staffAssistants: s.staffAssistants,
+        staffScouts: s.staffScouts,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);
         if (state?.rosters) commitRosters(state.rosters);
         if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
+        if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
         useGameStore.setState({ hydrated: true });
       },
     },

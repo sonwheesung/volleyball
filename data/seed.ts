@@ -5,12 +5,16 @@ import { createRng, strSeed, type Rng } from '../engine/rng';
 import { TRAINABLE_STATS } from '../engine/training';
 import { rollFAPref } from '../engine/faMarket';
 import { computeSalary } from '../engine/salary';
+import { headCoachSalary, assistantSalary, scoutSalary } from '../engine/staff';
 import type {
+  AssistantCoach,
   CareerStats,
   Coach,
+  CoachSpecialty,
   CoachStyle,
   Player,
   Position,
+  Scout,
   TrainableStat,
   TrainingFocus,
 } from '../types';
@@ -19,7 +23,9 @@ import { COACH_NAMES, FOREIGN_NAMES, GIVEN, SURNAMES, TEAM_NAMES } from './names
 export interface League {
   teams: Team[];
   players: Player[];
-  coaches: Coach[];
+  coaches: Coach[];            // 팀 배정 감독 + 프리에이전트 감독 풀(teamId=null)
+  assistants: AssistantCoach[]; // 전문 코치 풀(프리)
+  scouts: Scout[];             // 스카우터 풀(프리)
 }
 
 import type { Team } from '../types';
@@ -269,14 +275,16 @@ export function generateLeague(seed: number): League {
     // 아키타입을 팀마다 다르게 배정 (분화 보장)
     const arch = ARCHETYPES[ti % ARCHETYPES.length];
     const coachId = `${teamId}c`;
+    const charisma = rng.int(45, 95);
     coaches.push({
       id: coachId,
       name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)],
       age: rng.int(45, 64),
-      charisma: rng.int(45, 95),
+      charisma,
       style: arch.style,
       archetype: arch.name,
       trainingFocus: arch.focus,
+      salary: headCoachSalary(charisma),
       teamId,
     });
 
@@ -291,5 +299,39 @@ export function generateLeague(seed: number): League {
     });
   });
 
-  return { teams, players, coaches };
+  // ── 스태프 프리에이전트 풀 (STAFF_SYSTEM) — 단장이 영입 ──
+  const assistants: AssistantCoach[] = [];
+  const scouts: Scout[] = [];
+  const STYLES: CoachStyle[] = ['attack', 'defense', 'balanced'];
+  const SPECIALTIES: CoachSpecialty[] = ['attack', 'defense', 'stamina', 'setter', 'mental'];
+
+  // 프리 감독 6명(아키타입·성향 다양)
+  for (let i = 0; i < 6; i++) {
+    const arch = ARCHETYPES[rng.int(0, ARCHETYPES.length - 1)];
+    const ch = rng.int(48, 96);
+    coaches.push({
+      id: `fc${i}`, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(44, 65),
+      charisma: ch, style: STYLES[rng.int(0, STYLES.length - 1)], archetype: arch.name,
+      trainingFocus: arch.focus, salary: headCoachSalary(ch), teamId: null,
+    });
+  }
+  // 전문 코치 — 분야별 4명(=20)
+  let ai = 0;
+  for (const sp of SPECIALTIES) for (let k = 0; k < 4; k++) {
+    const rating = rng.int(52, 92);
+    assistants.push({
+      id: `ac${ai++}`, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(38, 62),
+      specialty: sp, rating, salary: assistantSalary(rating), teamId: null,
+    });
+  }
+  // 스카우터 12명
+  for (let i = 0; i < 12; i++) {
+    const sc = rng.int(45, 93);
+    scouts.push({
+      id: `sc${i}`, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(40, 66),
+      scouting: sc, salary: scoutSalary(sc), teamId: null,
+    });
+  }
+
+  return { teams, players, coaches, assistants, scouts };
 }

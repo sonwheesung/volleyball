@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
-import { getTeam } from '../data/league';
+import { getTeam, teamScoutReveal } from '../data/league';
 import { computeStandings } from '../data/standings';
 import { resolveDraft } from '../engine/draft';
 import { overall } from '../engine/overall';
@@ -47,6 +47,16 @@ export default function DraftCenter() {
   const classSorted = [...ctx.cls].sort((a, b) => overall(b) - overall(a));
   const myRank = standings.findIndex((s) => s.teamId === my) + 1;
 
+  // 스카우팅 안개(STAFF_SYSTEM) — 공개도↓일수록 OVR은 범위로, 포텐셜은 흐리게
+  const reveal = teamScoutReveal(my);
+  const fogStars = (p: Player) => (reveal >= 0.6 ? potStars(p) : reveal >= 0.3 ? '?·?' : '?');
+  const fogOvr = (p: Player): string => {
+    const o = overall(p);
+    if (reveal >= 0.92) return `${o}`;
+    const w = Math.max(2, Math.round((1 - reveal) * 14));
+    return `${Math.max(40, o - w)}~${Math.min(99, o + w)}`;
+  };
+
   const onFinish = () => {
     endSeason();
     router.replace('/(tabs)');
@@ -64,6 +74,9 @@ export default function DraftCenter() {
         <Muted style={{ fontSize: 12 }}>
           하위 팀이 앞 순번(추첨). 원하는 신인을 담아두면 순번에서 가능한 선수를 자동 지명합니다.
           AI가 먼저 데려가면 다음 우선순위로 넘어갑니다. ★=포텐셜(스카우팅).
+        </Muted>
+        <Muted style={{ fontSize: 12, marginTop: 4, color: reveal >= 0.6 ? theme.good : theme.warn }}>
+          스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= 0.92 ? '(정밀)' : '— 스태프에서 스카우터를 영입하면 능력치가 더 선명해집니다'}
         </Muted>
       </Card>
 
@@ -96,11 +109,13 @@ export default function DraftCenter() {
             <PosTag pos={p.position} />
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>
-                {p.name} <Text style={{ color: theme.warn }}>{potStars(p)}</Text>
+                {p.name} <Text style={{ color: theme.warn }}>{fogStars(p)}</Text>
               </Text>
               <Text style={styles.sub}>{p.age}세 · {p.height}cm</Text>
             </View>
-            <OvrBadge value={overall(p)} />
+            {reveal >= 0.92
+              ? <OvrBadge value={overall(p)} />
+              : <Text style={{ minWidth: 52, textAlign: 'center', color: theme.muted, fontWeight: '800', fontSize: 13 }}>{fogOvr(p)}</Text>}
             <Text style={{ width: 40, textAlign: 'right', color: picked ? theme.accent : theme.muted, fontWeight: '800' }}>
               {picked ? `담음${wi + 1}` : '담기'}
             </Text>
