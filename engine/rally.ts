@@ -36,6 +36,9 @@ const SERVE_DIFF: Record<ServeT, number> = { safe: -0.1, float: 0.04, jumpfloat:
 type Atk = 'quick' | 'tempo' | 'open' | 'back';
 const BLOCK_AVOID: Record<Atk, number> = { quick: 1.14, tempo: 1.08, back: 1.03, open: 0.98 };
 const ATK_ERR: Record<Atk, number> = { quick: 0.05, tempo: 0.03, back: 0.012, open: 0 };
+// 공격 화력 보정: 표시 spike를 풀스케일로 올린 만큼(ratings.ts) 엔진 화력을 옛 캘리브레이션으로 되돌림.
+// 표시 spike(n≈0.63) × ATK_K ≈ 옛 spike(n≈0.40). 킬·스터프 KOVO 분포 유지.
+const ATK_K = 0.64;
 const FAKE: Record<Atk, number> = { quick: 1, tempo: 1, back: 0, open: 0 };
 
 const CHANCE_Q = 0.32; // 이 이하 리시브/디그 품질이면 찬스볼(6장)
@@ -292,7 +295,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const qf = 0.6 + 0.5 * q;
     const atkStyleMul = at.style === 'attack' ? 1.05 : at.style === 'defense' ? 0.98 : 1; // 공격형 화력↑ / 수비형 화력↓(트레이드오프)
     const serveDisadv = att === serving ? 0.9 : 1; // 서브한 팀은 전환 공격 불리(서브 직후 out-of-system) → 사이드아웃↑
-    const attackPower = n(R(attacker).spike) * setMul * BLOCK_AVOID[atk] * qf * momFactor(at.momentum) * eg(att) * eff(at, attacker) * atkStyleMul * serveDisadv;
+    const attackPower = ATK_K * n(R(attacker).spike) * setMul * BLOCK_AVOID[atk] * qf * momFactor(at.momentum) * eg(att) * eff(at, attacker) * atkStyleMul * serveDisadv;
     const blk = blockEval(df, atk, R, rng);
     const firstBall = hop === 0; // 리시브 후 첫 공격(인시스템) — 서브한 팀의 블록이 미완성
     const blkStr = blk.str * (firstBall ? 0.74 : 1);
