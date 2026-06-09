@@ -10,6 +10,9 @@ import type { Rng } from './rng';
 import type { Player, Position, Side, CoachStyle } from '../types';
 import type { Ratings } from './ratings';
 import { frontRow, backRow, serverIndex } from './rotation';
+import { type Pt, zoneXY, playerXY, serveSpot, dist, jitter, COURT } from './court';
+import type { Tele, AtkResult } from './events';
+import { serveLanding, tossLanding, attackCourse } from './spatial';
 
 const n = (v: number) => v / 100;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -167,9 +170,9 @@ function chemistry(setter: Player, attacker: Player): number {
 }
 
 /** 블로킹 3축 (5.2): 인원·타이밍(리드/커밋)·강도. 감독 성향이 스터프/소프트 선호를 가른다 */
-function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng): { str: number } {
+function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng): { str: number; count: number; blockers: Player[] } {
   const fr = front(df);
-  if (!fr.length) return { str: 0.4 };
+  if (!fr.length) return { str: 0.4, count: 0, blockers: [] };
   const readiness = fr.reduce((s, p) => s + (n(p.reaction) + n(p.vq)) / 2, 0) / fr.length;
   const isRead = rng.next() < clamp(0.2 + 0.5 * readiness, 0.05, 0.9);
   let count = atk === 'quick' ? 1 : atk === 'open' ? (rng.next() < 0.5 ? 2 : 3)
@@ -180,7 +183,7 @@ function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng): { str: number } 
   for (const p of sorted) drain(df, p, 0.4);
   const skill = 0.5 * Math.max(...vals) + 0.5 * (vals.reduce((a, b) => a + b, 0) / vals.length);
   const fooled = FAKE[atk] && !isRead ? 0.7 : 1.0;
-  return { str: skill * (0.72 + 0.14 * count) * fooled * momFactor(df.momentum) };
+  return { str: skill * (0.72 + 0.14 * count) * fooled * momFactor(df.momentum), count, blockers: sorted };
 }
 
 /** 선택적 통계 수집 — 비우면(undefined) 아무 영향 없음(결과 불변). 밸런싱 측정 전용. */
@@ -222,10 +225,21 @@ export const newRallyStats = (): RallyStats => ({
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
  * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats): Side {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele): Side {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
   const eg = (s: Side) => (s === 'home' ? edge.home : edge.away);
+
+  // ── 공간 텔레메트리(승패 불변; 좌표는 별도 srng로 파생, 메인 rng 불간섭) ──
+  const E = tele?.events;
+  const sj: () => number = tele ? () => tele.srng.next() : () => 0;
+  const xyOf = (side: Side, t: RallyTeam, p: Player): Pt => {
+    const i = t.six.indexOf(p);
+    if (i >= 0) return playerXY(side, t.six, t.rotation, i, t.libero);
+    for (const bi of backRow(t.rotation)) if (t.six[bi]?.position === 'MB') return playerXY(side, t.six, t.rotation, bi, t.libero); // 리베로
+    return zoneXY(side, 6);
+  };
+  const emitPoint = (winner: Side, reason: string) => { if (E) E.push({ t: 'point', winner, reason }); };
 
   const serv = teamOf(serving);
   const recvSide = other(serving);
@@ -247,9 +261,39 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   if (pos) pos.serve[sp.position]++;
   const sideKo = (s: Side) => (s === 'home' ? '홈' : '원정');
   if (trace) trace.push(`서브 [${sideKo(serving)}] ${sp.name}(${sp.position}) · ${SERVE_KO[st]}`);
+
+  // 공간: 서브 위치·의도 목표·리시버 선정(별도 srng) — 결과는 아래 s0로 파생
+  let srvFrom: Pt = { x: 0, y: 0 }, srvTarget: Pt = { x: 0, y: 0 };
+  let passer: Player | null = null, passerXY: Pt = { x: 0, y: 0 };
+  if (E) {
+    srvFrom = serveSpot(serving, sj);
+    const rcv = receivers(recv);
+    // 패서 = 리시브 좋은 쪽으로 가중 선택(좌표 srng)
+    passer = rcv.length ? rcv[Math.min(rcv.length - 1, Math.floor(sj() * rcv.length))] : sp;
+    passerXY = xyOf(recvSide, recv, passer);
+    srvTarget = jitter({ x: passerXY.x, y: passerXY.y }, 1.2, sj); // 서버가 노린 점(빈 곳·심)
+  }
+
   const s0 = rng.next();
-  if (s0 < aceP) { if (stats) stats.aces++; if (trace) trace.push('  → 서브 에이스! (서브팀 득점)'); return serving; }
-  if (s0 < aceP + errP) { if (stats) stats.serveErrs++; if (trace) trace.push('  → 서브 범실 (리시브팀 득점)'); return recvSide; }
+  if (s0 < aceP) {
+    if (stats) stats.aces++; if (trace) trace.push('  → 서브 에이스! (서브팀 득점)');
+    if (E && passer) {
+      const land = serveLanding(recvSide, passerXY, srvTarget, 'ace', sj);
+      E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'ace' });
+      E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: 'ace', q: 0 });
+      emitPoint(serving, '서브 에이스');
+    }
+    return serving;
+  }
+  if (s0 < aceP + errP) {
+    if (stats) stats.serveErrs++; if (trace) trace.push('  → 서브 범실 (리시브팀 득점)');
+    if (E && passer) {
+      const land = serveLanding(recvSide, passerXY, srvTarget, 'fault', sj);
+      E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'fault' });
+      emitPoint(recvSide, '서브 범실');
+    }
+    return recvSide;
+  }
 
   // ── 포지션 폴트 (1.4) ──
   for (const side of [serving, recvSide] as Side[]) {
@@ -261,6 +305,11 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   let att = recvSide;
   let q = clamp(0.58 + 0.6 * (recvSkill - svPow) - SERVE_DIFF[st] + rng.range(-0.15, 0.15), 0.08, 0.98);
   if (trace) trace.push(`리시브 [${sideKo(recvSide)}] 품질 ${q.toFixed(2)} (${qLabel(q)})`);
+  if (E && passer) {
+    const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, q);
+    E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'in' });
+    E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: q >= 0.6 ? 'good' : q >= 0.4 ? 'poor' : 'shank', q });
+  }
 
   for (let hop = 0; hop < CAP; hop++) {
     const at = teamOf(att);
@@ -289,6 +338,24 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     }
     if (trace) trace.push(`  세트 [${sideKo(att)}] ${setter.name}(S) → ${ATK_KO[atk]} : ${attacker.name}(${attacker.position})`);
 
+    // 공간: 세터 위치 → 공격수 타점으로 토스(난조·아웃오브시스템이면 엉뚱한 곳)
+    const attSide = att, defSide = other(att);
+    let attackerHitXY: Pt = { x: 0, y: 0 };
+    const pushAttack = (result: AtkResult, diggerXY: Pt | null): Pt => {
+      const course = attackCourse(defSide, result, attSide, diggerXY, attackerHitXY.x, sj);
+      E!.push({ t: 'attack', side: attSide, player: attacker.name, pos: attacker.position, atk, from: attackerHitXY, course, result });
+      return course;
+    };
+    if (E) {
+      const inSystem = q >= CHANCE_Q;
+      const aXY = xyOf(attSide, at, attacker);
+      const isBack = atk === 'back';
+      const hy = attSide === 'home' ? (isBack ? COURT.NET_Y + 3.2 : COURT.NET_Y + 1.2) : (isBack ? COURT.NET_Y - 3.2 : COURT.NET_Y - 1.2);
+      attackerHitXY = { x: Math.max(0.5, Math.min(COURT.W - 0.5, aXY.x)), y: hy };
+      const toss = tossLanding(attackerHitXY, attSide, inSystem, q, sj);
+      E.push({ t: 'set', side: attSide, player: setter.name, pos: setter.position, from: xyOf(attSide, at, setter), target: toss.target, landing: toss.landing, atk, offTarget: toss.offTarget, inSystem });
+    }
+
     const chem = (atk === 'quick' || atk === 'tempo') ? 0.12 * chemistry(setter, attacker) : 0; // 케미(9.2)
     const chanceBall = q < CHANCE_Q ? 0.85 : 1; // 찬스볼은 세트 품질 하락(6장)
     const setMul = (0.85 + 0.3 * setQ + chem) * chanceBall;
@@ -299,6 +366,10 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const blk = blockEval(df, atk, R, rng);
     const firstBall = hop === 0; // 리시브 후 첫 공격(인시스템) — 서브한 팀의 블록이 미완성
     const blkStr = blk.str * (firstBall ? 0.74 : 1);
+    if (E && blk.count > 0) {
+      const netAt: Pt = { x: attackerHitXY.x, y: defSide === 'home' ? COURT.NET_Y + 0.2 : COURT.NET_Y - 0.2 };
+      E.push({ t: 'block', side: defSide, players: blk.blockers.map((p) => p.name), positions: blk.blockers.map((p) => p.position), at: netAt, count: blk.count });
+    }
 
     // 좋은 패스(높은 q)면 깔끔히 결정(범실↓→사이드아웃↑), 난조면 범실 급증. 기복·VQ가 낮춤
     const balancedDiscipline = at.style === 'balanced' ? 0.012 : 0; // 밸런스형: 기본기(범실↓)
@@ -306,15 +377,16 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const blockP = clamp(0.07 + 0.4 * (blkStr - attackPower), 0.02, 0.4);
     if (stats) stats.attacks++;
     const r1 = rng.next();
-    if (r1 < errP2) { if (stats) stats.attackErrs++; if (trace) trace.push('    → 공격 범실 (상대 득점)'); return other(att); }
+    if (r1 < errP2) { if (stats) stats.attackErrs++; if (trace) trace.push('    → 공격 범실 (상대 득점)'); if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); } return other(att); }
     if (r1 < errP2 + blockP) {
       // 공격방법(5.1): 영리한 공격수는 블록아웃/툴샷으로 살린다(VQ↑일수록)
       const blockOutP = clamp(0.12 + 0.35 * n(attacker.vq) - 0.15, 0.04, 0.4);
-      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); return att; }
+      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return att; }
       const stuffPref = df.style === 'attack' ? 0.04 : df.style === 'defense' ? -0.04 : 0;
       const stuffProb = clamp(0.27 + stuffPref + 0.7 * (blkStr - attackPower), 0.05, 0.8);
-      if (rng.next() < stuffProb) { if (stats) stats.stuffs++; if (trace) trace.push(`    → 스터프 블록! [${sideKo(other(att))}] 득점`); return other(att); }
+      if (rng.next() < stuffProb) { if (stats) stats.stuffs++; if (trace) trace.push(`    → 스터프 블록! [${sideKo(other(att))}] 득점`); if (E) { pushAttack('blocked', null); emitPoint(other(att), '스터프 블록'); } return other(att); }
       if (stats) stats.softblocks++;
+      if (E) pushAttack('softblock', null);
       q = clamp(0.7 + rng.range(-0.1, 0.1), 0.4, 0.92);          // 소프트 블록 → 수비측 좋은 전환
       if (trace) trace.push(`    → 소프트 블록 (공 튕겨 [${sideKo(other(att))}] 전환, q ${q.toFixed(2)})`);
       att = other(att);
@@ -327,12 +399,15 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     if (rng.next() < digP) {
       if (stats) stats.digs++;
       q = clamp(0.4 + 0.4 * (digStr - attackPower) + rng.range(-0.1, 0.1), 0.1, 0.85);
-      if (trace) { const d = defenders(df); const dg = d.length ? d.reduce((b, p) => (R(p).dig > R(b).dig ? p : b)) : attacker; trace.push(`    → 디그 성공 [${sideKo(other(att))}] ${dg.name}(${dg.position}) (공 튕겨 전환, q ${q.toFixed(2)})`); }
+      const d = defenders(df); const dg = d.length ? d.reduce((b, p) => (R(p).dig > R(b).dig ? p : b)) : attacker;
+      if (trace) trace.push(`    → 디그 성공 [${sideKo(other(att))}] ${dg.name}(${dg.position}) (공 튕겨 전환, q ${q.toFixed(2)})`);
+      if (E) { const dgXY = xyOf(defSide, df, dg); const course = pushAttack('dug', dgXY); E.push({ t: 'dig', side: defSide, player: dg.name, pos: dg.position, at: dgXY, ball: course, reach: dist(dgXY, course), ok: true }); }
       att = other(att);
       continue;
     }
     if (stats) stats.kills++;
     if (trace) trace.push(`    → 공격 성공(킬)! [${sideKo(att)}] ${attacker.name} 득점`);
+    if (E) { pushAttack('kill', null); emitPoint(att, '공격 성공'); }
     return att;                                                 // 공격 성공(kill)
   }
   return att;

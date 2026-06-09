@@ -6,10 +6,11 @@
 import type { Player, Side, CoachStyle, SubPolicy } from '../types';
 import type { SimResult, PointLog } from './simMatch';
 import type { Ratings } from './ratings';
-import { createRng } from './rng';
+import { createRng, strSeed } from './rng';
 import { deriveRatings } from './ratings';
 import { buildLineup } from './lineup';
 import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge, type RallyStats, type PosStats } from './rally';
+import type { RallyEvent } from './events';
 import { rotate, serverIndex, frontRow, backRow } from './rotation';
 
 // 작전 교체 (MATCH_SYSTEM 1.3b)
@@ -37,6 +38,7 @@ export interface CoachInfo { style: CoachStyle; charisma: number }
 export interface MatchOpts {
   edge?: Edge; home?: CoachInfo; away?: CoachInfo; stats?: RallyStats; trace?: string[]; pos?: PosStats;
   homePolicy?: SubPolicy; awayPolicy?: SubPolicy; // 작전 교체 방침(미지정 시 기본)
+  events?: RallyEvent[]; // 공간 텔레메트리 싱크(있으면 랠리별 독립 srng로 좌표 이벤트 누적; 승패 불변)
 }
 
 const DEFAULT_COACH: CoachInfo = { style: 'balanced', charisma: 50 };
@@ -52,6 +54,7 @@ export function simulateMatch(
   opts: MatchOpts = {},
 ): SimResult {
   const rng = createRng(seed >>> 0);
+  let rallyNo = 0; // 공간 텔레메트리: 랠리별 독립 srng 시드용(메인 rng 불간섭)
   const edge: Edge = opts.edge ?? { home: 1, away: 1 };
   const hc = opts.home ?? DEFAULT_COACH;
   const ac = opts.away ?? DEFAULT_COACH;
@@ -196,7 +199,9 @@ export function simulateMatch(
         }
       }
       if (opts.trace) opts.trace.push(`[${h}:${a}] 서브권 ${serving === 'home' ? '홈' : '원정'} (로테이션 H${home.rotation}/A${away.rotation})`);
-      const winner = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos);
+      const tele = opts.events ? { events: opts.events, srng: createRng(strSeed(`${seed}:r:${rallyNo}`)), rallyNo } : undefined;
+      rallyNo++;
+      const winner = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner });
