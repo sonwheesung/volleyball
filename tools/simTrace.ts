@@ -58,7 +58,7 @@ function main(): void {
 
   log(`\n═══ 세트(토스) 선택 집계 — ${S.rallies}랠리 / ${totalAtk}공격 ═══`);
   log('[공격 종류 분포]');
-  log(`  속공(센터)      ${pct(S.atkQuick, totalAtk)}`);
+  log(`  속공(센터)      ${pct(S.atkQuick, totalAtk)}  └ A퀵 ${pct(S.atkQuickA, S.atkQuick)} · B퀵 ${pct(S.atkQuickB, S.atkQuick)} · 이동속공 ${pct(S.atkSlide, S.atkQuick)} (속공 내 비중)`);
   log(`  시간차(센터)    ${pct(S.atkTempo, totalAtk)}`);
   log(`  오픈(레프트/라이트) ${pct(S.atkOpen, totalAtk)}`);
   log(`  후위공격        ${pct(S.atkBack, totalAtk)}`);

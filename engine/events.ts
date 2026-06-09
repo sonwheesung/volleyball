@@ -7,6 +7,8 @@ import type { Rng } from './rng';
 
 export type ServeT = 'safe' | 'float' | 'jumpfloat' | 'spike';
 export type Atk = 'quick' | 'tempo' | 'open' | 'back';
+/** 속공 세부 종류 — A퀵(세터 앞 1m), B퀵(2m 넓게), 이동속공(세터 뒤 횡이동 슬라이드) */
+export type QuickKind = 'A' | 'B' | 'slide';
 
 /** 리시브 3상태(+에이스) — 성공/난조/못닿음(에이스 허용) */
 export type RecvResult = 'good' | 'poor' | 'shank' | 'ace';
@@ -15,8 +17,8 @@ export type AtkResult = 'kill' | 'blocked' | 'dug' | 'error' | 'blockout' | 'sof
 export type RallyEvent =
   | { t: 'serve'; side: Side; player: string; pos: Position; serveType: ServeT; from: Pt; target: Pt; landing: Pt; errMargin: number; outcome: 'in' | 'ace' | 'fault' }
   | { t: 'receive'; side: Side; player: string; pos: Position; at: Pt; ball: Pt; reach: number; result: RecvResult; q: number }
-  | { t: 'set'; side: Side; player: string; pos: Position; from: Pt; target: Pt; landing: Pt; atk: Atk; offTarget: number; inSystem: boolean }
-  | { t: 'attack'; side: Side; player: string; pos: Position; atk: Atk; from: Pt; course: Pt; result: AtkResult }
+  | { t: 'set'; side: Side; player: string; pos: Position; from: Pt; target: Pt; landing: Pt; atk: Atk; quickKind?: QuickKind; offTarget: number; inSystem: boolean }
+  | { t: 'attack'; side: Side; player: string; pos: Position; atk: Atk; quickKind?: QuickKind; from: Pt; course: Pt; result: AtkResult }
   | { t: 'block'; side: Side; players: string[]; positions: Position[]; at: Pt; count: number }
   | { t: 'dig'; side: Side; player: string; pos: Position; at: Pt; ball: Pt; reach: number; ok: boolean }
   | { t: 'point'; winner: Side; reason: string };

@@ -59,6 +59,9 @@ const courseIn = { kill: [0, 0] as [number, number], err: [0, 0] as [number, num
 let blkCount = 0, blkTot = 0, blkBackBad = 0;
 let setterAttacks = 0;
 let backDeep = [0, 0] as [number, number];
+const qk: Record<string, number> = { A: 0, B: 0, slide: 0 };
+const qkOff: Record<string, number> = { A: 0, B: 0, slide: 0 }; // 세터 기준 타점 오프셋 합(좌우 미러 무관)
+let lastSetterX = 4.5; // 직전 세트의 세터 x(다음 attack과 짝)
 
 for (const e of all) {
   if (e.t === 'serve') {
@@ -71,6 +74,7 @@ for (const e of all) {
     if (e.inSystem) { setc.inSys++; setc.offIn += e.offTarget; } else { setc.out++; setc.offOut += e.offTarget; }
     setc.landTot++; if (inHalf(e.side, e.landing)) setc.landOwn++;
     bad(!inHalf(e.side, e.landing), `토스가 자기 코트 밖(엉뚱): ${P(e.landing)}`);
+    lastSetterX = e.from.x;
   } else if (e.t === 'attack') {
     atkBy[e.atk]++; atkRes[e.result] = (atkRes[e.result] ?? 0) + 1;
     const def = other(e.side);
@@ -78,6 +82,7 @@ for (const e of all) {
     if (e.result === 'error') { courseIn.err[1]++; if (!inHalf(def, e.course)) courseIn.err[0]++; }
     if (e.pos === 'S') setterAttacks++;
     if (e.atk === 'back') { backDeep[1]++; const deep = e.side === 'home' ? e.from.y > COURT.NET_Y + 2.5 : e.from.y < COURT.NET_Y - 2.5; if (deep) backDeep[0]++; }
+    if (e.atk === 'quick' && e.quickKind) { qk[e.quickKind]++; qkOff[e.quickKind] += (e.from.x - lastSetterX) * (e.side === 'home' ? -1 : 1); } // 세터 기준 좌(+)·우(−) 오프셋(미러 보정)
   } else if (e.t === 'block') { blkTot++; blkCount += e.count; bad(e.count < 1 || e.count > 3, `블록 인원 이상: ${e.count}`); if (e.positions.includes('L')) blkBackBad++; }
 }
 
@@ -92,6 +97,9 @@ log(`     도달거리 평균(m): good ${rt('good')} < poor ${rt('poor')} < shan
 log(`[3] 세트: 인시스템 ${pct(setc.inSys, setc.inSys + setc.out)} · 토스오차 인시스템 ${(setc.offIn / Math.max(1, setc.inSys)).toFixed(2)}m vs 아웃 ${(setc.offOut / Math.max(1, setc.out)).toFixed(2)}m (아웃이 커야 정상) · 자기코트 낙하 ${pct(setc.landOwn, setc.landTot)} (엉뚱X)`);
 const atkT = atkBy.quick + atkBy.tempo + atkBy.open + atkBy.back;
 log(`[4] 속공: 속공 ${pct(atkBy.quick, atkT)}·시간차 ${pct(atkBy.tempo, atkT)} (센터 ${pct(atkBy.quick + atkBy.tempo, atkT)}) · 결과 ${Object.entries(atkRes).map(([k, v]) => `${k} ${pct(v, atkT)}`).join(' ')}`);
+const qkTot = qk.A + qk.B + qk.slide;
+const aoff = (k: string) => (qk[k] ? (qkOff[k] / qk[k]).toFixed(1) : '-');
+log(`     속공 세부: A퀵 ${pct(qk.A, qkTot)}(세터앞 ${aoff('A')}m) · B퀵 ${pct(qk.B, qkTot)}(레프트 ${aoff('B')}m) · 이동속공 ${pct(qk.slide, qkTot)}(세터뒤 ${aoff('slide')}m)  ← 오프셋이 갈리면 공간 구분 OK(+레프트/−라이트)`);
 log(`     ※ "토스 빠르거나 느려서 속공 불발"(타이밍 변수)은 3단계 범위 — 현재 미모델`);
 log(`[5] 2어택(세터 공격): ${setterAttacks}회 / ${atkT}공격 (${pct(setterAttacks, atkT)}) — 전위에 OH/OP 없는 로테이션의 폴백일 뿐, 의도적 2어택 아님(3단계에서 모델링)`);
 log(`[6] 백어택: ${pct(atkBy.back, atkT)} · 후위(깊은 타점)에서 출발 ${pct(backDeep[0], backDeep[1])}`);
