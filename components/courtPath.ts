@@ -27,6 +27,13 @@ export interface Lineups { home: Lineup; away: Lineup }
 
 export const RECV_FAULT = 0.05; // 리시브 미스(투터치 등) 확률 — 지는 쪽 한정
 
+// 구간 지속(ms, 1배속) — 렌더(MatchCourt)와 헤드리스 감사기가 공유. WP.dur가 있으면 우선.
+export const SEG_DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 320 };
+
+/** 마커 이동 시간(ms) — 거리 비례(짧은 조정=빠릿, 긴 전력질주=오래 — 워프 방지).
+ *  0.45px/ms ≈ 화면 5.6m/s(슬로모 2배 반영 시 실속 스프린트). 렌더·감사기 공유. */
+export const markerTravelMs = (d: number): number => Math.max(240, Math.min(1400, d / 0.45));
+
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
@@ -193,8 +200,10 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     if (att === r.scorer) {
       if (intoBlock) {
         // 블로킹 아웃(터치아웃): 블록 맞고 옆으로 아웃 → 공격 득점. 점선=의도(코트)
+        // 나가는 공이라도 수비 2명이 어떻게든 살리려 쫓아간다(실제 배구 — 못 살리고 실점)
+        const outPt = { x: ap.x < W / 2 ? W + 12 : -12, y: (def === 'home' ? 0.78 : 0.22) * H };
         wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-        wp.push({ x: ap.x < W / 2 ? W + 12 : -12, y: (def === 'home' ? 0.78 : 0.22) * H, side: def, idx: -1, kind: 'fault' });
+        wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', movers: chasersTo(def, outPt, 2, 0.8) });
       } else {
         // 클린 킬: 블록을 각으로 피해 코트로 (수비 못 닿음)
         wp.push({ x: intended.x, y: intended.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, intended, 1, 0.5), ...coverMovers] });
@@ -205,8 +214,10 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     // att !== scorer (def가 득점하거나 랠리 지속)
     if (intoBlock && rng.next() < 0.55) {
       // 스터프 블록: 막혀서 자기 코트로 떨어짐 → 블로킹 당함(def 득점, 랠리 종료)
+      // 커버 선수들이 떨어지는 공으로 몸을 던진다(못 살리고 실점)
+      const stuffPt = { x: clampN(ap.x + rng.range(-0.08, 0.08) * W, 12, W - 12), y: (att === 'home' ? 0.78 : 0.22) * H };
       wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-      wp.push({ x: clampN(ap.x + rng.range(-0.08, 0.08) * W, 12, W - 12), y: (att === 'home' ? 0.78 : 0.22) * H, side: att, idx: -1, kind: 'fault' });
+      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', movers: chasersTo(att, stuffPt, 2, 0.85) });
       break;
     }
 

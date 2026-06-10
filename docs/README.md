@@ -63,6 +63,9 @@
 npx tsc --noEmit                          # 앱 타입체크
 npx tsc --noEmit -p tsconfig.test.json    # 테스트 타입체크
 npm test                                  # node --test (현재 104 통과)
+npx tsx tools/auditBoard.ts 6              # 보드 안무 프레임 감사(기하 원리 8종 + ASCII 덤프)
+npx tsx tools/checkRallyChain.ts           # 랠리 3터치 체인·공격 적격 검증
+npx tsx tools/checkCourtBoard.ts           # 대형·동적 위치 전수 검사
 npx expo export --platform android        # 번들 확인 후 dist 삭제
 ```
 
