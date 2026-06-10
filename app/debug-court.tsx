@@ -24,7 +24,7 @@ const MR = 15;
 type Phase = '리시브 대형' | '스위칭(공격)' | '스위칭(수비)' | '존 기본위치' | '공방 순간(스파이크)' | '디그 순간';
 const PHASES: Phase[] = ['리시브 대형', '스위칭(공격)', '스위칭(수비)', '존 기본위치', '공방 순간(스파이크)', '디그 순간'];
 const LANES = [0.22, 0.5, 0.78];
-const LANE_KO = ['좌(4번)', '중(3번)', '우(2번)'];
+const LANE_KO = ['좌(4번)', '중(3번)', '우(2번)', '백어택(파이프)']; // 4번째는 공방 순간 전용
 // 디그 낙하 지점(수비 진영 기준 분율) — 깊은 좌/중앙/깊은 우/블록 뒤 짧은 팁
 const DIG_SPOTS: { ko: string; xf: number; yf: number }[] = [
   { ko: '깊은 좌', xf: 0.2, yf: 0.82 },
@@ -80,28 +80,40 @@ export default function DebugCourt() {
     if (phase === '스위칭(수비)') return switchedSpots(side, lu, rot, false, W, H).pos;
     if (phase === '공방 순간(스파이크)') {
       // MatchCourt의 토스~스파이크 순간 재현: 공격팀=커버 반원, 수비팀=블로커 벽+부채꼴
-      const laneF = LANES[laneIdx];
-      const ax = (side === attSide ? (attSide === 'home' ? laneF : 1 - laneF) : (attSide === 'home' ? laneF : 1 - laneF)) * W;
+      const isPipe = laneIdx === 3; // 백어택(파이프)
+      const laneF = isPipe ? 0.5 : LANES[laneIdx];
+      const ax = (attSide === 'home' ? laneF : 1 - laneF) * W;
       if (side === attSide) {
         const sw = switchedSpots(side, lu, rot, true, W, H);
         const pos = { ...sw.pos };
-        // 공격수 = 해당 라인에 가장 가까운 전위 히터(타격 위치로 살짝 전진)
-        const atk = sw.frontHitters.reduce((b, i) => (Math.abs(sw.pos[i].x - ax) < Math.abs(sw.pos[b].x - ax) ? i : b), sw.frontHitters[0]);
-        pos[atk] = { x: ax, y: (side === 'home' ? 0.56 : 0.44) * H };
-        // 커버 반원(공격수·세터 제외 최대 3, 좌→우 슬롯 배정)
+        // 공격수: 파이프=후위 OH/OP(3m 라인 뒤 타점) / 그 외=해당 라인 전위 히터
+        let atk: number;
+        if (isPipe) {
+          const backs = [1, 5, 6].map((z) => lineupIdxAt(rot, z))
+            .filter((i) => i !== sw.setterIdx && (lu.six[i].position === 'OH' || lu.six[i].position === 'OP'));
+          atk = backs.length
+            ? backs.reduce((b, i) => (Math.abs(sw.pos[i].x - ax) < Math.abs(sw.pos[b].x - ax) ? i : b), backs[0])
+            : sw.frontHitters[0];
+          pos[atk] = { x: ax, y: (side === 'home' ? 0.70 : 0.30) * H };
+        } else {
+          atk = sw.frontHitters.reduce((b, i) => (Math.abs(sw.pos[i].x - ax) < Math.abs(sw.pos[b].x - ax) ? i : b), sw.frontHitters[0]);
+          pos[atk] = { x: ax, y: (side === 'home' ? 0.56 : 0.44) * H };
+        }
+        // 커버 반원(공격수·세터 제외 최대 3, 좌→우 슬롯 배정. 백어택은 측면 커버가 타점 앞)
         const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== atk && i !== sw.setterIdx)
           .sort((a, b) => Math.abs(sw.pos[a].x - ax) - Math.abs(sw.pos[b].x - ax)).slice(0, 3)
           .sort((a, b) => sw.pos[a].x - sw.pos[b].x);
-        const cs = coverSpots(side, ax, cand.length, W, H);
+        const cs = coverSpots(side, ax, cand.length, W, H, isPipe);
         if (cand.length === 3) { pos[cand[0]] = cs[0]; pos[cand[2]] = cs[1]; pos[cand[1]] = cs[2]; }
         else cand.forEach((i, k) => { pos[i] = cs[k]; });
         return pos;
       }
-      // 수비팀: 전위 = 블로커 벽(가까운 3) / 후위 = 부채꼴
+      // 수비팀: 전위 = 블로커 벽(파이프 2장/그 외 3장) / 후위 = 부채꼴
       const swd = switchedSpots(side, lu, rot, false, W, H);
       const pos = { ...swd.pos };
       const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
-      const chosen = front.slice().sort((a, b) => Math.abs(swd.pos[a].x - ax) - Math.abs(swd.pos[b].x - ax)).slice(0, 3)
+      const nBlk = isPipe ? 2 : 3;
+      const chosen = front.slice().sort((a, b) => Math.abs(swd.pos[a].x - ax) - Math.abs(swd.pos[b].x - ax)).slice(0, nBlk)
         .sort((a, b) => swd.pos[a].x - swd.pos[b].x);
       const wall = blockerWall(side, ax, chosen.length, W, H);
       chosen.forEach((bi, k) => { pos[bi] = wall[k]; });
@@ -112,7 +124,7 @@ export default function DebugCourt() {
     }
     if (phase === '디그 순간') {
       // 스파이크가 낙하 지점으로 향한 순간: 수비 부채꼴에서 가장 가까운 후위가 디그 지점으로.
-      const laneF = LANES[laneIdx];
+      const laneF = LANES[laneIdx % 3]; // 백어택 라인(3)은 공방 순간 전용 — 디그에선 좌/중/우만
       const ax = (attSide === 'home' ? laneF : 1 - laneF) * W;
       if (side === attSide) {
         // 공격팀은 공방 순간 그대로(공격수+커버 반원)
@@ -183,7 +195,10 @@ export default function DebugCourt() {
         {phase === '공방 순간(스파이크)' || phase === '디그 순간' ? (
           <>
             <Ctl label={`공격: ${attSide === 'home' ? '홈' : '원정'}`} onPress={() => setAttSide((s) => (s === 'home' ? 'away' : 'home'))} />
-            <Ctl label={`라인: ${LANE_KO[laneIdx]}`} onPress={() => setLaneIdx((l) => (l + 1) % 3)} />
+            <Ctl
+              label={`라인: ${LANE_KO[phase === '공방 순간(스파이크)' ? laneIdx : laneIdx % 3]}`}
+              onPress={() => setLaneIdx((l) => (l + 1) % (phase === '공방 순간(스파이크)' ? 4 : 3))}
+            />
           </>
         ) : null}
         {phase === '디그 순간' ? (

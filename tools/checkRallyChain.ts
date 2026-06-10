@@ -82,6 +82,10 @@ for (let seed = 1; seed <= mult; seed++) {
             if (atkKind === 'back') {
               if (z === 2 || z === 3 || z === 4) issues.push(`${ctx}: 백어택인데 전위(zone${z})`);
               if (aPos !== 'OH' && aPos !== 'OP') issues.push(`${ctx}: 백어택을 ${aPos}가(OH/OP여야 — 리베로 표시 슬롯 금지)`);
+              // 커버 형태: 백어택 리바운드는 타점 앞(네트 쪽)에 떨어짐 — 측면 커버가 타점보다 앞에 있어야
+              const covers = (tossW.movers ?? []).filter((m: Mover) => m.side === att && m.idx !== atkIdx);
+              const hasFrontCover = covers.some((m: Mover) => (att === 'home' ? m.y < tossW.y - 2 : m.y > tossW.y + 2));
+              if (!hasFrontCover) issues.push(`${ctx}: 백어택 커버가 전부 타점 뒤(네트 앞 리바운드 무방비)`);
             } else {
               if (z !== 2 && z !== 3 && z !== 4) issues.push(`${ctx}: ${atkKind} 스파이커 idx${atkIdx}가 후위(zone${z})`);
               if ((atkKind === 'quick' || atkKind === 'tempo') && aPos !== 'MB') issues.push(`${ctx}: 속공/시간차를 ${aPos}가(센터여야)`);

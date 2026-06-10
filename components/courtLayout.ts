@@ -88,11 +88,12 @@ export function blockerWall(side: Side, attackX: number, count: number, W: numbe
   return spread.map((dx) => ({ x: clampN(attackX + dx, 24, W - 24), y: yNet }));
 }
 
-/** 공격 커버 — 공격수 뒤 반원: 가까운 2가 좌우 측면, 1은 깊은 중앙(긴 리바운드).
- *  일렬 가로 배치(로봇 같은 그림) 대신 실제 커버 형태. n(1~3)개 슬롯 반환. */
-export function coverSpots(side: Side, attackX: number, n: number, W: number, H: number): Px[] {
-  const yNear = (side === 'home' ? 0.68 : 0.32) * H;
-  const yDeep = (side === 'home' ? 0.78 : 0.22) * H;
+/** 공격 커버 — 블록 리바운드 낙하 구역을 감싸는 반원(가까운 2 측면 + 1 깊은 중앙).
+ *  전위 공격(타점=네트): 리바운드가 히터 뒤에 떨어짐 → 커버가 뒤(0.68/0.78).
+ *  백어택(타점=3m 라인): 리바운드가 히터 앞(네트 쪽)에 떨어짐 → 측면 커버가 앞(0.62), 깊은 커버는 뒤(0.80). */
+export function coverSpots(side: Side, attackX: number, n: number, W: number, H: number, backAtk = false): Px[] {
+  const yNear = (side === 'home' ? (backAtk ? 0.62 : 0.68) : (backAtk ? 0.38 : 0.32)) * H;
+  const yDeep = (side === 'home' ? (backAtk ? 0.80 : 0.78) : (backAtk ? 0.20 : 0.22)) * H;
   const cx = (dx: number) => clampN(attackX + dx, 24, W - 24);
   if (n <= 1) return [{ x: cx(0), y: yNear }];
   if (n === 2) return [{ x: cx(-32), y: yNear }, { x: cx(32), y: yNear }];

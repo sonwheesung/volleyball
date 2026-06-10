@@ -157,7 +157,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const coverCand = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && !decoys.includes(i))
       .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
       .sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
-    const cSpots = coverSpots(att, ahx, coverCand.length, W, H);
+    const cSpots = coverSpots(att, ahx, coverCand.length, W, H, atk === 'back');
     const coverMovers: Mover[] = coverCand.length === 3
       ? [
           { side: att, idx: coverCand[0], ...cSpots[0] },

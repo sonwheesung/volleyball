@@ -115,6 +115,7 @@ for (const side of ['home', 'away'] as Side[]) {
       ['부채꼴', fanSlots(side, ax, W, H), 26],
       ['블로커벽', blockerWall(side, ax, 3, W, H), 18], // 어깨 맞댐 — 약간 겹침 허용
       ['커버', coverSpots(side, ax, 3, W, H), 26],
+      ['커버(백어택)', coverSpots(side, ax, 3, W, H, true), 26],
     ];
     for (const [name, pts, minD] of sets) {
       for (const p of pts) {
@@ -129,7 +130,7 @@ for (const side of ['home', 'away'] as Side[]) {
       }
       // 좌→우 슬롯 순서(x 단조) — 동선 교차 방지의 전제 (커버는 [좌,우,깊은중앙] 구조라 앞 2개만)
       checks++;
-      const xs = name === '커버' ? pts.slice(0, 2).map((p) => p.x) : pts.map((p) => p.x);
+      const xs = name.startsWith('커버') ? pts.slice(0, 2).map((p) => p.x) : pts.map((p) => p.x); // 커버는 [좌,우,깊은중앙] 구조
       for (let k = 1; k < xs.length; k++) if (xs[k] < xs[k - 1] - 0.01) flag(`동적 ${side}/${name}@x${ax.toFixed(0)}: 슬롯 좌우 순서 역전`);
     }
   }
