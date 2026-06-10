@@ -6,6 +6,8 @@ import { SEASON, getEvolvedTeamPlayers, getPlayer, getTeam, getTeamCoach } from 
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings } from '../../data/standings';
 import { teamInjuriesOn } from '../../data/injury';
+import { buildNewsFeed } from '../../data/news';
+import { currentSeasonAwards } from '../../data/awards';
 import { SEVERITY_KO } from '../../engine/injury';
 import { teamOverall } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
@@ -49,6 +51,18 @@ export default function Dashboard() {
   const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
   const myRank = standings.findIndex((s) => s.teamId === teamId) + 1;
   const injuries = useMemo(() => teamInjuriesOn(teamId, currentDay), [teamId, currentDay, season]);
+  const archive = useGameStore((s) => s.archive);
+  const milestones = useGameStore((s) => s.milestones);
+  const hallOfFame = useGameStore((s) => s.hallOfFame);
+  const news = useMemo(
+    () => buildNewsFeed(archive, milestones, hallOfFame, season).slice(0, 5),
+    [archive, milestones, hallOfFame, season, currentDay],
+  );
+  const latestRoundMvp = useMemo(() => {
+    const r = currentSeasonAwards(season, currentDay).roundMvps;
+    for (let i = r.length - 1; i >= 0; i--) if (r[i]) return r[i];
+    return null;
+  }, [season, currentDay]);
 
   if (!team) return null;
 
@@ -116,6 +130,38 @@ export default function Dashboard() {
               </Row>
             );
           })}
+        </Card>
+      ) : null}
+
+      {latestRoundMvp ? (
+        <Card>
+          <Row>
+            <Muted>이번 시즌 라운드 MVP</Muted>
+            <Text style={{ color: theme.text, fontWeight: '800' }}>
+              {getPlayer(latestRoundMvp.playerId)?.name ?? ''} ({getTeam(latestRoundMvp.teamId)?.name?.split(' ').slice(-1)[0] ?? ''})
+            </Text>
+          </Row>
+        </Card>
+      ) : null}
+
+      {news.length > 0 ? (
+        <Card onPress={() => router.push('/(tabs)/history')}>
+          <Row>
+            <Muted style={{ marginBottom: 4 }}>📰 리그 뉴스</Muted>
+            <Text style={{ color: theme.accent }}>전체 ›</Text>
+          </Row>
+          {news.map((n, i) => (
+            <Text
+              key={i}
+              numberOfLines={1}
+              style={{
+                color: n.teamId === teamId ? theme.accent : n.big ? theme.warn : theme.text,
+                fontSize: 13, fontWeight: n.big ? '800' : '600', paddingVertical: 2,
+              }}
+            >
+              {n.big ? '★ ' : '· '}{n.headline}
+            </Text>
+          ))}
         </Card>
       ) : null}
 

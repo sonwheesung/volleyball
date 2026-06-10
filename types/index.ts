@@ -154,6 +154,15 @@ export interface Milestone {
 }
 
 /** 경기 중 작전 교체 방침 (MATCH_SYSTEM 1.3b) — 프리셋/방침 레벨, AI 자동 + 플레이어 토글 */
+/** 뉴스 피드 (NEWS_SYSTEM) — 자동 진행된 리그를 읽을 수 있는 기사로. 1~4 종합 파생 */
+export interface NewsItem {
+  season: number;                                            // 0-based
+  kind: 'champion' | 'award' | 'milestone' | 'hof' | 'injury';
+  headline: string;
+  big: boolean;                                              // 헤드라인급
+  teamId?: string;                                           // 내 팀 강조용
+}
+
 export interface SubPolicy {
   pinchServer: boolean; // 약한 서버(세터 등) 차례에 벤치 서브 스페셜리스트 투입
   blockSub: boolean;    // (페이즈2) 접전 시 전위 블로킹 강화

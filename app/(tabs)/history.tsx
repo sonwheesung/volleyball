@@ -5,6 +5,7 @@ import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Scre
 import { currentRosters, getPlayer, getTeam, teamPlayerIds } from '../../data/league';
 import { leagueProduction } from '../../data/production';
 import { currentSeasonAwards } from '../../data/awards';
+import { buildNewsFeed } from '../../data/news';
 import { computeStandings, seasonResults } from '../../data/standings';
 import { dateForDay, formatDate } from '../../lib/calendar';
 import { useGameStore } from '../../store/useGameStore';
@@ -27,6 +28,10 @@ export default function History() {
   const milestones = useGameStore((s) => s.milestones);
 
   const awards = useMemo(() => currentSeasonAwards(season, currentDay), [currentDay, season]);
+  const newsFeed = useMemo(
+    () => buildNewsFeed(archive, milestones, hallOfFame, season).slice(0, 40),
+    [archive, milestones, hallOfFame, season, currentDay],
+  );
   const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
   const results = useMemo(
     () => seasonResults(currentDay).slice().sort((a, b) => b.dayIndex - a.dayIndex),
@@ -157,6 +162,25 @@ export default function History() {
                   </Muted>
                 </View>
                 <Text style={styles.lbVal}>{h.points.toLocaleString()}점</Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
+      {newsFeed.length > 0 ? (
+        <>
+          <Title>📰 리그 뉴스</Title>
+          <Card>
+            {newsFeed.map((n, i) => (
+              <View key={`${n.season}-${i}`} style={styles.msRow}>
+                <Text style={styles.msSeason}>{n.season + 1}시즌</Text>
+                <Text
+                  style={[styles.msText, n.big && { color: theme.warn, fontWeight: '800' }, n.teamId === teamId && styles.mine]}
+                  numberOfLines={1}
+                >
+                  {n.big ? '★ ' : ''}{n.headline}
+                </Text>
               </View>
             ))}
           </Card>
