@@ -13,7 +13,12 @@ import { leagueProduction } from '../data/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
 import { seasonInjuryDays } from '../data/injury';
+import { setTxContext, seasonTxLog, type Tx } from '../data/dynamics';
 import { buildPlayoffs } from '../data/playoffs';
+import { currentRosters, evolveOnDay } from '../data/league';
+import { marketValue } from '../engine/salary';
+import { LEAGUE_CAP } from '../engine/cap';
+import { ROSTER_MAX } from '../engine/transactions';
 import { accrueCareer } from '../engine/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
@@ -34,6 +39,8 @@ interface GameState {
   results: Record<string, MatchResult>;
   contractOverrides: Record<string, Contract>;
   released: string[];
+  inSeasonTx: Tx[];                            // 시즌 중 이동(방출/영입) — dynamics 주입
+  faPool: string[];                            // 시즌 시작 미계약 FA 풀(오프시즌 잔류)
   playerBase: Record<string, Player> | null;   // 시즌 시작 시점 선수 스냅샷(null=시드)
   rosters: Record<string, string[]> | null;    // 가변 팀 구성(null=시드)
   resignDecisions: Record<string, boolean>;    // 내 FA 잔류(true)/포기(false), 기본=잔류
@@ -56,6 +63,7 @@ interface GameState {
   reSign: (playerId: string, contract: Contract) => void;
   release: (playerId: string) => void;
   unrelease: (playerId: string) => void;
+  signInSeason: (faId: string) => boolean;
   setResign: (playerId: string, keep: boolean) => void;
   signFA: (playerId: string) => void;
   unsignFA: (playerId: string) => void;
@@ -81,6 +89,8 @@ const freshSave = {
   results: {} as Record<string, MatchResult>,
   contractOverrides: {} as Record<string, Contract>,
   released: [] as string[],
+  inSeasonTx: [] as Tx[],
+  faPool: [] as string[],
   playerBase: null as Record<string, Player> | null,
   rosters: null as Record<string, string[]> | null,
   resignDecisions: {} as Record<string, boolean>,
@@ -107,15 +117,48 @@ export const useGameStore = create<GameState>()(
       selectTeam: (teamId) => {
         resetLeagueBase();
         set({ ...freshSave, selectedTeamId: teamId });
+        setTxContext([], [], teamId);
       },
       setDay: (day) => set((s) => ({ currentDay: Math.max(s.currentDay, day) })),
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
       reSign: (playerId, contract) =>
         set((s) => ({ contractOverrides: { ...s.contractOverrides, [playerId]: contract } })),
-      release: (playerId) =>
-        set((s) => (s.released.includes(playerId) ? s : { released: [...s.released, playerId] })),
-      unrelease: (playerId) =>
-        set((s) => ({ released: s.released.filter((id) => id !== playerId) })),
+      // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용.
+      release: (playerId) => {
+        const s = get();
+        if (s.released.includes(playerId)) return;
+        const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: s.selectedTeamId ?? '', playerId, kind: 'release' }];
+        set({ released: [...s.released, playerId], inSeasonTx });
+        setTxContext(inSeasonTx, get().faPool, get().selectedTeamId ?? '');
+      },
+      unrelease: (playerId) => {
+        const s = get();
+        const inSeasonTx = s.inSeasonTx.filter((t) => !(t.kind === 'release' && t.playerId === playerId));
+        set({ released: s.released.filter((id) => id !== playerId), inSeasonTx });
+        setTxContext(inSeasonTx, get().faPool, get().selectedTeamId ?? '');
+      },
+      // 시즌 중 FA 영입(캡·정원 검증). dynamics는 플레이어 거래를 검증 없이 적용하므로 여기서 게이트.
+      signInSeason: (faId) => {
+        const s = get();
+        const my = s.selectedTeamId;
+        if (!my) return false;
+        if (s.inSeasonTx.some((t) => t.kind === 'sign' && t.playerId === faId)) return false;
+        const fa = evolveOnDay(faId, s.currentDay);
+        if (!fa) return false;
+        const rosterIds = currentRosters()[my] ?? [];
+        const myReleased = new Set(s.inSeasonTx.filter((t) => t.kind === 'release' && t.teamId === my).map((t) => t.playerId));
+        const mySigned = s.inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === my).map((t) => t.playerId);
+        const size = (rosterIds.length - myReleased.size) + mySigned.length;
+        if (size >= ROSTER_MAX) return false;
+        let payroll = 0;
+        for (const id of rosterIds) if (!myReleased.has(id)) payroll += evolveOnDay(id, s.currentDay)?.contract.salary ?? 0;
+        for (const id of mySigned) { const p = evolveOnDay(id, s.currentDay); if (p) payroll += marketValue(p); }
+        if (payroll + marketValue(fa) > LEAGUE_CAP) return false;
+        const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId: faId, kind: 'sign' }];
+        set({ inSeasonTx });
+        setTxContext(inSeasonTx, get().faPool, my);
+        return true;
+      },
       setResign: (playerId, keep) =>
         set((s) => ({ resignDecisions: { ...s.resignDecisions, [playerId]: keep } })),
       signFA: (playerId) =>
@@ -190,6 +233,18 @@ export const useGameStore = create<GameState>()(
 
         // 0) 시상식·마일스톤 — 롤오버 전(끝난 시즌의 base·생산이 살아있을 때) 계산해 영구 보존
         const seasonAwards = currentSeasonAwards(season);
+        // 0.4) 시즌 중 이동(방출/영입, 플레이어+AI)을 명단에 영구 반영 — 오프시즌(롤오버) 전.
+        //   seasonTxLog는 반드시 commitRosters 전에 읽는다(commit이 dynamics 재계산을 유발).
+        const txLog = seasonTxLog();
+        const finalR: Record<string, string[]> = {};
+        const cur = currentRosters();
+        for (const tid of Object.keys(cur)) finalR[tid] = [...cur[tid]];
+        for (const tx of txLog) {
+          const arr = finalR[tx.teamId] ?? [];
+          if (tx.kind === 'release') finalR[tx.teamId] = arr.filter((id) => id !== tx.playerId);
+          else if (!arr.includes(tx.playerId)) finalR[tx.teamId] = [...arr, tx.playerId];
+        }
+        commitRosters(finalR);
         // 마일스톤: big(역대·구단·레전드)은 영구 보존, 일반 통산 임계는 최근 300건만(방치형 장기 저장 바운딩)
         const allMs = [...milestones, ...detectSeasonMilestones(season, hallOfFame)];
         const nextMilestones = [...allMs.filter((m) => m.big), ...allMs.filter((m) => !m.big).slice(-300)]
@@ -254,14 +309,22 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // 4.6) 다음 시즌 FA 풀 = 롤오버됐으나 미계약(로스터 외)·비은퇴 선수(오프시즌 잔류 FA)
+        const rosteredNext = new Set(Object.values(filled.rosters).flat());
+        const retiredSet = new Set(ctx.retired);
+        const nextFaPool = Object.keys(snapshot).filter((id) => !rosteredNext.has(id) && !retiredSet.has(id));
+
         commitPlayerBase(snapshot);
         commitRosters(filled.rosters);
+        setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
         set({
           season: nextSeason,
           currentDay: 0,
           results: {},
           contractOverrides: {},
           released: [],
+          inSeasonTx: [],
+          faPool: nextFaPool,
           resignDecisions: {},
           faSignings: [],
           faAggressive: false,
@@ -277,6 +340,7 @@ export const useGameStore = create<GameState>()(
 
       resetSave: () => {
         resetLeagueBase();
+        setTxContext([], [], '');
         set({ ...freshSave });
       },
     }),
@@ -290,6 +354,8 @@ export const useGameStore = create<GameState>()(
         results: s.results,
         contractOverrides: s.contractOverrides,
         released: s.released,
+        inSeasonTx: s.inSeasonTx,
+        faPool: s.faPool,
         playerBase: s.playerBase,
         rosters: s.rosters,
         resignDecisions: s.resignDecisions,
@@ -311,6 +377,7 @@ export const useGameStore = create<GameState>()(
         if (state?.rosters) commitRosters(state.rosters);
         if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
         if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
+        setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
         useGameStore.setState({ hydrated: true });
       },
     },

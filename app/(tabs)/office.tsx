@@ -92,6 +92,14 @@ export default function Office() {
         <Muted style={{ fontSize: 12, marginTop: 2 }}>감독 영입 · 전문 코치(훈련 부스트) · 스카우터(드래프트 공개도)</Muted>
       </Card>
 
+      <Card onPress={() => router.push('/transactions')}>
+        <Row>
+          <Title>시즌 중 FA 영입</Title>
+          <Muted>포지션 구멍 메우기 →</Muted>
+        </Row>
+        <Muted style={{ fontSize: 12, marginTop: 2 }}>방출 선수·미계약 FA를 시즌 중 즉시 영입(캡·정원 적용)</Muted>
+      </Card>
+
       <Title>계약 관리</Title>
       {roster.map((p) => {
         const market = marketValue(p, getPlayerProduction(p.id, currentDay));
@@ -188,7 +196,7 @@ export default function Office() {
       ) : null}
 
       <Muted style={{ fontSize: 12 }}>
-        타 구단 FA 영입과 보상선수/보호명단은 다음 업데이트에 추가됩니다.
+        방출 선수는 즉시 FA가 되어 시즌 중 다른 팀이 영입할 수 있습니다(미영입 시 시즌말 정리).
       </Muted>
     </Screen>
   );

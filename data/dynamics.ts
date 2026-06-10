@@ -159,6 +159,17 @@ export function availableTeamPlayers(teamId: string, day: number): Player[] {
     .filter((p): p is Player => !!p);
 }
 
+/** day 시점 영입 가능 FA id(시작 풀 + txDay≤day 방출자 − 영입된 자) */
+export function availableFAsOnDay(day: number): string[] {
+  const set = new Set(faPoolSeed);
+  for (const tx of dyn().txLog) {
+    if (tx.day > day) continue;
+    if (tx.kind === 'release') set.add(tx.playerId);
+    else set.delete(tx.playerId);
+  }
+  return [...set];
+}
+
 export function teamInjuriesOn(teamId: string, day: number): InjurySpan[] {
   return dyn().injuries.filter((s) => s.teamId === teamId && s.from <= day && day <= s.to);
 }

@@ -21,6 +21,7 @@ export default function RootLayout() {
         <Stack.Screen name="player/[id]" options={{ title: '선수 정보' }} />
         <Stack.Screen name="coach/[id]" options={{ title: '감독 정보' }} />
         <Stack.Screen name="staff" options={{ title: '스태프 계약' }} />
+        <Stack.Screen name="transactions" options={{ title: '시즌 중 FA 영입' }} />
         <Stack.Screen name="playoffs" options={{ title: '포스트시즌' }} />
         <Stack.Screen name="fa" options={{ title: 'FA 센터' }} />
         <Stack.Screen name="draft" options={{ title: '신인 드래프트' }} />
