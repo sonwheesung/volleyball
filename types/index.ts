@@ -131,6 +131,18 @@ export interface SeasonAwards {
   roundMvps: (AwardWinner | null)[]; // 라운드(leg)별 MVP
 }
 
+// ─── 마일스톤 (MILESTONE_SYSTEM) ─────────────────────────────
+/** 기록 경신 한 건 — 시즌 경계에서 감지해 피드에 영구 적립(뉴스 P5 소재) */
+export interface Milestone {
+  season: number;                          // 0-based 발생 시즌
+  playerId: string;
+  name: string;                            // 당시 선수명(영속 — 은퇴 후 조회 대비)
+  teamId: string;
+  kind: 'career' | 'club' | 'league';      // 개인 통산 / 구단 / 리그 역대
+  text: string;                            // 완성형 표시 문구
+  big: boolean;                            // 헤드라인급(역대 진입·구단 최초·레전드 추월)
+}
+
 /** 경기 중 작전 교체 방침 (MATCH_SYSTEM 1.3b) — 프리셋/방침 레벨, AI 자동 + 플레이어 토글 */
 export interface SubPolicy {
   pinchServer: boolean; // 약한 서버(세터 등) 차례에 벤치 서브 스페셜리스트 투입

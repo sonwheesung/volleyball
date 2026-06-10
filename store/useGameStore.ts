@@ -11,13 +11,14 @@ import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOver
 import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
 import { currentSeasonAwards } from '../data/awards';
+import { detectSeasonMilestones } from '../data/milestones';
 import { buildPlayoffs } from '../data/playoffs';
 import { accrueCareer } from '../engine/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, HofEntry, MatchResult, Player, SeasonAwards, SubPolicy, TrainingFocus } from '../types';
+import type { Contract, HofEntry, MatchResult, Milestone, Player, SeasonAwards, SubPolicy, TrainingFocus } from '../types';
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const LEGEND_POINTS = 9000; // 영구결번급
@@ -41,6 +42,7 @@ interface GameState {
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
   archive: { season: number; championId: string; awards?: SeasonAwards }[]; // 역대 우승 + 시상
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
+  milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
   trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
   staffHead: Record<string, string>;           // teamId → 영입 감독 id(STAFF_SYSTEM)
@@ -87,6 +89,7 @@ const freshSave = {
   draftPicks: [] as string[],
   archive: [] as { season: number; championId: string; awards?: SeasonAwards }[],
   hallOfFame: [] as HofEntry[],
+  milestones: [] as Milestone[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
   trainingFocus: null as TrainingFocus | null,
   staffHead: {} as Record<string, string>,
@@ -180,12 +183,16 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
-        // 0) 시상식 — 롤오버 전(끝난 시즌의 base·생산이 살아있을 때) 계산해 archive 에 영구 보존
+        // 0) 시상식·마일스톤 — 롤오버 전(끝난 시즌의 base·생산이 살아있을 때) 계산해 영구 보존
         const seasonAwards = currentSeasonAwards(season);
+        // 마일스톤: big(역대·구단·레전드)은 영구 보존, 일반 통산 임계는 최근 300건만(방치형 장기 저장 바운딩)
+        const allMs = [...milestones, ...detectSeasonMilestones(season, hallOfFame)];
+        const nextMilestones = [...allMs.filter((m) => m.big), ...allMs.filter((m) => !m.big).slice(-300)]
+          .sort((a, b) => a.season - b.season);
         const championId = buildPlayoffs(season).championId ?? '';
         const nextArchive = archive.some((a) => a.season === season)
           ? archive.map((a) => (a.season === season ? { ...a, championId: championId || a.championId, awards: seasonAwards } : a))
@@ -253,6 +260,7 @@ export const useGameStore = create<GameState>()(
           rosters: filled.rosters,
           hallOfFame: [...hallOfFame, ...hofAdds],
           archive: nextArchive,
+          milestones: nextMilestones,
         });
       },
 
@@ -280,6 +288,7 @@ export const useGameStore = create<GameState>()(
         draftPicks: s.draftPicks,
         archive: s.archive,
         hallOfFame: s.hallOfFame,
+        milestones: s.milestones,
         subPolicy: s.subPolicy,
         trainingFocus: s.trainingFocus,
         staffHead: s.staffHead,

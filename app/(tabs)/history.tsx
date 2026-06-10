@@ -24,6 +24,7 @@ export default function History() {
   const currentDay = useGameStore((s) => s.currentDay);
   const archive = useGameStore((s) => s.archive);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
+  const milestones = useGameStore((s) => s.milestones);
 
   const awards = useMemo(() => currentSeasonAwards(season, currentDay), [currentDay, season]);
   const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
@@ -158,6 +159,25 @@ export default function History() {
                 <Text style={styles.lbVal}>{h.points.toLocaleString()}점</Text>
               </View>
             ))}
+          </Card>
+        </>
+      ) : null}
+
+      {milestones.length > 0 ? (
+        <>
+          <Title>기록 경신 · 마일스톤</Title>
+          <Card>
+            {milestones.slice(-30).reverse().map((m, i) => {
+              const mine = m.teamId === teamId;
+              return (
+                <View key={`${m.season}-${m.playerId}-${i}`} style={styles.msRow}>
+                  <Text style={styles.msSeason}>{m.season + 1}시즌</Text>
+                  <Text style={[styles.msText, m.big && { color: theme.warn, fontWeight: '800' }, mine && styles.mine]} numberOfLines={1}>
+                    {m.big ? '★ ' : ''}{m.text}
+                  </Text>
+                </View>
+              );
+            })}
           </Card>
         </>
       ) : null}
@@ -306,5 +326,8 @@ const styles = StyleSheet.create({
   awLabel: { width: 76, color: theme.muted, fontSize: 13, fontWeight: '700' },
   awName: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '700' },
   awHead: { color: theme.text, fontWeight: '800', marginBottom: 2 },
+  msRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  msSeason: { width: 52, color: theme.muted, fontSize: 11, fontWeight: '700' },
+  msText: { flex: 1, color: theme.text, fontSize: 13 },
 });
 
