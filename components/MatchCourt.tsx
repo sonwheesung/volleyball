@@ -6,15 +6,14 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, StyleSheet, Text, View } from 'react-native';
 import { theme } from './Screen';
 import { buildLineup } from '../engine/lineup';
-import { createRng } from '../engine/rng';
 import type { SimResult } from '../engine/simMatch';
 import type { Player, Position, Side } from '../types';
 import {
   lineupIdxAt, playerAtZone,
   zonePx as zonePxRaw, switchedSpots as switchedSpotsRaw, receiveFormation as receiveFormationRaw,
-  fanSlots, blockerWall, coverSpots,
-  type Switched,
+  fanSlots, blockerWall,
 } from './courtLayout';
+import { ballPath as ballPathRaw, type Move, type Mover, type WP } from './courtPath';
 
 const POS_COLOR: Record<Position, string> = {
   S: '#a78bfa', OH: '#38bdf8', OP: '#f87171', MB: '#fbbf24', L: '#4ade80',
@@ -26,7 +25,6 @@ const COURT_W = SCREEN_W - 32;
 const COURT_H = Math.min(COURT_W * 1.4, Dimensions.get('window').height * 0.52);
 
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
-const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 // 위치 계산은 courtLayout(순수 모듈)에 — 보드 크기 바인딩 래퍼
 const zonePx = (side: Side, zone: number) => zonePxRaw(side, zone, COURT_W, COURT_H);
@@ -34,15 +32,6 @@ const switchedSpots = (side: Side, lu: ReturnType<typeof buildLineup>, rot: numb
   switchedSpotsRaw(side, lu, rot, offense, COURT_W, COURT_H);
 const receiveFormation = (side: Side, lu: ReturnType<typeof buildLineup>, rot: number) =>
   receiveFormationRaw(side, lu, rot, COURT_W, COURT_H);
-
-/** 스파이크 코스 — 상대 코트의 다양한 위치(좌우·깊이). deep=득점성(깊고 빈 곳) */
-function spikeTarget(def: Side, rng: ReturnType<typeof createRng>, deep: boolean): { x: number; y: number } {
-  const x = (0.12 + rng.next() * 0.76) * COURT_W;
-  const near = deep ? 0.72 : 0.55;
-  const span = deep ? 0.24 : 0.4;
-  const f = def === 'home' ? near + rng.next() * span : 1 - near - rng.next() * span;
-  return { x, y: f * COURT_H };
-}
 
 interface Lineups {
   home: ReturnType<typeof buildLineup>;
@@ -106,172 +95,20 @@ function reconstruct(sim: SimResult): Rally[] {
   return out;
 }
 
-// 공 이동 종류 — 구간별 속도/이징이 다르다
-type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
-type Mover = { side: Side; idx: number; x: number; y: number };
-// movers: 이 구간에 특정 위치로 움직이는 선수들(디그·커버·쫓기·세트 등)
-// aim: 점선(의도) 궤적의 끝점. 실제 공은 x/y로 가지만 궤적은 aim까지 그린다(터치아웃 등)
-type WP = { x: number; y: number; side: Side; idx: number; kind: Move; movers?: Mover[]; aim?: { x: number; y: number } };
-
 // 구간 지속(ms, 1배속). 토스=느리게(붕), 스파이크=빠르게. walk=서버가 엔드라인 뒤로, return=공이 서버에게.
 const DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 320 };
 // 구간별 포물선 높이(px) / 공 크기 피크 — 토스가 가장 크게 휘고 커진다
 const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06 };
 const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1 };
-const RECV_FAULT = 0.05; // 리시브 미스(투터치 등) 확률 — 지는 쪽 한정
 const JUMP = 1.45; // 점프 시 마커 확대
 const SPEED = 2; // 전체 경기 속도 배수(클수록 느림). 2 = 2배 느리게
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
 const COURT_PAD = SERVE_OUT + 10; // 코트 밖 서브 공간 확보용 상하 여백
 const serveOutY = (side: Side) => (side === 'home' ? COURT_H + SERVE_OUT : -SERVE_OUT);
 
-/** 한 랠리의 공 이동 경로 — 스위칭(전문 포지션) 기반. prevLast: 직전 낙구점(공 순간이동 방지) */
-function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y: number }): WP[] {
-  const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
-  const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
-  const rotOf = (s: Side) => (s === 'home' ? r.homeRot : r.awayRot);
-  const sw: Record<Side, Switched> = {
-    home: switchedSpots('home', L.home, r.homeRot, true),
-    away: switchedSpots('away', L.away, r.awayRot, true),
-  };
-  // 수비 자세 좌표(세터 침투 없음) — 디그/추격자 선정은 수비 측 실제 위치 기준이어야
-  // (공격 모드 좌표로 고르면 수비 세터가 네트에 있다고 가정 → 엉뚱한 선수가 멀리서 달려감)
-  const swDef: Record<Side, Switched> = {
-    home: switchedSpots('home', L.home, r.homeRot, false),
-    away: switchedSpots('away', L.away, r.awayRot, false),
-  };
-  const spot = (s: Side, i: number, kind: Move): WP => ({ ...sw[s].pos[i], side: s, idx: i, kind });
-
-  const serving = r.serving;
-  const recv = other(serving);
-  const serverIdx = lineupIdxAt(rotOf(serving), 1);
-  const wp: WP[] = [];
-  if (prevLast) {
-    wp.push({ x: prevLast.x, y: prevLast.y, side: serving, idx: serverIdx, kind: 'start' }); // 직전 낙구점
-    wp.push({ ...zonePx(serving, 1), side: serving, idx: serverIdx, kind: 'return' }); // 공이 서버에게
-  } else {
-    wp.push({ ...zonePx(serving, 1), side: serving, idx: serverIdx, kind: 'start' });
-  }
-  wp.push({ x: zonePx(serving, 1).x, y: serveOutY(serving), side: serving, idx: serverIdx, kind: 'walk' }); // 엔드라인 뒤로
-
-  const recvIdx = pick(sw[recv].backers.length ? sw[recv].backers : [serverIdx]);
-  wp.push(spot(recv, recvIdx, 'serve')); // 서브 → 리시버(스위칭 후위)
-  let att: Side = recv;
-
-  const d2 = (a: { x: number; y: number }, p: { x: number; y: number }) => (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
-  const chasersTo = (side: Side, target: { x: number; y: number }, n: number, reach: number): Mover[] => {
-    const order = [0, 1, 2, 3, 4, 5].sort((a, b) => d2(swDef[side].pos[a], target) - d2(swDef[side].pos[b], target)).slice(0, n);
-    return order.map((i) => { const p = swDef[side].pos[i]; return { side, idx: i, x: p.x + (target.x - p.x) * reach, y: p.y + (target.y - p.y) * reach }; });
-  };
-
-  // 리시브 미스: 공이 옆/뒤로 튕겨 라인 밖으로, 선수들이 쫓지만 못 살림 → 서브측 득점
-  if (recv !== r.scorer && rng.next() < RECV_FAULT) {
-    const rp = sw[recv].pos[recvIdx];
-    const dir = rng.next() < 0.5 ? -1 : 1;
-    const out = rng.next() < 0.5
-      ? { x: dir < 0 ? -12 : COURT_W + 12, y: clampN(rp.y + rng.range(-0.1, 0.1) * COURT_H, 0.1 * COURT_H, 0.9 * COURT_H) } // 사이드 밖
-      : { x: clampN(rp.x + dir * 0.25 * COURT_W, 12, COURT_W - 12), y: (recv === 'home' ? COURT_H + 12 : -12) }; // 엔드라인 밖
-    wp.push({ x: out.x, y: out.y, side: recv, idx: -1, kind: 'fault', movers: chasersTo(recv, out, 2, 0.7) });
-    return wp;
-  }
-
-  let firstTouch = recvIdx; // 이번 공격의 첫 터치(리시브/디그)한 선수 — 토스는 다른 선수가
-  for (let hop = 0; hop < 6; hop++) {
-    const def = other(att);
-    // 리시브/디그 패스는 세터 자리 주변 "일정 범위"에서 랜덤하게 떨어진다(정확히 안 감)
-    const sIdx = sw[att].setterIdx;
-    const ideal = sIdx >= 0 ? sw[att].pos[sIdx] : sw[att].pos[sw[att].frontHitters[0] ?? 0];
-    const ang = rng.range(0, Math.PI * 2);
-    const mag = rng.next() ** 1.7 * (0.2 * COURT_W); // 대부분 가깝게, 가끔 멀리(난조)
-    const yLo = (att === 'home' ? 0.52 : 0.26) * COURT_H;
-    const yHi = (att === 'home' ? 0.74 : 0.48) * COURT_H;
-    const passSpot = {
-      x: clampN(ideal.x + Math.cos(ang) * mag, 0.12 * COURT_W, 0.88 * COURT_W),
-      y: clampN(ideal.y + Math.sin(ang) * mag * 0.7, yLo, yHi),
-    };
-    // 세터가 닿으면 세터가, 아니면 가장 가까운 다른 선수가 토스. 단 첫 터치한 선수는 제외(같은 선수가 리시브+토스 금지)
-    let tosserIdx: number;
-    if (sIdx >= 0 && sIdx !== firstTouch && mag <= 0.12 * COURT_W) {
-      tosserIdx = sIdx;
-    } else {
-      const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== sIdx && i !== firstTouch);
-      const pool = cand.length ? cand : [0, 1, 2, 3, 4, 5].filter((i) => i !== firstTouch);
-      tosserIdx = pool.reduce((b, i) => (d2(sw[att].pos[i], passSpot) < d2(sw[att].pos[b], passSpot) ? i : b), pool[0]);
-    }
-    // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트
-    wp.push({ x: passSpot.x, y: passSpot.y, side: att, idx: tosserIdx, kind: 'pass', movers: [{ side: att, idx: tosserIdx, x: passSpot.x, y: passSpot.y }] });
-    const hitters = sw[att].frontHitters.filter((i) => i !== tosserIdx);
-    const atkIdx = pick(hitters.length ? hitters : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
-
-    const ahx = sw[att].pos[atkIdx].x; // 공격수 x
-    // 미끼(속공/페이크): 토스 안 온 전위 공격수 일부는 공격하는 척 네트에 남아 커버 못 옴(시드 기반 가변)
-    const attFront = [2, 3, 4].map((z) => lineupIdxAt(rotOf(att), z));
-    const decoys = attFront.filter((i) => i !== atkIdx && i !== tosserIdx && rng.next() < 0.6);
-    // 공격 커버: 공격수·세터·미끼 제외 최대 3 — 반원 형태(가까운 2 좌우 측면 + 1 깊은 중앙).
-    //   슬롯은 현재 x 순으로 배정해 동선 교차 방지(일렬 가로 배치는 로봇 같은 그림).
-    const coverCand = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && !decoys.includes(i))
-      .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
-      .sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
-    const cSpots = coverSpots(att, ahx, coverCand.length, COURT_W, COURT_H);
-    const coverMovers: Mover[] = coverCand.length === 3
-      ? [ // 좌→좌측면, 우→우측면, 가운데→깊은 중앙
-          { side: att, idx: coverCand[0], ...cSpots[0] },
-          { side: att, idx: coverCand[2], ...cSpots[1] },
-          { side: att, idx: coverCand[1], ...cSpots[2] },
-        ]
-      : coverCand.map((i, k) => ({ side: att, idx: i, ...cSpots[k] }));
-    wp.push({ ...spot(att, atkIdx, 'toss'), movers: coverMovers }); // 토스 → 공격수 + 커버 형성(미끼 제외)
-
-    // 스파이크 경로(의도 코스)가 블록 폭 안이면 블록에 걸리고, 각으로 빠지면 안 걸린다(여자배구: 원터치 빈번)
-    const ap = sw[att].pos[atkIdx];
-    const blockW = (tosserIdx === sw[att].setterIdx ? 0.16 : 0.24) * COURT_W; // 인시스템 2장(좁게)/아웃 3장(넓게)
-    const intended = spikeTarget(def, rng, att === r.scorer); // 공격수가 원한 코스
-    const intoBlock = Math.abs(intended.x - ap.x) < blockW;
-    const netY = (def === 'home' ? 0.52 : 0.48) * COURT_H;
-    const sCross = Math.abs(intended.y - ap.y) < 1 ? 0.3 : (netY - ap.y) / (intended.y - ap.y);
-    const blockNet = { x: clampN(ap.x + (intended.x - ap.x) * sCross, 12, COURT_W - 12), y: netY };
-    const dBacks = sw[def].backers.length ? sw[def].backers : [0, 1, 2, 3, 4, 5].filter((i) => i !== sw[def].setterIdx);
-    const nearestDig = (tg: { x: number; y: number }) => dBacks.reduce((b, i) => (d2(swDef[def].pos[i], tg) < d2(swDef[def].pos[b], tg) ? i : b), dBacks[0]);
-
-    if (att === r.scorer) {
-      if (intoBlock) {
-        // 블로킹 아웃(터치아웃): 블록 맞고 옆으로 아웃 → 공격 득점. 점선=의도(코트)
-        wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-        wp.push({ x: ap.x < COURT_W / 2 ? COURT_W + 12 : -12, y: (def === 'home' ? 0.78 : 0.22) * COURT_H, side: def, idx: -1, kind: 'fault' });
-      } else {
-        // 클린 킬: 블록을 각으로 피해 코트로 (수비 못 닿음)
-        wp.push({ x: intended.x, y: intended.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, intended, 1, 0.5), ...coverMovers] });
-      }
-      break;
-    }
-
-    // att !== scorer (def가 득점하거나 랠리 지속)
-    if (intoBlock && rng.next() < 0.55) {
-      // 스터프 블록: 막혀서 자기 코트로 떨어짐 → 블로킹 당함(def 득점, 랠리 종료)
-      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-      wp.push({ x: clampN(ap.x + rng.range(-0.08, 0.08) * COURT_W, 12, COURT_W - 12), y: (att === 'home' ? 0.78 : 0.22) * COURT_H, side: att, idx: -1, kind: 'fault' });
-      break;
-    }
-
-    if (intoBlock) {
-      // 원터치(소프트 블록): 블록 스치고 def 코트로 떨어진 걸 디그 → 전환
-      const dt = { x: clampN(blockNet.x + rng.range(-0.06, 0.06) * COURT_W, 16, COURT_W - 16), y: (def === 'home' ? 0.64 : 0.36) * COURT_H };
-      const digIdx = nearestDig(dt);
-      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치
-      wp.push({ x: dt.x, y: dt.y, side: def, idx: -1, kind: 'pass', movers: [{ side: def, idx: digIdx, x: dt.x, y: dt.y }] }); // 디그
-      firstTouch = digIdx;
-    } else {
-      // 클린 디그: 블록 피한 강타를 후위가 받아 전환
-      const t = intended;
-      const digIdx = nearestDig(t);
-      const cover = chasersTo(def, t, 2, 0.5).find((m) => m.idx !== digIdx);
-      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [{ side: def, idx: digIdx, x: t.x, y: t.y }, ...(cover ? [cover] : []), ...coverMovers] });
-      firstTouch = digIdx;
-    }
-    att = def;
-  }
-  return wp;
-}
+/** 한 랠리의 공 이동 경로 — courtPath(순수 모듈, 헤드리스 검증 가능)에 위임 */
+const ballPath = (r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y: number }): WP[] =>
+  ballPathRaw(r, seed, L, COURT_W, COURT_H, SERVE_OUT, prevLast);
 
 const easingFor = (k: Move) =>
   k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : Easing.linear;
