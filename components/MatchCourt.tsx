@@ -9,6 +9,11 @@ import { buildLineup } from '../engine/lineup';
 import { createRng } from '../engine/rng';
 import type { SimResult } from '../engine/simMatch';
 import type { Player, Position, Side } from '../types';
+import {
+  ZONE_X, lineupIdxAt, playerAtZone,
+  zonePx as zonePxRaw, switchedSpots as switchedSpotsRaw, receiveFormation as receiveFormationRaw,
+  type Switched,
+} from './courtLayout';
 
 const POS_COLOR: Record<Position, string> = {
   S: '#a78bfa', OH: '#38bdf8', OP: '#f87171', MB: '#fbbf24', L: '#4ade80',
@@ -19,15 +24,15 @@ const SCREEN_W = Dimensions.get('window').width;
 const COURT_W = SCREEN_W - 32;
 const COURT_H = Math.min(COURT_W * 1.4, Dimensions.get('window').height * 0.52);
 
-// 존(zone) → 그리드 (col 0~2, row F=전위/B=후위)
-const GRID: Record<number, [number, 'F' | 'B']> = {
-  4: [0, 'F'], 3: [1, 'F'], 2: [2, 'F'],
-  5: [0, 'B'], 6: [1, 'B'], 1: [2, 'B'],
-};
-const COLX = [0.18, 0.5, 0.82];
-
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+// 위치 계산은 courtLayout(순수 모듈)에 — 보드 크기 바인딩 래퍼
+const zonePx = (side: Side, zone: number) => zonePxRaw(side, zone, COURT_W, COURT_H);
+const switchedSpots = (side: Side, lu: ReturnType<typeof buildLineup>, rot: number, offense: boolean) =>
+  switchedSpotsRaw(side, lu, rot, offense, COURT_W, COURT_H);
+const receiveFormation = (side: Side, lu: ReturnType<typeof buildLineup>, rot: number) =>
+  receiveFormationRaw(side, lu, rot, COURT_W, COURT_H);
 
 /** 스파이크 코스 — 상대 코트의 다양한 위치(좌우·깊이). deep=득점성(깊고 빈 곳) */
 function spikeTarget(def: Side, rng: ReturnType<typeof createRng>, deep: boolean): { x: number; y: number } {
@@ -38,18 +43,6 @@ function spikeTarget(def: Side, rng: ReturnType<typeof createRng>, deep: boolean
   return { x, y: f * COURT_H };
 }
 
-/** 존 중심 좌표(px) — 홈은 하단, 원정은 상단(좌우·전후 점대칭) */
-function zonePx(side: Side, zone: number): { x: number; y: number } {
-  const [col, row] = GRID[zone];
-  const x = (side === 'home' ? COLX[col] : COLX[2 - col]) * COURT_W;
-  const yF = side === 'home' ? 0.62 : 0.38;
-  const yB = side === 'home' ? 0.9 : 0.1;
-  return { x, y: (row === 'F' ? yF : yB) * COURT_H };
-}
-
-/** 로테이션 r 에서 zone 에 선 라인업 인덱스 (zone z → (r+z-1)%6) */
-const lineupIdxAt = (r: number, zone: number) => (r + zone - 1) % 6;
-
 interface Lineups {
   home: ReturnType<typeof buildLineup>;
   away: ReturnType<typeof buildLineup>;
@@ -57,65 +50,7 @@ interface Lineups {
 
 /** 사이드 라인업에서 zone 의 선수 (후위 1·5·6 MB는 리베로로 교체. 리베로는 전위 불가) */
 function playerAt(L: Lineups, side: Side, rot: number, zone: number): Player {
-  const lu = side === 'home' ? L.home : L.away;
-  let p = lu.six[lineupIdxAt(rot, zone)];
-  if ((zone === 1 || zone === 5 || zone === 6) && lu.libero && p?.position === 'MB') p = lu.libero;
-  return p;
-}
-
-// 스위칭(1.5) — 서브 직후 전문 포지션 좌→우 선호(세터는 네트로 침투)
-const LANE: Record<Position, number> = { OH: 0, L: 1, MB: 2, S: 3, OP: 4 };
-interface Switched { pos: Record<number, { x: number; y: number }>; setterIdx: number; frontHitters: number[]; backers: number[] }
-
-/** 로테이션 정렬 → 전문 포지션 좌표(선수 인덱스별). 전위=네트 라인, 후위=수비 라인.
- *  offense=true(자기 팀 공격)일 때만 세터가 네트로 침투, 수비 시엔 자기 수비 위치(리시브 준비). */
-function switchedSpots(side: Side, lu: ReturnType<typeof buildLineup>, rot: number, offense: boolean): Switched {
-  const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
-  const back = [1, 5, 6].map((z) => lineupIdxAt(rot, z));
-  const posOf = (i: number) => lu.six[i].position;
-  const X3 = side === 'home' ? [0.2, 0.5, 0.8] : [0.8, 0.5, 0.2];
-  const yF = (side === 'home' ? 0.6 : 0.4) * COURT_H;
-  const yB = (side === 'home' ? 0.86 : 0.14) * COURT_H;
-  const pos: Record<number, { x: number; y: number }> = {};
-  [...front].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * COURT_W, y: yF }; });
-  [...back].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * COURT_W, y: yB }; });
-  const setterIdx = lu.six.findIndex((p) => p.position === 'S');
-  if (offense && setterIdx >= 0) pos[setterIdx] = { x: (side === 'home' ? 0.63 : 0.37) * COURT_W, y: (side === 'home' ? 0.57 : 0.43) * COURT_H }; // 공격 시에만 네트 침투
-  return { pos, setterIdx, frontHitters: front.filter((i) => i !== setterIdx), backers: back.filter((i) => i !== setterIdx) };
-}
-
-// 존별 자연 x(좌우 순서·블로커 정렬용 기준)
-const ZONE_X: Record<number, number> = { 4: 0.22, 3: 0.5, 2: 0.78, 5: 0.18, 6: 0.5, 1: 0.82 };
-/** 서브 받기 전 대형 — 3-패서 리시브: 리베로+OH가 좌·중·우를 커버(빈 곳 없음),
- *  전위 공격수는 네트 대기, 세터는 네트 사이드 코너에 숨었다 서브 순간 세팅 자리로 침투. */
-function receiveFormation(side: Side, lu: ReturnType<typeof buildLineup>, rot: number): Record<number, { x: number; y: number }> {
-  const zoneOf = (i: number) => ((i - rot) % 6 + 6) % 6 + 1;
-  const mx = (f: number) => (side === 'home' ? f : 1 - f) * COURT_W;
-  const my = (f: number) => (side === 'home' ? f : 1 - f) * COURT_H;
-  const baseX = (i: number) => ZONE_X[zoneOf(i)];
-  const setterIdx = lu.six.findIndex((p) => p.position === 'S');
-  const pos: Record<number, { x: number; y: number }> = {};
-
-  // 패서 3명: 리베로/OH 우선, 부족하면 보충
-  const passers = [0, 1, 2, 3, 4, 5].filter((i) => i !== setterIdx && (lu.six[i].position === 'L' || lu.six[i].position === 'OH'));
-  for (const i of [0, 1, 2, 3, 4, 5]) { if (passers.length >= 3) break; if (i !== setterIdx && !passers.includes(i)) passers.push(i); }
-  const recv = passers.slice(0, 3);
-  const netAtt = [0, 1, 2, 3, 4, 5].filter((i) => i !== setterIdx && !recv.includes(i));
-
-  // 패서 좌·중·우 펼침(W, 자연 x순 → 교차 방지)
-  const pLane: [number, number][] = [[0.2, 0.78], [0.5, 0.85], [0.8, 0.78]];
-  recv.slice().sort((a, b) => baseX(a) - baseX(b)).forEach((i, k) => { const [xf, yf] = pLane[k] ?? [0.5, 0.82]; pos[i] = { x: mx(xf), y: my(yf) }; });
-  // 네트 공격수 대기
-  const naLane: [number, number][] = netAtt.length <= 1 ? [[0.5, 0.6]] : netAtt.length === 2 ? [[0.34, 0.6], [0.66, 0.6]] : [[0.26, 0.6], [0.5, 0.6], [0.74, 0.6]];
-  netAtt.slice().sort((a, b) => baseX(a) - baseX(b)).forEach((i, k) => { const [xf, yf] = naLane[k] ?? [0.5, 0.6]; pos[i] = { x: mx(xf), y: my(yf) }; });
-  // 세터: 네트 사이드 코너에 숨음(후위면 약간 뒤) → 서브 순간 스위칭으로 세팅 자리 침투
-  if (setterIdx >= 0) {
-    const sz = zoneOf(setterIdx);
-    const sxf = sz === 1 || sz === 2 ? 0.84 : sz === 4 || sz === 5 ? 0.16 : 0.5;
-    const syf = sz === 2 || sz === 3 || sz === 4 ? 0.58 : 0.64;
-    pos[setterIdx] = { x: mx(sxf), y: my(syf) };
-  }
-  return pos;
+  return playerAtZone(side === 'home' ? L.home : L.away, rot, zone);
 }
 
 /** 현재 구간에서 공격(세팅) 중인 측 — 그 팀 세터만 네트로 침투 */

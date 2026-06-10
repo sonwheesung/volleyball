@@ -1,0 +1,110 @@
+// 경기 보드 위치 계산 — React 무의존 순수 모듈(MatchCourt에서 분리, 헤드리스 검증 가능).
+// 좌표는 픽셀(코트 W×H 파라미터). 홈=하단, 원정=상단(점대칭).
+
+import type { Player, Position, Side } from '../types';
+import type { buildLineup } from '../engine/lineup';
+
+export type Lineup = ReturnType<typeof buildLineup>;
+export interface Px { x: number; y: number }
+
+// 존(zone) → 그리드 (col 0~2, row F=전위/B=후위)
+const GRID: Record<number, [number, 'F' | 'B']> = {
+  4: [0, 'F'], 3: [1, 'F'], 2: [2, 'F'],
+  5: [0, 'B'], 6: [1, 'B'], 1: [2, 'B'],
+};
+const COLX = [0.18, 0.5, 0.82];
+
+// 존별 자연 x(좌우 순서·블로커 정렬용 기준)
+export const ZONE_X: Record<number, number> = { 4: 0.22, 3: 0.5, 2: 0.78, 5: 0.18, 6: 0.5, 1: 0.82 };
+
+// 스위칭 좌→우 선호(전문 포지션)
+const LANE: Record<Position, number> = { OH: 0, L: 1, MB: 2, S: 3, OP: 4 };
+
+const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+
+/** 로테이션 r 에서 zone 에 선 라인업 인덱스 (zone z → (r+z-1)%6) */
+export const lineupIdxAt = (r: number, zone: number) => (r + zone - 1) % 6;
+/** 라인업 인덱스 i 가 선 존 */
+export const zoneOfIdx = (rot: number, i: number) => ((i - rot) % 6 + 6) % 6 + 1;
+const isBackZone = (z: number) => z === 1 || z === 5 || z === 6;
+
+/** 존 중심 좌표(px) — 홈은 하단, 원정은 상단(좌우·전후 점대칭) */
+export function zonePx(side: Side, zone: number, W: number, H: number): Px {
+  const [col, row] = GRID[zone];
+  const x = (side === 'home' ? COLX[col] : COLX[2 - col]) * W;
+  const yF = side === 'home' ? 0.62 : 0.38;
+  const yB = side === 'home' ? 0.9 : 0.1;
+  return { x, y: (row === 'F' ? yF : yB) * H };
+}
+
+/** 화면 표시 포지션 — 후위(1·5·6) MB는 리베로 표시 */
+export function displayPos(lu: Lineup, rot: number, i: number): Position {
+  const p = lu.six[i];
+  if (lu.libero && p?.position === 'MB' && isBackZone(zoneOfIdx(rot, i))) return 'L';
+  return p?.position ?? 'OH';
+}
+
+/** zone 의 표시 선수(후위 MB → 리베로. 리베로는 전위 불가) */
+export function playerAtZone(lu: Lineup, rot: number, zone: number): Player {
+  let p = lu.six[lineupIdxAt(rot, zone)];
+  if (isBackZone(zone) && lu.libero && p?.position === 'MB') p = lu.libero;
+  return p;
+}
+
+export interface Switched { pos: Record<number, Px>; setterIdx: number; frontHitters: number[]; backers: number[] }
+
+/** 스위칭(1.5) — 서브 후 전문 포지션. offense=true일 때만 세터가 네트로 침투. */
+export function switchedSpots(side: Side, lu: Lineup, rot: number, offense: boolean, W: number, H: number): Switched {
+  const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
+  const back = [1, 5, 6].map((z) => lineupIdxAt(rot, z));
+  const posOf = (i: number) => lu.six[i].position;
+  const X3 = side === 'home' ? [0.2, 0.5, 0.8] : [0.8, 0.5, 0.2];
+  const yF = (side === 'home' ? 0.6 : 0.4) * H;
+  const yB = (side === 'home' ? 0.86 : 0.14) * H;
+  const pos: Record<number, Px> = {};
+  [...front].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * W, y: yF }; });
+  [...back].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * W, y: yB }; });
+  const setterIdx = lu.six.findIndex((p) => p.position === 'S');
+  if (offense && setterIdx >= 0) pos[setterIdx] = { x: (side === 'home' ? 0.63 : 0.37) * W, y: (side === 'home' ? 0.57 : 0.43) * H }; // 공격 시에만 네트 침투
+  return { pos, setterIdx, frontHitters: front.filter((i) => i !== setterIdx), backers: back.filter((i) => i !== setterIdx) };
+}
+
+/** 서브 받기 전 대형 — 3-패서 리시브(리베로 표시 슬롯+OH가 좌·중·우),
+ *  전위 공격수는 네트 대기(후위 비패서는 한 칸 깊게), 세터는 네트 사이드 코너에 은신. */
+export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number, H: number): Record<number, Px> {
+  const zoneOf = (i: number) => zoneOfIdx(rot, i);
+  const mx = (f: number) => (side === 'home' ? f : 1 - f) * W;
+  const my = (f: number) => (side === 'home' ? f : 1 - f) * H;
+  const baseX = (i: number) => ZONE_X[zoneOf(i)];
+  const setterIdx = lu.six.findIndex((p) => p.position === 'S');
+  const pos: Record<number, Px> = {};
+
+  // 패서 3명: "표시 기준" 리베로(후위 MB 슬롯)·OH 우선 — 엔진 receivers()와 동일한 리시브 라인.
+  //   (six 원 포지션만 보면 전위 MB가 리시브 라인에, 리베로가 네트에 서는 시각 버그)
+  const passers = [0, 1, 2, 3, 4, 5].filter((i) => {
+    if (i === setterIdx) return false;
+    const d = displayPos(lu, rot, i);
+    return d === 'L' || d === 'OH';
+  });
+  for (const i of [0, 1, 2, 3, 4, 5]) { if (passers.length >= 3) break; if (i !== setterIdx && !passers.includes(i)) passers.push(i); }
+  const recv = passers.slice(0, 3);
+  const netAtt = [0, 1, 2, 3, 4, 5].filter((i) => i !== setterIdx && !recv.includes(i));
+
+  // 패서 좌·중·우 펼침(W, 자연 x순 → 교차 방지)
+  const pLane: [number, number][] = [[0.2, 0.78], [0.5, 0.85], [0.8, 0.78]];
+  recv.slice().sort((a, b) => baseX(a) - baseX(b)).forEach((i, k) => { const [xf, yf] = pLane[k] ?? [0.5, 0.82]; pos[i] = { x: mx(xf), y: my(yf) }; });
+  // 비패서 대기 — 전위는 네트(0.6), 후위는 한 칸 깊게(0.7: 서브 전 오버랩 어색 방지)
+  const naLane: number[] = netAtt.length <= 1 ? [0.5] : netAtt.length === 2 ? [0.34, 0.66] : [0.26, 0.5, 0.74];
+  netAtt.slice().sort((a, b) => baseX(a) - baseX(b)).forEach((i, k) => {
+    const deep = isBackZone(zoneOf(i));
+    pos[i] = { x: mx(naLane[k] ?? 0.5), y: my(deep ? 0.7 : 0.6) };
+  });
+  // 세터: 네트 사이드 코너에 은신(후위면 약간 뒤) → 서브 순간 스위칭으로 침투
+  if (setterIdx >= 0) {
+    const sz = zoneOf(setterIdx);
+    const sxf = sz === 1 || sz === 2 ? 0.84 : sz === 4 || sz === 5 ? 0.16 : 0.5;
+    const syf = sz === 2 || sz === 3 || sz === 4 ? 0.58 : 0.66;
+    pos[setterIdx] = { x: mx(sxf), y: my(syf) };
+  }
+  return pos;
+}
