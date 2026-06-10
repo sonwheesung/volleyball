@@ -444,7 +444,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     //    블록 무력화(스터프/블록아웃 없음). 수비가 읽으면 쉬운 디그, 못 읽으면 톡 떨어져 득점.
     const defStyleBonus = df.style === 'defense' ? 0.02 : df.style === 'attack' ? -0.01 : 0; // 수비형 디그↑
     const digStr = strength(defenders(df), (r) => r.dig, R, df) * momFactor(df.momentum);
-    const tipP = clamp((0.05 + 0.45 * (blkStr - attackPower)) * (0.45 + 0.7 * n(attacker.vq)), 0.015, 0.16);
+    const tipP = clamp((0.06 + 0.28 * (blkStr - attackPower)) * (0.62 + 0.42 * n(attacker.vq)), 0.015, 0.14); // 민감도 압축(parity — 평균 빈도 유지)
     if (atk !== 'quick' && rng.next() < tipP) {
       if (stats) stats.tips++;
       if (rng.next() < 0.035) { // 팁 범실(네트 터치·아웃) — 드묾
@@ -453,7 +453,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
         if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); }
         return { winner: other(att), how: 'atkErr' };
       }
-      const tipDigP = clamp(0.5 + 0.55 * (digStr - 0.45) - 0.12 * n(attacker.vq) + defStyleBonus, 0.18, 0.9);
+      const tipDigP = clamp(0.5 + 0.38 * (digStr - 0.45) - 0.07 * n(attacker.vq) + defStyleBonus, 0.2, 0.85); // 민감도 압축(parity)
       if (rng.next() < tipDigP) { // 읽혔다 — 얕은 수비가 살림(좋은 전환)
         if (stats) stats.digs++;
         q = clamp(0.55 + 0.3 * (digStr - 0.45) + rng.range(-0.1, 0.1), 0.2, 0.9);
