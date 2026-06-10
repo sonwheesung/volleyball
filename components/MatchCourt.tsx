@@ -100,6 +100,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const posRefs = useRef<Record<string, Animated.ValueXY>>({}); // 마커별 위치(선수 단위)
   const posLast = useRef<Record<string, { x: number; y: number }>>({});
   const finishedOnce = useRef(false);
+  const lastTargets = useRef<Record<string, { x: number; y: number }>>({});
 
   const finished = idx >= total;
   // 직전 랠리 낙구점 → 새 랠리 공 시작점으로 이어 붙여 공이 순간이동하지 않게
@@ -159,7 +160,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
 
   // 전 마커 목표 좌표 — courtDirector(순수 모듈, 헤드리스 감사기와 동일 소스)
-  const targets = segmentTargets(seg, { serving: stage.serving, homeRot: stage.homeRot, awayRot: stage.awayRot }, lineups, COURT_W, COURT_H, SERVE_OUT);
+  const targets = segmentTargets(seg, { serving: stage.serving, homeRot: stage.homeRot, awayRot: stage.awayRot }, lineups, COURT_W, COURT_H, SERVE_OUT, lastTargets.current);
+  lastTargets.current = targets;
 
   // 마커는 "선수(라인업 인덱스)" 단위로 그린다 → 위치가 바뀌면 무조건 슬라이드(순간이동 금지).
   const getPos = (key: string, init: { x: number; y: number }) => {

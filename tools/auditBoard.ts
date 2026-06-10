@@ -90,6 +90,7 @@ for (let m = 0; m < nMatches; m++) {
   const cur: Record<Key, Pt> = {};
   const anim: Record<Key, Anim> = {};
   const overlapStreak: Record<string, number> = {};
+  const lastTargets: Record<Key, Pt> = {};
   let prevLast: Pt | undefined;
   let tNow = 0;
 
@@ -121,7 +122,7 @@ for (let m = 0; m < nMatches; m++) {
       const seg = { from: path[k], to: path[k + 1] };
       const to: WP = seg.to;
       const segDur = (to.dur ?? SEG_DUR[to.kind]) * SPEED;
-      const targets = segmentTargets(seg, stage, L, W, H, SERVE_OUT);
+      const targets = segmentTargets(seg, stage, L, W, H, SERVE_OUT, lastTargets);
 
       // 목표 변경 → 애니메이션 시작(렌더의 Animated.timing과 동일 모델)
       for (const [key, tgt] of Object.entries(targets)) {
@@ -132,6 +133,18 @@ for (let m = 0; m < nMatches; m++) {
           anim[key] = { from: fromP, to: { ...tgt }, t0: tNow, dur: markerTravelMs(dist(fromP, tgt)) };
         }
       }
+
+      // J) 데드볼 재배치 금지: 랠리가 죽은 구간(fault/bounce)에서 무버가 아닌 선수의
+      //    목표가 직전 구간 대비 크게 바뀌면 안 됨(죽은 공에 공격 전환·스위칭 질주 — 사용자 발견 사례)
+      if (to.kind === 'fault' || to.kind === 'bounce') {
+        const moverKeys = new Set((to.movers ?? []).map((mv) => `${mv.side}-${mv.idx}`));
+        for (const [key, tgt] of Object.entries(targets)) {
+          if (moverKeys.has(key)) continue;
+          const prevT = lastTargets[key];
+          if (prevT && dist(prevT, tgt) > 30) flag('J.데드볼 재배치', ctx(`${key} 목표가 ${dist(prevT, tgt).toFixed(0)}px 점프(${to.kind})`));
+        }
+      }
+      for (const [key, tgt] of Object.entries(targets)) lastTargets[key] = tgt;
 
       // H) 아웃볼 추격: 추격자가 "존재"하는 걸로는 부족 — 최소 1명은 공 낙하점까지 실제 도달해야
       //    (reach<1이면 선 안쪽에서 멈춰 어색 — 사용자 발견 사례를 상설 규칙화)

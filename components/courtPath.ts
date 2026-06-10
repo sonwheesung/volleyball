@@ -19,6 +19,7 @@ export type WP = {
   x: number; y: number; side: Side; idx: number; kind: Move;
   movers?: Mover[]; aim?: { x: number; y: number };
   atk?: Atk; blk?: number; dur?: number; arc?: number; scale?: number;
+  hold?: boolean; // 서브 국면 데드볼(에이스·서브/리시브 범실) — 대형 동결(공격 전환 금지)
 };
 
 export interface RallyLike {
@@ -49,21 +50,32 @@ export function spikeTarget(def: Side, rng: ReturnType<typeof createRng>, deep: 
 }
 
 
-/** 랠리 종착 후 바운드 — 득점 낙하 지점에서 진행 방향으로 크게 한 번, 잦아들며 한 번 더(박힘 방지) */
+/** 랠리 종착 후 바운드 — 종결 에너지에 비례:
+ *  강타 킬(인코트)=낮고 길게 한 번에 라인 밖까지 튕겨나감 / 데드 드롭(네트 아래·핸들링)=짧게 톡 /
+ *  아웃볼·에이스=중간. 탱탱볼(짧은 동일 바운드 반복) 금지. */
 function withBounce(wp: WP[], W: number, H: number): WP[] {
   const last = wp[wp.length - 1];
   if (!last || (last.kind !== 'spike' && last.kind !== 'fault' && last.kind !== 'serve')) return wp;
   const prev = wp[wp.length - 2] ?? last;
   let dx = last.x - prev.x, dy = last.y - prev.y;
-  const len = Math.hypot(dx, dy) || 1;
-  dx /= len; dy /= len;
+  const travel = Math.hypot(dx, dy) || 1;
+  dx /= travel; dy /= travel;
+  const out = last.x < 0 || last.x > W || last.y < 0 || last.y > H;
+  // 바운드 에너지(1차 비거리 px)
+  let power: number;
+  if (travel < 30) power = 16;                              // 데드 드롭(네트 아래로 뚝·핸들링 휘슬)
+  else if (last.kind === 'spike') power = out ? 60 : 150;   // 인코트 강타 = 멀리 튕겨 아웃
+  else if (last.kind === 'serve') power = out ? 60 : 95;    // 에이스 = 빠른 서브 관통
+  else power = out ? 60 : 55;                               // 기타 fault
   const cl = (p: { x: number; y: number }) => ({
-    x: Math.max(-26, Math.min(W + 26, p.x)), y: Math.max(-40, Math.min(H + 40, p.y)),
+    x: Math.max(-26, Math.min(W + 26, p.x)), y: Math.max(-34, Math.min(H + 34, p.y)),
   });
-  const b1 = cl({ x: last.x + dx * 34, y: last.y + dy * 34 });
-  const b2 = cl({ x: b1.x + dx * 14, y: b1.y + dy * 14 });
-  wp.push({ ...b1, side: last.side, idx: -1, kind: 'bounce', dur: 240, arc: 0.055 * H, scale: 1.08 });
-  wp.push({ ...b2, side: last.side, idx: -1, kind: 'bounce', dur: 300, arc: 0.018 * H, scale: 1.02 });
+  const b1 = cl({ x: last.x + dx * power, y: last.y + dy * power });
+  const b2 = cl({ x: b1.x + dx * power * 0.16, y: b1.y + dy * power * 0.16 });
+  // 강타일수록 낮고 길게(작은 포물선), 약할수록 짧고 통통
+  const arc1 = (power >= 120 ? 0.035 : power >= 50 ? 0.05 : 0.02) * H;
+  wp.push({ ...b1, side: last.side, idx: -1, kind: 'bounce', dur: power >= 120 ? 330 : 240, arc: arc1, scale: 1.08, hold: last.hold });
+  wp.push({ ...b2, side: last.side, idx: -1, kind: 'bounce', dur: 300, arc: 0.015 * H, scale: 1.02, hold: last.hold });
   return wp;
 }
 
@@ -112,11 +124,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     // 서브 범실: 네트에 걸리거나 길게 아웃 — 받는 팀은 판단(추격 없음)
     if (rng.next() < 0.5) {
       const nx = clampN(zonePx(serving, 1, W, H).x + rng.range(-0.08, 0.08) * W, 0.1 * W, 0.9 * W);
-      wp.push({ x: nx, y: serving === 'home' ? NETY + 4 : NETY - 4, side: serving, idx: -1, kind: 'serve' });
-      wp.push({ x: nx, y: serving === 'home' ? NETY + 20 : NETY - 20, side: serving, idx: -1, kind: 'fault' }); // 네트 아래로 뚝
+      wp.push({ x: nx, y: serving === 'home' ? NETY + 4 : NETY - 4, side: serving, idx: -1, kind: 'serve', hold: true });
+      wp.push({ x: nx, y: serving === 'home' ? NETY + 20 : NETY - 20, side: serving, idx: -1, kind: 'fault', hold: true }); // 네트 아래로 뚝
     } else {
       const ox = clampN(rf[recvIdx].x + rng.range(-0.12, 0.12) * W, 0.1 * W, 0.9 * W);
-      wp.push({ x: ox, y: recv === 'home' ? H + 14 : -14, side: serving, idx: -1, kind: 'serve' }); // 길게 아웃
+      wp.push({ x: ox, y: recv === 'home' ? H + 14 : -14, side: serving, idx: -1, kind: 'serve', hold: true }); // 길게 아웃
     }
     return withBounce(wp, W, H);
   }
@@ -127,7 +139,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       x: clampN(rf[recvIdx].x + Math.cos(ang) * 32, 0.06 * W, 0.94 * W),
       y: clampN(rf[recvIdx].y + Math.abs(Math.sin(ang)) * (recv === 'home' ? 30 : -30), 0.04 * H, 0.96 * H),
     };
-    wp.push({ x: pt.x, y: pt.y, side: recv, idx: recvIdx, kind: 'serve', movers: [{ side: recv, idx: recvIdx, x: rf[recvIdx].x + (pt.x - rf[recvIdx].x) * 0.8, y: rf[recvIdx].y + (pt.y - rf[recvIdx].y) * 0.8 }] });
+    wp.push({ x: pt.x, y: pt.y, side: recv, idx: recvIdx, kind: 'serve', hold: true, movers: [{ side: recv, idx: recvIdx, x: rf[recvIdx].x + (pt.x - rf[recvIdx].x) * 0.8, y: rf[recvIdx].y + (pt.y - rf[recvIdx].y) * 0.8 }] });
     return withBounce(wp, W, H);
   }
 
@@ -147,7 +159,10 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const out = rng.next() < 0.5
       ? { x: dir < 0 ? -12 : W + 12, y: clampN(rp.y + rng.range(-0.1, 0.1) * H, 0.1 * H, 0.9 * H) } // 사이드 밖
       : { x: clampN(rp.x + dir * 0.25 * W, 12, W - 12), y: (recv === 'home' ? H + 12 : -12) }; // 엔드라인 밖
-    wp.push({ x: out.x, y: out.y, side: recv, idx: -1, kind: 'fault', movers: chasersTo(recv, out, 2, 1.05) });
+    // 실패한 리시버는 자기가 튕긴 공을 쫓고(닿지 못함), 가까운 2명이 코트 밖까지 추격. 나머지는 대형 동결.
+    const selfChase = { side: recv, idx: recvIdx, x: rp.x + (out.x - rp.x) * 0.45, y: rp.y + (out.y - rp.y) * 0.45 };
+    const others = chasersTo(recv, out, 3, 1.05).filter((m) => m.idx !== recvIdx).slice(0, 2);
+    wp.push({ x: out.x, y: out.y, side: recv, idx: -1, kind: 'fault', hold: true, movers: [selfChase, ...others] });
     return withBounce(wp, W, H);
   }
 
