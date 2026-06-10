@@ -43,6 +43,7 @@ const flag = (kind: string, detail: string, frame?: Record<Key, Pt>, ball?: Pt) 
 // 통계(이상이 아니어도 리포트)
 let maxSpeed = 0; let maxSpeedCtx = '';
 const holeSamples: number[] = [];
+const endings: Record<string, number> = {}; // 보드가 그리는 랠리 종결 유형 분포
 
 const easeOut = (u: number) => 1 - (1 - u) * (1 - u); // Easing.out(quad)
 const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
@@ -105,6 +106,15 @@ for (let m = 0; m < nMatches; m++) {
     const path = ballPath(r, seed, L, W, H, SERVE_OUT, prevLast);
     prevLast = path.length ? { x: path[path.length - 1].x, y: path[path.length - 1].y } : prevLast;
     const stage = { serving: r.serving, homeRot: r.homeRot, awayRot: r.awayRot };
+    // 종결 유형 = 엔진 기록(how) — 보드는 이를 사실대로 그린다(분포 = 엔진 분포 보장)
+    {
+      const KO: Record<string, string> = {
+        kill: '킬', cap: '킬(랠리상한)', blockout: '블록아웃(터치아웃)', stuff: '스터프 블록', atkErr: '공격 범실',
+        ace: '서브 에이스', serveErr: '서브 범실', recvErr: '리시브 범실', miscErr: '핸들링 범실', fault: '포지션 폴트',
+      };
+      const k = r.how ? (KO[r.how] ?? r.how) : '미기록(즉흥)';
+      endings[k] = (endings[k] ?? 0) + 1;
+    }
     const ctx = (extra: string) => `경기${m + 1}/랠리${ri + 1}(${r.setNo}세트 ${r.home}:${r.away}) ${extra}`;
 
     for (let k = 0; k + 1 < path.length; k++) {
@@ -247,6 +257,12 @@ for (let m = 0; m < nMatches; m++) {
 // ── 리포트 ──
 log(`\n═══ 보드 안무 자동 감사 — ${nMatches}경기 / ${totalRallies.toLocaleString()}랠리 / ${totalFrames.toLocaleString()}프레임(40ms) ═══`);
 log(`최고 이동 속도 ${maxSpeed.toFixed(1)} m/s (${maxSpeedCtx})`);
+{
+  const tot = Object.values(endings).reduce((a, b) => a + b, 0) || 1;
+  const setsApprox = totalRallies / 44; // 세트당 ~44랠리
+  log('랠리 종결 연출 분포: ' + Object.entries(endings).sort((a, b) => b[1] - a[1])
+    .map(([k, n]) => `${k} ${((n / tot) * 100).toFixed(1)}%(세트당 ${(n / setsApprox).toFixed(1)}회)`).join(' · '));
+}
 if (holeSamples.length) {
   const sorted = holeSamples.slice().sort((a, b) => a - b);
   log(`수비 빈 공간: 중앙값 ${sorted[Math.floor(sorted.length / 2)].toFixed(1)}m · p95 ${sorted[Math.floor(sorted.length * 0.95)].toFixed(1)}m · 최대 ${sorted[sorted.length - 1].toFixed(1)}m`);

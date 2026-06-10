@@ -3,6 +3,7 @@
 // 가까운 다른 선수가 올림) → 전위 공격수 스파이크. 시드 결정론.
 
 import type { Side } from '../types';
+import type { PointHow } from '../engine/rally';
 import { createRng } from '../engine/rng';
 import {
   lineupIdxAt, zonePx, switchedSpots, coverSpots, receiveFormation, receiveLine, type Lineup, type Switched,
@@ -22,6 +23,7 @@ export type WP = {
 
 export interface RallyLike {
   setNo: number; home: number; away: number; scorer: Side; serving: Side; homeRot: number; awayRot: number;
+  how?: PointHow; // 엔진이 기록한 종결 방식 — 있으면 보드는 사실대로 그린다(미기록 구결과는 즉흥)
 }
 export interface Lineups { home: Lineup; away: Lineup }
 
@@ -50,7 +52,7 @@ export function spikeTarget(def: Side, rng: ReturnType<typeof createRng>, deep: 
 /** 랠리 종착 후 바운드 — 득점 낙하 지점에서 진행 방향으로 크게 한 번, 잦아들며 한 번 더(박힘 방지) */
 function withBounce(wp: WP[], W: number, H: number): WP[] {
   const last = wp[wp.length - 1];
-  if (!last || (last.kind !== 'spike' && last.kind !== 'fault')) return wp;
+  if (!last || (last.kind !== 'spike' && last.kind !== 'fault' && last.kind !== 'serve')) return wp;
   const prev = wp[wp.length - 2] ?? last;
   let dx = last.x - prev.x, dy = last.y - prev.y;
   const len = Math.hypot(dx, dy) || 1;
@@ -99,6 +101,36 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   const rf = receiveFormation(recv, recvLu, rotOf(recv), W, H);
   const line = receiveLine(recvLu, rotOf(recv));
   const recvIdx = pick(line.length ? line : (sw[recv].backers.length ? sw[recv].backers : [serverIdx]));
+  const NETY = 0.5 * H;
+
+  // ── 사실 기반 서브 국면 종결(엔진 how) ──
+  if (r.how === 'fault') {
+    // 포지션 폴트: 서브 전 휘슬 — 랠리 없이 종료(공은 서버 자리)
+    return wp;
+  }
+  if (r.how === 'serveErr') {
+    // 서브 범실: 네트에 걸리거나 길게 아웃 — 받는 팀은 판단(추격 없음)
+    if (rng.next() < 0.5) {
+      const nx = clampN(zonePx(serving, 1, W, H).x + rng.range(-0.08, 0.08) * W, 0.1 * W, 0.9 * W);
+      wp.push({ x: nx, y: serving === 'home' ? NETY + 4 : NETY - 4, side: serving, idx: -1, kind: 'serve' });
+      wp.push({ x: nx, y: serving === 'home' ? NETY + 20 : NETY - 20, side: serving, idx: -1, kind: 'fault' }); // 네트 아래로 뚝
+    } else {
+      const ox = clampN(rf[recvIdx].x + rng.range(-0.12, 0.12) * W, 0.1 * W, 0.9 * W);
+      wp.push({ x: ox, y: recv === 'home' ? H + 14 : -14, side: serving, idx: -1, kind: 'serve' }); // 길게 아웃
+    }
+    return withBounce(wp, W, H);
+  }
+  if (r.how === 'ace') {
+    // 에이스: 리시버 옆을 꿰뚫음 — 몸을 날리지만 닿지 못함
+    const ang = rng.range(0, Math.PI * 2);
+    const pt = {
+      x: clampN(rf[recvIdx].x + Math.cos(ang) * 32, 0.06 * W, 0.94 * W),
+      y: clampN(rf[recvIdx].y + Math.abs(Math.sin(ang)) * (recv === 'home' ? 30 : -30), 0.04 * H, 0.96 * H),
+    };
+    wp.push({ x: pt.x, y: pt.y, side: recv, idx: recvIdx, kind: 'serve', movers: [{ side: recv, idx: recvIdx, x: rf[recvIdx].x + (pt.x - rf[recvIdx].x) * 0.8, y: rf[recvIdx].y + (pt.y - rf[recvIdx].y) * 0.8 }] });
+    return withBounce(wp, W, H);
+  }
+
   wp.push({ x: rf[recvIdx].x, y: rf[recvIdx].y, side: recv, idx: recvIdx, kind: 'serve' });
   let att: Side = recv;
 
@@ -109,7 +141,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   };
 
   // 리시브 미스: 공이 옆/뒤로 튕겨 라인 밖으로, 선수들이 쫓지만 못 살림 → 서브측 득점
-  if (recv !== r.scorer && rng.next() < RECV_FAULT) {
+  if (r.how ? r.how === 'recvErr' : (recv !== r.scorer && rng.next() < RECV_FAULT)) {
     const rp = rf[recvIdx];
     const dir = rng.next() < 0.5 ? -1 : 1;
     const out = rng.next() < 0.5
@@ -144,6 +176,12 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     }
     // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트
     wp.push({ x: passSpot.x, y: passSpot.y, side: att, idx: tosserIdx, kind: 'pass', movers: [{ side: att, idx: tosserIdx, x: passSpot.x, y: passSpot.y }] });
+
+    // 볼핸들링 범실(사실): 더블컨택·캐치 휘슬 — 패스가 죽고 그 자리에서 종료
+    if (r.how === 'miscErr' && att === other(r.scorer) && (hop >= 2 || rng.next() < 0.7)) {
+      wp.push({ x: clampN(passSpot.x + rng.range(-12, 12), 12, W - 12), y: passSpot.y, side: att, idx: -1, kind: 'fault' });
+      return withBounce(wp, W, H);
+    }
 
     // ── 공격 종류 선택 (엔진 분포 근사: 속공 ~12%·시간차 ~7%·백어택 ~18%·오픈 나머지) ──
     const lu = att === 'home' ? L.home : L.away;
@@ -220,30 +258,63 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const dBacks = [1, 5, 6].map((z) => lineupIdxAt(rotOf(def), z));
     const nearestDig = (tg: { x: number; y: number }) => dBacks.reduce((b, i) => (d2(swDef[def].pos[i], tg) < d2(swDef[def].pos[b], tg) ? i : b), dBacks[0]);
 
-    if (att === r.scorer) {
+    // ── 종결 실행기(사실 기반) ──
+    const doKill = () => {
+      // 클린 킬: 블록 코스에 걸려 있으면 각을 살짝 빼서(사실은 킬이므로 블록 회피 연출)
+      let t = intended;
       if (intoBlock) {
-        // 블로킹 아웃(터치아웃): 블록 맞고 옆으로 아웃 → 공격 득점. 점선=의도(코트)
-        // 나가는 공이라도 수비 2명이 코트 밖까지 오버런하며 살리려 쫓는다(실제 배구 — 못 살리고 실점)
-        const outPt = rng.next() < 0.55
-          ? { x: ap.x < W / 2 ? W + 13 : -13, y: (def === 'home' ? 0.78 : 0.22) * H }                  // 사이드 밖
-          : { x: clampN(blockNet.x + rng.range(-0.2, 0.2) * W, 24, W - 24), y: def === 'home' ? H + 18 : -18 }; // 엔드라인 밖(깊게)
-        wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-        wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', movers: chasersTo(def, outPt, 2, 1.06) });
-      } else {
-        // 클린 킬: 블록을 각으로 피해 코트로 (수비 못 닿음)
-        wp.push({ x: intended.x, y: intended.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, intended, 1, 0.92), ...coverMovers] });
+        const dir = Math.sign(intended.x - ap.x) || (rng.next() < 0.5 ? -1 : 1);
+        t = { x: clampN(ap.x + dir * (blockW + 0.05 * W), 0.08 * W, 0.92 * W), y: intended.y };
       }
-      break;
-    }
-
-    // att !== scorer (def가 득점하거나 랠리 지속)
-    if (intoBlock && rng.next() < 0.55) {
-      // 스터프 블록: 막혀서 자기 코트로 떨어짐 → 블로킹 당함(def 득점, 랠리 종료)
-      // 커버 선수들이 떨어지는 공으로 몸을 던진다(못 살리고 실점)
+      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, t, 1, 0.92), ...coverMovers] });
+    };
+    const doBlockout = () => {
+      // 터치아웃: 블록 스치고 아웃 — 수비 2명이 코트 밖까지 오버런하며 쫓는다(못 살림)
+      const outPt = rng.next() < 0.55
+        ? { x: ap.x < W / 2 ? W + 13 : -13, y: (def === 'home' ? 0.78 : 0.22) * H }
+        : { x: clampN(blockNet.x + rng.range(-0.2, 0.2) * W, 24, W - 24), y: def === 'home' ? H + 18 : -18 };
+      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
+      wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', movers: chasersTo(def, outPt, 2, 1.06) });
+    };
+    const doStuff = () => {
+      // 스터프: 벽에 막혀 자기 코트로 — 커버가 몸을 던진다(못 살림)
       const stuffPt = { x: clampN(ap.x + rng.range(-0.08, 0.08) * W, 12, W - 12), y: (att === 'home' ? 0.78 : 0.22) * H };
       wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
       wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', movers: chasersTo(att, stuffPt, 2, 0.97) });
-      break;
+    };
+    const doAtkErr = () => {
+      if (rng.next() < 0.45) {
+        // 네트에 꽂힘 — 자기 쪽 네트 면 맞고 아래로
+        const nx = clampN(ap.x + rng.range(-0.04, 0.04) * W, 0.1 * W, 0.9 * W);
+        wp.push({ x: nx, y: att === 'home' ? 0.5 * H + 4 : 0.5 * H - 4, side: att, idx: -1, kind: 'spike', movers: coverMovers });
+        wp.push({ x: nx, y: att === 'home' ? 0.5 * H + 20 : 0.5 * H - 20, side: att, idx: -1, kind: 'fault' });
+      } else {
+        // 라인 밖 — 수비는 아웃 판단(일부러 안 건드림)
+        const outPt = rng.next() < 0.6
+          ? { x: clampN(intended.x, 0.1 * W, 0.9 * W), y: def === 'home' ? H + 16 : -16 }
+          : { x: intended.x < W / 2 ? -14 : W + 14, y: def === 'home' ? clampN(intended.y, 0.56 * H, 0.94 * H) : clampN(intended.y, 0.06 * H, 0.44 * H) };
+        wp.push({ x: outPt.x, y: outPt.y, side: def, idx: -1, kind: 'spike', movers: coverMovers });
+      }
+    };
+
+    if (r.how) {
+      // 사실 기반: 엔진이 기록한 종결을, 진 팀/이긴 팀이 맞는 공격 차례에 실행
+      const winsByAtk = r.how === 'kill' || r.how === 'blockout' || r.how === 'cap';
+      const finalAtt: Side = winsByAtk ? r.scorer : other(r.scorer);
+      if (att === finalAtt && (hop >= 3 || rng.next() < 0.7)) {
+        if (r.how === 'blockout') doBlockout();
+        else if (r.how === 'stuff') doStuff();
+        else if (r.how === 'atkErr') doAtkErr();
+        else doKill(); // kill·cap (그 외 how는 위 국면에서 이미 종료)
+        break;
+      }
+    } else {
+      // 레거시(종결 미기록): 기존 즉흥 분포
+      if (att === r.scorer) {
+        if (intoBlock) doBlockout(); else doKill();
+        break;
+      }
+      if (intoBlock && rng.next() < 0.55) { doStuff(); break; }
     }
 
     if (intoBlock) {

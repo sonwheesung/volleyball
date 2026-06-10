@@ -78,6 +78,15 @@ export interface RallyTeam {
 
 export type Rate = (p: Player) => Ratings;
 
+/** 득점 종결 방식 — 경기 보드가 "지어내지 않고" 사실대로 그리기 위한 기록(결정론 무영향) */
+export type PointHow =
+  | 'ace' | 'serveErr' | 'recvErr' | 'fault'      // 서브 국면
+  | 'miscErr'                                      // 볼핸들링(더블컨택·캐치·네트터치)
+  | 'kill' | 'blockout' | 'stuff' | 'atkErr'       // 공격 국면
+  | 'cap';                                         // 랠리 상한 도달(킬 취급)
+
+export interface RallyOutcome { winner: Side; how: PointHow }
+
 export interface Edge { home: number; away: number }
 const NO_EDGE: Edge = { home: 1, away: 1 };
 
@@ -244,7 +253,7 @@ export const newRallyStats = (): RallyStats => ({
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
  * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false): Side {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false): RallyOutcome {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
   const eg = (s: Side) => (s === 'home' ? edge.home : edge.away);
@@ -304,7 +313,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: 'ace', q: 0 });
       emitPoint(serving, '서브 에이스');
     }
-    return serving;
+    return { winner: serving, how: 'ace' };
   }
   if (s0 < aceP + errP) {
     if (stats) stats.serveErrs++; if (trace) trace.push('  → 서브 범실 (리시브팀 득점)');
@@ -313,13 +322,13 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'fault' });
       emitPoint(recvSide, '서브 범실');
     }
-    return recvSide;
+    return { winner: recvSide, how: 'serveErr' };
   }
 
   // ── 포지션 폴트 (1.4) ──
   for (const side of [serving, recvSide] as Side[]) {
     const t = teamOf(side);
-    if (rng.next() < clamp(0.012 * (1 - teamVQ(t)), 0, 0.02)) { if (stats) stats.faults++; return other(side); }
+    if (rng.next() < clamp(0.012 * (1 - teamVQ(t)), 0, 0.02)) { if (stats) stats.faults++; return { winner: other(side), how: 'fault' }; }
   }
 
   // ── 랠리 루프 (4·5·6장) ── 서브 난이도만큼 첫 리시브 품질 하락
@@ -336,7 +345,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: 'shank', q: 0 });
       emitPoint(serving, '리시브 범실');
     }
-    return serving;
+    return { winner: serving, how: 'recvErr' };
   }
   if (trace) trace.push(`리시브 [${sideKo(recvSide)}] 품질 ${q.toFixed(2)} (${qLabel(q)})`);
   if (E && passer) {
@@ -356,7 +365,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       if (stats) stats.miscErrs++;
       if (trace) trace.push(`  볼핸들링 범실 [${sideKo(att)}] (상대 득점)`);
       if (E) emitPoint(other(att), '핸들링 범실');
-      return other(att);
+      return { winner: other(att), how: 'miscErr' };
     }
     const atk = chooseAtk(q, setQ, n(setter.vq), at.style, rng);
     const attacker = pickAttacker(at, atk, R, rng);
@@ -429,14 +438,14 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const blockP = clamp(0.085 + 0.3 * (blkStr - attackPower), 0.02, 0.4); // 민감도 압축(parity)·기저로 평균 복원
     if (stats) stats.attacks++;
     const r1 = rng.next();
-    if (r1 < errP2) { if (stats) stats.attackErrs++; if (trace) trace.push('    → 공격 범실 (상대 득점)'); if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); } return other(att); }
+    if (r1 < errP2) { if (stats) stats.attackErrs++; if (trace) trace.push('    → 공격 범실 (상대 득점)'); if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); } return { winner: other(att), how: 'atkErr' }; }
     if (r1 < errP2 + blockP) {
       // 공격방법(5.1): 영리한 공격수는 블록아웃/툴샷으로 살린다(VQ↑일수록)
       const blockOutP = clamp(0.12 + 0.35 * n(attacker.vq) - 0.15, 0.04, 0.4);
-      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return att; }
+      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return { winner: att, how: 'blockout' }; }
       const stuffPref = df.style === 'attack' ? 0.04 : df.style === 'defense' ? -0.04 : 0;
       const stuffProb = clamp(0.46 + stuffPref + 0.55 * (blkStr - attackPower), 0.05, 0.8); // 기저 KOVO 정렬·민감도 압축
-      if (rng.next() < stuffProb) { if (stats) stats.stuffs++; if (trace) trace.push(`    → 스터프 블록! [${sideKo(other(att))}] 득점`); if (E) { pushAttack('blocked', null); emitPoint(other(att), '스터프 블록'); } return other(att); }
+      if (rng.next() < stuffProb) { if (stats) stats.stuffs++; if (trace) trace.push(`    → 스터프 블록! [${sideKo(other(att))}] 득점`); if (E) { pushAttack('blocked', null); emitPoint(other(att), '스터프 블록'); } return { winner: other(att), how: 'stuff' }; }
       if (stats) stats.softblocks++;
       if (E) pushAttack('softblock', null);
       q = clamp(0.7 + rng.range(-0.1, 0.1), 0.4, 0.92);          // 소프트 블록 → 수비측 좋은 전환
@@ -461,7 +470,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     if (stats) stats.kills++;
     if (trace) trace.push(`    → 공격 성공(킬)! [${sideKo(att)}] ${attacker.name} 득점`);
     if (E) { pushAttack('kill', null); emitPoint(att, '공격 성공'); }
-    return att;                                                 // 공격 성공(kill)
+    return { winner: att, how: 'kill' };                                                 // 공격 성공(kill)
   }
-  return att;
+  return { winner: att, how: 'cap' };
 }

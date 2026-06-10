@@ -5,11 +5,14 @@
 
 import { createRng } from './rng';
 
+import type { PointHow } from './rally';
+
 export interface PointLog {
   setNo: number;
   home: number;
   away: number;
   scorer: 'home' | 'away';
+  how?: PointHow; // 종결 방식(보드가 사실대로 그리기 위함) — 구세이브 결과엔 없음
 }
 
 export interface SimResult {

@@ -9,6 +9,7 @@ import {
   type Lineup, type Px,
 } from './courtLayout';
 import type { WP, Move, Lineups } from './courtPath';
+import type { PointHow } from '../engine/rally';
 
 export interface StageInfo { serving: Side; homeRot: number; awayRot: number }
 export interface Seg { from: WP; to: WP }
@@ -114,7 +115,7 @@ export function segmentTargets(
 }
 
 export interface RallyState {
-  setNo: number; home: number; away: number; scorer: Side;
+  setNo: number; home: number; away: number; scorer: Side; how?: PointHow;
   serving: Side; homeRot: number; awayRot: number;
   homeSetsBefore: number; awaySetsBefore: number;
 }
@@ -138,7 +139,7 @@ export function reconstructRallies(sim: SimResult): RallyState[] {
       serving = pt.setNo % 2 === 1 ? 'home' : 'away';
     }
     out.push({
-      setNo: pt.setNo, home: pt.home, away: pt.away, scorer: pt.scorer,
+      setNo: pt.setNo, home: pt.home, away: pt.away, scorer: pt.scorer, how: pt.how,
       serving, homeRot, awayRot, homeSetsBefore: hs, awaySetsBefore: as,
     });
     if (pt.scorer !== serving) {
