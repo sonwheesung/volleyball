@@ -282,6 +282,21 @@ export function evolvedPlayers(day: number): Map<string, Player> {
 export const getEvolvedPlayer = (id: string, day: number): Player | undefined =>
   evolvedPlayers(day).get(id);
 
+// 임의 선수(로스터 외 FA 포함)를 day까지 진화 — 날짜 인지 명단(dynamics)용. baseVersion 단위 메모.
+const evoOneCache = new Map<string, Player>();
+let evoOneKey = -1;
+export function evolveOnDay(id: string, day: number): Player | undefined {
+  if (evoOneKey !== _baseVersion) { evoOneCache.clear(); evoOneKey = _baseVersion; }
+  const k = `${id}:${day}`;
+  const hit = evoOneCache.get(k);
+  if (hit) return hit;
+  const base = playerMap.get(id);
+  if (!base) return undefined;
+  const ev = evolvePlayer(base, focusOf(base), day, effectsOf(base));
+  evoOneCache.set(k, ev);
+  return ev;
+}
+
 export const getEvolvedTeamPlayers = (teamId: string, day: number): Player[] => {
   const m = evolvedPlayers(day);
   return teamPlayerIds(teamId)

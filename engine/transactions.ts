@@ -1,0 +1,40 @@
+// 시즌 중 이동 — 순수 AI 영입 판정 (TRANSACTION_SYSTEM). 결정론.
+// "포지션 구멍날 때만" 영입: healthy 가용 < 선발 필요. 캡·정원 제약.
+
+import type { Player, Position } from '../types';
+import { overall } from './overall';
+
+/** 선발 코트 필요 인원(포지션별) */
+export const STARTER_NEED: Record<Position, number> = { S: 1, OH: 2, OP: 1, MB: 2, L: 1 };
+/** 시즌 중 로스터 상한(영입 버퍼 — AI 방출 없이도 긴급 수혈 가능) */
+export const ROSTER_MAX = 18;
+
+export function healthyByPos(players: Player[]): Record<Position, number> {
+  const c: Record<Position, number> = { S: 0, OH: 0, OP: 0, MB: 0, L: 0 };
+  for (const p of players) c[p.position]++;
+  return c;
+}
+
+/** 구멍난 포지션(가용 < 필요) — 부족폭 큰 순, 동률은 포지션 고정순 */
+export function shortagePositions(healthy: Record<Position, number>): Position[] {
+  const order: Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
+  return order
+    .filter((p) => healthy[p] < STARTER_NEED[p])
+    .sort((a, b) => (STARTER_NEED[b] - healthy[b]) - (STARTER_NEED[a] - healthy[a]) || order.indexOf(a) - order.indexOf(b));
+}
+
+/** FA 풀에서 포지션 pos 최고 OVR 영입 후보(캡·정원 통과). 동률은 id 사전순. */
+export function pickSigning(
+  pos: Position,
+  faPool: Player[],
+  rosterSize: number,
+  payroll: number,
+  salaryOf: (p: Player) => number,
+  cap: number,
+): Player | null {
+  if (rosterSize >= ROSTER_MAX) return null;
+  const cands = faPool
+    .filter((p) => p.position === pos && payroll + salaryOf(p) <= cap)
+    .sort((a, b) => overall(b) - overall(a) || (a.id < b.id ? -1 : 1));
+  return cands[0] ?? null;
+}
