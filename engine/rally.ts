@@ -13,6 +13,7 @@ import { frontRow, backRow, serverIndex } from './rotation';
 import { type Pt, zoneXY, playerXY, serveSpot, dist, jitter, COURT } from './court';
 import type { Tele, AtkResult, QuickKind } from './events';
 import { serveLanding, tossLanding, attackCourse } from './spatial';
+import { clutchFocusAdj, serveAggrAdj } from './traits';
 
 const n = (v: number) => v / 100;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -128,7 +129,7 @@ const teamVQ = (t: RallyTeam) => t.six.reduce((s, p) => s + p.vq, 0) / t.six.len
 /** 서브 타입 선택 (2장) — 서브 능력·집중력·감독 성향이 공격성을 정한다 */
 function chooseServe(p: Player, style: CoachStyle, rng: Rng): ServeT {
   const styleAdj = style === 'attack' ? 0.12 : style === 'defense' ? -0.05 : 0;
-  const aggr = n(p.skServe) * 0.6 + 0.2 * n(p.focus) + styleAdj + rng.range(-0.12, 0.12);
+  const aggr = n(p.skServe) * 0.6 + 0.2 * n(p.focus) + styleAdj + serveAggrAdj(p.traits) + rng.range(-0.12, 0.12);
   if (aggr > 0.7) return 'spike';
   if (aggr > 0.46) return 'jumpfloat';
   if (aggr > 0.2) return 'float';
@@ -237,7 +238,7 @@ export const newRallyStats = (): RallyStats => ({
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
  * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele): Side {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false): Side {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
   const eg = (s: Side) => (s === 'home' ? edge.home : edge.away);
@@ -264,7 +265,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const svPow = n(R(sp).serve) * momFactor(serv.momentum) * eg(serving) * eff(serv, sp);
   const recvSkill = strength(receivers(recv), (r) => r.receive, R, recv) * momFactor(recv.momentum) * eg(recvSide);
   const aceP = clamp(SERVE_ACE[st] * (0.5 + svPow) + 0.12 * (svPow - recvSkill), 0.003, 0.18);
-  const errP = clamp(SERVE_ERR[st] * (1.3 - 0.5 * n(sp.focus)) * (serv.style === 'balanced' ? 0.92 : 1), 0.01, 0.24);
+  const spFocus = n(sp.focus) + (clutch ? clutchFocusAdj(sp.traits) : 0); // 큰 고비: 클러치↑·새가슴↓
+  const errP = clamp(SERVE_ERR[st] * (1.3 - 0.5 * spFocus) * (serv.style === 'balanced' ? 0.92 : 1), 0.01, 0.24);
   if (stats) {
     stats.rallies++; stats.serves++;
     if (st === 'safe') stats.srvSafe++; else if (st === 'float') stats.srvFloat++;
@@ -394,7 +396,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
 
     // 좋은 패스(높은 q)면 깔끔히 결정(범실↓→사이드아웃↑), 난조면 범실 급증. 기복·VQ가 낮춤
     const balancedDiscipline = at.style === 'balanced' ? 0.012 : 0; // 밸런스형: 기본기(범실↓)
-    const errP2 = clamp(0.16 - 0.09 * q + ATK_ERR[atk] - 0.05 * n(attacker.consistency) - 0.03 * n(attacker.vq) - balancedDiscipline, 0.04, 0.28);
+    const clutchAtk = clutch ? clutchFocusAdj(attacker.traits) * 0.1 : 0; // 큰 고비 공격 안정(클러치↓err/새가슴↑err)
+    const errP2 = clamp(0.16 - 0.09 * q + ATK_ERR[atk] - 0.05 * n(attacker.consistency) - 0.03 * n(attacker.vq) - balancedDiscipline - clutchAtk, 0.04, 0.28);
     const blockP = clamp(0.07 + 0.4 * (blkStr - attackPower), 0.02, 0.4);
     if (stats) stats.attacks++;
     const r1 = rng.next();

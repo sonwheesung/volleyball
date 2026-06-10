@@ -6,6 +6,7 @@
 
 import type { Player, TrainableStat } from '../types';
 import type { Rng } from './rng';
+import { agingTraitMult } from './traits';
 
 /** 스탯이 떨어질 수 있는 하한 (완전 0 방지) */
 export const FLOOR = 25;
@@ -28,7 +29,8 @@ function decayRate(age: number): number {
  * 체력·근력만 음수로 적립 → -1 도달 시 스탯 -1 (FLOOR 까지).
  */
 export function applyAgingDay(p: Player, rng: Rng, ageSlow = 0): Player {
-  const rate = decayRate(p.age) * (1 - Math.max(0, Math.min(0.6, ageSlow))); // 체력 코치가 노쇠 둔화(전성기 연장)
+  // 체력 코치(ageSlow)가 노쇠 둔화 + 특성(대기만성 둔화/조로 가속)
+  const rate = decayRate(p.age) * (1 - Math.max(0, Math.min(0.6, ageSlow))) * agingTraitMult(p.traits);
   if (rate <= 0) return p;
 
   const next = { ...p } as Player;

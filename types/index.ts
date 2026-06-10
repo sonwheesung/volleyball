@@ -3,6 +3,13 @@
 
 export type Position = 'S' | 'OH' | 'OP' | 'MB' | 'L';
 
+/** 선수 특성 (TRAIT_SYSTEM) — 숫자 뒤의 성격. id 시드 결정론 부여. 정의·효과는 engine/traits.ts */
+export type Trait =
+  | 'clutch' | 'choke' | 'bigGame'
+  | 'lateBloomer' | 'earlyDecline'
+  | 'glass' | 'iron'
+  | 'serveMachine' | 'leader' | 'diligent';
+
 export type CoachStyle = 'attack' | 'defense' | 'balanced';
 
 /** 통산 누적 기록 (백년야구식 장기 서사의 토대) */
@@ -58,6 +65,9 @@ export interface Player {
   // 계약 (SALARY_SYSTEM) — 연봉은 서명 시점 가치로 고착
   contract: Contract;
   clubTenure: number;   // 현 구단 연속 근속 시즌(프랜차이즈 판정) — 이적 시 0
+
+  // 특성 (TRAIT_SYSTEM) — 생성 시 id 시드로 부여. 없으면 무효과(구세이브 호환)
+  traits?: Trait[];
 
   // 메타
   peakAge: number;     // 전성기 나이(노쇠 곡선용)

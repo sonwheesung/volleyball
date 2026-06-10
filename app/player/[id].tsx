@@ -6,6 +6,7 @@ import { getPlayerProduction } from '../../data/production';
 import { effectiveContract } from '../../data/roster';
 import { isFranchise } from '../../engine/cap';
 import { overall } from '../../engine/overall';
+import { TRAITS } from '../../engine/traits';
 import { deriveRatings } from '../../engine/ratings';
 import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
 import { useGameStore } from '../../store/useGameStore';
@@ -45,6 +46,25 @@ export default function PlayerDetail() {
         </Row>
         <Muted>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
       </Card>
+
+      {p.traits && p.traits.length > 0 ? (
+        <>
+          <Title>특성</Title>
+          <Card>
+            {p.traits.map((t) => {
+              const d = TRAITS[t];
+              return (
+                <View key={t} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: d.good ? theme.good : theme.bad, fontWeight: '800', width: 76 }}>
+                    {d.good ? '▲' : '▼'} {d.name}
+                  </Text>
+                  <Text style={{ color: theme.muted, fontSize: 12, flex: 1 }}>{d.desc}</Text>
+                </View>
+              );
+            })}
+          </Card>
+        </>
+      ) : null}
 
       <Title>계약</Title>
       <Card>

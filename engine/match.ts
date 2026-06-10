@@ -201,7 +201,7 @@ export function simulateMatch(
       if (opts.trace) opts.trace.push(`[${h}:${a}] 서브권 ${serving === 'home' ? '홈' : '원정'} (로테이션 H${home.rotation}/A${away.rotation})`);
       const tele = opts.events ? { events: opts.events, srng: createRng(strSeed(`${seed}:r:${rallyNo}`)), rallyNo } : undefined;
       rallyNo++;
-      const winner = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele);
+      const winner = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner });

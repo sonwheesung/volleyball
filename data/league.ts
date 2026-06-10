@@ -8,6 +8,7 @@ import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
 import { evolvePlayer } from '../engine/progression';
+import { rollTraits } from '../engine/traits';
 import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, type StaffEffects, NO_EFFECTS } from '../engine/staff';
 
 const LEAGUE_SEED = 20251018;
@@ -200,9 +201,12 @@ export const currentBasePlayers = (): Player[] => {
   return out;
 };
 
-/** 선수 상태 스냅샷을 레지스트리에 반영(신규 id 포함) */
+/** 선수 상태 스냅샷을 레지스트리에 반영(신규 id 포함). 구세이브 호환: 특성 없으면 id 시드로 보정 */
 export function commitPlayerBase(snapshot: Record<string, Player>): void {
-  for (const id of Object.keys(snapshot)) playerMap.set(id, snapshot[id]);
+  for (const id of Object.keys(snapshot)) {
+    const p = snapshot[id];
+    playerMap.set(id, p.traits ? p : { ...p, traits: rollTraits(id) });
+  }
   evoCache = null;
   _baseVersion++;
 }

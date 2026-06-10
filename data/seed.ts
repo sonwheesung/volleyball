@@ -4,6 +4,7 @@
 import { createRng, strSeed, type Rng } from '../engine/rng';
 import { TRAINABLE_STATS } from '../engine/training';
 import { rollFAPref } from '../engine/faMarket';
+import { rollTraits } from '../engine/traits';
 import { computeSalary } from '../engine/salary';
 import { headCoachSalary, assistantSalary, scoutSalary } from '../engine/staff';
 import type {
@@ -174,6 +175,7 @@ export function makePlayer(
   };
   player.contract.salary = computeSalary(player, signedAtAge, rng);
   player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length);
+  player.traits = rollTraits(id);
   return player;
 }
 
@@ -238,6 +240,7 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
   };
   player.contract.salary = computeSalary(player, age, rng);
   player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length);
+  player.traits = rollTraits(id);
   return player;
 }
 

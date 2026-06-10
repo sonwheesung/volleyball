@@ -11,6 +11,7 @@ import type {
   TrainingId,
 } from '../types';
 import type { Rng } from './rng';
+import { trainTraitMult } from './traits';
 
 export const BASE = 0.18; // 마스터 속도 손잡이 (TRAINING_SYSTEM 1.4) — 유망주가 20대 중반에 포텐 도달하도록 상향(2026-06)
 export const POS_FLOOR = 0.24; // 포지션 인식 성장 바닥 — 감독 선호와 무관하게 포지션 핵심 스탯은 항상 성장
@@ -118,6 +119,7 @@ export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boos
   const next = { ...p } as Player;
   const stats = next as unknown as Record<TrainableStat, number>;
   const xp: Partial<Record<TrainableStat, number>> = { ...p.xp };
+  const traitMul = trainTraitMult(p.traits); // 노력형 성장 가속(특성)
 
   const addXp = (stat: TrainableStat, effort: number) => {
     if (effort <= 0) return;
@@ -126,7 +128,7 @@ export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boos
     if (cur >= pot) return; // 상한 도달 → 성장 없음
     const head = clamp01((pot - cur) / 12);
     if (head <= 0) return;
-    const gain = effort * head * talentFor(p, stat) * ageMul(p.age, stat);
+    const gain = effort * head * talentFor(p, stat) * ageMul(p.age, stat) * traitMul;
 
     let bar = (xp[stat] ?? 0) + gain;
     let value = cur;
