@@ -167,6 +167,7 @@ export default function Dashboard() {
 
       <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
       <Button label="테스트 경기 (결과 미적용)" variant="ghost" onPress={() => router.push('/exhibition')} />
+      <Button label="보드 위치 검증 (개발)" variant="ghost" onPress={() => router.push('/debug-court')} />
       <Button label="선수단 보기" variant="ghost" onPress={() => router.push('/(tabs)/squad')} />
 
       <View style={{ height: 8 }} />
