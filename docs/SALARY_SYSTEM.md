@@ -10,12 +10,12 @@
 
 | 영역 | 상태 | 실제 파일 / 메모 |
 |---|---|---|
-| 개인 생산 귀속(1장) | ✅ 구현 | `engine/production.ts`(귀속) + `data/production.ts`(`leagueProduction` 캐시) |
+| 개인 생산 귀속(1장) | ✅ 구현 | `engine/production.ts`(귀속) + `data/production.ts`(`leagueProduction` 캐시). 명단은 `availableTeamPlayers`(부상·시즌 중 이동 반영, INJURY/TRANSACTION_SYSTEM) — 결장은 생산 기회 손실 |
 | 시장가치/계약 고착(2·3장) | ✅ 구현 | `engine/salary.ts` — `marketValue`/`computeSalary`/`contractStatus`/`formatMoney` |
 | 루키스케일 | ✅ 구현 | `ROOKIE_CAP=6000`(0.6억), 서명나이 ≤22 적용 |
 | 시드 연봉 흩뿌리기 | ✅ 구현 | `data/seed.ts` — 0~3시즌 전 서명으로 분산 |
 | 팀 예산(느슨) | ⚠️ 대체됨 | **FA 단계에서 정식 샐러리캡으로 강화**(아래) |
-| 수상·실적보너스(2장 일부) | ❌ 미구현 | 명예의전당/타이틀 누적 후 |
+| 수상·실적보너스(2장 일부) | ❌ 미구현 | 시상식 자체는 구현됨(AWARDS_SYSTEM) — 수상→연봉 연동만 미구현 |
 
 **실제 시장가치 공식(`marketValue`)** — 단위: 만원, `BASE=28000`(~2.8억):
 ```

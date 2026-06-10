@@ -16,13 +16,14 @@
 | 스탯별 XP 바 + 포텐 상한 + 재능×나이 | ✅ 구현 | `engine/training.ts` |
 | 12종 훈련 + posRelevance + coachShare | ✅ 구현 | `TRAININGS`(12), `coachShare`= 핵심 0.25 / 보조 0.12 / 나머지 0.02 |
 | **포지션 인식 성장 플로어 + 속도 캘리브레이션** | ✅ 구현(2026-06) | `engine/training.ts` `POS_FLOOR`·상향 `BASE` — 위 ★★ 절 |
-| 노쇠(체력·근력만 하락) | ✅ 구현 | `engine/aging.ts` — `DECAY_STATS=['jump','staminaMax','staminaRegen']`, `FLOOR=25` |
+| 노쇠(체력·근력만 하락) | ✅ 구현 | `engine/aging.ts` — `DECAY_STATS=['jump','staminaMax','staminaRegen']`, `FLOOR=25`. 특성 보정 `agingTraitMult`(대기만성 ×0.8 / 조로 ×1.25) |
 | 감독 핵심2+보조3 | ✅ 구현(고정) | `data/seed.ts` 7개 아키타입(팀당 1명 결정론 배정). **단장 커스터마이즈는 미구현** |
 | 일자별 진행(훈련+노쇠) | ✅ 구현 | `engine/progression.ts`(오케스트레이션), 시드 리플레이 |
 | **경기 출전·생산 → 성장(추가 성장원)** | ✅ 구현 | `engine/experience.ts` — 본 문서 외 신규. 아래 1.7 참고 |
+| **선수 특성의 성장·노쇠 보정** | ✅ 구현(2026-06) | `engine/traits.ts` — 훈련 `trainTraitMult`(노력형 ×1.12)·노쇠 `agingTraitMult`. 상세는 TRAIT_SYSTEM |
 
 **실제 상수(문서 placeholder와 차이):**
-- `BASE = 0.032` (문서는 ≈0.04로 예시). 페이싱 마스터 손잡이.
+- `BASE = 0.18` (2026-06 상향 — 유망주가 20대 중반에 포텐 도달하도록 캘리브레이션). 페이싱 마스터 손잡이.
 - 훈련 대상 스탯 = **15종**(`TrainableStat`). 키는 고정 제외.
 - `ageMul`은 신체/기술 두 곡선(`training.ts`): 신체는 27세+ 0, 기술은 30세+까지 느리게.
 

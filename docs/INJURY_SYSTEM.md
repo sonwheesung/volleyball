@@ -32,7 +32,8 @@ staminaMax는 건드리지 않음 — 부상위험 피드백 스파이럴 차단
 
 ## 6. 코드 맵
 - `engine/injury.ts` — 순수 `injuryRisk`/`rollSeverity`/상수(`CONCURRENT_CAP`).
-- `data/injury.ts` — forward-pass 타임라인(캐시) + `availableTeamPlayers`/`injuredOnDay`/`teamInjuriesOn`/`seasonInjuryDays`.
+- `data/dynamics.ts` — **부상+시즌 중 이동 통합 forward-pass**(TRANSACTION_SYSTEM과 공유) — `availableTeamPlayers`/`injuredOnDay`/`teamInjuriesOn`/`seasonInjuryDays`/`rosterIdsOnDay`.
+- `data/injury.ts` — dynamics 재노출(기존 import 경로 호환용 셸).
 - `data/production.ts`·`standings.ts`·`playoffs.ts` — 출전 가능 명단으로 전환.
 - `store` — 만성 노쇠가속.
 - `app/(tabs)/index.tsx` — 부상자 명단 카드.

@@ -47,6 +47,7 @@
 | **선수 특성**(클러치·대기만성·유리몸 등 긍정+부정) | ✅ (P3) |
 | **부상**(출전 결장·만성·시즌 계층 격리) | ✅ (P4) |
 | **뉴스 피드**(1~4 종합) | ✅ (P5, 캡스톤) |
+| **시즌 중 이동**(방출→FA·구멍 영입·전 구단 AI·날짜 인지 명단) | ✅ (TRANSACTION_SYSTEM) |
 | 명예의전당·영구결번 | ✅ (기존) |
 | 감독 훈련선호 커스터마이즈 / 라인업·경기 직접 개입 | ❌ 자동 완성 후 "오버라이드"로 개방 예정 |
 
@@ -61,7 +62,7 @@
 ```
 npx tsc --noEmit                          # 앱 타입체크
 npx tsc --noEmit -p tsconfig.test.json    # 테스트 타입체크
-npm test                                  # node --test (현재 62 통과)
+npm test                                  # node --test (현재 104 통과)
 npx expo export --platform android        # 번들 확인 후 dist 삭제
 ```
 
