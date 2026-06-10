@@ -21,10 +21,17 @@ const W = Dimensions.get('window').width - 32;
 const H = Math.min(W * 1.4, Dimensions.get('window').height * 0.5);
 const MR = 15;
 
-type Phase = '리시브 대형' | '스위칭(공격)' | '스위칭(수비)' | '존 기본위치' | '공방 순간(스파이크)';
-const PHASES: Phase[] = ['리시브 대형', '스위칭(공격)', '스위칭(수비)', '존 기본위치', '공방 순간(스파이크)'];
+type Phase = '리시브 대형' | '스위칭(공격)' | '스위칭(수비)' | '존 기본위치' | '공방 순간(스파이크)' | '디그 순간';
+const PHASES: Phase[] = ['리시브 대형', '스위칭(공격)', '스위칭(수비)', '존 기본위치', '공방 순간(스파이크)', '디그 순간'];
 const LANES = [0.22, 0.5, 0.78];
 const LANE_KO = ['좌(4번)', '중(3번)', '우(2번)'];
+// 디그 낙하 지점(수비 진영 기준 분율) — 깊은 좌/중앙/깊은 우/블록 뒤 짧은 팁
+const DIG_SPOTS: { ko: string; xf: number; yf: number }[] = [
+  { ko: '깊은 좌', xf: 0.2, yf: 0.82 },
+  { ko: '중앙', xf: 0.5, yf: 0.74 },
+  { ko: '깊은 우', xf: 0.8, yf: 0.82 },
+  { ko: '짧은 팁', xf: 0.5, yf: 0.6 },
+];
 
 export default function DebugCourt() {
   const myTeam = useGameStore((s) => s.selectedTeamId);
@@ -32,8 +39,9 @@ export default function DebugCourt() {
   const [rot, setRot] = useState(0);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [serving, setServing] = useState<Side>('away'); // 리시브 대형 = 받는 쪽 기준 표시
-  const [attSide, setAttSide] = useState<Side>('home'); // 공방 순간: 공격 팀
-  const [laneIdx, setLaneIdx] = useState(0);            // 공방 순간: 공격 라인(좌/중/우)
+  const [attSide, setAttSide] = useState<Side>('home'); // 공방/디그: 공격 팀
+  const [laneIdx, setLaneIdx] = useState(0);            // 공방/디그: 공격 라인(좌/중/우)
+  const [digIdxSpot, setDigIdxSpot] = useState(0);      // 디그: 낙하 지점
 
   const homeId = myTeam ?? LEAGUE.teams[0].id;
   const awayId = LEAGUE.teams.find((t) => t.id !== homeId)?.id ?? LEAGUE.teams[1].id;
@@ -43,6 +51,14 @@ export default function DebugCourt() {
   }), [homeId, awayId, currentDay]);
 
   const phase = PHASES[phaseIdx];
+  const defSide: Side = attSide === 'home' ? 'away' : 'home';
+  // 디그 낙하 지점(수비 진영 좌표) — 수비가 원정이면 상하·좌우 반전
+  const digSpot = (() => {
+    const d = DIG_SPOTS[digIdxSpot];
+    const xf = defSide === 'home' ? d.xf : 1 - d.xf;
+    const yf = defSide === 'home' ? d.yf : 1 - d.yf;
+    return { x: xf * W, y: yf * H };
+  })();
 
   // 사이드별 좌표 계산 — MatchCourt와 동일 함수
   const posFor = (side: Side): Record<number, { x: number; y: number }> => {
@@ -94,6 +110,40 @@ export default function DebugCourt() {
       back.slice().sort((a, b) => swd.pos[a].x - swd.pos[b].x).forEach((bi, k) => { pos[bi] = slots[k]; });
       return pos;
     }
+    if (phase === '디그 순간') {
+      // 스파이크가 낙하 지점으로 향한 순간: 수비 부채꼴에서 가장 가까운 후위가 디그 지점으로.
+      const laneF = LANES[laneIdx];
+      const ax = (attSide === 'home' ? laneF : 1 - laneF) * W;
+      if (side === attSide) {
+        // 공격팀은 공방 순간 그대로(공격수+커버 반원)
+        const sw = switchedSpots(side, lu, rot, true, W, H);
+        const pos = { ...sw.pos };
+        const atk = sw.frontHitters.reduce((b, i) => (Math.abs(sw.pos[i].x - ax) < Math.abs(sw.pos[b].x - ax) ? i : b), sw.frontHitters[0]);
+        pos[atk] = { x: ax, y: (side === 'home' ? 0.56 : 0.44) * H };
+        const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== atk && i !== sw.setterIdx)
+          .sort((a, b) => Math.abs(sw.pos[a].x - ax) - Math.abs(sw.pos[b].x - ax)).slice(0, 3)
+          .sort((a, b) => sw.pos[a].x - sw.pos[b].x);
+        const cs = coverSpots(side, ax, cand.length, W, H);
+        if (cand.length === 3) { pos[cand[0]] = cs[0]; pos[cand[2]] = cs[1]; pos[cand[1]] = cs[2]; }
+        else cand.forEach((i, k) => { pos[i] = cs[k]; });
+        return pos;
+      }
+      // 수비팀: 부채꼴 기본 + 가장 가까운 후위(MatchCourt nearestDig 로직)가 낙하 지점으로
+      const swd = switchedSpots(side, lu, rot, false, W, H);
+      const pos = { ...swd.pos };
+      const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
+      const chosenB = front.slice().sort((a, b) => Math.abs(swd.pos[a].x - ax) - Math.abs(swd.pos[b].x - ax)).slice(0, 3)
+        .sort((a, b) => swd.pos[a].x - swd.pos[b].x);
+      const wall = blockerWall(side, ax, chosenB.length, W, H);
+      chosenB.forEach((bi, k) => { pos[bi] = wall[k]; });
+      const back = [1, 5, 6].map((z) => lineupIdxAt(rot, z));
+      const slots = fanSlots(side, ax, W, H);
+      back.slice().sort((a, b) => swd.pos[a].x - swd.pos[b].x).forEach((bi, k) => { pos[bi] = slots[k]; });
+      const d2 = (p: { x: number; y: number }) => (p.x - digSpot.x) ** 2 + (p.y - digSpot.y) ** 2;
+      const digger = back.reduce((b, i) => (d2(swd.pos[i]) < d2(swd.pos[b]) ? i : b), back[0]); // 선정은 swDef 기준(MatchCourt 동일)
+      pos[digger] = { x: digSpot.x, y: digSpot.y };
+      return pos;
+    }
     const out: Record<number, { x: number; y: number }> = {};
     for (let i = 0; i < 6; i++) out[i] = zonePx(side, zoneOfIdx(rot, i), W, H);
     return out;
@@ -130,11 +180,14 @@ export default function DebugCourt() {
         {phase === '리시브 대형' ? (
           <Ctl label={`서브: ${serving === 'home' ? '홈' : '원정'}`} onPress={() => setServing((s) => (s === 'home' ? 'away' : 'home'))} />
         ) : null}
-        {phase === '공방 순간(스파이크)' ? (
+        {phase === '공방 순간(스파이크)' || phase === '디그 순간' ? (
           <>
             <Ctl label={`공격: ${attSide === 'home' ? '홈' : '원정'}`} onPress={() => setAttSide((s) => (s === 'home' ? 'away' : 'home'))} />
             <Ctl label={`라인: ${LANE_KO[laneIdx]}`} onPress={() => setLaneIdx((l) => (l + 1) % 3)} />
           </>
+        ) : null}
+        {phase === '디그 순간' ? (
+          <Ctl label={`낙하: ${DIG_SPOTS[digIdxSpot].ko}`} onPress={() => setDigIdxSpot((d) => (d + 1) % DIG_SPOTS.length)} />
         ) : null}
       </View>
 
@@ -149,6 +202,9 @@ export default function DebugCourt() {
           {zoneGuides.map((g) => (
             <Text key={g.key} style={[st.zoneNo, { left: g.x - 6, top: g.y - 9 }]}>{g.z}</Text>
           ))}
+          {phase === '디그 순간' ? (
+            <View style={[st.ballSpot, { left: digSpot.x - 7, top: digSpot.y - 7 }]} />
+          ) : null}
           {markers.map((m) => (
             <View key={m.key} style={[st.marker, {
               left: m.pos.x - MR, top: m.pos.y - MR,
@@ -193,4 +249,8 @@ const st = StyleSheet.create({
   marker: { position: 'absolute', width: MR * 2, height: MR * 2, borderRadius: MR, alignItems: 'center', justifyContent: 'center' },
   mTxt: { color: '#0b1220', fontSize: 10, fontWeight: '900', lineHeight: 11 },
   mZone: { color: '#0b1220', fontSize: 8, fontWeight: '700', lineHeight: 9, opacity: 0.7 },
+  ballSpot: {
+    position: 'absolute', width: 14, height: 14, borderRadius: 7,
+    backgroundColor: '#ffd23f', borderWidth: 2, borderColor: '#b8860b',
+  },
 });
