@@ -18,6 +18,7 @@ const log = (m: string) => process.stdout.write(m + '\n');
 const issues: string[] = [];
 let paths = 0, hops = 0, digTransitions = 0, setterDugCases = 0;
 const altTosserPos: Record<string, number> = {}; // 세터 디그 시 대체 토서 포지션 분포
+const atkDist: Record<string, number> = {};      // 공격 종류 분포(보드 연출)
 
 resetLeagueBase();
 const L = {
@@ -71,10 +72,20 @@ for (let seed = 1; seed <= mult; seed++) {
               continue;
             }
             const atkIdx = tossW.idx;
-            // ③ 공격수 ≠ 토서, 전위
+            // ③ 공격수 ≠ 토서 + 공격 종류별 적격(속공=전위 센터 / 백어택=후위 OH·OP / 오픈=전위)
             if (atkIdx === tosser) issues.push(`${ctx}: 토스한 선수가 스파이크(idx${atkIdx})`);
             const z = zoneOfIdx(rot, atkIdx);
-            if (z !== 2 && z !== 3 && z !== 4) issues.push(`${ctx}: 스파이커 idx${atkIdx}가 후위(zone${z})`);
+            const atkKind = tossW.atk ?? 'open';
+            atkDist[atkKind] = (atkDist[atkKind] ?? 0) + 1;
+            const luA = att === 'home' ? L.home : L.away;
+            const aPos = luA.six[atkIdx]?.position;
+            if (atkKind === 'back') {
+              if (z === 2 || z === 3 || z === 4) issues.push(`${ctx}: 백어택인데 전위(zone${z})`);
+              if (aPos !== 'OH' && aPos !== 'OP') issues.push(`${ctx}: 백어택을 ${aPos}가(OH/OP여야 — 리베로 표시 슬롯 금지)`);
+            } else {
+              if (z !== 2 && z !== 3 && z !== 4) issues.push(`${ctx}: ${atkKind} 스파이커 idx${atkIdx}가 후위(zone${z})`);
+              if ((atkKind === 'quick' || atkKind === 'tempo') && aPos !== 'MB') issues.push(`${ctx}: 속공/시간차를 ${aPos}가(센터여야)`);
+            }
             // ④ toss 다음 spike
             const spikeW = wp[k + 2];
             if (!spikeW || (spikeW.kind !== 'spike')) issues.push(`${ctx}: toss 다음이 spike 아님(${spikeW?.kind})`);
@@ -106,6 +117,12 @@ for (let seed = 1; seed <= mult; seed++) {
 
 log(`\n═══ 랠리 안무 체인 검증 — ${paths.toLocaleString()}개 경로 / ${hops.toLocaleString()}개 공격 빌드업 ═══`);
 log(`디그 전환 ${digTransitions.toLocaleString()}회 · 세터가 첫 터치한 케이스 ${setterDugCases.toLocaleString()}회`);
+const totAtk = Object.values(atkDist).reduce((a, b) => a + b, 0);
+if (totAtk) {
+  const d = (['quick', 'tempo', 'open', 'back'] as const)
+    .map((k) => `${k} ${(((atkDist[k] ?? 0) / totAtk) * 100).toFixed(1)}%`).join(' · ');
+  log(`공격 종류(보드 연출): ${d}  (엔진 실측: 속공 ~12·시간차 ~7·백어택 ~19%)`);
+}
 if (setterDugCases > 0) {
   const dist = Object.entries(altTosserPos).sort((a, b) => b[1] - a[1])
     .map(([p, n]) => `${p} ${((n / setterDugCases) * 100).toFixed(0)}%`).join(' · ');

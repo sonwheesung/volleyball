@@ -9,10 +9,16 @@ import {
 } from './courtLayout';
 
 export type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
+export type Atk = 'quick' | 'tempo' | 'open' | 'back';
 export type Mover = { side: Side; idx: number; x: number; y: number };
 // movers: 이 구간에 특정 위치로 움직이는 선수들(디그·커버·쫓기·세트 등)
 // aim: 점선(의도) 궤적의 끝점. 실제 공은 x/y로 가지만 궤적은 aim까지 그린다(터치아웃 등)
-export type WP = { x: number; y: number; side: Side; idx: number; kind: Move; movers?: Mover[]; aim?: { x: number; y: number } };
+// atk/blk/dur/arc/scale: 토스 WP의 공격 종류·블록 장수·토스 연출(속공=낮고 빠르게, 오픈=높게)
+export type WP = {
+  x: number; y: number; side: Side; idx: number; kind: Move;
+  movers?: Mover[]; aim?: { x: number; y: number };
+  atk?: Atk; blk?: number; dur?: number; arc?: number; scale?: number;
+};
 
 export interface RallyLike {
   setNo: number; home: number; away: number; scorer: Side; serving: Side; homeRot: number; awayRot: number;
@@ -108,13 +114,45 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     }
     // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트
     wp.push({ x: passSpot.x, y: passSpot.y, side: att, idx: tosserIdx, kind: 'pass', movers: [{ side: att, idx: tosserIdx, x: passSpot.x, y: passSpot.y }] });
-    const hitters = sw[att].frontHitters.filter((i) => i !== tosserIdx);
-    const atkIdx = pick(hitters.length ? hitters : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
 
-    const ahx = sw[att].pos[atkIdx].x; // 공격수 x
-    // 미끼(속공/페이크): 토스 안 온 전위 공격수 일부는 공격하는 척 네트에 남아 커버 못 옴(시드 기반 가변)
+    // ── 공격 종류 선택 (엔진 분포 근사: 속공 ~12%·시간차 ~7%·백어택 ~18%·오픈 나머지) ──
+    const lu = att === 'home' ? L.home : L.away;
     const attFront = [2, 3, 4].map((z) => lineupIdxAt(rotOf(att), z));
+    const mbFront = attFront.find((i) => lu.six[i].position === 'MB' && i !== tosserIdx);
+    const backCand = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z))
+      .filter((i) => i !== tosserIdx && i !== sIdx && (lu.six[i].position === 'OH' || lu.six[i].position === 'OP'));
+    const inSystem = tosserIdx === sIdx; // 세터 토스 = 인시스템(속공 가능)
+    let atk: Atk = 'open';
+    const rA = rng.next();
+    if (inSystem && mbFront !== undefined) { if (rA < 0.17) atk = 'quick'; else if (rA < 0.26) atk = 'tempo'; }
+    if (atk === 'open' && backCand.length && rng.next() < 0.22) atk = 'back';
+
+    let atkIdx: number;
+    if (atk === 'quick' || atk === 'tempo') atkIdx = mbFront!;
+    else if (atk === 'back') atkIdx = pick(backCand);
+    else {
+      // 오픈은 전위 OH/OP(센터는 속공 담당) — 결손 시 폴백
+      const oh = sw[att].frontHitters.filter((i) => i !== tosserIdx && lu.six[i].position !== 'MB');
+      const pool = oh.length ? oh : sw[att].frontHitters.filter((i) => i !== tosserIdx);
+      atkIdx = pick(pool.length ? pool : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
+    }
+
+    // ── 타점: 속공=세터 옆 1~2m 낮고 빠르게 / 시간차=조금 넓게 / 백어택=3m 라인 뒤 / 오픈=사이드 레인 ──
+    const toLeft = att === 'home' ? -1 : 1;
+    const hitY = att === 'home' ? 0.555 * H : 0.445 * H;
+    const setterX = sIdx >= 0 ? sw[att].pos[sIdx].x : 0.5 * W;
+    const hit =
+      atk === 'quick' ? { x: clampN(setterX + toLeft * (0.05 + rng.next() * 0.09) * W, 0.08 * W, 0.92 * W), y: hitY }
+      : atk === 'tempo' ? { x: clampN(setterX + toLeft * (0.12 + rng.next() * 0.10) * W, 0.08 * W, 0.92 * W), y: hitY }
+      : atk === 'back' ? { x: sw[att].pos[atkIdx].x, y: att === 'home' ? 0.70 * H : 0.30 * H }
+      : { x: sw[att].pos[atkIdx].x, y: hitY };
+    const ahx = hit.x;
+
+    // 미끼(페이크): 오픈/백어택일 때 전위 센터가 속공 하는 척 세터 쪽으로 달려듦(시드 기반 가변)
     const decoys = attFront.filter((i) => i !== atkIdx && i !== tosserIdx && rng.next() < 0.6);
+    const fakeRun: Mover[] = (atk === 'open' || atk === 'back') && mbFront !== undefined && decoys.includes(mbFront)
+      ? [{ side: att, idx: mbFront, x: clampN(setterX + toLeft * 0.06 * W, 0.08 * W, 0.92 * W), y: hitY }]
+      : [];
     // 공격 커버: 반원(가까운 2 좌우 측면 + 1 깊은 중앙), 좌→우 슬롯 배정(동선 교차 방지)
     const coverCand = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && !decoys.includes(i))
       .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
@@ -127,11 +165,21 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
           { side: att, idx: coverCand[1], ...cSpots[2] },
         ]
       : coverCand.map((i, k) => ({ side: att, idx: i, ...cSpots[k] }));
-    wp.push({ ...spot(att, atkIdx, 'toss'), movers: coverMovers }); // 토스 → 공격수 + 커버 형성(미끼 제외)
+
+    // 토스 연출: 속공=낮고 빠르게(작은 포물선) / 오픈=높게 붕 / 백어택=중간 — 블록 장수도 차등
+    const blkCount = atk === 'quick' ? 1 : atk === 'open' ? (inSystem ? 2 : 3) : 2;
+    const tossDur = atk === 'quick' ? 230 : atk === 'tempo' ? 380 : atk === 'back' ? 500 : 540;
+    const tossArc = (atk === 'quick' ? 0.055 : atk === 'tempo' ? 0.10 : atk === 'back' ? 0.15 : 0.17) * H;
+    const tossScale = atk === 'quick' ? 1.2 : 1.55;
+    wp.push({
+      x: hit.x, y: hit.y, side: att, idx: atkIdx, kind: 'toss',
+      atk, blk: blkCount, dur: tossDur, arc: tossArc, scale: tossScale,
+      movers: [...coverMovers, { side: att, idx: atkIdx, x: hit.x, y: hit.y }, ...fakeRun], // 공격수가 타점으로 이동
+    });
 
     // 스파이크 경로(의도 코스)가 블록 폭 안이면 블록에 걸리고, 각으로 빠지면 안 걸린다
-    const ap = sw[att].pos[atkIdx];
-    const blockW = (tosserIdx === sw[att].setterIdx ? 0.16 : 0.24) * W; // 인시스템 2장(좁게)/아웃 3장(넓게)
+    const ap = hit; // 타점에서 발사
+    const blockW = (atk === 'quick' ? 0.10 : atk === 'tempo' ? 0.14 : atk === 'back' ? 0.18 : inSystem ? 0.16 : 0.24) * W;
     const intended = spikeTarget(def, rng, att === r.scorer, W, H); // 공격수가 원한 코스
     const intoBlock = Math.abs(intended.x - ap.x) < blockW;
     const netY = (def === 'home' ? 0.52 : 0.48) * H;

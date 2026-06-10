@@ -113,13 +113,18 @@ const ballPath = (r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
 const easingFor = (k: Move) =>
   k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : Easing.linear;
 
-/** 이 구간에 점프하는 마커들 — 서브(서버)·토스(세터)·스파이크(공격수+상대 전위 블로커) */
-function jumpersFor(from: WP, to: WP, homeRot: number, awayRot: number): { side: Side; idx: number }[] {
+/** 이 구간에 점프하는 마커들 — 서브(서버)·토스(세터)·스파이크(공격수+벽에 선 블로커만) */
+function jumpersFor(from: WP, to: WP, homeRot: number, awayRot: number, L: Lineups): { side: Side; idx: number }[] {
   if (to.kind === 'serve' || to.kind === 'toss') return [{ side: from.side, idx: from.idx }];
   if (to.kind === 'spike') {
     const opp = other(from.side);
     const rot = opp === 'home' ? homeRot : awayRot;
-    const blockers = [2, 3, 4].map((z) => lineupIdxAt(rot, z)); // 상대 전위 3
+    const lu = opp === 'home' ? L.home : L.away;
+    const dSw = switchedSpots(opp, lu, rot, false);
+    const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
+    const n = Math.min(from.blk ?? 3, front.length); // 토스 WP의 블록 장수(속공은 1장만 점프)
+    const blockers = front.slice()
+      .sort((a, b) => Math.abs(dSw.pos[a].x - from.x) - Math.abs(dSw.pos[b].x - from.x)).slice(0, n);
     return [{ side: from.side, idx: from.idx }, ...blockers.map((idx) => ({ side: opp, idx }))];
   }
   return [];
@@ -174,7 +179,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     prog.setValue(0);
     const anim = Animated.timing(prog, {
       toValue: 1,
-      duration: DUR[to.kind] * (fast ? 0.4 : 1) * SPEED,
+      duration: (to.dur ?? DUR[to.kind]) * (fast ? 0.4 : 1) * SPEED,
       easing: easingFor(to.kind),
       useNativeDriver: true,
     });
@@ -204,7 +209,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const segKind: Move | null = seg ? seg.to.kind : null;
   // 서브 이후(공 인플레이)엔 전 선수가 전문 포지션으로 스위칭
   const inPlay = segKind === 'serve' || segKind === 'pass' || segKind === 'toss' || segKind === 'spike' || segKind === 'fault';
-  const jl = seg ? jumpersFor(seg.from, seg.to, stage.homeRot, stage.awayRot) : [];
+  const jl = seg ? jumpersFor(seg.from, seg.to, stage.homeRot, stage.awayRot, lineups) : [];
   const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
 
   // 이 구간에 특정 선수들이 이동할 목표 좌표(블로커 형성/디그/커버/쫓기/세트/부채꼴). key=`side-idx`
@@ -233,7 +238,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     const dSide = other(attSide);
     const attLu = attSide === 'home' ? lineups.home : lineups.away;
     const attSetterIdx = attLu.six.findIndex((p) => p.position === 'S');
-    const count = seg.from.idx === attSetterIdx ? 2 : 3; // 세터 토스 2장 / 아웃오브시스템 3장
+    const count = seg.to.blk ?? (seg.from.idx === attSetterIdx ? 2 : 3); // 공격 종류별(속공1/시간차·백2/오픈2~3)
     const dRot = dSide === 'home' ? stage.homeRot : stage.awayRot;
     const dLu = dSide === 'home' ? lineups.home : lineups.away;
     const dSw = switchedSpots(dSide, dLu, dRot, false);
@@ -300,7 +305,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
 
   // 공 transform — 포물선(translateY에 아치 가산) + 크기(떴다 떨어지는 원근감)
   const last = path.length ? path[path.length - 1] : zonePx('home', 1);
-  const arcH = seg ? ARC[seg.to.kind] : 0;
+  const arcH = seg ? (seg.to.arc ?? ARC[seg.to.kind]) : 0;
   const ballTransform = seg
     ? [
         { translateX: prog.interpolate({ inputRange: [0, 1], outputRange: [seg.from.x, seg.to.x] }) },
@@ -310,7 +315,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
             prog.interpolate({ inputRange: [0, 0.25, 0.5, 0.75, 1], outputRange: [0, -0.75 * arcH, -arcH, -0.75 * arcH, 0] }),
           ),
         },
-        { scale: prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, BALL_SCALE[seg.to.kind], 1] }) },
+        { scale: prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, seg.to.scale ?? BALL_SCALE[seg.to.kind], 1] }) },
       ]
     : [{ translateX: last.x }, { translateY: last.y }];
 
