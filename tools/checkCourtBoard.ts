@@ -7,6 +7,7 @@ import { resetLeagueBase, getEvolvedTeamPlayers, LEAGUE } from '../data/league';
 import { buildLineup } from '../engine/lineup';
 import {
   receiveFormation, switchedSpots, playerAtZone, displayPos, zoneOfIdx, zonePx,
+  fanSlots, blockerWall, coverSpots,
 } from '../components/courtLayout';
 import type { Side } from '../types';
 
@@ -106,7 +107,35 @@ for (const side of ['home', 'away'] as Side[]) {
   }
 }
 
-log(`\n═══ 경기 보드 위치 전수 검사 — ${LEAGUE.teams.length}팀 × 2사이드 × 6로테이션 × 3국면 ═══`);
+// ── 동적 위치(수비 부채꼴/블로커 벽/공격 커버) — 사이드 × 공격 x 스윕 ──
+for (const side of ['home', 'away'] as Side[]) {
+  for (const laneF of [0.12, 0.22, 0.5, 0.78, 0.88]) {
+    const ax = laneF * W;
+    const sets: [string, { x: number; y: number }[], number][] = [
+      ['부채꼴', fanSlots(side, ax, W, H), 26],
+      ['블로커벽', blockerWall(side, ax, 3, W, H), 18], // 어깨 맞댐 — 약간 겹침 허용
+      ['커버', coverSpots(side, ax, 3, W, H), 26],
+    ];
+    for (const [name, pts, minD] of sets) {
+      for (const p of pts) {
+        checks++;
+        if (p.x < 0 || p.x > W || p.y < 0 || p.y > H) flag(`동적 ${side}/${name}@x${ax.toFixed(0)}: 코트 밖 (${p.x.toFixed(0)},${p.y.toFixed(0)})`);
+        else if (!inOwnHalf(side, p.y)) flag(`동적 ${side}/${name}@x${ax.toFixed(0)}: 상대 진영 y=${p.y.toFixed(0)}`);
+      }
+      for (let a = 0; a < pts.length; a++) for (let b = a + 1; b < pts.length; b++) {
+        checks++;
+        const d = Math.hypot(pts[a].x - pts[b].x, pts[a].y - pts[b].y);
+        if (d < minD) flag(`동적 ${side}/${name}@x${ax.toFixed(0)}: 슬롯 겹침 ${d.toFixed(0)}px`);
+      }
+      // 좌→우 슬롯 순서(x 단조) — 동선 교차 방지의 전제 (커버는 [좌,우,깊은중앙] 구조라 앞 2개만)
+      checks++;
+      const xs = name === '커버' ? pts.slice(0, 2).map((p) => p.x) : pts.map((p) => p.x);
+      for (let k = 1; k < xs.length; k++) if (xs[k] < xs[k - 1] - 0.01) flag(`동적 ${side}/${name}@x${ax.toFixed(0)}: 슬롯 좌우 순서 역전`);
+    }
+  }
+}
+
+log(`\n═══ 경기 보드 위치 전수 검사 — ${LEAGUE.teams.length}팀 × 2사이드 × 6로테이션 × 3국면 + 동적 ═══`);
 log(`검사 항목 ${checks}건`);
 if (issues.length === 0) log(`✅ 이상 위치 0건 — 경계·진영·겹침·역할 배치·리베로 교체·세터 침투 모두 정상`);
 else {

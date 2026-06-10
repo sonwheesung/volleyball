@@ -69,6 +69,36 @@ export function switchedSpots(side: Side, lu: Lineup, rot: number, offense: bool
   return { pos, setterIdx, frontHitters: front.filter((i) => i !== setterIdx), backers: back.filter((i) => i !== setterIdx) };
 }
 
+// ─── 랠리 중 동적 위치 (수비 부채꼴 / 블로커 벽 / 공격 커버) ───
+
+/** 수비 부채꼴 3슬롯 — 공격 x 쪽으로 살짝 시프트, 중앙 얕게(팁 커버)·양쪽 깊게(라인/크로스).
+ *  좌→우 순서 보장: 호출측이 "현재 x 순"으로 정렬한 선수에게 순서대로 배정하면 동선 교차 없음. */
+export function fanSlots(side: Side, attackX: number, W: number, H: number): Px[] {
+  const shift = (attackX - 0.5 * W) * 0.3;
+  const sx = [0.22, 0.5, 0.78].map((b) => clampN(b * W + shift, 22, W - 22));
+  const yDeep = (side === 'home' ? 0.84 : 0.16) * H;
+  const yMid = (side === 'home' ? 0.72 : 0.28) * H;
+  return [{ x: sx[0], y: yDeep }, { x: sx[1], y: yMid }, { x: sx[2], y: yDeep }];
+}
+
+/** 블로커 벽 — 공격수 x 정면에 count장(어깨 맞댐). 좌→우 순서로 반환. */
+export function blockerWall(side: Side, attackX: number, count: number, W: number, H: number): Px[] {
+  const yNet = (side === 'home' ? 0.575 : 0.425) * H;
+  const spread = count <= 1 ? [0] : count === 2 ? [-13, 13] : [-22, 0, 22];
+  return spread.map((dx) => ({ x: clampN(attackX + dx, 24, W - 24), y: yNet }));
+}
+
+/** 공격 커버 — 공격수 뒤 반원: 가까운 2가 좌우 측면, 1은 깊은 중앙(긴 리바운드).
+ *  일렬 가로 배치(로봇 같은 그림) 대신 실제 커버 형태. n(1~3)개 슬롯 반환. */
+export function coverSpots(side: Side, attackX: number, n: number, W: number, H: number): Px[] {
+  const yNear = (side === 'home' ? 0.68 : 0.32) * H;
+  const yDeep = (side === 'home' ? 0.78 : 0.22) * H;
+  const cx = (dx: number) => clampN(attackX + dx, 24, W - 24);
+  if (n <= 1) return [{ x: cx(0), y: yNear }];
+  if (n === 2) return [{ x: cx(-32), y: yNear }, { x: cx(32), y: yNear }];
+  return [{ x: cx(-36), y: yNear }, { x: cx(36), y: yNear }, { x: cx(0), y: yDeep }];
+}
+
 /** 서브 받기 전 대형 — 3-패서 리시브(리베로 표시 슬롯+OH가 좌·중·우),
  *  전위 공격수는 네트 대기(후위 비패서는 한 칸 깊게), 세터는 네트 사이드 코너에 은신. */
 export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number, H: number): Record<number, Px> {

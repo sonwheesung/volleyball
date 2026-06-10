@@ -10,8 +10,9 @@ import { createRng } from '../engine/rng';
 import type { SimResult } from '../engine/simMatch';
 import type { Player, Position, Side } from '../types';
 import {
-  ZONE_X, lineupIdxAt, playerAtZone,
+  lineupIdxAt, playerAtZone,
   zonePx as zonePxRaw, switchedSpots as switchedSpotsRaw, receiveFormation as receiveFormationRaw,
+  fanSlots, blockerWall, coverSpots,
   type Switched,
 } from './courtLayout';
 
@@ -133,6 +134,12 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     home: switchedSpots('home', L.home, r.homeRot, true),
     away: switchedSpots('away', L.away, r.awayRot, true),
   };
+  // 수비 자세 좌표(세터 침투 없음) — 디그/추격자 선정은 수비 측 실제 위치 기준이어야
+  // (공격 모드 좌표로 고르면 수비 세터가 네트에 있다고 가정 → 엉뚱한 선수가 멀리서 달려감)
+  const swDef: Record<Side, Switched> = {
+    home: switchedSpots('home', L.home, r.homeRot, false),
+    away: switchedSpots('away', L.away, r.awayRot, false),
+  };
   const spot = (s: Side, i: number, kind: Move): WP => ({ ...sw[s].pos[i], side: s, idx: i, kind });
 
   const serving = r.serving;
@@ -153,8 +160,8 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
 
   const d2 = (a: { x: number; y: number }, p: { x: number; y: number }) => (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
   const chasersTo = (side: Side, target: { x: number; y: number }, n: number, reach: number): Mover[] => {
-    const order = [0, 1, 2, 3, 4, 5].sort((a, b) => d2(sw[side].pos[a], target) - d2(sw[side].pos[b], target)).slice(0, n);
-    return order.map((i) => { const p = sw[side].pos[i]; return { side, idx: i, x: p.x + (target.x - p.x) * reach, y: p.y + (target.y - p.y) * reach }; });
+    const order = [0, 1, 2, 3, 4, 5].sort((a, b) => d2(swDef[side].pos[a], target) - d2(swDef[side].pos[b], target)).slice(0, n);
+    return order.map((i) => { const p = swDef[side].pos[i]; return { side, idx: i, x: p.x + (target.x - p.x) * reach, y: p.y + (target.y - p.y) * reach }; });
   };
 
   // 리시브 미스: 공이 옆/뒤로 튕겨 라인 밖으로, 선수들이 쫓지만 못 살림 → 서브측 득점
@@ -200,11 +207,19 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     // 미끼(속공/페이크): 토스 안 온 전위 공격수 일부는 공격하는 척 네트에 남아 커버 못 옴(시드 기반 가변)
     const attFront = [2, 3, 4].map((z) => lineupIdxAt(rotOf(att), z));
     const decoys = attFront.filter((i) => i !== atkIdx && i !== tosserIdx && rng.next() < 0.6);
-    // 공격 커버: 공격수·세터·미끼 제외한 선수들이 공격수 뒤로(인원 가변, 최대 3)
-    const coverY = (att === 'home' ? 0.7 : 0.3) * COURT_H;
-    const coverMovers: Mover[] = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && !decoys.includes(i))
+    // 공격 커버: 공격수·세터·미끼 제외 최대 3 — 반원 형태(가까운 2 좌우 측면 + 1 깊은 중앙).
+    //   슬롯은 현재 x 순으로 배정해 동선 교차 방지(일렬 가로 배치는 로봇 같은 그림).
+    const coverCand = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && !decoys.includes(i))
       .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
-      .map((i, k) => ({ side: att, idx: i, x: clampN(ahx + (k - 1) * 34, 24, COURT_W - 24), y: coverY }));
+      .sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
+    const cSpots = coverSpots(att, ahx, coverCand.length, COURT_W, COURT_H);
+    const coverMovers: Mover[] = coverCand.length === 3
+      ? [ // 좌→좌측면, 우→우측면, 가운데→깊은 중앙
+          { side: att, idx: coverCand[0], ...cSpots[0] },
+          { side: att, idx: coverCand[2], ...cSpots[1] },
+          { side: att, idx: coverCand[1], ...cSpots[2] },
+        ]
+      : coverCand.map((i, k) => ({ side: att, idx: i, ...cSpots[k] }));
     wp.push({ ...spot(att, atkIdx, 'toss'), movers: coverMovers }); // 토스 → 공격수 + 커버 형성(미끼 제외)
 
     // 스파이크 경로(의도 코스)가 블록 폭 안이면 블록에 걸리고, 각으로 빠지면 안 걸린다(여자배구: 원터치 빈번)
@@ -216,7 +231,7 @@ function ballPath(r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
     const sCross = Math.abs(intended.y - ap.y) < 1 ? 0.3 : (netY - ap.y) / (intended.y - ap.y);
     const blockNet = { x: clampN(ap.x + (intended.x - ap.x) * sCross, 12, COURT_W - 12), y: netY };
     const dBacks = sw[def].backers.length ? sw[def].backers : [0, 1, 2, 3, 4, 5].filter((i) => i !== sw[def].setterIdx);
-    const nearestDig = (tg: { x: number; y: number }) => dBacks.reduce((b, i) => (d2(sw[def].pos[i], tg) < d2(sw[def].pos[b], tg) ? i : b), dBacks[0]);
+    const nearestDig = (tg: { x: number; y: number }) => dBacks.reduce((b, i) => (d2(swDef[def].pos[i], tg) < d2(swDef[def].pos[b], tg) ? i : b), dBacks[0]);
 
     if (att === r.scorer) {
       if (intoBlock) {
@@ -366,14 +381,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   if (fanSide) {
     const fHome = fanSide === 'home';
     const fRot = fHome ? stage.homeRot : stage.awayRot;
+    const fLu = fHome ? lineups.home : lineups.away;
     const back = [1, 5, 6].map((z) => lineupIdxAt(fRot, z));
-    // 코트 전체 폭(좌·중·우)을 커버하되 공격 방향으로만 살짝 치우침 → 안 뭉침. 가운데 얕게(팁)·양쪽 깊게(라인/크로스)
-    const shift = (fanAx - 0.5 * COURT_W) * 0.3;
-    const sx = [0.22, 0.5, 0.78].map((b) => clampN(b * COURT_W + shift, 22, COURT_W - 22));
-    const yDeep = (fHome ? 0.84 : 0.16) * COURT_H;
-    const yMid = (fHome ? 0.72 : 0.28) * COURT_H;
-    const slots = [{ x: sx[0], y: yDeep }, { x: sx[1], y: yMid }, { x: sx[2], y: yDeep }];
-    back.slice().sort((a, b) => ZONE_X[((a - fRot) % 6 + 6) % 6 + 1] - ZONE_X[((b - fRot) % 6 + 6) % 6 + 1])
+    // 슬롯은 "현재 스위칭 x 순"으로 배정 — 존 순서 기준은 실제 서 있는 위치와 어긋나 동선이 교차(X자)함
+    const fSw = switchedSpots(fanSide, fLu, fRot, false);
+    const slots = fanSlots(fanSide, fanAx, COURT_W, COURT_H);
+    back.slice().sort((a, b) => fSw.pos[a].x - fSw.pos[b].x)
       .forEach((bi, k) => { moveMap[`${fanSide}-${bi}`] = slots[k]; });
   }
 
@@ -389,13 +402,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     const dSw = switchedSpots(dSide, dLu, dRot, false);
     const front = [2, 3, 4].map((z) => lineupIdxAt(dRot, z));
     const ax = seg.to.x;
-    const yNet = (dSide === 'home' ? 0.575 : 0.425) * COURT_H;
     const yOff = (dSide === 'home' ? 0.66 : 0.34) * COURT_H;
     // 공격수에 가까운 count명 선택 → 자연 좌우순으로 정렬해 배치(교차 방지)
     const chosen = front.slice().sort((a, b) => Math.abs(dSw.pos[a].x - ax) - Math.abs(dSw.pos[b].x - ax)).slice(0, count)
       .sort((a, b) => dSw.pos[a].x - dSw.pos[b].x);
-    const spread = count === 2 ? [-13, 13] : [-22, 0, 22];
-    chosen.forEach((bi, k) => { moveMap[`${dSide}-${bi}`] = { x: clampN(ax + spread[k], 24, COURT_W - 24), y: yNet }; });
+    const wall = blockerWall(dSide, ax, chosen.length, COURT_W, COURT_H);
+    chosen.forEach((bi, k) => { moveMap[`${dSide}-${bi}`] = wall[k]; });
     front.filter((i) => !chosen.includes(i)).forEach((ri) => { moveMap[`${dSide}-${ri}`] = { x: dSw.pos[ri].x, y: yOff }; }); // 블록 안 가는 전위는 빠짐
     moveMap[`${attSide}-${seg.from.idx}`] = { x: seg.from.x, y: seg.from.y }; // 토스한 선수는 패스 지점에서 세트
     // (공격 커버는 토스 WP의 movers로 처리 — 미끼 제외, 인원 가변)

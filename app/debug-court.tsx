@@ -8,6 +8,7 @@ import { LEAGUE, getEvolvedTeamPlayers, getTeam } from '../data/league';
 import { buildLineup } from '../engine/lineup';
 import {
   receiveFormation, switchedSpots, displayPos, zoneOfIdx, zonePx, lineupIdxAt,
+  fanSlots, blockerWall, coverSpots,
 } from '../components/courtLayout';
 import { useGameStore } from '../store/useGameStore';
 import type { Position, Side } from '../types';
@@ -20,8 +21,10 @@ const W = Dimensions.get('window').width - 32;
 const H = Math.min(W * 1.4, Dimensions.get('window').height * 0.5);
 const MR = 15;
 
-type Phase = '리시브 대형' | '스위칭(공격)' | '스위칭(수비)' | '존 기본위치';
-const PHASES: Phase[] = ['리시브 대형', '스위칭(공격)', '스위칭(수비)', '존 기본위치'];
+type Phase = '리시브 대형' | '스위칭(공격)' | '스위칭(수비)' | '존 기본위치' | '공방 순간(스파이크)';
+const PHASES: Phase[] = ['리시브 대형', '스위칭(공격)', '스위칭(수비)', '존 기본위치', '공방 순간(스파이크)'];
+const LANES = [0.22, 0.5, 0.78];
+const LANE_KO = ['좌(4번)', '중(3번)', '우(2번)'];
 
 export default function DebugCourt() {
   const myTeam = useGameStore((s) => s.selectedTeamId);
@@ -29,6 +32,8 @@ export default function DebugCourt() {
   const [rot, setRot] = useState(0);
   const [phaseIdx, setPhaseIdx] = useState(0);
   const [serving, setServing] = useState<Side>('away'); // 리시브 대형 = 받는 쪽 기준 표시
+  const [attSide, setAttSide] = useState<Side>('home'); // 공방 순간: 공격 팀
+  const [laneIdx, setLaneIdx] = useState(0);            // 공방 순간: 공격 라인(좌/중/우)
 
   const homeId = myTeam ?? LEAGUE.teams[0].id;
   const awayId = LEAGUE.teams.find((t) => t.id !== homeId)?.id ?? LEAGUE.teams[1].id;
@@ -57,6 +62,38 @@ export default function DebugCourt() {
     }
     if (phase === '스위칭(공격)') return switchedSpots(side, lu, rot, true, W, H).pos;
     if (phase === '스위칭(수비)') return switchedSpots(side, lu, rot, false, W, H).pos;
+    if (phase === '공방 순간(스파이크)') {
+      // MatchCourt의 토스~스파이크 순간 재현: 공격팀=커버 반원, 수비팀=블로커 벽+부채꼴
+      const laneF = LANES[laneIdx];
+      const ax = (side === attSide ? (attSide === 'home' ? laneF : 1 - laneF) : (attSide === 'home' ? laneF : 1 - laneF)) * W;
+      if (side === attSide) {
+        const sw = switchedSpots(side, lu, rot, true, W, H);
+        const pos = { ...sw.pos };
+        // 공격수 = 해당 라인에 가장 가까운 전위 히터(타격 위치로 살짝 전진)
+        const atk = sw.frontHitters.reduce((b, i) => (Math.abs(sw.pos[i].x - ax) < Math.abs(sw.pos[b].x - ax) ? i : b), sw.frontHitters[0]);
+        pos[atk] = { x: ax, y: (side === 'home' ? 0.56 : 0.44) * H };
+        // 커버 반원(공격수·세터 제외 최대 3, 좌→우 슬롯 배정)
+        const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== atk && i !== sw.setterIdx)
+          .sort((a, b) => Math.abs(sw.pos[a].x - ax) - Math.abs(sw.pos[b].x - ax)).slice(0, 3)
+          .sort((a, b) => sw.pos[a].x - sw.pos[b].x);
+        const cs = coverSpots(side, ax, cand.length, W, H);
+        if (cand.length === 3) { pos[cand[0]] = cs[0]; pos[cand[2]] = cs[1]; pos[cand[1]] = cs[2]; }
+        else cand.forEach((i, k) => { pos[i] = cs[k]; });
+        return pos;
+      }
+      // 수비팀: 전위 = 블로커 벽(가까운 3) / 후위 = 부채꼴
+      const swd = switchedSpots(side, lu, rot, false, W, H);
+      const pos = { ...swd.pos };
+      const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
+      const chosen = front.slice().sort((a, b) => Math.abs(swd.pos[a].x - ax) - Math.abs(swd.pos[b].x - ax)).slice(0, 3)
+        .sort((a, b) => swd.pos[a].x - swd.pos[b].x);
+      const wall = blockerWall(side, ax, chosen.length, W, H);
+      chosen.forEach((bi, k) => { pos[bi] = wall[k]; });
+      const back = [1, 5, 6].map((z) => lineupIdxAt(rot, z));
+      const slots = fanSlots(side, ax, W, H);
+      back.slice().sort((a, b) => swd.pos[a].x - swd.pos[b].x).forEach((bi, k) => { pos[bi] = slots[k]; });
+      return pos;
+    }
     const out: Record<number, { x: number; y: number }> = {};
     for (let i = 0; i < 6; i++) out[i] = zonePx(side, zoneOfIdx(rot, i), W, H);
     return out;
@@ -92,6 +129,12 @@ export default function DebugCourt() {
         <Ctl label={phase} onPress={() => setPhaseIdx((p) => (p + 1) % PHASES.length)} />
         {phase === '리시브 대형' ? (
           <Ctl label={`서브: ${serving === 'home' ? '홈' : '원정'}`} onPress={() => setServing((s) => (s === 'home' ? 'away' : 'home'))} />
+        ) : null}
+        {phase === '공방 순간(스파이크)' ? (
+          <>
+            <Ctl label={`공격: ${attSide === 'home' ? '홈' : '원정'}`} onPress={() => setAttSide((s) => (s === 'home' ? 'away' : 'home'))} />
+            <Ctl label={`라인: ${LANE_KO[laneIdx]}`} onPress={() => setLaneIdx((l) => (l + 1) % 3)} />
+          </>
         ) : null}
       </View>
 
