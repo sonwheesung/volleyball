@@ -20,6 +20,7 @@ export type WP = {
   movers?: Mover[]; aim?: { x: number; y: number };
   atk?: Atk; blk?: number; dur?: number; arc?: number; scale?: number;
   hold?: boolean; // 서브 국면 데드볼(에이스·서브/리시브 범실) — 대형 동결(공격 전환 금지)
+  soft?: boolean; // 연타/팁 낙하 — 바운드 미약
 };
 
 export interface RallyLike {
@@ -63,7 +64,7 @@ function withBounce(wp: WP[], W: number, H: number): WP[] {
   const out = last.x < 0 || last.x > W || last.y < 0 || last.y > H;
   // 바운드 에너지(1차 비거리 px)
   let power: number;
-  if (travel < 30) power = 16;                              // 데드 드롭(네트 아래로 뚝·핸들링 휘슬)
+  if (last.soft || travel < 30) power = 16;                              // 데드 드롭(네트 아래로 뚝·핸들링 휘슬)
   else if (last.kind === 'spike') power = out ? 60 : 150;   // 인코트 강타 = 멀리 튕겨 아웃
   else if (last.kind === 'serve') power = out ? 60 : 95;    // 에이스 = 빠른 서브 관통
   else power = out ? 60 : 55;                               // 기타 fault
@@ -297,6 +298,17 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
       wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', movers: chasersTo(att, stuffPt, 2, 0.97) });
     };
+    const doTip = () => {
+      // 페인트: 풀스윙 페이크(블로커 점프) → 손끝으로 살짝 — 블록 뒤·수비 앞 빈 공간에 톡.
+      // 얕은 수비가 늦게 몸을 던지지만 닿지 못한다.
+      const lat = (rng.next() < 0.5 ? -1 : 1) * (0.06 + rng.next() * 0.08) * W;
+      const t = {
+        x: clampN(ap.x + lat, 0.12 * W, 0.88 * W),
+        y: def === 'home' ? (0.58 + rng.next() * 0.08) * H : (0.34 + rng.next() * 0.08) * H,
+      };
+      const lunger = chasersTo(def, t, 1, 0.8);
+      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', dur: 470, arc: 0.115 * H, scale: 1.3, soft: true, movers: [...lunger, ...coverMovers] });
+    };
     const doAtkErr = () => {
       if (rng.next() < 0.45) {
         // 네트에 꽂힘 — 자기 쪽 네트 면 맞고 아래로
@@ -314,10 +326,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
 
     if (r.how) {
       // 사실 기반: 엔진이 기록한 종결을, 진 팀/이긴 팀이 맞는 공격 차례에 실행
-      const winsByAtk = r.how === 'kill' || r.how === 'blockout' || r.how === 'cap';
+      const winsByAtk = r.how === 'kill' || r.how === 'blockout' || r.how === 'cap' || r.how === 'tip';
       const finalAtt: Side = winsByAtk ? r.scorer : other(r.scorer);
       if (att === finalAtt && (hop >= 3 || rng.next() < 0.7)) {
-        if (r.how === 'blockout') doBlockout();
+        if (r.how === 'tip') doTip();
+        else if (r.how === 'blockout') doBlockout();
         else if (r.how === 'stuff') doStuff();
         else if (r.how === 'atkErr') doAtkErr();
         else doKill(); // kill·cap (그 외 how는 위 국면에서 이미 종료)

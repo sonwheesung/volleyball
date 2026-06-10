@@ -82,7 +82,7 @@ export type Rate = (p: Player) => Ratings;
 export type PointHow =
   | 'ace' | 'serveErr' | 'recvErr' | 'fault'      // 서브 국면
   | 'miscErr'                                      // 볼핸들링(더블컨택·캐치·네트터치)
-  | 'kill' | 'blockout' | 'stuff' | 'atkErr'       // 공격 국면
+  | 'kill' | 'blockout' | 'stuff' | 'atkErr' | 'tip' // 공격 국면(tip=페인트 득점)
   | 'cap';                                         // 랠리 상한 도달(킬 취급)
 
 export interface RallyOutcome { winner: Side; how: PointHow }
@@ -216,6 +216,7 @@ export interface RallyStats {
   serves: number; aces: number; serveErrs: number; faults: number;
   recvErrs: number; miscErrs: number; // 기타 범실(KOVO 범실군) — 리시브 범실·볼핸들링/네트터치
   attacks: number; kills: number; attackErrs: number; stuffs: number; blockouts: number; digs: number; softblocks: number;
+  tips: number; tipKills: number; // 페인트(연타) 시도·득점
   // 세트(토스) 선택 분석 — 센터 토스(속공/시간차)를 패스 품질별로
   atkQuick: number; atkTempo: number; atkOpen: number; atkBack: number;
   atkQuickA: number; atkQuickB: number; atkSlide: number; // 속공 세부(A퀵/B퀵/이동속공)
@@ -242,6 +243,7 @@ export const newRallyStats = (): RallyStats => ({
   serves: 0, aces: 0, serveErrs: 0, faults: 0,
   recvErrs: 0, miscErrs: 0,
   attacks: 0, kills: 0, attackErrs: 0, stuffs: 0, blockouts: 0, digs: 0, softblocks: 0,
+  tips: 0, tipKills: 0,
   atkQuick: 0, atkTempo: 0, atkOpen: 0, atkBack: 0,
   atkQuickA: 0, atkQuickB: 0, atkSlide: 0,
   goodAtk: 0, goodCenter: 0, badAtk: 0, badCenter: 0,
@@ -437,6 +439,34 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const errP2 = clamp(0.16 - 0.09 * q + ATK_ERR[atk] - 0.05 * n(attacker.consistency) - 0.03 * n(attacker.vq) - balancedDiscipline - clutchAtk, 0.04, 0.28);
     const blockP = clamp(0.085 + 0.3 * (blkStr - attackPower), 0.02, 0.4); // 민감도 압축(parity)·기저로 평균 복원
     if (stats) stats.attacks++;
+
+    // ── 페인트(팁/연타, 5.1) — 벽이 잘 섰고 영리한 공격수일수록 블록 너머 빈 공간에 살짝.
+    //    블록 무력화(스터프/블록아웃 없음). 수비가 읽으면 쉬운 디그, 못 읽으면 톡 떨어져 득점.
+    const defStyleBonus = df.style === 'defense' ? 0.02 : df.style === 'attack' ? -0.01 : 0; // 수비형 디그↑
+    const digStr = strength(defenders(df), (r) => r.dig, R, df) * momFactor(df.momentum);
+    const tipP = clamp((0.05 + 0.45 * (blkStr - attackPower)) * (0.45 + 0.7 * n(attacker.vq)), 0.015, 0.16);
+    if (atk !== 'quick' && rng.next() < tipP) {
+      if (stats) stats.tips++;
+      if (rng.next() < 0.035) { // 팁 범실(네트 터치·아웃) — 드묾
+        if (stats) stats.attackErrs++;
+        if (trace) trace.push('    → 페인트 범실 (상대 득점)');
+        if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); }
+        return { winner: other(att), how: 'atkErr' };
+      }
+      const tipDigP = clamp(0.5 + 0.55 * (digStr - 0.45) - 0.12 * n(attacker.vq) + defStyleBonus, 0.18, 0.9);
+      if (rng.next() < tipDigP) { // 읽혔다 — 얕은 수비가 살림(좋은 전환)
+        if (stats) stats.digs++;
+        q = clamp(0.55 + 0.3 * (digStr - 0.45) + rng.range(-0.1, 0.1), 0.2, 0.9);
+        if (trace) trace.push(`    → 페인트 읽힘! 디그 [${sideKo(other(att))}] (전환, q ${q.toFixed(2)})`);
+        if (E) pushAttack('dug', null);
+        att = other(att);
+        continue;
+      }
+      if (stats) { stats.kills++; stats.tipKills++; } // KOVO 집계상 팁도 공격 득점
+      if (trace) trace.push(`    → 페인트 득점! [${sideKo(att)}] ${attacker.name} (블록·수비 사이 톡)`);
+      if (E) { pushAttack('kill', null); emitPoint(att, '페인트'); }
+      return { winner: att, how: 'tip' };
+    }
     const r1 = rng.next();
     if (r1 < errP2) { if (stats) stats.attackErrs++; if (trace) trace.push('    → 공격 범실 (상대 득점)'); if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); } return { winner: other(att), how: 'atkErr' }; }
     if (r1 < errP2 + blockP) {
@@ -444,7 +474,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       const blockOutP = clamp(0.12 + 0.35 * n(attacker.vq) - 0.15, 0.04, 0.4);
       if (rng.next() < blockOutP) { if (stats) stats.blockouts++; if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return { winner: att, how: 'blockout' }; }
       const stuffPref = df.style === 'attack' ? 0.04 : df.style === 'defense' ? -0.04 : 0;
-      const stuffProb = clamp(0.46 + stuffPref + 0.55 * (blkStr - attackPower), 0.05, 0.8); // 기저 KOVO 정렬·민감도 압축
+      const stuffProb = clamp(0.55 + stuffPref + 0.55 * (blkStr - attackPower), 0.05, 0.8); // 기저 KOVO 정렬(팁 도입분 보정)·민감도 압축
       if (rng.next() < stuffProb) { if (stats) stats.stuffs++; if (trace) trace.push(`    → 스터프 블록! [${sideKo(other(att))}] 득점`); if (E) { pushAttack('blocked', null); emitPoint(other(att), '스터프 블록'); } return { winner: other(att), how: 'stuff' }; }
       if (stats) stats.softblocks++;
       if (E) pushAttack('softblock', null);
@@ -454,8 +484,6 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       continue;
     }
 
-    const defStyleBonus = df.style === 'defense' ? 0.02 : df.style === 'attack' ? -0.01 : 0; // 수비형 디그↑ / 공격형 디그 소폭↓
-    const digStr = strength(defenders(df), (r) => r.dig, R, df) * momFactor(df.momentum);
     // 기저 0.38 — KOVO 랠리 길이 정렬(공격시도 ~34/세트·디그 ~15/세트, 2026-06. 0.46은 랠리 과장)
     const digP = clamp(0.40 + defStyleBonus + 0.45 * (digStr - attackPower), 0.05, 0.9); // 민감도 압축(parity)·기저로 평균 복원
     if (rng.next() < digP) {

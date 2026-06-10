@@ -110,7 +110,7 @@ for (let m = 0; m < nMatches; m++) {
     // 종결 유형 = 엔진 기록(how) — 보드는 이를 사실대로 그린다(분포 = 엔진 분포 보장)
     {
       const KO: Record<string, string> = {
-        kill: '킬', cap: '킬(랠리상한)', blockout: '블록아웃(터치아웃)', stuff: '스터프 블록', atkErr: '공격 범실',
+        kill: '킬', cap: '킬(랠리상한)', tip: '팁(페인트)', blockout: '블록아웃(터치아웃)', stuff: '스터프 블록', atkErr: '공격 범실',
         ace: '서브 에이스', serveErr: '서브 범실', recvErr: '리시브 범실', miscErr: '핸들링 범실', fault: '포지션 폴트',
       };
       const k = r.how ? (KO[r.how] ?? r.how) : '미기록(즉흥)';
