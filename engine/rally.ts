@@ -43,6 +43,9 @@ const ATK_ERR: Record<Atk, number> = { quick: 0.05, tempo: 0.03, back: 0.012, op
 // 공격 화력 보정: 표시 spike를 풀스케일로 올린 만큼(ratings.ts) 엔진 화력을 옛 캘리브레이션으로 되돌림.
 // 표시 spike(n≈0.63) × ATK_K ≈ 옛 spike(n≈0.40). 킬·스터프 KOVO 분포 유지.
 const ATK_K = 0.64;
+// 블로킹 보정: 표시 block 키 스케일 상향(ratings.ts blockHeight, 평균 57→60) 만큼 엔진 강도 환원.
+// 0.91 = 주블로커(MB) 기준 비율(65→71) — 스터프% 기준선(~9.6) 유지.
+const BLK_K = 0.91;
 const FAKE: Record<Atk, number> = { quick: 1, tempo: 1, back: 0, open: 0 };
 
 const CHANCE_Q = 0.32; // 이 이하 리시브/디그 품질이면 찬스볼(6장)
@@ -190,7 +193,7 @@ function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng): { str: number; c
     : atk === 'tempo' ? (rng.next() < 0.6 ? 1 : 2) : (rng.next() < 0.5 ? 1 : 2);
   count = Math.min(count, fr.length);
   const sorted = fr.slice().sort((a, b) => n(R(b).block) - n(R(a).block)).slice(0, count);
-  const vals = sorted.map((p) => n(R(p).block) * eff(df, p));
+  const vals = sorted.map((p) => BLK_K * n(R(p).block) * eff(df, p));
   for (const p of sorted) drain(df, p, 0.4);
   const skill = 0.5 * Math.max(...vals) + 0.5 * (vals.reduce((a, b) => a + b, 0) / vals.length);
   const fooled = FAKE[atk] && !isRead ? 0.7 : 1.0;

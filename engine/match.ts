@@ -90,18 +90,25 @@ export function simulateMatch(
     const pool = players.filter((p) => !onIds.has(p.id) && p.position !== 'L');
     const best = (score: (p: Player) => number): Player | null =>
       pool.length ? pool.reduce((b, p) => (score(p) > score(b) ? p : b)) : null;
+    // 수비 교체는 OH만 — 리시브 라인(리베로+OH)에 실제로 합류해야 교체가 유효(receivers() 참조)
+    const bestOH = (score: (p: Player) => number): Player | null => {
+      const ohs = pool.filter((p) => p.position === 'OH');
+      return ohs.length ? ohs.reduce((b, p) => (score(p) > score(b) ? p : b)) : null;
+    };
     return {
       server: best((p) => R(p).serve),
       blocker: best((p) => R(p).block),
-      defender: best((p) => R(p).receive + R(p).dig),
+      defender: bestOH((p) => R(p).receive + R(p).dig),
     };
   };
   const bench = { home: benchSpecialists(homePlayers, homeLineup), away: benchSpecialists(awayPlayers, awayLineup) };
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 
-  // 랠리 사이 회복 — 체젠(staminaRegen) 높을수록 빨리 회복
-  const recover = (lu: typeof homeLineup, m: Map<string, number>, scale: number) => {
-    for (const p of onCourt(lu)) {
+  // 랠리 사이 회복 — 체젠(staminaRegen) 높을수록 빨리 회복.
+  // tracked = 체력을 추적하는 전원(선발+리베로+투입된 교체) — 교체 선수도 회복되게.
+  const tracked: Record<Side, Player[]> = { home: [...onCourt(homeLineup)], away: [...onCourt(awayLineup)] };
+  const recover = (side: Side, m: Map<string, number>, scale: number) => {
+    for (const p of tracked[side]) {
       m.set(p.id, Math.min(1, (m.get(p.id) ?? 1) + scale * (0.4 + p.staminaRegen / 100)));
     }
   };
@@ -122,8 +129,8 @@ export function simulateMatch(
     away.momentum = START_MOMENTUM;
     home.rotation = 0;
     away.rotation = 0;
-    recover(homeLineup, homeStam, 0.5);
-    recover(awayLineup, awayStam, 0.5);
+    recover('home', homeStam, 0.5);
+    recover('away', awayStam, 0.5);
     const timeouts = { home: TIMEOUTS_PER_SET, away: TIMEOUTS_PER_SET };
     let serving: Side = setNo % 2 === 1 ? 'home' : 'away';
 
@@ -137,10 +144,12 @@ export function simulateMatch(
     const subIn = (side: Side, slot: number, player: Player | null, kind: SubKind): void => {
       if (!player) return;
       const st = teamOf(side);
-      if (activeSubs[side].has(slot) || subBudget[side] < 2 || st.six[slot].id === player.id) return;
+      if (activeSubs[side].has(slot) || subBudget[side] < 2) return;
+      // 이미 코트에 있으면 불가 — 같은 벤치 스페셜리스트가 두 슬롯에 중복 투입되는 것 방지
+      if (st.six.some((p) => p.id === player.id)) return;
       activeSubs[side].set(slot, { orig: st.six[slot], kind });
       st.six[slot] = player;
-      if (!st.stam.has(player.id)) st.stam.set(player.id, 1);
+      if (!st.stam.has(player.id)) { st.stam.set(player.id, 1); tracked[side].push(player); }
       subBudget[side] -= 1; // IN
     };
     const subOut = (side: Side, slot: number): void => {
@@ -231,9 +240,9 @@ export function simulateMatch(
         lastScorer = null;
       }
 
-      // 랠리 사이 체력 회복(7.1)
-      recover(homeLineup, homeStam, STAM_REGEN_BASE);
-      recover(awayLineup, awayStam, STAM_REGEN_BASE);
+      // 랠리 사이 체력 회복(7.1) — 교체 투입 선수 포함(tracked)
+      recover('home', homeStam, STAM_REGEN_BASE);
+      recover('away', awayStam, STAM_REGEN_BASE);
     }
 
     // 세트 종료: 활성 교체 전부 원복(다음 세트 라인업 초기화)
