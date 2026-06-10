@@ -52,7 +52,7 @@ function main(): void {
   const pct = (x: number, d: number) => ((x / d) * 100).toFixed(1) + '%';
 
   const atkPts = S.kills + S.blockouts;                       // 공격 득점(킬+블록아웃 — KOVO 공격득점 정의)
-  const oppErrs = S.serveErrs + S.attackErrs + S.faults;      // 상대 범실로 얻은 점수
+  const oppErrs = S.serveErrs + S.attackErrs + S.faults + S.recvErrs + S.miscErrs; // 상대 범실로 얻은 점수(기타범실 포함)
   const inRange = (v: number, lo: number, hi: number) => (v >= lo && v <= hi ? '✓' : '⚠');
 
   const row = (label: string, mine: string, kovo: string, ok: string, note = '') =>
@@ -71,16 +71,20 @@ function main(): void {
   const sp = ps(S.aces);
   row('서브 득점', f2(sp), '~0.9~1.3', inRange(sp, 0.85, 1.4), '에이스');
   const ep = ps(oppErrs);
-  row('상대 범실 득점', f1(ep), '~6~7', inRange(ep, 5, 7.5), '엔진은 리시브범실·네트터치 등 기타범실 미모델 → 하단 참조');
-  row('└ 범실 득점 비중', pct(oppErrs, S.rallies), '~27~30%', inRange((oppErrs / S.rallies) * 100, 20, 31), '');
+  row('상대 범실 득점', f1(ep), '~6~7', inRange(ep, 5, 7.5), '서브·공격·리시브·핸들링·폴트 합');
+  row('└ 범실 득점 비중', pct(oppErrs, S.rallies), '~27~30%', inRange((oppErrs / S.rallies) * 100, 24, 31), '');
 
   log('\n[실점(범실) — 세트당 팀 범실]');
   const se = ps(S.serveErrs);
   row('서브 범실', f2(se), '~1.5~2.2', inRange(se, 1.4, 2.3), '');
   const ae = ps(S.attackErrs);
   row('공격 범실', f2(ae), '~1.5~2.5', inRange(ae, 1.4, 2.6), '');
+  const re = ps(S.recvErrs);
+  row('리시브 범실', f2(re), '~0.5~1.0', inRange(re, 0.4, 1.1), '난조 리시브 직접 실점(에이스와 별개)');
+  const me = ps(S.miscErrs);
+  row('볼핸들링 범실', f2(me), '~0.8~1.5', inRange(me, 0.7, 1.6), '더블컨택·캐치·네트터치(세터 기복 연동)');
   const fe = ps(S.faults);
-  row('포지션 폴트 등', f2(fe), '낮음', '✓', 'KOVO 기타범실(~2~3)은 리시브범실·네트터치 포함 — 엔진 미모델');
+  row('포지션 폴트', f2(fe), '낮음', '✓', '');
 
   log('\n[공격 — 세트당 팀]');
   const at = ps(S.attacks);

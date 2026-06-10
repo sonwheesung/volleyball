@@ -78,7 +78,7 @@ function main(): void {
   row('피블로킹률(스터프)', pct(S.stuffs, S.attacks), '~7~12%');
 
   L('\n[랠리/경기]');
-  row('랠리당 공격 횟수(공방)', per(S.attacks, S.rallies), '~1.8~2.2');
+  row('랠리당 공격 횟수(공방)', per(S.attacks, S.rallies), '~1.4~1.7'); // KOVO 시도(~33)/총득점(~22) 실측 비
   row('사이드아웃 성공률', pct(S.sideouts, S.rallies), '~58~68%');
   row('경기당 세트', per(totalSets, matches), '~3.5~3.9');
   row('듀스(26점+) 세트 비율', pct(deuceSets, totalSets), '~12~18%');

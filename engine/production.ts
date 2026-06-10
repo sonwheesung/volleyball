@@ -130,18 +130,18 @@ export function attributeProduction(
     const def = garbage && defBench.length ? defBench : defStart;
     const roll = rng.next();
 
-    // 득점 유형 비율 = 밸런싱된 엔진 실측에 맞춤(공격킬+블록아웃 62% / 스터프 10% / 에이스 6% / 상대범실 22%)
-    if (roll < 0.62) {
+    // 득점 유형 비율 = 밸런싱된 엔진 실측에 맞춤(공격킬+블록아웃 58% / 스터프 9% / 에이스 5.7% / 상대범실 27%, KOVO 정렬 2026-06)
+    if (roll < 0.58) {
       const hitter = pick(off, (p) => ATTACK[p.position] * p.skSpike ** ATK_FOCUS, rng.next());
       if (hitter) bump(hitter.id, (l) => { l.points++; l.spikes++; });
       const setter = pick(off, (p) => (p.position === 'S' ? p.skSet : 0), rng.next());
       if (setter) bump(setter.id, (l) => { l.assists++; });
       const digger = pick(def, (p) => DIG[p.position] * p.skDig, rng.next());
       if (digger) bump(digger.id, (l) => { l.digs++; });
-    } else if (roll < 0.72) {
+    } else if (roll < 0.67) {
       const blocker = pick(off, (p) => BLOCK[p.position] * p.skBlock ** BLK_FOCUS, rng.next());
       if (blocker) bump(blocker.id, (l) => { l.points++; l.blocks++; });
-    } else if (roll < 0.78) {
+    } else if (roll < 0.727) {
       const server = pick(off, (p) => SERVE[p.position] * p.skServe, rng.next());
       if (server) bump(server.id, (l) => { l.points++; l.aces++; });
     }

@@ -38,6 +38,7 @@
 | 모듈 분리(10장) | ❌ 보류 | `rally.ts` 통합 유지 |
 | **부상의 시즌 결장 반영** | ✅ 구현(2026-06) | 엔진 밖 시즌 계층 — `engine/injury.ts`+`data/dynamics.ts`가 "그날 출전 가능 명단"을 깎음(INJURY_SYSTEM). 엔진은 받은 명단만 굴림(결정론 보존) |
 | **선수 특성의 경기 반영** | ✅ 구현(2026-06) | `playRally(..., clutch)` — 세트포인트 접전(crunch)에서 클러치/새가슴 focus 보정, 서브머신 공격성(TRAIT_SYSTEM) |
+| **KOVO 박스스코어 정밀 정렬** | ✅ 재튜닝(2026-06) | `tools/simKovo.ts` 20개 지표 전부 KOVO 범위. 기타범실(리시브·볼핸들링) 신설, digP 0.40·stuffProb 0.46·momFactor ±4%로 재캘리브레이션. **실력차 민감도(델타 계수) 압축**으로 parity 보존(우승 5.4/7·반등 100%). 본문 산재한 옛 검증 수치(킬 55.8% 등)는 당시 기록 — 최신값은 simKovo/simStats 실행으로 확인 |
 
 ### v2 엔진 실제 로직 요약 (`simulateMatch(seed, home[], away[], { edge?, home?, away? })`)
 - 입력: 양 팀 **로스터 Player[]** + 시드 + (선택) 감독 정보 `{ style, charisma }`(없으면 밸런스/50).
