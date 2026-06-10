@@ -99,6 +99,38 @@ export interface HofEntry {
   legend: boolean;       // 영구결번급(예외적 커리어)
 }
 
+// ─── 시상식 (AWARDS_SYSTEM) ──────────────────────────────────
+/** 개인 수상자 — playerId + 당시 소속 + 선정 수치 */
+export interface AwardWinner {
+  playerId: string;
+  teamId: string;
+  value: number;        // 선정 근거 수치(득점/어시/델타 등) — 표시용
+}
+
+/** 베스트7 한 자리 — 포지션 슬롯 + 수상자 */
+export interface Best7Slot {
+  pos: Position;
+  winner: AwardWinner | null;
+}
+
+/** 한 시즌 시상 결과 — endSeason 에서 계산해 archive 에 영구 보존 */
+export interface SeasonAwards {
+  mvp: AwardWinner | null;          // 정규리그 MVP(팀 성적 가중)
+  finalsMvp: AwardWinner | null;    // 챔피언결정전 MVP(우승팀)
+  rookie: AwardWinner | null;       // 신인상
+  mostImproved: AwardWinner | null; // 기량발전상
+  titles: {                         // 부문 기록왕(순수 1위)
+    scoring: AwardWinner | null;    // 득점왕
+    spike: AwardWinner | null;      // 공격상
+    block: AwardWinner | null;      // 블로킹왕
+    serve: AwardWinner | null;      // 서브왕
+    dig: AwardWinner | null;        // 디그왕
+    set: AwardWinner | null;        // 세트왕
+  };
+  best7: Best7Slot[];               // S·OH·OH·OP·MB·MB·L 순
+  roundMvps: (AwardWinner | null)[]; // 라운드(leg)별 MVP
+}
+
 /** 경기 중 작전 교체 방침 (MATCH_SYSTEM 1.3b) — 프리셋/방침 레벨, AI 자동 + 플레이어 토글 */
 export interface SubPolicy {
   pinchServer: boolean; // 약한 서버(세터 등) 차례에 벤치 서브 스페셜리스트 투입

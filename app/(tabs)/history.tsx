@@ -4,11 +4,12 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Screen';
 import { currentRosters, getPlayer, getTeam, teamPlayerIds } from '../../data/league';
 import { leagueProduction } from '../../data/production';
+import { currentSeasonAwards } from '../../data/awards';
 import { computeStandings, seasonResults } from '../../data/standings';
 import { dateForDay, formatDate } from '../../lib/calendar';
 import { useGameStore } from '../../store/useGameStore';
 import type { ProdLine } from '../../engine/production';
-import type { CareerStats, Player } from '../../types';
+import type { AwardWinner, CareerStats, Player } from '../../types';
 
 const short = (teamId: string) => {
   const n = getTeam(teamId)?.name ?? '';
@@ -24,6 +25,7 @@ export default function History() {
   const archive = useGameStore((s) => s.archive);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
 
+  const awards = useMemo(() => currentSeasonAwards(season, currentDay), [currentDay, season]);
   const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
   const results = useMemo(
     () => seasonResults(currentDay).slice().sort((a, b) => b.dayIndex - a.dayIndex),
@@ -60,18 +62,77 @@ export default function History() {
     return { points: top('points'), blocks: top('blocks'), digs: top('digs') };
   }, [currentDay, season]);
 
+  const awName = (w: AwardWinner | null) => (w ? getPlayer(w.playerId)?.name ?? w.playerId : '—');
+  const awMine = (w: AwardWinner | null) => !!w && !!teamId && teamPlayerIds(teamId).includes(w.playerId);
+  const awTeam = (w: AwardWinner | null) => (w ? short(teamOfPlayer[w.playerId] ?? w.teamId) : '');
+
   return (
     <Screen title={`${season + 1}시즌 기록`}>
+      {awards.mvp ? (
+        <>
+          <Title>{season + 1}시즌 시상식{currentDay < 164 ? ' (잠정)' : ''}</Title>
+          <Card>
+            {([
+              { label: '정규 MVP', w: awards.mvp, hi: true, suffix: '' },
+              { label: '챔프전 MVP', w: awards.finalsMvp, hi: true, suffix: '' },
+              { label: '신인상', w: awards.rookie, hi: false, suffix: '' },
+              { label: '기량발전상', w: awards.mostImproved, hi: false, suffix: ' OVR' },
+            ]).map((a) => a.w ? (
+              <View key={a.label} style={styles.awRow}>
+                <Text style={[styles.awLabel, a.hi && { color: theme.warn }]}>{a.label}</Text>
+                <PosTag pos={getPlayer(a.w.playerId)?.position ?? 'OH'} />
+                <Text style={[styles.awName, awMine(a.w) && styles.mine]} numberOfLines={1}>{awName(a.w)}</Text>
+                <Text style={styles.lbTeam} numberOfLines={1}>{awTeam(a.w)}</Text>
+                <Text style={styles.lbVal}>{a.w.value}{a.suffix}</Text>
+              </View>
+            ) : null)}
+          </Card>
+
+          <Card>
+            <Text style={styles.awHead}>부문 기록왕</Text>
+            {([
+              { label: '득점', w: awards.titles.scoring },
+              { label: '공격', w: awards.titles.spike },
+              { label: '블로킹', w: awards.titles.block },
+              { label: '서브', w: awards.titles.serve },
+              { label: '디그', w: awards.titles.dig },
+              { label: '세트', w: awards.titles.set },
+            ]).map((a) => (
+              <View key={a.label} style={styles.awRow}>
+                <Text style={styles.awLabel}>{a.label}왕</Text>
+                <Text style={[styles.awName, awMine(a.w) && styles.mine]} numberOfLines={1}>{awName(a.w)}</Text>
+                <Text style={styles.lbTeam} numberOfLines={1}>{awTeam(a.w)}</Text>
+                <Text style={styles.lbVal}>{a.w?.value ?? ''}</Text>
+              </View>
+            ))}
+          </Card>
+
+          <Card>
+            <Text style={styles.awHead}>베스트7</Text>
+            {awards.best7.map((s, i) => (
+              <View key={`${s.pos}${i}`} style={styles.awRow}>
+                <PosTag pos={s.pos} />
+                <Text style={[styles.awName, awMine(s.winner) && styles.mine]} numberOfLines={1}>{awName(s.winner)}</Text>
+                <Text style={styles.lbTeam} numberOfLines={1}>{awTeam(s.winner)}</Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
       {archive.length > 0 ? (
         <>
           <Title>역대 우승</Title>
           <Card>
             {archive.slice().reverse().map((a) => (
               <View key={a.season} style={styles.row}>
-                <Text style={[styles.team, { flex: 0, width: 70 }]}>{a.season + 1}시즌</Text>
-                <Text style={[styles.team, a.championId === teamId && styles.mine]}>
+                <Text style={[styles.team, { flex: 0, width: 64 }]}>{a.season + 1}시즌</Text>
+                <Text style={[styles.team, a.championId === teamId && styles.mine]} numberOfLines={1}>
                   🏆 {getTeam(a.championId)?.name ?? a.championId}
                 </Text>
+                {a.awards?.mvp ? (
+                  <Muted style={{ fontSize: 11 }}>MVP {getPlayer(a.awards.mvp.playerId)?.name ?? ''}</Muted>
+                ) : null}
               </View>
             ))}
           </Card>
@@ -241,5 +302,9 @@ const styles = StyleSheet.create({
   lbTeam: { color: theme.muted, fontSize: 12, width: 52, textAlign: 'right' },
   lbVal: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 36, textAlign: 'right' },
   hofRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  awRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
+  awLabel: { width: 76, color: theme.muted, fontSize: 13, fontWeight: '700' },
+  awName: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '700' },
+  awHead: { color: theme.text, fontWeight: '800', marginBottom: 2 },
 });
 

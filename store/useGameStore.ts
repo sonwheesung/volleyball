@@ -10,12 +10,14 @@ import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOver
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
+import { currentSeasonAwards } from '../data/awards';
+import { buildPlayoffs } from '../data/playoffs';
 import { accrueCareer } from '../engine/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, HofEntry, MatchResult, Player, SubPolicy, TrainingFocus } from '../types';
+import type { Contract, HofEntry, MatchResult, Player, SeasonAwards, SubPolicy, TrainingFocus } from '../types';
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const LEGEND_POINTS = 9000; // 영구결번급
@@ -37,7 +39,7 @@ interface GameState {
   faAggressive: boolean;                       // 공격적 영입(연봉↑로 경쟁 우위)
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
-  archive: { season: number; championId: string }[]; // 역대 우승
+  archive: { season: number; championId: string; awards?: SeasonAwards }[]; // 역대 우승 + 시상
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
   trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
@@ -83,7 +85,7 @@ const freshSave = {
   faAggressive: false,
   protectedIds: [] as string[],
   draftPicks: [] as string[],
-  archive: [] as { season: number; championId: string }[],
+  archive: [] as { season: number; championId: string; awards?: SeasonAwards }[],
   hallOfFame: [] as HofEntry[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
   trainingFocus: null as TrainingFocus | null,
@@ -178,9 +180,16 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
+
+        // 0) 시상식 — 롤오버 전(끝난 시즌의 base·생산이 살아있을 때) 계산해 archive 에 영구 보존
+        const seasonAwards = currentSeasonAwards(season);
+        const championId = buildPlayoffs(season).championId ?? '';
+        const nextArchive = archive.some((a) => a.season === season)
+          ? archive.map((a) => (a.season === season ? { ...a, championId: championId || a.championId, awards: seasonAwards } : a))
+          : [...archive, { season, championId, awards: seasonAwards }];
 
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
         const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason);
@@ -243,6 +252,7 @@ export const useGameStore = create<GameState>()(
           playerBase: snapshot,
           rosters: filled.rosters,
           hallOfFame: [...hallOfFame, ...hofAdds],
+          archive: nextArchive,
         });
       },
 

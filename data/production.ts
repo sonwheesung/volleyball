@@ -44,9 +44,14 @@ function allProdRows(): ProdRow[] {
 
 /** uptoDay 까지 선수별 누적 생산 */
 export function leagueProduction(uptoDay: number): Map<string, ProdLine> {
+  return leagueProductionRange(0, uptoDay);
+}
+
+/** [fromDay, toDay] 구간 선수별 생산(양끝 포함) — 라운드 MVP 등 구간 집계용 */
+export function leagueProductionRange(fromDay: number, toDay: number): Map<string, ProdLine> {
   const out = new Map<string, ProdLine>();
   for (const r of allProdRows()) {
-    if (r.dayIndex > uptoDay) continue;
+    if (r.dayIndex < fromDay || r.dayIndex > toDay) continue;
     for (const [id, l] of r.lines) out.set(id, mergeProd(out.get(id), l));
   }
   return out;
