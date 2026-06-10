@@ -123,10 +123,17 @@ for (let m = 0; m < nMatches; m++) {
         }
       }
 
-      // H) 아웃볼 추격: 코트 밖으로 가는 fault 공엔 추격자가 있어야(터치아웃 — 나가는 공도 살리려 뛴다)
+      // H) 아웃볼 추격: 추격자가 "존재"하는 걸로는 부족 — 최소 1명은 공 낙하점까지 실제 도달해야
+      //    (reach<1이면 선 안쪽에서 멈춰 어색 — 사용자 발견 사례를 상설 규칙화)
       if (to.kind === 'fault') {
         const out = to.x < 0 || to.x > W || to.y < 0 || to.y > H;
-        if (out && !(to.movers && to.movers.length)) flag('H.아웃볼 무추격', ctx(`fault → (${to.x.toFixed(0)},${to.y.toFixed(0)}) 추격자 0명`));
+        if (out) {
+          if (!(to.movers && to.movers.length)) flag('H.아웃볼 무추격', ctx(`fault → (${to.x.toFixed(0)},${to.y.toFixed(0)}) 추격자 0명`));
+          else {
+            const nearest = Math.min(...to.movers.map((mv) => dist({ x: mv.x, y: mv.y }, { x: to.x, y: to.y })));
+            if (nearest > 42) flag('H.추격 미달(선에서 멈춤)', ctx(`fault 공까지 최근접 목표 ${(nearest * M_PER_PX).toFixed(1)}m`));
+          }
+        }
       }
 
       // 프레임 스텝

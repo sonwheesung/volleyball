@@ -48,15 +48,18 @@ export function spikeTarget(def: Side, rng: ReturnType<typeof createRng>, deep: 
 
 
 /** 랠리 종착 후 바운드 — 득점 낙하 지점에서 진행 방향으로 크게 한 번, 잦아들며 한 번 더(박힘 방지) */
-function withBounce(wp: WP[], H: number): WP[] {
+function withBounce(wp: WP[], W: number, H: number): WP[] {
   const last = wp[wp.length - 1];
   if (!last || (last.kind !== 'spike' && last.kind !== 'fault')) return wp;
   const prev = wp[wp.length - 2] ?? last;
   let dx = last.x - prev.x, dy = last.y - prev.y;
   const len = Math.hypot(dx, dy) || 1;
   dx /= len; dy /= len;
-  const b1 = { x: last.x + dx * 34, y: last.y + dy * 34 };
-  const b2 = { x: b1.x + dx * 14, y: b1.y + dy * 14 };
+  const cl = (p: { x: number; y: number }) => ({
+    x: Math.max(-26, Math.min(W + 26, p.x)), y: Math.max(-40, Math.min(H + 40, p.y)),
+  });
+  const b1 = cl({ x: last.x + dx * 34, y: last.y + dy * 34 });
+  const b2 = cl({ x: b1.x + dx * 14, y: b1.y + dy * 14 });
   wp.push({ ...b1, side: last.side, idx: -1, kind: 'bounce', dur: 240, arc: 0.055 * H, scale: 1.08 });
   wp.push({ ...b2, side: last.side, idx: -1, kind: 'bounce', dur: 300, arc: 0.018 * H, scale: 1.02 });
   return wp;
@@ -112,8 +115,8 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const out = rng.next() < 0.5
       ? { x: dir < 0 ? -12 : W + 12, y: clampN(rp.y + rng.range(-0.1, 0.1) * H, 0.1 * H, 0.9 * H) } // 사이드 밖
       : { x: clampN(rp.x + dir * 0.25 * W, 12, W - 12), y: (recv === 'home' ? H + 12 : -12) }; // 엔드라인 밖
-    wp.push({ x: out.x, y: out.y, side: recv, idx: -1, kind: 'fault', movers: chasersTo(recv, out, 2, 0.7) });
-    return withBounce(wp, H);
+    wp.push({ x: out.x, y: out.y, side: recv, idx: -1, kind: 'fault', movers: chasersTo(recv, out, 2, 1.05) });
+    return withBounce(wp, W, H);
   }
 
   let firstTouch = recvIdx; // 이번 공격의 첫 터치(리시브/디그)한 선수 — 토스는 다른 선수가
@@ -220,13 +223,15 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     if (att === r.scorer) {
       if (intoBlock) {
         // 블로킹 아웃(터치아웃): 블록 맞고 옆으로 아웃 → 공격 득점. 점선=의도(코트)
-        // 나가는 공이라도 수비 2명이 어떻게든 살리려 쫓아간다(실제 배구 — 못 살리고 실점)
-        const outPt = { x: ap.x < W / 2 ? W + 12 : -12, y: (def === 'home' ? 0.78 : 0.22) * H };
+        // 나가는 공이라도 수비 2명이 코트 밖까지 오버런하며 살리려 쫓는다(실제 배구 — 못 살리고 실점)
+        const outPt = rng.next() < 0.55
+          ? { x: ap.x < W / 2 ? W + 13 : -13, y: (def === 'home' ? 0.78 : 0.22) * H }                  // 사이드 밖
+          : { x: clampN(blockNet.x + rng.range(-0.2, 0.2) * W, 24, W - 24), y: def === 'home' ? H + 18 : -18 }; // 엔드라인 밖(깊게)
         wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-        wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', movers: chasersTo(def, outPt, 2, 0.8) });
+        wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', movers: chasersTo(def, outPt, 2, 1.06) });
       } else {
         // 클린 킬: 블록을 각으로 피해 코트로 (수비 못 닿음)
-        wp.push({ x: intended.x, y: intended.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, intended, 1, 0.5), ...coverMovers] });
+        wp.push({ x: intended.x, y: intended.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, intended, 1, 0.92), ...coverMovers] });
       }
       break;
     }
@@ -237,7 +242,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       // 커버 선수들이 떨어지는 공으로 몸을 던진다(못 살리고 실점)
       const stuffPt = { x: clampN(ap.x + rng.range(-0.08, 0.08) * W, 12, W - 12), y: (att === 'home' ? 0.78 : 0.22) * H };
       wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', movers: chasersTo(att, stuffPt, 2, 0.85) });
+      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', movers: chasersTo(att, stuffPt, 2, 0.97) });
       break;
     }
 
@@ -258,5 +263,5 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     }
     att = def;
   }
-  return withBounce(wp, H);
+  return withBounce(wp, W, H);
 }
