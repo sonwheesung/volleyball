@@ -2,9 +2,11 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
-import { SEASON, getEvolvedTeamPlayers, getTeam, getTeamCoach } from '../../data/league';
+import { SEASON, getEvolvedTeamPlayers, getPlayer, getTeam, getTeamCoach } from '../../data/league';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings } from '../../data/standings';
+import { teamInjuriesOn } from '../../data/injury';
+import { SEVERITY_KO } from '../../engine/injury';
 import { teamOverall } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
 import { teamScheduleEntries } from '../../engine/season';
@@ -46,6 +48,7 @@ export default function Dashboard() {
 
   const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
   const myRank = standings.findIndex((s) => s.teamId === teamId) + 1;
+  const injuries = useMemo(() => teamInjuriesOn(teamId, currentDay), [teamId, currentDay, season]);
 
   if (!team) return null;
 
@@ -95,6 +98,26 @@ export default function Dashboard() {
           </Text>
         </Row>
       </Card>
+
+      {injuries.length > 0 ? (
+        <Card>
+          <Muted style={{ marginBottom: 4 }}>🩹 부상자 명단</Muted>
+          {injuries.map((s) => {
+            const p = getPlayer(s.playerId);
+            const back = s.to >= Number.MAX_SAFE_INTEGER
+              ? '시즌아웃'
+              : `복귀까지 ~${Math.max(1, Math.ceil((s.to - currentDay) / 4))}경기`;
+            return (
+              <Row key={s.playerId}>
+                <Text style={{ color: theme.text, fontWeight: '700' }}>{p?.name ?? s.playerId}</Text>
+                <Text style={{ color: s.severity === 'season' ? theme.bad : theme.muted, fontSize: 12 }}>
+                  {SEVERITY_KO[s.severity]} · {back}
+                </Text>
+              </Row>
+            );
+          })}
+        </Card>
+      ) : null}
 
       <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
       <Button label="테스트 경기 (결과 미적용)" variant="ghost" onPress={() => router.push('/exhibition')} />

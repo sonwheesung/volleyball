@@ -12,6 +12,7 @@ import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
+import { seasonInjuryDays } from '../data/injury';
 import { buildPlayoffs } from '../data/playoffs';
 import { accrueCareer } from '../engine/production';
 import { fillRosters } from '../data/rookies';
@@ -193,6 +194,7 @@ export const useGameStore = create<GameState>()(
         const allMs = [...milestones, ...detectSeasonMilestones(season, hallOfFame)];
         const nextMilestones = [...allMs.filter((m) => m.big), ...allMs.filter((m) => !m.big).slice(-300)]
           .sort((a, b) => a.season - b.season);
+        const injuryDays = seasonInjuryDays(); // 만성 노쇠가속(약) — 큰 부상 선수 영구 소폭 하락
         const championId = buildPlayoffs(season).championId ?? '';
         const nextArchive = archive.some((a) => a.season === season)
           ? archive.map((a) => (a.season === season ? { ...a, championId: championId || a.championId, awards: seasonAwards } : a))
@@ -240,6 +242,15 @@ export const useGameStore = create<GameState>()(
           for (const id of filled.rosters[tid]) {
             const prev = ctx.prevTeamOf[id];
             if (prev && prev !== tid && snapshot[id]) snapshot[id] = { ...snapshot[id], clubTenure: 0 };
+          }
+        }
+
+        // 4.5) 만성 노쇠가속(약) — 큰 부상(7경기↑ 결장) 선수는 점프력 영구 -1.
+        //   staminaMax는 건드리지 않음(부상위험 피드백 스파이럴 차단).
+        for (const id of Object.keys(snapshot)) {
+          if ((injuryDays.get(id) ?? 0) >= 7 && snapshot[id]) {
+            const p = snapshot[id];
+            snapshot[id] = { ...p, jump: Math.max(25, p.jump - 1) };
           }
         }
 

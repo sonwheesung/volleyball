@@ -4,6 +4,7 @@
 
 import type { Fixture } from '../types';
 import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
+import { availableTeamPlayers } from './injury';
 import { simulateMatch } from '../engine/match';
 
 export interface ResultRow {
@@ -42,7 +43,7 @@ function allResults(): ResultRow[] {
   const rows: ResultRow[] = [];
   for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
     const squad: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
-    for (const t of LEAGUE.teams) squad[t.id] = getEvolvedTeamPlayers(t.id, day);
+    for (const t of LEAGUE.teams) squad[t.id] = availableTeamPlayers(t.id, day); // 부상자 제외 명단
     for (const f of byDay.get(day)!) {
       const sim = simulateMatch(f.seed, squad[f.homeTeamId], squad[f.awayTeamId], {
         home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId),

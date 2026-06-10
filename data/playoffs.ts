@@ -1,6 +1,7 @@
 // 포스트시즌 대진 — 정규리그 상위 3팀. 결정론(시즌 시드 + 종료 시점 OVR).
 
 import { coachInfoOf, getEvolvedTeamPlayers } from './league';
+import { availableTeamPlayers } from './injury';
 import { computeStandings } from './standings';
 import { playSeries, type Series } from '../engine/playoffs';
 
@@ -30,7 +31,7 @@ export function buildPlayoffs(season: number): Playoffs {
   }
   const [s1, s2, s3] = seeds;
   const sq: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
-  for (const id of seeds) sq[id] = getEvolvedTeamPlayers(id, REF_DAY);
+  for (const id of seeds) sq[id] = availableTeamPlayers(id, REF_DAY); // 부상자 제외(플옵 결장 드라마)
 
   // 플레이오프: 2위(hi) vs 3위(lo)
   const poSeries = playSeries(90000 + season * 17, sq[s2], sq[s3], PO_TARGET, coachInfoOf(s2), coachInfoOf(s3));
