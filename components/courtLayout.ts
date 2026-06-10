@@ -53,17 +53,22 @@ export function playerAtZone(lu: Lineup, rot: number, zone: number): Player {
 
 export interface Switched { pos: Record<number, Px>; setterIdx: number; frontHitters: number[]; backers: number[] }
 
-/** 스위칭(1.5) — 서브 후 전문 포지션. offense=true일 때만 세터가 네트로 침투. */
+/** 스위칭(1.5) — 서브 후 전문 포지션. offense=true일 때만 세터가 네트로 침투.
+ *  격자 금지: 전위는 살짝 V자(센터가 네트에 더 붙음), 후위는 다이아몬드
+ *  (윙 2명 넓고 약간 높게, 중앙 — 대개 리베로 — 이 가장 깊게: 실제 6-백 수비 베이스). */
 export function switchedSpots(side: Side, lu: Lineup, rot: number, offense: boolean, W: number, H: number): Switched {
   const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
   const back = [1, 5, 6].map((z) => lineupIdxAt(rot, z));
   const posOf = (i: number) => lu.six[i].position;
-  const X3 = side === 'home' ? [0.2, 0.5, 0.8] : [0.8, 0.5, 0.2];
-  const yF = (side === 'home' ? 0.6 : 0.4) * H;
-  const yB = (side === 'home' ? 0.86 : 0.14) * H;
+  const XF = side === 'home' ? [0.2, 0.5, 0.8] : [0.8, 0.5, 0.2];
+  const XB = side === 'home' ? [0.15, 0.5, 0.85] : [0.85, 0.5, 0.15];
+  const yFw = (side === 'home' ? 0.615 : 0.385) * H;  // 전위 윙
+  const yFm = (side === 'home' ? 0.585 : 0.415) * H;  // 전위 중앙(센터) — 네트에 더 붙음
+  const yBw = (side === 'home' ? 0.80 : 0.20) * H;    // 후위 윙
+  const yBm = (side === 'home' ? 0.905 : 0.095) * H;  // 후위 중앙 — 가장 깊게(리베로)
   const pos: Record<number, Px> = {};
-  [...front].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * W, y: yF }; });
-  [...back].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: X3[k] * W, y: yB }; });
+  [...front].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: XF[k] * W, y: k === 1 ? yFm : yFw }; });
+  [...back].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: XB[k] * W, y: k === 1 ? yBm : yBw }; });
   const setterIdx = lu.six.findIndex((p) => p.position === 'S');
   if (offense && setterIdx >= 0) pos[setterIdx] = { x: (side === 'home' ? 0.63 : 0.37) * W, y: (side === 'home' ? 0.57 : 0.43) * H }; // 공격 시에만 네트 침투
   return { pos, setterIdx, frontHitters: front.filter((i) => i !== setterIdx), backers: back.filter((i) => i !== setterIdx) };
@@ -100,6 +105,19 @@ export function coverSpots(side: Side, attackX: number, n: number, W: number, H:
   return [{ x: cx(-36), y: yNear }, { x: cx(36), y: yNear }, { x: cx(0), y: yDeep }];
 }
 
+/** 서브 리시브 라인(패서 3인) — "표시 기준" 리베로(후위 MB 슬롯)·OH 우선.
+ *  엔진 receivers()와 동일. 서브는 이 선수들 중 하나가 리시브 대형 자리에서 받는다. */
+export function receiveLine(lu: Lineup, rot: number): number[] {
+  const setterIdx = lu.six.findIndex((p) => p.position === 'S');
+  const passers = [0, 1, 2, 3, 4, 5].filter((i) => {
+    if (i === setterIdx) return false;
+    const d = displayPos(lu, rot, i);
+    return d === 'L' || d === 'OH';
+  });
+  for (const i of [0, 1, 2, 3, 4, 5]) { if (passers.length >= 3) break; if (i !== setterIdx && !passers.includes(i)) passers.push(i); }
+  return passers.slice(0, 3);
+}
+
 /** 서브 받기 전 대형 — 3-패서 리시브(리베로 표시 슬롯+OH가 좌·중·우),
  *  전위 공격수는 네트 대기(후위 비패서는 한 칸 깊게), 세터는 네트 사이드 코너에 은신. */
 export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number, H: number): Record<number, Px> {
@@ -110,15 +128,7 @@ export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number,
   const setterIdx = lu.six.findIndex((p) => p.position === 'S');
   const pos: Record<number, Px> = {};
 
-  // 패서 3명: "표시 기준" 리베로(후위 MB 슬롯)·OH 우선 — 엔진 receivers()와 동일한 리시브 라인.
-  //   (six 원 포지션만 보면 전위 MB가 리시브 라인에, 리베로가 네트에 서는 시각 버그)
-  const passers = [0, 1, 2, 3, 4, 5].filter((i) => {
-    if (i === setterIdx) return false;
-    const d = displayPos(lu, rot, i);
-    return d === 'L' || d === 'OH';
-  });
-  for (const i of [0, 1, 2, 3, 4, 5]) { if (passers.length >= 3) break; if (i !== setterIdx && !passers.includes(i)) passers.push(i); }
-  const recv = passers.slice(0, 3);
+  const recv = receiveLine(lu, rot);
   const netAtt = [0, 1, 2, 3, 4, 5].filter((i) => i !== setterIdx && !recv.includes(i));
 
   // 패서 좌·중·우 펼침(W, 자연 x순 → 교차 방지)

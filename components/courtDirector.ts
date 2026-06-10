@@ -89,9 +89,17 @@ export function segmentTargets(
   for (const side of ['home', 'away'] as Side[]) {
     const rot = side === 'home' ? stage.homeRot : stage.awayRot;
     const lu = side === 'home' ? L.home : L.away;
-    const posMap = inPlay
-      ? switchedSpots(side, lu, rot, side === offSide, W, H).pos
-      : receiveFormation(side, lu, rot, W, H);
+    // 서브 비행 중엔 "받는 팀"은 리시브 대형 유지(실제 배구 — 스위칭은 패스 이후).
+    // 서브 팀은 서브와 동시에 수비 전환 시작.
+    const holdReceive = !inPlay || (segKind === 'serve' && side !== stage.serving);
+    const posMap = holdReceive
+      ? receiveFormation(side, lu, rot, W, H)
+      : switchedSpots(side, lu, rot, side === offSide, W, H).pos;
+    // 단, 받는 팀 세터는 서브 컨택과 동시에 침투 출발(실제 배구) — 패스 도착 전에 세팅 자리 도달
+    if (segKind === 'serve' && side !== stage.serving) {
+      const sIdx = lu.six.findIndex((p) => p.position === 'S');
+      if (sIdx >= 0) posMap[sIdx] = switchedSpots(side, lu, rot, true, W, H).pos[sIdx];
+    }
     for (let i = 0; i < 6; i++) {
       const zone = ((i - rot) % 6 + 6) % 6 + 1;
       const isServer = stage.serving === side && zone === 1;

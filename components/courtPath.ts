@@ -5,10 +5,10 @@
 import type { Side } from '../types';
 import { createRng } from '../engine/rng';
 import {
-  lineupIdxAt, zonePx, switchedSpots, coverSpots, type Lineup, type Switched,
+  lineupIdxAt, zonePx, switchedSpots, coverSpots, receiveFormation, receiveLine, type Lineup, type Switched,
 } from './courtLayout';
 
-export type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault';
+export type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault' | 'bounce';
 export type Atk = 'quick' | 'tempo' | 'open' | 'back';
 export type Mover = { side: Side; idx: number; x: number; y: number };
 // movers: 이 구간에 특정 위치로 움직이는 선수들(디그·커버·쫓기·세트 등)
@@ -28,11 +28,11 @@ export interface Lineups { home: Lineup; away: Lineup }
 export const RECV_FAULT = 0.05; // 리시브 미스(투터치 등) 확률 — 지는 쪽 한정
 
 // 구간 지속(ms, 1배속) — 렌더(MatchCourt)와 헤드리스 감사기가 공유. WP.dur가 있으면 우선.
-export const SEG_DUR: Record<Move, number> = { start: 0, return: 280, walk: 340, serve: 300, pass: 240, toss: 540, spike: 150, fault: 320 };
+export const SEG_DUR: Record<Move, number> = { start: 0, return: 520, walk: 560, serve: 300, pass: 380, toss: 540, spike: 150, fault: 320, bounce: 240 };
 
-/** 마커 이동 시간(ms) — 거리 비례(짧은 조정=빠릿, 긴 전력질주=오래 — 워프 방지).
- *  0.45px/ms ≈ 화면 5.6m/s(슬로모 2배 반영 시 실속 스프린트). 렌더·감사기 공유. */
-export const markerTravelMs = (d: number): number => Math.max(240, Math.min(1400, d / 0.45));
+/** 마커 이동 시간(ms) — 거리 비례. 0.21px/ms ≈ 5.3m/s(실제 스프린트 상한).
+ *  이전 0.45(11m/s)는 우사인 볼트 초과 — 비현실 질주. 렌더·감사기 공유. */
+export const markerTravelMs = (d: number): number => Math.max(260, Math.min(2200, d / 0.21));
 
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -44,6 +44,22 @@ export function spikeTarget(def: Side, rng: ReturnType<typeof createRng>, deep: 
   const span = deep ? 0.24 : 0.4;
   const f = def === 'home' ? near + rng.next() * span : 1 - near - rng.next() * span;
   return { x, y: f * H };
+}
+
+
+/** 랠리 종착 후 바운드 — 득점 낙하 지점에서 진행 방향으로 크게 한 번, 잦아들며 한 번 더(박힘 방지) */
+function withBounce(wp: WP[], H: number): WP[] {
+  const last = wp[wp.length - 1];
+  if (!last || (last.kind !== 'spike' && last.kind !== 'fault')) return wp;
+  const prev = wp[wp.length - 2] ?? last;
+  let dx = last.x - prev.x, dy = last.y - prev.y;
+  const len = Math.hypot(dx, dy) || 1;
+  dx /= len; dy /= len;
+  const b1 = { x: last.x + dx * 34, y: last.y + dy * 34 };
+  const b2 = { x: b1.x + dx * 14, y: b1.y + dy * 14 };
+  wp.push({ ...b1, side: last.side, idx: -1, kind: 'bounce', dur: 240, arc: 0.055 * H, scale: 1.08 });
+  wp.push({ ...b2, side: last.side, idx: -1, kind: 'bounce', dur: 300, arc: 0.018 * H, scale: 1.02 });
+  return wp;
 }
 
 /** 한 랠리의 공 이동 경로 — 스위칭(전문 포지션) 기반. prevLast: 직전 낙구점(공 순간이동 방지) */
@@ -75,8 +91,12 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   }
   wp.push({ x: zonePx(serving, 1, W, H).x, y: serveOutY(serving), side: serving, idx: serverIdx, kind: 'walk' }); // 엔드라인 뒤로
 
-  const recvIdx = pick(sw[recv].backers.length ? sw[recv].backers : [serverIdx]);
-  wp.push(spot(recv, recvIdx, 'serve')); // 서브 → 리시버(스위칭 후위)
+  // 서브는 리시브 라인(리베로 표시+OH 패서)이 "리시브 대형 자리에서" 받는다 — 스위칭은 패스 중에(현실 순서)
+  const recvLu = recv === 'home' ? L.home : L.away;
+  const rf = receiveFormation(recv, recvLu, rotOf(recv), W, H);
+  const line = receiveLine(recvLu, rotOf(recv));
+  const recvIdx = pick(line.length ? line : (sw[recv].backers.length ? sw[recv].backers : [serverIdx]));
+  wp.push({ x: rf[recvIdx].x, y: rf[recvIdx].y, side: recv, idx: recvIdx, kind: 'serve' });
   let att: Side = recv;
 
   const d2 = (a: { x: number; y: number }, p: { x: number; y: number }) => (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
@@ -87,13 +107,13 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
 
   // 리시브 미스: 공이 옆/뒤로 튕겨 라인 밖으로, 선수들이 쫓지만 못 살림 → 서브측 득점
   if (recv !== r.scorer && rng.next() < RECV_FAULT) {
-    const rp = sw[recv].pos[recvIdx];
+    const rp = rf[recvIdx];
     const dir = rng.next() < 0.5 ? -1 : 1;
     const out = rng.next() < 0.5
       ? { x: dir < 0 ? -12 : W + 12, y: clampN(rp.y + rng.range(-0.1, 0.1) * H, 0.1 * H, 0.9 * H) } // 사이드 밖
       : { x: clampN(rp.x + dir * 0.25 * W, 12, W - 12), y: (recv === 'home' ? H + 12 : -12) }; // 엔드라인 밖
     wp.push({ x: out.x, y: out.y, side: recv, idx: -1, kind: 'fault', movers: chasersTo(recv, out, 2, 0.7) });
-    return wp;
+    return withBounce(wp, H);
   }
 
   let firstTouch = recvIdx; // 이번 공격의 첫 터치(리시브/디그)한 선수 — 토스는 다른 선수가
@@ -238,5 +258,5 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     }
     att = def;
   }
-  return wp;
+  return withBounce(wp, H);
 }

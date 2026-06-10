@@ -44,8 +44,8 @@ function playerAt(L: Lineups, side: Side, rot: number, zone: number): Player {
 type Rally = RallyState;
 
 // 구간별 포물선 높이(px) / 공 크기 피크 — 토스가 가장 크게 휘고 커진다
-const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06 };
-const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1 };
+const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06, bounce: COURT_H * 0.05 };
+const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1, bounce: 1.06 };
 const JUMP = 1.45; // 점프 시 마커 확대
 const SPEED = 2; // 전체 경기 속도 배수(클수록 느림). 2 = 2배 느리게
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
@@ -57,7 +57,7 @@ const ballPath = (r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y:
   ballPathRaw(r, seed, L, COURT_W, COURT_H, SERVE_OUT, prevLast);
 
 const easingFor = (k: Move) =>
-  k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : Easing.linear;
+  k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : k === 'bounce' ? Easing.out(Easing.quad) : Easing.linear;
 
 /** 이 구간에 점프하는 마커들 — 서브(서버)·토스(세터)·스파이크(공격수+벽에 선 블로커만) */
 function jumpersFor(from: WP, to: WP, homeRot: number, awayRot: number, L: Lineups): { side: Side; idx: number }[] {

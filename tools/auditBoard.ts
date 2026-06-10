@@ -144,7 +144,7 @@ for (let m = 0; m < nMatches; m++) {
           // A) 속도
           const v = (dist(prev, p) / DT) * 1000 * M_PER_PX; // m/s
           if (v > maxSpeed) { maxSpeed = v; maxSpeedCtx = ctx(`${key} ${to.kind}`); }
-          if (v > 26) flag('A.워프(순간이동)', ctx(`${key} ${v.toFixed(1)}m/s (${to.kind})`), frame, ball);
+          if (v > 14) flag('A.과속(>14m/s)', ctx(`${key} ${v.toFixed(1)}m/s (${to.kind})`), frame, ball);
           // B) 네트 침범
           const side = key.startsWith('home') ? 'home' : 'away';
           if (side === 'home' ? p.y < NET_Y - 8 : p.y > NET_Y + 8) flag('B.네트침범', ctx(`${key} y=${p.y.toFixed(0)}`), frame, ball);
@@ -160,7 +160,11 @@ for (let m = 0; m < nMatches; m++) {
             const tgtA = anim[`${side}-${a}`]?.to ?? cur[`${side}-${a}`];
             const tgtB = anim[`${side}-${b}`]?.to ?? cur[`${side}-${b}`];
             const intended = dist(tgtA, tgtB) < 26; // 목표 자체가 가까우면 의도된 안무(A퀵 듀오·블록 벽)
-            overlapStreak[pk] = (!intended && d < 16) ? (overlapStreak[pk] ?? 0) + 1 : 0;
+            // 지나치며 스치는 건 정상 — 둘 다 거의 정지(<0.8m/s)한 채 포개진 것만 어색
+            const vA = (dist(posAt(`${side}-${a}`, t - DT), frame[`${side}-${a}`]) / DT) * 1000 * M_PER_PX;
+            const vB = (dist(posAt(`${side}-${b}`, t - DT), frame[`${side}-${b}`]) / DT) * 1000 * M_PER_PX;
+            const parked = vA < 0.8 && vB < 0.8;
+            overlapStreak[pk] = (!intended && parked && d < 16) ? (overlapStreak[pk] ?? 0) + 1 : 0;
             if (overlapStreak[pk] === 4) flag('D.지속겹침', ctx(`${side}-${a}↔${side}-${b} ${d.toFixed(0)}px`), frame, ball);
           }
         }
@@ -171,6 +175,24 @@ for (let m = 0; m < nMatches; m++) {
       const endFrame: Record<Key, Pt> = {};
       for (const key of Object.keys(cur)) endFrame[key] = posAt(key, tNow);
       for (const key of Object.keys(cur)) cur[key] = endFrame[key];
+
+      // I) 터치 정합성: 서브 리시브/패스/토스가 도착했을 때 지정 처리자가 공 옆에 있어야(유령 터치)
+      if ((to.kind === 'serve' || to.kind === 'pass' || to.kind === 'toss') && to.idx >= 0) {
+        const handler = endFrame[`${to.side}-${to.idx}`];
+        if (handler) {
+          const gap = dist(handler, { x: to.x, y: to.y });
+          if (gap > 38) flag('I.유령터치', ctx(`${to.kind} 처리자 ${to.side}-${to.idx}가 공에서 ${(gap * M_PER_PX).toFixed(1)}m`), endFrame, { x: to.x, y: to.y });
+        }
+      }
+
+      // I) 터치 정합성: 서브/패스/토스 도착 시 지정 처리자가 공 옆에 있어야(유령 터치 방지)
+      if ((to.kind === 'serve' || to.kind === 'pass' || to.kind === 'toss') && to.idx >= 0) {
+        const handler = endFrame[`${to.side}-${to.idx}`];
+        if (handler) {
+          const gap = dist(handler, { x: to.x, y: to.y });
+          if (gap > 38) flag('I.유령터치', ctx(`${to.kind} 처리자 ${to.side}-${to.idx}가 공에서 ${(gap * M_PER_PX).toFixed(1)}m`), endFrame, { x: to.x, y: to.y });
+        }
+      }
 
       if (to.kind === 'spike') {
         const att = path[k].side; // 토스 WP의 사이드 = 공격팀
@@ -224,7 +246,7 @@ if (holeSamples.length) {
 }
 const total = Object.values(counts).reduce((a, b) => a + b, 0);
 if (total === 0) {
-  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격 모두 통과`);
+  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치 모두 통과`);
 } else {
   log(`\n❌ 이상 ${total}건:`);
   for (const [k, n] of Object.entries(counts).sort((a, b) => b[1] - a[1])) log(`  ${k}: ${n}건`);
