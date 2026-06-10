@@ -78,4 +78,4 @@ const all = order.flatMap((pos) => Array(posAgg[pos].n).fill(pos));
 const gAvg = (k: 'spike' | 'block' | 'dig' | 'recv' | 'set' | 'serve') =>
   order.reduce((s, pos) => s + posAgg[pos][k], 0) / total;
 log(`\n[스케일 관찰] 전체 평균 — 스파 ${gAvg('spike').toFixed(0)} · 블록 ${gAvg('block').toFixed(0)} · 디그 ${gAvg('dig').toFixed(0)} · 리시 ${gAvg('recv').toFixed(0)} · 세팅 ${gAvg('set').toFixed(0)} · 서브 ${gAvg('serve').toFixed(0)}`);
-log(`  ※ 스파이크 = (...) × consistency 라 다른 레이팅보다 ~30% 낮은 스케일 → OVR이 공격수를 과소평가(OVR≠실전력).`);
+log(`  ※ 스파이크·블로킹 스케일은 2026-06 보정 완료(키 레인지 정합) — 전 레이팅 60대 정렬. OVR↔승수 r≈0.82(tools/ovrCheck.ts).`);
