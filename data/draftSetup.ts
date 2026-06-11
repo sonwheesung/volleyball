@@ -31,8 +31,9 @@ export function buildDraftContext(
   protectedIds: string[],
   nextSeason: number,
   ownerFx?: import('../engine/owner').OwnerFx,
+  myCash?: number,
 ): DraftContext {
-  const pre = resolvePreDraft(myTeam, resignDecisions, overrides, faSignings, aggressive, protectedIds, nextSeason, ownerFx);
+  const pre = resolvePreDraft(myTeam, resignDecisions, overrides, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash);
   const holes: Record<string, number> = {};
   for (const t of Object.keys(pre.rosters)) holes[t] = Math.max(0, ROSTER_TOTAL - pre.rosters[t].length);
   const totalHoles = Object.values(holes).reduce((a, b) => a + b, 0);

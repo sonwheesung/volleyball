@@ -58,6 +58,7 @@ export function resolveFAMarket(
   season: number,
   prestige: Record<string, number>,
   ownerFx?: OwnerFx, // 구단주 면담 보정(내 팀 오퍼에만 가산)
+  myCash?: number,   // 내 운영 자금(FINANCE) — 캡이 남아도 지갑이 비면 입찰 불가
 ): FAMarketResult {
   const snapshot = off.snapshot;
   const rosters: Record<string, string[]> = {};
@@ -74,6 +75,7 @@ export function resolveFAMarket(
   }
 
   const rng = createRng(80000 + season * 131);
+  let cashLeft = myCash ?? Number.POSITIVE_INFINITY; // 다중 영입은 잔고를 차감하며 순차 판정
   const signedByMe: string[] = [];
   const lostTo: Record<string, string> = {};
   const wanted = new Set(faSignings);
@@ -93,7 +95,8 @@ export function resolveFAMarket(
       const isMe = t === myTeam;
       if (isMe ? !wanted.has(id) : gap <= 0) continue; // 나=지명한 선수만 / AI=필요 포지션만
       const offer = isMe ? Math.round((asking * (aggressive ? AGGRESSIVE_MULT : 1)) / 100) * 100 : asking;
-      const ok = isMe ? canAfford(payroll[t], offer) : payroll[t] + offer <= LEAGUE_CAP;
+      // 내 팀: 캡 AND 운영 자금(FINANCE) — 캡은 남아도 지갑이 비면 못 뽑는다. AI: 모기업 무한 보전(캡만)
+      const ok = isMe ? canAfford(payroll[t], offer) && offer <= cashLeft : payroll[t] + offer <= LEAGUE_CAP;
       if (!ok) continue;
       const score = offerScore({
         teamOvr: ovr[t],
@@ -121,7 +124,7 @@ export function resolveFAMarket(
     rosters[win.teamId] = [...rosters[win.teamId], id];
     payroll[win.teamId] += finalSalary;
     ovr[win.teamId] = teamOverall(rosters[win.teamId].map(get).filter((q): q is Player => !!q));
-    if (win.teamId === myTeam) signedByMe.push(id);
+    if (win.teamId === myTeam) { signedByMe.push(id); cashLeft -= finalSalary; }
     else if (wanted.has(id)) lostTo[id] = win.teamId;
   }
 
@@ -228,6 +231,7 @@ export function resolvePreDraft(
   protectedIds: string[],
   nextSeason: number,
   ownerFx?: OwnerFx,
+  myCash?: number,
 ): PreDraft {
   const committed = currentRosters();
   const prevTeamOf: Record<string, string> = {};
@@ -235,7 +239,7 @@ export function resolvePreDraft(
 
   const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
   const prestige = teamPrestige(nextSeason - 1);
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash);
   return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired };
 }
 
@@ -249,6 +253,7 @@ export function faMarketPreview(
   protectedIds: string[],
   nextSeason: number,
   ownerFx?: OwnerFx,
+  myCash?: number,
 ): {
   pool: string[];
   snapshot: Record<string, Player>;
@@ -264,6 +269,6 @@ export function faMarketPreview(
   const pool = [...off.pool];
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const prestige = teamPrestige(nextSeason - 1);
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash);
   return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo };
 }

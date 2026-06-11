@@ -16,6 +16,7 @@ export default function Transactions() {
   const currentDay = useGameStore((s) => s.currentDay);
   const inSeasonTx = useGameStore((s) => s.inSeasonTx);
   const signInSeason = useGameStore((s) => s.signInSeason);
+  const cash = useGameStore((s) => s.cash); // 운영 자금(FINANCE) — 캡과 별개 게이트
 
   // 내 팀 현재 명단(날짜 인지) — 정원·캡 계산
   const myIds = rosterIdsOnDay(teamId, currentDay);
@@ -43,7 +44,11 @@ export default function Transactions() {
         text: '영입',
         onPress: () => {
           if (!signInSeason(p.id)) {
-            Alert.alert('영입 불가', full ? `로스터 정원(${ROSTER_MAX}명) 초과` : `샐러리캡 초과 — 잔여 ${formatMoney(capLeft)}`);
+            Alert.alert('영입 불가', full
+              ? `로스터 정원(${ROSTER_MAX}명) 초과`
+              : cost > cash
+                ? `운영 자금 부족 — 잔고 ${formatMoney(cash)} (캡과 별개로 구단 지갑이 비었습니다)`
+                : `샐러리캡 초과 — 잔여 ${formatMoney(capLeft)}`);
           }
         },
       },
@@ -54,9 +59,9 @@ export default function Transactions() {
     <Screen title="시즌 중 FA 영입">
       <Card>
         <Row>
-          <Muted>샐러리캡 잔여 / 정원</Muted>
+          <Muted>캡 잔여 · 운영 자금 · 정원</Muted>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
-            {formatMoney(capLeft)} · {myIds.length}/{ROSTER_MAX}명
+            {formatMoney(capLeft)} · {formatMoney(cash)} · {myIds.length}/{ROSTER_MAX}명
           </Text>
         </Row>
         <Muted style={{ fontSize: 12, marginTop: 2 }}>
@@ -87,7 +92,7 @@ export default function Transactions() {
         fas.map((p) => {
           const betrayed = isBetrayed(p.id);
           const cost = inSeasonCost(marketValue(p), betrayed);
-          const afford = payroll + cost <= LEAGUE_CAP && !full;
+          const afford = payroll + cost <= LEAGUE_CAP && !full && cost <= cash;
           return (
             <Pressable
               key={p.id}

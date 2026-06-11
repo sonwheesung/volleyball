@@ -11,8 +11,8 @@ import { currentSeasonAwards } from '../../data/awards';
 import { SEVERITY_KO } from '../../engine/injury';
 import { teamOverall } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
-import { fanBudgetFactor } from '../../engine/owner';
 import { teamFanbaseNow } from '../../data/owner';
+import { LEAGUE_CAP } from '../../engine/cap';
 import { teamScheduleEntries } from '../../engine/season';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -34,10 +34,10 @@ export default function Dashboard() {
   const coach = getTeamCoach(teamId);
   const ovr = teamOverall(basePlayers); // 전력은 전체 스쿼드 기준(경기 엔진과 일치)
   const payroll = sumPayroll(roster);   // 페이롤은 활성 계약 기준
-  const fanScore = useGameStore((s) => s.fanScore); // 팬심(직전 시즌 정산) → 예산 계수
+  const fanScore = useGameStore((s) => s.fanScore); // 팬심(직전 시즌 정산)
   const archive = useGameStore((s) => s.archive);
-  const fanFactor = fanBudgetFactor(fanScore);
-  const adjustedBudget = Math.round((team?.budget ?? 0) * fanFactor);
+  const cash = useGameStore((s) => s.cash);         // 운영 자금(FINANCE)
+  const lastFinance = useGameStore((s) => s.lastFinance);
   const fanbaseInfo = useMemo(
     () => teamFanbaseNow(teamId, currentDay, fanScore, archive),
     [teamId, currentDay, fanScore, archive, season],
@@ -106,11 +106,27 @@ export default function Dashboard() {
 
       <Card>
         <Row>
-          <Muted>팀 총연봉</Muted>
-          <Text style={{ color: payroll > adjustedBudget ? theme.bad : theme.text, fontWeight: '800' }}>
-            {formatMoney(payroll)} / {formatMoney(adjustedBudget)}
+          <Muted>팀 총연봉 / 캡</Muted>
+          <Text style={{ color: payroll > LEAGUE_CAP ? theme.bad : theme.text, fontWeight: '800' }}>
+            {formatMoney(payroll)} / {formatMoney(LEAGUE_CAP)}
           </Text>
         </Row>
+        <Row>
+          <Muted>운영 자금</Muted>
+          <Text style={{ color: cash < 20000 ? theme.bad : theme.text, fontWeight: '800' }}>
+            {formatMoney(cash)}
+            {lastFinance ? ` (전 시즌 ${lastFinance.net >= 0 ? '+' : ''}${formatMoney(lastFinance.net)})` : ''}
+          </Text>
+        </Row>
+        {lastFinance ? (
+          <Muted style={{ fontSize: 11 }}>
+            전 시즌: 모기업 {formatMoney(lastFinance.sponsor + lastFinance.bonus)}
+            {lastFinance.bonus > 0 ? ` (보너스 ${formatMoney(lastFinance.bonus)})` : ''}
+            · 관중 {formatMoney(lastFinance.gate)} (평균 {lastFinance.attendance.toLocaleString()}명)
+            · 굿즈 {formatMoney(lastFinance.merch)} · 지출 {formatMoney(lastFinance.expense)}
+            {lastFinance.bailout ? ' · ⚠ 모기업 적자 보전' : ''}
+          </Muted>
+        ) : null}
         <Row>
           <Muted>팬덤</Muted>
           <Text style={{ color: fanScore >= 60 ? theme.good : fanScore >= 35 ? theme.text : theme.bad, fontWeight: '800' }}>
@@ -120,7 +136,6 @@ export default function Dashboard() {
         <Muted style={{ fontSize: 11 }}>
           팀팬 {fanbaseInfo.teamFans.toLocaleString()} + 선수팬 {fanbaseInfo.playerFansNet.toLocaleString()}
           (겹침 제외{fanbaseInfo.top[0] ? ` · 최다 ${fanbaseInfo.top[0].name} ${fanbaseInfo.top[0].fans.toLocaleString()}명` : ''})
-          {fanFactor !== 1 ? ` · 예산 ${fanFactor > 1 ? '+' : ''}${((fanFactor - 1) * 100).toFixed(0)}%` : ''}
         </Muted>
       </Card>
 

@@ -19,7 +19,9 @@ import {
   benchAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, sinkingShipBias, BENCH_MAX,
   type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx,
 } from '../engine/owner';
-import { discontentNow } from '../data/owner';
+import { discontentNow, teamFanbaseNow } from '../data/owner';
+import { settleSeason, applyNet, type SeasonFinance } from '../engine/finance';
+import { staffSpend } from '../data/league';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
 import { computeStandings } from '../data/standings';
@@ -71,6 +73,8 @@ interface GameState {
   interviews: InterviewLog[];                  // 구단주 면담 로그(OWNER_SYSTEM) — FA 판정 입력
   benchDirectives: BenchDirective[];           // 감독 수락된 벤치 지시 — dynamics 주입
   fanScore: number;                            // 내 팀 팬심(직전 시즌 결과, 0~100)
+  cash: number;                                // 운영 자금(FINANCE) — 캡과 별개의 지갑
+  lastFinance: SeasonFinance | null;           // 직전 시즌 정산 내역(표시용)
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -127,6 +131,8 @@ const freshSave = {
   interviews: [] as InterviewLog[],
   benchDirectives: [] as BenchDirective[],
   fanScore: 50,
+  cash: 50000, // 시작 운영 예비금 5억
+  lastFinance: null as SeasonFinance | null,
 };
 
 export const useGameStore = create<GameState>()(
@@ -192,9 +198,11 @@ export const useGameStore = create<GameState>()(
         let payroll = 0;
         for (const id of rosterIds) if (!myReleased.has(id)) payroll += evolveOnDay(id, s.currentDay)?.contract.salary ?? 0;
         for (const id of mySigned) { const p = evolveOnDay(id, s.currentDay); if (p) payroll += inSeasonCost(marketValue(p), betrayedBy(id)); }
-        if (payroll + inSeasonCost(marketValue(fa), betrayedBy(faId)) > LEAGUE_CAP) return false;
+        const signCost = inSeasonCost(marketValue(fa), betrayedBy(faId));
+        if (payroll + signCost > LEAGUE_CAP) return false;
+        if (signCost > s.cash) return false; // 운영 자금 부족(FINANCE) — 캡이 남아도 지갑이 비면 못 뽑는다
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId: faId, kind: 'sign' }];
-        set({ inSeasonTx });
+        set({ inSeasonTx, cash: s.cash - signCost }); // 지갑에서 즉시 차감
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
@@ -318,7 +326,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones, interviews, benchDirectives, fanScore } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones, interviews, benchDirectives, fanScore, cash } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -373,8 +381,25 @@ export const useGameStore = create<GameState>()(
         for (const sc of seasonScandals()) if (sc.teamId === my) angerSum += 12;
         const nextFan = fanScoreOf(winRate, championId === my, angerSum);
 
+        // 0.7) 재정 정산(FINANCE) — 모기업(베이스+성적 보너스) + 직관(성적 민감) + 굿즈(선수팬).
+        //   롤오버 전, 끝난 시즌의 성적·팬덤으로 정산 → 새 잔고가 이번 오프시즌 FA 지갑이 된다.
+        const po = buildPlayoffs(season);
+        const runnerUpId = po.final ? (po.final.hiId === po.championId ? po.final.loId : po.final.hiId) : null;
+        const myRankFinal = Math.max(1, finalStandings.findIndex((r) => r.teamId === my) + 1);
+        const fb = teamFanbaseNow(my, SEASON_END_DAY, fanScore, archive);
+        const myPayroll = (finalR[my] ?? []).reduce((sum, id) => sum + (evolveOnDay(id, SEASON_END_DAY)?.contract.salary ?? 0), 0);
+        const finance = settleSeason({
+          teamId: my, rank: myRankFinal, teamCount: finalStandings.length,
+          champion: championId === my, runnerUp: runnerUpId === my,
+          winRate, fan: fanScore, fanTotal: fb.total, playerFansTotal: fb.playerFansTotal,
+          payroll: myPayroll, staff: staffSpend(my), cashBefore: cash,
+        });
+        const settled = applyNet(cash, finance.net);
+        const nextFinance: SeasonFinance = { ...finance, bailout: settled.bailout };
+
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx);
+        //    FA 입찰은 캡 AND 새 잔고(지갑) — 캡이 남아도 돈이 없으면 못 뽑는다
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
@@ -433,6 +458,13 @@ export const useGameStore = create<GameState>()(
         const retiredSet = new Set(ctx.retired);
         const nextFaPool = Object.keys(snapshot).filter((id) => !rosteredNext.has(id) && !retiredSet.has(id));
 
+        // FA 영입 지출 차감 — 내 새 명단에 합류한 타 구단 출신(드래프트·신인 제외)의 첫 해 연봉
+        let faSpend = 0;
+        for (const id of filled.rosters[my] ?? []) {
+          const prev = ctx.prevTeamOf[id];
+          if (prev && prev !== my) faSpend += snapshot[id]?.contract.salary ?? 0;
+        }
+
         commitPlayerBase(snapshot);
         commitRosters(filled.rosters);
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
@@ -441,6 +473,8 @@ export const useGameStore = create<GameState>()(
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
           benchDirectives: [],
           fanScore: nextFan,
+          cash: Math.max(0, settled.cash - faSpend),
+          lastFinance: nextFinance,
           season: nextSeason,
           currentDay: 0,
           results: {},
@@ -498,6 +532,8 @@ export const useGameStore = create<GameState>()(
         interviews: s.interviews,
         benchDirectives: s.benchDirectives,
         fanScore: s.fanScore,
+        cash: s.cash,
+        lastFinance: s.lastFinance,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);
