@@ -6,6 +6,7 @@ import { getPlayerProduction } from '../../data/production';
 import { activeRoster, payroll } from '../../data/roster';
 import { overall } from '../../engine/overall';
 import { canAfford, isFranchise, LEAGUE_CAP } from '../../engine/cap';
+import { ROSTER_MIN } from '../../engine/transactions';
 import { assignFAGrades, askingPrice, willBeFA } from '../../engine/faMarket';
 import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
 import { useGameStore } from '../../store/useGameStore';
@@ -66,7 +67,12 @@ export default function Office() {
   const onRelease = (p: Player) => {
     Alert.alert('방출', `${p.name} 방출\n연봉 ${formatMoney(p.contract.salary)} 절감 (되돌릴 수 있음)`, [
       { text: '취소', style: 'cancel' },
-      { text: '방출', style: 'destructive', onPress: () => release(p.id) },
+      {
+        text: '방출', style: 'destructive',
+        onPress: () => {
+          if (!release(p.id)) Alert.alert('방출 불가', `로스터 하한(${ROSTER_MIN}명) 밑으로는 방출할 수 없습니다.`);
+        },
+      },
     ]);
   };
 

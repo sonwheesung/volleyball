@@ -42,7 +42,11 @@ for (const n of [full.length, 8, 7, 6, 4, 2, 1, 0]) {
     const sim = simulateMatch(123, roster, opp, { home: coachInfoOf(t), away: coachInfoOf(t2) });
     log(`  ${String(n).padStart(2)}명: six유효 ${sixValid}/6(고유 ${uniq}) · 리베로 ${lu.libero ? 'O' : '×'} · 경기 ${sim.homeSets}-${sim.awaySets} ✅`);
   } catch (e) {
-    log(`  ${String(n).padStart(2)}명: ❌ 예외 — ${(e as Error).message}`);
+    const msg = (e as Error).message;
+    // 0명은 설계상 불가능 상태(부상 상한 3·방출 하한 ROSTER_MIN이 원천 차단) — 정체불명
+    // TypeError가 아니라 buildLineup의 명시적 거부 메시지면 정상.
+    if (n === 0 && msg.includes('빈 로스터')) log(`  ${String(n).padStart(2)}명: 명시적 거부 ✅ — "${msg}"`);
+    else log(`  ${String(n).padStart(2)}명: ❌ 예외 — ${msg}`);
   }
 }
 log('');

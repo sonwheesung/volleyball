@@ -101,6 +101,7 @@ function compute(): Dyn {
         const injured = injuredOn(d, teamId);
         const avail = (roster.get(teamId) ?? []).filter((id) => !injured.has(id))
           .map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p);
+        if (!avail.length) continue; // 빈 명단(가드 우회 주입 등 비정상) — 부상 굴림 생략, 전진 패스는 계속
         const lu = buildLineup(avail);
         const onCourt = lu.libero ? [...lu.six, lu.libero] : lu.six;
         let concurrent = injured.size;

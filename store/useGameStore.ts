@@ -18,7 +18,7 @@ import { buildPlayoffs } from '../data/playoffs';
 import { currentRosters, evolveOnDay } from '../data/league';
 import { marketValue } from '../engine/salary';
 import { LEAGUE_CAP } from '../engine/cap';
-import { ROSTER_MAX } from '../engine/transactions';
+import { ROSTER_MAX, canRelease } from '../engine/transactions';
 import { accrueCareer } from '../engine/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
@@ -61,7 +61,7 @@ interface GameState {
   setDay: (day: number) => void;
   recordResult: (r: MatchResult) => void;
   reSign: (playerId: string, contract: Contract) => void;
-  release: (playerId: string) => void;
+  release: (playerId: string) => boolean;
   unrelease: (playerId: string) => void;
   signInSeason: (faId: string) => boolean;
   setResign: (playerId: string, keep: boolean) => void;
@@ -124,12 +124,20 @@ export const useGameStore = create<GameState>()(
       reSign: (playerId, contract) =>
         set((s) => ({ contractOverrides: { ...s.contractOverrides, [playerId]: contract } })),
       // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용.
+      // 정원 하한(ROSTER_MIN) 게이트 — 명단이 비어 경기 불가가 되는 상태를 원천 차단.
       release: (playerId) => {
         const s = get();
-        if (s.released.includes(playerId)) return;
-        const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: s.selectedTeamId ?? '', playerId, kind: 'release' }];
+        if (s.released.includes(playerId)) return false;
+        const my = s.selectedTeamId ?? '';
+        const rosterIds = currentRosters()[my] ?? [];
+        const myReleased = new Set(s.inSeasonTx.filter((t) => t.kind === 'release' && t.teamId === my).map((t) => t.playerId));
+        const mySigned = s.inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === my).map((t) => t.playerId);
+        const size = (rosterIds.length - myReleased.size) + mySigned.length;
+        if (!canRelease(size)) return false;
+        const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId, kind: 'release' }];
         set({ released: [...s.released, playerId], inSeasonTx });
-        setTxContext(inSeasonTx, get().faPool, get().selectedTeamId ?? '');
+        setTxContext(inSeasonTx, get().faPool, my);
+        return true;
       },
       unrelease: (playerId) => {
         const s = get();

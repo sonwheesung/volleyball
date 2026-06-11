@@ -8,6 +8,12 @@ import { overall } from './overall';
 export const STARTER_NEED: Record<Position, number> = { S: 1, OH: 2, OP: 1, MB: 2, L: 1 };
 /** 시즌 중 로스터 상한(영입 버퍼 — AI 방출 없이도 긴급 수혈 가능) */
 export const ROSTER_MAX = 18;
+/** 시즌 중 로스터 하한 — 선발 필요 7명(6인+리베로) + 동시부상 상한 3 여유.
+ *  이 밑으로 방출 불가: 명단이 비어 경기 자체가 불가능해지는 상태를 원천 차단. */
+export const ROSTER_MIN = 10;
+
+/** 방출 가능 여부 — 방출 후에도 하한을 지키는가(스토어/UI 게이트용 순수 판정) */
+export const canRelease = (rosterSize: number): boolean => rosterSize - 1 >= ROSTER_MIN;
 
 export function healthyByPos(players: Player[]): Record<Position, number> {
   const c: Record<Position, number> = { S: 0, OH: 0, OP: 0, MB: 0, L: 0 };

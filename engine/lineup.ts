@@ -20,8 +20,10 @@ function bestByPos(players: Player[], pos: Position, n: number, used: Set<string
   return picked;
 }
 
-/** 로스터 → 주전 6인 로테이션 배열 + 리베로. 결손 포지션은 잔여 선수로 방어 충원. */
+/** 로스터 → 주전 6인 로테이션 배열 + 리베로. 결손 포지션은 잔여 선수로 방어 충원.
+ *  빈 로스터는 명시적 거부 — 시즌 계층(부상 상한 3·방출 하한 ROSTER_MIN)이 원천 차단해야 하는 상태. */
 export function buildLineup(players: Player[]): Lineup {
+  if (players.length === 0) throw new Error('빈 로스터 — 라인업을 구성할 수 없습니다(시즌 계층 가드 위반)');
   const used = new Set<string>();
   const S = bestByPos(players, 'S', 1, used);
   const OH = bestByPos(players, 'OH', 2, used);
