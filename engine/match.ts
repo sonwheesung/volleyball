@@ -119,14 +119,17 @@ export function simulateMatch(
   let homeSets = 0;
   let awaySets = 0;
   let setNo = 1;
+  const SET_CARRY = 16; // 세트 간 "흐름" — 직전 세트 승자의 시작 기세 우위(KOVO 세트 분포 정렬)
+  let lastSetWinner: Side | null = null;
 
   while (homeSets < 3 && awaySets < 3) {
     let h = 0;
     let a = 0;
 
-    // 세트 시작: 기세 50, 회전 0, 서브권 교대(홀수 세트 홈), 타임아웃·휴식
-    home.momentum = START_MOMENTUM;
-    away.momentum = START_MOMENTUM;
+    // 세트 시작: 기세 리셋 + 흐름 carryover — 완전 독립 세트 금지(3-0이 늘고 3-2가 줄어 현실 분포로)
+    const carry = lastSetWinner === null ? 0 : SET_CARRY * (lastSetWinner === 'home' ? 1 : -1);
+    home.momentum = START_MOMENTUM + carry;
+    away.momentum = START_MOMENTUM - carry;
     home.rotation = 0;
     away.rotation = 0;
     recover('home', homeStam, 0.5);
@@ -210,7 +213,13 @@ export function simulateMatch(
       if (opts.trace) opts.trace.push(`[${h}:${a}] 서브권 ${serving === 'home' ? '홈' : '원정'} (로테이션 H${home.rotation}/A${away.rotation})`);
       const tele = opts.events ? { events: opts.events, srng: createRng(strSeed(`${seed}:r:${rallyNo}`)), rallyNo } : undefined;
       rallyNo++;
-      const { winner, how } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch);
+      // 종반 추격(7.2 확장): 이미 1~2점차 접전 종반일 때 쫓는 팀이 이를 악문다 — 동점 도달↑(듀스의
+      // 재료, KOVO 12~18% 정렬). 접전 한정이라 고무줄 효과 최소(스윕·실력 표현은 carry가 담당).
+      const lead = h - a;
+      const chasing: Side | null =
+        Math.max(h, a) >= targetPoints(setNo) - 4 && Math.abs(lead) >= 1 && Math.abs(lead) <= 2
+          ? (lead > 0 ? 'away' : 'home') : null;
+      const { winner, how } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner, how });
@@ -253,6 +262,7 @@ export function simulateMatch(
 
     setScores.push({ home: h, away: a });
     if (h > a) homeSets++; else awaySets++;
+    lastSetWinner = h > a ? 'home' : 'away';
     setNo++;
   }
 

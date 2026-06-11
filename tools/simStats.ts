@@ -81,7 +81,7 @@ function main(): void {
   row('랠리당 공격 횟수(공방)', per(S.attacks, S.rallies), '~1.4~1.7'); // KOVO 시도(~33)/총득점(~22) 실측 비
   row('사이드아웃 성공률', pct(S.sideouts, S.rallies), '~58~68%');
   row('경기당 세트', per(totalSets, matches), '~3.5~3.9');
-  row('듀스(26점+) 세트 비율', pct(deuceSets, totalSets), '~12~18%');
+  row('듀스(26점+) 세트 비율', pct(deuceSets, totalSets), '~9~14%'); // 실측 8~9%(아마추어 700경기) — 프로는 다소 높다고 추정. 구 12~18%는 미검증 과대치(2026-06-11 정정)
   row('스트레이트(3-0)', pct(m30, matches), '~38~42%');
   row('3-1', pct(m31, matches), '~33~38%');
   row('풀세트(3-2)', pct(m32, matches), '~22~28%');

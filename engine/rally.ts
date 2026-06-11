@@ -139,10 +139,12 @@ function strength(players: Player[], pick: (r: Ratings) => number, R: Rate, t: R
 
 const teamVQ = (t: RallyTeam) => t.six.reduce((s, p) => s + p.vq, 0) / t.six.length / 100;
 
-/** 서브 타입 선택 (2장) — 서브 능력·집중력·감독 성향이 공격성을 정한다 */
-function chooseServe(p: Player, style: CoachStyle, rng: Rng): ServeT {
+/** 서브 타입 선택 (2장) — 서브 능력·집중력·감독 성향이 공격성을 정한다.
+ *  큰 고비(clutch)엔 안전 서브로 — 에이스도 범실도 줄어 종반이 길어진다(듀스의 재료) */
+function chooseServe(p: Player, style: CoachStyle, rng: Rng, clutch = false): ServeT {
   const styleAdj = style === 'attack' ? 0.12 : style === 'defense' ? -0.05 : 0;
-  const aggr = n(p.skServe) * 0.6 + 0.2 * n(p.focus) + styleAdj + serveAggrAdj(p.traits) + rng.range(-0.12, 0.12);
+  const clutchAdj = clutch ? -0.14 : 0; // 세트포인트 접전 — 코치도 선수도 "일단 넣고 보자"
+  const aggr = n(p.skServe) * 0.6 + 0.2 * n(p.focus) + styleAdj + clutchAdj + serveAggrAdj(p.traits) + rng.range(-0.12, 0.12);
   if (aggr > 0.7) return 'spike';
   if (aggr > 0.46) return 'jumpfloat';
   if (aggr > 0.2) return 'float';
@@ -255,7 +257,7 @@ export const newRallyStats = (): RallyStats => ({
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
  * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false): RallyOutcome {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false, chasing: Side | null = null): RallyOutcome {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
   const eg = (s: Side) => (s === 'home' ? edge.home : edge.away);
@@ -278,7 +280,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   // ── 서브 (2장) ── 타입별 (에이스·범실·난이도) 트레이드오프
   const sp = server(serv);
   drain(serv, sp, 1);
-  const st = chooseServe(sp, serv.style, rng);
+  const st = chooseServe(sp, serv.style, rng, clutch);
   const svPow = n(R(sp).serve) * momFactor(serv.momentum) * eg(serving) * eff(serv, sp);
   const recvSkill = strength(receivers(recv), (r) => r.receive, R, recv) * momFactor(recv.momentum) * eg(recvSide);
   // 실력차 민감도 0.09 — KOVO 정렬로 무작위성(랠리·기세)을 줄인 만큼 격차 전달을 압축(parity, 2026-06)
@@ -335,7 +337,10 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
 
   // ── 랠리 루프 (4·5·6장) ── 서브 난이도만큼 첫 리시브 품질 하락
   let att = recvSide;
-  let q = clamp(0.58 + 0.45 * (recvSkill - svPow) - SERVE_DIFF[st] + rng.range(-0.15, 0.15), 0.08, 0.98); // 민감도 압축(parity)
+  // 큰 고비(세트포인트 접전): 리시브 라인이 이를 악문다 — 사이드아웃 안정 → 듀스가 생기는 메커니즘(KOVO 듀스 12~18% 정렬)
+  // 쫓는 팀(1~2점 뒤 종반)은 한 번 더 — 동점 도달의 재료. 접전 한정이라 고무줄 최소.
+  const crunchRecv = (clutch ? 0.09 : 0) + (chasing === recvSide ? 0.06 : 0);
+  let q = clamp(0.58 + crunchRecv + 0.45 * (recvSkill - svPow) - SERVE_DIFF[st] + rng.range(-0.15, 0.15), 0.08, 0.98); // 민감도 압축(parity)
   // 리시브 범실(기타 범실군) — 난조 리시브일수록 공이 죽어 서브팀 직접 득점(에이스와 별개 기록)
   const recvErrP = clamp(0.10 - 0.13 * q, 0.005, 0.10);
   if (rng.next() < recvErrP) {
@@ -436,7 +441,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     // 좋은 패스(높은 q)면 깔끔히 결정(범실↓→사이드아웃↑), 난조면 범실 급증. 기복·VQ가 낮춤
     const balancedDiscipline = at.style === 'balanced' ? 0.012 : 0; // 밸런스형: 기본기(범실↓)
     const clutchAtk = clutch ? clutchFocusAdj(attacker.traits) * 0.1 : 0; // 큰 고비 공격 안정(클러치↓err/새가슴↑err)
-    const errP2 = clamp(0.16 - 0.09 * q + ATK_ERR[atk] - 0.05 * n(attacker.consistency) - 0.03 * n(attacker.vq) - balancedDiscipline - clutchAtk, 0.04, 0.28);
+    const chaseAtk = chasing === att ? 0.04 : 0; // 쫓는 팀은 종반 범실을 아낀다(동점 도달 메커니즘)
+    const errP2 = clamp(0.16 - 0.09 * q + ATK_ERR[atk] - 0.05 * n(attacker.consistency) - 0.03 * n(attacker.vq) - balancedDiscipline - clutchAtk - chaseAtk, 0.04, 0.28);
     const blockP = clamp(0.085 + 0.3 * (blkStr - attackPower), 0.02, 0.4); // 민감도 압축(parity)·기저로 평균 복원
     if (stats) stats.attacks++;
 
