@@ -187,14 +187,12 @@ for (let m = 0; m < nMatches; m++) {
           for (let a = 0; a < 6; a++) for (let b = a + 1; b < 6; b++) {
             const pk = `${side}-${a}|${side}-${b}`;
             const d = dist(frame[`${side}-${a}`], frame[`${side}-${b}`]);
-            const tgtA = anim[`${side}-${a}`]?.to ?? cur[`${side}-${a}`];
-            const tgtB = anim[`${side}-${b}`]?.to ?? cur[`${side}-${b}`];
-            const intended = dist(tgtA, tgtB) < 26; // 목표 자체가 가까우면 의도된 안무(A퀵 듀오·블록 벽)
-            // 지나치며 스치는 건 정상 — 둘 다 거의 정지(<0.8m/s)한 채 포개진 것만 어색
+            // separateTargets가 목표 간 MIN_SEP(20px)을 보장하므로 면제 없음 —
+            // 지나치며 스치는 것만 정상(둘 다 거의 정지(<0.8m/s)한 채 포개진 것이 위반)
             const vA = (dist(posAt(`${side}-${a}`, t - DT), frame[`${side}-${a}`]) / DT) * 1000 * M_PER_PX;
             const vB = (dist(posAt(`${side}-${b}`, t - DT), frame[`${side}-${b}`]) / DT) * 1000 * M_PER_PX;
             const parked = vA < 0.8 && vB < 0.8;
-            overlapStreak[pk] = (!intended && parked && d < 16) ? (overlapStreak[pk] ?? 0) + 1 : 0;
+            overlapStreak[pk] = (parked && d < 16) ? (overlapStreak[pk] ?? 0) + 1 : 0;
             if (overlapStreak[pk] === 4) flag('D.지속겹침', ctx(`${side}-${a}↔${side}-${b} ${d.toFixed(0)}px`), frame, ball);
           }
         }

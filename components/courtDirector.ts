@@ -5,7 +5,7 @@
 import type { Side } from '../types';
 import type { SimResult } from '../engine/simMatch';
 import {
-  lineupIdxAt, zonePx, switchedSpots, receiveFormation, fanSlots, blockerWall,
+  lineupIdxAt, zonePx, switchedSpots, receiveFormation, fanSlots, blockerWall, separateTargets,
   type Lineup, type Px,
 } from './courtLayout';
 import type { WP, Move, Lineups } from './courtPath';
@@ -48,7 +48,7 @@ export function segmentTargets(
   if ((segKind === 'fault' || segKind === 'bounce') && prevTargets && Object.keys(prevTargets).length) {
     const out: Record<string, Px> = { ...prevTargets };
     if (seg?.to.movers) for (const m of seg.to.movers) out[`${m.side}-${m.idx}`] = { x: m.x, y: m.y };
-    return out;
+    return separateTargets(out, W, H, serveOut); // 무버가 동결 선수 위에 포개지는 것 방지
   }
 
   const inPlay = isInPlay(segKind);
@@ -124,7 +124,8 @@ export function segmentTargets(
       out[`${side}-${i}`] = t;
     }
   }
-  return out;
+  // 같은 목표점에 몰린 마커(추격자 2인·커버 합류 등) 어깨 간격 분리 — 마커 포개짐 방지
+  return separateTargets(out, W, H, serveOut);
 }
 
 export interface RallyState {

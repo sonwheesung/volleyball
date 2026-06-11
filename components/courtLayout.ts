@@ -105,6 +105,43 @@ export function coverSpots(side: Side, attackX: number, n: number, W: number, H:
   return [{ x: cx(-36), y: yNear }, { x: cx(36), y: yNear }, { x: cx(0), y: yDeep }];
 }
 
+/** 같은 팀 마커 최소 간격(px) — 마커 지름 30px의 2/3, 어깨 맞댐(블록 벽 22px)은 보존 */
+export const MIN_SEP = 20;
+
+/** 같은 팀 마커 분리 — 한 점에 몰린 목표(추격자·커버·동결+무버 합성)를 어깨 간격으로 벌린다.
+ *  결정론(키 정렬 + 고정 반복 완화). 자기 진영 유지(네트 불침범)·추격 마진 내 클램프.
+ *  렌더(MatchCourt)와 감사기(auditBoard)가 segmentTargets를 통해 같은 결과를 받는다. */
+export function separateTargets(t: Record<string, Px>, W: number, H: number, serveOut: number): Record<string, Px> {
+  const out: Record<string, Px> = {};
+  for (const k of Object.keys(t)) out[k] = { x: t[k].x, y: t[k].y };
+  for (const side of ['home', 'away']) {
+    const keys = Object.keys(out).filter((k) => k.startsWith(side)).sort();
+    for (let iter = 0; iter < 3; iter++) {
+      let moved = false;
+      for (let a = 0; a < keys.length; a++) for (let b = a + 1; b < keys.length; b++) {
+        const A = out[keys[a]], B = out[keys[b]];
+        const dx = B.x - A.x, dy = B.y - A.y;
+        const d = Math.hypot(dx, dy);
+        if (d >= MIN_SEP) continue;
+        const ux = d > 0.01 ? dx / d : (a % 2 ? -1 : 1); // 완전 일치 시 좌우로(결정론)
+        const uy = d > 0.01 ? dy / d : 0;
+        const push = (MIN_SEP - d) / 2 + 0.5;
+        A.x -= ux * push; A.y -= uy * push;
+        B.x += ux * push; B.y += uy * push;
+        moved = true;
+      }
+      if (!moved) break;
+    }
+    const netY = 0.5 * H;
+    for (const k of keys) {
+      out[k].x = clampN(out[k].x, -26, W + 26);
+      const y = clampN(out[k].y, -serveOut - 22, H + serveOut + 22);
+      out[k].y = side === 'home' ? Math.max(y, netY - 6) : Math.min(y, netY + 6);
+    }
+  }
+  return out;
+}
+
 /** 서브 리시브 라인(패서 3인) — "표시 기준" 리베로(후위 MB 슬롯)·OH 우선.
  *  엔진 receivers()와 동일. 서브는 이 선수들 중 하나가 리시브 대형 자리에서 받는다. */
 export function receiveLine(lu: Lineup, rot: number): number[] {
