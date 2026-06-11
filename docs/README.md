@@ -22,6 +22,8 @@
 | [INJURY_SYSTEM](./INJURY_SYSTEM.md) | 부상(시즌 계층 격리·출전결장·만성) | `engine/injury.ts`, `data/injury.ts` |
 | [NEWS_SYSTEM](./NEWS_SYSTEM.md) | 뉴스 피드(1~4 종합 파생, 캡스톤) | `data/news.ts` |
 | [TRANSACTION_SYSTEM](./TRANSACTION_SYSTEM.md) | 시즌 중 이동(방출→FA·구멍 영입, 전 구단 AI, 날짜 인지 명단) | `engine/transactions.ts`, `data/dynamics.ts`, `app/transactions.tsx` |
+| [OWNER_SYSTEM](./OWNER_SYSTEM.md) | 구단주 레이어: 선수 면담·감독 벤치 건의·팬심(설계) | (구현 예정) `engine/owner.ts` |
+| [FORM_SYSTEM](./FORM_SYSTEM.md) | 경기감각: 결장 누적 → 체감 하락, 출전 이력 파생(설계) | (구현 예정) `engine/form.ts` |
 
 ---
 
@@ -48,6 +50,8 @@
 | **부상**(출전 결장·만성·시즌 계층 격리) | ✅ (P4) |
 | **뉴스 피드**(1~4 종합) | ✅ (P5, 캡스톤) |
 | **시즌 중 이동**(방출→FA·구멍 영입·전 구단 AI·날짜 인지 명단) | ✅ (TRANSACTION_SYSTEM) |
+| **구단주 레이어**(선수 면담·감독 벤치 건의·팬심→예산) | 📐 설계 완료(OWNER_SYSTEM) |
+| **경기감각**(결장 누적 체감 −7%, 출전 이력 파생) | 📐 설계 완료(FORM_SYSTEM) |
 | 명예의전당·영구결번 | ✅ (기존) |
 | 감독 훈련선호 커스터마이즈 / 라인업·경기 직접 개입 | ❌ 자동 완성 후 "오버라이드"로 개방 예정 |
 
