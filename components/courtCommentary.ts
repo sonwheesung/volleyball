@@ -79,6 +79,7 @@ export function commentLine(seg: CommentSeg, how: PointHow | undefined, L: Lineu
 
   if (to.kind === 'fault') {
     // 데드볼 비행 — 종결 종류별 색깔만 더한다(상세는 자막)
+    if (how === 'ace') return '네트를 맞고 뚝! 손쓸 새가 없다'; // 네트인 에이스(일반 에이스는 fault 구간이 없다)
     if (how === 'blockout') return '코트 밖으로 — 끝까지 쫓아가 보지만!';
     if (how === 'stuff') return '벽에 막혀 그대로 꽂힌다!';
     if (how === 'recvErr') return '리시브가 크게 흔들렸다!';
