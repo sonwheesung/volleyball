@@ -16,7 +16,7 @@ import { seasonInjuryDays } from '../data/injury';
 import { setTxContext, setOwnerContext, seasonTxLog, seasonScandals, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
 import {
   meetAccept, persuade, cardMatch,
-  benchAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, BENCH_MAX,
+  benchAccept, startSuggestAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, BENCH_MAX,
   type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx,
 } from '../engine/owner';
 import { discontentNow, teamFanbaseNow, buildOwnerFx } from '../data/owner';
@@ -104,6 +104,7 @@ interface GameState {
   releaseScout: (id: string) => void;
   requestInterview: (playerId: string, card: TalkCard) => { met: boolean; topic: DiscontentTopic | null; ok?: boolean };
   suggestBench: (playerId: string, reason: BenchReason) => boolean;
+  suggestStart: (playerId: string) => boolean;
   unbench: (playerId: string) => void;
   toggleTryoutWish: (playerId: string) => void;
   replaceForeign: (altId: string) => boolean;
@@ -326,6 +327,34 @@ export const useGameStore = create<GameState>()(
         const ok = benchAccept(playerId, s.season, s.currentDay, coachInfoOf(my)?.charisma ?? 50, ovrGapT, aceRank, reason);
         if (ok) {
           const benchDirectives = [...s.benchDirectives, { playerId, fromDay: s.currentDay }];
+          set({ benchDirectives });
+          setOwnerContext(benchDirectives);
+        }
+        return ok;
+      },
+      // 선발 기용 건의 — 수락 시 동포지션 최약 주전을 벤치 지시(건의 선수가 그 자리를 잇는다)
+      suggestStart: (playerId) => {
+        const s = get();
+        const my = s.selectedTeamId;
+        if (!my) return false;
+        if (s.benchDirectives.length >= BENCH_MAX) return false;
+        const benched = new Set(s.benchDirectives.map((b) => b.playerId));
+        const squad = rosterIdsOnDay(my, s.currentDay)
+          .map((id) => evolveOnDay(id, s.currentDay))
+          .filter((q): q is Player => !!q && !benched.has(q.id));
+        const target = squad.find((q) => q.id === playerId);
+        if (!target) return false;
+        const incumbent = squad
+          .filter((q) => q.position === target.position && q.id !== playerId)
+          .sort((x, y) => overall(y) - overall(x))[0];
+        if (!incumbent || overall(incumbent) <= overall(target)) {
+          // 이미 사실상 선발권 — 건의 자체가 무의미(감독: "이미 그렇게 쓰고 있습니다")
+          if (!incumbent) return false;
+        }
+        const gapT = Math.max(0, Math.min(1, 1 - (overall(incumbent) - overall(target)) / 10));
+        const ok = startSuggestAccept(playerId, s.season, s.currentDay, coachInfoOf(my)?.charisma ?? 50, gapT);
+        if (ok) {
+          const benchDirectives = [...s.benchDirectives, { playerId: incumbent.id, fromDay: s.currentDay }];
           set({ benchDirectives });
           setOwnerContext(benchDirectives);
         }

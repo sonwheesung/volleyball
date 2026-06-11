@@ -140,6 +140,22 @@ export function benchAccept(
   return rng.next() < p;
 }
 
+/** 선발 기용 건의 — "이 선수를 선발로 써주시죠". 합리(건의 선수 vs 현 주전 격차)와 소신 사이.
+ *  @param gapT 0..1 — 건의 선수가 현 주전과 비등/우위일수록 1(수긍 쉬움) */
+export function startSuggestAccept(playerId: string, season: number, day: number, charisma: number, gapT: number): boolean {
+  const p = Math.max(0.05, Math.min(0.95, 0.35 + 0.5 * gapT - 0.3 * ((charisma - 50) / 50)));
+  const rng = createRng(strSeed(`start:${playerId}:${season}:${day}`));
+  return rng.next() < p;
+}
+
+/** 빅매치 판정 — 보러 갈 이유. 상위권 맞대결이거나, 종반의 순위 직결 매치업 */
+export function isBigMatch(myRank: number, oppRank: number, dayIndex: number, seasonEndDay = 164): boolean {
+  const topClash = myRank <= 3 && oppRank <= 3;
+  const rankClose = Math.abs(myRank - oppRank) <= 1;
+  const lateSeason = dayIndex >= seasonEndDay * 0.65;
+  return topClash || (rankClose && lateSeason);
+}
+
 // ─── 인기 · 팬심 ─────────────────────────────────────────────
 
 /** 선수 인기(0..100) — 쌓인 기록에서 파생(저장 없음). 통산 생산 + 수상 + 근속 + 올해 활약 */

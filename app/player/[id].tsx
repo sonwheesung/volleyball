@@ -33,6 +33,7 @@ export default function PlayerDetail() {
   const benchDirectives = useGameStore((s) => s.benchDirectives);
   const requestInterview = useGameStore((s) => s.requestInterview);
   const suggestBench = useGameStore((s) => s.suggestBench);
+  const suggestStart = useGameStore((s) => s.suggestStart);
   const unbench = useGameStore((s) => s.unbench);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
   const prod = id ? getPlayerProduction(id, currentDay) : undefined;
@@ -183,10 +184,25 @@ export default function PlayerDetail() {
             ) : (
               <>
                 <Muted style={{ fontSize: 12 }}>
-                  주전에서 빼달라고 감독에게 건의합니다. 감독 성향에 따라 거절할 수 있고,
+                  현장 권한은 감독에게 — 구단주는 건의합니다. 감독 성향에 따라 거절할 수 있고,
                   인기 선수를 오래 벤치에 두면 팬들이 분노합니다(기사·관중·예산).
                 </Muted>
-                <Button label="벤치 건의" onPress={openBench} />
+                <View style={{ flexDirection: 'row', gap: 8 }}>
+                  <View style={{ flex: 1 }}>
+                    <Button
+                      label="선발 기용 건의"
+                      onPress={() => {
+                        const ok = suggestStart(p.id);
+                        Alert.alert(ok ? '감독 수락' : '감독 거절',
+                          ok ? `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)`
+                             : `감독: "지금 라인업이 최선입니다."\n(격차가 크거나 감독 소신이 강하면 거절합니다)`);
+                      }}
+                    />
+                  </View>
+                  <View style={{ flex: 1 }}>
+                    <Button label="벤치 건의" onPress={openBench} />
+                  </View>
+                </View>
               </>
             )}
           </Card>

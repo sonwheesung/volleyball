@@ -39,6 +39,7 @@ export interface MatchOpts {
   edge?: Edge; home?: CoachInfo; away?: CoachInfo; stats?: RallyStats; trace?: string[]; pos?: PosStats;
   homePolicy?: SubPolicy; awayPolicy?: SubPolicy; // 작전 교체 방침(미지정 시 기본)
   events?: RallyEvent[]; // 공간 텔레메트리 싱크(있으면 랠리별 독립 srng로 좌표 이벤트 누적; 승패 불변)
+  toSuggest?: { side: Side; atRally: number }[]; // 구단주 타임아웃 건의(OWNER — 감독이 수락/거절 판정)
 }
 
 const DEFAULT_COACH: CoachInfo = { style: 'balanced', charisma: 50 };
@@ -114,6 +115,7 @@ export function simulateMatch(
   };
 
   const points: PointLog[] = [];
+  const toResponses: { atRally: number; side: Side; accepted: boolean }[] = [];
   const setScores: { home: number; away: number }[] = [];
   const subUse: Record<string, number> = {}; // 교체 출전 선수 id → 출전 랠리 수(출전 성장 XP용)
   let homeSets = 0;
@@ -211,6 +213,24 @@ export function simulateMatch(
         }
       }
       if (opts.trace) opts.trace.push(`[${h}:${a}] 서브권 ${serving === 'home' ? '홈' : '원정'} (로테이션 H${home.rotation}/A${away.rotation})`);
+      // 구단주 타임아웃 건의(OWNER) — 현장 권한은 감독: 흐름이 밀릴수록 수긍, 이기는데 부르면
+      // 소신(카리스마) 거절. 수락 시 정규 타임아웃 소모(기세 수렴 동일). 독립 시드(결정론).
+      const sugg = opts.toSuggest?.find((g) => g.atRally === rallyNo);
+      if (sugg && !isSetOver(h, a, setNo)) {
+        const side = sugg.side;
+        const momDiff = teamOf(other(side)).momentum - teamOf(side).momentum; // 밀릴수록 +
+        const pAcc = Math.max(0.05, Math.min(0.95, 0.3 + 0.012 * momDiff - 0.25 * ((charismaOf(side) - 50) / 50)));
+        const accepted = timeouts[side] > 0 && createRng(strSeed(`${seed}:tosugg:${rallyNo}`)).next() < pAcc;
+        toResponses.push({ atRally: rallyNo, side, accepted });
+        if (accepted) {
+          timeouts[side]--;
+          const pull = (charismaOf(side) / 100) * 0.6;
+          home.momentum += (50 - home.momentum) * pull;
+          away.momentum += (50 - away.momentum) * pull;
+          streak = 0;
+          lastScorer = null;
+        }
+      }
       const tele = opts.events ? { events: opts.events, srng: createRng(strSeed(`${seed}:r:${rallyNo}`)), rallyNo } : undefined;
       rallyNo++;
       // 종반 추격(7.2 확장): 이미 1~2점차 접전 종반일 때 쫓는 팀이 이를 악문다 — 동점 도달↑(듀스의
@@ -266,7 +286,7 @@ export function simulateMatch(
     setNo++;
   }
 
-  return { homeSets, awaySets, setScores, points, subUse };
+  return { homeSets, awaySets, setScores, points, subUse, toResponses };
 }
 
 // momFactor 재노출(테스트/튜닝용)

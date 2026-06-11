@@ -100,9 +100,10 @@ interface Props {
   seed: number;
   mineSide: Side | null;
   onFinished?: () => void;
+  onTimeoutSuggest?: (atRally: number) => void; // 구단주 타임아웃 건의(다음 랠리 전에 감독이 판정)
 }
 
-export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Props) {
+export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onTimeoutSuggest }: Props) {
   const lineups: Lineups = useMemo(() => ({ home: buildLineup(home), away: buildLineup(away) }), [home, away]);
   const rallies = useMemo(() => reconstructRallies(sim), [sim]);
   const total = rallies.length;
@@ -332,6 +333,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       <View style={styles.controls}>
         <Ctrl label={playing ? '⏸' : '▶'} onPress={() => setPlaying((p) => !p)} />
         <Ctrl label={fast ? '2x ✓' : '2x'} on={fast} onPress={() => setFast((f) => !f)} />
+        {onTimeoutSuggest && mineSide && !finished ? (
+          <Ctrl label="🙋 타임아웃 건의" onPress={() => onTimeoutSuggest(Math.min(idx + 1, total - 1))} />
+        ) : null}
         <Ctrl label="⏭ 결과" onPress={() => { setPlaying(false); setShown(total - 1); setIdx(total); setSegIdx(0); }} />
       </View>
 

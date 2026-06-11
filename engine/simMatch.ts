@@ -6,6 +6,7 @@
 import { createRng } from './rng';
 
 import type { PointHow } from './rally';
+import type { Side } from '../types';
 
 export interface PointLog {
   setNo: number;
@@ -21,6 +22,7 @@ export interface SimResult {
   setScores: { home: number; away: number }[];
   points: PointLog[];
   subUse?: Record<string, number>; // 작전 교체로 코트에 선 선수 id → 출전 랠리 수(출전 성장 XP용)
+  toResponses?: { atRally: number; side: Side; accepted: boolean }[]; // 구단주 타임아웃 건의에 대한 감독의 답
 }
 
 function targetPoints(setNo: number): number {
