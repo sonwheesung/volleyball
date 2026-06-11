@@ -4,7 +4,8 @@ import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
-import { coachInfoOf, getEvolvedTeamPlayers, getFixture, getTeam } from '../../data/league';
+import { coachInfoOf, getFixture, getTeam } from '../../data/league';
+import { availableTeamPlayers } from '../../data/injury';
 import { teamOverall } from '../../engine/overall';
 import { simulateMatch } from '../../engine/match';
 import { useGameStore } from '../../store/useGameStore';
@@ -41,8 +42,9 @@ export default function MatchBoard() {
       dayIndex = fixture.dayIndex;
       seed = fixture.seed;
     }
-    const homeSquad = getEvolvedTeamPlayers(home.id, dayIndex);
-    const awaySquad = getEvolvedTeamPlayers(away.id, dayIndex);
+    // 그날 출전 가능 명단(부상·시즌 중 이동 반영) — 결장 선수가 코트에 보이지 않게, 순위표 리플레이와 동일 소스
+    const homeSquad = availableTeamPlayers(home.id, dayIndex);
+    const awaySquad = availableTeamPlayers(away.id, dayIndex);
     // 내 팀 경기엔 내 작전 방침 적용(관전=내 프리셋 반영). 상대는 AI 기본.
     const sim = simulateMatch(seed, homeSquad, awaySquad, {
       home: coachInfoOf(home.id), away: coachInfoOf(away.id),

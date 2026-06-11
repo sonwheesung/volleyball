@@ -31,6 +31,8 @@ export function setTxContext(tx: Tx[], faPool: string[], myTeam: string): void {
 export function getTxContext(): { playerTx: Tx[]; faPoolSeed: string[]; myTeamId: string } {
   return { playerTx: [...playerTx], faPoolSeed: [...faPoolSeed], myTeamId };
 }
+/** 거래 컨텍스트 버전 — standings/production 등 tx 인지 파생 캐시의 키 성분 */
+export const currentTxVersion = (): number => txVersion;
 
 interface Dyn { injuries: InjurySpan[]; txLog: Tx[] }
 let cache: { key: string; dyn: Dyn } | null = null;
@@ -82,8 +84,10 @@ function compute(): Dyn {
     const injured = injuredOn(d, teamId);
     let ids = (roster.get(teamId) ?? []).filter((id) => !injured.has(id));
     let healthy = healthyByPos(ids.map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p));
+    // 현재 부상 중인 FA는 영입 대상 제외 — 구멍을 메우려는 영입인데 출전 불가면 무의미
+    const injAll = new Set(injuries.filter((s) => s.from <= d && d <= s.to).map((s) => s.playerId));
     for (const pos of shortagePositions(healthy)) {
-      const pool = [...faAvail].map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p);
+      const pool = [...faAvail].filter((id) => !injAll.has(id)).map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p);
       const pick = pickSigning(pos, pool, (roster.get(teamId) ?? []).length, payrollOf(teamId), (p) => marketValue(p), LEAGUE_CAP);
       if (!pick) continue;
       applyTx({ day: d, teamId, playerId: pick.id, kind: 'sign' });

@@ -7,17 +7,18 @@ import { simulateMatch } from '../engine/match';
 import { attributeProduction, mergeProd, type ProdLine } from '../engine/production';
 import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 import { availableTeamPlayers } from './injury';
+import { currentTxVersion } from './dynamics';
 
 interface ProdRow {
   dayIndex: number;
   lines: Map<string, ProdLine>;
 }
 
-let cache: { key: number; rows: ProdRow[] } | null = null;
+let cache: { key: string; rows: ProdRow[] } | null = null;
 
-/** 전 경기 선수별 생산(결정론). baseVersion 단위 캐시 */
+/** 전 경기 선수별 생산(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영 */
 function allProdRows(): ProdRow[] {
-  const key = baseVersion();
+  const key = `${baseVersion()}:${currentTxVersion()}`;
   if (cache && cache.key === key) return cache.rows;
 
   const byDay = new Map<number, Fixture[]>();

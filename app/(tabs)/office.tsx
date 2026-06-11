@@ -193,7 +193,12 @@ export default function Office() {
                   <Text style={styles.sub}>{p.age}세 · {formatMoney(p.contract.salary)}</Text>
                 </View>
               </View>
-              <Pressable onPress={() => unrelease(p.id)} style={[styles.btn, { borderColor: theme.good }]}>
+              <Pressable
+                onPress={() => {
+                  if (!unrelease(p.id)) Alert.alert('복귀 불가', '방출 철회는 방출 당일에만 가능합니다(이후엔 FA 시장에서 재영입).');
+                }}
+                style={[styles.btn, { borderColor: theme.good }]}
+              >
                 <Text style={[styles.btnText, { color: theme.good }]}>복귀</Text>
               </Pressable>
             </View>
@@ -203,6 +208,7 @@ export default function Office() {
 
       <Muted style={{ fontSize: 12 }}>
         방출 선수는 즉시 FA가 되어 시즌 중 다른 팀이 영입할 수 있습니다(미영입 시 시즌말 정리).
+        철회(복귀)는 방출 당일에만 가능합니다.
       </Muted>
     </Screen>
   );

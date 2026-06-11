@@ -5,6 +5,7 @@
 import type { Fixture } from '../types';
 import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 import { availableTeamPlayers } from './injury';
+import { currentTxVersion } from './dynamics';
 import { simulateMatch } from '../engine/match';
 
 export interface ResultRow {
@@ -25,11 +26,11 @@ export interface Standing {
   setDiff: number;
 }
 
-let cache: { key: number; rows: ResultRow[] } | null = null;
+let cache: { key: string; rows: ResultRow[] } | null = null;
 
-/** 전 경기 결과(결정론). baseVersion 단위 캐시 */
+/** 전 경기 결과(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영 */
 function allResults(): ResultRow[] {
-  const key = baseVersion();
+  const key = `${baseVersion()}:${currentTxVersion()}`;
   if (cache && cache.key === key) return cache.rows;
 
   // 경기일별로 묶어 그 날 OVR 한 번만 계산

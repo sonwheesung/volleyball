@@ -13,7 +13,7 @@ import { leagueProduction } from '../data/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
 import { seasonInjuryDays } from '../data/injury';
-import { setTxContext, seasonTxLog, type Tx } from '../data/dynamics';
+import { setTxContext, seasonTxLog, availableFAsOnDay, type Tx } from '../data/dynamics';
 import { buildPlayoffs } from '../data/playoffs';
 import { currentRosters, evolveOnDay } from '../data/league';
 import { marketValue } from '../engine/salary';
@@ -62,7 +62,7 @@ interface GameState {
   recordResult: (r: MatchResult) => void;
   reSign: (playerId: string, contract: Contract) => void;
   release: (playerId: string) => boolean;
-  unrelease: (playerId: string) => void;
+  unrelease: (playerId: string) => boolean;
   signInSeason: (faId: string) => boolean;
   setResign: (playerId: string, keep: boolean) => void;
   signFA: (playerId: string) => void;
@@ -139,11 +139,16 @@ export const useGameStore = create<GameState>()(
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
+      // 방출 철회는 당일만 — 다음 날부터는 리플레이가 이미 그 명단으로 경기를 굴렸으므로
+      // 철회하면 과거 경기 결과가 소급 변경된다(거래 이후 AI 영입 연쇄 포함).
       unrelease: (playerId) => {
         const s = get();
+        const tx = s.inSeasonTx.find((t) => t.kind === 'release' && t.playerId === playerId);
+        if (!tx || tx.day !== s.currentDay) return false;
         const inSeasonTx = s.inSeasonTx.filter((t) => !(t.kind === 'release' && t.playerId === playerId));
         set({ released: s.released.filter((id) => id !== playerId), inSeasonTx });
         setTxContext(inSeasonTx, get().faPool, get().selectedTeamId ?? '');
+        return true;
       },
       // 시즌 중 FA 영입(캡·정원 검증). dynamics는 플레이어 거래를 검증 없이 적용하므로 여기서 게이트.
       signInSeason: (faId) => {
@@ -151,6 +156,8 @@ export const useGameStore = create<GameState>()(
         const my = s.selectedTeamId;
         if (!my) return false;
         if (s.inSeasonTx.some((t) => t.kind === 'sign' && t.playerId === faId)) return false;
+        // FA 풀 멤버십 검증 — 풀 밖 id(타 팀 소속 선수 등)를 영입하면 한 선수가 두 명단에 존재하게 된다
+        if (!availableFAsOnDay(s.currentDay).includes(faId)) return false;
         const fa = evolveOnDay(faId, s.currentDay);
         if (!fa) return false;
         const rosterIds = currentRosters()[my] ?? [];
