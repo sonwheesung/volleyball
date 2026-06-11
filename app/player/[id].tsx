@@ -1,8 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
 import { Alert, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
-import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, conditionOf } from '../../data/owner';
-import { rosterIdsOnDay } from '../../data/dynamics';
+import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, conditionOf, popularityNow } from '../../data/owner';
+import { playerFans, fanOverlapRatio } from '../../engine/owner';
+import { rosterIdsOnDay, seasonScandals, suspendedOnDay } from '../../data/dynamics';
+import { SCANDAL_KO } from '../../engine/scandal';
 import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason } from '../../engine/owner';
 import { getEvolvedPlayer, getTeam } from '../../data/league';
 import { getPlayerProduction } from '../../data/production';
@@ -109,6 +111,18 @@ export default function PlayerDetail() {
           <OvrBadge value={overall(p)} />
         </Row>
         <Muted>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
+        {suspendedOnDay(currentDay).has(p.id) ? (
+          <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13 }}>
+            🚫 출장 정지 중 — {SCANDAL_KO[seasonScandals().find((s) => s.playerId === p.id)!.kind]}
+          </Text>
+        ) : null}
+        <Row>
+          <Muted>인기 / 개인 팬</Muted>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>
+            {popularityNow(p, currentDay, archive)} · {playerFans(popularityNow(p, currentDay, archive)).toLocaleString()}명
+            <Text style={{ color: theme.muted, fontSize: 12 }}> (팀팬 겹침 {Math.round(fanOverlapRatio(p.clubTenure) * 100)}%)</Text>
+          </Text>
+        </Row>
       </Card>
 
       {p.traits && p.traits.length > 0 ? (

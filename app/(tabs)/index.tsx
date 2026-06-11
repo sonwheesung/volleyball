@@ -12,6 +12,7 @@ import { SEVERITY_KO } from '../../engine/injury';
 import { teamOverall } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
 import { fanBudgetFactor } from '../../engine/owner';
+import { teamFanbaseNow } from '../../data/owner';
 import { teamScheduleEntries } from '../../engine/season';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -34,8 +35,13 @@ export default function Dashboard() {
   const ovr = teamOverall(basePlayers); // 전력은 전체 스쿼드 기준(경기 엔진과 일치)
   const payroll = sumPayroll(roster);   // 페이롤은 활성 계약 기준
   const fanScore = useGameStore((s) => s.fanScore); // 팬심(직전 시즌 정산) → 예산 계수
+  const archive = useGameStore((s) => s.archive);
   const fanFactor = fanBudgetFactor(fanScore);
   const adjustedBudget = Math.round((team?.budget ?? 0) * fanFactor);
+  const fanbaseInfo = useMemo(
+    () => teamFanbaseNow(teamId, currentDay, fanScore, archive),
+    [teamId, currentDay, fanScore, archive, season],
+  );
 
   const record = useMemo(() => {
     const entries = teamScheduleEntries(SEASON, teamId);
@@ -55,7 +61,6 @@ export default function Dashboard() {
   const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
   const myRank = standings.findIndex((s) => s.teamId === teamId) + 1;
   const injuries = useMemo(() => teamInjuriesOn(teamId, currentDay), [teamId, currentDay, season]);
-  const archive = useGameStore((s) => s.archive);
   const milestones = useGameStore((s) => s.milestones);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const news = useMemo(
@@ -107,12 +112,16 @@ export default function Dashboard() {
           </Text>
         </Row>
         <Row>
-          <Muted>팬심</Muted>
+          <Muted>팬덤</Muted>
           <Text style={{ color: fanScore >= 60 ? theme.good : fanScore >= 35 ? theme.text : theme.bad, fontWeight: '800' }}>
-            {'♥'.repeat(Math.max(1, Math.round(fanScore / 20)))} {fanScore}
-            {fanFactor !== 1 ? `  (예산 ${fanFactor > 1 ? '+' : ''}${((fanFactor - 1) * 100).toFixed(0)}%)` : ''}
+            {fanbaseInfo.total.toLocaleString()}명 · 팬심 {fanScore}
           </Text>
         </Row>
+        <Muted style={{ fontSize: 11 }}>
+          팀팬 {fanbaseInfo.teamFans.toLocaleString()} + 선수팬 {fanbaseInfo.playerFansNet.toLocaleString()}
+          (겹침 제외{fanbaseInfo.top[0] ? ` · 최다 ${fanbaseInfo.top[0].name} ${fanbaseInfo.top[0].fans.toLocaleString()}명` : ''})
+          {fanFactor !== 1 ? ` · 예산 ${fanFactor > 1 ? '+' : ''}${((fanFactor - 1) * 100).toFixed(0)}%` : ''}
+        </Muted>
       </Card>
 
       <Card onPress={() => router.push('/(tabs)/history')}>

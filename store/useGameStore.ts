@@ -13,7 +13,7 @@ import { leagueProduction } from '../data/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
 import { seasonInjuryDays } from '../data/injury';
-import { setTxContext, setOwnerContext, seasonTxLog, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
+import { setTxContext, setOwnerContext, seasonTxLog, seasonScandals, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
 import {
   meetAccept, persuade, cardMatch, interviewEffects, refuseResignProb,
   benchAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, sinkingShipBias, BENCH_MAX,
@@ -369,6 +369,8 @@ export const useGameStore = create<GameState>()(
           const pop = popularityOf(bp.career.points, awardHistoryOf(archive, b.playerId).length, bp.clubTenure, prodAll.get(b.playerId)?.points ?? 0);
           if (pop >= 60) angerSum += benchAngerPenalty(Math.round((SEASON_END_DAY - b.fromDay) / GAME_EVERY));
         }
+        // 내 팀 선수의 사건·사고 — 팬들이 등을 돌린다
+        for (const sc of seasonScandals()) if (sc.teamId === my) angerSum += 12;
         const nextFan = fanScoreOf(winRate, championId === my, angerSum);
 
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)

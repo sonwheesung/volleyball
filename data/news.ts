@@ -6,6 +6,8 @@ import type { HofEntry, Milestone, NewsItem, SeasonAwards } from '../types';
 import { getPlayer, getTeam } from './league';
 import { seasonInjuryReport } from './injury';
 import { SEVERITY_KO } from '../engine/injury';
+import { seasonScandals } from './dynamics';
+import { SCANDAL_KO } from '../engine/scandal';
 
 const teamName = (id: string) => getTeam(id)?.name ?? id;
 const pName = (id: string) => getPlayer(id)?.name ?? id;
@@ -47,6 +49,11 @@ export function buildNewsFeed(
   for (const s of seasonInjuryReport()) {
     if (s.severity !== 'major' && s.severity !== 'season') continue;
     push(currentSeason, 'injury', `${pName(s.playerId)} ${SEVERITY_KO[s.severity]} — ${s.severity === 'season' ? '시즌아웃' : `${s.missMatches}경기 결장`}`, s.severity === 'season', s.teamId);
+  }
+
+  // 5) 사건·사고 — 아주 가끔, 리그를 뒤흔드는 헤드라인
+  for (const s of seasonScandals()) {
+    push(currentSeason, 'scandal', `[단독] ${pName(s.playerId)}(${teamName(s.teamId)}), ${SCANDAL_KO[s.kind]} — ${s.missMatches}경기 출장 정지`, true, s.teamId);
   }
 
   return items.sort((x, y) => y.season - x.season || Number(y.big) - Number(x.big));

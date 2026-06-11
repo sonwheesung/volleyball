@@ -12,7 +12,7 @@ import { resolveDraft } from '../engine/draft';
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
-import { setOwnerContext, formFactorOnDay, availableTeamPlayers } from '../data/dynamics';
+import { setOwnerContext, formFactorOnDay, availableTeamPlayers, seasonScandals } from '../data/dynamics';
 import {
   discontentOf, meetAccept, persuade, cardMatch, interviewEffects, refuseResignProb,
   benchAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, fanBudgetFactor, sinkingShipBias,
@@ -41,6 +41,7 @@ const stat = {
   fanMin: 100, fanMax: 0, fanSum: 0,
   formSamples: [] as number[], rustyCount: 0,
   rosterMin: 99, rosterMax: 0,
+  scandals: 0, scandalsMine: 0,
 };
 const titles: Record<string, number> = {};
 for (const id of ids) titles[id] = 0;
@@ -123,6 +124,11 @@ for (let s = 0; s < seasons; s++) {
     if (availableTeamPlayers(MY, 120).some((p) => p.id === b.playerId)) log(`  ⚠ s${s} 벤치 선수가 출전 명단에 있음`);
   }
 
+  // 사건·사고 빈도 관찰
+  const scs = seasonScandals();
+  stat.scandals += scs.length;
+  stat.scandalsMine += scs.filter((x) => x.teamId === MY).length;
+
   // ── 시즌 정산(store.endSeason 재현) ──
   const standings = computeStandings(Number.MAX_SAFE_INTEGER);
   standings.forEach((st, rank) => { if (st.teamId === MY) myRankSum += rank + 1; });
@@ -196,6 +202,7 @@ log(`▸ 벤치 건의: ${stat.benchTried}회 중 감독 수락 ${stat.benchAcce
 const fs2 = stat.formSamples;
 log(`▸ 경기감각: 페널티 보유 선수 ${fs2.length}명-시즌 · 평균 ${fs2.length ? (fs2.reduce((a, b) => a + b, 0) / fs2.length).toFixed(3) : '-'} · 녹슮(≤0.94) ${stat.rustyCount}`);
 log(`▸ 팬심: 평균 ${(stat.fanSum / seasons).toFixed(0)} · 범위 ${stat.fanMin}~${stat.fanMax} · 예산 계수 ${fanBudgetFactor(stat.fanMin).toFixed(3)}~${fanBudgetFactor(stat.fanMax).toFixed(3)}`);
+log(`▸ 사건·사고: 리그 전체 ${stat.scandals}건(${(stat.scandals / seasons).toFixed(2)}건/시즌) · 내 팀 ${stat.scandalsMine}건`);
 log(`▸ 내 팀 평균 순위: ${(myRankSum / seasons).toFixed(1)}위 (구단주 개입이 팀을 침몰시키지 않는가)`);
 const tArr = ids.map((id) => titles[id]);
 const won = tArr.filter((t) => t > 0).length;

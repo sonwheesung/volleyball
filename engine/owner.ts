@@ -173,5 +173,40 @@ export function fanScore(winRate: number, champion: boolean, angerSum: number): 
 /** 팬심 → 다음 시즌 예산 계수(0.92~1.08) */
 export const fanBudgetFactor = (fan: number): number => 0.92 + 0.16 * (fan / 100);
 
+// ─── 팬덤 규모(명) — 팀팬 + 선수팬 − 겹침 ────────────────────────
+// 팬심(0~100)이 "마음"이라면 팬덤은 "사람 수". 팬에는 셋이 있다:
+// 팀팬(구단을 따른다) · 선수팬(선수를 따른다 — 이적하면 떠난다) · 둘 다(겹침 — 잔류).
+// 전부 파생(저장 없음): 팀 베이스는 teamId 시드, 선수팬은 인기에서.
+
+/** 연고 팬 베이스(25,000~45,000명) — 팀 고유, 시드 결정론(도시 규모 차이) */
+export function teamFanBase(teamId: string): number {
+  return 25000 + Math.floor(createRng(strSeed(`fanbase:${teamId}`)).next() * 20000);
+}
+
+/** 선수 개인 팬 수 — 인기 비선형(스타일수록 가파르게). pop 100 ≈ 31,800명, 60 ≈ 12,500, 20 ≈ 1,750 */
+export const playerFans = (popularity: number): number => Math.round(8 * Math.pow(Math.max(0, popularity), 1.8));
+
+/** 선수팬 중 팀팬과 겹치는 비율 — 근속이 길수록(프랜차이즈) 팬덤이 구단과 융합 */
+export const fanOverlapRatio = (tenure: number): number => Math.min(0.75, 0.25 + 0.08 * Math.max(0, tenure));
+
+export interface Fanbase {
+  teamFans: number;        // 순수 팀팬(팬심이 마음을 키우고 줄인다)
+  playerFansTotal: number; // 선수팬 총합(겹침 포함)
+  playerFansNet: number;   // 선수팬 중 팀팬과 안 겹치는 순증(이적 시 떠나는 몫)
+  total: number;           // 구단 총 팬덤 = 팀팬 + 선수팬 순증
+}
+
+/** 구단 팬덤 합산 — players: 로스터의 (인기, 근속) */
+export function fanbase(teamId: string, fan: number, players: { pop: number; tenure: number }[]): Fanbase {
+  const teamFans = Math.round(teamFanBase(teamId) * (0.6 + 0.8 * Math.max(0, Math.min(100, fan)) / 100));
+  let playerFansTotal = 0, playerFansNet = 0;
+  for (const p of players) {
+    const f = playerFans(p.pop);
+    playerFansTotal += f;
+    playerFansNet += Math.round(f * (1 - fanOverlapRatio(p.tenure)));
+  }
+  return { teamFans, playerFansTotal, playerFansNet, total: teamFans + playerFansNet };
+}
+
 /** 팬심 바닥(침몰선 정서) — 전 선수 잔류 의향에 가산되는 거부 보정 */
 export const sinkingShipBias = (fan: number): number => (fan < 25 ? 0.08 : 0);

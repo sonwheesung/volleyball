@@ -172,7 +172,7 @@ export interface Milestone {
 /** 뉴스 피드 (NEWS_SYSTEM) — 자동 진행된 리그를 읽을 수 있는 기사로. 1~4 종합 파생 */
 export interface NewsItem {
   season: number;                                            // 0-based
-  kind: 'champion' | 'award' | 'milestone' | 'hof' | 'injury';
+  kind: 'champion' | 'award' | 'milestone' | 'hof' | 'injury' | 'scandal';
   headline: string;
   big: boolean;                                              // 헤드라인급
   teamId?: string;                                           // 내 팀 강조용

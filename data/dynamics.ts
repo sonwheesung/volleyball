@@ -8,6 +8,7 @@ import { injuryRisk, rollSeverity, CONCURRENT_CAP, type Severity } from '../engi
 import { buildLineup } from '../engine/lineup';
 import { healthyByPos, shortagePositions, pickSigning } from '../engine/transactions';
 import { formFactor, applyForm, FORM_WINDOW } from '../engine/form';
+import { rollScandal, SCANDAL_MISS, type ScandalKind } from '../engine/scandal';
 import type { BenchDirective } from '../engine/owner';
 import { marketValue } from '../engine/salary';
 import { LEAGUE_CAP } from '../engine/cap';
@@ -44,10 +45,15 @@ export function setOwnerContext(bench: BenchDirective[]): void {
 const benchedOn = (day: number): Set<string> =>
   new Set(benchDirectives.filter((b) => b.fromDay <= day).map((b) => b.playerId));
 
+export interface ScandalSpan {
+  playerId: string; teamId: string; kind: ScandalKind; from: number; to: number; missMatches: number;
+}
+
 interface Dyn {
   injuries: InjurySpan[]; txLog: Tx[];
   played: Map<string, number[]>;      // playerId → 출전 매치데이(오름차순) — 경기감각 재료
   teamDays: Map<string, number[]>;    // teamId → 치른 매치데이(오름차순)
+  scandals: ScandalSpan[];            // 사건·사고 출장 정지(SCANDAL — 결장은 부상과 동일 취급)
 }
 let cache: { key: string; dyn: Dyn } | null = null;
 
@@ -78,6 +84,21 @@ function compute(): Dyn {
   const txLog: Tx[] = [];
   const played = new Map<string, number[]>();   // 경기감각 재료 — 누가 어느 매치데이에 뛰었나
   const teamDays = new Map<string, number[]>();
+  // 사건·사고 — 시즌 시작 명단 기준 1회 굴림(시드 = id+나이 → 시즌당 1회). 출장 정지 구간 생성
+  const scandals: ScandalSpan[] = [];
+  for (const t of LEAGUE.teams) {
+    for (const id of roster.get(t.id) ?? []) {
+      const p = evolveOnDay(id, 0);
+      if (!p) continue;
+      const roll = rollScandal(id, p.age);
+      if (!roll) continue;
+      const from = matchdays[Math.min(matchdays.length - 1, Math.floor(roll.dayT * matchdays.length))];
+      const miss = SCANDAL_MISS[roll.kind];
+      scandals.push({ playerId: id, teamId: t.id, kind: roll.kind, from, to: from + (miss - 1) * GAME_INTERVAL, missMatches: miss });
+    }
+  }
+  const suspendedOn = (d: number): Set<string> =>
+    new Set(scandals.filter((s) => s.from <= d && d <= s.to).map((s) => s.playerId));
   // 그날까지의 출전 이력 → 감각 계수(시간 순 진행이라 순환 없음 — 오늘의 감각은 어제까지의 출전)
   const formOf = (teamId: string, playerId: string, d: number): number => {
     const days = (teamDays.get(teamId) ?? []).slice(-FORM_WINDOW);
@@ -127,7 +148,8 @@ function compute(): Dyn {
     for (const f of byDay.get(d)!) {
       for (const teamId of [f.homeTeamId, f.awayTeamId]) {
         const injured = injuredOn(d, teamId);
-        let availIds = (roster.get(teamId) ?? []).filter((id) => !injured.has(id));
+        const suspended = suspendedOn(d); // 사건·사고 출장 정지
+        let availIds = (roster.get(teamId) ?? []).filter((id) => !injured.has(id) && !suspended.has(id));
         // 벤치 지시(구단주→감독) — 단, 출전 7인 미만이 되면 그 경기 한정 무시(부상 우선, 경기 성립)
         const benched = benchedOn(d);
         if (benched.size) {
@@ -158,7 +180,7 @@ function compute(): Dyn {
     }
   }
   while (pi < pendingPlayerTx.length) applyTx(pendingPlayerTx[pi++]);
-  return { injuries, txLog, played, teamDays };
+  return { injuries, txLog, played, teamDays, scandals };
 }
 
 function dyn(): Dyn {
@@ -200,9 +222,19 @@ export function formFactorOnDay(teamId: string, playerId: string, day: number): 
   return formFactor(cnt, days.length);
 }
 
+/** 이번 시즌 사건·사고(출장 정지) 전체 — 뉴스·팬심·표시용 */
+export function seasonScandals(): ScandalSpan[] {
+  return [...dyn().scandals];
+}
+/** day 시점 출장 정지 중인 선수 */
+export function suspendedOnDay(day: number): Set<string> {
+  return new Set(dyn().scandals.filter((s) => s.from <= day && day <= s.to).map((s) => s.playerId));
+}
+
 export function availableTeamPlayers(teamId: string, day: number): Player[] {
   const injured = injuredOnDay(day);
-  let ids = rosterIdsOnDay(teamId, day).filter((id) => !injured.has(id));
+  const suspended = suspendedOnDay(day);
+  let ids = rosterIdsOnDay(teamId, day).filter((id) => !injured.has(id) && !suspended.has(id));
   // 벤치 지시 — 출전 7인 미만이 되면 그 경기 한정 무시(forward-pass와 동일 가드)
   const benched = benchedOn(day);
   if (benched.size) {

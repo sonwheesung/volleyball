@@ -3,6 +3,7 @@ import assert from 'node:assert/strict';
 import {
   discontentOf, meetAccept, persuade, cardMatch, interviewEffects, refuseResignProb,
   benchAccept, popularityOf, benchAngerPenalty, fanScore, fanBudgetFactor, sinkingShipBias,
+  teamFanBase, playerFans, fanOverlapRatio, fanbase,
 } from './owner';
 import { LEAGUE, getEvolvedTeamPlayers } from '../data/league';
 import type { FAPref, Player } from '../types';
@@ -83,4 +84,17 @@ test('인기·팬심·예산 경계', () => {
   assert.ok(Math.abs(fanBudgetFactor(0) - 0.92) < 1e-9);
   assert.equal(sinkingShipBias(60), 0);
   assert.ok(sinkingShipBias(10) > 0);
+});
+
+test('팬덤 규모: 팀팬+선수팬−겹침, 결정론·비선형·팬심 반영', () => {
+  const b = teamFanBase('t1');
+  assert.ok(b >= 25000 && b <= 45000);
+  assert.equal(teamFanBase('t1'), b); // 결정론
+  assert.ok(playerFans(100) > playerFans(60) * 2); // 스타 비선형
+  assert.equal(fanOverlapRatio(0), 0.25);
+  assert.equal(fanOverlapRatio(99), 0.75);
+  const fb = fanbase('t1', 50, [{ pop: 80, tenure: 6 }, { pop: 20, tenure: 0 }]);
+  assert.equal(fb.total, fb.teamFans + fb.playerFansNet);
+  assert.ok(fb.playerFansNet < fb.playerFansTotal); // 겹침이 빠졌다
+  assert.ok(fanbase('t1', 100, []).teamFans > fanbase('t1', 0, []).teamFans); // 팬심이 마음을 키운다
 });
