@@ -447,13 +447,13 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const tipP = clamp((0.06 + 0.28 * (blkStr - attackPower)) * (0.62 + 0.42 * n(attacker.vq)), 0.015, 0.14); // 민감도 압축(parity — 평균 빈도 유지)
     if (atk !== 'quick' && rng.next() < tipP) {
       if (stats) stats.tips++;
-      if (rng.next() < 0.035) { // 팁 범실(네트 터치·아웃) — 드묾
+      if (rng.next() < 0.09) { // 팁 범실(네트 터치·아웃) — 실측 여자배구 ~10%(2026-06-11 정렬)
         if (stats) stats.attackErrs++;
         if (trace) trace.push('    → 페인트 범실 (상대 득점)');
         if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); }
         return { winner: other(att), how: 'atkErr' };
       }
-      const tipDigP = clamp(0.5 + 0.38 * (digStr - 0.45) - 0.07 * n(attacker.vq) + defStyleBonus, 0.2, 0.85); // 민감도 압축(parity)
+      const tipDigP = clamp(0.6 + 0.38 * (digStr - 0.45) - 0.07 * n(attacker.vq) + defStyleBonus, 0.2, 0.88); // 민감도 압축(parity) · 기저 0.6 = 실측 정렬(킬 ~30%·지속 ~60%)
       if (rng.next() < tipDigP) { // 읽혔다 — 얕은 수비가 살림(좋은 전환)
         if (stats) stats.digs++;
         q = clamp(0.55 + 0.3 * (digStr - 0.45) + rng.range(-0.1, 0.1), 0.2, 0.9);
