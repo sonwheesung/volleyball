@@ -13,10 +13,26 @@ import {
   zonePx as zonePxRaw, switchedSpots as switchedSpotsRaw,
 } from './courtLayout';
 import { ballPath as ballPathRaw, SEG_DUR as DUR, markerTravelMs, type Move, type WP } from './courtPath';
+import type { PointHow } from '../engine/rally';
 import { segmentTargets, reconstructRallies, isInPlay, type RallyState } from './courtDirector';
 
 const POS_COLOR: Record<Position, string> = {
   S: '#a78bfa', OH: '#38bdf8', OP: '#f87171', MB: '#fbbf24', L: '#4ade80',
+};
+
+// 랠리 종결 자막 — 엔진이 기록한 사실(PointLog.how)을 그대로 외친다(보드가 지어내지 않음)
+const HOW_CAPTION: Record<PointHow, { txt: string; color: string }> = {
+  kill: { txt: '스파이크 득점!', color: '#f8fafc' },
+  cap: { txt: '스파이크 득점!', color: '#f8fafc' },
+  stuff: { txt: '🧱 블로킹 차단!', color: '#fbbf24' },
+  blockout: { txt: '블록 터치아웃!', color: '#fb923c' },
+  tip: { txt: '페인트!', color: '#a78bfa' },
+  ace: { txt: '서브 에이스!', color: '#38bdf8' },
+  serveErr: { txt: '서브 범실', color: '#94a3b8' },
+  recvErr: { txt: '리시브 범실', color: '#94a3b8' },
+  miscErr: { txt: '핸들링 범실', color: '#94a3b8' },
+  atkErr: { txt: '공격 범실', color: '#94a3b8' },
+  fault: { txt: '포지션 폴트', color: '#94a3b8' },
 };
 
 // 코트 영역 크기
@@ -220,6 +236,13 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       ]
     : [{ translateX: last.x }, { translateY: last.y }];
 
+  // 종결 자막 — 공이 죽은 순간(바운드)부터 다음 서브 전까지. 바운드 중엔 진행 랠리, 그 후엔 점수 반영 랠리
+  const capRally = finished ? null
+    : segKind === 'bounce' ? rallies[Math.min(idx, total - 1)]
+    : !inPlay && shown >= 0 ? rallies[Math.min(shown, total - 1)]
+    : null;
+  const caption = capRally?.how ? HOW_CAPTION[capRally.how] : null;
+
   // 공 궤적(흰 점선) — 경기 중(인플레이)에만. 끝점은 의도(aim)가 있으면 그쪽으로(터치아웃: 점선=의도 코스)
   const aimEnd = seg ? seg.to.aim ?? seg.to : null;
   const trailDots = seg && inPlay && aimEnd
@@ -263,6 +286,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
           <View key={d.key} style={[styles.trailDot, { left: d.x - 1.5, top: d.y - 1.5 }]} />
         ))}
         <Animated.View style={[styles.ball, { transform: ballTransform }]} />
+        {caption ? (
+          <View style={[styles.howBadge, { borderColor: caption.color }]}>
+            <Text style={[styles.howTxt, { color: caption.color }]}>{caption.txt}</Text>
+          </View>
+        ) : null}
         {finished ? (
           <View style={styles.finishOverlay}>
             <Text style={styles.finishTxt}>경기 종료</Text>
@@ -324,6 +352,12 @@ const styles = StyleSheet.create({
     alignItems: 'center', justifyContent: 'center',
   },
   markerTxt: { color: '#0b1220', fontSize: 11, fontWeight: '900' },
+  howBadge: {
+    position: 'absolute', top: 8, alignSelf: 'center',
+    backgroundColor: '#0b1220d9', borderWidth: 1.5, borderRadius: 14,
+    paddingHorizontal: 12, paddingVertical: 5,
+  },
+  howTxt: { fontSize: 13, fontWeight: '900' },
   ball: {
     position: 'absolute', left: 0, top: 0, width: 12, height: 12, borderRadius: 6,
     marginLeft: -6, marginTop: -6, backgroundColor: '#ffd23f',

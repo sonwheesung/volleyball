@@ -293,10 +293,13 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', movers: chasersTo(def, outPt, 2, 1.06) });
     };
     const doStuff = () => {
-      // 스터프: 벽에 막혀 자기 코트로 — 커버가 몸을 던진다(못 살림)
-      const stuffPt = { x: clampN(ap.x + rng.range(-0.08, 0.08) * W, 12, W - 12), y: (att === 'home' ? 0.78 : 0.22) * H };
+      // 스터프: 벽에 막혀 수직으로 꺾임 — 공격수 바로 뒤(네트~3m)에 꽂힌다. 깊게 날아가면
+      // 랠리 공처럼 읽히므로 낙하점은 짧게, 리바운드는 천천히·크게(블로킹임이 보이게).
+      // 커버 2명이 낙하점으로 몸을 던지지만 못 살린다. 벽은 데드볼 동결로 네트 앞에 서 있다.
+      const dropY = att === 'home' ? (0.56 + rng.next() * 0.08) * H : (0.36 + rng.next() * 0.08) * H;
+      const stuffPt = { x: clampN(blockNet.x + rng.range(-0.05, 0.05) * W, 16, W - 16), y: dropY };
       wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', movers: chasersTo(att, stuffPt, 2, 0.97) });
+      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', dur: 430, arc: 0.07 * H, scale: 1.22, movers: chasersTo(att, stuffPt, 2, 0.9) });
     };
     const doTip = () => {
       // 페인트: 풀스윙 페이크(블로커 점프) → 손끝으로 살짝 — 블록 뒤·수비 앞 빈 공간에 톡.
