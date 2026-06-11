@@ -16,6 +16,7 @@ import { simulateMatch } from '../engine/match';
 import { buildLineup } from '../engine/lineup';
 import { ballPath, SEG_DUR, markerTravelMs, type WP, type Lineups } from '../components/courtPath';
 import { segmentTargets, reconstructRallies, type RallyState } from '../components/courtDirector';
+import { commentLine } from '../components/courtCommentary';
 import type { Side } from '../types';
 
 const W = 360, H = 500, SERVE_OUT = 22;
@@ -74,7 +75,7 @@ function ascii(frame: Record<Key, Pt>, ball: Pt | undefined, L: Lineups): string
 // ── 메인 재생 루프 ──
 resetLeagueBase();
 const teams = LEAGUE.teams.map((t) => t.id);
-let totalRallies = 0, totalFrames = 0;
+let totalRallies = 0, totalFrames = 0, commentTotal = 0;
 
 for (let m = 0; m < nMatches; m++) {
   const hId = teams[m % teams.length];
@@ -118,9 +119,11 @@ for (let m = 0; m < nMatches; m++) {
     }
     const ctx = (extra: string) => `경기${m + 1}/랠리${ri + 1}(${r.setNo}세트 ${r.home}:${r.away}) ${extra}`;
 
+    let commentCount = 0; // K) 중계 텍스트 커버리지 — 랠리당 최소 1줄
     for (let k = 0; k + 1 < path.length; k++) {
       const seg = { from: path[k], to: path[k + 1] };
       const to: WP = seg.to;
+      if (commentLine(seg, r.how, L, stage)) commentCount++;
       const segDur = (to.dur ?? SEG_DUR[to.kind]) * SPEED;
       const targets = segmentTargets(seg, stage, L, W, H, SERVE_OUT, lastTargets);
 
@@ -262,6 +265,9 @@ for (let m = 0; m < nMatches; m++) {
         }
       }
     }
+    // K) 중계 커버리지 — 이름이 들어간 사실 라인이 한 줄도 없는 랠리는 "조용한 중계"
+    commentTotal += commentCount;
+    if (commentCount === 0) flag('K.중계공백', ctx('중계 라인 0줄'));
   }
 }
 
@@ -278,6 +284,7 @@ if (holeSamples.length) {
   const sorted = holeSamples.slice().sort((a, b) => a - b);
   log(`수비 빈 공간: 중앙값 ${sorted[Math.floor(sorted.length / 2)].toFixed(1)}m · p95 ${sorted[Math.floor(sorted.length * 0.95)].toFixed(1)}m · 최대 ${sorted[sorted.length - 1].toFixed(1)}m`);
 }
+log(`중계 텍스트: 랠리당 평균 ${(commentTotal / Math.max(1, totalRallies)).toFixed(1)}줄`);
 const total = Object.values(counts).reduce((a, b) => a + b, 0);
 if (total === 0) {
   log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치 모두 통과`);

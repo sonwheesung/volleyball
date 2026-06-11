@@ -15,6 +15,7 @@ import {
 import { ballPath as ballPathRaw, SEG_DUR as DUR, markerTravelMs, type Move, type WP } from './courtPath';
 import type { PointHow } from '../engine/rally';
 import { segmentTargets, reconstructRallies, isInPlay, type RallyState } from './courtDirector';
+import { commentLine } from './courtCommentary';
 
 const POS_COLOR: Record<Position, string> = {
   S: '#a78bfa', OH: '#38bdf8', OP: '#f87171', MB: '#fbbf24', L: '#4ade80',
@@ -111,6 +112,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const [shown, setShown] = useState(-1); // 점수에 반영된 마지막 랠리
   const [playing, setPlaying] = useState(true);
   const [fast, setFast] = useState(false);
+  const [feed, setFeed] = useState<string[]>([]); // 중계 텍스트(최근 라인 유지)
 
   const prog = useRef(new Animated.Value(0)).current; // 현재 구간 진행도 0..1
   const posRefs = useRef<Record<string, Animated.ValueXY>>({}); // 마커별 위치(선수 단위)
@@ -135,6 +137,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     if (segIdx >= segCount) {
       // 득점 → 점수 반영 후 잠시 멈춤(공은 낙구 지점에 정지) → 다음 랠리
       setShown(idx);
+      const r = rallies[idx];
+      if (r?.how) {
+        const c = HOW_CAPTION[r.how];
+        setFeed((f) => [...f, `▶ ${c.txt} — ${r.scorer === 'home' ? '홈' : '원정'} 득점 (${r.home}:${r.away})`].slice(-30));
+      }
       const t = setTimeout(() => { setIdx((i) => i + 1); setSegIdx(0); }, fast ? 200 : 650);
       return () => clearTimeout(t);
     }
@@ -148,7 +155,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     });
     anim.start(({ finished: done }) => { if (done) setSegIdx((s) => s + 1); });
     return () => anim.stop();
-  }, [idx, segIdx, playing, fast, finished, segCount, path, prog]);
+  }, [idx, segIdx, playing, fast, finished, segCount, path, prog, rallies]);
 
   useEffect(() => {
     if (finished && !finishedOnce.current) {
@@ -236,6 +243,17 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       ]
     : [{ translateX: last.x }, { translateY: last.y }];
 
+  // 중계 텍스트 — 구간 시작마다 사실 기반 한 줄(서브/리시브/토스/스파이크 + 행위자 이름)
+  const segSig = seg ? `${idx}:${segIdx}` : '';
+  useEffect(() => {
+    if (!seg) return;
+    const line = commentLine(seg, rallies[Math.min(idx, total - 1)]?.how, lineups, {
+      serving: stage.serving, homeRot: stage.homeRot, awayRot: stage.awayRot,
+    });
+    if (line) setFeed((f) => (f[f.length - 1] === line ? f : [...f, line].slice(-30)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segSig]);
+
   // 종결 자막 — 공이 죽은 순간(바운드)부터 다음 서브 전까지. 바운드 중엔 진행 랠리, 그 후엔 점수 반영 랠리
   const capRally = finished ? null
     : segKind === 'bounce' ? rallies[Math.min(idx, total - 1)]
@@ -299,6 +317,17 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       </View>
       </View>
 
+      {/* 중계 텍스트 */}
+      {feed.length > 0 ? (
+        <View style={styles.feedBox}>
+          {feed.slice(-4).map((t, i, arr) => (
+            <Text key={`${feed.length}-${i}`} numberOfLines={1} style={[styles.feedLine, i === arr.length - 1 && styles.feedLast]}>
+              {t}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
       {/* 플레이 컨트롤 */}
       <View style={styles.controls}>
         <Ctrl label={playing ? '⏸' : '▶'} onPress={() => setPlaying((p) => !p)} />
@@ -358,6 +387,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12, paddingVertical: 5,
   },
   howTxt: { fontSize: 13, fontWeight: '900' },
+  feedBox: { backgroundColor: theme.card, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, gap: 1 },
+  feedLine: { color: theme.muted, fontSize: 11 },
+  feedLast: { color: theme.text, fontSize: 12.5, fontWeight: '700' },
   ball: {
     position: 'absolute', left: 0, top: 0, width: 12, height: 12, borderRadius: 6,
     marginLeft: -6, marginTop: -6, backgroundColor: '#ffd23f',
