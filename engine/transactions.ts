@@ -15,6 +15,13 @@ export const ROSTER_MIN = 10;
 /** 방출 가능 여부 — 방출 후에도 하한을 지키는가(스토어/UI 게이트용 순수 판정) */
 export const canRelease = (rosterSize: number): boolean => rosterSize - 1 >= ROSTER_MIN;
 
+/** 배신 웃돈 — 같은 시즌 내 "내가 방출한 선수"를 다시 부르는 값.
+ *  방출당한 선수는 배신감이 남는다: 당일 철회(unrelease)는 무료(실수 정정)지만,
+ *  그 이후 FA 시장 재영입은 몸값 ×1.5 — 갈 곳 없으면 돌아오긴 하는데, 마음 달랠 돈은 받는다. */
+export const BETRAYAL_PREMIUM = 1.5;
+export const inSeasonCost = (market: number, betrayed: boolean): number =>
+  Math.round(market * (betrayed ? BETRAYAL_PREMIUM : 1));
+
 export function healthyByPos(players: Player[]): Record<Position, number> {
   const c: Record<Position, number> = { S: 0, OH: 0, OP: 0, MB: 0, L: 0 };
   for (const p of players) c[p.position]++;

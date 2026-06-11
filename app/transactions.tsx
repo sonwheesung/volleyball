@@ -5,7 +5,7 @@ import { evolveOnDay } from '../data/league';
 import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
 import { overall } from '../engine/overall';
 import { LEAGUE_CAP } from '../engine/cap';
-import { ROSTER_MAX } from '../engine/transactions';
+import { ROSTER_MAX, inSeasonCost } from '../engine/transactions';
 import { formatMoney, marketValue } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
@@ -31,9 +31,13 @@ export default function Transactions() {
 
   const signedThis = inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === teamId);
 
+  // 내가 이번 시즌 방출한 선수 — 재영입엔 배신 웃돈 ×1.5
+  const isBetrayed = (id: string) => inSeasonTx.some((t) => t.kind === 'release' && t.teamId === teamId && t.playerId === id);
+
   const onSign = (p: Player) => {
-    const cost = marketValue(p);
-    Alert.alert('FA 영입', `${p.name} (${p.position})\n연봉 ${formatMoney(cost)} · 즉시 합류`, [
+    const betrayed = isBetrayed(p.id);
+    const cost = inSeasonCost(marketValue(p), betrayed);
+    Alert.alert('FA 영입', `${p.name} (${p.position})\n연봉 ${formatMoney(cost)}${betrayed ? ' (방출 재영입 웃돈 ×1.5)' : ''} · 즉시 합류`, [
       { text: '취소', style: 'cancel' },
       {
         text: '영입',
@@ -81,7 +85,8 @@ export default function Transactions() {
         <Card><Muted>현재 영입 가능한 FA가 없습니다. (방출 선수·오프시즌 미계약자가 풀에 쌓입니다.)</Muted></Card>
       ) : (
         fas.map((p) => {
-          const cost = marketValue(p);
+          const betrayed = isBetrayed(p.id);
+          const cost = inSeasonCost(marketValue(p), betrayed);
           const afford = payroll + cost <= LEAGUE_CAP && !full;
           return (
             <Pressable
@@ -92,7 +97,9 @@ export default function Transactions() {
               <PosTag pos={p.position} />
               <View style={{ flex: 1 }}>
                 <Text style={styles.name}>{p.name}</Text>
-                <Text style={styles.sub}>{p.age}세 · {formatMoney(cost)}</Text>
+                <Text style={styles.sub}>
+                  {p.age}세 · {formatMoney(cost)}{betrayed ? ' · 웃돈 ×1.5 (우리가 방출)' : ''}
+                </Text>
               </View>
               <OvrBadge value={overall(p)} />
               <Pressable

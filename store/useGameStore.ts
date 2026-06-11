@@ -18,7 +18,7 @@ import { buildPlayoffs } from '../data/playoffs';
 import { currentRosters, evolveOnDay } from '../data/league';
 import { marketValue } from '../engine/salary';
 import { LEAGUE_CAP } from '../engine/cap';
-import { ROSTER_MAX, canRelease } from '../engine/transactions';
+import { ROSTER_MAX, canRelease, inSeasonCost } from '../engine/transactions';
 import { accrueCareer } from '../engine/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
@@ -165,10 +165,12 @@ export const useGameStore = create<GameState>()(
         const mySigned = s.inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === my).map((t) => t.playerId);
         const size = (rosterIds.length - myReleased.size) + mySigned.length;
         if (size >= ROSTER_MAX) return false;
+        // 배신 웃돈: 내가 이번 시즌 방출한 선수의 재영입은 몸값 ×1.5 (당일 철회는 unrelease로 무료)
+        const betrayedBy = (id: string) => s.inSeasonTx.some((t) => t.kind === 'release' && t.teamId === my && t.playerId === id);
         let payroll = 0;
         for (const id of rosterIds) if (!myReleased.has(id)) payroll += evolveOnDay(id, s.currentDay)?.contract.salary ?? 0;
-        for (const id of mySigned) { const p = evolveOnDay(id, s.currentDay); if (p) payroll += marketValue(p); }
-        if (payroll + marketValue(fa) > LEAGUE_CAP) return false;
+        for (const id of mySigned) { const p = evolveOnDay(id, s.currentDay); if (p) payroll += inSeasonCost(marketValue(p), betrayedBy(id)); }
+        if (payroll + inSeasonCost(marketValue(fa), betrayedBy(faId)) > LEAGUE_CAP) return false;
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId: faId, kind: 'sign' }];
         set({ inSeasonTx });
         setTxContext(inSeasonTx, get().faPool, my);
