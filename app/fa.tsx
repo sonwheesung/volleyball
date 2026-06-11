@@ -4,6 +4,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { getTeam } from '../data/league';
 import { faMarketPreview } from '../data/offseason';
+import { buildOwnerFx } from '../data/owner';
 import { LEAGUE_CAP } from '../engine/cap';
 import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
 import { assignFAGrades, askingPrice } from '../engine/faMarket';
@@ -30,11 +31,16 @@ export default function FACenter() {
   const unsignFA = useGameStore((s) => s.unsignFA);
   const setAggressive = useGameStore((s) => s.setAggressive);
   const toggleProtect = useGameStore((s) => s.toggleProtect);
+  const interviews = useGameStore((s) => s.interviews);
+  const fanScore = useGameStore((s) => s.fanScore);
+  const cash = useGameStore((s) => s.cash);
 
-  // 경쟁 결과 미리보기(결정론) — 영입 성공/실패 예상
+  // 경쟁 결과 미리보기(결정론) — 영입 성공/실패 예상.
+  // endSeason과 동일한 ownerFx(면담·불만 거부)+운영 자금을 넣어야 미리보기=결과가 보장된다
   const pv = useMemo(
-    () => faMarketPreview(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1),
-    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season],
+    () => faMarketPreview(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
+      buildOwnerFx(interviews, season, my, fanScore), cash),
+    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, cash],
   );
   const snap = pv.snapshot;
 

@@ -15,11 +15,11 @@ import { detectSeasonMilestones } from '../data/milestones';
 import { seasonInjuryDays } from '../data/injury';
 import { setTxContext, setOwnerContext, seasonTxLog, seasonScandals, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
 import {
-  meetAccept, persuade, cardMatch, interviewEffects, refuseResignProb,
-  benchAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, sinkingShipBias, BENCH_MAX,
+  meetAccept, persuade, cardMatch,
+  benchAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, BENCH_MAX,
   type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx,
 } from '../engine/owner';
-import { discontentNow, teamFanbaseNow } from '../data/owner';
+import { discontentNow, teamFanbaseNow, buildOwnerFx } from '../data/owner';
 import { settleSeason, applyNet, type SeasonFinance } from '../engine/finance';
 import { staffSpend } from '../data/league';
 import { overall } from '../engine/overall';
@@ -355,16 +355,8 @@ export const useGameStore = create<GameState>()(
           : [...archive, { season, championId, awards: seasonAwards }];
 
         // 0.6) 구단주 레이어(OWNER_SYSTEM) — 면담 결과·불만·팬심 → FA 거부/오퍼 보정 + 시즌 팬심 정산
-        const fx = interviewEffects(interviews, season);
-        const refuseProb: Record<string, number> = {};
-        for (const id of finalR[my] ?? []) {
-          const p = evolveOnDay(id, SEASON_END_DAY);
-          if (!p || p.contract.remaining > 1) continue; // 이번 오프시즌 만료자만 거부권 행사
-          const { topic, weight } = discontentNow(p, my, SEASON_END_DAY);
-          const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore);
-          if (prob > 0) refuseProb[id] = Math.min(0.95, prob);
-        }
-        const ownerFx: OwnerFx = { refuseProb, offerBias: fx.offerBias };
+        //   FA/드래프트 센터 미리보기와 같은 빌더(buildOwnerFx) — 미리보기=결과 보장
+        const ownerFx: OwnerFx = buildOwnerFx(interviews, season, my, fanScore);
         // 팬심 정산: 성적 + 인기 스타 벤치 분노 → 다음 시즌 팬심(예산·침몰선 정서 입력)
         const finalStandings = computeStandings(Number.MAX_SAFE_INTEGER);
         const myRow = finalStandings.find((r) => r.teamId === my);

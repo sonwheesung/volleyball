@@ -2,7 +2,11 @@
 // 불만은 저장하지 않는다: FA 성향과 현실(순위·출전·연봉)의 불일치에서 그때그때 파생.
 
 import type { Player, SeasonAwards } from '../types';
-import { discontentOf, popularityOf, fanbase, playerFans, fanOverlapRatio, type DiscontentTopic, type Fanbase } from '../engine/owner';
+import {
+  discontentOf, popularityOf, fanbase, playerFans, fanOverlapRatio,
+  interviewEffects, refuseResignProb, sinkingShipBias,
+  type DiscontentTopic, type Fanbase, type InterviewLog, type OwnerFx,
+} from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
 import { marketValue } from '../engine/salary';
 import { formFactor, formGrade } from '../engine/form';
@@ -34,6 +38,20 @@ export function discontentNow(p: Player, myTeamId: string, day: number): { topic
   const w = prefWeightsOf(p);
   const weight = topic === 'win' ? w.win : topic === 'minutes' ? w.play : topic === 'money' ? w.money : w.home;
   return { topic, weight };
+}
+
+/** 시즌말 FA 판정용 ownerFx 조립 — store.endSeason과 FA/드래프트 센터 미리보기가 공유(미리보기=결과) */
+export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamId: string, fanScore: number): OwnerFx {
+  const fx = interviewEffects(interviews, season);
+  const refuseProb: Record<string, number> = {};
+  for (const id of rosterIdsOnDay(myTeamId, SEASON_END_DAY)) {
+    const p = evolveOnDay(id, SEASON_END_DAY);
+    if (!p || p.contract.remaining > 1) continue; // 이번 오프시즌 만료자만 거부권 행사
+    const { topic, weight } = discontentNow(p, myTeamId, SEASON_END_DAY);
+    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore);
+    if (prob > 0) refuseProb[id] = Math.min(0.95, prob);
+  }
+  return { refuseProb, offerBias: fx.offerBias };
 }
 
 /** 면담 장면에서 선수가 하는 말 */

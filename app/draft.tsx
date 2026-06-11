@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
+import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal } from '../data/league';
 import { computeStandings } from '../data/standings';
 import { resolveDraft } from '../engine/draft';
@@ -28,9 +29,14 @@ export default function DraftCenter() {
   const endSeason = useGameStore((s) => s.endSeason);
 
   const faAggressive = useGameStore((s) => s.faAggressive);
+  const interviews = useGameStore((s) => s.interviews);
+  const fanScore = useGameStore((s) => s.fanScore);
+  const cash = useGameStore((s) => s.cash);
+  // endSeason과 동일한 ownerFx+자금 — 미리보기=결과 보장(면담 거부·자금 게이트가 명단·순번에 반영)
   const ctx = useMemo(
-    () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1),
-    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season],
+    () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
+      buildOwnerFx(interviews, season, my, fanScore), cash),
+    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, cash],
   );
   const standings = useMemo(() => computeStandings(Number.MAX_SAFE_INTEGER), [season]);
 
