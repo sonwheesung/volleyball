@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
-import { getTeam, teamScoutReveal } from '../data/league';
+import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
 import { overall } from '../engine/overall';
 import { FOREIGN_SALARY } from '../engine/foreign';
 import { formatMoney } from '../engine/salary';
@@ -28,12 +28,19 @@ export default function Tryout() {
   const cash = useGameStore((s) => s.cash);
   const tryoutWish = useGameStore((s) => s.tryoutWish);
   const toggleTryoutWish = useGameStore((s) => s.toggleTryoutWish);
+  const keepForeign = useGameStore((s) => s.keepForeign);
+  const setKeepForeign = useGameStore((s) => s.setKeepForeign);
+  const currentDay = useGameStore((s) => s.currentDay);
 
   // endSeason과 같은 체인 — 미리보기=결과
   const ctx = useMemo(
     () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
-      buildOwnerFx(interviews, season, my, fanScore), cash, tryoutWish),
-    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, cash, tryoutWish],
+      buildOwnerFx(interviews, season, my, fanScore), cash, tryoutWish, keepForeign),
+    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, cash, tryoutWish, keepForeign],
+  );
+  const myForeign = useMemo(
+    () => getEvolvedTeamPlayers(my, currentDay).find((p) => p.isForeign),
+    [my, currentDay, season],
   );
   const tryout = ctx.tryout;
   const snap = ctx.snapshot;
@@ -72,6 +79,29 @@ export default function Tryout() {
           </Text>
         </Row>
       </Card>
+
+      {myForeign ? (
+        <>
+          <Title>재계약 우선권 — {myForeign.name} ({myForeign.age}세 · OVR {overall(myForeign)})</Title>
+          <Card>
+            <Muted style={{ fontSize: 12 }}>
+              드래프트 없이 현 외인과 갱신할 수 있습니다(1년 단위 — 잘하는 용병은 수 시즌 함께).
+              풀로 보내면 다른 팀이 지명할 수 있습니다.
+            </Muted>
+            <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+              {([['자동(추천)', null], ['재계약', true], ['풀로 보냄', false]] as const).map(([label, v]) => (
+                <Pressable
+                  key={label}
+                  onPress={() => setKeepForeign(v)}
+                  style={[styles.chip, keepForeign === v && styles.chipOn]}
+                >
+                  <Text style={[styles.chipTxt, keepForeign === v && { color: theme.bg }]}>{label}</Text>
+                </Pressable>
+              ))}
+            </View>
+          </Card>
+        </>
+      ) : null}
 
       <Title>후보 ({pool.length}명) — ★ 위시 토글</Title>
       {pool
@@ -116,4 +146,7 @@ const styles = StyleSheet.create({
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   tagReturn: { color: '#38bdf8', fontSize: 11, fontWeight: '700' },
   tagWish: { color: theme.warn, fontSize: 12, fontWeight: '900' },
+  chip: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 12 },
+  chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
+  chipTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },
 });

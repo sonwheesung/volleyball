@@ -79,6 +79,7 @@ interface GameState {
   tryoutWish: string[];                        // 외국인 트라이아웃 위시리스트(우선순위)
   foreignAltPool: string[];                    // 시즌 중 교체 대체 외인 후보
   foreignSubUsed: boolean;                     // 외인 교체는 시즌당 1회
+  keepForeign: boolean | null;                 // 외인 재계약 결정(null=자동 — AI 판단)
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -106,6 +107,7 @@ interface GameState {
   unbench: (playerId: string) => void;
   toggleTryoutWish: (playerId: string) => void;
   replaceForeign: (altId: string) => boolean;
+  setKeepForeign: (keep: boolean | null) => void;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -142,6 +144,7 @@ const freshSave = {
   tryoutWish: [] as string[],
   foreignAltPool: [] as string[],
   foreignSubUsed: false,
+  keepForeign: null as boolean | null,
 };
 
 export const useGameStore = create<GameState>()(
@@ -333,6 +336,7 @@ export const useGameStore = create<GameState>()(
         set({ benchDirectives });
         setOwnerContext(benchDirectives);
       },
+      setKeepForeign: (keep) => set({ keepForeign: keep }),
       toggleTryoutWish: (playerId) =>
         set((s) => ({ tryoutWish: s.tryoutWish.includes(playerId) ? s.tryoutWish.filter((id) => id !== playerId) : [...s.tryoutWish, playerId] })),
       // 시즌 중 외인 교체(시즌당 1회) — 퇴출 외인은 리그를 떠나고, 대체 외인 연봉은 지갑에서(이중 부담)
@@ -353,7 +357,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -418,7 +422,7 @@ export const useGameStore = create<GameState>()(
 
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
         //    FA 입찰은 캡 AND 새 잔고(지갑) — 캡이 남아도 돈이 없으면 못 뽑는다
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash, tryoutWish);
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash, tryoutWish, keepForeign);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
@@ -497,6 +501,7 @@ export const useGameStore = create<GameState>()(
           tryoutWish: [],
           foreignAltPool: ctx.tryout.altPoolIds,
           foreignSubUsed: false,
+          keepForeign: null,
           season: nextSeason,
           currentDay: 0,
           results: {},
@@ -559,6 +564,7 @@ export const useGameStore = create<GameState>()(
         tryoutWish: s.tryoutWish,
         foreignAltPool: s.foreignAltPool,
         foreignSubUsed: s.foreignSubUsed,
+        keepForeign: s.keepForeign,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);

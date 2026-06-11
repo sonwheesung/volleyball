@@ -4,7 +4,7 @@
 import type { Player, Position } from '../types';
 import { createRng, strSeed } from '../engine/rng';
 import { overall } from '../engine/overall';
-import { FOREIGN_SALARY, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, type TryoutPicks } from '../engine/foreign';
+import { FOREIGN_SALARY, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, aiKeepsForeign, type TryoutPicks } from '../engine/foreign';
 import { makePlayer } from './seed';
 
 const clampS = (v: number) => Math.max(20, Math.min(96, Math.round(v)));
@@ -48,6 +48,8 @@ export function runTryout(
   nextSeason: number,
   myTeam: string,
   myWish: string[],
+  prevForeignOf: Record<string, string>, // 전 시즌 팀별 외인(재계약 우선권의 주체)
+  myKeep: boolean | null = null,         // 내 재계약 결정(null=자동 — AI 판단과 동일)
 ): TryoutOutcome {
   // 국내 평균 = 현재 로스터(외인 제외) OVR 평균 — 외인 바닥의 기준선
   const domestic = Object.values(rosters).flat()
@@ -55,16 +57,33 @@ export function runTryout(
   const domesticAvg = domestic.length
     ? domestic.reduce((s, p) => s + overall(p), 0) / domestic.length : 65;
 
+  // 재계약 우선권(실제 KOVO) — 드래프트 전에 구단이 자기 외인과 갱신. 잘하는 용병은 수 시즌 잔류
+  const kept: Record<string, string> = {};
+  const keptSet = new Set<string>();
+  for (const [teamId, pid] of Object.entries(prevForeignOf)) {
+    const p = snapshot[pid];
+    if (!p || !returningForeign.includes(pid)) continue; // 은퇴/이탈자는 갱신 불가
+    const wants = teamId === myTeam && myKeep !== null ? myKeep : aiKeepsForeign(p, domesticAvg);
+    if (!wants) continue;
+    kept[teamId] = pid;
+    keptSet.add(pid);
+    snapshot[pid] = { ...p, contract: { salary: FOREIGN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } };
+    rosters[teamId] = [...(rosters[teamId] ?? []), pid];
+  }
+
   const fresh = generateForeignPool(nextSeason, domesticAvg);
   for (const p of fresh) snapshot[p.id] = p;
-  const poolIds = [...fresh.map((p) => p.id), ...returningForeign.filter((id) => snapshot[id])];
+  const poolIds = [...fresh.map((p) => p.id), ...returningForeign.filter((id) => snapshot[id] && !keptSet.has(id))];
   const pool = poolIds.map((id) => snapshot[id]).filter((p): p is Player => !!p);
 
-  const order = tryoutOrder(nextSeason, Object.keys(rosters));
+  // 재계약한 팀은 드래프트를 건너뛴다(팀당 1명)
+  const order = tryoutOrder(nextSeason, Object.keys(rosters)).filter((t) => !kept[t]);
   const res = resolveTryout(order, pool, myTeam, myWish, nextSeason);
+  for (const [t, pid] of Object.entries(kept)) res.picks[t] = pid; // 결과 합치기(표시용)
 
-  // 지명자 → 1년 계약으로 로스터 합류
+  // 지명자 → 1년 계약으로 로스터 합류 (재계약자는 위에서 이미 합류 — 중복 금지)
   for (const [teamId, pid] of Object.entries(res.picks)) {
+    if (keptSet.has(pid)) continue;
     const p = snapshot[pid];
     if (!p) continue;
     snapshot[pid] = { ...p, contract: { salary: FOREIGN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } };

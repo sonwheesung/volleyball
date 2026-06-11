@@ -240,14 +240,21 @@ export function resolvePreDraft(
   ownerFx?: OwnerFx,
   myCash?: number,
   tryoutWish: string[] = [],
+  myKeepForeign: boolean | null = null,
 ): PreDraft {
   const committed = currentRosters();
   const prevTeamOf: Record<string, string> = {};
   for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
 
   const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
+  // 전 시즌 팀별 외인 — 재계약 우선권의 주체
+  const prevForeignOf: Record<string, string> = {};
+  for (const t of Object.keys(committed)) {
+    const f = committed[t].find((id) => off.snapshot[id]?.isForeign);
+    if (f) prevForeignOf[t] = f;
+  }
   // 외국인 트라이아웃 — FA 시장 앞(외인이 OP를 채워야 AI가 FA로 중복 영입하지 않는다)
-  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish);
+  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign);
   const prestige = teamPrestige(nextSeason - 1);
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash);
   return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, tryout };
@@ -265,6 +272,7 @@ export function faMarketPreview(
   ownerFx?: OwnerFx,
   myCash?: number,
   tryoutWish: string[] = [],
+  myKeepForeign: boolean | null = null,
 ): {
   pool: string[];
   snapshot: Record<string, Player>;
@@ -278,7 +286,12 @@ export function faMarketPreview(
   for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
 
   const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
-  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish);
+  const prevForeignOf: Record<string, string> = {};
+  for (const t of Object.keys(committed)) {
+    const f = committed[t].find((id) => off.snapshot[id]?.isForeign);
+    if (f) prevForeignOf[t] = f;
+  }
+  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign);
   const pool = [...off.pool];
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const prestige = teamPrestige(nextSeason - 1);

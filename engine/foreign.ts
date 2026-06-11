@@ -23,6 +23,12 @@ export function tryoutOrder(season: number, teamIds: string[]): string[] {
   return arr;
 }
 
+/** 재계약 우선권(실제 KOVO) — 구단은 자기 외인과 드래프트 없이 갱신할 수 있다(1년 단위).
+ *  AI 판단: 충분히 강하고(국내 평균 +8↑) 노쇠 전이면 잔류 — 잘하는 용병은 3~5시즌 함께 간다. */
+export function aiKeepsForeign(p: Player, domesticAvg: number): boolean {
+  return overall(p) >= domesticAvg + 15 && p.age <= 32; // 확실한 에이스급만 — 애매하면 새 얼굴 도박(현실 잔류 ~절반)
+}
+
 /** AI 지명 — 실제 OVR + 약간의 안개(트라이아웃 며칠로는 다 못 본다) */
 export function aiForeignChoice(pool: Player[], season: number, teamId: string): Player | null {
   if (!pool.length) return null;
