@@ -24,6 +24,7 @@
 | [TRANSACTION_SYSTEM](./TRANSACTION_SYSTEM.md) | 시즌 중 이동(방출→FA·구멍 영입, 전 구단 AI, 날짜 인지 명단) | `engine/transactions.ts`, `data/dynamics.ts`, `app/transactions.tsx` |
 | [OWNER_SYSTEM](./OWNER_SYSTEM.md) | 구단주 레이어: 선수 면담·감독 벤치 건의·팬심(설계) | (구현 예정) `engine/owner.ts` |
 | [FORM_SYSTEM](./FORM_SYSTEM.md) | 경기감각: 결장 누적 → 체감 하락, 출전 이력 파생(설계) | (구현 예정) `engine/form.ts` |
+| [FOREIGN_SYSTEM](./FOREIGN_SYSTEM.md) | 용병 트라이아웃: 1년 계약·연봉 고정·추첨 지명·시즌 중 교체(설계) | (구현 예정) engine/foreign.ts |
 | [FINANCE_SYSTEM](./FINANCE_SYSTEM.md) | 구단 재정: 모기업(성적 보너스·긴축)+직관+굿즈, 캡과 별개 지갑 | `engine/finance.ts`, store, `tools/simFinance.ts` |
 
 ---
@@ -54,6 +55,7 @@
 | **구단주 레이어**(선수 면담·감독 벤치 건의·팬심→예산) | ✅ (OWNER_SYSTEM — 뉴스 연동만 보류) |
 | **경기감각**(결장 누적 체감 −7%, 출전 이력 파생, ● 컨디션) | ✅ (FORM_SYSTEM) |
 | **구단 재정**(모기업·직관·굿즈, 캡 별개 지갑·자금 게이트) | ✅ (FINANCE_SYSTEM) |
+| **용병 트라이아웃**(1년 계약·매년 풀 유입 — 멸종 해결) | 📐 설계 완료(FOREIGN_SYSTEM) |
 | **사건·사고**(음주운전 등 출장정지, ~0.4건/시즌) | ✅ (OWNER_SYSTEM 4.6) |
 | 명예의전당·영구결번 | ✅ (기존) |
 | 감독 훈련선호 커스터마이즈 / 라인업·경기 직접 개입 | ❌ 자동 완성 후 "오버라이드"로 개방 예정 |
