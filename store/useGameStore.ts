@@ -19,7 +19,7 @@ import { currentRosters, evolveOnDay } from '../data/league';
 import { marketValue } from '../engine/salary';
 import { LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MAX, canRelease, inSeasonCost } from '../engine/transactions';
-import { accrueCareer } from '../engine/production';
+import { accrueCareer, appendSeasonLine } from '../engine/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
@@ -290,7 +290,8 @@ export const useGameStore = create<GameState>()(
         for (const tid of Object.keys(filled.rosters)) {
           for (const id of filled.rosters[tid]) {
             const pr = seasonProd.get(id);
-            if (pr && snapshot[id]) snapshot[id] = accrueCareer(applyMatchXp(snapshot[id], pr), pr); // 성장 XP + 통산 기록 누적
+            // 시즌 라인의 소속은 "이번 시즌을 뛴 팀"(prevTeamOf) — filled.rosters(tid)는 다음 시즌 명단이라 FA 이적자가 새 팀으로 잘못 적힘
+            if (pr && snapshot[id]) snapshot[id] = appendSeasonLine(accrueCareer(applyMatchXp(snapshot[id], pr), pr), season, ctx.prevTeamOf[id] ?? tid, pr); // 성장 XP + 통산 누적 + 시즌별 기록 라인
           }
         }
 

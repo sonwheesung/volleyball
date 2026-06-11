@@ -2,7 +2,7 @@
 // 선발 라인업(코트 위 7명)만 정상 생산 → "뛴 선수만 기록/성장".
 // 큰 점수차(블로아웃)의 가비지타임엔 벤치/유망주가 출전해 생산(감독 육성 판단).
 
-import type { Player, Position } from '../types';
+import type { Player, Position, SeasonLine } from '../types';
 import { createRng } from './rng';
 import { overall } from './overall';
 import type { SimResult } from './simMatch';
@@ -36,8 +36,21 @@ export function accrueCareer(p: Player, prod: ProdLine | undefined): Player {
       blocks: c.blocks + prod.blocks,
       digs: c.digs + prod.digs,
       aces: c.aces + prod.aces,
+      assists: (c.assists ?? 0) + prod.assists, // 구세이브 career엔 없을 수 있음
     },
   };
+}
+
+/** 시즌 라인 적립 — 선수 상세 "시즌별 기록"용. 시즌 경계에서 1회(같은 시즌 중복 호출은 덮어씀).
+ *  선수 베이스에 붙어 은퇴 시 함께 정리(세이브 자동 다이어트). 밸런스 무영향(기록용). */
+export function appendSeasonLine(p: Player, season: number, teamId: string, prod: ProdLine | undefined): Player {
+  if (!prod || prod.matches <= 0) return p;
+  const line: SeasonLine = {
+    season, teamId, matches: Math.round(prod.matches),
+    points: prod.points, spikes: prod.spikes, blocks: prod.blocks,
+    aces: prod.aces, assists: prod.assists, digs: prod.digs,
+  };
+  return { ...p, seasonLines: [...(p.seasonLines ?? []).filter((l) => l.season !== season), line] };
 }
 
 export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {

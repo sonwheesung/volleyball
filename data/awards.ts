@@ -81,3 +81,35 @@ export function currentSeasonAwards(season: number, uptoDay: number = Number.MAX
     legProd,
   });
 }
+
+// ─── 선수 수상 이력 (선수 상세 화면) ───────────────────────────
+
+export interface AwardHistoryItem { season: number; label: string }
+
+const TITLE_KO: Record<string, string> = {
+  scoring: '득점왕', spike: '공격상', block: '블로킹왕',
+  serve: '서브왕', dig: '디그왕', set: '세트왕',
+};
+
+/** archive(영구 보존된 시즌별 시상)를 선수 기준으로 훑어 수상 연표를 만든다. 순수 함수(store 무의존). */
+export function awardHistoryOf(
+  archive: { season: number; awards?: SeasonAwards }[],
+  playerId: string,
+): AwardHistoryItem[] {
+  const out: AwardHistoryItem[] = [];
+  for (const a of archive) {
+    const w = a.awards;
+    if (!w) continue;
+    if (w.mvp?.playerId === playerId) out.push({ season: a.season, label: '정규리그 MVP' });
+    if (w.finalsMvp?.playerId === playerId) out.push({ season: a.season, label: '챔프전 MVP' });
+    if (w.rookie?.playerId === playerId) out.push({ season: a.season, label: '신인상' });
+    if (w.mostImproved?.playerId === playerId) out.push({ season: a.season, label: '기량발전상' });
+    for (const [k, t] of Object.entries(w.titles)) {
+      if (t?.playerId === playerId) out.push({ season: a.season, label: TITLE_KO[k] ?? k });
+    }
+    if (w.best7.some((b) => b.winner?.playerId === playerId)) out.push({ season: a.season, label: '베스트7' });
+    const rounds = w.roundMvps.filter((m) => m?.playerId === playerId).length;
+    if (rounds > 0) out.push({ season: a.season, label: `라운드 MVP ${rounds}회` });
+  }
+  return out.sort((x, y) => y.season - x.season);
+}

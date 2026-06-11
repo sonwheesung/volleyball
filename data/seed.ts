@@ -55,7 +55,7 @@ export const ARCHETYPES: Archetype[] = [
 
 const emptyCareer = (): CareerStats => ({
   seasons: 0, matches: 0, sets: 0, points: 0,
-  spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0,
+  spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0,
 });
 
 /** core 스탯은 높게, 그 외는 보통으로 — 포지션 차별화 */

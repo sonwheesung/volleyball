@@ -1,8 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
 import { Text, View } from 'react-native';
 import { Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
-import { getEvolvedPlayer } from '../../data/league';
+import { getEvolvedPlayer, getTeam } from '../../data/league';
 import { getPlayerProduction } from '../../data/production';
+import { awardHistoryOf } from '../../data/awards';
 import { effectiveContract } from '../../data/roster';
 import { isFranchise } from '../../engine/cap';
 import { overall } from '../../engine/overall';
@@ -13,12 +14,18 @@ import { useGameStore } from '../../store/useGameStore';
 
 const STATUS_COLOR = { 꿀계약: theme.good, 적정: theme.muted, 고연봉: theme.bad } as const;
 
+const teamShort = (teamId: string) => (getTeam(teamId)?.name ?? teamId).split(' ').pop() ?? teamId;
+
 export default function PlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const currentDay = useGameStore((s) => s.currentDay);
   const overrides = useGameStore((s) => s.contractOverrides);
+  const archive = useGameStore((s) => s.archive);
+  const milestones = useGameStore((s) => s.milestones);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
   const prod = id ? getPlayerProduction(id, currentDay) : undefined;
+  const awardHist = id ? awardHistoryOf(archive, id) : [];
+  const myMilestones = id ? milestones.filter((m) => m.playerId === id) : [];
 
   if (!p) {
     return (
@@ -114,6 +121,83 @@ export default function PlayerDetail() {
                 <Text style={{ color: theme.text, fontWeight: '700' }}>{prod.digs}</Text>
               </Row>
             ) : null}
+          </Card>
+        </>
+      ) : null}
+
+      {p.career.matches > 0 ? (
+        <>
+          <Title>통산 기록 ({p.career.seasons}시즌)</Title>
+          <Card>
+            <Row>
+              <Muted>경기</Muted>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>{p.career.matches}경기</Text>
+            </Row>
+            <Row>
+              <Muted>득점</Muted>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>
+                {p.career.points}점 (스{p.career.spikes}·블{p.career.blocks}·서{p.career.aces})
+              </Text>
+            </Row>
+            {(p.career.assists ?? 0) > 0 ? (
+              <Row>
+                <Muted>세트</Muted>
+                <Text style={{ color: theme.text, fontWeight: '700' }}>{p.career.assists}</Text>
+              </Row>
+            ) : null}
+            {p.career.digs > 0 ? (
+              <Row>
+                <Muted>디그</Muted>
+                <Text style={{ color: theme.text, fontWeight: '700' }}>{p.career.digs}</Text>
+              </Row>
+            ) : null}
+          </Card>
+        </>
+      ) : null}
+
+      {p.seasonLines && p.seasonLines.length > 0 ? (
+        <>
+          <Title>시즌별 기록</Title>
+          <Card>
+            {p.seasonLines.slice().reverse().map((l) => (
+              <View key={l.season} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+                <Text style={{ color: theme.muted, fontSize: 12, width: 56 }}>{l.season + 1}시즌</Text>
+                <Text style={{ color: theme.muted, fontSize: 12, width: 56 }} numberOfLines={1}>{teamShort(l.teamId)}</Text>
+                <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700', flex: 1 }}>
+                  {l.matches}경기 · {l.points}점
+                  {l.assists > 0 ? ` · 세트${l.assists}` : ''}
+                  {l.digs > 0 ? ` · 디그${l.digs}` : ''}
+                </Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
+      {awardHist.length > 0 ? (
+        <>
+          <Title>수상 이력</Title>
+          <Card>
+            {awardHist.map((a, i) => (
+              <View key={`${a.season}-${a.label}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+                <Text style={{ color: theme.muted, fontSize: 12, width: 56 }}>{a.season + 1}시즌</Text>
+                <Text style={{ color: theme.warn, fontSize: 13, fontWeight: '800' }}>🏆 {a.label}</Text>
+              </View>
+            ))}
+          </Card>
+        </>
+      ) : null}
+
+      {myMilestones.length > 0 ? (
+        <>
+          <Title>마일스톤</Title>
+          <Card>
+            {myMilestones.slice(-8).reverse().map((m, i) => (
+              <View key={`${m.season}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
+                <Text style={{ color: theme.muted, fontSize: 12, width: 56 }}>{m.season + 1}시즌</Text>
+                <Text style={{ color: m.big ? theme.warn : theme.text, fontSize: 13, flex: 1 }}>{m.text}</Text>
+              </View>
+            ))}
           </Card>
         </>
       ) : null}

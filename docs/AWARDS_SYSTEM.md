@@ -32,7 +32,13 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 - 라운드 MVP는 시즌 *중* 갱신 표시(현재 시즌은 production 재계산), 시즌 마감 시 archive에 박힘.
 
 ## 4. 누적
-- 선수 카드: 통산 수상("MVP 3회·득점왕 5회") = archive 순회 도출.
+- **선수 상세 수상 이력(2026-06-11 구현)**: `awardHistoryOf(archive, playerId)`(data/awards, 순수) —
+  MVP·챔프MVP·신인상·기량발전상·부문 기록왕·베스트7·라운드MVP(시즌당 횟수)를 연표로.
+  `app/player/[id].tsx` "수상 이력" 섹션.
+- **시즌별 기록 라인(2026-06-11 구현)**: `Player.seasonLines[]` — endSeason에서
+  `appendSeasonLine`(engine/production)으로 그 시즌 생산(경기·득점·세트·디그, 소속=뛴 팀
+  prevTeamOf)을 선수 베이스에 적립. 은퇴 시 베이스와 함께 정리(세이브 자동 다이어트).
+  통산 `career.assists`(세트)도 함께 누적 시작(구세이브는 0부터).
 - 은퇴 시 명예의전당 판정 근거로 확장(추후).
 - 연속 수상(3년 연속 득점왕)은 추후 강조.
 

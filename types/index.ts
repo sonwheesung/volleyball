@@ -23,6 +23,20 @@ export interface CareerStats {
   digs: number;        // 디그 성공
   aces: number;        // 서브 에이스
   errors: number;      // 범실
+  assists: number;     // 세트 성공(세터) — 2026-06-11 추가, 구세이브는 0에서 시작
+}
+
+/** 한 시즌 개인 기록 라인 — 선수 상세 "시즌별 기록". 시즌 경계에서 적립, 은퇴 시 베이스와 함께 정리 */
+export interface SeasonLine {
+  season: number;   // 0-based
+  teamId: string;   // 그 시즌 소속
+  matches: number;
+  points: number;
+  spikes: number;
+  blocks: number;
+  aces: number;
+  assists: number;
+  digs: number;
 }
 
 export interface Player {
@@ -72,6 +86,7 @@ export interface Player {
   // 메타
   peakAge: number;     // 전성기 나이(노쇠 곡선용)
   career: CareerStats;
+  seasonLines?: SeasonLine[]; // 시즌별 기록(선수 상세) — 없으면 빈 이력(구세이브 호환)
 
   // FA 성향 (FA_SYSTEM 2.5) — 선수마다 이적 동기가 다르다. id 시드로 결정론 생성.
   faPref?: FAPref;
