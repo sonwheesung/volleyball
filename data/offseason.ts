@@ -10,6 +10,8 @@ import { aiKeepsFA, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
 import { assignFAGrades, askingPrice, offerScore, prefWeightsOf } from '../engine/faMarket';
 import { needsCompensationPlayer, pickCompensation } from '../engine/compensation';
 import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
+import { strSeed } from '../engine/rng';
+import type { OwnerFx } from '../engine/owner';
 import { marketValue } from '../engine/salary';
 import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
@@ -55,6 +57,7 @@ export function resolveFAMarket(
   prevTeamOf: Record<string, string>,
   season: number,
   prestige: Record<string, number>,
+  ownerFx?: OwnerFx, // 구단주 면담 보정(내 팀 오퍼에만 가산)
 ): FAMarketResult {
   const snapshot = off.snapshot;
   const rosters: Record<string, string[]> = {};
@@ -103,6 +106,7 @@ export function resolveFAMarket(
         asking,
         w: prefWeightsOf(p),
         rand: rng.next(),
+        talkBias: isMe ? ownerFx?.offerBias[id] : undefined, // 면담의 기억은 우리 구단에만 작용
       });
       bids.push({ teamId: t, offer, score });
     }
@@ -155,6 +159,7 @@ export function buildOffseason(
   resignDecisions: Record<string, boolean>,
   contractOverrides: Record<string, Contract>,
   nextSeason: number,
+  ownerFx?: OwnerFx, // 불만 선수의 재계약 거부(OWNER_SYSTEM) — 단장이 잡아도 선수가 떠날 수 있다
 ): Offseason {
   const snapshot = rolloverLeague(currentBasePlayers(), focusOf, contractOverrides, effectsOf);
   const retireRng = createRng(70000 + nextSeason * 977);
@@ -175,8 +180,16 @@ export function buildOffseason(
     }
     // 2) 만료자: 잔류 의사(내 팀=단장 결정 / AI=aiKeepsFA) 있는 선수를 가치 높은 순으로,
     //    팀 샐러리캡 한도 내에서만 재계약. 캡 초과분은 잔류 못 하고 FA 시장으로(왕조 억제 레버).
+    // 내 팀 만료자: 단장이 잡고 싶어도(resign) 불만 선수는 거부하고 시장으로 나갈 수 있다(면담이 좌우)
+    const refuses = (p: Player): boolean => {
+      if (teamId !== myTeam) return false;
+      const prob = ownerFx?.refuseProb[p.id] ?? 0;
+      if (prob <= 0) return false;
+      const rng = createRng(strSeed(`resign-refuse:${p.id}:${nextSeason}`));
+      return rng.next() < prob;
+    };
     const wantRetain = expiring
-      .filter((p) => (teamId === myTeam ? resignDecisions[p.id] !== false : aiKeepsFA(p)))
+      .filter((p) => (teamId === myTeam ? resignDecisions[p.id] !== false && !refuses(p) : aiKeepsFA(p)))
       .sort((a, b) => overall(b) - overall(a));
     const retainSet = new Set(wantRetain.map((p) => p.id));
     for (const p of wantRetain) {
@@ -214,14 +227,15 @@ export function resolvePreDraft(
   aggressive: boolean,
   protectedIds: string[],
   nextSeason: number,
+  ownerFx?: OwnerFx,
 ): PreDraft {
   const committed = currentRosters();
   const prevTeamOf: Record<string, string> = {};
   for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
 
-  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason);
+  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
   const prestige = teamPrestige(nextSeason - 1);
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx);
   return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired };
 }
 
@@ -234,6 +248,7 @@ export function faMarketPreview(
   aggressive: boolean,
   protectedIds: string[],
   nextSeason: number,
+  ownerFx?: OwnerFx,
 ): {
   pool: string[];
   snapshot: Record<string, Player>;
@@ -245,10 +260,10 @@ export function faMarketPreview(
   const prevTeamOf: Record<string, string> = {};
   for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
 
-  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason);
+  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
   const pool = [...off.pool];
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const prestige = teamPrestige(nextSeason - 1);
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx);
   return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo };
 }

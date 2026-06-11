@@ -7,6 +7,8 @@ import { createRng, strSeed } from '../engine/rng';
 import { injuryRisk, rollSeverity, CONCURRENT_CAP, type Severity } from '../engine/injury';
 import { buildLineup } from '../engine/lineup';
 import { healthyByPos, shortagePositions, pickSigning } from '../engine/transactions';
+import { formFactor, applyForm, FORM_WINDOW } from '../engine/form';
+import type { BenchDirective } from '../engine/owner';
 import { marketValue } from '../engine/salary';
 import { LEAGUE_CAP } from '../engine/cap';
 import { baseVersion, currentRosters, getPlayer, evolveOnDay, LEAGUE, SEASON } from './league';
@@ -34,7 +36,19 @@ export function getTxContext(): { playerTx: Tx[]; faPoolSeed: string[]; myTeamId
 /** 거래 컨텍스트 버전 — standings/production 등 tx 인지 파생 캐시의 키 성분 */
 export const currentTxVersion = (): number => txVersion;
 
-interface Dyn { injuries: InjurySpan[]; txLog: Tx[] }
+// ── 구단주 컨텍스트(OWNER_SYSTEM) — 벤치 지시. 부상과 같은 "그날 출전 후보" 필터 ──
+let benchDirectives: BenchDirective[] = [];
+export function setOwnerContext(bench: BenchDirective[]): void {
+  benchDirectives = [...bench]; txVersion++; // 파생 캐시(순위·생산·dyn) 일괄 무효화
+}
+const benchedOn = (day: number): Set<string> =>
+  new Set(benchDirectives.filter((b) => b.fromDay <= day).map((b) => b.playerId));
+
+interface Dyn {
+  injuries: InjurySpan[]; txLog: Tx[];
+  played: Map<string, number[]>;      // playerId → 출전 매치데이(오름차순) — 경기감각 재료
+  teamDays: Map<string, number[]>;    // teamId → 치른 매치데이(오름차순)
+}
 let cache: { key: string; dyn: Dyn } | null = null;
 
 /** 레그(라운드 묶음) 경계 = 각 레그 첫 매치데이 */
@@ -62,6 +76,16 @@ function compute(): Dyn {
   const faAvail = new Set<string>(faPoolSeed);
   const injuries: InjurySpan[] = [];
   const txLog: Tx[] = [];
+  const played = new Map<string, number[]>();   // 경기감각 재료 — 누가 어느 매치데이에 뛰었나
+  const teamDays = new Map<string, number[]>();
+  // 그날까지의 출전 이력 → 감각 계수(시간 순 진행이라 순환 없음 — 오늘의 감각은 어제까지의 출전)
+  const formOf = (teamId: string, playerId: string, d: number): number => {
+    const days = (teamDays.get(teamId) ?? []).slice(-FORM_WINDOW);
+    if (!days.length) return 1;
+    const pl = played.get(playerId);
+    const cnt = pl ? days.filter((x) => pl.includes(x)).length : 0;
+    return formFactor(cnt, days.length);
+  };
   const pendingPlayerTx = [...playerTx].sort((a, b) => a.day - b.day);
   let pi = 0;
 
@@ -103,11 +127,21 @@ function compute(): Dyn {
     for (const f of byDay.get(d)!) {
       for (const teamId of [f.homeTeamId, f.awayTeamId]) {
         const injured = injuredOn(d, teamId);
-        const avail = (roster.get(teamId) ?? []).filter((id) => !injured.has(id))
-          .map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p);
+        let availIds = (roster.get(teamId) ?? []).filter((id) => !injured.has(id));
+        // 벤치 지시(구단주→감독) — 단, 출전 7인 미만이 되면 그 경기 한정 무시(부상 우선, 경기 성립)
+        const benched = benchedOn(d);
+        if (benched.size) {
+          const wo = availIds.filter((id) => !benched.has(id));
+          if (wo.length >= 7) availIds = wo;
+        }
+        const avail = availIds
+          .map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p)
+          .map((p) => applyForm(p, formOf(teamId, p.id, d))); // 경기감각 — 결장 누적자는 무뎌진 채 평가
         if (!avail.length) continue; // 빈 명단(가드 우회 주입 등 비정상) — 부상 굴림 생략, 전진 패스는 계속
         const lu = buildLineup(avail);
         const onCourt = lu.libero ? [...lu.six, lu.libero] : lu.six;
+        teamDays.set(teamId, [...(teamDays.get(teamId) ?? []), d]);
+        for (const p of onCourt) played.set(p.id, [...(played.get(p.id) ?? []), d]);
         let concurrent = injured.size;
         for (const p of onCourt) {
           if (concurrent >= CONCURRENT_CAP) break;
@@ -124,7 +158,7 @@ function compute(): Dyn {
     }
   }
   while (pi < pendingPlayerTx.length) applyTx(pendingPlayerTx[pi++]);
-  return { injuries, txLog };
+  return { injuries, txLog, played, teamDays };
 }
 
 function dyn(): Dyn {
@@ -156,12 +190,29 @@ export function rosterIdsOnDay(teamId: string, day: number): string[] {
 }
 
 /** day 시점 출전 가능 선수(날짜 명단 − 부상자) — production·standings·playoffs 공용 */
+/** day 시점 경기감각 계수 — 그 팀의 직전 FORM_WINDOW 매치데이 중 출전 비율(forward-pass와 동일 규칙) */
+export function formFactorOnDay(teamId: string, playerId: string, day: number): number {
+  const dn = dyn();
+  const days = (dn.teamDays.get(teamId) ?? []).filter((x) => x < day).slice(-FORM_WINDOW);
+  if (!days.length) return 1;
+  const pl = dn.played.get(playerId);
+  const cnt = pl ? days.filter((x) => pl.includes(x)).length : 0;
+  return formFactor(cnt, days.length);
+}
+
 export function availableTeamPlayers(teamId: string, day: number): Player[] {
   const injured = injuredOnDay(day);
-  return rosterIdsOnDay(teamId, day)
-    .filter((id) => !injured.has(id))
+  let ids = rosterIdsOnDay(teamId, day).filter((id) => !injured.has(id));
+  // 벤치 지시 — 출전 7인 미만이 되면 그 경기 한정 무시(forward-pass와 동일 가드)
+  const benched = benchedOn(day);
+  if (benched.size) {
+    const wo = ids.filter((id) => !benched.has(id));
+    if (wo.length >= 7) ids = wo;
+  }
+  return ids
     .map((id) => evolveOnDay(id, day))
-    .filter((p): p is Player => !!p);
+    .filter((p): p is Player => !!p)
+    .map((p) => applyForm(p, formFactorOnDay(teamId, p.id, day))); // 경기감각 반영
 }
 
 /** day 시점 영입 가능 FA id(시작 풀 + txDay≤day 방출자 − 영입된 자) */

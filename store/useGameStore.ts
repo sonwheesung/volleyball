@@ -13,7 +13,17 @@ import { leagueProduction } from '../data/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
 import { seasonInjuryDays } from '../data/injury';
-import { setTxContext, seasonTxLog, availableFAsOnDay, type Tx } from '../data/dynamics';
+import { setTxContext, setOwnerContext, seasonTxLog, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
+import {
+  discontentOf, meetAccept, persuade, cardMatch, interviewEffects, refuseResignProb,
+  benchAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, sinkingShipBias, BENCH_MAX,
+  type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx,
+} from '../engine/owner';
+import { prefWeightsOf } from '../engine/faMarket';
+import { overall } from '../engine/overall';
+import { awardHistoryOf } from '../data/awards';
+import { computeStandings } from '../data/standings';
+import { coachInfoOf } from '../data/league';
 import { buildPlayoffs } from '../data/playoffs';
 import { currentRosters, evolveOnDay } from '../data/league';
 import { marketValue } from '../engine/salary';
@@ -28,6 +38,27 @@ import type { Contract, HofEntry, MatchResult, Milestone, Player, SeasonAwards, 
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const LEGEND_POINTS = 9000; // 영구결번급
+const SEASON_END_DAY = 164; // 정규시즌 길이(일) — 출전비율·팬심 계산 기준
+const GAME_EVERY = 4.6;     // 평균 경기 간격(일)
+
+/** 선수 불만 파생(OWNER_SYSTEM) — 성향과 현실의 불일치. 저장하지 않는다. */
+function discontentNow(p: Player, my: string, day: number): { topic: DiscontentTopic | null; weight: number } {
+  const standings = computeStandings(day > 0 ? day : Number.MAX_SAFE_INTEGER);
+  const rank = Math.max(1, standings.findIndex((s) => s.teamId === my) + 1);
+  const prod = leagueProduction(day > 0 ? day : Number.MAX_SAFE_INTEGER).get(p.id);
+  const gamesSoFar = Math.max(1, Math.round((day > 0 ? day : SEASON_END_DAY) / GAME_EVERY));
+  const topic = discontentOf(p, {
+    recentRankAvg: rank,
+    teamCount: standings.length,
+    playRatio: Math.min(1, (prod?.matches ?? 0) / gamesSoFar),
+    salaryRatio: p.contract.salary / Math.max(1, marketValue(p)),
+    myTeamId: my,
+  });
+  if (!topic) return { topic: null, weight: 0 };
+  const w = prefWeightsOf(p);
+  const weight = topic === 'win' ? w.win : topic === 'minutes' ? w.play : topic === 'money' ? w.money : w.home;
+  return { topic, weight };
+}
 
 const DEFAULT_SUB_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSub: true };
 
@@ -56,6 +87,9 @@ interface GameState {
   staffHead: Record<string, string>;           // teamId → 영입 감독 id(STAFF_SYSTEM)
   staffAssistants: Record<string, string[]>;   // teamId → 영입 코치 ids
   staffScouts: Record<string, string[]>;       // teamId → 영입 스카우터 ids
+  interviews: InterviewLog[];                  // 구단주 면담 로그(OWNER_SYSTEM) — FA 판정 입력
+  benchDirectives: BenchDirective[];           // 감독 수락된 벤치 지시 — dynamics 주입
+  fanScore: number;                            // 내 팀 팬심(직전 시즌 결과, 0~100)
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -78,6 +112,9 @@ interface GameState {
   releaseAssistant: (id: string) => void;
   hireScout: (id: string) => boolean;
   releaseScout: (id: string) => void;
+  requestInterview: (playerId: string, card: TalkCard) => { met: boolean; topic: DiscontentTopic | null; ok?: boolean };
+  suggestBench: (playerId: string, reason: BenchReason) => boolean;
+  unbench: (playerId: string) => void;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -106,6 +143,9 @@ const freshSave = {
   staffHead: {} as Record<string, string>,
   staffAssistants: {} as Record<string, string[]>,
   staffScouts: {} as Record<string, string[]>,
+  interviews: [] as InterviewLog[],
+  benchDirectives: [] as BenchDirective[],
+  fanScore: 50,
 };
 
 export const useGameStore = create<GameState>()(
@@ -118,6 +158,7 @@ export const useGameStore = create<GameState>()(
         resetLeagueBase();
         set({ ...freshSave, selectedTeamId: teamId });
         setTxContext([], [], teamId);
+        setOwnerContext([]);
       },
       setDay: (day) => set((s) => ({ currentDay: Math.max(s.currentDay, day) })),
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
@@ -243,8 +284,60 @@ export const useGameStore = create<GameState>()(
         set({ staffScouts: getStaffState().scout });
       },
 
+      // ── 구단주 레이어 (OWNER_SYSTEM) ──
+      // 면담: 문은 선수가 연다(들볶을수록·실망시켰을수록 거절) → 약속 카드로 설득(성공/역효과)
+      requestInterview: (playerId, card) => {
+        const s = get();
+        const my = s.selectedTeamId;
+        if (!my) return { met: false, topic: null };
+        const p = evolveOnDay(playerId, s.currentDay);
+        if (!p) return { met: false, topic: null };
+        const { topic } = discontentNow(p, my, s.currentDay);
+        if (!topic) return { met: true, topic: null }; // 만족 상태 — "괜찮습니다, 구단주님"
+        const seasonLogs = s.interviews.filter((l) => l.playerId === playerId && l.season === s.season);
+        const lastFailed = seasonLogs.length > 0 && !seasonLogs[seasonLogs.length - 1].ok;
+        if (!meetAccept(playerId, s.season, seasonLogs.length, lastFailed)) return { met: false, topic };
+        const standings = computeStandings(s.currentDay > 0 ? s.currentDay : Number.MAX_SAFE_INTEGER);
+        const rank = Math.max(1, standings.findIndex((r) => r.teamId === my) + 1);
+        const perfT = standings.length <= 1 ? 1 : 1 - (rank - 1) / (standings.length - 1);
+        const fails = s.interviews.filter((l) => l.playerId === playerId && !l.ok).length;
+        const ok = persuade(playerId, s.season, seasonLogs.length, cardMatch(card, topic, p), perfT, fails);
+        set({ interviews: [...s.interviews, { playerId, season: s.season, day: s.currentDay, topic, card, ok }].slice(-200) });
+        return { met: true, topic, ok };
+      },
+      // 감독 벤치 건의 — 합리(대체자 격차)와 소신(카리스마·에이스 보호) 사이에서 감독이 답한다
+      suggestBench: (playerId, reason) => {
+        const s = get();
+        const my = s.selectedTeamId;
+        if (!my) return false;
+        if (s.benchDirectives.length >= BENCH_MAX) return false;
+        if (s.benchDirectives.some((b) => b.playerId === playerId)) return false;
+        const squad = rosterIdsOnDay(my, s.currentDay)
+          .map((id) => evolveOnDay(id, s.currentDay))
+          .filter((q): q is Player => !!q)
+          .sort((a, b) => overall(b) - overall(a));
+        const target = squad.find((q) => q.id === playerId);
+        if (!target) return false;
+        const aceRank = squad.findIndex((q) => q.id === playerId);
+        const alt = squad.find((q) => q.id !== playerId && q.position === target.position);
+        const gap = alt ? overall(target) - overall(alt) : 10;
+        const ovrGapT = Math.max(0, Math.min(1, 1 - gap / 10)); // 대체자가 비등할수록 1
+        const ok = benchAccept(playerId, s.season, s.currentDay, coachInfoOf(my)?.charisma ?? 50, ovrGapT, aceRank, reason);
+        if (ok) {
+          const benchDirectives = [...s.benchDirectives, { playerId, fromDay: s.currentDay }];
+          set({ benchDirectives });
+          setOwnerContext(benchDirectives);
+        }
+        return ok;
+      },
+      unbench: (playerId) => {
+        const benchDirectives = get().benchDirectives.filter((b) => b.playerId !== playerId);
+        set({ benchDirectives });
+        setOwnerContext(benchDirectives);
+      },
+
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones, interviews, benchDirectives, fanScore } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -272,8 +365,33 @@ export const useGameStore = create<GameState>()(
           ? archive.map((a) => (a.season === season ? { ...a, championId: championId || a.championId, awards: seasonAwards } : a))
           : [...archive, { season, championId, awards: seasonAwards }];
 
+        // 0.6) 구단주 레이어(OWNER_SYSTEM) — 면담 결과·불만·팬심 → FA 거부/오퍼 보정 + 시즌 팬심 정산
+        const fx = interviewEffects(interviews, season);
+        const refuseProb: Record<string, number> = {};
+        for (const id of finalR[my] ?? []) {
+          const p = evolveOnDay(id, SEASON_END_DAY);
+          if (!p || p.contract.remaining > 1) continue; // 이번 오프시즌 만료자만 거부권 행사
+          const { topic, weight } = discontentNow(p, my, SEASON_END_DAY);
+          const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore);
+          if (prob > 0) refuseProb[id] = Math.min(0.95, prob);
+        }
+        const ownerFx: OwnerFx = { refuseProb, offerBias: fx.offerBias };
+        // 팬심 정산: 성적 + 인기 스타 벤치 분노 → 다음 시즌 팬심(예산·침몰선 정서 입력)
+        const finalStandings = computeStandings(Number.MAX_SAFE_INTEGER);
+        const myRow = finalStandings.find((r) => r.teamId === my);
+        const winRate = myRow ? myRow.wins / Math.max(1, myRow.wins + myRow.losses) : 0.5;
+        const prodAll = leagueProduction(Number.MAX_SAFE_INTEGER);
+        let angerSum = 0;
+        for (const b of benchDirectives) {
+          const bp = evolveOnDay(b.playerId, SEASON_END_DAY);
+          if (!bp) continue;
+          const pop = popularityOf(bp.career.points, awardHistoryOf(archive, b.playerId).length, bp.clubTenure, prodAll.get(b.playerId)?.points ?? 0);
+          if (pop >= 60) angerSum += benchAngerPenalty(Math.round((SEASON_END_DAY - b.fromDay) / GAME_EVERY));
+        }
+        const nextFan = fanScoreOf(winRate, championId === my, angerSum);
+
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason);
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
@@ -335,7 +453,11 @@ export const useGameStore = create<GameState>()(
         commitPlayerBase(snapshot);
         commitRosters(filled.rosters);
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
+        setOwnerContext([]);              // 벤치 지시는 시즌 단위 — 새 시즌 전원 복귀
         set({
+          interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
+          benchDirectives: [],
+          fanScore: nextFan,
           season: nextSeason,
           currentDay: 0,
           results: {},
@@ -359,6 +481,7 @@ export const useGameStore = create<GameState>()(
       resetSave: () => {
         resetLeagueBase();
         setTxContext([], [], '');
+        setOwnerContext([]);
         set({ ...freshSave });
       },
     }),
@@ -389,6 +512,9 @@ export const useGameStore = create<GameState>()(
         staffHead: s.staffHead,
         staffAssistants: s.staffAssistants,
         staffScouts: s.staffScouts,
+        interviews: s.interviews,
+        benchDirectives: s.benchDirectives,
+        fanScore: s.fanScore,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);
@@ -396,6 +522,7 @@ export const useGameStore = create<GameState>()(
         if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
         if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
         setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
+        setOwnerContext(state?.benchDirectives ?? []);
         useGameStore.setState({ hydrated: true });
       },
     },

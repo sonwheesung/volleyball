@@ -1,0 +1,177 @@
+// 구단주 레이어 (OWNER_SYSTEM) — 선수 면담·감독 벤치 건의·인기/팬심. 순수 + 시드 결정론.
+// 불만은 저장하지 않는다: FA 성향(faPref)과 현실의 불일치에서 그때그때 파생.
+// 면담 결과만 로그로 저장(store) → FA 잔류/이탈 판정의 입력이 된다.
+
+import type { Player } from '../types';
+import { createRng, strSeed } from './rng';
+import { prefWeightsOf } from './faMarket';
+
+// ─── 불만 (파생, 저장 없음) ───────────────────────────────────
+
+export type DiscontentTopic = 'win' | 'minutes' | 'money' | 'hometown';
+
+export interface DiscontentCtx {
+  recentRankAvg: number;   // 팀 최근 2시즌 평균 순위(1=1위)
+  teamCount: number;
+  playRatio: number;       // 최근 10경기 출전 비율 0..1
+  salaryRatio: number;     // 연봉 / 시장가치
+  myTeamId: string;
+}
+
+/** 성향-현실 불일치 → 불만 주제. 없으면 null(충성파거나 만족 상태). */
+export function discontentOf(p: Player, ctx: DiscontentCtx): DiscontentTopic | null {
+  const w = prefWeightsOf(p);
+  // 가장 강한 동기 순으로 불일치를 검사 — 한 사람의 불만은 하나로 수렴시킨다(면담 장면용)
+  const checks: { topic: DiscontentTopic; weight: number; unmet: boolean }[] = [
+    { topic: 'win', weight: w.win, unmet: ctx.recentRankAvg > ctx.teamCount * 0.6 },
+    { topic: 'minutes', weight: w.play, unmet: ctx.playRatio < 0.34 },
+    { topic: 'money', weight: w.money, unmet: ctx.salaryRatio < 0.75 },
+    { topic: 'hometown', weight: w.home, unmet: !!p.faPref?.preferredTeamId && p.faPref.preferredTeamId !== ctx.myTeamId },
+  ];
+  const hit = checks.filter((c) => c.unmet && c.weight >= 0.25).sort((a, b) => b.weight - a.weight)[0];
+  return hit ? hit.topic : null;
+}
+
+// ─── 면담 (Interview) ────────────────────────────────────────
+
+/** 구단주의 약속 카드 */
+export type TalkCard = 'reinforce' | 'starter' | 'raise' | 'franchise';
+
+export const CARD_KO: Record<TalkCard, string> = {
+  reinforce: '전력을 보강하겠다',
+  starter: '주전을 보장하겠다',
+  raise: '재계약 때 성의를 보이겠다',
+  franchise: '당신은 이 구단의 심장이다',
+};
+
+/** 카드 ↔ 불만 주제 매칭(0..1) — 맞는 약속을 해야 통한다 */
+export function cardMatch(card: TalkCard, topic: DiscontentTopic, p: Player): number {
+  const M: Record<DiscontentTopic, TalkCard> = { win: 'reinforce', minutes: 'starter', money: 'raise', hometown: 'franchise' };
+  if (M[topic] === card) return 1;
+  if (card === 'franchise' && p.clubTenure >= 4) return 0.5; // 장기근속이면 정서 카드가 절반은 통함
+  return 0;
+}
+
+export interface InterviewLog {
+  playerId: string;
+  season: number;       // 0-based
+  day: number;
+  topic: DiscontentTopic;
+  card: TalkCard;
+  ok: boolean;
+}
+
+/** 면담의 문은 선수가 연다 — 들볶을수록·실망시켰을수록 닫힌다 */
+export function meetAccept(playerId: string, season: number, nThisSeason: number, lastFailed: boolean): boolean {
+  const refuse = Math.min(0.9, 0.10 + 0.25 * nThisSeason + (lastFailed ? 0.30 : 0));
+  const rng = createRng(strSeed(`talk-door:${playerId}:${season}:${nThisSeason}`));
+  return rng.next() >= refuse;
+}
+
+/** 설득 판정 — 카드 매칭 + 구단 성적 보정 − 누적 실패 */
+export function persuade(
+  playerId: string, season: number, nThisSeason: number,
+  match: number,          // cardMatch 0..1
+  perfT: number,          // 구단 성적 보정 0..1 (상위권일수록 말에 힘이 실림)
+  failsBefore: number,    // 이 선수와의 누적 실패 횟수(시즌 무관)
+): boolean {
+  const p = Math.max(0.1, Math.min(0.9, 0.35 + 0.4 * match + 0.1 * perfT - 0.15 * failsBefore));
+  const rng = createRng(strSeed(`talk:${playerId}:${season}:${nThisSeason}`));
+  return rng.next() < p;
+}
+
+/** 면담 로그 → FA 판정 보정. refuse=내 재계약 거부 가중(±), offer=FA 시장 내 오퍼 가중(±) */
+export function interviewEffects(logs: InterviewLog[], season: number): {
+  refuseBias: Record<string, number>;
+  offerBias: Record<string, number>;
+} {
+  const refuseBias: Record<string, number> = {};
+  const offerBias: Record<string, number> = {};
+  for (const l of logs) {
+    if (l.season !== season) continue;
+    const d = l.ok ? 1 : -0.7; // 실패는 역효과 — 진심을 확인하고 실망
+    refuseBias[l.playerId] = Math.max(-0.3, Math.min(0.3, (refuseBias[l.playerId] ?? 0) - d * 0.18));
+    offerBias[l.playerId] = Math.max(-0.15, Math.min(0.15, (offerBias[l.playerId] ?? 0) + d * 0.10));
+  }
+  return { refuseBias, offerBias };
+}
+
+/** FA 판정에 주입되는 구단주 레이어 효과 — offseason은 이 타입만 안다(구현 비의존) */
+export interface OwnerFx {
+  refuseProb: Record<string, number>; // 내 팀 만료자: 재계약 거부 확률(불만+면담 결과)
+  offerBias: Record<string, number>;  // FA 시장: 내 팀 오퍼에 대한 선수의 가중(면담 결과)
+}
+
+/** 불만 선수의 재계약 거부 확률 — 면담 보정(refuseBias) 가산. 만족 선수는 거부하지 않는다 */
+export function refuseResignProb(topic: DiscontentTopic | null, weight: number, refuseBias: number): number {
+  if (!topic) return 0;
+  return Math.max(0, Math.min(0.9, 0.25 + 0.5 * weight + refuseBias));
+}
+
+// ─── 감독 벤치 건의 ───────────────────────────────────────────
+
+export type BenchReason = 'noResign' | 'form' | 'prospect';
+
+export const BENCH_REASON_KO: Record<BenchReason, string> = {
+  noResign: '내년에 우리와 함께하지 않을 선수입니다',
+  form: '최근 폼이 너무 떨어졌습니다',
+  prospect: '유망주에게 기회를 주고 싶습니다',
+};
+
+export interface BenchDirective { playerId: string; fromDay: number }
+
+/** 동시 벤치 지시 상한 — 전원 벤치 같은 악용 차단 */
+export const BENCH_MAX = 2;
+
+/**
+ * 감독의 수락 판정 — 합리(대체자 격차)와 소신(카리스마·에이스 보호) 사이.
+ * @param ovrGapT   0..1 — 벤치 대상 vs 대체자 OVR 격차가 작을수록 1(수긍 쉬움)
+ * @param aceRank   팀 내 OVR 순위(0=에이스)
+ */
+export function benchAccept(
+  playerId: string, season: number, day: number,
+  charisma: number, ovrGapT: number, aceRank: number, reason: BenchReason,
+): boolean {
+  const aceGuard = aceRank === 0 ? 0.4 : aceRank === 1 ? 0.2 : 0;
+  const reasonT = reason === 'noResign' ? 0.2 : reason === 'form' ? 0.1 : 0.05;
+  const p = Math.max(0.05, Math.min(0.95,
+    0.5 + 0.3 * ovrGapT - aceGuard - 0.2 * ((charisma - 50) / 50) + reasonT));
+  const rng = createRng(strSeed(`bench:${playerId}:${season}:${day}`));
+  return rng.next() < p;
+}
+
+// ─── 인기 · 팬심 ─────────────────────────────────────────────
+
+/** 선수 인기(0..100) — 쌓인 기록에서 파생(저장 없음). 통산 생산 + 수상 + 근속 + 올해 활약 */
+export function popularityOf(careerPoints: number, awardCount: number, tenure: number, seasonPoints: number): number {
+  const t = 30 * Math.min(1, careerPoints / 3000)
+    + 30 * Math.min(1, awardCount / 5)
+    + 15 * Math.min(1, tenure / 6)
+    + 25 * Math.min(1, seasonPoints / 400);
+  return Math.round(Math.max(0, Math.min(100, t)));
+}
+
+/** 인기 스타 연속 결장의 팬 분노 — 길어질수록 가속 */
+export function benchAngerPenalty(missedStreak: number): number {
+  if (missedStreak < 3) return 0;
+  if (missedStreak < 6) return 2;
+  if (missedStreak < 10) return 5;
+  return 10;
+}
+
+/**
+ * 시즌 팬심(0..100) — 50에서 출발해 성적과 스타 대우로 움직인다.
+ * @param winRate    시즌 승률 0..1
+ * @param champion   우승 여부
+ * @param angerSum   인기 스타 벤치 분노 누적(benchAngerPenalty 합)
+ */
+export function fanScore(winRate: number, champion: boolean, angerSum: number): number {
+  const base = 50 + (winRate - 0.5) * 60 + (champion ? 15 : 0) - angerSum;
+  return Math.round(Math.max(0, Math.min(100, base)));
+}
+
+/** 팬심 → 다음 시즌 예산 계수(0.92~1.08) */
+export const fanBudgetFactor = (fan: number): number => 0.92 + 0.16 * (fan / 100);
+
+/** 팬심 바닥(침몰선 정서) — 전 선수 잔류 의향에 가산되는 거부 보정 */
+export const sinkingShipBias = (fan: number): number => (fan < 25 ? 0.08 : 0);

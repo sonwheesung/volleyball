@@ -90,6 +90,7 @@ export interface OfferCtx {
   asking: number;      // 요구 연봉
   w: FAWeights;        // 선수의 동기 가중치(prefWeightsOf)
   rand: number;        // 0~1 결정론 난수
+  talkBias?: number;   // 구단주 면담 보정(OWNER_SYSTEM) — 설득 성공 +, 결렬 −. 내 팀 오퍼에만
 }
 
 /**
@@ -107,7 +108,7 @@ export function offerScore(c: OfferCtx): number {
   const loyT = c.isOriginal ? (c.isFranchise ? 1 : 0.5) : 0;            // 잔류
   const homeT = c.isPreferred ? 1 : 0;                                  // 연고/선호팀
   const w = c.w;
-  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + 0.05 * c.rand;
+  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + 0.05 * c.rand + (c.talkBias ?? 0);
 }
 
 /** 자격 FA 목록 + 등급 (한 오프시즌 스냅샷) */
