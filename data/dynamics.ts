@@ -114,13 +114,16 @@ function compute(): Dyn {
     new Set(injuries.filter((s) => s.teamId === teamId && s.from <= d && d <= s.to).map((s) => s.playerId));
   const activeInjCount = (d: number, teamId: string) =>
     injuries.reduce((n, s) => n + (s.teamId === teamId && s.from <= d && d <= s.to ? 1 : 0), 0);
-  const payrollOf = (teamId: string) =>
-    (roster.get(teamId) ?? []).reduce((s, id) => s + (getPlayer(id)?.contract.salary ?? 0), 0);
+  const payrollOf = (teamId: string) => // 캡 합산은 국내 선수만(외인 연봉 캡 제외 — FOREIGN_SYSTEM)
+    (roster.get(teamId) ?? []).reduce((s, id) => s + (getPlayer(id)?.isForeign ? 0 : (getPlayer(id)?.contract.salary ?? 0)), 0);
 
   const applyTx = (tx: Tx) => {
     const arr = roster.get(tx.teamId) ?? [];
-    if (tx.kind === 'release') { roster.set(tx.teamId, arr.filter((id) => id !== tx.playerId)); faAvail.add(tx.playerId); }
-    else { if (!arr.includes(tx.playerId)) roster.set(tx.teamId, [...arr, tx.playerId]); faAvail.delete(tx.playerId); }
+    if (tx.kind === 'release') {
+      roster.set(tx.teamId, arr.filter((id) => id !== tx.playerId));
+      // 외인은 방출돼도 FA 풀로 가지 않는다 — 리그를 떠남(FOREIGN_SYSTEM 3장, 타 팀이 주울 수 없음)
+      if (!getPlayer(tx.playerId)?.isForeign) faAvail.add(tx.playerId);
+    } else { if (!arr.includes(tx.playerId)) roster.set(tx.teamId, [...arr, tx.playerId]); faAvail.delete(tx.playerId); }
     txLog.push(tx);
   };
 

@@ -21,6 +21,7 @@ import {
 } from '../engine/owner';
 import { discontentNow, teamFanbaseNow, buildOwnerFx } from '../data/owner';
 import { settleSeason, applyNet, type SeasonFinance } from '../engine/finance';
+import { FOREIGN_SALARY } from '../engine/foreign';
 import { staffSpend } from '../data/league';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
@@ -75,6 +76,9 @@ interface GameState {
   fanScore: number;                            // 내 팀 팬심(직전 시즌 결과, 0~100)
   cash: number;                                // 운영 자금(FINANCE) — 캡과 별개의 지갑
   lastFinance: SeasonFinance | null;           // 직전 시즌 정산 내역(표시용)
+  tryoutWish: string[];                        // 외국인 트라이아웃 위시리스트(우선순위)
+  foreignAltPool: string[];                    // 시즌 중 교체 대체 외인 후보
+  foreignSubUsed: boolean;                     // 외인 교체는 시즌당 1회
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -100,6 +104,8 @@ interface GameState {
   requestInterview: (playerId: string, card: TalkCard) => { met: boolean; topic: DiscontentTopic | null; ok?: boolean };
   suggestBench: (playerId: string, reason: BenchReason) => boolean;
   unbench: (playerId: string) => void;
+  toggleTryoutWish: (playerId: string) => void;
+  replaceForeign: (altId: string) => boolean;
   endSeason: () => void;
   resetSave: () => void;
 }
@@ -133,6 +139,9 @@ const freshSave = {
   fanScore: 50,
   cash: 50000, // 시작 운영 예비금 5억
   lastFinance: null as SeasonFinance | null,
+  tryoutWish: [] as string[],
+  foreignAltPool: [] as string[],
+  foreignSubUsed: false,
 };
 
 export const useGameStore = create<GameState>()(
@@ -196,7 +205,7 @@ export const useGameStore = create<GameState>()(
         // 배신 웃돈: 내가 이번 시즌 방출한 선수의 재영입은 몸값 ×1.5 (당일 철회는 unrelease로 무료)
         const betrayedBy = (id: string) => s.inSeasonTx.some((t) => t.kind === 'release' && t.teamId === my && t.playerId === id);
         let payroll = 0;
-        for (const id of rosterIds) if (!myReleased.has(id)) payroll += evolveOnDay(id, s.currentDay)?.contract.salary ?? 0;
+        for (const id of rosterIds) if (!myReleased.has(id)) { const rp = evolveOnDay(id, s.currentDay); if (rp && !rp.isForeign) payroll += rp.contract.salary; } // 캡=국내 전용
         for (const id of mySigned) { const p = evolveOnDay(id, s.currentDay); if (p) payroll += inSeasonCost(marketValue(p), betrayedBy(id)); }
         const signCost = inSeasonCost(marketValue(fa), betrayedBy(faId));
         if (payroll + signCost > LEAGUE_CAP) return false;
@@ -324,9 +333,27 @@ export const useGameStore = create<GameState>()(
         set({ benchDirectives });
         setOwnerContext(benchDirectives);
       },
+      toggleTryoutWish: (playerId) =>
+        set((s) => ({ tryoutWish: s.tryoutWish.includes(playerId) ? s.tryoutWish.filter((id) => id !== playerId) : [...s.tryoutWish, playerId] })),
+      // 시즌 중 외인 교체(시즌당 1회) — 퇴출 외인은 리그를 떠나고, 대체 외인 연봉은 지갑에서(이중 부담)
+      replaceForeign: (altId) => {
+        const s = get();
+        const my = s.selectedTeamId;
+        if (!my || s.foreignSubUsed) return false;
+        if (!s.foreignAltPool.includes(altId)) return false;
+        const curForeign = rosterIdsOnDay(my, s.currentDay).map((id) => evolveOnDay(id, s.currentDay)).find((p) => p?.isForeign);
+        if (!curForeign) return false;
+        if (FOREIGN_SALARY > s.cash) return false; // 운영 자금 부족
+        const inSeasonTx: Tx[] = [...s.inSeasonTx,
+          { day: s.currentDay, teamId: my, playerId: curForeign.id, kind: 'release' },
+          { day: s.currentDay, teamId: my, playerId: altId, kind: 'sign' }];
+        set({ inSeasonTx, foreignSubUsed: true, cash: s.cash - FOREIGN_SALARY, foreignAltPool: s.foreignAltPool.filter((id) => id !== altId) });
+        setTxContext(inSeasonTx, get().faPool, my);
+        return true;
+      },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones, interviews, benchDirectives, fanScore, cash } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -391,7 +418,7 @@ export const useGameStore = create<GameState>()(
 
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
         //    FA 입찰은 캡 AND 새 잔고(지갑) — 캡이 남아도 돈이 없으면 못 뽑는다
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash);
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash, tryoutWish);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
@@ -448,7 +475,7 @@ export const useGameStore = create<GameState>()(
         // 4.6) 다음 시즌 FA 풀 = 롤오버됐으나 미계약(로스터 외)·비은퇴 선수(오프시즌 잔류 FA)
         const rosteredNext = new Set(Object.values(filled.rosters).flat());
         const retiredSet = new Set(ctx.retired);
-        const nextFaPool = Object.keys(snapshot).filter((id) => !rosteredNext.has(id) && !retiredSet.has(id));
+        const nextFaPool = Object.keys(snapshot).filter((id) => !rosteredNext.has(id) && !retiredSet.has(id) && !snapshot[id].isForeign); // 외인은 FA 풀 비대상(트라이아웃 전용)
 
         // FA 영입 지출 차감 — 내 새 명단에 합류한 타 구단 출신(드래프트·신인 제외)의 첫 해 연봉
         let faSpend = 0;
@@ -467,6 +494,9 @@ export const useGameStore = create<GameState>()(
           fanScore: nextFan,
           cash: Math.max(0, settled.cash - faSpend),
           lastFinance: nextFinance,
+          tryoutWish: [],
+          foreignAltPool: ctx.tryout.altPoolIds,
+          foreignSubUsed: false,
           season: nextSeason,
           currentDay: 0,
           results: {},
@@ -526,6 +556,9 @@ export const useGameStore = create<GameState>()(
         fanScore: s.fanScore,
         cash: s.cash,
         lastFinance: s.lastFinance,
+        tryoutWish: s.tryoutWish,
+        foreignAltPool: s.foreignAltPool,
+        foreignSubUsed: s.foreignSubUsed,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);

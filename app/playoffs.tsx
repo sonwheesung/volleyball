@@ -62,7 +62,7 @@ export default function Playoffs() {
         {po.championId === my ? <Muted style={{ color: theme.good }}>우리 구단이 우승했습니다!</Muted> : null}
       </Card>
 
-      <Button label="오프시즌 · FA 센터 →" onPress={() => router.push('/fa')} />
+      <Button label="오프시즌 · 외국인 트라이아웃 →" onPress={() => router.push('/tryout')} />
     </Screen>
   );
 }

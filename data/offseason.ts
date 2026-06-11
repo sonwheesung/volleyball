@@ -15,6 +15,7 @@ import type { OwnerFx } from '../engine/owner';
 import { marketValue } from '../engine/salary';
 import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
+import { runTryout, type TryoutOutcome } from './tryout';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
 
@@ -70,7 +71,8 @@ export function resolveFAMarket(
   const payroll: Record<string, number> = {};
   const ovr: Record<string, number> = {};
   for (const t of teams) {
-    payroll[t] = rosters[t].reduce((s, id) => s + (snapshot[id]?.contract.salary ?? 0), 0);
+    // 캡 합산은 국내 선수만(외인 연봉은 캡 제외 — 실제 KOVO 규정, FOREIGN_SYSTEM 2장)
+    payroll[t] = rosters[t].reduce((s, id) => s + (snapshot[id]?.isForeign ? 0 : (snapshot[id]?.contract.salary ?? 0)), 0);
     ovr[t] = teamOverall(rosters[t].map(get).filter((p): p is Player => !!p));
   }
 
@@ -150,6 +152,7 @@ export interface Offseason {
   rosters: Record<string, string[]>;    // 잔류/AI유지 반영, FA 풀 인원 제외
   pool: string[];                       // 영입 가능한 FA id
   retired: string[];
+  returningForeign: string[];           // 전 시즌 외인(생존자) — 트라이아웃 재참가(국내 흐름과 분리)
 }
 
 /**
@@ -170,6 +173,7 @@ export function buildOffseason(
 
   const rosters: Record<string, string[]> = {};
   const pool: string[] = [];
+  const returningForeign: string[] = [];
   for (const teamId of Object.keys(afterRetire.rosters)) {
     // 1) 계약 남은 선수는 무조건 보유 + 팀 연봉 누적
     const keep: string[] = [];
@@ -178,6 +182,8 @@ export function buildOffseason(
     for (const id of afterRetire.rosters[teamId]) {
       const p = snapshot[id];
       if (!p) continue;
+      // 외인은 항상 1년 계약 만료 — 국내 잔류/FA 흐름과 분리, 트라이아웃 재참가로(FOREIGN_SYSTEM)
+      if (p.isForeign) { returningForeign.push(id); continue; }
       if (p.contract.remaining <= 0) expiring.push(p);
       else { keep.push(id); payroll += p.contract.salary; }
     }
@@ -208,7 +214,7 @@ export function buildOffseason(
     for (const p of expiring) if (!retainSet.has(p.id)) pool.push(p.id); // 잔류 의사 없던 만료자
     rosters[teamId] = keep;
   }
-  return { snapshot, rosters, pool, retired: afterRetire.retired };
+  return { snapshot, rosters, pool, retired: afterRetire.retired, returningForeign };
 }
 
 export interface PreDraft {
@@ -216,6 +222,7 @@ export interface PreDraft {
   rosters: Record<string, string[]>;     // FA 영입·보상·AI 충원까지 반영(드래프트 전)
   prevTeamOf: Record<string, string>;
   retired: string[];                     // 이번 오프시즌 은퇴자 id(명예의전당 등재용)
+  tryout: TryoutOutcome;                 // 외국인 트라이아웃 결과(풀·지명·대체 풀 — 미리보기 공유)
 }
 
 /**
@@ -232,15 +239,18 @@ export function resolvePreDraft(
   nextSeason: number,
   ownerFx?: OwnerFx,
   myCash?: number,
+  tryoutWish: string[] = [],
 ): PreDraft {
   const committed = currentRosters();
   const prevTeamOf: Record<string, string> = {};
   for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
 
   const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
+  // 외국인 트라이아웃 — FA 시장 앞(외인이 OP를 채워야 AI가 FA로 중복 영입하지 않는다)
+  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish);
   const prestige = teamPrestige(nextSeason - 1);
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash);
-  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired };
+  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, tryout };
 }
 
 /** FA 센터 미리보기: 풀 + 내 영입 성공/실패 예상 (resolvePreDraft와 동일 소스) */
@@ -254,21 +264,24 @@ export function faMarketPreview(
   nextSeason: number,
   ownerFx?: OwnerFx,
   myCash?: number,
+  tryoutWish: string[] = [],
 ): {
   pool: string[];
   snapshot: Record<string, Player>;
   myRoster: string[];
   signedByMe: Set<string>;
   lostTo: Record<string, string>;
+  tryout: TryoutOutcome;
 } {
   const committed = currentRosters();
   const prevTeamOf: Record<string, string> = {};
   for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
 
   const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
+  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish);
   const pool = [...off.pool];
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const prestige = teamPrestige(nextSeason - 1);
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash);
-  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo };
+  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, tryout };
 }

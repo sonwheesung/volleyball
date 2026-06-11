@@ -20,6 +20,7 @@ export interface DraftContext {
   cls: Player[];                          // 드래프트 클래스
   myHoles: number;
   myPickSlots: number[];                  // order 내 내 지명 순번(0-based)
+  tryout: import('./tryout').TryoutOutcome; // 외국인 트라이아웃 결과(미리보기=결과 공유)
 }
 
 export function buildDraftContext(
@@ -32,8 +33,9 @@ export function buildDraftContext(
   nextSeason: number,
   ownerFx?: import('../engine/owner').OwnerFx,
   myCash?: number,
+  tryoutWish: string[] = [],
 ): DraftContext {
-  const pre = resolvePreDraft(myTeam, resignDecisions, overrides, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash);
+  const pre = resolvePreDraft(myTeam, resignDecisions, overrides, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish);
   const holes: Record<string, number> = {};
   for (const t of Object.keys(pre.rosters)) holes[t] = Math.max(0, ROSTER_TOTAL - pre.rosters[t].length);
   const totalHoles = Object.values(holes).reduce((a, b) => a + b, 0);
@@ -56,5 +58,6 @@ export function buildDraftContext(
     cls,
     myHoles: holes[myTeam] ?? 0,
     myPickSlots,
+    tryout: pre.tryout,
   };
 }

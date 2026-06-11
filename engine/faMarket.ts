@@ -49,9 +49,9 @@ export function prefWeightsOf(p: Player): FAWeights {
 
 export const FIRST_FA_SEASONS = 6; // 최초 FA 자격(이후 다년 계약 만료마다 재자격)
 
-/** FA 자격: 경력 6시즌 이상 + 계약 만료 임박(잔여 1년 이하) */
+/** FA 자격: 경력 6시즌 이상 + 계약 만료 임박(잔여 1년 이하). 외인은 비대상(트라이아웃 전용) */
 export function isFAEligible(p: Player): boolean {
-  return p.career.seasons >= FIRST_FA_SEASONS && p.contract.remaining <= 1;
+  return !p.isForeign && p.career.seasons >= FIRST_FA_SEASONS && p.contract.remaining <= 1;
 }
 
 /** 이번 시즌 종료 시 FA가 될 선수(경력+1≥6, 잔여-1≤0 예정) — UI 예고용 */
