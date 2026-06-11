@@ -256,16 +256,18 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const hitY = att === 'home' ? 0.555 * H : 0.445 * H;
     const setterX = sIdx >= 0 ? sw[att].pos[sIdx].x : 0.5 * W;
     const hit =
-      atk === 'quick' ? { x: clampN(setterX + toLeft * (0.05 + rng.next() * 0.09) * W, 0.08 * W, 0.92 * W), y: hitY }
-      : atk === 'tempo' ? { x: clampN(setterX + toLeft * (0.12 + rng.next() * 0.10) * W, 0.08 * W, 0.92 * W), y: hitY }
+      atk === 'quick' ? { x: clampN(setterX + toLeft * (0.08 + rng.next() * 0.08) * W, 0.08 * W, 0.92 * W), y: hitY }
+      : atk === 'tempo' ? { x: clampN(setterX + toLeft * (0.14 + rng.next() * 0.10) * W, 0.08 * W, 0.92 * W), y: hitY }
       : atk === 'back' ? { x: sw[att].pos[atkIdx].x, y: att === 'home' ? 0.70 * H : 0.30 * H }
       : { x: sw[att].pos[atkIdx].x, y: hitY };
     const ahx = hit.x;
 
-    // 미끼(페이크): 오픈/백어택일 때 전위 센터가 속공 하는 척 세터 쪽으로 달려듦(시드 기반 가변)
+    // 미끼(페이크): 인시스템 오픈/백어택일 때 전위 센터가 속공 하는 척 세터 쪽으로 달려듦.
+    // 하이볼(세터 아닌 토스)엔 속공 위협이 없으므로 페이크 없음 — 토서에게 달려드는 것처럼 보인다.
+    // 간격 0.11W(≈마커 지름 이상): 세터에 포개지면 미끼가 아니라 방해로 읽힌다.
     const decoys = attFront.filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch && rng.next() < 0.6);
-    const fakeRun: Mover[] = (atk === 'open' || atk === 'back') && mbFront !== undefined && decoys.includes(mbFront)
-      ? [{ side: att, idx: mbFront, x: clampN(setterX + toLeft * 0.06 * W, 0.08 * W, 0.92 * W), y: hitY }]
+    const fakeRun: Mover[] = inSystem && (atk === 'open' || atk === 'back') && mbFront !== undefined && decoys.includes(mbFront)
+      ? [{ side: att, idx: mbFront, x: clampN(setterX + toLeft * 0.11 * W, 0.08 * W, 0.92 * W), y: hitY }]
       : [];
     // 공격 커버: 반원(가까운 2 좌우 측면 + 1 깊은 중앙), 좌→우 슬롯 배정(동선 교차 방지)
     // 첫 터치(리시브/디그)한 선수는 제외 — 패스 직후 한 박자 머물러야지 즉시 커버로 뛰면 어색하다
@@ -343,12 +345,13 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     };
     const doStuff = () => {
       // 스터프: 벽에 막혀 수직으로 꺾임 — 공격수 바로 뒤(네트~3m)에 꽂힌다. 깊게 날아가면
-      // 랠리 공처럼 읽히므로 낙하점은 짧게, 리바운드는 천천히·크게(블로킹임이 보이게).
+      // 랠리 공처럼 읽히므로 낙하점은 짧게. 막힌 공은 떠오르지 않는다 — 포물선 0으로
+      // 블록 면에서 그대로 내리꽂힌다(위로 붕 떴다 떨어지면 스터프로 안 읽힘).
       // 커버 2명이 낙하점으로 몸을 던지지만 못 살린다. 벽은 데드볼 동결로 네트 앞에 서 있다.
       const dropY = att === 'home' ? (0.56 + rng.next() * 0.08) * H : (0.36 + rng.next() * 0.08) * H;
       const stuffPt = { x: clampN(blockNet.x + rng.range(-0.05, 0.05) * W, 16, W - 16), y: dropY };
       wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', dur: 430, arc: 0.07 * H, scale: 1.22, movers: chasersTo(att, stuffPt, 2, 0.9) });
+      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', dur: 240, arc: 0, scale: 1, movers: chasersTo(att, stuffPt, 2, 0.9) });
     };
     const doTip = () => {
       // 페인트: 풀스윙 페이크(블로커 점프) → 손끝으로 살짝 — 블록 뒤·수비 앞 빈 공간에 톡.
