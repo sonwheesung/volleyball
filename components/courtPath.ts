@@ -251,23 +251,29 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       atkIdx = pick(pool.length ? pool : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
     }
 
-    // ── 타점: 속공=세터 옆 1~2m 낮고 빠르게 / 시간차=조금 넓게 / 백어택=3m 라인 뒤 / 오픈=사이드 레인 ──
+    // ── 타점: 속공=토스 지점 옆 1~2m 낮고 빠르게 / 시간차=조금 넓게 / 백어택=3m 라인 뒤 / 오픈=사이드 레인 ──
+    // 기준은 세터 "대형" x가 아니라 공이 실제 올라가는 지점(passSpot) — 토서는 패스를 따라
+    // 움직이므로, 대형 기준으로 잡으면 패스가 흐른 날 타점·미끼가 토서 위에 포개진다.
     const toLeft = att === 'home' ? -1 : 1;
     const hitY = att === 'home' ? 0.555 * H : 0.445 * H;
-    const setterX = sIdx >= 0 ? sw[att].pos[sIdx].x : 0.5 * W;
+    // 토스 지점에서 off만큼 옆 — 코트 가장자리에 몰리면 반대쪽으로(간격 보존이 우선)
+    const besideX = (off: number) => {
+      const want = passSpot.x + toLeft * off;
+      return want < 0.08 * W || want > 0.92 * W ? clampN(passSpot.x - toLeft * off, 0.08 * W, 0.92 * W) : want;
+    };
     const hit =
-      atk === 'quick' ? { x: clampN(setterX + toLeft * (0.08 + rng.next() * 0.08) * W, 0.08 * W, 0.92 * W), y: hitY }
-      : atk === 'tempo' ? { x: clampN(setterX + toLeft * (0.14 + rng.next() * 0.10) * W, 0.08 * W, 0.92 * W), y: hitY }
+      atk === 'quick' ? { x: besideX((0.08 + rng.next() * 0.08) * W), y: hitY }
+      : atk === 'tempo' ? { x: besideX((0.14 + rng.next() * 0.10) * W), y: hitY }
       : atk === 'back' ? { x: sw[att].pos[atkIdx].x, y: att === 'home' ? 0.70 * H : 0.30 * H }
       : { x: sw[att].pos[atkIdx].x, y: hitY };
     const ahx = hit.x;
 
-    // 미끼(페이크): 인시스템 오픈/백어택일 때 전위 센터가 속공 하는 척 세터 쪽으로 달려듦.
+    // 미끼(페이크): 인시스템 오픈/백어택일 때 전위 센터가 속공 하는 척 토스 지점 옆으로 달려듦.
     // 하이볼(세터 아닌 토스)엔 속공 위협이 없으므로 페이크 없음 — 토서에게 달려드는 것처럼 보인다.
-    // 간격 0.11W(≈마커 지름 이상): 세터에 포개지면 미끼가 아니라 방해로 읽힌다.
+    // 간격 0.11W(≈마커 지름 이상): 토서에 포개지면 미끼가 아니라 방해로 읽힌다.
     const decoys = attFront.filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch && rng.next() < 0.6);
     const fakeRun: Mover[] = inSystem && (atk === 'open' || atk === 'back') && mbFront !== undefined && decoys.includes(mbFront)
-      ? [{ side: att, idx: mbFront, x: clampN(setterX + toLeft * 0.11 * W, 0.08 * W, 0.92 * W), y: hitY }]
+      ? [{ side: att, idx: mbFront, x: besideX(0.11 * W), y: hitY }]
       : [];
     // 공격 커버: 반원(가까운 2 좌우 측면 + 1 깊은 중앙), 좌→우 슬롯 배정(동선 교차 방지)
     // 첫 터치(리시브/디그)한 선수는 제외 — 패스 직후 한 박자 머물러야지 즉시 커버로 뛰면 어색하다
