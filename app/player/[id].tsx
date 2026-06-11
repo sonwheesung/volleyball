@@ -1,6 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
-import { Text, View } from 'react-native';
-import { Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
+import { Alert, Text, View } from 'react-native';
+import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
+import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, conditionOf } from '../../data/owner';
+import { rosterIdsOnDay } from '../../data/dynamics';
+import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason } from '../../engine/owner';
 import { getEvolvedPlayer, getTeam } from '../../data/league';
 import { getPlayerProduction } from '../../data/production';
 import { awardHistoryOf } from '../../data/awards';
@@ -22,6 +25,13 @@ export default function PlayerDetail() {
   const overrides = useGameStore((s) => s.contractOverrides);
   const archive = useGameStore((s) => s.archive);
   const milestones = useGameStore((s) => s.milestones);
+  const myTeamId = useGameStore((s) => s.selectedTeamId);
+  const season = useGameStore((s) => s.season);
+  const interviews = useGameStore((s) => s.interviews);
+  const benchDirectives = useGameStore((s) => s.benchDirectives);
+  const requestInterview = useGameStore((s) => s.requestInterview);
+  const suggestBench = useGameStore((s) => s.suggestBench);
+  const unbench = useGameStore((s) => s.unbench);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
   const prod = id ? getPlayerProduction(id, currentDay) : undefined;
   const awardHist = id ? awardHistoryOf(archive, id) : [];
@@ -39,6 +49,53 @@ export default function PlayerDetail() {
   const contract = effectiveContract(p, overrides);
   const market = marketValue(p, prod);
   const status = contractStatus(contract.salary, market);
+
+  // ── 구단주 레이어 (내 팀 선수만) ──
+  const isMine = !!myTeamId && rosterIdsOnDay(myTeamId, currentDay).includes(p.id);
+  const { topic } = isMine && myTeamId ? discontentNow(p, myTeamId, currentDay) : { topic: null as null };
+  const cond = isMine && myTeamId ? conditionOf(myTeamId, p.id, currentDay) : null;
+  const myTalks = interviews.filter((l) => l.playerId === p.id && l.season === season);
+  const lastTalkFailed = myTalks.length > 0 && !myTalks[myTalks.length - 1].ok;
+  const benched = benchDirectives.some((b) => b.playerId === p.id);
+
+  const openTalk = () => {
+    if (!topic) return;
+    Alert.alert(
+      `면담 — ${p.name}`,
+      `${TOPIC_SPEECH[topic]}\n\n무엇을 약속하시겠습니까?`,
+      [
+        ...(['reinforce', 'starter', 'raise', 'franchise'] as TalkCard[]).map((card) => ({
+          text: CARD_KO[card],
+          onPress: () => {
+            const res = requestInterview(p.id, card);
+            if (!res.met) Alert.alert('면담 거절', `${p.name}: "…드릴 말씀 없습니다."\n(최근 면담이 잦았거나, 지난 면담에 실망한 상태입니다)`);
+            else if (res.ok) Alert.alert('설득 성공', `${p.name}: "알겠습니다. 구단주님 말씀, 믿어보겠습니다."`);
+            else Alert.alert('면담 결렬', `${p.name}: "…기대했던 제가 어리석었네요."\n(마음이 오히려 멀어졌습니다 — 이적 의향 상승)`);
+          },
+        })),
+        { text: '취소', style: 'cancel' as const },
+      ],
+    );
+  };
+
+  const openBench = () => {
+    Alert.alert(
+      `감독에게 벤치 건의 — ${p.name}`,
+      '어떤 명분으로 건의하시겠습니까?',
+      [
+        ...(['noResign', 'form', 'prospect'] as BenchReason[]).map((reason) => ({
+          text: BENCH_REASON_KO[reason],
+          onPress: () => {
+            const ok = suggestBench(p.id, reason);
+            Alert.alert(ok ? '감독 수락' : '감독 거절',
+              ok ? `감독: "알겠습니다. 당분간 ${p.name} 선수는 제외하겠습니다."`
+                 : `감독: "받아들일 수 없습니다. 라인업은 제가 책임집니다."\n(에이스 제외 요구·감독 소신·지시 정원 초과 시 거절)`);
+          },
+        })),
+        { text: '취소', style: 'cancel' as const },
+      ],
+    );
+  };
 
   return (
     <Screen title={p.name}>
@@ -69,6 +126,55 @@ export default function PlayerDetail() {
                 </View>
               );
             })}
+          </Card>
+        </>
+      ) : null}
+
+      {isMine && cond ? (
+        <>
+          <Title>구단주 면담</Title>
+          <Card>
+            <Row>
+              <Muted>컨디션</Muted>
+              <Text style={{ color: cond.color, fontWeight: '800' }}>● {cond.label}</Text>
+            </Row>
+            {benched ? (
+              <Text style={{ color: theme.warn, fontWeight: '700', fontSize: 13 }}>🪑 감독 지시로 출전 제외 중</Text>
+            ) : null}
+            {topic ? (
+              <>
+                <Text style={{ color: theme.bad, fontWeight: '800', marginTop: 4 }}>😟 {TOPIC_BADGE[topic]}</Text>
+                <Muted style={{ fontSize: 13 }}>{TOPIC_SPEECH[topic]}</Muted>
+                {lastTalkFailed ? <Muted style={{ fontSize: 12, color: theme.bad }}>💔 지난 면담이 결렬됐습니다 — 다시 문을 두드리면 거절당할 수 있습니다.</Muted> : null}
+                <Button label="면담 요청" onPress={openTalk} />
+              </>
+            ) : (
+              <Muted style={{ marginTop: 4 }}>😊 특별한 불만 없음 — "괜찮습니다, 구단주님."</Muted>
+            )}
+            {myTalks.length > 0 ? (
+              <View style={{ marginTop: 6, gap: 2 }}>
+                {myTalks.map((l, i) => (
+                  <Muted key={i} style={{ fontSize: 12 }}>
+                    {l.day}일차 · {TOPIC_BADGE[l.topic]} · "{CARD_KO[l.card]}" → {l.ok ? '성공' : '결렬'}
+                  </Muted>
+                ))}
+              </View>
+            ) : null}
+          </Card>
+
+          <Title>감독 건의</Title>
+          <Card>
+            {benched ? (
+              <Button label="복귀 지시 (벤치 해제)" onPress={() => { unbench(p.id); Alert.alert('복귀', `${p.name} 선수가 출전 명단에 복귀합니다. 실전 감각은 몇 경기에 걸쳐 돌아옵니다.`); }} />
+            ) : (
+              <>
+                <Muted style={{ fontSize: 12 }}>
+                  주전에서 빼달라고 감독에게 건의합니다. 감독 성향에 따라 거절할 수 있고,
+                  인기 선수를 오래 벤치에 두면 팬들이 분노합니다(기사·관중·예산).
+                </Muted>
+                <Button label="벤치 건의" onPress={openBench} />
+              </>
+            )}
           </Card>
         </>
       ) : null}

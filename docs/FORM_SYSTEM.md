@@ -1,7 +1,7 @@
 # 경기감각 (Match Form) — 설계 문서
 
 > **구현 현황(2026-06-11)**: ✅ `engine/form.ts` + dynamics(출전 이력 기록 → 날짜별 감각 적용,
-> `formFactorOnDay`/`availableTeamPlayers`). UI 컨디션 점은 미구현(다음 단계).
+> `formFactorOnDay`/`availableTeamPlayers`) + UI(스쿼드/선수 상세 ● 컨디션 점 — `data/owner.conditionOf`).
 > 검증: 100시즌 parity 유지(std 6.2·왕조 7·r −0.01·우승경험 7/7), KOVO 20지표 유지,
 > 무결성 0위반. 결장 누적 선수 평균 계수 0.933(설계 −7% 바닥과 일치).
 

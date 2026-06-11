@@ -15,11 +15,11 @@ import { detectSeasonMilestones } from '../data/milestones';
 import { seasonInjuryDays } from '../data/injury';
 import { setTxContext, setOwnerContext, seasonTxLog, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
 import {
-  discontentOf, meetAccept, persuade, cardMatch, interviewEffects, refuseResignProb,
+  meetAccept, persuade, cardMatch, interviewEffects, refuseResignProb,
   benchAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, sinkingShipBias, BENCH_MAX,
   type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx,
 } from '../engine/owner';
-import { prefWeightsOf } from '../engine/faMarket';
+import { discontentNow } from '../data/owner';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
 import { computeStandings } from '../data/standings';
@@ -40,25 +40,6 @@ const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const LEGEND_POINTS = 9000; // 영구결번급
 const SEASON_END_DAY = 164; // 정규시즌 길이(일) — 출전비율·팬심 계산 기준
 const GAME_EVERY = 4.6;     // 평균 경기 간격(일)
-
-/** 선수 불만 파생(OWNER_SYSTEM) — 성향과 현실의 불일치. 저장하지 않는다. */
-function discontentNow(p: Player, my: string, day: number): { topic: DiscontentTopic | null; weight: number } {
-  const standings = computeStandings(day > 0 ? day : Number.MAX_SAFE_INTEGER);
-  const rank = Math.max(1, standings.findIndex((s) => s.teamId === my) + 1);
-  const prod = leagueProduction(day > 0 ? day : Number.MAX_SAFE_INTEGER).get(p.id);
-  const gamesSoFar = Math.max(1, Math.round((day > 0 ? day : SEASON_END_DAY) / GAME_EVERY));
-  const topic = discontentOf(p, {
-    recentRankAvg: rank,
-    teamCount: standings.length,
-    playRatio: Math.min(1, (prod?.matches ?? 0) / gamesSoFar),
-    salaryRatio: p.contract.salary / Math.max(1, marketValue(p)),
-    myTeamId: my,
-  });
-  if (!topic) return { topic: null, weight: 0 };
-  const w = prefWeightsOf(p);
-  const weight = topic === 'win' ? w.win : topic === 'minutes' ? w.play : topic === 'money' ? w.money : w.home;
-  return { topic, weight };
-}
 
 const DEFAULT_SUB_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSub: true };
 

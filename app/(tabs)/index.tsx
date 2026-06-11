@@ -11,6 +11,7 @@ import { currentSeasonAwards } from '../../data/awards';
 import { SEVERITY_KO } from '../../engine/injury';
 import { teamOverall } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
+import { fanBudgetFactor } from '../../engine/owner';
 import { teamScheduleEntries } from '../../engine/season';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -32,6 +33,9 @@ export default function Dashboard() {
   const coach = getTeamCoach(teamId);
   const ovr = teamOverall(basePlayers); // 전력은 전체 스쿼드 기준(경기 엔진과 일치)
   const payroll = sumPayroll(roster);   // 페이롤은 활성 계약 기준
+  const fanScore = useGameStore((s) => s.fanScore); // 팬심(직전 시즌 정산) → 예산 계수
+  const fanFactor = fanBudgetFactor(fanScore);
+  const adjustedBudget = Math.round((team?.budget ?? 0) * fanFactor);
 
   const record = useMemo(() => {
     const entries = teamScheduleEntries(SEASON, teamId);
@@ -98,8 +102,15 @@ export default function Dashboard() {
       <Card>
         <Row>
           <Muted>팀 총연봉</Muted>
-          <Text style={{ color: payroll > team.budget ? theme.bad : theme.text, fontWeight: '800' }}>
-            {formatMoney(payroll)} / {formatMoney(team.budget)}
+          <Text style={{ color: payroll > adjustedBudget ? theme.bad : theme.text, fontWeight: '800' }}>
+            {formatMoney(payroll)} / {formatMoney(adjustedBudget)}
+          </Text>
+        </Row>
+        <Row>
+          <Muted>팬심</Muted>
+          <Text style={{ color: fanScore >= 60 ? theme.good : fanScore >= 35 ? theme.text : theme.bad, fontWeight: '800' }}>
+            {'♥'.repeat(Math.max(1, Math.round(fanScore / 20)))} {fanScore}
+            {fanFactor !== 1 ? `  (예산 ${fanFactor > 1 ? '+' : ''}${((fanFactor - 1) * 100).toFixed(0)}%)` : ''}
           </Text>
         </Row>
       </Card>
