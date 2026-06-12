@@ -155,8 +155,12 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   }
   const d2 = (a: { x: number; y: number }, p: { x: number; y: number }) => (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
   // shortPx: 죽은 공 추격은 공에 "닿기 직전"에서 멈춘다 — 공 위에 선 수비는 "잡았어야지"가 된다.
+  // 이미 공 옆(shortPx+6 이내)에 서 있던 선수는 추격자에서 제외(얼어붙음) — 그 선수가 추격자가
+  // 되면 제자리=공 위가 되어 같은 모순이 생긴다(스터프가 네트 앞 전위 옆에 떨어지는 경우).
   const chasersTo = (side: Side, target: { x: number; y: number }, n: number, reach: number, shortPx = 0): Mover[] => {
-    const order = [0, 1, 2, 3, 4, 5].sort((a, b) => d2(swDef[side].pos[a], target) - d2(swDef[side].pos[b], target)).slice(0, n);
+    const all = [0, 1, 2, 3, 4, 5].sort((a, b) => d2(swDef[side].pos[a], target) - d2(swDef[side].pos[b], target));
+    const min2 = (shortPx + 6) ** 2;
+    const order = (shortPx > 0 ? all.filter((i) => d2(swDef[side].pos[i], target) >= min2) : all).slice(0, n);
     return order.map((i) => {
       const p = swDef[side].pos[i];
       const dist = Math.hypot(target.x - p.x, target.y - p.y) || 1;
@@ -304,6 +308,17 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
           { side: att, idx: coverCand[1], ...cSpots[2] },
         ]
       : coverCand.map((i, k) => ({ side: att, idx: i, ...cSpots[k] }));
+    // 커버 슬롯이 토스 지점과 우연히 포개지면(타점≈토스 지점) 토서에서 24px 밖으로 — 토서 점유 금지
+    for (const mv of coverMovers) {
+      const cdx = mv.x - passSpot.x, cdy = mv.y - passSpot.y;
+      const cdd = Math.hypot(cdx, cdy);
+      if (cdd < 24) {
+        const ux = cdd > 0.01 ? cdx / cdd : (att === 'home' ? -1 : 1);
+        const uy = cdd > 0.01 ? cdy / cdd : 0;
+        mv.x = clampN(passSpot.x + ux * 24, 12, W - 12);
+        mv.y = clampN(passSpot.y + uy * 24, 12, H - 12);
+      }
+    }
 
     // 토스 연출: 속공=낮고 빠르게(작은 포물선) / 오픈=높게 붕 / 백어택=중간 — 블록 장수도 차등
     const blkCount = atk === 'quick' ? 1 : atk === 'open' ? (inSystem ? 2 : 3) : 2;

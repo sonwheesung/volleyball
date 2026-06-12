@@ -8,7 +8,10 @@
 //   A 이동 속도(순간이동/비현실 질주)  B 네트 침범  C 코트 이탈
 //   D 같은 팀 지속 겹침               E 리바운드 커버리지 홀(공격 시)
 //   F 수비 빈 공간(상대 스파이크 순간)  G 디그 적합성(가까운 수비수가 가는가)
-//   H 아웃볼 추격(터치아웃·스터프에 추격자 필수)
+//   H 아웃볼 추격(추격자 필수 + 공 42px 내 도달)  I 유령터치(처리자가 공 옆에)
+//   J 데드볼 재배치 금지                K 중계 공백(랠리당 최소 1줄)
+//   L 토서 점유 금지(토스 중 토서 옆 주차)        M 퍼스트터치 배회 금지(터치 후 정지)
+//   N 죽은 공 점유 금지(추격자가 공 위에 서기)    O 스터프 상승 금지(막힌 공은 안 떠오름)
 // 걸린 장면은 ASCII 코트로 덤프 → 사람 눈 없이도 직접 "보고" 진단 가능.
 
 import { resetLeagueBase, getEvolvedTeamPlayers, coachInfoOf, LEAGUE } from '../data/league';
@@ -120,6 +123,8 @@ for (let m = 0; m < nMatches; m++) {
     const ctx = (extra: string) => `경기${m + 1}/랠리${ri + 1}(${r.setNo}세트 ${r.home}:${r.away}) ${extra}`;
 
     let commentCount = 0; // K) 중계 텍스트 커버리지 — 랠리당 최소 1줄
+    // 퍼스트 터치(리시브/디그) 추적 — L(토서 점유 예외)·M(배회 금지)용
+    let ft: { key: Key; pos: Pt; side: Side } | null = null;
     for (let k = 0; k + 1 < path.length; k++) {
       const seg = { from: path[k], to: path[k + 1] };
       const to: WP = seg.to;
@@ -161,6 +166,50 @@ for (let m = 0; m < nMatches; m++) {
           }
         }
       }
+
+      // L) 토서 점유 금지: 토스 구간에 토서(공이 올라간 지점=seg.from) 22px 안으로 들어오는
+      //    같은 팀 무버 금지 — 공격수(타점행)·퍼스트 터치 정지는 예외. (구 미끼 런이 토서 위에
+      //    포개지던 사용자 보고 3회를 상설 규칙화 — 재발 시 여기서 잡힌다)
+      if (to.kind === 'toss' && to.movers) {
+        for (const mv of to.movers) {
+          if (mv.side !== to.side || mv.idx === to.idx) continue;
+          if (ft && `${mv.side}-${mv.idx}` === ft.key) continue;
+          const d = dist({ x: mv.x, y: mv.y }, { x: seg.from.x, y: seg.from.y });
+          if (d < 22) flag('L.토서 점유', ctx(`${mv.side}-${mv.idx} 목표가 토서에서 ${d.toFixed(0)}px`));
+        }
+      }
+
+      // M) 퍼스트터치 배회 금지: 리시브/디그한 선수는 그 공격이 끝날 때까지 터치 지점에 정지
+      //    (자세 회복) — 패스/토스 중 대형 복귀·커버 합류로 어슬렁거리면 위반
+      if (ft && (to.kind === 'pass' || to.kind === 'toss') && to.side === ft.side && `${to.side}-${to.idx}` !== ft.key) {
+        const tgt = targets[ft.key];
+        if (tgt && dist(tgt, ft.pos) > 18) flag('M.퍼스트터치 배회', ctx(`${ft.key} 목표가 터치 지점에서 ${dist(tgt, ft.pos).toFixed(0)}px 이탈(${to.kind})`));
+      }
+
+      // N) 죽은 공 점유 금지: 추격자는 공 가까이 가되(룰 H) 공 13px 안에 서면 안 된다 —
+      //    닿는 거리에 도달했으면 잡았어야 한다(블록아웃 오버런 사용자 보고를 상설 규칙화)
+      if (to.kind === 'fault' && to.movers) {
+        for (const mv of to.movers) {
+          const d = dist({ x: mv.x, y: mv.y }, { x: to.x, y: to.y });
+          if (d < 13) flag('N.죽은 공 점유', ctx(`${mv.side}-${mv.idx} 추격 목표가 공에서 ${d.toFixed(0)}px — 닿는 거리면 잡았어야`));
+        }
+      }
+
+      // O) 스터프 상승 금지: 블록에 막힌 공은 떠오를 수 없다 — 낙하 WP의 포물선은 0이어야
+      if (r.how === 'stuff' && to.kind === 'fault' && (to.arc === undefined || to.arc > 0.02 * H)) {
+        flag('O.스터프 상승', ctx(`막힌 공 arc=${to.arc === undefined ? '기본값(상승 포물선)' : to.arc.toFixed(0) + 'px'}`));
+      }
+
+      // 퍼스트 터치 추적: 서브/패스 도착 후 같은 팀 패스가 이어지면 이 도착의 처리자가 첫 터치
+      // (서브 리시브·원터치 디그 — 원터치 디그 WP는 idx -1이라 무버에서 디거를 읽는다).
+      // 클린/팁 디그는 spike 블록(룰 G 자리)에서 무버로 추적.
+      if ((to.kind === 'serve' || to.kind === 'pass') && !to.hold
+          && path[k + 2] && path[k + 2].kind === 'pass' && path[k + 2].side === to.side) {
+        const h = to.idx >= 0 ? { idx: to.idx, x: to.x, y: to.y }
+          : (() => { const mv = to.movers?.find((v) => v.side === to.side); return mv ? { idx: mv.idx, x: mv.x, y: mv.y } : null; })();
+        if (h) ft = { key: `${to.side}-${h.idx}`, pos: { x: h.x, y: h.y }, side: to.side };
+      }
+      if (to.kind === 'fault') ft = null;
 
       // 프레임 스텝
       const steps = Math.max(1, Math.round(segDur / DT));
@@ -206,15 +255,6 @@ for (let m = 0; m < nMatches; m++) {
       const endFrame: Record<Key, Pt> = {};
       for (const key of Object.keys(cur)) endFrame[key] = posAt(key, tNow);
       for (const key of Object.keys(cur)) cur[key] = endFrame[key];
-
-      // I) 터치 정합성: 서브 리시브/패스/토스가 도착했을 때 지정 처리자가 공 옆에 있어야(유령 터치)
-      if ((to.kind === 'serve' || to.kind === 'pass' || to.kind === 'toss') && to.idx >= 0) {
-        const handler = endFrame[`${to.side}-${to.idx}`];
-        if (handler) {
-          const gap = dist(handler, { x: to.x, y: to.y });
-          if (gap > 38) flag('I.유령터치', ctx(`${to.kind} 처리자 ${to.side}-${to.idx}가 공에서 ${(gap * M_PER_PX).toFixed(1)}m`), endFrame, { x: to.x, y: to.y });
-        }
-      }
 
       // I) 터치 정합성: 서브/패스/토스 도착 시 지정 처리자가 공 옆에 있어야(유령 터치 방지)
       if ((to.kind === 'serve' || to.kind === 'pass' || to.kind === 'toss') && to.idx >= 0) {
@@ -263,6 +303,10 @@ for (let m = 0; m < nMatches; m++) {
           const rank = backs.findIndex((b) => b.i === digMover.idx);
           if (rank > 3) flag('G.디그부적합', ctx(`디거 ${def}-${digMover.idx}가 ${rank + 1}번째로 먼 선수`), endFrame, land);
         }
+        // 퍼스트 터치 추적(클린/팁 디그): 공수 전환 — 디거가 새 공격의 첫 터치(무버 목표 = 밀린 지점 포함)
+        ft = digMover && path[k + 2] && path[k + 2].kind === 'pass'
+          ? { key: `${def}-${digMover.idx}`, pos: { x: digMover.x, y: digMover.y }, side: def }
+          : null;
       }
     }
     // K) 중계 커버리지 — 이름이 들어간 사실 라인이 한 줄도 없는 랠리는 "조용한 중계"
@@ -287,7 +331,7 @@ if (holeSamples.length) {
 log(`중계 텍스트: 랠리당 평균 ${(commentTotal / Math.max(1, totalRallies)).toFixed(1)}줄`);
 const total = Object.values(counts).reduce((a, b) => a + b, 0);
 if (total === 0) {
-  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치 모두 통과`);
+  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치·토서점유·퍼스트터치배회·죽은공점유·스터프상승 모두 통과`);
 } else {
   log(`\n❌ 이상 ${total}건:`);
   for (const [k, n] of Object.entries(counts).sort((a, b) => b[1] - a[1])) log(`  ${k}: ${n}건`);
