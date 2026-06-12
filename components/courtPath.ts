@@ -191,10 +191,16 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   // 리시브 미스: 공이 옆/뒤로 튕겨 라인 밖으로, 선수들이 쫓지만 못 살림 → 서브측 득점
   if (r.how ? r.how === 'recvErr' : (recv !== r.scorer && rng.next() < RECV_FAULT)) {
     const rp = serveTarget; // 공은 코스에 떨어졌고, 리시버가 거기서 튕겨냈다
-    const dir = rng.next() < 0.5 ? -1 : 1;
-    const out = rng.next() < 0.5
-      ? { x: dir < 0 ? -12 : W + 12, y: clampN(rp.y + rng.range(-0.1, 0.1) * H, 0.1 * H, 0.9 * H) } // 사이드 밖
-      : { x: clampN(rp.x + dir * 0.25 * W, 12, W - 12), y: (recv === 'home' ? H + 12 : -12) }; // 엔드라인 밖
+    // 튕긴 공은 "동료 없는 쪽"으로 — 옆에 선 수비 코스로 빠지면 잡았어야 한다(블록아웃과 동일 원칙).
+    // 동료에서 먼 코스 = 추격 거리가 길어져 "쫓는 장면"도 보인다(짧으면 가만히 서 있는 것처럼 보임).
+    const cs = [
+      { x: -14, y: clampN(rp.y + rng.range(-0.1, 0.1) * H, 0.1 * H, 0.9 * H) },
+      { x: W + 14, y: clampN(rp.y + rng.range(-0.1, 0.1) * H, 0.1 * H, 0.9 * H) },
+      { x: clampN(rp.x + (rng.next() < 0.5 ? -1 : 1) * 0.3 * W, 12, W - 12), y: recv === 'home' ? H + 14 : -14 },
+    ];
+    const mateDist = (p: { x: number; y: number }) =>
+      Math.min(...[0, 1, 2, 3, 4, 5].filter((i) => i !== recvIdx).map((i) => d2(rf[i] ?? sw[recv].pos[i], p)));
+    const out = cs.reduce((b, c) => (mateDist(c) > mateDist(b) ? c : b));
     // 실패한 리시버는 자기가 튕긴 공을 쫓고(닿지 못함), 가까운 2명이 코트 밖까지 추격. 나머지는 대형 동결.
     const selfChase = { side: recv, idx: recvIdx, x: rp.x + (out.x - rp.x) * 0.45, y: rp.y + (out.y - rp.y) * 0.45 };
     const others = chasersTo(recv, out, 3, 1.05, 26).filter((m) => m.idx !== recvIdx).slice(0, 2);
@@ -226,8 +232,15 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const pool = cand.length ? cand : [0, 1, 2, 3, 4, 5].filter((i) => i !== firstTouch);
       tosserIdx = pool.reduce((b, i) => (d2(sw[att].pos[i], passSpot) < d2(sw[att].pos[b], passSpot) ? i : b), pool[0]);
     }
-    // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트
-    wp.push({ x: passSpot.x, y: passSpot.y, side: att, idx: tosserIdx, kind: 'pass', movers: [{ side: att, idx: tosserIdx, x: passSpot.x, y: passSpot.y }] });
+    // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트.
+    // 퍼스트 터치한 선수는 패스 구간부터 그 자리에 멈춘다(자세 회복) — 대형 복귀로 어슬렁거리지 않게
+    wp.push({
+      x: passSpot.x, y: passSpot.y, side: att, idx: tosserIdx, kind: 'pass',
+      movers: [
+        { side: att, idx: tosserIdx, x: passSpot.x, y: passSpot.y },
+        ...(firstTouch !== tosserIdx ? [{ side: att, idx: firstTouch, x: touchPos.x, y: touchPos.y }] : []),
+      ],
+    });
 
     // 볼핸들링 범실(사실): 더블컨택·캐치 휘슬 — 패스가 죽고 그 자리에서 종료
     if (r.how === 'miscErr' && att === other(r.scorer) && (hop >= 2 || rng.next() < 0.7)) {
@@ -239,8 +252,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const lu = att === 'home' ? L.home : L.away;
     const attFront = [2, 3, 4].map((z) => lineupIdxAt(rotOf(att), z));
     const mbFront = attFront.find((i) => lu.six[i].position === 'MB' && i !== tosserIdx);
+    // 퍼스트 터치(리시브/디그)한 선수는 이번 공격에서 제외 — 받은 직후 자세 회복(한 박자 멈춤)
     const backCand = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z))
-      .filter((i) => i !== tosserIdx && i !== sIdx && (lu.six[i].position === 'OH' || lu.six[i].position === 'OP'));
+      .filter((i) => i !== tosserIdx && i !== sIdx && i !== firstTouch && (lu.six[i].position === 'OH' || lu.six[i].position === 'OP'));
     const inSystem = tosserIdx === sIdx; // 세터 토스 = 인시스템(속공 가능)
     let atk: Atk = 'open';
     const rA = rng.next();
@@ -252,7 +266,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     else if (atk === 'back') atkIdx = pick(backCand);
     else {
       // 오픈은 전위 OH/OP(센터는 속공 담당) — 결손 시 폴백
-      const oh = sw[att].frontHitters.filter((i) => i !== tosserIdx && lu.six[i].position !== 'MB');
+      const oh = sw[att].frontHitters.filter((i) => i !== tosserIdx && i !== firstTouch && lu.six[i].position !== 'MB');
       const pool = oh.length ? oh : sw[att].frontHitters.filter((i) => i !== tosserIdx);
       atkIdx = pick(pool.length ? pool : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
     }
@@ -274,13 +288,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       : { x: sw[att].pos[atkIdx].x, y: hitY };
     const ahx = hit.x;
 
-    // 미끼(페이크): 인시스템 오픈/백어택일 때 전위 센터가 속공 하는 척 토스 지점 옆으로 달려듦.
-    // 하이볼(세터 아닌 토스)엔 속공 위협이 없으므로 페이크 없음 — 토서에게 달려드는 것처럼 보인다.
-    // 간격 0.11W(≈마커 지름 이상): 토서에 포개지면 미끼가 아니라 방해로 읽힌다.
+    // 속공 페이크(미끼) 런은 넣지 않는다 — 톱뷰 2D에선 토스 중 세터 쪽 질주가 "토서 방해"로만
+    // 읽힌다(사용자 보고 3회). 비커버 전위(decoys)는 네트 앞 자기 자리를 지키는 걸로 위협을 표현.
     const decoys = attFront.filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch && rng.next() < 0.6);
-    const fakeRun: Mover[] = inSystem && (atk === 'open' || atk === 'back') && mbFront !== undefined && decoys.includes(mbFront)
-      ? [{ side: att, idx: mbFront, x: besideX(0.11 * W), y: hitY }]
-      : [];
     // 공격 커버: 반원(가까운 2 좌우 측면 + 1 깊은 중앙), 좌→우 슬롯 배정(동선 교차 방지)
     // 첫 터치(리시브/디그)한 선수는 제외 — 패스 직후 한 박자 머물러야지 즉시 커버로 뛰면 어색하다
     const coverCand = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch && !decoys.includes(i))
@@ -306,7 +316,6 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       movers: [
         ...coverMovers,
         { side: att, idx: atkIdx, x: hit.x, y: hit.y }, // 공격수가 타점으로 이동
-        ...fakeRun,
         // 첫 터치한 선수는 패스 지점에 한 박자 머문다(자세 회복) — 다음 구간부터 합류
         ...(firstTouch !== atkIdx && firstTouch !== tosserIdx
           ? [{ side: att, idx: firstTouch, x: touchPos.x, y: touchPos.y }]
@@ -439,13 +448,19 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       firstTouch = digIdx;
       touchPos = tp;
     } else {
-      // 클린 디그: 블록 피한 강타를 후위가 받아 전환
+      // 클린 디그: 블록 피한 강타를 후위가 받아 전환 — 강타 위세에 한 걸음(12px) 뒤로 밀린다.
+      // 연타(팁·원터치)는 제자리 디그 — 공 속도에 따라 밀림이 갈린다(사용자 제안 반영).
       const t = intended;
       const digIdx = nearestDig(t);
+      const kd = Math.hypot(t.x - ap.x, t.y - ap.y) || 1;
+      const dug = {
+        x: clampN(t.x + ((t.x - ap.x) / kd) * 12, 12, W - 12),
+        y: clampN(t.y + ((t.y - ap.y) / kd) * 12, 12, H - 12),
+      };
       const cover = chasersTo(def, t, 2, 0.5).find((m) => m.idx !== digIdx);
-      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [{ side: def, idx: digIdx, x: t.x, y: t.y }, ...(cover ? [cover] : []), ...coverMovers] });
+      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [{ side: def, idx: digIdx, ...dug }, ...(cover ? [cover] : []), ...coverMovers] });
       firstTouch = digIdx;
-      touchPos = t;
+      touchPos = dug;
     }
     att = def;
   }
