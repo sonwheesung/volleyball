@@ -106,14 +106,33 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   const serving = r.serving;
   const recv = other(serving);
   const serverIdx = lineupIdxAt(rotOf(serving), 1);
+  const servePos = zonePx(serving, 1, W, H);
   const wp: WP[] = [];
   if (prevLast) {
-    wp.push({ x: prevLast.x, y: prevLast.y, side: serving, idx: serverIdx, kind: 'start' }); // 직전 낙구점
-    wp.push({ ...zonePx(serving, 1, W, H), side: serving, idx: serverIdx, kind: 'return' }); // 공이 서버에게
+    // 공 전달(멀티볼) — 죽은 공이 혼자 서버에게 휭 날아가지 않는다:
+    //  우리 진영 안 = 가까운 선수가 주워 서버에게 로브 / 코트 밖·상대 진영 = 볼보이가 옆에서 새 공
+    const inCourt = prevLast.x >= 0 && prevLast.x <= W && prevLast.y >= 0 && prevLast.y <= H;
+    const myHalf = serving === 'home' ? prevLast.y >= 0.5 * H : prevLast.y <= 0.5 * H;
+    if (inCourt && myHalf) {
+      const sLu = serving === 'home' ? L.home : L.away;
+      const rfs = receiveFormation(serving, sLu, rotOf(serving), W, H);
+      const pd2 = (a: { x: number; y: number }) => (a.x - prevLast.x) ** 2 + (a.y - prevLast.y) ** 2;
+      const picker = [0, 1, 2, 3, 4, 5].filter((i) => i !== serverIdx)
+        .reduce((b, i) => (pd2(rfs[i]) < pd2(rfs[b]) ? i : b), serverIdx === 0 ? 1 : 0);
+      wp.push({ x: prevLast.x, y: prevLast.y, side: serving, idx: picker, kind: 'start' });
+      // 가까운 선수가 공으로 걸어가 줍고(공은 그 자리에 잠시), 서버에게 로브로 던져준다
+      wp.push({ x: prevLast.x, y: prevLast.y, side: serving, idx: picker, kind: 'return', dur: 340, movers: [{ side: serving, idx: picker, x: prevLast.x, y: prevLast.y }] });
+      wp.push({ ...servePos, side: serving, idx: serverIdx, kind: 'return', dur: 500, arc: 0.12 * H });
+    } else {
+      // 볼보이: 서브 코너 사이드라인에서 새 공을 건넨다 — 옛 공 위치에서 날아오지 않음
+      const bb = { x: servePos.x < W / 2 ? -16 : W + 16, y: serving === 'home' ? H - 24 : 24 };
+      wp.push({ x: bb.x, y: bb.y, side: serving, idx: serverIdx, kind: 'start' });
+      wp.push({ ...servePos, side: serving, idx: serverIdx, kind: 'return', dur: 300, arc: 0.05 * H });
+    }
   } else {
-    wp.push({ ...zonePx(serving, 1, W, H), side: serving, idx: serverIdx, kind: 'start' });
+    wp.push({ ...servePos, side: serving, idx: serverIdx, kind: 'start' });
   }
-  wp.push({ x: zonePx(serving, 1, W, H).x, y: serveOutY(serving), side: serving, idx: serverIdx, kind: 'walk' }); // 엔드라인 뒤로
+  wp.push({ x: servePos.x, y: serveOutY(serving), side: serving, idx: serverIdx, kind: 'walk' }); // 엔드라인 뒤로
 
   // 서브는 "코스"를 노린다(깊은 좌/중/우 70% · 3m 앞 짧은 서브 30%) — 리시버가 공 위치로 움직인다
   const recvLu = recv === 'home' ? L.home : L.away;
