@@ -6,7 +6,7 @@ import type { Side } from '../types';
 import type { PointHow } from '../engine/rally';
 import { createRng } from '../engine/rng';
 import {
-  lineupIdxAt, zonePx, switchedSpots, coverSpots, receiveFormation, receiveLine, type Lineup, type Switched,
+  lineupIdxAt, zonePx, switchedSpots, coverSpots, fanSlots, receiveFormation, receiveLine, type Lineup, type Switched,
 } from './courtLayout';
 
 export type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault' | 'bounce';
@@ -154,9 +154,15 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     return withBounce(wp, W, H);
   }
   const d2 = (a: { x: number; y: number }, p: { x: number; y: number }) => (a.x - p.x) ** 2 + (a.y - p.y) ** 2;
-  const chasersTo = (side: Side, target: { x: number; y: number }, n: number, reach: number): Mover[] => {
+  // shortPx: 죽은 공 추격은 공에 "닿기 직전"에서 멈춘다 — 공 위에 선 수비는 "잡았어야지"가 된다.
+  const chasersTo = (side: Side, target: { x: number; y: number }, n: number, reach: number, shortPx = 0): Mover[] => {
     const order = [0, 1, 2, 3, 4, 5].sort((a, b) => d2(swDef[side].pos[a], target) - d2(swDef[side].pos[b], target)).slice(0, n);
-    return order.map((i) => { const p = swDef[side].pos[i]; return { side, idx: i, x: p.x + (target.x - p.x) * reach, y: p.y + (target.y - p.y) * reach }; });
+    return order.map((i) => {
+      const p = swDef[side].pos[i];
+      const dist = Math.hypot(target.x - p.x, target.y - p.y) || 1;
+      const travel = Math.min(dist * reach, Math.max(0, dist - shortPx));
+      return { side, idx: i, x: p.x + ((target.x - p.x) / dist) * travel, y: p.y + ((target.y - p.y) / dist) * travel };
+    });
   };
 
   if (r.how === 'ace') {
@@ -165,7 +171,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const nx = clampN(zonePx(serving, 1, W, H).x + rng.range(-0.15, 0.15) * W, 0.15 * W, 0.85 * W);
       const drop = { x: nx, y: recv === 'home' ? NETY + 16 : NETY - 16 };
       wp.push({ x: nx, y: recv === 'home' ? NETY + 3 : NETY - 3, side: recv, idx: -1, kind: 'serve', hold: true, dur: 360 }); // 네트 터치(처리자 없음)
-      wp.push({ ...drop, side: recv, idx: -1, kind: 'fault', hold: true, dur: 420, soft: true, movers: chasersTo(recv, drop, 2, 0.82) }); // 다이빙 — 닿지 못함
+      wp.push({ ...drop, side: recv, idx: -1, kind: 'fault', hold: true, dur: 420, soft: true, movers: chasersTo(recv, drop, 2, 0.82, 24) }); // 다이빙 — 닿지 못함
       return withBounce(wp, W, H);
     }
     // 강서브 에이스: 코스를 꿰뚫음 — 가장 가까운 리시버가 몸을 날리지만 닿지 못함
@@ -191,7 +197,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       : { x: clampN(rp.x + dir * 0.25 * W, 12, W - 12), y: (recv === 'home' ? H + 12 : -12) }; // 엔드라인 밖
     // 실패한 리시버는 자기가 튕긴 공을 쫓고(닿지 못함), 가까운 2명이 코트 밖까지 추격. 나머지는 대형 동결.
     const selfChase = { side: recv, idx: recvIdx, x: rp.x + (out.x - rp.x) * 0.45, y: rp.y + (out.y - rp.y) * 0.45 };
-    const others = chasersTo(recv, out, 3, 1.05).filter((m) => m.idx !== recvIdx).slice(0, 2);
+    const others = chasersTo(recv, out, 3, 1.05, 26).filter((m) => m.idx !== recvIdx).slice(0, 2);
     wp.push({ x: out.x, y: out.y, side: recv, idx: -1, kind: 'fault', hold: true, movers: [selfChase, ...others] });
     return withBounce(wp, W, H);
   }
@@ -339,15 +345,23 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
         const dir = Math.sign(intended.x - ap.x) || (rng.next() < 0.5 ? -1 : 1);
         t = { x: clampN(ap.x + dir * (blockW + 0.05 * W), 0.08 * W, 0.92 * W), y: intended.y };
       }
-      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, t, 1, 0.92), ...coverMovers] });
+      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, t, 1, 0.92, 22), ...coverMovers] });
     };
     const doBlockout = () => {
-      // 터치아웃: 블록 스치고 아웃 — 수비 2명이 코트 밖까지 오버런하며 쫓는다(못 살림)
-      const outPt = rng.next() < 0.55
-        ? { x: ap.x < W / 2 ? W + 13 : -13, y: (def === 'home' ? 0.78 : 0.22) * H }
-        : { x: clampN(blockNet.x + rng.range(-0.2, 0.2) * W, 24, W - 24), y: def === 'home' ? H + 18 : -18 };
+      // 터치아웃: 블록 스치고 수비 없는 쪽으로 빠진다 — 후보 코스(좌·우 사이드, 엔드라인) 중
+      // 수비(대형+부채꼴)에서 가장 먼 곳. 추격 2명은 닿기 한 뼘 전(0.7m)에서 다이빙 — 공에
+      // 도달해 놓고 못 잡으면 모순이다(잡을 수 있는 공은 잡았어야 한다).
+      const cs = [
+        { x: -20, y: (def === 'home' ? 0.74 + rng.next() * 0.1 : 0.16 + rng.next() * 0.1) * H },
+        { x: W + 20, y: (def === 'home' ? 0.74 + rng.next() * 0.1 : 0.16 + rng.next() * 0.1) * H },
+        { x: clampN(blockNet.x + rng.range(-0.2, 0.2) * W, 24, W - 24), y: def === 'home' ? H + 24 : -24 },
+      ];
+      const fan = fanSlots(def, ap.x, W, H);
+      const defDist = (p: { x: number; y: number }) =>
+        Math.min(...[0, 1, 2, 3, 4, 5].map((i) => d2(swDef[def].pos[i], p)), ...fan.map((s) => d2(s, p)));
+      const outPt = cs.reduce((b, c) => (defDist(c) > defDist(b) ? c : b));
       wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-      wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', movers: chasersTo(def, outPt, 2, 1.06) });
+      wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', movers: chasersTo(def, outPt, 2, 1.06, 28) });
     };
     const doStuff = () => {
       // 스터프: 벽에 막혀 수직으로 꺾임 — 공격수 바로 뒤(네트~3m)에 꽂힌다. 깊게 날아가면
@@ -357,7 +371,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const dropY = att === 'home' ? (0.56 + rng.next() * 0.08) * H : (0.36 + rng.next() * 0.08) * H;
       const stuffPt = { x: clampN(blockNet.x + rng.range(-0.05, 0.05) * W, 16, W - 16), y: dropY };
       wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', dur: 240, arc: 0, scale: 1, movers: chasersTo(att, stuffPt, 2, 0.9) });
+      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', dur: 240, arc: 0, scale: 1, movers: chasersTo(att, stuffPt, 2, 0.9, 24) });
     };
     const doTip = () => {
       // 페인트: 풀스윙 페이크(블로커 점프) → 손끝으로 살짝 — 블록 뒤·수비 앞 빈 공간에 톡.
