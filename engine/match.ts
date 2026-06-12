@@ -33,6 +33,8 @@ const START_MOMENTUM = 50;
 const TIMEOUTS_PER_SET = 2;
 // 감독 성향별 타임아웃 호출 임계(상대 연속득점 수). 수비형은 일찍, 공격형은 늦게(아낀다)
 const TO_THRESHOLD: Record<CoachStyle, number> = { defense: 3, balanced: 4, attack: 5 };
+const TIMEOUT_REST = 0.04; // 타임아웃 휴식 회복(7.1·7.4) — 양 팀 모두 쉰다(차이는 기세 수렴이 만듦)
+const TIRED_STAM = 0.5;    // 코트에 이 미만으로 퍼진 선수가 있으면 감독이 타임아웃을 한 박자 일찍 부른다
 
 export interface CoachInfo { style: CoachStyle; charisma: number }
 export interface MatchOpts {
@@ -229,6 +231,9 @@ export function simulateMatch(
           away.momentum += (50 - away.momentum) * pull;
           streak = 0;
           lastScorer = null;
+          recover('home', homeStam, TIMEOUT_REST); // 타임아웃 = 쉬는 시간(7.1) — 양 팀 회복
+          recover('away', awayStam, TIMEOUT_REST);
+          if (opts.trace) opts.trace.push(`타임아웃(건의 수락) — ${side === 'home' ? '홈' : '원정'} [${h}:${a}]`);
         }
       }
       const tele = opts.events ? { events: opts.events, srng: createRng(strSeed(`${seed}:r:${rallyNo}`)), rallyNo } : undefined;
@@ -260,13 +265,25 @@ export function simulateMatch(
 
       // 타임아웃 (7.4/8장): 상대 연속득점이 임계 도달 + 잔여 보유 → 지는 팀 감독 호출.
       // 양 팀 기세를 50으로 수렴(폭 = 호출 감독 카리스마). 좋은 흐름일 때 부르면 손해.
-      if (!isSetOver(h, a, setNo) && streak >= TO_THRESHOLD[teamOf(loserSide).style] && timeouts[loserSide] > 0) {
-        timeouts[loserSide]--;
-        const pull = (charismaOf(loserSide) / 100) * 0.6;
-        home.momentum += (50 - home.momentum) * pull;
-        away.momentum += (50 - away.momentum) * pull;
-        streak = 0;
-        lastScorer = null;
+      // 코트 선수들이 지쳐 보이면(평균 체력 < TIRED_STAM) 한 박자 일찍 끊는다 — 한숨 돌리기(7.1).
+      {
+        const stamMap = loserSide === 'home' ? homeStam : awayStam;
+        const lt = teamOf(loserSide);
+        const courtPs = [...lt.six, ...(lt.libero ? [lt.libero] : [])];
+        const minStam = courtPs.reduce((sm, p) => Math.min(sm, stamMap.get(p.id) ?? 1), 1);
+        const tired = minStam < TIRED_STAM; // 주포가 퍼졌다 — 평균은 세터·리베로가 가려서 못 본다
+        const th = Math.max(2, TO_THRESHOLD[lt.style] - (tired ? 1 : 0));
+        if (!isSetOver(h, a, setNo) && streak >= th && timeouts[loserSide] > 0) {
+          timeouts[loserSide]--;
+          if (opts.trace) opts.trace.push(`타임아웃 — ${loserSide === 'home' ? '홈' : '원정'} (연속실점 ${streak}${tired ? '·코트 지침' : ''}) [${h}:${a}]`);
+          const pull = (charismaOf(loserSide) / 100) * 0.6;
+          home.momentum += (50 - home.momentum) * pull;
+          away.momentum += (50 - away.momentum) * pull;
+          streak = 0;
+          lastScorer = null;
+          recover('home', homeStam, TIMEOUT_REST); // 타임아웃 = 쉬는 시간(7.1) — 양 팀 회복
+          recover('away', awayStam, TIMEOUT_REST);
+        }
       }
 
       // 랠리 사이 체력 회복(7.1) — 교체 투입 선수 포함(tracked)
