@@ -283,7 +283,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const st = chooseServe(sp, serv.style, rng, clutch);
   const svPow = n(R(sp).serve) * momFactor(serv.momentum) * eg(serving) * eff(serv, sp);
   const recvSkill = strength(receivers(recv), (r) => r.receive, R, recv) * momFactor(recv.momentum) * eg(recvSide);
-  for (const p of receivers(recv)) drain(recv, p, 0.3); // 리시브 라인도 체력을 쓴다(7.1) — 수비 전담도 지친다
+  for (const p of receivers(recv)) drain(recv, p, 0.2); // 리시브 라인도 체력을 쓴다(7.1) — 수비 전담도 지친다
   // 실력차 민감도 0.09 — KOVO 정렬로 무작위성(랠리·기세)을 줄인 만큼 격차 전달을 압축(parity, 2026-06)
   const aceP = clamp(SERVE_ACE[st] * (0.5 + svPow) + 0.09 * (svPow - recvSkill), 0.003, 0.18);
   const spFocus = n(sp.focus) + (clutch ? clutchFocusAdj(sp.traits) : 0); // 큰 고비: 클러치↑·새가슴↓
@@ -366,6 +366,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const at = teamOf(att);
     const df = teamOf(other(att));
     const setter = setterOf(at);
+    drain(at, setter, 0.3); // 토스도 체력을 쓴다(7.1) — 세터는 모든 2구를 따라다닌다(빈도 최다·강도 낮음)
     const setQ = n(R(setter).set) * eff(at, setter);
     // 볼핸들링 범실(기타 범실군) — 더블컨택·캐치·네트터치. 세터 기복↓·난조 패스일수록↑
     const miscP = clamp(0.042 - 0.022 * n(setter.consistency) - 0.012 * q, 0.006, 0.06);
@@ -377,7 +378,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     }
     const atk = chooseAtk(q, setQ, n(setter.vq), at.style, rng);
     const attacker = pickAttacker(at, atk, R, rng);
-    drain(at, attacker, 1);
+    drain(at, attacker, 1.2); // 스파이크 점프가 가장 힘들다(7.1) — 리시브 면제 공격수(OP)도 지치게
     maybeInjure(at, attacker, rng);
     const quickKind: QuickKind | undefined = atk === 'quick' ? quickKindOf(q, setter, attacker) : undefined; // 난수 없는 결정론 분류
 
