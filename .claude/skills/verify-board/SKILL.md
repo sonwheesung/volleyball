@@ -40,5 +40,7 @@ description: Verify the match-board choreography against the documented user cau
 - **이상 장면 0건**이 머지 조건. 1건이라도 있으면 실패로 보고한다.
 - 종결 분포가 엔진 분포와 크게 어긋나면(보드가 결과를 지어냄) 실패 — 엔진 분포 자체의 KOVO
   정렬은 `tools/simKovo.ts`(엔진 검증) 소관이지 이 스킬 소관이 아니다.
-- 엔진(`engine/`)을 건드린 변경이면 이 스킬로는 부족 — simKovo·시즌 시뮬(`/sim-league`)까지
-  풀배터리를 돌린다.
+- 엔진(`engine/`)을 건드린 변경이면 이 스킬로는 부족 — simKovo(KOVO 분포)·시즌 시뮬(`/sim-league`)·
+  **스탯 유효성**(`npx tsx tools/simStatEffect.ts` — 16개 스탯 각각을 고/저 통제 실험으로 승률 측정,
+  무효/역효과 스탯 검출)까지 풀배터리를 돌린다. 스탯 산식을 바꿨다면 simStatEffect는 필수.
+  알려진 미해결(2026-06-12): 체력·체젠 무효 — 드레인≈회복 상쇄 + 효율 하한 0.82 캡. 튜닝 결정 대기.
