@@ -12,6 +12,8 @@
 //   J 데드볼 재배치 금지                K 중계 공백(랠리당 최소 1줄)
 //   L 토서 점유 금지(토스 중 토서 옆 주차)        M 퍼스트터치 배회 금지(터치 후 정지)
 //   N 죽은 공 점유 금지(추격자가 공 위에 서기)    O 스터프 상승 금지(막힌 공은 안 떠오름)
+//   P 공 전달 정합(서브 공은 볼보이=코트 밖 출발 또는 선수 픽업 — 휭 직행 금지)
+// 기준 문서: docs/BOARD_RULES.md (사용자 주의사항 ↔ 룰 대응표). 새 주의사항은 문서에 먼저.
 // 걸린 장면은 ASCII 코트로 덤프 → 사람 눈 없이도 직접 "보고" 진단 가능.
 
 import { resetLeagueBase, getEvolvedTeamPlayers, coachInfoOf, LEAGUE } from '../data/league';
@@ -125,6 +127,18 @@ for (let m = 0; m < nMatches; m++) {
     let commentCount = 0; // K) 중계 텍스트 커버리지 — 랠리당 최소 1줄
     // 퍼스트 터치(리시브/디그) 추적 — L(토서 점유 예외)·M(배회 금지)용
     let ft: { key: Key; pos: Pt; side: Side } | null = null;
+
+    // P) 공 전달 정합: 새 랠리의 서브 공은 ①볼보이(코트 밖 사이드 출발) ②선수 픽업(무버가 공
+    //    위치로) 중 하나여야 — 죽은 공이 혼자 코트를 가로질러 서버에게 날아오는 "휭 직행" 금지
+    if (path[0]?.kind === 'start' && path[1]?.kind === 'return') {
+      const pickup = path[1].movers?.[0];
+      if (pickup) {
+        if (dist({ x: pickup.x, y: pickup.y }, { x: path[0].x, y: path[0].y }) > 10)
+          flag('P.공 전달(픽업 이탈)', ctx('줍는 선수가 공 위치로 가지 않음'));
+      } else if (path[0].x >= 0 && path[0].x <= W) {
+        flag('P.공 전달(유령 배달)', ctx(`새 공이 코트 안(${path[0].x.toFixed(0)},${path[0].y.toFixed(0)})에서 출발 — 볼보이는 사이드라인 밖`));
+      }
+    }
     for (let k = 0; k + 1 < path.length; k++) {
       const seg = { from: path[k], to: path[k + 1] };
       const to: WP = seg.to;
@@ -331,7 +345,7 @@ if (holeSamples.length) {
 log(`중계 텍스트: 랠리당 평균 ${(commentTotal / Math.max(1, totalRallies)).toFixed(1)}줄`);
 const total = Object.values(counts).reduce((a, b) => a + b, 0);
 if (total === 0) {
-  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치·토서점유·퍼스트터치배회·죽은공점유·스터프상승 모두 통과`);
+  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치·토서점유·퍼스트터치배회·죽은공점유·스터프상승·공전달 모두 통과 (기준: docs/BOARD_RULES.md)`);
 } else {
   log(`\n❌ 이상 ${total}건:`);
   for (const [k, n] of Object.entries(counts).sort((a, b) => b[1] - a[1])) log(`  ${k}: ${n}건`);
