@@ -1,5 +1,6 @@
 // 구단주 건의 시뮬 (Phase 4) — 여러 감독(카리스마·성향)을 대상으로 선발 건의·타임아웃 건의의
 // 수락률이 설계 의도대로 갈리는지 측정. + 결정론·경기 영향 범위 검증.
+// STATS_PROTOCOL: 판정 표본 10,000/셀(타임아웃 건의는 경기 내 발생 빈도 한정 — 산하 표본 명기).
 //   npx tsx tools/simSuggest.ts
 
 import { LEAGUE, getEvolvedTeamPlayers, getTeamCoach, resetLeagueBase } from '../data/league';
@@ -24,8 +25,8 @@ for (const cha of [30, 50, 70, 90]) {
   const row: number[] = [];
   for (const gapT of [1.0, 0.5, 0.1]) {
     let ok = 0;
-    for (let i = 0; i < 800; i++) if (startSuggestAccept(`p${i}`, 1, 40, cha, gapT)) ok++;
-    row.push(ok / 800);
+    for (let i = 0; i < 10000; i++) if (startSuggestAccept(`p${i}`, 1, 40, cha, gapT)) ok++;
+    row.push(ok / 10000);
   }
   rates[cha] = row;
   log(`     ${cha}      ${(row[0] * 100).toFixed(0)}%          ${(row[1] * 100).toFixed(0)}%        ${(row[2] * 100).toFixed(0)}%`);
@@ -40,11 +41,11 @@ for (const id of ids) {
   const c = getTeamCoach(id);
   if (!c) continue;
   let okS = 0, okB = 0;
-  for (let i = 0; i < 600; i++) {
+  for (let i = 0; i < 10000; i++) {
     if (startSuggestAccept(`q${i}`, 2, 60, c.charisma, 0.7)) okS++;
     if (benchAccept(`q${i}`, 2, 60, c.charisma, 0.7, 4, 'noResign')) okB++;
   }
-  log(`  ${c.name.padEnd(8)} 카리스마 ${String(c.charisma).padStart(2)} · 선발 건의 ${(okS / 600 * 100).toFixed(0)}% · 벤치 건의 ${(okB / 600 * 100).toFixed(0)}%`);
+  log(`  ${c.name.padEnd(8)} 카리스마 ${String(c.charisma).padStart(2)} · 선발 건의 ${(okS / 10000 * 100).toFixed(0)}% · 벤치 건의 ${(okB / 10000 * 100).toFixed(0)}%`);
 }
 
 // ── 3) 타임아웃 건의 — 흐름(밀림/이김)별 수락률 + 경기 영향 ──
