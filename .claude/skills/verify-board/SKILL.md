@@ -42,5 +42,6 @@ description: Verify the match-board choreography against the documented user cau
   정렬은 `tools/simKovo.ts`(엔진 검증) 소관이지 이 스킬 소관이 아니다.
 - 엔진(`engine/`)을 건드린 변경이면 이 스킬로는 부족 — simKovo(KOVO 분포)·시즌 시뮬(`/sim-league`)·
   **스탯 유효성**(`npx tsx tools/simStatEffect.ts` — 16개 스탯 각각을 고/저 통제 실험으로 승률 측정,
-  무효/역효과 스탯 검출)까지 풀배터리를 돌린다. 스탯 산식을 바꿨다면 simStatEffect는 필수.
-  알려진 미해결(2026-06-12): 체력·체젠 무효 — 드레인≈회복 상쇄 + 효율 하한 0.82 캡. 튜닝 결정 대기.
+  무효/역효과 스탯 검출)·**동작 스탯 추적**(`npx tsx tools/simActionTrace.ts` — 모든 서브/리시브/세트/
+  공격/디그가 "그 선수의 현재(체력·부상 반영) 스탯"에서 나왔는지: 기본 스탯 재계산 정합, 세트별 피로
+  곡선, 실효 스탯 3분위 성공률 단조)까지 풀배터리를 돌린다. 스탯 산식을 바꿨다면 둘 다 필수.

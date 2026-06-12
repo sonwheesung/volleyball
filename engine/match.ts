@@ -134,8 +134,8 @@ export function simulateMatch(
     away.momentum = START_MOMENTUM - carry;
     home.rotation = 0;
     away.rotation = 0;
-    recover('home', homeStam, 0.5);
-    recover('away', awayStam, 0.5);
+    recover('home', homeStam, 0.12);
+    recover('away', awayStam, 0.12);
     const timeouts = { home: TIMEOUTS_PER_SET, away: TIMEOUTS_PER_SET };
     let serving: Side = setNo % 2 === 1 ? 'home' : 'away';
 

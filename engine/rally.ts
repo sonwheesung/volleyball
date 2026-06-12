@@ -26,9 +26,9 @@ const ATTACK_SHARE: Record<Position, number> = { OP: 1.0, OH: 0.9, MB: 0.6, S: 0
 const CAP = 8; // 랠리 hop 상한(7.3)
 
 // ── 체력 (7.1) ──
-const STAM_FLOOR = 0.82;
-const HOP_COST = 0.02;
-export const STAM_REGEN_BASE = 0.05;
+const STAM_FLOOR = 0.70;
+const HOP_COST = 0.024;
+export const STAM_REGEN_BASE = 0.009;
 const INJ_EFF = 0.5; // 부상 시 효율 배수(9.3)
 
 // ── 서브 타입 (2장) ── [에이스 기저, 범실 기저]
@@ -283,6 +283,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const st = chooseServe(sp, serv.style, rng, clutch);
   const svPow = n(R(sp).serve) * momFactor(serv.momentum) * eg(serving) * eff(serv, sp);
   const recvSkill = strength(receivers(recv), (r) => r.receive, R, recv) * momFactor(recv.momentum) * eg(recvSide);
+  for (const p of receivers(recv)) drain(recv, p, 0.3); // 리시브 라인도 체력을 쓴다(7.1) — 수비 전담도 지친다
   // 실력차 민감도 0.09 — KOVO 정렬로 무작위성(랠리·기세)을 줄인 만큼 격차 전달을 압축(parity, 2026-06)
   const aceP = clamp(SERVE_ACE[st] * (0.5 + svPow) + 0.09 * (svPow - recvSkill), 0.003, 0.18);
   const spFocus = n(sp.focus) + (clutch ? clutchFocusAdj(sp.traits) : 0); // 큰 고비: 클러치↑·새가슴↓
@@ -313,8 +314,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     if (stats) stats.aces++; if (trace) trace.push('  → 서브 에이스! (서브팀 득점)');
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'ace', sj);
-      E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'ace' });
-      E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: 'ace', q: 0 });
+      E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'ace', rating: R(sp).serve, eff: eff(serv, sp) });
+      E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: 'ace', q: 0, rating: R(passer).receive, eff: eff(recv, passer) });
       emitPoint(serving, '서브 에이스');
     }
     return { winner: serving, how: 'ace' };
@@ -323,7 +324,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     if (stats) stats.serveErrs++; if (trace) trace.push('  → 서브 범실 (리시브팀 득점)');
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'fault', sj);
-      E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'fault' });
+      E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'fault', rating: R(sp).serve, eff: eff(serv, sp) });
       emitPoint(recvSide, '서브 범실');
     }
     return { winner: recvSide, how: 'serveErr' };
@@ -348,8 +349,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     if (trace) trace.push(`리시브 범실 [${sideKo(recvSide)}] (서브팀 득점)`);
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, 0.05);
-      E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'in' });
-      E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: 'shank', q: 0 });
+      E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'in', rating: R(sp).serve, eff: eff(serv, sp) });
+      E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: 'shank', q: 0, rating: R(passer).receive, eff: eff(recv, passer) });
       emitPoint(serving, '리시브 범실');
     }
     return { winner: serving, how: 'recvErr' };
@@ -357,8 +358,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   if (trace) trace.push(`리시브 [${sideKo(recvSide)}] 품질 ${q.toFixed(2)} (${qLabel(q)})`);
   if (E && passer) {
     const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, q);
-    E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'in' });
-    E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: q >= 0.6 ? 'good' : q >= 0.4 ? 'poor' : 'shank', q });
+    E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'in', rating: R(sp).serve, eff: eff(serv, sp) });
+    E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: q >= 0.6 ? 'good' : q >= 0.4 ? 'poor' : 'shank', q, rating: R(passer).receive, eff: eff(recv, passer) });
   }
 
   for (let hop = 0; hop < CAP; hop++) {
@@ -403,7 +404,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     let attackerHitXY: Pt = { x: 0, y: 0 };
     const pushAttack = (result: AtkResult, diggerXY: Pt | null): Pt => {
       const course = attackCourse(defSide, result, attSide, diggerXY, attackerHitXY.x, sj);
-      E!.push({ t: 'attack', side: attSide, player: attacker.name, pos: attacker.position, atk, quickKind, from: attackerHitXY, course, result });
+      E!.push({ t: 'attack', side: attSide, player: attacker.name, pos: attacker.position, atk, quickKind, from: attackerHitXY, course, result, rating: R(attacker).spike, eff: eff(at, attacker) });
       return course;
     };
     if (E) {
@@ -420,7 +421,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       }
       attackerHitXY = { x: Math.max(0.5, Math.min(COURT.W - 0.5, hx)), y: hy };
       const toss = tossLanding(attackerHitXY, attSide, inSystem, q, sj);
-      E.push({ t: 'set', side: attSide, player: setter.name, pos: setter.position, from: xyOf(attSide, at, setter), target: toss.target, landing: toss.landing, atk, quickKind, offTarget: toss.offTarget, inSystem });
+      E.push({ t: 'set', side: attSide, player: setter.name, pos: setter.position, from: xyOf(attSide, at, setter), target: toss.target, landing: toss.landing, atk, quickKind, offTarget: toss.offTarget, inSystem, rating: R(setter).set, eff: eff(at, setter) });
     }
 
     const chem = (atk === 'quick' || atk === 'tempo') ? 0.12 * chemistry(setter, attacker) : 0; // 케미(9.2)
@@ -492,12 +493,16 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
 
     // 기저 0.38 — KOVO 랠리 길이 정렬(공격시도 ~34/세트·디그 ~15/세트, 2026-06. 0.46은 랠리 과장)
     const digP = clamp(0.40 + defStyleBonus + 0.45 * (digStr - attackPower), 0.05, 0.9); // 민감도 압축(parity)·기저로 평균 복원
+    // 디그는 시도 자체가 체력을 쓴다(성공/실패 무관 — 몸을 던진다). 디거 = 후위 최고 디그
+    const dDef = defenders(df);
+    const dg0 = dDef.length ? dDef.reduce((b, p) => (R(p).dig > R(b).dig ? p : b)) : attacker;
+    drain(df, dg0, 0.4);
     if (rng.next() < digP) {
       if (stats) stats.digs++;
       q = clamp(0.4 + 0.4 * (digStr - attackPower) + rng.range(-0.1, 0.1), 0.1, 0.85);
-      const d = defenders(df); const dg = d.length ? d.reduce((b, p) => (R(p).dig > R(b).dig ? p : b)) : attacker;
+      const dg = dg0;
       if (trace) trace.push(`    → 디그 성공 [${sideKo(other(att))}] ${dg.name}(${dg.position}) (공 튕겨 전환, q ${q.toFixed(2)})`);
-      if (E) { const dgXY = xyOf(defSide, df, dg); const course = pushAttack('dug', dgXY); E.push({ t: 'dig', side: defSide, player: dg.name, pos: dg.position, at: dgXY, ball: course, reach: dist(dgXY, course), ok: true }); }
+      if (E) { const dgXY = xyOf(defSide, df, dg); const course = pushAttack('dug', dgXY); E.push({ t: 'dig', side: defSide, player: dg.name, pos: dg.position, at: dgXY, ball: course, reach: dist(dgXY, course), ok: true, rating: R(dg).dig, eff: eff(df, dg) }); }
       att = other(att);
       continue;
     }
