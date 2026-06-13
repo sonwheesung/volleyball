@@ -420,10 +420,13 @@ export const useGameStore = create<GameState>()(
         const injuryDays = seasonInjuryDays(); // 만성 노쇠가속(약) — 큰 부상 선수 영구 소폭 하락
         const playoffs = buildPlayoffs(season);
         const championId = playoffs.championId ?? '';
-        // 순위 기반·연승연패·플옵 서사 업적용: 최종 순위 + 팀별 최장 연승/연패 + 플옵 시리즈 W/L
-        const rankOrder = computeStandings(Number.MAX_SAFE_INTEGER).map((r) => r.teamId);
+        // 순위·연승연패·플옵 서사·시즌 승수 업적용: 최종 순위 + 팀별 최장 연승/연패 + 플옵 W/L + 팀별 승패
+        const finalTable = computeStandings(Number.MAX_SAFE_INTEGER);
+        const rankOrder = finalTable.map((r) => r.teamId);
+        const record: Record<string, [number, number]> = {};
+        for (const r of finalTable) record[r.teamId] = [r.wins, r.losses];
         const seasonStreak = seasonStreaks(Number.MAX_SAFE_INTEGER);
-        const archEntry: SeasonArchive = { season, championId, awards: seasonAwards, standings: rankOrder, streaks: seasonStreak, series: seriesByTeam(playoffs) };
+        const archEntry: SeasonArchive = { season, championId, awards: seasonAwards, standings: rankOrder, streaks: seasonStreak, series: seriesByTeam(playoffs), record };
         const nextArchive = archive.some((a) => a.season === season)
           ? archive.map((a) => (a.season === season ? { ...a, ...archEntry } : a))
           : [...archive, archEntry];

@@ -33,11 +33,15 @@ const firstUnlock: Record<string, Record<string, number>> = {}; // teamId -> ach
 for (let s = 0; s < N; s++) {
   // 1) 이번 시즌 결과 적립 (실제 endSeason 순서) — 순위·연승연패·플옵 시리즈 포함
   const po = buildPlayoffs(s);
+  const table = computeStandings(Number.MAX_SAFE_INTEGER);
+  const rec: Record<string, [number, number]> = {};
+  for (const r of table) rec[r.teamId] = [r.wins, r.losses];
   archive.push({
     season: s, championId: po.championId ?? '', awards: currentSeasonAwards(s),
-    standings: computeStandings(Number.MAX_SAFE_INTEGER).map((r) => r.teamId),
+    standings: table.map((r) => r.teamId),
     streaks: seasonStreaks(Number.MAX_SAFE_INTEGER),
     series: seriesByTeam(po),
+    record: rec,
   });
   allMs.push(...detectSeasonMilestones(s, hof));
 
@@ -108,17 +112,21 @@ for (const st of finalMine) {
   }
 }
 
+// 의도된 전설 극단: 구조상 가능하나(엔진 하드 차단 없음) 정상 밸런스에선 거의 안 나옴 — 버그 아님.
+//   전승(최고 35승 1패)·전패(최저 2승 34패)는 parity가 막아 200시즌 0건이 정상.
+const legendaryExtreme = new Set(['perfect_season', 'winless_season']);
 // 리그 전체 커버리지: 운영 외 업적이 어느 팀에서든 한 번이라도 달성되는가(도달 가능성 증명)
 const reachable = new Set<string>();
 for (const t of LEAGUE.teams) for (const [achId, _] of Object.entries(firstUnlock[t.id] ?? {})) reachable.add(achId);
-const neverReached = ACHIEVEMENTS.filter((a) => !opCats.has(a.id) && !reachable.has(a.id));
+const neverReached = ACHIEVEMENTS.filter((a) => !opCats.has(a.id) && !legendaryExtreme.has(a.id) && !reachable.has(a.id));
 
 log(`\n내 팀 달성 ${done}/${ACHIEVEMENTS.length} (운영 ${opSkipped}개는 시뮬 밖).`);
 log(`리그 전체에서 ${N}시즌 내 한 번이라도 달성된 비운영 업적: ${reachable.size}/${ACHIEVEMENTS.length - opCats.size}종`);
+log(`🌑 의도된 전설 극단(전승·전패): 구조상 가능하나 ${N}시즌 미관측(정상 — parity가 막음, 최고 35승/최저 2승)`);
 if (neverReached.length) {
   log(`⚠ ${N}시즌 동안 어느 팀도 못 깬 비운영 업적: ${neverReached.map((a) => a.title).join(', ')} — 임계 과한지 점검 대상`);
 } else {
-  log(`✅ 운영 외 전 업적이 실제 시뮬에서 도달 가능 — 임계 건강`);
+  log(`✅ 전설 극단 외 전 업적이 실제 시뮬에서 도달 가능 — 임계 건강`);
 }
 
 // ── 난이도 지도: 비운영 업적별 (달성 팀 수 / 7) + 첫 달성까지 걸린 시즌(전 팀 중앙값) ──

@@ -94,6 +94,12 @@ export const ACHIEVEMENTS: Achievement[] = [
   A('reverse_sweep', '대역전극', '챔프전 2패 후 3연승 우승(리버스 스윕)', '서사'),
   A('sweep_title', '완벽한 대관식', '챔프전 3-0 스윕 우승', '서사'),
   A('blown_lead', '통한의 준우승', '챔프전 2승 후 3연패(역스윕 당함)', '서사'),
+  A('perfect_season', '무패의 전설', '정규리그 전승으로 시즌 마무리', '서사'),
+  A('wins_30', '압도적 시즌', '한 시즌 30승 이상', '서사'),
+  A('wins_20s', '강호의 반열', '한 시즌 20승대(20~29승) 마무리', '서사'),
+  A('wins_10s', '평범한 한 해', '한 시즌 10승대(10~19승) 마무리', '서사'),
+  A('wins_single', '다사다난', '한 시즌 한 자릿수 승(1~9승) 마무리', '서사'),
+  A('winless_season', '굴욕의 시즌', '정규리그 무승으로 시즌 마무리', '서사'),
   // ── 단장(GM 액션) ──
   A('first_draft', '첫 드래프트', '첫 신인 드래프트 완료', '단장'),
   A('draft_veteran', '드래프트 베테랑', '드래프트 10회 진행', '단장', 10),
@@ -242,6 +248,9 @@ export function evalAchievements(input: AchInput): AchStatus[] {
   const runnerUps = hist.filter((h) => h.rank === 2).length;
   const podiums = hist.filter((h) => h.rank <= 3).length;
   const streaks = bestMatchStreaks(archive, my);
+  // 시즌 승수 브래킷 — record 있는 시즌의 내 팀 승/패
+  const myRecords = archive.map((a) => a.record?.[my]).filter((r): r is [number, number] => !!r);
+  const seasonWin = (ok: (w: number, l: number) => boolean) => myRecords.some(([w, l]) => (w + l > 0) && ok(w, l));
   // 최하위의 반란: 꼴찌한 시즌 바로 다음 시즌 가을야구(3위 이내)
   const rankBySeason = new Map(hist.map((h) => [h.season, h.rank]));
   const worstToFirst = hist.some((h) => isLast(h) && (rankBySeason.get(h.season + 1) ?? 99) <= 3);
@@ -285,6 +294,12 @@ export function evalAchievements(input: AchInput): AchStatus[] {
     reverse_sweep: b(hasSeriesPattern(archive, my, ['L', 'L', 'W', 'W', 'W'])),
     sweep_title: b(hasSeriesPattern(archive, my, ['W', 'W', 'W'])),
     blown_lead: b(hasSeriesPattern(archive, my, ['W', 'W', 'L', 'L', 'L'])),
+    perfect_season: b(seasonWin((_w, l) => l === 0)),
+    wins_30: b(seasonWin((w) => w >= 30)),
+    wins_20s: b(seasonWin((w) => w >= 20 && w <= 29)),
+    wins_10s: b(seasonWin((w) => w >= 10 && w <= 19)),
+    wins_single: b(seasonWin((w) => w >= 1 && w <= 9)),
+    winless_season: b(seasonWin((w) => w === 0)),
     // 단장(GM 액션 — careerLog + 드래프트는 시즌수 파생)
     first_draft: b(seasonsRun >= 1), draft_veteran: seasonsRun,
     first_fa: b(log.faSigns >= 1), fa_mogul: log.faSigns,

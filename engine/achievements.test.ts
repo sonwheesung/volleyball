@@ -133,6 +133,19 @@ test('플옵 서사 — 리버스 스윕·스윕·블론', () => {
   assert.equal(get(blown, 'reverse_sweep').unlocked, false);
 });
 
+test('시즌 승수 브래킷 — 전승·30승·20승대·10승대·한자릿수·무승', () => {
+  const rec = (w: number, l: number) => base({ archive: [{ season: 0, championId: 'x', record: { [MY]: [w, l] } }] });
+  assert.equal(get(rec(36, 0), 'perfect_season').unlocked, true);
+  assert.equal(get(rec(35, 1), 'perfect_season').unlocked, false);
+  assert.equal(get(rec(33, 3), 'wins_30').unlocked, true);
+  assert.equal(get(rec(25, 11), 'wins_20s').unlocked, true);
+  assert.equal(get(rec(25, 11), 'wins_30').unlocked, false);
+  assert.equal(get(rec(15, 21), 'wins_10s').unlocked, true);
+  assert.equal(get(rec(7, 29), 'wins_single').unlocked, true);
+  assert.equal(get(rec(0, 36), 'winless_season').unlocked, true);
+  assert.equal(get(rec(0, 36), 'wins_single').unlocked, false); // 0승은 한자릿수(1~9) 아님
+});
+
 test('단장 — careerLog 기반 GM 액션', () => {
   const cl = (over: Partial<{ faSigns: number; coachHires: number; staffHires: number; interviews: number }>) =>
     base({ careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0, ...over } });
