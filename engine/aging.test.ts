@@ -49,13 +49,13 @@ test('노장(33세) 체력·근력은 한 시즌에 1~2점 하락', () => {
   assert.ok(dSta >= 1 && dSta <= 3, `stamina 하락=${dSta}`);
 });
 
-test('체력·근력만 하락 — 민첩/기술/VQ는 안 떨어진다', () => {
+test('신체만 하락(점프·민첩) — 반응/기술/VQ는 안 떨어진다', () => {
   const after = runSeason(makePlayer(36), 1); // 가장 노쇠 빠른 나이로도
-  assert.equal(after.agility, 70, '민첩성 불변');
+  assert.ok(after.agility < 70, '민첩성 하락(신체 — CLAUDE.md 5.1)');
   assert.equal(after.reaction, 70, '반응속도 불변');
   assert.equal(after.skSpike, 70, '기술 불변');
   assert.equal(after.vq, 70, 'VQ 불변');
-  assert.ok(after.jump < 70, '근력은 하락');
+  assert.ok(after.jump < 70, '점프는 하락');
 });
 
 test('나이 들수록 체력·근력 하락이 가파르다', () => {

@@ -64,6 +64,7 @@ export function settleSeason(input: {
   return {
     sponsor, bonus, gate, merch, income,
     payroll: input.payroll, staff: input.staff, expense,
+    // bailout은 잔고 적용 후에야 확정 — 호출부가 applyNet(cash,net).bailout으로 덮어쓴다(여기선 placeholder)
     net: income - expense, attendance, bailout: false,
   };
 }

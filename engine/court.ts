@@ -43,8 +43,6 @@ export function serveSpot(side: Side, rng01: () => number): Pt {
 }
 
 export const dist = (a: Pt, b: Pt): number => Math.hypot(a.x - b.x, a.y - b.y);
-export const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-export const inBounds = (p: Pt): boolean => p.x >= 0 && p.x <= COURT.W && p.y >= 0 && p.y <= COURT.L;
 /** 한 사이드 코트 안(서브/공격 in/out 판정) */
 export const inHalf = (side: Side, p: Pt): boolean =>
   p.x >= 0 && p.x <= COURT.W && (side === 'home' ? p.y >= COURT.NET_Y && p.y <= COURT.L : p.y >= 0 && p.y <= COURT.NET_Y);

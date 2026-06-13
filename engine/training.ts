@@ -61,7 +61,6 @@ export const TRAINING_NAME: Record<TrainingId, string> = Object.fromEntries(
 // 포지션 관련성 (TRAINING_SYSTEM 2.1) — 명시 안 된 칸은 기본 1.0
 const POS_REL: Partial<Record<TrainingId, Partial<Record<Position, number>>>> = {
   1: { L: 0.5 },
-  3: {}, // 전 포지션 ~1
   4: { S: 0.3, L: 0.1, MB: 0.9 },
   5: { L: 0.2 },
   6: { L: 1.0, OH: 1.0, S: 0.5, MB: 0.4, OP: 0.3 },
@@ -147,8 +146,8 @@ export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boos
     // → 포지션 핵심 스탯은 감독과 무관하게 항상 크고, 감독이 속도·부가 방향을 더한다.
     const share = Math.max(coachShare(t.id, focus), POS_FLOOR);
     const boost = boosts?.[t.id] ?? 1; // 전문 코치 부스트(STAFF_SYSTEM) — 미지정 시 1(불변)
-    // 주 스탯
-    addXp(t.primary, BASE * 1.0 * pos * share * boost * rng.range(0.85, 1.15));
+    // 주 스탯(가중 1.0) — 부 스탯은 0.4
+    addXp(t.primary, BASE * pos * share * boost * rng.range(0.85, 1.15));
     // 부 스탯
     for (const sec of t.secondary) {
       addXp(sec, BASE * 0.4 * pos * share * boost * rng.range(0.85, 1.15));
