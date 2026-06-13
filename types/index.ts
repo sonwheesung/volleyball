@@ -163,6 +163,7 @@ export interface SeasonArchive {
   awards?: SeasonAwards;
   standings?: string[];                       // 최종 순위 teamId (1위→꼴찌). 순위 기반 업적용
   streaks?: Record<string, [number, number]>; // teamId → [그 시즌 최장 연승, 최장 연패]. 연승/연패 업적용
+  series?: Record<string, ('W' | 'L')[][]>;   // teamId → 플옵 시리즈별 W/L 시퀀스. 리버스 스윕·블론 업적용
 }
 
 // ─── 마일스톤 (MILESTONE_SYSTEM) ─────────────────────────────

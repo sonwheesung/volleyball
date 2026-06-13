@@ -45,3 +45,19 @@ export function buildPlayoffs(season: number): Playoffs {
 
   return { seeds, po, final, championId };
 }
+
+/** 팀별 그 시즌 플옵 시리즈 경기 결과(W/L 시퀀스, 팀 시점) — 리버스 스윕·블론 등 서사 업적용.
+ *  한 팀이 PO와 결승을 모두 치르면 2개 시리즈가 쌓인다(시간순: PO 먼저). */
+export function seriesByTeam(p: Playoffs): Record<string, ('W' | 'L')[][]> {
+  const out: Record<string, ('W' | 'L')[][]> = {};
+  const add = (m: Matchup | null) => {
+    if (!m) return;
+    const hi: ('W' | 'L')[] = m.series.games.map((g) => (g.hiSets > g.loSets ? 'W' : 'L'));
+    const lo: ('W' | 'L')[] = m.series.games.map((g) => (g.loSets > g.hiSets ? 'W' : 'L'));
+    (out[m.hiId] ??= []).push(hi);
+    (out[m.loId] ??= []).push(lo);
+  };
+  add(p.po);   // PO(2위 vs 3위) 먼저
+  add(p.final); // 결승
+  return out;
+}

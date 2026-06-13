@@ -122,6 +122,30 @@ test('연승/연패 — 시즌 최장 스트릭', () => {
   assert.equal(get(input, 'lose_streak_10').unlocked, true); // 최장 11연패
 });
 
+test('플옵 서사 — 리버스 스윕·스윕·블론', () => {
+  const rev = base({ archive: [{ season: 0, championId: MY, series: { [MY]: [['L', 'L', 'W', 'W', 'W']] } }] });
+  assert.equal(get(rev, 'reverse_sweep').unlocked, true);
+  assert.equal(get(rev, 'blown_lead').unlocked, false);
+  const sweep = base({ archive: [{ season: 0, championId: MY, series: { [MY]: [['W', 'W', 'W']] } }] });
+  assert.equal(get(sweep, 'sweep_title').unlocked, true);
+  const blown = base({ archive: [{ season: 0, championId: 'x', series: { [MY]: [['W', 'W', 'L', 'L', 'L']] } }] });
+  assert.equal(get(blown, 'blown_lead').unlocked, true);
+  assert.equal(get(blown, 'reverse_sweep').unlocked, false);
+});
+
+test('단장 — careerLog 기반 GM 액션', () => {
+  const cl = (over: Partial<{ faSigns: number; coachHires: number; staffHires: number; interviews: number }>) =>
+    base({ careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0, ...over } });
+  assert.equal(get(cl({ faSigns: 1 }), 'first_fa').unlocked, true);
+  assert.equal(get(cl({ faSigns: 15 }), 'fa_mogul').unlocked, true);
+  assert.equal(get(cl({ coachHires: 1 }), 'first_coach').unlocked, true);
+  assert.equal(get(cl({ interviews: 20 }), 'interview_master').unlocked, true);
+  assert.equal(get(cl({ interviews: 19 }), 'interview_master').unlocked, false);
+  // 드래프트는 시즌수 파생(careerLog 무관)
+  assert.equal(get(base({ archive: [{ season: 0, championId: 'x' }] }), 'first_draft').unlocked, true);
+  assert.equal(get(base(), 'first_draft').unlocked, false);
+});
+
 test('결정론 — 같은 입력 = 같은 결과', () => {
   const input = base({ archive: [{ season: 0, championId: MY }], cash: 123456, fanScore: 77 });
   assert.deepEqual(evalAchievements(input), evalAchievements(input));

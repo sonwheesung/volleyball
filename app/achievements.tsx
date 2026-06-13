@@ -8,8 +8,8 @@ import { evalAchievements, achievementSummary, type AchCategory, type AchStatus 
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 
-const CATEGORY_ORDER: AchCategory[] = ['우승', '시상', '레전드', '기록', '서사', '운영'];
-const CATEGORY_ICON: Record<AchCategory, string> = { 우승: '🏆', 시상: '🎖️', 레전드: '⭐', 기록: '📖', 서사: '📜', 운영: '💰' };
+const CATEGORY_ORDER: AchCategory[] = ['우승', '시상', '레전드', '기록', '서사', '단장', '운영'];
+const CATEGORY_ICON: Record<AchCategory, string> = { 우승: '🏆', 시상: '🎖️', 레전드: '⭐', 기록: '📖', 서사: '📜', 단장: '🧑‍💼', 운영: '💰' };
 
 // 진행치 표시 — 운영 자금만 금액 포맷, 나머지는 숫자
 const progressLabel = (s: AchStatus): string => {
@@ -26,10 +26,11 @@ export default function Achievements() {
   const milestones = useGameStore((s) => s.milestones);
   const cash = useGameStore((s) => s.cash);
   const fanScore = useGameStore((s) => s.fanScore);
+  const careerLog = useGameStore((s) => s.careerLog);
 
   const statuses = useMemo(
-    () => evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore }),
-    [myTeamId, archive, hof, milestones, cash, fanScore],
+    () => evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore, careerLog }),
+    [myTeamId, archive, hof, milestones, cash, fanScore, careerLog],
   );
   const { done, total } = achievementSummary(statuses);
   const byCat = useMemo(() => {

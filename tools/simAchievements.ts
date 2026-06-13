@@ -13,7 +13,7 @@ import { applyMatchXp } from '../engine/experience';
 import { accrueCareer } from '../engine/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
-import { buildPlayoffs } from '../data/playoffs';
+import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { computeStandings, seasonStreaks } from '../data/standings';
 import { evalAchievements, ACHIEVEMENTS } from '../engine/achievements';
 import type { HofEntry, Milestone, SeasonArchive } from '../types';
@@ -31,11 +31,13 @@ const allMs: Milestone[] = [];
 const firstUnlock: Record<string, Record<string, number>> = {}; // teamId -> achId -> season
 
 for (let s = 0; s < N; s++) {
-  // 1) 이번 시즌 결과 적립 (실제 endSeason 순서) — 순위·연승연패 포함
+  // 1) 이번 시즌 결과 적립 (실제 endSeason 순서) — 순위·연승연패·플옵 시리즈 포함
+  const po = buildPlayoffs(s);
   archive.push({
-    season: s, championId: buildPlayoffs(s).championId ?? '', awards: currentSeasonAwards(s),
+    season: s, championId: po.championId ?? '', awards: currentSeasonAwards(s),
     standings: computeStandings(Number.MAX_SAFE_INTEGER).map((r) => r.teamId),
     streaks: seasonStreaks(Number.MAX_SAFE_INTEGER),
+    series: seriesByTeam(po),
   });
   allMs.push(...detectSeasonMilestones(s, hof));
 
@@ -90,7 +92,8 @@ const finalMine = evalAchievements({ myTeamId: myTeam, archive, hof, milestones:
 const mineFu = firstUnlock[myTeam] ?? {};
 
 log(`\n═══ 업적 달성 검증 — ${N}시즌 실제 시뮬 (내 팀 = ${myName}, 통산 우승 ${titlesByTeam.get(myTeam) ?? 0}회) ═══`);
-const opCats = new Set(['cash_200k', 'cash_500k', 'cash_1m', 'fan_70', 'fan_90']); // 운영 자금·팬심은 리그 시뮬 밖
+// 리그 시뮬 밖: 운영(자금·팬심) + 단장 액션(careerLog — AI 리그엔 내 팀 액션 없음). 드래프트는 시즌수 파생이라 잡힘.
+const opCats = new Set(['cash_200k', 'cash_500k', 'cash_1m', 'fan_70', 'fan_90', 'first_fa', 'fa_mogul', 'first_coach', 'coach_collector', 'first_staff', 'first_interview', 'interview_master']);
 let done = 0, opSkipped = 0;
 for (const st of finalMine) {
   const isOp = opCats.has(st.ach.id);

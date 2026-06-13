@@ -27,7 +27,7 @@ import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
 import { computeStandings, seasonStreaks } from '../data/standings';
 import { coachInfoOf } from '../data/league';
-import { buildPlayoffs } from '../data/playoffs';
+import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay } from '../data/league';
 import { marketValue } from '../engine/salary';
 import { LEAGUE_CAP } from '../engine/cap';
@@ -64,7 +64,8 @@ interface GameState {
   faAggressive: boolean;                       // 공격적 영입(연봉↑로 경쟁 우위)
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
-  archive: { season: number; championId: string; awards?: SeasonAwards }[]; // 역대 우승 + 시상
+  archive: SeasonArchive[];                    // 역대 우승 + 시상 + 순위/연승연패/플옵
+  careerLog: { faSigns: number; coachHires: number; staffHires: number; interviews: number }; // 단장 통산 액션(업적용)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
@@ -131,6 +132,7 @@ const freshSave = {
   protectedIds: [] as string[],
   draftPicks: [] as string[],
   archive: [] as SeasonArchive[],
+  careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 },
   hallOfFame: [] as HofEntry[],
   milestones: [] as Milestone[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
@@ -219,7 +221,7 @@ export const useGameStore = create<GameState>()(
         if (payroll + signCost > LEAGUE_CAP) return false;
         if (signCost > s.cash) return false; // 운영 자금 부족(FINANCE) — 캡이 남아도 지갑이 비면 못 뽑는다
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId: faId, kind: 'sign' }];
-        set({ inSeasonTx, cash: s.cash - signCost }); // 지갑에서 즉시 차감
+        set({ inSeasonTx, cash: s.cash - signCost, careerLog: { ...s.careerLog, faSigns: s.careerLog.faSigns + 1 } }); // 지갑 즉시 차감 + 영입 카운트
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
@@ -260,14 +262,14 @@ export const useGameStore = create<GameState>()(
         const tid = get().selectedTeamId;
         if (!tid) return false;
         const ok = hireHeadCoach(tid, coachId);
-        if (ok) { const s = getStaffState(); set({ staffHead: s.head, staffAssistants: s.asst, staffScouts: s.scout }); }
+        if (ok) { const s = getStaffState(); set((st) => ({ staffHead: s.head, staffAssistants: s.asst, staffScouts: s.scout, careerLog: { ...st.careerLog, coachHires: st.careerLog.coachHires + 1 } })); }
         return ok;
       },
       hireAssistant: (id) => {
         const tid = get().selectedTeamId;
         if (!tid) return false;
         const ok = hireAsstLeague(tid, id);
-        if (ok) set({ staffAssistants: getStaffState().asst });
+        if (ok) set((st) => ({ staffAssistants: getStaffState().asst, careerLog: { ...st.careerLog, staffHires: st.careerLog.staffHires + 1 } }));
         return ok;
       },
       releaseAssistant: (id) => {
@@ -280,7 +282,7 @@ export const useGameStore = create<GameState>()(
         const tid = get().selectedTeamId;
         if (!tid) return false;
         const ok = hireScoutLeague(tid, id);
-        if (ok) set({ staffScouts: getStaffState().scout });
+        if (ok) set((st) => ({ staffScouts: getStaffState().scout, careerLog: { ...st.careerLog, staffHires: st.careerLog.staffHires + 1 } }));
         return ok;
       },
       releaseScout: (id) => {
@@ -308,7 +310,10 @@ export const useGameStore = create<GameState>()(
         const perfT = standings.length <= 1 ? 1 : 1 - (rank - 1) / (standings.length - 1);
         const fails = s.interviews.filter((l) => l.playerId === playerId && !l.ok).length;
         const ok = persuade(playerId, s.season, seasonLogs.length, cardMatch(card, topic, p), perfT, fails);
-        set({ interviews: [...s.interviews, { playerId, season: s.season, day: s.currentDay, topic, card, ok }].slice(-200) });
+        set({
+          interviews: [...s.interviews, { playerId, season: s.season, day: s.currentDay, topic, card, ok }].slice(-200),
+          careerLog: { ...s.careerLog, interviews: s.careerLog.interviews + 1 },
+        });
         return { met: true, topic, ok };
       },
       // 감독 벤치 건의 — 합리(대체자 격차)와 소신(카리스마·에이스 보호) 사이에서 감독이 답한다
@@ -390,7 +395,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, careerLog, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -413,11 +418,12 @@ export const useGameStore = create<GameState>()(
         const nextMilestones = [...allMs.filter((m) => m.big), ...allMs.filter((m) => !m.big).slice(-300)]
           .sort((a, b) => a.season - b.season);
         const injuryDays = seasonInjuryDays(); // 만성 노쇠가속(약) — 큰 부상 선수 영구 소폭 하락
-        const championId = buildPlayoffs(season).championId ?? '';
-        // 순위 기반·연승연패 업적용: 최종 순위(teamId 1위→꼴찌) + 팀별 그 시즌 최장 연승/연패
+        const playoffs = buildPlayoffs(season);
+        const championId = playoffs.championId ?? '';
+        // 순위 기반·연승연패·플옵 서사 업적용: 최종 순위 + 팀별 최장 연승/연패 + 플옵 시리즈 W/L
         const rankOrder = computeStandings(Number.MAX_SAFE_INTEGER).map((r) => r.teamId);
         const seasonStreak = seasonStreaks(Number.MAX_SAFE_INTEGER);
-        const archEntry: SeasonArchive = { season, championId, awards: seasonAwards, standings: rankOrder, streaks: seasonStreak };
+        const archEntry: SeasonArchive = { season, championId, awards: seasonAwards, standings: rankOrder, streaks: seasonStreak, series: seriesByTeam(playoffs) };
         const nextArchive = archive.some((a) => a.season === season)
           ? archive.map((a) => (a.season === season ? { ...a, ...archEntry } : a))
           : [...archive, archEntry];
@@ -519,10 +525,10 @@ export const useGameStore = create<GameState>()(
         const nextFaPool = Object.keys(snapshot).filter((id) => !rosteredNext.has(id) && !retiredSet.has(id) && !snapshot[id].isForeign); // 외인은 FA 풀 비대상(트라이아웃 전용)
 
         // FA 영입 지출 차감 — 내 새 명단에 합류한 타 구단 출신(드래프트·신인 제외)의 첫 해 연봉
-        let faSpend = 0;
+        let faSpend = 0, offseasonSigns = 0;
         for (const id of filled.rosters[my] ?? []) {
           const prev = ctx.prevTeamOf[id];
-          if (prev && prev !== my) faSpend += snapshot[id]?.contract.salary ?? 0;
+          if (prev && prev !== my) { faSpend += snapshot[id]?.contract.salary ?? 0; offseasonSigns += 1; } // 영입 수(업적 careerLog)
         }
 
         commitPlayerBase(snapshot);
@@ -530,6 +536,7 @@ export const useGameStore = create<GameState>()(
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
         setOwnerContext([]);              // 벤치 지시는 시즌 단위 — 새 시즌 전원 복귀
         set({
+          careerLog: { ...careerLog, faSigns: careerLog.faSigns + offseasonSigns }, // 오프시즌 영입 누적(업적)
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
           benchDirectives: [],
           fanScore: nextFan,
@@ -586,6 +593,7 @@ export const useGameStore = create<GameState>()(
         protectedIds: s.protectedIds,
         draftPicks: s.draftPicks,
         archive: s.archive,
+        careerLog: s.careerLog,
         hallOfFame: s.hallOfFame,
         milestones: s.milestones,
         subPolicy: s.subPolicy,

@@ -4,7 +4,10 @@
 
 import type { HofEntry, Milestone, Position, SeasonArchive, SeasonAwards } from '../types';
 
-export type AchCategory = '우승' | '시상' | '레전드' | '기록' | '서사' | '운영';
+export type AchCategory = '우승' | '시상' | '레전드' | '기록' | '서사' | '단장' | '운영';
+
+/** 단장 통산 액션(업적용) — 경기 리플레이로 파생 불가, 스토어가 액션마다 누적 */
+export interface CareerLog { faSigns: number; coachHires: number; staffHires: number; interviews: number }
 
 export interface Achievement {
   id: string;
@@ -21,6 +24,7 @@ export interface AchInput {
   milestones: Milestone[];
   cash: number;       // 만원
   fanScore: number;   // 0~100
+  careerLog?: CareerLog; // 단장 액션 누적(없으면 0 취급 — 구세이브·시뮬)
 }
 
 export interface AchStatus {
@@ -87,6 +91,19 @@ export const ACHIEVEMENTS: Achievement[] = [
   A('runner_up_3', '만년 2위', '정규리그 2위 통산 3회', '서사', 3),
   A('podium_10', '가을 단골', '정규리그 3위 이내 통산 10회', '서사', 10),
   A('podium_streak_5', '꾸준한 강호', '3위 이내 5시즌 연속', '서사', 5),
+  A('reverse_sweep', '대역전극', '챔프전 2패 후 3연승 우승(리버스 스윕)', '서사'),
+  A('sweep_title', '완벽한 대관식', '챔프전 3-0 스윕 우승', '서사'),
+  A('blown_lead', '통한의 준우승', '챔프전 2승 후 3연패(역스윕 당함)', '서사'),
+  // ── 단장(GM 액션) ──
+  A('first_draft', '첫 드래프트', '첫 신인 드래프트 완료', '단장'),
+  A('draft_veteran', '드래프트 베테랑', '드래프트 10회 진행', '단장', 10),
+  A('first_fa', '첫 영입', 'FA·외부 영입 1명', '단장'),
+  A('fa_mogul', '영입의 큰손', 'FA·외부 영입 통산 15명', '단장', 15),
+  A('first_coach', '감독 선임', '감독을 직접 선임', '단장'),
+  A('coach_collector', '명장 편력', '감독 통산 5회 선임', '단장', 5),
+  A('first_staff', '프런트 강화', '전문 코치·스카우터 영입', '단장'),
+  A('first_interview', '첫 면담', '선수와 첫 면담', '단장'),
+  A('interview_master', '소통의 달인', '선수 면담 통산 20회', '단장', 20),
   // ── 운영 ──
   A('cash_200k', '흑자 경영', '운영자금 20억 보유', '운영', 200000),
   A('cash_500k', '탄탄한 곳간', '운영자금 50억 보유', '운영', 500000),
@@ -188,6 +205,12 @@ function longestSeasonRun(hist: { season: number; rank: number; teams: number }[
   return best;
 }
 
+/** 내 팀의 플옵 시리즈 중 특정 W/L 시퀀스가 있었던 적이 있는가 (리버스 스윕·블론 등) */
+function hasSeriesPattern(archive: Arch, my: string, pattern: ('W' | 'L')[]): boolean {
+  const eq = (s: ('W' | 'L')[]) => s.length === pattern.length && s.every((g, i) => g === pattern[i]);
+  return archive.some((a) => (a.series?.[my] ?? []).some(eq));
+}
+
 /** 내 팀 전 시즌 최장 연승·연패(streaks 기록에서 최댓값) */
 function bestMatchStreaks(archive: Arch, my: string): { win: number; lose: number } {
   let win = 0, lose = 0;
@@ -203,6 +226,7 @@ function bestMatchStreaks(archive: Arch, my: string): { win: number; lose: numbe
 /** 업적별 현재 진행치 + 달성 여부 산출 (순수). */
 export function evalAchievements(input: AchInput): AchStatus[] {
   const { myTeamId: my, archive, hof, milestones, cash, fanScore } = input;
+  const log = input.careerLog ?? { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 };
   const titles = archive.filter((a) => a.championId === my).length;
   const streak = longestTitleStreak(archive, my);
   const myHof = hof.filter((h) => h.teamId === my);
@@ -258,6 +282,15 @@ export function evalAchievements(input: AchInput): AchStatus[] {
     win_streak_10: streaks.win, win_streak_15: streaks.win, lose_streak_10: streaks.lose,
     all_ranks: distinctRanks, worst_to_first: b(worstToFirst), last_3peat: lastStreak,
     runner_up_3: runnerUps, podium_10: podiums, podium_streak_5: podiumStreak,
+    reverse_sweep: b(hasSeriesPattern(archive, my, ['L', 'L', 'W', 'W', 'W'])),
+    sweep_title: b(hasSeriesPattern(archive, my, ['W', 'W', 'W'])),
+    blown_lead: b(hasSeriesPattern(archive, my, ['W', 'W', 'L', 'L', 'L'])),
+    // 단장(GM 액션 — careerLog + 드래프트는 시즌수 파생)
+    first_draft: b(seasonsRun >= 1), draft_veteran: seasonsRun,
+    first_fa: b(log.faSigns >= 1), fa_mogul: log.faSigns,
+    first_coach: b(log.coachHires >= 1), coach_collector: log.coachHires,
+    first_staff: b(log.staffHires >= 1),
+    first_interview: b(log.interviews >= 1), interview_master: log.interviews,
     // 운영
     cash_200k: Math.max(0, cash), cash_500k: Math.max(0, cash), cash_1m: Math.max(0, cash),
     fan_70: Math.round(fanScore), fan_90: Math.round(fanScore),
