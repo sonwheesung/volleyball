@@ -5,6 +5,7 @@ import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from
 import { shortTeamName as shortTeam } from '../data/league';
 import { faMarketPreview } from '../data/offseason';
 import { buildOwnerFx } from '../data/owner';
+import { projectSettledCash } from '../data/financeProjection';
 import { LEAGUE_CAP } from '../engine/cap';
 import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
 import { assignFAGrades, askingPrice } from '../engine/faMarket';
@@ -28,13 +29,21 @@ export default function FACenter() {
   const interviews = useGameStore((s) => s.interviews);
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
+  const archive = useGameStore((s) => s.archive);
+
+  // 이번 시즌 정산 후 운영 자금 — endSeason이 FA에 쓰는 실제 지갑(모기업 지원·관중 수입 반영).
+  //   store.cash(직전 정산값)로 미리보기하면 모기업 지원(14~28억)이 빠져 "영입 불가"로 오표시된다.
+  const budgetCash = useMemo(
+    () => projectSettledCash(my, season, cash, fanScore, archive),
+    [my, season, cash, fanScore, archive],
+  );
 
   // 경쟁 결과 미리보기(결정론) — 영입 성공/실패 예상.
-  // endSeason과 동일한 ownerFx(면담·불만 거부)+운영 자금을 넣어야 미리보기=결과가 보장된다
+  // endSeason과 동일한 ownerFx(면담·불만 거부)+정산 후 운영 자금을 넣어야 미리보기=결과가 보장된다
   const pv = useMemo(
     () => faMarketPreview(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
-      buildOwnerFx(interviews, season, my, fanScore), cash),
-    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, cash],
+      buildOwnerFx(interviews, season, my, fanScore), budgetCash),
+    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, budgetCash],
   );
   const snap = pv.snapshot;
 
@@ -73,9 +82,9 @@ export default function FACenter() {
           </Text>
         </Row>
         <Row>
-          <Muted>운영 자금(연봉+보상금 차감 후)</Muted>
-          <Text style={{ color: cash - signedCost - pv.compCash < 0 ? theme.bad : theme.text, fontWeight: '800' }}>
-            {formatMoney(Math.max(0, cash - signedCost - pv.compCash))} / {formatMoney(cash)}
+          <Muted>운영 자금(정산 후 · 연봉+보상금 차감)</Muted>
+          <Text style={{ color: budgetCash - signedCost - pv.compCash < 0 ? theme.bad : theme.text, fontWeight: '800' }}>
+            {formatMoney(Math.max(0, budgetCash - signedCost - pv.compCash))} / {formatMoney(budgetCash)}
           </Text>
         </Row>
         <Pressable
