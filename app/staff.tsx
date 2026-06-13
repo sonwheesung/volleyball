@@ -18,7 +18,9 @@ export default function Staff() {
   useGameStore((s) => s.staffHead);
   useGameStore((s) => s.staffAssistants);
   useGameStore((s) => s.staffScouts);
+  useGameStore((s) => s.coachPool); // 계약 변화 시 재렌더
   const hireCoach = useGameStore((s) => s.hireCoach);
+  const resignCoach = useGameStore((s) => s.resignCoach);
   const hireAssistant = useGameStore((s) => s.hireAssistant);
   const releaseAssistant = useGameStore((s) => s.releaseAssistant);
   const hireScout = useGameStore((s) => s.hireScout);
@@ -67,8 +69,22 @@ export default function Staff() {
         <Card>
           <Row><Title>{head.name}</Title><Muted>{head.age}세 · 연봉 {formatMoney(head.salary)}만</Muted></Row>
           <Muted style={{ marginTop: 4 }}>성향 {STYLE_LABEL[head.style]} · 카리스마 {head.charisma} · {head.archetype}</Muted>
+          {(() => {
+            const yrs = head.contractYears ?? 0;
+            const expiring = yrs <= 1;
+            return (
+              <Row>
+                <Muted style={{ color: expiring ? theme.warn : theme.muted, marginTop: 4 }}>
+                  계약 {yrs <= 0 ? '만료 — 재계약 필요' : `잔여 ${yrs}년`}
+                </Muted>
+                {expiring ? (
+                  <Button label="재계약(3년)" onPress={() => { if (resignCoach()) Alert.alert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); }} />
+                ) : null}
+              </Row>
+            );
+          })()}
         </Card>
-      ) : <Muted>감독 없음</Muted>}
+      ) : <Muted>감독 없음 — 시장에서 영입하세요</Muted>}
       <Muted style={{ marginTop: 8, marginBottom: 4 }}>감독 시장 (프리에이전트)</Muted>
       {availableCoaches().map((c) => (
         <Card key={c.id}>

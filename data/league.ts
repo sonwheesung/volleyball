@@ -173,6 +173,15 @@ export function assignCoach(teamId: string, coachId: string | null): void {
   invalidateStaff(true);
 }
 
+/** 내 팀 감독 재계약 — 현 감독 계약을 3년 연장. 만료 임박/만료 시 플레이어가 호출(STAFF_SYSTEM 6). */
+export function resignTeamCoach(teamId: string): boolean {
+  const c = teamHeadCoach(teamId);
+  if (!c) return false;
+  c.contractYears = 3;
+  invalidateStaff(false); // 효과 불변(계약만)
+  return true;
+}
+
 /** 죽은 계약 정리 — 풀에서 사라진(은퇴·승격) 감독/코치를 팀 영입 기록에서 제거(STAFF_SYSTEM 6).
  *  생애주기 후 호출. 반환 = 정리된 영입 상태(스토어 영속용). */
 export function reconcileStaff(): { head: Record<string, string>; asst: Record<string, string[]>; scout: Record<string, string[]> } {

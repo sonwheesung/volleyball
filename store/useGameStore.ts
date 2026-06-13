@@ -8,7 +8,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
-  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, getTeamCoach, LEAGUE } from '../data/league';
+  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, getTeamCoach, LEAGUE } from '../data/league';
 import { advanceCoaches } from '../data/staffLifecycle';
 import { bottomStreak } from '../engine/staffLifecycle';
 import type { Coach, AssistantCoach } from '../types';
@@ -106,6 +106,7 @@ interface GameState {
   setSubPolicy: (policy: Partial<SubPolicy>) => void;
   setTrainingFocus: (focus: TrainingFocus | null) => void;
   hireCoach: (coachId: string) => boolean;
+  resignCoach: () => boolean;
   hireAssistant: (id: string) => boolean;
   releaseAssistant: (id: string) => void;
   hireScout: (id: string) => boolean;
@@ -270,21 +271,29 @@ export const useGameStore = create<GameState>()(
         const tid = get().selectedTeamId;
         if (!tid) return false;
         const ok = hireHeadCoach(tid, coachId);
-        if (ok) { const s = getStaffState(); set((st) => ({ staffHead: s.head, staffAssistants: s.asst, staffScouts: s.scout, careerLog: { ...st.careerLog, coachHires: st.careerLog.coachHires + 1 } })); }
+        if (ok) { const s = getStaffState(); set((st) => ({ staffHead: s.head, staffAssistants: s.asst, staffScouts: s.scout, coachPool: currentCoachPool(), careerLog: { ...st.careerLog, coachHires: st.careerLog.coachHires + 1 } })); }
+        return ok;
+      },
+      // 감독 재계약 — 계약 3년 연장(만료/임박 시). 풀 변화 영속.
+      resignCoach: () => {
+        const tid = get().selectedTeamId;
+        if (!tid) return false;
+        const ok = resignTeamCoach(tid);
+        if (ok) set({ coachPool: currentCoachPool() });
         return ok;
       },
       hireAssistant: (id) => {
         const tid = get().selectedTeamId;
         if (!tid) return false;
         const ok = hireAsstLeague(tid, id);
-        if (ok) set((st) => ({ staffAssistants: getStaffState().asst, careerLog: { ...st.careerLog, staffHires: st.careerLog.staffHires + 1 } }));
+        if (ok) set((st) => ({ staffAssistants: getStaffState().asst, coachPool: currentCoachPool(), careerLog: { ...st.careerLog, staffHires: st.careerLog.staffHires + 1 } }));
         return ok;
       },
       releaseAssistant: (id) => {
         const tid = get().selectedTeamId;
         if (!tid) return;
         releaseAsstLeague(tid, id);
-        set({ staffAssistants: getStaffState().asst });
+        set({ staffAssistants: getStaffState().asst, coachPool: currentCoachPool() });
       },
       hireScout: (id) => {
         const tid = get().selectedTeamId;
