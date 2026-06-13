@@ -4,7 +4,7 @@
 // 합성 픽스처가 아니라 생성 데이터로 검증 — 챔피언/시상/레전드/기록 업적이 실제로 풀리는지.
 // 운영(자금·팬심) 업적은 구단주 레이어(앱 플레이) 소관이라 이 리그 시뮬엔 안 잡힘 — 별도 표시.
 
-import { resetLeagueBase, getTeam, teamScoutReveal, commitPlayerBase, commitRosters, LEAGUE } from '../data/league';
+import { resetLeagueBase, getTeam, teamScoutReveal, commitPlayerBase, commitRosters, currentRosters, LEAGUE } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
 import { fillRosters } from '../data/rookies';
@@ -14,7 +14,8 @@ import { accrueCareer } from '../engine/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
-import { computeStandings, seasonStreaks } from '../data/standings';
+import { computeStandings, seasonStreaks, seasonResults } from '../data/standings';
+import type { CareerTotals } from '../engine/achievements';
 import { evalAchievements, ACHIEVEMENTS } from '../engine/achievements';
 import type { HofEntry, Milestone, SeasonArchive } from '../types';
 
@@ -29,6 +30,9 @@ const hof: HofEntry[] = [];
 const allMs: Milestone[] = [];
 // 업적이 처음 달성된 시즌 기록 (팀별로 본다 — 우승을 가장 많이 한 팀을 "내 팀"으로 사후 선정)
 const firstUnlock: Record<string, Record<string, number>> = {}; // teamId -> achId -> season
+// 팀별 통산 경기 기록 누적(업적 검증용 — store.careerTotals 재현)
+const totals: Record<string, CareerTotals> = {};
+for (const t of LEAGUE.teams) totals[t.id] = { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 };
 
 for (let s = 0; s < N; s++) {
   // 1) 이번 시즌 결과 적립 (실제 endSeason 순서) — 순위·연승연패·플옵 시리즈 포함
@@ -44,6 +48,21 @@ for (let s = 0; s < N; s++) {
     record: rec,
   });
   allMs.push(...detectSeasonMilestones(s, hof));
+
+  // 통산 경기 기록 누적(팀별) — store.careerTotals 재현
+  const seasonProd = leagueProduction(Number.MAX_SAFE_INTEGER);
+  const rosters = currentRosters();
+  const setAgg: Record<string, [number, number]> = {};
+  for (const r of seasonResults(Number.MAX_SAFE_INTEGER)) {
+    (setAgg[r.homeTeamId] ??= [0, 0])[0] += r.homeSets; setAgg[r.homeTeamId][1] += r.awaySets;
+    (setAgg[r.awayTeamId] ??= [0, 0])[0] += r.awaySets; setAgg[r.awayTeamId][1] += r.homeSets;
+  }
+  for (const t of LEAGUE.teams) {
+    const tt = totals[t.id];
+    for (const id of rosters[t.id] ?? []) { const pr = seasonProd.get(id); if (pr) { tt.points += pr.points; tt.aces += pr.aces; } }
+    const [sw, sl] = setAgg[t.id] ?? [0, 0]; tt.setsWon += sw; tt.setsLost += sl;
+    tt.matchWins += rec[t.id]?.[0] ?? 0; tt.matchLosses += rec[t.id]?.[1] ?? 0;
+  }
 
   // 2) 오프시즌 컨텍스트(은퇴자·이전소속·스냅샷) + HOF 등재
   const ctx = buildDraftContext('', {}, {}, [], false, [], s + 1);
@@ -64,7 +83,7 @@ for (let s = 0; s < N; s++) {
 
   // 3) 매 시즌 종료 시점, 각 팀을 내 팀이라 가정하고 업적 평가 → 첫 달성 시즌 기록
   for (const t of LEAGUE.teams) {
-    const st = evalAchievements({ myTeamId: t.id, archive, hof, milestones: allMs, cash: 50000, fanScore: 50 });
+    const st = evalAchievements({ myTeamId: t.id, archive, hof, milestones: allMs, cash: 50000, fanScore: 50, careerTotals: totals[t.id] });
     const fu = (firstUnlock[t.id] ??= {});
     for (const x of st) if (x.unlocked && fu[x.ach.id] === undefined) fu[x.ach.id] = s;
   }
@@ -92,7 +111,7 @@ for (const a of archive) titlesByTeam.set(a.championId, (titlesByTeam.get(a.cham
 const myTeam = [...titlesByTeam.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? LEAGUE.teams[0].id;
 const myName = getTeam(myTeam)?.name ?? myTeam;
 
-const finalMine = evalAchievements({ myTeamId: myTeam, archive, hof, milestones: allMs, cash: 50000, fanScore: 50 });
+const finalMine = evalAchievements({ myTeamId: myTeam, archive, hof, milestones: allMs, cash: 50000, fanScore: 50, careerTotals: totals[myTeam] });
 const mineFu = firstUnlock[myTeam] ?? {};
 
 log(`\n═══ 업적 달성 검증 — ${N}시즌 실제 시뮬 (내 팀 = ${myName}, 통산 우승 ${titlesByTeam.get(myTeam) ?? 0}회) ═══`);
@@ -112,9 +131,10 @@ for (const st of finalMine) {
   }
 }
 
-// 의도된 전설 극단: 구조상 가능하나(엔진 하드 차단 없음) 정상 밸런스에선 거의 안 나옴 — 버그 아님.
-//   전승(최고 35승 1패)·전패(최저 2승 34패)는 parity가 막아 200시즌 0건이 정상.
-const legendaryExtreme = new Set(['perfect_season', 'winless_season']);
+// 의도된 끝판왕: 버그 아님 — 검증 경고에서 제외.
+//   전승/전패: 구조상 가능하나 parity가 막아 미관측(최고 35승1패·최저 2승34패).
+//   백만 득점: 보장 도달이나 ~445시즌 그라인드(팀 ~2,250점/시즌)라 200시즌엔 미도달.
+const legendaryExtreme = new Set(['perfect_season', 'winless_season', 'points_1m']);
 // 리그 전체 커버리지: 운영 외 업적이 어느 팀에서든 한 번이라도 달성되는가(도달 가능성 증명)
 const reachable = new Set<string>();
 for (const t of LEAGUE.teams) for (const [achId, _] of Object.entries(firstUnlock[t.id] ?? {})) reachable.add(achId);
@@ -122,7 +142,7 @@ const neverReached = ACHIEVEMENTS.filter((a) => !opCats.has(a.id) && !legendaryE
 
 log(`\n내 팀 달성 ${done}/${ACHIEVEMENTS.length} (운영 ${opSkipped}개는 시뮬 밖).`);
 log(`리그 전체에서 ${N}시즌 내 한 번이라도 달성된 비운영 업적: ${reachable.size}/${ACHIEVEMENTS.length - opCats.size}종`);
-log(`🌑 의도된 전설 극단(전승·전패): 구조상 가능하나 ${N}시즌 미관측(정상 — parity가 막음, 최고 35승/최저 2승)`);
+log(`🌑 의도된 끝판왕(전승·전패·백만득점): 버그 아님 — 전승/전패는 parity가 막아 미관측, 백만점은 ~445시즌 그라인드`);
 if (neverReached.length) {
   log(`⚠ ${N}시즌 동안 어느 팀도 못 깬 비운영 업적: ${neverReached.map((a) => a.title).join(', ')} — 임계 과한지 점검 대상`);
 } else {

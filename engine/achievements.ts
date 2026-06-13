@@ -4,10 +4,12 @@
 
 import type { HofEntry, Milestone, Position, SeasonArchive, SeasonAwards } from '../types';
 
-export type AchCategory = '우승' | '시상' | '레전드' | '기록' | '서사' | '단장' | '운영';
+export type AchCategory = '우승' | '시상' | '레전드' | '기록' | '서사' | '단장' | '통산' | '운영';
 
 /** 단장 통산 액션(업적용) — 경기 리플레이로 파생 불가, 스토어가 액션마다 누적 */
 export interface CareerLog { faSigns: number; coachHires: number; staffHires: number; interviews: number }
+/** 내 팀 통산 경기 기록(업적용) — 스토어가 매 시즌 누적 */
+export interface CareerTotals { points: number; aces: number; setsWon: number; setsLost: number; matchWins: number; matchLosses: number }
 
 export interface Achievement {
   id: string;
@@ -24,7 +26,8 @@ export interface AchInput {
   milestones: Milestone[];
   cash: number;       // 만원
   fanScore: number;   // 0~100
-  careerLog?: CareerLog; // 단장 액션 누적(없으면 0 취급 — 구세이브·시뮬)
+  careerLog?: CareerLog;       // 단장 액션 누적(없으면 0 취급 — 구세이브·시뮬)
+  careerTotals?: CareerTotals; // 통산 경기 기록(없으면 0 취급)
 }
 
 export interface AchStatus {
@@ -110,6 +113,19 @@ export const ACHIEVEMENTS: Achievement[] = [
   A('first_staff', '프런트 강화', '전문 코치·스카우터 영입', '단장'),
   A('first_interview', '첫 면담', '선수와 첫 면담', '단장'),
   A('interview_master', '소통의 달인', '선수 면담 통산 20회', '단장', 20),
+  // ── 통산(경기 기록) ──
+  A('first_point', '첫 득점', '구단 통산 첫 득점', '통산'),
+  A('first_concede', '첫 실점', '구단 통산 첫 실점', '통산'),
+  A('first_ace', '첫 서브 에이스', '구단 통산 첫 서브 에이스', '통산'),
+  A('first_set_win', '첫 세트 승리', '구단 통산 첫 세트 획득', '통산'),
+  A('first_set_loss', '첫 세트 패배', '구단 통산 첫 세트 내줌', '통산'),
+  A('first_match_win', '첫 경기 승리', '구단 통산 첫 승', '통산'),
+  A('first_match_loss', '첫 경기 패배', '구단 통산 첫 패', '통산'),
+  A('points_100', '백 점 돌파', '구단 통산 100득점', '통산', 100),
+  A('points_1k', '천 점 클럽', '구단 통산 1,000득점', '통산', 1000),
+  A('points_10k', '만 점의 탑', '구단 통산 10,000득점', '통산', 10000),
+  A('points_100k', '십만 득점', '구단 통산 100,000득점', '통산', 100000),
+  A('points_1m', '백만 득점', '구단 통산 1,000,000득점', '통산', 1000000),
   // ── 운영 ──
   A('cash_200k', '흑자 경영', '운영자금 20억 보유', '운영', 200000),
   A('cash_500k', '탄탄한 곳간', '운영자금 50억 보유', '운영', 500000),
@@ -233,6 +249,7 @@ function bestMatchStreaks(archive: Arch, my: string): { win: number; lose: numbe
 export function evalAchievements(input: AchInput): AchStatus[] {
   const { myTeamId: my, archive, hof, milestones, cash, fanScore } = input;
   const log = input.careerLog ?? { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 };
+  const tot = input.careerTotals ?? { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 };
   const titles = archive.filter((a) => a.championId === my).length;
   const streak = longestTitleStreak(archive, my);
   const myHof = hof.filter((h) => h.teamId === my);
@@ -306,6 +323,12 @@ export function evalAchievements(input: AchInput): AchStatus[] {
     first_coach: b(log.coachHires >= 1), coach_collector: log.coachHires,
     first_staff: b(log.staffHires >= 1),
     first_interview: b(log.interviews >= 1), interview_master: log.interviews,
+    // 통산(경기 기록)
+    first_point: b(tot.points >= 1), first_concede: b(tot.matchWins + tot.matchLosses >= 1),
+    first_ace: b(tot.aces >= 1),
+    first_set_win: b(tot.setsWon >= 1), first_set_loss: b(tot.setsLost >= 1),
+    first_match_win: b(tot.matchWins >= 1), first_match_loss: b(tot.matchLosses >= 1),
+    points_100: tot.points, points_1k: tot.points, points_10k: tot.points, points_100k: tot.points, points_1m: tot.points,
     // 운영
     cash_200k: Math.max(0, cash), cash_500k: Math.max(0, cash), cash_1m: Math.max(0, cash),
     fan_70: Math.round(fanScore), fan_90: Math.round(fanScore),

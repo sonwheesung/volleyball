@@ -25,7 +25,7 @@ import { FOREIGN_SALARY } from '../engine/foreign';
 import { staffSpend } from '../data/league';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
-import { computeStandings, seasonStreaks } from '../data/standings';
+import { computeStandings, seasonStreaks, seasonResults } from '../data/standings';
 import { coachInfoOf } from '../data/league';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay } from '../data/league';
@@ -66,6 +66,7 @@ interface GameState {
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
   archive: SeasonArchive[];                    // 역대 우승 + 시상 + 순위/연승연패/플옵
   careerLog: { faSigns: number; coachHires: number; staffHires: number; interviews: number }; // 단장 통산 액션(업적용)
+  careerTotals: { points: number; aces: number; setsWon: number; setsLost: number; matchWins: number; matchLosses: number }; // 내 팀 통산 경기 기록(업적용)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
@@ -133,6 +134,7 @@ const freshSave = {
   draftPicks: [] as string[],
   archive: [] as SeasonArchive[],
   careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 },
+  careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 },
   hallOfFame: [] as HofEntry[],
   milestones: [] as Milestone[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
@@ -395,7 +397,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, careerLog, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -430,6 +432,21 @@ export const useGameStore = create<GameState>()(
         const nextArchive = archive.some((a) => a.season === season)
           ? archive.map((a) => (a.season === season ? { ...a, ...archEntry } : a))
           : [...archive, archEntry];
+
+        // 통산 경기 기록 누적(업적용) — 이번 시즌 내 팀 득점·에이스·세트·경기 승패
+        const myRowRec = record[my] ?? [0, 0];
+        let seasonPts = 0, seasonAces = 0, setsW = 0, setsL = 0;
+        const myProd = leagueProduction(Number.MAX_SAFE_INTEGER);
+        for (const id of currentRosters()[my] ?? []) { const pr = myProd.get(id); if (pr) { seasonPts += pr.points; seasonAces += pr.aces; } }
+        for (const r of seasonResults(Number.MAX_SAFE_INTEGER)) {
+          if (r.homeTeamId === my) { setsW += r.homeSets; setsL += r.awaySets; }
+          else if (r.awayTeamId === my) { setsW += r.awaySets; setsL += r.homeSets; }
+        }
+        const nextTotals = {
+          points: careerTotals.points + seasonPts, aces: careerTotals.aces + seasonAces,
+          setsWon: careerTotals.setsWon + setsW, setsLost: careerTotals.setsLost + setsL,
+          matchWins: careerTotals.matchWins + myRowRec[0], matchLosses: careerTotals.matchLosses + myRowRec[1],
+        };
 
         // 0.6) 구단주 레이어(OWNER_SYSTEM) — 면담 결과·불만·팬심 → FA 거부/오퍼 보정 + 시즌 팬심 정산
         //   FA/드래프트 센터 미리보기와 같은 빌더(buildOwnerFx) — 미리보기=결과 보장
@@ -540,6 +557,7 @@ export const useGameStore = create<GameState>()(
         setOwnerContext([]);              // 벤치 지시는 시즌 단위 — 새 시즌 전원 복귀
         set({
           careerLog: { ...careerLog, faSigns: careerLog.faSigns + offseasonSigns }, // 오프시즌 영입 누적(업적)
+          careerTotals: nextTotals, // 통산 경기 기록 누적(업적)
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
           benchDirectives: [],
           fanScore: nextFan,
@@ -597,6 +615,7 @@ export const useGameStore = create<GameState>()(
         draftPicks: s.draftPicks,
         archive: s.archive,
         careerLog: s.careerLog,
+        careerTotals: s.careerTotals,
         hallOfFame: s.hallOfFame,
         milestones: s.milestones,
         subPolicy: s.subPolicy,

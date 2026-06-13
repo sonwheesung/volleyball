@@ -159,6 +159,19 @@ test('단장 — careerLog 기반 GM 액션', () => {
   assert.equal(get(base(), 'first_draft').unlocked, false);
 });
 
+test('통산 — 첫 사건·누적 점수', () => {
+  const ct = (over: Partial<{ points: number; aces: number; setsWon: number; setsLost: number; matchWins: number; matchLosses: number }>) =>
+    base({ careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0, ...over } });
+  assert.equal(get(ct({ points: 1 }), 'first_point').unlocked, true);
+  assert.equal(get(ct({ aces: 1 }), 'first_ace').unlocked, true);
+  assert.equal(get(ct({ setsWon: 1 }), 'first_set_win').unlocked, true);
+  assert.equal(get(ct({ matchWins: 1 }), 'first_match_win').unlocked, true);
+  assert.equal(get(ct({ matchLosses: 1 }), 'first_concede').unlocked, true); // 경기 했으면 실점
+  assert.equal(get(ct({ points: 10000 }), 'points_10k').unlocked, true);
+  assert.equal(get(ct({ points: 9999 }), 'points_10k').unlocked, false);
+  assert.equal(get(ct({ points: 500 }), 'points_1k').cur, 500); // 진행치
+});
+
 test('결정론 — 같은 입력 = 같은 결과', () => {
   const input = base({ archive: [{ season: 0, championId: MY }], cash: 123456, fanScore: 77 });
   assert.deepEqual(evalAchievements(input), evalAchievements(input));
