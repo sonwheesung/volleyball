@@ -7,7 +7,10 @@ import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
-  hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal } from '../data/league';
+  hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
+  currentCoachPool, commitCoachPool, assignCoach, getTeamCoach, LEAGUE } from '../data/league';
+import { advanceCoaches } from '../data/staffLifecycle';
+import type { Coach, AssistantCoach } from '../types';
 import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
 import { currentSeasonAwards } from '../data/awards';
@@ -67,6 +70,7 @@ interface GameState {
   archive: SeasonArchive[];                    // 역대 우승 + 시상 + 순위/연승연패/플옵
   careerLog: { faSigns: number; coachHires: number; staffHires: number; interviews: number }; // 단장 통산 액션(업적용)
   careerTotals: { points: number; aces: number; setsWon: number; setsLost: number; matchWins: number; matchLosses: number }; // 내 팀 통산 경기 기록(업적용)
+  coachPool: { coaches: Coach[]; assistants: AssistantCoach[] } | null; // 감독 생애주기 풀(null=시드, STAFF_SYSTEM 6)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
@@ -135,6 +139,7 @@ const freshSave = {
   archive: [] as SeasonArchive[],
   careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 },
   careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 },
+  coachPool: null as { coaches: Coach[]; assistants: AssistantCoach[] } | null,
   hallOfFame: [] as HofEntry[],
   milestones: [] as Milestone[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
@@ -522,6 +527,18 @@ export const useGameStore = create<GameState>()(
           }
         }
 
+        // 3.7) 감독 생애주기(STAFF_SYSTEM 6) — 노쇠·은퇴·경질·은퇴선수→코치·승격·빈팀 자동배정
+        const assignedHead: Record<string, string> = {};
+        for (const t of LEAGUE.teams) { const hc = getTeamCoach(t.id); if (hc) assignedHead[t.id] = hc.id; }
+        const retiredPlayers = ctx.retired.map((id) => snapshot[id]).filter((p): p is Player => !!p);
+        const legendSet = new Set(hofAdds.filter((h) => h.legend).map((h) => h.id));
+        const lifecycle = advanceCoaches(nextSeason, currentCoachPool(), assignedHead, retiredPlayers, legendSet, rankOrder, {}, my);
+        commitCoachPool(lifecycle.coaches, lifecycle.assistants);
+        // 재배정 적용: AI 팀은 새 감독, 내 팀은 감독이 떠났으면 배정 해제(기본 감독 복귀 — 직접 다시 영입)
+        for (const r of lifecycle.reassign) assignCoach(r.teamId, r.coachId);
+        const nextCoachPool = currentCoachPool();
+        const nextStaffHead = getStaffState().head; // AI 재배정 포함된 감독 배정(영속)
+
         // 4) 이적자 현 구단 근속 리셋(프랜차이즈 판정)
         for (const tid of Object.keys(filled.rosters)) {
           for (const id of filled.rosters[tid]) {
@@ -556,6 +573,8 @@ export const useGameStore = create<GameState>()(
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
         setOwnerContext([]);              // 벤치 지시는 시즌 단위 — 새 시즌 전원 복귀
         set({
+          coachPool: nextCoachPool,   // 감독 생애주기 풀 영속(STAFF_SYSTEM 6)
+          staffHead: nextStaffHead,   // AI 재배정 포함 감독 배정 영속
           careerLog: { ...careerLog, faSigns: careerLog.faSigns + offseasonSigns }, // 오프시즌 영입 누적(업적)
           careerTotals: nextTotals, // 통산 경기 기록 누적(업적)
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
@@ -616,6 +635,7 @@ export const useGameStore = create<GameState>()(
         archive: s.archive,
         careerLog: s.careerLog,
         careerTotals: s.careerTotals,
+        coachPool: s.coachPool,
         hallOfFame: s.hallOfFame,
         milestones: s.milestones,
         subPolicy: s.subPolicy,
@@ -636,6 +656,7 @@ export const useGameStore = create<GameState>()(
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);
         if (state?.rosters) commitRosters(state.rosters);
+        if (state?.coachPool) commitCoachPool(state.coachPool.coaches, state.coachPool.assistants); // 감독 풀 복원(commitStaff 전 — staffHead가 참조)
         if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
         if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
         setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');

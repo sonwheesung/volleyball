@@ -163,6 +163,12 @@ export function hireHeadCoach(teamId: string, coachId: string): boolean {
   invalidateStaff(true); // 성향·훈련선호 바뀜
   return true;
 }
+/** 생애주기 재배정 — 예산·검증 없이 감독을 팀에 배정(AI 자동 선임, STAFF_SYSTEM 6). null=배정 해제(기본 감독). */
+export function assignCoach(teamId: string, coachId: string | null): void {
+  if (coachId === null) delete headCoachOverride[teamId];
+  else headCoachOverride[teamId] = coachId;
+  invalidateStaff(true);
+}
 export const coachSlots = (): number => COACH_SLOTS;
 export function hireAssistant(teamId: string, id: string): boolean {
   const a = assistantMap.get(id);
