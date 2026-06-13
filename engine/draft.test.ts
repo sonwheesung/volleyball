@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRng } from './rng';
-import { lotteryRound1, neededPositions, aiDraftPick, resolveDraft } from './draft';
+import { lotteryRound1, neededPositions, aiDraftPick, resolveDraft, buildDraftOrder } from './draft';
 import { TRAINABLE_STATS } from './training';
 import type { Player, Position, TrainableStat } from '../types';
 
@@ -87,4 +87,45 @@ test('resolveDraft: 내 위시리스트 우선, 순번 존중', () => {
   const r2 = resolveDraft(['ai', 'me'], cls, rosters, () => undefined, 'me', [], style);
   assert.deepEqual(r2.rosters.ai, ['A']);
   assert.deepEqual(r2.rosters.me, ['B'], '위시 없으면 다음 가치 B');
+});
+
+test('buildDraftOrder: 팀별 holes 만큼만 등장 + 라운드로빈 + maxSlots 캡', () => {
+  const order = buildDraftOrder(['a', 'b', 'c'], { a: 2, b: 1, c: 3 }, 100);
+  assert.equal(order.filter((x) => x === 'a').length, 2, 'a는 holes=2');
+  assert.equal(order.filter((x) => x === 'b').length, 1, 'b는 holes=1');
+  assert.equal(order.filter((x) => x === 'c').length, 3, 'c는 holes=3');
+  assert.deepEqual(order.slice(0, 3), ['a', 'b', 'c'], '1라운드는 순번대로');
+  // maxSlots 캡 — 총 6 구멍이지만 4까지만
+  assert.equal(buildDraftOrder(['a', 'b', 'c'], { a: 2, b: 2, c: 2 }, 4).length, 4);
+});
+
+test('resolveDraft: 같은 신인은 한 팀만(중복 지명 불가) + 팀별 슬롯 한도 준수', () => {
+  const cls = [
+    mk('p0', 'OH', 70, 95), mk('p1', 'MB', 68, 92), mk('p2', 'S', 60, 88),
+    mk('p3', 'OP', 66, 90), mk('p4', 'L', 58, 80), mk('p5', 'OH', 64, 85),
+    mk('p6', 'MB', 62, 84), mk('p7', 'S', 55, 78),
+  ];
+  const order = buildDraftOrder(['a', 'b', 'c'], { a: 2, b: 2, c: 1 }, 100); // a2·b2·c1
+  const r = resolveDraft(order, cls, { a: [], b: [], c: [] }, () => undefined, '', [], () => 'balanced');
+  const ids = r.picked.map((p) => p.id);
+  assert.equal(new Set(ids).size, ids.length, 'picked에 중복 신인 없음');
+  // 전역 유일: 각 신인은 한 팀에만
+  const all = [...r.rosters.a, ...r.rosters.b, ...r.rosters.c];
+  assert.equal(new Set(all).size, all.length, '한 신인이 두 팀에 가지 않음');
+  assert.equal(r.rosters.a.length, 2, 'a 슬롯=2');
+  assert.equal(r.rosters.b.length, 2, 'b 슬롯=2');
+  assert.equal(r.rosters.c.length, 1, 'c 슬롯=1');
+});
+
+test('resolveDraft: 위시리스트 우선순위 순서를 지킴', () => {
+  const A = mk('A', 'OH', 60, 95); // 최고 가치
+  const B = mk('B', 'OH', 55, 90);
+  const C = mk('C', 'S', 45, 70);
+  // 내가 먼저 픽, 위시 [C, B] 둘 다 가용 → 1순위 C
+  const r1 = resolveDraft(['me'], [A, B, C], { me: [] }, () => undefined, 'me', ['C', 'B'], () => 'balanced');
+  assert.deepEqual(r1.rosters.me, ['C'], '위시 1순위 C');
+  // 1순위 A가 앞 순번 AI에 뽑히면 → 2순위 B
+  const r2 = resolveDraft(['ai', 'me'], [A, B, C], { ai: [], me: [] }, () => undefined, 'me', ['A', 'B'], () => 'balanced');
+  assert.deepEqual(r2.rosters.ai, ['A'], 'AI가 A 선점');
+  assert.deepEqual(r2.rosters.me, ['B'], '내 위시 1순위 없으니 2순위 B');
 });
