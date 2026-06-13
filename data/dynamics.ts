@@ -123,7 +123,12 @@ function compute(): Dyn {
       roster.set(tx.teamId, arr.filter((id) => id !== tx.playerId));
       // 외인은 방출돼도 FA 풀로 가지 않는다 — 리그를 떠남(FOREIGN_SYSTEM 3장, 타 팀이 주울 수 없음)
       if (!getPlayer(tx.playerId)?.isForeign) faAvail.add(tx.playerId);
-    } else { if (!arr.includes(tx.playerId)) roster.set(tx.teamId, [...arr, tx.playerId]); faAvail.delete(tx.playerId); }
+    } else {
+      // 영입: 이미 어느 팀(이 팀 포함) 소속이면 무효 — 선수는 한 팀만(이중 소속 방지). 트레이드 없음(7장).
+      //   수동 영입↔AI 영입이 같은 선수를 노려도 먼저 잡은 팀만 유효(미적용 tx는 기록 안 함 → 재구성 일치).
+      for (const ids of roster.values()) if (ids.includes(tx.playerId)) return;
+      roster.set(tx.teamId, [...arr, tx.playerId]); faAvail.delete(tx.playerId);
+    }
     txLog.push(tx);
   };
 
