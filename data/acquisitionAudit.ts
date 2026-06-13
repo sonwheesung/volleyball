@@ -64,6 +64,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
     newid: { key: 'newid', name: '신규 id 충돌 없음 (신인·외인 ↔ 기존)', violations: 0, samples: [] as string[] },
     intx: { key: 'intx', name: '시즌 중 거래 단일 소속 (이중영입 차단)', violations: 0, samples: [] as string[] },
     cash2: { key: 'cash2', name: '영입 자금 한도 (현금 초과 영입 없음)', violations: 0, samples: [] as string[] },
+    contract: { key: 'contract', name: '활성 계약 (만료 선수 명단 잔존 없음)', violations: 0, samples: [] as string[] },
   };
   const hit = (c: { violations: number; samples: string[] }, msg: string) => {
     c.violations++; if (c.samples.length < SAMPLE_CAP) c.samples.push(msg);
@@ -151,6 +152,8 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
           if (p) {
             if (!okNum(p.contract?.salary, 1, LEAGUE_CAP)) hit(C.salary, `S${sNo} ${where}: ${tname(t)} ${id} 연봉 비정상 ${p.contract?.salary}`);
             if (!okNum(p.contract?.remaining, 0, 10)) hit(C.salary, `S${sNo} ${where}: ${tname(t)} ${id} 잔여계약 비정상 ${p.contract?.remaining}`);
+            // 명단의 선수는 활성 계약이어야(만료=remaining<1인데 명단에 남으면 계약 전이 버그 — 재계약/방출 누락)
+            else if ((p.contract?.remaining ?? 0) < 1) hit(C.contract, `S${sNo} ${where}: ${tname(t)} ${id} 만료 계약(잔여 ${p.contract?.remaining})인데 명단 잔존`);
           }
         }
         if (foreignCnt > 1) hit(C.foreign, `S${sNo} ${where}: ${tname(t)} 외인 ${foreignCnt}명`);
