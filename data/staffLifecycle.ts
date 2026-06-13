@@ -58,6 +58,7 @@ export function advanceCoaches(
   // 1) 노쇠 +1 & 은퇴 판정
   let coaches: Coach[] = [];
   for (const c of pool.coaches) {
+    if (c.id.startsWith('acting_')) { coaches.push(c); continue; } // 대행은 임시 — 노쇠·은퇴 안 함(플레이어가 정식 영입으로 해소)
     const aged = { ...c, age: c.age + 1 };
     if (staffRetires(c.id, aged.age, season)) { retiredCoaches.push(c.name); continue; }
     coaches.push(aged);
@@ -88,7 +89,7 @@ export function advanceCoaches(
   // 2.5) 계약 진행 — 배정 감독 잔여 연수 −1, 만료 시 재계약(AI)/FA/플레이어 알림
   const rankOf = (teamId: string) => { const i = rankOrder.indexOf(teamId); return i < 0 ? teamCount : i + 1; };
   for (const [teamId, headId] of Object.entries(assignedHead)) {
-    if (leftHeadByTeam.has(teamId)) continue; // 이미 경질된 팀은 제외
+    if (leftHeadByTeam.has(teamId) || headId.startsWith('acting_')) continue; // 경질된 팀·대행 체제 제외
     const c = coaches.find((x) => x.id === headId);
     if (!c) continue;
     c.contractYears = (c.contractYears ?? 1) - 1;

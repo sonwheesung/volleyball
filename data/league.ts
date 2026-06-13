@@ -50,11 +50,13 @@ function teamFocus(teamId: string): TrainingFocus {
   return focusOverride[teamId] ?? teamHeadCoach(teamId)?.trainingFocus ?? DEFAULT_FOCUS;
 }
 
-/** 팀 현재 감독 — 영입 오버라이드 우선, 없으면 시드 감독 */
+/** 팀 현재 감독 — 영입/배정 오버라이드 우선. 없으면 시드 감독으로 폴백하되,
+ *  그 시드 감독이 아직 이 팀 소속(teamId 일치)일 때만 — 경질·이적·은퇴한 감독 부활 방지(STAFF_SYSTEM 6). */
 function teamHeadCoach(teamId: string): Coach | undefined {
   const ov = headCoachOverride[teamId];
   if (ov && coachMap.has(ov)) return coachMap.get(ov);
-  return coachMap.get(teamMap.get(teamId)?.coachId ?? '');
+  const seed = coachMap.get(teamMap.get(teamId)?.coachId ?? '');
+  return seed && seed.teamId === teamId ? seed : undefined; // 떠난 시드 감독은 폴백 안 함(공석→기본 감독)
 }
 
 /** 팀 보조코치 목록 */
