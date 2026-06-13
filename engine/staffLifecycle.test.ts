@@ -1,0 +1,77 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import {
+  coachRetireChance, staffRetires, becomesCoach, playerToCoach,
+  headWorthiness, promotesToHead, firedEndSeason, firedMidSeason,
+} from './staffLifecycle';
+import type { Player, TrainableStat } from '../types';
+
+function mkPlayer(over: Partial<Player> = {}): Player {
+  const potential = {} as Record<TrainableStat, number>;
+  const base = {
+    jump: 60, agility: 60, staminaMax: 60, staminaRegen: 60, reaction: 70, positioning: 70,
+    focus: 60, consistency: 60, vq: 80,
+    skSpike: 60, skBlock: 60, skDig: 60, skReceive: 60, skSet: 60, skServe: 60,
+  };
+  return {
+    id: 'p1', name: '김코치', age: 35, position: 'S', isForeign: false, height: 180, ...base,
+    xp: {}, potential, talentBase: 1, catTalent: { physical: 1, skill: 1, mental: 1 },
+    contract: { salary: 0, years: 1, remaining: 1, signedAtAge: 35 }, clubTenure: 5, peakAge: 28,
+    career: { seasons: 10, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0 },
+    ...over,
+  };
+}
+
+test('감독 은퇴 확률 — 나이 단조 증가, 55세 이하 0', () => {
+  assert.equal(coachRetireChance(50), 0);
+  assert.ok(coachRetireChance(62) > coachRetireChance(58));
+  assert.ok(coachRetireChance(76) >= 0.95);
+});
+
+test('은퇴 판정 — 결정론(같은 id·나이·시즌 = 같은 결과)', () => {
+  assert.equal(staffRetires('c1', 68, 5), staffRetires('c1', 68, 5));
+});
+
+test('선수→코치 전환 — 저VQ는 안 됨, 고VQ는 가능', () => {
+  const dumb = mkPlayer({ id: 'd', vq: 60 });
+  assert.equal(becomesCoach(dumb, false, 1), false); // VQ 72 미만
+  // 고VQ + 레전드는 충분히 높은 확률 — 여러 시즌 시도하면 전환됨
+  const smart = mkPlayer({ id: 's', vq: 90 });
+  let any = false;
+  for (let yr = 0; yr < 20; yr++) if (becomesCoach(smart, true, yr)) any = true;
+  assert.ok(any, '고VQ 레전드는 언젠가 코치가 된다');
+});
+
+test('선수→코치 — 포지션이 분야로, 속성 파생', () => {
+  const setter = playerToCoach(mkPlayer({ position: 'S', vq: 85 }), false);
+  assert.equal(setter.specialty, 'setter');
+  assert.equal(setter.teamId, null);
+  assert.ok(setter.rating >= 45 && setter.rating <= 95);
+  const mb = playerToCoach(mkPlayer({ position: 'MB' }), false);
+  assert.equal(mb.specialty, 'defense');
+  const oh = playerToCoach(mkPlayer({ position: 'OH' }), false);
+  assert.equal(oh.specialty, 'attack');
+  // 레전드는 역량 보너스
+  const legend = playerToCoach(mkPlayer({ id: 'L', vq: 85 }), true);
+  const normal = playerToCoach(mkPlayer({ id: 'L', vq: 85 }), false);
+  assert.ok(legend.rating >= normal.rating);
+});
+
+test('승격 — 명성 임계 + 결정론', () => {
+  assert.equal(promotesToHead('c', headWorthiness(50, 20, 10), 1), false); // 명성 낮음
+  // 고역량+고성과+스타는 명성 높아 언젠가 승격
+  const w = headWorthiness(90, 90, 90);
+  assert.ok(w >= 60);
+  let promoted = false;
+  for (let yr = 0; yr < 30; yr++) if (promotesToHead('star', w, yr)) promoted = true;
+  assert.ok(promoted, '명성 높은 코치는 언젠가 감독으로');
+});
+
+test('경질 — 꼴찌·시즌중 바닥', () => {
+  assert.equal(firedEndSeason(7, 7, 0), true);       // 꼴찌
+  assert.equal(firedEndSeason(6, 7, 2), true);       // 하위 2년연속
+  assert.equal(firedEndSeason(3, 7, 5), false);      // 중상위는 안전
+  assert.equal(firedMidSeason(2, 14), true);         // 16경기 12.5% 승률
+  assert.equal(firedMidSeason(2, 6), false);         // 표본 부족(8경기)
+  assert.equal(firedMidSeason(10, 8), false);        // 승률 양호
+});
