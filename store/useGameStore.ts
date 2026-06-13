@@ -8,7 +8,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
-  currentCoachPool, commitCoachPool, assignCoach, getTeamCoach, LEAGUE } from '../data/league';
+  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, getTeamCoach, LEAGUE } from '../data/league';
 import { advanceCoaches } from '../data/staffLifecycle';
 import type { Coach, AssistantCoach } from '../types';
 import { buildDraftContext } from '../data/draftSetup';
@@ -536,8 +536,10 @@ export const useGameStore = create<GameState>()(
         commitCoachPool(lifecycle.coaches, lifecycle.assistants);
         // 재배정 적용: AI 팀은 새 감독, 내 팀은 감독이 떠났으면 배정 해제(기본 감독 복귀 — 직접 다시 영입)
         for (const r of lifecycle.reassign) assignCoach(r.teamId, r.coachId);
+        const reconciled = reconcileStaff(); // 은퇴·승격으로 사라진 영입 계약 정리(내 팀 코치 포함)
         const nextCoachPool = currentCoachPool();
-        const nextStaffHead = getStaffState().head; // AI 재배정 포함된 감독 배정(영속)
+        const nextStaffHead = reconciled.head;       // AI 재배정 + 죽은 계약 정리 반영(영속)
+        const nextStaffAssistants = reconciled.asst;  // 은퇴한 내 코치 슬롯 정리
 
         // 4) 이적자 현 구단 근속 리셋(프랜차이즈 판정)
         for (const tid of Object.keys(filled.rosters)) {
@@ -573,8 +575,9 @@ export const useGameStore = create<GameState>()(
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
         setOwnerContext([]);              // 벤치 지시는 시즌 단위 — 새 시즌 전원 복귀
         set({
-          coachPool: nextCoachPool,   // 감독 생애주기 풀 영속(STAFF_SYSTEM 6)
-          staffHead: nextStaffHead,   // AI 재배정 포함 감독 배정 영속
+          coachPool: nextCoachPool,          // 감독 생애주기 풀 영속(STAFF_SYSTEM 6)
+          staffHead: nextStaffHead,          // AI 재배정 + 죽은 계약 정리 반영
+          staffAssistants: nextStaffAssistants, // 은퇴한 코치 슬롯 정리
           careerLog: { ...careerLog, faSigns: careerLog.faSigns + offseasonSigns }, // 오프시즌 영입 누적(업적)
           careerTotals: nextTotals, // 통산 경기 기록 누적(업적)
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)

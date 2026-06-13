@@ -159,28 +159,42 @@ export function hireHeadCoach(teamId: string, coachId: string): boolean {
   if (!c || (c.teamId !== null) || isCoachHired(coachId)) return false;
   const newSpend = staffSpend(teamId) - (teamHeadCoach(teamId)?.salary ?? 0) + c.salary;
   if (newSpend > STAFF_BUDGET) return false;
+  const prev = headCoachOverride[teamId]; if (prev) { const pc = coachMap.get(prev); if (pc) pc.teamId = null; } // 기존 영입 감독 FA로
   headCoachOverride[teamId] = coachId;
+  c.teamId = teamId; // 단일 진실
   invalidateStaff(true); // 성향·훈련선호 바뀜
   return true;
 }
 /** 생애주기 재배정 — 예산·검증 없이 감독을 팀에 배정(AI 자동 선임, STAFF_SYSTEM 6). null=배정 해제(기본 감독). */
 export function assignCoach(teamId: string, coachId: string | null): void {
+  const prev = headCoachOverride[teamId]; if (prev && prev !== coachId) { const pc = coachMap.get(prev); if (pc) pc.teamId = null; }
   if (coachId === null) delete headCoachOverride[teamId];
-  else headCoachOverride[teamId] = coachId;
+  else { headCoachOverride[teamId] = coachId; const c = coachMap.get(coachId); if (c) c.teamId = teamId; }
   invalidateStaff(true);
+}
+
+/** 죽은 계약 정리 — 풀에서 사라진(은퇴·승격) 감독/코치를 팀 영입 기록에서 제거(STAFF_SYSTEM 6).
+ *  생애주기 후 호출. 반환 = 정리된 영입 상태(스토어 영속용). */
+export function reconcileStaff(): { head: Record<string, string>; asst: Record<string, string[]>; scout: Record<string, string[]> } {
+  for (const tid of Object.keys(headCoachOverride)) if (!coachMap.has(headCoachOverride[tid])) delete headCoachOverride[tid];
+  for (const tid of Object.keys(teamAssistantIds)) teamAssistantIds[tid] = teamAssistantIds[tid].filter((id) => assistantMap.has(id));
+  invalidateStaff(true);
+  return getStaffState();
 }
 export const coachSlots = (): number => COACH_SLOTS;
 export function hireAssistant(teamId: string, id: string): boolean {
   const a = assistantMap.get(id);
-  if (!a || isAsstHired(id)) return false;
+  if (!a || isAsstHired(id) || a.teamId !== null) return false; // FA(teamId=null)만 영입 가능
   if ((teamAssistantIds[teamId]?.length ?? 0) >= COACH_SLOTS) return false; // 슬롯 초과
   if (staffSpend(teamId) + a.salary > STAFF_BUDGET) return false;
   teamAssistantIds[teamId] = [...(teamAssistantIds[teamId] ?? []), id];
+  a.teamId = teamId; // 단일 진실: 고용되면 teamId 설정(생애주기 승격·FA 풀에서 제외)
   invalidateStaff(true); // 코치 효과 바뀜
   return true;
 }
 export function releaseAssistant(teamId: string, id: string): void {
   teamAssistantIds[teamId] = (teamAssistantIds[teamId] ?? []).filter((x) => x !== id);
+  const a = assistantMap.get(id); if (a) a.teamId = null; // FA 풀로 복귀
   invalidateStaff(true);
 }
 export function hireScout(teamId: string, id: string): boolean {
