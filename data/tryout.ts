@@ -50,7 +50,10 @@ export function runTryout(
   myWish: string[],
   prevForeignOf: Record<string, string>, // 전 시즌 팀별 외인(재계약 우선권의 주체)
   myKeep: boolean | null = null,         // 내 재계약 결정(null=자동 — AI 판단과 동일)
+  myCash: number = Number.POSITIVE_INFINITY, // 내 운영 자금 — 외인 연봉 못 내면 외인 공석(시즌 중 교체와 일관)
 ): TryoutOutcome {
+  // 내 팀: 외인 연봉(FOREIGN_SALARY)을 못 내면 이번 오프시즌 외인 영입/재계약 불가(AI는 모기업 보전 — 무관).
+  const myCanAffordForeign = myCash >= FOREIGN_SALARY;
   // 국내 평균 = 현재 로스터(외인 제외) OVR 평균 — 외인 바닥의 기준선
   const domestic = Object.values(rosters).flat()
     .map((id) => snapshot[id]).filter((p): p is Player => !!p && !p.isForeign);
@@ -63,6 +66,7 @@ export function runTryout(
   for (const [teamId, pid] of Object.entries(prevForeignOf)) {
     const p = snapshot[pid];
     if (!p || !returningForeign.includes(pid)) continue; // 은퇴/이탈자는 갱신 불가
+    if (teamId === myTeam && !myCanAffordForeign) continue; // 자금 부족 — 내 외인 재계약 불가(공석)
     const wants = teamId === myTeam && myKeep !== null ? myKeep : aiKeepsForeign(p, domesticAvg);
     if (!wants) continue;
     kept[teamId] = pid;
@@ -76,8 +80,9 @@ export function runTryout(
   const poolIds = [...fresh.map((p) => p.id), ...returningForeign.filter((id) => snapshot[id] && !keptSet.has(id))];
   const pool = poolIds.map((id) => snapshot[id]).filter((p): p is Player => !!p);
 
-  // 재계약한 팀은 드래프트를 건너뛴다(팀당 1명)
-  const order = tryoutOrder(nextSeason, Object.keys(rosters)).filter((t) => !kept[t]);
+  // 재계약한 팀은 드래프트를 건너뛴다(팀당 1명). 내 팀은 자금 부족 시 트라이아웃 지명도 제외(공석)
+  const order = tryoutOrder(nextSeason, Object.keys(rosters))
+    .filter((t) => !kept[t] && !(t === myTeam && !myCanAffordForeign));
   const res = resolveTryout(order, pool, myTeam, myWish, nextSeason);
   for (const [t, pid] of Object.entries(kept)) res.picks[t] = pid; // 결과 합치기(표시용)
 
