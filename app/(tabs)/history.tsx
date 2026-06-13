@@ -68,6 +68,12 @@ export default function History() {
 
   return (
     <Screen title={`${season + 1}시즌 기록`}>
+      <Card onPress={() => router.push('/achievements')}>
+        <View style={styles.achLink}>
+          <Text style={styles.achLinkText}>🏆 업적 — 구단주의 발자취</Text>
+          <Text style={styles.achLinkArrow}>›</Text>
+        </View>
+      </Card>
       {awards.mvp ? (
         <>
           <Title>{season + 1}시즌 시상식{currentDay < 164 ? ' (잠정)' : ''}</Title>
@@ -321,6 +327,9 @@ export default function History() {
 }
 
 const styles = StyleSheet.create({
+  achLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  achLinkText: { color: theme.text, fontSize: 15, fontWeight: '800' },
+  achLinkArrow: { color: theme.accent, fontSize: 22, fontWeight: '900' },
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
   head: { borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 2, paddingBottom: 6 },
   h: { color: theme.muted, fontSize: 12, fontWeight: '700' },
