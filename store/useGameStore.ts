@@ -25,7 +25,7 @@ import { FOREIGN_SALARY } from '../engine/foreign';
 import { staffSpend } from '../data/league';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
-import { computeStandings } from '../data/standings';
+import { computeStandings, seasonStreaks } from '../data/standings';
 import { coachInfoOf } from '../data/league';
 import { buildPlayoffs } from '../data/playoffs';
 import { currentRosters, evolveOnDay } from '../data/league';
@@ -37,7 +37,7 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, HofEntry, MatchResult, Milestone, Player, SeasonAwards, SubPolicy, TrainingFocus } from '../types';
+import type { Contract, HofEntry, MatchResult, Milestone, Player, SeasonArchive, SeasonAwards, SubPolicy, TrainingFocus } from '../types';
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const LEGEND_POINTS = 7500; // 영구결번급 — 60시즌 통산 최고 ~8645라 9000은 도달 불가였음(레전드 0명).
@@ -130,7 +130,7 @@ const freshSave = {
   faAggressive: false,
   protectedIds: [] as string[],
   draftPicks: [] as string[],
-  archive: [] as { season: number; championId: string; awards?: SeasonAwards }[],
+  archive: [] as SeasonArchive[],
   hallOfFame: [] as HofEntry[],
   milestones: [] as Milestone[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
@@ -414,9 +414,13 @@ export const useGameStore = create<GameState>()(
           .sort((a, b) => a.season - b.season);
         const injuryDays = seasonInjuryDays(); // 만성 노쇠가속(약) — 큰 부상 선수 영구 소폭 하락
         const championId = buildPlayoffs(season).championId ?? '';
+        // 순위 기반·연승연패 업적용: 최종 순위(teamId 1위→꼴찌) + 팀별 그 시즌 최장 연승/연패
+        const rankOrder = computeStandings(Number.MAX_SAFE_INTEGER).map((r) => r.teamId);
+        const seasonStreak = seasonStreaks(Number.MAX_SAFE_INTEGER);
+        const archEntry: SeasonArchive = { season, championId, awards: seasonAwards, standings: rankOrder, streaks: seasonStreak };
         const nextArchive = archive.some((a) => a.season === season)
-          ? archive.map((a) => (a.season === season ? { ...a, championId: championId || a.championId, awards: seasonAwards } : a))
-          : [...archive, { season, championId, awards: seasonAwards }];
+          ? archive.map((a) => (a.season === season ? { ...a, ...archEntry } : a))
+          : [...archive, archEntry];
 
         // 0.6) 구단주 레이어(OWNER_SYSTEM) — 면담 결과·불만·팬심 → FA 거부/오퍼 보정 + 시즌 팬심 정산
         //   FA/드래프트 센터 미리보기와 같은 빌더(buildOwnerFx) — 미리보기=결과 보장

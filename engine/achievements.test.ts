@@ -86,6 +86,42 @@ test('운영 — 자금·팬심·시즌수 임계', () => {
   assert.equal(get(base({ archive: Array.from({ length: 50 }, (_, s) => ({ season: s, championId: 'x' })) }), 'seasons_50').unlocked, true);
 });
 
+test('순위 — 모든 순위 경험·만년 2위·가을 단골', () => {
+  // 4시즌: 내 팀 순위 1·2·3·7 (standings = 순위순 teamId)
+  const arch = (season: number, order: string[]) => ({ season, championId: 'x', standings: order });
+  const ranks = [[MY, 'b', 'c', 'd', 'e', 'f', 'g'], ['b', MY, 'c', 'd', 'e', 'f', 'g'], ['b', 'c', MY, 'd', 'e', 'f', 'g'], ['b', 'c', 'd', 'e', 'f', 'g', MY]];
+  const input = base({ archive: ranks.map((o, s) => arch(s, o)) });
+  assert.equal(get(input, 'all_ranks').cur, 4); // 1·2·3·7 = 4종
+  assert.equal(get(input, 'podium_10').cur, 3); // 1·2·3위 = 3회
+  assert.equal(get(input, 'runner_up_3').cur, 1); // 2위 1회
+});
+
+test('꼴찌 3연속 — 암흑기', () => {
+  const last = (season: number) => ({ season, championId: 'x', standings: ['b', 'c', 'd', 'e', 'f', 'g', MY] });
+  const yes = base({ archive: [0, 1, 2].map(last) });
+  assert.equal(get(yes, 'last_3peat').unlocked, true);
+  const gap = base({ archive: [last(0), { season: 1, championId: 'x', standings: [MY, 'b', 'c', 'd', 'e', 'f', 'g'] }, last(2)] });
+  assert.equal(get(gap, 'last_3peat').unlocked, false);
+});
+
+test('최하위의 반란 — 꼴찌 이듬해 가을야구', () => {
+  const yes = base({ archive: [
+    { season: 0, championId: 'x', standings: ['b', 'c', 'd', 'e', 'f', 'g', MY] }, // 꼴찌
+    { season: 1, championId: 'x', standings: ['b', 'c', MY, 'd', 'e', 'f', 'g'] }, // 3위
+  ] });
+  assert.equal(get(yes, 'worst_to_first').unlocked, true);
+});
+
+test('연승/연패 — 시즌 최장 스트릭', () => {
+  const input = base({ archive: [
+    { season: 0, championId: 'x', streaks: { [MY]: [12, 3] } },
+    { season: 1, championId: 'x', streaks: { [MY]: [4, 11] } },
+  ] });
+  assert.equal(get(input, 'win_streak_10').unlocked, true);  // 최장 12연승
+  assert.equal(get(input, 'win_streak_15').unlocked, false); // 15엔 못 미침
+  assert.equal(get(input, 'lose_streak_10').unlocked, true); // 최장 11연패
+});
+
 test('결정론 — 같은 입력 = 같은 결과', () => {
   const input = base({ archive: [{ season: 0, championId: MY }], cash: 123456, fanScore: 77 });
   assert.deepEqual(evalAchievements(input), evalAchievements(input));

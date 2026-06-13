@@ -70,6 +70,23 @@ export function seasonResults(uptoDay: number): ResultRow[] {
   return allResults().filter((r) => r.dayIndex <= uptoDay);
 }
 
+/** 팀별 그 시즌 최장 연승·연패 — 각 팀의 경기를 날짜순으로 보고 W/L 런 최댓값(연승/연패 업적용) */
+export function seasonStreaks(uptoDay: number): Record<string, [number, number]> {
+  const rows = seasonResults(uptoDay).slice().sort((a, b) => a.dayIndex - b.dayIndex);
+  const out: Record<string, [number, number]> = {};
+  const acc: Record<string, { w: number; l: number; mw: number; ml: number }> = {};
+  for (const r of rows) {
+    const homeWon = r.homeSets > r.awaySets;
+    for (const [team, won] of [[r.homeTeamId, homeWon], [r.awayTeamId, !homeWon]] as [string, boolean][]) {
+      const a = (acc[team] ??= { w: 0, l: 0, mw: 0, ml: 0 });
+      if (won) { a.w += 1; a.l = 0; if (a.w > a.mw) a.mw = a.w; }
+      else { a.l += 1; a.w = 0; if (a.l > a.ml) a.ml = a.l; }
+    }
+  }
+  for (const t of Object.keys(acc)) out[t] = [acc[t].mw, acc[t].ml];
+  return out;
+}
+
 /** uptoDay 시점 순위표 */
 export function computeStandings(uptoDay: number): Standing[] {
   const table: Record<string, Standing> = {};

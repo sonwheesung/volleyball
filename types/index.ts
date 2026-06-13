@@ -156,6 +156,15 @@ export interface SeasonAwards {
   roundMvps: (AwardWinner | null)[]; // 라운드(leg)별 MVP
 }
 
+/** 한 시즌 아카이브 한 건 — endSeason 에서 적립, 영구 보존(우승·시상·순위·연승연패) */
+export interface SeasonArchive {
+  season: number;
+  championId: string;
+  awards?: SeasonAwards;
+  standings?: string[];                       // 최종 순위 teamId (1위→꼴찌). 순위 기반 업적용
+  streaks?: Record<string, [number, number]>; // teamId → [그 시즌 최장 연승, 최장 연패]. 연승/연패 업적용
+}
+
 // ─── 마일스톤 (MILESTONE_SYSTEM) ─────────────────────────────
 /** 기록 경신 한 건 — 시즌 경계에서 감지해 피드에 영구 적립(뉴스 P5 소재) */
 export interface Milestone {
