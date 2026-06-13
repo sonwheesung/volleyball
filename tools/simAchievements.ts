@@ -120,3 +120,34 @@ if (neverReached.length) {
 } else {
   log(`✅ 운영 외 전 업적이 실제 시뮬에서 도달 가능 — 임계 건강`);
 }
+
+// ── 난이도 지도: 비운영 업적별 (달성 팀 수 / 7) + 첫 달성까지 걸린 시즌(전 팀 중앙값) ──
+// 적게·늦게 달성될수록 어렵다. 전설(어느 팀이든 매우 드묾) → 쉬움 순으로 정렬.
+const teamCount = LEAGUE.teams.length;
+const median = (xs: number[]) => { const s = xs.slice().sort((a, b) => a - b); return s.length ? s[Math.floor(s.length / 2)] : NaN; };
+type Diff = { id: string; title: string; cat: string; teams: number; medFirst: number; minFirst: number };
+const diffs: Diff[] = ACHIEVEMENTS.filter((a) => !opCats.has(a.id)).map((a) => {
+  const firsts: number[] = [];
+  for (const t of LEAGUE.teams) { const f = firstUnlock[t.id]?.[a.id]; if (f !== undefined) firsts.push(f + 1); }
+  return { id: a.id, title: a.title, cat: a.category, teams: firsts.length, medFirst: median(firsts), minFirst: firsts.length ? Math.min(...firsts) : Infinity };
+});
+// 정렬: 달성 팀 적은 순 → 중앙값 늦은 순 (가장 어려운 게 위로)
+diffs.sort((a, b) => a.teams - b.teams || (b.medFirst || 0) - (a.medFirst || 0));
+const tier = (d: Diff): string => {
+  if (d.teams === 0) return '🔒 미도달';
+  if (d.teams <= 1) return '🌑 전설';
+  if (d.teams <= 3 || d.medFirst >= N * 0.6) return '🟣 매우 어려움';
+  if (d.teams < teamCount || d.medFirst >= N * 0.3) return '🔴 어려움';
+  if (d.medFirst >= N * 0.12) return '🟡 보통';
+  return '🟢 쉬움';
+};
+log(`\n═══ 난이도 지도 (${N}시즌 · 7팀 기준 — 어려운 순) ═══`);
+log('업적            카테고리  달성팀  첫달성(중앙값/최단)  난이도');
+for (const d of diffs) {
+  const med = isFinite(d.medFirst) ? `${d.medFirst}시즌` : '-';
+  const min = isFinite(d.minFirst) ? `${d.minFirst}` : '-';
+  log(`${d.title.padEnd(12)} ${d.cat.padEnd(4)} ${String(d.teams).padStart(3)}/${teamCount}   ${med.padStart(7)} / ${min.padStart(3)}최단    ${tier(d)}`);
+}
+const byTier: Record<string, number> = {};
+for (const d of diffs) { const t = tier(d).split(' ')[1]; byTier[t] = (byTier[t] ?? 0) + 1; }
+log(`\n분포: ${Object.entries(byTier).map(([k, v]) => `${k} ${v}`).join(' · ')} (비운영 ${diffs.length}종 · 운영/단장 액션 ${opCats.size}종은 앱 플레이 소관)`);
