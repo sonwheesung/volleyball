@@ -20,8 +20,11 @@ export let SEASON: Fixture[] = generateSeason(LEAGUE.teams.map((t) => t.id), SEA
 
 const teamMap = new Map(LEAGUE.teams.map((t) => [t.id, t]));
 const playerMap = new Map<string, Player>(LEAGUE.players.map((p) => [p.id, p]));
-const coachMap = new Map(LEAGUE.coaches.map((c) => [c.id, c]));
-let assistantMap = new Map(LEAGUE.assistants.map((a) => [a.id, a]));
+// 감독 풀은 생애주기로 순환(STAFF_SYSTEM 6) — LEAGUE.coaches는 시드(불변), 풀은 가변 스냅샷
+let coachPool: Coach[] = [...LEAGUE.coaches];
+let assistantPool: AssistantCoach[] = [...LEAGUE.assistants];
+const coachMap = new Map(coachPool.map((c) => [c.id, c]));
+let assistantMap = new Map(assistantPool.map((a) => [a.id, a]));
 let scoutMap = new Map(LEAGUE.scouts.map((s) => [s.id, s]));
 const fixtureMap = new Map(SEASON.map((f) => [f.id, f]));
 
@@ -115,8 +118,18 @@ const isAsstHired = (id: string) => Object.values(teamAssistantIds).some((a) => 
 const isScoutHired = (id: string) => Object.values(teamScoutIds).some((a) => a.includes(id));
 
 /** 영입 가능한 프리 감독(teamId=null, 미계약) */
-export const availableCoaches = (): Coach[] => LEAGUE.coaches.filter((c) => c.teamId === null && !isCoachHired(c.id));
-export const availableAssistants = (): AssistantCoach[] => LEAGUE.assistants.filter((a) => !isAsstHired(a.id));
+export const availableCoaches = (): Coach[] => coachPool.filter((c) => c.teamId === null && !isCoachHired(c.id));
+export const availableAssistants = (): AssistantCoach[] => assistantPool.filter((a) => !isAsstHired(a.id));
+
+/** 감독 생애주기 반영 — 풀(감독+코치)을 통째 교체하고 맵 재구성(STAFF_SYSTEM 6, 오프시즌 호출) */
+export function commitCoachPool(coaches: Coach[], assistants: AssistantCoach[]): void {
+  coachPool = coaches;
+  assistantPool = assistants;
+  coachMap.clear();
+  for (const c of coachPool) coachMap.set(c.id, c);
+  assistantMap = new Map(assistantPool.map((a) => [a.id, a]));
+}
+export const currentCoachPool = (): { coaches: Coach[]; assistants: AssistantCoach[] } => ({ coaches: coachPool, assistants: assistantPool });
 export const availableScouts = (): Scout[] => LEAGUE.scouts.filter((s) => !isScoutHired(s.id));
 
 export const teamAssistants = (teamId: string): AssistantCoach[] => teamAssistantsOf(teamId);
@@ -231,6 +244,7 @@ export const defaultRosters = seedRosters;
 export function resetLeagueBase(): void {
   for (const p of LEAGUE.players) playerMap.set(p.id, p);
   rosters = seedRosters();
+  commitCoachPool([...LEAGUE.coaches], [...LEAGUE.assistants]); // 감독 풀 시드 복원
   focusOverride = {};
   headCoachOverride = {};
   teamAssistantIds = {};
@@ -251,9 +265,7 @@ export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
   for (const t of LEAGUE.teams) teamMap.set(t.id, t);
   playerMap.clear();
   for (const p of LEAGUE.players) playerMap.set(p.id, p);
-  coachMap.clear();
-  for (const c of LEAGUE.coaches) coachMap.set(c.id, c);
-  assistantMap = new Map(LEAGUE.assistants.map((a) => [a.id, a]));
+  commitCoachPool([...LEAGUE.coaches], [...LEAGUE.assistants]);
   scoutMap = new Map(LEAGUE.scouts.map((s) => [s.id, s]));
   fixtureMap.clear();
   for (const f of SEASON) fixtureMap.set(f.id, f);

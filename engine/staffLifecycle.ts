@@ -30,12 +30,13 @@ const POS_SPECIALTY: Record<Position, CoachSpecialty> = {
 
 const COACH_VQ_MIN = 72; // 이 미만 VQ면 지도자 자질 부족(전환 안 됨)
 
-/** 은퇴 선수가 지도자(전문 코치)로 전환되는가 — 고VQ일수록↑. 명성(레전드)도 가산. */
+/** 은퇴 선수가 지도자(전문 코치)로 전환되는가 — 고VQ일수록↑. 명성(레전드)도 가산.
+ *  공급 균형: 감독 풀 유지엔 은퇴 선수의 상당수가 지도자로 가야 한다(고VQ 절반 이상). */
 export function becomesCoach(p: Player, isLegend: boolean, season: number): boolean {
   if (p.vq < COACH_VQ_MIN) return false;
-  // VQ 72→0.15, 90→0.6 + 레전드 +0.25. 대부분의 똑똑한 선수가 코치를 시도하진 않는다(자리 한정).
-  const base = Math.max(0, (p.vq - COACH_VQ_MIN) / 30) * 0.5 + 0.1 + (isLegend ? 0.25 : 0);
-  return createRng(strSeed(`tocoach:${p.id}:${season}`)).next() < Math.min(0.85, base);
+  // VQ 72→0.30, 90→0.75 + 레전드 +0.2.
+  const base = Math.max(0, (p.vq - COACH_VQ_MIN) / 18) * 0.45 + 0.3 + (isLegend ? 0.2 : 0);
+  return createRng(strSeed(`tocoach:${p.id}:${season}`)).next() < Math.min(0.9, base);
 }
 
 /** 은퇴 선수 → 전문 코치(assistant) 객체. id는 staff:{playerId} 시드 결정론. */
@@ -54,10 +55,10 @@ export function headWorthiness(rating: number, coachRep: number, starRep: number
   return clamp(rating * 0.4 + coachRep * 0.4 + starRep * 0.2, 0, 100);
 }
 
-/** 승격 판정 — 명성이 임계를 넘고 시드 통과 시 감독 풀로. */
+/** 승격 판정 — 명성이 임계를 넘고 시드 통과 시 감독 풀로. (공급 균형: 은퇴 감독을 메울 만큼) */
 export function promotesToHead(coachId: string, worthiness: number, season: number): boolean {
-  if (worthiness < 60) return false;
-  const p = Math.min(0.6, (worthiness - 60) / 40 * 0.5 + 0.1);
+  if (worthiness < 52) return false;
+  const p = Math.min(0.42, (worthiness - 52) / 30 * 0.35 + 0.12);
   return createRng(strSeed(`promote:${coachId}:${season}`)).next() < p;
 }
 
