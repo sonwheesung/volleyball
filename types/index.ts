@@ -231,6 +231,7 @@ export interface Coach {
   trainingFocus: TrainingFocus; // 훈련 선호 (핵심2+보조3)
   salary: number;            // 연봉(만원) — 스태프 예산 차감
   teamId: string | null;     // 소속(null=프리에이전트 풀)
+  firedFrom?: string[];      // 경질당한 팀 id — 그 팀엔 다시 부임하지 않음(STAFF_SYSTEM 6)
 }
 
 /** 전문 코치 분야 (STAFF_SYSTEM) — 해당 분야 훈련 성장 부스트 */

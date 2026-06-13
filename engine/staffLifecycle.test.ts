@@ -4,7 +4,8 @@ import {
   coachRetireChance, staffRetires, becomesCoach, playerToCoach,
   headWorthiness, promotesToHead, firedEndSeason, firedMidSeason,
 } from './staffLifecycle';
-import type { Player, TrainableStat } from '../types';
+import { advanceCoaches } from '../data/staffLifecycle';
+import type { Coach, Player, TrainableStat } from '../types';
 
 function mkPlayer(over: Partial<Player> = {}): Player {
   const potential = {} as Record<TrainableStat, number>;
@@ -65,6 +66,34 @@ test('승격 — 명성 임계 + 결정론', () => {
   let promoted = false;
   for (let yr = 0; yr < 30; yr++) if (promotesToHead('star', w, yr)) promoted = true;
   assert.ok(promoted, '명성 높은 코치는 언젠가 감독으로');
+});
+
+const mkCoach = (id: string, cha: number, teamId: string | null, firedFrom?: string[]): Coach => ({
+  id, name: id, age: 50, charisma: cha, style: 'balanced',
+  archetype: 'x', trainingFocus: { primary: [4, 6], secondary: [1, 10, 12] }, salary: 8000, teamId, firedFrom,
+});
+
+test('엣지: 경질한 감독은 그 팀에 즉시 재배정 안 됨', () => {
+  const coaches = [mkCoach('star', 95, 't_bot'), mkCoach('low', 50, null)];
+  const r = advanceCoaches(1, { coaches, assistants: [] }, { t_bot: 'star' }, [], new Set(), ['a', 'b', 'c', 'd', 'e', 'f', 't_bot'], {}, 'P');
+  const bot = r.reassign.find((x) => x.teamId === 't_bot');
+  assert.notEqual(bot?.coachId, 'star', '경질한 star가 t_bot에 도로 가면 안 됨');
+  assert.ok(r.coaches.find((c) => c.id === 'star')?.firedFrom?.includes('t_bot'), 'firedFrom 기록');
+});
+
+test('엣지: firedFrom 팀엔 영구 배제, 다른 팀엔 부임 가능', () => {
+  const ex = () => mkCoach('ex', 95, null, ['t_bot']);
+  const sameTeam = advanceCoaches(2, { coaches: [ex(), mkCoach('low', 50, null)], assistants: [] }, { t_bot: 'gone' }, [], new Set(), ['a', 'b', 'c', 'd', 'e', 'f', 't_bot'], {}, 'P');
+  assert.notEqual(sameTeam.reassign.find((x) => x.teamId === 't_bot')?.coachId, 'ex', 'firedFrom 팀 배제');
+  const otherTeam = advanceCoaches(3, { coaches: [ex(), mkCoach('low', 50, null)], assistants: [] }, { t_oth: 'gone' }, [], new Set(), ['a', 'b', 'c', 'd', 'e', 'f', 't_oth'], {}, 'P');
+  assert.equal(otherTeam.reassign.find((x) => x.teamId === 't_oth')?.coachId, 'ex', '다른 팀엔 부임 가능');
+});
+
+test('엣지: 두 팀 동시 공석 — 같은 감독 이중 배정 없음', () => {
+  const r = advanceCoaches(4, { coaches: [mkCoach('f1', 70, null), mkCoach('f2', 65, null)], assistants: [] }, { A: 'deadA', B: 'deadB' }, [], new Set(), ['A', 'B', 'c', 'd', 'e', 'f', 'g'], {}, 'P');
+  const a = r.reassign.find((x) => x.teamId === 'A')?.coachId;
+  const b = r.reassign.find((x) => x.teamId === 'B')?.coachId;
+  assert.ok(a && b && a !== b, '서로 다른 감독');
 });
 
 test('경질 — 꼴찌·시즌중 바닥', () => {

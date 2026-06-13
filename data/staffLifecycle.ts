@@ -73,7 +73,11 @@ export function advanceCoaches(
     if (!headId) continue;
     if (firedEndSeason(i + 1, teamCount, bottomYears[teamId] ?? 0)) {
       const fired = coaches.find((c) => c.id === headId);
-      if (fired) { fired.teamId = null; leftHeadByTeam.set(teamId, headId); retiredCoaches.push(`${fired.name}(경질)`); }
+      if (fired) {
+        fired.teamId = null;
+        fired.firedFrom = [...(fired.firedFrom ?? []), teamId]; // 그 팀엔 다시 안 감(영구)
+        leftHeadByTeam.set(teamId, headId); retiredCoaches.push(`${fired.name}(경질)`);
+      }
     }
   }
 
@@ -105,11 +109,16 @@ export function advanceCoaches(
   }
   assistants = stillAsst;
 
+  // 방금 떠난(경질·은퇴 후 살아있는) 감독은 이번 오프시즌 재배정 제외 — 경질당한 팀에 도로 가거나
+  //   같은 시즌 다른 팀에 바로 취직하지 않는다(현실: 경질된 감독은 한 시즌 쉰다).
+  const justLeft = new Set(leftHeadByTeam.values());
   // 6) 빈 팀 재배정 — AI는 풀에서 최고 카리스마 자동 선임. 프리 감독이 없으면
   //    최고 역량 전문 코치를 즉시 감독 승격(공급 안전장치 — 팀은 항상 감독을 갖는다).
   for (const [teamId] of leftHeadByTeam) {
     if (teamId === myTeamId) { reassign.push({ teamId, coachId: null }); continue; }
-    let free = coaches.filter((c) => c.teamId === null).sort((x, y) => y.charisma - x.charisma)[0];
+    // 프리 감독 중: 이번에 떠난 사람 제외(한 시즌 휴식) + 이 팀에서 경질된 적 없는 사람만(영구 배제)
+    let free = coaches.filter((c) => c.teamId === null && !justLeft.has(c.id) && !(c.firedFrom ?? []).includes(teamId))
+      .sort((x, y) => y.charisma - x.charisma)[0];
     if (!free) {
       const best = assistants.filter((a) => a.teamId === null).sort((x, y) => y.rating - x.rating)[0];
       if (best) {
