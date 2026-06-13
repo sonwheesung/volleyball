@@ -5,7 +5,7 @@
 // 외인 트라이아웃 영입(비게이팅 가능)도 incoming 으로 잡아 비용에 포함.
 
 import {
-  resetLeagueBase, LEAGUE, getTeam, teamScoutReveal, commitPlayerBase, commitRosters,
+  resetLeagueBase, setMyTeamStaff, LEAGUE, getTeam, teamScoutReveal, commitPlayerBase, commitRosters,
 } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { faMarketPreview } from '../data/offseason';
@@ -21,6 +21,7 @@ const log = (m: string) => process.stdout.write(m + '\n');
 const N = Math.max(2, Number(process.argv[2]) || 40);
 resetLeagueBase();
 const myTeam = LEAGUE.teams[0].id;
+setMyTeamStaff(myTeam);
 const tname = (id: string) => getTeam(id)?.name ?? id;
 const money = (v: number) => `${(v / 10000).toFixed(2)}억`;
 

@@ -3,13 +3,14 @@
 // rosters    = 팀 구성(가변). 시드 기본값에서 은퇴/영입/드래프트로 바뀐다.
 // 시즌 내 진화는 스냅샷에서 currentDay 만큼 리플레이.
 
-import type { AssistantCoach, Coach, CoachStyle, Fixture, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
+import type { AssistantCoach, Coach, CoachSpecialty, CoachStyle, Fixture, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
 import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
 import { evolvePlayer } from '../engine/progression';
 import { rollTraits } from '../engine/traits';
-import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, type StaffEffects, NO_EFFECTS } from '../engine/staff';
+import { createRng, strSeed } from '../engine/rng';
+import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, type StaffEffects, NO_EFFECTS } from '../engine/staff';
 
 const LEAGUE_SEED = 20251018;
 const SEASON_SEED = 777;
@@ -59,12 +60,43 @@ function teamHeadCoach(teamId: string): Coach | undefined {
   return seed && seed.teamId === teamId ? seed : undefined; // 떠난 시드 감독은 폴백 안 함(공석→기본 감독)
 }
 
-/** 팀 보조코치 목록 */
+// ─── AI 팀 기본 스태프(STAFF_SYSTEM 7) — 전엔 AI가 시드 감독뿐, 코치·스카우터 0이라 성장·스카우팅
+//   일방 불리. AI 팀에 결정론 기본 스태프(코치 2 + 스카우터 1) 지급. 전용 id(`ai-*`)라 플레이어
+//   영입 풀과 분리 → 단일 소속 불변식 유지(영입 불가). 플레이어는 슬롯 3 + 상위 풀로 능가(단장 우위 레버). ───
+let myTeamStaff = ''; // 플레이어 팀 — 이 팀만 영입 스태프 사용, 나머지는 AI 기본
+/** 플레이어 팀 등록(스토어/시뮬). 이 팀은 단장이 영입한 스태프를, 나머지 팀은 AI 기본 스태프를 쓴다. */
+export function setMyTeamStaff(teamId: string): void { myTeamStaff = teamId; }
+
+const AI_SPECIALTIES: CoachSpecialty[] = ['attack', 'defense', 'setter', 'stamina', 'mental'];
+const aiAsstCache = new Map<string, AssistantCoach[]>();
+const aiScoutCache = new Map<string, Scout[]>();
+function aiTeamAssistants(teamId: string): AssistantCoach[] {
+  const hit = aiAsstCache.get(teamId); if (hit) return hit;
+  const rng = createRng(strSeed(`aistaff:${teamId}`));
+  const sp = [...AI_SPECIALTIES];
+  for (let i = sp.length - 1; i > 0; i--) { const j = rng.int(0, i); [sp[i], sp[j]] = [sp[j], sp[i]]; }
+  const list: AssistantCoach[] = sp.slice(0, 2).map((s, i) => {
+    const rating = 52 + rng.int(0, 22); // 52~74 기본기 — 플레이어 상위(최대 92) 영입에 밀린다
+    return { id: `ai-ac-${teamId}-${i}`, name: '전임 코치', age: 45 + rng.int(0, 15), specialty: s, rating, salary: assistantSalary(rating), teamId };
+  });
+  aiAsstCache.set(teamId, list); return list;
+}
+function aiTeamScouts(teamId: string): Scout[] {
+  const hit = aiScoutCache.get(teamId); if (hit) return hit;
+  const rng = createRng(strSeed(`aiscout:${teamId}`));
+  const scouting = 50 + rng.int(0, 25); // 50~75 기본 안목
+  const list: Scout[] = [{ id: `ai-sc-${teamId}`, name: '구단 스카우터', age: 45 + rng.int(0, 15), scouting, salary: scoutSalary(scouting), teamId }];
+  aiScoutCache.set(teamId, list); return list;
+}
+
+/** 팀 보조코치 목록 — 플레이어 팀은 영입분, AI 팀은 기본 스태프 */
 function teamAssistantsOf(teamId: string): AssistantCoach[] {
+  if (teamId !== myTeamStaff) return aiTeamAssistants(teamId);
   return (teamAssistantIds[teamId] ?? []).map((id) => assistantMap.get(id)).filter((a): a is AssistantCoach => !!a);
 }
-/** 팀 스카우터 목록 */
+/** 팀 스카우터 목록 — 플레이어 팀은 영입분, AI 팀은 기본 스카우터 */
 function teamScoutsOf(teamId: string): Scout[] {
+  if (teamId !== myTeamStaff) return aiTeamScouts(teamId);
   return (teamScoutIds[teamId] ?? []).map((id) => scoutMap.get(id)).filter((s): s is Scout => !!s);
 }
 
@@ -269,6 +301,7 @@ export interface LeagueSnapshot {
   coaches: Coach[]; assistants: AssistantCoach[];
   head: Record<string, string>; asst: Record<string, string[]>; scout: Record<string, string[]>;
   focus: Record<string, TrainingFocus>;
+  myTeamStaff: string;
 }
 
 /** 현재 가변 리그 상태를 통째로 캡처 — restoreLeagueState 로 원복. 감독은 in-place 변형되므로 깊은 복제. */
@@ -280,6 +313,7 @@ export function snapshotLeagueState(): LeagueSnapshot {
     assistants: assistantPool.map((a) => ({ ...a })),
     head: { ...headCoachOverride }, asst: jclone(teamAssistantIds), scout: jclone(teamScoutIds),
     focus: jclone(focusOverride),
+    myTeamStaff,
   };
 }
 
@@ -293,6 +327,7 @@ export function restoreLeagueState(s: LeagueSnapshot): void {
   teamAssistantIds = jclone(s.asst);
   teamScoutIds = jclone(s.scout);
   focusOverride = jclone(s.focus);
+  myTeamStaff = s.myTeamStaff;
   rebuildFocus(); evoCache = null; _baseVersion++;
 }
 export const getStaffState = () => ({ head: { ...headCoachOverride }, asst: { ...teamAssistantIds }, scout: { ...teamScoutIds } });
@@ -372,6 +407,7 @@ export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
   headCoachOverride = {};
   teamAssistantIds = {};
   teamScoutIds = {};
+  aiAsstCache.clear(); aiScoutCache.clear(); // 새 유니버스 — AI 기본 스태프 캐시 무효화
   rebuildFocus();
   evoCache = null;
   _baseVersion++;

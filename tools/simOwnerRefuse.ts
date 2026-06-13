@@ -3,7 +3,7 @@
 //   npx tsx tools/simOwnerRefuse.ts [시즌=20]
 
 import {
-  resetLeagueBase, LEAGUE, getTeam, getPlayer, teamScoutReveal,
+  resetLeagueBase, setMyTeamStaff, LEAGUE, getTeam, getPlayer, teamScoutReveal,
   commitPlayerBase, commitRosters, currentRosters,
 } from '../data/league';
 import { faMarketPreview, resolvePreDraft } from '../data/offseason';
@@ -19,6 +19,7 @@ const log = (m: string) => process.stdout.write(m + '\n');
 const N = Math.max(2, Number(process.argv[2]) || 20);
 resetLeagueBase();
 const myTeam = LEAGUE.teams[0].id;
+setMyTeamStaff(myTeam);
 const teamIds = LEAGUE.teams.map((t) => t.id);
 const tname = (id: string) => getTeam(id)?.name ?? id;
 

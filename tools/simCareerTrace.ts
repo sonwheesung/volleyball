@@ -4,7 +4,7 @@
 // 영입 감사와 동일한 진행(FA·드래프트·외인·감독 생애주기 + 내 팀 능동 영입)을 굴린다.
 
 import {
-  resetLeagueBase, LEAGUE, getTeam, getPlayer, getCoach, teamScoutReveal, currentRosters,
+  resetLeagueBase, setMyTeamStaff, LEAGUE, getTeam, getPlayer, getCoach, teamScoutReveal, currentRosters,
   commitPlayerBase, commitRosters, currentCoachPool, commitCoachPool, assignCoach, reconcileStaff,
   getTeamCoach, getStaffState, availableCoaches, availableAssistants, hireHeadCoach, hireAssistant,
   releaseAssistant, fireCoach, coachSlots, teamAssistants,
@@ -27,6 +27,7 @@ const SHOW_PLAYERS = Math.max(1, Number(process.argv[3]) || 12);
 resetLeagueBase();
 
 const myTeam = LEAGUE.teams[0].id;
+setMyTeamStaff(myTeam);
 const teamIds = LEAGUE.teams.map((t) => t.id);
 const tname = (id: string) => getTeam(id)?.name ?? id;
 const money = (v: number) => `${(v / 10000).toFixed(2)}억`; // 만원 → 억

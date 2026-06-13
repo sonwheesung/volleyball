@@ -26,7 +26,7 @@ import {
 import { discontentNow, teamFanbaseNow, buildOwnerFx } from '../data/owner';
 import { settleSeason, applyNet, type SeasonFinance } from '../engine/finance';
 import { FOREIGN_SALARY } from '../engine/foreign';
-import { staffSpend } from '../data/league';
+import { staffSpend, setMyTeamStaff } from '../data/league';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
 import { computeStandings, seasonStreaks, seasonResults } from '../data/standings';
@@ -178,6 +178,7 @@ export const useGameStore = create<GameState>()(
         resetLeagueBase();
         set({ ...freshSave, selectedTeamId: teamId });
         setTxContext([], [], teamId);
+        setMyTeamStaff(teamId); // 내 팀만 영입 스태프, 나머지는 AI 기본 스태프(STAFF_SYSTEM 7)
         setOwnerContext([]);
       },
       setDay: (day) => set((s) => ({ currentDay: Math.max(s.currentDay, day) })),
@@ -687,6 +688,7 @@ export const useGameStore = create<GameState>()(
         if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
         if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
         setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
+        setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)
         setOwnerContext(state?.benchDirectives ?? []);
         useGameStore.setState({ hydrated: true });
       },

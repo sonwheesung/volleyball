@@ -4,7 +4,7 @@
 // SOLID: UI → 이 셀렉터 → 엔진. 결정론(시드 의사난수)로 재현 가능.
 
 import {
-  resetLeagueBase, snapshotLeagueState, restoreLeagueState, LEAGUE, SEASON, getTeam, teamScoutReveal,
+  resetLeagueBase, setMyTeamStaff, snapshotLeagueState, restoreLeagueState, LEAGUE, SEASON, getTeam, teamScoutReveal,
   commitPlayerBase, commitRosters, currentRosters, getPlayer, currentCoachPool, commitCoachPool, assignCoach, reconcileStaff,
   getTeamCoach, getCoach, getStaffState, availableCoaches, availableAssistants, availableScouts,
   hireHeadCoach, hireAssistant, releaseAssistant, hireScout, releaseScout, fireCoach, coachSlots,
@@ -74,6 +74,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
   try {
     resetLeagueBase();
     const myTeam = LEAGUE.teams[0].id;
+    setMyTeamStaff(myTeam); // 내 팀 영입 스태프 경로 테스트(나머지는 AI 기본)
     const teamIds = LEAGUE.teams.map((t) => t.id);
     const tname = (id: string) => getTeam(id)?.name ?? id;
 

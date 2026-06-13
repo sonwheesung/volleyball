@@ -8,7 +8,7 @@
 //   선수: 한 선수 두 팀 로스터 동시 등록 불가
 
 import {
-  resetLeagueBase, getTeam, teamScoutReveal, commitPlayerBase, commitRosters, LEAGUE,
+  resetLeagueBase, setMyTeamStaff, getTeam, teamScoutReveal, commitPlayerBase, commitRosters, LEAGUE,
   currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, getTeamCoach, getCoach,
   getStaffState, availableCoaches, availableAssistants, availableScouts,
   hireHeadCoach, hireAssistant, releaseAssistant, hireScout, releaseScout, fireCoach, coachSlots,
@@ -28,6 +28,7 @@ const log = (m: string) => process.stdout.write(m + '\n');
 const N = Math.max(1, Number(process.argv[2]) || 120);
 resetLeagueBase();
 const myTeam = LEAGUE.teams[0].id;
+setMyTeamStaff(myTeam);
 const teamIds = LEAGUE.teams.map((t) => t.id);
 
 // 결정론 의사난수(시드) — 내 팀 영입 행동 다양화(Math.random 미사용)
