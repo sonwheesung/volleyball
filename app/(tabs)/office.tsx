@@ -106,6 +106,14 @@ export default function Office() {
         <Muted style={{ fontSize: 12, marginTop: 2 }}>방출 선수·미계약 FA를 시즌 중 즉시 영입(캡·정원 적용)</Muted>
       </Card>
 
+      <Card onPress={() => router.push('/audit')}>
+        <Row>
+          <Title>영입 무결성 감사</Title>
+          <Muted>QA · 중복/오배정 검사 →</Muted>
+        </Row>
+        <Muted style={{ fontSize: 12, marginTop: 2 }}>FA·드래프트·외인·감독/코치 영입을 여러 시즌 굴려 "한 사람=한 팀" 전수 검증(세이브 안전)</Muted>
+      </Card>
+
       <Title>계약 관리</Title>
       {roster.map((p) => {
         const market = marketValue(p, getPlayerProduction(p.id, currentDay));

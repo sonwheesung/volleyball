@@ -28,6 +28,7 @@ export default function RootLayout() {
         <Stack.Screen name="exhibition" options={{ title: '테스트 경기' }} />
         <Stack.Screen name="achievements" options={{ title: '업적' }} />
         <Stack.Screen name="debug-court" options={{ title: '보드 위치 검증' }} />
+        <Stack.Screen name="audit" options={{ title: '영입 무결성 감사' }} />
         <Stack.Screen name="match/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="matchresult/[id]" options={{ title: '경기 상세' }} />
       </Stack>
