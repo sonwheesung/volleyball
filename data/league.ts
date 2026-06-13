@@ -175,7 +175,7 @@ export function hireHeadCoach(teamId: string, coachId: string): boolean {
 }
 /** 생애주기 재배정 — 예산·검증 없이 감독을 팀에 배정(AI 자동 선임, STAFF_SYSTEM 6). null=배정 해제(기본 감독). */
 export function assignCoach(teamId: string, coachId: string | null): void {
-  const prev = headCoachOverride[teamId]; if (prev && prev !== coachId) { const pc = coachMap.get(prev); if (pc) pc.teamId = null; }
+  const prev = headCoachOverride[teamId]; if (prev && prev !== coachId) { const pc = coachMap.get(prev); if (pc) { pc.teamId = null; pc.contractYears = undefined; } }
   if (coachId === null) delete headCoachOverride[teamId];
   else { headCoachOverride[teamId] = coachId; const c = coachMap.get(coachId); if (c) c.teamId = teamId; }
   invalidateStaff(true);

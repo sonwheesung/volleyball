@@ -2,11 +2,29 @@
 // 엔진(staffLifecycle) 판정을 현재 풀에 적용해 다음 시즌 풀 + 팀 재배정을 만든다.
 // 순수에 가깝게: 입력(현재 풀·은퇴 선수·순위)을 받아 새 풀을 반환. 호출측이 commit/persist.
 
-import type { Coach, AssistantCoach, Player, TrainingFocus } from '../types';
+import type { Coach, AssistantCoach, Player, TrainingFocus, CoachStyle } from '../types';
 import {
   staffRetires, becomesCoach, playerToCoach, promotesToHead, headWorthiness,
   coachToHead, firedEndSeason, aiResigns, contractTerm,
 } from '../engine/staffLifecycle';
+import { createRng, strSeed } from '../engine/rng';
+import { headCoachSalary } from '../engine/staff';
+import { COACH_NAMES } from './names';
+
+/** 신임(대체급) 감독 생성 — 프리 감독·승격 가능 코치가 모두 고갈됐을 때의 공급 안전장치.
+ *  결정론(teamId·season 시드). 풀에 영구 합류해 공급을 보충(다음부터 이 감독도 순환). */
+function makeInterimCoach(teamId: string, season: number): Coach {
+  const rng = createRng(strSeed(`interim-coach:${teamId}:${season}`));
+  const charisma = 38 + rng.int(0, 18);
+  const styles: CoachStyle[] = ['attack', 'defense', 'balanced'];
+  return {
+    id: `coach-int-${teamId}-s${season}`,
+    name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)],
+    age: 44 + rng.int(0, 16), charisma, style: styles[rng.int(0, 2)],
+    archetype: '신임', trainingFocus: DEFAULT_FOCUS, salary: headCoachSalary(charisma),
+    teamId: null, contractYears: undefined,
+  };
+}
 
 export interface CoachReassign { teamId: string; coachId: string | null } // null = 풀에 빈자리(다음 영입까지 기본 감독)
 
@@ -79,7 +97,7 @@ export function advanceCoaches(
     if (firedEndSeason(i + 1, teamCount, bottomYears[teamId] ?? 0, season, headId)) {
       const fired = coaches.find((c) => c.id === headId);
       if (fired) {
-        fired.teamId = null;
+        fired.teamId = null; fired.contractYears = undefined; // FA로 — 계약 잔여 비움(stale 방지)
         fired.firedFrom = [...(fired.firedFrom ?? []), teamId]; // 그 팀엔 다시 안 감(영구)
         leftHeadByTeam.set(teamId, headId); retiredCoaches.push(`${fired.name}(경질)`);
       }
@@ -147,6 +165,10 @@ export function advanceCoaches(
         const style = best.specialty === 'attack' ? 'attack' : best.specialty === 'defense' ? 'defense' : 'balanced';
         free = coachToHead(best, fromLegend ? 80 : 40, DEFAULT_FOCUS, style);
         coaches.push(free); assistants = assistants.filter((a) => a.id !== best.id); promoted.push(best.name);
+      } else {
+        // 프리 감독·승격 코치 모두 고갈 → 신임 감독을 신규 영입(공급 안전장치 — 팀은 절대 무감독이 되지 않는다)
+        free = makeInterimCoach(teamId, season);
+        coaches.push(free); newCoaches.push(free.name);
       }
     }
     if (free) { free.teamId = teamId; free.contractYears = contractTerm(free.id, season); reassign.push({ teamId, coachId: free.id }); }

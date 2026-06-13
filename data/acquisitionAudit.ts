@@ -21,6 +21,9 @@ import { applyMatchXp } from '../engine/experience';
 import { accrueCareer } from '../engine/production';
 import { bottomStreak } from '../engine/staffLifecycle';
 import { overall } from '../engine/overall';
+import { LEAGUE_CAP } from '../engine/cap';
+import { ROSTER_MIN, ROSTER_MAX } from '../engine/transactions';
+import { domesticPayroll } from './roster';
 
 export interface AuditCheck {
   key: string;
@@ -53,6 +56,11 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
     faLeak: { key: 'faLeak', name: '내 영입 FA 유지 (이중배정 없음)', violations: 0, samples: [] as string[] },
     head: { key: 'head', name: '감독 1인 1팀 · 경질팀 복귀 금지', violations: 0, samples: [] as string[] },
     staff: { key: 'staff', name: '코치/스카우터 1인 1팀 · 슬롯', violations: 0, samples: [] as string[] },
+    roster: { key: 'roster', name: `정원 한도 (${ROSTER_MIN}~${ROSTER_MAX}명)`, violations: 0, samples: [] as string[] },
+    cap: { key: 'cap', name: `샐러리캡 (국내 연봉 ≤ ${LEAGUE_CAP})`, violations: 0, samples: [] as string[] },
+    salary: { key: 'salary', name: '연봉·계약 정상치 (NaN·음수·0 없음)', violations: 0, samples: [] as string[] },
+    supply: { key: 'supply', name: 'AI 팀 감독 공백 없음 (공급 고갈)', violations: 0, samples: [] as string[] },
+    newid: { key: 'newid', name: '신규 id 충돌 없음 (신인·외인 ↔ 기존)', violations: 0, samples: [] as string[] },
   };
   const hit = (c: { violations: number; samples: string[] }, msg: string) => {
     c.violations++; if (c.samples.length < SAMPLE_CAP) c.samples.push(msg);
@@ -106,22 +114,52 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
         if (prev && prev !== t) hit(C.staff, `S${sNo}: 스카우터 ${sc.id} 두 팀(${tname(prev)}·${tname(t)})`);
         scoutSeen.set(sc.id, t);
       }
+      // 감독·코치 연봉/계약 정상치 — 음수·NaN·비정상 연봉(예전 사용자 우려) + 계약연수 음수
+      const okNum = (v: number | undefined, lo: number, hi: number) => v === undefined || (Number.isFinite(v) && v >= lo && v <= hi);
+      for (const c of currentCoachPool().coaches) {
+        if (!okNum(c.salary, 0, 99999)) hit(C.salary, `S${sNo}: 감독 ${c.id} 연봉 비정상 ${c.salary}`);
+        if (!okNum(c.contractYears, 0, 10)) hit(C.salary, `S${sNo}: 감독 ${c.id} 계약연수 비정상 ${c.contractYears}`);
+        if (c.teamId === null && c.contractYears !== undefined) hit(C.salary, `S${sNo}: FA 감독 ${c.id} 인데 계약연수 ${c.contractYears} 남음`);
+      }
+      for (const a of currentCoachPool().assistants) {
+        if (!okNum(a.salary, 0, 99999)) hit(C.salary, `S${sNo}: 코치 ${a.id} 연봉 비정상 ${a.salary}`);
+        if (!okNum(a.contractYears, 0, 10)) hit(C.salary, `S${sNo}: 코치 ${a.id} 계약연수 비정상 ${a.contractYears}`);
+      }
+      // AI 팀(내 팀 제외 — 내 팀은 경질 후 공석 가능)은 항상 감독을 가져야 한다(공급 고갈 탐지)
+      for (const t of teamIds) if (t !== myTeam && !getTeamCoach(t)) hit(C.supply, `S${sNo}: ${tname(t)} 감독 공백(공급 고갈)`);
     };
 
-    const checkRosters = (sNo: number, where: string, rosters: Record<string, string[]>, snapshot: Record<string, import('../types').Player>, retired: string[], signedByMe: string[]) => {
+    const okNum = (v: number | undefined, lo: number, hi: number) => v !== undefined && Number.isFinite(v) && v >= lo && v <= hi;
+    const checkRosters = (sNo: number, where: string, rosters: Record<string, string[]>, snapshot: Record<string, import('../types').Player>, retired: string[], signedByMe: string[], final: boolean) => {
       const ownBy = new Map<string, string>();
       for (const t of teamIds) {
         const seen = new Set<string>();
         let foreignCnt = 0;
-        for (const id of rosters[t] ?? []) {
+        const ids = rosters[t] ?? [];
+        for (const id of ids) {
           if (seen.has(id)) hit(C.player, `S${sNo} ${where}: 선수 ${id} ${tname(t)} 로스터 중복`);
           seen.add(id);
           const prev = ownBy.get(id);
           if (prev && prev !== t) hit(C.player, `S${sNo} ${where}: 선수 ${id} 두 팀(${tname(prev)}·${tname(t)})`);
           ownBy.set(id, t);
-          if (snapshot[id]?.isForeign) foreignCnt++;
+          const p = snapshot[id];
+          if (p?.isForeign) foreignCnt++;
+          // 연봉·계약 정상치
+          if (p) {
+            if (!okNum(p.contract?.salary, 1, LEAGUE_CAP)) hit(C.salary, `S${sNo} ${where}: ${tname(t)} ${id} 연봉 비정상 ${p.contract?.salary}`);
+            if (!okNum(p.contract?.remaining, 0, 10)) hit(C.salary, `S${sNo} ${where}: ${tname(t)} ${id} 잔여계약 비정상 ${p.contract?.remaining}`);
+          }
         }
         if (foreignCnt > 1) hit(C.foreign, `S${sNo} ${where}: ${tname(t)} 외인 ${foreignCnt}명`);
+        // 샐러리캡(국내 연봉) — 영입/재계약이 캡을 넘기면 안 됨. 단 드래프트는 의무적 신인 수급(저가 슬롯)이라
+        //   캡 직전 팀도 정원을 채우려면 신인을 받아야 한다 → 신인 루키 예외(현실 캡과 동일). 따라서 캡 불변식은
+        //   FA·재계약 직후(드래프트 전) 단계에서만 강제. 드래프트 후엔 명백한 과다(>110%)만 잡는다.
+        const dom = domesticPayroll(ids, (id) => snapshot[id]);
+        const capLimit = final ? LEAGUE_CAP * 1.1 : LEAGUE_CAP;
+        if (dom > capLimit) hit(C.cap, `S${sNo} ${where}: ${tname(t)} 국내연봉 ${dom} > ${final ? '캡×1.1(신인수급 예외 후)' : '캡'} ${Math.round(capLimit)}`);
+        // 정원 한도 — 최종(드래프트 후) 명단만 하한 검사(중간 단계는 구멍이 정상)
+        if (final && (ids.length < ROSTER_MIN || ids.length > ROSTER_MAX)) hit(C.roster, `S${sNo} ${where}: ${tname(t)} 정원 ${ids.length} (허용 ${ROSTER_MIN}~${ROSTER_MAX})`);
+        else if (!final && ids.length > ROSTER_MAX) hit(C.roster, `S${sNo} ${where}: ${tname(t)} 정원 ${ids.length} > ${ROSTER_MAX}`);
       }
       for (const rid of retired) if (ownBy.has(rid)) hit(C.player, `S${sNo} ${where}: 은퇴자 ${rid} 가 ${tname(ownBy.get(rid)!)} 로스터에`);
       // 내 영입 FA가 내 팀에 유지되는가(보상으로 유출되면 위반)
@@ -162,7 +200,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
       for (const r of res.reassign) assignCoach(r.teamId, r.coachId);
       reconcileStaff();
       checkStaff(s);
-      checkRosters(s, '생애주기후', ctx.rosters, snapshot, ctx.retired, signedByMe);
+      checkRosters(s, '생애주기후', ctx.rosters, snapshot, ctx.retired, signedByMe, false);
 
       // 내 팀 능동 영입(감독·코치·스카우터)
       if (rnd() < 0.35) { const cur = getTeamCoach(myTeam); if (cur && !cur.id.startsWith('acting_')) { fireCoach(myTeam); stats.coachFired++; } }
@@ -178,12 +216,24 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
       checkStaff(s);
 
       // 드래프트 + 신인 → 다음 시즌
+      const preDraftIds = new Set<string>(Object.values(ctx.rosters).flat()); // 드래프트 전 모든 소속 선수
       const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';
       const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], myTeam, [], styleOf, teamScoutReveal);
-      for (const p of d.picked) snapshot[p.id] = p;
+      // 신인/외인 신규 id가 기존 소속 선수 id와 충돌하면 레지스트리를 덮어써 선수가 증발한다
+      const draftedSeen = new Set<string>();
+      for (const p of d.picked) {
+        if (preDraftIds.has(p.id)) hit(C.newid, `S${s}: 신인 ${p.id} 가 기존 소속 선수와 id 충돌`);
+        if (draftedSeen.has(p.id)) hit(C.newid, `S${s}: 신인 ${p.id} 가 같은 드래프트에서 중복 지명`);
+        draftedSeen.add(p.id);
+        snapshot[p.id] = p;
+      }
       const f = fillRosters(d.rosters, (id) => snapshot[id], s);
-      for (const p of f.newPlayers) snapshot[p.id] = p;
-      checkRosters(s, '드래프트후', f.rosters, snapshot, ctx.retired, signedByMe);
+      for (const p of f.newPlayers) {
+        if (preDraftIds.has(p.id) || draftedSeen.has(p.id)) hit(C.newid, `S${s}: 충원 신인 ${p.id} 가 기존/지명 선수와 id 충돌`);
+        draftedSeen.add(p.id);
+        snapshot[p.id] = p;
+      }
+      checkRosters(s, '드래프트후', f.rosters, snapshot, ctx.retired, signedByMe, true);
 
       for (const tid of Object.keys(f.rosters)) for (const id of f.rosters[tid]) {
         const pr = prod.get(id);
