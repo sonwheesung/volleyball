@@ -18,8 +18,8 @@ import { clutchFocusAdj, serveAggrAdj } from './traits';
 const n = (v: number) => v / 100;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
-/** 기세 → 능력 승수 (7.2). 0.94~1.06 — KOVO 세트 점수차(4~6)·듀스 비율 정렬(2026-06.
- *  ±10%는 스노볼 과강: 패자 평균 17.6·점수차 7.6·듀스 6%로 일방적 세트 과다) */
+/** 기세 → 능력 승수 (7.2). m∈[0,100]에서 0.96~1.04 — KOVO 세트 점수차(4~6)·듀스 비율 정렬(2026-06.
+ *  이전 ±10%(0.90~1.10)는 스노볼 과강: 패자 평균 17.6·점수차 7.6·듀스 6%로 일방적 세트 과다였음) */
 export const momFactor = (m: number) => 0.96 + 0.0008 * m;
 
 const ATTACK_SHARE: Record<Position, number> = { OP: 1.0, OH: 0.9, MB: 0.6, S: 0.1, L: 0 };
@@ -479,6 +479,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     if (r1 < errP2) { if (stats) stats.attackErrs++; if (trace) trace.push('    → 공격 범실 (상대 득점)'); if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); } return { winner: other(att), how: 'atkErr' }; }
     if (r1 < errP2 + blockP) {
       // 공격방법(5.1): 영리한 공격수는 블록아웃/툴샷으로 살린다(VQ↑일수록)
+      // 실효 = 0.35×VQ − 0.03. 두 리터럴(0.12−0.15)을 합치지 않는다 — 합치면 부동소수점 1 ULP가
+      // 달라져 결정론(같은 시드=같은 결과·세이브 리플레이)이 깨진다(2026-06-12 확인).
       const blockOutP = clamp(0.12 + 0.35 * n(attacker.vq) - 0.15, 0.04, 0.4);
       if (rng.next() < blockOutP) { if (stats) stats.blockouts++; if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return { winner: att, how: 'blockout' }; }
       const stuffPref = df.style === 'attack' ? 0.04 : df.style === 'defense' ? -0.04 : 0;

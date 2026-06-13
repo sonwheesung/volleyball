@@ -1,6 +1,6 @@
-// 간이 경기 시뮬 (Phase 0 임시판).
-// OVR 비율 + 시드 RNG로 점수를 한 점씩 굴려 경기를 끝까지 진행한다.
-// 풀 엔진(MATCH_SYSTEM: 랠리 체인/로테이션/기세)으로 추후 교체 예정.
+// 간이 경기 시뮬 (Phase 0) + SimResult/PointLog 타입 계약의 정본.
+// 풀 엔진은 match.ts(랠리 체인/로테이션/기세)로 구현됐고 이 파일의 SimResult 타입을 따른다.
+// simulateMatchSimple(OVR 비율 + 시드 RNG)는 레거시 — production.test.ts 등 빠른 단위 검증용으로 유지.
 // 결정론: 같은 (seed, ovr) = 같은 경기.
 
 import { createRng } from './rng';

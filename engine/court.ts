@@ -29,7 +29,8 @@ export function zoneOfIdx(rotation: number, lineupIdx: number): number {
   return 6;
 }
 
-/** 선수의 코트 좌표 — 후위(1·5·6) MB는 리베로가 그 자리에 섬 */
+/** 라인업 인덱스의 코트 좌표(존 중심). 좌표는 존에만 의존하므로 six·libero는 받기만 하고 쓰지 않는다
+ *  (리베로↔MB 자리 교체는 같은 후위 존이라 좌표가 동일 — 누가 그 자리에 서는지는 호출부 rally.ts가 선택). */
 export function playerXY(side: Side, six: Player[], rotation: number, lineupIdx: number, libero: Player | null): Pt {
   const z = zoneOfIdx(rotation, lineupIdx);
   return zoneXY(side, z);
