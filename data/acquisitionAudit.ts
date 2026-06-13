@@ -63,6 +63,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
     supply: { key: 'supply', name: 'AI 팀 감독 공백 없음 (공급 고갈)', violations: 0, samples: [] as string[] },
     newid: { key: 'newid', name: '신규 id 충돌 없음 (신인·외인 ↔ 기존)', violations: 0, samples: [] as string[] },
     intx: { key: 'intx', name: '시즌 중 거래 단일 소속 (이중영입 차단)', violations: 0, samples: [] as string[] },
+    cash2: { key: 'cash2', name: '영입 자금 한도 (현금 초과 영입 없음)', violations: 0, samples: [] as string[] },
   };
   const hit = (c: { violations: number; samples: string[] }, msg: string) => {
     c.violations++; if (c.samples.length < SAMPLE_CAP) c.samples.push(msg);
@@ -183,6 +184,14 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
       const outcome = faMarketPreview(myTeam, {}, {}, wishlist, true, [], s, undefined, BIG_CASH);
       const signedByMe = [...outcome.signedByMe];
       stats.faSigned += signedByMe.length;
+
+      // 자금 정합성: 한정 현금으로 상위 FA 다수를 공격적으로 노려도 영입 총액 ≤ 현금이어야(과영입 차단)
+      const CASH = 45000;
+      const bigWish = [...peek.pool].map((id) => peek.snapshot[id]).filter((p): p is NonNullable<typeof p> => !!p)
+        .sort((a, b) => overall(b) - overall(a)).slice(0, 8).map((p) => p.id);
+      const cashPeek = faMarketPreview(myTeam, {}, {}, bigWish, true, [], s, undefined, CASH);
+      const spent = [...cashPeek.signedByMe].reduce((sum, id) => sum + (cashPeek.snapshot[id]?.contract.salary ?? 0), 0);
+      if (spent > CASH) hit(C.cash2, `S${s}: 현금 ${CASH} 인데 영입 총액 ${spent} (${cashPeek.signedByMe.size}명) — 과영입`);
 
       // 감독 생애주기(AI)
       const table = computeStandings(Number.MAX_SAFE_INTEGER);
