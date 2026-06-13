@@ -137,7 +137,9 @@ export function resolveFAMarket(
     if (!grade || !needsCompensationPlayer(grade)) continue;
     const prev = prevTeamOf[id];
     if (!prev || prev === myTeam || !rosters[prev]) continue;
-    const compId = pickCompensation(rosters[myTeam] ?? [], protectedIds, snapshot, [...taken, id]);
+    // 이번 오프시즌에 내가 영입한 FA는 보상선수 대상에서 제외 — 안 그러면 방금 영입한(연봉 지불·signedByMe)
+    //   선수가 보상으로 원소속팀에 넘어가 "돈은 내고 선수는 상대 팀" 이중 배정이 된다(KBO 규정도 신규 FA는 보상 불가).
+    const compId = pickCompensation(rosters[myTeam] ?? [], protectedIds, snapshot, [...taken, ...signedByMe]);
     if (!compId) continue;
     taken.push(compId);
     rosters[myTeam] = (rosters[myTeam] ?? []).filter((x) => x !== compId);

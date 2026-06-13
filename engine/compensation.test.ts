@@ -45,3 +45,13 @@ test('보상선수: 비보호 중 최고 OVR, 보호/이미선택 제외', () =>
   // 전부 보호 → 없음
   assert.equal(pickCompensation(roster, ['star', 'mid', 'low'], snap, []), null);
 });
+
+test('이번 오프시즌 영입 FA는 보상선수 대상 제외(이중 배정 방지)', () => {
+  // star = 방금 영입한 FA(signedByMe). 최고 OVR이라도 exclude면 넘어가지 않는다.
+  const snap: Record<string, Player> = {
+    star: mk('star', 95), mid: mk('mid', 75), low: mk('low', 60),
+  };
+  const roster = ['star', 'mid', 'low'];
+  const signedByMe = ['star'];
+  assert.equal(pickCompensation(roster, [], snap, [...signedByMe]), 'mid');
+});
