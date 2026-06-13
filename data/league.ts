@@ -119,8 +119,10 @@ const isCoachHired = (id: string) => Object.values(headCoachOverride).includes(i
 const isAsstHired = (id: string) => Object.values(teamAssistantIds).some((a) => a.includes(id));
 const isScoutHired = (id: string) => Object.values(teamScoutIds).some((a) => a.includes(id));
 
-/** 영입 가능한 프리 감독(teamId=null, 미계약) */
-export const availableCoaches = (): Coach[] => coachPool.filter((c) => c.teamId === null && !isCoachHired(c.id));
+/** 영입 가능한 프리 감독(teamId=null, 미계약). teamId 주면 그 팀에서 경질된 감독은 제외(다시 안 옴 — STAFF_SYSTEM 6.4) */
+export const availableCoaches = (teamId?: string): Coach[] =>
+  coachPool.filter((c) => c.teamId === null && !isCoachHired(c.id)
+    && !(teamId !== undefined && (c.firedFrom ?? []).includes(teamId)));
 export const availableAssistants = (): AssistantCoach[] => assistantPool.filter((a) => !isAsstHired(a.id));
 
 /** 감독 생애주기 반영 — 풀(감독+코치)을 통째 교체하고 맵 재구성(STAFF_SYSTEM 6, 오프시즌 호출) */
@@ -159,11 +161,13 @@ function invalidateStaff(affectsTraining: boolean): void {
 export function hireHeadCoach(teamId: string, coachId: string): boolean {
   const c = coachMap.get(coachId);
   if (!c || (c.teamId !== null) || isCoachHired(coachId)) return false;
+  if ((c.firedFrom ?? []).includes(teamId)) return false; // 그 팀에서 경질된 감독은 다시 영입 불가(STAFF_SYSTEM 6.4)
   const newSpend = staffSpend(teamId) - (teamHeadCoach(teamId)?.salary ?? 0) + c.salary;
   if (newSpend > STAFF_BUDGET) return false;
   const prev = headCoachOverride[teamId];
   if (prev?.startsWith('acting_')) { coachPool = coachPool.filter((x) => x.id !== prev); coachMap.delete(prev); } // 대행은 임시 — 제거
   else if (prev) { const pc = coachMap.get(prev); if (pc) { pc.teamId = null; pc.contractYears = undefined; } } // 기존 감독 FA로
+  else { const seed = teamHeadCoach(teamId); if (seed && seed.id !== coachId) { seed.teamId = null; seed.contractYears = undefined; } } // 오버라이드 없던(시드 감독) 교체 — 떠나는 시드 감독을 FA로(teamId 고아 점유 방지)
   headCoachOverride[teamId] = coachId;
   c.teamId = teamId; c.contractYears = 3; // 단일 진실 + 3년 계약
   invalidateStaff(true); // 성향·훈련선호 바뀜
@@ -253,6 +257,42 @@ export function commitStaff(head: Record<string, string>, asst: Record<string, s
   headCoachOverride = { ...head };
   teamAssistantIds = { ...asst };
   teamScoutIds = { ...scout };
+  rebuildFocus(); evoCache = null; _baseVersion++;
+}
+
+// ─── 격리 실행용 스냅샷/복원 (영입 무결성 감사 등 — 라이브 세이브를 건드리지 않고 시뮬) ───
+const jclone = <T>(v: T): T => JSON.parse(JSON.stringify(v)) as T;
+
+export interface LeagueSnapshot {
+  rosters: Record<string, string[]>;
+  players: Player[];                 // 참조 보관(감사는 새 객체로 덮어쓰므로 원본 불변)
+  coaches: Coach[]; assistants: AssistantCoach[];
+  head: Record<string, string>; asst: Record<string, string[]>; scout: Record<string, string[]>;
+  focus: Record<string, TrainingFocus>;
+}
+
+/** 현재 가변 리그 상태를 통째로 캡처 — restoreLeagueState 로 원복. 감독은 in-place 변형되므로 깊은 복제. */
+export function snapshotLeagueState(): LeagueSnapshot {
+  return {
+    rosters: jclone(rosters),
+    players: [...playerMap.values()],
+    coaches: coachPool.map((c) => ({ ...c, firedFrom: c.firedFrom ? [...c.firedFrom] : undefined, trainingFocus: jclone(c.trainingFocus) })),
+    assistants: assistantPool.map((a) => ({ ...a })),
+    head: { ...headCoachOverride }, asst: jclone(teamAssistantIds), scout: jclone(teamScoutIds),
+    focus: jclone(focusOverride),
+  };
+}
+
+/** 스냅샷으로 리그 상태 원복(감사 종료 후 라이브 세이브 복귀). 신선한 복제로 주입해 이후 변형이 스냅샷을 오염시키지 않게. */
+export function restoreLeagueState(s: LeagueSnapshot): void {
+  playerMap.clear();
+  for (const p of s.players) playerMap.set(p.id, p);
+  rosters = jclone(s.rosters);
+  commitCoachPool(s.coaches.map((c) => ({ ...c, firedFrom: c.firedFrom ? [...c.firedFrom] : undefined })), s.assistants.map((a) => ({ ...a })));
+  headCoachOverride = { ...s.head };
+  teamAssistantIds = jclone(s.asst);
+  teamScoutIds = jclone(s.scout);
+  focusOverride = jclone(s.focus);
   rebuildFocus(); evoCache = null; _baseVersion++;
 }
 export const getStaffState = () => ({ head: { ...headCoachOverride }, asst: { ...teamAssistantIds }, scout: { ...teamScoutIds } });

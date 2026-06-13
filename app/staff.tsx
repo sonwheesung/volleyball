@@ -107,7 +107,7 @@ export default function Staff() {
         </Card>
       ) : <Muted>감독 없음 — 시장에서 영입하세요</Muted>}
       <Muted style={{ marginTop: 8, marginBottom: 4 }}>감독 시장 (프리에이전트)</Muted>
-      {availableCoaches().map((c) => (
+      {availableCoaches(teamId).map((c) => (
         <Card key={c.id}>
           <Row>
             <View style={{ flex: 1 }}>
