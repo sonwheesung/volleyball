@@ -4,12 +4,13 @@
 // SOLID: UI → 이 셀렉터 → 엔진. 결정론(시드 의사난수)로 재현 가능.
 
 import {
-  resetLeagueBase, snapshotLeagueState, restoreLeagueState, LEAGUE, getTeam, teamScoutReveal,
-  commitPlayerBase, commitRosters, currentCoachPool, commitCoachPool, assignCoach, reconcileStaff,
+  resetLeagueBase, snapshotLeagueState, restoreLeagueState, LEAGUE, SEASON, getTeam, teamScoutReveal,
+  commitPlayerBase, commitRosters, currentRosters, getPlayer, currentCoachPool, commitCoachPool, assignCoach, reconcileStaff,
   getTeamCoach, getCoach, getStaffState, availableCoaches, availableAssistants, availableScouts,
   hireHeadCoach, hireAssistant, releaseAssistant, hireScout, releaseScout, fireCoach, coachSlots,
   teamAssistants, teamScouts,
 } from './league';
+import { setTxContext, rosterIdsOnDay, availableFAsOnDay, type Tx } from './dynamics';
 import { buildDraftContext } from './draftSetup';
 import { faMarketPreview } from './offseason';
 import { computeStandings } from './standings';
@@ -61,6 +62,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
     salary: { key: 'salary', name: '연봉·계약 정상치 (NaN·음수·0 없음)', violations: 0, samples: [] as string[] },
     supply: { key: 'supply', name: 'AI 팀 감독 공백 없음 (공급 고갈)', violations: 0, samples: [] as string[] },
     newid: { key: 'newid', name: '신규 id 충돌 없음 (신인·외인 ↔ 기존)', violations: 0, samples: [] as string[] },
+    intx: { key: 'intx', name: '시즌 중 거래 단일 소속 (이중영입 차단)', violations: 0, samples: [] as string[] },
   };
   const hit = (c: { violations: number; samples: string[] }, msg: string) => {
     c.violations++; if (c.samples.length < SAMPLE_CAP) c.samples.push(msg);
@@ -240,6 +242,39 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
         if (pr && snapshot[id]) snapshot[id] = accrueCareer(applyMatchXp(snapshot[id], pr), pr);
       }
       commitPlayerBase(snapshot); commitRosters(f.rosters);
+    }
+
+    // ── 시즌 중 거래(in-season) 단일 소속 검사 — 깨끗한 시즌에 방출/적대적 이중영입 churn 주입 ──
+    {
+      resetLeagueBase();
+      const rs = currentRosters();
+      const mday = [...new Set(SEASON.map((f) => f.dayIndex))].sort((a, b) => a - b);
+      let fId = '', fTeam = '';
+      for (const t of teamIds) { const fp = (rs[t] ?? []).find((id) => getPlayer(id)?.isForeign); if (fp) { fId = fp; fTeam = t; break; } }
+      const txs: Tx[] = [];
+      for (const ti of [1, 2, 3]) {
+        const t = teamIds[ti];
+        for (const id of (rs[t] ?? []).filter((id) => !getPlayer(id)?.isForeign).slice(0, 2)) txs.push({ day: 4, teamId: t, playerId: id, kind: 'release' });
+      }
+      if (fId) txs.push({ day: 4, teamId: fTeam, playerId: fId, kind: 'release' }); // 외인 방출 → 리그 이탈해야(재등장 금지)
+      // 적대적 이중영입: 방출 선수를 두 팀이 다른 날 영입 시도 → 먼저 잡은 팀만 유효해야
+      const dbl = (rs[teamIds[2]] ?? []).filter((id) => !getPlayer(id)?.isForeign)[0];
+      if (dbl) { txs.push({ day: 8, teamId: myTeam, playerId: dbl, kind: 'sign' }); txs.push({ day: 12, teamId: teamIds[4], playerId: dbl, kind: 'sign' }); }
+      setTxContext(txs, [], myTeam);
+      const relForeign = fId;
+      const relDom = new Map<string, number>();
+      for (const tx of txs) if (tx.kind === 'release') relDom.set(tx.playerId, tx.day);
+      for (const d of mday) {
+        const owner = new Map<string, string>();
+        for (const t of teamIds) for (const id of rosterIdsOnDay(t, d)) {
+          const prev = owner.get(id);
+          if (prev && prev !== t) hit(C.intx, `day${d}: 선수 ${id} 두 팀 동시 소속(${tname(prev)}·${tname(t)})`);
+          owner.set(id, t);
+        }
+        for (const fa of availableFAsOnDay(d)) if (owner.has(fa)) hit(C.intx, `day${d}: FA ${fa} 가 ${tname(owner.get(fa)!)} 소속인데 FA 풀에도`);
+        if (relForeign && d > 4 && owner.has(relForeign)) hit(C.intx, `day${d}: 방출 외인 ${relForeign} 재등장(리그 이탈 위반)`);
+      }
+      setTxContext([], [], myTeam); // 컨텍스트 정리
     }
 
     const checks: AuditCheck[] = Object.values(C).map((c) => ({
