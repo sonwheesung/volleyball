@@ -289,6 +289,7 @@ export function generateLeague(seed: number): League {
       trainingFocus: arch.focus,
       salary: headCoachSalary(charisma),
       teamId,
+      contractYears: rng.int(1, 4), // 초기 계약 잔여 — 팀마다 만료 시점이 달라 FA 시장이 매년 돈다
     });
 
     teams.push({

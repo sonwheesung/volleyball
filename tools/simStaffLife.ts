@@ -4,7 +4,7 @@
 
 import {
   resetLeagueBase, getTeam, teamScoutReveal, commitPlayerBase, commitRosters, currentRosters,
-  currentCoachPool, commitCoachPool, getTeamCoach, LEAGUE,
+  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, getTeamCoach, LEAGUE,
 } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
@@ -14,6 +14,7 @@ import { applyMatchXp } from '../engine/experience';
 import { accrueCareer } from '../engine/production';
 import { computeStandings } from '../data/standings';
 import { advanceCoaches } from '../data/staffLifecycle';
+import { bottomStreak } from '../engine/staffLifecycle';
 import { overall } from '../engine/overall';
 
 const log = (m: string) => process.stdout.write(m + '\n');
@@ -21,15 +22,19 @@ const N = Math.max(1, Number(process.argv[2]) || 100);
 const LEGEND_POINTS = 7500;
 resetLeagueBase();
 
-let totalRetired = 0, totalNew = 0, totalPromoted = 0, totalFired = 0;
+let totalRetired = 0, totalNew = 0, totalPromoted = 0, totalFired = 0, totalWalked = 0;
 const poolSizes: number[] = [];
 const avgAges: number[] = [];
 let starOriginHeads = 0, totalHeadsEver = 0;
 const seenHeadIds = new Set<string>();
+const recentRankOrders: string[][] = [];
 
 for (let s = 0; s < N; s++) {
   const table = computeStandings(Number.MAX_SAFE_INTEGER);
   const rankOrder = table.map((r) => r.teamId);
+  recentRankOrders.push(rankOrder); if (recentRankOrders.length > 4) recentRankOrders.shift();
+  const bottomYears: Record<string, number> = {};
+  for (const t of LEAGUE.teams) bottomYears[t.id] = bottomStreak(recentRankOrders, t.id);
 
   // 배정 감독(teamId → 현재 감독 id)
   const assignedHead: Record<string, string> = {};
@@ -44,13 +49,16 @@ for (let s = 0; s < N; s++) {
 
   // 감독 생애주기 진행
   const pool = currentCoachPool();
-  const res = advanceCoaches(s + 1, pool, assignedHead, retiredPlayers, legendIds, rankOrder, {}, '___none___');
+  const res = advanceCoaches(s + 1, pool, assignedHead, retiredPlayers, legendIds, rankOrder, bottomYears, '___none___');
   commitCoachPool(res.coaches, res.assistants);
+  for (const r of res.reassign) assignCoach(r.teamId, r.coachId); // store와 동일하게 재배정 적용
+  reconcileStaff();
 
   totalRetired += res.retiredCoaches.filter((n) => !n.includes('경질')).length;
   totalFired += res.retiredCoaches.filter((n) => n.includes('경질')).length;
   totalNew += res.newCoaches.length;
   totalPromoted += res.promoted.length;
+  totalWalked += res.walked.length;
   poolSizes.push(res.coaches.length + res.assistants.length);
   const ages = [...res.coaches, ...res.assistants].map((c) => c.age);
   avgAges.push(ages.reduce((a, b) => a + b, 0) / Math.max(1, ages.length));
@@ -71,7 +79,7 @@ const avg = (a: number[]) => a.reduce((x, y) => x + y, 0) / Math.max(1, a.length
 log(`\n═══ 감독 생애주기 ${N}시즌 ═══`);
 log(`풀 크기: 평균 ${avg(poolSizes).toFixed(0)} · 최소 ${Math.min(...poolSizes)} · 최대 ${Math.max(...poolSizes)} (시작 ${LEAGUE.coaches.length + LEAGUE.assistants.length})`);
 log(`감독/코치 평균 연령: ${avg(avgAges).toFixed(1)}세`);
-log(`은퇴 ${totalRetired}명 · 경질 ${totalFired}명 · 선수 출신 신규 코치 ${totalNew}명 · 감독 승격 ${totalPromoted}명 (${N}시즌)`);
+log(`은퇴 ${totalRetired}명 · 경질 ${totalFired}명 · 계약만료 FA ${totalWalked}명 · 선수 출신 신규 코치 ${totalNew}명 · 감독 승격 ${totalPromoted}명 (${N}시즌)`);
 log(`역대 등장 감독 ${totalHeadsEver}명 중 선수 출신 ${starOriginHeads}명 (${(starOriginHeads / Math.max(1, totalHeadsEver) * 100).toFixed(0)}%)`);
 log(`종료 시점 — 감독 ${fin.coaches.length}명(프리 ${fin.coaches.filter((c) => c.teamId === null).length}) · 전문코치 ${fin.assistants.length}명`);
 

@@ -75,7 +75,8 @@ const mkCoach = (id: string, cha: number, teamId: string | null, firedFrom?: str
 
 test('엣지: 경질한 감독은 그 팀에 즉시 재배정 안 됨', () => {
   const coaches = [mkCoach('star', 95, 't_bot'), mkCoach('low', 50, null)];
-  const r = advanceCoaches(1, { coaches, assistants: [] }, { t_bot: 'star' }, [], new Set(), ['a', 'b', 'c', 'd', 'e', 'f', 't_bot'], {}, 'P');
+  // bottomYears=2로 확정 경질(꼴찌 1년은 확률적이라)
+  const r = advanceCoaches(1, { coaches, assistants: [] }, { t_bot: 'star' }, [], new Set(), ['a', 'b', 'c', 'd', 'e', 'f', 't_bot'], { t_bot: 2 }, 'P');
   const bot = r.reassign.find((x) => x.teamId === 't_bot');
   assert.notEqual(bot?.coachId, 'star', '경질한 star가 t_bot에 도로 가면 안 됨');
   assert.ok(r.coaches.find((c) => c.id === 'star')?.firedFrom?.includes('t_bot'), 'firedFrom 기록');
@@ -96,10 +97,14 @@ test('엣지: 두 팀 동시 공석 — 같은 감독 이중 배정 없음', () 
   assert.ok(a && b && a !== b, '서로 다른 감독');
 });
 
-test('경질 — 꼴찌·시즌중 바닥', () => {
-  assert.equal(firedEndSeason(7, 7, 0), true);       // 꼴찌
-  assert.equal(firedEndSeason(6, 7, 2), true);       // 하위 2년연속
-  assert.equal(firedEndSeason(3, 7, 5), false);      // 중상위는 안전
+test('경질 — 하위권 2년 연속 확정·중상위 안전·꼴찌 1년 확률', () => {
+  assert.equal(firedEndSeason(6, 7, 2), true);       // 하위 2년연속 = 확정
+  assert.equal(firedEndSeason(7, 7, 2), true);       // 꼴찌 2년연속 = 확정
+  assert.equal(firedEndSeason(3, 7, 5), false);      // 중상위는 안전(2년연속이어도 순위 안전)
+  assert.equal(firedEndSeason(5, 7, 0), false);      // 5위(teamCount-2)는 안전
+  // 꼴찌 1년은 확률(45%) — 시드별로 갈림. 일부 시즌은 경질, 일부는 인내
+  let fires = 0; for (let s = 0; s < 100; s++) if (firedEndSeason(7, 7, 0, s, 'c')) fires++;
+  assert.ok(fires > 20 && fires < 70, `꼴찌 1년 경질 ${fires}/100(확률적)`);
   assert.equal(firedMidSeason(2, 14), true);         // 16경기 12.5% 승률
   assert.equal(firedMidSeason(2, 6), false);         // 표본 부족(8경기)
   assert.equal(firedMidSeason(10, 8), false);        // 승률 양호

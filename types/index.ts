@@ -232,6 +232,7 @@ export interface Coach {
   salary: number;            // 연봉(만원) — 스태프 예산 차감
   teamId: string | null;     // 소속(null=프리에이전트 풀)
   firedFrom?: string[];      // 경질당한 팀 id — 그 팀엔 다시 부임하지 않음(STAFF_SYSTEM 6)
+  contractYears?: number;    // 잔여 계약 연수(팀 소속 시) — 0이면 만료(재계약/FA). FA는 undefined
 }
 
 /** 전문 코치 분야 (STAFF_SYSTEM) — 해당 분야 훈련 성장 부스트 */
@@ -246,6 +247,7 @@ export interface AssistantCoach {
   rating: number;            // 0~100 역량 → 부스트·연봉
   salary: number;            // 연봉(만원)
   teamId: string | null;     // 소속(null=프리)
+  contractYears?: number;    // 잔여 계약 연수(팀 소속 시). FA는 undefined
 }
 
 /** 스카우터 — 드래프트 유망주 능력 공개도를 높인다 */

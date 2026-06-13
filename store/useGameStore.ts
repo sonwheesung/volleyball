@@ -10,6 +10,7 @@ import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOver
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
   currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, getTeamCoach, LEAGUE } from '../data/league';
 import { advanceCoaches } from '../data/staffLifecycle';
+import { bottomStreak } from '../engine/staffLifecycle';
 import type { Coach, AssistantCoach } from '../types';
 import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
@@ -532,7 +533,11 @@ export const useGameStore = create<GameState>()(
         for (const t of LEAGUE.teams) { const hc = getTeamCoach(t.id); if (hc) assignedHead[t.id] = hc.id; }
         const retiredPlayers = ctx.retired.map((id) => snapshot[id]).filter((p): p is Player => !!p);
         const legendSet = new Set(hofAdds.filter((h) => h.legend).map((h) => h.id));
-        const lifecycle = advanceCoaches(nextSeason, currentCoachPool(), assignedHead, retiredPlayers, legendSet, rankOrder, {}, my);
+        // 최근 4시즌 순위(과거 archive standings + 이번 시즌)로 연속 하위권 = 경질 판정
+        const recentOrders = [...nextArchive.slice(-4).map((a) => a.standings).filter((s): s is string[] => !!s)];
+        const bottomYears: Record<string, number> = {};
+        for (const t of LEAGUE.teams) bottomYears[t.id] = bottomStreak(recentOrders, t.id);
+        const lifecycle = advanceCoaches(nextSeason, currentCoachPool(), assignedHead, retiredPlayers, legendSet, rankOrder, bottomYears, my);
         commitCoachPool(lifecycle.coaches, lifecycle.assistants);
         // 재배정 적용: AI 팀은 새 감독, 내 팀은 감독이 떠났으면 배정 해제(기본 감독 복귀 — 직접 다시 영입)
         for (const r of lifecycle.reassign) assignCoach(r.teamId, r.coachId);

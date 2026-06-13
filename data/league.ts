@@ -159,9 +159,9 @@ export function hireHeadCoach(teamId: string, coachId: string): boolean {
   if (!c || (c.teamId !== null) || isCoachHired(coachId)) return false;
   const newSpend = staffSpend(teamId) - (teamHeadCoach(teamId)?.salary ?? 0) + c.salary;
   if (newSpend > STAFF_BUDGET) return false;
-  const prev = headCoachOverride[teamId]; if (prev) { const pc = coachMap.get(prev); if (pc) pc.teamId = null; } // 기존 영입 감독 FA로
+  const prev = headCoachOverride[teamId]; if (prev) { const pc = coachMap.get(prev); if (pc) { pc.teamId = null; pc.contractYears = undefined; } } // 기존 감독 FA로
   headCoachOverride[teamId] = coachId;
-  c.teamId = teamId; // 단일 진실
+  c.teamId = teamId; c.contractYears = 3; // 단일 진실 + 3년 계약
   invalidateStaff(true); // 성향·훈련선호 바뀜
   return true;
 }

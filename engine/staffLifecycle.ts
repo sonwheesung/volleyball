@@ -73,11 +73,24 @@ export function coachToHead(c: AssistantCoach, starRep: number, focus: Coach['tr
 }
 
 // ── 6.4 경질 ──
-/** 시즌 후 AI 경질 — 최하위(또는 하위+부진)면 감독 교체. rank/teamCount는 1-based. */
-export function firedEndSeason(rank: number, teamCount: number, recentBottomYears: number): boolean {
-  if (rank === teamCount) return true;                 // 꼴찌 = 경질
-  if (rank >= teamCount - 1 && recentBottomYears >= 2) return true; // 하위권 2년 연속 = 경질
+/** 시즌 후 AI 경질 — 부진 시 감독 교체. rank/teamCount는 1-based.
+ *  꼴찌 1년은 확률(인내심), 하위권 2년 연속은 확정. 매 시즌 꼴찌마다 경질하면 과도한 churn. */
+export function firedEndSeason(rank: number, teamCount: number, recentBottomYears: number, season = 0, coachId = ''): boolean {
+  if (rank < teamCount - 1) return false;              // 중상위는 안전
+  if (recentBottomYears >= 2) return true;             // 하위권 2년 연속 = 확정 경질
+  if (rank === teamCount) return createRng(strSeed(`fire:${coachId}:${season}`)).next() < 0.45; // 꼴찌 1년 = 45%
   return false;
+}
+
+/** 최근 연속 하위권(꼴찌권=teamCount-1 이하) 연수 — rankOrder 배열들(과거→현재)에서 팀 기준 산출. */
+export function bottomStreak(recentRankOrders: string[][], teamId: string): number {
+  let n = 0;
+  for (let i = recentRankOrders.length - 1; i >= 0; i--) {
+    const order = recentRankOrders[i];
+    const rank = order.indexOf(teamId) + 1;
+    if (rank > 0 && rank >= order.length - 1) n++; else break;
+  }
+  return n;
 }
 
 /** 시즌 중 경질 임계 — 일정 경기 이상 치렀고 승률이 바닥이면(대행 전환). */
@@ -85,6 +98,20 @@ export function firedMidSeason(wins: number, losses: number): boolean {
   const games = wins + losses;
   if (games < 12) return false;             // 충분한 표본 후에만
   return wins / games < 0.2;                // 승률 20% 미만 = 시즌 중 경질
+}
+
+// ── 6.6 계약·재계약(감독 FA) ──
+export const NEW_CONTRACT_YEARS = 3;        // 영입/재계약 기본 계약 연수
+/** 영입/재계약 시 부여할 계약 연수 — id·시즌 시드로 2~4년 변동(결정론). */
+export function contractTerm(id: string, season: number): number {
+  return 2 + Math.floor(createRng(strSeed(`contract:${id}:${season}`)).next() * 3); // 2~4
+}
+/** AI 재계약 결정 — 계약 만료 감독을 붙잡을지. 성적 좋고 너무 늙지 않으면 재계약, 아니면 FA로 놓아준다. */
+export function aiResigns(rank: number, teamCount: number, coachAge: number, season: number, coachId: string): boolean {
+  // 상위권일수록·젊을수록 재계약. 기본 확률 + 순위 보정 − 노령 보정.
+  const rankFactor = 1 - (rank - 1) / Math.max(1, teamCount - 1); // 1위=1, 꼴찌=0
+  const p = clamp(0.45 + 0.4 * rankFactor - Math.max(0, coachAge - 62) * 0.06, 0.1, 0.95);
+  return createRng(strSeed(`resign:${coachId}:${season}`)).next() < p;
 }
 
 function clamp(v: number, lo: number, hi: number): number { return Math.max(lo, Math.min(hi, v)); }

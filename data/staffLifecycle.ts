@@ -5,7 +5,7 @@
 import type { Coach, AssistantCoach, Player, TrainingFocus } from '../types';
 import {
   staffRetires, becomesCoach, playerToCoach, promotesToHead, headWorthiness,
-  coachToHead, firedEndSeason,
+  coachToHead, firedEndSeason, aiResigns, contractTerm,
 } from '../engine/staffLifecycle';
 
 export interface CoachReassign { teamId: string; coachId: string | null } // null = 풀에 빈자리(다음 영입까지 기본 감독)
@@ -17,6 +17,8 @@ export interface LifecycleResult {
   retiredCoaches: string[];         // 이번에 은퇴한 감독/코치 이름(뉴스용)
   newCoaches: string[];             // 선수 출신 신규 코치 이름
   promoted: string[];               // 감독으로 승격한 이름
+  expiringForPlayer: boolean;       // 플레이어 팀 감독 계약 만료(재계약 필요) — UI 알림
+  walked: string[];                 // 계약 만료로 FA가 된 감독 이름(AI 미재계약)
 }
 
 const DEFAULT_FOCUS: TrainingFocus = { primary: [4, 6], secondary: [1, 10, 12] };
@@ -46,6 +48,8 @@ export function advanceCoaches(
   const retiredCoaches: string[] = [];
   const newCoaches: string[] = [];
   const promoted: string[] = [];
+  const walked: string[] = [];
+  let expiringForPlayer = false;
   const reassign: CoachReassign[] = [];
 
   // 떠난(은퇴/경질) 감독 id 집합 — 팀 재배정 트리거
@@ -71,13 +75,29 @@ export function advanceCoaches(
     if (teamId === myTeamId) continue;
     const headId = assignedHead[teamId];
     if (!headId) continue;
-    if (firedEndSeason(i + 1, teamCount, bottomYears[teamId] ?? 0)) {
+    if (firedEndSeason(i + 1, teamCount, bottomYears[teamId] ?? 0, season, headId)) {
       const fired = coaches.find((c) => c.id === headId);
       if (fired) {
         fired.teamId = null;
         fired.firedFrom = [...(fired.firedFrom ?? []), teamId]; // 그 팀엔 다시 안 감(영구)
         leftHeadByTeam.set(teamId, headId); retiredCoaches.push(`${fired.name}(경질)`);
       }
+    }
+  }
+
+  // 2.5) 계약 진행 — 배정 감독 잔여 연수 −1, 만료 시 재계약(AI)/FA/플레이어 알림
+  const rankOf = (teamId: string) => { const i = rankOrder.indexOf(teamId); return i < 0 ? teamCount : i + 1; };
+  for (const [teamId, headId] of Object.entries(assignedHead)) {
+    if (leftHeadByTeam.has(teamId)) continue; // 이미 경질된 팀은 제외
+    const c = coaches.find((x) => x.id === headId);
+    if (!c) continue;
+    c.contractYears = (c.contractYears ?? 1) - 1;
+    if (c.contractYears > 0) continue; // 계약 남음
+    if (teamId === myTeamId) { expiringForPlayer = true; c.contractYears = 0; continue; } // 플레이어가 재계약 결정(유지)
+    if (aiResigns(rankOf(teamId), teamCount, c.age, season, c.id)) {
+      c.contractYears = contractTerm(c.id, season); // AI 재계약
+    } else {
+      c.teamId = null; c.contractYears = undefined; leftHeadByTeam.set(teamId, headId); walked.push(c.name); // FA로 풀려남
     }
   }
 
@@ -128,9 +148,9 @@ export function advanceCoaches(
         coaches.push(free); assistants = assistants.filter((a) => a.id !== best.id); promoted.push(best.name);
       }
     }
-    if (free) { free.teamId = teamId; reassign.push({ teamId, coachId: free.id }); }
+    if (free) { free.teamId = teamId; free.contractYears = contractTerm(free.id, season); reassign.push({ teamId, coachId: free.id }); }
     else reassign.push({ teamId, coachId: null });
   }
 
-  return { coaches, assistants, reassign, retiredCoaches, newCoaches, promoted };
+  return { coaches, assistants, reassign, retiredCoaches, newCoaches, promoted, expiringForPlayer, walked };
 }
