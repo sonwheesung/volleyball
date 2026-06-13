@@ -8,7 +8,7 @@ import { applyRetirements } from '../engine/retire';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
 import { aiKeepsFA, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
 import { assignFAGrades, askingPrice, offerScore, prefWeightsOf } from '../engine/faMarket';
-import { needsCompensationPlayer, pickCompensation } from '../engine/compensation';
+import { needsCompensationPlayer, pickCompensation, compensationMoney } from '../engine/compensation';
 import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { strSeed } from '../engine/rng';
 import type { OwnerFx } from '../engine/owner';
@@ -44,6 +44,7 @@ export interface FAMarketResult {
   rosters: Record<string, string[]>;
   signedByMe: string[];                 // 내가 영입 성공
   lostTo: Record<string, string>;       // 내가 노렸으나 뺏긴 선수 → 영입팀
+  compCash: number;                     // 내가 낸 보상금 합(A/B FA 영입 — 직전연봉 배수, FA_SYSTEM 2.2)
 }
 
 /**
@@ -80,6 +81,7 @@ export function resolveFAMarket(
   let cashLeft = myCash ?? Number.POSITIVE_INFINITY; // 다중 영입은 잔고를 차감하며 순차 판정
   const signedByMe: string[] = [];
   const lostTo: Record<string, string> = {};
+  let compCash = 0; // 내가 낸 FA 보상금 누계(A/B 영입 — FA_SYSTEM 2.2)
   const wanted = new Set(faSignings);
 
   // 좋은 FA부터 계약 결정
@@ -89,6 +91,7 @@ export function resolveFAMarket(
     if (!p) continue;
     const grade = grades.get(id) ?? 'C';
     const asking = askingPrice(marketValue(p), grade);
+    const compCost = needsCompensationPlayer(grade) ? compensationMoney(grade, p.contract.salary) : 0; // 내가 영입 시 추가로 낼 보상금
 
     const bids: { teamId: string; offer: number; score: number }[] = [];
     for (const t of teams) {
@@ -97,8 +100,8 @@ export function resolveFAMarket(
       const isMe = t === myTeam;
       if (isMe ? !wanted.has(id) : gap <= 0) continue; // 나=지명한 선수만 / AI=필요 포지션만
       const offer = isMe ? Math.round((asking * (aggressive ? AGGRESSIVE_MULT : 1)) / 100) * 100 : asking;
-      // 내 팀: 캡 AND 운영 자금(FINANCE) — 캡은 남아도 지갑이 비면 못 뽑는다. AI: 모기업 무한 보전(캡만)
-      const ok = isMe ? canAfford(payroll[t], offer) && offer <= cashLeft : payroll[t] + offer <= LEAGUE_CAP;
+      // 내 팀: 캡 AND 운영 자금(FINANCE, 연봉+보상금) — 캡은 남아도 지갑이 비면 못 뽑는다. AI: 모기업 무한 보전(캡만)
+      const ok = isMe ? canAfford(payroll[t], offer) && offer + compCost <= cashLeft : payroll[t] + offer <= LEAGUE_CAP;
       if (!ok) continue;
       const score = offerScore({
         teamOvr: ovr[t],
@@ -126,7 +129,8 @@ export function resolveFAMarket(
     rosters[win.teamId] = [...rosters[win.teamId], id];
     payroll[win.teamId] += finalSalary;
     ovr[win.teamId] = teamOverall(rosters[win.teamId].map(get).filter((q): q is Player => !!q));
-    if (win.teamId === myTeam) { signedByMe.push(id); cashLeft -= finalSalary; }
+    // 보상금(FA_SYSTEM 2.2) — 내가 영입한 A/B FA마다 직전연봉 배수(A 200%·B 100%)를 추가 비용으로(보상선수와 함께).
+    if (win.teamId === myTeam) { signedByMe.push(id); cashLeft -= finalSalary + compCost; compCash += compCost; }
     else if (wanted.has(id)) lostTo[id] = win.teamId;
   }
 
@@ -146,7 +150,7 @@ export function resolveFAMarket(
     rosters[prev] = [...rosters[prev], compId];
   }
 
-  return { snapshot, rosters, signedByMe, lostTo };
+  return { snapshot, rosters, signedByMe, lostTo, compCash };
 }
 
 export interface Offseason {
@@ -225,6 +229,7 @@ export interface PreDraft {
   prevTeamOf: Record<string, string>;
   retired: string[];                     // 이번 오프시즌 은퇴자 id(명예의전당 등재용)
   tryout: TryoutOutcome;                 // 외국인 트라이아웃 결과(풀·지명·대체 풀 — 미리보기 공유)
+  compCash: number;                      // 내가 낸 FA 보상금 합(운영 자금 차감용)
 }
 
 /**
@@ -259,7 +264,7 @@ export function resolvePreDraft(
   const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign);
   const prestige = teamPrestige(nextSeason - 1);
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash);
-  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, tryout };
+  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, tryout, compCash: fa.compCash };
 }
 
 /** FA 센터 미리보기: 풀 + 내 영입 성공/실패 예상 (resolvePreDraft와 동일 소스) */
@@ -282,6 +287,7 @@ export function faMarketPreview(
   signedByMe: Set<string>;
   lostTo: Record<string, string>;
   tryout: TryoutOutcome;
+  compCash: number;
 } {
   const committed = currentRosters();
   const prevTeamOf: Record<string, string> = {};
@@ -298,5 +304,5 @@ export function faMarketPreview(
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const prestige = teamPrestige(nextSeason - 1);
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash);
-  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, tryout };
+  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, tryout, compCash: fa.compCash };
 }

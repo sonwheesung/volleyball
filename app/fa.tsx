@@ -72,6 +72,12 @@ export default function FACenter() {
             {formatMoney(projected)} / {formatMoney(LEAGUE_CAP)}
           </Text>
         </Row>
+        <Row>
+          <Muted>운영 자금(연봉+보상금 차감 후)</Muted>
+          <Text style={{ color: cash - signedCost - pv.compCash < 0 ? theme.bad : theme.text, fontWeight: '800' }}>
+            {formatMoney(Math.max(0, cash - signedCost - pv.compCash))} / {formatMoney(cash)}
+          </Text>
+        </Row>
         <Pressable
           onPress={() => setAggressive(!faAggressive)}
           style={[styles.toggle, faAggressive && { borderColor: theme.warn, backgroundColor: theme.warn + '20' }]}
@@ -90,6 +96,7 @@ export default function FACenter() {
             A/B 영입 {compNeeded}명 → 보호명단 밖 {compNeeded}명이 원소속팀으로 갑니다.
           </Text>
           {projectedCompName ? <Muted style={{ fontSize: 12 }}>현재 보상 1순위: {projectedCompName}</Muted> : null}
+          {pv.compCash > 0 ? <Muted style={{ fontSize: 12, color: theme.warn }}>보상금 {formatMoney(pv.compCash)} 추가 차감 (A 200%·B 100% × 직전연봉)</Muted> : null}
         </Card>
       ) : null}
 
