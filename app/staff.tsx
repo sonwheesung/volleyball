@@ -6,7 +6,9 @@ import {
   availableCoaches, availableAssistants, availableScouts,
   staffSpend, staffBudget, staffBudgetLeft,
 } from '../data/league';
+import { computeStandings } from '../data/standings';
 import { SPECIALTY_KO, SPECIALTY_DESC } from '../engine/staff';
+import { firedMidSeason } from '../engine/staffLifecycle';
 import { coachSlots } from '../data/league';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
@@ -19,8 +21,10 @@ export default function Staff() {
   useGameStore((s) => s.staffAssistants);
   useGameStore((s) => s.staffScouts);
   useGameStore((s) => s.coachPool); // 계약 변화 시 재렌더
+  const currentDay = useGameStore((s) => s.currentDay);
   const hireCoach = useGameStore((s) => s.hireCoach);
   const resignCoach = useGameStore((s) => s.resignCoach);
+  const fireCoach = useGameStore((s) => s.fireCoach);
   const hireAssistant = useGameStore((s) => s.hireAssistant);
   const releaseAssistant = useGameStore((s) => s.releaseAssistant);
   const hireScout = useGameStore((s) => s.hireScout);
@@ -29,6 +33,9 @@ export default function Staff() {
   if (!teamId) return <Screen title="스태프"><Muted>먼저 구단을 선택하세요.</Muted></Screen>;
 
   const head = getTeamCoach(teamId);
+  const acting = !!head?.id.startsWith('acting_');
+  const myRow = computeStandings(currentDay > 0 ? currentDay : Number.MAX_SAFE_INTEGER).find((r) => r.teamId === teamId);
+  const slumping = !!myRow && firedMidSeason(myRow.wins, myRow.losses); // 시즌 중 부진(경질 권유)
   const asst = teamAssistants(teamId);
   const scouts = teamScouts(teamId);
   const spend = staffSpend(teamId);
@@ -65,22 +72,36 @@ export default function Staff() {
 
       {/* 감독 */}
       <Title>감독</Title>
+      {slumping && !acting ? (
+        <Muted style={{ color: theme.bad }}>⚠ 성적 부진({myRow!.wins}승 {myRow!.losses}패) — 감독 교체를 고려할 시점입니다.</Muted>
+      ) : null}
       {head ? (
         <Card>
-          <Row><Title>{head.name}</Title><Muted>{head.age}세 · 연봉 {formatMoney(head.salary)}만</Muted></Row>
+          <Row>
+            <Title>{head.name}</Title>
+            <Muted>{head.age}세 · {head.salary > 0 ? `연봉 ${formatMoney(head.salary)}만` : '대행'}</Muted>
+          </Row>
           <Muted style={{ marginTop: 4 }}>성향 {STYLE_LABEL[head.style]} · 카리스마 {head.charisma} · {head.archetype}</Muted>
-          {(() => {
+          {acting ? (
+            <Muted style={{ color: theme.warn, marginTop: 4 }}>감독 대행 체제 — 정식 감독을 영입하세요(아래 시장).</Muted>
+          ) : (() => {
             const yrs = head.contractYears ?? 0;
             const expiring = yrs <= 1;
             return (
-              <Row>
-                <Muted style={{ color: expiring ? theme.warn : theme.muted, marginTop: 4 }}>
-                  계약 {yrs <= 0 ? '만료 — 재계약 필요' : `잔여 ${yrs}년`}
-                </Muted>
-                {expiring ? (
-                  <Button label="재계약(3년)" onPress={() => { if (resignCoach()) Alert.alert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); }} />
-                ) : null}
-              </Row>
+              <View style={{ gap: 6, marginTop: 4 }}>
+                <Row>
+                  <Muted style={{ color: expiring ? theme.warn : theme.muted }}>
+                    계약 {yrs <= 0 ? '만료 — 재계약 필요' : `잔여 ${yrs}년`}
+                  </Muted>
+                  {expiring ? (
+                    <Button label="재계약(3년)" onPress={() => { if (resignCoach()) Alert.alert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); }} />
+                  ) : null}
+                </Row>
+                <Button label="감독 경질" onPress={() => Alert.alert('감독 경질', `${head.name} 감독을 경질하시겠습니까? 전문 코치가 대행을 맡고, 그 감독은 우리 팀에 다시 오지 않습니다.`, [
+                  { text: '취소', style: 'cancel' },
+                  { text: '경질', style: 'destructive', onPress: () => { const r = fireCoach(); Alert.alert('경질 완료', r.acting ? `${r.acting} 코치가 감독 대행을 맡습니다.` : '대행할 코치가 없어 공석입니다. 감독을 영입하세요.'); } },
+                ])} />
+              </View>
             );
           })()}
         </Card>

@@ -3,7 +3,7 @@
 // rosters    = 팀 구성(가변). 시드 기본값에서 은퇴/영입/드래프트로 바뀐다.
 // 시즌 내 진화는 스냅샷에서 currentDay 만큼 리플레이.
 
-import type { AssistantCoach, Coach, Fixture, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
+import type { AssistantCoach, Coach, CoachStyle, Fixture, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
 import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
@@ -159,7 +159,9 @@ export function hireHeadCoach(teamId: string, coachId: string): boolean {
   if (!c || (c.teamId !== null) || isCoachHired(coachId)) return false;
   const newSpend = staffSpend(teamId) - (teamHeadCoach(teamId)?.salary ?? 0) + c.salary;
   if (newSpend > STAFF_BUDGET) return false;
-  const prev = headCoachOverride[teamId]; if (prev) { const pc = coachMap.get(prev); if (pc) { pc.teamId = null; pc.contractYears = undefined; } } // 기존 감독 FA로
+  const prev = headCoachOverride[teamId];
+  if (prev?.startsWith('acting_')) { coachPool = coachPool.filter((x) => x.id !== prev); coachMap.delete(prev); } // 대행은 임시 — 제거
+  else if (prev) { const pc = coachMap.get(prev); if (pc) { pc.teamId = null; pc.contractYears = undefined; } } // 기존 감독 FA로
   headCoachOverride[teamId] = coachId;
   c.teamId = teamId; c.contractYears = 3; // 단일 진실 + 3년 계약
   invalidateStaff(true); // 성향·훈련선호 바뀜
@@ -171,6 +173,31 @@ export function assignCoach(teamId: string, coachId: string | null): void {
   if (coachId === null) delete headCoachOverride[teamId];
   else { headCoachOverride[teamId] = coachId; const c = coachMap.get(coachId); if (c) c.teamId = teamId; }
   invalidateStaff(true);
+}
+
+/** 시즌 중 감독 경질 — 현 감독을 FA로 내보내고(그 팀 영구 배제), 전문 코치 중 최고 역량을
+ *  감독 대행(acting)으로 임시 승격. 코치 없으면 공석(기본 감독). 새 감독 영입 시 대행 해제(STAFF_SYSTEM 6.4). */
+export function fireCoach(teamId: string): { acting: string | null } {
+  const cur = teamHeadCoach(teamId);
+  if (cur && !cur.id.startsWith('acting_')) { cur.teamId = null; cur.contractYears = undefined; cur.firedFrom = [...(cur.firedFrom ?? []), teamId]; }
+  delete headCoachOverride[teamId];
+  // 전문 코치 중 최고 역량을 대행으로 캐스팅(임시 Coach — 새 감독 영입 시 제거)
+  const best = teamAssistantsOf(teamId).sort((a, b) => b.rating - a.rating)[0];
+  if (best) {
+    const style: CoachStyle = best.specialty === 'attack' ? 'attack' : best.specialty === 'defense' ? 'defense' : 'balanced';
+    const acting: Coach = {
+      id: `acting_${teamId}`, name: `${best.name} (대행)`, age: best.age,
+      charisma: Math.round(best.rating * 0.7), style, archetype: '감독 대행',
+      trainingFocus: DEFAULT_FOCUS, salary: 0, teamId, contractYears: 0,
+    };
+    coachPool = [...coachPool.filter((c) => c.id !== acting.id), acting];
+    coachMap.set(acting.id, acting);
+    headCoachOverride[teamId] = acting.id;
+    invalidateStaff(true);
+    return { acting: best.name };
+  }
+  invalidateStaff(true);
+  return { acting: null };
 }
 
 /** 내 팀 감독 재계약 — 현 감독 계약을 3년 연장. 만료 임박/만료 시 플레이어가 호출(STAFF_SYSTEM 6). */

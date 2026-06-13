@@ -8,7 +8,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
-  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, getTeamCoach, LEAGUE } from '../data/league';
+  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, fireCoach as fireCoachLeague, getTeamCoach, LEAGUE } from '../data/league';
 import { advanceCoaches } from '../data/staffLifecycle';
 import { bottomStreak } from '../engine/staffLifecycle';
 import type { Coach, AssistantCoach } from '../types';
@@ -107,6 +107,7 @@ interface GameState {
   setTrainingFocus: (focus: TrainingFocus | null) => void;
   hireCoach: (coachId: string) => boolean;
   resignCoach: () => boolean;
+  fireCoach: () => { acting: string | null };
   hireAssistant: (id: string) => boolean;
   releaseAssistant: (id: string) => void;
   hireScout: (id: string) => boolean;
@@ -281,6 +282,14 @@ export const useGameStore = create<GameState>()(
         const ok = resignTeamCoach(tid);
         if (ok) set({ coachPool: currentCoachPool() });
         return ok;
+      },
+      // 감독 경질 — 시즌 중 해촉. 전문 코치가 대행, 없으면 공석. 새 감독은 직접 영입.
+      fireCoach: () => {
+        const tid = get().selectedTeamId;
+        if (!tid) return { acting: null };
+        const r = fireCoachLeague(tid);
+        set({ coachPool: currentCoachPool(), staffHead: getStaffState().head });
+        return r;
       },
       hireAssistant: (id) => {
         const tid = get().selectedTeamId;
