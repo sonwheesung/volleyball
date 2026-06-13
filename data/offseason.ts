@@ -15,6 +15,7 @@ import type { OwnerFx } from '../engine/owner';
 import { marketValue } from '../engine/salary';
 import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
+import { domesticPayroll } from './roster';
 import { runTryout, type TryoutOutcome } from './tryout';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
@@ -71,8 +72,7 @@ export function resolveFAMarket(
   const payroll: Record<string, number> = {};
   const ovr: Record<string, number> = {};
   for (const t of teams) {
-    // 캡 합산은 국내 선수만(외인 연봉은 캡 제외 — 실제 KOVO 규정, FOREIGN_SYSTEM 2장)
-    payroll[t] = rosters[t].reduce((s, id) => s + (snapshot[id]?.isForeign ? 0 : (snapshot[id]?.contract.salary ?? 0)), 0);
+    payroll[t] = domesticPayroll(rosters[t], (id) => snapshot[id]); // 국내만(외인 캡 제외 — FOREIGN_SYSTEM 2장)
     ovr[t] = teamOverall(rosters[t].map(get).filter((p): p is Player => !!p));
   }
 

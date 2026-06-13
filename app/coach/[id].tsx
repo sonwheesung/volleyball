@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { Pressable, Text, View } from 'react-native';
-import { Card, Muted, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
+import { Card, Muted, Row, Screen, StatBar, STYLE_LABEL, Title, theme } from '../../components/Screen';
 import { getCoach, getTeam } from '../../data/league';
 import { TRAINING_NAME } from '../../engine/training';
 import { ARCHETYPES } from '../../data/seed';
@@ -11,7 +11,6 @@ const sameFocus = (a: TrainingFocus, b: TrainingFocus): boolean =>
   [...a.primary].sort().join() === [...b.primary].sort().join() &&
   [...a.secondary].sort().join() === [...b.secondary].sort().join();
 
-const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
 const STYLE_DESC = {
   attack: '공격적 서브·속공 비중↑, 공격적 블로킹. 타임아웃을 아끼고 밀어붙인다.',
   defense: '안정 서브·소프트 블로킹·디그 중심. 위기에 타임아웃을 빨리 부른다.',

@@ -13,6 +13,7 @@ import type { BenchDirective } from '../engine/owner';
 import { marketValue } from '../engine/salary';
 import { LEAGUE_CAP } from '../engine/cap';
 import { baseVersion, currentRosters, getPlayer, evolveOnDay, LEAGUE, SEASON } from './league';
+import { domesticPayroll } from './roster';
 
 const GAME_INTERVAL = 4;
 const LEGS = 6;
@@ -114,8 +115,7 @@ function compute(): Dyn {
     new Set(injuries.filter((s) => s.teamId === teamId && s.from <= d && d <= s.to).map((s) => s.playerId));
   const activeInjCount = (d: number, teamId: string) =>
     injuries.reduce((n, s) => n + (s.teamId === teamId && s.from <= d && d <= s.to ? 1 : 0), 0);
-  const payrollOf = (teamId: string) => // 캡 합산은 국내 선수만(외인 연봉 캡 제외 — FOREIGN_SYSTEM)
-    (roster.get(teamId) ?? []).reduce((s, id) => s + (getPlayer(id)?.isForeign ? 0 : (getPlayer(id)?.contract.salary ?? 0)), 0);
+  const payrollOf = (teamId: string) => domesticPayroll(roster.get(teamId) ?? [], getPlayer);
 
   const applyTx = (tx: Tx) => {
     const arr = roster.get(tx.teamId) ?? [];

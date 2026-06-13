@@ -1,13 +1,11 @@
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native';
-import { Card, Muted, Row, Screen, Title, theme } from '../../components/Screen';
+import { Card, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
 import { RosterList } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeamCoach } from '../../data/league';
 import { activeRoster } from '../../data/roster';
 import { discontentNow, conditionOf } from '../../data/owner';
 import { useGameStore } from '../../store/useGameStore';
-
-const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
 
 export default function Squad() {
   const router = useRouter();

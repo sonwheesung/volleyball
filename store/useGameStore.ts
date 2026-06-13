@@ -148,6 +148,13 @@ const freshSave = {
   keepForeign: null as boolean | null,
 };
 
+/** 내 팀의 시즌 중 거래 반영 명단 변화 — 방출/영입 집합 + 현재 정원(방출·영입 검증 게이트 공용) */
+function myRosterDelta(my: string, inSeasonTx: Tx[], rosterIds: string[]) {
+  const myReleased = new Set(inSeasonTx.filter((t) => t.kind === 'release' && t.teamId === my).map((t) => t.playerId));
+  const mySigned = inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === my).map((t) => t.playerId);
+  return { myReleased, mySigned, size: (rosterIds.length - myReleased.size) + mySigned.length };
+}
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
@@ -171,9 +178,7 @@ export const useGameStore = create<GameState>()(
         if (s.released.includes(playerId)) return false;
         const my = s.selectedTeamId ?? '';
         const rosterIds = currentRosters()[my] ?? [];
-        const myReleased = new Set(s.inSeasonTx.filter((t) => t.kind === 'release' && t.teamId === my).map((t) => t.playerId));
-        const mySigned = s.inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === my).map((t) => t.playerId);
-        const size = (rosterIds.length - myReleased.size) + mySigned.length;
+        const { size } = myRosterDelta(my, s.inSeasonTx, rosterIds);
         if (!canRelease(size)) return false;
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId, kind: 'release' }];
         set({ released: [...s.released, playerId], inSeasonTx });
@@ -202,9 +207,7 @@ export const useGameStore = create<GameState>()(
         const fa = evolveOnDay(faId, s.currentDay);
         if (!fa) return false;
         const rosterIds = currentRosters()[my] ?? [];
-        const myReleased = new Set(s.inSeasonTx.filter((t) => t.kind === 'release' && t.teamId === my).map((t) => t.playerId));
-        const mySigned = s.inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === my).map((t) => t.playerId);
-        const size = (rosterIds.length - myReleased.size) + mySigned.length;
+        const { myReleased, mySigned, size } = myRosterDelta(my, s.inSeasonTx, rosterIds);
         if (size >= ROSTER_MAX) return false;
         // 배신 웃돈: 내가 이번 시즌 방출한 선수의 재영입은 몸값 ×1.5 (당일 철회는 unrelease로 무료)
         const betrayedBy = (id: string) => s.inSeasonTx.some((t) => t.kind === 'release' && t.teamId === my && t.playerId === id);

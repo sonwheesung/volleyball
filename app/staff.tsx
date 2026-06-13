@@ -1,6 +1,6 @@
 // 스태프 계약(STAFF_SYSTEM) — 단장이 감독·전문코치·스카우터를 예산 안에서 영입/방출.
 import { Alert, View } from 'react-native';
-import { Button, Card, Muted, Row, Screen, Title, theme } from '../components/Screen';
+import { Button, Card, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../components/Screen';
 import {
   getTeamCoach, teamAssistants, teamScouts, teamScoutReveal,
   availableCoaches, availableAssistants, availableScouts,
@@ -11,7 +11,6 @@ import { coachSlots } from '../data/league';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 
-const STYLE_KO = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
 
 export default function Staff() {
   const teamId = useGameStore((s) => s.selectedTeamId);
@@ -67,7 +66,7 @@ export default function Staff() {
       {head ? (
         <Card>
           <Row><Title>{head.name}</Title><Muted>{head.age}세 · 연봉 {formatMoney(head.salary)}만</Muted></Row>
-          <Muted style={{ marginTop: 4 }}>성향 {STYLE_KO[head.style]} · 카리스마 {head.charisma} · {head.archetype}</Muted>
+          <Muted style={{ marginTop: 4 }}>성향 {STYLE_LABEL[head.style]} · 카리스마 {head.charisma} · {head.archetype}</Muted>
         </Card>
       ) : <Muted>감독 없음</Muted>}
       <Muted style={{ marginTop: 8, marginBottom: 4 }}>감독 시장 (프리에이전트)</Muted>
@@ -76,7 +75,7 @@ export default function Staff() {
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{c.name}</Title>
-              <Muted style={{ marginTop: 2 }}>{STYLE_KO[c.style]} · 카리스마 {c.charisma} · {c.archetype} · 연봉 {formatMoney(c.salary)}만</Muted>
+              <Muted style={{ marginTop: 2 }}>{STYLE_LABEL[c.style]} · 카리스마 {c.charisma} · {c.archetype} · 연봉 {formatMoney(c.salary)}만</Muted>
             </View>
             <Button label="영입" onPress={() => tryHireCoach(c.id, c.name, c.salary)} />
           </Row>

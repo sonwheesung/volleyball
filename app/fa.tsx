@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
-import { getTeam } from '../data/league';
+import { shortTeamName as shortTeam } from '../data/league';
 import { faMarketPreview } from '../data/offseason';
 import { buildOwnerFx } from '../data/owner';
 import { LEAGUE_CAP } from '../engine/cap';
@@ -11,12 +11,6 @@ import { assignFAGrades, askingPrice } from '../engine/faMarket';
 import { overall } from '../engine/overall';
 import { formatMoney, marketValue } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
-
-const shortTeam = (teamId: string) => {
-  const n = getTeam(teamId)?.name ?? '';
-  const p = n.split(' ');
-  return p.length > 1 ? p[1] : n;
-};
 
 export default function FACenter() {
   const router = useRouter();

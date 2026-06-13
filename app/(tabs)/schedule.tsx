@@ -3,7 +3,7 @@ import { useMemo } from 'react';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Calendar } from '../../components/Calendar';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
-import { SEASON, getEvolvedTeamPlayers, getTeam } from '../../data/league';
+import { SEASON, getEvolvedTeamPlayers, getTeam, shortTeamName as shortName } from '../../data/league';
 import { seasonResults, computeStandings } from '../../data/standings';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
@@ -12,11 +12,6 @@ import { teamScheduleEntries } from '../../engine/season';
 import { dateForDay, formatDate } from '../../lib/calendar';
 import { useGameStore } from '../../store/useGameStore';
 
-const shortName = (id: string) => {
-  const n = getTeam(id)?.name ?? '';
-  const p = n.split(' ');
-  return p.length > 1 ? p[1] : n;
-};
 
 export default function Schedule() {
   const router = useRouter();

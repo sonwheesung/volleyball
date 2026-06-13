@@ -24,3 +24,8 @@ export function activeRoster(
 export function payroll(players: Player[]): number {
   return players.reduce((s, p) => s + p.contract.salary, 0);
 }
+
+/** 국내 선수만 연봉 합산 — 외인은 샐러리캡 제외(FOREIGN_SYSTEM 2장). lookup: id → Player|undefined */
+export function domesticPayroll(ids: string[], lookup: (id: string) => Player | undefined): number {
+  return ids.reduce((s, id) => { const p = lookup(id); return s + (p && !p.isForeign ? p.contract.salary : 0); }, 0);
+}

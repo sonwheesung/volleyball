@@ -1,12 +1,10 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
-import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../../components/Screen';
+import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
 import { RosterList } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach } from '../../data/league';
 import { teamOverall } from '../../engine/overall';
 import { useGameStore } from '../../store/useGameStore';
-
-const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
 
 export default function TeamDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();

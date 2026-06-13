@@ -85,6 +85,11 @@ export function setFocusOverride(teamId: string, focus: TrainingFocus | null): v
 export const getFocusOverride = (teamId: string): TrainingFocus | null => focusOverride[teamId] ?? null;
 
 export const getTeam = (id: string): Team | undefined => teamMap.get(id);
+/** 팀명 짧은 표기 — "도시 팀명"에서 팀명(마지막 어절)만. 마커·좁은 칸용 */
+export const shortTeamName = (id: string): string => {
+  const n = getTeam(id)?.name ?? id;
+  return n.split(' ').slice(-1)[0] || n;
+};
 export const getPlayer = (id: string): Player | undefined => playerMap.get(id);
 export const getCoach = (id: string): Coach | undefined => coachMap.get(id);
 export const getFixture = (id: string): Fixture | undefined => fixtureMap.get(id);

@@ -3,15 +3,9 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, theme } from '../components/Screen';
-import { LEAGUE, getEvolvedTeamPlayers } from '../data/league';
+import { LEAGUE, getEvolvedTeamPlayers, shortTeamName as shortName } from '../data/league';
 import { teamOverall } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
-
-const shortName = (id: string) => {
-  const n = LEAGUE.teams.find((t) => t.id === id)?.name ?? '';
-  const p = n.split(' ');
-  return p.length > 1 ? p[1] : n;
-};
 
 export default function Exhibition() {
   const router = useRouter();

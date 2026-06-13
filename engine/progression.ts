@@ -3,20 +3,13 @@
 // 선수별 RNG는 id 해시로 고정 → 같은 currentDay = 같은 결과.
 
 import type { Player, TrainingFocus } from '../types';
-import { createRng } from './rng';
+import { createRng, strSeed } from './rng';
 import { applyTrainingDay } from './training';
 import { applyAgingDay } from './aging';
 import { type StaffEffects, NO_EFFECTS } from './staff';
 
-/** 문자열 id → 32비트 시드 (FNV-1a) */
-function playerSeed(id: string): number {
-  let h = 2166136261;
-  for (let i = 0; i < id.length; i++) {
-    h ^= id.charCodeAt(i);
-    h = Math.imul(h, 16777619);
-  }
-  return h >>> 0;
-}
+// 선수별 RNG 시드 = id 해시(FNV-1a) — rng.strSeed와 동일 알고리즘이라 공유(한쪽만 바뀌면 결정론 깨짐)
+const playerSeed = strSeed;
 
 /**
  * base 선수에게 days 일치의 (훈련 성장 + 노쇠)를 적용한 새 선수.

@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Screen';
-import { currentRosters, getPlayer, getTeam, teamPlayerIds } from '../../data/league';
+import { currentRosters, getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../../data/league';
 import { leagueProduction } from '../../data/production';
 import { currentSeasonAwards } from '../../data/awards';
 import { buildNewsFeed } from '../../data/news';
@@ -11,12 +11,6 @@ import { dateForDay, formatDate } from '../../lib/calendar';
 import { useGameStore } from '../../store/useGameStore';
 import type { ProdLine } from '../../engine/production';
 import type { AwardWinner, CareerStats, Player } from '../../types';
-
-const short = (teamId: string) => {
-  const n = getTeam(teamId)?.name ?? '';
-  const parts = n.split(' ');
-  return parts.length > 1 ? parts[1] : n;
-};
 
 export default function History() {
   const router = useRouter();

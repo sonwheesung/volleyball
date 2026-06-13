@@ -6,7 +6,7 @@ import { playerFans, fanOverlapRatio } from '../../engine/owner';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay } from '../../data/dynamics';
 import { SCANDAL_KO } from '../../engine/scandal';
 import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason } from '../../engine/owner';
-import { getEvolvedPlayer, getTeam } from '../../data/league';
+import { getEvolvedPlayer, getTeam, shortTeamName as teamShort } from '../../data/league';
 import { getPlayerProduction } from '../../data/production';
 import { awardHistoryOf } from '../../data/awards';
 import { effectiveContract } from '../../data/roster';
@@ -19,7 +19,6 @@ import { useGameStore } from '../../store/useGameStore';
 
 const STATUS_COLOR = { 꿀계약: theme.good, 적정: theme.muted, 고연봉: theme.bad } as const;
 
-const teamShort = (teamId: string) => (getTeam(teamId)?.name ?? teamId).split(' ').pop() ?? teamId;
 
 export default function PlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();

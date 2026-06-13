@@ -2,6 +2,9 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
+/** 감독 성향 한글 라벨 — 여러 화면 공유 */
+export const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
+
 export const theme = {
   bg: '#0f172a',
   card: '#1e293b',

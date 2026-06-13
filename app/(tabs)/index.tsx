@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
+import { Button, Card, Muted, OvrBadge, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
 import { SEASON, getEvolvedTeamPlayers, getPlayer, getTeam, getTeamCoach } from '../../data/league';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings } from '../../data/standings';
@@ -15,8 +15,6 @@ import { teamFanbaseNow } from '../../data/owner';
 import { LEAGUE_CAP } from '../../engine/cap';
 import { teamScheduleEntries } from '../../engine/season';
 import { useGameStore } from '../../store/useGameStore';
-
-const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
 
 export default function Dashboard() {
   const router = useRouter();
