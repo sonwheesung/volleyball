@@ -55,3 +55,13 @@ test('이번 오프시즌 영입 FA는 보상선수 대상 제외(이중 배정 
   const signedByMe = ['star'];
   assert.equal(pickCompensation(roster, [], snap, [...signedByMe]), 'mid');
 });
+
+test('외국인은 보상선수 대상 제외(받는 팀 외인 2명 방지)', () => {
+  // 외인 OP가 최고 OVR이라도 보상으로 넘어가지 않는다 — 1년 트라이아웃·팀당 1명 슬롯.
+  const fgn = mk('fgn', 95, 'OP'); fgn.isForeign = true;
+  const snap: Record<string, Player> = { fgn, mid: mk('mid', 75), low: mk('low', 60) };
+  const roster = ['fgn', 'mid', 'low'];
+  assert.equal(pickCompensation(roster, [], snap, []), 'mid'); // 외인 건너뛰고 차순위
+  // 외인만 있으면 보상 없음(null)
+  assert.equal(pickCompensation(['fgn'], [], snap, []), null);
+});

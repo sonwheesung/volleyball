@@ -35,6 +35,7 @@ export function pickCompensation(
     if (skip.has(id)) continue;
     const p = snapshot[id];
     if (!p) continue;
+    if (p.isForeign) continue; // 외국인은 보상선수 대상 불가 — 1년 트라이아웃 계약·팀당 1명 슬롯(FOREIGN_SYSTEM). 넘기면 받는 팀이 외인 2명이 된다
     const v = overall(p);
     if (v > bestVal) {
       bestVal = v;
