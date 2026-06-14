@@ -1,10 +1,12 @@
 // 보드 위치 검증 뷰어(개발) — 로테이션·국면·사이드를 넘기며 모든 대형을 정지 화면으로 확인.
 // MatchCourt와 동일한 courtLayout 순수 모듈을 그대로 그림 → 보이는 좌표 = 실제 경기 좌표.
 
+import { Redirect } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, Screen, theme } from '../components/Screen';
 import { LEAGUE, getEvolvedTeamPlayers, getTeam } from '../data/league';
+import { DEV_TOOLS } from '../data/flags';
 import { buildLineup } from '../engine/lineup';
 import {
   receiveFormation, switchedSpots, displayPos, zoneOfIdx, zonePx, lineupIdxAt,
@@ -34,6 +36,7 @@ const DIG_SPOTS: { ko: string; xf: number; yf: number }[] = [
 ];
 
 export default function DebugCourt() {
+  if (!DEV_TOOLS) return <Redirect href="/(tabs)/" />; // 보드 검증(개발) — 실전 빌드 차단
   const myTeam = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const [rot, setRot] = useState(0);

@@ -1,4 +1,4 @@
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { Side } from '../../types';
@@ -7,6 +7,7 @@ import { Button, Muted, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
 import { coachInfoOf, getFixture, getTeam } from '../../data/league';
 import { availableTeamPlayers } from '../../data/injury';
+import { DEV_TOOLS } from '../../data/flags';
 import { teamOverall } from '../../engine/overall';
 import { simulateMatch } from '../../engine/match';
 import { useGameStore } from '../../store/useGameStore';
@@ -82,6 +83,7 @@ export default function MatchBoard() {
     recordResult({ fixtureId: fixture.id, homeSets: data.sim.homeSets, awaySets: data.sim.awaySets });
   }, [isSandbox, data, fixture, recordResult]);
 
+  if (isSandbox && !DEV_TOOLS) return <Redirect href="/(tabs)/" />; // 테스트 경기 모드 — 실전 빌드 차단(딥링크 방어)
   if (!data) {
     return (
       <View style={[styles.root, { paddingTop: insets.top + 16 }]}>

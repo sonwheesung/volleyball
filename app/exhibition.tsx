@@ -1,13 +1,15 @@
 // 테스트 경기 — 일정과 무관하게 임의 두 팀을 골라 경기를 돌려본다. 결과는 저장하지 않는다.
-import { useRouter } from 'expo-router';
+import { Redirect, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, theme } from '../components/Screen';
 import { LEAGUE, getEvolvedTeamPlayers, shortTeamName as shortName } from '../data/league';
 import { teamOverall } from '../engine/overall';
+import { DEV_TOOLS } from '../data/flags';
 import { useGameStore } from '../store/useGameStore';
 
 export default function Exhibition() {
+  if (!DEV_TOOLS) return <Redirect href="/(tabs)/" />; // 테스트 경기 — 실전 빌드 차단
   const router = useRouter();
   const currentDay = useGameStore((s) => s.currentDay);
   const myId = useGameStore((s) => s.selectedTeamId);

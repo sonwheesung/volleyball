@@ -1,14 +1,17 @@
 // 영입 무결성 감사 (QA 대시보드) — FA·드래프트·외인·감독/코치/스카우터 영입을 N시즌 굴려
 // "한 사람 = 한 팀" 불변식을 전수 검사. 라이브 세이브는 격리(snapshot/restore)되어 안전.
 // 엔진: data/acquisitionAudit. 개발/검증용 — 단장실에서 진입.
+import { Redirect } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, View } from 'react-native';
 import { Button, Card, Muted, Row, Screen, Title, theme } from '../components/Screen';
 import { runAcquisitionAudit, type AuditReport } from '../data/acquisitionAudit';
+import { DEV_TOOLS } from '../data/flags';
 
 const PRESETS = [8, 16, 30];
 
 export default function Audit() {
+  if (!DEV_TOOLS) return <Redirect href="/(tabs)/" />; // 개발용 — 실전 빌드에선 진입 차단
   const [seasons, setSeasons] = useState(8);
   const [running, setRunning] = useState(false);
   const [report, setReport] = useState<AuditReport | null>(null);

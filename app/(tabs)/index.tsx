@@ -13,6 +13,7 @@ import { teamOverall } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
 import { teamFanbaseNow } from '../../data/owner';
 import { LEAGUE_CAP } from '../../engine/cap';
+import { DEV_TOOLS } from '../../data/flags';
 import { teamScheduleEntries } from '../../engine/season';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -200,8 +201,12 @@ export default function Dashboard() {
       ) : null}
 
       <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
-      <Button label="테스트 경기 (결과 미적용)" variant="ghost" onPress={() => router.push('/exhibition')} />
-      <Button label="보드 위치 검증 (개발)" variant="ghost" onPress={() => router.push('/debug-court')} />
+      {DEV_TOOLS ? (
+        <>
+          <Button label="테스트 경기 (결과 미적용)" variant="ghost" onPress={() => router.push('/exhibition')} />
+          <Button label="보드 위치 검증 (개발)" variant="ghost" onPress={() => router.push('/debug-court')} />
+        </>
+      ) : null}
       <Button label="선수단 보기" variant="ghost" onPress={() => router.push('/(tabs)/squad')} />
 
       <View style={{ height: 8 }} />
