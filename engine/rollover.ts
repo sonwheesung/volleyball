@@ -17,10 +17,11 @@ export function renewedContract(p: Player): Contract {
   return { salary: clampSalary(marketValue(p), p), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: p.age };
 }
 
-/** 한 선수의 시즌 롤오버. override = 시즌 중 재계약된 계약(있으면 우선). effects = 전문 코치 효과(STAFF) */
-export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Contract, effects: StaffEffects = NO_EFFECTS): Player {
-  // 1) 시즌치 성장/노쇠 누적 — 전문 코치 효과(속도·포텐 상한·노쇠 지연)를 영구 반영
-  const grown = evolvePlayer(base, focus, SEASON_LENGTH, effects);
+/** 한 선수의 시즌 롤오버. override = 시즌 중 재계약된 계약(있으면 우선). effects = 전문 코치 효과(STAFF).
+ *  lostDays = 출장정지 결장일(훈련 생략 — 성장 정체·노장 하락, OWNER_SYSTEM 4.6) */
+export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Contract, effects: StaffEffects = NO_EFFECTS, lostDays = 0): Player {
+  // 1) 시즌치 성장/노쇠 누적 — 전문 코치 효과(속도·포텐 상한·노쇠 지연)를 영구 반영. 정지일은 훈련 생략.
+  const grown = evolvePlayer(base, focus, SEASON_LENGTH, effects, lostDays);
   // 2) 나이 +1
   const aged: Player = { ...grown, age: grown.age + 1 };
   // 3) 경력 +1 (FA 자격 기준)
@@ -43,8 +44,9 @@ export function rolloverLeague(
   focusOf: (p: Player) => TrainingFocus,
   overrides: Record<string, Contract>,
   effectsOf?: (p: Player) => StaffEffects,
+  lostDaysOf?: (p: Player) => number, // 출장정지 결장일(훈련 생략) — 미지정이면 0(기존과 동일)
 ): Record<string, Player> {
   const out: Record<string, Player> = {};
-  for (const p of players) out[p.id] = rolloverPlayer(p, focusOf(p), overrides[p.id], effectsOf?.(p));
+  for (const p of players) out[p.id] = rolloverPlayer(p, focusOf(p), overrides[p.id], effectsOf?.(p), lostDaysOf?.(p) ?? 0);
   return out;
 }

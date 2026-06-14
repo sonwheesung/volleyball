@@ -500,8 +500,8 @@ export const useGameStore = create<GameState>()(
           const pop = popularityOf(bp.career.points, awardHistoryOf(archive, b.playerId).length, bp.clubTenure, prodAll.get(b.playerId)?.points ?? 0);
           if (pop >= 60) angerSum += benchAngerPenalty(Math.round((SEASON_END_DAY - b.fromDay) / GAME_EVERY));
         }
-        // 내 팀 선수의 사건·사고 — 팬들이 등을 돌린다
-        for (const sc of seasonScandals()) if (sc.teamId === my) angerSum += 12;
+        // 내 팀 선수의 사건·사고 — 팬들이 등을 돌린다(사안이 클수록 = 정지 경기 많을수록 더 떠난다)
+        for (const sc of seasonScandals()) if (sc.teamId === my) angerSum += Math.min(28, 6 + sc.missMatches);
         const nextFan = fanScoreOf(winRate, championId === my, angerSum);
 
         // 0.7) 재정 정산(FINANCE) — 모기업(베이스+성적 보너스) + 직관(성적 민감) + 굿즈(선수팬).
@@ -620,7 +620,8 @@ export const useGameStore = create<GameState>()(
           careerTotals: nextTotals, // 통산 경기 기록 누적(업적)
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
           benchDirectives: [],
-          fanScore: nextFan,
+          // 영구제명(승부조작·학폭) — 내 팀이면 팬심 대폭락(사건당 −35). 리그 최대 충격.
+          fanScore: Math.max(0, nextFan - 35 * ctx.expelled.filter((e) => e.teamId === my).length),
           cash: Math.max(0, settled.cash - faSpend),
           lastFinance: nextFinance,
           tryoutWish: [],

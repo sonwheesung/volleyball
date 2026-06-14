@@ -16,6 +16,7 @@ import type { OwnerFx } from '../engine/owner';
 import { marketValue } from '../engine/salary';
 import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
+import { seasonScandals } from './dynamics';
 import { domesticPayroll } from './roster';
 import { runTryout, type TryoutOutcome } from './tryout';
 import { computeStandings } from './standings';
@@ -184,7 +185,10 @@ export function buildOffseason(
   nextSeason: number,
   ownerFx?: OwnerFx, // 불만 선수의 재계약 거부(OWNER_SYSTEM) — 단장이 잡아도 선수가 떠날 수 있다
 ): Offseason {
-  const snapshot = rolloverLeague(currentBasePlayers(), focusOf, contractOverrides, effectsOf);
+  // 출장정지 결장일 → 그 시즌 훈련 생략(성장 정체·노장 하락, OWNER_SYSTEM 4.6). 정지 기간(to−from) 일수.
+  const lostDays = new Map<string, number>();
+  for (const sc of seasonScandals()) lostDays.set(sc.playerId, Math.max(0, sc.to - sc.from));
+  const snapshot = rolloverLeague(currentBasePlayers(), focusOf, contractOverrides, effectsOf, (p) => lostDays.get(p.id) ?? 0);
   const retireRng = createRng(70000 + nextSeason * 977);
   const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng);
 
