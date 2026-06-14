@@ -37,10 +37,11 @@ export function deriveRatings(p: Player): Ratings {
     // 블로킹 = f(키, 점프력, 반응속도, 블로킹기술)
     //   키는 완화 레인지(blockHeight) — 장신 보상은 살리되 팀 간 격차 폭주 방지(2026-06)
     block: clamp((0.3 * blockHeight(p.height) + 0.25 * jump + 0.2 * reaction + 0.25 * norm(p.skBlock)) * 100),
-    // 디그 = f(민첩성, 반응속도, 위치선정, 디그기술)
-    dig: clamp((0.25 * agility + 0.25 * reaction + 0.25 * positioning + 0.25 * norm(p.skDig)) * 100),
-    // 리시브 = f(반응속도, 위치선정, 리시브기술)
-    receive: clamp((0.35 * reaction + 0.3 * positioning + 0.35 * norm(p.skReceive)) * 100),
+    // 디그 = f(민첩성, 반응속도, 위치선정, 디그기술) — 반응 비중↓·전용기술↑(2026-06-14, 반응 과대 가중 보정)
+    dig: clamp((0.25 * agility + 0.2 * reaction + 0.25 * positioning + 0.3 * norm(p.skDig)) * 100),
+    // 리시브 = f(반응속도, 위치선정, 리시브기술) — 반응(0.35→0.25)↓·리시브기술(0.35→0.45)↑
+    //   반응속도가 전용 기술과 동급이던 걸 완화 — 리시브는 기술·읽기 주도(2026-06-14)
+    receive: clamp((0.25 * reaction + 0.3 * positioning + 0.45 * norm(p.skReceive)) * 100),
     // 세팅 = f(세팅기술, 집중력)
     set: clamp((0.7 * norm(p.skSet) + 0.3 * focus) * 100),
     // 서브 = f(서브기술, 집중력)
