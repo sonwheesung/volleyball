@@ -61,9 +61,10 @@ export default function Dashboard() {
   const injuries = useMemo(() => teamInjuriesOn(teamId, currentDay), [teamId, currentDay, season]);
   const milestones = useGameStore((s) => s.milestones);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
+  const expelledLog = useGameStore((s) => s.expelledLog);
   const news = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season).slice(0, 5),
-    [archive, milestones, hallOfFame, season, currentDay],
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog).slice(0, 5),
+    [archive, milestones, hallOfFame, season, currentDay, expelledLog],
   );
   const latestRoundMvp = useMemo(() => {
     const r = currentSeasonAwards(season, currentDay).roundMvps;

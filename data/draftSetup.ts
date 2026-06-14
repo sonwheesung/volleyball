@@ -6,7 +6,7 @@ import { createRng } from '../engine/rng';
 import { ROSTER_IDEAL } from '../engine/aiGM';
 import { buildDraftOrder, lotteryRound1 } from '../engine/draft';
 import { generateDraftClass } from './draftClass';
-import { resolvePreDraft } from './offseason';
+import { resolvePreDraft, type ExpelEvent } from './offseason';
 import { standingsWorstFirst } from './standings';
 
 const ROSTER_TOTAL = Object.values(ROSTER_IDEAL).reduce((a, b) => a + b, 0); // 16
@@ -16,6 +16,7 @@ export interface DraftContext {
   rosters: Record<string, string[]>;     // 드래프트 전
   prevTeamOf: Record<string, string>;
   retired: string[];                      // 오프시즌 은퇴자 id(명예의전당)
+  expelled: ExpelEvent[];                 // 오프시즌 영구제명자(승부조작·학폭 — 불명예 퇴출)
   order: string[];                        // 슬롯별 teamId
   cls: Player[];                          // 드래프트 클래스
   myHoles: number;
@@ -57,6 +58,7 @@ export function buildDraftContext(
     rosters: pre.rosters,
     prevTeamOf: pre.prevTeamOf,
     retired: pre.retired,
+    expelled: pre.expelled,
     order,
     cls,
     myHoles: holes[myTeam] ?? 0,

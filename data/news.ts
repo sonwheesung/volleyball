@@ -2,12 +2,12 @@
 // ★ 새 저장 없음 — archive(시상)·milestones·hallOfFame·injuries 에서 순수 파생(결정론).
 //   가짜 드라마 금지: 기록에 근거한 사실만. 중요도(big)로 헤드라인/단신 구분.
 
-import type { HofEntry, Milestone, NewsItem, SeasonAwards } from '../types';
+import type { ExpelRecord, HofEntry, Milestone, NewsItem, SeasonAwards } from '../types';
 import { getPlayer, getTeam } from './league';
 import { seasonInjuryReport } from './injury';
 import { SEVERITY_KO } from '../engine/injury';
 import { seasonScandals } from './dynamics';
-import { SCANDAL_KO } from '../engine/scandal';
+import { SCANDAL_KO, EXPEL_KO } from '../engine/scandal';
 
 const teamName = (id: string) => getTeam(id)?.name ?? id;
 const pName = (id: string) => getPlayer(id)?.name ?? id;
@@ -20,6 +20,7 @@ export function buildNewsFeed(
   milestones: Milestone[],
   hallOfFame: HofEntry[],
   currentSeason: number,
+  expelled: ExpelRecord[] = [],
 ): NewsItem[] {
   const items: NewsItem[] = [];
   const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string) =>
@@ -54,6 +55,11 @@ export function buildNewsFeed(
   // 5) 사건·사고 — 아주 가끔, 리그를 뒤흔드는 헤드라인
   for (const s of seasonScandals()) {
     push(currentSeason, 'scandal', `[단독] ${pName(s.playerId)}(${teamName(s.teamId)}), ${SCANDAL_KO[s.kind]} — ${s.missMatches}경기 출장 정지`, true, s.teamId);
+  }
+
+  // 6) 영구제명 — 리그를 뒤흔드는 최대 사건(승부조작·학폭). 영속 기록에서.
+  for (const e of expelled) {
+    push(e.season, 'scandal', `[속보] ${e.name}(${teamName(e.teamId)}), ${EXPEL_KO[e.kind]} 적발 — 영구제명(리그 영구 퇴출)`, true, e.teamId);
   }
 
   return items.sort((x, y) => y.season - x.season || Number(y.big) - Number(x.big));

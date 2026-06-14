@@ -10,7 +10,7 @@ import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
 import { seasonScandals, setOwnerContext } from '../data/dynamics';
-import { SCANDAL_KO, type ScandalKind } from '../engine/scandal';
+import { SCANDAL_KO, EXPEL_KO, type ScandalKind, type ExpelKind } from '../engine/scandal';
 
 const log = (m: string) => process.stdout.write(m + '\n');
 const seasons = Math.max(10, Number(process.argv[2]) || 200);
@@ -23,6 +23,9 @@ interface Incident { season: number; playerId: string; name: string; age: number
 const log_: Incident[] = [];
 const byKind: Record<string, number> = {};
 const byTeam: Record<string, number> = {};
+interface Expel { season: number; name: string; teamId: string; kind: ExpelKind; }
+const expels: Expel[] = [];
+const byExpel: Record<string, number> = {};
 let violations = 0;
 const fail = (m: string) => { if (violations < 10) log(`  ❌ ${m}`); violations++; };
 
@@ -41,6 +44,12 @@ for (let s = 0; s < seasons; s++) {
   // 오프시즌 진행(전 구단 AI)
   const ctx = buildDraftContext('', {}, {}, [], false, [], s + 1);
   const snapshot = ctx.snapshot;
+  // 영구제명(이번 오프시즌) — 그 시즌 소속팀에서 영구 퇴출
+  for (const e of ctx.expelled) {
+    if (!(rosters[e.teamId] ?? []).includes(e.playerId)) fail(`s${s}: 제명 ${e.playerId} 가 ${tn(e.teamId)} 소속 아님`);
+    expels.push({ season: s, name: snapshot[e.playerId]?.name ?? e.playerId, teamId: e.teamId, kind: e.kind });
+    byExpel[e.kind] = (byExpel[e.kind] ?? 0) + 1;
+  }
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
   const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], '', [], styleOf, teamScoutReveal);
   for (const p of drafted.picked) snapshot[p.id] = p;
@@ -83,7 +92,11 @@ for (const [pid, a] of repeat.slice(0, 15)) {
 log(`\n▸ 최근 연표(마지막 12건):`);
 for (const i of log_.slice(-12)) log(`  [s${i.season}] ${i.name}(${i.pos}/${i.age}세·${tn(i.teamId)}) — ${SCANDAL_KO[i.kind]} ${i.miss}경기 정지`);
 
+log(`\n▸ 영구제명(승부조작·학폭 — 리그 영구 퇴출): 총 ${expels.length}건 (${(expels.length / seasons).toFixed(3)}건/시즌)`);
+for (const k of ['matchfix', 'violence'] as ExpelKind[]) log(`  ${EXPEL_KO[k].padEnd(16)} ${String(byExpel[k] ?? 0).padStart(3)}건`);
+for (const e of expels) log(`  [s${e.season}] ${e.name} (${tn(e.teamId)}) — ${EXPEL_KO[e.kind]} → 영구제명`);
+
 log(violations === 0
-  ? `\n✅ 정합성 위반 0건 — 모든 사고가 그 시즌 소속팀에 정확히 귀속(누가·언제·어느 팀)`
+  ? `\n✅ 정합성 위반 0건 — 모든 사고·제명이 그 시즌 소속팀에 정확히 귀속(누가·언제·어느 팀)`
   : `\n❌ 정합성 위반 ${violations}건 — 위 로그 확인`);
 process.exit(violations === 0 ? 0 : 1);

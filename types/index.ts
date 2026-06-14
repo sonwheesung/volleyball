@@ -189,6 +189,15 @@ export interface NewsItem {
   teamId?: string;                                           // 내 팀 강조용
 }
 
+/** 영구제명 영속 기록 — 승부조작·학폭 등으로 리그에서 영구 퇴출된 선수(불명예, 뉴스·연표용) */
+export interface ExpelRecord {
+  season: number;                                            // 제명 확정 시즌(직전 시즌 종료)
+  playerId: string;
+  name: string;                                              // 제명 시점 이름(선수 소멸 후 표시용)
+  teamId: string;                                            // 제명 당시 소속팀
+  kind: 'matchfix' | 'violence';
+}
+
 export interface SubPolicy {
   pinchServer: boolean; // 약한 서버(세터 등) 차례에 벤치 서브 스페셜리스트 투입
   blockSub: boolean;    // (페이즈2) 접전 시 전위 블로킹 강화

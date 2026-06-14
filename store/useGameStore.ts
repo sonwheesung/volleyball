@@ -41,7 +41,7 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, HofEntry, MatchResult, Milestone, Player, SeasonArchive, SeasonAwards, SubPolicy, TrainingFocus } from '../types';
+import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, SeasonArchive, SeasonAwards, SubPolicy, TrainingFocus } from '../types';
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const LEGEND_POINTS = 7500; // 영구결번급 — 60시즌 통산 최고 ~8645라 9000은 도달 불가였음(레전드 0명).
@@ -74,6 +74,7 @@ interface GameState {
   careerTotals: { points: number; aces: number; setsWon: number; setsLost: number; matchWins: number; matchLosses: number }; // 내 팀 통산 경기 기록(업적용)
   coachPool: { coaches: Coach[]; assistants: AssistantCoach[] } | null; // 감독 생애주기 풀(null=시드, STAFF_SYSTEM 6)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
+  expelledLog: ExpelRecord[];                  // 영구제명 연표(승부조작·학폭 — 불명예 퇴출, 뉴스/서사용)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
   trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
@@ -147,6 +148,7 @@ const freshSave = {
   careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 },
   coachPool: null as { coaches: Coach[]; assistants: AssistantCoach[] } | null,
   hallOfFame: [] as HofEntry[],
+  expelledLog: [] as ExpelRecord[],
   milestones: [] as Milestone[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
   trainingFocus: null as TrainingFocus | null,
@@ -432,7 +434,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -592,10 +594,11 @@ export const useGameStore = create<GameState>()(
           }
         }
 
-        // 4.6) 다음 시즌 FA 풀 = 롤오버됐으나 미계약(로스터 외)·비은퇴 선수(오프시즌 잔류 FA)
+        // 4.6) 다음 시즌 FA 풀 = 롤오버됐으나 미계약(로스터 외)·비은퇴·비제명 선수(오프시즌 잔류 FA)
         const rosteredNext = new Set(Object.values(filled.rosters).flat());
         const retiredSet = new Set(ctx.retired);
-        const nextFaPool = Object.keys(snapshot).filter((id) => !rosteredNext.has(id) && !retiredSet.has(id) && !snapshot[id].isForeign); // 외인은 FA 풀 비대상(트라이아웃 전용)
+        const expelledSet = new Set(ctx.expelled.map((e) => e.playerId)); // 영구제명자는 FA 풀로도 안 감(리그 소멸)
+        const nextFaPool = Object.keys(snapshot).filter((id) => !rosteredNext.has(id) && !retiredSet.has(id) && !expelledSet.has(id) && !snapshot[id].isForeign); // 외인은 FA 풀 비대상(트라이아웃 전용)
 
         // FA 영입 지출 차감 — 내 새 명단에 합류한 타 구단 출신(드래프트·신인 제외)의 첫 해 연봉 + A/B 보상금
         let faSpend = ctx.compCash; // FA 보상금(A 200%·B 100% × 직전연봉, FA_SYSTEM 2.2) — 운영 자금에서
@@ -640,6 +643,7 @@ export const useGameStore = create<GameState>()(
           playerBase: snapshot,
           rosters: filled.rosters,
           hallOfFame: [...hallOfFame, ...hofAdds],
+          expelledLog: [...expelledLog, ...ctx.expelled.map((e) => ({ season, playerId: e.playerId, name: snapshot[e.playerId]?.name ?? e.playerId, teamId: e.teamId, kind: e.kind }))],
           archive: nextArchive,
           milestones: nextMilestones,
         });
@@ -677,6 +681,7 @@ export const useGameStore = create<GameState>()(
         careerTotals: s.careerTotals,
         coachPool: s.coachPool,
         hallOfFame: s.hallOfFame,
+        expelledLog: s.expelledLog,
         milestones: s.milestones,
         subPolicy: s.subPolicy,
         trainingFocus: s.trainingFocus,

@@ -5,6 +5,7 @@
 import type { Contract, Player } from '../types';
 import { createRng } from '../engine/rng';
 import { applyRetirements } from '../engine/retire';
+import { rollExpulsion, type ExpelKind } from '../engine/scandal';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
 import { aiKeepsFA, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
 import { assignFAGrades, askingPrice, offerScore, prefWeightsOf } from '../engine/faMarket';
@@ -159,12 +160,16 @@ export function resolveFAMarket(
   return { snapshot, rosters, signedByMe, lostTo, compCash };
 }
 
+/** 영구제명 사건 — 그 시즌 소속팀에서 리그 영구 퇴출(불명예, HOF 불가) */
+export interface ExpelEvent { playerId: string; teamId: string; kind: ExpelKind }
+
 export interface Offseason {
   snapshot: Record<string, Player>;     // 롤오버된 선수(레지스트리)
   rosters: Record<string, string[]>;    // 잔류/AI유지 반영, FA 풀 인원 제외
   pool: string[];                       // 영입 가능한 FA id
   retired: string[];
   returningForeign: string[];           // 전 시즌 외인(생존자) — 트라이아웃 재참가(국내 흐름과 분리)
+  expelled: ExpelEvent[];               // 이번 오프시즌 영구제명자(승부조작·학폭 등 — 리그 영구 퇴출)
 }
 
 /**
@@ -183,6 +188,19 @@ export function buildOffseason(
   const retireRng = createRng(70000 + nextSeason * 977);
   const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng);
 
+  // 영구제명(SCANDAL terminal) — 은퇴 생존자 중 승부조작·학폭 등으로 리그 영구 퇴출(결정론).
+  //   제명자는 잔류도 FA 풀도 아닌 '소멸'(은퇴와 동급 종착이나 불명예 — HOF 불가).
+  const expelled: ExpelEvent[] = [];
+  const expelledSet = new Set<string>();
+  for (const teamId of Object.keys(afterRetire.rosters)) {
+    for (const id of afterRetire.rosters[teamId]) {
+      const p = snapshot[id];
+      if (!p || p.isForeign) continue; // 외인은 트라이아웃 별도 흐름
+      const ex = rollExpulsion(id, p.age);
+      if (ex) { expelled.push({ playerId: id, teamId, kind: ex.kind }); expelledSet.add(id); }
+    }
+  }
+
   const rosters: Record<string, string[]> = {};
   const pool: string[] = [];
   const returningForeign: string[] = [];
@@ -194,6 +212,7 @@ export function buildOffseason(
     for (const id of afterRetire.rosters[teamId]) {
       const p = snapshot[id];
       if (!p) continue;
+      if (expelledSet.has(id)) continue; // 영구제명 — 명단에서 영구 제거
       // 외인은 항상 1년 계약 만료 — 국내 잔류/FA 흐름과 분리, 트라이아웃 재참가로(FOREIGN_SYSTEM)
       if (p.isForeign) { returningForeign.push(id); continue; }
       if (p.contract.remaining <= 0) expiring.push(p);
@@ -226,7 +245,7 @@ export function buildOffseason(
     for (const p of expiring) if (!retainSet.has(p.id)) pool.push(p.id); // 잔류 의사 없던 만료자
     rosters[teamId] = keep;
   }
-  return { snapshot, rosters, pool, retired: afterRetire.retired, returningForeign };
+  return { snapshot, rosters, pool, retired: afterRetire.retired, returningForeign, expelled };
 }
 
 export interface PreDraft {
@@ -234,6 +253,7 @@ export interface PreDraft {
   rosters: Record<string, string[]>;     // FA 영입·보상·AI 충원까지 반영(드래프트 전)
   prevTeamOf: Record<string, string>;
   retired: string[];                     // 이번 오프시즌 은퇴자 id(명예의전당 등재용)
+  expelled: ExpelEvent[];                // 이번 오프시즌 영구제명자(승부조작·학폭 — 리그 영구 퇴출)
   tryout: TryoutOutcome;                 // 외국인 트라이아웃 결과(풀·지명·대체 풀 — 미리보기 공유)
   compCash: number;                      // 내가 낸 FA 보상금 합(운영 자금 차감용)
 }
@@ -271,7 +291,7 @@ export function resolvePreDraft(
   const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY);
   const prestige = teamPrestige(nextSeason - 1);
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash, moneyOnlyIds);
-  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, tryout, compCash: fa.compCash };
+  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, expelled: off.expelled, tryout, compCash: fa.compCash };
 }
 
 /** FA 센터 미리보기: 풀 + 내 영입 성공/실패 예상 (resolvePreDraft와 동일 소스) */
