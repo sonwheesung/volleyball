@@ -5,7 +5,7 @@
 import type { Contract, Player } from '../types';
 import { createRng } from '../engine/rng';
 import { applyRetirements } from '../engine/retire';
-import { rollExpulsion, type ExpelKind } from '../engine/scandal';
+import { rollExpulsion, scandalRepMul, type ExpelKind } from '../engine/scandal';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
 import { aiKeepsFA, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
 import { assignFAGrades, askingPrice, offerScore, prefWeightsOf } from '../engine/faMarket';
@@ -18,6 +18,14 @@ import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
 import { seasonScandals } from './dynamics';
 import { domesticPayroll } from './roster';
+
+/** 직전 시즌 사고 선수 → 다음 재계약·FA 평판 계수(playerId→≤1). 사안 클수록 더 깎인다. */
+function scandalRepMap(): Map<string, number> {
+  const m = new Map<string, number>();
+  for (const sc of seasonScandals()) m.set(sc.playerId, scandalRepMul(sc.missMatches));
+  return m;
+}
+const round100 = (x: number) => Math.round(x / 100) * 100;
 import { runTryout, type TryoutOutcome } from './tryout';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
@@ -88,13 +96,14 @@ export function resolveFAMarket(
   let compCash = 0; // 내가 낸 FA 보상금 누계(A/B 영입 — FA_SYSTEM 2.2)
   const wanted = new Set(faSignings);
 
-  // 좋은 FA부터 계약 결정
+  // 좋은 FA부터 계약 결정. 직전 시즌 사고 선수는 평판 할인(요구연봉↓ — 다음 FA에 반영)
+  const repMap = scandalRepMap();
   const faIds = [...off.pool].sort((a, b) => overall(snapshot[b]!) - overall(snapshot[a]!));
   for (const id of faIds) {
     const p = snapshot[id];
     if (!p) continue;
     const grade = grades.get(id) ?? 'C';
-    const asking = askingPrice(marketValue(p), grade);
+    const asking = round100(askingPrice(marketValue(p), grade) * (repMap.get(id) ?? 1));
     // 내가 영입 시 추가로 낼 보상금 — '돈만' 선택 시 가중 보상금(보상선수 면제), 아니면 기본(보상선수 동반)
     const compCost = needsCompensationPlayer(grade)
       ? (moneyOnly.has(id) ? compensationMoneyOnly(grade, p.contract.salary) : compensationMoney(grade, p.contract.salary))
@@ -188,6 +197,7 @@ export function buildOffseason(
   // 출장정지 결장일 → 그 시즌 훈련 생략(성장 정체·노장 하락, OWNER_SYSTEM 4.6). 정지 기간(to−from) 일수.
   const lostDays = new Map<string, number>();
   for (const sc of seasonScandals()) lostDays.set(sc.playerId, Math.max(0, sc.to - sc.from));
+  const repMap = scandalRepMap(); // 사고 선수 다음 재계약/FA 평판 할인
   const snapshot = rolloverLeague(currentBasePlayers(), focusOf, contractOverrides, effectsOf, (p) => lostDays.get(p.id) ?? 0);
   const retireRng = createRng(70000 + nextSeason * 977);
   const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng);
@@ -237,7 +247,10 @@ export function buildOffseason(
       .sort((a, b) => overall(b) - overall(a));
     const retainSet = new Set(wantRetain.map((p) => p.id));
     for (const p of wantRetain) {
-      const renewed = renewedContract(p);
+      const rc = renewedContract(p);
+      // 직전 시즌 사고 선수는 평판 할인(사안 경중만큼 연봉↓) — 다음 재계약에 반영(OWNER_SYSTEM 4.6)
+      const rep = repMap.get(p.id) ?? 1;
+      const renewed = rep < 1 ? { ...rc, salary: round100(rc.salary * rep) } : rc;
       if (payroll + renewed.salary <= LEAGUE_CAP) {
         snapshot[p.id] = { ...p, contract: renewed };
         keep.push(p.id);

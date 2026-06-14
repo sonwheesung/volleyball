@@ -27,6 +27,12 @@ export const SCANDAL_PROB = 0.0035;
 /** 스캔들 시즌의 인기 계수 — 팬이 떠난다(선수팬 직격) */
 export const SCANDAL_POP_FACTOR = 0.6;
 
+/** 사고 후 다음 재계약·FA 평판 계수(≤1) — 사안 경중(정지 경기 수)만큼 연봉 할인.
+ *  SNS −1% · 무단이탈 −2% · 폭행 −6% · 음주 −9% · 도박 −15%(상한). 다음 한 시즌만 반영(평판은 회복). */
+export function scandalRepMul(missMatches: number): number {
+  return 1 - Math.min(0.15, Math.max(0, missMatches) * 0.005);
+}
+
 export interface ScandalRoll { kind: ScandalKind; dayT: number /* 시즌 내 발생 시점 0..1 */ }
 
 export function rollScandal(playerId: string, age: number): ScandalRoll | null {
