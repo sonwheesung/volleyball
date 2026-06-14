@@ -90,6 +90,7 @@
 | EC-FA-03 | FA 센터에서 "영입 불가"인데 실제론 가능(미리보기≠결과) | 정산 전 자금으로 미리보기 → 모기업 지원 누락. `projectSettledCash`로 정산 후 자금 사용 (`072779a`) | fa.tsx=endSeason 동일 소스 |
 | EC-FA-04 | (예방) '돈만' 선택인데 보상선수가 빠지거나 보상금 미가중 | 신규 기능 — `moneyOnlyIds` 전파 + `pickCompensation` 건너뜀 + `compensationMoneyOnly` (`e9bb4b6`) | simMoneyOnly |
 | EC-CA-01 | 현금 없는데 국내 FA 영입됨 | 입찰 게이트가 캡만 봄 → `offer + compCost <= cashLeft` 추가 (`a91f967`) | audit `cash2` |
+| EC-CA-02 | 외인 트라이아웃 + 국내 FA 합산이 정산현금 초과(각자 전액 게이팅 → 이중 사용) | `resolvePreDraft`/`faMarketPreview`가 `runTryout`·`resolveFAMarket`에 같은 `myCash` 전달 → 외인 incoming 비용을 국내 FA 지갑에서 차감(`cashAfterForeign`) | simBrokeSign |
 
 ### 감독·스태프
 | ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |

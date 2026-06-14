@@ -90,7 +90,7 @@ function compute(): Dyn {
   for (const t of LEAGUE.teams) {
     for (const id of roster.get(t.id) ?? []) {
       const p = evolveOnDay(id, 0);
-      if (!p) continue;
+      if (!p || p.isForeign) continue; // 외인은 사고 대상 제외 — 1년 용병이라 사고 생애주기(성장정지·재계약 평판) 부적합, 바닥 보장 유지
       const roll = rollScandal(id, p.age);
       if (!roll) continue;
       const from = matchdays[Math.min(matchdays.length - 1, Math.floor(roll.dayT * matchdays.length))];

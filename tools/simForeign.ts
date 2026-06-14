@@ -55,7 +55,9 @@ for (let s = 0; s < seasons; s++) {
       if (p.isForeign) { fCount++; fSum += overall(p); }
       else { dSum += overall(p); dCount++; domesticPay += p.contract.salary; }
     }
-    if (domesticPay > LEAGUE_CAP) stat.capOverDomestic++;
+    // committed(드래프트 후) 로스터 측정 — 신인 의무수급(저가 슬롯)·다년계약 누적으로 캡 직전 팀이
+    // 살짝 넘을 수 있다(현실 캡과 동일, acquisitionAudit과 같은 기준). 명백한 과다(>110%)만 위반.
+    if (domesticPay > LEAGUE_CAP * 1.1) stat.capOverDomestic++;
   }
   const dAvg = dCount ? dSum / dCount : 0;
   stat.foreignMin = Math.min(stat.foreignMin, fCount);

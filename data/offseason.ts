@@ -26,7 +26,20 @@ function scandalRepMap(): Map<string, number> {
   return m;
 }
 const round100 = (x: number) => Math.round(x / 100) * 100;
+
+/** 트라이아웃 후 국내 FA에 남는 현금 — 내 외인 영입 비용(incoming=prevTeam≠내팀, faSpend에 잡히는 분)을
+ *  차감해 외인·국내가 같은 정산현금을 공유한다(둘이 각자 전액 게이팅하면 합산 과지출 — simBrokeSign). */
+function cashAfterForeign(
+  myCash: number | undefined, rosters: Record<string, string[]>, snapshot: Record<string, Player>,
+  myTeam: string, prevTeamOf: Record<string, string>,
+): number | undefined {
+  if (myCash === undefined) return undefined;
+  const f = (rosters[myTeam] ?? []).find((id) => snapshot[id]?.isForeign);
+  const cost = f && prevTeamOf[f] !== myTeam ? FOREIGN_SALARY : 0; // 재계약(prev=내팀)은 faSpend 미포함 → 비차감
+  return Math.max(0, myCash - cost);
+}
 import { runTryout, type TryoutOutcome } from './tryout';
+import { FOREIGN_SALARY } from '../engine/foreign';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
 
@@ -307,7 +320,8 @@ export function resolvePreDraft(
   // 외국인 트라이아웃 — FA 시장 앞(외인이 OP를 채워야 AI가 FA로 중복 영입하지 않는다)
   const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY);
   const prestige = teamPrestige(nextSeason - 1);
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash, moneyOnlyIds);
+  const faCash = cashAfterForeign(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 외인 비용 차감 후 국내 FA 지갑
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds);
   return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, expelled: off.expelled, tryout, compCash: fa.compCash };
 }
 
@@ -348,6 +362,7 @@ export function faMarketPreview(
   const pool = [...off.pool];
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const prestige = teamPrestige(nextSeason - 1);
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash, moneyOnlyIds);
+  const faCash = cashAfterForeign(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 외인 비용 차감 후 국내 FA 지갑
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds);
   return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, tryout, compCash: fa.compCash };
 }
