@@ -9,9 +9,12 @@ export const MERCH_PER_FAN = 0.25; // 선수팬 1명당 연간 굿즈 매출(만
 /** 구단 운영 고정비(만원) — 시설·전지훈련·유소년·프런트. 이게 있어야 흉작 시즌에 적자가 난다 */
 export const OPERATING_COST = 80000;
 
-/** 모기업 지원금 베이스(만원) — 팀별 차등 20~28억(모기업 크기가 다르다). 시드 결정론 */
+/** 모기업 지원금 베이스(만원) — 팀별 차등 22~30억(모기업 크기가 다르다). 시드 결정론.
+ *  2026-06-14 상향(20~28→22~30): 리그 성장 가속(AI 스태프 등)으로 연봉 수준이 올라
+ *  모기업 보전이 62%까지 치솟음 → 인플레 반영해 베이스 +2억. "캡OK·자금부족" 드라마는
+ *  살리면서 보전만 설계 의도("가끔")로 끌어내림. (+4억은 잔고 폭증·드라마 소멸로 과보정) */
 export function sponsorBase(teamId: string): number {
-  return 200000 + Math.floor(createRng(strSeed(`sponsor:${teamId}`)).next() * 80000);
+  return 220000 + Math.floor(createRng(strSeed(`sponsor:${teamId}`)).next() * 80000);
 }
 
 /** 모기업 긴축 계수 — 모기업은 메꿔주는 기관이지 쌓아주는 기관이 아니다.
