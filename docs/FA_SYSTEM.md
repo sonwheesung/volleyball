@@ -30,7 +30,7 @@
   현재 계약 만료 기준으로 단순화.)
 - 등급: 연봉 순위 **상위 35% A / 다음 35% B / 나머지 C**.
 - 요구연봉 프리미엄 `PREMIUM = A 1.25 / B 1.15 / C 1.1`(2.2표의 보상 배수와는 별개).
-- 보상금 `compensationMoney = A 2.0× / B 1.0× / C 0`, 보상선수는 **A·B만** 필요.
+- 보상금 `compensationMoney = A 2.0× / B 1.0× / C 0`(보상선수 동반), `compensationMoneyOnly = A 3.0× / B 2.0×`('돈만'·선수 보호). 보상선수는 **A·B만** 필요.
 - `offerScore = w.money·연봉 + w.win·우승권 + w.loyalty·충성 + w.play·출전 + w.home·연고 + 0.05·rand`.
   **선수별 가중치 `w`** 가 동기를 차등화(2.5b). `우승권 = 0.7·전력 + 0.3·prestige`(최근 성적).
 - AI 잔류 판단 `aiKeepsFA`: 나이<32 AND OVR≥70. 로스터 이상치 `ROSTER_IDEAL{S3,OH5,OP2,MB4,L2}=16`.
@@ -100,10 +100,14 @@ FA가 돌아가려면 선수가 빠지고(은퇴) 채워져야(유망주) 한다
 
 > 영입 구단이 두 옵션 중 선택(보상선수 줄지/돈 더 낼지).
 >
-> **구현 현황(2026-06-14)**: "보상선수 + 보상금" 옵션을 구현 — A/B FA 영입 시 보상선수 1명(비보호)에
-> **더해 보상금(A 200%·B 100% × 직전연봉)을 운영 자금(FINANCE)에서 차감**한다(`resolveFAMarket.compCash`
-> → `store.endSeason` faSpend, FA 센터에 표시). 영입 입찰 가능 판정도 연봉+보상금 합으로 본다(지갑 빌
-> 만큼은 못 뽑음). "돈만(300%/200%, 선수 보호)" 대체 옵션은 후속.
+> **구현 현황(2026-06-14)**: **두 옵션 모두 구현**.
+> - **기본(보상선수 동반)**: A/B FA 영입 시 보상선수 1명(비보호)에 **더해 보상금(A 200%·B 100% × 직전연봉)을
+>   운영 자금(FINANCE)에서 차감**(`resolveFAMarket.compCash` → `store.endSeason` faSpend, FA 센터 표시).
+> - **'돈만'(선수단 보호)**: FA 센터에서 A/B 지명 시 토글 → 보상선수 면제, 대신 **가중 보상금(A 300%·B 200%)**
+>   만 지불(`compensationMoneyOnly`). 보상선수 추첨(`pickCompensation`)을 건너뛴다(`moneyOnlyIds` 전파:
+>   store → `buildDraftContext`/`resolvePreDraft`/`faMarketPreview` → `resolveFAMarket`). 부자 구단의 레버
+>   — 비싼 대가로 유망주를 지킨다. 검증 `tools/simMoneyOnly.ts`(유출 면제·비율 정확, 위반 0).
+> - 영입 입찰 가능 판정은 연봉+보상금(돈만이면 가중분) 합으로 본다(지갑 빌 만큼은 못 뽑음).
 
 ### 2.3 보상선수 + 보호선수 명단 ★
 - 보상선수 옵션 선택 시: **영입 구단이 보호선수 명단(예: 6명) 제출**.

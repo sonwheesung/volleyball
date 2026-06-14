@@ -67,6 +67,7 @@ interface GameState {
   faSignings: string[];                        // 오프시즌에 영입 시도할 풀 FA id
   faAggressive: boolean;                       // 공격적 영입(연봉↑로 경쟁 우위)
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
+  moneyOnlyIds: string[];                      // '돈만' 보상 선택 A/B FA id — 보상선수 면제·보상금 가중(FA_SYSTEM 2.2)
   draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
   archive: SeasonArchive[];                    // 역대 우승 + 시상 + 순위/연승연패/플옵
   careerLog: { faSigns: number; coachHires: number; staffHires: number; interviews: number }; // 단장 통산 액션(업적용)
@@ -101,6 +102,7 @@ interface GameState {
   unsignFA: (playerId: string) => void;
   setAggressive: (on: boolean) => void;
   toggleProtect: (playerId: string) => void;
+  toggleMoneyOnly: (playerId: string) => void;
   toggleDraftPick: (playerId: string) => void;
   recordChampion: (season: number, championId: string) => void;
   setSubPolicy: (policy: Partial<SubPolicy>) => void;
@@ -138,6 +140,7 @@ const freshSave = {
   faSignings: [] as string[],
   faAggressive: false,
   protectedIds: [] as string[],
+  moneyOnlyIds: [] as string[],
   draftPicks: [] as string[],
   archive: [] as SeasonArchive[],
   careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 },
@@ -241,7 +244,10 @@ export const useGameStore = create<GameState>()(
       signFA: (playerId) =>
         set((s) => (s.faSignings.includes(playerId) ? s : { faSignings: [...s.faSignings, playerId] })),
       unsignFA: (playerId) =>
-        set((s) => ({ faSignings: s.faSignings.filter((id) => id !== playerId) })),
+        set((s) => ({
+          faSignings: s.faSignings.filter((id) => id !== playerId),
+          moneyOnlyIds: s.moneyOnlyIds.filter((id) => id !== playerId), // 지명 취소 시 '돈만' 선택도 해제
+        })),
       setAggressive: (on) => set({ faAggressive: on }),
       toggleProtect: (playerId) =>
         set((s) => {
@@ -250,6 +256,10 @@ export const useGameStore = create<GameState>()(
           if (s.protectedIds.length >= PROTECT_COUNT) return s; // 정원 초과 무시
           return { protectedIds: [...s.protectedIds, playerId] };
         }),
+      toggleMoneyOnly: (playerId) =>
+        set((s) => (s.moneyOnlyIds.includes(playerId)
+          ? { moneyOnlyIds: s.moneyOnlyIds.filter((id) => id !== playerId) }
+          : { moneyOnlyIds: [...s.moneyOnlyIds, playerId] })),
       toggleDraftPick: (playerId) =>
         set((s) =>
           s.draftPicks.includes(playerId)
@@ -422,7 +432,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, draftPicks, hallOfFame, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -510,7 +520,7 @@ export const useGameStore = create<GameState>()(
 
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
         //    FA 입찰은 캡 AND 새 잔고(지갑) — 캡이 남아도 돈이 없으면 못 뽑는다
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash, tryoutWish, keepForeign);
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash, tryoutWish, keepForeign, moneyOnlyIds);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
@@ -625,6 +635,7 @@ export const useGameStore = create<GameState>()(
           faSignings: [],
           faAggressive: false,
           protectedIds: [],
+          moneyOnlyIds: [],
           draftPicks: [],
           playerBase: snapshot,
           rosters: filled.rosters,
@@ -659,6 +670,7 @@ export const useGameStore = create<GameState>()(
         faSignings: s.faSignings,
         faAggressive: s.faAggressive,
         protectedIds: s.protectedIds,
+        moneyOnlyIds: s.moneyOnlyIds,
         draftPicks: s.draftPicks,
         archive: s.archive,
         careerLog: s.careerLog,

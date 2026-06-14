@@ -22,10 +22,12 @@ export default function FACenter() {
   const faSignings = useGameStore((s) => s.faSignings);
   const faAggressive = useGameStore((s) => s.faAggressive);
   const protectedIds = useGameStore((s) => s.protectedIds);
+  const moneyOnlyIds = useGameStore((s) => s.moneyOnlyIds);
   const signFA = useGameStore((s) => s.signFA);
   const unsignFA = useGameStore((s) => s.unsignFA);
   const setAggressive = useGameStore((s) => s.setAggressive);
   const toggleProtect = useGameStore((s) => s.toggleProtect);
+  const toggleMoneyOnly = useGameStore((s) => s.toggleMoneyOnly);
   const interviews = useGameStore((s) => s.interviews);
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
@@ -42,8 +44,8 @@ export default function FACenter() {
   // endSeason과 동일한 ownerFx(면담·불만 거부)+정산 후 운영 자금을 넣어야 미리보기=결과가 보장된다
   const pv = useMemo(
     () => faMarketPreview(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
-      buildOwnerFx(interviews, season, my, fanScore), budgetCash),
-    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, budgetCash],
+      buildOwnerFx(interviews, season, my, fanScore), budgetCash, [], null, moneyOnlyIds),
+    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, budgetCash, moneyOnlyIds],
   );
   const snap = pv.snapshot;
 
@@ -57,10 +59,12 @@ export default function FACenter() {
 
   const projectedComp = pickCompensation(pv.myRoster, protectedIds, snap, []);
   const projectedCompName = projectedComp ? snap[projectedComp]?.name : null;
+  // 보상선수가 실제로 빠지는 영입 = A/B 중 '돈만' 미선택분
   const compNeeded = [...pv.signedByMe].filter((id) => {
     const g = grades.get(id);
-    return g ? needsCompensationPlayer(g) : false;
+    return g ? needsCompensationPlayer(g) && !moneyOnlyIds.includes(id) : false;
   }).length;
+  const moneyOnlyCount = [...pv.signedByMe].filter((id) => moneyOnlyIds.includes(id) && needsCompensationPlayer(grades.get(id) ?? 'C')).length;
 
   return (
     <Screen title={`${season + 1}→${season + 2}시즌 FA 시장`}>
@@ -99,13 +103,22 @@ export default function FACenter() {
 
       <Button label="신인 드래프트로 →" onPress={() => router.push('/draft')} />
 
-      {compNeeded > 0 ? (
+      {(compNeeded > 0 || moneyOnlyCount > 0) ? (
         <Card>
-          <Text style={{ color: theme.warn, fontSize: 13, fontWeight: '700' }}>
-            A/B 영입 {compNeeded}명 → 보호명단 밖 {compNeeded}명이 원소속팀으로 갑니다.
-          </Text>
-          {projectedCompName ? <Muted style={{ fontSize: 12 }}>현재 보상 1순위: {projectedCompName}</Muted> : null}
-          {pv.compCash > 0 ? <Muted style={{ fontSize: 12, color: theme.warn }}>보상금 {formatMoney(pv.compCash)} 추가 차감 (A 200%·B 100% × 직전연봉)</Muted> : null}
+          {compNeeded > 0 ? (
+            <>
+              <Text style={{ color: theme.warn, fontSize: 13, fontWeight: '700' }}>
+                A/B 영입 {compNeeded}명 → 보호명단 밖 {compNeeded}명이 원소속팀으로 갑니다.
+              </Text>
+              {projectedCompName ? <Muted style={{ fontSize: 12 }}>현재 보상 1순위: {projectedCompName}</Muted> : null}
+            </>
+          ) : null}
+          {moneyOnlyCount > 0 ? (
+            <Text style={{ color: theme.good, fontSize: 13, fontWeight: '700' }}>
+              '돈만' {moneyOnlyCount}명 → 선수단 보호(보상선수 없음), 보상금 가중(A 300%·B 200%).
+            </Text>
+          ) : null}
+          {pv.compCash > 0 ? <Muted style={{ fontSize: 12, color: theme.warn }}>보상금 {formatMoney(pv.compCash)} 추가 차감</Muted> : null}
         </Card>
       ) : null}
 
@@ -171,6 +184,19 @@ export default function FACenter() {
                   {targeted ? '취소' : '영입 시도'}
                 </Text>
               </Pressable>
+              {/* A/B FA만 — 보상선수 대신 보상금만 내고 선수단 보호 */}
+              {targeted && needsCompensationPlayer(grade) ? (
+                <Pressable
+                  onPress={() => toggleMoneyOnly(p.id)}
+                  style={[styles.btn, moneyOnlyIds.includes(p.id)
+                    ? { borderColor: theme.good, backgroundColor: theme.good + '22' }
+                    : { borderColor: theme.border }]}
+                >
+                  <Text style={[styles.btnText, { color: moneyOnlyIds.includes(p.id) ? theme.good : theme.muted }]}>
+                    {moneyOnlyIds.includes(p.id) ? `✓ 돈만 보상 (${grade === 'A' ? '300' : '200'}%)` : '보상선수 보호 (돈만)'}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           );
         })

@@ -8,7 +8,7 @@ import { applyRetirements } from '../engine/retire';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
 import { aiKeepsFA, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
 import { assignFAGrades, askingPrice, offerScore, prefWeightsOf } from '../engine/faMarket';
-import { needsCompensationPlayer, pickCompensation, compensationMoney } from '../engine/compensation';
+import { needsCompensationPlayer, pickCompensation, compensationMoney, compensationMoneyOnly } from '../engine/compensation';
 import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { strSeed } from '../engine/rng';
 import type { OwnerFx } from '../engine/owner';
@@ -62,7 +62,9 @@ export function resolveFAMarket(
   prestige: Record<string, number>,
   ownerFx?: OwnerFx, // 구단주 면담 보정(내 팀 오퍼에만 가산)
   myCash?: number,   // 내 운영 자금(FINANCE) — 캡이 남아도 지갑이 비면 입찰 불가
+  moneyOnlyIds: string[] = [], // 내가 '돈만' 보상 선택한 A/B FA id — 보상선수 면제, 보상금 가중(FA_SYSTEM 2.2)
 ): FAMarketResult {
+  const moneyOnly = new Set(moneyOnlyIds);
   const snapshot = off.snapshot;
   const rosters: Record<string, string[]> = {};
   for (const k of Object.keys(off.rosters)) rosters[k] = [...off.rosters[k]];
@@ -91,7 +93,10 @@ export function resolveFAMarket(
     if (!p) continue;
     const grade = grades.get(id) ?? 'C';
     const asking = askingPrice(marketValue(p), grade);
-    const compCost = needsCompensationPlayer(grade) ? compensationMoney(grade, p.contract.salary) : 0; // 내가 영입 시 추가로 낼 보상금
+    // 내가 영입 시 추가로 낼 보상금 — '돈만' 선택 시 가중 보상금(보상선수 면제), 아니면 기본(보상선수 동반)
+    const compCost = needsCompensationPlayer(grade)
+      ? (moneyOnly.has(id) ? compensationMoneyOnly(grade, p.contract.salary) : compensationMoney(grade, p.contract.salary))
+      : 0;
 
     const bids: { teamId: string; offer: number; score: number }[] = [];
     for (const t of teams) {
@@ -139,6 +144,7 @@ export function resolveFAMarket(
   for (const id of signedByMe) {
     const grade = grades.get(id);
     if (!grade || !needsCompensationPlayer(grade)) continue;
+    if (moneyOnly.has(id)) continue; // '돈만' 선택 — 보상금만 내고 선수단 보호(위에서 가중 보상금 차감)
     const prev = prevTeamOf[id];
     if (!prev || prev === myTeam || !rosters[prev]) continue;
     // 이번 오프시즌에 내가 영입한 FA는 보상선수 대상에서 제외 — 안 그러면 방금 영입한(연봉 지불·signedByMe)
@@ -248,6 +254,7 @@ export function resolvePreDraft(
   myCash?: number,
   tryoutWish: string[] = [],
   myKeepForeign: boolean | null = null,
+  moneyOnlyIds: string[] = [],
 ): PreDraft {
   const committed = currentRosters();
   const prevTeamOf: Record<string, string> = {};
@@ -263,7 +270,7 @@ export function resolvePreDraft(
   // 외국인 트라이아웃 — FA 시장 앞(외인이 OP를 채워야 AI가 FA로 중복 영입하지 않는다)
   const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY);
   const prestige = teamPrestige(nextSeason - 1);
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash, moneyOnlyIds);
   return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, tryout, compCash: fa.compCash };
 }
 
@@ -280,6 +287,7 @@ export function faMarketPreview(
   myCash?: number,
   tryoutWish: string[] = [],
   myKeepForeign: boolean | null = null,
+  moneyOnlyIds: string[] = [],
 ): {
   pool: string[];
   snapshot: Record<string, Player>;
@@ -303,6 +311,6 @@ export function faMarketPreview(
   const pool = [...off.pool];
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const prestige = teamPrestige(nextSeason - 1);
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, myCash, moneyOnlyIds);
   return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, tryout, compCash: fa.compCash };
 }

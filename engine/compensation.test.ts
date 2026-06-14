@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { needsCompensationPlayer, compensationMoney, pickCompensation } from './compensation';
+import { needsCompensationPlayer, compensationMoney, compensationMoneyOnly, pickCompensation } from './compensation';
 import { TRAINABLE_STATS } from './training';
 import type { Player, Position, TrainableStat } from '../types';
 
@@ -29,6 +29,15 @@ test('보상금: A 200% > B 100% > C 0', () => {
   assert.equal(compensationMoney('A', 10000), 20000);
   assert.equal(compensationMoney('B', 10000), 10000);
   assert.equal(compensationMoney('C', 10000), 0);
+});
+
+test("'돈만' 보상금: A 300% > B 200% > C 0 (보상선수 동반보다 1배 가중)", () => {
+  assert.equal(compensationMoneyOnly('A', 10000), 30000);
+  assert.equal(compensationMoneyOnly('B', 10000), 20000);
+  assert.equal(compensationMoneyOnly('C', 10000), 0);
+  // 보상선수 면제 대가 — 항상 동반 보상금보다 높다
+  assert.ok(compensationMoneyOnly('A', 10000) > compensationMoney('A', 10000));
+  assert.ok(compensationMoneyOnly('B', 10000) > compensationMoney('B', 10000));
 });
 
 test('보상선수: 비보호 중 최고 OVR, 보호/이미선택 제외', () => {
