@@ -5,17 +5,18 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
 export const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
 
+// KOVO 스타일 타일(밝고 깔끔) 디자인 시스템 — 2026-06-15 라이트 테마 전환
 export const theme = {
-  bg: '#0f172a',
-  card: '#1e293b',
-  cardAlt: '#334155',
-  text: '#f8fafc',
-  muted: '#94a3b8',
-  accent: '#38bdf8',
-  good: '#4ade80',
-  warn: '#fbbf24',
-  bad: '#f87171',
-  border: '#334155',
+  bg: '#F4F7FB',       // 부드러운 오프화이트
+  card: '#FFFFFF',     // 순백 카드
+  cardAlt: '#EEF1F6',  // 트랙·세그먼트 배경
+  text: '#15202B',     // 잉크
+  muted: '#8A94A6',    // 보조 텍스트
+  accent: '#10B9A6',   // 틸 민트(프라이머리)
+  good: '#16B07D',     // 승/긍정
+  warn: '#F2A93B',     // 주의
+  bad: '#FF6B5A',      // 워키 코랄(패/위험·외국인)
+  border: '#E6EAF0',   // 헤어라인
 };
 
 interface ScreenProps {
@@ -107,7 +108,7 @@ const POS_LABEL: Record<string, string> = {
   S: '세터', OH: '아웃사이드', OP: '아포짓', MB: '미들', L: '리베로',
 };
 const POS_COLOR: Record<string, string> = {
-  S: '#a78bfa', OH: '#38bdf8', OP: '#f87171', MB: '#fbbf24', L: '#4ade80',
+  S: '#36BE9A', OH: '#0E9C8C', OP: '#FF6B5A', MB: '#8B7CF0', L: '#C8961F',
 };
 
 export function PosTag({ pos, full }: { pos: string; full?: boolean }) {
@@ -143,16 +144,21 @@ const styles = StyleSheet.create({
   content: { padding: 16, gap: 12 },
   title: { color: theme.text, fontSize: 24, fontWeight: '800', marginBottom: 2 },
   h2: { color: theme.text, fontSize: 16, fontWeight: '700' },
-  card: { backgroundColor: theme.card, borderRadius: 14, padding: 16, gap: 8 },
+  card: {
+    backgroundColor: theme.card, borderRadius: 18, padding: 16, gap: 8,
+    borderWidth: 1, borderColor: theme.border,
+    shadowColor: '#1B2A4A', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
+    elevation: 2,
+  },
   muted: { color: theme.muted, fontSize: 14, lineHeight: 20 },
-  btn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  btn: { borderRadius: 999, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   btnPrimary: { backgroundColor: theme.accent },
-  btnGhost: { backgroundColor: 'transparent', borderWidth: 1, borderColor: theme.accent },
-  btnText: { color: '#06283d', fontSize: 16, fontWeight: '800' },
-  ovr: { minWidth: 40, paddingHorizontal: 6, paddingVertical: 3, borderRadius: 8, borderWidth: 1.5, alignItems: 'center' },
-  ovrText: { fontSize: 16, fontWeight: '800' },
-  pos: { paddingHorizontal: 8, paddingVertical: 3, borderRadius: 6 },
-  posText: { fontSize: 12, fontWeight: '700' },
+  btnGhost: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: theme.accent },
+  btnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  ovr: { width: 46, height: 46, borderRadius: 23, borderWidth: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
+  ovrText: { fontSize: 16, fontWeight: '900' },
+  pos: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
+  posText: { fontSize: 12, fontWeight: '800' },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statLabel: { color: theme.muted, fontSize: 13, width: 64 },
   statVal: { color: theme.text, fontSize: 13, fontWeight: '700', width: 28, textAlign: 'right' },

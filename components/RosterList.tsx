@@ -59,6 +59,8 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     paddingHorizontal: 14,
     paddingVertical: 10,
+    borderWidth: 1,
+    borderColor: theme.border,
   },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   foreign: { color: theme.bad, fontSize: 11, fontWeight: '700' },

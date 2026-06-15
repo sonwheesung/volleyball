@@ -17,23 +17,25 @@ import type { PointHow } from '../engine/rally';
 import { segmentTargets, reconstructRallies, isInPlay, type RallyState } from './courtDirector';
 import { commentLine } from './courtCommentary';
 
+// KOVO 라이트 시스템과 동일한 파스텔 포지션색 (Screen.tsx POS_COLOR와 일치)
 const POS_COLOR: Record<Position, string> = {
-  S: '#a78bfa', OH: '#38bdf8', OP: '#f87171', MB: '#fbbf24', L: '#4ade80',
+  S: '#36BE9A', OH: '#0E9C8C', OP: '#FF6B5A', MB: '#8B7CF0', L: '#C8961F',
 };
 
 // 랠리 종결 자막 — 엔진이 기록한 사실(PointLog.how)을 그대로 외친다(보드가 지어내지 않음)
+// 색은 흰 뱃지 위에서 읽히도록 진한 톤으로(라이트 테마)
 const HOW_CAPTION: Record<PointHow, { txt: string; color: string }> = {
-  kill: { txt: '스파이크 득점!', color: '#f8fafc' },
-  cap: { txt: '스파이크 득점!', color: '#f8fafc' },
-  stuff: { txt: '🧱 블로킹 차단!', color: '#fbbf24' },
-  blockout: { txt: '블록 터치아웃!', color: '#fb923c' },
-  tip: { txt: '페인트!', color: '#a78bfa' },
-  ace: { txt: '서브 에이스!', color: '#38bdf8' },
-  serveErr: { txt: '서브 범실', color: '#94a3b8' },
-  recvErr: { txt: '리시브 범실', color: '#94a3b8' },
-  miscErr: { txt: '핸들링 범실', color: '#94a3b8' },
-  atkErr: { txt: '공격 범실', color: '#94a3b8' },
-  fault: { txt: '포지션 폴트', color: '#94a3b8' },
+  kill: { txt: '스파이크 득점!', color: '#0E9C8C' },
+  cap: { txt: '스파이크 득점!', color: '#0E9C8C' },
+  stuff: { txt: '🧱 블로킹 차단!', color: '#E0922B' },
+  blockout: { txt: '블록 터치아웃!', color: '#F2722C' },
+  tip: { txt: '페인트!', color: '#8B7CF0' },
+  ace: { txt: '서브 에이스!', color: '#10B9A6' },
+  serveErr: { txt: '서브 범실', color: '#8A94A6' },
+  recvErr: { txt: '리시브 범실', color: '#8A94A6' },
+  miscErr: { txt: '핸들링 범실', color: '#8A94A6' },
+  atkErr: { txt: '공격 범실', color: '#8A94A6' },
+  fault: { txt: '포지션 폴트', color: '#8A94A6' },
 };
 
 // 코트 영역 크기
@@ -292,9 +294,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onTime
           return (
             <Animated.View key={m.key} style={[styles.marker, {
               left: -MR, top: -MR,
-              backgroundColor: color + (mine ? 'ee' : '99'),
-              borderColor: m.isServer ? theme.warn : mine ? theme.text : 'transparent',
-              borderWidth: m.isServer ? 2.5 : mine ? 1.5 : 0,
+              backgroundColor: color + (mine ? 'ff' : 'd0'),
+              borderColor: m.isServer ? theme.warn : mine ? theme.text : '#FFFFFF',
+              borderWidth: m.isServer ? 2.5 : mine ? 1.5 : 1.5,
               transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.jumping ? jumpScale : 1 }],
             }]}>
               <Text style={styles.markerTxt}>{m.p?.position ?? ''}</Text>
@@ -373,45 +375,47 @@ const styles = StyleSheet.create({
   courtWrap: { paddingVertical: COURT_PAD, alignItems: 'center' },
   court: {
     width: COURT_W, height: COURT_H, alignSelf: 'center',
-    borderRadius: 10, borderWidth: 2, borderColor: theme.muted, overflow: 'visible',
+    borderRadius: 12, borderWidth: 2, borderColor: '#A9DCD4', overflow: 'visible',
   },
   half: { position: 'absolute', left: 0, right: 0, height: COURT_H / 2 },
-  halfAway: { top: 0, backgroundColor: '#3a2a1a' },
-  halfHome: { bottom: 0, backgroundColor: '#1a2e3a' },
-  net: { position: 'absolute', left: 0, right: 0, top: COURT_H / 2 - 1.5, height: 3, backgroundColor: theme.text },
-  attackLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: theme.muted + '55' },
+  halfAway: { top: 0, backgroundColor: '#EEF3F8' },     // 상대 코트 — 쿨 라이트
+  halfHome: { bottom: 0, backgroundColor: '#E3F4F0' },  // 내 코트 — 민트 라이트
+  net: { position: 'absolute', left: 0, right: 0, top: COURT_H / 2 - 1.5, height: 3, backgroundColor: theme.accent },
+  attackLine: { position: 'absolute', left: 0, right: 0, height: 1, backgroundColor: theme.accent + '44' },
   marker: {
     position: 'absolute', width: MR * 2, height: MR * 2, borderRadius: MR,
     alignItems: 'center', justifyContent: 'center',
+    shadowColor: '#1B2A4A', shadowOpacity: 0.18, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 3,
   },
-  markerTxt: { color: '#0b1220', fontSize: 11, fontWeight: '900' },
+  markerTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
   howBadge: {
     position: 'absolute', top: 8, alignSelf: 'center',
-    backgroundColor: '#0b1220d9', borderWidth: 1.5, borderRadius: 14,
+    backgroundColor: '#FFFFFFF2', borderWidth: 1.5, borderRadius: 14,
     paddingHorizontal: 12, paddingVertical: 5,
+    shadowColor: '#1B2A4A', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
   howTxt: { fontSize: 13, fontWeight: '900' },
-  feedBox: { backgroundColor: theme.card, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, gap: 1 },
+  feedBox: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, gap: 1 },
   feedLine: { color: theme.muted, fontSize: 11 },
   feedLast: { color: theme.text, fontSize: 12.5, fontWeight: '700' },
   ball: {
     position: 'absolute', left: 0, top: 0, width: 12, height: 12, borderRadius: 6,
-    marginLeft: -6, marginTop: -6, backgroundColor: '#ffd23f',
-    borderWidth: 1, borderColor: '#b8860b',
+    marginLeft: -6, marginTop: -6, backgroundColor: '#FFD23F',
+    borderWidth: 1, borderColor: '#B8860B',
   },
   trailDot: {
     position: 'absolute', width: 3, height: 3, borderRadius: 1.5,
-    backgroundColor: '#ffffffcc',
+    backgroundColor: theme.accent + 'cc',
   },
   finishOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  finishTxt: { color: theme.text, fontSize: 22, fontWeight: '900', backgroundColor: '#000a', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
+  finishTxt: { color: '#FFFFFF', fontSize: 22, fontWeight: '900', backgroundColor: '#15202BD9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
   controls: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
   ctrl: {
     color: theme.text, fontSize: 15, fontWeight: '800', overflow: 'hidden',
     borderWidth: 1, borderColor: theme.border, borderRadius: 8,
     paddingHorizontal: 16, paddingVertical: 8, minWidth: 64, textAlign: 'center',
   },
-  track: { height: 5, backgroundColor: theme.card, borderRadius: 3, marginHorizontal: 4, overflow: 'hidden' },
+  track: { height: 5, backgroundColor: theme.cardAlt, borderRadius: 3, marginHorizontal: 4, overflow: 'hidden' },
   fill: { height: 5, backgroundColor: theme.accent },
   scoreboard: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
   sName: { flex: 1, color: theme.text, fontSize: 15, fontWeight: '800' },

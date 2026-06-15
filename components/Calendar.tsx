@@ -83,7 +83,7 @@ export function Calendar({ entries, results, focusDayIndex }: Props) {
 
           return (
             <View key={i} style={[styles.cell, isFocus && styles.cellFocus]}>
-              <Text style={[styles.dayNum, !inMonth && { color: '#475569' }]}>{d.getDate()}</Text>
+              <Text style={[styles.dayNum, !inMonth && { color: '#C2C9D4' }]}>{d.getDate()}</Text>
               {match ? (
                 <View style={styles.matchTag}>
                   <Text numberOfLines={1} style={styles.matchText}>
@@ -105,7 +105,7 @@ export function Calendar({ entries, results, focusDayIndex }: Props) {
 }
 
 const styles = StyleSheet.create({
-  wrap: { backgroundColor: theme.card, borderRadius: 14, padding: 10, gap: 6 },
+  wrap: { backgroundColor: theme.card, borderRadius: 14, padding: 10, gap: 6, borderWidth: 1, borderColor: theme.border },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8 },
   month: { color: theme.text, fontSize: 17, fontWeight: '800' },
   nav: { color: theme.accent, fontSize: 26, fontWeight: '800', paddingHorizontal: 12 },

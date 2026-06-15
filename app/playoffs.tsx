@@ -44,7 +44,7 @@ export default function Playoffs() {
   };
 
   return (
-    <Screen title={`${season + 1}시즌 포스트시즌`}>
+    <Screen title={`${season + 1}시즌 포스트시즌`} scroll={false}>
       <Card>
         <Muted>진출 (상위 3팀)</Muted>
         {po.seeds.map((id, i) => (

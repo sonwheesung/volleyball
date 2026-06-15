@@ -94,7 +94,7 @@ const styles = StyleSheet.create({
   ach: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: theme.card, borderRadius: 12, padding: 12,
-    borderWidth: 1, borderColor: 'transparent', opacity: 0.7,
+    borderWidth: 1, borderColor: theme.border, opacity: 0.7,
   },
   achDone: { opacity: 1, borderColor: theme.good + '66' },
   icon: { fontSize: 18, width: 24, textAlign: 'center' },

@@ -141,10 +141,10 @@ export default function Tryout() {
 }
 
 const styles = StyleSheet.create({
-  row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
-  tagReturn: { color: '#38bdf8', fontSize: 11, fontWeight: '700' },
+  tagReturn: { color: theme.accent, fontSize: 11, fontWeight: '700' },
   tagWish: { color: theme.warn, fontSize: 12, fontWeight: '900' },
   chip: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 12 },
   chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },

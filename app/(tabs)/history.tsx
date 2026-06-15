@@ -338,7 +338,7 @@ const styles = StyleSheet.create({
   team: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
   cell: { width: 40, textAlign: 'center', color: theme.text, fontSize: 14 },
   mine: { color: theme.accent, fontWeight: '800' },
-  match: { backgroundColor: theme.card, borderRadius: 10, padding: 10, marginBottom: 6 },
+  match: { backgroundColor: theme.card, borderRadius: 10, padding: 10, marginBottom: 6, borderWidth: 1, borderColor: theme.border },
   date: { color: theme.muted, fontSize: 11, marginBottom: 4, textAlign: 'center' },
   matchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10 },
   mTeam: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
