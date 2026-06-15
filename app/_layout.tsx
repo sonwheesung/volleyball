@@ -1,9 +1,22 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
+import { Text, View } from 'react-native';
+import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { theme } from '../components/Screen';
 
+// 전역 기본 폰트 = Pretendard(가변). 인스턴스의 fontWeight가 굵기 축을 구동한다.
+// (RN Text.defaultProps — 전 화면 Text를 건드리지 않고 한 번에 적용)
+const TextDefaults = Text as unknown as { defaultProps?: { style?: unknown } };
+TextDefaults.defaultProps = TextDefaults.defaultProps ?? {};
+TextDefaults.defaultProps.style = { fontFamily: 'Pretendard' };
+
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    Pretendard: require('../assets/fonts/PretendardVariable.ttf'),
+  });
+  if (!fontsLoaded) return <View style={{ flex: 1, backgroundColor: theme.bg }} />; // 폰트 로드 전(깜빡임 방지)
+
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
