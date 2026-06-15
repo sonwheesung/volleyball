@@ -3,7 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import type { Side } from '../../types';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Muted, theme } from '../../components/Screen';
+import { Button, Muted, OvrBadge, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
 import { coachInfoOf, getFixture, getTeam } from '../../data/league';
 import { availableTeamPlayers } from '../../data/injury';
@@ -108,14 +108,14 @@ export default function MatchBoard() {
           <Text style={[styles.teamName, mineSide === 'home' && { color: theme.accent }]} numberOfLines={1}>
             {data.home.name}
           </Text>
-          <Text style={styles.teamOvr}>OVR {data.homeOvr}</Text>
+          <OvrBadge value={data.homeOvr} />
         </View>
         <Text style={styles.vs}>VS</Text>
         <View style={[styles.teamHead, { alignItems: 'flex-end' }]}>
           <Text style={[styles.teamName, { textAlign: 'right' }, mineSide === 'away' && { color: theme.accent }]} numberOfLines={1}>
             {data.away.name}
           </Text>
-          <Text style={styles.teamOvr}>OVR {data.awayOvr}</Text>
+          <OvrBadge value={data.awayOvr} />
         </View>
       </View>
 
@@ -172,8 +172,11 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
   content: { paddingHorizontal: 16, gap: 12 },
   sandboxTag: { color: theme.warn, fontSize: 12, fontWeight: '800', textAlign: 'center' },
-  header: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  teamHead: { flex: 1, gap: 2 },
+  header: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 14, padding: 14,
+  },
+  teamHead: { flex: 1, gap: 6 },
   teamName: { color: theme.text, fontSize: 17, fontWeight: '800' },
   teamOvr: { color: theme.muted, fontSize: 12 },
   vs: { color: theme.muted, fontSize: 13, fontWeight: '800' },
