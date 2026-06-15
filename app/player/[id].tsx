@@ -1,5 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { Alert, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans, fanOverlapRatio } from '../../engine/owner';
@@ -102,15 +103,20 @@ export default function PlayerDetail() {
   return (
     <Screen title={p.name}>
       <Card>
-        <Row>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <PosTag pos={p.position} full />
-            {p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700' }}>외국인</Text> : null}
-            {isFranchise(p) ? <Text style={{ color: theme.warn, fontWeight: '700' }}>프랜차이즈</Text> : null}
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme.cardAlt, alignItems: 'center', justifyContent: 'center' }}>
+            <Ionicons name="person" size={26} color={theme.muted} />
           </View>
-          <OvrBadge value={overall(p)} />
-        </Row>
-        <Muted>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
+          <View style={{ flex: 1, gap: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+              <PosTag pos={p.position} full />
+              {p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700' }}>외국인</Text> : null}
+              {isFranchise(p) ? <Text style={{ color: theme.warn, fontWeight: '700' }}>프랜차이즈</Text> : null}
+            </View>
+            <Muted>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
+          </View>
+          <OvrBadge value={overall(p)} size={56} />
+        </View>
         {suspendedOnDay(currentDay).has(p.id) ? (
           <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13 }}>
             🚫 출장 정지 중 — {SCANDAL_KO[seasonScandals().find((s) => s.playerId === p.id)!.kind]}

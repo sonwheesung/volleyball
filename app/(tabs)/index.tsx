@@ -74,7 +74,7 @@ export default function Dashboard() {
           <View>
             <Muted>팀 종합 전력</Muted>
             <View style={{ height: 4 }} />
-            <OvrBadge value={ovr} />
+            <OvrBadge value={ovr} size={60} />
           </View>
           <View style={{ alignItems: 'flex-end' }}>
             <Muted>{season + 1}시즌 성적</Muted>

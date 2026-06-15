@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
@@ -16,6 +17,7 @@ export const theme = {
   good: '#16B07D',     // 승/긍정
   warn: '#F2A93B',     // 주의
   bad: '#FF6B5A',      // 워키 코랄(패/위험·외국인)
+  elite: '#3B82F6',    // OVR 85+ 엘리트(틸·녹과 구분되는 블루칩)
   border: '#E6EAF0',   // 헤어라인
 };
 
@@ -94,12 +96,25 @@ export function Button({
   );
 }
 
-/** OVR 숫자 배지 (값에 따라 색) */
-export function OvrBadge({ value }: { value: number }) {
-  const color = value >= 85 ? theme.good : value >= 72 ? theme.accent : value >= 60 ? theme.warn : theme.muted;
+/** OVR 진행호 링 배지 (값에 따라 색·채움) — 스타일타일의 원형 레이팅 링 */
+export function OvrBadge({ value, size = 46 }: { value: number; size?: number }) {
+  const color = value >= 85 ? theme.elite : value >= 72 ? theme.accent : value >= 60 ? theme.warn : theme.muted;
+  const stroke = size >= 56 ? 5 : 4;
+  const r = (size - stroke) / 2;
+  const C = 2 * Math.PI * r;
+  const frac = Math.max(0.04, Math.min(1, value / 100));
   return (
-    <View style={[styles.ovr, { borderColor: color }]}>
-      <Text style={[styles.ovrText, { color }]}>{value}</Text>
+    <View style={[styles.ovr, { width: size, height: size }]}>
+      <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
+        <Circle cx={size / 2} cy={size / 2} r={r} stroke={theme.cardAlt} strokeWidth={stroke} fill="none" />
+        <Circle
+          cx={size / 2} cy={size / 2} r={r} stroke={color} strokeWidth={stroke} fill="none"
+          strokeLinecap="round"
+          strokeDasharray={`${frac * C} ${C}`}
+          transform={`rotate(-90 ${size / 2} ${size / 2})`}
+        />
+      </Svg>
+      <Text style={[styles.ovrText, { color, fontSize: size >= 56 ? 19 : 15 }]}>{value}</Text>
     </View>
   );
 }
@@ -155,8 +170,8 @@ const styles = StyleSheet.create({
   btnPrimary: { backgroundColor: theme.accent },
   btnGhost: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: theme.accent },
   btnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
-  ovr: { width: 46, height: 46, borderRadius: 23, borderWidth: 3, alignItems: 'center', justifyContent: 'center', backgroundColor: '#FFFFFF' },
-  ovrText: { fontSize: 16, fontWeight: '900' },
+  ovr: { alignItems: 'center', justifyContent: 'center' },
+  ovrText: { fontWeight: '900' },
   pos: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
   posText: { fontSize: 12, fontWeight: '800' },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },

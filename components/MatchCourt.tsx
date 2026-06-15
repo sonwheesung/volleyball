@@ -417,7 +417,12 @@ const styles = StyleSheet.create({
   },
   track: { height: 5, backgroundColor: theme.cardAlt, borderRadius: 3, marginHorizontal: 4, overflow: 'hidden' },
   fill: { height: 5, backgroundColor: theme.accent },
-  scoreboard: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingHorizontal: 4 },
+  scoreboard: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 14,
+    paddingHorizontal: 14, paddingVertical: 10,
+    shadowColor: '#1B2A4A', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2,
+  },
   sName: { flex: 1, color: theme.text, fontSize: 15, fontWeight: '800' },
   sets: { color: theme.muted, fontSize: 20, fontWeight: '900', minWidth: 18, textAlign: 'center' },
   ptsBox: { alignItems: 'center', minWidth: 96 },
