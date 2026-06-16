@@ -225,6 +225,13 @@ export interface RallyStats {
   goodAtk: number; goodCenter: number;   // 좋은 패스(q≥0.6)에서 공격수·센터 비중
   badAtk: number; badCenter: number;     // 난조 패스(q<0.45)에서
   srvSafe: number; srvFloat: number; srvJump: number; srvSpike: number; // 서브 타입 분포
+  // 패스 품질(q) 계측 — 서브 리시브(인플레이만, 셰이크 제외)와 랠리 중 전환 품질
+  recvQSum: number; recvQN: number;      // 서브 리시브 품질 합·건수
+  recvGood: number; recvOk: number; recvPoor: number; recvChance: number; // 분포 q≥0.6 / 0.45~0.6 / 0.32~0.45 / <0.32
+  // 랠리 중 전환 품질을 종류별로 분리(소프트블록이 평균을 끌어올리는 효과 분리 측정)
+  digRegSum: number; digRegN: number;    // 일반 디그(기저 0.40)
+  digTipSum: number; digTipN: number;    // 팁(페인트) 디그(기저 0.55)
+  digSoftSum: number; digSoftN: number;  // 소프트 블록 전환(기저 0.70)
 }
 
 /** 포지션별 동작 계측(서브/세트/공격/속공/블로킹 처리자) — 포지션 역할 검증용 */
@@ -250,6 +257,11 @@ export const newRallyStats = (): RallyStats => ({
   atkQuickA: 0, atkQuickB: 0, atkSlide: 0,
   goodAtk: 0, goodCenter: 0, badAtk: 0, badCenter: 0,
   srvSafe: 0, srvFloat: 0, srvJump: 0, srvSpike: 0,
+  recvQSum: 0, recvQN: 0,
+  recvGood: 0, recvOk: 0, recvPoor: 0, recvChance: 0,
+  digRegSum: 0, digRegN: 0,
+  digTipSum: 0, digTipN: 0,
+  digSoftSum: 0, digSoftN: 0,
 });
 
 /**
@@ -354,6 +366,10 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       emitPoint(serving, '리시브 범실');
     }
     return { winner: serving, how: 'recvErr' };
+  }
+  if (stats) { // 인플레이 리시브 품질 계측(셰이크=recvErr는 위에서 이미 빠짐) — 결과 불변
+    stats.recvQSum += q; stats.recvQN++;
+    if (q >= 0.6) stats.recvGood++; else if (q >= 0.45) stats.recvOk++; else if (q >= CHANCE_Q) stats.recvPoor++; else stats.recvChance++;
   }
   if (trace) trace.push(`리시브 [${sideKo(recvSide)}] 품질 ${q.toFixed(2)} (${qLabel(q)})`);
   if (E && passer) {
@@ -465,6 +481,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       if (rng.next() < tipDigP) { // 읽혔다 — 얕은 수비가 살림(좋은 전환)
         if (stats) stats.digs++;
         q = clamp(0.55 + 0.3 * (digStr - 0.45) + rng.range(-0.1, 0.1), 0.2, 0.9);
+        if (stats) { stats.digTipSum += q; stats.digTipN++; }
         if (trace) trace.push(`    → 페인트 읽힘! 디그 [${sideKo(other(att))}] (전환, q ${q.toFixed(2)})`);
         if (E) pushAttack('dug', null);
         att = other(att);
@@ -489,6 +506,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       if (stats) stats.softblocks++;
       if (E) pushAttack('softblock', null);
       q = clamp(0.7 + rng.range(-0.1, 0.1), 0.4, 0.92);          // 소프트 블록 → 수비측 좋은 전환
+      if (stats) { stats.digSoftSum += q; stats.digSoftN++; }
       if (trace) trace.push(`    → 소프트 블록 (공 튕겨 [${sideKo(other(att))}] 전환, q ${q.toFixed(2)})`);
       att = other(att);
       continue;
@@ -503,6 +521,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     if (rng.next() < digP) {
       if (stats) stats.digs++;
       q = clamp(0.4 + 0.4 * (digStr - attackPower) + rng.range(-0.1, 0.1), 0.1, 0.85);
+      if (stats) { stats.digRegSum += q; stats.digRegN++; }
       const dg = dg0;
       if (trace) trace.push(`    → 디그 성공 [${sideKo(other(att))}] ${dg.name}(${dg.position}) (공 튕겨 전환, q ${q.toFixed(2)})`);
       if (E) { const dgXY = xyOf(defSide, df, dg); const course = pushAttack('dug', dgXY); E.push({ t: 'dig', side: defSide, player: dg.name, pos: dg.position, at: dgXY, ball: course, reach: dist(dgXY, course), ok: true, rating: R(dg).dig, eff: eff(df, dg) }); }
