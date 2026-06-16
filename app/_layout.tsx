@@ -44,6 +44,12 @@ export default function RootLayout() {
         <Stack.Screen name="audit" options={{ title: '영입 무결성 감사' }} />
         <Stack.Screen name="match/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="matchresult/[id]" options={{ title: '경기 상세' }} />
+        <Stack.Screen name="contracts" options={{ title: '계약 관리' }} />
+        <Stack.Screen name="results" options={{ title: '경기 결과' }} />
+        <Stack.Screen name="calendar" options={{ title: '일정' }} />
+        <Stack.Screen name="standings" options={{ title: '리그 순위' }} />
+        <Stack.Screen name="news" options={{ title: '리그 뉴스' }} />
+        <Stack.Screen name="news/[id]" options={{ title: '뉴스' }} />
       </Stack>
     </SafeAreaProvider>
   );

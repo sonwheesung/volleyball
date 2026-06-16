@@ -1,17 +1,13 @@
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Calendar } from '../../components/Calendar';
+import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
-import { SEASON, getEvolvedTeamPlayers, getTeam, shortTeamName as shortName } from '../../data/league';
-import { seasonResults, computeStandings } from '../../data/standings';
+import { SEASON, getEvolvedTeamPlayers, getTeam } from '../../data/league';
+import { computeStandings } from '../../data/standings';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
 import { teamOverall } from '../../engine/overall';
-import { teamScheduleEntries } from '../../engine/season';
 import { dateForDay, formatDate } from '../../lib/calendar';
 import { useGameStore } from '../../store/useGameStore';
-
 
 export default function Schedule() {
   const router = useRouter();
@@ -21,12 +17,6 @@ export default function Schedule() {
   const results = useGameStore((s) => s.results);
   const setDay = useGameStore((s) => s.setDay);
 
-  const entries = useMemo(() => teamScheduleEntries(SEASON, teamId), [teamId]);
-  const leagueResults = useMemo(
-    () => seasonResults(currentDay).slice().sort((a, b) => b.dayIndex - a.dayIndex),
-    [currentDay, season],
-  );
-
   // "진행" 의사결정은 순수 오케스트레이터에 위임
   const action = planNextAction(SEASON, teamId, results);
   const nextFixture = action.kind === 'match' ? action.fixture : null;
@@ -35,7 +25,6 @@ export default function Schedule() {
   const playedCount = SEASON.filter(
     (f) => (f.homeTeamId === teamId || f.awayTeamId === teamId) && results[f.id],
   ).length;
-  const focusDayIndex = nextFixture?.dayIndex ?? 0;
 
   const onAdvance = () => {
     if (!nextFixture) {
@@ -117,49 +106,13 @@ export default function Schedule() {
         </Card>
       )}
 
-      <Calendar entries={entries} results={results} focusDayIndex={focusDayIndex} />
-
-      <Card>
-        <Muted>전 구단 경기 결과</Muted>
-        {leagueResults.length === 0 ? (
-          <Muted style={{ fontSize: 12 }}>아직 치른 경기가 없습니다.</Muted>
-        ) : (
-          <ScrollView style={{ maxHeight: 300 }} nestedScrollEnabled>
-            {leagueResults.map((r) => {
-              const d = dateForDay(r.dayIndex);
-              const mine = r.homeTeamId === teamId || r.awayTeamId === teamId;
-              const homeWin = r.homeSets > r.awaySets;
-              return (
-                <Pressable
-                  key={r.fixtureId}
-                  onPress={() => router.push(`/matchresult/${r.fixtureId}`)}
-                  style={({ pressed }) => [styles.mrow, mine && styles.mineRow, pressed && { opacity: 0.6 }]}
-                >
-                  <Text style={styles.mdate}>{d.getMonth() + 1}/{d.getDate()}</Text>
-                  <Text style={[styles.mteam, { textAlign: 'right' }, homeWin && styles.win]} numberOfLines={1}>
-                    {shortName(r.homeTeamId)}
-                  </Text>
-                  <Text style={styles.mscore}>{r.homeSets}:{r.awaySets}</Text>
-                  <Text style={[styles.mteam, !homeWin && styles.win]} numberOfLines={1}>
-                    {shortName(r.awayTeamId)}
-                  </Text>
-                </Pressable>
-              );
-            })}
-          </ScrollView>
-        )}
-      </Card>
+      <Button label="일정 보러 가기 (캘린더)" variant="ghost" onPress={() => router.push('/calendar')} />
+      <Button label="전 구단 경기 결과 보기" variant="ghost" onPress={() => router.push('/results')} />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
-  mrow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6, borderRadius: 8, paddingHorizontal: 6 },
-  mineRow: { backgroundColor: theme.accent + '14' },
-  mdate: { width: 38, color: theme.muted, fontSize: 11 },
-  mteam: { flex: 1, color: theme.text, fontSize: 13, fontWeight: '600' },
-  mscore: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 34, textAlign: 'center' },
-  win: { color: theme.good, fontWeight: '800' },
   bigMatch: { backgroundColor: theme.warn + '26', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   bigMatchText: { color: theme.warn, fontSize: 12, fontWeight: '800' },
 });

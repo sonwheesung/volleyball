@@ -108,8 +108,8 @@ export default function Dashboard() {
         </Row>
       </Card>
 
-      {/* 순위 + 부상자 수(있으면) — 자세히는 기록 탭 */}
-      <Card onPress={() => router.push('/(tabs)/history')}>
+      {/* 순위 + 부상자 수(있으면) — 누르면 순위표만 */}
+      <Card onPress={() => router.push('/standings')}>
         <Row>
           <Muted>리그 순위</Muted>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
@@ -120,9 +120,9 @@ export default function Dashboard() {
         </Row>
       </Card>
 
-      {/* 리그 뉴스 — 관전형 서사 후크(전체는 기록 탭) */}
+      {/* 리그 뉴스 — 관전형 서사 후크(전체는 뉴스 화면) */}
       {news.length > 0 ? (
-        <Card onPress={() => router.push('/(tabs)/history')}>
+        <Card onPress={() => router.push('/news')}>
           <Row>
             <Muted style={{ marginBottom: 4 }}>📰 리그 뉴스</Muted>
             <Text style={{ color: theme.accent }}>전체 ›</Text>

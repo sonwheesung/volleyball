@@ -1,7 +1,6 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Alert, ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
-import type { Side } from '../../types';
+import { useCallback, useMemo, useRef, useState } from 'react';
+import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, OvrBadge, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
@@ -24,9 +23,8 @@ export default function MatchBoard() {
   const setSubPolicy = useGameStore((s) => s.setSubPolicy);
   const recordResult = useGameStore((s) => s.recordResult);
   const recorded = useRef(false);
-  // 구단주 타임아웃 건의(현장 권한은 감독 — 수락/거절은 엔진이 결정론 판정)
-  const [toReqs, setToReqs] = useState<{ side: Side; atRally: number }[]>([]);
-  const answered = useRef(0);
+  // 관전이 끝나기 전엔 경기 결과(세트 스코어·승패)를 숨긴다 — 결정론 시뮬이라 미리 계산돼 있어도 스포일러 금지
+  const [finished, setFinished] = useState(false);
 
   const isSandbox = sandbox === '1';
   const fixture = id && !isSandbox ? getFixture(id) : undefined;
@@ -55,29 +53,15 @@ export default function MatchBoard() {
       home: coachInfoOf(home.id), away: coachInfoOf(away.id),
       homePolicy: selectedTeamId === home.id ? subPolicy : undefined,
       awayPolicy: selectedTeamId === away.id ? subPolicy : undefined,
-      toSuggest: toReqs, // 타임아웃 건의 — 수락되면 그 랠리부터 경기가 달라진다(결정론 재계산)
     });
     return {
       home, away, homeSquad, awaySquad, seed, sim,
       homeOvr: teamOverall(homeSquad), awayOvr: teamOverall(awaySquad),
     };
-  }, [fixture, isSandbox, homeParam, awayParam, seedParam, currentDay, selectedTeamId, subPolicy, toReqs]);
-
-  // 감독의 답 — 건의가 처리되면 한 번 알림
-  useEffect(() => {
-    const rs = data?.sim.toResponses ?? [];
-    if (rs.length > answered.current) {
-      const r = rs[rs.length - 1];
-      answered.current = rs.length;
-      Alert.alert(
-        r.accepted ? '감독 수락' : '감독 거절',
-        r.accepted ? '감독: "타임아웃!" — 벤치가 흐름을 끊습니다.'
-                   : '감독: "지금은 아닙니다." (이기는 흐름이거나, 감독 소신이 강하거나, 타임아웃이 없습니다)',
-      );
-    }
-  }, [data]);
+  }, [fixture, isSandbox, homeParam, awayParam, seedParam, currentDay, selectedTeamId, subPolicy]);
 
   const onFinished = useCallback(() => {
+    setFinished(true); // 관전 종료 — 이제부터 결과 공개
     if (isSandbox || !data || !fixture || recorded.current) return;
     recorded.current = true;
     recordResult({ fixtureId: fixture.id, homeSets: data.sim.homeSets, awaySets: data.sim.awaySets });
@@ -147,23 +131,22 @@ export default function MatchBoard() {
         seed={data.seed}
         mineSide={mineSide}
         onFinished={onFinished}
-        onTimeoutSuggest={mineSide ? (atRally) => {
-          setToReqs((r) => (r.some((x) => x.atRally === atRally) ? r : [...r, { side: mineSide, atRally }]));
-        } : undefined}
       />
 
-      {/* 세트 스코어 */}
-      <View style={styles.setScores}>
-        {data.sim.setScores.map((s, i) => (
-          <View key={i} style={styles.setChip}>
-            <Text style={styles.setChipLabel}>{i + 1}세트</Text>
-            <Text style={styles.setChipScore}>{s.home}:{s.away}</Text>
-          </View>
-        ))}
-      </View>
+      {/* 세트 스코어 — 관전이 끝난 뒤에만 공개(스포일러 방지) */}
+      {finished ? (
+        <View style={styles.setScores}>
+          {data.sim.setScores.map((s, i) => (
+            <View key={i} style={styles.setChip}>
+              <Text style={styles.setChipLabel}>{i + 1}세트</Text>
+              <Text style={styles.setChipScore}>{s.home}:{s.away}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
 
       <View style={{ height: 4 }} />
-      <Button label={`나가기 (${winnerName} 승)`} onPress={() => router.back()} />
+      <Button label={finished ? `나가기 (${winnerName} 승)` : '나가기'} onPress={() => router.back()} />
     </ScrollView>
   );
 }
