@@ -3,9 +3,9 @@ import assert from 'node:assert/strict';
 import { evolvePlayer } from './progression';
 import { overall } from './overall';
 import { TRAINABLE_STATS } from './training';
-import type { Player, Position, TrainableStat } from '../types';
+import type { Player, Position, TrainableStat, TrainingFocus } from '../types';
 
-const F = { primary: [4, 6] as [number, number], secondary: [1, 10, 12] as number[] };
+const F: TrainingFocus = { primary: [4, 6], secondary: [1, 10, 12] };
 
 function mk(age: number, sk: number, pos: Position = 'OH'): Player {
   const pot = {} as Record<TrainableStat, number>;
@@ -18,7 +18,7 @@ function mk(age: number, sk: number, pos: Position = 'OH'): Player {
     xp: {}, potential: pot, talentBase: 1.5, catTalent: { physical: 1.5, skill: 1.5, mental: 1.5 },
     contract: { salary: 30000, years: 2, remaining: 2, signedAtAge: age - 1 },
     clubTenure: 1, peakAge: 27,
-    career: { seasons: 1, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
+    career: { seasons: 1, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0 },
   };
 }
 

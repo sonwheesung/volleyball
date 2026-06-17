@@ -14,7 +14,7 @@ function mkPlayer(pos: Position): Player {
     skSpike: 50, skBlock: 50, skDig: 50, skReceive: 50, skSet: 50, skServe: 50,
     xp: {}, potential, talentBase: 1, catTalent: { physical: 1, skill: 1, mental: 1 },
     contract: { salary: 10000, years: 3, remaining: 2, signedAtAge: 22 }, clubTenure: 1, peakAge: 28,
-    career: { seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
+    career: { seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0 },
   };
 }
 const asst = (specialty: AssistantCoach['specialty'], rating: number): AssistantCoach =>

@@ -17,7 +17,7 @@ function mk(id: string, pos: Position, skill: number): Player {
     xp: {}, potential, talentBase: 1, catTalent: { physical: 1, skill: 1, mental: 1 },
     contract: { salary: 10000, years: 3, remaining: 2, signedAtAge: 22 },
     clubTenure: 3, peakAge: 28,
-    career: { seasons: 3, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
+    career: { seasons: 3, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0 },
   };
 }
 function team(prefix: string, skill: number): Player[] {

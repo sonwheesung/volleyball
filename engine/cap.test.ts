@@ -16,7 +16,7 @@ function mk(tenure: number): Player {
     contract: { salary: 50000, years: 2, remaining: 2, signedAtAge: 26 },
     clubTenure: tenure,
     peakAge: 28,
-    career: { seasons: tenure, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
+    career: { seasons: tenure, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0 },
   };
 }
 

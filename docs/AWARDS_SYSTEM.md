@@ -21,7 +21,7 @@
 | 시즌 중 | **라운드 MVP** | 6라운드(leg)별 최고 생산자. 조용히 갱신, 알림 없음 |
 
 ## 2. 선정 철학 (수치는 튜닝 placeholder)
-- `mvpScore(l) = points + 0.25·assists + 0.18·digs` — 득점 위주, 세터·리베로도 경합 가능.
+- `impactScore(l) = points + 0.25·assists + 0.18·digs` (`engine/awards.ts`) — 득점 위주, 세터·리베로도 경합 가능.
 - MVP만 `× teamWeight(rank)`. 기록왕·베스트7은 순수 1위.
 - 동률은 playerId 사전순으로 결정론 해소.
 - 리시브왕은 ProdLine에 리시브 미집계 → 보류(추후 telemetry 연동).

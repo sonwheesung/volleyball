@@ -15,7 +15,7 @@ function mk(id: string, pos: Position, ovrV: number, pot = 90): Player {
     xp: {}, potential, talentBase: 1, catTalent: { physical: 1, skill: 1, mental: 1 },
     contract: { salary: 5000, years: 3, remaining: 3, signedAtAge: 19 },
     clubTenure: 0, peakAge: 28,
-    career: { seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
+    career: { seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0 },
   };
 }
 

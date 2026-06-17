@@ -4,7 +4,7 @@ import { crossedThresholds, personalMilestones, passedValues, CAREER_THRESHOLDS 
 import type { CareerStats } from '../types';
 
 const C = (o: Partial<CareerStats>): CareerStats =>
-  ({ seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, ...o });
+  ({ seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0, ...o });
 
 test('crossedThresholds: before→after 사이 임계만', () => {
   assert.deepEqual(crossedThresholds(900, 1100, CAREER_THRESHOLDS.points), [1000]);

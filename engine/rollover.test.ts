@@ -17,7 +17,7 @@ function makePlayer(age: number, opts: { remaining?: number; skSpike?: number; j
     contract: { salary: 30000, years: 3, remaining: opts.remaining ?? 3, signedAtAge: age },
     clubTenure: 5,
     peakAge: 28,
-    career: { seasons: opts.seasons ?? 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
+    career: { seasons: opts.seasons ?? 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0 },
   };
 }
 

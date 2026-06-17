@@ -16,7 +16,7 @@ function buildP(over: Partial<Player> = {}): Player {
     contract: { salary: 0, years: 2, remaining: 1, signedAtAge: 27 },
     clubTenure: 5,
     peakAge: 28,
-    career: { seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0 },
+    career: { seasons: 0, matches: 0, sets: 0, points: 0, spikes: 0, blocks: 0, digs: 0, aces: 0, errors: 0, assists: 0 },
     ...over,
   };
 }
