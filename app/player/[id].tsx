@@ -12,7 +12,7 @@ import { getPlayerProduction } from '../../data/production';
 import { awardHistoryOf } from '../../data/awards';
 import { effectiveContract } from '../../data/roster';
 import { isFranchise } from '../../engine/cap';
-import { overall } from '../../engine/overall';
+import { overall, overallRaw } from '../../engine/overall';
 import { TRAITS } from '../../engine/traits';
 import { deriveRatings } from '../../engine/ratings';
 import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
@@ -115,7 +115,7 @@ export default function PlayerDetail() {
             </View>
             <Muted>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
           </View>
-          <OvrBadge value={overall(p)} size={56} />
+          <OvrBadge value={overallRaw(p)} size={56} />
         </View>
         {suspendedOnDay(currentDay).has(p.id) ? (
           <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13 }}>

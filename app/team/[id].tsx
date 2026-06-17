@@ -3,7 +3,7 @@ import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
 import { RosterList } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal } from '../../data/league';
-import { teamOverall } from '../../engine/overall';
+import { teamOverallRaw } from '../../engine/overall';
 import { SPECIALTY_KO } from '../../engine/staff';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -25,7 +25,7 @@ export default function TeamDetail() {
 
   const players = getEvolvedTeamPlayers(team.id, currentDay);
   const coach = getTeamCoach(team.id);
-  const ovr = teamOverall(players);
+  const ovr = teamOverallRaw(players);
   const isCurrent = selectedTeamId === team.id;
   const asst = teamAssistants(team.id);
   const scouts = teamScouts(team.id);

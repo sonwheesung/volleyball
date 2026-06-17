@@ -7,7 +7,7 @@ import { MatchCourt } from '../../components/MatchCourt';
 import { coachInfoOf, getFixture, getTeam } from '../../data/league';
 import { availableTeamPlayers } from '../../data/injury';
 import { DEV_TOOLS } from '../../data/flags';
-import { teamOverall } from '../../engine/overall';
+import { teamOverallRaw } from '../../engine/overall';
 import { simulateMatch } from '../../engine/match';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -56,7 +56,7 @@ export default function MatchBoard() {
     });
     return {
       home, away, homeSquad, awaySquad, seed, sim,
-      homeOvr: teamOverall(homeSquad), awayOvr: teamOverall(awaySquad),
+      homeOvr: teamOverallRaw(homeSquad), awayOvr: teamOverallRaw(awaySquad),
     };
   }, [fixture, isSandbox, homeParam, awayParam, seedParam, currentDay, selectedTeamId, subPolicy]);
 

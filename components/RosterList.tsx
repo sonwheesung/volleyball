@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Player, Position } from '../types';
-import { overall } from '../engine/overall';
+import { overall, overallRaw } from '../engine/overall';
 import { formatMoney } from '../engine/salary';
 import { OvrBadge, PosTag, theme } from './Screen';
 
@@ -40,7 +40,7 @@ export function RosterList({ players, decor }: { players: Player[]; decor?: (p: 
             </Text>
           </View>
           <View style={{ alignItems: 'flex-end', gap: 3 }}>
-            <OvrBadge value={overall(p)} />
+            <OvrBadge value={overallRaw(p)} />
             <Text style={styles.salary}>{formatMoney(p.contract.salary)}</Text>
           </View>
         </Pressable>

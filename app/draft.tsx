@@ -7,7 +7,7 @@ import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal } from '../data/league';
 import { computeStandings } from '../data/standings';
 import { resolveDraft } from '../engine/draft';
-import { overall } from '../engine/overall';
+import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
 
@@ -57,7 +57,7 @@ export default function DraftCenter() {
   const reveal = teamScoutReveal(my);
   const fogStars = (p: Player) => (reveal >= 0.6 ? potStars(p) : reveal >= 0.3 ? '?·?' : '?');
   const fogOvr = (p: Player): string => {
-    const o = overall(p);
+    const o = displayOvr(overallRaw(p));
     if (reveal >= 0.92) return `${o}`;
     const w = Math.max(2, Math.round((1 - reveal) * 14));
     return `${Math.max(40, o - w)}~${Math.min(99, o + w)}`;
@@ -97,7 +97,7 @@ export default function DraftCenter() {
             <PosTag pos={p.position} />
             <Text style={[styles.name, { flex: 1 }]}>{p.name}</Text>
             <Text style={styles.pot}>{potStars(p)}</Text>
-            <OvrBadge value={overall(p)} />
+            <OvrBadge value={overallRaw(p)} />
           </View>
         ))
       )}
@@ -120,7 +120,7 @@ export default function DraftCenter() {
               <Text style={styles.sub}>{p.age}세 · {p.height}cm</Text>
             </View>
             {reveal >= 0.92
-              ? <OvrBadge value={overall(p)} />
+              ? <OvrBadge value={overallRaw(p)} />
               : <Text style={{ minWidth: 52, textAlign: 'center', color: theme.muted, fontWeight: '800', fontSize: 13 }}>{fogOvr(p)}</Text>}
             <Text style={{ width: 40, textAlign: 'right', color: picked ? theme.accent : theme.muted, fontWeight: '800' }}>
               {picked ? `담음${wi + 1}` : '담기'}

@@ -9,7 +9,7 @@ import { projectSettledCash } from '../data/financeProjection';
 import { LEAGUE_CAP } from '../engine/cap';
 import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
 import { assignFAGrades, askingPrice } from '../engine/faMarket';
-import { overall } from '../engine/overall';
+import { overall, overallRaw } from '../engine/overall';
 import { formatMoney, marketValue } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 
@@ -134,7 +134,7 @@ export default function FACenter() {
           >
             <PosTag pos={p.position} />
             <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{p.name}</Text>
-            <OvrBadge value={overall(p)} />
+            <OvrBadge value={overallRaw(p)} />
             <Text style={{ color: prot ? theme.good : theme.muted, fontWeight: '800', width: 36, textAlign: 'right' }}>
               {prot ? '보호' : '—'}
             </Text>
@@ -171,7 +171,7 @@ export default function FACenter() {
                   </Text>
                   {badge ? <Text style={{ color: badge.c, fontSize: 12, fontWeight: '800', marginTop: 2 }}>{badge.t}</Text> : null}
                 </View>
-                <OvrBadge value={overall(p)} />
+                <OvrBadge value={overallRaw(p)} />
               </View>
               <Pressable
                 onPress={() => (targeted ? unsignFA(p.id) : signFA(p.id))}

@@ -8,7 +8,7 @@ import { Button, Card, Muted, PosTag, Row, Screen, Title, theme } from '../compo
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
-import { overall } from '../engine/overall';
+import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { FOREIGN_SALARY } from '../engine/foreign';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
@@ -53,7 +53,7 @@ export default function Tryout() {
 
   const reveal = teamScoutReveal(my);
   const fogOvr = (p: Player): string => {
-    const o = overall(p);
+    const o = displayOvr(overallRaw(p));
     if (reveal >= 0.92) return `${o}`;
     const w = Math.max(2, Math.round((1 - reveal) * 14));
     return `${Math.max(40, o - w)}~${Math.min(99, o + w)}`;
@@ -82,7 +82,7 @@ export default function Tryout() {
 
       {myForeign ? (
         <>
-          <Title>재계약 우선권 — {myForeign.name} ({myForeign.age}세 · OVR {overall(myForeign)})</Title>
+          <Title>재계약 우선권 — {myForeign.name} ({myForeign.age}세 · OVR {displayOvr(overallRaw(myForeign))})</Title>
           <Card>
             <Muted style={{ fontSize: 12 }}>
               드래프트 없이 현 외인과 갱신할 수 있습니다(1년 단위 — 잘하는 용병은 수 시즌 함께).

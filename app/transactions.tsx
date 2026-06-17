@@ -3,7 +3,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { evolveOnDay } from '../data/league';
 import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
-import { overall } from '../engine/overall';
+import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MAX, inSeasonCost } from '../engine/transactions';
 import { FOREIGN_SALARY } from '../engine/foreign';
@@ -105,7 +105,7 @@ export default function Transactions() {
                 <PosTag pos={p.position} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{p.name}</Text>
-                  <Text style={styles.sub}>{p.age}세 · OVR {overall(p)}</Text>
+                  <Text style={styles.sub}>{p.age}세 · OVR {displayOvr(overallRaw(p))}</Text>
                 </View>
                 <Pressable
                   onPress={() => {
@@ -151,7 +151,7 @@ export default function Transactions() {
                   {p.age}세 · {formatMoney(cost)}{betrayed ? ' · 웃돈 ×1.5 (우리가 방출)' : ''}
                 </Text>
               </View>
-              <OvrBadge value={overall(p)} />
+              <OvrBadge value={overallRaw(p)} />
               <Pressable
                 onPress={() => onSign(p)}
                 disabled={!afford}

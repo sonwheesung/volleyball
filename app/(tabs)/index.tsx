@@ -7,7 +7,7 @@ import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings } from '../../data/standings';
 import { teamInjuriesOn } from '../../data/injury';
 import { buildNewsFeed } from '../../data/news';
-import { teamOverall } from '../../engine/overall';
+import { teamOverallRaw } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
 import { teamFanbaseNow } from '../../data/owner';
 import { LEAGUE_CAP } from '../../engine/cap';
@@ -27,7 +27,7 @@ export default function Dashboard() {
   const team = getTeam(teamId);
   const basePlayers = getEvolvedTeamPlayers(teamId, currentDay);
   const roster = activeRoster(basePlayers, overrides, released);
-  const ovr = teamOverall(basePlayers); // 전력은 전체 스쿼드 기준(경기 엔진과 일치)
+  const ovr = teamOverallRaw(basePlayers); // 전력은 전체 스쿼드 기준(경기 엔진과 일치)
   const payroll = sumPayroll(roster);   // 페이롤은 활성 계약 기준
   const fanScore = useGameStore((s) => s.fanScore); // 팬심(직전 시즌 정산)
   const archive = useGameStore((s) => s.archive);

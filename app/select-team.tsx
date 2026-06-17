@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import { Card, Muted, OvrBadge, Row, Screen, theme } from '../components/Screen';
 import { LEAGUE, getTeamCoach, getTeamPlayers } from '../data/league';
-import { teamOverall } from '../engine/overall';
+import { teamOverallRaw } from '../engine/overall';
 
 export default function SelectTeam() {
   const router = useRouter();
@@ -13,7 +13,7 @@ export default function SelectTeam() {
       {LEAGUE.teams.map((t) => {
         const players = getTeamPlayers(t.id);
         const coach = getTeamCoach(t.id);
-        const ovr = teamOverall(players);
+        const ovr = teamOverallRaw(players);
         return (
           <Card key={t.id} onPress={() => router.push(`/team/${t.id}`)}>
             <Row>

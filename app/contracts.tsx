@@ -6,7 +6,7 @@ import { Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../com
 import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
 import { getPlayerProduction } from '../data/production';
 import { activeRoster, payroll } from '../data/roster';
-import { overall } from '../engine/overall';
+import { overall, overallRaw } from '../engine/overall';
 import { canAfford, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MIN } from '../engine/transactions';
 import { assignFAGrades, askingPrice, willBeFA } from '../engine/faMarket';
@@ -98,7 +98,7 @@ export default function Contracts() {
                 {isFranchise(p) ? <Text style={{ color: theme.warn }}> · 프랜차이즈</Text> : null}
               </Text>
             </View>
-            <OvrBadge value={overall(p)} />
+            <OvrBadge value={overallRaw(p)} />
           </Pressable>
         );
       })}
@@ -123,7 +123,7 @@ export default function Contracts() {
                     </Text>
                     <Text style={styles.sub}>{p.age}세 · 요구 {formatMoney(ask)}</Text>
                   </View>
-                  <OvrBadge value={overall(p)} />
+                  <OvrBadge value={overallRaw(p)} />
                 </View>
                 <View style={styles.actions}>
                   <Pressable

@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { displayOvr } from '../engine/overall';
 
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
 export const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
@@ -98,11 +99,14 @@ export function Button({
 
 /** OVR 진행호 링 배지 (값에 따라 색·채움) — 스타일타일의 원형 레이팅 링 */
 export function OvrBadge({ value, size = 46 }: { value: number; size?: number }) {
-  const color = value >= 85 ? theme.elite : value >= 72 ? theme.accent : value >= 60 ? theme.warn : theme.muted;
+  // value는 raw OVR(overall/teamOverall) — 표시 스케일로 스트레치해 색·링·숫자에 일괄 반영.
+  // 호출부는 항상 raw를 넘긴다(이중 변환 금지). 색 임계값은 스트레치된 값 기준이라 의미가 또렷.
+  const v = displayOvr(value);
+  const color = v >= 85 ? theme.elite : v >= 72 ? theme.accent : v >= 60 ? theme.warn : theme.muted;
   const stroke = size >= 56 ? 5 : 4;
   const r = (size - stroke) / 2;
   const C = 2 * Math.PI * r;
-  const frac = Math.max(0.04, Math.min(1, value / 100));
+  const frac = Math.max(0.04, Math.min(1, v / 100));
   return (
     <View style={[styles.ovr, { width: size, height: size }]}>
       <Svg width={size} height={size} style={StyleSheet.absoluteFill}>
@@ -114,7 +118,7 @@ export function OvrBadge({ value, size = 46 }: { value: number; size?: number })
           transform={`rotate(-90 ${size / 2} ${size / 2})`}
         />
       </Svg>
-      <Text style={[styles.ovrText, { color, fontSize: size >= 56 ? 19 : 15 }]}>{value}</Text>
+      <Text style={[styles.ovrText, { color, fontSize: size >= 56 ? 19 : 15 }]}>{v}</Text>
     </View>
   );
 }
