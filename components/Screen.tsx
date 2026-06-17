@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { displayOvr } from '../engine/overall';
 
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
@@ -28,23 +28,26 @@ interface ScreenProps {
   scroll?: boolean;
 }
 
-/** 다크 테마 + SafeArea 패딩 기본 화면 래퍼 */
+/** 기본 화면 래퍼 — SafeArea를 한 곳에서 중앙 관리(하단 홈인디케이터·좌우 라운드/노치).
+ *  상단은 네비게이션 헤더가 담당(전 Stack/Tabs 화면이 헤더 보유)하므로 top edge는 제외 —
+ *  헤더 있는 화면에 top inset을 또 주면 이중 여백이 된다. */
 export function Screen({ title, children, scroll = true }: ScreenProps) {
-  const insets = useSafeAreaInsets();
-  const pad = { paddingBottom: insets.bottom + 24 };
-  if (!scroll) {
-    return (
-      <View style={[styles.root, styles.content, pad]}>
-        {title ? <Text style={styles.title}>{title}</Text> : null}
-        {children}
-      </View>
-    );
-  }
-  return (
-    <ScrollView style={styles.root} contentContainerStyle={[styles.content, pad]}>
+  const inner = (
+    <>
       {title ? <Text style={styles.title}>{title}</Text> : null}
       {children}
-    </ScrollView>
+    </>
+  );
+  return (
+    <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
+      {scroll ? (
+        <ScrollView style={styles.root} contentContainerStyle={styles.contentScroll}>
+          {inner}
+        </ScrollView>
+      ) : (
+        <View style={[styles.root, styles.content]}>{inner}</View>
+      )}
+    </SafeAreaView>
   );
 }
 
@@ -161,6 +164,7 @@ export function Row({ children }: { children: ReactNode }) {
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
   content: { padding: 16, gap: 12 },
+  contentScroll: { padding: 16, paddingBottom: 32, gap: 12 }, // 스크롤 하단 여유(실제 inset은 SafeAreaView가 처리)
   title: { color: theme.text, fontSize: 24, fontWeight: '800', marginBottom: 2 },
   h2: { color: theme.text, fontSize: 16, fontWeight: '700' },
   card: {
