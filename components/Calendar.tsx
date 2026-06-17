@@ -114,8 +114,10 @@ const styles = StyleSheet.create({
   grid: { flexDirection: 'row', flexWrap: 'wrap' },
   cell: {
     width: `${100 / 7}%`,
-    aspectRatio: 0.78,
-    padding: 3,
+    height: 64,            // 고정 높이 — 라벨(경기/이벤트) 유무와 무관하게 모든 주 행 간격 일관
+    overflow: 'hidden',    // 콘텐츠가 칸을 늘리지 못하게(행 높이 들쭉날쭉 방지)
+    paddingTop: 3,
+    paddingHorizontal: 2,
     borderRadius: 6,
     alignItems: 'center',
   },
