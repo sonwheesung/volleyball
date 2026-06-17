@@ -6,8 +6,10 @@ import { theme } from '../../components/Screen';
 import { useGameStore } from '../../store/useGameStore';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
-const tabIcon = (name: IoniconName) =>
-  ({ color, size }: { color: string; size: number }) => <Ionicons name={name} size={size} color={color} />;
+// 선택된 탭은 채워진 아이콘(filled), 나머지는 outline — 색만이 아니라 모양으로도 선택을 확실히 표시
+const tabIcon = (outline: IoniconName, filled: IoniconName) =>
+  ({ color, size, focused }: { color: string; size: number; focused: boolean }) =>
+    <Ionicons name={focused ? filled : outline} size={size} color={color} />;
 
 export default function TabsLayout() {
   const hydrated = useGameStore((s) => s.hydrated);
@@ -29,14 +31,15 @@ export default function TabsLayout() {
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.muted,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
+        tabBarActiveBackgroundColor: theme.accent + '14', // 선택 탭 옅은 배경 강조
         sceneStyle: { backgroundColor: theme.bg },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: '대시보드', tabBarLabel: '구단', tabBarIcon: tabIcon('home-outline') }} />
-      <Tabs.Screen name="schedule" options={{ title: '일정', tabBarLabel: '일정', tabBarIcon: tabIcon('calendar-outline') }} />
-      <Tabs.Screen name="squad" options={{ title: '선수단', tabBarLabel: '선수단', tabBarIcon: tabIcon('people-outline') }} />
-      <Tabs.Screen name="office" options={{ title: '단장실', tabBarLabel: '단장실', tabBarIcon: tabIcon('briefcase-outline') }} />
-      <Tabs.Screen name="history" options={{ title: '기록', tabBarLabel: '기록', tabBarIcon: tabIcon('trophy-outline') }} />
+      <Tabs.Screen name="index" options={{ title: '대시보드', tabBarLabel: '구단', tabBarIcon: tabIcon('home-outline', 'home') }} />
+      <Tabs.Screen name="schedule" options={{ title: '일정', tabBarLabel: '일정', tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
+      <Tabs.Screen name="squad" options={{ title: '선수단', tabBarLabel: '선수단', tabBarIcon: tabIcon('people-outline', 'people') }} />
+      <Tabs.Screen name="office" options={{ title: '단장실', tabBarLabel: '단장실', tabBarIcon: tabIcon('briefcase-outline', 'briefcase') }} />
+      <Tabs.Screen name="history" options={{ title: '기록', tabBarLabel: '기록', tabBarIcon: tabIcon('trophy-outline', 'trophy') }} />
     </Tabs>
   );
 }
