@@ -316,7 +316,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const decoys = attFront.filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch && rng.next() < 0.6);
     // 공격 커버: 반원(가까운 2 좌우 측면 + 1 깊은 중앙), 좌→우 슬롯 배정(동선 교차 방지)
     // 첫 터치(리시브/디그)한 선수는 제외 — 패스 직후 한 박자 머물러야지 즉시 커버로 뛰면 어색하다
-    const coverCand = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch && !decoys.includes(i))
+    // 커버 풀이 비면(백어택 시 전위가 전부 미끼로 빠진 경우) 미끼라도 1명은 받친다 — 무방비 금지.
+    //   후위 공격의 블록 리바운드는 네트 앞에 떨어지므로 전위 선수가 커버로 들어오는 게 정석.
+    let coverPool = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch && !decoys.includes(i));
+    if (coverPool.length === 0) coverPool = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch);
+    const coverCand = coverPool
       .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
       .sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
     const cSpots = coverSpots(att, ahx, coverCand.length, W, H, atk === 'back');
