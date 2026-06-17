@@ -31,7 +31,6 @@ export default function TabsLayout() {
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.muted,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
-        tabBarActiveBackgroundColor: theme.accent + '14', // 선택 탭 옅은 배경 강조
         sceneStyle: { backgroundColor: theme.bg },
       }}
     >
