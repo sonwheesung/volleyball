@@ -3,6 +3,7 @@ import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
 import { SEASON, getEvolvedTeamPlayers, getTeam } from '../../data/league';
 import { computeStandings } from '../../data/standings';
+import { teamClinch } from '../../data/clinch';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
 import { teamOverallRaw } from '../../engine/overall';
@@ -25,6 +26,18 @@ export default function Schedule() {
   const playedCount = SEASON.filter(
     (f) => (f.homeTeamId === teamId || f.awayTeamId === teamId) && results[f.id],
   ).length;
+
+  // 플레이오프 확정/탈락/경합 — 이미 치른 경기(currentDay)만 반영(스포일러 안전)
+  const clinch = teamClinch(teamId, currentDay);
+  const clinchView = clinch
+    ? clinch.state === 'clinched'
+      ? { text: `🎉 플레이오프 진출 확정 · 현재 ${clinch.rank}위`, color: theme.good }
+      : clinch.state === 'eliminated'
+        ? { text: `플레이오프 탈락 · 현재 ${clinch.rank}위`, color: theme.bad }
+        : clinch.magic != null
+          ? { text: `플레이오프 매직넘버 ${clinch.magic} · 현재 ${clinch.rank}위`, color: theme.accent }
+          : { text: `플레이오프 경합 중 · 현재 ${clinch.rank}위`, color: theme.accent }
+    : null;
 
   const onAdvance = () => {
     if (!nextFixture) {
@@ -63,6 +76,15 @@ export default function Schedule() {
           </Text>
         </Row>
       </Card>
+
+      {clinchView ? (
+        <Card>
+          <Row>
+            <Muted>플레이오프</Muted>
+            <Text style={{ color: clinchView.color, fontWeight: '800' }}>{clinchView.text}</Text>
+          </Row>
+        </Card>
+      ) : null}
 
       {nextFixture && preview ? (
         <Card>

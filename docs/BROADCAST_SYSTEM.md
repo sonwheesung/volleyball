@@ -31,7 +31,7 @@
 |---|---|---|---|
 | **우승 확정** | `archive.championId` (data/playoffs.ts) | ✅ 있음 | 없음 — 챔프전 종료 현수막 |
 | **기록 경신** | `Milestone`(engine/milestones.ts `crossedThresholds`) | ⚠ 시즌말 계산만 | **경기단위 감지** `detectMatchMilestones()` — 선수 career 기준선 + 이 경기 생산으로 임계 교차 판정 |
-| **PO 확정/시드** | `computeStandings` + 잔여 일정 | ❌ 없음 | **매직넘버 감지** `detectClinch()` — 잔여 경기 수학으로 "수학적 확정" 판정 |
+| **PO 확정/시드** | `computeStandings` + 잔여 일정 | ✅ **구현** `engine/clinch.ts`·`data/clinch.ts` | 보수적 승수 기반 확정/탈락/경합+매직넘버. 일정 화면 표시 중. 시드 세분(1번 시드 확정 등)은 추후 |
 
 > 기록 경신의 경기단위 감지는 **랠리별 개인 기록 귀속**에 의존(현재 알려진 공백 — PointLog→production
 > 참가자 id). 경기말 집계는 근사 가능하나, 경기 *중* 실시간(그 랠리에 뜨는)은 귀속 정밀도가 선결.
@@ -47,7 +47,7 @@
 
 - **Phase 1 (싸고·스포일러 안전):** 하단 현수막 컴포넌트 + **경기 종료 시** 재생. 우승(기존 데이터) +
   경기단위 기록 감지(`detectMatchMilestones`, 경기말). 결정론 파생.
-- **Phase 2 (신규 시스템):** `detectClinch()` 매직넘버 → PO 확정/시드 현수막(종료 후).
+- **Phase 2 (신규 시스템):** ✅ `clinch.ts` 매직넘버 감지 구현(확정/탈락/경합) — 일정 화면 표시. 현수막 연출·시드 세분은 추후.
 - **Phase 3 (고비용):** 경기 *중* 실시간 기록 현수막 — 랠리별 개인 귀속 선결 후 그 랠리 시점에 띄움.
 
 ## 5. 코드 맵 (예정)
