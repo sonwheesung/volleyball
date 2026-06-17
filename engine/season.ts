@@ -61,14 +61,13 @@ export function generateSeason(teamIds: string[], seed: number): Fixture[] {
   return fixtures;
 }
 
-/** 선택한 팀 기준 캘린더 일정(경기 + 전술 훈련 이벤트) */
+/** 선택한 팀 기준 캘린더 일정(경기만). 경기 전날 '전술 훈련' 점은 정보량이 적고
+ *  매치 라벨과 시각적으로 충돌해 제거(2026-06-17). 훈련은 자동 진행 — 마커만 뺌. */
 export function teamScheduleEntries(season: Fixture[], teamId: string): ScheduleEntry[] {
   const entries: ScheduleEntry[] = [];
   for (const f of season) {
     if (f.homeTeamId !== teamId && f.awayTeamId !== teamId) continue;
     const isHome = f.homeTeamId === teamId;
-    // 경기 전날 전술 훈련
-    entries.push({ kind: 'event', dayIndex: f.dayIndex - 1, title: '전술 훈련' });
     entries.push({
       kind: 'match',
       dayIndex: f.dayIndex,
