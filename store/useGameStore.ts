@@ -21,6 +21,7 @@ import { setTxContext, setOwnerContext, seasonTxLog, seasonScandals, availableFA
 import {
   meetAccept, persuade, cardMatch,
   benchAccept, startSuggestAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, BENCH_MAX,
+  TALK_COOLDOWN_DAYS, BENCH_COOLDOWN_DAYS,
   type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx,
 } from '../engine/owner';
 import { discontentNow, teamFanbaseNow, buildOwnerFx } from '../data/owner';
@@ -84,6 +85,8 @@ interface GameState {
   staffScouts: Record<string, string[]>;       // teamId → 영입 스카우터 ids
   interviews: InterviewLog[];                  // 구단주 면담 로그(OWNER_SYSTEM) — FA 판정 입력
   benchDirectives: BenchDirective[];           // 감독 수락된 벤치 지시 — dynamics 주입
+  talkCooldown: Record<string, number>;        // playerId → 재면담 가능 day(쿨다운, OWNER_SYSTEM)
+  benchCooldown: Record<string, number>;       // playerId → 재건의(주전/벤치) 가능 day
   fanScore: number;                            // 내 팀 팬심(직전 시즌 결과, 0~100)
   cash: number;                                // 운영 자금(FINANCE) — 캡과 별개의 지갑
   lastFinance: SeasonFinance | null;           // 직전 시즌 정산 내역(표시용)
@@ -160,6 +163,8 @@ const freshSave = {
   staffScouts: {} as Record<string, string[]>,
   interviews: [] as InterviewLog[],
   benchDirectives: [] as BenchDirective[],
+  talkCooldown: {} as Record<string, number>,
+  benchCooldown: {} as Record<string, number>,
   fanScore: 50,
   cash: 50000, // 시작 운영 예비금 5억
   lastFinance: null as SeasonFinance | null,
@@ -341,13 +346,15 @@ export const useGameStore = create<GameState>()(
         const s = get();
         const my = s.selectedTeamId;
         if (!my) return { met: false, topic: null };
+        if (s.currentDay < (s.talkCooldown[playerId] ?? 0)) return { met: false, topic: null }; // 쿨다운 중(UI에서 막지만 방어)
         const p = evolveOnDay(playerId, s.currentDay);
         if (!p) return { met: false, topic: null };
+        const nextCd = { ...s.talkCooldown, [playerId]: s.currentDay + TALK_COOLDOWN_DAYS }; // 면담했으면(성공·거절·결렬 무관) 일정 기간 잠금
         const { topic } = discontentNow(p, my, s.currentDay);
-        if (!topic) return { met: true, topic: null }; // 만족 상태 — "괜찮습니다, 구단주님"
+        if (!topic) { set({ talkCooldown: nextCd }); return { met: true, topic: null }; } // 만족 상태 — "괜찮습니다, 구단주님"
         const seasonLogs = s.interviews.filter((l) => l.playerId === playerId && l.season === s.season);
         const lastFailed = seasonLogs.length > 0 && !seasonLogs[seasonLogs.length - 1].ok;
-        if (!meetAccept(playerId, s.season, seasonLogs.length, lastFailed)) return { met: false, topic };
+        if (!meetAccept(playerId, s.season, seasonLogs.length, lastFailed)) { set({ talkCooldown: nextCd }); return { met: false, topic }; }
         const standings = computeStandings(s.currentDay > 0 ? s.currentDay : Number.MAX_SAFE_INTEGER);
         const rank = Math.max(1, standings.findIndex((r) => r.teamId === my) + 1);
         const perfT = standings.length <= 1 ? 1 : 1 - (rank - 1) / (standings.length - 1);
@@ -356,6 +363,7 @@ export const useGameStore = create<GameState>()(
         set({
           interviews: [...s.interviews, { playerId, season: s.season, day: s.currentDay, topic, card, ok }].slice(-200),
           careerLog: { ...s.careerLog, interviews: s.careerLog.interviews + 1 },
+          talkCooldown: nextCd,
         });
         return { met: true, topic, ok };
       },
@@ -364,6 +372,7 @@ export const useGameStore = create<GameState>()(
         const s = get();
         const my = s.selectedTeamId;
         if (!my) return false;
+        if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return false; // 건의 쿨다운(방어)
         if (s.benchDirectives.length >= BENCH_MAX) return false;
         if (s.benchDirectives.some((b) => b.playerId === playerId)) return false;
         const squad = rosterIdsOnDay(my, s.currentDay)
@@ -377,10 +386,13 @@ export const useGameStore = create<GameState>()(
         const gap = alt ? overall(target) - overall(alt) : 10;
         const ovrGapT = Math.max(0, Math.min(1, 1 - gap / 10)); // 대체자가 비등할수록 1
         const ok = benchAccept(playerId, s.season, s.currentDay, coachInfoOf(my)?.charisma ?? 50, ovrGapT, aceRank, reason);
+        const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
         if (ok) {
           const benchDirectives = [...s.benchDirectives, { playerId, fromDay: s.currentDay }];
-          set({ benchDirectives });
+          set({ benchDirectives, benchCooldown: benchCd });
           setOwnerContext(benchDirectives);
+        } else {
+          set({ benchCooldown: benchCd });
         }
         return ok;
       },
@@ -389,6 +401,7 @@ export const useGameStore = create<GameState>()(
         const s = get();
         const my = s.selectedTeamId;
         if (!my) return false;
+        if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return false; // 건의 쿨다운(방어)
         if (s.benchDirectives.length >= BENCH_MAX) return false;
         const benched = new Set(s.benchDirectives.map((b) => b.playerId));
         const squad = rosterIdsOnDay(my, s.currentDay)
@@ -405,10 +418,13 @@ export const useGameStore = create<GameState>()(
         }
         const gapT = Math.max(0, Math.min(1, 1 - (overall(incumbent) - overall(target)) / 10));
         const ok = startSuggestAccept(playerId, s.season, s.currentDay, coachInfoOf(my)?.charisma ?? 50, gapT);
+        const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
         if (ok) {
           const benchDirectives = [...s.benchDirectives, { playerId: incumbent.id, fromDay: s.currentDay }];
-          set({ benchDirectives });
+          set({ benchDirectives, benchCooldown: benchCd });
           setOwnerContext(benchDirectives);
+        } else {
+          set({ benchCooldown: benchCd });
         }
         return ok;
       },
@@ -624,6 +640,8 @@ export const useGameStore = create<GameState>()(
           careerTotals: nextTotals, // 통산 경기 기록 누적(업적)
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
           benchDirectives: [],
+          talkCooldown: {},   // 시즌말 currentDay 0 리셋과 함께 쿨다운 초기화
+          benchCooldown: {},
           // 영구제명(승부조작·학폭) — 내 팀이면 팬심 대폭락(사건당 −35). 리그 최대 충격.
           fanScore: Math.max(0, nextFan - 35 * ctx.expelled.filter((e) => e.teamId === my).length),
           cash: Math.max(0, settled.cash - faSpend),
@@ -696,6 +714,8 @@ export const useGameStore = create<GameState>()(
         staffScouts: s.staffScouts,
         interviews: s.interviews,
         benchDirectives: s.benchDirectives,
+        talkCooldown: s.talkCooldown,
+        benchCooldown: s.benchCooldown,
         fanScore: s.fanScore,
         cash: s.cash,
         lastFinance: s.lastFinance,

@@ -61,6 +61,11 @@ export interface InterviewLog {
   ok: boolean;
 }
 
+/** 면담·건의 쿨다운(일) — 같은 선수를 하루에도 여러 번 들볶지 못하게(OWNER_SYSTEM).
+ *  GAME_INTERVAL=4 기준 면담 ~6경기·건의 ~4경기 간격. 시즌말 currentDay 리셋과 함께 초기화. */
+export const TALK_COOLDOWN_DAYS = 24;
+export const BENCH_COOLDOWN_DAYS = 16;
+
 /** 면담의 문은 선수가 연다 — 들볶을수록·실망시켰을수록 닫힌다 */
 export function meetAccept(playerId: string, season: number, nThisSeason: number, lastFailed: boolean): boolean {
   const refuse = Math.min(0.9, 0.10 + 0.25 * nThisSeason + (lastFailed ? 0.30 : 0));

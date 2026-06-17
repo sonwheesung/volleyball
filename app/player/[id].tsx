@@ -1,5 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
-import { Alert, Text, View } from 'react-native';
+import { useState } from 'react';
+import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, conditionOf, popularityNow } from '../../data/owner';
@@ -35,6 +36,10 @@ export default function PlayerDetail() {
   const suggestBench = useGameStore((s) => s.suggestBench);
   const suggestStart = useGameStore((s) => s.suggestStart);
   const unbench = useGameStore((s) => s.unbench);
+  const talkCooldown = useGameStore((s) => s.talkCooldown);
+  const benchCooldown = useGameStore((s) => s.benchCooldown);
+  const [talkAsk, setTalkAsk] = useState(false);
+  const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
   const prod = id ? getPlayerProduction(id, currentDay) : undefined;
   const awardHist = id ? awardHistoryOf(archive, id) : [];
@@ -60,25 +65,17 @@ export default function PlayerDetail() {
   const myTalks = interviews.filter((l) => l.playerId === p.id && l.season === season);
   const lastTalkFailed = myTalks.length > 0 && !myTalks[myTalks.length - 1].ok;
   const benched = benchDirectives.some((b) => b.playerId === p.id);
+  const talkLeft = Math.max(0, (talkCooldown[p.id] ?? 0) - currentDay);   // 재면담까지 남은 일수
+  const benchLeft = Math.max(0, (benchCooldown[p.id] ?? 0) - currentDay); // 재건의까지 남은 일수
 
-  const openTalk = () => {
-    if (!topic) return;
-    Alert.alert(
-      `면담 — ${p.name}`,
-      `${TOPIC_SPEECH[topic]}\n\n무엇을 약속하시겠습니까?`,
-      [
-        ...(['reinforce', 'starter', 'raise', 'franchise'] as TalkCard[]).map((card) => ({
-          text: CARD_KO[card],
-          onPress: () => {
-            const res = requestInterview(p.id, card);
-            if (!res.met) Alert.alert('면담 거절', `${p.name}: "…드릴 말씀 없습니다."\n(최근 면담이 잦았거나, 지난 면담에 실망한 상태입니다)`);
-            else if (res.ok) Alert.alert('설득 성공', `${p.name}: "알겠습니다. 구단주님 말씀, 믿어보겠습니다."`);
-            else Alert.alert('면담 결렬', `${p.name}: "…기대했던 제가 어리석었네요."\n(마음이 오히려 멀어졌습니다 — 이적 의향 상승)`);
-          },
-        })),
-        { text: '취소', style: 'cancel' as const },
-      ],
-    );
+  // 면담 — 시스템 Alert 대신 앱 테마 커스텀 모달
+  const openTalk = () => { if (topic) setTalkAsk(true); };
+  const chooseTalk = (card: TalkCard) => {
+    const res = requestInterview(p.id, card);
+    setTalkAsk(false);
+    if (!res.met) setTalkResult({ title: '면담 거절', color: theme.muted, msg: `${p.name}: "…드릴 말씀 없습니다."\n최근 면담이 잦았거나, 지난 면담에 실망한 상태입니다.` });
+    else if (res.ok) setTalkResult({ title: '설득 성공 ✓', color: theme.good, msg: `${p.name}: "알겠습니다. 구단주님 말씀, 믿어보겠습니다."` });
+    else setTalkResult({ title: '면담 결렬', color: theme.bad, msg: `${p.name}: "…기대했던 제가 어리석었네요."\n마음이 오히려 멀어졌습니다 — 이적 의향이 올랐습니다.` });
   };
 
   const openBench = () => {
@@ -166,7 +163,8 @@ export default function PlayerDetail() {
                 <Text style={{ color: theme.bad, fontWeight: '800', marginTop: 4 }}>😟 {TOPIC_BADGE[topic]}</Text>
                 <Muted style={{ fontSize: 13 }}>{TOPIC_SPEECH[topic]}</Muted>
                 {lastTalkFailed ? <Muted style={{ fontSize: 12, color: theme.bad }}>💔 지난 면담이 결렬됐습니다 — 다시 문을 두드리면 거절당할 수 있습니다.</Muted> : null}
-                <Button label="면담 요청" onPress={openTalk} />
+                {talkLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 면담 — 약 {talkLeft}일 뒤 다시 가능합니다.</Muted> : null}
+                <Button label={talkLeft > 0 ? `면담 (${talkLeft}일 후)` : '면담 요청'} onPress={openTalk} disabled={talkLeft > 0} />
               </>
             ) : (
               <Muted style={{ marginTop: 4 }}>😊 특별한 불만 없음 — "괜찮습니다, 구단주님."</Muted>
@@ -192,10 +190,12 @@ export default function PlayerDetail() {
                   현장 권한은 감독에게 — 구단주는 건의합니다. 감독 성향에 따라 거절할 수 있고,
                   인기 선수를 오래 벤치에 두면 팬들이 분노합니다(기사·관중·예산).
                 </Muted>
+                {benchLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 건의 — 약 {benchLeft}일 뒤 다시 건의할 수 있습니다.</Muted> : null}
                 <View style={{ flexDirection: 'row', gap: 8 }}>
                   <View style={{ flex: 1 }}>
                     <Button
-                      label="선발 기용 건의"
+                      label={benchLeft > 0 ? `선발 (${benchLeft}일 후)` : '선발 기용 건의'}
+                      disabled={benchLeft > 0}
                       onPress={() => {
                         const ok = suggestStart(p.id);
                         Alert.alert(ok ? '감독 수락' : '감독 거절',
@@ -205,7 +205,7 @@ export default function PlayerDetail() {
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Button label="벤치 건의" onPress={openBench} />
+                    <Button label={benchLeft > 0 ? `벤치 (${benchLeft}일 후)` : '벤치 건의'} onPress={openBench} disabled={benchLeft > 0} />
                   </View>
                 </View>
               </>
@@ -378,6 +378,60 @@ export default function PlayerDetail() {
         <StatBar label="세팅기술" value={p.skSet} />
         <StatBar label="서브기술" value={p.skServe} />
       </Card>
+
+      {/* 면담 모달 — 시스템 Alert 대신 앱 테마 디자인 */}
+      <Modal
+        visible={talkAsk || !!talkResult}
+        transparent
+        animationType="fade"
+        onRequestClose={() => { setTalkAsk(false); setTalkResult(null); }}
+      >
+        <Pressable style={mstyles.backdrop} onPress={() => { setTalkAsk(false); setTalkResult(null); }}>
+          <Pressable style={mstyles.dialog} onPress={() => {}}>
+            {talkResult ? (
+              <>
+                <Text style={[mstyles.title, { color: talkResult.color }]}>{talkResult.title}</Text>
+                <Text style={mstyles.body}>{talkResult.msg}</Text>
+                <Pressable style={mstyles.primary} onPress={() => setTalkResult(null)}>
+                  <Text style={mstyles.primaryTxt}>확인</Text>
+                </Pressable>
+              </>
+            ) : topic ? (
+              <>
+                <Text style={mstyles.title}>면담 — {p.name}</Text>
+                <Text style={mstyles.badge}>😟 {TOPIC_BADGE[topic]}</Text>
+                <Text style={mstyles.quote}>"{TOPIC_SPEECH[topic]}"</Text>
+                <Text style={mstyles.body}>무엇을 약속하시겠습니까?</Text>
+                {(['reinforce', 'starter', 'raise', 'franchise'] as TalkCard[]).map((card) => (
+                  <Pressable key={card} style={({ pressed }) => [mstyles.choice, pressed && { opacity: 0.6 }]} onPress={() => chooseTalk(card)}>
+                    <Text style={mstyles.choiceTxt}>{CARD_KO[card]}</Text>
+                    <Text style={mstyles.choiceArrow}>›</Text>
+                  </Pressable>
+                ))}
+                <Pressable style={mstyles.cancel} onPress={() => setTalkAsk(false)}>
+                  <Text style={mstyles.cancelTxt}>닫기</Text>
+                </Pressable>
+              </>
+            ) : null}
+          </Pressable>
+        </Pressable>
+      </Modal>
     </Screen>
   );
 }
+
+const mstyles = StyleSheet.create({
+  backdrop: { flex: 1, backgroundColor: '#0B121CCC', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  dialog: { width: '100%', maxWidth: 420, backgroundColor: theme.card, borderRadius: 18, padding: 20, gap: 8 },
+  title: { color: theme.text, fontSize: 18, fontWeight: '900' },
+  badge: { color: theme.bad, fontSize: 13, fontWeight: '800' },
+  quote: { color: theme.muted, fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
+  body: { color: theme.text, fontSize: 14, lineHeight: 20, marginBottom: 2 },
+  choice: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', backgroundColor: theme.cardAlt, borderRadius: 12, paddingVertical: 14, paddingHorizontal: 16, marginTop: 4 },
+  choiceTxt: { color: theme.text, fontSize: 15, fontWeight: '700' },
+  choiceArrow: { color: theme.accent, fontSize: 20, fontWeight: '900' },
+  cancel: { alignItems: 'center', paddingVertical: 10, marginTop: 4 },
+  cancelTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
+  primary: { backgroundColor: theme.accent, borderRadius: 999, paddingVertical: 13, alignItems: 'center', marginTop: 8 },
+  primaryTxt: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+});
