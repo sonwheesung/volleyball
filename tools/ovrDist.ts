@@ -2,7 +2,7 @@
 // 선수 개인 overall()과 팀 teamOverall()의 분위수를 대표본(리시드 K)으로 수집.
 //   npx tsx tools/ovrDist.ts [리시드=300]
 import { LEAGUE, reseedLeague, getEvolvedTeamPlayers } from '../data/league';
-import { overall, teamOverall, displayOvr } from '../engine/overall';
+import { overall, overallRaw, teamOverall, displayOvr } from '../engine/overall';
 import type { Player, Position } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
@@ -12,8 +12,10 @@ const players: number[] = [];
 const teams: number[] = [];
 const byPos: Record<string, number[]> = {};
 
+const elite90: number[] = []; // 리그당 표시 90+ 인원
 for (let k = 0; k < K; k++) {
   reseedLeague(2000 + k * 17, 777);
+  let n90 = 0;
   for (const t of LEAGUE.teams) {
     const pl: Player[] = getEvolvedTeamPlayers(t.id, 0);
     teams.push(teamOverall(pl));
@@ -21,8 +23,10 @@ for (let k = 0; k < K; k++) {
       const o = overall(p);
       players.push(o);
       (byPos[p.position] ??= []).push(o);
+      if (displayOvr(overallRaw(p)) >= 90) n90++;
     }
   }
+  elite90.push(n90);
 }
 
 function stats(a: number[]) {
@@ -46,7 +50,12 @@ log(`\n▸ 선수 개인 (overall)`);
 line('전체 raw', players);
 line('전체 표시', players.map(displayOvr));
 for (const pos of ['S', 'OH', 'OP', 'MB', 'L'] as Position[]) if (byPos[pos]) line(pos, byPos[pos]);
-const clampLo = players.map(displayOvr).filter((x) => x <= 40).length;
+const clampLo = players.map(displayOvr).filter((x) => x <= 69).length;
 const clampHi = players.map(displayOvr).filter((x) => x >= 99).length;
-log(`\n  표시 클램프: 하한(40) ${(clampLo / players.length * 100).toFixed(1)}% · 상한(99) ${(clampHi / players.length * 100).toFixed(1)}%`);
+log(`\n  표시 클램프: 하한(69) ${(clampLo / players.length * 100).toFixed(1)}% · 상한(99) ${(clampHi / players.length * 100).toFixed(1)}%`);
+
+const e90mean = elite90.reduce((a, b) => a + b, 0) / elite90.length;
+const dist = [0, 1, 2, 3, 4, 5].map((n) => `${n === 5 ? '5+' : n}명 ${(elite90.filter((x) => (n === 5 ? x >= 5 : x === n)).length / elite90.length * 100).toFixed(0)}%`).join(' · ');
+log(`\n▸ 표시 90+ "독보적 선수" 리그당: 평균 ${e90mean.toFixed(1)}명 · 범위 ${Math.min(...elite90)}~${Math.max(...elite90)}`);
+log(`  분포: ${dist}`);
 log('');

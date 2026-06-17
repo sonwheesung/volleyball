@@ -105,7 +105,8 @@ export function OvrBadge({ value, size = 46 }: { value: number; size?: number })
   // value는 raw OVR(overall/teamOverall) — 표시 스케일로 스트레치해 색·링·숫자에 일괄 반영.
   // 호출부는 항상 raw를 넘긴다(이중 변환 금지). 색 임계값은 스트레치된 값 기준이라 의미가 또렷.
   const v = displayOvr(value);
-  const color = v >= 85 ? theme.elite : v >= 72 ? theme.accent : v >= 60 ? theme.warn : theme.muted;
+  // 프로 스케일(신입~70·평균80·90+ 독보적)에 맞춘 색 구간
+  const color = v >= 88 ? theme.elite : v >= 80 ? theme.accent : v >= 74 ? theme.warn : theme.muted;
   const stroke = size >= 56 ? 5 : 4;
   const r = (size - stroke) / 2;
   const C = 2 * Math.PI * r;

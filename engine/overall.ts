@@ -47,14 +47,16 @@ export function teamOverall(players: Player[]): number {
   return Math.round(teamOverallRaw(players));
 }
 
-// 표시 전용 OVR 스트레치 — overall()/teamOverall()(엔진·AI 정렬·은퇴/aiGM·스케줄 절대 임계값용)은
-// 그대로 두고, UI 카드/목록 표시에만 적용한다. 표시 OVR이 좁은 밴드(팀 66~77·선수 56~84)에 압축돼
-// 1점 ≈ 8%p 승률, 정수 반올림으로 ±4%p가 분해 불가했던 문제를 펴서 해상도를 높인다.
-// ★ 입력은 반드시 "연속값"(overallRaw/teamOverallRaw) — 정수를 넣으면 같은 정수 팀이 안 갈라져 무의미.
-// 단조 선형이라 순위·상관(r=0.897) 불변, 반올림 전 연속값을 펴므로 같은-정수 병합도 해소.
-// (tools/ovrDist·ovrDiag 측정 근거)
-const OVR_PIVOT = 69;
-const OVR_STRETCH = 2.6;
+// 표시 전용 OVR 스케일 — overall()/teamOverall()(엔진·AI 정렬·은퇴/aiGM·스케줄 절대 임계값용)은
+// 그대로 두고, UI 카드/목록 표시에만 적용한다. 원시 OVR이 좁은 밴드(선수 56~84, 평균 69)에 압축돼
+// "프로답지 않게" 낮아 보이던 것을, 프로 스케일(신입 ~70 · 평균 ~80 · 최고 90+)로 옮긴다.
+//   원시 평균 69 → 표시 80, 기울기 0.9. 90+는 원시 ~80↑(상위 ~2%) = 리그 2~3명, 황금기 5+·침체기 0
+//   (고정 매핑 + 원시 분포의 자연 변동 → 시대별 천재 수가 알아서 출렁임). 100년 무드리프트.
+// ★ 입력은 "연속값"(overallRaw/teamOverallRaw) — 정수 넣으면 같은 값끼리 안 갈라짐. 단조라 순위·상관 불변.
+// (tools/ovrDist 측정 근거)
+const OVR_PIVOT_RAW = 69;   // 원시 평균
+const OVR_PIVOT_DISP = 80;  // → 표시 평균
+const OVR_SLOPE = 1.15;     // 90+를 상위 ~2%(리그 2~3명)로, 신입/약체는 하한 69 근처로
 export function displayOvr(rawContinuous: number): number {
-  return Math.round(Math.max(40, Math.min(99, OVR_PIVOT + (rawContinuous - OVR_PIVOT) * OVR_STRETCH)));
+  return Math.round(Math.max(69, Math.min(99, OVR_PIVOT_DISP + (rawContinuous - OVR_PIVOT_RAW) * OVR_SLOPE)));
 }
