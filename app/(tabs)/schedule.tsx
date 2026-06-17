@@ -28,8 +28,11 @@ export default function Schedule() {
   ).length;
 
   // 플레이오프 확정/탈락/경합 — 이미 치른 경기(currentDay)만 반영(스포일러 안전)
+  // 시즌 초엔 숨긴다: 확정/탈락(정해진 사건)이거나, 시즌 60% 경과 후에만 표시(후반 레이스)
   const clinch = teamClinch(teamId, currentDay);
-  const clinchView = clinch
+  const playedFrac = totalMatches > 0 ? playedCount / totalMatches : 0;
+  const showPlayoff = !!clinch && (clinch.state !== 'contention' || playedFrac >= 0.6);
+  const clinchView = showPlayoff && clinch
     ? clinch.state === 'clinched'
       ? { text: `🎉 플레이오프 진출 확정 · 현재 ${clinch.rank}위`, color: theme.good }
       : clinch.state === 'eliminated'
