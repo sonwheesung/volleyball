@@ -12,23 +12,27 @@
 |---|---|---|
 | 개인 생산 귀속(1장) | ✅ 구현 | `engine/production.ts`(귀속) + `data/production.ts`(`leagueProduction` 캐시). 명단은 `availableTeamPlayers`(부상·시즌 중 이동 반영, INJURY/TRANSACTION_SYSTEM) — 결장은 생산 기회 손실 |
 | 시장가치/계약 고착(2·3장) | ✅ 구현 | `engine/salary.ts` — `marketValue`/`computeSalary`/`contractStatus`/`formatMoney` |
-| 루키스케일 | ✅ 구현 | `ROOKIE_CAP=6000`(0.6억), 서명나이 ≤22 적용 |
+| 루키 할인(2026-06-17 개편) | ✅ 구현 | 하드 캡(절벽) 제거 → `serviceFactor` 연속 곡선(어린 서명 할인→전성기 시장가→노장 할인). 능력 반영 |
 | 시드 연봉 흩뿌리기 | ✅ 구현 | `data/seed.ts` — 0~3시즌 전 서명으로 분산 |
 | 팀 예산(느슨) | ⚠️ 대체됨 | **FA 단계에서 정식 샐러리캡으로 강화**(아래) |
 | 수상·실적보너스(2장 일부) | ❌ 미구현 | 시상식 자체는 구현됨(AWARDS_SYSTEM) — 수상→연봉 연동만 미구현 |
 
-**실제 시장가치 공식(`marketValue`)** — 단위: 만원, `BASE=28000`(~2.8억):
+**실제 시장가치 공식(`marketValue`)** — 단위: 만원, `BASE=24000`(~2.4억). 2026-06-17 개편:
+**능력(abilityMul)을 주동력으로 가파르게** + 나이는 **연속 serviceFactor**(루키 절벽 제거):
 ```
-marketValue = BASE × abilityMul × ageEarnMul(age) × POSITION_MUL × foreignMul × perfFactor
-  abilityMul  = clamp(0.5 + (overall-55)/45, 0.4, 1.6)   // OVR을 "보정"으로는 사용(주동력 아님)
-  ageEarnMul  = ≤21:0.45 / 22~23:0.7 / 24~29:1.0 / 30~31:0.82 / 32~33:0.62 / 34+:0.42
-  POSITION_MUL= S1.12 · OP1.18 · OH1.05 · MB0.92 · L0.82
-  foreignMul  = 외국인 1.6
-  perfFactor  = 생산 3경기↑일 때 0.8~1.3 (S=세트/경기, L=디그/경기, 그 외=득점/경기), 없으면 1.0
+marketValue = BASE × abilityMul × serviceFactor(age) × POSITION_MUL × foreignMul × perfFactor
+  abilityMul   = clamp(0.35 + (overall-55)/28, 0.35, 2.0)  // 가파름 — 연봉이 OVR을 따라감
+  serviceFactor= ≤19:0.58 → 27:1.0(점진) → 31:0.84 → 그 이후 감소  // 22→23 절벽 없음
+  POSITION_MUL = S1.12 · OP1.18 · OH1.05 · MB0.92 · L0.82
+  foreignMul   = 외국인 1.6
+  perfFactor   = 생산 3경기↑일 때 0.8~1.3 (S=세트/경기, L=디그/경기, 그 외=득점/경기), 없으면 1.0
 → clampSalary(MIN_SALARY=3000, 개인상한)  // 캡은 cap.ts
 ```
-> 0장 결정("OVR 직접 안 씀")의 현 구현: OVR은 `abilityMul`로 **보정만** 하고, 실적(`perfFactor`)과
-> 나이·포지션·외국인이 함께 결정. 계약은 서명 시점 값으로 고착(`computeSalary`).
+> **2026-06-17 개편 동기·측정**: 기존엔 OVR을 "보정만" 써서 연봉↔OVR 상관 r=0.16(거의 무관),
+> 루키캡 22→23세 3.5배 절벽으로 같은 OVR 쌍 48.8%가 연봉 2배+ 차이 → "연봉 체계가 없다"는 피드백.
+> abilityMul 가파르게 + serviceFactor(절벽 제거)로 **r=0.16→0.47, 2배+ 차이 48.8%→6.9%, 절벽
+> 3.5배→1.37배** (tools/simSalaryOvr.ts, N=200리시드·22,400선수). 계약은 여전히 서명 시점 고착
+> (노장 과대·신인 저평가 서사 보존) — 다만 능력이 주도해 OVR과 분명히 연동.
 
 > **0장 ↔ FA 충돌 주의(해소됨):** 0장은 "팀 총예산만(느슨), 정식 캡 없음"으로 결정했으나,
 > 이후 FA 시스템에서 **정식 샐러리캡이 도입**되었다(`engine/cap.ts`: `LEAGUE_CAP=350000`/35억,

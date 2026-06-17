@@ -33,9 +33,13 @@ test('OVR≠연봉: 같은 능력도 신인 서명(19) ≪ 전성기 서명(27)'
   assert.ok(prime > rookie * 1.5, `prime=${prime} rookie=${rookie}`);
 });
 
-test('루키스케일: 어린 나이 서명은 상한(0.6억) 이하', () => {
-  const star = buildP({ skSpike: 95, skServe: 95, jump: 95 }); // 고능력이어도
-  assert.ok(computeSalary(star, 20) <= 6000, `rookie salary=${computeSalary(star, 20)}`);
+test('루키 할인은 점진(하드 캡 절벽 없음) — 능력은 반영', () => {
+  const star = buildP({ skSpike: 95, skServe: 95, jump: 95 });
+  const scrub = buildP({ skSpike: 50, skBlock: 50, skDig: 50, skReceive: 50, skSet: 50, skServe: 50, jump: 50 });
+  // 어린 서명은 전성기보다 싸다(할인)
+  assert.ok(computeSalary(star, 20) < computeSalary(star, 27), '루키 서명 < 전성기 서명');
+  // 절벽 없음: 고능력 루키가 저능력 루키보다 많이 받는다(하드 캡이면 둘 다 6000으로 동일했음)
+  assert.ok(computeSalary(star, 20) > computeSalary(scrub, 20) * 1.3, '루키도 능력 반영');
 });
 
 test('외국인 프리미엄', () => {
