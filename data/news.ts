@@ -14,6 +14,9 @@ const pName = (id: string) => getPlayer(id)?.name ?? id;
 
 type ArchiveEntry = { season: number; championId: string; awards?: SeasonAwards };
 
+/** 뉴스 안정 키 — id가 없으므로 결정론 필드 조합. 읽음/안읽음 추적용(store.readNews). */
+export const newsKey = (n: NewsItem) => `${n.season}:${n.kind}:${n.headline}`;
+
 /** 전체 뉴스 피드(최신 시즌 우선, 같은 시즌 내 헤드라인 우선) */
 export function buildNewsFeed(
   archive: ArchiveEntry[],

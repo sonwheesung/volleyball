@@ -1,10 +1,11 @@
 // 리그 뉴스 목록 전용 화면 — 대시보드 "리그 뉴스"에서 진입.
 // 한 행 = 기사 제목(헤드라인)만. 누르면 기사 상세(/news/[id]).
-import { useMemo } from 'react';
+// 읽음/안읽음 구분: 진입 시점 스냅샷으로 안읽음을 강조하고, 본 뉴스는 읽음 처리.
+import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Muted, Screen, theme } from '../components/Screen';
-import { buildNewsFeed } from '../data/news';
+import { buildNewsFeed, newsKey } from '../data/news';
 import { useGameStore } from '../store/useGameStore';
 import type { NewsItem } from '../types';
 
@@ -21,35 +22,46 @@ export default function NewsList() {
   const milestones = useGameStore((s) => s.milestones);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const expelledLog = useGameStore((s) => s.expelledLog);
+  const readNews = useGameStore((s) => s.readNews);
+  const markNewsRead = useGameStore((s) => s.markNewsRead);
 
   const feed = useMemo(
     () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog),
     [archive, milestones, hallOfFame, season, currentDay, expelledLog],
   );
 
+  // 진입 시점의 읽음 상태 스냅샷(이번 화면 동안 안읽음 강조 유지), 그리고 본 뉴스는 읽음 처리
+  const [readSnapshot] = useState(() => new Set(readNews));
+  useEffect(() => {
+    markNewsRead(feed.map(newsKey));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <Screen title="리그 뉴스">
       {feed.length === 0 ? (
         <Muted>아직 전해진 소식이 없습니다.</Muted>
       ) : (
-        feed.map((n, i) => (
-          <Pressable
-            key={i}
-            onPress={() => router.push(`/news/${i}`)}
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
-          >
-            <View style={{ flex: 1 }}>
-              <Text
-                style={[styles.head, n.big && { color: theme.warn }, n.teamId === teamId && { color: theme.accent }]}
-                numberOfLines={2}
-              >
-                {n.big ? '★ ' : ''}{n.headline}
-              </Text>
-              <Text style={styles.meta}>{n.season + 1}시즌 · {KIND_KO[n.kind]}</Text>
-            </View>
-            <Text style={styles.arrow}>›</Text>
-          </Pressable>
-        ))
+        feed.map((n, i) => {
+          const unread = !readSnapshot.has(newsKey(n));
+          const headColor = !unread ? theme.muted : n.teamId === teamId ? theme.accent : n.big ? theme.warn : theme.text;
+          return (
+            <Pressable
+              key={i}
+              onPress={() => router.push(`/news/${i}`)}
+              style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
+            >
+              <View style={[styles.dot, { backgroundColor: unread ? theme.accent : 'transparent' }]} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.head, { color: headColor, fontWeight: unread ? '700' : '600' }]} numberOfLines={2}>
+                  {n.big ? '★ ' : ''}{n.headline}
+                </Text>
+                <Text style={styles.meta}>{n.season + 1}시즌 · {KIND_KO[n.kind]}</Text>
+              </View>
+              <Text style={styles.arrow}>›</Text>
+            </Pressable>
+          );
+        })
       )}
     </Screen>
   );
@@ -61,6 +73,7 @@ const styles = StyleSheet.create({
     backgroundColor: theme.card, borderRadius: 12, padding: 14,
     borderWidth: 1, borderColor: theme.border,
   },
+  dot: { width: 7, height: 7, borderRadius: 4 }, // 안읽음 = accent 점, 읽음 = 투명(자리만)
   head: { color: theme.text, fontSize: 15, fontWeight: '700', lineHeight: 20 },
   meta: { color: theme.muted, fontSize: 12, marginTop: 4 },
   arrow: { color: theme.accent, fontSize: 22, fontWeight: '900' },

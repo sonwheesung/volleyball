@@ -6,7 +6,7 @@ import { SEASON, getEvolvedTeamPlayers, getTeam } from '../../data/league';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings } from '../../data/standings';
 import { teamInjuriesOn } from '../../data/injury';
-import { buildNewsFeed } from '../../data/news';
+import { buildNewsFeed, newsKey } from '../../data/news';
 import { teamOverallRaw } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
 import { teamFanbaseNow } from '../../data/owner';
@@ -59,10 +59,15 @@ export default function Dashboard() {
   const milestones = useGameStore((s) => s.milestones);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const expelledLog = useGameStore((s) => s.expelledLog);
-  const news = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog).slice(0, 3),
+  const readNews = useGameStore((s) => s.readNews);
+  const allNews = useMemo(
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog),
     [archive, milestones, hallOfFame, season, currentDay, expelledLog],
   );
+  const unreadNews = useMemo(() => {
+    const read = new Set(readNews);
+    return allNews.filter((n) => !read.has(newsKey(n))).length;
+  }, [allNews, readNews]);
 
   if (!team) return null;
 
@@ -120,25 +125,15 @@ export default function Dashboard() {
         </Row>
       </Card>
 
-      {/* 리그 뉴스 — 관전형 서사 후크(전체는 뉴스 화면) */}
-      {news.length > 0 ? (
+      {/* 리그 뉴스 — 진입점만(내용은 뉴스 화면에서). 안읽음 수만 표시 */}
+      {allNews.length > 0 ? (
         <Card onPress={() => router.push('/news')}>
           <Row>
-            <Muted style={{ marginBottom: 4 }}>📰 리그 뉴스</Muted>
-            <Text style={{ color: theme.accent }}>전체 ›</Text>
-          </Row>
-          {news.map((n, i) => (
-            <Text
-              key={i}
-              numberOfLines={1}
-              style={{
-                color: n.teamId === teamId ? theme.accent : n.big ? theme.warn : theme.text,
-                fontSize: 13, fontWeight: n.big ? '800' : '600', paddingVertical: 2,
-              }}
-            >
-              {n.big ? '★ ' : '· '}{n.headline}
+            <Muted>📰 리그 뉴스</Muted>
+            <Text style={{ color: theme.accent, fontWeight: '800' }}>
+              {unreadNews > 0 ? `새 소식 ${unreadNews} ›` : '전체 보기 ›'}
             </Text>
-          ))}
+          </Row>
         </Card>
       ) : null}
 

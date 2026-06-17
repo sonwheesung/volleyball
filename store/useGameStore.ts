@@ -76,6 +76,7 @@ interface GameState {
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   expelledLog: ExpelRecord[];                  // 영구제명 연표(승부조작·학폭 — 불명예 퇴출, 뉴스/서사용)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
+  readNews: string[];                          // 읽은 뉴스 키(season:kind:headline) — 읽음/안읽음 구분(NEWS_SYSTEM)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
   trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
   staffHead: Record<string, string>;           // teamId → 영입 감독 id(STAFF_SYSTEM)
@@ -107,6 +108,7 @@ interface GameState {
   toggleDraftPick: (playerId: string) => void;
   recordChampion: (season: number, championId: string) => void;
   setSubPolicy: (policy: Partial<SubPolicy>) => void;
+  markNewsRead: (keys: string[]) => void;
   setTrainingFocus: (focus: TrainingFocus | null) => void;
   hireCoach: (coachId: string) => boolean;
   resignCoach: () => boolean;
@@ -150,6 +152,7 @@ const freshSave = {
   hallOfFame: [] as HofEntry[],
   expelledLog: [] as ExpelRecord[],
   milestones: [] as Milestone[],
+  readNews: [] as string[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
   trainingFocus: null as TrainingFocus | null,
   staffHead: {} as Record<string, string>,
@@ -275,6 +278,7 @@ export const useGameStore = create<GameState>()(
             : { archive: [...s.archive, { season, championId }] },
         ),
       setSubPolicy: (policy) => set((s) => ({ subPolicy: { ...s.subPolicy, ...policy } })),
+      markNewsRead: (keys) => set((s) => ({ readNews: Array.from(new Set([...s.readNews, ...keys])) })),
       setTrainingFocus: (focus) => {
         const tid = get().selectedTeamId;
         if (tid) setFocusOverride(tid, focus);
@@ -684,6 +688,7 @@ export const useGameStore = create<GameState>()(
         hallOfFame: s.hallOfFame,
         expelledLog: s.expelledLog,
         milestones: s.milestones,
+        readNews: s.readNews,
         subPolicy: s.subPolicy,
         trainingFocus: s.trainingFocus,
         staffHead: s.staffHead,
