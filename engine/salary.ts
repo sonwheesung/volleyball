@@ -67,13 +67,13 @@ export function computeSalary(p: Player, signedAtAge: number, rng?: Rng): number
   return clampSalary(roundTo100(Math.max(MIN_SALARY, v)), p);
 }
 
-export type ContractStatus = '꿀계약' | '적정' | '고연봉';
+export type ContractStatus = '저평가' | '적정' | '고평가';
 
-/** 연봉 vs 시장가치 평가 */
+/** 연봉 vs 시장가치 평가 — 자산 가치 관점(구단 운영 게임 톤). 연봉<시장=저평가(구단 이득)·연봉>시장=고평가(부담) */
 export function contractStatus(salary: number, market: number): ContractStatus {
   const ratio = salary / market;
-  if (ratio <= 0.8) return '꿀계약';
-  if (ratio >= 1.25) return '고연봉';
+  if (ratio <= 0.8) return '저평가';
+  if (ratio >= 1.25) return '고평가';
   return '적정';
 }
 

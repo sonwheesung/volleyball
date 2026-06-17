@@ -14,7 +14,7 @@ import { contractStatus, formatMoney, marketValue } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { Contract, Player } from '../types';
 
-const STATUS_COLOR = { 꿀계약: theme.good, 적정: theme.muted, 고연봉: theme.bad } as const;
+const STATUS_COLOR = { 저평가: theme.good, 적정: theme.muted, 고평가: theme.bad } as const;
 const RESIGN_YEARS = 3;
 
 export default function Contracts() {

@@ -45,9 +45,9 @@ test('외국인 프리미엄', () => {
 });
 
 test('contractStatus: 연봉/시장가치 비율로 평가', () => {
-  assert.equal(contractStatus(50, 100), '꿀계약');
+  assert.equal(contractStatus(50, 100), '저평가');
   assert.equal(contractStatus(100, 100), '적정');
-  assert.equal(contractStatus(200, 100), '고연봉');
+  assert.equal(contractStatus(200, 100), '고평가');
 });
 
 test('marketValue는 양수, 결정론', () => {
