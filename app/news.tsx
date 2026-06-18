@@ -10,7 +10,7 @@ import { useGameStore } from '../store/useGameStore';
 import type { NewsItem } from '../types';
 
 export const KIND_KO: Record<NewsItem['kind'], string> = {
-  champion: '우승', award: '시상', milestone: '기록 경신', hof: '명예의전당', injury: '부상', scandal: '사건·사고',
+  champion: '우승', award: '시상', milestone: '기록 경신', hof: '명예의전당', injury: '부상', scandal: '사건·사고', owner: '구단',
 };
 
 export default function NewsList() {
@@ -24,10 +24,11 @@ export default function NewsList() {
   const expelledLog = useGameStore((s) => s.expelledLog);
   const readNews = useGameStore((s) => s.readNews);
   const markNewsRead = useGameStore((s) => s.markNewsRead);
+  const benchDirectives = useGameStore((s) => s.benchDirectives);
 
   const feed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog],
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? ''),
+    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId],
   );
 
   // 진입 시점의 읽음 상태 스냅샷(이번 화면 동안 안읽음 강조 유지), 그리고 본 뉴스는 읽음 처리

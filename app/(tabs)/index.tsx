@@ -59,9 +59,10 @@ export default function Dashboard() {
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const expelledLog = useGameStore((s) => s.expelledLog);
   const readNews = useGameStore((s) => s.readNews);
+  const benchDirectives = useGameStore((s) => s.benchDirectives);
   const allNews = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog],
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId),
+    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId],
   );
   const unreadNews = useMemo(() => {
     const read = new Set(readNews);

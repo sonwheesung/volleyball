@@ -11,7 +11,7 @@ import { useGameStore } from '../../store/useGameStore';
 import type { NewsItem } from '../../types';
 
 const KIND_KO: Record<NewsItem['kind'], string> = {
-  champion: '우승', award: '시상', milestone: '기록 경신', hof: '명예의전당', injury: '부상', scandal: '사건·사고',
+  champion: '우승', award: '시상', milestone: '기록 경신', hof: '명예의전당', injury: '부상', scandal: '사건·사고', owner: '구단',
 };
 
 // 본문 데이터가 없으므로 분류별 리드 문단을 구성(헤드라인이 구체 사실을 담는다).
@@ -22,6 +22,7 @@ const LEAD: Record<NewsItem['kind'], string> = {
   hof: '오랜 커리어를 마치고 명예의전당에 이름을 올렸다. 통산 기록은 영원히 보존된다.',
   injury: '부상으로 당분간 코트를 비우게 됐다. 팀 전력과 로테이션에 변수가 생겼다.',
   scandal: '리그를 뒤흔든 소식이다. 해당 선수와 구단은 적지 않은 후폭풍을 마주하게 됐다.',
+  owner: '간판 선수의 기용을 두고 팬심이 출렁였다. 구단 운영은 성적만큼이나 정서도 함께 살펴야 한다.',
 };
 
 export default function NewsArticle() {
@@ -32,10 +33,12 @@ export default function NewsArticle() {
   const milestones = useGameStore((s) => s.milestones);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const expelledLog = useGameStore((s) => s.expelledLog);
+  const benchDirectives = useGameStore((s) => s.benchDirectives);
+  const teamId = useGameStore((s) => s.selectedTeamId);
 
   const feed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog],
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? ''),
+    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId],
   );
   const n = feed[Number(id)];
 

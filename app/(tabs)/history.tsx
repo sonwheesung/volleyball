@@ -21,11 +21,12 @@ export default function History() {
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const milestones = useGameStore((s) => s.milestones);
   const expelledLog = useGameStore((s) => s.expelledLog);
+  const benchDirectives = useGameStore((s) => s.benchDirectives);
 
   const awards = useMemo(() => currentSeasonAwards(season, currentDay), [currentDay, season]);
   const newsFeed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog).slice(0, 40),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog],
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? '').slice(0, 40),
+    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId],
   );
   const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
   const results = useMemo(

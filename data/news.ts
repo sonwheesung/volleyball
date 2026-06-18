@@ -3,7 +3,9 @@
 //   가짜 드라마 금지: 기록에 근거한 사실만. 중요도(big)로 헤드라인/단신 구분.
 
 import type { ExpelRecord, HofEntry, Milestone, NewsItem, SeasonAwards } from '../types';
+import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
+import { popularityNow } from './owner';
 import { seasonInjuryReport } from './injury';
 import { SEVERITY_KO } from '../engine/injury';
 import { seasonScandals } from './dynamics';
@@ -24,6 +26,9 @@ export function buildNewsFeed(
   hallOfFame: HofEntry[],
   currentSeason: number,
   expelled: ExpelRecord[] = [],
+  benchDirectives: BenchDirective[] = [], // 구단주 벤치 지시(내 팀, 현재 시즌) — 인기 스타 벤치 → 팬 술렁
+  currentDay = 0,
+  myTeamId = '',
 ): NewsItem[] {
   const items: NewsItem[] = [];
   const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string) =>
@@ -63,6 +68,14 @@ export function buildNewsFeed(
   // 6) 영구제명 — 리그를 뒤흔드는 최대 사건(승부조작·학폭). 영속 기록에서.
   for (const e of expelled) {
     push(e.season, 'scandal', `[속보] ${e.name}(${teamName(e.teamId)}), ${EXPEL_KO[e.kind]} 적발 — 영구제명(리그 영구 퇴출)`, true, e.teamId);
+  }
+
+  // 7) 구단주 — 인기 스타를 벤치로 보낸 건의가 받아들여졌을 때 팬심이 술렁(OWNER_SYSTEM 팬 분노 연동)
+  for (const b of benchDirectives) {
+    const p = getPlayer(b.playerId); if (!p) continue;
+    const pop = popularityNow(p, currentDay, archive);
+    if (pop < 60) continue; // 인기 스타만 — 무명 선수 벤치는 기사 안 남
+    push(currentSeason, 'owner', `팬들, 간판 ${p.name} 벤치 기용에 술렁 — "왜 안 쓰나"`, pop >= 78, myTeamId);
   }
 
   return items.sort((x, y) => y.season - x.season || Number(y.big) - Number(x.big));
