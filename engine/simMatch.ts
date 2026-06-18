@@ -16,12 +16,25 @@ export interface PointLog {
   how?: PointHow; // 종결 방식(보드가 사실대로 그리기 위함) — 구세이브 결과엔 없음
 }
 
+/** 작전 교체 1건 — 보드 연출용 로그(승패 무영향, 순수 가산). 엔진이 st.six 를 실제로 바꾼 순간을 기록. */
+export interface SubEvent {
+  point: number;   // 기록 시점 points.length = 이 교체가 처음 반영되는 랠리 인덱스(0-based)
+  setNo: number;
+  side: Side;
+  slot: number;    // 라인업 슬롯 0..5
+  inId: string;    // 코트로 들어온 선수
+  outId: string;   // 코트에서 나간 선수
+  kind: 'pinch' | 'block' | 'def';
+  enter: boolean;  // true=벤치 스페셜리스트 투입, false=원선발 복귀(원위치)
+}
+
 export interface SimResult {
   homeSets: number;
   awaySets: number;
   setScores: { home: number; away: number }[];
   points: PointLog[];
   subUse?: Record<string, number>; // 작전 교체로 코트에 선 선수 id → 출전 랠리 수(출전 성장 XP용)
+  subEvents?: SubEvent[];           // 작전 교체 연출 로그(보드가 코트 위 실제 교체를 보여주기 위함)
 }
 
 function targetPoints(setNo: number): number {

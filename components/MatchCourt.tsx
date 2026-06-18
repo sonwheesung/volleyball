@@ -2,7 +2,7 @@
 // 엔진 SimResult.points 만으로 각 랠리의 서브권·로테이션을 복원(엔진과 동일한 사이드아웃 규칙)
 // → 마커를 실제 코트 위치에 놓고 공을 득점 결과와 일치하게 애니메이션.
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, StyleSheet, Text, View } from 'react-native';
 import { theme } from './Screen';
 import { buildLineup } from '../engine/lineup';
@@ -14,7 +14,7 @@ import {
 } from './courtLayout';
 import { ballPath as ballPathRaw, SEG_DUR as DUR, markerTravelMs, type Move, type WP } from './courtPath';
 import type { PointHow } from '../engine/rally';
-import { segmentTargets, reconstructRallies, isInPlay, type RallyState } from './courtDirector';
+import { segmentTargets, reconstructRallies, isInPlay, applySubsToSix, type RallyState } from './courtDirector';
 import { commentLine } from './courtCommentary';
 
 // KOVO 라이트 시스템과 동일한 파스텔 포지션색 (Screen.tsx POS_COLOR와 일치)
@@ -24,6 +24,9 @@ const POS_COLOR: Record<Position, string> = {
 
 // 굳은(못 움직이는) 선수 테두리 — 서버(주황)·팀(잉크/흰)과 구분되는 선명한 블루(긴장·집중)
 const BRACED = '#2563EB';
+// 작전 교체 — 갓 투입된 선수 강조(골드). 코트 위에서 "방금 들어온 선수"를 또렷이.
+const SUB_GOLD = '#F2A93B';
+const SUB_KIND_KO: Record<'pinch' | 'block' | 'def', string> = { pinch: '서브 보강', block: '블로킹 보강', def: '수비 보강' };
 
 // 랠리 종결 자막 — 엔진이 기록한 사실(PointLog.how)을 그대로 외친다(보드가 지어내지 않음)
 // 색은 흰 뱃지 위에서 읽히도록 진한 톤으로(라이트 테마)
@@ -109,9 +112,22 @@ interface Props {
 }
 
 export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScore }: Props) {
-  const lineups: Lineups = useMemo(() => ({ home: buildLineup(home), away: buildLineup(away) }), [home, away]);
+  // 선발 라인업(고정) + 전 선수 id 맵(교체 선수 조회용)
+  const baseLineups: Lineups = useMemo(() => ({ home: buildLineup(home), away: buildLineup(away) }), [home, away]);
+  const byId = useMemo(() => {
+    const m = new Map<string, Player>();
+    for (const p of home) m.set(p.id, p);
+    for (const p of away) m.set(p.id, p);
+    return m;
+  }, [home, away]);
   const rallies = useMemo(() => reconstructRallies(sim), [sim]);
   const total = rallies.length;
+
+  // 특정 랠리 시점의 코트 라인업(작전 교체 반영) — subEvents 없으면 base 그대로(기존 동작 보존)
+  const effLineupsAt = useCallback((rallyIdx: number): Lineups => ({
+    home: { ...baseLineups.home, six: applySubsToSix(baseLineups.home.six, 'home', sim.subEvents, rallyIdx, byId) },
+    away: { ...baseLineups.away, six: applySubsToSix(baseLineups.away.six, 'away', sim.subEvents, rallyIdx, byId) },
+  }), [baseLineups, sim.subEvents, byId]);
 
   const [idx, setIdx] = useState(0);      // 현재 진행 중인 랠리
   const [segIdx, setSegIdx] = useState(0);// 랠리 내 공 이동 구간
@@ -127,15 +143,46 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
   const lastTargets = useRef<Record<string, { x: number; y: number }>>({});
 
   const finished = idx >= total;
+  // 현재/직전 랠리의 코트 라인업(교체 반영). 마커·궤적·중계가 모두 "그 순간 실제 코트 6인"을 본다.
+  const lineups: Lineups = useMemo(() => effLineupsAt(Math.min(idx, total - 1)), [effLineupsAt, idx, total]);
+  const prevLineups: Lineups = useMemo(() => effLineupsAt(Math.max(0, idx - 1)), [effLineupsAt, idx]);
   // 직전 랠리 낙구점 → 새 랠리 공 시작점으로 이어 붙여 공이 순간이동하지 않게
   const prevLast = useMemo(() => {
     if (finished || idx <= 0) return undefined;
-    const pp = ballPath(rallies[idx - 1], seed, lineups);
+    const pp = ballPath(rallies[idx - 1], seed, prevLineups);
     const w = pp[pp.length - 1];
     return { x: w.x, y: w.y };
-  }, [finished, rallies, idx, seed, lineups]);
+  }, [finished, rallies, idx, seed, prevLineups]);
   const path = useMemo(() => (finished ? [] : ballPath(rallies[idx], seed, lineups, prevLast)), [finished, rallies, idx, seed, lineups, prevLast]);
   const segCount = Math.max(0, path.length - 1);
+
+  // ── 작전 교체 연출 ── 이 랠리에 갓 투입된(enter) 선수 → 골드 강조 + 이름표 + 팝인
+  const enterEvs = useMemo(
+    () => (finished ? [] : (sim.subEvents ?? []).filter((e) => e.point === idx && e.enter)),
+    [sim.subEvents, idx, finished],
+  );
+  const subbedKeys = useMemo(() => new Set(enterEvs.map((e) => `${e.side}-${e.slot}`)), [enterEvs]);
+  const subPop = useRef(new Animated.Value(1)).current; // 투입 마커 팝인 스케일
+  useEffect(() => {
+    if (enterEvs.length === 0) return;
+    subPop.setValue(0.45);
+    Animated.spring(subPop, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }).start();
+  }, [enterEvs, subPop]);
+  // 교체 발생 랠리 진입 시 중계 한 줄(투입 + 같은 세트 내 복귀). 세트 경계 원복은 조용히(라인업 리셋이 당연).
+  useEffect(() => {
+    if (finished) return;
+    const all = sim.subEvents ?? [];
+    const curSet = rallies[Math.min(idx, total - 1)]?.setNo;
+    const evs = all.filter((e) => e.point === idx && (e.enter || e.setNo === curSet));
+    if (evs.length === 0) return;
+    const sideKo = (s: Side) => (s === 'home' ? '홈' : '원정');
+    const nm = (id: string) => byId.get(id)?.name ?? '선수';
+    const lines = evs.map((e) => e.enter
+      ? `🔄 교체 [${sideKo(e.side)}] ${nm(e.outId)} ▶ ${nm(e.inId)} · ${SUB_KIND_KO[e.kind]}`
+      : `↩ 교체 [${sideKo(e.side)}] ${nm(e.outId)} ▶ ${nm(e.inId)} · 원위치`);
+    setFeed((f) => [...f, ...lines].slice(-30));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idx]);
 
   // 구간 단위 진행 (위치·포물선·크기·점프를 prog 하나로 동기화)
   useEffect(() => {
@@ -206,7 +253,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
     return posRefs.current[key];
   };
 
-  type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean; braced: boolean };
+  type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean; braced: boolean; justSubbed: boolean };
   const buildMarkers = (side: Side): Mk[] => {
     const rot = side === 'home' ? stage.homeRot : stage.awayRot;
     const lu = side === 'home' ? lineups.home : lineups.away;
@@ -222,7 +269,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
       if (jumping) { const lp = posLast.current[`${side}-${i}`]; if (lp) { tx = lp.x; ty = lp.y; } } // 점프 중엔 제자리(착지 후 이동)
       const moving = (seg?.to.movers ?? []).some((mv) => mv.side === side && mv.idx === i);
       const braced = reactingSide === side && !moving && !jumping && !isServer; // 굳어서 못 움직이는 선수
-      arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer, braced });
+      const justSubbed = subbedKeys.has(`${side}-${i}`); // 이 랠리에 갓 투입된 선수
+      arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer, braced, justSubbed });
     }
     return arr;
   };
@@ -308,11 +356,17 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
             <Animated.View key={m.key} style={[styles.marker, {
               left: -MR, top: -MR,
               backgroundColor: color + (mine ? 'ff' : 'd0'),
-              borderColor: m.isServer ? theme.warn : m.braced ? BRACED : mine ? theme.text : '#FFFFFF',
-              borderWidth: m.isServer ? 2.5 : m.braced ? 2.5 : 1.5,
-              transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.jumping ? jumpScale : 1 }],
+              borderColor: m.justSubbed ? SUB_GOLD : m.isServer ? theme.warn : m.braced ? BRACED : mine ? theme.text : '#FFFFFF',
+              borderWidth: m.justSubbed ? 3 : m.isServer ? 2.5 : m.braced ? 2.5 : 1.5,
+              borderStyle: m.justSubbed ? 'dashed' : 'solid',
+              transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.justSubbed ? subPop : m.jumping ? jumpScale : 1 }],
             }]}>
               <Text style={styles.markerTxt}>{m.p?.position ?? ''}</Text>
+              {m.justSubbed ? (
+                <View style={styles.subTag}>
+                  <Text style={styles.subTagTxt} numberOfLines={1}>↑ {m.p?.name ?? '교체'}</Text>
+                </View>
+              ) : null}
             </Animated.View>
           );
         })}
@@ -386,6 +440,12 @@ const styles = StyleSheet.create({
     shadowColor: '#1B2A4A', shadowOpacity: 0.18, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 3,
   },
   markerTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
+  // 갓 투입된 선수 이름표 — 마커 아래 중앙(골드 칩)
+  subTag: { position: 'absolute', top: MR * 2 + 1, left: -25, width: 80, alignItems: 'center' },
+  subTagTxt: {
+    color: '#3D2A00', fontSize: 9.5, fontWeight: '900', backgroundColor: SUB_GOLD,
+    paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6, overflow: 'hidden',
+  },
   howBadge: {
     position: 'absolute', top: 8, alignSelf: 'center',
     backgroundColor: '#FFFFFFF2', borderWidth: 1.5, borderRadius: 14,

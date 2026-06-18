@@ -2,8 +2,8 @@
 // MatchCourt 렌더와 헤드리스 감사기(tools/auditBoard.ts)가 같은 함수를 쓴다
 // → 화면에 보이는 위치 = 감사기가 검사하는 위치(단일 소스, 검증 가능).
 
-import type { Side } from '../types';
-import type { SimResult } from '../engine/simMatch';
+import type { Player, Side } from '../types';
+import type { SimResult, SubEvent } from '../engine/simMatch';
 import {
   lineupIdxAt, zonePx, switchedSpots, receiveFormation, serveFormation, fanSlots, blockerWall, separateTargets,
   type Lineup, type Px,
@@ -140,6 +140,28 @@ export interface RallyState {
   setNo: number; home: number; away: number; scorer: Side; how?: PointHow;
   serving: Side; homeRot: number; awayRot: number;
   homeSetsBefore: number; awaySetsBefore: number;
+}
+
+/**
+ * 작전 교체 로그를 재생해 특정 랠리 시점의 코트 6인(라인업 슬롯)을 복원.
+ * subEvents 는 점(point) 오름차순 — point ≤ uptoRally 인 모든 교체를 슬롯에 순서대로 적용.
+ * (subIn·subOut·세트말 원복 모두 "슬롯 = inId" 형태라 누적 적용하면 그 랠리의 실제 점유자가 됨.)
+ * 결정론·승패 무영향: 보드 연출 전용. subEvents 없으면 base 그대로(기존 동작).
+ */
+export function applySubsToSix(
+  baseSix: Player[], side: Side, subEvents: SubEvent[] | undefined, uptoRally: number, byId: Map<string, Player>,
+): Player[] {
+  if (!subEvents || subEvents.length === 0) return baseSix;
+  let six: Player[] | null = null;
+  for (const e of subEvents) {
+    if (e.point > uptoRally) break;     // 오름차순 — 이후는 모두 미래
+    if (e.side !== side) continue;
+    const p = byId.get(e.inId);
+    if (!p) continue;
+    if (!six) six = baseSix.slice();
+    six[e.slot] = p;
+  }
+  return six ?? baseSix;
 }
 
 /** points[] → 랠리별 서브권·로테이션·세트 상태 복원 (engine/match.ts 규칙과 동일) */

@@ -4,7 +4,7 @@
 // playRally를 돌려 SimResult(간이 시뮬과 동일 계약)를 출력 → 드롭인 교체 가능.
 
 import type { Player, Side, CoachStyle, SubPolicy } from '../types';
-import type { SimResult, PointLog } from './simMatch';
+import type { SimResult, PointLog, SubEvent } from './simMatch';
 import type { Ratings } from './ratings';
 import { createRng, strSeed } from './rng';
 import { deriveRatings } from './ratings';
@@ -118,6 +118,7 @@ export function simulateMatch(
   const points: PointLog[] = [];
   const setScores: { home: number; away: number }[] = [];
   const subUse: Record<string, number> = {}; // 교체 출전 선수 id → 출전 랠리 수(출전 성장 XP용)
+  const subEvents: SubEvent[] = [];           // 교체 연출 로그(보드용, 순수 가산 — 승패 무영향)
   let homeSets = 0;
   let awaySets = 0;
   let setNo = 1;
@@ -152,18 +153,22 @@ export function simulateMatch(
       if (activeSubs[side].has(slot) || subBudget[side] < 2) return;
       // 이미 코트에 있으면 불가 — 같은 벤치 스페셜리스트가 두 슬롯에 중복 투입되는 것 방지
       if (st.six.some((p) => p.id === player.id)) return;
-      activeSubs[side].set(slot, { orig: st.six[slot], kind });
+      const outP = st.six[slot];
+      activeSubs[side].set(slot, { orig: outP, kind });
       st.six[slot] = player;
       if (!st.stam.has(player.id)) { st.stam.set(player.id, 1); tracked[side].push(player); }
       subBudget[side] -= 1; // IN
+      subEvents.push({ point: points.length, setNo, side, slot, inId: player.id, outId: outP.id, kind, enter: true });
     };
     const subOut = (side: Side, slot: number): void => {
       const st = teamOf(side);
       const rec = activeSubs[side].get(slot);
       if (!rec) return;
+      const outP = st.six[slot];
       st.six[slot] = rec.orig;
       activeSubs[side].delete(slot);
       subBudget[side] -= 1; // OUT (왕복 2회)
+      subEvents.push({ point: points.length, setNo, side, slot, inId: rec.orig.id, outId: outP.id, kind: rec.kind, enter: false });
     };
 
     while (!isSetOver(h, a, setNo)) {
@@ -268,9 +273,13 @@ export function simulateMatch(
       recover('away', awayStam, STAM_REGEN_BASE);
     }
 
-    // 세트 종료: 활성 교체 전부 원복(다음 세트 라인업 초기화)
+    // 세트 종료: 활성 교체 전부 원복(다음 세트 라인업 초기화) — 보드도 다음 세트 시작 랠리에서 원복
     for (const side of ['home', 'away'] as Side[]) {
-      for (const [slot, rec] of activeSubs[side]) teamOf(side).six[slot] = rec.orig;
+      for (const [slot, rec] of activeSubs[side]) {
+        const outP = teamOf(side).six[slot];
+        teamOf(side).six[slot] = rec.orig;
+        subEvents.push({ point: points.length, setNo, side, slot, inId: rec.orig.id, outId: outP.id, kind: rec.kind, enter: false });
+      }
       activeSubs[side].clear();
     }
 
@@ -280,7 +289,7 @@ export function simulateMatch(
     setNo++;
   }
 
-  return { homeSets, awaySets, setScores, points, subUse };
+  return { homeSets, awaySets, setScores, points, subUse, subEvents };
 }
 
 // momFactor 재노출(테스트/튜닝용)
