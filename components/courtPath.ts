@@ -165,12 +165,19 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     return wp;
   }
   if (r.how === 'serveErr') {
-    // 서브 범실: 네트에 걸리거나 길게 아웃 — 받는 팀은 판단(추격 없음)
+    // 서브 범실: 네트에 걸리거나 길게 아웃
     if (rng.next() < 0.5) {
+      // 네트인: 공이 네트에 걸린다. 넘어올지 몰라 가장 가까운 리시버가 네트로 달려갔다가, 안 넘어와 멈춘다.
       const nx = clampN(zonePx(serving, 1, W, H).x + rng.range(-0.08, 0.08) * W, 0.1 * W, 0.9 * W);
-      wp.push({ x: nx, y: serving === 'home' ? NETY + 4 : NETY - 4, side: serving, idx: -1, kind: 'serve', hold: true });
-      wp.push({ x: nx, y: serving === 'home' ? NETY + 20 : NETY - 20, side: serving, idx: -1, kind: 'fault', hold: true }); // 네트 아래로 뚝
+      const chargeY = recv === 'home' ? NETY + 30 : NETY - 30;        // 리시버 쪽 네트 앞
+      const charger = (line.length ? line : [recvIdx]).reduce(
+        (b, i) => (sd2(rf[i] ?? sw[recv].pos[i], { x: nx, y: chargeY }) < sd2(rf[b] ?? sw[recv].pos[b], { x: nx, y: chargeY }) ? i : b),
+        line[0] ?? recvIdx);
+      const charge: Mover = { side: recv, idx: charger, x: clampN(nx, 0.12 * W, 0.88 * W), y: chargeY };
+      wp.push({ x: nx, y: serving === 'home' ? NETY + 4 : NETY - 4, side: serving, idx: -1, kind: 'serve', hold: true, movers: [charge] });
+      wp.push({ x: nx, y: serving === 'home' ? NETY + 20 : NETY - 20, side: serving, idx: -1, kind: 'fault', hold: true, movers: [charge] }); // 네트 아래로 뚝(서버 쪽), 리시버는 네트 앞에서 멈춤
     } else {
+      // 길게 아웃 — 받는 팀은 아웃 판단(추격 없음)
       const ox = clampN(rf[recvIdx].x + rng.range(-0.12, 0.12) * W, 0.1 * W, 0.9 * W);
       wp.push({ x: ox, y: recv === 'home' ? H + 14 : -14, side: serving, idx: -1, kind: 'serve', hold: true }); // 길게 아웃
     }
