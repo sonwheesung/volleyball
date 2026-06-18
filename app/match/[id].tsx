@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
-import { useCallback, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, OvrBadge, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
@@ -25,6 +25,7 @@ export default function MatchBoard() {
   const recorded = useRef(false);
   // 관전이 끝나기 전엔 경기 결과(세트 스코어·승패)를 숨긴다 — 결정론 시뮬이라 미리 계산돼 있어도 스포일러 금지
   const [finished, setFinished] = useState(false);
+  const [confirmExit, setConfirmExit] = useState(false); // 관전 중 나가기 확인
   // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거)
   const [score, setScore] = useState({ h: 0, a: 0, homeSets: 0, awaySets: 0, setNo: 1 });
   const handleScore = useCallback((s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number }) => setScore(s), []);
@@ -68,6 +69,33 @@ export default function MatchBoard() {
     recordResult({ fixtureId: fixture.id, homeSets: data.sim.homeSets, awaySets: data.sim.awaySets });
   }, [isSandbox, data, fixture, recordResult]);
 
+  // 나가기 = 결과 즉시 확정 + 코트 이탈. 결정론 시뮬이라 끝까지 본 것과 동일한 결과를 바로 적립
+  // (조기 이탈 시 "그날은 지났는데 결과 미기록" 한정 상태를 없앤다). 다음 경기는 일정에서 자연히 다음 차례.
+  const handleExit = useCallback(() => {
+    if (!isSandbox && data && fixture && !recorded.current) {
+      recorded.current = true;
+      recordResult({ fixtureId: fixture.id, homeSets: data.sim.homeSets, awaySets: data.sim.awaySets });
+    }
+    setConfirmExit(false);
+    router.back();
+  }, [isSandbox, data, fixture, recordResult, router]);
+
+  // 나가기 요청 — 관전 중(미종료)이면 확인 모달, 종료/샌드박스면 즉시 이탈
+  const requestExit = useCallback(() => {
+    if (finished || isSandbox) handleExit();
+    else setConfirmExit(true);
+  }, [finished, isSandbox, handleExit]);
+
+  // Android 하드웨어 백 가로채기 — 관전 중엔 확인 모달을 띄운다(결과가 바로 확정되므로)
+  useEffect(() => {
+    const sub = BackHandler.addEventListener('hardwareBackPress', () => {
+      if (finished || isSandbox || confirmExit) return false; // 기본 동작(나가기) 허용
+      setConfirmExit(true);
+      return true; // 가로채기
+    });
+    return () => sub.remove();
+  }, [finished, isSandbox, confirmExit]);
+
   if (isSandbox && !DEV_TOOLS) return <Redirect href="/(tabs)/" />; // 테스트 경기 모드 — 실전 빌드 차단(딥링크 방어)
   if (!data) {
     return (
@@ -88,6 +116,7 @@ export default function MatchBoard() {
   );
 
   return (
+    <>
     <ScrollView
       style={styles.root}
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 10, paddingBottom: insets.bottom + 16 }]}
@@ -142,8 +171,30 @@ export default function MatchBoard() {
       ) : null}
 
       <View style={{ height: 4 }} />
-      <Button label={finished ? `나가기 (${winnerName} 승)` : '나가기'} onPress={() => router.back()} />
-    </ScrollView>
+      <Button label={finished ? `나가기 (${winnerName} 승)` : '나가기'} onPress={requestExit} />
+      </ScrollView>
+
+      {/* 관전 중 나가기 확인 — 나가면 결정론 결과가 바로 확정된다 */}
+      <Modal visible={confirmExit} transparent animationType="fade" onRequestClose={() => setConfirmExit(false)}>
+        <Pressable style={styles.backdrop} onPress={() => setConfirmExit(false)}>
+          <Pressable style={styles.modal} onPress={() => {}}>
+            <Text style={styles.modalTitle}>경기를 나갈까요?</Text>
+            <Text style={styles.modalBody}>
+              지금 나가면 이 경기 결과가 <Text style={{ fontWeight: '900', color: theme.text }}>바로 확정</Text>됩니다.{'\n'}
+              ({data.home.name} vs {data.away.name} — 끝까지 본 것과 같은 결과로 기록)
+            </Text>
+            <View style={styles.modalBtns}>
+              <Pressable style={[styles.mBtn, styles.mGhost]} onPress={() => setConfirmExit(false)}>
+                <Text style={styles.mGhostText}>계속 관전</Text>
+              </Pressable>
+              <Pressable style={[styles.mBtn, styles.mPrimary]} onPress={handleExit}>
+                <Text style={styles.mPrimaryText}>결과 확정하고 나가기</Text>
+              </Pressable>
+            </View>
+          </Pressable>
+        </Pressable>
+      </Modal>
+    </>
   );
 }
 
@@ -167,4 +218,14 @@ const styles = StyleSheet.create({
   setChip: { backgroundColor: theme.card, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center', borderWidth: 1, borderColor: theme.border },
   setChipLabel: { color: theme.muted, fontSize: 10 },
   setChipScore: { color: theme.text, fontSize: 14, fontWeight: '800' },
+  backdrop: { flex: 1, backgroundColor: '#15202B80', alignItems: 'center', justifyContent: 'center', padding: 28 },
+  modal: { backgroundColor: theme.card, borderRadius: 18, padding: 22, gap: 12, alignSelf: 'stretch' },
+  modalTitle: { color: theme.text, fontSize: 18, fontWeight: '900', textAlign: 'center' },
+  modalBody: { color: theme.muted, fontSize: 13.5, lineHeight: 20, textAlign: 'center' },
+  modalBtns: { flexDirection: 'row', gap: 10, marginTop: 4 },
+  mBtn: { flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
+  mGhost: { backgroundColor: theme.cardAlt },
+  mGhostText: { color: theme.text, fontSize: 15, fontWeight: '800' },
+  mPrimary: { backgroundColor: theme.accent },
+  mPrimaryText: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '800' },
 });
