@@ -107,11 +107,13 @@ interface Props {
   away: Player[];
   seed: number;
   mineSide: Side | null;
+  startIdx?: number;                    // 이어보기 — 이 랠리부터 재생
+  onProgress?: (idx: number) => void;   // 현재 랠리 인덱스 보고(이어보기 저장용)
   onFinished?: () => void;
   onScore?: (s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number }) => void;
 }
 
-export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScore }: Props) {
+export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgress, onFinished, onScore }: Props) {
   // 선발 라인업(고정) + 전 선수 id 맵(교체 선수 조회용)
   const baseLineups: Lineups = useMemo(() => ({ home: buildLineup(home), away: buildLineup(away) }), [home, away]);
   const byId = useMemo(() => {
@@ -129,9 +131,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
     away: { ...baseLineups.away, six: applySubsToSix(baseLineups.away.six, 'away', sim.subEvents, rallyIdx, byId) },
   }), [baseLineups, sim.subEvents, byId]);
 
-  const [idx, setIdx] = useState(0);      // 현재 진행 중인 랠리
-  const [segIdx, setSegIdx] = useState(0);// 랠리 내 공 이동 구간
-  const [shown, setShown] = useState(-1); // 점수에 반영된 마지막 랠리
+  // 이어보기: 저장된 랠리부터 시작(범위 클램프). 점수도 그 시점으로 맞춘다(shown = 시작-1).
+  const resumeAt = Math.min(Math.max(0, startIdx ?? 0), Math.max(0, total - 1));
+  const [idx, setIdx] = useState(resumeAt);       // 현재 진행 중인 랠리
+  const [segIdx, setSegIdx] = useState(0);        // 랠리 내 공 이동 구간
+  const [shown, setShown] = useState(resumeAt > 0 ? resumeAt - 1 : -1); // 점수에 반영된 마지막 랠리
   const [playing, setPlaying] = useState(true);
   const [fast, setFast] = useState(false);
   const [feed, setFeed] = useState<string[]>([]); // 중계 텍스트(최근 라인 유지)
@@ -218,6 +222,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
       onFinished?.();
     }
   }, [finished, onFinished]);
+
+  // 현재 랠리 인덱스 보고 — 부모(경기 화면)가 이어보기 위치를 저장하는 데 쓴다
+  useEffect(() => { onProgress?.(idx); }, [idx, onProgress]);
 
   const seg = !finished && segIdx < segCount ? { from: path[segIdx], to: path[segIdx + 1] } : null;
 

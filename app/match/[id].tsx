@@ -22,7 +22,11 @@ export default function MatchBoard() {
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const recordResult = useGameStore((s) => s.recordResult);
+  const watchProgress = useGameStore((s) => s.watchProgress);
+  const saveWatchProgress = useGameStore((s) => s.saveWatchProgress);
+  const clearWatchProgress = useGameStore((s) => s.clearWatchProgress);
   const recorded = useRef(false);
+  const progressRef = useRef(0); // MatchCourt가 보고하는 현재 랠리 인덱스(이어보기 저장용)
   // 관전이 끝나기 전엔 경기 결과(세트 스코어·승패)를 숨긴다 — 결정론 시뮬이라 미리 계산돼 있어도 스포일러 금지
   const [finished, setFinished] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false); // 관전 중 나가기 확인
@@ -67,20 +71,30 @@ export default function MatchBoard() {
     if (isSandbox || !data || !fixture || recorded.current) return;
     recorded.current = true;
     recordResult({ fixtureId: fixture.id, homeSets: data.sim.homeSets, awaySets: data.sim.awaySets });
-  }, [isSandbox, data, fixture, recordResult]);
+    clearWatchProgress(fixture.id); // 끝까지 봤으니 이어보기 위치 삭제
+  }, [isSandbox, data, fixture, recordResult, clearWatchProgress]);
 
-  // 나가기 = 결과 즉시 확정 + 코트 이탈. 결정론 시뮬이라 끝까지 본 것과 동일한 결과를 바로 적립
-  // (조기 이탈 시 "그날은 지났는데 결과 미기록" 한정 상태를 없앤다). 다음 경기는 일정에서 자연히 다음 차례.
+  const onProgress = useCallback((i: number) => { progressRef.current = i; }, []);
+
+  // 이어보기: 관전 위치를 저장하고 나간다(결과 미확정 — 다음에 이 지점부터 다시 본다)
+  const handleResume = useCallback(() => {
+    if (!isSandbox && fixture) saveWatchProgress(fixture.id, progressRef.current);
+    setConfirmExit(false);
+    router.back();
+  }, [isSandbox, fixture, saveWatchProgress, router]);
+
+  // 결과 확정 = 결정론 결과를 바로 적립(끝까지 본 것과 동일). 이어보기 위치는 삭제.
   const handleExit = useCallback(() => {
     if (!isSandbox && data && fixture && !recorded.current) {
       recorded.current = true;
       recordResult({ fixtureId: fixture.id, homeSets: data.sim.homeSets, awaySets: data.sim.awaySets });
     }
+    if (!isSandbox && fixture) clearWatchProgress(fixture.id);
     setConfirmExit(false);
     router.back();
-  }, [isSandbox, data, fixture, recordResult, router]);
+  }, [isSandbox, data, fixture, recordResult, clearWatchProgress, router]);
 
-  // 나가기 요청 — 관전 중(미종료)이면 확인 모달, 종료/샌드박스면 즉시 이탈
+  // 나가기 요청 — 관전 중(미종료)이면 확인 모달(이어보기/확정 선택), 종료/샌드박스면 즉시 이탈
   const requestExit = useCallback(() => {
     if (finished || isSandbox) handleExit();
     else setConfirmExit(true);
@@ -152,6 +166,8 @@ export default function MatchBoard() {
           away={data.awaySquad}
           seed={data.seed}
           mineSide={mineSide}
+          startIdx={fixture ? watchProgress[fixture.id] : undefined}
+          onProgress={onProgress}
           onFinished={onFinished}
           onScore={handleScore}
         />
@@ -180,17 +196,18 @@ export default function MatchBoard() {
           <Pressable style={styles.modal} onPress={() => {}}>
             <Text style={styles.modalTitle}>경기를 나갈까요?</Text>
             <Text style={styles.modalBody}>
-              지금 나가면 이 경기 결과가 <Text style={{ fontWeight: '900', color: theme.text }}>바로 확정</Text>됩니다.{'\n'}
-              ({data.home.name} vs {data.away.name} — 끝까지 본 것과 같은 결과로 기록)
+              <Text style={{ fontWeight: '900', color: theme.text }}>이어보기</Text>는 다음에 이 지점부터 다시 볼 수 있어요.{'\n'}
+              <Text style={{ fontWeight: '900', color: theme.text }}>결과 확정</Text>은 지금 바로 결과를 기록합니다.
             </Text>
-            <View style={styles.modalBtns}>
-              <Pressable style={[styles.mBtn, styles.mGhost]} onPress={() => setConfirmExit(false)}>
-                <Text style={styles.mGhostText}>계속 관전</Text>
-              </Pressable>
-              <Pressable style={[styles.mBtn, styles.mPrimary]} onPress={handleExit}>
-                <Text style={styles.mPrimaryText}>결과 확정하고 나가기</Text>
-              </Pressable>
-            </View>
+            <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={handleResume}>
+              <Text style={styles.mPrimaryText}>나중에 이어보기</Text>
+            </Pressable>
+            <Pressable style={[styles.mBtnWide, styles.mGhost]} onPress={handleExit}>
+              <Text style={styles.mGhostText}>결과 확정하고 나가기</Text>
+            </Pressable>
+            <Pressable style={styles.mTextBtn} onPress={() => setConfirmExit(false)}>
+              <Text style={styles.mTextBtnTxt}>계속 관전</Text>
+            </Pressable>
           </Pressable>
         </Pressable>
       </Modal>
@@ -222,10 +239,11 @@ const styles = StyleSheet.create({
   modal: { backgroundColor: theme.card, borderRadius: 18, padding: 22, gap: 12, alignSelf: 'stretch' },
   modalTitle: { color: theme.text, fontSize: 18, fontWeight: '900', textAlign: 'center' },
   modalBody: { color: theme.muted, fontSize: 13.5, lineHeight: 20, textAlign: 'center' },
-  modalBtns: { flexDirection: 'row', gap: 10, marginTop: 4 },
-  mBtn: { flex: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center', justifyContent: 'center' },
+  mBtnWide: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
   mGhost: { backgroundColor: theme.cardAlt },
   mGhostText: { color: theme.text, fontSize: 15, fontWeight: '800' },
   mPrimary: { backgroundColor: theme.accent },
-  mPrimaryText: { color: '#FFFFFF', fontSize: 14.5, fontWeight: '800' },
+  mPrimaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  mTextBtn: { alignItems: 'center', paddingVertical: 6, marginTop: 2 },
+  mTextBtnTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
 });

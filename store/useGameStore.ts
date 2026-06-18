@@ -60,6 +60,7 @@ interface GameState {
   season: number;                              // 0-based 경과 시즌
   currentDay: number;                          // 시즌 내 경과 일수
   results: Record<string, MatchResult>;
+  watchProgress: Record<string, number>;       // fixtureId → 관전한 랠리 인덱스(이어보기). 종료/확정 시 삭제
   contractOverrides: Record<string, Contract>;
   released: string[];
   inSeasonTx: Tx[];                            // 시즌 중 이동(방출/영입) — dynamics 주입
@@ -100,6 +101,8 @@ interface GameState {
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
   recordResult: (r: MatchResult) => void;
+  saveWatchProgress: (fixtureId: string, idx: number) => void; // 이어보기 위치 저장
+  clearWatchProgress: (fixtureId: string) => void;             // 종료·결과 확정 시 삭제
   reSign: (playerId: string, contract: Contract) => void;
   release: (playerId: string) => boolean;
   unrelease: (playerId: string) => boolean;
@@ -142,6 +145,7 @@ const freshSave = {
   season: 0,
   currentDay: 0,
   results: {} as Record<string, MatchResult>,
+  watchProgress: {} as Record<string, number>,
   contractOverrides: {} as Record<string, Contract>,
   released: [] as string[],
   inSeasonTx: [] as Tx[],
@@ -205,6 +209,12 @@ export const useGameStore = create<GameState>()(
       },
       setDay: (day) => set((s) => ({ currentDay: Math.max(s.currentDay, day) })),
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
+      saveWatchProgress: (fixtureId, idx) => set((s) => ({ watchProgress: { ...s.watchProgress, [fixtureId]: idx } })),
+      clearWatchProgress: (fixtureId) => set((s) => {
+        if (s.watchProgress[fixtureId] === undefined) return {};
+        const next = { ...s.watchProgress }; delete next[fixtureId];
+        return { watchProgress: next };
+      }),
       reSign: (playerId, contract) =>
         set((s) => ({ contractOverrides: { ...s.contractOverrides, [playerId]: contract } })),
       // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용.
@@ -664,6 +674,7 @@ export const useGameStore = create<GameState>()(
           season: nextSeason,
           currentDay: 0,
           results: {},
+          watchProgress: {}, // 새 시즌 — 이어보기 위치 초기화
           contractOverrides: {},
           released: [],
           inSeasonTx: [],
@@ -705,6 +716,7 @@ export const useGameStore = create<GameState>()(
         season: s.season,
         currentDay: s.currentDay,
         results: s.results,
+        watchProgress: s.watchProgress,
         contractOverrides: s.contractOverrides,
         released: s.released,
         inSeasonTx: s.inSeasonTx,

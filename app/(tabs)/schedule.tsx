@@ -16,6 +16,7 @@ export default function Schedule() {
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
+  const watchProgress = useGameStore((s) => s.watchProgress);
   const setDay = useGameStore((s) => s.setDay);
 
   // "진행" 의사결정은 순수 오케스트레이터에 위임
@@ -115,7 +116,12 @@ export default function Schedule() {
               <OvrBadge value={preview.oppOvr} />
             </View>
           </Row>
-          <Button label={preview.important ? '관전하러 가기 →' : '경기 시작'} onPress={onAdvance} />
+          <Button
+            label={nextFixture && watchProgress[nextFixture.id] !== undefined
+              ? '이어보기 →'
+              : preview.important ? '관전하러 가기 →' : '경기 시작'}
+            onPress={onAdvance}
+          />
           <Muted style={{ fontSize: 12 }}>
             {preview.important
               ? '경기 보드에서 작전 방침(핀치 서버·블로킹·수비)을 조정할 수 있습니다.'
