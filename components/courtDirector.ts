@@ -5,7 +5,7 @@
 import type { Side } from '../types';
 import type { SimResult } from '../engine/simMatch';
 import {
-  lineupIdxAt, zonePx, switchedSpots, receiveFormation, fanSlots, blockerWall, separateTargets,
+  lineupIdxAt, zonePx, switchedSpots, receiveFormation, serveFormation, fanSlots, blockerWall, separateTargets,
   type Lineup, type Px,
 } from './courtLayout';
 import type { WP, Move, Lineups } from './courtPath';
@@ -106,9 +106,13 @@ export function segmentTargets(
     // 죽은 공에 공격 전환(스위칭 질주) 금지. 추격자(movers)만 공을 쫓는다.
     const servePhase = segKind === 'serve' || seg?.to.hold === true;
     const holdReceive = !inPlay || (servePhase && side !== stage.serving);
+    // 서브 컨택 순간: 받는 팀=리시브 대형, 서브 팀=오버랩 합법 베이스(직후 스위칭 전환).
+    // 둘 다 로테이션 순서를 지킨다(BOARD_RULES 18). 그 외 인플레이는 스위칭(전문 포지션).
     const posMap = holdReceive
       ? receiveFormation(side, lu, rot, W, H)
-      : switchedSpots(side, lu, rot, side === offSide, W, H).pos;
+      : servePhase && side === stage.serving
+        ? serveFormation(side, lu, rot, W, H)
+        : switchedSpots(side, lu, rot, side === offSide, W, H).pos;
     // 단, 받는 팀 세터는 서브 컨택과 동시에 침투 출발(실제 배구) — 패스 도착 전에 세팅 자리 도달
     if (servePhase && side !== stage.serving) {
       const sIdx = lu.six.findIndex((p) => p.position === 'S');

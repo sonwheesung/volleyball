@@ -28,6 +28,14 @@ export const lineupIdxAt = (r: number, zone: number) => (r + zone - 1) % 6;
 export const zoneOfIdx = (rot: number, i: number) => ((i - rot) % 6 + 6) % 6 + 1;
 const isBackZone = (z: number) => z === 1 || z === 5 || z === 6;
 
+// ── 오버랩 합법 레인 (CLAUDE.md 4.3 로테이션) ──
+// 서브 컨택 순간 6명은 인접 기준 로테이션 순서를 지켜야 한다:
+//   같은 행 좌→중→우(전위 4·3·2 / 후위 5·6·1), 같은 열 전위가 후위보다 네트에 가깝다(4·5 / 3·6 / 2·1).
+// x를 존 가로랭크로만, y를 전/후위 밴드로만 정하면 위 두 순서가 구성상 보장된다.
+const LANE_X = [0.17, 0.5, 0.83]; // 좌·중·우 (home 프랙션)
+/** 존 → 가로랭크(L0/C1/R2): {4,5}=좌 · {3,6}=중 · {2,1}=우 */
+const lateralRank = (zone: number): number => (zone === 4 || zone === 5 ? 0 : zone === 3 || zone === 6 ? 1 : 2);
+
 /** 존 중심 좌표(px) — 홈은 하단, 원정은 상단(좌우·전후 점대칭) */
 export function zonePx(side: Side, zone: number, W: number, H: number): Px {
   const [col, row] = GRID[zone];
@@ -155,34 +163,37 @@ export function receiveLine(lu: Lineup, rot: number): number[] {
   return passers.slice(0, 3);
 }
 
-/** 서브 받기 전 대형 — 3-패서 리시브(리베로 표시 슬롯+OH가 좌·중·우),
- *  전위 공격수는 네트 대기(후위 비패서는 한 칸 깊게), 세터는 네트 사이드 코너에 은신. */
+/** 서브 받기 전 대형 — **오버랩 합법**(같은 행 좌<중<우, 같은 열 전위<후위)을 보존하면서
+ *  3-패서 리시브 룩(전위 공격수 네트 대기·후위 패서 깊게·세터 코너). x는 존 가로랭크로만,
+ *  y는 전/후위 밴드로만 정해 구성상 합법 — 밴드 분리(전위 max 0.665 < 후위 min 0.72)로 열 전후 보장.
+ *  세터는 서브 컨택과 동시에 침투(릴리즈)하는 단일 예외(디렉터가 별도 처리, MATCH_SYSTEM 1장). */
 export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number, H: number): Record<number, Px> {
-  const zoneOf = (i: number) => zoneOfIdx(rot, i);
   const mx = (f: number) => (side === 'home' ? f : 1 - f) * W;
   const my = (f: number) => (side === 'home' ? f : 1 - f) * H;
-  const baseX = (i: number) => ZONE_X[zoneOf(i)];
   const setterIdx = lu.six.findIndex((p) => p.position === 'S');
-  const pos: Record<number, Px> = {};
-
   const recv = receiveLine(lu, rot);
-  const netAtt = [0, 1, 2, 3, 4, 5].filter((i) => i !== setterIdx && !recv.includes(i));
+  const pos: Record<number, Px> = {};
+  for (let i = 0; i < 6; i++) {
+    const zone = zoneOfIdx(rot, i);
+    const front = !isBackZone(zone);
+    let yf: number;
+    if (i === setterIdx) yf = front ? 0.585 : 0.72;        // 세터: 전위면 네트 코너, 후위면 백밴드 얕게(릴리즈 대기)
+    else if (front) yf = recv.includes(i) ? 0.665 : 0.60;  // 전위: 패서면 미드, 비패서(공격수) 네트
+    else yf = recv.includes(i) ? 0.845 : 0.755;            // 후위: 패서 깊게, 비패서 얕게
+    pos[i] = { x: mx(LANE_X[lateralRank(zone)]), y: my(yf) };
+  }
+  return pos;
+}
 
-  // 패서 좌·중·우 펼침(W, 자연 x순 → 교차 방지)
-  const pLane: [number, number][] = [[0.2, 0.78], [0.5, 0.85], [0.8, 0.78]];
-  recv.slice().sort((a, b) => baseX(a) - baseX(b)).forEach((i, k) => { const [xf, yf] = pLane[k] ?? [0.5, 0.82]; pos[i] = { x: mx(xf), y: my(yf) }; });
-  // 비패서 대기 — 전위는 네트(0.6), 후위는 한 칸 깊게(0.7: 서브 전 오버랩 어색 방지)
-  const naLane: number[] = netAtt.length <= 1 ? [0.5] : netAtt.length === 2 ? [0.34, 0.66] : [0.26, 0.5, 0.74];
-  netAtt.slice().sort((a, b) => baseX(a) - baseX(b)).forEach((i, k) => {
-    const deep = isBackZone(zoneOf(i));
-    pos[i] = { x: mx(naLane[k] ?? 0.5), y: my(deep ? 0.7 : 0.6) };
-  });
-  // 세터: 네트 사이드 코너에 은신(후위면 약간 뒤) → 서브 순간 스위칭으로 침투
-  if (setterIdx >= 0) {
-    const sz = zoneOf(setterIdx);
-    const sxf = sz === 1 || sz === 2 ? 0.84 : sz === 4 || sz === 5 ? 0.16 : 0.5;
-    const syf = sz === 2 || sz === 3 || sz === 4 ? 0.58 : 0.66;
-    pos[setterIdx] = { x: mx(sxf), y: my(syf) };
+/** 서브 팀 대형(서버 제외 5인) — 서브 컨택 순간 **오버랩 합법** 베이스. 직후(패스 구간)부터 스위칭 전환.
+ *  x=존 가로랭크, y=전/후위 밴드. 서버(zone1)는 디렉터가 베이스라인으로 따로 보낸다. */
+export function serveFormation(side: Side, lu: Lineup, rot: number, W: number, H: number): Record<number, Px> {
+  const mx = (f: number) => (side === 'home' ? f : 1 - f) * W;
+  const my = (f: number) => (side === 'home' ? f : 1 - f) * H;
+  const pos: Record<number, Px> = {};
+  for (let i = 0; i < 6; i++) {
+    const zone = zoneOfIdx(rot, i);
+    pos[i] = { x: mx(LANE_X[lateralRank(zone)]), y: my(isBackZone(zone) ? 0.805 : 0.625) };
   }
   return pos;
 }

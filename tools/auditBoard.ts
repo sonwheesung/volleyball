@@ -21,6 +21,7 @@ import { simulateMatch } from '../engine/match';
 import { buildLineup } from '../engine/lineup';
 import { ballPath, SEG_DUR, markerTravelMs, type WP, type Lineups } from '../components/courtPath';
 import { segmentTargets, reconstructRallies, type RallyState } from '../components/courtDirector';
+import { lineupIdxAt } from '../components/courtLayout';
 import { commentLine } from '../components/courtCommentary';
 import type { Side } from '../types';
 
@@ -50,6 +51,23 @@ const flag = (kind: string, detail: string, frame?: Record<Key, Pt>, ball?: Pt) 
 let maxSpeed = 0; let maxSpeedCtx = '';
 const holeSamples: number[] = [];
 const endings: Record<string, number> = {}; // 보드가 그리는 랠리 종결 유형 분포
+
+// Q) 서브 오버랩 합법성 — 서브 컨택 순간 6명이 로테이션 순서를 지키는가(BOARD_RULES 18).
+//    같은 행 좌<중<우(전위 4·3·2 / 후위 5·6·1), 같은 열 전위가 후위보다 네트에 가깝다(4·5/3·6/2·1).
+//    home은 네트에 가까울수록 y작음·좌측 x작음, away는 점대칭(부호 반전). 서버·침투세터는 면제.
+function overlapViolations(side: Side, rot: number, posOf: (k: Key) => Pt, setterIdx: number, isServing: boolean, movers: Set<number> = new Set()): string[] {
+  const s = side === 'home' ? 1 : -1;
+  const idxAt = (z: number) => lineupIdxAt(rot, z);
+  const exempt = new Set<number>([isServing ? idxAt(1) : setterIdx, ...movers]); // 서버/침투세터/공 쫓는 리시버(릴리즈)
+  const has = (z: number) => !exempt.has(idxAt(z));
+  const P = (z: number) => posOf(`${side}-${idxAt(z)}`);
+  const v: string[] = [];
+  const front = (a: number, b: number, n: string) => { if (has(a) && has(b) && s * (P(b).y - P(a).y) <= 0.5) v.push(`${n}전후역전`); };
+  const lr = (l: number, r: number, n: string) => { if (has(l) && has(r) && s * (P(r).x - P(l).x) <= 0.5) v.push(`${n}좌우역전`); };
+  front(4, 5, '좌열'); front(3, 6, '중열'); front(2, 1, '우열');
+  lr(4, 3, '전위LC'); lr(3, 2, '전위CR'); lr(5, 6, '후위LC'); lr(6, 1, '후위CR');
+  return v;
+}
 
 const easeOut = (u: number) => 1 - (1 - u) * (1 - u); // Easing.out(quad)
 const lerp = (a: Pt, b: Pt, t: number): Pt => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
@@ -153,6 +171,19 @@ for (let m = 0; m < nMatches; m++) {
         if (Math.round(prevTgt.x) !== Math.round(tgt.x) || Math.round(prevTgt.y) !== Math.round(tgt.y)) {
           const fromP = posAt(key, tNow);
           anim[key] = { from: fromP, to: { ...tgt }, t0: tNow, dur: markerTravelMs(dist(fromP, tgt)) };
+        }
+      }
+
+      // Q) 서브 오버랩: 서브 컨택 순간 양 팀이 로테이션 순서를 지키는가(BOARD_RULES 18).
+      //    릴리즈(컨택 직후 움직임)는 면제 — 서버·침투세터·공을 쫓는 리시버(movers)는 합법적으로 이동 중.
+      if (to.kind === 'serve') {
+        const moverIdx = (side: Side) => new Set((to.movers ?? []).filter((mv) => mv.side === side).map((mv) => mv.idx));
+        for (const side of ['home', 'away'] as Side[]) {
+          const lu = side === 'home' ? L.home : L.away;
+          const sIdx = lu.six.findIndex((p) => p.position === 'S');
+          const sRot = side === 'home' ? r.homeRot : r.awayRot;
+          const vio = overlapViolations(side, sRot, (k) => targets[k], sIdx, r.serving === side, moverIdx(side));
+          if (vio.length) flag('Q.서브 오버랩', ctx(`${side} ${vio.join(' · ')}`), targets);
         }
       }
 
@@ -345,7 +376,7 @@ if (holeSamples.length) {
 log(`중계 텍스트: 랠리당 평균 ${(commentTotal / Math.max(1, totalRallies)).toFixed(1)}줄`);
 const total = Object.values(counts).reduce((a, b) => a + b, 0);
 if (total === 0) {
-  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치·토서점유·퍼스트터치배회·죽은공점유·스터프상승·공전달 모두 통과 (기준: docs/BOARD_RULES.md)`);
+  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치·토서점유·퍼스트터치배회·죽은공점유·스터프상승·공전달·서브오버랩 모두 통과 (기준: docs/BOARD_RULES.md)`);
 } else {
   log(`\n❌ 이상 ${total}건:`);
   for (const [k, n] of Object.entries(counts).sort((a, b) => b[1] - a[1])) log(`  ${k}: ${n}건`);
