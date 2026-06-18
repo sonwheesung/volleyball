@@ -143,9 +143,10 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   const line = receiveLine(recvLu, rotOf(recv));
   const NETY = 0.5 * H;
   const sd2 = (a: { x: number; y: number }, b: { x: number; y: number }) => (a.x - b.x) ** 2 + (a.y - b.y) ** 2;
-  let serveTarget = rng.next() < 0.7
-    ? { x: clampN((0.12 + rng.next() * 0.76) * W, 0.1 * W, 0.9 * W), y: (recv === 'home' ? 0.76 + rng.next() * 0.13 : 0.11 + rng.next() * 0.13) * H }  // 깊은 코스
-    : { x: clampN((0.18 + rng.next() * 0.64) * W, 0.1 * W, 0.9 * W), y: (recv === 'home' ? 0.58 + rng.next() * 0.08 : 0.34 + rng.next() * 0.08) * H }; // 짧은 서브
+  // 서브는 후위 리시브 존을 노린다 — 전위(네트 앞)로 떨어지면 받을 사람이 없어 비현실(2026-06-18 측정).
+  let serveTarget = rng.next() < 0.8
+    ? { x: clampN((0.12 + rng.next() * 0.76) * W, 0.1 * W, 0.9 * W), y: (recv === 'home' ? 0.76 + rng.next() * 0.13 : 0.11 + rng.next() * 0.13) * H }  // 깊은 코스(후위 리시브)
+    : { x: clampN((0.18 + rng.next() * 0.64) * W, 0.1 * W, 0.9 * W), y: (recv === 'home' ? 0.67 + rng.next() * 0.07 : 0.26 + rng.next() * 0.07) * H }; // 짧은 서브(3m 라인 부근 — 후위가 전진 리시브, 전위 아님)
   // 리시버 = 코스에 가장 가까운 패서("마이볼")
   const cands = line.length ? line : (sw[recv].backers.length ? sw[recv].backers : [serverIdx]);
   const recvIdx = cands.reduce((b, i) => (sd2(rf[i] ?? sw[recv].pos[i], serveTarget) < sd2(rf[b] ?? sw[recv].pos[b], serveTarget) ? i : b), cands[0]);
