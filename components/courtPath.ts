@@ -248,6 +248,10 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
 
   let firstTouch = recvIdx; // 이번 공격의 첫 터치(리시브/디그)한 선수 — 토스는 다른 선수가
   let touchPos = { x: serveTarget.x, y: serveTarget.y }; // 첫 터치 지점 — 그 선수는 한 박자 머문다(즉시 커버 참가 금지)
+  // 종결 공격팀(엔진 how 기준) — 이 팀이 아닌 쪽은 이 랠리를 끝내지 못하므로 찬스볼(프리볼)을 넘길 수 있다.
+  const winsByAtk0 = r.how === 'kill' || r.how === 'blockout' || r.how === 'cap' || r.how === 'tip';
+  const finalAtt: Side | null = r.how ? (winsByAtk0 ? r.scorer : other(r.scorer)) : null;
+  let lastWasFree = false; // 프리볼 직후 또 프리볼(핑퐁) 방지
   for (let hop = 0; hop < 6; hop++) {
     const def = other(att);
     // 리시브/디그 패스는 세터 자리 주변 "일정 범위"에서 랜덤하게 떨어진다(정확히 안 감)
@@ -279,6 +283,27 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
         ...(firstTouch !== tosserIdx ? [{ side: att, idx: firstTouch, x: touchPos.x, y: touchPos.y }] : []),
       ],
     });
+
+    // ── 찬스볼(프리볼) 전환 ── 리시브/디그가 무너져(아웃오브시스템) 공격을 못 짤 때, 언더로
+    // 네트 너머 깊숙이 넘긴다(3번째 컨택). 상대가 받아 인시스템 공격 = 찬스볼. 실제 배구의 흔한
+    // 장면(사용자 보고: 찬스볼 전환을 본 적이 없다). 종결 공격팀이 아닐 때만(이 팀은 못 끝낸다).
+    const outOfSystem = mag > 0.13 * W; // 패스가 세터에서 크게 벗어남 = 공격 조직 불가
+    if (att !== finalAtt && outOfSystem && !lastWasFree && hop < 4 && rng.next() < 0.5) {
+      const def0 = other(att);
+      const overX = clampN((0.22 + rng.next() * 0.56) * W, 0.14 * W, 0.86 * W);
+      const overY = (def0 === 'home' ? 0.72 + rng.next() * 0.12 : 0.16 + rng.next() * 0.12) * H; // 상대 후위 깊숙이
+      const dBacks0 = [1, 5, 6].map((z) => lineupIdxAt(rotOf(def0), z));
+      const rIdx = dBacks0.reduce((b, i) => (d2(swDef[def0].pos[i], { x: overX, y: overY }) < d2(swDef[def0].pos[b], { x: overX, y: overY }) ? i : b), dBacks0[0]);
+      // 넘기는 선수가 언더로 공을 높고 느리게 띄워 보낸다(블록 점프 없음 = pass kind). 상대 후위가 받으러 이동.
+      wp.push({ x: overX, y: overY, side: def0, idx: -1, kind: 'pass', dur: 640, arc: 0.18 * H, scale: 1.4, soft: true,
+        movers: [{ side: def0, idx: rIdx, x: overX, y: overY }] });
+      firstTouch = rIdx;
+      touchPos = { x: overX, y: overY };
+      lastWasFree = true;
+      att = def0;
+      continue;
+    }
+    lastWasFree = false;
 
     // ── 공격 종류 선택 (엔진 분포 근사: 속공 ~12%·시간차 ~7%·백어택 ~18%·오픈 나머지) ──
     const lu = att === 'home' ? L.home : L.away;
@@ -445,7 +470,19 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const stuffPt = { x: clampN(blockContact.x + rng.range(-0.05, 0.05) * W, 16, W - 16), y: dropY };
       // 공이 블록 정면으로 들어가 수직으로 꺾인다(빈 곳 통과 모순 제거). aim(점선)도 빼서 "엉뚱한 곳 점선" 방지.
       wp.push({ x: blockContact.x, y: blockContact.y, side: def, idx: -1, kind: 'spike', movers: coverMovers });
-      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', dur: 240, arc: 0, scale: 1, movers: chasersTo(att, stuffPt, 2, 0.9, 24) });
+      // 커버 선수들이 멀뚱히 서 있지 않고 떨어지는 공으로 **몸을 던진다**(가장 가까운 2명) — 닿기 직전
+      // (18px≈0.45m)에 멈춰 못 살린다(스터프라 실패). 나머지는 커버 자리 유지. (사용자 보고: 커버가 보고만 있다)
+      const stuffMovers: Mover[] = coverMovers.map((mv) => ({ ...mv }));
+      coverMovers.map((mv) => ({ mv, d: Math.hypot(mv.x - stuffPt.x, mv.y - stuffPt.y) || 1 }))
+        .sort((a, b) => a.d - b.d).slice(0, 2)
+        .forEach(({ mv, d }) => {
+          const j = stuffMovers.find((s) => s.idx === mv.idx && s.side === mv.side)!;
+          // 커버 자리에서 공 쪽으로 다이브하되 닿기 직전 24px(≈0.6m)에서 멈춘다 — 공 위에 서지 않게(N 룰).
+          const ux = (mv.x - stuffPt.x) / d, uy = (mv.y - stuffPt.y) / d;
+          j.x = stuffPt.x + ux * 24;
+          j.y = stuffPt.y + uy * 24;
+        });
+      wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', dur: 240, arc: 0, scale: 1, movers: stuffMovers });
     };
     const doTip = () => {
       // 페인트(연타) 득점: 블록 너머 빈 공간에 톡. 후보 낙하점 중 수비에서 가장 먼 곳(빈 공간)으로 —
@@ -487,11 +524,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       }
     };
 
-    if (r.how) {
-      // 사실 기반: 엔진이 기록한 종결을, 진 팀/이긴 팀이 맞는 공격 차례에 실행
-      const winsByAtk = r.how === 'kill' || r.how === 'blockout' || r.how === 'cap' || r.how === 'tip';
-      const finalAtt: Side = winsByAtk ? r.scorer : other(r.scorer);
-      if (att === finalAtt && (hop >= 3 || rng.next() < 0.7)) {
+    if (r.how && finalAtt) {
+      // 사실 기반: 엔진이 기록한 종결을, 진 팀/이긴 팀이 맞는 공격 차례에 실행.
+      // 즉시 종결 확률을 낮춰(0.7→0.55) 디그·커버·찬스볼 같은 랠리 장면이 더 자주 보이게 한다
+      // (사용자 보고: 커버/찬스볼 성공을 본 적이 없다 — 랠리가 1타에 끝나 장면이 안 생겼다).
+      if (att === finalAtt && (hop >= 4 || rng.next() < 0.55)) {
         if (r.how === 'tip') doTip();
         else if (r.how === 'blockout') doBlockout();
         else if (r.how === 'stuff') doStuff();
