@@ -196,14 +196,10 @@ export default function MatchBoard() {
           <Pressable style={styles.modal} onPress={() => {}}>
             <Text style={styles.modalTitle}>경기를 나갈까요?</Text>
             <Text style={styles.modalBody}>
-              <Text style={{ fontWeight: '900', color: theme.text }}>이어보기</Text>는 다음에 이 지점부터 다시 볼 수 있어요.{'\n'}
-              <Text style={{ fontWeight: '900', color: theme.text }}>결과 확정</Text>은 지금 바로 결과를 기록합니다.
+              지금까지 본 위치를 저장합니다.{'\n'}다음에 이 지점부터 이어서 볼 수 있어요.
             </Text>
             <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={handleResume}>
               <Text style={styles.mPrimaryText}>나중에 이어보기</Text>
-            </Pressable>
-            <Pressable style={[styles.mBtnWide, styles.mGhost]} onPress={handleExit}>
-              <Text style={styles.mGhostText}>결과 확정하고 나가기</Text>
             </Pressable>
             <Pressable style={styles.mTextBtn} onPress={() => setConfirmExit(false)}>
               <Text style={styles.mTextBtnTxt}>계속 관전</Text>
@@ -240,8 +236,6 @@ const styles = StyleSheet.create({
   modalTitle: { color: theme.text, fontSize: 18, fontWeight: '900', textAlign: 'center' },
   modalBody: { color: theme.muted, fontSize: 13.5, lineHeight: 20, textAlign: 'center' },
   mBtnWide: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
-  mGhost: { backgroundColor: theme.cardAlt },
-  mGhostText: { color: theme.text, fontSize: 15, fontWeight: '800' },
   mPrimary: { backgroundColor: theme.accent },
   mPrimaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   mTextBtn: { alignItems: 'center', paddingVertical: 6, marginTop: 2 },
