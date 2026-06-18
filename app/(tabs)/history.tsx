@@ -104,6 +104,7 @@ export default function History() {
               { label: '서브', w: awards.titles.serve },
               { label: '디그', w: awards.titles.dig },
               { label: '세트', w: awards.titles.set },
+              { label: '리시브', w: awards.titles.receive },
             ]).map((a) => (
               <View key={a.label} style={styles.awRow}>
                 <Text style={styles.awLabel}>{a.label}왕</Text>

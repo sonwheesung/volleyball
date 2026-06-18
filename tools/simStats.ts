@@ -96,7 +96,7 @@ function main(): void {
 }
 
 function blank(): ProdLine {
-  return { matches: 0, points: 0, spikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0 };
+  return { matches: 0, points: 0, spikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0 };
 }
 function add(acc: ProdLine, l: ProdLine): void {
   acc.points += l.points; acc.spikes += l.spikes; acc.blocks += l.blocks;

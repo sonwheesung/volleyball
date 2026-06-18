@@ -151,6 +151,7 @@ export interface SeasonAwards {
     serve: AwardWinner | null;      // 서브왕
     dig: AwardWinner | null;        // 디그왕
     set: AwardWinner | null;        // 세트왕
+    receive: AwardWinner | null;    // 리시브왕
   };
   best7: Best7Slot[];               // S·OH·OH·OP·MB·MB·L 순
   roundMvps: (AwardWinner | null)[]; // 라운드(leg)별 MVP

@@ -5,7 +5,7 @@ import type { Player, Position } from '../types';
 import type { ProdLine } from './production';
 
 const L = (o: Partial<ProdLine>): ProdLine =>
-  ({ matches: 1, points: 0, spikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, ...o });
+  ({ matches: 1, points: 0, spikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0, ...o });
 
 // position 만 필요 — 나머지는 더미
 const P = (pos: Position): Player => ({

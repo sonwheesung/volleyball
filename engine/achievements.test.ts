@@ -7,7 +7,7 @@ const MY = 'team_a';
 const winner = (teamId: string) => ({ playerId: 'p', teamId, value: 1 });
 const emptyAwards = (): SeasonAwards => ({
   mvp: null, finalsMvp: null, rookie: null, mostImproved: null,
-  titles: { scoring: null, spike: null, block: null, serve: null, dig: null, set: null },
+  titles: { scoring: null, spike: null, block: null, serve: null, dig: null, set: null, receive: null },
   best7: [], roundMvps: [],
 });
 

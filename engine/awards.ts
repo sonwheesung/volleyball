@@ -88,6 +88,7 @@ export function computeSeasonAwards(input: AwardsInput): SeasonAwards {
     serve: title('aces'),
     dig: title('digs'),
     set: title('assists'),
+    receive: title('receives'),
   };
 
   // ── 베스트7: 포지션별 최고(각 슬롯 중복 없이) ──

@@ -15,10 +15,11 @@ export interface ProdLine {
   aces: number;
   assists: number;  // 세트(세터)
   digs: number;
+  receives: number; // 서브 리시브(리시브왕) — 기록 전용(밸런스 무영향)
 }
 
 export const emptyProd = (): ProdLine => ({
-  matches: 0, points: 0, spikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0,
+  matches: 0, points: 0, spikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0,
 });
 
 /** 시즌 생산을 선수 통산 기록(CareerStats)에 누적한 새 선수 — 백년 누적 서사의 토대.
@@ -58,7 +59,7 @@ export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {
   return {
     matches: x.matches + b.matches, points: x.points + b.points,
     spikes: x.spikes + b.spikes, blocks: x.blocks + b.blocks, aces: x.aces + b.aces,
-    assists: x.assists + b.assists, digs: x.digs + b.digs,
+    assists: x.assists + b.assists, digs: x.digs + b.digs, receives: x.receives + b.receives,
   };
 }
 
@@ -71,6 +72,7 @@ const ATTACK: Record<Position, number> = { OP: 1.38, OH: 0.98, MB: 0.42, S: 0.08
 const BLOCK: Record<Position, number> = { MB: 1.0, OH: 0.6, OP: 0.6, S: 0.3, L: 0 };
 const SERVE: Record<Position, number> = { OP: 1, OH: 1, MB: 1, S: 1, L: 0.1 };
 const DIG: Record<Position, number> = { L: 1.3, OH: 0.6, S: 0.5, MB: 0.4, OP: 0.3 };
+const RECV: Record<Position, number> = { L: 1.3, OH: 1.0, S: 0.1, MB: 0.15, OP: 0.15 }; // 서브 리시브 = 리베로+OH(W형)
 const ATK_FOCUS = 2.0; // 공격 집중도 — 좋은 공격수에게 세트 몰림(1옵션 에이스 부각)
 const BLK_FOCUS = 2.5; // 블록 집중도 — 좋은 블로커(센터)가 팀 블록 점유↑ → 스킬→블록 기울기 확보
 
@@ -132,6 +134,10 @@ export function attributeProduction(
     tally.set(id, l);
   };
 
+  // 서브권 추적(리시브 귀속용) — 세트 시작 서브팀 교대, 사이드아웃 시 교대(engine/match 규칙과 동일)
+  let serving: 'home' | 'away' = 'home';
+  let curSet = -1;
+
   sim.points.forEach((pt, i) => {
     const garbage = i >= total - gp;
     const offHome = pt.scorer === 'home';
@@ -142,6 +148,18 @@ export function attributeProduction(
     const off = garbage && offBench.length ? offBench : offStart;
     const def = garbage && defBench.length ? defBench : defStart;
     const roll = rng.next();
+
+    // 서브 리시브 귀속: 세트 시작 서브팀 복원 → 받는 팀의 패서(리베로+OH)가 리시브. 서브범실은 리시브 없음.
+    if (pt.setNo !== curSet) { curSet = pt.setNo; serving = pt.setNo % 2 === 1 ? 'home' : 'away'; }
+    if (pt.how !== 'serveErr') {
+      const recvHome = serving === 'away';
+      const recvStart = recvHome ? H.starters : A.starters;
+      const recvBench = recvHome ? H.bench : A.bench;
+      const recv = garbage && recvBench.length ? recvBench : recvStart;
+      const passer = pick(recv, (p) => RECV[p.position] * p.skReceive, rng.next());
+      if (passer) bump(passer.id, (l) => { l.receives++; });
+    }
+    if (pt.scorer !== serving) serving = pt.scorer; // 사이드아웃 → 서브권 교대
 
     // 득점 유형 비율 = 밸런싱된 엔진 실측에 맞춤(공격킬+블록아웃 58% / 스터프 9% / 에이스 5.7% / 상대범실 27%, KOVO 정렬 2026-06)
     if (roll < 0.58) {

@@ -24,7 +24,9 @@
 - `impactScore(l) = points + 0.25·assists + 0.18·digs` (`engine/awards.ts`) — 득점 위주, 세터·리베로도 경합 가능.
 - MVP만 `× teamWeight(rank)`. 기록왕·베스트7은 순수 1위.
 - 동률은 playerId 사전순으로 결정론 해소.
-- 리시브왕은 ProdLine에 리시브 미집계 → 보류(추후 telemetry 연동).
+- 리시브왕 ✅ 구현(2026-06-18): `ProdLine.receives` 추가 — `attributeProduction`이 서브권 추적으로 받는 팀
+  패서(리베로+OH)에 귀속(skReceive 가중). 측정: 포지션 점유 OH 56%·L 33%(W형 정렬), 리시브왕→상위 리베로.
+  기록 전용(밸런스 무영향).
 
 ## 3. 영속 (중요)
 production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에서 계산해 `archive`에 구워넣는다**(시즌별 영구 보존). 과거 시즌 시상은 archive에서만 조회.
