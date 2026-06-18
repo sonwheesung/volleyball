@@ -106,10 +106,12 @@ export function segmentTargets(
     // 죽은 공에 공격 전환(스위칭 질주) 금지. 추격자(movers)만 공을 쫓는다.
     const servePhase = segKind === 'serve' || seg?.to.hold === true;
     const holdReceive = !inPlay || (servePhase && side !== stage.serving);
-    // 서브 팀은 서브 베이스를 "상대 리시브"까지 유지한다 — 컨택 직후 전문 포지션으로 확 스위칭하면
-    // "상대 리시브 받자마자 자기 자리로 확 가는" 어색함이 된다(측정: 최대 6.2m 점프). 실제 배구처럼
-    // 상대가 공격을 시작할 때(토스/스파이크) 블록·부채꼴 수비로 한 번에 이동(아래 moveMap이 처리).
-    const servingDefBase = side === stage.serving && side !== offSide && (servePhase || segKind === 'pass');
+    // 서브 팀은 **서브 컨택 순간에만** 오버랩 베이스(serveFormation)를 유지한다(룰 Q 합법성).
+    // 서브를 보낸 직후(상대 리시브=pass 구간)부터는 곧바로 수비 전문 포지션으로 전환하기 시작한다 —
+    // 그래야 상대 공격(토스/스파이크) 전에 수비가 자리를 잡는다(2026-06-18 사용자 보고: 서브하자마자
+    // 이동해야 하는데 상대가 공격하려 할 때 그제서야 움직임). 전환은 pass 구간(긴 비행/리시브)에 걸쳐
+    // 점진적으로 일어나 "확 점프"가 아니다(markerTravelMs 속도 상한이 부드럽게 만든다).
+    const servingDefBase = side === stage.serving && side !== offSide && servePhase;
     // 서브 컨택 순간: 받는 팀=리시브 대형, 서브 팀=오버랩 합법 베이스(상대 리시브까지 유지).
     // 둘 다 로테이션 순서를 지킨다(BOARD_RULES 18). 그 외 인플레이는 스위칭(전문 포지션).
     const posMap = holdReceive

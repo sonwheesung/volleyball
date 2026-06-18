@@ -417,13 +417,13 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [...chasersTo(def, t, 1, 0.92, 22), ...coverMovers] });
     };
     const doBlockout = () => {
-      // 터치아웃: 블록 스치고 수비 없는 쪽으로 빠진다 — 후보 코스(좌·우 사이드, 엔드라인) 중
-      // 수비(대형+부채꼴)에서 가장 먼 곳. 추격 2명은 닿기 한 뼘 전(0.7m)에서 다이빙 — 공에
-      // 도달해 놓고 못 잡으면 모순이다(잡을 수 있는 공은 잡았어야 한다).
+      // 터치아웃: 블록 손끝을 맞고 **코트 밖 멀리** 빠진다 — 후보 코스(좌·우 사이드 한참 밖, 엔드라인
+      // 한참 밖) 중 수비에서 가장 먼 곳. 멀리 나가는 공은 못 잡는 게 정상 → 추격 2명은 라인에서 멈춰
+      // 멀어지는 공을 지켜본다(2026-06-18 사용자 보고: 멀리 나가야 하는데 잡을 수 있는 위치에 서 있음).
       const cs = [
-        { x: -20, y: (def === 'home' ? 0.74 + rng.next() * 0.1 : 0.16 + rng.next() * 0.1) * H },
-        { x: W + 20, y: (def === 'home' ? 0.74 + rng.next() * 0.1 : 0.16 + rng.next() * 0.1) * H },
-        { x: clampN(blockContact.x + rng.range(-0.2, 0.2) * W, 24, W - 24), y: def === 'home' ? H + 24 : -24 },
+        { x: -58, y: (def === 'home' ? 0.72 + rng.next() * 0.12 : 0.16 + rng.next() * 0.12) * H },
+        { x: W + 58, y: (def === 'home' ? 0.72 + rng.next() * 0.12 : 0.16 + rng.next() * 0.12) * H },
+        { x: clampN(blockContact.x + rng.range(-0.22, 0.22) * W, 24, W - 24), y: def === 'home' ? H + 52 : -52 },
       ];
       const fan = fanSlots(def, ap.x, W, H);
       const defDist = (p: { x: number; y: number }) =>
@@ -432,8 +432,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       // 강타가 블록 정면(손끝)을 강하게 때린다 — 짧고 빠른 잭(dur↓). 그 뒤 손끝에 에너지를 뺏겨 굴절구는
       // 크게 떠올라(arc↑) 천천히 코트 밖으로 빠진다 → 공이 블록으로 들어갔다가 빠진 게 보인다.
       wp.push({ x: blockContact.x, y: blockContact.y, side: def, idx: -1, kind: 'spike', dur: 95, movers: coverMovers });
-      // 후위 2명이 라인까지 쫓지만(아웃볼 추격 규칙 H) 떠오른 굴절구를 닿지 못한다(36px 밖 — 라인에서 멈춤).
-      wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', dur: 700, arc: 0.12 * H, scale: 1.05, movers: chasersTo(def, outPt, 2, 0.95, 36) });
+      // 후위 2명이 라인까지 쫓지만 멀리 나간 굴절구엔 닿지 못한다(70px≈1.7m 밖에서 멈춰 지켜봄 — 도착해서
+      // 못 잡는 모순 제거). 멀리 나간 공은 감사 룰 H(추격 사정권 밖)에서 추격 요구 면제.
+      wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', dur: 700, arc: 0.12 * H, scale: 1.05, movers: chasersTo(def, outPt, 2, 0.78, 70) });
     };
     const doStuff = () => {
       // 스터프: 벽에 막혀 수직으로 꺾임 — 공격수 바로 뒤(네트~3m)에 꽂힌다. 깊게 날아가면

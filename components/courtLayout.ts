@@ -200,7 +200,9 @@ export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number,
       yf = front ? 0.57 : 0.715;                            // 전위면 네트, 후위면 백밴드 얕게(릴리즈 대기)
     } else if (front) {
       xf = RF_FRONT_X[r] + jit(seed + 1, 0.04);
-      yf = recv.includes(i) ? 0.645 + jit(seed + 2, 0.025) : 0.58 + jit(seed + 2, 0.02); // 패서 미드 / 공격수 네트
+      // 전위 패서는 3m 라인(0.66) "뒤"로 확실히 물러나 리시브 자세를 잡는다(라인 위에 어정쩡 금지,
+      // 2026-06-18 사용자 보고). 비패서(공격수)는 네트 앞 대기. 후위 패서(≥0.75)보다는 앞이라 오버랩 합법.
+      yf = recv.includes(i) ? 0.695 + jit(seed + 2, 0.02) : 0.575 + jit(seed + 2, 0.02);
     } else {
       xf = RF_BACK_X[r] + jit(seed + 1, 0.04);
       // 후위 패서는 W 아크(중앙 더 깊게), 비패서는 얕게

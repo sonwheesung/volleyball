@@ -199,11 +199,14 @@ for (let m = 0; m < nMatches; m++) {
       }
       for (const [key, tgt] of Object.entries(targets)) lastTargets[key] = tgt;
 
-      // H) 아웃볼 추격: 추격자가 "존재"하는 걸로는 부족 — 최소 1명은 공 낙하점까지 실제 도달해야
-      //    (reach<1이면 선 안쪽에서 멈춰 어색 — 사용자 발견 사례를 상설 규칙화)
+      // H) 아웃볼 추격(사정권 한정): 공이 경계 가까이(≤30px≈0.7m) 빠진 "잡힐 뻔한" 아웃볼은
+      //    최소 1명이 낙하점까지(42px 내) 다이빙해야 — 선 안쪽에서 멈추면 어색. 단 **멀리 빠진**
+      //    터치아웃(>30px 밖)은 못 잡는 게 정상 → 추격 요구 면제(라인에서 지켜봄, 2026-06-18 사용자
+      //    보고: 멀리 나가는 공에 선수가 도달해 있으면 잡았어야 한다는 모순). N(공 위 점유<13px)은 유지.
       if (to.kind === 'fault') {
         const out = to.x < 0 || to.x > W || to.y < 0 || to.y > H;
-        if (out) {
+        const beyond = Math.max(to.x < 0 ? -to.x : to.x > W ? to.x - W : 0, to.y < 0 ? -to.y : to.y > H ? to.y - H : 0);
+        if (out && beyond <= 30) {
           if (!(to.movers && to.movers.length)) flag('H.아웃볼 무추격', ctx(`fault → (${to.x.toFixed(0)},${to.y.toFixed(0)}) 추격자 0명`));
           else {
             const nearest = Math.min(...to.movers.map((mv) => dist({ x: mv.x, y: mv.y }, { x: to.x, y: to.y })));

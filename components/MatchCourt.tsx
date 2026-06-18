@@ -139,6 +139,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
   const prog = useRef(new Animated.Value(0)).current; // 현재 구간 진행도 0..1
   const posRefs = useRef<Record<string, Animated.ValueXY>>({}); // 마커별 위치(선수 단위)
   const posLast = useRef<Record<string, { x: number; y: number }>>({});
+  const prevJumpKeys = useRef<Set<string>>(new Set()); // 직전 구간에 점프(블록/스파이크)한 마커 — 착지 후 한 박자 정지
   const finishedOnce = useRef(false);
   const lastTargets = useRef<Record<string, { x: number; y: number }>>({});
 
@@ -195,7 +196,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
         const c = HOW_CAPTION[r.how];
         setFeed((f) => [...f, `▶ ${c.txt} — ${r.scorer === 'home' ? '홈' : '원정'} 득점 (${r.home}:${r.away})`].slice(-30));
       }
-      const t = setTimeout(() => { setIdx((i) => i + 1); setSegIdx(0); }, fast ? 200 : 650);
+      // 점수 후 한 박자 멈춤 — 득점 자막을 읽고 숨 돌릴 틈(관전형). 빠르게 모드는 짧게.
+      const t = setTimeout(() => { setIdx((i) => i + 1); setSegIdx(0); }, fast ? 320 : 1300);
       return () => clearTimeout(t);
     }
     const to = path[segIdx + 1];
@@ -266,8 +268,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
       let tx = t.x;
       let ty = t.y;
       const jumping = jl.some((j) => j.side === side && j.idx === i);
-      if (jumping) { const lp = posLast.current[`${side}-${i}`]; if (lp) { tx = lp.x; ty = lp.y; } } // 점프 중엔 제자리(착지 후 이동)
       const moving = (seg?.to.movers ?? []).some((mv) => mv.side === side && mv.idx === i);
+      // 착지 정지: 직전 구간에 점프한 선수(블로커·공격수)는 다음 한 구간 동안 그 자리에 머문다 —
+      // 점프 직후 즉시 다른 곳으로 빠르게 미끄러지는 어색함 제거(2026-06-18 사용자 보고). 공을 쫓는
+      // 무버(디그·커버)는 예외(이동해야 함).
+      const settling = !jumping && !moving && prevJumpKeys.current.has(`${side}-${i}`);
+      if (jumping || settling) { const lp = posLast.current[`${side}-${i}`]; if (lp) { tx = lp.x; ty = lp.y; } } // 점프 중·착지 직후엔 제자리
       const braced = reactingSide === side && !moving && !jumping && !isServer; // 굳어서 못 움직이는 선수
       const justSubbed = subbedKeys.has(`${side}-${i}`); // 이 랠리에 갓 투입된 선수
       arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer, braced, justSubbed });
@@ -315,6 +321,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
       serving: stage.serving, homeRot: stage.homeRot, awayRot: stage.awayRot,
     });
     if (line) setFeed((f) => (f[f.length - 1] === line ? f : [...f, line].slice(-30)));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [segSig]);
+
+  // 구간이 바뀔 때마다 "이번 구간 점퍼"를 기록 → 다음 구간 렌더에서 착지 정지(settling) 판정에 쓴다.
+  useEffect(() => {
+    prevJumpKeys.current = new Set(jl.map((j) => `${j.side}-${j.idx}`));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segSig]);
 
