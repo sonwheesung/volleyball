@@ -428,11 +428,6 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
         <Ctrl label={fast ? '2x ✓' : '2x'} on={fast} onPress={() => setFast((f) => !f)} />
         <Ctrl label="⏭ 결과" onPress={() => { setPlaying(false); setShown(total - 1); setIdx(total); setSegIdx(0); }} />
       </View>
-
-      {/* 진행 바 */}
-      <View style={styles.track}>
-        <View style={[styles.fill, { width: `${total ? (Math.min(idx, total) / total) * 100 : 0}%` }]} />
-      </View>
     </View>
   );
 }
@@ -504,6 +499,4 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: theme.border, borderRadius: 8,
     paddingHorizontal: 16, paddingVertical: 8, minWidth: 64, textAlign: 'center',
   },
-  track: { height: 5, backgroundColor: theme.cardAlt, borderRadius: 3, marginHorizontal: 4, overflow: 'hidden' },
-  fill: { height: 5, backgroundColor: theme.accent },
 });
