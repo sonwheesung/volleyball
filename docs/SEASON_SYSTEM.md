@@ -31,10 +31,19 @@
 
 ## 3. 순위·리더보드 (data/standings.ts)
 
-- `seasonResults(uptoDay)` — `results`를 `fixture.dayIndex ≤ uptoDay`로 필터.
+- `seasonResults(uptoDay)` — 전 경기 결정론 재시뮬 중 `dayIndex ≤ uptoDay`만.
 - `computeStandings(uptoDay)` — 승–패–세트득실로 정렬. `baseVersion`별 캐시.
 - `standingsWorstFirst()` — 드래프트 순번(하위 우선) 소스.
 - 개인 리더보드/대시보드 요약은 `data/production.ts`(생산)와 `overall`로 산출.
+
+### 3.1 "치른 경기까지만" 컷오프 — `playedThroughDay(results)` (2026-06-18)
+- **문제**: `setDay`는 다음 경기를 관전하기 **전에** `currentDay`를 그 경기일로 올린다(그 사이 진화
+  재계산용). 그래서 화면이 `computeStandings(currentDay)`를 쓰면 **아직 관전·기록 안 한 경기까지**
+  순위·결과에 선반영돼, `results` 기반인 대시보드 성적(1승)과 어긋났다(순위표 2경기, 사용자 보고).
+- **해결**: `playedThroughDay(results)` = `results`로 완료한 경기 중 최대 `dayIndex`(없으면 −1).
+  순위/결과/대시보드 순위/PO 확정(clinch)은 `currentDay` 대신 이 값을 컷오프로 쓴다 → 전부 `results`
+  기준으로 일치(미관전 경기 비노출, 스포일러 안전). 검증: 1경기 기록 시 순위표 played 2→1.
+  적용처: `app/standings.tsx`·`app/(tabs)/index.tsx`·`app/results.tsx`·`app/(tabs)/schedule.tsx`(clinch).
 
 ## 4. 경기 진행 ("진행" 1일)
 

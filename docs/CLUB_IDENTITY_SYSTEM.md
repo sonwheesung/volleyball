@@ -60,8 +60,10 @@ interface ClubIdentity {
 
 - `data/clubIdentity.ts`에 `CLUB_IDENTITIES`(7) + `clubIdentity(teamId)` 셀렉터.
 - `recentRanks`·`titles`·`tradition`은 **순수 표시**(엔진 무관). 정체성 서사의 "과거".
-- 알려진 단순화: 창단 직후 신생팀도 `clubTenure`는 기존 공식(나이−19)을 따른다 —
-  프랜차이즈 표시에 약간의 lore 불일치가 있으나 밸런스 무해(향후 노브 후보).
+- 알려진 단순화: 창단 직후 신생팀도 `clubTenure`는 기존 공식(나이−19)을 따른다(시드 = 홈그로운 가정).
+  이 때문에 한때 25세↑ 전원이 "프랜차이즈"로 표시됐으나(측정 59%), **프랜차이즈 판정에 스타급
+  기량·외국인 제외 조건을 더해** 간판만 남겼다(2026-06-18, 측정 ~7% — `engine/cap.ts isFranchise`,
+  FA_SYSTEM 2.4). clubTenure 시드 자체(체미스트리·근속 서사용)는 그대로 둔다.
 
 ---
 
