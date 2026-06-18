@@ -6,7 +6,7 @@ import type { Side } from '../types';
 import type { PointHow } from '../engine/rally';
 import { createRng } from '../engine/rng';
 import {
-  lineupIdxAt, zonePx, switchedSpots, coverSpots, fanSlots, receiveFormation, receiveLine, type Lineup, type Switched,
+  lineupIdxAt, zonePx, switchedSpots, coverSpots, fanSlots, receiveFormation, receiveLine, NET_SAFE, type Lineup, type Switched,
 } from './courtLayout';
 
 export type Move = 'start' | 'return' | 'walk' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault' | 'bounce';
@@ -265,12 +265,6 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       ],
     });
 
-    // 볼핸들링 범실(사실): 더블컨택·캐치 휘슬 — 패스가 죽고 그 자리에서 종료
-    if (r.how === 'miscErr' && att === other(r.scorer) && (hop >= 2 || rng.next() < 0.7)) {
-      wp.push({ x: clampN(passSpot.x + rng.range(-12, 12), 12, W - 12), y: passSpot.y, side: att, idx: -1, kind: 'fault' });
-      return withBounce(wp, W, H);
-    }
-
     // ── 공격 종류 선택 (엔진 분포 근사: 속공 ~12%·시간차 ~7%·백어택 ~18%·오픈 나머지) ──
     const lu = att === 'home' ? L.home : L.away;
     const attFront = [2, 3, 4].map((z) => lineupIdxAt(rotOf(att), z));
@@ -298,7 +292,8 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     // 기준은 세터 "대형" x가 아니라 공이 실제 올라가는 지점(passSpot) — 토서는 패스를 따라
     // 움직이므로, 대형 기준으로 잡으면 패스가 흐른 날 타점·미끼가 토서 위에 포개진다.
     const toLeft = att === 'home' ? -1 : 1;
-    const hitY = att === 'home' ? 0.555 * H : 0.445 * H;
+    // 공격수 타점 — 네트 안전 여백 보장(점프 마커가 네트 침범 안 하게, 저해상도 폰 대응)
+    const hitY = att === 'home' ? Math.max(0.555 * H, 0.5 * H + NET_SAFE) : Math.min(0.445 * H, 0.5 * H - NET_SAFE);
     // 토스 지점에서 off만큼 옆 — 코트 가장자리에 몰리면 반대쪽으로(간격 보존이 우선)
     const besideX = (off: number) => {
       const want = passSpot.x + toLeft * off;
@@ -361,6 +356,14 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       ],
     });
 
+    // 볼핸들링 범실(사실): 세터의 세트가 더블컨택/들어올림 — 휘슬. 공이 (자기에게가 아니라) 공격수
+    // 쪽으로 올라가던 중 죽는다. 위 toss WP가 firstTouch·커버를 올바로 잡으므로(M 안전) 여기서 스파이크
+    // 대신 낙구만 — 공은 타점 부근에 뚝 떨어진다.
+    if (r.how === 'miscErr' && att === other(r.scorer) && (hop >= 2 || rng.next() < 0.7)) {
+      wp.push({ x: clampN(hit.x + rng.range(-10, 10), 12, W - 12), y: hit.y + (att === 'home' ? 14 : -14), side: att, idx: -1, kind: 'fault', soft: true });
+      return withBounce(wp, W, H);
+    }
+
     // 스파이크 경로(의도 코스)가 블록 폭 안이면 블록에 걸리고, 각으로 빠지면 안 걸린다
     const ap = hit; // 타점에서 발사
     const blockW = (atk === 'quick' ? 0.10 : atk === 'tempo' ? 0.14 : atk === 'back' ? 0.18 : inSystem ? 0.16 : 0.24) * W;
@@ -407,8 +410,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const defDist = (p: { x: number; y: number }) =>
         Math.min(...[0, 1, 2, 3, 4, 5].map((i) => d2(swDef[def].pos[i], p)), ...fan.map((s) => d2(s, p)));
       const outPt = cs.reduce((b, c) => (defDist(c) > defDist(b) ? c : b));
-      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
-      wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', movers: chasersTo(def, outPt, 2, 1.06, 28) });
+      // 강타가 블록 손끝을 강하게 때린다 — 짧고 빠른 잭(dur↓). 그 뒤 손끝에 에너지를 뺏겨 굴절구는
+      // 크게 떠올라(arc↑) 천천히 코트 밖으로 빠진다 → 원 스파이크보다 명백히 느리고 부드럽게 보인다.
+      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', dur: 95, aim: intended, movers: coverMovers });
+      // 후위 2명이 라인까지 쫓지만(아웃볼 추격 규칙 H) 떠오른 굴절구를 닿지 못한다(36px 밖 — 라인에서 멈춤).
+      wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', dur: 700, arc: 0.12 * H, scale: 1.05, movers: chasersTo(def, outPt, 2, 0.95, 36) });
     };
     const doStuff = () => {
       // 스터프: 벽에 막혀 수직으로 꺾임 — 공격수 바로 뒤(네트~3m)에 꽂힌다. 깊게 날아가면
@@ -421,15 +427,29 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', dur: 240, arc: 0, scale: 1, movers: chasersTo(att, stuffPt, 2, 0.9, 24) });
     };
     const doTip = () => {
-      // 페인트: 풀스윙 페이크(블로커 점프) → 손끝으로 살짝 — 블록 뒤·수비 앞 빈 공간에 톡.
-      // 얕은 수비가 늦게 몸을 던지지만 닿지 못한다.
-      const lat = (rng.next() < 0.5 ? -1 : 1) * (0.06 + rng.next() * 0.08) * W;
-      const t = {
-        x: clampN(ap.x + lat, 0.12 * W, 0.88 * W),
-        y: def === 'home' ? (0.58 + rng.next() * 0.08) * H : (0.34 + rng.next() * 0.08) * H,
-      };
-      const lungers = chasersTo(def, t, 2, 0.93); // 둘이 몸을 던진다 — 손끝 차이로 닿지 못함
-      wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', dur: 470, arc: 0.115 * H, scale: 1.3, soft: true, movers: [...lungers, ...coverMovers] });
+      // 페인트(연타) 득점: 블록 너머 빈 공간에 톡. 후보 낙하점 중 수비에서 가장 먼 곳(빈 공간)으로 —
+      // "수비가 앞에 있는데 안 잡는" 모순 방지. 두 연출(사용자 제안): ① 수비가 못 읽어 굳음(아무도 못 옴) /
+      // ② 가까운 수비가 손은 댔지만 리시브 실패 → 공이 동료 없는 쪽으로 튕겨 죽는다.
+      const cands = [-0.18, -0.09, 0.09, 0.18].map((dx) => ({
+        x: clampN(ap.x + dx * W, 0.14 * W, 0.86 * W),
+        y: def === 'home' ? (0.58 + rng.next() * 0.1) * H : (0.32 + rng.next() * 0.1) * H,
+      }));
+      const defDistT = (p: { x: number; y: number }) => Math.min(...[0, 1, 2, 3, 4, 5].map((i) => d2(swDef[def].pos[i], p)));
+      const t = cands.reduce((b, c) => (defDistT(c) > defDistT(b) ? c : b));
+      const nearIdx = nearestDig(t);
+      const np = swDef[def].pos[nearIdx];
+      const nearD = Math.hypot(np.x - t.x, np.y - t.y);
+      if (nearD < 0.16 * W) {
+        // ② 닿긴 했지만 리시브 실패 — 손에 맞고 동료 없는 쪽으로 튕겨 죽는다(연타 디그 실패)
+        wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', dur: 470, arc: 0.115 * H, scale: 1.3, soft: true,
+          movers: [{ side: def, idx: nearIdx, x: t.x + (np.x < t.x ? -8 : 8), y: t.y }, ...coverMovers] });
+        const dir = np.x < t.x ? 1 : -1; // 댄 손 반대쪽으로 튕김
+        const deflect = { x: clampN(t.x + dir * (0.18 + rng.next() * 0.1) * W, 10, W - 10), y: clampN(t.y + (def === 'home' ? 0.1 : -0.1) * H, 0.08 * H, 0.92 * H) };
+        wp.push({ ...deflect, side: def, idx: -1, kind: 'fault', soft: true });
+      } else {
+        // ① 수비가 못 읽어 굳음 — 아무도 못 와 빈 공간에 톡 떨어진다(경직)
+        wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', dur: 470, arc: 0.115 * H, scale: 1.3, soft: true, movers: coverMovers });
+      }
     };
     const doAtkErr = () => {
       if (rng.next() < 0.45) {

@@ -97,23 +97,30 @@ export function fanSlots(side: Side, attackX: number, W: number, H: number): Px[
   return [{ x: sx[0], y: yDeep }, { x: sx[1], y: yMid }, { x: sx[2], y: yDeep }];
 }
 
-/** 블로커 벽 — 공격수 x 정면에 count장(어깨 맞댐). 좌→우 순서로 반환. */
+// 네트 안전 여백(px, 절대값) — 점프 마커(반지름 MR×JUMP≈22px + 네트선)가 네트를 침범하지 않도록
+// 네트에 서는 마커(공격수 타점·블로커 벽)의 중심을 최소 이만큼 네트에서 떨어뜨린다(저해상도 폰 대응).
+// 분수 오프셋만으론 COURT_H가 작은 화면에서 px 여백이 부족해 "네트 터치"가 보였다(2026-06-18 측정).
+export const NET_SAFE = 26;
+
+/** 블로커 벽 — 공격수 x 정면에 count장(어깨 맞댐). 좌→우 순서로 반환. 네트 안전 여백 보장. */
 export function blockerWall(side: Side, attackX: number, count: number, W: number, H: number): Px[] {
-  const yNet = (side === 'home' ? 0.575 : 0.425) * H;
+  const netY = 0.5 * H;
+  const yNet = side === 'home' ? Math.max(0.575 * H, netY + NET_SAFE) : Math.min(0.425 * H, netY - NET_SAFE);
   const spread = count <= 1 ? [0] : count === 2 ? [-13, 13] : [-22, 0, 22];
   return spread.map((dx) => ({ x: clampN(attackX + dx, 24, W - 24), y: yNet }));
 }
 
 /** 공격 커버 — 블록 리바운드 낙하 구역을 감싸는 반원(가까운 2 측면 + 1 깊은 중앙).
- *  전위 공격(타점=네트): 리바운드가 히터 뒤에 떨어짐 → 커버가 뒤(0.68/0.78).
- *  백어택(타점=3m 라인): 리바운드가 히터 앞(네트 쪽)에 떨어짐 → 측면 커버가 앞(0.62), 깊은 커버는 뒤(0.80). */
+ *  전위 공격(타점=네트): 블록에 막힌 공은 히터 바로 뒤(네트 쪽)에 뚝 떨어진다 → 커버가 히터를 바짝
+ *  감싼다(2026-06-18 보정: 0.68/0.78은 ~3m로 너무 깊어 리바운드 구역 뒤였음 → 0.645/0.70로 타이트).
+ *  백어택(타점=3m 라인): 리바운드가 히터 앞(네트 쪽)에 떨어짐 → 측면 커버가 앞(0.62), 깊은 커버는 뒤(0.78). */
 export function coverSpots(side: Side, attackX: number, n: number, W: number, H: number, backAtk = false): Px[] {
-  const yNear = (side === 'home' ? (backAtk ? 0.62 : 0.68) : (backAtk ? 0.38 : 0.32)) * H;
-  const yDeep = (side === 'home' ? (backAtk ? 0.80 : 0.78) : (backAtk ? 0.20 : 0.22)) * H;
+  const yNear = (side === 'home' ? (backAtk ? 0.62 : 0.645) : (backAtk ? 0.38 : 0.355)) * H;
+  const yDeep = (side === 'home' ? (backAtk ? 0.78 : 0.70) : (backAtk ? 0.22 : 0.30)) * H;
   const cx = (dx: number) => clampN(attackX + dx, 24, W - 24);
   if (n <= 1) return [{ x: cx(0), y: yNear }];
-  if (n === 2) return [{ x: cx(-32), y: yNear }, { x: cx(32), y: yNear }];
-  return [{ x: cx(-36), y: yNear }, { x: cx(36), y: yNear }, { x: cx(0), y: yDeep }];
+  if (n === 2) return [{ x: cx(-30), y: yNear }, { x: cx(30), y: yNear }];
+  return [{ x: cx(-34), y: yNear }, { x: cx(34), y: yNear }, { x: cx(0), y: yDeep }];
 }
 
 /** 같은 팀 마커 최소 간격(px) — 마커 지름 30px의 2/3, 어깨 맞댐(블록 벽 22px)은 보존 */
