@@ -25,6 +25,9 @@ export default function MatchBoard() {
   const recorded = useRef(false);
   // 관전이 끝나기 전엔 경기 결과(세트 스코어·승패)를 숨긴다 — 결정론 시뮬이라 미리 계산돼 있어도 스포일러 금지
   const [finished, setFinished] = useState(false);
+  // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거)
+  const [score, setScore] = useState({ h: 0, a: 0, homeSets: 0, awaySets: 0, setNo: 1 });
+  const handleScore = useCallback((s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number }) => setScore(s), []);
 
   const isSandbox = sandbox === '1';
   const fixture = id && !isSandbox ? getFixture(id) : undefined;
@@ -89,13 +92,19 @@ export default function MatchBoard() {
 
       <View style={styles.header}>
         <View style={styles.teamHead}>
+          <Text style={styles.sideLabel}>홈</Text>
           <Text style={[styles.teamName, mineSide === 'home' && { color: theme.accent }]} numberOfLines={1}>
             {data.home.name}
           </Text>
           <OvrBadge value={data.homeOvr} />
         </View>
-        <Text style={styles.vs}>VS</Text>
+        <View style={styles.scoreMid}>
+          <Text style={styles.setNoTxt}>{finished ? '종료' : `${score.setNo}세트`}</Text>
+          <Text style={styles.scoreNum}>{score.h} : {score.a}</Text>
+          <Text style={styles.setWins}>{score.homeSets} - {score.awaySets} 세트</Text>
+        </View>
         <View style={[styles.teamHead, { alignItems: 'flex-end' }]}>
+          <Text style={[styles.sideLabel, { textAlign: 'right' }]}>원정</Text>
           <Text style={[styles.teamName, { textAlign: 'right' }, mineSide === 'away' && { color: theme.accent }]} numberOfLines={1}>
             {data.away.name}
           </Text>
@@ -131,6 +140,7 @@ export default function MatchBoard() {
         seed={data.seed}
         mineSide={mineSide}
         onFinished={onFinished}
+        onScore={handleScore}
       />
 
       {/* 세트 스코어 — 관전이 끝난 뒤에만 공개(스포일러 방지) */}
@@ -159,10 +169,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 14, padding: 14,
   },
-  teamHead: { flex: 1, gap: 6 },
-  teamName: { color: theme.text, fontSize: 17, fontWeight: '800' },
+  teamHead: { flex: 1, gap: 4 },
+  teamName: { color: theme.text, fontSize: 16, fontWeight: '800' },
   teamOvr: { color: theme.muted, fontSize: 12 },
-  vs: { color: theme.muted, fontSize: 13, fontWeight: '800' },
+  sideLabel: { color: theme.muted, fontSize: 11, fontWeight: '700' },
+  scoreMid: { alignItems: 'center', minWidth: 86 },
+  setNoTxt: { color: theme.accent, fontSize: 11, fontWeight: '700' },
+  scoreNum: { color: theme.text, fontSize: 26, fontWeight: '900', marginVertical: 1 },
+  setWins: { color: theme.muted, fontSize: 11, fontWeight: '700' },
   setScores: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
   setChip: { backgroundColor: theme.card, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center', borderWidth: 1, borderColor: theme.border },
   setChipLabel: { color: theme.muted, fontSize: 10 },

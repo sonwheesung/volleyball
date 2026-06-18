@@ -22,6 +22,9 @@ const POS_COLOR: Record<Position, string> = {
   S: '#36BE9A', OH: '#0E9C8C', OP: '#FF6B5A', MB: '#8B7CF0', L: '#C8961F',
 };
 
+// 굳은(못 움직이는) 선수 테두리 — 서버(주황)·팀(잉크/흰)과 구분되는 선명한 블루(긴장·집중)
+const BRACED = '#2563EB';
+
 // 랠리 종결 자막 — 엔진이 기록한 사실(PointLog.how)을 그대로 외친다(보드가 지어내지 않음)
 // 색은 흰 뱃지 위에서 읽히도록 진한 톤으로(라이트 테마)
 const HOW_CAPTION: Record<PointHow, { txt: string; color: string }> = {
@@ -102,9 +105,10 @@ interface Props {
   seed: number;
   mineSide: Side | null;
   onFinished?: () => void;
+  onScore?: (s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number }) => void;
 }
 
-export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Props) {
+export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScore }: Props) {
   const lineups: Lineups = useMemo(() => ({ home: buildLineup(home), away: buildLineup(away) }), [home, away]);
   const rallies = useMemo(() => reconstructRallies(sim), [sim]);
   const total = rallies.length;
@@ -175,6 +179,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const curPts = view ? { h: view.home, a: view.away } : { h: 0, a: 0 };
   const setNo = view?.setNo ?? 1;
 
+  // 관전 점수를 부모(헤더)로 올린다 — 스코어보드를 헤더 팀명 옆에 표시(별도 영역 제거)
+  useEffect(() => {
+    onScore?.({ h: curPts.h, a: curPts.a, homeSets, awaySets, setNo });
+  }, [curPts.h, curPts.a, homeSets, awaySets, setNo, onScore]);
+
   // 마커 배치는 현재 진행 중 랠리(idx) 기준
   const stage = rallies[Math.min(idx, total - 1)];
 
@@ -183,6 +192,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
   const inPlay = isInPlay(segKind);
   const jl = seg ? jumpersFor(seg.from, seg.to, stage.homeRot, stage.awayRot, lineups) : [];
   const jumpScale = prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, JUMP, 1] });
+  // 받는/막는 쪽이 "굳는" 순간 — 서브 비행·스파이크 컨택에선 공을 받는 팀(seg.to.side)이 자세를 잡고
+  // 못 움직인다. 그 팀의 비(非)이동·비점프 선수에 braced 테두리(공 쫓는 디거/리시버는 이동 중이라 제외).
+  const reactingSide: Side | null = seg && (segKind === 'serve' || segKind === 'spike') ? seg.to.side : null;
 
   // 전 마커 목표 좌표 — courtDirector(순수 모듈, 헤드리스 감사기와 동일 소스)
   const targets = segmentTargets(seg, { serving: stage.serving, homeRot: stage.homeRot, awayRot: stage.awayRot }, lineups, COURT_W, COURT_H, SERVE_OUT, lastTargets.current);
@@ -194,7 +206,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
     return posRefs.current[key];
   };
 
-  type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean };
+  type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean; braced: boolean };
   const buildMarkers = (side: Side): Mk[] => {
     const rot = side === 'home' ? stage.homeRot : stage.awayRot;
     const lu = side === 'home' ? lineups.home : lineups.away;
@@ -208,7 +220,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       let ty = t.y;
       const jumping = jl.some((j) => j.side === side && j.idx === i);
       if (jumping) { const lp = posLast.current[`${side}-${i}`]; if (lp) { tx = lp.x; ty = lp.y; } } // 점프 중엔 제자리(착지 후 이동)
-      arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer });
+      const moving = (seg?.to.movers ?? []).some((mv) => mv.side === side && mv.idx === i);
+      const braced = reactingSide === side && !moving && !jumping && !isServer; // 굳어서 못 움직이는 선수
+      arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer, braced });
     }
     return arr;
   };
@@ -294,8 +308,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
             <Animated.View key={m.key} style={[styles.marker, {
               left: -MR, top: -MR,
               backgroundColor: color + (mine ? 'ff' : 'd0'),
-              borderColor: m.isServer ? theme.warn : mine ? theme.text : '#FFFFFF',
-              borderWidth: m.isServer ? 2.5 : mine ? 1.5 : 1.5,
+              borderColor: m.isServer ? theme.warn : m.braced ? BRACED : mine ? theme.text : '#FFFFFF',
+              borderWidth: m.isServer ? 2.5 : m.braced ? 2.5 : 1.5,
               transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.jumping ? jumpScale : 1 }],
             }]}>
               <Text style={styles.markerTxt}>{m.p?.position ?? ''}</Text>
@@ -340,18 +354,6 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished }: Prop
       {/* 진행 바 */}
       <View style={styles.track}>
         <View style={[styles.fill, { width: `${total ? (Math.min(idx, total) / total) * 100 : 0}%` }]} />
-      </View>
-
-      {/* 점수 */}
-      <View style={styles.scoreboard}>
-        <Text style={[styles.sName, mineSide === 'home' && { color: theme.accent }]} numberOfLines={1}>홈</Text>
-        <Text style={styles.sets}>{homeSets}</Text>
-        <View style={styles.ptsBox}>
-          <Text style={styles.setNo}>{finished ? '종료' : `${setNo}세트`}</Text>
-          <Text style={styles.pts}>{curPts.h} : {curPts.a}</Text>
-        </View>
-        <Text style={styles.sets}>{awaySets}</Text>
-        <Text style={[styles.sName, { textAlign: 'right' }, mineSide === 'away' && { color: theme.accent }]} numberOfLines={1}>원정</Text>
       </View>
     </View>
   );
@@ -413,15 +415,4 @@ const styles = StyleSheet.create({
   },
   track: { height: 5, backgroundColor: theme.cardAlt, borderRadius: 3, marginHorizontal: 4, overflow: 'hidden' },
   fill: { height: 5, backgroundColor: theme.accent },
-  scoreboard: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 14,
-    paddingHorizontal: 14, paddingVertical: 10,
-    shadowColor: '#1B2A4A', shadowOpacity: 0.06, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 2,
-  },
-  sName: { flex: 1, color: theme.text, fontSize: 15, fontWeight: '800' },
-  sets: { color: theme.muted, fontSize: 20, fontWeight: '900', minWidth: 18, textAlign: 'center' },
-  ptsBox: { alignItems: 'center', minWidth: 96 },
-  setNo: { color: theme.accent, fontSize: 11, fontWeight: '700' },
-  pts: { color: theme.text, fontSize: 30, fontWeight: '900' },
 });
