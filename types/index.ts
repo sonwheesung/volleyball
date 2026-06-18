@@ -120,6 +120,10 @@ export interface HofEntry {
   points: number;
   blocks: number;
   digs: number;
+  // 2026-06-18 추가 — 통산 리더보드 여러 카테고리용(구세이브는 없을 수 있어 optional, 셀렉터에서 ?? 0)
+  spikes?: number;
+  aces?: number;
+  assists?: number;
   retiredSeason: number; // 0-based
   legend: boolean;       // 영구결번급(예외적 커리어)
 }

@@ -584,6 +584,7 @@ export const useGameStore = create<GameState>()(
             hofAdds.push({
               id, name: base.name, position: base.position, teamId: ctx.prevTeamOf[id] ?? '',
               seasons: c.seasons, points: c.points, blocks: c.blocks, digs: c.digs,
+              spikes: c.spikes, aces: c.aces, assists: c.assists,
               retiredSeason: season, legend: c.points >= LEGEND_POINTS,
             });
           }

@@ -41,6 +41,7 @@ export default function RootLayout() {
         <Stack.Screen name="draft" options={{ title: '신인 드래프트' }} />
         <Stack.Screen name="exhibition" options={{ title: '테스트 경기' }} />
         <Stack.Screen name="achievements" options={{ title: '업적' }} />
+        <Stack.Screen name="records" options={{ title: '통산 순위' }} />
         <Stack.Screen name="settings" options={{ title: '설정' }} />
         <Stack.Screen name="supporter" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="credits" options={{ title: '크레딧' }} />
