@@ -17,7 +17,7 @@ export const RECORD_CATS: { key: RecordCat; label: string; short: string; unit: 
   { key: 'blocks', label: '통산 블로킹', short: '블로킹', unit: '개' },
   { key: 'aces', label: '통산 서브', short: '서브', unit: '개' },
   { key: 'digs', label: '통산 디그', short: '디그', unit: '개' },
-  { key: 'assists', label: '통산 세트', short: '세트', unit: '개' },
+  { key: 'assists', label: '통산 도움(세트)', short: '도움', unit: '개' },
 ];
 
 export interface CareerRow {

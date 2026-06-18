@@ -85,6 +85,10 @@ export default function PlayerDetail() {
       ? { text: '주전', color: theme.good }
       : { text: '후보', color: theme.muted };
   })();
+  // 건의 버튼 활성화 — 주전이면 벤치 건의만, 후보(벤치)면 선발 기용 건의만(사용자 보고).
+  // 부상·정지·명단 외는 둘 다 비활성(출전 자체가 불가).
+  const isStarter = role?.text === '주전';
+  const isCandidate = role?.text === '후보';
 
   const talkLeft = Math.max(0, (talkCooldown[p.id] ?? 0) - currentDay);   // 재면담까지 남은 일수
   const benchLeft = Math.max(0, (benchCooldown[p.id] ?? 0) - currentDay); // 재건의까지 남은 일수
@@ -221,7 +225,7 @@ export default function PlayerDetail() {
                   <View style={{ flex: 1 }}>
                     <Button
                       label={benchLeft > 0 ? `선발 (${benchLeft}일 후)` : '선발 기용 건의'}
-                      disabled={benchLeft > 0}
+                      disabled={!isCandidate || benchLeft > 0}
                       onPress={() => {
                         const ok = suggestStart(p.id);
                         Alert.alert(ok ? '감독 수락' : '감독 거절',
@@ -231,7 +235,7 @@ export default function PlayerDetail() {
                     />
                   </View>
                   <View style={{ flex: 1 }}>
-                    <Button label={benchLeft > 0 ? `벤치 (${benchLeft}일 후)` : '벤치 건의'} onPress={openBench} disabled={benchLeft > 0} />
+                    <Button label={benchLeft > 0 ? `벤치 (${benchLeft}일 후)` : '벤치 건의'} onPress={openBench} disabled={!isStarter || benchLeft > 0} />
                   </View>
                 </View>
               </>

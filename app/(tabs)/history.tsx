@@ -69,7 +69,7 @@ export default function History() {
       { label: '득점', key: 'points' as const, list: top('points') },
       { label: '블로킹', key: 'blocks' as const, list: top('blocks') },
       { label: '디그', key: 'digs' as const, list: top('digs') },
-      { label: '세트', key: 'assists' as const, list: top('assists') },
+      { label: '도움(세트)', key: 'assists' as const, list: top('assists') },
     ];
   }, [currentDay, season]);
 
@@ -94,7 +94,6 @@ export default function History() {
           snap={snap} viewSeason={viewSeason} maxSeason={season} setViewSeason={setViewSeason}
           currentDay={currentDay} teamId={teamId} leaders={leaders}
           pName={pName} pPos={pPos} isMine={isMine}
-          onResults={() => router.push('/results')}
         />
       ) : null}
 
@@ -122,13 +121,12 @@ export default function History() {
 
 // ─── 탭 0 · 시즌 ───────────────────────────────────────────────
 function SeasonView({
-  snap, viewSeason, maxSeason, setViewSeason, currentDay, teamId, leaders, pName, pPos, isMine, onResults,
+  snap, viewSeason, maxSeason, setViewSeason, currentDay, teamId, leaders, pName, pPos, isMine,
 }: {
   snap: ReturnType<typeof seasonSnapshot>; viewSeason: number; maxSeason: number;
   setViewSeason: (s: number) => void; currentDay: number; teamId: string | null;
   leaders: { label: string; key: keyof ProdLine; list: { id: string; l: ProdLine }[] }[];
   pName: (id: string) => string; pPos: (id: string) => Position; isMine: (id: string) => boolean;
-  onResults: () => void;
 }) {
   const aw = snap.awards;
   const provisional = snap.isCurrent && currentDay < FINISHED;
@@ -265,12 +263,6 @@ function SeasonView({
               ))}
             </Card>
           ))}
-          <Card onPress={onResults}>
-            <View style={styles.achLink}>
-              <Text style={styles.achLinkText}>📅 경기 결과 전체 보기</Text>
-              <Text style={styles.achLinkArrow}>›</Text>
-            </View>
-          </Card>
         </>
       ) : null}
     </>
