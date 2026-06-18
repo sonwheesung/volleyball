@@ -55,6 +55,7 @@ const DEFAULT_SUB_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSu
 interface GameState {
   hydrated: boolean;
   onboarded: boolean;                          // 온보딩(첫 안내) 완료 — 세이브와 별개(초기화해도 유지)
+  supporter: boolean;                          // 서포터 팩(비소모성 IAP) 보유 — 구매 자산이라 초기화해도 유지
   selectedTeamId: string | null;
   season: number;                              // 0-based 경과 시즌
   currentDay: number;                          // 시즌 내 경과 일수
@@ -132,6 +133,7 @@ interface GameState {
   resetSave: () => void;
   completeOnboarding: () => void;
   replayOnboarding: () => void;
+  grantSupporter: () => void;
 }
 
 const freshSave = {
@@ -189,6 +191,7 @@ export const useGameStore = create<GameState>()(
     (set, get) => ({
       hydrated: false,
       onboarded: false,
+      supporter: false,
       ...freshSave,
 
       selectTeam: (teamId) => {
@@ -687,12 +690,14 @@ export const useGameStore = create<GameState>()(
       },
       completeOnboarding: () => set({ onboarded: true }),
       replayOnboarding: () => set({ onboarded: false }),
+      grantSupporter: () => set({ supporter: true }), // 결제 성공 시 호출(출시 시 IAP 콜백에 연결)
     }),
     {
       name: 'baeknyeon-save',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
         onboarded: s.onboarded,
+        supporter: s.supporter,
         selectedTeamId: s.selectedTeamId,
         season: s.season,
         currentDay: s.currentDay,

@@ -28,11 +28,14 @@ function Row({ icon, tint, label, sub, onPress, danger }: { icon: IoniconName; t
   );
 }
 
+const ROSE = '#FF5C8D';
+
 export default function Settings() {
   const router = useRouter();
   const resetSave = useGameStore((s) => s.resetSave);
   const replayOnboarding = useGameStore((s) => s.replayOnboarding);
   const season = useGameStore((s) => s.season);
+  const supporter = useGameStore((s) => s.supporter);
   const [confirmReset, setConfirmReset] = useState(false);
 
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
@@ -40,6 +43,16 @@ export default function Settings() {
   return (
     <Screen title="설정">
       <Muted>게임 · 데이터 · 정보를 관리합니다.</Muted>
+
+      <Text style={styles.section}>응원</Text>
+      <View style={styles.group}>
+        <Row icon="heart" tint={ROSE}
+          label={supporter ? '서포터 ♥ — 감사합니다' : '서포터 팩'}
+          sub={supporter ? '백년배구를 응원해주셨어요' : '한 번의 응원으로 다음 시즌을 함께'}
+          onPress={() => router.push('/supporter')} />
+        <Row icon="document-text-outline" tint={theme.muted} label="크레딧" sub="만든 사람 · 응원해주신 분들"
+          onPress={() => router.push('/credits')} />
+      </View>
 
       <Text style={styles.section}>게임</Text>
       <View style={styles.group}>
