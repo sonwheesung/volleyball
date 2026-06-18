@@ -184,7 +184,7 @@ function SeasonView({
             {([
               { label: '득점', w: aw.titles.scoring }, { label: '공격', w: aw.titles.spike },
               { label: '블로킹', w: aw.titles.block }, { label: '서브', w: aw.titles.serve },
-              { label: '디그', w: aw.titles.dig }, { label: '세트', w: aw.titles.set },
+              { label: '디그', w: aw.titles.dig }, { label: '어시스트', w: aw.titles.set },
               { label: '리시브', w: aw.titles.receive },
             ]).map((a) => (
               <View key={a.label} style={styles.awRow}>

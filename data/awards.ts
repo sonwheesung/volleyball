@@ -88,7 +88,7 @@ export interface AwardHistoryItem { season: number; label: string }
 
 const TITLE_KO: Record<string, string> = {
   scoring: '득점왕', spike: '공격상', block: '블로킹왕',
-  serve: '서브왕', dig: '디그왕', set: '세트왕', receive: '리시브왕',
+  serve: '서브왕', dig: '디그왕', set: '어시스트왕', receive: '리시브왕',
 };
 
 /** archive(영구 보존된 시즌별 시상)를 선수 기준으로 훑어 수상 연표를 만든다. 순수 함수(store 무의존). */
