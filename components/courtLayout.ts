@@ -225,7 +225,8 @@ export function serveFormation(side: Side, lu: Lineup, rot: number, W: number, H
     const front = !isBackZone(zone);
     const seed = zone * 31 + rot * 7 + 99;
     const xf = (front ? SV_FRONT_X : SV_BACK_X)[r] + jit(seed + 1, 0.045);
-    const yf = (front ? 0.63 : 0.80) + jit(seed + 2, 0.03);
+    // 전위는 네트 앞에 바짝(블로킹 준비) — 서브 직후 스위칭(좌우 스페셜리스트)로 전환되는 게 보이게(사용자 보고).
+    const yf = (front ? 0.585 : 0.80) + jit(seed + 2, 0.025);
     pos[i] = { x: mx(xf), y: my(yf) };
   }
   return pos;

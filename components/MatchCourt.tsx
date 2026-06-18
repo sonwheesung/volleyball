@@ -72,6 +72,7 @@ type Rally = RallyState;
 const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06, bounce: COURT_H * 0.05 };
 const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1, bounce: 1.06 };
 const JUMP = 1.45; // 점프 시 마커 확대
+const SETTLE_SEGMENTS = 2; // 블록/스파이크 점프 후 착지 정지 구간 수(점프 직후 즉시 이동 방지)
 const SPEED = 2; // 전체 경기 속도 배수(클수록 느림). 2 = 2배 느리게
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
 const COURT_PAD = SERVE_OUT + 10; // 코트 밖 서브 공간 확보용 상하 여백
@@ -143,7 +144,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   const prog = useRef(new Animated.Value(0)).current; // 현재 구간 진행도 0..1
   const posRefs = useRef<Record<string, Animated.ValueXY>>({}); // 마커별 위치(선수 단위)
   const posLast = useRef<Record<string, { x: number; y: number }>>({});
-  const prevJumpKeys = useRef<Set<string>>(new Set()); // 직전 구간에 점프(블록/스파이크)한 마커 — 착지 후 한 박자 정지
+  const jumpHold = useRef<Record<string, number>>({}); // 마커별 착지 후 남은 정지 구간 수(블록/스파이크 점프 한정)
   const finishedOnce = useRef(false);
   const lastTargets = useRef<Record<string, { x: number; y: number }>>({});
 
@@ -276,10 +277,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
       let ty = t.y;
       const jumping = jl.some((j) => j.side === side && j.idx === i);
       const moving = (seg?.to.movers ?? []).some((mv) => mv.side === side && mv.idx === i);
-      // 착지 정지: 직전 구간에 점프한 선수(블로커·공격수)는 다음 한 구간 동안 그 자리에 머문다 —
-      // 점프 직후 즉시 다른 곳으로 빠르게 미끄러지는 어색함 제거(2026-06-18 사용자 보고). 공을 쫓는
-      // 무버(디그·커버)는 예외(이동해야 함).
-      const settling = !jumping && !moving && prevJumpKeys.current.has(`${side}-${i}`);
+      // 착지 정지: 블록/스파이크로 점프한 선수는 착지 후 SETTLE_SEGMENTS 구간 동안 그 자리에 머문다 —
+      // 점프 직후 즉시 빠르게 미끄러지는 어색함 제거(2026-06-18 사용자 보고). 공 쫓는 무버(디그·커버)는 예외.
+      const settling = !jumping && !moving && (jumpHold.current[`${side}-${i}`] ?? 0) > 0;
       if (jumping || settling) { const lp = posLast.current[`${side}-${i}`]; if (lp) { tx = lp.x; ty = lp.y; } } // 점프 중·착지 직후엔 제자리
       const braced = reactingSide === side && !moving && !jumping && !isServer; // 굳어서 못 움직이는 선수
       const justSubbed = subbedKeys.has(`${side}-${i}`); // 이 랠리에 갓 투입된 선수
@@ -331,9 +331,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segSig]);
 
-  // 구간이 바뀔 때마다 "이번 구간 점퍼"를 기록 → 다음 구간 렌더에서 착지 정지(settling) 판정에 쓴다.
+  // 구간이 바뀔 때마다: 기존 정지 카운트 1 감소 + 이번 구간의 "스파이크 점프"(블로커·공격수)에 정지 부여.
+  // 토스 점프(세터)는 제외 — 세터는 토스 후 곧장 움직여야 자연스럽다.
   useEffect(() => {
-    prevJumpKeys.current = new Set(jl.map((j) => `${j.side}-${j.idx}`));
+    const h = jumpHold.current;
+    for (const k of Object.keys(h)) { h[k] -= 1; if (h[k] <= 0) delete h[k]; }
+    if (seg?.to.kind === 'spike') for (const j of jl) h[`${j.side}-${j.idx}`] = SETTLE_SEGMENTS;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segSig]);
 
