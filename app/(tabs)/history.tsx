@@ -12,6 +12,7 @@ import type { ProdLine } from '../../engine/production';
 import type { AwardWinner, Position, SeasonAwards } from '../../types';
 
 const FINISHED = 164; // 시즌 종료 기준일(잠정 라벨)
+const AWARD_MIN_GAMES = 12; // 잠정 시상 노출 최소 경기수(팀당, 36경기 시즌의 1/3)
 const MEDAL = ['🥇', '🥈', '🥉'];
 
 // ─── 작은 세그먼트 컨트롤 ──────────────────────────────────────
@@ -131,6 +132,9 @@ function SeasonView({
 }) {
   const aw = snap.awards;
   const provisional = snap.isCurrent && currentDay < FINISHED;
+  // 잠정 시상은 시즌이 무르익은 뒤에만 — 2~3경기에 "MVP·득점왕"은 무의미(36경기 중 1/3=12 경과 기준).
+  const gamesPlayed = snap.standings.reduce((mx, s) => Math.max(mx, s.wins + s.losses), 0);
+  const awardsReady = !snap.isCurrent || gamesPlayed >= AWARD_MIN_GAMES;
 
   const awName = (w: AwardWinner | null) => (w ? pName(w.playerId) : '—');
 
@@ -156,8 +160,8 @@ function SeasonView({
         </Pressable>
       </View>
 
-      {/* 시상식 */}
-      {aw && aw.mvp ? (
+      {/* 시상식 — 시즌이 충분히 진행된 뒤에만(잠정 포함) */}
+      {aw && aw.mvp && awardsReady ? (
         <>
           <Card>
             <Text style={styles.cardHead}>시상식{provisional ? ' (잠정)' : ''}</Text>
@@ -205,6 +209,14 @@ function SeasonView({
             ))}
           </Card>
         </>
+      ) : snap.isCurrent && !awardsReady ? (
+        <Card>
+          <Text style={styles.cardHead}>시상식</Text>
+          <Muted style={{ fontSize: 12.5 }}>
+            아직 시즌 초반입니다 ({gamesPlayed}경기). 정규리그가 1/3({AWARD_MIN_GAMES}경기) 넘게 진행되면
+            잠정 MVP·기록왕 윤곽이 잡힙니다. 지금은 아래 순위·리더보드로 흐름을 보세요.
+          </Muted>
+        </Card>
       ) : (
         <Card><Muted>이 시즌의 시상 기록이 없습니다.</Muted></Card>
       )}

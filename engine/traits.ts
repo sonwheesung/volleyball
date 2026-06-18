@@ -15,7 +15,7 @@ export const TRAITS: Record<Trait, TraitDef> = {
   bigGame:      { name: '큰경기형', desc: '중요한 순간 집중력이 오른다', good: true, cat: '멘탈' },
   choke:        { name: '새가슴', desc: '접전 고비에 흔들린다', good: false, cat: '멘탈' },
   lateBloomer:  { name: '대기만성', desc: '노쇠가 더디다 — 전성기가 길다', good: true, cat: '성장' },
-  earlyDecline: { name: '조로', desc: '신체 능력이 일찍 저문다', good: false, cat: '성장' },
+  earlyDecline: { name: '짧은전성기', desc: '전성기가 짧다 — 신체 능력이 또래보다 일찍 저문다', good: false, cat: '성장' },
   diligent:     { name: '노력형', desc: '훈련 효율이 높아 더 빨리 성장한다', good: true, cat: '성장' },
   glass:        { name: '유리몸', desc: '부상이 잦다', good: false, cat: '내구' },
   iron:         { name: '철강', desc: '좀처럼 다치지 않는다', good: true, cat: '내구' },
@@ -58,7 +58,7 @@ export function rollTraits(id: string): Trait[] {
 // ─── 효과 접근자 (traits 기반, 기본 무효과) ───
 const has = (traits: Trait[] | undefined, t: Trait): boolean => !!traits && traits.includes(t);
 
-/** 노쇠 배수 — 대기만성 둔화, 조로 가속 (aging.ts) */
+/** 노쇠 배수 — 대기만성 둔화, 짧은전성기 가속 (aging.ts) */
 export function agingTraitMult(traits?: Trait[]): number {
   let m = 1;
   if (has(traits, 'lateBloomer')) m *= 0.8;

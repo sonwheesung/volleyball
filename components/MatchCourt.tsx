@@ -378,6 +378,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, onFinished, onScor
                 <View style={styles.subTag}>
                   <Text style={styles.subTagTxt} numberOfLines={1}>↑ {m.p?.name ?? '교체'}</Text>
                 </View>
+              ) : m.p ? (
+                // 마커 밑 선수명(상시) — 포지션은 마커 안, 이름은 아래(사용자 요청). 내 팀은 강조.
+                <View style={styles.nameTag} pointerEvents="none">
+                  <Text style={[styles.nameTagTxt, mine && styles.nameTagMine]} numberOfLines={1}>{m.p.name}</Text>
+                </View>
               ) : null}
             </Animated.View>
           );
@@ -452,6 +457,13 @@ const styles = StyleSheet.create({
     shadowColor: '#1B2A4A', shadowOpacity: 0.18, shadowRadius: 3, shadowOffset: { width: 0, height: 1 }, elevation: 3,
   },
   markerTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
+  // 마커 밑 상시 선수명 — 작고 옅은 칩(라이트 코트에서 읽히게 흰 배경)
+  nameTag: { position: 'absolute', top: MR * 2 - 1, left: -27, width: 84, alignItems: 'center' },
+  nameTagTxt: {
+    color: '#2B3645', fontSize: 8.5, fontWeight: '800', backgroundColor: '#FFFFFFD9',
+    paddingHorizontal: 3, paddingVertical: 0.5, borderRadius: 4, overflow: 'hidden',
+  },
+  nameTagMine: { color: theme.accent, backgroundColor: '#FFFFFFF2' },
   // 갓 투입된 선수 이름표 — 마커 아래 중앙(골드 칩)
   subTag: { position: 'absolute', top: MR * 2 + 1, left: -25, width: 80, alignItems: 'center' },
   subTagTxt: {

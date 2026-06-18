@@ -31,7 +31,7 @@ test('rollTraits: 부정 특성도 등장(도박 성립)', () => {
   assert.ok(found > 0, '부정 특성이 일부 선수에 존재');
 });
 
-test('노쇠 배수: 대기만성<1, 조로>1, 무특성=1', () => {
+test('노쇠 배수: 대기만성<1, 짧은전성기>1, 무특성=1', () => {
   assert.ok(agingTraitMult(['lateBloomer']) < 1);
   assert.ok(agingTraitMult(['earlyDecline']) > 1);
   assert.equal(agingTraitMult(undefined), 1);

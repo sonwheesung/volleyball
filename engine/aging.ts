@@ -29,7 +29,7 @@ function decayRate(age: number): number {
  * 신체 스탯만 음수로 적립 → -1 도달 시 스탯 -1 (FLOOR 까지).
  */
 export function applyAgingDay(p: Player, rng: Rng, ageSlow = 0): Player {
-  // 체력 코치(ageSlow)가 노쇠 둔화 + 특성(대기만성 둔화/조로 가속)
+  // 체력 코치(ageSlow)가 노쇠 둔화 + 특성(대기만성 둔화/짧은전성기 가속)
   const rate = decayRate(p.age) * (1 - Math.max(0, Math.min(0.6, ageSlow))) * agingTraitMult(p.traits);
   if (rate <= 0) return p;
 
