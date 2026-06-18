@@ -16,7 +16,8 @@ export const FRANCHISE_MAX = 110000;  // 프랜차이즈 개인 상한 예외 (1
  * 캡 예외(FRANCHISE_MAX·재계약 캡 면제)도 진짜 간판에게만 적용돼 의미가 산다.
  */
 export function isFranchise(p: Player): boolean {
-  return (p.clubTenure ?? 0) >= FRANCHISE_SEASONS && overallRaw(p) >= FRANCHISE_OVR;
+  // 외국인은 제외 — 용병은 매 시즌 트라이아웃으로 교체되는 단기 자원이라 "구단의 간판"이 아니다.
+  return !p.isForeign && (p.clubTenure ?? 0) >= FRANCHISE_SEASONS && overallRaw(p) >= FRANCHISE_OVR;
 }
 
 /** 그 선수에게 허용되는 개인 연봉 상한(프랜차이즈는 예외 한도) */
