@@ -106,11 +106,15 @@ export function segmentTargets(
     // 죽은 공에 공격 전환(스위칭 질주) 금지. 추격자(movers)만 공을 쫓는다.
     const servePhase = segKind === 'serve' || seg?.to.hold === true;
     const holdReceive = !inPlay || (servePhase && side !== stage.serving);
-    // 서브 컨택 순간: 받는 팀=리시브 대형, 서브 팀=오버랩 합법 베이스(직후 스위칭 전환).
+    // 서브 팀은 서브 베이스를 "상대 리시브"까지 유지한다 — 컨택 직후 전문 포지션으로 확 스위칭하면
+    // "상대 리시브 받자마자 자기 자리로 확 가는" 어색함이 된다(측정: 최대 6.2m 점프). 실제 배구처럼
+    // 상대가 공격을 시작할 때(토스/스파이크) 블록·부채꼴 수비로 한 번에 이동(아래 moveMap이 처리).
+    const servingDefBase = side === stage.serving && side !== offSide && (servePhase || segKind === 'pass');
+    // 서브 컨택 순간: 받는 팀=리시브 대형, 서브 팀=오버랩 합법 베이스(상대 리시브까지 유지).
     // 둘 다 로테이션 순서를 지킨다(BOARD_RULES 18). 그 외 인플레이는 스위칭(전문 포지션).
     const posMap = holdReceive
       ? receiveFormation(side, lu, rot, W, H)
-      : servePhase && side === stage.serving
+      : (servePhase && side === stage.serving) || servingDefBase
         ? serveFormation(side, lu, rot, W, H)
         : switchedSpots(side, lu, rot, side === offSide, W, H).pos;
     // 단, 받는 팀 세터는 서브 컨택과 동시에 침투 출발(실제 배구) — 패스 도착 전에 세팅 자리 도달
