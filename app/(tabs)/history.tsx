@@ -69,7 +69,7 @@ export default function History() {
       { label: '득점', key: 'points' as const, list: top('points') },
       { label: '블로킹', key: 'blocks' as const, list: top('blocks') },
       { label: '디그', key: 'digs' as const, list: top('digs') },
-      { label: '도움(세트)', key: 'assists' as const, list: top('assists') },
+      { label: '어시스트', key: 'assists' as const, list: top('assists') },
     ];
   }, [currentDay, season]);
 
