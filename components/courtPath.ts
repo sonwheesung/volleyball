@@ -387,6 +387,10 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const netY = (def === 'home' ? 0.52 : 0.48) * H;
     const sCross = Math.abs(intended.y - ap.y) < 1 ? 0.3 : (netY - ap.y) / (intended.y - ap.y);
     const blockNet = { x: clampN(ap.x + (intended.x - ap.x) * sCross, 12, W - 12), y: netY };
+    // 블록은 타점 앞(ap.x)에 형성된다 → 종결 블록(스터프·블록아웃)은 공이 "블록 정면"으로 들어가야
+    // 모순이 없다. blockNet(의도 코스 기준)은 빈 곳을 통과할 수 있어, 그대로 쓰면 "블록 없는 곳에
+    // 때렸는데 막힘"이 된다(측정 42%). 블록 사건은 blockContact(블록 중심)로 보낸다.
+    const blockContact = { x: clampN(ap.x + rng.range(-0.04, 0.04) * W, 16, W - 16), y: netY };
     // 디그 후보 = 후위 전원(세터 포함 — 후위 세터도 디그한다, 엔진 defenders()와 일치).
     // 세터가 디그하면 토서 선정 로직이 자동으로 다른 선수(가까운 전위 — 대개 센터)에게 토스를 맡긴다.
     // 리베로 콜 우선권: 후위 MB 슬롯(표시=리베로)은 약간 멀어도 "마이볼" — 수비 전문이 수비를 한다.
@@ -419,15 +423,15 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const cs = [
         { x: -20, y: (def === 'home' ? 0.74 + rng.next() * 0.1 : 0.16 + rng.next() * 0.1) * H },
         { x: W + 20, y: (def === 'home' ? 0.74 + rng.next() * 0.1 : 0.16 + rng.next() * 0.1) * H },
-        { x: clampN(blockNet.x + rng.range(-0.2, 0.2) * W, 24, W - 24), y: def === 'home' ? H + 24 : -24 },
+        { x: clampN(blockContact.x + rng.range(-0.2, 0.2) * W, 24, W - 24), y: def === 'home' ? H + 24 : -24 },
       ];
       const fan = fanSlots(def, ap.x, W, H);
       const defDist = (p: { x: number; y: number }) =>
         Math.min(...[0, 1, 2, 3, 4, 5].map((i) => d2(swDef[def].pos[i], p)), ...fan.map((s) => d2(s, p)));
       const outPt = cs.reduce((b, c) => (defDist(c) > defDist(b) ? c : b));
-      // 강타가 블록 손끝을 강하게 때린다 — 짧고 빠른 잭(dur↓). 그 뒤 손끝에 에너지를 뺏겨 굴절구는
-      // 크게 떠올라(arc↑) 천천히 코트 밖으로 빠진다 → 원 스파이크보다 명백히 느리고 부드럽게 보인다.
-      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', dur: 95, aim: intended, movers: coverMovers });
+      // 강타가 블록 정면(손끝)을 강하게 때린다 — 짧고 빠른 잭(dur↓). 그 뒤 손끝에 에너지를 뺏겨 굴절구는
+      // 크게 떠올라(arc↑) 천천히 코트 밖으로 빠진다 → 공이 블록으로 들어갔다가 빠진 게 보인다.
+      wp.push({ x: blockContact.x, y: blockContact.y, side: def, idx: -1, kind: 'spike', dur: 95, movers: coverMovers });
       // 후위 2명이 라인까지 쫓지만(아웃볼 추격 규칙 H) 떠오른 굴절구를 닿지 못한다(36px 밖 — 라인에서 멈춤).
       wp.push({ ...outPt, side: def, idx: -1, kind: 'fault', dur: 700, arc: 0.12 * H, scale: 1.05, movers: chasersTo(def, outPt, 2, 0.95, 36) });
     };
@@ -437,8 +441,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       // 블록 면에서 그대로 내리꽂힌다(위로 붕 떴다 떨어지면 스터프로 안 읽힘).
       // 커버 2명이 낙하점으로 몸을 던지지만 못 살린다. 벽은 데드볼 동결로 네트 앞에 서 있다.
       const dropY = att === 'home' ? (0.56 + rng.next() * 0.08) * H : (0.36 + rng.next() * 0.08) * H;
-      const stuffPt = { x: clampN(blockNet.x + rng.range(-0.05, 0.05) * W, 16, W - 16), y: dropY };
-      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers });
+      const stuffPt = { x: clampN(blockContact.x + rng.range(-0.05, 0.05) * W, 16, W - 16), y: dropY };
+      // 공이 블록 정면으로 들어가 수직으로 꺾인다(빈 곳 통과 모순 제거). aim(점선)도 빼서 "엉뚱한 곳 점선" 방지.
+      wp.push({ x: blockContact.x, y: blockContact.y, side: def, idx: -1, kind: 'spike', movers: coverMovers });
       wp.push({ ...stuffPt, side: att, idx: -1, kind: 'fault', dur: 240, arc: 0, scale: 1, movers: chasersTo(att, stuffPt, 2, 0.9, 24) });
     };
     const doTip = () => {
