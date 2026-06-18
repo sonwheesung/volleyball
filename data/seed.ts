@@ -20,6 +20,7 @@ import type {
   TrainingFocus,
 } from '../types';
 import { COACH_NAMES, FOREIGN_NAMES, GIVEN, SURNAMES, TEAM_NAMES } from './names';
+import { clubIdentityByIndex } from './clubIdentity';
 
 export interface League {
   teams: Team[];
@@ -90,6 +91,7 @@ export function makePlayer(
   isForeign: boolean,
   ageOverride?: number,
   bias = 0, // 팀 전력 티어(시드 전용) — 그 팀 선수 능력을 ±이동해 팀 OVR 분포를 넓힘
+  ageRange: [number, number] = [19, 34], // 팀 정체성 나이 분포(CLUB_IDENTITY_SYSTEM). 기본=기존 분포
 ): Player {
   const name = isForeign
     ? FOREIGN_NAMES[rng.int(0, FOREIGN_NAMES.length - 1)]
@@ -104,7 +106,7 @@ export function makePlayer(
     L: { skDig: true, skReceive: true, agility: true },
   };
   const c = core[pos];
-  const age = ageOverride ?? rng.int(19, 34);
+  const age = ageOverride ?? rng.int(ageRange[0], ageRange[1]);
 
   // 현재 스탯
   const cur = {
@@ -244,9 +246,10 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
   return player;
 }
 
-// 팀 전력 티어 — 시드 로스터의 팀 OVR 분포를 넓혀(압축 66~71 → ~62~76) 강·약팀을 만든다.
-// 대칭 분포라 리그 평균은 유지. 드래프트(꼴찌 우선)·노쇠·FA로 수십 시즌 뒤 평균회귀(parity 유지).
-const TIER_SPREAD = 3;
+// 팀 전력 티어·나이 분포 — 이제 랜덤 셔플 대신 **구단 정체성**(CLUB_IDENTITY_SYSTEM)이 결정.
+// strengthBias 합=0이라 리그 평균 전력 보존. 명문은 강·노련, 신생/신흥은 약·젊음(높은 포텐).
+// 정체성은 시작 조건일 뿐 — 드래프트(꼴찌 우선)·노쇠·FA로 수십 시즌 뒤 평균회귀(parity 유지).
+const FOREIGN_AGE: [number, number] = [24, 31]; // 외국인은 정체성 무관 전성기 영입
 
 export function generateLeague(seed: number): League {
   const rng = createRng(seed);
@@ -254,22 +257,19 @@ export function generateLeague(seed: number): League {
   const players: Player[] = [];
   const coaches: Coach[] = [];
 
-  // 팀별 전력 티어(대칭) — rng로 팀 배정 셔플 → 시드마다 강팀이 달라짐
-  const N = TEAM_NAMES.length;
-  const tiers = TEAM_NAMES.map((_, i) => (N <= 1 ? 0 : (i / (N - 1) - 0.5) * 2 * TIER_SPREAD));
-  for (let i = tiers.length - 1; i > 0; i--) { const j = rng.int(0, i); [tiers[i], tiers[j]] = [tiers[j], tiers[i]]; }
-
   TEAM_NAMES.forEach((teamName, ti) => {
     const teamId = `t${ti}`;
     const playerIds: string[] = [];
-    const teamBias = tiers[ti];
+    const identity = clubIdentityByIndex(ti);
+    const teamBias = identity.strengthBias;
 
     // 외국인 1명: OP 중 한 자리
     let foreignAssigned = false;
     let teamSalary = 0;
     ROSTER.forEach((pos, pi) => {
       const isForeign = pos === 'OP' && !foreignAssigned ? (foreignAssigned = true) : false;
-      const pl = makePlayer(rng, `${teamId}p${pi}`, pos, isForeign, undefined, teamBias);
+      const ageRange = isForeign ? FOREIGN_AGE : identity.ageRange;
+      const pl = makePlayer(rng, `${teamId}p${pi}`, pos, isForeign, undefined, teamBias, ageRange);
       players.push(pl);
       playerIds.push(pl.id);
       teamSalary += pl.contract.salary;

@@ -2,7 +2,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
 import { RosterList } from '../../components/RosterList';
+import { IdentityChip, RecentRanks } from '../../components/ClubIdentity';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal } from '../../data/league';
+import { clubIdentity, clubAgeYears } from '../../data/clubIdentity';
 import { teamOverallRaw } from '../../engine/overall';
 import { SPECIALTY_KO } from '../../engine/staff';
 import { useGameStore } from '../../store/useGameStore';
@@ -24,6 +26,7 @@ export default function TeamDetail() {
   }
 
   const players = getEvolvedTeamPlayers(team.id, currentDay);
+  const identity = clubIdentity(team.id);
   const coach = getTeamCoach(team.id);
   const ovr = teamOverallRaw(players);
   const isCurrent = selectedTeamId === team.id;
@@ -44,6 +47,25 @@ export default function TeamDetail() {
           <OvrBadge value={ovr} />
         </Row>
       </Card>
+
+      {identity ? (
+        <Card>
+          <Row>
+            <IdentityChip identity={identity} />
+            <Muted style={{ fontSize: 12 }}>{identity.tagline}</Muted>
+          </Row>
+          <Text style={{ color: theme.text, fontSize: 13, lineHeight: 19, marginTop: 8 }}>{identity.blurb}</Text>
+          <View style={{ flexDirection: 'row', marginTop: 12, gap: 8 }}>
+            <Stat label="창단" value={`${identity.foundedYear}`} sub={`${clubAgeYears(identity)}년차`} />
+            <Stat label="통산 우승" value={`${identity.titles}회`} />
+            <Stat label="전통" value={`${identity.tradition}`} sub="/100" />
+          </View>
+          <View style={{ marginTop: 12 }}>
+            <Muted style={{ fontSize: 11, marginBottom: 4 }}>최근 시즌 성적</Muted>
+            <RecentRanks ranks={identity.recentRanks} teamCount={7} />
+          </View>
+        </Card>
+      ) : null}
 
       {coach ? (
         <Card onPress={() => router.push(`/coach/${coach.id}`)}>
@@ -95,5 +117,18 @@ export default function TeamDetail() {
         <Button label={`${team.name} 운영하기`} onPress={onSelect} />
       )}
     </Screen>
+  );
+}
+
+/** 구단 프로필 미니 통계 칸 */
+function Stat({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <View style={{ flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10 }}>
+      <Text style={{ color: theme.muted, fontSize: 11 }}>{label}</Text>
+      <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 2, marginTop: 2 }}>
+        <Text style={{ color: theme.text, fontSize: 16, fontWeight: '800' }}>{value}</Text>
+        {sub ? <Text style={{ color: theme.muted, fontSize: 11 }}>{sub}</Text> : null}
+      </View>
+    </View>
   );
 }

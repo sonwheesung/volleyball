@@ -279,6 +279,23 @@ export interface Team {
   budget: number;          // 팀 총예산 (만원, 느슨한 제약)
 }
 
+/** 구단 정체성(서사) — 고정 배정. 생성 노브(strengthBias·ageRange) + 표시 프로필. CLUB_IDENTITY_SYSTEM */
+export type ClubIdentityKey =
+  | 'dynasty' | 'aging' | 'rising' | 'cellar' | 'midpack' | 'expansion' | 'rebuild';
+
+export interface ClubIdentity {
+  key: ClubIdentityKey;
+  label: string;              // 짧은 칩 — "명문" 등
+  tagline: string;            // 한 어구 — "전통의 명가" 등
+  blurb: string;              // 한 줄 서사
+  foundedYear: number;        // 창단연도
+  titles: number;             // 통산 우승(서사)
+  tradition: number;          // 0~100 전통/팬덤
+  recentRanks: number[];      // 최근 N시즌 가상 순위(1=우승)
+  strengthBias: number;       // [생성] OVR ± (랜덤 티어 대체)
+  ageRange: [number, number]; // [생성] 선수 나이 분포
+}
+
 export type Side = 'home' | 'away';
 
 export interface MatchState {
