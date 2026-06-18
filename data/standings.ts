@@ -2,8 +2,8 @@
 // 경기일(dayIndex) 기준 OVR로 계산 → 사용자가 관전한 결과와 일치.
 // 성능: 전 경기 1회 계산 후 baseVersion 으로 캐시.
 
-import type { Fixture } from '../types';
-import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
+import type { Fixture, MatchResult } from '../types';
+import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, getFixture, LEAGUE, SEASON } from './league';
 import { availableTeamPlayers } from './injury';
 import { currentTxVersion } from './dynamics';
 import { simulateMatch } from '../engine/match';
@@ -68,6 +68,22 @@ function allResults(): ResultRow[] {
 /** uptoDay 까지 치른 경기 결과(최근순 정렬은 호출측에서) */
 export function seasonResults(uptoDay: number): ResultRow[] {
   return allResults().filter((r) => r.dayIndex <= uptoDay);
+}
+
+/**
+ * "실제로 치른 마지막 경기일" — 사용자가 기록(results)으로 완료한 경기 중 최대 dayIndex.
+ * currentDay 는 다음 경기로 진행(setDay)하는 순간 미리 올라가므로, 아직 관전·기록하지 않은
+ * 경기까지 순위표에 반영돼 대시보드 성적(results 기반)과 어긋났다(사용자 보고). 순위/결과 화면은
+ * currentDay 대신 이 값을 쓰면 "치르지 않은 경기는 반영 안 됨"이 보장된다(대시보드와 일치).
+ * 기록이 없으면 -1(시즌 전 — 0경기).
+ */
+export function playedThroughDay(results: Record<string, MatchResult>): number {
+  let max = -1;
+  for (const id of Object.keys(results)) {
+    const f = getFixture(id);
+    if (f && f.dayIndex > max) max = f.dayIndex;
+  }
+  return max;
 }
 
 /** 팀별 그 시즌 최장 연승·연패 — 각 팀의 경기를 날짜순으로 보고 W/L 런 최댓값(연승/연패 업적용) */

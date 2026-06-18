@@ -60,7 +60,7 @@ export default function NewsArticle() {
         <Text style={styles.byline}>{n.season + 1}시즌{team ? ` · ${team.name}` : ''}</Text>
       </Card>
       <Card>
-        <Text style={styles.body}>{LEAD[n.kind]}</Text>
+        <Text style={styles.body}>{n.body ?? LEAD[n.kind]}</Text>
       </Card>
     </Screen>
   );

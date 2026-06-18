@@ -4,7 +4,7 @@ import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
 import { SEASON, getEvolvedTeamPlayers, getTeam } from '../../data/league';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
-import { computeStandings } from '../../data/standings';
+import { computeStandings, playedThroughDay } from '../../data/standings';
 import { teamInjuriesOn } from '../../data/injury';
 import { buildNewsFeed, newsKey } from '../../data/news';
 import { teamOverallRaw } from '../../engine/overall';
@@ -52,7 +52,8 @@ export default function Dashboard() {
     return { w, l };
   }, [teamId, results]);
 
-  const standings = useMemo(() => computeStandings(currentDay), [currentDay, season]);
+  // 순위는 실제로 치른 경기까지만(성적 카드 results와 동일 기준 — 미관전 경기 선반영 방지)
+  const standings = useMemo(() => computeStandings(playedThroughDay(results)), [results, season]);
   const myRank = standings.findIndex((s) => s.teamId === teamId) + 1;
   const injuries = useMemo(() => teamInjuriesOn(teamId, currentDay), [teamId, currentDay, season]);
   const milestones = useGameStore((s) => s.milestones);

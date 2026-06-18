@@ -192,6 +192,7 @@ export interface NewsItem {
   headline: string;
   big: boolean;                                              // 헤드라인급
   teamId?: string;                                           // 내 팀 강조용
+  body?: string;                                             // 기사 본문(사실 기반 2~3문장) — 없으면 분류별 기본 리드
 }
 
 /** 영구제명 영속 기록 — 승부조작·학폭 등으로 리그에서 영구 퇴출된 선수(불명예, 뉴스·연표용) */

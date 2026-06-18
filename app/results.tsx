@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Muted, Screen, theme } from '../components/Screen';
-import { seasonResults, type ResultRow } from '../data/standings';
+import { seasonResults, playedThroughDay, type ResultRow } from '../data/standings';
 import { shortTeamName as short } from '../data/league';
 import { dateForDay, formatDate } from '../lib/calendar';
 import { useGameStore } from '../store/useGameStore';
@@ -12,12 +12,12 @@ import { useGameStore } from '../store/useGameStore';
 export default function Results() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId);
-  const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const season = useGameStore((s) => s.season);
 
-  // 최신 날짜 → 옛날 순, 같은 날끼리 묶기
+  // 최신 날짜 → 옛날 순, 같은 날끼리 묶기 — 실제로 치른 경기까지만(미관전 경기 노출 방지)
   const days = useMemo(() => {
-    const sorted = seasonResults(currentDay).slice().sort((a, b) => b.dayIndex - a.dayIndex);
+    const sorted = seasonResults(playedThroughDay(results)).slice().sort((a, b) => b.dayIndex - a.dayIndex);
     const groups: { dayIndex: number; rows: ResultRow[] }[] = [];
     for (const r of sorted) {
       const last = groups[groups.length - 1];
@@ -25,7 +25,7 @@ export default function Results() {
       else groups.push({ dayIndex: r.dayIndex, rows: [r] });
     }
     return groups;
-  }, [currentDay, season]);
+  }, [results, season]);
 
   return (
     <Screen title="전 구단 경기 결과">

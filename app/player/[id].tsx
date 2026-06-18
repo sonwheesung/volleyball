@@ -5,10 +5,11 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans, fanOverlapRatio } from '../../engine/owner';
-import { rosterIdsOnDay, seasonScandals, suspendedOnDay } from '../../data/dynamics';
+import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
 import { SCANDAL_KO } from '../../engine/scandal';
 import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason } from '../../engine/owner';
-import { getEvolvedPlayer, getTeam, shortTeamName as teamShort } from '../../data/league';
+import { getEvolvedPlayer, getTeam, shortTeamName as teamShort, currentRosters } from '../../data/league';
+import { buildLineup } from '../../engine/lineup';
 import { getPlayerProduction } from '../../data/production';
 import { awardHistoryOf } from '../../data/awards';
 import { effectiveContract } from '../../data/roster';
@@ -66,6 +67,25 @@ export default function PlayerDetail() {
   const myTalks = interviews.filter((l) => l.playerId === p.id && l.season === season);
   const lastTalkFailed = myTalks.length > 0 && !myTalks[myTalks.length - 1].ok;
   const benched = benchDirectives.some((b) => b.playerId === p.id);
+
+  // 주전/후보 — 그 팀의 실제 출전 라인업(부상·정지·벤치 제외 = 경기 엔진과 동일)에서 선발 6인+리베로 여부.
+  // 구단주가 선발/벤치 건의 여부를 판단하는 핵심 정보(사용자 보고). 결장 사유가 있으면 그걸 우선 표시.
+  const teamOfP = (() => { const rs = currentRosters(); for (const t of Object.keys(rs)) if (rs[t].includes(p.id)) return t; return null; })();
+  const role: { text: string; color: string } | null = (() => {
+    if (!teamOfP) return null;
+    const avail = availableTeamPlayers(teamOfP, currentDay);
+    if (!avail.some((x) => x.id === p.id)) {
+      if (suspendedOnDay(currentDay).has(p.id)) return { text: '출장 정지', color: theme.bad };
+      if (teamInjuriesOn(teamOfP, currentDay).some((s) => s.playerId === p.id)) return { text: '부상 결장', color: theme.bad };
+      if (benched) return { text: '벤치(감독 지시)', color: theme.warn };
+      return { text: '출전 명단 외', color: theme.muted };
+    }
+    const lu = buildLineup(avail);
+    return lu.six.some((x) => x.id === p.id) || lu.libero?.id === p.id
+      ? { text: '주전', color: theme.good }
+      : { text: '후보', color: theme.muted };
+  })();
+
   const talkLeft = Math.max(0, (talkCooldown[p.id] ?? 0) - currentDay);   // 재면담까지 남은 일수
   const benchLeft = Math.max(0, (benchCooldown[p.id] ?? 0) - currentDay); // 재건의까지 남은 일수
 
@@ -108,6 +128,11 @@ export default function PlayerDetail() {
           <View style={{ flex: 1, gap: 4 }}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
               <PosTag pos={p.position} full />
+              {role ? (
+                <View style={{ backgroundColor: role.color + '22', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                  <Text style={{ color: role.color, fontWeight: '800', fontSize: 12 }}>{role.text}</Text>
+                </View>
+              ) : null}
               {p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700' }}>외국인</Text> : null}
               {isFranchise(p) ? <Text style={{ color: theme.warn, fontWeight: '700' }}>프랜차이즈</Text> : null}
             </View>

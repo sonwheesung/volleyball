@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
 import { SEASON, getEvolvedTeamPlayers, getTeam } from '../../data/league';
-import { computeStandings } from '../../data/standings';
+import { computeStandings, playedThroughDay } from '../../data/standings';
 import { teamClinch } from '../../data/clinch';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
@@ -29,7 +29,7 @@ export default function Schedule() {
 
   // 플레이오프 확정/탈락/경합 — 이미 치른 경기(currentDay)만 반영(스포일러 안전)
   // 시즌 초엔 숨긴다: 확정/탈락(정해진 사건)이거나, 시즌 60% 경과 후에만 표시(후반 레이스)
-  const clinch = teamClinch(teamId, currentDay);
+  const clinch = teamClinch(teamId, playedThroughDay(results)); // 치른 경기만 — 미관전 경기로 PO 확정 스포일 방지
   const playedFrac = totalMatches > 0 ? playedCount / totalMatches : 0;
   const showPlayoff = !!clinch && (clinch.state !== 'contention' || playedFrac >= 0.6);
   const clinchView = showPlayoff && clinch
