@@ -30,6 +30,9 @@ export interface RallyLike {
 export interface Lineups { home: Lineup; away: Lineup }
 
 export const RECV_FAULT = 0.05; // 리시브 미스(투터치 등) 확률 — 지는 쪽 한정
+// 블록 커버: 소프트 블록(원터치)된 공을 공격팀이 자기 코트에서 살려 재공격하는 비율(나머지는 수비 전환).
+// 연출 전용 중간 사건(종결 how는 불변) — 실제 배구의 핵심 수비 장면을 보드에 등장시킨다.
+const BLOCK_COVER_RATE = 0.42;
 
 // 구간 지속(ms, 1배속) — 렌더(MatchCourt)와 헤드리스 감사기가 공유. WP.dur가 있으면 우선.
 export const SEG_DUR: Record<Move, number> = { start: 0, return: 520, walk: 560, serve: 300, pass: 380, toss: 540, spike: 150, fault: 320, bounce: 240 };
@@ -487,14 +490,28 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       if (intoBlock && rng.next() < 0.55) { doStuff(); break; }
     }
 
+    let nextAtt: Side = def; // 기본: 공수 전환(아래 블록 커버 시 공격팀 유지)
     if (intoBlock) {
-      // 원터치(소프트 블록): 블록 스치고 def 코트로 떨어진 걸 디그 → 전환
-      const dt = { x: clampN(blockNet.x + rng.range(-0.06, 0.06) * W, 16, W - 16), y: (def === 'home' ? 0.64 : 0.36) * H };
-      const digIdx = nearestDig(dt);
-      wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치
-      wp.push({ x: dt.x, y: dt.y, side: def, idx: -1, kind: 'pass', movers: [{ side: def, idx: digIdx, x: dt.x, y: dt.y }] }); // 디그
-      firstTouch = digIdx;
-      touchPos = dt;
+      // 원터치(소프트 블록): 떠오른 공을 ① 공격팀이 커버해 살림(재공격) ② 또는 수비팀 코트로 넘어가 디그 전환.
+      if (rng.next() < BLOCK_COVER_RATE) {
+        // 블록 커버 — 공이 공격팀 코트 네트 앞에 떨어지고, 후위/커버가 몸을 던져 살린다 → 같은 팀 재공격
+        const ct = { x: clampN(blockNet.x + rng.range(-0.07, 0.07) * W, 16, W - 16), y: (att === 'home' ? 0.61 : 0.39) * H };
+        const aBacks = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z));
+        const coverIdx = aBacks.reduce((b, i) => (d2(swDef[att].pos[i], ct) < d2(swDef[att].pos[b], ct) ? i : b), aBacks[0]);
+        wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치(공격팀 쪽으로 튕김)
+        wp.push({ x: ct.x, y: ct.y, side: att, idx: -1, kind: 'pass', movers: [{ side: att, idx: coverIdx, x: ct.x, y: ct.y }] }); // 커버 디그(살림)
+        firstTouch = coverIdx;
+        touchPos = ct;
+        nextAtt = att; // 커버 성공 → 같은 팀이 다시 공격
+      } else {
+        // 원터치 → def 코트로 떨어진 걸 디그 → 공수 전환
+        const dt = { x: clampN(blockNet.x + rng.range(-0.06, 0.06) * W, 16, W - 16), y: (def === 'home' ? 0.64 : 0.36) * H };
+        const digIdx = nearestDig(dt);
+        wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치
+        wp.push({ x: dt.x, y: dt.y, side: def, idx: -1, kind: 'pass', movers: [{ side: def, idx: digIdx, x: dt.x, y: dt.y }] }); // 디그
+        firstTouch = digIdx;
+        touchPos = dt;
+      }
     } else if (rng.next() < 0.18) {
       // 페인트가 살아나는 장면 — 엔진에선 팁 절반이 디그된다. 수비가 몸을 던져 받아내고 랠리가 이어진다
       const tp = {
@@ -520,7 +537,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       firstTouch = digIdx;
       touchPos = dug;
     }
-    att = def;
+    att = nextAtt;
   }
   return withBounce(wp, W, H);
 }
