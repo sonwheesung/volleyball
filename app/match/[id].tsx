@@ -1,6 +1,6 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useMemo, useRef, useState } from 'react';
-import { ScrollView, StyleSheet, Switch, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, OvrBadge, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
@@ -19,8 +19,6 @@ export default function MatchBoard() {
   const insets = useSafeAreaInsets();
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
-  const subPolicy = useGameStore((s) => s.subPolicy);
-  const setSubPolicy = useGameStore((s) => s.setSubPolicy);
   const recordResult = useGameStore((s) => s.recordResult);
   const recorded = useRef(false);
   // 관전이 끝나기 전엔 경기 결과(세트 스코어·승패)를 숨긴다 — 결정론 시뮬이라 미리 계산돼 있어도 스포일러 금지
@@ -51,17 +49,15 @@ export default function MatchBoard() {
     // 그날 출전 가능 명단(부상·시즌 중 이동 반영) — 결장 선수가 코트에 보이지 않게, 순위표 리플레이와 동일 소스
     const homeSquad = availableTeamPlayers(home.id, dayIndex);
     const awaySquad = availableTeamPlayers(away.id, dayIndex);
-    // 내 팀 경기엔 내 작전 방침 적용(관전=내 프리셋 반영). 상대는 AI 기본.
+    // 작전 교체는 감독이 자동 집행(엔진 DEFAULT_POLICY) — 구단주의 수동 토글은 제거(관전형 강화).
     const sim = simulateMatch(seed, homeSquad, awaySquad, {
       home: coachInfoOf(home.id), away: coachInfoOf(away.id),
-      homePolicy: selectedTeamId === home.id ? subPolicy : undefined,
-      awayPolicy: selectedTeamId === away.id ? subPolicy : undefined,
     });
     return {
       home, away, homeSquad, awaySquad, seed, sim,
       homeOvr: teamOverallRaw(homeSquad), awayOvr: teamOverallRaw(awaySquad),
     };
-  }, [fixture, isSandbox, homeParam, awayParam, seedParam, currentDay, selectedTeamId, subPolicy]);
+  }, [fixture, isSandbox, homeParam, awayParam, seedParam, currentDay, selectedTeamId]);
 
   const onFinished = useCallback(() => {
     setFinished(true); // 관전 종료 — 이제부터 결과 공개
@@ -112,27 +108,6 @@ export default function MatchBoard() {
         </View>
       </View>
 
-      {mineSide && !recorded.current ? (
-        <View style={styles.policyPanel}>
-          <Text style={styles.policyTitle}>작전 방침 (내 팀)</Text>
-          {([
-            ['pinchServer', '핀치 서버'],
-            ['blockSub', '블로킹 강화'],
-            ['defSub', '수비 강화'],
-          ] as const).map(([key, label]) => (
-            <View key={key} style={styles.policyRow}>
-              <Text style={styles.policyLabel}>{label}</Text>
-              <Switch
-                value={subPolicy[key]}
-                onValueChange={(v) => setSubPolicy({ [key]: v })}
-                trackColor={{ true: theme.accent, false: theme.cardAlt }}
-              />
-            </View>
-          ))}
-          <Muted style={{ fontSize: 11 }}>방침을 바꾸면 경기가 다시 계산됩니다.</Muted>
-        </View>
-      ) : null}
-
       <MatchCourt
         sim={data.sim}
         home={data.homeSquad}
@@ -181,8 +156,4 @@ const styles = StyleSheet.create({
   setChip: { backgroundColor: theme.card, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center', borderWidth: 1, borderColor: theme.border },
   setChipLabel: { color: theme.muted, fontSize: 10 },
   setChipScore: { color: theme.text, fontSize: 14, fontWeight: '800' },
-  policyPanel: { backgroundColor: theme.card, borderRadius: 12, padding: 12, gap: 6, borderWidth: 1, borderColor: theme.border },
-  policyTitle: { color: theme.text, fontSize: 14, fontWeight: '800', marginBottom: 2 },
-  policyRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  policyLabel: { color: theme.text, fontSize: 14 },
 });
