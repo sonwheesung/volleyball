@@ -64,6 +64,9 @@
 | **용병 트라이아웃**(1년 계약·매년 풀 유입 — 멸종 해결, 국내 평균 이상 보장) | ✅ (FOREIGN_SYSTEM) |
 | **사건·사고**(음주운전 등 출장정지, ~0.4건/시즌) | ✅ (OWNER_SYSTEM 4.6) |
 | 명예의전당·영구결번 | ✅ (기존) |
+| **기록 화면 개편**(시즌별 이동·통산 리더보드 현역+은퇴 TOP100·팀별 TOP50·6카테고리·세그먼트 탭) | ✅ `data/records.ts`·`app/records.tsx`·`app/(tabs)/history.tsx` (HofEntry에 spikes/aces/assists 추가) |
+| **작전 교체 코트 가시화**(엔진 subEvents 연출 로그 → 보드가 실제 코트 6인 재생·투입 강조) | ✅ `engine/simMatch.ts`(SubEvent)·`engine/match.ts`·`components/MatchCourt.tsx` (BOARD_RULES 30) |
+| **온보딩/튜토리얼·설정·서포터팩(비소모성 후원)·크레딧** | ✅ `app/onboarding.tsx`·`settings.tsx`·`supporter.tsx`·`credits.tsx` (출시 시 실제 IAP 연결) |
 | 감독 훈련선호 커스터마이즈 / 라인업·경기 직접 개입 | ❌ 자동 완성 후 "오버라이드"로 개방 예정 |
 
 > **자동/수동 정책:** 현재 전 구단(사용자 팀 포함) 자동. AI 팀은 영구히 자동.
@@ -77,10 +80,12 @@
 ```
 npx tsc --noEmit                          # 앱 타입체크
 npx tsc --noEmit -p tsconfig.test.json    # 테스트 타입체크
-npm test                                  # node --test (현재 104 통과)
-npx tsx tools/auditBoard.ts 6              # 보드 안무 프레임 감사(기하 원리 8종 + ASCII 덤프)
-npx tsx tools/checkRallyChain.ts           # 랠리 3터치 체인·공격 적격 검증
-npx tsx tools/checkCourtBoard.ts           # 대형·동적 위치 전수 검사
+npm test                                  # node --test (현재 171 통과)
+npx tsx tools/auditBoard.ts 6              # 보드 안무 프레임 감사(기하 원리 룰 A~Q + 사용자보고 18~37 + ASCII 덤프)
+npx tsx tools/checkBoardFixes.ts           # 보드 타깃 측정(패서 깊이·터치아웃·서브전환 — "의도대로 바뀌었나")
+npx tsx tools/checkBlockerCross.ts         # 블로커 좌우 교차(프레임 정확 — 실제 애니메이션 위치)
+npx tsx tools/checkRecords.ts              # 통산 리더보드 셀렉터(병합·정렬·팀필터)
+npx tsx tools/checkSubs.ts                 # 작전 교체 로그(재생 불변식·세트말 net-zero)
 npx expo export --platform android        # 번들 확인 후 dist 삭제
 ```
 
