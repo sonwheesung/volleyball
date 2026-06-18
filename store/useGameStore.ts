@@ -54,6 +54,7 @@ const DEFAULT_SUB_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSu
 
 interface GameState {
   hydrated: boolean;
+  onboarded: boolean;                          // 온보딩(첫 안내) 완료 — 세이브와 별개(초기화해도 유지)
   selectedTeamId: string | null;
   season: number;                              // 0-based 경과 시즌
   currentDay: number;                          // 시즌 내 경과 일수
@@ -129,6 +130,8 @@ interface GameState {
   setKeepForeign: (keep: boolean | null) => void;
   endSeason: () => void;
   resetSave: () => void;
+  completeOnboarding: () => void;
+  replayOnboarding: () => void;
 }
 
 const freshSave = {
@@ -185,6 +188,7 @@ export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
       hydrated: false,
+      onboarded: false,
       ...freshSave,
 
       selectTeam: (teamId) => {
@@ -676,13 +680,16 @@ export const useGameStore = create<GameState>()(
         resetLeagueBase();
         setTxContext([], [], '');
         setOwnerContext([]);
-        set({ ...freshSave });
+        set({ ...freshSave }); // 온보딩 플래그는 freshSave 밖이라 유지(다시보기는 replayOnboarding)
       },
+      completeOnboarding: () => set({ onboarded: true }),
+      replayOnboarding: () => set({ onboarded: false }),
     }),
     {
       name: 'baeknyeon-save',
       storage: createJSONStorage(() => AsyncStorage),
       partialize: (s) => ({
+        onboarded: s.onboarded,
         selectedTeamId: s.selectedTeamId,
         season: s.season,
         currentDay: s.currentDay,

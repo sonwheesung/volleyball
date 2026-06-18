@@ -13,11 +13,14 @@ const tabIcon = (outline: IoniconName, filled: IoniconName) =>
 
 export default function TabsLayout() {
   const hydrated = useGameStore((s) => s.hydrated);
+  const onboarded = useGameStore((s) => s.onboarded);
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
 
   // 저장 데이터 로드 전: 빈 화면(깜빡임 방지)
   if (!hydrated) return <View style={{ flex: 1, backgroundColor: theme.bg }} />;
 
+  // 첫 실행 → 온보딩(게임 소개) → 구단 선택
+  if (!onboarded) return <Redirect href="/onboarding" />;
   // 팀 미선택 → 구단 선택으로
   if (!selectedTeamId) return <Redirect href="/select-team" />;
 

@@ -29,6 +29,7 @@ export default function RootLayout() {
         }}
       >
         <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+        <Stack.Screen name="onboarding" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="select-team" options={{ title: '구단 선택', headerBackVisible: false }} />
         <Stack.Screen name="team/[id]" options={{ title: '구단 정보' }} />
         <Stack.Screen name="player/[id]" options={{ title: '선수 정보' }} />
@@ -40,6 +41,7 @@ export default function RootLayout() {
         <Stack.Screen name="draft" options={{ title: '신인 드래프트' }} />
         <Stack.Screen name="exhibition" options={{ title: '테스트 경기' }} />
         <Stack.Screen name="achievements" options={{ title: '업적' }} />
+        <Stack.Screen name="settings" options={{ title: '설정' }} />
         <Stack.Screen name="debug-court" options={{ title: '보드 위치 검증' }} />
         <Stack.Screen name="audit" options={{ title: '영입 무결성 감사' }} />
         <Stack.Screen name="match/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />

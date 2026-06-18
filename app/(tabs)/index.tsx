@@ -22,7 +22,6 @@ export default function Dashboard() {
   const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
   const released = useGameStore((s) => s.released);
-  const resetSave = useGameStore((s) => s.resetSave);
 
   const team = getTeam(teamId);
   const basePlayers = getEvolvedTeamPlayers(teamId, currentDay);
@@ -140,14 +139,7 @@ export default function Dashboard() {
       <View style={{ flex: 1 }} />
 
       <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
-      <Button
-        label="구단 변경 (세이브 초기화)"
-        variant="ghost"
-        onPress={() => {
-          resetSave();
-          router.replace('/select-team');
-        }}
-      />
+      <Button label="설정" variant="ghost" onPress={() => router.push('/settings')} />
     </Screen>
   );
 }
