@@ -175,7 +175,9 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   muted: { color: theme.muted, fontSize: 14, lineHeight: 20 },
-  btn: { borderRadius: 999, paddingVertical: 14, alignItems: 'center', justifyContent: 'center' },
+  // paddingHorizontal 필수 — 인라인(Row 안) 버튼은 폭이 글자에 맞춰지므로, 없으면 "영입"처럼 짧은
+  // 라벨이 세로로 길쭉한 캡슐이 된다. 전체폭 버튼(Card 안)은 stretch라 영향 없음.
+  btn: { borderRadius: 999, paddingVertical: 14, paddingHorizontal: 22, minWidth: 76, alignItems: 'center', justifyContent: 'center' },
   btnPrimary: { backgroundColor: theme.accent },
   btnGhost: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: theme.accent },
   btnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },

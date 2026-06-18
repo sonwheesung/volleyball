@@ -1,5 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, InteractionManager, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
 import { RosterList } from '../../components/RosterList';
 import { IdentityChip, RecentRanks } from '../../components/ClubIdentity';
@@ -15,8 +16,20 @@ export default function TeamDetail() {
   const selectTeam = useGameStore((s) => s.selectTeam);
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
+  const [starting, setStarting] = useState(false);
 
   const team = id ? getTeam(id) : undefined;
+
+  // 구단 확정 = 무거운 동기 작업(리그 리셋·시즌 구성). 먼저 로딩 화면을 그린 뒤(다음 인터랙션 틱)
+  // 실제 작업을 돌려 "탭했는데 화면이 멈춘" 체감을 없앤다(사용자 보고). InteractionManager로 한 프레임 양보.
+  useEffect(() => {
+    if (!starting || !team) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      selectTeam(team.id);
+      router.replace('/(tabs)/schedule');
+    });
+    return () => task.cancel();
+  }, [starting, team, selectTeam, router]);
   if (!team) {
     return (
       <Screen title="구단 없음">
@@ -34,10 +47,19 @@ export default function TeamDetail() {
   const scouts = teamScouts(team.id);
   const reveal = teamScoutReveal(team.id);
 
-  const onSelect = () => {
-    selectTeam(team.id);
-    router.replace('/(tabs)/schedule');
-  };
+  const onSelect = () => setStarting(true);
+
+  if (starting) {
+    return (
+      <Screen title={team.name} scroll={false}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+          <ActivityIndicator size="large" color={theme.accent} />
+          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>{team.name} 운영을 준비하는 중…</Text>
+          <Muted style={{ textAlign: 'center' }}>시즌 일정과 선수단을 구성하고 있습니다.{'\n'}잠시만 기다려 주세요.</Muted>
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen title={team.name}>
