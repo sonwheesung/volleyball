@@ -13,7 +13,7 @@ import { needsCompensationPlayer, pickCompensation, compensationMoney, compensat
 import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { strSeed } from '../engine/rng';
 import type { OwnerFx } from '../engine/owner';
-import { marketValue } from '../engine/salary';
+import { marketVal } from './awardSalary';
 import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
 import { seasonScandals } from './dynamics';
@@ -116,7 +116,7 @@ export function resolveFAMarket(
     const p = snapshot[id];
     if (!p) continue;
     const grade = grades.get(id) ?? 'C';
-    const asking = round100(askingPrice(marketValue(p), grade) * (repMap.get(id) ?? 1));
+    const asking = round100(askingPrice(marketVal(p), grade) * (repMap.get(id) ?? 1));
     // 내가 영입 시 추가로 낼 보상금 — '돈만' 선택 시 가중 보상금(보상선수 면제), 아니면 기본(보상선수 동반)
     const compCost = needsCompensationPlayer(grade)
       ? (moneyOnly.has(id) ? compensationMoneyOnly(grade, p.contract.salary) : compensationMoney(grade, p.contract.salary))

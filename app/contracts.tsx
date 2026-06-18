@@ -10,7 +10,8 @@ import { overall, overallRaw } from '../engine/overall';
 import { canAfford, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MIN } from '../engine/transactions';
 import { assignFAGrades, askingPrice, willBeFA } from '../engine/faMarket';
-import { contractStatus, formatMoney, marketValue } from '../engine/salary';
+import { contractStatus, formatMoney } from '../engine/salary';
+import { marketVal } from '../data/awardSalary';
 import { useGameStore } from '../store/useGameStore';
 import type { Contract, Player } from '../types';
 
@@ -37,7 +38,7 @@ export default function Contracts() {
   const faGrades = assignFAGrades(faList);
 
   const doResign = (p: Player) => {
-    const market = marketValue(p, getPlayerProduction(p.id, currentDay));
+    const market = marketVal(p, getPlayerProduction(p.id, currentDay));
     if (!canAfford(total - p.contract.salary, market, { franchise: isFranchise(p) })) {
       Alert.alert('샐러리캡 초과', `${p.name} 재계약(${formatMoney(market)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
       return;
@@ -85,7 +86,7 @@ export default function Contracts() {
 
       <Title>선수 계약</Title>
       {roster.map((p) => {
-        const market = marketValue(p, getPlayerProduction(p.id, currentDay));
+        const market = marketVal(p, getPlayerProduction(p.id, currentDay));
         const status = contractStatus(p.contract.salary, market);
         return (
           <Pressable key={p.id} onPress={() => onManage(p)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
@@ -111,7 +112,7 @@ export default function Contracts() {
           </Muted>
           {faList.map((p) => {
             const grade = faGrades.get(p.id)!;
-            const ask = askingPrice(marketValue(p, getPlayerProduction(p.id, currentDay)), grade);
+            const ask = askingPrice(marketVal(p, getPlayerProduction(p.id, currentDay)), grade);
             const keep = resignDecisions[p.id] !== false;
             return (
               <View key={p.id} style={styles.rowCol}>

@@ -7,7 +7,8 @@ import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MAX, inSeasonCost } from '../engine/transactions';
 import { FOREIGN_SALARY } from '../engine/foreign';
-import { formatMoney, marketValue } from '../engine/salary';
+import { formatMoney } from '../engine/salary';
+import { marketVal } from '../data/awardSalary';
 import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
 
@@ -41,7 +42,7 @@ export default function Transactions() {
 
   const onSign = (p: Player) => {
     const betrayed = isBetrayed(p.id);
-    const cost = inSeasonCost(marketValue(p), betrayed);
+    const cost = inSeasonCost(marketVal(p), betrayed);
     Alert.alert('FA 영입', `${p.name} (${p.position})\n연봉 ${formatMoney(cost)}${betrayed ? ' (방출 재영입 웃돈 ×1.5)' : ''} · 즉시 합류`, [
       { text: '취소', style: 'cancel' },
       {
@@ -136,7 +137,7 @@ export default function Transactions() {
       ) : (
         fas.map((p) => {
           const betrayed = isBetrayed(p.id);
-          const cost = inSeasonCost(marketValue(p), betrayed);
+          const cost = inSeasonCost(marketVal(p), betrayed);
           const afford = payroll + cost <= LEAGUE_CAP && !full && cost <= cash;
           return (
             <Pressable

@@ -34,7 +34,7 @@ import { computeStandings, seasonStreaks, seasonResults } from '../data/standing
 import { coachInfoOf } from '../data/league';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay } from '../data/league';
-import { marketValue } from '../engine/salary';
+import { marketVal, setAwardScores } from '../data/awardSalary';
 import { LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MAX, canRelease, inSeasonCost } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
@@ -197,6 +197,7 @@ export const useGameStore = create<GameState>()(
         setTxContext([], [], teamId);
         setMyTeamStaff(teamId); // 내 팀만 영입 스태프, 나머지는 AI 기본 스태프(STAFF_SYSTEM 7)
         setOwnerContext([]);
+        setAwardScores([]); // 새 세이브 — 수상 이력 없음
       },
       setDay: (day) => set((s) => ({ currentDay: Math.max(s.currentDay, day) })),
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
@@ -244,8 +245,8 @@ export const useGameStore = create<GameState>()(
         const betrayedBy = (id: string) => s.inSeasonTx.some((t) => t.kind === 'release' && t.teamId === my && t.playerId === id);
         let payroll = 0;
         for (const id of rosterIds) if (!myReleased.has(id)) { const rp = evolveOnDay(id, s.currentDay); if (rp && !rp.isForeign) payroll += rp.contract.salary; } // 캡=국내 전용
-        for (const id of mySigned) { const p = evolveOnDay(id, s.currentDay); if (p) payroll += inSeasonCost(marketValue(p), betrayedBy(id)); }
-        const signCost = inSeasonCost(marketValue(fa), betrayedBy(faId));
+        for (const id of mySigned) { const p = evolveOnDay(id, s.currentDay); if (p) payroll += inSeasonCost(marketVal(p), betrayedBy(id)); }
+        const signCost = inSeasonCost(marketVal(fa), betrayedBy(faId));
         if (payroll + signCost > LEAGUE_CAP) return false;
         if (signCost > s.cash) return false; // 운영 자금 부족(FINANCE) — 캡이 남아도 지갑이 비면 못 뽑는다
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId: faId, kind: 'sign' }];
@@ -493,6 +494,7 @@ export const useGameStore = create<GameState>()(
         const nextArchive = archive.some((a) => a.season === season)
           ? archive.map((a) => (a.season === season ? { ...a, ...archEntry } : a))
           : [...archive, archEntry];
+        setAwardScores(nextArchive); // 수상 프리미엄 컨텍스트 갱신 — 이번 오프시즌 FA/재계약(buildDraftContext)부터 반영
 
         // 통산 경기 기록 누적(업적용) — 이번 시즌 내 팀 득점·에이스·세트·경기 승패
         const myRowRec = record[my] ?? [0, 0];
@@ -680,6 +682,7 @@ export const useGameStore = create<GameState>()(
         resetLeagueBase();
         setTxContext([], [], '');
         setOwnerContext([]);
+        setAwardScores([]);
         set({ ...freshSave }); // 온보딩 플래그는 freshSave 밖이라 유지(다시보기는 replayOnboarding)
       },
       completeOnboarding: () => set({ onboarded: true }),
@@ -740,6 +743,7 @@ export const useGameStore = create<GameState>()(
         setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
         setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)
         setOwnerContext(state?.benchDirectives ?? []);
+        setAwardScores(state?.archive ?? []); // 수상 프리미엄 컨텍스트 복원
         useGameStore.setState({ hydrated: true });
       },
     },

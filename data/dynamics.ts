@@ -10,7 +10,7 @@ import { healthyByPos, shortagePositions, pickSigning } from '../engine/transact
 import { formFactor, applyForm, FORM_WINDOW } from '../engine/form';
 import { rollScandal, SCANDAL_MISS, type ScandalKind } from '../engine/scandal';
 import type { BenchDirective } from '../engine/owner';
-import { marketValue } from '../engine/salary';
+import { marketVal } from './awardSalary';
 import { LEAGUE_CAP } from '../engine/cap';
 import { baseVersion, currentRosters, getPlayer, evolveOnDay, LEAGUE, SEASON } from './league';
 import { domesticPayroll } from './roster';
@@ -141,7 +141,7 @@ function compute(): Dyn {
     const injAll = new Set(injuries.filter((s) => s.from <= d && d <= s.to).map((s) => s.playerId));
     for (const pos of shortagePositions(healthy)) {
       const pool = [...faAvail].filter((id) => !injAll.has(id)).map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p);
-      const pick = pickSigning(pos, pool, (roster.get(teamId) ?? []).length, payrollOf(teamId), (p) => marketValue(p), LEAGUE_CAP);
+      const pick = pickSigning(pos, pool, (roster.get(teamId) ?? []).length, payrollOf(teamId), (p) => marketVal(p), LEAGUE_CAP);
       if (!pick) continue;
       applyTx({ day: d, teamId, playerId: pick.id, kind: 'sign' });
       ids = (roster.get(teamId) ?? []).filter((id) => !injured.has(id));

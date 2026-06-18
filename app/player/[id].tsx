@@ -16,7 +16,8 @@ import { isFranchise } from '../../engine/cap';
 import { overall, overallRaw } from '../../engine/overall';
 import { TRAITS } from '../../engine/traits';
 import { deriveRatings } from '../../engine/ratings';
-import { contractStatus, formatMoney, marketValue } from '../../engine/salary';
+import { contractStatus, formatMoney } from '../../engine/salary';
+import { marketVal } from '../../data/awardSalary';
 import { useGameStore } from '../../store/useGameStore';
 
 const STATUS_COLOR = { 저평가: theme.good, 적정: theme.muted, 고평가: theme.bad } as const;
@@ -55,7 +56,7 @@ export default function PlayerDetail() {
 
   const r = deriveRatings(p);
   const contract = effectiveContract(p, overrides);
-  const market = marketValue(p, prod);
+  const market = marketVal(p, prod);
   const status = contractStatus(contract.salary, market);
 
   // ── 구단주 레이어 (내 팀 선수만) ──

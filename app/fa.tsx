@@ -10,7 +10,8 @@ import { LEAGUE_CAP } from '../engine/cap';
 import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
 import { assignFAGrades, askingPrice } from '../engine/faMarket';
 import { overall, overallRaw } from '../engine/overall';
-import { formatMoney, marketValue } from '../engine/salary';
+import { formatMoney } from '../engine/salary';
+import { marketVal } from '../data/awardSalary';
 import { useGameStore } from '../store/useGameStore';
 
 export default function FACenter() {
@@ -148,7 +149,7 @@ export default function FACenter() {
       ) : (
         poolPlayers.map((p) => {
           const grade = grades.get(p.id)!;
-          const ask = askingPrice(marketValue(p), grade);
+          const ask = askingPrice(marketVal(p), grade);
           const targeted = faSignings.includes(p.id);
           const won = pv.signedByMe.has(p.id);
           const lost = pv.lostTo[p.id];

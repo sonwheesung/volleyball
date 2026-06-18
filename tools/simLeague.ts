@@ -17,13 +17,24 @@ import { resolveDraft } from '../engine/draft';
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
+import { currentSeasonAwards } from '../data/awards';
+import { setAwardScores } from '../data/awardSalary';
+import type { SeasonAwards } from '../types';
+
+// 수상 프리미엄(SALARY 2장) — 실게임 store.endSeason 과 동일하게, 오프시즌 FA 전에 수상 컨텍스트를 갱신.
+// 유니버스 경계(season 0)에서 초기화. 시뮬도 awarded 스타에 몸값 프리미엄을 반영해 검증한다.
+let simArchive: { season: number; awards?: SeasonAwards }[] = [];
 
 const teamName = (id: string): string => getTeam(id)?.name ?? id;
 
 /** 한 시즌의 오프시즌(롤오버·은퇴·경쟁FA·드래프트·충원·성장XP·이적근속리셋) — store.endSeason 재현, 전 구단 AI */
 export function advanceOffseason(season: number): void {
+  if (season === 0) simArchive = [];
   const nextSeason = season + 1;
   const my = '';
+  // 끝난 시즌 수상 집계 → 프리미엄 컨텍스트(이번 오프시즌 FA/재계약에 반영). 롤오버(buildDraftContext) 전.
+  simArchive = [...simArchive, { season, awards: currentSeasonAwards(season) }];
+  setAwardScores(simArchive);
   const ctx = buildDraftContext(my, {}, {}, [], false, [], nextSeason);
   const snapshot = ctx.snapshot;
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
