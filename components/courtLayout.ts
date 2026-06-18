@@ -28,13 +28,16 @@ export const lineupIdxAt = (r: number, zone: number) => (r + zone - 1) % 6;
 export const zoneOfIdx = (rot: number, i: number) => ((i - rot) % 6 + 6) % 6 + 1;
 const isBackZone = (z: number) => z === 1 || z === 5 || z === 6;
 
-// ── 오버랩 합법 레인 (CLAUDE.md 4.3 로테이션) ──
-// 서브 컨택 순간 6명은 인접 기준 로테이션 순서를 지켜야 한다:
-//   같은 행 좌→중→우(전위 4·3·2 / 후위 5·6·1), 같은 열 전위가 후위보다 네트에 가깝다(4·5 / 3·6 / 2·1).
-// x를 존 가로랭크로만, y를 전/후위 밴드로만 정하면 위 두 순서가 구성상 보장된다.
-const LANE_X = [0.17, 0.5, 0.83]; // 좌·중·우 (home 프랙션)
+// ── 오버랩 합법 + 자유분방한 룩 (CLAUDE.md 4.3 로테이션) ──
+// 서브 컨택 순간 6명은 인접 기준 로테이션 순서만 지키면 된다(등간격 격자가 아니다):
+//   같은 행 좌<중<우(전위 4·3·2 / 후위 5·6·1), 같은 열 전위가 후위보다 네트에 가깝다(4·5 / 3·6 / 2·1).
+// 그래서: 가로는 전·후위 레인을 어긋나게(stagger) + 존/로테이션별 결정론 흔들기(jit),
+// 세로는 전위/후위 밴드 안에서 자유롭게(아크·깊이차) — 순서는 보존하되 등간격은 깬다.
 /** 존 → 가로랭크(L0/C1/R2): {4,5}=좌 · {3,6}=중 · {2,1}=우 */
 const lateralRank = (zone: number): number => (zone === 4 || zone === 5 ? 0 : zone === 3 || zone === 6 ? 1 : 2);
+// 결정론 흔들기(시드 → -amp..amp) — 같은 입력=같은 위치(렌더=감사 단일 소스). Math.random/Date 불사용.
+const frac = (n: number): number => { const s = Math.sin(n * 127.1 + 311.7) * 43758.5453; return s - Math.floor(s); };
+const jit = (seed: number, amp: number): number => (frac(seed) - 0.5) * 2 * amp;
 
 /** 존 중심 좌표(px) — 홈은 하단, 원정은 상단(좌우·전후 점대칭) */
 export function zonePx(side: Side, zone: number, W: number, H: number): Px {
@@ -163,10 +166,16 @@ export function receiveLine(lu: Lineup, rot: number): number[] {
   return passers.slice(0, 3);
 }
 
-/** 서브 받기 전 대형 — **오버랩 합법**(같은 행 좌<중<우, 같은 열 전위<후위)을 보존하면서
- *  3-패서 리시브 룩(전위 공격수 네트 대기·후위 패서 깊게·세터 코너). x는 존 가로랭크로만,
- *  y는 전/후위 밴드로만 정해 구성상 합법 — 밴드 분리(전위 max 0.665 < 후위 min 0.72)로 열 전후 보장.
- *  세터는 서브 컨택과 동시에 침투(릴리즈)하는 단일 예외(디렉터가 별도 처리, MATCH_SYSTEM 1장). */
+// 전·후위 가로 레인 — 어긋나게(stagger) 둬서 같은 열 앞뒤 선수가 일직선 정렬되지 않게(격자 탈피).
+const RF_FRONT_X = [0.21, 0.50, 0.79];
+const RF_BACK_X = [0.13, 0.55, 0.87];
+const SV_FRONT_X = [0.23, 0.50, 0.77];
+const SV_BACK_X = [0.15, 0.53, 0.85];
+
+/** 서브 받기 전 대형 — **오버랩 합법**(행 좌<중<우, 열 전위<후위)을 지키되 **등간격 격자가 아니라
+ *  자유분방하게**(레인 어긋남 + 결정론 흔들기 + 후위 패서 W 아크). 전위 공격수 네트 대기·후위 패서
+ *  깊게·세터 코너 은신. x 흔들기는 레인 간격(≥0.29)보다 작아(±0.04) 좌우 순서 불변, y는 전위(≤0.68)·
+ *  후위(≥0.72) 밴드가 분리돼 열 전후 보장. 세터는 컨택과 동시 침투(릴리즈) — 디렉터가 별도 처리. */
 export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number, H: number): Record<number, Px> {
   const mx = (f: number) => (side === 'home' ? f : 1 - f) * W;
   const my = (f: number) => (side === 'home' ? f : 1 - f) * H;
@@ -175,25 +184,40 @@ export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number,
   const pos: Record<number, Px> = {};
   for (let i = 0; i < 6; i++) {
     const zone = zoneOfIdx(rot, i);
+    const r = lateralRank(zone);
     const front = !isBackZone(zone);
-    let yf: number;
-    if (i === setterIdx) yf = front ? 0.585 : 0.72;        // 세터: 전위면 네트 코너, 후위면 백밴드 얕게(릴리즈 대기)
-    else if (front) yf = recv.includes(i) ? 0.665 : 0.60;  // 전위: 패서면 미드, 비패서(공격수) 네트
-    else yf = recv.includes(i) ? 0.845 : 0.755;            // 후위: 패서 깊게, 비패서 얕게
-    pos[i] = { x: mx(LANE_X[lateralRank(zone)]), y: my(yf) };
+    const seed = zone * 31 + rot * 7;
+    let xf: number, yf: number;
+    if (i === setterIdx) {
+      xf = r === 2 ? 0.87 : r === 0 ? 0.13 : 0.5;          // 자기 사이드 코너에 은신
+      yf = front ? 0.57 : 0.715;                            // 전위면 네트, 후위면 백밴드 얕게(릴리즈 대기)
+    } else if (front) {
+      xf = RF_FRONT_X[r] + jit(seed + 1, 0.04);
+      yf = recv.includes(i) ? 0.645 + jit(seed + 2, 0.025) : 0.58 + jit(seed + 2, 0.02); // 패서 미드 / 공격수 네트
+    } else {
+      xf = RF_BACK_X[r] + jit(seed + 1, 0.04);
+      // 후위 패서는 W 아크(중앙 더 깊게), 비패서는 얕게
+      yf = recv.includes(i) ? (r === 1 ? 0.85 : 0.80) + jit(seed + 2, 0.025) : 0.75 + jit(seed + 2, 0.02);
+    }
+    pos[i] = { x: mx(xf), y: my(yf) };
   }
   return pos;
 }
 
-/** 서브 팀 대형(서버 제외 5인) — 서브 컨택 순간 **오버랩 합법** 베이스. 직후(패스 구간)부터 스위칭 전환.
- *  x=존 가로랭크, y=전/후위 밴드. 서버(zone1)는 디렉터가 베이스라인으로 따로 보낸다. */
+/** 서브 팀 대형(서버 제외 5인) — 컨택 순간 **오버랩 합법** 베이스(직후 패스 구간부터 스위칭 전환).
+ *  받기와 같은 원리(레인 어긋남 + 흔들기)로 자유분방하되 순서 보존. 서버(zone1)는 디렉터가 베이스라인으로. */
 export function serveFormation(side: Side, lu: Lineup, rot: number, W: number, H: number): Record<number, Px> {
   const mx = (f: number) => (side === 'home' ? f : 1 - f) * W;
   const my = (f: number) => (side === 'home' ? f : 1 - f) * H;
   const pos: Record<number, Px> = {};
   for (let i = 0; i < 6; i++) {
     const zone = zoneOfIdx(rot, i);
-    pos[i] = { x: mx(LANE_X[lateralRank(zone)]), y: my(isBackZone(zone) ? 0.805 : 0.625) };
+    const r = lateralRank(zone);
+    const front = !isBackZone(zone);
+    const seed = zone * 31 + rot * 7 + 99;
+    const xf = (front ? SV_FRONT_X : SV_BACK_X)[r] + jit(seed + 1, 0.045);
+    const yf = (front ? 0.63 : 0.80) + jit(seed + 2, 0.03);
+    pos[i] = { x: mx(xf), y: my(yf) };
   }
   return pos;
 }

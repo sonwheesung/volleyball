@@ -60,4 +60,26 @@ log(`▸ 오라클 자기검증(zonePx 표준격자): 위반 ${oracleViol} (0이
 log(`▸ 받는 팀(receiveFormation, 세터 면제): ${recvViol}/${recvTotal} 대형 위반`);
 log(`▸ 서브 팀(serveFormation, 서버 면제): ${servViol}/${servTotal} 대형 위반`);
 if (sample.length) { log(`\n샘플:`); for (const s of sample) log(`  ${s}`); }
+
+// ── 시각 확인: 격자가 아니라 자유분방한가? (홈=하단 대문자, 네트=상단) ──
+function render(title: string, pos: Record<number, { x: number; y: number }>, lu: ReturnType<typeof buildLineup>, rot: number, serverIdx = -1): void {
+  const COLS = 34, ROWS = 13;
+  const g: string[][] = Array.from({ length: ROWS }, () => Array(COLS).fill('·'));
+  for (let c = 0; c < COLS; c++) g[0][c] = '─'; // 네트(상단)
+  for (let i = 0; i < 6; i++) {
+    const p = pos[i]; if (!p) continue;
+    const c = Math.max(0, Math.min(COLS - 1, Math.round((p.x / W) * (COLS - 1))));
+    // 홈 하단 절반(y 0.5~1.0)을 13행에 매핑
+    const r = Math.max(0, Math.min(ROWS - 1, Math.round(((p.y / H) - 0.5) * 2 * (ROWS - 1))));
+    const ch = i === serverIdx ? 'Σ' : (lu.six[i]?.position ?? '?')[0];
+    g[r][c] = ch;
+  }
+  log(`\n  ${title} (rot ${rot}, 네트=맨위):`);
+  for (const row of g) log('  ' + row.join(''));
+}
+
+const lu0 = lus[0];
+const setter0 = lu0.six.findIndex((p) => p.position === 'S');
+for (const rot of [0, 2, 4]) render(`받기 대형`, receiveFormation('home', lu0, rot, W, H), lu0, rot, setter0 /*세터 표시용 아님*/ && -1);
+render(`서브 대형`, serveFormation('home', lu0, 0, W, H), lu0, 0, lineupIdxAt(0, 1));
 log('');
