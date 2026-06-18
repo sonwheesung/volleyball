@@ -17,7 +17,7 @@
 | 12종 훈련 + posRelevance + coachShare | ✅ 구현 | `TRAININGS`(12), `coachShare`= 핵심 0.25 / 보조 0.12 / 나머지 0.02 |
 | **포지션 인식 성장 플로어 + 속도 캘리브레이션** | ✅ 구현(2026-06) | `engine/training.ts` `POS_FLOOR`·상향 `BASE` — 위 ★★ 절 |
 | 노쇠(점프·민첩·체력·체젠 하락) | ✅ 구현 | `engine/aging.ts` — `DECAY_STATS=['jump','agility','staminaMax','staminaRegen']`, `FLOOR=25`. 특성 보정 `agingTraitMult`(대기만성 ×0.8 / 조로 ×1.25) |
-| 감독 핵심2+보조3 | ✅ 구현(고정) | `data/seed.ts` 7개 아키타입(팀당 1명 결정론 배정). **단장 커스터마이즈는 미구현** |
+| 감독 핵심2+보조3 | ✅ 구현 | `data/seed.ts` 7개 아키타입(팀당 1명 결정론 배정). **단장 커스터마이즈 ✅**(`app/coach/[id].tsx` — 7개 아키타입 중 선택해 팀 훈련 방향 오버라이드, `setTrainingFocus`) |
 | 일자별 진행(훈련+노쇠) | ✅ 구현 | `engine/progression.ts`(오케스트레이션), 시드 리플레이 |
 | **경기 출전·생산 → 성장(추가 성장원)** | ✅ 구현 | `engine/experience.ts` — 본 문서 외 신규. 아래 1.7 참고 |
 | **선수 특성의 성장·노쇠 보정** | ✅ 구현(2026-06) | `engine/traits.ts` — 훈련 `trainTraitMult`(노력형 ×1.12)·노쇠 `agingTraitMult`. 상세는 TRAIT_SYSTEM |
@@ -376,8 +376,10 @@ interface Coach {
 
 ---
 
-## 9. 보류 — 돌파(Breakthrough) (지금은 제외)
+## 9. 돌파(Breakthrough) — ✅ 구현(2026-06-18)
 
-- 가끔 실력이 갑자기 확 느는 현상. XP 바에 한 번에 큰 덩어리를 꽂거나 `talent`를
-  일시 급등시키는 **희귀 이벤트**로 후에 구현.
-- 지금은 전부 "천천히"만. 돌파는 페이싱 검증이 끝난 뒤 얹는다.
+- 어린 선수(≤23세, 헤드룸 충분)가 한 시즌에 **갑자기 확 크는 희귀 이벤트**. 시즌 롤오버에서
+  정상 성장 후 적용(`engine/rollover.ts` `maybeBreakthrough`). 결정론(id+경력시즌).
+- 발생: 자격 선수 중 **시즌당 5%**(헤드룸 하한 12). 효과: 헤드룸 큰 상위 4스탯에 +3~+6씩(포텐 상한 보존).
+- 측정(N·2026-06-18): 발생률 4.4% · OVR 상승 평균 +1.4(최대 +4) · 리그당 ~1.8건/시즌.
+  밸런스: qaIntegrity 150시즌 OVR 범위 유지·무결성 0(폭발 절제 + 노쇠로 상쇄).
