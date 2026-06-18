@@ -1,11 +1,14 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 import { Muted, Screen, theme } from '../components/Screen';
+import { DEV_TOOLS } from '../data/flags';
 import { useGameStore } from '../store/useGameStore';
+
+const ROSE = '#FF5C8D';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -28,14 +31,13 @@ function Row({ icon, tint, label, sub, onPress, danger }: { icon: IoniconName; t
   );
 }
 
-const ROSE = '#FF5C8D';
-
 export default function Settings() {
   const router = useRouter();
   const resetSave = useGameStore((s) => s.resetSave);
   const replayOnboarding = useGameStore((s) => s.replayOnboarding);
   const season = useGameStore((s) => s.season);
   const supporter = useGameStore((s) => s.supporter);
+  const setSupporter = useGameStore((s) => s.setSupporter);
   const [confirmReset, setConfirmReset] = useState(false);
 
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
@@ -71,6 +73,25 @@ export default function Settings() {
         <Row icon="information-circle-outline" tint={theme.muted} label="버전" sub={`백년배구 v${version}`} />
       </View>
 
+      {/* 미리보기(개발용) — 실전 빌드에선 숨김. 서포터 적용된 모습을 즉시 확인 */}
+      {DEV_TOOLS ? (
+        <>
+          <Text style={styles.section}>미리보기 (개발)</Text>
+          <View style={styles.group}>
+            <View style={styles.toggleRow}>
+              <View style={[styles.rowIcon, { backgroundColor: ROSE + '1A' }]}>
+                <Ionicons name="heart" size={18} color={ROSE} />
+              </View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.rowLabel}>서포터 보유 (적용 미리보기)</Text>
+                <Muted style={{ fontSize: 12, marginTop: 1 }}>켜면 실제로 산 것처럼 ♥·크레딧·감사 화면 표시</Muted>
+              </View>
+              <Switch value={supporter} onValueChange={setSupporter} trackColor={{ true: ROSE, false: theme.cardAlt }} />
+            </View>
+          </View>
+        </>
+      ) : null}
+
       {/* 세이브 초기화 확인 — 되돌릴 수 없는 작업이라 명시 확인 */}
       <Modal visible={confirmReset} transparent animationType="fade" onRequestClose={() => setConfirmReset(false)}>
         <Pressable style={styles.backdrop} onPress={() => setConfirmReset(false)}>
@@ -99,6 +120,7 @@ const styles = StyleSheet.create({
   section: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 16, marginBottom: 6, marginLeft: 2 },
   group: { backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
+  toggleRow: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
   rowIcon: { width: 34, height: 34, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
   rowLabel: { color: theme.text, fontSize: 15, fontWeight: '700' },
   backdrop: { flex: 1, backgroundColor: '#15202B80', alignItems: 'center', justifyContent: 'center', padding: 28 },

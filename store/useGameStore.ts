@@ -134,6 +134,7 @@ interface GameState {
   completeOnboarding: () => void;
   replayOnboarding: () => void;
   grantSupporter: () => void;
+  setSupporter: (v: boolean) => void;
 }
 
 const freshSave = {
@@ -691,6 +692,7 @@ export const useGameStore = create<GameState>()(
       completeOnboarding: () => set({ onboarded: true }),
       replayOnboarding: () => set({ onboarded: false }),
       grantSupporter: () => set({ supporter: true }), // 결제 성공 시 호출(출시 시 IAP 콜백에 연결)
+      setSupporter: (v) => set({ supporter: v }),     // 미리보기 토글(개발용) — 적용된 모습 확인
     }),
     {
       name: 'baeknyeon-save',
