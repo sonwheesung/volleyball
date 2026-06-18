@@ -1,4 +1,9 @@
-# 중계 현수막 (Broadcast Lower-Third) — 설계 문서 (2026-06-17)
+# 중계 현수막 (Broadcast Lower-Third) — 설계+Phase1 구현 (2026-06-17 설계 / 2026-06-18 구현)
+
+> **★ 구현 현황(2026-06-18)**: Phase 1 ✅ — `data/broadcast.ts buildMatchBanners`(기록 경신·PO 확정/탈락)
+> + `components/BroadcastBanner.tsx`(하단 현수막 큐 애니메이션) + `app/match/[id]` finished 게이트 주입.
+> 검증 `tools/simBroadcast.ts`: 시즌0 PO확정 3·탈락 4/126경기, 합성 1000점 돌파 현수막 ✅, 스포일러 누출 0(구조 보장).
+> **추후**: 우승 현수막(플레이오프는 경기단위 관전 안 함 — 보류), 경기 *중* 실시간 기록(랠리별 귀속 선결, Phase 3).
 
 > 실제 배구 TV 중계처럼, 큰 사건(우승·기록 경신·플레이오프 확정)을 경기 보드 **하단 현수막**으로
 > 띄운다. 관전형 1순위(보는 경험의 품질, CLAUDE.md 2장)에 직결되는 연출 투자.

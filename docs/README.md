@@ -25,7 +25,7 @@
 | [TRAIT_SYSTEM](./TRAIT_SYSTEM.md) | 선수 특성(긍정+부정, 결정론 부여, 소폭 엔진영향) | `engine/traits.ts` |
 | [INJURY_SYSTEM](./INJURY_SYSTEM.md) | 부상(시즌 계층 격리·출전결장·만성) | `engine/injury.ts`, `data/injury.ts` |
 | [NEWS_SYSTEM](./NEWS_SYSTEM.md) | 뉴스 피드(1~4 종합 파생, 캡스톤) | `data/news.ts` |
-| [BROADCAST_SYSTEM](./BROADCAST_SYSTEM.md) | 중계 현수막(우승·기록·PO확정, 보드 하단 lower-third, 스포일러 정책) — 설계 | clinch 감지 ✅ `engine/clinch.ts`·`data/clinch.ts`(일정 화면 표시). 현수막 UI·기록 감지 예정 |
+| [BROADCAST_SYSTEM](./BROADCAST_SYSTEM.md) | 중계 현수막(기록·PO확정, 보드 하단 lower-third, 스포일러 정책) | ✅ Phase1 — `data/broadcast.ts`·`components/BroadcastBanner.tsx`·`app/match/[id]`(finished 게이트). 우승 현수막·실시간 기록은 추후 |
 | [TRANSACTION_SYSTEM](./TRANSACTION_SYSTEM.md) | 시즌 중 이동(방출→FA·구멍 영입, 전 구단 AI, 날짜 인지 명단) | `engine/transactions.ts`, `data/dynamics.ts`, `app/transactions.tsx` |
 | [OWNER_SYSTEM](./OWNER_SYSTEM.md) | 구단주 레이어: 선수 면담·감독 벤치 건의·팬심 | `engine/owner.ts`·`data/owner.ts` (뉴스 연동만 보류) |
 | [FORM_SYSTEM](./FORM_SYSTEM.md) | 경기감각: 결장 누적 → 체감 하락, 출전 이력 파생 | `engine/form.ts`·`data/dynamics.ts` |

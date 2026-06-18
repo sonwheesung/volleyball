@@ -4,6 +4,8 @@ import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, OvrBadge, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
+import { BroadcastBanner } from '../../components/BroadcastBanner';
+import { buildMatchBanners } from '../../data/broadcast';
 import { coachInfoOf, getFixture, getTeam } from '../../data/league';
 import { availableTeamPlayers } from '../../data/injury';
 import { DEV_TOOLS } from '../../data/flags';
@@ -79,6 +81,12 @@ export default function MatchBoard() {
   const mineSide = selectedTeamId === data.home.id ? 'home' : selectedTeamId === data.away.id ? 'away' : null;
   const winnerName = data.sim.homeSets > data.sim.awaySets ? data.home.name : data.away.name;
 
+  // 중계 현수막 — 관전 종료 후에만 빌드(스포일러 정책: 결과-결정 사건 누출 0). 샌드박스 제외.
+  const banners = useMemo(
+    () => (finished && !isSandbox && fixture ? buildMatchBanners(data.home.id, data.away.id, fixture.dayIndex, mineSide) : []),
+    [finished, isSandbox, fixture, data.home.id, data.away.id, mineSide],
+  );
+
   return (
     <ScrollView
       style={styles.root}
@@ -108,15 +116,18 @@ export default function MatchBoard() {
         </View>
       </View>
 
-      <MatchCourt
-        sim={data.sim}
-        home={data.homeSquad}
-        away={data.awaySquad}
-        seed={data.seed}
-        mineSide={mineSide}
-        onFinished={onFinished}
-        onScore={handleScore}
-      />
+      <View style={{ position: 'relative' }}>
+        <MatchCourt
+          sim={data.sim}
+          home={data.homeSquad}
+          away={data.awaySquad}
+          seed={data.seed}
+          mineSide={mineSide}
+          onFinished={onFinished}
+          onScore={handleScore}
+        />
+        {banners.length > 0 ? <BroadcastBanner banners={banners} /> : null}
+      </View>
 
       {/* 세트 스코어 — 관전이 끝난 뒤에만 공개(스포일러 방지) */}
       {finished ? (
