@@ -552,21 +552,24 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     let nextAtt: Side = def; // 기본: 공수 전환(아래 블록 커버 시 공격팀 유지)
     if (intoBlock) {
       // 원터치(소프트 블록): 떠오른 공을 ① 공격팀이 커버해 살림(재공격) ② 또는 수비팀 코트로 넘어가 디그 전환.
+      // 소프트 블록도 종결 블록처럼 **blockContact(블록 정면=블로커 위치)** 에서 공이 튕긴다.
+      //   blockNet(의도 코스)을 쓰면 공이 블로커서 한참 떨어진 빈 네트서 튕겨 부자연(측정 중앙값 2.6m·69%
+      //   빗나감, 2026-06-19 사용자 보고). 종결 블록은 이미 blockContact로 고쳤는데 소프트 블록만 누락이었다.
       if (rng.next() < BLOCK_COVER_RATE) {
         // 블록 커버 — 공이 공격팀 코트 네트 앞에 떨어지고, 후위/커버가 몸을 던져 살린다 → 같은 팀 재공격
-        const ct = { x: clampN(blockNet.x + rng.range(-0.07, 0.07) * W, 16, W - 16), y: (att === 'home' ? 0.61 : 0.39) * H };
+        const ct = { x: clampN(blockContact.x + rng.range(-0.07, 0.07) * W, 16, W - 16), y: (att === 'home' ? 0.61 : 0.39) * H };
         const aBacks = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z));
         const coverIdx = aBacks.reduce((b, i) => (d2(swDef[att].pos[i], ct) < d2(swDef[att].pos[b], ct) ? i : b), aBacks[0]);
-        wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치(공격팀 쪽으로 튕김)
+        wp.push({ x: blockContact.x, y: blockContact.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치(블록 정면→공격팀 쪽으로)
         wp.push({ x: ct.x, y: ct.y, side: att, idx: -1, kind: 'pass', movers: [{ side: att, idx: coverIdx, x: ct.x, y: ct.y }] }); // 커버 디그(살림)
         firstTouch = coverIdx;
         touchPos = ct;
         nextAtt = att; // 커버 성공 → 같은 팀이 다시 공격
       } else {
         // 원터치 → def 코트로 떨어진 걸 디그 → 공수 전환
-        const dt = { x: clampN(blockNet.x + rng.range(-0.06, 0.06) * W, 16, W - 16), y: (def === 'home' ? 0.64 : 0.36) * H };
+        const dt = { x: clampN(blockContact.x + rng.range(-0.06, 0.06) * W, 16, W - 16), y: (def === 'home' ? 0.64 : 0.36) * H };
         const digIdx = nearestDig(dt);
-        wp.push({ x: blockNet.x, y: blockNet.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치
+        wp.push({ x: blockContact.x, y: blockContact.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치(블록 정면)
         wp.push({ x: dt.x, y: dt.y, side: def, idx: -1, kind: 'pass', movers: [{ side: def, idx: digIdx, x: dt.x, y: dt.y }] }); // 디그
         firstTouch = digIdx;
         touchPos = dt;
