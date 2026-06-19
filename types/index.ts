@@ -46,6 +46,7 @@ export interface Player {
   position: Position;
   isForeign: boolean;
   isAsianQuota?: boolean; // 아시아쿼터 수입 선수(FOREIGN_SYSTEM 7). isForeign과 함께 true → 캡/FA 제외 자동, 라이프사이클만 분리
+  nationality?: string;   // 국적(아시아쿼터 표시용 — AVC 가맹국). 결정론(id 시드)
 
   // 밑단 — 신체 (5.1)
   height: number;       // 고정 (나이 무관)

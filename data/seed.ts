@@ -20,7 +20,7 @@ import type {
   TrainableStat,
   TrainingFocus,
 } from '../types';
-import { COACH_NAMES, FOREIGN_NAMES, GIVEN, SURNAMES, TEAM_NAMES } from './names';
+import { ASIAN_IMPORTS, COACH_NAMES, FOREIGN_NAMES, GIVEN, SURNAMES, TEAM_NAMES } from './names';
 import { clubIdentityByIndex } from './clubIdentity';
 
 export interface League {
@@ -254,6 +254,13 @@ const FOREIGN_AGE: [number, number] = [24, 31]; // 외국인은 정체성 무관
 // 아시아쿼터 시드 포지션 — 16칸 중 1칸 차지(팀마다 변주, 공격수/블로커 중심). 외인 OP 슬롯과 충돌 회피.
 const ASIAN_SEED_POS: Position[] = ['OH', 'MB', 'OH', 'MB', 'OH', 'MB', 'OP'];
 
+/** 아시아쿼터 이름·국적 부여 — id 시드 결정론(makePlayer RNG 불간섭, 서양식 이름→아시아 이름+국적) */
+export function applyAsianIdentity(p: Player): Player {
+  const r = createRng(strSeed(p.id + ':asian'));
+  const e = ASIAN_IMPORTS[r.int(0, ASIAN_IMPORTS.length - 1)];
+  return { ...p, name: e.name, nationality: e.nat };
+}
+
 export function generateLeague(seed: number): League {
   const rng = createRng(seed);
   const teams: Team[] = [];
@@ -276,7 +283,7 @@ export function generateLeague(seed: number): League {
       const isAsian = !isForeign && pos === asianPos && !asianAssigned ? (asianAssigned = true) : false;
       const ageRange = isForeign || isAsian ? FOREIGN_AGE : identity.ageRange;
       let pl = makePlayer(rng, `${teamId}p${pi}`, pos, isForeign || isAsian, undefined, teamBias, ageRange);
-      if (isAsian) pl = { ...pl, isAsianQuota: true, contract: { ...pl.contract, salary: ASIAN_SALARY } };
+      if (isAsian) pl = applyAsianIdentity({ ...pl, isAsianQuota: true, contract: { ...pl.contract, salary: ASIAN_SALARY } });
       players.push(pl);
       playerIds.push(pl.id);
       teamSalary += pl.contract.salary;

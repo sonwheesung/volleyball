@@ -16,6 +16,20 @@ export const FOREIGN_NAMES = [
   '브랑카', '디미트라', '루시아', '안나', '타이샤', '옐레나', '나탈리아',
 ];
 
+// 아시아쿼터 수입 선수 — 이름 + 국적(AVC 가맹국). 실제 KOVO 여자부 아시아쿼터는
+// 일본·태국·중국·인도네시아·베트남·필리핀·카자흐스탄·호주(AVC) 등에서 온다.
+export const ASIAN_IMPORTS: { name: string; nat: string }[] = [
+  { name: '사쿠라', nat: '일본' }, { name: '유키', nat: '일본' }, { name: '아이리', nat: '일본' },
+  { name: '미사키', nat: '일본' }, { name: '나나미', nat: '일본' }, { name: '하루카', nat: '일본' },
+  { name: '폼퐁', nat: '태국' }, { name: '위파위', nat: '태국' }, { name: '아차라폰', nat: '태국' },
+  { name: '핀카에우', nat: '태국' }, { name: '치트라폰', nat: '태국' },
+  { name: '리잉', nat: '중국' }, { name: '장창닝', nat: '중국' }, { name: '왕윈루', nat: '중국' },
+  { name: '가오이', nat: '중국' }, { name: '메가', nat: '인도네시아' }, { name: '위다', nat: '인도네시아' },
+  { name: '투이짱', nat: '베트남' }, { name: '비치투', nat: '베트남' },
+  { name: '자야', nat: '필리핀' }, { name: '알리사', nat: '필리핀' },
+  { name: '사비나', nat: '카자흐스탄' }, { name: '킨켈라', nat: '호주' }, { name: '와일러', nat: '호주' },
+];
+
 export const COACH_NAMES = [
   '차상우', '문병호', '서남원', '강성형', '고희진', '권순찬',
   '이영택', '마우리시오', '아본단자', '필립', '한상길', '오한남',

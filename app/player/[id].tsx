@@ -137,7 +137,7 @@ export default function PlayerDetail() {
                   <Text style={{ color: role.color, fontWeight: '800', fontSize: 12 }}>{role.text}</Text>
                 </View>
               ) : null}
-              {p.isAsianQuota ? <Text style={{ color: theme.elite, fontWeight: '700' }}>아시아쿼터</Text> : p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700' }}>외국인</Text> : null}
+              {p.isAsianQuota ? <Text style={{ color: theme.elite, fontWeight: '700' }}>아시아쿼터{p.nationality ? `·${p.nationality}` : ''}</Text> : p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700' }}>외국인</Text> : null}
               {isFranchise(p) ? <Text style={{ color: theme.warn, fontWeight: '700' }}>프랜차이즈</Text> : null}
             </View>
             <Muted>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>

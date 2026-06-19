@@ -5,7 +5,7 @@ import type { Player, Position } from '../types';
 import { createRng, strSeed } from '../engine/rng';
 import { overall } from '../engine/overall';
 import { FOREIGN_SALARY, ASIAN_SALARY, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, aiKeepsForeign, type TryoutPicks } from '../engine/foreign';
-import { makePlayer } from './seed';
+import { makePlayer, applyAsianIdentity } from './seed';
 
 const clampS = (v: number) => Math.max(20, Math.min(96, Math.round(v)));
 const LIFT_KEYS = ['jump', 'agility', 'reaction', 'positioning', 'focus', 'consistency', 'vq',
@@ -51,6 +51,7 @@ export function generateAsianPool(season: number, domesticAvg: number, count = F
     const bias = 2 + rng.int(0, 9); // 외인(6+0~12)보다 낮은 티어
     let p: Player = { ...makePlayer(rng, `asn-s${season}-${i}`, pos, true, age, bias), isAsianQuota: true };
     while (overall(p) < domesticAvg) p = { ...lift(p, 3), isAsianQuota: true }; // 바닥 = 국내 평균(외인은 +2)
+    p = applyAsianIdentity(p); // 아시아 이름·국적(id 결정론)
     out.push({ ...p, contract: { salary: ASIAN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } });
   }
   return out;
