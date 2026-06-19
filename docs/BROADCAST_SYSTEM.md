@@ -1,8 +1,8 @@
 # 중계 현수막 (Broadcast Lower-Third) — 설계+Phase1 구현 (2026-06-17 설계 / 2026-06-18 구현)
 
-> **★ 구현 현황(2026-06-18)**: Phase 1 ✅ — `data/broadcast.ts buildMatchBanners`(기록 경신·PO 확정/탈락)
-> + `components/BroadcastBanner.tsx`(하단 현수막 큐 애니메이션) + `app/match/[id]` finished 게이트 주입.
-> 검증 `tools/simBroadcast.ts`: 시즌0 PO확정 3·탈락 4/126경기, 합성 1000점 돌파 현수막 ✅, 스포일러 누출 0(구조 보장).
+> **★ 구현 현황(2026-06-19)**: Phase 1 ✅ — `data/broadcast.ts buildMatchBanners`(기록 경신·PO 확정/탈락·**트리플 크라운**)
+> + `components/BroadcastBanner.tsx`(하단 현수막 큐 애니메이션, kind 무관 tint/icon/title 렌더) + `app/match/[id]` finished 게이트 주입.
+> 검증 `tools/simBroadcast.ts`·`tools/checkTripleCrown.ts`: 시즌0 PO확정 3·탈락 13·트리플크라운 9/126경기, 합성 1000점 돌파 현수막 ✅, 스포일러 누출 0(구조 보장).
 > **추후**: 우승 현수막(플레이오프는 경기단위 관전 안 함 — 보류), 경기 *중* 실시간 기록(랠리별 귀속 선결, Phase 3).
 
 > 실제 배구 TV 중계처럼, 큰 사건(우승·기록 경신·플레이오프 확정)을 경기 보드 **하단 현수막**으로
@@ -30,13 +30,14 @@
 **우승·PO확정 = 종료 직후**. (우승·확정을 굳이 경기 중에 띄우려면 스포일러를 감수하는 명시적 옵션이
 필요 — 기본은 금지.)
 
-## 2. 트리거 3종 — 데이터 출처 & 신규 작업
+## 2. 트리거 4종 — 데이터 출처 & 신규 작업
 
 | 트리거 | 출처 | 상태 | 신규 작업 |
 |---|---|---|---|
 | **우승 확정** | `archive.championId` (data/playoffs.ts) | ✅ 있음 | 없음 — 챔프전 종료 현수막 |
 | **기록 경신** | `Milestone`(engine/milestones.ts `crossedThresholds`) | ⚠ 시즌말 계산만 | **경기단위 감지** `detectMatchMilestones()` — 선수 career 기준선 + 이 경기 생산으로 임계 교차 판정 |
 | **PO 확정/시드** | `computeStandings` + 잔여 일정 | ✅ **구현** `engine/clinch.ts`·`data/clinch.ts` | 보수적 승수 기반 확정/탈락/경합+매직넘버. 일정 화면 표시 중. 시드 세분(1번 시드 확정 등)은 추후 |
+| **트리플 크라운** (결과-중립, 2026-06-19 구현) | `production`(before/after diff) | ✅ **구현** `data/broadcast.ts` | 한 경기 **공격·블로킹·서브 각 3개 이상** 득점한 선수 → 현수막. KOVO 정통은 '후위공격+블로킹+서브'지만 엔진 생산이 후위/전위 미분리라 공격(spike) 기준으로 근사. 빈도 측정(`tools/checkTripleCrown.ts`): **시즌당 ~10건**(달성자는 전원 공격 ≥3 동반 — 진짜 올라운드 활약). 개인 업적이라 승패 무노출(결과-중립) → finished 후 안전 |
 
 > 기록 경신의 경기단위 감지는 **랠리별 개인 기록 귀속**에 의존(현재 알려진 공백 — PointLog→production
 > 참가자 id). 경기말 집계는 근사 가능하나, 경기 *중* 실시간(그 랠리에 뜨는)은 귀속 정밀도가 선결.

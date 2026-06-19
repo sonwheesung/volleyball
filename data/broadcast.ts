@@ -9,10 +9,13 @@ import { availableTeamPlayers } from './injury';
 import { leagueProduction } from './production';
 import { teamClinch } from './clinch';
 
-export type BannerKind = 'record' | 'clinch' | 'eliminated';
+export type BannerKind = 'record' | 'clinch' | 'eliminated' | 'triple';
 export interface Banner { kind: BannerKind; tint: string; icon: string; title: string; mine: boolean }
 
-const RECORD_TINT = '#3B82F6', CLINCH_TINT = '#16B07D', ELIM_TINT = '#FF6B5A';
+const RECORD_TINT = '#3B82F6', CLINCH_TINT = '#16B07D', ELIM_TINT = '#FF6B5A', TRIPLE_TINT = '#8B5CF6';
+// 트리플 크라운 임계 — 한 경기 공격·블로킹·서브 각 TRIPLE_MIN 이상. 시즌당 ~10건(big 사건 유지,
+// tools/checkTripleCrown.ts 측정). KOVO 정통(후위공격)은 엔진 생산 미분리라 공격(spike) 기준으로 근사.
+const TRIPLE_MIN = 3;
 const STAT_KO: Record<string, [string, string]> = {
   points: ['통산', '점'], blocks: ['통산 블로킹', '개'], digs: ['통산 디그', '개'],
   aces: ['통산 서브에이스', '개'], matches: ['통산', '경기 출전'], seasons: ['통산', '시즌'],
@@ -43,6 +46,20 @@ export function buildMatchBanners(homeId: string, awayId: string, dayIndex: numb
     }
   }
 
+  // 1.5) 트리플 크라운(결과-중립) — 한 경기 공격·블로킹·서브 각 TRIPLE_MIN 이상 득점.
+  //   개인 업적이라 승패를 노출하지 않음 → finished 후 안전. 시즌당 ~10건(측정 — big 사건 유지).
+  for (const [side, teamId] of sides) {
+    const mine = mineSide === side;
+    for (const pl of availableTeamPlayers(teamId, dayIndex)) {
+      const pb = before.get(pl.id), pa = after.get(pl.id);
+      const s = (pa?.spikes ?? 0) - (pb?.spikes ?? 0);
+      const b = (pa?.blocks ?? 0) - (pb?.blocks ?? 0);
+      const a = (pa?.aces ?? 0) - (pb?.aces ?? 0);
+      if (s >= TRIPLE_MIN && b >= TRIPLE_MIN && a >= TRIPLE_MIN)
+        out.push({ kind: 'triple', tint: TRIPLE_TINT, icon: 'ribbon', mine, title: `${pl.name} 트리플 크라운! 공격 ${s}·블로킹 ${b}·서브 ${a}` });
+    }
+  }
+
   // 2) 플레이오프 확정/탈락(결과-결정) — 이 경기로 막 바뀐 팀
   for (const [side, teamId] of sides) {
     const mine = mineSide === side;
@@ -53,6 +70,7 @@ export function buildMatchBanners(homeId: string, awayId: string, dayIndex: numb
     else if (cb !== 'eliminated' && ca === 'eliminated') out.push({ kind: 'eliminated', tint: ELIM_TINT, icon: 'close-circle', mine, title: `${name} 플레이오프 탈락` });
   }
 
-  // 내 팀 사건 먼저, 그다음 확정류
-  return out.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (a.kind === 'record' ? 0 : 1) - (b.kind === 'record' ? 0 : 1));
+  // 내 팀 사건 먼저, 그다음 트리플 크라운(가장 특별) → 기록 → 확정/탈락 순
+  const rank: Record<BannerKind, number> = { triple: 0, record: 1, clinch: 2, eliminated: 3 };
+  return out.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (rank[a.kind] - rank[b.kind]));
 }

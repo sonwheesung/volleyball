@@ -40,7 +40,9 @@ const HOW_CAPTION: Record<PointHow, { txt: string; color: string }> = {
   tip: { txt: '페인트!', color: '#8B7CF0' },
   ace: { txt: '서브 에이스!', color: '#10B9A6' },
   serveErr: { txt: '서브 범실', color: '#8A94A6' },
-  recvErr: { txt: '리시브 범실', color: '#8A94A6' },
+  // 리시브를 흔들어 직접 득점한 서브 — 관전 표기는 '서브 에이스'(사용자 요청). KOVO 통계는
+  // 여전히 리시브 범실로 별도 집계(엔진 how/stats 분리 — 분포·서브왕 보존). 보드 헤드라인만 에이스.
+  recvErr: { txt: '서브 에이스!', color: '#10B9A6' },
   miscErr: { txt: '핸들링 범실', color: '#8A94A6' },
   atkErr: { txt: '공격 범실', color: '#8A94A6' },
   fault: { txt: '포지션 폴트', color: '#8A94A6' },

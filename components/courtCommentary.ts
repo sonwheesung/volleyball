@@ -86,7 +86,7 @@ export function commentLine(seg: CommentSeg, how: PointHow | undefined, L: Lineu
     if (how === 'ace') return '네트를 맞고 뚝! 손쓸 새가 없다'; // 네트인 에이스(일반 에이스는 fault 구간이 없다)
     if (how === 'blockout') return '코트 밖으로 — 끝까지 쫓아가 보지만!';
     if (how === 'stuff') return '벽에 막혀 그대로 꽂힌다!';
-    if (how === 'recvErr') return '리시브가 크게 흔들렸다!';
+    if (how === 'recvErr') return '날카로운 서브! 리시브가 그대로 튕겨 아웃 — 에이스!';
     if (how === 'miscErr') return '연결이 어긋났다!';
     if (how === 'fault') return '휘슬 — 포지션 폴트';
     return null; // serveErr 등은 자막으로 충분
