@@ -22,7 +22,8 @@ export default function Standings() {
           <Text style={[styles.cell, styles.h]}>경기</Text>
           <Text style={[styles.cell, styles.h]}>승</Text>
           <Text style={[styles.cell, styles.h]}>패</Text>
-          <Text style={[styles.cell, styles.h]}>득실</Text>
+          <Text style={[styles.cell, styles.h]}>승점</Text>
+          <Text style={[styles.cell, styles.h]}>세트±</Text>
         </View>
         {standings.map((s, i) => {
           const mine = s.teamId === teamId;
@@ -33,8 +34,9 @@ export default function Standings() {
                 {getTeam(s.teamId)?.name ?? s.teamId}
               </Text>
               <Text style={styles.cell}>{s.played}</Text>
-              <Text style={[styles.cell, styles.mine]}>{s.wins}</Text>
+              <Text style={styles.cell}>{s.wins}</Text>
               <Text style={styles.cell}>{s.losses}</Text>
+              <Text style={[styles.cell, styles.pts, mine && styles.mine]}>{s.points}</Text>
               <Text style={[styles.cell, { color: s.setDiff >= 0 ? theme.good : theme.bad }]}>
                 {s.setDiff > 0 ? '+' : ''}{s.setDiff}
               </Text>
@@ -53,5 +55,6 @@ const styles = StyleSheet.create({
   rank: { width: 24, color: theme.text, fontSize: 14, fontWeight: '700' },
   team: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
   cell: { width: 40, textAlign: 'center', color: theme.text, fontSize: 14 },
+  pts: { fontWeight: '800', color: theme.text }, // 승점 — 순위 결정 1순위라 강조
   mine: { color: theme.accent, fontWeight: '800' },
 });

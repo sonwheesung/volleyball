@@ -16,6 +16,8 @@ export interface ResultRow {
   awayTeamId: string;
   homeSets: number;
   awaySets: number;
+  homePoints: number; // 전 세트 합산 득점(점수득실률 타이브레이크용)
+  awayPoints: number;
 }
 
 export interface Standing {
@@ -23,8 +25,17 @@ export interface Standing {
   played: number;
   wins: number;
   losses: number;
-  setDiff: number;
+  points: number;     // 승점(KOVO): 3-0·3-1=3 / 3-2=2 / 2-3=1 / 0-3·1-3=0
+  setsWon: number;
+  setsLost: number;
+  pointsWon: number;
+  pointsLost: number;
+  setDiff: number;    // 세트 득실차(표시·구버전 호환). 순위 결정은 승점→승률→세트득실률→점수득실률
 }
+
+/** KOVO 타이브레이크 비율 — 분모 0(미실시·전패 없음) 보호 */
+const ratio = (won: number, lost: number): number => (lost > 0 ? won / lost : won > 0 ? Infinity : 0);
+const winRate = (s: Standing): number => (s.played > 0 ? s.wins / s.played : 0);
 
 let cache: { key: string; rows: ResultRow[] } | null = null;
 
@@ -57,6 +68,8 @@ function allResults(): ResultRow[] {
         awayTeamId: f.awayTeamId,
         homeSets: sim.homeSets,
         awaySets: sim.awaySets,
+        homePoints: sim.setScores.reduce((s, x) => s + x.home, 0), // 점수득실률 타이브레이크
+        awayPoints: sim.setScores.reduce((s, x) => s + x.away, 0),
       });
     }
   }
@@ -103,20 +116,34 @@ export function seasonStreaks(uptoDay: number): Record<string, [number, number]>
   return out;
 }
 
-/** uptoDay 시점 순위표 */
+/** 승점(KOVO): 승 3-0·3-1=3 / 3-2=2 · 패 2-3=1 / 0-3·1-3=0 — 이긴 세트수로 판정 */
+function matchPoints(winnerSets: number, loserSets: number): [number, number] {
+  if (winnerSets <= 1) return [3, 0]; // 3-0 / 3-1
+  return [2, 1];                       // 3-2 (패자 1점)
+}
+
+/** uptoDay 시점 순위표 — KOVO 순위 결정: 승점 → 승률 → 세트득실률 → 점수득실률 */
 export function computeStandings(uptoDay: number): Standing[] {
   const table: Record<string, Standing> = {};
-  for (const t of LEAGUE.teams) table[t.id] = { teamId: t.id, played: 0, wins: 0, losses: 0, setDiff: 0 };
+  for (const t of LEAGUE.teams) table[t.id] = { teamId: t.id, played: 0, wins: 0, losses: 0, points: 0, setsWon: 0, setsLost: 0, pointsWon: 0, pointsLost: 0, setDiff: 0 };
   for (const r of seasonResults(uptoDay)) {
     const h = table[r.homeTeamId];
     const a = table[r.awayTeamId];
-    const sd = r.homeSets - r.awaySets;
     h.played++; a.played++;
-    h.setDiff += sd; a.setDiff -= sd;
-    if (r.homeSets > r.awaySets) { h.wins++; a.losses++; }
-    else { a.wins++; h.losses++; }
+    h.setsWon += r.homeSets; h.setsLost += r.awaySets; a.setsWon += r.awaySets; a.setsLost += r.homeSets;
+    h.pointsWon += r.homePoints; h.pointsLost += r.awayPoints; a.pointsWon += r.awayPoints; a.pointsLost += r.homePoints;
+    h.setDiff += r.homeSets - r.awaySets; a.setDiff += r.awaySets - r.homeSets;
+    const homeWon = r.homeSets > r.awaySets;
+    const [wp, lp] = matchPoints(Math.max(r.homeSets, r.awaySets), Math.min(r.homeSets, r.awaySets));
+    if (homeWon) { h.wins++; a.losses++; h.points += wp; a.points += lp; }
+    else { a.wins++; h.losses++; a.points += wp; h.points += lp; }
   }
-  return Object.values(table).sort((x, y) => y.wins - x.wins || y.setDiff - x.setDiff);
+  // 승점 → 승률 → 세트득실률 → 점수득실률 (KOVO 정렬)
+  return Object.values(table).sort((x, y) =>
+    y.points - x.points
+    || winRate(y) - winRate(x)
+    || ratio(y.setsWon, y.setsLost) - ratio(x.setsWon, x.setsLost)
+    || ratio(y.pointsWon, y.pointsLost) - ratio(x.pointsWon, x.pointsLost));
 }
 
 /** 드래프트 순번용 — 시즌 전체 기준 하위 팀부터 */

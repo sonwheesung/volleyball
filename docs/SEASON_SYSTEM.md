@@ -32,7 +32,8 @@
 ## 3. 순위·리더보드 (data/standings.ts)
 
 - `seasonResults(uptoDay)` — 전 경기 결정론 재시뮬 중 `dayIndex ≤ uptoDay`만.
-- `computeStandings(uptoDay)` — 승–패–세트득실로 정렬. `baseVersion`별 캐시.
+- `computeStandings(uptoDay)` — **KOVO 승점제**(2026-06-19): 승 3-0·3-1=3점 / 3-2=2점, 패 2-3=1점 / 0-3·1-3=0점.
+  정렬 = 승점 → 승률 → 세트득실률 → 점수득실률(KOVO 순위 결정 규칙). `baseVersion`별 캐시. 순위 화면에 승점 컬럼.
 - `standingsWorstFirst()` — 드래프트 순번(하위 우선) 소스.
 - 개인 리더보드/대시보드 요약은 `data/production.ts`(생산)와 `overall`로 산출.
 
