@@ -26,7 +26,7 @@ import {
 } from '../engine/owner';
 import { discontentNow, teamFanbaseNow, buildOwnerFx } from '../data/owner';
 import { settleSeason, applyNet, type SeasonFinance } from '../engine/finance';
-import { FOREIGN_SALARY } from '../engine/foreign';
+import { FOREIGN_SALARY, ASIAN_SALARY } from '../engine/foreign';
 import { staffSpend, setMyTeamStaff } from '../data/league';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
@@ -98,6 +98,10 @@ interface GameState {
   foreignAltPool: string[];                    // 시즌 중 교체 대체 외인 후보
   foreignSubUsed: boolean;                     // 외인 교체는 시즌당 1회
   keepForeign: boolean | null;                 // 외인 재계약 결정(null=자동 — AI 판단)
+  asianWish: string[];                         // 아시아쿼터 트라이아웃 위시리스트(우선순위)
+  asianAltPool: string[];                      // 시즌 중 교체 대체 아시아쿼터 후보
+  asianSubUsed: boolean;                       // 아시아쿼터 교체는 시즌당 1회
+  keepAsian: boolean | null;                   // 아시아쿼터 재계약 결정(null=자동)
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
@@ -133,6 +137,9 @@ interface GameState {
   toggleTryoutWish: (playerId: string) => void;
   replaceForeign: (altId: string) => boolean;
   setKeepForeign: (keep: boolean | null) => void;
+  toggleAsianWish: (playerId: string) => void;
+  replaceAsian: (altId: string) => boolean;
+  setKeepAsian: (keep: boolean | null) => void;
   endSeason: () => void;
   resetSave: () => void;
   completeOnboarding: () => void;
@@ -184,6 +191,10 @@ const freshSave = {
   foreignAltPool: [] as string[],
   foreignSubUsed: false,
   keepForeign: null as boolean | null,
+  asianWish: [] as string[],
+  asianAltPool: [] as string[],
+  asianSubUsed: false,
+  keepAsian: null as boolean | null,
 };
 
 /** 내 팀의 시즌 중 거래 반영 명단 변화 — 방출/영입 집합 + 현재 정원(방출·영입 검증 게이트 공용) */
@@ -465,7 +476,7 @@ export const useGameStore = create<GameState>()(
         const my = s.selectedTeamId;
         if (!my || s.foreignSubUsed) return false;
         if (!s.foreignAltPool.includes(altId)) return false;
-        const curForeign = rosterIdsOnDay(my, s.currentDay).map((id) => evolveOnDay(id, s.currentDay)).find((p) => p?.isForeign);
+        const curForeign = rosterIdsOnDay(my, s.currentDay).map((id) => evolveOnDay(id, s.currentDay)).find((p) => p?.isForeign && !p?.isAsianQuota);
         if (!curForeign) return false;
         if (FOREIGN_SALARY > s.cash) return false; // 운영 자금 부족
         const inSeasonTx: Tx[] = [...s.inSeasonTx,
@@ -475,9 +486,28 @@ export const useGameStore = create<GameState>()(
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
+      setKeepAsian: (keep) => set({ keepAsian: keep }),
+      toggleAsianWish: (playerId) =>
+        set((s) => ({ asianWish: s.asianWish.includes(playerId) ? s.asianWish.filter((id) => id !== playerId) : [...s.asianWish, playerId] })),
+      // 시즌 중 아시아쿼터 교체(시즌당 1회) — 외인 교체와 동일 구조(ASIAN_SALARY)
+      replaceAsian: (altId) => {
+        const s = get();
+        const my = s.selectedTeamId;
+        if (!my || s.asianSubUsed) return false;
+        if (!s.asianAltPool.includes(altId)) return false;
+        const curAsian = rosterIdsOnDay(my, s.currentDay).map((id) => evolveOnDay(id, s.currentDay)).find((p) => p?.isAsianQuota);
+        if (!curAsian) return false;
+        if (ASIAN_SALARY > s.cash) return false; // 운영 자금 부족
+        const inSeasonTx: Tx[] = [...s.inSeasonTx,
+          { day: s.currentDay, teamId: my, playerId: curAsian.id, kind: 'release' },
+          { day: s.currentDay, teamId: my, playerId: altId, kind: 'sign' }];
+        set({ inSeasonTx, asianSubUsed: true, cash: s.cash - ASIAN_SALARY, asianAltPool: s.asianAltPool.filter((id) => id !== altId) });
+        setTxContext(inSeasonTx, get().faPool, my);
+        return true;
+      },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -566,7 +596,7 @@ export const useGameStore = create<GameState>()(
 
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
         //    FA 입찰은 캡 AND 새 잔고(지갑) — 캡이 남아도 돈이 없으면 못 뽑는다
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash, tryoutWish, keepForeign, moneyOnlyIds);
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
@@ -675,6 +705,10 @@ export const useGameStore = create<GameState>()(
           foreignAltPool: ctx.tryout.altPoolIds,
           foreignSubUsed: false,
           keepForeign: null,
+          asianWish: [],
+          asianAltPool: ctx.asianTryout.altPoolIds,
+          asianSubUsed: false,
+          keepAsian: null,
           season: nextSeason,
           currentDay: 0,
           results: {},
@@ -759,6 +793,10 @@ export const useGameStore = create<GameState>()(
         foreignAltPool: s.foreignAltPool,
         foreignSubUsed: s.foreignSubUsed,
         keepForeign: s.keepForeign,
+        asianWish: s.asianWish,
+        asianAltPool: s.asianAltPool,
+        asianSubUsed: s.asianSubUsed,
+        keepAsian: s.keepAsian,
       }),
       onRehydrateStorage: () => (state) => {
         if (state?.playerBase) commitPlayerBase(state.playerBase);
