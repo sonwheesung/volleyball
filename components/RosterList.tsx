@@ -40,7 +40,7 @@ export function RosterList({ players, decor, starterIds }: { players: Player[]; 
                 {d?.dotColor ? <Text style={{ color: d.dotColor, fontSize: 11 }}>●</Text> : null}
                 <Text style={styles.name}>{p.name}</Text>
                 {d?.mood ? <Text style={{ fontSize: 12 }}>{d.mood}</Text> : null}
-                {p.isForeign ? <Text style={styles.foreign}>외국인</Text> : null}
+                {p.isAsianQuota ? <Text style={styles.asian}>아시아쿼터</Text> : p.isForeign ? <Text style={styles.foreign}>외국인</Text> : null}
               </View>
               <Text style={styles.sub}>
                 {p.age}세 · {p.height}cm
@@ -73,6 +73,7 @@ const styles = StyleSheet.create({
   groupLabel: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 6, marginLeft: 2 },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   foreign: { color: theme.bad, fontSize: 11, fontWeight: '700' },
+  asian: { color: theme.elite, fontSize: 11, fontWeight: '700' }, // 아시아쿼터 — 외국인(코랄)과 구분되는 블루
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   salary: { color: theme.muted, fontSize: 12, fontWeight: '700' },
 });
