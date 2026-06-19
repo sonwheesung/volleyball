@@ -90,3 +90,23 @@ test('구조적 홈 편향 없음: 동일 전력 ≈ 5:5', () => {
   const pct = homeWins / N;
   assert.ok(pct > 0.4 && pct < 0.6, `홈 승률 ${(pct * 100).toFixed(1)}% (40~60%)`);
 });
+
+test('작전 타임아웃: 이벤트 방출 + 유효 스냅샷(MATCH_SYSTEM 7.4)', () => {
+  let total = 0;
+  for (let s = 0; s < 30; s++) {
+    const r = simulateMatch(2000 + s, team('H', 70), team('A', 70));
+    const tos = r.timeouts ?? [];
+    total += tos.length;
+    for (const t of tos) {
+      assert.ok(t.point >= 0 && t.point < r.points.length, 'point가 유효 랠리 인덱스');
+      assert.ok(t.setNo >= 1 && t.setNo <= 5, 'setNo 1~5');
+      assert.ok(t.side === 'home' || t.side === 'away', 'side 유효');
+      assert.ok(t.streak >= 2, '연속 실점 임계 이상');
+      // 코트 체력 스냅샷(선발6+리베로) 0~1
+      assert.ok(t.stamHome.length > 0 && t.stamAway.length > 0, '양 팀 체력 스냅샷');
+      assert.ok([...t.stamHome, ...t.stamAway].every((x) => x.stam >= 0 && x.stam <= 1), '체력 0~1');
+      assert.ok(t.momHome >= 0 && t.momHome <= 100 && t.momAway >= 0 && t.momAway <= 100, '기세 0~100');
+    }
+  }
+  assert.ok(total > 0, `30경기에서 타임아웃 ${total}회 발생(0이면 미방출)`);
+});

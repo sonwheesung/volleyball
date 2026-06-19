@@ -116,10 +116,11 @@ export function seasonStreaks(uptoDay: number): Record<string, [number, number]>
   return out;
 }
 
-/** 승점(KOVO): 승 3-0·3-1=3 / 3-2=2 · 패 2-3=1 / 0-3·1-3=0 — 이긴 세트수로 판정 */
-function matchPoints(winnerSets: number, loserSets: number): [number, number] {
-  if (winnerSets <= 1) return [3, 0]; // 3-0 / 3-1
-  return [2, 1];                       // 3-2 (패자 1점)
+/** 승점(KOVO): 승 3-0·3-1=3 / 3-2=2 · 패 2-3=1 / 0-3·1-3=0 — **패자 세트수**로 판정
+ *  (승자 세트는 항상 3이므로 패자가 1세트 이하면 3-0/3-1=완승, 2세트면 3-2 풀세트). */
+export function matchPoints(winnerSets: number, loserSets: number): [number, number] {
+  if (loserSets <= 1) return [3, 0]; // 3-0 / 3-1 (완승 3점)
+  return [2, 1];                      // 3-2 (풀세트 — 승자 2점·패자 1점)
 }
 
 /** uptoDay 시점 순위표 — KOVO 순위 결정: 승점 → 승률 → 세트득실률 → 점수득실률 */

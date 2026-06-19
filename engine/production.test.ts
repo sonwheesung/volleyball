@@ -51,6 +51,22 @@ test('귀속된 총 득점이 0보다 크고 합산 일관', () => {
   assert.ok(totalPoints > 50, `총 득점=${totalPoints}`);
 });
 
+test('후위공격(backSpikes): spikes 부분집합 + OH/OP만(트리플 크라운 판정용)', () => {
+  const m = run();
+  const byId = new Map([...home, ...away].map((p) => [p.id, p]));
+  let totBack = 0, totSpike = 0;
+  for (const [id, l] of m) {
+    assert.ok(l.backSpikes <= l.spikes, `${id} backSpikes(${l.backSpikes}) ≤ spikes(${l.spikes})`);
+    if (l.backSpikes > 0) {
+      const pos = byId.get(id)?.position;
+      assert.ok(pos === 'OH' || pos === 'OP', `후위공격은 OH/OP만 — ${pos}`);
+    }
+    totBack += l.backSpikes; totSpike += l.spikes;
+  }
+  assert.ok(totBack > 0, '후위공격 귀속 발생');
+  assert.ok(totBack / totSpike < 0.4, `후위공격 비율 ${(100 * totBack / totSpike).toFixed(0)}% < 40%(엔진 백어택 18% 앵커)`);
+});
+
 test('mergeProd 합산이 올바르다', () => {
   const a: ProdLine = { matches: 1, points: 10, spikes: 8, backSpikes: 2, blocks: 1, aces: 1, assists: 5, digs: 3, receives: 0 };
   const merged = mergeProd(mergeProd(emptyProd(), a), a);
