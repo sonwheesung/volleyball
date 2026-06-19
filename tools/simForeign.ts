@@ -35,7 +35,7 @@ for (const id of ids) titles[id] = 0;
 
 let prevForeignOf: Record<string, string> = {};
 for (const t of ids) {
-  const f = (currentRosters()[t] ?? []).find((id) => getPlayer(id)?.isForeign);
+  const f = (currentRosters()[t] ?? []).find((id) => { const p = getPlayer(id); return p?.isForeign && !p.isAsianQuota; });
   if (f) prevForeignOf[t] = f;
 }
 
@@ -52,6 +52,7 @@ for (let s = 0; s < seasons; s++) {
     for (const id of roster) {
       const p = getPlayer(id);
       if (!p) continue;
+      if (p.isAsianQuota) continue; // 아시아쿼터는 외인/국내 지표서 제외(별도 슬롯 — simAsianQuota가 측정)
       if (p.isForeign) { fCount++; fSum += overall(p); }
       else { dSum += overall(p); dCount++; domesticPay += p.contract.salary; }
     }
@@ -66,7 +67,7 @@ for (let s = 0; s < seasons; s++) {
   for (const [, roster] of all) {
     for (const id of roster) {
       const p = getPlayer(id);
-      if (p?.isForeign && overall(p) < dAvg - 1) stat.floorViolations++; // 노쇠 감안 -1 여유
+      if (p?.isForeign && !p.isAsianQuota && overall(p) < dAvg - 1) stat.floorViolations++; // 노쇠 감안 -1 여유
     }
   }
   // 외인 생산
@@ -74,7 +75,7 @@ for (let s = 0; s < seasons; s++) {
   for (const [, roster] of all) {
     for (const id of roster) {
       const p = getPlayer(id);
-      if (p?.isForeign) { stat.opPointsSum += prod.get(id)?.points ?? 0; stat.opSets += 1; }
+      if (p?.isForeign && !p.isAsianQuota) { stat.opPointsSum += prod.get(id)?.points ?? 0; stat.opSets += 1; }
     }
   }
 
@@ -96,7 +97,7 @@ for (let s = 0; s < seasons; s++) {
   // 재지명 vs 교체 추적 + FA 풀 오염 검사
   const nextForeignOf: Record<string, string> = {};
   for (const t of ids) {
-    const f = (filled.rosters[t] ?? []).find((id) => snapshot[id]?.isForeign);
+    const f = (filled.rosters[t] ?? []).find((id) => snapshot[id]?.isForeign && !snapshot[id]?.isAsianQuota);
     if (f) {
       nextForeignOf[t] = f;
       if (prevForeignOf[t] === f) stat.resignSame++; else stat.switched++;

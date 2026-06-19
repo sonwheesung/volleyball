@@ -4,7 +4,7 @@
 import type { Player, Position } from '../types';
 import { createRng, strSeed } from '../engine/rng';
 import { overall } from '../engine/overall';
-import { FOREIGN_SALARY, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, aiKeepsForeign, type TryoutPicks } from '../engine/foreign';
+import { FOREIGN_SALARY, ASIAN_SALARY, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, aiKeepsForeign, type TryoutPicks } from '../engine/foreign';
 import { makePlayer } from './seed';
 
 const clampS = (v: number) => Math.max(20, Math.min(96, Math.round(v)));
@@ -35,6 +35,89 @@ export function generateForeignPool(season: number, domesticAvg: number, count =
 
 export interface TryoutOutcome extends TryoutPicks {
   poolIds: string[]; // 그 해 트라이아웃 전체 풀(미리보기 표시용)
+}
+
+// ─── 아시아쿼터 (FOREIGN_SYSTEM 7) — 외인과 별도 트라이아웃·슬롯. 포지션 유연·연봉 낮음 ───
+// 여자부 아시아쿼터는 공격수/블로커 중심(수입 세터는 드묾). OH 다수·MB·OP.
+const ASIAN_POS: Position[] = ['OH', 'OH', 'OH', 'MB', 'OP'];
+
+/** 매년 아시아쿼터 풀 — 국내 평균 이상(외인은 +2). OH 중심 변주, 외인보다 한 티어 낮음 */
+export function generateAsianPool(season: number, domesticAvg: number, count = FRESH_POOL_SIZE): Player[] {
+  const rng = createRng(strSeed(`asian-pool:${season}`));
+  const out: Player[] = [];
+  for (let i = 0; i < count; i++) {
+    const pos = ASIAN_POS[rng.int(0, ASIAN_POS.length - 1)];
+    const age = rng.int(22, 30);
+    const bias = 2 + rng.int(0, 9); // 외인(6+0~12)보다 낮은 티어
+    let p: Player = { ...makePlayer(rng, `asn-s${season}-${i}`, pos, true, age, bias), isAsianQuota: true };
+    while (overall(p) < domesticAvg) p = { ...lift(p, 3), isAsianQuota: true }; // 바닥 = 국내 평균(외인은 +2)
+    out.push({ ...p, contract: { salary: ASIAN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } });
+  }
+  return out;
+}
+
+/**
+ * 아시아쿼터 트라이아웃 — 외인과 동일 구조(재계약 우선권 → 풀 → 지명), 별도 순번·연봉·플래그.
+ * snapshot/rosters 직접 갱신(오프시즌 체인 내부, 외인 트라이아웃 다음·FA 앞). resolveTryout 재사용.
+ */
+export function runAsianQuota(
+  snapshot: Record<string, Player>,
+  rosters: Record<string, string[]>,
+  returningAsian: string[],
+  nextSeason: number,
+  myTeam: string,
+  myWish: string[],
+  prevAsianOf: Record<string, string>,
+  myKeep: boolean | null = null,
+  myCash: number = Number.POSITIVE_INFINITY,
+): TryoutOutcome {
+  const myCanAfford = myCash >= ASIAN_SALARY;
+  const domestic = Object.values(rosters).flat()
+    .map((id) => snapshot[id]).filter((p): p is Player => !!p && !p.isForeign);
+  const domesticAvg = domestic.length
+    ? domestic.reduce((s, p) => s + overall(p), 0) / domestic.length : 65;
+
+  // 재계약 우선권(외인과 동일 AI 판정)
+  const kept: Record<string, string> = {};
+  const keptSet = new Set<string>();
+  for (const [teamId, pid] of Object.entries(prevAsianOf)) {
+    const p = snapshot[pid];
+    if (!p || !returningAsian.includes(pid)) continue;
+    if (teamId === myTeam && !myCanAfford) continue;
+    const wants = teamId === myTeam && myKeep !== null ? myKeep : aiKeepsForeign(p, domesticAvg);
+    if (!wants) continue;
+    kept[teamId] = pid;
+    keptSet.add(pid);
+    snapshot[pid] = { ...p, contract: { salary: ASIAN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } };
+    rosters[teamId] = [...(rosters[teamId] ?? []), pid];
+  }
+
+  const fresh = generateAsianPool(nextSeason, domesticAvg);
+  for (const p of fresh) snapshot[p.id] = p;
+  const poolIds = [...fresh.map((p) => p.id), ...returningAsian.filter((id) => snapshot[id] && !keptSet.has(id))];
+  const pool = poolIds.map((id) => snapshot[id]).filter((p): p is Player => !!p);
+
+  const order = tryoutOrder(nextSeason, Object.keys(rosters), 'asian-order')
+    .filter((t) => !kept[t] && !(t === myTeam && !myCanAfford));
+  const res = resolveTryout(order, pool, myTeam, myWish, nextSeason);
+  for (const [t, pid] of Object.entries(kept)) res.picks[t] = pid;
+
+  for (const [teamId, pid] of Object.entries(res.picks)) {
+    if (keptSet.has(pid)) continue;
+    const p = snapshot[pid];
+    if (!p) continue;
+    snapshot[pid] = { ...p, contract: { salary: ASIAN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } };
+    rosters[teamId] = [...(rosters[teamId] ?? []), pid];
+  }
+  // 미지명 아시아쿼터 청소(대체 풀 제외) — 외인 cleanup과 대칭(isAsianQuota만)
+  const keep = new Set([...Object.values(res.picks), ...res.altPoolIds]);
+  for (const id of Object.keys(snapshot)) {
+    const p = snapshot[id];
+    if (!p?.isAsianQuota) continue;
+    const rostered = Object.values(rosters).some((r) => r.includes(id));
+    if (!rostered && !keep.has(id)) delete snapshot[id];
+  }
+  return { ...res, poolIds };
 }
 
 /**

@@ -14,9 +14,10 @@ export const ALT_POOL_SIZE = 4;
 /** 신규 외인 풀 크기(매년) — 재참가자가 더해진다 */
 export const FRESH_POOL_SIZE = 10;
 
-/** 지명 순번 — 추첨(성적 무관, 현실 그대로. 꼴찌도 1픽을 못 받을 수 있는 비정함) */
-export function tryoutOrder(season: number, teamIds: string[]): string[] {
-  const rng = createRng(strSeed(`tryout-order:${season}`));
+/** 지명 순번 — 추첨(성적 무관, 현실 그대로. 꼴찌도 1픽을 못 받을 수 있는 비정함).
+ *  tag로 독립 추첨 분리(외인 vs 아시아쿼터 순번이 달라야 함). 기본값=외인(기존 동작 보존). */
+export function tryoutOrder(season: number, teamIds: string[], tag = 'tryout-order'): string[] {
+  const rng = createRng(strSeed(`${tag}:${season}`));
   const arr = [...teamIds].sort();
   for (let i = arr.length - 1; i > 0; i--) {
     const j = rng.int(0, i);

@@ -22,6 +22,7 @@ export interface DraftContext {
   myHoles: number;
   myPickSlots: number[];                  // order 내 내 지명 순번(0-based)
   tryout: import('./tryout').TryoutOutcome; // 외국인 트라이아웃 결과(미리보기=결과 공유)
+  asianTryout: import('./tryout').TryoutOutcome; // 아시아쿼터 트라이아웃 결과(FOREIGN_SYSTEM 7)
   compCash: number;                       // 내가 낸 FA 보상금 합(운영 자금 차감)
 }
 
@@ -64,6 +65,7 @@ export function buildDraftContext(
     myHoles: holes[myTeam] ?? 0,
     myPickSlots,
     tryout: pre.tryout,
+    asianTryout: pre.asianTryout,
     compCash: pre.compCash,
   };
 }
