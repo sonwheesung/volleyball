@@ -6,6 +6,7 @@ import { TRAINABLE_STATS } from '../engine/training';
 import { rollFAPref } from '../engine/faMarket';
 import { rollTraits } from '../engine/traits';
 import { computeSalary } from '../engine/salary';
+import { ASIAN_SALARY } from '../engine/foreign';
 import { headCoachSalary, assistantSalary, scoutSalary } from '../engine/staff';
 import type {
   AssistantCoach,
@@ -250,6 +251,8 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
 // strengthBias 합=0이라 리그 평균 전력 보존. 명문은 강·노련, 신생/신흥은 약·젊음(높은 포텐).
 // 정체성은 시작 조건일 뿐 — 드래프트(꼴찌 우선)·노쇠·FA로 수십 시즌 뒤 평균회귀(parity 유지).
 const FOREIGN_AGE: [number, number] = [24, 31]; // 외국인은 정체성 무관 전성기 영입
+// 아시아쿼터 시드 포지션 — 16칸 중 1칸 차지(팀마다 변주, 공격수/블로커 중심). 외인 OP 슬롯과 충돌 회피.
+const ASIAN_SEED_POS: Position[] = ['OH', 'MB', 'OH', 'MB', 'OH', 'MB', 'OP'];
 
 export function generateLeague(seed: number): League {
   const rng = createRng(seed);
@@ -263,13 +266,17 @@ export function generateLeague(seed: number): League {
     const identity = clubIdentityByIndex(ti);
     const teamBias = identity.strengthBias;
 
-    // 외국인 1명: OP 중 한 자리
+    // 수입 2명: 외국인 1명(OP) + 아시아쿼터 1명(ASIAN_SEED_POS) — 둘 다 16칸 안에 차지(FOREIGN_SYSTEM 7)
     let foreignAssigned = false;
+    let asianAssigned = false;
+    const asianPos = ASIAN_SEED_POS[ti % ASIAN_SEED_POS.length];
     let teamSalary = 0;
     ROSTER.forEach((pos, pi) => {
       const isForeign = pos === 'OP' && !foreignAssigned ? (foreignAssigned = true) : false;
-      const ageRange = isForeign ? FOREIGN_AGE : identity.ageRange;
-      const pl = makePlayer(rng, `${teamId}p${pi}`, pos, isForeign, undefined, teamBias, ageRange);
+      const isAsian = !isForeign && pos === asianPos && !asianAssigned ? (asianAssigned = true) : false;
+      const ageRange = isForeign || isAsian ? FOREIGN_AGE : identity.ageRange;
+      let pl = makePlayer(rng, `${teamId}p${pi}`, pos, isForeign || isAsian, undefined, teamBias, ageRange);
+      if (isAsian) pl = { ...pl, isAsianQuota: true, contract: { ...pl.contract, salary: ASIAN_SALARY } };
       players.push(pl);
       playerIds.push(pl.id);
       teamSalary += pl.contract.salary;
