@@ -20,6 +20,19 @@ export const ZONE_X: Record<number, number> = { 4: 0.22, 3: 0.5, 2: 0.78, 5: 0.1
 // 스위칭 좌→우 선호(전문 포지션)
 const LANE: Record<Position, number> = { OH: 0, L: 1, MB: 2, S: 3, OP: 4 };
 
+// 전위 3인 깊이 — 스페셜리스트 레인 순(identity)으로 고정 배정. 서브 대형 ↔ 수비 스위칭 전환 때
+// 각 선수가 자기 깊이를 유지(좌우만 슬라이드)해서, 두 윙이 좌우를 맞바꿀 때 같은 깊이에서 겹쳐
+// 쌓이지(뒷통수에 손) 않게 한다(2026-06-19 사용자 보고). 센터 레인(대개 MB)이 네트 최밀착,
+// 윙은 살짝 어긋난 깊이 → 좌우 교차해도 깊이가 달라 마커가 분리돼 보인다. 전부 네트 밴드(≤1.3m).
+const FRONT_DEPTH_HOME = [0.58, 0.555, 0.605]; // laneRank 0(좌윙)·1(센터)·2(우윙)
+const frontDepthFrac = (side: Side, laneRank: number): number => {
+  const d = FRONT_DEPTH_HOME[laneRank] ?? 0.57;
+  return side === 'home' ? d : 1 - d;
+};
+/** 전위 i 의 레인 순위(0~2) — 같은 전위 3인을 스페셜리스트 순으로 줄세웠을 때 위치 */
+const frontLaneRank = (six: Player[], frontIdx: number[], i: number): number =>
+  [...frontIdx].sort((a, b) => LANE[six[a].position] - LANE[six[b].position]).indexOf(i);
+
 const clampN = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 
 /** 로테이션 r 에서 zone 에 선 라인업 인덱스 (zone z → (r+z-1)%6) */
@@ -73,12 +86,11 @@ export function switchedSpots(side: Side, lu: Lineup, rot: number, offense: bool
   const posOf = (i: number) => lu.six[i].position;
   const XF = side === 'home' ? [0.2, 0.5, 0.8] : [0.8, 0.5, 0.2];
   const XB = side === 'home' ? [0.15, 0.5, 0.85] : [0.85, 0.5, 0.15];
-  const yFw = (side === 'home' ? 0.615 : 0.385) * H;  // 전위 윙
-  const yFm = (side === 'home' ? 0.585 : 0.415) * H;  // 전위 중앙(센터) — 네트에 더 붙음
   const yBw = (side === 'home' ? 0.80 : 0.20) * H;    // 후위 윙
   const yBm = (side === 'home' ? 0.905 : 0.095) * H;  // 후위 중앙 — 가장 깊게(리베로)
   const pos: Record<number, Px> = {};
-  [...front].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: XF[k] * W, y: k === 1 ? yFm : yFw }; });
+  // 전위: 좌→우(스페셜리스트) x, 깊이는 레인 고정(frontDepthFrac) — 서브 대형과 동일 깊이라 전환 시 겹침 없음
+  [...front].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: XF[k] * W, y: frontDepthFrac(side, k) * H }; });
   [...back].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => { pos[i] = { x: XB[k] * W, y: k === 1 ? yBm : yBw }; });
   const setterIdx = lu.six.findIndex((p) => p.position === 'S');
   if (offense && setterIdx >= 0) pos[setterIdx] = { x: (side === 'home' ? 0.63 : 0.37) * W, y: (side === 'home' ? 0.57 : 0.43) * H }; // 공격 시에만 네트 침투
@@ -218,6 +230,7 @@ export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number,
 export function serveFormation(side: Side, lu: Lineup, rot: number, W: number, H: number): Record<number, Px> {
   const mx = (f: number) => (side === 'home' ? f : 1 - f) * W;
   const my = (f: number) => (side === 'home' ? f : 1 - f) * H;
+  const frontIdx = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
   const pos: Record<number, Px> = {};
   for (let i = 0; i < 6; i++) {
     const zone = zoneOfIdx(rot, i);
@@ -225,9 +238,15 @@ export function serveFormation(side: Side, lu: Lineup, rot: number, W: number, H
     const front = !isBackZone(zone);
     const seed = zone * 31 + rot * 7 + 99;
     const xf = (front ? SV_FRONT_X : SV_BACK_X)[r] + jit(seed + 1, 0.045);
-    // 전위는 네트 앞에 바짝(블로킹 준비) — 서브 직후 스위칭(좌우 스페셜리스트)로 전환되는 게 보이게(사용자 보고).
-    const yf = (front ? 0.585 : 0.80) + jit(seed + 2, 0.025);
-    pos[i] = { x: mx(xf), y: my(yf) };
+    // 전위는 네트(블로킹 라인)에 붙인다. 깊이는 스위칭과 동일한 레인 고정(frontDepthFrac)을 써서,
+    // 서브 직후 좌우 스위칭이 "깊이 유지·좌우 슬라이드"로 보이게 — 중앙에서 겹쳐 쌓이지 않게(사용자 보고).
+    if (front) {
+      // 깊이는 레인 고정(frontDepthFrac은 side 보정 완료) + 미세 흔들기. x는 zone 순(mx).
+      const yf = frontDepthFrac(side, frontLaneRank(lu.six, frontIdx, i)) + jit(seed + 2, 0.01);
+      pos[i] = { x: mx(xf), y: yf * H };
+    } else {
+      pos[i] = { x: mx(xf), y: my(0.80 + jit(seed + 2, 0.025)) };
+    }
   }
   return pos;
 }

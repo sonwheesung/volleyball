@@ -4,7 +4,7 @@
 // playRally를 돌려 SimResult(간이 시뮬과 동일 계약)를 출력 → 드롭인 교체 가능.
 
 import type { Player, Side, CoachStyle, SubPolicy } from '../types';
-import type { SimResult, PointLog, SubEvent } from './simMatch';
+import type { SimResult, PointLog, SubEvent, TimeoutEvent, TimeoutCourtStam } from './simMatch';
 import type { Ratings } from './ratings';
 import { createRng, strSeed } from './rng';
 import { deriveRatings } from './ratings';
@@ -119,6 +119,7 @@ export function simulateMatch(
   const setScores: { home: number; away: number }[] = [];
   const subUse: Record<string, number> = {}; // 교체 출전 선수 id → 출전 랠리 수(출전 성장 XP용)
   const subEvents: SubEvent[] = [];           // 교체 연출 로그(보드용, 순수 가산 — 승패 무영향)
+  const timeoutEvents: TimeoutEvent[] = [];   // 타임아웃 로그(보드용, 순수 가산 — 승패 무영향)
   let homeSets = 0;
   let awaySets = 0;
   let setNo = 1;
@@ -257,6 +258,14 @@ export function simulateMatch(
         const th = Math.max(2, TO_THRESHOLD[lt.style] - (tired ? 1 : 0));
         if (!isSetOver(h, a, setNo) && streak >= th && timeouts[loserSide] > 0) {
           timeouts[loserSide]--;
+          // 보드 연출 로그(순수 가산) — 회복·기세 수렴 전 스냅샷(지친 코트가 타임아웃을 부른 이유)
+          const courtStam = (st: typeof home, m: Map<string, number>): TimeoutCourtStam[] =>
+            [...st.six, ...(st.libero ? [st.libero] : [])].map((p) => ({ id: p.id, stam: m.get(p.id) ?? 1 }));
+          timeoutEvents.push({
+            point: points.length - 1, setNo, side: loserSide, home: h, away: a, streak,
+            stamHome: courtStam(home, homeStam), stamAway: courtStam(away, awayStam),
+            momHome: home.momentum, momAway: away.momentum,
+          });
           if (opts.trace) opts.trace.push(`타임아웃 — ${loserSide === 'home' ? '홈' : '원정'} (연속실점 ${streak}${tired ? '·코트 지침' : ''}) [${h}:${a}]`);
           const pull = (charismaOf(loserSide) / 100) * 0.6;
           home.momentum += (50 - home.momentum) * pull;
@@ -289,7 +298,7 @@ export function simulateMatch(
     setNo++;
   }
 
-  return { homeSets, awaySets, setScores, points, subUse, subEvents };
+  return { homeSets, awaySets, setScores, points, subUse, subEvents, timeouts: timeoutEvents };
 }
 
 // momFactor 재노출(테스트/튜닝용)

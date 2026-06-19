@@ -55,6 +55,10 @@ export function commentLine(seg: CommentSeg, how: PointHow | undefined, L: Lineu
       // 강타를 받아낸 순간 — 디거는 movers[0]
       const dig = to.movers?.[0];
       const digger = dig ? nameAt(L, dig.side, rotOf(dig.side), dig.idx) : null;
+      // 블록 커버: 공격팀이 자기 블로킹 맞은 공을 자기 코트에서 살려 재공격(블록터치 side=수비 ≠ 살린
+      // side=공격). 일반 디그(공수 전환)와 구분해 "블로킹을 살려냈다"를 명시 — 사용자 보고: 블록 당한
+      // 공을 살리는 장면을 본 적이 없다(실제론 랠리의 16%에서 일어나지만 '디그'로만 불려 안 보였다).
+      if (from.side !== to.side) return digger ? `🛡 블로킹 커버! ${digger}가 살려낸다` : '🛡 블로킹 커버! 살려낸다';
       return digger ? `${digger} 디그! 랠리 이어진다` : '디그! 랠리 이어진다';
     }
     // 디그 후 토서에게 잇는 연결 패스 — 디그와 중복 표시 금지

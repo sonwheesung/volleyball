@@ -28,6 +28,22 @@ export interface SubEvent {
   enter: boolean;  // true=벤치 스페셜리스트 투입, false=원선발 복귀(원위치)
 }
 
+/** 작전 타임아웃 1건 — 보드 연출용(승패 무영향, 순수 가산). 감독이 타임아웃을 부른 순간을 기록.
+ *  보드는 이 랠리(point) 종료 후 멈추고 코트 체력/기세를 보여준다. 미래 교체 UI의 진입점. */
+export interface TimeoutCourtStam { id: string; stam: number } // 0..1
+export interface TimeoutEvent {
+  point: number;   // 이 랠리(인덱스) 종료 직후 타임아웃 — 보드는 이 랠리를 보여준 뒤 멈춘다
+  setNo: number;
+  side: Side;      // 타임아웃을 부른 팀(연속 실점한 지는 팀)
+  home: number;    // 당시 스코어
+  away: number;
+  streak: number;  // 상대 연속 득점(타임아웃을 부른 이유)
+  stamHome: TimeoutCourtStam[]; // 코트(선발6+리베로) 체력 스냅샷(회복 전)
+  stamAway: TimeoutCourtStam[];
+  momHome: number; // 기세(수렴 전, 0..100)
+  momAway: number;
+}
+
 export interface SimResult {
   homeSets: number;
   awaySets: number;
@@ -35,6 +51,7 @@ export interface SimResult {
   points: PointLog[];
   subUse?: Record<string, number>; // 작전 교체로 코트에 선 선수 id → 출전 랠리 수(출전 성장 XP용)
   subEvents?: SubEvent[];           // 작전 교체 연출 로그(보드가 코트 위 실제 교체를 보여주기 위함)
+  timeouts?: TimeoutEvent[];        // 작전 타임아웃 로그(보드가 멈추고 체력/기세를 보여주기 위함)
 }
 
 function targetPoints(setNo: number): number {

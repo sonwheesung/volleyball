@@ -3,10 +3,10 @@
 // → 마커를 실제 코트 위치에 놓고 공을 득점 결과와 일치하게 애니메이션.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from './Screen';
 import { buildLineup } from '../engine/lineup';
-import type { SimResult } from '../engine/simMatch';
+import type { SimResult, TimeoutEvent } from '../engine/simMatch';
 import type { Player, Position, Side } from '../types';
 import {
   lineupIdxAt, playerAtZone,
@@ -140,6 +140,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   const [playing, setPlaying] = useState(true);
   const [fast, setFast] = useState(false);
   const [feed, setFeed] = useState<string[]>([]); // 중계 텍스트(최근 라인 유지)
+  const [timeoutModal, setTimeoutModal] = useState<TimeoutEvent | null>(null); // 작전 타임아웃 — 멈춤+체력
+  const ackTO = useRef<Set<number>>(new Set()); // 이미 본 타임아웃(랠리 인덱스) — 재진입 시 재팝업 방지
 
   const prog = useRef(new Animated.Value(0)).current; // 현재 구간 진행도 0..1
   const posRefs = useRef<Record<string, Animated.ValueXY>>({}); // 마커별 위치(선수 단위)
@@ -190,6 +192,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx]);
 
+  // 이 랠리(idx) 직후에 잡힌 작전 타임아웃 — 점수 반영 후 보드를 멈추고 코트 체력을 보여준다
+  const timeoutHere = useMemo(
+    () => (finished ? undefined : (sim.timeouts ?? []).find((t) => t.point === idx)),
+    [sim.timeouts, idx, finished],
+  );
+
   // 구간 단위 진행 (위치·포물선·크기·점프를 prog 하나로 동기화)
   useEffect(() => {
     if (!playing || finished) return;
@@ -200,6 +208,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
       if (r?.how) {
         const c = HOW_CAPTION[r.how];
         setFeed((f) => [...f, `▶ ${c.txt} — ${r.scorer === 'home' ? '홈' : '원정'} 득점 (${r.home}:${r.away})`].slice(-30));
+      }
+      // 작전 타임아웃: 득점 자막을 한 박자 보여준 뒤 멈추고 모달(코트 체력)을 띄운다(아직 안 본 것만).
+      if (timeoutHere && !ackTO.current.has(idx)) {
+        const t = setTimeout(() => { setPlaying(false); setTimeoutModal(timeoutHere); }, fast ? 320 : 1300);
+        return () => clearTimeout(t);
       }
       // 점수 후 한 박자 멈춤 — 득점 자막을 읽고 숨 돌릴 틈(관전형). 빠르게 모드는 짧게.
       const t = setTimeout(() => { setIdx((i) => i + 1); setSegIdx(0); }, fast ? 320 : 1300);
@@ -215,7 +228,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     });
     anim.start(({ finished: done }) => { if (done) setSegIdx((s) => s + 1); });
     return () => anim.stop();
-  }, [idx, segIdx, playing, fast, finished, segCount, path, prog, rallies]);
+  }, [idx, segIdx, playing, fast, finished, segCount, path, prog, rallies, timeoutHere]);
+
+  // 타임아웃 종료 — "경기 진행하기" 누르면 다음 랠리로 재개(이 타임아웃은 본 것으로 표시)
+  const resumeFromTimeout = useCallback(() => {
+    setTimeoutModal((to) => { if (to) ackTO.current.add(to.point); return null; });
+    setIdx((i) => i + 1);
+    setSegIdx(0);
+    setPlaying(true);
+  }, []);
 
   useEffect(() => {
     if (finished && !finishedOnce.current) {
@@ -429,8 +450,53 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
       <View style={styles.controls}>
         <Ctrl label={playing ? '⏸' : '▶'} onPress={() => setPlaying((p) => !p)} />
         <Ctrl label={fast ? '2x ✓' : '2x'} on={fast} onPress={() => setFast((f) => !f)} />
-        <Ctrl label="⏭ 결과" onPress={() => { setPlaying(false); setShown(total - 1); setIdx(total); setSegIdx(0); }} />
+        <Ctrl label="⏭ 결과" onPress={() => { setPlaying(false); setTimeoutModal(null); setShown(total - 1); setIdx(total); setSegIdx(0); }} />
       </View>
+
+      {/* 작전 타임아웃 — 경기 멈춤 + 코트 선수 체력(미래: 교체·기세) */}
+      <Modal visible={!!timeoutModal} transparent animationType="fade" onRequestClose={resumeFromTimeout}>
+        <View style={styles.toBackdrop}>
+          <View style={styles.toModal}>
+            {timeoutModal ? (() => {
+              const dSide: Side = mineSide ?? timeoutModal.side;
+              const stam = dSide === 'home' ? timeoutModal.stamHome : timeoutModal.stamAway;
+              const callerMine = mineSide != null && timeoutModal.side === mineSide;
+              return (
+                <>
+                  <Text style={styles.toTitle}>⏱ 작전 타임아웃</Text>
+                  <Text style={styles.toSub}>
+                    {callerMine ? '우리 벤치에서 타임아웃' : mineSide != null ? '상대 벤치에서 타임아웃' : `${timeoutModal.side === 'home' ? '홈' : '원정'} 타임아웃`}
+                    {'  ·  '}{timeoutModal.home}:{timeoutModal.away}
+                  </Text>
+                  <Text style={styles.toSectionLabel}>코트 선수 체력</Text>
+                  <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
+                    {stam.map(({ id, stam: s }) => {
+                      const p = byId.get(id);
+                      const pct = Math.round(s * 100);
+                      const barColor = s >= 0.6 ? '#2BAE66' : s >= 0.35 ? '#E0922B' : '#E1574C';
+                      return (
+                        <View key={id} style={styles.toRow}>
+                          <View style={[styles.toPosDot, { backgroundColor: p ? POS_COLOR[p.position] : theme.muted }]}>
+                            <Text style={styles.toPosTxt}>{p?.position ?? '?'}</Text>
+                          </View>
+                          <Text style={styles.toName} numberOfLines={1}>{p?.name ?? '선수'}</Text>
+                          <View style={styles.toBarTrack}>
+                            <View style={[styles.toBarFill, { width: `${pct}%`, backgroundColor: barColor }]} />
+                          </View>
+                          <Text style={[styles.toPct, { color: barColor }]}>{pct}%</Text>
+                        </View>
+                      );
+                    })}
+                  </ScrollView>
+                  <Pressable style={styles.toBtn} onPress={resumeFromTimeout}>
+                    <Text style={styles.toBtnTxt}>경기 진행하기</Text>
+                  </Pressable>
+                </>
+              );
+            })() : null}
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -502,4 +568,19 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: theme.border, borderRadius: 8,
     paddingHorizontal: 16, paddingVertical: 8, minWidth: 64, textAlign: 'center',
   },
+  // 작전 타임아웃 모달
+  toBackdrop: { flex: 1, backgroundColor: '#15202B80', alignItems: 'center', justifyContent: 'center', padding: 24 },
+  toModal: { backgroundColor: theme.card, borderRadius: 18, padding: 20, gap: 10, alignSelf: 'stretch', borderWidth: 1, borderColor: theme.border },
+  toTitle: { color: theme.text, fontSize: 18, fontWeight: '900', textAlign: 'center' },
+  toSub: { color: theme.muted, fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  toSectionLabel: { color: theme.muted, fontSize: 11, fontWeight: '800', marginTop: 4 },
+  toRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 5 },
+  toPosDot: { width: 26, height: 26, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  toPosTxt: { color: '#FFFFFF', fontSize: 9.5, fontWeight: '900' },
+  toName: { color: theme.text, fontSize: 13, fontWeight: '700', width: 78 },
+  toBarTrack: { flex: 1, height: 8, borderRadius: 4, backgroundColor: theme.border, overflow: 'hidden' },
+  toBarFill: { height: 8, borderRadius: 4 },
+  toPct: { fontSize: 12, fontWeight: '800', width: 38, textAlign: 'right' },
+  toBtn: { backgroundColor: theme.accent, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 6 },
+  toBtnTxt: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
 });
