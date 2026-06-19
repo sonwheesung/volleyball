@@ -214,13 +214,15 @@ export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number,
       yf = front ? 0.57 : 0.715;                            // 전위면 네트, 후위면 백밴드 얕게(릴리즈 대기)
     } else if (front) {
       xf = RF_FRONT_X[r] + jit(seed + 1, 0.04);
-      // 전위 패서는 3m 라인(0.66) "뒤"로 확실히 물러나 리시브 자세를 잡는다(라인 위에 어정쩡 금지,
-      // 2026-06-18 사용자 보고). 비패서(공격수)는 네트 앞 대기. 후위 패서(≥0.75)보다는 앞이라 오버랩 합법.
-      yf = recv.includes(i) ? 0.695 + jit(seed + 2, 0.02) : 0.575 + jit(seed + 2, 0.02);
+      // 실제 3인 리시브는 윙2+리베로가 **한 라인**(나무위키·strength-and-power). 전위 패서도
+      // 깊게 내려와 그 라인에 합류(0.75≈4.5m, 3m 라인 뒤·후위 패서보다 살짝 앞 — 오버랩 합법).
+      // 비패서(공격수)는 네트 앞 대기.
+      yf = recv.includes(i) ? 0.75 + jit(seed + 2, 0.015) : 0.575 + jit(seed + 2, 0.02);
     } else {
       xf = RF_BACK_X[r] + jit(seed + 1, 0.04);
-      // 후위 패서는 W 아크(중앙 더 깊게), 비패서는 얕게
-      yf = recv.includes(i) ? (r === 1 ? 0.85 : 0.80) + jit(seed + 2, 0.025) : 0.75 + jit(seed + 2, 0.02);
+      // 후위 패서 라인 — 리베로(중앙 zone6, 서브 집중 구역) 가장 깊게(0.82), 윙 0.80. 비패서(백어택
+      // 대기 OP)는 더 깊게(0.81)로 빼 전위 패서(0.75)와 오버랩 여유 확보.
+      yf = recv.includes(i) ? (r === 1 ? 0.82 : 0.80) + jit(seed + 2, 0.015) : 0.81 + jit(seed + 2, 0.015);
     }
     pos[i] = { x: mx(xf), y: my(yf) };
   }
