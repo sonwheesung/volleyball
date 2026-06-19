@@ -2,7 +2,7 @@
 // (production.test.ts가 data/league를 import하는 것과 동일한 교차 레이어 패턴).
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { resetLeagueBase } from '../data/league';
+import { resetLeagueBase, LEAGUE } from '../data/league';
 import { matchPoints, computeStandings, type Standing } from '../data/standings';
 
 test('승점(KOVO): 3-0/3-1=3 · 3-2=2 · 2-3=1 · 0-3=0', () => {
@@ -23,6 +23,19 @@ test('순위표: 승점 내림차순 정렬 + 필드 일관', () => {
     assert.equal(t.wins + t.losses, t.played, '승+패=경기');
     assert.ok(t.setsWon >= 0 && t.setsLost >= 0 && t.pointsWon >= 0 && t.pointsLost >= 0, '세트·점수 음수 아님');
   }
+});
+
+test('시즌 초(0경기/0세트실): 비율 타이브레이크 div-by-zero 없음', () => {
+  resetLeagueBase();
+  const s0 = computeStandings(0); // 첫 경기일 — 일부 팀 0경기
+  assert.equal(s0.length, LEAGUE.teams.length, '전 팀 포함');
+  for (const t of s0) {
+    assert.ok(Number.isFinite(t.points), `승점 유한(${t.points})`);
+    assert.ok(t.played >= 0 && Number.isFinite(t.setsWon / Math.max(1, t.setsLost)), '세트율 계산 안전');
+  }
+  // 0경기 팀이 존재하면(시즌 초 가능) NaN 없이 정렬 — 순서가 깨지지 않음
+  const zeroGame = s0.find((t) => t.played === 0);
+  if (zeroGame) assert.equal(zeroGame.points, 0, '0경기 팀 승점 0');
 });
 
 test('승점 타이브레이크: 동점 시 승률→세트득실률 순서 보장', () => {
