@@ -276,8 +276,12 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     }
     // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트.
     // 퍼스트 터치한 선수는 패스 구간부터 그 자리에 멈춘다(자세 회복) — 대형 복귀로 어슬렁거리지 않게
+    // 패스 구간 길이를 토서 이동거리에 맞춰 보장 — 멀리 흩어진 패스에서 토서가 공에 못 미치는
+    // "유령터치"(룰 I) 방지. 멀리 뛰면 공이 그만큼 더 떠 있다(스크램블 세트는 실제로 시간이 걸린다).
+    const tosserRun = Math.hypot(passSpot.x - sw[att].pos[tosserIdx].x, passSpot.y - sw[att].pos[tosserIdx].y);
     wp.push({
       x: passSpot.x, y: passSpot.y, side: att, idx: tosserIdx, kind: 'pass',
+      dur: Math.max(SEG_DUR.pass, markerTravelMs(tosserRun)),
       movers: [
         { side: att, idx: tosserIdx, x: passSpot.x, y: passSpot.y },
         ...(firstTouch !== tosserIdx ? [{ side: att, idx: firstTouch, x: touchPos.x, y: touchPos.y }] : []),

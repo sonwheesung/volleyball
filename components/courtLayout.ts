@@ -99,14 +99,16 @@ export function switchedSpots(side: Side, lu: Lineup, rot: number, offense: bool
 
 // ─── 랠리 중 동적 위치 (수비 부채꼴 / 블로커 벽 / 공격 커버) ───
 
-/** 수비 부채꼴 3슬롯 — 공격 x 쪽으로 살짝 시프트, 중앙 얕게(팁 커버)·양쪽 깊게(라인/크로스).
+/** 수비 부채꼴(컵/활) 3슬롯 — 공격 x 쪽으로 살짝 시프트. **표준 페리미터 수비**: 중앙 백(미들백)
+ *  가장 깊게(라인/딥 크로스)·양 윙 앞으로(각·연타) → 공격자 쪽으로 열린 "∨"(활). 이전엔 중앙 얕고
+ *  윙 깊은 역방향("∧")이었다(2026-06-19 사용자 보고). 네트 앞 팁은 전위 커버/블로커가 담당.
  *  좌→우 순서 보장: 호출측이 "현재 x 순"으로 정렬한 선수에게 순서대로 배정하면 동선 교차 없음. */
 export function fanSlots(side: Side, attackX: number, W: number, H: number): Px[] {
   const shift = (attackX - 0.5 * W) * 0.3;
   const sx = [0.22, 0.5, 0.78].map((b) => clampN(b * W + shift, 22, W - 22));
-  const yDeep = (side === 'home' ? 0.84 : 0.16) * H;
-  const yMid = (side === 'home' ? 0.72 : 0.28) * H;
-  return [{ x: sx[0], y: yDeep }, { x: sx[1], y: yMid }, { x: sx[2], y: yDeep }];
+  const yDeep = (side === 'home' ? 0.85 : 0.15) * H; // 중앙 백 — 가장 깊게
+  const yWing = (side === 'home' ? 0.72 : 0.28) * H; // 양 윙 — 앞으로(컵)
+  return [{ x: sx[0], y: yWing }, { x: sx[1], y: yDeep }, { x: sx[2], y: yWing }];
 }
 
 // 네트 안전 여백(px, 절대값) — 점프 마커(반지름 MR×JUMP≈22px + 네트선)가 네트를 침범하지 않도록
