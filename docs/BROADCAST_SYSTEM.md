@@ -2,7 +2,7 @@
 
 > **★ 구현 현황(2026-06-19)**: Phase 1 ✅ — `data/broadcast.ts buildMatchBanners`(기록 경신·PO 확정/탈락·**트리플 크라운**)
 > + `components/BroadcastBanner.tsx`(하단 현수막 큐 애니메이션, kind 무관 tint/icon/title 렌더) + `app/match/[id]` finished 게이트 주입.
-> 검증 `tools/simBroadcast.ts`·`tools/checkTripleCrown.ts`: 시즌0 PO확정 3·탈락 13·트리플크라운 9/126경기, 합성 1000점 돌파 현수막 ✅, 스포일러 누출 0(구조 보장).
+> 검증 `tools/simBroadcast.ts`·`tools/checkTripleCrown.ts`: 시즌0 PO확정 3·탈락 13·트리플크라운 1(KOVO 후위공격 기준)/126경기, 합성 1000점 돌파 현수막 ✅, 스포일러 누출 0(구조 보장).
 > **추후**: 우승 현수막(플레이오프는 경기단위 관전 안 함 — 보류), 경기 *중* 실시간 기록(랠리별 귀속 선결, Phase 3).
 
 > 실제 배구 TV 중계처럼, 큰 사건(우승·기록 경신·플레이오프 확정)을 경기 보드 **하단 현수막**으로
@@ -37,7 +37,7 @@
 | **우승 확정** | `archive.championId` (data/playoffs.ts) | ✅ 있음 | 없음 — 챔프전 종료 현수막 |
 | **기록 경신** | `Milestone`(engine/milestones.ts `crossedThresholds`) | ⚠ 시즌말 계산만 | **경기단위 감지** `detectMatchMilestones()` — 선수 career 기준선 + 이 경기 생산으로 임계 교차 판정 |
 | **PO 확정/시드** | `computeStandings` + 잔여 일정 | ✅ **구현** `engine/clinch.ts`·`data/clinch.ts` | 보수적 승수 기반 확정/탈락/경합+매직넘버. 일정 화면 표시 중. 시드 세분(1번 시드 확정 등)은 추후 |
-| **트리플 크라운** (결과-중립, 2026-06-19 구현) | `production`(before/after diff) | ✅ **구현** `data/broadcast.ts` | 한 경기 **공격·블로킹·서브 각 3개 이상** 득점한 선수 → 현수막. KOVO 정통은 '후위공격+블로킹+서브'지만 엔진 생산이 후위/전위 미분리라 공격(spike) 기준으로 근사. 빈도 측정(`tools/checkTripleCrown.ts`): **시즌당 ~10건**(달성자는 전원 공격 ≥3 동반 — 진짜 올라운드 활약). 개인 업적이라 승패 무노출(결과-중립) → finished 후 안전 |
+| **트리플 크라운** (KOVO 공식, 결과-중립, 2026-06-19 구현) | `production`(before/after diff) | ✅ **구현** `data/broadcast.ts` | 한 경기 **후위공격·블로킹·서브 에이스 각 3개 이상**(KOVO 공식 정의, 2005-06 도입). 엔진 생산이 공격을 후위/전위 미분리 → `production`이 OH/OP 킬에 `BACK_ATK_RATE=0.24`로 **후위공격(backSpikes) 별도 귀속**(독립 rng — 기존 spike/block/ace 귀속 불변, backSpikes만 가산. 검증: backSpikes/spikes 18.8% ≈ 엔진 백어택 18.3%). 빈도(`tools/checkTripleCrown.ts`): **시즌당 ~1건**(실제 KOVO 여자부도 매우 희귀 — 후위공격 3+이 블록 3+·에이스 3+와 동시 = 극히 드묾). 개인 업적이라 승패 무노출 → finished 후 안전 |
 
 > 기록 경신의 경기단위 감지는 **랠리별 개인 기록 귀속**에 의존(현재 알려진 공백 — PointLog→production
 > 참가자 id). 경기말 집계는 근사 가능하나, 경기 *중* 실시간(그 랠리에 뜨는)은 귀속 정밀도가 선결.

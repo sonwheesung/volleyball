@@ -11,6 +11,7 @@ export interface ProdLine {
   matches: number;  // 출전
   points: number;   // 득점(공격+블록+에이스)
   spikes: number;
+  backSpikes: number; // 후위공격(백어택) 득점 — spikes의 부분집합. 트리플 크라운(후위공격 3+) 판정 전용
   blocks: number;
   aces: number;
   assists: number;  // 세트(세터)
@@ -19,7 +20,7 @@ export interface ProdLine {
 }
 
 export const emptyProd = (): ProdLine => ({
-  matches: 0, points: 0, spikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0,
+  matches: 0, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0,
 });
 
 /** 시즌 생산을 선수 통산 기록(CareerStats)에 누적한 새 선수 — 백년 누적 서사의 토대.
@@ -58,7 +59,7 @@ export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {
   const x = a ?? emptyProd();
   return {
     matches: x.matches + b.matches, points: x.points + b.points,
-    spikes: x.spikes + b.spikes, blocks: x.blocks + b.blocks, aces: x.aces + b.aces,
+    spikes: x.spikes + b.spikes, backSpikes: x.backSpikes + b.backSpikes, blocks: x.blocks + b.blocks, aces: x.aces + b.aces,
     assists: x.assists + b.assists, digs: x.digs + b.digs, receives: x.receives + b.receives,
   };
 }
@@ -74,6 +75,7 @@ const SERVE: Record<Position, number> = { OP: 1, OH: 1, MB: 1, S: 1, L: 0.1 };
 const DIG: Record<Position, number> = { L: 1.3, OH: 0.6, S: 0.5, MB: 0.4, OP: 0.3 };
 const RECV: Record<Position, number> = { L: 1.3, OH: 1.0, S: 0.1, MB: 0.15, OP: 0.15 }; // 서브 리시브 = 리베로+OH(W형)
 const ATK_FOCUS = 2.0; // 공격 집중도 — 좋은 공격수에게 세트 몰림(1옵션 에이스 부각)
+const BACK_ATK_RATE = 0.24; // OH/OP 킬 중 후위공격(백어택) 비율 — 엔진 백어택 18%/공격을 OH/OP 킬 기준 환산(측정 calibration)
 const BLK_FOCUS = 2.5; // 블록 집중도 — 좋은 블로커(센터)가 팀 블록 점유↑ → 스킬→블록 기울기 확보
 
 /** 선발(코트 위 7) / 벤치 분리 — 포지션별 OVR 상위가 선발 */
@@ -122,6 +124,8 @@ export function attributeProduction(
   seed: number,
 ): Map<string, ProdLine> {
   const rng = createRng((seed ^ 0x9e3779b9) >>> 0);
+  // 후위공격 판정용 독립 rng — 기존 귀속 스트림(rng) 불간섭 → spike/block/ace/assist/dig 귀속 불변, backSpikes만 가산
+  const backRng = createRng((seed ^ 0x517cc1b7) >>> 0);
   const H = splitLineup(home);
   const A = splitLineup(away);
   const total = sim.points.length;
@@ -164,7 +168,13 @@ export function attributeProduction(
     // 득점 유형 비율 = 밸런싱된 엔진 실측에 맞춤(공격킬+블록아웃 58% / 스터프 9% / 에이스 5.7% / 상대범실 27%, KOVO 정렬 2026-06)
     if (roll < 0.58) {
       const hitter = pick(off, (p) => ATTACK[p.position] * p.skSpike ** ATK_FOCUS, rng.next());
-      if (hitter) bump(hitter.id, (l) => { l.points++; l.spikes++; });
+      if (hitter) {
+        bump(hitter.id, (l) => { l.points++; l.spikes++; });
+        // 후위공격(백어택) 귀속 — 백어택은 OH/OP만(MB 속공·S·L 제외). 엔진 백어택 ~18%/공격(측정),
+        // OH/OP 킬에 BACK_ATK_RATE 적용 → OP(파이프)에 자연 집중. backSpikes ⊆ spikes. 트리플 크라운 전용.
+        if ((hitter.position === 'OH' || hitter.position === 'OP') && backRng.next() < BACK_ATK_RATE)
+          bump(hitter.id, (l) => { l.backSpikes++; });
+      }
       const setter = pick(off, (p) => (p.position === 'S' ? p.skSet : 0), rng.next());
       if (setter) bump(setter.id, (l) => { l.assists++; });
       const digger = pick(def, (p) => DIG[p.position] * p.skDig, rng.next());

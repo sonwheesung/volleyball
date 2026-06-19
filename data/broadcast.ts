@@ -13,8 +13,8 @@ export type BannerKind = 'record' | 'clinch' | 'eliminated' | 'triple';
 export interface Banner { kind: BannerKind; tint: string; icon: string; title: string; mine: boolean }
 
 const RECORD_TINT = '#3B82F6', CLINCH_TINT = '#16B07D', ELIM_TINT = '#FF6B5A', TRIPLE_TINT = '#8B5CF6';
-// 트리플 크라운 임계 — 한 경기 공격·블로킹·서브 각 TRIPLE_MIN 이상. 시즌당 ~10건(big 사건 유지,
-// tools/checkTripleCrown.ts 측정). KOVO 정통(후위공격)은 엔진 생산 미분리라 공격(spike) 기준으로 근사.
+// 트리플 크라운(KOVO 공식) — 한 경기 **후위공격·블로킹·서브 에이스 각 TRIPLE_MIN 이상**.
+// 후위공격(backSpikes)은 production이 OH/OP 킬에서 별도 귀속(engine/production). tools/checkTripleCrown.ts 측정.
 const TRIPLE_MIN = 3;
 const STAT_KO: Record<string, [string, string]> = {
   points: ['통산', '점'], blocks: ['통산 블로킹', '개'], digs: ['통산 디그', '개'],
@@ -46,17 +46,17 @@ export function buildMatchBanners(homeId: string, awayId: string, dayIndex: numb
     }
   }
 
-  // 1.5) 트리플 크라운(결과-중립) — 한 경기 공격·블로킹·서브 각 TRIPLE_MIN 이상 득점.
-  //   개인 업적이라 승패를 노출하지 않음 → finished 후 안전. 시즌당 ~10건(측정 — big 사건 유지).
+  // 1.5) 트리플 크라운(KOVO 공식, 결과-중립) — 한 경기 후위공격·블로킹·서브 에이스 각 TRIPLE_MIN 이상.
+  //   개인 업적이라 승패를 노출하지 않음 → finished 후 안전.
   for (const [side, teamId] of sides) {
     const mine = mineSide === side;
     for (const pl of availableTeamPlayers(teamId, dayIndex)) {
       const pb = before.get(pl.id), pa = after.get(pl.id);
-      const s = (pa?.spikes ?? 0) - (pb?.spikes ?? 0);
+      const back = (pa?.backSpikes ?? 0) - (pb?.backSpikes ?? 0);
       const b = (pa?.blocks ?? 0) - (pb?.blocks ?? 0);
       const a = (pa?.aces ?? 0) - (pb?.aces ?? 0);
-      if (s >= TRIPLE_MIN && b >= TRIPLE_MIN && a >= TRIPLE_MIN)
-        out.push({ kind: 'triple', tint: TRIPLE_TINT, icon: 'ribbon', mine, title: `${pl.name} 트리플 크라운! 공격 ${s}·블로킹 ${b}·서브 ${a}` });
+      if (back >= TRIPLE_MIN && b >= TRIPLE_MIN && a >= TRIPLE_MIN)
+        out.push({ kind: 'triple', tint: TRIPLE_TINT, icon: 'ribbon', mine, title: `${pl.name} 트리플 크라운! 후위공격 ${back}·블로킹 ${b}·서브 ${a}` });
     }
   }
 
