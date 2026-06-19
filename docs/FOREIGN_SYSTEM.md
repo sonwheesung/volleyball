@@ -87,3 +87,38 @@
   외인 OVR 분포, OP 생산(KOVO 외인 의존도: 팀 득점의 ~30% 안팎 목표).
 - 풀배터리: KOVO(OP 득점 4.26→4.5~6 개선 기대)·parity(매년 용병 리셋 = 섞임 레버 —
   개선 기대)·OVR 정합·무결성·세이브 호환 시나리오(외인 0명 세이브 → 1오프시즌 후 7명).
+
+## 7. ★ 아시아쿼터 (V2) — 구현 설계 (2026-06-19, 사용자 요청 "풀 구현")
+
+KOVO 여자부: 팀당 **외인 1(OP 트라이아웃) + 아시아쿼터 1 = 수입 2명**. 아시아쿼터는 별도
+트라이아웃, 포지션 유연(OH/MB/OP/S), 연봉 더 낮음. 아래는 외인 시스템을 **재사용**하는 안전 설계.
+
+### 7.1 핵심 설계 결정 (경제 무파급의 열쇠)
+- **플래그**: 아시아쿼터 = `isForeign:true` **+** `isAsianQuota:true`. → 캡 제외·FA 비대상·면담
+  제외가 `!isForeign` 필터로 **자동 적용**(통합 지점 0). 외인 *라이프사이클*만 `!isAsianQuota`로 분리.
+- **로스터 16칸 유지(중요)**: 아시아쿼터는 **17번째가 아니라 16칸 중 1칸을 차지**한다(국내 14 +
+  외인 OP 1 + 아시아쿼터 1 = 16). → `ROSTER_TOTAL=16`·FA room·드래프트 충원·`positionGap`
+  **무변경**(경제 수학 불변 — 검증 리스크 제거). 외인 OP가 이미 16칸 안에 사는 것과 동일 패턴.
+- **엔진 재사용**: `resolveTryout`(풀+순번→지명)은 슬롯 무관 — 아시아쿼터 풀로 그대로 호출.
+
+### 7.2 변경 맵 (커플링 — 함께 가야 하는 최소 코어)
+| 파일 | 변경 |
+|---|---|
+| `types` | `isAsianQuota?: boolean` |
+| `engine/foreign.ts` | `ASIAN_SALARY`(외인 4.1억 미만, 예: 2.5억) |
+| `data/seed.ts` | 팀당 1명 아시아쿼터(16칸 중 1칸, 포지션 OH/MB/OP 변주, import 능력 티어) |
+| `data/tryout.ts` | `runAsianQuota`(runTryout 미러 — 아시아쿼터 풀 생성·지명·잔류) + 외인 cleanup에 `&& !isAsianQuota` |
+| `data/offseason.ts` | buildOffseason: 아시아쿼터→`returningAsian`(외인과 분리) · `prevAsianOf` · prevForeignOf에 `&& !isAsianQuota` · resolvePreDraft/preview에 아시아쿼터 트라이아웃 삽입(외인 다음) |
+| `data/draftSetup.ts` | `buildDraftContext`가 아시아쿼터 트라이아웃 결과도 반환 |
+| `store` | `asianWish`·`asianAltPool`·`asianSubUsed` + endSeason 스레딩 + 시즌중 교체 액션(`replaceAsian`) |
+| `data/financeProjection`·`engine/cap` | 캡은 isForeign로 자동 제외. 재정에 아시아쿼터 연봉 지출 추가 |
+| UI | 아시아쿼터 트라이아웃 화면(`tryout.tsx` 패턴, 위시리스트) · 선수카드 "아시아쿼터" 태그 · transactions 교체 섹션 |
+
+### 7.3 검증 (필수 — 경제 회귀 방지)
+- `tools/simForeign.ts` **외인 파트 불변**(아시아쿼터 추가가 외인 멸종0·재지명률·OVR 분포를 안 흔든다 — A/B).
+- 신규 `simAsianQuota`: 120시즌 아시아쿼터 멸종 0(항상 7), OVR 분포, 생산.
+- 캡 초과 0·FA 풀 오염 0·무결성 0위반·세이브 호환(구세이브 → 1오프시즌 후 전팀 1명).
+- 풀배터리(KOVO 분포·parity)·171 테스트.
+
+> **상태(2026-06-19)**: 설계 완료. 코어(seed+offseason+트라이아웃)는 커플링이라 함께 구현해야
+> 첫 오프시즌에서 슬롯이 비지 않는다. 경제 검증 시스템 확장이라 단계별 구현+100시즌 검증으로 진행.
