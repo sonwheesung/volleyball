@@ -37,6 +37,8 @@ export default function RootLayout() {
         <Stack.Screen name="staff" options={{ title: '스태프 계약' }} />
         <Stack.Screen name="transactions" options={{ title: '시즌 중 FA 영입' }} />
         <Stack.Screen name="playoffs" options={{ title: '포스트시즌' }} />
+        <Stack.Screen name="tryout" options={{ title: '외국인 트라이아웃' }} />
+        <Stack.Screen name="asian-tryout" options={{ title: '아시아쿼터 트라이아웃' }} />
         <Stack.Screen name="fa" options={{ title: 'FA 센터' }} />
         <Stack.Screen name="draft" options={{ title: '신인 드래프트' }} />
         <Stack.Screen name="exhibition" options={{ title: '테스트 경기' }} />
