@@ -6,7 +6,7 @@ import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MAX, inSeasonCost } from '../engine/transactions';
-import { FOREIGN_SALARY } from '../engine/foreign';
+import { FOREIGN_SALARY, ASIAN_SALARY } from '../engine/foreign';
 import { formatMoney } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
 import { useGameStore } from '../store/useGameStore';
@@ -22,6 +22,9 @@ export default function Transactions() {
   const foreignAltPool = useGameStore((s) => s.foreignAltPool);
   const foreignSubUsed = useGameStore((s) => s.foreignSubUsed);
   const replaceForeign = useGameStore((s) => s.replaceForeign);
+  const asianAltPool = useGameStore((s) => s.asianAltPool);
+  const asianSubUsed = useGameStore((s) => s.asianSubUsed);
+  const replaceAsian = useGameStore((s) => s.replaceAsian);
 
   // 내 팀 현재 명단(날짜 인지) — 정원·캡 계산
   const myIds = rosterIdsOnDay(teamId, currentDay);
@@ -116,6 +119,47 @@ export default function Transactions() {
                         text: '교체', style: 'destructive',
                         onPress: () => {
                           if (!replaceForeign(p.id)) Alert.alert('교체 불가', foreignSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : FOREIGN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 외국인 선수가 없습니다.');
+                        },
+                      },
+                    ]);
+                  }}
+                  disabled={!can}
+                  style={[styles.btn, { borderColor: can ? theme.warn : theme.border }]}
+                >
+                  <Text style={[styles.btnText, { color: can ? theme.warn : theme.muted }]}>교체</Text>
+                </Pressable>
+              </View>
+            );
+          })}
+        </>
+      ) : null}
+
+      {asianAltPool.length > 0 ? (
+        <>
+          <Title>아시아쿼터 교체 (시즌 1회{asianSubUsed ? ' — 사용함' : ''})</Title>
+          <Muted style={{ fontSize: 12 }}>
+            부진한 아시아쿼터를 퇴출하고 대체 선수를 영입합니다. 퇴출 선수는 리그를 떠나며,
+            대체 선수 연봉 {formatMoney(ASIAN_SALARY)}은 운영 자금에서 추가 부담합니다.
+          </Muted>
+          {asianAltPool.map((id) => {
+            const p = evolveOnDay(id, currentDay);
+            if (!p) return null;
+            const can = !asianSubUsed && ASIAN_SALARY <= cash;
+            return (
+              <View key={id} style={styles.row}>
+                <PosTag pos={p.position} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{p.name}{p.nationality ? ` · ${p.nationality}` : ''}</Text>
+                  <Text style={styles.sub}>{p.age}세 · OVR {displayOvr(overallRaw(p))}</Text>
+                </View>
+                <Pressable
+                  onPress={() => {
+                    Alert.alert('아시아쿼터 교체', `${p.name}을(를) 영입하고 현 아시아쿼터 선수를 퇴출합니다.\n추가 부담 ${formatMoney(ASIAN_SALARY)} · 시즌 1회`, [
+                      { text: '취소', style: 'cancel' },
+                      {
+                        text: '교체', style: 'destructive',
+                        onPress: () => {
+                          if (!replaceAsian(p.id)) Alert.alert('교체 불가', asianSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : ASIAN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 아시아쿼터 선수가 없습니다.');
                         },
                       },
                     ]);
