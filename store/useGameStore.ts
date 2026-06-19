@@ -56,6 +56,7 @@ interface GameState {
   hydrated: boolean;
   onboarded: boolean;                          // 온보딩(첫 안내) 완료 — 세이브와 별개(초기화해도 유지)
   supporter: boolean;                          // 서포터 팩(비소모성 IAP) 보유 — 구매 자산이라 초기화해도 유지
+  sfxEnabled: boolean;                         // 경기 효과음(휘슬·스파이크·서브) 켬 — 사용자 환경설정(초기화해도 유지)
   selectedTeamId: string | null;
   season: number;                              // 0-based 경과 시즌
   currentDay: number;                          // 시즌 내 경과 일수
@@ -138,6 +139,7 @@ interface GameState {
   replayOnboarding: () => void;
   grantSupporter: () => void;
   setSupporter: (v: boolean) => void;
+  setSfx: (v: boolean) => void;
 }
 
 const freshSave = {
@@ -197,6 +199,7 @@ export const useGameStore = create<GameState>()(
       hydrated: false,
       onboarded: false,
       supporter: false,
+      sfxEnabled: true,
       ...freshSave,
 
       selectTeam: (teamId) => {
@@ -706,6 +709,7 @@ export const useGameStore = create<GameState>()(
       replayOnboarding: () => set({ onboarded: false }),
       grantSupporter: () => set({ supporter: true }), // 결제 성공 시 호출(출시 시 IAP 콜백에 연결)
       setSupporter: (v) => set({ supporter: v }),     // 미리보기 토글(개발용) — 적용된 모습 확인
+      setSfx: (v) => set({ sfxEnabled: v }),          // 효과음 켬/끔(설정) — 영속
     }),
     {
       name: 'baeknyeon-save',
@@ -713,6 +717,7 @@ export const useGameStore = create<GameState>()(
       partialize: (s) => ({
         onboarded: s.onboarded,
         supporter: s.supporter,
+        sfxEnabled: s.sfxEnabled,
         selectedTeamId: s.selectedTeamId,
         season: s.season,
         currentDay: s.currentDay,

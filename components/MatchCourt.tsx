@@ -16,6 +16,8 @@ import { ballPath as ballPathRaw, SEG_DUR as DUR, markerTravelMs, type Move, typ
 import type { PointHow } from '../engine/rally';
 import { segmentTargets, reconstructRallies, isInPlay, applySubsToSix, type RallyState } from './courtDirector';
 import { commentLine } from './courtCommentary';
+import { initSfx, playSfx, setSfxEnabled } from '../audio/sfx';
+import { useGameStore } from '../store/useGameStore';
 
 // KOVO 라이트 시스템과 동일한 파스텔 포지션색 (Screen.tsx POS_COLOR와 일치)
 const POS_COLOR: Record<Position, string> = {
@@ -143,6 +145,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   const [timeoutModal, setTimeoutModal] = useState<TimeoutEvent | null>(null); // 작전 타임아웃 — 멈춤+체력
   const ackTO = useRef<Set<number>>(new Set()); // 이미 본 타임아웃(랠리 인덱스) — 재진입 시 재팝업 방지
 
+  // 효과음(휘슬·스파이크·서브) — 보드 진입 시 1회 프리로드, 설정 토글 동기화(audio/sfx.ts, UI 전용)
+  const sfxOn = useGameStore((s) => s.sfxEnabled);
+  useEffect(() => { initSfx(); }, []);
+  useEffect(() => { setSfxEnabled(sfxOn); }, [sfxOn]);
+
   const prog = useRef(new Animated.Value(0)).current; // 현재 구간 진행도 0..1
   const posRefs = useRef<Record<string, Animated.ValueXY>>({}); // 마커별 위치(선수 단위)
   const posLast = useRef<Record<string, { x: number; y: number }>>({});
@@ -209,6 +216,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
         const c = HOW_CAPTION[r.how];
         setFeed((f) => [...f, `▶ ${c.txt} — ${r.scorer === 'home' ? '홈' : '원정'} 득점 (${r.home}:${r.away})`].slice(-30));
       }
+      playSfx('whistle'); // 종결 휘슬 — 랠리가 끝나 점수가 났다
       // 작전 타임아웃: 득점 자막을 한 박자 보여준 뒤 멈추고 모달(코트 체력)을 띄운다(아직 안 본 것만).
       if (timeoutHere && !ackTO.current.has(idx)) {
         const t = setTimeout(() => { setPlaying(false); setTimeoutModal(timeoutHere); }, fast ? 320 : 1300);
@@ -349,6 +357,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
       serving: stage.serving, homeRot: stage.homeRot, awayRot: stage.awayRot,
     });
     if (line) setFeed((f) => (f[f.length - 1] === line ? f : [...f, line].slice(-30)));
+    // 효과음: 서브 임팩트(서버 컨택) / 스파이크 강타 — 페인트·소프트샷(to.soft)은 퍽 소리 제외(사용자 요청)
+    if (seg.to.kind === 'serve') playSfx('serve');
+    else if (seg.to.kind === 'spike' && !seg.to.soft) playSfx('spike');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segSig]);
 

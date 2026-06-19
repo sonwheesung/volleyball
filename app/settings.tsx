@@ -38,6 +38,8 @@ export default function Settings() {
   const season = useGameStore((s) => s.season);
   const supporter = useGameStore((s) => s.supporter);
   const setSupporter = useGameStore((s) => s.setSupporter);
+  const sfxEnabled = useGameStore((s) => s.sfxEnabled);
+  const setSfx = useGameStore((s) => s.setSfx);
   const [confirmReset, setConfirmReset] = useState(false);
 
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
@@ -58,6 +60,16 @@ export default function Settings() {
 
       <Text style={styles.section}>게임</Text>
       <View style={styles.group}>
+        <View style={styles.toggleRow}>
+          <View style={[styles.rowIcon, { backgroundColor: theme.accent + '1A' }]}>
+            <Ionicons name={sfxEnabled ? 'volume-high-outline' : 'volume-mute-outline'} size={18} color={theme.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>효과음</Text>
+            <Muted style={{ fontSize: 12, marginTop: 1 }}>경기 보드 휘슬·스파이크·서브 소리 (무음 모드 존중)</Muted>
+          </View>
+          <Switch value={sfxEnabled} onValueChange={setSfx} trackColor={{ true: theme.accent, false: theme.cardAlt }} />
+        </View>
         <Row icon="book-outline" tint={theme.accent} label="튜토리얼 다시보기" sub="게임 소개를 처음부터"
           onPress={() => { replayOnboarding(); router.replace('/onboarding'); }} />
       </View>
