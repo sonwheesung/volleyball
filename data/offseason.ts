@@ -314,7 +314,7 @@ export function resolvePreDraft(
   // 전 시즌 팀별 외인 — 재계약 우선권의 주체
   const prevForeignOf: Record<string, string> = {};
   for (const t of Object.keys(committed)) {
-    const f = committed[t].find((id) => off.snapshot[id]?.isForeign);
+    const f = committed[t].find((id) => off.snapshot[id]?.isForeign && !off.snapshot[id]?.isAsianQuota);
     if (f) prevForeignOf[t] = f;
   }
   // 외국인 트라이아웃 — FA 시장 앞(외인이 OP를 채워야 AI가 FA로 중복 영입하지 않는다)
@@ -355,7 +355,7 @@ export function faMarketPreview(
   const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
   const prevForeignOf: Record<string, string> = {};
   for (const t of Object.keys(committed)) {
-    const f = committed[t].find((id) => off.snapshot[id]?.isForeign);
+    const f = committed[t].find((id) => off.snapshot[id]?.isForeign && !off.snapshot[id]?.isAsianQuota);
     if (f) prevForeignOf[t] = f;
   }
   const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY);

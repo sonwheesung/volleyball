@@ -98,7 +98,7 @@ export function runTryout(
   const keep = new Set([...Object.values(res.picks), ...res.altPoolIds]);
   for (const id of Object.keys(snapshot)) {
     const p = snapshot[id];
-    if (!p?.isForeign) continue;
+    if (!p?.isForeign || p.isAsianQuota) continue; // 아시아쿼터는 별도 트라이아웃 소관 — 외인 cleanup서 제외(FOREIGN_SYSTEM 7)
     const rostered = Object.values(rosters).some((r) => r.includes(id));
     if (!rostered && !keep.has(id)) delete snapshot[id];
   }

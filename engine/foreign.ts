@@ -7,6 +7,8 @@ import { overall } from './overall';
 
 /** 외인 연봉 — 전 구단 동일(30만 달러 상당). 샐러리캡 제외, 운영 자금(FINANCE)에서 지출 */
 export const FOREIGN_SALARY = 41000;
+/** 아시아쿼터 연봉 — 외인보다 낮음(KOVO 아시아쿼터 상한 더 낮음). 캡 제외·운영 자금 지출(FOREIGN_SYSTEM 7) */
+export const ASIAN_SALARY = 25000;
 /** 시즌 중 교체 대체 풀 크기(트라이아웃 미지명자 중 잔류 희망 상위) */
 export const ALT_POOL_SIZE = 4;
 /** 신규 외인 풀 크기(매년) — 재참가자가 더해진다 */
