@@ -152,7 +152,7 @@
 ### 화면·표시(UI)
 | ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
 |---|---|---|---|
-| EC-UI-01 | **결과 상세 박스스코어 ≠ 실제 기록·관전 결과**. 부상·정지·벤치 선수가 있는 경기를 결과 상세로 열면 standings/production/관전 화면과 다른 명단으로 재시뮬 → 다른 스코어(관전형 1순위 위반) | `app/matchresult/[id].tsx`가 `getEvolvedTeamPlayers`(원본 명단)로 시뮬 — 정사(`production.ts`)·관전(`match/[id].tsx`)은 `availableTeamPlayers`(부상·정지·벤치 반영). → matchresult도 `availableTeamPlayers`로 통일 (2026-06-21, 독립검증 도출) | 정적: matchresult↔match↔production 명단 소스 일치 grep |
+| EC-UI-01 | **결과 상세 박스스코어 ≠ 실제 기록·관전 결과**. 부상·정지·벤치 선수가 있는 경기를 결과 상세로 열면 standings/production/관전 화면과 다른 명단으로 재시뮬 → 다른 스코어(관전형 1순위 위반) | `app/matchresult/[id].tsx`가 `getEvolvedTeamPlayers`(원본 명단)로 시뮬 — 정사(`production.ts`)·관전(`match/[id].tsx`)은 `availableTeamPlayers`(부상·정지·벤치 반영). → matchresult도 `availableTeamPlayers`로 통일 (2026-06-21, 독립검증 도출) | **`_ev_simsource`**(모든 simulateMatch 호출부가 availableTeamPlayers 쓰는지·getEvolvedTeamPlayers 금지, A/B 자가검증) |
 
 > EC-UI-01 발견 방법(왜 기존 테스트가 못 잡았나): 단위/시뮬은 **데이터층(production)** 만 검사 — 화면이 *자기 시뮬*을 돌리는 줄 몰랐다(계층 우회 §4 + reported-but-unwired §1.F). **문서-코드 drift 독립검증**(INJURY 0 "동일 availableTeamPlayers" 약속 ↔ matchresult 코드 대조)이 잡음.
 
