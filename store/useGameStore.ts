@@ -42,7 +42,7 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, SeasonArchive, SeasonAwards, SubPolicy, TrainingFocus } from '../types';
+import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, SeasonArchive, SeasonAwards, SubPolicy, TrainingFocus, Transfer } from '../types';
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const LEGEND_POINTS = 7500; // 영구결번급 — 60시즌 통산 최고 ~8645라 9000은 도달 불가였음(레전드 0명).
@@ -80,6 +80,7 @@ interface GameState {
   coachPool: { coaches: Coach[]; assistants: AssistantCoach[] } | null; // 감독 생애주기 풀(null=시드, STAFF_SYSTEM 6)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   expelledLog: ExpelRecord[];                  // 영구제명 연표(승부조작·학폭 — 불명예 퇴출, 뉴스/서사용)
+  transfers: Transfer[];                       // FA 이적 연표(오프시즌 팀 이동, 뉴스 슬라이스3)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   readNews: string[];                          // 읽은 뉴스 키(season:kind:headline) — 읽음/안읽음 구분(NEWS_SYSTEM)
   subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
@@ -173,6 +174,7 @@ const freshSave = {
   coachPool: null as { coaches: Coach[]; assistants: AssistantCoach[] } | null,
   hallOfFame: [] as HofEntry[],
   expelledLog: [] as ExpelRecord[],
+  transfers: [] as Transfer[],
   milestones: [] as Milestone[],
   readNews: [] as string[],
   subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
@@ -532,7 +534,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, transfers, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -708,6 +710,17 @@ export const useGameStore = create<GameState>()(
           if (prev && prev !== my) { faSpend += snapshot[id]?.contract.salary ?? 0; offseasonSigns += 1; } // 영입 수(업적 careerLog)
         }
 
+        // FA 이적 연표(뉴스 슬라이스3) — 오프시즌에 팀을 옮긴 국내 선수(prev≠new, 신인·외인·은퇴 제외). 최근 200건.
+        const seasonTransfers: Transfer[] = [];
+        for (const tid of Object.keys(filled.rosters)) {
+          for (const id of filled.rosters[tid]) {
+            const prev = ctx.prevTeamOf[id];
+            const p = snapshot[id];
+            if (prev && prev !== tid && p && !p.isForeign) seasonTransfers.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: tid });
+          }
+        }
+        const nextTransfers = [...transfers, ...seasonTransfers].slice(-200);
+
         commitPlayerBase(snapshot);
         commitRosters(filled.rosters);
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
@@ -752,6 +765,7 @@ export const useGameStore = create<GameState>()(
           rosters: filled.rosters,
           hallOfFame: [...hallOfFame, ...hofAdds],
           expelledLog: [...expelledLog, ...ctx.expelled.map((e) => ({ season, playerId: e.playerId, name: snapshot[e.playerId]?.name ?? e.playerId, teamId: e.teamId, kind: e.kind }))],
+          transfers: nextTransfers,
           archive: nextArchive,
           milestones: nextMilestones,
         });
@@ -800,6 +814,7 @@ export const useGameStore = create<GameState>()(
         coachPool: s.coachPool,
         hallOfFame: s.hallOfFame,
         expelledLog: s.expelledLog,
+        transfers: s.transfers,
         milestones: s.milestones,
         readNews: s.readNews,
         subPolicy: s.subPolicy,

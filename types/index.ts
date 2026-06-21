@@ -190,7 +190,7 @@ export interface Milestone {
 /** 뉴스 피드 (NEWS_SYSTEM) — 자동 진행된 리그를 읽을 수 있는 기사로. 1~4 종합 파생 */
 export interface NewsItem {
   season: number;                                            // 0-based
-  kind: 'champion' | 'award' | 'milestone' | 'hof' | 'injury' | 'scandal' | 'owner' | 'streak' | 'standing' | 'match' | 'debut';
+  kind: 'champion' | 'award' | 'milestone' | 'hof' | 'injury' | 'scandal' | 'owner' | 'streak' | 'standing' | 'match' | 'debut' | 'transfer';
   headline: string;
   big: boolean;                                              // 헤드라인급
   teamId?: string;                                           // 내 팀 강조용
@@ -205,6 +205,15 @@ export interface ExpelRecord {
   name: string;                                              // 제명 시점 이름(선수 소멸 후 표시용)
   teamId: string;                                            // 제명 당시 소속팀
   kind: 'matchfix' | 'violence';
+}
+
+/** FA 이적 영속 기록 — 오프시즌에 팀을 옮긴 국내 선수(뉴스 NEWS_SYSTEM 슬라이스3, 연표용) */
+export interface Transfer {
+  season: number;                                            // 이적 확정 시즌(오프시즌 종료)
+  playerId: string;
+  name: string;
+  fromTeam: string;                                          // 직전 시즌 소속(prevTeamOf)
+  toTeam: string;                                            // 새 시즌 소속
 }
 
 export interface SubPolicy {

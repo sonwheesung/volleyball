@@ -184,7 +184,10 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 ---
 
 ## 10. 추후 (신규 데이터 필요)
-- FA 영입/이적 기사(signedByMe 영속 필요), 라이벌 구도, 선수 인터뷰 — 영속 데이터 추가 후.
+- ~~FA 영입/이적 기사~~ → **슬라이스3 구현(2026-06-21)**: `store.transfers`(영속, 최근 200) — endSeason이
+  오프시즌 팀 이동(국내, `prevTeamOf≠new`)을 적립. 뉴스는 **내 팀 in/out만** 기사화(리그 전체는 노이즈).
+  `kind='transfer'`. 리그 전체 거물 이적은 추후(career 데이터 필요).
+- 라이벌 구도, 선수 인터뷰 — 영속/판정 데이터 추가 후(아직 보류).
 
 ---
 

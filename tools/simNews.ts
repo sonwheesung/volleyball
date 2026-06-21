@@ -59,7 +59,14 @@ for (let s = 0; s < N; s++) {
 }
 
 // 라이브 시즌 = N(아카이브 0..N-1은 과거, 베이스는 N 진행 상태). 실시간 경기 소재는 시즌 N에서 발화.
-const feed = buildNewsFeed(archive, allMs, [], N, [], [], MAX, MY);
+// FA 이적(슬라이스3) 합성 — 내 팀 in/out + 무관 이적(노이즈, 기사 안 떠야). 실제 팀 id로 매달린참조 검사.
+const T2 = LEAGUE.teams[1].id, T3 = LEAGUE.teams[2].id;
+const transfers = [
+  { season: N - 1, playerId: 'tr-in', name: '김이적', fromTeam: T2, toTeam: MY },
+  { season: N - 1, playerId: 'tr-out', name: '박방출', fromTeam: MY, toTeam: T2 },
+  { season: N - 1, playerId: 'tr-other', name: '최무관', fromTeam: T2, toTeam: T3 },
+];
+const feed = buildNewsFeed(archive, allMs, [], N, [], [], MAX, MY, transfers);
 
 // ── 무결성 검사 ──
 const V: string[] = [];
@@ -96,7 +103,7 @@ const newsTriples = feed.filter((n) => n.kind === 'match' && n.headline.includes
 const tripleAgree = newsTriples === bcastTriples;
 
 // ── A/B 자가검증: 같은 시즌 archive 중복 주입 → 중복 검사가 잡아야 ──
-const abFeed = buildNewsFeed([...archive, archive[archive.length - 1]], allMs, [], N, [], [], MAX, MY);
+const abFeed = buildNewsFeed([...archive, archive[archive.length - 1]], allMs, [], N, [], [], MAX, MY, transfers);
 const abDup = dupOf(abFeed) > dup;
 
 log(`\n═══ 리그 뉴스 · ${N}시즌 (총 ${feed.length}건) ═══`);

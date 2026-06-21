@@ -38,6 +38,7 @@ export default function History() {
   const milestones = useGameStore((s) => s.milestones);
   const expelledLog = useGameStore((s) => s.expelledLog);
   const benchDirectives = useGameStore((s) => s.benchDirectives);
+  const transfers = useGameStore((s) => s.transfers);
 
   const [tab, setTab] = useState(0);          // 0 시즌 · 1 통산 · 2 명예의전당 · 3 연표
   const [viewSeason, setViewSeason] = useState(season);
@@ -74,8 +75,8 @@ export default function History() {
   }, [currentDay, season]);
 
   const newsFeed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? '').slice(0, 40),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId],
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? '', transfers).slice(0, 40),
+    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
   );
 
   return (

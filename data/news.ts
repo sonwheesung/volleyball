@@ -3,7 +3,7 @@
 //   가짜 드라마 금지: 기록에 근거한 사실만. 중요도(big)로 헤드라인/단신 구분.
 //   본문은 조립식(opener+사실+closer) + 안정 시드 변주 → 같은 종류라도 표현이 다르다(NEWS_SYSTEM §4).
 
-import type { ExpelRecord, HofEntry, Milestone, NewsItem, Position, SeasonArchive, SeasonAwards } from '../types';
+import type { ExpelRecord, HofEntry, Milestone, NewsItem, Position, SeasonArchive, SeasonAwards, Transfer } from '../types';
 import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
 import { popularityNow } from './owner';
@@ -104,6 +104,10 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
     open: ['한 경기를 통째로 끌고 갔다.', '폭발적인 한 경기였다.', '코트의 중심에 선 하루였다.'],
     close: ['이런 경기가 팀의 순위 싸움을 떠받친다.', '에이스의 무게를 숫자로 증명했다.', '시즌 베스트 게임으로 손꼽힐 활약이었다.'],
   },
+  transfer: {
+    open: ['오프시즌 시장이 움직였다.', '한 선수의 거취가 정해졌다.', '새 유니폼을 입는다.', 'FA 시장의 한 페이지가 넘어갔다.'],
+    close: ['새 팀에서의 활약이 기대된다.', '이적이 두 팀의 전력 균형을 흔든다.', '한 시즌의 새 출발이다.', '익숙한 코트를 떠나 새 도전을 시작한다.'],
+  },
 };
 
 const TITLE_KO: Record<string, string> = {
@@ -123,6 +127,7 @@ export function buildNewsFeed(
   benchDirectives: BenchDirective[] = [], // 구단주 벤치 지시(내 팀, 현재 시즌) — 인기 스타 벤치 → 팬 술렁
   currentDay = 0,
   myTeamId = '',
+  transfers: Transfer[] = [], // FA 이적 연표(슬라이스3) — 내 팀 in/out만 기사화
 ): NewsItem[] {
   const items: NewsItem[] = [];
   const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string, body?: string, ref?: string) =>
@@ -296,6 +301,20 @@ export function buildNewsFeed(
     if (pop < 60) continue; // 인기 스타만 — 무명 선수 벤치는 기사 안 남
     push(currentSeason, 'owner', `팬들, 간판 ${p.name} 벤치 기용에 술렁 — "왜 안 쓰나"`, pop >= 78, myTeamId,
       body3('owner', `${currentSeason}:own:${b.playerId}`, `${teamName(myTeamId)}의 간판 ${p.name}이(가) 최근 출전 명단에서 빠지면서 팬들이 술렁이고 있다. "왜 안 쓰나"라는 목소리가 커지고 있다.`), b.playerId);
+  }
+
+  // 7.5) FA 이적(오프시즌 팀 이동) — 내 팀 in/out만 기사화(리그 전체는 노이즈)
+  for (const t of transfers) {
+    const inMine = t.toTeam === myTeamId, outMine = t.fromTeam === myTeamId;
+    if (!inMine && !outMine) continue;
+    const key = `${t.season}:tr:${t.playerId}`;
+    push(t.season, 'transfer', vh([
+      (n) => `${n}, ${teamName(t.fromTeam)} 떠나 ${teamName(t.toTeam)} 이적`,
+      (n) => inMine ? `${teamName(t.toTeam)}, FA ${n} 영입` : `${n} ${teamName(t.toTeam)}行 — ${teamName(t.fromTeam)} 떠난다`,
+      (n) => `FA ${n}, ${teamName(t.toTeam)} 합류`,
+    ], key, t.name), inMine, myTeamId,
+      body3('transfer', key, `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 ${teamName(t.toTeam)}으로 둥지를 옮겼다.`
+        + (inMine ? ` ${teamName(myTeamId)}이(가) 새 전력을 더했다.` : outMine ? ` ${teamName(myTeamId)}은(는) 한 자원을 떠나보냈다.` : '')), t.playerId);
   }
 
   // 8) 실시간 경기 소재(현재 시즌) — 트리플 크라운·데뷔전·한 경기 폭발. 경기 단위 생산에서 파생.

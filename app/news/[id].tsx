@@ -24,6 +24,7 @@ const LEAD: Record<NewsItem['kind'], string> = {
   standing: '한 시즌의 성적표가 순위로 정리됐다. 다음 시즌의 출발선이 여기서 정해진다.',
   match: '한 경기에서 나온 인상적인 장면이다. 코트 위 활약이 기록으로 남았다.',
   debut: '새 얼굴이 코트에 첫발을 디뎠다. 데뷔 무대의 기록이 커리어의 출발점이 된다.',
+  transfer: '오프시즌 시장이 움직였다. 한 선수가 새 유니폼을 입고 새 도전을 시작한다.',
 };
 
 export default function NewsArticle() {
@@ -35,11 +36,12 @@ export default function NewsArticle() {
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const expelledLog = useGameStore((s) => s.expelledLog);
   const benchDirectives = useGameStore((s) => s.benchDirectives);
+  const transfers = useGameStore((s) => s.transfers);
   const teamId = useGameStore((s) => s.selectedTeamId);
 
   const feed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? ''),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId],
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? '', transfers),
+    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
   );
   const n = feed[Number(id)];
 
