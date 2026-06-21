@@ -17,6 +17,18 @@ const teamName = (id: string) => getTeam(id)?.name ?? id;
 const pName = (id: string) => getPlayer(id)?.name ?? id;
 const POS_KO: Record<string, string> = { S: '세터', OH: '아웃사이드 히터', OP: '아포짓', MB: '미들 블로커', L: '리베로' };
 const posKoOf = (id: string) => POS_KO[getPlayer(id)?.position ?? ''] ?? '주전';
+/** 선수 통산 사실 한 줄(포지션별 대표 스탯) — 본문 보강용. 은퇴/조회 불가 시 빈 문자열. 전부 실제 누적값(가짜 드라마 금지). */
+const careerLine = (playerId: string): string => {
+  const p = getPlayer(playerId); const c = p?.career;
+  if (!p || !c || c.matches <= 0) return '';
+  const stat = p.position === 'L' ? `디그 ${c.digs.toLocaleString()}개`
+    : p.position === 'S' ? `세트 어시스트 ${c.assists.toLocaleString()}개`
+    : p.position === 'MB' ? `블로킹 ${c.blocks.toLocaleString()}개`
+    : `${c.points.toLocaleString()}점`;
+  return `${POS_KO[p.position]} ${p.name}의 통산 성적은 ${c.seasons}시즌 ${c.matches}경기 ${stat}이다.`;
+};
+/** core 뒤에 사실 절을 덧붙임(빈 문자열이면 그대로) — 본문 보강 공통. */
+const more = (core: string, ...facts: string[]): string => [core, ...facts.filter((f) => f && f.trim())].join(' ');
 
 /** 뉴스 안정 키 — 안정 식별자(ref: playerId 등) + 헤드라인 조합. 동명이인 충돌 방지(§4.4). 읽음 추적용. */
 export const newsKey = (n: NewsItem) => `${n.season}:${n.kind}:${n.ref ?? ''}:${n.headline}`;
@@ -248,19 +260,23 @@ export function buildNewsFeed(
         (t) => `${t}, ${S}시즌 ${bestWin.n}연승 질주`,
         (t) => `${bestWin.n}연승 파죽지세 — ${t}`,
       ], `${a.season}:win`, teamName(bestWin.tid)), bestWin.n >= 12, bestWin.tid,
-        body3('streakWin', `${a.season}:win`, `${teamName(bestWin.tid)}이(가) ${S}시즌 한때 ${bestWin.n}연승을 내달렸다.`));
+        body3('streakWin', `${a.season}:win`, more(`${teamName(bestWin.tid)}이(가) ${S}시즌 한때 ${bestWin.n}연승을 내달렸다.`,
+          a.record?.[bestWin.tid] ? `그 시즌을 ${a.record[bestWin.tid][0]}승 ${a.record[bestWin.tid][1]}패로 마쳤고, 연승은 순위 싸움의 분수령이 됐다.` : '')));
       if (bestLose.n >= 8) push(a.season, 'streak', vh([
         (t) => `${t}, ${S}시즌 ${bestLose.n}연패 수렁`,
         (t) => `${bestLose.n}연패 악몽 — ${t}`,
       ], `${a.season}:lose`, teamName(bestLose.tid)), bestLose.n >= 12, bestLose.tid,
-        body3('streakLose', `${a.season}:lose`, `${teamName(bestLose.tid)}이(가) ${S}시즌 ${bestLose.n}연패의 긴 터널을 지났다.`));
+        body3('streakLose', `${a.season}:lose`, more(`${teamName(bestLose.tid)}이(가) ${S}시즌 ${bestLose.n}연패의 긴 터널을 지났다.`,
+          a.record?.[bestLose.tid] ? `최종 성적은 ${a.record[bestLose.tid][0]}승 ${a.record[bestLose.tid][1]}패, 긴 부진이 시즌 농사를 흔들었다.` : '')));
     }
   }
 
-  // 2) 마일스톤(기록 경신)
+  // 2) 마일스톤(기록 경신) — 통산 사실 한 줄 보강(헤드라인 반복 줄이고 실제 누적값 노출)
   for (const m of milestones) push(m.season, 'milestone', m.text, m.big, m.teamId,
     body3('milestone', `${m.season}:ms:${m.playerId}:${m.text}`,
-      `${m.text} ${m.kind === 'league' ? '리그 역사에' : m.kind === 'club' ? '구단 역사에' : '개인 통산 기록에'} 새로 새겨졌다.`), m.playerId);
+      more(`${m.text} ${m.kind === 'league' ? '리그 역사에' : m.kind === 'club' ? '구단 역사에' : '개인 통산 기록에'} 새로 새겨졌다.`,
+        `${teamName(m.teamId)} 소속으로 세운 이정표다.`,
+        careerLine(m.playerId))), m.playerId);
 
   // 3) 명예의전당 헌액
   for (const h of hallOfFame) {
@@ -328,6 +344,7 @@ export function buildNewsFeed(
     for (const [id, l] of mp.lines) {
       const p = getPlayer(id); if (!p) continue;
       const tid = teamOf(id);
+      const opp = tid === mp.homeTeamId ? mp.awayTeamId : mp.homeTeamId; // 상대팀(본문 보강)
       // 트리플 크라운(KOVO) — 후위공격·블로킹·서브 각 3+
       if (l.backSpikes >= TRIPLE_MIN && l.blocks >= TRIPLE_MIN && l.aces >= TRIPLE_MIN) {
         push(currentSeason, 'match', `${p.name} 트리플 크라운 — 후위공격 ${l.backSpikes}·블로킹 ${l.blocks}·서브 ${l.aces}`, true, tid,
@@ -345,12 +362,17 @@ export function buildNewsFeed(
           : p.position === 'S' ? `세트 ${l.assists}개`
           : `${l.points}점`;
         push(currentSeason, 'debut', `${tier} ${p.name} 데뷔전 — ${stat} (${posKo})`, elite, tid,
-          body3('debut', `${currentSeason}:db:${id}`, `${teamName(tid)}의 ${tier} ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}를 기록했다.`), id);
+          body3('debut', `${currentSeason}:db:${id}`, more(
+            `${teamName(tid)}의 ${tier} ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}를 기록했다.`,
+            `상대 ${teamName(opp)}을(를) 맞은 데뷔전이었다.`,
+            elite ? 'S급 재능으로 분류된 특급 유망주로, 팀의 미래를 책임질 재목으로 꼽힌다.' : '높은 잠재력을 인정받은 기대주로, 성장 곡선에 시선이 모인다.')), id);
       }
       // 한 경기 폭발(커리어하이급) — 30점 이상(데뷔 기사로 이미 다룬 선수는 제외)
       else if (l.points >= BIG_GAME) {
         push(currentSeason, 'match', `${p.name}, 한 경기 ${l.points}점 폭발`, l.points >= 35, tid,
-          body3('biggame', `${currentSeason}:bg:${id}:${mp.dayIndex}`, `${p.name}(${teamName(tid)})이(가) 한 경기 ${l.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`), `${id}:${mp.dayIndex}`);
+          body3('biggame', `${currentSeason}:bg:${id}:${mp.dayIndex}`, more(
+            `${p.name}(${teamName(tid)})이(가) 한 경기 ${l.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`,
+            `상대 ${teamName(opp)}을(를) 상대로 공격 성공 ${l.spikes}개·서브 에이스 ${l.aces}개·블로킹 ${l.blocks}개를 곁들였다.`)), `${id}:${mp.dayIndex}`);
       }
     }
   }

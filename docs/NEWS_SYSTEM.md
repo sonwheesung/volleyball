@@ -126,6 +126,14 @@ k = (seed / 53) % closer.length
 > 원칙 재확인: **사실의 가짓수를 늘리는 것**(밀도)과 **표현을 변주하는 것**(반복 제거)은 둘 다 한다.
 > 없는 사실을 지어내는 것(가짜 드라마)은 절대 안 한다.
 
+**구현(2026-06-21 사실 보강)**: 측정 결과 본문 중앙값 81자·88%가 100자 미만으로 빈약(`tools/_ev_bodylen.ts`).
+`more(core, ...facts)` 헬퍼로 **사실 절을 한 겹 더** 붙여 밀도를 올렸다(전부 실제 누적값):
+- **milestone**(전체 74%): `careerLine`(포지션별 통산 — L=디그·S=어시스트·MB=블로킹·그 외=득점, N시즌 N경기) + 당시 소속.
+- **streak**: 그 시즌 최종 승–패(`archive.record`).
+- **match(폭발)**: 상대팀 + 공격 성공·서브 에이스·블로킹 세부.
+- **debut**: 상대팀 + talentBase 등급(특급/유망주) 분류.
+- 결과: **중앙 81→144자, 100자 미만 88%→7%**(15시즌 788건). 헤드라인/newsKey 무변(읽음추적·중복0 유지).
+
 ### 4.4 newsKey 안정화(권장 변경)
 현재 `newsKey = season:kind:headline` — 헤드라인이 변주되면 읽음/안읽음 추적이 흔들릴 수 있다.
 → **`season:kind:subtype:playerId|teamId`** 같은 *불변 식별 필드*로 키를 바꾼다(변주는 표현일 뿐 동일 기사).
@@ -205,3 +213,6 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
   (측정: fresh 56건). → **유망주(talentBase≥1.12, seed rollTalent S·A 등급 = 상위 15%)만**, S급(≥1.25)은 ★(특급 기대주).
   팀 무관(라이벌 1순위 유망주 데뷔도 리그 사건). 비유망주가 30+ 폭발 시엔 `match`(커리어하이)로 surface돼 누락 아님.
   검증 `tools/_ev_debutgate.ts`(독립 재계산 == buildNewsFeed, talent 누수 0): **폭주 56→8건(86%↓)**.
+- 2026-06-21 **본문 사실 보강**(사용자 보고: 본문 100자도 안 됨, 빈약): 측정 `tools/_ev_bodylen.ts`로 중앙 81자·88%<100
+  확인 → `more()`로 milestone(통산 사실)·streak(시즌 승패)·match(상대+세부)·debut(상대+등급)에 실제 사실 한 겹 추가.
+  **중앙 81→144자, <100자 88%→7%**. 가짜 드라마 0(전부 누적값), tsc 0·무결성 0·트리플 교차검증·A/B 유지.
