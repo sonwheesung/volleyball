@@ -128,9 +128,11 @@ FA가 돌아가려면 선수가 빠지고(은퇴) 채워져야(유망주) 한다
 ### 2.5 협상·수락 로직 (선수가 고른다)
 ```
 asking = marketValue × FA프리미엄(1.1~1.3)
-offerScore = wSal·연봉/asking + wYrs·계약연수 + wWin·팀전력
-           + wPlay·출전기회(포지션 뎁스 역수) + wLoyal·충성도(원소속·프랜차이즈) + wAge·나이적합
+offerScore = w.money·(연봉/asking) + w.win·우승권(0.7·전력+0.3·prestige)
+           + w.play·출전기회(포지션 뎁스) + w.loyalty·충성(원소속·프랜차이즈) + w.home·연고/선호팀 + 0.05·rand + 면담bias
 선수는 최고 offerScore 수락. 동점·근소차는 원소속 우선.
+※ 계약연수(wYrs)·나이적합(wAge)은 설계안이었으나 **미구현** — 현재 코드(`engine/faMarket.ts:offerScore`)는 위 6항
+   (money/win/play/loyalty/home/rand+talkBias). 도입 시 이 식·코드 동시 갱신.
 ```
 
 ### 2.5b 선수별 FA 성향 (이적 동기 차등) ★ — 2026-06 구현

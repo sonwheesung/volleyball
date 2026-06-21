@@ -191,10 +191,10 @@
 | ~~면담 성공 무효(비만료)~~ | OWNER | **버그 아님(오독)** — line 48 `continue`는 **refuseProb 전용**(만료자만 거부권). 면담 효과(offerBias)는 `interviewEffects`로 전 선수 배선됨 | ❌ 기각(검증) |
 | NaN 미가드 진입점 | store | `setDay(NaN)` → `Math.max(x,NaN)=NaN` currentDay 오염 전파 | ✅ **해결 → §3 EC-ST-01** (setDay NaN 거부). recordResult는 리플레이가 SEASON 기준이라 무효항목 무시(저위험, 유지) |
 | hireScout 슬롯 무제한 | STAFF | 코치는 `COACH_SLOTS` 제한, 스카우터는 예산만 → 무한 영입 | ✅ **보강 → §3 EC-CO-06**(슬롯캡). 단 `scoutReveal` 상한(depth≤0.15@4)이라 **익스플로잇 아니었음**(예산 낭비뿐) |
-| toggleProtect 멤버십 미검증 | TX | 보호명단에 타팀/유령 id 추가 가능 → 보호 슬롯 낭비(무해하나 핵심선수 보호 실패) | 저 |
-| LEGEND 9000↔7500 | HOF | 문서(SEASON 89)는 9000, 코드는 7500(도달성 리밸런스). **문서 갱신 필요** | drift(문서) |
-| offerScore 공식 drift | FA | 문서(FA 131)는 wYrs·wAge 항, 코드는 home 항. **문서/코드 정합 확인** | drift |
-| FORM "중첩없음" 표현 | FORM | 문서 5의 −7% clamp가 form 계수만 — 만성부상·정지는 form 밖 별도 손실. **문서 표현 명확화** | drift(문서) |
+| toggleProtect 멤버십 미검증 | TX | 보호명단에 타팀/유령 id 추가 가능 → 보호 슬롯 낭비 | ✅ **수정**(내 로스터만 보호 가드, `store:328`, 2026-06-21) |
+| LEGEND 9000↔7500 | HOF | 문서(SEASON 89)는 9000, 코드는 7500(도달성 리밸런스) | ✅ **문서 정정**(SEASON 89 → 7500) |
+| offerScore 공식 drift | FA | 문서(FA 131)는 wYrs·wAge 항, 코드는 home 항 | ✅ **문서 정정**(FA 131 → 코드 6항 일치 + wYrs/wAge 미구현 명기) |
+| FORM "중첩없음" 표현 | FORM | 문서 5의 −7% clamp가 form 계수(sk*)만 — 만성·정지는 form 밖 별도 손실 | ✅ **문서 명확화**(FORM 53) |
 | subPolicy 죽은 상태 | MATCH | 제거 결정(2026-06-18) 후에도 store가 subPolicy persist·미배선 | 저(세이브 비대) |
 | 프리뷰 OVR 원본명단 | UI | 일정/대시보드 OVR이 `getEvolvedTeamPlayers`(부상·벤치 무시) — EC-UI-01과 동류이나 *프리뷰*라 설계 논의 필요 | 검토 |
 | endSeason 더블탭 | store | 확정 버튼 연타 시 시즌 2전진(데이터무결성 OK=검증됨, UX 디바운스) | 저(UX) |

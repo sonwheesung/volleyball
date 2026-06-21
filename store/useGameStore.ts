@@ -325,6 +325,7 @@ export const useGameStore = create<GameState>()(
         set((s) => {
           if (s.protectedIds.includes(playerId))
             return { protectedIds: s.protectedIds.filter((id) => id !== playerId) };
+          if (!(currentRosters()[s.selectedTeamId ?? ''] ?? []).includes(playerId)) return s; // 내 로스터만 보호(유령/타팀 id 무시 — 보호슬롯 낭비 방지)
           if (s.protectedIds.length >= PROTECT_COUNT) return s; // 정원 초과 무시
           return { protectedIds: [...s.protectedIds, playerId] };
         }),

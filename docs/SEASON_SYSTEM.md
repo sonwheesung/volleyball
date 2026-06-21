@@ -86,7 +86,7 @@ KOVO 방식:
 2)   resolveDraft:      내 위시리스트 + AI 니즈 기반 지명(순번 존중, 스카우트 공개도)
 3)   fillRosters:       클래스 소진 후 남은 공백 신인 자동 충원
 3.5) 경기 생산 → 성장·통산: leagueProduction(전체) → applyMatchXp + accrueCareer (experience/production)
-3.6) 명예의전당: 은퇴자 중 통산 4000점↑ 등재(9000점↑ 영구결번급)
+3.6) 명예의전당: 은퇴자 중 통산 4000점↑ 등재(**7500**점↑ 영구결번급 — 9000은 60시즌 통산 최고 ~8645라 도달불가여서 7500으로 리밸런스, `store:LEGEND_POINTS`)
 4)   이적자 clubTenure=0 (프랜차이즈 판정)
 4.5) 만성 노쇠가속: 7경기↑ 결장자 jump 영구 -1 (INJURY_SYSTEM)
 4.6) 다음 FA 풀: 미계약·비은퇴 → faPool (시즌 중 영입 풀, TRANSACTION_SYSTEM)
