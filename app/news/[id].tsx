@@ -6,15 +6,12 @@ import { useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { Card, Muted, Screen, theme } from '../../components/Screen';
 import { buildNewsFeed } from '../../data/news';
+import { KIND_KO } from '../news';
 import { getTeam } from '../../data/league';
 import { useGameStore } from '../../store/useGameStore';
 import type { NewsItem } from '../../types';
 
-const KIND_KO: Record<NewsItem['kind'], string> = {
-  champion: '우승', award: '시상', milestone: '기록 경신', hof: '명예의전당', injury: '부상', scandal: '사건·사고', owner: '구단',
-};
-
-// 본문 데이터가 없으므로 분류별 리드 문단을 구성(헤드라인이 구체 사실을 담는다).
+// 본문 데이터가 없으면(구결과·예외) 분류별 리드 문단으로 폴백(헤드라인이 구체 사실을 담는다).
 const LEAD: Record<NewsItem['kind'], string> = {
   champion: '정규리그와 포스트시즌을 모두 통과하며 시즌 정상에 올랐다. 한 시즌의 모든 여정이 이 한 줄로 남는다.',
   award: '한 시즌의 활약을 인정받아 수상의 영예를 안았다. 코트 위 생산이 만든 결과다.',
@@ -23,6 +20,8 @@ const LEAD: Record<NewsItem['kind'], string> = {
   injury: '부상으로 당분간 코트를 비우게 됐다. 팀 전력과 로테이션에 변수가 생겼다.',
   scandal: '리그를 뒤흔든 소식이다. 해당 선수와 구단은 적지 않은 후폭풍을 마주하게 됐다.',
   owner: '간판 선수의 기용을 두고 팬심이 출렁였다. 구단 운영은 성적만큼이나 정서도 함께 살펴야 한다.',
+  streak: '시즌의 흐름을 가른 연속 기록이다. 분위기가 곧 순위로 이어졌다.',
+  standing: '한 시즌의 성적표가 순위로 정리됐다. 다음 시즌의 출발선이 여기서 정해진다.',
 };
 
 export default function NewsArticle() {

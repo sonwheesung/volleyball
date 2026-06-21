@@ -1,8 +1,9 @@
-// 뉴스 피드 sanity — N시즌 누적(시상+마일스톤) 후 종합 피드를 출력.
+// 뉴스 피드 sanity + 무결성·변주 검사 — N시즌 누적 후 종합 피드.
 //   npx tsx tools/simNews.ts [시즌=20]
-// store.endSeason 누적 경로를 재현. HOF는 생략(빈 배열) — 챔피언/시상/마일스톤/부상 종합 확인.
+// store.endSeason 누적 경로를 재현(archive에 순위·연승·플옵·승패도 채움 → 새 소재 발화).
+// 검사: 크래시0·빈 헤드라인/본문0·newsKey 중복0·kind 카탈로그·변주 커버리지 + A/B 자가검증.
 
-import { resetLeagueBase, getTeam, teamScoutReveal, commitPlayerBase, commitRosters } from '../data/league';
+import { resetLeagueBase, getTeam, teamScoutReveal, commitPlayerBase, commitRosters, LEAGUE } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
 import { fillRosters } from '../data/rookies';
@@ -11,11 +12,13 @@ import { applyMatchXp } from '../engine/experience';
 import { accrueCareer } from '../engine/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
-import { buildPlayoffs } from '../data/playoffs';
-import { buildNewsFeed } from '../data/news';
-import type { Milestone, SeasonAwards } from '../types';
+import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
+import { computeStandings, seasonStreaks } from '../data/standings';
+import { buildNewsFeed, newsKey } from '../data/news';
+import type { Milestone, SeasonArchive } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
+const MAX = Number.MAX_SAFE_INTEGER;
 
 function advance(season: number): void {
   const ctx = buildDraftContext('', {}, {}, [], false, [], season + 1);
@@ -25,7 +28,7 @@ function advance(season: number): void {
   for (const p of drafted.picked) snapshot[p.id] = p;
   const filled = fillRosters(drafted.rosters, (id) => snapshot[id], season + 1);
   for (const r of filled.newPlayers) snapshot[r.id] = r;
-  const prod = leagueProduction(Number.MAX_SAFE_INTEGER);
+  const prod = leagueProduction(MAX);
   for (const tid of Object.keys(filled.rosters)) {
     for (const id of filled.rosters[tid]) {
       const pr = prod.get(id);
@@ -37,18 +40,67 @@ function advance(season: number): void {
 }
 
 const N = Math.max(1, Number(process.argv[2]) || 20);
+const MY = LEAGUE.teams[0].id;
 resetLeagueBase();
-const archive: { season: number; championId: string; awards?: SeasonAwards }[] = [];
+const archive: SeasonArchive[] = [];
 const allMs: Milestone[] = [];
 for (let s = 0; s < N; s++) {
-  archive.push({ season: s, championId: buildPlayoffs(s).championId ?? '', awards: currentSeasonAwards(s) });
+  const table = computeStandings(MAX);
+  const record: Record<string, [number, number]> = {};
+  for (const r of table) record[r.teamId] = [r.wins, r.losses];
+  const po = buildPlayoffs(s);
+  archive.push({
+    season: s, championId: po.championId ?? '', awards: currentSeasonAwards(s),
+    standings: table.map((r) => r.teamId), streaks: seasonStreaks(MAX), series: seriesByTeam(po), record,
+  });
   allMs.push(...detectSeasonMilestones(s, []));
   advance(s);
 }
 
-const feed = buildNewsFeed(archive, allMs, [], N - 1);
-log(`\n═══ 리그 뉴스 · ${N}시즌 누적 (총 ${feed.length}건, 최근 28건) ═══`);
-for (const n of feed.slice(0, 28)) {
-  log(`${n.big ? '★' : '·'} [${n.season + 1}시즌] ${n.headline}`);
+const feed = buildNewsFeed(archive, allMs, [], N - 1, [], [], 0, MY);
+
+// ── 무결성 검사 ──
+const V: string[] = [];
+const emptyHead = feed.filter((n) => !n.headline || !n.headline.trim()).length;
+const emptyBody = feed.filter((n) => !n.body || !n.body.trim()).length;
+if (emptyHead) V.push(`빈 헤드라인 ${emptyHead}`);
+if (emptyBody) V.push(`빈 본문 ${emptyBody}`);
+const dupOf = (f: typeof feed) => { const seen = new Set<string>(); let d = 0; for (const n of f) { const k = newsKey(n); if (seen.has(k)) d++; seen.add(k); } return d; };
+const dup = dupOf(feed);
+if (dup) {
+  V.push(`newsKey 중복 ${dup}`);
+  const cnt = new Map<string, number>();
+  for (const n of feed) cnt.set(newsKey(n), (cnt.get(newsKey(n)) ?? 0) + 1);
+  log('  중복 키: ' + [...cnt].filter(([, c]) => c > 1).map(([k, c]) => `「${k}」×${c}`).join(' / '));
 }
-log('');
+const badTeam = feed.filter((n) => n.teamId && !getTeam(n.teamId)).length;
+if (badTeam) V.push(`매달린 teamId ${badTeam}`);
+
+// ── kind 카탈로그(풍부함) ──
+const byKind = new Map<string, number>();
+for (const n of feed) byKind.set(n.kind, (byKind.get(n.kind) ?? 0) + 1);
+
+// ── 변주 커버리지(같은 kind 내 본문 distinct — 높을수록 다양) ──
+const seenBody = new Map<string, Set<string>>();
+for (const n of feed) {
+  if (!seenBody.has(n.kind)) seenBody.set(n.kind, new Set());
+  seenBody.get(n.kind)!.add(n.body ?? '');
+}
+
+// ── A/B 자가검증: 같은 시즌 archive 중복 주입 → 중복 검사가 잡아야 ──
+const abFeed = buildNewsFeed([...archive, archive[archive.length - 1]], allMs, [], N - 1, [], [], 0, MY);
+const abDup = dupOf(abFeed) > dup;
+
+log(`\n═══ 리그 뉴스 · ${N}시즌 (총 ${feed.length}건) ═══`);
+log(`kind 종류=${byKind.size}: ${[...byKind].map(([k, c]) => `${k}:${c}`).join(' · ')}`);
+log(`\n변주 커버리지(kind: distinct본문/총건수 — 높을수록 다양):`);
+for (const [k, set] of seenBody) log(`  ${k}: ${set.size}/${byKind.get(k) ?? 0}`);
+log(`\n무결성: ${V.length ? '❌ ' + V.join(' · ') : '✅ 위반 0(빈 헤드/본문·중복·매달린 teamId)'}`);
+log(`[A/B] 중복 주입 시 newsKey 중복 검출=${abDup} (true여야 신뢰)`);
+
+log(`\n── 최근 30건 ──`);
+for (const n of feed.slice(0, 30)) log(`${n.big ? '★' : '·'} [${n.season + 1}][${n.kind}] ${n.headline}`);
+
+const ok = V.length === 0 && abDup;
+log(`\nNEWS OK = ${ok}`);
+process.exit(ok ? 0 : 2);
