@@ -440,6 +440,17 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
             <Text style={[styles.howTxt, { color: caption.color }]}>{caption.txt}</Text>
           </View>
         ) : null}
+        {enterEvs.length > 0 ? (
+          <Animated.View style={[styles.subBadge, { transform: [{ scale: subPop }] }]}>
+            <Text style={styles.subBadgeHdr}>🔄 {SUB_KIND_KO[enterEvs[0].kind]}</Text>
+            {enterEvs.slice(0, 2).map((e, k) => (
+              <View key={k} style={{ marginTop: k ? 2 : 0 }}>
+                <Text style={styles.subInTxt}>{byId.get(e.inId)?.name ?? '선수'} IN</Text>
+                <Text style={styles.subOutTxt}>{byId.get(e.outId)?.name ?? '선수'} OUT</Text>
+              </View>
+            ))}
+          </Animated.View>
+        ) : null}
         {finished ? (
           <View style={styles.finishOverlay}>
             <Text style={styles.finishTxt}>경기 종료</Text>
@@ -561,6 +572,16 @@ const styles = StyleSheet.create({
     shadowColor: '#1B2A4A', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
   howTxt: { fontSize: 13, fontWeight: '900' },
+  // 작전 교체 코트 배지 — 좌상단(결과 라벨과 안 겹침). IN 초록·OUT 회색.
+  subBadge: {
+    position: 'absolute', top: 8, left: 8,
+    backgroundColor: '#FFFFFFF2', borderWidth: 1.5, borderColor: SUB_GOLD, borderRadius: 12,
+    paddingHorizontal: 10, paddingVertical: 5,
+    shadowColor: '#1B2A4A', shadowOpacity: 0.12, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 3,
+  },
+  subBadgeHdr: { color: '#B8860B', fontSize: 10, fontWeight: '900', marginBottom: 2 },
+  subInTxt: { color: '#0E9C8C', fontSize: 12.5, fontWeight: '900' },
+  subOutTxt: { color: '#8A94A6', fontSize: 11, fontWeight: '800' },
   feedBox: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, gap: 1 },
   feedLine: { color: theme.muted, fontSize: 11 },
   feedLast: { color: theme.text, fontSize: 12.5, fontWeight: '700' },
