@@ -320,6 +320,8 @@ export function buildNewsFeed(
   // 8) 실시간 경기 소재(현재 시즌) — 트리플 크라운·데뷔전·한 경기 폭발. 경기 단위 생산에서 파생.
   //   트리플 크라운 정의는 KOVO 공식(후위공격·블로킹·서브 각 3+) — broadcast.ts와 동일(simNews 교차검증).
   const TRIPLE_MIN = 3, BIG_GAME = 30;
+  // 유망주 데뷔 게이트 — talentBase 등급(seed rollTalent): S 3%(≥1.25)·A 12%(≥1.12)·B 45%·C 30%·D 10%.
+  const PROSPECT_MIN = 1.12, ELITE_MIN = 1.25; // A급 이상만 기사화, S급은 ★(특급 기대주)
   const debuted = new Set<string>(); // 이번 시즌 첫 선발 1회만
   for (const mp of seasonMatchProds(currentDay)) {
     const teamOf = (id: string) => (mp.homeIds.has(id) ? mp.homeTeamId : mp.awayTeamId);
@@ -331,17 +333,19 @@ export function buildNewsFeed(
         push(currentSeason, 'match', `${p.name} 트리플 크라운 — 후위공격 ${l.backSpikes}·블로킹 ${l.blocks}·서브 ${l.aces}`, true, tid,
           body3('triple', `${currentSeason}:tc:${id}:${mp.dayIndex}`, `${p.name}(${teamName(tid)})이(가) 한 경기에서 후위공격 ${l.backSpikes}개·블로킹 ${l.blocks}개·서브 에이스 ${l.aces}개로 트리플 크라운을 달성했다. KOVO 공식 기록에 이름을 올렸다.`), `${id}:${mp.dayIndex}`);
       }
-      // 데뷔전 — 통산 출전 0(이번 시즌이 데뷔)인 선수의 첫 선발만. **내 팀 신인만**(리그 전체 신인 데뷔를
-      // 다 기사화하면 첫 경기에 ~50건 쏟아짐 — 이적과 동일하게 내 연대기로 게이트, 2026-06-21 사용자 보고).
-      // **포지션별 대표 스탯**(리베로 득점 0 정상 → 디그·리시브, 세터 세트 — "리베로 0점" 어색함 교정)
-      if (tid === myTeamId && !debuted.has(id) && mp.starters.has(id) && (p.career?.matches ?? 0) === 0) {
+      // 데뷔전 — 통산 출전 0(이번 시즌이 데뷔)인 선수의 첫 선발만. **유망주(잠재력 높은 신인)만**: 리그 전체
+      // 신인 데뷔를 다 기사화하면 첫 경기에 ~50건 쏟아짐 → talentBase A급 이상(상위 15%)만, S급은 ★(2026-06-21 사용자 보고).
+      // 팀 무관(라이벌 1순위 유망주 데뷔도 리그 사건). **포지션별 대표 스탯**(리베로 득점 0 정상 → 디그·리시브, 세터 세트)
+      if (!debuted.has(id) && mp.starters.has(id) && (p.career?.matches ?? 0) === 0 && p.talentBase >= PROSPECT_MIN) {
         debuted.add(id);
+        const elite = p.talentBase >= ELITE_MIN;
+        const tier = elite ? '특급 기대주' : '유망주';
         const posKo = POS_KO[p.position] ?? '';
         const stat = p.position === 'L' ? `디그 ${l.digs}개·리시브 ${l.receives}개`
           : p.position === 'S' ? `세트 ${l.assists}개`
           : `${l.points}점`;
-        push(currentSeason, 'debut', `신인 ${p.name} 데뷔전 — ${stat} (${posKo})`, false, tid,
-          body3('debut', `${currentSeason}:db:${id}`, `${teamName(tid)}의 신인 ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}를 기록했다.`), id);
+        push(currentSeason, 'debut', `${tier} ${p.name} 데뷔전 — ${stat} (${posKo})`, elite, tid,
+          body3('debut', `${currentSeason}:db:${id}`, `${teamName(tid)}의 ${tier} ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}를 기록했다.`), id);
       }
       // 한 경기 폭발(커리어하이급) — 30점 이상(데뷔 기사로 이미 다룬 선수는 제외)
       else if (l.points >= BIG_GAME) {
