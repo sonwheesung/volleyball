@@ -4,7 +4,7 @@ import { LEAGUE, currentRosters, getPlayer, evolveOnDay, getTeamCoach, currentCo
   teamAssistants, teamScouts, coachSlots, getTeam } from '../data/league';
 import { rosterIdsOnDay, availableFAsOnDay, seasonTxLog } from '../data/dynamics';
 import { ROSTER_MIN, ROSTER_MAX } from '../engine/transactions';
-import { LEAGUE_CAP } from '../engine/cap';
+import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
 import { buildLineup } from '../engine/lineup';
 import { overall } from '../engine/overall';
 import { domesticPayroll } from '../data/roster';
@@ -20,7 +20,8 @@ function numbersOk(p: Player, V: Violation[], where: string) {
   const o = overall(p);
   if (!Number.isFinite(o)) V.push({ check: 'num', msg: `${where}: ${p.id} overall=${o}` });
   if (!isFinitePos(p.age, 14, 60)) V.push({ check: 'num', msg: `${where}: ${p.id} age=${p.age}` });
-  if (!isFinitePos(p.contract?.salary, 1, LEAGUE_CAP)) V.push({ check: 'num', msg: `${where}: ${p.id} salary=${p.contract?.salary}` });
+  const indCap = maxSalaryFor(p); // 개인 상한(MAX_SALARY/FRANCHISE_MAX) — reSign 개인상한 우회 가드(EC-TX-04 잔여)
+  if (!isFinitePos(p.contract?.salary, 1, indCap)) V.push({ check: 'num', msg: `${where}: ${p.id} salary=${p.contract?.salary} > 개인상한 ${indCap}` });
   if (!isFinitePos(p.contract?.remaining, 0, 12)) V.push({ check: 'num', msg: `${where}: ${p.id} remaining=${p.contract?.remaining}` });
   for (const k of ['jump','agility','staminaMax','reaction','positioning','focus','consistency','vq','skSpike','skBlock','skDig','skReceive','skSet','skServe','height'] as const) {
     const v = (p as any)[k];

@@ -35,7 +35,7 @@ import { coachInfoOf } from '../data/league';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay } from '../data/league';
 import { marketVal, setAwardScores } from '../data/awardSalary';
-import { LEAGUE_CAP } from '../engine/cap';
+import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
 import { ROSTER_MAX, canRelease, inSeasonCost } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
 import { fillRosters } from '../data/rookies';
@@ -223,7 +223,7 @@ export const useGameStore = create<GameState>()(
         setOwnerContext([]);
         setAwardScores([]); // 새 세이브 — 수상 이력 없음
       },
-      setDay: (day) => set((s) => ({ currentDay: Math.max(s.currentDay, day) })),
+      setDay: (day) => set((s) => (Number.isFinite(day) ? { currentDay: Math.max(s.currentDay, day) } : {})), // NaN/Infinity 거부(currentDay 오염 전파 차단)
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
       saveWatchProgress: (fixtureId, idx) => set((s) => ({ watchProgress: { ...s.watchProgress, [fixtureId]: idx } })),
       clearWatchProgress: (fixtureId) => set((s) => {
@@ -244,6 +244,8 @@ export const useGameStore = create<GameState>()(
         if (salary <= 0 || years < 1 || remaining < 1 || remaining > years) return;
         // 재계약 후 내 국내 payroll이 캡 초과면 거부(다른 영입과 일관 — 캡은 하드). 외인은 캡 제외.
         const target = evolveOnDay(playerId, s.currentDay);
+        // 개인 연봉 상한(MAX_SALARY 8억 / 프랜차이즈 11억) — 팀캡만 보면 단일선수 거대연봉으로 우회 가능(EC-TX-04 잔여)
+        if (target && !target.isForeign && salary > maxSalaryFor(target)) return;
         if (target && !target.isForeign) {
           let dom = 0;
           for (const id of rosterIds) {

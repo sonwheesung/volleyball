@@ -54,7 +54,7 @@ import type { Violation } from './_gt_invariants';
       G().reSign(id, { salary, years, remaining: years, signedAtAge: 25 });
     } },
     { name: 'signInSeason', fn: () => { const day = G().currentDay; const pool = availableFAsOnDay(day); const id = (CLEAN_RELEASE || rnd() < 0.5) ? pick(pool) : randId(); if (id !== undefined) G().signInSeason(id); } },
-    { name: 'setDay', fn: () => { const d = rnd() < 0.7 ? (pick(matchdays) ?? 0) : Math.floor((rnd() - 0.3) * 400); G().setDay(d); } },
+    { name: 'setDay', fn: () => { const r = rnd(); const d = r < 0.6 ? (pick(matchdays) ?? 0) : r < 0.85 ? Math.floor((rnd() - 0.3) * 400) : (r < 0.93 ? NaN : Infinity); G().setDay(d); if (!Number.isFinite(G().currentDay)) throw new Error(`currentDay 오염=${G().currentDay} (EC-ST-01 — setDay NaN/Inf 미가드)`); } },
     { name: 'recordResult', fn: () => { const f = pick(SEASON); if (f) G().recordResult({ fixtureId: f.id, homeSets: Math.floor(rnd()*4), awaySets: Math.floor(rnd()*4) }); } },
     { name: 'signFA', fn: () => G().signFA(randId()) },
     { name: 'unsignFA', fn: () => G().unsignFA(pick(G().faSignings) ?? randId()) },

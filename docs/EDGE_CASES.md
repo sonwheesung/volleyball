@@ -126,6 +126,7 @@
 | EC-CO-03 | FA 감독인데 계약연수 잔존(`teamId=null` & `contractYears>0`) | 경질·교체 시 teamId만 비우고 계약 안 비움 → `contractYears=undefined` 동반 (`d091d4c`) | audit `salary` |
 | EC-CO-04 | AI 팀 감독 공백(공급 고갈) | 플레이어가 풀을 빨아들임 → `makeInterimCoach` 안전장치(공석 팀 임시 감독) (`d091d4c`) | audit `supply` |
 | EC-CO-05 | 대행 감독이 정식 풀·생애주기에 섞임 | `acting_` 접두 제외 누락 → 생애주기·고아 점검에서 제외 (`23e8cb1`) | simStaffDup·audit `head` |
+| EC-CO-06 | 스카우터 슬롯 무제한(코치는 `COACH_SLOTS` 제한, 스카우터는 예산만) — 예산 되면 무한 영입 | `hireScout`에 `>= COACH_SLOTS` 슬롯 게이트(코치와 일관, `data/league.ts:277`). ※ `scoutReveal` 상한(depth≤0.15@4)이라 익스플로잇은 아니었고 예산 낭비 방지·일관성 (2026-06-21) | 정적: hireScout↔hireAssistant 슬롯 검사 일관 |
 
 ### 시즌 중 이동·외인
 | ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
@@ -134,6 +135,8 @@
 | EC-TX-02 | 방출 외인이 시즌 중 재등장(리그 이탈해야) | 방출 외인 추적 누락 → 방출일 이후 소속 금지 검사 | audit `intx` |
 | EC-TX-04 | **검증 없는 `reSign` 계약으로 캡 무력화** — 내 선수를 ①음수/0 연봉(→payroll 음수 -1.4억) 또는 ②거대 연봉(개인 7.1조·팀 캡 35억 초과)으로 재계약하면 롤오버가 그대로 적용 → 캡 무력화 + 비정상 연봉 새 시즌 잔존 | `store.reSign` 미검증 + `rolloverPlayer`가 override 클램프 없이 사용 → reSign에 **유효 로스터+계약정상치+캡 인지**(재계약 후 국내 payroll>캡이면 거부) 게이트 + `rolloverPlayer`가 비정상/캡초과 override 무시(심층방어) (`store/useGameStore.ts:232`·`engine/rollover.ts:58`, 2026-06-20) | _gt_resign(A/B 음수)·_gt_monkey(reSign 적대계약, 거대 양수) |
 | EC-TX-03 | **타 팀 선수 id를 방출에 넣으면 팬텀 방출** — 그 선수가 내 FA풀에 뜨면서 원 소속팀에도 남음(이중 소속) + 영입 시 자금만 차감되고 안 들어옴(누수) + 6회 반복 시 정상 방출 전면 차단(자기 DoS) | `store.release()`가 소유권 미검증 + `applyTx` release가 그 팀 소속 미확인(영입과 비대칭) → `release()`에 유효 로스터(시즌초+영입) 가드 + `applyTx`에 `if(!arr.includes)return`(영입과 대칭) (`store/useGameStore.ts:236`·`data/dynamics.ts:122`, 2026-06-20) | _gt_repro_release(오라클)·_gt_repro_cash·_gt_monkey(full) |
+| EC-TX-05 | **reSign 개인상한 우회** — 팀캡(35억)만 검사해, 싼 동료 9명 + 한 선수에 거대연봉(예: 30억 > 개인상한 8억) 주면 팀합은 캡 이하라 통과 → 단일선수가 개인상한(MAX_SALARY/FRANCHISE_MAX) 초과(EC-TX-04 잔여 — 팀캡만 막고 개인상한 누락) | `reSign`에 `salary > maxSalaryFor(target)` 거부 게이트 추가(`store:248`) + `_gt_invariants` 가드를 `≤LEAGUE_CAP`→`≤maxSalaryFor`로 강화(개인상한 클래스 monkey가 잡게) (2026-06-21) | _gt_monkey(reSign 적대계약)·_gt_invariants(개인상한) |
+| EC-ST-01 | **setDay(NaN) → currentDay 오염** — `Math.max(s.currentDay, NaN)=NaN` → 이후 모든 `evolveOnDay(id, NaN)` 전파(NaN/Infinity 미가드) | `setDay`에 `Number.isFinite(day)` 가드(비유한 거부) (`store:226`, 2026-06-21) | _gt_monkey(setDay 적대값) |
 | EC-FG-01 | 자금 부족인데 외인 영입됨 | `runTryout`이 현금 미검사 → `myCash >= FOREIGN_SALARY` 게이트 (`6be1ea7`) | simBrokeSign |
 | EC-FG-02 | 외인 좀비/멸종(재계약 연속성 깨짐) | 외인 1년 계약 흐름 분리 검증 | simCareerTrace |
 
@@ -184,10 +187,10 @@
 
 | 후보 | 시스템 | 무엇 | 상태/심각 |
 |---|---|---|---|
-| reSign 개인상한 미클램프 | TX | `reSign`이 `≤LEAGUE_CAP`만 보고 `maxSalaryFor`(MAX_SALARY 8억/FRANCHISE 11억) 미적용 → 단일선수 거대연봉 가능(EC-TX-04 잔여) | **검증요**·중 |
-| 면담 성공 무효(비만료) | OWNER | `buildOwnerFx`가 `contract.remaining>1`이면 continue → 잔여 2년+ 선수 면담 성공해도 다운스트림 0(reported-but-unwired) | **검증요**·중 |
-| NaN 미가드 진입점 | store | `setDay(NaN)`·`recordResult`(fixture/스코어 범위 미검증) → NaN/오염 전파 가능 | **검증요**·중 |
-| hireScout 슬롯 무제한 | STAFF | 코치는 `COACH_SLOTS` 제한, 스카우터는 예산만 검사·인원 상한 없음 → scoutReveal 비정상 상승? | **검증요**·중하 |
+| reSign 개인상한 미클램프 | TX | `reSign`이 `≤LEAGUE_CAP`만 보고 `maxSalaryFor` 미적용 → 단일선수 거대연봉 가능(EC-TX-04 잔여) | ✅ **해결 → §3 EC-TX-05** (2026-06-21 검증·수정) |
+| ~~면담 성공 무효(비만료)~~ | OWNER | **버그 아님(오독)** — line 48 `continue`는 **refuseProb 전용**(만료자만 거부권). 면담 효과(offerBias)는 `interviewEffects`로 전 선수 배선됨 | ❌ 기각(검증) |
+| NaN 미가드 진입점 | store | `setDay(NaN)` → `Math.max(x,NaN)=NaN` currentDay 오염 전파 | ✅ **해결 → §3 EC-ST-01** (setDay NaN 거부). recordResult는 리플레이가 SEASON 기준이라 무효항목 무시(저위험, 유지) |
+| hireScout 슬롯 무제한 | STAFF | 코치는 `COACH_SLOTS` 제한, 스카우터는 예산만 → 무한 영입 | ✅ **보강 → §3 EC-CO-06**(슬롯캡). 단 `scoutReveal` 상한(depth≤0.15@4)이라 **익스플로잇 아니었음**(예산 낭비뿐) |
 | toggleProtect 멤버십 미검증 | TX | 보호명단에 타팀/유령 id 추가 가능 → 보호 슬롯 낭비(무해하나 핵심선수 보호 실패) | 저 |
 | LEGEND 9000↔7500 | HOF | 문서(SEASON 89)는 9000, 코드는 7500(도달성 리밸런스). **문서 갱신 필요** | drift(문서) |
 | offerScore 공식 drift | FA | 문서(FA 131)는 wYrs·wAge 항, 코드는 home 항. **문서/코드 정합 확인** | drift |

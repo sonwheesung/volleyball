@@ -274,6 +274,7 @@ export function releaseAssistant(teamId: string, id: string): void {
 export function hireScout(teamId: string, id: string): boolean {
   const s = scoutMap.get(id);
   if (!s || isScoutHired(id)) return false;
+  if ((teamScoutIds[teamId]?.length ?? 0) >= COACH_SLOTS) return false; // 슬롯 상한(코치와 일관 — 무한 영입 방지)
   if (staffSpend(teamId) + s.salary > STAFF_BUDGET) return false;
   teamScoutIds[teamId] = [...(teamScoutIds[teamId] ?? []), id];
   invalidateStaff(false); // 드래프트 표시만 — 훈련 무관
