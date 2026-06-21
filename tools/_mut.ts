@@ -32,6 +32,24 @@ const MUTANTS: Mutant[] = [
   //   ≈ 0.049 < 0.06 이라 클램프가 절대 안 걸린다. 관측 가능한 동작 변화 0 → 변이 대상에서 제외(2026-06-21).
   { file: 'engine/finance.ts', find: 'if (cashBefore < 150000) return 1;', repl: 'if (cashBefore < 0) return 1;', label: 'finance 구제금융 문턱 제거' },
   { file: 'engine/milestones.ts', find: 'before < t && after >= t', repl: 'before < t && after > t', label: 'milestones 임계 경계(>= → >)' },
+  // ── 3차 배치(엔진 전모듈 확장) ──
+  // 'draft 완전공개 문턱 1→2': EQUIVALENT 변이 — scoutMult은 `1 + noise*(1-reveal)`라 reveal=1에서 (1-reveal)=0
+  //   → 노이즈 0이라 reveal∈[0,1] 전 구간에서 원본·변이 출력 동일(관측 차이 0). 변이 대상 제외(2026-06-21).
+  { file: 'engine/aiGM.ts', find: 'if (p.age >= 32) return false;', repl: 'if (p.age >= 99) return false;', label: 'aiGM 나이 상한 32→99' },
+  { file: 'engine/training.ts', find: 'if (focus?.primary?.includes(id)) return 0.25;', repl: 'if (focus?.primary?.includes(id)) return 0.02;', label: 'training 핵심 선호 부스트 제거' },
+  { file: 'engine/training.ts', find: 'export const POS_FLOOR = 0.24;', repl: 'export const POS_FLOOR = 0.0;', label: 'training 포지션 성장 바닥 제거' },
+  { file: 'engine/transactions.ts', find: 'export const ROSTER_MAX = 18;', repl: 'export const ROSTER_MAX = 19;', label: 'transactions 정원 상한 18→19' },
+  { file: 'engine/transactions.ts', find: 'export const ROSTER_MIN = 10;', repl: 'export const ROSTER_MIN = 9;', label: 'transactions 방출 하한 10→9' },
+  { file: 'engine/scandal.ts', find: 'export const SCANDAL_PROB = 0.0035;', repl: 'export const SCANDAL_PROB = 0.5;', label: 'scandal 사건 확률 폭증' },
+  { file: 'engine/staff.ts', find: 'export const COACH_SLOTS = 3;', repl: 'export const COACH_SLOTS = 4;', label: 'staff 코치 슬롯 3→4' },
+  { file: 'engine/staffLifecycle.ts', find: 'if (age <= 55) return 0;', repl: 'if (age <= 99) return 0;', label: 'staffLifecycle 감독 은퇴 제거' },
+  { file: 'engine/awards.ts', find: 'return 1 - 0.5 * (rank / (teamCount - 1));', repl: 'return 1 - 0.0 * (rank / (teamCount - 1));', label: 'awards 팀성적 가중 제거' },
+  { file: 'engine/achievements.ts', find: 'back_to_back: b(streak >= 2)', repl: 'back_to_back: b(streak >= 3)', label: 'achievements 연속우승 2→3' },
+  { file: 'engine/retire.ts', find: 'if (age < 30) return 0;', repl: 'if (age < 99) return 0;', label: 'retire 은퇴 나이 제거' },
+  { file: 'engine/rollover.ts', find: ', Math.max(3, Math.round(room * 0.6)), 6);', repl: ', Math.max(3, Math.round(room * 0.6)), 60);', label: 'rollover 성장 상한 6→60' },
+  { file: 'engine/faMarket.ts', find: "if (r < 0.34) return 'money';", repl: "if (r < 0.99) return 'money';", label: 'faMarket 동기 분포 왜곡' },
+  { file: 'engine/progression.ts', find: 'if (days <= 0) return base;', repl: 'if (days <= 99) return base;', label: 'progression 성장 무효화' },
+  { file: 'engine/traits.ts', find: 'const count = r < 0.55 ? 0 : r < 0.85 ? 1 : 2;', repl: 'const count = r < 0.0 ? 0 : r < 0.85 ? 1 : 2;', label: 'traits 특성 개수 분포 왜곡' },
 ];
 
 const LOCK = '.mutation.lock';

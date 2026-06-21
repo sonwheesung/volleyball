@@ -47,3 +47,8 @@ test('skipTrainDays=0 은 기존과 바이트 동일(무사고 선수 불변 —
   const b = evolvePlayer(p, F, 164);            // skip 미지정(기본 0)
   assert.deepEqual(a, b);
 });
+
+test('evolvePlayer: 양수 일수면 선수가 변한다(days>0 게이트 — 성장/노쇠 실제 적용)', () => {
+  const y = mk(20, 55); // 영건 — 50일이면 성장으로 변해야
+  assert.notDeepEqual(evolvePlayer(y, F, 50), y, '50일 경과 → base와 달라야');
+});

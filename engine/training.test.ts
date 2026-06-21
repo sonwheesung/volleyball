@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRng } from './rng';
-import { applyTrainingDay, TRAINABLE_STATS } from './training';
+import { applyTrainingDay, coachShare, TRAINABLE_STATS } from './training';
 import type { Player, Position, TrainableStat, TrainingFocus } from '../types';
 
 // 매 캘린더일 훈련 → 개월 = 일수 / 30
@@ -95,4 +95,10 @@ test('결정론: 같은 시드 = 같은 소요일', () => {
   const a = daysToPlusOne(makePlayer({ age: 24, talentBase: 1.0 }), 77);
   const b = daysToPlusOne(makePlayer({ age: 24, talentBase: 1.0 }), 77);
   assert.equal(a, b);
+});
+
+test('coachShare: 핵심 0.25 > 보조 0.12 > 나머지 0.02 (감독 선호 배분)', () => {
+  assert.equal(coachShare(4, FOCUS), 0.25, '핵심(primary)');
+  assert.equal(coachShare(6, FOCUS), 0.12, '보조(secondary)');
+  assert.equal(coachShare(9, FOCUS), 0.02, '나머지');
 });

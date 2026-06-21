@@ -79,3 +79,9 @@ test('listFreeAgents: 자격자만 + 등급 부여', () => {
   assert.equal(fas.length, 2);
   assert.ok(fas.every((f) => f.grade));
 });
+
+test('rollFAPref: 동기(archetype) 분포가 다양 — 한쪽 쏠림 아님', () => {
+  const seen = new Set<string>();
+  for (let s = 0; s < 80; s++) seen.add(rollFAPref(createRng(s + 1), 8).archetype);
+  assert.ok(seen.size >= 3, `archetype 종류 ${seen.size} (≥3 — 분포 왜곡 방지)`);
+});

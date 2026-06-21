@@ -30,6 +30,14 @@ test('첫 우승 — 내 팀 우승 시 달성', () => {
   assert.equal(get(no, 'first_title').unlocked, false);
 });
 
+test('back_to_back: 정확히 2시즌 연속이 문턱(2연속 달성·3연속 아님·비연속 미달)', () => {
+  const two = base({ archive: [{ season: 0, championId: MY }, { season: 1, championId: MY }] });
+  assert.equal(get(two, 'back_to_back').unlocked, true, '2연속 → 달성(문턱=2)');
+  assert.equal(get(two, 'three_peat').unlocked, false, '2연속은 3연속 미달');
+  const gap = base({ archive: [{ season: 0, championId: MY }, { season: 1, championId: 'x' }, { season: 2, championId: MY }] });
+  assert.equal(get(gap, 'back_to_back').unlocked, false, '비연속 → 미달');
+});
+
 test('연패 — 3연속만 왕조, 비연속은 미달성', () => {
   const consec = base({ archive: [0, 1, 2].map((s) => ({ season: s, championId: MY })) });
   assert.equal(get(consec, 'back_to_back').unlocked, true);

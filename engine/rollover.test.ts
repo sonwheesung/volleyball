@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { rolloverPlayer } from './rollover';
+import { rolloverPlayer, maybeBreakthrough } from './rollover';
 import { TRAINABLE_STATS } from './training';
 import type { Player, Position, TrainableStat, TrainingFocus } from '../types';
 
@@ -61,4 +61,19 @@ test('여러 시즌: 노장은 체력·근력이 하락한다', () => {
   for (let s = 0; s < 3; s++) p = rolloverPlayer(p, FOCUS);
   assert.equal(p.age, 36);
   assert.ok(p.jump < 75, `jump ${p.jump}`);
+});
+
+test('maybeBreakthrough: 돌파 발생 시 스탯 증가폭 ≤ 6 (성장 상한 — 절제)', () => {
+  let fired = false;
+  for (let s = 0; s < 400 && !fired; s++) {
+    const p = makePlayer(20, { seasons: s }); // 영건 + 헤드룸 큼(92−60)
+    const r = maybeBreakthrough(p);
+    if (r === p) continue; // 미발생(같은 참조)
+    fired = true;
+    for (const k of TRAINABLE_STATS) {
+      const d = (r as unknown as Record<string, number>)[k] - (p as unknown as Record<string, number>)[k];
+      if (d !== 0) assert.ok(d > 0 && d <= 6, `${k} 증가폭 ${d} (≤6이어야 — 상한)`);
+    }
+  }
+  assert.ok(fired, '400 시즌 내 돌파 표본 확보 실패');
 });
