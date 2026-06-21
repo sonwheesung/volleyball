@@ -21,7 +21,7 @@ import { simulateMatch } from '../engine/match';
 import { buildLineup } from '../engine/lineup';
 import { ballPath, SEG_DUR, markerTravelMs, type WP, type Lineups } from '../components/courtPath';
 import { segmentTargets, reconstructRallies, type RallyState } from '../components/courtDirector';
-import { lineupIdxAt } from '../components/courtLayout';
+import { lineupIdxAt, serveFormation, receiveFormation } from '../components/courtLayout';
 import { commentLine } from '../components/courtCommentary';
 import type { Side } from '../types';
 
@@ -54,11 +54,14 @@ const endings: Record<string, number> = {}; // 보드가 그리는 랠리 종결
 
 // Q) 서브 오버랩 합법성 — 서브 컨택 순간 6명이 로테이션 순서를 지키는가(BOARD_RULES 18).
 //    같은 행 좌<중<우(전위 4·3·2 / 후위 5·6·1), 같은 열 전위가 후위보다 네트에 가깝다(4·5/3·6/2·1).
-//    home은 네트에 가까울수록 y작음·좌측 x작음, away는 점대칭(부호 반전). 서버·침투세터는 면제.
-function overlapViolations(side: Side, rot: number, posOf: (k: Key) => Pt, setterIdx: number, isServing: boolean, movers: Set<number> = new Set()): string[] {
+//    home은 네트에 가까울수록 y작음·좌측 x작음, away는 점대칭(부호 반전).
+//    면제는 **서버만**(서브하러 베이스라인 뒤로 간 선수). 받는 팀 세터는 면제하지 않는다 —
+//    세터 침투(릴리즈)는 서브 컨택 "직후"라, 컨택 순간엔 세터도 로테이션 합법이어야 한다(룰).
+//    (2026-06-20: 기존엔 세터를 무조건 면제해 후위 세터가 전위보다 앞서는 역전을 못 잡았음 — 사용자 보고)
+function overlapViolations(side: Side, rot: number, posOf: (k: Key) => Pt, _setterIdx: number, isServing: boolean, movers: Set<number> = new Set()): string[] {
   const s = side === 'home' ? 1 : -1;
   const idxAt = (z: number) => lineupIdxAt(rot, z);
-  const exempt = new Set<number>([isServing ? idxAt(1) : setterIdx, ...movers]); // 서버/침투세터/공 쫓는 리시버(릴리즈)
+  const exempt = new Set<number>([...(isServing ? [idxAt(1)] : []), ...movers]); // 서버·공 쫓는 무버만 면제(세터 포함 안 함)
   const has = (z: number) => !exempt.has(idxAt(z));
   const P = (z: number) => posOf(`${side}-${idxAt(z)}`);
   const v: string[] = [];
@@ -175,15 +178,33 @@ for (let m = 0; m < nMatches; m++) {
       }
 
       // Q) 서브 오버랩: 서브 컨택 순간 양 팀이 로테이션 순서를 지키는가(BOARD_RULES 18).
-      //    릴리즈(컨택 직후 움직임)는 면제 — 서버·침투세터·공을 쫓는 리시버(movers)는 합법적으로 이동 중.
+      //    검사 시점 = 서브 컨택(릴리즈 직전)의 **합법 대형**: 서브팀 serveFormation / 받는팀 receiveFormation.
+      //    디렉터의 segmentTargets는 이 serve 구간에서 받는 팀 세터를 이미 침투(릴리즈)시킨 좌표라
+      //    그걸로 검사하면 세터를 면제할 수밖에 없었음 → 후위 세터가 전위보다 앞서는 역전을 못 잡음(사용자 보고).
+      //    그래서 릴리즈 전 ready 대형으로, 세터 포함해 검사한다.
       if (to.kind === 'serve') {
-        const moverIdx = (side: Side) => new Set((to.movers ?? []).filter((mv) => mv.side === side).map((mv) => mv.idx));
         for (const side of ['home', 'away'] as Side[]) {
           const lu = side === 'home' ? L.home : L.away;
           const sIdx = lu.six.findIndex((p) => p.position === 'S');
           const sRot = side === 'home' ? r.homeRot : r.awayRot;
-          const vio = overlapViolations(side, sRot, (k) => targets[k], sIdx, r.serving === side, moverIdx(side));
+          const ready = r.serving === side ? serveFormation(side, lu, sRot, W, H) : receiveFormation(side, lu, sRot, W, H);
+          const posOf = (k: Key) => ready[Number(k.split('-')[1])] ?? { x: 0, y: 0 };
+          const vio = overlapViolations(side, sRot, posOf, sIdx, r.serving === side);
           if (vio.length) flag('Q.서브 오버랩', ctx(`${side} ${vio.join(' · ')}`), targets);
+        }
+      }
+
+      // Q2) 서브대기(walk) 오버랩 — 서브 컨택 "전"이라 **실제 그려지는 좌표(targets)** 가 합법이어야 한다.
+      //     세터가 walk에서 릴리즈(컨택 전 침투)되면 전후역전인데, 룰 Q는 serve 프레임을 ready 대형으로
+      //     재계산해 검사하므로 그 회귀를 못 잡는 사각이 있었다(독립검증 세션 P1, 2026-06-20). 여기서
+      //     walk의 실제 좌표를 세터 포함·서버만 면제로 직접 검사해 그 사각을 닫는다.
+      if (to.kind === 'walk') {
+        for (const side of ['home', 'away'] as Side[]) {
+          const lu = side === 'home' ? L.home : L.away;
+          const sIdx = lu.six.findIndex((p) => p.position === 'S');
+          const sRot = side === 'home' ? r.homeRot : r.awayRot;
+          const vio = overlapViolations(side, sRot, (k) => targets[k] ?? { x: 0, y: 0 }, sIdx, r.serving === side);
+          if (vio.length) flag('Q2.서브대기 오버랩', ctx(`${side} ${vio.join(' · ')}`), targets);
         }
       }
 
@@ -379,7 +400,7 @@ if (holeSamples.length) {
 log(`중계 텍스트: 랠리당 평균 ${(commentTotal / Math.max(1, totalRallies)).toFixed(1)}줄`);
 const total = Object.values(counts).reduce((a, b) => a + b, 0);
 if (total === 0) {
-  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치·토서점유·퍼스트터치배회·죽은공점유·스터프상승·공전달·서브오버랩 모두 통과 (기준: docs/BOARD_RULES.md)`);
+  log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치·토서점유·퍼스트터치배회·죽은공점유·스터프상승·공전달·서브오버랩·서브대기오버랩 모두 통과 (기준: docs/BOARD_RULES.md)`);
 } else {
   log(`\n❌ 이상 ${total}건:`);
   for (const [k, n] of Object.entries(counts).sort((a, b) => b[1] - a[1])) log(`  ${k}: ${n}건`);

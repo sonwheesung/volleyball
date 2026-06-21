@@ -190,7 +190,10 @@ export function receiveLine(lu: Lineup, rot: number): number[] {
 // 전·후위 가로 레인 — 어긋나게(stagger) 둬서 같은 열 앞뒤 선수가 일직선 정렬되지 않게(격자 탈피).
 const RF_FRONT_X = [0.21, 0.50, 0.79];
 const RF_BACK_X = [0.13, 0.55, 0.87];
-const SV_FRONT_X = [0.23, 0.50, 0.77];
+// 서브 팀 전위(블로커)는 **번치 리드**로 가운데에 모은다(미들서드 0.36~0.64) — 프로/상위 표준:
+// 넓게 펴지 않고 중앙에 뭉쳐 상대 세터를 읽고 핀으로 빠르게 이동(GMS·USAV, 2026-06-20 사용자 보고).
+// 서브 직후 switched(스페셜리스트)로 벌어지며 "번치→핀 릴리즈"가 보인다. 좌우 순서 보존 = 오버랩 합법.
+const SV_FRONT_X = [0.36, 0.50, 0.64];
 const SV_BACK_X = [0.15, 0.53, 0.85];
 
 /** 서브 받기 전 대형 — **오버랩 합법**(행 좌<중<우, 열 전위<후위)을 지키되 **등간격 격자가 아니라
@@ -211,7 +214,10 @@ export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number,
     let xf: number, yf: number;
     if (i === setterIdx) {
       xf = r === 2 ? 0.87 : r === 0 ? 0.13 : 0.5;          // 자기 사이드 코너에 은신
-      yf = front ? 0.57 : 0.715;                            // 전위면 네트, 후위면 백밴드 얕게(릴리즈 대기)
+      // 전위 세터는 네트(0.57). 후위 세터는 전위 패서(0.75)보다 **깊게**(0.80) — 서브 컨택 순간
+      // 같은 열 전후 역전 금지(오버랩 합법, 룰 Q). 침투는 디렉터가 컨택 직후 릴리즈(switchedSpots
+      // offense)로 처리 → 시작은 합법, 릴리즈는 컨택 후. (구 0.715는 전위보다 앞서 역전, 2026-06-20 사용자 보고)
+      yf = front ? 0.57 : 0.80;
     } else if (front) {
       xf = RF_FRONT_X[r] + jit(seed + 1, 0.04);
       // 실제 3인 리시브는 윙2+리베로가 **한 라인**(나무위키·strength-and-power). 전위 패서도

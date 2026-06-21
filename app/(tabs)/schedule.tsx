@@ -8,6 +8,7 @@ import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
 import { teamOverallRaw } from '../../engine/overall';
 import { dateForDay, formatDate } from '../../lib/calendar';
+import { DEV_TOOLS } from '../../data/flags';
 import { useGameStore } from '../../store/useGameStore';
 
 export default function Schedule() {
@@ -124,7 +125,7 @@ export default function Schedule() {
           />
           <Muted style={{ fontSize: 12 }}>
             {preview.important
-              ? '경기 보드에서 작전 방침(핀치 서버·블로킹·수비)을 조정할 수 있습니다.'
+              ? '순위 직결 빅매치입니다 — 직접 관전을 권합니다(현장 운영은 감독 몫).'
               : '경기 사이 기간 동안 모든 선수가 자동으로 훈련합니다.'}
           </Muted>
         </Card>
@@ -139,6 +140,9 @@ export default function Schedule() {
 
       <Button label="일정 보러 가기 (캘린더)" variant="ghost" onPress={() => router.push('/calendar')} />
       <Button label="전 구단 경기 결과 보기" variant="ghost" onPress={() => router.push('/results')} />
+      {DEV_TOOLS ? (
+        <Button label="🧪 수비 위치 실험실 (개발용)" variant="ghost" onPress={() => router.push('/board-lab')} />
+      ) : null}
     </Screen>
   );
 }

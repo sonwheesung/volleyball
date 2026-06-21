@@ -48,6 +48,7 @@ export default function RootLayout() {
         <Stack.Screen name="supporter" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="credits" options={{ title: '크레딧' }} />
         <Stack.Screen name="debug-court" options={{ title: '보드 위치 검증' }} />
+        <Stack.Screen name="board-lab" options={{ title: '수비 위치 실험실' }} />
         <Stack.Screen name="audit" options={{ title: '영입 무결성 감사' }} />
         <Stack.Screen name="match/[id]" options={{ headerShown: false, presentation: 'fullScreenModal' }} />
         <Stack.Screen name="matchresult/[id]" options={{ title: '경기 상세' }} />

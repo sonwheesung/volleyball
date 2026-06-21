@@ -74,7 +74,9 @@ export function segmentTargets(
   }
 
   if (seg && segKind === 'toss') {
-    // 블로커 형성(공격 종류별 장수) + 비선택 전위 후퇴 + 토스한 선수는 패스 지점 유지
+    // 블로커 형성(공격 종류별 장수) + 비선택 전위(오프블로커) 팁 시프트 + 토스한 선수는 패스 지점 유지.
+    // (자체점검 2026-06-20: 이걸 spike 프레임까지 확장하면 오프블로커가 네트 밖으로 빠져 네트 옆 공간이
+    //  열려 수비홀 9건 — 페리미터의 실제 약점. 회귀라 토스 프레임에 한정. 트레이드오프는 사용자 판단 대기.)
     const attSide = seg.to.side;
     const dSide = other(attSide);
     const attLu = attSide === 'home' ? L.home : L.away;
@@ -90,7 +92,14 @@ export function segmentTargets(
       .sort((a, b) => dSw.pos[a].x - dSw.pos[b].x);
     const wall = blockerWall(dSide, ax, chosen.length, W, H);
     chosen.forEach((bi, k) => { moveMap[`${dSide}-${bi}`] = wall[k]; });
-    front.filter((i) => !chosen.includes(i)).forEach((ri) => { moveMap[`${dSide}-${ri}`] = { x: dSw.pos[ri].x, y: yOff }; });
+    // 오프블로커(블록 안 뛰는 전위): 네트서 풀오프(yOff≈3m선)하며 **시임/팁 쪽으로 시프트**해 팁·연타를
+    // 디그할 위치로 — 페리미터의 약점(가운데 팁 무방비)을 오프블로커 팁 커버로 보강(USAV IMPACT·AoC,
+    // 2026-06-20 사용자 보고). 공격 x 쪽으로 0.35 당겨 시임을 덮되, 자기 사이드 각(크로스)도 일부 유지.
+    front.filter((i) => !chosen.includes(i)).forEach((ri) => {
+      const baseX = dSw.pos[ri].x;
+      const tipX = baseX + (ax - baseX) * 0.35;
+      moveMap[`${dSide}-${ri}`] = { x: Math.max(24, Math.min(W - 24, tipX)), y: yOff };
+    });
     moveMap[`${attSide}-${seg.from.idx}`] = { x: seg.from.x, y: seg.from.y };
   }
   if (seg && seg.to.movers) for (const m of seg.to.movers) moveMap[`${m.side}-${m.idx}`] = { x: m.x, y: m.y };
@@ -105,18 +114,24 @@ export function segmentTargets(
     // 서브 국면(서브 비행 + 데드볼: 에이스·서브/리시브 범실)엔 받는 팀이 리시브 대형 유지 —
     // 죽은 공에 공격 전환(스위칭 질주) 금지. 추격자(movers)만 공을 쫓는다.
     const servePhase = segKind === 'serve' || seg?.to.hold === true;
-    const holdReceive = !inPlay || (servePhase && side !== stage.serving);
+    // 서브대기(walk: 서버가 베이스라인으로 걸어가는 동안)에도 서브 팀은 **서브 대형**(전위 네트 블로킹 준비)
+    // 으로 그린다. 기존엔 walk가 !inPlay라 양 팀 다 리시브 대형 → 서브팀 전위가 깊게 보였음(2026-06-20 사용자
+    // 보고: "서브팀 전위가 네트에 붙어 블로킹 준비해야"). 받는 팀은 walk에도 리시브 유지. 세터 침투(릴리즈)는
+    // walk엔 안 함 — 서브 컨택 후에만(컨택 전 릴리즈 = 오버랩 위반, 룰 45). serveWalk는 서브 대형만 켠다.
+    const serveWalk = segKind === 'walk';
+    const servePrep = servePhase || serveWalk;
+    const holdReceive = serveWalk ? side !== stage.serving : !inPlay || (servePhase && side !== stage.serving);
     // 서브 팀은 **서브 컨택 순간에만** 오버랩 베이스(serveFormation)를 유지한다(룰 Q 합법성).
     // 서브를 보낸 직후(상대 리시브=pass 구간)부터는 곧바로 수비 전문 포지션으로 전환하기 시작한다 —
     // 그래야 상대 공격(토스/스파이크) 전에 수비가 자리를 잡는다(2026-06-18 사용자 보고: 서브하자마자
     // 이동해야 하는데 상대가 공격하려 할 때 그제서야 움직임). 전환은 pass 구간(긴 비행/리시브)에 걸쳐
     // 점진적으로 일어나 "확 점프"가 아니다(markerTravelMs 속도 상한이 부드럽게 만든다).
-    const servingDefBase = side === stage.serving && side !== offSide && servePhase;
+    const servingDefBase = side === stage.serving && side !== offSide && servePrep;
     // 서브 컨택 순간: 받는 팀=리시브 대형, 서브 팀=오버랩 합법 베이스(상대 리시브까지 유지).
     // 둘 다 로테이션 순서를 지킨다(BOARD_RULES 18). 그 외 인플레이는 스위칭(전문 포지션).
     const posMap = holdReceive
       ? receiveFormation(side, lu, rot, W, H)
-      : (servePhase && side === stage.serving) || servingDefBase
+      : (servePrep && side === stage.serving) || servingDefBase
         ? serveFormation(side, lu, rot, W, H)
         : switchedSpots(side, lu, rot, side === offSide, W, H).pos;
     // 단, 받는 팀 세터는 서브 컨택과 동시에 침투 출발(실제 배구) — 패스 도착 전에 세팅 자리 도달
