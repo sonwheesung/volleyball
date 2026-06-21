@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { sponsorBase, sponsorBonus, turnoutRate, gateRevenue, merchRevenue, settleSeason, applyNet } from './finance';
+import { sponsorBase, sponsorBonus, turnoutRate, gateRevenue, merchRevenue, settleSeason, applyNet, sponsorThrift } from './finance';
 
 test('모기업 베이스: 팀별 차등 20~28억, 결정론', () => {
   const a = sponsorBase('t1');
@@ -39,4 +39,10 @@ test('정산: 수입 분해 합산 + 순익 + 보전', () => {
   assert.ok(f.attendance > 2000 && f.attendance < 8000, `평균 관중 ${f.attendance}`);
   assert.deepEqual(applyNet(10000, -50000), { cash: 0, bailout: true });  // 모기업 보전
   assert.deepEqual(applyNet(10000, 5000), { cash: 15000, bailout: false });
+});
+
+test('sponsorThrift: 잔고 적을수록 전액 지원(<15억=1·<50억=0.85·이상=0.7)', () => {
+  assert.equal(sponsorThrift(100000), 1);    // 15억 미만 — 전액 지원
+  assert.equal(sponsorThrift(200000), 0.85); // 50억 미만 — 약간 긴축
+  assert.equal(sponsorThrift(600000), 0.7);  // 그 이상 — 긴축
 });

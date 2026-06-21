@@ -28,3 +28,8 @@ test('formGrade 구간', () => {
   assert.equal(formGrade(0.97), 'dull');
   assert.equal(formGrade(0.93), 'rusty');
 });
+
+test('formFactor 최악(0 출전·가득 찬 창) = 0.93 (체감 −7% 상한 고정)', () => {
+  // 리터럴 0.93 단언 — FORM_MAX_PENALTY가 바뀌면 이 값이 어긋나 잡힌다(상수 자체와 묶지 않음).
+  assert.ok(Math.abs(formFactor(0, FORM_WINDOW) - 0.93) < 1e-9, `worst=${formFactor(0, FORM_WINDOW)}`);
+});

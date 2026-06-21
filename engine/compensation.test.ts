@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { needsCompensationPlayer, compensationMoney, compensationMoneyOnly, pickCompensation } from './compensation';
+import { needsCompensationPlayer, compensationMoney, compensationMoneyOnly, pickCompensation, PROTECT_COUNT } from './compensation';
 import { TRAINABLE_STATS } from './training';
 import type { Player, Position, TrainableStat } from '../types';
 
@@ -73,4 +73,8 @@ test('외국인은 보상선수 대상 제외(받는 팀 외인 2명 방지)', (
   assert.equal(pickCompensation(roster, [], snap, []), 'mid'); // 외인 건너뛰고 차순위
   // 외인만 있으면 보상 없음(null)
   assert.equal(pickCompensation(['fgn'], [], snap, []), null);
+});
+
+test('PROTECT_COUNT = 6 (보호명단 인원 — 계약 고정값)', () => {
+  assert.equal(PROTECT_COUNT, 6);
 });

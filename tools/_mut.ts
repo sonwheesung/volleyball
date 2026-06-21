@@ -28,7 +28,8 @@ const MUTANTS: Mutant[] = [
   { file: 'engine/form.ts', find: 'export const FORM_MAX_PENALTY = 0.07;', repl: 'export const FORM_MAX_PENALTY = 0.20;', label: 'form 최대패널티 7%→20%' },
   { file: 'engine/form.ts', find: 'if (windowSize <= 0) return 1;', repl: 'if (windowSize <= 0) return 0.5;', label: 'form 빈 윈도우 1→0.5' },
   { file: 'engine/injury.ts', find: 'export const CONCURRENT_CAP = 3;', repl: 'export const CONCURRENT_CAP = 99;', label: 'injury 동시부상 상한 3→99' },
-  { file: 'engine/injury.ts', find: 'Math.min(0.06, INJURY_BASE', repl: 'Math.min(0.99, INJURY_BASE', label: 'injury 확률 상한 0.06→0.99' },
+  // 'injury 확률 상한 0.06→0.99': EQUIVALENT 변이(도달 불가) — 최대 raw ≈ 0.009×2(age)×1.6(stam)×1.7(glass)
+  //   ≈ 0.049 < 0.06 이라 클램프가 절대 안 걸린다. 관측 가능한 동작 변화 0 → 변이 대상에서 제외(2026-06-21).
   { file: 'engine/finance.ts', find: 'if (cashBefore < 150000) return 1;', repl: 'if (cashBefore < 0) return 1;', label: 'finance 구제금융 문턱 제거' },
   { file: 'engine/milestones.ts', find: 'before < t && after >= t', repl: 'before < t && after > t', label: 'milestones 임계 경계(>= → >)' },
 ];

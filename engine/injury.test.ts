@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { injuryRisk, rollSeverity, INJURY_BASE } from './injury';
+import { injuryRisk, rollSeverity, INJURY_BASE, CONCURRENT_CAP } from './injury';
 import { createRng } from './rng';
 
 test('injuryRisk: 나이↑·체력↓·유리몸↑ 단조 증가, 상한 6%', () => {
@@ -34,4 +34,8 @@ test('rollSeverity: 결장 경기 수 양수, 심각도별 단조', () => {
 
 test('INJURY_BASE 합리적 범위', () => {
   assert.ok(INJURY_BASE > 0 && INJURY_BASE < 0.02);
+});
+
+test('CONCURRENT_CAP = 3 (팀 동시부상 상한 — 뎁스 붕괴·라인업 파탄 방지)', () => {
+  assert.equal(CONCURRENT_CAP, 3);
 });

@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { tryoutOrder, resolveTryout, aiForeignChoice, FOREIGN_SALARY, ALT_POOL_SIZE } from './foreign';
+import { tryoutOrder, resolveTryout, aiForeignChoice, aiKeepsForeign, FOREIGN_SALARY, ALT_POOL_SIZE } from './foreign';
 import { generateForeignPool } from '../data/tryout';
 import { overall } from './overall';
 
@@ -45,4 +45,12 @@ test('AI 지명: 결정론 + 대체로 강한 선수를 고른다(안개 허용)
   assert.equal(pick?.id, aiForeignChoice(pool, 9, 'tX')?.id);
   const rank = [...pool].sort((a, b) => overall(b) - overall(a)).findIndex((p) => p.id === pick?.id);
   assert.ok(rank <= 3, `AI 픽이 ${rank + 1}위 — 안개를 감안해도 너무 약함`);
+});
+
+test('aiKeepsForeign: 국내평균 +15 이상 & 32세 이하만 잔류(문턱 정확)', () => {
+  const p = generateForeignPool(5, 70)[0];
+  const o = overall(p);
+  assert.equal(aiKeepsForeign(p, o - 15), true, '정확히 +15 → 잔류');
+  assert.equal(aiKeepsForeign(p, o - 14), false, '+14(문턱 미만) → 방출');
+  assert.equal(aiKeepsForeign({ ...p, age: 33 }, o - 15), false, '33세는 +15라도 방출');
 });
