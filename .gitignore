@@ -32,3 +32,6 @@ yarn-error.*
 # typescript
 *.tsbuildinfo
 .gstack/
+
+# 변이 테스트 락(절대 커밋 금지)
+.mutation.lock
