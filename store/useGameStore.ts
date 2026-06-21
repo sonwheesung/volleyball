@@ -33,7 +33,8 @@ import { awardHistoryOf } from '../data/awards';
 import { computeStandings, seasonStreaks, seasonResults } from '../data/standings';
 import { coachInfoOf } from '../data/league';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
-import { currentRosters, evolveOnDay } from '../data/league';
+import { currentRosters, evolveOnDay, SEASON } from '../data/league';
+import { planNextAction } from '../engine/advance';
 import { marketVal, setAwardScores } from '../data/awardSalary';
 import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
 import { ROSTER_MAX, canRelease, inSeasonCost } from '../engine/transactions';
@@ -42,15 +43,13 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, SeasonArchive, SeasonAwards, SubPolicy, TrainingFocus, Transfer } from '../types';
+import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, SeasonArchive, SeasonAwards, TrainingFocus, Transfer } from '../types';
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const LEGEND_POINTS = 7500; // 영구결번급 — 60시즌 통산 최고 ~8645라 9000은 도달 불가였음(레전드 0명).
                             //   7500 = 60시즌당 ~2명(top 8645·7723) → 영구결번 ~30시즌당 1명 + league 마일스톤(레전드 추월) 가능
 const SEASON_END_DAY = 164; // 정규시즌 길이(일) — 출전비율·팬심 계산 기준
 const GAME_EVERY = 4.6;     // 평균 경기 간격(일)
-
-const DEFAULT_SUB_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSub: true };
 
 interface GameState {
   hydrated: boolean;
@@ -83,7 +82,6 @@ interface GameState {
   transfers: Transfer[];                       // FA 이적 연표(오프시즌 팀 이동, 뉴스 슬라이스3)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   readNews: string[];                          // 읽은 뉴스 키(season:kind:headline) — 읽음/안읽음 구분(NEWS_SYSTEM)
-  subPolicy: SubPolicy;                        // 내 팀 작전 교체 방침(경기 적용)
   trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
   staffHead: Record<string, string>;           // teamId → 영입 감독 id(STAFF_SYSTEM)
   staffAssistants: Record<string, string[]>;   // teamId → 영입 코치 ids
@@ -121,7 +119,6 @@ interface GameState {
   toggleMoneyOnly: (playerId: string) => void;
   toggleDraftPick: (playerId: string) => void;
   recordChampion: (season: number, championId: string) => void;
-  setSubPolicy: (policy: Partial<SubPolicy>) => void;
   markNewsRead: (keys: string[]) => void;
   setTrainingFocus: (focus: TrainingFocus | null) => void;
   hireCoach: (coachId: string) => boolean;
@@ -177,7 +174,6 @@ const freshSave = {
   transfers: [] as Transfer[],
   milestones: [] as Milestone[],
   readNews: [] as string[],
-  subPolicy: { ...DEFAULT_SUB_POLICY } as SubPolicy,
   trainingFocus: null as TrainingFocus | null,
   staffHead: {} as Record<string, string>,
   staffAssistants: {} as Record<string, string[]>,
@@ -345,7 +341,6 @@ export const useGameStore = create<GameState>()(
             ? s
             : { archive: [...s.archive, { season, championId }] },
         ),
-      setSubPolicy: (policy) => set((s) => ({ subPolicy: { ...s.subPolicy, ...policy } })),
       markNewsRead: (keys) => set((s) => ({ readNews: Array.from(new Set([...s.readNews, ...keys])) })),
       setTrainingFocus: (focus) => {
         const tid = get().selectedTeamId;
@@ -540,6 +535,10 @@ export const useGameStore = create<GameState>()(
         const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, transfers, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
+
+        // 더블탭 방어 — 정규시즌이 실제로 끝났을 때만 진행한다. 한 번 롤오버하면 results가 비워져(아래 749)
+        //   planNextAction이 다시 'match'를 돌려주므로, 확정 버튼 연타로 인한 시즌 2전진을 차단한다(§3.5 endSeason 더블탭).
+        if (planNextAction(SEASON, my, get().results).kind !== 'seasonOver') return;
 
         // 0) 시상식·마일스톤 — 롤오버 전(끝난 시즌의 base·생산이 살아있을 때) 계산해 영구 보존
         const seasonAwards = currentSeasonAwards(season);
@@ -820,7 +819,6 @@ export const useGameStore = create<GameState>()(
         transfers: s.transfers,
         milestones: s.milestones,
         readNews: s.readNews,
-        subPolicy: s.subPolicy,
         trainingFocus: s.trainingFocus,
         staffHead: s.staffHead,
         staffAssistants: s.staffAssistants,

@@ -195,9 +195,9 @@
 | LEGEND 9000↔7500 | HOF | 문서(SEASON 89)는 9000, 코드는 7500(도달성 리밸런스) | ✅ **문서 정정**(SEASON 89 → 7500) |
 | offerScore 공식 drift | FA | 문서(FA 131)는 wYrs·wAge 항, 코드는 home 항 | ✅ **문서 정정**(FA 131 → 코드 6항 일치 + wYrs/wAge 미구현 명기) |
 | FORM "중첩없음" 표현 | FORM | 문서 5의 −7% clamp가 form 계수(sk*)만 — 만성·정지는 form 밖 별도 손실 | ✅ **문서 명확화**(FORM 53) |
-| subPolicy 죽은 상태 | MATCH | 제거 결정(2026-06-18) 후에도 store가 subPolicy persist·미배선 | 저(세이브 비대) |
-| 프리뷰 OVR 원본명단 | UI | 일정/대시보드 OVR이 `getEvolvedTeamPlayers`(부상·벤치 무시) — EC-UI-01과 동류이나 *프리뷰*라 설계 논의 필요 | 검토 |
-| endSeason 더블탭 | store | 확정 버튼 연타 시 시즌 2전진(데이터무결성 OK=검증됨, UX 디바운스) | 저(UX) |
+| subPolicy 죽은 상태 | MATCH | 제거 결정(2026-06-18) 후에도 store가 subPolicy persist·미배선 | ✅ **제거**(store 상태·액션·persist·DEFAULT_SUB_POLICY 삭제, 2026-06-21). 엔진 `match.ts` DEFAULT_POLICY는 유지(감독 자동 집행) |
+| 프리뷰 OVR 원본명단 | UI | 일정/대시보드 OVR이 `getEvolvedTeamPlayers`(부상·벤치 무시) — EC-UI-01과 동류이나 *프리뷰*라 설계 논의 필요 | ✅ **수정**(2026-06-21): 전력 프리뷰 3곳(일정 다음경기·대시보드·exhibition) `availableTeamPlayers`로 — 각자 띄우는 실제 경기와 동일 소스. 명단관리 화면(squad·office·contracts)은 전체 명단 유지(의도) |
+| endSeason 더블탭 | store | 확정 버튼 연타 시 시즌 2전진(데이터무결성 OK=검증됨, UX 디바운스) | ✅ **가드**(2026-06-21): endSeason 진입부 `planNextAction(SEASON,my,results).kind!=='seasonOver'`면 return. 롤오버가 results={}로 비워(749) 둘째 탭은 'match'→차단. 검증 `tools/_ev_endseason_guard.ts` |
 
 ---
 

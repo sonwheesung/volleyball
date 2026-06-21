@@ -3,7 +3,8 @@ import { Redirect, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, theme } from '../components/Screen';
-import { LEAGUE, getEvolvedTeamPlayers, shortTeamName as shortName } from '../data/league';
+import { LEAGUE, shortTeamName as shortName } from '../data/league';
+import { availableTeamPlayers } from '../data/injury';
 import { teamOverallRaw } from '../engine/overall';
 import { DEV_TOOLS } from '../data/flags';
 import { useGameStore } from '../store/useGameStore';
@@ -20,8 +21,9 @@ export default function Exhibition() {
   const [awayId, setAwayId] = useState(() => (teams.find((t) => t.id !== firstId) ?? teams[0]).id);
   const [seed, setSeed] = useState(1);
 
-  const homeOvr = useMemo(() => teamOverallRaw(getEvolvedTeamPlayers(homeId, currentDay)), [homeId, currentDay]);
-  const awayOvr = useMemo(() => teamOverallRaw(getEvolvedTeamPlayers(awayId, currentDay)), [awayId, currentDay]);
+  // 프리뷰 전력 = sandbox 경기가 실제로 쓰는 출전 가능 명단(match/[id] dayIndex=currentDay)과 동일 소스
+  const homeOvr = useMemo(() => teamOverallRaw(availableTeamPlayers(homeId, currentDay)), [homeId, currentDay]);
+  const awayOvr = useMemo(() => teamOverallRaw(availableTeamPlayers(awayId, currentDay)), [awayId, currentDay]);
 
   const same = homeId === awayId;
 

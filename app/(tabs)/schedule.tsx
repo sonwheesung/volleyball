@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
-import { SEASON, getEvolvedTeamPlayers, getTeam } from '../../data/league';
+import { SEASON, getTeam } from '../../data/league';
 import { computeStandings, playedThroughDay } from '../../data/standings';
 import { teamClinch } from '../../data/clinch';
+import { availableTeamPlayers } from '../../data/injury';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
 import { teamOverallRaw } from '../../engine/overall';
@@ -57,8 +58,9 @@ export default function Schedule() {
     ? (() => {
         const isHome = nextFixture.homeTeamId === teamId;
         const oppId = isHome ? nextFixture.awayTeamId : nextFixture.homeTeamId;
-        const myOvr = teamOverallRaw(getEvolvedTeamPlayers(teamId, nextFixture.dayIndex));
-        const oppOvr = teamOverallRaw(getEvolvedTeamPlayers(oppId, nextFixture.dayIndex));
+        // 프리뷰 전력 = 그 경기에 실제로 나설 출전 가능 명단(부상·결장 반영) — 경기/리플레이와 동일 소스(EC-UI-01 동류)
+        const myOvr = teamOverallRaw(availableTeamPlayers(teamId, nextFixture.dayIndex));
+        const oppOvr = teamOverallRaw(availableTeamPlayers(oppId, nextFixture.dayIndex));
         // 빅매치 판정(Phase 4): 순위 직결이 1순위 — 상위권 맞대결·종반 인접 순위전. 그 다음 접전/강팀
         const standings = computeStandings(currentDay > 0 ? currentDay : Number.MAX_SAFE_INTEGER);
         const myRank = Math.max(1, standings.findIndex((r) => r.teamId === teamId) + 1);
