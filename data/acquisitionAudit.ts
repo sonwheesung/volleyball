@@ -139,7 +139,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
       const ownBy = new Map<string, string>();
       for (const t of teamIds) {
         const seen = new Set<string>();
-        let foreignCnt = 0;
+        let trueForeignCnt = 0, asianCnt = 0; // 외인(아포짓)·아시아쿼터 분리 — 팀당 각 1명 허용(둘 다 isForeign)
         const ids = rosters[t] ?? [];
         for (const id of ids) {
           if (seen.has(id)) hit(C.player, `S${sNo} ${where}: 선수 ${id} ${tname(t)} 로스터 중복`);
@@ -148,7 +148,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
           if (prev && prev !== t) hit(C.player, `S${sNo} ${where}: 선수 ${id} 두 팀(${tname(prev)}·${tname(t)})`);
           ownBy.set(id, t);
           const p = snapshot[id];
-          if (p?.isForeign) foreignCnt++;
+          if (p?.isForeign) { if (p.isAsianQuota) asianCnt++; else trueForeignCnt++; }
           // 연봉·계약 정상치
           if (p) {
             if (!okNum(p.contract?.salary, 1, LEAGUE_CAP)) hit(C.salary, `S${sNo} ${where}: ${tname(t)} ${id} 연봉 비정상 ${p.contract?.salary}`);
@@ -157,13 +157,18 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
             else if ((p.contract?.remaining ?? 0) < 1) hit(C.contract, `S${sNo} ${where}: ${tname(t)} ${id} 만료 계약(잔여 ${p.contract?.remaining})인데 명단 잔존`);
           }
         }
-        if (foreignCnt > 1) hit(C.foreign, `S${sNo} ${where}: ${tname(t)} 외인 ${foreignCnt}명`);
-        // 샐러리캡(국내 연봉) — 영입/재계약이 캡을 넘기면 안 됨. 단 드래프트는 의무적 신인 수급(저가 슬롯)이라
-        //   캡 직전 팀도 정원을 채우려면 신인을 받아야 한다 → 신인 루키 예외(현실 캡과 동일). 따라서 캡 불변식은
-        //   FA·재계약 직후(드래프트 전) 단계에서만 강제. 드래프트 후엔 명백한 과다(>110%)만 잡는다.
+        // 아시아쿼터 도입 후: 진짜 외인(아포짓) 1 + 아시아쿼터 1 = 2 허용. 각 칸이 1을 넘으면 위반.
+        if (trueForeignCnt > 1) hit(C.foreign, `S${sNo} ${where}: ${tname(t)} 외인 ${trueForeignCnt}명`);
+        if (asianCnt > 1) hit(C.foreign, `S${sNo} ${where}: ${tname(t)} 아시아쿼터 ${asianCnt}명`);
+        // 샐러리캡(국내 연봉). 새 영입/재계약(만료자)은 게임 로직이 `≤ 캡`으로 하드 게이트한다.
+        //   단 두 가지 정상 초과(WAI)를 감사는 허용한다:
+        //   ① 드래프트(final): 의무 신인 수급(저가 슬롯)으로 정원 채우려 캡 직전 팀도 신인을 받음 → ×1.1.
+        //   ② 비최종(생애주기·FA): **자기 선수 유지(keep, 미만료)** 가 누적돼 소폭 초과 가능(EC-CA-03, WAI).
+        //      현실 배구도 자기 선수 유지는 캡을 넘긴다(캡은 새 영입을 막는 장치). 트레이드 없는 게임에서
+        //      미만료 선수 강제 방출은 과해 (A) 채택 → ×1.05 여유. 진짜 과다(>5%, 새 영입 버그)는 여전히 잡힘.
         const dom = domesticPayroll(ids, (id) => snapshot[id]);
-        const capLimit = final ? LEAGUE_CAP * 1.1 : LEAGUE_CAP;
-        if (dom > capLimit) hit(C.cap, `S${sNo} ${where}: ${tname(t)} 국내연봉 ${dom} > ${final ? '캡×1.1(신인수급 예외 후)' : '캡'} ${Math.round(capLimit)}`);
+        const capLimit = final ? LEAGUE_CAP * 1.1 : LEAGUE_CAP * 1.05;
+        if (dom > capLimit) hit(C.cap, `S${sNo} ${where}: ${tname(t)} 국내연봉 ${dom} > ${final ? '캡×1.1(신인수급)' : '캡×1.05(자기선수 유지)'} ${Math.round(capLimit)}`);
         // 정원 한도 — 최종(드래프트 후) 명단만 하한 검사(중간 단계는 구멍이 정상)
         if (final && (ids.length < ROSTER_MIN || ids.length > ROSTER_MAX)) hit(C.roster, `S${sNo} ${where}: ${tname(t)} 정원 ${ids.length} (허용 ${ROSTER_MIN}~${ROSTER_MAX})`);
         else if (!final && ids.length > ROSTER_MAX) hit(C.roster, `S${sNo} ${where}: ${tname(t)} 정원 ${ids.length} > ${ROSTER_MAX}`);

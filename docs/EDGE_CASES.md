@@ -22,6 +22,9 @@
 4. **공급 고갈 없음** — 풀(감독·코치·외인)이 말라 AI 팀이 공석이 되지 않는다.
 5. **만료 = 명단 이탈** — 계약 만료 선수/감독은 재계약하거나 풀로. 명단에 유령으로 남지 않는다.
 6. **결정론** — 같은 시드·같은 입력 → 같은 결과. 모든 검증은 재현 가능.
+7. **정원 경계** — 어떤 경로(방출·영입·드래프트·은퇴충원·악질입력)로도 로스터는 `ROSTER_MIN(10)`~
+   `ROSTER_MAX(18)`(`engine/transactions.ts`). **방출은 내 유효 로스터(시즌초+시즌중영입) 선수만** —
+   타 팀/존재 안 함 id는 거부(`store.release` 가드).
 
 ---
 
@@ -39,6 +42,22 @@
 | `tools/simMoneyOnly.ts` | '돈만' 보상 — 유출 면제·보상금 가중 | 2 | `[탐색시즌=60]` |
 | `engine/compensation.test.ts` | 보상금 배수·보상선수 선정 규칙(단위) | 2 | — |
 | `engine/draft.test.ts` | 드래프트 위시 우선순위·중복 지명·슬롯 한도 | 1 | — |
+
+**악질 유저/원숭이(adversarial·monkey) 퍼저군** — 실제 zustand 스토어를 Node에서 구동(액션 난사·적대 입력).
+**먼저 `import './_gt_mock'`**(AsyncStorage 인메모리 모킹)이 필요. 시드 결정론·재현 가능.
+
+| 도구 | 검사 범위 | 핵심 불변식 | 표본 인자 |
+|---|---|---|---|
+| `tools/_gt_monkey.ts` | 스토어 무작위 액션 난사(방출·영입·드래프트·setDay·endSeason·세이브) — 매 스텝 불변식 | 1·7·정원·이중소속 | `[steps] [seed] [clean]` |
+| `tools/_gt_adversarial.ts` | 데이터층 적대 입력(가짜/빈 id·음수·NaN 자금·전원 영입·전원 보호·거대/음수 시즌·60시즌 소크) | 0·1·3 | — |
+| `tools/_gt_seqbreak.ts` | 순서 꼬기(day0 endSeason·역행 setDay·무팀 endSeason·오프시즌 도중 영입) | 7·크래시/소프트락 無 | — |
+| `tools/_gt_determinism.ts` | 결정론 + **실제 persist** partialize·onRehydrate 충실도(파생 순위·로스터·감독·focus). 베낀 복사본 아님 — A/B(필드 누락 검출) | 6 | — |
+| `tools/_gt_owner.ts` | 구단주/면담 퍼징(requestInterview·suggestBench·suggestStart·unbench 적대 인자) — fanScore 0~100·benchDirectives≤2·중복없음·쿨다운 enforce·무크래시 | owner | — |
+| `tools/_gt_derived.ts` | **파생데이터 무결성**(시상·마일스톤·HOF·careerTotals·careerLog) 장기 churn 실제 endSeason 구동 — HOF 중복·미래참조·이중집계(단조성)·NaN·achievement 범위. A/B(HOF중복·NaN·미래마일스톤 주입 검출). 더블탭 endSeason 적대 | 파생/업적/기록 | `[seasons] [seed]` |
+| `tools/_ev_routes.ts` | **화면 이벤트①** 죽은 네비게이션 링크(모든 router.push/navigate/replace ↔ 라우트 파일, 동적·그룹·쿼리 정규화) | UI 네비 | — |
+| `tools/_gt_repro_release.ts` | **EC-TX-03** 팬텀 방출 재현(오라클 자가검증: 클린 통과·익스플로잇 검출) | 1·2 | — |
+| `tools/_gt_repro_cash.ts` | EC-TX-03 영입비 누수 재현 | 2 | — |
+| `tools/_gt_repro_oversize.ts` | **EC-RM-01** 정원 초과 재현(순수 endSeason=대조군 vs churn) | 7 | — |
 
 **`runAcquisitionAudit`의 13개 체크** (`data/acquisitionAudit.ts`, 인앱 `app/audit.tsx` 공유):
 `player`(선수 유일성) · `foreign`(외인 1팀 1명) · `faLeak`(내 영입 FA 유지) · `head`(감독 1인 1팀·경질팀 복귀 금지) ·
@@ -74,7 +93,13 @@
 
 ### 2.5 시즌 중 이동·재정
 - 방출 → FA 풀, 포지션 구멍 긴급 영입(전 구단 AI, 캡·정원 적용). 날짜 인지 명단(`rosterIdsOnDay`).
+- **방출은 내 유효 로스터(시즌초 명단 + 시즌 중 영입) 선수만** — 타 팀/존재 안 함 id는 `release()`가 거부.
+  방출은 `ROSTER_MIN(10)` 하한을 지킨다(그 밑으론 불가).
 - 운영 자금 = 모기업(성적 보너스·긴축) + 직관 + 굿즈. 캡과 별개 지갑. 적자는 모기업 보전(바닥 0).
+
+### 2.6 정원·은퇴 충원
+- 오프시즌 은퇴 구멍은 신인으로 포지션별 `ROSTER_IDEAL`까지 채우되, 팀 정원은 **`ROSTER_MAX(18)`를
+  넘지 않는다**(시즌 중 영입으로 명단이 차 있어도). 외인+아시아쿼터 2명도 이 상한 안.
 
 ---
 
@@ -91,6 +116,7 @@
 | EC-FA-04 | (예방) '돈만' 선택인데 보상선수가 빠지거나 보상금 미가중 | 신규 기능 — `moneyOnlyIds` 전파 + `pickCompensation` 건너뜀 + `compensationMoneyOnly` (`e9bb4b6`) | simMoneyOnly |
 | EC-CA-01 | 현금 없는데 국내 FA 영입됨 | 입찰 게이트가 캡만 봄 → `offer + compCost <= cashLeft` 추가 (`a91f967`) | audit `cash2` |
 | EC-CA-02 | 외인 트라이아웃 + 국내 FA 합산이 정산현금 초과(각자 전액 게이팅 → 이중 사용) | `resolvePreDraft`/`faMarketPreview`가 `runTryout`·`resolveFAMarket`에 같은 `myCash` 전달 → 외인 incoming 비용을 국내 FA 지갑에서 차감(`cashAfterForeign`) | simBrokeSign |
+| EC-CA-03 | 생애주기 keep(자기 선수 유지)로 팀 국내연봉이 캡 소폭 초과(대전 +1.5% @S6) — `buildOffseason` keep 경로(`offseason.ts:257`, 미만료 선수)는 캡 미게이트. **결정: (A) 정상 인정(WAI)** — 현실 배구도 자기 선수 유지는 캡 초과 허용, 트레이드 없는 게임서 미만료 강제 방출은 과함. 새 영입/재계약(만료자)은 게임이 `≤캡` 하드 게이트 유지. **감사 비최종 캡 임계 `×1.0→×1.05`**(>5%=진짜 새영입 버그는 계속 잡힘) (`acquisitionAudit.ts:167`, 2026-06-20) | audit `cap`(비최종 ×1.05) |
 
 ### 감독·스태프
 | ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
@@ -106,6 +132,8 @@
 |---|---|---|---|
 | EC-TX-01 | 방출 선수를 두 팀이 영입 → 이중 소속 | `applyTx` 영입이 기존 소속 미확인 → 단일 소속 가드(이미 가진 팀이면 무시) (`489a968`) | simTxDup·audit `intx` |
 | EC-TX-02 | 방출 외인이 시즌 중 재등장(리그 이탈해야) | 방출 외인 추적 누락 → 방출일 이후 소속 금지 검사 | audit `intx` |
+| EC-TX-04 | **검증 없는 `reSign` 계약으로 캡 무력화** — 내 선수를 ①음수/0 연봉(→payroll 음수 -1.4억) 또는 ②거대 연봉(개인 7.1조·팀 캡 35억 초과)으로 재계약하면 롤오버가 그대로 적용 → 캡 무력화 + 비정상 연봉 새 시즌 잔존 | `store.reSign` 미검증 + `rolloverPlayer`가 override 클램프 없이 사용 → reSign에 **유효 로스터+계약정상치+캡 인지**(재계약 후 국내 payroll>캡이면 거부) 게이트 + `rolloverPlayer`가 비정상/캡초과 override 무시(심층방어) (`store/useGameStore.ts:232`·`engine/rollover.ts:58`, 2026-06-20) | _gt_resign(A/B 음수)·_gt_monkey(reSign 적대계약, 거대 양수) |
+| EC-TX-03 | **타 팀 선수 id를 방출에 넣으면 팬텀 방출** — 그 선수가 내 FA풀에 뜨면서 원 소속팀에도 남음(이중 소속) + 영입 시 자금만 차감되고 안 들어옴(누수) + 6회 반복 시 정상 방출 전면 차단(자기 DoS) | `store.release()`가 소유권 미검증 + `applyTx` release가 그 팀 소속 미확인(영입과 비대칭) → `release()`에 유효 로스터(시즌초+영입) 가드 + `applyTx`에 `if(!arr.includes)return`(영입과 대칭) (`store/useGameStore.ts:236`·`data/dynamics.ts:122`, 2026-06-20) | _gt_repro_release(오라클)·_gt_repro_cash·_gt_monkey(full) |
 | EC-FG-01 | 자금 부족인데 외인 영입됨 | `runTryout`이 현금 미검사 → `myCash >= FOREIGN_SALARY` 게이트 (`6be1ea7`) | simBrokeSign |
 | EC-FG-02 | 외인 좀비/멸종(재계약 연속성 깨짐) | 외인 1년 계약 흐름 분리 검증 | simCareerTrace |
 
@@ -116,9 +144,28 @@
 | EC-DR-02 | 위시 우선순위 무시·중복 지명·슬롯 초과 | 드래프트 해석 정밀 검증 3종 추가 (`f1b00eb`) | draft.test.ts |
 | EC-OW-01 | 면담/재계약 거부 선수가 풀로 안 감(소속 모호) | 거부 경로 풀 이동 정합 검증 (`35f9e7b`) | simOwnerRefuse |
 
-> **주의(WAI, 버그 아님)**: 드래프트 직후 캡 일시 초과는 정상 — 신인 의무 수급(저가 슬롯)이라
-> 정원 채우려면 캡 직전 팀도 신인을 받는다(현실 캡과 동일). 감사는 **FA·재계약 직후엔 캡 엄격**,
-> **드래프트 후엔 명백한 과다(>110%)만** 잡는다.
+### 정원·은퇴 충원
+| ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
+|---|---|---|---|
+| EC-RM-01 | **오프시즌 신인 충원이 정원 초과 → 19명**. 시즌 중 FA 영입으로 명단이 차오른 팀이 은퇴 구멍을 메울 때(순수 endSeason은 정상=대조군, churn 시 시즌5에 발생) | `fillRosters`가 포지션별 `ROSTER_IDEAL`까지 채우는데 **전역 정원 상한 없음** → `if(ids.length>=ROSTER_MAX)break` (`data/rookies.ts:38`, 2026-06-20) | _gt_repro_oversize·_gt_monkey(clean)·audit `roster` |
+
+> **악질/원숭이 — 견뎌낸 것(WAI, 버그 아님, 견고성 증거)**: 가짜/빈/존재안함 id, 음수·NaN 자금,
+> '전원 영입'·'전원 보호'·'전원 재계약 거부', 거대/음수 시즌 번호, day0 `endSeason`, 무팀 `endSeason`,
+> 역행 `setDay`, 60시즌 소크 — 전부 크래시·소프트락·불변식 위반 없이 우아하게 거부/처리됨
+> (`_gt_adversarial`·`_gt_seqbreak`). 데이터층 순수 함수의 가드가 견고. NaN/Infinity 미발생.
+>
+> **구단주/면담(owner)**: requestInterview·suggestBench·suggestStart·unbench를 적대 인자(가짜 id·badcard·
+> badreason) 3000스텝 난사 — crashes 0·불변식 0(fanScore 0~100·benchDirectives≤2·중복없음)·쿨다운 enforce.
+> 액션 가드(쿨다운·BENCH_MAX·중복·무팀·invalid 선수)가 탄탄(`_gt_owner`, A/B 검증).
+>
+> **화면 UI 이벤트**: 죽은 네비 링크 0(`_ev_routes`), 핸들러 정적감사 36화면 — 동적 라우트 undefined 가드·
+> 멱등성·빈상태·disabled↔store 일치 전부 OK(크래시 0). 단 `coachShare`는 malformed focus(손상 세이브)에
+> 가드 추가(`engine/training.ts:80`, save-corruption 내성).
+
+> **주의(WAI, 버그 아님)**: 캡 초과 2종은 정상이라 감사가 허용한다 — ① **드래프트 직후**: 신인 의무 수급
+> (저가 슬롯)으로 정원 채우려 캡 직전 팀도 신인을 받음 → ×1.1. ② **비최종(생애주기·FA)**: 자기 선수 유지
+> (keep)로 소폭 초과 → ×1.05(EC-CA-03). **새 영입/재계약(만료자)은 게임이 `≤캡` 하드 게이트**(이건 정상
+> 초과가 아니라 막힌다). 비최종 >5%·드래프트 >10%는 진짜 버그로 잡힌다.
 
 ---
 
@@ -130,12 +177,18 @@
 1. **풀 배터리** (수정 후 처음부터 — `resetLeagueBase`):
    ```
    npx tsc --noEmit
-   npx tsx --test engine/*.test.ts          # 단위(현재 159)
+   npm test                                 # 단위(현재 177)
    npx tsx tools/simAudit.ts 60             # 종합 13체크
    npx tsx tools/simFaDup.ts 100            # FA·보상 중복
    npx tsx tools/simStaffDup.ts 60          # 스태프 중복
    npx tsx tools/simMoneyOnly.ts 200        # '돈만' 보상
    # 건드린 영역에 따라: simTxDup · simBrokeSign · simCareerTrace · simOwnerRefuse
+   # 악질/원숭이(스토어·정원·이중소속 — 관리 로직 수정 시 필수):
+   npx tsx tools/_gt_repro_release.ts       # EC-TX-03 (오라클 자가검증)
+   npx tsx tools/_gt_repro_oversize.ts      # EC-RM-01
+   npx tsx tools/_gt_monkey.ts 3000 12345         # 악질 난사(full)
+   npx tsx tools/_gt_monkey.ts 3000 777 clean     # 정원·은퇴충원(clean)
+   npx tsx tools/_gt_adversarial.ts ; npx tsx tools/_gt_seqbreak.ts ; npx tsx tools/_gt_determinism.ts
    ```
 2. **위반이 나오면 도구를 느슨하게 풀지 않는다** — 엔진/셀렉터를 고친다(설계 불변식이 기준).
 3. **새 버그를 찾으면**: ① 본 문서 §3에 EC 행 추가(증상·원인·수정·도구) → ② 그걸 잡는 감사/도구에
@@ -150,3 +203,36 @@
 - '돈만' 보상이 AI 구단 의사결정엔 미적용(플레이어 전용 레버) — AI도 쓰게 할지 후속.
 - AI 팀 능동 스태프 교체(현재 기본 스태프 시즌 불변) — 도입 시 EC-CO 계열 재검증 필요.
 - 외인 '돈만'/보상 상호작용 없음(외인은 보상 대상 제외라 무관) — 외인 규칙 변경 시 EC-FA-02 재확인.
+- **[해결 → EC-CA-03] 생애주기 keep(자기 선수 유지) 팀 캡 소폭 초과** — 결정: **(A) 정상 인정**. 상세 §3.
+- **[수정됨] simAudit 외국인 체크 stale 오라클** — `acquisitionAudit` foreign 체크가 아시아쿼터 도입 전
+  기준(`isForeign>1`)이라 외인1+아시아1=2를 **위반으로 오판(560건 false positive)**. 진짜외인≤1 AND
+  아시아≤1로 교정(`data/acquisitionAudit.ts:151·160`). 오라클은 false negative(허위 통과)뿐 아니라
+  **false positive(허위 위반)** 도 stale될 수 있음 — 시스템 추가 시 옛 감사도 갱신할 것.
+
+---
+
+## 6. 왜 이전 테스트가 못 잡았나 (사각 분석)
+
+> 발견 **방법**의 표준은 [`TEST_METHODOLOGY`](./TEST_METHODOLOGY.md). 케이스(무엇)와 발견법(어떻게)은
+> 분리. 아래는 §3 신규 버그가 **왜 기존 도구를 빠져나갔는지**.
+
+- **EC-TX-03 (팬텀 방출)** — 사각: **계층 우회 + valid 편향**. `simTxDup`은 `Tx[]`를 직접 만들어
+  replay층(`applyTx`)에 먹여 **사용자 진입점 `store.release()`를 우회**했고, 적대 케이스도
+  **이중 영입뿐**(타팀 **방출**은 안 함). 그래서 release()의 소유권 미검증을 한 번도 안 건드림.
+  → `_gt_monkey`(store 직접 구동 + 타팀 id 방출)가 노출.
+- **EC-RM-01 (정원 19)** — 사각: **단일 국면**. `acquisitionAudit`의 `roster` 체크는 **오프시즌 흐름만**
+  보고, **시즌 중 FA churn으로 명단이 18까지 차오른 상태 × 오프시즌 충원**의 교차를 안 봄.
+  → 장기 원숭이(`_gt_monkey`·`_gt_repro_oversize`)가 churn 후 endSeason에서 노출.
+
+**동종 버그 사냥 결과(sibling hunt)** — 렌즈 "store 액션이 입력을 검증 없이 변이":
+- **id 멤버십**: `release()`가 유일한 예외(EC-TX-03, 수정). 나머지 id 받는 액션은 가드 보유 —
+  `signInSeason`(FA풀 `availableFAsOnDay`)·`replaceForeign`/`replaceAsian`(altPool+subUsed)·`toggleProtect`(캡).
+- **구조 입력(미퍼징)**: 렌즈를 "**몽키가 안 부르는 액션 + 구조 입력**"으로 넓히니 `reSign(Contract)`가
+  걸림(EC-TX-04, 수정) — 몽키 액션셋에 reSign이 없어 미검사였고, 음수 연봉이 캡을 뚫었다. 나머지 액션은
+  id/불리언만(토글은 해소 시점 검증) → 구조 입력은 reSign이 유일. **두 클래스 모두 잔존 0.**
+- **교훈 1**: 사냥 렌즈를 "검증 없는 변이" 한 줄로만 보지 말고 **퍼저 커버리지 갭(미호출 액션)** 도 함께
+  봐야 한다. 미퍼징 액션 = 사각. → `_gt_monkey` 액션셋에 `reSign`(적대 계약) **추가 완료**.
+- **교훈 2 (좁은 테스트 < 넓은 퍼저)**: EC-TX-04 1차 수정은 `reSign` 음수만 막았고 좁은 repro
+  (`_gt_resign`, 음수만)는 통과했다. 하지만 **reSign을 넣은 확장 몽키가 거대 양수 연봉**(개인 캡 초과)으로
+  여전히 캡을 뚫는 걸 잡아, 수정이 불완전함을 드러냈다 → 캡 인지 게이트로 재수정. **타겟 repro는 내가 상상한
+  공격만 검사한다 — 무작위 퍼저가 상상 못 한 변종을 친다.** 수정 후엔 좁은 repro뿐 아니라 넓은 퍼저도 돌릴 것.

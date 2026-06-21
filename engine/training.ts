@@ -78,8 +78,10 @@ export function posRelevance(id: TrainingId, pos: Position): number {
 
 /** 감독 배분 시간 비중: 핵심 0.25 / 보조 0.12 / 나머지 0.02 */
 export function coachShare(id: TrainingId, focus: TrainingFocus): number {
-  if (focus.primary.includes(id)) return 0.25;
-  if (focus.secondary.includes(id)) return 0.12;
+  // focus 형태 방어 — 손상된 세이브/구버전의 trainingFocus(영속+rehydrate)가 malformed여도 훈련이
+  // 게임 전체를 크래시시키지 않게 graceful 기본값(나머지 비중). 정상 focus는 동작 불변.
+  if (focus?.primary?.includes(id)) return 0.25;
+  if (focus?.secondary?.includes(id)) return 0.12;
   return 0.02;
 }
 

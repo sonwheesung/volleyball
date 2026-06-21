@@ -120,6 +120,7 @@ function compute(): Dyn {
   const applyTx = (tx: Tx) => {
     const arr = roster.get(tx.teamId) ?? [];
     if (tx.kind === 'release') {
+      if (!arr.includes(tx.playerId)) return; // 그 팀 소속이 아닌 선수 방출은 무효 — 팬텀 방출이 FA 풀로 새는 것 차단(이중 소속 방지). 영입과 대칭.
       roster.set(tx.teamId, arr.filter((id) => id !== tx.playerId));
       // 외인은 방출돼도 FA 풀로 가지 않는다 — 리그를 떠남(FOREIGN_SYSTEM 3장, 타 팀이 주울 수 없음)
       if (!getPlayer(tx.playerId)?.isForeign) faAvail.add(tx.playerId);

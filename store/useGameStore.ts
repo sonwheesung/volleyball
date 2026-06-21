@@ -229,8 +229,30 @@ export const useGameStore = create<GameState>()(
         const next = { ...s.watchProgress }; delete next[fixtureId];
         return { watchProgress: next };
       }),
-      reSign: (playerId, contract) =>
-        set((s) => ({ contractOverrides: { ...s.contractOverrides, [playerId]: contract } })),
+      reSign: (playerId, contract) => {
+        // 내 로스터 선수 + 정상 계약 + **캡 인지**만 허용. 검증 없으면 음수 연봉(payroll 음수→캡 무력화)
+        // 또는 거대 연봉(개인 7천만배·팀 캡 초과)으로 캡을 뚫는다(전체게임 퍼저 Defect3·확장몽키, EC-TX-04).
+        // reSign은 void라 비정상 입력은 조용히 무시(UI는 항상 정상 계약을 보냄).
+        const s = get();
+        const my = s.selectedTeamId ?? '';
+        const rosterIds = currentRosters()[my] ?? [];
+        if (!rosterIds.includes(playerId)) return;
+        const { salary, years, remaining } = contract;
+        if (![salary, years, remaining].every((v) => Number.isFinite(v))) return;
+        if (salary <= 0 || years < 1 || remaining < 1 || remaining > years) return;
+        // 재계약 후 내 국내 payroll이 캡 초과면 거부(다른 영입과 일관 — 캡은 하드). 외인은 캡 제외.
+        const target = evolveOnDay(playerId, s.currentDay);
+        if (target && !target.isForeign) {
+          let dom = 0;
+          for (const id of rosterIds) {
+            const p = evolveOnDay(id, s.currentDay);
+            if (!p || p.isForeign) continue;
+            dom += id === playerId ? salary : (s.contractOverrides[id]?.salary ?? p.contract.salary);
+          }
+          if (dom > LEAGUE_CAP) return;
+        }
+        set((st) => ({ contractOverrides: { ...st.contractOverrides, [playerId]: contract } }));
+      },
       // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용.
       // 정원 하한(ROSTER_MIN) 게이트 — 명단이 비어 경기 불가가 되는 상태를 원천 차단.
       release: (playerId) => {
@@ -238,7 +260,10 @@ export const useGameStore = create<GameState>()(
         if (s.released.includes(playerId)) return false;
         const my = s.selectedTeamId ?? '';
         const rosterIds = currentRosters()[my] ?? [];
-        const { size } = myRosterDelta(my, s.inSeasonTx, rosterIds);
+        const { mySigned, size } = myRosterDelta(my, s.inSeasonTx, rosterIds);
+        // 내 유효 로스터(시즌초 명단 + 시즌 중 영입) 선수만 방출 가능 — 타 팀/존재 안 함 id 주입 차단.
+        // (없으면 팬텀 방출로 이중 소속·영입비 누수·자기 방출 DoS, 2026-06-20 전체게임 퍼저 발견)
+        if (!rosterIds.includes(playerId) && !mySigned.includes(playerId)) return false;
         if (!canRelease(size)) return false;
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId, kind: 'release' }];
         set({ released: [...s.released, playerId], inSeasonTx });

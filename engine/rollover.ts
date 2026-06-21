@@ -6,7 +6,7 @@ import type { Contract, Player, TrainableStat, TrainingFocus } from '../types';
 import { evolvePlayer } from './progression';
 import { type StaffEffects, NO_EFFECTS } from './staff';
 import { FIRST_FA_SEASONS } from './faMarket';
-import { clampSalary } from './cap';
+import { clampSalary, LEAGUE_CAP } from './cap';
 import { marketValue } from './salary';
 import { createRng, strSeed } from './rng';
 import { TRAINABLE_STATS } from './training';
@@ -55,7 +55,11 @@ export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Co
   // 3) 경력 +1 (FA 자격 기준)
   const career = { ...aged.career, seasons: aged.career.seasons + 1 };
   // 4) 계약: 잔여 -1. 만료 시 — FA 자격자면 미계약(FA), 아니면 자동연장(영건 보유)
-  const cur = override ?? aged.contract;
+  //    override(시즌 중 재계약)는 정상 계약일 때만 사용 — 음수/0/NaN 연봉·비정상 연수는 무시하고 base로
+  //    (심층 방어: 손상 세이브·버그성 override가 payroll 음수→캡 무력화하는 것 차단. EC-TX-04)
+  const okOverride = override && Number.isFinite(override.salary) && override.salary > 0 && override.salary <= LEAGUE_CAP
+    && Number.isFinite(override.remaining) && override.remaining >= 1;
+  const cur = okOverride ? override! : aged.contract;
   const remaining = cur.remaining - 1;
   let contract: Contract;
   if (remaining > 0) contract = { ...cur, remaining };

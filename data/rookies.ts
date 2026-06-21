@@ -4,6 +4,7 @@
 
 import { createRng } from '../engine/rng';
 import { ROSTER_IDEAL } from '../engine/aiGM';
+import { ROSTER_MAX } from '../engine/transactions';
 import { makeProspect } from './seed';
 import type { Player, Position } from '../types';
 
@@ -36,6 +37,7 @@ export function fillRosters(
     for (const pos of FILL_ORDER) {
       const need = IDEAL[pos] - have[pos];
       for (let i = 0; i < need; i++) {
+        if (ids.length >= ROSTER_MAX) break; // 전역 정원 상한 — 포지션별 충원이 ROSTER_MAX(18)을 넘지 않게
         const id = `s${season}r${counter++}`;
         const rookie = makeProspect(rng, id, pos);
         newPlayers.push(rookie);
