@@ -331,11 +331,16 @@ export function buildNewsFeed(
         push(currentSeason, 'match', `${p.name} 트리플 크라운 — 후위공격 ${l.backSpikes}·블로킹 ${l.blocks}·서브 ${l.aces}`, true, tid,
           body3('triple', `${currentSeason}:tc:${id}:${mp.dayIndex}`, `${p.name}(${teamName(tid)})이(가) 한 경기에서 후위공격 ${l.backSpikes}개·블로킹 ${l.blocks}개·서브 에이스 ${l.aces}개로 트리플 크라운을 달성했다. KOVO 공식 기록에 이름을 올렸다.`), `${id}:${mp.dayIndex}`);
       }
-      // 데뷔전 — 통산 출전 0(이번 시즌이 데뷔)인 선수의 첫 선발만
+      // 데뷔전 — 통산 출전 0(이번 시즌이 데뷔)인 선수의 첫 선발만. **포지션별 대표 스탯**(리베로는 득점이
+      // 0이 정상 → 디그·리시브로, 세터는 세트로 — "리베로 데뷔전 0점" 어색함 교정, 2026-06-21 사용자 보고)
       if (!debuted.has(id) && mp.starters.has(id) && (p.career?.matches ?? 0) === 0) {
         debuted.add(id);
-        push(currentSeason, 'debut', `신인 ${p.name}, 데뷔전 ${l.points}점 (${POS_KO[p.position] ?? ''})`, false, tid,
-          body3('debut', `${currentSeason}:db:${id}`, `${teamName(tid)}의 신인 ${p.name}이(가) 첫 선발 무대에 나서 ${l.points}점을 기록했다.`), id);
+        const posKo = POS_KO[p.position] ?? '';
+        const stat = p.position === 'L' ? `디그 ${l.digs}개·리시브 ${l.receives}개`
+          : p.position === 'S' ? `세트 ${l.assists}개`
+          : `${l.points}점`;
+        push(currentSeason, 'debut', `신인 ${p.name} 데뷔전 — ${stat} (${posKo})`, false, tid,
+          body3('debut', `${currentSeason}:db:${id}`, `${teamName(tid)}의 신인 ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}를 기록했다.`), id);
       }
       // 한 경기 폭발(커리어하이급) — 30점 이상(데뷔 기사로 이미 다룬 선수는 제외)
       else if (l.points >= BIG_GAME) {
