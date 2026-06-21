@@ -4,14 +4,28 @@
 
 import type { Fixture } from '../types';
 import { simulateMatch } from '../engine/match';
-import { attributeProduction, mergeProd, type ProdLine } from '../engine/production';
+import { attributeProduction, mergeProd, splitLineup, type ProdLine } from '../engine/production';
 import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 import { availableTeamPlayers } from './injury';
 import { currentTxVersion } from './dynamics';
 
 interface ProdRow {
   dayIndex: number;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeIds: Set<string>; // 홈팀 출전 명단 id(팀 귀속용)
   lines: Map<string, ProdLine>;
+  starters: Set<string>; // 그 경기 선발(코트 위 7×2) id — 데뷔=첫 선발 판정용(가비지/서브 출전 제외)
+}
+
+/** 경기 1건의 선수별 생산 + 선발 명단(뉴스 실시간 소재: 트리플크라운·데뷔·커리어하이) */
+export interface MatchProd {
+  dayIndex: number;
+  homeTeamId: string;
+  awayTeamId: string;
+  homeIds: Set<string>;
+  lines: Map<string, ProdLine>;
+  starters: Set<string>;
 }
 
 let cache: { key: string; rows: ProdRow[] } | null = null;
@@ -37,7 +51,12 @@ function allProdRows(): ProdRow[] {
         home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId),
       });
       const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed);
-      rows.push({ dayIndex: f.dayIndex, lines });
+      const starters = new Set<string>([
+        ...splitLineup(roster[f.homeTeamId]).starters.map((p) => p.id),
+        ...splitLineup(roster[f.awayTeamId]).starters.map((p) => p.id),
+      ]);
+      const homeIds = new Set<string>(roster[f.homeTeamId].map((p) => p.id));
+      rows.push({ dayIndex: f.dayIndex, homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId, homeIds, lines, starters });
     }
   }
   cache = { key, rows };
@@ -61,3 +80,10 @@ export function leagueProductionRange(fromDay: number, toDay: number): Map<strin
 
 export const getPlayerProduction = (id: string, uptoDay: number): ProdLine | undefined =>
   leagueProduction(uptoDay).get(id);
+
+/** uptoDay 까지 치러진 경기별 생산 + 선발 명단(경기일 오름차순). 뉴스 실시간 소재용. */
+export function seasonMatchProds(uptoDay: number): MatchProd[] {
+  return allProdRows()
+    .filter((r) => r.dayIndex <= uptoDay)
+    .map((r) => ({ dayIndex: r.dayIndex, homeTeamId: r.homeTeamId, awayTeamId: r.awayTeamId, homeIds: r.homeIds, lines: r.lines, starters: r.starters }));
+}

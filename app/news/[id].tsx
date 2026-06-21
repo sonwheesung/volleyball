@@ -22,6 +22,8 @@ const LEAD: Record<NewsItem['kind'], string> = {
   owner: '간판 선수의 기용을 두고 팬심이 출렁였다. 구단 운영은 성적만큼이나 정서도 함께 살펴야 한다.',
   streak: '시즌의 흐름을 가른 연속 기록이다. 분위기가 곧 순위로 이어졌다.',
   standing: '한 시즌의 성적표가 순위로 정리됐다. 다음 시즌의 출발선이 여기서 정해진다.',
+  match: '한 경기에서 나온 인상적인 장면이다. 코트 위 활약이 기록으로 남았다.',
+  debut: '새 얼굴이 코트에 첫발을 디뎠다. 데뷔 무대의 기록이 커리어의 출발점이 된다.',
 };
 
 export default function NewsArticle() {

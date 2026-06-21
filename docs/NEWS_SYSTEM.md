@@ -191,3 +191,8 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 ## 변경 이력
 - 2026-06-21: 전면 재설계. 진단(초반 공백·미사용 데이터·템플릿1개) → 실시간 소재(트리플크라운·데뷔·연승·업셋·순위) +
   경계 종류 확대(기록왕6·베스트7·라운드MVP·시즌기록·순위서사) + **본문 조립/결정론 변주 엔진**. 트리플크라운 정의 출처 확인.
+- 2026-06-21 **슬라이스1 구현**: 변주 엔진 + 경계 미사용 데이터 전부 배선(기록왕6·베스트7·라운드MVP·시즌기록·
+  순위·연승연패·플옵). 새 kind streak·standing. newsKey에 ref(playerId) — 동명이인 충돌 교정.
+- 2026-06-21 **슬라이스2 구현**: 경기 단위 셀렉터 `seasonMatchProds`(엔진 변경 0) → 실시간 트리플크라운·
+  데뷔전(첫 선발만)·한 경기 폭발(30+). 새 kind match·debut. 트리플크라운은 `buildMatchBanners`와
+  `simNews` 교차검증으로 두 경로 일치 보장(재구현 오라클 방지). kind 9종·무결성 0.

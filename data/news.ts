@@ -8,6 +8,7 @@ import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
 import { popularityNow } from './owner';
 import { seasonInjuryReport } from './injury';
+import { seasonMatchProds } from './production';
 import { SEVERITY_KO } from '../engine/injury';
 import { seasonScandals } from './dynamics';
 import { SCANDAL_KO, EXPEL_KO } from '../engine/scandal';
@@ -90,6 +91,18 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
   owner: {
     open: ['관중석이 술렁였다.', '팬심이 출렁인 한 장면이다.', '코트 밖 여론이 움직였다.'],
     close: ['구단 운영은 성적만큼이나 정서도 살펴야 한다.', '팬과 구단 사이의 거리가 시험대에 올랐다.', '여론의 향배가 다음 행보에 영향을 줄 전망이다.'],
+  },
+  triple: {
+    open: ['경기를 지배한 자에게만 허락되는 왕관이다.', '한 경기에서 세 부문을 동시에 폭발시켰다.', '좀처럼 보기 힘든 대기록이 나왔다.'],
+    close: ['트리플 크라운은 코트를 완전히 장악했다는 증표다.', '공·수·서브 전 영역에서 존재감을 뽐낸 한 경기였다.', '시즌을 통틀어 손에 꼽을 장면으로 남았다.'],
+  },
+  debut: {
+    open: ['새 얼굴이 코트에 첫발을 디뎠다.', '기다리던 데뷔 무대가 열렸다.', '미래의 주인공이 첫 선발 명단에 이름을 올렸다.'],
+    close: ['데뷔전의 기록은 긴 커리어의 출발점이 된다.', '첫 무대의 떨림을 코트 위 활약으로 갚았다.', '다음 세대의 성장 곡선이 여기서 시작된다.'],
+  },
+  biggame: {
+    open: ['한 경기를 통째로 끌고 갔다.', '폭발적인 한 경기였다.', '코트의 중심에 선 하루였다.'],
+    close: ['이런 경기가 팀의 순위 싸움을 떠받친다.', '에이스의 무게를 숫자로 증명했다.', '시즌 베스트 게임으로 손꼽힐 활약이었다.'],
   },
 };
 
@@ -283,6 +296,34 @@ export function buildNewsFeed(
     if (pop < 60) continue; // 인기 스타만 — 무명 선수 벤치는 기사 안 남
     push(currentSeason, 'owner', `팬들, 간판 ${p.name} 벤치 기용에 술렁 — "왜 안 쓰나"`, pop >= 78, myTeamId,
       body3('owner', `${currentSeason}:own:${b.playerId}`, `${teamName(myTeamId)}의 간판 ${p.name}이(가) 최근 출전 명단에서 빠지면서 팬들이 술렁이고 있다. "왜 안 쓰나"라는 목소리가 커지고 있다.`), b.playerId);
+  }
+
+  // 8) 실시간 경기 소재(현재 시즌) — 트리플 크라운·데뷔전·한 경기 폭발. 경기 단위 생산에서 파생.
+  //   트리플 크라운 정의는 KOVO 공식(후위공격·블로킹·서브 각 3+) — broadcast.ts와 동일(simNews 교차검증).
+  const TRIPLE_MIN = 3, BIG_GAME = 30;
+  const debuted = new Set<string>(); // 이번 시즌 첫 선발 1회만
+  for (const mp of seasonMatchProds(currentDay)) {
+    const teamOf = (id: string) => (mp.homeIds.has(id) ? mp.homeTeamId : mp.awayTeamId);
+    for (const [id, l] of mp.lines) {
+      const p = getPlayer(id); if (!p) continue;
+      const tid = teamOf(id);
+      // 트리플 크라운(KOVO) — 후위공격·블로킹·서브 각 3+
+      if (l.backSpikes >= TRIPLE_MIN && l.blocks >= TRIPLE_MIN && l.aces >= TRIPLE_MIN) {
+        push(currentSeason, 'match', `${p.name} 트리플 크라운 — 후위공격 ${l.backSpikes}·블로킹 ${l.blocks}·서브 ${l.aces}`, true, tid,
+          body3('triple', `${currentSeason}:tc:${id}:${mp.dayIndex}`, `${p.name}(${teamName(tid)})이(가) 한 경기에서 후위공격 ${l.backSpikes}개·블로킹 ${l.blocks}개·서브 에이스 ${l.aces}개로 트리플 크라운을 달성했다. KOVO 공식 기록에 이름을 올렸다.`), `${id}:${mp.dayIndex}`);
+      }
+      // 데뷔전 — 통산 출전 0(이번 시즌이 데뷔)인 선수의 첫 선발만
+      if (!debuted.has(id) && mp.starters.has(id) && (p.career?.matches ?? 0) === 0) {
+        debuted.add(id);
+        push(currentSeason, 'debut', `신인 ${p.name}, 데뷔전 ${l.points}점 (${POS_KO[p.position] ?? ''})`, false, tid,
+          body3('debut', `${currentSeason}:db:${id}`, `${teamName(tid)}의 신인 ${p.name}이(가) 첫 선발 무대에 나서 ${l.points}점을 기록했다.`), id);
+      }
+      // 한 경기 폭발(커리어하이급) — 30점 이상(데뷔 기사로 이미 다룬 선수는 제외)
+      else if (l.points >= BIG_GAME) {
+        push(currentSeason, 'match', `${p.name}, 한 경기 ${l.points}점 폭발`, l.points >= 35, tid,
+          body3('biggame', `${currentSeason}:bg:${id}:${mp.dayIndex}`, `${p.name}(${teamName(tid)})이(가) 한 경기 ${l.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`), `${id}:${mp.dayIndex}`);
+      }
+    }
   }
 
   return items.sort((x, y) => y.season - x.season || Number(y.big) - Number(x.big));

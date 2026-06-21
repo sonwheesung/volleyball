@@ -3,7 +3,8 @@
 // store.endSeason 누적 경로를 재현(archive에 순위·연승·플옵·승패도 채움 → 새 소재 발화).
 // 검사: 크래시0·빈 헤드라인/본문0·newsKey 중복0·kind 카탈로그·변주 커버리지 + A/B 자가검증.
 
-import { resetLeagueBase, getTeam, teamScoutReveal, commitPlayerBase, commitRosters, LEAGUE } from '../data/league';
+import { resetLeagueBase, getTeam, teamScoutReveal, commitPlayerBase, commitRosters, LEAGUE, SEASON } from '../data/league';
+import { buildMatchBanners } from '../data/broadcast';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
 import { fillRosters } from '../data/rookies';
@@ -57,7 +58,8 @@ for (let s = 0; s < N; s++) {
   advance(s);
 }
 
-const feed = buildNewsFeed(archive, allMs, [], N - 1, [], [], 0, MY);
+// 라이브 시즌 = N(아카이브 0..N-1은 과거, 베이스는 N 진행 상태). 실시간 경기 소재는 시즌 N에서 발화.
+const feed = buildNewsFeed(archive, allMs, [], N, [], [], MAX, MY);
 
 // ── 무결성 검사 ──
 const V: string[] = [];
@@ -87,8 +89,14 @@ for (const n of feed) {
   seenBody.get(n.kind)!.add(n.body ?? '');
 }
 
+// ── 교차검증: 뉴스 트리플크라운 == broadcast.buildMatchBanners 트리플(두 경로 일치 = 재구현 오라클 방지) ──
+let bcastTriples = 0;
+for (const f of SEASON) bcastTriples += buildMatchBanners(f.homeTeamId, f.awayTeamId, f.dayIndex, null).filter((b) => b.kind === 'triple').length;
+const newsTriples = feed.filter((n) => n.kind === 'match' && n.headline.includes('트리플 크라운')).length;
+const tripleAgree = newsTriples === bcastTriples;
+
 // ── A/B 자가검증: 같은 시즌 archive 중복 주입 → 중복 검사가 잡아야 ──
-const abFeed = buildNewsFeed([...archive, archive[archive.length - 1]], allMs, [], N - 1, [], [], 0, MY);
+const abFeed = buildNewsFeed([...archive, archive[archive.length - 1]], allMs, [], N, [], [], MAX, MY);
 const abDup = dupOf(abFeed) > dup;
 
 log(`\n═══ 리그 뉴스 · ${N}시즌 (총 ${feed.length}건) ═══`);
@@ -96,11 +104,12 @@ log(`kind 종류=${byKind.size}: ${[...byKind].map(([k, c]) => `${k}:${c}`).join
 log(`\n변주 커버리지(kind: distinct본문/총건수 — 높을수록 다양):`);
 for (const [k, set] of seenBody) log(`  ${k}: ${set.size}/${byKind.get(k) ?? 0}`);
 log(`\n무결성: ${V.length ? '❌ ' + V.join(' · ') : '✅ 위반 0(빈 헤드/본문·중복·매달린 teamId)'}`);
+log(`[교차검증] 트리플크라운 news=${newsTriples} ↔ broadcast=${bcastTriples} 일치=${tripleAgree} (true여야 신뢰)`);
 log(`[A/B] 중복 주입 시 newsKey 중복 검출=${abDup} (true여야 신뢰)`);
 
 log(`\n── 최근 30건 ──`);
 for (const n of feed.slice(0, 30)) log(`${n.big ? '★' : '·'} [${n.season + 1}][${n.kind}] ${n.headline}`);
 
-const ok = V.length === 0 && abDup;
+const ok = V.length === 0 && abDup && tripleAgree;
 log(`\nNEWS OK = ${ok}`);
 process.exit(ok ? 0 : 2);
