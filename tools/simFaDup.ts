@@ -61,7 +61,7 @@ for (let s = 1; s <= N; s++) {
     const owner = new Map<string, string>(); // playerId → teamId
     for (const tid of Object.keys(rosters)) {
       const seen = new Set<string>();
-      let foreignCnt = 0;
+      let trueForeignCnt = 0, asianCnt = 0; // 진짜 외인 vs 아시아쿼터 분리(아시아쿼터 시스템 반영)
       for (const id of rosters[tid]) {
         // (b) 로스터 내 유일성
         if (seen.has(id)) fail(s, `${label}: ${id} 가 ${getTeam(tid)?.name} 로스터에 중복`);
@@ -72,11 +72,12 @@ for (let s = 1; s <= N; s++) {
         owner.set(id, tid);
         // (d) 스냅샷 존재
         if (!snapshot[id]) fail(s, `${label}: ${id} 가 로스터에 있으나 스냅샷에 없음`);
-        // (e) 외인 ≤1
-        if (snapshot[id]?.isForeign) foreignCnt++;
+        // (e) 진짜 외인 ≤1 AND 아시아쿼터 ≤1 (외인1+아시아쿼터1=2는 정상 — FOREIGN 7)
+        const p0 = snapshot[id];
+        if (p0?.isForeign) { if (p0.isAsianQuota) asianCnt++; else trueForeignCnt++; }
       }
-      if (foreignCnt > 1) {
-        fail(s, `${label}: ${getTeam(tid)?.name} 외인 ${foreignCnt}명 (>1)`);
+      if (trueForeignCnt > 1 || asianCnt > 1) {
+        fail(s, `${label}: ${getTeam(tid)?.name} 외인 ${trueForeignCnt}·아시아쿼터 ${asianCnt} (각 ≤1이어야)`);
         if (violations <= 2) {
           const fgn = rosters[tid].filter((id) => snapshot[id]?.isForeign);
           for (const id of fgn) {

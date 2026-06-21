@@ -149,6 +149,13 @@
 |---|---|---|---|
 | EC-RM-01 | **오프시즌 신인 충원이 정원 초과 → 19명**. 시즌 중 FA 영입으로 명단이 차오른 팀이 은퇴 구멍을 메울 때(순수 endSeason은 정상=대조군, churn 시 시즌5에 발생) | `fillRosters`가 포지션별 `ROSTER_IDEAL`까지 채우는데 **전역 정원 상한 없음** → `if(ids.length>=ROSTER_MAX)break` (`data/rookies.ts:38`, 2026-06-20) | _gt_repro_oversize·_gt_monkey(clean)·audit `roster` |
 
+### 화면·표시(UI)
+| ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
+|---|---|---|---|
+| EC-UI-01 | **결과 상세 박스스코어 ≠ 실제 기록·관전 결과**. 부상·정지·벤치 선수가 있는 경기를 결과 상세로 열면 standings/production/관전 화면과 다른 명단으로 재시뮬 → 다른 스코어(관전형 1순위 위반) | `app/matchresult/[id].tsx`가 `getEvolvedTeamPlayers`(원본 명단)로 시뮬 — 정사(`production.ts`)·관전(`match/[id].tsx`)은 `availableTeamPlayers`(부상·정지·벤치 반영). → matchresult도 `availableTeamPlayers`로 통일 (2026-06-21, 독립검증 도출) | 정적: matchresult↔match↔production 명단 소스 일치 grep |
+
+> EC-UI-01 발견 방법(왜 기존 테스트가 못 잡았나): 단위/시뮬은 **데이터층(production)** 만 검사 — 화면이 *자기 시뮬*을 돌리는 줄 몰랐다(계층 우회 §4 + reported-but-unwired §1.F). **문서-코드 drift 독립검증**(INJURY 0 "동일 availableTeamPlayers" 약속 ↔ matchresult 코드 대조)이 잡음.
+
 > **악질/원숭이 — 견뎌낸 것(WAI, 버그 아님, 견고성 증거)**: 가짜/빈/존재안함 id, 음수·NaN 자금,
 > '전원 영입'·'전원 보호'·'전원 재계약 거부', 거대/음수 시즌 번호, day0 `endSeason`, 무팀 `endSeason`,
 > 역행 `setDay`, 60시즌 소크 — 전부 크래시·소프트락·불변식 위반 없이 우아하게 거부/처리됨
@@ -166,6 +173,28 @@
 > (저가 슬롯)으로 정원 채우려 캡 직전 팀도 신인을 받음 → ×1.1. ② **비최종(생애주기·FA)**: 자기 선수 유지
 > (keep)로 소폭 초과 → ×1.05(EC-CA-03). **새 영입/재계약(만료자)은 게임이 `≤캡` 하드 게이트**(이건 정상
 > 초과가 아니라 막힌다). 비최종 >5%·드래프트 >10%는 진짜 버그로 잡힌다.
+
+---
+
+## 3.5 독립 도출 후보 (2026-06-21, 3세션: 문서만·코드만·drift) — 검증 대기
+
+> 새 세션 3개가 *서로·기존 레지스트리 안 보고* 도출. 이미 등록된 것(EC-TX-03/04·RM-01·FA·CA)은 제외.
+> 아래는 **처음 본 케이스만** 기록 — 추정 금지 원칙상 **시뮬/실측으로 확인 후** §3에 정식 등록한다(아직 버그 단정 아님).
+> EC-UI-01은 이 도출에서 나와 검증·수정 완료(위 §3 UI 표).
+
+| 후보 | 시스템 | 무엇 | 상태/심각 |
+|---|---|---|---|
+| reSign 개인상한 미클램프 | TX | `reSign`이 `≤LEAGUE_CAP`만 보고 `maxSalaryFor`(MAX_SALARY 8억/FRANCHISE 11억) 미적용 → 단일선수 거대연봉 가능(EC-TX-04 잔여) | **검증요**·중 |
+| 면담 성공 무효(비만료) | OWNER | `buildOwnerFx`가 `contract.remaining>1`이면 continue → 잔여 2년+ 선수 면담 성공해도 다운스트림 0(reported-but-unwired) | **검증요**·중 |
+| NaN 미가드 진입점 | store | `setDay(NaN)`·`recordResult`(fixture/스코어 범위 미검증) → NaN/오염 전파 가능 | **검증요**·중 |
+| hireScout 슬롯 무제한 | STAFF | 코치는 `COACH_SLOTS` 제한, 스카우터는 예산만 검사·인원 상한 없음 → scoutReveal 비정상 상승? | **검증요**·중하 |
+| toggleProtect 멤버십 미검증 | TX | 보호명단에 타팀/유령 id 추가 가능 → 보호 슬롯 낭비(무해하나 핵심선수 보호 실패) | 저 |
+| LEGEND 9000↔7500 | HOF | 문서(SEASON 89)는 9000, 코드는 7500(도달성 리밸런스). **문서 갱신 필요** | drift(문서) |
+| offerScore 공식 drift | FA | 문서(FA 131)는 wYrs·wAge 항, 코드는 home 항. **문서/코드 정합 확인** | drift |
+| FORM "중첩없음" 표현 | FORM | 문서 5의 −7% clamp가 form 계수만 — 만성부상·정지는 form 밖 별도 손실. **문서 표현 명확화** | drift(문서) |
+| subPolicy 죽은 상태 | MATCH | 제거 결정(2026-06-18) 후에도 store가 subPolicy persist·미배선 | 저(세이브 비대) |
+| 프리뷰 OVR 원본명단 | UI | 일정/대시보드 OVR이 `getEvolvedTeamPlayers`(부상·벤치 무시) — EC-UI-01과 동류이나 *프리뷰*라 설계 논의 필요 | 검토 |
+| endSeason 더블탭 | store | 확정 버튼 연타 시 시즌 2전진(데이터무결성 OK=검증됨, UX 디바운스) | 저(UX) |
 
 ---
 
