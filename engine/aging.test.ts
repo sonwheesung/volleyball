@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRng } from './rng';
-import { applyAgingDay, FLOOR } from './aging';
+import { applyAgingDay, ageOneSeason, FLOOR } from './aging';
 import { TRAINABLE_STATS } from './training';
 import type { Player, TrainableStat } from '../types';
 
@@ -74,4 +74,11 @@ test('결정론: 같은 시드 = 같은 결과', () => {
   const a = runSeason(makePlayer(34), 99).jump;
   const b = runSeason(makePlayer(34), 99).jump;
   assert.equal(a, b);
+});
+
+test('ageOneSeason: 시즌 경과 시 나이 +1 (스탯은 불변)', () => {
+  const p = makePlayer(28);
+  const next = ageOneSeason(p);
+  assert.equal(next.age, 29, '나이는 매 시즌 정확히 +1');
+  assert.equal(next.jump, p.jump, '스탯 변화는 일일 틱(aging/training) 몫 — ageOneSeason은 나이만');
 });

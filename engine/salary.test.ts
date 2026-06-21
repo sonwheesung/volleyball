@@ -33,6 +33,13 @@ test('OVR≠연봉: 같은 능력도 신인 서명(19) ≪ 전성기 서명(27)'
   assert.ok(prime > rookie * 1.5, `prime=${prime} rookie=${rookie}`);
 });
 
+test('노장 서명(36) < 전성기 서명(31) — serviceFactor 노장 하락', () => {
+  const p = buildP();
+  const old = computeSalary(p, 36);
+  const prime = computeSalary(p, 31);
+  assert.ok(old < prime, `노장(36)=${old} 이 전성기(31)=${prime} 보다 싸야 — 노쇠 할인`);
+});
+
 test('루키 할인은 점진(하드 캡 절벽 없음) — 능력은 반영', () => {
   const star = buildP({ skSpike: 95, skServe: 95, jump: 95 });
   const scrub = buildP({ skSpike: 50, skBlock: 50, skDig: 50, skReceive: 50, skSet: 50, skServe: 50, jump: 50 });
