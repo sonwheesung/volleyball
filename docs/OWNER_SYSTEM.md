@@ -62,7 +62,9 @@
   불만 없음**("아직 부족하지"), 에이스가 벤치면 부글부글. → 출전 불만 = `w.play × 사유 스케일 × 기대치`.
 - **기분 3종**(`moodOf`): 불만(😟)/무감정(😐)/긍정(😊, 주전+상위권). 선수 상세 "지금 마음" 한 줄로 노출.
 - 엔진 `discontentOf`(`engine/owner.ts`)·셀렉터 `discontentNow`(`data/owner.ts`). 파생·무저장. 검증 `tools/simMood.ts`.
-- 상세 설계(+ #3 휴식·누적→FA): [ROTATION_MORALE](./ROTATION_MORALE_SYSTEM.md).
+- **누적→FA 이탈(C.4)**: 시즌 내내 부당하게 벤치에 묵힌 선수(낮은 출전율 × 출전 불만)는 정 떨어져 **재계약 거부↑ → FA**.
+  `sustainedBenchRefuse`를 `buildOwnerFx` 거부 확률에 가산(출전율=묵힌 기간). 부상 결장은 무관(불만 아님).
+- 상세 설계(+ #3 휴식): [ROTATION_MORALE](./ROTATION_MORALE_SYSTEM.md).
 
 ### 1.2 면담 빈도 — 쿨다운 + 감정 (2026-06-17 쿨다운 추가)
 - **쿨다운**: 한 선수와 면담하면(성공·거절·결렬 무관) `TALK_COOLDOWN_DAYS=24`일 동안 재면담 불가

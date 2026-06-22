@@ -145,6 +145,12 @@ export function refuseResignProb(topic: DiscontentTopic | null, weight: number, 
   return Math.max(0, Math.min(0.9, 0.25 + 0.5 * weight + refuseBias));
 }
 
+/** 누적 출전 불만 → 재계약 거부 가산 (ROTATION_MORALE C.4) — 시즌 내내 앉아있을수록(낮은 출전율) 정 떨어진다.
+ *  출전 불만(topic==='minutes', 사유·성격·기대치 게이트를 통과한 진짜 불만)일 때만 가산. 부상 결장(불만 아님)은 무관. */
+export function sustainedBenchRefuse(playRatio: number, weight: number): number {
+  return Math.min(0.35, Math.max(0, 1 - playRatio) * 0.45 * weight);
+}
+
 // ─── 감독 벤치 건의 ───────────────────────────────────────────
 
 export type BenchReason = 'noResign' | 'form' | 'prospect';

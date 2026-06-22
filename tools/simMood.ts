@@ -112,6 +112,28 @@ const PASS = '✅ PASS', FAIL = '❌ FAIL', NA = '⚠️ 표본부족';
       `(같은 선수·성격, 기대치만 달라 불만 on/off — 저OVR·저경력은 못 나와도 불만 없음)`);
   }
 
+  // ── ⑥ 누적 부당 벤치 → 정 떨어져 재계약 거부↑ → FA (C.4, A/B) ──
+  {
+    const { buildOwnerFx } = await import('../data/owner');
+    const { prefWeightsOf } = await import('../engine/faMarket');
+    setOwnerContext([]);
+    // 만료 예정(remaining≤1) + 출전 갈망 높은 비리베로 선수
+    const endRoster = getEvolvedTeamPlayers(t0, 164).filter((p) => p.position !== 'L' && p.contract.remaining <= 1);
+    const cand = endRoster.sort((a, b) => prefWeightsOf(b).play - prefWeightsOf(a).play)[0];
+    if (cand) {
+      const refuseFree = buildOwnerFx([], G().season, t0, 50).refuseProb[cand.id] ?? 0;
+      setOwnerContext([{ playerId: cand.id, fromDay: 0 }]); // 시즌 내내 벤치
+      const refuseBenched = buildOwnerFx([], G().season, t0, 50).refuseProb[cand.id] ?? 0;
+      setOwnerContext([]);
+      const ok = refuseBenched > refuseFree + 0.1;
+      add('⑥ 누적 부당벤치→재계약 거부(C.4)', ok ? PASS : NA,
+        `${cand.name}(만료예정·출전갈망 ${prefWeightsOf(cand).play.toFixed(2)}): 정상 출전 시 거부 ${(refuseFree * 100).toFixed(0)}% → ` +
+        `시즌 내내 벤치 시 ${(refuseBenched * 100).toFixed(0)}% (오래 묵힐수록 정 떨어져 FA로)`);
+    } else {
+      add('⑥ 누적 부당벤치→재계약 거부(C.4)', NA, '만료 예정 선수 없음(표본)');
+    }
+  }
+
   log(`\n${'═'.repeat(56)}\n선수 심리 검증 요약`);
   for (const r of results) log(`  ${r.status.padEnd(4)} ${r.item}`);
   log(`\nFAIL ${results.filter((r) => r.status === FAIL).length}`);

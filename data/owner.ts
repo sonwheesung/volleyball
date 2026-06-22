@@ -4,7 +4,7 @@
 import type { Player, SeasonAwards } from '../types';
 import {
   discontentOf, moodOf, popularityOf, fanbase, playerFans, fanOverlapRatio,
-  interviewEffects, refuseResignProb, sinkingShipBias,
+  interviewEffects, refuseResignProb, sustainedBenchRefuse, sinkingShipBias,
   type DiscontentTopic, type Mood, type SitCause, type Fanbase, type InterviewLog, type OwnerFx,
 } from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
@@ -73,17 +73,18 @@ function moodLabel(cause: SitCause, mood: Mood, topic: DiscontentTopic | null): 
 /** 선수의 현재 마음 — 사유(왜 벤치인가)+성격으로 불만/무감정/긍정 + 면담용 주제·가중. 시즌 진행 시점(day) 기준 */
 export function discontentNow(
   p: Player, myTeamId: string, day: number,
-): { topic: DiscontentTopic | null; weight: number; mood: Mood; cause: SitCause; label: string } {
+): { topic: DiscontentTopic | null; weight: number; mood: Mood; cause: SitCause; label: string; playRatio: number } {
   const refDay = day > 0 ? day : Number.MAX_SAFE_INTEGER;
   const standings = computeStandings(refDay);
   const rank = Math.max(1, standings.findIndex((s) => s.teamId === myTeamId) + 1);
   const prod = leagueProduction(refDay).get(p.id);
   const games = Math.max(1, Math.round((day > 0 ? day : SEASON_END_DAY) / GAME_EVERY));
+  const playRatio = Math.min(1, (prod?.matches ?? 0) / games);
   const cause = benchCauseOf(p, myTeamId, day);
   const ctx = {
     recentRankAvg: rank,
     teamCount: standings.length,
-    playRatio: Math.min(1, (prod?.matches ?? 0) / games),
+    playRatio,
     salaryRatio: p.contract.salary / Math.max(1, marketValue(p)),
     myTeamId,
     sitCause: cause,
@@ -93,7 +94,7 @@ export function discontentNow(
   const mood = moodOf(ctx, topic);
   const w = prefWeightsOf(p);
   const weight = !topic ? 0 : topic === 'win' ? w.win : topic === 'minutes' ? w.play : topic === 'money' ? w.money : w.home;
-  return { topic, weight, mood, cause, label: moodLabel(cause, mood, topic) };
+  return { topic, weight, mood, cause, label: moodLabel(cause, mood, topic), playRatio };
 }
 
 /** 시즌말 FA 판정용 ownerFx 조립 — store.endSeason과 FA/드래프트 센터 미리보기가 공유(미리보기=결과) */
@@ -103,8 +104,10 @@ export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamI
   for (const id of rosterIdsOnDay(myTeamId, SEASON_END_DAY)) {
     const p = evolveOnDay(id, SEASON_END_DAY);
     if (!p || p.contract.remaining > 1) continue; // 이번 오프시즌 만료자만 거부권 행사
-    const { topic, weight } = discontentNow(p, myTeamId, SEASON_END_DAY);
-    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore);
+    const { topic, weight, playRatio } = discontentNow(p, myTeamId, SEASON_END_DAY);
+    // 누적(C.4): 시즌 내내 부당하게 앉아있던 만큼(낮은 출전율) 정 떨어져 거부↑. 출전 불만일 때만.
+    const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight) : 0;
+    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore) + accum;
     if (prob > 0) refuseProb[id] = Math.min(0.95, prob);
   }
   return { refuseProb, offerBias: fx.offerBias };
