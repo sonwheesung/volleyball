@@ -1,7 +1,12 @@
 // 배구 엔진 테스트 콘솔 — 경기·관계(선수 심리)·FA·영입(드래프트)을 브라우저에서 직접 시뮬/검증.
 // 백엔드 없음 — engine/·data/ 순수 TS를 그대로 번들(RN은 _stubs). 탭마다 우리가 tools/sim*.ts로 보던 엔진을 화면으로.
-import { resetLeagueBase, LEAGUE, getTeam, coachInfoOf, getEvolvedTeamPlayers } from '../data/league';
+import { resetLeagueBase, LEAGUE, getTeam, coachInfoOf, getEvolvedTeamPlayers, getPlayer, shortTeamName, SEASON } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
+import { computeStandings } from '../data/standings';
+import { buildPlayoffs } from '../data/playoffs';
+import { currentSeasonAwards } from '../data/awards';
+import { restedOnDay } from '../data/rotation';
+import type { AwardWinner } from '../types';
 import { simulateMatch } from '../engine/match';
 import { attributeProduction } from '../engine/production';
 import { teamOverallRaw, overall, displayOvr } from '../engine/overall';
@@ -28,14 +33,14 @@ const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
   TEAMS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select>`;
 
 // ─── 탭 프레임워크 ───────────────────────────────────────────────────────
-type TabId = 'match' | 'morale' | 'fa' | 'draft' | 'salary';
-const TABS: [TabId, string][] = [['match', '경기'], ['morale', '관계 · 선수 심리'], ['salary', '연봉 산정'], ['fa', 'FA 시장'], ['draft', '영입 · 드래프트']];
+type TabId = 'match' | 'season' | 'morale' | 'fa' | 'draft' | 'salary';
+const TABS: [TabId, string][] = [['match', '경기'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['salary', '연봉 산정'], ['fa', 'FA 시장'], ['draft', '영입 · 드래프트']];
 let active: TabId = 'match';
 function mount() {
   $('tabs').innerHTML = TABS.map(([id, l]) => `<span class="tab${id === active ? '' : ' off'}" data-tab="${id}">${l}</span>`).join('');
   document.querySelectorAll('[data-tab]').forEach((e) => e.addEventListener('click', () => { active = e.getAttribute('data-tab') as TabId; mount(); }));
   $('out').innerHTML = `<p class="hint">실행을 눌러줘.</p>`;
-  ({ match: mountMatch, morale: mountMorale, fa: mountFA, draft: mountDraft, salary: mountSalary })[active]();
+  ({ match: mountMatch, season: mountSeason, morale: mountMorale, fa: mountFA, draft: mountDraft, salary: mountSalary })[active]();
 }
 
 // ═══ 경기 ═══════════════════════════════════════════════════════════════
@@ -83,6 +88,29 @@ function runMatch() {
     const dr = order.filter((k) => dist[k]).map((k) => `<tr><td>${k}</td><td>${dist[k]}</td><td>${(dist[k] / M.runs * 100).toFixed(1)}%</td></tr>`).join('');
     $('out').innerHTML = `<div class="stat-grid"><div class="stat"><span class="sv">${(aw / M.runs * 100).toFixed(1)}%</span><span class="sl">A 승률 (${aw}/${M.runs})</span></div><div class="stat"><span class="sv">${(as / M.runs).toFixed(2)} : ${(bs / M.runs).toFixed(2)}</span><span class="sl">평균 세트 (A:B)</span></div></div><table class="box dist"><thead><tr><th>세트 스코어</th><th>경기 수</th><th>비율</th></tr></thead><tbody>${dr}</tbody></table><p class="hint">${esc(getTeam(M.a)?.name ?? M.a)}(A) 기준 · 시드 ${M.seed}~${M.seed + M.runs - 1}</p>`;
   }
+}
+
+// ═══ 시즌 ════════════════════════════════════════════════════════════════
+function mountSeason() {
+  $('controls').innerHTML = `<div class="run-row"><button id="se-run">시즌 진행 결과 ▶</button></div><p class="hint">현재 리그(1시즌)를 끝까지 자동 시뮬한 최종 순위·우승·시상(MVP·신인상·기록왕)·주전 휴식(#3). 결정론 — 관전/생산과 동일.</p>`;
+  $('se-run').onclick = runSeason;
+}
+function runSeason() {
+  const standings = computeStandings(164);
+  const champ = buildPlayoffs(0).championId;
+  const aw = currentSeasonAwards(0);
+  let restGames = 0;
+  for (const d of [...new Set(SEASON.map((f) => f.dayIndex))]) for (const t of LEAGUE.teams) if (restedOnDay(t.id, d).size) restGames++;
+  const awName = (w: AwardWinner | null) => w ? `${esc(getPlayer(w.playerId)?.name ?? '?')} <span style="color:var(--soft)">${esc(shortTeamName(w.teamId))}</span>` : '—';
+  const standRows = standings.map((s, i) => `<tr><td>${i + 1}</td><td class="nm" style="text-align:left">${s.teamId === champ ? '🏆 ' : ''}${esc(getTeam(s.teamId)?.name ?? s.teamId)}</td><td>${s.played}</td><td class="pt">${s.wins}</td><td>${s.losses}</td><td>${s.points}</td><td style="color:${s.setDiff >= 0 ? 'var(--good)' : 'var(--bad)'}">${s.setDiff > 0 ? '+' : ''}${s.setDiff}</td></tr>`).join('');
+  const awardRows = [['정규 MVP', aw.mvp], ['챔프전 MVP', aw.finalsMvp], ['신인상', aw.rookie], ['기량발전상', aw.mostImproved], ['득점왕', aw.titles.scoring], ['블로킹왕', aw.titles.block], ['디그왕', aw.titles.dig], ['세트왕', aw.titles.set]]
+    .map(([label, w]) => `<tr><td style="color:var(--soft);text-align:left">${label}</td><td class="nm" style="text-align:left">${awName(w as AwardWinner | null)}</td></tr>`).join('');
+  $('out').innerHTML = `
+    <div class="boxes">
+      <div class="boxwrap"><h3>최종 순위</h3><table class="box"><thead><tr><th>#</th><th style="text-align:left">팀</th><th>경기</th><th>승</th><th>패</th><th>승점</th><th>세트±</th></tr></thead><tbody>${standRows}</tbody></table></div>
+      <div class="boxwrap"><h3>시상식</h3><table class="box"><tbody>${awardRows}</tbody></table>
+        <p class="hint" style="margin-top:12px">🛋️ 로드매니지먼트(#3): 시즌 동안 주전 휴식 <b>${restGames}</b> 팀-경기 (순위 굳은 팀이 노장·주력 안배)</p></div>
+    </div>`;
 }
 
 // ═══ 관계 · 선수 심리 ════════════════════════════════════════════════════
