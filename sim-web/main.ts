@@ -10,6 +10,8 @@ import { prefWeightsOf, isFAEligible, assignFAGrades, askingPrice } from '../eng
 import { SIT_CAUSE_KO } from '../engine/owner';
 import { marketVal } from '../data/awardSalary';
 import { formatMoney } from '../engine/salary';
+import { LEAGUE_CAP, isFranchise } from '../engine/cap';
+import { leagueProduction } from '../data/production';
 import { buildDraftContext } from '../data/draftSetup';
 import type { Player } from '../types';
 
@@ -26,14 +28,14 @@ const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
   TEAMS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select>`;
 
 // ─── 탭 프레임워크 ───────────────────────────────────────────────────────
-type TabId = 'match' | 'morale' | 'fa' | 'draft';
-const TABS: [TabId, string][] = [['match', '경기'], ['morale', '관계 · 선수 심리'], ['fa', 'FA 시장'], ['draft', '영입 · 드래프트']];
+type TabId = 'match' | 'morale' | 'fa' | 'draft' | 'salary';
+const TABS: [TabId, string][] = [['match', '경기'], ['morale', '관계 · 선수 심리'], ['salary', '연봉 산정'], ['fa', 'FA 시장'], ['draft', '영입 · 드래프트']];
 let active: TabId = 'match';
 function mount() {
   $('tabs').innerHTML = TABS.map(([id, l]) => `<span class="tab${id === active ? '' : ' off'}" data-tab="${id}">${l}</span>`).join('');
   document.querySelectorAll('[data-tab]').forEach((e) => e.addEventListener('click', () => { active = e.getAttribute('data-tab') as TabId; mount(); }));
   $('out').innerHTML = `<p class="hint">실행을 눌러줘.</p>`;
-  ({ match: mountMatch, morale: mountMorale, fa: mountFA, draft: mountDraft })[active]();
+  ({ match: mountMatch, morale: mountMorale, fa: mountFA, draft: mountDraft, salary: mountSalary })[active]();
 }
 
 // ═══ 경기 ═══════════════════════════════════════════════════════════════
@@ -120,6 +122,32 @@ function runFA() {
     return `<tr><td class="pt">${g}</td>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td style="text-align:left">${esc(getTeam(team)?.name ?? team)}</td><td>${ovrOf(p)}</td><td>${p.age}</td><td>${formatMoney(askingPrice(marketVal(p), g))}</td></tr>`;
   }).join('');
   $('out').innerHTML = `<table class="box"><thead><tr><th>등급</th><th>P</th><th>선수</th><th style="text-align:left">현 소속</th><th>OVR</th><th>나이</th><th>요구 연봉</th></tr></thead><tbody>${body || '<tr><td colspan="7" class="empty">FA 자격 선수 없음</td></tr>'}</tbody></table><p class="hint">총 ${pool.length}명 · A/B는 보상선수 대상 등급</p>`;
+}
+
+// ═══ 연봉 산정 ═══════════════════════════════════════════════════════════
+const SAL = { team: TEAMS[0].id, day: 164 };
+function mountSalary() {
+  $('controls').innerHTML = `<div class="run-row"><label>팀 ${teamSelect('s-team', SAL.team)}</label><label>경기일(생산 반영) <input type="number" id="s-day" value="${SAL.day}" min="0" max="164" /></label><button id="s-run">연봉 산정 보기 ▶</button></div><p class="hint">시장가치 = 능력(OVR)×나이(서비스)×포지션×<b>시즌 생산</b>×수상 프리미엄. 연봉/시장가로 고평가·저평가 판정. 팀 총연봉 vs 샐러리캡(35억).</p>`;
+  ($('s-team') as HTMLSelectElement).onchange = (e) => { SAL.team = (e.target as HTMLSelectElement).value; };
+  ($('s-day') as HTMLInputElement).onchange = (e) => { SAL.day = Math.max(0, Math.min(164, +(e.target as HTMLInputElement).value || 0)); };
+  $('s-run').onclick = runSalary;
+}
+function runSalary() {
+  const prodMap = leagueProduction(SAL.day);
+  const rows = getEvolvedTeamPlayers(SAL.team, SAL.day).map((p) => {
+    const prod = prodMap.get(p.id);
+    const mv = marketVal(p, prod);
+    const ratio = p.contract.salary / Math.max(1, mv);
+    return { p, pts: prod?.points ?? 0, mv, sal: p.contract.salary, ratio };
+  }).sort((a, b) => b.sal - a.sal);
+  const total = rows.reduce((s, r) => s + r.sal, 0);
+  const body = rows.map(({ p, pts, mv, sal, ratio }) => {
+    const col = ratio > 1.15 ? 'var(--bad)' : ratio < 0.85 ? 'var(--good)' : 'var(--soft)';
+    const tag = isFranchise(p) ? '<span style="color:var(--accent);font-weight:700">프랜차이즈</span>' : p.isForeign ? '<span style="color:var(--bad)">외인</span>' : (p.career.seasons <= 1 ? '<span style="color:var(--soft)">신인</span>' : '');
+    return `<tr>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td>${ovrOf(p)}</td><td>${p.age}</td><td>${pts}</td><td>${formatMoney(mv)}</td><td class="pt">${formatMoney(sal)}</td><td style="color:${col};font-weight:700">${(ratio * 100).toFixed(0)}%</td><td style="text-align:left">${tag}</td></tr>`;
+  }).join('');
+  const capCol = total > LEAGUE_CAP ? 'var(--bad)' : 'var(--good)';
+  $('out').innerHTML = `<div class="stat-grid"><div class="stat"><span class="sv" style="color:${capCol}">${formatMoney(total)}</span><span class="sl">팀 총연봉 / 캡 ${formatMoney(LEAGUE_CAP)}</span></div></div><table class="box"><thead><tr><th>P</th><th>선수</th><th>OVR</th><th>나이</th><th>시즌득점</th><th>시장가치</th><th>연봉</th><th>연봉/시장</th><th style="text-align:left">비고</th></tr></thead><tbody>${body}</tbody></table><p class="hint">연봉/시장: 빨강 고평가(>115%)·초록 저평가(&lt;85%) · ${esc(getTeam(SAL.team)?.name ?? SAL.team)} day ${SAL.day}</p>`;
 }
 
 // ═══ 영입 · 드래프트 ═════════════════════════════════════════════════════
