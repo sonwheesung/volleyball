@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PosTag, theme } from '../components/Screen';
+import { Loading, PosTag, theme, useDeferredReady } from '../components/Screen';
 import { getTeam, shortTeamName as short, teamPlayerIds } from '../data/league';
 import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, type RecordCat } from '../data/records';
 import { useGameStore } from '../store/useGameStore';
@@ -10,6 +10,13 @@ import { useGameStore } from '../store/useGameStore';
 const MEDAL = ['🥇', '🥈', '🥉'];
 
 export default function Records() {
+  // 통산 리더보드(현역+은퇴 전체 순회·정렬)는 시즌이 쌓일수록 무거워 한 틱 미뤄 로딩부터 그린다
+  const ready = useDeferredReady();
+  if (!ready) return <Loading title="통산 순위" message="기록을 집계하는 중…" />;
+  return <RecordsInner />;
+}
+
+function RecordsInner() {
   const router = useRouter();
   const params = useLocalSearchParams<{ cat?: string; scope?: string; team?: string }>();
   const cat = (RECORD_CATS.some((c) => c.key === params.cat) ? params.cat : 'points') as RecordCat;

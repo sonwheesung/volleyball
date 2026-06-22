@@ -1,7 +1,7 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { ActivityIndicator, InteractionManager, Text, View } from 'react-native';
-import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
+import { InteractionManager, Text, View } from 'react-native';
+import { Button, Card, Loading, Muted, OvrBadge, PosTag, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
 import { RosterList } from '../../components/RosterList';
 import { IdentityChip, RecentRanks } from '../../components/ClubIdentity';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal } from '../../data/league';
@@ -50,15 +50,7 @@ export default function TeamDetail() {
   const onSelect = () => setStarting(true);
 
   if (starting) {
-    return (
-      <Screen title={team.name} scroll={false}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-          <ActivityIndicator size="large" color={theme.accent} />
-          <Text style={{ color: theme.text, fontSize: 17, fontWeight: '800' }}>{team.name} 운영을 준비하는 중…</Text>
-          <Muted style={{ textAlign: 'center' }}>시즌 일정과 선수단을 구성하고 있습니다.{'\n'}잠시만 기다려 주세요.</Muted>
-        </View>
-      </Screen>
-    );
+    return <Loading title={team.name} message={`${team.name} 운영을 준비하는 중…\n시즌 일정과 선수단을 구성하고 있습니다.`} />;
   }
 
   return (

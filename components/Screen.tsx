@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { ActivityIndicator, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { displayOvr } from '../engine/overall';
@@ -49,6 +50,31 @@ export function Screen({ title, children, scroll = true }: ScreenProps) {
       )}
     </SafeAreaView>
   );
+}
+
+/** 전체 화면 로딩 표시 — 스피너 + 안내문. 데이터를 불러오거나 무겁게 생성하는 동안 보여준다.
+ *  (관전형 1순위 — UI는 1차 구현, 추후 개선 예정: docs/EDGE_CASES §5) */
+export function Loading({ title, message }: { title?: string; message?: string }) {
+  return (
+    <Screen title={title} scroll={false}>
+      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+        <ActivityIndicator size="large" color={theme.accent} />
+        {message ? <Text style={styles.loadingMsg}>{message}</Text> : null}
+      </View>
+    </Screen>
+  );
+}
+
+/** 무거운 동기 생성/재계산 화면용 — 첫 프레임에 로딩을 그리고 다음 인터랙션 틱에 본문을 마운트해
+ *  "탭했는데 화면이 멈춘" 체감을 없앤다(team/[id] 패턴 일반화). 동기 계산이라 "빠르면 안 보이게"가
+ *  불가하므로 즉시 뜨는 가벼운 화면엔 쓰지 말 것(불필요한 깜빡임). 반환값 false 동안 <Loading/>을 렌더. */
+export function useDeferredReady(): boolean {
+  const [ready, setReady] = useState(false);
+  useEffect(() => {
+    const task = InteractionManager.runAfterInteractions(() => setReady(true));
+    return () => task.cancel();
+  }, []);
+  return ready;
 }
 
 export function Card({ children, onPress }: { children: ReactNode; onPress?: () => void }) {
@@ -175,6 +201,7 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   muted: { color: theme.muted, fontSize: 14, lineHeight: 20 },
+  loadingMsg: { color: theme.muted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   // paddingHorizontal 필수 — 인라인(Row 안) 버튼은 폭이 글자에 맞춰지므로, 없으면 "영입"처럼 짧은
   // 라벨이 세로로 길쭉한 캡슐이 된다. 전체폭 버튼(Card 안)은 stretch라 영향 없음.
   btn: { borderRadius: 999, paddingVertical: 14, paddingHorizontal: 22, minWidth: 76, alignItems: 'center', justifyContent: 'center' },

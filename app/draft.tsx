@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
+import { Button, Card, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal } from '../data/league';
@@ -17,6 +17,13 @@ function potStars(p: Player): string {
 }
 
 export default function DraftCenter() {
+  // 드래프트 컨텍스트 생성(buildDraftContext)+지명 시뮬(resolveDraft)은 무거워 한 틱 미뤄 로딩부터 그린다
+  const ready = useDeferredReady();
+  if (!ready) return <Loading title="신인 드래프트" message="드래프트를 준비하는 중…" />;
+  return <DraftCenterInner />;
+}
+
+function DraftCenterInner() {
   const router = useRouter();
   const my = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);

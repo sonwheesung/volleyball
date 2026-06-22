@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Muted, Screen, theme } from '../components/Screen';
+import { Loading, Muted, Screen, theme, useDeferredReady } from '../components/Screen';
 import { buildNewsFeed, newsKey } from '../data/news';
 import { useGameStore } from '../store/useGameStore';
 import type { NewsItem } from '../types';
@@ -15,6 +15,13 @@ export const KIND_KO: Record<NewsItem['kind'], string> = {
 };
 
 export default function NewsList() {
+  // 뉴스 피드 생성(buildNewsFeed = 전 시즌·경기 순회)은 무거워 한 틱 미뤄 로딩부터 그린다
+  const ready = useDeferredReady();
+  if (!ready) return <Loading title="리그 뉴스" message="기사를 불러오는 중…" />;
+  return <NewsListInner />;
+}
+
+function NewsListInner() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);

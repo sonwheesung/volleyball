@@ -1,8 +1,7 @@
 import type { ComponentProps } from 'react';
 import { Redirect, Tabs } from 'expo-router';
-import { View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { theme } from '../../components/Screen';
+import { Loading, theme } from '../../components/Screen';
 import { useGameStore } from '../../store/useGameStore';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -16,8 +15,8 @@ export default function TabsLayout() {
   const onboarded = useGameStore((s) => s.onboarded);
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
 
-  // 저장 데이터 로드 전: 빈 화면(깜빡임 방지)
-  if (!hydrated) return <View style={{ flex: 1, backgroundColor: theme.bg }} />;
+  // 저장 데이터 로드 전(AsyncStorage 복원 = 유일한 진짜 비동기 로드): 로딩 화면
+  if (!hydrated) return <Loading message="저장된 시즌을 불러오는 중…" />;
 
   // 첫 실행 → 온보딩(게임 소개) → 구단 선택
   if (!onboarded) return <Redirect href="/onboarding" />;

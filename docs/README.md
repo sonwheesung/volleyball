@@ -70,6 +70,7 @@
 | **기록 화면 개편**(시즌별 이동·통산 리더보드 현역+은퇴 TOP100·팀별 TOP50·6카테고리·세그먼트 탭) | ✅ `data/records.ts`·`app/records.tsx`·`app/(tabs)/history.tsx` (HofEntry에 spikes/aces/assists 추가) |
 | **작전 교체 코트 가시화**(엔진 subEvents 연출 로그 → 보드가 실제 코트 6인 재생·투입 강조) | ✅ `engine/simMatch.ts`(SubEvent)·`engine/match.ts`·`components/MatchCourt.tsx` (BOARD_RULES 30) |
 | **온보딩/튜토리얼·설정·서포터팩(비소모성 후원)·크레딧** | ✅ `app/onboarding.tsx`·`settings.tsx`·`supporter.tsx`·`credits.tsx` (출시 시 실제 IAP 연결) |
+| **로딩 화면**(시작 복원 게이트 + 무거운 생성/재계산 7화면) | ✅ 1차 — `components/Screen.tsx`(`Loading`·`useDeferredReady`)·`(tabs)/_layout.tsx`·news/history/records/draft/fa/tryout/asian-tryout. **UI 개선 예정**(스켈레톤·브랜드 연출, EDGE_CASES §5) |
 | 감독 훈련선호 커스터마이즈 / 라인업·경기 직접 개입 | ❌ 자동 완성 후 "오버라이드"로 개방 예정 |
 
 > **자동/수동 정책:** 현재 전 구단(사용자 팀 포함) 자동. AI 팀은 영구히 자동.

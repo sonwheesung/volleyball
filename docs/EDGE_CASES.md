@@ -240,6 +240,16 @@
   기준(`isForeign>1`)이라 외인1+아시아1=2를 **위반으로 오판(560건 false positive)**. 진짜외인≤1 AND
   아시아≤1로 교정(`data/acquisitionAudit.ts:151·160`). 오라클은 false negative(허위 통과)뿐 아니라
   **false positive(허위 위반)** 도 stale될 수 있음 — 시스템 추가 시 옛 감사도 갱신할 것.
+- **[구현(2026-06-22) · UI 개선 예정] 로딩 화면** — 데이터를 불러오거나 무겁게 생성하는 화면에 로딩 표시 추가.
+  - **공통**: `components/Screen.tsx`에 재사용 `Loading`(스피너+안내문)과 `useDeferredReady()`(첫 프레임 로딩 →
+    다음 인터랙션 틱에 본문 마운트, `team/[id]` 패턴 일반화) 추가. 동기 계산이라 "빠르면 안 보이게"가 RN에서
+    불가하므로 **무거운 화면에만** 적용(가벼운 화면은 깜빡임 유발 → 제외).
+  - **시작 복원 게이트**: `(tabs)/_layout.tsx`가 `hydrated` 전 빈 화면 → `Loading`(AsyncStorage 복원 = 유일한 진짜 비동기).
+  - **무거운 생성/재계산 화면(7)**: news·history·records·draft·fa·tryout·asian-tryout — wrapper/inner 분리로
+    무거운 셀렉터(buildNewsFeed·buildDraftContext·faMarketPreview·careerLeaderboard 등)를 ready 후에만 마운트.
+  - **제외**: results·standings(단순 집계, 가벼움 — 깜빡임 방지), 메인 탭 index/squad/schedule/office(주 루프, 즉시감 우선).
+  - **개선 예정(후속)**: 현재 스피너+텍스트 1차 구현. ① 스켈레톤/플레이스홀더 레이아웃, ② 브랜드 연출(로고·코트 모션),
+    ③ 제외 화면 중 시즌 누적으로 무거워지면 재평가(records 외 results도 후보), ④ 지연 임계(아주 빠르면 스피너 생략) 검토.
 
 ---
 

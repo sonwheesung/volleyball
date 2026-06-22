@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Screen';
+import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } from '../../components/Screen';
 import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../../data/league';
 import { leagueProduction } from '../../data/production';
 import { buildNewsFeed } from '../../data/news';
@@ -29,6 +29,13 @@ function Seg({ items, value, onChange }: { items: string[]; value: number; onCha
 }
 
 export default function History() {
+  // 기록 탭은 무겁다(뉴스 피드 생성 + 리그 생산 집계 + 시즌 스냅샷). 한 틱 미뤄 로딩부터 그린다
+  const ready = useDeferredReady();
+  if (!ready) return <Loading title="기록" message="기록을 불러오는 중…" />;
+  return <HistoryInner />;
+}
+
+function HistoryInner() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);

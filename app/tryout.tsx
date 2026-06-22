@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Muted, PosTag, Row, Screen, Title, theme } from '../components/Screen';
+import { Button, Card, Loading, Muted, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
@@ -15,6 +15,13 @@ import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
 
 export default function Tryout() {
+  // 트라이아웃 컨텍스트 생성(buildDraftContext)은 무거워 한 틱 미뤄 로딩부터 그린다
+  const ready = useDeferredReady();
+  if (!ready) return <Loading title="외국인 트라이아웃" message="트라이아웃을 준비하는 중…" />;
+  return <TryoutInner />;
+}
+
+function TryoutInner() {
   const router = useRouter();
   const my = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);
