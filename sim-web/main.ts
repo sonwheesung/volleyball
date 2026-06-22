@@ -33,6 +33,21 @@ const pcell = (pos: string) => `<td class="pos pos-${pos}">${pos}</td>`;
 const ovrOf = (p: Player) => displayOvr(overall(p));
 const potStars = (p: Player) => { const m = Math.max(...Object.values(p.potential)); return m >= 88 ? '★★★' : m >= 80 ? '★★' : m >= 72 ? '★' : '·'; };
 
+// 무거운 동기 작업(N회 반복 시뮬 등) — 버튼 비활성 + 로딩 표시 후 **한 프레임 양보(rAF×2)** 하고 실행.
+// JS 단일 스레드라 동기 루프는 UI를 막는다 → 페인트를 먼저 시켜야 로딩/비활성이 실제로 보인다(SIM_CONSOLE UI 규칙).
+const HEAVY_AT = 100; // 이 횟수 이상이면 로딩 표시(미만은 즉시 — 깜빡임 방지)
+function runHeavy(btn: HTMLButtonElement, label: string, work: () => void) {
+  btn.disabled = true;
+  const orig = btn.textContent;
+  btn.textContent = '실행 중…';
+  $('out').innerHTML = `<div class="loading"><div class="spinner"></div><p>${esc(label)}</p></div>`;
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    try { work(); } finally { btn.disabled = false; btn.textContent = orig; }
+  }));
+}
+const maybeHeavy = (btn: HTMLButtonElement, count: number, label: string, work: () => void) =>
+  count >= HEAVY_AT ? runHeavy(btn, label, work) : work();
+
 resetLeagueBase();
 const TEAMS = LEAGUE.teams.map((t) => ({ id: t.id, name: getTeam(t.id)?.name ?? t.id }));
 const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
@@ -88,13 +103,13 @@ function runMatch() {
       return `<div class="boxwrap"><h3>${esc(getTeam(teamId)?.name ?? teamId)}</h3><table class="box"><thead><tr><th>P</th><th>선수</th><th>득점</th><th>공격</th><th>블록</th><th>디그</th><th>에이스</th><th>어시</th><th>리시브</th></tr></thead><tbody>${body || '<tr><td colspan="9" class="empty">출전 기록 없음</td></tr>'}</tbody></table></div>`;
     };
     $('out').innerHTML = `<div class="scoreboard"><div class="sb-team ${win === M.a ? 'won' : ''}">${esc(getTeam(M.a)?.name ?? M.a)}</div><div class="sb-score">${sim.homeSets} : ${sim.awaySets}</div><div class="sb-team ${win === M.b ? 'won' : ''}">${esc(getTeam(M.b)?.name ?? M.b)}</div></div><div class="setchips">${sets}</div><div class="boxes">${box(A, M.a)}${box(B, M.b)}</div>`;
-  } else {
+  } else maybeHeavy($('m-run') as HTMLButtonElement, M.runs, `${M.runs.toLocaleString()}경기 시뮬레이션 중…`, () => {
     let aw = 0, as = 0, bs = 0; const dist: Record<string, number> = {};
     for (let i = 0; i < M.runs; i++) { const s = simulateMatch(M.seed + i, A, B, opts); if (s.homeSets > s.awaySets) aw++; as += s.homeSets; bs += s.awaySets; const k = `${s.homeSets}:${s.awaySets}`; dist[k] = (dist[k] ?? 0) + 1; }
     const order = ['3:0', '3:1', '3:2', '2:3', '1:3', '0:3'];
     const dr = order.filter((k) => dist[k]).map((k) => `<tr><td>${k}</td><td>${dist[k]}</td><td>${(dist[k] / M.runs * 100).toFixed(1)}%</td></tr>`).join('');
     $('out').innerHTML = `<div class="stat-grid"><div class="stat"><span class="sv">${(aw / M.runs * 100).toFixed(1)}%</span><span class="sl">A 승률 (${aw}/${M.runs})</span></div><div class="stat"><span class="sv">${(as / M.runs).toFixed(2)} : ${(bs / M.runs).toFixed(2)}</span><span class="sl">평균 세트 (A:B)</span></div></div><table class="box dist"><thead><tr><th>세트 스코어</th><th>경기 수</th><th>비율</th></tr></thead><tbody>${dr}</tbody></table><p class="hint">${esc(getTeam(M.a)?.name ?? M.a)}(A) 기준 · 시드 ${M.seed}~${M.seed + M.runs - 1}</p>`;
-  }
+  });
 }
 
 // ═══ 선발 라인업 (경기별 주전 등록 엔진) — what-if 부상 주입 ══════════════
@@ -153,6 +168,7 @@ function runDist() {
   if (D.a === D.b) { $('out').innerHTML = `<p class="warn">서로 다른 두 팀을 골라주세요.</p>`; return; }
   const A = availableTeamPlayers(D.a, 0), B = availableTeamPlayers(D.b, 0);
   const opts = { home: coachInfoOf(D.a), away: coachInfoOf(D.b) } as any;
+  maybeHeavy($('d-run') as HTMLButtonElement, D.runs, `${D.runs.toLocaleString()}경기 분포 측정 중…`, () => {
   let kill = 0, stuff = 0, ace = 0, err = 0, total = 0;
   for (let i = 0; i < D.runs; i++) {
     const sim = simulateMatch(i + 1, A, B, opts);
@@ -162,6 +178,7 @@ function runDist() {
   $('out').innerHTML = `<table class="box" style="max-width:520px"><thead><tr><th style="text-align:left">득점 유형</th><th>비중</th><th>횟수</th><th>KOVO 목표</th></tr></thead><tbody>
     ${row('공격(킬)', kill, '~56%', 'var(--accent)')}${row('블로킹(스터프)', stuff, '~10%', '#8B7CF0')}${row('서브 에이스', ace, '~6%', 'var(--warn)')}${row('상대 범실', err, '~28%', 'var(--soft)')}</tbody></table>
     <p class="hint">${esc(getTeam(D.a)?.name ?? D.a)} vs ${esc(getTeam(D.b)?.name ?? D.b)} · ${D.runs}경기 · 총 ${total.toLocaleString()}득점</p>`;
+  });
 }
 
 // ═══ 재정 ════════════════════════════════════════════════════════════════
