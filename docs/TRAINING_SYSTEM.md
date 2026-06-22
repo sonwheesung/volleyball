@@ -152,7 +152,7 @@ xp[stat] >= 1.0  →  stat += 1,  xp[stat] -= 1.0
 gain = BASE
      × relevance        // 주 스탯 1.0 / 부 스탯 0.4
      × posRelevance     // 포지션 관련성 0~1 (리베로 × 블로킹훈련 ≈ 0)
-     × effectiveShare   // = max(coachShare, POS_FLOOR × posRelevance)  ← 포지션 인식(리밸런스)
+     × effectiveShare   // = max(coachShare, POS_FLOOR)  ← 코치 선호 vs 포지션 바닥(posRelevance는 위 줄에서 별도 곱)
      × ageMul           // 1.3 표 (어릴수록↑, 신체는 전성기후 0)
      × headroom         // clamp((potential[stat] - current)/12, 0, 1)
      × talent[stat]     // 재능 × 분야보정 (1.2)

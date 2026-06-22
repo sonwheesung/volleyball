@@ -16,7 +16,7 @@
 | [ROTATION_MORALE](./ROTATION_MORALE_SYSTEM.md) | **선발 휴식(순위 기반 로드매니지먼트) + 벤치 사유 인지 + 감정=f(사유,성격) + 누적→FA**. ✅ 구현(2026-06-22) | `engine/lineup.ts`(pickRest)·`data/rotation.ts`·`engine/owner.ts`·`data/owner.ts`, `tools/simMood·simStarters·_ev_rest` |
 | [STATS_PROTOCOL](./STATS_PROTOCOL.md) | 통계 3원칙 — 표본 1만+·N/엔진커밋 명기·로직 변경 시 무효 처리 | 모든 `tools/sim*.ts` |
 | [EDGE_CASES](./EDGE_CASES.md) | 영입·오프시즌 정상/엣지 케이스 레지스트리(회귀 체크리스트, `analyze-cases`/`verify-cases` 스킬) | `data/acquisitionAudit.ts`, `tools/simAudit·simFaDup·simStaffDup·simMoneyOnly.ts` |
-| [SIM_CONSOLE](./SIM_CONSOLE.md) | **엔진 테스트 콘솔(웹)** — PC 브라우저에서 엔진 직접 실행·검증(백엔드 없음, 13탭). `npm run sim:web` → :5051 | `sim-web/`(build.cjs·main.ts·index.html) |
+| [SIM_CONSOLE](./SIM_CONSOLE.md) | **엔진 테스트 콘솔(웹)** — PC 브라우저에서 엔진 직접 실행·검증(백엔드 없음, 14탭). `npm run sim:web` → :5051 | `sim-web/`(build.cjs·main.ts·index.html) |
 | [TEST_METHODOLOGY](./TEST_METHODOLOGY.md) | 오류를 **새로** 찾는 방법론(악질/원숭이 퍼징·독립검증·A/B자가검증·결과배선강제·값→표현매핑·변이·결함주입·속성·5렌즈) + 버그 발견 후 5단계 프로토콜(`fuzz-game` 스킬·`independent-verifier` 에이전트) | `tools/_gt_*.ts`·`_dv_*.ts` |
 | [DOC_DISCIPLINE](./DOC_DISCIPLINE.md) | 문서 작업법 — 결정 先문서·취소선 정정 보존·`*_SYSTEM.md`·색인 유지·날짜/통계 절대화·새 시스템 체크리스트 | (전 docs) |
 | [TRAINING_SYSTEM](./TRAINING_SYSTEM.md) | 훈련·성장·노쇠·재능·경기경험 성장 | `engine/training.ts`, `aging.ts`, `experience.ts`, `progression.ts` |
@@ -86,7 +86,7 @@
 ```
 npx tsc --noEmit                          # 앱 타입체크
 npx tsc --noEmit -p tsconfig.test.json    # 테스트 타입체크
-npm test                                  # node --test (현재 171 통과)
+npm test                                  # node --test (현재 205 통과)
 npx tsx tools/auditBoard.ts 6              # 보드 안무 프레임 감사(기하 원리 룰 A~Q + 사용자보고 18~37 + ASCII 덤프)
 npx tsx tools/checkBoardFixes.ts           # 보드 타깃 측정(패서 깊이·터치아웃·서브전환 — "의도대로 바뀌었나")
 npx tsx tools/checkBlockerCross.ts         # 블로커 좌우 교차(프레임 정확 — 실제 애니메이션 위치)
@@ -96,7 +96,7 @@ npx tsx tools/simStarters.ts               # 선발 검증(지시·OVR·징계·
 npx tsx tools/simMood.ts                    # 선수 심리(벤치 사유 귀속·부상자 불만없음·성격/기대치별 기분 A/B·누적→FA)
 npx tsx tools/_ev_rest.ts                   # 로드매니지먼트(#3) — 굳은 순위 주전 휴식·관전==순위 일치(결정론)
 npx expo export --platform android        # 번들 확인 후 dist 삭제
-npm run sim:web                            # 엔진 테스트 콘솔(웹) → localhost:5051 (13탭, SIM_CONSOLE)
+npm run sim:web                            # 엔진 테스트 콘솔(웹) → localhost:5051 (14탭, SIM_CONSOLE)
 ```
 
 ## 아키텍처 원칙 (CLAUDE.md 11장)

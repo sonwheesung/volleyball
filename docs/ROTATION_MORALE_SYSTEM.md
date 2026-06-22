@@ -1,9 +1,9 @@
 # 선발 로테이션 & 벤치 사유 심리 (ROTATION_MORALE) — SPEC
 
-> 상태: **확정 후 구현**(2026-06-22 설계, 사용자 검토 대기 — COURT_POSITIONING과 같은 절차).
+> 상태: **✅ 구현 완료**(2026-06-22 설계+구현). B+C+C.4(감정·사유·기대치·누적→FA)·#3(로드매니지먼트) 전부 구현 — §0.2.
 > 사용자 요구 3종을 한 시스템으로: ①순위 굳으면 주전 휴식(로드 매니지먼트, 검증 #3) ②벤치 *사유*를
 > 선수가 정확히 인지 ③사유 + **선수 성격**에 따라 불만/무감정/긍정 상태가 변경·유지.
-> 선행 검증: `tools/simStarters.ts`(현 5요인 PASS, #3 미구현 확인). 버그 가드: EC-LU-01·02.
+> 검증: `simStarters`(선발 9/9)·`simMood`(심리 6/6)·`_ev_rest`(#3 휴식·관전==순위 일치). 버그 가드: EC-LU-01·02.
 
 ---
 
@@ -64,7 +64,7 @@
 
 ## B. 벤치 사유 귀속 (선수가 *왜* 벤치인지 인지)
 
-비출전 선수의 사유를 우선순위로 단일 분류 (`benchReasonOf(teamId, playerId, day, results) → BenchReason`):
+비출전 선수의 사유를 우선순위로 단일 분류 (`benchCauseOf(p, teamId, day) → SitCause`):
 | 순위 | 사유 | 감지 |
 |---|---|---|
 | 1 | `injured` | `teamInjuriesOn` |
@@ -101,7 +101,7 @@
 | starter(승격 포함) | 긍정/만족 | 백업이 출전 기회 → 출전갈망↑일수록 강한 긍정 |
 
 ### C.3 상태 모델
-- **출력**: `{ mood: 'discontent'|'neutral'|'positive', reason: BenchReason, topic?, weight }`.
+- **출력**: `{ mood: 'discontent'|'neutral'|'positive', cause: SitCause, topic?, weight, label }`.
 - 사유가 유지되면 상태 유지, 사유가 바뀌면 재평가(파생). 기존 `discontentNow` 확장(출전 불만을 사유 인지로 분기).
 - 기존 `minutes` 불만의 단일 조건(`playRatio<0.34`)을 **사유 분기로 교체**: 부상·징계·휴식은 불만 억제, 구단주 벤치·실력밀림만 불만(성격 변조).
 
