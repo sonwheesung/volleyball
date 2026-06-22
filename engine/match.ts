@@ -9,7 +9,7 @@ import type { Ratings } from './ratings';
 import { createRng, strSeed } from './rng';
 import { deriveRatings } from './ratings';
 import { buildLineup } from './lineup';
-import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge, type RallyStats, type PosStats } from './rally';
+import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge, type RallyStats, type PosStats, type BoxSink } from './rally';
 import type { RallyEvent } from './events';
 import { rotate, serverIndex, frontRow, backRow } from './rotation';
 
@@ -41,6 +41,7 @@ export interface MatchOpts {
   edge?: Edge; home?: CoachInfo; away?: CoachInfo; stats?: RallyStats; trace?: string[]; pos?: PosStats;
   homePolicy?: SubPolicy; awayPolicy?: SubPolicy; // 작전 교체 방침(미지정 시 기본)
   events?: RallyEvent[]; // 공간 텔레메트리 싱크(있으면 랠리별 독립 srng로 좌표 이벤트 누적; 승패 불변)
+  box?: BoxSink; // 선수별 박스스코어 싱크(있으면 스윙 단위 귀속 누적; 승패 불변·rng 무관)
 }
 
 const DEFAULT_COACH: CoachInfo = { style: 'balanced', charisma: 50 };
@@ -227,7 +228,7 @@ export function simulateMatch(
       const chasing: Side | null =
         Math.max(h, a) >= targetPoints(setNo) - 4 && Math.abs(lead) >= 1 && Math.abs(lead) <= 2
           ? (lead > 0 ? 'away' : 'home') : null;
-      const { winner, how } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing);
+      const { winner, how } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, opts.box);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner, how });
