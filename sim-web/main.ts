@@ -6,6 +6,10 @@ import { computeStandings } from '../data/standings';
 import { buildPlayoffs } from '../data/playoffs';
 import { currentSeasonAwards } from '../data/awards';
 import { restedOnDay } from '../data/rotation';
+import { seasonTxLog, seasonInjuryReport, seasonScandals } from '../data/dynamics';
+import { buildNewsFeed } from '../data/news';
+import { SEVERITY_KO } from '../engine/injury';
+import { SCANDAL_KO } from '../engine/scandal';
 import type { AwardWinner } from '../types';
 import { simulateMatch } from '../engine/match';
 import { attributeProduction } from '../engine/production';
@@ -34,14 +38,15 @@ const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
   TEAMS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select>`;
 
 // ─── 탭 프레임워크 ───────────────────────────────────────────────────────
-type TabId = 'match' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft';
-const TABS: [TabId, string][] = [['match', '경기'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['draft', '영입 · 드래프트']];
+type TabId = 'match' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft' | 'foreign' | 'tx' | 'injury' | 'news';
+const TABS: [TabId, string][] = [['match', '경기'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['foreign', '외국인'], ['draft', '영입 · 드래프트'], ['tx', '시즌 중 이동'], ['injury', '부상 · 사고'], ['news', '뉴스']];
 let active: TabId = 'match';
+const MOUNTS: Record<TabId, () => void> = { match: mountMatch, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft, foreign: mountForeign, tx: mountTx, injury: mountInjury, news: mountNews };
 function mount() {
   $('tabs').innerHTML = TABS.map(([id, l]) => `<span class="tab${id === active ? '' : ' off'}" data-tab="${id}">${l}</span>`).join('');
   document.querySelectorAll('[data-tab]').forEach((e) => e.addEventListener('click', () => { active = e.getAttribute('data-tab') as TabId; mount(); }));
   $('out').innerHTML = `<p class="hint">실행을 눌러줘.</p>`;
-  ({ match: mountMatch, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft })[active]();
+  MOUNTS[active]();
 }
 
 // ═══ 경기 ═══════════════════════════════════════════════════════════════
@@ -251,6 +256,54 @@ function runDraft() {
   const cls = [...ctx.cls].sort((a, b) => overall(b) - overall(a));
   const body = cls.map((p) => `<tr>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td>${p.age}</td><td>${p.height}</td><td class="pt">${ovrOf(p)}</td><td style="color:var(--warn);font-weight:700">${potStars(p)}</td></tr>`).join('');
   $('out').innerHTML = `<table class="box"><thead><tr><th>P</th><th>선수</th><th>나이</th><th>키</th><th>OVR</th><th>포텐셜</th></tr></thead><tbody>${body}</tbody></table><p class="hint">총 ${cls.length}명 · ★★★=특급 유망주</p>`;
+}
+
+// ═══ 외국인 트라이아웃 ═══════════════════════════════════════════════════
+function mountForeign() {
+  $('controls').innerHTML = `<div class="run-row"><button id="fo-run">트라이아웃 풀 생성 ▶</button></div><p class="hint">외국인(아포짓 위주)·아시아쿼터 트라이아웃 풀 — 매 오프시즌 유입(1년 계약). OVR 순.</p>`;
+  $('fo-run').onclick = runForeign;
+}
+function runForeign() {
+  const ctx = buildDraftContext('', {}, {}, [], false, [], 1);
+  const pool = (ids: string[]) => ids.map((id) => ctx.snapshot[id]).filter((p): p is Player => !!p).sort((a, b) => overall(b) - overall(a));
+  const tbl = (players: Player[], title: string) => `<div class="boxwrap"><h3>${title} (${players.length}명)</h3><table class="box"><thead><tr><th>P</th><th>선수</th><th style="text-align:left">국적</th><th>나이</th><th>OVR</th></tr></thead><tbody>${players.map((p) => `<tr>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td style="text-align:left">${esc(p.nationality ?? '외국')}</td><td>${p.age}</td><td class="pt">${ovrOf(p)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">풀 없음</td></tr>'}</tbody></table></div>`;
+  $('out').innerHTML = `<div class="boxes">${tbl(pool(ctx.tryout.poolIds), '외국인 트라이아웃')}${tbl(pool(ctx.asianTryout.poolIds), '아시아쿼터')}</div>`;
+}
+
+// ═══ 시즌 중 이동 ════════════════════════════════════════════════════════
+function mountTx() {
+  $('controls').innerHTML = `<div class="run-row"><button id="tx-run">시즌 중 이동 보기 ▶</button></div><p class="hint">시즌 진행 중 전 구단 AI의 방출→FA 영입(부상 구멍 긴급 수혈, 캡·정원 적용). 날짜순.</p>`;
+  $('tx-run').onclick = runTx;
+}
+function runTx() {
+  const log = seasonTxLog().slice().sort((a, b) => a.day - b.day);
+  const body = log.map((t) => `<tr><td>${t.day}일</td><td style="text-align:left">${esc(getTeam(t.teamId)?.name ?? t.teamId)}</td><td class="nm">${esc(getPlayer(t.playerId)?.name ?? t.playerId)}</td><td style="color:${t.kind === 'sign' ? 'var(--good)' : 'var(--bad)'};font-weight:700">${t.kind === 'sign' ? '영입' : '방출'}</td></tr>`).join('');
+  $('out').innerHTML = `<table class="box" style="max-width:560px"><thead><tr><th>날짜</th><th style="text-align:left">구단</th><th>선수</th><th>이동</th></tr></thead><tbody>${body || '<tr><td colspan="4" class="empty">시즌 중 이동 없음</td></tr>'}</tbody></table><p class="hint">총 ${log.length}건</p>`;
+}
+
+// ═══ 부상 · 사고 ═════════════════════════════════════════════════════════
+function mountInjury() {
+  $('controls').innerHTML = `<div class="run-row"><button id="in-run">부상·사고 보기 ▶</button></div><p class="hint">시즌 부상(경미~시즌아웃, 동시 상한 3)·사건사고(SNS·음주운전 등 출장정지). 결장 경기수 포함.</p>`;
+  $('in-run').onclick = runInjury;
+}
+function runInjury() {
+  const inj = seasonInjuryReport().slice().sort((a, b) => a.from - b.from);
+  const sc = seasonScandals().slice().sort((a, b) => a.from - b.from);
+  const injBody = inj.map((s) => `<tr><td>${s.from}일</td><td style="text-align:left">${esc(getTeam(s.teamId)?.name ?? s.teamId)}</td><td class="nm">${esc(getPlayer(s.playerId)?.name ?? s.playerId)}</td><td style="color:var(--warn)">${SEVERITY_KO[s.severity]}</td><td>${s.missMatches}경기</td></tr>`).join('');
+  const scBody = sc.map((s) => `<tr><td>${s.from}일</td><td style="text-align:left">${esc(getTeam(s.teamId)?.name ?? s.teamId)}</td><td class="nm">${esc(getPlayer(s.playerId)?.name ?? s.playerId)}</td><td style="color:var(--bad)">${SCANDAL_KO[s.kind]}</td><td>${s.missMatches}경기</td></tr>`).join('');
+  $('out').innerHTML = `<div class="boxes"><div class="boxwrap"><h3>부상 (${inj.length}건)</h3><table class="box"><thead><tr><th>발생</th><th style="text-align:left">팀</th><th>선수</th><th>정도</th><th>결장</th></tr></thead><tbody>${injBody || '<tr><td colspan="5" class="empty">없음</td></tr>'}</tbody></table></div><div class="boxwrap"><h3>사건·사고 (${sc.length}건)</h3><table class="box"><thead><tr><th>발생</th><th style="text-align:left">팀</th><th>선수</th><th>사안</th><th>정지</th></tr></thead><tbody>${scBody || '<tr><td colspan="5" class="empty">없음</td></tr>'}</tbody></table></div></div>`;
+}
+
+// ═══ 뉴스 ════════════════════════════════════════════════════════════════
+function mountNews() {
+  $('controls').innerHTML = `<div class="run-row"><button id="ne-run">뉴스 피드 보기 ▶</button></div><p class="hint">시즌 실시간 기사(데뷔·트리플크라운·연승·순위 등). 누적 서사(우승·시상·명전)는 시즌이 쌓여야 — 콘솔은 1시즌이라 실시간 위주.</p>`;
+  $('ne-run').onclick = runNews;
+}
+function runNews() {
+  const feed = buildNewsFeed([], [], [], 0, [], [], 164, '', []);
+  const KIND: Record<string, string> = { champion: '우승', award: '시상', milestone: '기록', hof: '명전', injury: '부상', scandal: '사건', owner: '구단', streak: '연승연패', standing: '순위', match: '경기', debut: '데뷔', transfer: '이적' };
+  const body = feed.slice(0, 60).map((n) => `<div style="padding:10px 0;border-bottom:1px solid var(--alt)"><div style="font-weight:700">${n.big ? '★ ' : ''}${esc(n.headline)} <span style="color:var(--soft);font-weight:400;font-size:12px">· ${KIND[n.kind] ?? n.kind}</span></div>${n.body ? `<div style="color:var(--soft);font-size:12.5px;margin-top:3px">${esc(n.body)}</div>` : ''}</div>`).join('');
+  $('out').innerHTML = `${body || '<p class="hint">기사 없음</p>'}<p class="hint">총 ${feed.length}건 (상위 60 표시)</p>`;
 }
 
 mount();
