@@ -8,6 +8,7 @@ import { attributeProduction, mergeProd, splitLineup, type ProdLine } from '../e
 import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 import { availableTeamPlayers } from './injury';
 import { currentTxVersion } from './dynamics';
+import { restedOnDay } from './rotation';
 
 interface ProdRow {
   dayIndex: number;
@@ -45,7 +46,11 @@ function allProdRows(): ProdRow[] {
   const rows: ProdRow[] = [];
   for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
     const roster: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
-    for (const t of LEAGUE.teams) roster[t.id] = availableTeamPlayers(t.id, day); // 부상자 제외 명단(백업 출전)
+    for (const t of LEAGUE.teams) {
+      const avail = availableTeamPlayers(t.id, day); // 부상자 제외 명단(백업 출전)
+      const rest = restedOnDay(t.id, day); // 로드매니지먼트(#3) — 순위 굳으면 주전 휴식(순위 재시뮬과 동일 집합)
+      roster[t.id] = rest.size ? avail.filter((p) => !rest.has(p.id)) : avail;
+    }
     for (const f of byDay.get(day)!) {
       const sim = simulateMatch(f.seed, roster[f.homeTeamId], roster[f.awayTeamId], {
         home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId),

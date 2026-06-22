@@ -31,7 +31,10 @@
 1. **Phase 1 = B+C+C.4 (감정·사유·FA)** — ✅ **구현(2026-06-22)**: `benchCauseOf`(사유 귀속)·`discontentOf` 사유×성격×기대치
    분기·`moodOf`(불만/무감정/긍정)·선수 상세 "지금 마음" 표시·**누적 부당벤치→재계약 거부→FA**(`sustainedBenchRefuse`).
    검증 `tools/simMood.ts`(6체크 PASS). 'rested' 사유는 #3 전까지 휴면.
-2. **Phase 2 = A (#3 로드매니지먼트)** — 위 0.1 순환 해결 리팩터 포함, 별도 집중 작업으로 신중히. 완료 시 'rested'·#5 활성.
+2. **Phase 2 = A (#3 로드매니지먼트)** — ✅ **구현(2026-06-22)**: `pickRest`(engine/lineup, 고령 우선·백업 있는 주전·리베로 유지·
+   최대 2명)·`restedOnDay`(data/rotation, day−1 clinch)·순위 재시뮬(allResults) 러닝 순위로 동일 적용·생산·관전 보드 연결.
+   순환은 0.1대로 해결(allResults는 러닝 순위로 pickRest 직접 호출, 나머지는 restedOnDay). 'rested' 사유·#5 활성.
+   검증 `tools/_ev_rest.ts`(휴식 18팀-경기·경합기 0·리베로 유지·**관전==순위 불일치 0**)·`simStarters` #3·#5 PASS·결정론 유지.
 
 ---
 
@@ -52,10 +55,10 @@
 - 대체 = 동포지션 차순위(벤치 최고). **리베로는 항상 유지**(EC-LU-01 가드 재사용).
 - 팀 OVR 급락 방지: 휴식 후 라인업 OVR이 전력 대비 −Δ(예: −4) 이내. 초과 시 휴식 축소.
 
-### A.4 구현 형태 (결정론)
-신규 순수 함수: `restedOnDay(teamId, day, results, seed) → Set<playerId>`.
-- `match/[id].tsx`·`data/production.ts`가 라인업 구성 시 availableTeamPlayers에서 이 set을 추가 제외.
-- forward-pass(부상)는 **사용 안 함**(0장). → 휴식은 "그날 출전 가능한데 감독이 안 낸" 선수.
+### A.4 구현 형태 (결정론) — ✅ 구현됨
+- `pickRest(avail, teamId, day)`(`engine/lineup.ts`, 순수) + `restedOnDay(teamId, day)`(`data/rotation.ts`, clinch는 day−1).
+- `match/[id].tsx`·`data/production.ts`(allProdRows)가 `restedOnDay`로, 순위 재시뮬 `data/standings.ts`(allResults)는
+  **러닝 순위로 같은 `pickRest`를 직접 호출**(0.1 순환 회피) → 세 경로 동일 휴식 집합. forward-pass(부상)는 미사용.
 
 ---
 

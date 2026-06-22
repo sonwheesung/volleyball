@@ -5,6 +5,7 @@
 
 import type { Player, Position } from '../types';
 import { overall } from './overall';
+import { createRng, strSeed } from './rng';
 
 export interface Lineup {
   six: Player[];          // 로테이션 슬롯 0..5: [S, OH, MB, OP, OH, MB]
@@ -41,4 +42,22 @@ export function buildLineup(players: Player[]): Lineup {
     if (!slots[i]) slots[i] = fallback[fi++] ?? players[i % players.length];
   }
   return { six: slots as Player[], libero };
+}
+
+const REST_GAME_RATE = 0.45;   // 굳은 순위에서 잔여 경기 중 휴식 발동 비율(ROTATION_MORALE #3)
+const REST_SECOND_RATE = 0.4;  // 1명 휴식 시 2명째 추가 확률(라인업 붕괴 방지 — 최대 2명)
+
+/** 로드 매니지먼트(#3) — 그 경기 쉬게 할 주전 집합. 순수: 같은 (avail·teamId·day)면 항상 같은 결과.
+ *  고령 우선·동포지션 백업 있는 주전만(대체 가능)·리베로 제외·최대 2명. 순위 굳음 판정은 호출측(eligible). */
+export function pickRest(avail: Player[], teamId: string, day: number): Set<string> {
+  const rng = createRng(strSeed(`rest:${teamId}:${day}`));
+  if (rng.next() >= REST_GAME_RATE) return new Set(); // 이 경기는 풀전력
+  const lu = buildLineup(avail);
+  const cnt: Record<string, number> = {};
+  for (const p of avail) cnt[p.position] = (cnt[p.position] ?? 0) + 1;
+  const restable = lu.six.filter((s) => (cnt[s.position] ?? 0) >= 2); // 본인+백업 → 빼도 그 포지션 채워짐
+  if (!restable.length) return new Set();
+  const sorted = [...restable].sort((a, b) => b.age - a.age || a.id.localeCompare(b.id)); // 고령 우선(결정론 tiebreak)
+  const n = 1 + (sorted.length >= 2 && rng.next() < REST_SECOND_RATE ? 1 : 0);
+  return new Set(sorted.slice(0, n).map((s) => s.id));
 }

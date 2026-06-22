@@ -8,6 +8,7 @@ import { BroadcastBanner } from '../../components/BroadcastBanner';
 import { buildMatchBanners } from '../../data/broadcast';
 import { coachInfoOf, getFixture, getTeam } from '../../data/league';
 import { availableTeamPlayers } from '../../data/injury';
+import { restedOnDay } from '../../data/rotation';
 import { DEV_TOOLS } from '../../data/flags';
 import { teamOverallRaw } from '../../engine/overall';
 import { simulateMatch } from '../../engine/match';
@@ -53,9 +54,12 @@ export default function MatchBoard() {
       dayIndex = fixture.dayIndex;
       seed = fixture.seed;
     }
-    // 그날 출전 가능 명단(부상·시즌 중 이동 반영) — 결장 선수가 코트에 보이지 않게, 순위표 리플레이와 동일 소스
-    const homeSquad = availableTeamPlayers(home.id, dayIndex);
-    const awaySquad = availableTeamPlayers(away.id, dayIndex);
+    // 그날 출전 가능 명단(부상·시즌 중 이동 반영) — 결장 선수가 코트에 보이지 않게, 순위표 리플레이와 동일 소스.
+    // 로드매니지먼트(#3): 순위 굳으면 주전 휴식 — 순위/생산 재시뮬과 동일 restedOnDay 집합이라 관전==순위==생산 일치.
+    const homeRest = restedOnDay(home.id, dayIndex);
+    const awayRest = restedOnDay(away.id, dayIndex);
+    const homeSquad = homeRest.size ? availableTeamPlayers(home.id, dayIndex).filter((p) => !homeRest.has(p.id)) : availableTeamPlayers(home.id, dayIndex);
+    const awaySquad = awayRest.size ? availableTeamPlayers(away.id, dayIndex).filter((p) => !awayRest.has(p.id)) : availableTeamPlayers(away.id, dayIndex);
     // 작전 교체는 감독이 자동 집행(엔진 DEFAULT_POLICY) — 구단주의 수동 토글은 제거(관전형 강화).
     const sim = simulateMatch(seed, homeSquad, awaySquad, {
       home: coachInfoOf(home.id), away: coachInfoOf(away.id),

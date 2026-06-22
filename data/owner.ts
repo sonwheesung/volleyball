@@ -16,6 +16,7 @@ import { awardHistoryOf } from './awards';
 import { computeStandings } from './standings';
 import { leagueProduction } from './production';
 import { formFactorOnDay, rosterIdsOnDay, seasonScandals, injuredOnDay, suspendedOnDay, availableTeamPlayers } from './dynamics';
+import { restedOnDay } from './rotation';
 import { SCANDAL_POP_FACTOR } from '../engine/scandal';
 import { evolveOnDay } from './league';
 
@@ -30,7 +31,9 @@ export function benchCauseOf(p: Player, myTeamId: string, day: number): SitCause
   if (suspendedOnDay(d).has(p.id)) return 'suspended';
   const avail = availableTeamPlayers(myTeamId, d);
   if (!avail.some((x) => x.id === p.id)) return 'ownerBenched'; // 부상·징계 아닌데 가용 명단 밖 = 벤치 지시
-  const lu = buildLineup(avail);
+  const rest = restedOnDay(myTeamId, d); // 로드매니지먼트(#3) — 순위 굳어 감독이 쉬게 한 선수
+  if (rest.has(p.id)) return 'rested';
+  const lu = buildLineup(avail.filter((x) => !rest.has(x.id))); // 휴식 제외한 실제 출전 라인업
   const starters = new Set<string>([...lu.six.map((x) => x.id), ...(lu.libero ? [lu.libero.id] : [])]);
   return starters.has(p.id) ? 'starter' : 'outclassed';
 }

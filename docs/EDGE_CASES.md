@@ -263,10 +263,10 @@
   **세이브에서 빠져도 복원 상태가 동일** → 누락이 결정론 차이를 안 만든다(오라클이 검사 대상을 잘못 고름). 실제 결정론
   (`real partialize+rehydrate identical`)·`different seed differs`는 통과. **2026-06-22 G1/G2 수정과 무관**(stash A/B로
   확인 — 수정 전에도 동일 false). 후속: 오라클을 정말 결정론에 영향 주는 필드(예: `results`·`currentDay`) 누락으로 교체.
-- **[SPEC 작성됨 → 검토 대기] 선발 휴식 + 벤치 사유 심리** — 검증 #3(순위 기반 로드매니지먼트)·벤치 사유 인지·
-  감정=f(사유,**성격**)을 한 시스템으로 설계 완료: **[ROTATION_MORALE](./ROTATION_MORALE_SYSTEM.md)**(확정 후 구현).
-  결정론 핵심: 휴식은 forward-pass(results-독립) 밖 **라인업 레이어**에서 results-파생 clinch로 적용(순환 방지).
-  사용자 검토 후 구현 — simStarters #3·#5·사유귀속·감정 A/B로 검증 예정.
+- **[✅ 구현(2026-06-22)] 선발 휴식 + 벤치 사유 심리** — **[ROTATION_MORALE](./ROTATION_MORALE_SYSTEM.md)** 전부 구현:
+  ①벤치 사유 인지(부상/징계/구단주벤치/실력밀림/휴식) ②감정=f(사유,성격,주전 기대치) ③누적 부당벤치→재계약 거부→FA
+  ④순위 기반 주전 휴식(#3, 로드매니지먼트). 결정론: 휴식은 forward-pass 밖 라인업 레이어, clinch는 day−1 results-파생
+  (순환은 allResults 러닝 순위로 회피) → **관전==순위==생산 일치 검증 0 불일치**. 가드 `simMood`·`simStarters`(9/9)·`_ev_rest`.
 
 ---
 

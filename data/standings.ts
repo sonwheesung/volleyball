@@ -7,6 +7,10 @@ import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, getFixture, LEAGUE, SE
 import { availableTeamPlayers } from './injury';
 import { currentTxVersion } from './dynamics';
 import { simulateMatch } from '../engine/match';
+import { pickRest } from '../engine/lineup';
+import { clinchStatus } from '../engine/clinch';
+
+const PLAYOFF_CUTOFF = 3; // data/clinch.PLAYOFF_CUTOFF와 동일(순환 import 회피 위해 로컬 — 로드매니지먼트 #3)
 
 export interface ResultRow {
   fixtureId: string;
@@ -52,10 +56,23 @@ function allResults(): ResultRow[] {
     byDay.set(f.dayIndex, arr);
   }
 
+  // 로드 매니지먼트(#3): 러닝 순위를 누적하며 진행 — day일 휴식은 day−1까지의 실제 순위로 판정(인과적·비순환).
+  const totalGames: Record<string, number> = {};
+  for (const f of SEASON) { totalGames[f.homeTeamId] = (totalGames[f.homeTeamId] ?? 0) + 1; totalGames[f.awayTeamId] = (totalGames[f.awayTeamId] ?? 0) + 1; }
+  const running: Record<string, { wins: number; played: number }> = {};
+  for (const t of LEAGUE.teams) running[t.id] = { wins: 0, played: 0 };
+
   const rows: ResultRow[] = [];
   for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
+    // 그 시점(day−1까지) 순위가 굳은(확정/탈락) 팀만 휴식 자격
+    const clinch = clinchStatus(LEAGUE.teams.map((t) => ({ teamId: t.id, wins: running[t.id].wins, remaining: Math.max(0, (totalGames[t.id] ?? 0) - running[t.id].played) })), PLAYOFF_CUTOFF);
+    const eligible = new Set(clinch.filter((c) => c.state === 'clinched' || c.state === 'eliminated').map((c) => c.teamId));
     const squad: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
-    for (const t of LEAGUE.teams) squad[t.id] = availableTeamPlayers(t.id, day); // 부상자 제외 명단
+    for (const t of LEAGUE.teams) {
+      const avail = availableTeamPlayers(t.id, day); // 부상자 제외 명단
+      const rest = eligible.has(t.id) ? pickRest(avail, t.id, day) : new Set<string>();
+      squad[t.id] = rest.size ? avail.filter((p) => !rest.has(p.id)) : avail; // 굳은 순위면 주전 1~2명 휴식(백업 출전)
+    }
     for (const f of byDay.get(day)!) {
       const sim = simulateMatch(f.seed, squad[f.homeTeamId], squad[f.awayTeamId], {
         home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId),
@@ -71,6 +88,8 @@ function allResults(): ResultRow[] {
         homePoints: sim.setScores.reduce((s, x) => s + x.home, 0), // 점수득실률 타이브레이크
         awayPoints: sim.setScores.reduce((s, x) => s + x.away, 0),
       });
+      running[f.homeTeamId].played++; running[f.awayTeamId].played++;
+      if (sim.homeSets > sim.awaySets) running[f.homeTeamId].wins++; else running[f.awayTeamId].wins++;
     }
   }
   rows.sort((a, b) => a.dayIndex - b.dayIndex);

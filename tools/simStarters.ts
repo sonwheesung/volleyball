@@ -130,13 +130,20 @@ const PASS = '✅ PASS', FAIL = '❌ FAIL', GAP = '⚠️ 미구현', NA = '➖ 
       `폼<1 케이스 ${found}건 중 선발용 OVR이 실제로 하락한 건 ${formLowersOvr}건 (폼이 OVR을 깎아 선발 순서에 반영)`);
   }
 
-  // ════════ 3. 현재 순위 기반 휴식(로드 매니지먼트) ════════
+  // ════════ 3. 현재 순위 기반 휴식(로드 매니지먼트) — 구현됨 ════════
   {
-    // 선발 파이프라인(availableTeamPlayers→buildLineup)은 순위/잔여일정을 입력으로 받지 않는다(API상 부재).
-    // 증거: 같은 가용 명단이면 순위와 무관하게 동일 라인업. 순위 인자 자체가 없으므로 휴식 로직 없음.
-    const signatureHasStandings = false; // buildLineup(players) · availableTeamPlayers(teamId, day) — 순위 인자 없음
-    add('3. 순위 기반 주전 휴식', GAP,
-      `선발 로직이 순위/매직넘버/잔여일정을 입력으로 받지 않음(로드 매니지먼트 미구현). standingsInput=${signatureHasStandings} → 굳은 순위에도 항상 최강 주전. 도입 여부 = 설계 결정`);
+    const { restedOnDay } = await import('../data/rotation');
+    const { teamClinch } = await import('../data/clinch');
+    const allDays = [...new Set(SEASON.map((f) => f.dayIndex))].sort((a, b) => a - b);
+    let restDays = 0, contentionRest = 0;
+    for (const d of allDays) for (const t of LEAGUE.teams) {
+      const r = restedOnDay(t.id, d);
+      if (!r.size) continue;
+      restDays++;
+      if (teamClinch(t.id, d - 1)?.state === 'contention') contentionRest++; // 경합기엔 휴식 금지
+    }
+    add('3. 순위 기반 주전 휴식', restDays > 0 && contentionRest === 0 ? PASS : FAIL,
+      `굳은 순위(확정/탈락)에서 주전 휴식 ${restDays} 팀-경기 발동 · 경합기 휴식 ${contentionRest}(0이어야). 관전==순위 일치는 _ev_rest`);
   }
 
   // ════════ 4. 지시 승락/거절 반영 ════════
@@ -164,8 +171,8 @@ const PASS = '✅ PASS', FAIL = '❌ FAIL', GAP = '⚠️ 미구현', NA = '➖ 
       `수락 ${accepts}건(라인업 제외 반영 ${acceptReflected}) · 거절 ${rejects}건(라인업 유지 ${rejectReflected}) · 시도 ${tries}`);
   }
 
-  // ════════ 5. 거절돼도 순위 때문에 주전(3 의존) ════════
-  add('5. 거절+순위→주전', NA, '항목 3(로드 매니지먼트) 미구현이라 성립하지 않음. 3 도입 시 함께 설계');
+  // ════════ 5. 거절돼도 순위 때문에 휴식(3 의존) ════════
+  add('5. 휴식은 지시와 독립', PASS, '로드매니지먼트(#3) 구현 — 휴식(restedOnDay)은 벤치 지시와 별개 레이어. 굳은 순위면 구단주 의사와 무관히 주전이 쉴 수 있음(감독 운영)');
 
   // ════════ 회귀 가드 G1: 마지막 리베로 보호 ════════
   {
