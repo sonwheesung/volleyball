@@ -57,6 +57,27 @@
   table.box td.pt { font-weight:900; color:var(--accent); }
   td.empty { text-align:center; color:var(--soft); padding:14px; }
 
+  /* ── 박스스코어(네이버 기록실 스타일) ── */
+  .boxwrap h3 { display:flex; align-items:center; gap:8px; }
+  .boxwrap h3::before { content:''; width:4px; height:15px; border-radius:2px; background:var(--good); }
+  .boxwrap.away h3::before { background:var(--bad); }
+  table.bx { width:100%; border-collapse:collapse; font-size:12px; }
+  table.bx th { color:var(--soft); font-weight:800; padding:5px 5px; }
+  table.bx thead tr.grp th { font-size:10.5px; text-transform:uppercase; letter-spacing:.3px; padding:6px 5px 3px; border-bottom:1px solid var(--line); }
+  table.bx thead tr.grp th.atkg { color:var(--accent); border-bottom:2px solid var(--accent); }
+  table.bx thead tr.sub th { font-size:11px; padding:2px 5px 6px; border-bottom:1px solid var(--line); }
+  table.bx th.l, table.bx td.l { text-align:left; }
+  table.bx td { text-align:center; padding:5px 5px; border-bottom:1px solid var(--alt); font-variant-numeric:tabular-nums; }
+  table.bx tbody tr:hover { background:rgba(16,185,166,.055); }
+  table.bx td.nm { text-align:left; font-weight:700; padding-left:7px; }
+  table.bx td.sc { font-weight:900; color:var(--ink); background:rgba(16,185,166,.08); }
+  table.bx td.rate.hi { color:var(--good); font-weight:800; }
+  table.bx td.zero { color:var(--line); }
+  table.bx td.er { color:var(--bad); font-weight:700; }
+  table.bx tr.tot td { border-top:2px solid var(--line); border-bottom:none; background:var(--alt); font-weight:800; color:var(--ink); padding:7px 5px; }
+  .pp { display:inline-block; min-width:25px; text-align:center; font-size:10px; font-weight:800; color:#fff; padding:2px 0; border-radius:5px; }
+  .pp-S{background:#2FB48E;} .pp-OH{background:#0E9C8C;} .pp-OP{background:#FF6B5A;} .pp-MB{background:#8B7CF0;} .pp-L{background:#C8961F;}
+
   .stat-grid { display:flex; gap:16px; margin-bottom:14px; }
   .stat { flex:1; background:var(--alt); border-radius:var(--radius); padding:14px; text-align:center; }
   .stat .sv { display:block; font-size:24px; font-weight:900; color:var(--accent); }

@@ -99,24 +99,31 @@ function runMatch() {
     const sets = sim.setScores.map((s, i) => `<span class="setchip"><b>${i + 1}세트</b> ${s.home}:${s.away}</span>`).join('');
     const pts = (l: BoxLine) => l.atkKill + l.blockPt + l.srvAce; // 득점 = 공격+블록+에이스
     const pct = (n: number, d: number) => d > 0 ? `${(n / d * 100).toFixed(1)}%` : '–';
-    const box = (squad: Player[], teamId: string) => {
-      const rows = squad.map((p) => ({ p, l: bs.get(p.id) }))
+    const z = (n: number) => n === 0 ? `<td class="zero">0</td>` : `<td>${n}</td>`; // 0은 흐리게(네이버 가독성)
+    const pill = (pos: string) => `<td><span class="pp pp-${pos}">${pos}</span></td>`;
+    const box = (squad: Player[], teamId: string, away: boolean) => {
+      const rows = squad.map((p) => ({ p, l: bs.get(p.id)! }))
         .filter((r) => r.l && (r.l.atkAtt > 0 || r.l.srvAtt > 0 || r.l.blockPt > 0 || r.l.digSucc > 0 || r.l.assist > 0))
-        .sort((x, y) => pts(y.l!) - pts(x.l!));
+        .sort((x, y) => pts(y.l) - pts(x.l) || y.l.atkAtt - x.l.atkAtt);
+      const T = { pt: 0, ak: 0, aa: 0, bl: 0, ac: 0, dg: 0, as: 0, er: 0 }; // 팀 합계
       const body = rows.map(({ p, l }) => {
-        const err = l!.atkErr + l!.srvErr;
-        const rateCol = l!.atkAtt > 0 && l!.atkKill / l!.atkAtt >= 0.45 ? ' style="color:var(--good);font-weight:700"' : '';
-        return `<tr>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td class="pt">${pts(l!)}</td>`
-          + `<td>${l!.atkKill}</td><td>${l!.atkAtt}</td><td${rateCol}>${pct(l!.atkKill, l!.atkAtt)}</td>`
-          + `<td>${l!.blockPt}</td><td>${l!.srvAce}</td><td>${l!.digSucc}</td><td>${l!.assist}</td>`
-          + `<td${err > 0 ? ' style="color:var(--bad)"' : ''}>${err || '–'}</td></tr>`;
+        const err = l.atkErr + l.srvErr;
+        const hi = l.atkAtt > 0 && l.atkKill / l.atkAtt >= 0.45;
+        T.pt += pts(l); T.ak += l.atkKill; T.aa += l.atkAtt; T.bl += l.blockPt; T.ac += l.srvAce; T.dg += l.digSucc; T.as += l.assist; T.er += err;
+        return `<tr>${pill(p.position)}<td class="nm">${esc(p.name)}</td><td class="sc">${pts(l)}</td>`
+          + `${z(l.atkKill)}${z(l.atkAtt)}<td class="rate${hi ? ' hi' : ''}">${pct(l.atkKill, l.atkAtt)}</td>`
+          + `${z(l.blockPt)}${z(l.srvAce)}${z(l.digSucc)}${z(l.assist)}`
+          + `<td class="${err > 0 ? 'er' : 'zero'}">${err}</td></tr>`;
       }).join('');
-      return `<div class="boxwrap"><h3>${esc(getTeam(teamId)?.name ?? teamId)}</h3><table class="box"><thead>`
-        + `<tr><th colspan="3"></th><th colspan="3" style="text-align:center;border-bottom:1px solid var(--accent)">공격</th><th colspan="5"></th></tr>`
-        + `<tr><th>P</th><th>선수</th><th>득점</th><th>성공</th><th>시도</th><th>성공률</th><th>블록</th><th>서브</th><th>디그</th><th>세트</th><th>범실</th></tr>`
-        + `</thead><tbody>${body || '<tr><td colspan="11" class="empty">출전 기록 없음</td></tr>'}</tbody></table></div>`;
+      const total = rows.length ? `<tr class="tot"><td></td><td class="l">팀 합계</td><td class="sc">${T.pt}</td>`
+        + `<td>${T.ak}</td><td>${T.aa}</td><td class="rate">${pct(T.ak, T.aa)}</td>`
+        + `<td>${T.bl}</td><td>${T.ac}</td><td>${T.dg}</td><td>${T.as}</td><td>${T.er}</td></tr>` : '';
+      return `<div class="boxwrap${away ? ' away' : ''}"><h3>${esc(getTeam(teamId)?.name ?? teamId)}</h3><table class="bx"><thead>`
+        + `<tr class="grp"><th colspan="3"></th><th class="atkg" colspan="3">공격</th><th colspan="5"></th></tr>`
+        + `<tr class="sub"><th>P</th><th class="l">선수</th><th>득점</th><th>성공</th><th>시도</th><th>성공률</th><th>블로킹</th><th>서브</th><th>디그</th><th>세트</th><th>범실</th></tr>`
+        + `</thead><tbody>${body || '<tr><td colspan="11" class="empty">출전 기록 없음</td></tr>'}${total}</tbody></table></div>`;
     };
-    $('out').innerHTML = `<div class="scoreboard"><div class="sb-team ${win === M.a ? 'won' : ''}">${esc(getTeam(M.a)?.name ?? M.a)}</div><div class="sb-score">${sim.homeSets} : ${sim.awaySets}</div><div class="sb-team ${win === M.b ? 'won' : ''}">${esc(getTeam(M.b)?.name ?? M.b)}</div></div><div class="setchips">${sets}</div><div class="boxes">${box(A, M.a)}${box(B, M.b)}</div><p class="hint">공격 <b>성공/시도/성공률</b> · 서브=에이스 · 범실=공격+서브. 실제 스윙 단위 집계(랠리 엔진 직접 기록 — 통계 재구성 아님).</p>`;
+    $('out').innerHTML = `<div class="scoreboard"><div class="sb-team ${win === M.a ? 'won' : ''}">${esc(getTeam(M.a)?.name ?? M.a)}</div><div class="sb-score">${sim.homeSets} : ${sim.awaySets}</div><div class="sb-team ${win === M.b ? 'won' : ''}">${esc(getTeam(M.b)?.name ?? M.b)}</div></div><div class="setchips">${sets}</div><div class="boxes">${box(A, M.a, false)}${box(B, M.b, true)}</div><p class="hint">공격 <b>성공·시도·성공률</b> · 서브=에이스 · 범실=공격+서브. 실제 스윙 단위 집계(랠리 엔진 직접 기록 — 통계 재구성 아님). 리시브는 팀 단위만 추적(개인 미표기).</p>`;
   } else maybeHeavy($('m-run') as HTMLButtonElement, M.runs, `${M.runs.toLocaleString()}경기 시뮬레이션 중…`, () => {
     let aw = 0, as = 0, bs = 0; const dist: Record<string, number> = {};
     for (let i = 0; i < M.runs; i++) { const s = simulateMatch(M.seed + i, A, B, opts); if (s.homeSets > s.awaySets) aw++; as += s.homeSets; bs += s.awaySets; const k = `${s.homeSets}:${s.awaySets}`; dist[k] = (dist[k] ?? 0) + 1; }
