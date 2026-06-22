@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit",
     "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
     "sim:web": "node sim-web/build.cjs --serve",
-    "sim:web:build": "node sim-web/build.cjs"
+    "sim:web:build": "node sim-web/build.cjs",
+    "sim:web:check": "tsc --noEmit --lib es2020,dom --module esnext --moduleResolution bundler --target es2020 --skipLibCheck sim-web/main.ts"
   },
   "private": true,
   "dependencies": {

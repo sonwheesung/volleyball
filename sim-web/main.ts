@@ -14,7 +14,8 @@ import type { AwardWinner } from '../types';
 import { simulateMatch } from '../engine/match';
 import { attributeProduction } from '../engine/production';
 import { teamOverallRaw, overall, displayOvr } from '../engine/overall';
-import { discontentNow, expectsPlayOf, buildOwnerFx, teamFanbaseNow } from '../data/owner';
+import { buildLineup } from '../engine/lineup';
+import { discontentNow, benchCauseOf, expectsPlayOf, buildOwnerFx, teamFanbaseNow } from '../data/owner';
 import { settleSeason } from '../engine/finance';
 import { prefWeightsOf, isFAEligible, assignFAGrades, askingPrice } from '../engine/faMarket';
 import { SIT_CAUSE_KO } from '../engine/owner';
@@ -38,10 +39,10 @@ const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
   TEAMS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select>`;
 
 // ─── 탭 프레임워크 ───────────────────────────────────────────────────────
-type TabId = 'match' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft' | 'foreign' | 'tx' | 'injury' | 'news';
-const TABS: [TabId, string][] = [['match', '경기'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['foreign', '외국인'], ['draft', '영입 · 드래프트'], ['tx', '시즌 중 이동'], ['injury', '부상 · 사고'], ['news', '뉴스']];
+type TabId = 'match' | 'lineup' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft' | 'foreign' | 'tx' | 'injury' | 'news';
+const TABS: [TabId, string][] = [['match', '경기'], ['lineup', '선발 라인업'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['foreign', '외국인'], ['draft', '영입 · 드래프트'], ['tx', '시즌 중 이동'], ['injury', '부상 · 사고'], ['news', '뉴스']];
 let active: TabId = 'match';
-const MOUNTS: Record<TabId, () => void> = { match: mountMatch, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft, foreign: mountForeign, tx: mountTx, injury: mountInjury, news: mountNews };
+const MOUNTS: Record<TabId, () => void> = { match: mountMatch, lineup: mountLineup, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft, foreign: mountForeign, tx: mountTx, injury: mountInjury, news: mountNews };
 function mount() {
   $('tabs').innerHTML = TABS.map(([id, l]) => `<span class="tab${id === active ? '' : ' off'}" data-tab="${id}">${l}</span>`).join('');
   document.querySelectorAll('[data-tab]').forEach((e) => e.addEventListener('click', () => { active = e.getAttribute('data-tab') as TabId; mount(); }));
@@ -94,6 +95,34 @@ function runMatch() {
     const dr = order.filter((k) => dist[k]).map((k) => `<tr><td>${k}</td><td>${dist[k]}</td><td>${(dist[k] / M.runs * 100).toFixed(1)}%</td></tr>`).join('');
     $('out').innerHTML = `<div class="stat-grid"><div class="stat"><span class="sv">${(aw / M.runs * 100).toFixed(1)}%</span><span class="sl">A 승률 (${aw}/${M.runs})</span></div><div class="stat"><span class="sv">${(as / M.runs).toFixed(2)} : ${(bs / M.runs).toFixed(2)}</span><span class="sl">평균 세트 (A:B)</span></div></div><table class="box dist"><thead><tr><th>세트 스코어</th><th>경기 수</th><th>비율</th></tr></thead><tbody>${dr}</tbody></table><p class="hint">${esc(getTeam(M.a)?.name ?? M.a)}(A) 기준 · 시드 ${M.seed}~${M.seed + M.runs - 1}</p>`;
   }
+}
+
+// ═══ 선발 라인업 (경기별 주전 등록 엔진) ════════════════════════════════
+const LU = { team: TEAMS[0].id, day: 60 };
+const SLOT_KO = ['S · 세터', 'OH · 아웃사이드', 'MB · 미들', 'OP · 아포짓', 'OH · 아웃사이드', 'MB · 미들'];
+function mountLineup() {
+  $('controls').innerHTML = `<div class="run-row"><label>팀 ${teamSelect('lu-team', LU.team)}</label><label>경기일(day 0~164) <input type="number" id="lu-day" value="${LU.day}" min="0" max="164" /></label><button id="lu-run">선발 라인업 보기 ▶</button></div><p class="hint">경기별 주전 등록 — 그날 출전 가능 명단(부상·징계·벤치 제외)에서 감독이 짜는 <b>코트 7인(6+리베로)</b> + 순위 굳으면 휴식. 제외 선수는 사유와 함께. 실제 경기/순위/생산과 동일 라인업.</p>`;
+  ($('lu-team') as HTMLSelectElement).onchange = (e) => { LU.team = (e.target as HTMLSelectElement).value; };
+  ($('lu-day') as HTMLInputElement).onchange = (e) => { LU.day = Math.max(0, Math.min(164, +(e.target as HTMLInputElement).value || 0)); };
+  $('lu-run').onclick = runLineup;
+}
+function runLineup() {
+  const rest = restedOnDay(LU.team, LU.day);
+  const avail = availableTeamPlayers(LU.team, LU.day).filter((p) => !rest.has(p.id));
+  const lu = buildLineup(avail);
+  const starterIds = new Set<string>([...lu.six.map((p) => p.id), ...(lu.libero ? [lu.libero.id] : [])]);
+  const courtRows = lu.six.map((p, i) => `<tr><td style="text-align:left;color:var(--soft)">${SLOT_KO[i]}</td>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td class="pt">${ovrOf(p)}</td></tr>`).join('')
+    + (lu.libero ? `<tr><td style="text-align:left;color:var(--soft)">L · 리베로</td>${pcell('L')}<td class="nm">${esc(lu.libero.name)}</td><td class="pt">${ovrOf(lu.libero)}</td></tr>` : '');
+  const CAUSE_COL: Record<string, string> = { injured: 'var(--warn)', suspended: 'var(--bad)', rested: 'var(--accent)', ownerBenched: 'var(--bad)', outclassed: 'var(--soft)', starter: 'var(--soft)' };
+  const excl = getEvolvedTeamPlayers(LU.team, LU.day).filter((p) => !starterIds.has(p.id))
+    .map((p) => ({ p, cause: benchCauseOf(p, LU.team, LU.day) }))
+    .sort((a, b) => overall(b.p) - overall(a.p));
+  const exclRows = excl.map(({ p, cause }) => `<tr>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td>${ovrOf(p)}</td><td style="text-align:left;color:${CAUSE_COL[cause]};font-weight:700">${SIT_CAUSE_KO[cause]}</td></tr>`).join('');
+  $('out').innerHTML = `<div class="boxes">
+    <div class="boxwrap"><h3>선발 — 코트 7인 (5-1 시스템)</h3><table class="box"><thead><tr><th style="text-align:left">슬롯</th><th>P</th><th>선수</th><th>OVR</th></tr></thead><tbody>${courtRows}</tbody></table>
+      <p class="hint" style="margin-top:10px">6인은 로테이션 슬롯 순(전위 2·3·4 / 후위 1·5·6). 후위 미들은 경기 중 리베로와 교체.</p></div>
+    <div class="boxwrap"><h3>제외 (${excl.length}명) · 사유</h3><table class="box"><thead><tr><th>P</th><th>선수</th><th>OVR</th><th style="text-align:left">사유</th></tr></thead><tbody>${exclRows || '<tr><td colspan="4" class="empty">전원 출전</td></tr>'}</tbody></table></div>
+  </div><p class="hint">${esc(getTeam(LU.team)?.name ?? LU.team)} · day ${LU.day} · 부상=🚑 / 휴식=로드매니지먼트(#3) / 구단주 벤치=지시 / 주전 경쟁 밀림=실력</p>`;
 }
 
 // ═══ 분포 KOVO ═══════════════════════════════════════════════════════════
