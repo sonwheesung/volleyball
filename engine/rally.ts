@@ -272,10 +272,12 @@ export interface BoxLine {
   atkAtt: number; atkKill: number; atkErr: number; atkBlocked: number; // 공격: 시도/성공/범실/차단당함
   srvAtt: number; srvAce: number; srvErr: number;                       // 서브: 시도/에이스/범실
   blockPt: number; digSucc: number; assist: number;                     // 블록 득점/디그 성공/세트(어시)
+  recvAtt: number; recvGood: number; recvErr: number;                   // 리시브: 시도/성공(공격 전개 가능 q≥0.45)/실패(에이스+셰이크)
 }
 export type BoxSink = Map<string, BoxLine>;
 export const emptyBox = (): BoxLine => ({
   atkAtt: 0, atkKill: 0, atkErr: 0, atkBlocked: 0, srvAtt: 0, srvAce: 0, srvErr: 0, blockPt: 0, digSucc: 0, assist: 0,
+  recvAtt: 0, recvGood: 0, recvErr: 0,
 });
 
 /**
@@ -283,12 +285,22 @@ export const emptyBox = (): BoxLine => ({
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
  * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false, chasing: Side | null = null, box?: BoxSink): RallyOutcome {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false, chasing: Side | null = null, box?: BoxSink, boxRng?: Rng): RallyOutcome {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
   const eg = (s: Side) => (s === 'home' ? edge.home : edge.away);
   // 박스 기록(선택) — 맵에 카운트만, rng 무관. 비우면 모든 호출이 no-op → 결과 바이트 불변.
   const bx = box ? (id: string, f: (l: BoxLine) => void) => { let l = box.get(id); if (!l) { l = emptyBox(); box.set(id, l); } f(l); } : null;
+  // 리시브 귀속용 선택 — 누가 받았는지는 q(팀 리시브력 기반)·승패에 영향 없음(라벨일 뿐)이라
+  // 별도 boxRng로 뽑는다(본 rng 불간섭 → 경기 결과 바이트 불변). W형(리베로+OH) 리시브력 가중.
+  const pickRecv = (bx && boxRng) ? (t: RallyTeam): Player | null => {
+    const rc = receivers(t);
+    if (!rc.length) return null;
+    let tot = 0; const w = rc.map((p) => { const x = Math.max(0.01, n(R(p).receive)); tot += x; return x; });
+    let r = boxRng.next() * tot;
+    for (let i = 0; i < rc.length; i++) { r -= w[i]; if (r <= 0) return rc[i]; }
+    return rc[rc.length - 1];
+  } : null;
 
   // ── 공간 텔레메트리(승패 불변; 좌표는 별도 srng로 파생, 메인 rng 불간섭) ──
   const E = tele?.events;
@@ -340,7 +352,9 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
 
   const s0 = rng.next();
   if (s0 < aceP) {
-    if (stats) stats.aces++; bx?.(sp.id, (l) => { l.srvAce++; }); if (trace) trace.push('  → 서브 에이스! (서브팀 득점)');
+    if (stats) stats.aces++; bx?.(sp.id, (l) => { l.srvAce++; });
+    { const rv = pickRecv?.(recv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 에이스 = 리시브 실패
+    if (trace) trace.push('  → 서브 에이스! (서브팀 득점)');
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'ace', sj);
       E.push({ t: 'serve', side: serving, player: sp.name, pos: sp.position, serveType: st, from: srvFrom, target: srvTarget, landing: land, errMargin: dist(srvTarget, land), outcome: 'ace', rating: R(sp).serve, eff: eff(serv, sp) });
@@ -375,6 +389,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const recvErrP = clamp(0.10 - 0.13 * q, 0.005, 0.10);
   if (rng.next() < recvErrP) {
     if (stats) stats.recvErrs++;
+    { const rv = pickRecv?.(recv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 셰이크 = 리시브 실패
     if (trace) trace.push(`리시브 범실 [${sideKo(recvSide)}] (서브팀 득점)`);
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, 0.05);
@@ -388,6 +403,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     stats.recvQSum += q; stats.recvQN++;
     if (q >= 0.6) stats.recvGood++; else if (q >= 0.45) stats.recvOk++; else if (q >= CHANCE_Q) stats.recvPoor++; else stats.recvChance++;
   }
+  { const rv = pickRecv?.(recv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; if (q >= 0.45) l.recvGood++; }); } // 인플레이 리시브 성공(세터 공격 전개 가능 = A+B패스 q≥0.45)
   if (trace) trace.push(`리시브 [${sideKo(recvSide)}] 품질 ${q.toFixed(2)} (${qLabel(q)})`);
   if (E && passer) {
     const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, q);

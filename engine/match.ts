@@ -57,6 +57,8 @@ export function simulateMatch(
   opts: MatchOpts = {},
 ): SimResult {
   const rng = createRng(seed >>> 0);
+  // 박스 리시브 귀속용 별도 rng — opts.box 있을 때만. 메인 rng 불간섭 → 경기 결과 바이트 불변.
+  const boxRng = opts.box ? createRng((seed ^ 0x6d2b79f5) >>> 0) : undefined;
   let rallyNo = 0; // 공간 텔레메트리: 랠리별 독립 srng 시드용(메인 rng 불간섭)
   const edge: Edge = opts.edge ?? { home: 1, away: 1 };
   const hc = opts.home ?? DEFAULT_COACH;
@@ -228,7 +230,7 @@ export function simulateMatch(
       const chasing: Side | null =
         Math.max(h, a) >= targetPoints(setNo) - 4 && Math.abs(lead) >= 1 && Math.abs(lead) <= 2
           ? (lead > 0 ? 'away' : 'home') : null;
-      const { winner, how } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, opts.box);
+      const { winner, how } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, opts.box, boxRng);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner, how });

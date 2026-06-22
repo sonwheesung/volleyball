@@ -24,9 +24,8 @@ log(`(1) 밸런스 무영향(box 유무 sim.points 바이트 동일, 50경기): 
 const sum = (b: BoxSink, k: keyof BoxLine) => { let s = 0; for (const l of b.values()) s += l[k]; return s; };
 const N = 300;
 let atkAttT = 0, atkKillT = 0;
-const acc = { attacks: 0, kills: 0, blockouts: 0, attackErrs: 0, stuffs: 0, serves: 0, aces: 0, serveErrs: 0, digs: 0 };
-const box: { att: number; kill: number; err: number; blk: number; blkPt: number; srv: number; ace: number; srvErr: number; dig: number; assist: number } =
-  { att: 0, kill: 0, err: 0, blk: 0, blkPt: 0, srv: 0, ace: 0, srvErr: 0, dig: 0, assist: 0 };
+const acc = { attacks: 0, kills: 0, blockouts: 0, attackErrs: 0, stuffs: 0, serves: 0, aces: 0, serveErrs: 0, digs: 0, recvErrs: 0, recvQN: 0, recvGood: 0, recvOk: 0 };
+const box = { att: 0, kill: 0, err: 0, blk: 0, blkPt: 0, srv: 0, ace: 0, srvErr: 0, dig: 0, assist: 0, rAtt: 0, rGood: 0, rErr: 0 };
 for (let i = 1; i <= N; i++) {
   const stats = newRallyStats();
   const b: BoxSink = new Map();
@@ -34,10 +33,12 @@ for (let i = 1; i <= N; i++) {
   acc.attacks += stats.attacks; acc.kills += stats.kills; acc.blockouts += stats.blockouts;
   acc.attackErrs += stats.attackErrs; acc.stuffs += stats.stuffs; acc.serves += stats.serves;
   acc.aces += stats.aces; acc.serveErrs += stats.serveErrs; acc.digs += stats.digs;
+  acc.recvErrs += stats.recvErrs; acc.recvQN += stats.recvQN; acc.recvGood += stats.recvGood; acc.recvOk += stats.recvOk;
   box.att += sum(b, 'atkAtt'); box.kill += sum(b, 'atkKill'); box.err += sum(b, 'atkErr');
   box.blk += sum(b, 'atkBlocked'); box.blkPt += sum(b, 'blockPt'); box.srv += sum(b, 'srvAtt');
   box.ace += sum(b, 'srvAce'); box.srvErr += sum(b, 'srvErr'); box.dig += sum(b, 'digSucc');
   box.assist += sum(b, 'assist');
+  box.rAtt += sum(b, 'recvAtt'); box.rGood += sum(b, 'recvGood'); box.rErr += sum(b, 'recvErr');
   atkAttT += sum(b, 'atkAtt'); atkKillT += sum(b, 'atkKill');
 }
 const chk = (label: string, boxV: number, oracle: number, exact = true) => {
@@ -57,6 +58,10 @@ allOk = chk('서브 에이스 srvAce == stats.aces', box.ace, acc.aces) && allOk
 allOk = chk('서브 범실  srvErr == stats.serveErrs', box.srvErr, acc.serveErrs) && allOk;
 allOk = chk('세트 어시  assist == kills+blockouts', box.assist, acc.kills + acc.blockouts) && allOk;
 allOk = chk('디그 성공  digSucc <= stats.digs(팁디그 미귀속)', box.dig, acc.digs, false) && allOk;
+allOk = chk('리시브 시도 recvAtt == aces+recvErrs+recvQN', box.rAtt, acc.aces + acc.recvErrs + acc.recvQN) && allOk;
+allOk = chk('리시브 성공 recvGood == recvGood+recvOk(q≥0.45)', box.rGood, acc.recvGood + acc.recvOk) && allOk;
+allOk = chk('리시브 실패 recvErr == aces+recvErrs', box.rErr, acc.aces + acc.recvErrs) && allOk;
+log(`    리시브 성공률(recvGood/recvAtt) = ${(box.rGood / box.rAtt * 100).toFixed(1)}%`);
 
 // ── (3) 공격 성공률 현실성 ───────────────────────────────────────────────
 const rate = atkKillT / atkAttT * 100;
