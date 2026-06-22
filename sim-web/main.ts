@@ -10,7 +10,8 @@ import type { AwardWinner } from '../types';
 import { simulateMatch } from '../engine/match';
 import { attributeProduction } from '../engine/production';
 import { teamOverallRaw, overall, displayOvr } from '../engine/overall';
-import { discontentNow, expectsPlayOf, buildOwnerFx } from '../data/owner';
+import { discontentNow, expectsPlayOf, buildOwnerFx, teamFanbaseNow } from '../data/owner';
+import { settleSeason } from '../engine/finance';
 import { prefWeightsOf, isFAEligible, assignFAGrades, askingPrice } from '../engine/faMarket';
 import { SIT_CAUSE_KO } from '../engine/owner';
 import { marketVal } from '../data/awardSalary';
@@ -33,14 +34,14 @@ const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
   TEAMS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select>`;
 
 // ─── 탭 프레임워크 ───────────────────────────────────────────────────────
-type TabId = 'match' | 'season' | 'morale' | 'fa' | 'draft' | 'salary';
-const TABS: [TabId, string][] = [['match', '경기'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['salary', '연봉 산정'], ['fa', 'FA 시장'], ['draft', '영입 · 드래프트']];
+type TabId = 'match' | 'dist' | 'season' | 'morale' | 'salary' | 'finance' | 'fa' | 'draft';
+const TABS: [TabId, string][] = [['match', '경기'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['draft', '영입 · 드래프트']];
 let active: TabId = 'match';
 function mount() {
   $('tabs').innerHTML = TABS.map(([id, l]) => `<span class="tab${id === active ? '' : ' off'}" data-tab="${id}">${l}</span>`).join('');
   document.querySelectorAll('[data-tab]').forEach((e) => e.addEventListener('click', () => { active = e.getAttribute('data-tab') as TabId; mount(); }));
   $('out').innerHTML = `<p class="hint">실행을 눌러줘.</p>`;
-  ({ match: mountMatch, season: mountSeason, morale: mountMorale, fa: mountFA, draft: mountDraft, salary: mountSalary })[active]();
+  ({ match: mountMatch, dist: mountDist, season: mountSeason, morale: mountMorale, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft })[active]();
 }
 
 // ═══ 경기 ═══════════════════════════════════════════════════════════════
@@ -88,6 +89,50 @@ function runMatch() {
     const dr = order.filter((k) => dist[k]).map((k) => `<tr><td>${k}</td><td>${dist[k]}</td><td>${(dist[k] / M.runs * 100).toFixed(1)}%</td></tr>`).join('');
     $('out').innerHTML = `<div class="stat-grid"><div class="stat"><span class="sv">${(aw / M.runs * 100).toFixed(1)}%</span><span class="sl">A 승률 (${aw}/${M.runs})</span></div><div class="stat"><span class="sv">${(as / M.runs).toFixed(2)} : ${(bs / M.runs).toFixed(2)}</span><span class="sl">평균 세트 (A:B)</span></div></div><table class="box dist"><thead><tr><th>세트 스코어</th><th>경기 수</th><th>비율</th></tr></thead><tbody>${dr}</tbody></table><p class="hint">${esc(getTeam(M.a)?.name ?? M.a)}(A) 기준 · 시드 ${M.seed}~${M.seed + M.runs - 1}</p>`;
   }
+}
+
+// ═══ 분포 KOVO ═══════════════════════════════════════════════════════════
+const D = { a: TEAMS[0].id, b: TEAMS[1].id, runs: 200 };
+const KILL = new Set(['kill', 'blockout', 'tip', 'cap']);
+const ERR = new Set(['serveErr', 'recvErr', 'fault', 'miscErr', 'atkErr']);
+function mountDist() {
+  $('controls').innerHTML = `<div class="teams"><div class="team A"><span class="badge">A</span>${teamSelect('d-a', D.a)}</div><div class="vs">VS</div><div class="team B"><span class="badge">B</span>${teamSelect('d-b', D.b)}</div></div><div class="run-row"><label>경기 수 <input type="number" id="d-runs" value="${D.runs}" min="10" max="20000" /></label><button id="d-run">분포 측정 ▶</button></div><p class="hint">N경기의 모든 득점을 종결 방식으로 분류 → 킬·블로킹·에이스·범실 비중이 실제 KOVO(킬~56%·블록~10%·에이스~6%)에 수렴하는지.</p>`;
+  ($('d-a') as HTMLSelectElement).onchange = (e) => { D.a = (e.target as HTMLSelectElement).value; };
+  ($('d-b') as HTMLSelectElement).onchange = (e) => { D.b = (e.target as HTMLSelectElement).value; };
+  ($('d-runs') as HTMLInputElement).onchange = (e) => { D.runs = Math.max(10, Math.min(20000, +(e.target as HTMLInputElement).value || 200)); };
+  $('d-run').onclick = runDist;
+}
+function runDist() {
+  if (D.a === D.b) { $('out').innerHTML = `<p class="warn">서로 다른 두 팀을 골라주세요.</p>`; return; }
+  const A = availableTeamPlayers(D.a, 0), B = availableTeamPlayers(D.b, 0);
+  const opts = { home: coachInfoOf(D.a), away: coachInfoOf(D.b) } as any;
+  let kill = 0, stuff = 0, ace = 0, err = 0, total = 0;
+  for (let i = 0; i < D.runs; i++) {
+    const sim = simulateMatch(i + 1, A, B, opts);
+    for (const pt of sim.points) { const h = (pt as any).how as string | undefined; if (!h) continue; total++; if (KILL.has(h)) kill++; else if (h === 'stuff') stuff++; else if (h === 'ace') ace++; else if (ERR.has(h)) err++; }
+  }
+  const row = (label: string, n: number, target: string, col: string) => `<tr><td style="text-align:left;color:${col};font-weight:700">${label}</td><td class="pt">${(n / total * 100).toFixed(1)}%</td><td>${n.toLocaleString()}</td><td style="color:var(--soft)">${target}</td></tr>`;
+  $('out').innerHTML = `<table class="box" style="max-width:520px"><thead><tr><th style="text-align:left">득점 유형</th><th>비중</th><th>횟수</th><th>KOVO 목표</th></tr></thead><tbody>
+    ${row('공격(킬)', kill, '~56%', 'var(--accent)')}${row('블로킹(스터프)', stuff, '~10%', '#8B7CF0')}${row('서브 에이스', ace, '~6%', 'var(--warn)')}${row('상대 범실', err, '~28%', 'var(--soft)')}</tbody></table>
+    <p class="hint">${esc(getTeam(D.a)?.name ?? D.a)} vs ${esc(getTeam(D.b)?.name ?? D.b)} · ${D.runs}경기 · 총 ${total.toLocaleString()}득점</p>`;
+}
+
+// ═══ 재정 ════════════════════════════════════════════════════════════════
+function mountFinance() {
+  $('controls').innerHTML = `<div class="run-row"><button id="fi-run">재정 정산 보기 ▶</button></div><p class="hint">시즌 정산(settleSeason) — 모기업 지원·성적 보너스·관중 입장·굿즈 수입 − 연봉·운영비. 전 구단 비교. (스태프비·시작 잔고는 콘솔 기본값)</p>`;
+  $('fi-run').onclick = runFinance;
+}
+function runFinance() {
+  const standings = computeStandings(164);
+  const champ = buildPlayoffs(0).championId;
+  const rows = standings.map((s, i) => {
+    const fb = teamFanbaseNow(s.teamId, 164, 50, []);
+    const payroll = getEvolvedTeamPlayers(s.teamId, 164).reduce((sum, p) => sum + p.contract.salary, 0);
+    const fin = settleSeason({ teamId: s.teamId, rank: i + 1, teamCount: standings.length, champion: s.teamId === champ, runnerUp: i === 1, winRate: s.wins / Math.max(1, s.played), fan: 50, fanTotal: fb.total, playerFansTotal: fb.playerFansTotal, payroll, staff: 0, cashBefore: 50000 });
+    return { team: s.teamId, rank: i + 1, fin };
+  });
+  const body = rows.map(({ team, rank, fin }) => `<tr><td>${rank}</td><td class="nm" style="text-align:left">${team === champ ? '🏆 ' : ''}${esc(getTeam(team)?.name ?? team)}</td><td>${formatMoney(fin.sponsor + fin.bonus)}</td><td>${formatMoney(fin.gate)}</td><td>${formatMoney(fin.merch)}</td><td class="pt">${formatMoney(fin.income)}</td><td>${formatMoney(fin.payroll)}</td><td style="color:${fin.net >= 0 ? 'var(--good)' : 'var(--bad)'};font-weight:700">${fin.net >= 0 ? '+' : ''}${formatMoney(fin.net)}</td></tr>`).join('');
+  $('out').innerHTML = `<table class="box"><thead><tr><th>#</th><th style="text-align:left">팀</th><th>모기업</th><th>관중</th><th>굿즈</th><th>총수입</th><th>연봉</th><th>순익</th></tr></thead><tbody>${body}</tbody></table><p class="hint">모기업=기본 지원+성적 보너스 · 관중=입장수입 · 적자는 모기업이 보전(파산 없음)</p>`;
 }
 
 // ═══ 시즌 ════════════════════════════════════════════════════════════════
