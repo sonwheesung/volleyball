@@ -12,6 +12,7 @@
 |---|---|---|
 | [MATCH_SYSTEM](./MATCH_SYSTEM.md) | 경기 시뮬(로테이션·서브타입·랠리·블로킹3축·찬스볼·체력·기세·타임아웃·감독) | `engine/match.ts`·`rally.ts`·`lineup.ts`·`rotation.ts`(풀 랠리 체인 v2) |
 | [BOARD_RULES](./BOARD_RULES.md) | 관전 연출 검증 기준(사용자 주의사항 ↔ 감사 룰 A~P, `/verify-board` 스킬) | `components/courtPath.ts`·`courtDirector.ts`, `tools/auditBoard.ts` |
+| [UI_RULES](./UI_RULES.md) | **UI 상호작용 규칙**(버튼·로딩·비활성·빈상태 — 무거운 작업 로딩+비활성 등). `verify-board`(UI 검수기)가 대조 | `sim-web/main.ts`(runHeavy)·`components/Screen.tsx`(Loading) |
 | [COURT_POSITIONING](./COURT_POSITIONING.md) | **수비/리시브 포지셔닝 모델**(역할→위치 자동화 SPEC, 세터 후위/전위 × 서브/리시브). 확정 후 구현 | `components/courtLayout.ts`·`courtDirector.ts` |
 | [ROTATION_MORALE](./ROTATION_MORALE_SYSTEM.md) | **선발 휴식(순위 기반 로드매니지먼트) + 벤치 사유 인지 + 감정=f(사유,성격) + 누적→FA**. ✅ 구현(2026-06-22) | `engine/lineup.ts`(pickRest)·`data/rotation.ts`·`engine/owner.ts`·`data/owner.ts`, `tools/simMood·simStarters·_ev_rest` |
 | [STATS_PROTOCOL](./STATS_PROTOCOL.md) | 통계 3원칙 — 표본 1만+·N/엔진커밋 명기·로직 변경 시 무효 처리 | 모든 `tools/sim*.ts` |

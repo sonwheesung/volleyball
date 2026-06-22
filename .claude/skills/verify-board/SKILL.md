@@ -1,6 +1,6 @@
 ---
 name: verify-board
-description: Verify the match-board choreography against the documented user cautions (docs/BOARD_RULES.md) by running the headless frame-by-frame audit (tools/auditBoard.ts), type check, and unit tests, then reporting per-caution compliance. Invoke when the user asks to "검증", "보드 검증", "시뮬 돌리고 검증", "연출 확인", "어색한 장면 찾아", or after ANY change to components/courtPath.ts, courtDirector.ts, courtLayout.ts, courtCommentary.ts, or MatchCourt.tsx. Also invoke to ADD a new caution when the user reports a new awkward scene while watching a match.
+description: Verify the match-board choreography against documented user cautions (docs/BOARD_RULES.md) by running the headless frame-by-frame audit (tools/auditBoard.ts), type check, and unit tests, then reporting per-caution compliance. ALSO the project UI inspector (UI 검수기) — verifies general UI interaction rules in docs/UI_RULES.md (loading/disable on heavy ops, etc.). Invoke when the user asks to "검증", "보드 검증", "UI 검수", "시뮬 돌리고 검증", "연출 확인", "어색한 장면 찾아", or after ANY change to components/courtPath.ts, courtDirector.ts, courtLayout.ts, courtCommentary.ts, MatchCourt.tsx, or sim-web/ console / app UI handlers. Also invoke to ADD a new caution (board → BOARD_RULES, UI 상호작용 → UI_RULES) when the user reports a new awkward scene or UI issue.
 ---
 
 # verify-board — 관전 연출 검증기
@@ -34,6 +34,19 @@ description: Verify the match-board choreography against the documented user cau
 3. **상설 감사 룰 추가** (auditBoard — 같은 클래스 재발 방지). 룰 문자는 알파벳 순서로 다음 것.
 4. 회귀 검증: 가능하면 옛 버그를 임시 재주입해 룰이 잡는지 확인 후 `git checkout`으로 원복.
 5. 풀배터리 0건 → 커밋(`YYMMDD :: 한국어 요약`) → push.
+
+## UI 상호작용 룰 검수 (`docs/UI_RULES.md`)
+
+보드 연출(BOARD_RULES) 외에 **일반 UI 상호작용**(버튼·로딩·비활성·빈상태)도 이 스킬이 검수한다.
+sim-web 콘솔(`sim-web/`)이나 앱 화면의 *조작* 관련 변경이면:
+
+1. `docs/UI_RULES.md`를 Read — 규칙(UI-1 등)과 구현/검증법을 기억한다.
+2. 각 규칙을 대조 보고. 자동 감사 도구가 없는 규칙(상호작용)은 **코드/실행으로 직접 확인**:
+   - **UI-1(무거운 작업 로딩+비활성)**: 무거운 핸들러(N회 반복 시뮬·무거운 셀렉터)가 `runHeavy`/`maybeHeavy`
+     (sim-web) 또는 `Loading`/`useDeferredReady`(앱)로 감싸였는지 grep + 가능하면 브라우저로 N=5000 실행해
+     버튼 `disabled`·로딩 표시·완료 후 복구 확인. sim-web 변경이면 `npm run sim:web:check`(타입체크)도.
+3. **새 UI 주의사항**이 들어오면 BOARD_RULES와 같은 절차: ① `docs/UI_RULES.md` 대응표에 행 추가 →
+   ② 화면 수정 → ③ 검증(grep/실행) → ④ 풀배터리 0건 → 커밋. (보드 장면이면 BOARD_RULES, 상호작용이면 UI_RULES)
 
 ## 판정 기준
 
