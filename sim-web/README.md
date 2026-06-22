@@ -1,5 +1,7 @@
 # 배구 엔진 테스트 콘솔 (sim-web)
 
+> 설계·전체 문서: [`docs/SIM_CONSOLE.md`](../docs/SIM_CONSOLE.md). 여기는 빠른 로컬 안내.
+
 PC 브라우저에서 게임 엔진(`engine/`·`data/`)을 직접 돌려 결과를 검증하는 **백엔드 없는** 콘솔.
 RN·AsyncStorage·expo 의존은 `_stubs/`로 무력화(엔진은 순수 TS라 실제로 안 씀). 앱(Expo)과 별개.
 
