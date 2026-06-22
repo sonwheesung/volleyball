@@ -3,41 +3,97 @@
 
 import type { Player, SeasonAwards } from '../types';
 import {
-  discontentOf, popularityOf, fanbase, playerFans, fanOverlapRatio,
+  discontentOf, moodOf, popularityOf, fanbase, playerFans, fanOverlapRatio,
   interviewEffects, refuseResignProb, sinkingShipBias,
-  type DiscontentTopic, type Fanbase, type InterviewLog, type OwnerFx,
+  type DiscontentTopic, type Mood, type SitCause, type Fanbase, type InterviewLog, type OwnerFx,
 } from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
+import { buildLineup } from '../engine/lineup';
+import { overall } from '../engine/overall';
 import { marketValue } from '../engine/salary';
 import { formFactor, formGrade } from '../engine/form';
 import { awardHistoryOf } from './awards';
 import { computeStandings } from './standings';
 import { leagueProduction } from './production';
-import { formFactorOnDay, rosterIdsOnDay, seasonScandals } from './dynamics';
+import { formFactorOnDay, rosterIdsOnDay, seasonScandals, injuredOnDay, suspendedOnDay, availableTeamPlayers } from './dynamics';
 import { SCANDAL_POP_FACTOR } from '../engine/scandal';
 import { evolveOnDay } from './league';
 
 const GAME_EVERY = 4.6;
 const SEASON_END_DAY = 164;
 
-/** 선수의 현재 불만(주제+동기 강도) — 시즌 진행 시점(day) 기준 */
-export function discontentNow(p: Player, myTeamId: string, day: number): { topic: DiscontentTopic | null; weight: number } {
+/** 선수가 코트에 못/안 나오는 사유 판정 (ROTATION_MORALE B) — 부상·징계·구단주벤치·실력밀림·주전.
+ *  'rested'(#3 휴식)는 restedOnDay 구현 후 추가. 실제 경기 라인업(availableTeamPlayers→buildLineup)과 일치. */
+export function benchCauseOf(p: Player, myTeamId: string, day: number): SitCause {
+  const d = day > 0 ? day : 0;
+  if (injuredOnDay(d).has(p.id)) return 'injured';
+  if (suspendedOnDay(d).has(p.id)) return 'suspended';
+  const avail = availableTeamPlayers(myTeamId, d);
+  if (!avail.some((x) => x.id === p.id)) return 'ownerBenched'; // 부상·징계 아닌데 가용 명단 밖 = 벤치 지시
+  const lu = buildLineup(avail);
+  const starters = new Set<string>([...lu.six.map((x) => x.id), ...(lu.libero ? [lu.libero.id] : [])]);
+  return starters.has(p.id) ? 'starter' : 'outclassed';
+}
+
+const EXPECT_GAP = 9; // 동포지션 최약 주전보다 OVR 이만큼 아래면 '아직 못 뛴다'고 받아들임(기대치≈0)
+
+/** 주전 기대치 0..1 — 동포지션 최약 주전과의 OVR 격차 + 경력. 약체 후보(기대치≈0)는 벤치를 당연히 받아들임.
+ *  → 사용자 지적: OVR 낮고 경력 짧은 선수가 출전율만 낮다고 불만 품는 비현실 차단. */
+export function expectsPlayOf(p: Player, myTeamId: string, day: number): number {
+  const d = day > 0 ? day : 0;
+  const avail = availableTeamPlayers(myTeamId, d);
+  const lu = buildLineup(avail);
+  const starters = [...lu.six, ...(lu.libero ? [lu.libero] : [])].filter((s) => s.position === p.position);
+  if (!starters.length) return 0.5;
+  const weakest = Math.min(...starters.map((s) => overall(s)));
+  let e = Math.max(0, Math.min(1, 1 - (weakest - overall(p)) / EXPECT_GAP)); // 양수 격차=내가 더 약함→기대↓
+  if (p.career.seasons >= 6) e = Math.max(e, 0.5); // 베테랑은 역할 기대
+  if (p.career.seasons <= 1) e *= 0.5;             // 신인은 배우는 자세(기대↓)
+  return e;
+}
+
+/** 사유+기분 → UI 한 줄(선수가 자기 상황을 어떻게 받아들이는가) */
+function moodLabel(cause: SitCause, mood: Mood, topic: DiscontentTopic | null): string {
+  if (mood === 'discontent') {
+    if (topic === 'minutes') return cause === 'ownerBenched' ? '구단주 벤치 — 출전 불만' : '주전 경쟁서 밀림 — 출전 불만';
+    if (topic === 'win') return '우승 갈망 — 성적 불만';
+    if (topic === 'money') return '연봉 불만';
+    return '연고 향수 — 고향 팀 그리움';
+  }
+  if (mood === 'positive') return '주전 활약 — 만족';
+  switch (cause) { // neutral(무감정) — 사유별 받아들임
+    case 'injured': return '부상 결장 — 묵묵히 복귀 준비';
+    case 'suspended': return '징계 결장 — 자숙 중';
+    case 'rested': return '체력 안배 — 관리 양해';
+    case 'outclassed': return '주전 경쟁 — 묵묵히 준비';
+    default: return '특별한 동요 없음';
+  }
+}
+
+/** 선수의 현재 마음 — 사유(왜 벤치인가)+성격으로 불만/무감정/긍정 + 면담용 주제·가중. 시즌 진행 시점(day) 기준 */
+export function discontentNow(
+  p: Player, myTeamId: string, day: number,
+): { topic: DiscontentTopic | null; weight: number; mood: Mood; cause: SitCause; label: string } {
   const refDay = day > 0 ? day : Number.MAX_SAFE_INTEGER;
   const standings = computeStandings(refDay);
   const rank = Math.max(1, standings.findIndex((s) => s.teamId === myTeamId) + 1);
   const prod = leagueProduction(refDay).get(p.id);
   const games = Math.max(1, Math.round((day > 0 ? day : SEASON_END_DAY) / GAME_EVERY));
-  const topic = discontentOf(p, {
+  const cause = benchCauseOf(p, myTeamId, day);
+  const ctx = {
     recentRankAvg: rank,
     teamCount: standings.length,
     playRatio: Math.min(1, (prod?.matches ?? 0) / games),
     salaryRatio: p.contract.salary / Math.max(1, marketValue(p)),
     myTeamId,
-  });
-  if (!topic) return { topic: null, weight: 0 };
+    sitCause: cause,
+    expectsPlay: expectsPlayOf(p, myTeamId, day),
+  };
+  const topic = discontentOf(p, ctx);
+  const mood = moodOf(ctx, topic);
   const w = prefWeightsOf(p);
-  const weight = topic === 'win' ? w.win : topic === 'minutes' ? w.play : topic === 'money' ? w.money : w.home;
-  return { topic, weight };
+  const weight = !topic ? 0 : topic === 'win' ? w.win : topic === 'minutes' ? w.play : topic === 'money' ? w.money : w.home;
+  return { topic, weight, mood, cause, label: moodLabel(cause, mood, topic) };
 }
 
 /** 시즌말 FA 판정용 ownerFx 조립 — store.endSeason과 FA/드래프트 센터 미리보기가 공유(미리보기=결과) */

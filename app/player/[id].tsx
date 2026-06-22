@@ -62,7 +62,8 @@ export default function PlayerDetail() {
 
   // ── 구단주 레이어 (내 팀 선수만) ──
   const isMine = !!myTeamId && rosterIdsOnDay(myTeamId, currentDay).includes(p.id);
-  const { topic } = isMine && myTeamId ? discontentNow(p, myTeamId, currentDay) : { topic: null as null };
+  const moodInfo = isMine && myTeamId ? discontentNow(p, myTeamId, currentDay) : null;
+  const topic = moodInfo?.topic ?? null;
   const cond = isMine && myTeamId ? conditionOf(myTeamId, p.id, currentDay) : null;
   const myTalks = interviews.filter((l) => l.playerId === p.id && l.season === season);
   const lastTalkFailed = myTalks.length > 0 && !myTalks[myTalks.length - 1].ok;
@@ -185,8 +186,13 @@ export default function PlayerDetail() {
               <Muted>컨디션</Muted>
               <Text style={{ color: cond.color, fontWeight: '800' }}>● {cond.label}</Text>
             </Row>
-            {benched ? (
-              <Text style={{ color: theme.warn, fontWeight: '700', fontSize: 13 }}>🪑 감독 지시로 출전 제외 중</Text>
+            {moodInfo ? (
+              <Row>
+                <Muted>지금 마음</Muted>
+                <Text style={{ color: moodInfo.mood === 'discontent' ? theme.bad : moodInfo.mood === 'positive' ? theme.good : theme.muted, fontWeight: '800', fontSize: 13 }}>
+                  {moodInfo.mood === 'discontent' ? '😟' : moodInfo.mood === 'positive' ? '😊' : '😐'} {moodInfo.label}
+                </Text>
+              </Row>
             ) : null}
             {topic ? (
               <>

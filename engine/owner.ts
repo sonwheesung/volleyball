@@ -10,26 +10,58 @@ import { prefWeightsOf } from './faMarket';
 
 export type DiscontentTopic = 'win' | 'minutes' | 'money' | 'hometown';
 
+/** 선수가 코트에 못/안 나오는 사유 (ROTATION_MORALE B). 'rested'는 #3 구현 전까지 휴면. */
+export type SitCause = 'starter' | 'injured' | 'suspended' | 'rested' | 'ownerBenched' | 'outclassed';
+/** 선수 기분 (ROTATION_MORALE C) — 불만 / 무감정 / 긍정 */
+export type Mood = 'discontent' | 'neutral' | 'positive';
+
+export const SIT_CAUSE_KO: Record<SitCause, string> = {
+  starter: '주전 출전', injured: '부상 결장', suspended: '징계 결장',
+  rested: '체력 안배(휴식)', ownerBenched: '구단주 벤치 지시', outclassed: '주전 경쟁 밀림',
+};
+
 export interface DiscontentCtx {
   recentRankAvg: number;   // 팀 최근 2시즌 평균 순위(1=1위)
   teamCount: number;
   playRatio: number;       // 최근 10경기 출전 비율 0..1
   salaryRatio: number;     // 연봉 / 시장가치
   myTeamId: string;
+  sitCause?: SitCause;     // 왜 벤치/출전인지 — 출전 불만을 사유로 분기(없으면 구버전 playRatio 폴백)
+  expectsPlay?: number;    // 주전 기대치 0..1 — 주전감(OVR·경력)일수록↑. 약체 후보는 벤치를 당연히 받아들임(불만 억제)
 }
 
-/** 성향-현실 불일치 → 불만 주제. 없으면 null(충성파거나 만족 상태). */
+/** 출전 불만 — 사유 × **주전 기대치(실력/경력)** 로 분기.
+ *  부상·징계·휴식·주전은 불만 없음(구단 탓 아님). 구단주 벤치는 전부·실력밀림은 절반, 둘 다 기대치로 스케일.
+ *  → OVR 낮고 경력 짧은 후보(기대치≈0)는 못 나와도 불만 없음("아직 부족하지"). 에이스 벤치(기대치≈1)는 부글부글. */
+function minutesGrievance(cause: SitCause | undefined, playRatio: number, expectsPlay = 1): { unmet: boolean; scale: number } {
+  if (!cause) return { unmet: playRatio < 0.34, scale: 1 }; // 구버전 호환(사유 모르면 출전율만)
+  switch (cause) {
+    case 'ownerBenched': return { unmet: true, scale: 1 * expectsPlay };   // 부당 벤치 — 주전감일수록 분노
+    case 'outclassed':   return { unmet: true, scale: 0.5 * expectsPlay }; // 실력 밀림 — 주전 문턱 가까울 때만
+    default:             return { unmet: false, scale: 0 };  // starter·injured·suspended·rested → 불만 없음
+  }
+}
+
+/** 성향-현실 불일치 → 불만 주제. 없으면 null(충성파거나 만족 상태). 출전 불만은 사유+성격(w.play) 가중. */
 export function discontentOf(p: Player, ctx: DiscontentCtx): DiscontentTopic | null {
   const w = prefWeightsOf(p);
+  const min = minutesGrievance(ctx.sitCause, ctx.playRatio, ctx.expectsPlay);
   // 가장 강한 동기 순으로 불일치를 검사 — 한 사람의 불만은 하나로 수렴시킨다(면담 장면용)
   const checks: { topic: DiscontentTopic; weight: number; unmet: boolean }[] = [
     { topic: 'win', weight: w.win, unmet: ctx.recentRankAvg > ctx.teamCount * 0.6 },
-    { topic: 'minutes', weight: w.play, unmet: ctx.playRatio < 0.34 },
+    { topic: 'minutes', weight: w.play * min.scale, unmet: min.unmet },
     { topic: 'money', weight: w.money, unmet: ctx.salaryRatio < 0.75 },
     { topic: 'hometown', weight: w.home, unmet: !!p.faPref?.preferredTeamId && p.faPref.preferredTeamId !== ctx.myTeamId },
   ];
   const hit = checks.filter((c) => c.unmet && c.weight >= 0.25).sort((a, b) => b.weight - a.weight)[0];
   return hit ? hit.topic : null;
+}
+
+/** 기분 — 불만이 있으면 discontent, 주전+상위권이면 positive(만족), 그 외 neutral(무감정). */
+export function moodOf(ctx: DiscontentCtx, topic: DiscontentTopic | null): Mood {
+  if (topic) return 'discontent';
+  if (ctx.sitCause === 'starter' && ctx.recentRankAvg <= ctx.teamCount * 0.5) return 'positive';
+  return 'neutral';
 }
 
 // ─── 면담 (Interview) ────────────────────────────────────────
