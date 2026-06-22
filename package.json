@@ -10,7 +10,9 @@
     "web": "expo start --web",
     "test": "node --test --import tsx \"engine/**/*.test.ts\"",
     "typecheck": "tsc --noEmit",
-    "typecheck:test": "tsc --noEmit -p tsconfig.test.json"
+    "typecheck:test": "tsc --noEmit -p tsconfig.test.json",
+    "sim:web": "node sim-web/build.cjs --serve",
+    "sim:web:build": "node sim-web/build.cjs"
   },
   "private": true,
   "dependencies": {

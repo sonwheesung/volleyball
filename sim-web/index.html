@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>배구 — 엔진 테스트 콘솔</title>
+<style>
+  :root {
+    --ink:#15202B; --soft:#8A94A6; --line:#E6EAF0; --paper:#FFFFFF; --bg:#F4F7FB;
+    --accent:#10B9A6; --good:#16B07D; --warn:#F2A93B; --bad:#FF6B5A; --alt:#EEF1F6;
+    --radius:10px; --shadow:0 1px 3px rgba(27,42,74,.06);
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body { font-family: system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background:var(--bg); color:var(--ink); font-size:14px; line-height:1.45; }
+  header { padding:16px 24px; border-bottom:1px solid var(--line); background:var(--paper); }
+  header h1 { margin:0; font-size:19px; }
+  header .sub { color:var(--soft); font-size:12.5px; margin-top:3px; }
+  .wrap { max-width:980px; margin:0 auto; padding:20px 24px 80px; }
+  .card { border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); padding:16px; box-shadow:var(--shadow); margin-bottom:18px; }
+
+  .teams { display:flex; align-items:center; gap:14px; }
+  .team { flex:1; border:1px solid var(--line); border-radius:var(--radius); background:var(--alt); padding:12px 14px; display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .team .badge { font-size:11px; font-weight:800; color:#fff; padding:3px 10px; border-radius:99px; }
+  .team.A .badge { background:var(--good); } .team.B .badge { background:var(--bad); }
+  .team select { flex:1; min-width:90px; padding:8px 10px; border:1px solid var(--line); border-radius:7px; background:#fff; font-size:14px; font-weight:700; }
+  .team .ovr { font-size:12px; font-weight:800; color:var(--accent); }
+  .vs { font-weight:900; color:var(--soft); }
+
+  .run-row { display:flex; align-items:flex-end; gap:14px; margin-top:14px; flex-wrap:wrap; }
+  .run-row label { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--soft); font-weight:700; }
+  .run-row input { width:96px; padding:9px 11px; border:1px solid var(--line); border-radius:7px; font-size:14px; }
+  #run { margin-left:auto; padding:11px 28px; border:none; background:var(--accent); color:#fff; border-radius:8px; font-weight:800; font-size:15px; cursor:pointer; box-shadow:var(--shadow); }
+  #run:hover { filter:brightness(1.07); }
+  .hint { color:var(--soft); font-size:12.5px; margin:10px 2px 0; }
+  .warn { color:var(--bad); font-weight:700; }
+
+  .scoreboard { display:flex; align-items:center; justify-content:center; gap:22px; padding:8px 0 14px; }
+  .sb-team { font-size:16px; font-weight:800; color:var(--soft); flex:1; text-align:center; }
+  .sb-team.won { color:var(--ink); }
+  .sb-score { font-size:34px; font-weight:900; letter-spacing:1px; }
+  .setchips { display:flex; gap:7px; justify-content:center; flex-wrap:wrap; margin-bottom:16px; }
+  .setchip { background:var(--alt); border:1px solid var(--line); border-radius:8px; padding:4px 11px; font-size:12.5px; }
+  .setchip b { color:var(--soft); font-weight:700; margin-right:4px; }
+
+  .boxes { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+  @media (max-width:720px){ .boxes{ grid-template-columns:1fr; } .teams{ flex-direction:column; align-items:stretch; } }
+  .boxwrap h3 { margin:0 0 8px; font-size:14px; }
+  table.box { width:100%; border-collapse:collapse; font-size:12.5px; }
+  table.box th { text-align:right; color:var(--soft); font-weight:700; padding:5px 6px; border-bottom:1px solid var(--line); }
+  table.box th:nth-child(1), table.box th:nth-child(2) { text-align:left; }
+  table.box td { text-align:right; padding:5px 6px; border-bottom:1px solid var(--alt); font-variant-numeric:tabular-nums; }
+  table.box td.pos { text-align:center; font-weight:800; font-size:11px; border-radius:5px; }
+  td.pos-S{color:#36BE9A;} td.pos-OH{color:#0E9C8C;} td.pos-OP{color:#FF6B5A;} td.pos-MB{color:#8B7CF0;} td.pos-L{color:#C8961F;}
+  table.box td.nm { text-align:left; font-weight:700; }
+  table.box td.pt { font-weight:900; color:var(--accent); }
+  td.empty { text-align:center; color:var(--soft); padding:14px; }
+
+  .stat-grid { display:flex; gap:16px; margin-bottom:14px; }
+  .stat { flex:1; background:var(--alt); border-radius:var(--radius); padding:14px; text-align:center; }
+  .stat .sv { display:block; font-size:24px; font-weight:900; color:var(--accent); }
+  .stat .sl { color:var(--soft); font-size:12px; font-weight:700; }
+  table.dist { max-width:420px; }
+  .tabs { display:flex; gap:8px; margin:16px 0 0; }
+  .tab { padding:8px 18px; border-radius:8px; font-weight:800; font-size:13px; border:1px solid var(--ink); background:var(--accent); color:#fff; }
+  .tab.off { background:transparent; color:var(--soft); border:1px dashed var(--line); }
+</style>
+</head>
+<body>
+  <header>
+    <h1>배구 — 엔진 테스트 콘솔</h1>
+    <div class="sub">PC 브라우저에서 경기 엔진을 직접 돌려 결과를 검증 · 백엔드 없음</div>
+  </header>
+  <div class="wrap">
+    <div class="tabs">
+      <span class="tab">경기</span>
+      <span class="tab off" title="추후">시즌</span>
+      <span class="tab off" title="추후">분포(KOVO)</span>
+    </div>
+    <div class="card" id="controls"></div>
+    <div class="card" id="out"></div>
+  </div>
+  <script src="dist/bundle.js"></script>
+</body>
+</html>
