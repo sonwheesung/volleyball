@@ -34,14 +34,14 @@ const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
   TEAMS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select>`;
 
 // ─── 탭 프레임워크 ───────────────────────────────────────────────────────
-type TabId = 'match' | 'dist' | 'season' | 'morale' | 'salary' | 'finance' | 'fa' | 'draft';
-const TABS: [TabId, string][] = [['match', '경기'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['draft', '영입 · 드래프트']];
+type TabId = 'match' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft';
+const TABS: [TabId, string][] = [['match', '경기'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['draft', '영입 · 드래프트']];
 let active: TabId = 'match';
 function mount() {
   $('tabs').innerHTML = TABS.map(([id, l]) => `<span class="tab${id === active ? '' : ' off'}" data-tab="${id}">${l}</span>`).join('');
   document.querySelectorAll('[data-tab]').forEach((e) => e.addEventListener('click', () => { active = e.getAttribute('data-tab') as TabId; mount(); }));
   $('out').innerHTML = `<p class="hint">실행을 눌러줘.</p>`;
-  ({ match: mountMatch, dist: mountDist, season: mountSeason, morale: mountMorale, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft })[active]();
+  ({ match: mountMatch, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft })[active]();
 }
 
 // ═══ 경기 ═══════════════════════════════════════════════════════════════
@@ -195,6 +195,24 @@ function runFA() {
     return `<tr><td class="pt">${g}</td>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td style="text-align:left">${esc(getTeam(team)?.name ?? team)}</td><td>${ovrOf(p)}</td><td>${p.age}</td><td>${formatMoney(askingPrice(marketVal(p), g))}</td></tr>`;
   }).join('');
   $('out').innerHTML = `<table class="box"><thead><tr><th>등급</th><th>P</th><th>선수</th><th style="text-align:left">현 소속</th><th>OVR</th><th>나이</th><th>요구 연봉</th></tr></thead><tbody>${body || '<tr><td colspan="7" class="empty">FA 자격 선수 없음</td></tr>'}</tbody></table><p class="hint">총 ${pool.length}명 · A/B는 보상선수 대상 등급</p>`;
+}
+
+// ═══ 성장 · 노쇠 ═════════════════════════════════════════════════════════
+const AGE = { team: TEAMS[0].id };
+function mountAging() {
+  $('controls').innerHTML = `<div class="run-row"><label>팀 ${teamSelect('a-team', AGE.team)}</label><button id="a-run">성장·노쇠 보기 ▶</button></div><p class="hint">각 선수가 커리어 곡선 어디쯤인지 — 나이 vs 전성기(peakAge)로 성장기/전성기/노쇠기, 잠재력(★) 헤드룸. 미들은 전성기 짧고 노쇠 빠름.</p>`;
+  ($('a-team') as HTMLSelectElement).onchange = (e) => { AGE.team = (e.target as HTMLSelectElement).value; };
+  $('a-run').onclick = runAging;
+}
+function runAging() {
+  const rows = getEvolvedTeamPlayers(AGE.team, 0).sort((a, b) => a.age - b.age);
+  const body = rows.map((p) => {
+    const d = p.age - p.peakAge;
+    const [phase, col] = d <= -2 ? ['↑ 성장기', 'var(--good)'] : d <= 1 ? ['★ 전성기', 'var(--accent)'] : ['↓ 노쇠기', 'var(--bad)'];
+    const headroom = Math.max(0, Math.round(displayOvr(Math.max(...Object.values(p.potential))) - ovrOf(p)));
+    return `<tr>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td>${p.age}</td><td class="pt">${ovrOf(p)}</td><td>${p.peakAge}</td><td style="color:${col};font-weight:700">${phase}</td><td style="color:var(--warn)">${potStars(p)}</td><td>${headroom > 0 ? '+' + headroom : '—'}</td></tr>`;
+  }).join('');
+  $('out').innerHTML = `<table class="box"><thead><tr><th>P</th><th>선수</th><th>나이</th><th>OVR</th><th>전성기</th><th>단계</th><th>잠재</th><th>성장여력</th></tr></thead><tbody>${body}</tbody></table><p class="hint">${esc(getTeam(AGE.team)?.name ?? AGE.team)} · 성장여력=잠재 OVR−현재 OVR · 노쇠기 선수는 신체 스탯부터 하락</p>`;
 }
 
 // ═══ 연봉 산정 ═══════════════════════════════════════════════════════════
