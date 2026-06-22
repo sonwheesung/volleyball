@@ -82,6 +82,14 @@ function legBoundaryDays(): Set<number> {
   return new Set(firstDayOfLeg.values());
 }
 
+// ── 콘솔 what-if 주입(SIM_CONSOLE) — 강제 부상/사고. **앱·세이브 무관**(스토어는 호출 안 함).
+//   빈 배열이면 무동작(forward-pass 동일). 셋되면 시즌 전체(순위·생산·뉴스·라인업)에 파급. txVersion++로 dyn 캐시 무효화. ──
+let injuryOverride: InjurySpan[] = [];
+let scandalOverride: ScandalSpan[] = [];
+export function setInjuryOverride(spans: InjurySpan[]): void { injuryOverride = [...spans]; txVersion++; }
+export function setScandalOverride(spans: ScandalSpan[]): void { scandalOverride = [...spans]; txVersion++; }
+export function clearWhatIf(): void { injuryOverride = []; scandalOverride = []; txVersion++; }
+
 function compute(): Dyn {
   const byDay = new Map<number, typeof SEASON>();
   for (const f of SEASON) { const a = byDay.get(f.dayIndex) ?? []; a.push(f); byDay.set(f.dayIndex, a); }
@@ -160,6 +168,10 @@ function compute(): Dyn {
       healthy = healthyByPos(ids.map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p));
     }
   };
+
+  // 콘솔 what-if 주입(SIM_CONSOLE) — 강제 부상/사고를 루프 전에 주입 → injuredOn/suspendedOn이 시즌 전체(순위·생산·뉴스·라인업)에 반영. 빈 배열이면 무동작.
+  injuries.push(...injuryOverride);
+  scandals.push(...scandalOverride);
 
   for (const d of matchdays) {
     while (pi < pendingPlayerTx.length && pendingPlayerTx[pi].day <= d) applyTx(pendingPlayerTx[pi++]);

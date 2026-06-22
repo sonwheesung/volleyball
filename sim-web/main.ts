@@ -6,7 +6,7 @@ import { computeStandings } from '../data/standings';
 import { buildPlayoffs } from '../data/playoffs';
 import { currentSeasonAwards } from '../data/awards';
 import { restedOnDay } from '../data/rotation';
-import { seasonTxLog, seasonInjuryReport, seasonScandals } from '../data/dynamics';
+import { seasonTxLog, seasonInjuryReport, seasonScandals, setInjuryOverride, clearWhatIf } from '../data/dynamics';
 import { buildNewsFeed } from '../data/news';
 import { SEVERITY_KO } from '../engine/injury';
 import { SCANDAL_KO } from '../engine/scandal';
@@ -97,37 +97,45 @@ function runMatch() {
   }
 }
 
-// ═══ 선발 라인업 (경기별 주전 등록 엔진) — what-if 빼기 가능 ══════════════
-const LU = { team: TEAMS[0].id, day: 60, out: new Set<string>() };
+// ═══ 선발 라인업 (경기별 주전 등록 엔진) — what-if 부상 주입 ══════════════
+const LU = { team: TEAMS[0].id, day: 60, inj: new Map<string, string>() }; // playerId → teamId(주입한 부상)
 const SLOT_KO = ['S · 세터', 'OH · 아웃사이드', 'MB · 미들', 'OP · 아포짓', 'OH · 아웃사이드', 'MB · 미들'];
+function applyInj() { // 콘솔 주입 → dynamics 훅(시즌 전체 파급). 시즌아웃(from 0~164).
+  setInjuryOverride([...LU.inj].map(([pid, tid]) => ({ playerId: pid, teamId: tid, from: 0, to: 164, severity: 'season' as const, missMatches: 36 })));
+}
+function toggleInj(pid: string, tid: string) { LU.inj.has(pid) ? LU.inj.delete(pid) : LU.inj.set(pid, tid); applyInj(); runLineup(); }
 function mountLineup() {
-  $('controls').innerHTML = `<div class="run-row"><label>팀 ${teamSelect('lu-team', LU.team)}</label><label>경기일(day 0~164) <input type="number" id="lu-day" value="${LU.day}" min="0" max="164" /></label><button id="lu-run">선발 라인업 보기 ▶</button></div><p class="hint">경기별 주전 등록 — 그날 출전 가능 명단에서 감독이 짜는 <b>코트 7인(6+리베로)</b>. <b>선수를 클릭하면 빼고(부상·벤치 가정)</b> 엔진이 라인업을 다시 짭니다(가짜 아님 — buildLineup 재실행). 실제 경기/순위/생산과 동일.</p>`;
-  ($('lu-team') as HTMLSelectElement).onchange = (e) => { LU.team = (e.target as HTMLSelectElement).value; LU.out.clear(); };
-  ($('lu-day') as HTMLInputElement).onchange = (e) => { LU.day = Math.max(0, Math.min(164, +(e.target as HTMLInputElement).value || 0)); LU.out.clear(); };
+  $('controls').innerHTML = `<div class="run-row"><label>팀 ${teamSelect('lu-team', LU.team)}</label><label>경기일(day 0~164) <input type="number" id="lu-day" value="${LU.day}" min="0" max="164" /></label><button id="lu-run">선발 라인업 보기 ▶</button><button id="lu-clr" style="background:var(--bad)">what-if 초기화</button></div><p class="hint">경기별 주전 등록 — 그날 출전 가능 명단에서 감독이 짜는 <b>코트 7인(6+리베로)</b>. <b>선수를 클릭하면 시즌아웃 부상을 주입</b>(진짜 엔진 — 시즌·뉴스·생산 탭에도 파급) → 라인업 재구성. 다시 클릭하면 복귀.</p>`;
+  ($('lu-team') as HTMLSelectElement).onchange = (e) => { LU.team = (e.target as HTMLSelectElement).value; };
+  ($('lu-day') as HTMLInputElement).onchange = (e) => { LU.day = Math.max(0, Math.min(164, +(e.target as HTMLInputElement).value || 0)); };
   $('lu-run').onclick = runLineup;
+  $('lu-clr').onclick = () => { LU.inj.clear(); clearWhatIf(); runLineup(); };
 }
 function runLineup() {
   const rest = restedOnDay(LU.team, LU.day);
-  const fullAvail = availableTeamPlayers(LU.team, LU.day); // 그날 진짜 출전 가능(부상·징계·벤치 반영)
+  const fullAvail = availableTeamPlayers(LU.team, LU.day); // 그날 출전 가능 — 주입한 부상도 여기 반영(injuredOnDay)
   const healthy = new Set(fullAvail.map((p) => p.id));
-  const avail = fullAvail.filter((p) => !rest.has(p.id) && !LU.out.has(p.id)); // + 휴식 + 내가 뺀 선수
+  const avail = fullAvail.filter((p) => !rest.has(p.id));
   const lu = buildLineup(avail);
   const starterIds = new Set<string>([...lu.six.map((p) => p.id), ...(lu.libero ? [lu.libero.id] : [])]);
-  const clk = (p: Player) => healthy.has(p.id) ? ` data-pid="${p.id}" style="cursor:pointer" title="클릭: 빼기/되돌리기"` : '';
+  const clk = (p: Player) => (healthy.has(p.id) || LU.inj.has(p.id)) ? ` data-pid="${p.id}" style="cursor:pointer" title="클릭: 부상 주입/복귀"` : '';
   const courtRows = lu.six.map((p, i) => `<tr${clk(p)}><td style="text-align:left;color:var(--soft)">${SLOT_KO[i]}</td>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td class="pt">${ovrOf(p)}</td></tr>`).join('')
     + (lu.libero ? `<tr${clk(lu.libero)}><td style="text-align:left;color:var(--soft)">L · 리베로</td>${pcell('L')}<td class="nm">${esc(lu.libero.name)}</td><td class="pt">${ovrOf(lu.libero)}</td></tr>` : '');
   const CAUSE_COL: Record<string, string> = { injured: 'var(--warn)', suspended: 'var(--bad)', rested: 'var(--accent)', ownerBenched: 'var(--bad)', outclassed: 'var(--soft)', starter: 'var(--soft)' };
   const excl = getEvolvedTeamPlayers(LU.team, LU.day).filter((p) => !starterIds.has(p.id))
-    .map((p) => ({ p, reason: LU.out.has(p.id) ? '내가 뺌 (what-if)' : rest.has(p.id) ? '휴식 (#3)' : SIT_CAUSE_KO[benchCauseOf(p, LU.team, LU.day)], col: LU.out.has(p.id) ? 'var(--bad)' : rest.has(p.id) ? 'var(--accent)' : CAUSE_COL[benchCauseOf(p, LU.team, LU.day)] }))
-    .sort((a, b) => overall(b.p) - overall(a.p));
+    .map((p) => {
+      const injd = LU.inj.has(p.id);
+      const cause = benchCauseOf(p, LU.team, LU.day);
+      return { p, reason: injd ? '🚑 부상 (what-if 주입)' : rest.has(p.id) ? '휴식 (#3)' : SIT_CAUSE_KO[cause], col: injd ? 'var(--bad)' : rest.has(p.id) ? 'var(--accent)' : CAUSE_COL[cause] };
+    }).sort((a, b) => overall(b.p) - overall(a.p));
   const exclRows = excl.map(({ p, reason, col }) => `<tr${clk(p)}>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td>${ovrOf(p)}</td><td style="text-align:left;color:${col};font-weight:700">${reason}</td></tr>`).join('');
-  const outNote = LU.out.size ? ` · <b style="color:var(--bad)">what-if 제외 ${LU.out.size}명</b> (클릭해 되돌리기)` : '';
+  const injNote = LU.inj.size ? ` · <b style="color:var(--bad)">what-if 부상 ${LU.inj.size}명 주입 중</b> (시즌·뉴스 탭에도 반영)` : '';
   $('out').innerHTML = `<div class="boxes">
     <div class="boxwrap"><h3>선발 — 코트 7인 (5-1 시스템)</h3><table class="box"><thead><tr><th style="text-align:left">슬롯</th><th>P</th><th>선수</th><th>OVR</th></tr></thead><tbody>${courtRows}</tbody></table>
-      <p class="hint" style="margin-top:10px">6인은 로테이션 슬롯 순. 선수 클릭 = 빼기(부상·벤치 가정) → 대체 선수 자동 등판.</p></div>
+      <p class="hint" style="margin-top:10px">6인은 로테이션 슬롯 순. 선수 클릭 = 시즌아웃 부상 주입 → 대체 선수 자동 등판(시즌 전체 파급).</p></div>
     <div class="boxwrap"><h3>제외 (${excl.length}명) · 사유</h3><table class="box"><thead><tr><th>P</th><th>선수</th><th>OVR</th><th style="text-align:left">사유</th></tr></thead><tbody>${exclRows || '<tr><td colspan="4" class="empty">전원 출전</td></tr>'}</tbody></table></div>
-  </div><p class="hint">${esc(getTeam(LU.team)?.name ?? LU.team)} · day ${LU.day}${outNote}</p>`;
-  $('out').querySelectorAll('[data-pid]').forEach((el) => el.addEventListener('click', () => { const id = el.getAttribute('data-pid')!; LU.out.has(id) ? LU.out.delete(id) : LU.out.add(id); runLineup(); }));
+  </div><p class="hint">${esc(getTeam(LU.team)?.name ?? LU.team)} · day ${LU.day}${injNote}</p>`;
+  $('out').querySelectorAll('[data-pid]').forEach((el) => el.addEventListener('click', () => toggleInj(el.getAttribute('data-pid')!, LU.team)));
 }
 
 // ═══ 분포 KOVO ═══════════════════════════════════════════════════════════
