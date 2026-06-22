@@ -159,6 +159,14 @@
 
 > EC-UI-01 발견 방법(왜 기존 테스트가 못 잡았나): 단위/시뮬은 **데이터층(production)** 만 검사 — 화면이 *자기 시뮬*을 돌리는 줄 몰랐다(계층 우회 §4 + reported-but-unwired §1.F). **문서-코드 drift 독립검증**(INJURY 0 "동일 availableTeamPlayers" 약속 ↔ matchresult 코드 대조)이 잡음.
 
+### 선발·벤치(라인업)
+| ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
+|---|---|---|---|
+| EC-LU-01 | **벤치 지시가 팀의 마지막 리베로까지 빼서 리베로 0으로 경기**(상대 리베로는 정상 출전 → 우리 팀만 리베로 없음). 프로팀이 리베로 없이 뛰는 비현실. 사용자 보고(2026-06-22) | `availableTeamPlayers`/forward-pass의 벤치 필터가 **총원 7인 가드만** 보고 포지션은 안 봄 → 리베로 전원 벤치 시 코트 리베로 null. → 공유 헬퍼 `applyBenchDirective`에 **마지막 리베로 보호**(리베로 벤치만 무효) 추가, 양 경로 공유로 결정론 유지 (`data/dynamics.ts`) | **`simStarters`** G1 (전 리베로 벤치 → 코트 리베로 존재, A/B FAIL→PASS) |
+| EC-LU-02 | **선발 기용 건의(`suggestStart`) 수락 시 동포지션 '최강' 주전을 벤치**(에이스 강등). 주석은 "최약 주전"인데 코드가 정반대 → 백업 선발 건의가 에이스(90+)를 벤치로 | `suggestStart` 인컴번트 선택이 `sort((x,y)=>overall(y)-overall(x))[0]`(내림차순=최강). → 실제 경기 라인업(`buildLineup(availableTeamPlayers)`)의 동포지션 **최약 주전**을 벤치하도록 수정 (`store/useGameStore.ts`) | **`simStarters`** G2 (수락 시 벤치=최약 주전인지, A/B FAIL→PASS) |
+
+> EC-LU 발견 방법: 사용자 관전 보고("우리 리베로만 경기 안 나옴, 90+인데") → **home/away 대칭 엔진에서 팀-특정 필터 추적**(injured/suspended는 전역 → 유일 비대칭 = 벤치 지시) → 재현 프로브(`_ev_libero_bench`) → **선발 검증 시뮬(`simStarters`)** 로 5요인(지시·OVR·징계·부상·폼) 전수 + 가드 상설화. 도구 자체 A/B(수정 전 FAIL 확인 → 수정 후 PASS).
+
 > **악질/원숭이 — 견뎌낸 것(WAI, 버그 아님, 견고성 증거)**: 가짜/빈/존재안함 id, 음수·NaN 자금,
 > '전원 영입'·'전원 보호'·'전원 재계약 거부', 거대/음수 시즌 번호, day0 `endSeason`, 무팀 `endSeason`,
 > 역행 `setDay`, 60시즌 소크 — 전부 크래시·소프트락·불변식 위반 없이 우아하게 거부/처리됨
@@ -250,6 +258,17 @@
   - **제외**: results·standings(단순 집계, 가벼움 — 깜빡임 방지), 메인 탭 index/squad/schedule/office(주 루프, 즉시감 우선).
   - **개선 예정(후속)**: 현재 스피너+텍스트 1차 구현. ① 스켈레톤/플레이스홀더 레이아웃, ② 브랜드 연출(로고·코트 모션),
     ③ 제외 화면 중 시즌 누적으로 무거워지면 재평가(records 외 results도 후보), ④ 지연 임계(아주 빠르면 스피너 생략) 검토.
+- **[기존 문제 · 도구] `_gt_determinism` 자가검증 오라클 stale** — "partialize에서 `rosters` 누락을 검출하는가" A/B가
+  `false`(검출 실패)라 `DETERMINISM+SAVE OK=false`. 원인: `rosters`는 리하이드레이트 때 base 스냅샷에서 재구성돼
+  **세이브에서 빠져도 복원 상태가 동일** → 누락이 결정론 차이를 안 만든다(오라클이 검사 대상을 잘못 고름). 실제 결정론
+  (`real partialize+rehydrate identical`)·`different seed differs`는 통과. **2026-06-22 G1/G2 수정과 무관**(stash A/B로
+  확인 — 수정 전에도 동일 false). 후속: 오라클을 정말 결정론에 영향 주는 필드(예: `results`·`currentDay`) 누락으로 교체.
+- **[설계 결정 대기] 선발 로드 매니지먼트(순위 기반 주전 휴식, 검증 #3)** — `simStarters` #3가 미구현 확인:
+  선발 파이프라인(`availableTeamPlayers→buildLineup`)이 순위/매직넘버/잔여일정을 입력으로 안 받아, 순위가 굳어도 항상 최강
+  주전. 도입 시 #5(지시 거절돼도 순위 때문에 주전)도 함께 설계. **관전형/현실성과 맞물린 설계 결정 — 채팅 합의 후 진행.**
+- **[설계 요청] 벤치 사유 인지 → 선수 심리(2026-06-22 사용자)** — 선수가 *왜* 벤치인지(OVR 밀림·부상·징계·구단주 지시·
+  로테이션 휴식) 정확히 인지하고, 그에 따라 불만/긍정/무감정 상태가 변경·유지돼야 함. 현재 `discontentNow`는 벤치 지시(🪑)
+  기반 불만만 — 사유별 분기·휴식 양해 없음. OWNER_SYSTEM 확장 설계 필요(채팅 합의 후).
 
 ---
 

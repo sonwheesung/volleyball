@@ -46,6 +46,17 @@ export function setOwnerContext(bench: BenchDirective[]): void {
 const benchedOn = (day: number): Set<string> =>
   new Set(benchDirectives.filter((b) => b.fromDay <= day).map((b) => b.playerId));
 
+/** 벤치 지시 적용 — ①출전 7인 미만이 되면 그 경기 한정 전체 무시(부상 우선·경기 성립),
+ *  ②마지막 리베로까지 빼면 리베로 벤치만 무효(프로팀은 항상 리베로를 코트에 둔다 — 현실성 가드, EC-LU-01).
+ *  forward-pass(아래 루프)와 availableTeamPlayers가 반드시 이 한 함수를 공유해야 결정론이 유지된다. */
+function applyBenchDirective(ids: string[], benched: Set<string>): string[] {
+  if (!benched.size) return ids;
+  const wo = ids.filter((id) => !benched.has(id));
+  if (wo.length < 7) return ids;                                    // 총원 가드(기존)
+  if (wo.some((id) => getPlayer(id)?.position === 'L')) return wo;   // 리베로 남아있음 — 그대로
+  return ids.filter((id) => !benched.has(id) || getPlayer(id)?.position === 'L'); // 마지막 리베로 보호
+}
+
 export interface ScandalSpan {
   playerId: string; teamId: string; kind: ScandalKind; from: number; to: number; missMatches: number;
 }
@@ -159,12 +170,8 @@ function compute(): Dyn {
         const injured = injuredOn(d, teamId);
         const suspended = suspendedOn(d); // 사건·사고 출장 정지
         let availIds = (roster.get(teamId) ?? []).filter((id) => !injured.has(id) && !suspended.has(id));
-        // 벤치 지시(구단주→감독) — 단, 출전 7인 미만이 되면 그 경기 한정 무시(부상 우선, 경기 성립)
-        const benched = benchedOn(d);
-        if (benched.size) {
-          const wo = availIds.filter((id) => !benched.has(id));
-          if (wo.length >= 7) availIds = wo;
-        }
+        // 벤치 지시(구단주→감독) — 총원·마지막 리베로 가드 포함(availableTeamPlayers와 동일 헬퍼 = 결정론)
+        availIds = applyBenchDirective(availIds, benchedOn(d));
         const avail = availIds
           .map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p)
           .map((p) => applyForm(p, formOf(teamId, p.id, d))); // 경기감각 — 결장 누적자는 무뎌진 채 평가
@@ -243,13 +250,9 @@ export function suspendedOnDay(day: number): Set<string> {
 export function availableTeamPlayers(teamId: string, day: number): Player[] {
   const injured = injuredOnDay(day);
   const suspended = suspendedOnDay(day);
-  let ids = rosterIdsOnDay(teamId, day).filter((id) => !injured.has(id) && !suspended.has(id));
-  // 벤치 지시 — 출전 7인 미만이 되면 그 경기 한정 무시(forward-pass와 동일 가드)
-  const benched = benchedOn(day);
-  if (benched.size) {
-    const wo = ids.filter((id) => !benched.has(id));
-    if (wo.length >= 7) ids = wo;
-  }
+  const ids0 = rosterIdsOnDay(teamId, day).filter((id) => !injured.has(id) && !suspended.has(id));
+  // 벤치 지시 — 총원·마지막 리베로 가드(forward-pass와 동일 헬퍼 = 결정론)
+  const ids = applyBenchDirective(ids0, benchedOn(day));
   return ids
     .map((id) => evolveOnDay(id, day))
     .filter((p): p is Player => !!p)

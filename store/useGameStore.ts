@@ -16,7 +16,8 @@ import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
-import { seasonInjuryDays } from '../data/injury';
+import { seasonInjuryDays, availableTeamPlayers } from '../data/injury';
+import { buildLineup } from '../engine/lineup';
 import { setTxContext, setOwnerContext, seasonTxLog, seasonScandals, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
 import {
   meetAccept, persuade, cardMatch,
@@ -467,9 +468,13 @@ export const useGameStore = create<GameState>()(
           .filter((q): q is Player => !!q && !benched.has(q.id));
         const target = squad.find((q) => q.id === playerId);
         if (!target) return false;
+        // 동포지션 '최약 주전'을 벤치 — 건의 선수가 그 자리를 잇는다(주석대로). 과거 최강(에이스)을 벤치하던 버그 수정(EC-LU-02).
+        //   주전 판정은 실제 경기 라인업(availableTeamPlayers→buildLineup)으로 — 벤치된 비주전을 골라 무의미해지는 것 방지.
+        const lu = buildLineup(availableTeamPlayers(my, s.currentDay));
+        const starterIds = new Set<string>([...lu.six.map((p) => p.id), ...(lu.libero ? [lu.libero.id] : [])]);
         const incumbent = squad
-          .filter((q) => q.position === target.position && q.id !== playerId)
-          .sort((x, y) => overall(y) - overall(x))[0];
+          .filter((q) => q.position === target.position && q.id !== playerId && starterIds.has(q.id))
+          .sort((x, y) => overall(x) - overall(y))[0];
         if (!incumbent) {
           // 동포지션 대체자가 없어 건의가 무의미해도, 시도했으면 쿨다운 적용(성공·거절·무의미 모두 잠금)
           set({ benchCooldown: { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS } });
