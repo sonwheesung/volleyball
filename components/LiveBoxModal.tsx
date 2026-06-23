@@ -25,7 +25,7 @@ const pts = (l: BoxLine) => l.atkKill + l.blockPt + l.srvAce;       // 득점 = 
 const rateN = (n: number, d: number) => (d > 0 ? (n / d) * 100 : null); // 비율(%) or null(시도 0)
 const fmt = (v: number | null) => (v === null ? '–' : `${Math.round(v)}%`);
 
-const NAME_W = 86;
+const NAME_W = 96;
 const C = { sc: 34, ak: 30, aa: 30, ap: 48, bl: 32, sv: 32, dg: 32, st: 32, rc: 46, er: 34 };
 const ATK_W = C.ak + C.aa + C.ap;                          // 공격 그룹 폭
 const REST_W = C.bl + C.sv + C.dg + C.st + C.rc + C.er;     // 공격 뒤 나머지 폭
@@ -84,8 +84,9 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
           {rows.length === 0 ? (
             <Text style={styles.empty}>출전 명단이 없습니다.</Text>
           ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
-              <View>
+            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
+              <ScrollView horizontal showsHorizontalScrollIndicator>
+                <View>
                 {/* 그룹 헤더 — 공격 묶음 */}
                 <View style={[styles.row, styles.grpRow]}>
                   <View style={{ width: NAME_W + C.sc }} />
@@ -107,8 +108,7 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
                   <Text style={[styles.hCell, { width: C.er }]}>범실</Text>
                 </View>
                 {/* 선수 행 */}
-                <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-                  {rows.map(({ p, l }) => {
+                {rows.map(({ p, l }) => {
                     const ap = rateN(l.atkKill, l.atkAtt); // 공격 성공률
                     const rc = l.recvAtt > 0 ? (l.recvGood - l.recvErr) / l.recvAtt * 100 : null; // 리시브 효율
                     const err = l.atkErr + l.srvErr;
@@ -116,7 +116,7 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
                       <View key={p.id} style={styles.row}>
                         <View style={[styles.nmCell, { width: NAME_W }]}>
                           <View style={[styles.pill, { backgroundColor: POS_COLOR[p.position] }]}><Text style={styles.pillTxt}>{p.position}</Text></View>
-                          <Text style={styles.nmTxt} numberOfLines={1}>{p.name}</Text>
+                          <Text style={styles.nmTxt} numberOfLines={1} ellipsizeMode="tail">{p.name}</Text>
                         </View>
                         <Text style={[styles.cell, styles.sc, { width: C.sc }]}>{pts(l)}</Text>
                         {num(l.atkKill, C.ak)}
@@ -131,7 +131,6 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
                       </View>
                     );
                   })}
-                </ScrollView>
                 {/* 팀 합계 */}
                 <View style={[styles.row, styles.tot]}>
                   <Text style={[styles.totTxt, { width: NAME_W, textAlign: 'left' }]}>팀 합계</Text>
@@ -146,7 +145,8 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
                   <Text style={[styles.cell, styles.totTxt, { width: C.rc }]}>{fmt(rateN(T.rg - T.re, T.ra))}</Text>
                   <Text style={[styles.cell, styles.totTxt, { width: C.er }]}>{T.er}</Text>
                 </View>
-              </View>
+                </View>
+              </ScrollView>
             </ScrollView>
           )}
 
@@ -178,7 +178,7 @@ const styles = StyleSheet.create({
   hCell: { color: theme.muted, fontSize: 11, fontWeight: '800', textAlign: 'center' },
   cell: { textAlign: 'center', color: theme.text, fontSize: 12.5, fontVariant: ['tabular-nums'], paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border },
   nmCell: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border },
-  nmTxt: { color: theme.text, fontSize: 12.5, fontWeight: '700', flexShrink: 1 },
+  nmTxt: { color: theme.text, fontSize: 12.5, fontWeight: '700', flex: 1, minWidth: 0 },
   pill: { minWidth: 24, paddingHorizontal: 3, paddingVertical: 1, borderRadius: 5, alignItems: 'center' },
   pillTxt: { color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' },
   sc: { fontWeight: '900', color: theme.text, backgroundColor: 'rgba(16,185,166,0.10)' },
