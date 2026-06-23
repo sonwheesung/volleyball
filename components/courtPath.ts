@@ -152,8 +152,12 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   let serveTarget = rng.next() < 0.8
     ? { x: clampN((0.12 + rng.next() * 0.76) * W, 0.1 * W, 0.9 * W), y: (recv === 'home' ? 0.76 + rng.next() * 0.13 : 0.11 + rng.next() * 0.13) * H }  // 깊은 코스(후위 리시브)
     : { x: clampN((0.18 + rng.next() * 0.64) * W, 0.1 * W, 0.9 * W), y: (recv === 'home' ? 0.67 + rng.next() * 0.07 : 0.26 + rng.next() * 0.07) * H }; // 짧은 서브(3m 라인 부근 — 후위가 전진 리시브, 전위 아님)
-  // 리시버 = 코스에 가장 가까운 패서("마이볼")
-  const cands = line.length ? line : (sw[recv].backers.length ? sw[recv].backers : [serverIdx]);
+  // 리시버 = 코스에 가장 가까운 패서("마이볼"). 단 받는 팀이 곧 byId 공격을 한다면 byId는 리시브 안 함
+  // (받은 선수가 그대로 백어택하면 firstTouch=공격수 충돌 → 박스 불일치). 항상 공격수로 남긴다.
+  const recvWins = !!r.byId && (r.how === 'kill' || r.how === 'blockout' || r.how === 'cap' || r.how === 'tip') && r.scorer === recv;
+  const recvByIdx = recvWins ? (recv === 'home' ? L.home : L.away).six.findIndex((p) => p.id === r.byId) : -1;
+  const cands0 = line.length ? line : (sw[recv].backers.length ? sw[recv].backers : [serverIdx]);
+  const cands = cands0.filter((i) => i !== recvByIdx).length ? cands0.filter((i) => i !== recvByIdx) : cands0;
   const recvIdx = cands.reduce((b, i) => (sd2(rf[i] ?? sw[recv].pos[i], serveTarget) < sd2(rf[b] ?? sw[recv].pos[b], serveTarget) ? i : b), cands[0]);
   {
     // 받히는 서브는 리시버가 공 비행 중 도달 가능한 반경 안 — 그보다 먼 코스는 현실에서도 에이스다
@@ -258,6 +262,10 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     // 종결 공격팀의 킬류 공격이면, 엔진이 귀속한 실제 공격수(byId) 슬롯 — 토서·공격수 선택에서 이 선수를 보존(박스 일치).
     const byIdx = (att === finalAtt && winsByAtk0 && r.byId)
       ? (att === 'home' ? L.home : L.away).six.findIndex((p) => p.id === r.byId) : -1;
+    // def(디그하는 팀)이 곧 byId(후위 백어택) 공격을 한다면, byId를 디거 후보에서 제외 → byId가 firstTouch가
+    // 되지 않게(항상 공격수로 남김). firstTouch는 항상 후위 디거라, byId가 후위 공격수일 때만 충돌한다.
+    const byIdxDef = (def === finalAtt && winsByAtk0 && r.byId)
+      ? (def === 'home' ? L.home : L.away).six.findIndex((p) => p.id === r.byId) : -1;
     // 리시브/디그 패스는 세터 자리 주변 "일정 범위"에서 랜덤하게 떨어진다(정확히 안 감)
     const sIdx = sw[att].setterIdx;
     const ideal = sIdx >= 0 ? sw[att].pos[sIdx] : sw[att].pos[sw[att].frontHitters[0] ?? 0];
@@ -300,7 +308,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const def0 = other(att);
       const overX = clampN((0.22 + rng.next() * 0.56) * W, 0.14 * W, 0.86 * W);
       const overY = (def0 === 'home' ? 0.72 + rng.next() * 0.12 : 0.16 + rng.next() * 0.12) * H; // 상대 후위 깊숙이
-      const dBacks0 = [1, 5, 6].map((z) => lineupIdxAt(rotOf(def0), z));
+      const byIdxDef0 = (def0 === finalAtt && winsByAtk0 && r.byId) ? (def0 === 'home' ? L.home : L.away).six.findIndex((p) => p.id === r.byId) : -1;
+      const dBacks0all = [1, 5, 6].map((z) => lineupIdxAt(rotOf(def0), z));
+      const dBacks0 = dBacks0all.filter((i) => i !== byIdxDef0).length ? dBacks0all.filter((i) => i !== byIdxDef0) : dBacks0all; // 프리볼 받고 곧 공격할 byId는 그 리시브 안 함
       const rIdx = dBacks0.reduce((b, i) => (d2(swDef[def0].pos[i], { x: overX, y: overY }) < d2(swDef[def0].pos[b], { x: overX, y: overY }) ? i : b), dBacks0[0]);
       // ★ 3번째 컨택으로 넘긴다 — 디그(1, 위 pass) → 세트(2) → 언더로 넘김(3). 세트 없이 바로 넘기면
       //   "2번째 터치인데 찬스볼"로 보인다(사용자 보고 2026-06-23). 세터가 전위 sender에게 띄우고, sender가 넘김.
@@ -364,8 +374,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       atkIdx = pick(pool.length ? pool : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
     }
     // 종결 공격을 위에서 구한 byIdx(엔진 귀속 공격수)로 교체 — 보드 마커·중계가 박스와 같은 선수.
-    // 토서가 이미 byIdx를 피했으므로 충돌 없음. firstTouch(디그한 선수)와만 같지 않게(전환공격 회피, 드묾).
-    if (byIdx >= 0 && byIdx !== firstTouch) {
+    // 토서·디거 선정에서 이미 byIdx를 피했고, byIdx==firstTouch(전환공격)여도 토스 idx==firstTouch라
+    // 룰 M(퍼스트터치 배회)이 자동 면제 → 디그한 선수가 그대로 공격(진짜 전환공격)도 사실대로 그린다.
+    if (byIdx >= 0) {
       atkIdx = byIdx;
       atk = attFront.includes(byIdx) ? (lu.six[byIdx].position === 'MB' ? 'quick' : 'open') : 'back';
     }
@@ -464,7 +475,8 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const dBacks = [1, 5, 6].map((z) => lineupIdxAt(rotOf(def), z));
     const dluSix = (def === 'home' ? L.home : L.away).six;
     const nearestDig = (tg: { x: number; y: number }) => {
-      const ds = dBacks.map((i) => ({ i, d: d2(swDef[def].pos[i], tg) })).sort((a, b) => a.d - b.d);
+      const dCand = dBacks.filter((i) => i !== byIdxDef); // byId(곧 공격할 선수)는 디그 안 함 — 항상 공격수로
+      const ds = (dCand.length ? dCand : dBacks).map((i) => ({ i, d: d2(swDef[def].pos[i], tg) })).sort((a, b) => a.d - b.d);
       const libIdx = dBacks.find((i) => dluSix[i]?.position === 'MB');
       if (libIdx !== undefined && libIdx !== ds[0].i) {
         const dl = ds.find((x) => x.i === libIdx);
@@ -596,7 +608,8 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       if (rng.next() < BLOCK_COVER_RATE) {
         // 블록 커버 — 공이 공격팀 코트 네트 앞에 떨어지고, 후위/커버가 몸을 던져 살린다 → 같은 팀 재공격
         const ct = { x: clampN(blockContact.x + rng.range(-0.07, 0.07) * W, 16, W - 16), y: (att === 'home' ? 0.61 : 0.39) * H };
-        const aBacks = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z));
+        const aBacks0 = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z));
+        const aBacks = aBacks0.filter((i) => i !== byIdx).length ? aBacks0.filter((i) => i !== byIdx) : aBacks0; // 재공격할 byId는 커버(디그) 안 함
         const coverIdx = aBacks.reduce((b, i) => (d2(swDef[att].pos[i], ct) < d2(swDef[att].pos[b], ct) ? i : b), aBacks[0]);
         wp.push({ x: blockContact.x, y: blockContact.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치(블록 정면→공격팀 쪽으로)
         wp.push({ x: ct.x, y: ct.y, side: att, idx: -1, kind: 'pass', movers: [{ side: att, idx: coverIdx, x: ct.x, y: ct.y }] }); // 커버 디그(살림)
