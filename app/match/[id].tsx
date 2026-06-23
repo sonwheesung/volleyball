@@ -1,10 +1,11 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, OvrBadge, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
 import { LiveBoxModal } from '../../components/LiveBoxModal';
+import { Popup } from '../../components/Popup';
 import { BroadcastBanner } from '../../components/BroadcastBanner';
 import type { BoxSink } from '../../engine/rally';
 import { buildMatchBanners } from '../../data/broadcast';
@@ -207,23 +208,19 @@ export default function MatchBoard() {
       </View>
       </ScrollView>
 
-      {/* 관전 중 나가기 확인 — 나가면 결정론 결과가 바로 확정된다 */}
-      <Modal visible={confirmExit} transparent animationType="fade" onRequestClose={() => setConfirmExit(false)}>
-        <Pressable style={styles.backdrop} onPress={() => setConfirmExit(false)}>
-          <Pressable style={styles.modal} onPress={() => {}}>
-            <Text style={styles.modalTitle}>경기를 나갈까요?</Text>
-            <Text style={styles.modalBody}>
-              지금까지 본 위치를 저장합니다.{'\n'}다음에 이 지점부터 이어서 볼 수 있어요.
-            </Text>
-            <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={handleResume}>
-              <Text style={styles.mPrimaryText}>나중에 이어보기</Text>
-            </Pressable>
-            <Pressable style={styles.mTextBtn} onPress={() => setConfirmExit(false)}>
-              <Text style={styles.mTextBtnTxt}>계속 관전</Text>
-            </Pressable>
-          </Pressable>
+      {/* 관전 중 나가기 확인 — 나가면 결정론 결과가 바로 확정된다. 밖 영역 탭으로 안 닫힘(Popup) */}
+      <Popup visible={confirmExit} onRequestClose={() => setConfirmExit(false)}>
+        <Text style={styles.modalTitle}>경기를 나갈까요?</Text>
+        <Text style={styles.modalBody}>
+          지금까지 본 위치를 저장합니다.{'\n'}다음에 이 지점부터 이어서 볼 수 있어요.
+        </Text>
+        <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={handleResume}>
+          <Text style={styles.mPrimaryText}>나중에 이어보기</Text>
         </Pressable>
-      </Modal>
+        <Pressable style={styles.mTextBtn} onPress={() => setConfirmExit(false)}>
+          <Text style={styles.mTextBtnTxt}>계속 관전</Text>
+        </Pressable>
+      </Popup>
 
       {/* 스코어박스 — 지금까지 본 점수까지의 누적 박스(boxTimeline). 열리면 경기 일시정지, 닫으면 재개. 스포일러 아님(현재 점수까지만) */}
       <LiveBoxModal

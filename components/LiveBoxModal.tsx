@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react';
-import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from './Screen';
+import { Popup } from './Popup';
 import { buildLineup } from '../engine/lineup';
 import { emptyBox } from '../engine/rally';
 import type { Player, Position } from '../types';
@@ -8,7 +9,7 @@ import type { BoxSink, BoxLine } from '../engine/rally';
 
 // 경기 보드 "스코어박스" 팝업 — 엔진 테스트 콘솔(sim-web)의 네이버 종합 박스스코어를 그대로.
 // 지금까지 본 점수까지의 누적 박스(boxTimeline 스냅샷). 열리면 경기 일시정지, 닫으면 재개.
-// 점수가 0이어도 선발 명단을 0으로 항상 표시(스포일러 아님 — 현재 점수까지만).
+// 점수가 0이어도 선발 명단을 0으로 항상 표시(스포일러 아님 — 현재 점수까지만). 밖 영역 탭으로 안 닫힘(Popup).
 interface Props {
   visible: boolean;
   onClose: () => void;
@@ -27,8 +28,9 @@ const fmt = (v: number | null) => (v === null ? '–' : `${Math.round(v)}%`);
 
 const NAME_W = 96;
 const C = { sc: 34, ak: 30, aa: 30, ap: 48, bl: 32, sv: 32, dg: 32, st: 32, rc: 46, er: 34 };
-const ATK_W = C.ak + C.aa + C.ap;                          // 공격 그룹 폭
-const REST_W = C.bl + C.sv + C.dg + C.st + C.rc + C.er;     // 공격 뒤 나머지 폭
+const ATK_W = C.ak + C.aa + C.ap;                                  // 공격 그룹 폭
+const REST_W = C.bl + C.sv + C.dg + C.st + C.rc + C.er;            // 공격 뒤 나머지 폭
+const TABLE_W = NAME_W + C.sc + ATK_W + REST_W;                    // 표 전체 폭(가로 스크롤 기준)
 
 export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName, box, mineSide }: Props) {
   const [tab, setTab] = useState<'home' | 'away'>(mineSide ?? 'home');
@@ -56,113 +58,105 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
     { pt: 0, ak: 0, aa: 0, bl: 0, ac: 0, dg: 0, as: 0, rg: 0, re: 0, ra: 0, er: 0 },
   );
 
-  // 숫자 셀(0은 흐리게 — 네이버 가독성)
-  const num = (v: number, w: number, extra?: object) => (
-    <Text style={[styles.cell, { width: w }, v === 0 ? styles.zero : undefined, extra]}>{v}</Text>
+  const num = (v: number, w: number) => (
+    <Text style={[styles.cell, { width: w }, v === 0 ? styles.zero : undefined]}>{v}</Text>
   );
 
   return (
-    <Modal visible={visible} transparent animationType="fade" onRequestClose={onClose}>
-      <Pressable style={styles.backdrop} onPress={onClose}>
-        <Pressable style={styles.card} onPress={() => {}}>
-          <View style={styles.head}>
-            <Text style={styles.title}>실시간 기록</Text>
-            <Pressable hitSlop={10} onPress={onClose}><Text style={styles.close}>✕</Text></Pressable>
-          </View>
+    <Popup visible={visible} onRequestClose={onClose} card={{ maxWidth: 600 }}>
+      <View style={styles.head}>
+        <Text style={styles.title}>실시간 기록</Text>
+        <Pressable hitSlop={10} onPress={onClose}><Text style={styles.close}>✕</Text></Pressable>
+      </View>
 
-          {/* 팀 토글 */}
-          <View style={styles.toggle}>
-            {(['home', 'away'] as const).map((s) => (
-              <Pressable key={s} style={[styles.tBtn, tab === s && styles.tBtnOn]} onPress={() => setTab(s)}>
-                <Text style={[styles.tTxt, tab === s && styles.tTxtOn]} numberOfLines={1}>
-                  {s === 'home' ? homeName : awayName}{mineSide === s ? ' ★' : ''}
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-
-          {rows.length === 0 ? (
-            <Text style={styles.empty}>출전 명단이 없습니다.</Text>
-          ) : (
-            <ScrollView style={{ maxHeight: 360 }} showsVerticalScrollIndicator={false}>
-              <ScrollView horizontal showsHorizontalScrollIndicator>
-                <View>
-                {/* 그룹 헤더 — 공격 묶음 */}
-                <View style={[styles.row, styles.grpRow]}>
-                  <View style={{ width: NAME_W + C.sc }} />
-                  <Text style={[styles.grpTxt, { width: ATK_W }]}>공격</Text>
-                  <View style={{ width: REST_W }} />
-                </View>
-                {/* 칸 헤더 */}
-                <View style={[styles.row, styles.hRow]}>
-                  <Text style={[styles.hCell, { width: NAME_W, textAlign: 'left' }]}>선수</Text>
-                  <Text style={[styles.hCell, { width: C.sc }]}>득점</Text>
-                  <Text style={[styles.hCell, { width: C.ak }]}>성공</Text>
-                  <Text style={[styles.hCell, { width: C.aa }]}>시도</Text>
-                  <Text style={[styles.hCell, { width: C.ap }]}>성공률</Text>
-                  <Text style={[styles.hCell, { width: C.bl }]}>블록</Text>
-                  <Text style={[styles.hCell, { width: C.sv }]}>서브</Text>
-                  <Text style={[styles.hCell, { width: C.dg }]}>디그</Text>
-                  <Text style={[styles.hCell, { width: C.st }]}>세트</Text>
-                  <Text style={[styles.hCell, { width: C.rc }]}>리시브</Text>
-                  <Text style={[styles.hCell, { width: C.er }]}>범실</Text>
-                </View>
-                {/* 선수 행 */}
-                {rows.map(({ p, l }) => {
-                    const ap = rateN(l.atkKill, l.atkAtt); // 공격 성공률
-                    const rc = l.recvAtt > 0 ? (l.recvGood - l.recvErr) / l.recvAtt * 100 : null; // 리시브 효율
-                    const err = l.atkErr + l.srvErr;
-                    return (
-                      <View key={p.id} style={styles.row}>
-                        <View style={[styles.nmCell, { width: NAME_W }]}>
-                          <View style={[styles.pill, { backgroundColor: POS_COLOR[p.position] }]}><Text style={styles.pillTxt}>{p.position}</Text></View>
-                          <Text style={styles.nmTxt} numberOfLines={1} ellipsizeMode="tail">{p.name}</Text>
-                        </View>
-                        <Text style={[styles.cell, styles.sc, { width: C.sc }]}>{pts(l)}</Text>
-                        {num(l.atkKill, C.ak)}
-                        {num(l.atkAtt, C.aa)}
-                        <Text style={[styles.cell, { width: C.ap }, ap !== null && ap >= 45 ? styles.hi : ap === null ? styles.zero : undefined]}>{fmt(ap)}</Text>
-                        {num(l.blockPt, C.bl)}
-                        {num(l.srvAce, C.sv)}
-                        {num(l.digSucc, C.dg)}
-                        {num(l.assist, C.st)}
-                        <Text style={[styles.cell, { width: C.rc }, rc !== null && rc >= 45 ? styles.hi : rc === null ? styles.zero : undefined]}>{fmt(rc)}</Text>
-                        <Text style={[styles.cell, { width: C.er }, err > 0 ? styles.err : styles.zero]}>{err}</Text>
-                      </View>
-                    );
-                  })}
-                {/* 팀 합계 */}
-                <View style={[styles.row, styles.tot]}>
-                  <Text style={[styles.totTxt, { width: NAME_W, textAlign: 'left' }]}>팀 합계</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.sc }]}>{T.pt}</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.ak }]}>{T.ak}</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.aa }]}>{T.aa}</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.ap }]}>{fmt(rateN(T.ak, T.aa))}</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.bl }]}>{T.bl}</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.sv }]}>{T.ac}</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.dg }]}>{T.dg}</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.st }]}>{T.as}</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.rc }]}>{fmt(rateN(T.rg - T.re, T.ra))}</Text>
-                  <Text style={[styles.cell, styles.totTxt, { width: C.er }]}>{T.er}</Text>
-                </View>
-                </View>
-              </ScrollView>
-            </ScrollView>
-          )}
-
-          <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 리시브=효율((정확−실패)/시도)</Text>
-          <Pressable style={styles.resume} onPress={onClose}>
-            <Text style={styles.resumeTxt}>경기 계속 보기 ▶</Text>
+      {/* 팀 토글 */}
+      <View style={styles.toggle}>
+        {(['home', 'away'] as const).map((s) => (
+          <Pressable key={s} style={[styles.tBtn, tab === s && styles.tBtnOn]} onPress={() => setTab(s)}>
+            <Text style={[styles.tTxt, tab === s && styles.tTxtOn]} numberOfLines={1}>
+              {s === 'home' ? homeName : awayName}{mineSide === s ? ' ★' : ''}
+            </Text>
           </Pressable>
-        </Pressable>
+        ))}
+      </View>
+
+      {rows.length === 0 ? (
+        <Text style={styles.empty}>출전 명단이 없습니다.</Text>
+      ) : (
+        // 가로 스크롤만(세로 중첩 없음) + 명시적 폭 → 좌우 스크롤 보장
+        <ScrollView horizontal showsHorizontalScrollIndicator>
+          <View style={{ width: TABLE_W }}>
+            {/* 그룹 헤더 — 공격 묶음 */}
+            <View style={[styles.row, styles.grpRow]}>
+              <View style={{ width: NAME_W + C.sc }} />
+              <Text style={[styles.grpTxt, { width: ATK_W }]}>공격</Text>
+              <View style={{ width: REST_W }} />
+            </View>
+            {/* 칸 헤더 */}
+            <View style={[styles.row, styles.hRow]}>
+              <Text style={[styles.hCell, { width: NAME_W, textAlign: 'left' }]}>선수</Text>
+              <Text style={[styles.hCell, { width: C.sc }]}>득점</Text>
+              <Text style={[styles.hCell, { width: C.ak }]}>성공</Text>
+              <Text style={[styles.hCell, { width: C.aa }]}>시도</Text>
+              <Text style={[styles.hCell, { width: C.ap }]}>성공률</Text>
+              <Text style={[styles.hCell, { width: C.bl }]}>블록</Text>
+              <Text style={[styles.hCell, { width: C.sv }]}>서브</Text>
+              <Text style={[styles.hCell, { width: C.dg }]}>디그</Text>
+              <Text style={[styles.hCell, { width: C.st }]}>세트</Text>
+              <Text style={[styles.hCell, { width: C.rc }]}>리시브</Text>
+              <Text style={[styles.hCell, { width: C.er }]}>범실</Text>
+            </View>
+            {/* 선수 행 */}
+            {rows.map(({ p, l }) => {
+              const ap = rateN(l.atkKill, l.atkAtt); // 공격 성공률
+              const rc = l.recvAtt > 0 ? (l.recvGood - l.recvErr) / l.recvAtt * 100 : null; // 리시브 효율
+              const err = l.atkErr + l.srvErr;
+              return (
+                <View key={p.id} style={styles.row}>
+                  <View style={[styles.nmCell, { width: NAME_W }]}>
+                    <View style={[styles.pill, { backgroundColor: POS_COLOR[p.position] }]}><Text style={styles.pillTxt}>{p.position}</Text></View>
+                    <Text style={styles.nmTxt} numberOfLines={1} ellipsizeMode="tail">{p.name}</Text>
+                  </View>
+                  <Text style={[styles.cell, styles.sc, { width: C.sc }]}>{pts(l)}</Text>
+                  {num(l.atkKill, C.ak)}
+                  {num(l.atkAtt, C.aa)}
+                  <Text style={[styles.cell, { width: C.ap }, ap !== null && ap >= 45 ? styles.hi : ap === null ? styles.zero : undefined]}>{fmt(ap)}</Text>
+                  {num(l.blockPt, C.bl)}
+                  {num(l.srvAce, C.sv)}
+                  {num(l.digSucc, C.dg)}
+                  {num(l.assist, C.st)}
+                  <Text style={[styles.cell, { width: C.rc }, rc !== null && rc >= 45 ? styles.hi : rc === null ? styles.zero : undefined]}>{fmt(rc)}</Text>
+                  <Text style={[styles.cell, { width: C.er }, err > 0 ? styles.err : styles.zero]}>{err}</Text>
+                </View>
+              );
+            })}
+            {/* 팀 합계 */}
+            <View style={[styles.row, styles.tot]}>
+              <Text style={[styles.totTxt, { width: NAME_W, textAlign: 'left' }]}>팀 합계</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.sc }]}>{T.pt}</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.ak }]}>{T.ak}</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.aa }]}>{T.aa}</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.ap }]}>{fmt(rateN(T.ak, T.aa))}</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.bl }]}>{T.bl}</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.sv }]}>{T.ac}</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.dg }]}>{T.dg}</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.st }]}>{T.as}</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.rc }]}>{fmt(rateN(T.rg - T.re, T.ra))}</Text>
+              <Text style={[styles.cell, styles.totTxt, { width: C.er }]}>{T.er}</Text>
+            </View>
+          </View>
+        </ScrollView>
+      )}
+
+      <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 리시브=효율((정확−실패)/시도)</Text>
+      <Pressable style={styles.resume} onPress={onClose}>
+        <Text style={styles.resumeTxt}>경기 계속 보기 ▶</Text>
       </Pressable>
-    </Modal>
+    </Popup>
   );
 }
 
 const styles = StyleSheet.create({
-  backdrop: { flex: 1, backgroundColor: '#15202B80', alignItems: 'center', justifyContent: 'center', padding: 16 },
-  card: { backgroundColor: theme.card, borderRadius: 18, padding: 16, gap: 12, alignSelf: 'stretch', maxWidth: 600, width: '100%' },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { color: theme.text, fontSize: 17, fontWeight: '900' },
   close: { color: theme.muted, fontSize: 18, fontWeight: '800' },

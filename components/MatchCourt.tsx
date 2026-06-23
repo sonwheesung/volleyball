@@ -3,7 +3,8 @@
 // → 마커를 실제 코트 위치에 놓고 공을 득점 결과와 일치하게 애니메이션.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Animated, Dimensions, Easing, Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Animated, Dimensions, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Popup } from './Popup';
 import { theme } from './Screen';
 import { buildLineup } from '../engine/lineup';
 import type { SimResult, TimeoutEvent } from '../engine/simMatch';
@@ -482,9 +483,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
       </View>
 
       {/* 작전 타임아웃 — 경기 멈춤 + 코트 선수 체력(미래: 교체·기세) */}
-      <Modal visible={!!timeoutModal} transparent animationType="fade" onRequestClose={resumeFromTimeout}>
-        <View style={styles.toBackdrop}>
-          <View style={styles.toModal}>
+      <Popup visible={!!timeoutModal} onRequestClose={resumeFromTimeout} card={styles.toModal}>
             {timeoutModal ? (() => {
               const dSide: Side = mineSide ?? timeoutModal.side;
               const stam = dSide === 'home' ? timeoutModal.stamHome : timeoutModal.stamAway;
@@ -522,9 +521,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
                 </>
               );
             })() : null}
-          </View>
-        </View>
-      </Modal>
+      </Popup>
     </View>
   );
 }
