@@ -27,6 +27,7 @@ export interface RallyLike {
   setNo: number; home: number; away: number; scorer: Side; serving: Side; homeRot: number; awayRot: number;
   how?: PointHow; // 엔진이 기록한 종결 방식 — 있으면 보드는 사실대로 그린다(미기록 구결과는 즉흥)
   byId?: string;  // 종결 선수 id(킬/팁/블록아웃=공격수) — 종결 스파이크 마커를 실제 공격수로(박스 일치)
+  recvId?: string; // 서브 리시버 id(박스 귀속) — 보드 서브 리시버 마커를 박스와 일치
 }
 export interface Lineups { home: Lineup; away: Lineup }
 
@@ -152,13 +153,15 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   let serveTarget = rng.next() < 0.8
     ? { x: clampN((0.12 + rng.next() * 0.76) * W, 0.1 * W, 0.9 * W), y: (recv === 'home' ? 0.76 + rng.next() * 0.13 : 0.11 + rng.next() * 0.13) * H }  // 깊은 코스(후위 리시브)
     : { x: clampN((0.18 + rng.next() * 0.64) * W, 0.1 * W, 0.9 * W), y: (recv === 'home' ? 0.67 + rng.next() * 0.07 : 0.26 + rng.next() * 0.07) * H }; // 짧은 서브(3m 라인 부근 — 후위가 전진 리시브, 전위 아님)
-  // 리시버 = 코스에 가장 가까운 패서("마이볼"). 단 받는 팀이 곧 byId 공격을 한다면 byId는 리시브 안 함
-  // (받은 선수가 그대로 백어택하면 firstTouch=공격수 충돌 → 박스 불일치). 항상 공격수로 남긴다.
-  const recvWins = !!r.byId && (r.how === 'kill' || r.how === 'blockout' || r.how === 'cap' || r.how === 'tip') && r.scorer === recv;
-  const recvByIdx = recvWins ? (recv === 'home' ? L.home : L.away).six.findIndex((p) => p.id === r.byId) : -1;
+  // 리시버 = 엔진이 박스 귀속한 서브 리시버(recvId)면 그 선수로 → 보드=박스 리시브 일치(귀속 사각 제거).
+  //   리베로 리시버는 보드가 후위 MB 슬롯을 리베로로 표시하므로 그 슬롯에 매핑. 없으면 코스 최근접("마이볼").
+  let recvByIdx = r.recvId ? recvLu.six.findIndex((p) => p.id === r.recvId) : -1;
+  if (recvByIdx < 0 && r.recvId && recvLu.libero && r.recvId === recvLu.libero.id) {
+    const backMB = [1, 5, 6].map((z) => lineupIdxAt(rotOf(recv), z)).find((i) => recvLu.six[i]?.position === 'MB');
+    if (backMB !== undefined) recvByIdx = backMB;
+  }
   const cands0 = line.length ? line : (sw[recv].backers.length ? sw[recv].backers : [serverIdx]);
-  const cands = cands0.filter((i) => i !== recvByIdx).length ? cands0.filter((i) => i !== recvByIdx) : cands0;
-  const recvIdx = cands.reduce((b, i) => (sd2(rf[i] ?? sw[recv].pos[i], serveTarget) < sd2(rf[b] ?? sw[recv].pos[b], serveTarget) ? i : b), cands[0]);
+  const recvIdx = recvByIdx >= 0 ? recvByIdx : cands0.reduce((b, i) => (sd2(rf[i] ?? sw[recv].pos[i], serveTarget) < sd2(rf[b] ?? sw[recv].pos[b], serveTarget) ? i : b), cands0[0]);
   {
     // 받히는 서브는 리시버가 공 비행 중 도달 가능한 반경 안 — 그보다 먼 코스는 현실에서도 에이스다
     const rbase = rf[recvIdx] ?? sw[recv].pos[recvIdx];
@@ -211,6 +214,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   if (r.how === 'ace') {
     if (rng.next() < 0.18) {
       // 네트인 에이스: 백테이프를 맞고 뚝 — 서브도 네트 맞고 득점할 수 있다. 가까운 둘이 달려들지만 늦는다
+      // 네트인 에이스: 공이 네트 앞에 뚝 — 깊은 곳의 지정 리시버는 닿을 수 없다(net≠후위 리시브존).
+      // 여기서 idx=recvIdx로 귀속하면 "공에서 먼 처리자"(유령터치)가 된다 → idx -1(클린 리시브 없음)이 사실.
+      // 박스는 이 에이스를 지정 리시버 recvErr로 기장(bookkeeping)하되, 보드는 클린 리시브를 그리지 않는다.
       const nx = clampN(zonePx(serving, 1, W, H).x + rng.range(-0.15, 0.15) * W, 0.15 * W, 0.85 * W);
       const drop = { x: nx, y: recv === 'home' ? NETY + 16 : NETY - 16 };
       wp.push({ x: nx, y: recv === 'home' ? NETY + 3 : NETY - 3, side: recv, idx: -1, kind: 'serve', hold: true, dur: 360 }); // 네트 터치(처리자 없음)

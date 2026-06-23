@@ -1,6 +1,6 @@
 // 형제오류 사냥(sibling hunt) — 스코어박스 "리시브" 칸: 보드가 보여주는 리시버 ↔ 박스 귀속 리시버 일치?
-// byId(종결 공격수/블로커/서버)만 보드-박스를 묶었고, 디그/세트/리시브 "선택"은 보드 자체 로직(proximity)이라
-// 박스(boxRng pickRecv) 귀속과 따로 굴 가능성 → 측정. 보드 서브-리시버 분포 vs 박스 recvAtt 분포 겹침률.
+// recvId 배선 후 per-event 검증: 각 랠리에서 보드가 그린 서브-리시버 == 엔진 recvId(박스 recvAtt 귀속자)?
+//   리베로 리시버는 보드가 후위 MB 슬롯을 리베로로 표시하므로(display-equivalence) 그 경우도 일치로 친다.
 import { resetLeagueBase, LEAGUE, coachInfoOf } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
 import { simulateMatch } from '../engine/match';
@@ -18,36 +18,48 @@ const A = availableTeamPlayers(t0, 0), B = availableTeamPlayers(t1, 0);
 const L: Lineups = { home: buildLineup(A), away: buildLineup(B) };
 const base = { home: coachInfoOf(t0), away: coachInfoOf(t1) } as any;
 
-const boardCnt = new Map<string, number>();   // 보드가 서브-리시브 처리자로 보여준 선수
-const boxCnt = new Map<string, number>();      // 박스가 recvAtt 귀속한 선수
-const add = (m: Map<string, number>, id: string, v = 1) => m.set(id, (m.get(id) ?? 0) + v);
+// 두 버킷으로 정직하게 나눈다:
+//  (A) 클린 리시브(보드가 서브 처리자를 그림, idx≥0) → 그 선수 == 박스 recvId 여야 함(100% 목표).
+//  (B) 노클린(보드 idx -1) → 에이스(네트인 등). 박스는 지정 리시버를 recvErr로 기장하지만 코트엔
+//      클린 터치가 없다(공이 닿을 수 없는 곳). 이건 불일치가 아니라 "에이스" — 단, how가 'ace'가 아니면
+//      (kill/tip 등 클린 리시브가 있어야 할 종결인데 처리자 미렌더) 그건 진짜 버그 → 별도 카운트.
+let clean = 0, cleanMatch = 0, cleanMis = 0;
+let ace = 0, aceLeak = 0; // aceLeak = idx -1인데 how!=ace (있으면 안 됨)
+const misBy: Record<string, number> = {};
+const SHUFFLE = process.argv[3] === 'shuffle'; // A/B: recvId를 한 칸 밀어 비교(허위 오라클 차단 — 100%면 안 됨)
 
 for (let s = 1; s <= N; s++) {
   const box: BoxSink = new Map();
   const sim = simulateMatch(s, A, B, { ...base, box });
   const rallies = reconstructRallies(sim);
+  const recvIds = sim.points.map((p) => p.recvId);
   for (let i = 0; i < rallies.length; i++) {
     const r = rallies[i];
+    const recvId = SHUFFLE ? recvIds[(i + 1) % recvIds.length] : recvIds[i];
+    if (!recvId) continue; // 리시브 없음(서브 범실 등) → 박스 recvAtt 없음 → 비교 대상 아님
     let prevLast: { x: number; y: number } | undefined;
     if (i > 0) { const pp = ballPath(rallies[i - 1], s, L, W, H, SO); const w = pp[pp.length - 1]; prevLast = { x: w.x, y: w.y }; }
     const path = ballPath(r, s, L, W, H, SO, prevLast);
-    const sv = path.find((w) => w.kind === 'serve' && w.idx >= 0); // 서브 리시브 처리자
-    if (sv) { const p = (sv.side === 'home' ? L.home : L.away).six[sv.idx]; if (p) add(boardCnt, p.id); }
+    const sv = path.find((w) => w.kind === 'serve' && w.idx >= 0); // 클린 서브 리시브 처리자
+    if (!sv) { // (B) 노클린 — 에이스여야 함
+      ace++;
+      if (sim.points[i]?.how !== 'ace') aceLeak++;
+      continue;
+    }
+    // (A) 클린 리시브 — 처리자 == 박스 recvId?
+    clean++;
+    const lu = sv.side === 'home' ? L.home : L.away;
+    const slot = lu.six[sv.idx];
+    const ok = !!slot && (slot.id === recvId || (slot.position === 'MB' && !!lu.libero && lu.libero.id === recvId)); // 리베로=후위 MB 표시 display-equivalence
+    if (ok) cleanMatch++;
+    else { cleanMis++; if (slot) misBy[slot.position] = (misBy[slot.position] ?? 0) + 1; }
   }
-  for (const [id, l] of box) if (l.recvAtt > 0) add(boxCnt, id, l.recvAtt);
 }
 
-// 분포 겹침률 — Σ min(board_p, box_p) / Σ box_p (보드가 박스와 같은 선수에게 리시브를 몰아주는 비율)
-const ids = new Set([...boardCnt.keys(), ...boxCnt.keys()]);
-let overlap = 0, boardTot = 0, boxTot = 0;
-for (const id of ids) { overlap += Math.min(boardCnt.get(id) ?? 0, boxCnt.get(id) ?? 0); boardTot += boardCnt.get(id) ?? 0; boxTot += boxCnt.get(id) ?? 0; }
-// 정규화(보드는 서브리시브만·박스는 모든 리시브시도라 총량이 달라 — 분포 비율로 비교)
-const norm = (m: Map<string, number>, tot: number) => new Map([...m].map(([k, v]) => [k, v / tot]));
-const bnd = norm(boardCnt, boardTot), bx = norm(boxCnt, boxTot);
-let distOverlap = 0;
-for (const id of ids) distOverlap += Math.min(bnd.get(id) ?? 0, bx.get(id) ?? 0);
-
-log(`시드 ${N} · 보드 서브리시브 ${boardTot}건 · 박스 recvAtt ${boxTot}건`);
-log(`리시버 분포 겹침률(보드 vs 박스): ${(distOverlap * 100).toFixed(1)}%  (100%면 같은 선수에게 동일 비율 귀속)`);
-log(`→ 100%에서 모자란 만큼이 "보드가 보여준 리시버 ≠ 박스 귀속 리시버"(스코어박스 리시브 칸 sibling 불일치)`);
-log(`\n참고: 득점/블록/서브는 byId로 보드-박스 100% 묶임. 디그/세트/리시브는 미묶임(보드 자체 선택).`);
+const pct = clean ? (cleanMatch / clean * 100) : 0;
+log(`시드 ${N} · 클린 리시브 ${clean}건 · 노클린(에이스) ${ace}건`);
+log(`(A) 클린 리시브 처리자 == 박스 recvId : ${cleanMatch}/${clean} = ${pct.toFixed(1)}%`);
+if (cleanMis) log(`    불일치 ${cleanMis}건, 보드 슬롯 포지션별: ${JSON.stringify(misBy)}`);
+log(`(B) 노클린=에이스 ${ace}건 중 how!=ace 누수: ${aceLeak}건 (0이어야 정상 — 박스는 지정 리시버 recvErr로 기장)`);
+const okAll = pct >= 99.5 && aceLeak === 0;
+log(okAll ? '✅ 리시브 귀속 일치(클린=보드=박스 100% · 노클린은 전부 에이스)' : '❌ 리시브 sibling 불일치/누수 잔존');

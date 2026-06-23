@@ -85,7 +85,7 @@ export type PointHow =
   | 'kill' | 'blockout' | 'stuff' | 'atkErr' | 'tip' // 공격 국면(tip=페인트 득점)
   | 'cap';                                         // 랠리 상한 도달(킬 취급)
 
-export interface RallyOutcome { winner: Side; how: PointHow; byId?: string } // byId=종결 선수(킬/팁/블록아웃/cap=공격수·stuff=블로커·ace=서버) — 보드/중계가 박스와 같은 선수를 그리게
+export interface RallyOutcome { winner: Side; how: PointHow; byId?: string; recvId?: string } // byId=종결 선수(킬/팁/블록아웃/cap=공격수·stuff=블로커·ace=서버). recvId=서브 리시버(박스 recvAtt 귀속자) — 보드가 같은 리시버를 그리게
 
 export interface Edge { home: number; away: number }
 const NO_EDGE: Edge = { home: 1, away: 1 };
@@ -293,7 +293,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const bx = box ? (id: string, f: (l: BoxLine) => void) => { let l = box.get(id); if (!l) { l = emptyBox(); box.set(id, l); } f(l); } : null;
   // 리시브 귀속용 선택 — 누가 받았는지는 q(팀 리시브력 기반)·승패에 영향 없음(라벨일 뿐)이라
   // 별도 boxRng로 뽑는다(본 rng 불간섭 → 경기 결과 바이트 불변). W형(리베로+OH) 리시브력 가중.
-  const pickRecv = (bx && boxRng) ? (t: RallyTeam): Player | null => {
+  const pickRecv = boxRng ? (t: RallyTeam): Player | null => {
     const rc = receivers(t);
     if (!rc.length) return null;
     let tot = 0; const w = rc.map((p) => { const x = Math.max(0.01, n(R(p).receive)); tot += x; return x; });
@@ -350,10 +350,11 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     srvTarget = jitter({ x: passerXY.x, y: passerXY.y }, 1.2, sj); // 서버가 노린 점(빈 곳·심)
   }
 
+  let recvPlayer: Player | null = null; // 서브 리시버(박스 recvAtt 귀속자) — 모든 종결 return에 recvId로 실어 보드와 일치
   const s0 = rng.next();
   if (s0 < aceP) {
     if (stats) stats.aces++; bx?.(sp.id, (l) => { l.srvAce++; });
-    { const rv = pickRecv?.(recv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 에이스 = 리시브 실패
+    { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 에이스 = 리시브 실패
     if (trace) trace.push('  → 서브 에이스! (서브팀 득점)');
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'ace', sj);
@@ -361,7 +362,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: 'ace', q: 0, rating: R(passer).receive, eff: eff(recv, passer) });
       emitPoint(serving, '서브 에이스');
     }
-    return { winner: serving, how: 'ace', byId: sp.id };
+    return { winner: serving, how: 'ace', byId: sp.id, recvId: recvPlayer?.id };
   }
   if (s0 < aceP + errP) {
     if (stats) stats.serveErrs++; bx?.(sp.id, (l) => { l.srvErr++; }); if (trace) trace.push('  → 서브 범실 (리시브팀 득점)');
@@ -389,7 +390,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const recvErrP = clamp(0.10 - 0.13 * q, 0.005, 0.10);
   if (rng.next() < recvErrP) {
     if (stats) stats.recvErrs++;
-    { const rv = pickRecv?.(recv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 셰이크 = 리시브 실패
+    { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 셰이크 = 리시브 실패
     if (trace) trace.push(`리시브 범실 [${sideKo(recvSide)}] (서브팀 득점)`);
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, 0.05);
@@ -397,13 +398,13 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: 'shank', q: 0, rating: R(passer).receive, eff: eff(recv, passer) });
       emitPoint(serving, '리시브 범실');
     }
-    return { winner: serving, how: 'recvErr' };
+    return { winner: serving, how: 'recvErr', recvId: recvPlayer?.id };
   }
   if (stats) { // 인플레이 리시브 품질 계측(셰이크=recvErr는 위에서 이미 빠짐) — 결과 불변
     stats.recvQSum += q; stats.recvQN++;
     if (q >= 0.6) stats.recvGood++; else if (q >= 0.45) stats.recvOk++; else if (q >= CHANCE_Q) stats.recvPoor++; else stats.recvChance++;
   }
-  { const rv = pickRecv?.(recv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; if (q >= 0.45) l.recvGood++; }); } // 정확 리시브(q≥0.45=KOVO 정확, 세터 공격 전개 가능 A+B패스) → 효율=(정확−실패)/시도
+  { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; if (rv) bx?.(rv.id, (l) => { l.recvAtt++; if (q >= 0.45) l.recvGood++; }); } // 정확 리시브(q≥0.45=KOVO 정확, 세터 공격 전개 가능 A+B패스) → 효율=(정확−실패)/시도
   if (trace) trace.push(`리시브 [${sideKo(recvSide)}] 품질 ${q.toFixed(2)} (${qLabel(q)})`);
   if (E && passer) {
     const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, q);
@@ -423,7 +424,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       if (stats) stats.miscErrs++;
       if (trace) trace.push(`  볼핸들링 범실 [${sideKo(att)}] (상대 득점)`);
       if (E) emitPoint(other(att), '핸들링 범실');
-      return { winner: other(att), how: 'miscErr' };
+      return { winner: other(att), how: 'miscErr', recvId: recvPlayer?.id };
     }
     const atk = chooseAtk(q, setQ, n(setter.vq), at.style, rng);
     const attacker = pickAttacker(at, atk, R, rng);
@@ -510,7 +511,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
         bx?.(attacker.id, (l) => { l.atkErr++; });
         if (trace) trace.push('    → 페인트 범실 (상대 득점)');
         if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); }
-        return { winner: other(att), how: 'atkErr' };
+        return { winner: other(att), how: 'atkErr', recvId: recvPlayer?.id };
       }
       const tipDigP = clamp(0.6 + 0.38 * (digStr - 0.45) - 0.07 * n(attacker.vq) + defStyleBonus, 0.2, 0.88); // 민감도 압축(parity) · 기저 0.6 = 실측 정렬(킬 ~30%·지속 ~60%)
       if (rng.next() < tipDigP) { // 읽혔다 — 얕은 수비가 살림(좋은 전환)
@@ -526,19 +527,19 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; });
       if (trace) trace.push(`    → 페인트 득점! [${sideKo(att)}] ${attacker.name} (블록·수비 사이 톡)`);
       if (E) { pushAttack('kill', null); emitPoint(att, '페인트'); }
-      return { winner: att, how: 'tip', byId: attacker.id };
+      return { winner: att, how: 'tip', byId: attacker.id, recvId: recvPlayer?.id };
     }
     const r1 = rng.next();
-    if (r1 < errP2) { if (stats) stats.attackErrs++; bx?.(attacker.id, (l) => { l.atkErr++; }); if (trace) trace.push('    → 공격 범실 (상대 득점)'); if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); } return { winner: other(att), how: 'atkErr' }; }
+    if (r1 < errP2) { if (stats) stats.attackErrs++; bx?.(attacker.id, (l) => { l.atkErr++; }); if (trace) trace.push('    → 공격 범실 (상대 득점)'); if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); } return { winner: other(att), how: 'atkErr', recvId: recvPlayer?.id }; }
     if (r1 < errP2 + blockP) {
       // 공격방법(5.1): 영리한 공격수는 블록아웃/툴샷으로 살린다(VQ↑일수록)
       // 실효 = 0.35×VQ − 0.03. 두 리터럴(0.12−0.15)을 합치지 않는다 — 합치면 부동소수점 1 ULP가
       // 달라져 결정론(같은 시드=같은 결과·세이브 리플레이)이 깨진다(2026-06-12 확인).
       const blockOutP = clamp(0.12 + 0.35 * n(attacker.vq) - 0.15, 0.04, 0.4);
-      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; }); if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return { winner: att, how: 'blockout', byId: attacker.id }; }
+      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; }); if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return { winner: att, how: 'blockout', byId: attacker.id, recvId: recvPlayer?.id }; }
       const stuffPref = df.style === 'attack' ? 0.04 : df.style === 'defense' ? -0.04 : 0;
       const stuffProb = clamp(0.55 + stuffPref + 0.55 * (blkStr - attackPower), 0.05, 0.8); // 기저 KOVO 정렬(팁 도입분 보정)·민감도 압축
-      if (rng.next() < stuffProb) { if (stats) stats.stuffs++; bx?.(attacker.id, (l) => { l.atkBlocked++; }); if (blk.blockers[0]) bx?.(blk.blockers[0].id, (l) => { l.blockPt++; }); if (trace) trace.push(`    → 스터프 블록! [${sideKo(other(att))}] 득점`); if (E) { pushAttack('blocked', null); emitPoint(other(att), '스터프 블록'); } return { winner: other(att), how: 'stuff', byId: blk.blockers[0]?.id }; }
+      if (rng.next() < stuffProb) { if (stats) stats.stuffs++; bx?.(attacker.id, (l) => { l.atkBlocked++; }); if (blk.blockers[0]) bx?.(blk.blockers[0].id, (l) => { l.blockPt++; }); if (trace) trace.push(`    → 스터프 블록! [${sideKo(other(att))}] 득점`); if (E) { pushAttack('blocked', null); emitPoint(other(att), '스터프 블록'); } return { winner: other(att), how: 'stuff', byId: blk.blockers[0]?.id, recvId: recvPlayer?.id }; }
       if (stats) stats.softblocks++;
       if (E) pushAttack('softblock', null);
       q = clamp(0.7 + rng.range(-0.1, 0.1), 0.4, 0.92);          // 소프트 블록 → 수비측 좋은 전환
@@ -569,7 +570,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; });
     if (trace) trace.push(`    → 공격 성공(킬)! [${sideKo(att)}] ${attacker.name} 득점`);
     if (E) { pushAttack('kill', null); emitPoint(att, '공격 성공'); }
-    return { winner: att, how: 'kill', byId: attacker.id };                               // 공격 성공(kill)
+    return { winner: att, how: 'kill', byId: attacker.id, recvId: recvPlayer?.id };        // 공격 성공(kill)
   }
-  return { winner: att, how: 'cap' }; // 랠리 상한 강제종결 — 박스 미귀속(특정 공격수 없음), byId 생략
+  return { winner: att, how: 'cap', recvId: recvPlayer?.id }; // 랠리 상한 강제종결 — 박스 미귀속(특정 공격수 없음), byId 생략
 }
