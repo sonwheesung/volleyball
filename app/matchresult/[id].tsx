@@ -1,11 +1,12 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Screen';
+import { Card, Muted, Screen, Title, theme } from '../../components/Screen';
+import { BoxScoreTable } from '../../components/BoxScoreTable';
 import { coachInfoOf, getFixture, getTeam } from '../../data/league';
 import { availableTeamPlayers } from '../../data/injury';
-import { attributeProduction, emptyProd, type ProdLine } from '../../engine/production';
+import { restedOnDay } from '../../data/rotation';
 import { simulateMatch } from '../../engine/match';
-import type { Player } from '../../types';
+import type { BoxSink } from '../../engine/rally';
 
 export default function MatchResult() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -19,51 +20,20 @@ export default function MatchResult() {
     );
   }
 
-  // 정사(production·standings)·관전 화면과 동일 명단(부상·정지·벤치 반영) — 박스스코어 일치(INJURY 0).
-  const home = availableTeamPlayers(fixture.homeTeamId, fixture.dayIndex);
-  const away = availableTeamPlayers(fixture.awayTeamId, fixture.dayIndex);
+  // 관전 보드·정사(production·standings)와 동일 명단(부상·정지·벤치 + 휴식 #3 반영) — 박스스코어 완전 일치.
+  const dayIndex = fixture.dayIndex;
+  const homeRest = restedOnDay(fixture.homeTeamId, dayIndex);
+  const awayRest = restedOnDay(fixture.awayTeamId, dayIndex);
+  const home = homeRest.size ? availableTeamPlayers(fixture.homeTeamId, dayIndex).filter((p) => !homeRest.has(p.id)) : availableTeamPlayers(fixture.homeTeamId, dayIndex);
+  const away = awayRest.size ? availableTeamPlayers(fixture.awayTeamId, dayIndex).filter((p) => !awayRest.has(p.id)) : availableTeamPlayers(fixture.awayTeamId, dayIndex);
+  // 경기 보드 스코어박스와 동일 — 실제 스윙 단위 박스 싱크(클론만, 승패 불변). box는 최종 누적.
+  const box: BoxSink = new Map();
   const sim = simulateMatch(fixture.seed, home, away, {
-    home: coachInfoOf(fixture.homeTeamId), away: coachInfoOf(fixture.awayTeamId),
+    home: coachInfoOf(fixture.homeTeamId), away: coachInfoOf(fixture.awayTeamId), box,
   });
-  const box = attributeProduction(sim, home, away, fixture.seed);
 
   const homeName = getTeam(fixture.homeTeamId)?.name ?? '';
   const awayName = getTeam(fixture.awayTeamId)?.name ?? '';
-
-  const lines = (players: Player[]) =>
-    players
-      .map((p) => ({ p, l: box.get(p.id) ?? emptyProd() }))
-      .filter((x) => x.l.points || x.l.assists || x.l.digs)
-      .sort((a, b) => b.l.points - a.l.points || b.l.digs - a.l.digs);
-
-  const TeamBox = ({ name, players }: { name: string; players: Player[] }) => (
-    <>
-      <Title>{name}</Title>
-      <Card>
-        <View style={[styles.row, styles.head]}>
-          <Text style={[styles.name, styles.h]}>선수</Text>
-          <Text style={[styles.col, styles.h]}>득점</Text>
-          <Text style={[styles.col, styles.h]}>블록</Text>
-          <Text style={[styles.col, styles.h]}>서브</Text>
-          <Text style={[styles.col, styles.h]}>디그</Text>
-          <Text style={[styles.col, styles.h]}>세트</Text>
-        </View>
-        {lines(players).map(({ p, l }) => (
-          <View key={p.id} style={styles.row}>
-            <View style={styles.nameCell}>
-              <PosTag pos={p.position} />
-              <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
-            </View>
-            <Text style={[styles.col, styles.pts]}>{l.points}</Text>
-            <Text style={styles.col}>{l.blocks}</Text>
-            <Text style={styles.col}>{l.aces}</Text>
-            <Text style={styles.col}>{l.digs}</Text>
-            <Text style={styles.col}>{l.assists}</Text>
-          </View>
-        ))}
-      </Card>
-    </>
-  );
 
   return (
     <Screen title="경기 상세">
@@ -83,8 +53,11 @@ export default function MatchResult() {
         </View>
       </Card>
 
-      <TeamBox name={homeName} players={home} />
-      <TeamBox name={awayName} players={away} />
+      <Title>{homeName}</Title>
+      <Card><BoxScoreTable squad={home} box={box} /></Card>
+      <Title>{awayName}</Title>
+      <Card><BoxScoreTable squad={away} box={box} /></Card>
+      <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 리시브=효율((정확−실패)/시도)</Text>
     </Screen>
   );
 }
@@ -97,11 +70,5 @@ const styles = StyleSheet.create({
   setChip: { backgroundColor: theme.cardAlt, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center' },
   setLabel: { color: theme.muted, fontSize: 10 },
   setScore: { color: theme.text, fontSize: 14, fontWeight: '800' },
-  row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
-  head: { borderBottomWidth: 1, borderBottomColor: theme.border, paddingBottom: 6, marginBottom: 2 },
-  h: { color: theme.muted, fontSize: 12, fontWeight: '700' },
-  nameCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 6 },
-  name: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
-  col: { width: 38, textAlign: 'center', color: theme.text, fontSize: 13 },
-  pts: { fontWeight: '800' },
+  hint: { color: theme.muted, fontSize: 10.5, lineHeight: 15, marginTop: 2 },
 });
