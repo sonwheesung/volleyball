@@ -85,7 +85,7 @@ export type PointHow =
   | 'kill' | 'blockout' | 'stuff' | 'atkErr' | 'tip' // 공격 국면(tip=페인트 득점)
   | 'cap';                                         // 랠리 상한 도달(킬 취급)
 
-export interface RallyOutcome { winner: Side; how: PointHow; byId?: string; recvId?: string } // byId=종결 선수(킬/팁/블록아웃/cap=공격수·stuff=블로커·ace=서버). recvId=서브 리시버(박스 recvAtt 귀속자) — 보드가 같은 리시버를 그리게
+export interface RallyOutcome { winner: Side; how: PointHow; byId?: string; recvId?: string; setId?: string } // byId=종결 선수(킬/팁/블록아웃/cap=공격수·stuff=블로커·ace=서버). recvId=서브 리시버(박스 recvAtt 귀속자). setId=종결 공격에 어시(assist) 귀속된 세터 — 보드가 같은 선수를 그리게
 
 export interface Edge { home: number; away: number }
 const NO_EDGE: Edge = { home: 1, away: 1 };
@@ -527,7 +527,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; });
       if (trace) trace.push(`    → 페인트 득점! [${sideKo(att)}] ${attacker.name} (블록·수비 사이 톡)`);
       if (E) { pushAttack('kill', null); emitPoint(att, '페인트'); }
-      return { winner: att, how: 'tip', byId: attacker.id, recvId: recvPlayer?.id };
+      return { winner: att, how: 'tip', byId: attacker.id, recvId: recvPlayer?.id, setId: setter.id };
     }
     const r1 = rng.next();
     if (r1 < errP2) { if (stats) stats.attackErrs++; bx?.(attacker.id, (l) => { l.atkErr++; }); if (trace) trace.push('    → 공격 범실 (상대 득점)'); if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); } return { winner: other(att), how: 'atkErr', recvId: recvPlayer?.id }; }
@@ -536,7 +536,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       // 실효 = 0.35×VQ − 0.03. 두 리터럴(0.12−0.15)을 합치지 않는다 — 합치면 부동소수점 1 ULP가
       // 달라져 결정론(같은 시드=같은 결과·세이브 리플레이)이 깨진다(2026-06-12 확인).
       const blockOutP = clamp(0.12 + 0.35 * n(attacker.vq) - 0.15, 0.04, 0.4);
-      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; }); if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return { winner: att, how: 'blockout', byId: attacker.id, recvId: recvPlayer?.id }; }
+      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; }); if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return { winner: att, how: 'blockout', byId: attacker.id, recvId: recvPlayer?.id, setId: setter.id }; }
       const stuffPref = df.style === 'attack' ? 0.04 : df.style === 'defense' ? -0.04 : 0;
       const stuffProb = clamp(0.55 + stuffPref + 0.55 * (blkStr - attackPower), 0.05, 0.8); // 기저 KOVO 정렬(팁 도입분 보정)·민감도 압축
       if (rng.next() < stuffProb) { if (stats) stats.stuffs++; bx?.(attacker.id, (l) => { l.atkBlocked++; }); if (blk.blockers[0]) bx?.(blk.blockers[0].id, (l) => { l.blockPt++; }); if (trace) trace.push(`    → 스터프 블록! [${sideKo(other(att))}] 득점`); if (E) { pushAttack('blocked', null); emitPoint(other(att), '스터프 블록'); } return { winner: other(att), how: 'stuff', byId: blk.blockers[0]?.id, recvId: recvPlayer?.id }; }
@@ -570,7 +570,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; });
     if (trace) trace.push(`    → 공격 성공(킬)! [${sideKo(att)}] ${attacker.name} 득점`);
     if (E) { pushAttack('kill', null); emitPoint(att, '공격 성공'); }
-    return { winner: att, how: 'kill', byId: attacker.id, recvId: recvPlayer?.id };        // 공격 성공(kill)
+    return { winner: att, how: 'kill', byId: attacker.id, recvId: recvPlayer?.id, setId: setter.id }; // 공격 성공(kill)
   }
   return { winner: att, how: 'cap', recvId: recvPlayer?.id }; // 랠리 상한 강제종결 — 박스 미귀속(특정 공격수 없음), byId 생략
 }

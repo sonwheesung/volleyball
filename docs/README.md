@@ -101,6 +101,7 @@ npx tsx tools/_ev_box.ts                    # 박스 밸런스 무영향(box 유
 npx tsx tools/_ev_box_audit.ts 200          # 박스 무결성(보존식) 0위반·KOVO 밴드·A/B 검출 민감도(허위 오라클 차단)
 npx tsx tools/_ev_scorer.ts 200             # 보드 종결 스파이커 == 박스 byId 100%(팬텀 킬 0)·A/B shuffle 대조
 npx tsx tools/_ev_recvmatch.ts 300          # 보드 서브 리시버 == 박스 recvId: 클린 100%·노클린은 전부 ace(누수 0)·A/B(shuffle 모드)
+npx tsx tools/_ev_setmatch.ts 300           # 보드 종결 토서 == 박스 어시 세터(setId) 86.3%(잔여는 디그 배선에 종속)·A/B(shuffle)
 npx tsx tools/_ev_blockcomment.ts 200       # 스터프 중계가 byId 블로커를 호명 100%(블록=킬 수준 충실)
 npx expo export --platform android        # 번들 확인 후 dist 삭제
 npm run sim:web                            # 엔진 테스트 콘솔(웹) → localhost:5051 (14탭, SIM_CONSOLE)

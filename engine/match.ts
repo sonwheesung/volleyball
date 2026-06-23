@@ -236,10 +236,10 @@ export function simulateMatch(
       const chasing: Side | null =
         Math.max(h, a) >= targetPoints(setNo) - 4 && Math.abs(lead) >= 1 && Math.abs(lead) <= 2
           ? (lead > 0 ? 'away' : 'home') : null;
-      const { winner, how, byId, recvId } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, accBox, boxRng);
+      const { winner, how, byId, recvId, setId } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, accBox, boxRng);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
-      points.push({ setNo, home: h, away: a, scorer: winner, how, byId, recvId });
+      points.push({ setNo, home: h, away: a, scorer: winner, how, byId, recvId, setId });
       if (opts.boxTimeline) opts.boxTimeline.push(cloneBox(accBox!)); // 이 득점까지의 누적 스냅샷(points와 1:1)
 
       // 기세 갱신 (연속 득점 가속, 7.2)

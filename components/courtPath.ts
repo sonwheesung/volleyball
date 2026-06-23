@@ -28,6 +28,7 @@ export interface RallyLike {
   how?: PointHow; // 엔진이 기록한 종결 방식 — 있으면 보드는 사실대로 그린다(미기록 구결과는 즉흥)
   byId?: string;  // 종결 선수 id(킬/팁/블록아웃=공격수) — 종결 스파이크 마커를 실제 공격수로(박스 일치)
   recvId?: string; // 서브 리시버 id(박스 귀속) — 보드 서브 리시버 마커를 박스와 일치
+  setId?: string;  // 종결 어시 세터 id(박스 귀속) — 보드 종결 토서 마커를 박스와 일치
 }
 export interface Lineups { home: Lineup; away: Lineup }
 
@@ -291,6 +292,15 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== sIdx && i !== firstTouch && i !== byIdx);
       const pool = cand.length ? cand : [0, 1, 2, 3, 4, 5].filter((i) => i !== firstTouch && i !== byIdx);
       tosserIdx = pool.reduce((b, i) => (d2(sw[att].pos[i], passSpot) < d2(sw[att].pos[b], passSpot) ? i : b), pool[0]);
+    }
+    // 종결 공격(킬/팁/블록아웃) hop이면, 엔진이 어시(assist)를 귀속한 실제 세터(setId)가 토스 → 보드=박스 세트 칸 일치.
+    //   엔진은 인/아웃오브시스템 무관 항상 지정 세터에 어시 → 보드 스크램블 토서(근접 비세터)와 어긋났던 것(64%)을 묶는다.
+    //   단 세터가 이미 첫 터치(디그/리시브)했거나 곧 byId 공격수면 더블컨택 불가 → 그대로 둠(드묾, 후속 측정).
+    if (att === finalAtt && winsByAtk0 && r.setId) {
+      const setByIdx = sw[att].setterIdx >= 0 && (att === 'home' ? L.home : L.away).six[sw[att].setterIdx]?.id === r.setId
+        ? sw[att].setterIdx
+        : (att === 'home' ? L.home : L.away).six.findIndex((p) => p.id === r.setId);
+      if (setByIdx >= 0 && setByIdx !== firstTouch && setByIdx !== byIdx) tosserIdx = setByIdx;
     }
     // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트.
     // 퍼스트 터치한 선수는 패스 구간부터 그 자리에 멈춘다(자세 회복) — 대형 복귀로 어슬렁거리지 않게

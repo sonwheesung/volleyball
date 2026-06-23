@@ -16,6 +16,7 @@ export interface PointLog {
   how?: PointHow; // 종결 방식(보드가 사실대로 그리기 위함) — 구세이브 결과엔 없음
   byId?: string;  // 종결 선수 id(킬/팁/블록아웃/cap=공격수·stuff=블로커·ace=서버) — 보드/중계가 박스와 같은 선수를 그림
   recvId?: string; // 서브 리시버 id(박스 recvAtt 귀속자) — 보드가 같은 리시버를 그림(리시브 칸 일치)
+  setId?: string;  // 종결 공격 어시(assist) 귀속 세터 id — 보드 종결 토서를 박스와 일치(세트 칸). 킬/팁/블록아웃만
 }
 
 /** 작전 교체 1건 — 보드 연출용 로그(승패 무영향, 순수 가산). 엔진이 st.six 를 실제로 바꾼 순간을 기록. */
