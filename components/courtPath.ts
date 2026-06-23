@@ -26,6 +26,7 @@ export type WP = {
 export interface RallyLike {
   setNo: number; home: number; away: number; scorer: Side; serving: Side; homeRot: number; awayRot: number;
   how?: PointHow; // 엔진이 기록한 종결 방식 — 있으면 보드는 사실대로 그린다(미기록 구결과는 즉흥)
+  byId?: string;  // 종결 선수 id(킬/팁/블록아웃=공격수) — 종결 스파이크 마커를 실제 공격수로(박스 일치)
 }
 export interface Lineups { home: Lineup; away: Lineup }
 
@@ -254,6 +255,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   let lastWasFree = false; // 프리볼 직후 또 프리볼(핑퐁) 방지
   for (let hop = 0; hop < 6; hop++) {
     const def = other(att);
+    // 종결 공격팀의 킬류 공격이면, 엔진이 귀속한 실제 공격수(byId) 슬롯 — 토서·공격수 선택에서 이 선수를 보존(박스 일치).
+    const byIdx = (att === finalAtt && winsByAtk0 && r.byId)
+      ? (att === 'home' ? L.home : L.away).six.findIndex((p) => p.id === r.byId) : -1;
     // 리시브/디그 패스는 세터 자리 주변 "일정 범위"에서 랜덤하게 떨어진다(정확히 안 감)
     const sIdx = sw[att].setterIdx;
     const ideal = sIdx >= 0 ? sw[att].pos[sIdx] : sw[att].pos[sw[att].frontHitters[0] ?? 0];
@@ -267,11 +271,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     };
     // 세터가 닿으면 세터가, 아니면 가장 가까운 다른 선수가 토스. 단 첫 터치한 선수는 제외(같은 선수가 리시브+토스 금지)
     let tosserIdx: number;
-    if (sIdx >= 0 && sIdx !== firstTouch && mag <= 0.12 * W) {
+    if (sIdx >= 0 && sIdx !== firstTouch && sIdx !== byIdx && mag <= 0.12 * W) {
       tosserIdx = sIdx;
     } else {
-      const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== sIdx && i !== firstTouch);
-      const pool = cand.length ? cand : [0, 1, 2, 3, 4, 5].filter((i) => i !== firstTouch);
+      const cand = [0, 1, 2, 3, 4, 5].filter((i) => i !== sIdx && i !== firstTouch && i !== byIdx);
+      const pool = cand.length ? cand : [0, 1, 2, 3, 4, 5].filter((i) => i !== firstTouch && i !== byIdx);
       tosserIdx = pool.reduce((b, i) => (d2(sw[att].pos[i], passSpot) < d2(sw[att].pos[b], passSpot) ? i : b), pool[0]);
     }
     // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트.
@@ -298,7 +302,19 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const overY = (def0 === 'home' ? 0.72 + rng.next() * 0.12 : 0.16 + rng.next() * 0.12) * H; // 상대 후위 깊숙이
       const dBacks0 = [1, 5, 6].map((z) => lineupIdxAt(rotOf(def0), z));
       const rIdx = dBacks0.reduce((b, i) => (d2(swDef[def0].pos[i], { x: overX, y: overY }) < d2(swDef[def0].pos[b], { x: overX, y: overY }) ? i : b), dBacks0[0]);
-      // 넘기는 선수가 언더로 공을 높고 느리게 띄워 보낸다(블록 점프 없음 = pass kind). 상대 후위가 받으러 이동.
+      // ★ 3번째 컨택으로 넘긴다 — 디그(1, 위 pass) → 세트(2) → 언더로 넘김(3). 세트 없이 바로 넘기면
+      //   "2번째 터치인데 찬스볼"로 보인다(사용자 보고 2026-06-23). 세터가 전위 sender에게 띄우고, sender가 넘김.
+      const front0 = [2, 3, 4].map((z) => lineupIdxAt(rotOf(att), z));
+      const sender = front0.filter((i) => i !== tosserIdx && i !== firstTouch)[0] ?? tosserIdx;
+      const setSpot = { x: clampN(sw[att].pos[sender].x, 0.12 * W, 0.88 * W), y: (att === 'home' ? 0.6 : 0.4) * H };
+      // (2) 세트 — 토서가 sender에게 짧게 올린다(블록 없음). idx=sender(공 도착 처리자, 유령터치 방지),
+      //     퍼스트터치(디그한 선수)는 자기 자리에 한 박자 고정(배회 방지 — 정상 토스 WP와 동일 패턴).
+      wp.push({ x: setSpot.x, y: setSpot.y, side: att, idx: sender, kind: 'toss', dur: 360, arc: 0.10 * H, scale: 1.3,
+        movers: [
+          { side: att, idx: sender, x: setSpot.x, y: setSpot.y },
+          ...(firstTouch !== sender ? [{ side: att, idx: firstTouch, x: touchPos.x, y: touchPos.y }] : []),
+        ] });
+      // (3) 언더로 네트 너머 — sender가 높고 느리게 띄워 보낸다(블록 점프 없음 = pass kind). 상대 후위가 받으러 이동.
       wp.push({ x: overX, y: overY, side: def0, idx: -1, kind: 'pass', dur: 640, arc: 0.18 * H, scale: 1.4, soft: true,
         movers: [{ side: def0, idx: rIdx, x: overX, y: overY }] });
       firstTouch = rIdx;
@@ -346,6 +362,12 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const oh = sw[att].frontHitters.filter((i) => i !== tosserIdx && i !== firstTouch && lu.six[i].position !== 'MB');
       const pool = oh.length ? oh : sw[att].frontHitters.filter((i) => i !== tosserIdx);
       atkIdx = pick(pool.length ? pool : (sw[att].frontHitters.length ? sw[att].frontHitters : [tosserIdx]));
+    }
+    // 종결 공격을 위에서 구한 byIdx(엔진 귀속 공격수)로 교체 — 보드 마커·중계가 박스와 같은 선수.
+    // 토서가 이미 byIdx를 피했으므로 충돌 없음. firstTouch(디그한 선수)와만 같지 않게(전환공격 회피, 드묾).
+    if (byIdx >= 0 && byIdx !== firstTouch) {
+      atkIdx = byIdx;
+      atk = attFront.includes(byIdx) ? (lu.six[byIdx].position === 'MB' ? 'quick' : 'open') : 'back';
     }
 
     // ── 타점: 속공=토스 지점 옆 1~2m 낮고 빠르게 / 시간차=조금 넓게 / 백어택=3m 라인 뒤 / 오픈=사이드 레인 ──

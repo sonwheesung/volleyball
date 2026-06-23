@@ -14,6 +14,7 @@ export interface PointLog {
   away: number;
   scorer: 'home' | 'away';
   how?: PointHow; // 종결 방식(보드가 사실대로 그리기 위함) — 구세이브 결과엔 없음
+  byId?: string;  // 종결 선수 id(킬/팁/블록아웃/cap=공격수·stuff=블로커·ace=서버) — 보드/중계가 박스와 같은 선수를 그림
 }
 
 /** 작전 교체 1건 — 보드 연출용 로그(승패 무영향, 순수 가산). 엔진이 st.six 를 실제로 바꾼 순간을 기록. */

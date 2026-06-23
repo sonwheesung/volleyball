@@ -155,6 +155,7 @@ export function segmentTargets(
 
 export interface RallyState {
   setNo: number; home: number; away: number; scorer: Side; how?: PointHow;
+  byId?: string; // 종결 선수 id(엔진 귀속) — 보드 스파이크 마커를 실제 공격수로(박스 일치)
   serving: Side; homeRot: number; awayRot: number;
   homeSetsBefore: number; awaySetsBefore: number;
 }
@@ -200,7 +201,7 @@ export function reconstructRallies(sim: SimResult): RallyState[] {
       serving = pt.setNo % 2 === 1 ? 'home' : 'away';
     }
     out.push({
-      setNo: pt.setNo, home: pt.home, away: pt.away, scorer: pt.scorer, how: pt.how,
+      setNo: pt.setNo, home: pt.home, away: pt.away, scorer: pt.scorer, how: pt.how, byId: pt.byId,
       serving, homeRot, awayRot, homeSetsBefore: hs, awaySetsBefore: as,
     });
     if (pt.scorer !== serving) {
