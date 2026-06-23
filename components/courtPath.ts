@@ -605,7 +605,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       // 소프트 블록도 종결 블록처럼 **blockContact(블록 정면=블로커 위치)** 에서 공이 튕긴다.
       //   blockNet(의도 코스)을 쓰면 공이 블로커서 한참 떨어진 빈 네트서 튕겨 부자연(측정 중앙값 2.6m·69%
       //   빗나감, 2026-06-19 사용자 보고). 종결 블록은 이미 blockContact로 고쳤는데 소프트 블록만 누락이었다.
-      if (rng.next() < BLOCK_COVER_RATE) {
+      // hop≥4에서 비-finalAtt가 커버로 공을 계속 쥐면 finalAtt가 종결 차례를 못 잡아 "팬텀 킬"(종결
+      // 스파이크 미렌더)이 난다 → hop≥4 비-finalAtt는 커버 금지(finalAtt로 전환 강제). rng는 그대로 소비.
+      if (rng.next() < BLOCK_COVER_RATE && (hop < 4 || att === finalAtt)) {
         // 블록 커버 — 공이 공격팀 코트 네트 앞에 떨어지고, 후위/커버가 몸을 던져 살린다 → 같은 팀 재공격
         const ct = { x: clampN(blockContact.x + rng.range(-0.07, 0.07) * W, 16, W - 16), y: (att === 'home' ? 0.61 : 0.39) * H };
         const aBacks0 = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z));
