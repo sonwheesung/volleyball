@@ -369,7 +369,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     if (!seg) return;
     const line = commentLine(seg, rallies[Math.min(idx, total - 1)]?.how, lineups, {
       serving: stage.serving, homeRot: stage.homeRot, awayRot: stage.awayRot,
-    });
+    }, rallies[Math.min(idx, total - 1)]?.byId);
     if (line) setFeed((f) => (f[f.length - 1] === line ? f : [...f, line].slice(-30)));
     // 효과음: 서브 임팩트(서버 컨택) / 스파이크 강타 — 페인트·소프트샷(to.soft)은 퍽 소리 제외(사용자 요청)
     if (seg.to.kind === 'serve') playSfx('serve');

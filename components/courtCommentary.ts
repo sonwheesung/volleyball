@@ -24,11 +24,22 @@ function nameAt(L: Lineups, side: Side, rot: number, idx: number): string | null
   return p.name;
 }
 
+/** id로 선수 이름 — 슬롯이 아닌 엔진 귀속 id로 지목된 선수(스터프 블로커 byId 등) */
+function nameById(L: Lineups, id?: string): string | null {
+  if (!id) return null;
+  for (const lu of [L.home, L.away]) {
+    const p = lu.six.find((x) => x.id === id);
+    if (p) return p.name;
+    if (lu.libero?.id === id) return lu.libero.name;
+  }
+  return null;
+}
+
 /**
  * 구간 시작 시점의 중계 한 줄. 사실이 없는 구간(이동·바운드)은 null.
  * 종결의 "무엇으로 끝났나"는 자막(HOW_CAPTION)이 말하므로, 여기선 행위와 행위자를 말한다.
  */
-export function commentLine(seg: CommentSeg, how: PointHow | undefined, L: Lineups, stage: CommentStage): string | null {
+export function commentLine(seg: CommentSeg, how: PointHow | undefined, L: Lineups, stage: CommentStage, byId?: string): string | null {
   const { from, to } = seg;
   const rotOf = (s: Side) => (s === 'home' ? stage.homeRot : stage.awayRot);
 
@@ -85,7 +96,7 @@ export function commentLine(seg: CommentSeg, how: PointHow | undefined, L: Lineu
     // 데드볼 비행 — 종결 종류별 색깔만 더한다(상세는 자막)
     if (how === 'ace') return '네트를 맞고 뚝! 손쓸 새가 없다'; // 네트인 에이스(일반 에이스는 fault 구간이 없다)
     if (how === 'blockout') return '코트 밖으로 — 끝까지 쫓아가 보지만!';
-    if (how === 'stuff') return '벽에 막혀 그대로 꽂힌다!';
+    if (how === 'stuff') { const blk = nameById(L, byId); return blk ? `${blk}, 블로킹 차단!` : '벽에 막혀 그대로 꽂힌다!'; }
     if (how === 'recvErr') return '날카로운 서브! 리시브가 그대로 튕겨 아웃 — 에이스!';
     if (how === 'miscErr') return '연결이 어긋났다!';
     if (how === 'fault') return '휘슬 — 포지션 폴트';
