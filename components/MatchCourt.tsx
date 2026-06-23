@@ -115,10 +115,11 @@ interface Props {
   startIdx?: number;                    // 이어보기 — 이 랠리부터 재생
   onProgress?: (idx: number) => void;   // 현재 랠리 인덱스 보고(이어보기 저장용)
   onFinished?: () => void;
-  onScore?: (s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number }) => void;
+  onScore?: (s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number; ptIdx: number }) => void;
+  paused?: boolean;                     // 외부 일시정지(스코어박스 모달 등) — true면 진행 멈춤, false면 재개
 }
 
-export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgress, onFinished, onScore }: Props) {
+export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgress, onFinished, onScore, paused }: Props) {
   // 선발 라인업(고정) + 전 선수 id 맵(교체 선수 조회용)
   const baseLineups: Lineups = useMemo(() => ({ home: buildLineup(home), away: buildLineup(away) }), [home, away]);
   const byId = useMemo(() => {
@@ -209,16 +210,19 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
 
   // 구간 단위 진행 (위치·포물선·크기·점프를 prog 하나로 동기화)
   useEffect(() => {
-    if (!playing || finished) return;
+    if (!playing || paused || finished) return; // paused: 스코어박스 모달 등 외부 일시정지
     if (segIdx >= segCount) {
-      // 득점 → 점수 반영 후 잠시 멈춤(공은 낙구 지점에 정지) → 다음 랠리
-      setShown(idx);
-      const r = rallies[idx];
-      if (r?.how) {
-        const c = HOW_CAPTION[r.how];
-        setFeed((f) => [...f, `▶ ${c.txt} — ${r.scorer === 'home' ? '홈' : '원정'} 득점 (${r.home}:${r.away})`].slice(-30));
+      // 득점 → 점수 반영 후 잠시 멈춤(공은 낙구 지점에 정지) → 다음 랠리.
+      // shown!==idx 가드: 일시정지(스코어박스) 후 재개 시 이 분기가 다시 돌아도 중계줄·휘슬·점수반영을 중복하지 않음.
+      if (shown !== idx) {
+        setShown(idx);
+        const r = rallies[idx];
+        if (r?.how) {
+          const c = HOW_CAPTION[r.how];
+          setFeed((f) => [...f, `▶ ${c.txt} — ${r.scorer === 'home' ? '홈' : '원정'} 득점 (${r.home}:${r.away})`].slice(-30));
+        }
+        playSfx('whistle'); // 종결 휘슬 — 랠리가 끝나 점수가 났다
       }
-      playSfx('whistle'); // 종결 휘슬 — 랠리가 끝나 점수가 났다
       // 작전 타임아웃: 득점 자막을 한 박자 보여준 뒤 멈추고 모달(코트 체력)을 띄운다(아직 안 본 것만).
       if (timeoutHere && !ackTO.current.has(idx)) {
         const t = setTimeout(() => { setPlaying(false); setTimeoutModal(timeoutHere); }, fast ? 320 : 1300);
@@ -238,7 +242,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     });
     anim.start(({ finished: done }) => { if (done) setSegIdx((s) => s + 1); });
     return () => anim.stop();
-  }, [idx, segIdx, playing, fast, finished, segCount, path, prog, rallies, timeoutHere]);
+  }, [idx, segIdx, playing, paused, fast, finished, segCount, path, prog, rallies, timeoutHere, shown]);
 
   // 타임아웃 종료 — "경기 진행하기" 누르면 다음 랠리로 재개(이 타임아웃은 본 것으로 표시)
   const resumeFromTimeout = useCallback(() => {
@@ -269,8 +273,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
 
   // 관전 점수를 부모(헤더)로 올린다 — 스코어보드를 헤더 팀명 옆에 표시(별도 영역 제거)
   useEffect(() => {
-    onScore?.({ h: curPts.h, a: curPts.a, homeSets, awaySets, setNo });
-  }, [curPts.h, curPts.a, homeSets, awaySets, setNo, onScore]);
+    onScore?.({ h: curPts.h, a: curPts.a, homeSets, awaySets, setNo, ptIdx: shown });
+  }, [curPts.h, curPts.a, homeSets, awaySets, setNo, shown, onScore]);
 
   // 마커 배치는 현재 진행 중 랠리(idx) 기준
   const stage = rallies[Math.min(idx, total - 1)];

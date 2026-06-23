@@ -11,14 +11,24 @@ const t0 = LEAGUE.teams[0].id, t1 = LEAGUE.teams[1].id;
 const A = availableTeamPlayers(t0, 0), B = availableTeamPlayers(t1, 0);
 const base = { home: coachInfoOf(t0), away: coachInfoOf(t1) } as any;
 
-// ── (1) box 유무 → 결과 바이트 동일 ──────────────────────────────────────
-let neutralOk = true;
+// ── (1) box·boxTimeline 유무 → 결과 바이트 동일 + 타임라인 정합 ──────────────
+let neutralOk = true, tlOk = true;
+const eqLine = (x: BoxLine, y: BoxLine) => (Object.keys(x) as (keyof BoxLine)[]).every((k) => x[k] === y[k]);
 for (let i = 1; i <= 50; i++) {
   const noBox = simulateMatch(i, A, B, { ...base });
-  const withBox = simulateMatch(i, A, B, { ...base, box: new Map() as BoxSink });
-  if (JSON.stringify(noBox.points) !== JSON.stringify(withBox.points)) { neutralOk = false; log(`  [FAIL] seed ${i} points 불일치`); break; }
+  const fullBox: BoxSink = new Map();
+  const timeline: BoxSink[] = [];
+  const withBox = simulateMatch(i, A, B, { ...base, box: fullBox });
+  const withTl = simulateMatch(i, A, B, { ...base, boxTimeline: timeline });
+  if (JSON.stringify(noBox.points) !== JSON.stringify(withBox.points) || JSON.stringify(noBox.points) !== JSON.stringify(withTl.points)) { neutralOk = false; log(`  [FAIL] seed ${i} points 불일치`); break; }
+  // 타임라인: points와 1:1 길이, 마지막 스냅샷 == 최종 박스(전 선수·전 필드)
+  if (timeline.length !== withTl.points.length) { tlOk = false; log(`  [FAIL] seed ${i} 타임라인 길이 ${timeline.length}≠points ${withTl.points.length}`); break; }
+  const last = timeline[timeline.length - 1];
+  for (const [id, l] of fullBox) { const t = last.get(id); if (!t || !eqLine(l, t)) { tlOk = false; log(`  [FAIL] seed ${i} 마지막 스냅샷≠최종 박스(${id})`); break; } }
+  if (!tlOk) break;
 }
-log(`(1) 밸런스 무영향(box 유무 sim.points 바이트 동일, 50경기): ${neutralOk ? 'PASS' : 'FAIL'}`);
+log(`(1) 밸런스 무영향(box·boxTimeline 유무 sim.points 바이트 동일, 50경기): ${neutralOk ? 'PASS' : 'FAIL'}`);
+log(`(1b) 타임라인 정합(points와 1:1 길이 · 마지막 스냅샷==최종 박스): ${tlOk ? 'PASS' : 'FAIL'}`);
 
 // ── (2) 박스 합계 == 팀 RallyStats 오라클 ────────────────────────────────
 const sum = (b: BoxSink, k: keyof BoxLine) => { let s = 0; for (const l of b.values()) s += l[k]; return s; };
@@ -73,4 +83,4 @@ log(`(3) 공격 성공률(atkKill/atkAtt) = ${rate.toFixed(1)}%  → ${realistic
 const errRate = box.err / box.att * 100, blkRate = box.blk / box.att * 100;
 log(`    참고: 범실률 ${errRate.toFixed(1)}% · 차단당함률 ${blkRate.toFixed(1)}% (시도 대비)`);
 
-log(`\n종합: ${neutralOk && allOk && realistic ? '✅ ALL PASS' : '❌ FAIL 있음'}`);
+log(`\n종합: ${neutralOk && tlOk && allOk && realistic ? '✅ ALL PASS' : '❌ FAIL 있음'}`);

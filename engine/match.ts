@@ -42,9 +42,12 @@ export interface MatchOpts {
   homePolicy?: SubPolicy; awayPolicy?: SubPolicy; // 작전 교체 방침(미지정 시 기본)
   events?: RallyEvent[]; // 공간 텔레메트리 싱크(있으면 랠리별 독립 srng로 좌표 이벤트 누적; 승패 불변)
   box?: BoxSink; // 선수별 박스스코어 싱크(있으면 스윙 단위 귀속 누적; 승패 불변·rng 무관)
+  boxTimeline?: BoxSink[]; // 점수별 누적 박스 스냅샷(있으면 매 득점 후 클론 push) — 관전 보드 실시간 기록용. points[k]와 1:1. 클론만 → 승패·rng 무관
 }
 
 const DEFAULT_COACH: CoachInfo = { style: 'balanced', charisma: 50 };
+// 박스 스냅샷용 얕은 클론(BoxLine은 number 필드만) — 타임라인이 시점별 누적을 독립 보존
+const cloneBox = (b: BoxSink): BoxSink => { const m: BoxSink = new Map(); for (const [k, v] of b) m.set(k, { ...v }); return m; };
 
 /**
  * 풀 랠리 체인 경기 시뮬 — 양 팀 로스터(코트 선발 자동 구성) + 시드 → SimResult.
@@ -57,8 +60,9 @@ export function simulateMatch(
   opts: MatchOpts = {},
 ): SimResult {
   const rng = createRng(seed >>> 0);
-  // 박스 리시브 귀속용 별도 rng — opts.box 있을 때만. 메인 rng 불간섭 → 경기 결과 바이트 불변.
-  const boxRng = opts.box ? createRng((seed ^ 0x6d2b79f5) >>> 0) : undefined;
+  // 박스 누적 대상: 호출자가 준 box, 없고 타임라인만 원하면 내부 box. 리시브 귀속용 별도 rng는 둘 중 하나라도 있을 때만.
+  const accBox: BoxSink | undefined = opts.box ?? (opts.boxTimeline ? new Map() : undefined);
+  const boxRng = accBox ? createRng((seed ^ 0x6d2b79f5) >>> 0) : undefined; // 메인 rng 불간섭 → 경기 결과 바이트 불변
   let rallyNo = 0; // 공간 텔레메트리: 랠리별 독립 srng 시드용(메인 rng 불간섭)
   const edge: Edge = opts.edge ?? { home: 1, away: 1 };
   const hc = opts.home ?? DEFAULT_COACH;
@@ -230,10 +234,11 @@ export function simulateMatch(
       const chasing: Side | null =
         Math.max(h, a) >= targetPoints(setNo) - 4 && Math.abs(lead) >= 1 && Math.abs(lead) <= 2
           ? (lead > 0 ? 'away' : 'home') : null;
-      const { winner, how } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, opts.box, boxRng);
+      const { winner, how } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, accBox, boxRng);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner, how });
+      if (opts.boxTimeline) opts.boxTimeline.push(cloneBox(accBox!)); // 이 득점까지의 누적 스냅샷(points와 1:1)
 
       // 기세 갱신 (연속 득점 가속, 7.2)
       streak = winner === lastScorer ? streak + 1 : 1;

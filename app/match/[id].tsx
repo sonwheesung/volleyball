@@ -4,7 +4,9 @@ import { BackHandler, Modal, Pressable, ScrollView, StyleSheet, Text, View } fro
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, OvrBadge, theme } from '../../components/Screen';
 import { MatchCourt } from '../../components/MatchCourt';
+import { LiveBoxModal } from '../../components/LiveBoxModal';
 import { BroadcastBanner } from '../../components/BroadcastBanner';
+import type { BoxSink } from '../../engine/rally';
 import { buildMatchBanners } from '../../data/broadcast';
 import { coachInfoOf, getFixture, getTeam } from '../../data/league';
 import { availableTeamPlayers } from '../../data/injury';
@@ -31,9 +33,10 @@ export default function MatchBoard() {
   // 관전이 끝나기 전엔 경기 결과(세트 스코어·승패)를 숨긴다 — 결정론 시뮬이라 미리 계산돼 있어도 스포일러 금지
   const [finished, setFinished] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false); // 관전 중 나가기 확인
-  // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거)
-  const [score, setScore] = useState({ h: 0, a: 0, homeSets: 0, awaySets: 0, setNo: 1 });
-  const handleScore = useCallback((s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number }) => setScore(s), []);
+  const [statsOpen, setStatsOpen] = useState(false); // 스코어박스 팝업 — 열리면 경기 일시정지(paused), 닫으면 재개
+  // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거). ptIdx=현재 점수가 반영된 득점 인덱스(타임라인 조회용)
+  const [score, setScore] = useState({ h: 0, a: 0, homeSets: 0, awaySets: 0, setNo: 1, ptIdx: -1 });
+  const handleScore = useCallback((s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number; ptIdx: number }) => setScore(s), []);
 
   const isSandbox = sandbox === '1';
   const fixture = id && !isSandbox ? getFixture(id) : undefined;
@@ -61,11 +64,13 @@ export default function MatchBoard() {
     const homeSquad = homeRest.size ? availableTeamPlayers(home.id, dayIndex).filter((p) => !homeRest.has(p.id)) : availableTeamPlayers(home.id, dayIndex);
     const awaySquad = awayRest.size ? availableTeamPlayers(away.id, dayIndex).filter((p) => !awayRest.has(p.id)) : availableTeamPlayers(away.id, dayIndex);
     // 작전 교체는 감독이 자동 집행(엔진 DEFAULT_POLICY) — 구단주의 수동 토글은 제거(관전형 강화).
+    // boxTimeline: 득점별 누적 박스 스냅샷(실시간 스코어박스용). 클론만 → sim 결과 바이트 불변(승패·결정론 무관).
+    const boxTimeline: BoxSink[] = [];
     const sim = simulateMatch(seed, homeSquad, awaySquad, {
-      home: coachInfoOf(home.id), away: coachInfoOf(away.id),
+      home: coachInfoOf(home.id), away: coachInfoOf(away.id), boxTimeline,
     });
     return {
-      home, away, homeSquad, awaySquad, seed, sim,
+      home, away, homeSquad, awaySquad, seed, sim, boxTimeline,
       homeOvr: teamOverallRaw(homeSquad), awayOvr: teamOverallRaw(awaySquad),
     };
   }, [fixture, isSandbox, homeParam, awayParam, seedParam, currentDay, selectedTeamId]);
@@ -174,6 +179,7 @@ export default function MatchBoard() {
           onProgress={onProgress}
           onFinished={onFinished}
           onScore={handleScore}
+          paused={statsOpen}
         />
         {banners.length > 0 ? <BroadcastBanner banners={banners} /> : null}
       </View>
@@ -191,7 +197,14 @@ export default function MatchBoard() {
       ) : null}
 
       <View style={{ height: 4 }} />
-      <Button label={finished ? `나가기 (${winnerName} 승)` : '나가기'} onPress={requestExit} />
+      <View style={styles.btnRow}>
+        <View style={{ flex: 1 }}>
+          <Button label="📊 스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
+        </View>
+        <View style={{ flex: 1 }}>
+          <Button label={finished ? `나가기 (${winnerName} 승)` : '나가기'} onPress={requestExit} />
+        </View>
+      </View>
       </ScrollView>
 
       {/* 관전 중 나가기 확인 — 나가면 결정론 결과가 바로 확정된다 */}
@@ -211,6 +224,26 @@ export default function MatchBoard() {
           </Pressable>
         </Pressable>
       </Modal>
+
+      {/* 스코어박스 — 지금까지 본 점수까지의 누적 박스(boxTimeline). 열리면 경기 일시정지, 닫으면 재개. 스포일러 아님(현재 점수까지만) */}
+      <LiveBoxModal
+        visible={statsOpen}
+        onClose={() => setStatsOpen(false)}
+        home={data.homeSquad}
+        away={data.awaySquad}
+        homeName={data.home.name}
+        awayName={data.away.name}
+        box={
+          data.boxTimeline.length === 0
+            ? undefined
+            : finished
+              ? data.boxTimeline[data.boxTimeline.length - 1]
+              : score.ptIdx >= 0
+                ? data.boxTimeline[Math.min(score.ptIdx, data.boxTimeline.length - 1)]
+                : undefined
+        }
+        mineSide={mineSide}
+      />
     </>
   );
 }
@@ -232,6 +265,7 @@ const styles = StyleSheet.create({
   scoreNum: { color: theme.text, fontSize: 26, fontWeight: '900', marginVertical: 1 },
   setWins: { color: theme.muted, fontSize: 11, fontWeight: '700' },
   setScores: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
+  btnRow: { flexDirection: 'row', gap: 8 },
   setChip: { backgroundColor: theme.card, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center', borderWidth: 1, borderColor: theme.border },
   setChipLabel: { color: theme.muted, fontSize: 10 },
   setChipScore: { color: theme.text, fontSize: 14, fontWeight: '800' },
