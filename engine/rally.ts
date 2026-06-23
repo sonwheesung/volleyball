@@ -87,6 +87,11 @@ export type PointHow =
 
 export interface RallyOutcome { winner: Side; how: PointHow; byId?: string; recvId?: string; setId?: string } // byId=종결 선수(킬/팁/블록아웃/cap=공격수·stuff=블로커·ace=서버). recvId=서브 리시버(박스 recvAtt 귀속자). setId=종결 공격에 어시(assist) 귀속된 세터 — 보드가 같은 선수를 그리게
 
+/** 한 점의 터치 1건 — 엔진이 실제로 누가 만졌나를 순서대로 기록(보드가 그대로 재생 → 디그/세트/공격 박스 일치).
+ *  좌표 없음(보드가 합성). rng 추가 소비 0(이미 정해진 선수 id를 push만) → 결과 바이트 중립. */
+export type TouchAct = 'serve' | 'recv' | 'set' | 'atk' | 'dig';
+export interface TouchEvent { act: TouchAct; side: Side; id: string }
+
 export interface Edge { home: number; away: number }
 const NO_EDGE: Edge = { home: 1, away: 1 };
 
@@ -285,8 +290,9 @@ export const emptyBox = (): BoxLine => ({
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
  * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false, chasing: Side | null = null, box?: BoxSink, boxRng?: Rng): RallyOutcome {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false, chasing: Side | null = null, box?: BoxSink, boxRng?: Rng, touchSink?: TouchEvent[]): RallyOutcome {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
+  const tch = touchSink ? (act: TouchAct, side: Side, p: Player | null | undefined) => { if (p) touchSink.push({ act, side, id: p.id }); } : null; // 터치 기록(중립·rng 무관)
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
   const eg = (s: Side) => (s === 'home' ? edge.home : edge.away);
   // 박스 기록(선택) — 맵에 카운트만, rng 무관. 비우면 모든 호출이 no-op → 결과 바이트 불변.
@@ -319,6 +325,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
 
   // ── 서브 (2장) ── 타입별 (에이스·범실·난이도) 트레이드오프
   const sp = server(serv);
+  tch?.('serve', serving, sp);
   drain(serv, sp, 1);
   const st = chooseServe(sp, serv.style, rng, clutch);
   const svPow = n(R(sp).serve) * momFactor(serv.momentum) * eg(serving) * eff(serv, sp);
@@ -354,7 +361,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const s0 = rng.next();
   if (s0 < aceP) {
     if (stats) stats.aces++; bx?.(sp.id, (l) => { l.srvAce++; });
-    { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 에이스 = 리시브 실패
+    { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; tch?.('recv', recvSide, rv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 에이스 = 리시브 실패
     if (trace) trace.push('  → 서브 에이스! (서브팀 득점)');
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'ace', sj);
@@ -390,7 +397,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const recvErrP = clamp(0.10 - 0.13 * q, 0.005, 0.10);
   if (rng.next() < recvErrP) {
     if (stats) stats.recvErrs++;
-    { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 셰이크 = 리시브 실패
+    { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; tch?.('recv', recvSide, rv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 셰이크 = 리시브 실패
     if (trace) trace.push(`리시브 범실 [${sideKo(recvSide)}] (서브팀 득점)`);
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, 0.05);
@@ -404,7 +411,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     stats.recvQSum += q; stats.recvQN++;
     if (q >= 0.6) stats.recvGood++; else if (q >= 0.45) stats.recvOk++; else if (q >= CHANCE_Q) stats.recvPoor++; else stats.recvChance++;
   }
-  { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; if (rv) bx?.(rv.id, (l) => { l.recvAtt++; if (q >= 0.45) l.recvGood++; }); } // 정확 리시브(q≥0.45=KOVO 정확, 세터 공격 전개 가능 A+B패스) → 효율=(정확−실패)/시도
+  { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; tch?.('recv', recvSide, rv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; if (q >= 0.45) l.recvGood++; }); } // 정확 리시브(q≥0.45=KOVO 정확, 세터 공격 전개 가능 A+B패스) → 효율=(정확−실패)/시도
   if (trace) trace.push(`리시브 [${sideKo(recvSide)}] 품질 ${q.toFixed(2)} (${qLabel(q)})`);
   if (E && passer) {
     const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, q);
@@ -416,6 +423,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const at = teamOf(att);
     const df = teamOf(other(att));
     const setter = setterOf(at);
+    tch?.('set', att, setter); // 세트(토스) 터치 — 볼핸들링 범실이면 세트에서 끝(공격 없음)
     drain(at, setter, 0.3); // 토스도 체력을 쓴다(7.1) — 세터는 모든 2구를 따라다닌다(빈도 최다·강도 낮음)
     const setQ = n(R(setter).set) * eff(at, setter);
     // 볼핸들링 범실(기타 범실군) — 더블컨택·캐치·네트터치. 세터 기복↓·난조 패스일수록↑
@@ -428,6 +436,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     }
     const atk = chooseAtk(q, setQ, n(setter.vq), at.style, rng);
     const attacker = pickAttacker(at, atk, R, rng);
+    tch?.('atk', att, attacker); // 공격 스윙 터치 — 모든 스윙(디그로 살아난 비종결 포함)
     drain(at, attacker, 1.2); // 스파이크 점프가 가장 힘들다(7.1) — 리시브 면제 공격수(OP)도 지치게
     maybeInjure(at, attacker, rng);
     const quickKind: QuickKind | undefined = atk === 'quick' ? quickKindOf(q, setter, attacker) : undefined; // 난수 없는 결정론 분류
@@ -560,6 +569,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       q = clamp(0.4 + 0.4 * (digStr - attackPower) + rng.range(-0.1, 0.1), 0.1, 0.85);
       if (stats) { stats.digRegSum += q; stats.digRegN++; }
       const dg = dg0;
+      tch?.('dig', other(att), dg); // 디그 성공 터치(공수 전환) — 박스 digSucc 귀속자와 동일
       bx?.(dg.id, (l) => { l.digSucc++; });
       if (trace) trace.push(`    → 디그 성공 [${sideKo(other(att))}] ${dg.name}(${dg.position}) (공 튕겨 전환, q ${q.toFixed(2)})`);
       if (E) { const dgXY = xyOf(defSide, df, dg); const course = pushAttack('dug', dgXY); E.push({ t: 'dig', side: defSide, player: dg.name, pos: dg.position, at: dgXY, ball: course, reach: dist(dgXY, course), ok: true, rating: R(dg).dig, eff: eff(df, dg) }); }

@@ -5,7 +5,7 @@
 
 import { createRng } from './rng';
 
-import type { PointHow } from './rally';
+import type { PointHow, TouchEvent } from './rally';
 import type { Side } from '../types';
 
 export interface PointLog {
@@ -17,6 +17,7 @@ export interface PointLog {
   byId?: string;  // 종결 선수 id(킬/팁/블록아웃/cap=공격수·stuff=블로커·ace=서버) — 보드/중계가 박스와 같은 선수를 그림
   recvId?: string; // 서브 리시버 id(박스 recvAtt 귀속자) — 보드가 같은 리시버를 그림(리시브 칸 일치)
   setId?: string;  // 종결 공격 어시(assist) 귀속 세터 id — 보드 종결 토서를 박스와 일치(세트 칸). 킬/팁/블록아웃만
+  touches?: TouchEvent[]; // 이 점의 터치 순서(서브→리시브→세트→공격→디그…) — opts.touches일 때만. 보드 재생용·승패 불변
 }
 
 /** 작전 교체 1건 — 보드 연출용 로그(승패 무영향, 순수 가산). 엔진이 st.six 를 실제로 바꾼 순간을 기록. */

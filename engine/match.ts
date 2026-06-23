@@ -43,6 +43,7 @@ export interface MatchOpts {
   events?: RallyEvent[]; // 공간 텔레메트리 싱크(있으면 랠리별 독립 srng로 좌표 이벤트 누적; 승패 불변)
   box?: BoxSink; // 선수별 박스스코어 싱크(있으면 스윙 단위 귀속 누적; 승패 불변·rng 무관)
   boxTimeline?: BoxSink[]; // 점수별 누적 박스 스냅샷(있으면 매 득점 후 클론 push) — 관전 보드 실시간 기록용. points[k]와 1:1. 클론만 → 승패·rng 무관
+  touches?: boolean;       // 켜면 매 point에 터치 순서(누가 서브/리시브/세트/공격/디그)를 PointLog.touches로 — 보드 재생용. rng 무관·승패 불변
 }
 
 const DEFAULT_COACH: CoachInfo = { style: 'balanced', charisma: 50 };
@@ -236,10 +237,11 @@ export function simulateMatch(
       const chasing: Side | null =
         Math.max(h, a) >= targetPoints(setNo) - 4 && Math.abs(lead) >= 1 && Math.abs(lead) <= 2
           ? (lead > 0 ? 'away' : 'home') : null;
-      const { winner, how, byId, recvId, setId } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, accBox, boxRng);
+      const touches = opts.touches ? [] : undefined; // 켜면 이 점의 터치 순서를 엔진이 기록(가산·중립). 안 켜면 undefined → playRally가 no-op
+      const { winner, how, byId, recvId, setId } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, accBox, boxRng, touches);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
-      points.push({ setNo, home: h, away: a, scorer: winner, how, byId, recvId, setId });
+      points.push({ setNo, home: h, away: a, scorer: winner, how, byId, recvId, setId, touches });
       if (opts.boxTimeline) opts.boxTimeline.push(cloneBox(accBox!)); // 이 득점까지의 누적 스냅샷(points와 1:1)
 
       // 기세 갱신 (연속 득점 가속, 7.2)
