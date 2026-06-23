@@ -147,6 +147,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   const [fast, setFast] = useState(false);
   const [feed, setFeed] = useState<string[]>([]); // 중계 텍스트(최근 라인 유지)
   const [timeoutModal, setTimeoutModal] = useState<TimeoutEvent | null>(null); // 작전 타임아웃 — 멈춤+체력
+  const [confirmEnd, setConfirmEnd] = useState(false); // ⏭ 결과(경기 종료) 확인 — 즉시 종료 방지
   const ackTO = useRef<Set<number>>(new Set()); // 이미 본 타임아웃(랠리 인덱스) — 재진입 시 재팝업 방지
 
   // 효과음(휘슬·스파이크·서브) — 보드 진입 시 1회 프리로드, 설정 토글 동기화(audio/sfx.ts, UI 전용)
@@ -252,6 +253,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     setSegIdx(0);
     setPlaying(true);
   }, []);
+
+  // ⏭ 결과 — 확인 후 끝으로 건너뛰기(즉시 종료 방지)
+  const endNow = useCallback(() => {
+    setConfirmEnd(false);
+    setPlaying(false); setTimeoutModal(null); setShown(total - 1); setIdx(total); setSegIdx(0);
+  }, [total]);
 
   useEffect(() => {
     if (finished && !finishedOnce.current) {
@@ -478,8 +485,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
       {/* 플레이 컨트롤 */}
       <View style={styles.controls}>
         <Ctrl label={playing ? '⏸' : '▶'} onPress={() => setPlaying((p) => !p)} />
-        <Ctrl label={fast ? '2x ✓' : '2x'} on={fast} onPress={() => setFast((f) => !f)} />
-        <Ctrl label="⏭ 결과" onPress={() => { setPlaying(false); setTimeoutModal(null); setShown(total - 1); setIdx(total); setSegIdx(0); }} />
+        <Ctrl label="2x" on={fast} onPress={() => setFast((f) => !f)} />
+        <Ctrl label="⏭ 결과" onPress={() => setConfirmEnd(true)} />
       </View>
 
       {/* 작전 타임아웃 — 경기 멈춤 + 코트 선수 체력(미래: 교체·기세) */}
@@ -521,6 +528,18 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
                 </>
               );
             })() : null}
+      </Popup>
+
+      {/* ⏭ 결과 — 경기 종료 확인(즉시 종료 방지). 건너뛰면 다시 관전 불가 */}
+      <Popup visible={confirmEnd} onRequestClose={() => setConfirmEnd(false)}>
+        <Text style={styles.toTitle}>경기를 종료할까요?</Text>
+        <Text style={styles.toSub}>끝까지 보지 않고 결과로 건너뜁니다.{'\n'}이후 다시 관전할 수 없어요.</Text>
+        <Pressable style={styles.toBtn} onPress={endNow}>
+          <Text style={styles.toBtnTxt}>결과 보기</Text>
+        </Pressable>
+        <Pressable style={styles.toCancel} onPress={() => setConfirmEnd(false)}>
+          <Text style={styles.toCancelTxt}>계속 관전</Text>
+        </Pressable>
       </Popup>
     </View>
   );
@@ -618,4 +637,6 @@ const styles = StyleSheet.create({
   toPct: { fontSize: 12, fontWeight: '800', width: 38, textAlign: 'right' },
   toBtn: { backgroundColor: theme.accent, borderRadius: 12, paddingVertical: 14, alignItems: 'center', marginTop: 6 },
   toBtnTxt: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  toCancel: { alignItems: 'center', paddingVertical: 8, marginTop: 2 },
+  toCancelTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
 });

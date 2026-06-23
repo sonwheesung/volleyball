@@ -131,7 +131,6 @@ export default function MatchBoard() {
   }
 
   const mineSide = selectedTeamId === data.home.id ? 'home' : selectedTeamId === data.away.id ? 'away' : null;
-  const winnerName = data.sim.homeSets > data.sim.awaySets ? data.home.name : data.away.name;
 
   // 중계 현수막 — 관전 종료 후에만 빌드(스포일러 정책: 결과-결정 사건 누출 0). 샌드박스 제외.
   const banners = useMemo(
@@ -203,7 +202,7 @@ export default function MatchBoard() {
           <Button label="📊 스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
         </View>
         <View style={{ flex: 1 }}>
-          <Button label={finished ? `나가기 (${winnerName} 승)` : '나가기'} onPress={requestExit} />
+          <Button label="나가기" onPress={requestExit} />
         </View>
       </View>
       </ScrollView>
