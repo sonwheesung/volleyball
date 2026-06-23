@@ -105,6 +105,18 @@ function defenders(t: RallyTeam): Player[] {
   return back(t).map((p) => (p.position === 'MB' && t.libero ? t.libero : p));
 }
 
+/** 디그 성공 귀속자 — 후위 수비수 중 dig 레이팅 가중 추첨(현실 분산, 리베로 1위 유지). 전역 best-dig
+ *  독식(리베로 87.7%)을 흩어 박스 디그가 실제 배구처럼 보이게. 승패엔 무관(전용 digRng·귀속만). */
+function pickByDig(dDef: Player[], R: Rate, rng: Rng): Player {
+  if (dDef.length === 0) throw new Error('pickByDig: empty defenders'); // 호출부가 보장
+  // 가중 = dig^2 — 특화 디거(리베로)를 분명한 1위로, 그래도 후위 OH/OP·세터가 유의미 분담(정성 타깃).
+  const w = dDef.map((p) => Math.max(1, n(R(p).dig)) ** 2);
+  const sum = w.reduce((a, b) => a + b, 0);
+  let r = rng.next() * sum;
+  for (let i = 0; i < dDef.length; i++) { r -= w[i]; if (r < 0) return dDef[i]; }
+  return dDef[dDef.length - 1];
+}
+
 /** 서브 리시브 담당 — 리베로 + 아웃사이드(OH) 전원(W형). 세터·OP·MB는 숨김(현실 KOVO 5-1). */
 function receivers(t: RallyTeam): Player[] {
   const ohs = t.six.filter((p) => p.position === 'OH');
@@ -290,7 +302,7 @@ export const emptyBox = (): BoxLine => ({
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
  * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false, chasing: Side | null = null, box?: BoxSink, boxRng?: Rng, touchSink?: TouchEvent[]): RallyOutcome {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false, chasing: Side | null = null, box?: BoxSink, boxRng?: Rng, touchSink?: TouchEvent[], digRng?: Rng): RallyOutcome {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const tch = touchSink ? (act: TouchAct, side: Side, p: Player | null | undefined) => { if (p) touchSink.push({ act, side, id: p.id }); } : null; // 터치 기록(중립·rng 무관)
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
@@ -563,12 +575,14 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     // 디그는 시도 자체가 체력을 쓴다(성공/실패 무관 — 몸을 던진다). 디거 = 후위 최고 디그
     const dDef = defenders(df);
     const dg0 = dDef.length ? dDef.reduce((b, p) => (R(p).dig > R(b).dig ? p : b)) : attacker;
-    drain(df, dg0, 0.4);
+    drain(df, dg0, 0.4); // 체력 소모는 기존 best-dig(dg0)에 — 메인 rng·승패 바이트 불변(귀속만 분산, 2026-06-24 결정)
     if (rng.next() < digP) {
       if (stats) stats.digs++;
       q = clamp(0.4 + 0.4 * (digStr - attackPower) + rng.range(-0.1, 0.1), 0.1, 0.85);
       if (stats) { stats.digRegSum += q; stats.digRegN++; }
-      const dg = dg0;
+      // 귀속(box·touches·telemetry) = 후위 수비수 dig 가중 추첨(digRng 전용 스트림 — 메인·boxRng 불간섭).
+      // 리베로가 dig 최고라 최다지만 독식 아님(현실 분산). 디그 성공마다 항상 소비(box 유무 무관) → 결정론.
+      const dg = digRng ? pickByDig(dDef, R, digRng) : dg0;
       tch?.('dig', other(att), dg); // 디그 성공 터치(공수 전환) — 박스 digSucc 귀속자와 동일
       bx?.(dg.id, (l) => { l.digSucc++; });
       if (trace) trace.push(`    → 디그 성공 [${sideKo(other(att))}] ${dg.name}(${dg.position}) (공 튕겨 전환, q ${q.toFixed(2)})`);

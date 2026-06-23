@@ -66,6 +66,9 @@ export function simulateMatch(
   // 리시브 귀속용 별도 rng — **항상 생성**(메인 rng 불간섭). 서브 리시버 선택을 box 유무와 무관하게
   // 결정론으로 만들어 recvId가 sim.points에 항상 같게 실린다(box 유무 바이트 동일 보존).
   const boxRng = createRng((seed ^ 0x6d2b79f5) >>> 0);
+  // 디그 귀속용 별도 rng — **항상 생성**(메인·boxRng 불간섭). 디그 성공 귀속자(box digSucc·touches)를
+  // 후위 수비수 가중 분산으로 고르되 승패·recvId 무영향(전용 스트림). 2026-06-24 디그 귀속 현실화 결정.
+  const digRng = createRng((seed ^ 0x9e3779b9) >>> 0);
   let rallyNo = 0; // 공간 텔레메트리: 랠리별 독립 srng 시드용(메인 rng 불간섭)
   const edge: Edge = opts.edge ?? { home: 1, away: 1 };
   const hc = opts.home ?? DEFAULT_COACH;
@@ -238,7 +241,7 @@ export function simulateMatch(
         Math.max(h, a) >= targetPoints(setNo) - 4 && Math.abs(lead) >= 1 && Math.abs(lead) <= 2
           ? (lead > 0 ? 'away' : 'home') : null;
       const touches = opts.touches ? [] : undefined; // 켜면 이 점의 터치 순서를 엔진이 기록(가산·중립). 안 켜면 undefined → playRally가 no-op
-      const { winner, how, byId, recvId, setId } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, accBox, boxRng, touches);
+      const { winner, how, byId, recvId, setId } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, accBox, boxRng, touches, digRng);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner, how, byId, recvId, setId, touches });
