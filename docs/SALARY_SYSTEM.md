@@ -93,6 +93,41 @@ marketValue = BASE × abilityMul × serviceFactor(age) × POSITION_MUL × foreig
 - `ProdLine = { matches, points, spikes, blocks, aces, assists, digs }`
 - 명예의 전당·통산 기록(6장)의 토대도 된다.
 
+### 1.3 통계 단일화 — 스코어박스 = 생산 = 통산 (2026-06-24 측정·설계, 구현 대기)
+
+> **문제(사용자 보고 "통계는 차이가 한 개도 없어야")**: 같은 경기의 선수별 기록이 **두 곳에서 따로** 계산된다 —
+> ① **스코어박스**(`engine/rally.ts` box, 관전 보드·경기 상세가 그리는 기록, `data/matchBox.ts`), ② **생산**
+> (`engine/production.ts` `attributeProduction`, 통산·시즌·시상·연봉이 먹는 기록). 둘은 **독립 난수·다른 모델**이라
+> 팀 합계만 KOVO로 맞춰져 있고 **선수 개인은 크게 어긋난다**. → "보면서 본 기록 ≠ 영원히 남는 기록".
+
+**측정(`tools/_ev_statsource.ts`, N=2,000경기·32선수, A/B 자가검증 통과 — box vs box=0·box vs prod>0):**
+
+| 통계 | 팀합 차이 | **선수 개인 분기율(\|box−prod\|/box)** |
+|---|---|---|
+| 디그 | 3.9% | **58.4%** |
+| 블록 | 0.2% | **62.6%** |
+| 에이스 | 8.0% | **62.6%** |
+| 스파이크(킬+블록아웃) | 3.3% | **25.3%** |
+| 어시(세트) | 3.3% | **22.0%** |
+
+> 핵심: 팀합은 비슷한데 개인은 22~62% 어긋남. 또 생산은 한 점당 spike=assist=dig를 묶어 셈(192,995 동일)하나
+> 박스는 사건별 독립(디그 200,893 ≠ 스파이크 199,553 — 랠리 루프의 비종결 디그까지 포함) → **박스가 사건 단위 진실**.
+
+**단일화 설계(채택 방향)**: **스코어박스(box)를 단일 진실로** 삼고, `attributeProduction`이 자기 난수로
+재귀속하는 걸 폐기 → 생산은 **경기별 box를 집계**(matches·garbage·backSpikes·subUse XP 등 생산 고유 오버레이만 유지).
+그러면 관전 보드 = 스코어박스 = 통산/시즌/시상/연봉이 **구성상 한 선수도 안 어긋난다**(보드↔박스는 이미 byId/recvId/
+setId/touches로 묶는 중 — 그 사슬의 종점을 통산까지 연장).
+- **카테고리 정의 통일**: box `atkKill`→spikes, `blockPt`→blocks, `srvAce`→aces, `assist`→assists, `digSucc`→digs,
+  `recvAtt`→receives(정의 차 — box는 범실 포함 전 리시브, prod는 패서 픽 → box 기준으로 통일).
+- **과거 세이브 불변**: 통산은 시즌 끝에 선수에 박혀 저장(`accrueCareer`) → **앞으로 쌓이는 시즌부터** 새 집계.
+  과거 career는 동결(소급 변경 없음). 모델 교체 시점 불연속은 수용(STATS_PROTOCOL — 신규만 새 모델).
+- **밸런스 재검증(엄수)**: 연봉·시상 산출이 생산을 먹으므로 KOVO 밴드·생산 기울기(스탯→생산 단조)·시상 분포를
+  N≥1만 재시뮬(이 1장 본문 측정 재실행). 팀합은 박스가 이미 KOVO 정렬(`_ev_box_audit`)이라 개인 재분배가 골자.
+- **가드**: `_ev_statsource`(분기율 → 통합 후 **0** 목표) + 기존 `_ev_box_audit`·`simKovo`·생산 기울기 측정.
+
+> docs-first: 위 설계 확정 후 단계 구현. 이 변경은 **기록·연봉·시상 척추**라 단계마다 재검증·커밋.
+> (보드↔스코어박스 단일화 = `docs/BOARD_RULES.md` 충실도 절. 본 절은 그 한 단계 위 = 스코어박스↔통산 단일화.)
+
 ---
 
 ## 2. 시장가치 (Market Value) — 계약/재계약 시 산정
