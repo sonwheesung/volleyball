@@ -7,14 +7,11 @@ import { MatchCourt } from '../../components/MatchCourt';
 import { LiveBoxModal } from '../../components/LiveBoxModal';
 import { Popup } from '../../components/Popup';
 import { BroadcastBanner } from '../../components/BroadcastBanner';
-import type { BoxSink } from '../../engine/rally';
 import { buildMatchBanners } from '../../data/broadcast';
-import { coachInfoOf, getFixture, getTeam } from '../../data/league';
-import { availableTeamPlayers } from '../../data/injury';
-import { restedOnDay } from '../../data/rotation';
+import { getFixture, getTeam } from '../../data/league';
+import { buildMatchBox } from '../../data/matchBox';
 import { DEV_TOOLS } from '../../data/flags';
 import { teamOverallRaw } from '../../engine/overall';
-import { simulateMatch } from '../../engine/match';
 import { useGameStore } from '../../store/useGameStore';
 
 export default function MatchBoard() {
@@ -58,18 +55,9 @@ export default function MatchBoard() {
       dayIndex = fixture.dayIndex;
       seed = fixture.seed;
     }
-    // 그날 출전 가능 명단(부상·시즌 중 이동 반영) — 결장 선수가 코트에 보이지 않게, 순위표 리플레이와 동일 소스.
-    // 로드매니지먼트(#3): 순위 굳으면 주전 휴식 — 순위/생산 재시뮬과 동일 restedOnDay 집합이라 관전==순위==생산 일치.
-    const homeRest = restedOnDay(home.id, dayIndex);
-    const awayRest = restedOnDay(away.id, dayIndex);
-    const homeSquad = homeRest.size ? availableTeamPlayers(home.id, dayIndex).filter((p) => !homeRest.has(p.id)) : availableTeamPlayers(home.id, dayIndex);
-    const awaySquad = awayRest.size ? availableTeamPlayers(away.id, dayIndex).filter((p) => !awayRest.has(p.id)) : availableTeamPlayers(away.id, dayIndex);
-    // 작전 교체는 감독이 자동 집행(엔진 DEFAULT_POLICY) — 구단주의 수동 토글은 제거(관전형 강화).
-    // boxTimeline: 득점별 누적 박스 스냅샷(실시간 스코어박스용). 클론만 → sim 결과 바이트 불변(승패·결정론 무관).
-    const boxTimeline: BoxSink[] = [];
-    const sim = simulateMatch(seed, homeSquad, awaySquad, {
-      home: coachInfoOf(home.id), away: coachInfoOf(away.id), boxTimeline,
-    });
+    // 박스스코어 단일 소스 — 경기 상세(matchresult)와 동일 명단(부상·정지·벤치 + 휴식 #3)·시뮬·박스.
+    // 둘 다 buildMatchBox만 호출 → 같은 기록 보장(드리프트 차단). boxTimeline=실시간 스코어박스용.
+    const { homeSquad, awaySquad, sim, boxTimeline } = buildMatchBox(home.id, away.id, dayIndex, seed);
     return {
       home, away, homeSquad, awaySquad, seed, sim, boxTimeline,
       homeOvr: teamOverallRaw(homeSquad), awayOvr: teamOverallRaw(awaySquad),

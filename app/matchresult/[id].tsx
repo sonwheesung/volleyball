@@ -2,11 +2,8 @@ import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, Screen, Title, theme } from '../../components/Screen';
 import { BoxScoreTable } from '../../components/BoxScoreTable';
-import { coachInfoOf, getFixture, getTeam } from '../../data/league';
-import { availableTeamPlayers } from '../../data/injury';
-import { restedOnDay } from '../../data/rotation';
-import { simulateMatch } from '../../engine/match';
-import type { BoxSink } from '../../engine/rally';
+import { getFixture, getTeam } from '../../data/league';
+import { buildMatchBox } from '../../data/matchBox';
 
 export default function MatchResult() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -20,17 +17,8 @@ export default function MatchResult() {
     );
   }
 
-  // 관전 보드·정사(production·standings)와 동일 명단(부상·정지·벤치 + 휴식 #3 반영) — 박스스코어 완전 일치.
-  const dayIndex = fixture.dayIndex;
-  const homeRest = restedOnDay(fixture.homeTeamId, dayIndex);
-  const awayRest = restedOnDay(fixture.awayTeamId, dayIndex);
-  const home = homeRest.size ? availableTeamPlayers(fixture.homeTeamId, dayIndex).filter((p) => !homeRest.has(p.id)) : availableTeamPlayers(fixture.homeTeamId, dayIndex);
-  const away = awayRest.size ? availableTeamPlayers(fixture.awayTeamId, dayIndex).filter((p) => !awayRest.has(p.id)) : availableTeamPlayers(fixture.awayTeamId, dayIndex);
-  // 경기 보드 스코어박스와 동일 — 실제 스윙 단위 박스 싱크(클론만, 승패 불변). box는 최종 누적.
-  const box: BoxSink = new Map();
-  const sim = simulateMatch(fixture.seed, home, away, {
-    home: coachInfoOf(fixture.homeTeamId), away: coachInfoOf(fixture.awayTeamId), box,
-  });
+  // 관전 보드와 동일 단일 소스(buildMatchBox) — 명단(부상·정지·벤치+휴식 #3)·시뮬·박스가 항상 일치.
+  const { homeSquad: home, awaySquad: away, sim, box } = buildMatchBox(fixture.homeTeamId, fixture.awayTeamId, fixture.dayIndex, fixture.seed);
 
   const homeName = getTeam(fixture.homeTeamId)?.name ?? '';
   const awayName = getTeam(fixture.awayTeamId)?.name ?? '';
