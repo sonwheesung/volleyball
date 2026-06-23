@@ -80,6 +80,25 @@
 | 37b | **프리볼이 2번째 터치처럼 보임** — 세트 없이 디그 직후 넘김(2026-06-23 사용자 보고, 룰 37 후속) | 프리볼 분기가 toss(세트) 전에 발화해 디그→(세트없이)→네트 너머였음. **세트 컨택(touch 2) 추가**: 토서가 전위 sender에게 올리고 sender가 언더로 넘김 → 디그(1)·세트(2)·넘김(3) 3터치. idx=sender(유령터치 방지)·firstTouch 고정(배회 방지) | auditBoard I·M 0 |
 | 50 | **핸들링 범실(볼핸들링)인데 스파이크를 그린다** — 세트 더블컨택·캐치는 공격 전 종료라 스파이크가 없어야(2026-06-21 사용자 보고) | `courtPath`에 miscErr special-case가 없어 일반 공격 경로로 떨어져 pass→toss→**spike**를 합성했음. 종결 반칙팀(finalAtt) hop에서 **스파이크 없이 세트 fault로 종결**(공이 setter 근처서 죽음, 휘슬·추격 없음, idx -1). 멀티홉의 *이전* 디그된 spike는 정당(무관). 측정(`_dv_mischandle`): 종결직전 spike **85→0**(허위 오라클 교정: '아무 spike'→'종결 직전 spike'), A/B kill 100% spike. auditBoard 0(죽은공점유 회귀=mover 제거로 해소) | **`_dv_mischandle`**·auditBoard N |
 
+## 보드↔박스 귀속 충실도 현황 (cross-layer attribution — 2026-06-23, TEST_METHODOLOGY §1.J)
+
+> 스코어박스(엔진 박스 싱크)는 **항상 엔진 진실**이다. 문제는 **보드가 보여주는 선수 ≠ 박스 귀속 선수**인 칸 —
+> "화면에서 X가 했는데 기록은 Y"(사용자 보고 "득점했는데 0%"의 클래스). auditBoard는 기하·HOW만 봐 못 잡았다(귀속 사각).
+
+| 스코어박스 칸 | 보드↔박스 일치 | 묶는 법 | 측정 |
+|---|---|---|---|
+| 득점(킬/팁/블록아웃) | ✅ **100%** | 엔진 `byId`=공격수 → courtPath 종결 atkIdx | `_ev_scorer` 100.00% |
+| 블록(스터프) | ✅ 중계 **100%** · 애니 벽 98.46% | `byId`=블로커 → 중계 호명(벽 시딩은 후속) | `_ev_blockcomment` 100% |
+| 서브(에이스) | ✅ **100%** | `byId`=서버 → serverIdx | `_ev_scorer` ace 100% |
+| **리시브** | ❌ **~59.5%** (40% 어긋남) | **미배선** — 보드 recvIdx(proximity) vs 박스 boxRng pickRecv | `_ev_recvmatch` 59.5% |
+| **디그** | ❌ 미배선 | 보드 nearestDig(proximity) vs 박스 digSucc(엔진 디거) | (구조상 미묶임) |
+| **세트(어시)** | ❌ 미배선 | 보드 tosserIdx(proximity) vs 박스 setter(어시 귀속) | (구조상 미묶임) |
+| 공격 시도(비종결) | ❌ 미배선 | 비종결 atkIdx(보드 난수) vs 박스 per-swing 공격수 | (구조상 미묶임) |
+
+> **근본 해결(후속)**: 엔진이 종결 byId처럼 **비종결 액션(리시브·디그·세트·공격시도)의 박스 귀속 선수 id도 per-이벤트로
+> 내주고**, 보드가 그걸 소비하면 전 칸 100% 일치. 큰 작업이라 스코프 합의 후 진행. 그전까진 비종결 칸은
+> "보드=근사, 박스=정답". 가드: `_ev_scorer`·`_ev_recvmatch`·`_ev_blockcomment`(회귀 시 재실행).
+
 ## 수치 기준 (auditBoard 리포트에서 함께 확인)
 
 - **이상 장면 0건** — 13+개 룰 전부. 1건이라도 나오면 머지 금지.
