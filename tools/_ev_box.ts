@@ -59,9 +59,12 @@ allOk = chk('서브 범실  srvErr == stats.serveErrs', box.srvErr, acc.serveErr
 allOk = chk('세트 어시  assist == kills+blockouts', box.assist, acc.kills + acc.blockouts) && allOk;
 allOk = chk('디그 성공  digSucc <= stats.digs(팁디그 미귀속)', box.dig, acc.digs, false) && allOk;
 allOk = chk('리시브 시도 recvAtt == aces+recvErrs+recvQN', box.rAtt, acc.aces + acc.recvErrs + acc.recvQN) && allOk;
-allOk = chk('리시브 성공 recvGood == recvGood+recvOk(q≥0.45)', box.rGood, acc.recvGood + acc.recvOk) && allOk;
+allOk = chk('리시브 정확 recvGood == recvGood+recvOk(q≥0.45=KOVO 정확)', box.rGood, acc.recvGood + acc.recvOk) && allOk;
 allOk = chk('리시브 실패 recvErr == aces+recvErrs', box.rErr, acc.aces + acc.recvErrs) && allOk;
-log(`    리시브 성공률(recvGood/recvAtt) = ${(box.rGood / box.rAtt * 100).toFixed(1)}%`);
+const recvEff = (box.rGood - box.rErr) / box.rAtt * 100; // KOVO 리시브 효율 = (정확 − 실패) / 시도, 정확=q≥0.45(세터 전개 가능)
+const recvRealistic = recvEff >= 25 && recvEff <= 55; // KOVO 여자부 팀 리시브 효율 현실 밴드(개인 리베로 40~70% — namu V리그/기록, 팀 평균은 그 아래)
+log(`    리시브 효율((정확−실패)/시도) = ${recvEff.toFixed(1)}%  → ${recvRealistic ? 'PASS(KOVO 현실 밴드)' : 'CHECK(범위 밖 — 게이트 재확인)'}`);
+log(`    참고: 정확률(recvGood/recvAtt q≥0.45) ${(box.rGood / box.rAtt * 100).toFixed(1)}% · 실패율 ${(box.rErr / box.rAtt * 100).toFixed(1)}%`);
 
 // ── (3) 공격 성공률 현실성 ───────────────────────────────────────────────
 const rate = atkKillT / atkAttT * 100;

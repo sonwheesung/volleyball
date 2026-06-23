@@ -105,13 +105,15 @@ function runMatch() {
       const rows = squad.map((p) => ({ p, l: bs.get(p.id)! }))
         .filter((r) => r.l && (r.l.atkAtt > 0 || r.l.srvAtt > 0 || r.l.blockPt > 0 || r.l.digSucc > 0 || r.l.assist > 0))
         .sort((x, y) => pts(y.l) - pts(x.l) || y.l.atkAtt - x.l.atkAtt);
-      const T = { pt: 0, ak: 0, aa: 0, bl: 0, ac: 0, dg: 0, as: 0, rg: 0, ra: 0, er: 0 }; // 팀 합계
+      const T = { pt: 0, ak: 0, aa: 0, bl: 0, ac: 0, dg: 0, as: 0, rg: 0, re: 0, ra: 0, er: 0 }; // 팀 합계
+      const eff = (good: number, errc: number, att: number) => att > 0 ? `${((good - errc) / att * 100).toFixed(1)}%` : '–'; // KOVO 리시브 효율=(정확−실패)/시도
       const body = rows.map(({ p, l }) => {
         const err = l.atkErr + l.srvErr;
         const hi = l.atkAtt > 0 && l.atkKill / l.atkAtt >= 0.45;
-        const rhi = l.recvAtt > 0 && l.recvGood / l.recvAtt >= 0.5;
-        T.pt += pts(l); T.ak += l.atkKill; T.aa += l.atkAtt; T.bl += l.blockPt; T.ac += l.srvAce; T.dg += l.digSucc; T.as += l.assist; T.rg += l.recvGood; T.ra += l.recvAtt; T.er += err;
-        const rcv = l.recvAtt > 0 ? `<td class="rate${rhi ? ' hi' : ''}" title="성공 ${l.recvGood} / 시도 ${l.recvAtt}">${pct(l.recvGood, l.recvAtt)}</td>` : `<td class="zero">–</td>`;
+        const reff = l.recvAtt > 0 ? (l.recvGood - l.recvErr) / l.recvAtt * 100 : 0;
+        const rhi = l.recvAtt > 0 && reff >= 45;   // 팀 평균 ~42% 위 = 좋은 리시버(리베로·강 OH) 강조
+        T.pt += pts(l); T.ak += l.atkKill; T.aa += l.atkAtt; T.bl += l.blockPt; T.ac += l.srvAce; T.dg += l.digSucc; T.as += l.assist; T.rg += l.recvGood; T.re += l.recvErr; T.ra += l.recvAtt; T.er += err;
+        const rcv = l.recvAtt > 0 ? `<td class="rate${rhi ? ' hi' : reff < 0 ? ' er' : ''}" title="정확 ${l.recvGood} · 실패 ${l.recvErr} / 시도 ${l.recvAtt}">${eff(l.recvGood, l.recvErr, l.recvAtt)}</td>` : `<td class="zero">–</td>`;
         return `<tr>${pill(p.position)}<td class="nm">${esc(p.name)}</td><td class="sc">${pts(l)}</td>`
           + `${z(l.atkKill)}${z(l.atkAtt)}<td class="rate${hi ? ' hi' : ''}">${pct(l.atkKill, l.atkAtt)}</td>`
           + `${z(l.blockPt)}${z(l.srvAce)}${z(l.digSucc)}${z(l.assist)}${rcv}`
@@ -119,13 +121,13 @@ function runMatch() {
       }).join('');
       const total = rows.length ? `<tr class="tot"><td></td><td class="l">팀 합계</td><td class="sc">${T.pt}</td>`
         + `<td>${T.ak}</td><td>${T.aa}</td><td class="rate">${pct(T.ak, T.aa)}</td>`
-        + `<td>${T.bl}</td><td>${T.ac}</td><td>${T.dg}</td><td>${T.as}</td><td class="rate">${pct(T.rg, T.ra)}</td><td>${T.er}</td></tr>` : '';
+        + `<td>${T.bl}</td><td>${T.ac}</td><td>${T.dg}</td><td>${T.as}</td><td class="rate">${eff(T.rg, T.re, T.ra)}</td><td>${T.er}</td></tr>` : '';
       return `<div class="boxwrap${away ? ' away' : ''}"><h3>${esc(getTeam(teamId)?.name ?? teamId)}</h3><table class="bx"><thead>`
         + `<tr class="grp"><th colspan="3"></th><th class="atkg" colspan="3">공격</th><th colspan="6"></th></tr>`
-        + `<tr class="sub"><th>P</th><th class="l">선수</th><th>득점</th><th>성공</th><th>시도</th><th>성공률</th><th>블록</th><th>서브</th><th>디그</th><th>세트</th><th>리시브</th><th>범실</th></tr>`
+        + `<tr class="sub"><th>P</th><th class="l">선수</th><th>득점</th><th>성공</th><th>시도</th><th>성공률</th><th>블록</th><th>서브</th><th>디그</th><th>세트</th><th>리시브<br><span class="eff">효율</span></th><th>범실</th></tr>`
         + `</thead><tbody>${body || '<tr><td colspan="12" class="empty">출전 기록 없음</td></tr>'}${total}</tbody></table></div>`;
     };
-    $('out').innerHTML = `<div class="scoreboard"><div class="sb-team ${win === M.a ? 'won' : ''}">${esc(getTeam(M.a)?.name ?? M.a)}</div><div class="sb-score">${sim.homeSets} : ${sim.awaySets}</div><div class="sb-team ${win === M.b ? 'won' : ''}">${esc(getTeam(M.b)?.name ?? M.b)}</div></div><div class="setchips">${sets}</div><div class="boxes">${box(A, M.a, false)}${box(B, M.b, true)}</div><p class="hint">공격 <b>성공·시도·성공률</b> · 서브=에이스 · 리시브=성공률(세터 공격 전개 가능 q≥0.45, 마우스 올리면 성공/시도) · 범실=공격+서브. 실제 스윙 단위 집계(랠리 엔진 직접 기록 — 통계 재구성 아님).</p>`;
+    $('out').innerHTML = `<div class="scoreboard"><div class="sb-team ${win === M.a ? 'won' : ''}">${esc(getTeam(M.a)?.name ?? M.a)}</div><div class="sb-score">${sim.homeSets} : ${sim.awaySets}</div><div class="sb-team ${win === M.b ? 'won' : ''}">${esc(getTeam(M.b)?.name ?? M.b)}</div></div><div class="setchips">${sets}</div><div class="boxes">${box(A, M.a, false)}${box(B, M.b, true)}</div><p class="hint">공격 <b>성공·시도·성공률</b> · 서브=에이스 · 리시브=<b>효율</b>((정확−실패)/시도, KOVO 공식 · 정확=세터 공격 전개 가능 q≥0.45, 마우스 올리면 정확·실패/시도) · 범실=공격+서브. 실제 스윙 단위 집계(랠리 엔진 직접 기록 — 통계 재구성 아님).</p>`;
   } else maybeHeavy($('m-run') as HTMLButtonElement, M.runs, `${M.runs.toLocaleString()}경기 시뮬레이션 중…`, () => {
     let aw = 0, as = 0, bs = 0; const dist: Record<string, number> = {};
     for (let i = 0; i < M.runs; i++) { const s = simulateMatch(M.seed + i, A, B, opts); if (s.homeSets > s.awaySets) aw++; as += s.homeSets; bs += s.awaySets; const k = `${s.homeSets}:${s.awaySets}`; dist[k] = (dist[k] ?? 0) + 1; }

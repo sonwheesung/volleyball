@@ -272,7 +272,7 @@ export interface BoxLine {
   atkAtt: number; atkKill: number; atkErr: number; atkBlocked: number; // 공격: 시도/성공/범실/차단당함
   srvAtt: number; srvAce: number; srvErr: number;                       // 서브: 시도/에이스/범실
   blockPt: number; digSucc: number; assist: number;                     // 블록 득점/디그 성공/세트(어시)
-  recvAtt: number; recvGood: number; recvErr: number;                   // 리시브: 시도/성공(공격 전개 가능 q≥0.45)/실패(에이스+셰이크)
+  recvAtt: number; recvGood: number; recvErr: number;                   // 리시브: 시도/정확(q≥0.45=KOVO 정확 리시브, 세터 공격 전개 가능)/실패(에이스+셰이크). KOVO 효율=(정확−실패)/시도
 }
 export type BoxSink = Map<string, BoxLine>;
 export const emptyBox = (): BoxLine => ({
@@ -403,7 +403,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     stats.recvQSum += q; stats.recvQN++;
     if (q >= 0.6) stats.recvGood++; else if (q >= 0.45) stats.recvOk++; else if (q >= CHANCE_Q) stats.recvPoor++; else stats.recvChance++;
   }
-  { const rv = pickRecv?.(recv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; if (q >= 0.45) l.recvGood++; }); } // 인플레이 리시브 성공(세터 공격 전개 가능 = A+B패스 q≥0.45)
+  { const rv = pickRecv?.(recv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; if (q >= 0.45) l.recvGood++; }); } // 정확 리시브(q≥0.45=KOVO 정확, 세터 공격 전개 가능 A+B패스) → 효율=(정확−실패)/시도
   if (trace) trace.push(`리시브 [${sideKo(recvSide)}] 품질 ${q.toFixed(2)} (${qLabel(q)})`);
   if (E && passer) {
     const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, q);
