@@ -1,6 +1,8 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Modal, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { theme } from './Screen';
+import { buildLineup } from '../engine/lineup';
+import { emptyBox } from '../engine/rally';
 import type { Player, Position } from '../types';
 import type { BoxSink, BoxLine } from '../engine/rally';
 
@@ -29,10 +31,18 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
   const [tab, setTab] = useState<'home' | 'away'>(mineSide ?? 'home');
   const squad = tab === 'home' ? home : away;
 
-  const rows = squad
-    .map((p) => ({ p, l: box?.get(p.id) }))
-    .filter((r): r is { p: Player; l: BoxLine } => !!r.l && (r.l.atkAtt > 0 || r.l.srvAtt > 0 || r.l.blockPt > 0 || r.l.digSucc > 0 || r.l.assist > 0))
-    .sort((x, y) => pts(y.l) - pts(x.l) || y.l.atkAtt - x.l.atkAtt);
+  // 점수가 0이어도 스코어보드는 항상 보인다 — 선발 7인(코트 6 + 리베로)을 0으로 깔고,
+  // 교체로 투입돼 기록이 생긴 비선발만 추가로 합류. 득점순 정렬(동점은 선발 순서 유지).
+  const order = useMemo(() => {
+    const lu = buildLineup(squad);
+    const starters = [...lu.six, lu.libero].filter((p): p is Player => !!p);
+    const ids = new Set(starters.map((p) => p.id));
+    const subs = squad.filter((p) => !ids.has(p.id) && !!box?.get(p.id));
+    return [...starters, ...subs];
+  }, [squad, box]);
+  const rows = order
+    .map((p, i) => ({ p, l: box?.get(p.id) ?? emptyBox(), i }))
+    .sort((x, y) => pts(y.l) - pts(x.l) || y.l.atkAtt - x.l.atkAtt || x.i - y.i);
 
   const T = rows.reduce(
     (t, { l }) => {
@@ -65,7 +75,7 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
           </View>
 
           {rows.length === 0 ? (
-            <Text style={styles.empty}>아직 기록이 없습니다 — 경기가 진행되면 쌓입니다.</Text>
+            <Text style={styles.empty}>출전 명단이 없습니다.</Text>
           ) : (
             <ScrollView horizontal showsHorizontalScrollIndicator={false}>
               <View>
