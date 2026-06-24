@@ -6,6 +6,7 @@ import type { Player, Position, SeasonLine } from '../types';
 import { createRng } from './rng';
 import { overall } from './overall';
 import type { SimResult } from './simMatch';
+import type { BoxSink } from './rally';
 
 export interface ProdLine {
   matches: number;  // 출전
@@ -117,12 +118,63 @@ function pick(pool: Player[], weight: (p: Player) => number, r: number): Player 
   return pool[pool.length - 1];
 }
 
+/** 통계 단일화(2026-06-24) — 스코어박스(엔진 box)를 **그대로** 통산 생산으로 집계. production이 자기 난수로
+ *  재귀속하던 걸 폐기 → 관전 보드 = 스코어박스 = 통산/시즌/시상/연봉이 한 선수도 안 어긋난다(SALARY_SYSTEM 1.3).
+ *  box 카테고리 → ProdLine: atkKill→spikes·blockPt→blocks·srvAce→aces·assist→assists·digSucc→digs·recvAtt→receives,
+ *  points = atkKill+blockPt+srvAce(득점 사건). matches/garbage/subUse·backSpikes는 생산 고유 오버레이로 유지. */
+function productionFromBox(
+  sim: SimResult,
+  home: Player[],
+  away: Player[],
+  seed: number,
+  box: BoxSink,
+): Map<string, ProdLine> {
+  const H = splitLineup(home);
+  const A = splitLineup(away);
+  const gp = Math.round(sim.points.length * garbageFrac(sim));
+  const tally = new Map<string, ProdLine>();
+  const bump = (id: string, f: (l: ProdLine) => void) => {
+    const l = tally.get(id) ?? emptyProd();
+    f(l);
+    tally.set(id, l);
+  };
+  // 스코어박스 그대로 집계 — 사건 단위 진실(비종결 디그·독립 카테고리 포함)
+  for (const [id, l] of box) {
+    bump(id, (p) => {
+      p.spikes += l.atkKill;
+      p.blocks += l.blockPt;
+      p.aces += l.srvAce;
+      p.assists += l.assist;
+      p.digs += l.digSucc;
+      p.receives += l.recvAtt;
+      p.points += l.atkKill + l.blockPt + l.srvAce; // 득점 = 공격 성공(킬+블록아웃) + 스터프 + 에이스
+    });
+  }
+  // 후위공격(backSpikes) 오버레이 — 박스는 백어택을 안 나누므로 OH/OP 스파이크에 BACK_ATK_RATE 적용(트리플크라운 전용).
+  //   전용 backRng·id 정렬 순회로 결정론. box 미집계 = 0(스파이크 없는 선수).
+  const backRng = createRng((seed ^ 0x517cc1b7) >>> 0);
+  const posById = new Map<string, Position>([...home, ...away].map((p) => [p.id, p.position]));
+  for (const id of [...tally.keys()].sort()) {
+    const pos = posById.get(id);
+    if (pos !== 'OH' && pos !== 'OP') continue;
+    const sp = tally.get(id)!.spikes;
+    for (let k = 0; k < sp; k++) if (backRng.next() < BACK_ATK_RATE) bump(id, (l) => { l.backSpikes++; });
+  }
+  // 출전(matches) — 통계가 아니라 참여 집계라 기존 로직 유지(선발 항상·벤치는 가비지·작전교체 코트타임)
+  for (const p of [...H.starters, ...A.starters]) bump(p.id, (l) => { l.matches++; });
+  if (gp > 0) for (const p of [...H.bench, ...A.bench]) bump(p.id, (l) => { l.matches++; });
+  if (sim.subUse) for (const id in sim.subUse) bump(id, (l) => { l.matches += Math.min(1, sim.subUse![id] / 40); });
+  return tally;
+}
+
 export function attributeProduction(
   sim: SimResult,
   home: Player[],
   away: Player[],
   seed: number,
+  box?: BoxSink, // 주면 스코어박스를 **단일 진실**로 집계(보드=박스=통산 일치, SALARY_SYSTEM 1.3). 없으면 레거시 자체 귀속.
 ): Map<string, ProdLine> {
+  if (box) return productionFromBox(sim, home, away, seed, box);
   const rng = createRng((seed ^ 0x9e3779b9) >>> 0);
   // 후위공격 판정용 독립 rng — 기존 귀속 스트림(rng) 불간섭 → spike/block/ace/assist/dig 귀속 불변, backSpikes만 가산
   const backRng = createRng((seed ^ 0x517cc1b7) >>> 0);

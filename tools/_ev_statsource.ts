@@ -42,12 +42,15 @@ const addProd = (id: string, l: any) => {
   prodAgg.set(id, cur);
 };
 
+const newAgg = new Map<string, any>(); // 통합 후(box 먹인 production) — box와 0 분기여야
 for (let s = 1; s <= N; s++) {
   const box: BoxSink = new Map();
   const sim = simulateMatch(s, A, B, { ...base, box });
   for (const [id, l] of box) addBox(id, l);
-  const prod = attributeProduction(sim, A, B, s);
+  const prod = attributeProduction(sim, A, B, s);          // 레거시(자체 귀속) — 분기 노출
   for (const [id, l] of prod) addProd(id, l);
+  const prodNew = attributeProduction(sim, A, B, s, box);  // 통합(box 단일 진실) — 0 분기 기대
+  for (const [id, l] of prodNew) { const cur = newAgg.get(id) ?? {}; for (const k of Object.keys(l)) cur[k] = (cur[k] ?? 0) + l[k]; newAgg.set(id, cur); }
 }
 
 const ids = new Set<string>([...boxAgg.keys(), ...prodAgg.keys()]);
@@ -77,6 +80,24 @@ for (const c of CATS) for (const id of ids) {
 }
 log(`\n[A/B 자가검증]`);
 log(`  대조(box vs box, 같은 소스): 선수별 차이 합 = ${selfDiff}  (0이어야 — PASS=${selfDiff === 0})`);
-log(`  실측(box vs prod): 위 표의 분기율 — 두 모델이 다르면 >0  (분기 노출=${anyDiverge})`);
-log(`\n결론: ${anyDiverge ? '⚠ 두 통계 소스가 선수 단위로 어긋남(분기율 표 참조) → 통합 필요(사용자 결정: 차이 0)' : '✅ 선수 단위로도 일치'}`);
+log(`  실측(box vs 레거시 prod): 위 표의 분기율 — 두 모델이 다르면 >0  (분기 노출=${anyDiverge})`);
+
+// ── 통합 검증 — box를 먹인 production(통합 경로)이 box와 선수별 0 분기여야(단일 진실) ──
+let newDiff = 0;
+const newDetail: string[] = [];
+for (const c of CATS) {
+  let d = 0;
+  for (const id of ids) {
+    const bv = boxAgg.has(id) ? c.box(boxAgg.get(id)!) : 0;
+    const nv = newAgg.has(id) ? c.prod(newAgg.get(id)!) : 0;
+    d += Math.abs(bv - nv);
+  }
+  newDiff += d;
+  newDetail.push(`${c.name}=${d}`);
+}
+log(`\n[통합 검증] box vs 통합 prod(box 먹임) 선수별 차이 합 = ${newDiff}  (0이어야 — 단일 진실)`);
+log(`  카테고리별: ${newDetail.join(' · ')}`);
+const pass = selfDiff === 0 && anyDiverge && newDiff === 0;
+log(`\n결론: ${pass ? '✅ 통합 성공 — 통합 prod가 스코어박스와 선수 단위 0 분기(레거시는 분기, 도구 민감)' : (newDiff === 0 ? '✅ 통합 0 분기' : '❌ 통합 prod가 box와 어긋남(' + newDiff + ')')}`);
+if (newDiff !== 0) process.exit(1);
 log(`참고: 리시브는 정의가 달라(box recvAtt=전 리시브 incl 범실 / prod receives=패서 픽) 위 표에서 제외 — 통합 시 정의 통일 대상`);

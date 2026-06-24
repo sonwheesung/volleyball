@@ -10,7 +10,7 @@
 
 | 영역 | 상태 | 실제 파일 / 메모 |
 |---|---|---|
-| 개인 생산 귀속(1장) | ✅ 구현 | `engine/production.ts`(귀속) + `data/production.ts`(`leagueProduction` 캐시). 명단은 `availableTeamPlayers`(부상·시즌 중 이동 반영, INJURY/TRANSACTION_SYSTEM) — 결장은 생산 기회 손실 |
+| 개인 생산 귀속(1장) | ✅ 구현 | `engine/production.ts`(귀속) + `data/production.ts`(`leagueProduction` 캐시). 명단은 `availableTeamPlayers`(부상·시즌 중 이동 반영, INJURY/TRANSACTION_SYSTEM) — 결장은 생산 기회 손실. **통계 단일화(2026-06-24)**: 스코어박스(box)를 단일 진실로 집계 → 관전 보드=스코어박스=통산/연봉/시상 선수별 0 분기(1.3장) |
 | 시장가치/계약 고착(2·3장) | ✅ 구현 | `engine/salary.ts` — `marketValue`/`computeSalary`/`contractStatus`/`formatMoney` |
 | 루키 할인(2026-06-17 개편) | ✅ 구현 | 하드 캡(절벽) 제거 → `serviceFactor` 연속 곡선(어린 서명 할인→전성기 시장가→노장 할인). 능력 반영 |
 | 시드 연봉 흩뿌리기 | ✅ 구현 | `data/seed.ts` — 0~3시즌 전 서명으로 분산 |
@@ -93,7 +93,7 @@ marketValue = BASE × abilityMul × serviceFactor(age) × POSITION_MUL × foreig
 - `ProdLine = { matches, points, spikes, blocks, aces, assists, digs }`
 - 명예의 전당·통산 기록(6장)의 토대도 된다.
 
-### 1.3 통계 단일화 — 스코어박스 = 생산 = 통산 (2026-06-24 측정·설계, 구현 대기)
+### 1.3 통계 단일화 — 스코어박스 = 생산 = 통산 (2026-06-24 ✅ 구현)
 
 > **문제(사용자 보고 "통계는 차이가 한 개도 없어야")**: 같은 경기의 선수별 기록이 **두 곳에서 따로** 계산된다 —
 > ① **스코어박스**(`engine/rally.ts` box, 관전 보드·경기 상세가 그리는 기록, `data/matchBox.ts`), ② **생산**
@@ -125,8 +125,19 @@ setId/touches로 묶는 중 — 그 사슬의 종점을 통산까지 연장).
   N≥1만 재시뮬(이 1장 본문 측정 재실행). 팀합은 박스가 이미 KOVO 정렬(`_ev_box_audit`)이라 개인 재분배가 골자.
 - **가드**: `_ev_statsource`(분기율 → 통합 후 **0** 목표) + 기존 `_ev_box_audit`·`simKovo`·생산 기울기 측정.
 
-> docs-first: 위 설계 확정 후 단계 구현. 이 변경은 **기록·연봉·시상 척추**라 단계마다 재검증·커밋.
-> (보드↔스코어박스 단일화 = `docs/BOARD_RULES.md` 충실도 절. 본 절은 그 한 단계 위 = 스코어박스↔통산 단일화.)
+**✅ 구현(2026-06-24)**: `engine/production.ts` `productionFromBox`(box 카테고리→ProdLine 직접 집계 +
+matches/backSpikes/subUse 오버레이) + `attributeProduction(…, box?)` 분기. `data/production.ts`가 경기마다
+`box`를 채워 넘김 → 전 구단 통산/시즌이 스코어박스를 단일 진실로 집계.
+- **검증**: `_ev_statsource`(통합 prod vs box **선수별 0 분기** 5카테고리 전부 · 레거시는 분기 → 도구 민감) ·
+  `simAwards`(새 경로 — 디그왕=리베로·세트왕=세터·블로킹왕=MB·득점왕=OH·베스트7 포지션 정상 = 기울기 보존) ·
+  `checkRecords`(리더보드 PASS) · 205 테스트 · tsc · auditBoard 0(보드 무관). box가 KOVO 정렬(`_ev_box_audit`)이라
+  통산도 자동 정렬.
+- **과거 세이브 불변 확인**: career는 시즌말 `accrueCareer`로 동결 저장 → 미래 시즌부터 새 집계(소급 없음).
+- **레거시 경로 잔존**: `attributeProduction`의 box 없는 분기는 `simStats`·`simStatRecord` 참조용으로만 유지
+  (게임은 항상 box 경로). 추후 그 도구도 box 경로로 옮길 수 있음.
+
+> 보드↔스코어박스 단일화 = `docs/BOARD_RULES.md` 충실도 절. 본 절은 그 한 단계 위 = 스코어박스↔통산 단일화.
+> 이로써 **관전 보드 → 스코어박스 → 통산/시즌/시상/연봉**이 한 사슬의 단일 진실(보드 칸 배선은 BOARD_RULES 2b 진행 중).
 
 ---
 

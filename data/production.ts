@@ -5,6 +5,7 @@
 import type { Fixture } from '../types';
 import { simulateMatch } from '../engine/match';
 import { attributeProduction, mergeProd, splitLineup, type ProdLine } from '../engine/production';
+import type { BoxSink } from '../engine/rally';
 import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 import { availableTeamPlayers } from './injury';
 import { currentTxVersion } from './dynamics';
@@ -52,10 +53,13 @@ function allProdRows(): ProdRow[] {
       roster[t.id] = rest.size ? avail.filter((p) => !rest.has(p.id)) : avail;
     }
     for (const f of byDay.get(day)!) {
+      // 통계 단일화(2026-06-24): 스코어박스(box)를 통산 생산의 단일 진실로 — 관전 보드가 그린 기록이
+      // 그대로 통산/시즌/시상/연봉에 쌓인다(SALARY_SYSTEM 1.3). box는 승패 불변(클론 누적만).
+      const box: BoxSink = new Map();
       const sim = simulateMatch(f.seed, roster[f.homeTeamId], roster[f.awayTeamId], {
-        home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId),
+        home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId), box,
       });
-      const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed);
+      const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed, box);
       const starters = new Set<string>([
         ...splitLineup(roster[f.homeTeamId]).starters.map((p) => p.id),
         ...splitLineup(roster[f.awayTeamId]).starters.map((p) => p.id),
