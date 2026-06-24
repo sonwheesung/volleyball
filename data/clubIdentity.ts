@@ -9,40 +9,44 @@ import type { ClubIdentity } from '../types';
 const NOW = 2026;
 
 // strengthBias 합 = 0 → 리그 평균 전력 보존(대칭).
+// recentRanks: 최근→과거(index0=이전 시즌). **각 시즌(열)이 그 시즌 존재 팀들의 순위 1..N 유일 순열**이어야
+//   한다 — 한 시즌에 1위·꼴찌는 각 한 팀뿐. 아키타입 성격(명문=상위·만년약체=하위·신흥=상승·황혼=하락)을
+//   지키면서 열 정합을 맞췄다. 신생팀(expansion)은 최근 1시즌만 존재(그 시즌 7위), 그 이전 시즌은 6팀(1..6).
+//   조율 검증: `npx tsx tools/checkClubRanks.ts`(열별 순열 가드 — 아키타입별 비조율 작성 회귀 차단).
 export const CLUB_IDENTITIES: ClubIdentity[] = [
   {
     key: 'dynasty', label: '명문', tagline: '전통의 명가',
     blurb: '리그를 대표하는 전통의 강호. 두꺼운 선수층과 우승 DNA로 매 시즌 우승을 다툰다.',
     foundedYear: 1998, titles: 7, tradition: 95,
-    recentRanks: [1, 2, 1, 3, 2],
+    recentRanks: [1, 1, 1, 1, 2], // 명문: 항상 정상권
     strengthBias: 3.5, ageRange: [23, 33],
   },
   {
     key: 'aging', label: '황혼의 명가', tagline: '저무는 왕조',
     blurb: '한 시대를 풍미했지만 주축이 노쇠한 황혼의 명가. 어쩌면 지금이 마지막 전성기다.',
     foundedYear: 2001, titles: 5, tradition: 82,
-    recentRanks: [1, 2, 2, 4, 5],
+    recentRanks: [4, 4, 3, 2, 1], // 황혼: 5시즌 전 우승(1) → 하락(4)
     strengthBias: 1.5, ageRange: [26, 35],
   },
   {
     key: 'rising', label: '신흥 강호', tagline: '떠오르는 다크호스',
     blurb: '젊은 코어가 폭발하며 강팀으로 떠오른 다크호스. 미래가 더 무섭다.',
     foundedYear: 2015, titles: 1, tradition: 44,
-    recentRanks: [7, 6, 4, 2, 2],
+    recentRanks: [2, 2, 2, 4, 5], // 신흥: 5위서 2위로 상승
     strengthBias: 2.0, ageRange: [19, 26],
   },
   {
     key: 'cellar', label: '만년 약체', tagline: '하위권의 그늘',
     blurb: '수년째 하위권을 벗어나지 못한 만년 약체. 반등의 계기가 절실하다.',
     foundedYear: 2009, titles: 0, tradition: 22,
-    recentRanks: [7, 6, 7, 7, 6],
+    recentRanks: [6, 6, 5, 5, 6], // 만년약체: 하위 고정(6팀 시즌 5~6위)
     strengthBias: -2.0, ageRange: [20, 33],
   },
   {
     key: 'midpack', label: '중위권', tagline: '봄배구의 문턱',
     blurb: '꾸준한 중위권. 한 끗이 모자라 봄배구 문턱에서 멈춰 서곤 한다.',
     foundedYear: 2007, titles: 1, tradition: 51,
-    recentRanks: [4, 5, 3, 4, 5],
+    recentRanks: [3, 3, 4, 3, 3], // 중위권: 꾸준한 3~4위
     strengthBias: 0, ageRange: [21, 32],
   },
   {
@@ -56,7 +60,7 @@ export const CLUB_IDENTITIES: ClubIdentity[] = [
     key: 'rebuild', label: '리빌딩', tagline: '판을 다시 짜다',
     blurb: '전성기를 보낸 뒤 어린 선수 위주로 판을 다시 짜는 리빌딩 구단. 인내가 필요한 시기.',
     foundedYear: 2012, titles: 0, tradition: 31,
-    recentRanks: [3, 5, 7, 6, 7],
+    recentRanks: [5, 5, 6, 6, 4], // 리빌딩: 4위서 6위로 추락 후 회복 중
     strengthBias: -1.5, ageRange: [19, 28],
   },
 ];
