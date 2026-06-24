@@ -63,6 +63,7 @@
     성적 카드도 `results[id]`(관전)에서 `seasonResults(leagueDisplayDay)` 내 팀 집계로 — 순위와 같은 기준이라 안 어긋남.
   - `app/(tabs)/history.tsx`(시즌 리더): `leagueProduction(currentDay)` → `leagueProduction(leagueDisplayDay(currentDay))` — currentDay 직접 사용이 day0 스포일러(미플레이 시즌 선반영)였던 것도 동시 해소.
   - `app/(tabs)/schedule.tsx`(빅매치 순위)·`app/staff.tsx`(내 순위): `currentDay>0?currentDay:MAX` → `leagueDisplayDay(currentDay)` — day0 MAX는 전 시즌 선반영 스포일러였음(같이 해소).
+  - **`data/records.ts seasonSnapshot`(기록 탭 순위표+잠정 시상)**: 현재 시즌 분기가 `computeStandings(currentDay)`/`currentSeasonAwards(…,currentDay)` → `leagueDisplayDay(currentDay)`. **1차 누락분**(사용자 보고 2026-06-24: 경기 결과는 비었는데 기록 탭 순위/리더가 1라운드 표시) — 표시 셀렉터 전수(`grep computeStandings(currentDay)`=0) 확인.
   - 효과: 결과·순위·성적·시즌리더·빅매치·스태프순위가 **전부 같은 컷오프**(현재 경기일 직전까지) → 내부 불일치 0. 균일 지연(현재 경기일 게임은 모두 동일하게 다음 진행 후 노출) 수용.
 - **clinch(PO 확정)는 예외 — `playedThroughDay(results)` 유지**: PO 확정 노출은 `BROADCAST_SYSTEM` 스포일러 정책상
   "결과-결정"이라 관전 후에만. 표시 기준 통일과 별개 개념이라 관전 기준을 지킨다.
