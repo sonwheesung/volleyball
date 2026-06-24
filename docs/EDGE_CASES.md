@@ -250,7 +250,8 @@
 | **도달성(정상플레이)** | `replaceForeign`(시즌중 외인 교체 — 정식 기능, store:520)이 **옛 외인 release tx**를 남김 → 그 시즌 내내 옛 외인이 `availableFAsOnDay`에 잔존. 매뉴얼 `release(외인)`도 동일(store.release에 isForeign 차단 없음). |
 | **피해** | (1) UI 누수: 교체한 외인이 인시즌 FA 영입 목록(`app/transactions.tsx:36`)에 뜸. (2) **익스플로잇**: 소비처 `signInSeason`(store:299)이 `isForeign` 가드 없이 **풀 멤버십만** 검사 → 방출 외인 재영입 가능(캡·현금 여유 시). 새 외인 영입 후 옛 외인까지 재영입하면 **로스터 2외인** 가능. A/B(수정 revert)로 `signInSeason(외인)=true` 실증. |
 | **근본수정** | `availableFAsOnDay`에 `applyTx`와 동일한 `!getPlayer(tx.playerId)?.isForeign` 가드 1줄(`data/dynamics.ts:281`). UI·`signInSeason` 양쪽 누수 동시 해소. |
-| **형제(아시아쿼터)** | `replaceAsian`도 같은 release-tx 패턴. 그러나 시드(`data/seed.ts:285`)가 아시아쿼터를 `isForeign=true`로 생성 → **같은 1줄 수정이 자동 커버**(probe: ASIAN 방출 후 FA 풀 false 확인). 별도 수정 불필요. |
+| **형제 사냥(전수 5점)** | "외인이 국내 영입 풀로 새는" 모든 진입점을 코드 직독(문서 불신)으로 점검: ① 인시즌 FA **방출 분기**(`availableFAsOnDay`) = **버그(수정)** · ② 인시즌 FA **시드**(`faPool`←`nextFaPool` store:717) `!isForeign` ✅ · ③ 오프시즌 FA 시장(`isFAEligible` faMarket:54) `!p.isForeign` ✅ · ④ 팀 명단(`rosterIdsOnDay`) applyTx와 동일·외인은 명단서 정상 이탈 ✅ · ⑤ 아시아쿼터(`replaceAsian`) seed가 `isForeign=true` → 같은 1줄이 커버 ✅. **5곳 중 1곳만 버그**, 나머지 4곳 clean. 가드의 "풀내 외인수=0"이 ①+②(시드+방출) 동시 방어. |
+| **구조적 잔존 위험** | ①은 `availableFAsOnDay`(셀렉터)와 `applyTx.faAvail`(정본)이 **같은 집합을 두 번 재유도**해 생긴 일. 시점별 질의 때문에 셀렉터가 정본을 그대로 반환할 순 없어 1줄 가드로 정합. 같은 클래스 재발 방지는 "동일 집합 두 곳 재구성 시 대조 가드"(TEST_METHODOLOGY §4 병렬재구성). |
 | **가드** | `tools/_dv_foreign_fa_leak.ts`(exit 0/1) — 실제 `release`+`signInSeason` 구동, 외인 미포함·국내 포함(대조군)·외인 재영입 거부·국내 영입 허용 + A/B(구 전부-add 로직은 외인 검출=도구 민감). README 검증루틴 등록. |
 | **부수 발견(허위 오라클)** | `tools/simForeign.ts`의 "FA 풀 외인 오염 0건"은 **루프 본문이 비어** `faPoolForeign`이 한 번도 증가 안 함(pass 조건에도 없음) → **공허하게 0 보고하던 죽은 오라클**. 그 계층(오프시즌)은 이 인시즌 불변식을 못 본다. 미측정 명시 + 전용 가드로 이관(죽은 카운터 제거). |
 
