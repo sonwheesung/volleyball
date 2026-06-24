@@ -41,6 +41,7 @@ const state = {
   idx: 0,       // 랠리
   segIdx: 0,    // 랠리 내 구간(스텝)
   showMoves: true,
+  showNames: true, // 마커에 선수 이름 라벨 표시
   overrides: new Map<string, { x: number; y: number }>(), // 드래그로 옮긴 좌표(key→px)
 };
 
@@ -281,6 +282,21 @@ function drawCourt(step: Step, markers: LabMarker[]): void {
       d.setAttribute('cx', `${R - 2}`); d.setAttribute('cy', `${-(R - 2)}`); d.setAttribute('r', '3.5'); d.setAttribute('fill', '#15202B');
       g.appendChild(d);
     }
+    // 선수 이름 라벨 — 홈(아래)은 원 위, 원정(위)은 원 아래(코트 안쪽=네트 쪽으로 두어 가장자리 잘림 방지).
+    // 흰 테두리(paint-order)로 코트·마커 어디서나 읽히게.
+    if (state.showNames) {
+      const nm = document.createElementNS(NS, 'text');
+      nm.setAttribute('text-anchor', 'middle');
+      nm.setAttribute('y', `${home ? -(RW + 4) : RW + 12}`);
+      nm.setAttribute('font-size', '10.5');
+      nm.setAttribute('font-weight', '700');
+      nm.setAttribute('fill', '#15202B');
+      nm.setAttribute('stroke', '#FFFFFF');
+      nm.setAttribute('stroke-width', '3');
+      nm.setAttribute('paint-order', 'stroke');
+      nm.textContent = m.name;
+      g.appendChild(nm);
+    }
     attachDrag(g, svg, m.key);
     svg.appendChild(g);
   }
@@ -359,6 +375,7 @@ function init(): void {
   $('nextRally').onclick = nextRally;
   $('resetStep').onclick = () => { state.overrides.clear(); render(); };
   $('movesBtn').onclick = () => { state.showMoves = !state.showMoves; ($('movesBtn') as HTMLElement).textContent = state.showMoves ? '이동 ✓' : '이동 ✕'; render(); };
+  $('namesBtn').onclick = () => { state.showNames = !state.showNames; ($('namesBtn') as HTMLElement).textContent = state.showNames ? '이름 ✓' : '이름 ✕'; render(); };
   $('exportBtn').onclick = () => {
     const step = computeStep(state.idx, state.segIdx);
     const out = exportText(step, currentMarkers(step));
