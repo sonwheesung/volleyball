@@ -4,6 +4,7 @@ import { ActivityIndicator, InteractionManager, Pressable, ScrollView, StyleShee
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { displayOvr } from '../engine/overall';
+import { POS_COLOR, POS_LABEL } from './posTokens';
 
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
 export const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
@@ -153,18 +154,23 @@ export function OvrBadge({ value, size = 46 }: { value: number; size?: number })
   );
 }
 
-const POS_LABEL: Record<string, string> = {
-  S: '세터', OH: '아웃사이드', OP: '아포짓', MB: '미들', L: '리베로',
-};
-const POS_COLOR: Record<string, string> = {
-  S: '#36BE9A', OH: '#0E9C8C', OP: '#FF6B5A', MB: '#8B7CF0', L: '#C8961F',
-};
-
-export function PosTag({ pos, full }: { pos: string; full?: boolean }) {
+/** 포지션 배지 — 전 화면 단일 컴포넌트(색·라벨은 posTokens 단일 소스).
+ *  약어(S·OH…)는 **고정 너비**로 정렬(글자수 1·2 섞여도 들쭉날쭉 안 함).
+ *  variant: 기본=소프트(반투명 배경·컬러 글씨) / `solid`=솔리드 배경·흰 글씨(테이블 등 조밀 표시).
+ *  `compact`=작은 폰트·고정 28(박스스코어 열 정렬). `full`=한글 풀라벨(가변 폭). */
+export function PosTag({ pos, full, solid, compact }: { pos: string; full?: boolean; solid?: boolean; compact?: boolean }) {
+  const c = POS_COLOR[pos as keyof typeof POS_COLOR] ?? theme.muted;
   return (
-    <View style={[styles.pos, { backgroundColor: (POS_COLOR[pos] ?? theme.muted) + '33' }]}>
-      <Text style={[styles.posText, { color: POS_COLOR[pos] ?? theme.muted }]}>
-        {full ? POS_LABEL[pos] ?? pos : pos}
+    <View style={[
+      compact ? styles.posCompact : styles.pos,
+      full ? styles.posFull : null,
+      { backgroundColor: solid ? c : c + '33' },
+    ]}>
+      <Text
+        style={[compact ? styles.posTextCompact : styles.posText, { color: solid ? '#FFFFFF' : c }]}
+        numberOfLines={1}
+      >
+        {full ? POS_LABEL[pos as keyof typeof POS_LABEL] ?? pos : pos}
       </Text>
     </View>
   );
@@ -210,8 +216,12 @@ const styles = StyleSheet.create({
   btnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
   ovr: { alignItems: 'center', justifyContent: 'center' },
   ovrText: { fontWeight: '900' },
-  pos: { paddingHorizontal: 10, paddingVertical: 3, borderRadius: 999 },
+  // 약어 배지 — minWidth로 1글자(S·L)와 2글자(OH·OP·MB)가 같은 폭으로 정렬(들쭉날쭉 제거)
+  pos: { minWidth: 34, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
   posText: { fontSize: 12, fontWeight: '800' },
+  posFull: { minWidth: 0, paddingHorizontal: 10 }, // 풀라벨(세터·아웃사이드…)은 가변 폭
+  posCompact: { width: 28, paddingVertical: 2, borderRadius: 5, alignItems: 'center', justifyContent: 'center' }, // 박스스코어 열 정렬용 고정폭
+  posTextCompact: { fontSize: 9.5, fontWeight: '800' },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statLabel: { color: theme.muted, fontSize: 13, width: 64 },
   statVal: { color: theme.text, fontSize: 13, fontWeight: '700', width: 28, textAlign: 'right' },

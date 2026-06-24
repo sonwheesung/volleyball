@@ -1,11 +1,10 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import type { Player, Position } from '../types';
+import type { Player } from '../types';
 import { overall, overallRaw } from '../engine/overall';
 import { formatMoney } from '../engine/salary';
 import { OvrBadge, PosTag, theme } from './Screen';
-
-const POS_ORDER: Record<Position, number> = { S: 0, OH: 1, OP: 2, MB: 3, L: 4 };
+import { POS_ORDER } from './posTokens';
 
 export interface RosterDecor { dotColor?: string; mood?: string }
 

@@ -1,15 +1,15 @@
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
-import { theme } from './Screen';
+import { PosTag, theme } from './Screen';
 import { buildLineup } from '../engine/lineup';
 import { emptyBox } from '../engine/rally';
-import type { Player, Position } from '../types';
+import type { Player } from '../types';
 import type { BoxSink, BoxLine } from '../engine/rally';
 
 // 공용 박스스코어 표(한 팀) — 엔진 테스트 콘솔(sim-web)의 네이버 종합 스타일.
 // 경기 보드 스코어박스 팝업(LiveBoxModal)과 경기 상세(matchresult)가 같은 표를 쓰도록 추출.
 // 박스 싱크(BoxSink, 실제 스윙 단위)를 그린다 — 점수 0이어도 선발 7인을 0으로 항상 표시.
-const POS_COLOR: Record<Position, string> = { S: '#2FB48E', OH: '#0E9C8C', OP: '#FF6B5A', MB: '#8B7CF0', L: '#C8961F' };
+// 포지션 배지는 공용 PosTag(solid·compact) — 색은 posTokens 단일 소스(예전 로컬 POS_COLOR는 S색 드리프트였음).
 const pts = (l: BoxLine) => l.atkKill + l.blockPt + l.srvAce;       // 득점 = 공격+블록+에이스
 const rateN = (n: number, d: number) => (d > 0 ? (n / d) * 100 : null);
 const fmt = (v: number | null) => (v === null ? '–' : `${Math.round(v)}%`);
@@ -80,7 +80,7 @@ export function BoxScoreTable({ squad, box }: { squad: Player[]; box: BoxSink | 
           return (
             <View key={p.id} style={styles.row}>
               <View style={[styles.nmCell, { width: NAME_W }]}>
-                <View style={[styles.pill, { backgroundColor: POS_COLOR[p.position] }]}><Text style={styles.pillTxt}>{p.position}</Text></View>
+                <PosTag pos={p.position} solid compact />
                 <Text style={styles.nmTxt} numberOfLines={1} ellipsizeMode="tail">{p.name}</Text>
               </View>
               <Text style={[styles.cell, styles.sc, { width: C.sc }]}>{pts(l)}</Text>
@@ -124,9 +124,6 @@ const styles = StyleSheet.create({
   cell: { textAlign: 'center', color: theme.text, fontSize: 12.5, fontVariant: ['tabular-nums'], paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border },
   nmCell: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border },
   nmTxt: { color: theme.text, fontSize: 12.5, fontWeight: '700', flex: 1, minWidth: 0 },
-  // 포지션 마커 — 고정폭(S·OH·OP·MB·L 모두 동일 너비)
-  pill: { width: 28, paddingVertical: 2, borderRadius: 5, alignItems: 'center' },
-  pillTxt: { color: '#FFFFFF', fontSize: 9.5, fontWeight: '800' },
   sc: { fontWeight: '900', color: theme.text, backgroundColor: 'rgba(16,185,166,0.10)' },
   hi: { color: theme.good, fontWeight: '800' },
   err: { color: theme.bad, fontWeight: '800' },

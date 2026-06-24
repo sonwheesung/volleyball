@@ -5,6 +5,7 @@ import { Redirect } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, Screen, theme } from '../components/Screen';
+import { POS_COLOR } from '../components/posTokens';
 import { LEAGUE, getEvolvedTeamPlayers, getTeam } from '../data/league';
 import { DEV_TOOLS } from '../data/flags';
 import { buildLineup } from '../engine/lineup';
@@ -14,10 +15,6 @@ import {
 } from '../components/courtLayout';
 import { useGameStore } from '../store/useGameStore';
 import type { Position, Side } from '../types';
-
-const POS_COLOR: Record<Position, string> = {
-  S: '#a78bfa', OH: '#38bdf8', OP: '#f87171', MB: '#fbbf24', L: '#4ade80',
-};
 
 const W = Dimensions.get('window').width - 32;
 const H = Math.min(W * 1.4, Dimensions.get('window').height * 0.5);

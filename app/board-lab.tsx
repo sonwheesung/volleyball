@@ -9,6 +9,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, PanResponder, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Polygon } from 'react-native-svg';
 import { Button, Card, Muted, Row, Screen, theme } from '../components/Screen';
+import { POS_COLOR } from '../components/posTokens';
 import { DEV_TOOLS } from '../data/flags';
 import { LEAGUE, coachInfoOf, shortTeamName } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
@@ -31,9 +32,6 @@ const H = Math.min(W * 1.4, Dimensions.get('window').height * 0.52);
 const SERVE_OUT = 22;
 const R = 14; // 마커 반지름
 
-const POS_COLOR: Record<Position, string> = {
-  S: '#36BE9A', OH: '#0E9C8C', OP: '#FF6B5A', MB: '#8B7CF0', L: '#C8961F',
-};
 const KIND_KO: Record<Move, string> = {
   start: '시작', return: '복귀', walk: '서브대기', serve: '서브', pass: '리시브',
   toss: '토스(세트)', spike: '스파이크', fault: '범실', bounce: '바운드',

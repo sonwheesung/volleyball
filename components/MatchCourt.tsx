@@ -6,9 +6,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Popup } from './Popup';
 import { theme } from './Screen';
+import { POS_COLOR } from './posTokens';
 import { buildLineup } from '../engine/lineup';
 import type { SimResult, TimeoutEvent } from '../engine/simMatch';
-import type { Player, Position, Side } from '../types';
+import type { Player, Side } from '../types';
 import {
   lineupIdxAt, playerAtZone,
   zonePx as zonePxRaw, switchedSpots as switchedSpotsRaw,
@@ -20,11 +21,7 @@ import { commentLine } from './courtCommentary';
 import { initSfx, playSfx, setSfxEnabled } from '../audio/sfx';
 import { useGameStore } from '../store/useGameStore';
 
-// KOVO 라이트 시스템과 동일한 파스텔 포지션색 (Screen.tsx POS_COLOR와 일치)
-const POS_COLOR: Record<Position, string> = {
-  S: '#36BE9A', OH: '#0E9C8C', OP: '#FF6B5A', MB: '#8B7CF0', L: '#C8961F',
-};
-
+// 포지션색은 posTokens 단일 소스(코트 마커도 배지와 같은 색)
 // 굳은(못 움직이는) 선수 테두리 — 서버(주황)·팀(잉크/흰)과 구분되는 선명한 블루(긴장·집중)
 const BRACED = '#2563EB';
 // 작전 교체 — 갓 투입된 선수 강조(골드). 코트 위에서 "방금 들어온 선수"를 또렷이.
