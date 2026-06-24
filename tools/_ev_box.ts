@@ -67,7 +67,7 @@ allOk = chk('서브 시도  srvAtt == stats.serves', box.srv, acc.serves) && all
 allOk = chk('서브 에이스 srvAce == stats.aces', box.ace, acc.aces) && allOk;
 allOk = chk('서브 범실  srvErr == stats.serveErrs', box.srvErr, acc.serveErrs) && allOk;
 allOk = chk('세트 어시  assist == kills+blockouts', box.assist, acc.kills + acc.blockouts) && allOk;
-allOk = chk('디그 성공  digSucc <= stats.digs(팁디그 미귀속)', box.dig, acc.digs, false) && allOk;
+allOk = chk('디그 성공  digSucc == stats.digs(클린+팁 디그 전부 귀속)', box.dig, acc.digs) && allOk;
 allOk = chk('리시브 시도 recvAtt == aces+recvErrs+recvQN', box.rAtt, acc.aces + acc.recvErrs + acc.recvQN) && allOk;
 allOk = chk('리시브 정확 recvGood == recvGood+recvOk(q≥0.45=KOVO 정확)', box.rGood, acc.recvGood + acc.recvOk) && allOk;
 allOk = chk('리시브 실패 recvErr == aces+recvErrs', box.rErr, acc.aces + acc.recvErrs) && allOk;

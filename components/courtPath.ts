@@ -286,7 +286,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
   const winsByAtk0 = r.how === 'kill' || r.how === 'blockout' || r.how === 'cap' || r.how === 'tip';
   const finalAtt: Side | null = r.how ? (winsByAtk0 ? r.scorer : other(r.scorer)) : null;
   let lastWasFree = false; // 프리볼 직후 또 프리볼(핑퐁) 방지
-  for (let hop = 0; hop < 6; hop++) {
+  // touches가 있으면 보드 랠리 길이 = 엔진 디그 수(+커버 여유) → 보드가 엔진 디그를 전부 그린다(per-event 정합).
+  const HOP_MAX = digQ ? digQ.length + 6 : 6;
+  for (let hop = 0; hop < HOP_MAX; hop++) {
     const def = other(att);
     // 종결 공격팀의 킬류 공격이면, 엔진이 귀속한 실제 공격수(byId) 슬롯 — 토서·공격수 선택에서 이 선수를 보존(박스 일치).
     const byIdx = (att === finalAtt && winsByAtk0 && r.byId)
@@ -344,12 +346,17 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const outOfSystem = mag > 0.13 * W; // 패스가 세터에서 크게 벗어남 = 공격 조직 불가
     if (att !== finalAtt && outOfSystem && !lastWasFree && hop < 4 && rng.next() < 0.5) {
       const def0 = other(att);
-      const overX = clampN((0.22 + rng.next() * 0.56) * W, 0.14 * W, 0.86 * W);
-      const overY = (def0 === 'home' ? 0.72 + rng.next() * 0.12 : 0.16 + rng.next() * 0.12) * H; // 상대 후위 깊숙이
+      const overXr = clampN((0.22 + rng.next() * 0.56) * W, 0.14 * W, 0.86 * W); // 폴백 좌표(rng 소비 보존 — eDig 유무 무관 동일 스트림)
+      const overYr = (def0 === 'home' ? 0.72 + rng.next() * 0.12 : 0.16 + rng.next() * 0.12) * H; // 상대 후위 깊숙이
       const byIdxDef0 = (def0 === finalAtt && winsByAtk0 && r.byId) ? (def0 === 'home' ? L.home : L.away).six.findIndex((p) => p.id === r.byId) : -1;
       const dBacks0all = [1, 5, 6].map((z) => lineupIdxAt(rotOf(def0), z));
       const dBacks0 = dBacks0all.filter((i) => i !== byIdxDef0).length ? dBacks0all.filter((i) => i !== byIdxDef0) : dBacks0all; // 프리볼 받고 곧 공격할 byId는 그 리시브 안 함
-      const rIdx = dBacks0.reduce((b, i) => (d2(swDef[def0].pos[i], { x: overX, y: overY }) < d2(swDef[def0].pos[b], { x: overX, y: overY }) ? i : b), dBacks0[0]);
+      const rIdxFb = dBacks0.reduce((b, i) => (d2(swDef[def0].pos[i], { x: overXr, y: overYr }) < d2(swDef[def0].pos[b], { x: overXr, y: overYr }) ? i : b), dBacks0[0]);
+      // 2b: 엔진은 아웃오브시스템 공격을 atk→dig로 센다 → 프리볼 받는 선수를 엔진 디그 귀속자로(없으면 폴백). 큐 동기·워프 0.
+      const eDigFb = takeEngineDig(def0);
+      const rIdx = eDigFb >= 0 ? eDigFb : rIdxFb;
+      const fbSpot = eDigFb >= 0 ? diggerSpot(def0, eDigFb) : { x: overXr, y: overYr };
+      const overX = fbSpot.x, overY = fbSpot.y;
       // ★ 3번째 컨택으로 넘긴다 — 디그(1, 위 pass) → 세트(2) → 언더로 넘김(3). 세트 없이 바로 넘기면
       //   "2번째 터치인데 찬스볼"로 보인다(사용자 보고 2026-06-23). 세터가 전위 sender에게 띄우고, sender가 넘김.
       const front0 = [2, 3, 4].map((z) => lineupIdxAt(rotOf(att), z));
@@ -365,6 +372,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       // (3) 언더로 네트 너머 — sender가 높고 느리게 띄워 보낸다(블록 점프 없음 = pass kind). 상대 후위가 받으러 이동.
       wp.push({ x: overX, y: overY, side: def0, idx: -1, kind: 'pass', dur: 640, arc: 0.18 * H, scale: 1.4, soft: true,
         movers: [{ side: def0, idx: rIdx, x: overX, y: overY }] });
+      digSink?.push({ side: def0, idx: rIdx }); // 프리볼 수신 = 엔진 디그(측정·박스 대조)
       firstTouch = rIdx;
       touchPos = { x: overX, y: overY };
       lastWasFree = true;
@@ -620,7 +628,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       // 사실 기반: 엔진이 기록한 종결을, 진 팀/이긴 팀이 맞는 공격 차례에 실행.
       // 즉시 종결 확률을 낮춰(0.7→0.55) 디그·커버·찬스볼 같은 랠리 장면이 더 자주 보이게 한다
       // (사용자 보고: 커버/찬스볼 성공을 본 적이 없다 — 랠리가 1타에 끝나 장면이 안 생겼다).
-      if (att === finalAtt && (hop >= 4 || rng.next() < 0.55)) {
+      // 종결 타이밍: touches가 있으면 엔진 디그를 전부 소진했을 때(보드 랠리 길이 = 엔진 attack 수 → 디그 per-event 정합).
+      //   없으면 레거시(hop≥4 또는 0.55). rng는 항상 소비(스트림 보존).
+      const rTerm = rng.next();
+      const terminateNow = digQ ? digQi >= digQ.length : (hop >= 4 || rTerm < 0.55);
+      if (att === finalAtt && terminateNow) {
         if (r.how === 'tip') doTip();
         else if (r.how === 'blockout') doBlockout();
         else if (r.how === 'stuff') doStuff();

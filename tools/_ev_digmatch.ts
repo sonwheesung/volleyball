@@ -29,6 +29,7 @@ const base = { home: coachInfoOf(t0), away: coachInfoOf(t1), touches: true } as 
 let engTot = 0, boardTot = 0;
 const renderedIds: string[] = [], engAligned: string[] = []; // 정렬쌍 — 전역 셔플 A/B용
 const boardPos: Record<string, number> = {}, engPos: Record<string, number> = {};
+const diag = { sideMis: 0, notInSix: 0, otherPlayer: 0, countMis: 0, rallies: 0, firstDrift: [0, 0, 0, 0, 0, 0] };
 const posKey = (id: string) => (liberoIds.has(id) ? 'L' : (posOf.get(id) ?? '?'));
 
 for (let s = 1; s <= N; s++) {
@@ -49,6 +50,10 @@ for (let s = 1; s <= N; s++) {
     ballPath(r, s, eff, W, H, SO, prevLast, digSink);
     engTot += engDigs.length;
     boardTot += digSink.length;
+    if (digSink.length !== engDigs.length) diag.countMis++;
+    // 첫 사이드 어긋남 위치(드리프트 시작점) 분포
+    { const mm = Math.min(engDigs.length, digSink.length); for (let k = 0; k < mm; k++) { if (digSink[k].side !== engDigs[k].side) { diag.firstDrift[Math.min(k, 5)]++; break; } } }
+    diag.rallies++;
     // 엔진 디거 포지션 분포(박스 기준)
     for (const e of engDigs) engPos[posKey(e.id)] = (engPos[posKey(e.id)] ?? 0) + 1;
     const m = Math.min(engDigs.length, digSink.length);
@@ -64,6 +69,16 @@ for (let s = 1; s <= N; s++) {
       boardPos[posKey(renderedId)] = (boardPos[posKey(renderedId)] ?? 0) + 1;
       renderedIds.push(renderedId);
       engAligned.push(engDigs[k].id); // 독립 재유도: 엔진 디그 터치 id(순서 정렬)
+      // 진단: 불일치 분해 — 사이드 어긋남 vs 엔진 디거가 보드 def six에 없음(매핑 실패) vs 다른 유효 선수
+      if (renderedId !== engDigs[k].id) {
+        if (d.side !== engDigs[k].side) diag.sideMis++;
+        else {
+          const dsix = (engDigs[k].side === 'home' ? eff.home : eff.away).six;
+          const lu2 = engDigs[k].side === 'home' ? eff.home : eff.away;
+          const inSix = dsix.some((p) => p.id === engDigs[k].id) || (lu2.libero?.id === engDigs[k].id);
+          if (!inSix) diag.notInSix++; else diag.otherPlayer++;
+        }
+      }
     }
   }
 }
@@ -78,6 +93,8 @@ for (let k = 0; k < paired; k++) {
 log(`시드 ${N} · 엔진 디그(box) ${engTot}건 · 보드 att-flip 디그 ${boardTot}건 · 정렬쌍 ${paired}건`);
 log(`(A) 렌더된 디거 == 엔진 디그 귀속(순서 정렬) : ${match}/${paired} = ${(match / paired * 100).toFixed(1)}%`);
 log(`(B) A/B 자가검증 — 전역 미스페어링(chance) : ${(shufMatch / paired * 100).toFixed(1)}%  (실측보다 훨씬 낮아야 도구 신뢰)`);
+log(`불일치 분해: 사이드어긋남 ${diag.sideMis} · 엔진디거 보드six에 없음 ${diag.notInSix} · 다른유효선수 ${diag.otherPlayer}`);
+log(`디그 수 불일치 랠리: ${diag.countMis}/${diag.rallies} · 첫 드리프트 hop별: ${diag.firstDrift.map((v, k) => `h${k}:${v}`).join(' ')}`);
 const fmt = (o: Record<string, number>, tot: number) => Object.entries(o).sort((a, b) => b[1] - a[1]).map(([k, v]) => `${k} ${(v / tot * 100).toFixed(1)}%`).join(' · ');
 log(`\n분포 대조:`);
 log(`  엔진(박스) 디거: ${fmt(engPos, engTot)}`);

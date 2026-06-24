@@ -539,7 +539,12 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
         if (stats) stats.digs++;
         q = clamp(0.55 + 0.3 * (digStr - 0.45) + rng.range(-0.1, 0.1), 0.2, 0.9);
         if (stats) { stats.digTipSum += q; stats.digTipN++; }
-        if (trace) trace.push(`    → 페인트 읽힘! 디그 [${sideKo(other(att))}] (전환, q ${q.toFixed(2)})`);
+        // 팁 디그도 정식 디그(stats.digs 포함) — 귀속(box·touches)을 클린 디그와 동일하게(digSucc==stats.digs, 보드 정합).
+        const dDefT = defenders(df);
+        const dgT = digRng && dDefT.length ? pickByDig(dDefT, R, digRng) : (dDefT[0] ?? attacker);
+        tch?.('dig', other(att), dgT);
+        bx?.(dgT.id, (l) => { l.digSucc++; });
+        if (trace) trace.push(`    → 페인트 읽힘! 디그 [${sideKo(other(att))}] ${dgT.name} (전환, q ${q.toFixed(2)})`);
         if (E) pushAttack('dug', null);
         att = other(att);
         continue;
@@ -565,7 +570,12 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       if (E) pushAttack('softblock', null);
       q = clamp(0.7 + rng.range(-0.1, 0.1), 0.4, 0.92);          // 소프트 블록 → 수비측 좋은 전환
       if (stats) { stats.digSoftSum += q; stats.digSoftN++; }
-      if (trace) trace.push(`    → 소프트 블록 (공 튕겨 [${sideKo(other(att))}] 전환, q ${q.toFixed(2)})`);
+      // 소프트블록 전환도 수비측이 공을 만진다 → 보드 정합용 dig 터치(처리자=pickByDig). 단 digSucc는 안 셈
+      //   (softblocks는 stats.digs와 별개 집계 → 보존식 digSucc==stats.digs 유지). 보드는 이 전환의 처리자를 그린다.
+      const dDefS = defenders(df);
+      const dgS = digRng && dDefS.length ? pickByDig(dDefS, R, digRng) : (dDefS[0] ?? attacker);
+      tch?.('dig', other(att), dgS);
+      if (trace) trace.push(`    → 소프트 블록 (공 튕겨 [${sideKo(other(att))}] ${dgS.name} 전환, q ${q.toFixed(2)})`);
       att = other(att);
       continue;
     }
