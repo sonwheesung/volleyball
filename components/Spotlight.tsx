@@ -9,8 +9,11 @@ import { tipsForScreen } from '../data/tutorialSteps';
 import { theme } from './Screen';
 
 type Rect = { x: number; y: number; width: number; height: number };
-interface Ctx { targets: Record<string, Rect>; setTarget: (id: string, r: Rect | null) => void }
-const SpotlightCtx = createContext<Ctx | null>(null);
+// 두 컨텍스트로 분리: targets(자주 바뀜)와 setTarget(영구 고정). 하나로 묶으면 Provider value가 매 렌더
+// 새 객체가 돼, Target의 측정 effect가 ctx 변화로 매번 재실행→cleanup이 방금 등록한 좌표를 즉시 제거하는
+// 무한 루프가 생긴다(측정이 a0에 멈추고 좌표를 못 잡는 진짜 원인, 사용자 진단 태그로 확인 2026-06-24).
+const TargetsCtx = createContext<Record<string, Rect>>({});
+const SetTargetCtx = createContext<(id: string, r: Rect | null) => void>(() => {});
 
 /** 루트(_layout)에 1회 — 화면별 대상 사각형들을 보관. 화면 전환 시 Target이 mount/unmount로 갱신. */
 export function SpotlightProvider({ children }: { children: ReactNode }) {
@@ -22,27 +25,30 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
       if (p && p.x === r.x && p.y === r.y && p.width === r.width && p.height === r.height) return prev;
       return { ...prev, [id]: r };
     });
-  }, []);
-  return <SpotlightCtx.Provider value={{ targets, setTarget }}>{children}</SpotlightCtx.Provider>;
+  }, []); // 영구 고정(빈 deps) — Target effect가 이걸 의존해도 재실행 안 됨
+  return (
+    <SetTargetCtx.Provider value={setTarget}>
+      <TargetsCtx.Provider value={targets}>{children}</TargetsCtx.Provider>
+    </SetTargetCtx.Provider>
+  );
 }
 
-/** 밝게 띄울 요소를 감싼다 — onLayout 후 윈도우 절대좌표를 측정해 등록(언마운트 시 해제). */
+/** 밝게 띄울 요소를 감싼다 — onLayout + 마운트 직후 여러 번 윈도우 절대좌표를 측정해 등록(언마운트 시만 해제). */
 export function SpotlightTarget({ id, children, style }: { id: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
-  const ctx = useContext(SpotlightCtx);
+  const setTarget = useContext(SetTargetCtx); // 고정 참조 — 아래 effect가 한 번만 돌게 한다
   const ref = useRef<View>(null);
   const measure = useCallback(() => {
     const node = ref.current;
-    if (!node || !ctx) return;
-    // measureInWindow는 레이아웃이 안정된 다음 틱에 정확 → onLayout 후 + 마운트 직후 여러 번 시도
+    if (!node) return;
     node.measureInWindow((x, y, width, height) => {
-      if (width > 0 && height > 0) ctx.setTarget(id, { x, y, width, height });
+      if (width > 0 && height > 0) setTarget(id, { x, y, width, height });
     });
-  }, [ctx, id]);
-  // 마운트 후 몇 차례 재측정(스크롤뷰·전환 애니메이션으로 첫 onLayout이 0/미안정인 경우 보강)
+  }, [setTarget, id]);
+  // 마운트 후 몇 차례 재측정(스크롤뷰·전환으로 첫 측정이 0/미안정인 경우 보강). cleanup은 언마운트에서만 해제.
   useEffect(() => {
     const ts = [0, 60, 200, 500, 900].map((d) => setTimeout(measure, d));
-    return () => { ts.forEach(clearTimeout); ctx?.setTarget(id, null); };
-  }, [measure, ctx, id]);
+    return () => { ts.forEach(clearTimeout); setTarget(id, null); };
+  }, [measure, setTarget, id]);
   return (
     <View ref={ref} collapsable={false} onLayout={measure} style={style}>
       {children}
@@ -55,14 +61,14 @@ const CARD_W = 300;  // 설명 카드 폭
 
 /** 각 화면 끝에 1개 — 그 화면의 미본 스텝 큐의 첫 스텝을 스포트라이트로 띄운다. */
 export function SpotlightOverlay({ screen }: { screen: string }) {
-  const ctx = useContext(SpotlightCtx);
+  const targets = useContext(TargetsCtx);
   const seen = useGameStore((s) => s.seenTips) ?? {};
   const markTip = useGameStore((s) => s.markTip);
   const [attempt, setAttempt] = useState(0);
 
   const queue = tipsForScreen(screen).filter((t) => !seen[t.id]);
   const active = queue[0];
-  const rect = active?.anchor ? ctx?.targets[active.anchor] : undefined;
+  const rect = active?.anchor ? targets[active.anchor] : undefined;
 
   // 새 스텝마다 측정 시도 카운트 리셋
   useEffect(() => { setAttempt(0); }, [active?.id]);

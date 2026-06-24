@@ -54,6 +54,10 @@ export const tipsForScreen = (screen: string): Tip[] =>
 
 - **`SpotlightProvider`** (루트 `app/_layout.tsx`에 1회): 화면의 대상 사각형들을 보관
   (`Record<anchorId, Rect>`). 화면 전환 시 대상은 mount/unmount로 자동 등록·해제.
+  **컨텍스트 2분리 필수**: `targets`(자주 바뀜)와 `setTarget`(영구 고정, `useCallback []`)을 **별도 컨텍스트**로
+  제공한다. 하나로 묶으면 Provider value가 매 렌더 새 객체가 돼, Target의 측정 effect가 그 변화로 재실행되고
+  cleanup이 방금 등록한 좌표를 즉시 지우는 **무한 루프**(측정이 영원히 안 끝나 카드가 한 번도 안 뜸)가 생긴다
+  — 모든 화면에서 스포트라이트 미표시의 진짜 원인이었다(2026-06-24, 진단 태그 `a0·` 로 확인).
 - **`SpotlightTarget id`**: 밝게 띄울 요소를 감싼다. `onLayout` + 마운트 직후 **여러 차례**(0·60·200·
   500·900ms) `measureInWindow`로 **윈도우 절대 좌표**를 측정해 Provider에 등록(스크롤뷰·화면전환
   애니메이션으로 첫 측정이 0/미안정인 경우 보강). 언마운트 시 해제.

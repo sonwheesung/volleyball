@@ -790,7 +790,9 @@ export const useGameStore = create<GameState>()(
         setTxContext([], [], '');
         setOwnerContext([]);
         setAwardScores([]);
-        set({ ...freshSave }); // 온보딩 플래그는 freshSave 밖이라 유지(다시보기는 replayOnboarding)
+        // 전체 데이터 초기화 = 새 출발 → 스포트라이트 본 기록도 리셋(튜토리얼 다시 봄). 인트로 슬라이드(onboarded)는
+        // 유지(다시보기는 replayOnboarding). seenTips는 freshSave 밖이라 명시적으로 비운다(ONBOARDING 4).
+        set({ ...freshSave, seenTips: {} });
       },
       completeOnboarding: () => set({ onboarded: true }),
       replayOnboarding: () => set({ onboarded: false }),
