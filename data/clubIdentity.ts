@@ -18,7 +18,7 @@ export const CLUB_IDENTITIES: ClubIdentity[] = [
     key: 'dynasty', label: '명문', tagline: '전통의 명가',
     blurb: '리그를 대표하는 전통의 강호. 두꺼운 선수층과 우승 DNA로 매 시즌 우승을 다툰다.',
     foundedYear: 1998, titles: 7, tradition: 95,
-    recentRanks: [1, 1, 1, 1, 2], // 명문: 항상 정상권
+    recentRanks: [1, 1, 2, 1, 2], // 명문: 우승 단골(3회)·가끔 준우승
     strengthBias: 3.5, ageRange: [23, 33],
   },
   {
@@ -32,21 +32,21 @@ export const CLUB_IDENTITIES: ClubIdentity[] = [
     key: 'rising', label: '신흥 강호', tagline: '떠오르는 다크호스',
     blurb: '젊은 코어가 폭발하며 강팀으로 떠오른 다크호스. 미래가 더 무섭다.',
     foundedYear: 2015, titles: 1, tradition: 44,
-    recentRanks: [2, 2, 2, 4, 5], // 신흥: 5위서 2위로 상승
+    recentRanks: [2, 3, 1, 4, 5], // 신흥: 5위→우승 한 번→2위 정착(상승)
     strengthBias: 2.0, ageRange: [19, 26],
   },
   {
     key: 'cellar', label: '만년 약체', tagline: '하위권의 그늘',
     blurb: '수년째 하위권을 벗어나지 못한 만년 약체. 반등의 계기가 절실하다.',
     foundedYear: 2009, titles: 0, tradition: 22,
-    recentRanks: [6, 6, 5, 5, 6], // 만년약체: 하위 고정(6팀 시즌 5~6위)
+    recentRanks: [6, 5, 5, 6, 6], // 만년약체: 하위 고정(5~6위)
     strengthBias: -2.0, ageRange: [20, 33],
   },
   {
     key: 'midpack', label: '중위권', tagline: '봄배구의 문턱',
     blurb: '꾸준한 중위권. 한 끗이 모자라 봄배구 문턱에서 멈춰 서곤 한다.',
     foundedYear: 2007, titles: 1, tradition: 51,
-    recentRanks: [3, 3, 4, 3, 3], // 중위권: 꾸준한 3~4위
+    recentRanks: [3, 2, 4, 3, 3], // 중위권: 3위권에서 오르내림
     strengthBias: 0, ageRange: [21, 32],
   },
   {
@@ -60,7 +60,7 @@ export const CLUB_IDENTITIES: ClubIdentity[] = [
     key: 'rebuild', label: '리빌딩', tagline: '판을 다시 짜다',
     blurb: '전성기를 보낸 뒤 어린 선수 위주로 판을 다시 짜는 리빌딩 구단. 인내가 필요한 시기.',
     foundedYear: 2012, titles: 0, tradition: 31,
-    recentRanks: [5, 5, 6, 6, 4], // 리빌딩: 4위서 6위로 추락 후 회복 중
+    recentRanks: [5, 6, 6, 5, 4], // 리빌딩: 4위→6위 추락→회복 중
     strengthBias: -1.5, ageRange: [19, 28],
   },
 ];
