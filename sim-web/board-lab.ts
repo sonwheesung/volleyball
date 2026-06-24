@@ -194,7 +194,26 @@ function render(): void {
     `이 스텝에서 옮긴 선수: <b style="color:${movedCount ? 'var(--accent)' : 'var(--soft)'}">${movedCount}명</b>` +
     (movedCount ? ` — ${markers.filter(isMoved).map((m) => `${m.side === 'home' ? '홈' : '원'} ${m.pos}`).join(', ')}` : '');
 
+  $('lineup').innerHTML = lineupHtml(markers);
   drawCourt(step, markers);
+}
+
+// 위/아래 코트 + 전위/후위별 선수 명단(이름) — 좌→우 순서로 코트와 같게. ⚑=서브 ✎=옮김.
+function lineupHtml(markers: LabMarker[]): string {
+  const fmt = (m: LabMarker) => {
+    const col = POS_COLOR[m.pos] ?? '#8A94A6';
+    const tag = `${m.server ? '⚑' : ''}${isMoved(m) ? '✎' : ''}`;
+    return `<span class="pl"><b style="color:${col}">${m.pos}</b> ${m.name}${tag ? `<span class="tg">${tag}</span>` : ''}</span>`;
+  };
+  const grp = (side: Side, label: string, team: string) => {
+    const ms = markers.filter((m) => m.side === side).slice().sort((a, b) => a.x - b.x);
+    const front = ms.filter((m) => m.front).map(fmt).join('<i class="sep">·</i>') || '<span class="pl" style="color:var(--soft)">-</span>';
+    const back = ms.filter((m) => !m.front).map(fmt).join('<i class="sep">·</i>') || '<span class="pl" style="color:var(--soft)">-</span>';
+    return `<div class="cgrp"><div class="ch">${label} <span class="tn">${team}</span></div>` +
+      `<div class="ln"><span class="rl front">전위</span>${front}</div>` +
+      `<div class="ln"><span class="rl back">후위</span>${back}</div></div>`;
+  };
+  return grp('away', '▲ 위 코트 (원정)', shortTeamName(state.awayId)) + grp('home', '▼ 아래 코트 (홈)', shortTeamName(state.homeId));
 }
 
 // 다음 스텝(이동 화살표용)
