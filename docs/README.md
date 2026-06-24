@@ -111,6 +111,10 @@ npx tsx tools/_ev_statsource.ts 2000        # 통계 단일화 가드 — 통합
 npx tsx tools/_ev_blockcomment.ts 200       # 스터프 중계가 byId 블로커를 호명 100%(블록=킬 수준 충실)
 npx tsx tools/_iv_scorebox.ts 600           # 실시간 점수판(boxTimeline) 독립 검증(2026-06-24, 독립 검증자) — 타임라인 1:1·단조·마지막==최종·byId 델타 100%·box중립. _ev_*와 다른 각도(박스 델타)
 npx tsx tools/_iv_scorebox_ab.ts            # 위 정합 체크의 A/B 자가검증 — 깨뜨린 타임라인(스냅 swap·스탯 깎음)을 검출(허위 오라클 차단)
+# ── 코트 포지셔닝 가드(서브 오버랩·서브리시브 라인·인플레이 공격/블록/수비 — COURT_POSITIONING) ──
+npx tsx tools/_dv_overlap.ts 24             # 서브 컨택 오버랩 합법(받는팀 위반 0·세터 포함·서버 면제)·A/B 9/9 검출(독립 구현 오라클)
+npx tsx tools/_dv_receive.ts                # 서브리시브 평평한 3인 라인(룰57) — 전위 패서 라인 합류(≥0.74)·비패서 네트(≤0.68) 0미스
+npx tsx tools/_dv_position.ts 24            # 인플레이 포지션(2026-06-24) — 인시스템 대기 공격수 핀 100%·블록↔공격 0.000·페리미터 0.56·A/B(0.15 옮기면 잡힘)
 npx expo export --platform android        # 번들 확인 후 dist 삭제
 npm run sim:web                            # 엔진 테스트 콘솔(웹) → localhost:5051 (14탭, SIM_CONSOLE)
 ```
