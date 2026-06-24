@@ -101,7 +101,7 @@ npx tsx tools/_ev_box.ts                    # 박스 밸런스 무영향(box 유
 npx tsx tools/_ev_box_audit.ts 200          # 박스 무결성(보존식) 0위반·KOVO 밴드·A/B 검출 민감도(허위 오라클 차단)
 npx tsx tools/_ev_scorer.ts 200             # 보드 종결 스파이커 == 박스 byId 100%(팬텀 킬 0)·A/B shuffle 대조
 npx tsx tools/_ev_recvmatch.ts 300          # 보드 서브 리시버 == 박스 recvId: 클린 100%·노클린은 전부 ace(누수 0)·A/B(shuffle 모드)
-npx tsx tools/_ev_setmatch.ts 300           # 보드 종결 토서 == 박스 어시 세터(setId) 86.3%(잔여는 엔진 어시 추상화)·A/B(shuffle)
+npx tsx tools/_ev_setmatch.ts 300           # 보드 종결 토서 == 박스 어시 세터(setId) 100.0%(touches·교체반영·세터 디그 시 비상세터 재귀속)·A/B(shuffle)
 npx tsx tools/_ev_digdist.ts 300            # 디그 귀속 현실 분산 가드(2026-06-24 재모델) — 개인 디그왕=리베로(15.6%)·디거≥10명·리베로<50%. 구 best-dig(87.7%·5명) 폐기
 npx tsx tools/_ev_digmatch.ts 300           # 보드 디그 마커 == 엔진 디그 귀속(2b) 100.0%·A/B chance 10%·드리프트 0·분포 byte동일. auditBoard도 touches:true로 실제 렌더 감사
 npx tsx tools/_ev_touches.ts 200            # 랠리 터치 스크립트 1단계 — 엔진 touches 기록 코히런트(첫=서브·종결 atk==byId·ace serve==byId 100%, 가산·중립 sanity)

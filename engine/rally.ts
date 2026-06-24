@@ -431,6 +431,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     E.push({ t: 'receive', side: recvSide, player: passer.name, pos: passer.position, at: passerXY, ball: land, reach: dist(passerXY, land), result: q >= 0.6 ? 'good' : q >= 0.4 ? 'poor' : 'shank', q, rating: R(passer).receive, eff: eff(recv, passer) });
   }
 
+  let lastDigger: Player | null = null; // 직전 전환에서 1구를 디그한 선수(공수 전환 시 갱신) — 어시 귀속용
   for (let hop = 0; hop < CAP; hop++) {
     const at = teamOf(att);
     const df = teamOf(other(att));
@@ -449,6 +450,12 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const atk = chooseAtk(q, setQ, n(setter.vq), at.style, rng);
     const attacker = pickAttacker(at, atk, R, rng);
     tch?.('atk', att, attacker); // 공격 스윙 터치 — 모든 스윙(디그로 살아난 비종결 포함)
+    // 어시 귀속자 — 지정 세터가 직전 1구를 디그했으면(더블컨택 불가) **실제 세트한 선수**(비상 세터 = 디거·공격수
+    //   제외 최고 skSet, 보통 전위 OH). 아니면 지정 세터. set 품질·체력·rng는 지정 세터 유지(밸런스 바이트 불변) —
+    //   귀속(어시·setId)만 실제 세터로. 공격수 제외가 핵심: 최고 skSet이 곧 종결 공격수면 더블컨택이라 보드가 못 그림(디그 재모델과 같은 결).
+    const assistSetter = (lastDigger && lastDigger.id === setter.id)
+      ? (at.six.filter((p) => p.id !== setter.id && p.id !== attacker.id).reduce<Player | null>((b, p) => (!b || p.skSet > b.skSet ? p : b), null) ?? setter)
+      : setter;
     drain(at, attacker, 1.2); // 스파이크 점프가 가장 힘들다(7.1) — 리시브 면제 공격수(OP)도 지치게
     maybeInjure(at, attacker, rng);
     const quickKind: QuickKind | undefined = atk === 'quick' ? quickKindOf(q, setter, attacker) : undefined; // 난수 없는 결정론 분류
@@ -542,6 +549,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
         // 팁 디그도 정식 디그(stats.digs 포함) — 귀속(box·touches)을 클린 디그와 동일하게(digSucc==stats.digs, 보드 정합).
         const dDefT = defenders(df);
         const dgT = digRng && dDefT.length ? pickByDig(dDefT, R, digRng) : (dDefT[0] ?? attacker);
+        lastDigger = dgT; // 다음 hop 어시 귀속용(세터가 디그하면 비상 세터로)
         tch?.('dig', other(att), dgT);
         bx?.(dgT.id, (l) => { l.digSucc++; });
         if (trace) trace.push(`    → 페인트 읽힘! 디그 [${sideKo(other(att))}] ${dgT.name} (전환, q ${q.toFixed(2)})`);
@@ -550,10 +558,10 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
         continue;
       }
       if (stats) { stats.kills++; stats.tipKills++; } // KOVO 집계상 팁도 공격 득점
-      bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; });
+      bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(assistSetter.id, (l) => { l.assist++; });
       if (trace) trace.push(`    → 페인트 득점! [${sideKo(att)}] ${attacker.name} (블록·수비 사이 톡)`);
       if (E) { pushAttack('kill', null); emitPoint(att, '페인트'); }
-      return { winner: att, how: 'tip', byId: attacker.id, recvId: recvPlayer?.id, setId: setter.id };
+      return { winner: att, how: 'tip', byId: attacker.id, recvId: recvPlayer?.id, setId: assistSetter.id };
     }
     const r1 = rng.next();
     if (r1 < errP2) { if (stats) stats.attackErrs++; bx?.(attacker.id, (l) => { l.atkErr++; }); if (trace) trace.push('    → 공격 범실 (상대 득점)'); if (E) { pushAttack('error', null); emitPoint(other(att), '공격 범실'); } return { winner: other(att), how: 'atkErr', recvId: recvPlayer?.id }; }
@@ -562,7 +570,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       // 실효 = 0.35×VQ − 0.03. 두 리터럴(0.12−0.15)을 합치지 않는다 — 합치면 부동소수점 1 ULP가
       // 달라져 결정론(같은 시드=같은 결과·세이브 리플레이)이 깨진다(2026-06-12 확인).
       const blockOutP = clamp(0.12 + 0.35 * n(attacker.vq) - 0.15, 0.04, 0.4);
-      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; }); if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return { winner: att, how: 'blockout', byId: attacker.id, recvId: recvPlayer?.id, setId: setter.id }; }
+      if (rng.next() < blockOutP) { if (stats) stats.blockouts++; bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(assistSetter.id, (l) => { l.assist++; }); if (trace) trace.push(`    → 블록아웃(툴샷) 득점 [${sideKo(att)}]`); if (E) { pushAttack('blockout', null); emitPoint(att, '블록아웃'); } return { winner: att, how: 'blockout', byId: attacker.id, recvId: recvPlayer?.id, setId: assistSetter.id }; }
       const stuffPref = df.style === 'attack' ? 0.04 : df.style === 'defense' ? -0.04 : 0;
       const stuffProb = clamp(0.55 + stuffPref + 0.55 * (blkStr - attackPower), 0.05, 0.8); // 기저 KOVO 정렬(팁 도입분 보정)·민감도 압축
       if (rng.next() < stuffProb) { if (stats) stats.stuffs++; bx?.(attacker.id, (l) => { l.atkBlocked++; }); if (blk.blockers[0]) bx?.(blk.blockers[0].id, (l) => { l.blockPt++; }); if (trace) trace.push(`    → 스터프 블록! [${sideKo(other(att))}] 득점`); if (E) { pushAttack('blocked', null); emitPoint(other(att), '스터프 블록'); } return { winner: other(att), how: 'stuff', byId: blk.blockers[0]?.id, recvId: recvPlayer?.id }; }
@@ -574,6 +582,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       //   (softblocks는 stats.digs와 별개 집계 → 보존식 digSucc==stats.digs 유지). 보드는 이 전환의 처리자를 그린다.
       const dDefS = defenders(df);
       const dgS = digRng && dDefS.length ? pickByDig(dDefS, R, digRng) : (dDefS[0] ?? attacker);
+      lastDigger = dgS; // 다음 hop 어시 귀속용
       tch?.('dig', other(att), dgS);
       if (trace) trace.push(`    → 소프트 블록 (공 튕겨 [${sideKo(other(att))}] ${dgS.name} 전환, q ${q.toFixed(2)})`);
       att = other(att);
@@ -593,6 +602,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       // 귀속(box·touches·telemetry) = 후위 수비수 dig 가중 추첨(digRng 전용 스트림 — 메인·boxRng 불간섭).
       // 리베로가 dig 최고라 최다지만 독식 아님(현실 분산). 디그 성공마다 항상 소비(box 유무 무관) → 결정론.
       const dg = digRng ? pickByDig(dDef, R, digRng) : dg0;
+      lastDigger = dg; // 다음 hop 어시 귀속용(세터가 디그하면 비상 세터로)
       tch?.('dig', other(att), dg); // 디그 성공 터치(공수 전환) — 박스 digSucc 귀속자와 동일
       bx?.(dg.id, (l) => { l.digSucc++; });
       if (trace) trace.push(`    → 디그 성공 [${sideKo(other(att))}] ${dg.name}(${dg.position}) (공 튕겨 전환, q ${q.toFixed(2)})`);
@@ -601,10 +611,10 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       continue;
     }
     if (stats) stats.kills++;
-    bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(setter.id, (l) => { l.assist++; });
+    bx?.(attacker.id, (l) => { l.atkKill++; }); bx?.(assistSetter.id, (l) => { l.assist++; });
     if (trace) trace.push(`    → 공격 성공(킬)! [${sideKo(att)}] ${attacker.name} 득점`);
     if (E) { pushAttack('kill', null); emitPoint(att, '공격 성공'); }
-    return { winner: att, how: 'kill', byId: attacker.id, recvId: recvPlayer?.id, setId: setter.id }; // 공격 성공(kill)
+    return { winner: att, how: 'kill', byId: attacker.id, recvId: recvPlayer?.id, setId: assistSetter.id }; // 공격 성공(kill)
   }
   return { winner: att, how: 'cap', recvId: recvPlayer?.id }; // 랠리 상한 강제종결 — 박스 미귀속(특정 공격수 없음), byId 생략
 }

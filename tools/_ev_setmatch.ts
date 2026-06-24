@@ -4,10 +4,11 @@
 import { resetLeagueBase, LEAGUE, coachInfoOf } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
 import { simulateMatch } from '../engine/match';
-import { reconstructRallies } from '../components/courtDirector';
+import { reconstructRallies, applySubsToSix } from '../components/courtDirector';
 import { ballPath, type Lineups } from '../components/courtPath';
 import { buildLineup } from '../engine/lineup';
 import type { BoxSink } from '../engine/rally';
+import type { Player } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
 resetLeagueBase();
@@ -16,8 +17,10 @@ const N = parseInt(process.argv[2] || '300', 10);
 const SHUFFLE = process.argv[3] === 'shuffle';
 const t0 = LEAGUE.teams[0].id, t1 = LEAGUE.teams[1].id;
 const A = availableTeamPlayers(t0, 0), B = availableTeamPlayers(t1, 0);
-const L: Lineups = { home: buildLineup(A), away: buildLineup(B) };
-const base = { home: coachInfoOf(t0), away: coachInfoOf(t1) } as any;
+const baseL = { home: buildLineup(A), away: buildLineup(B) };
+const byIdMap = new Map<string, Player>();
+for (const p of [...A, ...B]) byIdMap.set(p.id, p);
+const base = { home: coachInfoOf(t0), away: coachInfoOf(t1), touches: true } as any; // touches: 보드가 실제 게임처럼 엔진 디그/세트 재생
 
 let total = 0, match = 0, mismatch = 0, noTosser = 0;
 const misBy: Record<string, number> = {}; // 불일치 보드 토서 포지션
@@ -27,13 +30,18 @@ for (let s = 1; s <= N; s++) {
   const sim = simulateMatch(s, A, B, { ...base, box });
   const rallies = reconstructRallies(sim);
   const setIds = sim.points.map((p) => p.setId);
+  const effAt = (i: number): Lineups => ({
+    home: { ...baseL.home, six: applySubsToSix(baseL.home.six, 'home', sim.subEvents, i, byIdMap) },
+    away: { ...baseL.away, six: applySubsToSix(baseL.away.six, 'away', sim.subEvents, i, byIdMap) },
+  });
   for (let i = 0; i < rallies.length; i++) {
     const r = rallies[i];
     const setId = SHUFFLE ? setIds[(i + 1) % setIds.length] : setIds[i];
     if (!setId) continue; // 어시 없는 종결(에이스·범실·스터프 등) → 비교 대상 아님
     total++;
+    const L = effAt(i);
     let prevLast: { x: number; y: number } | undefined;
-    if (i > 0) { const pp = ballPath(rallies[i - 1], s, L, W, H, SO); const w = pp[pp.length - 1]; prevLast = { x: w.x, y: w.y }; }
+    if (i > 0) { const pp = ballPath(rallies[i - 1], s, effAt(i - 1), W, H, SO); const w = pp[pp.length - 1]; prevLast = { x: w.x, y: w.y }; }
     const path = ballPath(r, s, L, W, H, SO, prevLast);
     // 종결 스파이크 직전의 토서(세트) 웨이포인트 — 보드는 set/토스를 kind:'pass'(또는 'toss') idx=tosserIdx로 그린다.
     const lastSpike = (() => { for (let k = path.length - 1; k >= 0; k--) if (path[k].kind === 'spike') return k; return -1; })();
