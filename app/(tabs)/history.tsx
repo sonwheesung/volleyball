@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } from '../../components/Screen';
+import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../../data/league';
 import { leagueProduction } from '../../data/production';
 import { buildNewsFeed } from '../../data/news';
@@ -96,7 +97,9 @@ function HistoryInner() {
         </View>
       </Card>
 
-      <Seg items={['시즌', '통산', '명예의전당', '연표']} value={tab} onChange={setTab} />
+      <SpotlightTarget id="history-top">
+        <Seg items={['시즌', '통산', '명예의전당', '연표']} value={tab} onChange={setTab} />
+      </SpotlightTarget>
 
       {tab === 0 ? (
         <SeasonView
@@ -124,6 +127,7 @@ function HistoryInner() {
           onSeason={(s) => { setViewSeason(s); setTab(0); }}
         />
       ) : null}
+      <SpotlightOverlay screen="tab-history" />
     </Screen>
   );
 }

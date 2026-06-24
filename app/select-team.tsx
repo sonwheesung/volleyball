@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Text, View } from 'react-native';
 import { Card, Muted, OvrBadge, Row, Screen, theme } from '../components/Screen';
+import { SpotlightOverlay, SpotlightTarget } from '../components/Spotlight';
 import { IdentityChip, RecentRanks } from '../components/ClubIdentity';
 import { LEAGUE, getTeamCoach, getTeamPlayers } from '../data/league';
 import { clubIdentity } from '../data/clubIdentity';
@@ -12,12 +13,12 @@ export default function SelectTeam() {
   return (
     <Screen title="구단을 선택하세요">
       <Muted>구단마다 역사와 색깔이 다릅니다. 카드를 누르면 선수단과 감독을 미리 볼 수 있습니다.</Muted>
-      {LEAGUE.teams.map((t) => {
+      {LEAGUE.teams.map((t, i) => {
         const players = getTeamPlayers(t.id);
         const coach = getTeamCoach(t.id);
         const ovr = teamOverallRaw(players);
         const identity = clubIdentity(t.id);
-        return (
+        const card = (
           <Card key={t.id} onPress={() => router.push(`/team/${t.id}`)}>
             <Row>
               <View style={{ flex: 1, gap: 4 }}>
@@ -42,7 +43,9 @@ export default function SelectTeam() {
             )}
           </Card>
         );
+        return i === 0 ? <SpotlightTarget key={t.id} id="team-card-0">{card}</SpotlightTarget> : card;
       })}
+      <SpotlightOverlay screen="select-team" />
     </Screen>
   );
 }

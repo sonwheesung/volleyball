@@ -2,6 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 import { InteractionManager, Text, View } from 'react-native';
 import { Button, Card, Loading, Muted, OvrBadge, PosTag, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
+import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList } from '../../components/RosterList';
 import { IdentityChip, RecentRanks } from '../../components/ClubIdentity';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal } from '../../data/league';
@@ -62,12 +63,14 @@ export default function TeamDetail() {
 
   return (
     <Screen title={team.name}>
-      <Card>
-        <Row>
-          <Muted>팀 종합 전력</Muted>
-          <OvrBadge value={ovr} />
-        </Row>
-      </Card>
+      <SpotlightTarget id="team-ovr">
+        <Card>
+          <Row>
+            <Muted>팀 종합 전력</Muted>
+            <OvrBadge value={ovr} />
+          </Row>
+        </Card>
+      </SpotlightTarget>
 
       {identity ? (
         <Card>
@@ -135,8 +138,11 @@ export default function TeamDetail() {
       {isCurrent ? (
         <Button label="현재 운영 중인 구단" onPress={() => router.replace('/(tabs)/schedule')} variant="ghost" />
       ) : (
-        <Button label={`${team.name} 운영하기`} onPress={onSelect} />
+        <SpotlightTarget id="team-operate">
+          <Button label={`${team.name} 운영하기`} onPress={onSelect} />
+        </SpotlightTarget>
       )}
+      <SpotlightOverlay screen="team-detail" />
     </Screen>
   );
 }

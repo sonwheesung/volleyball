@@ -4,6 +4,7 @@ import { Text, View } from 'react-native';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { theme } from '../components/Screen';
+import { SpotlightProvider } from '../components/Spotlight';
 
 // 전역 기본 폰트 = Pretendard(가변). 인스턴스의 fontWeight가 굵기 축을 구동한다.
 // (RN Text.defaultProps — 전 화면 Text를 건드리지 않고 한 번에 적용)
@@ -20,6 +21,7 @@ export default function RootLayout() {
   return (
     <SafeAreaProvider>
       <StatusBar style="dark" />
+      <SpotlightProvider>
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: theme.bg },
@@ -59,6 +61,7 @@ export default function RootLayout() {
         <Stack.Screen name="news" options={{ title: '리그 뉴스' }} />
         <Stack.Screen name="news/[id]" options={{ title: '뉴스' }} />
       </Stack>
+      </SpotlightProvider>
     </SafeAreaProvider>
   );
 }

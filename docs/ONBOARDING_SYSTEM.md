@@ -1,0 +1,121 @@
+# 온보딩 / 스포트라이트 튜토리얼 시스템
+
+> 게임 시작(구단 선택)부터 핵심 화면을 **스포트라이트**로 하나씩 안내한다. 설명 대상만 밝게,
+> 나머지는 어둡게, 화면을 탭하면 다음으로. **스텝 단위로 "본 것"을 영구 추적**해서, 나중에 기능이
+> 추가돼도 이미 본 스텝은 건너뛰고 **신규 스텝만** 스포트라이트가 잡는다(기존 유저). 신규 유저는
+> 미본(=전부)을 순서대로 본다. 관전형 1순위(보는 게임)의 진입장벽을 낮추는 연출 투자.
+
+관련: 첫 인트로 슬라이드(`app/onboarding.tsx`, 게임 소개 4장)는 **이 시스템 이전 단계**다 —
+인트로 끝(`completeOnboarding`) → `select-team`부터 스포트라이트가 시작된다. UI 연출 규칙은 UI_RULES.
+
+---
+
+## 1. 핵심 원칙 — 스텝 단위 추적(확장성의 척추)
+
+- **단위는 "스텝(팁)"**: 화면 전체가 아니라 *설명 한 조각*이 단위다. 각 스텝은 **고유 id**를 갖는다.
+- **영구 추적**: 본 스텝 id는 `store.seenTips: Record<string, true>`에 영속 저장된다.
+  세이브와 **별개**(초기화해도 유지) — `onboarded`·`supporter`와 같은 결(설정의 "튜토리얼 다시보기"로만 리셋).
+- **게이트는 조건문 하나**: 어떤 화면이든 그 화면의 스텝 목록을 `!seenTips[id]`로 거른다.
+  본 건 안 뜨고, 안 본 것만 순서대로 뜬다.
+- **확장 규칙**: 새 기능을 붙이면 **새 id의 스텝**을 레지스트리에 추가만 하면 된다.
+  - 기존 유저: 옛 id는 이미 seen → **신규 id만** 스포트라이트.
+  - 신규 유저: 전부 미본 → 전부 순서대로.
+  - 코드 분기 추가 없음 — 레지스트리에 한 줄.
+
+> 안티패턴: "튜토리얼 봤나?"를 화면 단위 불리언 하나(`tutorialDone`)로 두는 것. 그러면 신규 스텝을
+> 기존 유저에게 보여줄 수 없다(이미 true). **반드시 스텝 id 집합**으로 둔다.
+
+---
+
+## 2. 데이터 — 스텝 레지스트리 (`data/tutorialSteps.ts`)
+
+```ts
+export interface Tip {
+  id: string;        // 영구 추적 키. 한 번 출시하면 절대 바꾸지 않는다(바꾸면 기존 유저가 다시 봄).
+  screen: string;    // 어느 화면에서 뜨나(아래 SCREEN 키)
+  order: number;     // 그 화면 안 순서
+  anchor?: string;   // 밝게 띄울 대상 SpotlightTarget id. 없으면 전체 어둡게 + 가운데 카드(인트로형)
+  title: string;
+  body: string;
+}
+export const tipsForScreen = (screen: string): Tip[] =>
+  TIPS.filter((t) => t.screen === screen).sort((a, b) => a.order - b.order);
+```
+
+- **screen 키**(현재): `select-team` · `team-detail` · `tab-schedule` · `tab-dashboard` ·
+  `tab-squad` · `tab-office` · `tab-history`. (확장 시 새 키 추가.)
+- **id 불변 규칙**: 출시된 id는 고정. 문구만 고치는 건 자유(추적과 무관). 대상이 바뀌면 **새 id**.
+
+---
+
+## 3. 연출 — 스포트라이트 (`components/Spotlight.tsx`)
+
+3요소(컨텍스트 1 + 컴포넌트 2):
+
+- **`SpotlightProvider`** (루트 `app/_layout.tsx`에 1회): 화면의 대상 사각형들을 보관
+  (`Record<anchorId, Rect>`). 화면 전환 시 대상은 mount/unmount로 자동 등록·해제.
+- **`SpotlightTarget id`**: 밝게 띄울 요소를 감싼다. `onLayout` 후 `measureInWindow`로 **윈도우 절대
+  좌표**를 측정해 Provider에 등록(언마운트 시 해제). 측정 전이면 그 스텝은 잠깐 대기.
+- **`SpotlightOverlay screen`**: 각 화면 끝에 1개. 그 화면의 미본 스텝 큐(`tipsForScreen(screen)
+  .filter(!seen)`)의 **첫 스텝**을 띄운다. 투명 `Modal`(최상위·탭바 위 포함) 위에:
+  - **구멍 뚫린 어둠**: 대상 Rect 둘레로 4개의 어두운 띠(상/하/좌/우) + 강조 링. 대상만 밝게.
+    (RN엔 "구멍"이 없어 4밴드로 만든다.) anchor 없으면 전체 어둠 + 가운데 카드.
+  - **설명 카드**: 대상 위/아래 빈 쪽에 제목·본문 + "탭하여 계속 (n/총)".
+  - **탭하면 다음**: 오버레이 아무 데나 탭 → `markTip(현재 id)` → 큐의 다음 스텝. 큐 비면 사라짐.
+    (탭은 오버레이가 가로채므로 밑 요소는 안 눌린다 — 흐름은 튜토리얼이 통제.)
+
+> 왜 Modal인가: 탭바·헤더까지 덮어야 "그 외는 어둡게"가 완성된다. `measureInWindow`(윈도우 좌표)와
+> 풀스크린 Modal(0,0 기준)이 좌표계가 같아 구멍이 정확히 맞는다.
+
+---
+
+## 4. 상태 (`store/useGameStore.ts`)
+
+```ts
+seenTips: Record<string, true>;     // 본 스텝 id 집합(영속, 세이브와 별개 — 초기화해도 유지)
+markTip: (id: string) => void;      // 한 스텝 완료
+resetTips: () => void;              // 전체 리셋(설정 "튜토리얼 다시보기")
+```
+
+- `seenTips`는 `freshSave`(게임 초기화) **밖**에 둔다 → 초기화해도 유지(`onboarded`와 동일 패턴).
+- 설정의 "튜토리얼 다시보기"(`app/settings.tsx`)는 `replayOnboarding()` + **`resetTips()`** 를 같이
+  호출해 인트로와 스포트라이트를 처음부터 다시 보게 한다.
+
+---
+
+## 5. 초기 스텝 세트 (확장 가능 — 레지스트리에 추가만)
+
+| screen | id | anchor | 한 줄 |
+|---|---|---|---|
+| select-team | `select.pick` | 첫 구단 카드 | 구단마다 역사·색깔이 다르다 / 카드로 미리보기 |
+| team-detail | `team.ovr` | 팀 전력 카드 | 팀 종합 전력 읽는 법 |
+| team-detail | `team.start` | 운영하기 버튼 | 이 구단으로 시작 |
+| tab-schedule | `sched.next` | 다음 경기 카드 | 빅매치는 직접 관전 권장(현장은 감독 몫) |
+| tab-dashboard | `dash.overview` | 구단 현황 카드 | 대시보드 = 구단 한눈에 |
+| tab-squad | `squad.intro` | 선수단 리스트 | 2층 스탯·특성 |
+| tab-office | `office.intro` | 단장 업무 메뉴 | 드래프트·FA·스태프·외인 = 단장의 레버 |
+| tab-history | `history.intro` | 기록 탭 | 세월이 쌓여 기록·명전이 된다 |
+
+> 이 표는 시작점이다. 새 화면/기능이 생기면 그 화면 키 + 새 id를 한 행 추가하면 자동으로
+> 신규 유저 전체·기존 유저 신규분에 스포트라이트가 잡힌다.
+
+---
+
+## 6. 기본 스태프 지급(관련 결정, STAFF_SYSTEM 7과 연동)
+
+게임 시작 시 플레이어 팀은 **기본 전문코치 1 + 스카우터 1**을 갖고 출발한다(2026-06-24).
+- 왜: AI 팀은 이미 기본 스태프(코치 2 + 스카우터 1, `data/league.ts` `aiTeam*`)를 갖는데
+  플레이어만 0에서 시작해, "스태프 0" 빈 화면이 어색하고 초반 성장·스카우팅이 불리했다(사용자 보고).
+- 어떻게: `selectTeam` 시 `grantStartingStaff(teamId)` — 팀에 영입 스태프가 없으면 FA 풀에서
+  중위권 전문코치 1 + 스카우터 1을 **결정론**으로 자동 영입(예산 내). 이후 단장이 방출·상위 교체 가능
+  (슬롯 3 + 상위 풀로 AI를 능가하는 레버는 그대로 — STAFF_SYSTEM 7).
+- 영속: 스토어 `staffAssistants`·`staffScouts`에 반영되어 리로드에도 유지.
+
+---
+
+## 7. 검증
+
+- `tipsForScreen`가 화면별 순서대로 반환. `seenTips`에 든 id는 큐에서 빠진다(미본만).
+- 새 id를 레지스트리에 추가하면 기존 세이브(그 id 미보유)에서 스포트라이트가 뜬다 — "신규만" 보장.
+- 설정 "튜토리얼 다시보기" → `seenTips` 비고 인트로부터 전체 재생.
+- 기본 스태프: `selectTeam` 후 `teamAssistants(myTeam).length===1 && teamScouts(myTeam).length===1`.

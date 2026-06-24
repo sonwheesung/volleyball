@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
+import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { SEASON, getTeam } from '../../data/league';
 import { computeStandings, playedThroughDay, leagueDisplayDay } from '../../data/standings';
 import { teamClinch } from '../../data/clinch';
@@ -94,6 +95,7 @@ export default function Schedule() {
       ) : null}
 
       {nextFixture && preview ? (
+        <SpotlightTarget id="sched-next">
         <Card>
           <Row>
             <Muted>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</Muted>
@@ -131,6 +133,7 @@ export default function Schedule() {
               : '경기 사이 기간 동안 모든 선수가 자동으로 훈련합니다.'}
           </Muted>
         </Card>
+        </SpotlightTarget>
       ) : (
         <Card>
           <Title>시즌 종료</Title>
@@ -145,6 +148,7 @@ export default function Schedule() {
       {DEV_TOOLS ? (
         <Button label="🧪 수비 위치 실험실 (개발용)" variant="ghost" onPress={() => router.push('/board-lab')} />
       ) : null}
+      <SpotlightOverlay screen="tab-schedule" />
     </Screen>
   );
 }

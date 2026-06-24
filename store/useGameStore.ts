@@ -8,7 +8,7 @@ import { createJSONStorage, persist } from 'zustand/middleware';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
-  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, fireCoach as fireCoachLeague, getTeamCoach, LEAGUE } from '../data/league';
+  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, fireCoach as fireCoachLeague, getTeamCoach, grantStartingStaff, LEAGUE } from '../data/league';
 import { advanceCoaches } from '../data/staffLifecycle';
 import { bottomStreak } from '../engine/staffLifecycle';
 import type { Coach, AssistantCoach } from '../types';
@@ -57,6 +57,7 @@ interface GameState {
   onboarded: boolean;                          // 온보딩(첫 안내) 완료 — 세이브와 별개(초기화해도 유지)
   supporter: boolean;                          // 서포터 팩(비소모성 IAP) 보유 — 구매 자산이라 초기화해도 유지
   sfxEnabled: boolean;                         // 경기 효과음(휘슬·스파이크·서브) 켬 — 사용자 환경설정(초기화해도 유지)
+  seenTips: Record<string, true>;              // 본 스포트라이트 스텝 id 집합(ONBOARDING) — 세이브와 별개(초기화해도 유지)
   selectedTeamId: string | null;
   season: number;                              // 0-based 경과 시즌
   currentDay: number;                          // 시즌 내 경과 일수
@@ -143,6 +144,8 @@ interface GameState {
   resetSave: () => void;
   completeOnboarding: () => void;
   replayOnboarding: () => void;
+  markTip: (id: string) => void;               // 스포트라이트 스텝 1개 완료(ONBOARDING)
+  resetTips: () => void;                        // 스포트라이트 전체 리셋(설정 "튜토리얼 다시보기")
   grantSupporter: () => void;
   setSupporter: (v: boolean) => void;
   setSfx: (v: boolean) => void;
@@ -210,6 +213,7 @@ export const useGameStore = create<GameState>()(
       onboarded: false,
       supporter: false,
       sfxEnabled: true,
+      seenTips: {},
       ...freshSave,
 
       selectTeam: (teamId) => {
@@ -217,6 +221,9 @@ export const useGameStore = create<GameState>()(
         set({ ...freshSave, selectedTeamId: teamId });
         setTxContext([], [], teamId);
         setMyTeamStaff(teamId); // 내 팀만 영입 스태프, 나머지는 AI 기본 스태프(STAFF_SYSTEM 7)
+        // 시작 기본 스태프(ONBOARDING 6) — 플레이어 팀을 0이 아니라 코치1+스카우터1로 출발시킨다(AI와 대칭).
+        const staff = grantStartingStaff(teamId);
+        set({ staffHead: staff.head, staffAssistants: staff.asst, staffScouts: staff.scout });
         setOwnerContext([]);
         setAwardScores([]); // 새 세이브 — 수상 이력 없음
       },
@@ -787,6 +794,8 @@ export const useGameStore = create<GameState>()(
       },
       completeOnboarding: () => set({ onboarded: true }),
       replayOnboarding: () => set({ onboarded: false }),
+      markTip: (id) => set((s) => (s.seenTips[id] ? {} : { seenTips: { ...s.seenTips, [id]: true } })),
+      resetTips: () => set({ seenTips: {} }),
       grantSupporter: () => set({ supporter: true }), // 결제 성공 시 호출(출시 시 IAP 콜백에 연결)
       setSupporter: (v) => set({ supporter: v }),     // 미리보기 토글(개발용) — 적용된 모습 확인
       setSfx: (v) => set({ sfxEnabled: v }),          // 효과음 켬/끔(설정) — 영속

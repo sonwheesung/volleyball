@@ -2,6 +2,7 @@
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native';
 import { Card, Muted, Row, Screen, Title, theme } from '../../components/Screen';
+import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getEvolvedTeamPlayers } from '../../data/league';
 import { activeRoster, payroll } from '../../data/roster';
 import { LEAGUE_CAP } from '../../engine/cap';
@@ -33,13 +34,15 @@ export default function Office() {
         </Muted>
       </Card>
 
-      <Card onPress={() => router.push('/contracts')}>
-        <Row>
-          <Title>계약 관리</Title>
-          <Muted>재계약 · 방출 · FA 예정 →</Muted>
-        </Row>
-        <Muted style={{ fontSize: 12, marginTop: 2 }}>선수 재계약·방출, 시즌 종료 FA 잔류/포기, 방출 선수 복귀</Muted>
-      </Card>
+      <SpotlightTarget id="office-top">
+        <Card onPress={() => router.push('/contracts')}>
+          <Row>
+            <Title>계약 관리</Title>
+            <Muted>재계약 · 방출 · FA 예정 →</Muted>
+          </Row>
+          <Muted style={{ fontSize: 12, marginTop: 2 }}>선수 재계약·방출, 시즌 종료 FA 잔류/포기, 방출 선수 복귀</Muted>
+        </Card>
+      </SpotlightTarget>
 
       <Card onPress={() => router.push('/staff')}>
         <Row>
@@ -65,6 +68,7 @@ export default function Office() {
           </Row>
         </Card>
       ) : null}
+      <SpotlightOverlay screen="tab-office" />
     </Screen>
   );
 }

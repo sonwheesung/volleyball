@@ -35,6 +35,7 @@ export default function Settings() {
   const router = useRouter();
   const resetSave = useGameStore((s) => s.resetSave);
   const replayOnboarding = useGameStore((s) => s.replayOnboarding);
+  const resetTips = useGameStore((s) => s.resetTips);
   const season = useGameStore((s) => s.season);
   const supporter = useGameStore((s) => s.supporter);
   const setSupporter = useGameStore((s) => s.setSupporter);
@@ -70,8 +71,8 @@ export default function Settings() {
           </View>
           <Switch value={sfxEnabled} onValueChange={setSfx} trackColor={{ true: theme.accent, false: theme.cardAlt }} />
         </View>
-        <Row icon="book-outline" tint={theme.accent} label="튜토리얼 다시보기" sub="게임 소개를 처음부터"
-          onPress={() => { replayOnboarding(); router.replace('/onboarding'); }} />
+        <Row icon="book-outline" tint={theme.accent} label="튜토리얼 다시보기" sub="게임 소개 + 화면 안내를 처음부터"
+          onPress={() => { replayOnboarding(); resetTips(); router.replace('/onboarding'); }} />
       </View>
 
       <Text style={styles.section}>데이터</Text>

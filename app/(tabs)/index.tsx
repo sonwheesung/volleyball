@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
+import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getEvolvedTeamPlayers, getTeam } from '../../data/league';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings, leagueDisplayDay, seasonResults } from '../../data/standings';
@@ -73,21 +74,23 @@ export default function Dashboard() {
   return (
     <Screen title={team.name} scroll={false}>
       {/* 전력 + 성적 */}
-      <Card>
-        <Row>
-          <View>
-            <Muted>팀 종합 전력</Muted>
-            <View style={{ height: 4 }} />
-            <OvrBadge value={ovr} size={60} />
-          </View>
-          <View style={{ alignItems: 'flex-end' }}>
-            <Muted>{season + 1}시즌 성적</Muted>
-            <Text style={{ color: theme.text, fontSize: 26, fontWeight: '900' }}>
-              {record.w}승 {record.l}패
-            </Text>
-          </View>
-        </Row>
-      </Card>
+      <SpotlightTarget id="dash-top">
+        <Card>
+          <Row>
+            <View>
+              <Muted>팀 종합 전력</Muted>
+              <View style={{ height: 4 }} />
+              <OvrBadge value={ovr} size={60} />
+            </View>
+            <View style={{ alignItems: 'flex-end' }}>
+              <Muted>{season + 1}시즌 성적</Muted>
+              <Text style={{ color: theme.text, fontSize: 26, fontWeight: '900' }}>
+                {record.w}승 {record.l}패
+              </Text>
+            </View>
+          </Row>
+        </Card>
+      </SpotlightTarget>
 
       {/* 재정 — 한 장 요약(상세 내역은 기록 탭) */}
       <Card>
@@ -140,6 +143,7 @@ export default function Dashboard() {
 
       <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
       <Button label="설정" variant="ghost" onPress={() => router.push('/settings')} />
+      <SpotlightOverlay screen="tab-dashboard" />
     </Screen>
   );
 }

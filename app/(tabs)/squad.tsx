@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native';
 import { Card, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
+import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeamCoach } from '../../data/league';
 import { activeRoster } from '../../data/roster';
@@ -55,9 +56,12 @@ export default function Squad() {
         </Card>
       ) : null}
 
-      <Title>선수 ({players.length}명)</Title>
-      <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다. ● 경기감각 · 🚑 결장(부상·정지) · 🪑 벤치 지시 · 😟 불만</Muted>
+      <SpotlightTarget id="squad-top">
+        <Title>선수 ({players.length}명)</Title>
+        <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다. ● 경기감각 · 🚑 결장(부상·정지) · 🪑 벤치 지시 · 😟 불만</Muted>
+      </SpotlightTarget>
       <RosterList players={players} decor={decor} starterIds={starterIds} />
+      <SpotlightOverlay screen="tab-squad" />
     </Screen>
   );
 }

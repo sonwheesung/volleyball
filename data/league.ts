@@ -336,6 +336,24 @@ export function restoreLeagueState(s: LeagueSnapshot): void {
 }
 export const getStaffState = () => ({ head: { ...headCoachOverride }, asst: { ...teamAssistantIds }, scout: { ...teamScoutIds } });
 
+/** 시작 기본 스태프(ONBOARDING 6) — 플레이어 팀이 영입 스태프 0이면 FA 풀에서 **중위권** 전문코치 1 +
+ *  스카우터 1을 결정론(역량 정렬 후 중앙값)으로 자동 영입(예산·슬롯 내). 이미 있으면 무시(멱등).
+ *  AI 팀은 별도 기본 스태프(`aiTeam*`)를 쓰므로 여기 무관 — 플레이어만 0→기본으로 끌어올린다.
+ *  이후 단장이 방출·상위 교체 가능(슬롯 3 + 상위 풀로 능가하는 레버는 유지). 반환 = 영속용 staff 상태. */
+export function grantStartingStaff(teamId: string): { head: Record<string, string>; asst: Record<string, string[]>; scout: Record<string, string[]> } {
+  if ((teamAssistantIds[teamId]?.length ?? 0) === 0) {
+    const fa = availableAssistants().slice().sort((a, b) => a.rating - b.rating || a.id.localeCompare(b.id));
+    const pick = fa[Math.floor(fa.length / 2)];
+    if (pick) hireAssistant(teamId, pick.id);
+  }
+  if ((teamScoutIds[teamId]?.length ?? 0) === 0) {
+    const fa = availableScouts().slice().sort((a, b) => a.scouting - b.scouting || a.id.localeCompare(b.id));
+    const pick = fa[Math.floor(fa.length / 2)];
+    if (pick) hireScout(teamId, pick.id);
+  }
+  return getStaffState();
+}
+
 /** 선수 → 소속팀 감독 훈련선호 (롤오버/진화 성장 방향) */
 export const focusOf = (p: Player): TrainingFocus => playerFocus.get(p.id) ?? DEFAULT_FOCUS;
 
