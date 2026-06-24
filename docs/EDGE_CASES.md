@@ -227,6 +227,19 @@
 
 ---
 
+## 3.7 독립 도출 3차 (2026-06-25, 문서+코드 드리프트) — 검증 완료
+
+> 2차에 이어 한 번 더. 신규 드리프트 **1건 + 형제 1건**. 둘 다 "문서 표가 코드 정의(상수 그룹)와 어긋난" 같은 클래스.
+
+| 후보 | 시각 | 무엇 | 상태/조치 |
+|---|---|---|---|
+| **agility 노쇠 표 오기** | 문서+코드 | `TRAINING_SYSTEM §1.6` 표가 `민첩`을 "유지/상승(노쇠 없음)"으로 잘못 분류. 그러나 `CLAUDE.md 5.1`("민첩성 — 노쇠 시 하락")·`engine/aging.ts`(`DECAY_STATS`에 `agility` 포함)·`aging.test.ts:54`(이미 민첩 하락 단언)이 정본 → **표가 단독 오기**(내부 모순: 같은 문서 §1.3 ageMul 표·§0 현황표는 민첩을 신체로 정확히 분류). 35→38세 실측 agility −7(jump와 동일) | ✅ **문서 정정**(§1.6 표에서 민첩을 하락(신체)으로 이동 + 정정 주석). 가드 `_dv_drift2_agility`(A/B: 반응·위치선정 Δ0 대조군) |
+| **체력코치 노쇠둔화 대상 누락(형제)** | 문서+코드 | 형제 사냥: `STAFF_SYSTEM.md:19` 체력코치 노쇠둔화 대상을 "jump·staminaMax·staminaRegen"로 적어 **agility 누락**. 그러나 `staff.ageSlow`는 `applyAgingDay`에서 `DECAY_STATS` **전체**에 곱해짐(민첩 노쇠도 둔화) | ✅ **문서 정정**(대상에 agility 추가 + "노쇠 지연은 DECAY_STATS 전체" 명기) |
+
+> 사각: "한 코드 상수(`DECAY_STATS`)를 **여러 문서 표가 각자 손으로 다시 나열**하는데, 그 나열을 상수와 대조하는 가드가 없었다." TEST_METHODOLOGY §4 사각표 참조. 가드 `_dv_drift2_agility`가 노쇠 그룹 멤버십을 코드에서 직접 읽어 대조.
+
+---
+
 ## 4. 회귀 프로토콜 (로직 수정 시)
 
 영입/오프시즌 계열 엔진·셀렉터(`engine/compensation·faMarket·cap·draft·staff·staffLifecycle·foreign·transactions·finance`,
