@@ -21,7 +21,7 @@ export const TIPS: Tip[] = [
   { id: 'team.ovr', screen: 'team-detail', order: 0, anchor: 'team-ovr',
     title: '팀 종합 전력', body: '선수단 전체의 평균 전력입니다. 숫자가 높을수록 강팀 — 하지만 이야기는 지금부터 쌓입니다.' },
   { id: 'team.start', screen: 'team-detail', order: 1, anchor: 'team-operate',
-    title: '이 구단으로 시작', body: '여기를 누르면 당신이 이 구단의 구단주가 됩니다. 시즌 일정과 선수단이 준비됩니다.' },
+    title: '이 구단으로 시작', body: '선수단을 둘러본 뒤, 맨 아래 "운영하기" 버튼을 누르면 당신이 이 구단의 구단주가 됩니다. (탭해서 닫고 자유롭게 살펴보세요.)' },
 
   // ── 일정 탭(첫 진입 화면) ──
   { id: 'sched.next', screen: 'tab-schedule', order: 0, anchor: 'sched-next',

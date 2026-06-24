@@ -83,8 +83,10 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   const total = tipsForScreen(screen).length;
   const idx = total - queue.length + 1; // 현재가 몇 번째인지(1-based)
 
-  // 구멍(측정 성공 시) 둘레 4밴드 + 강조 링. 측정 실패/앵커없음이면 전체 어둠 + 가운데 카드.
-  const hole = rect
+  // 앵커가 **화면 안**에 있을 때만 구멍을 판다. 스크롤해야 보이는(화면 밖) 대상은 좌표가 화면 밖으로
+  // 나와 어둠 띠가 전체를 덮고 카드도 밖으로 가 "시커멓고 멈춘" 화면이 된다 → 전체 어둠 + 가운데 카드로 폴백.
+  const onScreen = !!rect && rect.y + rect.height > 0 && rect.y < SH && rect.x + rect.width > 0 && rect.x < SW;
+  const hole = onScreen && rect
     ? { x: Math.max(0, rect.x - PAD), y: Math.max(0, rect.y - PAD), w: rect.width + PAD * 2, h: rect.height + PAD * 2 }
     : null;
 
