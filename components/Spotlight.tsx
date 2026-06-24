@@ -4,7 +4,6 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { useIsFocused } from '@react-navigation/native';
 import { useGameStore } from '../store/useGameStore';
 import { tipsForScreen } from '../data/tutorialSteps';
 import { theme } from './Screen';
@@ -57,9 +56,8 @@ const CARD_W = 300;  // 설명 카드 폭
 /** 각 화면 끝에 1개 — 그 화면의 미본 스텝 큐의 첫 스텝을 스포트라이트로 띄운다. */
 export function SpotlightOverlay({ screen }: { screen: string }) {
   const ctx = useContext(SpotlightCtx);
-  const seen = useGameStore((s) => s.seenTips);
+  const seen = useGameStore((s) => s.seenTips) ?? {};
   const markTip = useGameStore((s) => s.markTip);
-  const focused = useIsFocused(); // 탭은 마운트가 유지됨 — 포커스된 화면의 오버레이만 띄운다(이중 모달 방지)
   const [attempt, setAttempt] = useState(0);
 
   const queue = tipsForScreen(screen).filter((t) => !seen[t.id]);
@@ -76,8 +74,8 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
     }
   }, [active, rect, attempt]);
 
-  if (!focused) return null; // 포커스 화면만
   if (!active) return null;
+  // 이중 모달 걱정 없음 — 모달이 탭바까지 덮어 안내를 탭으로 넘기기 전엔 다른 화면 이동 불가(이미 본 화면은 큐가 빔).
   const measuring = !!active.anchor && !rect && attempt < 6;
   if (measuring) return null; // 잠깐 측정 대기(최대 ≈720ms). 그 뒤엔 폴백으로 무조건 표시.
 
