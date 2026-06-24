@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Loading, Muted, Screen, theme, useDeferredReady } from '../components/Screen';
+import { EmptyState, Loading, Screen, theme, useDeferredReady } from '../components/Screen';
 import { buildNewsFeed, newsKey } from '../data/news';
 import { useGameStore } from '../store/useGameStore';
 import type { NewsItem } from '../types';
@@ -47,12 +47,17 @@ function NewsListInner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  if (feed.length === 0) {
+    return (
+      <Screen title="리그 뉴스" scroll={false}>
+        <EmptyState message="아직 전해진 소식이 없습니다." />
+      </Screen>
+    );
+  }
+
   return (
     <Screen title="리그 뉴스">
-      {feed.length === 0 ? (
-        <Muted>아직 전해진 소식이 없습니다.</Muted>
-      ) : (
-        feed.map((n, i) => {
+      {feed.map((n, i) => {
           const unread = !readSnapshot.has(newsKey(n));
           const headColor = !unread ? theme.muted : n.teamId === teamId ? theme.accent : n.big ? theme.warn : theme.text;
           return (
@@ -71,8 +76,7 @@ function NewsListInner() {
               <Text style={styles.arrow}>›</Text>
             </Pressable>
           );
-        })
-      )}
+        })}
     </Screen>
   );
 }

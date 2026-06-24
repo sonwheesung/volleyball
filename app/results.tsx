@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Muted, Screen, theme } from '../components/Screen';
+import { EmptyState, Screen, theme } from '../components/Screen';
 import { seasonResults, playedThroughDay, type ResultRow } from '../data/standings';
 import { shortTeamName as short } from '../data/league';
 import { dateForDay, formatDate } from '../lib/calendar';
@@ -27,12 +27,17 @@ export default function Results() {
     return groups;
   }, [results, season]);
 
+  if (days.length === 0) {
+    return (
+      <Screen title="전 구단 경기 결과" scroll={false}>
+        <EmptyState message="아직 치른 경기가 없습니다." />
+      </Screen>
+    );
+  }
+
   return (
     <Screen title="전 구단 경기 결과">
-      {days.length === 0 ? (
-        <View style={styles.dayCard}><Muted>아직 치른 경기가 없습니다.</Muted></View>
-      ) : (
-        days.map((g) => (
+      {days.map((g) => (
           <View key={g.dayIndex} style={styles.daySection}>
             <Text style={styles.dayHeader}>{formatDate(dateForDay(g.dayIndex))}</Text>
             <View style={styles.dayCard}>
@@ -62,8 +67,7 @@ export default function Results() {
               })}
             </View>
           </View>
-        ))
-      )}
+        ))}
     </Screen>
   );
 }

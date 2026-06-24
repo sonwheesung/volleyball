@@ -194,6 +194,17 @@ export function Row({ children }: { children: ReactNode }) {
   return <View style={styles.rowBetween}>{children}</View>;
 }
 
+/** 빈 상태 — 데이터 없을 때 안내문을 **화면 가운데** 정렬(전체화면 빈 상태용).
+ *  세로 중앙은 부모가 공간을 줘야 하므로 `<Screen scroll={false}>` 안에서 쓴다(flex:1로 남은 공간을 채워 중앙).
+ *  섹션 단위 "없음"(다른 내용과 함께 뜨는)은 인라인 Card/Muted를 그대로 둔다. */
+export function EmptyState({ message }: { message: string }) {
+  return (
+    <View style={styles.emptyState}>
+      <Text style={styles.emptyStateText}>{message}</Text>
+    </View>
+  );
+}
+
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
   content: { padding: 16, gap: 12 },
@@ -228,4 +239,6 @@ const styles = StyleSheet.create({
   barTrack: { flex: 1, height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 40 },
+  emptyStateText: { color: theme.muted, fontSize: 15, lineHeight: 22, textAlign: 'center' },
 });
