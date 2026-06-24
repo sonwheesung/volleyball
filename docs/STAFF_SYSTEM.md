@@ -36,7 +36,11 @@ UI(app/staff.tsx, draft.tsx) → 셀렉터(data/league.ts) → 엔진(engine/sta
 - 풀 생성: `data/seed.ts generateLeague` → `League.{coaches(+프리), assistants, scouts}`.
 - 계약 상태: `data/league.ts` `headCoachOverride·teamAssistantIds·teamScoutIds`.
 - 영속화: `store/useGameStore.ts` `staffHead·staffAssistants·staffScouts`(persist) → 재수화 시 `commitStaff`.
-- 캐시 무효화: 감독·코치 영입은 훈련/경기 영향 → `evoCache` 무효화 + `_baseVersion++`. 스카우터는 표시만.
+- 캐시 무효화(`invalidateStaff(affectsTraining)`): 감독·코치 영입/방출/경질은 훈련→진화→경기 영향 →
+  `rebuildFocus`+`evoCache`+`_baseVersion++`(전 시즌 결과/생산 캐시 무효 → 재시뮬). **스카우터(드래프트 표시만)·
+  감독 재계약(계약만)은 시뮬 무영향 → baseVersion 안 올린다**(2026-06-24 교정 — 구버전은 `_baseVersion++`가
+  무조건이라 결과가 byte 동일한데도 1.7s 전 시즌을 헛재시뮬 = 낭비 프리즈였다. A/B로 결과 동일·baseVersion 키
+  캐시는 전부 진화/경기용뿐 확인 후 `affectsTraining` 분기 안으로 이동). 화면 연출은 UI_RULES UI-4(스태프) 참조.
 
 ## 4. 결정론·무손상
 

@@ -1,6 +1,7 @@
 // 스태프 계약(STAFF_SYSTEM) — 단장이 감독·전문코치·스카우터를 예산 안에서 영입/방출.
-import { Alert, View } from 'react-native';
-import { Button, Card, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../components/Screen';
+import { useEffect, useRef, useState } from 'react';
+import { Alert, InteractionManager, View } from 'react-native';
+import { Button, Card, Loading, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../components/Screen';
 import {
   getTeamCoach, teamAssistants, teamScouts, teamScoutReveal,
   availableCoaches, availableAssistants, availableScouts,
@@ -30,7 +31,26 @@ export default function Staff() {
   const hireScout = useGameStore((s) => s.hireScout);
   const releaseScout = useGameStore((s) => s.releaseScout);
 
+  // 코치/감독 변경은 시즌 결과 캐시를 무효화 → 부진경고용 computeStandings가 전 시즌을 재시뮬(무거움).
+  // UI-4: 그 재계산을 로딩 뒤에서 미리 데운다(스피너는 네이티브라 JS가 막혀도 계속 돈다).
+  // 스카우터·재계약은 시뮬 무영향(캐시 무효 없음) → busy 안 거치고 즉시.
+  const [busy, setBusy] = useState(false);
+  const pending = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    if (!busy) return;
+    const task = InteractionManager.runAfterInteractions(() => {
+      pending.current?.(); // 영입/방출 실행(성공 시 baseVersion 무효화)
+      const day = leagueDisplayDay(useGameStore.getState().currentDay);
+      computeStandings(day); // 로딩 중 캐시 워밍(무거운 재시뮬을 여기서 끝낸다)
+      pending.current = null;
+      setBusy(false); // 클리어 → 본문은 워밍된 캐시로 즉시 렌더
+    });
+    return () => task.cancel();
+  }, [busy]);
+  const heavyAction = (fn: () => void) => { pending.current = fn; setBusy(true); };
+
   if (!teamId) return <Screen title="스태프"><Muted>먼저 구단을 선택하세요.</Muted></Screen>;
+  if (busy) return <Loading title="스태프 계약" message={'새 스태프를 반영해\n시즌 전력을 다시 계산하는 중…'} />;
 
   const head = getTeamCoach(teamId);
   const acting = !!head?.id.startsWith('acting_');
@@ -44,15 +64,32 @@ export default function Staff() {
 
   const overBudget = (msg: string) => Alert.alert('스태프 예산 초과', `${msg}\n예산 여유: ${formatMoney(left)}만`);
 
-  const tryHireCoach = (id: string, name: string, salary: number) => {
-    if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}만) 불가.`);
-  };
-  const tryHireAsst = (id: string, name: string, salary: number) => {
-    if (!hireAssistant(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}만) 불가.`);
-  };
-  const tryHireScout = (id: string, name: string, salary: number) => {
-    if (!hireScout(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}만) 불가.`);
-  };
+  // 코치/감독 = 무거움(시즌 재계산) → 로딩 뒤에서 실행. 스카우터 = 즉시. 모두 confirm으로 묻는다.
+  const tryHireCoach = (id: string, name: string, salary: number) =>
+    Alert.alert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만 · 3년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
+      { text: '취소', style: 'cancel' },
+      { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}만) 불가.`); }) },
+    ]);
+  const tryHireAsst = (id: string, name: string, salary: number) =>
+    Alert.alert('코치 영입', `${name} 코치를 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만\n\n새 코치를 반영해 시즌 전력을 다시 계산합니다.`, [
+      { text: '취소', style: 'cancel' },
+      { text: '영입', onPress: () => heavyAction(() => { if (!hireAssistant(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}만) 불가.`); }) },
+    ]);
+  const tryReleaseAsst = (id: string, name: string) =>
+    Alert.alert('코치 방출', `${name} 코치를 방출하시겠습니까?\n\n전력 변화로 시즌을 다시 계산합니다.`, [
+      { text: '취소', style: 'cancel' },
+      { text: '방출', style: 'destructive', onPress: () => heavyAction(() => releaseAssistant(id)) },
+    ]);
+  const tryHireScout = (id: string, name: string, salary: number) =>
+    Alert.alert('스카우터 영입', `${name}을(를) 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만`, [
+      { text: '취소', style: 'cancel' },
+      { text: '영입', onPress: () => { if (!hireScout(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}만) 불가.`); } },
+    ]);
+  const tryReleaseScout = (id: string, name: string) =>
+    Alert.alert('스카우터 방출', `${name}을(를) 방출하시겠습니까?`, [
+      { text: '취소', style: 'cancel' },
+      { text: '방출', style: 'destructive', onPress: () => releaseScout(id) },
+    ]);
 
   const pct = Math.min(100, Math.round((spend / staffBudget()) * 100));
 
@@ -99,7 +136,7 @@ export default function Staff() {
                 </Row>
                 <Button label="감독 경질" onPress={() => Alert.alert('감독 경질', `${head.name} 감독을 경질하시겠습니까? 전문 코치가 대행을 맡고, 그 감독은 우리 팀에 다시 오지 않습니다.`, [
                   { text: '취소', style: 'cancel' },
-                  { text: '경질', style: 'destructive', onPress: () => { const r = fireCoach(); Alert.alert('경질 완료', r.acting ? `${r.acting} 코치가 감독 대행을 맡습니다.` : '대행할 코치가 없어 공석입니다. 감독을 영입하세요.'); } },
+                  { text: '경질', style: 'destructive', onPress: () => heavyAction(() => { const r = fireCoach(); Alert.alert('경질 완료', r.acting ? `${r.acting} 코치가 감독 대행을 맡습니다.` : '대행할 코치가 없어 공석입니다. 감독을 영입하세요.'); }) },
                 ])} />
               </View>
             );
@@ -129,7 +166,7 @@ export default function Staff() {
               <Title>{SPECIALTY_KO[a.specialty]} · {a.name}</Title>
               <Muted style={{ marginTop: 2 }}>{SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}만</Muted>
             </View>
-            <Button label="방출" variant="ghost" onPress={() => releaseAssistant(a.id)} />
+            <Button label="방출" variant="ghost" onPress={() => tryReleaseAsst(a.id, a.name)} />
           </Row>
         </Card>
       ))}
@@ -156,7 +193,7 @@ export default function Staff() {
               <Title>{s.name}</Title>
               <Muted style={{ marginTop: 2 }}>스카우팅 {s.scouting} · 연봉 {formatMoney(s.salary)}만</Muted>
             </View>
-            <Button label="방출" variant="ghost" onPress={() => releaseScout(s.id)} />
+            <Button label="방출" variant="ghost" onPress={() => tryReleaseScout(s.id, s.name)} />
           </Row>
         </Card>
       ))}

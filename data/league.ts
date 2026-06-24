@@ -185,8 +185,11 @@ export const staffBudgetLeft = (teamId: string): number => STAFF_BUDGET - staffS
 export const teamScoutReveal = (teamId: string): number => scoutReveal(teamScoutsOf(teamId));
 
 function invalidateStaff(affectsTraining: boolean): void {
-  if (affectsTraining) { rebuildFocus(); evoCache = null; }
-  _baseVersion++;
+  // baseVersion(전 시즌 결과/생산 캐시 키)은 *시뮬에 영향을 주는* 스태프 변경에서만 올린다.
+  // 스카우터(드래프트 표시만)·감독 재계약(계약만)은 경기 결과가 byte 동일 → 무효화하면
+  // 같은 숫자를 1.7s 재시뮬하는 순수 낭비 프리즈였다(검증: A/B 결과 동일, baseVersion 키 캐시는
+  // 전부 진화/경기 시뮬용뿐 — 스카우팅 공개도는 baseVersion 무관). 2026-06-24 교정.
+  if (affectsTraining) { rebuildFocus(); evoCache = null; _baseVersion++; }
 }
 
 /** 감독 영입(시드 감독 대체). 예산 초과면 거부(false). */
