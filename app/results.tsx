@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EmptyState, Screen, theme } from '../components/Screen';
-import { seasonResults, playedThroughDay, type ResultRow } from '../data/standings';
+import { seasonResults, type ResultRow } from '../data/standings';
 import { shortTeamName as short } from '../data/league';
 import { dateForDay, formatDate } from '../lib/calendar';
 import { useGameStore } from '../store/useGameStore';
@@ -13,11 +13,16 @@ export default function Results() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId);
   const results = useGameStore((s) => s.results);
+  const currentDay = useGameStore((s) => s.currentDay);
   const season = useGameStore((s) => s.season);
 
-  // 최신 날짜 → 옛날 순, 같은 날끼리 묶기 — 실제로 치른 경기까지만(미관전 경기 노출 방지)
+  // **리그 진행 기준**(통산·순위 화면과 동일): currentDay까지 리그가 치른 경기를 전부 표시(관전 안 한 것도 —
+  // 이미 지나간 경기). 단 **현재 경기일의 미관전 경기는 스포일러 방지로 제외** → 지난 경기일 전부 +
+  // 내가 관전 완료한 경기(results). 구버전은 관전한 경기만 봐서 자동진행한 리그 기록과 어긋났다(2026-06-24 사용자 보고).
   const days = useMemo(() => {
-    const sorted = seasonResults(playedThroughDay(results)).slice().sort((a, b) => b.dayIndex - a.dayIndex);
+    const sorted = seasonResults(currentDay)
+      .filter((r) => r.dayIndex < currentDay || results[r.fixtureId])
+      .slice().sort((a, b) => b.dayIndex - a.dayIndex);
     const groups: { dayIndex: number; rows: ResultRow[] }[] = [];
     for (const r of sorted) {
       const last = groups[groups.length - 1];
