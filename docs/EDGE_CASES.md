@@ -43,6 +43,8 @@
 | `engine/compensation.test.ts` | 보상금 배수·보상선수 선정 규칙(단위) | 2 | — |
 | `engine/draft.test.ts` | 드래프트 위시 우선순위·중복 지명·슬롯 한도 | 1 | — |
 | `tools/_gt_facontract.ts` | **재계약·FA 영입 시나리오 15케이스**(reSign 게이트: 정상/타팀/음수·0·NaN/years·잔여/8억초과/캡/외인면제/프랜차이즈11억 · FA: 큐·등급 A>B>C·endSeason 정원·캡 불변식). 정상=적용·비정상=거부 양방향(A/B). exit 0/1 | 1·2·연봉/캡 | — |
+| `tools/_gt_bench.ts` | **주전·벤치 시나리오 9케이스**(라인업 6+리베로·벤치 제외·마지막 리베로 EC-LU-01·7인 가드·ownerBenched 사유 · 건의 게이트: 타팀/쿨다운16 · suggestStart 최약 주전 벤치 EC-LU-02 실제 액션). exit 0/1 | 5·라인업 | — |
+| `tools/_dv_bench.ts`·`_dv_bench2.ts` | **독립 검증(2026-06-24 독립 세션)** — 문서서 불변식 9종 도출, A/B 자가검증 내장. _dv_bench2: EC-LU-02 옛버그(최강벤치) 재주입 88/88 검출·사유 우선순위. _dv_bench: 라인업·게이트·pickRest(리베로 휴식 0·≤2명, 무거움). 메인 _gt_bench가 허위 오라클 아님 교차확인 | 5·라인업 | `_dv_bench` 무거움(on-demand) |
 
 **악질 유저/원숭이(adversarial·monkey) 퍼저군** — 실제 zustand 스토어를 Node에서 구동(액션 난사·적대 입력).
 **먼저 `import './_gt_mock'`**(AsyncStorage 인메모리 모킹)이 필요. 시드 결정론·재현 가능.
