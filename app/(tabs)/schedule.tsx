@@ -2,7 +2,7 @@ import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
 import { SEASON, getTeam } from '../../data/league';
-import { computeStandings, playedThroughDay } from '../../data/standings';
+import { computeStandings, playedThroughDay, leagueDisplayDay } from '../../data/standings';
 import { teamClinch } from '../../data/clinch';
 import { availableTeamPlayers } from '../../data/injury';
 import { isBigMatch } from '../../engine/owner';
@@ -62,7 +62,7 @@ export default function Schedule() {
         const myOvr = teamOverallRaw(availableTeamPlayers(teamId, nextFixture.dayIndex));
         const oppOvr = teamOverallRaw(availableTeamPlayers(oppId, nextFixture.dayIndex));
         // 빅매치 판정(Phase 4): 순위 직결이 1순위 — 상위권 맞대결·종반 인접 순위전. 그 다음 접전/강팀
-        const standings = computeStandings(currentDay > 0 ? currentDay : Number.MAX_SAFE_INTEGER);
+        const standings = computeStandings(leagueDisplayDay(currentDay)); // 리그 진행 기준(§3.2) — 구 day0 MAX는 전 시즌 선반영 스포일러였음
         const myRank = Math.max(1, standings.findIndex((r) => r.teamId === teamId) + 1);
         const oppRank = Math.max(1, standings.findIndex((r) => r.teamId === oppId) + 1);
         const big = isBigMatch(myRank, oppRank, nextFixture.dayIndex);

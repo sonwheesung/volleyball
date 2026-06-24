@@ -2,16 +2,16 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, Screen, theme } from '../components/Screen';
-import { computeStandings, playedThroughDay } from '../data/standings';
+import { computeStandings, leagueDisplayDay } from '../data/standings';
 import { getTeam } from '../data/league';
 import { useGameStore } from '../store/useGameStore';
 
 export default function Standings() {
   const teamId = useGameStore((s) => s.selectedTeamId);
-  const results = useGameStore((s) => s.results);
+  const currentDay = useGameStore((s) => s.currentDay);
   const season = useGameStore((s) => s.season);
-  // 실제로 치른 경기까지만 반영(대시보드 성적과 일치) — 미관전 경기 선반영 방지
-  const standings = useMemo(() => computeStandings(playedThroughDay(results)), [results, season]);
+  // 리그 진행 기준(§3.2) — 현재 경기일 직전까지(관전 중 경기 제외, 스포일러 안전). 결과/대시보드/시즌리더와 동일 컷오프.
+  const standings = useMemo(() => computeStandings(leagueDisplayDay(currentDay)), [currentDay, season]);
 
   return (
     <Screen title={`${season + 1}시즌 순위`}>

@@ -5,7 +5,7 @@ import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } 
 import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../../data/league';
 import { leagueProduction } from '../../data/production';
 import { buildNewsFeed } from '../../data/news';
-import { computeStandings } from '../../data/standings';
+import { computeStandings, leagueDisplayDay } from '../../data/standings';
 import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, seasonSnapshot, type RecordCat } from '../../data/records';
 import { useGameStore } from '../../store/useGameStore';
 import type { ProdLine } from '../../engine/production';
@@ -66,9 +66,10 @@ function HistoryInner() {
     [viewSeason, season, currentDay, archive],
   );
 
-  // 현재 진행 시즌 라이브 리더보드(시즌 탭, 현재 시즌에서만 노출)
+  // 현재 진행 시즌 라이브 리더보드 — 리그 진행 기준(§3.2 leagueDisplayDay: 현재 경기일 직전까지).
+  // 구버전 `currentDay` 직접 사용은 결과/순위(관전 기준)와 어긋났고 day0에 미플레이 시즌을 선반영(스포일러)했다.
   const leaders = useMemo(() => {
-    const prod = leagueProduction(currentDay);
+    const prod = leagueProduction(leagueDisplayDay(currentDay));
     const rows = [...prod.entries()].map(([id, l]) => ({ id, l }));
     const top = (key: keyof ProdLine, n = 5) =>
       rows.filter((r) => (r.l[key] as number) > 0)

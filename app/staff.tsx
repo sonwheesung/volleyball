@@ -6,7 +6,7 @@ import {
   availableCoaches, availableAssistants, availableScouts,
   staffSpend, staffBudget, staffBudgetLeft,
 } from '../data/league';
-import { computeStandings } from '../data/standings';
+import { computeStandings, leagueDisplayDay } from '../data/standings';
 import { SPECIALTY_KO, SPECIALTY_DESC } from '../engine/staff';
 import { firedMidSeason } from '../engine/staffLifecycle';
 import { coachSlots } from '../data/league';
@@ -34,7 +34,7 @@ export default function Staff() {
 
   const head = getTeamCoach(teamId);
   const acting = !!head?.id.startsWith('acting_');
-  const myRow = computeStandings(currentDay > 0 ? currentDay : Number.MAX_SAFE_INTEGER).find((r) => r.teamId === teamId);
+  const myRow = computeStandings(leagueDisplayDay(currentDay)).find((r) => r.teamId === teamId); // 리그 진행 기준(§3.2)
   const slumping = !!myRow && firedMidSeason(myRow.wins, myRow.losses); // 시즌 중 부진(경질 권유)
   const asst = teamAssistants(teamId);
   const scouts = teamScouts(teamId);

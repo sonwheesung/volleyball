@@ -54,11 +54,19 @@
 - **결정**: 결과/리더/순위 표시 기준을 **`currentDay`(리그 진행)** 으로 통일 — §3.1의 "관전 기준"을 표시 화면에선 뒤집는다.
   단 **현재 경기일의 미관전 경기는 제외**(스포일러): `dayIndex < currentDay || results[fixtureId]`(지난 경기일 전부 +
   내가 관전 완료한 경기). 시작(currentDay 0)엔 0경기 → 빈 상태 유지.
-- **진행 상태(부분 적용 — 미완)**: ✅ `results.tsx`(2026-06-24). ⏳ **대시보드 순위(`index.tsx`)·순위 화면(`standings.tsx`)은
-  아직 §3.1(`playedThroughDay`)** — 전수 통일 필요(안 하면 결과=리그기준 vs 순위=관전기준으로 또 어긋남).
-- **clinch(PO 확정)는 예외 — `playedThroughDay` 유지**: PO 확정 노출은 `BROADCAST_SYSTEM` 스포일러 정책상
+- **단일 컷오프 헬퍼 — `leagueDisplayDay(currentDay) = currentDay − 1`** (`data/standings.ts`): "현재 경기일 **직전**까지"가
+  리그가 완료한 경기(현재 경기일은 관전 중이라 제외 → 스포일러 안전). 시작(currentDay 0)엔 −1 → 빈 집계. 결과/순위/
+  대시보드/시즌리더가 **모두 이 컷오프**를 쓴다(집계 화면은 좌우대칭 — 내 현재경기만 빼는 비대칭 없음).
+- **✅ 전수 통일 완료(2026-06-24) — `leagueDisplayDay` 균일 적용(내부 불일치 0)**:
+  - `app/results.tsx`(결과 목록): `seasonResults(leagueDisplayDay(currentDay))` — `results`(관전) 의존 제거, 순수 리그 기준.
+  - `app/standings.tsx`·`app/(tabs)/index.tsx`(대시보드 순위 + **성적 W/L 카드**): `playedThroughDay` → `leagueDisplayDay(currentDay)`.
+    성적 카드도 `results[id]`(관전)에서 `seasonResults(leagueDisplayDay)` 내 팀 집계로 — 순위와 같은 기준이라 안 어긋남.
+  - `app/(tabs)/history.tsx`(시즌 리더): `leagueProduction(currentDay)` → `leagueProduction(leagueDisplayDay(currentDay))` — currentDay 직접 사용이 day0 스포일러(미플레이 시즌 선반영)였던 것도 동시 해소.
+  - `app/(tabs)/schedule.tsx`(빅매치 순위)·`app/staff.tsx`(내 순위): `currentDay>0?currentDay:MAX` → `leagueDisplayDay(currentDay)` — day0 MAX는 전 시즌 선반영 스포일러였음(같이 해소).
+  - 효과: 결과·순위·성적·시즌리더·빅매치·스태프순위가 **전부 같은 컷오프**(현재 경기일 직전까지) → 내부 불일치 0. 균일 지연(현재 경기일 게임은 모두 동일하게 다음 진행 후 노출) 수용.
+- **clinch(PO 확정)는 예외 — `playedThroughDay(results)` 유지**: PO 확정 노출은 `BROADCAST_SYSTEM` 스포일러 정책상
   "결과-결정"이라 관전 후에만. 표시 기준 통일과 별개 개념이라 관전 기준을 지킨다.
-- 검증: `results` — currentDay 0→0경기·10(미관전)→9경기·30→24경기. 전수 통일 시 순위/대시보드 동일 기준 확인 필요.
+- 검증: `results`/`standings`/`index`(순위·성적)/leaders 모두 currentDay 0→빈집계·진행 후→리그 진행분 동일 수치. 회귀: `checkRecords`·`_ev_rest`·205 테스트·tsc.
 
 ## 4. 경기 진행 ("진행" 1일)
 

@@ -2,16 +2,15 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
-import { SEASON, getEvolvedTeamPlayers, getTeam } from '../../data/league';
+import { getEvolvedTeamPlayers, getTeam } from '../../data/league';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
-import { computeStandings, playedThroughDay } from '../../data/standings';
+import { computeStandings, leagueDisplayDay, seasonResults } from '../../data/standings';
 import { teamInjuriesOn, availableTeamPlayers } from '../../data/injury';
 import { buildNewsFeed, newsKey } from '../../data/news';
 import { teamOverallRaw } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
 import { teamFanbaseNow } from '../../data/owner';
 import { LEAGUE_CAP } from '../../engine/cap';
-import { teamScheduleEntries } from '../../engine/season';
 import { useGameStore } from '../../store/useGameStore';
 
 export default function Dashboard() {
@@ -19,7 +18,6 @@ export default function Dashboard() {
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
   const season = useGameStore((s) => s.season);
-  const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
   const released = useGameStore((s) => s.released);
 
@@ -37,23 +35,22 @@ export default function Dashboard() {
     [teamId, currentDay, fanScore, archive, season],
   );
 
+  // 성적·순위 모두 **리그 진행 기준**(§3.2 — leagueDisplayDay: 현재 경기일 직전까지, 관전 중 경기 제외).
+  // 구버전은 성적=results(관전)·순위=playedThroughDay라 자동진행 리그와 어긋났다. 이제 결과/시즌리더와 동일 컷오프.
   const record = useMemo(() => {
-    const entries = teamScheduleEntries(SEASON, teamId);
     let w = 0;
     let l = 0;
-    for (const e of entries) {
-      if (e.kind !== 'match') continue;
-      const r = results[e.fixture.id];
-      if (!r) continue;
-      const myWin = e.isHome ? r.homeSets > r.awaySets : r.awaySets > r.homeSets;
+    for (const r of seasonResults(leagueDisplayDay(currentDay))) {
+      const isHome = r.homeTeamId === teamId, isAway = r.awayTeamId === teamId;
+      if (!isHome && !isAway) continue;
+      const myWin = isHome ? r.homeSets > r.awaySets : r.awaySets > r.homeSets;
       if (myWin) w++;
       else l++;
     }
     return { w, l };
-  }, [teamId, results]);
+  }, [teamId, currentDay, season]);
 
-  // 순위는 실제로 치른 경기까지만(성적 카드 results와 동일 기준 — 미관전 경기 선반영 방지)
-  const standings = useMemo(() => computeStandings(playedThroughDay(results)), [results, season]);
+  const standings = useMemo(() => computeStandings(leagueDisplayDay(currentDay)), [currentDay, season]);
   const myRank = standings.findIndex((s) => s.teamId === teamId) + 1;
   const injuries = useMemo(() => teamInjuriesOn(teamId, currentDay), [teamId, currentDay, season]);
   const milestones = useGameStore((s) => s.milestones);

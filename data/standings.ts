@@ -118,6 +118,11 @@ export function playedThroughDay(results: Record<string, MatchResult>): number {
   return max;
 }
 
+/** §3.2(2026-06-24) — 표시용 "리그 진행" 컷오프 = 현재 경기일 **직전**까지. 현재 경기일은 관전 중이라 제외
+ *  (스포일러 안전). 시작(currentDay 0)엔 −1 → 빈 집계. 결과/순위/대시보드/시즌리더가 모두 이걸 쓴다(좌우대칭).
+ *  clinch(PO 확정)는 BROADCAST 스포일러 정책상 예외 — `playedThroughDay`를 따로 쓴다. */
+export const leagueDisplayDay = (currentDay: number): number => currentDay - 1;
+
 /** 팀별 그 시즌 최장 연승·연패 — 각 팀의 경기를 날짜순으로 보고 W/L 런 최댓값(연승/연패 업적용) */
 export function seasonStreaks(uptoDay: number): Record<string, [number, number]> {
   const rows = seasonResults(uptoDay).slice().sort((a, b) => a.dayIndex - b.dayIndex);
