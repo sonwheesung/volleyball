@@ -5,6 +5,8 @@ import { Button, Card, Loading, Muted, OvrBadge, PosTag, Row, Screen, STYLE_LABE
 import { RosterList } from '../../components/RosterList';
 import { IdentityChip, RecentRanks } from '../../components/ClubIdentity';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal } from '../../data/league';
+import { computeStandings } from '../../data/standings';
+import { leagueProduction } from '../../data/production';
 import { clubIdentity, clubAgeYears } from '../../data/clubIdentity';
 import { teamOverallRaw } from '../../engine/overall';
 import { SPECIALTY_KO } from '../../engine/staff';
@@ -26,6 +28,11 @@ export default function TeamDetail() {
     if (!starting || !team) return;
     const task = InteractionManager.runAfterInteractions(() => {
       selectTeam(team.id);
+      // 시즌 결과·생산을 **이 로딩 화면 뒤에서** 미리 계산(캐시 워밍). allResults()는 첫 호출이 ~1.8s(전 시즌
+      // 결정론 시뮬·baseVersion 캐시)라, 안 데우면 이동 직후 스케줄/대시보드 첫 렌더가 로딩 없이 그만큼 멈춘다
+      // (사용자 보고: 운영하기 후 오래 대기·로딩 없음). 여기서 끝내면 downstream은 캐시라 즉시.
+      computeStandings(Number.MAX_SAFE_INTEGER); // allResults() 캐시 워밍(스케줄·대시보드 순위)
+      leagueProduction(Number.MAX_SAFE_INTEGER); // 생산 캐시 워밍(대시보드·뉴스·기록)
       router.replace('/(tabs)/schedule');
     });
     return () => task.cancel();
