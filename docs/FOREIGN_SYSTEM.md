@@ -56,6 +56,10 @@
   미지명자 중 잔류 희망자(시드 파생, 3~5명 — 등급은 한 단계 아래가 보통).
 - 구현: TRANSACTION_SYSTEM 재활용 — release+sign tx, 날짜 인지 명단·리플레이 안전 그대로.
   단 외인 release는 FA 풀로 가지 않고 리그를 떠난다(타 팀이 주울 수 없음 — 현실 규정).
+  > **버그 수정(2026-06-25)**: 이 "리그 떠남"은 **두 곳**에서 지켜야 한다 — forward-pass `applyTx`(faAvail)
+  > **와** on-demand 셀렉터 `availableFAsOnDay`. 후자에 `!isForeign` 가드가 빠져 있어 `replaceForeign`/
+  > 매뉴얼 방출 후 옛 외인이 인시즌 FA 풀(`app/transactions.tsx`)·`signInSeason`으로 샜다(재영입·UI 누수).
+  > 셀렉터에 동일 가드 추가로 해소. 가드 `tools/_dv_foreign_fa_leak.ts`(A/B). 아시아쿼터는 `isForeign=true`라 동일 수정이 커버.
 - 새 외인은 경기감각 0에서 시작(FORM — 합류 직후 1~2주 무뎌짐, 공짜 디테일).
 
 ## 4. 기존 시스템 통합 지점 (수정 맵)
@@ -66,7 +70,7 @@
 | `data/offseason.ts` | buildOffseason에서 **외인 만료자는 국내 풀로 보내지 않음** + resolvePreDraft 체인에 `resolveTryout` 삽입(FA 시장 **앞** — AI가 OP 구멍을 FA로 메우기 전에 외인이 채워져야 중복 영입 없음) | 미리보기=결과 유지 |
 | `engine/cap.ts` 합산처들 | payroll 합산 전부 `!isForeign` 필터(offseason·store signInSeason·transactions UI·aiGM) | 캡=국내 전용 |
 | `store` | `tryoutWish: string[]` 저장 + endSeason 체인에 반영 + 시즌 중 교체 액션(`replaceForeign`) | 옵셔널 필드 — 구세이브 기본값 |
-| `data/dynamics.ts` | 외인 교체 tx의 "리그 떠남" 처리(faAvail에 안 넣음) | 가드 1줄 |
+| `data/dynamics.ts` | 외인 교체 tx의 "리그 떠남" 처리 — `applyTx`(faAvail) **및** `availableFAsOnDay`(셀렉터) **둘 다** `!isForeign` 가드 | 가드 1줄 ×2(후자 2026-06-25 누락 수정) |
 | FA/faMarket | `isFAEligible`에 `!isForeign`(외인은 FA 시장 비대상) | 1줄 |
 | 면담(OWNER) | 외인은 면담 비대상(1년 계약 — 잔류 설득이 무의미, 재지명이 그 역할) | discontent 제외 |
 | 스카우팅 | 트라이아웃 풀에 `teamScoutReveal` 그대로 적용 — 스카우터가 좋으면 도박이 덜 도박 | 재활용 |

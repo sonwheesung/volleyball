@@ -25,7 +25,6 @@ const stat = {
   foreignMin: 99, foreignMax: 0,
   floorViolations: 0,          // 외인 OVR < 국내 평균(설계: 그 이상이어야)
   resignSame: 0, switched: 0,  // 재지명(같은 팀 잔류) vs 새 얼굴
-  faPoolForeign: 0,            // FA 풀에 섞인 외인(0이어야)
   capOverDomestic: 0,          // 국내 페이롤 캡 초과(0이어야)
   foreignAvgSum: 0, domesticAvgSum: 0,
   opPointsSum: 0, opSets: 0,   // 외인 생산(세트당)
@@ -104,13 +103,8 @@ for (let s = 0; s < seasons; s++) {
     }
   }
   prevForeignOf = nextForeignOf;
-  const rostered = new Set(Object.values(filled.rosters).flat());
-  for (const id of Object.keys(snapshot)) {
-    const p = snapshot[id] as Player;
-    if (p?.isForeign && !rostered.has(id)) {
-      // 대체 풀(최대 4) 외의 비로스터 외인은 없어야 한다
-    }
-  }
+  // (FA 풀 외인 오염 검사는 인시즌 트랜잭션 계층의 불변식 — 전용 가드 tools/_dv_foreign_fa_leak.ts가
+  //  replaceForeign/release 후 availableFAsOnDay·signInSeason을 실제로 구동해 A/B로 검증. 여기선 미측정.)
   commitPlayerBase(snapshot);
   commitRosters(filled.rosters);
   if ((s + 1) % 30 === 0) process.stderr.write(`  …${s + 1}/${seasons}\n`);
@@ -121,7 +115,7 @@ log(`▸ 리그 외인 수: 항상 ${stat.foreignMin}~${stat.foreignMax}명 (멸
 log(`▸ 성능: 외인 평균 OVR ${(stat.foreignAvgSum / seasons).toFixed(1)} vs 국내 평균 ${(stat.domesticAvgSum / seasons).toFixed(1)} — 바닥 위반 ${stat.floorViolations}건`);
 log(`▸ 재지명(같은 팀 잔류) ${stat.resignSame} vs 새 얼굴 ${stat.switched} (${(stat.resignSame / Math.max(1, stat.resignSame + stat.switched) * 100).toFixed(0)}% 잔류)`);
 log(`▸ 외인 생산: 시즌당 평균 ${(stat.opPointsSum / Math.max(1, stat.opSets)).toFixed(0)}점/인`);
-log(`▸ 무결: 국내 페이롤 캡 초과 ${stat.capOverDomestic}건 · FA 풀 외인 오염 ${stat.faPoolForeign}건`);
+log(`▸ 무결: 국내 페이롤 캡 초과 ${stat.capOverDomestic}건 (FA 풀 외인 오염은 _dv_foreign_fa_leak.ts가 검증)`);
 const tArr = ids.map((id) => titles[id]);
 log(`▸ 리그 건강: 우승경험 ${tArr.filter((t) => t > 0).length}/${ids.length} · 최다 ${Math.max(...tArr)}회`);
 const ok = stat.foreignMin === 7 && stat.foreignMax === 7 && stat.floorViolations < seasons * 0.5

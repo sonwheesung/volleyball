@@ -276,7 +276,9 @@ export function availableFAsOnDay(day: number): string[] {
   const set = new Set(faPoolSeed);
   for (const tx of dyn().txLog) {
     if (tx.day > day) continue;
-    if (tx.kind === 'release') set.add(tx.playerId);
+    // 외인 방출은 FA 풀로 가지 않는다 — 리그를 떠남(FOREIGN_SYSTEM 3장). applyTx(line 145)와 동일 가드.
+    // (replaceForeign이 옛 외인 release tx를 남기므로 이 가드가 없으면 교체 후 옛 외인이 FA 풀로 샌다.)
+    if (tx.kind === 'release') { if (!getPlayer(tx.playerId)?.isForeign) set.add(tx.playerId); }
     else set.delete(tx.playerId);
   }
   return [...set];
