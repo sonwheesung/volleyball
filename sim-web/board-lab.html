@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:," />
+<title>배구 — 수비 위치 실험실</title>
+<style>
+  :root {
+    --ink:#15202B; --soft:#8A94A6; --line:#E6EAF0; --paper:#FFFFFF; --bg:#F4F7FB;
+    --accent:#10B9A6; --good:#16B07D; --warn:#F2A93B; --bad:#FF6B5A; --alt:#EEF1F6;
+    --radius:10px; --shadow:0 1px 3px rgba(27,42,74,.06);
+  }
+  * { box-sizing:border-box; }
+  html,body { margin:0; }
+  body { font-family: system-ui, "Apple SD Gothic Neo", "Malgun Gothic", sans-serif; background:var(--bg); color:var(--ink); font-size:14px; line-height:1.45; }
+  header { padding:14px 20px; border-bottom:1px solid var(--line); background:var(--paper); }
+  header h1 { margin:0; font-size:18px; }
+  header .sub { color:var(--soft); font-size:12.5px; margin-top:3px; }
+  header a { color:var(--accent); text-decoration:none; font-weight:700; }
+  .wrap { max-width:520px; margin:0 auto; padding:16px 16px 80px; }
+  .card { border:1px solid var(--line); border-radius:var(--radius); background:var(--paper); padding:14px; box-shadow:var(--shadow); margin-bottom:14px; }
+  .warn { background:#F2A93B1F; border-radius:10px; padding:10px; color:#8A6A12; font-size:12px; line-height:1.5; font-weight:600; }
+  .row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; }
+  .row.between { justify-content:space-between; }
+  label.fld { display:flex; flex-direction:column; gap:4px; font-size:12px; color:var(--soft); font-weight:700; }
+  select { padding:8px 10px; border:1px solid var(--line); border-radius:7px; background:#fff; font-size:14px; font-weight:700; min-width:120px; }
+  button { padding:9px 14px; border:1px solid var(--line); background:var(--alt); color:var(--ink); border-radius:8px; font-weight:800; font-size:13px; cursor:pointer; }
+  button.primary { background:var(--accent); color:#fff; border-color:var(--accent); }
+  button:hover { filter:brightness(1.05); }
+  #situation { font-weight:800; font-size:15px; margin-bottom:4px; }
+  #counters, #roles, #movedline { font-size:12.5px; color:var(--soft); margin-top:3px; }
+  #counters b, #roles b { color:var(--ink); }
+  .courtwrap { display:flex; justify-content:center; }
+  svg#court { width:400px; max-width:100%; height:auto; border:2px solid #C9B98E; border-radius:10px; background:#EBE0C8; touch-action:none; }
+  .legend { font-size:11px; color:var(--soft); margin-top:6px; text-align:center; }
+  .ctrl { display:flex; gap:8px; justify-content:space-between; margin-top:4px; }
+  .ctrl .grp { display:flex; gap:6px; }
+  textarea#out { display:none; width:100%; height:300px; margin-top:8px; font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; line-height:1.5; border:1px solid var(--line); border-radius:8px; padding:10px; white-space:pre; overflow:auto; }
+  #copied { color:var(--good); font-size:12px; font-weight:700; margin-top:6px; min-height:16px; }
+  .seed { font-size:12px; color:var(--soft); font-weight:700; }
+</style>
+</head>
+<body>
+<header>
+  <h1>🏐 수비 위치 실험실 <span style="font-size:12px;color:var(--soft)">(웹)</span></h1>
+  <div class="sub">한 스텝씩 진행하며 양 팀 12명 위치를 드래그로 고치고, 좌표를 복사해 채팅에 붙여넣으세요 · <a href="/">← 엔진 콘솔</a></div>
+</header>
+<div class="wrap">
+
+  <div class="card">
+    <div class="warn">⚠ 저장은 <b>경기에 반영되지 않습니다</b>. 좌표를 텍스트로 내보낼 뿐이에요. 그 텍스트와 "이래야 하는 이유"를 채팅에 적어주시면, 함께 타당하다고 합의했을 때만 실제 엔진 코드를 고칩니다.</div>
+  </div>
+
+  <div class="card">
+    <div class="row between">
+      <label class="fld">홈 <select id="homeSel"></select></label>
+      <span class="vs" style="font-weight:900;color:var(--soft)">VS</span>
+      <label class="fld">원정 <select id="awaySel"></select></label>
+    </div>
+    <div class="row" style="margin-top:10px">
+      <span class="seed">시드 <b id="seedVal">1</b></span>
+      <button id="seedBtn">시드 변경</button>
+      <button id="movesBtn">이동 ✓</button>
+    </div>
+  </div>
+
+  <div class="card">
+    <div id="situation">🏐 …</div>
+    <div id="counters"></div>
+    <div id="roles"></div>
+  </div>
+
+  <div class="courtwrap">
+    <svg id="court" viewBox="0 0 400 560" width="400" height="560" xmlns="http://www.w3.org/2000/svg"></svg>
+  </div>
+  <div class="legend">→ 화살표=다음 이동 방향 · 🟡 공 · <b style="color:#F2A93B">금테=전위</b> · <b style="color:#F2722C">주황테=서브</b> · ●홈 ○원정 · 위=원정 / 아래=홈</div>
+
+  <div class="card" style="margin-top:14px">
+    <div class="ctrl">
+      <div class="grp">
+        <button id="prevRally">◀◀ 랠리</button>
+        <button id="back">◀ 단계</button>
+      </div>
+      <div class="grp">
+        <button id="adv" class="primary">단계 ▶</button>
+        <button id="nextRally">랠리 ▶▶</button>
+      </div>
+    </div>
+    <div id="movedline" style="margin-top:10px"></div>
+    <div class="row" style="margin-top:10px">
+      <button id="exportBtn" class="primary">좌표 내보내기 (복사)</button>
+      <button id="resetStep">이 스텝 초기화</button>
+    </div>
+    <div id="copied"></div>
+    <textarea id="out" readonly spellcheck="false"></textarea>
+  </div>
+
+</div>
+<script src="dist/board-lab.js"></script>
+</body>
+</html>

@@ -9,11 +9,15 @@ const root = path.resolve(__dirname, '..');
 const stubs = path.join(__dirname, '_stubs');
 
 const opts = {
-  entryPoints: [path.join(__dirname, 'main.ts')],
+  // 두 페이지: 엔진 콘솔(index.html→dist/bundle.js) + 수비 위치 실험실(board-lab.html→dist/board-lab.js)
+  entryPoints: [
+    { out: 'bundle', in: path.join(__dirname, 'main.ts') },
+    { out: 'board-lab', in: path.join(__dirname, 'board-lab.ts') },
+  ],
   bundle: true,
   platform: 'browser',
   format: 'iife',
-  outfile: path.join(__dirname, 'dist/bundle.js'),
+  outdir: path.join(__dirname, 'dist'),
   alias: {
     'react-native': path.join(stubs, 'empty.ts'),
     '@react-native-async-storage/async-storage': path.join(stubs, 'async-storage.ts'),
