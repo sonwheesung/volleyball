@@ -54,8 +54,12 @@ export const tipsForScreen = (screen: string): Tip[] =>
 
 - **`SpotlightProvider`** (루트 `app/_layout.tsx`에 1회): 화면의 대상 사각형들을 보관
   (`Record<anchorId, Rect>`). 화면 전환 시 대상은 mount/unmount로 자동 등록·해제.
-- **`SpotlightTarget id`**: 밝게 띄울 요소를 감싼다. `onLayout` 후 `measureInWindow`로 **윈도우 절대
-  좌표**를 측정해 Provider에 등록(언마운트 시 해제). 측정 전이면 그 스텝은 잠깐 대기.
+- **`SpotlightTarget id`**: 밝게 띄울 요소를 감싼다. `onLayout` + 마운트 직후 **여러 차례**(0·60·200·
+  500·900ms) `measureInWindow`로 **윈도우 절대 좌표**를 측정해 Provider에 등록(스크롤뷰·화면전환
+  애니메이션으로 첫 측정이 0/미안정인 경우 보강). 언마운트 시 해제.
+- **측정 실패 폴백(중요)**: 오버레이가 대상 좌표를 ≈720ms(6회 재시도) 안에 못 받으면 **포기하고 전체
+  어둠 + 가운데 카드**로 띄운다 — 측정이 어떤 이유로 실패해도 **튜토리얼이 안 보이는 일은 없다**.
+  (구버전은 측정 실패 시 `return null`로 영원히 안 떴다 — 2026-06-24 교정.)
 - **`SpotlightOverlay screen`**: 각 화면 끝에 1개. 그 화면의 미본 스텝 큐(`tipsForScreen(screen)
   .filter(!seen)`)의 **첫 스텝**을 띄운다. 투명 `Modal`(최상위·탭바 위 포함) 위에:
   - **구멍 뚫린 어둠**: 대상 Rect 둘레로 4개의 어두운 띠(상/하/좌/우) + 강조 링. 대상만 밝게.
@@ -78,6 +82,8 @@ resetTips: () => void;              // 전체 리셋(설정 "튜토리얼 다시
 ```
 
 - `seenTips`는 `freshSave`(게임 초기화) **밖**에 둔다 → 초기화해도 유지(`onboarded`와 동일 패턴).
+- **persist `partialize`에 반드시 포함**(`store/useGameStore.ts`) — 빠지면 리로드마다 `{}`로 초기화돼
+  튜토리얼이 매번 다시 뜬다(영구 추적 깨짐). 2026-06-24 누락 교정.
 - 설정의 "튜토리얼 다시보기"(`app/settings.tsx`)는 `replayOnboarding()` + **`resetTips()`** 를 같이
   호출해 인트로와 스포트라이트를 처음부터 다시 보게 한다.
 

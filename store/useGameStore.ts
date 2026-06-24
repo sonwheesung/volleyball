@@ -807,6 +807,7 @@ export const useGameStore = create<GameState>()(
         onboarded: s.onboarded,
         supporter: s.supporter,
         sfxEnabled: s.sfxEnabled,
+        seenTips: s.seenTips, // 본 스포트라이트 스텝(영구 추적 — 리로드/새 게임에도 유지, ONBOARDING 1·4)
         selectedTeamId: s.selectedTeamId,
         season: s.season,
         currentDay: s.currentDay,

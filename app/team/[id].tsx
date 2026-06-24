@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
-import { InteractionManager, Text, View } from 'react-native';
+import { Text, View } from 'react-native';
 import { Button, Card, Loading, Muted, OvrBadge, PosTag, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList } from '../../components/RosterList';
@@ -23,20 +23,22 @@ export default function TeamDetail() {
 
   const team = id ? getTeam(id) : undefined;
 
-  // 구단 확정 = 무거운 동기 작업(리그 리셋·시즌 구성). 먼저 로딩 화면을 그린 뒤(다음 인터랙션 틱)
-  // 실제 작업을 돌려 "탭했는데 화면이 멈춘" 체감을 없앤다(사용자 보고). InteractionManager로 한 프레임 양보.
+  // 구단 확정 = 무거운 동기 작업(리그 리셋·시즌 구성·전 시즌 캐시 워밍 ~1.8s).
+  // 로딩이 **실제로 페인트된 뒤** 무거운 일을 하도록 rAF 2프레임을 양보한다(UI-1). 1프레임=로딩 커밋,
+  // 2프레임=페인트 완료 후 실행. (구 InteractionManager.runAfterInteractions는 페인트 보장이 약해
+  //  로딩이 안 뜨고 그냥 멈춘 것처럼 보였다 — 사용자 보고 2026-06-24.)
   useEffect(() => {
     if (!starting || !team) return;
-    const task = InteractionManager.runAfterInteractions(() => {
-      selectTeam(team.id);
-      // 시즌 결과·생산을 **이 로딩 화면 뒤에서** 미리 계산(캐시 워밍). allResults()는 첫 호출이 ~1.8s(전 시즌
-      // 결정론 시뮬·baseVersion 캐시)라, 안 데우면 이동 직후 스케줄/대시보드 첫 렌더가 로딩 없이 그만큼 멈춘다
-      // (사용자 보고: 운영하기 후 오래 대기·로딩 없음). 여기서 끝내면 downstream은 캐시라 즉시.
-      computeStandings(Number.MAX_SAFE_INTEGER); // allResults() 캐시 워밍(스케줄·대시보드 순위)
-      leagueProduction(Number.MAX_SAFE_INTEGER); // 생산 캐시 워밍(대시보드·뉴스·기록)
-      router.replace('/(tabs)/schedule');
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => {
+        selectTeam(team.id);
+        computeStandings(Number.MAX_SAFE_INTEGER); // allResults() 캐시 워밍(스케줄·대시보드 순위)
+        leagueProduction(Number.MAX_SAFE_INTEGER); // 생산 캐시 워밍(대시보드·뉴스·기록)
+        router.replace('/(tabs)/schedule');
+      });
     });
-    return () => task.cancel();
+    return () => { cancelAnimationFrame(raf1); if (raf2) cancelAnimationFrame(raf2); };
   }, [starting, team, selectTeam, router]);
   if (!team) {
     return (

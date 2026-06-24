@@ -34,14 +34,18 @@ export function SpotlightTarget({ id, children, style }: { id: string; children:
   const measure = useCallback(() => {
     const node = ref.current;
     if (!node || !ctx) return;
-    // measureInWindow는 레이아웃이 안정된 다음 틱에 정확 → onLayout 후 호출
+    // measureInWindow는 레이아웃이 안정된 다음 틱에 정확 → onLayout 후 + 마운트 직후 여러 번 시도
     node.measureInWindow((x, y, width, height) => {
       if (width > 0 && height > 0) ctx.setTarget(id, { x, y, width, height });
     });
   }, [ctx, id]);
-  useEffect(() => () => ctx?.setTarget(id, null), [ctx, id]);
+  // 마운트 후 몇 차례 재측정(스크롤뷰·전환 애니메이션으로 첫 onLayout이 0/미안정인 경우 보강)
+  useEffect(() => {
+    const ts = [0, 60, 200, 500, 900].map((d) => setTimeout(measure, d));
+    return () => { ts.forEach(clearTimeout); ctx?.setTarget(id, null); };
+  }, [measure, ctx, id]);
   return (
-    <View ref={ref} collapsable={false} onLayout={() => { setTimeout(measure, 0); }} style={style}>
+    <View ref={ref} collapsable={false} onLayout={measure} style={style}>
       {children}
     </View>
   );
@@ -56,29 +60,32 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   const seen = useGameStore((s) => s.seenTips);
   const markTip = useGameStore((s) => s.markTip);
   const focused = useIsFocused(); // 탭은 마운트가 유지됨 — 포커스된 화면의 오버레이만 띄운다(이중 모달 방지)
-  const [, force] = useState(0);
+  const [attempt, setAttempt] = useState(0);
 
   const queue = tipsForScreen(screen).filter((t) => !seen[t.id]);
   const active = queue[0];
   const rect = active?.anchor ? ctx?.targets[active.anchor] : undefined;
 
-  // 대상이 아직 측정 안 됐으면 잠깐 기다렸다 재시도(레이아웃 안정 후 등록됨)
+  // 새 스텝마다 측정 시도 카운트 리셋
+  useEffect(() => { setAttempt(0); }, [active?.id]);
+  // 대상이 아직 측정 안 됐으면 재시도. 단 일정 횟수(≈720ms) 넘으면 포기하고 가운데 카드로 폴백(안 보이는 일 없게).
   useEffect(() => {
-    if (active?.anchor && !rect) {
-      const t = setTimeout(() => force((x) => x + 1), 140);
+    if (active?.anchor && !rect && attempt < 6) {
+      const t = setTimeout(() => setAttempt((a) => a + 1), 120);
       return () => clearTimeout(t);
     }
-  }, [active, rect]);
+  }, [active, rect, attempt]);
 
-  if (!focused) return null;               // 포커스 화면만
+  if (!focused) return null; // 포커스 화면만
   if (!active) return null;
-  if (active.anchor && !rect) return null; // 측정 대기
+  const measuring = !!active.anchor && !rect && attempt < 6;
+  if (measuring) return null; // 잠깐 측정 대기(최대 ≈720ms). 그 뒤엔 폴백으로 무조건 표시.
 
   const { width: SW, height: SH } = Dimensions.get('window');
   const total = tipsForScreen(screen).length;
   const idx = total - queue.length + 1; // 현재가 몇 번째인지(1-based)
 
-  // 구멍(있으면) 둘레 4밴드 + 강조 링. 없으면 전체 어둠 + 가운데 카드.
+  // 구멍(측정 성공 시) 둘레 4밴드 + 강조 링. 측정 실패/앵커없음이면 전체 어둠 + 가운데 카드.
   const hole = rect
     ? { x: Math.max(0, rect.x - PAD), y: Math.max(0, rect.y - PAD), w: rect.width + PAD * 2, h: rect.height + PAD * 2 }
     : null;
