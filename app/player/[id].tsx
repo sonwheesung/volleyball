@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
-import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, conditionOf, popularityNow } from '../../data/owner';
+import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans, fanOverlapRatio } from '../../engine/owner';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
 import { SCANDAL_KO } from '../../engine/scandal';
@@ -186,6 +186,17 @@ export default function PlayerDetail() {
               <Muted>컨디션</Muted>
               <Text style={{ color: cond.color, fontWeight: '800' }}>● {cond.label}</Text>
             </Row>
+            {p.faPref ? (
+              <>
+                <Row>
+                  <Muted>성격</Muted>
+                  <Text style={{ color: theme.text, fontWeight: '800', fontSize: 13 }}>
+                    {ARCHETYPE_KO[p.faPref.archetype].emoji} {ARCHETYPE_KO[p.faPref.archetype].label}
+                  </Text>
+                </Row>
+                <Muted style={{ fontSize: 12 }}>{ARCHETYPE_KO[p.faPref.archetype].note}</Muted>
+              </>
+            ) : null}
             {moodInfo ? (
               <Row>
                 <Muted>지금 마음</Muted>

@@ -134,6 +134,23 @@ const PASS = '✅ PASS', FAIL = '❌ FAIL', NA = '⚠️ 표본부족';
     }
   }
 
+  // ── ⑦ 실력 밀림(outclassed) 주전급도 성격 따라 갈림 — 출전형 불만 / 팀퍼스트 수용 (사용자 보고 2026-06-24) ──
+  // "91이 93에 2점 밀려 벤치인데 불만없음" → 성격 게이트. 출전형은 주전급(±3 OVR)서 밀리면 불만이어야 화면의 성격과 일치.
+  {
+    const { discontentOf } = await import('../engine/owner');
+    const { prefWeightsOf } = await import('../engine/faMarket');
+    const roster = getEvolvedTeamPlayers(t0, day).filter((p) => p.position !== 'L');
+    const hi = [...roster].sort((a, b) => prefWeightsOf(b).play - prefWeightsOf(a).play)[0]; // 출전 갈망 高
+    const lo = [...roster].sort((a, b) => prefWeightsOf(a).play - prefWeightsOf(b).play)[0]; // 출전 갈망 低(팀퍼스트)
+    // 실력 밀림 + 주전 문턱 근접(기대 0.78 ≈ 2 OVR 차) — 기대치·사유 고정, 성격만 변수
+    const base = { recentRankAvg: 4, teamCount: 7, playRatio: 0, salaryRatio: 1, myTeamId: t0, sitCause: 'outclassed' as const, expectsPlay: 0.78 };
+    const dHi = discontentOf(hi, base), dLo = discontentOf(lo, base);
+    const ok = dHi === 'minutes' && dLo !== 'minutes';
+    add('⑦ 실력밀림 주전급 — 성격 갈림', ok ? PASS : FAIL,
+      `2점 차 벤치(outclassed, 기대 0.78): 출전형 ${hi.name}(w.play ${prefWeightsOf(hi).play.toFixed(2)})→'${dHi ?? '불만없음'}' / ` +
+      `팀퍼스트 ${lo.name}(${prefWeightsOf(lo).play.toFixed(2)})→'${dLo ?? '불만없음'}' (성격↔마음 일치: 출전형만 벤치 불만)`);
+  }
+
   log(`\n${'═'.repeat(56)}\n선수 심리 검증 요약`);
   for (const r of results) log(`  ${r.status.padEnd(4)} ${r.item}`);
   log(`\nFAIL ${results.filter((r) => r.status === FAIL).length}`);

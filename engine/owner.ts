@@ -37,7 +37,7 @@ function minutesGrievance(cause: SitCause | undefined, playRatio: number, expect
   if (!cause) return { unmet: playRatio < 0.34, scale: 1 }; // 구버전 호환(사유 모르면 출전율만)
   switch (cause) {
     case 'ownerBenched': return { unmet: true, scale: 1 * expectsPlay };   // 부당 벤치 — 주전감일수록 분노
-    case 'outclassed':   return { unmet: true, scale: 0.5 * expectsPlay }; // 실력 밀림 — 주전 문턱 가까울 때만
+    case 'outclassed':   return { unmet: true, scale: 0.7 * expectsPlay }; // 실력 밀림 — 주전 문턱 가까울수록(±3 OVR) 출전형은 불만(어디서든 주전 원함). 부당벤치(1.0)보단 약함
     default:             return { unmet: false, scale: 0 };  // starter·injured·suspended·rested → 불만 없음
   }
 }

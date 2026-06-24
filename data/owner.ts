@@ -1,7 +1,7 @@
 // 구단주 레이어 셀렉터 (OWNER_SYSTEM) — 불만 파생·면담 대사·컨디션. UI와 store가 공유.
 // 불만은 저장하지 않는다: FA 성향과 현실(순위·출전·연봉)의 불일치에서 그때그때 파생.
 
-import type { Player, SeasonAwards } from '../types';
+import type { Player, SeasonAwards, FAArchetype } from '../types';
 import {
   discontentOf, moodOf, popularityOf, fanbase, playerFans, fanOverlapRatio,
   interviewEffects, refuseResignProb, sustainedBenchRefuse, sinkingShipBias,
@@ -126,6 +126,16 @@ export const TOPIC_SPEECH: Record<DiscontentTopic, string> = {
 
 export const TOPIC_BADGE: Record<DiscontentTopic, string> = {
   win: '우승 갈망', minutes: '출전 불만', money: '연봉 불만', hometown: '연고 향수',
+};
+
+/** 선수 성격(FA 동기 아키타입) 표시 라벨 + 벤치 태도 설명 — "왜 이 마음인지" 가독성용(OWNER_SYSTEM).
+ *  화면에 성격을 드러내 "얘는 충성형이라 백업도 수용 / 출전형이라 벤치에 민감"이 한눈에 보이게. */
+export const ARCHETYPE_KO: Record<FAArchetype, { label: string; emoji: string; note: string }> = {
+  money:    { label: '연봉 중시', emoji: '💰', note: '보상이 1순위 — 대우만 맞으면 역할은 받아들이는 편.' },
+  winnow:   { label: '우승 갈망', emoji: '🏆', note: '우승이 1순위 — 강팀이라면 벤치도 감수한다.' },
+  loyal:    { label: '팀 충성', emoji: '🤝', note: '소속감이 1순위 — 팀에 헌신하며 백업도 묵묵히 받아들인다.' },
+  minutes:  { label: '출전 갈망', emoji: '🔥', note: '코트가 1순위 — 어디서든 주전을 원한다. 주전급인데 벤치면 불만이 크다.' },
+  hometown: { label: '연고 애착', emoji: '🏠', note: '연고가 1순위 — 역할보다 어디서 뛰는지를 더 본다.' },
 };
 
 /** 선수 인기(0~100) — 통산·수상·근속·올해 활약에서 파생. 이번 시즌 사고 치면 팬이 떠난다(×0.6) */
