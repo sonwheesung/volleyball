@@ -8,7 +8,7 @@ import { simulateMatch } from '../engine/match';
 import { buildLineup } from '../engine/lineup';
 import { displayPos, playerAtZone, zonePx, type Lineup, type Px } from '../components/courtLayout';
 import { segmentTargets, reconstructRallies, applySubsToSix, offenseSideOf } from '../components/courtDirector';
-import { ballPath, type Move, type Lineups } from '../components/courtPath';
+import { ballPath, SEG_DUR, type Move, type Lineups } from '../components/courtPath';
 import { POS_COLOR } from '../components/posTokens';
 import type { Player, Position, Side } from '../types';
 
@@ -26,6 +26,9 @@ const sgn = (n: number) => (n >= 0 ? `+${n.toFixed(3)}` : n.toFixed(3));
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
 const isBackZone = (z: number) => z === 1 || z === 5 || z === 6;
 const NS = 'http://www.w3.org/2000/svg';
+// 재생 애니메이션 — 공 포물선 높이(H 비율, MatchCourt와 동일 결)·마커 슬라이드 이징
+const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: 0.10, pass: 0.05, toss: 0.17, spike: 0.03, fault: 0.06, bounce: 0.05 };
+const easeOut = (t: number) => 1 - (1 - t) * (1 - t);
 
 interface LabMarker {
   key: string; side: Side; name: string; pos: Position; zone: number;
@@ -42,8 +45,16 @@ const state = {
   segIdx: 0,    // 랠리 내 구간(스텝)
   showMoves: true,
   showNames: true, // 마커에 선수 이름 라벨 표시
+  playing: false,  // 재생 중(애니메이션)인가
   overrides: new Map<string, { x: number; y: number }>(), // 드래그로 옮긴 좌표(key→px)
 };
+
+// 재생 루프 상태
+let raf = 0, segStart = 0;
+let prevCache: Step | null = null;          // 직전 스텝(마커 슬라이드 시작 위치)
+const markerEls: Record<string, SVGGElement> = {}; // 애니메이션 중 transform만 갱신할 마커 ref
+let ballEl: SVGCircleElement | null = null;
+let speedMul = 1;                           // 클수록 느리게(구간 길이에 곱)
 
 // ── 시뮬 캐시(팀/시드 의존) ──
 let sim: ReturnType<typeof simulateMatch>;
@@ -172,9 +183,16 @@ function situationOf(step: Step, markers: LabMarker[]): string {
 // ── 렌더 ──
 const $ = (id: string) => document.getElementById(id)!;
 
+// 정적 렌더(일시정지/스텝 상태) — 대형·점선 경로·드래그 가능.
 function render(): void {
   const step = computeStep(state.idx, state.segIdx);
   const markers = currentMarkers(step);
+  updateInfo(step, markers);
+  drawCourt(step, markers, false);
+}
+
+// 상단 정보(상황·카운터·역할·옮김·명단) — 재생 중엔 구간 바뀔 때만 호출(매 프레임 X).
+function updateInfo(step: Step, markers: LabMarker[]): void {
   const r = step.rally;
   const preH = r.home - (r.scorer === 'home' ? 1 : 0);
   const preA = r.away - (r.scorer === 'away' ? 1 : 0);
@@ -190,12 +208,67 @@ function render(): void {
   $('roles').innerHTML =
     `<span style="color:${SERVE_RING};font-weight:800">서브</span> ${server ? `${server.side === 'home' ? '홈' : '원정'} ${server.pos} ${server.name}` : '— (인플레이)'}` +
     ` &nbsp;·&nbsp; <span style="color:${FRONT_RING};font-weight:800">전위</span> 홈 ${frontOf('home')} / 원정 ${frontOf('away')}`;
-  $('movedline').innerHTML =
-    `이 스텝에서 옮긴 선수: <b style="color:${movedCount ? 'var(--accent)' : 'var(--soft)'}">${movedCount}명</b>` +
-    (movedCount ? ` — ${markers.filter(isMoved).map((m) => `${m.side === 'home' ? '홈' : '원'} ${m.pos}`).join(', ')}` : '');
-
+  $('movedline').innerHTML = state.playing
+    ? '재생 중 — ⏸ 멈추면 그 스텝에서 선수를 드래그해 고칠 수 있어요.'
+    : `이 스텝에서 옮긴 선수: <b style="color:${movedCount ? 'var(--accent)' : 'var(--soft)'}">${movedCount}명</b>` +
+      (movedCount ? ` — ${markers.filter(isMoved).map((m) => `${m.side === 'home' ? '홈' : '원'} ${m.pos}`).join(', ')}` : '');
   $('lineup').innerHTML = lineupHtml(markers);
-  drawCourt(step, markers);
+}
+
+// ── 재생(애니메이션) ── 공이 경로를 날고 선수가 슬라이드 → 정적이 아니라 "장면"이 보인다.
+function prevStepOf(idx: number, segIdx: number): Step | null {
+  if (segIdx > 0) return computeStep(idx, segIdx - 1);
+  if (idx > 0) return computeStep(idx - 1, 1e9); // 직전 랠리 마지막 구간(computeStep이 클램프)
+  return null;
+}
+function pauseIfPlaying(): void {
+  if (!state.playing) return;
+  state.playing = false; cancelAnimationFrame(raf);
+  const pb = document.getElementById('playBtn'); if (pb) pb.textContent = '▶ 재생';
+}
+function startPlay(): void {
+  state.playing = true; state.overrides.clear();
+  ($('playBtn') as HTMLElement).textContent = '⏸ 멈춤';
+  const step = computeStep(state.idx, state.segIdx);
+  updateInfo(step, currentMarkers(step));
+  drawCourt(step, currentMarkers(step), true);
+  prevCache = prevStepOf(state.idx, state.segIdx);
+  segStart = performance.now();
+  raf = requestAnimationFrame(frame);
+}
+function stopPlay(): void { pauseIfPlaying(); render(); }
+function frame(now: number): void {
+  if (!state.playing) return;
+  let step = computeStep(state.idx, state.segIdx);
+  const dur = Math.max(220, SEG_DUR[step.kind ?? 'pass'] ?? 360) * speedMul;
+  let t = (now - segStart) / dur;
+  if (t >= 1) {
+    if (state.segIdx < step.segCount - 1) state.segIdx++;
+    else if (state.idx < total - 1) { state.idx++; state.segIdx = 0; }
+    else { stopPlay(); return; }            // 경기 끝 → 정지
+    segStart = now; t = 0;
+    step = computeStep(state.idx, state.segIdx);
+    prevCache = prevStepOf(state.idx, state.segIdx);
+    updateInfo(step, currentMarkers(step));   // 구간 바뀔 때만 정보·요소 재빌드
+    drawCourt(step, currentMarkers(step), true);
+  }
+  paintFrame(step, prevCache, Math.min(1, t));
+  raf = requestAnimationFrame(frame);
+}
+function paintFrame(step: Step, prev: Step | null, t: number): void {
+  if (ballEl && step.ball) {
+    const { fromX, fromY, toX, toY } = step.ball;
+    const arcH = (ARC[step.kind ?? 'pass'] ?? 0) * H;
+    ballEl.setAttribute('cx', `${fromX + (toX - fromX) * t}`);
+    ballEl.setAttribute('cy', `${fromY + (toY - fromY) * t - arcH * 4 * t * (1 - t)}`);
+  }
+  const e = easeOut(t);
+  const prevByKey = prev ? new Map(prev.markersBase.map((m) => [m.key, m] as const)) : null;
+  for (const m of step.markersBase) {
+    const g = markerEls[m.key]; if (!g) continue;
+    const from = prevByKey?.get(m.key) ?? m;
+    g.setAttribute('transform', `translate(${from.x + (m.x - from.x) * e},${from.y + (m.y - from.y) * e})`);
+  }
 }
 
 // 위/아래 코트 + 전위/후위별 선수 명단(이름) — 좌→우 순서로 코트와 같게. ⚑=서브 ✎=옮김.
@@ -223,9 +296,10 @@ function nextStepOf(step: Step): Step | null {
   return null;
 }
 
-function drawCourt(step: Step, markers: LabMarker[]): void {
+function drawCourt(step: Step, markers: LabMarker[], animated = false): void {
   const svg = $('court') as unknown as SVGSVGElement;
   while (svg.firstChild) svg.removeChild(svg.firstChild);
+  for (const k in markerEls) delete markerEls[k]; ballEl = null; // 애니메이션 ref 초기화
 
   const rect = (x: number, y: number, w: number, h: number, fill: string) => {
     const e = document.createElementNS(NS, 'rect');
@@ -251,9 +325,9 @@ function drawCourt(step: Step, markers: LabMarker[]): void {
   line(0, H * 0.333, W, H * 0.333, '#C9B98E', 1); // 공격선(원정)
   line(0, H * 0.667, W, H * 0.667, '#C9B98E', 1); // 공격선(홈)
 
-  // 이동 화살표(같은 랠리 다음 구간일 때만)
+  // 이동 화살표(같은 랠리 다음 구간일 때만) — 정적 상태에서만(재생 땐 실제 움직임이 보임)
   const sameRallyNext = state.segIdx < step.segCount - 1;
-  if (state.showMoves && sameRallyNext) {
+  if (state.showMoves && sameRallyNext && !animated) {
     const next = nextStepOf(step);
     const nextMap = new Map((next?.markersBase ?? []).map((m) => [m.key, m] as const));
     for (const m of step.markersBase) {
@@ -267,8 +341,8 @@ function drawCourt(step: Step, markers: LabMarker[]): void {
     }
   }
 
-  // 공 경로
-  if (step.ball) {
+  // 공 경로 — 정적 상태: 점선 from→to + 끝점. 재생: 공 dot은 마커 뒤에 그려(아래) 위에 뜨게.
+  if (step.ball && !animated) {
     line(step.ball.fromX, step.ball.fromY, step.ball.toX, step.ball.toY, '#E0A21B', 2, '5,5');
     circle(step.ball.fromX, step.ball.fromY, 4, 'none', '#E0A21B', 2);
     circle(step.ball.toX, step.ball.toY, 9, '#FFD23F', '#15202B', 2);
@@ -278,7 +352,7 @@ function drawCourt(step: Step, markers: LabMarker[]): void {
   for (const m of markers) {
     const g = document.createElementNS(NS, 'g');
     g.setAttribute('transform', `translate(${m.x},${m.y})`);
-    g.style.cursor = 'grab';
+    g.style.cursor = animated ? 'default' : 'grab';
     (g as any).dataset.key = m.key;
     const color = POS_COLOR[m.pos] ?? '#8A94A6';
     const home = m.side === 'home';
@@ -316,9 +390,11 @@ function drawCourt(step: Step, markers: LabMarker[]): void {
       nm.textContent = m.name;
       g.appendChild(nm);
     }
-    attachDrag(g, svg, m.key);
+    if (animated) markerEls[m.key] = g; else attachDrag(g, svg, m.key);
     svg.appendChild(g);
   }
+  // 재생 중 움직이는 공 — 마커 위에(마지막에 추가)
+  if (animated && step.ball) ballEl = circle(step.ball.fromX, step.ball.fromY, 8, '#FFD23F', '#15202B', 2);
 }
 
 function arrowHead(fx: number, fy: number, tx: number, ty: number): string {
@@ -361,18 +437,20 @@ function attachDrag(g: SVGGElement, svg: SVGSVGElement, key: string): void {
 
 // ── 컨트롤 배선 ──
 function advance(): void {
+  pauseIfPlaying();
   const step = computeStep(state.idx, state.segIdx);
   if (state.segIdx < step.segCount - 1) state.segIdx++;
   else if (state.idx < total - 1) { state.idx++; state.segIdx = 0; }
   state.overrides.clear(); render();
 }
 function back(): void {
+  pauseIfPlaying();
   if (state.segIdx > 0) state.segIdx--;
   else if (state.idx > 0) { state.idx--; state.segIdx = 0; }
   state.overrides.clear(); render();
 }
-function nextRally(): void { if (state.idx < total - 1) { state.idx++; state.segIdx = 0; state.overrides.clear(); render(); } }
-function prevRally(): void { if (state.idx > 0) { state.idx--; state.segIdx = 0; state.overrides.clear(); render(); } }
+function nextRally(): void { pauseIfPlaying(); if (state.idx < total - 1) { state.idx++; state.segIdx = 0; state.overrides.clear(); render(); } }
+function prevRally(): void { pauseIfPlaying(); if (state.idx > 0) { state.idx--; state.segIdx = 0; state.overrides.clear(); render(); } }
 
 function fillTeamSelects(): void {
   const opts = teams.map((t) => `<option value="${t.id}">${shortTeamName(t.id)}</option>`).join('');
@@ -380,14 +458,17 @@ function fillTeamSelects(): void {
   const awaySel = $('awaySel') as HTMLSelectElement;
   homeSel.innerHTML = opts; awaySel.innerHTML = opts;
   homeSel.value = state.homeId; awaySel.value = state.awayId;
-  homeSel.onchange = () => { state.homeId = homeSel.value; recompute(); render(); };
-  awaySel.onchange = () => { state.awayId = awaySel.value; recompute(); render(); };
+  homeSel.onchange = () => { pauseIfPlaying(); state.homeId = homeSel.value; recompute(); render(); };
+  awaySel.onchange = () => { pauseIfPlaying(); state.awayId = awaySel.value; recompute(); render(); };
 }
 
 function init(): void {
   fillTeamSelects();
   ($('seedVal') as HTMLElement).textContent = `${state.seed}`;
-  $('seedBtn').onclick = () => { state.seed++; ($('seedVal') as HTMLElement).textContent = `${state.seed}`; recompute(); render(); };
+  $('seedBtn').onclick = () => { pauseIfPlaying(); state.seed++; ($('seedVal') as HTMLElement).textContent = `${state.seed}`; recompute(); render(); };
+  $('playBtn').onclick = () => { if (state.playing) stopPlay(); else startPlay(); };
+  const speedSel = $('speedSel') as HTMLSelectElement;
+  speedSel.onchange = () => { speedMul = Number(speedSel.value) || 1; };
   $('prevRally').onclick = prevRally;
   $('back').onclick = back;
   $('adv').onclick = advance;

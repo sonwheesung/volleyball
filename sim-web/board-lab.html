@@ -95,6 +95,17 @@
   </div>
 
   <div class="card" style="margin-top:14px">
+    <div class="row" style="justify-content:center; gap:14px; margin-bottom:12px">
+      <button id="playBtn" class="primary" style="min-width:130px; font-size:15px">▶ 재생</button>
+      <label class="fld" style="flex-direction:row; align-items:center; gap:6px">속도
+        <select id="speedSel">
+          <option value="1.6">느리게</option>
+          <option value="1" selected>보통</option>
+          <option value="0.55">빠르게</option>
+        </select>
+      </label>
+    </div>
+    <div class="hint" style="text-align:center; color:var(--soft); font-size:12px; margin-bottom:10px">▶로 실제 경기처럼 재생 · ⏸ 멈추면 그 스텝에서 드래그·내보내기 · ◀/▶로 한 스텝씩</div>
     <div class="ctrl">
       <div class="grp">
         <button id="prevRally">◀◀ 랠리</button>
