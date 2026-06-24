@@ -44,21 +44,25 @@ export default function Office() {
         </Card>
       </SpotlightTarget>
 
-      <Card onPress={() => router.push('/staff')}>
-        <Row>
-          <Title>스태프 계약</Title>
-          <Muted>감독 · 코치 · 스카우터 →</Muted>
-        </Row>
-        <Muted style={{ fontSize: 12, marginTop: 2 }}>감독 영입 · 전문 코치(훈련 부스트) · 스카우터(드래프트 공개도)</Muted>
-      </Card>
+      <SpotlightTarget id="office-staff">
+        <Card onPress={() => router.push('/staff')}>
+          <Row>
+            <Title>스태프 계약</Title>
+            <Muted>감독 · 코치 · 스카우터 →</Muted>
+          </Row>
+          <Muted style={{ fontSize: 12, marginTop: 2 }}>감독 영입 · 전문 코치(훈련 부스트) · 스카우터(드래프트 공개도)</Muted>
+        </Card>
+      </SpotlightTarget>
 
-      <Card onPress={() => router.push('/transactions')}>
-        <Row>
-          <Title>시즌 중 FA 영입</Title>
-          <Muted>포지션 구멍 메우기 →</Muted>
-        </Row>
-        <Muted style={{ fontSize: 12, marginTop: 2 }}>방출 선수·미계약 FA를 시즌 중 즉시 영입(캡·정원 적용)</Muted>
-      </Card>
+      <SpotlightTarget id="office-tx">
+        <Card onPress={() => router.push('/transactions')}>
+          <Row>
+            <Title>시즌 중 FA 영입</Title>
+            <Muted>포지션 구멍 메우기 →</Muted>
+          </Row>
+          <Muted style={{ fontSize: 12, marginTop: 2 }}>방출 선수·미계약 FA를 시즌 중 즉시 영입(캡·정원 적용)</Muted>
+        </Card>
+      </SpotlightTarget>
 
       {DEV_TOOLS ? (
         <Card onPress={() => router.push('/audit')}>

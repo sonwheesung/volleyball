@@ -2,12 +2,13 @@
 // 단위 = 설명 한 조각(팁). 각 팁은 영구 추적되는 고유 id를 갖는다.
 // 확장: 새 기능엔 새 id의 팁을 여기 한 줄 추가만 하면 — 기존 유저는 신규 id만, 신규 유저는 전부 본다.
 // ⚠ 출시된 id는 절대 바꾸지 않는다(바꾸면 기존 유저가 다시 봄). 대상이 바뀌면 새 id를 만든다. 문구만 고치는 건 자유.
+// order = 그 화면 안 순서(위→아래). anchor = 밝게 띄울 SpotlightTarget id(없으면 가운데 카드).
 
 export interface Tip {
-  id: string;        // 영구 추적 키
-  screen: string;    // 어느 화면에서 뜨나(SpotlightOverlay 의 screen 키와 일치)
-  order: number;     // 그 화면 안 순서
-  anchor?: string;   // 밝게 띄울 SpotlightTarget id. 없으면 전체 어둡게 + 가운데 카드
+  id: string;
+  screen: string;
+  order: number;
+  anchor?: string;
   title: string;
   body: string;
 }
@@ -20,28 +21,50 @@ export const TIPS: Tip[] = [
   // ── 구단 정보(상세) ──
   { id: 'team.ovr', screen: 'team-detail', order: 0, anchor: 'team-ovr',
     title: '팀 종합 전력', body: '선수단 전체의 평균 전력입니다. 숫자가 높을수록 강팀 — 하지만 이야기는 지금부터 쌓입니다.' },
-  { id: 'team.start', screen: 'team-detail', order: 1, anchor: 'team-operate',
+  { id: 'team.coach', screen: 'team-detail', order: 1, anchor: 'team-coach',
+    title: '감독', body: '감독을 누르면 성향·카리스마를 자세히 봅니다. 감독 성향이 자동 경기 운영(선발·작전·타임아웃)을 좌우합니다.' },
+  { id: 'team.roster', screen: 'team-detail', order: 2, anchor: 'team-roster',
+    title: '선수단', body: '선수 이름을 누르면 2층 스탯·특성을 자세히 봅니다. 선수는 성장하고 또 노쇠합니다.' },
+  { id: 'team.start', screen: 'team-detail', order: 3, anchor: 'team-operate',
     title: '이 구단으로 시작', body: '선수단을 둘러본 뒤, 맨 아래 "운영하기" 버튼을 누르면 당신이 이 구단의 구단주가 됩니다. (탭해서 닫고 자유롭게 살펴보세요.)' },
 
   // ── 일정 탭(첫 진입 화면) ──
   { id: 'sched.next', screen: 'tab-schedule', order: 0, anchor: 'sched-next',
     title: '다음 경기', body: '여기서 경기를 진행합니다. ⭐ 빅매치는 직접 관전을 권해요 — 현장 운영(교체·작전)은 감독 몫, 당신은 보는 게임입니다.' },
+  { id: 'sched.calendar', screen: 'tab-schedule', order: 1, anchor: 'sched-calendar',
+    title: '일정 캘린더', body: '시즌 전체 일정을 달력으로 봅니다. 다가오는 경기와 빅매치를 미리 가늠하세요.' },
+  { id: 'sched.results', screen: 'tab-schedule', order: 2, anchor: 'sched-results',
+    title: '전 구단 경기 결과', body: '리그의 모든 경기 결과를 한눈에. 라이벌 구단들이 어떻게 하고 있는지 확인합니다.' },
 
   // ── 대시보드(구단) 탭 ──
   { id: 'dash.overview', screen: 'tab-dashboard', order: 0, anchor: 'dash-top',
-    title: '구단 현황', body: '구단의 한눈 요약입니다. 순위·재정·소식이 모여요. 시즌이 흐르며 이 화면이 당신의 연대기가 됩니다.' },
+    title: '구단 현황', body: '구단의 한눈 요약입니다. 전력과 이번 시즌 성적이 모여요. 시즌이 흐르며 이 화면이 당신의 연대기가 됩니다.' },
+  { id: 'dash.finance', screen: 'tab-dashboard', order: 1, anchor: 'dash-finance',
+    title: '재정', body: '총연봉·샐러리캡·운영 자금·팬심입니다. 캡을 넘기면 영입이 막히고, 자금이 마르면 운영이 빠듯해집니다.' },
+  { id: 'dash.standings', screen: 'tab-dashboard', order: 2, anchor: 'dash-standings',
+    title: '리그 순위', body: '누르면 전체 순위표를 봅니다. 🩹 표시는 부상자 수 — 출전 명단에 영향을 줍니다.' },
+  { id: 'dash.news', screen: 'tab-dashboard', order: 3, anchor: 'dash-news',
+    title: '리그 뉴스', body: '누르면 리그의 소식·기록·사건을 연대기로 읽습니다. 세월이 쌓일수록 읽을거리가 풍성해집니다.' },
 
   // ── 선수단 탭 ──
-  { id: 'squad.intro', screen: 'tab-squad', order: 0, anchor: 'squad-top',
-    title: '선수단', body: '선수마다 2층 스탯(보이는 종합 + 밑단 세부)과 특성이 있습니다. 카드를 눌러 자세히 보세요. 선수는 성장하고, 또 노쇠합니다.' },
+  { id: 'squad.coach', screen: 'tab-squad', order: 0, anchor: 'squad-coach',
+    title: '우리 감독', body: '감독을 누르면 성향·훈련 선호를 봅니다. 감독의 선호가 우리 팀이 어떤 스탯 위주로 성장할지를 가릅니다.' },
+  { id: 'squad.intro', screen: 'tab-squad', order: 1, anchor: 'squad-top',
+    title: '선수단', body: '선수마다 2층 스탯(보이는 종합 + 밑단 세부)과 특성이 있습니다. 이름을 누르면 상세·면담을 볼 수 있어요.' },
 
   // ── 단장실 탭 ──
   { id: 'office.intro', screen: 'tab-office', order: 0, anchor: 'office-top',
-    title: '단장의 레버', body: '드래프트·FA·외국인·스태프 — 전력을 좌우하는 결정이 여기 있습니다. 단장의 선택이 수 시즌 뒤 구단의 운명을 가릅니다.' },
+    title: '계약 관리', body: '선수 재계약·방출, 시즌 종료 FA 잔류/포기를 결정합니다. 단장의 핵심 권한이에요.' },
+  { id: 'office.staff', screen: 'tab-office', order: 1, anchor: 'office-staff',
+    title: '스태프 계약', body: '감독·전문 코치(훈련 부스트)·스카우터(드래프트 공개도)를 예산 안에서 영입합니다.' },
+  { id: 'office.tx', screen: 'tab-office', order: 2, anchor: 'office-tx',
+    title: '시즌 중 FA 영입', body: '부상 등으로 포지션에 구멍이 나면, 미계약 FA를 시즌 중 즉시 수혈합니다(캡·정원 적용).' },
 
   // ── 기록 탭 ──
-  { id: 'history.intro', screen: 'tab-history', order: 0, anchor: 'history-top',
-    title: '기록과 명예', body: '통산 기록·시상·명예의전당이 쌓이는 곳. 세월이 흘러야 채워집니다 — 백년배구의 진짜 재미입니다.' },
+  { id: 'history.ach', screen: 'tab-history', order: 0, anchor: 'history-ach',
+    title: '업적', body: '구단주 본인의 장기 발자취 — 우승·시상·레전드·기록·운영을 트로피로 모읍니다.' },
+  { id: 'history.intro', screen: 'tab-history', order: 1, anchor: 'history-top',
+    title: '기록과 명예', body: '시즌·통산·명예의전당·연표 — 세월이 흘러야 채워집니다. 백년배구의 진짜 재미입니다.' },
 ];
 
 /** 그 화면의 팁을 순서대로 */

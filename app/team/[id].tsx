@@ -94,17 +94,19 @@ export default function TeamDetail() {
       ) : null}
 
       {coach ? (
-        <Card onPress={() => router.push(`/coach/${coach.id}`)}>
-          <Row>
-            <View style={{ flex: 1 }}>
-              <Title>감독 · {coach.name}</Title>
-              <Muted style={{ marginTop: 2 }}>
-                {coach.age}세 · {STYLE_LABEL[coach.style]} · 카리스마 {coach.charisma}
-              </Muted>
-            </View>
-            <Text style={{ color: theme.accent }}>상세 ›</Text>
-          </Row>
-        </Card>
+        <SpotlightTarget id="team-coach">
+          <Card onPress={() => router.push(`/coach/${coach.id}`)}>
+            <Row>
+              <View style={{ flex: 1 }}>
+                <Title>감독 · {coach.name}</Title>
+                <Muted style={{ marginTop: 2 }}>
+                  {coach.age}세 · {STYLE_LABEL[coach.style]} · 카리스마 {coach.charisma}
+                </Muted>
+              </View>
+              <Text style={{ color: theme.accent }}>상세 ›</Text>
+            </Row>
+          </Card>
+        </SpotlightTarget>
       ) : null}
 
       {/* 코칭 스태프 — AI 팀은 기본 스태프(코치2+스카우터1), 내 팀은 영입분 */}
@@ -133,8 +135,10 @@ export default function TeamDetail() {
         </Card>
       ) : null}
 
-      <Title>선수단 ({players.length}명)</Title>
-      <RosterList players={players} />
+      <SpotlightTarget id="team-roster">
+        <Title>선수단 ({players.length}명)</Title>
+        <RosterList players={players} />
+      </SpotlightTarget>
 
       <View style={{ height: 4 }} />
       {isCurrent ? (

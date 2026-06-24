@@ -97,19 +97,20 @@ resetTips: () => void;              // 전체 리셋(설정 "튜토리얼 다시
 
 ## 5. 초기 스텝 세트 (확장 가능 — 레지스트리에 추가만)
 
-| screen | id | anchor | 한 줄 |
-|---|---|---|---|
-| select-team | `select.pick` | 첫 구단 카드 | 구단마다 역사·색깔이 다르다 / 카드로 미리보기 |
-| team-detail | `team.ovr` | 팀 전력 카드 | 팀 종합 전력 읽는 법 |
-| team-detail | `team.start` | 운영하기 버튼 | 이 구단으로 시작 |
-| tab-schedule | `sched.next` | 다음 경기 카드 | 빅매치는 직접 관전 권장(현장은 감독 몫) |
-| tab-dashboard | `dash.overview` | 구단 현황 카드 | 대시보드 = 구단 한눈에 |
-| tab-squad | `squad.intro` | 선수단 리스트 | 2층 스탯·특성 |
-| tab-office | `office.intro` | 단장 업무 메뉴 | 드래프트·FA·스태프·외인 = 단장의 레버 |
-| tab-history | `history.intro` | 기록 탭 | 세월이 쌓여 기록·명전이 된다 |
+화면당 **상호작용 요소를 위→아래 순서로 다 짚는다**(2026-06-24 — 1화면 1팁에서 확장). `data/tutorialSteps.ts` 참조.
 
-> 이 표는 시작점이다. 새 화면/기능이 생기면 그 화면 키 + 새 id를 한 행 추가하면 자동으로
-> 신규 유저 전체·기존 유저 신규분에 스포트라이트가 잡힌다.
+| screen | 스텝(순서) | 짚는 상호작용 |
+|---|---|---|
+| select-team | `select.pick` | 첫 구단 카드(미리보기) |
+| team-detail | `team.ovr` → `team.coach` → `team.roster` → `team.start` | 팀 전력 · 감독 카드 · 선수단 목록 · 운영하기 버튼 |
+| tab-schedule | `sched.next` → `sched.calendar` → `sched.results` | 다음 경기(관전) · 캘린더 버튼 · 전 구단 결과 버튼 |
+| tab-dashboard | `dash.overview` → `dash.finance` → `dash.standings` → `dash.news` | 구단 현황 · 재정 카드 · 순위 카드(탭) · 뉴스 카드(탭) |
+| tab-squad | `squad.coach` → `squad.intro` | 감독 카드 · 선수단 목록 |
+| tab-office | `office.intro` → `office.staff` → `office.tx` | 계약 관리 · 스태프 계약 · 시즌 중 FA |
+| tab-history | `history.ach` → `history.intro` | 업적 링크 · 기록 탭(시즌/통산/명전/연표) |
+
+> 새 화면/기능이 생기면 그 화면 키 + 새 id를 한 행 추가하면 자동으로 신규 유저 전체·기존 유저 신규분에
+> 스포트라이트가 잡힌다. 한 화면에 상호작용 요소를 추가하면 그 화면에 새 order의 팁을 끼우면 된다(앵커 래핑 + 한 줄).
 
 ---
 

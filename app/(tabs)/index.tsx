@@ -93,50 +93,56 @@ export default function Dashboard() {
       </SpotlightTarget>
 
       {/* 재정 — 한 장 요약(상세 내역은 기록 탭) */}
-      <Card>
-        <Row>
-          <Muted>총연봉 / 캡</Muted>
-          <Text style={{ color: payroll > LEAGUE_CAP ? theme.bad : theme.text, fontWeight: '800' }}>
-            {formatMoney(payroll)} / {formatMoney(LEAGUE_CAP)}
-          </Text>
-        </Row>
-        <Row>
-          <Muted>운영 자금</Muted>
-          <Text style={{ color: cash < 20000 ? theme.bad : theme.text, fontWeight: '800' }}>
-            {formatMoney(cash)}
-            {lastFinance ? ` (전 시즌 ${lastFinance.net >= 0 ? '+' : ''}${formatMoney(lastFinance.net)})` : ''}
-          </Text>
-        </Row>
-        <Row>
-          <Muted>팬덤</Muted>
-          <Text style={{ color: fanScore >= 60 ? theme.good : fanScore >= 35 ? theme.text : theme.bad, fontWeight: '800' }}>
-            {fanbaseInfo.total.toLocaleString()}명 · 팬심 {fanScore}
-          </Text>
-        </Row>
-      </Card>
-
-      {/* 순위 + 부상자 수(있으면) — 누르면 순위표만 */}
-      <Card onPress={() => router.push('/standings')}>
-        <Row>
-          <Muted>리그 순위</Muted>
-          <Text style={{ color: theme.text, fontWeight: '800' }}>
-            {myRank > 0 ? `${myRank}위 / ${standings.length}` : '-'}
-            {injuries.length > 0 ? <Text style={{ color: theme.bad }}>{`  · 🩹 ${injuries.length}`}</Text> : null}
-            {' ›'}
-          </Text>
-        </Row>
-      </Card>
-
-      {/* 리그 뉴스 — 진입점만(내용은 뉴스 화면에서). 안읽음 수만 표시 */}
-      {allNews.length > 0 ? (
-        <Card onPress={() => router.push('/news')}>
+      <SpotlightTarget id="dash-finance">
+        <Card>
           <Row>
-            <Muted>📰 리그 뉴스</Muted>
-            <Text style={{ color: theme.accent, fontWeight: '800' }}>
-              {unreadNews > 0 ? `새 소식 ${unreadNews} ›` : '전체 보기 ›'}
+            <Muted>총연봉 / 캡</Muted>
+            <Text style={{ color: payroll > LEAGUE_CAP ? theme.bad : theme.text, fontWeight: '800' }}>
+              {formatMoney(payroll)} / {formatMoney(LEAGUE_CAP)}
+            </Text>
+          </Row>
+          <Row>
+            <Muted>운영 자금</Muted>
+            <Text style={{ color: cash < 20000 ? theme.bad : theme.text, fontWeight: '800' }}>
+              {formatMoney(cash)}
+              {lastFinance ? ` (전 시즌 ${lastFinance.net >= 0 ? '+' : ''}${formatMoney(lastFinance.net)})` : ''}
+            </Text>
+          </Row>
+          <Row>
+            <Muted>팬덤</Muted>
+            <Text style={{ color: fanScore >= 60 ? theme.good : fanScore >= 35 ? theme.text : theme.bad, fontWeight: '800' }}>
+              {fanbaseInfo.total.toLocaleString()}명 · 팬심 {fanScore}
             </Text>
           </Row>
         </Card>
+      </SpotlightTarget>
+
+      {/* 순위 + 부상자 수(있으면) — 누르면 순위표만 */}
+      <SpotlightTarget id="dash-standings">
+        <Card onPress={() => router.push('/standings')}>
+          <Row>
+            <Muted>리그 순위</Muted>
+            <Text style={{ color: theme.text, fontWeight: '800' }}>
+              {myRank > 0 ? `${myRank}위 / ${standings.length}` : '-'}
+              {injuries.length > 0 ? <Text style={{ color: theme.bad }}>{`  · 🩹 ${injuries.length}`}</Text> : null}
+              {' ›'}
+            </Text>
+          </Row>
+        </Card>
+      </SpotlightTarget>
+
+      {/* 리그 뉴스 — 진입점만(내용은 뉴스 화면에서). 안읽음 수만 표시 */}
+      {allNews.length > 0 ? (
+        <SpotlightTarget id="dash-news">
+          <Card onPress={() => router.push('/news')}>
+            <Row>
+              <Muted>📰 리그 뉴스</Muted>
+              <Text style={{ color: theme.accent, fontWeight: '800' }}>
+                {unreadNews > 0 ? `새 소식 ${unreadNews} ›` : '전체 보기 ›'}
+              </Text>
+            </Row>
+          </Card>
+        </SpotlightTarget>
       ) : null}
 
       <View style={{ flex: 1 }} />

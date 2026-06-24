@@ -143,8 +143,12 @@ export default function Schedule() {
         </Card>
       )}
 
-      <Button label="일정 보러 가기 (캘린더)" variant="ghost" onPress={() => router.push('/calendar')} />
-      <Button label="전 구단 경기 결과 보기" variant="ghost" onPress={() => router.push('/results')} />
+      <SpotlightTarget id="sched-calendar">
+        <Button label="일정 보러 가기 (캘린더)" variant="ghost" onPress={() => router.push('/calendar')} />
+      </SpotlightTarget>
+      <SpotlightTarget id="sched-results">
+        <Button label="전 구단 경기 결과 보기" variant="ghost" onPress={() => router.push('/results')} />
+      </SpotlightTarget>
       {DEV_TOOLS ? (
         <Button label="🧪 수비 위치 실험실 (개발용)" variant="ghost" onPress={() => router.push('/board-lab')} />
       ) : null}

@@ -90,12 +90,14 @@ function HistoryInner() {
 
   return (
     <Screen title="기록">
-      <Card onPress={() => router.push('/achievements')}>
-        <View style={styles.achLink}>
-          <Text style={styles.achLinkText}>🏆 업적 — 구단주의 발자취</Text>
-          <Text style={styles.achLinkArrow}>›</Text>
-        </View>
-      </Card>
+      <SpotlightTarget id="history-ach">
+        <Card onPress={() => router.push('/achievements')}>
+          <View style={styles.achLink}>
+            <Text style={styles.achLinkText}>🏆 업적 — 구단주의 발자취</Text>
+            <Text style={styles.achLinkArrow}>›</Text>
+          </View>
+        </Card>
+      </SpotlightTarget>
 
       <SpotlightTarget id="history-top">
         <Seg items={['시즌', '통산', '명예의전당', '연표']} value={tab} onChange={setTab} />
