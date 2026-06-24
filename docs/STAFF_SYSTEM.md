@@ -63,7 +63,7 @@ UI(app/staff.tsx, draft.tsx) → 셀렉터(data/league.ts) → 엔진(engine/sta
 - **명성 가산**: 레전드(영구결번)·통산 상위 선수는 카리스마·승격 속도 보너스("스타 출신 감독").
 
 ### 6.3 승격 — 코치 → 감독
-- 전문 코치는 **명성**(retired 선수 시절 + 코치 경력)이 쌓이면 **감독(head) 풀**로 승격(`promoteToHead`):
+- 전문 코치는 **명성**(retired 선수 시절 + 코치 경력)이 쌓이면 **감독(head) 풀**로 승격(`promotesToHead`):
   - 트리거: ① 코치로 성공(소속 팀 호성적 누적 = coachRep) **또는** ② 본래 명성 높음(레전드 출신).
   - 승격 시 head Coach로 재생성(charisma·style·trainingFocus 계승, 연봉 책정).
 - 즉 경로: **은퇴 선수(고VQ) → 전문 코치 → (성과·명성) → 감독**. 레전드는 코치 단계를 빨리 통과.
@@ -81,7 +81,7 @@ UI(app/staff.tsx, draft.tsx) → 셀렉터(data/league.ts) → 엔진(engine/sta
 - 선수→코치 변환 id는 `staff:{playerId}` 시드로 결정론. 리플레이 일관.
 
 ### 6.6 계약·재계약(감독 FA, 2026-06-13 구현)
-- `Coach/AssistantCoach.contractYears`: 영입/재계약 시 부여(3년·시드 1~4년), 매 오프시즌 −1.
+- `Coach/AssistantCoach.contractYears`: 영입/재계약 시 부여(3년·시드 2~4년), 매 오프시즌 −1.
 - 만료(0) 시: **AI**는 성적·연령으로 재계약(`aiResigns`) 또는 FA로 놓아줌 → 다른 팀이 영입(감독 쟁탈).
   **플레이어**는 스태프 화면에서 `재계약(3년)` 또는 새 감독 영입(기존 감독 FA로). 유예 유지(놓치지 않게).
 - 경질 인내심: 꼴찌 1년 45% 확률·하위권 2년 연속 확정(`firedEndSeason`+`bottomStreak`) — 매 시즌 경질 과churn 방지.

@@ -1,6 +1,7 @@
 # COURT_POSITIONING — 수비/리시브 포지셔닝 모델 (보드 연출 단일 기준)
 
-> **상태: SPEC (확정 대기).** 사용자 교습(2026-06-21) + 5-1 서브리시브 리서치 기반. 추측 금지 —
+> **상태: ✅ 구현 반영(`receiveFormation`/`serveFormation`/`switchedSpots`에 좌표 박힘 — 룰 43·45·47·49 등).
+> 단 "magic 숫자 제거"(역할유도 `positionOf` 자동화)는 미달 — 여전히 하드코딩 좌표.** 사용자 교습(2026-06-21) + 5-1 서브리시브 리서치 기반. 추측 금지 —
 > 이 문서가 `receiveFormation`·`serveFormation`·`switchedSpots`·`courtDirector`의 **단일 기준**이다.
 > 위치 변경은 코드보다 **이 문서를 먼저** 고친다([[verify-domain-definitions]]·DOC_DISCIPLINE).
 

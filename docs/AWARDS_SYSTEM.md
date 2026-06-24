@@ -46,6 +46,6 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 
 ## 5. 코드 맵
 - `engine/awards.ts` — 순수 `computeSeasonAwards(input)`. 리그/스토어 의존 0.
-- `data/awards.ts` — production·standings·playoffs·rookie·OVR델타를 모아 엔진 호출. `currentSeasonAwards()` / `seasonLegProduction()`.
+- `data/awards.ts` — production·standings·playoffs·rookie·OVR델타를 모아 엔진 호출. `currentSeasonAwards()` / `seasonLegRanges()`.
 - `store` — `endSeason`에서 계산 → archive 적립.
 - `app/(tabs)/history.tsx` — 시즌별 시상식 표시.

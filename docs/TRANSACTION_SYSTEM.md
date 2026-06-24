@@ -50,7 +50,7 @@
 - 둘 다 거래 로그에 day=currentDay로 기록.
 
 ## 5. 코드 맵 (예정)
-- `engine/transactions.ts` — 순수 AI 영입 판정(positionShortage, pickSigning).
+- `engine/transactions.ts` — 순수 AI 영입 판정(shortagePositions, pickSigning).
 - `data/dynamics.ts` — 통합 forward-pass(injury+tx) → injuredOnDay·rosterIdsOnDay·txLog. `data/injury.ts`는 재노출.
 - `data/league.ts` — `evolvedByIdOnDay`(FA 포함 임의 선수 진화), 날짜 인지 availableTeamPlayers.
 - `store` — 플레이어 release/sign(day) + 거래 영속, endSeason에서 txLog 커밋.

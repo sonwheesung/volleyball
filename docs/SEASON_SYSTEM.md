@@ -84,7 +84,7 @@ advance(targetDay):
 KOVO 방식:
 - **준PO/PO**: 정규 2위 vs 3위, **3전 2선승**(target=2).
 - **챔피언결정전**: 정규 1위 vs PO 승자, **5전 3선승**(target=3).
-- 상위 시드 홈 어드밴티지 **+2 OVR**. 매치업별 시드로 `playSeries` 결정론.
+- 상위 시드 홈 어드밴티지 **×1.03 능력 승수**(`HI_EDGE`, OVR가산 아님). 매치업별 시드로 `playSeries` 결정론.
 - 우승 팀은 `recordChampion(season, championId)` → `archive`에 연표 보존.
 
 ## 6. 오프시즌 오케스트레이션 (store.endSeason)
