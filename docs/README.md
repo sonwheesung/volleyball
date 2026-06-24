@@ -99,6 +99,8 @@ npx tsx tools/_gt_facontract.ts            # 재계약·FA 영입 시나리오 1
 npx tsx tools/_gt_bench.ts                  # 주전·벤치 시나리오 9케이스(라인업·마지막리베로·7인가드·건의게이트·suggestStart 최약주전 EC-LU-02, exit 0/1)
 npx tsx tools/_dv_bench2.ts                 # 독립검증 — EC-LU-02 옛버그(최강벤치) 재주입 A/B 88/88 검출·사유 우선순위 (독립 세션 산출)
 # (_dv_bench.ts = 라인업·게이트·pickRest 독립검증 13체크, 무거움 — on-demand)
+npx tsx tools/_dv_drift_posrate.ts 600      # 포지션 세트당 생산 vs 문서 드리프트(STATS_PROTOCOL §3 stale 감시 — MB블록 0.5→0.98 검출했던 가드)
+# (2026-06-25 독립 3세션 엣지 도구 = _dv_docs_*·_dv_code_*·_dv_drift_* — EDGE_CASES §3.6, 무거움 on-demand)
 npx tsx tools/simStarters.ts               # 선발 검증(지시·OVR·징계·부상·폼·순위 + 리베로/suggestStart 가드 G1·G2)
 npx tsx tools/simMood.ts                    # 선수 심리(벤치 사유 귀속·부상자 불만없음·성격/기대치별 기분 A/B·누적→FA·⑦실력밀림 주전급 성격갈림)
 npx tsx tools/_ev_rest.ts                   # 로드매니지먼트(#3) — 굳은 순위 주전 휴식·관전==순위 일치(결정론)

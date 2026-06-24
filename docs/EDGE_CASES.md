@@ -210,6 +210,20 @@
 | 프리뷰 OVR 원본명단 | UI | 일정/대시보드 OVR이 `getEvolvedTeamPlayers`(부상·벤치 무시) — EC-UI-01과 동류이나 *프리뷰*라 설계 논의 필요 | ✅ **수정**(2026-06-21): 전력 프리뷰 3곳(일정 다음경기·대시보드·exhibition) `availableTeamPlayers`로 — 각자 띄우는 실제 경기와 동일 소스. 명단관리 화면(squad·office·contracts)은 전체 명단 유지(의도) |
 | endSeason 더블탭 | store | 확정 버튼 연타 시 시즌 2전진(데이터무결성 OK=검증됨, UX 디바운스) | ✅ **가드**(2026-06-21): endSeason 진입부 `planNextAction(SEASON,my,results).kind!=='seasonOver'`면 return. 롤오버가 results={}로 비워(749) 둘째 탭은 'match'→차단. 검증 `tools/_ev_endseason_guard.ts` |
 
+## 3.6 독립 도출 2차 (2026-06-25, 3세션: 문서만·코드만·문서+코드) — 검증 완료
+
+> 이미 커버된 영역(보드·박스귀속·FA/재계약·벤치·트랜잭션) 제외하고 신규 엣지를 3시각으로 도출. 메인 세션이 전부 **직접 재현**함.
+
+| 후보 | 시각 | 무엇 | 상태/조치 |
+|---|---|---|---|
+| **MB 블록 세트당 드리프트** | 문서+코드 | SALARY §1.1 "MB 블록 0.5/세트"는 구 legacy production 경로(simStatRecord) 측정값. **2026-06-24 box 단일화(실제 블로커=MB ~97% 귀속) 후 게임 truth는 ≈0.98/세트**(+96%). 세터어시·리베로디그는 일치. STATS_PROTOCOL §3 stale | ✅ **문서 정정**(SALARY §1.1에 box 재측정값 명기, 가중치는 legacy 한정 표기). 재현 `_dv_drift_posrate`(N=600, MB블록 0.98)·`_dv_drift_ab`(box vs legacy 점유 97% vs 66%) |
+| resetSave 레지스트리 누수 | 문서만 | 한 프로세스서 게임 후 `resetSave()` 해도 생성 선수(드래프티·외인 id)가 `getPlayer`로 잔존 → **in-process 다중 resetSave 재플레이 시 S1+ 오프시즌 비결정**(S0·cross-process는 완전 결정론, 무결성 0위반) | ⚠ **제품 무영향**(앱 세션=1프로세스·재시작=fresh). **미수정 등록** — 위험은 *in-process 다중 resetSave* 검증 도구의 false-oracle뿐(그런 도구는 cross-process로). 재현 `_dv_docs_rollover`(누수 프로브) |
+| buildLineup <6 가용 동일선수 중복 | 코드만 | `engine/lineup.ts:42` 가용<6이면 같은 Player를 여러 코트 슬롯에 배치(묵음, 박스 부풀림). 가드 없음 | ⚠ **시즌층 의존**(로스터≥10·부상동시≤3 → 가용≥7 정상 보장, 부상+정지 극단 누적 시만 도달). **미수정 등록**(시즌층이 보장, 엔진은 계약 의존). 재현 `_dv_code_lineup`(5인→distinct six=5) |
+| pickRest 빈 avail throw → 생산 크래시 | 코드만 | 빈 `avail`에 `pickRest`→`buildLineup` throw("시즌 계층 가드 위반"). `data/production.ts:52 allProdRows`가 try/catch 없이 호출 → 시즌 통계 재계산 전체 중단 | ⚠ **빈 avail 정상 도달 불가**(부상≤3·로스터≥10) + throw는 **의도적 loud assertion**(묵음 손상보다 나음). **미수정 등록**(마스킹 회피). 재현 `_dv_code_rest`(빈 avail rest-roll일 throw) |
+| 정적 상수·KOVO 분포 | 문서+코드 | 캡35억·개인8억·프랜11억·정원10~18·외인4.1/2.5억·타임아웃2·교체6·듀스·승점3210·득점유형분포(±1%p) | ✅ **전부 일치**(드리프트 없음). 견고 확인 — `_dv_drift_kovo`(N=3000) |
+
+> 견고 확인(위반 0): 시즌 롤오버(나이/정원/외인·아시아/좀비), 부상(동시상한 정확히 3·코트제외·시드무의존), 경기 세트경계(듀스/5세트), 시상(신인=데뷔·챔프MVP↔우승·archive 보존), 결정론(cross-process 동일 해시), 순수함수 경계(NaN/0/음수/Infinity 안전). 도구: `_dv_docs_*`·`_dv_code_*`·`_dv_drift_*`(A/B 자가검증 내장).
+
 ---
 
 ## 4. 회귀 프로토콜 (로직 수정 시)
