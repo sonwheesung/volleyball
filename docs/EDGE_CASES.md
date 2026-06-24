@@ -42,6 +42,7 @@
 | `tools/simMoneyOnly.ts` | '돈만' 보상 — 유출 면제·보상금 가중 | 2 | `[탐색시즌=60]` |
 | `engine/compensation.test.ts` | 보상금 배수·보상선수 선정 규칙(단위) | 2 | — |
 | `engine/draft.test.ts` | 드래프트 위시 우선순위·중복 지명·슬롯 한도 | 1 | — |
+| `tools/_gt_facontract.ts` | **재계약·FA 영입 시나리오 15케이스**(reSign 게이트: 정상/타팀/음수·0·NaN/years·잔여/8억초과/캡/외인면제/프랜차이즈11억 · FA: 큐·등급 A>B>C·endSeason 정원·캡 불변식). 정상=적용·비정상=거부 양방향(A/B). exit 0/1 | 1·2·연봉/캡 | — |
 
 **악질 유저/원숭이(adversarial·monkey) 퍼저군** — 실제 zustand 스토어를 Node에서 구동(액션 난사·적대 입력).
 **먼저 `import './_gt_mock'`**(AsyncStorage 인메모리 모킹)이 필요. 시드 결정론·재현 가능.
