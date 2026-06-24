@@ -107,6 +107,8 @@ npx tsx tools/_ev_digmatch.ts 300           # 보드 디그 마커 == 엔진 디
 npx tsx tools/_ev_touches.ts 200            # 랠리 터치 스크립트 1단계 — 엔진 touches 기록 코히런트(첫=서브·종결 atk==byId·ace serve==byId 100%, 가산·중립 sanity)
 npx tsx tools/_ev_statsource.ts 2000        # 통계 단일화 가드 — 통합 prod(box 먹임)가 스코어박스와 선수별 0 분기(5카테고리)·레거시는 분기(도구 민감)·A/B(box vs box=0)
 npx tsx tools/_ev_blockcomment.ts 200       # 스터프 중계가 byId 블로커를 호명 100%(블록=킬 수준 충실)
+npx tsx tools/_iv_scorebox.ts 600           # 실시간 점수판(boxTimeline) 독립 검증(2026-06-24, 독립 검증자) — 타임라인 1:1·단조·마지막==최종·byId 델타 100%·box중립. _ev_*와 다른 각도(박스 델타)
+npx tsx tools/_iv_scorebox_ab.ts            # 위 정합 체크의 A/B 자가검증 — 깨뜨린 타임라인(스냅 swap·스탯 깎음)을 검출(허위 오라클 차단)
 npx expo export --platform android        # 번들 확인 후 dist 삭제
 npm run sim:web                            # 엔진 테스트 콘솔(웹) → localhost:5051 (14탭, SIM_CONSOLE)
 ```
