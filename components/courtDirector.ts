@@ -9,7 +9,7 @@ import {
   type Lineup, type Px,
 } from './courtLayout';
 import type { WP, Move, Lineups } from './courtPath';
-import type { PointHow } from '../engine/rally';
+import type { PointHow, TouchEvent } from '../engine/rally';
 
 export interface StageInfo { serving: Side; homeRot: number; awayRot: number }
 export interface Seg { from: WP; to: WP }
@@ -158,6 +158,7 @@ export interface RallyState {
   byId?: string; // 종결 선수 id(엔진 귀속) — 보드 스파이크 마커를 실제 공격수로(박스 일치)
   recvId?: string; // 서브 리시버 id(박스 귀속) — 보드 서브 리시버 마커를 박스와 일치
   setId?: string;  // 종결 어시 세터 id(박스 귀속) — 보드 종결 토서 마커를 박스와 일치
+  touches?: TouchEvent[]; // 엔진 터치 순서 — 보드 디그 마커를 박스 귀속자로 재생(2b)
   serving: Side; homeRot: number; awayRot: number;
   homeSetsBefore: number; awaySetsBefore: number;
 }
@@ -203,7 +204,7 @@ export function reconstructRallies(sim: SimResult): RallyState[] {
       serving = pt.setNo % 2 === 1 ? 'home' : 'away';
     }
     out.push({
-      setNo: pt.setNo, home: pt.home, away: pt.away, scorer: pt.scorer, how: pt.how, byId: pt.byId, recvId: pt.recvId, setId: pt.setId,
+      setNo: pt.setNo, home: pt.home, away: pt.away, scorer: pt.scorer, how: pt.how, byId: pt.byId, recvId: pt.recvId, setId: pt.setId, touches: pt.touches,
       serving, homeRot, awayRot, homeSetsBefore: hs, awaySetsBefore: as,
     });
     if (pt.scorer !== serving) {

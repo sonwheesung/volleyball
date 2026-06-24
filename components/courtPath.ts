@@ -3,7 +3,7 @@
 // 가까운 다른 선수가 올림) → 전위 공격수 스파이크. 시드 결정론.
 
 import type { Side } from '../types';
-import type { PointHow } from '../engine/rally';
+import type { PointHow, TouchEvent } from '../engine/rally';
 import { createRng } from '../engine/rng';
 import {
   lineupIdxAt, zonePx, switchedSpots, coverSpots, fanSlots, receiveFormation, receiveLine, NET_SAFE, type Lineup, type Switched,
@@ -29,6 +29,7 @@ export interface RallyLike {
   byId?: string;  // 종결 선수 id(킬/팁/블록아웃=공격수) — 종결 스파이크 마커를 실제 공격수로(박스 일치)
   recvId?: string; // 서브 리시버 id(박스 귀속) — 보드 서브 리시버 마커를 박스와 일치
   setId?: string;  // 종결 어시 세터 id(박스 귀속) — 보드 종결 토서 마커를 박스와 일치
+  touches?: TouchEvent[]; // 엔진 터치 순서(서브→리시브→세트→공격→디그…) — 보드가 디그 마커를 박스 귀속자로 재생(2b)
 }
 export interface Lineups { home: Lineup; away: Lineup }
 
@@ -97,7 +98,7 @@ function withBounce(wp: WP[], W: number, H: number): WP[] {
 }
 
 /** 한 랠리의 공 이동 경로 — 스위칭(전문 포지션) 기반. prevLast: 직전 낙구점(공 순간이동 방지) */
-export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }): WP[] {
+export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[]): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
   const rotOf = (s: Side) => (s === 'home' ? r.homeRot : r.awayRot);
@@ -260,6 +261,27 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
 
   let firstTouch = recvIdx; // 이번 공격의 첫 터치(리시브/디그)한 선수 — 토스는 다른 선수가
   let touchPos = { x: serveTarget.x, y: serveTarget.y }; // 첫 터치 지점 — 그 선수는 한 박자 머문다(즉시 커버 참가 금지)
+  // 2b: 엔진 디그 귀속 순서(box digSucc와 동일) — att를 뒤집는 실제 디그에 순서대로 그래프트 → 코트 디거 == 박스 디거.
+  //   블록커버(att 유지)·프리볼은 큐 미소비(비박스 보드 연출). 워프 방지: 공을 엔진 디거 위치로 유도(diggerSpot).
+  const digQ = r.touches ? r.touches.filter((t) => t.act === 'dig') : null;
+  let digQi = 0;
+  const takeEngineDig = (side: Side): number => {
+    if (!digQ || digQi >= digQ.length) return -1;
+    const e = digQ[digQi++]; // 보드 att-flip 디그마다 큐 진행(위치 동기). side/슬롯 불일치면 -1=폴백(nearestDig)
+    if (e.side !== side) return -1;
+    const lu = side === 'home' ? L.home : L.away;
+    let idx = lu.six.findIndex((p) => p.id === e.id);
+    if (idx < 0 && lu.libero && e.id === lu.libero.id) {
+      // 리베로 디그 — 보드 six엔 후위 MB가 있고 그 슬롯을 리베로로 표시(display-equiv, 룰 55와 동일)
+      const backMB = [1, 5, 6].map((z) => lineupIdxAt(rotOf(side), z)).find((i) => lu.six[i]?.position === 'MB');
+      if (backMB !== undefined) idx = backMB;
+    }
+    return idx;
+  };
+  const diggerSpot = (side: Side, idx: number) => { // 엔진 디거 자기 자리 근처(공을 여기로 보냄 — 순간이동 없이 디그)
+    const p = swDef[side].pos[idx];
+    return { x: clampN(p.x + rng.range(-0.03, 0.03) * W, 14, W - 14), y: clampN(p.y + rng.range(-0.03, 0.03) * H, 14, H - 14) };
+  };
   // 종결 공격팀(엔진 how 기준) — 이 팀이 아닌 쪽은 이 랠리를 끝내지 못하므로 찬스볼(프리볼)을 넘길 수 있다.
   const winsByAtk0 = r.how === 'kill' || r.how === 'blockout' || r.how === 'cap' || r.how === 'tip';
   const finalAtt: Side | null = r.how ? (winsByAtk0 ? r.scorer : other(r.scorer)) : null;
@@ -635,29 +657,35 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
         touchPos = ct;
         nextAtt = att; // 커버 성공 → 같은 팀이 다시 공격
       } else {
-        // 원터치 → def 코트로 떨어진 걸 디그 → 공수 전환
-        const dt = { x: clampN(blockContact.x + rng.range(-0.06, 0.06) * W, 16, W - 16), y: (def === 'home' ? 0.64 : 0.36) * H };
-        const digIdx = nearestDig(dt);
+        // 원터치 → def 코트로 떨어진 걸 디그 → 공수 전환. 2b: 엔진 디그 귀속자로 공 유도(없으면 nearestDig)
+        const eDig = takeEngineDig(def);
+        const dt = eDig >= 0 ? diggerSpot(def, eDig) : { x: clampN(blockContact.x + rng.range(-0.06, 0.06) * W, 16, W - 16), y: (def === 'home' ? 0.64 : 0.36) * H };
+        const digIdx = eDig >= 0 ? eDig : nearestDig(dt);
         wp.push({ x: blockContact.x, y: blockContact.y, side: def, idx: -1, kind: 'spike', aim: intended, movers: coverMovers }); // 블록 원터치(블록 정면)
         wp.push({ x: dt.x, y: dt.y, side: def, idx: -1, kind: 'pass', movers: [{ side: def, idx: digIdx, x: dt.x, y: dt.y }] }); // 디그
+        digSink?.push({ side: def, idx: digIdx }); // 렌더된 디거(측정 — 박스 귀속 대조)
         firstTouch = digIdx;
         touchPos = dt;
       }
     } else if (rng.next() < 0.18) {
       // 페인트가 살아나는 장면 — 엔진에선 팁 절반이 디그된다. 수비가 몸을 던져 받아내고 랠리가 이어진다
-      const tp = {
+      const eDig = takeEngineDig(def);
+      const tp = eDig >= 0 ? diggerSpot(def, eDig) : {
         x: clampN(ap.x + (rng.next() < 0.5 ? -1 : 1) * (0.05 + rng.next() * 0.07) * W, 0.12 * W, 0.88 * W),
         y: def === 'home' ? (0.58 + rng.next() * 0.07) * H : (0.35 + rng.next() * 0.07) * H,
       };
-      const digIdx = nearestDig(tp);
+      const digIdx = eDig >= 0 ? eDig : nearestDig(tp);
       wp.push({ x: tp.x, y: tp.y, side: def, idx: -1, kind: 'spike', dur: 470, arc: 0.115 * H, scale: 1.3, soft: true, movers: [{ side: def, idx: digIdx, x: tp.x, y: tp.y }, ...coverMovers] });
+      digSink?.push({ side: def, idx: digIdx }); // 렌더된 디거(측정)
       firstTouch = digIdx;
       touchPos = tp;
     } else {
       // 클린 디그: 블록 피한 강타를 후위가 받아 전환 — 강타 위세에 한 걸음(12px) 뒤로 밀린다.
       // 연타(팁·원터치)는 제자리 디그 — 공 속도에 따라 밀림이 갈린다(사용자 제안 반영).
-      const t = intended;
-      const digIdx = nearestDig(t);
+      // 2b: 엔진 디그 귀속자가 있으면 강타를 그 선수 쪽으로 보내 디그(없으면 intended로 nearestDig).
+      const eDig = takeEngineDig(def);
+      const t = eDig >= 0 ? diggerSpot(def, eDig) : intended;
+      const digIdx = eDig >= 0 ? eDig : nearestDig(t);
       const kd = Math.hypot(t.x - ap.x, t.y - ap.y) || 1;
       const dug = {
         x: clampN(t.x + ((t.x - ap.x) / kd) * 12, 12, W - 12),
@@ -665,6 +693,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       };
       const cover = chasersTo(def, t, 2, 0.5).find((m) => m.idx !== digIdx);
       wp.push({ x: t.x, y: t.y, side: def, idx: -1, kind: 'spike', movers: [{ side: def, idx: digIdx, ...dug }, ...(cover ? [cover] : []), ...coverMovers] });
+      digSink?.push({ side: def, idx: digIdx }); // 렌더된 디거(측정)
       firstTouch = digIdx;
       touchPos = dug;
     }

@@ -26,7 +26,7 @@ export function buildMatchBox(homeId: string, awayId: string, dayIndex: number, 
   const box: BoxSink = new Map();
   const boxTimeline: BoxSink[] = [];
   const sim = simulateMatch(seed, homeSquad, awaySquad, {
-    home: coachInfoOf(homeId), away: coachInfoOf(awayId), box, boxTimeline,
+    home: coachInfoOf(homeId), away: coachInfoOf(awayId), box, boxTimeline, touches: true, // touches: 보드가 디그 마커를 박스 귀속자로 재생(2b)
   });
   return { homeSquad, awaySquad, sim, box, boxTimeline };
 }

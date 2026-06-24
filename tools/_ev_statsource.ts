@@ -50,7 +50,7 @@ for (let s = 1; s <= N; s++) {
   const prod = attributeProduction(sim, A, B, s);          // 레거시(자체 귀속) — 분기 노출
   for (const [id, l] of prod) addProd(id, l);
   const prodNew = attributeProduction(sim, A, B, s, box);  // 통합(box 단일 진실) — 0 분기 기대
-  for (const [id, l] of prodNew) { const cur = newAgg.get(id) ?? {}; for (const k of Object.keys(l)) cur[k] = (cur[k] ?? 0) + l[k]; newAgg.set(id, cur); }
+  for (const [id, l] of prodNew) { const cur = newAgg.get(id) ?? {}; for (const k of Object.keys(l)) cur[k] = (cur[k] ?? 0) + (l as any)[k]; newAgg.set(id, cur); }
 }
 
 const ids = new Set<string>([...boxAgg.keys(), ...prodAgg.keys()]);

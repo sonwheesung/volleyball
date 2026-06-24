@@ -110,7 +110,7 @@ for (let m = 0; m < nMatches; m++) {
   const aPs = getEvolvedTeamPlayers(aId, 0);
   const L: Lineups = { home: buildLineup(hPs), away: buildLineup(aPs) };
   const seed = 424242 + m * 7919;
-  const sim = simulateMatch(seed, hPs, aPs, { home: coachInfoOf(hId), away: coachInfoOf(aId) });
+  const sim = simulateMatch(seed, hPs, aPs, { home: coachInfoOf(hId), away: coachInfoOf(aId), touches: true }); // touches: 보드가 디그 마커를 엔진 귀속자로 재생(2b) — 감사가 실제 렌더 경로를 보게
   const rallies = reconstructRallies(sim);
 
   // 마커 상태(경기 내 연속 — 렌더와 동일하게 랠리를 넘어 이어짐)
