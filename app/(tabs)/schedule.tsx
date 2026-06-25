@@ -2,8 +2,9 @@ import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
-import { SEASON, getTeam } from '../../data/league';
+import { SEASON, LEAGUE, getTeam } from '../../data/league';
 import { computeStandings, playedThroughDay, leagueDisplayDay } from '../../data/standings';
+import { rivalOf } from '../../data/rivalry';
 import { teamClinch } from '../../data/clinch';
 import { availableTeamPlayers } from '../../data/injury';
 import { isBigMatch } from '../../engine/owner';
@@ -19,8 +20,11 @@ export default function Schedule() {
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
+  const archive = useGameStore((s) => s.archive);
   const watchProgress = useGameStore((s) => s.watchProgress);
   const setDay = useGameStore((s) => s.setDay);
+
+  const rival = rivalOf(teamId, archive, results, SEASON, LEAGUE.teams.map((t) => t.id));
 
   // "진행" 의사결정은 순수 오케스트레이터에 위임
   const action = planNextAction(SEASON, teamId, results);
@@ -69,8 +73,12 @@ export default function Schedule() {
         const big = isBigMatch(myRank, oppRank, nextFixture.dayIndex);
         const margin = Math.abs(myOvr - oppOvr);
         const late = totalMatches > 0 && playedCount / totalMatches >= 0.8;
-        const reason = big ? `🔥 빅매치 — ${myRank}위 vs ${oppRank}위` : margin <= 3 ? '접전 예상' : oppOvr >= 76 ? '강팀 상대' : late ? '시즌 막바지' : null;
-        return { isHome, oppName: getTeam(oppId)?.name ?? '', myOvr, oppOvr, important: !!reason, reason };
+        const isRival = rival?.teamId === oppId;
+        // 라이벌전이 최우선 프레이밍(숙적은 순위 무관하게 기대됨)
+        const reason = isRival ? `🔥 라이벌전 — 숙적 ${getTeam(oppId)?.name ?? ''}`
+          : big ? `🔥 빅매치 — ${myRank}위 vs ${oppRank}위` : margin <= 3 ? '접전 예상' : oppOvr >= 76 ? '강팀 상대' : late ? '시즌 막바지' : null;
+        const rivalNote = isRival && rival ? `최근 순위 경쟁 ${rival.adjacent}회 · 시즌 상대전적 ${rival.h2hW}승 ${rival.h2hL}패` : null;
+        return { isHome, oppName: getTeam(oppId)?.name ?? '', myOvr, oppOvr, important: !!reason, reason, isRival, rivalNote };
       })()
     : null;
 
@@ -128,9 +136,11 @@ export default function Schedule() {
             onPress={onAdvance}
           />
           <Muted style={{ fontSize: 12 }}>
-            {preview.important
-              ? '순위 직결 빅매치입니다 — 직접 관전을 권합니다(현장 운영은 감독 몫).'
-              : '경기 사이 기간 동안 모든 선수가 자동으로 훈련합니다.'}
+            {preview.isRival && preview.rivalNote
+              ? `${preview.rivalNote} — 숙적과의 일전입니다. 직접 관전을 권합니다.`
+              : preview.important
+                ? '순위 직결 빅매치입니다 — 직접 관전을 권합니다(현장 운영은 감독 몫).'
+                : '경기 사이 기간 동안 모든 선수가 자동으로 훈련합니다.'}
           </Muted>
         </Card>
         </SpotlightTarget>
