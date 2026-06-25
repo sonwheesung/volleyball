@@ -87,6 +87,13 @@ export function prospectValue(p: Player): number {
 export const SUPER_PV = 81;
 export const isSuperProspect = (p: Player): boolean => prospectValue(p) >= SUPER_PV;
 
+/** 유망주 별 등급 — 드래프트가치(prospectValue) 기준(측정 보정): ★★★ 상위~11%(특급)·★★ ~33%·★ ~56%·· 그 외.
+ *  구 maxPot 기준(★★★ 71% 포화)을 대체 — 별이 실제 희소도를 반영. */
+export function prospectStars(p: Player): string {
+  const v = prospectValue(p);
+  return v >= SUPER_PV ? '★★★' : v >= 78 ? '★★' : v >= 75 ? '★' : '·';
+}
+
 function bestBy(arr: Player[], score: (p: Player) => number): Player {
   let best = arr[0];
   let bs = -Infinity;

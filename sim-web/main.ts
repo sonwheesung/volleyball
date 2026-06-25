@@ -24,7 +24,7 @@ import { formatMoney } from '../engine/salary';
 import { LEAGUE_CAP, isFranchise } from '../engine/cap';
 import { leagueProduction } from '../data/production';
 import { buildDraftContext } from '../data/draftSetup';
-import { resolveDraft, lotteryRound1, buildDraftOrder, type PickReason } from '../engine/draft';
+import { resolveDraft, lotteryRound1, buildDraftOrder, prospectStars, type PickReason } from '../engine/draft';
 import { generateDraftClass } from '../data/draftClass';
 import { createRng } from '../engine/rng';
 import type { Player } from '../types';
@@ -34,7 +34,7 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const $ = (id: string) => document.getElementById(id)!;
 const pcell = (pos: string) => `<td class="pos pos-${pos}">${pos}</td>`;
 const ovrOf = (p: Player) => displayOvr(overall(p));
-const potStars = (p: Player) => { const m = Math.max(...Object.values(p.potential)); return m >= 88 ? '★★★' : m >= 80 ? '★★' : m >= 72 ? '★' : '·'; };
+const potStars = (p: Player) => prospectStars(p); // 드래프트가치 기준(희소도 반영) — 구 maxPot 포화 교정
 
 // 무거운 동기 작업(N회 반복 시뮬 등) — 버튼 비활성 + 로딩 표시 후 **한 프레임 양보(rAF×2)** 하고 실행.
 // JS 단일 스레드라 동기 루프는 UI를 막는다 → 페인트를 먼저 시켜야 로딩/비활성이 실제로 보인다(SIM_CONSOLE UI 규칙).

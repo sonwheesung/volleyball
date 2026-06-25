@@ -6,15 +6,12 @@ import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal } from '../data/league';
 import { computeStandings } from '../data/standings';
-import { resolveDraft } from '../engine/draft';
+import { resolveDraft, prospectStars } from '../engine/draft';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
 
-function potStars(p: Player): string {
-  const pot = Math.max(...Object.values(p.potential));
-  return pot >= 88 ? '★★★' : pot >= 80 ? '★★' : pot >= 72 ? '★' : '·';
-}
+const potStars = (p: Player): string => prospectStars(p); // 드래프트가치 기준(희소도 반영) — 구 maxPot 포화 교정
 
 export default function DraftCenter() {
   // 드래프트 컨텍스트 생성(buildDraftContext)+지명 시뮬(resolveDraft)은 무거워 한 틱 미뤄 로딩부터 그린다
@@ -93,7 +90,10 @@ function DraftCenterInner() {
         </Muted>
       </Card>
 
-      <Button label="다음 시즌 시작" onPress={onFinish} />
+      <Button label="라이브 드래프트 보기 ▶" onPress={() => router.push('/draft-live')} />
+      <Pressable onPress={onFinish} style={{ paddingVertical: 8, alignItems: 'center' }}>
+        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>건너뛰고 바로 다음 시즌 시작</Text>
+      </Pressable>
 
       <Title>내 지명 결과 (미리보기)</Title>
       {myDrafted.length === 0 ? (
