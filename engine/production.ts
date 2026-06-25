@@ -206,7 +206,7 @@ export function attributeProduction(
     const roll = rng.next();
 
     // 서브 리시브 귀속: 세트 시작 서브팀 복원 → 받는 팀의 패서(리베로+OH)가 리시브. 서브범실은 리시브 없음.
-    if (pt.setNo !== curSet) { curSet = pt.setNo; serving = pt.setNo % 2 === 1 ? 'home' : 'away'; }
+    if (pt.setNo !== curSet) { curSet = pt.setNo; serving = sim.setFirstServers?.[pt.setNo - 1] ?? (pt.setNo % 2 === 1 ? 'home' : 'away'); }
     if (pt.how !== 'serveErr') {
       const recvHome = serving === 'away';
       const recvStart = recvHome ? H.starters : A.starters;

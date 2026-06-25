@@ -201,7 +201,8 @@ export function reconstructRallies(sim: SimResult): RallyState[] {
       }
       curSet = pt.setNo;
       homeRot = 0; awayRot = 0;
-      serving = pt.setNo % 2 === 1 ? 'home' : 'away';
+      // 첫 서브 팀은 엔진이 실어 보낸 진실을 쓴다(5세트 코인토스 — MATCH_SYSTEM v2.1). 구세이브 폴백만 setNo%2.
+      serving = sim.setFirstServers?.[pt.setNo - 1] ?? (pt.setNo % 2 === 1 ? 'home' : 'away');
     }
     out.push({
       setNo: pt.setNo, home: pt.home, away: pt.away, scorer: pt.scorer, how: pt.how, byId: pt.byId, recvId: pt.recvId, setId: pt.setId, touches: pt.touches,

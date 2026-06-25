@@ -56,6 +56,8 @@ export interface SimResult {
   subUse?: Record<string, number>; // 작전 교체로 코트에 선 선수 id → 출전 랠리 수(출전 성장 XP용)
   subEvents?: SubEvent[];           // 작전 교체 연출 로그(보드가 코트 위 실제 교체를 보여주기 위함)
   timeouts?: TimeoutEvent[];        // 작전 타임아웃 로그(보드가 멈추고 체력/기세를 보여주기 위함)
+  setFirstServers?: Side[];         // 세트별(인덱스=세트-1) 첫 서브 팀. 5세트는 코인토스(MATCH_SYSTEM v2.1)라
+                                    // 소비자(보드 복원·production)가 setNo%2로 재도출하면 어긋남 → 엔진이 진실을 실어 보낸다.
 }
 
 function targetPoints(setNo: number): number {

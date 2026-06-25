@@ -72,9 +72,19 @@
 - **수정**: 5세트만 첫 서브를 전용 사이드스트림 코인(`(seed ^ 0x517cc1b7)` 기반 RNG 1드로우)으로 50/50 결정.
   메인 랠리 RNG 스트림 불간섭 → 1~4세트·코인=home인 5세트는 바이트 동일, 코인=away인 5세트만 변경(의도된 변화).
   결정론 보존(시드 고정 = 동일 결과). 검증: 수정 후 5세트 홈 승률 ~50% 수렴 + 코인 ~50/50(`_dv_firstserve` A/B).
+- **★ 결과 반영(소비자) — 재도출 금지, 엔진이 진실을 실어 보낸다**: 코인 결과를 **보드·production이
+  `setNo%2`로 재도출하면 어긋난다**(코인=away인 5세트에 home이 서브하는 것으로 잘못 그림). 그래서
+  `SimResult.setFirstServers: Side[]`(세트별 첫 서브 팀, 인덱스=세트−1)를 엔진이 채워 보내고, 소비자는 그걸 읽는다:
+  - `engine/match.ts` — 세트 시작 시 `serving`을 `setFirstServers`에 push, 반환.
+  - `components/courtDirector.reconstructRallies` — `sim.setFirstServers[setNo−1] ?? setNo%2`(구세이브 폴백). **보드가 정확히 반영.**
+  - `engine/production.attributeProduction`(box 없을 때만) — 동일하게 `setFirstServers` 우선.
+  - `tools/_dv_rules`(서브교대·사이드아웃 가드) — 동일하게 `setFirstServers` 사용, 서브교대 검증은 1~4세트만.
+  - 검증 `_dv_firstserve` (C): **엔진 `setFirstServers[4]` == 독립 오라클(첫 set5 point recvId) == 보드 `reconstructRallies` 시작 서브**
+    가 전 5세트 경기에서 0불일치. 소스 revert(보드 `setNo%2`) 시 1118/2146 불일치 = teeth.
 - **한계**: 1세트 첫 서브(실제도 코인토스)는 결정론(홈) 유지 — 시즌 홈/원정 교대로 상쇄돼 편향 0, replay churn
-  최소화 위해 손대지 않음. 레거시 `production.attributeProduction`(box 없을 때만)은 `setNo%2`로 서브권을
-  재구성해 코인 결과를 모름 — 레거시 경로라 근사 유지(현행 `productionFromBox`는 box 기반이라 무관).
+  최소화 위해 손대지 않음.
+- **연출(2026-06-25 미정)**: 코인 결과는 현재 **보드에 별도 시각화 없음**(서버만 올바르게 표시). 5세트 시작
+  코인토스 연출(현수막/오버레이)은 관전형 연출 후보 — 사용자 결정 대기.
 - **일관성 보장:** 관전(`app/match/[id]`)·순위(`data/standings`)·생산(`data/production`)·플레이오프가
   모두 동일 `simulateMatch` + 동일 입력(`getEvolvedTeamPlayers(team, dayIndex)`)을 써서
   관전 결과 == 순위 재시뮬 == 생산 귀속이 항상 일치(결정론). 검증 완료(불일치 0).

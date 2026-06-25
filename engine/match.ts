@@ -133,6 +133,7 @@ export function simulateMatch(
 
   const points: PointLog[] = [];
   const setScores: { home: number; away: number }[] = [];
+  const setFirstServers: Side[] = []; // 세트별 첫 서브 팀(보드·production이 재도출 않게 진실을 실어 보냄) — 5세트 코인토스 포함
   const subUse: Record<string, number> = {}; // 교체 출전 선수 id → 출전 랠리 수(출전 성장 XP용)
   const subEvents: SubEvent[] = [];           // 교체 연출 로그(보드용, 순수 가산 — 승패 무영향)
   const timeoutEvents: TimeoutEvent[] = [];   // 타임아웃 로그(보드용, 순수 가산 — 승패 무영향)
@@ -157,6 +158,7 @@ export function simulateMatch(
     const timeouts = { home: TIMEOUTS_PER_SET, away: TIMEOUTS_PER_SET };
     // 1~4세트: 홀수=홈·짝수=원정 교대. 5세트(결승): 코인토스(실제 배구 규칙, v2.1).
     let serving: Side = setNo >= 5 ? (cointossRng.next() < 0.5 ? 'home' : 'away') : (setNo % 2 === 1 ? 'home' : 'away');
+    setFirstServers.push(serving); // 이 세트 첫 서브 팀을 기록(소비자가 재도출 않게)
 
     let lastScorer: Side | null = null;
     let streak = 0;
@@ -317,7 +319,7 @@ export function simulateMatch(
     setNo++;
   }
 
-  return { homeSets, awaySets, setScores, points, subUse, subEvents, timeouts: timeoutEvents };
+  return { homeSets, awaySets, setScores, points, subUse, subEvents, timeouts: timeoutEvents, setFirstServers };
 }
 
 // momFactor 재노출(테스트/튜닝용)
