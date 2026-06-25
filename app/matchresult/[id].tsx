@@ -1,9 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, Screen, Title, theme } from '../../components/Screen';
+import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Screen';
 import { BoxScoreTable } from '../../components/BoxScoreTable';
 import { getFixture, getTeam } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
+import { matchMvp } from '../../data/matchAward';
 
 export default function MatchResult() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -22,6 +23,7 @@ export default function MatchResult() {
 
   const homeName = getTeam(fixture.homeTeamId)?.name ?? '';
   const awayName = getTeam(fixture.awayTeamId)?.name ?? '';
+  const mvp = matchMvp(box, home, away, sim, homeName, awayName);
 
   return (
     <Screen title="경기 상세">
@@ -41,6 +43,22 @@ export default function MatchResult() {
         </View>
       </Card>
 
+      {mvp ? (
+        <Card>
+          <View style={styles.mvpRow}>
+            <View style={styles.mvpBadge}><Text style={styles.mvpBadgeT}>MVP</Text></View>
+            <PosTag pos={mvp.position} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.mvpName}>{mvp.name}</Text>
+              <Text style={styles.mvpStat}>
+                {mvp.points}득점{mvp.blocks ? ` · 블로킹 ${mvp.blocks}` : ''}{mvp.aces ? ` · 서브 ${mvp.aces}` : ''}{mvp.digs ? ` · 디그 ${mvp.digs}` : ''}
+              </Text>
+            </View>
+          </View>
+          <Text style={styles.mvpLine}>{mvp.line}</Text>
+        </Card>
+      ) : null}
+
       <Title>{homeName}</Title>
       <Card><BoxScoreTable squad={home} box={box} /></Card>
       <Title>{awayName}</Title>
@@ -59,4 +77,10 @@ const styles = StyleSheet.create({
   setLabel: { color: theme.muted, fontSize: 10 },
   setScore: { color: theme.text, fontSize: 14, fontWeight: '800' },
   hint: { color: theme.muted, fontSize: 10.5, lineHeight: 15, marginTop: 2 },
+  mvpRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  mvpBadge: { backgroundColor: theme.warn, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3 },
+  mvpBadgeT: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
+  mvpName: { color: theme.text, fontSize: 16, fontWeight: '800' },
+  mvpStat: { color: theme.muted, fontSize: 12.5, marginTop: 1 },
+  mvpLine: { color: theme.text, fontSize: 13, marginTop: 8, lineHeight: 18 },
 });
