@@ -62,10 +62,10 @@ const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
   TEAMS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select>`;
 
 // ─── 탭 프레임워크 ───────────────────────────────────────────────────────
-type TabId = 'match' | 'broadcast' | 'lineup' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft' | 'draftlive' | 'foreign' | 'tx' | 'injury' | 'news';
-const TABS: [TabId, string][] = [['match', '경기'], ['broadcast', '경기 중계 · 현수막'], ['lineup', '선발 라인업'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['foreign', '외국인'], ['draft', '영입 · 드래프트'], ['draftlive', '드래프트 라이브'], ['tx', '시즌 중 이동'], ['injury', '부상 · 사고'], ['news', '뉴스']];
+type TabId = 'match' | 'broadcast' | 'champ' | 'lineup' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft' | 'draftlive' | 'foreign' | 'tx' | 'injury' | 'news';
+const TABS: [TabId, string][] = [['match', '경기'], ['broadcast', '경기 중계 · 현수막'], ['champ', '🏆 우승 화면'], ['lineup', '선발 라인업'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['foreign', '외국인'], ['draft', '영입 · 드래프트'], ['draftlive', '드래프트 라이브'], ['tx', '시즌 중 이동'], ['injury', '부상 · 사고'], ['news', '뉴스']];
 let active: TabId = 'match';
-const MOUNTS: Record<TabId, () => void> = { match: mountMatch, broadcast: mountBroadcast, lineup: mountLineup, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft, draftlive: mountDraftLive, foreign: mountForeign, tx: mountTx, injury: mountInjury, news: mountNews };
+const MOUNTS: Record<TabId, () => void> = { match: mountMatch, broadcast: mountBroadcast, champ: mountChamp, lineup: mountLineup, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft, draftlive: mountDraftLive, foreign: mountForeign, tx: mountTx, injury: mountInjury, news: mountNews };
 function mount() {
   $('tabs').innerHTML = TABS.map(([id, l]) => `<span class="tab${id === active ? '' : ' off'}" data-tab="${id}">${l}</span>`).join('');
   document.querySelectorAll('[data-tab]').forEach((e) => e.addEventListener('click', () => { active = e.getAttribute('data-tab') as TabId; mount(); }));
@@ -385,6 +385,69 @@ function runCoinTossPreview() {
     <h3 class="bch">🪙 5세트 코인토스 오버레이</h3>
     <div style="display:flex;gap:14px;flex-wrap:wrap">${panel(an)}${panel(bn)}</div>`;
 }
+
+// ─── 🏆 우승 화면 ───────────────────────────────────────────────────────────
+// 우승 순간 축하 화면 목업 + 블롭 일러스트(SVG). 가운데 선수 = 우승팀 색(현재 팀 색 데이터 없어 id 해시로 결정론 생성 — 추후 CLUB_IDENTITY에 실제 색).
+const CH = { team: TEAMS[0]?.id ?? '', season: 14 };
+function teamHue(id: string): number { let h = 2166136261 >>> 0; for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); } return h % 360; }
+const champArt = (primary: string, arm: string, badge: string) => `
+  <g opacity="0.92">
+    <rect x="60" y="30" width="11" height="11" rx="2" fill="#10B9A6" transform="rotate(20 65 35)"/><rect x="330" y="46" width="11" height="11" rx="2" fill="#FF6B5A" transform="rotate(-15 335 51)"/>
+    <rect x="120" y="20" width="9" height="9" rx="2" fill="#F2A93B" transform="rotate(30 124 24)"/><rect x="278" y="24" width="10" height="10" rx="2" fill="#3B82F6" transform="rotate(-25 283 29)"/>
+    <circle cx="200" cy="16" r="4" fill="#FF6B5A"/><circle cx="352" cy="116" r="4" fill="#10B9A6"/><circle cx="46" cy="116" r="4" fill="#F2A93B"/>
+  </g>
+  <g fill="#FFD879"><path d="M200 32 l4 10 10 4 -10 4 -4 10 -4 -10 -10 -4 10 -4 z"/><path d="M250 66 l2.5 6 6 2.5 -6 2.5 -2.5 6 -2.5 -6 -6 -2.5 6 -2.5 z"/><path d="M150 68 l2.5 6 6 2.5 -6 2.5 -2.5 6 -2.5 -6 -6 -2.5 6 -2.5 z"/></g>
+  <g>
+    <rect x="190" y="146" width="20" height="14" rx="3" fill="#E0902A"/><rect x="176" y="158" width="48" height="9" rx="4" fill="#C9791C"/>
+    <path d="M168 92 h64 v14 a32 26 0 0 1 -64 0 z" fill="url(#cg)"/><path d="M168 92 h64 v6 a32 10 0 0 1 -64 0 z" fill="#FFE49B"/>
+    <path d="M168 96 a16 16 0 0 0 -16 16 a8 8 0 0 0 8 0 a10 10 0 0 1 8 -10 z" fill="#E0902A"/><path d="M232 96 a16 16 0 0 1 16 16 a8 8 0 0 1 -8 0 a10 10 0 0 0 -8 -10 z" fill="#E0902A"/>
+    <rect x="194" y="116" width="12" height="32" rx="3" fill="#E0902A"/><path d="M200 106 l3 7 7.5 0.6 -5.7 5 1.8 7.3 -6.6 -4 -6.6 4 1.8 -7.3 -5.7 -5 7.5 -0.6 z" fill="#FFF3D0"/>
+  </g>
+  <ellipse cx="200" cy="296" rx="150" ry="16" fill="#10B9A6" opacity="0.10"/>
+  <g><ellipse cx="112" cy="293" rx="34" ry="10" fill="#000" opacity="0.07"/>
+    <path d="M96 188 a16 16 0 0 1 -10 -14 a7 7 0 0 1 13 -3 z" fill="#FF8475"/><path d="M128 188 a16 16 0 0 0 10 -14 a7 7 0 0 0 -13 -3 z" fill="#FF8475"/>
+    <rect x="86" y="196" width="52" height="92" rx="26" fill="#FF6B5A"/><ellipse cx="100" cy="214" rx="8" ry="11" fill="#fff" opacity="0.35"/></g>
+  <g><ellipse cx="288" cy="293" rx="32" ry="9" fill="#000" opacity="0.07"/>
+    <path d="M304 192 a15 15 0 0 0 9 -13 a6.5 6.5 0 0 0 -12 -3 z" fill="#F6BC5C"/>
+    <rect x="266" y="206" width="48" height="84" rx="24" fill="#F2A93B"/><ellipse cx="279" cy="222" rx="7" ry="10" fill="#fff" opacity="0.35"/></g>
+  <g><ellipse cx="200" cy="295" rx="40" ry="11" fill="#000" opacity="0.09"/>
+    <path d="M176 174 a18 20 0 0 1 6 -24 l11 7 a10 12 0 0 0 -4 16 z" fill="${arm}"/><path d="M224 174 a18 20 0 0 0 -6 -24 l-11 7 a10 12 0 0 1 4 16 z" fill="${arm}"/>
+    <rect x="162" y="168" width="76" height="124" rx="38" fill="${primary}"/><ellipse cx="182" cy="192" rx="11" ry="15" fill="#fff" opacity="0.34"/>
+    <circle cx="200" cy="236" r="21" fill="${badge}"/><path d="M200 226 l0 20 M196 228 l4 -2" stroke="#fff" stroke-width="3.6" stroke-linecap="round" fill="none"/></g>
+  <g><circle cx="62" cy="262" r="20" fill="#fff" stroke="#D7DEE6" stroke-width="1.5"/>
+    <path d="M62 242 a20 20 0 0 1 17 10 M62 282 a20 20 0 0 1 -17 -10 M48 250 a26 26 0 0 0 6 26" stroke="#10B9A6" stroke-width="2.2" fill="none" stroke-linecap="round"/></g>`;
+// 우승 화면 전체를 단일 SVG로(목업 + 일러스트) — sim-web 임베드 + PNG 렌더 동일 소스.
+function champScreenSvg(): string {
+  const name = getTeam(CH.team)?.name ?? CH.team;
+  const h = teamHue(CH.team);
+  const primary = `hsl(${h},60%,47%)`, arm = `hsl(${h},60%,39%)`, badge = `hsl(${h},52%,31%)`;
+  return `<svg viewBox="0 0 380 500" width="100%" style="max-width:360px" xmlns="http://www.w3.org/2000/svg" font-family="'Pretendard',sans-serif">
+    <defs>
+      <linearGradient id="cg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD879"/><stop offset="1" stop-color="#F2A93B"/></linearGradient>
+      <radialGradient id="bgc" cx="50%" cy="0%" r="120%"><stop offset="0" stop-color="hsl(${h},45%,18%)"/><stop offset="0.7" stop-color="#0b1320"/></radialGradient>
+    </defs>
+    <rect x="0" y="0" width="380" height="500" rx="26" fill="url(#bgc)"/>
+    <text x="190" y="34" text-anchor="middle" fill="#FFD879" font-size="12" font-weight="800" letter-spacing="2">🏆 챔피언 결정전 우승</text>
+    <g transform="translate(30,46) scale(0.8)">${champArt(primary, arm, badge)}</g>
+    <text x="190" y="352" text-anchor="middle" fill="#fff" font-size="27" font-weight="900">${esc(name)}</text>
+    <text x="190" y="378" text-anchor="middle" fill="hsl(${h},70%,72%)" font-size="15" font-weight="800">${CH.season + 1}시즌 챔피언</text>
+    <text x="190" y="404" text-anchor="middle" fill="#9fb0c4" font-size="12">챔프전 MVP · 서지아  ·  정규리그 1위 → 통합 우승</text>
+    <rect x="125" y="424" width="130" height="40" rx="20" fill="#FFD879"/>
+    <text x="190" y="449" text-anchor="middle" fill="#3a2a08" font-size="13" font-weight="800">시즌 마무리 →</text>
+  </svg>`;
+}
+function mountChamp() {
+  $('controls').innerHTML = `<div class="run-row"><label>우승팀 ${teamSelect('ch-team', CH.team)}</label>
+    <label>시즌 <input type="number" id="ch-season" value="${CH.season}" min="0" style="width:56px" /></label>
+    <button id="ch-run">우승 화면 ▶</button></div>
+    <p class="hint">우승 순간 축하 화면 목업. 가운데 블롭 = <b>우승팀 색</b>(현재 팀 색 데이터가 없어 팀 id로 결정론 생성 — 추후 CLUB_IDENTITY에 실제 색 추가 시 그대로 연결). 팀을 바꿔보면 색이 따라옵니다. 일러스트는 <b>벡터(react-native-svg)</b>라 앱에선 어떤 해상도에서도 선명.</p>`;
+  ($('ch-team') as HTMLSelectElement).onchange = (e) => { CH.team = (e.target as HTMLSelectElement).value; runChamp(); };
+  ($('ch-season') as HTMLInputElement).onchange = (e) => { CH.season = Math.max(0, +(e.target as HTMLInputElement).value || 0); runChamp(); };
+  $('ch-run').onclick = runChamp;
+  runChamp();
+}
+function runChamp() { $('out').innerHTML = `<div style="text-align:center">${champScreenSvg()}</div>`; }
+
 function runBroadcastSamples() {
   // 4종 현수막 시각 미리보기 — 통산 기록 경신은 누적이 필요해 실경기 1시즌엔 잘 안 떠 샘플로 보여준다.
   const samp: Banner[] = [
