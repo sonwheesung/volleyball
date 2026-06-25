@@ -4,9 +4,31 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
+import { useSegments } from 'expo-router';
 import { useGameStore } from '../store/useGameStore';
 import { tipsForScreen } from '../data/tutorialSteps';
 import { theme } from './Screen';
+
+// 현재 라우트(expo-router useSegments)를 스포트라이트 screen 키로 환원 — **포커스된 화면만** 오버레이를 띄운다.
+// 스택에 여러 화면이 mount된 채(예: (tabs) 위 select-team) resetTips로 동시에 활성화되는 "이중 스포트라이트"를 차단.
+// (@react-navigation useIsFocused는 과거 오버레이를 영영 가린 이력 → 라우터 세그먼트로 판정.)
+function screenKeyFromSegments(segments: string[]): string | null {
+  const s = segments;
+  if (s[0] === '(tabs)') {
+    const sub = s[1];
+    if (!sub || sub === 'index') return 'tab-dashboard';
+    if (sub === 'schedule') return 'tab-schedule';
+    if (sub === 'squad') return 'tab-squad';
+    if (sub === 'office') return 'tab-office';
+    if (sub === 'history') return 'tab-history';
+    return null;
+  }
+  if (s[0] === 'select-team') return 'select-team';
+  if (s[0] === 'team') return 'team-detail';
+  return null;
+}
+
+const CARD_RADIUS = 18; // 기본 카드 borderRadius(components/Screen Card) — 대상이 안 알려주면 이 값 사용
 
 type Rect = { x: number; y: number; width: number; height: number };
 // 두 컨텍스트로 분리: targets(자주 바뀜)와 setTarget(영구 고정). 하나로 묶으면 Provider value가 매 렌더
@@ -65,8 +87,13 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   const seen = useGameStore((s) => s.seenTips) ?? {};
   const markTip = useGameStore((s) => s.markTip);
   const [attempt, setAttempt] = useState(0);
+  const segments = useSegments() as string[];
 
-  const queue = tipsForScreen(screen).filter((t) => !seen[t.id]);
+  // 현재 포커스된 화면이 아니면 오버레이를 띄우지 않는다(이중 스포트라이트 차단). 라우트를 못 알아보면(폴백) 띄운다.
+  const curScreen = screenKeyFromSegments(segments);
+  const focused = curScreen === null || curScreen === screen;
+
+  const queue = focused ? tipsForScreen(screen).filter((t) => !seen[t.id]) : [];
   const active = queue[0];
   const rect = active?.anchor ? targets[active.anchor] : undefined;
 
@@ -117,7 +144,7 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
             {band({ left: 0, top: hole.y + hole.h, width: SW, height: SH - (hole.y + hole.h) }, 'b')}
             {band({ left: 0, top: hole.y, width: hole.x, height: hole.h }, 'l')}
             {band({ left: hole.x + hole.w, top: hole.y, width: SW - (hole.x + hole.w), height: hole.h }, 'r')}
-            <View pointerEvents="none" style={{ position: 'absolute', left: hole.x, top: hole.y, width: hole.w, height: hole.h, borderRadius: 14, borderWidth: 2.5, borderColor: theme.accent }} />
+            <View pointerEvents="none" style={{ position: 'absolute', left: hole.x, top: hole.y, width: hole.w, height: hole.h, borderRadius: (active.radius ?? CARD_RADIUS) + PAD, borderWidth: 2.5, borderColor: theme.accent }} />
           </>
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: dim }]} />

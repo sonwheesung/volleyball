@@ -1,7 +1,7 @@
 // 리그 뉴스 목록 전용 화면 — 대시보드 "리그 뉴스"에서 진입.
 // 한 행 = 기사 제목(헤드라인)만. 누르면 기사 상세(/news/[id]).
 // 읽음/안읽음 구분: 진입 시점 스냅샷으로 안읽음을 강조하고, 본 뉴스는 읽음 처리.
-import { useEffect, useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EmptyState, Loading, Screen, theme, useDeferredReady } from '../components/Screen';
@@ -31,7 +31,6 @@ function NewsListInner() {
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const expelledLog = useGameStore((s) => s.expelledLog);
   const readNews = useGameStore((s) => s.readNews);
-  const markNewsRead = useGameStore((s) => s.markNewsRead);
   const benchDirectives = useGameStore((s) => s.benchDirectives);
   const transfers = useGameStore((s) => s.transfers);
   const retirements = useGameStore((s) => s.retirements);
@@ -41,12 +40,9 @@ function NewsListInner() {
     [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
   );
 
-  // 진입 시점의 읽음 상태 스냅샷(이번 화면 동안 안읽음 강조 유지), 그리고 본 뉴스는 읽음 처리
+  // 진입 시점의 읽음 상태 스냅샷(이번 화면 동안 안읽음 강조 유지). **목록 진입만으론 읽음 처리하지 않는다** —
+  // 읽음은 상세(news/[id])를 실제로 열 때만(NEWS_SYSTEM §6 — 사용자 보고: 상세 안 봤는데 전부 읽음 처리되던 버그 교정).
   const [readSnapshot] = useState(() => new Set(readNews));
-  useEffect(() => {
-    markNewsRead(feed.map(newsKey));
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
 
   if (feed.length === 0) {
     return (

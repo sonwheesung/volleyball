@@ -358,7 +358,9 @@ export const useGameStore = create<GameState>()(
             ? s
             : { archive: [...s.archive, { season, championId }] },
         ),
-      markNewsRead: (keys) => set((s) => ({ readNews: Array.from(new Set([...s.readNews, ...keys])) })),
+      // 읽은 뉴스 키 누적 — 최근 1500개만 보존(방치형 장기 저장 바운딩, NEWS_SYSTEM §6). 오래된 키가 떨어져도
+      // 그 기사는 피드 소스(transfers 200·retirements 200·milestones 300 등)서 이미 빠져 다시 안 뜨므로 안전.
+      markNewsRead: (keys) => set((s) => ({ readNews: Array.from(new Set([...s.readNews, ...keys])).slice(-1500) })),
       setTrainingFocus: (focus) => {
         const tid = get().selectedTeamId;
         if (tid) setFocusOverride(tid, focus);

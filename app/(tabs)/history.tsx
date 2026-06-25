@@ -5,7 +5,6 @@ import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } 
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../../data/league';
 import { leagueProduction } from '../../data/production';
-import { buildNewsFeed } from '../../data/news';
 import { computeStandings, leagueDisplayDay } from '../../data/standings';
 import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, seasonSnapshot, type RecordCat } from '../../data/records';
 import { useGameStore } from '../../store/useGameStore';
@@ -44,10 +43,6 @@ function HistoryInner() {
   const archive = useGameStore((s) => s.archive);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const milestones = useGameStore((s) => s.milestones);
-  const expelledLog = useGameStore((s) => s.expelledLog);
-  const benchDirectives = useGameStore((s) => s.benchDirectives);
-  const transfers = useGameStore((s) => s.transfers);
-  const retirements = useGameStore((s) => s.retirements);
 
   const [tab, setTab] = useState(0);          // 0 시즌 · 1 통산 · 2 명예의전당 · 3 연표
   const [viewSeason, setViewSeason] = useState(season);
@@ -83,11 +78,6 @@ function HistoryInner() {
       { label: '어시스트', key: 'assists' as const, list: top('assists') },
     ];
   }, [currentDay, season]);
-
-  const newsFeed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? '', transfers, retirements).slice(0, 40),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
-  );
 
   return (
     <Screen title="기록">
@@ -126,7 +116,7 @@ function HistoryInner() {
 
       {tab === 3 ? (
         <ChronicleView
-          archive={archive} milestones={milestones} newsFeed={newsFeed} teamId={teamId}
+          archive={archive} milestones={milestones} teamId={teamId}
           onSeason={(s) => { setViewSeason(s); setTab(0); }}
         />
       ) : null}
@@ -362,11 +352,10 @@ function HofView({ hallOfFame, teamId }: { hallOfFame: ReturnType<typeof useGame
 
 // ─── 탭 3 · 연표 ───────────────────────────────────────────────
 function ChronicleView({
-  archive, milestones, newsFeed, teamId, onSeason,
+  archive, milestones, teamId, onSeason,
 }: {
   archive: ReturnType<typeof useGameStore.getState>['archive'];
   milestones: ReturnType<typeof useGameStore.getState>['milestones'];
-  newsFeed: { season: number; headline: string; big: boolean; teamId?: string }[];
   teamId: string | null; onSeason: (s: number) => void;
 }) {
   return (
@@ -389,22 +378,6 @@ function ChronicleView({
         </>
       ) : null}
 
-      {newsFeed.length > 0 ? (
-        <>
-          <Title>📰 리그 뉴스</Title>
-          <Card>
-            {newsFeed.map((n, i) => (
-              <View key={`${n.season}-${i}`} style={styles.msRow}>
-                <Text style={styles.msSeason}>{n.season + 1}시즌</Text>
-                <Text style={[styles.msText, n.big && { color: theme.warn, fontWeight: '800' }, n.teamId === teamId && styles.mine]} numberOfLines={1}>
-                  {n.big ? '★ ' : ''}{n.headline}
-                </Text>
-              </View>
-            ))}
-          </Card>
-        </>
-      ) : null}
-
       {milestones.length > 0 ? (
         <>
           <Title>기록 경신 · 마일스톤</Title>
@@ -421,7 +394,7 @@ function ChronicleView({
         </>
       ) : null}
 
-      {archive.length === 0 && newsFeed.length === 0 && milestones.length === 0 ? (
+      {archive.length === 0 && milestones.length === 0 ? (
         <Card><Muted>첫 시즌이 끝나면 이곳에 리그의 역사가 기록됩니다.</Muted></Card>
       ) : null}
     </>

@@ -70,12 +70,28 @@ export const tipsForScreen = (screen: string): Tip[] =>
   .filter(!seen)`)의 **첫 스텝**을 띄운다. 투명 `Modal`(최상위·탭바 위 포함) 위에:
   - **구멍 뚫린 어둠**: 대상 Rect 둘레로 4개의 어두운 띠(상/하/좌/우) + 강조 링. 대상만 밝게.
     (RN엔 "구멍"이 없어 4밴드로 만든다.) anchor 없으면 전체 어둠 + 가운데 카드.
+  - **강조 링 모서리 반경(2026-06-25 교정)**: 구멍은 대상 Rect를 `PAD(8)`만큼 바깥으로 키운 사각형이므로
+    링이 카드와 **같은 곡률로 감싸려면** 반경 = 카드 borderRadius + PAD. 구 하드코딩 `14`는 표준 카드(18)보다
+    작아 모서리가 어긋났다 → `(tip.radius ?? CARD_RADIUS=18) + PAD`로 계산(기본 26). 카드가 아닌 대상은
+    `Tip.radius`로 개별 지정(예: 알약 999, 작은 배지). 사용자 보고: "카드 포커스는 맞는데 radius가 다르다".
   - **설명 카드**: 대상 위/아래 빈 쪽에 제목·본문 + "탭하여 계속 (n/총)".
   - **탭하면 다음**: 오버레이 아무 데나 탭 → `markTip(현재 id)` → 큐의 다음 스텝. 큐 비면 사라짐.
     (탭은 오버레이가 가로채므로 밑 요소는 안 눌린다 — 흐름은 튜토리얼이 통제.)
 
 > 왜 Modal인가: 탭바·헤더까지 덮어야 "그 외는 어둡게"가 완성된다. `measureInWindow`(윈도우 좌표)와
 > 풀스크린 Modal(0,0 기준)이 좌표계가 같아 구멍이 정확히 맞는다.
+
+### 3.1 포커스 게이트 — 이중 스포트라이트 차단(2026-06-25)
+> **증상(사용자 보고)**: 설정 → "튜토리얼 다시보기" 누르면 **구단 선택 스포트라이트 + (배경) 탭 화면 스포트라이트가
+> 동시에** 뜬다.
+> **원인**: `settings`는 `(tabs)` 위에 push돼 있고, 다시보기는 `resetTips()`(seenTips 비움) + `router.replace('/onboarding')`
+> → `(tabs)`가 **스택에 mount된 채로 남는다**. onboarding→`select-team`으로 가면 스택에 `select-team`(최상위)·`(tabs)`
+> (배경)가 공존하고, seenTips가 비어 **두 화면의 `SpotlightOverlay`가 동시에 활성**(각자 Modal). 정상 플레이에서도
+> `select-team`은 `(tabs)` 밑에 남지만 그땐 그 팁이 이미 seen이라 안 떴을 뿐 — 구조적 사각.
+> **수정**: `SpotlightOverlay`가 `expo-router useSegments()`로 **현재 라우트**를 알아내 자기 `screen`과 같을 때만 띄운다
+> (`screenKeyFromSegments`). useSegments는 mount된 모든 컴포넌트에 **현재 top 라우트**를 주므로 배경 화면 오버레이는
+> 자동 억제. 라우트 환원 실패(폴백)면 띄운다(튜토리얼이 영영 가려지는 것 방지 — `@react-navigation useIsFocused`가
+> 과거 오버레이를 영구 비표시한 이력 때문에 라우터 세그먼트로 판정). **기기 확인 필요**(라우트→screen 매핑 정확성).
 
 ---
 

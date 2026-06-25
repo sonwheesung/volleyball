@@ -11,6 +11,7 @@ export interface Tip {
   anchor?: string;
   title: string;
   body: string;
+  radius?: number; // 구멍 모서리 반경(대상 카드의 borderRadius). 없으면 기본 카드값(18). 스포트라이트 링이 카드와 같은 곡률로 감싸게.
 }
 
 export const TIPS: Tip[] = [

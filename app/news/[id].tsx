@@ -2,10 +2,10 @@
 // 뉴스는 저장 없이 archive·milestones·hallOfFame 등에서 파생되므로(결정론), 목록과 동일 피드를
 // 재구성해 id(인덱스)로 같은 기사를 집어낸다.
 import { useLocalSearchParams } from 'expo-router';
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { Card, Muted, Screen, theme } from '../../components/Screen';
-import { buildNewsFeed } from '../../data/news';
+import { buildNewsFeed, newsKey } from '../../data/news';
 import { KIND_KO } from '../news';
 import { getTeam } from '../../data/league';
 import { useGameStore } from '../../store/useGameStore';
@@ -47,6 +47,13 @@ export default function NewsArticle() {
     [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
   );
   const n = feed[Number(id)];
+  const markNewsRead = useGameStore((s) => s.markNewsRead);
+
+  // 읽음 처리는 **상세를 실제로 열 때만**(목록 진입만으론 안 됨 — NEWS_SYSTEM §6). 이 기사 하나만.
+  useEffect(() => {
+    if (n) markNewsRead([newsKey(n)]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
 
   if (!n) {
     return (
