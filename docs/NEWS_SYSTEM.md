@@ -269,3 +269,8 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
   in/out만이던 이적 기사를 **리그 전체로 확장**(거물 게이트 `overall≥71`) + **방출/재계약 불발**(`kind='release'`, FA 풀행
   미계약) 신설. `Transfer`에 `kind`·`ovr`(이동 시점) 추가, endSeason이 적립(내 팀 항상·타팀 거물만). 새 kind `release`.
   보정·검증 `tools/_ev_transfernews.ts`(15시즌: 타팀 ~2건/시즌·매달린참조0·중복0·결정론·이동시점OVR 게이트). 엔진 무파급·새 사건 0(roster diff 파생).
+- 2026-06-25 **에디터 리뷰 글품질 수리**: (1) §4.5 조사 자동교정(`resolveJosa` — "코메츠이(가)" 병기 일괄). (2) milestone
+  본문이 헤드라인(m.text)을 재탕해 비문 + careerLine(현재값)이 마일스톤(돌파 시점)과 수치 모순 → 본문을 **맥락 문장**으로
+  재설계(수치는 헤드라인이 말함). (3) retire "벽였다→벽이었다"(`josa(stat,'이었다','였다')`) + 0스탯이면 중립 문형(가짜
+  드라마 방지). (4) hof 본문 0 스탯 제외("디그 0개" 박제 방지). (5) release 전용 opener/closer 풀(transfer 낙관 톤 분리).
+  검증 `_ev_josa`(잔여 병기 0)·simNews 무결성·_ev_retirenews·_ev_transfernews PASS.

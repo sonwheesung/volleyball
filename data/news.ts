@@ -12,7 +12,7 @@ import { seasonMatchProds } from './production';
 import { SEVERITY_KO } from '../engine/injury';
 import { seasonScandals } from './dynamics';
 import { SCANDAL_KO, EXPEL_KO } from '../engine/scandal';
-import { resolveJosa } from '../lib/josa';
+import { resolveJosa, josa } from '../lib/josa';
 
 const teamName = (id: string) => getTeam(id)?.name ?? id;
 const pName = (id: string) => getPlayer(id)?.name ?? id;
@@ -124,6 +124,10 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
   transfer: {
     open: ['오프시즌 시장이 움직였다.', '한 선수의 거취가 정해졌다.', '새 유니폼을 입는다.', 'FA 시장의 한 페이지가 넘어갔다.'],
     close: ['새 팀에서의 활약이 기대된다.', '이적이 두 팀의 전력 균형을 흔든다.', '한 시즌의 새 출발이다.', '익숙한 코트를 떠나 새 도전을 시작한다.'],
+  },
+  release: { // 방출/재계약 불발 — transfer 낙관 톤과 분리(2026-06-25 에디터)
+    open: ['방출 명단에 이름이 올랐다.', '한 시즌의 인연이 정리됐다.', '냉정한 전력 구상의 결과다.', 'FA 시장에 새 이름이 나왔다.'],
+    close: ['새 팀을 찾아야 하는 처지가 됐다.', '거취는 아직 안갯속이다.', '반등의 무대를 스스로 찾아야 한다.', '한 시즌의 마침표이자 새 출발선이다.'],
   },
 };
 
@@ -278,21 +282,29 @@ export function buildNewsFeed(
     }
   }
 
-  // 2) 마일스톤(기록 경신) — 통산 사실 한 줄 보강(헤드라인 반복 줄이고 실제 누적값 노출)
-  for (const m of milestones) push(m.season, 'milestone', m.text, m.big, m.teamId,
-    body3('milestone', `${m.season}:ms:${m.playerId}:${m.text}`,
-      more(`${m.text} ${m.kind === 'league' ? '리그 역사에' : m.kind === 'club' ? '구단 역사에' : '개인 통산 기록에'} 새로 새겨졌다.`,
-        `${teamName(m.teamId)} 소속으로 세운 이정표다.`,
-        careerLine(m.playerId))), m.playerId);
+  // 2) 마일스톤(기록 경신) — 헤드라인(m.text)이 사실(수치)을 말하므로 본문은 맥락만(재탕·수치 모순 방지, 2026-06-25 에디터).
+  for (const m of milestones) {
+    const kindKo = m.kind === 'league' ? '리그 역대 기록' : m.kind === 'club' ? '구단 통산 기록' : '개인 통산 기록';
+    const sig = m.big ? '리그가 주목할 이정표다.' : '오랜 꾸준함이 쌓아 올린 한 걸음이다.';
+    push(m.season, 'milestone', m.text, m.big, m.teamId,
+      body3('milestone', `${m.season}:ms:${m.playerId}:${m.text}`,
+        `${teamName(m.teamId)} 소속 ${m.name}이(가) ${kindKo}에 또 하나의 이정표를 새겼다. ${sig}`), m.playerId);
+  }
 
   // 3) 명예의전당 헌액
   for (const h of hallOfFame) {
     const key = `${h.retiredSeason}:hof:${h.id}`;
+    // 0인 스탯은 빼고 나열(공격수 "디그 0개"·리베로 "블로킹 0개" 박제 방지, 2026-06-25 에디터)
+    const hofStats = [
+      h.points > 0 ? `통산 ${h.points.toLocaleString()}점` : '',
+      h.blocks > 0 ? `블로킹 ${h.blocks.toLocaleString()}개` : '',
+      h.digs > 0 ? `디그 ${h.digs.toLocaleString()}개` : '',
+    ].filter(Boolean).join('·');
     push(h.retiredSeason, 'hof', vh([
       (n) => `${n}, 명예의전당 헌액${h.legend ? ' · 영구결번' : ''} (통산 ${h.points.toLocaleString()}점)`,
       (n) => `전설의 마침표 — ${n} 명예의전당으로`,
     ], key, h.name), h.legend, h.teamId,
-      body3('hof', key, `${h.name}이(가) ${h.seasons}시즌의 커리어를 마치고 명예의전당에 헌액됐다. ${teamName(h.teamId)}에서 통산 ${h.points.toLocaleString()}점·블로킹 ${h.blocks.toLocaleString()}개·디그 ${h.digs.toLocaleString()}개를 남겼다.`
+      body3('hof', key, `${h.name}이(가) ${h.seasons}시즌의 커리어를 마치고 명예의전당에 헌액됐다.${hofStats ? ` ${teamName(h.teamId)}에서 ${hofStats}를 남겼다.` : ''}`
         + (h.legend ? ' 구단은 등번호를 영구결번으로 올렸다.' : '')), h.id);
   }
 
@@ -300,11 +312,11 @@ export function buildNewsFeed(
   for (const r of retirements) {
     const key = `${r.season}:retire:${r.playerId}`;
     const posKo = POS_KO[r.position] ?? '';
-    // 포지션별 대표 회고 스탯
-    const stat = r.position === 'L' ? `디그 ${r.digs.toLocaleString()}개·리시브를 책임진 수비의 핵`
-      : r.position === 'S' ? `세트 어시스트 ${r.assists.toLocaleString()}개로 팀 공격을 조립한 야전사령관`
-      : r.position === 'MB' ? `블로킹 ${r.blocks.toLocaleString()}개로 네트 앞을 지킨 벽`
-      : `통산 ${r.points.toLocaleString()}점을 책임진 득점원`;
+    // 포지션별 대표 회고 스탯 — 값이 0이면 중립 문형으로(데이터 0인데 "벽" 칭송=가짜 드라마 방지, 2026-06-25 에디터)
+    const stat = r.position === 'L' ? (r.digs > 0 ? `디그 ${r.digs.toLocaleString()}개로 수비를 책임진 리베로` : `${r.seasons}시즌 코트를 지킨 리베로`)
+      : r.position === 'S' ? (r.assists > 0 ? `세트 어시스트 ${r.assists.toLocaleString()}개로 팀 공격을 조립한 야전사령관` : `${r.seasons}시즌 코트를 지킨 세터`)
+      : r.position === 'MB' ? (r.blocks > 0 ? `블로킹 ${r.blocks.toLocaleString()}개로 네트 앞을 지킨 벽` : `${r.seasons}시즌 코트를 지킨 미들 블로커`)
+      : (r.points > 0 ? `통산 ${r.points.toLocaleString()}점을 책임진 득점원` : `${r.seasons}시즌 코트를 지킨 ${posKo}`);
     const tail = r.legend ? ` ${teamName(r.teamId)}은(는) 등번호를 영구결번으로 올려 그를 영원히 기린다.`
       : r.hof ? ' 통산 기록은 명예의전당에 새겨진다.' : '';
     push(r.season, 'retire', vh([
@@ -312,7 +324,7 @@ export function buildNewsFeed(
       (n) => `코트를 떠나는 ${n} — ${r.seasons}시즌의 여정`,
       (n) => `${teamName(r.teamId)}의 ${n}, 은퇴 선언`,
     ], key, r.name), r.legend, r.teamId,
-      body3('retire', key, `${teamName(r.teamId)}의 ${posKo} ${r.name}이(가) ${r.seasons}시즌의 커리어를 마치고 코트를 떠난다. ${stat}였다.` + tail), r.playerId);
+      body3('retire', key, `${teamName(r.teamId)}의 ${posKo} ${r.name}이(가) ${r.seasons}시즌의 커리어를 마치고 코트를 떠난다. ${josa(stat, '이었다', '였다')}.` + tail), r.playerId);
   }
 
   // 4) 이번 시즌 큰 부상(중상·시즌아웃만 — 경미는 단신 제외)
@@ -360,7 +372,7 @@ export function buildNewsFeed(
         (n) => `${n}, ${teamName(t.fromTeam)}와(과) 재계약 불발`,
         (n) => outMine ? `${teamName(myTeamId)}, ${n} 방출` : `FA ${n}, ${teamName(t.fromTeam)} 떠난다`,
       ], rkey, t.name), bigRel, t.fromTeam,
-        body3('transfer', rkey, more(
+        body3('release', rkey, more(
           `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 FA 시장에 나왔다. 새 시즌 명단에 이름을 올리지 못했다.`,
           careerLine(t.playerId),
           outMine ? `${teamName(myTeamId)}은(는) 한 자원을 정리했다.` : '')), t.playerId);
