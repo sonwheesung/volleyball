@@ -117,6 +117,13 @@ export function persuade(
   return rng.next() < p;
 }
 
+/** 공약 파기 시 재계약 거부 가산 — 성공 면담의 −0.18 바이어스를 압도(배신은 칭찬보다 크게). OWNER_SYSTEM 1.3. */
+export const PROMISE_BREACH_REFUSE = 0.5;
+/** '주전 보장'(starter) 약속을 성공시킨 적이 있나 — 그 시즌. (파기 판정 = 이 약속 + 여전히 출전 불만) */
+export function starterPromised(logs: InterviewLog[], season: number, playerId: string): boolean {
+  return logs.some((l) => l.season === season && l.playerId === playerId && l.card === 'starter' && l.ok);
+}
+
 /** 면담 로그 → FA 판정 보정. refuse=내 재계약 거부 가중(±), offer=FA 시장 내 오퍼 가중(±) */
 export function interviewEffects(logs: InterviewLog[], season: number): {
   refuseBias: Record<string, number>;

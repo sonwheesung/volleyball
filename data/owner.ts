@@ -5,6 +5,7 @@ import type { Player, SeasonAwards, FAArchetype } from '../types';
 import {
   discontentOf, moodOf, popularityOf, fanbase, playerFans, fanOverlapRatio,
   interviewEffects, refuseResignProb, sustainedBenchRefuse, sinkingShipBias,
+  starterPromised, PROMISE_BREACH_REFUSE,
   type DiscontentTopic, type Mood, type SitCause, type Fanbase, type InterviewLog, type OwnerFx,
 } from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
@@ -110,7 +111,9 @@ export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamI
     const { topic, weight, playRatio } = discontentNow(p, myTeamId, SEASON_END_DAY);
     // 누적(C.4): 시즌 내내 부당하게 앉아있던 만큼(낮은 출전율) 정 떨어져 거부↑. 출전 불만일 때만.
     const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight) : 0;
-    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore) + accum;
+    // 공약 파기(OWNER_SYSTEM 1.3): '주전 보장' 약속을 했는데 여전히 출전 불만(=벤치) → 배신. 거부 급등(성공 보정 상쇄+α).
+    const breach = topic === 'minutes' && starterPromised(interviews, season, id) ? PROMISE_BREACH_REFUSE : 0;
+    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore) + accum + breach;
     if (prob > 0) refuseProb[id] = Math.min(0.95, prob);
   }
   return { refuseProb, offerBias: fx.offerBias };
