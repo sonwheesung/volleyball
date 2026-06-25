@@ -105,6 +105,7 @@ npx tsx tools/_dv_foreign_fa_leak.ts        # 외인 FA 풀 오염 가드 — re
 npx tsx tools/_dv_foreign_contract.ts       # 계약관리 외인 차단 — release/reSign(외인·아시아) 거부·국내 대조군·willBeFA 외인 false + A/B(가드 제거 시 release(외인)=true). EDGE_CASES §3.9, exit 0/1
 npx tsx tools/_ev_transfernews.ts 15        # 타팀 이적/방출 뉴스(NEWS 슬라이스4) — 거물 게이트 볼륨·매달린참조0·중복0·결정론·이동시점OVR. exit 0/1
 npx tsx tools/_ev_draftpick.ts              # AI 드래프트 3티어(FA §3.1) — 특급 BPA·포지션 필요·OVR+성격 불변식 + 성격 A/B + 결정론. exit 0/1
+npx tsx tools/_ev_airetain.ts 12            # AI 재계약 확률(aiRetainProb, FA §4) — 절벽해소(나이/OVR 그라데이션)·순잔류~58%·단조·엘리트유지·연속. 구 aiKeepsFA 이진 A/B. exit 0/1
 # (2026-06-25 독립 3세션 엣지 도구 = _dv_docs_*·_dv_code_*·_dv_drift_* — EDGE_CASES §3.6, 무거움 on-demand)
 npx tsx tools/simStarters.ts               # 선발 검증(지시·OVR·징계·부상·폼·순위 + 리베로/suggestStart 가드 G1·G2)
 npx tsx tools/simMood.ts                    # 선수 심리(벤치 사유 귀속·부상자 불만없음·성격/기대치별 기분 A/B·누적→FA·⑦실력밀림 주전급 성격갈림)

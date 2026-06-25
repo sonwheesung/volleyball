@@ -53,11 +53,26 @@ export function wantScore(p: Player, value: number, gap: Record<Position, number
   return value * needWeight(gap[p.position]) * styleWeight(p.position, style);
 }
 
-/** AI가 자기 FA를 잔류시킬지: 어리고 잘하면 잔류, 늙거나 약하면 풀어줌 */
+/** AI가 자기 FA를 잔류시킬지(이진, 레거시) — 어리고 잘하면 잔류. ※ 절벽 컷이라 `aiRetainProb`(확률)로 대체(2026-06-25). */
 export function aiKeepsFA(p: Player): boolean {
   if (p.age >= 32) return false;
   if (overall(p) < 70) return false;
   return true;
+}
+
+/** AI 재계약 의향 확률(0~1, FA_SYSTEM 4) — 절벽 컷 대신 OVR·나이 연속 함수.
+ *  엘리트는 노쇠에도 소프트 플로어(프랜차이즈 본능 — 32세 에이스를 칼같이 안 버림). 가끔 노장 잔류·영건 이탈 = 리그 생동.
+ *  rng 롤은 호출부(offseason): keep = rng < aiRetainProb(p). placeholder — `_ev_airetain`으로 측정·튜닝. */
+export function aiRetainProb(p: Player): number {
+  const ovr = overall(p);
+  const a = p.age;
+  const q = Math.max(0, Math.min(1, (ovr - 62) / 16));   // 품질 0~1: 62→0, 78→1
+  const base = q * q * (3 - 2 * q);                       // smoothstep(S커브) — 양 끝 완만
+  const ageMul = a <= 29 ? 1 : a <= 31 ? 0.92 : a <= 33 ? 0.74 : a <= 35 ? 0.48 : 0.26;
+  let prob = base * ageMul;
+  // 엘리트(에이스) 프랜차이즈 본능 — 1 쪽으로 곱셈 당김(나이 반영 유지=단조 보존, 32세 에이스 칼버림 방지)
+  if (ovr >= 82) prob = prob + (1 - prob) * 0.3;
+  return Math.max(0, Math.min(1, prob));
 }
 
 /**

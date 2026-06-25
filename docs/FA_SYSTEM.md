@@ -37,7 +37,10 @@
 - 보상금 `compensationMoney = A 2.0× / B 1.0× / C 0`(보상선수 동반), `compensationMoneyOnly = A 3.0× / B 2.0×`('돈만'·선수 보호). 보상선수는 **A·B만** 필요.
 - `offerScore = w.money·연봉 + w.win·우승권 + w.loyalty·충성 + w.play·출전 + w.home·연고 + 0.05·rand`.
   **선수별 가중치 `w`** 가 동기를 차등화(2.5b). `우승권 = 0.7·전력 + 0.3·prestige`(최근 성적).
-- AI 잔류 판단 `aiKeepsFA`: 나이<32 AND OVR≥70. 로스터 이상치 `ROSTER_IDEAL{S3,OH5,OP2,MB4,L2}=16`.
+- AI 잔류 판단 `aiRetainProb`(2026-06-25, 구 `aiKeepsFA` 이진 절벽 대체): OVR·나이 **연속 확률**(0~1)을
+  결정론 시드로 굴림 — 절벽(32세·OVR70 칼컷) 제거, **엘리트는 노쇠에도 소프트 플로어**(32세 에이스 안 버림),
+  가끔 노장 잔류·영건 이탈로 리그 생동. 측정 보정(`_ev_airetain`): 순잔류 ~58%(구와 동률)·나이/OVR 매끄러운 그라데이션·
+  33세 에이스 0.82·연속 73%. 로스터 이상치 `ROSTER_IDEAL{S3,OH5,OP2,MB4,L2}=16`.
 - **재계약에도 샐러리캡 적용**: 만료 FA 잔류는 가치순으로 팀 캡(35억) 한도 내에서만. 초과분은 잔류 못 하고
   FA 시장으로(`data/offseason.ts buildOffseason`). 재계약 연봉은 개인상한 클램프(`renewedContract`→`clampSalary`).
   단, 현재 연봉 수준에선 캡이 거의 안 걸려 왕조 억제 효과는 미미(향후 연봉 인플레 시 작동).

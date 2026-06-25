@@ -7,7 +7,7 @@ import { createRng } from '../engine/rng';
 import { applyRetirements } from '../engine/retire';
 import { rollExpulsion, scandalRepMul, type ExpelKind } from '../engine/scandal';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
-import { aiKeepsFA, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
+import { aiRetainProb, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
 import { assignFAGrades, askingPrice, offerScore, prefWeightsOf } from '../engine/faMarket';
 import { needsCompensationPlayer, pickCompensation, compensationMoney, compensationMoneyOnly } from '../engine/compensation';
 import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
@@ -266,8 +266,10 @@ export function buildOffseason(
       const rng = createRng(strSeed(`resign-refuse:${p.id}:${nextSeason}`));
       return rng.next() < prob;
     };
+    // AI 재계약: 절벽 컷(aiKeepsFA) 대신 확률(aiRetainProb)을 결정론 시드로 굴림 — 가끔 노장 잔류·영건 이탈(리그 생동)
+    const aiRetains = (p: Player): boolean => createRng(strSeed(`airetain:${p.id}:${nextSeason}`)).next() < aiRetainProb(p);
     const wantRetain = expiring
-      .filter((p) => (teamId === myTeam ? resignDecisions[p.id] !== false && !refuses(p) : aiKeepsFA(p)))
+      .filter((p) => (teamId === myTeam ? resignDecisions[p.id] !== false && !refuses(p) : aiRetains(p)))
       .sort((a, b) => overall(b) - overall(a));
     const retainSet = new Set(wantRetain.map((p) => p.id));
     for (const p of wantRetain) {
