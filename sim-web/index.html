@@ -57,6 +57,23 @@
   table.box td.pt { font-weight:900; color:var(--accent); }
   td.empty { text-align:center; color:var(--soft); padding:14px; }
 
+  /* ── 드래프트 라이브 ── */
+  .rbadge { display:inline-block; font-size:11px; font-weight:800; padding:1px 7px; border-radius:10px; white-space:nowrap; }
+  .rbadge.r-super { background:rgba(242,169,59,.18); color:#C8830F; }
+  .rbadge.r-need  { background:rgba(16,185,166,.16); color:var(--accent); }
+  .rbadge.r-best  { background:var(--alt); color:var(--soft); }
+  .rbadge.r-wish  { background:rgba(139,124,240,.18); color:#6C5CE0; }
+  .dl-rank { display:grid; grid-template-columns:repeat(2,1fr); gap:4px 14px; margin-top:10px; }
+  .dl-rrow { display:flex; align-items:center; gap:8px; font-size:12.5px; padding:3px 6px; border-bottom:1px solid var(--alt); }
+  .dl-rk { color:var(--soft); font-weight:800; width:38px; }
+  .dl-tm { flex:1; font-weight:700; }
+  .dl-mv { border:1px solid var(--line); background:var(--card,#fff); border-radius:6px; padding:1px 7px; cursor:pointer; font-size:12px; }
+  .dl-mv:disabled { opacity:.3; cursor:default; }
+  .dl-prog { margin-left:auto; color:var(--soft); font-weight:800; font-size:12.5px; }
+  table.dl-tbl td.dl-pk { color:var(--soft); font-weight:800; }
+  table.dl-tbl td.dl-tn { text-align:left; font-weight:700; }
+  table.dl-tbl tr.dl-last td { background:rgba(16,185,166,.10); }
+
   /* ── 박스스코어(네이버 기록실 스타일) ── */
   .boxwrap h3 { display:flex; align-items:center; gap:8px; }
   .boxwrap h3::before { content:''; width:4px; height:15px; border-radius:2px; background:var(--good); }

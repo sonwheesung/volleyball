@@ -5,7 +5,10 @@
 import type { CoachStyle, Player, Position } from '../types';
 import { type Rng, strSeed } from './rng';
 import { overall } from './overall';
-import { positionGap, ROSTER_IDEAL, wantScore } from './aiGM';
+import { positionGap, ROSTER_IDEAL, needWeight, styleWeight, isSuperProspect, personalityFactor } from './aiGM';
+
+/** 한 AI 픽의 사유 — wish(인간 위시) / super(특급 BPA) / need(부족 포지션) / best(필요없음→OVR+성격) */
+export type PickReason = 'wish' | 'super' | 'need' | 'best';
 
 type Lookup = (id: string) => Player | undefined;
 
@@ -79,7 +82,41 @@ export function prospectValue(p: Player): number {
   return overall(p) * 0.4 + pot * 0.6;
 }
 
-/** AI 지명: 팀 부족도 + 감독 성향 + 신인 가치(포텐 비중) 종합으로 "원하는 선수" 선택 */
+function bestBy(arr: Player[], score: (p: Player) => number): Player {
+  let best = arr[0];
+  let bs = -Infinity;
+  for (const p of arr) { const s = score(p); if (s > bs) { bs = s; best = p; } }
+  return best;
+}
+
+/**
+ * AI 픽(3티어, 사유 포함 — FA_SYSTEM 3.1):
+ *  1) 슈퍼 유망주(pot≥88) 있으면 포지션 무관 BPA(reason=super)
+ *  2) 없으면 부족 포지션(gap>0)만 보고 가치×부족도×성향(reason=need)
+ *  3) 부족 포지션 없으면 OVR×성격×성향(reason=best)
+ */
+export function pickWithReason(
+  available: Player[],
+  rosterIds: string[],
+  get: Lookup,
+  style: CoachStyle,
+  teamId = '',
+  reveal = 1,
+): { player: Player; reason: PickReason } | null {
+  if (available.length === 0) return null;
+  const gap = positionGap(rosterIds, get);
+  const styleScout = (p: Player) => styleWeight(p.position, style) * scoutMult(p.id, teamId, reveal);
+  // 1) 특급 유망주 — 포지션 무관 베스트(BPA)
+  const supers = available.filter(isSuperProspect);
+  if (supers.length) return { player: bestBy(supers, (p) => prospectValue(p) * styleScout(p)), reason: 'super' };
+  // 2) 부족 포지션 우선 — 잉여 포지션은 보지 않음(aiFillFromPool과 동일 정책)
+  const needed = available.filter((p) => gap[p.position] > 0);
+  if (needed.length) return { player: bestBy(needed, (p) => prospectValue(p) * needWeight(gap[p.position]) * styleScout(p)), reason: 'need' };
+  // 3) 부족 없음 — 현재 실력(OVR) + 성격
+  return { player: bestBy(available, (p) => overall(p) * personalityFactor(p) * styleScout(p)), reason: 'best' };
+}
+
+/** AI 지명(사유 없이 선수만) — 기존 호출부 호환. 내부는 3티어 pickWithReason. */
 export function aiDraftPick(
   available: Player[],
   rosterIds: string[],
@@ -88,18 +125,7 @@ export function aiDraftPick(
   teamId = '',
   reveal = 1, // 스카우팅 공개도(1=정밀, 낮을수록 오판)
 ): Player | null {
-  if (available.length === 0) return null;
-  const gap = positionGap(rosterIds, get);
-  let best: Player | null = null;
-  let bestScore = -1;
-  for (const p of available) {
-    const sc = wantScore(p, prospectValue(p), gap, style) * scoutMult(p.id, teamId, reveal);
-    if (sc > bestScore) {
-      bestScore = sc;
-      best = p;
-    }
-  }
-  return best;
+  return pickWithReason(available, rosterIds, get, style, teamId, reveal)?.player ?? null;
 }
 
 /**
@@ -117,7 +143,7 @@ export function resolveDraft(
   wishlist: string[],
   styleOf: (teamId: string) => CoachStyle,
   revealOf: (teamId: string) => number = () => 1, // 팀 스카우팅 공개도(기본 1=정밀)
-): { rosters: Record<string, string[]>; picked: Player[] } {
+): { rosters: Record<string, string[]>; picked: Player[]; sequence: { teamId: string; playerId: string; reason: PickReason }[] } {
   const rosters: Record<string, string[]> = {};
   for (const k of Object.keys(rostersIn)) rosters[k] = [...rostersIn[k]];
   const clsById = new Map(cls.map((p) => [p.id, p]));
@@ -126,24 +152,27 @@ export function resolveDraft(
   const available = [...cls];
   const wl = [...wishlist];
   const picked: Player[] = [];
+  const sequence: { teamId: string; playerId: string; reason: PickReason }[] = [];
 
   for (const teamId of order) {
     let chosen: Player | null = null;
+    let reason: PickReason = 'best';
     if (teamId === myTeam) {
       for (const id of wl) {
         const idx = available.findIndex((a) => a.id === id);
-        if (idx >= 0) {
-          chosen = available[idx];
-          break;
-        }
+        if (idx >= 0) { chosen = available[idx]; reason = 'wish'; break; }
       }
     }
-    if (!chosen) chosen = aiDraftPick(available, rosters[teamId] ?? [], get, styleOf(teamId), teamId, revealOf(teamId));
+    if (!chosen) {
+      const r = pickWithReason(available, rosters[teamId] ?? [], get, styleOf(teamId), teamId, revealOf(teamId));
+      if (r) { chosen = r.player; reason = r.reason; }
+    }
     if (!chosen) continue;
     const idx = available.findIndex((a) => a.id === chosen!.id);
     available.splice(idx, 1);
     rosters[teamId] = [...(rosters[teamId] ?? []), chosen.id];
     picked.push(chosen);
+    sequence.push({ teamId, playerId: chosen.id, reason });
   }
-  return { rosters, picked };
+  return { rosters, picked, sequence };
 }

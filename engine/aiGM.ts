@@ -3,9 +3,24 @@
 
 import type { CoachStyle, Player, Position } from '../types';
 import { overall } from './overall';
+import { TRAITS } from './traits';
 
 // 팀 포지션 이상 구성(16인) — 공용
 export const ROSTER_IDEAL: Record<Position, number> = { S: 3, OH: 5, OP: 2, MB: 4, L: 2 };
+
+/** 특급(슈퍼) 유망주 컷 — 최대 포텐셜 ≥ 88(★★★). 이상이면 포지션 무관 BPA(FA_SYSTEM 3.1). */
+export const SUPER_POT = 88;
+export const maxPotential = (p: Player): number => Math.max(...Object.values(p.potential));
+export const isSuperProspect = (p: Player): boolean => maxPotential(p) >= SUPER_POT;
+
+/** 성격 계수(드래프트 3티어 — 필요 포지션 없을 때 OVR과 함께). 멘탈(집중·기복·VQ)+특성(긍정+/부정−). ~0.85~1.15. placeholder. */
+export function personalityFactor(p: Player): number {
+  const mental = (p.focus + p.consistency + p.vq) / 3; // ~25..99
+  let traitAdj = 0;
+  for (const t of p.traits ?? []) traitAdj += TRAITS[t]?.good ? 1 : -1;
+  const s = Math.max(0, Math.min(1, mental / 100 + 0.06 * traitAdj));
+  return 0.85 + 0.3 * s;
+}
 export const ROSTER_TOTAL = Object.values(ROSTER_IDEAL).reduce((a, b) => a + b, 0);
 
 type Lookup = (id: string) => Player | undefined;

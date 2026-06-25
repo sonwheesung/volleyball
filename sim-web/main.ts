@@ -24,6 +24,10 @@ import { formatMoney } from '../engine/salary';
 import { LEAGUE_CAP, isFranchise } from '../engine/cap';
 import { leagueProduction } from '../data/production';
 import { buildDraftContext } from '../data/draftSetup';
+import { resolveDraft, lotteryRound1, buildDraftOrder, type PickReason } from '../engine/draft';
+import { isSuperProspect } from '../engine/aiGM';
+import { generateDraftClass } from '../data/draftClass';
+import { createRng } from '../engine/rng';
 import type { Player } from '../types';
 
 const POS_KO: Record<string, string> = { S: '세터', OH: '아웃사이드', OP: '아포짓', MB: '미들', L: '리베로' };
@@ -54,10 +58,10 @@ const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
   TEAMS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select>`;
 
 // ─── 탭 프레임워크 ───────────────────────────────────────────────────────
-type TabId = 'match' | 'lineup' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft' | 'foreign' | 'tx' | 'injury' | 'news';
-const TABS: [TabId, string][] = [['match', '경기'], ['lineup', '선발 라인업'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['foreign', '외국인'], ['draft', '영입 · 드래프트'], ['tx', '시즌 중 이동'], ['injury', '부상 · 사고'], ['news', '뉴스']];
+type TabId = 'match' | 'lineup' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft' | 'draftlive' | 'foreign' | 'tx' | 'injury' | 'news';
+const TABS: [TabId, string][] = [['match', '경기'], ['lineup', '선발 라인업'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['foreign', '외국인'], ['draft', '영입 · 드래프트'], ['draftlive', '드래프트 라이브'], ['tx', '시즌 중 이동'], ['injury', '부상 · 사고'], ['news', '뉴스']];
 let active: TabId = 'match';
-const MOUNTS: Record<TabId, () => void> = { match: mountMatch, lineup: mountLineup, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft, foreign: mountForeign, tx: mountTx, injury: mountInjury, news: mountNews };
+const MOUNTS: Record<TabId, () => void> = { match: mountMatch, lineup: mountLineup, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft, draftlive: mountDraftLive, foreign: mountForeign, tx: mountTx, injury: mountInjury, news: mountNews };
 function mount() {
   $('tabs').innerHTML = TABS.map(([id, l]) => `<span class="tab${id === active ? '' : ' off'}" data-tab="${id}">${l}</span>`).join('');
   document.querySelectorAll('[data-tab]').forEach((e) => e.addEventListener('click', () => { active = e.getAttribute('data-tab') as TabId; mount(); }));
@@ -334,6 +338,108 @@ function runSalary() {
 function mountDraft() {
   $('controls').innerHTML = `<div class="run-row"><button id="d-run">드래프트 클래스 생성 ▶</button></div><p class="hint">다음 시즌 신인 드래프트 클래스(엔진 생성). OVR·포텐셜(★) 순. 스카우팅 안개는 콘솔에선 전부 공개.</p>`;
   $('d-run').onclick = runDraft;
+}
+
+// ───────────────────────── 드래프트 라이브(순위 설정 + 한 픽씩 진행 + AI 사유) ─────────────────────────
+const REASON_KO: Record<PickReason, { ko: string; cls: string }> = {
+  super: { ko: '특급 BPA', cls: 'r-super' }, need: { ko: '포지션 필요', cls: 'r-need' },
+  best: { ko: 'OVR+성격', cls: 'r-best' }, wish: { ko: '지명', cls: 'r-wish' },
+};
+const DL: { ranking: string[]; holes: number; lottery: boolean; seed: number; auto: boolean;
+  seq: { teamId: string; player: Player; reason: PickReason; round: number }[]; revealed: number; timer: number } = {
+  ranking: [], holes: 2, lottery: false, seed: 1, auto: false, seq: [], revealed: 0, timer: 0,
+};
+function dlInitRanking() {
+  if (DL.ranking.length) return;
+  const st = computeStandings(Number.MAX_SAFE_INTEGER);
+  DL.ranking = st.length ? st.map((s) => s.teamId) : LEAGUE.teams.map((t) => t.id); // 1위→꼴찌
+}
+function mountDraftLive() {
+  if (DL.timer) { clearInterval(DL.timer); DL.timer = 0; DL.auto = false; }
+  dlInitRanking();
+  $('controls').innerHTML = `
+    <div class="run-row">
+      <label>팀당 빈자리(지명권) <input type="number" id="dl-holes" value="${DL.holes}" min="1" max="6" style="width:54px" /></label>
+      <label><input type="checkbox" id="dl-lot" ${DL.lottery ? 'checked' : ''} /> 추첨(하위 가중)</label>
+      <label>시드 <input type="number" id="dl-seed" value="${DL.seed}" style="width:64px" /></label>
+      <button id="dl-run">드래프트 진행 ▶</button>
+    </div>
+    <p class="hint">각 순위에 팀을 배치(▲▼) → 하위 팀이 앞 순번. <b>추첨 끄면 순위 그대로</b>(결정론), 켜면 하위 가중 추첨.
+      AI 픽 사유: <span class="rbadge r-super">특급 BPA</span>(포텐≥88 무조건) · <span class="rbadge r-need">포지션 필요</span>(부족 자리) ·
+      <span class="rbadge r-best">OVR+성격</span>(부족 없을 때). 빈자리는 각 팀 최저 OVR을 비워 만든 테스트용.</p>
+    <div id="dl-rank" class="dl-rank"></div>`;
+  ($('dl-holes') as HTMLInputElement).onchange = (e) => { DL.holes = Math.max(1, Math.min(6, +(e.target as HTMLInputElement).value || 2)); };
+  ($('dl-lot') as HTMLInputElement).onchange = (e) => { DL.lottery = (e.target as HTMLInputElement).checked; };
+  ($('dl-seed') as HTMLInputElement).onchange = (e) => { DL.seed = +(e.target as HTMLInputElement).value || 1; };
+  $('dl-run').onclick = runDraftLive;
+  renderRankEditor();
+  if (DL.seq.length) renderDLBoard(); else $('out').innerHTML = `<p class="hint">순위를 정하고 "드래프트 진행 ▶"을 눌러줘.</p>`;
+}
+function renderRankEditor() {
+  const rows = DL.ranking.map((tid, i) => `<div class="dl-rrow"><span class="dl-rk">${i + 1}위</span><span class="dl-tm">${esc(getTeam(tid)?.name ?? tid)}</span>`
+    + `<button class="dl-mv" data-mv="up" data-i="${i}" ${i === 0 ? 'disabled' : ''}>▲</button>`
+    + `<button class="dl-mv" data-mv="dn" data-i="${i}" ${i === DL.ranking.length - 1 ? 'disabled' : ''}>▼</button></div>`).join('');
+  $('dl-rank').innerHTML = rows;
+  document.querySelectorAll('.dl-mv').forEach((b) => b.addEventListener('click', () => {
+    const i = +b.getAttribute('data-i')!; const dir = b.getAttribute('data-mv') === 'up' ? -1 : 1; const j = i + dir;
+    if (j < 0 || j >= DL.ranking.length) return;
+    [DL.ranking[i], DL.ranking[j]] = [DL.ranking[j], DL.ranking[i]]; renderRankEditor();
+  }));
+}
+function runDraftLive() {
+  if (DL.timer) { clearInterval(DL.timer); DL.timer = 0; DL.auto = false; }
+  const ctx = buildDraftContext('', {}, {}, [], false, [], 1);
+  const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';
+  // 빈자리 만들기: 각 팀 최저 OVR DL.holes명 제거 → 실제 포지션 부족 생성(테스트용)
+  const rosters: Record<string, string[]> = {};
+  const holes: Record<string, number> = {};
+  for (const tid of DL.ranking) {
+    const cur = [...(ctx.rosters[tid] ?? [])].sort((a, b) => overall(ctx.snapshot[a]) - overall(ctx.snapshot[b]));
+    rosters[tid] = cur.slice(DL.holes); // 최저 DL.holes명 제외
+    holes[tid] = DL.holes;
+  }
+  const total = DL.holes * DL.ranking.length;
+  const cls = generateDraftClass(2, total + 12); // 충분한 클래스(특급 일부 포함)
+  const clsById = new Map(cls.map((p) => [p.id, p]));
+  const get = (id: string) => ctx.snapshot[id] ?? clsById.get(id);
+  const worstFirst = [...DL.ranking].reverse(); // 꼴찌가 앞 순번
+  const r1 = DL.lottery ? lotteryRound1(worstFirst, createRng(DL.seed)) : worstFirst;
+  const order = buildDraftOrder(r1, holes, total);
+  const res = resolveDraft(order, cls, rosters, get, '', [], styleOf);
+  const seen: Record<string, number> = {};
+  DL.seq = res.sequence.map((s) => { seen[s.teamId] = (seen[s.teamId] ?? 0) + 1; return { teamId: s.teamId, player: clsById.get(s.playerId)!, reason: s.reason, round: seen[s.teamId] }; });
+  DL.revealed = 0;
+  renderDLBoard();
+}
+function renderDLBoard() {
+  const total = DL.seq.length;
+  const shown = DL.seq.slice(0, DL.revealed);
+  const cnt = { super: 0, need: 0, best: 0, wish: 0 } as Record<PickReason, number>;
+  for (const s of shown) cnt[s.reason]++;
+  const rowHtml = shown.map((s, i) => {
+    const p = s.player; const rb = REASON_KO[s.reason]; const last = i === shown.length - 1;
+    const why = s.reason === 'need' ? `${rb.ko} (${p.position})` : rb.ko;
+    return `<tr class="${last ? 'dl-last' : ''}"><td class="dl-pk">${s.round}R·${i + 1}</td><td class="dl-tn">${esc(shortTeamName(s.teamId))}</td>`
+      + `${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td class="pt">${ovrOf(p)}</td><td style="color:var(--warn)">${potStars(p)}</td>`
+      + `<td><span class="rbadge ${rb.cls}">${why}</span></td></tr>`;
+  }).join('');
+  const ctrl = `<div class="run-row" style="margin-bottom:8px">
+      <button id="dl-next" ${DL.revealed >= total ? 'disabled' : ''}>다음 픽 ▶</button>
+      <button id="dl-auto">${DL.auto ? '⏸ 정지' : '▶ 자동'}</button>
+      <button id="dl-all" ${DL.revealed >= total ? 'disabled' : ''}>전체 공개 ⏭</button>
+      <button id="dl-rst" style="background:var(--bad)">처음으로</button>
+      <span class="dl-prog">${DL.revealed} / ${total} 픽</span></div>`;
+  const summary = `<p class="hint">사유: <span class="rbadge r-super">특급 ${cnt.super}</span> <span class="rbadge r-need">필요 ${cnt.need}</span> <span class="rbadge r-best">OVR성격 ${cnt.best}</span>${cnt.wish ? ` <span class="rbadge r-wish">지명 ${cnt.wish}</span>` : ''} · ${DL.lottery ? `추첨(시드 ${DL.seed})` : '순위 그대로'}</p>`;
+  $('out').innerHTML = ctrl + `<table class="box dl-tbl"><thead><tr><th>픽</th><th>팀</th><th>P</th><th>선수</th><th>OVR</th><th>포텐</th><th style="text-align:left">사유</th></tr></thead><tbody>${rowHtml || '<tr><td colspan="7" class="empty">다음 픽 ▶ 또는 자동 재생</td></tr>'}</tbody></table>` + summary;
+  const step = () => { if (DL.revealed < total) { DL.revealed++; renderDLBoard(); } };
+  ($('dl-next') as HTMLButtonElement).onclick = step;
+  ($('dl-all') as HTMLButtonElement).onclick = () => { if (DL.timer) { clearInterval(DL.timer); DL.timer = 0; DL.auto = false; } DL.revealed = total; renderDLBoard(); };
+  ($('dl-rst') as HTMLButtonElement).onclick = () => { if (DL.timer) { clearInterval(DL.timer); DL.timer = 0; DL.auto = false; } DL.revealed = 0; renderDLBoard(); };
+  ($('dl-auto') as HTMLButtonElement).onclick = () => {
+    if (DL.auto) { clearInterval(DL.timer); DL.timer = 0; DL.auto = false; renderDLBoard(); return; }
+    DL.auto = true; DL.timer = window.setInterval(() => { if (DL.revealed >= total) { clearInterval(DL.timer); DL.timer = 0; DL.auto = false; renderDLBoard(); } else step(); }, 320);
+    renderDLBoard();
+  };
 }
 function runDraft() {
   const ctx = buildDraftContext('', {}, {}, [], false, [], 1);

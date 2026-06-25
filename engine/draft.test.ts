@@ -56,7 +56,7 @@ test('aiDraftPick: 필요 포지션 + 종합가치 우선', () => {
   assert.ok(pick && (pick.id === 'hiS' || pick.id === 'oh'));
 });
 
-test('aiDraftPick: 부족 포지션을 더 원함(무조건 OVR 아님)', () => {
+test('aiDraftPick: 부족 포지션 우선(비특급은 OVR 높아도 양보) + 특급은 BPA 예외', () => {
   const snap: Record<string, Player> = {};
   // 로스터에 OH 이미 5명(이상치) → OH 잉여, S 0명 → S 절실
   const roster: string[] = [];
@@ -65,10 +65,17 @@ test('aiDraftPick: 부족 포지션을 더 원함(무조건 OVR 아님)', () => 
     snap[oh.id] = oh;
     roster.push(oh.id);
   }
-  const star = mk('star', 'OH', 75, 95); // 잉여 포지션의 최고 OVR
-  const needS = mk('needS', 'S', 58, 80); // 절실 포지션, 낮은 OVR
-  const pick = aiDraftPick([star, needS], roster, (id) => snap[id], 'balanced');
-  assert.equal(pick?.id, 'needS', 'OVR 낮아도 부족 포지션(S)을 택함');
+  // (1) 비특급(pot<88) OH는 OVR 높아도 절실한 S에 양보 → needS
+  const surplusOH = mk('surplusOH', 'OH', 75, 82); // 잉여 포지션·비특급(pot 82)
+  const needS = mk('needS', 'S', 58, 80);          // 절실 포지션, 낮은 OVR
+  [surplusOH, needS].forEach((p) => (snap[p.id] = p));
+  const p1 = aiDraftPick([surplusOH, needS], roster, (id) => snap[id], 'balanced');
+  assert.equal(p1?.id, 'needS', '비특급 잉여(OVR 높아도) → 부족 포지션(S) 우선');
+  // (2) 특급(pot≥88) OH는 잉여 포지션이어도 무조건 BPA → star (FA_SYSTEM 3.1 슈퍼 예외)
+  const star = mk('star', 'OH', 75, 95); // 잉여 포지션이지만 특급(pot 95)
+  snap[star.id] = star;
+  const p2 = aiDraftPick([star, needS], roster, (id) => snap[id], 'balanced');
+  assert.equal(p2?.id, 'star', '특급 유망주는 포지션 잉여여도 BPA로 잡음');
 });
 
 test('resolveDraft: 내 위시리스트 우선, 순번 존중', () => {
