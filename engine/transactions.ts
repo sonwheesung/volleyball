@@ -22,6 +22,12 @@ export const BETRAYAL_PREMIUM = 1.5;
 export const inSeasonCost = (market: number, betrayed: boolean): number =>
   Math.round(market * (betrayed ? BETRAYAL_PREMIUM : 1));
 
+/** 방출 위약금 — 잔여 보장액(연봉×잔여연수)의 일부를 정산금으로 지불(TRANSACTION_SYSTEM 0.5①).
+ *  방출에 "재정 무게"를 줘 정 없이 떨구지 못하게. 장기계약을 막 자르면 더 아프다. RATE는 placeholder(튜닝 대상). */
+export const SEVERANCE_RATE = 0.4;
+export const severanceFee = (salary: number, remaining: number): number =>
+  Math.max(0, Math.round(salary * Math.max(1, remaining) * SEVERANCE_RATE));
+
 export function healthyByPos(players: Player[]): Record<Position, number> {
   const c: Record<Position, number> = { S: 0, OH: 0, OP: 0, MB: 0, L: 0 };
   for (const p of players) c[p.position]++;

@@ -39,7 +39,7 @@ import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
 import { planNextAction } from '../engine/advance';
 import { marketVal, setAwardScores } from '../data/awardSalary';
 import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
-import { ROSTER_MAX, canRelease, inSeasonCost } from '../engine/transactions';
+import { ROSTER_MAX, canRelease, inSeasonCost, severanceFee } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
@@ -282,8 +282,12 @@ export const useGameStore = create<GameState>()(
         // 못 메우는 공석이 된다. 외인은 시즌 중 교체(replaceForeign)·오프시즌 트라이아웃에서만 정리(리뷰 발견 2026-06-25).
         if (getPlayer(playerId)?.isForeign) return false;
         if (!canRelease(size)) return false;
+        // 위약금(TRANSACTION_SYSTEM 0.5①) — 잔여 보장액의 일부를 운영 자금에서 즉시 정산. 지갑이 모자라면 방출 불가.
+        const c = getPlayer(playerId)?.contract;
+        const fee = c ? severanceFee(c.salary, c.remaining) : 0;
+        if (fee > s.cash) return false;
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId, kind: 'release' }];
-        set({ released: [...s.released, playerId], inSeasonTx });
+        set({ released: [...s.released, playerId], inSeasonTx, cash: s.cash - fee });
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
@@ -294,7 +298,10 @@ export const useGameStore = create<GameState>()(
         const tx = s.inSeasonTx.find((t) => t.kind === 'release' && t.playerId === playerId);
         if (!tx || tx.day !== s.currentDay) return false;
         const inSeasonTx = s.inSeasonTx.filter((t) => !(t.kind === 'release' && t.playerId === playerId));
-        set({ released: s.released.filter((id) => id !== playerId), inSeasonTx });
+        // 당일 철회는 실수 정정 — 위약금 환불(release에서 차감한 만큼 되돌림).
+        const c = getPlayer(playerId)?.contract;
+        const fee = c ? severanceFee(c.salary, c.remaining) : 0;
+        set({ released: s.released.filter((id) => id !== playerId), inSeasonTx, cash: s.cash + fee });
         setTxContext(inSeasonTx, get().faPool, get().selectedTeamId ?? '');
         return true;
       },

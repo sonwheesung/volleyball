@@ -8,7 +8,7 @@ import { getPlayerProduction } from '../data/production';
 import { activeRoster, payroll } from '../data/roster';
 import { overall, overallRaw } from '../engine/overall';
 import { canAfford, isFranchise, LEAGUE_CAP } from '../engine/cap';
-import { ROSTER_MIN } from '../engine/transactions';
+import { ROSTER_MIN, severanceFee } from '../engine/transactions';
 import { assignFAGrades, askingPrice, willBeFA } from '../engine/faMarket';
 import { contractStatus, formatMoney, resignOptions } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
@@ -28,6 +28,7 @@ export default function Contracts() {
   const release = useGameStore((s) => s.release);
   const unrelease = useGameStore((s) => s.unrelease);
   const setResign = useGameStore((s) => s.setResign);
+  const cash = useGameStore((s) => s.cash);
 
   const evolved = getEvolvedTeamPlayers(teamId, currentDay);
   const active = activeRoster(evolved, overrides, released);
@@ -64,13 +65,35 @@ export default function Contracts() {
   };
 
   const doRelease = (p: Player) => {
-    Alert.alert('방출', `${p.name} 방출\n연봉 ${formatMoney(p.contract.salary)} 절감 (되돌릴 수 있음)`, [
-      { text: '취소', style: 'cancel' },
-      {
-        text: '방출', style: 'destructive',
-        onPress: () => { if (!release(p.id)) Alert.alert('방출 불가', `로스터 하한(${ROSTER_MIN}명) 밑으로는 방출할 수 없습니다.`); },
-      },
-    ]);
+    const fee = severanceFee(p.contract.salary, p.contract.remaining);
+    // 위약금 지불 못 하면 방출 자체가 불가(재정 무게 — TRANSACTION_SYSTEM 0.5①)
+    if (fee > cash) {
+      Alert.alert('위약금 부족', `${p.name} 방출에는 위약금 ${formatMoney(fee)}가 듭니다.\n현재 운영 자금 ${formatMoney(cash)} — 지불할 수 없습니다.`);
+      return;
+    }
+    // 함께한 세월·통산을 회고로(감정 무게 — TRANSACTION_SYSTEM 0.5②). 포지션별 대표 스탯.
+    const c = p.career;
+    const stat = p.position === 'L' ? `통산 디그 ${c.digs.toLocaleString()}`
+      : p.position === 'S' ? `통산 세트 ${c.assists.toLocaleString()}`
+      : `통산 ${c.points.toLocaleString()}점`;
+    const retro = [
+      p.clubTenure > 0 ? `우리 팀과 ${p.clubTenure}시즌` : '갓 합류한 선수',
+      c.matches > 0 ? `${c.matches}경기 · ${stat}` : '아직 기록 없음',
+      isFranchise(p) ? '프랜차이즈 스타' : null,
+    ].filter(Boolean).join('\n');
+    const heavy = isFranchise(p) || p.clubTenure >= 6;
+    const tone = heavy ? '\n\n오래 팀을 지킨 선수입니다. 정말 보내시겠습니까?' : '';
+    Alert.alert(
+      `${p.name} 방출`,
+      `${retro}\n\n위약금 ${formatMoney(fee)} 지불 · 연봉 ${formatMoney(p.contract.salary)} 절감\n(당일 철회 가능)${tone}`,
+      [
+        { text: '취소', style: 'cancel' },
+        {
+          text: '방출', style: 'destructive',
+          onPress: () => { if (!release(p.id)) Alert.alert('방출 불가', `로스터 하한(${ROSTER_MIN}명) 또는 위약금(${formatMoney(fee)}) 문제로 방출할 수 없습니다.`); },
+        },
+      ],
+    );
   };
 
   // 행을 누르면 처리 메뉴(1행 1선수)
