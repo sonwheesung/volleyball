@@ -12,6 +12,7 @@ import { seasonMatchProds } from './production';
 import { SEVERITY_KO } from '../engine/injury';
 import { seasonScandals } from './dynamics';
 import { SCANDAL_KO, EXPEL_KO } from '../engine/scandal';
+import { resolveJosa } from '../lib/josa';
 
 const teamName = (id: string) => getTeam(id)?.name ?? id;
 const pName = (id: string) => getPlayer(id)?.name ?? id;
@@ -147,8 +148,9 @@ export function buildNewsFeed(
   retirements: RetireRecord[] = [], // 은퇴 연표(슬라이스5) — 주목 은퇴자 작별·회고
 ): NewsItem[] {
   const items: NewsItem[] = [];
+  // 조사 병기("코메츠이(가)") 일괄 교정 — 헤드라인·본문 전체에 받침 기준 적용(NEWS_SYSTEM §4.5).
   const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string, body?: string, ref?: string) =>
-    items.push({ season, kind, headline, big, teamId, body, ref });
+    items.push({ season, kind, headline: resolveJosa(headline), big, teamId, body: body ? resolveJosa(body) : body, ref });
 
   // 1) 역대 시즌 — 우승 + 시상 + 순위·연승·플옵 서사
   for (const a of archive) {
@@ -325,13 +327,13 @@ export function buildNewsFeed(
   // 5) 사건·사고 — 아주 가끔, 리그를 뒤흔드는 헤드라인
   for (const s of seasonScandals()) {
     push(currentSeason, 'scandal', `[단독] ${pName(s.playerId)}(${teamName(s.teamId)}), ${SCANDAL_KO[s.kind]} — ${s.missMatches}경기 출장 정지`, true, s.teamId,
-      body3('scandal', `${currentSeason}:sc:${s.playerId}`, `${pName(s.playerId)}(${teamName(s.teamId)})이(가) ${SCANDAL_KO[s.kind]}으로 ${s.missMatches}경기 출장 정지 징계를 받았다.`), s.playerId);
+      body3('scandal', `${currentSeason}:sc:${s.playerId}`, `${pName(s.playerId)}(${teamName(s.teamId)})이(가) ${SCANDAL_KO[s.kind]}으로(로) ${s.missMatches}경기 출장 정지 징계를 받았다.`), s.playerId);
   }
 
   // 6) 영구제명 — 리그를 뒤흔드는 최대 사건(승부조작·학폭). 영속 기록에서.
   for (const e of expelled) {
     push(e.season, 'scandal', `[속보] ${e.name}(${teamName(e.teamId)}), ${EXPEL_KO[e.kind]} 적발 — 영구제명(리그 영구 퇴출)`, true, e.teamId,
-      body3('scandal', `${e.season}:ex:${e.playerId}`, `${e.name}(${teamName(e.teamId)})이(가) ${EXPEL_KO[e.kind]}으로 적발돼 리그에서 영구제명됐다. 코트로 돌아올 수 없으며, 그의 이름은 불명예 기록으로만 남는다.`), e.playerId);
+      body3('scandal', `${e.season}:ex:${e.playerId}`, `${e.name}(${teamName(e.teamId)})이(가) ${EXPEL_KO[e.kind]}으로(로) 적발돼 리그에서 영구제명됐다. 코트로 돌아올 수 없으며, 그의 이름은 불명예 기록으로만 남는다.`), e.playerId);
   }
 
   // 7) 구단주 — 인기 스타를 벤치로 보낸 건의가 받아들여졌을 때 팬심이 술렁(OWNER_SYSTEM 팬 분노 연동)
@@ -355,7 +357,7 @@ export function buildNewsFeed(
       const rkey = `${t.season}:rel:${t.playerId}`;
       push(t.season, 'release', vh([
         (n) => `${teamName(t.fromTeam)}, ${n} 방출 — FA 시장으로`,
-        (n) => `${n}, ${teamName(t.fromTeam)}와 재계약 불발`,
+        (n) => `${n}, ${teamName(t.fromTeam)}와(과) 재계약 불발`,
         (n) => outMine ? `${teamName(myTeamId)}, ${n} 방출` : `FA ${n}, ${teamName(t.fromTeam)} 떠난다`,
       ], rkey, t.name), bigRel, t.fromTeam,
         body3('transfer', rkey, more(
@@ -371,7 +373,7 @@ export function buildNewsFeed(
       (n) => inMine ? `${teamName(t.toTeam)}, FA ${n} 영입` : `FA ${n}, ${teamName(t.fromTeam)} → ${teamName(t.toTeam)}`,
       (n) => `FA ${n}, ${teamName(t.toTeam)} 합류`,
     ], key, t.name), inMine, inMine || outMine ? myTeamId : t.toTeam,
-      body3('transfer', key, `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 ${teamName(t.toTeam)}으로 둥지를 옮겼다.`
+      body3('transfer', key, `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 ${teamName(t.toTeam)}으로(로) 둥지를 옮겼다.`
         + (inMine ? ` ${teamName(myTeamId)}이(가) 새 전력을 더했다.` : outMine ? ` ${teamName(myTeamId)}은(는) 한 자원을 떠나보냈다.` : '')), t.playerId);
   }
 
@@ -405,7 +407,7 @@ export function buildNewsFeed(
           : `${l.points}점`;
         push(currentSeason, 'debut', `${tier} ${p.name} 데뷔전 — ${stat} (${posKo})`, elite, tid,
           body3('debut', `${currentSeason}:db:${id}`, more(
-            `${teamName(tid)}의 ${tier} ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}를 기록했다.`,
+            `${teamName(tid)}의 ${tier} ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}을(를) 기록했다.`,
             `상대 ${teamName(opp)}을(를) 맞은 데뷔전이었다.`,
             elite ? 'S급 재능으로 분류된 특급 유망주로, 팀의 미래를 책임질 재목으로 꼽힌다.' : '높은 잠재력을 인정받은 기대주로, 성장 곡선에 시선이 모인다.')), id);
       }

@@ -128,6 +128,7 @@ npx tsx tools/_ev_situation.ts 200          # 상황 인지 중계(BOARD_RULES 6
 npx tsx tools/_ev_matchmvp.ts 300           # 경기 MVP(AWARDS §1) — 이긴 팀 최고생산자 == 독립오라클 100%·승자측·points>0·결정론. exit 0/1
 npx tsx tools/_ev_retirenews.ts 20          # 은퇴 세리머니 뉴스(NEWS 슬라이스5) — 게이트(8시즌/HOF)·전원기사화·매달린0·중복0·결정론. exit 0/1
 npx tsx tools/_ev_rival.ts 12               # 라이벌 구도(CLUB_IDENTITY 6) — 순위인접·접전 가중·임계·결정론·합성 A/B. exit 0/1
+npx tsx tools/_ev_josa.ts 18                # 조사 자동교정(NEWS §4.5) — 실기사 잔여 병기 0·합성 경계 A/B(받침·괄호건너뜀·ㄹ예외). exit 0/1
 npx tsx tools/_iv_scorebox.ts 600           # 실시간 점수판(boxTimeline) 독립 검증(2026-06-24, 독립 검증자) — 타임라인 1:1·단조·마지막==최종·byId 델타 100%·box중립. _ev_*와 다른 각도(박스 델타)
 npx tsx tools/_iv_scorebox_ab.ts            # 위 정합 체크의 A/B 자가검증 — 깨뜨린 타임라인(스냅 swap·스탯 깎음)을 검출(허위 오라클 차단)
 # ── 코트 포지셔닝 가드(서브 오버랩·서브리시브 라인·인플레이 공격/블록/수비 — COURT_POSITIONING) ──
