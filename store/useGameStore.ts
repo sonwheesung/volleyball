@@ -729,16 +729,30 @@ export const useGameStore = create<GameState>()(
           if (prev && prev !== my) { faSpend += snapshot[id]?.contract.salary ?? 0; offseasonSigns += 1; } // 영입 수(업적 careerLog)
         }
 
-        // FA 이적 연표(뉴스 슬라이스3) — 오프시즌에 팀을 옮긴 국내 선수(prev≠new, 신인·외인·은퇴 제외). 최근 200건.
+        // FA 이적·방출 연표(뉴스 슬라이스3·4) — 오프시즌 선수 이동. 최근 200건.
+        //  노이즈 정책(NEWS_SYSTEM §3.3): 내 팀 in/out은 항상, 타팀은 거물(overall≥REL_NEWS_OVR)만 적립 → 로그를 린하게.
+        const REL_NEWS_OVR = 71; // 타팀 이동 기사화 게이트(리그 국내평균 ~68 위 = 주전급. _ev_transfernews 보정 — 타팀 수건/시즌, 잡선수 노이즈 차단)
+        const notable = (id: string) => { const p = snapshot[id]; return !!p && overall(p) >= REL_NEWS_OVR; };
         const seasonTransfers: Transfer[] = [];
         for (const tid of Object.keys(filled.rosters)) {
           for (const id of filled.rosters[tid]) {
             const prev = ctx.prevTeamOf[id];
             const p = snapshot[id];
-            if (prev && prev !== tid && p && !p.isForeign) seasonTransfers.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: tid });
+            // 팀→팀 이동(국내). 내 팀 in/out은 항상, 타팀은 거물만.
+            if (prev && prev !== tid && p && !p.isForeign && (prev === my || tid === my || notable(id)))
+              seasonTransfers.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: tid, kind: 'transfer', ovr: overall(p) });
           }
         }
-        const nextTransfers = [...transfers, ...seasonTransfers].slice(-200);
+        // 방출/재계약 불발 — 직전 소속(prevTeamOf)이 있는데 새 시즌 어느 명단에도 없는 국내 선수(=FA 풀행, 미계약).
+        //  nextFaPool = 이미 (비로스터·비은퇴·비제명·국내)라, 거기에 "직전 소속 보유"만 더하면 신규 방출자.
+        const seasonReleases: Transfer[] = [];
+        for (const id of nextFaPool) {
+          const prev = ctx.prevTeamOf[id];
+          const p = snapshot[id];
+          if (!prev || !p) continue; // 직전 소속 없으면 풀 잔류자(신규 방출 아님)
+          if (prev === my || notable(id)) seasonReleases.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: '', kind: 'release', ovr: overall(p) });
+        }
+        const nextTransfers = [...transfers, ...seasonTransfers, ...seasonReleases].slice(-200);
 
         commitPlayerBase(snapshot);
         commitRosters(filled.rosters);

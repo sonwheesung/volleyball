@@ -319,16 +319,31 @@ export function buildNewsFeed(
       body3('owner', `${currentSeason}:own:${b.playerId}`, `${teamName(myTeamId)}의 간판 ${p.name}이(가) 최근 출전 명단에서 빠지면서 팬들이 술렁이고 있다. "왜 안 쓰나"라는 목소리가 커지고 있다.`), b.playerId);
   }
 
-  // 7.5) FA 이적(오프시즌 팀 이동) — 내 팀 in/out만 기사화(리그 전체는 노이즈)
+  // 7.5) FA 이적·방출(슬라이스3·4) — 내 팀 in/out + 타팀 거물(포착 단계서 게이트됨, NEWS_SYSTEM §3.3).
   for (const t of transfers) {
     const inMine = t.toTeam === myTeamId, outMine = t.fromTeam === myTeamId;
-    if (!inMine && !outMine) continue;
+    // ── 방출/재계약 불발(release) — toTeam='' ──
+    if (t.kind === 'release') {
+      const bigRel = (t.ovr ?? 0) >= 82; // 이동 시점 OVR — 거물 베테랑 방출 = 헤드라인(이후 노쇠 무관)
+      const rkey = `${t.season}:rel:${t.playerId}`;
+      push(t.season, 'release', vh([
+        (n) => `${teamName(t.fromTeam)}, ${n} 방출 — FA 시장으로`,
+        (n) => `${n}, ${teamName(t.fromTeam)}와 재계약 불발`,
+        (n) => outMine ? `${teamName(myTeamId)}, ${n} 방출` : `FA ${n}, ${teamName(t.fromTeam)} 떠난다`,
+      ], rkey, t.name), bigRel, t.fromTeam,
+        body3('transfer', rkey, more(
+          `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 FA 시장에 나왔다. 새 시즌 명단에 이름을 올리지 못했다.`,
+          careerLine(t.playerId),
+          outMine ? `${teamName(myTeamId)}은(는) 한 자원을 정리했다.` : '')), t.playerId);
+      continue;
+    }
+    // ── 팀→팀 이적(transfer) — 내 팀은 헤드라인, 타팀 거물은 단신 ──
     const key = `${t.season}:tr:${t.playerId}`;
     push(t.season, 'transfer', vh([
       (n) => `${n}, ${teamName(t.fromTeam)} 떠나 ${teamName(t.toTeam)} 이적`,
-      (n) => inMine ? `${teamName(t.toTeam)}, FA ${n} 영입` : `${n} ${teamName(t.toTeam)}行 — ${teamName(t.fromTeam)} 떠난다`,
+      (n) => inMine ? `${teamName(t.toTeam)}, FA ${n} 영입` : `FA ${n}, ${teamName(t.fromTeam)} → ${teamName(t.toTeam)}`,
       (n) => `FA ${n}, ${teamName(t.toTeam)} 합류`,
-    ], key, t.name), inMine, myTeamId,
+    ], key, t.name), inMine, inMine || outMine ? myTeamId : t.toTeam,
       body3('transfer', key, `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 ${teamName(t.toTeam)}으로 둥지를 옮겼다.`
         + (inMine ? ` ${teamName(myTeamId)}이(가) 새 전력을 더했다.` : outMine ? ` ${teamName(myTeamId)}은(는) 한 자원을 떠나보냈다.` : '')), t.playerId);
   }

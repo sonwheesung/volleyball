@@ -87,6 +87,32 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 | 기록 경신 | milestone | milestones (기존) | m.big |
 | 명예의전당 헌액 | hof | hallOfFame (기존) | legend=★ |
 
+### 3.3 타팀 선수 이동 — 방출·이적 (슬라이스4, 2026-06-25)
+
+> **왜**: 그동안 이적 기사는 **내 팀 in/out만**(리그 전체는 노이즈라 보류, §10). 그러나 관전형 1순위는
+> "리그 전체를 신문이 대신 이야기"하는 것 — **"누가 방출당했다", "거물이 어디로 갔다"** 같은 타팀 소식이
+> 빠지면 드라마가 내 팀에만 갇힌다(리뷰 지적 "사람의 드라마가 내 팀에서만"). career/OVR 데이터가 갖춰져
+> **거물만 골라(노이즈 제거)** 리그 전체를 surface한다. **엔진 무파급·새 사건 생성 0** — 이미 일어난 이동의 *파생*.
+
+| 소재 | kind | 트리거(사실) | big | 데이터원 |
+|---|---|---|---|---|
+| **방출/재계약 불발** | release | 직전 시즌 소속(prevTeamOf) 국내 선수가 **새 시즌 어느 명단에도 없음** + 은퇴·제명 아님 = FA 풀로 풀려 미계약 | 거물(통산 누적 큰 베테랑)=★ | endSeason 로스터 diff |
+| **타팀 거물 이적** | transfer | 기존 transfers(팀→팀) 중 **내 팀 무관**한 이동도 거물이면 기사화 | 정상 단신 | store.transfers |
+
+**노이즈 정책(핵심)**: 비-내 팀 이동은 **거물 게이트**를 통과해야 기사화한다. 게이트 = `overall(p) ≥ REL_NEWS_OVR`
+(`REL_NEWS_OVR=71` — 리그 국내평균 ~68 위 = 주전급. `_ev_transfernews` 보정: 타팀 ~2건/시즌으로 잡선수 노이즈 차단,
+이동 대부분이 이적·거물 방출은 드묾=현실적). **내 팀 in/out은 OVR 무관 항상**(내 단장 결정·내 선수). "내 팀 전부 + 리그는 거물만".
+- **이동 시점 OVR 고정**: `Transfer.ovr`에 이동 당시 OVR을 저장 — 이후 노쇠로 OVR이 내려가도 게이트·헤드라인 판정은
+  그대로(스타가 트레이드된 사건은 그가 나중에 쇠해도 그때의 거물 사건). 쿼리 시점 OVR로 재판정하면 안 됨(허위 누수).
+
+**데이터 모델**: `Transfer`에 `kind?: 'transfer'|'release'`(미지정=transfer, 구세이브 호환), 방출은 `toTeam=''`.
+- **포착(endSeason)**: 팀→팀 이동(transfer) + **방출(release)** 을 같은 `transfers` 연표에 적립(최근 200).
+  포착 게이트 = `fromTeam===myTeam || overall≥REL_NEWS_OVR`(로그를 거물+내 팀으로 린하게 유지).
+- **렌더(news.ts)**: 저장된 전부 렌더(내 팀 accent). 방출=`release` kind, 본문에 `careerLine`(통산 사실).
+
+**무결성**: 매달린 참조 0(방출 선수도 playerBase에 존재 — `commitPlayerBase(snapshot)`이 풀 포함), 중복 0
+(`season:release:playerId` 키), 결정론(같은 시드 동일), 가짜 드라마 0(전부 실제 roster diff). `simNews` 확장 검증.
+
 ---
 
 ## 4. ★ 본문 풍부화 + 변주 엔진 (핵심)
@@ -194,7 +220,9 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 ## 10. 추후 (신규 데이터 필요)
 - ~~FA 영입/이적 기사~~ → **슬라이스3 구현(2026-06-21)**: `store.transfers`(영속, 최근 200) — endSeason이
   오프시즌 팀 이동(국내, `prevTeamOf≠new`)을 적립. 뉴스는 **내 팀 in/out만** 기사화(리그 전체는 노이즈).
-  `kind='transfer'`. 리그 전체 거물 이적은 추후(career 데이터 필요).
+  `kind='transfer'`. ~~리그 전체 거물 이적은 추후(career 데이터 필요).~~
+- ~~리그 전체 거물 이적~~ → **슬라이스4 구현(2026-06-25, §3.3)**: 타팀 **방출(release)** + **거물 이적**을
+  거물 게이트(`overall≥REL_NEWS_OVR`)로 surface. 내 팀은 OVR 무관 항상. `Transfer.kind`·`toTeam=''`(방출).
 - 라이벌 구도, 선수 인터뷰 — 영속/판정 데이터 추가 후(아직 보류).
 
 ---
@@ -216,3 +244,7 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 - 2026-06-21 **본문 사실 보강**(사용자 보고: 본문 100자도 안 됨, 빈약): 측정 `tools/_ev_bodylen.ts`로 중앙 81자·88%<100
   확인 → `more()`로 milestone(통산 사실)·streak(시즌 승패)·match(상대+세부)·debut(상대+등급)에 실제 사실 한 겹 추가.
   **중앙 81→144자, <100자 88%→7%**. 가짜 드라마 0(전부 누적값), tsc 0·무결성 0·트리플 교차검증·A/B 유지.
+- 2026-06-25 **슬라이스4 — 타팀 이적·방출**(사용자 요청 "타팀 선수 소식도 뉴스로, 누가 방출당했다 같은"): 그동안 내 팀
+  in/out만이던 이적 기사를 **리그 전체로 확장**(거물 게이트 `overall≥71`) + **방출/재계약 불발**(`kind='release'`, FA 풀행
+  미계약) 신설. `Transfer`에 `kind`·`ovr`(이동 시점) 추가, endSeason이 적립(내 팀 항상·타팀 거물만). 새 kind `release`.
+  보정·검증 `tools/_ev_transfernews.ts`(15시즌: 타팀 ~2건/시즌·매달린참조0·중복0·결정론·이동시점OVR 게이트). 엔진 무파급·새 사건 0(roster diff 파생).

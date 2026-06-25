@@ -25,6 +25,7 @@ const LEAD: Record<NewsItem['kind'], string> = {
   match: '한 경기에서 나온 인상적인 장면이다. 코트 위 활약이 기록으로 남았다.',
   debut: '새 얼굴이 코트에 첫발을 디뎠다. 데뷔 무대의 기록이 커리어의 출발점이 된다.',
   transfer: '오프시즌 시장이 움직였다. 한 선수가 새 유니폼을 입고 새 도전을 시작한다.',
+  release: '한 선수가 정든 팀을 떠나 FA 시장에 나왔다. 재계약 불발 끝에 새 둥지를 찾아야 하는 처지다.',
 };
 
 export default function NewsArticle() {
