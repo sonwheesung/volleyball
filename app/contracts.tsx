@@ -10,13 +10,12 @@ import { overall, overallRaw } from '../engine/overall';
 import { canAfford, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MIN } from '../engine/transactions';
 import { assignFAGrades, askingPrice, willBeFA } from '../engine/faMarket';
-import { contractStatus, formatMoney } from '../engine/salary';
+import { contractStatus, formatMoney, resignOptions } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
 import { useGameStore } from '../store/useGameStore';
 import type { Contract, Player } from '../types';
 
 const STATUS_COLOR = { 저평가: theme.good, 적정: theme.muted, 고평가: theme.bad } as const;
-const RESIGN_YEARS = 3;
 
 export default function Contracts() {
   const router = useRouter();
@@ -42,14 +41,25 @@ export default function Contracts() {
 
   const doResign = (p: Player) => {
     const market = marketVal(p, getPlayerProduction(p.id, currentDay));
-    if (!canAfford(total - p.contract.salary, market, { franchise: isFranchise(p) })) {
-      Alert.alert('샐러리캡 초과', `${p.name} 재계약(${formatMoney(market)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
-      return;
-    }
-    const contract: Contract = { salary: market, years: RESIGN_YEARS, remaining: RESIGN_YEARS, signedAtAge: p.age };
-    Alert.alert('재계약', `${p.name}\n연봉 ${formatMoney(p.contract.salary)} → ${formatMoney(market)} · ${RESIGN_YEARS}년 연장`, [
+    const opts = resignOptions(p, market);
+    const buttons = opts.map((o) => ({
+      text: `${o.label} · ${formatMoney(o.salary)} · ${o.years}년`,
+      onPress: () => {
+        if (!canAfford(total - p.contract.salary, o.salary, { franchise: isFranchise(p) })) {
+          Alert.alert('샐러리캡 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
+          return;
+        }
+        const contract: Contract = { salary: o.salary, years: o.years, remaining: o.years, signedAtAge: p.age };
+        Alert.alert('재계약 확정', `${p.name}\n${o.label} — 연봉 ${formatMoney(p.contract.salary)} → ${formatMoney(o.salary)} · ${o.years}년\n${o.note}`, [
+          { text: '취소', style: 'cancel' },
+          { text: '확정', onPress: () => reSign(p.id, contract) },
+        ]);
+      },
+    }));
+    // 후하게=충성·길게 묶기 / 짧게=싸게·곧 재협상 — 시장가 일괄 대신 협상의 폭(FA 2.5b)
+    Alert.alert(`${p.name} 재계약`, `시장가 ${formatMoney(market)} · ${p.age}세\n표준 / 후하게 / 짧게 중 선택`, [
+      ...buttons,
       { text: '취소', style: 'cancel' },
-      { text: '재계약', onPress: () => reSign(p.id, contract) },
     ]);
   };
 

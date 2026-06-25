@@ -7,9 +7,24 @@ import type { Player, Position } from '../types';
 import type { Rng } from './rng';
 import type { ProdLine } from './production';
 import { overall } from './overall';
-import { clampSalary } from './cap';
+import { clampSalary, maxSalaryFor } from './cap';
 
 const BASE = 24000;          // 중립 배수에서 ~2.4억
+
+/** 재계약 협상 3택(FA_SYSTEM 2.5b·SALARY) — 시장가 일괄 대신 폭을 준다. 연수는 나이 적합(wAge): 노장에 장기계약 안 줌. */
+export interface ResignOption { key: 'standard' | 'generous' | 'short'; label: string; salary: number; years: number; note: string; }
+export function resignOptions(p: Player, market: number): ResignOption[] {
+  const r100 = (x: number) => Math.round(x / 100) * 100;
+  const cap = maxSalaryFor(p);                       // 개인 상한(프랜차이즈 11억 / 8억)
+  const old = p.age >= 32, young = p.age <= 27;
+  const genYears = old ? 2 : young ? 5 : 4;          // 나이 적합 — 노장 후하게도 단기
+  const shortYears = old ? 1 : 2;
+  return [
+    { key: 'standard', label: '표준', salary: Math.min(cap, r100(market)), years: 3, note: '시장가 · 3년' },
+    { key: 'generous', label: '후하게', salary: Math.min(cap, r100(market * 1.15)), years: genYears, note: `+15% · ${genYears}년 — 충성·길게 묶기(캡 부담)` },
+    { key: 'short', label: '짧게', salary: Math.min(cap, r100(market * 0.85)), years: shortYears, note: `−15% · ${shortYears}년 — 싸게·곧 재협상(불만 위험)` },
+  ];
+}
 const MIN_SALARY = 3000;     // 최저 (0.3억)
 const AWARD_BONUS = 0.25;    // 수상 이력 최대 프리미엄(+25%) — MVP·베스트7 누적 스타는 몸값↑(SALARY 2장)
 

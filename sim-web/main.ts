@@ -20,7 +20,7 @@ import { settleSeason } from '../engine/finance';
 import { prefWeightsOf, isFAEligible, assignFAGrades, askingPrice } from '../engine/faMarket';
 import { SIT_CAUSE_KO } from '../engine/owner';
 import { marketVal } from '../data/awardSalary';
-import { formatMoney } from '../engine/salary';
+import { formatMoney, resignOptions } from '../engine/salary';
 import { LEAGUE_CAP, isFranchise } from '../engine/cap';
 import { leagueProduction } from '../data/production';
 import { buildDraftContext } from '../data/draftSetup';
@@ -327,10 +327,12 @@ function runSalary() {
   const body = rows.map(({ p, pts, mv, sal, ratio }) => {
     const col = ratio > 1.15 ? 'var(--bad)' : ratio < 0.85 ? 'var(--good)' : 'var(--soft)';
     const tag = isFranchise(p) ? '<span style="color:var(--accent);font-weight:700">프랜차이즈</span>' : p.isForeign ? '<span style="color:var(--bad)">외인</span>' : (p.career.seasons <= 1 ? '<span style="color:var(--soft)">신인</span>' : '');
-    return `<tr>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td>${ovrOf(p)}</td><td>${p.age}</td><td>${pts}</td><td>${formatMoney(mv)}</td><td class="pt">${formatMoney(sal)}</td><td style="color:${col};font-weight:700">${(ratio * 100).toFixed(0)}%</td><td style="text-align:left">${tag}</td></tr>`;
+    // 재계약 3택(나이 적합 연수) — 외인은 트라이아웃 전용이라 제외
+    const ro = p.isForeign ? '' : resignOptions(p, mv).map((o) => `${o.label[0]} ${(o.salary / 10000).toFixed(1)}·${o.years}`).join(' / ');
+    return `<tr>${pcell(p.position)}<td class="nm">${esc(p.name)}</td><td>${ovrOf(p)}</td><td>${p.age}</td><td>${pts}</td><td>${formatMoney(mv)}</td><td class="pt">${formatMoney(sal)}</td><td style="color:${col};font-weight:700">${(ratio * 100).toFixed(0)}%</td><td style="text-align:left;font-size:11px;color:var(--soft)">${ro}</td><td style="text-align:left">${tag}</td></tr>`;
   }).join('');
   const capCol = total > LEAGUE_CAP ? 'var(--bad)' : 'var(--good)';
-  $('out').innerHTML = `<div class="stat-grid"><div class="stat"><span class="sv" style="color:${capCol}">${formatMoney(total)}</span><span class="sl">팀 총연봉 / 캡 ${formatMoney(LEAGUE_CAP)}</span></div></div><table class="box"><thead><tr><th>P</th><th>선수</th><th>OVR</th><th>나이</th><th>시즌득점</th><th>시장가치</th><th>연봉</th><th>연봉/시장</th><th style="text-align:left">비고</th></tr></thead><tbody>${body}</tbody></table><p class="hint">연봉/시장: 빨강 고평가(>115%)·초록 저평가(&lt;85%) · ${esc(getTeam(SAL.team)?.name ?? SAL.team)} day ${SAL.day}</p>`;
+  $('out').innerHTML = `<div class="stat-grid"><div class="stat"><span class="sv" style="color:${capCol}">${formatMoney(total)}</span><span class="sl">팀 총연봉 / 캡 ${formatMoney(LEAGUE_CAP)}</span></div></div><table class="box"><thead><tr><th>P</th><th>선수</th><th>OVR</th><th>나이</th><th>시즌득점</th><th>시장가치</th><th>연봉</th><th>연봉/시장</th><th style="text-align:left">재계약 3택(표/후/짧 억·년)</th><th style="text-align:left">비고</th></tr></thead><tbody>${body}</tbody></table><p class="hint">연봉/시장: 빨강 고평가(>115%)·초록 저평가(&lt;85%) · 재계약 3택=표준/후하게/짧게(노장은 후하게도 단기) · ${esc(getTeam(SAL.team)?.name ?? SAL.team)} day ${SAL.day}</p>`;
 }
 
 // ═══ 영입 · 드래프트 ═════════════════════════════════════════════════════

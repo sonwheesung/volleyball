@@ -138,9 +138,22 @@ asking = marketValue × FA프리미엄(1.1~1.3)
 offerScore = w.money·(연봉/asking) + w.win·우승권(0.7·전력+0.3·prestige)
            + w.play·출전기회(포지션 뎁스) + w.loyalty·충성(원소속·프랜차이즈) + w.home·연고/선호팀 + 0.05·rand + 면담bias
 선수는 최고 offerScore 수락. 동점·근소차는 원소속 우선.
-※ 계약연수(wYrs)·나이적합(wAge)은 설계안이었으나 **미구현** — 현재 코드(`engine/faMarket.ts:offerScore`)는 위 6항
-   (money/win/play/loyalty/home/rand+talkBias). 도입 시 이 식·코드 동시 갱신.
+※ FA **시장 입찰** offerScore는 6항(money/win/play/loyalty/home/rand+talkBias) — 계약연수(wYrs) 항은 아직 미구현(AI 오퍼가 연수를 변별 안 함).
 ```
+
+### 2.5c 재계약 협상 3택 ★ — 2026-06-25 구현
+> "재계약 연봉이 시장가 일괄이라 협상의 폭이 없다"(리뷰) → **내 만료 선수 재계약 시 3택**. `engine/salary.resignOptions`.
+
+| 택 | 연봉 | 연수 | 효과 |
+|---|---|---|---|
+| **표준** | 시장가 | 3년 | 기본 |
+| **후하게** | +15%(개인상한 클램프) | 나이적합(어림 5·중간 4·**노장 2**) | 시장가↑ → 불만('money') 차단·길게 묶기. 캡 부담. |
+| **짧게** | −15% | 2년(노장 1) | 싸게 — 곧 재협상(저평가 불만 위험·빨리 FA) |
+
+- **나이 적합(wAge)**: 후하게도 노장(32+)엔 2년만 — "34세에게 5년" 방지(나이 항을 재계약 택에 구현).
+- 효과는 기존 시스템으로 자연 발생: 연수=FA 시점, 후하게(≥시장가)=불만 차단(+면담 'raise' 공약 이행 고리, 추후),
+  짧게=조기 FA + 저평가 불만. 캡/개인상한은 `maxSalaryFor` 클램프 + 화면 `canAfford` 게이트.
+- UI: 앱 `app/contracts.tsx`(행 누르면 3택 액션시트) + 콘솔 연봉 탭(선수별 3택 표시). 가드 `tools/_ev_resign.ts`.
 
 ### 2.5b 선수별 FA 성향 (이적 동기 차등) ★ — 2026-06 구현
 
