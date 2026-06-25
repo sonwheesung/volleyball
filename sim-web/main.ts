@@ -354,7 +354,7 @@ function mountBroadcast() {
   $('controls').innerHTML = `
     <div class="teams"><div class="team A"><span class="badge">A</span>${teamSelect('bc-a', BC.a)}</div><div class="vs">VS</div><div class="team B"><span class="badge">B</span>${teamSelect('bc-b', BC.b)}</div></div>
     <div class="run-row"><label>시드 <input type="number" id="bc-seed" value="${BC.seed}" style="width:64px" /></label><label>경기일(현수막 누적) <input type="number" id="bc-day" value="${BC.day}" min="0" max="164" style="width:64px" /></label>
-      <button id="bc-run">경기 분석 ▶</button><button id="bc-season">시즌 현수막 스캔 ▶</button><button id="bc-sample">현수막 종류 미리보기</button></div>
+      <button id="bc-run">경기 분석 ▶</button><button id="bc-season">시즌 현수막 스캔 ▶</button><button id="bc-sample">현수막 종류 미리보기</button><button id="bc-coin">5세트 코인토스 미리보기</button></div>
     <p class="hint">한 경기의 <b>경기 MVP</b> + <b>상황 인지 중계</b>(세트/매치포인트·듀스·연속) + <b>중계 현수막</b>(기록 경신·트리플 크라운·PO 확정/탈락).
       현수막은 통산 누적이 필요 → 경기일↑(시즌말) 또는 <b>"시즌 현수막 스캔"</b>(전 경기)으로 잘 보입니다.</p>`;
   ($('bc-a') as HTMLSelectElement).onchange = (e) => { BC.a = (e.target as HTMLSelectElement).value; };
@@ -364,6 +364,26 @@ function mountBroadcast() {
   $('bc-run').onclick = runBroadcastMatch;
   $('bc-season').onclick = runBroadcastSeason;
   $('bc-sample').onclick = runBroadcastSamples;
+  $('bc-coin').onclick = runCoinTossPreview;
+}
+function runCoinTossPreview() {
+  // 5세트 코인토스 오버레이 미리보기(MATCH_SYSTEM v2.1) — 앱 RN 오버레이의 룩을 HTML로 재현. 양 결과(A/B 서브) 표시.
+  const an = getTeam(BC.a)?.name ?? BC.a, bn = getTeam(BC.b)?.name ?? BC.b;
+  const panel = (team: string) => `<div class="coin-overlay"><div class="coin-panel">`
+    + `<div class="coin-head">🏐 5세트 · 결승</div><div class="coin-emoji">🪙</div>`
+    + `<div class="coin-label">코인토스</div><div class="coin-result">▶ ${esc(team)} 서브로 시작</div></div></div>`;
+  $('out').innerHTML = `<style>
+      .coin-overlay{position:relative;display:flex;align-items:center;justify-content:center;background:rgba(8,12,20,0.62);border-radius:12px;padding:34px 10px;min-height:190px;flex:1;min-width:230px}
+      .coin-panel{display:flex;flex-direction:column;align-items:center;gap:8px;padding:22px 30px;border-radius:18px;background:rgba(18,24,36,0.96);border:1.5px solid #10B9A6}
+      .coin-head{color:#10B9A6;font-size:13px;font-weight:800;letter-spacing:1px}
+      .coin-emoji{font-size:52px;animation:coinspin 0.95s cubic-bezier(0.2,0.7,0.3,1) infinite}
+      .coin-label{color:#8A94A6;font-size:12px;font-weight:700}
+      .coin-result{color:#fff;font-size:16px;font-weight:800}
+      @keyframes coinspin{from{transform:perspective(600px) rotateY(0deg)}to{transform:perspective(600px) rotateY(1980deg)}}
+    </style>
+    <p class="hint">앱 경기 보드에서 <b>5세트(결승 세트) 시작 직전</b> 1회 뜨는 코인토스 오버레이(MATCH_SYSTEM v2.1). 실제는 ~0.8초 회전 후 사라지고 경기 시작. 코인 결과 = 엔진 <code>setFirstServers[4]</code>(보드가 그대로 반영 — 재도출 안 함). 아래는 두 가지 결과(미리보기는 무한 회전).</p>
+    <h3 class="bch">🪙 5세트 코인토스 오버레이</h3>
+    <div style="display:flex;gap:14px;flex-wrap:wrap">${panel(an)}${panel(bn)}</div>`;
 }
 function runBroadcastSamples() {
   // 4종 현수막 시각 미리보기 — 통산 기록 경신은 누적이 필요해 실경기 1시즌엔 잘 안 떠 샘플로 보여준다.

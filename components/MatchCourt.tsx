@@ -18,6 +18,7 @@ import { ballPath as ballPathRaw, SEG_DUR as DUR, markerTravelMs, type Move, typ
 import type { PointHow } from '../engine/rally';
 import { segmentTargets, reconstructRallies, isInPlay, applySubsToSix, type RallyState } from './courtDirector';
 import { commentLine, situationFeed } from './courtCommentary';
+import { CoinTossOverlay } from './CoinTossOverlay';
 import { initSfx, playSfx, setSfxEnabled } from '../audio/sfx';
 import { useGameStore } from '../store/useGameStore';
 
@@ -115,9 +116,11 @@ interface Props {
   onFinished?: () => void;
   onScore?: (s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number; ptIdx: number }) => void;
   paused?: boolean;                     // 외부 일시정지(스코어박스 모달 등) — true면 진행 멈춤, false면 재개
+  homeName?: string;                    // 코인토스 오버레이 등 팀명 표기용(없으면 홈/원정 폴백)
+  awayName?: string;
 }
 
-export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgress, onFinished, onScore, paused }: Props) {
+export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgress, onFinished, onScore, paused, homeName, awayName }: Props) {
   // 선발 라인업(고정) + 전 선수 id 맵(교체 선수 조회용)
   const baseLineups: Lineups = useMemo(() => ({ home: buildLineup(home), away: buildLineup(away) }), [home, away]);
   const byId = useMemo(() => {
@@ -207,9 +210,26 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     [sim.timeouts, idx, finished],
   );
 
+  // 5세트(결승) 코인토스 오버레이 — 첫 5세트 랠리 직전 1회(MATCH_SYSTEM v2.1). 순수 연출(승패·기록 무영향).
+  const coinIdx = useMemo(() => {
+    const i = rallies.findIndex((r) => r.setNo === 5);
+    return i >= 0 ? i : null;
+  }, [rallies]);
+  const coinAck = useRef(false);                       // 이미 보여줬나(1회 게이트)
+  const [coinActive, setCoinActive] = useState(false); // 오버레이 표시 중 — 랠리 진행 정지
+
   // 구간 단위 진행 (위치·포물선·크기·점프를 prog 하나로 동기화)
   useEffect(() => {
     if (!playing || paused || finished) return; // paused: 스코어박스 모달 등 외부 일시정지
+    // 5세트 진입 — 첫 랠리 직전 코인토스 오버레이(1회). coinAck(ref)로 동기 게이트(재실행 레이스 없음).
+    // 자동 해제 타이머는 별도 effect에 둔다(여기 두면 coinActive 변화로 이 effect가 재실행되며 cleanup이 타이머를 죽임).
+    if (coinIdx !== null && idx === coinIdx && !coinAck.current) {
+      coinAck.current = true;
+      setCoinActive(true);
+      playSfx('whistle'); // 코인토스 시작 신호
+      return;
+    }
+    if (coinActive) return; // 오버레이 표시 중엔 랠리 진행 정지
     if (segIdx >= segCount) {
       // 득점 → 점수 반영 후 잠시 멈춤(공은 낙구 지점에 정지) → 다음 랠리.
       // shown!==idx 가드: 일시정지(스코어박스) 후 재개 시 이 분기가 다시 돌아도 중계줄·휘슬·점수반영을 중복하지 않음.
@@ -243,7 +263,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     });
     anim.start(({ finished: done }) => { if (done) setSegIdx((s) => s + 1); });
     return () => anim.stop();
-  }, [idx, segIdx, playing, paused, fast, finished, segCount, path, prog, rallies, timeoutHere, shown]);
+  }, [idx, segIdx, playing, paused, fast, finished, segCount, path, prog, rallies, timeoutHere, shown, coinIdx, coinActive]);
+
+  // 코인토스 자동 해제 — coinActive가 켜지면 일정 시간(빠르게 450·일반 950ms) 뒤 끄고 랠리 재개.
+  // 별도 effect라 위 진행 effect의 재실행에 타이머가 안 죽는다.
+  useEffect(() => {
+    if (!coinActive) return;
+    const t = setTimeout(() => setCoinActive(false), fast ? 450 : 950);
+    return () => clearTimeout(t);
+  }, [coinActive, fast]);
 
   // 타임아웃 종료 — "경기 진행하기" 누르면 다음 랠리로 재개(이 타임아웃은 본 것으로 표시)
   const resumeFromTimeout = useCallback(() => {
@@ -471,6 +499,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
           <View style={styles.finishOverlay}>
             <Text style={styles.finishTxt}>경기 종료</Text>
           </View>
+        ) : null}
+        {/* 5세트 코인토스 연출(순수 표시 — 승패 무영향). coinActive 동안만 표시·랠리 정지 */}
+        {coinActive && coinIdx !== null ? (
+          <CoinTossOverlay
+            serving={rallies[coinIdx].serving}
+            homeName={homeName}
+            awayName={awayName}
+            fast={fast}
+          />
         ) : null}
       </View>
       </View>

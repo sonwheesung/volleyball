@@ -168,6 +168,8 @@ export default function MatchBoard() {
           onFinished={onFinished}
           onScore={handleScore}
           paused={statsOpen}
+          homeName={data.home.name}
+          awayName={data.away.name}
         />
         {banners.length > 0 ? <BroadcastBanner banners={banners} /> : null}
       </View>
