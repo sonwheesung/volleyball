@@ -135,18 +135,19 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   }
 
   const dim = 'rgba(8,16,28,0.82)';
-  const band = (s: ViewStyle, key: string) => <View key={key} style={[{ position: 'absolute', backgroundColor: dim }, s]} />;
+  // 구멍 모서리 반경 = 카드 borderRadius + PAD(카드와 동심원). 작은 구멍이면 절반으로 클램프.
+  const R = hole ? Math.min((active.radius ?? CARD_RADIUS) + PAD, hole.w / 2, hole.h / 2) : 0;
+  // 둥근 구멍 — **거대 테두리 기법**: View의 content 영역(투명)을 구멍에 맞추고, 화면을 덮을 만큼 큰 borderWidth(dim)로
+  //  주위를 어둡게. borderRadius(R+BIG)면 inner(=구멍) 모서리 반경이 정확히 R → 띠 4개의 직각 구멍 대신 카드와 같은 곡률.
+  const BIG = SW + SH;
 
   return (
     <Modal transparent animationType="fade" visible onRequestClose={() => markTip(active.id)}>
       <Pressable style={StyleSheet.absoluteFill} onPress={() => markTip(active.id)}>
         {hole ? (
           <>
-            {band({ left: 0, top: 0, width: SW, height: hole.y }, 't')}
-            {band({ left: 0, top: hole.y + hole.h, width: SW, height: SH - (hole.y + hole.h) }, 'b')}
-            {band({ left: 0, top: hole.y, width: hole.x, height: hole.h }, 'l')}
-            {band({ left: hole.x + hole.w, top: hole.y, width: SW - (hole.x + hole.w), height: hole.h }, 'r')}
-            <View pointerEvents="none" style={{ position: 'absolute', left: hole.x, top: hole.y, width: hole.w, height: hole.h, borderRadius: (active.radius ?? CARD_RADIUS) + PAD, borderWidth: 2.5, borderColor: theme.accent }} />
+            <View pointerEvents="none" style={{ position: 'absolute', left: hole.x - BIG, top: hole.y - BIG, width: hole.w + 2 * BIG, height: hole.h + 2 * BIG, borderWidth: BIG, borderColor: dim, borderRadius: R + BIG }} />
+            <View pointerEvents="none" style={{ position: 'absolute', left: hole.x, top: hole.y, width: hole.w, height: hole.h, borderRadius: R, borderWidth: 2.5, borderColor: theme.accent }} />
           </>
         ) : (
           <View style={[StyleSheet.absoluteFill, { backgroundColor: dim }]} />
