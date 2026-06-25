@@ -88,10 +88,15 @@ export const tipsForScreen = (screen: string): Tip[] =>
 > → `(tabs)`가 **스택에 mount된 채로 남는다**. onboarding→`select-team`으로 가면 스택에 `select-team`(최상위)·`(tabs)`
 > (배경)가 공존하고, seenTips가 비어 **두 화면의 `SpotlightOverlay`가 동시에 활성**(각자 Modal). 정상 플레이에서도
 > `select-team`은 `(tabs)` 밑에 남지만 그땐 그 팁이 이미 seen이라 안 떴을 뿐 — 구조적 사각.
-> **수정**: `SpotlightOverlay`가 `expo-router useSegments()`로 **현재 라우트**를 알아내 자기 `screen`과 같을 때만 띄운다
-> (`screenKeyFromSegments`). useSegments는 mount된 모든 컴포넌트에 **현재 top 라우트**를 주므로 배경 화면 오버레이는
-> 자동 억제. 라우트 환원 실패(폴백)면 띄운다(튜토리얼이 영영 가려지는 것 방지 — `@react-navigation useIsFocused`가
-> 과거 오버레이를 영구 비표시한 이력 때문에 라우터 세그먼트로 판정). **기기 확인 필요**(라우트→screen 매핑 정확성).
+> **1차 수정(실패)**: `SpotlightOverlay`마다 `useSegments()`로 현재 라우트를 판정. **탭에선 각 탭 컴포넌트가 자기
+> 라우트로 인식**해 모두 focused=true → 대시보드·일정 탭 팁이 동시에 떴다(사용자 스샷 2026-06-25 — 일정 화면에
+> "구단 현황 1/4" + "다음 경기 1/3" 동시).
+> **2차 수정(구조적 보장)**: 활성 화면을 **`SpotlightProvider`에서 `usePathname()`로 한 번만** 계산해 `ActiveScreenCtx`로
+> 공유. 모든 오버레이가 **같은 값**을 보고 `activeScreen === screen`일 때만 표시 → **at most one만 매치 = 이중 표시
+> 구조적 불가**(usePathname이 부정확해도 둘은 절대 안 뜸 — 최악은 한 화면 누락). 폴백 없음(불일치=숨김, 이중>누락 우선).
+> 경로 매핑 `screenFromPathname`은 `/`·`/index`·`(tabs)`·`endsWith('/schedule')` 등 변형을 관대히 흡수.
+> **기기 확인**: 리로드 후 ① 이중 표시 사라짐(보장) ② 각 화면 팁이 1회씩 뜨는지(매핑 누락 시 그 화면만 안 뜸 → 경로 추가).
+> (`@react-navigation useIsFocused`는 과거 오버레이를 영구 비표시한 이력이 있어 회피 — `usePathname` 전역 1회 계산으로 대체.)
 
 ---
 

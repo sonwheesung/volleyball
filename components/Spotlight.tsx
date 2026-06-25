@@ -4,29 +4,27 @@ import type { ReactNode } from 'react';
 import { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { Dimensions, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
-import { useSegments } from 'expo-router';
+import { usePathname } from 'expo-router';
 import { useGameStore } from '../store/useGameStore';
 import { tipsForScreen } from '../data/tutorialSteps';
 import { theme } from './Screen';
 
-// 현재 라우트(expo-router useSegments)를 스포트라이트 screen 키로 환원 — **포커스된 화면만** 오버레이를 띄운다.
-// 스택에 여러 화면이 mount된 채(예: (tabs) 위 select-team) resetTips로 동시에 활성화되는 "이중 스포트라이트"를 차단.
-// (@react-navigation useIsFocused는 과거 오버레이를 영영 가린 이력 → 라우터 세그먼트로 판정.)
-function screenKeyFromSegments(segments: string[]): string | null {
-  const s = segments;
-  if (s[0] === '(tabs)') {
-    const sub = s[1];
-    if (!sub || sub === 'index') return 'tab-dashboard';
-    if (sub === 'schedule') return 'tab-schedule';
-    if (sub === 'squad') return 'tab-squad';
-    if (sub === 'office') return 'tab-office';
-    if (sub === 'history') return 'tab-history';
-    return null;
-  }
-  if (s[0] === 'select-team') return 'select-team';
-  if (s[0] === 'team') return 'team-detail';
+// 현재 경로(expo-router usePathname)를 스포트라이트 screen 키로 환원. **Provider에서 한 번만** 계산해 모든
+// 오버레이가 같은 값을 공유 → at most one만 매치 → "이중 스포트라이트" 구조적 불가(탭마다 각자 포커스로 인식하던
+// 구 useSegments-per-overlay 버그 교정 2026-06-25). 경로 변형(/, /index, (tabs))도 관대히 매칭.
+function screenFromPathname(p: string | null | undefined): string | null {
+  if (!p) return null; // 초기 빈 경로 — 아무 것도 활성 아님(잘못된 플래시 방지)
+  if (p.startsWith('/team/')) return 'team-detail';
+  if (p === '/select-team') return 'select-team';
+  if (p.endsWith('/schedule')) return 'tab-schedule';
+  if (p.endsWith('/squad')) return 'tab-squad';
+  if (p.endsWith('/office')) return 'tab-office';
+  if (p.endsWith('/history')) return 'tab-history';
+  if (p === '/' || p.endsWith('/index') || p.endsWith('(tabs)')) return 'tab-dashboard';
   return null;
 }
+/** 현재 활성 화면 키 — Provider가 usePathname으로 1회 계산해 공유. 오버레이는 자기 screen과 같을 때만 표시. */
+const ActiveScreenCtx = createContext<string | null>(null);
 
 const CARD_RADIUS = 18; // 기본 카드 borderRadius(components/Screen Card) — 대상이 안 알려주면 이 값 사용
 
@@ -40,6 +38,8 @@ const SetTargetCtx = createContext<(id: string, r: Rect | null) => void>(() => {
 /** 루트(_layout)에 1회 — 화면별 대상 사각형들을 보관. 화면 전환 시 Target이 mount/unmount로 갱신. */
 export function SpotlightProvider({ children }: { children: ReactNode }) {
   const [targets, setTargets] = useState<Record<string, Rect>>({});
+  const pathname = usePathname();                     // 전역 현재 경로(1회) — 탭 전환마다 갱신
+  const activeScreen = screenFromPathname(pathname);  // 모든 오버레이가 공유 → 동시 표시 불가
   const setTarget = useCallback((id: string, r: Rect | null) => {
     setTargets((prev) => {
       if (!r) { if (!(id in prev)) return prev; const n = { ...prev }; delete n[id]; return n; }
@@ -50,7 +50,9 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
   }, []); // 영구 고정(빈 deps) — Target effect가 이걸 의존해도 재실행 안 됨
   return (
     <SetTargetCtx.Provider value={setTarget}>
-      <TargetsCtx.Provider value={targets}>{children}</TargetsCtx.Provider>
+      <TargetsCtx.Provider value={targets}>
+        <ActiveScreenCtx.Provider value={activeScreen}>{children}</ActiveScreenCtx.Provider>
+      </TargetsCtx.Provider>
     </SetTargetCtx.Provider>
   );
 }
@@ -87,11 +89,11 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   const seen = useGameStore((s) => s.seenTips) ?? {};
   const markTip = useGameStore((s) => s.markTip);
   const [attempt, setAttempt] = useState(0);
-  const segments = useSegments() as string[];
 
-  // 현재 포커스된 화면이 아니면 오버레이를 띄우지 않는다(이중 스포트라이트 차단). 라우트를 못 알아보면(폴백) 띄운다.
-  const curScreen = screenKeyFromSegments(segments);
-  const focused = curScreen === null || curScreen === screen;
+  // 활성 화면(Provider가 공유)과 같을 때만 표시. 모든 오버레이가 같은 값을 보므로 둘 이상 동시 표시 불가.
+  // 폴백 없음(불일치=숨김) — "이중 표시 방지"가 "한 화면 누락"보다 우선(누락은 자기 화면 들어가면 바로 뜸).
+  const activeScreen = useContext(ActiveScreenCtx);
+  const focused = activeScreen === screen;
 
   const queue = focused ? tipsForScreen(screen).filter((t) => !seen[t.id]) : [];
   const active = queue[0];
