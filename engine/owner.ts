@@ -236,6 +236,14 @@ export function releaseAngerPenalty(stature: number): number {
   return 16;                    // 프랜차이즈 레전드
 }
 
+/** 핵심·충성 동료 방출이 남은 선수단에 주는 동요(TRANSACTION_SYSTEM 0.5④) — 재계약 거부 확률에 더해지는 팀 단위 항.
+ *  stature = 동료 명성(career·근속 기반, 0~45 — 수상·시즌 제외 / 매치 밸런스 불변, 호감도 경로만). 무명 방출은 0. 상한 0.25. */
+export function releaseUnrestBias(statures: number[]): number {
+  let u = 0;
+  for (const s of statures) u += s >= 38 ? 0.10 : s >= 25 ? 0.06 : s >= 14 ? 0.03 : 0;
+  return Math.min(0.25, u);
+}
+
 /**
  * 시즌 팬심(0..100) — 50에서 출발해 성적과 스타 대우로 움직인다.
  * @param winRate    시즌 승률 0..1

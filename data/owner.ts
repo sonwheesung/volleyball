@@ -5,7 +5,7 @@ import type { Player, SeasonAwards, FAArchetype } from '../types';
 import {
   discontentOf, moodOf, popularityOf, fanbase, playerFans, fanOverlapRatio,
   interviewEffects, refuseResignProb, sustainedBenchRefuse, sinkingShipBias,
-  starterPromised, PROMISE_BREACH_REFUSE,
+  starterPromised, PROMISE_BREACH_REFUSE, releaseUnrestBias,
   type DiscontentTopic, type Mood, type SitCause, type Fanbase, type InterviewLog, type OwnerFx,
 } from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
@@ -17,7 +17,7 @@ import { formFactor, formGrade } from '../engine/form';
 import { awardHistoryOf } from './awards';
 import { computeStandings } from './standings';
 import { leagueProduction } from './production';
-import { formFactorOnDay, rosterIdsOnDay, seasonScandals, injuredOnDay, suspendedOnDay, availableTeamPlayers } from './dynamics';
+import { formFactorOnDay, rosterIdsOnDay, seasonScandals, injuredOnDay, suspendedOnDay, availableTeamPlayers, getTxContext } from './dynamics';
 import { restedOnDay } from './rotation';
 import { SCANDAL_POP_FACTOR } from '../engine/scandal';
 import { evolveOnDay } from './league';
@@ -106,6 +106,11 @@ export function discontentNow(
 export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamId: string, fanScore: number): OwnerFx {
   const fx = interviewEffects(interviews, season);
   const refuseProb: Record<string, number> = {};
+  // 핵심·충성 동료 방출 → 남은 선수단 동요(TRANSACTION_SYSTEM 0.5④). 이번 시즌 내 방출자의 명성(career·근속)으로 팀 단위 거부 가중.
+  const releasedStatures = getTxContext().playerTx
+    .filter((t) => t.kind === 'release' && t.teamId === myTeamId)
+    .map((t) => { const rp = evolveOnDay(t.playerId, SEASON_END_DAY); return rp && !rp.isForeign ? popularityOf(rp.career.points, 0, rp.clubTenure, 0) : 0; });
+  const unrest = releaseUnrestBias(releasedStatures);
   for (const id of rosterIdsOnDay(myTeamId, SEASON_END_DAY)) {
     const p = evolveOnDay(id, SEASON_END_DAY);
     if (!p || p.contract.remaining > 1) continue; // 이번 오프시즌 만료자만 거부권 행사
@@ -114,7 +119,7 @@ export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamI
     const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight) : 0;
     // 공약 파기(OWNER_SYSTEM 1.3): '주전 보장' 약속을 했는데 여전히 출전 불만(=벤치) → 배신. 거부 급등(성공 보정 상쇄+α).
     const breach = topic === 'minutes' && starterPromised(interviews, season, id) ? PROMISE_BREACH_REFUSE : 0;
-    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore) + accum + breach;
+    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore) + accum + breach + unrest;
     if (prob > 0) refuseProb[id] = Math.min(0.95, prob);
   }
   return { refuseProb, offerBias: fx.offerBias };
