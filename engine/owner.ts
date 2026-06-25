@@ -226,6 +226,16 @@ export function benchAngerPenalty(missedStreak: number): number {
   return 10;
 }
 
+/** 스타 방출의 팬 분노(OWNER_SYSTEM §3.2 — 설계엔 있었으나 fanScore에 누락됐던 항). 입력은 **안정 명성**
+ *  (career·수상·근속 기반 인기 — 시즌 production 같은 휘발치 제외, 결정론). 무명 방출은 0, 프랜차이즈 레전드는 큰 타격.
+ *  명성 범위 0~75(career 30·수상 30·근속 15) 기준 구간. TRANSACTION_SYSTEM 0.5③. */
+export function releaseAngerPenalty(stature: number): number {
+  if (stature < 30) return 0;   // 무명·신인 — 팬 무관심
+  if (stature < 45) return 5;   // 중견
+  if (stature < 60) return 10;  // 인기 스타
+  return 16;                    // 프랜차이즈 레전드
+}
+
 /**
  * 시즌 팬심(0..100) — 50에서 출발해 성적과 스타 대우로 움직인다.
  * @param winRate    시즌 승률 0..1

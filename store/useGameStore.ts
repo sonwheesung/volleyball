@@ -22,7 +22,7 @@ import { buildLineup } from '../engine/lineup';
 import { setTxContext, setOwnerContext, seasonTxLog, seasonScandals, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
 import {
   meetAccept, persuade, cardMatch,
-  benchAccept, startSuggestAccept, popularityOf, benchAngerPenalty, fanScore as fanScoreOf, BENCH_MAX,
+  benchAccept, startSuggestAccept, popularityOf, benchAngerPenalty, releaseAngerPenalty, fanScore as fanScoreOf, BENCH_MAX,
   TALK_COOLDOWN_DAYS, BENCH_COOLDOWN_DAYS,
   type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx,
 } from '../engine/owner';
@@ -96,6 +96,7 @@ interface GameState {
   talkCooldown: Record<string, number>;        // playerId → 재면담 가능 day(쿨다운, OWNER_SYSTEM)
   benchCooldown: Record<string, number>;       // playerId → 재건의(주전/벤치) 가능 day
   fanScore: number;                            // 내 팀 팬심(직전 시즌 결과, 0~100)
+  releaseAnger: number;                        // 이번 시즌 스타 방출로 적립된 팬 분노(방출 시점 인기로 계산, endSeason서 fanScore에 반영·리셋)
   cash: number;                                // 운영 자금(FINANCE) — 캡과 별개의 지갑
   lastFinance: SeasonFinance | null;           // 직전 시즌 정산 내역(표시용)
   tryoutWish: string[];                        // 외국인 트라이아웃 위시리스트(우선순위)
@@ -191,6 +192,7 @@ const freshSave = {
   talkCooldown: {} as Record<string, number>,
   benchCooldown: {} as Record<string, number>,
   fanScore: 50,
+  releaseAnger: 0,
   cash: 50000, // 시작 운영 예비금 5억
   lastFinance: null as SeasonFinance | null,
   tryoutWish: [] as string[],
@@ -208,6 +210,15 @@ function myRosterDelta(my: string, inSeasonTx: Tx[], rosterIds: string[]) {
   const myReleased = new Set(inSeasonTx.filter((t) => t.kind === 'release' && t.teamId === my).map((t) => t.playerId));
   const mySigned = inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === my).map((t) => t.playerId);
   return { myReleased, mySigned, size: (rosterIds.length - myReleased.size) + mySigned.length };
+}
+
+/** 방출 시점의 팬 분노(TRANSACTION_SYSTEM 0.5③) — **안정 명성**(career·수상·근속, 시즌 production 제외)으로
+ *  계산해 결정론 보장(leagueProduction은 호출 순서에 민감해 분노가 흔들렸다 — 제외). 외인은 0(팬심 비대상). */
+function releaseAngerOf(playerId: string, archive: SeasonArchive[], day: number): number {
+  const rp = evolveOnDay(playerId, day);
+  if (!rp || rp.isForeign) return 0;
+  const stature = popularityOf(rp.career.points, awardHistoryOf(archive, playerId).length, rp.clubTenure, 0);
+  return releaseAngerPenalty(stature);
 }
 
 export const useGameStore = create<GameState>()(
@@ -287,7 +298,9 @@ export const useGameStore = create<GameState>()(
         const fee = c ? severanceFee(c.salary, c.remaining) : 0;
         if (fee > s.cash) return false;
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId, kind: 'release' }];
-        set({ released: [...s.released, playerId], inSeasonTx, cash: s.cash - fee });
+        // 팬 분노 적립(방출 시점 인기 — TRANSACTION_SYSTEM 0.5③). endSeason서 fanScore에 반영.
+        const anger = releaseAngerOf(playerId, s.archive, s.currentDay);
+        set({ released: [...s.released, playerId], inSeasonTx, cash: s.cash - fee, releaseAnger: s.releaseAnger + anger });
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
@@ -298,10 +311,11 @@ export const useGameStore = create<GameState>()(
         const tx = s.inSeasonTx.find((t) => t.kind === 'release' && t.playerId === playerId);
         if (!tx || tx.day !== s.currentDay) return false;
         const inSeasonTx = s.inSeasonTx.filter((t) => !(t.kind === 'release' && t.playerId === playerId));
-        // 당일 철회는 실수 정정 — 위약금 환불(release에서 차감한 만큼 되돌림).
+        // 당일 철회는 실수 정정 — 위약금 환불 + 팬 분노 적립도 되돌림(같은 날·같은 입력이라 동일값).
         const c = getPlayer(playerId)?.contract;
         const fee = c ? severanceFee(c.salary, c.remaining) : 0;
-        set({ released: s.released.filter((id) => id !== playerId), inSeasonTx, cash: s.cash + fee });
+        const anger = releaseAngerOf(playerId, s.archive, s.currentDay);
+        set({ released: s.released.filter((id) => id !== playerId), inSeasonTx, cash: s.cash + fee, releaseAnger: Math.max(0, s.releaseAnger - anger) });
         setTxContext(inSeasonTx, get().faPool, get().selectedTeamId ?? '');
         return true;
       },
@@ -635,6 +649,9 @@ export const useGameStore = create<GameState>()(
         }
         // 내 팀 선수의 사건·사고 — 팬들이 등을 돌린다(사안이 클수록 = 정지 경기 많을수록 더 떠난다)
         for (const sc of seasonScandals()) if (sc.teamId === my) angerSum += Math.min(28, 6 + sc.missMatches);
+        // 스타 방출 분노(TRANSACTION_SYSTEM 0.5③ — OWNER §3.2). 방출 *시점*에 적립한 값을 합산
+        // (release가 그때의 인기로 계산 — 방출 후 production 제외로 시즌 활약이 사라지는 역설 회피).
+        angerSum += get().releaseAnger;
         const nextFan = fanScoreOf(winRate, championId === my, angerSum);
 
         // 0.7) 재정 정산(FINANCE) — 모기업(베이스+성적 보너스) + 직관(성적 민감) + 굿즈(선수팬).
@@ -810,6 +827,7 @@ export const useGameStore = create<GameState>()(
           watchProgress: {}, // 새 시즌 — 이어보기 위치 초기화
           contractOverrides: {},
           released: [],
+          releaseAnger: 0, // 시즌 분노는 이번 endSeason에서 fanScore로 반영됐으니 리셋
           inSeasonTx: [],
           faPool: nextFaPool,
           resignDecisions: {},
@@ -890,6 +908,7 @@ export const useGameStore = create<GameState>()(
         talkCooldown: s.talkCooldown,
         benchCooldown: s.benchCooldown,
         fanScore: s.fanScore,
+        releaseAnger: s.releaseAnger,
         cash: s.cash,
         lastFinance: s.lastFinance,
         tryoutWish: s.tryoutWish,

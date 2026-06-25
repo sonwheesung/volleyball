@@ -36,10 +36,14 @@
   "가벼운 클릭"을 "무게 있는 결정"으로(노장/프랜차이즈일수록 문구 강화). UI: `app/contracts.tsx` `doRelease`.
 - (추후) 주목 방출(프랜차이즈·노장)은 **작별 뉴스**(NEWS `release` 강화)로 연대기에 남긴다.
 
-### ③ 팬심·예산 타격 (단계 계획 — 평판 무게, OWNER_SYSTEM §3.2 구현)
-- `fanScore`에 **방출 분노 항** 추가: 이번 시즌 방출자의 인기(`popularityOf`)·근속·프랜차이즈로 가중한 페널티 합.
-  스타·프랜차이즈 방출은 팬심↓ → 다음 시즌 예산(`fanBudgetFactor`)·관중↓. 일반 선수는 ~0.
-- **엔진 변경 → A/B 측정 필수**(추정 금지): 스타 방출 시 팬심 유의 하락 vs 무명 방출 대조군 ~0(`simOwner` 확장).
+### ③ 팬심·예산 타격 (구현 — 평판 무게, OWNER_SYSTEM §3.2 구현)
+- **방출 *시점*에 분노 적립**(`store.releaseAnger` 누적, endSeason서 `fanScore` angerSum에 합산·리셋). 방출 후
+  production 제외로 시즌 기여가 사라지는 역설을 피하려 release/unrelease 순간에 계산(철회는 환불).
+- 분노 = `releaseAngerPenalty(stature)`. **stature = 안정 명성**(career·수상·근속 기반 인기, **시즌 production 제외**) —
+  `leagueProduction`은 호출 순서에 민감해 분노가 흔들렸다(측정서 9↔16) → 휘발항 빼고 결정론화. 구간: <30→0·<45→5·<60→10·≥60→16.
+- 스타·레전드 방출은 팬심↓ → 다음 시즌 예산(`fanBudgetFactor`)·관중↓. 무명은 0(인기 게이트).
+- **측정(`_dv_releasefan`, N=8 · 거울 빌드업)**: 스타(명성 63) 방출 → 분노 정확히 16·철회 0·무명(명성 0) → 0(게이트)·
+  팬심 방향성 42→27. releaseAnger가 비교란 직접 오라클(fanScore 절대낙폭은 winRate 약결합이라 방향만).
 
 ### ④ 팀 사기 — 남은 선수 동요 (단계 계획 — 라커룸 무게)
 - **주의**: 현재 *팀 사기→경기력* 시스템은 **없다**(grep 확인). `ROTATION_MORALE`은 개인 *호감도→재계약 거부/FA 이탈*.
