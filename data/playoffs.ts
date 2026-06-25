@@ -4,8 +4,9 @@ import { coachInfoOf, getEvolvedTeamPlayers } from './league';
 import { availableTeamPlayers } from './injury';
 import { computeStandings } from './standings';
 import { playSeries, type Series } from '../engine/playoffs';
+import { SEASON_DAYS } from '../engine/calendar';
 
-const REF_DAY = 164; // 시즌 종료 전력
+const REF_DAY = SEASON_DAYS; // 시즌 종료 전력 — 단일 출처(engine/calendar)
 const PO_TARGET = 2; // 3전 2선승
 const FINAL_TARGET = 3; // 5전 3선승
 

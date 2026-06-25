@@ -9,6 +9,7 @@ import {
   type DiscontentTopic, type Mood, type SitCause, type Fanbase, type InterviewLog, type OwnerFx,
 } from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
+import { SEASON_DAYS } from '../engine/calendar';
 import { buildLineup } from '../engine/lineup';
 import { overall } from '../engine/overall';
 import { marketValue } from '../engine/salary';
@@ -22,7 +23,7 @@ import { SCANDAL_POP_FACTOR } from '../engine/scandal';
 import { evolveOnDay } from './league';
 
 const GAME_EVERY = 4.6;
-const SEASON_END_DAY = 164;
+const SEASON_END_DAY = SEASON_DAYS;
 
 /** 선수가 코트에 못/안 나오는 사유 판정 (ROTATION_MORALE B) — 부상·징계·구단주벤치·실력밀림·주전.
  *  'rested'(#3 휴식)는 restedOnDay 구현 후 추가. 실제 경기 라인업(availableTeamPlayers→buildLineup)과 일치. */

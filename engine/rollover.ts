@@ -10,8 +10,9 @@ import { clampSalary, LEAGUE_CAP } from './cap';
 import { marketValue } from './salary';
 import { createRng, strSeed } from './rng';
 import { TRAINABLE_STATS } from './training';
+import { SEASON_DAYS } from './calendar';
 
-export const SEASON_LENGTH = 164; // 한 시즌 캘린더 일수(진화량 기준)
+export const SEASON_LENGTH = SEASON_DAYS; // 한 시즌 캘린더 일수(진화량 기준) — 단일 출처(engine/calendar)
 const RENEW_YEARS = 2;
 
 // ── 돌파(Breakthrough, TRAINING 9장) ── 어린 선수가 한 시즌에 갑자기 확 크는 희귀 이벤트.

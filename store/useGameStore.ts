@@ -11,6 +11,7 @@ import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOver
   currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, fireCoach as fireCoachLeague, getTeamCoach, grantStartingStaff, LEAGUE } from '../data/league';
 import { advanceCoaches } from '../data/staffLifecycle';
 import { bottomStreak } from '../engine/staffLifecycle';
+import { SEASON_DAYS } from '../engine/calendar';
 import type { Coach, AssistantCoach } from '../types';
 import { buildDraftContext } from '../data/draftSetup';
 import { leagueProduction } from '../data/production';
@@ -49,7 +50,7 @@ import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, S
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const LEGEND_POINTS = 7500; // 영구결번급 — 60시즌 통산 최고 ~8645라 9000은 도달 불가였음(레전드 0명).
                             //   7500 = 60시즌당 ~2명(top 8645·7723) → 영구결번 ~30시즌당 1명 + league 마일스톤(레전드 추월) 가능
-const SEASON_END_DAY = 164; // 정규시즌 길이(일) — 출전비율·팬심 계산 기준
+const SEASON_END_DAY = SEASON_DAYS; // 정규시즌 길이(일) — 출전비율·팬심 계산 기준. 단일 출처(engine/calendar)
 const GAME_EVERY = 4.6;     // 평균 경기 간격(일)
 
 interface GameState {

@@ -8,8 +8,9 @@ import { LEAGUE, SEASON, getPlayer, getEvolvedTeamPlayers, currentRosters } from
 import { leagueProduction, leagueProductionRange } from './production';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
+import { SEASON_DAYS } from '../engine/calendar';
 
-const REF_DAY = 164; // 시즌 종료 전력(playoffs 와 동일)
+const REF_DAY = SEASON_DAYS; // 시즌 종료 전력(playoffs 와 동일) — 단일 출처(engine/calendar)
 const LEGS = 6;      // KOVO 여자부 6라운드
 
 /** 라운드(leg)별 [from, to] 일자 구간 — SEASON 의 round 구조에서 도출 */

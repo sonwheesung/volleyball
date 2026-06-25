@@ -11,8 +11,9 @@ import { buildPlayoffs } from './playoffs';
 import { teamFanbaseNow } from './owner';
 import { rosterIdsOnDay } from './dynamics';
 import { evolveOnDay, staffSpend } from './league';
+import { SEASON_DAYS } from '../engine/calendar';
 
-const SEASON_END_DAY = 164;
+const SEASON_END_DAY = SEASON_DAYS;
 
 /** 이번 시즌 정산 후 운영 자금(= cash + 이번 시즌 net, 모기업 보전 floor 0). FA 영입 지갑의 정확한 기준. */
 export function projectSettledCash(

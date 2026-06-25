@@ -5,6 +5,7 @@
 import type { Player } from '../types';
 import { createRng, strSeed } from './rng';
 import { prefWeightsOf } from './faMarket';
+import { SEASON_DAYS } from './calendar';
 
 // ─── 불만 (파생, 저장 없음) ───────────────────────────────────
 
@@ -199,7 +200,7 @@ export function startSuggestAccept(playerId: string, season: number, day: number
 }
 
 /** 빅매치 판정 — 보러 갈 이유. 상위권 맞대결이거나, 종반의 순위 직결 매치업 */
-export function isBigMatch(myRank: number, oppRank: number, dayIndex: number, seasonEndDay = 164): boolean {
+export function isBigMatch(myRank: number, oppRank: number, dayIndex: number, seasonEndDay = SEASON_DAYS): boolean {
   const topClash = myRank <= 3 && oppRank <= 3;
   const rankClose = Math.abs(myRank - oppRank) <= 1;
   const lateSeason = dayIndex >= seasonEndDay * 0.65;
