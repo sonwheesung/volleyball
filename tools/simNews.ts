@@ -96,9 +96,13 @@ for (const n of feed) {
   seenBody.get(n.kind)!.add(n.body ?? '');
 }
 
-// ── 교차검증: 뉴스 트리플크라운 == broadcast.buildMatchBanners 트리플(두 경로 일치 = 재구현 오라클 방지) ──
-let bcastTriples = 0;
-for (const f of SEASON) bcastTriples += buildMatchBanners(f.homeTeamId, f.awayTeamId, f.dayIndex, null).filter((b) => b.kind === 'triple').length;
+// ── 교차검증: 뉴스 트리플크라운(선수당 1건 집계) == broadcast 트리플 달성 **선수 수**(경기당 현수막) ──
+//   뉴스는 선수·시즌당 1건으로 묶고(기사 리뷰 하: 폭주 방지), 현수막은 경기마다 → 일치 기준은 **distinct 선수**.
+const bcastTriplePlayers = new Set<string>();
+for (const f of SEASON)
+  for (const b of buildMatchBanners(f.homeTeamId, f.awayTeamId, f.dayIndex, null))
+    if (b.kind === 'triple') bcastTriplePlayers.add(b.title.split(' 트리플 크라운')[0]);
+const bcastTriples = bcastTriplePlayers.size;
 const newsTriples = feed.filter((n) => n.kind === 'match' && n.headline.includes('트리플 크라운')).length;
 const tripleAgree = newsTriples === bcastTriples;
 

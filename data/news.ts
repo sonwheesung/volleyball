@@ -242,8 +242,19 @@ export function buildNewsFeed(
       const myRank = a.standings.indexOf(myTeamId) + 1;
       if (myRank === 2) push(a.season, 'standing', `${teamName(myTeamId)}, ${S}시즌 정규리그 2위`, false, myTeamId,
         body3('standing', key('rank2'), `${teamName(myTeamId)}이(가) ${S}시즌 정규리그를 2위로 마쳤다. 정상을 눈앞에 두고 아쉽게 한 걸음이 모자랐다.`));
-      else if (myRank === teams && teams > 0) push(a.season, 'standing', `${teamName(myTeamId)}, ${S}시즌 최하위`, false, myTeamId,
-        body3('standing', key('last'), `${teamName(myTeamId)}이(가) ${S}시즌 정규리그 최하위에 머물렀다. 반등을 위한 긴 겨울이 시작됐다.`));
+      else if (myRank === teams && teams > 0) {
+        const rec = a.record?.[myTeamId];
+        const wl = rec ? `${rec[0]}승 ${rec[1]}패, ` : '';
+        const note = vp([
+          '반등을 위한 긴 겨울이 시작됐다.',
+          '바닥에서 다시 쌓아 올려야 하는 시즌이 됐다.',
+          '리빌딩의 청사진이 절실해졌다.',
+          '다음 시즌을 향한 대수술이 불가피해졌다.',
+          '자존심을 회복할 반격의 동력이 필요하다.',
+        ], key('last'), 3);
+        push(a.season, 'standing', `${teamName(myTeamId)}, ${S}시즌 최하위(${teams}팀 중 꼴찌)`, false, myTeamId,
+          body3('standing', key('last'), `${teamName(myTeamId)}이(가) ${wl}${S}시즌 정규리그 최하위에 머물렀다. ${note}`));
+      }
     }
 
     // ── 시즌 기록(전승·30승·무승) — 어느 팀이든 ──
@@ -385,8 +396,15 @@ export function buildNewsFeed(
       (n) => inMine ? `${teamName(t.toTeam)}, FA ${n} 영입` : `FA ${n}, ${teamName(t.fromTeam)} → ${teamName(t.toTeam)}`,
       (n) => `FA ${n}, ${teamName(t.toTeam)} 합류`,
     ], key, t.name), inMine, inMine || outMine ? myTeamId : t.toTeam,
-      body3('transfer', key, `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 ${teamName(t.toTeam)}으로(로) 둥지를 옮겼다.`
-        + (inMine ? ` ${teamName(myTeamId)}이(가) 새 전력을 더했다.` : outMine ? ` ${teamName(myTeamId)}은(는) 한 자원을 떠나보냈다.` : '')), t.playerId);
+      (() => {
+        const posKo = POS_KO[getPlayer(t.playerId)?.position ?? ''] ?? '';
+        const tag = [t.ovr ? `OVR ${t.ovr}` : '', posKo].filter(Boolean).join(' ');
+        const lead = tag ? `${tag} ${t.name}` : t.name;
+        const gain = posKo ? `${posKo} 자원을 보강했다` : '전력을 더했다';
+        const lose = posKo ? `${posKo} 한 자리가 비었다` : '한 자원을 떠나보냈다';
+        return body3('transfer', key, `${lead}이(가) ${teamName(t.fromTeam)}을(를) 떠나 ${teamName(t.toTeam)}으로(로) 둥지를 옮겼다.`
+          + (inMine ? ` ${teamName(myTeamId)}이(가) ${gain}.` : outMine ? ` ${teamName(myTeamId)}은(는) ${lose}.` : ` ${teamName(t.toTeam)}이(가) ${gain}.`));
+      })(), t.playerId);
   }
 
   // 8) 실시간 경기 소재(현재 시즌) — 트리플 크라운·데뷔전·한 경기 폭발. 경기 단위 생산에서 파생.
@@ -395,16 +413,19 @@ export function buildNewsFeed(
   // 유망주 데뷔 게이트 — talentBase 등급(seed rollTalent): S 3%(≥1.25)·A 12%(≥1.12)·B 45%·C 30%·D 10%.
   const PROSPECT_MIN = 1.12, ELITE_MIN = 1.25; // A급 이상만 기사화, S급은 ★(특급 기대주)
   const debuted = new Set<string>(); // 이번 시즌 첫 선발 1회만
+  // 트리플 크라운·한 경기 폭발은 선수당 1건으로 묶는다(한 시즌 8건 폭주 방지, 2026-06-25 에디터) — 시즌 N번째/최고 경기.
+  const tc = new Map<string, { count: number; tid: string; name: string; back: number; b: number; a: number }>();
+  const bg = new Map<string, { tid: string; name: string; points: number; spikes: number; aces: number; blocks: number; opp: string }>();
   for (const mp of seasonMatchProds(currentDay)) {
     const teamOf = (id: string) => (mp.homeIds.has(id) ? mp.homeTeamId : mp.awayTeamId);
     for (const [id, l] of mp.lines) {
       const p = getPlayer(id); if (!p) continue;
       const tid = teamOf(id);
       const opp = tid === mp.homeTeamId ? mp.awayTeamId : mp.homeTeamId; // 상대팀(본문 보강)
-      // 트리플 크라운(KOVO) — 후위공격·블로킹·서브 각 3+
+      // 트리플 크라운(KOVO) — 후위공격·블로킹·서브 각 3+. 선수당 누적(첫 경기 스탯 + 시즌 횟수).
       if (l.backSpikes >= TRIPLE_MIN && l.blocks >= TRIPLE_MIN && l.aces >= TRIPLE_MIN) {
-        push(currentSeason, 'match', `${p.name} 트리플 크라운 — 후위공격 ${l.backSpikes}·블로킹 ${l.blocks}·서브 ${l.aces}`, true, tid,
-          body3('triple', `${currentSeason}:tc:${id}:${mp.dayIndex}`, `${p.name}(${teamName(tid)})이(가) 한 경기에서 후위공격 ${l.backSpikes}개·블로킹 ${l.blocks}개·서브 에이스 ${l.aces}개로 트리플 크라운을 달성했다. KOVO 공식 기록에 이름을 올렸다.`), `${id}:${mp.dayIndex}`);
+        const e = tc.get(id);
+        if (e) e.count++; else tc.set(id, { count: 1, tid, name: p.name, back: l.backSpikes, b: l.blocks, a: l.aces });
       }
       // 데뷔전 — 통산 출전 0(이번 시즌이 데뷔)인 선수의 첫 선발만. **유망주(잠재력 높은 신인)만**: 리그 전체
       // 신인 데뷔를 다 기사화하면 첫 경기에 ~50건 쏟아짐 → talentBase A급 이상(상위 15%)만, S급은 ★(2026-06-21 사용자 보고).
@@ -423,14 +444,25 @@ export function buildNewsFeed(
             `상대 ${teamName(opp)}을(를) 맞은 데뷔전이었다.`,
             elite ? 'S급 재능으로 분류된 특급 유망주로, 팀의 미래를 책임질 재목으로 꼽힌다.' : '높은 잠재력을 인정받은 기대주로, 성장 곡선에 시선이 모인다.')), id);
       }
-      // 한 경기 폭발(커리어하이급) — 30점 이상(데뷔 기사로 이미 다룬 선수는 제외)
+      // 한 경기 폭발(커리어하이급) — 30점 이상(데뷔 기사로 이미 다룬 경기는 제외). 선수당 시즌 최고 경기만.
       else if (l.points >= BIG_GAME) {
-        push(currentSeason, 'match', `${p.name}, 한 경기 ${l.points}점 폭발`, l.points >= 35, tid,
-          body3('biggame', `${currentSeason}:bg:${id}:${mp.dayIndex}`, more(
-            `${p.name}(${teamName(tid)})이(가) 한 경기 ${l.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`,
-            `상대 ${teamName(opp)}을(를) 상대로 공격 성공 ${l.spikes}개·서브 에이스 ${l.aces}개·블로킹 ${l.blocks}개를 곁들였다.`)), `${id}:${mp.dayIndex}`);
+        const e = bg.get(id);
+        if (!e || l.points > e.points) bg.set(id, { tid, name: p.name, points: l.points, spikes: l.spikes, aces: l.aces, blocks: l.blocks, opp });
       }
     }
+  }
+  // 트리플 크라운 — 선수당 1건(여러 번이면 "시즌 N번째")
+  for (const [id, e] of tc) {
+    const multi = e.count > 1 ? ` (시즌 ${e.count}번째)` : '';
+    push(currentSeason, 'match', `${e.name} 트리플 크라운${multi} — 후위공격 ${e.back}·블로킹 ${e.b}·서브 ${e.a}`, true, e.tid,
+      body3('triple', `${currentSeason}:tc:${id}`, `${e.name}(${teamName(e.tid)})이(가) 후위공격 ${e.back}개·블로킹 ${e.b}개·서브 에이스 ${e.a}개로 트리플 크라운을 달성했다.${e.count > 1 ? ` 이번 시즌 ${e.count}번째 대기록이다.` : ' KOVO 공식 기록에 이름을 올렸다.'}`), id);
+  }
+  // 한 경기 폭발 — 선수당 시즌 최고 경기 1건
+  for (const [id, e] of bg) {
+    push(currentSeason, 'match', `${e.name}, 한 경기 ${e.points}점 폭발`, e.points >= 35, e.tid,
+      body3('biggame', `${currentSeason}:bg:${id}`, more(
+        `${e.name}(${teamName(e.tid)})이(가) 한 경기 ${e.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`,
+        `상대 ${teamName(e.opp)}을(를) 상대로 공격 성공 ${e.spikes}개·서브 에이스 ${e.aces}개·블로킹 ${e.blocks}개를 곁들였다.`)), id);
   }
 
   return items.sort((x, y) => y.season - x.season || Number(y.big) - Number(x.big));
