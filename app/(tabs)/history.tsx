@@ -47,6 +47,7 @@ function HistoryInner() {
   const expelledLog = useGameStore((s) => s.expelledLog);
   const benchDirectives = useGameStore((s) => s.benchDirectives);
   const transfers = useGameStore((s) => s.transfers);
+  const retirements = useGameStore((s) => s.retirements);
 
   const [tab, setTab] = useState(0);          // 0 시즌 · 1 통산 · 2 명예의전당 · 3 연표
   const [viewSeason, setViewSeason] = useState(season);
@@ -84,7 +85,7 @@ function HistoryInner() {
   }, [currentDay, season]);
 
   const newsFeed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? '', transfers).slice(0, 40),
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? '', transfers, retirements).slice(0, 40),
     [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
   );
 

@@ -193,6 +193,17 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 
 ---
 
+### 3.4 은퇴 세리머니 (슬라이스5, 2026-06-25 게이머 리뷰)
+> **왜**: "정 붙인 노장이 명전 목록 한 줄로 조용히 사라진다"(리뷰). 은퇴를 **사건**으로 — 작별 + 커리어 회고.
+> 그동안 HOF 헌액 뉴스(통산 4000점+)만 있고 **비-HOF 노장은 무음**으로 사라졌다.
+- **데이터**: `store.retirements: RetireRecord[]`(영속, 최근 200) — endSeason이 **주목 은퇴자**(career.seasons≥8 또는
+  HOF급)를 통산 스탯·소속·legend 플래그와 함께 적립. `ctx.retired`에서 파생(새 사건 0).
+- **뉴스**: `kind='retire'` 작별 — "OO, N시즌 커리어 마치고 코트를 떠난다" + 통산 회고(포지션별 대표 스탯·소속).
+  레전드(영구결번)는 ★. HOF 헌액(enshrinement) 뉴스와 **상보**(은퇴=작별 / 헌액=전당 입성, 다른 각도).
+- **무결성**: 매달린 참조 0(은퇴자도 playerBase에 잔존), 중복 0(`season:retire:playerId`), 결정론, 가짜 0. `_ev_retirenews`.
+
+---
+
 ## 7. 표면 (no-push)
 - **대시보드**: 최근 5건 뉴스 티커 + 라운드 MVP 위젯(조용히 갱신). → 전체는 history.
 - **history**: 리그 뉴스 아카이브(최근 N건) — 한 우주의 연대기. 내 팀 기사 accent 강조.

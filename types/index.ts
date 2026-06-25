@@ -190,7 +190,7 @@ export interface Milestone {
 /** 뉴스 피드 (NEWS_SYSTEM) — 자동 진행된 리그를 읽을 수 있는 기사로. 1~4 종합 파생 */
 export interface NewsItem {
   season: number;                                            // 0-based
-  kind: 'champion' | 'award' | 'milestone' | 'hof' | 'injury' | 'scandal' | 'owner' | 'streak' | 'standing' | 'match' | 'debut' | 'transfer' | 'release';
+  kind: 'champion' | 'award' | 'milestone' | 'hof' | 'injury' | 'scandal' | 'owner' | 'streak' | 'standing' | 'match' | 'debut' | 'transfer' | 'release' | 'retire';
   headline: string;
   big: boolean;                                              // 헤드라인급
   teamId?: string;                                           // 내 팀 강조용
@@ -216,6 +216,17 @@ export interface Transfer {
   toTeam: string;                                            // 새 시즌 소속 ('' = 방출(미계약), kind='release')
   kind?: 'transfer' | 'release';                             // 미지정=transfer(구세이브 호환). release=방출/재계약 불발(슬라이스4)
   ovr?: number;                                              // 이동 시점 OVR(거물 게이트·헤드라인 판정 — 이후 노쇠 무관 고정)
+}
+
+/** 은퇴 영속 기록 — 주목 은퇴자(career≥8시즌 또는 HOF)의 작별·회고(NEWS_SYSTEM 슬라이스5). */
+export interface RetireRecord {
+  season: number;                                            // 은퇴 시즌(오프시즌)
+  playerId: string;
+  name: string;
+  position: Position;
+  teamId: string;                                            // 마지막 소속(prevTeamOf)
+  seasons: number; points: number; blocks: number; digs: number; aces: number; assists: number; // 통산
+  hof: boolean; legend: boolean;                             // 명전 등재 / 영구결번급
 }
 
 export interface SubPolicy {

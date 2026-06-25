@@ -3,7 +3,7 @@
 //   가짜 드라마 금지: 기록에 근거한 사실만. 중요도(big)로 헤드라인/단신 구분.
 //   본문은 조립식(opener+사실+closer) + 안정 시드 변주 → 같은 종류라도 표현이 다르다(NEWS_SYSTEM §4).
 
-import type { ExpelRecord, HofEntry, Milestone, NewsItem, Position, SeasonArchive, SeasonAwards, Transfer } from '../types';
+import type { ExpelRecord, HofEntry, Milestone, NewsItem, Position, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
 import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
 import { popularityNow } from './owner';
@@ -92,6 +92,10 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
     open: ['한 시대가 막을 내렸다.', '오랜 커리어가 끝내 명예로 마무리됐다.', '코트를 떠나는 이름이 전당에 새겨졌다.', '한 선수의 긴 여정이 영광으로 봉인됐다.'],
     close: ['통산 기록은 리그에 영구히 남는다.', '그의 발자취는 후배들의 이정표가 된다.', '은퇴는 끝이 아니라 또 다른 기록의 시작이다.', '코트를 떠나도 이름은 전당에 영원히 걸린다.'],
   },
+  retire: {
+    open: ['긴 여정의 마침표가 찍혔다.', '한 베테랑이 코트와 작별한다.', '오랜 시간 코트를 지킨 이름이 떠난다.', '한 시대를 함께한 선수가 라켓을 내려놓는다.'],
+    close: ['수고했다는 말로는 부족한 세월이었다.', '팬들은 그의 마지막 시즌을 오래 기억할 것이다.', '코트를 떠나도 쌓아온 기록은 남는다.', '다음 세대가 그 빈자리를 채워갈 것이다.'],
+  },
   injury: {
     open: ['반갑지 않은 소식이다.', '팀에 전력 공백이 생겼다.', '코트 밖 변수가 순위에 끼어들었다.'],
     close: ['복귀 시점이 시즌 후반의 변수가 된다.', '백업 자원의 분발이 필요해졌다.', '팀은 로테이션 조정으로 공백을 메워야 한다.'],
@@ -140,6 +144,7 @@ export function buildNewsFeed(
   currentDay = 0,
   myTeamId = '',
   transfers: Transfer[] = [], // FA 이적 연표(슬라이스3) — 내 팀 in/out만 기사화
+  retirements: RetireRecord[] = [], // 은퇴 연표(슬라이스5) — 주목 은퇴자 작별·회고
 ): NewsItem[] {
   const items: NewsItem[] = [];
   const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string, body?: string, ref?: string) =>
@@ -287,6 +292,25 @@ export function buildNewsFeed(
     ], key, h.name), h.legend, h.teamId,
       body3('hof', key, `${h.name}이(가) ${h.seasons}시즌의 커리어를 마치고 명예의전당에 헌액됐다. ${teamName(h.teamId)}에서 통산 ${h.points.toLocaleString()}점·블로킹 ${h.blocks.toLocaleString()}개·디그 ${h.digs.toLocaleString()}개를 남겼다.`
         + (h.legend ? ' 구단은 등번호를 영구결번으로 올렸다.' : '')), h.id);
+  }
+
+  // 3.5) 은퇴 세리머니(슬라이스5) — 주목 은퇴자 작별 + 커리어 회고. HOF 헌액과 상보(작별 vs 전당 입성).
+  for (const r of retirements) {
+    const key = `${r.season}:retire:${r.playerId}`;
+    const posKo = POS_KO[r.position] ?? '';
+    // 포지션별 대표 회고 스탯
+    const stat = r.position === 'L' ? `디그 ${r.digs.toLocaleString()}개·리시브를 책임진 수비의 핵`
+      : r.position === 'S' ? `세트 어시스트 ${r.assists.toLocaleString()}개로 팀 공격을 조립한 야전사령관`
+      : r.position === 'MB' ? `블로킹 ${r.blocks.toLocaleString()}개로 네트 앞을 지킨 벽`
+      : `통산 ${r.points.toLocaleString()}점을 책임진 득점원`;
+    const tail = r.legend ? ` ${teamName(r.teamId)}은(는) 등번호를 영구결번으로 올려 그를 영원히 기린다.`
+      : r.hof ? ' 통산 기록은 명예의전당에 새겨진다.' : '';
+    push(r.season, 'retire', vh([
+      (n) => `${n}, ${r.seasons}시즌 커리어 마치고 은퇴`,
+      (n) => `코트를 떠나는 ${n} — ${r.seasons}시즌의 여정`,
+      (n) => `${teamName(r.teamId)}의 ${n}, 은퇴 선언`,
+    ], key, r.name), r.legend, r.teamId,
+      body3('retire', key, `${teamName(r.teamId)}의 ${posKo} ${r.name}이(가) ${r.seasons}시즌의 커리어를 마치고 코트를 떠난다. ${stat}였다.` + tail), r.playerId);
   }
 
   // 4) 이번 시즌 큰 부상(중상·시즌아웃만 — 경미는 단신 제외)

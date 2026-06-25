@@ -60,8 +60,9 @@ export default function Dashboard() {
   const readNews = useGameStore((s) => s.readNews);
   const benchDirectives = useGameStore((s) => s.benchDirectives);
   const transfers = useGameStore((s) => s.transfers);
+  const retirements = useGameStore((s) => s.retirements);
   const allNews = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId, transfers),
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId, transfers, retirements),
     [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
   );
   const unreadNews = useMemo(() => {

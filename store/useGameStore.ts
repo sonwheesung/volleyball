@@ -45,9 +45,10 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, SeasonArchive, SeasonAwards, TrainingFocus, Transfer } from '../types';
+import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainingFocus, Transfer } from '../types';
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
+const RETIRE_NEWS_MIN_SEASONS = 8; // 작별 뉴스 대상 — 8시즌+ 뛴 노장(또는 HOF). 버스트(단명)는 무음
 const LEGEND_POINTS = 7500; // 영구결번급 — 60시즌 통산 최고 ~8645라 9000은 도달 불가였음(레전드 0명).
                             //   7500 = 60시즌당 ~2명(top 8645·7723) → 영구결번 ~30시즌당 1명 + league 마일스톤(레전드 추월) 가능
 const SEASON_END_DAY = SEASON_DAYS; // 정규시즌 길이(일) — 출전비율·팬심 계산 기준. 단일 출처(engine/calendar)
@@ -83,6 +84,7 @@ interface GameState {
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   expelledLog: ExpelRecord[];                  // 영구제명 연표(승부조작·학폭 — 불명예 퇴출, 뉴스/서사용)
   transfers: Transfer[];                       // FA 이적 연표(오프시즌 팀 이동, 뉴스 슬라이스3)
+  retirements: RetireRecord[];                 // 은퇴 연표(주목 은퇴자 작별·회고, 뉴스 슬라이스5)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   readNews: string[];                          // 읽은 뉴스 키(season:kind:headline) — 읽음/안읽음 구분(NEWS_SYSTEM)
   trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
@@ -177,6 +179,7 @@ const freshSave = {
   hallOfFame: [] as HofEntry[],
   expelledLog: [] as ExpelRecord[],
   transfers: [] as Transfer[],
+  retirements: [] as RetireRecord[],
   milestones: [] as Milestone[],
   readNews: [] as string[],
   trainingFocus: null as TrainingFocus | null,
@@ -550,7 +553,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, transfers, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, transfers, retirements, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -667,11 +670,13 @@ export const useGameStore = create<GameState>()(
 
         // 3.6) 은퇴 레전드 명예의전당 등재(마지막 시즌까지 누적 후 기준 충족 시)
         const hofAdds: HofEntry[] = [];
+        const seasonRetires: RetireRecord[] = []; // 은퇴 세리머니(슬라이스5) — 주목 은퇴자 작별·회고
         for (const id of ctx.retired) {
           const base = snapshot[id];
           if (!base) continue;
           const c = accrueCareer(base, seasonProd.get(id)).career;
-          if (c.points >= HOF_POINTS) {
+          const isHof = c.points >= HOF_POINTS;
+          if (isHof) {
             hofAdds.push({
               id, name: base.name, position: base.position, teamId: ctx.prevTeamOf[id] ?? '',
               seasons: c.seasons, points: c.points, blocks: c.blocks, digs: c.digs,
@@ -679,7 +684,16 @@ export const useGameStore = create<GameState>()(
               retiredSeason: season, legend: c.points >= LEGEND_POINTS,
             });
           }
+          // 주목 은퇴자(오래 뛴 베테랑 또는 HOF)는 작별 뉴스 — 비-HOF 노장이 무음으로 사라지지 않게
+          if (isHof || c.seasons >= RETIRE_NEWS_MIN_SEASONS) {
+            seasonRetires.push({
+              season, playerId: id, name: base.name, position: base.position, teamId: ctx.prevTeamOf[id] ?? '',
+              seasons: c.seasons, points: c.points, blocks: c.blocks, digs: c.digs, aces: c.aces, assists: c.assists,
+              hof: isHof, legend: c.points >= LEGEND_POINTS,
+            });
+          }
         }
+        const nextRetirements = [...retirements, ...seasonRetires].slice(-200);
 
         // 3.7) 감독 생애주기(STAFF_SYSTEM 6) — 노쇠·은퇴·경질·은퇴선수→코치·승격·빈팀 자동배정
         const assignedHead: Record<string, string> = {};
@@ -800,6 +814,7 @@ export const useGameStore = create<GameState>()(
           hallOfFame: [...hallOfFame, ...hofAdds],
           expelledLog: [...expelledLog, ...ctx.expelled.map((e) => ({ season, playerId: e.playerId, name: snapshot[e.playerId]?.name ?? e.playerId, teamId: e.teamId, kind: e.kind }))],
           transfers: nextTransfers,
+          retirements: nextRetirements,
           archive: nextArchive,
           milestones: nextMilestones,
         });
@@ -854,6 +869,7 @@ export const useGameStore = create<GameState>()(
         hallOfFame: s.hallOfFame,
         expelledLog: s.expelledLog,
         transfers: s.transfers,
+        retirements: s.retirements,
         milestones: s.milestones,
         readNews: s.readNews,
         trainingFocus: s.trainingFocus,
