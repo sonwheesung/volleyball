@@ -5,6 +5,7 @@ import { Button, Card, Muted, Screen, Title, theme } from '../components/Screen'
 import { getTeam } from '../data/league';
 import { buildPlayoffs, type Matchup } from '../data/playoffs';
 import { useGameStore } from '../store/useGameStore';
+import { ChampionCelebration } from '../components/ChampionCelebration';
 
 export default function Playoffs() {
   const router = useRouter();
@@ -43,8 +44,19 @@ export default function Playoffs() {
     );
   };
 
+  const iWon = po.championId === my && !!my;
+
   return (
-    <Screen title={`${season + 1}시즌 포스트시즌`} scroll={false}>
+    <Screen title={`${season + 1}시즌 포스트시즌`}>
+      {iWon ? (
+        <ChampionCelebration
+          teamName={champ}
+          teamId={my!}
+          season={season}
+          onDone={() => router.push('/tryout')}
+        />
+      ) : null}
+
       <Card>
         <Muted>진출 (상위 3팀)</Muted>
         {po.seeds.map((id, i) => (
@@ -59,7 +71,6 @@ export default function Playoffs() {
 
       <Card>
         <Title>🏆 우승 — {champ}</Title>
-        {po.championId === my ? <Muted style={{ color: theme.good }}>우리 구단이 우승했습니다!</Muted> : null}
       </Card>
 
       <Button label="오프시즌 · 외국인 트라이아웃 →" onPress={() => router.push('/tryout')} />
