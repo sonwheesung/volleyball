@@ -93,6 +93,19 @@
 ### 2.4 드래프트
 - 역순 로터리 순번. 위시리스트 우선순위 존중, 같은 신인 중복 지명 불가, 팀별 슬롯 한도.
 - 신인·외인 **신규 id는 기존 선수와 충돌하지 않는다**(충돌 시 레지스트리 덮어써 선수 증발).
+- **AI 픽 3티어(2026-06-25, FA §3.1)**: ①특급(`prospectValue≥81`, 상위~10%) 있으면 포지션 무관 BPA →
+  ②부족 포지션(gap>0)만 → ③부족 없으면 OVR+성격. 위시(인간)는 전 티어 우선. `resolveDraft`가 픽 사유(reason) 반환.
+  별 등급 `prospectStars`도 드래프트가치 기준(★★★ 상위~11%, 구 maxPot 포화 교정).
+
+### 2.4b 재계약·공약·타팀 소식 (2026-06-25 리뷰 라운드)
+- **AI 재계약 확률(`aiRetainProb`)**: 절벽 컷이 아니라 OVR·나이 연속 확률(결정론 시드). 엘리트는 노쇠에도
+  소프트 플로어(32세 에이스 안 버림). 순잔류 ~58%(구 이진과 동률), 나이·OVR 매끄러운 그라데이션.
+- **재계약 협상 3택(`resignOptions`)**: 표준(시장가·3년)/후하게(+15%·나이적합 연수)/짧게(−15%·단기).
+  후하게 연수는 나이적합(어림 5·노장 2) — 34세에 5년 안 줌. 전부 개인상한(`maxSalaryFor`)·캡(`canAfford`) 게이트.
+- **면담 공약 파기**: 성공시킨 '주전 보장' 약속 + 그 시즌 벤치(여전히 출전 불만) → 배신 → 재계약 거부 급등(0.5 가산).
+  약속 지키면(출전) 거부 0. 외인/아시아쿼터는 계약 관리 비대상(트라이아웃 전용 — release/reSign/FA예정 차단).
+- **타팀 선수 뉴스**: 방출/재계약 불발(`kind='release'`)·거물 이적은 내 팀 항상 + 타팀 거물(`overall≥71`)만.
+  이동 시점 OVR 고정(`Transfer.ovr`)으로 이후 노쇠 무관. 매달린 참조 0·중복 0·결정론.
 
 ### 2.5 시즌 중 이동·재정
 - 방출 → FA 풀, 포지션 구멍 긴급 영입(전 구단 AI, 캡·정원 적용). 날짜 인지 명단(`rosterIdsOnDay`).
@@ -277,6 +290,27 @@
 
 ---
 
+## 3.10 리뷰 라운드 신규 기능 — 정상+엣지 케이스 등록 (2026-06-25)
+
+> 선수관리 리뷰에서 도출한 7개 기능을 구현하며 각각 **경계/엣지를 가드로 박았다**(개별 A/B). 여기서 케이스로 등록.
+> 형식: 기능 · 정상(골든) · 엣지/경계(가드가 막는 것) · 잡는 도구.
+
+| 기능 | 정상 | 엣지/경계(가드) | 잡는 도구 |
+|---|---|---|---|
+| **AI 드래프트 3티어** | 특급 BPA→필요→OVR+성격, 위시 우선 | 특급 컷 포화(maxPot 71%→prospectValue 상위~10%로 교정)·티어 발화·사유 정확·결정론 | `_ev_draftpick`(통제 [super,need,need,best]·불변식 I1~4=0·성격 A/B) |
+| **AI 재계약 확률** | OVR·나이 연속, 순잔류~58% | 절벽 0%(33-34·OVR<70)→그라데이션·단조(OVR↑·나이↓)·엘리트 유지·과이탈/고착 차단 | `_ev_airetain`(구 이진 A/B·나이/OVR 구간 잔류율) |
+| **재계약 협상 3택** | 표준/후하게/짧게 | 후하게≥표준≥짧게·후하게≥시장가·개인상한 클램프·**나이항**(노장 후하게도 2년) | `_ev_resign`(어림5>노장2·캡내) |
+| **면담 공약 파기** | 주전약속 지키면 거부0 | 주전약속+벤치=거부 급등(0.95)·카드 특정(전력보강+벤치≠파기)·이행<파기 | `_ev_promise`(4시나리오 A/B) |
+| **타팀 이적/방출 뉴스** | 내 팀 항상+타팀 거물 | 거물 게이트(타팀 OVR≥71)·구세이브 무게이트 로그 범람 차단(렌더 ovr 게이트)·이동시점 OVR 고정·매달린참조0·중복0 | `_ev_transfernews`(15시즌·구세이브 엣지) |
+| **계약관리 외인 차단** | 국내만 방출·재계약·FA예정 | 외인/아시아 release·reSign 거부(공석 방지)·willBeFA 외인 false·아시아=isForeign 커버 | `_dv_foreign_contract`(가드 제거 시 release(외인)=true A/B) |
+| **시즌 길이 단일상수** | `SEASON_DAYS` 한 곳 | 6곳 손복제 통합·실제 일정(max dayIndex 164)과 일치 대조 | `_dv_seasondays` |
+
+> **적대 퍼징 견고성(2026-06-25)**: 위 store 게이트(외인 release/reSign·signInSeason·replaceForeign·endSeason)를
+> `_gt_monkey` **6시드(1·2·7·13·42·99)×3000~4000스텝**(full+clean) + `_gt_adversarial` + `_gt_seqbreak`로 난사 →
+> **크래시 0·불변식 위반 0**(한 사람=한 팀·정원·캡·자금·결정론 전부 유지). 새 게이트가 적대 시퀀스에도 안전.
+
+---
+
 ## 4. 회귀 프로토콜 (로직 수정 시)
 
 영입/오프시즌 계열 엔진·셀렉터(`engine/compensation·faMarket·cap·draft·staff·staffLifecycle·foreign·transactions·finance`,
@@ -285,11 +319,14 @@
 1. **풀 배터리** (수정 후 처음부터 — `resetLeagueBase`):
    ```
    npx tsc --noEmit
-   npm test                                 # 단위(현재 177)
+   npm test                                 # 단위(현재 205)
    npx tsx tools/simAudit.ts 60             # 종합 13체크
    npx tsx tools/simFaDup.ts 100            # FA·보상 중복
    npx tsx tools/simStaffDup.ts 60          # 스태프 중복
    npx tsx tools/simMoneyOnly.ts 200        # '돈만' 보상
+   # 리뷰 라운드 신규 기능 가드(2026-06-25 — §3.10):
+   npx tsx tools/_ev_draftpick.ts ; npx tsx tools/_ev_airetain.ts 12 ; npx tsx tools/_ev_resign.ts
+   npx tsx tools/_ev_promise.ts ; npx tsx tools/_ev_transfernews.ts 15 ; npx tsx tools/_dv_foreign_contract.ts ; npx tsx tools/_dv_seasondays.ts
    # 건드린 영역에 따라: simTxDup · simBrokeSign · simCareerTrace · simOwnerRefuse
    # 악질/원숭이(스토어·정원·이중소속 — 관리 로직 수정 시 필수):
    npx tsx tools/_gt_repro_release.ts       # EC-TX-03 (오라클 자가검증)
