@@ -31,7 +31,10 @@ export default function Contracts() {
   const setResign = useGameStore((s) => s.setResign);
 
   const evolved = getEvolvedTeamPlayers(teamId, currentDay);
-  const roster = activeRoster(evolved, overrides, released).sort((a, b) => b.contract.salary - a.contract.salary);
+  const active = activeRoster(evolved, overrides, released);
+  // 계약 관리는 국내 전용 — 외인/아시아쿼터는 1년 트라이아웃 계약이라 방출·재계약·FA 비대상(FOREIGN_SYSTEM 3장).
+  const roster = active.filter((p) => !p.isForeign).sort((a, b) => b.contract.salary - a.contract.salary);
+  const foreigners = active.filter((p) => p.isForeign).sort((a, b) => overallRaw(b) - overallRaw(a));
   const total = payroll(roster);
   const releasedPlayers = released.map((id) => getPlayer(id)).filter((p): p is Player => !!p);
   const faList = roster.filter(willBeFA);
@@ -103,6 +106,27 @@ export default function Contracts() {
           </Pressable>
         );
       })}
+
+      {foreigners.length > 0 ? (
+        <>
+          <Title>외국인 선수</Title>
+          <Muted style={{ fontSize: 12 }}>
+            외인·아시아쿼터는 1년 계약이라 방출·재계약 대상이 아닙니다. 재지명·교체는 외인 트라이아웃·시즌 중 교체에서 합니다.
+          </Muted>
+          {foreigners.map((p) => (
+            <Pressable key={p.id} onPress={() => router.push(`/player/${p.id}`)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+              <PosTag pos={p.position} />
+              <View style={{ flex: 1 }}>
+                <Text style={styles.name}>
+                  {p.name} <Text style={{ color: theme.accent }}>{p.isAsianQuota ? '아시아쿼터' : '외국인'}</Text>
+                </Text>
+                <Text style={styles.sub}>{p.age}세 · {formatMoney(p.contract.salary)} · 잔여 {p.contract.remaining}년</Text>
+              </View>
+              <OvrBadge value={overallRaw(p)} />
+            </Pressable>
+          ))}
+        </>
+      ) : null}
 
       {faList.length > 0 ? (
         <>

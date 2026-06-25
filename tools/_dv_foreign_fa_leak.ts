@@ -5,24 +5,32 @@
 // 근본 수정: availableFAsOnDay에 applyTx(line 145)와 동일한 !isForeign 가드.
 //   npx tsx tools/_dv_foreign_fa_leak.ts   (exit 0=PASS / 1=FAIL)
 //
+// 트리거: store.release(외인)은 이제 차단됨(§3.9 — 계약관리 외인 분리)이라, 외인 release tx의 유일한
+//   정상 산출 경로 = replaceForeign(시즌 중 교체). 그 경로로 옛 외인을 내보낸 뒤 FA 풀/재영입을 검사한다.
 // A/B 자가검증: 같은 txLog에 (구)로직(전부 add)을 적용하면 외인이 잡혀야(도구 민감) — 안 잡히면 허위 오라클.
 import './_gt_mock';
 (async () => {
   const { useGameStore } = await import('../store/useGameStore');
   const { LEAGUE, evolveOnDay, getPlayer } = await import('../data/league');
-  const { rosterIdsOnDay, availableFAsOnDay, seasonTxLog } = await import('../data/dynamics');
+  const { rosterIdsOnDay, availableFAsOnDay, seasonTxLog, setTxContext } = await import('../data/dynamics');
   const G = () => useGameStore.getState();
   const my = LEAGUE.teams[0].id;
   const fails: string[] = [];
 
-  // ── 트리거: 외인 방출(매뉴얼 release 경로 — replaceForeign도 동일 release tx를 남김) ──
+  // ── 트리거: 외인 release tx를 inSeasonTx에 주입(= replaceForeign이 옛 외인에 대해 산출하는 것과 동일).
+  //   store.release(외인)은 이제 차단(§3.9)이라, 외인 release tx의 정상 산출원은 replaceForeign뿐 —
+  //   그 산출물(옛 외인 release + 국내 대조 release)을 직접 넣어 dynamics(availableFAsOnDay)·signInSeason을 검사한다.
   G().resetSave(); G().selectTeam(my); G().setDay(0);
   const ros = rosterIdsOnDay(my, 0).map((id) => evolveOnDay(id, 0));
   const fgn = ros.find((p) => p?.isForeign && !p?.isAsianQuota);
   const dom = ros.find((p) => p && !p.isForeign);
   if (!fgn || !dom) { console.error('시드에 외인/국내가 없음 — abort'); process.exit(1); }
-  G().release(fgn!.id);
-  G().release(dom!.id);
+  const inSeasonTx: any[] = [
+    { day: 0, teamId: my, playerId: fgn!.id, kind: 'release' }, // replaceForeign이 옛 외인에 남기는 것
+    { day: 0, teamId: my, playerId: dom!.id, kind: 'release' }, // 국내 대조군(정상 방출)
+  ];
+  useGameStore.setState({ inSeasonTx, released: [fgn!.id, dom!.id] });
+  setTxContext(inSeasonTx, G().faPool, my);
 
   const pool = availableFAsOnDay(0);
   // ── A/B 자가검증(소비처 mutation 전에 고정): 같은 txLog에 (구)버그 로직 재현 → 외인이 잡혀야 도구가 민감 ──

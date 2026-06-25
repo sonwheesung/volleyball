@@ -71,6 +71,12 @@
 | `engine/cap.ts` 합산처들 | payroll 합산 전부 `!isForeign` 필터(offseason·store signInSeason·transactions UI·aiGM) | 캡=국내 전용 |
 | `store` | `tryoutWish: string[]` 저장 + endSeason 체인에 반영 + 시즌 중 교체 액션(`replaceForeign`) | 옵셔널 필드 — 구세이브 기본값 |
 | `data/dynamics.ts` | 외인 교체 tx의 "리그 떠남" 처리 — `applyTx`(faAvail) **및** `availableFAsOnDay`(셀렉터) **둘 다** `!isForeign` 가드 | 가드 1줄 ×2(후자 2026-06-25 누락 수정) |
+| `app/contracts.tsx` + `store.release`/`reSign` | **계약 관리는 국내 전용** — 외인·아시아쿼터는 방출·재계약·FA 비대상(트라이아웃/교체에서만 관리). 화면은 외인을 읽기전용 섹션으로 분리, `release`/`reSign`은 외인이면 거부, `willBeFA`에 `!isForeign` | 2026-06-25 추가 |
+
+> **계약 관리 외인 분리(2026-06-25)**: 외인은 1년 트라이아웃 계약이라 **국내 방출→FA·재계약 흐름에 없다.**
+> 그런데 `app/contracts.tsx`가 외인을 국내 선수처럼 방출·재계약·"FA 예정"에 노출했고, `store.release`에 외인
+> 차단이 없어 **외인을 방출하면 그 자리가 시즌 1회 교체 외엔 못 메우는 공석**이 됐다(리뷰 발견). →
+> 계약 관리는 국내 전용으로, 외인은 읽기전용 정보(관리는 외인 트라이아웃/시즌 중 교체로 안내). 엔진 가드(`release`/`reSign` 외인 거부)로 이중 방어. 가드 `tools/_dv_foreign_contract.ts`.
 | FA/faMarket | `isFAEligible`에 `!isForeign`(외인은 FA 시장 비대상) | 1줄 |
 | 면담(OWNER) | 외인은 면담 비대상(1년 계약 — 잔류 설득이 무의미, 재지명이 그 역할) | discontent 제외 |
 | 스카우팅 | 트라이아웃 풀에 `teamScoutReveal` 그대로 적용 — 스카우터가 좋으면 도박이 덜 도박 | 재활용 |

@@ -253,6 +253,24 @@
 | **형제 사냥(전수 5점)** | "외인이 국내 영입 풀로 새는" 모든 진입점을 코드 직독(문서 불신)으로 점검: ① 인시즌 FA **방출 분기**(`availableFAsOnDay`) = **버그(수정)** · ② 인시즌 FA **시드**(`faPool`←`nextFaPool` store:717) `!isForeign` ✅ · ③ 오프시즌 FA 시장(`isFAEligible` faMarket:54) `!p.isForeign` ✅ · ④ 팀 명단(`rosterIdsOnDay`) applyTx와 동일·외인은 명단서 정상 이탈 ✅ · ⑤ 아시아쿼터(`replaceAsian`) seed가 `isForeign=true` → 같은 1줄이 커버 ✅. **5곳 중 1곳만 버그**, 나머지 4곳 clean. 가드의 "풀내 외인수=0"이 ①+②(시드+방출) 동시 방어. |
 | **구조적 잔존 위험** | ①은 `availableFAsOnDay`(셀렉터)와 `applyTx.faAvail`(정본)이 **같은 집합을 두 번 재유도**해 생긴 일. 시점별 질의 때문에 셀렉터가 정본을 그대로 반환할 순 없어 1줄 가드로 정합. 같은 클래스 재발 방지는 "동일 집합 두 곳 재구성 시 대조 가드"(TEST_METHODOLOGY §4 병렬재구성). |
 | **가드** | `tools/_dv_foreign_fa_leak.ts`(exit 0/1) — 실제 `release`+`signInSeason` 구동, 외인 미포함·국내 포함(대조군)·외인 재영입 거부·국내 영입 허용 + A/B(구 전부-add 로직은 외인 검출=도구 민감). README 검증루틴 등록. |
+
+---
+
+## 3.9 리뷰 발견 — 계약 관리 외인 방출 공석 구멍(UX/도달 버그) — 수정 완료
+
+> 독립 리뷰어(선수관리 점검)가 발견. §3.8의 후속 — §3.8은 "방출된 외인이 FA 풀로 새는 것"을 막았는데, 그 수정으로 외인 방출 = **리그에서 완전 소멸**이 확정됐다. 그러나 **방출 자체를 막지 않아** 외인을 방출하면 공석만 남는 상위 버그가 남아 있었다.
+
+| 항목 | 내용 |
+|---|---|
+| **버그** | `app/contracts.tsx`가 외인·아시아쿼터를 국내 선수처럼 **방출·재계약·"FA 예정"** 에 노출. `store.release`에 `isForeign` 차단 없어 외인 방출 시 — §3.8 가드로 FA 풀에도 안 가 — **그 자리가 시즌 1회 교체 외엔 못 메우는 공석**(OP 통째로 비는 시즌). |
+| **도달성** | 정상 UX — 계약관리 화면에서 외인 행 눌러 "방출"이면 즉시. `willBeFA`(faMarket:58)에 `!isForeign`이 없어 외인이 "FA 예정" 잔류/포기에도 잘못 노출. `reSign`도 외인 차단 없이 override 생성 가능(잘못된 경로). |
+| **근본수정** | 계약 관리 = **국내 전용**. `store.release`/`reSign` 외인 거부(엔진 가드), `willBeFA`에 `!isForeign`, `app/contracts.tsx`는 외인을 **읽기전용 "외국인 선수" 섹션**으로 분리(관리는 트라이아웃/교체로 안내). |
+| **형제(동시 수정)** | 같은 뿌리("계약관리가 외인을 국내 취급")의 3갈래를 한 번에: release(공석)·reSign(잘못된 override)·willBeFA(FA예정 오노출). 아시아쿼터는 `isForeign=true`라 같은 가드가 커버(release 가드 1줄이 외인+아시아 동시 차단 — A/B 실증). |
+| **가드** | `tools/_dv_foreign_contract.ts`(exit 0/1) — release(외인/아시아) 거부·release(국내) 허용 대조군·reSign(외인) override 미생성·willBeFA(외인) false + A/B(가드 제거 시 release(외인)=true FAIL 실증). |
+
+> 사각(왜 §3.8서 못 잡았나): §3.8은 **결과(FA 풀 오염)** 만 보고 다운스트림(셀렉터)에서 막았다. **행동(방출) 자체가 도메인 위반**(외인은 국내 방출 대상이 아님)인지를 업스트림(release 진입·UI)에서 묻는 렌즈가 없었다. TEST_METHODOLOGY §4 "다운스트림 증상만 봉합" 참조.
+
+---
 | **부수 발견(허위 오라클)** | `tools/simForeign.ts`의 "FA 풀 외인 오염 0건"은 **루프 본문이 비어** `faPoolForeign`이 한 번도 증가 안 함(pass 조건에도 없음) → **공허하게 0 보고하던 죽은 오라클**. 그 계층(오프시즌)은 이 인시즌 불변식을 못 본다. 미측정 명시 + 전용 가드로 이관(죽은 카운터 제거). |
 
 > 사각(왜 못 잡았나): TEST_METHODOLOGY §4 "병렬 재구성 드리프트" + "죽은/공허 오라클" 2행 참조. 같은 논리 집합(FA 풀)을 **두 함수가 따로 재구성**(authoritative forward-pass vs on-demand selector)했는데 **둘을 대조하는 검사가 없었고**, 명목상 가드는 빈 루프(공허)였다.

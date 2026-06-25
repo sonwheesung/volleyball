@@ -54,9 +54,9 @@ export function isFAEligible(p: Player): boolean {
   return !p.isForeign && p.career.seasons >= FIRST_FA_SEASONS && p.contract.remaining <= 1;
 }
 
-/** 이번 시즌 종료 시 FA가 될 선수(경력+1≥6, 잔여-1≤0 예정) — UI 예고용 */
+/** 이번 시즌 종료 시 FA가 될 선수(경력+1≥6, 잔여-1≤0 예정) — UI 예고용. 외인은 국내 FA 비대상(트라이아웃 전용). */
 export function willBeFA(p: Player): boolean {
-  return p.career.seasons >= FIRST_FA_SEASONS - 1 && p.contract.remaining <= 1;
+  return !p.isForeign && p.career.seasons >= FIRST_FA_SEASONS - 1 && p.contract.remaining <= 1;
 }
 
 /** 직전 연봉 순위로 A/B/C 등급 (상위 35% A · 다음 35% B · 나머지 C) */

@@ -34,7 +34,7 @@ import { awardHistoryOf } from '../data/awards';
 import { computeStandings, seasonStreaks, seasonResults } from '../data/standings';
 import { coachInfoOf } from '../data/league';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
-import { currentRosters, evolveOnDay, SEASON } from '../data/league';
+import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
 import { planNextAction } from '../engine/advance';
 import { marketVal, setAwardScores } from '../data/awardSalary';
 import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
@@ -243,6 +243,8 @@ export const useGameStore = create<GameState>()(
         const my = s.selectedTeamId ?? '';
         const rosterIds = currentRosters()[my] ?? [];
         if (!rosterIds.includes(playerId)) return;
+        // 외인/아시아쿼터는 국내 재계약 흐름 비대상 — 트라이아웃 재지명(keepForeign)으로만 갱신(FOREIGN_SYSTEM 3장)
+        if (getPlayer(playerId)?.isForeign) return;
         const { salary, years, remaining } = contract;
         if (![salary, years, remaining].every((v) => Number.isFinite(v))) return;
         if (salary <= 0 || years < 1 || remaining < 1 || remaining > years) return;
@@ -272,6 +274,9 @@ export const useGameStore = create<GameState>()(
         // 내 유효 로스터(시즌초 명단 + 시즌 중 영입) 선수만 방출 가능 — 타 팀/존재 안 함 id 주입 차단.
         // (없으면 팬텀 방출로 이중 소속·영입비 누수·자기 방출 DoS, 2026-06-20 전체게임 퍼저 발견)
         if (!rosterIds.includes(playerId) && !mySigned.includes(playerId)) return false;
+        // 외인/아시아쿼터 방출 차단 — 외인은 FA 풀로 안 가므로(FOREIGN_SYSTEM 3장) 방출 시 시즌 1회 교체 외엔
+        // 못 메우는 공석이 된다. 외인은 시즌 중 교체(replaceForeign)·오프시즌 트라이아웃에서만 정리(리뷰 발견 2026-06-25).
+        if (getPlayer(playerId)?.isForeign) return false;
         if (!canRelease(size)) return false;
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId, kind: 'release' }];
         set({ released: [...s.released, playerId], inSeasonTx });
