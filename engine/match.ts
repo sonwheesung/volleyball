@@ -69,6 +69,9 @@ export function simulateMatch(
   // 디그 귀속용 별도 rng — **항상 생성**(메인·boxRng 불간섭). 디그 성공 귀속자(box digSucc·touches)를
   // 후위 수비수 가중 분산으로 고르되 승패·recvId 무영향(전용 스트림). 2026-06-24 디그 귀속 현실화 결정.
   const digRng = createRng((seed ^ 0x9e3779b9) >>> 0);
+  // 5세트 코인토스용 별도 rng(메인 rng 불간섭) — FIVB/KOVO는 결승 세트 첫 서브를 새 코인토스로 정한다(v2.1).
+  // 1~4세트는 홀짝 교대 유지, 5세트만 50/50. 전용 스트림이라 메인 랠리 스트림·1~4세트 결과 바이트 동일.
+  const cointossRng = createRng((seed ^ 0x517cc1b7) >>> 0);
   let rallyNo = 0; // 공간 텔레메트리: 랠리별 독립 srng 시드용(메인 rng 불간섭)
   const edge: Edge = opts.edge ?? { home: 1, away: 1 };
   const hc = opts.home ?? DEFAULT_COACH;
@@ -152,7 +155,8 @@ export function simulateMatch(
     recover('home', homeStam, 0.12);
     recover('away', awayStam, 0.12);
     const timeouts = { home: TIMEOUTS_PER_SET, away: TIMEOUTS_PER_SET };
-    let serving: Side = setNo % 2 === 1 ? 'home' : 'away';
+    // 1~4세트: 홀수=홈·짝수=원정 교대. 5세트(결승): 코인토스(실제 배구 규칙, v2.1).
+    let serving: Side = setNo >= 5 ? (cointossRng.next() < 0.5 ? 'home' : 'away') : (setNo % 2 === 1 ? 'home' : 'away');
 
     let lastScorer: Side | null = null;
     let streak = 0;
