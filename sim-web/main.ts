@@ -24,6 +24,11 @@ import { formatMoney, resignOptions } from '../engine/salary';
 import { LEAGUE_CAP, isFranchise } from '../engine/cap';
 import { leagueProduction } from '../data/production';
 import { buildDraftContext } from '../data/draftSetup';
+import { buildMatchBox } from '../data/matchBox';
+import { reconstructRallies } from '../components/courtDirector';
+import { situationFeed } from '../components/courtCommentary';
+import { matchMvp } from '../data/matchAward';
+import { buildMatchBanners, type Banner } from '../data/broadcast';
 import { resolveDraft, lotteryRound1, buildDraftOrder, prospectStars, type PickReason } from '../engine/draft';
 import { generateDraftClass } from '../data/draftClass';
 import { createRng } from '../engine/rng';
@@ -57,10 +62,10 @@ const teamSelect = (id: string, cur: string) => `<select id="${id}">` +
   TEAMS.map((t) => `<option value="${t.id}"${t.id === cur ? ' selected' : ''}>${esc(t.name)}</option>`).join('') + `</select>`;
 
 // ─── 탭 프레임워크 ───────────────────────────────────────────────────────
-type TabId = 'match' | 'lineup' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft' | 'draftlive' | 'foreign' | 'tx' | 'injury' | 'news';
-const TABS: [TabId, string][] = [['match', '경기'], ['lineup', '선발 라인업'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['foreign', '외국인'], ['draft', '영입 · 드래프트'], ['draftlive', '드래프트 라이브'], ['tx', '시즌 중 이동'], ['injury', '부상 · 사고'], ['news', '뉴스']];
+type TabId = 'match' | 'broadcast' | 'lineup' | 'dist' | 'season' | 'morale' | 'aging' | 'salary' | 'finance' | 'fa' | 'draft' | 'draftlive' | 'foreign' | 'tx' | 'injury' | 'news';
+const TABS: [TabId, string][] = [['match', '경기'], ['broadcast', '경기 중계 · 현수막'], ['lineup', '선발 라인업'], ['dist', '분포 KOVO'], ['season', '시즌'], ['morale', '관계 · 선수 심리'], ['aging', '성장 · 노쇠'], ['salary', '연봉 산정'], ['finance', '재정'], ['fa', 'FA 시장'], ['foreign', '외국인'], ['draft', '영입 · 드래프트'], ['draftlive', '드래프트 라이브'], ['tx', '시즌 중 이동'], ['injury', '부상 · 사고'], ['news', '뉴스']];
 let active: TabId = 'match';
-const MOUNTS: Record<TabId, () => void> = { match: mountMatch, lineup: mountLineup, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft, draftlive: mountDraftLive, foreign: mountForeign, tx: mountTx, injury: mountInjury, news: mountNews };
+const MOUNTS: Record<TabId, () => void> = { match: mountMatch, broadcast: mountBroadcast, lineup: mountLineup, dist: mountDist, season: mountSeason, morale: mountMorale, aging: mountAging, salary: mountSalary, finance: mountFinance, fa: mountFA, draft: mountDraft, draftlive: mountDraftLive, foreign: mountForeign, tx: mountTx, injury: mountInjury, news: mountNews };
 function mount() {
   $('tabs').innerHTML = TABS.map(([id, l]) => `<span class="tab${id === active ? '' : ' off'}" data-tab="${id}">${l}</span>`).join('');
   document.querySelectorAll('[data-tab]').forEach((e) => e.addEventListener('click', () => { active = e.getAttribute('data-tab') as TabId; mount(); }));
@@ -339,6 +344,64 @@ function runSalary() {
 function mountDraft() {
   $('controls').innerHTML = `<div class="run-row"><button id="d-run">드래프트 클래스 생성 ▶</button></div><p class="hint">다음 시즌 신인 드래프트 클래스(엔진 생성). OVR·포텐셜(★) 순. 스카우팅 안개는 콘솔에선 전부 공개.</p>`;
   $('d-run').onclick = runDraft;
+}
+
+// ───────────────────────── 경기 중계 · 현수막(게이머 리뷰 — 상황중계·MVP·기록 현수막) ─────────────────────────
+const BC: { a: string; b: string; seed: number; day: number } = { a: TEAMS[0].id, b: TEAMS[1].id, seed: 1, day: 164 };
+const BANNER_EMOJI: Record<string, string> = { record: '📊', triple: '🎀', clinch: '✅', eliminated: '❌' };
+const bannerHtml = (b: Banner) => `<div class="bcbanner" style="border-left-color:${b.tint}"><span class="bcicon">${BANNER_EMOJI[b.kind] ?? '•'}</span><span class="bctitle">${esc(b.title)}</span>${b.mine ? '<span class="bcmine">MY</span>' : ''}</div>`;
+function mountBroadcast() {
+  $('controls').innerHTML = `
+    <div class="teams"><div class="team A"><span class="badge">A</span>${teamSelect('bc-a', BC.a)}</div><div class="vs">VS</div><div class="team B"><span class="badge">B</span>${teamSelect('bc-b', BC.b)}</div></div>
+    <div class="run-row"><label>시드 <input type="number" id="bc-seed" value="${BC.seed}" style="width:64px" /></label><label>경기일(현수막 누적) <input type="number" id="bc-day" value="${BC.day}" min="0" max="164" style="width:64px" /></label>
+      <button id="bc-run">경기 분석 ▶</button><button id="bc-season">시즌 현수막 스캔 ▶</button><button id="bc-sample">현수막 종류 미리보기</button></div>
+    <p class="hint">한 경기의 <b>경기 MVP</b> + <b>상황 인지 중계</b>(세트/매치포인트·듀스·연속) + <b>중계 현수막</b>(기록 경신·트리플 크라운·PO 확정/탈락).
+      현수막은 통산 누적이 필요 → 경기일↑(시즌말) 또는 <b>"시즌 현수막 스캔"</b>(전 경기)으로 잘 보입니다.</p>`;
+  ($('bc-a') as HTMLSelectElement).onchange = (e) => { BC.a = (e.target as HTMLSelectElement).value; };
+  ($('bc-b') as HTMLSelectElement).onchange = (e) => { BC.b = (e.target as HTMLSelectElement).value; };
+  ($('bc-seed') as HTMLInputElement).onchange = (e) => { BC.seed = +(e.target as HTMLInputElement).value || 1; };
+  ($('bc-day') as HTMLInputElement).onchange = (e) => { BC.day = Math.max(0, Math.min(164, +(e.target as HTMLInputElement).value || 164)); };
+  $('bc-run').onclick = runBroadcastMatch;
+  $('bc-season').onclick = runBroadcastSeason;
+  $('bc-sample').onclick = runBroadcastSamples;
+}
+function runBroadcastSamples() {
+  // 4종 현수막 시각 미리보기 — 통산 기록 경신은 누적이 필요해 실경기 1시즌엔 잘 안 떠 샘플로 보여준다.
+  const samp: Banner[] = [
+    { kind: 'record', tint: '#3B82F6', icon: 'stats-chart', mine: true, title: '타이샤 통산 4,000점 돌파!' },
+    { kind: 'record', tint: '#3B82F6', icon: 'stats-chart', mine: false, title: '브랑카 통산 블로킹 1,000개 돌파!' },
+    { kind: 'triple', tint: '#8B5CF6', icon: 'ribbon', mine: false, title: '조지윤 트리플 크라운! 후위공격 4·블로킹 3·서브 4' },
+    { kind: 'clinch', tint: '#16B07D', icon: 'checkmark-circle', mine: true, title: '타이드 플레이오프 확정!' },
+    { kind: 'eliminated', tint: '#FF6B5A', icon: 'close-circle', mine: false, title: '코메츠 플레이오프 탈락' },
+  ];
+  $('out').innerHTML = `<p class="hint">앱 경기 보드 하단에 뜨는 <b>중계 현수막</b> 4종(BROADCAST_SYSTEM). MY=내 팀 강조. 통산 기록 경신은 누적이 필요해 실경기 1시즌엔 드물어 샘플로 표시.</p>`
+    + `<h3 class="bch">📊 기록 경신 · 🎀 트리플 크라운 · ✅ PO 확정 · ❌ 탈락</h3>` + samp.map(bannerHtml).join('');
+}
+function runBroadcastMatch() {
+  const { a, b, seed, day } = BC;
+  const { homeSquad, awaySquad, sim, box } = buildMatchBox(a, b, day, seed);
+  const rallies = reconstructRallies(sim);
+  const aName = getTeam(a)?.name ?? a, bName = getTeam(b)?.name ?? b;
+  const sit: string[] = [];
+  for (let i = 0; i < rallies.length; i++) { const f = situationFeed(rallies, i, aName, bName); if (f.pre) sit.push(f.pre); if (f.post) sit.push(f.post); }
+  const mvp = matchMvp(box, homeSquad, awaySquad, sim, aName, bName);
+  const banners = buildMatchBanners(a, b, day, null);
+  const mvpHtml = mvp ? `<div class="bcmvp"><span class="bcmvpbadge">MVP</span> <b>${esc(mvp.name)}</b> ${mvp.points}득점${mvp.blocks ? ` · 블록 ${mvp.blocks}` : ''}${mvp.aces ? ` · 서브 ${mvp.aces}` : ''}${mvp.digs ? ` · 디그 ${mvp.digs}` : ''}<div class="bcrecap">${esc(mvp.line)}</div></div>` : '<div class="empty">MVP 없음</div>';
+  const sitHtml = sit.length ? sit.map((s) => `<div class="bcsit">${esc(s)}</div>`).join('') : '<div class="empty">상황 멘트 없음(접전·연속 미발생)</div>';
+  const bansHtml = banners.length ? banners.map(bannerHtml).join('') : '<div class="empty">이 경기 현수막 없음(경기일↑ 또는 시즌 스캔으로)</div>';
+  $('out').innerHTML = `<div class="stat-grid"><div class="stat"><span class="sv">${esc(aName)} ${sim.homeSets} : ${sim.awaySets} ${esc(bName)}</span><span class="sl">세트 스코어 · 시드 ${seed} · day ${day}</span></div></div>`
+    + `<h3 class="bch">🏅 경기 MVP</h3>${mvpHtml}`
+    + `<h3 class="bch">📢 중계 현수막 (${banners.length})</h3>${bansHtml}`
+    + `<h3 class="bch">🎙 상황 인지 중계 (${sit.length}줄)</h3><div class="bcsitwrap">${sitHtml}</div>`;
+}
+function runBroadcastSeason() {
+  const all: Banner[] = [];
+  const cnt: Record<string, number> = { record: 0, triple: 0, clinch: 0, eliminated: 0 };
+  for (const f of SEASON) for (const ban of buildMatchBanners(f.homeTeamId, f.awayTeamId, f.dayIndex, null)) { all.push(ban); cnt[ban.kind] = (cnt[ban.kind] ?? 0) + 1; }
+  const body = all.slice(0, 150).map(bannerHtml).join('');
+  $('out').innerHTML = `<div class="stat-grid"><div class="stat"><span class="sv">${all.length}</span><span class="sl">시즌 전체 현수막</span></div></div>`
+    + `<p class="hint">기록 경신 ${cnt.record} · 트리플 크라운 ${cnt.triple} · PO 확정 ${cnt.clinch} · 탈락 ${cnt.eliminated} (현 리그 1시즌 전 경기 스캔, 결정론)</p>`
+    + `<div class="bcsitwrap">${body || '<div class="empty">현수막 없음(시즌 초·누적 부족)</div>'}</div>`;
 }
 
 // ───────────────────────── 드래프트 라이브(순위 설정 + 한 픽씩 진행 + AI 사유) ─────────────────────────
