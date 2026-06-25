@@ -3,9 +3,66 @@
 // React 무의존 순수 모듈(헤드리스 감사 가능).
 
 import type { Side } from '../types';
-import type { WP, Atk, Lineups } from './courtPath';
+import type { WP, Atk, Lineups, RallyLike } from './courtPath';
 import type { PointHow } from '../engine/rally';
 import { zoneOfIdx } from './courtLayout';
+import { targetPoints } from '../engine/match';
+
+// ─── 상황 인지 중계(BOARD_RULES 60) — 엔진이 아는 점수·세트·연속에서 긴장/결과 한 줄 파생(새 엔진 0) ───
+export interface SituationCtx {
+  phase: 'pre' | 'post';
+  setNo: number;
+  home: number; away: number;            // pre: 점수 직전(이번 점 전) / post: 점수 직후
+  homeSetsWon: number; awaySetsWon: number;
+  streakSide?: Side; streak?: number;    // post 전용 — 현재 연속 득점
+  homeTeam?: string; awayTeam?: string;
+}
+const sideName = (c: SituationCtx, s: Side) => (s === 'home' ? c.homeTeam ?? '홈' : c.awayTeam ?? '원정');
+
+/** 상황 한 줄(없으면 null). pre=세트/매치포인트(긴장), post=듀스도달/연속(결과). 중복 방지로 둘이 겹치지 않음. */
+export function situationLine(c: SituationCtx): string | null {
+  const target = targetPoints(c.setNo);
+  const hi = Math.max(c.home, c.away), lo = Math.min(c.home, c.away);
+  const leader: Side | null = c.home > c.away ? 'home' : c.away > c.home ? 'away' : null;
+  if (c.phase === 'pre') {
+    // 한 팀이 세트를 한 점 앞둠(다음 한 점이면 세트 종료 가능) — 듀스 구간(둘 다 target−1↑)은 제외해 post 듀스와 안 겹침
+    if (leader && hi >= target - 1 && lo < target - 1) {
+      const setsWon = leader === 'home' ? c.homeSetsWon : c.awaySetsWon;
+      const nm = sideName(c, leader);
+      return setsWon >= 2 ? `⚡ 매치포인트! ${nm}, 이 한 점이면 경기 끝` : `⚡ 세트포인트! ${nm}, 한 점이면 ${c.setNo}세트`;
+    }
+    return null;
+  }
+  // post — 듀스 도달 / 연속 득점
+  if (c.home >= target - 1 && c.away >= target - 1 && c.home === c.away) return `🔥 듀스! ${c.home}-${c.away}`;
+  if (c.streak && c.streak >= 4 && c.streakSide) return `${sideName(c, c.streakSide)} ${c.streak}연속 득점 — 흐름이 넘어온다!`;
+  return null;
+}
+
+/** 랠리 배열에서 한 점(idx)의 pre/post 상황 라인을 산출(세트스코어·연속을 내부 계산). 순수. */
+export function situationFeed(rallies: RallyLike[], idx: number, homeTeam?: string, awayTeam?: string): { pre: string | null; post: string | null } {
+  const r = rallies[idx];
+  if (!r) return { pre: null, post: null };
+  const setNo = r.setNo;
+  // 이번 세트 직전 점수(같은 세트의 직전 랠리, 없으면 0-0)
+  const prev = idx > 0 && rallies[idx - 1].setNo === setNo ? rallies[idx - 1] : null;
+  const hb = prev?.home ?? 0, ab = prev?.away ?? 0;
+  // 이번 세트 이전까지 세트 스코어(각 이전 세트의 마지막 랠리 승자)
+  let hs = 0, as = 0;
+  for (let s = 1; s < setNo; s++) {
+    let last: RallyLike | null = null;
+    for (let k = 0; k < rallies.length; k++) if (rallies[k].setNo === s) last = rallies[k];
+    if (last) { if (last.home > last.away) hs++; else as++; }
+  }
+  // idx에서 끝나는 연속 득점(같은 세트·같은 scorer)
+  let streak = 1;
+  for (let k = idx - 1; k >= 0 && rallies[k].setNo === setNo && rallies[k].scorer === r.scorer; k--) streak++;
+  const base = { setNo, homeSetsWon: hs, awaySetsWon: as, homeTeam, awayTeam };
+  return {
+    pre: situationLine({ ...base, phase: 'pre', home: hb, away: ab }),
+    post: situationLine({ ...base, phase: 'post', home: r.home, away: r.away, streakSide: r.scorer, streak }),
+  };
+}
 
 export interface CommentStage { serving: Side; homeRot: number; awayRot: number }
 export interface CommentSeg { from: WP; to: WP }

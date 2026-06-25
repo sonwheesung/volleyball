@@ -17,7 +17,7 @@ import {
 import { ballPath as ballPathRaw, SEG_DUR as DUR, markerTravelMs, type Move, type WP } from './courtPath';
 import type { PointHow } from '../engine/rally';
 import { segmentTargets, reconstructRallies, isInPlay, applySubsToSix, type RallyState } from './courtDirector';
-import { commentLine } from './courtCommentary';
+import { commentLine, situationFeed } from './courtCommentary';
 import { initSfx, playSfx, setSfxEnabled } from '../audio/sfx';
 import { useGameStore } from '../store/useGameStore';
 
@@ -219,6 +219,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
         if (r?.how) {
           const c = HOW_CAPTION[r.how];
           setFeed((f) => [...f, `▶ ${c.txt} — ${r.scorer === 'home' ? '홈' : '원정'} 득점 (${r.home}:${r.away})`].slice(-30));
+          const sit = situationFeed(rallies, idx).post; // 듀스 도달·연속 득점 — 결과 직후 상황(BOARD_RULES 60)
+          if (sit) setFeed((f) => (f[f.length - 1] === sit ? f : [...f, sit].slice(-30)));
         }
         playSfx('whistle'); // 종결 휘슬 — 랠리가 끝나 점수가 났다
       }
@@ -369,7 +371,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     }, rallies[Math.min(idx, total - 1)]?.byId);
     if (line) setFeed((f) => (f[f.length - 1] === line ? f : [...f, line].slice(-30)));
     // 효과음: 서브 임팩트(서버 컨택) / 스파이크 강타 — 페인트·소프트샷(to.soft)은 퍽 소리 제외(사용자 요청)
-    if (seg.to.kind === 'serve') playSfx('serve');
+    if (seg.to.kind === 'serve') {
+      playSfx('serve');
+      // 서브 직전 긴장 — 세트포인트/매치포인트(BOARD_RULES 60). 점수 직전 상태로 판정.
+      const pre = situationFeed(rallies, Math.min(idx, total - 1)).pre;
+      if (pre) setFeed((f) => (f[f.length - 1] === pre ? f : [...f, pre].slice(-30)));
+    }
     else if (seg.to.kind === 'spike' && !seg.to.soft) playSfx('spike');
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [segSig]);
