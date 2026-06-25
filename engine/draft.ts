@@ -5,7 +5,7 @@
 import type { CoachStyle, Player, Position } from '../types';
 import { type Rng, strSeed } from './rng';
 import { overall } from './overall';
-import { positionGap, ROSTER_IDEAL, needWeight, styleWeight, isSuperProspect, personalityFactor } from './aiGM';
+import { positionGap, ROSTER_IDEAL, needWeight, styleWeight, personalityFactor } from './aiGM';
 
 /** 한 AI 픽의 사유 — wish(인간 위시) / super(특급 BPA) / need(부족 포지션) / best(필요없음→OVR+성격) */
 export type PickReason = 'wish' | 'super' | 'need' | 'best';
@@ -81,6 +81,11 @@ export function prospectValue(p: Player): number {
   const pot = Math.max(...Object.values(p.potential));
   return overall(p) * 0.4 + pot * 0.6;
 }
+
+/** 특급(슈퍼) 유망주 컷 — 드래프트가치 ≥ 81(클래스 상위 ~10%, 측정 보정). 이상이면 포지션 무관 BPA(FA_SYSTEM 3.1).
+ *  maxPot 단독(클래스 71%가 ≥88)은 변별 불가라 prospectValue(현재+포텐 0.6)로 정의. */
+export const SUPER_PV = 81;
+export const isSuperProspect = (p: Player): boolean => prospectValue(p) >= SUPER_PV;
 
 function bestBy(arr: Player[], score: (p: Player) => number): Player {
   let best = arr[0];

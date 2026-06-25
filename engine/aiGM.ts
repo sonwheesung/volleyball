@@ -8,10 +8,8 @@ import { TRAITS } from './traits';
 // 팀 포지션 이상 구성(16인) — 공용
 export const ROSTER_IDEAL: Record<Position, number> = { S: 3, OH: 5, OP: 2, MB: 4, L: 2 };
 
-/** 특급(슈퍼) 유망주 컷 — 최대 포텐셜 ≥ 88(★★★). 이상이면 포지션 무관 BPA(FA_SYSTEM 3.1). */
-export const SUPER_POT = 88;
-export const maxPotential = (p: Player): number => Math.max(...Object.values(p.potential));
-export const isSuperProspect = (p: Player): boolean => maxPotential(p) >= SUPER_POT;
+// 특급(슈퍼) 유망주 컷은 draft.ts(`SUPER_PV`·`isSuperProspect`)에 둔다 — prospectValue(현재+포텐) 기반.
+//  maxPot(스탯 최대) 단독은 포화(클래스 71%가 ≥88)라 변별 불가 → 드래프트가치 상위 ~10%로 정의(FA_SYSTEM 3.1).
 
 /** 성격 계수(드래프트 3티어 — 필요 포지션 없을 때 OVR과 함께). 멘탈(집중·기복·VQ)+특성(긍정+/부정−). ~0.85~1.15. placeholder. */
 export function personalityFactor(p: Player): number {

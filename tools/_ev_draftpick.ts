@@ -7,8 +7,8 @@ import './_gt_mock';
 import type { Position } from '../types';
 (async () => {
   const { buildDraftContext } = await import('../data/draftSetup');
-  const { resolveDraft, pickWithReason } = await import('../engine/draft');
-  const { positionGap, isSuperProspect, ROSTER_IDEAL } = await import('../engine/aiGM');
+  const { resolveDraft, pickWithReason, isSuperProspect } = await import('../engine/draft');
+  const { positionGap, ROSTER_IDEAL } = await import('../engine/aiGM');
   const { getTeam, teamScoutReveal } = await import('../data/league');
   const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';
   const ctx = buildDraftContext('', {}, {}, [], false, [], 1);

@@ -25,7 +25,6 @@ import { LEAGUE_CAP, isFranchise } from '../engine/cap';
 import { leagueProduction } from '../data/production';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft, lotteryRound1, buildDraftOrder, type PickReason } from '../engine/draft';
-import { isSuperProspect } from '../engine/aiGM';
 import { generateDraftClass } from '../data/draftClass';
 import { createRng } from '../engine/rng';
 import type { Player } from '../types';
