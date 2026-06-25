@@ -60,6 +60,14 @@ import './_gt_mock';
   for (const n of [...relItems, ...trItems]) { const k = newsKey(n); if (keys.has(k)) dup++; keys.add(k); if (!n.headline.trim()) fails.push('빈 헤드라인'); }
   if (dup) fails.push(`뉴스 중복 ${dup}건`);
 
+  // 5b) 엣지 — 구세이브 범람 차단: ovr 없는 타팀 이적(구버전 무게이트 로그)은 렌더서 숨김. 내 팀 무게이트는 보임.
+  const others = LEAGUE.teams.filter((t) => t.id !== my);
+  const legacyOther = { season: Math.max(0, A.season - 1), playerId: 'legacy-x', name: '구이적', fromTeam: others[0].id, toTeam: others[1].id }; // ovr 없음
+  const legacyMine = { season: Math.max(0, A.season - 1), playerId: 'legacy-m', name: '구내이적', fromTeam: others[0].id, toTeam: my };       // ovr 없음·내 팀
+  const feedLegacy = buildNewsFeed(A.archive, [], [], A.season, [], [], 0, my, [legacyOther, legacyMine] as any);
+  if (feedLegacy.some((n) => n.ref === 'legacy-x')) fails.push('구세이브 타팀 무게이트 이적이 렌더됨(범람)');
+  if (!feedLegacy.some((n) => n.ref === 'legacy-m')) fails.push('구세이브 내 팀 이적이 숨겨짐(과교정)');
+
   // 5) 결정론(내 코드) — 같은 transfers·archive로 뉴스 두 번 빌드 == 동일(resetSave 누수 회피)
   const feed2 = buildNewsFeed(A.archive, [], [], A.season, [], [], 0, my, tr);
   const same = JSON.stringify(feed.map(newsKey)) === JSON.stringify(feed2.map(newsKey));

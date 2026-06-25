@@ -320,8 +320,11 @@ export function buildNewsFeed(
   }
 
   // 7.5) FA 이적·방출(슬라이스3·4) — 내 팀 in/out + 타팀 거물(포착 단계서 게이트됨, NEWS_SYSTEM §3.3).
+  //   렌더 단계서도 타팀은 거물(이동시점 ovr≥REL_NEWS_OVR)만 — 구세이브(ovr 없는 무게이트 이적 로그) 범람 차단.
+  const REL_NEWS_OVR = 71;
   for (const t of transfers) {
     const inMine = t.toTeam === myTeamId, outMine = t.fromTeam === myTeamId;
+    if (!inMine && !outMine && (t.ovr ?? 0) < REL_NEWS_OVR) continue; // 타팀은 거물만(ovr 없으면=구세이브 무게이트 → 숨김)
     // ── 방출/재계약 불발(release) — toTeam='' ──
     if (t.kind === 'release') {
       const bigRel = (t.ovr ?? 0) >= 82; // 이동 시점 OVR — 거물 베테랑 방출 = 헤드라인(이후 노쇠 무관)

@@ -39,8 +39,8 @@ import './_gt_mock';
   { const ids = setup(); const id = ids.find((x) => { const p = evolveOnDay(x, 0); return p && !p.isForeign && !isFranchise(p); })!; G().reSign(id, C(MAX_SALARY + 10000)); check('S8 비프랜차이즈 8억 초과 거부', !applied(id), `시도 ${MAX_SALARY + 10000}>${MAX_SALARY}`); }
   // S9 캡 가드: 국내 전원 8억 재계약해도 국내 payroll ≤ 35억(초과분 거부)
   { const ids = setup(); let attempted = 0; for (const id of ids) { const p = evolveOnDay(id, 0); if (!p || p.isForeign) continue; attempted++; G().reSign(id, C(MAX_SALARY)); } const pay = domSalary(ids); check('S9 캡 가드(전원 8억 시도 → payroll ≤ 35억)', pay <= LEAGUE_CAP, `국내payroll ${pay} ≤ ${LEAGUE_CAP} · 시도 ${attempted}명`); }
-  // S10 외인 거대연봉(캡 면제) → 적용
-  { const ids = setup(); const fid = firstForeign(ids); if (fid) { G().reSign(fid, C(2_000_000)); check('S10 외인 거대연봉 적용(캡 면제)', applied(fid), '외인 200억 적용'); } else check('S10 외인 거대연봉(캡 면제)', true, '로스터에 외인 없음 — skip'); }
+  // S10 외인은 국내 reSign 비대상(트라이아웃 전용, 2026-06-25 — FOREIGN_SYSTEM 3장·EDGE_CASES §3.9). reSign(외인)은 거부(override 미생성).
+  { const ids = setup(); const fid = firstForeign(ids); if (fid) { G().reSign(fid, C(2_000_000)); check('S10 외인 reSign 거부(트라이아웃 전용)', !applied(fid), '외인은 국내 재계약 비대상 — keepForeign으로만'); } else check('S10 외인 reSign 거부', true, '로스터에 외인 없음 — skip'); }
   // S11 프랜차이즈 개인상한 11억(8억 초과 적용·11억 초과 거부) — 팀 캡과 분리하려 다른 선수를 최저로 재계약해 캡 여유 확보
   { const ids = setup(); const fr = ids.find((x) => { const p = evolveOnDay(x, 0); return p && isFranchise(p); });
     if (fr) {
