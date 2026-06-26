@@ -68,7 +68,7 @@ test('rollFAPref: 결정론 + 가중치 합≈1 + 선호팀 지정', () => {
   const a = rollFAPref(createRng(12345), 7);
   const b = rollFAPref(createRng(12345), 7);
   assert.deepEqual(a, b, '같은 시드 = 같은 성향');
-  const sum = a.w.money + a.w.win + a.w.loyalty + a.w.play + a.w.home;
+  const sum = a.w.money + a.w.win + a.w.loyalty + a.w.play + a.w.home + (a.w.rel ?? 0); // rel 포함 정규화(RELATIONSHIP)
   assert.ok(Math.abs(sum - 1) < 1e-9, '가중치 합 1');
   assert.ok(/^t[0-6]$/.test(a.preferredTeamId ?? ''), '선호팀 t0~t6');
 });

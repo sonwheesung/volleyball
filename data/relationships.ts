@@ -5,6 +5,11 @@ import { getPlayer, getTeamPlayers, currentRosters } from './league';
 
 const REL_SCALE = 2.5;        // 친구 2~3명이면 포화
 const SHOW_THRESHOLD = 0.3;   // 표시할 관계 최소 강도
+
+// ── bond 컨텍스트(setTxContext 패턴) — 스토어가 주입, FA 해석(offseason)이 읽어 preview=result 유지 ──
+let bondsCtx: Record<string, number> = {};
+export function setRelationContext(b: Record<string, number> | undefined): void { bondsCtx = b ?? {}; }
+export function relationBonds(): Record<string, number> { return bondsCtx; }
 const BOND_PRUNE = 0.02;      // 이하 가지치기(옛정 소멸)
 const BOND_CAP = 4000;        // 맵 크기 상한(저장 폭주 차단)
 

@@ -148,7 +148,7 @@
 |---|---|---|---|
 | **1a. 모델+셀렉터 ✅(2026-06-26)** | `engine/relationships.ts`(`affinity`=innate+bond+posRivalry)·`data/relationships.ts`(`teamAffinity`·`relationsOf`). 결정 미반영 | 0 | ✅ `_dv_relations` ALL PASS(결정론·대칭·분포 중립59.6%·포지션라이벌·bond단조·외인0) |
 | **1b. 영속 bond + 표시 ✅(2026-06-26)** | store `bonds` 필드(SAVE_DEFAULTS+partialize)·endSeason `accrueBonds`(같은팀 +BOND_GROW·감쇠 BOND_DECAY·prune·cap 4000) + 선수상세 "인간관계" 카드(친한/라이벌) | 저장 | ✅ `_dv_relations`(bond 누적·외인0·감쇠·affinity상승)·`_dv_migrate` drift(bonds 키)·e2e·205테스트 |
-| **2. FA 영입 = 점수→확률 재설계(FA §2.7)** | offerScore→offerScoreOf(0~100)+acceptProb(S곡선) + resolveFAMarket argmax→정렬·롤·fallback·SIT + relT 항 + rollFAPref `rel` 가중 | **parity·로스터구멍** | 시나리오 A/B·`simLeague` parity 불변·SIT 드묾·미리보기=결과·`simKovo` 불변 |
+| **2. FA 영입 = 점수→확률 재설계 ✅(2026-06-26)** | offerScore에 relT 항(w.rel)·`acceptProb`(완만 S곡선)·`SIT_OUT` + resolveFAMarket argmax→정렬·롤·fallback·SIT + 로컬 affinity(친구연쇄) + 모듈 컨텍스트(`setRelationContext`, preview=result) | parity | ✅ `_dv_fa_relations`(4시나리오·S곡선)·`simLeague` parity 2.77(튜닝 후 기준 노이즈 내)·simKovo 38.9% 불변·simAudit/simFaDup 무결성 0·205테스트 |
 | **3. 재계약 반영** | buildOwnerFx 친구잔류(−)·친구방출(+, affinity 가중 releaseUnrestBias) | 미리보기=결과 | `simMood`/owner 가드·미리보기=결과·A/B |
 | **4. 서사 확장** | 뉴스(이적 사유 관계)·방출 회고·면담 연동 | 가짜 드라마 | `simNews` 무결성·매달린 0 |
 

@@ -8,7 +8,9 @@ import { applyRetirements } from '../engine/retire';
 import { rollExpulsion, scandalRepMul, type ExpelKind } from '../engine/scandal';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
 import { aiRetainProb, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
-import { assignFAGrades, askingPrice, offerScore, prefWeightsOf } from '../engine/faMarket';
+import { assignFAGrades, askingPrice, offerScore, prefWeightsOf, acceptProb, SIT_OUT } from '../engine/faMarket';
+import { affinity, pairKey } from '../engine/relationships';
+import { relationBonds } from './relationships';
 import { needsCompensationPlayer, pickCompensation, compensationMoney, compensationMoneyOnly } from '../engine/compensation';
 import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { strSeed } from '../engine/rng';
@@ -81,6 +83,20 @@ export interface FAMarketResult {
  * 경쟁 FA 시장(결정론). 풀의 각 FA에 대해 관심 구단(나=지명, AI=포지션 필요)이
  * 오퍼를 내고, 선수가 offerScore 로 최선을 선택. 내가 찍어도 질 수 있다.
  */
+const REL_SCALE_FA = 3.5; // 친구 3~4명이면 포화(RELATIONSHIP §2 — parity 보호로 완화)
+/** 선수 ↔ 팀(로컬 rosters 기준) affinity −1..1 — 진행 중 영입 반영(친구 연쇄). 등록부 셀렉터 대신 로컬 사용. */
+function teamAffinityFor(p: Player, rosterIds: string[], get: (id: string) => Player | undefined, bonds: Record<string, number>): number {
+  if (p.isForeign) return 0;
+  let sum = 0, n = 0;
+  for (const mid of rosterIds) {
+    if (mid === p.id) continue;
+    const m = get(mid);
+    if (!m || m.isForeign) continue;
+    sum += affinity(p, m, bonds[pairKey(p.id, mid)] ?? 0, true); n++;
+  }
+  return n ? Math.max(-1, Math.min(1, sum / REL_SCALE_FA)) : 0;
+}
+
 export function resolveFAMarket(
   off: { snapshot: Record<string, Player>; rosters: Record<string, string[]>; pool: string[] },
   myTeam: string,
@@ -110,6 +126,7 @@ export function resolveFAMarket(
   }
 
   const rng = createRng(80000 + season * 131);
+  const bondsCtx = relationBonds(); // 인간관계 우정(스토어 컨텍스트) — preview=result
   let cashLeft = myCash ?? Number.POSITIVE_INFINITY; // 다중 영입은 잔고를 차감하며 순차 판정
   const signedByMe: string[] = [];
   const lostTo: Record<string, string> = {};
@@ -151,12 +168,16 @@ export function resolveFAMarket(
         w: prefWeightsOf(p),
         rand: rng.next(),
         talkBias: isMe ? ownerFx?.offerBias[id] : undefined, // 면담의 기억은 우리 구단에만 작용
+        relT: teamAffinityFor(p, rosters[t], get, bondsCtx), // 인간관계(그 시점 로스터 — 친구 연쇄) RELATIONSHIP
       });
       bids.push({ teamId: t, offer, score });
     }
-    if (bids.length === 0) continue; // 미계약
-    bids.sort((a, b) => b.score - a.score);
-    const win = bids[0];
+    if (bids.length === 0) continue; // 미계약(팀이 안 원함 — 양방향)
+    // 점수 → 확률 → 정렬·롤·fallback·SIT (FA_SYSTEM 2.7, 사용자 결정)
+    const scored = bids.map((b) => ({ ...b, prob: acceptProb(b.score) })).sort((a, b) => b.prob - a.prob || b.score - a.score);
+    if (scored[0].score < SIT_OUT) continue; // 최고 점수도 바닥 미만 → 시즌 아웃(FA 잔류)
+    let win = scored[0]; // fallback = 최고 확률 팀(전부 실패 시)
+    for (const cand of scored) { if (rng.next() < cand.prob) { win = cand; break; } } // 위에서부터 롤, 첫 성공 입단
     const finalSalary = clampSalary(win.offer, p); // 개인 상한(프랜차이즈 예외) 적용
     snapshot[id] = {
       ...p,

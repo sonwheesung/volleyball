@@ -104,6 +104,7 @@ export interface FAWeights {
   loyalty: number;  // 잔류(원소속·프랜차이즈)
   play: number;     // 출전 기회
   home: number;     // 연고/선호팀
+  rel?: number;     // 인간관계(좋은/싫은 팀메이트) — RELATIONSHIP_SYSTEM. 옵셔널(구세이브 0)
 }
 
 export interface FAPref {

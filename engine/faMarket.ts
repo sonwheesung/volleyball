@@ -9,16 +9,19 @@ export type FAGrade = 'A' | 'B' | 'C';
 // ─── FA 성향 프로필 (선수마다 다른 이적 동기) ───
 
 /** 아키타입별 기준 가중치(합 1.0). 한 동기를 크게, 나머지는 옅게. */
+// rel(인간관계) — 은은하게(사용자 결정). 충성·연고형이 동료를 좀 더 중시. 정규화로 합 1.
+// rel(인간관계) — 은은하게(사용자 결정). 충성·연고형이 동료를 좀 더 중시. 정규화로 합 1.
+// (parity 보호: 친구 연쇄가 컨텐더에 몰리는 집중을 줄이려 가중을 작게 — 2026-06-26 측정 튜닝)
 const ARCH_BASE: Record<FAArchetype, FAWeights> = {
-  money:    { money: 0.55, win: 0.15, loyalty: 0.05, play: 0.15, home: 0.10 },
-  winnow:   { money: 0.20, win: 0.42, loyalty: 0.13, play: 0.15, home: 0.10 },
-  loyal:    { money: 0.15, win: 0.10, loyalty: 0.55, play: 0.10, home: 0.10 },
-  minutes:  { money: 0.20, win: 0.10, loyalty: 0.05, play: 0.55, home: 0.10 },
-  hometown: { money: 0.20, win: 0.15, loyalty: 0.10, play: 0.10, home: 0.45 },
+  money:    { money: 0.55, win: 0.15, loyalty: 0.05, play: 0.15, home: 0.10, rel: 0.03 },
+  winnow:   { money: 0.20, win: 0.42, loyalty: 0.13, play: 0.15, home: 0.10, rel: 0.03 },
+  loyal:    { money: 0.15, win: 0.10, loyalty: 0.55, play: 0.10, home: 0.10, rel: 0.07 },
+  minutes:  { money: 0.20, win: 0.10, loyalty: 0.05, play: 0.55, home: 0.10, rel: 0.03 },
+  hometown: { money: 0.20, win: 0.15, loyalty: 0.10, play: 0.10, home: 0.45, rel: 0.06 },
 };
 
 /** 리그 평균에 가까운 기본 가중치(faPref 없는 선수 폴백) */
-export const DEFAULT_FA_WEIGHTS: FAWeights = { money: 0.4, win: 0.3, loyalty: 0.15, play: 0.1, home: 0.05 };
+export const DEFAULT_FA_WEIGHTS: FAWeights = { money: 0.4, win: 0.3, loyalty: 0.15, play: 0.1, home: 0.05, rel: 0.05 };
 
 function rollArchetype(r: number): FAArchetype {
   if (r < 0.34) return 'money';   // 34% 머니
@@ -32,12 +35,12 @@ function rollArchetype(r: number): FAArchetype {
 export function rollFAPref(rng: Rng, teamCount: number): FAPref {
   const archetype = rollArchetype(rng.next());
   const base = ARCH_BASE[archetype];
-  const keys: (keyof FAWeights)[] = ['money', 'win', 'loyalty', 'play', 'home'];
+  const keys: (keyof FAWeights)[] = ['money', 'win', 'loyalty', 'play', 'home', 'rel'];
   const noisy = {} as FAWeights;
   let sum = 0;
-  for (const k of keys) { const v = Math.max(0, base[k] + (rng.next() - 0.5) * 0.1); noisy[k] = v; sum += v; }
+  for (const k of keys) { const v = Math.max(0, (base[k] ?? 0) + (rng.next() - 0.5) * 0.1); noisy[k] = v; sum += v; }
   const w = {} as FAWeights;
-  for (const k of keys) w[k] = noisy[k] / (sum || 1);
+  for (const k of keys) w[k] = (noisy[k] ?? 0) / (sum || 1);
   const preferredTeamId = teamCount > 0 ? `t${rng.int(0, teamCount - 1)}` : undefined;
   return { archetype, w, preferredTeamId };
 }
@@ -91,6 +94,18 @@ export interface OfferCtx {
   w: FAWeights;        // 선수의 동기 가중치(prefWeightsOf)
   rand: number;        // 0~1 결정론 난수
   talkBias?: number;   // 구단주 면담 보정(OWNER_SYSTEM) — 설득 성공 +, 결렬 −. 내 팀 오퍼에만
+  relT?: number;       // 인간관계 affinity −1..1 (친구 +·싫은 선수 −) — RELATIONSHIP_SYSTEM
+}
+
+// FA 수락 = 점수→확률 (FA_SYSTEM 2.7). offerScore는 [0,~1] 가중합 → acceptProb가 완만 S곡선으로.
+const SIT_FLOOR = 0.22;   // 이하 거의 거절(확률 0 부근)
+const CERTAIN = 0.60;     // 이상 거의 확정(확률 1 부근)
+export const SIT_OUT = 0.14; // 최고 점수도 이 미만이면 시즌 아웃(FA 잔류) — 드물게
+
+/** 점수(offerScore, [0,~1]) → 수락 확률(완만 S곡선 smoothstep) */
+export function acceptProb(score: number): number {
+  const t = Math.max(0, Math.min(1, (score - SIT_FLOOR) / (CERTAIN - SIT_FLOOR)));
+  return t * t * (3 - 2 * t);
 }
 
 /**
@@ -108,7 +123,9 @@ export function offerScore(c: OfferCtx): number {
   const loyT = c.isOriginal ? (c.isFranchise ? 1 : 0.5) : 0;            // 잔류
   const homeT = c.isPreferred ? 1 : 0;                                  // 연고/선호팀
   const w = c.w;
-  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + 0.05 * c.rand + (c.talkBias ?? 0);
+  // 인간관계 항: relT(−1..1) × w.rel. 친구 있는 팀 +, 싫은 선수 있는 팀 −(감점). RELATIONSHIP_SYSTEM.
+  const relTerm = (w.rel ?? 0) * (c.relT ?? 0);
+  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + relTerm + 0.05 * c.rand + (c.talkBias ?? 0);
 }
 
 /** 자격 FA 목록 + 등급 (한 오프시즌 스냅샷) */

@@ -6,7 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { SAVE_VERSION, migrateSave } from './saveMigration';
-import { accrueBonds } from '../data/relationships';
+import { accrueBonds, setRelationContext } from '../data/relationships';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
@@ -799,6 +799,8 @@ export const useGameStore = create<GameState>()(
         }
         const nextTransfers = [...transfers, ...seasonTransfers, ...seasonReleases].slice(-200);
 
+        const nextBonds = accrueBonds(bonds, filled.rosters); // 인간관계 우정 누적(같은 팀 +·옛정 감쇠)
+        setRelationContext(nextBonds);    // 새 시즌 관계 컨텍스트(FA preview=result)
         commitPlayerBase(snapshot);
         commitRosters(filled.rosters);
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
@@ -809,7 +811,7 @@ export const useGameStore = create<GameState>()(
           staffAssistants: nextStaffAssistants, // 은퇴한 코치 슬롯 정리
           careerLog: { ...careerLog, faSigns: careerLog.faSigns + offseasonSigns }, // 오프시즌 영입 누적(업적)
           careerTotals: nextTotals, // 통산 경기 기록 누적(업적)
-          bonds: accrueBonds(bonds, filled.rosters), // 인간관계 우정 누적(같은 팀 +·옛정 감쇠, RELATIONSHIP §1.1)
+          bonds: nextBonds, // 인간관계 우정 누적(같은 팀 +·옛정 감쇠, RELATIONSHIP §1.1)
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
           benchDirectives: [],
           talkCooldown: {},   // 시즌말 currentDay 0 리셋과 함께 쿨다운 초기화
@@ -939,6 +941,7 @@ export const useGameStore = create<GameState>()(
           if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
           if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
           setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
+          setRelationContext(state?.bonds ?? {}); // 인간관계 우정 컨텍스트(FA 해석)
           setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)
           setOwnerContext(state?.benchDirectives ?? []);
           setAwardScores(state?.archive ?? []); // 수상 프리미엄 컨텍스트 복원
