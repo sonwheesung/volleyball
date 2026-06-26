@@ -9,6 +9,8 @@ import './_gt_mock';
   const { buildOwnerFx } = await import('../data/owner');
   const { setTxContext, getTxContext } = await import('../data/dynamics');
   const { popularityOf, releaseUnrestBias } = await import('../engine/owner');
+  const { affinity } = await import('../engine/relationships');
+  const { getPlayer } = await import('../data/league');
   const G = () => useGameStore.getState();
   const my = LEAGUE.teams[0].id;
   const N = Math.max(4, Number(process.argv[2]) || 8);
@@ -47,17 +49,22 @@ import './_gt_mock';
 
   if (uCore <= 0) fails.push(`핵심 명성 ${core.stat} → unrest 0 (빌드업이 명성 낮음 — N↑ 필요)`);
   if (expiring.length === 0) fails.push('만료 선수(거부권자) 0 — A/B 비교 불가');
-  // 핵심 방출: 만료 선수 refuseProb가 정확히 unrest만큼 상승(상한 0.95 고려)
-  let okUp = 0;
+  // 핵심 방출: 만료 선수 refuseProb가 **최소 uniform unrest만큼** 상승(중립 동료=정확히 uCore, 친한 동료=초과).
+  //  RELATIONSHIP §3.2 — uniform unrest 위에 affinity 가산(친구만 더 동요). friendStay는 A/B 동일이라 델타서 상쇄.
+  let okUp = 0, friendExceed = 0, friendChecked = 0;
+  const coreP = getPlayer(core.id)!;
   for (const id of expiring) {
-    const a = A[id] ?? 0, b = B[id] ?? 0;
-    const exp = Math.min(0.95, a + uCore);
-    if (Math.abs(b - exp) > 1e-6) fails.push(`핵심 방출 후 ${id} refuse ${b.toFixed(3)} ≠ ${exp.toFixed(3)}(=${a.toFixed(3)}+${uCore})`);
+    const a = A[id] ?? 0, b = B[id] ?? 0, exp = Math.min(0.95, a + uCore);
+    if (b < exp - 1e-6) fails.push(`핵심 방출 후 ${id} refuse ${b.toFixed(3)} < ${exp.toFixed(3)}(최소 uniform)`);
     else okUp++;
-    // 무명 방출: 변화 없음
+    // 핵심과 친한(positive affinity) 만료자는 uCore보다 더 오른다(상한 0.95 미만일 때)
+    const aff = affinity(getPlayer(id)!, coreP, 0, false);
+    if (aff > 0.25 && exp < 0.95 - 1e-6) { friendChecked++; if (b > exp + 1e-9) friendExceed++; }
+    // 무명 방출: 최소 uScrub만큼(게이트)
     const c = C[id] ?? 0;
-    if (Math.abs(c - (a + uScrub)) > 1e-6) fails.push(`무명 방출 후 ${id} refuse ${c.toFixed(3)} ≠ ${(a + uScrub).toFixed(3)} (게이트)`);
+    if (c < a + uScrub - 1e-6) fails.push(`무명 방출 후 ${id} refuse ${c.toFixed(3)} < ${(a + uScrub).toFixed(3)} (게이트)`);
   }
+  if (friendChecked > 0 && friendExceed === 0) fails.push(`핵심의 친한 만료자 ${friendChecked}명 — 아무도 uCore 초과 안 함(관계 항 미작동)`);
 
   console.log('=== 핵심 방출 → 선수단 동요 측정 (N=' + N + ') ===');
   console.log(`  핵심 ${evolveOnDay(core.id, 164)?.name}(명성 ${core.stat}) → unrest +${uCore} · 무명 ${evolveOnDay(scrub.id, 164)?.name}(명성 ${scrub.stat}) → +${uScrub}`);

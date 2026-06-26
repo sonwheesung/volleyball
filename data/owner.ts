@@ -9,6 +9,8 @@ import {
   type DiscontentTopic, type Mood, type SitCause, type Fanbase, type InterviewLog, type OwnerFx,
 } from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
+import { affinity, pairKey } from '../engine/relationships';
+import { relationBonds } from './relationships';
 import { SEASON_DAYS } from '../engine/calendar';
 import { buildLineup } from '../engine/lineup';
 import { overall } from '../engine/overall';
@@ -102,15 +104,21 @@ export function discontentNow(
   return { topic, weight, mood, cause, label: moodLabel(cause, mood, topic), playRatio };
 }
 
+// 인간관계 재계약 계수(RELATIONSHIP §3.2 — 은은하게)
+const REL_LEAVE_K = 0.15;  // 친한 동료 방출 1명당 거부 가산(affinity×) — 절친(0.7)≈+0.10
+
 /** 시즌말 FA 판정용 ownerFx 조립 — store.endSeason과 FA/드래프트 센터 미리보기가 공유(미리보기=결과) */
 export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamId: string, fanScore: number): OwnerFx {
   const fx = interviewEffects(interviews, season);
   const refuseProb: Record<string, number> = {};
   // 핵심·충성 동료 방출 → 남은 선수단 동요(TRANSACTION_SYSTEM 0.5④). 이번 시즌 내 방출자의 명성(career·근속)으로 팀 단위 거부 가중.
-  const releasedStatures = getTxContext().playerTx
-    .filter((t) => t.kind === 'release' && t.teamId === myTeamId)
-    .map((t) => { const rp = evolveOnDay(t.playerId, SEASON_END_DAY); return rp && !rp.isForeign ? popularityOf(rp.career.points, 0, rp.clubTenure, 0) : 0; });
+  const releasedTx = getTxContext().playerTx.filter((t) => t.kind === 'release' && t.teamId === myTeamId);
+  const releasedStatures = releasedTx.map((t) => { const rp = evolveOnDay(t.playerId, SEASON_END_DAY); return rp && !rp.isForeign ? popularityOf(rp.career.points, 0, rp.clubTenure, 0) : 0; });
   const unrest = releaseUnrestBias(releasedStatures);
+  // 인간관계(RELATIONSHIP §3.2): 친한 동료 방출 → 그 친구만 거부↑(uniform unrest 위에 가산).
+  //  "친구 잔류 → 거부↓"는 별도 항을 안 둔다 — 만료자가 FA로 풀리면 Phase 2 FA 시장의 relT(내 팀 친구)가 재계약 확률을 올려 자연 처리.
+  const bonds = relationBonds();
+  const releasedPlayers = releasedTx.map((t) => evolveOnDay(t.playerId, SEASON_END_DAY)).filter((rp): rp is Player => !!rp && !rp.isForeign);
   for (const id of rosterIdsOnDay(myTeamId, SEASON_END_DAY)) {
     const p = evolveOnDay(id, SEASON_END_DAY);
     if (!p || p.contract.remaining > 1) continue; // 이번 오프시즌 만료자만 거부권 행사
@@ -119,7 +127,11 @@ export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamI
     const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight) : 0;
     // 공약 파기(OWNER_SYSTEM 1.3): '주전 보장' 약속을 했는데 여전히 출전 불만(=벤치) → 배신. 거부 급등(성공 보정 상쇄+α).
     const breach = topic === 'minutes' && starterPromised(interviews, season, id) ? PROMISE_BREACH_REFUSE : 0;
-    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore) + accum + breach + unrest;
+    // 방출된 친한 동료(positive affinity)만큼 추가 동요(+) — 절친 방출일수록 강하게.
+    let friendLeave = 0;
+    for (const rp of releasedPlayers) friendLeave += Math.max(0, affinity(p, rp, bonds[pairKey(id, rp.id)] ?? 0, false));
+    const relTerm = REL_LEAVE_K * friendLeave;
+    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore) + accum + breach + unrest + relTerm;
     if (prob > 0) refuseProb[id] = Math.min(0.95, prob);
   }
   return { refuseProb, offerBias: fx.offerBias };
