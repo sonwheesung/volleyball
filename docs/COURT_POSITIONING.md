@@ -86,6 +86,27 @@
 
 ---
 
+## 4.5 OP 후위 백어택 준비 자리 (§7-OP — 리서치 완료·구현 ⏸ 보류, 2026-06-27)
+
+> **용어 교정(verify-domain-definitions)** ✅: 사용자가 "OP 파이프"라 했으나 리서치상 **OP 백어택 = 우측 후위(Zone 1)**,
+> 3m 라인 뒤에서 친다. **파이프(Pipe)=중앙 후위(Zone 6)** 로 보통 **OH**가 친다 — OP와 다른 자리.
+> 출처: [joinstriveon 5-1 로테이션](https://joinstriveon.com/blog/5-1-volleyball-rotation),
+> [goldmedalsquared 5-1](https://www.goldmedalsquared.com/post/5-1-volleyball-rotation).
+
+| 선수 | 자리(목표) | **왜** |
+|---|---|---|
+| **OP(후위)** | **우측(Zone 1), 3m 라인 뒤** 준비 → 접근 | 후위 OP는 **백어택 옵션**. 받기 후 깊은 베이스(0.80)에 머물지 말고 **3m 라인 뒤(~0.71)·우측**으로 올라와 백어택 준비. 특히 **세터 전위 로테이션(네트 공격수 2명)** 일 때 후위 OP가 3번째 공격 옵션 |
+
+- **⏸ 구현 보류(2026-06-27)**: `switchedSpots(offense=true)`에 후위 OP를 우측 3m 라인 뒤로 고정하는 **순진한 오버라이드**를
+  넣었더니 **auditBoard 9건 회귀**(유령터치 등 — A/B로 확정: WITHOUT 0건 vs WITH 9건). 원인: switchedSpots는 *공 무관 순수
+  레이아웃*이라, 인플레이 전환에서 **OP가 그 공의 처리자(디그/패스)일 때도** 무조건 공격 자리로 끌어 공에서 멀어지거나
+  `separateTargets`가 인접 마커(실제 처리자)를 밀어냄.
+- **올바른 방법(다음 시도 시)**: 자리 박기를 director에서 **공 처리자/무버가 아닐 때만**(또는 offense 셋업 프레임 한정)
+  적용 — switchedSpots 정적 오버라이드가 아니라 `courtDirector` 단계 통합. 그때 `_dv_op_backrow`(offense 시 우측 3m 뒤
+  + A/B) **+ auditBoard 0건 회귀**를 둘 다 통과해야 머지.
+
+---
+
 ## 5. 자동화 방향 (구현 시 — magic 숫자 제거)
 
 자리마다 숫자를 박는 대신 **역할 → 위치 함수**로:
@@ -124,7 +145,8 @@ positionOf(player, rotation, phase) =
 - [ ] **MB ↔ 리베로 교체** 타이밍·자리(후위 MB가 리베로로 빠질 때).
 - [ ] 페리미터 디펜스 vs 로테이션(rotational) 디펜스 — 어느 베이스를 쓸지.
 - [ ] 찬스볼/프리볼 전환 시 자리.
-- [ ] OP(아포짓) 후위일 때 백어택 준비 자리.
+- [~] OP(아포짓) 후위일 때 백어택 준비 자리 → **§4.5 리서치·스펙 완료, 구현 ⏸ 보류(2026-06-27)**: 우측 후위(Zone 1)
+  3m 라인 뒤. 용어 교정 ✅(파이프=Zone6 OH, OP=Zone1). 순진한 switchedSpots 오버라이드는 auditBoard 9건 회귀 → director 통합 필요.
 
 ---
 
