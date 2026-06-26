@@ -74,12 +74,11 @@
 
 ## 3. 의사결정 통합 (정확한 지점)
 
-### 3.1 FA 영입 — offerScore (faMarket.ts:100-112)
-현재 합산(라인 111): `w.money·moneyT + w.win·winT + w.loyalty·loyT + w.play·playT + w.home·homeT + 0.05·rand + (talkBias??0)`.
-- **추가**: `+ w.rel · relT`. `OfferCtx`에 `relationAffinity: number(−1..1)` 필드 추가.
-- **호출처**(offseason.ts:142-154 `resolveFAMarket` 입찰 루프): 각 (선수, 팀 t) 오퍼 전
-  `relT = teamAffinity(id, t, day)` 계산해 주입. **양·음 모두** → 친구 있는 팀 끌림 / 앙숙 팀 기피.
-- 효과: 사용자 시나리오 1·2·3·4 전부 자연 발생(§4).
+### 3.1 FA 영입 — 점수(100)→확률 모델 (FA_SYSTEM §2.7, 2026-06-26 사용자 재설계)
+> 단순 "관계 항 추가"를 넘어, FA 수락을 **argmax → 점수(가산/감점 0~100)→확률(완만 S곡선)→정렬·롤·fallback·SIT**로
+> 재설계했다(사용자 결정). 관계(relT)는 그 점수의 **±항**(친구 +·싫은 선수 −). 상세·엣지·동시성은 **FA_SYSTEM §2.7**.
+- 관계 입력: `teamAffinity(playerId, teamId, bonds)`(§2) → score의 `w.rel·relT·100` 항.
+- 효과: 사용자 시나리오 1·2·3·4가 점수 가산/감점 + 확률로 자연 발생(§4). 여러 팀 오퍼·동시성·시즌아웃 처리는 FA §2.7.3~4.
 
 ### 3.2 재계약 거부 — buildOwnerFx (data/owner.ts:106-126)
 현재 refuseProb 합산: `refuseResignProb + sinkingShipBias + sustainedBenchRefuse + breach + releaseUnrestBias`.
@@ -149,7 +148,7 @@
 |---|---|---|---|
 | **1a. 모델+셀렉터 ✅(2026-06-26)** | `engine/relationships.ts`(`affinity`=innate+bond+posRivalry)·`data/relationships.ts`(`teamAffinity`·`relationsOf`). 결정 미반영 | 0 | ✅ `_dv_relations` ALL PASS(결정론·대칭·분포 중립59.6%·포지션라이벌·bond단조·외인0) |
 | **1b. 영속 bond + 표시** | store `bonds` 필드(SAVE_DEFAULTS+partialize)·endSeason 같은팀 쌍 누적(BOND_GROW/DECAY·바운딩) + 선수상세 친구/라이벌 UI | 저장 | `_dv_migrate` drift·bond 누적 가드 |
-| **2. FA 영입 반영** | offerScore에 `w.rel·relT` + rollFAPref에 `rel` 가중 + resolveFAMarket 주입 | **parity** | 시나리오 A/B(4종 오더 플립)·`simLeague` parity 불변·`simKovo` 불변 |
+| **2. FA 영입 = 점수→확률 재설계(FA §2.7)** | offerScore→offerScoreOf(0~100)+acceptProb(S곡선) + resolveFAMarket argmax→정렬·롤·fallback·SIT + relT 항 + rollFAPref `rel` 가중 | **parity·로스터구멍** | 시나리오 A/B·`simLeague` parity 불변·SIT 드묾·미리보기=결과·`simKovo` 불변 |
 | **3. 재계약 반영** | buildOwnerFx 친구잔류(−)·친구방출(+, affinity 가중 releaseUnrestBias) | 미리보기=결과 | `simMood`/owner 가드·미리보기=결과·A/B |
 | **4. 서사 확장** | 뉴스(이적 사유 관계)·방출 회고·면담 연동 | 가짜 드라마 | `simNews` 무결성·매달린 0 |
 
