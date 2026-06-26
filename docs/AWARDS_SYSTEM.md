@@ -50,3 +50,16 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 - `data/awards.ts` — production·standings·playoffs·rookie·OVR델타를 모아 엔진 호출. `currentSeasonAwards()` / `seasonLegRanges()`.
 - `store` — `endSeason`에서 계산 → archive 적립.
 - `app/(tabs)/history.tsx` — 시즌별 시상식 표시.
+
+## 6. 시상식 일러스트 — MVP 트로피 (2026-06-26, 사용자 선택)
+> 시상식(MVP 발표)을 글자 행 대신 **장면**으로 — "시즌 마감의 음미하는 순간"(0장). **MVP 소속 구단 색**은
+> 카드 배경·시즌 텍스트(CLUB_IDENTITY hue, `teamColors`)가 담당.
+> 설계 변경 이력: ~~블롭+메달~~(사용자 반려) → ~~블롭 1인+소형 트로피~~("트로피 밑 파란 블롭이 어색") →
+> **트로피만**(블롭 제거, 2026-06-26 확정). 우승 화면(블롭 3인+큰 컵)과 자연히 구분된다.
+- **컴포넌트**: `components/AwardIllustration.tsx` — `react-native-svg` **금 트로피 + 반짝이**만(블롭 없음).
+  컴팩트(viewBox 200×116, width 기본 120). props `{width}`. 트로피는 보편 금색 — 팀색은 감싸는 카드가 담당.
+- **배치**: `app/(tabs)/history.tsx` **시상식 카드** 상단 중앙. 카드 배경/텍스트 색은 **정규 MVP 소속 구단**
+  (`aw.mvp.teamId → teamColors`). 시상식 카드는 시즌별로 뜨므로(잠정 포함) 매 시즌 그 시즌 MVP 팀색으로. 잠정도 동일.
+- **확인 절차**: 우승 화면과 동일 — sim-web '🏆 우승 화면' 탭에 메달 목업 추가 → 룩 합의 → 앱 통합.
+- 표시 전용·엔진 무파급. 검증: 앱/sim-web tsc·`react-native-svg` 링크 확인(기존 사용처와 동일).
+- **추후 확장**: 같은 블롭으로 기록 경신(기록판)·HOF(꽃다발)까지 — MILESTONE/NEWS 썸네일 통일감(BROADCAST §7 재활용 항).

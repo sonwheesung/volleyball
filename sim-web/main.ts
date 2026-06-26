@@ -436,17 +436,37 @@ function champScreenSvg(): string {
     <text x="190" y="449" text-anchor="middle" fill="#3a2a08" font-size="13" font-weight="800">시즌 마무리 →</text>
   </svg>`;
 }
+// 시상식 MVP 트로피 일러스트(블롭 제거 — 트로피만, AwardIllustration과 동일 마크업). AWARDS_SYSTEM §6.
+const trophyArt = () => `
+  <g fill="#FFD879"><path d="M100 8 l3 7 7 3 -7 3 -3 7 -3 -7 -7 -3 7 -3 z"/><path d="M52 36 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 z"/><path d="M148 36 l2 5 5 2 -5 2 -2 5 -2 -5 -5 -2 5 -2 z"/></g>
+  <g><rect x="90" y="80" width="20" height="14" rx="3" fill="#E0902A"/><rect x="74" y="92" width="52" height="10" rx="4" fill="#C9791C"/>
+    <path d="M68 26 h64 v14 a32 26 0 0 1 -64 0 z" fill="url(#tg)"/><path d="M68 26 h64 v6 a32 10 0 0 1 -64 0 z" fill="#FFE49B"/>
+    <path d="M68 30 a16 16 0 0 0 -16 16 a8 8 0 0 0 8 0 a10 10 0 0 1 8 -10 z" fill="#E0902A"/><path d="M132 30 a16 16 0 0 1 16 16 a8 8 0 0 1 -8 0 a10 10 0 0 0 -8 -10 z" fill="#E0902A"/>
+    <rect x="94" y="50" width="12" height="32" rx="3" fill="#E0902A"/><path d="M100 40 l3 7 7.5 0.6 -5.7 5 1.8 7.3 -6.6 -4 -6.6 4 1.8 -7.3 -5.7 -5 7.5 -0.6 z" fill="#FFF3D0"/></g>`;
+function mvpScreenSvg(): string {
+  const name = getTeam(CH.team)?.name ?? CH.team;
+  const h = teamHue(CH.team);
+  return `<svg viewBox="0 0 240 220" width="100%" style="max-width:220px" xmlns="http://www.w3.org/2000/svg" font-family="'Pretendard',sans-serif">
+    <defs><linearGradient id="tg" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFD879"/><stop offset="1" stop-color="#F2A93B"/></linearGradient>
+      <radialGradient id="mbg" cx="50%" cy="0%" r="120%"><stop offset="0" stop-color="hsl(${h},45%,18%)"/><stop offset="0.7" stop-color="#0b1320"/></radialGradient></defs>
+    <rect x="0" y="0" width="240" height="220" rx="22" fill="url(#mbg)"/>
+    <text x="120" y="30" text-anchor="middle" fill="#FFD879" font-size="11" font-weight="800" letter-spacing="2">🏆 시즌 MVP</text>
+    <g transform="translate(20,40)">${trophyArt()}</g>
+    <text x="120" y="184" text-anchor="middle" fill="#fff" font-size="20" font-weight="900">서지아</text>
+    <text x="120" y="206" text-anchor="middle" fill="hsl(${h},70%,72%)" font-size="12" font-weight="700">${esc(name)}</text>
+  </svg>`;
+}
 function mountChamp() {
   $('controls').innerHTML = `<div class="run-row"><label>우승팀 ${teamSelect('ch-team', CH.team)}</label>
     <label>시즌 <input type="number" id="ch-season" value="${CH.season}" min="0" style="width:56px" /></label>
     <button id="ch-run">우승 화면 ▶</button></div>
-    <p class="hint">우승 순간 축하 화면 목업. 가운데 블롭 = <b>우승팀 색</b>(현재 팀 색 데이터가 없어 팀 id로 결정론 생성 — 추후 CLUB_IDENTITY에 실제 색 추가 시 그대로 연결). 팀을 바꿔보면 색이 따라옵니다. 일러스트는 <b>벡터(react-native-svg)</b>라 앱에선 어떤 해상도에서도 선명.</p>`;
+    <p class="hint">왼쪽 = 우승 축하 화면(블롭 3인+큰 컵), 오른쪽 = <b>시상식 MVP</b> 목업(트로피만). 카드 배경·시즌 텍스트가 <b>MVP 팀 색</b>(CLUB_IDENTITY 실제 구단 hue). 팀을 바꿔보면 그 구단 시그니처 색이 따라옵니다. 일러스트는 <b>벡터(react-native-svg)</b>라 앱에선 어떤 해상도에서도 선명.</p>`;
   ($('ch-team') as HTMLSelectElement).onchange = (e) => { CH.team = (e.target as HTMLSelectElement).value; runChamp(); };
   ($('ch-season') as HTMLInputElement).onchange = (e) => { CH.season = Math.max(0, +(e.target as HTMLInputElement).value || 0); runChamp(); };
   $('ch-run').onclick = runChamp;
   runChamp();
 }
-function runChamp() { $('out').innerHTML = `<div style="text-align:center">${champScreenSvg()}</div>`; }
+function runChamp() { $('out').innerHTML = `<div style="display:flex;gap:18px;flex-wrap:wrap;justify-content:center;align-items:flex-start">${champScreenSvg()}${mvpScreenSvg()}</div>`; }
 
 function runBroadcastSamples() {
   // 4종 현수막 시각 미리보기 — 통산 기록 경신은 누적이 필요해 실경기 1시즌엔 잘 안 떠 샘플로 보여준다.

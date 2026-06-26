@@ -2,6 +2,8 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } from '../../components/Screen';
+import { AwardIllustration } from '../../components/AwardIllustration';
+import { teamColors } from '../../lib/teamColor';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../../data/league';
 import { leagueProduction } from '../../data/production';
@@ -168,6 +170,15 @@ function SeasonView({
       {aw && aw.mvp && awardsReady ? (
         <>
           <Card>
+            {/* 시즌 MVP 트로피 배너 — MVP 소속 구단 색(AWARDS_SYSTEM §6) */}
+            <View style={[styles.mvpBanner, { backgroundColor: teamColors(aw.mvp.teamId).bg }]}>
+              <AwardIllustration width={104} />
+              <Text style={styles.mvpKick}>{provisional ? '시즌 MVP (잠정)' : '시즌 MVP'}</Text>
+              <Text style={styles.mvpName} numberOfLines={1}>{awName(aw.mvp)}</Text>
+              <Text style={[styles.mvpTeam, { color: teamColors(aw.mvp.teamId).light }]} numberOfLines={1}>
+                {getTeam(aw.mvp.teamId)?.name ?? short(aw.mvp.teamId)}
+              </Text>
+            </View>
             <Text style={styles.cardHead}>시상식{provisional ? ' (잠정)' : ''}</Text>
             {([
               { label: '정규 MVP', w: aw.mvp, hi: true, suffix: '' },
@@ -421,6 +432,10 @@ const styles = StyleSheet.create({
   stepTag: { fontSize: 12, fontWeight: '800', marginTop: 1 },
 
   cardHead: { color: theme.text, fontWeight: '800', fontSize: 14, marginBottom: 4 },
+  mvpBanner: { alignItems: 'center', borderRadius: 16, paddingTop: 12, paddingBottom: 14, marginBottom: 10, overflow: 'hidden' },
+  mvpKick: { color: '#FFD879', fontSize: 11, fontWeight: '800', letterSpacing: 2, marginTop: 2 },
+  mvpName: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', marginTop: 2 },
+  mvpTeam: { fontSize: 12, fontWeight: '700', marginTop: 1 },
   careerHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   moreLink: { color: theme.accent, fontSize: 13, fontWeight: '800' },
 
