@@ -5,6 +5,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
+import { SAVE_VERSION, migrateSave } from './saveMigration';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
@@ -867,6 +868,9 @@ export const useGameStore = create<GameState>()(
     {
       name: 'baeknyeon-save',
       storage: createJSONStorage(() => AsyncStorage),
+      version: SAVE_VERSION,
+      // 구버전/손상 세이브 → 정규화(컨테이너 모양 강제) + 향후 breaking 변경 단계 변환. SAVE_SYSTEM.md.
+      migrate: (persisted, version) => migrateSave(persisted, version) as never,
       partialize: (s) => ({
         onboarded: s.onboarded,
         supporter: s.supporter,
@@ -921,16 +925,24 @@ export const useGameStore = create<GameState>()(
         keepAsian: s.keepAsian,
       }),
       onRehydrateStorage: () => (state) => {
-        if (state?.playerBase) commitPlayerBase(state.playerBase);
-        if (state?.rosters) commitRosters(state.rosters);
-        if (state?.coachPool) commitCoachPool(state.coachPool.coaches, state.coachPool.assistants); // 감독 풀 복원(commitStaff 전 — staffHead가 참조)
-        if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
-        if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
-        setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
-        setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)
-        setOwnerContext(state?.benchDirectives ?? []);
-        setAwardScores(state?.archive ?? []); // 수상 프리미엄 컨텍스트 복원
-        useGameStore.setState({ hydrated: true });
+        // migrate(정규화)를 거쳐 모양은 안전하나, 심층 방어로 try/catch — 커밋이 throw하면
+        // 크래시 루프 대신 fresh로 깨끗이 리셋(데이터 1개라 최악도 1인 손실). SAVE_SYSTEM §3.3.
+        try {
+          if (state?.playerBase) commitPlayerBase(state.playerBase);
+          if (state?.rosters) commitRosters(state.rosters);
+          if (state?.coachPool) commitCoachPool(state.coachPool.coaches, state.coachPool.assistants); // 감독 풀 복원(commitStaff 전 — staffHead가 참조)
+          if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
+          if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
+          setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
+          setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)
+          setOwnerContext(state?.benchDirectives ?? []);
+          setAwardScores(state?.archive ?? []); // 수상 프리미엄 컨텍스트 복원
+          useGameStore.setState({ hydrated: true });
+        } catch (e) {
+          console.warn('[save] 복원 실패 — fresh로 리셋:', e);
+          resetLeagueBase();
+          useGameStore.setState({ ...freshSave, hydrated: true });
+        }
       },
     },
   ),
