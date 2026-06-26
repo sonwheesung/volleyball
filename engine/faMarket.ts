@@ -13,15 +13,15 @@ export type FAGrade = 'A' | 'B' | 'C';
 // rel(인간관계) — 은은하게(사용자 결정). 충성·연고형이 동료를 좀 더 중시. 정규화로 합 1.
 // (parity 보호: 친구 연쇄가 컨텐더에 몰리는 집중을 줄이려 가중을 작게 — 2026-06-26 측정 튜닝)
 const ARCH_BASE: Record<FAArchetype, FAWeights> = {
-  money:    { money: 0.55, win: 0.15, loyalty: 0.05, play: 0.15, home: 0.10, rel: 0.03 },
-  winnow:   { money: 0.20, win: 0.42, loyalty: 0.13, play: 0.15, home: 0.10, rel: 0.03 },
-  loyal:    { money: 0.15, win: 0.10, loyalty: 0.55, play: 0.10, home: 0.10, rel: 0.07 },
-  minutes:  { money: 0.20, win: 0.10, loyalty: 0.05, play: 0.55, home: 0.10, rel: 0.03 },
-  hometown: { money: 0.20, win: 0.15, loyalty: 0.10, play: 0.10, home: 0.45, rel: 0.06 },
+  money:    { money: 0.55, win: 0.15, loyalty: 0.05, play: 0.15, home: 0.10, rel: 0.02 },
+  winnow:   { money: 0.20, win: 0.42, loyalty: 0.13, play: 0.15, home: 0.10, rel: 0.02 },
+  loyal:    { money: 0.15, win: 0.10, loyalty: 0.55, play: 0.10, home: 0.10, rel: 0.04 },
+  minutes:  { money: 0.20, win: 0.10, loyalty: 0.05, play: 0.55, home: 0.10, rel: 0.02 },
+  hometown: { money: 0.20, win: 0.15, loyalty: 0.10, play: 0.10, home: 0.45, rel: 0.04 },
 };
 
 /** 리그 평균에 가까운 기본 가중치(faPref 없는 선수 폴백) */
-export const DEFAULT_FA_WEIGHTS: FAWeights = { money: 0.4, win: 0.3, loyalty: 0.15, play: 0.1, home: 0.05, rel: 0.05 };
+export const DEFAULT_FA_WEIGHTS: FAWeights = { money: 0.4, win: 0.3, loyalty: 0.15, play: 0.1, home: 0.05, rel: 0.03 };
 
 function rollArchetype(r: number): FAArchetype {
   if (r < 0.34) return 'money';   // 34% 머니

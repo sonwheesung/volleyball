@@ -190,7 +190,9 @@ offerScore = w.money·(연봉/asking) + w.win·우승권(0.7·전력+0.3·presti
 
 > **구현됨**: `engine/faMarket`(offerScore relT 항·`acceptProb` 완만 S곡선 `SIT_FLOOR 0.22`/`CERTAIN 0.60`·`SIT_OUT 0.14`),
 > `data/offseason.resolveFAMarket`(argmax→정렬·롤·fallback·SIT, 로컬 affinity 친구연쇄, `relationBonds()` 컨텍스트).
-> 측정: parity std 2.77(기준 2.64 노이즈 내 — rel 가중 ~0.05·REL_SCALE_FA 3.5로 집중 완화)·simKovo 불변·무결성 0·4시나리오(`_dv_fa_relations`).
+> 측정: **장기 A/B(30시즌×8, 관계 격리)** — 관계 OFF std 3.42 vs ON 4.06(친구 연쇄가 컨텐더 집중)을 발견해 **rel 가중 ~0.03·REL_SCALE_FA 6**으로
+> 재튜닝 → ON std **3.12**(OFF보다 낮음·왕조 max 8·r −0.18·1위점유 31%·반등 100%) = 관계가 집중 안 시키는 은은한 타이브레이커.
+> simKovo 불변·무결성 0(simAudit/simFaDup)·4시나리오(`_dv_fa_relations`)·205테스트.
 
 > 기존 `offerScore` **argmax(최고 점수 팀에 무조건 입단)** 을 **점수→확률→정렬·롤·fallback**으로 교체한다.
 > "왜 이 팀에 갔나"가 투명한 가산/감점 점수가 되고, 인간관계망(RELATIONSHIP_SYSTEM)이 그 점수의 한 항(±)으로 들어간다.
