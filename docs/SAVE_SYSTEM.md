@@ -170,5 +170,10 @@
   - **정상 입력 멱등**: 유효 현 세이브 → `migrateSave`가 의미 보존(필드값 불변).
   - **A/B 자가검증**: 정규화 *없이* 손상 입력을 복원 경로에 넣으면 크래시(또는 위반)함을 확인 → 정규화가 실제로 막는지 증명(허위 오라클 차단).
   - **버전 누락=0 취급**: version undefined/0 입력에 migrate가 동작.
+- **`npx tsx tools/_dv_migrate_e2e.ts`** — **실제 persist 파이프라인 E2E**(순수 함수가 아니라 진짜 store):
+  모킹 AsyncStorage(`_gt_mock`)에 세이브를 넣고 `useGameStore.persist.rehydrate()`로 migrate→merge→onRehydrate→commit을
+  끝까지 태운다. ① 손상 타입 세이브 → 크래시 없이 live store에 sanitize 로드(+유효 필드 보존=리셋 아님 증명) ②
+  유효 세이브 → 값 보존 + `playerBase` 실제 커밋(`getPlayer` 동작) ③ sanitize 통과하나 commit이 throw(playerBase
+  값이 null) → try/catch가 fresh 리셋(hydrated=true·크래시 루프 없음). ③의 콘솔 경고는 안전망 작동의 의도된 출력.
 
-> 검증 루틴(README)에 `_dv_migrate` 등록. 세이브 필드 추가·구조 변경 시 이 가드를 갱신·재실행.
+> 검증 루틴(README)에 `_dv_migrate`(순수)·`_dv_migrate_e2e`(실 store) 등록. 세이브 필드 추가·구조 변경 시 갱신·재실행.
