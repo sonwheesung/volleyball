@@ -6,6 +6,7 @@
 import type { ExpelRecord, HofEntry, Milestone, NewsItem, Position, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
 import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
+import { topFriendOnTeam } from './relationships';
 import { popularityNow } from './owner';
 import { seasonInjuryReport } from './injury';
 import { seasonMatchProds } from './production';
@@ -402,8 +403,11 @@ export function buildNewsFeed(
         const lead = tag ? `${tag} ${t.name}` : t.name;
         const gain = posKo ? `${posKo} 자원을 보강했다` : '전력을 더했다';
         const lose = posKo ? `${posKo} 한 자리가 비었다` : '한 자원을 떠나보냈다';
+        // 인간관계(현재 사실 — 가짜 드라마 아님): 옮긴 팀에 절친이 있으면 재회 한 줄(RELATIONSHIP §6)
+        const friend = topFriendOnTeam(t.playerId, t.toTeam);
+        const friendLine = friend ? ` 새 팀에는 절친 ${friend.name}이(가) 있다.` : '';
         return body3('transfer', key, `${lead}이(가) ${teamName(t.fromTeam)}을(를) 떠나 ${teamName(t.toTeam)}으로(로) 둥지를 옮겼다.`
-          + (inMine ? ` ${teamName(myTeamId)}이(가) ${gain}.` : outMine ? ` ${teamName(myTeamId)}은(는) ${lose}.` : ` ${teamName(t.toTeam)}이(가) ${gain}.`));
+          + (inMine ? ` ${teamName(myTeamId)}이(가) ${gain}.` : outMine ? ` ${teamName(myTeamId)}은(는) ${lose}.` : ` ${teamName(t.toTeam)}이(가) ${gain}.`) + friendLine);
       })(), t.playerId);
   }
 

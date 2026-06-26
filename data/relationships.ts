@@ -59,6 +59,19 @@ export function teamAffinity(playerId: string, teamId: string, bonds: Bonds = {}
 
 export interface Relation { id: string; name: string; v: number }
 
+/** 특정 팀에 있는 그 선수의 최고 절친(현재 사실) — 이적 뉴스 서사용(가짜 드라마 아님: 지금 그 팀에 있는 친구). */
+export function topFriendOnTeam(playerId: string, teamId: string, bonds: Bonds = bondsCtx): Relation | null {
+  const p = getPlayer(playerId);
+  if (!p || p.isForeign) return null;
+  let best: Relation | null = null;
+  for (const m of getTeamPlayers(teamId)) {
+    if (m.id === playerId || m.isForeign) continue;
+    const v = affinity(p, m, bonds[pairKey(playerId, m.id)] ?? 0, true);
+    if (v >= 0.4 && (!best || v > best.v)) best = { id: m.id, name: m.name, v };
+  }
+  return best;
+}
+
 /** 표시용 — 리그 전체에서 친한/껄끄러운 선수 상위(선수 상세 화면) */
 export function relationsOf(playerId: string, bonds: Bonds = {}): { friends: Relation[]; rivals: Relation[] } {
   const p = getPlayer(playerId);

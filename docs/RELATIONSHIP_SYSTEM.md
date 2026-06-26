@@ -150,7 +150,7 @@
 | **1b. 영속 bond + 표시 ✅(2026-06-26)** | store `bonds` 필드(SAVE_DEFAULTS+partialize)·endSeason `accrueBonds`(같은팀 +BOND_GROW·감쇠 BOND_DECAY·prune·cap 4000) + 선수상세 "인간관계" 카드(친한/라이벌) | 저장 | ✅ `_dv_relations`(bond 누적·외인0·감쇠·affinity상승)·`_dv_migrate` drift(bonds 키)·e2e·205테스트 |
 | **2. FA 영입 = 점수→확률 재설계 ✅(2026-06-26)** | offerScore에 relT 항(w.rel)·`acceptProb`(완만 S곡선)·`SIT_OUT` + resolveFAMarket argmax→정렬·롤·fallback·SIT + 로컬 affinity(친구연쇄) + 모듈 컨텍스트(`setRelationContext`, preview=result) | parity | ✅ `_dv_fa_relations`(4시나리오·S곡선)·`simLeague` parity 2.77(튜닝 후 기준 노이즈 내)·simKovo 38.9% 불변·simAudit/simFaDup 무결성 0·205테스트 |
 | **3. 재계약 반영 ✅(2026-06-26)** | buildOwnerFx에 **친구 방출 → 거부↑**(`REL_LEAVE_K × Σ max(0,affinity)` — uniform unrest 위에 가산, 절친 방출일수록↑). "친구 잔류→거부↓"는 별도 항 없이 **Phase 2 FA 시장 relT**가 처리(만료자가 FA로 풀리면 내 팀 친구가 재계약 확률↑) | 내 팀 한정(parity 무관) | ✅ `_dv_release_unrest`(방출 시 ≥uniform·친구 초과)·205테스트·tsc |
-| **4. 서사 확장** | 뉴스(이적 사유 관계)·방출 회고·면담 연동 | 가짜 드라마 | `simNews` 무결성·매달린 0 |
+| **4. 서사 확장 ✅(2026-06-26)** | 이적 뉴스에 **현재 사실**(옮긴 팀에 절친 있으면 "새 팀에는 절친 XX가 있다") — `topFriendOnTeam`. **가짜 드라마 금지** 준수(과거 사유 추정 X, 현 로스터 팩트만) | 가짜 드라마 | ✅ `_ev_transfernews`(무결성·매달린0)·`_ev_josa`(조사 교정)·tsc |
 
 > Phase 1은 무영향이라 안전·즉시. Phase 2가 parity 관문(핵심). 단계마다 문서 갱신·커밋.
 
