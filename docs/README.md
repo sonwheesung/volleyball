@@ -99,7 +99,7 @@ npx tsx tools/_gt_facontract.ts            # 재계약·FA 영입 시나리오 1
 npx tsx tools/_gt_bench.ts                  # 주전·벤치 시나리오 9케이스(라인업·마지막리베로·7인가드·건의게이트·suggestStart 최약주전 EC-LU-02, exit 0/1)
 npx tsx tools/_dv_bench2.ts                 # 독립검증 — EC-LU-02 옛버그(최강벤치) 재주입 A/B 88/88 검출·사유 우선순위 (독립 세션 산출)
 # (_dv_bench.ts = 라인업·게이트·pickRest 독립검증 13체크, 무거움 — on-demand)
-npx tsx tools/_dv_drift_posrate.ts 600      # 포지션 세트당 생산 vs 문서 드리프트(STATS_PROTOCOL §3 stale 감시 — MB블록 0.5→0.98 검출했던 가드)
+npx tsx tools/_dv_drift_posrate.ts 600      # 포지션 세트당 생산 vs box baseline 드리프트(STATS_PROTOCOL §3 stale 감시). baseline 재교정 2026-06-26: OP톱 3.3·MB블록 0.98·세터 12·리베로 4.7(구 doc 5.3/0.5 stale 교정). 해석 분해는 _dv_op_interp(on-demand)
 npx tsx tools/_dv_drift2_agility.ts         # 노쇠 그룹 멤버십 가드(문서 enum ↔ engine DECAY_STATS) — agility 노쇠 실측 + A/B 대조군(반응·위치 Δ0). EDGE_CASES §3.7, exit 0/1
 npx tsx tools/_dv_seasondays.ts             # 시즌 길이 단일상수(engine/calendar SEASON_DAYS) == 실제 일정 max dayIndex(164) — 상수 손복제 드리프트 차단. exit 0/1
 npx tsx tools/_dv_severance.ts              # 방출 위약금(TRANSACTION_SYSTEM 0.5①) — release가 cash서 severanceFee 차감·unrelease 환불·지갑부족 차단·잔여연수 단조성. exit 0/1
