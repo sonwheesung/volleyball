@@ -22,7 +22,12 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
  *  이전 ±10%(0.90~1.10)는 스노볼 과강: 패자 평균 17.6·점수차 7.6·듀스 6%로 일방적 세트 과다였음) */
 export const momFactor = (m: number) => 0.96 + 0.0008 * m;
 
-const ATTACK_SHARE: Record<Position, number> = { OP: 1.0, OH: 0.9, MB: 0.6, S: 0.1, L: 0 };
+// 공격 집중 지수 — spike^FOCUS로 에이스(외인 OP)에 스윙 몰림. KOVO 외인 아포짓 의존도(~25~30%) 재현.
+// 2026-06-26 도입(구: 선형·OP 1.0 → OP 톱 3.26/세트 ~20%로 KOVO 미달). 확정 FOCUS 3.0·OP 2.0:
+// OP 톱 ~4.3/세트(~27%)·KOVO 공격성공률 38.8% 불변·parity std 2.60(불변)·반등 100%. MATCH_SYSTEM 4장.
+const ATK_FOCUS = 3.0;
+const ATTACK_SHARE: Record<Position, number> = { OP: 2.0, OH: 0.9, MB: 0.6, S: 0.1, L: 0 };
+const aspk = (R: Rate, p: Player) => Math.pow(n(R(p).spike), ATK_FOCUS); // 집중 적용 스파이크 가중
 const CAP = 8; // 랠리 hop 상한(7.3)
 
 // ── 체력 (7.1) ──
@@ -191,14 +196,14 @@ function pickAttacker(t: RallyTeam, atk: Atk, R: Rate, rng: Rng): Player {
   const bk = back(t);
   const pool: { p: Player; w: number }[] = [];
   if (atk === 'quick' || atk === 'tempo') {
-    for (const p of fr) if (p.position === 'MB') pool.push({ p, w: n(R(p).spike) });
-    if (!pool.length) for (const p of fr) pool.push({ p, w: ATTACK_SHARE[p.position] * n(R(p).spike) });
+    for (const p of fr) if (p.position === 'MB') pool.push({ p, w: aspk(R, p) });
+    if (!pool.length) for (const p of fr) pool.push({ p, w: ATTACK_SHARE[p.position] * aspk(R, p) });
   } else if (atk === 'back') {
-    for (const p of bk) if (p.position === 'OH' || p.position === 'OP') pool.push({ p, w: n(R(p).spike) });
-    if (!pool.length) for (const p of fr) pool.push({ p, w: ATTACK_SHARE[p.position] * n(R(p).spike) });
+    for (const p of bk) if (p.position === 'OH' || p.position === 'OP') pool.push({ p, w: ATTACK_SHARE[p.position] * aspk(R, p) });
+    if (!pool.length) for (const p of fr) pool.push({ p, w: ATTACK_SHARE[p.position] * aspk(R, p) });
   } else {
-    for (const p of fr) if (p.position !== 'MB' && p.position !== 'S') pool.push({ p, w: ATTACK_SHARE[p.position] * n(R(p).spike) });
-    if (!pool.length) for (const p of fr) pool.push({ p, w: ATTACK_SHARE[p.position] * n(R(p).spike) });
+    for (const p of fr) if (p.position !== 'MB' && p.position !== 'S') pool.push({ p, w: ATTACK_SHARE[p.position] * aspk(R, p) });
+    if (!pool.length) for (const p of fr) pool.push({ p, w: ATTACK_SHARE[p.position] * aspk(R, p) });
   }
   const tot = pool.reduce((s, x) => s + x.w, 0);
   if (tot <= 0) return fr[0] ?? t.six[0];

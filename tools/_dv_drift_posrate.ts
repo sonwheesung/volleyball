@@ -1,10 +1,10 @@
 // 드리프트 검출 — 포지션별 생산(세트당) 문서값 vs box 단일 진실 경로 실측.
 //
-// baseline = box 단일 진실 실측(N=10,000·엔진 76c66ad·2026-06-26):
-//   OP 톱 3.26 · MB 블록(1인) 0.98 · 세터 어시 11.75 · 리베로 디그 4.57.
-// 구 doc(OP 5.3·MB 0.5, simStatRecord legacy 경로)은 box 단일화(2026-06-24) 전 오버레이라 stale였음 →
-//   SALARY §1.1·FOREIGN_SYSTEM·EDGE_CASES §3.6 전부 box 값으로 교정 완료. 이 가드는 이후 드리프트만 잡는다.
-// 이 도구는 box 경로의 포지션별 세트당 생산을 재측정해 baseline과 대조(STATS_PROTOCOL §3 stale 감시).
+// baseline = box 단일 진실 실측(N=10,000·2026-06-26):
+//   OP 톱 4.31 · MB 블록(1인) 0.98 · 세터 어시 11.75 · 리베로 디그 4.57.
+// 이력: 구 doc(OP 5.3·MB 0.5, legacy 오버레이)은 stale → box 재측정 OP 3.26(76c66ad). 이후 **공격 집중 도입
+//   (rally.ts ATK_FOCUS 3.0·OP share 2.0, KOVO 외인 의존도 ~27%)** 로 OP 톱 3.26→4.31(의도된 변경, MATCH_SYSTEM 4장).
+// 이 가드는 baseline 대비 이후 드리프트만 잡는다(box 경로 세트당 생산, STATS_PROTOCOL §3).
 //
 // 정의:
 //   세트당 = 누적 카운트 / 총 세트 수. "OP 톱"은 팀별 OP 중 득점 1위의 평균, 나머지는 포지션 평균(코트당 1명 등).
@@ -109,8 +109,8 @@ log(`표본: ${N}경기 · 총 세트 ${totalSets} · 총 득점 ${totalPts}\n`)
 log(`지표                    실측/세트   문서값/세트   차이`);
 // 기대값 = box 단일 진실 baseline(N=10,000·엔진 76c66ad·2026-06-26 재측정). 구 doc(OP 5.3·MB 0.5)은 legacy 오버레이라 stale였음.
 const rows: [string, number, number][] = [
-  ['OP 톱 득점', topOpPerSet, 3.3],   // 구 5.3(legacy ATK_FOCUS 과장) → box 3.26
-  ['MB 블록(1인)', mbBlockPerSet, 0.98], // 구 0.5(legacy 분산) → box 0.98(실제 리드블로커 MB)
+  ['OP 톱 득점', topOpPerSet, 4.3],   // 공격 집중(ATK_FOCUS 3.0·OP 2.0) 도입 후 box 4.31(구 3.26→KOVO ~27%)
+  ['MB 블록(1인)', mbBlockPerSet, 0.98], // box 실제 리드블로커 MB
   ['세터 어시', setterAssistPerSet, 12],
   ['리베로 디그', liberoDigPerSet, 4.7],
 ];
