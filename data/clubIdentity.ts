@@ -19,49 +19,49 @@ export const CLUB_IDENTITIES: ClubIdentity[] = [
     blurb: '리그를 대표하는 전통의 강호. 두꺼운 선수층과 우승 DNA로 매 시즌 우승을 다툰다.',
     foundedYear: 1998, titles: 7, tradition: 95,
     recentRanks: [1, 1, 2, 1, 2], // 명문: 우승 단골(3회)·가끔 준우승
-    strengthBias: 3.5, ageRange: [23, 33],
+    strengthBias: 3.5, ageRange: [23, 33], hue: 218, // 인천 타이드 — 딥블루(바다/전통)
   },
   {
     key: 'aging', label: '황혼의 명가', tagline: '저무는 왕조',
     blurb: '한 시대를 풍미했지만 주축이 노쇠한 황혼의 명가. 어쩌면 지금이 마지막 전성기다.',
     foundedYear: 2001, titles: 5, tradition: 82,
     recentRanks: [4, 4, 3, 2, 1], // 황혼: 5시즌 전 우승(1) → 하락(4)
-    strengthBias: 1.5, ageRange: [26, 35],
+    strengthBias: 1.5, ageRange: [26, 35], hue: 278, // 수원 페어리스 — 바이올렛(요정/황혼)
   },
   {
     key: 'rising', label: '신흥 강호', tagline: '떠오르는 다크호스',
     blurb: '젊은 코어가 폭발하며 강팀으로 떠오른 다크호스. 미래가 더 무섭다.',
     foundedYear: 2015, titles: 1, tradition: 44,
     recentRanks: [2, 3, 1, 4, 5], // 신흥: 5위→우승 한 번→2위 정착(상승)
-    strengthBias: 2.0, ageRange: [19, 26],
+    strengthBias: 2.0, ageRange: [19, 26], hue: 6, // 대전 블레이즈 — 스칼렛(불꽃/폭발)
   },
   {
     key: 'cellar', label: '만년 약체', tagline: '하위권의 그늘',
     blurb: '수년째 하위권을 벗어나지 못한 만년 약체. 반등의 계기가 절실하다.',
     foundedYear: 2009, titles: 0, tradition: 22,
     recentRanks: [6, 5, 5, 6, 6], // 만년약체: 하위 고정(5~6위)
-    strengthBias: -2.0, ageRange: [20, 33],
+    strengthBias: -2.0, ageRange: [20, 33], hue: 332, // 광주 페퍼스 — 마젠타핑크(페퍼)
   },
   {
     key: 'midpack', label: '중위권', tagline: '봄배구의 문턱',
     blurb: '꾸준한 중위권. 한 끗이 모자라 봄배구 문턱에서 멈춰 서곤 한다.',
     foundedYear: 2007, titles: 1, tradition: 51,
     recentRanks: [3, 2, 4, 3, 3], // 중위권: 3위권에서 오르내림
-    strengthBias: 0, ageRange: [21, 32],
+    strengthBias: 0, ageRange: [21, 32], hue: 190, // 김천 코메츠 — 시안(혜성)
   },
   {
     key: 'expansion', label: '신생팀', tagline: '백지의 도전',
     blurb: '이제 막 창단한 신생 구단. 당장의 전력은 약하지만 유망주로 가득해 잠재력은 최고다.',
     foundedYear: 2024, titles: 0, tradition: 6,
     recentRanks: [7],
-    strengthBias: -3.5, ageRange: [19, 23],
+    strengthBias: -3.5, ageRange: [19, 23], hue: 43, // 화성 윙스 — 앰버골드(날개)
   },
   {
     key: 'rebuild', label: '리빌딩', tagline: '판을 다시 짜다',
     blurb: '전성기를 보낸 뒤 어린 선수 위주로 판을 다시 짜는 리빌딩 구단. 인내가 필요한 시기.',
     foundedYear: 2012, titles: 0, tradition: 31,
     recentRanks: [5, 6, 6, 5, 4], // 리빌딩: 4위→6위 추락→회복 중
-    strengthBias: -1.5, ageRange: [19, 28],
+    strengthBias: -1.5, ageRange: [19, 28], hue: 148, // 서울 스파이커스 — 그린(새 출발)
   },
 ];
 

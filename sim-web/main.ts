@@ -32,6 +32,7 @@ import { buildMatchBanners, type Banner } from '../data/broadcast';
 import { resolveDraft, lotteryRound1, buildDraftOrder, prospectStars, type PickReason } from '../engine/draft';
 import { generateDraftClass } from '../data/draftClass';
 import { createRng } from '../engine/rng';
+import { teamHue } from '../lib/teamColor';
 import type { Player } from '../types';
 
 const POS_KO: Record<string, string> = { S: '세터', OH: '아웃사이드', OP: '아포짓', MB: '미들', L: '리베로' };
@@ -387,9 +388,8 @@ function runCoinTossPreview() {
 }
 
 // ─── 🏆 우승 화면 ───────────────────────────────────────────────────────────
-// 우승 순간 축하 화면 목업 + 블롭 일러스트(SVG). 가운데 선수 = 우승팀 색(현재 팀 색 데이터 없어 id 해시로 결정론 생성 — 추후 CLUB_IDENTITY에 실제 색).
+// 우승 순간 축하 화면 목업 + 블롭 일러스트(SVG). 가운데 선수 = 우승팀 색(lib/teamColor — CLUB_IDENTITY 실제 구단 hue).
 const CH = { team: TEAMS[0]?.id ?? '', season: 14 };
-function teamHue(id: string): number { let h = 2166136261 >>> 0; for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); } return h % 360; }
 const champArt = (primary: string, arm: string, badge: string) => `
   <g opacity="0.92">
     <rect x="60" y="30" width="11" height="11" rx="2" fill="#10B9A6" transform="rotate(20 65 35)"/><rect x="330" y="46" width="11" height="11" rx="2" fill="#FF6B5A" transform="rotate(-15 335 51)"/>

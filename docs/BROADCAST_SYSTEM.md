@@ -76,7 +76,9 @@
 - **컴포넌트**:
   - `components/ChampionIllustration.tsx` — `react-native-svg` 벡터(블롭 3인 + 컵 + 콘페티 + 배구공). 이미지 파일 0·전 해상도 선명.
   - `components/ChampionCelebration.tsx` — 어두운 팀색 카드 + 일러스트 + 팀명·N시즌 챔피언·(선택)MVP·"시즌 마무리 →".
-  - `lib/teamColor.ts` `teamColors(id)` — **가운데 선수·배경·강조 텍스트가 우승팀 색**. 현재 구단별 색 데이터가 없어
-    **id 해시로 결정론 생성**. → **추후 `CLUB_IDENTITY`에 실제 구단 색 추가 시 `teamColors`만 그 값 우선으로 교체**(연결 지점 한 곳).
+  - `lib/teamColor.ts` `teamColors(id)` — **가운데 선수·배경·강조 텍스트가 우승팀 색**. **✅ `CLUB_IDENTITY` 실제 구단
+    색(hue) 연결됨(2026-06-26)**: `clubIdentity(id)?.hue`를 우선 쓰고(비표준 id면 id 해시 폴백) 5색 파생 → 구단마다
+    고유 시그니처 색(타이드=딥블루·블레이즈=스칼렛 등, CLUB_IDENTITY_SYSTEM §2). sim-web 우승 탭도 동일 `teamColors`
+    임포트(자체 hue 재구현 제거 — 단일 소스).
 - **MVP**: 챔프전 MVP(`finalsMvp`)는 endSeason 후에만 산출 → 플레이오프 시점엔 생략(있으면 표시). 추후 연표·결과 화면에 MVP 포함.
 - **재활용(추후)**: 같은 블롭 캐릭터로 컵→메달·꽃다발·기록판 교체해 시상식·기록 경신·연표 썸네일에 통일감 있게 확장.

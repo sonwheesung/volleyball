@@ -325,6 +325,7 @@ export interface ClubIdentity {
   recentRanks: number[];      // 최근 N시즌 가상 순위(1=우승)
   strengthBias: number;       // [생성] OVR ± (랜덤 티어 대체)
   ageRange: [number, number]; // [생성] 선수 나이 분포
+  hue: number;                // [표시] 구단 시그니처 색(HSL 0~359) — 우승 연출·일러스트(teamColors)
 }
 
 export type Side = 'home' | 'away';

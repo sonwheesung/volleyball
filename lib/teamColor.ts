@@ -1,9 +1,12 @@
-// 팀 색 — 우승 일러스트·연출에 쓰는 구단 색. 현재 구단별 색 데이터가 없어 **팀 id 해시로 결정론 생성**한다.
-// 추후 CLUB_IDENTITY에 실제 구단 색이 들어오면 teamColors가 그 값을 우선 쓰도록 바꾸면 된다(이 함수만 교체).
-// 순수 함수(시드=id). react-native-svg/RN 스타일 모두 hsl() 문자열을 색으로 받는다.
+// 팀 색 — 우승 일러스트·연출에 쓰는 구단 색. **CLUB_IDENTITY의 실제 구단 hue를 우선** 쓰고,
+// 비표준 id(합성 테스트 등)면 id 해시로 결정론 폴백한다(2026-06-26 연결, CLUB_IDENTITY_SYSTEM §2).
+// 순수 함수. react-native-svg/RN 스타일 모두 hsl() 문자열을 색으로 받는다.
+import { clubIdentity } from '../data/clubIdentity';
 
 export function teamHue(id: string): number {
-  let h = 2166136261 >>> 0;
+  const ci = clubIdentity(id);          // t0..t6 → 구단 시그니처 색
+  if (ci) return ci.hue;
+  let h = 2166136261 >>> 0;             // 비표준 id 폴백(결정론 해시)
   for (let i = 0; i < id.length; i++) { h ^= id.charCodeAt(i); h = Math.imul(h, 16777619); }
   return h % 360;
 }

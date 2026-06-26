@@ -55,11 +55,17 @@ interface ClubIdentity {
   recentRanks: number[];      // 최근 5시즌 가상 순위(1=우승) — 서사 그래프
   strengthBias: number;       // [생성] OVR ± (랜덤 티어 대체)
   ageRange: [number, number]; // [생성] 선수 나이 분포
+  hue: number;                // [표시] 구단 시그니처 색(HSL 색상환 0~359) — 우승 연출·일러스트
 }
 ```
 
 - `data/clubIdentity.ts`에 `CLUB_IDENTITIES`(7) + `clubIdentity(teamId)` 셀렉터.
 - `recentRanks`·`titles`·`tradition`은 **순수 표시**(엔진 무관). 정체성 서사의 "과거".
+- **`hue`(2026-06-26 추가)**: 구단 시그니처 색. `lib/teamColor.ts teamColors(id)`가 `clubIdentity(id)?.hue`를
+  우선 쓰고(없으면 id 해시 폴백) primary/arm/badge/bg/light 5색을 파생 → 우승 축하 화면(`ChampionCelebration`)·
+  일러스트가 **진짜 구단색**으로 뜬다(BROADCAST_SYSTEM §7). 색은 구단명/정체성에 맞춰 배정(타이드=딥블루·
+  페어리스=바이올렛·블레이즈=스칼렛·페퍼스=마젠타·코메츠=시안·윙스=앰버·스파이커스=그린, 7색 색상환 분산).
+  엔진 무파급(표시 전용) — 정체성 SOLID 원칙(§0) 그대로.
 - 알려진 단순화: 창단 직후 신생팀도 `clubTenure`는 기존 공식(나이−19)을 따른다(시드 = 홈그로운 가정).
   이 때문에 한때 25세↑ 전원이 "프랜차이즈"로 표시됐으나(측정 59%), **프랜차이즈 판정에 스타급
   기량·외국인 제외 조건을 더해** 간판만 남겼다(2026-06-18, 측정 ~7% — `engine/cap.ts isFranchise`,
