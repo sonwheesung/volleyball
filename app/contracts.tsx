@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
+import { teamRelations } from '../data/relationships';
 import { getPlayerProduction } from '../data/production';
 import { activeRoster, payroll } from '../data/roster';
 import { overall, overallRaw } from '../engine/overall';
@@ -29,6 +30,7 @@ export default function Contracts() {
   const unrelease = useGameStore((s) => s.unrelease);
   const setResign = useGameStore((s) => s.setResign);
   const cash = useGameStore((s) => s.cash);
+  const bonds = useGameStore((s) => s.bonds);
 
   const evolved = getEvolvedTeamPlayers(teamId, currentDay);
   const active = activeRoster(evolved, overrides, released);
@@ -83,9 +85,15 @@ export default function Contracts() {
     ].filter(Boolean).join('\n');
     const heavy = isFranchise(p) || p.clubTenure >= 6;
     const tone = heavy ? '\n\n오래 팀을 지킨 선수입니다. 정말 보내시겠습니까?' : '';
+    // 인간관계 경고(현재 사실 — RELATIONSHIP §3.2②·§6): 팀에 남는 각별한 동료는 방출에 동요(재계약 거부 위험↑).
+    const friends = teamRelations(p.id, teamId, bonds).friends;
+    // Alert는 josa 자동교정을 안 거치므로 주격조사(이/가) 병기를 피해 대시로 끊는다.
+    const friendWarn = friends.length
+      ? `\n\n💔 각별한 동료 ${friends.map((f) => f.name).join(', ')} — 방출에 동요할 수 있습니다 (재계약 거부 위험↑)`
+      : '';
     Alert.alert(
       `${p.name} 방출`,
-      `${retro}\n\n위약금 ${formatMoney(fee)} 지불 · 연봉 ${formatMoney(p.contract.salary)} 절감\n(당일 철회 가능)${tone}`,
+      `${retro}${friendWarn}\n\n위약금 ${formatMoney(fee)} 지불 · 연봉 ${formatMoney(p.contract.salary)} 절감\n(당일 철회 가능)${tone}`,
       [
         { text: '취소', style: 'cancel' },
         {
