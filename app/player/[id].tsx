@@ -20,6 +20,7 @@ import { deriveRatings } from '../../engine/ratings';
 import { contractStatus, formatMoney } from '../../engine/salary';
 import { marketVal } from '../../data/awardSalary';
 import { useGameStore } from '../../store/useGameStore';
+import { relationsOf } from '../../data/relationships';
 
 const STATUS_COLOR = { 저평가: theme.good, 적정: theme.muted, 고평가: theme.bad } as const;
 
@@ -40,6 +41,7 @@ export default function PlayerDetail() {
   const unbench = useGameStore((s) => s.unbench);
   const talkCooldown = useGameStore((s) => s.talkCooldown);
   const benchCooldown = useGameStore((s) => s.benchCooldown);
+  const bonds = useGameStore((s) => s.bonds);
   const [talkAsk, setTalkAsk] = useState(false);
   const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
@@ -177,6 +179,30 @@ export default function PlayerDetail() {
           </Card>
         </>
       ) : null}
+
+      {(() => {
+        const rel = relationsOf(p.id, bonds);
+        if (!rel.friends.length && !rel.rivals.length) return null;
+        return (
+          <>
+            <Title>인간관계</Title>
+            <Card>
+              {rel.friends.length > 0 ? (
+                <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: theme.good, fontWeight: '800', width: 54 }}>친한</Text>
+                  <Text style={{ color: theme.text, flex: 1 }}>{rel.friends.map((f) => f.name).join(', ')}</Text>
+                </View>
+              ) : null}
+              {rel.rivals.length > 0 ? (
+                <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
+                  <Text style={{ color: theme.bad, fontWeight: '800', width: 54 }}>라이벌</Text>
+                  <Text style={{ color: theme.text, flex: 1 }}>{rel.rivals.map((r) => r.name).join(', ')}</Text>
+                </View>
+              ) : null}
+            </Card>
+          </>
+        );
+      })()}
 
       {isMine && cond ? (
         <>

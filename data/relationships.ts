@@ -1,10 +1,36 @@
 // 관계망 셀렉터 — 선수↔팀 affinity + 표시용 친구/라이벌. docs/RELATIONSHIP_SYSTEM §2.
 // 엔진(engine/relationships)은 순수, 여기서 리그 로스터·bond를 엮는다. bond는 Phase 1b에서 store가 주입(없으면 0).
-import { affinity, pairKey } from '../engine/relationships';
+import { affinity, pairKey, BOND_GROW, BOND_MAX, BOND_DECAY } from '../engine/relationships';
 import { getPlayer, getTeamPlayers, currentRosters } from './league';
 
 const REL_SCALE = 2.5;        // 친구 2~3명이면 포화
 const SHOW_THRESHOLD = 0.3;   // 표시할 관계 최소 강도
+const BOND_PRUNE = 0.02;      // 이하 가지치기(옛정 소멸)
+const BOND_CAP = 4000;        // 맵 크기 상한(저장 폭주 차단)
+
+/** 시즌말 bond 누적 — 전체 감쇠(옛정 약화) + 같은 팀 국내 쌍 +성장. 무영향 결정론(저장값). RELATIONSHIP §1.1. */
+export function accrueBonds(prev: Record<string, number>, rosters: Record<string, string[]>): Record<string, number> {
+  const next: Record<string, number> = {};
+  // 1) 전체 감쇠 — 떨어진 쌍 자연 약화(완전소멸은 prune)
+  for (const k in prev) { const d = prev[k] * BOND_DECAY; if (d >= BOND_PRUNE) next[k] = d; }
+  // 2) 같은 팀 국내 쌍 성장(감쇠 상쇄 + 누적, 상한 BOND_MAX)
+  for (const ids of Object.values(rosters)) {
+    const dom = ids.filter((id) => { const p = getPlayer(id); return p && !p.isForeign; });
+    for (let i = 0; i < dom.length; i++) for (let j = i + 1; j < dom.length; j++) {
+      const k = pairKey(dom[i], dom[j]);
+      next[k] = Math.min(BOND_MAX, (next[k] ?? 0) + BOND_GROW);
+    }
+  }
+  // 3) 바운딩 — 상한 초과 시 강한 순 top BOND_CAP만 유지
+  const keys = Object.keys(next);
+  if (keys.length > BOND_CAP) {
+    keys.sort((a, b) => next[b] - next[a]);
+    const trimmed: Record<string, number> = {};
+    for (let i = 0; i < BOND_CAP; i++) trimmed[keys[i]] = next[keys[i]];
+    return trimmed;
+  }
+  return next;
+}
 
 type Bonds = Record<string, number>;
 

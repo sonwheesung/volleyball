@@ -29,6 +29,8 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 외국인·아시아쿼터
   tryoutWish: [], foreignAltPool: [], foreignSubUsed: false, keepForeign: null,
   asianWish: [], asianAltPool: [], asianSubUsed: false, keepAsian: null,
+  // 인간관계(RELATIONSHIP_SYSTEM) — 함께한 세월 우정(pairKey→0~0.3)
+  bonds: {},
 };
 
 type Kind = 'bool' | 'nbool' | 'num' | 'nstr' | 'rec' | 'nrec' | 'arr';
@@ -48,6 +50,7 @@ const KIND: Record<string, Kind> = {
   fanScore: 'num', releaseAnger: 'num', cash: 'num',
   tryoutWish: 'arr', foreignAltPool: 'arr', foreignSubUsed: 'bool', keepForeign: 'nbool',
   asianWish: 'arr', asianAltPool: 'arr', asianSubUsed: 'bool', keepAsian: 'nbool',
+  bonds: 'rec',
   // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, lastFinance
 };
 

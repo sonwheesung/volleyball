@@ -6,6 +6,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
 import { SAVE_VERSION, migrateSave } from './saveMigration';
+import { accrueBonds } from '../data/relationships';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
@@ -81,6 +82,7 @@ interface GameState {
   archive: SeasonArchive[];                    // 역대 우승 + 시상 + 순위/연승연패/플옵
   careerLog: { faSigns: number; coachHires: number; staffHires: number; interviews: number }; // 단장 통산 액션(업적용)
   careerTotals: { points: number; aces: number; setsWon: number; setsLost: number; matchWins: number; matchLosses: number }; // 내 팀 통산 경기 기록(업적용)
+  bonds: Record<string, number>; // 인간관계 우정(pairKey→0~0.3, 함께한 세월 누적, RELATIONSHIP_SYSTEM)
   coachPool: { coaches: Coach[]; assistants: AssistantCoach[] } | null; // 감독 생애주기 풀(null=시드, STAFF_SYSTEM 6)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   expelledLog: ExpelRecord[];                  // 영구제명 연표(승부조작·학폭 — 불명예 퇴출, 뉴스/서사용)
@@ -177,6 +179,7 @@ const freshSave = {
   archive: [] as SeasonArchive[],
   careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 },
   careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 },
+  bonds: {} as Record<string, number>,
   coachPool: null as { coaches: Coach[]; assistants: AssistantCoach[] } | null,
   hallOfFame: [] as HofEntry[],
   expelledLog: [] as ExpelRecord[],
@@ -577,7 +580,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, transfers, retirements, archive, careerLog, careerTotals, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, transfers, retirements, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
 
@@ -806,6 +809,7 @@ export const useGameStore = create<GameState>()(
           staffAssistants: nextStaffAssistants, // 은퇴한 코치 슬롯 정리
           careerLog: { ...careerLog, faSigns: careerLog.faSigns + offseasonSigns }, // 오프시즌 영입 누적(업적)
           careerTotals: nextTotals, // 통산 경기 기록 누적(업적)
+          bonds: accrueBonds(bonds, filled.rosters), // 인간관계 우정 누적(같은 팀 +·옛정 감쇠, RELATIONSHIP §1.1)
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
           benchDirectives: [],
           talkCooldown: {},   // 시즌말 currentDay 0 리셋과 함께 쿨다운 초기화
@@ -896,6 +900,7 @@ export const useGameStore = create<GameState>()(
         archive: s.archive,
         careerLog: s.careerLog,
         careerTotals: s.careerTotals,
+        bonds: s.bonds,
         coachPool: s.coachPool,
         hallOfFame: s.hallOfFame,
         expelledLog: s.expelledLog,
