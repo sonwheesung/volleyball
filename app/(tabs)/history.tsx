@@ -3,7 +3,10 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } from '../../components/Screen';
 import { AwardIllustration } from '../../components/AwardIllustration';
+import { LegendIllustration } from '../../components/LegendIllustration';
 import { teamColors } from '../../lib/teamColor';
+import { jerseyNumber, SUPER_LEGEND_POINTS } from '../../engine/jersey';
+import { numberLineage } from '../../data/legends';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../../data/league';
 import { leagueProduction } from '../../data/production';
@@ -329,7 +332,7 @@ function CareerView({
         })
       )}
       <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 2 }}>
-        현역 + 은퇴(명예의전당) 통합 · 🎖️ 영구결번 · ·은 은퇴
+        현역 + 은퇴(명예의전당) 통합 · 🎖️ 헌액 번호 · ·은 은퇴
       </Muted>
     </>
   );
@@ -344,19 +347,44 @@ function HofView({ hallOfFame, teamId }: { hallOfFame: ReturnType<typeof useGame
   return (
     <Card>
       <Text style={styles.cardHead}>은퇴 레전드 · {sorted.length}명</Text>
-      {sorted.map((h) => (
-        <View key={h.id} style={styles.hofRow}>
-          <PosTag pos={h.position} />
-          <View style={{ flex: 1 }}>
-            <Text style={[styles.team, h.teamId === teamId && styles.mine]} numberOfLines={1}>
-              {h.legend ? '🎖️ ' : '🏅 '}{h.name}
-              {h.legend ? <Text style={{ color: theme.warn, fontSize: 11 }}>  영구결번</Text> : null}
-            </Text>
-            <Muted style={{ fontSize: 11 }}>{short(h.teamId)} · {h.seasons}시즌 · {h.retiredSeason + 1}시즌 은퇴</Muted>
+      {sorted.map((h) => {
+        if (!h.legend) {
+          // 비-레전드 HOF(통산 4000+) — 기존 컴팩트 행
+          return (
+            <View key={h.id} style={styles.hofRow}>
+              <PosTag pos={h.position} />
+              <View style={{ flex: 1 }}>
+                <Text style={[styles.team, h.teamId === teamId && styles.mine]} numberOfLines={1}>🏅 {h.name}</Text>
+                <Muted style={{ fontSize: 11 }}>{short(h.teamId)} · {h.seasons}시즌 · {h.retiredSeason + 1}시즌 은퇴</Muted>
+              </View>
+              <Text style={styles.lbVal}>{h.points.toLocaleString()}점</Text>
+            </View>
+          );
+        }
+        // 레전드 — 헌액 유니폼 + 헌액 번호 + 번호 계보(사실)
+        const num = jerseyNumber(h.id);
+        const tc = teamColors(h.teamId);
+        const isSuper = h.points >= SUPER_LEGEND_POINTS;
+        const numColor = isSuper ? '#FFD879' : theme.warn;
+        const lineage = numberLineage(hallOfFame, h.teamId, num, h.id, h.retiredSeason);
+        return (
+          <View key={h.id} style={styles.hofLegendRow}>
+            <LegendIllustration primary={tc.primary} light={tc.light} num={num} width={50} />
+            <View style={{ flex: 1, gap: 1 }}>
+              <Text style={[styles.team, h.teamId === teamId && styles.mine]} numberOfLines={1}>
+                {isSuper ? '👑 ' : '🎖️ '}{h.name}
+                <Text style={{ color: numColor, fontSize: 11, fontWeight: '800' }}>  {isSuper ? '초레전드' : '헌액 번호'} {num}번</Text>
+              </Text>
+              <Muted style={{ fontSize: 11 }}>{short(h.teamId)} · {h.seasons}시즌 · {h.retiredSeason + 1}시즌 은퇴 · {h.points.toLocaleString()}점</Muted>
+              {lineage.length > 0 ? (
+                <Text style={{ fontSize: 10.5, color: theme.muted }} numberOfLines={1}>
+                  {num}번 계보 · {lineage.map((g) => `${g.name}(${g.points.toLocaleString()})`).join(', ')}
+                </Text>
+              ) : null}
+            </View>
           </View>
-          <Text style={styles.lbVal}>{h.points.toLocaleString()}점</Text>
-        </View>
-      ))}
+        );
+      })}
     </Card>
   );
 }
@@ -456,6 +484,7 @@ const styles = StyleSheet.create({
   lbVal: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 44, textAlign: 'right' },
 
   hofRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
+  hofLegendRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border },
   awRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   awLabel: { width: 76, color: theme.muted, fontSize: 13, fontWeight: '700' },
   awName: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '700' },

@@ -69,7 +69,7 @@ function DraftCenterInner() {
 
   const onFinish = () => {
     endSeason();
-    router.replace('/(tabs)');
+    router.replace('/enshrine'); // 헌액 화면(새 레전드 0명이면 자동 통과 → 탭). BROADCAST §8.4
   };
 
   return (

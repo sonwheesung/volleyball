@@ -73,7 +73,7 @@ function DraftLiveInner() {
   const done = revealed >= total;
   const shown = picks.slice(0, revealed).reverse(); // 최신이 위로
 
-  const onFinish = () => { setAuto(false); endSeason(); router.replace('/(tabs)'); };
+  const onFinish = () => { setAuto(false); endSeason(); router.replace('/enshrine'); }; // 헌액 화면 경유(BROADCAST §8.4)
 
   return (
     <Screen title={`${season + 2}시즌 드래프트`}>

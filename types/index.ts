@@ -118,7 +118,7 @@ export interface HofEntry {
   id: string;
   name: string;
   position: Position;
-  teamId: string;        // 마지막 소속(영구결번 구단)
+  teamId: string;        // 마지막 소속(헌액 구단)
   seasons: number;
   points: number;
   blocks: number;

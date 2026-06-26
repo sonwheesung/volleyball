@@ -43,6 +43,7 @@ export default function RootLayout() {
         <Stack.Screen name="asian-tryout" options={{ title: '아시아쿼터 트라이아웃' }} />
         <Stack.Screen name="fa" options={{ title: 'FA 센터' }} />
         <Stack.Screen name="draft" options={{ title: '신인 드래프트' }} />
+        <Stack.Screen name="enshrine" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="exhibition" options={{ title: '테스트 경기' }} />
         <Stack.Screen name="achievements" options={{ title: '업적' }} />
         <Stack.Screen name="records" options={{ title: '통산 순위' }} />

@@ -31,7 +31,7 @@
 | [TRAIT_SYSTEM](./TRAIT_SYSTEM.md) | 선수 특성(긍정+부정, 결정론 부여, 소폭 엔진영향) | `engine/traits.ts` |
 | [INJURY_SYSTEM](./INJURY_SYSTEM.md) | 부상(시즌 계층 격리·출전결장·만성) | `engine/injury.ts`, `data/injury.ts` |
 | [NEWS_SYSTEM](./NEWS_SYSTEM.md) | 뉴스 피드(1~4 종합 파생, 캡스톤) | `data/news.ts` |
-| [BROADCAST_SYSTEM](./BROADCAST_SYSTEM.md) | 중계 현수막(기록·PO확정, 보드 하단 lower-third, 스포일러 정책) | ✅ Phase1 — `data/broadcast.ts`·`components/BroadcastBanner.tsx`·`app/match/[id]`(finished 게이트). 우승 현수막·실시간 기록은 추후 |
+| [BROADCAST_SYSTEM](./BROADCAST_SYSTEM.md) | 중계 현수막(기록·PO확정·정규우승) + 우승 축하 화면 + **§8 명예의전당 헌액 연출·헌액 번호(비소모·결정론·번호 계보 사실)** | ✅ Phase1 — `data/broadcast.ts`·`BroadcastBanner`·`ChampionCelebration`. §8 헌액 번호 — `engine/jersey.ts`·`data/legends.ts`·`components/LegendIllustration.tsx`·기록탭 HofView·뉴스(2026-06-26) |
 | [TRANSACTION_SYSTEM](./TRANSACTION_SYSTEM.md) | 시즌 중 이동(방출→FA·구멍 영입, 전 구단 AI, 날짜 인지 명단) | `engine/transactions.ts`, `data/dynamics.ts`, `app/transactions.tsx` |
 | [OWNER_SYSTEM](./OWNER_SYSTEM.md) | 구단주 레이어: 선수 면담·감독 벤치 건의·팬심 | `engine/owner.ts`·`data/owner.ts` (뉴스 연동만 보류) |
 | [FORM_SYSTEM](./FORM_SYSTEM.md) | 경기감각: 결장 누적 → 체감 하락, 출전 이력 파생 | `engine/form.ts`·`data/dynamics.ts` |
@@ -105,6 +105,7 @@ npx tsx tools/_dv_drift_posrate.ts 600      # 포지션 세트당 생산 vs box 
 npx tsx tools/_dv_drift2_agility.ts         # 노쇠 그룹 멤버십 가드(문서 enum ↔ engine DECAY_STATS) — agility 노쇠 실측 + A/B 대조군(반응·위치 Δ0). EDGE_CASES §3.7, exit 0/1
 npx tsx tools/_dv_fa_relations.ts           # FA 점수→확률+관계(FA §2.7) — relT ±·우승파강행/의리파기피·acceptProb S곡선·SIT_OUT·결정론. exit 0/1
 npx tsx tools/_dv_relations.ts              # 인간관계망 모델(RELATIONSHIP_SYSTEM §8 Phase 1a) — affinity 결정론·대칭·innate분포·포지션라이벌·bond단조·외인0. exit 0/1
+npx tsx tools/_dv_jersey.ts                 # 헌액 번호(BROADCAST §8) — jerseyNumber 1..99·결정론·동결스냅샷·균등분포 + numberLineage(같은팀·먼저은퇴·통산내림·본인/타팀/비레전드 제외). exit 0/1
 npx tsx tools/_dv_migrate.ts                # 세이브 마이그레이션 순수함수(SAVE_SYSTEM §6) — 손상/구버전 입력 정규화 무크래시·정상 멱등·A/B(정규화 없이 크래시 실증)·drift(키 일치). exit 0/1
 npx tsx tools/_dv_migrate_e2e.ts            # 세이브 마이그레이션 E2E — 실 store에 손상/유효 세이브 넣고 persist.rehydrate() 끝까지(sanitize 로드·base 커밋·commit throw 시 fresh 리셋). exit 0/1
 npx tsx tools/_dv_seasondays.ts             # 시즌 길이 단일상수(engine/calendar SEASON_DAYS) == 실제 일정 max dayIndex(164) — 상수 손복제 드리프트 차단. exit 0/1

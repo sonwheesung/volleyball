@@ -6,6 +6,8 @@
 import type { ExpelRecord, HofEntry, Milestone, NewsItem, Position, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
 import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
+import { jerseyNumber } from '../engine/jersey';
+import { numberLineage } from './legends';
 import { topFriendOnTeam } from './relationships';
 import { popularityNow } from './owner';
 import { seasonInjuryReport } from './injury';
@@ -312,12 +314,18 @@ export function buildNewsFeed(
       h.blocks > 0 ? `블로킹 ${h.blocks.toLocaleString()}개` : '',
       h.digs > 0 ? `디그 ${h.digs.toLocaleString()}개` : '',
     ].filter(Boolean).join('·');
+    // 헌액 번호(비소모·결정론) + 번호 계보(사실만 — '계승' 인과 금지, docs/BROADCAST §8.3)
+    const num = jerseyNumber(h.id);
+    const lineage = h.legend ? numberLineage(hallOfFame, h.teamId, num, h.id, h.retiredSeason) : [];
+    const legacyTxt = lineage.length > 0
+      ? ` 같은 ${num}번을 달았던 과거 레전드 — ${lineage.map((g) => `${g.name}(통산 ${g.points.toLocaleString()}점)`).join(', ')}.`
+      : '';
     push(h.retiredSeason, 'hof', vh([
-      (n) => `${n}, 명예의전당 헌액${h.legend ? ' · 영구결번' : ''} (통산 ${h.points.toLocaleString()}점)`,
+      (n) => `${n}, 명예의전당 헌액${h.legend ? ` · 헌액 번호 ${num}번` : ''} (통산 ${h.points.toLocaleString()}점)`,
       (n) => `전설의 마침표 — ${n} 명예의전당으로`,
     ], key, h.name), h.legend, h.teamId,
       body3('hof', key, `${h.name}이(가) ${h.seasons}시즌의 커리어를 마치고 명예의전당에 헌액됐다.${hofStats ? ` ${teamName(h.teamId)}에서 ${hofStats}를 남겼다.` : ''}`
-        + (h.legend ? ' 구단은 등번호를 영구결번으로 올렸다.' : '')), h.id);
+        + (h.legend ? ` 구단은 그의 헌액 번호 ${num}번을 전당에 새겼다.${legacyTxt}` : '')), h.id);
   }
 
   // 3.5) 은퇴 세리머니(슬라이스5) — 주목 은퇴자 작별 + 커리어 회고. HOF 헌액과 상보(작별 vs 전당 입성).
@@ -329,7 +337,7 @@ export function buildNewsFeed(
       : r.position === 'S' ? (r.assists > 0 ? `세트 어시스트 ${r.assists.toLocaleString()}개로 팀 공격을 조립한 야전사령관` : `${r.seasons}시즌 코트를 지킨 세터`)
       : r.position === 'MB' ? (r.blocks > 0 ? `블로킹 ${r.blocks.toLocaleString()}개로 네트 앞을 지킨 벽` : `${r.seasons}시즌 코트를 지킨 미들 블로커`)
       : (r.points > 0 ? `통산 ${r.points.toLocaleString()}점을 책임진 득점원` : `${r.seasons}시즌 코트를 지킨 ${posKo}`);
-    const tail = r.legend ? ` ${teamName(r.teamId)}은(는) 등번호를 영구결번으로 올려 그를 영원히 기린다.`
+    const tail = r.legend ? ` ${teamName(r.teamId)}은(는) 그의 헌액 번호 ${jerseyNumber(r.playerId)}번을 전당에 새겨 영원히 기린다.`
       : r.hof ? ' 통산 기록은 명예의전당에 새겨진다.' : '';
     push(r.season, 'retire', vh([
       (n) => `${n}, ${r.seasons}시즌 커리어 마치고 은퇴`,

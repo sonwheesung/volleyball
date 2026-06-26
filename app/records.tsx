@@ -85,7 +85,7 @@ function RecordsInner() {
                   <View style={styles.nameWrap}>
                     <View style={styles.nameRow}>
                       <Text style={[styles.name, mine && styles.mine]} numberOfLines={1}>{r.name}</Text>
-                      {r.legend ? <Text style={styles.legend}>영구결번</Text>
+                      {r.legend ? <Text style={styles.legend}>헌액 번호</Text>
                         : r.retired ? <Text style={styles.retired}>은퇴</Text> : null}
                     </View>
                     <Text style={styles.metaTxt} numberOfLines={1}>
