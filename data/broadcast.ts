@@ -7,12 +7,12 @@ import { personalMilestones } from '../engine/milestones';
 import { getPlayer, shortTeamName } from './league';
 import { availableTeamPlayers } from './injury';
 import { leagueProduction } from './production';
-import { teamClinch } from './clinch';
+import { teamClinch, teamTitleClinch } from './clinch';
 
-export type BannerKind = 'record' | 'clinch' | 'eliminated' | 'triple';
+export type BannerKind = 'champion' | 'record' | 'clinch' | 'eliminated' | 'triple';
 export interface Banner { kind: BannerKind; tint: string; icon: string; title: string; mine: boolean }
 
-const RECORD_TINT = '#3B82F6', CLINCH_TINT = '#16B07D', ELIM_TINT = '#FF6B5A', TRIPLE_TINT = '#8B5CF6';
+const RECORD_TINT = '#3B82F6', CLINCH_TINT = '#16B07D', ELIM_TINT = '#FF6B5A', TRIPLE_TINT = '#8B5CF6', CHAMP_TINT = '#F2A93B';
 // 트리플 크라운(KOVO 공식) — 한 경기 **후위공격·블로킹·서브 에이스 각 TRIPLE_MIN 이상**.
 // 후위공격(backSpikes)은 production이 OH/OP 킬에서 별도 귀속(engine/production). tools/checkTripleCrown.ts 측정.
 const TRIPLE_MIN = 3;
@@ -60,7 +60,16 @@ export function buildMatchBanners(homeId: string, awayId: string, dayIndex: numb
     }
   }
 
-  // 2) 플레이오프 확정/탈락(결과-결정) — 이 경기로 막 바뀐 팀
+  // 2) 정규리그 우승(1위·챔프전 직행) 확정(결과-결정) — 이 경기로 막 1위를 수학적 확정한 팀. BROADCAST_SYSTEM §2.
+  for (const [side, teamId] of sides) {
+    const mine = mineSide === side;
+    const tb = teamTitleClinch(teamId, Math.max(0, dayIndex - 1))?.state;
+    const ta = teamTitleClinch(teamId, dayIndex)?.state;
+    if (tb !== 'clinched' && ta === 'clinched')
+      out.push({ kind: 'champion', tint: CHAMP_TINT, icon: 'trophy', mine, title: `${shortTeamName(teamId)} 정규리그 우승 — 챔프전 직행!` });
+  }
+
+  // 3) 플레이오프 확정/탈락(결과-결정) — 이 경기로 막 바뀐 팀
   for (const [side, teamId] of sides) {
     const mine = mineSide === side;
     const cb = teamClinch(teamId, Math.max(0, dayIndex - 1))?.state;
@@ -70,7 +79,7 @@ export function buildMatchBanners(homeId: string, awayId: string, dayIndex: numb
     else if (cb !== 'eliminated' && ca === 'eliminated') out.push({ kind: 'eliminated', tint: ELIM_TINT, icon: 'close-circle', mine, title: `${name} 플레이오프 탈락` });
   }
 
-  // 내 팀 사건 먼저, 그다음 트리플 크라운(가장 특별) → 기록 → 확정/탈락 순
-  const rank: Record<BannerKind, number> = { triple: 0, record: 1, clinch: 2, eliminated: 3 };
+  // 내 팀 사건 먼저, 그다음 우승(가장 특별) → 트리플 → 기록 → 확정/탈락 순
+  const rank: Record<BannerKind, number> = { champion: 0, triple: 1, record: 2, clinch: 3, eliminated: 4 };
   return out.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (rank[a.kind] - rank[b.kind]));
 }

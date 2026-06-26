@@ -4,16 +4,16 @@ import { resetLeagueBase, SEASON, getPlayer, currentBasePlayers } from '../data/
 import { commitPlayerBase } from '../data/league';
 import { buildMatchBanners } from '../data/broadcast';
 resetLeagueBase();
-let rec = 0, clinch = 0, elim = 0, withBanner = 0;
+let rec = 0, clinch = 0, elim = 0, champ = 0, withBanner = 0;
 for (const f of SEASON) {
   const bs = buildMatchBanners(f.homeTeamId, f.awayTeamId, f.dayIndex, 'home');
   if (bs.length) withBanner++;
-  for (const b of bs) { if (b.kind === 'record') rec++; else if (b.kind === 'clinch') clinch++; else elim++; }
+  for (const b of bs) { if (b.kind === 'record') rec++; else if (b.kind === 'clinch') clinch++; else if (b.kind === 'champion') champ++; else elim++; }
 }
-console.log(`시즌0(${SEASON.length}경기): 기록 ${rec} · PO확정 ${clinch} · PO탈락 ${elim} · 현수막 경기 ${withBanner}`);
-// 합성 마일스톤: 한 선수 career.points를 999로 올려두고 그 선수 경기에서 1000 돌파 현수막 뜨는지
+console.log(`시즌0(${SEASON.length}경기): 우승확정 ${champ} · 기록 ${rec} · PO확정 ${clinch} · PO탈락 ${elim} · 현수막 경기 ${withBanner}`);
+// 합성 마일스톤: 득점형 선수(OP/OH) career.points를 999로 올려 그 선수 경기에서 1000 돌파 현수막 뜨는지
 const players = currentBasePlayers();
-const star = players[0];
+const star = players.find((p) => (p.position === 'OP' || p.position === 'OH') && !p.isForeign) ?? players[0];
 const snap: Record<string, any> = {}; for (const p of players) snap[p.id] = p;
 snap[star.id] = { ...star, career: { ...star.career, points: 999 } };
 commitPlayerBase(snap);
