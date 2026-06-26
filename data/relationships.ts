@@ -59,6 +59,22 @@ export function teamAffinity(playerId: string, teamId: string, bonds: Bonds = {}
 
 export interface Relation { id: string; name: string; v: number }
 
+/** 특정 팀 로스터 중 그 선수의 친구/라이벌(FA 센터 표시용 — "이 팀에 친한/껄끄러운 선수가 있다"). */
+export function teamRelations(playerId: string, teamId: string, bonds: Bonds = bondsCtx): { friends: Relation[]; rivals: Relation[] } {
+  const p = getPlayer(playerId);
+  if (!p || p.isForeign) return { friends: [], rivals: [] };
+  const out: Relation[] = [];
+  for (const m of getTeamPlayers(teamId)) {
+    if (m.id === playerId || m.isForeign) continue;
+    const v = affinity(p, m, bonds[pairKey(playerId, m.id)] ?? 0, true);
+    if (Math.abs(v) >= SHOW_THRESHOLD) out.push({ id: m.id, name: m.name, v });
+  }
+  return {
+    friends: out.filter((x) => x.v > 0).sort((a, b) => b.v - a.v).slice(0, 3),
+    rivals: out.filter((x) => x.v < 0).sort((a, b) => a.v - b.v).slice(0, 3),
+  };
+}
+
 /** 특정 팀에 있는 그 선수의 최고 절친(현재 사실) — 이적 뉴스 서사용(가짜 드라마 아님: 지금 그 팀에 있는 친구). */
 export function topFriendOnTeam(playerId: string, teamId: string, bonds: Bonds = bondsCtx): Relation | null {
   const p = getPlayer(playerId);

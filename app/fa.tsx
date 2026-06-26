@@ -12,6 +12,7 @@ import { assignFAGrades, askingPrice } from '../engine/faMarket';
 import { overall, overallRaw } from '../engine/overall';
 import { formatMoney } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
+import { teamRelations } from '../data/relationships';
 import { useGameStore } from '../store/useGameStore';
 
 export default function FACenter() {
@@ -40,6 +41,7 @@ function FACenterInner() {
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
   const archive = useGameStore((s) => s.archive);
+  const bonds = useGameStore((s) => s.bonds);
 
   // 이번 시즌 정산 후 운영 자금 — endSeason이 FA에 쓰는 실제 지갑(모기업 지원·관중 수입 반영).
   //   store.cash(직전 정산값)로 미리보기하면 모기업 지원(14~28억)이 빠져 "영입 불가"로 오표시된다.
@@ -177,6 +179,19 @@ function FACenterInner() {
                     {p.age}세 · 요구 {formatMoney(ask)}
                     {needsCompensationPlayer(grade) ? ' · 보상선수' : ''}
                   </Text>
+                  {/* 우리 팀 친구/라이벌 — 영입 확률 판단 정보(RELATIONSHIP_SYSTEM) */}
+                  {(() => {
+                    if (p.isForeign) return null;
+                    const rel = teamRelations(p.id, my, bonds);
+                    if (!rel.friends.length && !rel.rivals.length) return null;
+                    return (
+                      <Text style={{ fontSize: 11, marginTop: 2 }}>
+                        {rel.friends.length ? <Text style={{ color: theme.good }}>친한 {rel.friends.map((f) => f.name).join(', ')}</Text> : null}
+                        {rel.friends.length && rel.rivals.length ? <Text style={{ color: theme.muted }}>  ·  </Text> : null}
+                        {rel.rivals.length ? <Text style={{ color: theme.bad }}>라이벌 {rel.rivals.map((r) => r.name).join(', ')}</Text> : null}
+                      </Text>
+                    );
+                  })()}
                   {badge ? <Text style={{ color: badge.c, fontSize: 12, fontWeight: '800', marginTop: 2 }}>{badge.t}</Text> : null}
                 </View>
                 <OvrBadge value={overallRaw(p)} />

@@ -42,6 +42,7 @@ export default function PlayerDetail() {
   const talkCooldown = useGameStore((s) => s.talkCooldown);
   const benchCooldown = useGameStore((s) => s.benchCooldown);
   const bonds = useGameStore((s) => s.bonds);
+  const released = useGameStore((s) => s.released);
   const [talkAsk, setTalkAsk] = useState(false);
   const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
@@ -183,6 +184,8 @@ export default function PlayerDetail() {
       {(() => {
         const rel = relationsOf(p.id, bonds);
         if (!rel.friends.length && !rel.rivals.length) return null;
+        // 이번 시즌 방출된 절친 — Phase 3 friendLeave(재계약 거부↑)를 화면으로
+        const lostFriends = rel.friends.filter((f) => released.includes(f.id));
         return (
           <>
             <Title>인간관계</Title>
@@ -198,6 +201,11 @@ export default function PlayerDetail() {
                   <Text style={{ color: theme.bad, fontWeight: '800', width: 54 }}>라이벌</Text>
                   <Text style={{ color: theme.text, flex: 1 }}>{rel.rivals.map((r) => r.name).join(', ')}</Text>
                 </View>
+              ) : null}
+              {isMine && lostFriends.length > 0 ? (
+                <Text style={{ color: theme.bad, fontSize: 12, marginTop: 4 }}>
+                  💔 절친 {lostFriends.map((f) => f.name).join(', ')} 방출에 동요 중 — 재계약 거부 위험↑
+                </Text>
               ) : null}
             </Card>
           </>
