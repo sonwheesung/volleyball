@@ -395,6 +395,8 @@ export function buildNewsFeed(
         body3('release', rkey, more(
           `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 FA 시장에 나왔다. 새 시즌 명단에 이름을 올리지 못했다.`,
           careerLine(t.playerId),
+          // 인간관계(현재 사실 — 가짜 드라마 아님): 떠난 팀에 가까운 동료가 남아 있으면 이별 한 줄(이적의 정서적 대칭, RELATIONSHIP §6)
+          (() => { const f = topFriendOnTeam(t.playerId, t.fromTeam); return f ? `각별한 동료 ${f.name}을(를) ${teamName(t.fromTeam)}에 남기고 떠난다.` : ''; })(),
           outMine ? `${teamName(myTeamId)}은(는) 한 자원을 정리했다.` : '')), t.playerId);
       continue;
     }
@@ -411,9 +413,9 @@ export function buildNewsFeed(
         const lead = tag ? `${tag} ${t.name}` : t.name;
         const gain = posKo ? `${posKo} 자원을 보강했다` : '전력을 더했다';
         const lose = posKo ? `${posKo} 한 자리가 비었다` : '한 자원을 떠나보냈다';
-        // 인간관계(현재 사실 — 가짜 드라마 아님): 옮긴 팀에 절친이 있으면 재회 한 줄(RELATIONSHIP §6)
+        // 인간관계(현재 사실 — 가짜 드라마 아님): 옮긴 팀에 가까운 동료가 있으면 재회 한 줄(RELATIONSHIP §6)
         const friend = topFriendOnTeam(t.playerId, t.toTeam);
-        const friendLine = friend ? ` 새 팀에는 절친 ${friend.name}이(가) 있다.` : '';
+        const friendLine = friend ? ` 새 팀에는 각별한 동료 ${friend.name}이(가) 있다.` : '';
         return body3('transfer', key, `${lead}이(가) ${teamName(t.fromTeam)}을(를) 떠나 ${teamName(t.toTeam)}으로(로) 둥지를 옮겼다.`
           + (inMine ? ` ${teamName(myTeamId)}이(가) ${gain}.` : outMine ? ` ${teamName(myTeamId)}은(는) ${lose}.` : ` ${teamName(t.toTeam)}이(가) ${gain}.`) + friendLine);
       })(), t.playerId);

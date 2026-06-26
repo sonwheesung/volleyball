@@ -204,7 +204,7 @@ export default function PlayerDetail() {
               ) : null}
               {isMine && lostFriends.length > 0 ? (
                 <Text style={{ color: theme.bad, fontSize: 12, marginTop: 4 }}>
-                  💔 절친 {lostFriends.map((f) => f.name).join(', ')} 방출에 동요 중 — 재계약 거부 위험↑
+                  💔 각별한 동료 {lostFriends.map((f) => f.name).join(', ')} 방출에 동요 중 — 재계약 거부 위험↑
                 </Text>
               ) : null}
             </Card>

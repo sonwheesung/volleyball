@@ -116,6 +116,7 @@ npx tsx tools/_dv_firstserve.ts 8000        # 5세트 첫 서브=코인토스(MA
 npx tsx tools/_dv_foreign_fa_leak.ts        # 외인 FA 풀 오염 가드 — release 후 외인 미포함·재영입 거부(signInSeason)·국내 대조군 + A/B(구 전부-add 검출). EDGE_CASES §3.8, exit 0/1
 npx tsx tools/_dv_foreign_contract.ts       # 계약관리 외인 차단 — release/reSign(외인·아시아) 거부·국내 대조군·willBeFA 외인 false + A/B(가드 제거 시 release(외인)=true). EDGE_CASES §3.9, exit 0/1
 npx tsx tools/_ev_transfernews.ts 15        # 타팀 이적/방출 뉴스(NEWS 슬라이스4) — 거물 게이트 볼륨·매달린참조0·중복0·결정론·이동시점OVR. exit 0/1
+npx tsx tools/_dv_releasenews.ts            # 방출 뉴스 인간관계 한 줄(RELATIONSHIP §6) — 합성 방출+잔류 각별한동료 "남기고 떠난다" 박힘 + A/B(친구없으면 줄 없음=허위오라클 차단)·조사교정. exit 0/1
 npx tsx tools/_ev_draftpick.ts              # AI 드래프트 3티어(FA §3.1) — 특급 BPA·포지션 필요·OVR+성격 불변식 + 성격 A/B + 결정론. exit 0/1
 npx tsx tools/_ev_airetain.ts 12            # AI 재계약 확률(aiRetainProb, FA §4) — 절벽해소(나이/OVR 그라데이션)·순잔류~58%·단조·엘리트유지·연속. 구 aiKeepsFA 이진 A/B. exit 0/1
 npx tsx tools/_ev_promise.ts                # 면담 공약 파기(OWNER 1.3) — 주전약속+벤치=거부급등(0.95) vs 약속+출전=0 vs 전력보강+벤치=파기아님. A/B 4시나리오. exit 0/1
