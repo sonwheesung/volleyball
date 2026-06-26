@@ -147,7 +147,8 @@
 
 | Phase | 내용 | 위험 | 검증 |
 |---|---|---|---|
-| **1. 모델+표시(무영향)** | `engine/relationships.ts`(affinity)·`data/relationships.ts`(teamAffinity) + 선수 상세에 친구/라이벌 표시. **결정 미반영** | 0(관측만) | `_dv_relations`(결정론·대칭·분포·bond 단조)·tsc |
+| **1a. 모델+셀렉터 ✅(2026-06-26)** | `engine/relationships.ts`(`affinity`=innate+bond+posRivalry)·`data/relationships.ts`(`teamAffinity`·`relationsOf`). 결정 미반영 | 0 | ✅ `_dv_relations` ALL PASS(결정론·대칭·분포 중립59.6%·포지션라이벌·bond단조·외인0) |
+| **1b. 영속 bond + 표시** | store `bonds` 필드(SAVE_DEFAULTS+partialize)·endSeason 같은팀 쌍 누적(BOND_GROW/DECAY·바운딩) + 선수상세 친구/라이벌 UI | 저장 | `_dv_migrate` drift·bond 누적 가드 |
 | **2. FA 영입 반영** | offerScore에 `w.rel·relT` + rollFAPref에 `rel` 가중 + resolveFAMarket 주입 | **parity** | 시나리오 A/B(4종 오더 플립)·`simLeague` parity 불변·`simKovo` 불변 |
 | **3. 재계약 반영** | buildOwnerFx 친구잔류(−)·친구방출(+, affinity 가중 releaseUnrestBias) | 미리보기=결과 | `simMood`/owner 가드·미리보기=결과·A/B |
 | **4. 서사 확장** | 뉴스(이적 사유 관계)·방출 회고·면담 연동 | 가짜 드라마 | `simNews` 무결성·매달린 0 |
