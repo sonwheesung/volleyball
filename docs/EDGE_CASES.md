@@ -117,6 +117,16 @@
 - 오프시즌 은퇴 구멍은 신인으로 포지션별 `ROSTER_IDEAL`까지 채우되, 팀 정원은 **`ROSTER_MAX(18)`를
   넘지 않는다**(시즌 중 영입으로 명단이 차 있어도). 외인+아시아쿼터 2명도 이 상한 안.
 
+### 2.7 인간관계망 + FA 점수→확률 (2026-06-26 신설 — RELATIONSHIP_SYSTEM·FA_SYSTEM §2.7)
+- **affinity(A,B) ∈ [−1,+1]** = innate(id 시드 무저장·**대칭**·중립 ~60%) + bond(영속·함께한 시즌) + posRivalry(같은 포지션 경쟁 −).
+  **외인은 0**(관계망 밖). `engine/relationships.affinity`.
+- **bond**: 같은 팀 국내 쌍이 매 시즌 `+BOND_GROW`(상한 0.3), 떨어지면 `×BOND_DECAY`(옛정), `<0.02` prune, 맵 `≤4000`(저장 폭주 차단). `data/relationships.accrueBonds`(endSeason).
+- **FA 수락 = 점수→확률**: offerScore(돈·우승·근속·주전·**±관계**) → `acceptProb`(완만 S곡선 `[0.22,0.60]`). 여러 오퍼 = P 정렬→롤→첫 성공→전부 실패 시 최고 P→1팀이면 자동→**최고<`SIT_OUT`(0.14) 시 시즌 아웃(FA 잔류)**. `resolveFAMarket`.
+- **친구 연쇄**: relT는 **그 시점 로컬 rosters** 기준(`teamAffinityFor`) → A가 먼저 입단하면 친구 B의 그 팀 점수↑(자연 발생, 순서 고정=결정론).
+- **재계약**: 친한 동료 방출 → 그 친구 거부확률↑(`buildOwnerFx` `REL_LEAVE_K×Σmax(0,affinity)`, uniform unrest 위에). 내 팀 한정.
+- **은은하게(parity 보호)**: rel 가중 ~0.03·`REL_SCALE_FA 6` — 관계는 타이브레이커, 권력 집중 안 함(30×8 std 3.12).
+- **미리보기=결과**: `setRelationContext`(모듈 컨텍스트, rehydrate+endSeason)로 FA 센터 예상==실제. **무저장 원칙**: bond 1필드만 영속(SAVE_SYSTEM, `_dv_migrate` drift).
+
 ---
 
 ## 3. 엣지 케이스 레지스트리 (발견·수정된 버그 — 회귀 감시)
@@ -311,6 +321,33 @@
 
 ---
 
+## 3.11 인간관계망 + FA 점수→확률 — 정상+엣지 케이스 (2026-06-26 신설)
+
+> RELATIONSHIP_SYSTEM(Phase 1a~4) + FA_SYSTEM §2.7 구현·검증 중 도출. 형식: 기능 · 정상 · 엣지/경계(가드) · 잡는 도구.
+
+| 기능 | 정상 | 엣지/경계(가드) | 잡는 도구 |
+|---|---|---|---|
+| **affinity 모델** | innate 중립~60%·친구/라이벌 소수·같은팀 bond↑ | **대칭**(A,B==B,A)·결정론·범위[−1,1]·**외인 0**·posRivalry 같은포지션만 −·bond가 라이벌 완화 | `_dv_relations`(분포·대칭·외인0·bond단조·A/B) |
+| **영속 bond** | 같은 팀 누적→0.3·떨어지면 옛정 감쇠 | **맵 바운드 ≤4000**(100시즌+ 저장폭주 0)·prune<0.02·외인 쌍 미생성·손상세이브 정규화(rec) | `_dv_relations`(누적·바운드)·`_dv_migrate`(bonds drift·키일치)·`_dv_migrate_e2e` |
+| **FA 점수→확률** | offerScore±관계→S곡선→정렬·롤·fallback | **단일소속 보존**(순차+슬롯차감, 이중계약0)·캡·자금 게이트·1팀=자동·결정론(시드 롤) | `simAudit`(13체크 0)·`simFaDup`·`_dv_fa_relations`(4시나리오·S곡선·SIT) |
+| **4시나리오 트레이드오프** | relT ± 가중합 | 우승파=싫어도 강행·의리파=앙숙 회피·연봉 양보+친구·우승+친구 동반 | `_dv_fa_relations`(성향별 점수 플립 A/B) |
+| **재계약 관계** | 친한 동료 방출→그 친구 거부↑ | uniform unrest 위에 가산(친구는 초과)·내 팀 한정(parity 무관)·미리보기=결과 | `_dv_release_unrest`(≥uniform·친구 초과)·`simMood` |
+| **미리보기=결과** | setRelationContext 모듈 컨텍스트 | rehydrate+endSeason 동기·로컬 affinity(친구연쇄) preview==actual | `simAudit`(영입 일관)·결정론 |
+
+### 발견·수정된 엣지(이번 세션 — 구현/검증 중)
+| ID | 증상 → 원인 | 수정 | 잡는 도구 |
+|---|---|---|---|
+| EC-REL-01 | **친구 연쇄 장기 parity 집중** — 30시즌×8 관계 ON std 4.06 vs OFF 3.42·왕조 11. 친구가 컨텐더에 몰려 super-team(20×6 단기 측정엔 안 보임) | rel 가중 ~0.05→0.03·`REL_SCALE_FA` 3.5→6 → ON std **3.12**(OFF보다 낮음)·왕조 8·r −0.18 (e45b13b) | **`simLeague 30 8` A/B**(관계 격리 NO_REL 진단)·sim-league 스킬 |
+| EC-REL-02 | **friendStay가 기준 refuse 음수화** → refuseProb는 양수만 저장 → 방출 델타 측정 교란(`_dv_release_unrest` FAIL) | friendStay 제거(친구 잔류는 Phase 2 FA 시장 relT가 처리) → friendLeave만 가산 (49f61a4) | `_dv_release_unrest`(델타 ≥uniform) |
+| EC-REL-03 | `rollFAPref` 가중치 합 테스트 FAIL — rel 키 추가로 6개 정규화인데 테스트는 5개만 합산 | 테스트 합산에 `rel` 포함 (8a17887) | `faMarket.test`(합≈1) |
+
+### 감시 대상(잠재 — verify-cases 후속)
+- **시즌 아웃 → 로스터 구멍**: 최고 점수<`SIT_OUT`(0.14)면 미입단. `SIT_OUT` 낮아 드물지만, 약팀 다수 시즌아웃 누적 시 `ROSTER_MIN` 압박 가능 → `fillRosters`(신인)가 메움. 감시: `simAudit roster`(정원 하한)·SIT 빈도 측정 도구 필요.
+- **bond 무저장 결정론**: bond는 endSeason 누적 저장값(파생 아님). in-process 다중 resetSave 재플레이 시 §3.6 resetSave 누수와 결합 가능성 — 미측정(제품 무영향, fresh 재시작).
+- **AI 팀 재계약 관계 미반영**: buildOwnerFx는 내 팀만. AI 잔류(aiRetainProb)에 관계 미적용 — 의도(1차). FA 시장은 league-wide 적용됨.
+
+---
+
 ## 4. 회귀 프로토콜 (로직 수정 시)
 
 영입/오프시즌 계열 엔진·셀렉터(`engine/compensation·faMarket·cap·draft·staff·staffLifecycle·foreign·transactions·finance`,
@@ -327,6 +364,10 @@
    # 리뷰 라운드 신규 기능 가드(2026-06-25 — §3.10):
    npx tsx tools/_ev_draftpick.ts ; npx tsx tools/_ev_airetain.ts 12 ; npx tsx tools/_ev_resign.ts
    npx tsx tools/_ev_promise.ts ; npx tsx tools/_ev_transfernews.ts 15 ; npx tsx tools/_dv_foreign_contract.ts ; npx tsx tools/_dv_seasondays.ts
+   # 인간관계망 + FA 점수→확률 가드(2026-06-26 — §3.11):
+   npx tsx tools/_dv_relations.ts ; npx tsx tools/_dv_fa_relations.ts ; npx tsx tools/_dv_release_unrest.ts 8
+   npx tsx tools/_dv_migrate.ts ; npx tsx tools/_dv_migrate_e2e.ts   # 세이브 bonds 필드 drift·E2E
+   npx tsx tools/simLeague.ts 30 8          # 장기 parity(EC-REL-01 — 친구연쇄 집중, 단기 측정 미검출)
    # 건드린 영역에 따라: simTxDup · simBrokeSign · simCareerTrace · simOwnerRefuse
    # 악질/원숭이(스토어·정원·이중소속 — 관리 로직 수정 시 필수):
    npx tsx tools/_gt_repro_release.ts       # EC-TX-03 (오라클 자가검증)
@@ -387,6 +428,13 @@
 - **EC-RM-01 (정원 19)** — 사각: **단일 국면**. `acquisitionAudit`의 `roster` 체크는 **오프시즌 흐름만**
   보고, **시즌 중 FA churn으로 명단이 18까지 차오른 상태 × 오프시즌 충원**의 교차를 안 봄.
   → 장기 원숭이(`_gt_monkey`·`_gt_repro_oversize`)가 churn 후 endSeason에서 노출.
+- **EC-REL-01 (친구 연쇄 parity 집중)** — 사각: **짧은 측정 지평 + 격리 부재**. Phase 2 도입 때 `simLeague` **20시즌×6**로
+  parity를 보고 2.77(기준 2.64 노이즈 내)로 "안전"이라 판단했으나, **친구 연쇄(친구가 컨텐더에 누적)는 누적 효과라
+  30시즌+ 장기 지평에서만 드러난다**(20시즌엔 왕조가 짧아 은폐). 또 "관계가 원인인지"를 **격리 측정(NO_REL A/B)**
+  하지 않아 prob 재설계 vs 관계의 기여를 못 갈랐다. → 사용자 "검증 들어가" 지시로 **30×8 + 관계 격리 A/B**
+  (OFF 3.42 vs ON 4.06)를 돌려 관계가 +0.64·왕조 11임을 규명, 재튜닝(3.12). **교훈: 누적·스노볼형 변경은
+  장기 지평(≥30시즌)에서 측정하고, 새 요인은 격리(on/off) A/B로 기여분을 분리한다**(STATS_PROTOCOL — 단일 측정
+  말고 대조). TEST_METHODOLOGY §1.5 ④의미정합 + 장기 누적 사각.
 
 **동종 버그 사냥 결과(sibling hunt)** — 렌즈 "store 액션이 입력을 검증 없이 변이":
 - **id 멤버십**: `release()`가 유일한 예외(EC-TX-03, 수정). 나머지 id 받는 액션은 가드 보유 —
