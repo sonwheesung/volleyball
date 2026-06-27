@@ -106,6 +106,7 @@ npx tsx tools/_dv_drift2_agility.ts         # 노쇠 그룹 멤버십 가드(문
 npx tsx tools/_dv_fa_relations.ts           # FA 점수→확률+관계(FA §2.7) — relT ±·우승파강행/의리파기피·acceptProb S곡선·SIT_OUT·결정론. exit 0/1
 npx tsx tools/_dv_relations.ts              # 인간관계망 모델(RELATIONSHIP_SYSTEM §8 Phase 1a) — affinity 결정론·대칭·innate분포·포지션라이벌·bond단조·외인0. exit 0/1
 npx tsx tools/_dv_jersey.ts                 # 헌액 번호(BROADCAST §8) — jerseyNumber 1..99·결정론·동결스냅샷·균등분포 + numberLineage(같은팀·먼저은퇴·통산내림·본인/타팀/비레전드 제외). exit 0/1
+npx tsx tools/_dv_lineage.ts 60             # 헌액 번호 계보 길이 실측(EDGE_CASES §3.12 감시①) — 실제 시즌 루프 N시즌 굴려 레전드(≥7500점) 누적, (팀·번호)별 최대 계보 길이 측정. 60→0·300→1(WAI 캡 불요). 측정 도구(판정 advisory)·무거움 on-demand
 npx tsx tools/_dv_migrate.ts                # 세이브 마이그레이션 순수함수(SAVE_SYSTEM §6) — 손상/구버전 입력 정규화 무크래시·정상 멱등·A/B(정규화 없이 크래시 실증)·drift(키 일치). exit 0/1
 npx tsx tools/_dv_migrate_e2e.ts            # 세이브 마이그레이션 E2E — 실 store에 손상/유효 세이브 넣고 persist.rehydrate() 끝까지(sanitize 로드·base 커밋·commit throw 시 fresh 리셋). exit 0/1
 npx tsx tools/_dv_seasondays.ts             # 시즌 길이 단일상수(engine/calendar SEASON_DAYS) == 실제 일정 max dayIndex(164) — 상수 손복제 드리프트 차단. exit 0/1
