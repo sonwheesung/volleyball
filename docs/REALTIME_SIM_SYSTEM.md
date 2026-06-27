@@ -55,7 +55,26 @@
   변경 시 +1). simCache가 버전 태깅 + 재로드 시 게이트 — **엔진 재튜닝(앱 업데이트) 후 버전 불일치면 캐시 폐기→새 엔진으로
   재계산**. 그래서 저장 순위·생산이 옛 엔진에 박제되지 않고, 과거 경기 보드 재생(항상 현 엔진)과 **같은 엔진 버전으로 일관**.
   구세이브(버전 없음)도 폐기→재계산(안전). 검증 `_dv_simcache` [6](버전 불일치+조작 캐시 폐기→재계산 원복).
-- **Phase 3 — 마이그레이션·정리(G4·G6)**: SAVE_VERSION 범프·백필·가드·무제한 배열 점검.
+- **Phase 3 — 마이그레이션·정리(G4·G6)** ✅ **완료(2026-06-27)**:
+  - **G4 마이그레이션**: simCache는 **추가 필드 + 재생성 가능**(검증 실패/구세이브=null→재계산 폴백)이라 SAVE_VERSION 하드
+    범프 불요. `saveMigration` 정규화기가 구세이브에 `simCache:null` 채움 → `_dv_migrate`·`_dv_migrate_e2e` ALL PASS.
+  - **G6 무제한 배열(코드 검사 — 헤드리스 endSeason 구동 불가라 정적 분석)**: churn 데이터는 **이미 바운딩**
+    (readNews 1500·interviews 200·milestones big+300·retirements 200·transfers 200). 무제한은 `archive`(시즌당 1)·
+    `hallOfFame`(레전드당 1)뿐인데 **이 둘이 누적 서사 기둥(연표) 그 자체** — 엔트리당 작고(archive ~0.5KB/시즌·HOF
+    ~0.1KB/레전드, 1만시즌 ~2000레전드) 1만 시즌 ≈ 저-MB(AsyncStorage 허용). **바운딩=기둥 위반이라 WAI(의도적 무제한).**
+    simCache(Phase1)는 현 시즌만이라 bounded — **B가 세이브 폭주를 도입하지 않음.** (시도했던 `_dv_savesize`는
+    store.endSeason 가드(planNextAction seasonOver)를 헤드리스로 못 넘겨 season=0 → 허위 오라클로 삭제, 자가검증으로 포착.)
+
+---
+
+## 5. 전환 완료 요약 (2026-06-27)
+
+Phase 0~3 전부 ✅. **"진짜 실시간"(B안) 달성** — 게으른 씨앗 재계산 → 계산 결과 저장·재로드 시 읽기:
+- Phase 0: 결정론 누수 근본수정(스태프 in-place 변이) + 새게임 스타팅스태프 버그 + 가드 A/B 복구.
+- Phase 1: 계산된 시즌 결과(순위·생산) 세이브 저장 → **재로드 재계산(로딩) 제거**(재생 엔진은 변경 시 폴백 유지).
+- Phase 2: 엔진버전 게이트(G3) — 재튜닝 후 옛-엔진 결과 폐기·보드 일관성.
+- Phase 3: 마이그레이션 안전(추가/재생성 가능)·세이브 폭주 없음(churn 바운딩·연표는 의도적 무제한·작음).
+검증 도구: `_gt_determinism`·`_dv_simcache`(+유닛205·_dv_migrate(_e2e)·simAudit·auditBoard 무회귀).
 
 ## 4. 검증 (각 Phase 통과 조건)
 - Phase 0: `_gt_determinism` in-process 2회 동일 + A/B 이빨 복구. 풀 배터리(run-all-tests) 0건.
