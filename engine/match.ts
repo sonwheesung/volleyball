@@ -13,6 +13,11 @@ import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge, type 
 import type { RallyEvent } from './events';
 import { rotate, serverIndex, frontRow, backRow } from './rotation';
 
+// 경기 시뮬 결과 버전 — rally/match/simMatch/ratings 등 *경기 결과를 바꾸는* 엔진 변경 시 +1.
+// REALTIME_SIM Phase2(G3): simCache는 이 버전을 태깅·게이트해, 엔진 재튜닝(앱 업데이트) 후 저장된 옛-엔진
+// 순위를 폐기하고 새 엔진으로 재계산한다 → 저장 순위 ↔ 과거경기 보드 재생 일관성 보장.
+export const ENGINE_VERSION = 1;
+
 // 작전 교체 (MATCH_SYSTEM 1.3b)
 const SUBS_PER_SET = 6;          // 세트당 정규 교체 횟수(리베로 교체는 별도)
 const PINCH_SERVE_GAP = 12;      // 핀치 서버: 벤치-선발 서브 레이팅 차 임계

@@ -63,7 +63,18 @@ import './_gt_mock';
   const sigHeal = sig();
   log(`[5] A/B 캐시 조작이 결과에 반영(캐시 실제 사용): ${abUsed ? '✅' : '❌'} · 재계산은 원본 복구: ${sigHeal === sig1 ? '✅' : '❌'}`);
 
-  const ok = hasCache && restoredHit && sig2 === sig1 && sig3 === sig1 && abUsed && sigHeal === sig1;
-  log(ok ? '\n결론: ✅ 캐시 영속 — 재로드 재계산 제거 + 무stale + 실제 사용(A/B)' : '\n결론: ❌ 점검 필요');
+  // 6) G3 엔진버전 게이트: 다른 엔진버전 + 조작된 캐시 → 폐기되어 재계산으로 원복(옛-엔진 결과 박제 방지)
+  const verBad = JSON.parse(JSON.stringify(saved));
+  if (verBad.simCache) {
+    verBad.simCache.engineVersion = (verBad.simCache.engineVersion ?? 0) + 999; // 엔진 재튜닝 흉내
+    for (const r of (verBad.simCache.standings ?? []).slice(0, 20)) { const t = r.homeSets; r.homeSets = r.awaySets; r.awaySets = t; } // 조작
+  }
+  reload(verBad);
+  const sigVer = sig();
+  const g3 = sigVer === sig1; // 조작됐지만 버전 불일치로 폐기→재계산→원본
+  log(`[6] G3 엔진버전 불일치 캐시 폐기(재계산 원복): ${g3 ? '✅' : '❌'}`);
+
+  const ok = hasCache && restoredHit && sig2 === sig1 && sig3 === sig1 && abUsed && sigHeal === sig1 && g3;
+  log(ok ? '\n결론: ✅ 캐시 영속 — 재로드 재계산 제거 + 무stale + 실제 사용(A/B) + 엔진버전 게이트(G3)' : '\n결론: ❌ 점검 필요');
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

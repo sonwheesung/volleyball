@@ -5,10 +5,12 @@ import { baseVersion, setBaseVersion } from './league';
 import { currentTxVersion, setTxVersion } from './dynamics';
 import { getStandingsCacheRaw, setStandingsCacheRaw, type ResultRow } from './standings';
 import { getProductionCacheRaw, setProductionCacheRaw, type ProdRow } from './production';
+import { ENGINE_VERSION } from '../engine/match';
 
 export interface SimCache {
   baseVersion: number;
   txVersion: number;
+  engineVersion: number; // 경기 엔진 버전(G3) — 다르면 재로드 시 폐기(엔진 재튜닝 후 옛 결과 박제 방지)
   standings?: ResultRow[]; // 워밍된 것만(독립) — 화면마다 순위/생산이 따로 워밍되므로
   production?: ProdRow[];
 }
@@ -21,12 +23,14 @@ export function captureSimCache(): SimCache | undefined {
   const standings = s && s.key === key ? s.rows : undefined;
   const production = p && p.key === key ? p.rows : undefined;
   if (!standings && !production) return undefined;
-  return { baseVersion: baseVersion(), txVersion: currentTxVersion(), standings, production };
+  return { baseVersion: baseVersion(), txVersion: currentTxVersion(), engineVersion: ENGINE_VERSION, standings, production };
 }
 
 /** 재로드 복원 — rehydrate **맨 끝**(모든 commit이 카운터를 bump한 뒤)에 호출해야 키가 맞는다. 있는 것만 복원. */
 export function restoreSimCache(c: SimCache | undefined): void {
   if (!c || typeof c.baseVersion !== 'number' || typeof c.txVersion !== 'number') return;
+  // G3: 엔진 버전 불일치(앱 업데이트로 재튜닝)면 캐시 폐기 → 새 엔진으로 재계산(보드 재생과 일관). 구세이브(버전 없음)도 폐기.
+  if (c.engineVersion !== ENGINE_VERSION) return;
   setBaseVersion(c.baseVersion);
   setTxVersion(c.txVersion);
   const key = `${c.baseVersion}:${c.txVersion}`;
