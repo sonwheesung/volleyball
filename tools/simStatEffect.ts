@@ -55,19 +55,25 @@ const mk = (tag: string, key: NumKey | null, val: number): Player[] =>
   base.map((p) => ({ ...p, id: `${p.id}:${tag}`, ...(key ? { [key]: val } : {}) }));
 
 function runArm(spec: Spec, seedBase: number): { win: number; set5: number; set5n: number } {
-  const A = mk('A', spec.key, spec.hi);
-  const B = mk('B', spec.key, spec.lo);
+  // hi 스탯을 A베이스/B베이스에 번갈아 부여 → id-시드 동작(slideApt·trait 등) 편향 상쇄(진짜 통제실험).
+  // + 진영(홈/원정)도 교대 → 홈 어드밴티지 상쇄. 둘 다 상쇄해야 대조군(hi==lo)이 ~50%로 무편향.
+  const aHi = mk('A', spec.key, spec.hi), bLo = mk('B', spec.key, spec.lo); // hi가 A베이스
+  const aLo = mk('A', spec.key, spec.lo), bHi = mk('B', spec.key, spec.hi); // hi가 B베이스
   let win = 0, set5w = 0, set5n = 0;
   for (let i = 0; i < N; i++) {
-    const flip = i % 2 === 1; // 진영 교대 — 홈 어드밴티지 상쇄
-    const sim = flip ? simulateMatch(seedBase + i, B, A) : simulateMatch(seedBase + i, A, B);
-    const aSets = flip ? sim.awaySets : sim.homeSets;
-    const bSets = flip ? sim.homeSets : sim.awaySets;
-    if (aSets > bSets) win++;
+    const hiOnB = i % 2 === 1;          // hi 스탯을 어느 베이스가 갖나 교대(id-편향 상쇄)
+    const flipSide = (i >> 1) % 2 === 1; // 진영 교대(홈 어드밴티지 상쇄)
+    const teamHi = hiOnB ? bHi : aHi;
+    const teamLo = hiOnB ? aLo : bLo;
+    const sim = flipSide ? simulateMatch(seedBase + i, teamLo, teamHi) : simulateMatch(seedBase + i, teamHi, teamLo);
+    const hiSets = flipSide ? sim.awaySets : sim.homeSets;
+    const loSets = flipSide ? sim.homeSets : sim.awaySets;
+    if (hiSets > loSets) win++;
     if (sim.setScores.length === 5) {
       set5n++;
       const s = sim.setScores[4];
-      if ((flip ? s.away : s.home) > (flip ? s.home : s.away)) set5w++;
+      const hiPts = flipSide ? s.away : s.home, loPts = flipSide ? s.home : s.away;
+      if (hiPts > loPts) set5w++;
     }
   }
   return { win: win / N, set5: set5n ? set5w / set5n : NaN, set5n };

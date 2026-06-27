@@ -153,6 +153,19 @@ npx tsx tools/_iv_scorebox_ab.ts            # 위 정합 체크의 A/B 자가검
 npx tsx tools/_dv_overlap.ts 24             # 서브 컨택 오버랩 합법(받는팀 위반 0·세터 포함·서버 면제)·A/B 9/9 검출(독립 구현 오라클)
 npx tsx tools/_dv_receive.ts                # 서브리시브 평평한 3인 라인(룰57) — 전위 패서 라인 합류(≥0.74)·비패서 네트(≤0.68) 0미스
 npx tsx tools/_dv_position.ts 24            # 인플레이 포지션(2026-06-24) — 인시스템 대기 공격수 핀 100%·블록↔공격 0.000·페리미터 0.56·A/B(0.15 옮기면 잡힘)
+# ── 시스템 건강·무결성 가드(밸런스 드리프트 — 불변식 가드가 못 보는 "느린 회귀"를 잡는다. 2026-06-27 루틴 등록: 누락→재정 회귀 늦게 발견 사고 재발 방지, TEST_METHODOLOGY §4) ──
+npx tsx tools/simFinance.ts 120            # 재정 건강(잔고·모기업 보전 빈도·FA 자금게이트) — exit 0/1. ❌면 튜닝(2026-06-27 회귀 발견 도구)
+npx tsx tools/simStatEffect.ts             # 스탯 유효성 — 전 16스탯이 올바른 방향으로 경기 작용(대조군 무편향·id편향 상쇄). exit 0/1
+npx tsx tools/simAudit.ts 60               # 영입 13체크(한선수=한팀·이중계약0·캡·자금게이트). exit 0/1
+npx tsx tools/simBrokeSign.ts              # 현금 게이팅(돈 없는데 영입 0). exit 0/1
+npx tsx tools/simTxDup.ts                  # 시즌중 거래 이중소속/FA 누수 0. exit 0/1
+npx tsx tools/simOwnerRefuse.ts            # 면담 거부 선수 풀 이동 정확. exit 0/1
+npx tsx tools/simForeign.ts 40             # 외인 장기 건강(멸종0·바닥보장·캡). exit 0/1
+npx tsx tools/simStaffLife.ts              # 스태프 풀 건강(고갈/폭발0·연령·순환). exit 0/1
+npx tsx tools/simScandalEffect.ts          # 사건사고 정지출전 차단·영구퇴출 정합. exit 0/1
+npx tsx tools/simStatRecord.ts             # 개인 귀속 결정론·팀 누수0·개인합=팀박스. exit 0/1
+npx tsx tools/simNews.ts                   # 뉴스 무결성(빈헤드/본문·중복·매달린 teamId 0). exit 0/1
+npx tsx tools/simSuggest.ts                # 건의 시스템(감독 성향이 수락/거절 가른다). exit 0/1
 npx expo export --platform android        # 번들 확인 후 dist 삭제
 npm run sim:web                            # 엔진 테스트 콘솔(웹) → localhost:5051 (16탭, SIM_CONSOLE)
 ```
