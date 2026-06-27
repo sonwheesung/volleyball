@@ -17,7 +17,7 @@ export const KIND_KO: Record<NewsItem['kind'], string> = {
 export default function NewsList() {
   // 뉴스 피드 생성(buildNewsFeed = 전 시즌·경기 순회)은 무거워 한 틱 미뤄 로딩부터 그린다
   const ready = useDeferredReady();
-  if (!ready) return <Loading title="리그 뉴스" message="기사를 불러오는 중…" />;
+  if (!ready) return <Loading title="리그 뉴스" variant="list" />;
   return <NewsListInner />;
 }
 

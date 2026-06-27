@@ -17,7 +17,7 @@ import type { Player } from '../types';
 export default function Tryout() {
   // 트라이아웃 컨텍스트 생성(buildDraftContext)은 무거워 한 틱 미뤄 로딩부터 그린다
   const ready = useDeferredReady();
-  if (!ready) return <Loading title="외국인 트라이아웃" message="트라이아웃을 준비하는 중…" />;
+  if (!ready) return <Loading title="외국인 트라이아웃" variant="list" />;
   return <TryoutInner />;
 }
 

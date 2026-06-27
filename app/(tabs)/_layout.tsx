@@ -16,7 +16,7 @@ export default function TabsLayout() {
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
 
   // 저장 데이터 로드 전(AsyncStorage 복원 = 유일한 진짜 비동기 로드): 로딩 화면
-  if (!hydrated) return <Loading message="저장된 시즌을 불러오는 중…" />;
+  if (!hydrated) return <Loading message="저장된 시즌을 불러오는 중…" variant="brand" />;
 
   // 첫 실행 → 온보딩(게임 소개) → 구단 선택
   if (!onboarded) return <Redirect href="/onboarding" />;

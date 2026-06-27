@@ -36,7 +36,7 @@ function Seg({ items, value, onChange }: { items: string[]; value: number; onCha
 export default function History() {
   // 기록 탭은 무겁다(뉴스 피드 생성 + 리그 생산 집계 + 시즌 스냅샷). 한 틱 미뤄 로딩부터 그린다
   const ready = useDeferredReady();
-  if (!ready) return <Loading title="기록" message="기록을 불러오는 중…" />;
+  if (!ready) return <Loading title="기록" variant="list" />;
   return <HistoryInner />;
 }
 

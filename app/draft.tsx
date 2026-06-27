@@ -16,7 +16,7 @@ const potStars = (p: Player): string => prospectStars(p); // 드래프트가치 
 export default function DraftCenter() {
   // 드래프트 컨텍스트 생성(buildDraftContext)+지명 시뮬(resolveDraft)은 무거워 한 틱 미뤄 로딩부터 그린다
   const ready = useDeferredReady();
-  if (!ready) return <Loading title="신인 드래프트" message="드래프트를 준비하는 중…" />;
+  if (!ready) return <Loading title="신인 드래프트" variant="list" />;
   return <DraftCenterInner />;
 }
 

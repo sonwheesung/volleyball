@@ -50,7 +50,7 @@ export default function Staff() {
   const heavyAction = (fn: () => void) => { pending.current = fn; setBusy(true); };
 
   if (!teamId) return <Screen title="스태프"><Muted>먼저 구단을 선택하세요.</Muted></Screen>;
-  if (busy) return <Loading title="스태프 계약" message={'새 스태프를 반영해\n시즌 전력을 다시 계산하는 중…'} />;
+  if (busy) return <Loading title="스태프 계약" message={'새 스태프를 반영해\n시즌 전력을 다시 계산하는 중…'} variant="brand" />;
 
   const head = getTeamCoach(teamId);
   const acting = !!head?.id.startsWith('acting_');

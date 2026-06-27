@@ -402,8 +402,11 @@
   - **무거운 생성/재계산 화면(7)**: news·history·records·draft·fa·tryout·asian-tryout — wrapper/inner 분리로
     무거운 셀렉터(buildNewsFeed·buildDraftContext·faMarketPreview·careerLeaderboard 등)를 ready 후에만 마운트.
   - **제외**: results·standings(단순 집계, 가벼움 — 깜빡임 방지), 메인 탭 index/squad/schedule/office(주 루프, 즉시감 우선).
-  - **개선 예정(후속)**: 현재 스피너+텍스트 1차 구현. ① 스켈레톤/플레이스홀더 레이아웃, ② 브랜드 연출(로고·코트 모션),
-    ③ 제외 화면 중 시즌 누적으로 무거워지면 재평가(records 외 results도 후보), ④ 지연 임계(아주 빠르면 스피너 생략) 검토.
+  - **2차 개선(✅ 2026-06-27 — UI-6)**: ① **스켈레톤 레이아웃** — 콘텐츠 화면 8개(news·history·records·draft·draft-live·
+    fa·tryout·asian-tryout)는 `<Loading variant="list">`로 카드 골격 시머(곧 올 내용 예고). ② **브랜드 연출** — 앱 복원
+    게이트(`(tabs)/_layout`)·워밍 게이트(`team/[id]`·`staff`)는 `<Loading variant="brand">`로 워드마크 "백년배구"+SVG 코트에
+    통통 튀는 공 모션. 공통 `Skeleton` 시머(Animated opacity 루프·`useNativeDriver`·새 의존성 0, Expo Go 안전). 게이트 로직 불변(표시만).
+  - **개선 예정(후속)**: ③ 제외 화면 중 시즌 누적으로 무거워지면 재평가(records 외 results도 후보), ④ 지연 임계(아주 빠르면 스피너 생략) 검토.
 - **[기존 문제 · 도구] `_gt_determinism` 자가검증 오라클 stale** — "partialize에서 `rosters` 누락을 검출하는가" A/B가
   `false`(검출 실패)라 `DETERMINISM+SAVE OK=false`. 원인: `rosters`는 리하이드레이트 때 base 스냅샷에서 재구성돼
   **세이브에서 빠져도 복원 상태가 동일** → 누락이 결정론 차이를 안 만든다(오라클이 검사 대상을 잘못 고름). 실제 결정론

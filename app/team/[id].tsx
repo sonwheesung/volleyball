@@ -60,7 +60,7 @@ export default function TeamDetail() {
   const onSelect = () => setStarting(true);
 
   if (starting) {
-    return <Loading title={team.name} message={`${team.name} 운영을 준비하는 중…\n시즌 일정과 선수단을 구성하고 있습니다.`} />;
+    return <Loading title={team.name} message={`${team.name} 운영을 준비하는 중…\n시즌 일정과 선수단을 구성하고 있습니다.`} variant="brand" />;
   }
 
   return (

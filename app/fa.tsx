@@ -18,7 +18,7 @@ import { useGameStore } from '../store/useGameStore';
 export default function FACenter() {
   // FA 시장 경쟁 미리보기(faMarketPreview)+정산 자금 투영은 무거워 한 틱 미뤄 로딩부터 그린다
   const ready = useDeferredReady();
-  if (!ready) return <Loading title="FA 시장" message="FA 시장을 분석하는 중…" />;
+  if (!ready) return <Loading title="FA 시장" variant="list" />;
   return <FACenterInner />;
 }
 

@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react';
-import { useEffect, useState } from 'react';
-import { ActivityIndicator, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle } from 'react-native-svg';
+import { useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, Animated, Easing, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { displayOvr } from '../engine/overall';
 import { POS_COLOR, POS_LABEL } from './posTokens';
@@ -53,15 +53,106 @@ export function Screen({ title, children, scroll = true }: ScreenProps) {
   );
 }
 
-/** 전체 화면 로딩 표시 — 스피너 + 안내문. 데이터를 불러오거나 무겁게 생성하는 동안 보여준다.
- *  (관전형 1순위 — UI는 1차 구현, 추후 개선 예정: docs/EDGE_CASES §5) */
-export function Loading({ title, message }: { title?: string; message?: string }) {
+/** 골격 시머 블록 — 곧 올 콘텐츠 자리를 잡는 플레이스홀더(Animated opacity 루프, useNativeDriver — Expo Go 안전).
+ *  단일 소스: 모든 스켈레톤은 이 프리미티브로 조립한다(UI-6). */
+export function Skeleton({ w = '100%', h, r = 8, style }: { w?: number | string; h: number; r?: number; style?: object }) {
+  const a = useRef(new Animated.Value(0.45)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(a, { toValue: 1, duration: 650, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(a, { toValue: 0.45, duration: 650, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [a]);
+  return <Animated.View style={[{ width: w as number, height: h, borderRadius: r, backgroundColor: theme.cardAlt, opacity: a }, style]} />;
+}
+
+/** 콘텐츠 화면(리스트/카드)용 스켈레톤 — 카드 골격 5줄로 곧 올 내용을 예고(맨 스피너보다 체감 대기↓, UI-6). */
+function SkeletonList() {
+  return (
+    <View style={{ gap: 12 }}>
+      {[0, 1, 2, 3, 4].map((i) => (
+        <View key={i} style={styles.skCard}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+            <Skeleton w={44} h={44} r={22} />
+            <View style={{ flex: 1, gap: 8 }}>
+              <Skeleton w={'58%'} h={13} />
+              <Skeleton w={'38%'} h={10} />
+            </View>
+            <Skeleton w={38} h={20} r={6} />
+          </View>
+          <Skeleton w={'100%'} h={9} r={5} />
+        </View>
+      ))}
+    </View>
+  );
+}
+
+const AnimView = Animated.View;
+
+/** 브랜드 연출 로더 — 워드마크 "백년배구" + SVG 코트에 통통 튀는 공(Animated translateY, useNativeDriver).
+ *  콘텐츠 모양이 아직 없는 긴 대기(앱 복원·무거운 재계산)용. 관전형 1순위 — 첫 인상/대기도 "보는 경험"(UI-6). */
+function BrandLoading({ message }: { message?: string }) {
+  const COURT_W = 150, COURT_H = 92, BALL = 13;
+  const yTop = 8, yBot = COURT_H - BALL - 6; // 공 중심 이동 범위(코트 안)
+  const t = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(t, { toValue: 1, duration: 560, easing: Easing.in(Easing.quad), useNativeDriver: true }),   // 낙하(가속)
+        Animated.timing(t, { toValue: 0, duration: 560, easing: Easing.out(Easing.quad), useNativeDriver: true }),  // 상승(감속) → 통통
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [t]);
+  const ty = t.interpolate({ inputRange: [0, 1], outputRange: [yTop, yBot] });
+  const squash = t.interpolate({ inputRange: [0, 0.85, 1], outputRange: [1, 1, 0.8] }); // 착지 순간 살짝 눌림
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 }}>
+      <View style={{ width: COURT_W, height: COURT_H }}>
+        <Svg width={COURT_W} height={COURT_H} style={StyleSheet.absoluteFill}>
+          <Rect x={1} y={1} width={COURT_W - 2} height={COURT_H - 2} rx={6} stroke={theme.border} strokeWidth={2} fill={theme.card} />
+          <Line x1={COURT_W / 2} y1={2} x2={COURT_W / 2} y2={COURT_H - 2} stroke={theme.border} strokeWidth={2} />
+          <Line x1={COURT_W * 0.28} y1={2} x2={COURT_W * 0.28} y2={COURT_H - 2} stroke={theme.cardAlt} strokeWidth={1.5} />
+          <Line x1={COURT_W * 0.72} y1={2} x2={COURT_W * 0.72} y2={COURT_H - 2} stroke={theme.cardAlt} strokeWidth={1.5} />
+        </Svg>
+        <AnimView
+          style={{
+            position: 'absolute', left: COURT_W / 2 - BALL / 2, width: BALL, height: BALL, borderRadius: BALL / 2,
+            backgroundColor: theme.accent, transform: [{ translateY: ty }, { scaleY: squash }],
+          }}
+        />
+      </View>
+      <Text style={styles.brandMark}>백년배구</Text>
+      {message ? <Text style={styles.loadingMsg}>{message}</Text> : null}
+    </View>
+  );
+}
+
+/** 전체 화면 로딩 표시(UI-6). variant: `list`=콘텐츠 화면 카드 스켈레톤 · `brand`=워드마크+코트 모션(긴 대기) ·
+ *  `spinner`=기본 스피너(폴백). 로딩 게이트 로직(UI-1·UI-4)은 불변 — 표시만 맥락에 맞춘다. */
+export function Loading({ title, message, variant = 'spinner' }: { title?: string; message?: string; variant?: 'spinner' | 'list' | 'brand' }) {
+  if (variant === 'list') {
+    return (
+      <Screen title={title} scroll={false}>
+        <SkeletonList />
+      </Screen>
+    );
+  }
   return (
     <Screen title={title} scroll={false}>
-      <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
-        <ActivityIndicator size="large" color={theme.accent} />
-        {message ? <Text style={styles.loadingMsg}>{message}</Text> : null}
-      </View>
+      {variant === 'brand' ? (
+        <BrandLoading message={message} />
+      ) : (
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 14 }}>
+          <ActivityIndicator size="large" color={theme.accent} />
+          {message ? <Text style={styles.loadingMsg}>{message}</Text> : null}
+        </View>
+      )}
     </Screen>
   );
 }
@@ -219,6 +310,9 @@ const styles = StyleSheet.create({
   },
   muted: { color: theme.muted, fontSize: 14, lineHeight: 20 },
   loadingMsg: { color: theme.muted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
+  brandMark: { color: theme.text, fontSize: 26, fontWeight: '900', letterSpacing: 1 },
+  // 스켈레톤 카드 — 실제 카드(card)와 같은 골격(둥근모서리·패딩·헤어라인)이되 그림자는 빼 가벼운 플레이스홀더로
+  skCard: { backgroundColor: theme.card, borderRadius: 18, padding: 16, gap: 10, borderWidth: 1, borderColor: theme.border },
   // paddingHorizontal 필수 — 인라인(Row 안) 버튼은 폭이 글자에 맞춰지므로, 없으면 "영입"처럼 짧은
   // 라벨이 세로로 길쭉한 캡슐이 된다. 전체폭 버튼(Card 안)은 stretch라 영향 없음.
   btn: { borderRadius: 999, paddingVertical: 14, paddingHorizontal: 22, minWidth: 76, alignItems: 'center', justifyContent: 'center' },

@@ -21,7 +21,7 @@ const REASON: Record<PickReason, { ko: string; color: string }> = {
 
 export default function DraftLive() {
   const ready = useDeferredReady();
-  if (!ready) return <Loading title="라이브 드래프트" message="지명 순서를 준비하는 중…" />;
+  if (!ready) return <Loading title="라이브 드래프트" variant="list" />;
   return <DraftLiveInner />;
 }
 
