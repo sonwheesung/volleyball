@@ -29,6 +29,14 @@ let assistantMap = new Map(assistantPool.map((a) => [a.id, a]));
 let scoutMap = new Map(LEAGUE.scouts.map((s) => [s.id, s]));
 const fixtureMap = new Map(SEASON.map((f) => [f.id, f]));
 
+// 시드 스태프 원본 스냅샷(pristine) — 풀 복원의 단일 진실. hireAssistant(`a.teamId=teamId`)·assignCoach(`c.teamId=...`)가
+// 스태프 객체를 **in-place 변이**하는데, resetLeagueBase가 `[...LEAGUE.x]`(얕은 복사=변이된 참조)로 복원하면 teamId가
+// 안 돌아와 다음 게임의 영입 가드(`a.teamId!==null`)에 걸린다 → 새 게임이 스타팅 코치 0 + in-process 진화 비결정
+// (REALTIME_SIM §3 Phase0, edge-swarm/engine-verify 연계 발견 2026-06-27). 매 복원 시 이 스냅샷의 새 클론을 쓴다.
+let seedCoaches: Coach[] = LEAGUE.coaches.map((c) => ({ ...c }));
+let seedAssistants: AssistantCoach[] = LEAGUE.assistants.map((a) => ({ ...a }));
+let seedScouts: Scout[] = LEAGUE.scouts.map((s) => ({ ...s }));
+
 // ─── 스태프 계약(STAFF_SYSTEM) — 단장이 영입한 감독/코치/스카우터 ───
 let headCoachOverride: Record<string, string> = {};                 // teamId → 영입 감독 id(시드 감독 대체)
 let teamAssistantIds: Record<string, string[]> = {};                // teamId → 영입 코치 ids
@@ -399,7 +407,9 @@ export const defaultRosters = seedRosters;
 export function resetLeagueBase(): void {
   for (const p of LEAGUE.players) playerMap.set(p.id, p);
   rosters = seedRosters();
-  commitCoachPool([...LEAGUE.coaches], [...LEAGUE.assistants]); // 감독 풀 시드 복원
+  // pristine 클론으로 복원 — in-place 변이(teamId)된 참조가 아니라 시드 원본을 되살린다(결정론·새게임 스타팅스태프 일관)
+  commitCoachPool(seedCoaches.map((c) => ({ ...c })), seedAssistants.map((a) => ({ ...a })));
+  scoutMap = new Map(seedScouts.map((s) => [s.id, { ...s }]));
   focusOverride = {};
   headCoachOverride = {};
   teamAssistantIds = {};
@@ -420,8 +430,12 @@ export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
   for (const t of LEAGUE.teams) teamMap.set(t.id, t);
   playerMap.clear();
   for (const p of LEAGUE.players) playerMap.set(p.id, p);
-  commitCoachPool([...LEAGUE.coaches], [...LEAGUE.assistants]);
-  scoutMap = new Map(LEAGUE.scouts.map((s) => [s.id, s]));
+  // 새 유니버스 — 시드 스태프 스냅샷도 pristine으로 갱신(resetLeagueBase 복원의 단일 진실)
+  seedCoaches = LEAGUE.coaches.map((c) => ({ ...c }));
+  seedAssistants = LEAGUE.assistants.map((a) => ({ ...a }));
+  seedScouts = LEAGUE.scouts.map((s) => ({ ...s }));
+  commitCoachPool(seedCoaches.map((c) => ({ ...c })), seedAssistants.map((a) => ({ ...a })));
+  scoutMap = new Map(seedScouts.map((s) => [s.id, { ...s }]));
   fixtureMap.clear();
   for (const f of SEASON) fixtureMap.set(f.id, f);
   rosters = seedRosters();

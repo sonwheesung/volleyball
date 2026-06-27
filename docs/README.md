@@ -40,6 +40,7 @@
 | [CLUB_IDENTITY_SYSTEM](./CLUB_IDENTITY_SYSTEM.md) | 구단 정체성(명문·신흥강호·황혼·만년약체·신생팀): 선택 화면 서사 + 선수단 생성 연동(고정 배정) | `data/clubIdentity.ts`, `data/seed.ts`, `app/select-team.tsx`, `app/team/[id].tsx`, `tools/clubIdentity.ts` |
 | [RELATIONSHIP_SYSTEM](./RELATIONSHIP_SYSTEM.md) | **선수 인간관계망**(친구/라이벌 affinity → FA 영입·재계약·방출 결정에 ± 가중) — 📋 플랜(미구현) | `engine/relationships.ts`·`data/relationships.ts`(예정) |
 | [SAVE_SYSTEM](./SAVE_SYSTEM.md) | **세이브·마이그레이션**(영속 51필드 스키마·version/migrate·정규화기·안전 복원) — 출시 후 구조 변경 안전 | `store/saveMigration.ts`·`store/useGameStore.ts`(persist) |
+| [REALTIME_SIM_SYSTEM](./REALTIME_SIM_SYSTEM.md) | **전진 시뮬+결과 저장 전환(B안)** — 게으른 씨앗 재생 → 1회 치르고 저장(로딩·재생버그 제거). 독립리뷰·함정 7게이트·Phase0~3 | `store/useGameStore.ts`·`data/standings.ts`·`data/production.ts`(전환 중) |
 | [ONBOARDING_SYSTEM](./ONBOARDING_SYSTEM.md) | 스포트라이트 튜토리얼(구단 선택부터 화면별 안내, **스텝 단위 영구 추적** → 신규 기능만 재안내)·플레이어 시작 기본 스태프 | `components/Spotlight.tsx`, `data/tutorialSteps.ts`, `store/useGameStore.ts`(seenTips), `data/league.ts`(grantStartingStaff) |
 
 ---

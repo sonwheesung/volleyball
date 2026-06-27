@@ -88,7 +88,9 @@ import './_gt_mock';
   // 실제 partialize 산출물(영속되는 그대로) → 리로드 흉내(모듈 컨텍스트 wipe + 실제 rehydrate)
   const saved = JSON.parse(JSON.stringify(realPartialize(G())));
   const reload = (savedState: any) => {
-    resetLeagueBase(); setTxContext([], [], ''); setOwnerContext([]); setAwardScores([]); // 리로드=컨텍스트 초기화
+    // 깨끗한 store+컨텍스트에서 출발: setState는 merge라, 안 비우면 누락 필드가 직전 값으로 남아 A/B가 안 묾(허위 오라클).
+    // resetSave로 freshSave 기본값으로 비운 뒤 savedState를 얹으면, 누락된 영속 필드는 기본값으로 남아 파생 sig에 드러난다.
+    G().resetSave(); // = resetLeagueBase + setTxContext/Owner/Award 초기화
     realRehydrate()(savedState);          // 실제 onRehydrateStorage
     useGameStore.setState(savedState);    // 영속된 store 필드 복원(파생 셀렉터가 G().cash 등 읽음)
   };
@@ -96,15 +98,16 @@ import './_gt_mock';
   const after = sig();
   const saveOk = before === after;
 
-  // A/B 자가검증: 영속 필드(rosters)를 일부러 누락 → 차이로 검출해야(허위 오라클 아님)
-  const broken = JSON.parse(JSON.stringify(saved)); delete broken.rosters;
+  // A/B 자가검증: 영속 필드를 일부러 누락 → 차이로 검출해야(허위 오라클 아님). rosters는 playerBase에서 재구성
+  // 가능해 누락해도 무해(나쁜 표적) → 비-재구성 스칼라 currentDay를 누락(리플레이 커서·sig 포함). 누락 시 freshSave 기본값으로 남아 sig 변함.
+  const broken = JSON.parse(JSON.stringify(saved)); delete broken.currentDay;
   reload(broken);
   const abDetected = sig() !== before;
   reload(saved); // 원복
 
   console.log(`\n=== SAVE/RELOAD (real persist) ===`);
   console.log(`real partialize+rehydrate identical = ${saveOk}`);
-  console.log(`[A/B] partialize 필드(rosters) 누락 검출 = ${abDetected} (true여야 신뢰)`);
+  console.log(`[A/B] partialize 필드(currentDay) 누락 검출 = ${abDetected} (true여야 신뢰)`);
   if (!saveOk) { const a = JSON.parse(before), b = JSON.parse(after); for (const k of Object.keys(a)) if (JSON.stringify(a[k]) !== JSON.stringify(b[k])) console.log(`  DIFF ${k}`); }
 
   const allOk = detOk && saveOk && abDetected;
