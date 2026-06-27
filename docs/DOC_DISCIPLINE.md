@@ -87,3 +87,40 @@
 [ ] 통계 기입 시 (N · 엔진커밋 · 날짜) 메타데이터
 [ ] 도메인 용어 쓰면 출처 확인 + 주석에 출처 명기
 ```
+
+---
+
+## 문서-코드 일관성 검사 결과 (2026-06-27 · engine-verify 스웜 문서_drift 38건 → 2차 검수·처리)
+
+> engine-verify 100세션 스웜의 **문서_drift 렌즈가 38건** 검출(run whk3dgfmg). 코드로 spot-검증해 정확 확인 후 분류·처리.
+> 대부분 **문서 stale**(코드가 진실·검증된 값)이고, **밸런스 회귀 1건(FINANCE)** 과 **설계 단순화(코드갭) 몇 건**이 섞임.
+
+### 🐛 실제 발견(doc 넘어 — 별도 작업 필요)
+- **FINANCE 재정 회귀(#28)**: simFinance 재측정 잔고 1.6억(문서 9.9억)·모기업 보전 50%(19%)·FA 자금부족 좌절 91/115
+  ·"❌ 튜닝 필요". 만성 적자로 FA 영입 막힘(단장 기둥 저해). 추정 원인: 구단 정체성(2026-06-18)+성장/노쇠 변경. → **재정 튜닝 작업 등록.** FINANCE_SYSTEM 헤더에 stale 무효+회귀 플래그 반영.
+
+### ✅ 문서 정정 완료(코드에 맞춤)
+- MATCH_SYSTEM: §7.2 momFactor ~~±15%(0.85+0.30×)~~→±4%(0.96+0.0008m)·직접범실보정 미구현 명기(#1) · §1.4 포지션폴트
+  ~~0.015×situationFactor~~→0.012+clamp[0,0.02], situationFactor 미구현(#2·#6) · 구현현황 stuffProb ~~0.46~~→0.55(#3·#7) ·
+  hop 상한 ~~예:12~~→8(#8) · §10 모듈매핑 rotation.ts에서 리베로교체·폴트 제거(rally.ts 소관)(#5).
+
+### 📊 stale 통계(검증값이 현 엔진서 재현 안 됨 — STATS_PROTOCOL상 무효, 재측정 필요)
+- TRAINING §★★ OVR 63.8→재측정 71.4(#14)·페이싱 BASE 0.04 stale(#16) · SALARY 개편동기 통계(#17) · FOREIGN 재지명
+  잔류 63%→51%(#22, 코드 주석 "~절반"과는 일치) · draft 분포 일부(#21) · FA offerScore 요약공식 rel/talkBias 누락(#19).
+  → 각 문서에 "(stale·재측정 필요)" 표기 대상. 수치 자체는 placeholder라 밸런스 영향 없음(FINANCE 제외).
+
+### 📌 설계 단순화(문서가 미구현 동작 기술 — "미구현" 명기 대상)
+- ROTATION_MORALE A.3 휴식 우선순위 '고령만' 구현(저폼/피로/부상이력 미반영)(#10) · OVR 급락방지 가드 미구현(#11) ·
+  시드 출처 fixture.seed 아님(#12) · 감독 분화 POS_FLOOR=0.24가 차등 흡수(#15) · STAFF stamina/mental 코치 공급 0(#26).
+
+### 📝 경미(주석·표현·손복제 상수 — 동작 버그 없음)
+- rally.ts digP 주석 0.38(코드 0.40)(#4) · simulateMatchSimple "호출처 없음" 표현(테스트 호출 있음)(#9) · overall.ts 주석
+  0.9(OVR_SLOPE 1.15)(#13) · ASIAN_POS 세터 없음(FOREIGN §7.1 'S 가능' 표현)(#23) · STARTER_NEED/ON_COURT 손복제(#24) ·
+  severance remaining 1년 하한 미기재(#25) · staff 은퇴확률 75세 경계(#27) · 성적보너스 상한 9억 과소표기(#29) ·
+  OWNER outclassed 0.7 vs 문서 0.5(#30) · RELATIONSHIP innate 시드키 구분자/접두 문서 stale(#31) · numberLineage beforeSeason
+  인자 문서 누락(#32) · SEASON 더블라운드로빈 표현(#33) · AWARDS 기록왕 6 vs 7(receive)(#34) · achievements TITLE_KEYS
+  receive 제외→리시브왕 업적 미집계(#35, 잠재 코드갭) · MILESTONE big 임계(#36) · achievements first_concede desc(#37) ·
+  PLAYOFF_CUTOFF 3곳 손복제(#38, 값 일치).
+
+> 처리: ✅ 5건 정정 + 🐛 FINANCE 회귀 플래그. 📊/📌/📝 항목은 본 레지스트리로 추적 — 해당 시스템 작업 시 동반 정정
+> (placeholder 수치라 긴급도 낮음). 전수 원본은 engine-verify run whk3dgfmg 출력.
