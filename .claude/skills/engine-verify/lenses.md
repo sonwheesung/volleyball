@@ -58,3 +58,11 @@
   - **[사각] 경계극단(23)이 잡은 latent 갭은 대개 "정상 파이프라인 도달 불가, 적대 store 입력만 도달"**(composition-blind
     lineup·empty-six)이라 fuzz-game(store 구동)과 겹침 → 경계극단 세션엔 "store 진입점 도달성까지 확인" 지시 보강.
   - **[가드결함]** `_gt_determinism`의 A/B 자가검증(partialize rosters 누락 검출)이 **안 묾(false)** = 허위 오라클 — 가드 자신 수정 필요.
+- **(2026-06-27 · edge-swarm run 100세션)** 엣지 383(high 16·med 143·low 224 · 신규 ~314). 합의 매트릭스:
+  - **[표준 승격] "무캡 루프/공급 고갈"** — 클러스터 A(외인/아시아 풀 `while(overall<dom)` 무한루프=프리즈)를 **3개 렌즈
+    (경계극단·장기누적·적대입력)가 같은 코드로 수렴** = 최고 합의 = 명백 실버그. 즉시 수정(EDGE_CASES §3.14). **"종료 보장
+    안 되는 while/재시도 루프"를 모든 area에서 보는 표준 체크로 승격**(클램프 천장 vs 목표 불일치 패턴).
+  - **[표준 승격] "손상/도핑 세이브 → NaN 전파"(적대입력)** — sanitize가 값(숫자/범위) 미검증이라 salary/bonds/potential
+    NaN이 캡·affinity·성장으로 전파(클러스터 D 다수 세션). save-corruption 내성을 표준 렌즈로.
+  - **[사각] cross-metric 정합** — 클러스터 B(clinch는 승수, standings는 승점)를 season 2세션만 잡음. 다른 season 세션은
+    clinch의 *내부* wins 일관성만 봐 surveyed에 OK 기록 → **"같은 개념을 두 모듈이 다른 지표로 계산하나"** 각도가 사각이었음. 서브렌즈 추가.

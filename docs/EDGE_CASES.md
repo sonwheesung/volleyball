@@ -394,6 +394,29 @@
 
 ---
 
+## 3.14 외인/아시아 트라이아웃 풀 생성 무한루프 (edge-swarm 클러스터 A, 2026-06-27 · ✅ 수정)
+
+> edge-swarm 100세션 발굴에서 **5세션 합의**(foreign:경계극단·장기누적·적대입력 ×2 + asian)로 떠오른 최고 합의 엣지. 2차 검수로 실측 확인 후 수정.
+
+- **증상**: `data/tryout.ts` `generateForeignPool`/`generateAsianPool`의 바닥보장 루프 `while (overall(p) < domesticAvg[+2])
+  p = lift(p,3)`가 **무캡**. `lift`는 키·체력을 안 올려(`LIFT_KEYS`만 96 클램프) overall에 **천장(~89~93)**이 존재 →
+  `domesticAvg`가 천장 근처(실측 **≥87**)면 조건이 영원히 참 = **무한루프=앱 프리즈**.
+- **2차 검수(실측)**: 외인 후보 200명 무한 lift 후 overall 천장 **89~93**. 정상 `domesticAvg~64`(+2=66 ≪ 89)는 ~3회로
+  자연 종료(안전). 도달 경로: 장기 인플레(domesticAvg↑) 또는 **손상·도핑 세이브**(국내 전원 고OVR → domesticAvg≈90)로 확실.
+- **수정**: best-effort 반복 캡 `for (let g=0; g<60 && cond; g++)`. **정상 동작 불변**(캡은 64에서 미발동), 천장 초과 시
+  best-effort 풀로 종료(프리즈 차단). `tools/_dv_tryout_pool.ts`(정상 바닥 충족 + 고/극단 domesticAvg 종료 — 옛 무캡은 hang = A/B 이빨).
+
+### edge-swarm 발굴 배치 요약 (2026-06-27 · 100세션 · 383엣지 → 신규 ~314 · 미검수 클러스터 = verify-cases 후속)
+> 합의 높은 미수정 클러스터(2차 검수 일부만 — 나머지는 `verify-cases`가 도구화·확정):
+- **[B] clinch 승수 vs 승점 불일치(2세션)**: `engine/clinch.ts`는 `t.wins`(승 수)로 PO 확정/탈락 판정하나 `data/standings.ts`는
+  KOVO 승점(3-0/3-1=3·3-2=2·풀세트패=1)으로 정렬 → 헤더가 '확정/탈락 100% 신뢰'라 보장하나 듀스 잦은 시즌에 표시 rank와 모순 가능. **감시 — verify-cases 확정 필요**.
+- **[C] 외인 은퇴 누수(1세션)**: `engine/retire.ts applyRetirements`가 isForeign 미제외(offseason.expel은 제외) → 노장 외인이
+  국내 은퇴/HOF/코치 파이프라인에 샐 가능(FOREIGN_SYSTEM 7 위반). **감시**.
+- **[D] 손상세이브 NaN 내성**(potential/catTalent 결손·salary/bonds NaN, 다수 세션): sanitize가 값 검증 약함 → NaN 전파. **감시**.
+- **[E] 가용<7(부상 cap3 + 스캔들 정지 무캡 겹침)**: §3.6/§3.12 기지 클래스 재확인(스웜이 독립 재발견 = 검출 신뢰).
+
+---
+
 ## 4. 회귀 프로토콜 (로직 수정 시)
 
 영입/오프시즌 계열 엔진·셀렉터(`engine/compensation·faMarket·cap·draft·staff·staffLifecycle·foreign·transactions·finance`,

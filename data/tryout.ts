@@ -27,7 +27,10 @@ export function generateForeignPool(season: number, domesticAvg: number, count =
     const age = rng.int(23, 31);
     const bias = 6 + rng.int(0, 12); // 상위권 기본 — 분산은 도박의 재료
     let p = makePlayer(rng, `fgn-s${season}-${i}`, pos, true, age, bias);
-    while (overall(p) < domesticAvg + 2) p = lift(p, 3); // 바닥 보장: 국내 평균 그 이상
+    // 바닥 보장: 국내 평균 그 이상. lift는 키·체력 미상향이라 overall 천장(~89~93)이 존재 →
+    // domesticAvg가 천장 근처(≥~87, 장기 인플레/손상·도핑 세이브)면 무캡 while가 영구루프=앱 프리즈
+    // (edge-swarm 5세션 합의 발견 2026-06-27). best-effort 캡으로 종료 보장(정상 domesticAvg~64면 ~3회로 자연 종료, 불변).
+    for (let g = 0; g < 60 && overall(p) < domesticAvg + 2; g++) p = lift(p, 3);
     out.push({ ...p, contract: { salary: FOREIGN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } });
   }
   return out;
@@ -50,7 +53,8 @@ export function generateAsianPool(season: number, domesticAvg: number, count = F
     const age = rng.int(22, 30);
     const bias = 2 + rng.int(0, 9); // 외인(6+0~12)보다 낮은 티어
     let p: Player = { ...makePlayer(rng, `asn-s${season}-${i}`, pos, true, age, bias), isAsianQuota: true };
-    while (overall(p) < domesticAvg) p = { ...lift(p, 3), isAsianQuota: true }; // 바닥 = 국내 평균(외인은 +2)
+    // 바닥 = 국내 평균(외인은 +2). 외인과 동일 무한루프 위험(아시아는 +2 마진 없어 임계 더 낮음) → best-effort 캡.
+    for (let g = 0; g < 60 && overall(p) < domesticAvg; g++) p = { ...lift(p, 3), isAsianQuota: true };
     p = applyAsianIdentity(p); // 아시아 이름·국적(id 결정론)
     out.push({ ...p, contract: { salary: ASIAN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } });
   }
