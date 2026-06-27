@@ -65,7 +65,7 @@ export const TIPS: Tip[] = [
   { id: 'history.ach', screen: 'tab-history', order: 0, anchor: 'history-ach',
     title: '업적', body: '구단주 본인의 장기 발자취 — 우승·시상·레전드·기록·운영을 트로피로 모읍니다.' },
   { id: 'history.intro', screen: 'tab-history', order: 1, anchor: 'history-top',
-    title: '기록과 명예', body: '시즌·통산·명예의전당·연표 — 세월이 흘러야 채워집니다. 백년배구의 진짜 재미입니다.' },
+    title: '기록과 명예', body: '시즌·통산·명예의전당·연표 — 세월이 흘러야 채워집니다. 배구명가의 진짜 재미입니다.' },
 ];
 
 /** 그 화면의 팁을 순서대로 */

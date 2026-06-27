@@ -93,7 +93,7 @@ function SkeletonList() {
 
 const AnimView = Animated.View;
 
-/** 브랜드 연출 로더 — 워드마크 "백년배구" + SVG 코트에 통통 튀는 공(Animated translateY, useNativeDriver).
+/** 브랜드 연출 로더 — 워드마크 "배구명가" + SVG 코트에 통통 튀는 공(Animated translateY, useNativeDriver).
  *  콘텐츠 모양이 아직 없는 긴 대기(앱 복원·무거운 재계산)용. 관전형 1순위 — 첫 인상/대기도 "보는 경험"(UI-6). */
 function BrandLoading({ message }: { message?: string }) {
   const COURT_W = 150, COURT_H = 92, BALL = 13;
@@ -127,7 +127,7 @@ function BrandLoading({ message }: { message?: string }) {
           }}
         />
       </View>
-      <Text style={styles.brandMark}>백년배구</Text>
+      <Text style={styles.brandMark}>배구명가</Text>
       {message ? <Text style={styles.loadingMsg}>{message}</Text> : null}
     </View>
   );

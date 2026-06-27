@@ -15,7 +15,7 @@ const ROSE_DK = '#E63E72';
 const PERKS: { icon: IoniconName; title: string; sub: string }[] = [
   { icon: 'heart', title: '후원자 뱃지', sub: '대시보드·설정에 ♥ 후원자 표시 (영구)' },
   { icon: 'document-text', title: '크레딧 등재', sub: '"이 게임을 응원해주신 분들"에 함께' },
-  { icon: 'sparkles', title: '개발 응원', sub: '한 사람이 만든 백년배구를 계속 가꾸는 힘' },
+  { icon: 'sparkles', title: '개발 응원', sub: '한 사람이 만든 배구명가를 계속 가꾸는 힘' },
 ];
 
 export default function Supporter() {
@@ -51,7 +51,7 @@ export default function Supporter() {
         <Text style={styles.subtitle}>
           {supporter
             ? '당신의 응원이 이 긴 시즌을 계속 잇습니다 ♥'
-            : '백년배구는 한 사람이 만듭니다.\n응원으로 다음 시즌을 함께 만들어요.'}
+            : '배구명가는 한 사람이 만듭니다.\n응원으로 다음 시즌을 함께 만들어요.'}
         </Text>
       </View>
 

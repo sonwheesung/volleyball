@@ -22,7 +22,7 @@ export default function Credits() {
   return (
     <Screen title="크레딧">
       <View style={styles.headWrap}>
-        <Text style={styles.logo}>백년배구</Text>
+        <Text style={styles.logo}>배구명가</Text>
         <Muted style={{ textAlign: 'center' }}>가상 V리그를 수십 시즌 운영하는 관전형 배구 시뮬</Muted>
       </View>
 
@@ -50,7 +50,7 @@ export default function Credits() {
           </Pressable>
         )}
         <Muted style={{ fontSize: 11.5, lineHeight: 16, marginTop: 4 }}>
-          백년배구를 응원해주신 모든 서포터분들께 감사드립니다.
+          배구명가를 응원해주신 모든 서포터분들께 감사드립니다.
         </Muted>
       </View>
 

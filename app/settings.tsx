@@ -53,7 +53,7 @@ export default function Settings() {
       <View style={styles.group}>
         <Row icon="heart" tint={ROSE}
           label={supporter ? '서포터 ♥ — 감사합니다' : '서포터 팩'}
-          sub={supporter ? '백년배구를 응원해주셨어요' : '한 번의 응원으로 다음 시즌을 함께'}
+          sub={supporter ? '배구명가를 응원해주셨어요' : '한 번의 응원으로 다음 시즌을 함께'}
           onPress={() => router.push('/supporter')} />
         <Row icon="document-text-outline" tint={theme.muted} label="크레딧" sub="만든 사람 · 응원해주신 분들"
           onPress={() => router.push('/credits')} />
@@ -83,7 +83,7 @@ export default function Settings() {
 
       <Text style={styles.section}>정보</Text>
       <View style={styles.group}>
-        <Row icon="information-circle-outline" tint={theme.muted} label="버전" sub={`백년배구 v${version}`} />
+        <Row icon="information-circle-outline" tint={theme.muted} label="버전" sub={`배구명가 v${version}`} />
       </View>
 
       {/* 미리보기(개발용) — 실전 빌드에선 숨김. 서포터 적용된 모습을 즉시 확인 */}
