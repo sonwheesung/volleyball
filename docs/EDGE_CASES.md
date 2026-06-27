@@ -9,7 +9,8 @@
 > `sim-league` 스킬, 엔진 분포(KOVO)는 `tools/simKovo.ts`. 본 문서는 **"한 사람=한 팀" 불변식과
 > 영입 정합**(돈·계약·소속)을 관장한다.
 >
-> **연동 스킬**: 문서 작성/갱신 = `analyze-cases`, 시뮬 검증/수정 = `verify-cases`.
+> **연동 스킬**: 문서 작성/갱신 = `analyze-cases`(1세션) 또는 `edge-swarm`(100+ 세션 대량 발굴 — 합의도·생성사각),
+> 시뮬 검증/수정 = `verify-cases`. (엔진 검증 스웜 = `engine-verify` — 둘은 `engine-verify/lenses.md` 카탈로그 공유.)
 
 ---
 

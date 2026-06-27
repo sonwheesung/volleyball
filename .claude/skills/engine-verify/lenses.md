@@ -1,8 +1,9 @@
-# engine-verify — area × lens 카탈로그 (진화하는 정본)
+# area × lens 카탈로그 (진화하는 정본 — engine-verify + edge-swarm 공유)
 
-> `engine-verify` 스킬이 100+ 세션에 배정하는 **area(검증 표면)** 와 **lens(검증 각도)** 의 목록.
-> 매 run의 6단계(자기보강)가 **사각을 만든 누락 렌즈/under-covered area를 아래 "run 환류"에 append**한다.
-> 강력한 렌즈(한 세션만 잡았으나 실버그를 잡은)는 표준 렌즈로 승격. → 스킬이 run마다 똑똑해진다.
+> 두 스웜 스킬이 100+ 세션에 배정하는 **area(검증/발굴 표면)** 와 **lens(각도)** 의 **공유 목록**:
+> [`engine-verify`](./SKILL.md)(검증 — A/B로 실버그 확인)와 [`edge-swarm`](../edge-swarm/SKILL.md)(발굴 — 신규 엣지 도출).
+> 매 run의 자기보강 단계가 **사각을 만든 누락 렌즈/under-covered area를 아래 "run 환류"에 append**한다.
+> 강력한 렌즈(한 세션만 잡았으나 실버그/희귀 엣지를 잡은)는 표준 렌즈로 승격. → 두 스킬이 run마다 같이 똑똑해진다.
 
 ## area (검증 표면 — 실제 모듈에서 가져옴, 지어내지 말 것)
 
