@@ -46,4 +46,15 @@
 
 > 형식: `(YYYY-MM-DD·run N세션) [추가렌즈/area 또는 승격] — 어느 실버그를 어느 세션만 잡았고, 다른 세션이 왜 놓쳤나(사각).`
 
-- (아직 없음 — 첫 run 후 채워진다.)
+- **(2026-06-27 · engine-verify run 100세션)** finding 106건(high 1클래스·med 16·low 88). 렌즈별 수율:
+  **문서_drift 38 · 경계극단 23 · 분포 18 · 불변식 15 · 결정론 12**.
+  - **[승격] 문서_drift = 최고 수율 렌즈(38)** — 코드↔문서 상수/공식이 광범위하게 벌어짐(momFactor 문서 ±15% vs 코드 ±4%·
+    포지션폴트 0.015+situationFactor 미구현·FINANCE/TRAINING stale 검증통계·stuffProb 0.46 vs 0.55 등). 출력은 대부분 정상이라
+    *엔진 버그가 아니라 DOC_DISCIPLINE 위반*. → **표준 렌즈로 항상 포함 + 별도 "문서 동기화 패스" 권고**.
+  - **[추가 서브렌즈] 결정론 → "in-process resetSave 재플레이(앱 내 새 게임)"** — HIGH(파이프라인 결정론: 같은 시드 2회
+    resetSave → computeStandings 91↔83)를 **단 1세션(lineup:결정론)만** 잡음. 사각: 다른 결정론 세션들은 각자 area의
+    *단발 시드 재현*만 봐 surveyed에 '결정론 OK'를 적었지만, **연속 resetSave(프로세스 재사용=앱 내 새게임) 경로**를 아무도
+    안 봄 → 그 각도를 명시 서브렌즈로 추가. (실세이브 partialize+rehydrate는 결정론 ✓ — 누수는 in-process 모듈 상태.)
+  - **[사각] 경계극단(23)이 잡은 latent 갭은 대개 "정상 파이프라인 도달 불가, 적대 store 입력만 도달"**(composition-blind
+    lineup·empty-six)이라 fuzz-game(store 구동)과 겹침 → 경계극단 세션엔 "store 진입점 도달성까지 확인" 지시 보강.
+  - **[가드결함]** `_gt_determinism`의 A/B 자가검증(partialize rosters 누락 검출)이 **안 묾(false)** = 허위 오라클 — 가드 자신 수정 필요.

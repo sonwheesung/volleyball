@@ -374,6 +374,26 @@
 
 ---
 
+## 3.13 결정론 — in-process resetSave 재플레이 (engine-verify 스웜 발견, 2026-06-27 · 확인됨·근본원인 추적 필요·미수정)
+
+> engine-verify 100세션 스웜에서 **lineup:결정론 세션 1개만** 잡은 HIGH 클래스. 2차 적대 검수로 **재현 확인**.
+
+- **증상(재현)**: `_gt_determinism.ts` — 같은 시드로 **같은 프로세스 내 `resetSave` 2회** 후 `computeStandings(MAX)`가
+  상이(t0 91pt↔83pt). 저장 store 서명(rosters/season/day/cash)은 동일, **standings 행만** 다름.
+- **2차 검수 결론(추정 금지·확인)**:
+  - 제품 **실세이브 경로(partialize+rehydrate)는 결정론적 ✓** — 셰이브/복원은 정상.
+  - 세션 추정 "standings.ts 캐시"는 **근본원인 아님** — 캐시 키 `baseVersion():txVersion()`의 `_baseVersion`은 리셋마다
+    증가(0 리셋 아님)라 매 run 재계산됨. 즉 캐시가 stale을 반환하는 게 아니라 **재계산 입력이 run간 달라짐** =
+    in-process 모듈 상태 누수(§3.6 resetSave 누수 클래스). 후보: 진화선수/부상/컨텍스트 잔존.
+  - **제품 영향 잠재**: 앱에서 재시작 없이 **"새 게임"이 같은 `resetSave` 경로**를 타므로, 직전 게임 모듈 상태가
+    새 게임 standings에 새면 비정규 순위 가능 → 근본원인 규명+수정 필요(미수정).
+- **가드 결함(동시 발견)**: `_gt_determinism`의 A/B 자가검증 `partialize rosters 누락 검출 = false`(true여야 신뢰) =
+  **허위 오라클** — 가드가 깨진 partialize를 못 잡음. 가드 자신 수정 필요(STATS_PROTOCOL 0장).
+- **다음**: ① resetSave가 리셋하는 모듈 상태 전수(standings cache·getEvolvedTeamPlayers·relation/owner/award/tx 컨텍스트·
+  injury) A/B로 좁혀 누수원 격리 ② 누수원을 resetSave에서 리셋 ③ `_gt_determinism` A/B 이빨 복구.
+
+---
+
 ## 4. 회귀 프로토콜 (로직 수정 시)
 
 영입/오프시즌 계열 엔진·셀렉터(`engine/compensation·faMarket·cap·draft·staff·staffLifecycle·foreign·transactions·finance`,
