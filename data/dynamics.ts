@@ -37,6 +37,8 @@ export function getTxContext(): { playerTx: Tx[]; faPoolSeed: string[]; myTeamId
 }
 /** 거래 컨텍스트 버전 — standings/production 등 tx 인지 파생 캐시의 키 성분 */
 export const currentTxVersion = (): number => txVersion;
+// 캐시 영속 복원(REALTIME_SIM Phase1) — 저장된 simCache 키와 맞추려 재로드 시 txVersion 복원.
+export const setTxVersion = (n: number): void => { txVersion = n; };
 
 // ── 구단주 컨텍스트(OWNER_SYSTEM) — 벤치 지시. 부상과 같은 "그날 출전 후보" 필터 ──
 let benchDirectives: BenchDirective[] = [];

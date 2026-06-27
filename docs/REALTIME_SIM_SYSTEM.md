@@ -44,8 +44,13 @@
   재구성가능한 나쁜 표적)도 복구(resetSave-clean 출발 + currentDay 표적). **검증**: `_gt_determinism` same-seed-twice=true·A/B=true·exit0,
   유닛 205·auditBoard 0·생산귀속 ALL PASS·스태프/시즌 가드 무회귀.
   - 진단 경로(추정 배제): base 변이 NO → 감독 동일 → myTeamStaff NO → "콜드 첫호출만 다름"(5792 vs 5789, 수비스킬) → 스타팅코치 콜드 ac7/웜 0 → in-place teamId 누수.
-- **Phase 1 — 순위·생산 저장(G1·G5)**: league-advance가 전 경기를 한 번 치러 순위(점수득실 포함)·개인 생산을
-  세이브에 저장. 화면 셀렉터는 저장값 읽기 우선, 없으면 재생(G2 폴백). 시즌말 박스 폐기 강제 + 크기 가드.
+- **Phase 1 — 순위·생산 저장(G1·G2·G5)** ✅ **완료(2026-06-27)**: 계산된 시즌 결과(순위 ResultRow + 생산 ProdRow)를
+  세이브에 저장→재로드 시 **재계산(로딩) 제거**. 구현: 모듈 캐시(`baseVersion:txVersion` 키)를 `data/simCache.ts`로
+  캡처/복원 — partialize에 `simCache`(워밍된 것만, stale 저장 금지), rehydrate **맨 끝**(commit들이 카운터 bump한 뒤)에
+  `restoreSimCache`로 카운터+캐시 복원→키 일치→히트. **재생 엔진 유지(G2)**: 상태 변경 시 키 불일치→자동 재계산.
+  **G1**: 저장은 *현 시즌 계산결과*뿐(통산은 기존 careerTotals/archive) → 시즌 단위 bounded. saveMigration `simCache` 필드는
+  폐기 가능(검증 실패/구세이브=null→재계산 폴백, 하드 마이그레이션 불요). 검증 `_dv_simcache`(재로드 재계산0·무stale(캐시==재계산)·
+  A/B 실제사용) + 유닛205·_dv_migrate(_e2e) ALL PASS·결정론 OK·simAudit·auditBoard 무회귀.
 - **Phase 2 — 보드 일관성(G3)**: 과거 경기 관전을 저장 결과와 연결(엔진버전 태깅·미스매치 재계산).
 - **Phase 3 — 마이그레이션·정리(G4·G6)**: SAVE_VERSION 범프·백필·가드·무제한 배열 점검.
 

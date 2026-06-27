@@ -43,6 +43,11 @@ const winRate = (s: Standing): number => (s.played > 0 ? s.wins / s.played : 0);
 
 let cache: { key: string; rows: ResultRow[] } | null = null;
 
+// 캐시 영속(REALTIME_SIM Phase1) — 계산된 시즌 결과를 세이브에 저장→복원해 재로드 시 재계산(로딩) 제거.
+// 결정론 보장(Phase0 수정)이라 같은 키면 행이 동일 → 저장값을 안전히 재사용. 키 불일치(상태 변경)면 재계산(폴백).
+export const getStandingsCacheRaw = (): { key: string; rows: ResultRow[] } | null => cache;
+export const setStandingsCacheRaw = (c: { key: string; rows: ResultRow[] } | null): void => { cache = c; };
+
 /** 전 경기 결과(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영 */
 function allResults(): ResultRow[] {
   const key = `${baseVersion()}:${currentTxVersion()}`;

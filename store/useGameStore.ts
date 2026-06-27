@@ -22,6 +22,7 @@ import { detectSeasonMilestones } from '../data/milestones';
 import { seasonInjuryDays, availableTeamPlayers } from '../data/injury';
 import { buildLineup } from '../engine/lineup';
 import { setTxContext, setOwnerContext, seasonTxLog, seasonScandals, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
+import { captureSimCache, restoreSimCache } from '../data/simCache';
 import {
   meetAccept, persuade, cardMatch,
   benchAccept, startSuggestAccept, popularityOf, benchAngerPenalty, releaseAngerPenalty, fanScore as fanScoreOf, BENCH_MAX,
@@ -903,6 +904,7 @@ export const useGameStore = create<GameState>()(
         careerLog: s.careerLog,
         careerTotals: s.careerTotals,
         bonds: s.bonds,
+        simCache: captureSimCache(), // 계산된 시즌 결과(REALTIME_SIM Phase1) — 워밍됐을 때만, 재로드 재계산 제거
         coachPool: s.coachPool,
         hallOfFame: s.hallOfFame,
         expelledLog: s.expelledLog,
@@ -945,6 +947,8 @@ export const useGameStore = create<GameState>()(
           setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)
           setOwnerContext(state?.benchDirectives ?? []);
           setAwardScores(state?.archive ?? []); // 수상 프리미엄 컨텍스트 복원
+          // 시뮬 결과 캐시 복원 — **반드시 맨 끝**(위 commit들이 baseVersion/txVersion을 bump한 뒤). 저장 키와 맞춰 재계산 제거(Phase1).
+          restoreSimCache((state as { simCache?: import('../data/simCache').SimCache })?.simCache);
           useGameStore.setState({ hydrated: true });
         } catch (e) {
           console.warn('[save] 복원 실패 — fresh로 리셋:', e);

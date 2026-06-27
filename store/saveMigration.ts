@@ -31,6 +31,8 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   asianWish: [], asianAltPool: [], asianSubUsed: false, keepAsian: null,
   // 인간관계(RELATIONSHIP_SYSTEM) — 함께한 세월 우정(pairKey→0~0.3)
   bonds: {},
+  // 시뮬 결과 캐시(REALTIME_SIM Phase1) — 계산된 시즌 결과(재로드 시 재계산 제거). 폐기 가능(특수 분기). null=재계산
+  simCache: null,
 };
 
 type Kind = 'bool' | 'nbool' | 'num' | 'nstr' | 'rec' | 'nrec' | 'arr';
@@ -90,6 +92,11 @@ function sanitizeField(key: string, v: unknown): unknown {
       return isObj(v) && Array.isArray(v.primary) && Array.isArray(v.secondary) ? v : null;
     case 'lastFinance':
       return v === null || isObj(v) ? v : null;
+    case 'simCache':
+      // 모양 검증(baseVersion·txVersion 숫자 + standings/production은 있으면 배열). 어긋나면 null(재계산 폴백) — 폐기 가능
+      return isObj(v) && typeof v.baseVersion === 'number' && typeof v.txVersion === 'number'
+        && (v.standings === undefined || Array.isArray(v.standings))
+        && (v.production === undefined || Array.isArray(v.production)) ? v : null;
     default:
       return v ?? def; // 미분류(이론상 없음) — 안전 통과
   }

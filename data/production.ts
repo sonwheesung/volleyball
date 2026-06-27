@@ -11,7 +11,7 @@ import { availableTeamPlayers } from './injury';
 import { currentTxVersion } from './dynamics';
 import { restedOnDay } from './rotation';
 
-interface ProdRow {
+export interface ProdRow {
   dayIndex: number;
   homeTeamId: string;
   awayTeamId: string;
@@ -31,6 +31,10 @@ export interface MatchProd {
 }
 
 let cache: { key: string; rows: ProdRow[] } | null = null;
+
+// 캐시 영속(REALTIME_SIM Phase1) — 생산 결과를 세이브에 저장→복원해 재로드 시 재계산 제거(standings와 동일 패턴).
+export const getProductionCacheRaw = (): { key: string; rows: ProdRow[] } | null => cache;
+export const setProductionCacheRaw = (c: { key: string; rows: ProdRow[] } | null): void => { cache = c; };
 
 /** 전 경기 선수별 생산(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영 */
 function allProdRows(): ProdRow[] {
