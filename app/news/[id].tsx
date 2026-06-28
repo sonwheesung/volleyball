@@ -4,7 +4,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { Card, Muted, Screen, theme } from '../../components/Screen';
+import { Card, IconLabel, Muted, Screen, theme } from '../../components/Screen';
 import { buildNewsFeed, newsKey } from '../../data/news';
 import { KIND_KO } from '../news';
 import { getTeam } from '../../data/league';
@@ -67,12 +67,12 @@ export default function NewsArticle() {
 
   return (
     <Screen title="">
-      <Card>
-        <Text style={styles.category}>{KIND_KO[n.kind]}{n.big ? ' · 헤드라인' : ''}</Text>
+      <Card accent={theme.violet}>
+        <IconLabel icon="newspaper-outline" color={theme.violet}>{KIND_KO[n.kind]}{n.big ? ' · 헤드라인' : ''}</IconLabel>
         <Text style={styles.headline}>{n.headline}</Text>
         <Text style={styles.byline}>{n.season + 1}시즌{team ? ` · ${team.name}` : ''}</Text>
       </Card>
-      <Card>
+      <Card accent={theme.violet}>
         <Text style={styles.body}>{n.body ?? LEAD[n.kind]}</Text>
       </Card>
     </Screen>
