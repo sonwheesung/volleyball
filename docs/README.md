@@ -155,7 +155,8 @@ npx tsx tools/_dv_overlap.ts 24             # 서브 컨택 오버랩 합법(받
 npx tsx tools/_dv_receive.ts                # 서브리시브 평평한 3인 라인(룰57) — 전위 패서 라인 합류(≥0.74)·비패서 네트(≤0.68) 0미스
 npx tsx tools/_dv_position.ts 24            # 인플레이 포지션(2026-06-24) — 인시스템 대기 공격수 핀 100%·블록↔공격 0.000·페리미터 0.56·A/B(0.15 옮기면 잡힘)
 # ── 시스템 건강·무결성 가드(밸런스 드리프트 — 불변식 가드가 못 보는 "느린 회귀"를 잡는다. 2026-06-27 루틴 등록: 누락→재정 회귀 늦게 발견 사고 재발 방지, TEST_METHODOLOGY §4) ──
-npx tsx tools/simFinance.ts 120            # 재정 건강(잔고·모기업 보전 빈도·FA 자금게이트) — exit 0/1. ❌면 튜닝(2026-06-27 회귀 발견 도구)
+npx tsx tools/simFinance.ts 120            # 재정 건강(잔고·모기업 보전 빈도·FA 자금게이트) — exit 0/1. ❌면 튜닝(2026-06-27 회귀 발견 도구). 2026-06-28 v2 체력 재조율 base 243000(FINANCE 2.0 Stage1)
+npx tsx tools/_dv_sponsorstance.ts         # 모기업 기조(FINANCE 2.0 Stage2) — sponsorStanceOf 도출: aggressive 빈도 5~13%·thrifty 4~10%·normal>75%·양 트리거(상위권/가뭄)·결정론·대칭(순수함수 myTeam/cash 의존0). 합성 archive. exit 0/1
 npx tsx tools/simStatEffect.ts             # 스탯 유효성 — 전 16스탯이 올바른 방향으로 경기 작용(대조군 무편향·id편향 상쇄). exit 0/1
 npx tsx tools/simStamCurve.ts 3000         # 체력 곡선(MATCH 7.1, 2026-06-28) — 경기 중 빠지고 세트 누적되는지(타임아웃 코트 평균 세트1→세트5 ≥8%p 하락·세트5 60~82% 밴드). 옛 평탄~95%(체력 무의미) 회귀 차단. exit 0/1
 npx tsx tools/simAudit.ts 60               # 영입 13체크(한선수=한팀·이중계약0·캡·자금게이트). exit 0/1
