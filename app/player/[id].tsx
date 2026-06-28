@@ -5,7 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { Button, Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, StatBar, theme } from '../../components/Screen';
 import { faceFor } from '../../data/playerFace';
-import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, conditionOf, popularityNow } from '../../data/owner';
+import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchetypeOf, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans, fanOverlapRatio } from '../../engine/owner';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
 import { SCANDAL_KO } from '../../engine/scandal';
@@ -192,7 +192,7 @@ export default function PlayerDetail() {
           <View style={{ flex: 1, gap: 6 }}>
             <Text style={styles.pName} numberOfLines={1}>{p.name}</Text>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
-              <PosTag pos={p.position} full />
+              <PosTag pos={p.position} />
               {role ? (
                 <View style={{ backgroundColor: role.color + '22', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
                   <Text style={{ color: role.color, fontWeight: '800', fontSize: 12 }}>{role.text}</Text>
@@ -289,10 +289,10 @@ export default function PlayerDetail() {
                 <Row>
                   <Muted>성격</Muted>
                   <Text style={{ color: theme.text, fontWeight: '800', fontSize: 13 }}>
-                    {ARCHETYPE_KO[p.faPref.archetype].emoji} {ARCHETYPE_KO[p.faPref.archetype].label}
+                    {ARCHETYPE_KO[effectiveArchetypeOf(p)].emoji} {ARCHETYPE_KO[effectiveArchetypeOf(p)].label}
                   </Text>
                 </Row>
-                <Muted style={{ fontSize: 12 }}>{ARCHETYPE_KO[p.faPref.archetype].note}</Muted>
+                <Muted style={{ fontSize: 12 }}>{ARCHETYPE_KO[effectiveArchetypeOf(p)].note}</Muted>
               </>
             ) : null}
             {moodInfo ? (

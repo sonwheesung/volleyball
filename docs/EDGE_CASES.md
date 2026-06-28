@@ -166,6 +166,9 @@
 | EC-ST-01 | **setDay(NaN) → currentDay 오염** — `Math.max(s.currentDay, NaN)=NaN` → 이후 모든 `evolveOnDay(id, NaN)` 전파(NaN/Infinity 미가드) | `setDay`에 `Number.isFinite(day)` 가드(비유한 거부) (`store:226`, 2026-06-21) | _gt_monkey(setDay 적대값) |
 | EC-FG-01 | 자금 부족인데 외인 영입됨 | `runTryout`이 현금 미검사 → `myCash >= FOREIGN_SALARY` 게이트 (`6be1ea7`) | simBrokeSign |
 | EC-FG-02 | 외인 좀비/멸종(재계약 연속성 깨짐) | 외인 1년 계약 흐름 분리 검증 | simCareerTrace |
+| EC-FG-03 | **외국인/아시아쿼터가 "연고 애착 / 고향 팀에서 뛰는 게 꿈"**(국내 전용 성격) — V리그는 외인에게 연고(고향팀) 개념이 없는데 표시됨(사용자 보고 2026-06-28, 아시아쿼터 호주 선수). 근본: `makePlayer`→`rollFAPref`가 **외국인에도 무게이트로** hometown 아키타입+preferredTeamId 부여 | ① 생성: `rollFAPref(rng, teamCount, isForeign)` — 외국인은 hometown 제외(4개 재분배)·preferredTeamId 없음(국내는 RNG/결과 불변=결정론 보존). ② 기존 세이브(이미 박힘): `discontentOf` hometown unmet에 `!p.isForeign` 게이트(연고 향수 mood 차단) + `effectiveArchetypeOf(p)`(외인 hometown→winnow 표시 매핑, player 화면 사용) (2026-06-28) | **`_dv_foreign_archetype`**(생성 외인 hometown/preferredTeamId 0·국내 도달가능 대조군·effectiveArchetypeOf·discontentNow 게이트, A/B) |
+
+> EC-FG-03 발견 방법(왜 기존 테스트가 못 잡았나 — **하위집단 유효성 사각**): 아키타입 부여는 *분포*(hometown ~10%?)만 봤지, **그 속성이 그 선수의 하위집단(외국인)에 유효한가**를 대조하는 렌즈가 없었다. 다른 국내전용 속성(`isFranchise`·FA자격)은 `!isForeign` 게이트가 있었는데(형제사냥 결과 정상) **faPref만 누락** = "개별값은 유효하나 하위집단엔 무효"인 단일 칸. 가드도 분포가 아니라 **(외국인=0) × (국내=도달가능 대조군)** 교차로 짠다(허위통과 차단).
 
 ### 드래프트·면담
 | ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |

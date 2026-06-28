@@ -159,6 +159,13 @@ export const ARCHETYPE_KO: Record<FAArchetype, { label: string; emoji: string; n
   hometown: { label: '연고 애착', emoji: '🏠', note: '연고가 1순위 — 역할보다 어디서 뛰는지를 더 본다.' },
 };
 
+// 표시용 성격 — 외국인/아시아쿼터는 연고(hometown) 개념이 없다(EC-DOM-01). 새 선수는 생성 단계(rollFAPref)에서
+// hometown을 안 받지만, 기존 세이브엔 박혀 있을 수 있어 읽는 쪽에서도 매핑(외국인 hometown→winnow: 우승 갈망 용병).
+export function effectiveArchetypeOf(p: Player): FAArchetype {
+  const a = p.faPref?.archetype ?? 'money';
+  return p.isForeign && a === 'hometown' ? 'winnow' : a;
+}
+
 /** 선수 인기(0~100) — 통산·수상·근속·올해 활약에서 파생. 이번 시즌 사고 치면 팬이 떠난다(×0.6) */
 export function popularityNow(p: Player, day: number, archive: { season: number; awards?: SeasonAwards }[]): number {
   // 시즌 시작 전(day≤0)은 올해 경기가 0 → 현시즌 생산 0(통산·수상·근속만으로 인기). 구 폴백은 MAX(전 시즌 전체

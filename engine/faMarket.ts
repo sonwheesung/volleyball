@@ -23,7 +23,14 @@ const ARCH_BASE: Record<FAArchetype, FAWeights> = {
 /** 리그 평균에 가까운 기본 가중치(faPref 없는 선수 폴백) */
 export const DEFAULT_FA_WEIGHTS: FAWeights = { money: 0.4, win: 0.3, loyalty: 0.15, play: 0.1, home: 0.05, rel: 0.03 };
 
-function rollArchetype(r: number): FAArchetype {
+// allowHometown=false(외국인): 연고(hometown)는 V리그 연고 개념이 없어 부여 안 함 → 나머지 4개로 재분배.
+function rollArchetype(r: number, allowHometown = true): FAArchetype {
+  if (!allowHometown) {            // 외국인 — hometown 제외(10%를 4개에 비례 재분배)
+    if (r < 0.38) return 'money';
+    if (r < 0.56) return 'winnow';
+    if (r < 0.84) return 'loyal';
+    return 'minutes';
+  }
   if (r < 0.34) return 'money';   // 34% 머니
   if (r < 0.50) return 'winnow';  // 16% 윈나우 (부익부 억제 위해 축소)
   if (r < 0.76) return 'loyal';   // 26% 충성 (parity 위해 확대)
@@ -31,9 +38,10 @@ function rollArchetype(r: number): FAArchetype {
   return 'hometown';              // 10% 연고
 }
 
-/** 선수 1명의 FA 성향(결정론). teamCount 로 선호팀 1곳 지정. */
-export function rollFAPref(rng: Rng, teamCount: number): FAPref {
-  const archetype = rollArchetype(rng.next());
+/** 선수 1명의 FA 성향(결정론). teamCount 로 선호팀 1곳 지정.
+ *  isForeign: 외국인/아시아쿼터는 연고(hometown) 성향·선호팀 없음(V리그 연고 개념 없음 — EC-DOM-01). 국내는 기존 그대로(결정론 보존). */
+export function rollFAPref(rng: Rng, teamCount: number, isForeign = false): FAPref {
+  const archetype = rollArchetype(rng.next(), !isForeign);
   const base = ARCH_BASE[archetype];
   const keys: (keyof FAWeights)[] = ['money', 'win', 'loyalty', 'play', 'home', 'rel'];
   const noisy = {} as FAWeights;
@@ -41,7 +49,7 @@ export function rollFAPref(rng: Rng, teamCount: number): FAPref {
   for (const k of keys) { const v = Math.max(0, (base[k] ?? 0) + (rng.next() - 0.5) * 0.1); noisy[k] = v; sum += v; }
   const w = {} as FAWeights;
   for (const k of keys) w[k] = (noisy[k] ?? 0) / (sum || 1);
-  const preferredTeamId = teamCount > 0 ? `t${rng.int(0, teamCount - 1)}` : undefined;
+  const preferredTeamId = (!isForeign && teamCount > 0) ? `t${rng.int(0, teamCount - 1)}` : undefined;
   return { archetype, w, preferredTeamId };
 }
 

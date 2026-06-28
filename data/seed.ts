@@ -177,7 +177,7 @@ export function makePlayer(
     career: { ...emptyCareer(), seasons: Math.max(0, age - 19) }, // 데뷔 추정
   };
   player.contract.salary = computeSalary(player, signedAtAge, rng);
-  player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length);
+  player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length, isForeign); // 외국인=연고 성향·선호팀 없음(EC-DOM-01)
   player.traits = rollTraits(id);
   return player;
 }

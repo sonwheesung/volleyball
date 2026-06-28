@@ -52,7 +52,7 @@ export function discontentOf(p: Player, ctx: DiscontentCtx): DiscontentTopic | n
     { topic: 'win', weight: w.win, unmet: ctx.recentRankAvg > ctx.teamCount * 0.6 },
     { topic: 'minutes', weight: w.play * min.scale, unmet: min.unmet },
     { topic: 'money', weight: w.money, unmet: ctx.salaryRatio < 0.75 },
-    { topic: 'hometown', weight: w.home, unmet: !!p.faPref?.preferredTeamId && p.faPref.preferredTeamId !== ctx.myTeamId },
+    { topic: 'hometown', weight: w.home, unmet: !p.isForeign && !!p.faPref?.preferredTeamId && p.faPref.preferredTeamId !== ctx.myTeamId }, // 외국인=연고 개념 없음(EC-DOM-01, 기존 세이브 게이트)
   ];
   const hit = checks.filter((c) => c.unmet && c.weight >= 0.25).sort((a, b) => b.weight - a.weight)[0];
   return hit ? hit.topic : null;
