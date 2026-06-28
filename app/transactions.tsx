@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
+import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { evolveOnDay } from '../data/league';
 import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
@@ -65,9 +65,9 @@ export default function Transactions() {
 
   return (
     <Screen title="시즌 중 FA 영입">
-      <Card>
+      <Card accent={theme.warn}>
         <Row>
-          <Muted>캡 잔여 · 운영 자금 · 정원</Muted>
+          <IconLabel icon="wallet-outline" color={theme.warn}>캡 잔여 · 운영 자금 · 정원</IconLabel>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
             {formatMoney(capLeft)} · {formatMoney(cash)} · {myIds.length}/{ROSTER_MAX}명
           </Text>
@@ -177,7 +177,7 @@ export default function Transactions() {
 
       <Title>영입 가능 FA ({fas.length})</Title>
       {fas.length === 0 ? (
-        <Card><Muted>현재 영입 가능한 FA가 없습니다. (방출 선수·오프시즌 미계약자가 풀에 쌓입니다.)</Muted></Card>
+        <Card accent={theme.sky}><Muted>현재 영입 가능한 FA가 없습니다. (방출 선수·오프시즌 미계약자가 풀에 쌓입니다.)</Muted></Card>
       ) : (
         fas.map((p) => {
           const betrayed = isBetrayed(p.id);

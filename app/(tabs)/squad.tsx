@@ -47,7 +47,7 @@ export default function Squad() {
     <Screen title="선수단">
       {coach ? (
         <SpotlightTarget id="squad-coach">
-          <Card onPress={() => router.push(`/coach/${coach.id}`)}>
+          <Card accent={theme.violet} onPress={() => router.push(`/coach/${coach.id}`)}>
             <Row>
               <Text style={{ color: theme.text, fontWeight: '700' }}>
                 감독 {coach.name} · {STYLE_LABEL[coach.style]} · 카리스마 {coach.charisma}

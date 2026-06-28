@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Muted, Screen, Title, theme } from '../components/Screen';
+import { Button, Card, IconLabel, Screen, Title, theme } from '../components/Screen';
 import { getTeam } from '../data/league';
 import { buildPlayoffs, type Matchup } from '../data/playoffs';
 import { useGameStore } from '../store/useGameStore';
@@ -26,8 +26,8 @@ export default function Playoffs() {
     const hiName = name(m.hiId);
     const loName = name(m.loId);
     return (
-      <Card>
-        <Muted>{title}</Muted>
+      <Card accent={theme.gold}>
+        <IconLabel icon="trophy-outline" color={theme.gold}>{title}</IconLabel>
         <View style={styles.matchup}>
           <Text style={[styles.team, { textAlign: 'right' }, m.winnerId === m.hiId && styles.win, m.hiId === my && styles.mine]} numberOfLines={1}>
             {hiName}
@@ -57,8 +57,8 @@ export default function Playoffs() {
         />
       ) : null}
 
-      <Card>
-        <Muted>진출 (상위 3팀)</Muted>
+      <Card accent={theme.accent}>
+        <IconLabel icon="podium-outline" color={theme.accent}>진출 (상위 3팀)</IconLabel>
         {po.seeds.map((id, i) => (
           <Text key={id} style={[styles.seed, id === my && styles.mine]}>
             {i + 1}위 {name(id)} {i === 0 ? '(챔프전 직행)' : ''}
@@ -69,7 +69,7 @@ export default function Playoffs() {
       {po.po ? <SeriesCard title="플레이오프 (2위 vs 3위 · 3전2선승)" m={po.po} /> : null}
       {po.final ? <SeriesCard title="챔피언결정전 (5전3선승)" m={po.final} /> : null}
 
-      <Card>
+      <Card accent={theme.gold}>
         <Title>🏆 우승 — {champ}</Title>
       </Card>
 

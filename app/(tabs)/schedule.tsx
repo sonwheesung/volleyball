@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
+import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { SEASON, LEAGUE, getTeam } from '../../data/league';
 import { computeStandings, playedThroughDay, leagueDisplayDay } from '../../data/standings';
@@ -84,9 +84,9 @@ export default function Schedule() {
 
   return (
     <Screen title={`${season + 1}시즌 일정`}>
-      <Card>
+      <Card accent={theme.sky}>
         <Row>
-          <Muted>정규리그 진행</Muted>
+          <IconLabel icon="calendar-outline" color={theme.sky}>정규리그 진행</IconLabel>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
             {playedCount} / {totalMatches} 경기
           </Text>
@@ -94,9 +94,9 @@ export default function Schedule() {
       </Card>
 
       {clinchView ? (
-        <Card>
+        <Card accent={theme.accent}>
           <Row>
-            <Muted>플레이오프</Muted>
+            <IconLabel icon="podium-outline" color={theme.accent}>플레이오프</IconLabel>
             <Text style={{ color: clinchView.color, fontWeight: '800' }}>{clinchView.text}</Text>
           </Row>
         </Card>
@@ -104,9 +104,9 @@ export default function Schedule() {
 
       {nextFixture && preview ? (
         <SpotlightTarget id="sched-next">
-        <Card>
+        <Card accent={theme.sky}>
           <Row>
-            <Muted>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</Muted>
+            <IconLabel icon="calendar-outline" color={theme.sky}>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</IconLabel>
             {preview.important ? (
               <View style={styles.bigMatch}>
                 <Text style={styles.bigMatchText}>⭐ 중요 · {preview.reason}</Text>
@@ -145,7 +145,7 @@ export default function Schedule() {
         </Card>
         </SpotlightTarget>
       ) : (
-        <Card>
+        <Card accent={theme.accent}>
           <Title>시즌 종료</Title>
           <Muted>정규리그 일정을 모두 마쳤습니다. 포스트시즌(상위 3팀)을 치른 뒤 오프시즌으로
             넘어갑니다. (이후 나이 +1·성장/노쇠·계약 -1년)</Muted>

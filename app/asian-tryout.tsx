@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Loading, Muted, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
@@ -72,13 +72,13 @@ function AsianTryoutInner() {
 
   return (
     <Screen title="아시아쿼터 트라이아웃">
-      <Card>
+      <Card accent={theme.bad}>
         <Muted style={{ fontSize: 12 }}>
           외국인과 별개 — 팀당 1명(AVC 국가) · 1년 계약 · 연봉 {formatMoney(ASIAN_SALARY)} 고정(샐러리캡 제외).
           지명 순번은 추첨 — 위시리스트 순서로 노리고, 뺏기면 차순위로 내려갑니다.
         </Muted>
         <Row>
-          <Muted>내 예상 지명</Muted>
+          <IconLabel icon="airplane-outline" color={theme.bad}>내 예상 지명</IconLabel>
           <Text style={{ color: theme.accent, fontWeight: '800' }}>
             {myPickId && snap[myPickId] ? `${snap[myPickId].name} (${snap[myPickId].nationality ?? ''} ${snap[myPickId].position})` : '- (자금 부족/공석)'}
           </Text>
@@ -88,7 +88,7 @@ function AsianTryoutInner() {
       {myAsian ? (
         <>
           <Title>재계약 우선권 — {myAsian.name} ({myAsian.nationality ?? ''} · {myAsian.age}세 · OVR {displayOvr(overallRaw(myAsian))})</Title>
-          <Card>
+          <Card accent={theme.bad}>
             <Muted style={{ fontSize: 12 }}>
               드래프트 없이 현 아시아쿼터와 갱신할 수 있습니다(1년 단위). 풀로 보내면 다른 팀이 지명할 수 있습니다.
             </Muted>

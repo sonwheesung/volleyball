@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Loading, PosTag, theme, useDeferredReady } from '../components/Screen';
+import { IconLabel, Loading, PosTag, theme, useDeferredReady } from '../components/Screen';
 import { getTeam, shortTeamName as short, teamPlayerIds } from '../data/league';
 import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, type RecordCat } from '../data/records';
 import { useGameStore } from '../store/useGameStore';
@@ -44,6 +44,10 @@ function RecordsInner() {
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>{titleScope}{meta.label}</Text>
         <Text style={styles.sub}>현역 · 은퇴 통합 · TOP {limit}</Text>
+
+        <View style={{ marginBottom: 12 }}>
+          <IconLabel icon="trophy-outline" color={theme.gold}>통산 리더보드</IconLabel>
+        </View>
 
         {/* 카테고리 칩 */}
         <View style={styles.chips}>

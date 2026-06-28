@@ -87,7 +87,7 @@ function HistoryInner() {
   return (
     <Screen title="기록">
       <SpotlightTarget id="history-ach">
-        <Card onPress={() => router.push('/achievements')}>
+        <Card accent={theme.gold} onPress={() => router.push('/achievements')}>
           <View style={styles.achLink}>
             <Text style={styles.achLinkText}>🏆 업적 — 구단주의 발자취</Text>
             <Text style={styles.achLinkArrow}>›</Text>
@@ -172,7 +172,7 @@ function SeasonView({
       {/* 시상식 — 시즌이 충분히 진행된 뒤에만(잠정 포함) */}
       {aw && aw.mvp && awardsReady ? (
         <>
-          <Card>
+          <Card accent={theme.gold}>
             {/* 시즌 MVP 트로피 배너 — MVP 소속 구단 색(AWARDS_SYSTEM §6) */}
             <View style={[styles.mvpBanner, { backgroundColor: teamColors(aw.mvp.teamId).bg }]}>
               <AwardIllustration width={104} />
@@ -199,7 +199,7 @@ function SeasonView({
             ) : null)}
           </Card>
 
-          <Card>
+          <Card accent={theme.gold}>
             <Text style={styles.cardHead}>부문 기록왕</Text>
             {([
               { label: '득점', w: aw.titles.scoring }, { label: '공격', w: aw.titles.spike },
@@ -216,7 +216,7 @@ function SeasonView({
             ))}
           </Card>
 
-          <Card>
+          <Card accent={theme.gold}>
             <Text style={styles.cardHead}>베스트7</Text>
             {aw.best7.map((s, i) => (
               <View key={`${s.pos}${i}`} style={styles.awRow}>
@@ -228,7 +228,7 @@ function SeasonView({
           </Card>
         </>
       ) : snap.isCurrent && !awardsReady ? (
-        <Card>
+        <Card accent={theme.gold}>
           <Text style={styles.cardHead}>시상식</Text>
           <Muted style={{ fontSize: 12.5 }}>
             아직 시즌 초반입니다 ({gamesPlayed}경기). 정규리그가 1/3({AWARD_MIN_GAMES}경기) 넘게 진행되면
@@ -241,7 +241,7 @@ function SeasonView({
 
       {/* 최종 순위 */}
       {snap.standings.length > 0 ? (
-        <Card>
+        <Card accent={theme.accent}>
           <Text style={styles.cardHead}>{snap.isCurrent ? '순위표' : '최종 순위'}</Text>
           <View style={[styles.row, styles.head]}>
             <Text style={[styles.rank, styles.h]}>#</Text>
@@ -271,7 +271,7 @@ function SeasonView({
         <>
           <Title>개인 기록 리더보드</Title>
           {leaders.map((cat) => (
-            <Card key={cat.label}>
+            <Card key={cat.label} accent={theme.elite}>
               <Text style={styles.cardHead}>{cat.label} TOP 5</Text>
               {cat.list.length === 0 ? <Muted style={{ fontSize: 12 }}>기록 없음</Muted> : cat.list.map((r, i) => (
                 <View key={r.id} style={styles.lbRow}>
@@ -309,7 +309,7 @@ function CareerView({
           const rows = (scope === 'team' ? teamCareerLeaderboard(c.key, teamId ?? '', hallOfFame) : careerLeaderboard(c.key, hallOfFame));
           const top = rows.slice(0, 5);
           return (
-            <Card key={c.key}>
+            <Card key={c.key} accent={theme.gold}>
               <View style={styles.careerHead}>
                 <Text style={styles.cardHead}>{c.label}</Text>
                 <Pressable onPress={() => onMore(c.key)} hitSlop={8}>
@@ -345,7 +345,7 @@ function HofView({ hallOfFame, teamId }: { hallOfFame: ReturnType<typeof useGame
     return <Card><Muted>아직 은퇴한 레전드가 없습니다. 세월이 쌓이면 이곳에 명예가 새겨집니다.</Muted></Card>;
   }
   return (
-    <Card>
+    <Card accent={theme.gold}>
       <Text style={styles.cardHead}>은퇴 레전드 · {sorted.length}명</Text>
       {sorted.map((h) => {
         if (!h.legend) {
@@ -402,7 +402,7 @@ function ChronicleView({
       {archive.length > 0 ? (
         <>
           <Title>역대 우승</Title>
-          <Card>
+          <Card accent={theme.gold}>
             {archive.slice().reverse().map((a) => (
               <Pressable key={a.season} onPress={() => onSeason(a.season)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
                 <Text style={[styles.team, { flex: 0, width: 64 }]}>{a.season + 1}시즌</Text>
@@ -420,7 +420,7 @@ function ChronicleView({
       {milestones.length > 0 ? (
         <>
           <Title>기록 경신 · 마일스톤</Title>
-          <Card>
+          <Card accent={theme.gold}>
             {milestones.slice(-40).reverse().map((m, i) => (
               <View key={`${m.season}-${m.playerId}-${i}`} style={styles.msRow}>
                 <Text style={styles.msSeason}>{m.season + 1}시즌</Text>

@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { EmptyState, Screen, theme } from '../components/Screen';
+import { EmptyState, IconLabel, Screen, theme } from '../components/Screen';
 import { seasonResults, leagueDisplayDay, type ResultRow } from '../data/standings';
 import { shortTeamName as short } from '../data/league';
 import { dateForDay, formatDate } from '../lib/calendar';
@@ -40,7 +40,9 @@ export default function Results() {
     <Screen title="전 구단 경기 결과">
       {days.map((g) => (
           <View key={g.dayIndex} style={styles.daySection}>
-            <Text style={styles.dayHeader}>{formatDate(dateForDay(g.dayIndex))}</Text>
+            <View style={styles.dayHeader}>
+              <IconLabel icon="calendar-outline" color={theme.sky}>{formatDate(dateForDay(g.dayIndex))}</IconLabel>
+            </View>
             <View style={styles.dayCard}>
               {g.rows.map((r, i) => {
                 const mine = r.homeTeamId === teamId || r.awayTeamId === teamId;
@@ -75,8 +77,8 @@ export default function Results() {
 
 const styles = StyleSheet.create({
   daySection: { marginBottom: 12 },
-  dayHeader: { color: theme.muted, fontSize: 12, fontWeight: '700', marginBottom: 5, marginLeft: 4 },
-  dayCard: { backgroundColor: theme.card, borderRadius: 10, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
+  dayHeader: { marginBottom: 5, marginLeft: 4 },
+  dayCard: { backgroundColor: theme.card, borderRadius: 10, borderWidth: 1, borderColor: theme.border, borderLeftWidth: 4, borderLeftColor: theme.sky, overflow: 'hidden' },
   matchRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, paddingVertical: 10, paddingHorizontal: 12 },
   divider: { borderTopWidth: 1, borderTopColor: theme.border },
   mineRow: { backgroundColor: theme.accent + '14' },

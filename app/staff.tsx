@@ -1,7 +1,7 @@
 // 스태프 계약(STAFF_SYSTEM) — 단장이 감독·전문코치·스카우터를 예산 안에서 영입/방출.
 import { useEffect, useRef, useState } from 'react';
 import { Alert, InteractionManager, View } from 'react-native';
-import { Button, Card, Loading, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../components/Screen';
 import {
   getTeamCoach, teamAssistants, teamScouts, teamScoutReveal,
   availableCoaches, availableAssistants, availableScouts,
@@ -96,9 +96,9 @@ export default function Staff() {
   return (
     <Screen title="스태프 계약">
       {/* 예산 바 */}
-      <Card>
+      <Card accent={theme.warn}>
         <Row>
-          <Title>스태프 예산</Title>
+          <IconLabel icon="wallet-outline" color={theme.warn}>스태프 예산</IconLabel>
           <Muted>{formatMoney(spend)} / {formatMoney(staffBudget())}만</Muted>
         </Row>
         <View style={{ height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, marginTop: 8, overflow: 'hidden' }}>
@@ -113,7 +113,7 @@ export default function Staff() {
         <Muted style={{ color: theme.bad }}>⚠ 성적 부진({myRow!.wins}승 {myRow!.losses}패) — 감독 교체를 고려할 시점입니다.</Muted>
       ) : null}
       {head ? (
-        <Card>
+        <Card accent={theme.violet}>
           <Row>
             <Title>{head.name}</Title>
             <Muted>{head.age}세 · {head.salary > 0 ? `연봉 ${formatMoney(head.salary)}만` : '대행'}</Muted>
@@ -143,7 +143,9 @@ export default function Staff() {
           })()}
         </Card>
       ) : <Muted>감독 없음 — 시장에서 영입하세요</Muted>}
-      <Muted style={{ marginTop: 8, marginBottom: 4 }}>감독 시장 (프리에이전트)</Muted>
+      <View style={{ marginTop: 8, marginBottom: 4 }}>
+        <IconLabel icon="clipboard-outline" color={theme.violet}>감독 시장 (프리에이전트)</IconLabel>
+      </View>
       {availableCoaches(teamId).map((c) => (
         <Card key={c.id}>
           <Row>

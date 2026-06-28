@@ -4,7 +4,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Svg, { Circle } from 'react-native-svg';
-import { Button, Card, Loading, Muted, OvrBadge, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, Screen, STYLE_LABEL, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList, type RosterSort } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal, LEAGUE } from '../../data/league';
@@ -174,8 +174,8 @@ export default function TeamDetail() {
 
       {/* ── 구단 정체성 ── */}
       {identity ? (
-        <Card>
-          <Title>구단 정체성</Title>
+        <Card accent={theme.elite}>
+          <IconLabel icon="shield-outline" color={theme.elite}>구단 정체성</IconLabel>
           <Text style={styles.blurb}>{identity.blurb}</Text>
           <View style={styles.statRow}>
             <StatCell label="창단" value={`${identity.foundedYear}`} sub={`${clubAgeYears(identity)}년차`} />
@@ -192,7 +192,7 @@ export default function TeamDetail() {
       {/* ── 감독 ── */}
       {coach ? (
         <SpotlightTarget id="team-coach">
-          <Card onPress={() => router.push(`/coach/${coach.id}`)}>
+          <Card onPress={() => router.push(`/coach/${coach.id}`)} accent={theme.violet}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <View style={styles.avatar}>
                 <Ionicons name="person" size={24} color={theme.muted} />
@@ -211,8 +211,8 @@ export default function TeamDetail() {
 
       {/* ── 코칭 스태프 ── */}
       {(asst.length > 0 || scouts.length > 0) ? (
-        <Card>
-          <Title>코칭 스태프</Title>
+        <Card accent={theme.violet}>
+          <IconLabel icon="clipboard-outline" color={theme.violet}>코칭 스태프</IconLabel>
           <View style={styles.staffWrap}>
             {asst.map((a) => (
               <View key={a.id} style={styles.staffItem}>
@@ -247,7 +247,7 @@ export default function TeamDetail() {
       {/* ── 선수단 ── */}
       <SpotlightTarget id="team-roster">
         <View style={styles.rosterHead}>
-          <Title>선수단 ({players.length}명)</Title>
+          <IconLabel icon="people-outline" color={theme.accent}>선수단 ({players.length}명)</IconLabel>
           <Pressable
             onPress={() => setSort((s) => (s === 'salary' ? 'ovr' : s === 'ovr' ? 'position' : 'salary'))}
             style={({ pressed }) => [styles.sortChip, pressed && { opacity: 0.7 }]}

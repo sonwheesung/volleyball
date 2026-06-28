@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
 import { shortTeamName as shortTeam } from '../data/league';
 import { faMarketPreview } from '../data/offseason';
 import { buildOwnerFx } from '../data/owner';
@@ -78,9 +78,9 @@ function FACenterInner() {
 
   return (
     <Screen title={`${season + 1}→${season + 2}시즌 FA 시장`}>
-      <Card>
+      <Card accent={theme.sky}>
         <Row>
-          <Muted>영입 성공 / 시도</Muted>
+          <IconLabel icon="person-add-outline" color={theme.sky}>영입 성공 / 시도</IconLabel>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
             {pv.signedByMe.size} / {faSignings.length}
           </Text>
@@ -114,7 +114,7 @@ function FACenterInner() {
       <Button label="신인 드래프트로 →" onPress={() => router.push('/draft')} />
 
       {(compNeeded > 0 || moneyOnlyCount > 0) ? (
-        <Card>
+        <Card accent={theme.warn}>
           {compNeeded > 0 ? (
             <>
               <Text style={{ color: theme.warn, fontSize: 13, fontWeight: '700' }}>

@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Loading, Muted, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
@@ -74,13 +74,13 @@ function TryoutInner() {
 
   return (
     <Screen title="외국인 트라이아웃">
-      <Card>
+      <Card accent={theme.bad}>
         <Muted style={{ fontSize: 12 }}>
           팀당 1명 · 1년 계약 · 연봉 {formatMoney(FOREIGN_SALARY)} 고정(샐러리캡 제외, 운영 자금 지출).
           지명 순번은 추첨 — 위시리스트 순서로 노리고, 뺏기면 차순위로 내려갑니다.
         </Muted>
         <Row>
-          <Muted>내 예상 지명</Muted>
+          <IconLabel icon="globe-outline" color={theme.bad}>내 예상 지명</IconLabel>
           <Text style={{ color: theme.accent, fontWeight: '800' }}>
             {myPickId && snap[myPickId] ? `${snap[myPickId].name} (${snap[myPickId].position})` : '-'}
           </Text>
@@ -90,7 +90,7 @@ function TryoutInner() {
       {myForeign ? (
         <>
           <Title>재계약 우선권 — {myForeign.name} ({myForeign.age}세 · OVR {displayOvr(overallRaw(myForeign))})</Title>
-          <Card>
+          <Card accent={theme.bad}>
             <Muted style={{ fontSize: 12 }}>
               드래프트 없이 현 외인과 갱신할 수 있습니다(1년 단위 — 잘하는 용병은 수 시즌 함께).
               풀로 보내면 다른 팀이 지명할 수 있습니다.

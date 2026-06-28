@@ -42,7 +42,7 @@ export default function Achievements() {
 
   return (
     <Screen title="업적">
-      <Card>
+      <Card accent={theme.gold}>
         <Row>
           <Title>구단주의 발자취</Title>
           <Text style={styles.count}>{done} / {total}</Text>

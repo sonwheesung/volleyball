@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Alert, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
-import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
+import { Button, Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, StatBar, theme } from '../../components/Screen';
 import { faceFor } from '../../data/playerFace';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans, fanOverlapRatio } from '../../engine/owner';
@@ -222,8 +222,8 @@ export default function PlayerDetail() {
 
       {p.traits && p.traits.length > 0 ? (
         <>
-          <Title>특성</Title>
-          <Card>
+          <IconLabel icon="sparkles-outline" color={theme.violet}>특성</IconLabel>
+          <Card accent={theme.violet}>
             {p.traits.map((t, i) => {
               const d = TRAITS[t];
               const c = d.good ? theme.good : theme.bad;
@@ -248,8 +248,8 @@ export default function PlayerDetail() {
         const lostFriends = rel.friends.filter((f) => released.includes(f.id));
         return (
           <>
-            <Title>인간관계</Title>
-            <Card>
+            <IconLabel icon="people-circle-outline" color={theme.rose}>인간관계</IconLabel>
+            <Card accent={theme.rose}>
               {rel.friends.length > 0 ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 }}>
                   <View style={{ backgroundColor: theme.good + '22', borderWidth: 1, borderColor: theme.good + '66', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3 }}>
@@ -278,8 +278,8 @@ export default function PlayerDetail() {
 
       {isMine && cond ? (
         <>
-          <Title>구단주 면담</Title>
-          <Card>
+          <IconLabel icon="chatbubbles-outline" color={theme.rose}>구단주 면담</IconLabel>
+          <Card accent={theme.rose}>
             <Row>
               <Muted>컨디션</Muted>
               <Text style={{ color: cond.color, fontWeight: '800' }}>● {cond.label}</Text>
@@ -325,8 +325,8 @@ export default function PlayerDetail() {
             ) : null}
           </Card>
 
-          <Title>감독 건의</Title>
-          <Card>
+          <IconLabel icon="clipboard-outline" color={theme.violet}>감독 건의</IconLabel>
+          <Card accent={theme.violet}>
             {benched ? (
               <Button label="복귀 지시 (벤치 해제)" onPress={() => { unbench(p.id); Alert.alert('복귀', `${p.name} 선수가 출전 명단에 복귀합니다. 실전 감각은 몇 경기에 걸쳐 돌아옵니다.`); }} />
             ) : (
@@ -359,8 +359,8 @@ export default function PlayerDetail() {
         </>
       ) : null}
 
-      <Title>계약</Title>
-      <Card>
+      <IconLabel icon="wallet-outline" color={theme.warn}>계약</IconLabel>
+      <Card accent={theme.warn}>
         <Row>
           <Muted>연봉</Muted>
           <Text style={{ color: theme.text, fontSize: 18, fontWeight: '800' }}>
@@ -383,8 +383,8 @@ export default function PlayerDetail() {
 
       {prod && prod.matches > 0 ? (
         <>
-          <Title>이번 시즌 기록</Title>
-          <Card>
+          <IconLabel icon="stats-chart-outline" color={theme.elite}>이번 시즌 기록</IconLabel>
+          <Card accent={theme.elite}>
             <Row>
               <Muted>경기</Muted>
               <Text style={{ color: theme.text, fontWeight: '700' }}>{prod.matches}경기</Text>
@@ -413,8 +413,8 @@ export default function PlayerDetail() {
 
       {p.career.matches > 0 ? (
         <>
-          <Title>통산 기록 ({p.career.seasons}시즌)</Title>
-          <Card>
+          <IconLabel icon="trophy-outline" color={theme.gold}>통산 기록 ({p.career.seasons}시즌)</IconLabel>
+          <Card accent={theme.gold}>
             <Row>
               <Muted>경기</Muted>
               <Text style={{ color: theme.text, fontWeight: '700' }}>{p.career.matches}경기</Text>
@@ -443,8 +443,8 @@ export default function PlayerDetail() {
 
       {p.seasonLines && p.seasonLines.length > 0 ? (
         <>
-          <Title>시즌별 기록</Title>
-          <Card>
+          <IconLabel icon="stats-chart-outline" color={theme.elite}>시즌별 기록</IconLabel>
+          <Card accent={theme.elite}>
             {p.seasonLines.slice().reverse().map((l) => (
               <View key={l.season} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
                 <Text style={{ color: theme.muted, fontSize: 12, width: 56 }}>{l.season + 1}시즌</Text>
@@ -462,8 +462,8 @@ export default function PlayerDetail() {
 
       {awardHist.length > 0 ? (
         <>
-          <Title>수상 이력</Title>
-          <Card>
+          <IconLabel icon="ribbon-outline" color={theme.gold}>수상 이력</IconLabel>
+          <Card accent={theme.gold}>
             {awardHist.map((a, i) => (
               <View key={`${a.season}-${a.label}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
                 <Text style={{ color: theme.muted, fontSize: 12, width: 56 }}>{a.season + 1}시즌</Text>
@@ -476,8 +476,8 @@ export default function PlayerDetail() {
 
       {myMilestones.length > 0 ? (
         <>
-          <Title>마일스톤</Title>
-          <Card>
+          <IconLabel icon="trophy-outline" color={theme.gold}>마일스톤</IconLabel>
+          <Card accent={theme.gold}>
             {myMilestones.slice(-8).reverse().map((m, i) => (
               <View key={`${m.season}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
                 <Text style={{ color: theme.muted, fontSize: 12, width: 56 }}>{m.season + 1}시즌</Text>
@@ -488,8 +488,8 @@ export default function PlayerDetail() {
         </>
       ) : null}
 
-      <Title>종합 스탯</Title>
-      <Card>
+      <IconLabel icon="stats-chart-outline" color={theme.elite}>종합 스탯</IconLabel>
+      <Card accent={theme.elite}>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
           <RadarChart
             values={[r.spike, r.block, r.dig, r.receive, r.set, r.serve]}
@@ -507,8 +507,8 @@ export default function PlayerDetail() {
         </View>
       </Card>
 
-      <Title>세부 스탯 (밑단)</Title>
-      <Card>
+      <IconLabel icon="barbell-outline" color={theme.elite}>세부 스탯 (밑단)</IconLabel>
+      <Card accent={theme.elite}>
         <Muted style={{ marginBottom: 2 }}>신체</Muted>
         <StatBar label="점프력" value={p.jump} />
         <StatBar label="민첩성" value={p.agility} />
@@ -523,8 +523,8 @@ export default function PlayerDetail() {
         <StatBar label="VQ" value={p.vq} />
       </Card>
 
-      <Title>기술치</Title>
-      <Card>
+      <IconLabel icon="trending-up-outline" color={theme.good}>기술치</IconLabel>
+      <Card accent={theme.good}>
         <StatBar label="공격기술" value={p.skSpike} />
         <StatBar label="블로킹기술" value={p.skBlock} />
         <StatBar label="디그기술" value={p.skDig} />

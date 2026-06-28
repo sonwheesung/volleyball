@@ -2,7 +2,7 @@
 // 1행 = 선수 1명. 행을 누르면 재계약/방출 선택(액션시트). FA 예정·방출 선수도 여기서 처리.
 import { useRouter } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
+import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
 import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
 import { teamRelations } from '../data/relationships';
 import { getPlayerProduction } from '../data/production';
@@ -117,9 +117,9 @@ export default function Contracts() {
 
   return (
     <Screen title="계약 관리">
-      <Card>
+      <Card accent={theme.warn}>
         <Row>
-          <Muted>팀 총연봉 / 캡</Muted>
+          <IconLabel icon="card-outline" color={theme.warn}>팀 총연봉 / 캡</IconLabel>
           <Text style={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '800' }}>
             {formatMoney(total)} / {formatMoney(LEAGUE_CAP)}
           </Text>

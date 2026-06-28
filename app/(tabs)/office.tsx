@@ -1,7 +1,7 @@
 // 단장실 — 메뉴 허브. 계약 관리·스태프·시즌 중 FA는 각 상세 화면에서 처리.
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native';
-import { Card, Muted, Row, Screen, Title, theme } from '../../components/Screen';
+import { Card, IconLabel, Muted, Row, Screen, Title, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getEvolvedTeamPlayers } from '../../data/league';
 import { activeRoster, payroll } from '../../data/roster';
@@ -22,9 +22,9 @@ export default function Office() {
 
   return (
     <Screen title="단장실" scroll={false}>
-      <Card>
+      <Card accent={theme.warn}>
         <Row>
-          <Muted>팀 총연봉 / 예산</Muted>
+          <IconLabel icon="wallet-outline" color={theme.warn}>팀 총연봉 / 예산</IconLabel>
           <Text style={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '800' }}>
             {formatMoney(total)} / {formatMoney(LEAGUE_CAP)}
           </Text>
@@ -35,7 +35,7 @@ export default function Office() {
       </Card>
 
       <SpotlightTarget id="office-top">
-        <Card onPress={() => router.push('/contracts')}>
+        <Card accent={theme.accent} onPress={() => router.push('/contracts')}>
           <Row>
             <Title>계약 관리</Title>
             <Muted>재계약 · 방출 · FA 예정 →</Muted>
@@ -45,7 +45,7 @@ export default function Office() {
       </SpotlightTarget>
 
       <SpotlightTarget id="office-staff">
-        <Card onPress={() => router.push('/staff')}>
+        <Card accent={theme.violet} onPress={() => router.push('/staff')}>
           <Row>
             <Title>스태프 계약</Title>
             <Muted>감독 · 코치 · 스카우터 →</Muted>
@@ -55,7 +55,7 @@ export default function Office() {
       </SpotlightTarget>
 
       <SpotlightTarget id="office-tx">
-        <Card onPress={() => router.push('/transactions')}>
+        <Card accent={theme.sky} onPress={() => router.push('/transactions')}>
           <Row>
             <Title>시즌 중 FA 영입</Title>
             <Muted>포지션 구멍 메우기 →</Muted>

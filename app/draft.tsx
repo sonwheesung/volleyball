@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal } from '../data/league';
@@ -74,9 +74,9 @@ function DraftCenterInner() {
 
   return (
     <Screen title={`${season + 2}시즌 신인 드래프트`}>
-      <Card>
+      <Card accent={theme.sky}>
         <Row>
-          <Muted>내 순위 {myRank}위 · 지명권 {ctx.myHoles}장</Muted>
+          <IconLabel icon="person-add-outline" color={theme.sky}>내 순위 {myRank}위 · 지명권 {ctx.myHoles}장</IconLabel>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
             지명 순번 {ctx.myPickSlots.map((i) => i + 1).join(', ') || '-'}
           </Text>

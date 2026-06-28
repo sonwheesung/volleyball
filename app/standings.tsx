@@ -1,7 +1,7 @@
 // 리그 순위표 전용 화면 — 대시보드 "리그 순위"에서 진입(순위만 본다).
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Card, Screen, theme } from '../components/Screen';
+import { Card, IconLabel, Screen, theme } from '../components/Screen';
 import { computeStandings, leagueDisplayDay } from '../data/standings';
 import { getTeam } from '../data/league';
 import { useGameStore } from '../store/useGameStore';
@@ -15,7 +15,8 @@ export default function Standings() {
 
   return (
     <Screen title={`${season + 1}시즌 순위`}>
-      <Card>
+      <Card accent={theme.accent}>
+        <IconLabel icon="podium-outline" color={theme.accent}>리그 순위</IconLabel>
         <View style={[styles.row, styles.head]}>
           <Text style={[styles.rank, styles.h]}>#</Text>
           <Text style={[styles.team, styles.h]}>팀</Text>
