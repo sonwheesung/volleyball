@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
+import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getEvolvedTeamPlayers, getTeam } from '../../data/league';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
@@ -76,10 +76,10 @@ export default function Dashboard() {
     <Screen title={team.name} scroll={false}>
       {/* 전력 + 성적 */}
       <SpotlightTarget id="dash-top">
-        <Card>
+        <Card accent={theme.elite}>
           <Row>
             <View>
-              <Muted>팀 종합 전력</Muted>
+              <IconLabel icon="barbell-outline" color={theme.elite}>팀 종합 전력</IconLabel>
               <View style={{ height: 4 }} />
               <OvrBadge value={ovr} size={60} />
             </View>
@@ -95,22 +95,22 @@ export default function Dashboard() {
 
       {/* 재정 — 한 장 요약(상세 내역은 기록 탭) */}
       <SpotlightTarget id="dash-finance">
-        <Card>
+        <Card accent={theme.warn}>
           <Row>
-            <Muted>총연봉 / 캡</Muted>
+            <IconLabel icon="card-outline" color={theme.warn}>총연봉 / 캡</IconLabel>
             <Text style={{ color: payroll > LEAGUE_CAP ? theme.bad : theme.text, fontWeight: '800' }}>
               {formatMoney(payroll)} / {formatMoney(LEAGUE_CAP)}
             </Text>
           </Row>
           <Row>
-            <Muted>운영 자금</Muted>
+            <IconLabel icon="wallet-outline" color={theme.warn}>운영 자금</IconLabel>
             <Text style={{ color: cash < 20000 ? theme.bad : theme.text, fontWeight: '800' }}>
               {formatMoney(cash)}
               {lastFinance ? ` (전 시즌 ${lastFinance.net >= 0 ? '+' : ''}${formatMoney(lastFinance.net)})` : ''}
             </Text>
           </Row>
           <Row>
-            <Muted>팬덤</Muted>
+            <IconLabel icon="heart-outline" color={theme.rose}>팬덤</IconLabel>
             <Text style={{ color: fanScore >= 60 ? theme.good : fanScore >= 35 ? theme.text : theme.bad, fontWeight: '800' }}>
               {fanbaseInfo.total.toLocaleString()}명 · 팬심 {fanScore}
             </Text>
@@ -120,9 +120,9 @@ export default function Dashboard() {
 
       {/* 순위 + 부상자 수(있으면) — 누르면 순위표만 */}
       <SpotlightTarget id="dash-standings">
-        <Card onPress={() => router.push('/standings')}>
+        <Card accent={theme.accent} onPress={() => router.push('/standings')}>
           <Row>
-            <Muted>리그 순위</Muted>
+            <IconLabel icon="podium-outline" color={theme.accent}>리그 순위</IconLabel>
             <Text style={{ color: theme.text, fontWeight: '800' }}>
               {myRank > 0 ? `${myRank}위 / ${standings.length}` : '-'}
               {injuries.length > 0 ? <Text style={{ color: theme.bad }}>{`  · 🩹 ${injuries.length}`}</Text> : null}
@@ -135,9 +135,9 @@ export default function Dashboard() {
       {/* 리그 뉴스 — 진입점만(내용은 뉴스 화면에서). 안읽음 수만 표시 */}
       {allNews.length > 0 ? (
         <SpotlightTarget id="dash-news">
-          <Card onPress={() => router.push('/news')}>
+          <Card accent={theme.violet} onPress={() => router.push('/news')}>
             <Row>
-              <Muted>📰 리그 뉴스</Muted>
+              <IconLabel icon="newspaper-outline" color={theme.violet}>리그 뉴스</IconLabel>
               <Text style={{ color: theme.accent, fontWeight: '800' }}>
                 {unreadNews > 0 ? `새 소식 ${unreadNews} ›` : '전체 보기 ›'}
               </Text>

@@ -1,5 +1,6 @@
-import type { ReactNode } from 'react';
+import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { ActivityIndicator, Animated, Easing, ImageBackground, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -28,6 +29,10 @@ export const theme = {
   border: 'rgba(255,255,255,0.14)',   // 글래스 헤어라인(다크 카드 위 엣지 하이라이트)
   accentGlass: 'rgba(25,194,174,0.16)', // 액센트 글래스 — primary 버튼(accent #19C2AE=rgb 25,194,174의 16% 틴트)
   gold: '#E8C46A',                    // 절제된 골드(우승·트로피·로고 한정)
+  // 카테고리 장식 색(UI-12) — 의미 없음, 메뉴/카드를 색으로 구분해 다크 단조로움 해소. 다크 위에서 또렷한 채도.
+  violet: '#9B7BFF',                  // 보라
+  sky: '#46C8FF',                     // 하늘/시안
+  rose: '#FF7BA6',                    // 로즈/핑크
 };
 
 // 전역 배경 — 다크 아레나(GPT 생성). Screen 래퍼가 모든 화면에 깐다. select-team도 동일 파일 사용.
@@ -182,18 +187,20 @@ export function useDeferredReady(): boolean {
   return ready;
 }
 
-export function Card({ children, onPress }: { children: ReactNode; onPress?: () => void }) {
+// accent: 좌측 컬러 바(카테고리 구분, UI-12). borderLeftWidth를 키워 라운드 코너 자동 준수(overflow 불필요).
+export function Card({ children, onPress, accent }: { children: ReactNode; onPress?: () => void; accent?: string }) {
+  const accentStyle = accent ? { borderLeftWidth: 4, borderLeftColor: accent } : null;
   if (onPress) {
     return (
       <Pressable
         onPress={onPress}
-        style={({ pressed }) => [styles.card, pressed && { opacity: 0.7 }]}
+        style={({ pressed }) => [styles.card, accentStyle, pressed && { opacity: 0.7 }]}
       >
         {children}
       </Pressable>
     );
   }
-  return <View style={styles.card}>{children}</View>;
+  return <View style={[styles.card, accentStyle]}>{children}</View>;
 }
 
 export function Muted({ children, style }: { children: ReactNode; style?: object }) {
@@ -202,6 +209,19 @@ export function Muted({ children, style }: { children: ReactNode; style?: object
 
 export function Title({ children }: { children: ReactNode }) {
   return <Text style={styles.h2}>{children}</Text>;
+}
+
+// 카테고리 컬러 아이콘 칩 + 보조 라벨(UI-12) — 다크 단조로움 해소. 아이콘을 틴트 배경 칩에 담아 색 존재감↑.
+// 화면마다 재구현 금지(UI-3), 여기 단일 소스.
+export function IconLabel({ icon, color, children }: { icon: ComponentProps<typeof Ionicons>['name']; color: string; children: ReactNode }) {
+  return (
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+      <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: color + '26', alignItems: 'center', justifyContent: 'center' }}>
+        <Ionicons name={icon} size={16} color={color} />
+      </View>
+      <Text style={styles.muted}>{children}</Text>
+    </View>
+  );
 }
 
 export function Button({
