@@ -2,9 +2,10 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sponsorBase, sponsorBonus, turnoutRate, gateRevenue, merchRevenue, settleSeason, applyNet, sponsorThrift } from './finance';
 
-test('모기업 베이스: 팀별 차등 20~28억, 결정론', () => {
+test('모기업 베이스: 팀별 차등 24.3~32.3억, 결정론', () => {
   const a = sponsorBase('t1');
-  assert.ok(a >= 200000 && a <= 280000);
+  assert.ok(a >= 243000 && a <= 323000); // 2026-06-28 FINANCE 2.0 Stage1: v2 체력 재조율(250000→243000)
+
   assert.equal(sponsorBase('t1'), a);
   assert.notEqual(sponsorBase('t1'), sponsorBase('t2')); // 모기업이 다르면 지갑도 다르다(높은 확률)
 });
