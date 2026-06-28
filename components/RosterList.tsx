@@ -4,7 +4,7 @@ import type { Player } from '../types';
 import { overall, overallRaw } from '../engine/overall';
 import { formatMoney } from '../engine/salary';
 import { OvrBadge, PosTag, theme } from './Screen';
-import { POS_ORDER } from './posTokens';
+import { POS_COLOR, POS_ORDER } from './posTokens';
 
 export interface RosterDecor { dotColor?: string; mood?: string }
 
@@ -35,7 +35,7 @@ export function RosterList({ players, decor, starterIds, sort = 'position' }: { 
           {showGroups && i === firstBenchIdx ? <Text style={styles.groupLabel}>벤치</Text> : null}
           <Pressable
             onPress={() => router.push(`/player/${p.id}`)}
-            style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}
+            style={({ pressed }) => [styles.row, { borderLeftWidth: 4, borderLeftColor: POS_COLOR[p.position] }, pressed && { opacity: 0.7 }]}
           >
             <PosTag pos={p.position} />
             <View style={{ flex: 1 }}>
