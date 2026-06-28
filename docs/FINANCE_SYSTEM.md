@@ -37,13 +37,14 @@
 
 ### 착수 전 확정 결정 (100에이전트 검증 — clamp/주입/분리)
 1. **캡 게이트 = clamp, drop 아님**: `offer = min(round100(asking×배수), LEAGUE_CAP − payroll[t])`. (단순 ×배수면 캡 근접 공격팀이 입찰 탈락해 거물을 *덜* 잡는 역설 — offseason.ts:155/157/158.)
-2. **stance는 resolveFAMarket 내부에서 단일 도출**(season+committed standings, teamPrestige 패턴). 호출부 2곳(offseason.ts:373 resolvePreDraft·:427 faMarketPreview)에 동일 적용 → **preview=result** 보존. 내 팀 현금보너스도 endSeason cash(useGameStore:826) + 미리보기 projectSettledCash 양쪽.
+2. **stance는 resolveFAMarket 내부에서 단일 도출** → 호출부 2곳(offseason.ts:373 resolvePreDraft·:427 faMarketPreview)에 동일 적용 → **preview=result** 보존. 내 팀 현금보너스도 endSeason cash(useGameStore:826) + 미리보기 projectSettledCash 양쪽.
+   > ⚠ **수정(2026-06-29, Stage3 착수 grounding)**: ~~"teamPrestige 패턴(season+committed standings)으로 도출"~~ — **불가**(검증). `teamPrestige`·`buildPlayoffs(season)`은 *현재* 누적 standings(`computeStandings(MAX)`)만 읽고 `season`은 플옵 RNG 시드일 뿐 → **과거 시즌 우승팀(가뭄 트리거의 다년 이력)에 데이터 계층 접근 불가**. 과거 우승은 `archive`(store)/`simArchive`(sim)에만 있다. → **대안 채택**: `setAwardScores`/`awardScoreOf` 컨텍스트 주입 패턴을 그대로 미러 — 새 `data/leagueHistory.ts`(`setSeasonHistory(archive)`·`teamStanceOf(teamId,season)`·`setStanceEnabled` parity 토글). 스토어가 archive 변화 시(248/627/866/953=setAwardScores 동일 지점) 주입, simLeague도 `setSeasonHistory(simArchive)`. `sponsorStanceOf(teamId,season,archive)`는 **순수 유지**(Stage2a 가드 `.length===3` 보존), archive는 컨텍스트가 공급. **파라미터 스레딩 0**(11개 호출부 시그니처 무변경).
 3. **bidGap(참가) vs posGap(점수) 분리**: 타겟+1을 참가 게이트(:154)에만 적용, offerScore.posGap(:162)엔 안 흘림(playT 0.15→0.65 오인 방지).
 4. stance는 **별도 RNG 시드**(공유 :128 스트림 소비 금지 — 기존 FA 회귀 baseline 보존). 엔진버전 게이트 권장.
 
 ### 검증 가드 (커밋 전 전부 0)
 - 재정 건강(simFinance): ~~현금부족 좌절 8~15%~~ → **옛 검증 healthy 수준 복원**(좌절 ~20-27%·보전 ~8%·잔고 ~9억·파산0). 단일유니버스라 좌절% 노이즈 큼(243k=27%·244k=33%·246k=17% 비단조) — 밴드로 판정. 주 압박은 캡, 현금은 그 위 + stance 변동.
-- **parity(필수, simLeague 40×24 stance on/off A/B)**: std·왕조최장·지속성 r·우승점유·약팀반등. **사전 폴백**: 기준선+Δ 초과 시 트리거①폐기 / 배수↓ / 타겟+1→+0. (simArchive에 standings/championId 누적 선결 — 다년추세 트리거 발화용.)
+- ✅ **parity(simLeague 40×16 stance on/off A/B, 2026-06-29)**: 전 지표 노이즈 밴드 내 동일 — parityStd off 4.01±1.32 vs on 4.19±0.92 · 최장왕조 6.0/5.9(둘 다 max12) · 지속성 r 0.19/0.17 · 1위점유 32%/33% · 약팀반등 100%/100%. **부익부 재점화 없음** → 폴백(트리거①폐기/배수↓) 불필요. (G-2: simArchive championId/standings 누적 완료.) 재확인: `STANCE_OFF=1` vs 기본.
 - **레버 효과 A/B(B4)**: aggressive vs normal 동일시드 — AI 거물 행선지 Δ(×배수·타겟+1 **분리 측정**) + 내 팀 보너스 Δ. Δ≈0=장식.
 - **권한 무영향**: thrifty 시 내 팀 cashLeft Δ=0.
 - **캡 불변**: 어떤 stance도 payroll+offer≤LEAGUE_CAP 위반 0. **stance 대칭**: 같은 시드, 같은 팀이 내팀/AI 동일.
@@ -54,8 +55,11 @@
 0. ✅ **진단 완료(2026-06-28)**: 드리프트 원인=**체력 튜닝(ENGINE_VERSION 2)**. A/B 입증 — 옛 체력 잔고 8.0억(보전8%·좌절21/96) vs v2 18.8억(보전0·좌절0), 차이는 체력뿐. v2서 내 팀 성적↑→수입↑.
 1. ✅ **L1 baseline 완료(2026-06-28)**: sponsorBase 250000→**243000**(24.3~32.3억) → v2 잔고 9.1억·보전8%·좌절28/105·✅ 건강(옛 healthy 복원). finance.test 단언·문서 동기.
 2~5. (진행 예정) sponsorStance 도출+뉴스 → AI 입찰 → 내 팀 보너스 → 가드 일괄.
-2. sponsorStance 도출(전 구단, 시드+성적, 별도 RNG) + 뉴스 예고.
-3. AI 입찰 공격성(캡 안 clamp, bidGap/posGap 분리).
+2. ✅ **2a 완료(2026-06-28)**: `engine/sponsorStance.ts`(순수 도출, 별도 RNG) + 가드 `_dv_sponsorstance.ts` 8/8. (2b 뉴스 예고 — 미착수.)
+3. ✅ **AI 입찰 공격성 완료(2026-06-29)**: 컨텍스트 주입(`data/leagueHistory.ts` — 결정#2 수정 참조) → resolveFAMarket AI 봇 stance별:
+   - aggressive=참가게이트 타겟+1(gap===0도 입찰=depth) + offer `min(round100(asking×AI_AGGRESSIVE_MULT 1.2), LEAGUE_CAP−payroll[t])` **clamp** / thrifty=관망(gap≥2 뚜렷한 구멍만) / normal=기존(gap>0·offer=asking).
+   - posGap 점수엔 실제 gap 유지(bidGap/posGap 분리). G-2: simLeague `simArchive`에 championId+standings 누적 + `setSeasonHistory`.
+   - 가드 `_dv_fa_stance.ts` ✅ 5/5(120오프시즌): 레버 Δ267(68/120)·캡위반0·방향성 aggr0.81>norm0.60>thr0.21·결정론0·양stance발화. 무회귀 확인(_gt_facontract 15/15·simFaDup·simAudit·foreign-leak·유닛 205/205).
 4. 내 팀 소폭 현금보너스(aggressive)/권고(thrifty, 강제 X).
 5. 가드 일괄(simLeague parity A/B + 레버효과 + 권한 + 인플레).
 > 각 단계 검증 통과분만 커밋, 미통과분 되돌림(추정 금지).

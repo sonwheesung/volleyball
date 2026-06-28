@@ -20,6 +20,8 @@ import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
 import { seasonScandals } from './dynamics';
 import { domesticPayroll } from './roster';
+import { teamStanceOf } from './leagueHistory';
+import type { SponsorStance } from '../engine/sponsorStance';
 
 /** 직전 시즌 사고 선수 → 다음 재계약·FA 평판 계수(playerId→≤1). 사안 클수록 더 깎인다. */
 function scandalRepMap(): Map<string, number> {
@@ -70,6 +72,7 @@ function teamPrestige(prevSeason: number): Record<string, number> {
 
 const RENEW_FA_YEARS = 2;
 const AGGRESSIVE_MULT = 1.2;
+const AI_AGGRESSIVE_MULT = 1.2; // 모기업 aggressive AI 봇 오퍼 배수(캡 천장 clamp). parity로 튜닝(FINANCE 2.0 Stage3)
 
 export interface FAMarketResult {
   snapshot: Record<string, Player>;
@@ -126,6 +129,10 @@ export function resolveFAMarket(
   }
 
   const rng = createRng(80000 + season * 131);
+  // 모기업 기조(FINANCE 2.0 Stage3) — 막 끝난 시즌(season-1) 기준, 전 구단 stance(컨텍스트 주입 archive).
+  //   별도 RNG(sponsorStanceOf 자체 시드)라 위 rng 스트림 미소비 = 기존 FA 회귀 baseline 보존(결정#4).
+  const stanceOf: Record<string, SponsorStance> = {};
+  for (const t of teams) stanceOf[t] = teamStanceOf(t, season - 1);
   const bondsCtx = relationBonds(); // 인간관계 우정(스토어 컨텍스트) — preview=result
   let cashLeft = myCash ?? Number.POSITIVE_INFINITY; // 다중 영입은 잔고를 차감하며 순차 판정
   const signedByMe: string[] = [];
@@ -151,8 +158,19 @@ export function resolveFAMarket(
       if (ROSTER_TOTAL - rosters[t].length <= 0) continue; // 자리 없음
       const gap = positionGap(rosters[t], get)[p.position];
       const isMe = t === myTeam;
-      if (isMe ? !wanted.has(id) : gap <= 0) continue; // 나=지명한 선수만 / AI=필요 포지션만
-      const offer = isMe ? Math.round((asking * (aggressive ? AGGRESSIVE_MULT : 1)) / 100) * 100 : asking;
+      const stance = stanceOf[t];
+      // 참가 게이트(bidGap) — 나=지명한 선수만. AI=stance별: aggressive 타겟+1(gap===0 여유 포지션도 입찰=depth) /
+      //   thrifty 관망(gap≥2 뚜렷한 구멍만) / normal 기존(gap>0). ※게이트만 — offerScore.posGap엔 실제 gap 유지(결정#3).
+      if (isMe) { if (!wanted.has(id)) continue; }
+      else if (stance === 'aggressive') { if (gap < 0) continue; }
+      else if (stance === 'thrifty') { if (gap < 2) continue; }
+      else { if (gap <= 0) continue; }
+      // 오퍼 — 내 팀=aggressive 토글 배수. AI aggressive=배수, 단 캡 천장 안 clamp(결정#1, 단순×배수면 캡근접팀 탈락 역설).
+      const offer = isMe
+        ? Math.round((asking * (aggressive ? AGGRESSIVE_MULT : 1)) / 100) * 100
+        : stance === 'aggressive'
+          ? Math.min(round100(asking * AI_AGGRESSIVE_MULT), LEAGUE_CAP - payroll[t])
+          : asking;
       // 내 팀: 캡 AND 운영 자금(FINANCE, 연봉+보상금) — 캡은 남아도 지갑이 비면 못 뽑는다. AI: 모기업 무한 보전(캡만)
       const ok = isMe ? canAfford(payroll[t], offer) && offer + compCost <= cashLeft : payroll[t] + offer <= LEAGUE_CAP;
       if (!ok) continue;

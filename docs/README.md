@@ -157,6 +157,8 @@ npx tsx tools/_dv_position.ts 24            # 인플레이 포지션(2026-06-24)
 # ── 시스템 건강·무결성 가드(밸런스 드리프트 — 불변식 가드가 못 보는 "느린 회귀"를 잡는다. 2026-06-27 루틴 등록: 누락→재정 회귀 늦게 발견 사고 재발 방지, TEST_METHODOLOGY §4) ──
 npx tsx tools/simFinance.ts 120            # 재정 건강(잔고·모기업 보전 빈도·FA 자금게이트) — exit 0/1. ❌면 튜닝(2026-06-27 회귀 발견 도구). 2026-06-28 v2 체력 재조율 base 243000(FINANCE 2.0 Stage1)
 npx tsx tools/_dv_sponsorstance.ts         # 모기업 기조(FINANCE 2.0 Stage2) — sponsorStanceOf 도출: aggressive 빈도 5~13%·thrifty 4~10%·normal>75%·양 트리거(상위권/가뭄)·결정론·대칭(순수함수 myTeam/cash 의존0). 합성 archive. exit 0/1
+npx tsx tools/_dv_fa_stance.ts 24 6        # 모기업 기조→AI FA 입찰(FINANCE 2.0 Stage3) — 매 오프시즌 stance on/off A/B: ①레버 효과(행선지 Δ>0)·②캡 불변(clamp 위반0)·③방향성(aggressive>normal>thrifty 팀당 FA)·④결정론/A/B민감도·⑤양 stance 발화. 실제 이력(advanceOffseason) 적립. exit 0/1
+# parity A/B(FINANCE 2.0 Stage3 필수): `npx tsx tools/simLeague.ts 40 24`(stance on) vs `$env:STANCE_OFF=1; npx tsx tools/simLeague.ts 40 24`(베이스라인=전팀 normal) — parityStd·최장왕조·지속성 r·1위 점유율·약팀반등 밴드 대조(부익부 재점화 감시). off arm == Stage3 이전 동작
 npx tsx tools/simStatEffect.ts             # 스탯 유효성 — 전 16스탯이 올바른 방향으로 경기 작용(대조군 무편향·id편향 상쇄). exit 0/1
 npx tsx tools/simStamCurve.ts 3000         # 체력 곡선(MATCH 7.1, 2026-06-28) — 경기 중 빠지고 세트 누적되는지(타임아웃 코트 평균 세트1→세트5 ≥8%p 하락·세트5 60~82% 밴드). 옛 평탄~95%(체력 무의미) 회귀 차단. exit 0/1
 npx tsx tools/simAudit.ts 60               # 영입 13체크(한선수=한팀·이중계약0·캡·자금게이트). exit 0/1

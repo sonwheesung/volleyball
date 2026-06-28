@@ -19,22 +19,25 @@ import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
 import { currentSeasonAwards } from '../data/awards';
 import { setAwardScores } from '../data/awardSalary';
-import type { SeasonAwards } from '../types';
+import { setSeasonHistory, setStanceEnabled } from '../data/leagueHistory';
+import type { SeasonArchive } from '../types';
 
 // 수상 프리미엄(SALARY 2장) — 실게임 store.endSeason 과 동일하게, 오프시즌 FA 전에 수상 컨텍스트를 갱신.
 // 유니버스 경계(season 0)에서 초기화. 시뮬도 awarded 스타에 몸값 프리미엄을 반영해 검증한다.
-let simArchive: { season: number; awards?: SeasonAwards }[] = [];
+// G-2(FINANCE 2.0 Stage3): championId/standings 까지 누적 → 모기업 기조(가뭄 등 다년 트리거) 발화 + setSeasonHistory 주입.
+let simArchive: SeasonArchive[] = [];
 
 const teamName = (id: string): string => getTeam(id)?.name ?? id;
 
 /** 한 시즌의 오프시즌(롤오버·은퇴·경쟁FA·드래프트·충원·성장XP·이적근속리셋) — store.endSeason 재현, 전 구단 AI */
-export function advanceOffseason(season: number): void {
+export function advanceOffseason(season: number, championId = '', standings: string[] = []): void {
   if (season === 0) simArchive = [];
   const nextSeason = season + 1;
   const my = '';
-  // 끝난 시즌 수상 집계 → 프리미엄 컨텍스트(이번 오프시즌 FA/재계약에 반영). 롤오버(buildDraftContext) 전.
-  simArchive = [...simArchive, { season, awards: currentSeasonAwards(season) }];
+  // 끝난 시즌 수상·우승·순위 집계 → 컨텍스트(이번 오프시즌 FA/재계약·모기업 기조에 반영). 롤오버(buildDraftContext) 전.
+  simArchive = [...simArchive, { season, championId, standings, awards: currentSeasonAwards(season) }];
   setAwardScores(simArchive);
+  setSeasonHistory(simArchive); // 모기업 기조(FINANCE 2.0 Stage3) — AI FA 입찰 stance 도출원
   const ctx = buildDraftContext(my, {}, {}, [], false, [], nextSeason);
   const snapshot = ctx.snapshot;
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
@@ -98,7 +101,7 @@ export function runUniverse(seasons: number, onProgress?: (s: number) => void): 
     if (champ === curTeam) curStreak++; else { curTeam = champ; curStreak = 1; }
     if (curStreak > longestStreak) { longestStreak = curStreak; longestTeam = champ; }
     if (onProgress) onProgress(s);
-    advanceOffseason(s);
+    advanceOffseason(s, champ, standings.map((st) => st.teamId)); // G-2: 우승·순위 누적(모기업 기조 트리거)
   }
   return { ids, titles, rankSum, rankHistory, champByYear, champSeasons, lastSeasons, longestStreak, longestTeam };
 }
@@ -210,6 +213,7 @@ function multiReport(seasons: number, universes: number): void {
 }
 
 function main(): void {
+  if (process.env.STANCE_OFF) { setStanceEnabled(false); process.stderr.write('▶ STANCE_OFF — 모기업 기조 비활성(parity 베이스라인)\n'); }
   const seasons = Math.max(1, Number(process.argv[2]) || 100);
   const universes = Math.max(1, Number(process.argv[3]) || 1);
   if (universes <= 1) singleReport(seasons);

@@ -41,6 +41,7 @@ import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
 import { planNextAction } from '../engine/advance';
 import { marketVal, setAwardScores } from '../data/awardSalary';
+import { setSeasonHistory } from '../data/leagueHistory';
 import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
 import { ROSTER_MAX, canRelease, inSeasonCost, severanceFee } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
@@ -246,6 +247,7 @@ export const useGameStore = create<GameState>()(
         set({ staffHead: staff.head, staffAssistants: staff.asst, staffScouts: staff.scout });
         setOwnerContext([]);
         setAwardScores([]); // 새 세이브 — 수상 이력 없음
+        setSeasonHistory([]); // 모기업 기조(FINANCE 2.0) 컨텍스트 — 이력 없음
       },
       setDay: (day) => set((s) => (Number.isFinite(day) ? { currentDay: Math.max(s.currentDay, day) } : {})), // NaN/Infinity 거부(currentDay 오염 전파 차단)
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
@@ -625,6 +627,7 @@ export const useGameStore = create<GameState>()(
           ? archive.map((a) => (a.season === season ? { ...a, ...archEntry } : a))
           : [...archive, archEntry];
         setAwardScores(nextArchive); // 수상 프리미엄 컨텍스트 갱신 — 이번 오프시즌 FA/재계약(buildDraftContext)부터 반영
+        setSeasonHistory(nextArchive); // 모기업 기조(FINANCE 2.0 Stage3) — 이번 오프시즌 AI FA 입찰부터 반영(championId/standings)
 
         // 통산 경기 기록 누적(업적용) — 이번 시즌 내 팀 득점·에이스·세트·경기 승패
         const myRowRec = record[my] ?? [0, 0];
@@ -864,6 +867,7 @@ export const useGameStore = create<GameState>()(
         setTxContext([], [], '');
         setOwnerContext([]);
         setAwardScores([]);
+        setSeasonHistory([]); // 모기업 기조(FINANCE 2.0) 컨텍스트 리셋
         // 전체 데이터 초기화 = 새 출발 → 스포트라이트 본 기록도 리셋(튜토리얼 다시 봄). 인트로 슬라이드(onboarded)는
         // 유지(다시보기는 replayOnboarding). seenTips는 freshSave 밖이라 명시적으로 비운다(ONBOARDING 4).
         set({ ...freshSave, seenTips: {} });
@@ -951,6 +955,7 @@ export const useGameStore = create<GameState>()(
           setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)
           setOwnerContext(state?.benchDirectives ?? []);
           setAwardScores(state?.archive ?? []); // 수상 프리미엄 컨텍스트 복원
+          setSeasonHistory(state?.archive ?? []); // 모기업 기조(FINANCE 2.0) 컨텍스트 복원 — FA 화면 진입 전 stance 일관
           // 시뮬 결과 캐시 복원 — **반드시 맨 끝**(위 commit들이 baseVersion/txVersion을 bump한 뒤). 저장 키와 맞춰 재계산 제거(Phase1).
           restoreSimCache((state as { simCache?: import('../data/simCache').SimCache })?.simCache);
           useGameStore.setState({ hydrated: true });
