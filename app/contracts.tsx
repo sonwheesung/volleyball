@@ -6,6 +6,7 @@ import { Card, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../com
 import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
 import { teamRelations } from '../data/relationships';
 import { getPlayerProduction } from '../data/production';
+import { leagueDisplayDay } from '../data/standings';
 import { activeRoster, payroll } from '../data/roster';
 import { overall, overallRaw } from '../engine/overall';
 import { canAfford, isFranchise, LEAGUE_CAP } from '../engine/cap';
@@ -43,7 +44,7 @@ export default function Contracts() {
   const faGrades = assignFAGrades(faList);
 
   const doResign = (p: Player) => {
-    const market = marketVal(p, getPlayerProduction(p.id, currentDay));
+    const market = marketVal(p, getPlayerProduction(p.id, leagueDisplayDay(currentDay)));
     const opts = resignOptions(p, market);
     const buttons = opts.map((o) => ({
       text: `${o.label} · ${formatMoney(o.salary)} · ${o.years}년`,
@@ -130,7 +131,7 @@ export default function Contracts() {
 
       <Title>선수 계약</Title>
       {roster.map((p) => {
-        const market = marketVal(p, getPlayerProduction(p.id, currentDay));
+        const market = marketVal(p, getPlayerProduction(p.id, leagueDisplayDay(currentDay)));
         const status = contractStatus(p.contract.salary, market);
         return (
           <Pressable key={p.id} onPress={() => onManage(p)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
@@ -177,7 +178,7 @@ export default function Contracts() {
           </Muted>
           {faList.map((p) => {
             const grade = faGrades.get(p.id)!;
-            const ask = askingPrice(marketVal(p, getPlayerProduction(p.id, currentDay)), grade);
+            const ask = askingPrice(marketVal(p, getPlayerProduction(p.id, leagueDisplayDay(currentDay))), grade);
             const keep = resignDecisions[p.id] !== false;
             return (
               <View key={p.id} style={styles.rowCol}>

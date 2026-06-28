@@ -84,6 +84,13 @@ export function leagueProduction(uptoDay: number): Map<string, ProdLine> {
 /** [fromDay, toDay] 구간 선수별 생산(양끝 포함) — 라운드 MVP 등 구간 집계용 */
 export function leagueProductionRange(fromDay: number, toDay: number): Map<string, ProdLine> {
   const out = new Map<string, ProdLine>();
+  // 빈 구간 가드(2026-06-28) — 집계할 경기가 하나도 없으면 allProdRows()(전 경기 시드 재생, 콜드 ~3s·폰 15s)를
+  // 부르지 않고 즉시 빈 결과. 핵심 케이스: 구단 선택/시즌 시작 전 leagueDisplayDay(0)=−1 → range[0,−1]은
+  // toDay<fromDay라 경기 0개인데 옛 코드는 전 시즌을 시뮬했다(선수 화면 진입 15s의 원인).
+  if (toDay < fromDay) return out;
+  let hasFixture = false;
+  for (const f of SEASON) { if (f.dayIndex >= fromDay && f.dayIndex <= toDay) { hasFixture = true; break; } }
+  if (!hasFixture) return out;
   for (const r of allProdRows()) {
     if (r.dayIndex < fromDay || r.dayIndex > toDay) continue;
     for (const [id, l] of r.lines) out.set(id, mergeProd(out.get(id), l));

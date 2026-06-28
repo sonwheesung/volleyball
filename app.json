@@ -5,11 +5,13 @@
     "version": "0.1.0",
     "orientation": "portrait",
     "scheme": "volleyball",
-    "userInterfaceStyle": "automatic",
+    "userInterfaceStyle": "dark",
+    "backgroundColor": "#0B1018",
     "ios": {
       "supportsTablet": true
     },
     "android": {
+      "backgroundColor": "#0B1018",
       "adaptiveIcon": {
         "backgroundColor": "#0f172a"
       }

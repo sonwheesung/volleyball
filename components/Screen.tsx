@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Animated, Easing, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, ImageBackground, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Rect } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { displayOvr } from '../engine/overall';
@@ -9,20 +9,29 @@ import { POS_COLOR, POS_LABEL } from './posTokens';
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
 export const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
 
-// KOVO 스타일 타일(밝고 깔끔) 디자인 시스템 — 2026-06-15 라이트 테마 전환
+// 시네마틱 글래스 디자인 시스템 — 2026-06-27 다크 글래스 전환(구 KOVO 라이트 테마 폐기, UI-7).
+// 키는 그대로 유지하고 값만 다크화 → 전 화면 자동 재스킨.
+// 카드는 **다크 반투명**(2026-06-28 교정): 흰색 0.06 반투명은 뒤 코트/네트가 비쳐 내용 집중이
+// 어렵다는 사용자 보고 → 어두운 틴트(0.82~0.85)로 배경을 가려 또렷하게. 은은한 투과+헤어라인+그림자로
+// 글래스 질감은 유지. cardAlt는 카드 위/배경 위 모두에서 보이도록 카드보다 한 톤 밝은 다크.
 export const theme = {
-  bg: '#F4F7FB',       // 부드러운 오프화이트
-  card: '#FFFFFF',     // 순백 카드
-  cardAlt: '#EEF1F6',  // 트랙·세그먼트 배경
-  text: '#15202B',     // 잉크
-  muted: '#8A94A6',    // 보조 텍스트
-  accent: '#10B9A6',   // 틸 민트(프라이머리)
-  good: '#16B07D',     // 승/긍정
-  warn: '#F2A93B',     // 주의
-  bad: '#FF6B5A',      // 워키 코랄(패/위험·외국인)
-  elite: '#3B82F6',    // OVR 85+ 엘리트(틸·녹과 구분되는 블루칩)
-  border: '#E6EAF0',   // 헤어라인
+  bg: '#0B1018',                      // 다크 베이스(배경 이미지 뒤·헤더)
+  card: 'rgba(16,22,34,0.86)',        // 프로스티드 다크 글래스 카드(배경 차폐 — 가독성)
+  cardAlt: 'rgba(40,50,68,0.92)',     // 트랙·세그먼트·칩·스켈레톤(카드보다 한 톤 밝게)
+  text: '#F2F5FA',                    // 밝은 잉크
+  muted: '#9AA7BC',                   // 보조 텍스트
+  accent: '#19C2AE',                  // 틸 민트(프라이머리) — 다크에서 또렷
+  good: '#2BD17E',                    // 승/긍정
+  warn: '#F2A93B',                    // 주의
+  bad: '#FF6B5A',                     // 코랄(패/위험·외국인)
+  elite: '#5B9BFF',                   // OVR 88+ 엘리트(블루칩)
+  border: 'rgba(255,255,255,0.14)',   // 글래스 헤어라인(다크 카드 위 엣지 하이라이트)
+  accentGlass: 'rgba(25,194,174,0.16)', // 액센트 글래스 — primary 버튼(accent #19C2AE=rgb 25,194,174의 16% 틴트)
+  gold: '#E8C46A',                    // 절제된 골드(우승·트로피·로고 한정)
 };
+
+// 전역 배경 — 다크 아레나(GPT 생성). Screen 래퍼가 모든 화면에 깐다. select-team도 동일 파일 사용.
+const BG = require('../assets/bg/court.png');
 
 interface ScreenProps {
   title?: string;
@@ -41,15 +50,19 @@ export function Screen({ title, children, scroll = true }: ScreenProps) {
     </>
   );
   return (
-    <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
-      {scroll ? (
-        <ScrollView style={styles.root} contentContainerStyle={styles.contentScroll}>
-          {inner}
-        </ScrollView>
-      ) : (
-        <View style={[styles.root, styles.content]}>{inner}</View>
-      )}
-    </SafeAreaView>
+    <ImageBackground source={BG} style={styles.bgRoot} resizeMode="cover">
+      {/* 가독성 스크림 — 다크 톤으로 깔아 글래스 카드/텍스트가 스포트라이트 위에서도 읽히게(콘텐츠 화면은 다소 강하게) */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.scrim]} />
+      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
+        {scroll ? (
+          <ScrollView style={styles.safe} contentContainerStyle={styles.contentScroll}>
+            {inner}
+          </ScrollView>
+        ) : (
+          <View style={[styles.safe, styles.content]}>{inner}</View>
+        )}
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
@@ -213,7 +226,7 @@ export function Button({
         pressed && !disabled && { opacity: 0.8 },
       ]}
     >
-      <Text style={[styles.btnText, variant === 'ghost' && { color: theme.accent }]}>{label}</Text>
+      <Text style={styles.btnText}>{label}</Text>
     </Pressable>
   );
 }
@@ -255,7 +268,11 @@ export function PosTag({ pos, full, solid, compact }: { pos: string; full?: bool
     <View style={[
       compact ? styles.posCompact : styles.pos,
       full ? styles.posFull : null,
-      { backgroundColor: solid ? c : c + '33' },
+      // 기본/full = 아웃라인(다크 틴트 배경 + 컬러 보더 + 컬러 글씨, 라운드 8) — 사용자 요청(2026-06-28).
+      // solid = 채움(흰 글씨, 테이블), compact = 기존 소프트(박스스코어 열 정렬 — 변경 안 함).
+      solid ? { backgroundColor: c }
+        : compact ? { backgroundColor: c + '33' }
+        : { backgroundColor: c + '1A', borderWidth: 1.5, borderColor: c },
     ]}>
       <Text
         style={[compact ? styles.posTextCompact : styles.posText, { color: solid ? '#FFFFFF' : c }]}
@@ -297,7 +314,9 @@ export function EmptyState({ message }: { message: string }) {
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.bg },
+  bgRoot: { flex: 1, backgroundColor: theme.bg },
+  safe: { flex: 1, backgroundColor: 'transparent' },
+  scrim: { backgroundColor: 'rgba(7,10,16,0.62)' },
   content: { padding: 16, gap: 12 },
   contentScroll: { padding: 16, paddingBottom: 32, gap: 12 }, // 스크롤 하단 여유(실제 inset은 SafeAreaView가 처리)
   title: { color: theme.text, fontSize: 24, fontWeight: '800', marginBottom: 2 },
@@ -305,24 +324,31 @@ const styles = StyleSheet.create({
   card: {
     backgroundColor: theme.card, borderRadius: 18, padding: 16, gap: 8,
     borderWidth: 1, borderColor: theme.border,
-    shadowColor: '#1B2A4A', shadowOpacity: 0.06, shadowRadius: 12, shadowOffset: { width: 0, height: 4 },
-    elevation: 2,
+    shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 6 },
+    elevation: 4,
   },
   muted: { color: theme.muted, fontSize: 14, lineHeight: 20 },
   loadingMsg: { color: theme.muted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
   brandMark: { color: theme.text, fontSize: 26, fontWeight: '900', letterSpacing: 1 },
   // 스켈레톤 카드 — 실제 카드(card)와 같은 골격(둥근모서리·패딩·헤어라인)이되 그림자는 빼 가벼운 플레이스홀더로
   skCard: { backgroundColor: theme.card, borderRadius: 18, padding: 16, gap: 10, borderWidth: 1, borderColor: theme.border },
+  // 글래스 버튼(2026-06-28 UI-7, 사용자 선택) — 카드와 같은 14R + 다크 글래스 결.
+  // primary: 액센트 글래스(민트 틴트 반투명) + 민트 보더 1.5 + 민트 글씨 + 액센트 글로우 → 유리판처럼 얹힌 CTA.
+  // ghost: 중립 다크 글래스(theme.card) + 은은한 헤어라인 → 보조 버튼(primary보다 차분).
   // paddingHorizontal 필수 — 인라인(Row 안) 버튼은 폭이 글자에 맞춰지므로, 없으면 "영입"처럼 짧은
   // 라벨이 세로로 길쭉한 캡슐이 된다. 전체폭 버튼(Card 안)은 stretch라 영향 없음.
-  btn: { borderRadius: 999, paddingVertical: 14, paddingHorizontal: 22, minWidth: 76, alignItems: 'center', justifyContent: 'center' },
-  btnPrimary: { backgroundColor: theme.accent },
-  btnGhost: { backgroundColor: 'transparent', borderWidth: 1.5, borderColor: theme.accent },
-  btnText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  btn: { borderRadius: 14, paddingVertical: 15, paddingHorizontal: 22, minWidth: 76, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  btnPrimary: {
+    backgroundColor: theme.accentGlass, borderWidth: 1.5, borderColor: theme.accent,
+    // iOS 액센트 글로우만(elevation 제거 — Android는 반투명 배경 위 elevation이 사각 그림자 아티팩트를 만든다. 2026-06-28)
+    shadowColor: theme.accent, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 3 },
+  },
+  btnGhost: { backgroundColor: theme.card, borderColor: theme.border },
+  btnText: { color: theme.accent, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
   ovr: { alignItems: 'center', justifyContent: 'center' },
   ovrText: { fontWeight: '900' },
   // 약어 배지 — minWidth로 1글자(S·L)와 2글자(OH·OP·MB)가 같은 폭으로 정렬(들쭉날쭉 제거)
-  pos: { minWidth: 34, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 999, alignItems: 'center', justifyContent: 'center' },
+  pos: { minWidth: 34, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
   posText: { fontSize: 12, fontWeight: '800' },
   posFull: { minWidth: 0, paddingHorizontal: 10 }, // 풀라벨(세터·아웃사이드…)은 가변 폭
   posCompact: { width: 28, paddingVertical: 2, borderRadius: 5, alignItems: 'center', justifyContent: 'center' }, // 박스스코어 열 정렬용 고정폭

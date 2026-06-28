@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
@@ -57,6 +57,8 @@ export default function Onboarding() {
   const finish = () => { completeOnboarding(); router.replace('/select-team'); };
 
   return (
+    <ImageBackground source={require('../assets/bg/court.png')} style={styles.bgRoot} resizeMode="cover">
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(7,10,16,0.62)' }]} />
     <SafeAreaView style={styles.root}>
       <View style={styles.topBar}>
         <Pressable onPress={finish} hitSlop={10}>
@@ -99,11 +101,13 @@ export default function Onboarding() {
         </Pressable>
       </View>
     </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.bg, paddingHorizontal: 24 },
+  bgRoot: { flex: 1, backgroundColor: theme.bg },
+  root: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 24 },
   topBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 8, minHeight: 32 },
   skip: { color: theme.muted, fontSize: 14, fontWeight: '700' },
   body: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 },
@@ -117,6 +121,10 @@ const styles = StyleSheet.create({
   footer: { paddingBottom: 16, gap: 18 },
   dots: { flexDirection: 'row', justifyContent: 'center', gap: 7 },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.border },
-  cta: { backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 16, alignItems: 'center' },
-  ctaText: { color: '#FFFFFF', fontSize: 16, fontWeight: '800' },
+  cta: {
+    backgroundColor: theme.accentGlass, borderRadius: 14, paddingVertical: 16, alignItems: 'center',
+    borderWidth: 1.5, borderColor: theme.accent,
+    shadowColor: theme.accent, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 3 },
+  },
+  ctaText: { color: theme.accent, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
 });

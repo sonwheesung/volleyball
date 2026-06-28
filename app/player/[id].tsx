@@ -1,8 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Alert, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { Button, Card, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme } from '../../components/Screen';
+import { faceFor } from '../../data/playerFace';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans, fanOverlapRatio } from '../../engine/owner';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
@@ -11,6 +13,7 @@ import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason } from '../..
 import { getEvolvedPlayer, getTeam, shortTeamName as teamShort, currentRosters } from '../../data/league';
 import { buildLineup } from '../../engine/lineup';
 import { getPlayerProduction } from '../../data/production';
+import { leagueDisplayDay } from '../../data/standings';
 import { awardHistoryOf } from '../../data/awards';
 import { effectiveContract } from '../../data/roster';
 import { isFranchise } from '../../engine/cap';
@@ -23,6 +26,49 @@ import { useGameStore } from '../../store/useGameStore';
 import { relationsOf } from '../../data/relationships';
 
 const STATUS_COLOR = { 저평가: theme.good, 적정: theme.muted, 고평가: theme.bad } as const;
+
+// ── 시안 컴포넌트(2026-06-28 선수 정보 재설계) ──
+const polar = (cx: number, cy: number, r: number, i: number, n: number): [number, number] => {
+  const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+  return [cx + Math.cos(a) * r, cy + Math.sin(a) * r];
+};
+
+/** 종합 스탯 육각 레이더 — 6축 0~100 + 꼭짓점 스탯 라벨(어느 축인지 표시). 좁은 폭(옆 배치)에서 라벨이
+ *  안 잘리게 라벨은 가운데 정렬, 폴리곤은 작게 잡아 가장자리에 라벨 여백을 둔다. */
+function RadarChart({ values, labels, size = 158 }: { values: number[]; labels?: string[]; size?: number }) {
+  const cx = size / 2, cy = size / 2, R = size / 2 - 36, n = values.length;
+  const labelR = size / 2 - 13;
+  const ring = (f: number) => values.map((_, i) => polar(cx, cy, R * f, i, n).join(',')).join(' ');
+  const poly = values.map((v, i) => polar(cx, cy, R * Math.max(0.06, Math.min(1, v / 100)), i, n).join(',')).join(' ');
+  return (
+    <Svg width={size} height={size}>
+      {[0.4, 0.7, 1].map((f, k) => <Polygon key={k} points={ring(f)} fill="none" stroke={theme.border} strokeWidth={1} />)}
+      {values.map((_, i) => { const [x, y] = polar(cx, cy, R, i, n); return <Line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={theme.border} strokeWidth={1} />; })}
+      <Polygon points={poly} fill={theme.accent + '40'} stroke={theme.accent} strokeWidth={2} />
+      {values.map((v, i) => { const [x, y] = polar(cx, cy, R * Math.max(0.06, Math.min(1, v / 100)), i, n); return <Circle key={`d${i}`} cx={x} cy={y} r={2.5} fill={theme.accent} />; })}
+      {labels?.map((lb, i) => {
+        const [x, y] = polar(cx, cy, labelR, i, n);
+        return (
+          <SvgText key={`l${i}`} x={x} y={y + 3} fontSize={9.5} fontWeight="700" fill={theme.muted} textAnchor="middle">{lb}</SvgText>
+        );
+      })}
+    </Svg>
+  );
+}
+
+/** 특성 육각 뱃지 — 긍정=상승 화살표(민트/초록), 부정=하강(코랄) */
+function TraitBadge({ good, color }: { good: boolean; color: string }) {
+  const s = 44, cx = s / 2, cy = s / 2, r = s / 2 - 2;
+  const pts = Array.from({ length: 6 }, (_, i) => { const a = -Math.PI / 2 + (i * Math.PI) / 3; return `${cx + Math.cos(a) * r},${cy + Math.sin(a) * r}`; }).join(' ');
+  return (
+    <View style={{ width: s, height: s, alignItems: 'center', justifyContent: 'center' }}>
+      <Svg width={s} height={s} style={StyleSheet.absoluteFill}>
+        <Polygon points={pts} fill={color + '1A'} stroke={color + '66'} strokeWidth={1.5} />
+      </Svg>
+      <Ionicons name={good ? 'arrow-up' : 'arrow-down'} size={20} color={color} />
+    </View>
+  );
+}
 
 
 export default function PlayerDetail() {
@@ -46,7 +92,11 @@ export default function PlayerDetail() {
   const [talkAsk, setTalkAsk] = useState(false);
   const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
-  const prod = id ? getPlayerProduction(id, currentDay) : undefined;
+  // 시즌 파생(생산·부상·정지·role)은 **치른 경기까지만**(leagueDisplayDay=currentDay−1) — 대시보드·기록과 동일 컷오프.
+  // raw currentDay는 안 치른 다음 경기를 포함(스포일러·불일치)했고, 시즌 시작 전(day0→−1)이면 빈 구간/일자<0 가드로
+  // 콜드 전 시즌 시뮬(생산·dyn)을 통째로 회피한다 → 구단 선택 플로우 선수 화면 15s 제거(2026-06-28).
+  const displayDay = leagueDisplayDay(currentDay);
+  const prod = id ? getPlayerProduction(id, displayDay) : undefined;
   const awardHist = id ? awardHistoryOf(archive, id) : [];
   const myMilestones = id ? milestones.filter((m) => m.playerId === id) : [];
 
@@ -62,6 +112,8 @@ export default function PlayerDetail() {
   const contract = effectiveContract(p, overrides);
   const market = marketVal(p, prod);
   const status = contractStatus(contract.salary, market);
+  const face = faceFor(p.id);                         // 얼굴 포트레이트(풀 비면 null→아이콘)
+  const pop = popularityNow(p, currentDay, archive);  // 인기(시작 전 day≤0이면 통산만, 한 번만 계산)
 
   // ── 구단주 레이어 (내 팀 선수만) ──
   const isMine = !!myTeamId && rosterIdsOnDay(myTeamId, currentDay).includes(p.id);
@@ -77,10 +129,10 @@ export default function PlayerDetail() {
   const teamOfP = (() => { const rs = currentRosters(); for (const t of Object.keys(rs)) if (rs[t].includes(p.id)) return t; return null; })();
   const role: { text: string; color: string } | null = (() => {
     if (!teamOfP) return null;
-    const avail = availableTeamPlayers(teamOfP, currentDay);
+    const avail = availableTeamPlayers(teamOfP, displayDay);
     if (!avail.some((x) => x.id === p.id)) {
-      if (suspendedOnDay(currentDay).has(p.id)) return { text: '출장 정지', color: theme.bad };
-      if (teamInjuriesOn(teamOfP, currentDay).some((s) => s.playerId === p.id)) return { text: '부상 결장', color: theme.bad };
+      if (suspendedOnDay(displayDay).has(p.id)) return { text: '출장 정지', color: theme.bad };
+      if (teamInjuriesOn(teamOfP, displayDay).some((s) => s.playerId === p.id)) return { text: '부상 결장', color: theme.bad };
       if (benched) return { text: '벤치(감독 지시)', color: theme.warn };
       return { text: '출전 명단 외', color: theme.muted };
     }
@@ -127,53 +179,58 @@ export default function PlayerDetail() {
   };
 
   return (
-    <Screen title={p.name}>
+    <Screen>
+      {/* ── 히어로: 얼굴 포트레이트 + 이름 + 포지션/상태 + OVR + 인기/팬 ── */}
       <Card>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: theme.cardAlt, alignItems: 'center', justifyContent: 'center' }}>
-            <Ionicons name="person" size={26} color={theme.muted} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
+          <View style={styles.avatar}>
+            {face ? <Image source={face} style={styles.avatarImg} /> : <Ionicons name="person" size={42} color={theme.muted} />}
           </View>
-          <View style={{ flex: 1, gap: 4 }}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+          <View style={{ flex: 1, gap: 6 }}>
+            <Text style={styles.pName} numberOfLines={1}>{p.name}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
               <PosTag pos={p.position} full />
               {role ? (
-                <View style={{ backgroundColor: role.color + '22', borderRadius: 6, paddingHorizontal: 7, paddingVertical: 2 }}>
+                <View style={{ backgroundColor: role.color + '22', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
                   <Text style={{ color: role.color, fontWeight: '800', fontSize: 12 }}>{role.text}</Text>
                 </View>
               ) : null}
-              {p.isAsianQuota ? <Text style={{ color: theme.elite, fontWeight: '700' }}>아시아쿼터{p.nationality ? `·${p.nationality}` : ''}</Text> : p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700' }}>외국인</Text> : null}
-              {isFranchise(p) ? <Text style={{ color: theme.warn, fontWeight: '700' }}>프랜차이즈</Text> : null}
+              {p.isAsianQuota ? <Text style={{ color: theme.elite, fontWeight: '700', fontSize: 12 }}>아시아쿼터{p.nationality ? `·${p.nationality}` : ''}</Text> : p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700', fontSize: 12 }}>외국인</Text> : null}
+              {isFranchise(p) ? <Text style={{ color: theme.warn, fontWeight: '700', fontSize: 12 }}>프랜차이즈</Text> : null}
             </View>
-            <Muted>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
+            <Muted style={{ fontSize: 13 }}>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
           </View>
-          <OvrBadge value={overallRaw(p)} size={56} />
+          <OvrBadge value={overallRaw(p)} size={62} />
         </View>
-        {suspendedOnDay(currentDay).has(p.id) ? (
-          <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13 }}>
+        {suspendedOnDay(displayDay).has(p.id) ? (
+          <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13, marginTop: 6 }}>
             🚫 출장 정지 중 — {SCANDAL_KO[seasonScandals().find((s) => s.playerId === p.id)!.kind]}
           </Text>
         ) : null}
-        <Row>
-          <Muted>인기 / 개인 팬</Muted>
-          <Text style={{ color: theme.text, fontWeight: '700' }}>
-            {popularityNow(p, currentDay, archive)} · {playerFans(popularityNow(p, currentDay, archive)).toLocaleString()}명
-            <Text style={{ color: theme.muted, fontSize: 12 }}> (팀팬 겹침 {Math.round(fanOverlapRatio(p.clubTenure) * 100)}%)</Text>
-          </Text>
-        </Row>
+        <View style={styles.divider} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', flexWrap: 'wrap' }}>
+          <Text style={{ fontSize: 14 }}>🔥 </Text>
+          <Text style={{ color: theme.muted, fontSize: 13 }}>인기 <Text style={{ color: theme.text, fontWeight: '800' }}>{pop}</Text></Text>
+          <Text style={{ color: theme.muted, fontSize: 13, marginHorizontal: 8 }}>·</Text>
+          <Text style={{ color: theme.muted, fontSize: 13 }}>개인 팬 <Text style={{ color: theme.text, fontWeight: '800' }}>{playerFans(pop).toLocaleString()}명</Text></Text>
+          <Text style={{ color: theme.muted, fontSize: 12 }}> (팀팬 겹침 {Math.round(fanOverlapRatio(p.clubTenure) * 100)}%)</Text>
+        </View>
       </Card>
 
       {p.traits && p.traits.length > 0 ? (
         <>
           <Title>특성</Title>
           <Card>
-            {p.traits.map((t) => {
+            {p.traits.map((t, i) => {
               const d = TRAITS[t];
+              const c = d.good ? theme.good : theme.bad;
               return (
-                <View key={t} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
-                  <Text style={{ color: d.good ? theme.good : theme.bad, fontWeight: '800', width: 76 }}>
-                    {d.good ? '▲' : '▼'} {d.name}
-                  </Text>
-                  <Text style={{ color: theme.muted, fontSize: 12, flex: 1 }}>{d.desc}</Text>
+                <View key={t} style={{ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 4, marginTop: i > 0 ? 4 : 0 }}>
+                  <TraitBadge good={d.good} color={c} />
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: c, fontWeight: '800', fontSize: 15 }}>{d.good ? '▲' : '▼'} {d.name}</Text>
+                    <Text style={{ color: theme.muted, fontSize: 13, marginTop: 2 }}>{d.desc}</Text>
+                  </View>
                 </View>
               );
             })}
@@ -191,15 +248,19 @@ export default function PlayerDetail() {
             <Title>인간관계</Title>
             <Card>
               {rel.friends.length > 0 ? (
-                <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
-                  <Text style={{ color: theme.good, fontWeight: '800', width: 54 }}>친한</Text>
-                  <Text style={{ color: theme.text, flex: 1 }}>{rel.friends.map((f) => f.name).join(', ')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 }}>
+                  <View style={{ backgroundColor: theme.good + '22', borderWidth: 1, borderColor: theme.good + '66', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3 }}>
+                    <Text style={{ color: theme.good, fontWeight: '800', fontSize: 13 }}>친한</Text>
+                  </View>
+                  <Text style={{ color: theme.text, flex: 1, fontSize: 14 }}>{rel.friends.map((f) => f.name).join(', ')}</Text>
                 </View>
               ) : null}
               {rel.rivals.length > 0 ? (
-                <View style={{ flexDirection: 'row', gap: 8, paddingVertical: 4 }}>
-                  <Text style={{ color: theme.bad, fontWeight: '800', width: 54 }}>라이벌</Text>
-                  <Text style={{ color: theme.text, flex: 1 }}>{rel.rivals.map((r) => r.name).join(', ')}</Text>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 }}>
+                  <View style={{ backgroundColor: theme.bad + '22', borderWidth: 1, borderColor: theme.bad + '66', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3 }}>
+                    <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13 }}>라이벌</Text>
+                  </View>
+                  <Text style={{ color: theme.text, flex: 1, fontSize: 14 }}>{rel.rivals.map((r) => r.name).join(', ')}</Text>
                 </View>
               ) : null}
               {isMine && lostFriends.length > 0 ? (
@@ -424,14 +485,23 @@ export default function PlayerDetail() {
         </>
       ) : null}
 
-      <Title>종합 스탯 (윗단)</Title>
+      <Title>종합 스탯</Title>
       <Card>
-        <StatBar label="스파이크" value={r.spike} />
-        <StatBar label="블로킹" value={r.block} />
-        <StatBar label="디그" value={r.dig} />
-        <StatBar label="리시브" value={r.receive} />
-        <StatBar label="세팅" value={r.set} />
-        <StatBar label="서브" value={r.serve} />
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <RadarChart
+            values={[r.spike, r.block, r.dig, r.receive, r.set, r.serve]}
+            labels={['스파이크', '블로킹', '디그', '리시브', '세팅', '서브']}
+            size={158}
+          />
+          <View style={{ flex: 1, gap: 2 }}>
+            <StatBar label="스파이크" value={r.spike} />
+            <StatBar label="블로킹" value={r.block} />
+            <StatBar label="디그" value={r.dig} />
+            <StatBar label="리시브" value={r.receive} />
+            <StatBar label="세팅" value={r.set} />
+            <StatBar label="서브" value={r.serve} />
+          </View>
+        </View>
       </Card>
 
       <Title>세부 스탯 (밑단)</Title>
@@ -464,6 +534,7 @@ export default function PlayerDetail() {
       <Modal
         visible={talkAsk || !!talkResult}
         transparent
+        statusBarTranslucent
         animationType="fade"
         onRequestClose={() => { setTalkAsk(false); setTalkResult(null); }}
       >
@@ -501,6 +572,13 @@ export default function PlayerDetail() {
   );
 }
 
+const styles = StyleSheet.create({
+  avatar: { width: 84, height: 84, borderRadius: 42, backgroundColor: theme.cardAlt, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
+  avatarImg: { width: 84, height: 84, resizeMode: 'cover' },
+  pName: { color: theme.text, fontSize: 24, fontWeight: '900' },
+  divider: { height: 1, backgroundColor: theme.border, marginVertical: 10 },
+});
+
 const mstyles = StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#0B121CCC', alignItems: 'center', justifyContent: 'center', padding: 24 },
   dialog: { width: '100%', maxWidth: 420, backgroundColor: theme.card, borderRadius: 18, padding: 20, gap: 8 },
@@ -513,6 +591,11 @@ const mstyles = StyleSheet.create({
   choiceArrow: { color: theme.accent, fontSize: 20, fontWeight: '900' },
   cancel: { alignItems: 'center', paddingVertical: 10, marginTop: 4 },
   cancelTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
-  primary: { backgroundColor: theme.accent, borderRadius: 999, paddingVertical: 13, alignItems: 'center', marginTop: 8 },
-  primaryTxt: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
+  // 공용 Button과 같은 글래스 톤(14R·민트 틴트·민트 보더/글씨·액센트 글로우) — 다이얼로그 자체 CTA(2026-06-28 UI-7)
+  primary: {
+    backgroundColor: theme.accentGlass, borderRadius: 14, paddingVertical: 14, alignItems: 'center', marginTop: 8,
+    borderWidth: 1.5, borderColor: theme.accent,
+    shadowColor: theme.accent, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 3 },
+  },
+  primaryTxt: { color: theme.accent, fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
 });

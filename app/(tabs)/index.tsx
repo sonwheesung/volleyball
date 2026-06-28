@@ -149,7 +149,6 @@ export default function Dashboard() {
       <View style={{ flex: 1 }} />
 
       <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
-      <Button label="설정" variant="ghost" onPress={() => router.push('/settings')} />
       <SpotlightOverlay screen="tab-dashboard" />
     </Screen>
   );

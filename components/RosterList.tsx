@@ -11,11 +11,15 @@ export interface RosterDecor { dotColor?: string; mood?: string }
 /** 포지션 → 연령 정렬된 선수 행 목록. 각 행 탭 시 상세로 이동.
  *  decor: 선수별 컨디션 점(●)·기분 뱃지(😟🪑) — 구단주 레이어 표시(선택).
  *  starterIds: 주어지면 "주전 먼저 → 포지션순, 그 다음 벤치 → 포지션순"으로 정렬 + 주전/벤치 구분선. */
-export function RosterList({ players, decor, starterIds }: { players: Player[]; decor?: (p: Player) => RosterDecor; starterIds?: Set<string> }) {
+export type RosterSort = 'position' | 'salary' | 'ovr';
+
+export function RosterList({ players, decor, starterIds, sort = 'position' }: { players: Player[]; decor?: (p: Player) => RosterDecor; starterIds?: Set<string>; sort?: RosterSort }) {
   const router = useRouter();
   const isStarter = (p: Player) => !!starterIds && starterIds.has(p.id);
   const sorted = [...players].sort((a, b) => {
     if (starterIds) { const sa = isStarter(a) ? 0 : 1, sb = isStarter(b) ? 0 : 1; if (sa !== sb) return sa - sb; }
+    if (sort === 'salary') return b.contract.salary - a.contract.salary || overallRaw(b) - overallRaw(a);
+    if (sort === 'ovr') return overallRaw(b) - overallRaw(a) || POS_ORDER[a.position] - POS_ORDER[b.position];
     return POS_ORDER[a.position] - POS_ORDER[b.position] || overall(b) - overall(a);
   });
   const firstBenchIdx = starterIds ? sorted.findIndex((p) => !isStarter(p)) : -1;
@@ -45,7 +49,7 @@ export function RosterList({ players, decor, starterIds }: { players: Player[]; 
                 {p.age}세 · {p.height}cm
               </Text>
             </View>
-            <View style={{ alignItems: 'flex-end', gap: 3 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
               <OvrBadge value={overallRaw(p)} />
               <Text style={styles.salary}>{formatMoney(p.contract.salary)}</Text>
             </View>
@@ -74,5 +78,5 @@ const styles = StyleSheet.create({
   foreign: { color: theme.bad, fontSize: 11, fontWeight: '700' },
   asian: { color: theme.elite, fontSize: 11, fontWeight: '700' }, // 아시아쿼터 — 외국인(코랄)과 구분되는 블루
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
-  salary: { color: theme.muted, fontSize: 12, fontWeight: '700' },
+  salary: { color: theme.text, fontSize: 13, fontWeight: '800', minWidth: 52, textAlign: 'right' },
 });

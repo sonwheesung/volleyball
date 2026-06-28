@@ -49,6 +49,7 @@ export default function Settings() {
     <Screen title="설정">
       <Muted>게임 · 데이터 · 정보를 관리합니다.</Muted>
 
+      {/* 응원 섹션(서포터 팩·크레딧) — 출시 전 임시 숨김(2026-06-28, 사용자 요청). IAP 연결 시 복원.
       <Text style={styles.section}>응원</Text>
       <View style={styles.group}>
         <Row icon="heart" tint={ROSE}
@@ -58,6 +59,7 @@ export default function Settings() {
         <Row icon="document-text-outline" tint={theme.muted} label="크레딧" sub="만든 사람 · 응원해주신 분들"
           onPress={() => router.push('/credits')} />
       </View>
+      */}
 
       <Text style={styles.section}>게임</Text>
       <View style={styles.group}>
@@ -106,7 +108,7 @@ export default function Settings() {
       ) : null}
 
       {/* 세이브 초기화 확인 — 되돌릴 수 없는 작업이라 명시 확인 */}
-      <Modal visible={confirmReset} transparent animationType="fade" onRequestClose={() => setConfirmReset(false)}>
+      <Modal visible={confirmReset} transparent statusBarTranslucent animationType="fade" onRequestClose={() => setConfirmReset(false)}>
         <Pressable style={styles.backdrop} onPress={() => setConfirmReset(false)}>
           <Pressable style={styles.modal} onPress={() => {}}>
             <View style={[styles.rowIcon, { backgroundColor: theme.bad + '1A', alignSelf: 'center', width: 48, height: 48, borderRadius: 14 }]}>

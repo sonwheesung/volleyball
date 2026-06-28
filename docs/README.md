@@ -119,7 +119,8 @@ npx tsx tools/_dv_foreign_fa_leak.ts        # 외인 FA 풀 오염 가드 — re
 npx tsx tools/_dv_foreign_contract.ts       # 계약관리 외인 차단 — release/reSign(외인·아시아) 거부·국내 대조군·willBeFA 외인 false + A/B(가드 제거 시 release(외인)=true). EDGE_CASES §3.9, exit 0/1
 npx tsx tools/_dv_tryout_pool.ts            # 트라이아웃 풀 생성 종료 가드(EDGE_CASES §3.14 — edge-swarm 클러스터A) — 정상 domesticAvg 바닥충족·고/극단 domesticAvg 종료(옛 무캡 while은 hang=A/B 이빨). exit 0/1
 npx tsx tools/_dv_setscore_dist.ts 3000     # 세트스코어 분포(독립) — 3-0/3-1/3-2 모두 출현·홈승률 밴드·풀세트 합리 + matchPoints 불변식(승자+패자=3) 0위반 + A/B(깨진 6종 거부). engine-verify 스웜 산물 승격. exit 0/1
-npx tsx tools/_dv_simcache.ts               # 시뮬 결과 캐시 영속(REALTIME_SIM Phase1) — 재로드 시 재계산 제거(캐시 복원)·무stale(캐시==재계산)·A/B(캐시 조작 반영=실제 사용). exit 0/1
+npx tsx tools/_dv_simcache.ts               # 시뮬 결과 캐시 영속(REALTIME_SIM Phase1+6.1) — 재로드 시 재계산 제거(순위·생산·**dyn** 복원)·무stale(캐시==재계산)·A/B(캐시 조작 반영=실제 사용)·G3 엔진버전 게이트. [7]=dyn(부상/거래) 영속(복원히트·무stale·A/B). [8]=production 직렬화 라운드트립(ProdRow Set/Map이 JSON 후 반복가능 — "iterator not callable" 크래시 가드). exit 0/1
+npx tsx tools/_dv_preseason_cold.ts         # 시즌 시작 전(day0 구단선택) 선수/구단 화면 콜드 비용 가드(2026-06-28) — day0은 전 시즌 시드 재생(생산·dyn·인기/사건)을 안 타야(실측 ~2ms<500ms) + A/B(중반 콜드 leagueProduction는 >500ms로 무거움=측정 민감). 선수 화면 진입 15s 회귀 차단. exit 0/1
 npx tsx tools/_gt_determinism.ts            # 결정론+세이브(REALTIME_SIM Phase0) — 같은시드 in-process 2회 동일·실 partialize/rehydrate 동일·A/B(currentDay 누락 검출). exit 0/2
 npx tsx tools/_ev_transfernews.ts 15        # 타팀 이적/방출 뉴스(NEWS 슬라이스4) — 거물 게이트 볼륨·매달린참조0·중복0·결정론·이동시점OVR. exit 0/1
 npx tsx tools/_dv_releasenews.ts            # 방출 뉴스 인간관계 한 줄(RELATIONSHIP §6) — 합성 방출+잔류 각별한동료 "남기고 떠난다" 박힘 + A/B(친구없으면 줄 없음=허위오라클 차단)·조사교정. exit 0/1
@@ -156,6 +157,7 @@ npx tsx tools/_dv_position.ts 24            # 인플레이 포지션(2026-06-24)
 # ── 시스템 건강·무결성 가드(밸런스 드리프트 — 불변식 가드가 못 보는 "느린 회귀"를 잡는다. 2026-06-27 루틴 등록: 누락→재정 회귀 늦게 발견 사고 재발 방지, TEST_METHODOLOGY §4) ──
 npx tsx tools/simFinance.ts 120            # 재정 건강(잔고·모기업 보전 빈도·FA 자금게이트) — exit 0/1. ❌면 튜닝(2026-06-27 회귀 발견 도구)
 npx tsx tools/simStatEffect.ts             # 스탯 유효성 — 전 16스탯이 올바른 방향으로 경기 작용(대조군 무편향·id편향 상쇄). exit 0/1
+npx tsx tools/simStamCurve.ts 3000         # 체력 곡선(MATCH 7.1, 2026-06-28) — 경기 중 빠지고 세트 누적되는지(타임아웃 코트 평균 세트1→세트5 ≥8%p 하락·세트5 60~82% 밴드). 옛 평탄~95%(체력 무의미) 회귀 차단. exit 0/1
 npx tsx tools/simAudit.ts 60               # 영입 13체크(한선수=한팀·이중계약0·캡·자금게이트). exit 0/1
 npx tsx tools/simBrokeSign.ts              # 현금 게이팅(돈 없는데 영입 0). exit 0/1
 npx tsx tools/simTxDup.ts                  # 시즌중 거래 이중소속/FA 누수 0. exit 0/1

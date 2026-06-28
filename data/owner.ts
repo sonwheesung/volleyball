@@ -161,9 +161,14 @@ export const ARCHETYPE_KO: Record<FAArchetype, { label: string; emoji: string; n
 
 /** 선수 인기(0~100) — 통산·수상·근속·올해 활약에서 파생. 이번 시즌 사고 치면 팬이 떠난다(×0.6) */
 export function popularityNow(p: Player, day: number, archive: { season: number; awards?: SeasonAwards }[]): number {
-  const prod = leagueProduction(day > 0 ? day : Number.MAX_SAFE_INTEGER).get(p.id);
+  // 시즌 시작 전(day≤0)은 올해 경기가 0 → 현시즌 생산 0(통산·수상·근속만으로 인기). 구 폴백은 MAX(전 시즌 전체
+  // 시뮬)라 ① 안 치른 경기 스포일러 ② 콜드 ~2.8s(폰 15s, 구단 선택 플로우 선수 화면). −1=빈 구간(생산 가드)로 즉시.
+  const prod = leagueProduction(day > 0 ? day : -1).get(p.id);
   const pop = popularityOf(p.career.points, awardHistoryOf(archive, p.id).length, p.clubTenure, prod?.points ?? 0);
-  return seasonScandals().some((s) => s.playerId === p.id) ? Math.round(pop * SCANDAL_POP_FACTOR) : pop;
+  // 사건·사고 페널티는 시즌 진행 중에만 — seasonScandals()는 dyn()(전 시즌 재생)을 타므로 시작 전(day≤0)엔
+  // 부르지 않는다(시작 전 사고 0). 안 그러면 생산 가드를 해도 여기서 콜드 시뮬이 돈다(2026-06-28).
+  const scandaled = day > 0 && seasonScandals().some((s) => s.playerId === p.id);
+  return scandaled ? Math.round(pop * SCANDAL_POP_FACTOR) : pop;
 }
 
 /** 구단 팬덤(명) — 팀팬 + 선수팬 − 겹침. top: 팬 많은 선수 3인(개인 팬·겹침 비율) */

@@ -1,6 +1,6 @@
 // 경기 보드 효과음(휘슬·스파이크·서브) — UI 레이어 전용. 엔진(/engine)은 오디오를 모른다(순수성 유지).
-// 음원은 무음 플레이스홀더(assets/audio/*.wav) — 실제 음원으로 같은 파일명으로 교체하면 바로 소리난다.
-//   (다른 확장자면 아래 SOURCES require 경로만 변경) — 상세: audio/README.md
+// 음원: 합성 효과음(assets/audio/*.wav, 44.1kHz·16bit·모노 — 2026-06-28 numpy 합성으로 무음 플레이스홀더 교체).
+//   더 좋은 음원으로 바꾸려면 같은 파일명으로 덮으면 끝(코드 무변경). 다른 확장자면 아래 SOURCES require만 변경.
 import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
 
 export type SfxKey = 'serve' | 'spike' | 'whistle';

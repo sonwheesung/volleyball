@@ -93,10 +93,11 @@ function sanitizeField(key: string, v: unknown): unknown {
     case 'lastFinance':
       return v === null || isObj(v) ? v : null;
     case 'simCache':
-      // 모양 검증(baseVersion·txVersion 숫자 + standings/production은 있으면 배열). 어긋나면 null(재계산 폴백) — 폐기 가능
+      // 모양 검증(baseVersion·txVersion 숫자 + standings/production/dyn은 있으면 배열/객체). 어긋나면 null(재계산 폴백) — 폐기 가능
       return isObj(v) && typeof v.baseVersion === 'number' && typeof v.txVersion === 'number'
         && (v.standings === undefined || Array.isArray(v.standings))
-        && (v.production === undefined || Array.isArray(v.production)) ? v : null;
+        && (v.production === undefined || Array.isArray(v.production))
+        && (v.dyn === undefined || (isObj(v.dyn) && Array.isArray(v.dyn.played) && Array.isArray(v.dyn.teamDays))) ? v : null;
     default:
       return v ?? def; // 미분류(이론상 없음) — 안전 통과
   }

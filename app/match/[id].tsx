@@ -1,8 +1,9 @@
 import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Muted, OvrBadge, theme } from '../../components/Screen';
+import { Button, Muted, theme } from '../../components/Screen';
+import { emblemFor } from '../../data/emblems';
 import { MatchCourt } from '../../components/MatchCourt';
 import { LiveBoxModal } from '../../components/LiveBoxModal';
 import { Popup } from '../../components/Popup';
@@ -134,25 +135,25 @@ export default function MatchBoard() {
     >
       {isSandbox ? <Text style={styles.sandboxTag}>테스트 경기 · 결과 미적용</Text> : null}
 
-      <View style={styles.header}>
-        <View style={styles.teamHead}>
-          <Text style={styles.sideLabel}>홈</Text>
-          <Text style={[styles.teamName, mineSide === 'home' && { color: theme.accent }]} numberOfLines={1}>
-            {data.home.name}
-          </Text>
-          <OvrBadge value={data.homeOvr} />
+      {/* 글래스 스코어보드 — 엠블럼(팀명 위 가운데) + 세트 스코어 + 점수 + 세트 진행 칩(OVR 제거, 사용자 요청 2026-06-28) */}
+      <View style={styles.scoreboard}>
+        <View style={styles.sbSide}>
+          <Image source={emblemFor(data.home.id)} style={styles.sbEmblem} />
+          <Text style={[styles.sbName, mineSide === 'home' && { color: theme.accent }]} numberOfLines={1}>{data.home.name}</Text>
         </View>
-        <View style={styles.scoreMid}>
-          <Text style={styles.setNoTxt}>{finished ? '종료' : `${score.setNo}세트`}</Text>
-          <Text style={styles.scoreNum}>{score.h} : {score.a}</Text>
-          <Text style={styles.setWins}>{score.homeSets} - {score.awaySets} 세트</Text>
+        <View style={styles.sbMid}>
+          {/* 관전 메인 = 현재 점수(크게), 세트 스코어는 보조(작게 위) — 2026-06-28 위치 교정 */}
+          <Text style={styles.sbSetLabel}>세트 {score.homeSets} : {score.awaySets}</Text>
+          <Text style={styles.sbSetScore}>{finished ? '종료' : `${score.h} : ${score.a}`}</Text>
         </View>
-        <View style={[styles.teamHead, { alignItems: 'flex-end' }]}>
-          <Text style={[styles.sideLabel, { textAlign: 'right' }]}>원정</Text>
-          <Text style={[styles.teamName, { textAlign: 'right' }, mineSide === 'away' && { color: theme.accent }]} numberOfLines={1}>
-            {data.away.name}
-          </Text>
-          <OvrBadge value={data.awayOvr} />
+        <View style={styles.sbSide}>
+          <Image source={emblemFor(data.away.id)} style={styles.sbEmblem} />
+          <Text style={[styles.sbName, mineSide === 'away' && { color: theme.accent }]} numberOfLines={1}>{data.away.name}</Text>
+        </View>
+      </View>
+      <View style={styles.setPillWrap}>
+        <View style={styles.setPill}>
+          <Text style={styles.setPillTxt}>{finished ? '경기 종료' : `${score.setNo}세트 진행 중`}</Text>
         </View>
       </View>
 
@@ -238,18 +239,21 @@ const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
   content: { paddingHorizontal: 16, gap: 12 },
   sandboxTag: { color: theme.warn, fontSize: 12, fontWeight: '800', textAlign: 'center' },
-  header: {
+  scoreboard: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 14, padding: 14,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 12,
+    shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4,
   },
-  teamHead: { flex: 1, gap: 4 },
-  teamName: { color: theme.text, fontSize: 16, fontWeight: '800' },
-  teamOvr: { color: theme.muted, fontSize: 12 },
-  sideLabel: { color: theme.muted, fontSize: 11, fontWeight: '700' },
-  scoreMid: { alignItems: 'center', minWidth: 86 },
-  setNoTxt: { color: theme.accent, fontSize: 11, fontWeight: '700' },
-  scoreNum: { color: theme.text, fontSize: 26, fontWeight: '900', marginVertical: 1 },
-  setWins: { color: theme.muted, fontSize: 11, fontWeight: '700' },
+  sbSide: { flex: 1, alignItems: 'center', gap: 6 },
+  sbEmblem: { width: 52, height: 52, resizeMode: 'contain' },
+  sbName: { color: theme.text, fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  sbMid: { alignItems: 'center', minWidth: 92 },
+  sbSetLabel: { color: theme.muted, fontSize: 10.5, fontWeight: '700' },
+  sbSetScore: { color: theme.text, fontSize: 30, fontWeight: '900', marginVertical: 1, letterSpacing: 1 },
+  sbPoint: { color: theme.accent, fontSize: 16, fontWeight: '800' },
+  setPillWrap: { alignItems: 'center', marginTop: -4 },
+  setPill: { backgroundColor: theme.cardAlt, borderWidth: 1, borderColor: theme.border, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 4 },
+  setPillTxt: { color: theme.muted, fontSize: 12, fontWeight: '800' },
   setScores: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
   btnRow: { flexDirection: 'row', gap: 8 },
   setChip: { backgroundColor: theme.card, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center', borderWidth: 1, borderColor: theme.border },

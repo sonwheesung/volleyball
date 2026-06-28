@@ -16,7 +16,7 @@ import { rotate, serverIndex, frontRow, backRow } from './rotation';
 // 경기 시뮬 결과 버전 — rally/match/simMatch/ratings 등 *경기 결과를 바꾸는* 엔진 변경 시 +1.
 // REALTIME_SIM Phase2(G3): simCache는 이 버전을 태깅·게이트해, 엔진 재튜닝(앱 업데이트) 후 저장된 옛-엔진
 // 순위를 폐기하고 새 엔진으로 재계산한다 → 저장 순위 ↔ 과거경기 보드 재생 일관성 보장.
-export const ENGINE_VERSION = 1;
+export const ENGINE_VERSION = 2; // 2(2026-06-28): 체력 튜닝(회복 0.009→0.005·세트사이 0.12→0.035) — 경기 결과 변동 → 저장 캐시 무효화
 
 // 작전 교체 (MATCH_SYSTEM 1.3b)
 const SUBS_PER_SET = 6;          // 세트당 정규 교체 횟수(리베로 교체는 별도)
@@ -39,6 +39,7 @@ const TIMEOUTS_PER_SET = 2;
 // 감독 성향별 타임아웃 호출 임계(상대 연속득점 수). 수비형은 일찍, 공격형은 늦게(아낀다)
 const TO_THRESHOLD: Record<CoachStyle, number> = { defense: 3, balanced: 4, attack: 5 };
 const TIMEOUT_REST = 0.04; // 타임아웃 휴식 회복(7.1·7.4) — 양 팀 모두 쉰다(차이는 기세 수렴이 만듦)
+const SET_REST = 0.035;    // 세트 사이 회복(2026-06-28 튜닝 — 세트 누적 피로)
 const TIRED_STAM = 0.5;    // 코트에 이 미만으로 퍼진 선수가 있으면 감독이 타임아웃을 한 박자 일찍 부른다
 
 export interface CoachInfo { style: CoachStyle; charisma: number }
@@ -158,8 +159,8 @@ export function simulateMatch(
     away.momentum = START_MOMENTUM - carry;
     home.rotation = 0;
     away.rotation = 0;
-    recover('home', homeStam, 0.12);
-    recover('away', awayStam, 0.12);
+    recover('home', homeStam, SET_REST);
+    recover('away', awayStam, SET_REST);
     const timeouts = { home: TIMEOUTS_PER_SET, away: TIMEOUTS_PER_SET };
     // 1~4세트: 홀수=홈·짝수=원정 교대. 5세트(결승): 코인토스(실제 배구 규칙, v2.1).
     let serving: Side = setNo >= 5 ? (cointossRng.next() < 0.5 ? 'home' : 'away') : (setNo % 2 === 1 ? 'home' : 'away');

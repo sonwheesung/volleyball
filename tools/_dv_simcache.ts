@@ -8,9 +8,9 @@ import './_gt_mock';
   const { LEAGUE } = await import('../data/league');
   const { computeStandings } = await import('../data/standings');
   const { getStandingsCacheRaw, setStandingsCacheRaw } = await import('../data/standings');
-  const { leagueProduction, setProductionCacheRaw } = await import('../data/production');
+  const { leagueProduction, setProductionCacheRaw, seasonMatchProds } = await import('../data/production');
   const { baseVersion } = await import('../data/league');
-  const { currentTxVersion, availableFAsOnDay } = await import('../data/dynamics');
+  const { currentTxVersion, availableFAsOnDay, injuredOnDay, getDynCacheRaw, setDynCacheRaw } = await import('../data/dynamics');
   const G = () => useGameStore.getState();
   const my = LEAGUE.teams[0].id;
   const log = (m: string) => process.stdout.write(m + '\n');
@@ -74,7 +74,50 @@ import './_gt_mock';
   const g3 = sigVer === sig1; // 조작됐지만 버전 불일치로 폐기→재계산→원본
   log(`[6] G3 엔진버전 불일치 캐시 폐기(재계산 원복): ${g3 ? '✅' : '❌'}`);
 
-  const ok = hasCache && restoredHit && sig2 === sig1 && sig3 === sig1 && abUsed && sigHeal === sig1 && g3;
-  log(ok ? '\n결론: ✅ 캐시 영속 — 재로드 재계산 제거 + 무stale + 실제 사용(A/B) + 엔진버전 게이트(G3)' : '\n결론: ❌ 점검 필요');
+  // 7) dyn(부상/거래) 영속(2026-06-28) — 재로드 시 availableTeamPlayers/teamInjuriesOn 콜드 재생 제거.
+  //    복원히트 + 재로드==원본 + 무stale(캐시==재계산) + A/B(깬 dyn 반영=실제 읽힘) + 재계산복구.
+  const dynSig = () => JSON.stringify([
+    availableFAsOnDay(Number.MAX_SAFE_INTEGER).slice().sort(),
+    [40, 80, 120].map((d) => [...injuredOnDay(d)].sort()),
+  ]);
+  const dsig1 = dynSig(); // 현재 상태로 dyn 워밍
+  const savedD = JSON.parse(JSON.stringify(realPartialize(G())));
+  const hasDyn = !!savedD.simCache?.dyn && Array.isArray(savedD.simCache.dyn.played) && Array.isArray(savedD.simCache.dyn.teamDays);
+  reload(savedD);
+  const rd = getDynCacheRaw();
+  const dynHit = !!rd && rd.key === `${baseVersion()}:${currentTxVersion()}`;
+  const dsig2 = dynSig();
+  setDynCacheRaw(null); // 무stale: dyn 캐시 비우고 재계산
+  const dsig3 = dynSig();
+  const brokenD = JSON.parse(JSON.stringify(savedD)); // A/B: 가짜 부상 주입
+  if (brokenD.simCache?.dyn) brokenD.simCache.dyn.injuries = [{ playerId: '__fake__', teamId: my, from: 0, to: 999999, severity: 'season', missMatches: 999 }];
+  reload(brokenD);
+  const dsigBroken = dynSig();
+  const abDyn = dsigBroken !== dsig1;
+  setDynCacheRaw(null);
+  const dsigHeal = dynSig();
+  const dynOk = hasDyn && dynHit && dsig2 === dsig1 && dsig3 === dsig1 && abDyn && dsigHeal === dsig1;
+  log(`[7] dyn 영속: 포함 ${hasDyn ? '✅' : '❌'} · 복원히트 ${dynHit ? '✅' : '❌'} · 재로드==원본 ${dsig2 === dsig1 ? '✅' : '❌'} · 무stale ${dsig3 === dsig1 ? '✅' : '❌'} · A/B ${abDyn ? '✅' : '❌'} · 재계산복구 ${dsigHeal === dsig1 ? '✅' : '❌'}`);
+
+  // 8) production 직렬화 라운드트립(2026-06-28 버그 가드) — ProdRow의 Set(homeIds·starters)+Map(lines)이 JSON 후에도
+  //    살아 반복 가능해야 한다. 옛 버그: lines가 {}로 죽어 `for..of mp.lines`가 "iterator method is not callable"
+  //    (대시보드 buildNewsFeed 크래시). prodSig가 lines를 실제로 반복하므로, 깨졌으면 throw로 잡힌다.
+  const prodSig = () => {
+    let s = 0, cnt = 0;
+    for (const [, l] of leagueProduction(Number.MAX_SAFE_INTEGER)) { s += l.points || 0; cnt++; }
+    for (const mp of seasonMatchProds(Number.MAX_SAFE_INTEGER)) { for (const [, l] of mp.lines) s += (l.points || 0) * 0; } // buildNewsFeed 경로 반복
+    return `${cnt}:${s}`;
+  };
+  const psig1 = prodSig();
+  const savedP = JSON.parse(JSON.stringify(realPartialize(G())));
+  const prodIsArrays = Array.isArray(savedP.simCache?.production) && (savedP.simCache.production.length === 0 || Array.isArray(savedP.simCache.production[0]?.lines));
+  reload(savedP);
+  let prodNoCrash = true, psig2 = '';
+  try { psig2 = prodSig(); } catch { prodNoCrash = false; }
+  const prodOk = prodIsArrays && prodNoCrash && psig2 === psig1;
+  log(`[8] production 직렬화: lines 배열저장 ${prodIsArrays ? '✅' : '❌'} · 재로드 반복 무크래시 ${prodNoCrash ? '✅' : '❌'} · 재로드==원본 ${psig2 === psig1 ? '✅' : '❌'}`);
+
+  const ok = hasCache && restoredHit && sig2 === sig1 && sig3 === sig1 && abUsed && sigHeal === sig1 && g3 && dynOk && prodOk;
+  log(ok ? '\n결론: ✅ 캐시 영속 — 재로드 재계산 제거(순위·생산·dyn) + 무stale + 실제 사용(A/B) + 엔진버전 게이트(G3)' : '\n결론: ❌ 점검 필요');
   process.exit(ok ? 0 : 1);
 })().catch((e) => { console.error('FAIL', e); process.exit(1); });

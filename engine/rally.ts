@@ -33,7 +33,7 @@ const CAP = 8; // 랠리 hop 상한(7.3)
 // ── 체력 (7.1) ──
 const STAM_FLOOR = 0.70;
 const HOP_COST = 0.024;
-export const STAM_REGEN_BASE = 0.009;
+export const STAM_REGEN_BASE = 0.005; // 랠리 사이 회복(2026-06-28 튜닝)
 const INJ_EFF = 0.5; // 부상 시 효율 배수(9.3)
 
 // ── 서브 타입 (2장) ── [에이스 기저, 범실 기저]

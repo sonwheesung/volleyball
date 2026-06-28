@@ -63,13 +63,17 @@ export interface ScandalSpan {
   playerId: string; teamId: string; kind: ScandalKind; from: number; to: number; missMatches: number;
 }
 
-interface Dyn {
+export interface Dyn {
   injuries: InjurySpan[]; txLog: Tx[];
   played: Map<string, number[]>;      // playerId → 출전 매치데이(오름차순) — 경기감각 재료
   teamDays: Map<string, number[]>;    // teamId → 치른 매치데이(오름차순)
   scandals: ScandalSpan[];            // 사건·사고 출장 정지(SCANDAL — 결장은 부상과 동일 취급)
 }
 let cache: { key: string; dyn: Dyn } | null = null;
+// 캐시 영속(REALTIME_SIM Phase1 보강, 2026-06-28) — 순위·생산처럼 dyn(부상/거래)도 세이브에 저장해
+// **재로드 시 콜드 재생 제거**. dyn은 simCache에서 직렬화(Map→엔트리)되어 영속된다. 재생 엔진은 폴백 유지(키 불일치/구세이브=null→재계산).
+export const getDynCacheRaw = (): { key: string; dyn: Dyn } | null => cache;
+export const setDynCacheRaw = (c: { key: string; dyn: Dyn } | null): void => { cache = c; };
 
 /** 레그(라운드 묶음) 경계 = 각 레그 첫 매치데이 */
 function legBoundaryDays(): Set<number> {
@@ -222,7 +226,11 @@ function dyn(): Dyn {
 }
 
 // ── 공개 셀렉터 ──
+// 시즌 시작 전(day<0 — 예: leagueDisplayDay(0)=−1) 가드(2026-06-28): 부상(from=경기일+간격>0)·정지·거래는
+// 첫 경기 전엔 전무하므로, 이때 dyn()(전 시즌 시드 재생, 콜드 ~1.4s·폰 ~7s)을 부르지 않고 즉시 빈/기본값을
+// 돌려준다. 구단 선택 플로우(day0)에서 선수·구단 화면이 시즌 전체를 재생하던 비용 제거(생산 가드와 같은 원리).
 export function injuredOnDay(day: number): Set<string> {
+  if (day < 0) return new Set();
   const out = new Set<string>();
   for (const s of dyn().injuries) if (s.from <= day && day <= s.to) out.add(s.playerId);
   return out;
@@ -231,6 +239,7 @@ export function injuredOnDay(day: number): Set<string> {
 /** day 시점 팀 명단 id(시작명단 ± txDay≤day 거래) */
 export function rosterIdsOnDay(teamId: string, day: number): string[] {
   const ids = [...(currentRosters()[teamId] ?? [])];
+  if (day < 0) return ids; // 시즌 시작 전 — 거래 없음(base 명단). dyn().txLog 회피
   const set = new Set(ids);
   for (const tx of dyn().txLog) {
     if (tx.teamId !== teamId || tx.day > day) continue;
@@ -244,6 +253,7 @@ export function rosterIdsOnDay(teamId: string, day: number): string[] {
 /** day 시점 출전 가능 선수(날짜 명단 − 부상자) — production·standings·playoffs 공용 */
 /** day 시점 경기감각 계수 — 그 팀의 직전 FORM_WINDOW 매치데이 중 출전 비율(forward-pass와 동일 규칙) */
 export function formFactorOnDay(teamId: string, playerId: string, day: number): number {
+  if (day < 0) return 1; // 시즌 시작 전 — 출전 이력 없음(계수 1). dyn() 회피
   const dn = dyn();
   const days = (dn.teamDays.get(teamId) ?? []).filter((x) => x < day).slice(-FORM_WINDOW);
   if (!days.length) return 1;
@@ -258,6 +268,7 @@ export function seasonScandals(): ScandalSpan[] {
 }
 /** day 시점 출장 정지 중인 선수 */
 export function suspendedOnDay(day: number): Set<string> {
+  if (day < 0) return new Set();
   return new Set(dyn().scandals.filter((s) => s.from <= day && day <= s.to).map((s) => s.playerId));
 }
 
@@ -287,6 +298,7 @@ export function availableFAsOnDay(day: number): string[] {
 }
 
 export function teamInjuriesOn(teamId: string, day: number): InjurySpan[] {
+  if (day < 0) return []; // 시즌 시작 전 — 부상 없음. dyn() 회피
   return dyn().injuries.filter((s) => s.teamId === teamId && s.from <= day && day <= s.to);
 }
 export const seasonInjuryReport = (): InjurySpan[] => dyn().injuries;

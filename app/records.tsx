@@ -1,6 +1,6 @@
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Loading, PosTag, theme, useDeferredReady } from '../components/Screen';
 import { getTeam, shortTeamName as short, teamPlayerIds } from '../data/league';
@@ -38,7 +38,9 @@ function RecordsInner() {
   const max = rows[0]?.value ?? 1;
 
   return (
-    <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
+    <ImageBackground source={require('../assets/bg/court.png')} style={styles.bgRoot} resizeMode="cover">
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(7,10,16,0.62)' }]} />
+      <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>{titleScope}{meta.label}</Text>
         <Text style={styles.sub}>현역 · 은퇴 통합 · TOP {limit}</Text>
@@ -105,12 +107,14 @@ function RecordsInner() {
         )}
         <View style={{ height: 12 }} />
       </ScrollView>
-    </SafeAreaView>
+      </SafeAreaView>
+    </ImageBackground>
   );
 }
 
 const styles = StyleSheet.create({
-  root: { flex: 1, backgroundColor: theme.bg },
+  bgRoot: { flex: 1, backgroundColor: theme.bg },
+  root: { flex: 1, backgroundColor: 'transparent' },
   scroll: { padding: 16, paddingBottom: 28 },
   h1: { color: theme.text, fontSize: 22, fontWeight: '900' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 2, marginBottom: 12 },
