@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { Modal, Pressable, StyleSheet, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { theme } from './Screen';
 
@@ -40,6 +40,50 @@ export function Popup({ visible, children, onRequestClose, dismissable = false, 
     </Modal>
   );
 }
+
+// 앱 공용 액션시트 — 네이티브 Alert.alert(흰색, 테마 불가) 대체. 다크 글래스 카드 + 풀폭 버튼.
+// tone: primary=민트 글래스 / danger=코랄 / default=중립 다크. 배경 탭으로 취소(dismissable).
+export interface SheetAction { label: string; onPress: () => void; tone?: 'default' | 'primary' | 'danger' }
+export function ActionSheet({ visible, title, message, actions, onClose }: {
+  visible: boolean; title: string; message?: string; actions: SheetAction[]; onClose: () => void;
+}) {
+  return (
+    <Popup visible={visible} onRequestClose={onClose} dismissable>
+      <Text style={sheet.title}>{title}</Text>
+      {message ? <Text style={sheet.message}>{message}</Text> : null}
+      <View style={{ gap: 8, marginTop: 2 }}>
+        {actions.map((a, i) => {
+          const tone = a.tone ?? 'default';
+          const btn = tone === 'primary' ? sheet.primary : tone === 'danger' ? sheet.danger : sheet.neutral;
+          const txt = tone === 'primary' ? sheet.primaryTxt : tone === 'danger' ? sheet.dangerTxt : sheet.neutralTxt;
+          return (
+            <Pressable key={i} onPress={() => { onClose(); a.onPress(); }} style={({ pressed }) => [sheet.btn, btn, pressed && { opacity: 0.7 }]}>
+              <Text style={[sheet.btnTxt, txt]}>{a.label}</Text>
+            </Pressable>
+          );
+        })}
+        <Pressable onPress={onClose} style={({ pressed }) => [sheet.cancel, pressed && { opacity: 0.7 }]}>
+          <Text style={sheet.cancelTxt}>취소</Text>
+        </Pressable>
+      </View>
+    </Popup>
+  );
+}
+
+const sheet = StyleSheet.create({
+  title: { color: theme.text, fontSize: 19, fontWeight: '900' },
+  message: { color: theme.muted, fontSize: 13, lineHeight: 19, marginTop: -4 },
+  btn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
+  btnTxt: { fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
+  primary: { backgroundColor: theme.accentGlass, borderColor: theme.accent },
+  primaryTxt: { color: theme.accent },
+  danger: { backgroundColor: theme.bad + '1A', borderColor: theme.bad },
+  dangerTxt: { color: theme.bad },
+  neutral: { backgroundColor: theme.cardAlt, borderColor: theme.border },
+  neutralTxt: { color: theme.text },
+  cancel: { paddingVertical: 11, alignItems: 'center', marginTop: 2 },
+  cancelTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
+});
 
 const styles = StyleSheet.create({
   // 배경막 — 진한 스크림(0.82)으로 뒤 보드를 확실히 가라앉혀 팝업이 뜨게(다크 위 다크 50%는 거의 안 어두워져

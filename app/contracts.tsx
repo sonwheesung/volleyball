@@ -1,8 +1,10 @@
 // 계약 관리 전용 화면 — 단장실 "계약 관리"에서 진입.
 // 1행 = 선수 1명. 행을 누르면 재계약/방출 선택(액션시트). FA 예정·방출 선수도 여기서 처리.
 import { useRouter } from 'expo-router';
+import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
+import { ActionSheet } from '../components/Popup';
 import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
 import { teamRelations } from '../data/relationships';
 import { getPlayerProduction } from '../data/production';
@@ -105,15 +107,8 @@ export default function Contracts() {
     );
   };
 
-  // 행을 누르면 처리 메뉴(1행 1선수)
-  const onManage = (p: Player) => {
-    Alert.alert(p.name, `${p.age}세 · ${formatMoney(p.contract.salary)} · 잔여 ${p.contract.remaining}년`, [
-      { text: '재계약', onPress: () => doResign(p) },
-      { text: '방출', style: 'destructive', onPress: () => doRelease(p) },
-      { text: '선수 정보', onPress: () => router.push(`/player/${p.id}`) },
-      { text: '취소', style: 'cancel' },
-    ]);
-  };
+  // 행을 누르면 처리 메뉴(1행 1선수) — 다크 글래스 액션시트(네이티브 흰 Alert 대체)
+  const [manage, setManage] = useState<Player | null>(null);
 
   return (
     <Screen title="계약 관리">
@@ -134,7 +129,7 @@ export default function Contracts() {
         const market = marketVal(p, getPlayerProduction(p.id, leagueDisplayDay(currentDay)));
         const status = contractStatus(p.contract.salary, market);
         return (
-          <Pressable key={p.id} onPress={() => onManage(p)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
+          <Pressable key={p.id} onPress={() => setManage(p)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
             <PosTag pos={p.position} />
             <View style={{ flex: 1 }}>
               <Text style={styles.name}>{p.name}</Text>
@@ -239,6 +234,18 @@ export default function Contracts() {
         방출 선수는 즉시 FA가 되어 시즌 중 다른 팀이 영입할 수 있습니다(미영입 시 시즌말 정리).
         철회(복귀)는 방출 당일에만 가능합니다.
       </Muted>
+
+      <ActionSheet
+        visible={!!manage}
+        title={manage?.name ?? ''}
+        message={manage ? `${manage.age}세 · ${formatMoney(manage.contract.salary)} · 잔여 ${manage.contract.remaining}년` : undefined}
+        onClose={() => setManage(null)}
+        actions={manage ? [
+          { label: '재계약', tone: 'primary', onPress: () => doResign(manage) },
+          { label: '방출', tone: 'danger', onPress: () => doRelease(manage) },
+          { label: '선수 정보', onPress: () => router.push(`/player/${manage.id}`) },
+        ] : []}
+      />
     </Screen>
   );
 }
