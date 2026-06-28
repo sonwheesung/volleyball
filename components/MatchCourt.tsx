@@ -51,7 +51,7 @@ const HOW_CAPTION: Record<PointHow, { txt: string; color: string }> = {
 // 코트 영역 크기
 const SCREEN_W = Dimensions.get('window').width;
 const COURT_W = SCREEN_W - 32;
-const COURT_H = Math.min(COURT_W * 1.4, Dimensions.get('window').height * 0.52);
+const COURT_H = Math.min(COURT_W * 1.4, Dimensions.get('window').height * 0.52); // 코트 최우선(사용자) — 높이 유지
 
 const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
 
@@ -79,7 +79,7 @@ const JUMP = 1.45; // 점프 시 마커 확대
 const SETTLE_SEGMENTS = 2; // 블록/스파이크 점프 후 착지 정지 구간 수(점프 직후 즉시 이동 방지)
 const SPEED = 2; // 전체 경기 속도 배수(클수록 느림). 2 = 2배 느리게
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
-const COURT_PAD = SERVE_OUT + 10; // 코트 밖 서브 공간 확보용 상하 여백
+const COURT_PAD = SERVE_OUT + 4; // 코트 밖 서브 공간(버퍼 10→4로 축소, 2026-06-28 — 코트 유지하며 한 화면 맞춤)
 const serveOutY = (side: Side) => (side === 'home' ? COURT_H + SERVE_OUT : -SERVE_OUT);
 
 /** 한 랠리의 공 이동 경로 — courtPath(순수 모듈, 헤드리스 검증 가능)에 위임 */
@@ -453,7 +453,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     : [];
 
   return (
-    <View style={{ gap: 10 }}>
+    <View style={{ gap: 6 }}>
       {/* 코트 */}
       <View style={styles.courtWrap}>
       <View style={styles.court}>

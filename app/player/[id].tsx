@@ -85,6 +85,9 @@ export default function PlayerDetail() {
   const suggestBench = useGameStore((s) => s.suggestBench);
   const suggestStart = useGameStore((s) => s.suggestStart);
   const unbench = useGameStore((s) => s.unbench);
+  // 관전 중(이어보기 대기) 경기가 있으면 건의는 다음 경기부터 반영(OWNER_SYSTEM 2.3) — 수락 알림에 안내
+  const matchInProgress = useGameStore((s) => Object.keys(s.watchProgress).length > 0);
+  const deferNote = matchInProgress ? '\n\n(관전 중인 경기엔 적용되지 않고 다음 경기부터 반영됩니다.)' : '';
   const talkCooldown = useGameStore((s) => s.talkCooldown);
   const benchCooldown = useGameStore((s) => s.benchCooldown);
   const bonds = useGameStore((s) => s.bonds);
@@ -169,7 +172,7 @@ export default function PlayerDetail() {
           onPress: () => {
             const ok = suggestBench(p.id, reason);
             Alert.alert(ok ? '감독 수락' : '감독 거절',
-              ok ? `감독: "알겠습니다. 당분간 ${p.name} 선수는 제외하겠습니다."`
+              ok ? `감독: "알겠습니다. 당분간 ${p.name} 선수는 제외하겠습니다."` + deferNote
                  : `감독: "받아들일 수 없습니다. 라인업은 제가 책임집니다."\n(에이스 제외 요구·감독 소신·지시 정원 초과 시 거절)`);
           },
         })),
@@ -341,7 +344,7 @@ export default function PlayerDetail() {
                       onPress={() => {
                         const ok = suggestStart(p.id);
                         Alert.alert(ok ? '감독 수락' : '감독 거절',
-                          ok ? `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)`
+                          ok ? `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote
                              : `감독: "지금 라인업이 최선입니다."\n(격차가 크거나 감독 소신이 강하면 거절합니다)`);
                       }}
                     />

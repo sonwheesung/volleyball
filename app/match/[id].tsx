@@ -27,6 +27,9 @@ export default function MatchBoard() {
   const watchProgress = useGameStore((s) => s.watchProgress);
   const saveWatchProgress = useGameStore((s) => s.saveWatchProgress);
   const clearWatchProgress = useGameStore((s) => s.clearWatchProgress);
+  const markTip = useGameStore((s) => s.markTip);
+  // 첫 관전 1회 안내(관전형·결정론 — "다시 봐도 같다"). seenTips로 영구 1회. 샌드박스 제외.
+  const [showTip, setShowTip] = useState(() => sandbox !== '1' && !(useGameStore.getState().seenTips?.['match-spectate']));
   const recorded = useRef(false);
   const progressRef = useRef(0); // MatchCourt가 보고하는 현재 랠리 인덱스(이어보기 저장용)
   // 관전이 끝나기 전엔 경기 결과(세트 스코어·승패)를 숨긴다 — 결정론 시뮬이라 미리 계산돼 있어도 스포일러 금지
@@ -168,7 +171,7 @@ export default function MatchBoard() {
           onProgress={onProgress}
           onFinished={onFinished}
           onScore={handleScore}
-          paused={statsOpen}
+          paused={statsOpen || showTip}
           homeName={data.home.name}
           awayName={data.away.name}
         />
@@ -187,7 +190,6 @@ export default function MatchBoard() {
         </View>
       ) : null}
 
-      <View style={{ height: 4 }} />
       <View style={styles.btnRow}>
         <View style={{ flex: 1 }}>
           <Button label="📊 스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
@@ -209,6 +211,18 @@ export default function MatchBoard() {
         </Pressable>
         <Pressable style={styles.mTextBtn} onPress={() => setConfirmExit(false)}>
           <Text style={styles.mTextBtnTxt}>계속 관전</Text>
+        </Pressable>
+      </Popup>
+
+      {/* 첫 관전 1회 안내 — 관전형·결정론(결과는 전력으로 정해짐). seenTips로 영구 1회 */}
+      <Popup visible={showTip} onRequestClose={() => { markTip('match-spectate'); setShowTip(false); }}>
+        <Text style={styles.modalTitle}>📺 관전 모드</Text>
+        <Text style={styles.modalBody}>
+          경기는 감독과 선수가 치릅니다. 결과는 선수 전력·라인업으로 정해져요 — 다시 봐도 같습니다.{'\n'}
+          마음에 안 들면 영입·훈련·선발 기용으로 다음 경기를 바꾸세요.
+        </Text>
+        <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={() => { markTip('match-spectate'); setShowTip(false); }}>
+          <Text style={styles.mPrimaryText}>관전 시작 ▶</Text>
         </Pressable>
       </Popup>
 
@@ -237,19 +251,20 @@ export default function MatchBoard() {
 
 const styles = StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
-  content: { paddingHorizontal: 16, gap: 12 },
+  content: { paddingHorizontal: 16, gap: 8 }, // 간격 축소(2026-06-28) — 한 화면 맞춤(스크롤 제거)
   sandboxTag: { color: theme.warn, fontSize: 12, fontWeight: '800', textAlign: 'center' },
+  // 코트 최우선 — 스코어보드 컴팩트화(2026-06-28): 엠블럼·패딩·점수 폰트 축소로 코트 공간 확보
   scoreboard: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
-    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingVertical: 12, paddingHorizontal: 12,
+    backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 16, paddingVertical: 8, paddingHorizontal: 12,
     shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 6 }, elevation: 4,
   },
-  sbSide: { flex: 1, alignItems: 'center', gap: 6 },
-  sbEmblem: { width: 52, height: 52, resizeMode: 'contain' },
-  sbName: { color: theme.text, fontSize: 14, fontWeight: '800', textAlign: 'center' },
+  sbSide: { flex: 1, alignItems: 'center', gap: 4 },
+  sbEmblem: { width: 40, height: 40, resizeMode: 'contain' },
+  sbName: { color: theme.text, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   sbMid: { alignItems: 'center', minWidth: 92 },
   sbSetLabel: { color: theme.muted, fontSize: 10.5, fontWeight: '700' },
-  sbSetScore: { color: theme.text, fontSize: 30, fontWeight: '900', marginVertical: 1, letterSpacing: 1 },
+  sbSetScore: { color: theme.text, fontSize: 26, fontWeight: '900', marginVertical: 1, letterSpacing: 1 },
   sbPoint: { color: theme.accent, fontSize: 16, fontWeight: '800' },
   setPillWrap: { alignItems: 'center', marginTop: -4 },
   setPill: { backgroundColor: theme.cardAlt, borderWidth: 1, borderColor: theme.border, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 4 },

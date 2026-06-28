@@ -491,7 +491,9 @@ export const useGameStore = create<GameState>()(
         const ok = benchAccept(playerId, s.season, s.currentDay, coachInfoOf(my)?.charisma ?? 50, ovrGapT, aceRank, reason);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
         if (ok) {
-          const benchDirectives = [...s.benchDirectives, { playerId, fromDay: s.currentDay }];
+          // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). watchProgress 비어있지 않음 == 현재 경기 관전 중
+          const fromDay = Object.keys(s.watchProgress).length > 0 ? s.currentDay + 1 : s.currentDay;
+          const benchDirectives = [...s.benchDirectives, { playerId, fromDay }];
           set({ benchDirectives, benchCooldown: benchCd });
           setOwnerContext(benchDirectives);
         } else {
@@ -528,7 +530,9 @@ export const useGameStore = create<GameState>()(
         const ok = startSuggestAccept(playerId, s.season, s.currentDay, coachInfoOf(my)?.charisma ?? 50, gapT);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
         if (ok) {
-          const benchDirectives = [...s.benchDirectives, { playerId: incumbent.id, fromDay: s.currentDay }];
+          // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A)
+          const fromDay = Object.keys(s.watchProgress).length > 0 ? s.currentDay + 1 : s.currentDay;
+          const benchDirectives = [...s.benchDirectives, { playerId: incumbent.id, fromDay }];
           set({ benchDirectives, benchCooldown: benchCd });
           setOwnerContext(benchDirectives);
         } else {

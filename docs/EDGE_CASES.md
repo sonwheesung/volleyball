@@ -183,8 +183,11 @@
 | ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
 |---|---|---|---|
 | EC-UI-01 | **결과 상세 박스스코어 ≠ 실제 기록·관전 결과**. 부상·정지·벤치 선수가 있는 경기를 결과 상세로 열면 standings/production/관전 화면과 다른 명단으로 재시뮬 → 다른 스코어(관전형 1순위 위반) | `app/matchresult/[id].tsx`가 `getEvolvedTeamPlayers`(원본 명단)로 시뮬 — 정사(`production.ts`)·관전(`match/[id].tsx`)은 `availableTeamPlayers`(부상·정지·벤치 반영). → matchresult도 `availableTeamPlayers`로 통일 (2026-06-21, 독립검증 도출) | **`_ev_simsource`**(모든 simulateMatch 호출부가 availableTeamPlayers 쓰는지·getEvolvedTeamPlayers 금지, A/B 자가검증) |
+| EC-UI-02 | **관전 중인 경기를 라인업 변경으로 리롤/어긋남**. 경기 이어보기 대기 중(`watchProgress`) 선발/벤치 건의를 하면, 경기는 매 진입 시 `availableTeamPlayers(dayIndex)`로 재시뮬(EC-UI-01)이라 ① 저장된 이어보기 지점이 *바뀐 경기*로 이어져 어긋나고 ② "질 것 같으면 나가서 선발 바꿔 리롤" 가능(관전형 = 결과는 정해진다 위반) | 건의(`suggestBench`/`suggestStart`)의 `benchDirective.fromDay`를 **이어보기 대기 시 `currentDay+1`** 로(평소 `currentDay`) — 관전 중 경기엔 미적용, 다음 경기부터 반영. `watchProgress`는 다음 미관전 경기에만 생기고 건너뛰기 없음(`setDay(nextFixture)`)이라 "비어있지 않음 == 현재 경기 관전 중" 단순 판정 성립. 플레이어 화면 수락 알림에 "다음 경기부터" 안내 (2026-06-28, 옵션 A — OWNER_SYSTEM 2.3) | **`_ev_suggest_defer`**(이어보기 유무만 바꿔 fromDay 델타=1 — 0이면 옛 미적용 검출, A/B) |
 
 > EC-UI-01 발견 방법(왜 기존 테스트가 못 잡았나): 단위/시뮬은 **데이터층(production)** 만 검사 — 화면이 *자기 시뮬*을 돌리는 줄 몰랐다(계층 우회 §4 + reported-but-unwired §1.F). **문서-코드 drift 독립검증**(INJURY 0 "동일 availableTeamPlayers" 약속 ↔ matchresult 코드 대조)이 잡음.
+
+> EC-UI-02 발견 방법(왜 늦게 봤나): **시간차/stale-snapshot 사각**(TEST_METHODOLOGY §4 ①) — "행동 시작↔결과 확정 사이 상태 변함". 관전(이어보기 시작)과 라인업 변경 사이 시차를 대조하는 렌즈가 없었다. 사용자 질문("강제종료 후 선발 바꾸면 결과 달라지나")으로 드러남 → 의도 결정(옵션 A) + 가드.
 
 ### 선발·벤치(라인업)
 | ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
