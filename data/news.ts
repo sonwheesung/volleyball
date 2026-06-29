@@ -16,6 +16,7 @@ import { SEVERITY_KO } from '../engine/injury';
 import { seasonScandals } from './dynamics';
 import { SCANDAL_KO, EXPEL_KO } from '../engine/scandal';
 import { resolveJosa, josa } from '../lib/josa';
+import { sponsorStanceOf } from '../engine/sponsorStance';
 
 const teamName = (id: string) => getTeam(id)?.name ?? id;
 const pName = (id: string) => getPlayer(id)?.name ?? id;
@@ -131,6 +132,14 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
   release: { // 방출/재계약 불발 — transfer 낙관 톤과 분리(2026-06-25 에디터)
     open: ['방출 명단에 이름이 올랐다.', '한 시즌의 인연이 정리됐다.', '냉정한 전력 구상의 결과다.', 'FA 시장에 새 이름이 나왔다.'],
     close: ['새 팀을 찾아야 하는 처지가 됐다.', '거취는 아직 안갯속이다.', '반등의 무대를 스스로 찾아야 한다.', '한 시즌의 마침표이자 새 출발선이다.'],
+  },
+  sponsorAggr: { // 모기업 큰손 등판 예고(FINANCE 2.0 Stage2b) — 소문 톤·불발 가능
+    open: ['구단 안팎에서 큰손 등판설이 흘러나온다.', '모기업이 지갑을 열 채비라는 말이 돈다.', 'FA 시장을 앞두고 공격적 영입 기류가 감지된다.', '오프시즌을 앞두고 분위기가 심상치 않다.'],
+    close: ['다만 영입은 상대가 있는 일, 뜻대로 될지는 미지수다.', '실제 영입으로 이어질지는 시장이 열려봐야 안다.', '소문이 현실이 될지 시선이 쏠린다.', '거물 쟁탈전의 한 축이 될 전망이다.'],
+  },
+  sponsorThrift: { // 모기업 긴축·관망 예고(FINANCE 2.0 Stage2b)
+    open: ['모기업이 허리띠를 졸라맨다는 말이 나온다.', '이번 오프시즌은 관망 기조라는 기류다.', '큰 영입보다 내실을 다질 분위기다.', '지갑을 닫을 것이라는 전망이 우세하다.'],
+    close: ['FA 시장에서 조용한 행보가 예상된다.', '실속형 운영으로 시즌을 준비할 전망이다.', '큰 변화보다 기존 전력 유지에 무게가 실린다.', '시장이 열려봐야 알겠지만 움직임은 크지 않을 듯하다.'],
   },
 };
 
@@ -477,6 +486,32 @@ export function buildNewsFeed(
       body3('biggame', `${currentSeason}:bg:${id}`, more(
         `${e.name}(${teamName(e.tid)})이(가) 한 경기 ${e.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`,
         `상대 ${teamName(e.opp)}을(를) 상대로 공격 성공 ${e.spikes}개·서브 에이스 ${e.aces}개·블로킹 ${e.blocks}개를 곁들였다.`)), id);
+  }
+
+  // 9) 모기업 기조 예고(FINANCE 2.0 Stage2b) — 막 끝난 시즌(lastSeason) 기준 다가오는 오프시즌 FA 기류.
+  //   stance는 sponsorStanceOf(teamId, lastSeason, archive)로 순수 파생(새 저장 0·가짜 드라마 0). 소문 톤·불발 가능.
+  //   최신 시즌만(예고는 미래형) — 과거 시즌 stance는 이미 transfer/release 결과 기사로 surface됨.
+  if (archive.length) {
+    const last = archive.reduce((m, a) => (a.season > m.season ? a : m), archive[0]);
+    const spKey = (teamId: string) => `${last.season}:sp:${teamId}`;
+    for (const teamId of last.standings ?? []) {
+      const stance = sponsorStanceOf(teamId, last.season, archive);
+      if (stance === 'aggressive') {
+        push(last.season, 'sponsor', vh([
+          (t) => `${t}, 큰손 등판설 — 거물 노린다`,
+          (t) => `${t} 모기업 지갑 연다 — 공격 영입 예고`,
+          (t) => `FA 앞두고 ${t} 공격 모드`,
+        ], spKey(teamId), teamName(teamId)), teamId === myTeamId, teamId,
+          body3('sponsorAggr', spKey(teamId), `${teamName(teamId)} 모기업이 다가오는 FA 시장에서 적극적인 투자에 나설 것으로 보인다.`), teamId);
+      } else if (stance === 'thrifty') {
+        push(last.season, 'sponsor', vh([
+          (t) => `${t}, 이번 FA는 관망 — 긴축 기류`,
+          (t) => `${t} 허리띠 졸라맨다 — 조용한 오프시즌 예고`,
+          (t) => `${t}, 큰 영입보다 내실`,
+        ], spKey(teamId), teamName(teamId)), false, teamId,
+          body3('sponsorThrift', spKey(teamId), `${teamName(teamId)} 모기업이 다가오는 FA 시장에서 신중한 행보를 보일 전망이다.`), teamId);
+      }
+    }
   }
 
   return items.sort((x, y) => y.season - x.season || Number(y.big) - Number(x.big));

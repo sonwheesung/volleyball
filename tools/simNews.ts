@@ -16,6 +16,7 @@ import { detectSeasonMilestones } from '../data/milestones';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { computeStandings, seasonStreaks } from '../data/standings';
 import { buildNewsFeed, newsKey } from '../data/news';
+import { sponsorStanceOf } from '../engine/sponsorStance';
 import type { Milestone, SeasonArchive } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
@@ -106,6 +107,26 @@ const bcastTriples = bcastTriplePlayers.size;
 const newsTriples = feed.filter((n) => n.kind === 'match' && n.headline.includes('트리플 크라운')).length;
 const tripleAgree = newsTriples === bcastTriples;
 
+// ── 모기업 기조 예고(Stage2b) 사실 정합: sponsor 뉴스 == sponsorStanceOf 도출(가짜 드라마 0) ──
+//   최신 시즌만 예고 → 그 시즌 non-normal 팀 수 == sponsor 뉴스 수, 각 기사 톤이 실제 stance와 일치.
+const lastArch = archive[archive.length - 1];
+const expectAggr = (lastArch.standings ?? []).filter((t) => sponsorStanceOf(t, lastArch.season, archive) === 'aggressive');
+const expectThr = (lastArch.standings ?? []).filter((t) => sponsorStanceOf(t, lastArch.season, archive) === 'thrifty');
+const sponsorNews = feed.filter((n) => n.kind === 'sponsor');
+const isAggrHead = (h: string) => h.includes('큰손') || h.includes('공격');
+let sponsorMismatch = 0; // 기사 톤 ↔ 실제 stance 불일치(가짜 드라마/브랜치 스왑)
+let sponsorOldSeason = 0; // 최신 시즌 외 sponsor 기사(예고는 최신만)
+for (const n of sponsorNews) {
+  if (n.season !== lastArch.season) { sponsorOldSeason++; continue; }
+  const st = sponsorStanceOf(n.teamId!, lastArch.season, archive);
+  const want = isAggrHead(n.headline) ? 'aggressive' : 'thrifty';
+  if (st !== want) sponsorMismatch++;
+}
+const sponsorCountOk = sponsorNews.length === expectAggr.length + expectThr.length;
+if (sponsorMismatch) V.push(`sponsor 톤 불일치 ${sponsorMismatch}`);
+if (sponsorOldSeason) V.push(`sponsor 과거시즌 누출 ${sponsorOldSeason}`);
+if (!sponsorCountOk) V.push(`sponsor 건수 불일치 ${sponsorNews.length}≠${expectAggr.length + expectThr.length}`);
+
 // ── A/B 자가검증: 같은 시즌 archive 중복 주입 → 중복 검사가 잡아야 ──
 const abFeed = buildNewsFeed([...archive, archive[archive.length - 1]], allMs, [], N, [], [], MAX, MY, transfers);
 const abDup = dupOf(abFeed) > dup;
@@ -117,6 +138,7 @@ for (const [k, set] of seenBody) log(`  ${k}: ${set.size}/${byKind.get(k) ?? 0}`
 log(`\n무결성: ${V.length ? '❌ ' + V.join(' · ') : '✅ 위반 0(빈 헤드/본문·중복·매달린 teamId)'}`);
 log(`[교차검증] 트리플크라운 news=${newsTriples} ↔ broadcast=${bcastTriples} 일치=${tripleAgree} (true여야 신뢰)`);
 log(`[A/B] 중복 주입 시 newsKey 중복 검출=${abDup} (true여야 신뢰)`);
+log(`[Stage2b] sponsor 예고 ${sponsorNews.length}건(aggr ${expectAggr.length}·thr ${expectThr.length}) · 톤일치 ${sponsorMismatch === 0} · 최신시즌만 ${sponsorOldSeason === 0}`);
 
 log(`\n── 최근 30건 ──`);
 for (const n of feed.slice(0, 30)) log(`${n.big ? '★' : '·'} [${n.season + 1}][${n.kind}] ${n.headline}`);

@@ -11,7 +11,7 @@ import type { NewsItem } from '../types';
 
 export const KIND_KO: Record<NewsItem['kind'], string> = {
   champion: '우승', award: '시상', milestone: '기록 경신', hof: '명예의전당', injury: '부상', scandal: '사건·사고', owner: '구단',
-  streak: '연승·연패', standing: '순위', match: '경기', debut: '데뷔', transfer: '이적', release: '방출', retire: '은퇴',
+  streak: '연승·연패', standing: '순위', match: '경기', debut: '데뷔', transfer: '이적', release: '방출', retire: '은퇴', sponsor: '모기업',
 };
 
 export default function NewsList() {

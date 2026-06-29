@@ -54,14 +54,21 @@
 ### 단계
 0. ✅ **진단 완료(2026-06-28)**: 드리프트 원인=**체력 튜닝(ENGINE_VERSION 2)**. A/B 입증 — 옛 체력 잔고 8.0억(보전8%·좌절21/96) vs v2 18.8억(보전0·좌절0), 차이는 체력뿐. v2서 내 팀 성적↑→수입↑.
 1. ✅ **L1 baseline 완료(2026-06-28)**: sponsorBase 250000→**243000**(24.3~32.3억) → v2 잔고 9.1억·보전8%·좌절28/105·✅ 건강(옛 healthy 복원). finance.test 단언·문서 동기.
-2~5. (진행 예정) sponsorStance 도출+뉴스 → AI 입찰 → 내 팀 보너스 → 가드 일괄.
-2. ✅ **2a 완료(2026-06-28)**: `engine/sponsorStance.ts`(순수 도출, 별도 RNG) + 가드 `_dv_sponsorstance.ts` 8/8. (2b 뉴스 예고 — 미착수.)
+2. ✅ **2a 완료(2026-06-28)**: `engine/sponsorStance.ts`(순수 도출, 별도 RNG) + 가드 `_dv_sponsorstance.ts` 8/8.
+   ✅ **2b 완료(2026-06-29) — 뉴스 예고**: `data/news.ts` 새 kind `sponsor`(소문 톤·불발 가능) — 막 끝난 시즌 기준 다가오는
+   오프시즌 FA 기류를 `sponsorStanceOf` 순수 파생(새 저장 0·가짜 드라마 0). aggressive="큰손 등판 — 거물 노린다"(내 팀 ★),
+   thrifty="긴축 — 관망". 최신 시즌만(예고는 미래형). UI kind 맵(KIND_KO·LEAD) 보강. 검증 `simNews`(톤 일치·최신시즌만·건수 정합·무결성 0).
 3. ✅ **AI 입찰 공격성 완료(2026-06-29)**: 컨텍스트 주입(`data/leagueHistory.ts` — 결정#2 수정 참조) → resolveFAMarket AI 봇 stance별:
    - aggressive=참가게이트 타겟+1(gap===0도 입찰=depth) + offer `min(round100(asking×AI_AGGRESSIVE_MULT 1.2), LEAGUE_CAP−payroll[t])` **clamp** / thrifty=관망(gap≥2 뚜렷한 구멍만) / normal=기존(gap>0·offer=asking).
    - posGap 점수엔 실제 gap 유지(bidGap/posGap 분리). G-2: simLeague `simArchive`에 championId+standings 누적 + `setSeasonHistory`.
    - 가드 `_dv_fa_stance.ts` ✅ 5/5(120오프시즌): 레버 Δ267(68/120)·캡위반0·방향성 aggr0.81>norm0.60>thr0.21·결정론0·양stance발화. 무회귀 확인(_gt_facontract 15/15·simFaDup·simAudit·foreign-leak·유닛 205/205).
-4. 내 팀 소폭 현금보너스(aggressive)/권고(thrifty, 강제 X).
-5. 가드 일괄(simLeague parity A/B + 레버효과 + 권한 + 인플레).
+4. ✅ **완료(2026-06-29) — 내 팀 소폭 현금보너스**: `stanceCashBonus`(engine/finance) — aggressive 시 **1회성 +3억**(STANCE_AGGR_BONUS 30000,
+   소폭·시드+성적 도출=구매불가 안티과금·결정론), thrifty/normal=0(**강제 차단 안 함** — 권한표). FA 지갑에 가산: endSeason `walletCash`
+   + 미리보기 `projectSettledCash` 양쪽 동일 도출(`upcomingStanceOf` — 막 끝난 시즌을 라이브 셀렉터로 덧대 **preview=result**).
+   가드 `_dv_stance_bonus.ts` ✅ 7/7(448 팀-평가): Δ==stanceCashBonus 정합·권한 무영향(thr/norm Δ0)·결정론·세 stance 관측.
+5. ✅ **완료(2026-06-29) — 가드 일괄**: parity A/B(3 §parity ✅)·레버효과(_dv_fa_stance AI + _dv_stance_bonus 내 팀)·권한 무영향(_dv_stance_bonus)·
+   캡 불변(_dv_fa_stance)·재정 건강 무회귀(simFinance 9.1억·8%·좌절28/105 그대로)·무회귀(유닛 205/205·josa·transfernews·foreign·audit·brokeSign·txDup 전부 0).
+   인플레0: parity 40×16·simFinance 120 잔고 범위 0~54.8억 유계(런어웨이 0). **FINANCE 2.0 완성.**
 > 각 단계 검증 통과분만 커밋, 미통과분 되돌림(추정 금지).
 
 ---

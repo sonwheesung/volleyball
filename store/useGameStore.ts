@@ -30,7 +30,7 @@ import {
   type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx,
 } from '../engine/owner';
 import { discontentNow, teamFanbaseNow, buildOwnerFx } from '../data/owner';
-import { settleSeason, applyNet, type SeasonFinance } from '../engine/finance';
+import { settleSeason, applyNet, stanceCashBonus, type SeasonFinance } from '../engine/finance';
 import { FOREIGN_SALARY, ASIAN_SALARY } from '../engine/foreign';
 import { staffSpend, setMyTeamStaff } from '../data/league';
 import { overall } from '../engine/overall';
@@ -41,7 +41,7 @@ import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
 import { planNextAction } from '../engine/advance';
 import { marketVal, setAwardScores } from '../data/awardSalary';
-import { setSeasonHistory } from '../data/leagueHistory';
+import { setSeasonHistory, upcomingStanceOf } from '../data/leagueHistory';
 import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
 import { ROSTER_MAX, canRelease, inSeasonCost, severanceFee } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
@@ -681,10 +681,13 @@ export const useGameStore = create<GameState>()(
         });
         const settled = applyNet(cash, finance.net);
         const nextFinance: SeasonFinance = { ...finance, bailout: settled.bailout };
+        // 모기업 aggressive 1회성 현금 보너스(FINANCE 2.0 Stage4) — 다가오는 오프시즌 FA 지갑에 가산.
+        //   upcomingStanceOf = projectSettledCash(FA 프리뷰)와 동일 도출 → 미리보기=결과. thrifty/normal=0(권한표).
+        const walletCash = settled.cash + stanceCashBonus(upcomingStanceOf(my, season));
 
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
         //    FA 입찰은 캡 AND 새 잔고(지갑) — 캡이 남아도 돈이 없으면 못 뽑는다
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, settled.cash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian);
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, walletCash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
@@ -826,7 +829,7 @@ export const useGameStore = create<GameState>()(
           benchCooldown: {},
           // 영구제명(승부조작·학폭) — 내 팀이면 팬심 대폭락(사건당 −35). 리그 최대 충격.
           fanScore: Math.max(0, nextFan - 35 * ctx.expelled.filter((e) => e.teamId === my).length),
-          cash: Math.max(0, settled.cash - faSpend),
+          cash: Math.max(0, walletCash - faSpend),
           lastFinance: nextFinance,
           tryoutWish: [],
           foreignAltPool: ctx.tryout.altPoolIds,

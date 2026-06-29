@@ -6,6 +6,8 @@
 //     다년 이력)에 데이터 계층 접근이 없다. 과거 우승은 archive(store)/simArchive(sim)에만 있으므로 주입한다.
 import type { SeasonArchive } from '../types';
 import { sponsorStanceOf, type SponsorStance } from '../engine/sponsorStance';
+import { computeStandings } from './standings';
+import { buildPlayoffs } from './playoffs';
 
 let historyArchive: SeasonArchive[] = [];
 let stanceEnabled = true; // parity A/B 토글(simLeague STANCE_OFF). 기본 on.
@@ -18,4 +20,18 @@ export function setStanceEnabled(on: boolean): void { stanceEnabled = on; }
 export function teamStanceOf(teamId: string, season: number): SponsorStance {
   if (!stanceEnabled) return 'normal';
   return sponsorStanceOf(teamId, season, historyArchive);
+}
+
+/** 다가오는 오프시즌의 내 팀 기조(preview=result) — 막 끝난 시즌 S의 순위/우승을 **라이브 셀렉터로** 산출해
+ *  archive에 덧대 도출한다. archive가 아직 S를 안 담은 FA 프리뷰 시점(endSeason 전)과, S를 담은 endSeason
+ *  시점 모두 동일 결과(projectSettledCash가 finance를 라이브로 미리보는 것과 같은 패턴). 내 팀 현금 보너스 게이트. */
+export function upcomingStanceOf(teamId: string, season: number): SponsorStance {
+  if (!stanceEnabled) return 'normal';
+  const live: SeasonArchive = {
+    season,
+    championId: buildPlayoffs(season).championId ?? '',
+    standings: computeStandings(Number.MAX_SAFE_INTEGER).map((r) => r.teamId),
+  };
+  const merged = [...historyArchive.filter((a) => a.season !== season), live];
+  return sponsorStanceOf(teamId, season, merged);
 }

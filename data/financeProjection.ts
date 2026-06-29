@@ -5,7 +5,8 @@
 // endSeason 의 settleSeason 입력과 동일하게 계산(같은 셀렉터·같은 day 기준) → 미리보기=결과.
 
 import type { SeasonAwards } from '../types';
-import { settleSeason, applyNet } from '../engine/finance';
+import { settleSeason, applyNet, stanceCashBonus } from '../engine/finance';
+import { upcomingStanceOf } from './leagueHistory';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
 import { teamFanbaseNow } from './owner';
@@ -38,5 +39,6 @@ export function projectSettledCash(
     winRate, fan: fanScore, fanTotal: fb.total, playerFansTotal: fb.playerFansTotal,
     payroll, staff: staffSpend(my), cashBefore: cash,
   });
-  return applyNet(cash, finance.net).cash;
+  // 모기업 aggressive 1회성 현금 보너스(FINANCE 2.0 Stage4) — endSeason 지갑과 동일 도출(preview=result).
+  return applyNet(cash, finance.net).cash + stanceCashBonus(upcomingStanceOf(my, season));
 }

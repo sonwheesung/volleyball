@@ -2,6 +2,14 @@
 // 철학: 성적이 나빠도 팬은 잘 안 떠난다 — 대신 직관이 끊겨 지갑이 먼저 마른다.
 
 import { createRng, strSeed } from './rng';
+import type { SponsorStance } from './sponsorStance';
+
+/** 모기업 aggressive 시 내 팀 1회성 현금 보너스(만원) — "올해는 큰맘 먹고 지른다"(농심式). FINANCE 2.0 Stage4.
+ *  소폭(잔고 ~9억 대비 3억)·1회성·시드+성적 도출(구매 불가=안티과금)·결정론. thrifty/normal=0(권한표: 강제 차단 금지). */
+export const STANCE_AGGR_BONUS = 30000;
+export function stanceCashBonus(stance: SponsorStance): number {
+  return stance === 'aggressive' ? STANCE_AGGR_BONUS : 0;
+}
 
 export const HOME_GAMES = 18;   // 36경기의 절반
 export const TICKET = 1;        // 객단가(만원)

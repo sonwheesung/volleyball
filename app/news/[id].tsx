@@ -27,6 +27,7 @@ const LEAD: Record<NewsItem['kind'], string> = {
   transfer: '오프시즌 시장이 움직였다. 한 선수가 새 유니폼을 입고 새 도전을 시작한다.',
   release: '한 선수가 정든 팀을 떠나 FA 시장에 나왔다. 재계약 불발 끝에 새 둥지를 찾아야 하는 처지다.',
   retire: '오랜 커리어를 마치고 한 선수가 코트를 떠난다. 통산 기록과 함께 그의 여정이 마무리된다.',
+  sponsor: '다가오는 FA 시장을 앞두고 구단 안팎의 기류가 전해졌다. 어디까지나 소문, 시장이 열려봐야 안다.',
 };
 
 export default function NewsArticle() {
