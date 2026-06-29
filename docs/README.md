@@ -144,6 +144,7 @@ npx tsx tools/_ev_touches.ts 200            # 랠리 터치 스크립트 1단계
 npx tsx tools/_ev_statsource.ts 2000        # 통계 단일화 가드 — 통합 prod(box 먹임)가 스코어박스와 선수별 0 분기(5카테고리)·레거시는 분기(도구 민감)·A/B(box vs box=0)
 npx tsx tools/_ev_blockcomment.ts 200       # 스터프 중계가 byId 블로커를 호명 100%(블록=킬 수준 충실)
 npx tsx tools/_ev_situation.ts 200          # 상황 인지 중계(BOARD_RULES 60) — 세트/매치포인트·듀스 검출 == 독립오라클 100%·합성경계 A/B. exit 0/1
+npx tsx tools/_dv_livebanner.ts 40          # 경기 중 실시간 현수막(BROADCAST Phase3) — 세트획득·연속득점·에이스/블록 누적: ①스포일러 안전(배너 at은 rallies[0..at]로 재현·미래 미참조 + A/B 민감)·②세트승자/세트수 정합·③빈도 ~8/경기(스팸 아님)·④결정론. exit 0/1
 npx tsx tools/_ev_matchmvp.ts 300           # 경기 MVP(AWARDS §1) — 이긴 팀 최고생산자 == 독립오라클 100%·승자측·points>0·결정론. exit 0/1
 npx tsx tools/_ev_retirenews.ts 20          # 은퇴 세리머니 뉴스(NEWS 슬라이스5) — 게이트(8시즌/HOF)·전원기사화·매달린0·중복0·결정론. exit 0/1
 npx tsx tools/_ev_rival.ts 12               # 라이벌 구도(CLUB_IDENTITY 6) — 순위인접·접전 가중·임계·결정론·합성 A/B. exit 0/1

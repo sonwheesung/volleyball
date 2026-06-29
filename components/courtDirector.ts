@@ -10,6 +10,7 @@ import {
 } from './courtLayout';
 import type { WP, Move, Lineups } from './courtPath';
 import type { PointHow, TouchEvent } from '../engine/rally';
+import type { Banner } from '../data/broadcast';
 
 export interface StageInfo { serving: Side; homeRot: number; awayRot: number }
 export interface Seg { from: WP; to: WP }
@@ -211,6 +212,54 @@ export function reconstructRallies(sim: SimResult): RallyState[] {
     if (pt.scorer !== serving) {
       if (pt.scorer === 'home') homeRot = (homeRot + 1) % 6; else awayRot = (awayRot + 1) % 6;
       serving = pt.scorer;
+    }
+  }
+  return out;
+}
+
+// ─── 경기 중 실시간 현수막 (BROADCAST_SYSTEM Phase 3) ─────────────────────────
+export interface LiveBanner { at: number; banner: Banner }
+
+const LIVE_TINT = { setwon: '#34D399', run: '#FB923C', ace: '#27E0C7', block: '#F2A93B' };
+// 임계는 _dv_livebanner 빈도로 튜닝(스팸 방지·경기당 ~7건) — 단발은 콜아웃 배지/피드가 담당, 현수막은 "사건"만.
+const ACE_TH = new Set([3, 5, 7]);   // 선수 한 경기 누적 에이스(3+ = 드묾·주목)
+const BLK_TH = new Set([5, 8]);      // 선수 한 경기 누적 블록(MB가 3+는 흔함 → 5+ 압도적 게임만)
+const RUN_TH = new Set([6, 9, 12]);  // 한 팀 연속 득점(6+ = 진짜 흐름)
+
+/** 재생 중 띄울 실시간 현수막(결과-중립/관전동시 사건만 — 스포일러 안전). 각 배너 at(랠리 idx)는
+ *  rallies[0..at]만으로 도출(미래 미참조): 세트 종결은 그 랠리의 세트 점수(타깃·2점차)로 판정, run/누적은 전방 누적.
+ *  세트 획득·연속 득점·서브 에이스 누적·블로킹 누적. (_dv_livebanner: prefix 재현·세트승자 정합·빈도·결정론) */
+export function buildLiveBanners(
+  rallies: RallyState[],
+  mineSide: Side | null,
+  names: { homeName: string; awayName: string; nameOf: (id: string) => string },
+): LiveBanner[] {
+  const out: LiveBanner[] = [];
+  const teamName = (s: Side) => (s === 'home' ? names.homeName : names.awayName);
+  const aces: Record<string, number> = {};
+  const blocks: Record<string, number> = {};
+  let runSide: Side | null = null, run = 0;
+
+  for (let i = 0; i < rallies.length; i++) {
+    const r = rallies[i];
+    // 연속 득점(전방 누적)
+    if (r.scorer === runSide) run++; else { runSide = r.scorer; run = 1; }
+    if (RUN_TH.has(run)) out.push({ at: i, banner: { kind: 'run', tint: LIVE_TINT.run, icon: 'flame', mine: mineSide === r.scorer, title: `${teamName(r.scorer)} ${run}연속 득점!` } });
+    // 서브 에이스 누적(화면상 에이스 = ace + recvErr). byId=서버
+    if ((r.how === 'ace' || r.how === 'recvErr') && r.byId) {
+      const n = (aces[r.byId] = (aces[r.byId] ?? 0) + 1);
+      if (ACE_TH.has(n)) out.push({ at: i, banner: { kind: 'acemulti', tint: LIVE_TINT.ace, icon: 'flash', mine: mineSide === r.scorer, title: `${names.nameOf(r.byId)} 서브 에이스 ${n}개!` } });
+    }
+    // 블로킹 차단 누적(stuff). byId=블로커
+    if (r.how === 'stuff' && r.byId) {
+      const n = (blocks[r.byId] = (blocks[r.byId] ?? 0) + 1);
+      if (BLK_TH.has(n)) out.push({ at: i, banner: { kind: 'blockmulti', tint: LIVE_TINT.block, icon: 'shield', mine: mineSide === r.scorer, title: `${names.nameOf(r.byId)} 블로킹 ${n}개!` } });
+    }
+    // 세트 획득 — 그 랠리의 세트 점수만으로 판정(미래 미참조): 타깃 도달 + 2점차. scorer=세트 승자.
+    const target = r.setNo >= 5 ? 15 : 25;
+    if ((r.home >= target || r.away >= target) && Math.abs(r.home - r.away) >= 2) {
+      out.push({ at: i, banner: { kind: 'setwon', tint: LIVE_TINT.setwon, icon: 'flag', mine: mineSide === r.scorer, title: `${teamName(r.scorer)} ${r.setNo}세트 획득!` } });
+      runSide = null; run = 0; // 세트 경계서 연속 리셋
     }
   }
   return out;

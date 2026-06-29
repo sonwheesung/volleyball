@@ -8,8 +8,9 @@ import { MatchCourt } from '../../components/MatchCourt';
 import { LiveBoxModal } from '../../components/LiveBoxModal';
 import { Popup } from '../../components/Popup';
 import { BroadcastBanner } from '../../components/BroadcastBanner';
-import { buildMatchBanners } from '../../data/broadcast';
-import { getFixture, getTeam } from '../../data/league';
+import { buildMatchBanners, type Banner } from '../../data/broadcast';
+import { reconstructRallies, buildLiveBanners } from '../../components/courtDirector';
+import { getFixture, getTeam, shortTeamName } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
 import { DEV_TOOLS } from '../../data/flags';
 import { teamOverallRaw } from '../../engine/overall';
@@ -130,6 +131,21 @@ export default function MatchBoard() {
     [finished, isSandbox, fixture, data.home.id, data.away.id, mineSide],
   );
 
+  // 경기 중 실시간 현수막(Phase 3) — 재생 위치(ptIdx)가 배너 at에 도달하면 큐에 push. 결과-중립/관전동시 사건만(스포일러 안전).
+  const liveBanners = useMemo(() => {
+    const byId = new Map([...data.homeSquad, ...data.awaySquad].map((p) => [p.id, p] as const));
+    return buildLiveBanners(reconstructRallies(data.sim), mineSide, {
+      homeName: shortTeamName(data.home.id), awayName: shortTeamName(data.away.id),
+      nameOf: (pid) => byId.get(pid)?.name ?? '선수',
+    });
+  }, [data, mineSide]);
+  const [liveQueue, setLiveQueue] = useState<Banner[]>([]);
+  useEffect(() => {
+    if (finished) return;
+    const hits = liveBanners.filter((b) => b.at === score.ptIdx).map((b) => b.banner);
+    if (hits.length) setLiveQueue((q) => [...q, ...hits]);
+  }, [score.ptIdx, liveBanners, finished]);
+
   return (
     <>
     <ScrollView
@@ -175,7 +191,8 @@ export default function MatchBoard() {
           homeName={data.home.name}
           awayName={data.away.name}
         />
-        {banners.length > 0 ? <BroadcastBanner banners={banners} /> : null}
+        {!finished && liveQueue.length > 0 ? <BroadcastBanner key="live" banners={liveQueue} /> : null}
+        {finished && banners.length > 0 ? <BroadcastBanner key="fin" banners={banners} /> : null}
       </View>
 
       {/* 세트 스코어 — 관전이 끝난 뒤에만 공개(스포일러 방지) */}

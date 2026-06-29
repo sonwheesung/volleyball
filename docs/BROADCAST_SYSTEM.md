@@ -3,7 +3,10 @@
 > **★ 구현 현황(2026-06-19)**: Phase 1 ✅ — `data/broadcast.ts buildMatchBanners`(기록 경신·PO 확정/탈락·**트리플 크라운**)
 > + `components/BroadcastBanner.tsx`(하단 현수막 큐 애니메이션, kind 무관 tint/icon/title 렌더) + `app/match/[id]` finished 게이트 주입.
 > 검증 `tools/simBroadcast.ts`·`tools/checkTripleCrown.ts`: 시즌0 PO확정 3·탈락 13·트리플크라운 1(KOVO 후위공격 기준)/126경기, 합성 1000점 돌파 현수막 ✅, 스포일러 누출 0(구조 보장).
-> **추후**: 챔프전 우승 현수막(플레이오프는 경기단위 관전 안 함 — 보류, 우승은 `ChampionCelebration` 큰 화면이 담당 §7), 경기 *중* 실시간 기록(랠리별 귀속 선결, Phase 3).
+> **Phase 3 ✅(2026-06-29)**: 경기 *중* 실시간 현수막 — `courtDirector.buildLiveBanners`(세트획득·연속득점·에이스/블록 누적,
+> 순수 파생) + `app/match/[id]`가 재생 위치(ptIdx)에 맞춰 큐 재생. 스포일러 안전(배너 at은 rallies[0..at]로만 도출).
+> 검증 `tools/_dv_livebanner.ts` 7/7(prefix 스포일러·세트승자/세트수 정합·빈도 ~8/경기·결정론).
+> **추후**: 챔프전 우승 현수막(플레이오프는 경기단위 관전 안 함 — 보류, 우승은 `ChampionCelebration` 큰 화면이 담당 §7).
 > **★ 우승 현수막 = 정규리그 우승(2026-06-26 구현)**: 관전되는 맥락(정규시즌 경기)에서 가장 "우승"에 가까운 순간 =
 > **정규리그 1위(챔프전 직행) 확정**. `teamClinch(team, day, cutoff=1)`이 'clinched'면 그 경기로 1위를 수학적으로
 > 확정한 것 → 🏆 골드 현수막 "OO 정규리그 우승 — 챔프전 직행!". 결과-결정(순위 확정)이라 finished 후만(스포일러 정책 자동).
@@ -58,7 +61,18 @@
 - **Phase 1 (싸고·스포일러 안전):** 하단 현수막 컴포넌트 + **경기 종료 시** 재생. 우승(기존 데이터) +
   경기단위 기록 감지(`detectMatchMilestones`, 경기말). 결정론 파생.
 - **Phase 2 (신규 시스템):** ✅ `clinch.ts` 매직넘버 감지 구현(확정/탈락/경합) — 일정 화면 표시. 현수막 연출·시드 세분은 추후.
-- **Phase 3 (고비용):** 경기 *중* 실시간 기록 현수막 — 랠리별 개인 귀속 선결 후 그 랠리 시점에 띄움.
+- **Phase 3 ✅ 구현(2026-06-29):** 경기 *중* 실시간 현수막 — 랠리별 개인 귀속이 이미 100% 검증됨(`_ev_scorer`·
+  `_ev_setmatch`·`_ev_digmatch` 보드==박스)이라 선결 충족. `reconstructRallies(sim)`에서 순수 파생.
+  - **이벤트(전부 결과-중립 또는 "관전과 동시"=스포일러 안전)**: ① **세트 획득**("OO N세트 획득!" — 세트 종결
+    랠리의 scorer=세트 승자. 관전자가 세트 끝을 보는 순간이라 안전) ② **연속 득점**(한 팀 run≥5·8 → "OO 5연속 득점!")
+    ③ **서브 에이스 누적**(선수 한 경기 3·5개 → "PLAYER 서브 에이스 N개!") ④ **블로킹 누적**(선수 3·5개).
+  - **빈도 게이팅(스팸 방지, §6)**: 매 에이스/블록이 아니라 **누적 임계**(3·5)·**run 임계**(5·8)로만 → 경기당 ~5-8건.
+    에이스·블록 단발은 이미 상단 콜아웃 배지(`HOW_CAPTION`)·중계 피드가 담당 — 현수막은 "사건"만.
+  - **스포일러 안전(구조)**: 각 배너 `at`(랠리 인덱스)는 `rallies[0..at]`만으로 도출(미래 미참조) — 가드가
+    prefix 재현으로 전수 검증. 결과-결정(우승/PO)은 여전히 finished 후만(기존 buildMatchBanners 불변).
+  - **코드**: `components/courtDirector.buildLiveBanners(rallies, mineSide, names)` 순수 → `app/match/[id]`가
+    재생 위치(`score.ptIdx`)가 배너 `at`에 도달하면 큐에 넣어 `BroadcastBanner`로 재생(finished 전용 큐와 별개).
+    BannerKind에 `setwon·run·acemulti·blockmulti` 추가. 검증 `tools/_dv_livebanner.ts`(prefix 스포일러·빈도·세트승자 정합·결정론).
 
 ## 5. 코드 맵 (예정)
 - `data/broadcast.ts` — `buildMatchBanners(fixture, sim, ...)` 순수 집계(우승·기록·확정 → Banner[]).

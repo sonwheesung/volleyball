@@ -9,7 +9,8 @@ import { availableTeamPlayers } from './injury';
 import { leagueProduction } from './production';
 import { teamClinch, teamTitleClinch } from './clinch';
 
-export type BannerKind = 'champion' | 'record' | 'clinch' | 'eliminated' | 'triple';
+export type BannerKind = 'champion' | 'record' | 'clinch' | 'eliminated' | 'triple'
+  | 'setwon' | 'run' | 'acemulti' | 'blockmulti'; // 경기 중 실시간(Phase 3) — courtDirector.buildLiveBanners
 export interface Banner { kind: BannerKind; tint: string; icon: string; title: string; mine: boolean }
 
 const RECORD_TINT = '#3B82F6', CLINCH_TINT = '#16B07D', ELIM_TINT = '#FF6B5A', TRIPLE_TINT = '#8B5CF6', CHAMP_TINT = '#F2A93B';
@@ -80,6 +81,7 @@ export function buildMatchBanners(homeId: string, awayId: string, dayIndex: numb
   }
 
   // 내 팀 사건 먼저, 그다음 우승(가장 특별) → 트리플 → 기록 → 확정/탈락 순
-  const rank: Record<BannerKind, number> = { champion: 0, triple: 1, record: 2, clinch: 3, eliminated: 4 };
-  return out.sort((a, b) => (Number(b.mine) - Number(a.mine)) || (rank[a.kind] - rank[b.kind]));
+  // 실시간(setwon/run/acemulti/blockmulti)은 여기서 안 만들어짐(courtDirector.buildLiveBanners) — 부분 맵 + 폴백.
+  const rank: Partial<Record<BannerKind, number>> = { champion: 0, triple: 1, record: 2, clinch: 3, eliminated: 4 };
+  return out.sort((a, b) => (Number(b.mine) - Number(a.mine)) || ((rank[a.kind] ?? 9) - (rank[b.kind] ?? 9)));
 }
