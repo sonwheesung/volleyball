@@ -439,6 +439,27 @@
 
 ---
 
+## 3.16 edge-swarm 2차 검수 신규 감시 (2026-06-29, 108세션) — codeBasis 확인·실측 verify-cases 인계
+
+> 108세션 스웜 후보(542) 2차 검수: 신규 실버그 2종은 §3.15(수정 완료). 아래는 **codeBasis는 코드에서 직접 확인**했으나
+> *실제 파괴 여부·의도성*은 미확인 → **감시 대상 등록**(추정 금지 — 버그 단정 아님, verify-cases가 A/B로 확인). 나머지 대량 후보는
+> 기지 클래스(§3.6/§3.14[E] 가용<7·[D] NaN내성)의 독립 재확인(검출 신뢰) 또는 WAI.
+
+| ID | 의심 | codeBasis(확인됨) | 상태 |
+|---|---|---|---|
+| EC-SE-01 | **관전 우승/순위 ≠ archive** — endSeason이 `commitRosters(finalR)`(시즌중 거래 반영) **후** buildPlayoffs·computeStandings를 돌려, 유저가 관전(app/playoffs.tsx, commit 전)한 우승팀과 archive 우승팀이 시즌중 거래 시 갈릴 수 있음 | `store/useGameStore.ts:611` commitRosters → `:617` buildPlayoffs(season) → `:620` computeStandings(MAX) 순서(거래 후 로스터로 재계산) | 📋 감시 — verify-cases가 거래 유발 시즌서 관전챔프==archive챔프 실측(시즌중 거래 0이면 무영향) |
+| EC-RY-01 | **edge(실력 배수) 비대칭** — 플옵 상위시드 edge(1.03)가 서브·리시브·공격엔 곱해지나 **블록·디그엔 미적용** → 상위시드가 수비할 땐 부스트 없음(균일 팀 배수 의도와 다를 수 있음) | `engine/rally.ts:348`(svPow eg)·`:349`(recvSkill eg)·`:517`(attackPower eg) **vs** `:221`blockEval·`:538`digStr(eg 없음) | 📋 감시 — 의도 확인(설계) + parity 영향 실측 |
+| EC-CN-01 | **GAME_INTERVAL 상수 손복제** — `engine/season.ts:7`과 `data/dynamics.ts:18`에 `=4` 독립 사본(+owner.ts 주석) → 한쪽만 바꾸면 일정↔부상/사고 일수 환산 드리프트(SEASON_DAYS 손복제와 동류, `_dv_seasondays` 선례) | `season.ts:7`·`dynamics.ts:18` 두 지역 const = 4 | 📋 감시 — verify-cases가 두 상수 일치 가드(또는 calendar.ts 단일화) |
+| (note) cap-hop 무귀속 | 랠리 8-hop 상한 강제종결(`how:'cap'`)은 점수만 나고 **박스 미귀속** → 팀 득점 합 > 선수 박스 합(드묾 ~0.1%) | `engine/rally.ts:624` 주석에 "박스 미귀속(특정 공격수 없음)" 명시 | ✅ **WAI**(의도적·loud) — `_ev_box_audit` 밴드 내. 인지용 기록 |
+| (note) BYE 부상일 | 7팀(홀수) 리그 `__BYE__` 라운드가 부상 day-range[from,to]에 끼면 missMatches(경기수)↔일수 매핑이 BYE 한 칸만큼 어긋날 수 있음 | `dynamics.ts:207-208`(고정 GAME_INTERVAL stride)·`season.ts` singleRoundRobin BYE | 📋 감시(저위험) — verify-cases 실측 |
+
+> **기지 클래스 재확인(대량 — 신규 아님)**: `<6 가용 → buildLineup 선수 중복·리베로 six 침투`(§3.6·§3.14[E])를 rally/rotation/match/lineup
+> **수십 세션이 독립 재발견**. 스웜이 보강한 사실: ① 도달 경로 = 부상(cap3) + **출장정지(scandal, 팀 동시 상한 없음 — 검증)** + 휴식(≤2)
+> 가 ROSTER_MIN(10)에서 가용<6까지 깎을 수 있음(§3.6의 "부상≤3→≥7 보장"은 scandal+rest 미반영=불완전) ② 피해 = box 2배 귀속(통산/시상 오염)·
+> 같은 선수가 블록+디그 동시·concurrent 부상 카운트 왜곡(S9). → §3.14[E] 감시 유지하되 **버그 단정 + 방어 가드/엔진 클램프는 verify-cases**(가용<6 시 중복 대신 명시 처리 — 설계 결정 필요).
+
+---
+
 ## 4. 회귀 프로토콜 (로직 수정 시)
 
 영입/오프시즌 계열 엔진·셀렉터(`engine/compensation·faMarket·cap·draft·staff·staffLifecycle·foreign·transactions·finance`,
