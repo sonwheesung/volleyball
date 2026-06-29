@@ -6,7 +6,7 @@ import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { Button, Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, StatBar, theme } from '../../components/Screen';
 import { faceFor } from '../../data/playerFace';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchetypeOf, conditionOf, popularityNow } from '../../data/owner';
-import { playerFans, fanOverlapRatio } from '../../engine/owner';
+import { playerFans } from '../../engine/owner';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
 import { SCANDAL_KO } from '../../engine/scandal';
 import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason } from '../../engine/owner';
@@ -122,6 +122,11 @@ export default function PlayerDetail() {
   const isMine = !!myTeamId && rosterIdsOnDay(myTeamId, currentDay).includes(p.id);
   const moodInfo = isMine && myTeamId ? discontentNow(p, myTeamId, currentDay) : null;
   const topic = moodInfo?.topic ?? null;
+  // 연고 향수(hometown)면 어느 팀을 그리는지 이름으로(사용자 요청 2026-06-30) — "연고 팀에서 뛰고 싶다"(막연)가
+  // 아니라 "○○에서 뛰고 싶다"(구체). preferredTeamId(t0~t6)→팀명. 없으면(구세이브) 기존 막연 문구 폴백.
+  const homeTeamName = topic === 'hometown' && p.faPref?.preferredTeamId ? teamShort(p.faPref.preferredTeamId) : null;
+  const topicBadgeText = topic ? (homeTeamName ? `연고 향수 · ${homeTeamName}` : TOPIC_BADGE[topic]) : '';
+  const topicSpeechText = topic ? (homeTeamName ? `"${homeTeamName}에서 뛰는 게 오랜 꿈이었습니다."` : TOPIC_SPEECH[topic]) : '';
   const cond = isMine && myTeamId ? conditionOf(myTeamId, p.id, currentDay) : null;
   const myTalks = interviews.filter((l) => l.playerId === p.id && l.season === season);
   const lastTalkFailed = myTalks.length > 0 && !myTalks[myTalks.length - 1].ok;
@@ -216,7 +221,6 @@ export default function PlayerDetail() {
           <Text style={{ color: theme.muted, fontSize: 13 }}>인기 <Text style={{ color: theme.text, fontWeight: '800' }}>{pop}</Text></Text>
           <Text style={{ color: theme.muted, fontSize: 13, marginHorizontal: 8 }}>·</Text>
           <Text style={{ color: theme.muted, fontSize: 13 }}>개인 팬 <Text style={{ color: theme.text, fontWeight: '800' }}>{playerFans(pop).toLocaleString()}명</Text></Text>
-          <Text style={{ color: theme.muted, fontSize: 12 }}> (팀팬 겹침 {Math.round(fanOverlapRatio(p.clubTenure) * 100)}%)</Text>
         </View>
       </Card>
 
@@ -299,14 +303,14 @@ export default function PlayerDetail() {
               <Row>
                 <Muted>지금 마음</Muted>
                 <Text style={{ color: moodInfo.mood === 'discontent' ? theme.bad : moodInfo.mood === 'positive' ? theme.good : theme.muted, fontWeight: '800', fontSize: 13 }}>
-                  {moodInfo.mood === 'discontent' ? '😟' : moodInfo.mood === 'positive' ? '😊' : '😐'} {moodInfo.label}
+                  {moodInfo.mood === 'discontent' ? '😟' : moodInfo.mood === 'positive' ? '😊' : '😐'} {homeTeamName ? `연고 향수 — ${homeTeamName} 그리움` : moodInfo.label}
                 </Text>
               </Row>
             ) : null}
             {topic ? (
               <>
-                <Text style={{ color: theme.bad, fontWeight: '800', marginTop: 4 }}>😟 {TOPIC_BADGE[topic]}</Text>
-                <Muted style={{ fontSize: 13 }}>{TOPIC_SPEECH[topic]}</Muted>
+                <Text style={{ color: theme.bad, fontWeight: '800', marginTop: 4 }}>😟 {topicBadgeText}</Text>
+                <Muted style={{ fontSize: 13 }}>{topicSpeechText}</Muted>
                 {lastTalkFailed ? <Muted style={{ fontSize: 12, color: theme.bad }}>💔 지난 면담이 결렬됐습니다 — 다시 문을 두드리면 거절당할 수 있습니다.</Muted> : null}
                 {talkLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 면담 — 약 {talkLeft}일 뒤 다시 가능합니다.</Muted> : null}
                 <Button label={talkLeft > 0 ? `면담 (${talkLeft}일 후)` : '면담 요청'} onPress={openTalk} disabled={talkLeft > 0} />
@@ -336,23 +340,24 @@ export default function PlayerDetail() {
                   인기 선수를 오래 벤치에 두면 팬들이 분노합니다(기사·관중·예산).
                 </Muted>
                 {benchLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 건의 — 약 {benchLeft}일 뒤 다시 건의할 수 있습니다.</Muted> : null}
-                <View style={{ flexDirection: 'row', gap: 8 }}>
-                  <View style={{ flex: 1 }}>
-                    <Button
-                      label={benchLeft > 0 ? `선발 (${benchLeft}일 후)` : '선발 기용 건의'}
-                      disabled={!isCandidate || benchLeft > 0}
-                      onPress={() => {
-                        const ok = suggestStart(p.id);
-                        Alert.alert(ok ? '감독 수락' : '감독 거절',
-                          ok ? `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote
-                             : `감독: "지금 라인업이 최선입니다."\n(격차가 크거나 감독 소신이 강하면 거절합니다)`);
-                      }}
-                    />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Button label={benchLeft > 0 ? `벤치 (${benchLeft}일 후)` : '벤치 건의'} onPress={openBench} disabled={!isStarter || benchLeft > 0} />
-                  </View>
-                </View>
+                {/* 상태에 맞는 건의 하나만 노출(사용자 요청 2026-06-30) — 후보면 '선발 기용', 주전이면 '벤치'.
+                    둘 다 비활성으로 띄우던 옛 방식 대신 안 맞는 버튼은 숨긴다. 부상·정지·명단 외는 안내만. */}
+                {isCandidate ? (
+                  <Button
+                    label={benchLeft > 0 ? `선발 기용 건의 (${benchLeft}일 후)` : '선발 기용 건의'}
+                    disabled={benchLeft > 0}
+                    onPress={() => {
+                      const ok = suggestStart(p.id);
+                      Alert.alert(ok ? '감독 수락' : '감독 거절',
+                        ok ? `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote
+                           : `감독: "지금 라인업이 최선입니다."\n(격차가 크거나 감독 소신이 강하면 거절합니다)`);
+                    }}
+                  />
+                ) : isStarter ? (
+                  <Button label={benchLeft > 0 ? `벤치 건의 (${benchLeft}일 후)` : '벤치 건의'} onPress={openBench} disabled={benchLeft > 0} />
+                ) : (
+                  <Muted style={{ fontSize: 12 }}>지금은 출전할 수 없는 상태(부상·정지·명단 외)라 건의할 수 없습니다.</Muted>
+                )}
               </>
             )}
           </Card>
@@ -554,8 +559,8 @@ export default function PlayerDetail() {
             ) : topic ? (
               <>
                 <Text style={mstyles.title}>면담 — {p.name}</Text>
-                <Text style={mstyles.badge}>😟 {TOPIC_BADGE[topic]}</Text>
-                <Text style={mstyles.quote}>"{TOPIC_SPEECH[topic]}"</Text>
+                <Text style={mstyles.badge}>😟 {topicBadgeText}</Text>
+                <Text style={mstyles.quote}>{topicSpeechText}</Text>
                 <Text style={mstyles.body}>무엇을 약속하시겠습니까?</Text>
                 {(['reinforce', 'starter', 'raise', 'franchise'] as TalkCard[]).map((card) => (
                   <Pressable key={card} style={({ pressed }) => [mstyles.choice, pressed && { opacity: 0.6 }]} onPress={() => chooseTalk(card)}>

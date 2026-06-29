@@ -56,7 +56,7 @@ export const ACHIEVEMENTS: Achievement[] = [
   A('mvp_3', 'MVP 명가', '우리 선수 MVP 통산 3회', '시상', 3),
   A('mvp_5', 'MVP 군단', '우리 선수 MVP 통산 5회', '시상', 5),
   A('mvp_b2b', '절대 강자', '우리 선수가 MVP 2시즌 연속 수상', '시상'),
-  A('make_finals_mvp', '결승의 사나이', '우리 선수가 챔피언결정전 MVP', '시상'),
+  A('make_finals_mvp', '결승의 주인공', '우리 선수가 챔피언결정전 MVP', '시상'),
   A('make_rookie', '미래를 키우다', '우리 선수가 신인상 수상', '시상'),
   A('rookie_3', '신인 명가', '우리 선수 신인상 통산 3회', '시상', 3),
   A('make_improved', '성장의 증명', '우리 선수가 기량발전상 수상', '시상'),

@@ -1,20 +1,22 @@
+// 기록 보관소 — 마이페이지(마이페이지 탭) → "기록"에서 진입하는 스택 화면(2026-06-30 네비 개편).
+// 구 `app/(tabs)/history.tsx`(기록 탭)의 본문을 그대로 옮긴 것. 시즌·통산·명예의전당·연표 4탭.
+// 업적 링크와 스포트라이트(history.*)는 마이페이지 허브로 이동 — 여기선 순수 기록 열람만.
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } from '../../components/Screen';
-import { AwardIllustration } from '../../components/AwardIllustration';
-import { LegendIllustration } from '../../components/LegendIllustration';
-import { teamColors } from '../../lib/teamColor';
-import { jerseyNumber, SUPER_LEGEND_POINTS } from '../../engine/jersey';
-import { numberLineage } from '../../data/legends';
-import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
-import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../../data/league';
-import { leagueProduction } from '../../data/production';
-import { computeStandings, leagueDisplayDay } from '../../data/standings';
-import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, seasonSnapshot, type RecordCat } from '../../data/records';
-import { useGameStore } from '../../store/useGameStore';
-import type { ProdLine } from '../../engine/production';
-import type { AwardWinner, Position, SeasonAwards } from '../../types';
+import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { AwardIllustration } from '../components/AwardIllustration';
+import { LegendIllustration } from '../components/LegendIllustration';
+import { teamColors } from '../lib/teamColor';
+import { jerseyNumber, SUPER_LEGEND_POINTS } from '../engine/jersey';
+import { numberLineage } from '../data/legends';
+import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../data/league';
+import { leagueProduction } from '../data/production';
+import { computeStandings, leagueDisplayDay } from '../data/standings';
+import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, seasonSnapshot, type RecordCat } from '../data/records';
+import { useGameStore } from '../store/useGameStore';
+import type { ProdLine } from '../engine/production';
+import type { AwardWinner, Position, SeasonAwards } from '../types';
 
 const FINISHED = 164; // 시즌 종료 기준일(잠정 라벨)
 const AWARD_MIN_GAMES = 12; // 잠정 시상 노출 최소 경기수(팀당, 36경기 시즌의 1/3)
@@ -33,14 +35,14 @@ function Seg({ items, value, onChange }: { items: string[]; value: number; onCha
   );
 }
 
-export default function History() {
-  // 기록 탭은 무겁다(뉴스 피드 생성 + 리그 생산 집계 + 시즌 스냅샷). 한 틱 미뤄 로딩부터 그린다
+export default function RecordsArchive() {
+  // 기록 화면은 무겁다(리그 생산 집계 + 시즌 스냅샷). 한 틱 미뤄 로딩부터 그린다
   const ready = useDeferredReady();
   if (!ready) return <Loading title="기록" variant="list" />;
-  return <HistoryInner />;
+  return <RecordsInner />;
 }
 
-function HistoryInner() {
+function RecordsInner() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);
@@ -69,7 +71,6 @@ function HistoryInner() {
   );
 
   // 현재 진행 시즌 라이브 리더보드 — 리그 진행 기준(§3.2 leagueDisplayDay: 현재 경기일 직전까지).
-  // 구버전 `currentDay` 직접 사용은 결과/순위(관전 기준)와 어긋났고 day0에 미플레이 시즌을 선반영(스포일러)했다.
   const leaders = useMemo(() => {
     const prod = leagueProduction(leagueDisplayDay(currentDay));
     const rows = [...prod.entries()].map(([id, l]) => ({ id, l }));
@@ -86,18 +87,7 @@ function HistoryInner() {
 
   return (
     <Screen title="기록">
-      <SpotlightTarget id="history-ach">
-        <Card accent={theme.gold} onPress={() => router.push('/achievements')}>
-          <View style={styles.achLink}>
-            <Text style={styles.achLinkText}>🏆 업적 — 구단주의 발자취</Text>
-            <Text style={styles.achLinkArrow}>›</Text>
-          </View>
-        </Card>
-      </SpotlightTarget>
-
-      <SpotlightTarget id="history-top">
-        <Seg items={['시즌', '통산', '명예의전당', '연표']} value={tab} onChange={setTab} />
-      </SpotlightTarget>
+      <Seg items={['시즌', '통산', '명예의전당', '연표']} value={tab} onChange={setTab} />
 
       {tab === 0 ? (
         <SeasonView
@@ -125,7 +115,6 @@ function HistoryInner() {
           onSeason={(s) => { setViewSeason(s); setTab(0); }}
         />
       ) : null}
-      <SpotlightOverlay screen="tab-history" />
     </Screen>
   );
 }
@@ -266,7 +255,7 @@ function SeasonView({
         </Card>
       ) : null}
 
-      {/* 현재 시즌만: 라이브 리더보드 + 경기 결과 */}
+      {/* 현재 시즌만: 라이브 리더보드 */}
       {snap.isCurrent ? (
         <>
           <Title>개인 기록 리더보드</Title>
@@ -441,8 +430,6 @@ function ChronicleView({
 }
 
 const styles = StyleSheet.create({
-  achLink: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
-  achLinkText: { color: theme.text, fontSize: 15, fontWeight: '800' },
   achLinkArrow: { color: theme.accent, fontSize: 22, fontWeight: '900' },
 
   seg: { flexDirection: 'row', backgroundColor: theme.cardAlt, borderRadius: 12, padding: 3, gap: 2 },

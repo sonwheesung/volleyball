@@ -18,7 +18,8 @@ export default function Office() {
   const released = useGameStore((s) => s.released);
 
   const roster = activeRoster(getEvolvedTeamPlayers(teamId, currentDay), overrides, released);
-  const total = payroll(roster);
+  // 캡은 국내 선수만(외인=별개 지갑, FOREIGN_SYSTEM 2장). 외인 포함 비교는 허위 초과(빨강) — EC-CAP-01.
+  const total = payroll(roster.filter((p) => !p.isForeign));
 
   return (
     <Screen title="단장실" scroll={false}>

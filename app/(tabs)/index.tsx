@@ -26,7 +26,9 @@ export default function Dashboard() {
   const basePlayers = getEvolvedTeamPlayers(teamId, currentDay);
   const roster = activeRoster(basePlayers, overrides, released);
   const ovr = teamOverallRaw(availableTeamPlayers(teamId, currentDay)); // 전력은 그날 출전 가능 명단 기준(경기 엔진과 일치 — EC-UI-01, 부상·결장 반영)
-  const payroll = sumPayroll(roster);   // 페이롤은 활성 계약 기준
+  // 샐러리캡은 **국내 선수만** 적용(외인은 1년 트라이아웃 별개 지갑 — FOREIGN_SYSTEM 2장, roster.ts domesticPayroll).
+  // 외인 연봉을 포함해 국내 전용 캡과 비교하면 멀쩡한 팀도 빨강(허위 초과)이 된다(EC-CAP-01, 2026-06-30). 계약관리 화면과 동일 기준.
+  const payroll = sumPayroll(roster.filter((p) => !p.isForeign));
   const fanScore = useGameStore((s) => s.fanScore); // 팬심(직전 시즌 정산)
   const archive = useGameStore((s) => s.archive);
   const cash = useGameStore((s) => s.cash);         // 운영 자금(FINANCE)
@@ -93,7 +95,7 @@ export default function Dashboard() {
         </Card>
       </SpotlightTarget>
 
-      {/* 재정 — 한 장 요약(상세 내역은 기록 탭) */}
+      {/* 재정 — 한 장 요약(상세 기록은 마이페이지 → 기록) */}
       <SpotlightTarget id="dash-finance">
         <Card accent={theme.warn}>
           <Row>

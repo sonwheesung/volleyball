@@ -49,7 +49,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="schedule" options={{ title: '일정', tabBarLabel: '일정', tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
       <Tabs.Screen name="squad" options={{ title: '선수단', tabBarLabel: '선수단', tabBarIcon: tabIcon('people-outline', 'people') }} />
       <Tabs.Screen name="office" options={{ title: '단장실', tabBarLabel: '단장실', tabBarIcon: tabIcon('briefcase-outline', 'briefcase') }} />
-      <Tabs.Screen name="history" options={{ title: '기록', tabBarLabel: '기록', tabBarIcon: tabIcon('trophy-outline', 'trophy') }} />
+      <Tabs.Screen name="mypage" options={{ title: '마이페이지', tabBarLabel: '마이페이지', tabBarIcon: tabIcon('person-circle-outline', 'person-circle') }} />
     </Tabs>
   );
 }

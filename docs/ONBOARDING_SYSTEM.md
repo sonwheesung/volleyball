@@ -43,7 +43,9 @@ export const tipsForScreen = (screen: string): Tip[] =>
 ```
 
 - **screen 키**(현재): `select-team` · `team-detail` · `tab-schedule` · `tab-dashboard` ·
-  `tab-squad` · `tab-office` · `tab-history`. (확장 시 새 키 추가.)
+  `tab-squad` · `tab-office` · `tab-mypage`. (확장 시 새 키 추가.)
+  - 2026-06-30 네비 개편: 구 `tab-history`(기록 탭) → `tab-mypage`(마이페이지 탭). `history.intro`/`history.ach`
+    **id는 보존**하고 screen 키만 옮김(둘 다 마이페이지 허브에서 발화 — 기록·업적 카드 앵커 그대로 history-top·history-ach).
 - **id 불변 규칙**: 출시된 id는 고정. 문구만 고치는 건 자유(추적과 무관). 대상이 바뀌면 **새 id**.
 
 ---
@@ -129,7 +131,7 @@ resetTips: () => void;              // 전체 리셋(설정 "튜토리얼 다시
 | tab-dashboard | `dash.overview` → `dash.finance` → `dash.standings` → `dash.news` | 구단 현황 · 재정 카드 · 순위 카드(탭) · 뉴스 카드(탭) |
 | tab-squad | `squad.coach` → `squad.intro` | 감독 카드 · 선수단 목록 |
 | tab-office | `office.intro` → `office.staff` → `office.tx` | 계약 관리 · 스태프 계약 · 시즌 중 FA |
-| tab-history | `history.ach` → `history.intro` | 업적 링크 · 기록 탭(시즌/통산/명전/연표) |
+| tab-mypage | `history.intro` → `history.ach` | 마이페이지 허브 — 기록 카드(→/records-archive: 시즌/통산/명전/연표) · 업적 카드(→/achievements) |
 
 > 새 화면/기능이 생기면 그 화면 키 + 새 id를 한 행 추가하면 자동으로 신규 유저 전체·기존 유저 신규분에
 > 스포트라이트가 잡힌다. 한 화면에 상호작용 요소를 추가하면 그 화면에 새 order의 팁을 끼우면 된다(앵커 래핑 + 한 줄).

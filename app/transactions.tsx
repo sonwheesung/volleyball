@@ -28,7 +28,9 @@ export default function Transactions() {
 
   // 내 팀 현재 명단(날짜 인지) — 정원·캡 계산
   const myIds = rosterIdsOnDay(teamId, currentDay);
-  const payroll = myIds.reduce((s, id) => s + (evolveOnDay(id, currentDay)?.contract.salary ?? 0), 0);
+  // 캡 계산은 국내 선수만(외인=1년 트라이아웃 별개 지갑, FOREIGN_SYSTEM 2장). 외인 연봉(~7억)을 캡에 넣으면
+  // capLeft가 줄어 멀쩡한 팀이 시즌 중 영입에 막힌다(기능 버그) + 표시 허위 초과 — EC-CAP-01(2026-06-30).
+  const payroll = myIds.reduce((s, id) => { const pl = evolveOnDay(id, currentDay); return s + (pl && !pl.isForeign ? pl.contract.salary : 0); }, 0);
   const capLeft = Math.max(0, LEAGUE_CAP - payroll);
   const full = myIds.length >= ROSTER_MAX;
 

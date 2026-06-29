@@ -95,11 +95,11 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
   },
   hof: {
     open: ['한 시대가 막을 내렸다.', '오랜 커리어가 끝내 명예로 마무리됐다.', '코트를 떠나는 이름이 전당에 새겨졌다.', '한 선수의 긴 여정이 영광으로 봉인됐다.'],
-    close: ['통산 기록은 리그에 영구히 남는다.', '그의 발자취는 후배들의 이정표가 된다.', '은퇴는 끝이 아니라 또 다른 기록의 시작이다.', '코트를 떠나도 이름은 전당에 영원히 걸린다.'],
+    close: ['통산 기록은 리그에 영구히 남는다.', '그 발자취는 후배들의 이정표가 된다.', '은퇴는 끝이 아니라 또 다른 기록의 시작이다.', '코트를 떠나도 이름은 전당에 영원히 걸린다.'],
   },
   retire: {
-    open: ['긴 여정의 마침표가 찍혔다.', '한 베테랑이 코트와 작별한다.', '오랜 시간 코트를 지킨 이름이 떠난다.', '한 시대를 함께한 선수가 라켓을 내려놓는다.'],
-    close: ['수고했다는 말로는 부족한 세월이었다.', '팬들은 그의 마지막 시즌을 오래 기억할 것이다.', '코트를 떠나도 쌓아온 기록은 남는다.', '다음 세대가 그 빈자리를 채워갈 것이다.'],
+    open: ['긴 여정의 마침표가 찍혔다.', '한 베테랑이 코트와 작별한다.', '오랜 시간 코트를 지킨 이름이 떠난다.', '한 시대를 함께한 선수가 유니폼을 벗는다.'],
+    close: ['수고했다는 말로는 부족한 세월이었다.', '팬들은 그 마지막 시즌을 오래 기억할 것이다.', '코트를 떠나도 쌓아온 기록은 남는다.', '다음 세대가 그 빈자리를 채워갈 것이다.'],
   },
   injury: {
     open: ['반갑지 않은 소식이다.', '팀에 전력 공백이 생겼다.', '코트 밖 변수가 순위에 끼어들었다.'],
@@ -334,7 +334,7 @@ export function buildNewsFeed(
       (n) => `전설의 마침표 — ${n} 명예의전당으로`,
     ], key, h.name), h.legend, h.teamId,
       body3('hof', key, `${h.name}이(가) ${h.seasons}시즌의 커리어를 마치고 명예의전당에 헌액됐다.${hofStats ? ` ${teamName(h.teamId)}에서 ${hofStats}를 남겼다.` : ''}`
-        + (h.legend ? ` 구단은 그의 헌액 번호 ${num}번을 전당에 새겼다.${legacyTxt}` : '')), h.id);
+        + (h.legend ? ` 구단은 헌액 번호 ${num}번을 전당에 새겼다.${legacyTxt}` : '')), h.id);
   }
 
   // 3.5) 은퇴 세리머니(슬라이스5) — 주목 은퇴자 작별 + 커리어 회고. HOF 헌액과 상보(작별 vs 전당 입성).
@@ -346,7 +346,7 @@ export function buildNewsFeed(
       : r.position === 'S' ? (r.assists > 0 ? `세트 어시스트 ${r.assists.toLocaleString()}개로 팀 공격을 조립한 야전사령관` : `${r.seasons}시즌 코트를 지킨 세터`)
       : r.position === 'MB' ? (r.blocks > 0 ? `블로킹 ${r.blocks.toLocaleString()}개로 네트 앞을 지킨 벽` : `${r.seasons}시즌 코트를 지킨 미들 블로커`)
       : (r.points > 0 ? `통산 ${r.points.toLocaleString()}점을 책임진 득점원` : `${r.seasons}시즌 코트를 지킨 ${posKo}`);
-    const tail = r.legend ? ` ${teamName(r.teamId)}은(는) 그의 헌액 번호 ${jerseyNumber(r.playerId)}번을 전당에 새겨 영원히 기린다.`
+    const tail = r.legend ? ` ${teamName(r.teamId)}은(는) 헌액 번호 ${jerseyNumber(r.playerId)}번을 전당에 새겨 영원히 기린다.`
       : r.hof ? ' 통산 기록은 명예의전당에 새겨진다.' : '';
     push(r.season, 'retire', vh([
       (n) => `${n}, ${r.seasons}시즌 커리어 마치고 은퇴`,
@@ -376,7 +376,7 @@ export function buildNewsFeed(
   // 6) 영구제명 — 리그를 뒤흔드는 최대 사건(승부조작·학폭). 영속 기록에서.
   for (const e of expelled) {
     push(e.season, 'scandal', `[속보] ${e.name}(${teamName(e.teamId)}), ${EXPEL_KO[e.kind]} 적발 — 영구제명(리그 영구 퇴출)`, true, e.teamId,
-      body3('scandal', `${e.season}:ex:${e.playerId}`, `${e.name}(${teamName(e.teamId)})이(가) ${EXPEL_KO[e.kind]}으로(로) 적발돼 리그에서 영구제명됐다. 코트로 돌아올 수 없으며, 그의 이름은 불명예 기록으로만 남는다.`), e.playerId);
+      body3('scandal', `${e.season}:ex:${e.playerId}`, `${e.name}(${teamName(e.teamId)})이(가) ${EXPEL_KO[e.kind]}으로(로) 적발돼 리그에서 영구제명됐다. 코트로 돌아올 수 없으며, 그 이름은 불명예 기록으로만 남는다.`), e.playerId);
   }
 
   // 7) 구단주 — 인기 스타를 벤치로 보낸 건의가 받아들여졌을 때 팬심이 술렁(OWNER_SYSTEM 팬 분노 연동)

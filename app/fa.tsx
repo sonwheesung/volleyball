@@ -63,7 +63,8 @@ function FACenterInner() {
   const grades = assignFAGrades(poolPlayers);
   const myRoster = pv.myRoster.map((id) => snap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
 
-  const myPayroll = pv.myRoster.reduce((s, id) => s + (snap[id]?.contract.salary ?? 0), 0);
+  // 캡은 국내 선수만(외인=별개 지갑, FOREIGN_SYSTEM 2장) — EC-CAP-01(2026-06-30). 외인 포함 시 허위 캡 초과.
+  const myPayroll = pv.myRoster.reduce((s, id) => { const pl = snap[id]; return s + (pl && !pl.isForeign ? pl.contract.salary : 0); }, 0);
   const signedCost = [...pv.signedByMe].reduce((s, id) => s + (snap[id]?.contract.salary ?? 0), 0);
   const projected = myPayroll + signedCost;
 

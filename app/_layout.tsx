@@ -44,9 +44,12 @@ const NAV_THEME = {
 // (RN Text.defaultProps — 전 화면 Text를 건드리지 않고 한 번에 적용)
 // **색 기본값 중요(2026-06-28)**: RN Text는 색 미지정 시 검정 → 다크 배경에서 안 보인다. 기본을 밝은색으로
 // 박아 "색 빠뜨린 텍스트"가 묻히는 걸 전역 차단(명시 색은 그대로 우선 — 코트 등 라이트 표면은 자체 색 보유).
-const TextDefaults = Text as unknown as { defaultProps?: { style?: unknown } };
+const TextDefaults = Text as unknown as { defaultProps?: { style?: unknown; textBreakStrategy?: string } };
 TextDefaults.defaultProps = TextDefaults.defaultProps ?? {};
 TextDefaults.defaultProps.style = { fontFamily: 'Pretendard', color: theme.text };
+// 줄바꿈을 **어절(단어) 단위**로(2026-06-30 사용자 요청) — Android 기본 'highQuality'는 한글을 CJK로 보고
+// 어절 중간에서도 끊어 긴 문장이 글자 단위로 쪼개졌다. 'simple'=공백(어절) 경계에서만 줄바꿈(웹 word-break:keep-all 격).
+TextDefaults.defaultProps.textBreakStrategy = 'simple';
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
@@ -96,6 +99,7 @@ export default function RootLayout() {
         <Stack.Screen name="exhibition" options={{ title: '테스트 경기' }} />
         <Stack.Screen name="achievements" options={{ title: '업적' }} />
         <Stack.Screen name="records" options={{ title: '통산 순위' }} />
+        <Stack.Screen name="records-archive" options={{ title: '기록' }} />
         <Stack.Screen name="settings" options={{ title: '설정' }} />
         <Stack.Screen name="supporter" options={{ headerShown: false, presentation: 'modal' }} />
         <Stack.Screen name="credits" options={{ title: '크레딧' }} />

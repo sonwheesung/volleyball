@@ -61,11 +61,11 @@ export const TIPS: Tip[] = [
   { id: 'office.tx', screen: 'tab-office', order: 2, anchor: 'office-tx',
     title: '시즌 중 FA 영입', body: '부상 등으로 포지션에 구멍이 나면, 미계약 FA를 시즌 중 즉시 수혈합니다(캡·정원 적용).' },
 
-  // ── 기록 탭 ──
-  { id: 'history.ach', screen: 'tab-history', order: 0, anchor: 'history-ach',
+  // ── 마이페이지 탭(구 기록 탭 — 2026-06-30 네비 개편으로 screen 키만 tab-history→tab-mypage 이동, id는 보존) ──
+  { id: 'history.intro', screen: 'tab-mypage', order: 0, anchor: 'history-top',
+    title: '기록', body: '시즌·통산·명예의전당·연표 — 세월이 흘러야 채워집니다. 배구명가의 진짜 재미입니다.' },
+  { id: 'history.ach', screen: 'tab-mypage', order: 1, anchor: 'history-ach',
     title: '업적', body: '구단주 본인의 장기 발자취 — 우승·시상·레전드·기록·운영을 트로피로 모읍니다.' },
-  { id: 'history.intro', screen: 'tab-history', order: 1, anchor: 'history-top',
-    title: '기록과 명예', body: '시즌·통산·명예의전당·연표 — 세월이 흘러야 채워집니다. 배구명가의 진짜 재미입니다.' },
 ];
 
 /** 그 화면의 팁을 순서대로 */
