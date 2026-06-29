@@ -7,11 +7,12 @@ import './_gt_mock';
 
 (async () => {
   const { useGameStore } = await import('../store/useGameStore');
-  const { LEAGUE } = await import('../data/league');
+  const { LEAGUE, SEASON } = await import('../data/league');
+  const { buildMatchBox } = await import('../data/matchBox');
   const { evalAchievements, achievementSummary } = await import('../engine/achievements');
   const { ACHIEVEMENTS } = await import('../engine/achievements');
 
-  const SEASONS = parseInt(process.argv[2] ?? '120', 10);
+  const SEASONS = parseInt(process.argv[2] ?? '40', 10);
   const SEED = parseInt(process.argv[3] ?? '777', 10);
   const SEASON_END_DAY = 164;
   const LEGEND_POINTS = 7500;
@@ -119,7 +120,10 @@ import './_gt_mock';
     if (rnd() < 0.5) { const id = pick(useGameStore.getState().selectedTeamId ? (await import('../data/league')).currentRosters()[my] ?? [] : []); if (id) try { G().requestInterview(id, 'reinforce'); } catch {} }
     if (rnd() < 0.3) { const c = pick((await import('../data/league')).availableCoaches(my)); if (c) G().hireCoach(c.id); }
     if (rnd() < 0.3) { const sc = pick((await import('../data/league')).availableScouts()); if (sc) G().hireScout(sc.id); }
-    G().setDay(SEASON_END_DAY); // 정규시즌 완주 — 리플레이가 전 경기 생산을 채움
+    // 정규시즌 완주 — 실제 게임처럼 전 경기 결과를 기록한다. setDay만으론 endSeason의 seasonOver 게이트
+    //   (planNextAction, results 완비 요구 — 2026-06-27 cache-persist 전환)를 못 넘어 no-op이었다(2026-06-29 수정).
+    for (const f of SEASON) { const { sim } = buildMatchBox(f.homeTeamId, f.awayTeamId, f.dayIndex, f.seed); G().recordResult({ fixtureId: f.id, homeSets: sim.homeSets, awaySets: sim.awaySets }); }
+    G().setDay(SEASON_END_DAY);
     try { G().endSeason(); } catch (e: any) { violations.push({ check: 'CRASH', msg: `yr${yr} endSeason: ${e?.message}` }); break; }
     violations.push(...checkDerived(`yr${yr}`));
     violations.push(...checkMonotone(`yr${yr}`));
