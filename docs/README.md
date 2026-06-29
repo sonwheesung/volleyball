@@ -122,6 +122,8 @@ npx tsx tools/_dv_foreign_fa_leak.ts        # 외인 FA 풀 오염 가드 — re
 npx tsx tools/_dv_foreign_contract.ts       # 계약관리 외인 차단 — release/reSign(외인·아시아) 거부·국내 대조군·willBeFA 외인 false + A/B(가드 제거 시 release(외인)=true). EDGE_CASES §3.9, exit 0/1
 npx tsx tools/_dv_tryout_pool.ts            # 트라이아웃 풀 생성 종료 가드(EDGE_CASES §3.14 — edge-swarm 클러스터A) — 정상 domesticAvg 바닥충족·고/극단 domesticAvg 종료(옛 무캡 while은 hang=A/B 이빨). exit 0/1
 npx tsx tools/_dv_setscore_dist.ts 3000     # 세트스코어 분포(독립) — 3-0/3-1/3-2 모두 출현·홈승률 밴드·풀세트 합리 + matchPoints 불변식(승자+패자=3) 0위반 + A/B(깨진 6종 거부). engine-verify 스웜 산물 승격. exit 0/1
+npx tsx tools/_dv_sideout_deuce.ts 10000    # 사이드아웃·듀스율 분포 — 사이드아웃(받는팀 랠리획득) ~58%·듀스세트 ~12.5% + A/B 보존(serveWin+sideout==총점). v2 분포 재측정(2026-06-29). exit 0/1
+npx tsx tools/_dv_drift_kovo.ts 3000        # KOVO 득점유형 분포(box 단일진실) — 킬~59·스터프~9.5·에이스~5.2·상대범실~26.3 vs 문서값 ±2%p 드리프트 + A/B(유형합==총점). exit 0/1
 npx tsx tools/_dv_simcache.ts               # 시뮬 결과 캐시 영속(REALTIME_SIM Phase1+6.1) — 재로드 시 재계산 제거(순위·생산·**dyn** 복원)·무stale(캐시==재계산)·A/B(캐시 조작 반영=실제 사용)·G3 엔진버전 게이트. [7]=dyn(부상/거래) 영속(복원히트·무stale·A/B). [8]=production 직렬화 라운드트립(ProdRow Set/Map이 JSON 후 반복가능 — "iterator not callable" 크래시 가드). exit 0/1
 npx tsx tools/_dv_preseason_cold.ts         # 시즌 시작 전(day0 구단선택) 선수/구단 화면 콜드 비용 가드(2026-06-28) — day0은 전 시즌 시드 재생(생산·dyn·인기/사건)을 안 타야(실측 ~2ms<500ms) + A/B(중반 콜드 leagueProduction는 >500ms로 무거움=측정 민감). 선수 화면 진입 15s 회귀 차단. exit 0/1
 npx tsx tools/_gt_determinism.ts            # 결정론+세이브(REALTIME_SIM Phase0) — 같은시드 in-process 2회 동일·실 partialize/rehydrate 동일·A/B(currentDay 누락 검출). exit 0/2
