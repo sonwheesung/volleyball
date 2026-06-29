@@ -25,23 +25,26 @@ Claude가 안드로이드 에뮬레이터로 배구명가를 **Expo Go로 띄우
 ADB="$LOCALAPPDATA/Android/Sdk/platform-tools/adb.exe"
 EMU="$LOCALAPPDATA/Android/Sdk/emulator/emulator.exe"
 "$ADB" devices              # 이미 떠 있으면 부팅 스킵
-"$EMU" -list-avds           # 현재 PC: sadojeon(pixel_6·android-35) 1개 — 배구명가도 이 AVD 재사용(기기 무관)
+"$EMU" -list-avds           # **volleyball** 전용 AVD 사용. ⚠ **sadojeon / emulator-5554는 다른 프로젝트(사도전) — 절대 건드리지 말 것**
 ```
 
-- 환경: `ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk`. AVD 새로 만들 필요 없음(아무 pixel/android-3x AVD면 됨).
+- 환경: `ANDROID_HOME=%LOCALAPPDATA%\Android\Sdk`. **배구명가 전용 AVD `volleyball`**(2026-06-29 생성, pixel_6·android-35). 없으면 생성:
+  `echo no | "$LOCALAPPDATA/Android/Sdk/cmdline-tools/latest/bin/avdmanager.bat" create avd -n volleyball -k "system-images;android-35;google_apis;x86_64" -d pixel_6`.
+- **다중 에뮬 안전(핵심)**: 사도전 등 다른 에뮬이 동시에 떠 있을 수 있다 → 배구명가는 **전용 포트 `emulator-5556`** 으로 띄우고, **모든 adb·expo 동작을 `-s emulator-5556` / `ANDROID_SERIAL`로 타겟 고정**(5554를 건드리면 남의 세션을 가로챈다 — 실제 사고 2026-06-29).
 - **Expo Go 경로**라 JDK·네이티브 빌드 불요. 첫 로드 시 Metro가 JS 번들만 만든다(수십 초~1분).
 
 ## 1. 부팅 + Expo Go 로드
 
 ```bash
-"$EMU" -avd sadojeon -no-snapshot -no-boot-anim -gpu auto &     # 백그라운드 부팅
-"$ADB" wait-for-device
-until [ "$("$ADB" shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; do sleep 5; done
+S=emulator-5556        # ⚠ 배구명가 전용 시리얼. 5554(사도전) 절대 타겟 금지
+"$EMU" -avd volleyball -no-snapshot -no-boot-anim -gpu auto -port 5556 &   # 전용 포트(사도전 5554와 분리)
+"$ADB" -s "$S" wait-for-device
+until [ "$("$ADB" -s "$S" shell getprop sys.boot_completed | tr -d '\r')" = 1 ]; do sleep 5; done
 
-# 개발 서버 + Expo Go 자동 설치·실행(에뮬에 Expo Go 없으면 CLI가 깔고 앱을 연다)
+# 개발 서버 + Expo Go 자동 설치·실행 — ANDROID_SERIAL로 5556에만(2개 떠 있을 때 엉뚱한 에뮬 방지)
 cd /c/project/volleyball
-npx expo start --android --port 8082 &      # run_in_background로. Expo Go가 dev 번들을 로드
-# (대안) 수동: adb 로 Expo Go 설치 후 `"$ADB" reverse tcp:8082 tcp:8082` → Expo Go에서 exp://localhost:8082 열기
+ANDROID_SERIAL="$S" npx expo start --android --port 8082 &      # run_in_background. Expo Go가 5556에 dev 번들 로드
+# 이후 모든 adb 동작은 `"$ADB" -s emulator-5556 ...` 로 타겟 고정(screencap·tap 포함). 대안: ANDROID_SERIAL 환경변수 유지
 ```
 
 - 이미 Expo Go가 떠 번들을 받은 뒤면 재시작 말고 화면만 다시: `"$ADB" shell am start -n host.exp.exponent/.MainActivity` 후 최근앱/딥링크.
@@ -52,8 +55,10 @@ npx expo start --android --port 8082 &      # run_in_background로. Expo Go가 d
 
 한 동작 = 한 확인. 절대 화면 안 보고 연속 탭하지 않는다.
 
+> ⚠ **2개 에뮬이면 bare `adb`는 "more than one device" 에러.** 시작에 `export ANDROID_SERIAL=emulator-5556` 한 번 → 아래 모든 `"$ADB"` 명령이 5556(배구명가)만 타겟(또는 매 명령에 `-s emulator-5556`). 5554(사도전)로 새면 사고.
+
 ```bash
-"$ADB" exec-out screencap -p > shot.png    # scratchpad에
+"$ADB" exec-out screencap -p > shot.png    # (ANDROID_SERIAL=emulator-5556 전제) scratchpad에
 ```
 → **Read(shot.png)** 로 화면을 눈으로 본다 → 다음 동작 판단 → 탭 → 다시 screencap.
 
@@ -94,7 +99,7 @@ MSYS_NO_PATHCONV=1 "$ADB" shell cat /sdcard/ui.xml > ui.xml
 
 - **결과 기록**: 사이클·날짜·사전조건·PASS/오류·애매(질문대기). 핵심 스크린샷만 보관(scratchpad).
 - 오류 고쳤으면 BOARD_RULES/UI_RULES/EDGE_CASES 등재 + 형제 사냥 + 영향 계층(`README` 검증 루틴) 재실행. 기능 완성이면 자동 커밋·푸시([[auto-push-on-feature]]).
-- 에뮬은 PC를 점유 → 끝나면 정리: `"$ADB" emu kill` (또는 창 닫기). Metro 백그라운드도 종료.
+- 에뮬은 PC를 점유 → 끝나면 정리: **`"$ADB" -s emulator-5556 emu kill`** (배구명가만 — 사도전 5554는 절대 kill 금지). Metro 백그라운드도 종료.
 
 ## 트리거 메모
 
