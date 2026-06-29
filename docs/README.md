@@ -114,7 +114,7 @@ npx tsx tools/_dv_seasondays.ts             # 시즌 길이 단일상수(engine/
 npx tsx tools/_dv_severance.ts              # 방출 위약금(TRANSACTION_SYSTEM 0.5①) — release가 cash서 severanceFee 차감·unrelease 환불·지갑부족 차단·잔여연수 단조성. exit 0/1
 npx tsx tools/_dv_releasefan.ts 8           # 스타 방출→팬 분노(TRANSACTION_SYSTEM 0.5③) — releaseAnger==releaseAngerPenalty(명성)·철회 환불·무명 0(인기 게이트)·fanScore 방향성. 느림(빌드업 4회). exit 0/1
 npx tsx tools/_dv_release_unrest.ts 8       # 핵심 방출→선수단 동요(TRANSACTION_SYSTEM 0.5④) — buildOwnerFx 만료 선수 refuseProb += releaseUnrestBias(명성)·무명 0(게이트)·순수함수 단조/상한. exit 0/1
-npx tsx tools/_dv_firstserve.ts 8000        # 5세트 첫 서브=코인토스(MATCH_SYSTEM v2.1) 발생+보드반영 — (A)엔진 setFirstServers 홈~50%·1~4세트 홀짝정확 (B)받는팀이점 민감도 (C)교차계층 엔진==독립오라클(recvId)==보드 reconstructRallies 0불일치(소스revert 1118/2146 teeth). exit 0/1
+npx tsx tools/_dv_firstserve.ts 24000       # 5세트 첫 서브=코인토스(MATCH_SYSTEM v2.1) 발생+보드반영 (N=24000 — (B)받는팀이점 z<-3 민감도가 8000선 과소표본 false-fail이라 상향, 2026-06-29 확인) — (A)엔진 setFirstServers 홈~50%·1~4세트 홀짝정확 (B)받는팀이점 민감도 (C)교차계층 엔진==독립오라클(recvId)==보드 reconstructRallies 0불일치(소스revert 1118/2146 teeth). exit 0/1
 npx tsx tools/_dv_foreign_fa_leak.ts        # 외인 FA 풀 오염 가드 — release 후 외인 미포함·재영입 거부(signInSeason)·국내 대조군 + A/B(구 전부-add 검출). EDGE_CASES §3.8, exit 0/1
 npx tsx tools/_dv_foreign_contract.ts       # 계약관리 외인 차단 — release/reSign(외인·아시아) 거부·국내 대조군·willBeFA 외인 false + A/B(가드 제거 시 release(외인)=true). EDGE_CASES §3.9, exit 0/1
 npx tsx tools/_dv_tryout_pool.ts            # 트라이아웃 풀 생성 종료 가드(EDGE_CASES §3.14 — edge-swarm 클러스터A) — 정상 domesticAvg 바닥충족·고/극단 domesticAvg 종료(옛 무캡 while은 hang=A/B 이빨). exit 0/1
