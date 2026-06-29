@@ -158,7 +158,7 @@ export function buildNewsFeed(
   currentSeason: number,
   expelled: ExpelRecord[] = [],
   benchDirectives: BenchDirective[] = [], // 구단주 벤치 지시(내 팀, 현재 시즌) — 인기 스타 벤치 → 팬 술렁
-  currentDay = 0,
+  leagueDay = 0, // 리그 진행 컷오프 = leagueDisplayDay(currentDay) = currentDay−1 (관전/미래 경기·사건 제외, NEWS_SYSTEM §3.5). 호출부가 leagueDisplayDay를 넘긴다 — raw currentDay 금지(첫 경기 전 스포일러).
   myTeamId = '',
   transfers: Transfer[] = [], // FA 이적 연표(슬라이스3) — 내 팀 in/out만 기사화
   retirements: RetireRecord[] = [], // 은퇴 연표(슬라이스5) — 주목 은퇴자 작별·회고
@@ -359,6 +359,7 @@ export function buildNewsFeed(
   // 4) 이번 시즌 큰 부상(중상·시즌아웃만 — 경미는 단신 제외)
   for (const s of seasonInjuryReport()) {
     if (s.severity !== 'major' && s.severity !== 'season') continue;
+    if (s.from > leagueDay) continue; // 아직 안 일어난 미래 부상 제외 — 리그 진행 컷오프(NEWS_SYSTEM §3.5)
     const out = s.severity === 'season' ? '시즌아웃' : `약 ${s.missMatches}경기 결장`;
     const key = `${currentSeason}:inj:${s.playerId}`;
     push(currentSeason, 'injury', `${pName(s.playerId)} ${SEVERITY_KO[s.severity]} — ${out}`, s.severity === 'season', s.teamId,
@@ -367,6 +368,7 @@ export function buildNewsFeed(
 
   // 5) 사건·사고 — 아주 가끔, 리그를 뒤흔드는 헤드라인
   for (const s of seasonScandals()) {
+    if (s.from > leagueDay) continue; // 아직 안 터진 미래 사건 제외 — 리그 진행 컷오프(NEWS_SYSTEM §3.5)
     push(currentSeason, 'scandal', `[단독] ${pName(s.playerId)}(${teamName(s.teamId)}), ${SCANDAL_KO[s.kind]} — ${s.missMatches}경기 출장 정지`, true, s.teamId,
       body3('scandal', `${currentSeason}:sc:${s.playerId}`, `${pName(s.playerId)}(${teamName(s.teamId)})이(가) ${SCANDAL_KO[s.kind]}으로(로) ${s.missMatches}경기 출장 정지 징계를 받았다.`), s.playerId);
   }
@@ -380,7 +382,7 @@ export function buildNewsFeed(
   // 7) 구단주 — 인기 스타를 벤치로 보낸 건의가 받아들여졌을 때 팬심이 술렁(OWNER_SYSTEM 팬 분노 연동)
   for (const b of benchDirectives) {
     const p = getPlayer(b.playerId); if (!p) continue;
-    const pop = popularityNow(p, currentDay, archive);
+    const pop = popularityNow(p, leagueDay, archive);
     if (pop < 60) continue; // 인기 스타만 — 무명 선수 벤치는 기사 안 남
     push(currentSeason, 'owner', `팬들, 간판 ${p.name} 벤치 기용에 술렁 — "왜 안 쓰나"`, pop >= 78, myTeamId,
       body3('owner', `${currentSeason}:own:${b.playerId}`, `${teamName(myTeamId)}의 간판 ${p.name}이(가) 최근 출전 명단에서 빠지면서 팬들이 술렁이고 있다. "왜 안 쓰나"라는 목소리가 커지고 있다.`), b.playerId);
@@ -439,7 +441,7 @@ export function buildNewsFeed(
   // 트리플 크라운·한 경기 폭발은 선수당 1건으로 묶는다(한 시즌 8건 폭주 방지, 2026-06-25 에디터) — 시즌 N번째/최고 경기.
   const tc = new Map<string, { count: number; tid: string; name: string; back: number; b: number; a: number }>();
   const bg = new Map<string, { tid: string; name: string; points: number; spikes: number; aces: number; blocks: number; opp: string }>();
-  for (const mp of seasonMatchProds(currentDay)) {
+  for (const mp of seasonMatchProds(leagueDay)) {
     const teamOf = (id: string) => (mp.homeIds.has(id) ? mp.homeTeamId : mp.awayTeamId);
     for (const [id, l] of mp.lines) {
       const p = getPlayer(id); if (!p) continue;

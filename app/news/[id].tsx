@@ -6,6 +6,7 @@ import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { Card, IconLabel, Muted, Screen, theme } from '../../components/Screen';
 import { buildNewsFeed, newsKey } from '../../data/news';
+import { leagueDisplayDay } from '../../data/standings';
 import { KIND_KO } from '../news';
 import { getTeam } from '../../data/league';
 import { useGameStore } from '../../store/useGameStore';
@@ -44,7 +45,7 @@ export default function NewsArticle() {
   const teamId = useGameStore((s) => s.selectedTeamId);
 
   const feed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, currentDay, teamId ?? '', transfers, retirements),
+    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId ?? '', transfers, retirements),
     [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
   );
   const n = feed[Number(id)];

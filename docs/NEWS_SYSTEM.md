@@ -113,6 +113,28 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 **무결성**: 매달린 참조 0(방출 선수도 playerBase에 존재 — `commitPlayerBase(snapshot)`이 풀 포함), 중복 0
 (`season:release:playerId` 키), 결정론(같은 시드 동일), 가짜 드라마 0(전부 실제 roster diff). `simNews` 확장 검증.
 
+### 3.5 리그 진행 컷오프 — 첫 경기 전·관전 전 스포일러 차단 (2026-06-30 버그 수정)
+
+> **증상(에뮬레이터 C0, 첫 경기 전 0경기)**: `경기 결과` 화면은 "아직 치른 경기가 없습니다"인데 같은 순간
+> `리그 뉴스`가 **유망주 데뷔전 N점 6건 + 미래 부상(서하린 13경기 결장) + 시즌 후반(160일째) 사건(윤수아 도박 30경기 정지)**
+> 을 노출. 측정 `tools/_dv_newsday0.ts`: 순위표 `leagueDisplayDay(0)=-1`로 0경기인데 뉴스만 raw `currentDay=0`을
+> 써서 dayIndex 0(첫 경기일·미관전) 3경기를 미리 봄(NEWSDAY0_LEAK=true).
+
+**원인 = 컷오프 불일치(형제 버그)**. 앱 전체(`대시보드`·`results`·`schedule`·`standings`·`history`·`player`·`staff`·
+`contracts`)는 리그 진행 기준 **`leagueDisplayDay(currentDay)=currentDay−1`**(관전/미래 경기 제외)로 통일돼 있는데,
+**`buildNewsFeed`만 raw `currentDay`를 받았다**. 게다가 부상·사건(`seasonInjuryReport()`/`seasonScandals()`)은
+day 경계 자체가 없어 **시즌 전체 미래 사건**을 노출했다(`dyn()`이 시즌 전체를 시드 선생성하므로).
+
+**결정(2026-06-30 — 사용자 A안 "실제 치른 경기까지만")**: 뉴스 실시간 소재도 앱 전체와 **동일 컷오프**로 통일한다.
+- **호출부 3곳(`index`·`news`·`news/[id]`)**: `buildNewsFeed(..., leagueDisplayDay(currentDay), ...)` — raw currentDay 금지.
+  (목록 `news.tsx`와 상세 `news/[id].tsx`는 인덱스로 같은 기사를 집으므로 **반드시 동일하게** 넘긴다.)
+- **`buildNewsFeed` 내부**: 7번째 인자를 `leagueDay`로 받아 (a) 데뷔/트리플/폭발 `seasonMatchProds(leagueDay)`
+  (b) 부상 루프 `if (s.from > leagueDay) continue` (c) 사건 루프 `if (s.from > leagueDay) continue` (d) 구단주
+  인기 `popularityNow(p, leagueDay, …)`. `popularityNow`는 이미 `day≤0` 안전 처리(시작 전 생산 0·사고 0, owner.ts:171).
+- **결과**: 첫 경기 전(leagueDay=−1) → 경기성·부상·사건 뉴스 0(구단 소개·기조 예고 등 비경기 뉴스만). 관전 중에도
+  "치른 경기까지만" 노출 → `결과`/`순위`/`성적` 화면과 완전 일치. **스포일러 정책(결과는 관전 후, CLAUDE.md §6)과 정합.**
+- 검증 `tools/_dv_newsday0.ts`(첫 경기 전 LEAK=false) + `simNews`(장기 무결성·중복0·결정론) + A/B(필터 끄면 다시 누수).
+
 ---
 
 ## 4. ★ 본문 풍부화 + 변주 엔진 (핵심)
@@ -304,6 +326,10 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
   재설계(수치는 헤드라인이 말함). (3) retire "벽였다→벽이었다"(`josa(stat,'이었다','였다')`) + 0스탯이면 중립 문형(가짜
   드라마 방지). (4) hof 본문 0 스탯 제외("디그 0개" 박제 방지). (5) release 전용 opener/closer 풀(transfer 낙관 톤 분리).
   검증 `_ev_josa`(잔여 병기 0)·simNews 무결성·_ev_retirenews·_ev_transfernews PASS.
+- 2026-06-30 **리그 진행 컷오프 통일 — 첫 경기 전 스포일러 수정**(에뮬레이터 C0 발견, §3.5): `buildNewsFeed`만
+  raw `currentDay`를 써서 첫 경기 전(0경기)에 미관전 경기 데뷔 + 미래 부상·사건을 노출(`결과` 화면 "치른 경기 없음"과 모순).
+  앱 전체 표준 `leagueDisplayDay(currentDay)=currentDay−1`로 통일(호출부 3곳) + 부상·사건 루프에 `from>leagueDay` 필터.
+  측정 `tools/_dv_newsday0.ts`(LEAK true→false, A/B). 형제 버그 = standings의 playedThroughDay 수정이 뉴스엔 안 옮겨짐.
 - 2026-06-29 **FINANCE 2.0 Stage2b — `sponsor` kind 신설**: 모기업 기조 예고 뉴스. 막 끝난 시즌 기준 다가오는 오프시즌 FA
   기류를 `sponsorStanceOf`로 순수 파생(새 저장 0·가짜 드라마 0). aggressive "큰손 등판 — 거물 노린다"(내 팀 ★)·thrifty "긴축 — 관망".
   POOLS(`sponsorAggr`/`sponsorThrift`)·최신 시즌만(예고는 미래형). 검증 `simNews`(톤 일치·최신시즌만·건수==stance 도출·무결성 0).

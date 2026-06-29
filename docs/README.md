@@ -181,6 +181,7 @@ npx tsx tools/simStaffLife.ts              # 스태프 풀 건강(고갈/폭발0
 npx tsx tools/simScandalEffect.ts          # 사건사고 정지출전 차단·영구퇴출 정합. exit 0/1
 npx tsx tools/simStatRecord.ts             # 개인 귀속 결정론·팀 누수0·개인합=팀박스. exit 0/1
 npx tsx tools/simNews.ts                   # 뉴스 무결성(빈헤드/본문·중복·매달린 teamId 0). exit 0/1
+npx tsx tools/_dv_newsday0.ts              # 첫 경기 전 뉴스 스포일러 차단(EC-NEWS-01·NEWS §3.5, 2026-06-30) — leagueDay=-1 실시간 뉴스 0 + A/B(경계해제 시 재현=필터 민감). 미관전 데뷔·미래 부상/사건 노출 회귀 차단. exit 0/2
 npx tsx tools/simSuggest.ts                # 건의 시스템(감독 성향이 수락/거절 가른다). exit 0/1
 npx tsx tools/_ev_suggest_defer.ts         # 건의 반영 시점(OWNER 2.3, 2026-06-28) — 관전 중(이어보기 대기) 경기엔 미적용·다음 경기부터(fromDay=currentDay+1) + A/B(델타=1, 옛 미적용 검출). 시간차/stale-resume·리롤 차단. exit 0/1
 npx tsx tools/_dv_foreign_archetype.ts     # 외국인 연고 성격 가드(EC-FG-03, 2026-06-28) — 외인 hometown 아키타입/preferredTeamId 0·국내 도달가능 대조군 + effectiveArchetypeOf·discontentNow 외인 게이트(A/B). "외인이 고향팀 그리움" 회귀 차단. exit 0/1
