@@ -11,16 +11,16 @@
 - **저장소**: `zustand persist` + `AsyncStorage`, 키 `baeknyeon-save`. 각 기기 로컬 JSON 1개.
 - **얇은 리플레이 세이브**: 진화된 스탯·순위·생산을 저장하지 않는다. **base 스냅샷(`playerBase`/`rosters`) +
   `currentDay` + `results` + 누적 기록(archive/통산/명전/마일스톤…)** 만 저장하고, 화면·순위·생산은 시드로 **재계산**.
-- **부호화**: `partialize`(저장 필드 화이트리스트, 52필드 §1) → 직렬화. 복원은 `onRehydrateStorage`가 base를
+- **부호화**: `partialize`(저장 필드 화이트리스트, 53필드 §1) → 직렬화. 복원은 `onRehydrateStorage`가 base를
   레지스트리에 커밋(`commitPlayerBase`/`commitRosters`/`commitStaff` 등).
-- **시뮬 결과 캐시(2026-06-27, REALTIME_SIM Phase1)**: 52번째 필드 `simCache`(계산된 순위·생산) — 재로드 시 재계산
+- **시뮬 결과 캐시(2026-06-27, REALTIME_SIM Phase1)**: 53번째 필드 `simCache`(계산된 순위·생산) — 재로드 시 재계산
   제거. **폐기 가능**(검증 실패/구세이브=null→재계산 폴백)이라 하드 마이그레이션 불요. 워밍된 것만 저장(stale 금지).
 
 ---
 
-## 1. 영속 스키마 (52 필드 — 단일 진실)
+## 1. 영속 스키마 (53 필드 — 단일 진실)
 
-> 출처: `store/useGameStore.ts` `freshSave`(158-206)·`partialize`(870-922)·`types/index.ts`. 구조가 바뀌면
+> 출처: `store/useGameStore.ts` `freshSave`(163-212)·`partialize`(892-945)·`types/index.ts`. 구조가 바뀌면
 > **이 표를 먼저** 갱신한다(DOC_DISCIPLINE). 자료구조 분류가 마이그레이션 정규화기(§3)의 근거다.
 
 ### 설정(새 게임에도 유지 — freshSave 밖)
@@ -57,6 +57,7 @@
 |---|---|---|---|
 | `playerBase` | Record<playerId, Player> \| null | null | **전체 Player**(신체·멘탈·기술·xp·potential·talentBase·catTalent·contract·career·seasonLines·traits·faPref·isForeign·isAsianQuota·nationality). types/index.ts 42-95 |
 | `rosters` | Record<teamId, playerId[]> \| null | null | 팀별 명단 |
+| `bonds` | Record<playerId, number> | {} | 함께한 시즌 bond 누적(RELATIONSHIP — 복원 시 `setRelationContext`). 맵 바운드 |
 
 ### 역대 기록 (append-only, 일부 바운드)
 | 필드 | 자료구조 | 기본 | 바운드 |

@@ -31,16 +31,16 @@
 | [TRAIT_SYSTEM](./TRAIT_SYSTEM.md) | 선수 특성(긍정+부정, 결정론 부여, 소폭 엔진영향) | `engine/traits.ts` |
 | [INJURY_SYSTEM](./INJURY_SYSTEM.md) | 부상(시즌 계층 격리·출전결장·만성) | `engine/injury.ts`, `data/injury.ts` |
 | [NEWS_SYSTEM](./NEWS_SYSTEM.md) | 뉴스 피드(1~4 종합 파생, 캡스톤) | `data/news.ts` |
-| [BROADCAST_SYSTEM](./BROADCAST_SYSTEM.md) | 중계 현수막(기록·PO확정·정규우승) + 우승 축하 화면 + **§8 명예의전당 헌액 연출·헌액 번호(비소모·결정론·번호 계보 사실)** | ✅ Phase1 — `data/broadcast.ts`·`BroadcastBanner`·`ChampionCelebration`. §8 헌액 번호 — `engine/jersey.ts`·`data/legends.ts`·`components/LegendIllustration.tsx`·기록탭 HofView·뉴스(2026-06-26) |
+| [BROADCAST_SYSTEM](./BROADCAST_SYSTEM.md) | 중계 현수막(기록·PO확정·정규우승) + **경기 중 실시간(세트획득·연속·에이스/블록, Phase3)** + 우승 축하 화면 + **§8 헌액 연출·헌액 번호** | ✅ Phase1·3 — `data/broadcast.ts`·`components/courtDirector.buildLiveBanners`·`BroadcastBanner`·`ChampionCelebration`·`tools/_dv_livebanner`. §8 — `engine/jersey.ts`·`data/legends.ts`·`LegendIllustration` |
 | [TRANSACTION_SYSTEM](./TRANSACTION_SYSTEM.md) | 시즌 중 이동(방출→FA·구멍 영입, 전 구단 AI, 날짜 인지 명단) | `engine/transactions.ts`, `data/dynamics.ts`, `app/transactions.tsx` |
 | [OWNER_SYSTEM](./OWNER_SYSTEM.md) | 구단주 레이어: 선수 면담·감독 벤치 건의·팬심 | `engine/owner.ts`·`data/owner.ts` (뉴스 연동만 보류) |
 | [FORM_SYSTEM](./FORM_SYSTEM.md) | 경기감각: 결장 누적 → 체감 하락, 출전 이력 파생 | `engine/form.ts`·`data/dynamics.ts` |
 | [FOREIGN_SYSTEM](./FOREIGN_SYSTEM.md) | 용병 트라이아웃: 1년 계약·연봉 고정·추첨 지명·시즌 중 교체 | engine/foreign.ts, data/tryout.ts, app/tryout.tsx |
-| [FINANCE_SYSTEM](./FINANCE_SYSTEM.md) | 구단 재정: 모기업(성적 보너스·긴축)+직관+굿즈, 캡과 별개 지갑 | `engine/finance.ts`, store, `tools/simFinance.ts` |
+| [FINANCE_SYSTEM](./FINANCE_SYSTEM.md) | 구단 재정(모기업+직관+굿즈, 캡 별개 지갑) + **FINANCE 2.0**(모기업 기조 sponsorStance→AI FA 입찰·내 팀 1회성 보너스·예고 뉴스) | `engine/finance.ts`·`engine/sponsorStance.ts`·`data/leagueHistory.ts`, store, `tools/simFinance.ts` |
 | [CLUB_IDENTITY_SYSTEM](./CLUB_IDENTITY_SYSTEM.md) | 구단 정체성(명문·신흥강호·황혼·만년약체·신생팀): 선택 화면 서사 + 선수단 생성 연동(고정 배정) | `data/clubIdentity.ts`, `data/seed.ts`, `app/select-team.tsx`, `app/team/[id].tsx`, `tools/clubIdentity.ts` |
-| [RELATIONSHIP_SYSTEM](./RELATIONSHIP_SYSTEM.md) | **선수 인간관계망**(친구/라이벌 affinity → FA 영입·재계약·방출 결정에 ± 가중) — 📋 플랜(미구현) | `engine/relationships.ts`·`data/relationships.ts`(예정) |
+| [RELATIONSHIP_SYSTEM](./RELATIONSHIP_SYSTEM.md) | **선수 인간관계망**(친구/라이벌 affinity → FA 영입·재계약·방출 ± 가중) — ✅ Phase 1a 구현 | `engine/relationships.ts`·`data/relationships.ts` |
 | [WORLDCUP_SYSTEM](./WORLDCUP_SYSTEM.md) | **월드컵 참가 유료 DLC**(4년 비시즌 국가대표 차출→성장+사고면제+업적, **스카우팅 쇼케이스=차출선수 FA 영입**) — 📋 설계 완료·구현 추후. 100세션 재검증·현실일정 출처 반영 | `engine/nationalTeam.ts`·`engine/seasonBake.ts`·`data/worldCup.ts`(예정) |
-| [SAVE_SYSTEM](./SAVE_SYSTEM.md) | **세이브·마이그레이션**(영속 52필드 스키마·version/migrate·정규화기·안전 복원) — 출시 후 구조 변경 안전 | `store/saveMigration.ts`·`store/useGameStore.ts`(persist) |
+| [SAVE_SYSTEM](./SAVE_SYSTEM.md) | **세이브·마이그레이션**(영속 53필드 스키마·version/migrate·정규화기·안전 복원) — 출시 후 구조 변경 안전 | `store/saveMigration.ts`·`store/useGameStore.ts`(persist) |
 | [REALTIME_SIM_SYSTEM](./REALTIME_SIM_SYSTEM.md) | **전진 시뮬+결과 저장 전환(B안)** — 게으른 씨앗 재생 → 1회 치르고 저장(로딩·재생버그 제거). 독립리뷰·함정 7게이트·Phase0~3 | `store/useGameStore.ts`·`data/standings.ts`·`data/production.ts`(전환 중) |
 | [ONBOARDING_SYSTEM](./ONBOARDING_SYSTEM.md) | 스포트라이트 튜토리얼(구단 선택부터 화면별 안내, **스텝 단위 영구 추적** → 신규 기능만 재안내)·플레이어 시작 기본 스태프 | `components/Spotlight.tsx`, `data/tutorialSteps.ts`, `store/useGameStore.ts`(seenTips), `data/league.ts`(grantStartingStaff) |
 
@@ -71,7 +71,9 @@
 | **시즌 중 이동**(방출→FA·구멍 영입·전 구단 AI·날짜 인지 명단) | ✅ (TRANSACTION_SYSTEM) |
 | **구단주 레이어**(선수 면담·감독 벤치 건의·팬심→예산) | ✅ (OWNER_SYSTEM — 뉴스 연동만 보류) |
 | **경기감각**(결장 누적 체감 −7%, 출전 이력 파생, ● 컨디션) | ✅ (FORM_SYSTEM) |
-| **구단 재정**(모기업·직관·굿즈, 캡 별개 지갑·자금 게이트) | ✅ (FINANCE_SYSTEM) |
+| **구단 재정**(모기업·직관·굿즈, 캡 별개 지갑·자금 게이트) + **FINANCE 2.0**(모기업 기조→AI FA 입찰·내 팀 보너스·예고 뉴스) | ✅ (FINANCE_SYSTEM) |
+| **중계 현수막**(우승·기록·PO확정 + **경기 중 실시간**: 세트획득·연속·에이스/블록 누적) | ✅ Phase1·3 (BROADCAST_SYSTEM) |
+| **선수 인간관계망**(affinity→FA ± 가중) | ✅ Phase 1a (RELATIONSHIP_SYSTEM) |
 | **용병 트라이아웃**(1년 계약·매년 풀 유입 — 멸종 해결, 국내 평균 이상 보장) | ✅ (FOREIGN_SYSTEM) |
 | **사건·사고**(음주운전 등 출장정지, ~0.4건/시즌) | ✅ (OWNER_SYSTEM 4.6) |
 | 명예의전당·영구결번 | ✅ (기존) |

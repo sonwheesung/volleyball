@@ -46,9 +46,14 @@
 1. 영향권 문서의 통계를 **즉시 재측정해 새 메타데이터로 기입**, 또는
 2. 재측정 못 하면 해당 수치를 **"⟨재시뮬 필요 — 엔진 변경 yyyy-mm-dd⟩"** 로 바꾼다.
 
-점검 대상(통계가 사는 곳): `docs/MATCH_SYSTEM.md`(7.1 체력 등), `docs/FOREIGN_SYSTEM.md`,
-`.claude/skills/sim-league/SKILL.md`(parity 기준치), `docs/BOARD_RULES.md`(수치 기준),
-`tools/*.ts` 헤더의 측정 이력 주석.
+점검 대상(통계가 사는 곳): `docs/MATCH_SYSTEM.md`(7.1 체력·경기 분포 요약·세트스코어), `docs/SALARY_SYSTEM.md`(§1.1 생산/OP baseline),
+`docs/FOREIGN_SYSTEM.md`, `docs/FA_SYSTEM.md`(simLeague parity), `.claude/skills/sim-league/SKILL.md`(parity 기준치),
+`docs/BOARD_RULES.md`(수치 기준), `tools/*.ts` 헤더의 측정 이력 주석.
+
+> **무효화 사건 로그**(엔진 변경 시 여기 + 영향 문서에 기록):
+> - **2026-06-28 ENGINE_VERSION 2**(`engine/match.ts` — 체력 회복 0.009→0.005·세트 사이 0.12→0.035): 경기 분포(킬·에이스·
+>   스터프·세트스코어·체력 곡선) 일괄 무효 → `MATCH_SYSTEM.md` 본문에 일괄 무효 배너(개별 정정 대신, 2026-06-29). 단
+>   가드로 재확인된 생산 baseline(`_dv_drift_posrate` OP 4.3)·재정(`simFinance` base 243000)은 v2 반영 현행.
 
 ## 측정 도구 규약
 

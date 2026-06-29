@@ -98,6 +98,11 @@ KOVO 방식:
 
 ## 6. 오프시즌 오케스트레이션 (store.endSeason)
 
+> **진행 게이트(2026-06-27 cache-persist 전환)**: `endSeason`은 정규시즌이 **실제로 끝났을 때만**(전 경기 results
+> 완비 = `planNextAction(...).kind === 'seasonOver'`) 진행하고, 아니면 **즉시 return**(no-op). 확정 버튼 연타로 인한
+> 시즌 2전진(더블탭)도 이 게이트가 차단(롤오버 후 results가 비워져 planNextAction이 다시 'match'를 돌려줌).
+> → `setDay(164)`만으론 진행 안 됨(results를 채워야). 테스트 하네스도 전 경기 `recordResult` 후 endSeason해야(`_gt_derived` 2026-06-29 교정).
+
 시즌 종료 → 다음 시즌 base를 만드는 **단일 합성 함수**. 단계(2026-06 갱신):
 
 ```
@@ -142,4 +147,4 @@ KOVO 방식:
 | 부상 결장·시즌 중 이동(명단 날짜 인지) | ✅ 구현(2026-06) — INJURY/TRANSACTION_SYSTEM(`data/dynamics.ts`) |
 | 포스트시즌 직접 지휘 / 라인업 수동 개입 | ❌ 미구현(자동 완성 후 오버라이드로 개방 예정) |
 
-> 검증: `npm test`(104) · `npx tsc --noEmit`(+ `-p tsconfig.test.json`) · `npx expo export --platform android`.
+> 검증: `npm test`(205) · `npx tsc --noEmit`(+ `-p tsconfig.test.json`) · `npx expo export --platform android`.

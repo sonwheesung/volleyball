@@ -83,7 +83,7 @@
 
 | 수입원 | 공식(placeholder) | 규모 | 성격 |
 |---|---|---|---|
-| **모기업 지원금** | 팀별 베이스 22~30억(시드 결정론 — 모기업 크기가 다르다) | 수입의 ~60% | 안정 기반 |
+| **모기업 지원금** | 팀별 베이스 ~~22~30억~~ **24.3~32.3억**(시드 결정론 — 모기업 크기가 다르다. base 243000, FINANCE 2.0 Stage1) | 수입의 ~60% | 안정 기반 |
 | **성적 보너스** | 베이스 × (0.2×정규순위 비례 + 우승 0.15 / 준우승 0.08) | 0~9억 | "정규 2위에 플옵 준우승이라 모기업이 더 쏜다" |
 | **관중 수입** | 직관율 = 0.05 + 0.07×승률 + 0.03×팬심/100 (clamp 4~16%) → 관중/경기 = 팬덤×직관율 → ×홈 18경기 ×1만원 | 4.5~13억 | **성적 민감** — 꼴찌 시즌엔 반토막 |
 | **굿즈(유니폼)** | 선수팬 총합(겹침 포함) × 0.25만원 | 1~3억 | 스타가 벌어준다 — 인기 선수의 재정 가치 |
@@ -117,7 +117,9 @@
 
 ## 6. 코드 맵
 
-- `engine/finance.ts` — 순수: sponsorBase/sponsorBonus/turnout/gate/merch/settleSeason.
-- `store` — `cash`+`lastFinance` 저장, endSeason 정산(롤오버 전 성적·팬덤으로) → FA 게이트에 잔고 전달.
-- `data/offseason.ts` — resolveFAMarket 내 팀 입찰에 cash 게이트(차감 순차).
-- UI — 대시보드 재정 카드(잔고·수입 분해·순익), FA 화면 "자금 부족" 표시.
+- `engine/finance.ts` — 순수: sponsorBase/sponsorBonus/turnout/gate/merch/settleSeason + **`stanceCashBonus`**(FINANCE 2.0 Stage4 내 팀 1회성 보너스).
+- `engine/sponsorStance.ts` — 모기업 기조 `sponsorStanceOf`(시드+성적, 순수, FINANCE 2.0 Stage2a).
+- `data/leagueHistory.ts` — stance 컨텍스트 주입(`setSeasonHistory`·`teamStanceOf`·`upcomingStanceOf`·`setStanceEnabled`). setAwardScores 패턴 미러.
+- `store` — `cash`+`lastFinance` 저장, endSeason 정산 + stance 보너스 walletCash → FA 게이트. setSeasonHistory 주입(248/627/866/953).
+- `data/offseason.ts` — resolveFAMarket 내 팀 cash 게이트 + **AI 입찰 stance 공격성**(teamStanceOf, 캡 clamp). `data/news.ts` — `sponsor` 예고 뉴스.
+- UI — 대시보드 재정 카드, FA 화면 "자금 부족" 표시.

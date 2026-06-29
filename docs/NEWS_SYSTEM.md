@@ -50,8 +50,8 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 
 ## 3. 기사 소재 카탈로그 (전체)
 
-`kind`(NewsItem.kind) = `champion|award|milestone|hof|injury|scandal|owner|match|debut|streak|standing`
-(신규 kind: `match`·`debut`·`streak`·`standing` 추가)
+`kind`(NewsItem.kind) = `champion|award|milestone|hof|injury|scandal|owner|match|debut|streak|standing|transfer|release|retire|sponsor`
+(신규 kind: `match`·`debut`·`streak`·`standing` + 이적류 `transfer`·`release`(§3.3)·`retire`(§3.4) + **`sponsor`**(모기업 기조 예고, FINANCE 2.0 Stage2b·2026-06-29))
 
 ### 3.1 실시간 (시즌 중) — 초반을 채운다
 
@@ -304,3 +304,6 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
   재설계(수치는 헤드라인이 말함). (3) retire "벽였다→벽이었다"(`josa(stat,'이었다','였다')`) + 0스탯이면 중립 문형(가짜
   드라마 방지). (4) hof 본문 0 스탯 제외("디그 0개" 박제 방지). (5) release 전용 opener/closer 풀(transfer 낙관 톤 분리).
   검증 `_ev_josa`(잔여 병기 0)·simNews 무결성·_ev_retirenews·_ev_transfernews PASS.
+- 2026-06-29 **FINANCE 2.0 Stage2b — `sponsor` kind 신설**: 모기업 기조 예고 뉴스. 막 끝난 시즌 기준 다가오는 오프시즌 FA
+  기류를 `sponsorStanceOf`로 순수 파생(새 저장 0·가짜 드라마 0). aggressive "큰손 등판 — 거물 노린다"(내 팀 ★)·thrifty "긴축 — 관망".
+  POOLS(`sponsorAggr`/`sponsorThrift`)·최신 시즌만(예고는 미래형). 검증 `simNews`(톤 일치·최신시즌만·건수==stance 도출·무결성 0).

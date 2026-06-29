@@ -1,4 +1,4 @@
-# 중계 현수막 (Broadcast Lower-Third) — 설계+Phase1 구현 (2026-06-17 설계 / 2026-06-18 구현)
+# 중계 현수막 (Broadcast Lower-Third) — 설계 + Phase1·3 구현 (2026-06-17 설계 / Phase1 2026-06-18 / Phase3 2026-06-29)
 
 > **★ 구현 현황(2026-06-19)**: Phase 1 ✅ — `data/broadcast.ts buildMatchBanners`(기록 경신·PO 확정/탈락·**트리플 크라운**)
 > + `components/BroadcastBanner.tsx`(하단 현수막 큐 애니메이션, kind 무관 tint/icon/title 렌더) + `app/match/[id]` finished 게이트 주입.
@@ -64,9 +64,9 @@
 - **Phase 3 ✅ 구현(2026-06-29):** 경기 *중* 실시간 현수막 — 랠리별 개인 귀속이 이미 100% 검증됨(`_ev_scorer`·
   `_ev_setmatch`·`_ev_digmatch` 보드==박스)이라 선결 충족. `reconstructRallies(sim)`에서 순수 파생.
   - **이벤트(전부 결과-중립 또는 "관전과 동시"=스포일러 안전)**: ① **세트 획득**("OO N세트 획득!" — 세트 종결
-    랠리의 scorer=세트 승자. 관전자가 세트 끝을 보는 순간이라 안전) ② **연속 득점**(한 팀 run≥5·8 → "OO 5연속 득점!")
-    ③ **서브 에이스 누적**(선수 한 경기 3·5개 → "PLAYER 서브 에이스 N개!") ④ **블로킹 누적**(선수 3·5개).
-  - **빈도 게이팅(스팸 방지, §6)**: 매 에이스/블록이 아니라 **누적 임계**(3·5)·**run 임계**(5·8)로만 → 경기당 ~5-8건.
+    랠리의 scorer=세트 승자. 관전자가 세트 끝을 보는 순간이라 안전) ② **연속 득점**(한 팀 run≥6·9·12 → "OO 6연속 득점!")
+    ③ **서브 에이스 누적**(선수 한 경기 3·5·7개 → "PLAYER 서브 에이스 N개!") ④ **블로킹 누적**(선수 5·8개).
+  - **빈도 게이팅(스팸 방지, §6)**: 매 에이스/블록이 아니라 **누적 임계**(에이스 3·5·7 / 블록 5·8 — MB 3블록은 흔해 5+만)·**run 임계**(6·9·12)로만 → 경기당 ~8건(`courtDirector.ts` ACE_TH/BLK_TH/RUN_TH 실측).
     에이스·블록 단발은 이미 상단 콜아웃 배지(`HOW_CAPTION`)·중계 피드가 담당 — 현수막은 "사건"만.
   - **스포일러 안전(구조)**: 각 배너 `at`(랠리 인덱스)는 `rallies[0..at]`만으로 도출(미래 미참조) — 가드가
     prefix 재현으로 전수 검증. 결과-결정(우승/PO)은 여전히 finished 후만(기존 buildMatchBanners 불변).
@@ -74,8 +74,10 @@
     재생 위치(`score.ptIdx`)가 배너 `at`에 도달하면 큐에 넣어 `BroadcastBanner`로 재생(finished 전용 큐와 별개).
     BannerKind에 `setwon·run·acemulti·blockmulti` 추가. 검증 `tools/_dv_livebanner.ts`(prefix 스포일러·빈도·세트승자 정합·결정론).
 
-## 5. 코드 맵 (예정)
-- `data/broadcast.ts` — `buildMatchBanners(fixture, sim, ...)` 순수 집계(우승·기록·확정 → Banner[]).
+## 5. 코드 맵
+- `data/broadcast.ts` — `buildMatchBanners(...)` 순수 집계(우승·기록·확정 → Banner[]) + `BannerKind` 실시간 4종(`setwon·run·acemulti·blockmulti`).
+- `components/courtDirector.ts` — `buildLiveBanners(rallies, mineSide, names)` 경기 중 실시간 현수막(Phase 3, 순수 파생). `app/match/[id].tsx`가 `score.ptIdx` 도달 시 큐 재생.
+- `tools/_dv_livebanner.ts` — 실시간 현수막 가드(prefix 스포일러·세트승자/세트수 정합·빈도·결정론).
 - `engine/clinch.ts` — `detectClinch(standings, remaining)` 매직넘버(Phase 2).
 - `data/milestones.ts` — `detectMatchMilestones()` 추가(경기단위).
 - `components/BroadcastBanner.tsx` — 하단 현수막 렌더/애니메이션.
