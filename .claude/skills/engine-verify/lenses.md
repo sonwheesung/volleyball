@@ -66,3 +66,7 @@
     NaN이 캡·affinity·성장으로 전파(클러스터 D 다수 세션). save-corruption 내성을 표준 렌즈로.
   - **[사각] cross-metric 정합** — 클러스터 B(clinch는 승수, standings는 승점)를 season 2세션만 잡음. 다른 season 세션은
     clinch의 *내부* wins 일관성만 봐 surveyed에 OK 기록 → **"같은 개념을 두 모듈이 다른 지표로 계산하나"** 각도가 사각이었음. 서브렌즈 추가.
+- **(2026-06-29 · edge-swarm run 108세션)** 엣지 542(WAI 83·기지 88·신규고합의 38). 신규 실버그 2종(FINANCE 2.0)·기지 재확인([D]NaN·[E]가용<7).
+  - **[표준 승격] "새 표면 우선 재스윕"** — 직전 run(06-27) 이후 추가된 FINANCE 2.0(sponsorStance·leagueHistory·AI입찰)에서 **신규 실버그 2종**(EC-FN-01 preview≠result·EC-FN-02 음수오퍼)을 10+세션이 수렴 발견. 기존 area는 대부분 기지/WAI 재확인. → **"기능 추가 직후 그 표면을 area로 명시 배정하고 재스윕"** 을 표준화(새 코드가 가장 버그 밀도 높음).
+  - **[표준 승격] "형제 비대칭(parallel reconstruction)" = preview=result 최강 렌즈** — 같은 개념(stance)을 두 경로가 도출(내 팀 보너스=라이브 병합 ✓ / AI 입찰=archive-only ✗)하는데 **한쪽만 고쳐진** 비대칭을 cross-metric+동시성 세션이 수렴. preview=result는 **단일 시점이 아니라 "프리뷰 시점 vs 확정 시점의 컨텍스트(archive) 상태차"** 를 대조해야 보임 → 그 시점차 렌즈를 명시.
+  - **[사각] 단발 high(38건 중 다수 count=1)** — preview=result/음수오퍼는 high지만 합의 count=1로도 나옴(area가 신규라 겹침 세션이 적었음). 신규 area는 **중복도(RED)를 높여** 합의 측정력 확보 필요(이번엔 RED=4였으나 신규 area에 4 부족).

@@ -166,6 +166,7 @@ npx tsx tools/simFinance.ts 120            # 재정 건강(잔고·모기업 보
 npx tsx tools/_dv_sponsorstance.ts         # 모기업 기조(FINANCE 2.0 Stage2) — sponsorStanceOf 도출: aggressive 빈도 5~13%·thrifty 4~10%·normal>75%·양 트리거(상위권/가뭄)·결정론·대칭(순수함수 myTeam/cash 의존0). 합성 archive. exit 0/1
 npx tsx tools/_dv_fa_stance.ts 24 6        # 모기업 기조→AI FA 입찰(FINANCE 2.0 Stage3) — 매 오프시즌 stance on/off A/B: ①레버 효과(행선지 Δ>0)·②캡 불변(clamp 위반0)·③방향성(aggressive>normal>thrifty 팀당 FA)·④결정론/A/B민감도·⑤양 stance 발화. 실제 이력(advanceOffseason) 적립. exit 0/1
 npx tsx tools/_dv_stance_bonus.ts 20 6   # 모기업 기조→내 팀 1회성 현금보너스(FINANCE 2.0 Stage4) — projectSettledCash on/off A/B: Δ==stanceCashBonus 정합·권한 무영향(thrifty/normal Δ0)·결정론·세 stance 관측. preview=result. exit 0/1
+npx tsx tools/_dv_stance_preview.ts      # 모기업 기조 AI 입찰 preview=result(EC-FN-01) — archive에 막 끝난 시즌 유무만 바꿔 upcomingStances 동일(0)·옛 teamStanceOf는 차이(>0=오라클 이빨). edge-swarm 발견·수정. exit 0/1
 # parity A/B(FINANCE 2.0 Stage3 필수): `npx tsx tools/simLeague.ts 40 24`(stance on) vs `$env:STANCE_OFF=1; npx tsx tools/simLeague.ts 40 24`(베이스라인=전팀 normal) — parityStd·최장왕조·지속성 r·1위 점유율·약팀반등 밴드 대조(부익부 재점화 감시). off arm == Stage3 이전 동작
 # simNews 는 sponsor 예고(Stage2b) 사실 정합도 검증(톤 일치·최신시즌만·건수==sponsorStanceOf 도출)
 npx tsx tools/simStatEffect.ts             # 스탯 유효성 — 전 16스탯이 올바른 방향으로 경기 작용(대조군 무편향·id편향 상쇄). exit 0/1

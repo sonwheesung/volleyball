@@ -423,6 +423,22 @@
 
 ---
 
+## 3.15 FINANCE 2.0 모기업 기조 — edge-swarm 발견(2026-06-29, 108세션) · ✅ 수정
+
+> 2026-06-29 전 시스템 edge-swarm(108세션)이 **신규 표면(FINANCE 2.0)** 에서 잡은 실버그 2종. 합의 매우 높음(10+ 세션이
+> 같은 코드로 수렴). 직접 코드 대조(2차 검수)로 확인·근본수정·A/B 가드까지. 나머지(가용<7·NaN내성)는 §3.14[D][E] 기지 재확인.
+
+| ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
+|---|---|---|---|
+| EC-FN-01 | **모기업 기조 AI 입찰 preview≠result** — FA 센터 미리보기에선 전 구단 stance=normal(평범)으로 보이는데 endSeason 확정에선 실제 stance(aggressive/thrifty)로 입찰 → 미리보기와 결과가 다름(EC-FA-03 류 preview=result 위반). 매 오프시즌 체계적 발생 | `resolveFAMarket`가 `teamStanceOf(t, season-1)`(archive-only) 사용 → 프리뷰 시점 historyArchive에 막 끝난 시즌 S 엔트리가 아직 없어(endSeason @630 setSeasonHistory에서만 주입) `sponsorStanceOf`가 전원 normal. → **`upcomingStances`(라이브 병합 — `computeStandings`로 S를 덧대 archive S 유무 무관)** 로 교체(`offseason.ts:135`). 내 팀 보너스(Stage4)는 이미 `upcomingStanceOf` 라이브 병합이었음 — AI 입찰만 누락이었음(형제 정합) | **`_dv_stance_preview`**(archive S 유무만 바꿔 upcomingStances 동일=0·옛 teamStanceOf는 122 차이=오라클 이빨, 833 팀-시즌) |
+| EC-FN-02 | **AI aggressive 오퍼 음수/0·MIN_SALARY 미만** — payroll[t]≥LEAGUE_CAP(보장계약 keep는 무캡 누적 EC-CA-03)인 aggressive AI팀이 입찰 시 `offer=min(asking×1.2, cap−payroll)`의 둘째 항이 ≤0 → 음수 오퍼 + ok게이트(`payroll+offer≤cap`)가 항상 true로 무력화(no-op) | `offseason.ts:172` clamp가 상한만 보고 하한 없음 → **`room>asking`일 때만 프리미엄**(room=cap−payroll), room≤asking이면 offer=asking으로 두고 ok게이트가 정상 차단(`offseason.ts:172`). 음수/0·sub-MIN 오퍼·게이트 no-op 동시 해소 | `_dv_fa_stance`(캡 불변 — domesticPayroll≤cap 위반0)·코드리뷰 |
+
+> **감시(verify-cases 인계)**: ① **draft/tryout 센터 preview≠result** — `app/draft.tsx`·`tryout.tsx`가 `buildDraftContext`에 raw `store.cash`를 넘기나 endSeason은 `walletCash`(정산+stance보너스) 사용(`app/fa.tsx`만 `projectSettledCash`로 정합). 내 팀 현금게이트 FA가 프리뷰≠결과 가능(스웜 #9·#10, 코드 확인 — 도구화 대기). ② 가용<7(§3.14[E])는 여전히 미수정 감시(시즌층 의존, 스캔들 정지 무캡).
+
+> 발견 방법(왜 직전 검증이 못 잡았나): FINANCE 2.0(2026-06-29)은 **직전 edge-swarm(2026-06-27) 이후 추가된 표면**이라 미발굴 영역이었다. 또 stance 도출이 **두 경로(내 팀 보너스=라이브 병합 ✓ / AI 입찰=archive-only ✗)로 갈려** 한쪽만 고쳐진 "형제 비대칭"(TEST_METHODOLOGY §4 병렬 재구성). preview=result는 단일 시점 시뮬론 안 보이고 **프리뷰 시점 vs endSeason 시점의 archive 상태차**를 대조해야 보임.
+
+---
+
 ## 4. 회귀 프로토콜 (로직 수정 시)
 
 영입/오프시즌 계열 엔진·셀렉터(`engine/compensation·faMarket·cap·draft·staff·staffLifecycle·foreign·transactions·finance`,

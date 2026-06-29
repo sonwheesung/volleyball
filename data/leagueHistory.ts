@@ -22,16 +22,29 @@ export function teamStanceOf(teamId: string, season: number): SponsorStance {
   return sponsorStanceOf(teamId, season, historyArchive);
 }
 
-/** 다가오는 오프시즌의 내 팀 기조(preview=result) — 막 끝난 시즌 S의 순위/우승을 **라이브 셀렉터로** 산출해
- *  archive에 덧대 도출한다. archive가 아직 S를 안 담은 FA 프리뷰 시점(endSeason 전)과, S를 담은 endSeason
- *  시점 모두 동일 결과(projectSettledCash가 finance를 라이브로 미리보는 것과 같은 패턴). 내 팀 현금 보너스 게이트. */
-export function upcomingStanceOf(teamId: string, season: number): SponsorStance {
-  if (!stanceEnabled) return 'normal';
+// 막 끝난 시즌 S의 순위/우승을 **라이브 셀렉터로** 산출해 archive에 덧댄다(S가 아직 archive에 없는 프리뷰 시점과,
+//   S가 담긴 endSeason 시점 모두 동일 — computeStandings(MAX)는 두 시점 다 막 끝난 시즌이라 결과 동일 = preview=result).
+function mergedUpcoming(season: number): SeasonArchive[] {
   const live: SeasonArchive = {
     season,
     championId: buildPlayoffs(season).championId ?? '',
     standings: computeStandings(Number.MAX_SAFE_INTEGER).map((r) => r.teamId),
   };
-  const merged = [...historyArchive.filter((a) => a.season !== season), live];
-  return sponsorStanceOf(teamId, season, merged);
+  return [...historyArchive.filter((a) => a.season !== season), live];
+}
+
+/** 다가오는 오프시즌의 한 팀 기조(preview=result) — 내 팀 현금 보너스 게이트(projectSettledCash·endSeason). */
+export function upcomingStanceOf(teamId: string, season: number): SponsorStance {
+  if (!stanceEnabled) return 'normal';
+  return sponsorStanceOf(teamId, season, mergedUpcoming(season));
+}
+
+/** 전 구단 기조 배치(merged archive 1회 빌드 — buildPlayoffs/computeStandings 1회). resolveFAMarket AI 입찰용.
+ *  teamStanceOf(archive-only)와 달리 라이브 병합이라 **프리뷰=결과**(막 끝난 시즌이 archive에 아직 없어도 동일 stance). */
+export function upcomingStances(teamIds: string[], season: number): Record<string, SponsorStance> {
+  const out: Record<string, SponsorStance> = {};
+  if (!stanceEnabled) { for (const t of teamIds) out[t] = 'normal'; return out; }
+  const merged = mergedUpcoming(season);
+  for (const t of teamIds) out[t] = sponsorStanceOf(t, season, merged);
+  return out;
 }
