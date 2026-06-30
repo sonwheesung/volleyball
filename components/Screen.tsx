@@ -4,7 +4,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { ActivityIndicator, Animated, Easing, ImageBackground, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { displayOvr } from '../engine/overall';
+import { displayOvr, fogStat } from '../engine/overall';
 import { POS_COLOR, POS_LABEL } from './posTokens';
 
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
@@ -297,16 +297,25 @@ export function PosTag({ pos, full, solid, compact }: { pos: string; full?: bool
   );
 }
 
-/** 0~100 스탯 막대 */
-export function StatBar({ label, value }: { label: string; value: number }) {
+/** 0~100 스탯 막대.
+ *  potential: 주면 천장 틱 + "→NN"(내 팀 선수 — 성장 여지 표시). reveal<1: 스카우팅 안개(타 구단 — 흐리게/물음표). */
+export function StatBar({ label, value, potential, reveal = 1 }: { label: string; value: number; potential?: number; reveal?: number }) {
+  const fog = reveal < 1 ? fogStat(value, reveal) : null;
+  const shown = fog ? fog.fill : value;
   const color = value >= 80 ? theme.good : value >= 65 ? theme.accent : value >= 50 ? theme.warn : theme.bad;
+  const showPot = potential != null && potential > value && (!fog || fog.exact);
   return (
     <View style={styles.statRow}>
       <Text style={styles.statLabel}>{label}</Text>
       <View style={styles.barTrack}>
-        <View style={[styles.barFill, { width: `${Math.max(0, Math.min(100, value))}%`, backgroundColor: color }]} />
+        {shown != null ? (
+          <View style={[styles.barFill, { width: `${Math.max(0, Math.min(100, shown))}%`, backgroundColor: fog && !fog.exact ? theme.muted : color, opacity: fog && !fog.exact ? 0.55 : 1 }]} />
+        ) : null}
+        {showPot ? <View style={[styles.potMark, { left: `${Math.max(0, Math.min(100, potential!))}%` }]} /> : null}
       </View>
-      <Text style={styles.statVal}>{value}</Text>
+      <Text style={styles.statVal} numberOfLines={1}>
+        {fog ? fog.text : value}{showPot ? <Text style={styles.potTxt}>→{potential}</Text> : null}
+      </Text>
     </View>
   );
 }
@@ -368,9 +377,11 @@ const styles = StyleSheet.create({
   posTextCompact: { fontSize: 9.5, fontWeight: '800' },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statLabel: { color: theme.muted, fontSize: 13, width: 64 },
-  statVal: { color: theme.text, fontSize: 13, fontWeight: '700', width: 28, textAlign: 'right' },
+  statVal: { color: theme.text, fontSize: 13, fontWeight: '700', width: 58, textAlign: 'right' },
+  potTxt: { color: theme.good, fontSize: 12, fontWeight: '800' },
   barTrack: { flex: 1, height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4 },
+  potMark: { position: 'absolute', top: 0, width: 2, height: 8, backgroundColor: theme.good, opacity: 0.9 },
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 40 },
   emptyStateText: { color: theme.muted, fontSize: 15, lineHeight: 22, textAlign: 'center' },

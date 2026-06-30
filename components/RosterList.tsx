@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Player } from '../types';
-import { overall, overallRaw } from '../engine/overall';
+import { overall, overallRaw, displayOvr, fogOvr } from '../engine/overall';
 import { formatMoney } from '../engine/salary';
 import { OvrBadge, PosTag, theme } from './Screen';
 import { POS_COLOR, POS_ORDER } from './posTokens';
@@ -13,7 +13,7 @@ export interface RosterDecor { dotColor?: string; mood?: string }
  *  starterIds: 주어지면 "주전 먼저 → 포지션순, 그 다음 벤치 → 포지션순"으로 정렬 + 주전/벤치 구분선. */
 export type RosterSort = 'position' | 'salary' | 'ovr';
 
-export function RosterList({ players, decor, starterIds, sort = 'position' }: { players: Player[]; decor?: (p: Player) => RosterDecor; starterIds?: Set<string>; sort?: RosterSort }) {
+export function RosterList({ players, decor, starterIds, sort = 'position', reveal = 1 }: { players: Player[]; decor?: (p: Player) => RosterDecor; starterIds?: Set<string>; sort?: RosterSort; reveal?: number }) {
   const router = useRouter();
   const isStarter = (p: Player) => !!starterIds && starterIds.has(p.id);
   const sorted = [...players].sort((a, b) => {
@@ -50,7 +50,11 @@ export function RosterList({ players, decor, starterIds, sort = 'position' }: { 
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              <OvrBadge value={overallRaw(p)} />
+              {reveal >= 0.92 ? (
+                <OvrBadge value={overallRaw(p)} />
+              ) : (
+                <View style={styles.fogOvr}><Text style={styles.fogOvrTxt}>{fogOvr(displayOvr(overallRaw(p)), reveal)}</Text></View>
+              )}
               <Text style={styles.salary}>{formatMoney(p.contract.salary)}</Text>
             </View>
           </Pressable>
@@ -79,4 +83,6 @@ const styles = StyleSheet.create({
   asian: { color: theme.elite, fontSize: 11, fontWeight: '700' }, // 아시아쿼터 — 외국인(코랄)과 구분되는 블루
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   salary: { color: theme.text, fontSize: 13, fontWeight: '800', minWidth: 52, textAlign: 'right' },
+  fogOvr: { width: 46, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
+  fogOvrTxt: { color: theme.muted, fontSize: 12, fontWeight: '800' },
 });

@@ -10,14 +10,14 @@ import { playerFans } from '../../engine/owner';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
 import { SCANDAL_KO } from '../../engine/scandal';
 import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason } from '../../engine/owner';
-import { getEvolvedPlayer, getTeam, shortTeamName as teamShort, currentRosters } from '../../data/league';
+import { getEvolvedPlayer, getTeam, shortTeamName as teamShort, currentRosters, teamScoutReveal } from '../../data/league';
 import { buildLineup } from '../../engine/lineup';
 import { getPlayerProduction } from '../../data/production';
 import { leagueDisplayDay } from '../../data/standings';
 import { awardHistoryOf } from '../../data/awards';
 import { effectiveContract } from '../../data/roster';
 import { isFranchise } from '../../engine/cap';
-import { overall, overallRaw } from '../../engine/overall';
+import { overall, overallRaw, displayOvr, fogOvr } from '../../engine/overall';
 import { TRAITS } from '../../engine/traits';
 import { deriveRatings } from '../../engine/ratings';
 import { contractStatus, formatMoney } from '../../engine/salary';
@@ -120,6 +120,9 @@ export default function PlayerDetail() {
 
   // ── 구단주 레이어 (내 팀 선수만) ──
   const isMine = !!myTeamId && rosterIdsOnDay(myTeamId, currentDay).includes(p.id);
+  // 스카우팅 공개도 — 내 팀 선수는 전부(포텐까지) 보이고, 타 구단 선수는 스카우터 공개도만큼만(흐림). STAFF_SYSTEM
+  const reveal = isMine ? 1 : (myTeamId ? teamScoutReveal(myTeamId) : 1);
+  const pot = (s: keyof NonNullable<typeof p.potential>): number | undefined => (isMine ? p.potential?.[s] : undefined);
   const moodInfo = isMine && myTeamId ? discontentNow(p, myTeamId, currentDay) : null;
   const topic = moodInfo?.topic ?? null;
   // 연고 향수(hometown)면 어느 팀을 그리는지 이름으로(사용자 요청 2026-06-30) — "연고 팀에서 뛰고 싶다"(막연)가
@@ -208,8 +211,20 @@ export default function PlayerDetail() {
             </View>
             <Muted style={{ fontSize: 13 }}>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
           </View>
-          <OvrBadge value={overallRaw(p)} size={62} />
+          {isMine || reveal >= 0.92 ? (
+            <OvrBadge value={overallRaw(p)} size={62} />
+          ) : (
+            <View style={styles.fogBadge}>
+              <Text style={styles.fogOvrTxt}>{fogOvr(displayOvr(overallRaw(p)), reveal)}</Text>
+              <Text style={styles.fogOvrCap}>OVR</Text>
+            </View>
+          )}
         </View>
+        {!isMine && reveal < 0.92 ? (
+          <Text style={{ color: theme.warn, fontSize: 12, marginTop: 6 }}>
+            🔍 타 구단 — 스카우팅 공개도 {Math.round(reveal * 100)}%. 스카우터를 영입하면 더 선명해집니다.
+          </Text>
+        ) : null}
         {suspendedOnDay(displayDay).has(p.id) ? (
           <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13, marginTop: 6 }}>
             🚫 출장 정지 중 — {SCANDAL_KO[seasonScandals().find((s) => s.playerId === p.id)!.kind]}
@@ -502,12 +517,12 @@ export default function PlayerDetail() {
             size={158}
           />
           <View style={{ flex: 1, gap: 2 }}>
-            <StatBar label="스파이크" value={r.spike} />
-            <StatBar label="블로킹" value={r.block} />
-            <StatBar label="디그" value={r.dig} />
-            <StatBar label="리시브" value={r.receive} />
-            <StatBar label="세팅" value={r.set} />
-            <StatBar label="서브" value={r.serve} />
+            <StatBar label="스파이크" value={r.spike} reveal={reveal} />
+            <StatBar label="블로킹" value={r.block} reveal={reveal} />
+            <StatBar label="디그" value={r.dig} reveal={reveal} />
+            <StatBar label="리시브" value={r.receive} reveal={reveal} />
+            <StatBar label="세팅" value={r.set} reveal={reveal} />
+            <StatBar label="서브" value={r.serve} reveal={reveal} />
           </View>
         </View>
       </Card>
@@ -515,27 +530,27 @@ export default function PlayerDetail() {
       <IconLabel icon="barbell-outline" color={theme.elite}>세부 스탯 (밑단)</IconLabel>
       <Card accent={theme.elite}>
         <Muted style={{ marginBottom: 2 }}>신체</Muted>
-        <StatBar label="점프력" value={p.jump} />
-        <StatBar label="민첩성" value={p.agility} />
-        <StatBar label="체력" value={p.staminaMax} />
-        <StatBar label="체젠" value={p.staminaRegen} />
+        <StatBar label="점프력" value={p.jump} reveal={reveal} potential={pot('jump')} />
+        <StatBar label="민첩성" value={p.agility} reveal={reveal} potential={pot('agility')} />
+        <StatBar label="체력" value={p.staminaMax} reveal={reveal} potential={pot('staminaMax')} />
+        <StatBar label="체젠" value={p.staminaRegen} reveal={reveal} potential={pot('staminaRegen')} />
         <View style={{ height: 6 }} />
         <Muted style={{ marginBottom: 2 }}>공통 / 멘탈</Muted>
-        <StatBar label="반응속도" value={p.reaction} />
-        <StatBar label="위치선정" value={p.positioning} />
-        <StatBar label="집중력" value={p.focus} />
-        <StatBar label="기복" value={p.consistency} />
-        <StatBar label="VQ" value={p.vq} />
+        <StatBar label="반응속도" value={p.reaction} reveal={reveal} potential={pot('reaction')} />
+        <StatBar label="위치선정" value={p.positioning} reveal={reveal} potential={pot('positioning')} />
+        <StatBar label="집중력" value={p.focus} reveal={reveal} potential={pot('focus')} />
+        <StatBar label="기복" value={p.consistency} reveal={reveal} potential={pot('consistency')} />
+        <StatBar label="VQ" value={p.vq} reveal={reveal} potential={pot('vq')} />
       </Card>
 
-      <IconLabel icon="trending-up-outline" color={theme.good}>기술치</IconLabel>
+      <IconLabel icon="trending-up-outline" color={theme.good}>기술치{isMine ? <Text style={{ color: theme.good, fontSize: 12 }}>  (→ = 성장 포텐셜)</Text> : null}</IconLabel>
       <Card accent={theme.good}>
-        <StatBar label="공격기술" value={p.skSpike} />
-        <StatBar label="블로킹기술" value={p.skBlock} />
-        <StatBar label="디그기술" value={p.skDig} />
-        <StatBar label="리시브기술" value={p.skReceive} />
-        <StatBar label="세팅기술" value={p.skSet} />
-        <StatBar label="서브기술" value={p.skServe} />
+        <StatBar label="공격기술" value={p.skSpike} reveal={reveal} potential={pot('skSpike')} />
+        <StatBar label="블로킹기술" value={p.skBlock} reveal={reveal} potential={pot('skBlock')} />
+        <StatBar label="디그기술" value={p.skDig} reveal={reveal} potential={pot('skDig')} />
+        <StatBar label="리시브기술" value={p.skReceive} reveal={reveal} potential={pot('skReceive')} />
+        <StatBar label="세팅기술" value={p.skSet} reveal={reveal} potential={pot('skSet')} />
+        <StatBar label="서브기술" value={p.skServe} reveal={reveal} potential={pot('skServe')} />
       </Card>
 
       {/* 면담 모달 — 시스템 Alert 대신 앱 테마 디자인 */}
@@ -581,6 +596,9 @@ export default function PlayerDetail() {
 }
 
 const styles = StyleSheet.create({
+  fogBadge: { width: 62, height: 62, borderRadius: 31, borderWidth: 2, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
+  fogOvrTxt: { color: theme.muted, fontSize: 15, fontWeight: '900' },
+  fogOvrCap: { color: theme.muted, fontSize: 9, fontWeight: '700' },
   avatar: { width: 84, height: 84, borderRadius: 42, backgroundColor: theme.cardAlt, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' },
   avatarImg: { width: 84, height: 84, resizeMode: 'cover' },
   pName: { color: theme.text, fontSize: 24, fontWeight: '900' },

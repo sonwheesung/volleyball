@@ -257,7 +257,7 @@ export default function TeamDetail() {
           </Pressable>
         </View>
         <View style={{ height: 8 }} />
-        <RosterList players={players} sort={sort} />
+        <RosterList players={players} sort={sort} reveal={isCurrent ? 1 : (selectedTeamId ? teamScoutReveal(selectedTeamId) : 1)} />
       </SpotlightTarget>
 
       <View style={{ height: 6 }} />

@@ -9,7 +9,7 @@
 |---|---|---|
 | **감독(head)** | 성향(공/수/밸 → 경기)·카리스마(타임아웃 기세폭)·**훈련선호(어떤 스탯이 크는지=방향)** | `coachInfoOf`·`teamFocus` — 영입 시 시드 감독 대체 |
 | **전문 코치(assistant)** | **분야별 다른 효과**(아래). 같은 분야 최고 1명만. **팀당 슬롯 `COACH_SLOTS=3`** | `engine/staff.ts staffEffects` → `evolvePlayer`(훈련·노쇠) |
-| **스카우터(scout)** | 유망주 **공개도↑**(표시 안개) + **실제 지명 정확도↑**(공개도 낮으면 가치 오판, AI/단장) | `teamScoutReveal` → `draft.tsx`(표시)·`aiDraftPick`(픽 노이즈) |
+| **스카우터(scout)** | **내 팀 外 능력 공개도↑**(표시 안개 — 타 구단 선수·드래프트 유망주) + **실제 지명 정확도↑**(공개도 낮으면 가치 오판, AI/단장) | `teamScoutReveal` → `draft.tsx`·선수상세·`RosterList`(표시)·`aiDraftPick`(픽 노이즈) |
 
 **전문 코치 분야별 효과** (현실 코치진 — 더 빨리만이 아니라 더 높이/더 오래):
 
