@@ -10,22 +10,23 @@
 
 | 영역 | 상태 | 메모 |
 |---|---|---|
-| 모델 결정(무료+광고+서포터팩+DLC) | ✅ 설계 확정 | 독립 리뷰 통과(아래 §9) |
+| 모델 결정(무료+광고+광고제거+DLC) | ✅ 설계 확정 | 독립 리뷰 통과(아래 §9) |
 | 광고: **"시즌 시작하기" 버튼 → 동영상 광고** | ✅ 흐름·게이트 / 📋 SDK | `lib/ads.ts showSeasonStartAd()` 단일 연결점 + `draft.tsx`·`draft-live.tsx` onFinish 게이트. Expo Go 스텁(no-op) → EAS 후 AdMob 한 블록 교체. 첫 시즌 무광고·오프라인 즉시진행·관전 무관 |
 | 광고: 정적 메뉴 배너·앱오픈(선택) | 📋 설계 | 멈춘 화면 하단만. 경기보드·진행 중 금지. 추후 |
 | 광고: 자동진행·관전 가로채기 | 🚫 **제외** | 리뷰 기각 — 관전형·오프라인 위반(§9) |
-| 상점(마이페이지): **광고 제거 · 월드컵 시즌 구매** 2칸 | ✅ UI 셸 / 📋 구매배선 | `mypage.tsx` 상점 섹션. 구매 배선은 P2(EAS 후) — 그 전 "출시 시 연결" 안내 |
-| DLC 월드컵(`dlc_worldcup`) | 📋 설계 | WORLDCUP_SYSTEM 별도. 같은 IAP 인프라 |
-| 엔타이틀먼트 로컬 캐시(표시 전용) | 📋 설계 | 기존 save version/migrate 위. 엔진 직참조 금지 |
-| 검증: RevenueCat 하이브리드 | 📋 설계 | 진실의 원천=앱스토어. 진행경로에 안 낌 |
-| Supabase+Vercel(클라우드 세이브·글로벌 명전) | ⏸ 보류 | CLAUDE 8 — 나중. 수익화엔 불필요 |
+| 상점(마이페이지): **광고 제거 · 월드컵 시즌 구매 + 구매 복원** | ✅ UI+추상화 / 📋 SDK | `mypage.tsx` → `lib/iap` purchase/restore. dev 시뮬 알림·운영 RevenueCat. EAS 후 SDK 설치만 |
+| DLC 월드컵(`dlc_worldcup`) | 📋 설계 | WORLDCUP_SYSTEM 별도. 같은 IAP 인프라(`lib/iap`) |
+| 엔타이틀먼트(표시 전용·엔진 격리) | ✅ 추상화 / 📋 SDK | `lib/iap` getEntitlements·setRemoveAds. RevenueCat SDK 로컬 캐시가 오프라인 처리. 엔진 직참조 금지 |
+| 검증: RevenueCat 하이브리드 | ✅ 추상화 / 📋 SDK | `lib/iap`(initIap·purchase·restore·loadEntitlements) 지연 require·**throw 없음·graceful**. 진행경로 불간섭 |
+| **예외처리·로깅** | ✅ | 모든 IAP/광고 함수 throw 없이 typed 결과·`lib/log`. 결제 로그=RevenueCat·광고=AdMob 대시보드. **자체 로그 백엔드 불요** |
+| Supabase+Vercel | ⏸ 보류 | **결제엔 불필요**(RevenueCat이 백엔드·로그). 나중 클라우드 세이브·글로벌 명전(CLAUDE 8)에만 |
 
 ---
 
 ## 1. 모델 한 줄
 
-**무료로 받아 풀게임을 하고, 광고가 뜬다. ₩5,000 서포터 팩을 사면 광고가 사라지고 개발을 응원한다. 월드컵은 별도 DLC.**
-신생 인디 + 니치 장르라 **도달(무료)** 을 최대화하고, 광고·서포터·DLC가 같은 IAP 인프라를 공유한다.
+**무료로 받아 풀게임을 하고, 광고가 뜬다. ₩5,000 "광고 제거"를 사면 광고가 사라진다. 월드컵은 별도 DLC.**
+신생 인디 + 니치 장르라 **도달(무료)** 을 최대화하고, 광고 제거·DLC가 같은 IAP 인프라(`lib/iap`)를 공유한다.
 
 ## 2. 설계 원칙 (이 문서가 지키는 것)
 
@@ -72,14 +73,25 @@
 - **진실의 원천 = 앱스토어**(StoreKit/Play Billing). 비소모성은 플랫폼이 "구매 복원"·소유권을 무료 보장.
 - **로컬 캐시** — 소유 SKU를 기존 save의 **설정군(resetSave에서 살아남는 필드)** 에 둔다(`worldCupOwned`·`supporter` 패턴 1:1). `freshSave`에 넣지 않음 → 기변·세이브 초기화에도 소유 보존. SAVE_SYSTEM version/migrate로 추가.
 - **구매 복원 버튼**(필수, 스토어 정책) — 재설치·기변 시 스토어 재조회(온라인 1회). 오프라인 재설치면 일단 미소유로 graceful, **진행 데이터는 절대 삭제 금지**(온라인 되면 복원).
-- **엔진 격리** — `removeAds`/`supporter`는 순수 UI 불리언(엔진 미참조). `worldCup`만 sim 영향이나 WORLDCUP_SYSTEM의 epoch+forward-only+비트동일 A/B로 격리.
+- **엔진 격리** — `removeAds`는 광고 표시 토글(`lib/ads setRemoveAds`)일 뿐 엔진 미참조. `worldCup`만 sim 영향이나 WORLDCUP_SYSTEM의 epoch+forward-only+비트동일 A/B로 격리. (구현: `lib/iap getEntitlements`)
 
 ## 6. 검증 (RevenueCat 하이브리드)
 
 - **RevenueCat** — 영수증 검증·구매 복원·환불 웹훅·iOS/안드 교차. 무료 티어(매출 ~$2.5k/월). 보일러플레이트 절감용.
 - **불변 조건**: **출시·시즌 진행은 RevenueCat 응답에 의존하지 않는다.** RC는 구매·갱신 시에만 통신, 진행경로 밖. 오프라인은 로컬 캐시로.
 - (리뷰 소견: 비소모성만이라 RC는 다소 오버킬 — 네이티브 복원이 진실의 원천이면 RC 없이도 가능. 무료·편의라 채택 유지. 미래 구독·클라우드 세이브 때 RC 값이 커짐.)
-- **Supabase+Vercel 보류** — 수익화엔 불필요. 나중 클라우드 세이브·글로벌 명전(CLAUDE 8)에 투입.
+
+### 6.1 RevenueCat 쓰면 Supabase 따로 저장 필요? → **아니오**(2026-06-30 확정)
+- **RevenueCat이 결제 백엔드 그 자체** — 영수증 검증·엔타이틀먼트 저장·구매 복원·**구매/환불 로그·분석 대시보드**·웹훅을 서버측에서 전부 담당. **결제를 Supabase에 따로 저장할 필요 없다**(이중 저장 = 진실의 원천 2개 → 어긋남 위험).
+- **광고 로그 = AdMob 대시보드.** 자체 결제 서버·DB·로그 백엔드 = **불필요.**
+- 로컬에 영구 저장할 것 = 소유 엔타이틀먼트 캐시뿐인데, **그것도 RevenueCat SDK가 자체 로컬 캐시로 오프라인까지 처리**(`getCustomerInfo`).
+- **Supabase는 결제와 무관** — 나중 게임 데이터 클라우드(세이브 백업·글로벌 명예의전당·랭킹, CLAUDE 8)에만.
+
+### 6.2 예외처리·로깅 (확실하게 — 2026-06-30 구현)
+- **모든 IAP/광고 함수는 throw하지 않는다.** 결과를 typed로 반환(`PurchaseResult`: ok / cancelled·network·unavailable·error)하거나 항상 resolve(광고). 예외는 전부 잡아 graceful — **결제·광고 실패가 게임을 멈추거나 크래시시키지 않는다.**
+  - 광고(`lib/ads`): 로드 실패·오프라인·모듈 없음 → catch 후 즉시 진행(하드블록 금지) + `logError`.
+  - IAP(`lib/iap`): 유저 취소=오류 아님(조용히), 네트워크/미가용/기타 구분해 UI가 친절히 안내. `initIap`·`loadEntitlements` 실패해도 미소유로 graceful.
+- **로깅**: 단일 경량 로거 `lib/log`(`logEvent`/`logError`, dev 콘솔). **결제 진실 로그=RevenueCat, 광고=AdMob 대시보드**(서버측·유실 없음) — 자체 로그 저장소 안 만든다(local-first).
 
 ## 7. 빌드 전제
 

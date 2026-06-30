@@ -1,6 +1,6 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
@@ -9,6 +9,7 @@ import { theme } from '../components/Screen';
 import { SpotlightProvider } from '../components/Spotlight';
 import { IntroSplash } from '../components/IntroSplash';
 import { useGameStore } from '../store/useGameStore';
+import { initIap } from '../lib/iap';
 import { computeStandings } from '../data/standings';
 import { leagueProduction } from '../data/production';
 import { availableTeamPlayers } from '../data/injury';
@@ -59,6 +60,8 @@ export default function RootLayout() {
   // 연동해 100% 차오르면 진입. 이후엔 (tabs) 복원 로딩이 이미 끝나 있어 중복 로딩 없음.
   const hydrated = useGameStore((s) => s.hydrated);
   const [introDone, setIntroDone] = useState(false);
+  // 앱 시작 1회 — IAP 초기화 + 소유 엔타이틀먼트 로드(광고 제거 등). dev no-op·운영 RevenueCat·실패 graceful.
+  useEffect(() => { initIap(); }, []);
   if (!introDone) {
     return (
       <>

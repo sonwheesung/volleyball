@@ -5,10 +5,11 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, Screen, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
+import { purchase, restorePurchases, skuLabel, type Sku } from '../../lib/iap';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -34,10 +35,22 @@ export default function MyPage() {
   const replayOnboarding = useGameStore((s) => s.replayOnboarding);
   const resetTips = useGameStore((s) => s.resetTips);
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
-  // 상점 구매 배선은 P2(EAS 개발 빌드 후 — IAP는 네이티브, Expo Go 불가). 그 전엔 정직 플레이스홀더.
-  // MONETIZATION_SYSTEM: 광고 제거(remove_ads)·월드컵 시즌 구매(dlc_worldcup) 2칸.
-  const openStore = (item: string) =>
-    Alert.alert(item, '출시 시 실제 결제가 연결됩니다.\n(현재는 준비 중)');
+  // 상점 — IAP 추상화(lib/iap)에 연결. dev는 시뮬 알림, 운영은 RevenueCat. 모든 함수는 throw 없이 결과 반환.
+  // MONETIZATION_SYSTEM: 광고 제거(remove_ads)·월드컵 시즌 구매(dlc_worldcup) 2칸 + 구매 복원(필수).
+  const buy = async (sku: Sku) => {
+    const r = await purchase(sku);
+    if (r.ok) Alert.alert('구매 완료', `${skuLabel(sku)}이(가) 적용되었습니다. 감사합니다!`);
+    else if (r.reason === 'cancelled') return; // 유저 취소 — 조용히
+    else Alert.alert('구매 실패',
+      r.reason === 'network' ? '네트워크 연결을 확인한 뒤 다시 시도해 주세요.'
+      : r.reason === 'unavailable' ? '상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
+      : '구매를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+  };
+  const restore = async () => {
+    const r = await restorePurchases();
+    Alert.alert(r.ok ? '구매 복원' : '복원 실패',
+      r.ok ? '구매 내역을 확인했습니다.' : '잠시 후 다시 시도해 주세요(네트워크 확인).');
+  };
 
   return (
     <Screen title="마이페이지">
@@ -61,16 +74,19 @@ export default function MyPage() {
         sub="게임 소개 + 화면 안내를 처음부터"
         onPress={() => { replayOnboarding(); resetTips(); router.replace('/onboarding'); }} />
 
-      {/* ── 상점 (MONETIZATION_SYSTEM) — 광고 제거 · 월드컵 시즌 구매. 구매 배선은 EAS 후(P2) ── */}
+      {/* ── 상점 (MONETIZATION_SYSTEM) — 광고 제거 · 월드컵 시즌 구매. dev=시뮬, 운영=RevenueCat ── */}
       <Text style={styles.section}>상점</Text>
       <LinkCard icon="remove-circle-outline" tint={theme.rose} title="광고 제거"
         sub="게임 내 모든 광고를 없앱니다"
-        onPress={() => openStore('광고 제거')} />
+        onPress={() => buy('remove_ads')} />
       <LinkCard icon="globe-outline" tint={theme.sky} title="월드컵 시즌 구매"
         sub="DLC · 4년마다 국가대표 차출(월드컵)"
-        onPress={() => openStore('월드컵 시즌 구매')} />
+        onPress={() => buy('dlc_worldcup')} />
+      <Pressable onPress={restore} style={{ alignItems: 'center', paddingVertical: 10 }}>
+        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>구매 복원</Text>
+      </Pressable>
 
-      <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 10 }}>배구명가 v{version}</Muted>
+      <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 6 }}>배구명가 v{version}</Muted>
       <SpotlightOverlay screen="tab-mypage" />
     </Screen>
   );
