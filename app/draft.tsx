@@ -31,7 +31,6 @@ function DraftCenterInner() {
   const protectedIds = useGameStore((s) => s.protectedIds);
   const draftPicks = useGameStore((s) => s.draftPicks);
   const toggleDraftPick = useGameStore((s) => s.toggleDraftPick);
-  const endSeason = useGameStore((s) => s.endSeason);
 
   const faAggressive = useGameStore((s) => s.faAggressive);
   const interviews = useGameStore((s) => s.interviews);
@@ -69,11 +68,10 @@ function DraftCenterInner() {
   };
 
   const onFinish = async () => {
-    // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 새 시즌 commit.
-    // 광고는 항상 resolve(스킵/실패/오프라인이어도 진행 하드블록 없음). Expo Go에선 스텁(no-op).
+    // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 시즌 시작 로딩으로.
+    // 광고는 항상 resolve(스킵/실패/오프라인이어도 진행 하드블록 없음). endSeason은 로딩 화면이 페인트 후 실행(SEASON §5.5 D).
     await showSeasonStartAd();
-    endSeason();
-    router.replace('/enshrine'); // 헌액 화면(새 레전드 0명이면 자동 통과 → 탭). BROADCAST §8.4
+    router.replace('/season-start');
   };
 
   return (

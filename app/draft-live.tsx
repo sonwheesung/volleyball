@@ -39,7 +39,6 @@ function DraftLiveInner() {
   const interviews = useGameStore((s) => s.interviews);
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
-  const endSeason = useGameStore((s) => s.endSeason);
 
   // draft.tsx 미리보기와 동일 입력 → 동일 결과(미리보기=결과 보장)
   const picks = useMemo(() => {
@@ -76,7 +75,7 @@ function DraftLiveInner() {
 
   // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 새 시즌 commit.
   // 광고는 항상 resolve(스킵/실패/오프라인이어도 진행 하드블록 없음). Expo Go에선 스텁(no-op).
-  const onFinish = async () => { setAuto(false); await showSeasonStartAd(); endSeason(); router.replace('/enshrine'); }; // 헌액 화면 경유(BROADCAST §8.4)
+  const onFinish = async () => { setAuto(false); await showSeasonStartAd(); router.replace('/season-start'); }; // 시즌 시작 로딩→endSeason→헌액(SEASON §5.5 D)
 
   return (
     <Screen title={`${season + 2}시즌 드래프트`}>

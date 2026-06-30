@@ -53,7 +53,7 @@ export default function Playoffs() {
           teamName={champ}
           teamId={my!}
           season={season}
-          onDone={() => router.push('/tryout')}
+          onDone={() => router.push('/season-recap')}
         />
       ) : null}
 
@@ -73,7 +73,7 @@ export default function Playoffs() {
         <Title>🏆 우승 — {champ}</Title>
       </Card>
 
-      <Button label="오프시즌 · 외국인 트라이아웃 →" onPress={() => router.push('/tryout')} />
+      <Button label="시즌 결산 →" onPress={() => router.push('/season-recap')} />
     </Screen>
   );
 }

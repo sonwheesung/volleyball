@@ -61,6 +61,12 @@ export const TIPS: Tip[] = [
   { id: 'office.tx', screen: 'tab-office', order: 2, anchor: 'office-tx',
     title: '시즌 중 FA 영입', body: '부상 등으로 포지션에 구멍이 나면, 미계약 FA를 시즌 중 즉시 수혈합니다(캡·정원 적용).' },
 
+  // ── 외국인 트라이아웃(오프시즌 첫 진입 — 2026-06-30 신설) ──
+  { id: 'tryout.intro', screen: 'tryout', order: 0, anchor: 'tryout-pick',
+    title: '외국인 트라이아웃', body: '외국인 선수는 팀당 1명 — 아포짓(OP) 위주의 팀 공격 핵심입니다. 매 오프시즌, 추첨 순번대로 1명을 데려옵니다(1년 계약·연봉 고정·샐러리캡 제외, 운영 자금에서 지출). 누구를 잡느냐가 다음 시즌 전력을 크게 좌우해요.' },
+  { id: 'tryout.wish', screen: 'tryout', order: 1, anchor: 'tryout-wish',
+    title: '위시리스트로 노리기', body: '원하는 외인을 ★로 담아두면 순번에서 가능한 선수를 자동 지명합니다. 앞 순번 팀이 먼저 데려가면 다음 우선순위로 내려가요. 잘하던 현 외인은 "재계약 우선권"으로 드래프트 없이 갱신할 수 있습니다. 스카우터를 영입하면 능력치가 더 선명해져요.' },
+
   // ── 마이페이지 탭(구 기록 탭 — 2026-06-30 네비 개편으로 screen 키만 tab-history→tab-mypage 이동, id는 보존) ──
   { id: 'history.intro', screen: 'tab-mypage', order: 0, anchor: 'history-top',
     title: '기록', body: '시즌·통산·명예의전당·연표 — 세월이 흘러야 채워집니다. 배구명가의 진짜 재미입니다.' },

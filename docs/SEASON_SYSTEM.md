@@ -96,6 +96,57 @@ KOVO 방식:
 - 상위 시드 홈 어드밴티지 **×1.03 능력 승수**(`HI_EDGE`, OVR가산 아님). 매치업별 시드로 `playSeries` 결정론.
 - 우승 팀은 `recordChampion(season, championId)` → `archive`에 연표 보존.
 
+## 5.5 시즌 결산 (app/season-recap.tsx) — 2026-06-30 신설 (독립 리뷰 거침)
+
+> **왜**: AWARDS_SYSTEM §0이 시상식을 "1년에 한 번 멈춰 음미하는 순간"으로 규정했는데, 시상(MVP·베스트7)이
+> 기록 탭 텍스트 배열로만 묻혀 유저가 *뉴스 기사로* "누가 MVP였지"를 확인하는 미달 구현이었다(사용자 피드백).
+> 결산은 신규 스코프가 아니라 **이미 내려진 결정의 이행** — 관전형 1순위(연출=1순위 투자처)에 정면 부합.
+
+- **위치**: 포스트시즌 → **[시즌 결산]** → 외국인 트라이아웃. `endSeason` **이전**이라 이번 시즌 시상은 아직
+  archive에 안 구워짐 → **`seasonSnapshot(season, season, currentDay)`(=`currentSeasonAwards`+`computeStandings`)
+  + `leagueProduction(leagueDisplayDay)`로 그 자리 재계산**(tryout 잠정 시상·records 탭과 동일 경로). 우승팀은
+  포스트시즌 `recordChampion`이 박은 `archive.find(a=>a.season===season)?.championId`로 읽음. **새 영속 필드 0**.
+- **연출 규율(리뷰)**: **강제 도착·선택 정독·단일 한 장**(스크롤 1장 + 하단 "외국인 트라이아웃 →" 버튼 하나).
+  🚫 **다단계 캐러셀/"탭하여 계속 n/총" 순차 공개 금지**(그 순간 "손이 가는 게임"=관전형 위반). 결산은 정적 표지.
+- **내용 한정**(과부하 방지 — 깊은 건 기록 탭 drill-down): ① 우리 팀 헤드라인 한 줄(최종 순위·W/L·우승/PO)
+  ② 우리 선수 하이라이트(내 수상자 + 내 팀 생산 상위 1~3 = 단장 결정의 성적표) ③ 리그 시상 3종(MVP·신인·기량발전,
+  이름+팀+한 줄 스탯) ④ **베스트7 코트**(아래). + (선택, 하단 한 줄) 재정·팬덤.
+  🚫 제외: 리그 전체 순위표 풀버전·6부문 기록왕 전체(내 선수가 왕일 때만 강조)·라운드MVP·박스스코어.
+- **베스트7 코트(`components/Best7Court.tsx`, 재사용)**: 베스트7(S·OH·OH·OP·MB·MB·L)을 코트 포메이션 7마커
+  (이름·팀·포지션)로. **구단색 틴트(teamColors) + 우리 팀 선수 border 강조.** `SeasonAwards` 입력만 받아
+  현재 시즌(잠정)·과거 시즌(`archive[].awards`) 공용 → 기록 탭 시상식에도 동일 컴포넌트(AwardIllustration 패턴).
+  🚫 **가짜 드라마 금지**: 7명은 서로 다른 팀 올스타지 *함께 뛴 라인업 아님* → "최강 라인업/드림팀" 라벨·랠리
+  애니메이션 금지. **정적 명예 포메이션**("시즌 베스트7")으로만(실제 수상자 배치=사실 나열).
+- **성능**: `leagueProduction` 풀시즌 재계산이 무거움 → `useDeferredReady`+`<Loading variant="list">`(tryout 패턴).
+
+### 5.5 D 시즌 시작 로딩 (app/season-start.tsx) — 2026-06-30 신설
+
+> **왜**: 드래프트 끝 "시즌 시작하기"를 누르면 `store.endSeason`(§6, 오프시즌 단일 합성 — buildDraftContext·
+> resolveDraft·fillRosters·leagueProduction 다회·HOF)이 **무거운 동기 작업**이라 JS 스레드를 길게(실기기 ~15s)
+> 막아 화면이 멈춘 듯 보였다(사용자 보고 2026-06-30). 기다림을 유의미하게 — 전용 로딩 화면(`<Loading variant="brand">`
+> 워드마크+코트+**서브 연습하듯 좌우로 날아다니는 여러 공**)으로 가린다. 관전형 1순위(연출=투자처)에 부합.
+
+- **흐름**: 드래프트(`onFinish`) → `showSeasonStartAd()`(MONETIZATION §3, 첫 시즌 외 광고 — 항상 resolve) →
+  `router.replace('/season-start')` → 로딩 표시 → `endSeason()` → `router.replace('/enshrine')` → (헌액 0명이면 통과) 탭.
+- **⚠ 페인트-전-블록 버그(실기기 발견·교정 2026-06-30)**: 초기 구현은 `InteractionManager.runAfterInteractions`로
+  endSeason을 미뤘으나, 이게 **화면 전환 애니메이션/첫 페인트보다 일찍 발화**해 endSeason 동기 블록이
+  **직전 화면(드래프트)을 그대로 얼린 채** 돌았다(브랜드 로딩이 끝까지 안 보임 — 45프레임 ≈18s 전수 드래프트 동결 확인).
+  → **교정**: `setTimeout(~500ms, 전환 ≈350ms 초과) + 2×requestAnimationFrame`으로 **전환 완료 + 로딩 첫 페인트를
+  보장한 뒤** endSeason 실행. 그러면 로딩이 최상단으로 그려진 상태에서 블록이 시작돼 사용자가 로딩을 본다.
+- **여러 공 연출(2026-06-30 사용자 요청)**: 단일 통통 공 → **서브 연습처럼 코트를 좌↔우로 포물선 그리며 날아다니는
+  공 3개**(`ServeBall` — lane/속도/방향/시차 다름, `useNativeDriver:true`). 코트도 가로로 넓혀 서브 랠리 느낌.
+- **⚠ 블록 중엔 네이티브 애니도 멈춘다(실측 정정 2026-06-30)**: 당초 "useNativeDriver라 블록 중에도 계속 난다"고
+  적었으나 **에뮬레이터 실측에서 거짓**. 광고 확인 직후 8프레임을 연속 캡처해 MD5 비교 → **블록 전 3프레임은 서로 다르고
+  (공 이동), 블록 시작 후 5프레임은 전부 동일**(동결). 즉 endSeason 동기 블록이 JS뿐 아니라 네이티브 애니까지 멈춘다
+  (적어도 에뮬에서). 메시지 회전(setInterval)도 블록 중 정지 → 첫 메시지로 고정. **결론**: 현재는 블록 전 짧은
+  구간만 연출이 살아 있고, 긴 블록(에뮬 ~2.5분) 동안은 정지. 실기기 release에서 네이티브 애니가 블록을 견디는지는 미검증.
+- **미결(블록 내내 연출 유지)**: 블록 동안에도 공이 날고 메시지가 순차로 돌게 하려면 endSeason을 **청크로 쪼개
+  매 청크 사이 yield**(setTimeout/await)해 JS 스레드를 양보해야 한다. endSeason은 중간 commit(commitRosters·
+  setAwardScores·commitCoachPool 등)과 그 결과를 읽는 계산이 뒤섞인 ~200줄 단일 함수라 **순서 보존이 핵심**(결정론:
+  같은 세이브→같은 결과). 리스크가 있어 플랜 리뷰+결정론 검증(N≥10,000) 후 별도 작업으로 다룬다(보류).
+- **연출 텍스트 규율**: 로딩 문구는 분위기 카피지 데이터 주장 아님(가짜 드라마 금지 무관).
+- **검수**: UI_RULES "시즌 시작 로딩" 케이스 — 광고 확인 직후 ~수초간 캡처해 **브랜드 로딩(드래프트 아님)** 이 떠야 PASS.
+
 ## 6. 오프시즌 오케스트레이션 (store.endSeason)
 
 > **진행 게이트(2026-06-27 cache-persist 전환)**: `endSeason`은 정규시즌이 **실제로 끝났을 때만**(전 경기 results

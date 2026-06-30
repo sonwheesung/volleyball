@@ -7,6 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } from '../components/Screen';
 import { AwardIllustration } from '../components/AwardIllustration';
 import { LegendIllustration } from '../components/LegendIllustration';
+import { Best7Court } from '../components/Best7Court';
 import { teamColors } from '../lib/teamColor';
 import { jerseyNumber, SUPER_LEGEND_POINTS } from '../engine/jersey';
 import { numberLineage } from '../data/legends';
@@ -207,13 +208,7 @@ function SeasonView({
 
           <Card accent={theme.gold}>
             <Text style={styles.cardHead}>베스트7</Text>
-            {aw.best7.map((s, i) => (
-              <View key={`${s.pos}${i}`} style={styles.awRow}>
-                <PosTag pos={s.pos} />
-                <Text style={[styles.awName, s.winner && isMine(s.winner.playerId) && styles.mine]} numberOfLines={1}>{awName(s.winner)}</Text>
-                <Text style={styles.lbTeam} numberOfLines={1}>{s.winner ? short(s.winner.teamId) : ''}</Text>
-              </View>
-            ))}
+            <Best7Court best7={aw.best7} myTeamId={teamId} nameOf={pName} />
           </Card>
         </>
       ) : snap.isCurrent && !awardsReady ? (

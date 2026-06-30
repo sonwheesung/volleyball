@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { SpotlightOverlay, SpotlightTarget } from '../components/Spotlight';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
@@ -74,10 +75,12 @@ function TryoutInner() {
 
   return (
     <Screen title="외국인 트라이아웃">
+      <SpotlightTarget id="tryout-pick">
       <Card accent={theme.bad}>
         <Muted style={{ fontSize: 12 }}>
-          팀당 1명 · 1년 계약 · 연봉 {formatMoney(FOREIGN_SALARY)} 고정(샐러리캡 제외, 운영 자금 지출).
-          지명 순번은 추첨 — 위시리스트 순서로 노리고, 뺏기면 차순위로 내려갑니다.
+          외국인 선수는 <Text style={{ fontWeight: '800', color: theme.text }}>팀당 1명</Text> — 아포짓(OP) 위주의 팀 공격 핵심입니다(여자부 외인 자리). 매 오프시즌
+          {' '}<Text style={{ fontWeight: '800', color: theme.text }}>추첨 순번</Text>대로 1명을 데려옵니다 · 1년 계약 · 연봉 {formatMoney(FOREIGN_SALARY)} 고정(샐러리캡 제외, 운영 자금 지출).
+          아래에서 ★로 위시리스트를 정하면 순번에서 가능한 선수를 자동 지명하고, 앞 팀이 뺏으면 차순위로 내려갑니다.
         </Muted>
         <Row>
           <IconLabel icon="globe-outline" color={theme.bad}>내 예상 지명</IconLabel>
@@ -86,6 +89,7 @@ function TryoutInner() {
           </Text>
         </Row>
       </Card>
+      </SpotlightTarget>
 
       {myForeign ? (
         <>
@@ -110,7 +114,9 @@ function TryoutInner() {
         </>
       ) : null}
 
-      <Title>후보 ({pool.length}명) — ★ 위시 토글</Title>
+      <SpotlightTarget id="tryout-wish">
+        <Title>후보 ({pool.length}명) — ★ 위시 토글</Title>
+      </SpotlightTarget>
       {pool
         .slice()
         .sort((a, b) => overall(b) - overall(a))
@@ -143,6 +149,7 @@ function TryoutInner() {
         스카우터 투자(공개도 {(reveal * 100).toFixed(0)}%)가 도박의 보험입니다.
       </Muted>
       <Button label="아시아쿼터 트라이아웃 →" onPress={() => router.push('/asian-tryout')} />
+      <SpotlightOverlay screen="tryout" />
     </Screen>
   );
 }

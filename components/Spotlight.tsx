@@ -19,6 +19,7 @@ function screenFromPathname(p: string | null | undefined): string | null {
   if (p.endsWith('/schedule')) return 'tab-schedule';
   if (p.endsWith('/squad')) return 'tab-squad';
   if (p.endsWith('/office')) return 'tab-office';
+  if (p.endsWith('/tryout')) return 'tryout'; // 외국인 트라이아웃만('/asian-tryout'은 '-tryout'이라 미매치)
   if (p.endsWith('/mypage')) return 'tab-mypage';
   if (p === '/' || p.endsWith('/index') || p.endsWith('(tabs)')) return 'tab-dashboard';
   return null;
