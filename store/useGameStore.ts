@@ -2,9 +2,9 @@
 // 시즌 내 진화는 결정론 리플레이(currentDay), 시즌 경계에서 base 스냅샷을 커밋한다.
 // 세이브: 선택 팀 / 시즌 / 현재 일자 / 결과 / 단장 거래 / 선수 base 스냅샷.
 
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
-import { createJSONStorage, persist } from 'zustand/middleware';
+import { persist } from 'zustand/middleware';
+import { debouncedAsyncStorage } from './persistStorage';
 import { SAVE_VERSION, migrateSave, consumePendingClaimSeed } from './saveMigration';
 import { accrueBonds, setRelationContext } from '../data/relationships';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
@@ -949,7 +949,7 @@ export const useGameStore = create<GameState>()(
     }),
     {
       name: 'baeknyeon-save',
-      storage: createJSONStorage(() => AsyncStorage),
+      storage: debouncedAsyncStorage(), // 매 set마다 직렬화+쓰기 폭주 → 디바운스로 합침(A6 성능, 저장 내용 불변)
       version: SAVE_VERSION,
       // 구버전/손상 세이브 → 정규화(컨테이너 모양 강제) + 향후 breaking 변경 단계 변환. SAVE_SYSTEM.md.
       migrate: (persisted, version) => migrateSave(persisted, version) as never,

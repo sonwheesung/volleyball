@@ -4,13 +4,13 @@
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import type { ComponentProps } from 'react';
+import { useEffect, useState, type ComponentProps } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, Screen, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
 import { purchase, restorePurchases, skuLabel, type Sku } from '../../lib/iap';
-import { AD_REWARD } from '../../engine/diamonds';
+import { AD_REWARD, AD_DAILY_CAP, canWatchAd } from '../../engine/diamonds';
 import { DEV_TOOLS } from '../../data/flags';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -39,7 +39,14 @@ export default function MyPage() {
   const diamonds = useGameStore((s) => s.diamonds);
   const watchAdForDiamonds = useGameStore((s) => s.watchAdForDiamonds);
   const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
+  const adState = useGameStore((s) => s.adState);
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
+
+  // 광고 쿨다운 실시간 표시(MONETIZATION §11.1) — 1초 틱으로 남은 시간 카운트다운. Date.now()는 UI 런타임(엔진/시드 무관).
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  const adAvail = canWatchAd(adState, now);
+  const fmtLeft = (ms: number) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, '0')}초`; };
 
   // 광고 보고 다이아(MONETIZATION §11.1) — AdMob은 EAS 후 lib/ads 연결, 지금은 스텁(즉시 지급)으로 로컬 테스트.
   const watchAd = () => {
@@ -80,7 +87,13 @@ export default function MyPage() {
           </View>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <Pressable onPress={watchAd} style={styles.diaBtn}><Text style={styles.diaBtnTxt}>📺 광고 보고 +{AD_REWARD} 💎</Text></Pressable>
+          <Pressable onPress={watchAd} disabled={!adAvail.ok} style={[styles.diaBtn, !adAvail.ok && { opacity: 0.5 }]}>
+            <Text style={styles.diaBtnTxt}>
+              {adAvail.ok ? `📺 광고 보고 +${AD_REWARD} 💎`
+                : adAvail.reason === 'cap' ? `오늘 광고 끝 (하루 ${AD_DAILY_CAP}회)`
+                : `⏳ ${fmtLeft(adAvail.msLeft)} 후`}
+            </Text>
+          </Pressable>
           <Pressable onPress={claimAch} style={styles.diaBtn}><Text style={styles.diaBtnTxt}>🏅 업적 보상 받기</Text></Pressable>
         </View>
         {DEV_TOOLS ? (

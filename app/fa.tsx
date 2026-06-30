@@ -134,8 +134,8 @@ function FACenterInner() {
       ) : null}
 
       <Title>보호선수 명단 ({protectedIds.length}/{PROTECT_COUNT})</Title>
-      <Muted style={{ fontSize: 12 }}>보호하지 않은 선수가 보상선수로 지명될 수 있습니다.</Muted>
-      {myRoster.map((p) => {
+      <Muted style={{ fontSize: 12 }}>보호하지 않은 선수가 보상선수로 지명될 수 있습니다. (외국인은 1년 계약이라 보상선수 대상이 아니라 제외)</Muted>
+      {myRoster.filter((p) => !p.isForeign).map((p) => {
         const prot = protectedIds.includes(p.id);
         return (
           <Pressable
