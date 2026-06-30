@@ -137,6 +137,37 @@ export const ACHIEVEMENTS: Achievement[] = [
   A('seasons_100', '백년 구단', '100시즌 운영', '운영', 100),
 ];
 
+// ── 다이아 보상 (MONETIZATION §11) — 업적 달성 시 1회 지급(스토어가 claimed 추적). 난이도 7단계 10~1000.
+//    미지정 업적은 기본 30(보통). 특별훈련 300 기준 큰 업적 1개 ≈ 1~3회분. ※소비성 재화(안티과금 기둥 반전, 사용자 결정).
+export const ACH_REWARD: Record<string, number> = {
+  // 우승
+  first_title: 60, titles_3: 250, titles_5: 250, titles_10: 500, titles_15: 500, titles_20: 1000,
+  back_to_back: 120, three_peat: 250, five_peat: 500,
+  // 시상
+  make_mvp: 30, mvp_3: 120, mvp_5: 250, mvp_b2b: 120, make_finals_mvp: 30, make_rookie: 30, rookie_3: 120,
+  make_improved: 30, make_scoring_king: 30, title_kings_5: 120, title_kings_15: 250, sweep4_titles: 250,
+  best7_trio: 120, best7_10: 250, award_sweep: 250, round_mvp_5: 60,
+  // 레전드
+  first_hof: 60, hof_3: 250, hof_5: 500, hof_10: 1000, make_legend: 120, legend_3: 500, hof_all_pos: 250,
+  hof_8000: 250, hof_longevity: 250,
+  // 기록
+  league_record: 60, big_milestone: 60, big_milestone_5: 250, club_record: 60, milestones_20: 250,
+  // 서사
+  win_streak_10: 60, win_streak_15: 120, lose_streak_10: 10, all_ranks: 120, worst_to_first: 120, last_3peat: 30,
+  runner_up_3: 60, podium_10: 250, podium_streak_5: 250, reverse_sweep: 250, sweep_title: 120, blown_lead: 10,
+  perfect_season: 1000, wins_30: 250, wins_20s: 30, wins_10s: 10, wins_single: 10, winless_season: 10,
+  // 단장
+  first_draft: 10, draft_veteran: 120, first_fa: 10, fa_mogul: 120, first_coach: 10, coach_collector: 60,
+  first_staff: 10, first_interview: 10, interview_master: 60,
+  // 통산
+  first_point: 10, first_concede: 10, first_ace: 10, first_set_win: 10, first_set_loss: 10,
+  first_match_win: 10, first_match_loss: 10, points_100: 10, points_1k: 30, points_10k: 120, points_100k: 500, points_1m: 1000,
+  // 운영
+  cash_200k: 30, cash_500k: 60, cash_1m: 250, fan_70: 30, fan_90: 120, seasons_10: 30, seasons_50: 500, seasons_100: 1000,
+};
+/** 업적 다이아 보상(미지정=30). */
+export const achReward = (id: string): number => ACH_REWARD[id] ?? 30;
+
 const POSITIONS: Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
 type Arch = AchInput['archive'];
 
