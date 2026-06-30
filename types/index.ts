@@ -185,6 +185,7 @@ export interface Milestone {
   kind: 'career' | 'club' | 'league';      // 개인 통산 / 구단 / 리그 역대
   text: string;                            // 완성형 표시 문구
   big: boolean;                            // 헤드라인급(역대 진입·구단 최초·레전드 추월)
+  routine?: boolean;                       // 저신호 장수(현역/롱런) — 연표엔 남기되 뉴스 피드선 생략(NEWS §4.6)
 }
 
 /** 경기 중 작전 교체 방침 (MATCH_SYSTEM 1.3b) — 프리셋/방침 레벨, AI 자동 + 플레이어 토글 */

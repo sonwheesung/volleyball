@@ -53,13 +53,14 @@ export function detectSeasonMilestones(season: number, hof: HofEntry[]): Milesto
     const bef = before.get(id)!;
     const tid = teamOf.get(id) ?? '';
     const name = getPlayer(id)?.name ?? id;
-    const push = (kind: Milestone['kind'], text: string, big: boolean) =>
-      out.push({ season, playerId: id, name, teamId: tid, kind, text, big });
+    const push = (kind: Milestone['kind'], text: string, big: boolean, routine = false) =>
+      out.push({ season, playerId: id, name, teamId: tid, kind, text, big, routine });
 
     // 1) 개인 통산 임계 돌파
     for (const m of personalMilestones(bef, aft)) {
       if (m.stat === 'seasons') {
-        push('career', `${name}, ${m.threshold}시즌 현역 — 롱런`, m.threshold >= HEADLINE.seasons);
+        // 장수(현역/롱런)는 저신호(베테랑마다 반복) → routine 표시: 연표엔 남기되 뉴스 피드선 생략(NEWS §4.6). 20시즌+는 big(헤드라인 유지)
+        push('career', `${name}, ${m.threshold}시즌 현역 — 롱런`, m.threshold >= HEADLINE.seasons, true);
       } else {
         const big = m.threshold >= (HEADLINE[m.stat] ?? Infinity);
         push('career', `${name}, ${STAT_KO[m.stat]} ${m.threshold.toLocaleString()}${UNIT[m.stat] ?? ''} 돌파`, big);

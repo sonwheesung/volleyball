@@ -306,7 +306,16 @@ export function buildNewsFeed(
   }
 
   // 2) 마일스톤(기록 경신) — 헤드라인(m.text)이 사실(수치)을 말하므로 본문은 맥락만(재탕·수치 모순 방지, 2026-06-25 에디터).
+  // 저신호 장수(routine·non-big "현역 롱런")는 피드서 생략(연표엔 남음) — 우승/시상 같은 고신호 묻힘 방지(NEWS §4.6). 시즌당 비-big 상한.
+  const msCapBySeason = new Map<number, number>();
+  const MS_CAP = 8; // 시즌당 비-big 마일스톤 뉴스 상한(big은 무제한 — 헤드라인 우선)
   for (const m of milestones) {
+    if (m.routine && !m.big) continue;
+    if (!m.big) {
+      const n = msCapBySeason.get(m.season) ?? 0;
+      if (n >= MS_CAP) continue;
+      msCapBySeason.set(m.season, n + 1);
+    }
     const kindKo = m.kind === 'league' ? '리그 역대 기록' : m.kind === 'club' ? '구단 통산 기록' : '개인 통산 기록';
     const sig = m.big ? '리그가 주목할 이정표다.' : '오랜 꾸준함이 쌓아 올린 한 걸음이다.';
     push(m.season, 'milestone', m.text, m.big, m.teamId,

@@ -4,12 +4,11 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Text, View, StyleSheet } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
-import { Best7Court } from '../components/Best7Court';
+import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, theme, useDeferredReady } from '../components/Screen';
 import { seasonSnapshot } from '../data/records';
 import { computeStandings, leagueDisplayDay } from '../data/standings';
 import { leagueProduction } from '../data/production';
-import { getPlayer, getTeam, teamPlayerIds, shortTeamName } from '../data/league';
+import { getPlayer, getTeam, teamPlayerIds } from '../data/league';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
@@ -71,16 +70,6 @@ function RecapInner() {
   const prodLine = (l: ProdLine) => `${l.matches}경기 · ${l.points}점 (스${l.spikes}·블${l.blocks}·서${l.aces})`
     + (l.assists > 0 ? ` · 세트${l.assists}` : '') + (l.digs > 0 ? ` · 디그${l.digs}` : '');
 
-  const awName = (w: AwardWinner | null) => (w ? pName(w.playerId) : '—');
-  const awLine = (label: string, w: AwardWinner | null, suffix = '') => (
-    <Row>
-      <Muted>{label}</Muted>
-      <Text style={{ color: isMine(w) ? theme.accent : theme.text, fontWeight: '800', fontSize: 13 }} numberOfLines={1}>
-        {awName(w)} {w ? <Text style={{ color: theme.muted, fontWeight: '600' }}>· {shortTeamName(w.teamId)} · {w.value}{suffix}</Text> : null}
-      </Text>
-    </Row>
-  );
-
   return (
     <Screen title={`${season + 1}시즌 결산`}>
       {/* ① 우리 팀 헤드라인 한 줄 */}
@@ -116,26 +105,7 @@ function RecapInner() {
         ))}
       </Card>
 
-      {/* ③ 리그 시상 3종 */}
-      {aw && aw.mvp ? (
-        <>
-          <IconLabel icon="ribbon-outline" color={theme.gold}>리그 시상</IconLabel>
-          <Card accent={theme.gold}>
-            {awLine('정규 MVP', aw.mvp)}
-            {aw.finalsMvp ? awLine('챔프전 MVP', aw.finalsMvp) : null}
-            {aw.rookie ? awLine('신인상', aw.rookie) : null}
-            {aw.mostImproved ? awLine('기량발전상', aw.mostImproved, ' OVR') : null}
-          </Card>
-        </>
-      ) : null}
-
-      {/* ④ 베스트7 코트 */}
-      {aw && aw.best7.some((s) => s.winner) ? (
-        <>
-          <IconLabel icon="trophy-outline" color={theme.gold}>베스트7</IconLabel>
-          <Best7Court best7={aw.best7} myTeamId={my} nameOf={pName} />
-        </>
-      ) : null}
+      {/* 리그 시상·베스트7은 시상식 화면(awards-ceremony)으로 이관(삼중 표시 방지, AWARDS_SYSTEM §7). 여기선 ① 내 팀 수상 요약만 */}
 
       {/* 재정·팬덤 한 줄(선택) */}
       <Card accent={theme.warn}>

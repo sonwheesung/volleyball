@@ -2,8 +2,9 @@ import { useRouter } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Screen, Title, theme } from '../components/Screen';
-import { getTeam } from '../data/league';
+import { getTeam, getPlayer } from '../data/league';
 import { buildPlayoffs, type Matchup } from '../data/playoffs';
+import { currentSeasonAwards } from '../data/awards';
 import { useGameStore } from '../store/useGameStore';
 import { ChampionCelebration } from '../components/ChampionCelebration';
 
@@ -45,6 +46,12 @@ export default function Playoffs() {
   };
 
   const iWon = po.championId === my && !!my;
+  // 챔프전 MVP — 시즌 종료 시점이라 currentSeasonAwards로 이미 산출 가능(우승 세리머니에 표시). 우승 시에만 계산(무거움 회피)
+  const finalsMvpName = useMemo(() => {
+    if (!iWon) return undefined;
+    const id = currentSeasonAwards(season).finalsMvp?.playerId;
+    return id ? getPlayer(id)?.name : undefined;
+  }, [iWon, season]);
 
   return (
     <Screen title={`${season + 1}시즌 포스트시즌`}>
@@ -53,7 +60,8 @@ export default function Playoffs() {
           teamName={champ}
           teamId={my!}
           season={season}
-          onDone={() => router.push('/season-recap')}
+          mvpName={finalsMvpName}
+          onDone={() => router.push('/awards-ceremony')}
         />
       ) : null}
 
@@ -73,7 +81,7 @@ export default function Playoffs() {
         <Title>🏆 우승 — {champ}</Title>
       </Card>
 
-      <Button label="시즌 결산 →" onPress={() => router.push('/season-recap')} />
+      <Button label="시상식 →" onPress={() => router.push('/awards-ceremony')} />
     </Screen>
   );
 }
