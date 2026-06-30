@@ -7,5 +7,5 @@
 //   · 개발 중 "운영 화면처럼 보고 싶다"(테스트 화면 숨김) + Fast Refresh(즉시 반영) 둘 다 원하면
 //     SHOW_DEV_TOOLS=false 로 두고 **dev 모드(expo start)** 로 띄운다 — 운영 모드(--no-dev)는
 //     Fast Refresh가 없어 변경이 폰에 안 붙는다(번들 캐시 정체). 도구를 다시 쓰려면 true로.
-const SHOW_DEV_TOOLS = false; // ← 개발 도구 노출 토글(운영 확인 중엔 false) ※E2E 테스트 중 true, 끝나면 false 복원
+const SHOW_DEV_TOOLS = false; // ← 개발 도구 노출 토글(운영 확인 중엔 false)
 export const DEV_TOOLS = __DEV__ && SHOW_DEV_TOOLS;

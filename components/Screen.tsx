@@ -2,7 +2,7 @@ import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { ActivityIndicator, Animated, Easing, ImageBackground, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import Svg, { Circle, Line, Rect } from 'react-native-svg';
+import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { displayOvr } from '../engine/overall';
 import { POS_COLOR, POS_LABEL } from './posTokens';
@@ -111,65 +111,33 @@ function SkeletonList() {
 
 const AnimView = Animated.View;
 
-// 서브 연습하듯 코트를 좌↔우로 포물선을 그리며 날아다니는 공 1개. lane(세로 위치)·dur(속도)·dir(방향)·
-// delay(시차)를 달리해 여러 개를 겹치면 "여러 공이 난무하는" 연습 장면이 된다(사용자 요청 2026-06-30).
-// useNativeDriver: true — 가벼운 화면 전환/대기 중엔 JS와 무관하게 부드럽게 난다. ⚠ 단, endSeason 같은
-//   무거운 동기 블록 중엔 에뮬레이터에서 네이티브 애니도 멈춘다(실측 2026-06-30: 블록 전 프레임만 움직이고
-//   블록 중 8프레임 동일). 블록 내내 날게 하려면 endSeason을 청크로 쪼개 JS 스레드를 양보해야 함(미결).
-type ServeBallCfg = { lane: number; size: number; dur: number; dir: 1 | -1; delay: number; arc: number; op: number };
-function ServeBall({ courtW, courtH, cfg }: { courtW: number; courtH: number; cfg: ServeBallCfg }) {
-  const { size, dur, dir, delay, op } = cfg;
-  const p = useRef(new Animated.Value(0)).current;
-  useEffect(() => {
-    const move = Animated.loop(
-      Animated.sequence([
-        Animated.timing(p, { toValue: 1, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-        Animated.timing(p, { toValue: 0, duration: dur, easing: Easing.inOut(Easing.sin), useNativeDriver: true }),
-      ]),
-    );
-    const timer = setTimeout(() => move.start(), delay); // 시차 시작(<500ms — endSeason 블록 전에 발화)
-    return () => { clearTimeout(timer); move.stop(); };
-  }, [p, dur, delay]);
-  const margin = 8;
-  const leftX = margin, rightX = courtW - size - margin;
-  const topBase = courtH * cfg.lane - size / 2;       // 바닥 쪽 기준 높이
-  const arc = courtH * cfg.arc;                         // 네트 위로 솟는 포물선 높이
-  const tx = p.interpolate({ inputRange: [0, 1], outputRange: dir > 0 ? [leftX, rightX] : [rightX, leftX] });
-  const ty = p.interpolate({ inputRange: [0, 0.5, 1], outputRange: [topBase, topBase - arc, topBase] }); // 양끝 낮고 가운데(네트 위) 높게
-  return (
-    <AnimView
-      style={{
-        position: 'absolute', top: 0, left: 0, width: size, height: size, borderRadius: size / 2,
-        backgroundColor: theme.accent, opacity: op, transform: [{ translateX: tx }, { translateY: ty }],
-      }}
-    />
-  );
-}
-
-/** 브랜드 연출 로더 — 워드마크 "배구명가" + SVG 코트 위를 서브 연습처럼 좌우로 날아다니는 여러 공
- *  (Animated translateX/Y 포물선, useNativeDriver). 콘텐츠 모양이 아직 없는 긴 대기(앱 복원·무거운 재계산)용.
- *  관전형 1순위 — 첫 인상/대기도 "보는 경험"(UI-6). */
+/** 브랜드 연출 로더 — 워드마크 "배구명가" + 원형 스피너(회전 링). 콘텐츠 모양이 아직 없는 긴 대기
+ *  (앱 복원·무거운 재계산)용. 관전형 1순위 — 첫 인상/대기도 "보는 경험"(UI-6).
+ *  ⚠ 단순 원형 스피너로 채택(2026-06-30 사용자 요청 "그냥 원으로 도는 로딩"): 직전 "여러 공 서브연습" 안은
+ *    endSeason 무거운 동기 블록 중 네이티브 애니가 멈춰(에뮬 실측) 공이 바닥에 뚝 떨어진 채 정지 → 보기 안 좋음.
+ *    회전 링은 블록 중 멈춰도 그냥 멈춘 동그라미라 거슬리지 않는다(블록 내내 돌게 하려면 endSeason 청크화 필요 — 미결). */
 function BrandLoading({ message }: { message?: string }) {
-  const COURT_W = 210, COURT_H = 118;
-  // 여러 공: 세로 레인·크기·속도·방향·시차를 달리해 서브 난무 연출(겹쳐도 네이티브라 부담 적음).
-  const BALLS: ServeBallCfg[] = [
-    { lane: 0.66, size: 14, dur: 880, dir: 1, delay: 0, arc: 0.52, op: 1 },
-    { lane: 0.72, size: 11, dur: 1080, dir: -1, delay: 150, arc: 0.60, op: 0.9 },
-    { lane: 0.58, size: 10, dur: 1280, dir: 1, delay: 300, arc: 0.46, op: 0.78 },
-  ];
+  const SIZE = 64, STROKE = 5, R = (SIZE - STROKE) / 2, C = 2 * Math.PI * R;
+  const spin = useRef(new Animated.Value(0)).current;
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.timing(spin, { toValue: 1, duration: 900, easing: Easing.linear, useNativeDriver: true }),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [spin]);
+  const rotate = spin.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] });
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 18 }}>
-      <View style={{ width: COURT_W, height: COURT_H }}>
-        <Svg width={COURT_W} height={COURT_H} style={StyleSheet.absoluteFill}>
-          <Rect x={1} y={1} width={COURT_W - 2} height={COURT_H - 2} rx={6} stroke={theme.border} strokeWidth={2} fill={theme.card} />
-          <Line x1={COURT_W / 2} y1={2} x2={COURT_W / 2} y2={COURT_H - 2} stroke={theme.border} strokeWidth={2.5} />
-          <Line x1={COURT_W * 0.28} y1={2} x2={COURT_W * 0.28} y2={COURT_H - 2} stroke={theme.cardAlt} strokeWidth={1.5} />
-          <Line x1={COURT_W * 0.72} y1={2} x2={COURT_W * 0.72} y2={COURT_H - 2} stroke={theme.cardAlt} strokeWidth={1.5} />
+      <AnimView style={{ width: SIZE, height: SIZE, transform: [{ rotate }] }}>
+        <Svg width={SIZE} height={SIZE}>
+          <Circle cx={SIZE / 2} cy={SIZE / 2} r={R} stroke={theme.border} strokeWidth={STROKE} fill="none" />
+          <Circle
+            cx={SIZE / 2} cy={SIZE / 2} r={R} stroke={theme.accent} strokeWidth={STROKE} fill="none"
+            strokeLinecap="round" strokeDasharray={`${C * 0.3} ${C * 0.7}`}
+          />
         </Svg>
-        {BALLS.map((cfg, i) => (
-          <ServeBall key={i} courtW={COURT_W} courtH={COURT_H} cfg={cfg} />
-        ))}
-      </View>
+      </AnimView>
       <Text style={styles.brandMark}>배구명가</Text>
       {message ? <Text style={styles.loadingMsg}>{message}</Text> : null}
     </View>

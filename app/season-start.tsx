@@ -2,9 +2,9 @@
 // 화면이 멈춘 듯 보였다(사용자 보고). 브랜드 로딩을 **먼저 그리고 화면 전환이 끝난 뒤** endSeason을 돌려 로딩이
 // 실제로 보이게 한다. ⚠ runAfterInteractions는 전환/페인트 전에 일찍 발화해 직전 화면(드래프트)이 그대로
 // 얼어붙었다(실기기 확인 2026-06-30) → 전환 시간(≈350ms)을 넘긴 setTimeout + 2×RAF로 페인트 보장 후 실행.
-// ⚠ 실측 정정(2026-06-30): endSeason 동기 블록 중엔 메시지 회전(setInterval)뿐 아니라 공 애니(useNativeDriver)도
-//   에뮬레이터에서 멈춘다(블록 전 프레임만 움직임). 블록 내내 공이 날고 메시지가 돌게 하려면 endSeason을 청크로
-//   쪼개 JS 스레드를 양보해야 함(SEASON_SYSTEM §5.5 D 미결). 현재는 블록 전 짧은 구간만 연출이 살아 있다.
+// ⚠ 로더는 단순 원형 스피너(2026-06-30 사용자 요청): endSeason 동기 블록 중엔 메시지 회전(setInterval)도, 네이티브
+//   애니(useNativeDriver)도 에뮬에서 멈춘다(실측 — 블록 전 프레임만 움직임). 멈춘 회전 링은 거슬리지 않지만 첫
+//   메시지로 고정된다. 블록 내내 돌고 메시지가 순차로 바뀌게 하려면 endSeason 청크화 필요(SEASON_SYSTEM §5.5 D 미결).
 import { useEffect, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Loading } from '../components/Screen';
