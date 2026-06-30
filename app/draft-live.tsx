@@ -10,6 +10,7 @@ import { getTeam, shortTeamName, teamScoutReveal } from '../data/league';
 import { resolveDraft, prospectStars, type PickReason } from '../engine/draft';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
+import { showSeasonStartAd } from '../lib/ads';
 import type { Player } from '../types';
 
 const REASON: Record<PickReason, { ko: string; color: string }> = {
@@ -73,7 +74,9 @@ function DraftLiveInner() {
   const done = revealed >= total;
   const shown = picks.slice(0, revealed).reverse(); // 최신이 위로
 
-  const onFinish = () => { setAuto(false); endSeason(); router.replace('/enshrine'); }; // 헌액 화면 경유(BROADCAST §8.4)
+  // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 새 시즌 commit.
+  // 광고는 항상 resolve(스킵/실패/오프라인이어도 진행 하드블록 없음). Expo Go에선 스텁(no-op).
+  const onFinish = async () => { setAuto(false); await showSeasonStartAd(); endSeason(); router.replace('/enshrine'); }; // 헌액 화면 경유(BROADCAST §8.4)
 
   return (
     <Screen title={`${season + 2}시즌 드래프트`}>
@@ -95,7 +98,7 @@ function DraftLiveInner() {
           </Pressable>
         </View>
       ) : (
-        <Button label="다음 시즌 시작" onPress={onFinish} />
+        <Button label="시즌 시작하기 ▶" onPress={onFinish} />
       )}
 
       {revealed === 0 ? (

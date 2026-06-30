@@ -9,6 +9,7 @@ import { computeStandings } from '../data/standings';
 import { resolveDraft, prospectStars } from '../engine/draft';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
+import { showSeasonStartAd } from '../lib/ads';
 import type { Player } from '../types';
 
 const potStars = (p: Player): string => prospectStars(p); // 드래프트가치 기준(희소도 반영) — 구 maxPot 포화 교정
@@ -67,7 +68,10 @@ function DraftCenterInner() {
     return `${Math.max(40, o - w)}~${Math.min(99, o + w)}`;
   };
 
-  const onFinish = () => {
+  const onFinish = async () => {
+    // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 새 시즌 commit.
+    // 광고는 항상 resolve(스킵/실패/오프라인이어도 진행 하드블록 없음). Expo Go에선 스텁(no-op).
+    await showSeasonStartAd();
     endSeason();
     router.replace('/enshrine'); // 헌액 화면(새 레전드 0명이면 자동 통과 → 탭). BROADCAST §8.4
   };
@@ -92,7 +96,7 @@ function DraftCenterInner() {
 
       <Button label="라이브 드래프트 보기 ▶" onPress={() => router.push('/draft-live')} />
       <Pressable onPress={onFinish} style={{ paddingVertical: 8, alignItems: 'center' }}>
-        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>건너뛰고 바로 다음 시즌 시작</Text>
+        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>건너뛰고 시즌 시작하기</Text>
       </Pressable>
 
       <Title>내 지명 결과 (미리보기)</Title>
