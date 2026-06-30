@@ -7,6 +7,8 @@ import { computeStandings, playedThroughDay, leagueDisplayDay } from '../../data
 import { rivalOf } from '../../data/rivalry';
 import { teamClinch } from '../../data/clinch';
 import { availableTeamPlayers } from '../../data/injury';
+import { buildMatchBox } from '../../data/matchBox';
+import { SEASON_DAYS } from '../../engine/calendar';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
 import { teamOverallRaw } from '../../engine/overall';
@@ -23,6 +25,7 @@ export default function Schedule() {
   const archive = useGameStore((s) => s.archive);
   const watchProgress = useGameStore((s) => s.watchProgress);
   const setDay = useGameStore((s) => s.setDay);
+  const recordResult = useGameStore((s) => s.recordResult);
 
   const rival = rivalOf(teamId, archive, results, SEASON, LEAGUE.teams.map((t) => t.id));
 
@@ -57,6 +60,19 @@ export default function Schedule() {
     }
     setDay(nextFixture.dayIndex); // 경기일까지 진행(사이 기간은 자동 훈련/노쇠 재계산)
     router.push(`/match/${nextFixture.id}`);
+  };
+
+  // DEV 전용 — 내 팀 미치름 경기를 결정론 결과로 일괄 기록 + 시즌말로 진행(E2E 36탭 회피, EMULATOR_E2E C6).
+  // 결과·뉴스·사건사고는 결정론 시뮬이 시즌 전체분을 생성하므로, 완료 후 뉴스 피드에서 중간 사건까지 검수 가능.
+  const devCompleteSeason = () => {
+    for (const f of SEASON) {
+      if ((f.homeTeamId === teamId || f.awayTeamId === teamId) && !results[f.id]) {
+        const { sim } = buildMatchBox(f.homeTeamId, f.awayTeamId, f.dayIndex, f.seed);
+        recordResult({ fixtureId: f.id, homeSets: sim.homeSets, awaySets: sim.awaySets });
+      }
+    }
+    setDay(SEASON_DAYS); // 시즌말일 → 순위·결과·시상 전체 공개
+    Alert.alert('시즌 즉시 완료 (개발)', '정규리그 전 경기를 결정론 결과로 기록했습니다. "포스트시즌 →"으로 진행하세요.');
   };
 
   const preview = nextFixture
@@ -160,7 +176,10 @@ export default function Schedule() {
         <Button label="전 구단 경기 결과 보기" variant="ghost" onPress={() => router.push('/results')} />
       </SpotlightTarget>
       {DEV_TOOLS ? (
-        <Button label="🧪 수비 위치 실험실 (개발용)" variant="ghost" onPress={() => router.push('/board-lab')} />
+        <>
+          <Button label="🧪 시즌 즉시 완료 (개발용)" variant="ghost" onPress={devCompleteSeason} />
+          <Button label="🧪 수비 위치 실험실 (개발용)" variant="ghost" onPress={() => router.push('/board-lab')} />
+        </>
       ) : null}
       <SpotlightOverlay screen="tab-schedule" />
     </Screen>
