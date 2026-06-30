@@ -4,7 +4,7 @@
 
 export const SAVE_VERSION = 1;
 
-// 영속 51필드 기본값 — freshSave(store/useGameStore.ts) + 설정 4필드와 1:1. 정규화 기준 단일 소스.
+// 영속 56필드 기본값 — freshSave(store/useGameStore.ts) + 설정 4필드와 1:1. 정규화 기준 단일 소스.
 // (drift 가드: _dv_migrate가 이 키 집합 == partialize 키 집합을 단언한다.)
 export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 설정(새 게임에도 유지)
@@ -31,6 +31,9 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   asianWish: [], asianAltPool: [], asianSubUsed: false, keepAsian: null,
   // 인간관계(RELATIONSHIP_SYSTEM) — 함께한 세월 우정(pairKey→0~0.3)
   bonds: {},
+  // 다이아 이코노미(MONETIZATION §11) — 소비성 재화·전지훈련 기록·업적수령·광고상태
+  diamonds: 0, campLog: [], campTrainedThisOffseason: [], claimedAch: [],
+  adState: { dayIdx: 0, count: 0, lastAdAt: 0 },
   // 시뮬 결과 캐시(REALTIME_SIM Phase1) — 계산된 시즌 결과(재로드 시 재계산 제거). 폐기 가능(특수 분기). null=재계산
   simCache: null,
 };
@@ -53,7 +56,8 @@ const KIND: Record<string, Kind> = {
   tryoutWish: 'arr', foreignAltPool: 'arr', foreignSubUsed: 'bool', keepForeign: 'nbool',
   asianWish: 'arr', asianAltPool: 'arr', asianSubUsed: 'bool', keepAsian: 'nbool',
   bonds: 'rec',
-  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, lastFinance
+  diamonds: 'num', campLog: 'arr', campTrainedThisOffseason: 'arr', claimedAch: 'arr',
+  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, lastFinance, adState
 };
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -92,6 +96,8 @@ function sanitizeField(key: string, v: unknown): unknown {
       return isObj(v) && Array.isArray(v.primary) && Array.isArray(v.secondary) ? v : null;
     case 'lastFinance':
       return v === null || isObj(v) ? v : null;
+    case 'adState':
+      return numRec(v, ['dayIdx', 'count', 'lastAdAt']);
     case 'simCache':
       // 모양 검증(baseVersion·txVersion 숫자 + standings/production/dyn은 있으면 배열/객체). 어긋나면 null(재계산 폴백) — 폐기 가능
       return isObj(v) && typeof v.baseVersion === 'number' && typeof v.txVersion === 'number'
@@ -119,6 +125,12 @@ export function sanitizeSave(raw: unknown): Record<string, unknown> {
  *   if (version < 3) s = v2_to_v3(s);
  *   return sanitizeSave(s);
  */
+let _pendingClaimSeed = false;
+/** 다이아 기능 이전 세이브였는지(소급 폭탄 방지 시드 필요, §11.3) — rehydrate가 1회 소비. 출력 키 오염 없음. */
+export const consumePendingClaimSeed = (): boolean => { const v = _pendingClaimSeed; _pendingClaimSeed = false; return v; };
+
 export function migrateSave(persisted: unknown, _version: number): Record<string, unknown> {
+  // 다이아 기능 이전 세이브(진행 중)는 claimedAch 키가 없다 → 현 달성분을 claimed로 시드(rehydrate에서).
+  if (isObj(persisted) && persisted.claimedAch === undefined && !!persisted.selectedTeamId) _pendingClaimSeed = true;
   return sanitizeSave(persisted);
 }

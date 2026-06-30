@@ -5,7 +5,7 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { createJSONStorage, persist } from 'zustand/middleware';
-import { SAVE_VERSION, migrateSave } from './saveMigration';
+import { SAVE_VERSION, migrateSave, consumePendingClaimSeed } from './saveMigration';
 import { accrueBonds, setRelationContext } from '../data/relationships';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
@@ -49,7 +49,12 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainingFocus, Transfer } from '../types';
+import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
+import { evalAchievements } from '../engine/achievements';
+import { canWatchAd, grantAd, unclaimedReward, applyCamp, campCost, FRESH_AD_STATE, type AdState } from '../engine/diamonds';
+
+/** 전지훈련 기록(MONETIZATION §11.2) — 시드 폴백 재적용용 + 감사. */
+interface CampEntry { season: number; playerId: string; stats: TrainableStat[] }
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const RETIRE_NEWS_MIN_SEASONS = 8; // 작별 뉴스 대상 — 8시즌+ 뛴 노장(또는 HOF). 버스트(단명)는 무음
@@ -84,6 +89,14 @@ interface GameState {
   archive: SeasonArchive[];                    // 역대 우승 + 시상 + 순위/연승연패/플옵
   careerLog: { faSigns: number; coachHires: number; staffHires: number; interviews: number }; // 단장 통산 액션(업적용)
   careerTotals: { points: number; aces: number; setsWon: number; setsLost: number; matchWins: number; matchLosses: number }; // 내 팀 통산 경기 기록(업적용)
+  diamonds: number;                            // 다이아 잔액(MONETIZATION §11) — 전지훈련 전용 소비성 재화
+  campLog: CampEntry[];                        // 전지훈련 기록(시드 폴백 재적용·감사)
+  campTrainedThisOffseason: string[];          // 이번 오프시즌 전지훈련한 선수(선수당 1회) — 새 시즌 시작 시 초기화
+  claimedAch: string[];                        // 다이아 수령한 업적 id(1회 지급)
+  adState: AdState;                            // 광고 보상 쿨다운/하루상한 상태(메타 — 시드 무관)
+  watchAdForDiamonds: () => { ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' };
+  claimAchDiamonds: () => number;              // 새로 달성한 업적 다이아 수령(지급액 반환)
+  trainingCamp: (playerId: string, stats: TrainableStat[]) => { ok: boolean; reason?: string }; // 오프시즌 전지훈련
   bonds: Record<string, number>; // 인간관계 우정(pairKey→0~0.3, 함께한 세월 누적, RELATIONSHIP_SYSTEM)
   coachPool: { coaches: Coach[]; assistants: AssistantCoach[] } | null; // 감독 생애주기 풀(null=시드, STAFF_SYSTEM 6)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
@@ -181,6 +194,11 @@ const freshSave = {
   archive: [] as SeasonArchive[],
   careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 },
   careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 },
+  diamonds: 0,
+  campLog: [] as CampEntry[],
+  campTrainedThisOffseason: [] as string[],
+  claimedAch: [] as string[],
+  adState: { ...FRESH_AD_STATE } as AdState,
   bonds: {} as Record<string, number>,
   coachPool: null as { coaches: Coach[]; assistants: AssistantCoach[] } | null,
   hallOfFame: [] as HofEntry[],
@@ -236,6 +254,51 @@ export const useGameStore = create<GameState>()(
       sfxEnabled: true,
       seenTips: {},
       ...freshSave,
+
+      // ── 다이아 이코노미 (MONETIZATION §11) ──
+      watchAdForDiamonds: () => {
+        const s = get();
+        const now = Date.now(); // 광고 쿨다운/상한은 메타(시드/결정론 무관)
+        const c = canWatchAd(s.adState, now);
+        if (!c.ok) return { ok: false, reason: c.reason };
+        const { adState, reward } = grantAd(s.adState, now);
+        set({ adState, diamonds: s.diamonds + reward });
+        return { ok: true, reward };
+      },
+      claimAchDiamonds: () => {
+        const s = get();
+        const my = s.selectedTeamId;
+        if (!my) return 0;
+        const statuses = evalAchievements({ myTeamId: my, archive: s.archive, hof: s.hallOfFame, milestones: s.milestones, cash: s.cash, fanScore: s.fanScore, careerLog: s.careerLog, careerTotals: s.careerTotals });
+        const { ids, total } = unclaimedReward(statuses, s.claimedAch);
+        if (!ids.length) return 0;
+        set({ diamonds: s.diamonds + total, claimedAch: [...s.claimedAch, ...ids] });
+        return total;
+      },
+      trainingCamp: (playerId, stats) => {
+        const s = get();
+        const my = s.selectedTeamId;
+        if (!my) return { ok: false, reason: 'no-team' };
+        if (s.currentDay !== 0) return { ok: false, reason: 'not-offseason' }; // 오프시즌(경기0)만 — 재시뮬/소급 방지(§11.2)
+        if (s.campTrainedThisOffseason.includes(playerId)) return { ok: false, reason: 'already' }; // 선수당 오프시즌 1회
+        const list = stats.filter((v, i) => stats.indexOf(v) === i); // 중복 제거
+        if (!list.length) return { ok: false, reason: 'no-stat' };
+        const cost = campCost(list);
+        if (s.diamonds < cost) return { ok: false, reason: 'no-diamonds' };
+        if (!(currentRosters()[my] ?? []).includes(playerId)) return { ok: false, reason: 'not-mine' };
+        const base = getPlayer(playerId);
+        if (!base) return { ok: false, reason: 'not-found' };
+        const camped = applyCamp(base, list);
+        commitPlayerBase({ [playerId]: camped }); // 레지스트리 즉시 반영(evoCache 무효화 → 화면 즉시)
+        set({
+          diamonds: s.diamonds - cost,
+          campLog: [...s.campLog, { season: s.season, playerId, stats: list }],
+          campTrainedThisOffseason: [...s.campTrainedThisOffseason, playerId],
+          // 시즌≥1: 영속 base에도 굽기. 시즌0(base null): campLog가 재로드 시 시드에 재적용(§11.2 — 이중적용 없음)
+          ...(s.playerBase ? { playerBase: { ...s.playerBase, [playerId]: camped } } : {}),
+        });
+        return { ok: true };
+      },
 
       selectTeam: (teamId) => {
         resetLeagueBase();
@@ -841,6 +904,7 @@ export const useGameStore = create<GameState>()(
           keepAsian: null,
           season: nextSeason,
           currentDay: 0,
+          campTrainedThisOffseason: [], // 새 오프시즌 — 전지훈련 1회 제한 초기화(MONETIZATION §11.2)
           results: {},
           watchProgress: {}, // 새 시즌 — 이어보기 위치 초기화
           contractOverrides: {},
@@ -914,6 +978,11 @@ export const useGameStore = create<GameState>()(
         archive: s.archive,
         careerLog: s.careerLog,
         careerTotals: s.careerTotals,
+        diamonds: s.diamonds,
+        campLog: s.campLog,
+        campTrainedThisOffseason: s.campTrainedThisOffseason,
+        claimedAch: s.claimedAch,
+        adState: s.adState,
         bonds: s.bonds,
         simCache: captureSimCache(), // 계산된 시즌 결과(REALTIME_SIM Phase1) — 워밍됐을 때만, 재로드 재계산 제거
         coachPool: s.coachPool,
@@ -949,6 +1018,14 @@ export const useGameStore = create<GameState>()(
         // 크래시 루프 대신 fresh로 깨끗이 리셋(데이터 1개라 최악도 1인 손실). SAVE_SYSTEM §3.3.
         try {
           if (state?.playerBase) commitPlayerBase(state.playerBase);
+          // 시즌0(base null): 영속 base가 없으니 전지훈련 부스트를 시드 레지스트리에 재적용(campLog=기록입력, §11.2).
+          // 시즌≥1(base 존재): 이미 굽힌 base를 로드 → 재적용 안 함(이중적용 방지).
+          else if (state?.campLog?.length) {
+            for (const e of state.campLog) {
+              const p = getPlayer(e.playerId);
+              if (p) commitPlayerBase({ [e.playerId]: applyCamp(p, e.stats) });
+            }
+          }
           if (state?.rosters) commitRosters(state.rosters);
           if (state?.coachPool) commitCoachPool(state.coachPool.coaches, state.coachPool.assistants); // 감독 풀 복원(commitStaff 전 — staffHead가 참조)
           if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
@@ -961,6 +1038,11 @@ export const useGameStore = create<GameState>()(
           setSeasonHistory(state?.archive ?? []); // 모기업 기조(FINANCE 2.0) 컨텍스트 복원 — FA 화면 진입 전 stance 일관
           // 시뮬 결과 캐시 복원 — **반드시 맨 끝**(위 commit들이 baseVersion/txVersion을 bump한 뒤). 저장 키와 맞춰 재계산 제거(Phase1).
           restoreSimCache((state as { simCache?: import('../data/simCache').SimCache })?.simCache);
+          // 다이아 소급 폭탄 방지(§11.3): 기능 이전 세이브면 현 달성 업적을 claimed로 시드(1회) → 이후 신규 달성만 다이아.
+          if (consumePendingClaimSeed() && state?.selectedTeamId) {
+            const st = evalAchievements({ myTeamId: state.selectedTeamId, archive: state.archive ?? [], hof: state.hallOfFame ?? [], milestones: state.milestones ?? [], cash: state.cash ?? 0, fanScore: state.fanScore ?? 50, careerLog: state.careerLog, careerTotals: state.careerTotals });
+            useGameStore.setState({ claimedAch: st.filter((x) => x.unlocked).map((x) => x.ach.id) });
+          }
           useGameStore.setState({ hydrated: true });
         } catch (e) {
           console.warn('[save] 복원 실패 — fresh로 리셋:', e);
