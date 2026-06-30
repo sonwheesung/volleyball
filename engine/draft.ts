@@ -103,7 +103,7 @@ function bestBy(arr: Player[], score: (p: Player) => number): Player {
 
 /**
  * AI 픽(3티어, 사유 포함 — FA_SYSTEM 3.1):
- *  1) 슈퍼 유망주(pot≥88) 있으면 포지션 무관 BPA(reason=super)
+ *  1) 슈퍼 유망주(prospectValue≥81=SUPER_PV) 있으면 포지션 무관 BPA(reason=super)
  *  2) 없으면 부족 포지션(gap>0)만 보고 가치×부족도×성향(reason=need)
  *  3) 부족 포지션 없으면 OVR×성격×성향(reason=best)
  */
