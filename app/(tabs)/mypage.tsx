@@ -10,6 +10,8 @@ import { Card, Muted, Screen, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
 import { purchase, restorePurchases, skuLabel, type Sku } from '../../lib/iap';
+import { AD_REWARD } from '../../engine/diamonds';
+import { DEV_TOOLS } from '../../data/flags';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -34,7 +36,21 @@ export default function MyPage() {
   const router = useRouter();
   const replayOnboarding = useGameStore((s) => s.replayOnboarding);
   const resetTips = useGameStore((s) => s.resetTips);
+  const diamonds = useGameStore((s) => s.diamonds);
+  const watchAdForDiamonds = useGameStore((s) => s.watchAdForDiamonds);
+  const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
+
+  // 광고 보고 다이아(MONETIZATION §11.1) — AdMob은 EAS 후 lib/ads 연결, 지금은 스텁(즉시 지급)으로 로컬 테스트.
+  const watchAd = () => {
+    const r = watchAdForDiamonds();
+    if (r.ok) Alert.alert('광고 시청 완료', `+${r.reward} 💎 적립되었습니다.`);
+    else Alert.alert('잠시 후 다시', r.reason === 'cap' ? '오늘 광고 보상은 모두 받았어요(하루 8회). 내일 다시 와주세요.' : '다음 광고까지 잠시 기다려 주세요(30분 간격).');
+  };
+  const claimAch = () => {
+    const got = claimAchDiamonds();
+    Alert.alert(got > 0 ? '업적 보상 수령' : '수령할 보상 없음', got > 0 ? `달성 업적 보상 +${got} 💎` : '새로 달성한 업적이 없습니다.');
+  };
   // 상점 — IAP 추상화(lib/iap)에 연결. dev는 시뮬 알림, 운영은 RevenueCat. 모든 함수는 throw 없이 결과 반환.
   // MONETIZATION_SYSTEM: 광고 제거(remove_ads)·월드컵 시즌 구매(dlc_worldcup) 2칸 + 구매 복원(필수).
   const buy = async (sku: Sku) => {
@@ -54,6 +70,29 @@ export default function MyPage() {
 
   return (
     <Screen title="마이페이지">
+      {/* ── 다이아 (MONETIZATION §11) — 전지훈련 재화 ── */}
+      <Card accent={theme.sky}>
+        <View style={styles.row}>
+          <View style={[styles.iconChip, { backgroundColor: theme.sky + '22' }]}><Text style={{ fontSize: 20 }}>💎</Text></View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.title}>다이아 {diamonds.toLocaleString()}</Text>
+            <Muted style={{ fontSize: 12.5, marginTop: 1 }}>전지훈련으로 선수 능력을 키웁니다</Muted>
+          </View>
+        </View>
+        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
+          <Pressable onPress={watchAd} style={styles.diaBtn}><Text style={styles.diaBtnTxt}>📺 광고 보고 +{AD_REWARD} 💎</Text></Pressable>
+          <Pressable onPress={claimAch} style={styles.diaBtn}><Text style={styles.diaBtnTxt}>🏅 업적 보상 받기</Text></Pressable>
+        </View>
+        {DEV_TOOLS ? (
+          <Pressable onPress={() => useGameStore.setState({ diamonds: diamonds + 1000 })} style={{ alignItems: 'center', paddingTop: 8 }}>
+            <Text style={{ color: theme.muted, fontSize: 12, fontWeight: '700' }}>＋1000 💎 (개발용)</Text>
+          </Pressable>
+        ) : null}
+      </Card>
+      <LinkCard icon="airplane-outline" tint={theme.good} title="전지훈련"
+        sub="오프시즌 — 다이아로 선수 능력 강화"
+        onPress={() => router.push('/training-camp')} />
+
       <SpotlightTarget id="history-top">
         <LinkCard icon="trophy-outline" tint={theme.gold} title="기록"
           sub="시즌 · 통산 리더보드 · 명예의전당 · 연표"
@@ -76,6 +115,9 @@ export default function MyPage() {
 
       {/* ── 상점 (MONETIZATION_SYSTEM) — 광고 제거 · 월드컵 시즌 구매. dev=시뮬, 운영=RevenueCat ── */}
       <Text style={styles.section}>상점</Text>
+      <LinkCard icon="diamond-outline" tint={theme.sky} title="다이아 구매"
+        sub="전지훈련용 — 100개 ₩1,000 · 500개 ₩4,800 (출시 시 결제 연결)"
+        onPress={() => Alert.alert('다이아 구매', '결제는 출시 빌드에서 연결됩니다. 지금은 광고·업적으로 다이아를 모을 수 있어요.')} />
       <LinkCard icon="remove-circle-outline" tint={theme.rose} title="광고 제거"
         sub="게임 내 모든 광고를 없앱니다"
         onPress={() => buy('remove_ads')} />
@@ -98,4 +140,6 @@ const styles = StyleSheet.create({
   title: { color: theme.text, fontSize: 16, fontWeight: '800' },
   arrow: { color: theme.accent, fontSize: 24, fontWeight: '900' },
   section: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 14, marginBottom: 2, marginLeft: 2 },
+  diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '800' },
 });
