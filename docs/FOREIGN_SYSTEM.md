@@ -160,24 +160,32 @@ popular-names-by-country, IES-platform/r4r_gender(WGND) 등 국제 인명 데이
 어긋난다**. 그래서 이 데이터셋들을 **출처로만** 써서 한글 음역 풀을 대폭 큐레이션(확장)하고, **결정론 dedup**으로
 중복을 없앤다(실존 유명선수·셀럽·남성명 회피 규칙 유지 — 메가왓티·옐레나·나탈리아·카리나·드라간 류 금지).
 
-**A. 풀 확장** — `FOREIGN_NAMES` 14→~90, `ASIAN_IMPORTS` 24→~70(국적 분포 유지), `GIVEN`(국내) 30→~60.
-배구 수입국(브라질·세르비아·이탈리아·미국·도미니카·쿠바·터키·러시아·폴란드 등 + 아시아쿼터 8개국) 여자 이름
-음역. **배열 길이 핀 해제**: `rng.int(min,max)`는 범위와 무관하게 `next()`를 **정확히 1회** 소비(rng.ts 확인) →
-길이를 바꿔도 **다운스트림 스탯/재능/ID 추첨은 불변**, 신규 생성 선수의 *표시 이름만* 바뀐다. 기존 세이브는
-스냅샷에 이름이 영속돼 **불변**(구세이브 안전).
+**~~A. 풀 확장(1차 시도 — 폐기)~~** — ~~`FOREIGN_NAMES` 14→90·`ASIAN_IMPORTS` 24→76·`GIVEN` 30→60 큐레이션.~~
+**폐기 사유(2026-06-30, 사용자 지적)**: 고정 *완성 이름* 리스트는 아무리 늘려도 **유한 → 100시즌+면 고갈/반복**.
+dedup이 "현존 전부 회피"라 풀이 마르면 뽑을 게 없어진다. "무조건 유동적으로(절차적으로) 뽑아야" → 아래 A'로 교체.
 
-**B. 결정론 dedup** — `data/seed.ts dedupeNames(players, seedKey, taken)`. 생성 **직후 1회**만(선수 경력 중
-이름 불변 — 시즌마다 안 바뀜). 배열 순서대로 보며 이미 쓰인 이름이면 **미사용 풀 엔트리로 재배정**(아시아는
-이름+국적 묶음, 국내는 성+이름 조합). 순수 함수(같은 입력·시드 → 같은 결과)라 무저장 결정론·리플레이 보존.
-- 적용: `generateLeague`(초기 리그 전체 1배치) · `generateForeignPool`/`generateAsianPool`(fresh 배치 + `taken`=
-  스냅샷 현 외인/아시아 전원 → 트라이아웃 풀 화면=fresh+잔류 합쳐도 무중복·리그 전체 무중복) ·
-  `generateDraftClass`(클래스 + `taken`=리그 현 국내 이름) · `fillRosters`(신인 충원 배치 + `taken`).
+**A'. 절차적 음절 조합 생성 (정본)** — 이름을 *완성 리스트*에서 고르지 않고 **음절 빌딩블록을 조합**해 만든다.
+공간이 수만 가지라 사실상 무제한(어떤 플레이스루보다 큼) + 은퇴자가 이름을 비워 **영구히 고갈 안 함**.
+- **국내**: 성(`SURNAMES` ~60 실성) + 이름 = `GIVEN_SYL1`(~35) + `GIVEN_SYL2`(~20)(가끔 1음절 `GIVEN_SOLO`).
+  공간 ≈ 60×35×20 ≈ **42,000**. `genKoreanName(id)`.
+- **외국인**: `FGN_PREFIX`(~46) + `FGN_SUFFIX`(~32). 접두(여는 음절)+접미(여성형 꼬리 -아/-나/-라/-리아/-엘라…).
+  공간 ≈ **1,400+**(접미 다수가 -a 계열이라 유럽 여자이름처럼 읽힘). `genForeignName(id)`. 실존선수·셀럽·남성명 회피.
+- **아시아쿼터**: 국적(`ASIAN_NATS` 8개국)별 음절 풀 `ASIAN_SYL[nat].a + .b`. 국적 태그 동반. `genAsianIdentity(id)`.
+- **결정론 핵심**: 이름은 **id 시드 서브스트림**(`createRng(strSeed('kname:'+id))` 등)에서만 추첨 → makePlayer의
+  메인 rng(스탯/재능)와 **완전 분리**. 이름 로직을 바꿔도 스탯/ID 0 영향. 이름은 순수 `f(id)`. 기존 세이브는
+  스냅샷에 이름 영속 → 불변.
 
-**검증**: `tools/_dv_name_dedupe.ts` — 초기 리그·트라이아웃 풀·드래프트 클래스에서 **표시 중복 0**(A/B 자가검증:
-dedup 끄면 중복 N>0 떠야 — 허위 오라클 차단). `_gt_determinism` 무회귀(이름 dedup이 시드 리플레이를 안 흔든다).
-스탯/ID 불변(이름은 단일 추첨·다운스트림 0). `docs/README.md` 검증 루틴 등록.
+**B. 결정론 dedup (절차적 재생성)** — `data/seed.ts dedupeNames(players, seedKey, taken)`. 생성 **직후 1회**만
+(선수 경력 중 이름 불변). 이미 쓰인 이름이면 **시드를 교란해(`id#k`) 새 이름을 절차적으로 재생성**(유한 리스트
+소진 없음 — k가 늘수록 새 조합). 아시아는 이름+국적 묶음 재생성. 순수·결정론(같은 입력·시드 → 같은 결과).
+- 적용: `generateLeague`(초기 리그 1배치) · `generateForeignPool`/`generateAsianPool`(fresh + `taken`=현존 외인/아시아) ·
+  `generateDraftClass`(클래스 + `taken`=현 국내) · `fillRosters`(충원 + `taken`). dedup은 *현존(living)* 집합만 회피
+  하면 됨(은퇴자는 스냅샷서 제거) → 수만 공간에서 충돌 자체가 희박, dedup은 0 보장용.
 
-> **상태: ✅ 완료(2026-06-30)**. 적용 — `data/names.ts`(풀 14→90·24→76·30→60) · `data/seed.ts dedupeNames`+
-> `generateLeague` · `data/tryout.ts`(외인/아시아 풀+taken) · `data/draftSetup.ts`(클래스 taken) · `data/rookies.ts`(충원).
-> **검증**: `_dv_name_dedupe` ✅(중복 0·taken 회피·A/B 21>0→0·결정론) · `_gt_determinism` ✅(seed+save/reload) ·
-> `_dv_tryout_pool` ✅ · 205 테스트 · tsc 0.
+**검증**: `tools/_dv_name_dedupe.ts`(중복 0·taken 회피·A/B·결정론) + `tools/_dv_name_space.ts`(**대량 생성 시 고유율·
+공간 추정·샘플 육안**: 10k id 생성 시 고유 이름 수·반복률, 절차성 입증). `_gt_determinism` 무회귀. README 등록.
+
+> **상태: ✅ 완료(2026-06-30, A'로 재구현)**. 적용 — `data/names.ts`(음절 풀 + `genKoreanName`/`genForeignName`/
+> `genAsianIdentity`) · `data/seed.ts`(makePlayer/makeProspect/applyAsianIdentity가 gen 호출·dedup 절차적 재생성) ·
+> tryout/draftSetup/rookies(taken 유지). **검증**: `_dv_name_dedupe` ✅ · `_dv_name_space` ✅ · `_gt_determinism` ✅ ·
+> 205 테스트 · tsc 0.

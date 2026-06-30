@@ -20,7 +20,7 @@ import type {
   TrainableStat,
   TrainingFocus,
 } from '../types';
-import { ASIAN_IMPORTS, COACH_NAMES, FOREIGN_NAMES, GIVEN, SURNAMES, TEAM_NAMES } from './names';
+import { COACH_NAMES, TEAM_NAMES, genKoreanName, genForeignName, genAsianIdentity } from './names';
 import { clubIdentityByIndex } from './clubIdentity';
 
 export interface League {
@@ -94,9 +94,8 @@ export function makePlayer(
   bias = 0, // 팀 전력 티어(시드 전용) — 그 팀 선수 능력을 ±이동해 팀 OVR 분포를 넓힘
   ageRange: [number, number] = [19, 34], // 팀 정체성 나이 분포(CLUB_IDENTITY_SYSTEM). 기본=기존 분포
 ): Player {
-  const name = isForeign
-    ? FOREIGN_NAMES[rng.int(0, FOREIGN_NAMES.length - 1)]
-    : SURNAMES[rng.int(0, SURNAMES.length - 1)] + GIVEN[rng.int(0, GIVEN.length - 1)];
+  // 이름은 id 시드 서브스트림에서만 생성(절차적 음절 조합, FOREIGN_SYSTEM §8 A') — 메인 rng(스탯) 불간섭
+  const name = isForeign ? genForeignName(id) : genKoreanName(id);
 
   // 포지션별 core 스탯 (5.3 가중치 단순화)
   const core: Record<Position, Partial<Record<keyof Player, boolean>>> = {
@@ -185,7 +184,7 @@ export function makePlayer(
 // 신인(유망주) 생성 — 현재 OVR은 낮게(육성 대상), 포텐셜은 높게.
 // 드래프트 클래스 + 자동 충원 공용. KOVO 신인 기준(대부분 즉전감 아님).
 export function makeProspect(rng: Rng, id: string, pos: Position): Player {
-  const name = SURNAMES[rng.int(0, SURNAMES.length - 1)] + GIVEN[rng.int(0, GIVEN.length - 1)];
+  const name = genKoreanName(id); // 절차적 음절 조합(FOREIGN_SYSTEM §8 A') — id 시드, 메인 rng 불간섭
   const age = rng.int(18, 20);
   const core: Record<Position, Partial<Record<keyof Player, boolean>>> = {
     S: { skSet: true, vq: true, focus: true },
@@ -247,43 +246,31 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
   return player;
 }
 
-/** 결정론 Fisher-Yates 셔플(사본 반환) — dedup 후보 순서를 시드로 고정. */
-function shuffled<T>(arr: readonly T[], r: Rng): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = r.int(0, i);
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
-
 /**
- * 표시명 동명이인 방지 (FOREIGN_SYSTEM §8) — 생성 직후 1회. 충돌 시 미사용 풀 엔트리로 재배정.
- * 순수·결정론: 같은 (players 순서·seedKey·taken) → 같은 결과. 이름(+아시아 국적)만 수정, 스탯/ID 불변
- * (이름은 단일 rng 추첨이라 다운스트림 0). 생성 시 1회만 — 선수 경력 중 이름 불변(스냅샷 영속).
+ * 표시명 동명이인 방지 (FOREIGN_SYSTEM §8 B) — 생성 직후 1회. 충돌 시 **시드를 교란해 절차적으로 새 이름
+ * 재생성**(유한 리스트 소진 없음 — 음절 조합 공간이 수만 가지). 순수·결정론: 같은 (players 순서·seedKey·taken)
+ * → 같은 결과. 이름(+아시아 국적)만 수정, 스탯/ID 불변(이름은 id 서브스트림이라 메인 rng 0영향).
+ * 생성 시 1회만 — 선수 경력 중 이름 불변(스냅샷 영속). dedup은 현존(living) 집합만 회피하면 됨(은퇴자는 제거됨).
  * @param taken 이 배치 밖에서 이미 쓰인 이름(리그/스냅샷 현존) — 배치 내부 중복은 자동 추적.
  */
 export function dedupeNames(players: Player[], seedKey: string, taken: Iterable<string> = []): void {
   const used = new Set<string>(taken);
-  const r = createRng(strSeed(`dedupe:${seedKey}`));
-  const foreignQ = shuffled(FOREIGN_NAMES, r);
-  const asianQ = shuffled(ASIAN_IMPORTS, r);
-  const surnQ = shuffled(SURNAMES, r);
-  const givenQ = shuffled(GIVEN, r);
-
   for (const p of players) {
     if (!used.has(p.name)) { used.add(p.name); continue; }
-    // 충돌 → 같은 부류 풀에서 미사용 이름으로 재배정(못 찾으면 원래 이름 유지 — 풀 소진, 이론상 도달 안 함)
+    const salt = `${seedKey}:${p.id}`;
+    let k = 1;
     if (p.isAsianQuota) {
-      const e = asianQ.find((c) => !used.has(c.name));
-      if (e) { p.name = e.name; p.nationality = e.nat; }
+      let id2 = genAsianIdentity(`${salt}#${k}`);
+      while (used.has(id2.name) && k < 500) { k++; id2 = genAsianIdentity(`${salt}#${k}`); }
+      p.name = id2.name; p.nationality = id2.nat;
     } else if (p.isForeign) {
-      const nm = foreignQ.find((c) => !used.has(c));
-      if (nm) p.name = nm;
+      let nm = genForeignName(`${salt}#${k}`);
+      while (used.has(nm) && k < 500) { k++; nm = genForeignName(`${salt}#${k}`); }
+      p.name = nm;
     } else {
-      let nm: string | null = null;
-      for (const s of surnQ) { for (const g of givenQ) { if (!used.has(s + g)) { nm = s + g; break; } } if (nm) break; }
-      if (nm) p.name = nm;
+      let nm = genKoreanName(`${salt}#${k}`);
+      while (used.has(nm) && k < 500) { k++; nm = genKoreanName(`${salt}#${k}`); }
+      p.name = nm;
     }
     used.add(p.name);
   }
@@ -298,9 +285,8 @@ const ASIAN_SEED_POS: Position[] = ['OH', 'MB', 'OH', 'MB', 'OH', 'MB', 'OP'];
 
 /** 아시아쿼터 이름·국적 부여 — id 시드 결정론(makePlayer RNG 불간섭, 서양식 이름→아시아 이름+국적) */
 export function applyAsianIdentity(p: Player): Player {
-  const r = createRng(strSeed(p.id + ':asian'));
-  const e = ASIAN_IMPORTS[r.int(0, ASIAN_IMPORTS.length - 1)];
-  return { ...p, name: e.name, nationality: e.nat };
+  const { name, nat } = genAsianIdentity(p.id); // 국적별 음절 조합(FOREIGN_SYSTEM §8 A')
+  return { ...p, name, nationality: nat };
 }
 
 export function generateLeague(seed: number): League {
