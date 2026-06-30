@@ -49,7 +49,10 @@ export function buildDraftContext(
 
   const r1 = lotteryRound1(standingsWorstFirst(), createRng(60000 + nextSeason * 331));
   const order = buildDraftOrder(r1, holes, totalHoles);
-  const cls = generateDraftClass(nextSeason, totalHoles + 8); // 여유분(미지명 풀)
+  // 드래프트 클래스 — 리그 현 국내 선수 이름을 taken으로 줘 동명이인 방지(FOREIGN_SYSTEM §8)
+  const takenKorean = Object.values(pre.snapshot)
+    .filter((p): p is Player => !!p && !p.isForeign).map((p) => p.name);
+  const cls = generateDraftClass(nextSeason, totalHoles + 8, takenKorean); // 여유분(미지명 풀)
 
   const myPickSlots: number[] = [];
   order.forEach((t, i) => {

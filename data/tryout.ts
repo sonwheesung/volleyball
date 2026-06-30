@@ -5,7 +5,7 @@ import type { Player, Position } from '../types';
 import { createRng, strSeed } from '../engine/rng';
 import { overall } from '../engine/overall';
 import { FOREIGN_SALARY, ASIAN_SALARY, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, aiKeepsForeign, type TryoutPicks } from '../engine/foreign';
-import { makePlayer, applyAsianIdentity } from './seed';
+import { makePlayer, applyAsianIdentity, dedupeNames } from './seed';
 
 const clampS = (v: number) => Math.max(20, Math.min(96, Math.round(v)));
 const LIFT_KEYS = ['jump', 'agility', 'reaction', 'positioning', 'focus', 'consistency', 'vq',
@@ -19,7 +19,7 @@ function lift(p: Player, delta: number): Player {
 }
 
 /** 매년 새 외인 풀 — 전원 국내 평균 +2 이상(상위권~슈퍼스타). OP 중심(여자부 현실) */
-export function generateForeignPool(season: number, domesticAvg: number, count = FRESH_POOL_SIZE): Player[] {
+export function generateForeignPool(season: number, domesticAvg: number, count = FRESH_POOL_SIZE, taken: Iterable<string> = []): Player[] {
   const rng = createRng(strSeed(`tryout-pool:${season}`));
   const out: Player[] = [];
   for (let i = 0; i < count; i++) {
@@ -33,6 +33,8 @@ export function generateForeignPool(season: number, domesticAvg: number, count =
     for (let g = 0; g < 60 && overall(p) < domesticAvg + 2; g++) p = lift(p, 3);
     out.push({ ...p, contract: { salary: FOREIGN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } });
   }
+  // 동명이인 방지 — fresh 배치 내부 + taken(현존 외인) 회피. 풀 화면=fresh+잔류 합쳐도 무중복(FOREIGN_SYSTEM §8)
+  dedupeNames(out, `fgn:${season}`, taken);
   return out;
 }
 
@@ -45,7 +47,7 @@ export interface TryoutOutcome extends TryoutPicks {
 const ASIAN_POS: Position[] = ['OH', 'OH', 'OH', 'MB', 'OP'];
 
 /** 매년 아시아쿼터 풀 — 국내 평균 이상(외인은 +2). OH 중심 변주, 외인보다 한 티어 낮음 */
-export function generateAsianPool(season: number, domesticAvg: number, count = FRESH_POOL_SIZE): Player[] {
+export function generateAsianPool(season: number, domesticAvg: number, count = FRESH_POOL_SIZE, taken: Iterable<string> = []): Player[] {
   const rng = createRng(strSeed(`asian-pool:${season}`));
   const out: Player[] = [];
   for (let i = 0; i < count; i++) {
@@ -58,6 +60,8 @@ export function generateAsianPool(season: number, domesticAvg: number, count = F
     p = applyAsianIdentity(p); // 아시아 이름·국적(id 결정론)
     out.push({ ...p, contract: { salary: ASIAN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } });
   }
+  // 동명이인 방지 — fresh 배치 내부 + taken(현존 아시아쿼터) 회피. 이름+국적 묶음 재배정(FOREIGN_SYSTEM §8)
+  dedupeNames(out, `asn:${season}`, taken);
   return out;
 }
 
@@ -97,7 +101,9 @@ export function runAsianQuota(
     rosters[teamId] = [...(rosters[teamId] ?? []), pid];
   }
 
-  const fresh = generateAsianPool(nextSeason, domesticAvg);
+  const takenAsian = Object.values(snapshot)
+    .filter((p): p is Player => !!p && !!p.isAsianQuota).map((p) => p.name);
+  const fresh = generateAsianPool(nextSeason, domesticAvg, FRESH_POOL_SIZE, takenAsian);
   for (const p of fresh) snapshot[p.id] = p;
   const poolIds = [...fresh.map((p) => p.id), ...returningAsian.filter((id) => snapshot[id] && !keptSet.has(id))];
   const pool = poolIds.map((id) => snapshot[id]).filter((p): p is Player => !!p);
@@ -163,7 +169,9 @@ export function runTryout(
     rosters[teamId] = [...(rosters[teamId] ?? []), pid];
   }
 
-  const fresh = generateForeignPool(nextSeason, domesticAvg);
+  const takenForeign = Object.values(snapshot)
+    .filter((p): p is Player => !!p && p.isForeign && !p.isAsianQuota).map((p) => p.name);
+  const fresh = generateForeignPool(nextSeason, domesticAvg, FRESH_POOL_SIZE, takenForeign);
   for (const p of fresh) snapshot[p.id] = p;
   const poolIds = [...fresh.map((p) => p.id), ...returningForeign.filter((id) => snapshot[id] && !keptSet.has(id))];
   const pool = poolIds.map((id) => snapshot[id]).filter((p): p is Player => !!p);

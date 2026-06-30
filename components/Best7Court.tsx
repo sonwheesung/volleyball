@@ -17,7 +17,7 @@ const SPOT: { left: number; top: number }[] = [
   { left: 80, top: 28 }, // 3 OP — 전위 우
   { left: 50, top: 24 }, // 4 MB — 전위 중앙(네트)
   { left: 80, top: 60 }, // 5 MB — 후위 우
-  { left: 50, top: 84 }, // 6 L  — 후위 중앙 깊이(리베로)
+  { left: 50, top: 76 }, // 6 L  — 후위 중앙 깊이(리베로). ※84%였으나 마커 아래 이름·팀명이 코트 하단(300px)에 잘려 76%로(UI_RULES)
 ];
 
 export function Best7Court({

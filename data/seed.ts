@@ -247,6 +247,48 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
   return player;
 }
 
+/** 결정론 Fisher-Yates 셔플(사본 반환) — dedup 후보 순서를 시드로 고정. */
+function shuffled<T>(arr: readonly T[], r: Rng): T[] {
+  const a = [...arr];
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = r.int(0, i);
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
+/**
+ * 표시명 동명이인 방지 (FOREIGN_SYSTEM §8) — 생성 직후 1회. 충돌 시 미사용 풀 엔트리로 재배정.
+ * 순수·결정론: 같은 (players 순서·seedKey·taken) → 같은 결과. 이름(+아시아 국적)만 수정, 스탯/ID 불변
+ * (이름은 단일 rng 추첨이라 다운스트림 0). 생성 시 1회만 — 선수 경력 중 이름 불변(스냅샷 영속).
+ * @param taken 이 배치 밖에서 이미 쓰인 이름(리그/스냅샷 현존) — 배치 내부 중복은 자동 추적.
+ */
+export function dedupeNames(players: Player[], seedKey: string, taken: Iterable<string> = []): void {
+  const used = new Set<string>(taken);
+  const r = createRng(strSeed(`dedupe:${seedKey}`));
+  const foreignQ = shuffled(FOREIGN_NAMES, r);
+  const asianQ = shuffled(ASIAN_IMPORTS, r);
+  const surnQ = shuffled(SURNAMES, r);
+  const givenQ = shuffled(GIVEN, r);
+
+  for (const p of players) {
+    if (!used.has(p.name)) { used.add(p.name); continue; }
+    // 충돌 → 같은 부류 풀에서 미사용 이름으로 재배정(못 찾으면 원래 이름 유지 — 풀 소진, 이론상 도달 안 함)
+    if (p.isAsianQuota) {
+      const e = asianQ.find((c) => !used.has(c.name));
+      if (e) { p.name = e.name; p.nationality = e.nat; }
+    } else if (p.isForeign) {
+      const nm = foreignQ.find((c) => !used.has(c));
+      if (nm) p.name = nm;
+    } else {
+      let nm: string | null = null;
+      for (const s of surnQ) { for (const g of givenQ) { if (!used.has(s + g)) { nm = s + g; break; } } if (nm) break; }
+      if (nm) p.name = nm;
+    }
+    used.add(p.name);
+  }
+}
+
 // 팀 전력 티어·나이 분포 — 이제 랜덤 셔플 대신 **구단 정체성**(CLUB_IDENTITY_SYSTEM)이 결정.
 // strengthBias 합=0이라 리그 평균 전력 보존. 명문은 강·노련, 신생/신흥은 약·젊음(높은 포텐).
 // 정체성은 시작 조건일 뿐 — 드래프트(꼴찌 우선)·노쇠·FA로 수십 시즌 뒤 평균회귀(parity 유지).
@@ -316,6 +358,9 @@ export function generateLeague(seed: number): League {
       budget: Math.round((teamSalary * 1.12) / 1000) * 1000, // 총연봉 + 12% 여유
     });
   });
+
+  // 동명이인 방지 — 초기 리그 전체를 1배치로 dedup(외인/아시아/국내 각 부류 내 무중복). FOREIGN_SYSTEM §8
+  dedupeNames(players, `league:${seed}`);
 
   // ── 스태프 프리에이전트 풀 (STAFF_SYSTEM) — 단장이 영입 ──
   const assistants: AssistantCoach[] = [];

@@ -5,7 +5,7 @@
 import { createRng } from '../engine/rng';
 import { ROSTER_IDEAL } from '../engine/aiGM';
 import { ROSTER_MAX } from '../engine/transactions';
-import { makeProspect } from './seed';
+import { makeProspect, dedupeNames } from './seed';
 import type { Player, Position } from '../types';
 
 const IDEAL = ROSTER_IDEAL;
@@ -46,5 +46,9 @@ export function fillRosters(
     }
     next[teamId] = ids;
   }
+  // 동명이인 방지 — 신인 충원 배치 내부 + taken(현 로스터 전원 이름) 회피. FOREIGN_SYSTEM §8
+  const taken = Object.values(rosters).flat()
+    .map(registry).filter((p): p is Player => !!p).map((p) => p.name);
+  dedupeNames(newPlayers, `fill:${season}`, taken);
   return { rosters: next, newPlayers };
 }
