@@ -33,7 +33,7 @@ function CeremonyInner() {
   // 공개할 비트(빈 상 생략) — 신인 → 기량발전 → 베스트7 → 챔프MVP → 정규MVP(클라이맥스)
   const beats = useMemo(() => {
     const out: { key: string; el: React.ReactNode }[] = [];
-    const winnerCard = (icon: string, label: string, w: AwardWinner, suffix = '', climax = false) => (
+    const winnerCard = (icon: React.ComponentProps<typeof IconLabel>['icon'], label: string, w: AwardWinner, suffix = '', climax = false) => (
       <Card accent={theme.gold}>
         {climax ? <View style={{ alignItems: 'center' }}><AwardIllustration width={150} /></View> : null}
         <IconLabel icon={icon} color={theme.gold}>{label}</IconLabel>
