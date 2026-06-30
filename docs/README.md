@@ -184,6 +184,7 @@ npx tsx tools/simStatRecord.ts             # 개인 귀속 결정론·팀 누수
 npx tsx tools/simNews.ts                   # 뉴스 무결성(빈헤드/본문·중복·매달린 teamId 0). exit 0/1
 npx tsx tools/_dv_newsday0.ts              # 첫 경기 전 뉴스 스포일러 차단(EC-NEWS-01·NEWS §3.5, 2026-06-30) — leagueDay=-1 실시간 뉴스 0 + A/B(경계해제 시 재현=필터 민감). 미관전 데뷔·미래 부상/사건 노출 회귀 차단. exit 0/2
 npx tsx tools/_dv_capdomestic.ts           # 샐러리캡=국내 전용(EC-CAP-01, 2026-06-30) — day0 전 구단 국내 페이롤 ≤ 캡(초과 0) + A/B(외인 포함 규칙은 ≥1팀 초과로 잡힘=필터 민감) + 인천 사례 국내<캡<전체. 대시보드·단장실·이동·FA 외인혼입 빨강/영입차단 회귀 차단. exit 0/2
+npx tsx tools/_dv_copylint.ts              # 유저 문구 정합(2026-06-30, 에뮬 발견 회귀 분석) — data/engine/app/components 소스에 남성형(사나이·그의/그가 경계인식)·배구 오용어(라켓·홈런·골키퍼) 0건 + A/B(더러운 문장 ≥3 적발·깨끗한 문장 "리그가/리그의" 오탐 0). exit 0/2
 npx tsx tools/simSuggest.ts                # 건의 시스템(감독 성향이 수락/거절 가른다). exit 0/1
 npx tsx tools/_ev_suggest_defer.ts         # 건의 반영 시점(OWNER 2.3, 2026-06-28) — 관전 중(이어보기 대기) 경기엔 미적용·다음 경기부터(fromDay=currentDay+1) + A/B(델타=1, 옛 미적용 검출). 시간차/stale-resume·리롤 차단. exit 0/1
 npx tsx tools/_dv_foreign_archetype.ts     # 외국인 연고 성격 가드(EC-FG-03, 2026-06-28) — 외인 hometown 아키타입/preferredTeamId 0·국내 도달가능 대조군 + effectiveArchetypeOf·discontentNow 외인 게이트(A/B). "외인이 고향팀 그리움" 회귀 차단. exit 0/1
