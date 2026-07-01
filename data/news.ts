@@ -47,6 +47,9 @@ export const newsContentKey = (n: NewsItem) => `${n.season}:${n.kind}:${n.headli
 const hashStr = (s: string): number => {
   let h = 2166136261 >>> 0;
   for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); }
+  // murmur3 fmix 마무리(§4.4) — FNV-1a는 하위비트 애벌런치가 약해 `%4`(2의 거듭제곱)가 버킷 2개만 써서
+  // 4개 풀이 사실상 2개로 붕괴했다(측정: template%4 분포 [0,2455,0,1545]). fmix로 하위비트까지 균등 혼합.
+  h ^= h >>> 16; h = Math.imul(h, 2246822507); h ^= h >>> 13; h = Math.imul(h, 3266489909); h ^= h >>> 16;
   return h >>> 0;
 };
 /** 풀에서 키 기반 결정론 선택. salt로 독립 스트림(opener/closer 따로). */
@@ -346,9 +349,16 @@ export function buildNewsFeed(
     }
     const kindKo = m.kind === 'league' ? '리그 역대 기록' : m.kind === 'club' ? '구단 통산 기록' : '개인 통산 기록';
     const sig = m.big ? '리그가 주목할 이정표다.' : '오랜 꾸준함이 쌓아 올린 한 걸음이다.';
-    push(m.season, 'milestone', m.text, m.big, m.teamId,
-      body3('milestone', `${m.season}:ms:${m.playerId}:${m.text}`,
-        `${teamName(m.teamId)} 소속 ${m.name}이(가) ${kindKo}에 또 하나의 이정표를 새겼다. ${sig}`), m.playerId);
+    const msKey = `${m.season}:ms:${m.playerId}:${m.text}`;
+    // core 프레임을 키로 회전(§4.4 Step2) — 수치는 헤드라인(m.text)이 말하므로 본문은 문구만 변주(재탕·볼륨 증가 금지).
+    // 같은 선수·같은 카테고리라도 m.text(임계)가 달라 키가 달라짐 → 프레임+open/close 조합으로 본문 중복 급감.
+    const msCore = vp([
+      `${teamName(m.teamId)} 소속 ${m.name}이(가) ${kindKo}에 또 하나의 이정표를 새겼다.`,
+      `${m.name}(${teamName(m.teamId)})의 커리어가 ${kindKo}에 새 획을 그었다.`,
+      `${teamName(m.teamId)}의 ${m.name}, ${kindKo}에 또렷한 발자취를 남겼다.`,
+      `${m.name}이(가) ${kindKo}에서 커리어의 한 칸을 더 채웠다.`,
+    ], msKey, 3); // salt 3 — open(1)·close(2)와 독립 스트림
+    push(m.season, 'milestone', m.text, m.big, m.teamId, body3('milestone', msKey, `${msCore} ${sig}`), m.playerId);
   }
 
   // 3) 명예의전당 헌액
