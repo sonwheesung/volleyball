@@ -1,5 +1,5 @@
-// 아시아쿼터 트라이아웃 (FOREIGN_SYSTEM 7) — 매 오프시즌, 팀당 1명·1년 계약·연봉 고정(캡 제외).
-// 외국인 트라이아웃과 동일 구조(추첨 순번·위시리스트·재계약 우선권). 미리보기 = endSeason 결과(동일 빌더).
+// 아시아쿼터 FA (FOREIGN_SYSTEM §7.4, 2026-27 실규칙) — 트라이아웃 폐지→구단 직접 협상. 팀당 1명·연차 상한(1년/2년)·캡 제외.
+// 노리는 선수(오퍼)를 정하면 선수가 조건을 보고 팀을 고른다(추첨 아님). 기존 구단 보유권(증액/거부→시즌아웃). 미리보기=endSeason 결과(동일 빌더).
 
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
@@ -9,7 +9,7 @@ import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
-import { ASIAN_SALARY } from '../engine/foreign';
+import { ASIAN_SALARY_Y1, ASIAN_SALARY_Y2 } from '../engine/foreign';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
@@ -17,7 +17,7 @@ import type { Player } from '../types';
 export default function AsianTryout() {
   // 트라이아웃 컨텍스트 생성(buildDraftContext)은 무거워 한 틱 미뤄 로딩부터 그린다
   const ready = useDeferredReady();
-  if (!ready) return <Loading title="아시아쿼터 트라이아웃" variant="list" />;
+  if (!ready) return <Loading title="아시아쿼터 FA" variant="list" />;
   return <AsianTryoutInner />;
 }
 
@@ -71,14 +71,14 @@ function AsianTryoutInner() {
   };
 
   return (
-    <Screen title="아시아쿼터 트라이아웃">
+    <Screen title="아시아쿼터 FA">
       <Card accent={theme.bad}>
         <Muted style={{ fontSize: 12 }}>
-          외국인과 별개 — 팀당 1명(AVC 국가) · 1년 계약 · 연봉 {formatMoney(ASIAN_SALARY)} 고정(샐러리캡 제외).
-          지명 순번은 추첨 — 위시리스트 순서로 노리고, 뺏기면 차순위로 내려갑니다.
+          외국인과 별개 — 팀당 1명(AVC 국가) · **자유계약**(2026-27~) · 연차 상한 1년 {formatMoney(ASIAN_SALARY_Y1)}·2년 {formatMoney(ASIAN_SALARY_Y2)}(샐러리캡 제외).
+          추첨 아닌 직접 협상 — 노리는 선수를 ★로 정하면, 선수가 팀 전력·출전 기회를 보고 고릅니다(강팀·자리 있는 팀이 유리).
         </Muted>
         <Row>
-          <IconLabel icon="airplane-outline" color={theme.bad}>내 예상 지명</IconLabel>
+          <IconLabel icon="airplane-outline" color={theme.bad}>내 예상 영입</IconLabel>
           <Text style={{ color: theme.accent, fontWeight: '800' }}>
             {myPickId && snap[myPickId] ? `${snap[myPickId].name} (${snap[myPickId].nationality ?? ''} ${snap[myPickId].position})` : '- (자금 부족/공석)'}
           </Text>
@@ -87,13 +87,13 @@ function AsianTryoutInner() {
 
       {myAsian ? (
         <>
-          <Title>재계약 우선권 — {myAsian.name} ({myAsian.nationality ?? ''} · {myAsian.age}세 · OVR {displayOvr(overallRaw(myAsian))})</Title>
+          <Title>기존 구단 보유권 — {myAsian.name} ({myAsian.nationality ?? ''} · {myAsian.age}세 · OVR {displayOvr(overallRaw(myAsian))})</Title>
           <Card accent={theme.bad}>
             <Muted style={{ fontSize: 12 }}>
-              드래프트 없이 현 아시아쿼터와 갱신할 수 있습니다(1년 단위). 풀로 보내면 다른 팀이 지명할 수 있습니다.
+              보유권 — 2년차 상한({formatMoney(ASIAN_SALARY_Y2)})으로 증액 제시하면 우선 잔류. 놓아주면 자유계약 시장으로 나가 다른 팀과 협상할 수 있습니다.
             </Muted>
             <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-              {([['자동(추천)', null], ['재계약', true], ['풀로 보냄', false]] as const).map(([label, v]) => (
+              {([['자동(추천)', null], ['보유(증액)', true], ['놓아줌', false]] as const).map(([label, v]) => (
                 <Pressable
                   key={label}
                   onPress={() => setKeepAsian(v)}
@@ -107,7 +107,7 @@ function AsianTryoutInner() {
         </>
       ) : null}
 
-      <Title>후보 ({pool.length}명) — ★ 위시 토글</Title>
+      <Title>협상 후보 ({pool.length}명) — ★ 노리는 선수 토글</Title>
       {pool
         .slice()
         .sort((a, b) => overall(b) - overall(a))
@@ -130,15 +130,15 @@ function AsianTryoutInner() {
                 </Text>
               </View>
               <Text style={{ color: taker === getTeam(my)?.name ? theme.accent : theme.muted, fontSize: 12, fontWeight: '700' }}>
-                {taker ? `→ ${taker}` : '미지명'}
+                {taker ? `→ ${taker}` : '미계약'}
               </Text>
             </Pressable>
           );
         })}
 
       <Muted style={{ fontSize: 11 }}>
-        미지명자 중 상위 {tryout.altPoolIds.length}명은 대체 풀로 남아 시즌 중 교체(1회)에 쓸 수 있습니다.
-        스카우터 투자(공개도 {(reveal * 100).toFixed(0)}%)가 도박의 보험입니다.
+        미계약자 중 상위 {tryout.altPoolIds.length}명은 대체 풀로 남아 시즌 중 교체(1회)에 쓸 수 있습니다.
+        스카우터 투자(공개도 {(reveal * 100).toFixed(0)}%)가 협상의 보험입니다.
       </Muted>
       <Button label="FA 센터 →" onPress={() => router.push('/fa')} />
     </Screen>

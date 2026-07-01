@@ -7,8 +7,16 @@ import { overall } from './overall';
 
 /** 외인 연봉 — 전 구단 동일(30만 달러 상당). 샐러리캡 제외, 운영 자금(FINANCE)에서 지출 */
 export const FOREIGN_SALARY = 41000;
-/** 아시아쿼터 연봉 — 외인보다 낮음(KOVO 아시아쿼터 상한 더 낮음). 캡 제외·운영 자금 지출(FOREIGN_SYSTEM 7) */
-export const ASIAN_SALARY = 25000;
+// 아시아쿼터 연봉 — FA 전환(2026-27 실규칙, FOREIGN_SYSTEM §7.4)으로 **연차 상한**. 여자부: 1년 $150k·2년 $170k.
+// 엔진 단위 환산(FOREIGN_SALARY=41000≈$300k 기준): Y1≈20500·Y2≈23000. 캡 제외·운영 자금 지출.
+export const ASIAN_SALARY_Y1 = 20500; // 1년차(신규 서명) 상한
+export const ASIAN_SALARY_Y2 = 23000; // 2년차 이상(기존 구단 보유권 증액) 상한
+/** @deprecated FA 전환 후 티어(asianSalary)를 쓴다. 신규 서명 기본값=Y1(구 호출부 호환). */
+export const ASIAN_SALARY = ASIAN_SALARY_Y1;
+/** 아시아쿼터 연봉 — 신규 서명 Y1, 재계약(보유권 증액) Y2. */
+export function asianSalary(retained: boolean): number {
+  return retained ? ASIAN_SALARY_Y2 : ASIAN_SALARY_Y1;
+}
 /** 시즌 중 교체 대체 풀 크기(트라이아웃 미지명자 중 잔류 희망 상위) */
 export const ALT_POOL_SIZE = 4;
 /** 신규 외인 풀 크기(매년) — 재참가자가 더해진다 */

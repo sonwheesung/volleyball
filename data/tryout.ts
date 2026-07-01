@@ -4,7 +4,9 @@
 import type { Player, Position } from '../types';
 import { createRng, strSeed } from '../engine/rng';
 import { overall } from '../engine/overall';
-import { FOREIGN_SALARY, ASIAN_SALARY, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, aiKeepsForeign, type TryoutPicks } from '../engine/foreign';
+import { FOREIGN_SALARY, ASIAN_SALARY_Y1, ASIAN_SALARY_Y2, ALT_POOL_SIZE, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, aiKeepsForeign, type TryoutPicks } from '../engine/foreign';
+import { offerScore, acceptProb, SIT_OUT, prefWeightsOf } from '../engine/faMarket';
+import { aiRetainProb, positionGap } from '../engine/aiGM';
 import { makePlayer, applyAsianIdentity, dedupeNames } from './seed';
 
 const clampS = (v: number) => Math.max(20, Math.min(96, Math.round(v)));
@@ -58,7 +60,7 @@ export function generateAsianPool(season: number, domesticAvg: number, count = F
     // 바닥 = 국내 평균(외인은 +2). 외인과 동일 무한루프 위험(아시아는 +2 마진 없어 임계 더 낮음) → best-effort 캡.
     for (let g = 0; g < 60 && overall(p) < domesticAvg; g++) p = { ...lift(p, 3), isAsianQuota: true };
     p = applyAsianIdentity(p); // 아시아 이름·국적(id 결정론)
-    out.push({ ...p, contract: { salary: ASIAN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } });
+    out.push({ ...p, contract: { salary: ASIAN_SALARY_Y1, years: 1, remaining: 1, signedAtAge: p.age } });
   }
   // 동명이인 방지 — fresh 배치 내부 + taken(현존 아시아쿼터) 회피. 이름+국적 묶음 재배정(FOREIGN_SYSTEM §8)
   dedupeNames(out, `asn:${season}`, taken);
@@ -66,8 +68,10 @@ export function generateAsianPool(season: number, domesticAvg: number, count = F
 }
 
 /**
- * 아시아쿼터 트라이아웃 — 외인과 동일 구조(재계약 우선권 → 풀 → 지명), 별도 순번·연봉·플래그.
- * snapshot/rosters 직접 갱신(오프시즌 체인 내부, 외인 트라이아웃 다음·FA 앞). resolveTryout 재사용.
+ * 아시아쿼터 FA (FOREIGN_SYSTEM §7.4, 2026-27 실규칙) — 트라이아웃 폐지, 구단 직접 협상.
+ * 트라이아웃 셸 유지하되 세 가지만 바꿈: 연봉 티어(Y1/Y2)·보유권 확률+증액+거부→아웃·경쟁 배정(선수 선택).
+ * `offerScore`/`acceptProb` 프리미티브만 빌려 전용 소형 리졸버(자체 시드·슬롯가드·안정 타이브레이크·alt방출).
+ * snapshot/rosters 직접 갱신(오프시즌 체인 내부, 외인 트라이아웃 다음·국내 FA 앞).
  */
 export function runAsianQuota(
   snapshot: Record<string, Player>,
@@ -80,55 +84,113 @@ export function runAsianQuota(
   myKeep: boolean | null = null,
   myCash: number = Number.POSITIVE_INFINITY,
 ): TryoutOutcome {
-  const myCanAfford = myCash >= ASIAN_SALARY;
+  const teamIds = Object.keys(rosters).sort(); // 안정 순회(결정론)
+  const get = (id: string): Player | undefined => snapshot[id];
   const domestic = Object.values(rosters).flat()
     .map((id) => snapshot[id]).filter((p): p is Player => !!p && !p.isForeign);
   const domesticAvg = domestic.length
     ? domestic.reduce((s, p) => s + overall(p), 0) / domestic.length : 65;
+  const teamOvr = (t: string): number => {
+    const ps = (rosters[t] ?? []).map((id) => snapshot[id]).filter((p): p is Player => !!p);
+    return ps.length ? ps.reduce((s, p) => s + overall(p), 0) / ps.length : 60;
+  };
+  const hasAsian = (t: string): boolean => (rosters[t] ?? []).some((id) => snapshot[id]?.isAsianQuota);
+  // 전용 시드(국내 FA rng 무오염 — 리뷰 §2). 롤 소비는 분기 무관하게 결정론.
+  const retainRng = createRng(strSeed(`asian-retain:${nextSeason}`));
+  const faRng = createRng(strSeed(`asian-fa:${nextSeason}`));
 
-  // 재계약 우선권(외인과 동일 AI 판정)
-  const kept: Record<string, string> = {};
+  // ── 1) 보유권 (기존 구단 우선권) — Y2 증액 제시, 거부→시즌아웃 ──
+  const picks: Record<string, string> = {};
   const keptSet = new Set<string>();
-  for (const [teamId, pid] of Object.entries(prevAsianOf)) {
+  const satOut = new Set<string>();
+  for (const teamId of teamIds) {
+    const pid = prevAsianOf[teamId];
+    if (!pid) continue;
     const p = snapshot[pid];
-    if (!p || !returningAsian.includes(pid)) continue;
-    if (teamId === myTeam && !myCanAfford) continue;
-    const wants = teamId === myTeam && myKeep !== null ? myKeep : aiKeepsForeign(p, domesticAvg);
-    if (!wants) continue;
-    kept[teamId] = pid;
-    keptSet.add(pid);
-    snapshot[pid] = { ...p, contract: { salary: ASIAN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } };
-    rosters[teamId] = [...(rosters[teamId] ?? []), pid];
+    if (!p || !returningAsian.includes(pid)) continue; // 은퇴/이탈자는 갱신 불가
+    const wantRoll = retainRng.next() < aiRetainProb(p); // 항상 소비(분기 무관 결정론)
+    const rand = retainRng.next();
+    const accRoll = retainRng.next();
+    const canAffordY2 = teamId === myTeam ? myCash >= ASIAN_SALARY_Y2 : true;
+    const wantRetain = teamId === myTeam ? (myKeep !== null ? myKeep : wantRoll) : wantRoll;
+    if (!wantRetain || !canAffordY2) continue; // 미행사 → 자유 FA(아래 openPool에서 처리)
+    // 증액 Y2 제안 → 선수 수락(보유권=강한 잔류, 거부는 드묾)
+    const acc = acceptProb(offerScore({
+      teamOvr: teamOvr(teamId), prestige: 0, posGap: 1, isOriginal: true, isFranchise: true,
+      isPreferred: false, offerSalary: ASIAN_SALARY_Y2, asking: ASIAN_SALARY_Y2, w: prefWeightsOf(p), rand,
+    }));
+    if (accRoll < acc) {
+      keptSet.add(pid);
+      picks[teamId] = pid;
+      snapshot[pid] = { ...p, contract: { salary: ASIAN_SALARY_Y2, years: 1, remaining: 1, signedAtAge: p.age } };
+      rosters[teamId] = [...(rosters[teamId] ?? []), pid];
+    } else {
+      satOut.add(pid); // 증액 거부 → 한 시즌 타팀 계약 불가(리그 이탈)
+    }
   }
 
+  // ── 2) 자유 아시아 풀 = 신규 생성 + 보유권 미행사 복귀(잔류/시즌아웃 제외) ──
   const takenAsian = Object.values(snapshot)
     .filter((p): p is Player => !!p && !!p.isAsianQuota).map((p) => p.name);
   const fresh = generateAsianPool(nextSeason, domesticAvg, FRESH_POOL_SIZE, takenAsian);
   for (const p of fresh) snapshot[p.id] = p;
-  const poolIds = [...fresh.map((p) => p.id), ...returningAsian.filter((id) => snapshot[id] && !keptSet.has(id))];
-  const pool = poolIds.map((id) => snapshot[id]).filter((p): p is Player => !!p);
+  const openIds = [
+    ...fresh.map((p) => p.id),
+    ...returningAsian.filter((id) => snapshot[id] && !keptSet.has(id) && !satOut.has(id)),
+  ];
+  // OVR desc · id 타이브레이크(결정론)
+  const openPool = openIds.map((id) => snapshot[id]).filter((p): p is Player => !!p)
+    .sort((a, b) => overall(b) - overall(a) || (a.id < b.id ? -1 : 1));
 
-  const order = tryoutOrder(nextSeason, Object.keys(rosters), 'asian-order')
-    .filter((t) => !kept[t] && !(t === myTeam && !myCanAfford));
-  const res = resolveTryout(order, pool, myTeam, myWish, nextSeason);
-  for (const [t, pid] of Object.entries(kept)) res.picks[t] = pid;
-
-  for (const [teamId, pid] of Object.entries(res.picks)) {
-    if (keptSet.has(pid)) continue;
-    const p = snapshot[pid];
-    if (!p) continue;
-    snapshot[pid] = { ...p, contract: { salary: ASIAN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } };
-    rosters[teamId] = [...(rosters[teamId] ?? []), pid];
+  // ── 3) 경쟁 배정 (선수 선택) — 관심팀={아시아 없음}∩{포지션 니즈}∩{Y1 지불력} ──
+  const signed = new Set<string>();
+  const signTo = (t: string, p: Player, salary: number) => {
+    picks[t] = p.id;
+    signed.add(p.id);
+    snapshot[p.id] = { ...p, contract: { salary, years: 1, remaining: 1, signedAtAge: p.age } };
+    rosters[t] = [...(rosters[t] ?? []), p.id];
+  };
+  for (const p of openPool) {
+    const interested = teamIds.filter((t) => {
+      if (hasAsian(t)) return false; // 슬롯 가드 — 팀당 1
+      if (t === myTeam && myCash < ASIAN_SALARY_Y1) return false; // 내 지불력
+      return (positionGap(rosters[t] ?? [], get)[p.position] ?? 0) > 0; // 포지션 니즈
+    });
+    if (!interested.length) continue;
+    const scored = interested.map((t) => {
+      const gap = positionGap(rosters[t] ?? [], get)[p.position] ?? 0;
+      const wished = t === myTeam && myWish.includes(p.id);
+      const score = offerScore({
+        teamOvr: teamOvr(t), prestige: 0, posGap: gap, isOriginal: false, isFranchise: false,
+        isPreferred: false, offerSalary: ASIAN_SALARY_Y1, asking: ASIAN_SALARY_Y1, w: prefWeightsOf(p),
+        rand: faRng.next(), talkBias: wished ? 0.15 : 0, // 내 위시=소폭 선호(현장 협상 의지)
+      });
+      return { t, score };
+    }).sort((a, b) => b.score - a.score || (a.t < b.t ? -1 : 1)); // 안정 타이브레이크
+    if (scored[0].score >= SIT_OUT) signTo(scored[0].t, p, ASIAN_SALARY_Y1); // 최고 오퍼가 시원찮으면 미서명(드묾)
   }
-  // 미지명 아시아쿼터 청소(대체 풀 제외) — 외인 cleanup과 대칭(isAsianQuota만)
-  const keep = new Set([...Object.values(res.picks), ...res.altPoolIds]);
+  // ── 3.5) 멸종 방지 폴백 — 아시아 없는 팀은 남은 풀 최상위를 서명(구단은 슬롯을 채운다) ──
+  for (const t of teamIds) {
+    if (hasAsian(t)) continue;
+    if (t === myTeam && myCash < ASIAN_SALARY_Y1) continue; // 내 팀은 지불 못하면 공석(자금 게이트 일관)
+    const avail = openPool.find((p) => !signed.has(p.id));
+    if (avail) signTo(t, avail, ASIAN_SALARY_Y1);
+  }
+
+  // ── 4) alt-pool(시즌 중 교체 대체) = 미서명 fresh 상위 OVR + 청소 ──
+  const unsigned = openPool.filter((p) => !signed.has(p.id)
+    && !Object.values(rosters).some((r) => r.includes(p.id)));
+  const altPoolIds = unsigned.slice(0, ALT_POOL_SIZE).map((p) => p.id);
+  const leftIds = unsigned.slice(ALT_POOL_SIZE).map((p) => p.id);
+  const keep = new Set([...Object.values(picks), ...altPoolIds]);
   for (const id of Object.keys(snapshot)) {
     const p = snapshot[id];
     if (!p?.isAsianQuota) continue;
     const rostered = Object.values(rosters).some((r) => r.includes(id));
     if (!rostered && !keep.has(id)) delete snapshot[id];
   }
-  return { ...res, poolIds };
+  const poolIds = [...fresh.map((p) => p.id), ...openIds.filter((id) => snapshot[id] && !fresh.some((f) => f.id === id))];
+  return { picks, altPoolIds, leftIds, poolIds };
 }
 
 /**
