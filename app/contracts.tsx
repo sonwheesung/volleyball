@@ -20,6 +20,7 @@ import { useGameStore } from '../store/useGameStore';
 import type { Contract, Player } from '../types';
 
 const STATUS_COLOR = { 저평가: theme.good, 적정: theme.muted, 고평가: theme.bad } as const;
+type ResignOpt = ReturnType<typeof resignOptions>[number];
 
 export default function Contracts() {
   const router = useRouter();
@@ -45,28 +46,22 @@ export default function Contracts() {
   const faList = roster.filter(willBeFA);
   const faGrades = assignFAGrades(faList);
 
+  // 재계약 오퍼 선택 → 다크 글래스 액션시트(네이티브 흰 Alert 대체, 테마 통일 2026-07-01). 오퍼 선택 → 확정 시트 2단계.
   const doResign = (p: Player) => {
     const market = marketVal(p, getPlayerProduction(p.id, leagueDisplayDay(currentDay)));
-    const opts = resignOptions(p, market);
-    const buttons = opts.map((o) => ({
-      text: `${o.label} · ${formatMoney(o.salary)} · ${o.years}년`,
-      onPress: () => {
-        if (!canAfford(total - p.contract.salary, o.salary, { franchise: isFranchise(p) })) {
-          Alert.alert('샐러리캡 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
-          return;
-        }
-        const contract: Contract = { salary: o.salary, years: o.years, remaining: o.years, signedAtAge: p.age };
-        Alert.alert('재계약 확정', `${p.name}\n${o.label} — 연봉 ${formatMoney(p.contract.salary)} → ${formatMoney(o.salary)} · ${o.years}년\n${o.note}`, [
-          { text: '취소', style: 'cancel' },
-          { text: '확정', onPress: () => reSign(p.id, contract) },
-        ]);
-      },
-    }));
-    // 후하게=충성·길게 묶기 / 짧게=싸게·곧 재협상 — 시장가 일괄 대신 협상의 폭(FA 2.5b)
-    Alert.alert(`${p.name} 재계약`, `시장가 ${formatMoney(market)} · ${p.age}세\n표준 / 후하게 / 짧게 중 선택`, [
-      ...buttons,
-      { text: '취소', style: 'cancel' },
-    ]);
+    // 표준 → 후하게 → 짧게 순으로 정렬(추천=표준 최상단·강조). 후하게=충성·길게 / 짧게=싸게·곧 재협상(FA 2.5b)
+    const order = ['표준', '후하게', '짧게'];
+    const opts = [...resignOptions(p, market)].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
+    setResignSheet({ p, market, opts });
+  };
+  // 오퍼 선택 → 캡 체크 후 확정 시트 오픈(캡 초과는 즉시 안내)
+  const pickOffer = (p: Player, o: ResignOpt) => {
+    if (!canAfford(total - p.contract.salary, o.salary, { franchise: isFranchise(p) })) {
+      Alert.alert('샐러리캡 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
+      return;
+    }
+    const contract: Contract = { salary: o.salary, years: o.years, remaining: o.years, signedAtAge: p.age };
+    setConfirmSheet({ p, o, contract });
   };
 
   const doRelease = (p: Player) => {
@@ -109,6 +104,8 @@ export default function Contracts() {
 
   // 행을 누르면 처리 메뉴(1행 1선수) — 다크 글래스 액션시트(네이티브 흰 Alert 대체)
   const [manage, setManage] = useState<Player | null>(null);
+  const [resignSheet, setResignSheet] = useState<{ p: Player; market: number; opts: ResignOpt[] } | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{ p: Player; o: ResignOpt; contract: Contract } | null>(null);
 
   return (
     <Screen title="계약 관리">
@@ -244,6 +241,30 @@ export default function Contracts() {
           { label: '재계약', tone: 'primary', onPress: () => doResign(manage) },
           { label: '방출', tone: 'danger', onPress: () => doRelease(manage) },
           { label: '선수 정보', onPress: () => router.push(`/player/${manage.id}`) },
+        ] : []}
+      />
+
+      {/* 재계약 오퍼 선택 — 다크 글래스(네이티브 흰 Alert 대체). 표준=강조 */}
+      <ActionSheet
+        visible={!!resignSheet}
+        title={resignSheet ? `${resignSheet.p.name} 재계약` : ''}
+        message={resignSheet ? `시장가 ${formatMoney(resignSheet.market)} · ${resignSheet.p.age}세 — 표준 / 후하게 / 짧게 중 선택` : undefined}
+        onClose={() => setResignSheet(null)}
+        actions={resignSheet ? resignSheet.opts.map((o) => ({
+          label: `${o.label} · ${formatMoney(o.salary)} · ${o.years}년`,
+          tone: (o.label === '표준' ? 'primary' : 'default') as 'primary' | 'default',
+          onPress: () => pickOffer(resignSheet.p, o),
+        })) : []}
+      />
+
+      {/* 재계약 확정 */}
+      <ActionSheet
+        visible={!!confirmSheet}
+        title="재계약 확정"
+        message={confirmSheet ? `${confirmSheet.p.name} — ${confirmSheet.o.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.o.salary)} · ${confirmSheet.o.years}년\n${confirmSheet.o.note}` : undefined}
+        onClose={() => setConfirmSheet(null)}
+        actions={confirmSheet ? [
+          { label: '확정', tone: 'primary', onPress: () => reSign(confirmSheet.p.id, confirmSheet.contract) },
         ] : []}
       />
     </Screen>
