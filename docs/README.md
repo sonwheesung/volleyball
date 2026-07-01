@@ -128,6 +128,7 @@ npx tsx tools/_dv_tryout_pool.ts            # 트라이아웃 풀 생성 종료 
 npx tsx tools/_dv_name_dedupe.ts            # 동명이인 방지(FOREIGN_SYSTEM §8, 2026-06-30) — 초기 리그·트라이아웃 풀·드래프트 클래스 부류별 표시 중복 0 + taken 회피 + A/B(충돌 배치 dedup 전>0→후 0=오라클 민감) + 결정론. exit 0/1
 npx tsx tools/_dv_name_space.ts             # 절차적 이름 생성 공간(FOREIGN_SYSTEM §8 A', 2026-06-30) — 20k 생성 시 고유 이름 국내>5000·외인>1000·아시아>150+국적 전수(절차성=옛 수십리스트 압도, 고갈 없음)·결정론·육안 샘플. exit 0/1
 npx tsx tools/_dv_diamonds.ts               # 다이아 이코노미(MONETIZATION §11, 2026-06-30) — 광고 30분쿨다운/하루8회·업적 1회수령(중복지급0)·전지훈련 현재+1/포텐+1 cap99·비용 300/부위 + A/B(쿨다운 무력 검출). exit 0/1
+npx tsx tools/_dv_devicelog.ts              # 기기 진단 로그 버퍼 순수 헬퍼(BACKEND §13.6 #44) — prune 시즌경계(최근10)·하드상한·범위·시간순·미래제외 + A/B. exit 0/1
 npx tsx tools/_dv_setscore_dist.ts 3000     # 세트스코어 분포(독립) — 3-0/3-1/3-2 모두 출현·홈승률 밴드·풀세트 합리 + matchPoints 불변식(승자+패자=3) 0위반 + A/B(깨진 6종 거부). engine-verify 스웜 산물 승격. exit 0/1
 npx tsx tools/_dv_sideout_deuce.ts 10000    # 사이드아웃·듀스율 분포 — 사이드아웃(받는팀 랠리획득) ~58%·듀스세트 ~12.5% + A/B 보존(serveWin+sideout==총점). v2 분포 재측정(2026-06-29). exit 0/1
 npx tsx tools/_dv_drift_kovo.ts 3000        # KOVO 득점유형 분포(box 단일진실) — 킬~59·스터프~9.5·에이스~5.2·상대범실~26.3 vs 문서값 ±2%p 드리프트 + A/B(유형합==총점). exit 0/1

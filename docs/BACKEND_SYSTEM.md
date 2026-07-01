@@ -148,6 +148,21 @@
 1. **스켈레톤+health**(/server 독립·Metro blockList) — `next dev` 응답 + Expo 번들 무손상. ✅ **완료(2026-07-01)** — `GET /api/health` 200·server tsc 0·blockList /server 제외 확인.
 2. **Postgres+지갑 코어**(Drizzle, User+WalletLedger+balance, spend/earn = FOR UPDATE+멱등+가드, 동시 이중지불 테스트). 🔨 **코드 완료·tsc 0(2026-07-01)** / ⏳ **H2 런타임 검증은 Postgres 필요**(로컬 Docker Desktop 미기동 — `docker compose up -d db` 후 `tools/walletConcurrency.ts` K=50·N=200으로 이중지불 0 증명). 파일: `db/schema.ts`·`db/index.ts`·`lib/wallet.ts`·`app/api/wallet/*`·`tools/walletConcurrency.ts`·`docker-compose.yml`.
 3. **모바일 인증**(ID토큰 검증→Bearer→SecureStore, 부팅 익명 유지).
+
+### 13.6 클라이언트 인터페이스 — 오프라인 우선 선구현 (2026-07-01, DB 연결 전)
+> 사용자가 DB(Supabase)를 집에서 연결하기로 → 서버 DB 없이도 **완성·검증 가능한 클라이언트 측**을 먼저 만든다.
+> 서버가 안 떠도 앱은 오프라인으로 정상 동작(online-first ≠ online-only)해야 하므로, 이 계층은 지금 완성해도 안전.
+- **`lib/server.ts`(앱)** — 유일한 서버 연결점. **throw 없는 typed 결과**(광고 계약과 동일). `EXPO_PUBLIC_SERVER_URL`이
+  비면(로컬/미배포) 즉시 `{ok:false, reason:'offline'}` — fetch 자체를 안 함. Bearer 토큰은 마일스톤3에서 주입(`setServerToken`).
+  메서드: getWallet·spendDiamonds·earnDiamonds(멱등키)·uploadLogs·createTicket·listTickets·uploadSnapshot·telemetry.
+  **잔액 표시=캐시, 사용/적립=서버 확정 후에만**(offline이면 "온라인 필요" 안내, 낙관적 반영 안 함 — §2·§4).
+- **`lib/deviceLog.ts`(#44 기기 절반)** — 진단 로그 롤링 버퍼(시즌 태그, 최근 10시즌 유지·이전 prune). AsyncStorage 링.
+  `lib/log.ts`의 옛 "RevenueCat·자체 로그백엔드 없음(local-first)" 주석은 온라인 전환으로 폐기(취소선 정정).
+- **진단 스냅샷 생성기 `data/diagnosticSnapshot.ts`(#45 코어)** — `[max(1,cur-10)..cur]` 시즌의 **비저장 데이터**를
+  시드 리플레이로 재계산(선수 이동·성장·드래프트·외인, 뉴스, 경기 결과, 대회 기록) + 로컬 로그 버퍼 → JSON 블롭.
+  **순수 클라/엔진이라 PG 무관·tsx로 완전 검증**(재계산 결정론·시즌 범위·크기). 업로드는 `lib/server.ts`가 담당.
+- **문의하기 UI `app/support*`(#45 표면)** — 마이페이지 진입 → 목록(빈 상태) → 우상단 [문의] → 등록(카테고리
+  오류/건의/질문/기타 + 내용) → 제출 시 스냅샷 비동기 첨부. 관리자 답변 표시. 제출/조회는 `lib/server.ts`(offline면 대기 안내).
 4. **`lib/server.ts`**(throw 없는 클라, 캐시표시/서버확정) — 앱서 다이아 적립/사용 E2E.
 5. **결제**(verify→consume→환불 웹훅 차감) — 머니패스, 환불→차감 왕복 테스트.
 6. **AdMob SSV + 업적**(서명검증·상한·1회).
