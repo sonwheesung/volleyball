@@ -182,6 +182,7 @@ npx tsx tools/_dv_stance_preview.ts      # 모기업 기조 AI 입찰 preview=re
 npx tsx tools/simStatEffect.ts             # 스탯 유효성 — 전 16스탯이 올바른 방향으로 경기 작용(대조군 무편향·id편향 상쇄). exit 0/1
 npx tsx tools/simEngineRegression.ts 1200 40 # 경기 엔진 회귀 A/B(48k, 결정론 합성팀) — 분포비율+ΔOVR 승률곡선+q대칭. 계수 변경 전후 diff로 밸런스 붕괴 감지. 스킬 `engine-regression`. 베이스라인 SKILL.md(2026-07-01). 절대 KOVO는 simKovo
 npx tsx tools/simStamCurve.ts 3000         # 체력 곡선(MATCH 7.1, 2026-06-28) — 경기 중 빠지고 세트 누적되는지(타임아웃 코트 평균 세트1→세트5 ≥8%p 하락·세트5 60~82% 밴드). 옛 평탄~95%(체력 무의미) 회귀 차단. exit 0/1
+npx tsx tools/simGrowthGap.ts              # 성장 effect-A/B(§1.8 C) — 경기경험 순효과(주전>벤치 격차합≥4·벤치 OVR≥65). 죽은기능(경기XP inert=주전=벤치) 재발 차단. 구 코드면 격차~0 FAIL. exit 0/1
 npx tsx tools/simAudit.ts 60               # 영입 13체크(한선수=한팀·이중계약0·캡·자금게이트). exit 0/1
 npx tsx tools/simBrokeSign.ts              # 현금 게이팅(돈 없는데 영입 0). exit 0/1
 npx tsx tools/simTxDup.ts                  # 시즌중 거래 이중소속/FA 누수 0. exit 0/1

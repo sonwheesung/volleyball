@@ -14,7 +14,8 @@ import type { Rng } from './rng';
 import { trainTraitMult } from './traits';
 
 export const BASE = 0.18; // 마스터 속도 손잡이 (TRAINING_SYSTEM 1.4) — 유망주가 20대 중반에 포텐 도달하도록 상향(2026-06)
-export const POS_FLOOR = 0.24; // 포지션 인식 성장 바닥 — 감독 선호와 무관하게 포지션 핵심 스탯은 항상 성장
+export const POS_FLOOR = 0.14; // 포지션 인식 성장 바닥 — 감독 무시해도 포지션 핵심 스탯은 성장(단 감독핵심 0.25보다 낮춰 감독선호가 속도차 만듦, §1.8 C 2026-07-01)
+export const TRAIN_GAP = 12;    // 훈련 상한 = 포텐 − GAP. 마지막 GAP은 경기경험(§1.7)만 채운다 → 플레이타임·감독·전지훈련에 의미(§1.8 C)
 
 export const TRAINABLE_STATS: TrainableStat[] = [
   'jump', 'agility', 'staminaMax', 'staminaRegen',
@@ -126,19 +127,22 @@ export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boos
     if (effort <= 0) return;
     const cur = stats[stat];
     const pot = Math.min(99, (p.potential[stat] ?? cur) + (potBonus?.[stat] ?? 0)); // 기량/멘탈 코치가 상한 +
-    if (cur >= pot) return; // 상한 도달 → 성장 없음
-    const head = clamp01((pot - cur) / 12);
+    // §1.8 C: 훈련 상한 = 포텐−GAP은 **온코트 기술(sk*)만** — 신체·반응·멘탈은 훈련으로 완성(체육관/컨디셔닝),
+    //   경기 기술은 실전 reps로 마지막을 완성. 벤치는 기술이 GAP만큼 덜 여물고, 주전은 경기로 채운다.
+    const ceil = stat.startsWith('sk') ? Math.max(cur, pot - TRAIN_GAP) : pot;
+    if (cur >= ceil) return; // 훈련 상한 도달 → 훈련 성장 없음(그 위는 applyMatchXp가 채움)
+    const head = clamp01((ceil - cur) / 12);
     if (head <= 0) return;
     const gain = effort * head * talentFor(p, stat) * ageMul(p.age, stat) * traitMul;
 
     let bar = (xp[stat] ?? 0) + gain;
     let value = cur;
-    while (bar >= 1 && value < pot) {
+    while (bar >= 1 && value < ceil) {
       value += 1;
       bar -= 1;
     }
     if (value > cur) stats[stat] = value;
-    xp[stat] = value >= pot ? 0 : bar;
+    xp[stat] = value >= ceil ? 0 : bar;
   };
 
   for (const t of TRAININGS) {

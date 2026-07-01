@@ -6,8 +6,10 @@ import type { Player, TrainableStat } from '../types';
 import type { ProdLine } from './production';
 import { ageMul, talentFor } from './training';
 
-const K_SKILL = 0.008; // 생산 1당 효율(튜닝)
-const K_EXP = 0.02;    // 출전 1경기당 VQ·위치선정
+// §1.8 C(2026-07-01): 훈련이 포텐−GAP까지만 → 경기경험이 마지막 GAP을 채워야 주전>벤치가 실체화.
+// 구 값(0.008/0.02)은 GAP을 못 메워 순효과 +1에 그침 → 상향(주전이 실제로 완성되게). simGrowthGap로 A/B.
+const K_SKILL = 0.03;  // 생산 1당 효율
+const K_EXP = 0.08;    // 출전 1경기당 VQ·위치선정(광역 — 여러 레이팅에 파급)
 
 const MAP: [keyof ProdLine, TrainableStat][] = [
   ['spikes', 'skSpike'],
@@ -15,6 +17,7 @@ const MAP: [keyof ProdLine, TrainableStat][] = [
   ['aces', 'skServe'],
   ['digs', 'skDig'],
   ['assists', 'skSet'],
+  ['receives', 'skReceive'], // §1.8 C: 리시브도 경기경험으로(OH·리베로 리시브 gap이 안 메워지던 구멍)
 ];
 
 const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
