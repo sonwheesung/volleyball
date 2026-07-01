@@ -145,8 +145,8 @@
 - **M4 비밀키**: 서비스계정 JSON·애플 .p8·OAuth 클라ID·AdMob·세션서명키 — `.env.example`만 커밋, 실키는 연결단계. 로컬은 stub 프로바이더로 무자격 부팅.
 
 ### 13.5 빌드 순서(작은 러너블 먼저)
-1. **스켈레톤+health**(/server 독립·Metro blockList) — `next dev` 응답 + Expo 번들 무손상. ← **이번 세션**
-2. **Postgres+지갑 코어**(Drizzle, User+WalletLedger+balance, spend/earn = FOR UPDATE+멱등+가드, 동시 이중지불 테스트).
+1. **스켈레톤+health**(/server 독립·Metro blockList) — `next dev` 응답 + Expo 번들 무손상. ✅ **완료(2026-07-01)** — `GET /api/health` 200·server tsc 0·blockList /server 제외 확인.
+2. **Postgres+지갑 코어**(Drizzle, User+WalletLedger+balance, spend/earn = FOR UPDATE+멱등+가드, 동시 이중지불 테스트). 🔨 **코드 완료·tsc 0(2026-07-01)** / ⏳ **H2 런타임 검증은 Postgres 필요**(로컬 Docker Desktop 미기동 — `docker compose up -d db` 후 `tools/walletConcurrency.ts` K=50·N=200으로 이중지불 0 증명). 파일: `db/schema.ts`·`db/index.ts`·`lib/wallet.ts`·`app/api/wallet/*`·`tools/walletConcurrency.ts`·`docker-compose.yml`.
 3. **모바일 인증**(ID토큰 검증→Bearer→SecureStore, 부팅 익명 유지).
 4. **`lib/server.ts`**(throw 없는 클라, 캐시표시/서버확정) — 앱서 다이아 적립/사용 E2E.
 5. **결제**(verify→consume→환불 웹훅 차감) — 머니패스, 환불→차감 왕복 테스트.

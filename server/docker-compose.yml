@@ -1,0 +1,20 @@
+# 로컬 개발용 Postgres (BACKEND_SYSTEM §13.1) — dev==prod로 Postgres 고정(SQLite 동시성 마스킹 회피).
+# 사용: docker compose up -d db   (Docker Desktop 실행 중이어야 함)
+services:
+  db:
+    image: postgres:16
+    container_name: volleyball-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: volleyball
+      POSTGRES_PASSWORD: volleyball
+      POSTGRES_DB: volleyball
+    ports:
+      - '5432:5432'
+    volumes:
+      - ./pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U volleyball']
+      interval: 5s
+      timeout: 3s
+      retries: 10
