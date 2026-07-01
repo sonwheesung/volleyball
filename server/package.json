@@ -1,0 +1,22 @@
+{
+  "name": "volleyball-server",
+  "version": "0.1.0",
+  "private": true,
+  "description": "배구명가 온라인 백엔드 — 다이아 지갑·결제·로그·문의·통계 (BACKEND_SYSTEM.md). Vercel(Next.js).",
+  "scripts": {
+    "dev": "next dev -p 3000",
+    "build": "next build",
+    "start": "next start -p 3000",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "next": "^16.2.9",
+    "react": "19.0.0",
+    "react-dom": "19.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "22.10.7",
+    "@types/react": "19.0.7",
+    "typescript": "5.7.3"
+  }
+}

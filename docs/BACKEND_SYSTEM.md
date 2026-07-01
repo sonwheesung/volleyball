@@ -113,3 +113,42 @@
 
 - 내 손에서: 로컬 서버·DB·문의 UI·스냅샷 생성기·대시보드 골격·타입드 클라이언트.
 - 사용자 계정/키 필요(연결만): Vercel 프로젝트·DB, 구글/애플 OAuth 클라이언트, 스토어 결제 API 서비스계정(.p8/서비스계정 JSON), AdMob SSV, EAS 빌드. 그 단계에서 안내.
+
+---
+
+## 13. 구현 아키텍처 (P1 스캐폴드 — 2026-07-01 독립 리뷰 반영)
+
+> 표준 작업 순서 1.5 독립 리뷰를 거쳐 **기반 기술을 확정**했다. 리뷰가 원안(Auth.js·SQLite)의 치명적 오류 2건을
+> 잡아 아래로 교정. 리뷰 원문 요지는 §13.4 리스크 레지스터에 흡수.
+
+### 13.1 확정 스택
+| 층 | 선택 | 이유(리뷰 반영) |
+|---|---|---|
+| 서버 | **Next.js(App Router)** — `/server` 독립 패키지 | API 라우트 핸들러 + 관리자 대시보드 페이지 일체, Vercel 네이티브, 로컬 `next dev` |
+| DB/ORM | **Drizzle + Postgres**(로컬 Docker `postgres:16`) | ~~SQLite~~ 폐기 — SQLite는 단일라이터라 **동시성 버그(이중지불)를 로컬서 가림**(리뷰 C2/H2). dev==prod로 Postgres 고정. Drizzle=서버리스 콜드스타트 가벼움·SQL 우선(엔진 바이너리 없음) |
+| 인증 | **네이티브 ID토큰 검증(jose+JWKS) → 자체 Bearer 토큰** | ~~Auth.js(NextAuth)~~ 폐기(리뷰 C1) — Auth.js는 **브라우저 쿠키/리다이렉트** 전제라 RN 네이티브 클라에 안 맞음. 클라가 `expo-auth-session`/`expo-apple-authentication`로 ID토큰 획득→서버가 JWKS로 검증→자체 세션 JWT 발급→클라 `expo-secure-store` 보관→`Authorization: Bearer`. 쿠키 0. (구글 로그인 제공 시 iOS는 Apple 로그인 병행 필수 — App Store 4.8) |
+| 클라이언트 | `lib/server.ts`(Expo 앱) — **throw 없는** 타입드 | 광고 스텁과 동일 계약. 잔액 *표시*=캐시, 사용/적립/결제=서버 확인 후. **어떤 서버콜도 앱 렌더 임계경로에 두지 않음**(리뷰 M3 — 오프라인 부팅 보장) |
+
+### 13.2 데이터 모델(Drizzle 스키마)
+`User` · `WalletLedger`(append-only, `idempotencyKey` unique, signed `delta`, `reason`) + **`User.balance` 영속 컬럼**(fold O(n) 회피 + 동시성 잠금 대상) · `Purchase`(`transactionId` unique, `status` pending→granted→consumed→refunded) · `AdReward`(`ssvTransactionId` unique) · `AchievementClaim`(`userId+achievementId` unique) · `Log` · `Ticket`+`TicketMessage`(카테고리 오류/건의/질문/기타) · `DiagnosticSnapshot`(JSON) · `TelemetrySession`+`Heartbeat`(DAU·플레이타임).
+
+### 13.3 엔드포인트
+`/api/health` · `/api/auth/login`(ID토큰→Bearer)·`/refresh` · `GET /api/wallet`(balance+최근 원장) · `POST /api/wallet/spend`·`/earn`(멱등키+**행 잠금 트랜잭션**) · `POST /api/purchase/verify`(→grant→**스토어 consume/finish 호출**) · `POST /api/purchase/webhook/google`(RTDN Pub/Sub, JWT 검증)·`/apple`(ASSN V2, JWS 검증) → **환불 시 음수 원장 차감** · `POST /api/ad/ssv`(AdMob 서명 검증) · `POST /api/log` · `/api/ticket`(create/list/reply) · `POST /api/snapshot` · `POST /api/telemetry` · 관리자 대시보드 페이지(인증 보호).
+
+### 13.4 리스크 레지스터 (리뷰 지적 — 착수 전 반드시)
+- **H1 결제 소비/환불**: DB `status:consumed` ≠ 실제 consume. 구글은 **미consume 소비성 구매를 ~3일 뒤 자동 환불**. 흐름=verify→grant(원장, transactionId 멱등)→**Play `purchases.products.consume`**(애플=finish)→consumed. **환불/차지백 웹훅→지갑 음수 차감 필수**(정책: 음수 허용+spend는 balance 게이트 → 환불된 고래가 계속 못 씀).
+- **H2 이중지불 동시성**: 멱등키는 *같은 키 재시도*만 막음. 서로 다른 동시 spend 2건이 각자 balance 읽고 통과→초과지출. **`SELECT … FOR UPDATE` 행 잠금 트랜잭션 + `balance` 원자 갱신 + `CHECK(balance>=0)` 백스톱**. 동시 이중지불 유닛테스트로 증명(Postgres에서만 드러남).
+- **H3 업적 다이아=클라 신뢰**: 서버가 시뮬 재실행 안 함(결정론 격리)→업적 자작 가능. **불가피 → 설계로 수용**: 업적/광고 다이아는 **1회·저가·평생 합계 상한**, **구매만 고가 소스**. MONETIZATION에 명시(이미 §2.5 유저 관대·§6 반영).
+- **H4 서버-서버 웹훅 서명검증**: SSV/RTDN/ASSN은 유저 세션 없이 구글·애플 서버가 호출 → **암호서명 검증 필수**(AdMob 회전키·구글 서명 JWT·애플 JWS). SSV는 `custom_data`로 유저 바인딩+`ssvTransactionId` 멱등.
+- **M1 Metro가 /server 크롤**: 별도 package.json이어도 Metro는 루트서 감시→Haste 충돌·중복 React. **`metro.config.js` blockList에 /server 제외**(이번 커밋 포함).
+- **M3 부팅 게이트 금지**: 로그인/지갑을 부팅에 await하면 online-first 위반. **익명 캐시 플레이 기본, 세션은 spend/earn/결제 순간만**.
+- **M4 비밀키**: 서비스계정 JSON·애플 .p8·OAuth 클라ID·AdMob·세션서명키 — `.env.example`만 커밋, 실키는 연결단계. 로컬은 stub 프로바이더로 무자격 부팅.
+
+### 13.5 빌드 순서(작은 러너블 먼저)
+1. **스켈레톤+health**(/server 독립·Metro blockList) — `next dev` 응답 + Expo 번들 무손상. ← **이번 세션**
+2. **Postgres+지갑 코어**(Drizzle, User+WalletLedger+balance, spend/earn = FOR UPDATE+멱등+가드, 동시 이중지불 테스트).
+3. **모바일 인증**(ID토큰 검증→Bearer→SecureStore, 부팅 익명 유지).
+4. **`lib/server.ts`**(throw 없는 클라, 캐시표시/서버확정) — 앱서 다이아 적립/사용 E2E.
+5. **결제**(verify→consume→환불 웹훅 차감) — 머니패스, 환불→차감 왕복 테스트.
+6. **AdMob SSV + 업적**(서명검증·상한·1회).
+7. **로그/문의/텔레메트리** → **관리자 대시보드**(맨 마지막, 데이터 존재 후 read-only).

@@ -1,0 +1,15 @@
+# Next.js / Node
+node_modules/
+.next/
+out/
+dist/
+*.tsbuildinfo
+next-env.d.ts
+
+# 비밀키(절대 커밋 금지 — BACKEND_SYSTEM §13.4 M4)
+.env
+.env.local
+.env*.local
+
+# DB 로컬 볼륨
+pgdata/
