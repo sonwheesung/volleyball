@@ -58,7 +58,7 @@ export default function MyPage() {
     const got = claimAchDiamonds();
     Alert.alert(got > 0 ? '업적 보상 수령' : '수령할 보상 없음', got > 0 ? `달성 업적 보상 +${got} 💎` : '새로 달성한 업적이 없습니다.');
   };
-  // 상점 — IAP 추상화(lib/iap)에 연결. dev는 시뮬 알림, 운영은 RevenueCat. 모든 함수는 throw 없이 결과 반환.
+  // 상점 — IAP 추상화(lib/iap)에 연결. dev는 시뮬 알림, 운영은 스토어 결제→우리 서버 직접 검증(RevenueCat 폐기, BACKEND §5). throw 없이 결과 반환.
   // MONETIZATION_SYSTEM: 광고 제거(remove_ads)·월드컵 시즌 구매(dlc_worldcup) 2칸 + 구매 복원(필수).
   const buy = async (sku: Sku) => {
     const r = await purchase(sku);
@@ -130,7 +130,7 @@ export default function MyPage() {
         sub="오류 · 건의 · 질문 — 최근 기록 진단 정보 자동 첨부"
         onPress={() => router.push('/support')} />
 
-      {/* ── 상점 (MONETIZATION_SYSTEM) — 광고 제거 · 월드컵 시즌 구매. dev=시뮬, 운영=RevenueCat ── */}
+      {/* ── 상점 (MONETIZATION_SYSTEM) — 광고 제거 · 월드컵 시즌 구매. dev=시뮬, 운영=스토어 결제+서버 직접검증(§43) ── */}
       <Text style={styles.section}>상점</Text>
       <LinkCard icon="diamond-outline" tint={theme.sky} title="다이아 구매"
         sub="전지훈련용 — 100개 ₩1,000 · 500개 ₩4,800 (출시 시 결제 연결)"

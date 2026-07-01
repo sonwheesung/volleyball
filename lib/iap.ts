@@ -1,11 +1,15 @@
 // IAP 추상화 (MONETIZATION_SYSTEM) — 결제·복원·엔타이틀먼트의 유일한 연결점.
 //
-// 검증·저장·로그 = **RevenueCat(서버측)**. 앱은 SDK만 호출 → 자체 결제 서버/DB/로그 **불필요(Supabase 불요)**.
-//   dev(__DEV__): 실제 청구 없이 **시뮬 알림**으로 흐름 확인. prod: RevenueCat(react-native-purchases, 지연 require).
-//   활성화(P2): `npx expo install react-native-purchases` + EAS 빌드 + RevenueCat 대시보드(상품·엔타이틀먼트 설정).
+// ~~검증·저장·로그 = RevenueCat(서버측). 앱은 SDK만 호출 → 자체 결제 서버/DB/로그 불필요(Supabase 불요).~~
+//   → **정정(2026-07-01, 온라인 전환)**: RevenueCat 폐기. 결제 검증·저장·로그 = **우리 Vercel 서버가 직접**
+//   (구글 Play/애플 App Store Server API 직접 검증 + consume/환불 웹훅, BACKEND_SYSTEM §5·§13.4 H1). 즉 결제 흐름은
+//   **client가 스토어 결제 → 영수증/토큰을 `lib/server.ts`로 전송 → 서버가 검증·지급·consume**로 재작성 예정(#43, PG 연결 후).
+//   dev(__DEV__): 실제 청구 없이 **시뮬 알림**으로 흐름 확인(현행 유지). prod: 네이티브 결제(react-native-iap 등, 지연 require)
+//   + 서버 검증. 활성화(P2): 스토어 상품 등록 + EAS 빌드 + 서버 결제 라우트 연결.
 //
 // 원칙: **모든 함수는 throw하지 않고 결과를 반환**(예외는 전부 잡아 typed reason으로) → UI가 안전하게 분기·안내.
-//   엔타이틀먼트는 표시/가용성만 게이트(엔진 격리, MONETIZATION §2.4). 오프라인은 RevenueCat SDK 로컬 캐시가 처리.
+//   엔타이틀먼트(광고제거·DLC)는 표시/가용성만 게이트(엔진 격리, MONETIZATION §2.4). 비소모품은 스토어 복원 + 서버 엔타이틀먼트.
+//   ⚠ 현재 구현은 아직 RevenueCat 잔재(아래) — #43에서 서버 직접검증으로 교체. 지금은 dev 스텁으로 흐름만 동작.
 
 import { Alert } from 'react-native';
 import { setRemoveAds } from './ads';
