@@ -2,7 +2,7 @@
 // 시즌 태그로 쌓고 **최근 KEEP_SEASONS 시즌만 유지**(예: 15시즌이면 5시즌 이하 prune). 문의 제출 시 진단 스냅샷에
 // 첨부(대부분 문의가 히스토리 오류라 최근 이력이 핵심). AsyncStorage로 재시작에도 유지, 쓰기는 디바운스(A6 교훈).
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { logError } from './log';
+import { logError, setErrorSink } from './log';
 
 export interface DiagLogEntry {
   t: number; // epoch ms
@@ -71,6 +71,15 @@ export function diag(season: number, cat: string, msg: string, data?: unknown): 
 export async function getSnapshotLogs(currentSeason: number): Promise<DiagLogEntry[]> {
   await ensureLoaded();
   return entriesInRange(buf, currentSeason);
+}
+
+/** 앱 시작 시 1회 — 오류(logError)를 진단 버퍼에도 시즌 태그로 적재. getSeason은 현재 시즌 제공.
+ *  deviceLog 자체 오류(load/flush)는 재귀 방지로 제외. */
+export function installErrorSink(getSeason: () => number): void {
+  setErrorSink((where, msg) => {
+    if (where.startsWith('deviceLog')) return; // 자기 오류 재귀 차단
+    diag(getSeason(), 'error', where, msg);
+  });
 }
 
 export async function clearDiag(): Promise<void> {

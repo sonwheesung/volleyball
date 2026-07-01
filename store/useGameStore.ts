@@ -45,6 +45,7 @@ import { setSeasonHistory, upcomingStanceOf } from '../data/leagueHistory';
 import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
 import { ROSTER_MAX, canRelease, inSeasonCost, severanceFee } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
+import { diag } from '../lib/deviceLog';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
@@ -297,6 +298,7 @@ export const useGameStore = create<GameState>()(
           // 시즌≥1: 영속 base에도 굽기. 시즌0(base null): campLog가 재로드 시 시드에 재적용(§11.2 — 이중적용 없음)
           ...(s.playerBase ? { playerBase: { ...s.playerBase, [playerId]: camped } } : {}),
         });
+        diag(s.season, 'wallet', `전지훈련 ${playerId} ${list.length}부위 -${cost}💎`); // 진단 로그(#44)
         return { ok: true };
       },
 
@@ -653,6 +655,7 @@ export const useGameStore = create<GameState>()(
         const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, transfers, retirements, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
+        diag(season, 'season', `시즌 종료 ${season + 1}→${nextSeason + 1} (오프시즌 진입)`); // 진단 로그(#44)
 
         // 더블탭 방어 — 정규시즌이 실제로 끝났을 때만 진행한다. 한 번 롤오버하면 results가 비워져(아래 749)
         //   planNextAction이 다시 'match'를 돌려주므로, 확정 버튼 연타로 인한 시즌 2전진을 차단한다(§3.5 endSeason 더블탭).
@@ -930,6 +933,7 @@ export const useGameStore = create<GameState>()(
       },
 
       resetSave: () => {
+        diag(0, 'save', '새 게임 시작 (resetSave)'); // 진단 로그(#44)
         resetLeagueBase();
         setTxContext([], [], '');
         setOwnerContext([]);

@@ -5,6 +5,13 @@
 //   진단 로그=**기기 롤링 버퍼(`lib/deviceLog.ts`, 최근 10시즌)** + 중요 이벤트 서버 적재(BACKEND_SYSTEM §7·§13.6).
 //   여기 `logEvent`/`logError`는 개발 콘솔용 저수준 훅으로 유지 — 진단 버퍼/서버 전송은 deviceLog·server가 담당.
 
+// 외부 싱크(진단 버퍼 등) — 순환참조 회피용. log은 store/deviceLog를 import 하지 않고, 앱 시작 시
+// deviceLog.installErrorSink가 여기 등록한다(오류를 진단 버퍼에도 시즌 태그로 적재).
+let errorSink: ((where: string, msg: string) => void) | null = null;
+export function setErrorSink(fn: ((where: string, msg: string) => void) | null): void {
+  errorSink = fn;
+}
+
 /** 이벤트 기록(개발 콘솔). 운영 빌드에선 조용(필요 시 분석 SDK로 확장). */
 export function logEvent(category: string, data?: Record<string, unknown>): void {
   if (__DEV__) console.log(`[${category}]`, data ?? '');
@@ -15,5 +22,6 @@ export function logError(where: string, err: unknown): void {
   try {
     const msg = err instanceof Error ? err.message : String(err);
     console.warn(`[error:${where}]`, msg);
+    errorSink?.(where, msg); // 진단 버퍼로도(등록됐으면)
   } catch { /* 로깅 자체 실패는 무시 */ }
 }
