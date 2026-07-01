@@ -180,6 +180,7 @@ npx tsx tools/_dv_stance_preview.ts      # 모기업 기조 AI 입찰 preview=re
 # parity A/B(FINANCE 2.0 Stage3 필수): `npx tsx tools/simLeague.ts 40 24`(stance on) vs `$env:STANCE_OFF=1; npx tsx tools/simLeague.ts 40 24`(베이스라인=전팀 normal) — parityStd·최장왕조·지속성 r·1위 점유율·약팀반등 밴드 대조(부익부 재점화 감시). off arm == Stage3 이전 동작
 # simNews 는 sponsor 예고(Stage2b) 사실 정합도 검증(톤 일치·최신시즌만·건수==sponsorStanceOf 도출)
 npx tsx tools/simStatEffect.ts             # 스탯 유효성 — 전 16스탯이 올바른 방향으로 경기 작용(대조군 무편향·id편향 상쇄). exit 0/1
+npx tsx tools/simEngineRegression.ts 1200 40 # 경기 엔진 회귀 A/B(48k, 결정론 합성팀) — 분포비율+ΔOVR 승률곡선+q대칭. 계수 변경 전후 diff로 밸런스 붕괴 감지. 스킬 `engine-regression`. 베이스라인 SKILL.md(2026-07-01). 절대 KOVO는 simKovo
 npx tsx tools/simStamCurve.ts 3000         # 체력 곡선(MATCH 7.1, 2026-06-28) — 경기 중 빠지고 세트 누적되는지(타임아웃 코트 평균 세트1→세트5 ≥8%p 하락·세트5 60~82% 밴드). 옛 평탄~95%(체력 무의미) 회귀 차단. exit 0/1
 npx tsx tools/simAudit.ts 60               # 영입 13체크(한선수=한팀·이중계약0·캡·자금게이트). exit 0/1
 npx tsx tools/simBrokeSign.ts              # 현금 게이팅(돈 없는데 영입 0). exit 0/1
