@@ -102,6 +102,44 @@ for (const n of feed) {
   seenBody.get(n.kind)!.add(n.body ?? '');
 }
 
+// ── n-gram 겹침 변주 가드(§4.4 Step4) — exact-distinct가 못 잡는 "거의 동일" 본문 검출(해시 붕괴류).
+//   동종 기사 본문을 단어 3-shingle 집합으로 → distinct 본문 쌍별 Jaccard. open/close 공유로 기저 겹침은
+//   있으니 "distinct인데 최대 겹침이 임계 초과"면 사실상 복제(변주 실패). 정본 지표(리뷰: "동일-open<15%" 대체).
+const shingles = (s: string): Set<string> => {
+  const w = s.replace(/[.,·—()"]/g, ' ').split(/\s+/).filter(Boolean);
+  const out = new Set<string>();
+  for (let i = 0; i + 2 < w.length; i++) out.add(`${w[i]} ${w[i + 1]} ${w[i + 2]}`);
+  return out;
+};
+const jac = (a: Set<string>, b: Set<string>): number => {
+  if (!a.size || !b.size) return 0; let inter = 0; for (const x of a) if (b.has(x)) inter++;
+  return inter / (a.size + b.size - inter);
+};
+// 변주 비율 임계 가드(§4.4 Step4) — 고볼륨 kind(≥20건)는 distinct 본문 비율≥0.90.
+//   해시 붕괴·셀렉터 축소를 실측으로 잡음(A/B 검증: broken hash milestone 0.775→발화 / fmix 0.988→통과).
+//   n-gram 최대겹침(아래)은 "쌍 near-identical" 클래스라 분포 축소를 못 잡음 → 비율 가드가 그 사각을 메움.
+//   소볼륨 kind(standing 7·match 9 등)는 정상적으로 폼이 적어 제외(오검 방지).
+const RATIO_MIN = 0.9, RATIO_MINCOUNT = 20;
+for (const [k, set] of seenBody) {
+  const tot = byKind.get(k) ?? 0;
+  if (tot < RATIO_MINCOUNT) continue;
+  const ratio = set.size / tot;
+  if (ratio < RATIO_MIN) V.push(`${k} 변주비율 ${ratio.toFixed(3)}<${RATIO_MIN}(${set.size}/${tot} — 셀렉터 축소/해시 붕괴 의심)`);
+}
+const OVERLAP_MAX = 0.9; // distinct 본문인데 3-shingle Jaccard>이 값 = "거의 동일"(변주 실패)
+const NGRAM_CAP = 200;   // kind당 표본 상한(쌍 폭발 방지) — 초과 시 로그(무언 절단 금지)
+const ngramReport: string[] = [];
+for (const [k, set] of seenBody) {
+  const bodies = [...set].filter(Boolean);
+  if (bodies.length < 2) continue;
+  const sampled = bodies.length > NGRAM_CAP;
+  const sh = (sampled ? bodies.slice(0, NGRAM_CAP) : bodies).map(shingles);
+  let mx = 0;
+  for (let i = 0; i < sh.length; i++) for (let j = i + 1; j < sh.length; j++) { const o = jac(sh[i], sh[j]); if (o > mx) mx = o; }
+  ngramReport.push(`${k}:${mx.toFixed(2)}${sampled ? `(표본${NGRAM_CAP}/${bodies.length})` : ''}`);
+  if (mx > OVERLAP_MAX) V.push(`${k} 본문 n-gram 겹침 ${mx.toFixed(2)}>${OVERLAP_MAX}(거의 동일 — 변주 실패)`);
+}
+
 // ── 교차검증: 뉴스 트리플크라운(선수당 1건 집계) == broadcast 트리플 달성 **선수 수**(경기당 현수막) ──
 //   뉴스는 선수·시즌당 1건으로 묶고(기사 리뷰 하: 폭주 방지), 현수막은 경기마다 → 일치 기준은 **distinct 선수**.
 const bcastTriplePlayers = new Set<string>();
@@ -140,6 +178,7 @@ log(`\n═══ 리그 뉴스 · ${N}시즌 (총 ${feed.length}건) ═══`)
 log(`kind 종류=${byKind.size}: ${[...byKind].map(([k, c]) => `${k}:${c}`).join(' · ')}`);
 log(`\n변주 커버리지(kind: distinct본문/총건수 — 높을수록 다양):`);
 for (const [k, set] of seenBody) log(`  ${k}: ${set.size}/${byKind.get(k) ?? 0}`);
+log(`\nn-gram 최대겹침(kind별 distinct 본문 쌍, 낮을수록 다양 · 임계 ${OVERLAP_MAX}): ${ngramReport.join(' · ')}`);
 log(`\n무결성: ${V.length ? '❌ ' + V.join(' · ') : '✅ 위반 0(빈 헤드/본문·중복·매달린 teamId)'}`);
 log(`[교차검증] 트리플크라운 news=${newsTriples} ↔ broadcast=${bcastTriples} 일치=${tripleAgree} (true여야 신뢰)`);
 log(`[A/B] 중복 주입 시 내용중복 검출=${abDup} (true여야 신뢰)`);
