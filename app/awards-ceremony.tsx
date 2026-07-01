@@ -3,12 +3,16 @@
 // endSeason 전이라 currentSeasonAwards로 재계산(새 영속 0). 빈 상은 비트 자동 생략. 가짜 드라마 금지 — 상명+실선수+실스탯만.
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
-import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, Screen, theme, useDeferredReady } from '../components/Screen';
+import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, theme, useDeferredReady } from '../components/Screen';
 import { Best7Court } from '../components/Best7Court';
 import { AwardIllustration } from '../components/AwardIllustration';
+import { LegendIllustration } from '../components/LegendIllustration';
 import { currentSeasonAwards } from '../data/awards';
 import { getPlayer, shortTeamName } from '../data/league';
+import { emblemFor } from '../data/emblems';
+import { teamColors } from '../lib/teamColor';
+import { jerseyNumber } from '../engine/jersey';
 import { useGameStore } from '../store/useGameStore';
 import type { AwardWinner } from '../types';
 
@@ -32,16 +36,32 @@ function CeremonyInner() {
   // 공개 비트(빈 상 생략) — 신인 → 기량발전 → 베스트7 → 챔프MVP → 정규MVP(클라이맥스)
   const beats = useMemo(() => {
     const out: { key: string; el: React.ReactNode }[] = [];
-    const winnerCard = (icon: React.ComponentProps<typeof IconLabel>['icon'], label: string, w: AwardWinner, suffix = '', climax = false) => (
-      <Card accent={theme.gold}>
-        {climax ? <View style={{ alignItems: 'center' }}><AwardIllustration width={160} /></View> : null}
-        <IconLabel icon={icon} color={theme.gold}>{label}</IconLabel>
-        <Text style={[styles.win, climax && styles.climax, isMine(w) && { color: theme.accent }]} numberOfLines={1}>
-          {pName(w.playerId)}
-        </Text>
-        <Muted style={{ fontSize: 13 }}>{shortTeamName(w.teamId)} · {w.value}{suffix}{isMine(w) ? '  · 우리 구단' : ''}</Muted>
-      </Card>
-    );
+    const winnerCard = (icon: React.ComponentProps<typeof IconLabel>['icon'], label: string, w: AwardWinner, suffix = '', climax = false) => {
+      const c = teamColors(w.teamId);
+      const pos = getPlayer(w.playerId)?.position;
+      const num = jerseyNumber(w.playerId);
+      const figW = climax ? 132 : 104;
+      return (
+        <Card accent={theme.gold}>
+          {climax ? <View style={{ alignItems: 'center' }}><AwardIllustration width={150} /></View> : null}
+          <IconLabel icon={icon} color={theme.gold}>{label}</IconLabel>
+          {/* 선수 실루엣(구단색 유니폼+번호) + 구단 엠블럼 배지 — "어느 팀 선수"를 한눈에(A1) */}
+          <View style={styles.figureWrap}>
+            <LegendIllustration primary={c.primary} light={c.light} num={num} width={figW} />
+            <Image source={emblemFor(w.teamId)} style={styles.emblemBadge} />
+          </View>
+          <Text style={[styles.win, climax && styles.climax, isMine(w) && { color: theme.accent }]} numberOfLines={1}>
+            {pName(w.playerId)}
+          </Text>
+          <View style={styles.metaRow}>
+            {pos ? <PosTag pos={pos} /> : null}
+            <Text style={styles.team}>{shortTeamName(w.teamId)}</Text>
+            {isMine(w) ? <Text style={styles.mineTag}>우리 구단</Text> : null}
+          </View>
+          <Muted style={{ fontSize: 13, textAlign: 'center', marginTop: 4 }}>{w.value}{suffix}</Muted>
+        </Card>
+      );
+    };
     if (aw.rookie) out.push({ key: 'rookie', el: winnerCard('sparkles-outline', '신인상', aw.rookie) });
     if (aw.mostImproved) out.push({ key: 'improved', el: winnerCard('trending-up-outline', '기량발전상', aw.mostImproved, ' OVR') });
     if (aw.best7.some((s) => s.winner)) {
@@ -117,8 +137,13 @@ const styles = StyleSheet.create({
   dotOn: { backgroundColor: theme.gold, width: 9, height: 9, borderRadius: 5 },
   dotPast: { backgroundColor: theme.muted },
   skip: { color: theme.muted, fontSize: 13, fontWeight: '700' },
-  stage: { marginTop: 60, minHeight: 360 },
+  stage: { marginTop: 40, minHeight: 360 },
   hint: { fontSize: 12, textAlign: 'center', marginBottom: 14 },
-  win: { color: theme.text, fontSize: 22, fontWeight: '900', marginTop: 4 },
+  win: { color: theme.text, fontSize: 22, fontWeight: '900', marginTop: 4, textAlign: 'center' },
   climax: { fontSize: 28, color: theme.gold },
+  figureWrap: { alignSelf: 'center', marginTop: 6, marginBottom: 2 },
+  emblemBadge: { position: 'absolute', right: -6, top: -6, width: 38, height: 38, resizeMode: 'contain' },
+  metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
+  team: { color: theme.muted, fontSize: 14, fontWeight: '700' },
+  mineTag: { color: theme.accent, fontSize: 12, fontWeight: '800' },
 });

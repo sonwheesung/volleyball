@@ -33,7 +33,8 @@ export default function SeasonStart() {
           ran.current = true;
           try { endSeason(); } catch (e) { logError('seasonStart.endSeason', e); }
           clearInterval(iv);
-          router.replace('/enshrine'); // 헌액(새 레전드 0명이면 자동 통과 → 탭)
+          // endSeason 직후 currentDay=0(새 로스터 확정) → 전지훈련(A3, day0 제약) → 헌액 → 대시보드.
+          router.replace('/training-camp?chain=1');
         });
       });
     }, PAINT_DELAY);

@@ -135,6 +135,7 @@ npx tsx tools/_dv_simcache.ts               # 시뮬 결과 캐시 영속(REALTI
 npx tsx tools/_dv_preseason_cold.ts         # 시즌 시작 전(day0 구단선택) 선수/구단 화면 콜드 비용 가드(2026-06-28) — day0은 전 시즌 시드 재생(생산·dyn·인기/사건)을 안 타야(실측 ~2ms<500ms) + A/B(중반 콜드 leagueProduction는 >500ms로 무거움=측정 민감). 선수 화면 진입 15s 회귀 차단. exit 0/1
 npx tsx tools/_gt_determinism.ts            # 결정론+세이브(REALTIME_SIM Phase0) — 같은시드 in-process 2회 동일·실 partialize/rehydrate 동일·A/B(currentDay 누락 검출). exit 0/2
 npx tsx tools/_gt_derived.ts 40             # 파생데이터 churn(HOF·archive·마일스톤·careerTotals) 무결성 — 실 store 40시즌 완주(전 경기 recordResult→endSeason): 중복0·미래참조0·유한비음수·단조·업적정합 + A/B(hofDup/totNaN/msFuture 검출). exit 0/2. ※2026-06-29 수정: setDay만으론 seasonOver 게이트 미충족 no-op(stale)이었음 → 전 경기 결과 기록으로 실제 churn 복원
+npx tsx tools/_a8_verify.ts 14              # 선수 상세 데이터 흐름(A8, 2026-07-01) — 실 store 14시즌 구동 후 seasonLines(시즌별 소속팀·이적 이력 다팀 포함)·awardHistoryOf(수상 이력) 채워짐 검증. on-demand(무거움). ※부수효과: store import 경로가 RN을 안 끄는지(_gt_mock react-native 스텁) 스모크. exit 0/1
 npx tsx tools/_ev_transfernews.ts 15        # 타팀 이적/방출 뉴스(NEWS 슬라이스4) — 거물 게이트 볼륨·매달린참조0·중복0·결정론·이동시점OVR. exit 0/1
 npx tsx tools/_dv_releasenews.ts            # 방출 뉴스 인간관계 한 줄(RELATIONSHIP §6) — 합성 방출+잔류 각별한동료 "남기고 떠난다" 박힘 + A/B(친구없으면 줄 없음=허위오라클 차단)·조사교정. exit 0/1
 npx tsx tools/_ev_draftpick.ts              # AI 드래프트 3티어(FA §3.1) — 특급 BPA·포지션 필요·OVR+성격 불변식 + 성격 A/B + 결정론. exit 0/1

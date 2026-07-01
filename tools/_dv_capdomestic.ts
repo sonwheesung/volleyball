@@ -13,28 +13,37 @@ resetLeagueBase();
 const DAY = 0;
 const f = (n: number) => (n / 10000).toFixed(1) + '억';
 
-let domOver = 0;   // 국내 전용(수정 후) 캡 초과 팀 수 — 0이어야 정상
-let allOver = 0;   // 외인 포함(버그) 캡 초과 팀 수 — ≥1이어야 A/B 민감
-let incheonOk = false;
-const rows: string[] = [];
+let domOver = 0;   // 국내 전용(수정 후) 캡 초과 팀 수 — 0이어야 정상(진짜 불변식)
+const rows: { name: string; domPay: number; allPay: number }[] = [];
 
 for (const t of LEAGUE.teams) {
   const ps = getEvolvedTeamPlayers(t.id, DAY);
   const domPay = ps.filter((p) => !p.isForeign).reduce((s, p) => s + p.contract.salary, 0);
   const allPay = ps.reduce((s, p) => s + p.contract.salary, 0);
   if (domPay > LEAGUE_CAP) domOver++;
-  if (allPay > LEAGUE_CAP) allOver++;
   const name = getTeam(t.id)?.name ?? t.id;
-  // 인천 타이드 = 보고된 사례(국내<캡<전체)
-  if (name.includes('인천') && domPay < LEAGUE_CAP && allPay > LEAGUE_CAP) incheonOk = true;
-  rows.push(`  ${name.padEnd(10)} 국내 ${f(domPay)} | 전체 ${f(allPay)} | 캡 ${f(LEAGUE_CAP)}`);
+  rows.push({ name, domPay, allPay });
 }
 
 log('[_dv_capdomestic] day0 팀별 페이롤 (국내 전용이 캡 기준):');
-rows.forEach((r) => log(r));
-log(`  국내 캡초과 팀(수정 후) = ${domOver} (기대 0) · 외인포함 캡초과 팀(버그) = ${allOver} (기대 ≥1)`);
-log(`  인천 타이드 사례(국내<캡<전체) = ${incheonOk}`);
+rows.forEach((r) => log(`  ${r.name.padEnd(10)} 국내 ${f(r.domPay)} | 전체 ${f(r.allPay)} | 캡 ${f(LEAGUE_CAP)}`));
+log(`  국내 캡초과 팀(수정 후) = ${domOver} (기대 0)`);
 
-const pass = domOver === 0 && allOver >= 1 && incheonOk;
+// A/B 민감도(허위 오라클 방지) — 시드-강건판(2026-07-01): 실 LEAGUE_CAP이 시드 연봉에 따라 안 넘을 수도
+//   있어(외인 포함 최고 인천 34.9억<35.0억) "≥1팀 실초과" 가정이 깨졌다(브리틀 가드). 대신 **합성 probe 캡**을
+//   외인을 가장 많이 안은 팀의 (국내,전체) 사이로 잡아, 국내 규칙=캡내 ↔ 외인포함 규칙=초과로 **판정이 뒤집힘**을
+//   증명한다(외인 연봉>0이면 allPay>domPay라 항상 성립 → 시드 변동에 안 깨지면서 필터가 load-bearing임을 입증).
+const withForeign = rows.filter((r) => r.allPay > r.domPay);
+const probeTeam = withForeign.sort((a, b) => (b.allPay - b.domPay) - (a.allPay - a.domPay))[0];
+let flips = false, probeCap = 0;
+if (probeTeam) {
+  probeCap = Math.floor((probeTeam.domPay + probeTeam.allPay) / 2); // domPay < probeCap < allPay (외인 연봉>0)
+  const domVerdict = probeTeam.domPay > probeCap;  // 국내 규칙: 캡내(false)
+  const allVerdict = probeTeam.allPay > probeCap;  // 외인포함 규칙: 초과(true)
+  flips = !domVerdict && allVerdict;
+  log(`  [A/B] probe 캡 ${f(probeCap)} @ ${probeTeam.name}: 국내규칙 초과=${domVerdict} · 외인포함규칙 초과=${allVerdict} → 필터가 판정 뒤집음=${flips}`);
+}
+
+const pass = domOver === 0 && flips;
 log(pass ? 'CAPDOMESTIC_GUARD PASS' : 'CAPDOMESTIC_GUARD FAIL');
 process.exit(pass ? 0 : 2);

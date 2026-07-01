@@ -11,20 +11,24 @@ import './_gt_mock';
   const { useGameStore } = await import('../store/useGameStore');
   const { LEAGUE, getEvolvedTeamPlayers } = await import('../data/league');
   const { setOwnerContext } = await import('../data/dynamics');
-  const { buildOwnerFx } = await import('../data/owner');
+  const { buildOwnerFx, discontentNow } = await import('../data/owner');
   const G = () => useGameStore.getState();
   const my = LEAGUE.teams[0].id;
   G().resetSave(); G().selectTeam(my); G().setDay(164);
   const season = G().season;
   const promise = (id: string, card: string) => [{ playerId: id, season, day: 10, topic: 'minutes', card, ok: true } as any];
 
-  // 만료 예정(remaining≤1)·비리베로 — 벤치하면 출전 불만(minutes)이 잘 발화하는 선수
+  // 만료 예정(remaining≤1)·비리베로 — 벤치하면 출전 불만(minutes)이 잘 발화하는 선수.
+  // 후보 선정은 반드시 **force-bench 후 discontentNow().topic === 'minutes'** 로 한다(2026-07-01 브리틀 가드 수정):
+  //   구 방식 `b>0`은 sinkingShipBias(fanScore=50)만으로도 참이라, minutes가 아닌(예: hometown 향수) 만료자를
+  //   집어 breach(=topic 'minutes' 전용)가 애초에 발화 불가 → 허위 FAIL. topic으로 선정해야 breach를 실측한다.
   const cands = getEvolvedTeamPlayers(my, 164).filter((p) => p.position !== 'L' && p.contract.remaining <= 1);
   let chosen: string | null = null, A = 0, B = 0, C = 0, D = 0;
   for (const cand of cands) {
     setOwnerContext([{ playerId: cand.id, fromDay: 0 }]); // 시즌 내내 벤치
+    const dn = discontentNow(getEvolvedTeamPlayers(my, 164).find((p) => p.id === cand.id)!, my, 164);
+    if (dn.topic !== 'minutes') { setOwnerContext([]); continue; } // 출전 불만(minutes)이 실제로 나는 선수만
     const b = buildOwnerFx([], season, my, 50).refuseProb[cand.id] ?? 0;
-    if (b <= 0) { setOwnerContext([]); continue; } // 벤치 불만이 발화한 선수만(minutes 토픽)
     const a = buildOwnerFx(promise(cand.id, 'starter'), season, my, 50).refuseProb[cand.id] ?? 0;
     const c = buildOwnerFx(promise(cand.id, 'reinforce'), season, my, 50).refuseProb[cand.id] ?? 0;
     setOwnerContext([]); // 미벤치(이행)
@@ -32,7 +36,7 @@ import './_gt_mock';
     chosen = cand.id; A = a; B = b; C = c; D = d; break;
   }
   setOwnerContext([]);
-  if (!chosen) { console.error('벤치 시 출전불만 발화하는 만료 선수 없음 — abort'); process.exit(1); }
+  if (!chosen) { console.error('force-bench 시 minutes 불만 나는 만료 선수 없음 — abort'); process.exit(1); }
 
   const fails: string[] = [];
   if (!(A > B)) fails.push(`A(파기 ${A.toFixed(2)}) > B(벤치만 ${B.toFixed(2)}) 실패 — 파기 가산 없음`);

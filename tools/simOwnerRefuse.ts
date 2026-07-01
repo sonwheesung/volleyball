@@ -35,12 +35,17 @@ for (let s = 1; s <= N; s++) {
 
   // 미리보기 — 풀(롤오버 후·FA 전) + 내 잔류 명단
   const peek = faMarketPreview(myTeam, {}, {}, [], true, [], s, ownerFx, 9_999_999);
+  // 실제 적용(드래프트 직전) — 전역 유일성 + 은퇴자 집합(누락 판정서 제외). 위(peek)와 동일 인자 → 동일 롤오버.
+  const ctx = buildDraftContext(myTeam, {}, {}, [], true, [], s, ownerFx, 9_999_999);
+  const retiredSet = new Set<string>(ctx.retired ?? []); // 은퇴자는 명단·풀에서 정상 제거 — "누락" 아님(2026-07-01 브리틀 가드 수정)
   const keptMine = new Set(peek.myRoster);
   const poolSet = new Set(peek.pool);
-  // 시즌 시작 내 국내 선수 중 잔류 안 된 사람 = 거부/만료 → 풀에 있어야(은퇴·외인 제외)
+  // 시즌 시작 내 국내 선수 중 잔류 안 된 사람 = 거부/만료 → 풀에 있어야(은퇴·외인 제외).
+  //   ⚠ 은퇴 제외가 핵심: 강제 refuseProb=0.99로 나이 은퇴자(계약 잔여여도)가 명단·풀에서 빠지는데(정상),
+  //   구 코드는 isForeign만 제외해 은퇴자를 "누락"으로 오탐했다(seed 드리프트로 t0p4/t0p1 노출).
   for (const id of startMine) {
     const p = peek.snapshot[id];
-    if (!p || p.isForeign) continue;
+    if (!p || p.isForeign || retiredSet.has(id)) continue;
     if (!keptMine.has(id)) {
       totalRefused++;
       if (!poolSet.has(id)) {
@@ -54,8 +59,7 @@ for (let s = 1; s <= N; s++) {
     }
   }
 
-  // 실제 적용(드래프트 직전) — 전역 유일성
-  const ctx = buildDraftContext(myTeam, {}, {}, [], true, [], s, ownerFx, 9_999_999);
+  // 실제 적용(드래프트 직전) — 전역 유일성 (ctx는 위에서 계산)
   const owner = new Map<string, string>();
   for (const t of teamIds) for (const id of ctx.rosters[t] ?? []) {
     const prev = owner.get(id);

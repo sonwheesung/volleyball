@@ -1,7 +1,7 @@
 // 전지훈련 (MONETIZATION §11.2) — 오프시즌 해외 캠프. 다이아로 선수 1명을 보내 능력치 여러 부위를
 // 현재+1·포텐+1(최대 99). 선수당 오프시즌 1회. 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지.
 import { useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Muted, PosTag, Screen, theme } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
@@ -18,6 +18,11 @@ const LABEL: Record<TrainableStat, string> = {
 
 export default function TrainingCamp() {
   const router = useRouter();
+  // 오프시즌 체인 진입(season-start → 여기 → enshrine, A3)이면 chain=1 — "새 시즌으로 ▶"로 다음 단계(헌액) 진행.
+  // replace 로 들어와 뒤로 가도 season-start(endSeason)를 재실행하지 않음. 비-chain(마이페이지)은 뒤로가기만.
+  const { chain } = useLocalSearchParams<{ chain?: string }>();
+  const inChain = chain === '1';
+  const goNext = () => router.replace('/enshrine'); // 헌액(0명이면 자동 통과 → 대시보드)
   const my = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const diamonds = useGameStore((s) => s.diamonds);
@@ -47,6 +52,8 @@ export default function TrainingCamp() {
           <IconLabel icon="airplane-outline" color={theme.warn}>오프시즌에만 가능</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4 }}>전지훈련은 시즌이 끝난 뒤(새 시즌 시작 전)에만 보낼 수 있습니다. 이번 시즌을 마치고 오프시즌에 다시 오세요.</Muted>
         </Card>
+        {/* 체인 진입인데 day0이 아닌 예외(endSeason 실패 등) — 막다른 화면이 되지 않게 진행 버튼 보장 */}
+        {inChain ? <View style={{ marginTop: 14 }}><Button label="새 시즌으로 ▶" onPress={goNext} /></View> : null}
       </Screen>
     );
   }
@@ -56,6 +63,14 @@ export default function TrainingCamp() {
     return (
       <Screen title="전지훈련">
         {balance}
+        {inChain ? (
+          <Card accent={theme.warn}>
+            <IconLabel icon="flag-outline" color={theme.warn}>새 시즌 준비 — 마지막 단계</IconLabel>
+            <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
+              영입·드래프트가 끝났습니다. 새 시즌이 시작되기 전, 다이아로 선수를 전지훈련 보낼 수 있습니다. 보낼 선수가 없으면 아래 <Text style={{ color: theme.warn, fontWeight: '800' }}>새 시즌으로 ▶</Text> 로 진행하세요.
+            </Muted>
+          </Card>
+        ) : null}
         <Card accent={theme.good}>
           <IconLabel icon="airplane-outline" color={theme.good}>오프시즌 해외 캠프</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
@@ -77,6 +92,11 @@ export default function TrainingCamp() {
             </Pressable>
           );
         })}
+        {inChain ? (
+          <View style={{ marginTop: 14 }}>
+            <Button label="새 시즌으로 ▶" onPress={goNext} />
+          </View>
+        ) : null}
       </Screen>
     );
   }

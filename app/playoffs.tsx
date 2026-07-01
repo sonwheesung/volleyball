@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Screen, Title, theme } from '../components/Screen';
+import { Button, Card, IconLabel, Muted, Screen, Title, theme } from '../components/Screen';
 import { getTeam, getPlayer } from '../data/league';
 import { buildPlayoffs, type Matchup } from '../data/playoffs';
 import { currentSeasonAwards } from '../data/awards';
@@ -53,9 +53,30 @@ export default function Playoffs() {
     return id ? getPlayer(id)?.name : undefined;
   }, [iWon, season]);
 
+  // ── 단계별 공개(A2, 스포일러 제거) — 존재하는 시리즈만 순서대로. 탭마다 한 단계씩 공개. ──
+  // 진출 3팀은 진입 시 보이고, 그 뒤 PO결과 → 챔프전결과 → 우승(+세리머니)을 능동 공개.
+  const order = useMemo(() => {
+    const seq: ('po' | 'final' | 'champ')[] = [];
+    if (po.po) seq.push('po');
+    if (po.final) seq.push('final');
+    seq.push('champ');
+    return seq;
+  }, [po.po, po.final]);
+  const [revealed, setRevealed] = useState(0); // order[0..revealed-1]까지 공개됨
+  const next = order[revealed] as 'po' | 'final' | 'champ' | undefined;
+  const champRevealed = revealed >= order.indexOf('champ') + 1 && order.includes('champ');
+  const nextLabel =
+    next === 'po' ? '플레이오프 결과 보기 ▶'
+    : next === 'final' ? '챔피언결정전 보기 ▶'
+    : next === 'champ' ? '우승 팀 확인 ▶'
+    : '시상식 →';
+  const onNext = () => (next ? setRevealed((r) => r + 1) : router.push('/awards-ceremony'));
+  const shown = (item: 'po' | 'final' | 'champ') => { const i = order.indexOf(item); return i >= 0 && i < revealed; };
+
   return (
     <Screen title={`${season + 1}시즌 포스트시즌`}>
-      {iWon ? (
+      {/* 우승 세리머니는 우승팀이 공개되는 마지막 단계에서만(진입 즉시 발화=스포일러 차단) */}
+      {iWon && champRevealed ? (
         <ChampionCelebration
           teamName={champ}
           teamId={my!}
@@ -74,14 +95,20 @@ export default function Playoffs() {
         ))}
       </Card>
 
-      {po.po ? <SeriesCard title="플레이오프 (2위 vs 3위 · 3전2선승)" m={po.po} /> : null}
-      {po.final ? <SeriesCard title="챔피언결정전 (5전3선승)" m={po.final} /> : null}
+      {shown('po') && po.po ? <SeriesCard title="플레이오프 (2위 vs 3위 · 3전2선승)" m={po.po} /> : null}
+      {shown('final') && po.final ? <SeriesCard title="챔피언결정전 (5전3선승)" m={po.final} /> : null}
+      {shown('champ') ? (
+        <Card accent={theme.gold}>
+          <Title>🏆 우승 — {champ}</Title>
+        </Card>
+      ) : null}
 
-      <Card accent={theme.gold}>
-        <Title>🏆 우승 — {champ}</Title>
-      </Card>
-
-      <Button label="시상식 →" onPress={() => router.push('/awards-ceremony')} />
+      {!champRevealed ? (
+        <Muted style={{ textAlign: 'center', fontSize: 12, marginTop: 2 }}>
+          탭하여 한 단계씩 결과를 확인하세요 (스포일러 방지)
+        </Muted>
+      ) : null}
+      <Button label={nextLabel} onPress={onNext} />
     </Screen>
   );
 }
