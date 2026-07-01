@@ -197,7 +197,8 @@ export interface NewsItem {
   big: boolean;                                              // 헤드라인급
   teamId?: string;                                           // 내 팀 강조용
   body?: string;                                             // 기사 본문(사실 기반 2~3문장) — 없으면 분류별 기본 리드
-  ref?: string;                                              // 안정 식별자(playerId 등) — newsKey 충돌 방지(동명이인 분리, NEWS_SYSTEM §4.4)
+  ref?: string;                                              // 엔티티 앵커(playerId 등) — 이적 렌더 게이트·연표 식별용(NEWS_SYSTEM §4.4)
+  kord?: string;                                             // (season:kind)당 결정론 순번 — 읽음키(newsKey) 기반. 문구 무관 안정(§4.4 Step0)
 }
 
 /** 영구제명 영속 기록 — 승부조작·학폭 등으로 리그에서 영구 퇴출된 선수(불명예, 뉴스·연표용) */

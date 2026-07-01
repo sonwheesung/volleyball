@@ -217,7 +217,16 @@ k = (seed / 53) % closer.length
 - **LOW ⑧ 표시 드리프트 수용**: 풀 커지면 `hash%len`로 과거 시즌 문구가 바뀜 — 게임/사실 무영향, 버전내 결정론 유지. 수용·문서화(newsKey 안정화 후 읽음추적엔 불가시).
 
 **수정 빌드 순서**: **0)** newsKey `season:kind:ref` 안정화(선행·A/B) → **1)** fact-hook 파생층(archive: 우승 첫/N번째/연속왕조/가뭄/스윕/역전/풀세트·award N번째·hof 구단N번째·milestone m.kind, **MVP-우승팀 술어**) → **2)** 전제조건 게이트 core 템플릿(고노출부터→텐트폴, 틀마다 predicate 동봉) → **3)** 슬롯 조각(문법 균일)+open/close 소폭 → **4)** 변주 가드(n-gram 겹침+core 점유율, 노출가중, 결정론 시드) + 기존 `simNews`/`_ev_josa`/`_ev_transfernews`/`_dv_newsday0` 무회귀 0.
-**상태**: ✅ 설계 확정(리뷰 반영). 구현 착수 — Step 0(newsKey)·Step1 일부(MVP 버그) 완료. 태스크 #52.
+**진행(2026-07-01)**:
+- ✅ **Step 0 newsKey 안정화** — `newsKey=season:kind:kord`(kord=(season:kind)당 결정론 순번, 문구·ref 무관). `NewsItem.kord` 신설,
+  `ref`는 엔티티 앵커(이적 게이트)로 분리 → 한 선수 다건(밀스톤 2개·트리플+폭발)도 읽음키 충돌 0. 내용중복 검사는 `newsContentKey`(문구)로 분리.
+- ✅ **MVP-우승팀 술어**(가짜귀속 버그) — 우승 core는 `mvp.teamId===championId`일 때만 "MVP 앞세웠다".
+- ✅ **우승 왕조(연패) fact-hook** — `dynastyRun(archive 스캔)`으로 관측 연속우승 → 헤드라인 `—N연패`+core "N시즌 연속…왕조". archive 관측 사실이라 안전.
+- ⚠ **"구단 첫 우승"·"통산 N번째" 보류** — 클럽은 게임시작 전 우승수(`clubIdentity.titles`: 명문7·황혼5, 표시전용)를 이미 보유,
+  archive는 플레이 시즌만 담음 → archive-only 카운트로 "첫/통산" 주장 시 명문·황혼팀에 **거짓(프레이밍 가짜드라마)**. 안전화하려면 클럽 시작 titles를
+  `buildNewsFeed`에 배선해야 함(호출부 4곳·가드 배선). 배선 전까지 미구현 — 리뷰 원칙(전제조건 없는 프레임 금지) 준수.
+- ▶ **남음**: award(N번째 타이틀)·standing·milestone(m.kind) core 템플릿(고노출부터), 조각 슬롯, n-gram 변주 가드. 태스크 #52.
+**상태**: 🚧 구현 중(Step0 완료, Step1/2 우승부 착수). 설계 리뷰 반영 완료.
 
 ### 4.6 마일스톤 피드 쏠림 정리 (2026-06-30, 사용자 요청)
 > 문제: 피드의 ~74~80%가 마일스톤이고, 그 다수가 **"○○, 10시즌 현역 — 롱런"**(베테랑마다 10/15시즌마다 반복) —

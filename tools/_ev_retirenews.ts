@@ -5,7 +5,7 @@ import './_gt_mock';
 (async () => {
   const { useGameStore } = await import('../store/useGameStore');
   const { LEAGUE, SEASON, getPlayer } = await import('../data/league');
-  const { buildNewsFeed, newsKey } = await import('../data/news');
+  const { buildNewsFeed, newsKey, newsContentKey } = await import('../data/news');
   const G = () => useGameStore.getState();
   const my = LEAGUE.teams[0].id;
   const N = Math.max(8, Number(process.argv[2]) || 20);
@@ -31,7 +31,7 @@ import './_gt_mock';
   const retItems = feed.filter((n) => n.kind === 'retire');
   if (retItems.length !== rets.length) fails.push(`retire 기사 ${retItems.length} ≠ 은퇴자 ${rets.length}`);
   const keys = new Set<string>(); let dup = 0;
-  for (const n of retItems) { const k = newsKey(n); if (keys.has(k)) dup++; keys.add(k); if (!n.headline.trim() || !n.body?.includes('시즌')) fails.push('빈/회고없는 본문'); }
+  for (const n of retItems) { const k = newsContentKey(n); if (keys.has(k)) dup++; keys.add(k); if (!n.headline.trim() || !n.body?.includes('시즌')) fails.push('빈/회고없는 본문'); }
   if (dup) fails.push(`중복 ${dup}건`);
 
   // 4) 결정론

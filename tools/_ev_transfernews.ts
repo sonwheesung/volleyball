@@ -73,6 +73,15 @@ import './_gt_mock';
   const same = JSON.stringify(feed.map(newsKey)) === JSON.stringify(feed2.map(newsKey));
   if (!same) fails.push('결정론 위반(뉴스 재빌드 상이)');
 
+  // 5c) 방출 렌더 실증(합성 — seed-robust). 조직 방출은 시나리오(내 팀 전승 강팀)에 따라 0건일 수 있어
+  //     "조직 방출 존재"에 의존하면 브리틀(엔진 seed 드리프트로 #48류 재발). 대신 합성 방출 1건으로 게이트·문구 경로를 결정론 검증.
+  const relSubject = (await import('../data/league')).currentRosters()[my]?.[0];
+  const synthRel = { season: A.season, playerId: relSubject, name: '방출테스트', fromTeam: my, toTeam: '', ovr: 85, kind: 'release' as const };
+  const feedSynth = buildNewsFeed(A.archive, [], [], A.season, [], [], 0, my, [synthRel] as any);
+  const synthItem = feedSynth.find((n) => n.kind === 'release' && n.ref === relSubject);
+  if (!synthItem) fails.push('합성 방출이 렌더되지 않음(release 경로 실패)');
+  else if (!synthItem.headline.trim() || !synthItem.body?.trim()) fails.push('합성 방출 빈 헤드/본문');
+
   // ── 보정 진단: 게이트 전 이동 모집단의 OVR 분포(REL_NEWS_OVR 튜닝 근거) ──
   const otherPop = movedPop.filter((m) => !m.mine);
   const bucket = (lo: number, hi: number) => otherPop.filter((m) => m.ovr >= lo && m.ovr < hi).length;
@@ -85,7 +94,8 @@ import './_gt_mock';
   if (relItems[0]) console.log(`  예) ${relItems[0].headline}`);
   const trOtherItem = trItems.find((n) => trOther.some((t) => t.playerId === n.ref));
   if (trOtherItem) console.log(`  예) ${trOtherItem.headline}`);
-  const pass = fails.length === 0 && relItems.length > 0 && perSeasonOther <= 40;
+  // pass: 무결성 0 + 합성 방출 렌더 실증(위) + 볼륨 노이즈 아님. 조직 방출 존재는 요구하지 않음(seed-robust, 5c로 대체).
+  const pass = fails.length === 0 && perSeasonOther <= 40;
   console.log(`  A/B: 타팀 방출 존재=${relOther.length > 0} · 내팀 방출 존재=${relMine.length > 0} · 타팀 이적 존재=${trOther.length > 0}`);
   console.log(`\nRESULT: ${pass ? 'PASS' : 'FAIL'}${fails.length ? ' — ' + fails.join(' / ') : ''}`);
   if (!pass) process.exit(1);

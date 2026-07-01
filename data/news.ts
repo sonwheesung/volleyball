@@ -35,8 +35,12 @@ const careerLine = (playerId: string): string => {
 /** core 뒤에 사실 절을 덧붙임(빈 문자열이면 그대로) — 본문 보강 공통. */
 const more = (core: string, ...facts: string[]): string => [core, ...facts.filter((f) => f && f.trim())].join(' ');
 
-/** 뉴스 안정 키 — 안정 식별자(ref: playerId 등) + 헤드라인 조합. 동명이인 충돌 방지(§4.4). 읽음 추적용. */
-export const newsKey = (n: NewsItem) => `${n.season}:${n.kind}:${n.ref ?? ''}:${n.headline}`;
+/** 뉴스 안정 키(§4.4 Step0) — season:kind:kord. kord = (season:kind)당 결정론 순번(문구 무관).
+ *  헤드라인·ref 제외 → 문구를 바꿔도(Step1~3) 읽음추적 불변, 한 선수 다건도 순번이라 충돌 0.
+ *  내용 중복 검사는 별도 contentKey 사용(simNews). */
+export const newsKey = (n: NewsItem) => `${n.season}:${n.kind}:${n.kord ?? n.ref ?? ''}`;
+/** 내용 중복(같은 기사 두 번 방출 버그) 검출용 — 순번 무관, 실제 문구 비교. simNews/가드 전용. */
+export const newsContentKey = (n: NewsItem) => `${n.season}:${n.kind}:${n.headline}:${n.body ?? ''}`;
 
 // ─── 변주 엔진 (NEWS_SYSTEM §4.2) ─────────────────────────────
 // 안정 시드 해시(FNV-1a). 같은 키 → 같은 변형(리플레이 일치), 다른 기사 → 다른 변형.
@@ -164,9 +168,31 @@ export function buildNewsFeed(
   retirements: RetireRecord[] = [], // 은퇴 연표(슬라이스5) — 주목 은퇴자 작별·회고
 ): NewsItem[] {
   const items: NewsItem[] = [];
+  // 뉴스 안정 키(Step0, §4.4): ref = (season:kind)당 결정론 순번(ordinal). 문구 무관 → Step1~3에서
+  // 헤드라인/본문 문구를 바꿔도 읽음추적 키가 불변(백카탈로그가 미읽음으로 재등장하지 않음).
+  // 명시 ref를 주면 그걸 우선(엔티티 앵커). 기사 SET/push 순서는 사실로 결정 → 버전 내 결정론.
+  const kindOrd = new Map<string, number>();
   // 조사 병기("코메츠이(가)") 일괄 교정 — 헤드라인·본문 전체에 받침 기준 적용(NEWS_SYSTEM §4.5).
-  const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string, body?: string, ref?: string) =>
-    items.push({ season, kind, headline: resolveJosa(headline), big, teamId, body: body ? resolveJosa(body) : body, ref });
+  const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string, body?: string, ref?: string) => {
+    // kord = (season:kind)당 결정론 순번 → 읽음키(newsKey) 기반. ref(엔티티 앵커, 이적 게이트용)와 분리해
+    // 한 선수가 시즌에 여러 기사(밀스톤 2개·트리플+폭발 등)를 받아도 읽음키가 충돌하지 않는다(§4.4 Step0).
+    const ok = `${season}:${kind}`;
+    const ord = kindOrd.get(ok) ?? 0;
+    kindOrd.set(ok, ord + 1);
+    items.push({ season, kind, headline: resolveJosa(headline), big, teamId, body: body ? resolveJosa(body) : body, ref, kord: String(ord) });
+  };
+
+  // ── Step1 fact-hook 파생층(§4.4) — archive 스캔으로 "사실"을 만든다(문구 아님). Step2 core가 전제조건으로 골라 씀.
+  //   연패(왕조): archive 내 직전 시즌도 같은 팀 우승 = 참(구단 사전이력과 무관하게 관측 사실이라 가짜드라마 아님).
+  //   ⚠ "구단 첫 우승"·"통산 N번째"는 여기서 만들지 않는다 — 클럽은 게임 시작 전 우승수(clubIdentity.titles: 명문7·황혼5…,
+  //   표시전용)를 이미 갖고 archive는 플레이한 시즌만 담아, archive-only 카운트로 "첫/통산"을 주장하면 명문·황혼팀에 거짓.
+  //   안전히 하려면 클럽 시작 titles를 buildNewsFeed로 배선해야 함(배선 전까지 보류 — 프레이밍 가짜드라마 회피).
+  const champSeasonsBy = new Map<string, number[]>();
+  for (const a of archive) if (a.championId) { const arr = champSeasonsBy.get(a.championId); if (arr) arr.push(a.season); else champSeasonsBy.set(a.championId, [a.season]); }
+  const dynastyRun = (teamId: string, season: number): number => {
+    const ss = champSeasonsBy.get(teamId) ?? []; const idx = ss.indexOf(season); if (idx < 0) return 1;
+    let run = 1; for (let i = idx; i > 0 && ss[i] === ss[i - 1] + 1; i--) run++; return run; // 관측된 연속 우승 시즌 수
+  };
 
   // 1) 역대 시즌 — 우승 + 시상 + 순위·연승·플옵 서사
   for (const a of archive) {
@@ -179,9 +205,11 @@ export function buildNewsFeed(
       const champSeries = a.series?.[a.championId]?.find((s) => s.length >= 3);
       const sweep = champSeries && champSeries.length === 3 && champSeries.every((g) => g === 'W');
       const reverse = champSeries && champSeries.length === 5 && champSeries[0] === 'L' && champSeries[1] === 'L' && champSeries.slice(2).every((g) => g === 'W');
-      const tag = reverse ? ' — 리버스 스윕 대역전' : sweep ? ' — 3-0 스윕' : '';
+      const run = dynastyRun(a.championId, a.season); // 관측된 연속 우승 시즌 수(왕조)
+      const tag = reverse ? ' — 리버스 스윕 대역전' : sweep ? ' — 3-0 스윕' : run >= 2 ? ` — ${run}연패` : '';
       const core = `${teamName(a.championId)}이(가) ${S}시즌 정상에 올랐다.`
         + (reverse ? ' 챔피언결정전에서 2패 뒤 3연승, 리버스 스윕의 대역전 우승이었다.' : sweep ? ' 챔피언결정전을 3-0 스윕으로 끝낸 완벽한 대관식이었다.' : '')
+        + (run >= 3 ? ` ${run}시즌 연속 우승 — 리그를 지배하는 왕조의 시대다.` : run === 2 ? ' 2연패에 성공하며 왕조의 발판을 놓았다.' : '') // 연패는 archive 관측 사실(가짜드라마 아님)
         + (aw?.mvp && aw.mvp.teamId === a.championId ? ` 정규리그 MVP ${pName(aw.mvp.playerId)}을(를) 앞세웠다.` : '') // 우승팀 소속일 때만(타팀 MVP를 "앞세웠다"는 가짜드라마 — 독립리뷰 2026-07-01)
         + (aw?.finalsMvp ? ` 챔프전 MVP는 ${pName(aw.finalsMvp.playerId)}의 몫이었다.` : '');
       push(a.season, 'champion', vh([
