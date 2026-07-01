@@ -182,7 +182,7 @@ export function buildNewsFeed(
       const tag = reverse ? ' — 리버스 스윕 대역전' : sweep ? ' — 3-0 스윕' : '';
       const core = `${teamName(a.championId)}이(가) ${S}시즌 정상에 올랐다.`
         + (reverse ? ' 챔피언결정전에서 2패 뒤 3연승, 리버스 스윕의 대역전 우승이었다.' : sweep ? ' 챔피언결정전을 3-0 스윕으로 끝낸 완벽한 대관식이었다.' : '')
-        + (aw?.mvp ? ` 정규리그 MVP ${pName(aw.mvp.playerId)}을(를) 앞세웠다.` : '')
+        + (aw?.mvp && aw.mvp.teamId === a.championId ? ` 정규리그 MVP ${pName(aw.mvp.playerId)}을(를) 앞세웠다.` : '') // 우승팀 소속일 때만(타팀 MVP를 "앞세웠다"는 가짜드라마 — 독립리뷰 2026-07-01)
         + (aw?.finalsMvp ? ` 챔프전 MVP는 ${pName(aw.finalsMvp.playerId)}의 몫이었다.` : '');
       push(a.season, 'champion', vh([
         (t) => `${S}시즌 우승 — ${t}${tag}`,
