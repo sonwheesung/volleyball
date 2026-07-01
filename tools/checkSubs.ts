@@ -18,7 +18,7 @@ for (const id of ids) sq[id] = getEvolvedTeamPlayers(id, 0);
 const N = Math.max(1, Number(process.argv[2]) || 400);
 
 let matches = 0, withSubs = 0, totalEvents = 0, totalEnters = 0;
-let failConsistency = 0, failNetZero = 0, failOccupant = 0, failOrder = 0;
+let failConsistency = 0, failNetZero = 0, failOccupant = 0, failOrder = 0, failReentry = 0, failReout = 0;
 const kindCount: Record<string, number> = { pinch: 0, block: 0, def: 0 };
 
 let seed = 990000;
@@ -64,6 +64,19 @@ for (let m = 0; m < N; m++) {
     const six = applySubsToSix(baseSix[e.side], e.side, evs, e.point, byId);
     if (six[e.slot]?.id !== e.inId) failOccupant++;
   }
+
+  // (4) FIVB 교체 규칙 — 교체선수는 세트당 1회만 진입(재진입 금지)·선발은 세트당 1왕복(재이탈 금지).
+  //   구조·net-zero·점유자 검사는 핑퐁(in-out-in)도 통과시킴(연출 충실도만 봄) → 규칙 합법성을 별도 검사.
+  //   2026-07-01 도입 전 200경기에 재진입 1316건 검출됐던 도메인-규칙 사각(TEST_METHODOLOGY §4).
+  const enterCnt = new Map<string, number>(); // `${setNo}:${side}:${inId}`
+  const outCnt = new Map<string, number>();    // `${setNo}:${side}:${outId}`(선발 아웃)
+  for (const e of evs) {
+    const k = `${e.setNo}:${e.side}:${e.enter ? e.inId : e.outId}`;
+    if (e.enter) enterCnt.set(k, (enterCnt.get(k) ?? 0) + 1);
+    else outCnt.set(k, (outCnt.get(k) ?? 0) + 1);
+  }
+  for (const c of enterCnt.values()) if (c > 1) failReentry++;
+  for (const c of outCnt.values()) if (c > 1) failReout++;
 }
 
 log(`\n경기 ${matches}건 · 교체 있던 경기 ${withSubs} (${(100 * withSubs / matches).toFixed(0)}%)`);
@@ -75,5 +88,9 @@ assert(failOrder === 0, 'subEvents point 오름차순', failOrder ? ` (위반 ${
 assert(failConsistency === 0, '슬롯 0..5 · in/out id 소속·point 범위', failConsistency ? ` (위반 ${failConsistency})` : '');
 assert(failNetZero === 0, '전체 재생 → base 원복(세트말 net-zero)', failNetZero ? ` (위반 ${failNetZero})` : '');
 assert(failOccupant === 0, 'enter 시점 슬롯 점유자 == inId', failOccupant ? ` (위반 ${failOccupant})` : '');
+assert(failReentry === 0, 'FIVB: 교체선수 세트당 1회만 진입(재진입 금지)', failReentry ? ` (위반 ${failReentry})` : '');
+assert(failReout === 0, 'FIVB: 선발 세트당 1왕복만(재이탈 금지)', failReout ? ` (위반 ${failReout})` : '');
 assert(withSubs > 0, '실제 경기에서 교체가 발동함(연출이 켜짐)');
+const pass = failOrder === 0 && failConsistency === 0 && failNetZero === 0 && failOccupant === 0 && failReentry === 0 && failReout === 0 && withSubs > 0;
 log('완료.');
+process.exit(pass ? 0 : 1);

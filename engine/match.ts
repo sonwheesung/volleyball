@@ -173,13 +173,21 @@ export function simulateMatch(
     const subBudget = { home: SUBS_PER_SET, away: SUBS_PER_SET };
     type SubKind = 'pinch' | 'block' | 'def';
     const activeSubs: Record<Side, Map<number, { orig: Player; kind: SubKind }>> = { home: new Map(), away: new Map() };
+    // FIVB 교체 규칙(세트 단위 리셋) — ① 교체선수는 세트당 1회만 진입(재진입 금지) ② 선발은 세트당 1왕복만(나갔다 돌아온 뒤 재이탈 금지).
+    //   구현 누락으로 같은 스페셜리스트가 예산(6) 남는 한 핑퐁 투입되던 버그 수정(2026-07-01). checkSubs 규칙검사로 박제.
+    const usedSubIn: Record<Side, Set<string>> = { home: new Set(), away: new Set() };       // 이 세트에 이미 투입된 교체선수 id
+    const usedStarterOut: Record<Side, Set<string>> = { home: new Set(), away: new Set() };  // 이 세트에 이미 교체 아웃된 선발 id
     const subIn = (side: Side, slot: number, player: Player | null, kind: SubKind): void => {
       if (!player) return;
       const st = teamOf(side);
       if (activeSubs[side].has(slot) || subBudget[side] < 2) return;
       // 이미 코트에 있으면 불가 — 같은 벤치 스페셜리스트가 두 슬롯에 중복 투입되는 것 방지
       if (st.six.some((p) => p.id === player.id)) return;
+      if (usedSubIn[side].has(player.id)) return; // FIVB: 교체선수는 세트당 1회만 진입(재진입 금지)
       const outP = st.six[slot];
+      if (usedStarterOut[side].has(outP.id)) return; // FIVB: 선발은 세트당 1왕복만(돌아온 선발 재이탈 금지)
+      usedSubIn[side].add(player.id);
+      usedStarterOut[side].add(outP.id);
       activeSubs[side].set(slot, { orig: outP, kind });
       st.six[slot] = player;
       if (!st.stam.has(player.id)) { st.stam.set(player.id, 1); tracked[side].push(player); }
