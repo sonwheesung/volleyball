@@ -41,6 +41,7 @@
 | **단위정합** | 상수 손복제 drift(시즌길이·임계)·만원↔억·세트당↔경기당 | 은밀한 오차 |
 | **교차계층 귀속** | 보드가 보여준 선수 == 박스 귀속(스코어박스 충실도) | 표시 거짓 |
 | **A/B 오라클** | 모든 측정이 깬 입력에 무너지나(허위 오라클 차단) | 검증 자체 거짓 |
+| **기능 순효과(effect A/B)** | 배선·결정론·문서 ✅인 기능이 **실제로 효과가 있나** — with vs without(주전 vs 벤치·감독 공격형 vs 수비형·부스트 on/off)로 순효과≠0 확인. **다른 시스템(상한 선점·saturation)이 조용히 무력화하나?** | 죽은 기능(문서엔 ✅, 효과 0) |
 
 ## run 환류 (자기보강 누적 — 매 run의 6단계가 append)
 
@@ -66,6 +67,9 @@
     NaN이 캡·affinity·성장으로 전파(클러스터 D 다수 세션). save-corruption 내성을 표준 렌즈로.
   - **[사각] cross-metric 정합** — 클러스터 B(clinch는 승수, standings는 승점)를 season 2세션만 잡음. 다른 season 세션은
     clinch의 *내부* wins 일관성만 봐 surveyed에 OK 기록 → **"같은 개념을 두 모듈이 다른 지표로 계산하나"** 각도가 사각이었음. 서브렌즈 추가.
+- **(2026-07-01 · 기능 순효과 사각 발견 — 성장)** **경기경험(`experience.applyMatchXp`)·감독선호(`training.coachShare`)가 둘 다 inert**(문서엔 §1.7 "✅ 구현", 실제 순효과 0): 주전 34경기 vs 벤치 0경기 성장 **+0**, 공격형 vs 수비형 감독 최종 OVR **차이 0**. 원인=훈련(POS_FLOOR 0.24 + BASE)이 **모든 스탯을 22세에 포텐까지 saturate** → 경기XP·감독선호가 얹힐 head 0, 게다가 감독핵심 0.25 ≈ POS_FLOOR 0.24라 선호가 속도조차 못 바꿈.
+  - **[신규 표준 렌즈 승격] 기능 순효과(effect A/B)** — 이걸 **어느 렌즈도 못 잡았다**: 불변식·분포·결정론·문서drift·경계극단 전부 통과(코드는 배선·결정론·문서일치 ✅). 유일한 검출각 = "with vs without 순효과≠0". `experience.ts` 전용 가드가 **0개**였음(tools grep=transitive import뿐). → **모든 성장/부스트/보정/선호 입력에 effect A/B 가드 필수**. 형제: 케미(`chemistry`)·form·trait 보정도 순효과 미검증 의심 → 다음 run 배정.
+  - **[방법] cross-system saturation** — "A 시스템이 천장을 먼저 선점하면 B 시스템이 문서상 존재해도 죽는다". 단일 시스템 테스트로 안 보임(상호작용). 성장처럼 **여러 입력이 같은 상한(포텐)을 공유**하는 곳은 항상 "각 입력의 marginal 기여" A/B.
 - **(2026-06-29 · edge-swarm run 108세션)** 엣지 542(WAI 83·기지 88·신규고합의 38). 신규 실버그 2종(FINANCE 2.0)·기지 재확인([D]NaN·[E]가용<7).
   - **[표준 승격] "새 표면 우선 재스윕"** — 직전 run(06-27) 이후 추가된 FINANCE 2.0(sponsorStance·leagueHistory·AI입찰)에서 **신규 실버그 2종**(EC-FN-01 preview≠result·EC-FN-02 음수오퍼)을 10+세션이 수렴 발견. 기존 area는 대부분 기지/WAI 재확인. → **"기능 추가 직후 그 표면을 area로 명시 배정하고 재스윕"** 을 표준화(새 코드가 가장 버그 밀도 높음).
   - **[표준 승격] "형제 비대칭(parallel reconstruction)" = preview=result 최강 렌즈** — 같은 개념(stance)을 두 경로가 도출(내 팀 보너스=라이브 병합 ✓ / AI 입찰=archive-only ✗)하는데 **한쪽만 고쳐진** 비대칭을 cross-metric+동시성 세션이 수렴. preview=result는 **단일 시점이 아니라 "프리뷰 시점 vs 확정 시점의 컨텍스트(archive) 상태차"** 를 대조해야 보임 → 그 시점차 렌즈를 명시.
