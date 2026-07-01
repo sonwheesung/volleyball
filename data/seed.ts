@@ -85,6 +85,16 @@ function rollTalent(rng: Rng): number {
   return 0.60 + rng.next() * 0.20;               // D
 }
 
+/** 포지션별 전성기 나이 범위 (GPT 리뷰 2026-07-01) — aging.ts가 노쇠 시작 시점으로 실제 사용.
+ *  신장의존형(MB)은 이르고, 경험형(세터·리베로)은 늦다. 구: MB 26 / 기타 28 고정. */
+const PEAK_AGE_RANGE: Record<Position, [number, number]> = {
+  MB: [24, 26], OH: [25, 28], OP: [25, 28], S: [28, 31], L: [29, 33],
+};
+const peakAgeFor = (pos: Position, rng: Rng): number => {
+  const [lo, hi] = PEAK_AGE_RANGE[pos];
+  return rng.int(lo, hi);
+};
+
 export function makePlayer(
   rng: Rng,
   id: string,
@@ -172,7 +182,7 @@ export function makePlayer(
     catTalent,
     contract: { salary: 0, years: yearsAgo + remaining, remaining, signedAtAge },
     clubTenure: Math.max(0, age - 19), // 시드는 자팀 육성(홈그로운) 가정
-    peakAge: pos === 'MB' ? 26 : 28,
+    peakAge: peakAgeFor(pos, rng),
     career: { ...emptyCareer(), seasons: Math.max(0, age - 19) }, // 데뷔 추정
   };
   player.contract.salary = computeSalary(player, signedAtAge, rng);
@@ -237,7 +247,7 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
     xp: {}, potential, talentBase, catTalent,
     contract: { salary: 0, years: 3, remaining: 3, signedAtAge: age },
     clubTenure: 0,
-    peakAge: pos === 'MB' ? 26 : 28,
+    peakAge: peakAgeFor(pos, rng),
     career: emptyCareer(),
   };
   player.contract.salary = computeSalary(player, age, rng);

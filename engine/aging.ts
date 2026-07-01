@@ -4,7 +4,7 @@
 // 성장과 같은 숨은 XP 바를 음수로 적립: xp <= -1 → 스탯 -1 (FLOOR 까지).
 // 순수 함수 + 시드 결정론.
 
-import type { Player, TrainableStat } from '../types';
+import type { Player, Position, TrainableStat } from '../types';
 import type { Rng } from './rng';
 import { agingTraitMult } from './traits';
 
@@ -14,14 +14,20 @@ export const FLOOR = 25;
 /** 나이 들며 하락하는 신체 스탯 (CLAUDE.md 5.1: 점프·민첩·체력·체젠) */
 export const DECAY_STATS: TrainableStat[] = ['jump', 'agility', 'staminaMax', 'staminaRegen'];
 
-// 일일 노쇠 XP 적립률 (매 캘린더일, placeholder — TRAINING_SYSTEM 1.6). 바가 -1 도달 시 스탯 -1.
-function decayRate(age: number): number {
-  if (age <= 27) return 0;
-  if (age <= 29) return 0.002;
-  if (age <= 31) return 0.004;
-  if (age <= 33) return 0.007;
-  if (age <= 35) return 0.012;
-  return 0.018;
+/** 포지션별 노쇠 속도 배수 (CLAUDE 5.3 "MB 신체의존↑ 전성기 짧고 노쇠 빠름" 구현, GPT 리뷰 2026-07-01).
+ *  신장·점프 의존이 큰 포지션일수록 빨리, 경험형(세터·리베로)일수록 느리게. */
+export const POS_DECAY: Record<Position, number> = { MB: 1.20, OP: 1.10, OH: 1.00, S: 0.85, L: 0.75 };
+
+// 일일 노쇠 XP 적립률 — **peakAge 이후 경과연수(d) 기준**(peakAge를 실제 사용: 포지션별 전성기 시점 반영,
+// GPT 리뷰 2026-07-01). 바가 -1 도달 시 스탯 -1. (구: 나이 27 고정 onset → peakAge 상대로 교체)
+function decayRate(age: number, peakAge: number): number {
+  const d = age - peakAge; // 전성기 지난 햇수
+  if (d <= 0) return 0;
+  if (d <= 2) return 0.003;   // Fix③(2026-07-01): 신체 하락 ~1.5× 상향 — 노장 OVR 체감 확보(측정 튜닝)
+  if (d <= 4) return 0.006;
+  if (d <= 6) return 0.011;
+  if (d <= 8) return 0.018;
+  return 0.028;
 }
 
 /**
@@ -29,8 +35,8 @@ function decayRate(age: number): number {
  * 신체 스탯만 음수로 적립 → -1 도달 시 스탯 -1 (FLOOR 까지).
  */
 export function applyAgingDay(p: Player, rng: Rng, ageSlow = 0): Player {
-  // 체력 코치(ageSlow)가 노쇠 둔화 + 특성(대기만성 둔화/짧은전성기 가속)
-  const rate = decayRate(p.age) * (1 - Math.max(0, Math.min(0.6, ageSlow))) * agingTraitMult(p.traits);
+  // 체력 코치(ageSlow)가 노쇠 둔화 + 특성(대기만성 둔화/짧은전성기 가속) + 포지션 배수(MB 빠름·L 느림)
+  const rate = decayRate(p.age, p.peakAge) * POS_DECAY[p.position] * (1 - Math.max(0, Math.min(0.6, ageSlow))) * agingTraitMult(p.traits);
   if (rate <= 0) return p;
 
   const next = { ...p } as Player;

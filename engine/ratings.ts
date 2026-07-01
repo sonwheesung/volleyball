@@ -33,12 +33,13 @@ export function deriveRatings(p: Player): Ratings {
     // 스파이크 = f(키, 점프력, 공격기술) × 기복보정.
     //   키는 풀레인지(spikeHeight)로 — 장신 공격수가 제대로 보상받게.
     //   consistency는 ×c(−30%)가 아니라 (0.8+0.2·c) 약보정 — 기복은 OVR 멘탈로도 별도 반영.
-    spike: clamp((0.28 * spikeHeight(p.height) + 0.32 * jump + 0.4 * norm(p.skSpike)) * 100 * (0.8 + 0.2 * consistency)),
-    // 블로킹 = f(키, 점프력, 반응속도, 블로킹기술)
+    // Fix③(2026-07-01): 신체(점프) 가중↑(0.32→0.40)·기술↓ — 기술은 노쇠 안 하니 신체 하락이 OVR에 보이게(노장 체감). 합=1 유지.
+    spike: clamp((0.26 * spikeHeight(p.height) + 0.40 * jump + 0.34 * norm(p.skSpike)) * 100 * (0.8 + 0.2 * consistency)),
+    // 블로킹 = f(키, 점프력, 반응속도, 블로킹기술) — Fix③ 점프 0.25→0.34
     //   키는 완화 레인지(blockHeight) — 장신 보상은 살리되 팀 간 격차 폭주 방지(2026-06)
-    block: clamp((0.3 * blockHeight(p.height) + 0.25 * jump + 0.2 * reaction + 0.25 * norm(p.skBlock)) * 100),
-    // 디그 = f(민첩성, 반응속도, 위치선정, 디그기술) — 반응 비중↓·전용기술↑(2026-06-14, 반응 과대 가중 보정)
-    dig: clamp((0.25 * agility + 0.2 * reaction + 0.25 * positioning + 0.3 * norm(p.skDig)) * 100),
+    block: clamp((0.26 * blockHeight(p.height) + 0.34 * jump + 0.18 * reaction + 0.22 * norm(p.skBlock)) * 100),
+    // 디그 = f(민첩성, 반응속도, 위치선정, 디그기술) — Fix③ 민첩 0.25→0.34(민첩은 노쇠 → 노장 디그 하락 체감)
+    dig: clamp((0.34 * agility + 0.18 * reaction + 0.22 * positioning + 0.26 * norm(p.skDig)) * 100),
     // 리시브 = f(반응속도, 위치선정, 리시브기술) — 반응(0.35→0.25)↓·리시브기술(0.35→0.45)↑
     //   반응속도가 전용 기술과 동급이던 걸 완화 — 리시브는 기술·읽기 주도(2026-06-14)
     receive: clamp((0.25 * reaction + 0.3 * positioning + 0.45 * norm(p.skReceive)) * 100),
