@@ -126,6 +126,10 @@ export default function MyPage() {
         sub="게임 소개 + 화면 안내를 처음부터"
         onPress={() => { replayOnboarding(); resetTips(); router.replace('/onboarding'); }} />
 
+      <LinkCard icon="chatbubble-ellipses-outline" tint={theme.sky} title="문의하기"
+        sub="오류 · 건의 · 질문 — 최근 기록 진단 정보 자동 첨부"
+        onPress={() => router.push('/support')} />
+
       {/* ── 상점 (MONETIZATION_SYSTEM) — 광고 제거 · 월드컵 시즌 구매. dev=시뮬, 운영=RevenueCat ── */}
       <Text style={styles.section}>상점</Text>
       <LinkCard icon="diamond-outline" tint={theme.sky} title="다이아 구매"
