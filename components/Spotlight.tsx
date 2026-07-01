@@ -8,6 +8,7 @@ import { usePathname } from 'expo-router';
 import { useGameStore } from '../store/useGameStore';
 import { tipsForScreen } from '../data/tutorialSteps';
 import { theme } from './Screen';
+import { themedStyles } from './theme';
 
 // 현재 경로(expo-router usePathname)를 스포트라이트 screen 키로 환원. **Provider에서 한 번만** 계산해 모든
 // 오버레이가 같은 값을 공유 → at most one만 매치 → "이중 스포트라이트" 구조적 불가(탭마다 각자 포커스로 인식하던
@@ -165,11 +166,11 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   card: { position: 'absolute', backgroundColor: theme.card, borderRadius: 16, padding: 16, gap: 6,
     shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 16, shadowOffset: { width: 0, height: 6 }, elevation: 12 },
   step: { color: theme.accent, fontSize: 12, fontWeight: '800' },
   title: { color: theme.text, fontSize: 18, fontWeight: '800' },
   body: { color: theme.text, fontSize: 14, lineHeight: 21 },
   hint: { color: theme.muted, fontSize: 12, fontWeight: '700', marginTop: 4 },
-});
+}));

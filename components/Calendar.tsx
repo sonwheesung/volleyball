@@ -5,6 +5,7 @@ import { dateForDay } from '../lib/calendar';
 import { getTeam } from '../data/league';
 import type { MatchResult, ScheduleEntry } from '../types';
 import { theme } from './Screen';
+import { themedStyles } from './theme';
 
 function shortName(teamId: string): string {
   const n = getTeam(teamId)?.name ?? '';
@@ -114,7 +115,7 @@ export function Calendar({ entries, results, focusDayIndex }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   wrap: { backgroundColor: theme.card, borderRadius: 14, padding: 10, gap: 6, borderWidth: 1, borderColor: theme.border },
   header: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 8 },
   month: { color: theme.text, fontSize: 17, fontWeight: '800' },
@@ -137,4 +138,4 @@ const styles = StyleSheet.create({
   matchText: { color: theme.accent, fontSize: 9, fontWeight: '700', textAlign: 'center' },
   resBadge: { fontSize: 10, fontWeight: '800' },
   eventDot: { marginTop: 4, width: 5, height: 5, borderRadius: 3, backgroundColor: theme.muted },
-});
+}));

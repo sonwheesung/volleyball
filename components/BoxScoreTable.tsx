@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { PosTag, theme } from './Screen';
+import { themedStyles } from './theme';
 import { buildLineup } from '../engine/lineup';
 import { emptyBox } from '../engine/rally';
 import type { Player } from '../types';
@@ -115,7 +116,7 @@ export function BoxScoreTable({ squad, box }: { squad: Player[]; box: BoxSink | 
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
   grpRow: { paddingBottom: 2 },
   grpTxt: { color: theme.accent, fontSize: 10.5, fontWeight: '800', textAlign: 'center', textTransform: 'uppercase', borderBottomWidth: 2, borderBottomColor: theme.accent, paddingBottom: 3 },
@@ -131,4 +132,4 @@ const styles = StyleSheet.create({
   tot: { borderTopWidth: 2, borderTopColor: theme.border, backgroundColor: theme.bg },
   totTxt: { color: theme.text, fontWeight: '800', fontSize: 12.5, textAlign: 'center', paddingVertical: 7, borderBottomWidth: 0 },
   empty: { color: theme.muted, fontSize: 13, textAlign: 'center', paddingVertical: 24 },
-});
+}));

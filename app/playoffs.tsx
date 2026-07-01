@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Muted, Screen, Title, theme } from '../components/Screen';
+import { Button, Card, IconLabel, Muted, Screen, Title, theme, themedStyles } from '../components/Screen';
 import { getTeam, getPlayer } from '../data/league';
 import { buildPlayoffs, type Matchup } from '../data/playoffs';
 import { currentSeasonAwards } from '../data/awards';
@@ -113,7 +113,7 @@ export default function Playoffs() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   seed: { color: theme.text, fontSize: 15, fontWeight: '600', marginTop: 2 },
   matchup: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 },
   team: { flex: 1, color: theme.text, fontSize: 15, fontWeight: '600' },
@@ -121,4 +121,4 @@ const styles = StyleSheet.create({
   games: { color: theme.muted, fontSize: 12, textAlign: 'center', marginTop: 4 },
   win: { color: theme.good, fontWeight: '800' },
   mine: { color: theme.accent },
-});
+}));

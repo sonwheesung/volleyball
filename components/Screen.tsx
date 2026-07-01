@@ -10,33 +10,11 @@ import { POS_COLOR, POS_LABEL } from './posTokens';
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
 export const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
 
-// 시네마틱 글래스 디자인 시스템 — 2026-06-27 다크 글래스 전환(구 KOVO 라이트 테마 폐기, UI-7).
-// 키는 그대로 유지하고 값만 다크화 → 전 화면 자동 재스킨.
-// 카드는 **다크 반투명**(2026-06-28 교정): 흰색 0.06 반투명은 뒤 코트/네트가 비쳐 내용 집중이
-// 어렵다는 사용자 보고 → 어두운 틴트(0.82~0.85)로 배경을 가려 또렷하게. 은은한 투과+헤어라인+그림자로
-// 글래스 질감은 유지. cardAlt는 카드 위/배경 위 모두에서 보이도록 카드보다 한 톤 밝은 다크.
-export const theme = {
-  bg: '#0B1018',                      // 다크 베이스(배경 이미지 뒤·헤더)
-  card: 'rgba(16,22,34,0.86)',        // 프로스티드 다크 글래스 카드(배경 차폐 — 가독성)
-  cardAlt: 'rgba(40,50,68,0.92)',     // 트랙·세그먼트·칩·스켈레톤(카드보다 한 톤 밝게)
-  text: '#F2F5FA',                    // 밝은 잉크
-  muted: '#9AA7BC',                   // 보조 텍스트
-  accent: '#19C2AE',                  // 틸 민트(프라이머리) — 다크에서 또렷
-  good: '#2BD17E',                    // 승/긍정
-  warn: '#F2A93B',                    // 주의
-  bad: '#FF6B5A',                     // 코랄(패/위험·외국인)
-  elite: '#5B9BFF',                   // OVR 88+ 엘리트(블루칩)
-  border: 'rgba(255,255,255,0.14)',   // 글래스 헤어라인(다크 카드 위 엣지 하이라이트)
-  accentGlass: 'rgba(25,194,174,0.16)', // 액센트 글래스 — primary 버튼(accent #19C2AE=rgb 25,194,174의 16% 틴트)
-  gold: '#E8C46A',                    // 절제된 골드(우승·트로피·로고 한정)
-  // 카테고리 장식 색(UI-12) — 의미 없음, 메뉴/카드를 색으로 구분해 다크 단조로움 해소. 다크 위에서 또렷한 채도.
-  violet: '#9B7BFF',                  // 보라
-  sky: '#46C8FF',                     // 하늘/시안
-  rose: '#FF7BA6',                    // 로즈/핑크
-};
-
-// 전역 배경 — 다크 아레나(GPT 생성). Screen 래퍼가 모든 화면에 깐다. select-team도 동일 파일 사용.
-const BG = require('../assets/bg/court.png');
+// 디자인 시스템 색·테마는 components/theme.ts(다크/라이트 토글, 2026-07-01). 여기선 재수출(기존 import 경로 유지)
+// + 렌더 시 스타일(themedStyles)·모드별 배경/스크림(themeAssets)만 사용.
+import { theme, themeAssets, themedStyles, useThemeMode, setThemeMode } from './theme';
+export { theme, themeAssets, themedStyles, useThemedStyles, useThemeMode, setThemeMode } from './theme';
+export type { ThemeMode } from './theme';
 
 interface ScreenProps {
   title?: string;
@@ -48,6 +26,7 @@ interface ScreenProps {
  *  상단은 네비게이션 헤더가 담당(전 Stack/Tabs 화면이 헤더 보유)하므로 top edge는 제외 —
  *  헤더 있는 화면에 top inset을 또 주면 이중 여백이 된다. */
 export function Screen({ title, children, scroll = true }: ScreenProps) {
+  useThemeMode(); // 테마 토글 시 리렌더(배경·스크림 갱신)
   const inner = (
     <>
       {title ? <Text style={styles.title}>{title}</Text> : null}
@@ -55,9 +34,9 @@ export function Screen({ title, children, scroll = true }: ScreenProps) {
     </>
   );
   return (
-    <ImageBackground source={BG} style={styles.bgRoot} resizeMode="cover">
-      {/* 가독성 스크림 — 다크 톤으로 깔아 글래스 카드/텍스트가 스포트라이트 위에서도 읽히게(콘텐츠 화면은 다소 강하게) */}
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, styles.scrim]} />
+    <ImageBackground source={themeAssets.bg} style={styles.bgRoot} resizeMode="cover">
+      {/* 가독성 스크림 — 모드별 톤(다크=검정 베일 / 라이트=밝은 베일)으로 배경 위 카드·텍스트 가독 */}
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: themeAssets.scrim }]} />
       <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
         {scroll ? (
           <ScrollView style={styles.safe} contentContainerStyle={styles.contentScroll}>
@@ -181,7 +160,14 @@ export function useDeferredReady(): boolean {
 }
 
 // accent: 좌측 컬러 바(카테고리 구분, UI-12). borderLeftWidth를 키워 라운드 코너 자동 준수(overflow 불필요).
-export function Card({ children, onPress, accent }: { children: ReactNode; onPress?: () => void; accent?: string }) {
+// flat: 정보(읽기용) 패널 — 그림자·좌측 컬러바 없이 납작하게. 탭 카드(입체+화살표)와 시각 구분(UI-13, 2026-07-01).
+//   accent를 줘도 flat이면 좌측 바 대신 얇은 상단 헤어라인만(색은 유지하되 "버튼 아님" 신호).
+export function Card({ children, onPress, accent, flat }: { children: ReactNode; onPress?: () => void; accent?: string; flat?: boolean }) {
+  if (flat) {
+    // 정보 패널: 상하좌우 전체 보더를 accent 색으로(입체감 없이 색 테두리로 카테고리 표시). 탭 카드와 구분 유지.
+    const borderAccent = accent ? { borderColor: accent + '99', borderWidth: 1.5 } : null;
+    return <View style={[styles.cardFlat, borderAccent]}>{children}</View>;
+  }
   const accentStyle = accent ? { borderLeftWidth: 4, borderLeftColor: accent } : null;
   if (onPress) {
     return (
@@ -335,10 +321,10 @@ export function EmptyState({ message }: { message: string }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   bgRoot: { flex: 1, backgroundColor: theme.bg },
   safe: { flex: 1, backgroundColor: 'transparent' },
-  scrim: { backgroundColor: 'rgba(7,10,16,0.62)' },
+  scrim: { backgroundColor: 'rgba(236,241,247,0.72)' }, // [라이트] 밝은 베일 강화 — 산만한 사진을 부드러운 밝은 면으로
   content: { padding: 16, gap: 12 },
   contentScroll: { padding: 16, paddingBottom: 32, gap: 12 }, // 스크롤 하단 여유(실제 inset은 SafeAreaView가 처리)
   title: { color: theme.text, fontSize: 24, fontWeight: '800', marginBottom: 2 },
@@ -348,6 +334,11 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: theme.border,
     shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 6 },
     elevation: 4,
+  },
+  // 정보(읽기용) 패널 — 입체감(그림자/elevation) 없이 납작. 탭 카드와 구분(UI-13). 배경은 theme.card라 다크/라이트 자동 반전.
+  cardFlat: {
+    backgroundColor: theme.card, borderRadius: 12, padding: 14, gap: 8,
+    borderWidth: 1, borderColor: theme.border,
   },
   muted: { color: theme.muted, fontSize: 14, lineHeight: 20 },
   loadingMsg: { color: theme.muted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
@@ -385,4 +376,4 @@ const styles = StyleSheet.create({
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 40 },
   emptyStateText: { color: theme.muted, fontSize: 15, lineHeight: 22, textAlign: 'center' },
-});
+}));

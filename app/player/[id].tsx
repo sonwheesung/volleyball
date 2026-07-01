@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Alert, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
-import { Button, Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, StatBar, theme } from '../../components/Screen';
+import { Button, Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, StatBar, theme, themedStyles } from '../../components/Screen';
 import { faceFor } from '../../data/playerFace';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchetypeOf, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans } from '../../engine/owner';
@@ -595,7 +595,7 @@ export default function PlayerDetail() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   fogBadge: { width: 62, height: 62, borderRadius: 31, borderWidth: 2, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
   fogOvrTxt: { color: theme.muted, fontSize: 15, fontWeight: '900' },
   fogOvrCap: { color: theme.muted, fontSize: 9, fontWeight: '700' },
@@ -603,9 +603,9 @@ const styles = StyleSheet.create({
   avatarImg: { width: 84, height: 84, resizeMode: 'cover' },
   pName: { color: theme.text, fontSize: 24, fontWeight: '900' },
   divider: { height: 1, backgroundColor: theme.border, marginVertical: 10 },
-});
+}));
 
-const mstyles = StyleSheet.create({
+const mstyles = themedStyles(() => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#0B121CCC', alignItems: 'center', justifyContent: 'center', padding: 24 },
   dialog: { width: '100%', maxWidth: 420, backgroundColor: theme.card, borderRadius: 18, padding: 20, gap: 8 },
   title: { color: theme.text, fontSize: 18, fontWeight: '900' },
@@ -624,4 +624,4 @@ const mstyles = StyleSheet.create({
     shadowColor: theme.accent, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 3 },
   },
   primaryTxt: { color: theme.accent, fontSize: 15, fontWeight: '800', letterSpacing: 0.3 },
-});
+}));

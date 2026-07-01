@@ -2,7 +2,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { ImageBackground, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { IconLabel, Loading, PosTag, theme, useDeferredReady } from '../components/Screen';
+import { IconLabel, Loading, PosTag, theme, themeAssets, themedStyles, useDeferredReady } from '../components/Screen';
 import { getTeam, shortTeamName as short, teamPlayerIds } from '../data/league';
 import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, type RecordCat } from '../data/records';
 import { useGameStore } from '../store/useGameStore';
@@ -38,8 +38,8 @@ function RecordsInner() {
   const max = rows[0]?.value ?? 1;
 
   return (
-    <ImageBackground source={require('../assets/bg/court.png')} style={styles.bgRoot} resizeMode="cover">
-      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(7,10,16,0.62)' }]} />
+    <ImageBackground source={themeAssets.bg} style={styles.bgRoot} resizeMode="cover">
+      <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: themeAssets.scrim }]} />
       <SafeAreaView style={styles.root} edges={['bottom', 'left', 'right']}>
       <ScrollView contentContainerStyle={styles.scroll}>
         <Text style={styles.h1}>{titleScope}{meta.label}</Text>
@@ -116,7 +116,7 @@ function RecordsInner() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   bgRoot: { flex: 1, backgroundColor: theme.bg },
   root: { flex: 1, backgroundColor: 'transparent' },
   scroll: { padding: 16, paddingBottom: 28 },
@@ -148,4 +148,4 @@ const styles = StyleSheet.create({
   barFill: { height: 4, borderRadius: 2 },
   empty: { padding: 32, alignItems: 'center' },
   emptyTxt: { color: theme.muted, fontSize: 14 },
-});
+}));

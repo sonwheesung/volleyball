@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { EmptyState, Loading, Screen, theme, useDeferredReady } from '../components/Screen';
+import { EmptyState, Loading, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { buildNewsFeed, newsKey } from '../data/news';
 import { leagueDisplayDay } from '../data/standings';
 import { useGameStore } from '../store/useGameStore';
@@ -79,7 +79,7 @@ function NewsListInner() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: theme.card, borderRadius: 12, padding: 14,
@@ -89,4 +89,4 @@ const styles = StyleSheet.create({
   head: { color: theme.text, fontSize: 15, fontWeight: '700', lineHeight: 20 },
   meta: { color: theme.muted, fontSize: 12, marginTop: 4 },
   arrow: { color: theme.accent, fontSize: 22, fontWeight: '900' },
-});
+}));

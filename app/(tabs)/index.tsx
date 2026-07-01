@@ -78,7 +78,7 @@ export default function Dashboard() {
     <Screen title={team.name} scroll={false}>
       {/* 전력 + 성적 */}
       <SpotlightTarget id="dash-top">
-        <Card accent={theme.elite}>
+        <Card accent={theme.elite} flat>
           <Row>
             <View>
               <IconLabel icon="barbell-outline" color={theme.elite}>팀 종합 전력</IconLabel>
@@ -97,7 +97,7 @@ export default function Dashboard() {
 
       {/* 재정 — 한 장 요약(상세 기록은 마이페이지 → 기록) */}
       <SpotlightTarget id="dash-finance">
-        <Card accent={theme.warn}>
+        <Card accent={theme.warn} flat>
           <Row>
             <IconLabel icon="card-outline" color={theme.warn}>총연봉 / 캡</IconLabel>
             <Text style={{ color: payroll > LEAGUE_CAP ? theme.bad : theme.text, fontWeight: '800' }}>

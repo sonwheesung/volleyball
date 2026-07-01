@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal } from '../data/league';
@@ -141,7 +141,7 @@ function DraftCenterInner() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: theme.card, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10,
@@ -150,4 +150,4 @@ const styles = StyleSheet.create({
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   pot: { color: theme.warn, fontWeight: '800', width: 40, textAlign: 'center' },
-});
+}));

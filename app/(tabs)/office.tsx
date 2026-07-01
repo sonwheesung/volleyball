@@ -22,8 +22,8 @@ export default function Office() {
   const total = payroll(roster.filter((p) => !p.isForeign));
 
   return (
-    <Screen title="단장실" scroll={false}>
-      <Card accent={theme.warn}>
+    <Screen scroll={false}>
+      <Card accent={theme.warn} flat>
         <Row>
           <IconLabel icon="wallet-outline" color={theme.warn}>팀 총연봉 / 예산</IconLabel>
           <Text style={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '800' }}>

@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Muted, Screen, theme } from '../components/Screen';
+import { Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 
 const ROSE = '#FF5C8D';
@@ -60,7 +60,7 @@ export default function Credits() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   headWrap: { alignItems: 'center', gap: 6, paddingVertical: 14 },
   logo: { color: theme.text, fontSize: 28, fontWeight: '900' },
   section: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 16, marginBottom: 6, marginLeft: 2 },
@@ -74,4 +74,4 @@ const styles = StyleSheet.create({
   youTxt: { color: theme.text, fontSize: 14, fontWeight: '800' },
   cta: { flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: ROSE + '12', borderRadius: 12, borderWidth: 1, borderColor: ROSE + '33', paddingVertical: 13, paddingHorizontal: 12 },
   ctaTxt: { flex: 1, color: ROSE, fontSize: 14, fontWeight: '800' },
-});
+}));

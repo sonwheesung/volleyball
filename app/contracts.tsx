@@ -3,7 +3,7 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
+import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles } from '../components/Screen';
 import { ActionSheet } from '../components/Popup';
 import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
 import { teamRelations } from '../data/relationships';
@@ -271,7 +271,7 @@ export default function Contracts() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: theme.card, borderRadius: 12, padding: 12,
@@ -284,4 +284,4 @@ const styles = StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8 },
   btn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
   btnText: { fontSize: 14, fontWeight: '800' },
-});
+}));

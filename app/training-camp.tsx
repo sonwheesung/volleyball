@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Muted, PosTag, Screen, theme } from '../components/Screen';
+import { Button, Card, IconLabel, Muted, PosTag, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { getPlayer, teamPlayerIds } from '../data/league';
 import { TRAINABLE_STATS } from '../engine/training';
@@ -152,7 +152,7 @@ export default function TrainingCamp() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   bal: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginBottom: 6 },
   gem: { fontSize: 16 }, balN: { color: theme.text, fontSize: 18, fontWeight: '900' },
   prow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 14, paddingVertical: 11, marginTop: 6 },
@@ -173,4 +173,4 @@ const styles = StyleSheet.create({
   spot: { color: theme.muted, fontSize: 12, width: 96, textAlign: 'right' },
   footer: { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10, gap: 6 },
   costTxt: { color: theme.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
-});
+}));

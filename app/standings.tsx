@@ -1,7 +1,7 @@
 // 리그 순위표 전용 화면 — 대시보드 "리그 순위"에서 진입(순위만 본다).
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Card, IconLabel, Screen, theme } from '../components/Screen';
+import { Card, IconLabel, Screen, theme, themedStyles } from '../components/Screen';
 import { computeStandings, leagueDisplayDay } from '../data/standings';
 import { getTeam } from '../data/league';
 import { useGameStore } from '../store/useGameStore';
@@ -49,7 +49,7 @@ export default function Standings() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', paddingVertical: 5 },
   head: { borderBottomWidth: 1, borderBottomColor: theme.border, marginBottom: 2, paddingBottom: 6 },
   h: { color: theme.muted, fontSize: 12, fontWeight: '700' },
@@ -58,4 +58,4 @@ const styles = StyleSheet.create({
   cell: { width: 40, textAlign: 'center', color: theme.text, fontSize: 14 },
   pts: { fontWeight: '800', color: theme.text }, // 승점 — 순위 결정 1순위라 강조
   mine: { color: theme.accent, fontWeight: '800' },
-});
+}));

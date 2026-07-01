@@ -4,6 +4,7 @@ import type { Player } from '../types';
 import { overall, overallRaw, displayOvr, fogOvr } from '../engine/overall';
 import { formatMoney } from '../engine/salary';
 import { OvrBadge, PosTag, theme } from './Screen';
+import { themedStyles } from './theme';
 import { POS_COLOR, POS_ORDER } from './posTokens';
 
 export interface RosterDecor { dotColor?: string; mood?: string }
@@ -65,7 +66,7 @@ export function RosterList({ players, decor, starterIds, sort = 'position', reve
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -85,4 +86,4 @@ const styles = StyleSheet.create({
   salary: { color: theme.text, fontSize: 13, fontWeight: '800', minWidth: 52, textAlign: 'right' },
   fogOvr: { width: 46, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
   fogOvrTxt: { color: theme.muted, fontSize: 12, fontWeight: '800' },
-});
+}));

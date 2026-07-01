@@ -4,7 +4,7 @@
 import { Redirect } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Dimensions, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, Screen, theme } from '../components/Screen';
+import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { POS_COLOR } from '../components/posTokens';
 import { LEAGUE, getEvolvedTeamPlayers, getTeam } from '../data/league';
 import { DEV_TOOLS } from '../data/flags';
@@ -252,7 +252,7 @@ function Ctl({ label, onPress }: { label: string; onPress: () => void }) {
   );
 }
 
-const st = StyleSheet.create({
+const st = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', gap: 8, justifyContent: 'center', flexWrap: 'wrap' },
   ctl: { borderWidth: 1, borderColor: theme.accent, borderRadius: 8, paddingHorizontal: 14, paddingVertical: 8 },
   ctlTxt: { color: theme.accent, fontWeight: '800', fontSize: 13 },
@@ -268,4 +268,4 @@ const st = StyleSheet.create({
     position: 'absolute', width: 14, height: 14, borderRadius: 7,
     backgroundColor: '#ffd23f', borderWidth: 2, borderColor: '#b8860b',
   },
-});
+}));

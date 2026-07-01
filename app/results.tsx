@@ -3,7 +3,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { EmptyState, IconLabel, Screen, theme } from '../components/Screen';
+import { EmptyState, IconLabel, Screen, theme, themedStyles } from '../components/Screen';
 import { seasonResults, leagueDisplayDay, type ResultRow } from '../data/standings';
 import { shortTeamName as short } from '../data/league';
 import { dateForDay, formatDate } from '../lib/calendar';
@@ -75,7 +75,7 @@ export default function Results() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   daySection: { marginBottom: 12 },
   dayHeader: { marginBottom: 5, marginLeft: 4 },
   dayCard: { backgroundColor: theme.card, borderRadius: 10, borderWidth: 1, borderColor: theme.border, borderLeftWidth: 4, borderLeftColor: theme.sky, overflow: 'hidden' },
@@ -85,4 +85,4 @@ const styles = StyleSheet.create({
   mTeam: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
   score: { color: theme.text, fontSize: 16, fontWeight: '800', minWidth: 50, textAlign: 'center' },
   win: { color: theme.good, fontWeight: '800' },
-});
+}));

@@ -2,7 +2,7 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { Button, Muted, theme } from '../../components/Screen';
+import { Button, Muted, theme, themedStyles } from '../../components/Screen';
 import { emblemFor } from '../../data/emblems';
 import { MatchCourt } from '../../components/MatchCourt';
 import { LiveBoxModal } from '../../components/LiveBoxModal';
@@ -266,7 +266,7 @@ export default function MatchBoard() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
   content: { paddingHorizontal: 16, gap: 8 }, // 간격 축소(2026-06-28) — 한 화면 맞춤(스크롤 제거)
   sandboxTag: { color: theme.warn, fontSize: 12, fontWeight: '800', textAlign: 'center' },
@@ -300,4 +300,4 @@ const styles = StyleSheet.create({
   mPrimaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   mTextBtn: { alignItems: 'center', paddingVertical: 6, marginTop: 2 },
   mTextBtnTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
-});
+}));

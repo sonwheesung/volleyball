@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, PosTag, Screen, Title, theme } from '../../components/Screen';
+import { Card, Muted, PosTag, Screen, Title, theme, themedStyles } from '../../components/Screen';
 import { BoxScoreTable } from '../../components/BoxScoreTable';
 import { getFixture, getTeam } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
@@ -44,9 +44,10 @@ export default function MatchResult() {
       </Card>
 
       {mvp ? (
-        <Card accent={theme.accent}>
+        <>
+          <Title>MVP</Title>
+          <Card accent={theme.warn}>
           <View style={styles.mvpRow}>
-            <View style={styles.mvpBadge}><Text style={styles.mvpBadgeT}>MVP</Text></View>
             <PosTag pos={mvp.position} />
             <View style={{ flex: 1 }}>
               <Text style={styles.mvpName}>{mvp.name}</Text>
@@ -56,7 +57,8 @@ export default function MatchResult() {
             </View>
           </View>
           <Text style={styles.mvpLine}>{mvp.line}</Text>
-        </Card>
+          </Card>
+        </>
       ) : null}
 
       <Title>{homeName}</Title>
@@ -68,7 +70,7 @@ export default function MatchResult() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   scoreboard: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   bigTeam: { flex: 1, color: theme.text, fontSize: 16, fontWeight: '800' },
   bigScore: { color: theme.text, fontSize: 30, fontWeight: '900', minWidth: 84, textAlign: 'center' },
@@ -78,9 +80,7 @@ const styles = StyleSheet.create({
   setScore: { color: theme.text, fontSize: 14, fontWeight: '800' },
   hint: { color: theme.muted, fontSize: 10.5, lineHeight: 15, marginTop: 2 },
   mvpRow: { flexDirection: 'row', alignItems: 'center', gap: 9 },
-  mvpBadge: { backgroundColor: theme.warn, borderRadius: 7, paddingHorizontal: 8, paddingVertical: 3 },
-  mvpBadgeT: { color: '#fff', fontSize: 12, fontWeight: '900', letterSpacing: 0.5 },
   mvpName: { color: theme.text, fontSize: 16, fontWeight: '800' },
   mvpStat: { color: theme.muted, fontSize: 12.5, marginTop: 1 },
   mvpLine: { color: theme.text, fontSize: 13, marginTop: 8, lineHeight: 18 },
-});
+}));

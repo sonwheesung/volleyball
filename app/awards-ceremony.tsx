@@ -4,7 +4,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, theme, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { Best7Court } from '../components/Best7Court';
 import { AwardIllustration } from '../components/AwardIllustration';
 import { LegendIllustration } from '../components/LegendIllustration';
@@ -130,7 +130,7 @@ function CeremonyInner() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   dots: { flexDirection: 'row', gap: 7, alignItems: 'center' },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.border },
@@ -146,4 +146,4 @@ const styles = StyleSheet.create({
   metaRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 8, marginTop: 4, flexWrap: 'wrap' },
   team: { color: theme.muted, fontSize: 14, fontWeight: '700' },
   mineTag: { color: theme.accent, fontSize: 12, fontWeight: '800' },
-});
+}));

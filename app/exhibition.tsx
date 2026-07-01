@@ -2,7 +2,7 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Muted, OvrBadge, Row, Screen, theme } from '../components/Screen';
+import { Button, Card, Muted, OvrBadge, Row, Screen, theme, themedStyles } from '../components/Screen';
 import { LEAGUE, shortTeamName as shortName } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
 import { teamOverallRaw } from '../engine/overall';
@@ -92,10 +92,10 @@ export default function Exhibition() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   chip: {
     borderWidth: 1, borderColor: theme.border, borderRadius: 999,
     paddingHorizontal: 14, paddingVertical: 8, backgroundColor: theme.card,
   },
   tname: { color: theme.text, fontSize: 15, fontWeight: '800' },
-});
+}));

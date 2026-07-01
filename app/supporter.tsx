@@ -4,7 +4,7 @@ import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-nativ
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
-import { theme } from '../components/Screen';
+import { theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -95,7 +95,7 @@ export default function Supporter() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg, paddingHorizontal: 22, paddingTop: 8 },
   hero: { alignItems: 'center', paddingTop: 28, paddingBottom: 18, gap: 12 },
   glowRing: { position: 'absolute', top: 8, width: 132, height: 132, borderRadius: 66 },
@@ -127,4 +127,4 @@ const styles = StyleSheet.create({
   ownedTxt: { color: theme.text, fontSize: 14, fontWeight: '700' },
   closeBtn: { alignSelf: 'center', paddingVertical: 16, marginTop: 4 },
   closeTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
-});
+}));

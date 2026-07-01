@@ -4,7 +4,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Card, Muted, Screen, theme } from '../components/Screen';
+import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { ENGINE_VERSION } from '../engine/match';
 import { buildDiagnosticSnapshot } from '../data/diagnosticSnapshot';
@@ -145,7 +145,7 @@ function Compose({ onDone }: { onDone: () => void }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   topBar: { flexDirection: 'row', justifyContent: 'flex-end', marginBottom: 8 },
   topBtn: { flexDirection: 'row', alignItems: 'center', gap: 4, paddingVertical: 4, paddingHorizontal: 6 },
   newBtn: { color: theme.accent, fontSize: 15, fontWeight: '800' },
@@ -164,4 +164,4 @@ const styles = StyleSheet.create({
   input: { minHeight: 160, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 14, color: theme.text, fontSize: 15, lineHeight: 22 },
   submit: { marginTop: 14, backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
   submitTxt: { color: '#04150E', fontSize: 15, fontWeight: '900' },
-});
+}));

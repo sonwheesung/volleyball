@@ -3,7 +3,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Muted, Screen, Title, theme } from '../components/Screen';
+import { Button, Card, Muted, Screen, Title, theme, themedStyles } from '../components/Screen';
 import { evalAchievements, achievementSummary, type AchCategory, type AchStatus } from '../engine/achievements';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
@@ -84,7 +84,7 @@ function Row({ children }: { children: React.ReactNode }) {
   return <View style={styles.row}>{children}</View>;
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   count: { color: theme.accent, fontSize: 18, fontWeight: '900' },
   track: { height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, overflow: 'hidden' },
@@ -104,4 +104,4 @@ const styles = StyleSheet.create({
   prog: { color: theme.muted, fontSize: 12, fontWeight: '700', textAlign: 'right' },
   miniTrack: { height: 4, backgroundColor: theme.cardAlt, borderRadius: 2, overflow: 'hidden', marginTop: 5 },
   miniFill: { height: 4, backgroundColor: theme.accent },
-});
+}));

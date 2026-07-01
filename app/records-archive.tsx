@@ -4,7 +4,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { Card, Loading, Muted, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { AwardIllustration } from '../components/AwardIllustration';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { Best7Court } from '../components/Best7Court';
@@ -424,7 +424,7 @@ function ChronicleView({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   achLinkArrow: { color: theme.accent, fontSize: 22, fontWeight: '900' },
 
   seg: { flexDirection: 'row', backgroundColor: theme.cardAlt, borderRadius: 12, padding: 3, gap: 2 },
@@ -474,4 +474,4 @@ const styles = StyleSheet.create({
   msRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 },
   msSeason: { width: 52, color: theme.muted, fontSize: 11, fontWeight: '700' },
   msText: { flex: 1, color: theme.text, fontSize: 13 },
-});
+}));

@@ -4,7 +4,7 @@ import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
-import { theme } from '../components/Screen';
+import { theme, themeAssets, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -58,8 +58,8 @@ export default function Onboarding() {
   const finish = () => { completeOnboarding(); router.replace('/select-team'); };
 
   return (
-    <ImageBackground source={require('../assets/bg/court.png')} style={styles.bgRoot} resizeMode="cover">
-    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: 'rgba(7,10,16,0.62)' }]} />
+    <ImageBackground source={themeAssets.bg} style={styles.bgRoot} resizeMode="cover">
+    <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: themeAssets.scrim }]} />
     <SafeAreaView style={styles.root}>
       <View style={styles.topBar}>
         <Pressable onPress={finish} hitSlop={10}>
@@ -106,7 +106,7 @@ export default function Onboarding() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   bgRoot: { flex: 1, backgroundColor: theme.bg },
   root: { flex: 1, backgroundColor: 'transparent', paddingHorizontal: 24 },
   topBar: { flexDirection: 'row', justifyContent: 'flex-end', paddingTop: 8, minHeight: 32 },
@@ -128,4 +128,4 @@ const styles = StyleSheet.create({
     shadowColor: theme.accent, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 3 },
   },
   ctaText: { color: theme.accent, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
-});
+}));

@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Popup } from './Popup';
 import { theme } from './Screen';
+import { themedStyles } from './theme';
 import { POS_COLOR } from './posTokens';
 import { buildLineup } from '../engine/lineup';
 import type { SimResult, TimeoutEvent } from '../engine/simMatch';
@@ -616,7 +617,7 @@ const MR = 15; // 마커 반지름
 // 표시용 등번호 — 현역은 고정 등번호 데이터가 없어 id 해시로 결정론 부여(장식, 1~99). 같은 선수=항상 같은 번호.
 const jerseyNo = (id: string): number => { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return (h % 99) + 1; };
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   courtWrap: { paddingVertical: COURT_PAD, alignItems: 'center' },
   // 다크 네온 코트(2026-06-28 시안) — 어두운 바닥 + 네온 민트 라인/글로우. 라이트 코트(구)에서 전환.
   court: {
@@ -702,4 +703,4 @@ const styles = StyleSheet.create({
   toBtnTxt: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   toCancel: { alignItems: 'center', paddingVertical: 8, marginTop: 2 },
   toCancelTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
-});
+}));

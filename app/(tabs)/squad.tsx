@@ -45,7 +45,7 @@ export default function Squad() {
   };
 
   return (
-    <Screen title="선수단">
+    <Screen>
       {coach ? (
         <SpotlightTarget id="squad-coach">
           <Card accent={theme.violet} onPress={() => router.push(`/coach/${coach.id}`)}>

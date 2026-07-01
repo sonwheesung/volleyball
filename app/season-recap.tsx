@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Text, View, StyleSheet } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, theme, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { seasonSnapshot } from '../data/records';
 import { computeStandings, leagueDisplayDay } from '../data/standings';
 import { leagueProduction } from '../data/production';
@@ -119,10 +119,10 @@ function RecapInner() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   pRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   rank: { width: 18, color: theme.muted, fontSize: 14, fontWeight: '800', textAlign: 'center' },
   pName: { color: theme.text, fontSize: 15, fontWeight: '700' },
   pSub: { color: theme.muted, fontSize: 12.5, marginTop: 1 },
   fin: { color: theme.text, fontWeight: '800', fontSize: 15 },
-});
+}));

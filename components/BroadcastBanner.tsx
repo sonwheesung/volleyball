@@ -3,6 +3,7 @@ import { Animated, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 import { theme } from './Screen';
+import { themedStyles } from './theme';
 import type { Banner } from '../data/broadcast';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -40,7 +41,7 @@ export function BroadcastBanner({ banners }: { banners: Banner[] }) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   wrap: { position: 'absolute', left: 8, right: 8, bottom: 10, alignItems: 'center' },
   bar: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -52,4 +53,4 @@ const styles = StyleSheet.create({
   mine: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   mineText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
   count: { color: theme.muted, fontSize: 11, fontWeight: '700' },
-});
+}));

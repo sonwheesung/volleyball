@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, Title, theme } from '../../components/Screen';
+import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, Title, theme, themedStyles } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { SEASON, LEAGUE, getTeam } from '../../data/league';
 import { computeStandings, playedThroughDay, leagueDisplayDay } from '../../data/standings';
@@ -186,7 +186,7 @@ export default function Schedule() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   bigMatch: { backgroundColor: theme.warn + '26', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   bigMatchText: { color: theme.warn, fontSize: 12, fontWeight: '800' },
-});
+}));

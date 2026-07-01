@@ -8,7 +8,7 @@ import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Dimensions, PanResponder, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle, Line, Polygon } from 'react-native-svg';
-import { Button, Card, Muted, Row, Screen, theme } from '../components/Screen';
+import { Button, Card, Muted, Row, Screen, theme, themedStyles } from '../components/Screen';
 import { POS_COLOR } from '../components/posTokens';
 import { DEV_TOOLS } from '../data/flags';
 import { LEAGUE, coachInfoOf, shortTeamName } from '../data/league';
@@ -426,7 +426,7 @@ function Pill({ label, on, onPress, small }: { label: string; on: boolean; onPre
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   pill: { overflow: 'hidden', borderRadius: 999, paddingHorizontal: 12, paddingVertical: 7, fontSize: 13, fontWeight: '800' },
   court: {
     width: W, height: H, alignSelf: 'center',
@@ -443,4 +443,4 @@ const styles = StyleSheet.create({
   svTag: { position: 'absolute', bottom: -3, color: SERVE_RING, fontSize: 8, fontWeight: '900' },
   movedDot: { position: 'absolute', top: 1, right: 1, width: 7, height: 7, borderRadius: 4, backgroundColor: '#15202B' },
   code: { color: theme.text, fontSize: 11, fontFamily: 'monospace', lineHeight: 16 },
-});
+}));

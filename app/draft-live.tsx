@@ -3,7 +3,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Loading, Muted, PosTag, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { Button, Loading, Muted, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, shortTeamName, teamScoutReveal } from '../data/league';
@@ -136,7 +136,7 @@ function DraftLiveInner() {
 
 const esc = (tid: string) => shortTeamName(tid);
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   bar: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 },
   ctrl: { flexDirection: 'row', gap: 8 },
   btn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
@@ -151,4 +151,4 @@ const styles = StyleSheet.create({
   nm: { color: theme.text, fontSize: 15, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 12, marginTop: 1 },
   badge: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 8, paddingVertical: 4 },
-});
+}));

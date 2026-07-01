@@ -5,6 +5,7 @@
 import { useEffect, useRef } from 'react';
 import { Animated, Easing, StyleSheet, Text } from 'react-native';
 import { theme } from './Screen';
+import { themedStyles } from './theme';
 import type { Side } from '../types';
 
 interface Props {
@@ -42,7 +43,7 @@ export function CoinTossOverlay({ serving, homeName, awayName, fast }: Props) {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     alignItems: 'center',
@@ -63,4 +64,4 @@ const styles = StyleSheet.create({
   coin: { fontSize: 52, marginBottom: 6 },
   label: { color: theme.muted, fontSize: 12, fontWeight: '700', marginBottom: 10 },
   result: { color: theme.text, fontSize: 16, fontWeight: '800' },
-});
+}));

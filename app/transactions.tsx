@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme } from '../components/Screen';
+import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles } from '../components/Screen';
 import { evolveOnDay } from '../data/league';
 import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
@@ -214,10 +214,10 @@ export default function Transactions() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   btn: { borderWidth: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, alignItems: 'center' },
   btnText: { fontSize: 14, fontWeight: '800' },
-});
+}));

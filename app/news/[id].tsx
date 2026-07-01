@@ -4,7 +4,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { Card, IconLabel, Muted, Screen, theme } from '../../components/Screen';
+import { Card, IconLabel, Muted, Screen, theme, themedStyles } from '../../components/Screen';
 import { buildNewsFeed, newsKey } from '../../data/news';
 import { leagueDisplayDay } from '../../data/standings';
 import { KIND_KO } from '../news';
@@ -81,9 +81,9 @@ export default function NewsArticle() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   category: { color: theme.accent, fontSize: 13, fontWeight: '800' },
   headline: { color: theme.text, fontSize: 22, fontWeight: '900', lineHeight: 30, marginTop: 4 },
   byline: { color: theme.muted, fontSize: 13, marginTop: 8 },
   body: { color: theme.text, fontSize: 15, lineHeight: 24 },
-});
+}));

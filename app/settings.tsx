@@ -4,7 +4,7 @@ import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
-import { Muted, Screen, theme } from '../components/Screen';
+import { Muted, Screen, theme, themedStyles, useThemeMode, setThemeMode } from '../components/Screen';
 import { DEV_TOOLS } from '../data/flags';
 import { useGameStore } from '../store/useGameStore';
 
@@ -41,6 +41,7 @@ export default function Settings() {
   const setSupporter = useGameStore((s) => s.setSupporter);
   const sfxEnabled = useGameStore((s) => s.sfxEnabled);
   const setSfx = useGameStore((s) => s.setSfx);
+  const mode = useThemeMode();
   const [confirmReset, setConfirmReset] = useState(false);
 
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
@@ -72,6 +73,16 @@ export default function Settings() {
             <Muted style={{ fontSize: 12, marginTop: 1 }}>경기 보드 휘슬·스파이크·서브 소리 (무음 모드 존중)</Muted>
           </View>
           <Switch value={sfxEnabled} onValueChange={setSfx} trackColor={{ true: theme.accent, false: theme.cardAlt }} />
+        </View>
+        <View style={styles.toggleRow}>
+          <View style={[styles.rowIcon, { backgroundColor: theme.accent + '1A' }]}>
+            <Ionicons name={mode === 'light' ? 'sunny-outline' : 'moon-outline'} size={18} color={theme.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>라이트 모드</Text>
+            <Muted style={{ fontSize: 12, marginTop: 1 }}>밝은 화면 테마 (끄면 다크). 적용 시 화면이 새로 그려집니다</Muted>
+          </View>
+          <Switch value={mode === 'light'} onValueChange={(v) => setThemeMode(v ? 'light' : 'dark')} trackColor={{ true: theme.accent, false: theme.cardAlt }} />
         </View>
         <Row icon="book-outline" tint={theme.accent} label="튜토리얼 다시보기" sub="게임 소개 + 화면 안내를 처음부터"
           onPress={() => { replayOnboarding(); resetTips(); router.replace('/onboarding'); }} />
@@ -131,7 +142,7 @@ export default function Settings() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   section: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 16, marginBottom: 6, marginLeft: 2 },
   group: { backgroundColor: theme.card, borderRadius: 14, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
   row: { flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14 },
@@ -148,4 +159,4 @@ const styles = StyleSheet.create({
   mGhostText: { color: theme.text, fontSize: 15, fontWeight: '800' },
   mDanger: { backgroundColor: theme.bad },
   mDangerText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-});
+}));

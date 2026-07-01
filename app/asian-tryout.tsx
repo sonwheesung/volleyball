@@ -4,7 +4,7 @@
 import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
@@ -145,7 +145,7 @@ function AsianTryoutInner() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   nat: { color: theme.elite, fontSize: 11, fontWeight: '700' },
@@ -155,4 +155,4 @@ const styles = StyleSheet.create({
   chip: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 12 },
   chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   chipTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },
-});
+}));

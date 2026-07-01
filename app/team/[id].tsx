@@ -4,7 +4,7 @@ import { Image, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Svg, { Circle } from 'react-native-svg';
-import { Button, Card, IconLabel, Loading, Muted, OvrBadge, Screen, STYLE_LABEL, theme } from '../../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, Screen, STYLE_LABEL, theme, themedStyles } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList, type RosterSort } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal, LEAGUE } from '../../data/league';
@@ -273,7 +273,7 @@ export default function TeamDetail() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   hero: { flexDirection: 'row', alignItems: 'center', gap: 14, paddingLeft: 12, paddingVertical: 6, marginBottom: 2 },
   accentBar: { position: 'absolute', left: 0, top: 8, bottom: 8, width: 4, borderRadius: 2 },
   emblem: { width: 76, height: 76, resizeMode: 'contain' },
@@ -293,4 +293,4 @@ const styles = StyleSheet.create({
   rosterHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   sortChip: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: theme.cardAlt, borderRadius: 999, paddingHorizontal: 12, paddingVertical: 6 },
   sortTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },
-});
+}));

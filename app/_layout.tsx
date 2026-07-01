@@ -5,7 +5,8 @@ import { Text } from 'react-native';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { ThemeProvider, DarkTheme } from '@react-navigation/native';
-import { theme } from '../components/Screen';
+import { theme, useThemeMode } from '../components/Screen';
+import { loadThemeMode } from '../components/theme';
 import { SpotlightProvider } from '../components/Spotlight';
 import { IntroSplash } from '../components/IntroSplash';
 import { useGameStore } from '../store/useGameStore';
@@ -61,8 +62,12 @@ export default function RootLayout() {
   // 연동해 100% 차오르면 진입. 이후엔 (tabs) 복원 로딩이 이미 끝나 있어 중복 로딩 없음.
   const hydrated = useGameStore((s) => s.hydrated);
   const [introDone, setIntroDone] = useState(false);
-  // 앱 시작 1회 — IAP 초기화 + 소유 엔타이틀먼트 로드(광고 제거 등). dev no-op·운영 RevenueCat·실패 graceful.
+  const mode = useThemeMode(); // 테마 토글 시 리렌더 → key로 전 화면 리마운트(새 스타일 반영)
+  // 전역 기본 텍스트 색을 현재 모드로(다크=밝은잉크 / 라이트=검정). 색 미지정 Text 폴백이 안 묻히게(리마운트 전에 갱신).
+  TextDefaults.defaultProps!.style = { fontFamily: 'Pretendard', color: theme.text };
+  // 앱 시작 1회 — 저장 테마 적용 + IAP 초기화 + 오류 싱크. loadThemeMode는 인트로 스플래시가 뜬 동안 완료(부팅 깜빡임 마스킹).
   useEffect(() => {
+    loadThemeMode();
     initIap();
     installErrorSink(() => useGameStore.getState().season); // 오류를 진단 버퍼에 시즌 태그로(#44)
   }, []);
@@ -76,8 +81,8 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider>
-      <StatusBar style="light" />
+    <SafeAreaProvider key={mode}>
+      <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
       <ThemeProvider value={NAV_THEME}>
       <SpotlightProvider>
       <Stack

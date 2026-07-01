@@ -3,7 +3,7 @@
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { type ComponentProps } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, Screen, theme } from '../components/Screen';
+import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { purchase, restorePurchases, skuLabel, type Sku } from '../lib/iap';
 
@@ -82,10 +82,10 @@ export default function Shop() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconChip: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   title: { color: theme.text, fontSize: 16, fontWeight: '800' },
   arrow: { color: theme.accent, fontSize: 24, fontWeight: '900' },
   section: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 14, marginBottom: 2, marginLeft: 2 },
-});
+}));

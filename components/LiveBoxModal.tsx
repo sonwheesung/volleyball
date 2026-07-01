@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { theme } from './Screen';
+import { themedStyles } from './theme';
 import { Popup } from './Popup';
 import { BoxScoreTable } from './BoxScoreTable';
 import type { Player } from '../types';
@@ -51,7 +52,7 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   title: { color: theme.text, fontSize: 17, fontWeight: '900' },
   close: { color: theme.muted, fontSize: 18, fontWeight: '800' },
@@ -63,4 +64,4 @@ const styles = StyleSheet.create({
   hint: { color: theme.muted, fontSize: 10.5, lineHeight: 15 },
   resume: { backgroundColor: theme.accent, borderRadius: 12, paddingVertical: 13, alignItems: 'center' },
   resumeTxt: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
-});
+}));

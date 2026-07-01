@@ -5,6 +5,7 @@
 // SeasonAwards.best7 입력만 받아 현재(잠정)·과거(archive[].awards) 공용. 새 영속 필드 0.
 import { StyleSheet, Text, View } from 'react-native';
 import { theme } from './Screen';
+import { themedStyles } from './theme';
 import { teamColors } from '../lib/teamColor';
 import { shortTeamName } from '../data/league';
 import type { Best7Slot } from '../types';
@@ -62,7 +63,7 @@ export function Best7Court({
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   court: {
     height: 300, borderRadius: 16, overflow: 'hidden',
     backgroundColor: 'hsl(28, 30%, 22%)', // 코트 바닥 톤(우드)
@@ -82,4 +83,4 @@ const styles = StyleSheet.create({
   nameMine: { color: theme.accent },
   team: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '600', textAlign: 'center' },
   tag: { position: 'absolute', bottom: 6, right: 10, color: 'rgba(255,255,255,0.5)', fontSize: 10, fontWeight: '800' },
-});
+}));

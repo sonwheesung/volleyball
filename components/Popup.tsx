@@ -2,6 +2,7 @@ import type { ReactNode } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import type { StyleProp, ViewStyle } from 'react-native';
 import { theme } from './Screen';
+import { themedStyles } from './theme';
 
 // 앱 공용 모달 셸 — 모든 팝업이 같은 배경·카드·동작을 쓰도록 통일.
 // 기본은 밖 영역 탭으로 닫히지 않는다(dismissable=false). 버튼/✕ 으로만 닫음.
@@ -70,7 +71,7 @@ export function ActionSheet({ visible, title, message, actions, onClose }: {
   );
 }
 
-const sheet = StyleSheet.create({
+const sheet = themedStyles(() => StyleSheet.create({
   title: { color: theme.text, fontSize: 19, fontWeight: '900' },
   message: { color: theme.muted, fontSize: 13, lineHeight: 19, marginTop: -4 },
   btn: { borderRadius: 12, paddingVertical: 13, alignItems: 'center', justifyContent: 'center', borderWidth: 1.5 },
@@ -83,9 +84,9 @@ const sheet = StyleSheet.create({
   neutralTxt: { color: theme.text },
   cancel: { paddingVertical: 11, alignItems: 'center', marginTop: 2 },
   cancelTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
-});
+}));
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   // 배경막 — 진한 스크림(0.82)으로 뒤 보드를 확실히 가라앉혀 팝업이 뜨게(다크 위 다크 50%는 거의 안 어두워져
   // 경계가 안 보였다, 2026-06-28). 카드 — 불투명 표면(#161E2E, 배경보다 한 톤 밝게) + 헤어라인 보더 + 큰 그림자로
   // "떠 있는 패널"로 경계를 또렷하게(반투명 theme.card는 다크 보드와 섞여 어디부터 팝업인지 안 보였다).
@@ -95,4 +96,4 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: theme.border,
     shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 14,
   },
-});
+}));

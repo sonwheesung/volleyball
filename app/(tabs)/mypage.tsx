@@ -6,7 +6,7 @@ import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState, type ComponentProps } from 'react';
 import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, Screen, theme } from '../../components/Screen';
+import { Card, Muted, Screen, theme, themedStyles } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd } from '../../engine/diamonds';
@@ -33,8 +33,6 @@ function LinkCard({ icon, tint, title, sub, onPress }: { icon: IoniconName; tint
 
 export default function MyPage() {
   const router = useRouter();
-  const replayOnboarding = useGameStore((s) => s.replayOnboarding);
-  const resetTips = useGameStore((s) => s.resetTips);
   const diamonds = useGameStore((s) => s.diamonds);
   const watchAdForDiamonds = useGameStore((s) => s.watchAdForDiamonds);
   const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
@@ -59,7 +57,7 @@ export default function MyPage() {
   };
 
   return (
-    <Screen title="마이페이지">
+    <Screen>
       {/* ── 다이아 (MONETIZATION §11) — 전지훈련 재화 ── */}
       <Card accent={theme.sky}>
         <View style={styles.row}>
@@ -109,10 +107,6 @@ export default function MyPage() {
         sub="효과음 · 세이브 관리 · 버전"
         onPress={() => router.push('/settings')} />
 
-      <LinkCard icon="book-outline" tint={theme.violet} title="튜토리얼 다시보기"
-        sub="게임 소개 + 화면 안내를 처음부터"
-        onPress={() => { replayOnboarding(); resetTips(); router.replace('/onboarding'); }} />
-
       <LinkCard icon="chatbubble-ellipses-outline" tint={theme.sky} title="문의하기"
         sub="오류 · 건의 · 질문 — 최근 기록 진단 정보 자동 첨부"
         onPress={() => router.push('/support')} />
@@ -123,11 +117,11 @@ export default function MyPage() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconChip: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   title: { color: theme.text, fontSize: 16, fontWeight: '800' },
   arrow: { color: theme.accent, fontSize: 24, fontWeight: '900' },
   diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '800' },
-});
+}));

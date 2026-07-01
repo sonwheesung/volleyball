@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { shortTeamName as shortTeam } from '../data/league';
 import { faMarketPreview } from '../data/offseason';
 import { buildOwnerFx } from '../data/owner';
@@ -229,7 +229,7 @@ function FACenterInner() {
   );
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, gap: 10, borderWidth: 1, borderColor: theme.border },
   info: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
@@ -242,4 +242,4 @@ const styles = StyleSheet.create({
     backgroundColor: theme.card, borderRadius: 10, borderWidth: 1, borderColor: theme.border,
     paddingHorizontal: 12, paddingVertical: 8,
   },
-});
+}));
