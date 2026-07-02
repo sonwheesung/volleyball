@@ -15,6 +15,7 @@ import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
 import { rolloverPlayer, renewedContract } from '../engine/rollover';
+import { MED_REF } from '../engine/overall'; // 합성 시나리오 — 시대 0 앵커
 import { scandalRepMul } from '../engine/scandal';
 import { overall } from '../engine/overall';
 
@@ -62,10 +63,10 @@ for (let s = 0; s < seasons; s++) {
     if (!base || base.isForeign) continue; // 외인은 재계약 없음(1년 트라이아웃 고정연봉) — 계약 패널티 대상 외
     const lost = Math.max(0, sc.to - sc.from);
     const rep = scandalRepMul(sc.missMatches);
-    const actual = rolloverPlayer(base, focusOf(base), undefined, effectsOf(base), lost);   // 사고: 훈련정지
-    const clean = rolloverPlayer(base, focusOf(base), undefined, effectsOf(base), 0);        // 무사고 가정
-    const salA = round100(renewedContract(actual).salary * rep);                              // 사고: 성장↓ × 평판할인
-    const salC = renewedContract(clean).salary;                                               // 무사고 재계약
+    const actual = rolloverPlayer(base, focusOf(base), MED_REF, undefined, effectsOf(base), lost);   // 사고: 훈련정지
+    const clean = rolloverPlayer(base, focusOf(base), MED_REF, undefined, effectsOf(base), 0);        // 무사고 가정
+    const salA = round100(renewedContract(actual, MED_REF).salary * rep);                              // 사고: 성장↓ × 평판할인
+    const salC = renewedContract(clean, MED_REF).salary;                                               // 무사고 재계약
     scandalContracts++;
     if (salA < salC) reflectedLower++;
     mvDropSum += (salC - salA);

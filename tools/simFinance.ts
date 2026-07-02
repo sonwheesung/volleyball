@@ -17,6 +17,7 @@ import { fanScore as fanScoreOf } from '../engine/owner';
 import { assignFAGrades, askingPrice, isFAEligible } from '../engine/faMarket';
 import { canAfford } from '../engine/cap';
 import { marketValue } from '../engine/salary';
+import { medianOvr } from '../engine/overall';
 import { overall } from '../engine/overall';
 import type { Player } from '../types';
 
@@ -69,16 +70,19 @@ for (let s = 0; s < seasons; s++) {
 
   // 오프시즌: 매 시즌 최고 FA 1명을 노린다 — "캡은 OK인데 자금이 막는" 케이스 측정
   const myPayrollNow = payroll;
-  const pool = Object.values(currentRosters()).flat()
+  const allNow = Object.values(currentRosters()).flat()
     .map((id) => evolveOnDay(id, END_DAY))
-    .filter((p): p is Player => !!p && isFAEligible(p) && p.contract.remaining <= 1)
+    .filter((p): p is Player => !!p);
+  const medDom = medianOvr(allNow.filter((p) => !p.isForeign)); // 시대 앵커(SALARY 2장) — 게임과 동일하게 요구액을 시대 보정
+  const pool = allNow
+    .filter((p) => isFAEligible(p) && p.contract.remaining <= 1)
     .sort((a, b) => overall(b) - overall(a));
   let faSignings: string[] = [];
   if (pool.length) {
     // 캡 안에서 노릴 수 있는 가장 비싼 FA — 그래야 "캡 OK·자금 부족" 게이트가 측정된다
     const grades = assignFAGrades(pool);
     const cand = pool
-      .map((p) => ({ p, asking: askingPrice(marketValue(p), grades.get(p.id) ?? 'C') }))
+      .map((p) => ({ p, asking: askingPrice(marketValue(p, medDom), grades.get(p.id) ?? 'C') }))
       .find((c) => canAfford(myPayrollNow, c.asking));
     if (cand) {
       stat.faTried++;

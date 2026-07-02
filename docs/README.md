@@ -141,7 +141,7 @@ npx tsx tools/_a8_verify.ts 14              # 선수 상세 데이터 흐름(A8,
 npx tsx tools/_ev_transfernews.ts 15        # 타팀 이적/방출 뉴스(NEWS 슬라이스4) — 거물 게이트 볼륨·매달린참조0·중복0·결정론·이동시점OVR. exit 0/1
 npx tsx tools/_dv_releasenews.ts            # 방출 뉴스 인간관계 한 줄(RELATIONSHIP §6) — 합성 방출+잔류 각별한동료 "남기고 떠난다" 박힘 + A/B(친구없으면 줄 없음=허위오라클 차단)·조사교정. exit 0/1
 npx tsx tools/_ev_draftpick.ts              # AI 드래프트 3티어(FA §3.1) — 특급 BPA·포지션 필요·OVR+성격 불변식 + 성격 A/B + 결정론. exit 0/1
-npx tsx tools/_ev_airetain.ts 12            # AI 재계약 확률(aiRetainProb, FA §4) — 절벽해소(나이/OVR 그라데이션)·순잔류~58%·단조·엘리트유지·연속. 구 aiKeepsFA 이진 A/B. exit 0/1
+npx tsx tools/_ev_airetain.ts 12            # AI 재계약 확률(aiRetainProb, FA §4) — 절벽해소(나이/OVR 그라데이션)·순잔류 50~62%밴드·단조·엘리트유지·연속. 구 aiKeepsFA 이진 A/B. 2026-07-02 상대 앵커(medianOvr) 전환 후 12시즌 56.9%·24시즌 54.2%(EC-FA-06 — 다지평 확인은 24 인자로). exit 0/1
 npx tsx tools/_ev_promise.ts                # 면담 공약 파기(OWNER 1.3) — 주전약속+벤치=거부급등(0.95) vs 약속+출전=0 vs 전력보강+벤치=파기아님. A/B 4시나리오. exit 0/1
 npx tsx tools/_ev_resign.ts                 # 재계약 협상 3택(FA 2.5c) — 후하게≥표준≥짧게·후하게≥시장가·캡내·나이적합 연수(어림5/노장2). exit 0/1
 # (2026-06-25 독립 3세션 엣지 도구 = _dv_docs_*·_dv_code_*·_dv_drift_* — EDGE_CASES §3.6, 무거움 on-demand)
@@ -172,7 +172,8 @@ npx tsx tools/_dv_overlap.ts 24             # 서브 컨택 오버랩 합법(받
 npx tsx tools/_dv_receive.ts                # 서브리시브 평평한 3인 라인(룰57) — 전위 패서 라인 합류(≥0.74)·비패서 네트(≤0.68) 0미스
 npx tsx tools/_dv_position.ts 24            # 인플레이 포지션(2026-06-24) — 인시스템 대기 공격수 핀 100%·블록↔공격 0.000·페리미터 0.56·A/B(0.15 옮기면 잡힘)
 # ── 시스템 건강·무결성 가드(밸런스 드리프트 — 불변식 가드가 못 보는 "느린 회귀"를 잡는다. 2026-06-27 루틴 등록: 누락→재정 회귀 늦게 발견 사고 재발 방지, TEST_METHODOLOGY §4) ──
-npx tsx tools/simFinance.ts 120            # 재정 건강(잔고·모기업 보전 빈도·FA 자금게이트) — exit 0/1. ❌면 튜닝(2026-06-27 회귀 발견 도구). 2026-06-28 v2 체력 재조율 base 243000(FINANCE 2.0 Stage1)
+npx tsx tools/simFinance.ts 120            # 재정 건강(잔고·모기업 보전 빈도·FA 자금게이트) — exit 0/1. ❌면 튜닝(2026-06-27 회귀 발견 도구). 2026-06-28 v2 체력 재조율 base 243000(FINANCE 2.0 Stage1). 2026-07-02 시대 앵커(EC-FA-07)로 성장 C 디플레 복원(보전 8%·좌절 16회)
+npx tsx tools/_dv_cappressure.ts 15        # 캡 밀착 분포(EC-FA-07) — 팀 국내 페이롤/캡 중앙 ∈[69,80]·최대 ≥88·105%초과 0 + A/B(−11% 디플레 주입 거부). 연봉 디플레류 조용한 느슨화 재발 방지. exit 0/1
 npx tsx tools/_dv_sponsorstance.ts         # 모기업 기조(FINANCE 2.0 Stage2) — sponsorStanceOf 도출: aggressive 빈도 5~13%·thrifty 4~10%·normal>75%·양 트리거(상위권/가뭄)·결정론·대칭(순수함수 myTeam/cash 의존0). 합성 archive. exit 0/1
 npx tsx tools/_dv_fa_stance.ts 24 6        # 모기업 기조→AI FA 입찰(FINANCE 2.0 Stage3) — 매 오프시즌 stance on/off A/B: ①레버 효과(행선지 Δ>0)·②캡 불변(clamp 위반0)·③방향성(aggressive>normal>thrifty 팀당 FA)·④결정론/A/B민감도·⑤양 stance 발화. 실제 이력(advanceOffseason) 적립. exit 0/1
 npx tsx tools/_dv_stance_bonus.ts 20 6   # 모기업 기조→내 팀 1회성 현금보너스(FINANCE 2.0 Stage4) — projectSettledCash on/off A/B: Δ==stanceCashBonus 정합·권한 무영향(thrifty/normal Δ0)·결정론·세 stance 관측. preview=result. exit 0/1
@@ -185,9 +186,9 @@ npx tsx tools/simStamCurve.ts 3000         # 체력 곡선(MATCH 7.1, 2026-06-28
 npx tsx tools/simGrowthGap.ts              # 성장 effect-A/B(§1.8 C) — 경기경험 순효과(주전>벤치 격차합≥4·벤치 OVR≥65). 죽은기능(경기XP inert=주전=벤치) 재발 차단. 구 코드면 격차~0 FAIL. exit 0/1
 npx tsx tools/simAudit.ts 60               # 영입 13체크(한선수=한팀·이중계약0·캡·자금게이트). exit 0/1
 npx tsx tools/simBrokeSign.ts              # 현금 게이팅(돈 없는데 영입 0). exit 0/1
-npx tsx tools/simTxDup.ts                  # 시즌중 거래 이중소속/FA 누수 0. exit 0/1
+npx tsx tools/simTxDup.ts                  # 시즌중 거래 이중소속/FA 누수 0 + 방출 선수 옛팀 재등장 0(EC-TX-06 — AI 자기방출 재영입 금지, TRANSACTION 0장 ⑥). exit 0/1
 npx tsx tools/simOwnerRefuse.ts            # 면담 거부 선수 풀 이동 정확. exit 0/1
-npx tsx tools/simForeign.ts 40             # 외인 장기 건강(멸종0·바닥보장·캡). exit 0/1
+npx tsx tools/simForeign.ts 40             # 외인 장기 건강(멸종0·바닥보장·캡). parity(우승경험 6/7)는 표본<80 노이즈라 120시즌 arm에서만 판정(2026-07-02 브리틀 교정 — 40시즌 5/7·120시즌 7/7 실증). exit 0/1
 npx tsx tools/simStaffLife.ts              # 스태프 풀 건강(고갈/폭발0·연령·순환). exit 0/1
 npx tsx tools/simScandalEffect.ts          # 사건사고 정지출전 차단·영구퇴출 정합. exit 0/1
 npx tsx tools/simStatRecord.ts             # 개인 귀속 결정론·팀 누수0·개인합=팀박스. exit 0/1

@@ -4,6 +4,7 @@
 
 import type { Player, SeasonAwards } from '../types';
 import { marketValue } from '../engine/salary';
+import { MED_REF } from '../engine/overall';
 import type { ProdLine } from '../engine/production';
 
 type AwardsArchive = { season: number; awards?: SeasonAwards }[];
@@ -40,7 +41,16 @@ export function setAwardScores(archive: AwardsArchive): void {
 }
 export const awardScoreOf = (id: string): number => awardScoreMap.get(id) ?? 0;
 
-/** 시장가치(수상 프리미엄 반영) — 게임 전반에서 marketValue 대신 사용. */
+// ── 시대(era) 앵커 컨텍스트 (SALARY 2장, 2026-07-02) — setAwardScores와 동일 주입 패턴 ──
+// 스토어가 base 변화 시(선택·시즌전환·복원) 리그 국내 OVR 중앙값을 주입 → marketVal이 UI·AI·오프시즌
+// 어디서든 같은 시대 보정을 적용(미리보기=결과 전역 일관). 미주입 기본값 = MED_REF(시대 0 = 시드 시대).
+let salaryEra = MED_REF;
+export function setSalaryEra(medOvr: number): void {
+  salaryEra = Number.isFinite(medOvr) && medOvr > 0 ? medOvr : MED_REF;
+}
+export const salaryEraNow = (): number => salaryEra;
+
+/** 시장가치(수상 프리미엄 + 시대 앵커 반영) — 게임 전반에서 marketValue 대신 사용. */
 export function marketVal(p: Player, prod?: ProdLine): number {
-  return marketValue(p, prod, awardScoreOf(p.id));
+  return marketValue(p, salaryEra, prod, awardScoreOf(p.id));
 }

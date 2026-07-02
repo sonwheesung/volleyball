@@ -21,7 +21,8 @@
 **능력(abilityMul)을 주동력으로 가파르게** + 나이는 **연속 serviceFactor**(루키 절벽 제거):
 ```
 marketValue = BASE × abilityMul × serviceFactor(age) × POSITION_MUL × foreignMul × perfFactor
-  abilityMul   = clamp(0.35 + (overall-55)/28, 0.35, 2.0)  // 가파름 — 연봉이 OVR을 따라감
+  abilityMul   = clamp(0.35 + (overall − eraShift − 55)/28, 0.35, 2.0)  // 가파름 — 연봉이 OVR을 따라감
+  eraShift     = medOvr − MED_REF(72)   // 시대 보정(2026-07-02) — 리그 국내 OVR 중앙값 이동만큼 평행이동
   serviceFactor= ≤19:0.58 → 27:1.0(점진) → 31:0.84 → 그 이후 감소  // 22→23 절벽 없음
   POSITION_MUL = S1.12 · OP1.18 · OH1.05 · MB0.92 · L0.82
   foreignMul   = 외국인 1.6
@@ -33,6 +34,19 @@ marketValue = BASE × abilityMul × serviceFactor(age) × POSITION_MUL × foreig
 > abilityMul 가파르게 + serviceFactor(절벽 제거)로 **r=0.16→0.47, 2배+ 차이 48.8%→6.9%, 절벽
 > 3.5배→1.37배** (tools/simSalaryOvr.ts, N=200리시드·22,400선수). 계약은 여전히 서명 시점 고착
 > (노장 과대·신인 저평가 서사 보존) — 다만 능력이 주도해 OVR과 분명히 연동.
+
+> **연봉 = 리그 내 상대 가치 — 시대(era) 상대 앵커 전환 (2026-07-02, 독립 리뷰 A안 채택)**:
+> ~~abilityMul의 절대 앵커(overall−55)~~ 는 성장 C(TRAINING §1.8 C)가 리그 OVR 중앙값을 72→69(20시즌+ 정착)로
+> 내리자 리그 연봉 ~−11% 레벨 시프트(나선 아님 — 일회성 재보정 불일치)를 일으켰고, 수입(모기업·직관·굿즈,
+> 순위 기반)은 불변이라 **재정 긴장 사멸**(simFinance 120시즌: 자금부족 입찰좌절 14→0회·모기업 보전 9→0회·잔고
+> 21.4→46.6억) + **캡(35억=현실 KOVO 고정) 밀착 드라마 약화**. 절대 캡과 정합하려면 연봉은 리그 내 상대 가치여야
+> 캡 압박이 시대 불변 — `marketValue(p, medOvr, …)`·`computeSalary(p, medOvr, …)`에 **medOvr(리그 국내 OVR 중앙값)
+> 필수 파라미터**(기본값 없음 — 누락 호출부가 컴파일 에러, 미리보기≠결과 클래스 봉쇄). 기준점 `MED_REF=72`
+> (성장 C 직전 실측)는 `engine/overall.ts` 단일 출처 — aiRetainProb(EC-FA-06)·aiKeepsForeign과 같은 상대 패턴.
+> 공급: 게임 전반은 `data/awardSalary.ts marketVal`(주입 컨텍스트 `setSalaryEra` — setAwardScores와 동일 패턴,
+> 스토어가 base 변화 시 주입) · 오프시즌 재계약은 `buildOffseason leagueMedOvr` 명시 전달 · 시드 생성은 MED_REF
+> (시대 0 — 시드 연봉 불변, day0 캡 정합 유지). **FA 등급은 연봉 순위(상대) 기반이라 무관 확정**(리뷰 검증).
+> displayOvr(표시)는 **절대 척도 유지** — 리그가 덜 여문 시대는 덜 여물어 보이는 게 실데이터 서사(스케일 추격 금지).
 
 > **0장 ↔ FA 충돌 주의(해소됨):** 0장은 "팀 총예산만(느슨), 정식 캡 없음"으로 결정했으나,
 > 이후 FA 시스템에서 **정식 샐러리캡이 도입**되었다(`engine/cap.ts`: `LEAGUE_CAP=350000`/35억,

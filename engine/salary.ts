@@ -6,7 +6,7 @@
 import type { Player, Position } from '../types';
 import type { Rng } from './rng';
 import type { ProdLine } from './production';
-import { overall } from './overall';
+import { MED_REF, overall } from './overall';
 import { clampSalary, maxSalaryFor } from './cap';
 
 const BASE = 24000;          // 중립 배수에서 ~2.4억
@@ -40,9 +40,12 @@ function serviceFactor(age: number): number {
 const POSITION_MUL: Record<Position, number> = { S: 1.12, OP: 1.18, OH: 1.05, MB: 0.92, L: 0.82 };
 
 // 능력 배수 — 연봉이 OVR을 따라가도록 가파르게(좁은 원시 OVR 밴드를 넓게 벌림).
-//   raw 56→0.40 · 69→0.86 · 78→1.18 · 84→1.40 (clamp 0.35~2.0)
-function abilityMul(p: Player): number {
-  return Math.max(0.35, Math.min(2.0, 0.35 + (overall(p) - 55) / 28));
+//   MED_REF=72 시대 기준: raw 56→0.40 · 69→0.86 · 78→1.18 · 84→1.40 (clamp 0.35~2.0)
+// 시대 보정(2026-07-02, SALARY 2장): 연봉 = 리그 내 상대 가치 — medOvr(리그 국내 중앙값) 이동만큼 앵커 평행이동.
+//   절대 캡(35억=현실 KOVO 고정)과 정합하려면 연봉이 상대여야 캡 압박이 시대 불변(성장 C −11% 디플레 교훈).
+function abilityMul(p: Player, medOvr: number): number {
+  const ovr = overall(p) - (medOvr - MED_REF); // 시대 보정
+  return Math.max(0.35, Math.min(2.0, 0.35 + (ovr - 55) / 28));
 }
 
 function foreignMul(p: Player): number {
@@ -65,20 +68,23 @@ function perfFactor(p: Player, prod?: ProdLine): number {
 /**
  * 시장가치 — 지금 새로 계약하면 받을 값(현재 나이 기준).
  * 재계약/FA·표시용. prod 있으면 실적 반영.
+ * medOvr = 리그 국내 OVR 중앙값(시대 앵커, 필수 — 기본값 없음: 누락 호출부는 컴파일 에러로 드러난다.
+ *   게임 전반은 data/awardSalary.marketVal(주입 컨텍스트)을 쓰고, 엔진 내부·시드는 명시 전달).
  */
-export function marketValue(p: Player, prod?: ProdLine, awardScore = 0): number {
+export function marketValue(p: Player, medOvr: number, prod?: ProdLine, awardScore = 0): number {
   const award = 1 + AWARD_BONUS * Math.max(0, Math.min(1, awardScore)); // 통산 수상 누적 프리미엄
-  const v = BASE * abilityMul(p) * serviceFactor(p.age) * POSITION_MUL[p.position] * foreignMul(p) * perfFactor(p, prod) * award;
+  const v = BASE * abilityMul(p, medOvr) * serviceFactor(p.age) * POSITION_MUL[p.position] * foreignMul(p) * perfFactor(p, prod) * award;
   return clampSalary(roundTo100(Math.max(MIN_SALARY, v)), p);
 }
 
 /**
  * 계약 연봉 — 서명 시점 나이 기준으로 고정(능력은 서명 시점 능력).
  * 루키 할인은 serviceFactor 안에서 점진(하드 캡 절벽 제거). rng 있으면 협상 난수(±).
+ * medOvr = 서명 시점 리그 국내 OVR 중앙값(시드 생성은 MED_REF — 시대 0).
  */
-export function computeSalary(p: Player, signedAtAge: number, rng?: Rng): number {
+export function computeSalary(p: Player, medOvr: number, signedAtAge: number, rng?: Rng): number {
   const noise = rng ? rng.range(0.9, 1.12) : 1.0;
-  const v = BASE * abilityMul(p) * serviceFactor(signedAtAge) * POSITION_MUL[p.position] * foreignMul(p) * noise;
+  const v = BASE * abilityMul(p, medOvr) * serviceFactor(signedAtAge) * POSITION_MUL[p.position] * foreignMul(p) * noise;
   return clampSalary(roundTo100(Math.max(MIN_SALARY, v)), p);
 }
 

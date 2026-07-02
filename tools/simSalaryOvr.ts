@@ -3,6 +3,7 @@
 import { LEAGUE, reseedLeague, getEvolvedTeamPlayers } from '../data/league';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { marketValue } from '../engine/salary';
+import { MED_REF } from '../engine/overall'; // 보정 측정은 시대 0 기준
 import type { Player } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
@@ -19,7 +20,7 @@ for (let k = 0; k < K; k++) {
         disp: displayOvr(overallRaw(p)),
         raw: overall(p),
         salary: p.contract.salary,
-        market: marketValue(p),
+        market: marketValue(p, MED_REF),
         age: p.age,
         signedAtAge: p.contract.signedAtAge,
       });

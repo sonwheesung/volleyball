@@ -47,6 +47,20 @@ export function teamOverall(players: Player[]): number {
   return Math.round(teamOverallRaw(players));
 }
 
+// ── 시대(era) 상대 앵커 — 단일 출처 (2026-07-02, EC-FA-06·SALARY 2장) ──
+// 성장 곡선 개편(성장 C 등)으로 리그 OVR 분포가 이동하면 절대 OVR 임계(잔류 62·82, 연봉 앵커 55)가
+// 암묵적으로 강/약화된다. 소비자는 medianOvr(리그 국내 중앙값)를 받아 MED_REF와의 차만큼 평행이동한다.
+
+/** 상대 앵커 보정 기준 — 성장 C 직전(cf60ed6) 리그 국내 OVR 중앙값 실측(12시즌 안정 ~72, 2026-07-02). */
+export const MED_REF = 72;
+
+/** 국내 로스터 OVR 중앙값(상대 앵커 입력) — 분포 이동(성장 곡선 개편 등)에 잔류율·연봉 스케일이 견고하도록. */
+export function medianOvr(players: Player[]): number {
+  if (!players.length) return MED_REF;
+  const v = players.map((p) => overall(p)).sort((a, b) => a - b);
+  return v[Math.floor(v.length / 2)];
+}
+
 // 표시 전용 OVR 스케일 — overall()/teamOverall()(엔진·AI 정렬·은퇴/aiGM·스케줄 절대 임계값용)은
 // 그대로 두고, UI 카드/목록 표시에만 적용한다. 원시 OVR이 좁은 밴드(선수 56~84, 평균 69)에 압축돼
 // "프로답지 않게" 낮아 보이던 것을, 프로 스케일(신입 ~70 · 평균 ~80 · 최고 90+)로 옮긴다.

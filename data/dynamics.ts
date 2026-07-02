@@ -142,11 +142,16 @@ function compute(): Dyn {
     injuries.reduce((n, s) => n + (s.teamId === teamId && s.from <= d && d <= s.to ? 1 : 0), 0);
   const payrollOf = (teamId: string) => domesticPayroll(roster.get(teamId) ?? [], getPlayer);
 
+  // 자기 방출 선수 AI 재영입 금지(TRANSACTION_SYSTEM 0장 ⑥, 2026-07-02) — 방출로 만든 구멍을 그 선수로
+  // 되메꾸는 무의미 churn + "유저는 배신 웃돈 ×1.5, AI는 공짜" 비대칭 차단. 타팀 영입은 자유.
+  const releasedByTeam = new Map<string, string[]>(); // playerId → 이번 시즌 그를 방출한 teamId들
+
   const applyTx = (tx: Tx) => {
     const arr = roster.get(tx.teamId) ?? [];
     if (tx.kind === 'release') {
       if (!arr.includes(tx.playerId)) return; // 그 팀 소속이 아닌 선수 방출은 무효 — 팬텀 방출이 FA 풀로 새는 것 차단(이중 소속 방지). 영입과 대칭.
       roster.set(tx.teamId, arr.filter((id) => id !== tx.playerId));
+      releasedByTeam.set(tx.playerId, [...(releasedByTeam.get(tx.playerId) ?? []), tx.teamId]);
       // 외인은 방출돼도 FA 풀로 가지 않는다 — 리그를 떠남(FOREIGN_SYSTEM 3장, 타 팀이 주울 수 없음)
       if (!getPlayer(tx.playerId)?.isForeign) faAvail.add(tx.playerId);
     } else {
@@ -166,7 +171,8 @@ function compute(): Dyn {
     // 현재 부상 중인 FA는 영입 대상 제외 — 구멍을 메우려는 영입인데 출전 불가면 무의미
     const injAll = new Set(injuries.filter((s) => s.from <= d && d <= s.to).map((s) => s.playerId));
     for (const pos of shortagePositions(healthy)) {
-      const pool = [...faAvail].filter((id) => !injAll.has(id)).map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p);
+      // 자기 방출자 제외(0장 ⑥) — 부상 FA 제외와 같은 결: 구멍 수혈 대상으로 무의미한 후보를 걸러낸다
+      const pool = [...faAvail].filter((id) => !injAll.has(id) && !releasedByTeam.get(id)?.includes(teamId)).map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p);
       const pick = pickSigning(pos, pool, (roster.get(teamId) ?? []).length, payrollOf(teamId), (p) => marketVal(p), LEAGUE_CAP);
       if (!pick) continue;
       applyTx({ day: d, teamId, playerId: pick.id, kind: 'sign' });

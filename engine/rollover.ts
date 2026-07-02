@@ -40,14 +40,15 @@ export function maybeBreakthrough(grown: Player): Player {
   return next;
 }
 
-/** 시장가치로 재계약된 계약(자동연장·잔류). 개인 연봉 상한(프랜차이즈 예외) 적용. */
-export function renewedContract(p: Player): Contract {
-  return { salary: clampSalary(marketValue(p), p), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: p.age };
+/** 시장가치로 재계약된 계약(자동연장·잔류). 개인 연봉 상한(프랜차이즈 예외) 적용.
+ *  medOvr = 리그 국내 OVR 중앙값(시대 앵커, SALARY 2장 2026-07-02) — buildOffseason이 계산해 전달. */
+export function renewedContract(p: Player, medOvr: number): Contract {
+  return { salary: clampSalary(marketValue(p, medOvr), p), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: p.age };
 }
 
-/** 한 선수의 시즌 롤오버. override = 시즌 중 재계약된 계약(있으면 우선). effects = 전문 코치 효과(STAFF).
- *  lostDays = 출장정지 결장일(훈련 생략 — 성장 정체·노장 하락, OWNER_SYSTEM 4.6) */
-export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Contract, effects: StaffEffects = NO_EFFECTS, lostDays = 0): Player {
+/** 한 선수의 시즌 롤오버. medOvr = 시대 앵커(영건 자동연장 연봉용). override = 시즌 중 재계약된 계약(있으면 우선).
+ *  effects = 전문 코치 효과(STAFF). lostDays = 출장정지 결장일(훈련 생략 — 성장 정체·노장 하락, OWNER_SYSTEM 4.6) */
+export function rolloverPlayer(base: Player, focus: TrainingFocus, medOvr: number, override?: Contract, effects: StaffEffects = NO_EFFECTS, lostDays = 0): Player {
   // 1) 시즌치 성장/노쇠 누적 — 전문 코치 효과(속도·포텐 상한·노쇠 지연)를 영구 반영. 정지일은 훈련 생략.
   //    + 어린 선수 희귀 돌파(갑자기 확 큼, TRAINING 9장)
   const grown = maybeBreakthrough(evolvePlayer(base, focus, SEASON_LENGTH, effects, lostDays));
@@ -65,21 +66,22 @@ export function rolloverPlayer(base: Player, focus: TrainingFocus, override?: Co
   let contract: Contract;
   if (remaining > 0) contract = { ...cur, remaining };
   else if (career.seasons >= FIRST_FA_SEASONS) contract = { ...cur, remaining: 0 }; // FA 공시
-  else contract = renewedContract(aged); // 영건 자동연장
+  else contract = renewedContract(aged, medOvr); // 영건 자동연장
   // 현 구단 근속 +1 (이적 시 store 에서 0으로 리셋)
   const clubTenure = (aged.clubTenure ?? 0) + 1;
   return { ...aged, contract, career, clubTenure };
 }
 
-/** 리그 전체 롤오버 → 다음 시즌 base 스냅샷 */
+/** 리그 전체 롤오버 → 다음 시즌 base 스냅샷. medOvr = 시대 앵커(호출부가 medianOvr로 계산). */
 export function rolloverLeague(
   players: Player[],
   focusOf: (p: Player) => TrainingFocus,
+  medOvr: number,
   overrides: Record<string, Contract>,
   effectsOf?: (p: Player) => StaffEffects,
   lostDaysOf?: (p: Player) => number, // 출장정지 결장일(훈련 생략) — 미지정이면 0(기존과 동일)
 ): Record<string, Player> {
   const out: Record<string, Player> = {};
-  for (const p of players) out[p.id] = rolloverPlayer(p, focusOf(p), overrides[p.id], effectsOf?.(p), lostDaysOf?.(p) ?? 0);
+  for (const p of players) out[p.id] = rolloverPlayer(p, focusOf(p), medOvr, overrides[p.id], effectsOf?.(p), lostDaysOf?.(p) ?? 0);
   return out;
 }

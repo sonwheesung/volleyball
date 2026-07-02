@@ -15,6 +15,7 @@ import { SEASON_DAYS } from '../engine/calendar';
 import { buildLineup } from '../engine/lineup';
 import { overall } from '../engine/overall';
 import { marketValue } from '../engine/salary';
+import { salaryEraNow } from './awardSalary';
 import { formFactor, formGrade } from '../engine/form';
 import { awardHistoryOf } from './awards';
 import { computeStandings } from './standings';
@@ -92,7 +93,7 @@ export function discontentNow(
     recentRankAvg: rank,
     teamCount: standings.length,
     playRatio,
-    salaryRatio: p.contract.salary / Math.max(1, marketValue(p)),
+    salaryRatio: p.contract.salary / Math.max(1, marketValue(p, salaryEraNow())),
     myTeamId,
     sitCause: cause,
     expectsPlay: expectsPlayOf(p, myTeamId, day),

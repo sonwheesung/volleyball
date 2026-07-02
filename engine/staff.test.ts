@@ -26,14 +26,17 @@ test('trainingBoosts: 분야→훈련 매핑, 같은 분야 최고 1명만', () 
   assert.equal(b[6], undefined, '수비 훈련은 부스트 없음');
 });
 
-test('공격코치(기량): skSpike 더 빨리 + 포텐 상한 위로 더 높이 성장', () => {
+test('공격코치(기량): skSpike 더 빨리 + 훈련 상한(포텐−GAP) 위로 더 높이 성장', () => {
+  // §1.8 C(2026-07-01): 훈련 상한 = 포텐 − TRAIN_GAP(12). 마지막 GAP은 경기경험만 채운다.
+  // 코치 potBonus는 포텐을 +5 올려 훈련 상한도 함께 올린다(72→77) — "포텐 위로"가 아니라 "상한 위로".
   const base = mkPlayer('OH');
-  base.skSpike = 80; base.potential.skSpike = 84; // 상한 근접
+  base.skSpike = 70; base.potential.skSpike = 84; // 훈련 상한 84−12=72 근접
   const focus: TrainingFocus = { primary: [4, 6], secondary: [1, 10, 12] };
   const plain = evolvePlayer(base, focus, 600);
   const coached = evolvePlayer(base, focus, 600, staffEffects([asst('attack', 90)]));
-  assert.ok(plain.skSpike <= 84, '기본은 포텐 84에서 멈춤');
-  assert.ok(coached.skSpike > 84, `코치는 상한을 넘어 성장(${coached.skSpike} > 84, +${potRaise(90)})`);
+  assert.ok(plain.skSpike <= 72, `기본은 훈련 상한 72(=84−GAP)에서 멈춤(실측 ${plain.skSpike})`);
+  assert.ok(coached.skSpike > 72, `코치는 상한을 올려 그 위로 성장(${coached.skSpike} > 72, 포텐 +${potRaise(90)})`);
+  assert.ok(coached.skSpike > plain.skSpike, '코치가 더 높이');
 });
 
 test('체력코치(노쇠 지연): 나이든 선수 jump 덜 하락', () => {

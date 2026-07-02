@@ -5,7 +5,7 @@ import './_gt_mock';
 (async () => {
   const { useGameStore } = await import('../store/useGameStore');
   const { LEAGUE, SEASON, currentRosters, evolveOnDay } = await import('../data/league');
-  const { aiKeepsFA, aiRetainProb } = await import('../engine/aiGM');
+  const { aiKeepsFA, aiRetainProb, medianOvr, MED_REF } = await import('../engine/aiGM');
   const { overall } = await import('../engine/overall');
   const G = () => useGameStore.getState();
   const my = LEAGUE.teams[0].id;
@@ -15,13 +15,17 @@ import './_gt_mock';
   const pop: { age: number; ovr: number; old: boolean; prob: number }[] = [];
   G().resetSave(); G().selectTeam(my);
   for (let s = 0; s < N; s++) {
+    // 시즌 모집단 먼저 수집 → 중앙값 계산 → 확률(엔진과 동일한 상대 앵커 순서, FA_SYSTEM 4 2026-07-02)
+    const seasonPop: import('../types').Player[] = [];
     for (const t of LEAGUE.teams) {
       if (t.id === my) continue; // AI 팀만
       for (const id of currentRosters()[t.id] ?? []) {
         const p = evolveOnDay(id, 164); if (!p || p.isForeign) continue;
-        pop.push({ age: p.age, ovr: overall(p), old: aiKeepsFA(p), prob: aiRetainProb(p) });
+        seasonPop.push(p);
       }
     }
+    const med = medianOvr(seasonPop);
+    for (const p of seasonPop) pop.push({ age: p.age, ovr: overall(p), old: aiKeepsFA(p), prob: aiRetainProb(p, med) });
     for (const f of myFix) G().recordResult({ fixtureId: f.id, homeSets: 3, awaySets: 1 } as any);
     G().setDay(164); G().endSeason();
   }
@@ -52,7 +56,8 @@ import './_gt_mock';
   const mid = pop.filter((x) => x.prob > 0.05 && x.prob < 0.95).length / n;
   console.log(`\n연속성: 신 확률이 중간대(0.05~0.95) 비율 ${(mid * 100).toFixed(0)}% (이진이면 0% — 절벽). 단조성 sanity:`);
   // A/B 단조: 같은 나이서 OVR↑→prob↑, 같은 OVR서 나이↑→prob↓
-  const { aiRetainProb: f } = await import('../engine/aiGM');
+  // 합성 검사는 보정 기준 시대(med=MED_REF)로 고정 — 절대 앵커 의미(62·70·88) 유지
+  const f = (p: any) => aiRetainProb(p, MED_REF);
   const mk = (age: number, ovr: number) => ({ age, position: 'OH', isForeign: false,
     jump: ovr, agility: ovr, staminaMax: ovr, staminaRegen: ovr, reaction: ovr, positioning: ovr, focus: ovr, consistency: ovr, vq: ovr,
     skSpike: ovr, skBlock: ovr, skDig: ovr, skReceive: ovr, skSet: ovr, skServe: ovr, height: 185, potential: {}, traits: [] }) as any;

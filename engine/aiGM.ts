@@ -2,7 +2,7 @@
 // 영입/지명은 "무조건 OVR"이 아니라 팀 사정(포지션 부족도) + 감독 성향(공격/수비)으로 결정.
 
 import type { CoachStyle, Player, Position } from '../types';
-import { overall } from './overall';
+import { MED_REF, overall } from './overall';
 import { TRAITS } from './traits';
 
 // 팀 포지션 이상 구성(16인) — 공용
@@ -60,13 +60,18 @@ export function aiKeepsFA(p: Player): boolean {
   return true;
 }
 
+// 시대 상대 앵커(MED_REF·medianOvr)는 engine/overall.ts 단일 출처 — 연봉(salary)과 공유(2026-07-02).
+export { MED_REF, medianOvr } from './overall';
+
 /** AI 재계약 의향 확률(0~1, FA_SYSTEM 4) — 절벽 컷 대신 OVR·나이 연속 함수.
  *  엘리트는 노쇠에도 소프트 플로어(프랜차이즈 본능 — 32세 에이스를 칼같이 안 버림). 가끔 노장 잔류·영건 이탈 = 리그 생동.
- *  rng 롤은 호출부(offseason): keep = rng < aiRetainProb(p). placeholder — `_ev_airetain`으로 측정·튜닝. */
-export function aiRetainProb(p: Player): number {
-  const ovr = overall(p);
+ *  medOvr = 리그 국내 OVR 중앙값(호출부가 medianOvr로 계산) — 성장 C의 분포 하향으로 절대 앵커가 암묵 강화돼
+ *  순잔류 60%→39%(24시즌)로 과이탈하던 것을 시대 보정으로 흡수(2026-07-02, "분포 이동 vs 절대 임계" 사각).
+ *  aiKeepsForeign(domesticAvg+15)과 같은 상대 패턴. rng 롤은 호출부(offseason): keep = rng < aiRetainProb(p, med). */
+export function aiRetainProb(p: Player, medOvr: number): number {
+  const ovr = overall(p) - (medOvr - MED_REF); // 시대 보정: 리그 중앙값 이동분만큼 평행이동
   const a = p.age;
-  const q = Math.max(0, Math.min(1, (ovr - 62) / 16));   // 품질 0~1: 62→0, 78→1
+  const q = Math.max(0, Math.min(1, (ovr - 62) / 16));   // 품질 0~1: 62→0, 78→1 (MED_REF=72 시대 기준)
   const base = q * q * (3 - 2 * q);                       // smoothstep(S커브) — 양 끝 완만
   const ageMul = a <= 29 ? 1 : a <= 31 ? 0.92 : a <= 33 ? 0.74 : a <= 35 ? 0.48 : 0.26;
   let prob = base * ageMul;

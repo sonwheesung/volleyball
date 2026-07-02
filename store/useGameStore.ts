@@ -10,7 +10,9 @@ import { accrueBonds, setRelationContext } from '../data/relationships';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
-  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, fireCoach as fireCoachLeague, getTeamCoach, grantStartingStaff, LEAGUE } from '../data/league';
+  currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, fireCoach as fireCoachLeague, getTeamCoach, grantStartingStaff, LEAGUE,
+  currentBasePlayers } from '../data/league';
+import { medianOvr, MED_REF } from '../engine/overall';
 import { advanceCoaches } from '../data/staffLifecycle';
 import { bottomStreak } from '../engine/staffLifecycle';
 import { SEASON_DAYS } from '../engine/calendar';
@@ -40,7 +42,7 @@ import { coachInfoOf } from '../data/league';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
 import { planNextAction } from '../engine/advance';
-import { marketVal, setAwardScores } from '../data/awardSalary';
+import { marketVal, setAwardScores, setSalaryEra } from '../data/awardSalary';
 import { setSeasonHistory, upcomingStanceOf } from '../data/leagueHistory';
 import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
 import { ROSTER_MAX, canRelease, inSeasonCost, severanceFee } from '../engine/transactions';
@@ -313,6 +315,7 @@ export const useGameStore = create<GameState>()(
         setOwnerContext([]);
         setAwardScores([]); // 새 세이브 — 수상 이력 없음
         setSeasonHistory([]); // 모기업 기조(FINANCE 2.0) 컨텍스트 — 이력 없음
+        setSalaryEra(medianOvr(currentBasePlayers().filter((p) => !p.isForeign))); // 시대 앵커(SALARY 2장) — 시드 시대 ≈ MED_REF
       },
       setDay: (day) => set((s) => (Number.isFinite(day) ? { currentDay: Math.max(s.currentDay, day) } : {})), // NaN/Infinity 거부(currentDay 오염 전파 차단)
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
@@ -882,6 +885,7 @@ export const useGameStore = create<GameState>()(
         commitRosters(filled.rosters);
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
         setOwnerContext([]);              // 벤치 지시는 시즌 단위 — 새 시즌 전원 복귀
+        setSalaryEra(medianOvr(currentBasePlayers().filter((p) => !p.isForeign))); // 시대 앵커 갱신(SALARY 2장) — 새 base 기준
         set({
           coachPool: nextCoachPool,          // 감독 생애주기 풀 영속(STAFF_SYSTEM 6)
           staffHead: nextStaffHead,          // AI 재배정 + 죽은 계약 정리 반영
@@ -939,6 +943,7 @@ export const useGameStore = create<GameState>()(
         setOwnerContext([]);
         setAwardScores([]);
         setSeasonHistory([]); // 모기업 기조(FINANCE 2.0) 컨텍스트 리셋
+        setSalaryEra(MED_REF); // 시대 앵커 리셋(시대 0)
         // 전체 데이터 초기화 = 새 출발 → 스포트라이트 본 기록도 리셋(튜토리얼 다시 봄). 인트로 슬라이드(onboarded)는
         // 유지(다시보기는 replayOnboarding). seenTips는 freshSave 밖이라 명시적으로 비운다(ONBOARDING 4).
         set({ ...freshSave, seenTips: {} });
@@ -1040,6 +1045,7 @@ export const useGameStore = create<GameState>()(
           setOwnerContext(state?.benchDirectives ?? []);
           setAwardScores(state?.archive ?? []); // 수상 프리미엄 컨텍스트 복원
           setSeasonHistory(state?.archive ?? []); // 모기업 기조(FINANCE 2.0) 컨텍스트 복원 — FA 화면 진입 전 stance 일관
+          setSalaryEra(medianOvr(currentBasePlayers().filter((p) => !p.isForeign))); // 시대 앵커 복원(SALARY 2장) — base 커밋 후
           // 시뮬 결과 캐시 복원 — **반드시 맨 끝**(위 commit들이 baseVersion/txVersion을 bump한 뒤). 저장 키와 맞춰 재계산 제거(Phase1).
           restoreSimCache((state as { simCache?: import('../data/simCache').SimCache })?.simCache);
           // 다이아 소급 폭탄 방지(§11.3): 기능 이전 세이브면 현 달성 업적을 claimed로 시드(1회) → 이후 신규 달성만 다이아.

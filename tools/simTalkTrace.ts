@@ -25,6 +25,7 @@ import { prefWeightsOf } from '../engine/faMarket';
 import { overall, teamOverall } from '../engine/overall';
 import { createRng, strSeed } from '../engine/rng';
 import { marketValue } from '../engine/salary';
+import { MED_REF } from '../engine/overall';
 import type { Player, Position } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
@@ -59,7 +60,7 @@ function discontentNow(p: Player, day: number): { topic: DiscontentTopic | null;
   const topic = discontentOf(p, {
     recentRankAvg: rank, teamCount: standings.length,
     playRatio: Math.min(1, (prod?.matches ?? 0) / games),
-    salaryRatio: p.contract.salary / Math.max(1, marketValue(p)),
+    salaryRatio: p.contract.salary / Math.max(1, marketValue(p, MED_REF)),
     myTeamId: MY,
   });
   if (!topic) return { topic: null, weight: 0 };

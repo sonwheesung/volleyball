@@ -3,7 +3,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { createRng } from './rng';
-import { overall, overallRaw, teamOverall } from './overall';
+import { MED_REF, overall, overallRaw, teamOverall } from './overall';
 import { LEAGUE_CAP, MAX_SALARY, FRANCHISE_MAX, clampSalary, maxSalaryFor, canAfford } from './cap';
 import { computeSalary } from './salary';
 import { applyAgingDay, FLOOR, DECAY_STATS } from './aging';
@@ -88,11 +88,11 @@ test('속성: computeSalary는 [최저, 프랜차이즈상한] 안 + 전성기 �
   for (let s = 1; s <= 200; s++) {
     const p = randPlayer(s);
     for (let age = 18; age <= 40; age++) {
-      const sal = computeSalary(p, age);
+      const sal = computeSalary(p, MED_REF, age);
       assert.ok(sal >= 3000 && sal <= FRANCHISE_MAX, `salary=${sal} (age ${age})`);
     }
     for (let age = 32; age <= 39; age++) {
-      assert.ok(computeSalary(p, age + 1) <= computeSalary(p, age), `노장 단조 위반 seed ${s} age ${age}`);
+      assert.ok(computeSalary(p, MED_REF, age + 1) <= computeSalary(p, MED_REF, age), `노장 단조 위반 seed ${s} age ${age}`);
     }
   }
 });

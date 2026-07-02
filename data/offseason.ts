@@ -7,7 +7,7 @@ import { createRng } from '../engine/rng';
 import { applyRetirements } from '../engine/retire';
 import { rollExpulsion, scandalRepMul, type ExpelKind } from '../engine/scandal';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
-import { aiRetainProb, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
+import { aiRetainProb, medianOvr, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
 import { assignFAGrades, askingPrice, offerScore, prefWeightsOf, acceptProb, SIT_OUT } from '../engine/faMarket';
 import { affinity, pairKey } from '../engine/relationships';
 import { relationBonds } from './relationships';
@@ -15,7 +15,7 @@ import { needsCompensationPlayer, pickCompensation, compensationMoney, compensat
 import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { strSeed } from '../engine/rng';
 import type { OwnerFx } from '../engine/owner';
-import { marketVal } from './awardSalary';
+import { marketVal, setSalaryEra } from './awardSalary';
 import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
 import { seasonScandals } from './dynamics';
@@ -261,7 +261,12 @@ export function buildOffseason(
   const lostDays = new Map<string, number>();
   for (const sc of seasonScandals()) lostDays.set(sc.playerId, Math.max(0, sc.to - sc.from));
   const repMap = scandalRepMap(); // 사고 선수 다음 재계약/FA 평판 할인
-  const snapshot = rolloverLeague(currentBasePlayers(), focusOf, contractOverrides, effectsOf, (p) => lostDays.get(p.id) ?? 0);
+  // 시대 앵커(FA_SYSTEM 4·SALARY 2장, 2026-07-02): 리그 국내 OVR 중앙값 — 이번 오프시즌의 단일 시대값.
+  //   AI 잔류 확률·재계약/자동연장 연봉·FA 요구액이 전부 이 값으로 시대 보정 → 성장 곡선 개편으로
+  //   분포가 이동해도 순잔류율(~58%)·연봉 스케일(캡 압박)이 유지된다(과이탈·재정 긴장 사멸 방지).
+  const leagueMedOvr = medianOvr(currentBasePlayers().filter((p) => !p.isForeign));
+  setSalaryEra(leagueMedOvr); // marketVal(주입 컨텍스트) 사용처(FA 요구액·AI 수혈 등)와 동기화
+  const snapshot = rolloverLeague(currentBasePlayers(), focusOf, leagueMedOvr, contractOverrides, effectsOf, (p) => lostDays.get(p.id) ?? 0);
   const retireRng = createRng(70000 + nextSeason * 977);
   const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng);
 
@@ -309,13 +314,13 @@ export function buildOffseason(
       return rng.next() < prob;
     };
     // AI 재계약: 절벽 컷(aiKeepsFA) 대신 확률(aiRetainProb)을 결정론 시드로 굴림 — 가끔 노장 잔류·영건 이탈(리그 생동)
-    const aiRetains = (p: Player): boolean => createRng(strSeed(`airetain:${p.id}:${nextSeason}`)).next() < aiRetainProb(p);
+    const aiRetains = (p: Player): boolean => createRng(strSeed(`airetain:${p.id}:${nextSeason}`)).next() < aiRetainProb(p, leagueMedOvr);
     const wantRetain = expiring
       .filter((p) => (teamId === myTeam ? resignDecisions[p.id] !== false && !refuses(p) : aiRetains(p)))
       .sort((a, b) => overall(b) - overall(a));
     const retainSet = new Set(wantRetain.map((p) => p.id));
     for (const p of wantRetain) {
-      const rc = renewedContract(p);
+      const rc = renewedContract(p, leagueMedOvr);
       // 직전 시즌 사고 선수는 평판 할인(사안 경중만큼 연봉↓) — 다음 재계약에 반영(OWNER_SYSTEM 4.6)
       const rep = repMap.get(p.id) ?? 1;
       const renewed = rep < 1 ? { ...rc, salary: round100(rc.salary * rep) } : rc;

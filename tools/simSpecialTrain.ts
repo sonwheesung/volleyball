@@ -7,6 +7,7 @@
 //   npx tsx tools/simSpecialTrain.ts
 import { createRng, strSeed } from '../engine/rng';
 import { makeProspect } from '../data/seed';
+import { MED_REF } from '../engine/overall';
 import { rolloverPlayer } from '../engine/rollover';
 import { overall } from '../engine/overall';
 import type { Player, Position, TrainableStat, TrainingFocus } from '../types';
@@ -48,7 +49,7 @@ function runMode(mode: Mode): Agg {
     let p = makeProspect(createRng(strSeed(`st-${i}`)), `st-${i}`, pos);
     let bestOvr = overall(p), bestMaxed = maxedStats(p), bestSeason = 0, season = 0;
     while (p.age <= RETIRE_AGE) {
-      p = rolloverPlayer(p, FOCUS);
+      p = rolloverPlayer(p, FOCUS, MED_REF);
       p = special(p, mode);
       season++;
       const o = overall(p);

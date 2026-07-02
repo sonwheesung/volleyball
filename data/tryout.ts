@@ -6,7 +6,7 @@ import { createRng, strSeed } from '../engine/rng';
 import { overall } from '../engine/overall';
 import { FOREIGN_SALARY, ASIAN_SALARY_Y1, ASIAN_SALARY_Y2, ALT_POOL_SIZE, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, aiKeepsForeign, type TryoutPicks } from '../engine/foreign';
 import { offerScore, acceptProb, SIT_OUT, prefWeightsOf } from '../engine/faMarket';
-import { aiRetainProb, positionGap } from '../engine/aiGM';
+import { aiRetainProb, medianOvr, positionGap } from '../engine/aiGM';
 import { makePlayer, applyAsianIdentity, dedupeNames } from './seed';
 
 const clampS = (v: number) => Math.max(20, Math.min(96, Math.round(v)));
@@ -90,6 +90,7 @@ export function runAsianQuota(
     .map((id) => snapshot[id]).filter((p): p is Player => !!p && !p.isForeign);
   const domesticAvg = domestic.length
     ? domestic.reduce((s, p) => s + overall(p), 0) / domestic.length : 65;
+  const domesticMed = medianOvr(domestic); // 상대 앵커(FA_SYSTEM 4) — 아시아쿼터 잔류 확률도 시대 보정
   const teamOvr = (t: string): number => {
     const ps = (rosters[t] ?? []).map((id) => snapshot[id]).filter((p): p is Player => !!p);
     return ps.length ? ps.reduce((s, p) => s + overall(p), 0) / ps.length : 60;
@@ -108,7 +109,7 @@ export function runAsianQuota(
     if (!pid) continue;
     const p = snapshot[pid];
     if (!p || !returningAsian.includes(pid)) continue; // 은퇴/이탈자는 갱신 불가
-    const wantRoll = retainRng.next() < aiRetainProb(p); // 항상 소비(분기 무관 결정론)
+    const wantRoll = retainRng.next() < aiRetainProb(p, domesticMed); // 항상 소비(분기 무관 결정론)
     const rand = retainRng.next();
     const accRoll = retainRng.next();
     const canAffordY2 = teamId === myTeam ? myCash >= ASIAN_SALARY_Y2 : true;

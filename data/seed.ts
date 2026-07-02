@@ -6,6 +6,7 @@ import { TRAINABLE_STATS } from '../engine/training';
 import { rollFAPref } from '../engine/faMarket';
 import { rollTraits } from '../engine/traits';
 import { computeSalary } from '../engine/salary';
+import { MED_REF } from '../engine/overall';
 import { ASIAN_SALARY } from '../engine/foreign';
 import { headCoachSalary, assistantSalary, scoutSalary } from '../engine/staff';
 import type {
@@ -185,7 +186,7 @@ export function makePlayer(
     peakAge: peakAgeFor(pos, rng),
     career: { ...emptyCareer(), seasons: Math.max(0, age - 19) }, // 데뷔 추정
   };
-  player.contract.salary = computeSalary(player, signedAtAge, rng);
+  player.contract.salary = computeSalary(player, MED_REF, signedAtAge, rng); // 시드=시대 0(MED_REF) — 시드 연봉 불변·day0 캡 정합 유지
   player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length, isForeign); // 외국인=연고 성향·선호팀 없음(EC-DOM-01)
   player.traits = rollTraits(id);
   return player;
@@ -250,7 +251,7 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
     peakAge: peakAgeFor(pos, rng),
     career: emptyCareer(),
   };
-  player.contract.salary = computeSalary(player, age, rng);
+  player.contract.salary = computeSalary(player, MED_REF, age, rng); // 신인 진입 연봉 = 고정 스케일(시대 0) — 현실 루키 스케일은 시대 무관
   player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length);
   player.traits = rollTraits(id);
   return player;
