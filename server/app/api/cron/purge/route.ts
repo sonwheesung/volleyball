@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 import { rollupRecent, purgeExpired } from '../../../../lib/retention';
 
 export const dynamic = 'force-dynamic';
-export const maxDuration = 60;
+// maxDuration 미지정 — 플랜 기본값 사용(파기/롤업은 가벼워 충분). Hobby 플랜 한도 초과 배포실패 회피.
 
 export async function GET(req: Request) {
   const secret = process.env.CRON_SECRET;
