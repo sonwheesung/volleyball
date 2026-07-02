@@ -9,6 +9,7 @@ import { theme, useThemeMode } from '../components/Screen';
 import { loadThemeMode } from '../components/theme';
 import { SpotlightProvider } from '../components/Spotlight';
 import { IntroSplash } from '../components/IntroSplash';
+import { BootGate } from '../components/BootGate';
 import { useGameStore } from '../store/useGameStore';
 import { initIap } from '../lib/iap';
 import { installErrorSink } from '../lib/deviceLog';
@@ -85,6 +86,7 @@ export default function RootLayout() {
       <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
       <ThemeProvider value={NAV_THEME}>
       <SpotlightProvider>
+      <BootGate>
       <Stack
         screenOptions={{
           headerStyle: { backgroundColor: theme.bg },
@@ -134,6 +136,7 @@ export default function RootLayout() {
         <Stack.Screen name="news" options={{ title: '리그 뉴스' }} />
         <Stack.Screen name="news/[id]" options={{ title: '뉴스' }} />
       </Stack>
+      </BootGate>
       </SpotlightProvider>
       </ThemeProvider>
     </SafeAreaProvider>

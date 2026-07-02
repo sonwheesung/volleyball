@@ -60,7 +60,7 @@
 
 - 📋 문서 확정(2026-07-02).
 - ✅ **서버(2026-07-03)**: `lib/auth.ts`(HS256 세션 토큰·resolveUserId)·`/api/auth/login`(dev 스텁 Bearer 발급)·`/api/bootstrap`(점검·버전·공지)·wallet 3라우트 userId 귀속. **검증: 로그인→토큰→지갑 귀속·위조토큰 익명폴백(남의 지갑 0)·bootstrap 응답**.
-- 🔨 클라 `store/useAuthStore.ts`·`app/login.tsx`·루트 부팅 게이트·mypage 로그아웃 — 진행.
-- ⏳ EAS 실물(구글/애플 SDK·SecureStore·ID토큰 JWKS 검증) — EAS 빌드 단계.
+- ✅ **클라(2026-07-03)**: `store/useAuthStore.ts`(세션 persist·signIn/signOut·Bearer 재주입)·`components/LoginScreen.tsx`(로그인 벽)·`components/BootGate.tsx`(점검→강제버전→로그인 게이트, 오프라인 캐시세션 통과)·`lib/bootstrap.ts`(버전비교)·루트 `_layout.tsx` BootGate 래핑·`mypage.tsx` 최하단 로그아웃. **검증: 앱 tsc 0·버전비교 6케이스·게이트 데이터 경로 E2E(점검/min9.9.9/공지 bootstrap 반영·원복)**. ※로그인 화면은 라우트 아닌 컴포넌트(벽에서 이탈 불가).
+- ⏳ EAS 실물(구글/애플 SDK·SecureStore·ID토큰 JWKS 검증) — EAS 빌드 단계. 실기기 렌더/터치 확인은 emulator-test.
 
 > 관련: 결제·지갑은 [BACKEND_SYSTEM] §13, 다이아 SKU·상점은 [MONETIZATION_SYSTEM] §4, 오프라인 우선 계약은 BACKEND §13.6.

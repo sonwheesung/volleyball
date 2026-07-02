@@ -20,7 +20,7 @@ export function isServerConfigured(): boolean {
   return !!SERVER_URL;
 }
 
-export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust';
+export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon';
 export interface LedgerRow {
   delta: number;
   reason: string;
@@ -67,6 +67,25 @@ async function call<T>(path: string, init?: RequestInit): Promise<ServerResult<T
     logError('server.call:' + path, e);
     return { ok: false, reason: 'offline' };
   }
+}
+
+// ── 인증(AUTH_SYSTEM) ──
+/** 신원 → 자체 Bearer 세션. 스텁: provider+providerId. 성공 시 setServerToken은 호출부(useAuthStore)가. */
+export function login(provider: string, providerId: string, displayName?: string) {
+  return call<{ token: string; userId: string; provider: string; displayName: string | null }>('/api/auth/login', {
+    method: 'POST',
+    body: JSON.stringify({ provider, providerId, displayName }),
+  });
+}
+
+// ── 부팅 게이트(점검·버전·공지) ──
+export interface BootstrapData {
+  maintenance: { active: boolean; title?: string; body?: string };
+  version: { min: string | null; latest: string | null; androidUrl: string | null; iosUrl: string | null };
+  announcements: Array<{ id: string; title: string; body: string; pinned: boolean }>;
+}
+export function getBootstrap(): Promise<ServerResult<BootstrapData>> {
+  return call('/api/bootstrap');
 }
 
 // ── 지갑 ──

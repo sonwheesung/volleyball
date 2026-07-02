@@ -9,6 +9,7 @@ import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, Screen, theme, themedStyles } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
+import { useAuthStore } from '../../store/useAuthStore';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd } from '../../engine/diamonds';
 import { DEV_TOOLS } from '../../data/flags';
 
@@ -37,7 +38,19 @@ export default function MyPage() {
   const watchAdForDiamonds = useGameStore((s) => s.watchAdForDiamonds);
   const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
   const adState = useGameStore((s) => s.adState);
+  const session = useAuthStore((s) => s.session);
+  const signOut = useAuthStore((s) => s.signOut);
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
+
+  const accountLabel = session
+    ? session.displayName || (session.provider === 'dev' ? '개발자 계정' : session.provider === 'google' ? 'Google 계정' : session.provider === 'apple' ? 'Apple 계정' : '계정')
+    : null;
+  const confirmLogout = () => {
+    Alert.alert('로그아웃', '로그아웃하시겠어요? 다시 로그인하면 다이아·구매 내역이 그대로 복원됩니다.', [
+      { text: '취소', style: 'cancel' },
+      { text: '로그아웃', style: 'destructive', onPress: () => signOut() }, // 세션 제거 → BootGate가 로그인 벽으로 전환
+    ]);
+  };
 
   // 광고 쿨다운 실시간 표시(MONETIZATION §11.1) — 1초 틱으로 남은 시간 카운트다운. Date.now()는 UI 런타임(엔진/시드 무관).
   const [now, setNow] = useState(() => Date.now());
@@ -111,6 +124,17 @@ export default function MyPage() {
         sub="오류 · 건의 · 질문 — 최근 기록 진단 정보 자동 첨부"
         onPress={() => router.push('/support')} />
 
+      {/* ── 계정 · 로그아웃 (최하단) ── */}
+      {session ? (
+        <View style={{ marginTop: 18, gap: 8 }}>
+          <Muted style={{ fontSize: 12, textAlign: 'center' }}>{accountLabel}(으)로 로그인됨</Muted>
+          <Pressable onPress={confirmLogout} style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.7 }]}>
+            <Ionicons name="log-out-outline" size={18} color={theme.bad} />
+            <Text style={styles.logoutTxt}>로그아웃</Text>
+          </Pressable>
+        </View>
+      ) : null}
+
       <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 14 }}>배구명가 v{version}</Muted>
       <SpotlightOverlay screen="tab-mypage" />
     </Screen>
@@ -124,4 +148,6 @@ const styles = themedStyles(() => StyleSheet.create({
   arrow: { color: theme.accent, fontSize: 24, fontWeight: '900' },
   diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '800' },
+  logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 22, borderRadius: 11, borderWidth: 1, borderColor: theme.bad + '55', backgroundColor: theme.bad + '12' },
+  logoutTxt: { color: theme.bad, fontSize: 13.5, fontWeight: '800' },
 }));
