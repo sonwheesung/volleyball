@@ -29,6 +29,7 @@ export default function TrainingCamp() {
   const diamonds = useGameStore((s) => s.diamonds);
   const camped = useGameStore((s) => s.campTrainedThisOffseason);
   const trainingCamp = useGameStore((s) => s.trainingCamp);
+  const walletBusy = useGameStore((s) => s.walletBusy);
   const [picked, setPicked] = useState<string | null>(null);
   const [course, setCourse] = useState<CampCourse | null>(null);
   const [, force] = useState(0); // 적용 후 리렌더
@@ -101,15 +102,18 @@ export default function TrainingCamp() {
 
   // ── 코스 선택 ──
   const cur = player as unknown as Record<string, number>;
-  const send = () => {
-    if (!course) return;
-    const r = trainingCamp(player.id, course);
+  const send = async () => {
+    if (!course || walletBusy) return;
+    const r = await trainingCamp(player.id, course); // 서버 차감 확정 후에만 반영(BACKEND §13.12)
     if (r.ok) {
       Alert.alert('전지훈련 완료', `${player.name} 선수가 ${CAMP_COURSES[course].label}을 마치고 왔습니다. 열린 성장 한계는 이후 시즌 성장으로 실현됩니다.`);
       setPicked(null); setCourse(null); force((n) => n + 1);
     } else {
-      Alert.alert('전지훈련 불가',
+      Alert.alert(r.reason === 'offline' ? '온라인 연결 필요' : '전지훈련 불가',
         r.reason === 'no-diamonds' ? '다이아가 부족합니다.'
+        : r.reason === 'offline' ? '다이아 사용(전지훈련)은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.'
+        : r.reason === 'busy' ? '처리 중입니다. 잠시만 기다려 주세요.'
+        : r.reason === 'error' ? '전지훈련 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.'
         : r.reason === 'already' ? '이 선수는 이번 오프시즌에 이미 다녀왔습니다.'
         : r.reason === 'not-offseason' ? '오프시즌에만 가능합니다.'
         : r.reason === 'maxed' ? '이 코스의 능력치가 모두 한계(99)입니다.'
@@ -166,7 +170,7 @@ export default function TrainingCamp() {
         <Text style={styles.costTxt}>
           {course ? CAMP_COURSES[course].label : '코스 미선택'} · <Text style={{ color: canAfford ? theme.good : theme.bad, fontWeight: '900' }}>{CAMP_COURSE_COST.toLocaleString()} 💎</Text>
         </Text>
-        <Button label={!course ? '코스를 선택하세요' : canAfford ? '전지훈련 보내기 ▶' : '다이아 부족'} onPress={send} />
+        <Button label={walletBusy ? '보내는 중…' : !course ? '코스를 선택하세요' : canAfford ? '전지훈련 보내기 ▶' : '다이아 부족'} onPress={send} disabled={walletBusy || !course} />
       </View>
     </Screen>
   );

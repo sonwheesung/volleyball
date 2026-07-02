@@ -29,7 +29,7 @@ export interface LedgerRow {
 }
 export type TicketCategory = 'bug' | 'suggestion' | 'question' | 'etc';
 
-type Fail = { ok: false; reason: 'offline' | 'unauthorized' | 'insufficient' | 'bad-request' | 'error'; status?: number };
+type Fail = { ok: false; reason: 'offline' | 'unauthorized' | 'insufficient' | 'bad-request' | 'cap' | 'error'; status?: number };
 export type ServerResult<T> = ({ ok: true } & T) | Fail;
 
 const REQ_TIMEOUT_MS = 8000;
@@ -92,18 +92,19 @@ export function getBootstrap(): Promise<ServerResult<BootstrapData>> {
 export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[] }>> {
   return call('/api/wallet');
 }
-/** 다이아 차감(전지훈련). 서버 확정 후에만 앱이 반영. idempotencyKey = (saveId,season,playerId,stat) 등 자연키. */
-export function spendDiamonds(amount: number, reason: WalletReason, idempotencyKey: string) {
+/** 다이아 차감(전지훈련). 서버 확정 후에만 앱이 반영. **금액은 서버 권위**(camp=−900 강제, §13.12) — amount는 표시/호환용.
+ *  idempotencyKey = camp:<userId>:<saveId>:<season>:<playerId>. ref = 감사용 상세(playerId:course). */
+export function spendDiamonds(amount: number, reason: WalletReason, idempotencyKey: string, ref?: string) {
   return call<{ balance: number; applied: boolean }>('/api/wallet/spend', {
     method: 'POST',
-    body: JSON.stringify({ amount, reason, idempotencyKey }),
+    body: JSON.stringify({ amount, reason, idempotencyKey, ref }),
   });
 }
-/** 다이아 적립(광고 SSV/업적/구매). 멱등키로 이중지급 차단. */
-export function earnDiamonds(amount: number, reason: WalletReason, idempotencyKey: string) {
+/** 다이아 적립(광고 SSV/업적/구매). 멱등키로 이중지급 차단. ad는 서버 상수(+50), achievement만 클라값(캡). ref=감사(achId 등). */
+export function earnDiamonds(amount: number, reason: WalletReason, idempotencyKey: string, ref?: string) {
   return call<{ balance: number; applied: boolean }>('/api/wallet/earn', {
     method: 'POST',
-    body: JSON.stringify({ amount, reason, idempotencyKey }),
+    body: JSON.stringify({ amount, reason, idempotencyKey, ref }),
   });
 }
 

@@ -2,12 +2,12 @@
 // 불변식: balance == sum(ledger.delta) 항상. 절대 음수 안 됨(spend는 balance 게이트).
 // 동시성(H2): 서로 다른 동시 spend 2건이 각자 잔액 읽고 통과하는 초과지출을 막으려면 멱등키만으론 부족 —
 //   트랜잭션 안에서 users 행을 FOR UPDATE로 잠가 직렬화한다. 멱등키는 "같은 키 재시도"를 dedupe.
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { users, walletLedger, projInfo } from '../db/schema';
 import { PROJ_CODE } from './proj';
 
-export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust';
+export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon';
 
 export type WalletResult =
   | { ok: true; balance: number; applied: boolean } // applied=false → 멱등 재시도(이미 처리됨, 재적용 안 함)
@@ -57,6 +57,22 @@ export async function applyWallet(
     // idempotencyKey unique 충돌(동시에 같은 키 2건)도 여기로 — 재조회로 수렴시킬 수 있으나 P1은 error 반환.
     return { ok: false as const, reason: 'error' as const };
   }
+}
+
+/** 오늘(UTC 캘린더 데이) 특정 reason 원장 건수 — 광고 하루 상한 서버 백스톱(§13.12). */
+export async function countReasonToday(userId: string, reason: WalletReason): Promise<number> {
+  const rows = await db
+    .select({ n: sql<number>`count(*)::int` })
+    .from(walletLedger)
+    .where(
+      and(
+        eq(walletLedger.projCode, PROJ_CODE),
+        eq(walletLedger.userId, userId),
+        eq(walletLedger.reason, reason),
+        sql`${walletLedger.createdAt} >= date_trunc('day', now())`,
+      ),
+    );
+  return rows[0]?.n ?? 0;
 }
 
 /** 현재 잔액 + 최근 원장 N건. */

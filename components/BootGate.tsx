@@ -2,12 +2,13 @@
 // 판정은 서버 /api/bootstrap 응답 기준(앱 로컬 신뢰 금지). 오프라인이면 게이트 스킵(캐시 세션 진입 — online-first ≠ online-only).
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Constants from 'expo-constants';
-import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, AppState, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Loading, Screen, theme, themedStyles } from './Screen';
 import { getBootstrap, type BootstrapData } from '../lib/server';
 import { belowVersion } from '../lib/bootstrap';
 import { useAuthStore } from '../store/useAuthStore';
+import { useGameStore } from '../store/useGameStore';
 import { LoginScreen } from './LoginScreen';
 
 function GateScreen({ icon, title, body, actionLabel, onAction }: { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; body: string; actionLabel: string; onAction: () => void }) {
@@ -43,6 +44,17 @@ export function BootGate({ children }: { children: ReactNode }) {
 
   const retry = useCallback(() => { setBoot(undefined); setReloadKey((k) => k + 1); }, []);
   const appVer = (Constants.expoConfig?.version as string) ?? '0.0.0';
+
+  // 다이아 지갑 캐시 리싱크(BACKEND §13.12 P0-3) — 로그인(userId 확보) 직후 + 앱 포그라운드 복귀 시 서버 잔액으로
+  // 캐시를 맞추고 전지훈련 아웃박스를 정산한다. syncWallet은 userId 없으면 no-op(관전형 오프라인 무해).
+  const userId = session?.userId;
+  useEffect(() => {
+    if (!userId) return;
+    const sync = () => { void useGameStore.getState().syncWallet(); };
+    sync();
+    const sub = AppState.addEventListener('change', (st) => { if (st === 'active') sync(); });
+    return () => sub.remove();
+  }, [userId]);
 
   if (!authHydrated || boot === undefined) return <Loading variant="brand" />;
 

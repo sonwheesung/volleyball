@@ -37,6 +37,7 @@ export default function MyPage() {
   const diamonds = useGameStore((s) => s.diamonds);
   const watchAdForDiamonds = useGameStore((s) => s.watchAdForDiamonds);
   const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
+  const walletBusy = useGameStore((s) => s.walletBusy);
   const adState = useGameStore((s) => s.adState);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
@@ -58,15 +59,24 @@ export default function MyPage() {
   const adAvail = canWatchAd(adState, now);
   const fmtLeft = (ms: number) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, '0')}초`; };
 
-  // 광고 보고 다이아(MONETIZATION §11.1) — AdMob은 EAS 후 lib/ads 연결, 지금은 스텁(즉시 지급)으로 로컬 테스트.
-  const watchAd = () => {
-    const r = watchAdForDiamonds();
+  // 광고 보고 다이아(MONETIZATION §11.1) — 서버 확정 후 캐시 갱신(BACKEND §13.12). AdMob SSV는 EAS 후.
+  const watchAd = async () => {
+    const r = await watchAdForDiamonds();
     if (r.ok) Alert.alert('광고 시청 완료', `+${r.reward} 💎 적립되었습니다.`);
-    else Alert.alert('잠시 후 다시', r.reason === 'cap' ? '오늘 광고 보상은 모두 받았어요(하루 8회). 내일 다시 와주세요.' : '다음 광고까지 잠시 기다려 주세요(30분 간격).');
+    else Alert.alert(
+      r.reason === 'offline' ? '온라인 연결 필요' : '잠시 후 다시',
+      r.reason === 'cap' ? '오늘 광고 보상은 모두 받았어요(하루 8회). 내일 다시 와주세요.'
+        : r.reason === 'offline' ? '다이아 적립은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.'
+        : r.reason === 'busy' ? '처리 중입니다. 잠시만 기다려 주세요.'
+        : r.reason === 'error' ? '적립에 실패했습니다. 잠시 후 다시 시도해 주세요.'
+        : '다음 광고까지 잠시 기다려 주세요(30분 간격).');
   };
-  const claimAch = () => {
-    const got = claimAchDiamonds();
-    Alert.alert(got > 0 ? '업적 보상 수령' : '수령할 보상 없음', got > 0 ? `달성 업적 보상 +${got} 💎` : '새로 달성한 업적이 없습니다.');
+  const claimAch = async () => {
+    const r = await claimAchDiamonds();
+    if (r.granted > 0) Alert.alert('업적 보상 수령', `달성 업적 보상 +${r.granted} 💎`);
+    else if (r.reason === 'offline') Alert.alert('온라인 연결 필요', '업적 보상 수령은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.');
+    else if (r.reason === 'busy') Alert.alert('처리 중', '잠시만 기다려 주세요.');
+    else Alert.alert('수령할 보상 없음', '새로 달성한 업적이 없습니다.');
   };
 
   return (
@@ -81,14 +91,14 @@ export default function MyPage() {
           </View>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <Pressable onPress={watchAd} disabled={!adAvail.ok} style={[styles.diaBtn, !adAvail.ok && { opacity: 0.5 }]}>
+          <Pressable onPress={watchAd} disabled={!adAvail.ok || walletBusy} style={[styles.diaBtn, (!adAvail.ok || walletBusy) && { opacity: 0.5 }]}>
             <Text style={styles.diaBtnTxt}>
               {adAvail.ok ? `📺 광고 보고 +${AD_REWARD} 💎`
                 : adAvail.reason === 'cap' ? `오늘 광고 끝 (하루 ${AD_DAILY_CAP}회)`
                 : `⏳ ${fmtLeft(adAvail.msLeft)} 후`}
             </Text>
           </Pressable>
-          <Pressable onPress={claimAch} style={styles.diaBtn}><Text style={styles.diaBtnTxt}>🏅 업적 보상 받기</Text></Pressable>
+          <Pressable onPress={claimAch} disabled={walletBusy} style={[styles.diaBtn, walletBusy && { opacity: 0.5 }]}><Text style={styles.diaBtnTxt}>🏅 업적 보상 받기</Text></Pressable>
         </View>
         {DEV_TOOLS ? (
           <Pressable onPress={() => useGameStore.setState({ diamonds: diamonds + 1000 })} style={{ alignItems: 'center', paddingTop: 8 }}>

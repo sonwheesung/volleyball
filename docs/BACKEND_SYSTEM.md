@@ -46,15 +46,16 @@
 ## 4. 다이아 지갑 (append-only 원장)
 
 - **balance = fold(ledger)** — 잔액을 직접 증감하지 않고 원장 합으로 계산(재시도 안전).
-- **멱등키**(이중지급/이중차감 차단):
-  | 거래 | 멱등키 |
-  |---|---|
-  | 구매→다이아 | 스토어 transaction_id |
-  | 광고→다이아 | AdMob SSV transaction id |
-  | 업적→다이아 | 업적 id (영구 1회) |
-  | 전지훈련 차감 | (saveId, season, playerId, stat) ≈ `campTrainedThisOffseason` |
+- **멱등키**(이중지급/이중차감 차단) — 서버 UNIQUE는 `(proj_code, idempotency_key)`라 **키에 `userId`를 넣어 전역 유일**하게 만든다(안 넣으면 다른 유저가 같은 achId 수령 시 충돌):
+  | 거래 | 멱등키(구현 2026-07-03) | 재설정 대칭 |
+  |---|---|---|
+  | 구매→다이아 | `purchase:<userId>:<transactionId>` | 스토어 transaction_id (P2) |
+  | 광고→다이아 | `ad:<userId>:<dayIndex>:<count>` (스텁) → EAS `ssv:<userId>:<ssvTxId>` | 슬롯 결정론 — 같은 날 같은 슬롯 재시도만 dedupe |
+  | 업적→다이아 | `ach:<userId>:<achId>` — **에폭 없음(계정 평생 1회)** | **비대칭 의도**: 세이브 리셋 후 재달성해도 재수령 0(파밍 차단). ↔ camp |
+  | 전지훈련 차감 | `camp:<userId>:<saveId>:<season>:<playerId>` | **saveId(=walletEpoch, 세이브 생성 128비트 nonce)** 포함 → 세이브 지우고 새로 시작하면 같은 (season,playerId)라도 새 키 → 무료 재강화 버그 차단 |
 - **결정론 격리(중요)**: 지갑은 메타라 시드 입력에 **절대 안 들어간다**. **전지훈련 차감은 서버 차감 성공 뒤에만 `campLog` 기록**
   → 서버 잔액과 로컬 campLog가 어긋날 일(split-brain) 자체가 없음. 잔액 *표시*만 캐시. (campLog = 로컬 시뮬 진실, 리플레이 재적용 — §MONETIZATION 11.2.)
+  **재생 시 campLog만 로컬로 읽고 원장을 재조회하지 않는다** — 이 선이 결정론 격리의 성립 조건(독립리뷰 2026-07-03 §④-10).
 
 ## 5. 결제 (Vercel 직접 검증)
 
@@ -241,3 +242,16 @@
 - **`server_setting`**(게임별 1행, `proj_code` PK FK): `minVersion`(미만=강제 업데이트·진입 차단)·`latestVersion`(미만=소프트 안내)·`android/iosStoreUrl`·`maintenance`(bool)·`maintenanceTitle`·`maintenanceBody`·`updatedAt`. 관리자(#58)가 갱신.
 - **부팅 게이트(구현 예정 #56·#57)**: 앱 진입 시 **단일 `/api/bootstrap`** 조회 → `{maintenance, version, announcements}`. 루트 레이아웃 순서 **점검 차단 → 강제버전 차단 → 로그인 벽 → 게임**. 공지사항은 기간제·앱 진입 시에만(무푸시 관전형 유지).
 - 스키마·시드('volleyball' 1행, maintenance=false)는 이번 커밋에 완료. 조회 엔드포인트·클라 게이트는 후속.
+
+### 13.12 다이아 서버 진실화 (#42, 2026-07-03 — 독립 리뷰 5구멍 반영)
+> **왜**: 앱 스토어의 다이아 변이 3곳(`watchAdForDiamonds`·`claimAchDiamonds`·`trainingCamp`)이 로컬 산술로 즉시 변이 → 서버 미경유(split-brain 위험). 사용자 최상위 원칙([[server-authoritative-currency]])대로 **서버 확정 후에만 반영**으로 전환. 독립 리뷰(general-purpose, 2026-07-03)가 뼈대 승인 + **5개 정합성 구멍**을 "스텁 핑계로 미루지 말라"고 지적 → 전부 닫음.
+
+- **서버측 금액 권위(P0-2)** `server/lib/econ.ts`: 고정값 거래는 **서버가 금액을 계산**(클라 `amount` 무시). `ad`=+50·`camp`=−900 서버 상수(engine/diamonds.ts 락값 손복제, 드리프트 가드 `_dv_walletauth`가 대조). `achievement`만 클라 금액이되 **평생합 상한 5000 캡**. 라우트 **reason 화이트리스트**(earn∈{ad,achievement}·spend∈{camp}) — 클라의 'purchase' 사칭 차단. `ad`는 서버가 오늘 원장 count ≥8 백스톱(스텁 멱등키 무한증가 방지).
+- **applied 게이팅 + 재진입 락(P0-1)**: `applyCampCourse`는 비멱등(+2/호출) → 버튼 연타로 서버가 dedupe(`applied:false`, ok:true)를 반환해도 클라가 재적용하면 무료 +4. **스탯/campLog는 `applied===true`에서만** 반영. store `walletBusy` in-flight 래치로 동시 호출 자체를 차단.
+- **아웃박스(P0-4)**: camp만 spend 성공 후 로컬 스탯 적용 전 크래시 시 돈만 증발(earn은 getWallet 자가치유되나 camp는 로컬 결정론 변이라 durable-loss). 서버 호출 **전에** `pendingCamp`(같은 멱등키) persist → 성공 시 적용+clear → 재기동 시 `reconcilePendingCamp`가 같은 키로 재호출(dup→applied:false=이미 과금 확인) 후 스탯 적용·clear.
+- **캐시 수렴(P0-3)**: `insufficient`/`error`/`unauthorized` 응답은 balance를 드롭 → 스테일 캐시가 못 고쳐짐. store가 실패 시 **`syncWallet()`(getWallet)로 서버 잔액 리싱크**. 로그인 성공 직후 + 앱 포그라운드 복귀 시에도 syncWallet.
+- **업적 비대칭 결정(P0-5)**: `ach:<userId>:<achId>`는 에폭 없음 = **계정 평생 1회**. 세이브 리셋 후 재달성해도 재수령 0(파밍 차단). camp는 saveId 에폭으로 재과금 허용(다시 돈 냄=정당). 이 비대칭은 **의식적**(업적=구단주 평생 트로피, 재플레이가 재지급 아님). claimAch는 **업적별 개별 earn 호출**(배치 아님) — achId별 dedup 정확.
+- **saveId(=walletEpoch)**: 세이브 생성 시 128비트 nonce(store, Date.now/Math.random 허용 — 엔진 아님). 영속(SAVE_SYSTEM +1필드=54), migrate 없으면 생성. camp 멱등키 세이브 스코프.
+- **검증(Opus 4.8)**: `tools/_dv_walletauth.ts`(순수 — 멱등키 빌더 유일성·세이브리셋 비충돌·applied 게이팅·econ 금액권위 A/B) + 라이브 E2E(실 Vercel 서버: camp amount=1 보내도 −900 강제·이중 spend 2번째 applied:false·insufficient 리싱크). 앱/서버 tsc 0.
+- **파일**: `server/lib/econ.ts`(신)·`server/lib/wallet.ts`(countReasonToday·'coupon' reason)·`server/app/api/wallet/{earn,spend}/route.ts`·`lib/walletKeys.ts`(신, 순수)·`lib/server.ts`(earn/spend ref·cap reason)·`store/useGameStore.ts`(async 3함수+syncWallet+reconcilePendingCamp+applyCampLocal+saveId/pendingCamp/walletBusy)·`store/saveMigration.ts`(saveId/pendingCamp 정규화, 58필드)·`components/BootGate.tsx`(userId 확보/포그라운드 syncWallet)·`app/(tabs)/mypage.tsx`·`app/training-camp.tsx`.
+- **EAS 승격 잔여**: 광고 금액/진위=AdMob SSV 서버검증, 업적=서버 재계산(현 캡만), 결제=영수증 검증(#43). 구조(서버확정·멱등·잔액게이트·applied게이팅·아웃박스)는 지금 실물과 동일.

@@ -53,13 +53,19 @@ import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
 import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
-import { evalAchievements } from '../engine/achievements';
+import { evalAchievements, achReward } from '../engine/achievements';
 import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
+import { earnDiamonds, spendDiamonds, getWallet } from '../lib/server';
+import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
+import { useAuthStore } from './useAuthStore';
 
 /** 전지훈련 기록(MONETIZATION §11.2) — 시드 폴백 재적용용 + 감사.
  *  유니온(H3): 구 모델 엔트리는 stats[](+1/+1 재적용), 코스형(2026-07-02~)은 course(+2/+7 재적용) —
  *  각자 원 산식으로 재현해 구 세이브 결정론 보존(과다적용 0). */
 interface CampEntry { season: number; playerId: string; stats?: TrainableStat[]; course?: CampCourse }
+/** 전지훈련 아웃박스(BACKEND §13.12 P0-4) — 서버 차감 성공 후 로컬 스탯 적용 전 크래시 복구용.
+ *  서버 호출 전에 persist → 성공 시 적용+clear → 재기동 reconcile이 같은 key로 재확인 후 적용. */
+interface PendingCamp { key: string; playerId: string; course: CampCourse; season: number }
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const RETIRE_NEWS_MIN_SEASONS = 8; // 작별 뉴스 대상 — 8시즌+ 뛴 노장(또는 HOF). 버스트(단명)는 무음
@@ -94,14 +100,19 @@ interface GameState {
   archive: SeasonArchive[];                    // 역대 우승 + 시상 + 순위/연승연패/플옵
   careerLog: { faSigns: number; coachHires: number; staffHires: number; interviews: number }; // 단장 통산 액션(업적용)
   careerTotals: { points: number; aces: number; setsWon: number; setsLost: number; matchWins: number; matchLosses: number }; // 내 팀 통산 경기 기록(업적용)
-  diamonds: number;                            // 다이아 잔액(MONETIZATION §11) — 전지훈련 전용 소비성 재화
+  diamonds: number;                            // 다이아 잔액(MONETIZATION §11) — **표시용 캐시**(진실=서버, §13.12). 서버 확정 후에만 갱신
+  saveId: string;                              // 세이브 인스턴스 nonce(walletEpoch) — camp 멱등키 스코프(세이브 리셋 무료강화 차단)
   campLog: CampEntry[];                        // 전지훈련 기록(시드 폴백 재적용·감사)
   campTrainedThisOffseason: string[];          // 이번 오프시즌 전지훈련한 선수(선수당 1회) — 새 시즌 시작 시 초기화
+  pendingCamp: PendingCamp | null;             // 전지훈련 아웃박스(§13.12 P0-4) — 서버차감↔로컬적용 사이 크래시 복구
+  walletBusy: boolean;                         // 다이아 서버 왕복 in-flight 래치(비영속) — 버튼 연타 이중적용 차단(P0-1)
   claimedAch: string[];                        // 다이아 수령한 업적 id(1회 지급)
   adState: AdState;                            // 광고 보상 쿨다운/하루상한 상태(메타 — 시드 무관)
-  watchAdForDiamonds: () => { ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' };
-  claimAchDiamonds: () => number;              // 새로 달성한 업적 다이아 수령(지급액 반환)
-  trainingCamp: (playerId: string, course: CampCourse) => { ok: boolean; reason?: string }; // 오프시즌 전지훈련(코스형 §11.2)
+  watchAdForDiamonds: () => Promise<{ ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' | 'offline' | 'busy' | 'error' }>;
+  claimAchDiamonds: () => Promise<{ granted: number; reason?: 'offline' | 'busy' | 'none' }>; // 새로 달성한 업적 다이아 수령(서버 확정)
+  trainingCamp: (playerId: string, course: CampCourse) => Promise<{ ok: boolean; reason?: string }>; // 오프시즌 전지훈련(서버 차감 후, §11.2)
+  syncWallet: () => Promise<void>;             // 서버 잔액으로 캐시 리싱크(로그인/포그라운드/실패후 — §13.12 P0-3) + 아웃박스 정산
+  reconcilePendingCamp: () => Promise<void>;   // 아웃박스 정산(재기동 복구)
   bonds: Record<string, number>; // 인간관계 우정(pairKey→0~0.3, 함께한 세월 누적, RELATIONSHIP_SYSTEM)
   coachPool: { coaches: Coach[]; assistants: AssistantCoach[] } | null; // 감독 생애주기 풀(null=시드, STAFF_SYSTEM 6)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
@@ -200,8 +211,10 @@ const freshSave = {
   careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 },
   careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 },
   diamonds: 0,
+  saveId: '', // 첫 전지훈련/새 게임 시작 시 생성(newSaveId) — camp 멱등키 스코프
   campLog: [] as CampEntry[],
   campTrainedThisOffseason: [] as string[],
+  pendingCamp: null as PendingCamp | null,
   claimedAch: [] as string[],
   adState: { ...FRESH_AD_STATE } as AdState,
   bonds: {} as Record<string, number>,
@@ -250,64 +263,128 @@ function releaseAngerOf(playerId: string, archive: SeasonArchive[], day: number)
   return releaseAngerPenalty(stature);
 }
 
+/** 전지훈련 로컬 적용 — **서버 차감 확정 뒤에만** 호출(BACKEND §13.12). 스탯 부스트+campLog+캐시 갱신+pending clear를 한 set으로.
+ *  이미 적용된 선수(campTrainedThisOffseason)면 no-op(pending·캐시만 정리) — 아웃박스 재확인 시 이중적용 차단(P0-1). */
+function applyCampLocal(playerId: string, course: CampCourse, balance: number, season: number): void {
+  const st = useGameStore.getState();
+  if (st.campTrainedThisOffseason.includes(playerId)) { useGameStore.setState({ diamonds: balance, pendingCamp: null }); return; }
+  const p = getPlayer(playerId);
+  if (!p) { useGameStore.setState({ diamonds: balance, pendingCamp: null }); return; }
+  const camped = applyCampCourse(p, course); // 3스탯 현재+2·포텐+7(§11.2 코스형)
+  commitPlayerBase({ [playerId]: camped }); // 레지스트리 즉시 반영(evoCache 무효화 → 화면 즉시)
+  useGameStore.setState({
+    diamonds: balance, // 표시 캐시 = 서버 확정 잔액
+    campLog: [...st.campLog, { season, playerId, course }],
+    campTrainedThisOffseason: [...st.campTrainedThisOffseason, playerId],
+    pendingCamp: null,
+    // 시즌≥1: 영속 base에도 굽기. 시즌0(base null): campLog가 재로드 시 시드에 재적용(§11.2 — 이중적용 없음)
+    ...(st.playerBase ? { playerBase: { ...st.playerBase, [playerId]: camped } } : {}),
+  });
+  diag(season, 'wallet', `전지훈련 ${playerId} ${CAMP_COURSES[course].label} -${CAMP_COURSE_COST}💎`); // 진단 로그(#44)
+}
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
       hydrated: false,
+      walletBusy: false, // 비영속 — 다이아 서버 왕복 in-flight 래치(P0-1, 버튼 연타 이중적용 차단)
       onboarded: false,
       supporter: false,
       sfxEnabled: true,
       seenTips: {},
       ...freshSave,
 
-      // ── 다이아 이코노미 (MONETIZATION §11) ──
-      watchAdForDiamonds: () => {
+      // ── 다이아 이코노미 (MONETIZATION §11 · 서버 진실화 BACKEND §13.12) ──
+      // diamonds는 **표시용 캐시**. 적립/차감은 서버 확정(earn/spend 응답 balance) 후에만 반영(로컬 산술 금지).
+      // 서버 실패는 캐시 손 안 대고 syncWallet로 수렴. 버튼 연타는 walletBusy 래치로 차단(P0-1).
+      watchAdForDiamonds: async () => {
         const s = get();
+        if (s.walletBusy) return { ok: false, reason: 'busy' };
         const now = Date.now(); // 광고 쿨다운/상한은 메타(시드/결정론 무관)
         const c = canWatchAd(s.adState, now);
         if (!c.ok) return { ok: false, reason: c.reason };
-        const { adState, reward } = grantAd(s.adState, now);
-        set({ adState, diamonds: s.diamonds + reward });
-        return { ok: true, reward };
+        const userId = useAuthStore.getState().session?.userId;
+        if (!userId) return { ok: false, reason: 'offline' }; // 로그인 안 됨 → 서버 귀속 불가
+        const { adState, reward } = grantAd(s.adState, now); // 새 슬롯(count↑) — 실패 시 미커밋이라 재시도 동일키(멱등)
+        set({ walletBusy: true });
+        const r = await earnDiamonds(reward, 'ad', adKey(userId, adState.dayIdx, adState.count));
+        set({ walletBusy: false });
+        if (!r.ok) { void get().syncWallet(); return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'cap' ? 'cap' : 'error' }; }
+        set({ diamonds: r.balance, adState }); // 서버 확정 후에만 슬롯·캐시 커밋
+        return { ok: true, reward: r.applied ? reward : 0 };
       },
-      claimAchDiamonds: () => {
+      claimAchDiamonds: async () => {
         const s = get();
+        if (s.walletBusy) return { granted: 0, reason: 'busy' };
         const my = s.selectedTeamId;
-        if (!my) return 0;
+        if (!my) return { granted: 0, reason: 'none' };
+        const userId = useAuthStore.getState().session?.userId;
+        if (!userId) return { granted: 0, reason: 'offline' };
         const statuses = evalAchievements({ myTeamId: my, archive: s.archive, hof: s.hallOfFame, milestones: s.milestones, cash: s.cash, fanScore: s.fanScore, careerLog: s.careerLog, careerTotals: s.careerTotals });
-        const { ids, total } = unclaimedReward(statuses, s.claimedAch);
-        if (!ids.length) return 0;
-        set({ diamonds: s.diamonds + total, claimedAch: [...s.claimedAch, ...ids] });
-        return total;
+        const { ids } = unclaimedReward(statuses, s.claimedAch);
+        if (!ids.length) return { granted: 0, reason: 'none' };
+        set({ walletBusy: true });
+        let granted = 0; let lastBalance: number | null = null; const confirmed: string[] = []; let offline = false;
+        for (const id of ids) { // 업적별 개별 earn(배치 아님) — achId별 dedup 정확(계정 평생 1회, 세이브 리셋 재수령 0)
+          const r = await earnDiamonds(achReward(id), 'achievement', achKey(userId, id), id);
+          if (r.ok) { confirmed.push(id); lastBalance = r.balance; if (r.applied) granted += achReward(id); }
+          else { offline = true; break; } // 오프라인/에러 → 여기까지만 확정, 중단(부분 수령)
+        }
+        set({ walletBusy: false, ...(confirmed.length ? { claimedAch: [...get().claimedAch, ...confirmed] } : {}), ...(lastBalance !== null ? { diamonds: lastBalance } : {}) });
+        if (offline) { void get().syncWallet(); return { granted, reason: 'offline' }; }
+        return { granted };
       },
-      trainingCamp: (playerId, course) => {
+      trainingCamp: async (playerId, course) => {
         const s = get();
+        if (s.walletBusy) return { ok: false, reason: 'busy' };
         const my = s.selectedTeamId;
         if (!my) return { ok: false, reason: 'no-team' };
         if (s.currentDay !== 0) return { ok: false, reason: 'not-offseason' }; // 오프시즌(경기0)만 — 재시뮬/소급 방지(§11.2)
         if (s.campTrainedThisOffseason.includes(playerId)) return { ok: false, reason: 'already' }; // 선수당 오프시즌 1회
         if (!CAMP_COURSES[course]) return { ok: false, reason: 'no-course' }; // 유효 코스만(손상 입력 가드)
-        if (s.diamonds < CAMP_COURSE_COST) return { ok: false, reason: 'no-diamonds' };
         if (!(currentRosters()[my] ?? []).includes(playerId)) return { ok: false, reason: 'not-mine' };
         const base = getPlayer(playerId);
         if (!base) return { ok: false, reason: 'not-found' };
         if (!courseUpgradable(base, course)) return { ok: false, reason: 'maxed' }; // 3스탯 전부 현재·포텐 99
-        const camped = applyCampCourse(base, course); // 3스탯 현재+2·포텐+7(§11.2 코스형)
-        commitPlayerBase({ [playerId]: camped }); // 레지스트리 즉시 반영(evoCache 무효화 → 화면 즉시)
-        set({
-          diamonds: s.diamonds - CAMP_COURSE_COST,
-          campLog: [...s.campLog, { season: s.season, playerId, course }],
-          campTrainedThisOffseason: [...s.campTrainedThisOffseason, playerId],
-          // 시즌≥1: 영속 base에도 굽기. 시즌0(base null): campLog가 재로드 시 시드에 재적용(§11.2 — 이중적용 없음)
-          ...(s.playerBase ? { playerBase: { ...s.playerBase, [playerId]: camped } } : {}),
-        });
-        diag(s.season, 'wallet', `전지훈련 ${playerId} ${CAMP_COURSES[course].label} -${CAMP_COURSE_COST}💎`); // 진단 로그(#44)
+        const userId = useAuthStore.getState().session?.userId;
+        if (!userId) return { ok: false, reason: 'offline' };
+        // saveId(walletEpoch) 지연 생성 — camp 멱등키 세이브 스코프(리셋 무료강화 차단)
+        let saveId = s.saveId;
+        if (!saveId) { saveId = newSaveId(); set({ saveId }); }
+        const key = campKey(userId, saveId, s.season, playerId);
+        // 아웃박스(P0-4): 서버 호출 **전에** pending persist → spend 성공 후 크래시해도 재기동 reconcile이 복구
+        set({ walletBusy: true, pendingCamp: { key, playerId, course, season: s.season } });
+        const r = await spendDiamonds(CAMP_COURSE_COST, 'camp', key, `${playerId}:${course}`);
+        if (!r.ok) {
+          set({ walletBusy: false, pendingCamp: null }); // 차감 안 됨 → 아웃박스 취소(적용 안 함)
+          if (r.reason !== 'offline') void get().syncWallet(); // insufficient/error/unauthorized → 캐시 수렴(P0-3)
+          return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'insufficient' ? 'no-diamonds' : 'error' };
+        }
+        applyCampLocal(playerId, course, r.balance, s.season); // 서버 확정(applied true/false=이미 과금) → 스탯 적용+campLog+clear
+        set({ walletBusy: false });
         return { ok: true };
+      },
+      syncWallet: async () => {
+        const userId = useAuthStore.getState().session?.userId;
+        if (!userId) return;
+        const r = await getWallet();
+        if (r.ok) set({ diamonds: r.balance }); // 서버 잔액으로 캐시 리싱크(P0-3)
+        await get().reconcilePendingCamp();      // 아웃박스 정산(재기동/포그라운드 복구)
+      },
+      reconcilePendingCamp: async () => {
+        const s = get();
+        const pc = s.pendingCamp;
+        if (!pc) return;
+        if (s.campTrainedThisOffseason.includes(pc.playerId)) { set({ pendingCamp: null }); return; } // 이미 적용됨(clear 전 크래시)
+        if (!useAuthStore.getState().session?.userId) return; // 오프라인 → pending 유지, 다음 기회
+        const r = await spendDiamonds(CAMP_COURSE_COST, 'camp', pc.key, `${pc.playerId}:${pc.course}`);
+        if (!r.ok) return; // 오프라인/일시오류 → pending 유지
+        applyCampLocal(pc.playerId, pc.course, r.balance, pc.season); // dup(applied:false)=이미 과금 확정 → 스탯 적용
       },
 
       selectTeam: (teamId) => {
         resetLeagueBase();
-        set({ ...freshSave, selectedTeamId: teamId });
+        set({ ...freshSave, selectedTeamId: teamId, saveId: newSaveId() }); // 새 세이브 인스턴스 nonce(walletEpoch) — camp 멱등키 스코프
         setTxContext([], [], teamId);
         setMyTeamStaff(teamId); // 내 팀만 영입 스태프, 나머지는 AI 기본 스태프(STAFF_SYSTEM 7)
         // 시작 기본 스태프(ONBOARDING 6) — 플레이어 팀을 0이 아니라 코치1+스카우터1로 출발시킨다(AI와 대칭).
@@ -989,8 +1066,10 @@ export const useGameStore = create<GameState>()(
         careerLog: s.careerLog,
         careerTotals: s.careerTotals,
         diamonds: s.diamonds,
+        saveId: s.saveId,
         campLog: s.campLog,
         campTrainedThisOffseason: s.campTrainedThisOffseason,
+        pendingCamp: s.pendingCamp,
         claimedAch: s.claimedAch,
         adState: s.adState,
         bonds: s.bonds,
