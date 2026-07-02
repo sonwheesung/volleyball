@@ -125,7 +125,7 @@
 | 층 | 선택 | 이유(리뷰 반영) |
 |---|---|---|
 | 서버 | **Next.js(App Router)** — `/server` 독립 패키지 | API 라우트 핸들러 + 관리자 대시보드 페이지 일체, Vercel 네이티브, 로컬 `next dev` |
-| DB/ORM | **Drizzle + Postgres**(로컬 Docker `postgres:16`) | ~~SQLite~~ 폐기 — SQLite는 단일라이터라 **동시성 버그(이중지불)를 로컬서 가림**(리뷰 C2/H2). dev==prod로 Postgres 고정. Drizzle=서버리스 콜드스타트 가벼움·SQL 우선(엔진 바이너리 없음) |
+| DB/ORM | **Drizzle + Postgres**(~~로컬 Docker `postgres:16`~~ → **Supabase Postgres**, dev·prod 공통 — 2026-07-02 사용자 결정) | ~~SQLite~~ 폐기 — SQLite는 단일라이터라 **동시성 버그(이중지불)를 로컬서 가림**(리뷰 C2/H2). dev==prod로 Postgres 고정. **호스트를 로컬 Docker→Supabase로 전환**(개발부터 실 Postgres라 H2 동시성이 로컬서 그대로 드러남 — Docker Desktop 의존 제거). Drizzle=서버리스 콜드스타트 가벼움·SQL 우선(엔진 바이너리 없음). ⚠ **연결 규칙**(§13.7): 런타임=Transaction 풀러(:6543)+`prepare:false`, 마이그레이션=Session/Direct(:5432) |
 | 인증 | **네이티브 ID토큰 검증(jose+JWKS) → 자체 Bearer 토큰** | ~~Auth.js(NextAuth)~~ 폐기(리뷰 C1) — Auth.js는 **브라우저 쿠키/리다이렉트** 전제라 RN 네이티브 클라에 안 맞음. 클라가 `expo-auth-session`/`expo-apple-authentication`로 ID토큰 획득→서버가 JWKS로 검증→자체 세션 JWT 발급→클라 `expo-secure-store` 보관→`Authorization: Bearer`. 쿠키 0. (구글 로그인 제공 시 iOS는 Apple 로그인 병행 필수 — App Store 4.8) |
 | 클라이언트 | `lib/server.ts`(Expo 앱) — **throw 없는** 타입드 | 광고 스텁과 동일 계약. 잔액 *표시*=캐시, 사용/적립/결제=서버 확인 후. **어떤 서버콜도 앱 렌더 임계경로에 두지 않음**(리뷰 M3 — 오프라인 부팅 보장) |
 
@@ -146,7 +146,7 @@
 
 ### 13.5 빌드 순서(작은 러너블 먼저)
 1. **스켈레톤+health**(/server 독립·Metro blockList) — `next dev` 응답 + Expo 번들 무손상. ✅ **완료(2026-07-01)** — `GET /api/health` 200·server tsc 0·blockList /server 제외 확인.
-2. **Postgres+지갑 코어**(Drizzle, User+WalletLedger+balance, spend/earn = FOR UPDATE+멱등+가드, 동시 이중지불 테스트). 🔨 **코드 완료·tsc 0(2026-07-01)** / ⏳ **H2 런타임 검증은 Postgres 필요**(로컬 Docker Desktop 미기동 — `docker compose up -d db` 후 `tools/walletConcurrency.ts` K=50·N=200으로 이중지불 0 증명). 파일: `db/schema.ts`·`db/index.ts`·`lib/wallet.ts`·`app/api/wallet/*`·`tools/walletConcurrency.ts`·`docker-compose.yml`.
+2. **Postgres+지갑 코어**(Drizzle, User+WalletLedger+balance, spend/earn = FOR UPDATE+멱등+가드, 동시 이중지불 테스트). 🔨 **코드 완료·tsc 0(2026-07-01)** / ⏳ **H2 런타임 검증은 Postgres 필요** — ~~로컬 Docker Desktop `docker compose up -d db`~~ → **Supabase 연결**(§13.7)로 전환(2026-07-02): `server/.env.local`에 `DATABASE_URL` 주입 → `npx drizzle-kit push`(Session/Direct :5432) → `tools/walletConcurrency.ts` K=50·N=200으로 이중지불 0 증명. 파일: `db/schema.ts`·`db/index.ts`(`prepare:false`)·`lib/wallet.ts`·`app/api/wallet/*`·`tools/walletConcurrency.ts`. ~~`docker-compose.yml`~~(폐기 — Supabase 전환).
 3. **모바일 인증**(ID토큰 검증→Bearer→SecureStore, 부팅 익명 유지).
 
 ### 13.6 클라이언트 인터페이스 — 오프라인 우선 선구현 (2026-07-01, DB 연결 전)
@@ -167,3 +167,18 @@
 5. **결제**(verify→consume→환불 웹훅 차감) — 머니패스, 환불→차감 왕복 테스트.
 6. **AdMob SSV + 업적**(서명검증·상한·1회).
 7. **로그/문의/텔레메트리** → **관리자 대시보드**(맨 마지막, 데이터 존재 후 read-only).
+
+### 13.7 Supabase 연결 (2026-07-02 확정 — Docker 폐기, dev·prod 공통 호스트)
+> DB 호스트를 로컬 Docker Postgres → **Supabase Postgres**로 전환(§13.1). ORM/스키마/쿼리는 전부 그대로(Supabase=순정 Postgres).
+> Supabase는 **DB 호스트로만** 쓴다 — Auth·Realtime·Storage·PostgREST는 안 쓴다(인증은 §13.1 자체 Bearer, 서버리스 API는 Next.js).
+> 결정론 격리 불변(§8)은 유지: 서버 DB는 재화·계정·결제·로그·문의·통계만. 시드/리플레이엔 안 들어간다.
+
+- **비밀은 `server/.env.local`**(gitignore됨, 커밋 금지 — M4). `.env.example`은 양식 견본만.
+- **연결 문자열이 3종**(Supabase 대시보드 → Project Settings → Database):
+  | 용도 | 연결 | 포트 | prepared stmt | 비고 |
+  |---|---|---|---|---|
+  | **런타임**(Vercel 서버리스 API·`db/index.ts`) | **Transaction 풀러** | 6543 | ✗ | PgBouncer transaction 모드 → `postgres()` 옵션에 **`prepare:false` 필수**(없으면 런타임 에러). 서버리스 커넥션 폭발 방지 |
+  | **마이그레이션**(`drizzle-kit push`·`drizzle.config.ts`) | **Session/Direct** | 5432 | ✓ | DDL·prepared 필요 → 풀러(6543)로 하면 실패. Session 풀러(IPv4) 권장 |
+  | **동시성 테스트**(`tools/walletConcurrency.ts`) | 런타임과 동일(6543) | 6543 | ✗ | `FOR UPDATE` 행잠금은 transaction 풀러서 정상 작동 → H2 이중지불 0 증명 |
+- **`db/index.ts`**: `postgres(DATABASE_URL, { max: 10, prepare: false })` — `prepare:false`는 풀러 필수이면서 direct에서도 무해(항상 안전한 기본값)이라 무조건 켠다.
+- **검증 순서**: `.env.local`(DATABASE_URL=런타임 6543 문자열) → `DATABASE_URL=<5432 문자열> npx drizzle-kit push`(스키마 생성) → `npm run dev`(부팅) → `GET /api/health` 200 → `tools/walletConcurrency.ts`로 H2 이중지불 0.
