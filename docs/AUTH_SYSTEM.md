@@ -59,7 +59,8 @@
 ## 6. 구현 현황
 
 - 📋 문서 확정(2026-07-02).
-- 🔨 클라 `store/useAuthStore.ts`·`app/login.tsx`·루트 게이트·mypage 로그아웃 / 서버 `lib/auth.ts`·`/api/auth/login`·wallet userId 해석 — 진행.
+- ✅ **서버(2026-07-03)**: `lib/auth.ts`(HS256 세션 토큰·resolveUserId)·`/api/auth/login`(dev 스텁 Bearer 발급)·`/api/bootstrap`(점검·버전·공지)·wallet 3라우트 userId 귀속. **검증: 로그인→토큰→지갑 귀속·위조토큰 익명폴백(남의 지갑 0)·bootstrap 응답**.
+- 🔨 클라 `store/useAuthStore.ts`·`app/login.tsx`·루트 부팅 게이트·mypage 로그아웃 — 진행.
 - ⏳ EAS 실물(구글/애플 SDK·SecureStore·ID토큰 JWKS 검증) — EAS 빌드 단계.
 
 > 관련: 결제·지갑은 [BACKEND_SYSTEM] §13, 다이아 SKU·상점은 [MONETIZATION_SYSTEM] §4, 오프라인 우선 계약은 BACKEND §13.6.

@@ -58,6 +58,22 @@ export const walletLedger = pgTable(
   (t) => [uniqueIndex('ledger_proj_idem_uniq').on(t.projCode, t.idempotencyKey), index('ledger_user_idx').on(t.userId)],
 );
 
+// ── 공지사항(§13.11) — 제목/내용, 기간(startsAt~endsAt) 동안만 노출. 앱 진입 시 bootstrap이 활성분만 반환(무푸시 관전형).
+export const announcements = pgTable(
+  'announcements',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode),
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull().defaultNow(),
+    endsAt: timestamp('ends_at', { withTimezone: true }), // null = 무기한
+    pinned: boolean('pinned').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('ann_proj_idx').on(t.projCode)],
+);
+
 // ── 수입 일집계(롤업) — 영구 보존(§13.10). 원본 결제가 5년 뒤 파기돼도 총수입은 여기 생존.
 // 매일 크론이 어제치를 재집계 upsert(멱등). 관리자 대시보드(#46)가 즉시 조회(원본 5년 스캔 불필요).
 export const statsDaily = pgTable(
@@ -79,3 +95,4 @@ export type ServerSetting = typeof serverSetting.$inferSelect;
 export type User = typeof users.$inferSelect;
 export type WalletLedgerRow = typeof walletLedger.$inferSelect;
 export type StatsDailyRow = typeof statsDaily.$inferSelect;
+export type Announcement = typeof announcements.$inferSelect;

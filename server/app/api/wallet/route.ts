@@ -1,12 +1,13 @@
 // GET /api/wallet — 현재 잔액 + 최근 원장. (인증은 마일스톤3 — 지금은 dev 유저)
 import { NextResponse } from 'next/server';
-import { ensureDevUser, getWallet } from '../../../lib/wallet';
+import { getWallet } from '../../../lib/wallet';
+import { resolveUserId } from '../../../lib/auth';
 
 export const dynamic = 'force-dynamic';
 
-export async function GET() {
+export async function GET(req: Request) {
   try {
-    const userId = await ensureDevUser();
+    const userId = await resolveUserId(req);
     const w = await getWallet(userId);
     return NextResponse.json({ ok: true, ...w });
   } catch (e) {
