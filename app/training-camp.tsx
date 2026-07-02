@@ -1,13 +1,13 @@
-// 전지훈련 (MONETIZATION §11.2) — 오프시즌 해외 캠프. 다이아로 선수 1명을 보내 능력치 여러 부위를
-// 현재+1·포텐+1(최대 99). 선수당 오프시즌 1회. 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지.
+// 전지훈련 (MONETIZATION §11.2 코스형, 2026-07-02) — 오프시즌 해외 캠프. 다이아로 선수 1명을 보내
+// 5코스(공격/수비/블로킹/세터/서브) 중 하나로 관련 3스탯을 현재+2·포텐+7(최대 99). 선수당 오프시즌 1회.
+// 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지. 포텐 +7이 본체: 젊을수록 성장으로 실현되는 폭이 크다(H2).
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Muted, PosTag, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { getPlayer, teamPlayerIds } from '../data/league';
-import { TRAINABLE_STATS } from '../engine/training';
-import { CAMP_PER_STAT, campCost, upgradableStats } from '../engine/diamonds';
+import { CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, courseUpgradable, type CampCourse } from '../engine/diamonds';
 import type { Player, TrainableStat } from '../types';
 
 const LABEL: Record<TrainableStat, string> = {
@@ -15,6 +15,7 @@ const LABEL: Record<TrainableStat, string> = {
   reaction: '반응속도', positioning: '위치선정', focus: '집중력', consistency: '기복', vq: 'VQ',
   skSpike: '공격기술', skBlock: '블로킹기술', skDig: '디그기술', skReceive: '리시브기술', skSet: '세팅기술', skServe: '서브기술',
 };
+const COURSE_KEYS: CampCourse[] = ['attack', 'defense', 'block', 'setter', 'serve'];
 
 export default function TrainingCamp() {
   const router = useRouter();
@@ -29,16 +30,13 @@ export default function TrainingCamp() {
   const camped = useGameStore((s) => s.campTrainedThisOffseason);
   const trainingCamp = useGameStore((s) => s.trainingCamp);
   const [picked, setPicked] = useState<string | null>(null);
-  const [stats, setStats] = useState<TrainableStat[]>([]);
+  const [course, setCourse] = useState<CampCourse | null>(null);
   const [, force] = useState(0); // 적용 후 리렌더
 
   const offseason = currentDay === 0;
   const roster: Player[] = my ? teamPlayerIds(my).map((id) => getPlayer(id)).filter((p): p is Player => !!p) : [];
   const player = picked ? getPlayer(picked) : null;
-
-  const toggle = (s: TrainableStat) => setStats((prev) => prev.includes(s) ? prev.filter((x) => x !== s) : [...prev, s]);
-  const cost = campCost(stats);
-  const canAfford = diamonds >= cost;
+  const canAfford = diamonds >= CAMP_COURSE_COST;
 
   const balance = (
     <View style={styles.bal}><Text style={styles.gem}>💎</Text><Text style={styles.balN}>{diamonds.toLocaleString()}</Text></View>
@@ -74,16 +72,16 @@ export default function TrainingCamp() {
         <Card accent={theme.good}>
           <IconLabel icon="airplane-outline" color={theme.good}>오프시즌 해외 캠프</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
-            선수 한 명을 캠프로 보내 능력치를 키웁니다. 능력치 하나당 <Text style={{ color: theme.good, fontWeight: '800' }}>현재 +1 · 성장 한계(포텐) +1</Text> (최대 99).{'\n'}
-            • 부위당 <Text style={{ color: theme.good, fontWeight: '800' }}>{CAMP_PER_STAT} 💎</Text> · 여러 부위 가능{'\n'}
-            • <Text style={{ color: theme.text, fontWeight: '700' }}>선수 1명당 오프시즌 1회</Text> · 다음 시즌부터 반영 · 영구(환불 불가)
+            선수 한 명을 특별훈련 코스로 보냅니다. 코스의 관련 능력치 3개가 <Text style={{ color: theme.good, fontWeight: '800' }}>현재 +{CAMP_CUR_GAIN} · 성장 한계(포텐) +{CAMP_POT_GAIN}</Text> (최대 99).{'\n'}
+            • 코스당 <Text style={{ color: theme.good, fontWeight: '800' }}>{CAMP_COURSE_COST} 💎</Text> · 선수 1명당 오프시즌 1회 · 코스 1개{'\n'}
+            • 포텐이 크게 열리므로 <Text style={{ color: theme.text, fontWeight: '700' }}>어린 선수일수록 효과가 큽니다</Text> — 이후 시즌 성장으로 실현 · 영구(환불 불가)
           </Muted>
         </Card>
         <IconLabel icon="people-outline" color={theme.accent}>선수 선택</IconLabel>
         {roster.map((p) => {
           const done = camped.includes(p.id);
           return (
-            <Pressable key={p.id} disabled={done} onPress={() => { setPicked(p.id); setStats([]); }}
+            <Pressable key={p.id} disabled={done} onPress={() => { setPicked(p.id); setCourse(null); }}
               style={({ pressed }) => [styles.prow, done && { opacity: 0.45 }, pressed && { opacity: 0.7 }]}>
               <PosTag pos={p.position} />
               <Text style={styles.pname} numberOfLines={1}>{p.name}</Text>
@@ -101,19 +99,20 @@ export default function TrainingCamp() {
     );
   }
 
-  // ── 부위 선택 ──
-  const up = upgradableStats(player, [...TRAINABLE_STATS]);
+  // ── 코스 선택 ──
   const cur = player as unknown as Record<string, number>;
   const send = () => {
-    const r = trainingCamp(player.id, stats);
+    if (!course) return;
+    const r = trainingCamp(player.id, course);
     if (r.ok) {
-      Alert.alert('전지훈련 완료', `${player.name} 선수가 ${stats.length}개 부위를 키우고 왔습니다. 다음 시즌부터 반영됩니다.`);
-      setPicked(null); setStats([]); force((n) => n + 1);
+      Alert.alert('전지훈련 완료', `${player.name} 선수가 ${CAMP_COURSES[course].label}을 마치고 왔습니다. 열린 성장 한계는 이후 시즌 성장으로 실현됩니다.`);
+      setPicked(null); setCourse(null); force((n) => n + 1);
     } else {
       Alert.alert('전지훈련 불가',
         r.reason === 'no-diamonds' ? '다이아가 부족합니다.'
         : r.reason === 'already' ? '이 선수는 이번 오프시즌에 이미 다녀왔습니다.'
         : r.reason === 'not-offseason' ? '오프시즌에만 가능합니다.'
+        : r.reason === 'maxed' ? '이 코스의 능력치가 모두 한계(99)입니다.'
         : '전지훈련을 보낼 수 없습니다.');
     }
   };
@@ -124,29 +123,50 @@ export default function TrainingCamp() {
       <View style={styles.phead}>
         <PosTag pos={player.position} />
         <Text style={styles.pnameBig} numberOfLines={1}>{player.name}</Text>
-        <Pressable onPress={() => { setPicked(null); setStats([]); }}><Text style={styles.change}>선수 변경</Text></Pressable>
+        <Text style={styles.psub}>{player.age}세</Text>
+        <Pressable onPress={() => { setPicked(null); setCourse(null); }}><Text style={styles.change}>선수 변경</Text></Pressable>
       </View>
-      <Muted style={{ fontSize: 12.5, marginBottom: 6 }}>올릴 부위를 선택하세요 (각 현재+1·포텐+1, 최대 99)</Muted>
+      <Muted style={{ fontSize: 12.5, marginBottom: 6 }}>코스를 선택하세요 — 관련 3개 능력치가 현재 +{CAMP_CUR_GAIN} · 포텐 +{CAMP_POT_GAIN}</Muted>
       <ScrollView style={{ flex: 1 }}>
-        {TRAINABLE_STATS.map((s) => {
-          const on = stats.includes(s);
-          const disabled = !up.includes(s); // 현재·포텐 모두 99
-          const c = cur[s]; const pot = player.potential[s] ?? c;
+        {COURSE_KEYS.map((key) => {
+          const c = CAMP_COURSES[key];
+          const on = course === key;
+          const disabled = !courseUpgradable(player, key); // 3스탯 전부 현재·포텐 99
+          const mismatch = !c.forPos.includes(player.position); // 포지션-코스 미스매치 경고(차단 아님 — 유저 자유)
           return (
-            <Pressable key={s} disabled={disabled} onPress={() => toggle(s)}
-              style={({ pressed }) => [styles.srow, disabled && { opacity: 0.4 }, on && styles.srowOn, pressed && { opacity: 0.7 }]}>
-              <View style={[styles.check, on && styles.checkOn]}>{on ? <Text style={styles.checkMk}>✓</Text> : null}</View>
-              <Text style={styles.slabel}>{LABEL[s]}</Text>
-              <Text style={styles.sval}>{c}{c < 99 ? <Text style={{ color: theme.good }}> → {Math.min(99, c + 1)}</Text> : null}</Text>
-              <Text style={styles.spot}>포텐 {pot}{pot < 99 ? <Text style={{ color: theme.good }}>→{Math.min(99, pot + 1)}</Text> : ' (MAX)'}</Text>
+            <Pressable key={key} disabled={disabled} onPress={() => setCourse(key)}
+              style={({ pressed }) => [styles.crow, disabled && { opacity: 0.4 }, on && styles.crowOn, pressed && { opacity: 0.75 }]}>
+              <View style={styles.chead}>
+                <View style={[styles.check, on && styles.checkOn]}>{on ? <Text style={styles.checkMk}>✓</Text> : null}</View>
+                <Text style={styles.clabel}>{c.label}</Text>
+                <Text style={styles.cprice}>{CAMP_COURSE_COST.toLocaleString()} 💎</Text>
+              </View>
+              <Muted style={{ fontSize: 12, marginTop: 2, marginLeft: 32 }}>{c.desc}</Muted>
+              <View style={styles.cstats}>
+                {c.stats.map((s) => {
+                  const v = cur[s]; const pot = player.potential[s] ?? v;
+                  return (
+                    <View key={s} style={styles.cstat}>
+                      <Text style={styles.csname}>{LABEL[s]}</Text>
+                      <Text style={styles.csval}>{v}{v < 99 ? <Text style={{ color: theme.good, fontWeight: '800' }}>→{Math.min(99, v + CAMP_CUR_GAIN)}</Text> : null}</Text>
+                      <Text style={styles.cspot}>포텐 {pot}{pot < 99 ? <Text style={{ color: theme.good }}>→{Math.min(99, pot + CAMP_POT_GAIN)}</Text> : ''}</Text>
+                    </View>
+                  );
+                })}
+              </View>
+              {mismatch ? (
+                <Text style={styles.mismatch}>⚠ {player.position} 포지션과 결이 다른 코스입니다 — 보낼 수는 있어요</Text>
+              ) : null}
             </Pressable>
           );
         })}
         <View style={{ height: 12 }} />
       </ScrollView>
       <View style={styles.footer}>
-        <Text style={styles.costTxt}>{stats.length}부위 · <Text style={{ color: canAfford ? theme.good : theme.bad, fontWeight: '900' }}>{cost.toLocaleString()} 💎</Text></Text>
-        <Button label={stats.length === 0 ? '부위를 선택하세요' : canAfford ? '전지훈련 보내기 ▶' : '다이아 부족'} onPress={send} />
+        <Text style={styles.costTxt}>
+          {course ? CAMP_COURSES[course].label : '코스 미선택'} · <Text style={{ color: canAfford ? theme.good : theme.bad, fontWeight: '900' }}>{CAMP_COURSE_COST.toLocaleString()} 💎</Text>
+        </Text>
+        <Button label={!course ? '코스를 선택하세요' : canAfford ? '전지훈련 보내기 ▶' : '다이아 부족'} onPress={send} />
       </View>
     </Screen>
   );
@@ -163,14 +183,20 @@ const styles = themedStyles(() => StyleSheet.create({
   phead: { flexDirection: 'row', alignItems: 'center', gap: 10, marginBottom: 4 },
   pnameBig: { flex: 1, color: theme.text, fontSize: 20, fontWeight: '900' },
   change: { color: theme.accent, fontSize: 13, fontWeight: '700' },
-  srow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, paddingHorizontal: 10, borderRadius: 10, marginTop: 4, borderWidth: 1, borderColor: 'transparent' },
-  srowOn: { backgroundColor: theme.good + '18', borderColor: theme.good },
+  crow: { backgroundColor: theme.card, borderRadius: 14, borderWidth: 1.5, borderColor: theme.border, padding: 12, marginTop: 8 },
+  crowOn: { backgroundColor: theme.good + '14', borderColor: theme.good },
+  chead: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   check: { width: 22, height: 22, borderRadius: 6, borderWidth: 2, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
   checkOn: { backgroundColor: theme.good, borderColor: theme.good },
   checkMk: { color: '#04150E', fontSize: 14, fontWeight: '900' },
-  slabel: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
-  sval: { color: theme.text, fontSize: 13, fontWeight: '800', width: 70, textAlign: 'right' },
-  spot: { color: theme.muted, fontSize: 12, width: 96, textAlign: 'right' },
+  clabel: { flex: 1, color: theme.text, fontSize: 15.5, fontWeight: '800' },
+  cprice: { color: theme.text, fontSize: 13, fontWeight: '800' },
+  cstats: { flexDirection: 'row', gap: 8, marginTop: 8, marginLeft: 32 },
+  cstat: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 8, paddingVertical: 6, paddingHorizontal: 8, gap: 1 },
+  csname: { color: theme.muted, fontSize: 11, fontWeight: '700' },
+  csval: { color: theme.text, fontSize: 13, fontWeight: '800' },
+  cspot: { color: theme.muted, fontSize: 11 },
+  mismatch: { color: theme.warn, fontSize: 11.5, marginTop: 7, marginLeft: 32, fontWeight: '600' },
   footer: { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10, gap: 6 },
   costTxt: { color: theme.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
 }));

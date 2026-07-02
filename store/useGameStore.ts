@@ -54,10 +54,12 @@ import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
 import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
 import { evalAchievements } from '../engine/achievements';
-import { canWatchAd, grantAd, unclaimedReward, applyCamp, campCost, FRESH_AD_STATE, type AdState } from '../engine/diamonds';
+import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
 
-/** 전지훈련 기록(MONETIZATION §11.2) — 시드 폴백 재적용용 + 감사. */
-interface CampEntry { season: number; playerId: string; stats: TrainableStat[] }
+/** 전지훈련 기록(MONETIZATION §11.2) — 시드 폴백 재적용용 + 감사.
+ *  유니온(H3): 구 모델 엔트리는 stats[](+1/+1 재적용), 코스형(2026-07-02~)은 course(+2/+7 재적용) —
+ *  각자 원 산식으로 재현해 구 세이브 결정론 보존(과다적용 0). */
+interface CampEntry { season: number; playerId: string; stats?: TrainableStat[]; course?: CampCourse }
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const RETIRE_NEWS_MIN_SEASONS = 8; // 작별 뉴스 대상 — 8시즌+ 뛴 노장(또는 HOF). 버스트(단명)는 무음
@@ -99,7 +101,7 @@ interface GameState {
   adState: AdState;                            // 광고 보상 쿨다운/하루상한 상태(메타 — 시드 무관)
   watchAdForDiamonds: () => { ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' };
   claimAchDiamonds: () => number;              // 새로 달성한 업적 다이아 수령(지급액 반환)
-  trainingCamp: (playerId: string, stats: TrainableStat[]) => { ok: boolean; reason?: string }; // 오프시즌 전지훈련
+  trainingCamp: (playerId: string, course: CampCourse) => { ok: boolean; reason?: string }; // 오프시즌 전지훈련(코스형 §11.2)
   bonds: Record<string, number>; // 인간관계 우정(pairKey→0~0.3, 함께한 세월 누적, RELATIONSHIP_SYSTEM)
   coachPool: { coaches: Coach[]; assistants: AssistantCoach[] } | null; // 감독 생애주기 풀(null=시드, STAFF_SYSTEM 6)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
@@ -278,29 +280,28 @@ export const useGameStore = create<GameState>()(
         set({ diamonds: s.diamonds + total, claimedAch: [...s.claimedAch, ...ids] });
         return total;
       },
-      trainingCamp: (playerId, stats) => {
+      trainingCamp: (playerId, course) => {
         const s = get();
         const my = s.selectedTeamId;
         if (!my) return { ok: false, reason: 'no-team' };
         if (s.currentDay !== 0) return { ok: false, reason: 'not-offseason' }; // 오프시즌(경기0)만 — 재시뮬/소급 방지(§11.2)
         if (s.campTrainedThisOffseason.includes(playerId)) return { ok: false, reason: 'already' }; // 선수당 오프시즌 1회
-        const list = stats.filter((v, i) => stats.indexOf(v) === i); // 중복 제거
-        if (!list.length) return { ok: false, reason: 'no-stat' };
-        const cost = campCost(list);
-        if (s.diamonds < cost) return { ok: false, reason: 'no-diamonds' };
+        if (!CAMP_COURSES[course]) return { ok: false, reason: 'no-course' }; // 유효 코스만(손상 입력 가드)
+        if (s.diamonds < CAMP_COURSE_COST) return { ok: false, reason: 'no-diamonds' };
         if (!(currentRosters()[my] ?? []).includes(playerId)) return { ok: false, reason: 'not-mine' };
         const base = getPlayer(playerId);
         if (!base) return { ok: false, reason: 'not-found' };
-        const camped = applyCamp(base, list);
+        if (!courseUpgradable(base, course)) return { ok: false, reason: 'maxed' }; // 3스탯 전부 현재·포텐 99
+        const camped = applyCampCourse(base, course); // 3스탯 현재+2·포텐+7(§11.2 코스형)
         commitPlayerBase({ [playerId]: camped }); // 레지스트리 즉시 반영(evoCache 무효화 → 화면 즉시)
         set({
-          diamonds: s.diamonds - cost,
-          campLog: [...s.campLog, { season: s.season, playerId, stats: list }],
+          diamonds: s.diamonds - CAMP_COURSE_COST,
+          campLog: [...s.campLog, { season: s.season, playerId, course }],
           campTrainedThisOffseason: [...s.campTrainedThisOffseason, playerId],
           // 시즌≥1: 영속 base에도 굽기. 시즌0(base null): campLog가 재로드 시 시드에 재적용(§11.2 — 이중적용 없음)
           ...(s.playerBase ? { playerBase: { ...s.playerBase, [playerId]: camped } } : {}),
         });
-        diag(s.season, 'wallet', `전지훈련 ${playerId} ${list.length}부위 -${cost}💎`); // 진단 로그(#44)
+        diag(s.season, 'wallet', `전지훈련 ${playerId} ${CAMP_COURSES[course].label} -${CAMP_COURSE_COST}💎`); // 진단 로그(#44)
         return { ok: true };
       },
 
@@ -1032,7 +1033,10 @@ export const useGameStore = create<GameState>()(
           else if (state?.campLog?.length) {
             for (const e of state.campLog) {
               const p = getPlayer(e.playerId);
-              if (p) commitPlayerBase({ [e.playerId]: applyCamp(p, e.stats) });
+              if (!p) continue;
+              // 유니온 재적용(H3): 구 엔트리(stats[])는 구 산식(+1/+1), 코스 엔트리는 코스 산식(+2/+7) — 원 모델 재현
+              if (e.course && CAMP_COURSES[e.course]) commitPlayerBase({ [e.playerId]: applyCampCourse(p, e.course) });
+              else if (e.stats?.length) commitPlayerBase({ [e.playerId]: applyCamp(p, e.stats) });
             }
           }
           if (state?.rosters) commitRosters(state.rosters);

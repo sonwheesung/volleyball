@@ -1,7 +1,7 @@
 // INDEPENDENT — 다이아 이코노미 순수 로직 가드 (MONETIZATION §11, 2026-06-30).
 // 광고 쿨다운/하루상한 · 업적 수령 1회 · 전지훈련 cap99/비용. A/B 민감도 포함(허위 오라클 차단).
 //   npx tsx tools/_dv_diamonds.ts
-import { canWatchAd, grantAd, unclaimedReward, applyCamp, campCost, FRESH_AD_STATE, AD_REWARD, AD_COOLDOWN_MS, AD_DAILY_CAP, CAMP_PER_STAT } from '../engine/diamonds';
+import { canWatchAd, grantAd, unclaimedReward, applyCamp, campCost, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, FRESH_AD_STATE, AD_REWARD, AD_COOLDOWN_MS, AD_DAILY_CAP, CAMP_PER_STAT } from '../engine/diamonds';
 import { makeProspect } from '../data/seed';
 import { createRng, strSeed } from '../engine/rng';
 import type { AchStatus } from '../engine/achievements';
@@ -58,8 +58,31 @@ const T0 = 19675 * 86_400_000; // 고정 기준시각 = UTC 자정 정렬(상한
   const p2 = applyCamp(maxed, ['skBlock']);
   const capped = (p2 as any).skBlock === 99 && p2.potential.skBlock === 99;
   const costPass = campCost(['skSpike', 'skServe', 'skDig']) === CAMP_PER_STAT * 3;
-  log(`[전지훈련] 현재+1·포텐+1·원본불변: ${grew ? '✅' : '❌'} · 99상한 유지: ${capped ? '✅' : '❌'} · 비용 3부위=${CAMP_PER_STAT * 3}: ${costPass ? '✅' : '❌'}`);
+  log(`[전지훈련·구모델(재적용 전용)] 현재+1·포텐+1·원본불변: ${grew ? '✅' : '❌'} · 99상한 유지: ${capped ? '✅' : '❌'} · 비용 3부위=${CAMP_PER_STAT * 3}: ${costPass ? '✅' : '❌'}`);
   ok = ok && grew && capped && costPass;
+}
+// ── (4b) 코스형 전지훈련 (§11.2 개편, 2026-07-02) — +2/+7·cap99·H1 스탯 구성·비용 900 ──
+{
+  const p0 = makeProspect(createRng(strSeed('crs')), 'crs', 'OH');
+  const before = { sk: (p0 as any).skSpike as number, jp: (p0 as any).jump as number, cs: (p0 as any).consistency as number, pot: p0.potential.skSpike ?? 0 };
+  const p1 = applyCampCourse(p0, 'attack');
+  const grew = (p1 as any).skSpike === Math.min(99, before.sk + CAMP_CUR_GAIN)
+    && (p1 as any).jump === Math.min(99, before.jp + CAMP_CUR_GAIN)
+    && (p1 as any).consistency === Math.min(99, before.cs + CAMP_CUR_GAIN)
+    && p1.potential.skSpike === Math.min(99, before.pot + CAMP_POT_GAIN)
+    && (p0 as any).skSpike === before.sk; // 원본 불변
+  // 99 상한 + courseUpgradable 게이트
+  const maxed = { ...p0, potential: { ...p0.potential } } as any;
+  for (const s of CAMP_COURSES.attack.stats) { maxed[s] = 99; maxed.potential[s] = 99; }
+  const p2 = applyCampCourse(maxed, 'attack');
+  const capped = CAMP_COURSES.attack.stats.every((s) => (p2 as any)[s] === 99 && p2.potential[s] === 99) && !courseUpgradable(maxed, 'attack');
+  // H1: 죽은 스탯 reaction이 공격·서브 코스에 없고(스파이크/서브 레이팅 0기여) consistency로 대체·블로킹엔 유지(0.18 기여)
+  const h1 = !CAMP_COURSES.attack.stats.includes('reaction') && CAMP_COURSES.attack.stats.includes('consistency')
+    && !CAMP_COURSES.serve.stats.includes('reaction') && CAMP_COURSES.serve.stats.includes('consistency')
+    && CAMP_COURSES.block.stats.includes('reaction');
+  const costPass = CAMP_COURSE_COST === CAMP_PER_STAT * 3; // 900 = 락값(300)×3
+  log(`[전지훈련·코스형] 3스탯 +${CAMP_CUR_GAIN}/+${CAMP_POT_GAIN}·원본불변: ${grew ? '✅' : '❌'} · 99상한+maxed게이트: ${capped ? '✅' : '❌'} · H1 스탯구성: ${h1 ? '✅' : '❌'} · 비용 ${CAMP_COURSE_COST}: ${costPass ? '✅' : '❌'}`);
+  ok = ok && grew && capped && h1 && costPass;
 }
 // ── (5) A/B 민감도 — 쿨다운/cap 규칙이 살아있나(허위 오라클 차단) ──
 {

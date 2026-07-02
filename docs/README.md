@@ -127,7 +127,8 @@ npx tsx tools/_dv_foreign_contract.ts       # 계약관리 외인 차단 — rel
 npx tsx tools/_dv_tryout_pool.ts            # 트라이아웃 풀 생성 종료 가드(EDGE_CASES §3.14 — edge-swarm 클러스터A) — 정상 domesticAvg 바닥충족·고/극단 domesticAvg 종료(옛 무캡 while은 hang=A/B 이빨). exit 0/1
 npx tsx tools/_dv_name_dedupe.ts            # 동명이인 방지(FOREIGN_SYSTEM §8, 2026-06-30) — 초기 리그·트라이아웃 풀·드래프트 클래스 부류별 표시 중복 0 + taken 회피 + A/B(충돌 배치 dedup 전>0→후 0=오라클 민감) + 결정론. exit 0/1
 npx tsx tools/_dv_name_space.ts             # 절차적 이름 생성 공간(FOREIGN_SYSTEM §8 A', 2026-06-30) — 20k 생성 시 고유 이름 국내>5000·외인>1000·아시아>150+국적 전수(절차성=옛 수십리스트 압도, 고갈 없음)·결정론·육안 샘플. exit 0/1
-npx tsx tools/_dv_diamonds.ts               # 다이아 이코노미(MONETIZATION §11, 2026-06-30) — 광고 30분쿨다운/하루8회·업적 1회수령(중복지급0)·전지훈련 현재+1/포텐+1 cap99·비용 300/부위 + A/B(쿨다운 무력 검출). exit 0/1
+npx tsx tools/_dv_diamonds.ts               # 다이아 이코노미(MONETIZATION §11) — 광고 30분쿨다운/하루8회·업적 1회수령(중복지급0)·전지훈련 구모델(+1/+1, 재적용 전용)+코스형(3스탯 +2/+7·H1 스탯구성·900💎·cap99) + A/B(쿨다운 무력 검출). exit 0/1
+npx tsx tools/_dv_campeffect.ts 5 25        # 코스형 전지훈련 순효과(§11.2 H4, effect A/B) — 영건 with/without 5시즌 성장 ΔOVR 평균 ≥+1(실측 1.76·분포 1~3)·음수 0·결정론·null-대조 0. "유료인데 체감 0"(4번째 죽은기능) 재발 방지. exit 0/1
 npx tsx tools/_dv_devicelog.ts              # 기기 진단 로그 버퍼 순수 헬퍼(BACKEND §13.6 #44) — prune 시즌경계(최근10)·하드상한·범위·시간순·미래제외 + A/B. exit 0/1
 npx tsx tools/_dv_snapshot.ts 14            # 진단 스냅샷 생성기(BACKEND §13.6 #45) — 실 store 14시즌 후 스냅샷: 범위[max(0,cur-10)..cur]·미래제외·비어있지않음·뉴스/선수 시즌정합·로그필터·결정론. exit 0/1
 npx tsx tools/_dv_setscore_dist.ts 3000     # 세트스코어 분포(독립) — 3-0/3-1/3-2 모두 출현·홈승률 밴드·풀세트 합리 + matchPoints 불변식(승자+패자=3) 0위반 + A/B(깨진 6종 거부). engine-verify 스웜 산물 승격. exit 0/1
