@@ -44,7 +44,8 @@
 | [SAVE_SYSTEM](./SAVE_SYSTEM.md) | **세이브·마이그레이션**(영속 53필드 스키마·version/migrate·정규화기·안전 복원) — 출시 후 구조 변경 안전 | `store/saveMigration.ts`·`store/useGameStore.ts`(persist) |
 | [REALTIME_SIM_SYSTEM](./REALTIME_SIM_SYSTEM.md) | **전진 시뮬+결과 저장 전환(B안)** — 게으른 씨앗 재생 → 1회 치르고 저장(로딩·재생버그 제거). 독립리뷰·함정 7게이트·Phase0~3 | `store/useGameStore.ts`·`data/standings.ts`·`data/production.ts`(전환 중) |
 | [MONETIZATION_SYSTEM](./MONETIZATION_SYSTEM.md) | **수익화**(무료+광고+다이아 IAP+DLC) — 다이아(소비성=전지훈련)·광고 쿨다운 카운트다운(A4 ✅ 2026-07-01)·광고="시즌 시작하기" 버튼. **온라인 전환(2026-07-01)**: 오프라인/RevenueCat 폐기→Vercel(BACKEND_SYSTEM) | `engine/diamonds.ts`·`app/(tabs)/mypage.tsx`·`app/training-camp.tsx`·`lib/ads·iap·log` |
-| [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) | **온라인 백엔드(2026-07-01 신설)** — 소셜 로그인·online-first(관전/시뮬 캐시 오프라인·다이아/결제 온라인필수)·Vercel 단독 영수증검증+환불웹훅·다이아 지갑(append-only 원장·멱등)·로그(기기 롤링+서버)·문의+진단스냅샷(최근10시즌 재생)·관리자 대시보드+통계. 📋 설계완료·구현 P1(로컬 우선) | `lib/server.ts`(예정)·Vercel(예정)·`store/persistStorage.ts`(영속 디바운스 A6) |
+| [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) | **온라인 백엔드(2026-07-01 신설)** — 소셜 로그인·online-first(관전/시뮬 캐시 오프라인·다이아/결제 온라인필수)·Vercel 단독 영수증검증+환불웹훅·다이아 지갑(append-only 원장·멱등)·로그(기기 롤링+서버)·문의+진단스냅샷·관리자+통계. **Supabase Postgres 연결·Vercel 배포 라이브(2026-07-02)**·**멀티게임 proj_code FK(§13.2)**·**보관기간 법정 조사(§13.9)** | `server/`(Next.js)·`lib/server.ts`·`server/db/schema.ts`(proj_info·users·wallet_ledger) |
+| [AUTH_SYSTEM](./AUTH_SYSTEM.md) | **인증(2026-07-02 신설)** — 하드 로그인 벽(M3 정정, 최초1회 온라인·이후 캐시세션 오프라인 진입)·마이페이지 로그아웃·자체 Bearer 세션. Expo Go 스텁→EAS 실물(구글/애플·SecureStore) | `store/useAuthStore.ts`·`app/login.tsx`·`app/_layout.tsx`(게이트)·`server/lib/auth.ts`·`/api/auth/login` |
 | [ONBOARDING_SYSTEM](./ONBOARDING_SYSTEM.md) | 스포트라이트 튜토리얼(구단 선택부터 화면별 안내, **스텝 단위 영구 추적** → 신규 기능만 재안내)·플레이어 시작 기본 스태프 | `components/Spotlight.tsx`, `data/tutorialSteps.ts`, `store/useGameStore.ts`(seenTips), `data/league.ts`(grantStartingStaff) |
 
 ---

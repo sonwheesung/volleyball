@@ -130,7 +130,17 @@
 | 클라이언트 | `lib/server.ts`(Expo 앱) — **throw 없는** 타입드 | 광고 스텁과 동일 계약. 잔액 *표시*=캐시, 사용/적립/결제=서버 확인 후. **어떤 서버콜도 앱 렌더 임계경로에 두지 않음**(리뷰 M3 — 오프라인 부팅 보장) |
 
 ### 13.2 데이터 모델(Drizzle 스키마)
-`User` · `WalletLedger`(append-only, `idempotencyKey` unique, signed `delta`, `reason`) + **`User.balance` 영속 컬럼**(fold O(n) 회피 + 동시성 잠금 대상) · `Purchase`(`transactionId` unique, `status` pending→granted→consumed→refunded) · `AdReward`(`ssvTransactionId` unique) · `AchievementClaim`(`userId+achievementId` unique) · `Log` · `Ticket`+`TicketMessage`(카테고리 오류/건의/질문/기타) · `DiagnosticSnapshot`(JSON) · `TelemetrySession`+`Heartbeat`(DAU·플레이타임).
+**멀티게임 구조(2026-07-02 사용자 결정)**: 이 서버는 배구명가로 시작하되 **향후 타 스포츠게임이 같은 재화·결제 구조를 공유**한다.
+부모 테이블 **`ProjInfo`**(`proj_code` PK — 'volleyball' 등)를 두고, **모든 데이터 테이블에 `proj_code` FK→ProjInfo**를 박아
+게임별로 완전 격리한다. 유니크 제약도 게임 스코프(예: users `(proj_code, provider, providerId)`, ledger `(proj_code, idempotencyKey)`).
+서버 상수 `PROJ_CODE`('volleyball') 단일 소스로 모든 write에 주입.
+
+- `ProjInfo`(`proj_code` PK, name, createdAt) — 게임 카탈로그(부모).
+- `User`(`proj_code` FK, provider, providerId, `balance` 영속, **`deletedAt` 소프트삭제**) · UNIQUE`(proj_code, provider, providerId)`.
+  - **balance 영속**=fold O(n) 회피 + 동시성 잠금 대상. **deletedAt**=계정삭제 시 하드삭제 대신 소프트삭제(결제 원장 법정보존 §13.9).
+- `WalletLedger`(append-only 감사, `proj_code` FK, userId FK, signed `delta`, `reason`, **`ref`**, balanceAfter) · UNIQUE`(proj_code, idempotencyKey)`.
+  - `reason`=범주(purchase|ad|achievement|camp|refund|adjust). **`ref`(신규)=획득/사용 출처 상세 감사**("어떻게 얻었나" — 업적id·상품id·SSV id·전지훈련 playerId:stat). 사용자 요청(감사 필수).
+- (이후) `Purchase`(`proj_code` FK, `transactionId` unique/proj, status pending→granted→consumed→refunded, platform, productId, rawReceipt) · `AdReward`(`ssvTransactionId` unique) · `AchievementClaim`(`userId+achievementId` unique) · `Log`(proj_code, level, tag, season) · `Ticket`+`TicketMessage`(proj_code, userId, 카테고리) · `DiagnosticSnapshot`(JSON) · `TelemetrySession`+`Heartbeat`. 전부 `proj_code` FK 포함 신설.
 
 ### 13.3 엔드포인트
 `/api/health` · `/api/auth/login`(ID토큰→Bearer)·`/refresh` · `GET /api/wallet`(balance+최근 원장) · `POST /api/wallet/spend`·`/earn`(멱등키+**행 잠금 트랜잭션**) · `POST /api/purchase/verify`(→grant→**스토어 consume/finish 호출**) · `POST /api/purchase/webhook/google`(RTDN Pub/Sub, JWT 검증)·`/apple`(ASSN V2, JWS 검증) → **환불 시 음수 원장 차감** · `POST /api/ad/ssv`(AdMob 서명 검증) · `POST /api/log` · `/api/ticket`(create/list/reply) · `POST /api/snapshot` · `POST /api/telemetry` · 관리자 대시보드 페이지(인증 보호).
@@ -189,3 +199,21 @@
 - **실환경 검증(Opus 4.8)**: 공개 URL `GET /api/health` 200 + `GET /api/wallet` **Vercel 서버리스 → Supabase 6543 풀러 DB 왕복 정상**(balance:0). 서버리스에서 `prepare:false` 필수 확인.
 - **앱 연결**: 루트 `.env`의 `EXPO_PUBLIC_SERVER_URL=https://volleyball-jet-nine.vercel.app`(비밀 아님 → 커밋). 비면 오프라인 모드(§13.6). dev에서 로컬 서버로 바꾸려면 `.env.local`에 `EXPO_PUBLIC_SERVER_URL=http://localhost:3000` 오버라이드(단 실기기·에뮬레이터는 localhost 불가 → Vercel URL 사용).
 - **TODO(출시 전)**: DB 비밀번호 회전(개발 중 채팅 노출분) → Supabase reset 후 `.env.local`·Vercel env 갱신. 2FA는 계정에 활성화됨(복구코드 보관 완료).
+
+### 13.9 데이터 보관·파기 (법정 — 2026-07-02 조사)
+> 결제·개인정보 보관은 **추정 금지 — 실제 법령 조사**(전자상거래법 시행령 제6조). 근거: law.go.kr·easylaw.go.kr.
+
+- **법정 보존기간**(전자상거래 등에서의 소비자보호법 시행령 §6):
+  | 기록 | 보존 |
+  |---|---|
+  | 대금결제·재화 공급 | **5년** |
+  | 계약·청약철회 | **5년** |
+  | 소비자 불만·분쟁처리(문의하기) | **3년** |
+  | 표시·광고 | 6개월 |
+- **핵심 함의**: 사용자가 **계정을 삭제해도 결제 원장(WalletLedger reason=purchase/refund·Purchase)은 5년 보존 의무.** 개인정보보호법상
+  목적달성 시 파기가 원칙이나, **법정 보존기간 동안은 거래주체 식별정보를 동의철회에도 보존 가능**(합법 예외).
+- **설계**:
+  1. **계정삭제 = 소프트삭제**(`User.deletedAt`) — 로그인/플레이는 막되 결제 원장은 유지. 개인정보 최소화(displayName 등 비필수 필드는 파기 가능).
+  2. **보관기간 만료 파기 잡** — 5년(결제)·3년(문의) 경과분을 주기적으로 hard-purge. 관리자(#46) 단계에서 cron/route 구현. 지금은 정책만 문서화(스키마에 `createdAt`·`deletedAt`로 파기 판단 가능하게 준비).
+  3. **개인정보 처리방침 고지** — 출시 시 앱·스토어에 보존기간 명시(스토어 심사 필수).
+- **다이아 감사(사용자 요청)**: 모든 획득/사용을 `WalletLedger`에 `reason`+`ref`로 남겨 **"언제·어떻게·얼마"**를 영구 추적(append-only, 삭제 안 함 — balance는 fold와 항상 일치). 결제는 `Purchase`에 원문 영수증까지.

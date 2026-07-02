@@ -2,9 +2,10 @@
 // 불변식: balance == sum(ledger.delta) 항상. 절대 음수 안 됨(spend는 balance 게이트).
 // 동시성(H2): 서로 다른 동시 spend 2건이 각자 잔액 읽고 통과하는 초과지출을 막으려면 멱등키만으론 부족 —
 //   트랜잭션 안에서 users 행을 FOR UPDATE로 잠가 직렬화한다. 멱등키는 "같은 키 재시도"를 dedupe.
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db';
-import { users, walletLedger } from '../db/schema';
+import { users, walletLedger, projInfo } from '../db/schema';
+import { PROJ_CODE } from './proj';
 
 export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust';
 
@@ -22,14 +23,15 @@ export async function applyWallet(
   delta: number,
   reason: WalletReason,
   idempotencyKey: string,
+  ref?: string, // 출처 상세 감사(§13.2): 업적id·상품id·SSV id·전지훈련(playerId:stat) 등
 ): Promise<WalletResult> {
   try {
     return await db.transaction(async (tx) => {
-      // 1) 멱등 — 같은 키가 이미 있으면 그때의 잔액을 그대로 반환(재적용 금지)
+      // 1) 멱등 — 같은 (proj, 키)가 이미 있으면 그때의 잔액을 그대로 반환(재적용 금지)
       const dup = await tx
         .select({ balanceAfter: walletLedger.balanceAfter })
         .from(walletLedger)
-        .where(eq(walletLedger.idempotencyKey, idempotencyKey))
+        .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, idempotencyKey)))
         .limit(1);
       if (dup.length) return { ok: true as const, balance: dup[0].balanceAfter, applied: false };
 
@@ -48,7 +50,7 @@ export async function applyWallet(
 
       // 3) 잔액 갱신 + 원장 기록(같은 트랜잭션 = 원자적)
       await tx.update(users).set({ balance: next }).where(eq(users.id, userId));
-      await tx.insert(walletLedger).values({ userId, delta, reason, idempotencyKey, balanceAfter: next });
+      await tx.insert(walletLedger).values({ projCode: PROJ_CODE, userId, delta, reason, ref, idempotencyKey, balanceAfter: next });
       return { ok: true as const, balance: next, applied: true };
     });
   } catch {
@@ -70,14 +72,31 @@ export async function getWallet(userId: string, recent = 20) {
   return { balance: u[0].balance, ledger };
 }
 
-/** 개발용 고정 유저 보장(인증은 마일스톤3). provider=dev. */
-export async function ensureDevUser(providerId = 'dev-user-1'): Promise<string> {
+/** 이 게임(PROJ_CODE)의 proj_info 행 보장 — FK 대상. 최초 1회만 실제 insert. */
+export async function ensureProj(): Promise<void> {
+  await db
+    .insert(projInfo)
+    .values({ projCode: PROJ_CODE, name: PROJ_CODE })
+    .onConflictDoNothing({ target: projInfo.projCode });
+}
+
+/** (proj_code, provider, providerId) 유저 upsert → id. 인증(auth/login·resolveUserId)·익명 폴백 공용. */
+export async function ensureUser(providerId: string, provider = 'dev', displayName?: string): Promise<string> {
+  await ensureProj(); // FK 부모 보장(최초 1회 실제 insert, 이후 no-op)
   const existing = await db
     .select({ id: users.id })
     .from(users)
-    .where(eq(users.providerId, providerId))
+    .where(and(eq(users.projCode, PROJ_CODE), eq(users.provider, provider), eq(users.providerId, providerId)))
     .limit(1);
   if (existing.length) return existing[0].id;
-  const inserted = await db.insert(users).values({ provider: 'dev', providerId }).returning({ id: users.id });
+  const inserted = await db
+    .insert(users)
+    .values({ projCode: PROJ_CODE, provider, providerId, displayName })
+    .returning({ id: users.id });
   return inserted[0].id;
+}
+
+/** 개발용 고정 유저 보장(익명 폴백 — Bearer 없을 때). provider=dev. */
+export async function ensureDevUser(providerId = 'dev-user-1'): Promise<string> {
+  return ensureUser(providerId, 'dev');
 }
