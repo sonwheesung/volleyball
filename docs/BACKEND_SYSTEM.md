@@ -146,7 +146,7 @@
 
 ### 13.5 빌드 순서(작은 러너블 먼저)
 1. **스켈레톤+health**(/server 독립·Metro blockList) — `next dev` 응답 + Expo 번들 무손상. ✅ **완료(2026-07-01)** — `GET /api/health` 200·server tsc 0·blockList /server 제외 확인.
-2. **Postgres+지갑 코어**(Drizzle, User+WalletLedger+balance, spend/earn = FOR UPDATE+멱등+가드, 동시 이중지불 테스트). 🔨 **코드 완료·tsc 0(2026-07-01)** / ⏳ **H2 런타임 검증은 Postgres 필요** — ~~로컬 Docker Desktop `docker compose up -d db`~~ → **Supabase 연결**(§13.7)로 전환(2026-07-02): `server/.env.local`에 `DATABASE_URL` 주입 → `npx drizzle-kit push`(Session/Direct :5432) → `tools/walletConcurrency.ts` K=50·N=200으로 이중지불 0 증명. 파일: `db/schema.ts`·`db/index.ts`(`prepare:false`)·`lib/wallet.ts`·`app/api/wallet/*`·`tools/walletConcurrency.ts`. ~~`docker-compose.yml`~~(폐기 — Supabase 전환).
+2. **Postgres+지갑 코어**(Drizzle, User+WalletLedger+balance, spend/earn = FOR UPDATE+멱등+가드, 동시 이중지불 테스트). ✅ **완료·런타임 검증(2026-07-02, Supabase)** — ~~로컬 Docker Desktop~~ → **Supabase Postgres 17.6**(ap-northeast-2 Seoul) 연결(§13.7): `server/.env.local` `DATABASE_URL`(풀러:6543 `prepare:false`) → `drizzle-kit push`(Session:5432) 스키마 생성 → `tools/walletConcurrency.ts` **K=50·N=200 이중지불 0 증명(성공 정확히 50·음수 0·원장==잔액)** + `GET /api/health` 200·`GET /api/wallet` DB 왕복 확인. 파일: `db/schema.ts`·`db/index.ts`(`prepare:false`)·`lib/wallet.ts`·`app/api/wallet/*`·`tools/walletConcurrency.ts`. ~~`docker-compose.yml`~~(삭제 — Supabase 전환). (검증: Opus 4.8)
 3. **모바일 인증**(ID토큰 검증→Bearer→SecureStore, 부팅 익명 유지).
 
 ### 13.6 클라이언트 인터페이스 — 오프라인 우선 선구현 (2026-07-01, DB 연결 전)
