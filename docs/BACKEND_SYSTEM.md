@@ -214,6 +214,30 @@
   목적달성 시 파기가 원칙이나, **법정 보존기간 동안은 거래주체 식별정보를 동의철회에도 보존 가능**(합법 예외).
 - **설계**:
   1. **계정삭제 = 소프트삭제**(`User.deletedAt`) — 로그인/플레이는 막되 결제 원장은 유지. 개인정보 최소화(displayName 등 비필수 필드는 파기 가능).
-  2. **보관기간 만료 파기 잡** — 5년(결제)·3년(문의) 경과분을 주기적으로 hard-purge. 관리자(#46) 단계에서 cron/route 구현. 지금은 정책만 문서화(스키마에 `createdAt`·`deletedAt`로 파기 판단 가능하게 준비).
+  2. **보관기간 만료 파기 잡** — §13.10 크론 스케줄러가 티어별 경과분을 hard-purge(구현).
   3. **개인정보 처리방침 고지** — 출시 시 앱·스토어에 보존기간 명시(스토어 심사 필수).
-- **다이아 감사(사용자 요청)**: 모든 획득/사용을 `WalletLedger`에 `reason`+`ref`로 남겨 **"언제·어떻게·얼마"**를 영구 추적(append-only, 삭제 안 함 — balance는 fold와 항상 일치). 결제는 `Purchase`에 원문 영수증까지.
+- **다이아 감사(사용자 요청)**: 모든 획득/사용을 `WalletLedger`에 `reason`+`ref`로 남겨 **"언제·어떻게·얼마"**를 추적. 결제/환불 원장은 **5년 보존**(법정+수입), 게임경제 원장(ad/업적/전지훈련)은 2년 후 파기(재무 아님). balance는 영속 컬럼이라 원장 일부 파기돼도 잔액 무결(fold 재계산 안 함).
+
+### 13.10 삭제 스케줄러 + 수입 롤업 (2026-07-03 — 데이터 수명주기)
+> 데이터 폭증 방지: **필요없는 로그는 파기, 수입 집계는 영구.** 크론 방식은 조사(Vercel Hobby=일1회 크론, 무료·시간 부정확 OK — 파기는 시간 민감 아님).
+
+- **보관 티어**(`server/lib/retention.ts` 단일 소스 — `RETENTION_DAYS`):
+  | 데이터 | 테이블 | 보관 | 비고 |
+  |---|---|---|---|
+  | 결제·환불 원장 | walletLedger(reason=purchase/refund) | **5년(1825d)** | 법정+수입 |
+  | 게임경제 원장 | walletLedger(그 외 reason) | 2년(730d) | 재무 아님·벌크 |
+  | 문의(분쟁) | tickets(미래) | 3년(1095d) | 법정 |
+  | 서버 진단로그 | logs(미래) | 90d | 유지보수·벌크 |
+  | 텔레메트리 원본 | heartbeat(미래) | 90d → 일집계 영구 | DAU/플레이타임 |
+  | **수입 일집계** | **statsDaily** | **영구(파기 안 함)** | 원본 파기돼도 총수입 생존 |
+- **스케줄러**: `vercel.json` crons → `POST /api/cron/purge`(매일). **`CRON_SECRET` Bearer 검증**(Vercel이 크론콜에 자동 첨부 — 외부 무단호출 차단). 순서: ① 어제치 **롤업**(결제→statsDaily 매출/카운트) → ② 티어별 **파기**(경과 기준 delete). 각 단계 typed 결과·count 반환, throw 없음.
+- **수입 대시보드(사용자 요청 — "총 수입 영구 보관")**: `statsDaily`(proj_code, date, revenueKrw, purchaseCount, newUsers…)는 **절대 파기 안 함**. 원본 결제가 5년 뒤 사라져도 **일별 매출 합 = 총수입**이 영구 생존 → 관리자 대시보드(#46)가 즉시 조회(5년 스캔 불필요). KRW 매출은 `Purchase` 테이블(#43) 연결 시 완성(지금은 뼈대 — 결제 원장 카운트/신규유저).
+- **파기 안전**: 파기는 **경과 기준 delete만**(현재 데이터 무영향). 결제 원장 5년은 수년간 트리거 안 됨. 파기 전 반드시 롤업 선행(집계 유실 방지). 운영 마이그레이션 주의(§13.9 소프트삭제)와 별개 — 이건 시간경과 정리.
+- **크론 보안**: `CRON_SECRET`을 **Vercel env에도 설정**해야 Vercel이 크론콜에 `Authorization: Bearer`를 자동 첨부하고 라우트가 검증한다(미설정 시 라우트는 통과시키되 무방비 — 출시 전 필수 설정). 스케줄 `0 18 * * *`(=3am KST) 일 1회(Hobby 허용).
+
+### 13.11 운영 설정 — 버전 게이트 + 서버 점검 (`server_setting`, 2026-07-03)
+> **전부 DB로 저장·서버 조회**(사용자 원칙 — 앱 로컬 신뢰 금지 [[server-authoritative-currency]]). 스토어 강제업데이트에 의존하지 않고 DB로 우회.
+
+- **`server_setting`**(게임별 1행, `proj_code` PK FK): `minVersion`(미만=강제 업데이트·진입 차단)·`latestVersion`(미만=소프트 안내)·`android/iosStoreUrl`·`maintenance`(bool)·`maintenanceTitle`·`maintenanceBody`·`updatedAt`. 관리자(#58)가 갱신.
+- **부팅 게이트(구현 예정 #56·#57)**: 앱 진입 시 **단일 `/api/bootstrap`** 조회 → `{maintenance, version, announcements}`. 루트 레이아웃 순서 **점검 차단 → 강제버전 차단 → 로그인 벽 → 게임**. 공지사항은 기간제·앱 진입 시에만(무푸시 관전형 유지).
+- 스키마·시드('volleyball' 1행, maintenance=false)는 이번 커밋에 완료. 조회 엔드포인트·클라 게이트는 후속.
