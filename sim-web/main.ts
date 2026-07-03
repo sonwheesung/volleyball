@@ -29,7 +29,7 @@ import { reconstructRallies } from '../components/courtDirector';
 import { situationFeed } from '../components/courtCommentary';
 import { matchMvp } from '../data/matchAward';
 import { buildMatchBanners, type Banner } from '../data/broadcast';
-import { resolveDraft, lotteryRound1, buildDraftOrder, prospectStars, type PickReason } from '../engine/draft';
+import { resolveDraft, lotteryRound1, buildDraftOrder, prospectValue, type PickReason } from '../engine/draft';
 import { generateDraftClass } from '../data/draftClass';
 import { createRng } from '../engine/rng';
 import { teamHue } from '../lib/teamColor';
@@ -40,7 +40,8 @@ const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&l
 const $ = (id: string) => document.getElementById(id)!;
 const pcell = (pos: string) => `<td class="pos pos-${pos}">${pos}</td>`;
 const ovrOf = (p: Player) => displayOvr(overall(p));
-const potStars = (p: Player) => prospectStars(p); // 드래프트가치 기준(희소도 반영) — 구 maxPot 포화 교정
+// 드래프트가치 기준 별(개발 인스펙터 전용 — 게임 화면은 스카우팅 2.0으로 별 제거). engine에서 prospectStars 삭제돼 로컬 정의.
+const potStars = (p: Player) => { const v = prospectValue(p); return v >= 81 ? '★★★' : v >= 78 ? '★★' : v >= 75 ? '★' : '·'; };
 
 // 무거운 동기 작업(N회 반복 시뮬 등) — 버튼 비활성 + 로딩 표시 후 **한 프레임 양보(rAF×2)** 하고 실행.
 // JS 단일 스레드라 동기 루프는 UI를 막는다 → 페인트를 먼저 시켜야 로딩/비활성이 실제로 보인다(SIM_CONSOLE UI 규칙).

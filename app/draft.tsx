@@ -1,18 +1,58 @@
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal } from '../data/league';
 import { computeStandings } from '../data/standings';
-import { resolveDraft, prospectStars } from '../engine/draft';
+import { amateurRecord } from '../data/amateurRecord';
+import { revealedPotential } from '../data/prospectScout';
+import { prospectReport } from '../data/prospectReport';
+import { resolveDraft } from '../engine/draft';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
 import { showSeasonStartAd } from '../lib/ads';
 import type { Player } from '../types';
 
-const potStars = (p: Player): string => prospectStars(p); // 드래프트가치 기준(희소도 반영) — 구 maxPot 포화 교정
+// 아마추어 성적표 + 스카우터 공개 잠재력 + 스카우트 리포트 (★ 포텐 별 제거 — 스카우팅 2.0 4단계)
+function ProspectDetail({ p, reveal }: { p: Player; reveal: number }) {
+  const rec = amateurRecord(p);
+  const rev = revealedPotential(p, reveal);
+  const report = prospectReport(p, reveal);
+  return (
+    <View style={styles.detail}>
+      <Text style={styles.detailHead}>아마추어 성적 · {rec.leagueLabel}</Text>
+      <View style={styles.statWrap}>
+        {rec.stats.map((s) => (
+          <View key={s.key} style={styles.statChip}>
+            <Text style={styles.statLabel}>{s.label}</Text>
+            <Text style={styles.statVal}>{s.value}{s.unit === '%' ? '%' : ''}<Text style={styles.statUnit}>{s.unit === '%' ? '' : s.unit}</Text></Text>
+          </View>
+        ))}
+      </View>
+
+      <Text style={[styles.detailHead, { marginTop: 10 }]}>스카우터 공개 잠재력</Text>
+      {rev.length === 0 ? (
+        <Muted style={{ fontSize: 12 }}>스카우터가 부족해 잠재력을 읽지 못했습니다. (스태프에서 스카우터 영입)</Muted>
+      ) : (
+        <View style={styles.statWrap}>
+          {rev.map((r) => (
+            <View key={r.key} style={[styles.statChip, { borderColor: theme.sky + '55' }]}>
+              <Text style={styles.statLabel}>{r.label} 잠재</Text>
+              <Text style={[styles.statVal, { color: theme.sky }]}>{r.text}{r.exact ? '' : ''}</Text>
+            </View>
+          ))}
+        </View>
+      )}
+
+      <Text style={[styles.detailHead, { marginTop: 10 }]}>스카우트 리포트</Text>
+      {report.map((line, i) => (
+        <Text key={i} style={styles.reportLine}>· {line}</Text>
+      ))}
+    </View>
+  );
+}
 
 export default function DraftCenter() {
   // 드래프트 컨텍스트 생성(buildDraftContext)+지명 시뮬(resolveDraft)은 무거워 한 틱 미뤄 로딩부터 그린다
@@ -36,6 +76,7 @@ function DraftCenterInner() {
   const interviews = useGameStore((s) => s.interviews);
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
+  const [openId, setOpenId] = useState<string | null>(null);
   // endSeason과 동일한 ownerFx+자금 — 미리보기=결과 보장(면담 거부·자금 게이트가 명단·순번에 반영)
   const ctx = useMemo(
     () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
@@ -57,9 +98,8 @@ function DraftCenterInner() {
   const classSorted = [...ctx.cls].sort((a, b) => overall(b) - overall(a));
   const myRank = standings.findIndex((s) => s.teamId === my) + 1;
 
-  // 스카우팅 안개(STAFF_SYSTEM) — 공개도↓일수록 OVR은 범위로, 포텐셜은 흐리게
+  // 스카우팅 안개(STAFF_SYSTEM) — 공개도↓일수록 현재 OVR은 범위로.
   const reveal = teamScoutReveal(my);
-  const fogStars = (p: Player) => (reveal >= 0.6 ? potStars(p) : reveal >= 0.3 ? '?·?' : '?');
   const fogOvr = (p: Player): string => {
     const o = displayOvr(overallRaw(p));
     if (reveal >= 0.92) return `${o}`;
@@ -85,10 +125,10 @@ function DraftCenterInner() {
         </Row>
         <Muted style={{ fontSize: 12 }}>
           하위 팀이 앞 순번(추첨). 원하는 신인을 담아두면 순번에서 가능한 선수를 자동 지명합니다.
-          AI가 먼저 데려가면 다음 우선순위로 넘어갑니다. ★=포텐셜(스카우팅).
+          선수를 누르면 아마추어 성적·스카우트 리포트를 볼 수 있어요.
         </Muted>
         <Muted style={{ fontSize: 12, marginTop: 4, color: reveal >= 0.6 ? theme.good : theme.warn }}>
-          스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= 0.92 ? '(정밀)' : '— 스태프에서 스카우터를 영입하면 능력치가 더 선명해집니다'}
+          스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= 0.92 ? '(정밀)' : '— 스카우터를 영입하면 잠재력이 더 많이·선명하게 보입니다'}
         </Muted>
       </Card>
 
@@ -105,7 +145,6 @@ function DraftCenterInner() {
           <View key={p.id} style={styles.row}>
             <PosTag pos={p.position} />
             <Text style={[styles.name, { flex: 1 }]}>{p.name}</Text>
-            <Text style={styles.pot}>{potStars(p)}</Text>
             <OvrBadge value={overallRaw(p)} />
           </View>
         ))
@@ -115,26 +154,28 @@ function DraftCenterInner() {
       {classSorted.map((p) => {
         const wi = draftPicks.indexOf(p.id);
         const picked = wi >= 0;
+        const open = openId === p.id;
         return (
-          <Pressable
-            key={p.id}
-            onPress={() => toggleDraftPick(p.id)}
-            style={[styles.row, picked && { borderColor: theme.accent, borderWidth: 1, backgroundColor: theme.accent + '18' }]}
-          >
-            <PosTag pos={p.position} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>
-                {p.name} <Text style={{ color: theme.warn }}>{fogStars(p)}</Text>
-              </Text>
-              <Text style={styles.sub}>{p.age}세 · {p.height}cm</Text>
+          <View key={p.id} style={[styles.rowWrap, picked && { borderColor: theme.accent, borderWidth: 1, backgroundColor: theme.accent + '12' }]}>
+            <View style={styles.rowInner}>
+              <Pressable onPress={() => setOpenId(open ? null : p.id)} style={styles.rowTap}>
+                <PosTag pos={p.position} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.name}>{p.name}</Text>
+                  <Text style={styles.sub}>{p.age}세 · {p.height}cm · {open ? '접기 ▲' : '자세히 ▼'}</Text>
+                </View>
+                {reveal >= 0.92
+                  ? <OvrBadge value={overallRaw(p)} />
+                  : <Text style={styles.fogOvr}>{fogOvr(p)}</Text>}
+              </Pressable>
+              <Pressable onPress={() => toggleDraftPick(p.id)} hitSlop={8} style={styles.pickBtn}>
+                <Text style={{ color: picked ? theme.accent : theme.muted, fontWeight: '800', fontSize: 13 }}>
+                  {picked ? `담음${wi + 1}` : '담기'}
+                </Text>
+              </Pressable>
             </View>
-            {reveal >= 0.92
-              ? <OvrBadge value={overallRaw(p)} />
-              : <Text style={{ minWidth: 52, textAlign: 'center', color: theme.muted, fontWeight: '800', fontSize: 13 }}>{fogOvr(p)}</Text>}
-            <Text style={{ width: 40, textAlign: 'right', color: picked ? theme.accent : theme.muted, fontWeight: '800' }}>
-              {picked ? `담음${wi + 1}` : '담기'}
-            </Text>
-          </Pressable>
+            {open ? <ProspectDetail p={p} reveal={reveal} /> : null}
+          </View>
         );
       })}
     </Screen>
@@ -147,7 +188,21 @@ const styles = themedStyles(() => StyleSheet.create({
     backgroundColor: theme.card, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10,
     borderWidth: 1, borderColor: theme.border,
   },
+  rowWrap: {
+    backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, overflow: 'hidden',
+  },
+  rowInner: { flexDirection: 'row', alignItems: 'center' },
+  rowTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  pickBtn: { paddingHorizontal: 14, paddingVertical: 14, borderLeftWidth: 1, borderLeftColor: theme.border, minWidth: 64, alignItems: 'center' },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
-  pot: { color: theme.warn, fontWeight: '800', width: 40, textAlign: 'center' },
+  fogOvr: { minWidth: 52, textAlign: 'center', color: theme.muted, fontWeight: '800', fontSize: 13 },
+  detail: { paddingHorizontal: 12, paddingBottom: 12, paddingTop: 2, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.bg + '00' },
+  detailHead: { color: theme.muted, fontSize: 12, fontWeight: '800', marginBottom: 5, marginTop: 6 },
+  statWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+  statChip: { borderWidth: 1, borderColor: theme.border, borderRadius: 9, paddingHorizontal: 10, paddingVertical: 6, minWidth: 96 },
+  statLabel: { color: theme.muted, fontSize: 11 },
+  statVal: { color: theme.text, fontSize: 16, fontWeight: '800' },
+  statUnit: { color: theme.muted, fontSize: 11, fontWeight: '600' },
+  reportLine: { color: theme.text, fontSize: 13, lineHeight: 19, marginBottom: 1 },
 }));

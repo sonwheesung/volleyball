@@ -7,7 +7,7 @@ import { Button, Loading, Muted, PosTag, Screen, Title, theme, themedStyles, use
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, shortTeamName, teamScoutReveal } from '../data/league';
-import { resolveDraft, prospectStars, type PickReason } from '../engine/draft';
+import { resolveDraft, type PickReason } from '../engine/draft';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
 import { showSeasonStartAd } from '../lib/ads';
@@ -119,7 +119,7 @@ function DraftLiveInner() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.nm}>
                   {p.mine ? <Text style={{ color: theme.accent }}>★ </Text> : null}
-                  {p.player.name} <Text style={{ color: theme.warn, fontSize: 12 }}>{prospectStars(p.player)}</Text>
+                  {p.player.name}
                 </Text>
                 <Text style={styles.sub}>{esc(p.teamId)} · OVR {reveal >= 0.92 ? displayOvr(overallRaw(p.player)) : '?'}</Text>
               </View>
