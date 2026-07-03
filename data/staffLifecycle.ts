@@ -5,11 +5,23 @@
 import type { Coach, AssistantCoach, Player, TrainingFocus, CoachStyle } from '../types';
 import {
   staffRetires, becomesCoach, playerToCoach, promotesToHead, headWorthiness,
-  coachToHead, firedEndSeason, aiResigns, contractTerm,
+  coachToHead, firedEndSeason, aiResigns, contractTerm, coachSeasonGrowth,
 } from '../engine/staffLifecycle';
 import { createRng, strSeed } from '../engine/rng';
-import { headCoachSalary } from '../engine/staff';
+import { headCoachSalary, assistantSalary, coachTypeFor } from '../engine/staff';
 import { COACH_NAMES } from './names';
+import type { CoachSpecialty } from '../types';
+
+const EXT_SPECIALTIES: CoachSpecialty[] = ['attack', 'defense', 'stamina', 'setter', 'mental'];
+/** 외부 명장 A급 유입 (STAFF §8.1 phase③ 재생성) — 은퇴자 유입만으론 상위코치 멸종을 못 막아, 매 시즌 소수 A급을
+ *  풀에 결정론적으로 투입한다("해외/타 리그 출신 명장"). 빈도는 밸런스로 조정(과다=글럿 회귀). */
+function makeExternalCoach(season: number): AssistantCoach {
+  const rng = createRng(strSeed(`extcoach:${season}`));
+  const sp = EXT_SPECIALTIES[strSeed(`extsp:${season}`) % EXT_SPECIALTIES.length];
+  const rating = 80 + rng.int(0, 8); // 80~88 A급 입구
+  const id = `coach-ext-s${season}`;
+  return { id, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: 42 + rng.int(0, 12), specialty: sp, type: coachTypeFor(id, sp), rating, salary: assistantSalary(rating), teamId: null };
+}
 
 /** 신임(대체급) 감독 생성 — 프리 감독·승격 가능 코치가 모두 고갈됐을 때의 공급 안전장치.
  *  결정론(teamId·season 시드). 풀에 영구 합류해 공급을 보충(다음부터 이 감독도 순환). */
@@ -88,6 +100,13 @@ export function advanceCoaches(
     assistants.push(aged);
   }
 
+  // 1.5) 배정 코치 성장(경력+성과) — 팀을 맡은 감독/코치가 지난 시즌 성적 따라 성장(STAFF §8.1 phase②).
+  //   상위코치 멸종(실측) 처방: 오래 잘 지도한 코치가 A/S로 올라와 풀 tier를 유지시킨다.
+  //   정수 저장(표시 정합) — 성장분<0.5 구간은 자연 정체(성과별 성장 상한: 상위팀 ~A·하위팀 ~B, S는 재생성/엘리트만).
+  const rankPos = (teamId: string) => { const i = rankOrder.indexOf(teamId); return i < 0 ? teamCount : i + 1; };
+  for (const c of coaches) if (c.teamId) c.charisma = Math.round(coachSeasonGrowth(c.charisma, rankPos(c.teamId), teamCount));
+  for (const a of assistants) if (a.teamId) a.rating = Math.round(coachSeasonGrowth(a.rating, rankPos(a.teamId), teamCount));
+
   // 2) 시즌 후 경질 — 하위 팀 감독 해촉(플레이어 팀 제외)
   for (let i = 0; i < rankOrder.length; i++) {
     const teamId = rankOrder[i];
@@ -132,6 +151,11 @@ export function advanceCoaches(
       const ac = playerToCoach(p, legendIds.has(p.id));
       if (!assistants.some((a) => a.id === ac.id)) { assistants.push(ac); newCoaches.push(ac.name); }
     }
+  }
+  // 4.5) 외부 명장 A급 유입(phase③ 재생성) — 2시즌마다 1명("소수" — 빈도가 상위 공급 튜닝 손잡이, 과다=글럿 회귀).
+  if (season % 2 === 0) {
+    const ext = makeExternalCoach(season);
+    if (!assistants.some((a) => a.id === ext.id)) { assistants.push(ext); newCoaches.push(ext.name); }
   }
 
   // 5) 승격 — 명성 높은 전문 코치 → 감독 풀 (스타성=레전드 출신 가산)

@@ -22,6 +22,16 @@ export function staffRetires(id: string, age: number, season: number): boolean {
   return createRng(strSeed(`coachretire:${id}:${season}`)).next() < coachRetireChance(age);
 }
 
+// ── 6.1b 코치 성장 (STAFF_SYSTEM §8.1 phase② — 실측 붕괴 처방) ──
+/** 배정된(팀 맡은) 코치가 경력+성과로 시즌마다 소폭 성장. 상한(92) 근처 둔화 → A/S는 오래·성적 좋아야 도달.
+ *  값 기반 결정론(rng 없음). 반환=성장 후 새 값(fractional 누적 — 반올림은 표시에서). rankPos 1=1위. */
+export function coachSeasonGrowth(cur: number, rankPos: number, teamCount: number): number {
+  const perf = rankPos <= Math.ceil(teamCount / 2) ? 1 : 0.4; // 상위 절반=성과 보너스
+  const room = Math.max(0, 92 - cur) / 92;                     // 상한 근처 둔화(수렴)
+  const g = (1.5 + perf * 2.5) * room;                         // 상위팀 코치 ~+4/시즌(상한 근처 축소)
+  return Math.min(92, cur + g);
+}
+
 // ── 6.2 은퇴 선수 → 전문 코치 ──
 /** 포지션 → 코치 분야 (현실 매핑). 세터=세터코치, 미들/리베로=수비, 윙=공격. */
 const POS_SPECIALTY: Record<Position, CoachSpecialty> = {
@@ -43,9 +53,11 @@ export function becomesCoach(p: Player, isLegend: boolean, season: number): bool
 export function playerToCoach(p: Player, isLegend: boolean): AssistantCoach {
   const rng = createRng(strSeed(`staff:${p.id}`));
   const specialty = POS_SPECIALTY[p.position];
-  // 역량 = VQ 주도 + 위치선정/반응(지도 능력 근사) + 명성 보너스, 약간의 시드 변동
+  // 역량 = VQ 주도 + 위치선정/반응(지도 능력 근사) + **엘리트 보너스**(피지도자였을수록 명장 소질) + 명성.
+  //   STAFF §8.1 phase③(재생성): skillAvg×0.8 단독은 우수 은퇴자도 C로 강등→풀 붕괴. 엘리트일수록 A/S로 유입시켜 상위 공급 유지.
   const skillAvg = (p.vq + p.positioning + p.reaction) / 3;
-  const rating = clamp(Math.round(skillAvg * 0.8 + (isLegend ? 8 : 0) + rng.range(-4, 4)), 45, 95);
+  const elite = Math.max(0, (skillAvg - 74) / 22) * 14; // skillAvg 74→+0 · 88→+9 · 96→+14 (상위 은퇴자가 A/S로)
+  const rating = clamp(Math.round(skillAvg * 0.85 + elite + (isLegend ? 8 : 0) + rng.range(-4, 4)), 45, 95);
   const id = `coach_${p.id}`;
   return { id, name: p.name, age: p.age + 1, specialty, type: coachTypeFor(id, specialty), rating, salary: assistantSalary(rating), teamId: null };
 }
