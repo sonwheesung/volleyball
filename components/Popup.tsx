@@ -93,7 +93,7 @@ const styles = themedStyles(() => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: 'rgba(7,10,16,0.82)', alignItems: 'center', justifyContent: 'center', padding: 16 },
   card: {
     backgroundColor: '#161E2E', borderRadius: 18, padding: 18, gap: 12, alignSelf: 'stretch', maxWidth: 560, width: '100%',
-    borderWidth: 1, borderColor: theme.border,
+    borderWidth: 1.5, borderColor: theme.accent + '66', // 다크 배경에 묻히던 경계 — 민트 틴트로 또렷하게(UI-10)
     shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 14,
   },
 }));

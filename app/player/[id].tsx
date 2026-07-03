@@ -629,7 +629,11 @@ const styles = themedStyles(() => StyleSheet.create({
 
 const mstyles = themedStyles(() => StyleSheet.create({
   backdrop: { flex: 1, backgroundColor: '#0B121CCC', alignItems: 'center', justifyContent: 'center', padding: 24 },
-  dialog: { width: '100%', maxWidth: 420, backgroundColor: theme.card, borderRadius: 18, padding: 20, gap: 8 },
+  dialog: {
+    width: '100%', maxWidth: 420, backgroundColor: theme.cardAlt, borderRadius: 18, padding: 20, gap: 8,
+    borderWidth: 1.5, borderColor: theme.accent + '66', // 다크 배경에 묻히던 경계 — 민트 틴트 테두리로 또렷하게(UI-10)
+    elevation: 16, shadowColor: '#000', shadowOpacity: 0.55, shadowRadius: 18, shadowOffset: { width: 0, height: 8 },
+  },
   title: { color: theme.text, fontSize: 18, fontWeight: '900' },
   badge: { color: theme.bad, fontSize: 13, fontWeight: '800' },
   quote: { color: theme.muted, fontSize: 14, fontStyle: 'italic', lineHeight: 20 },
