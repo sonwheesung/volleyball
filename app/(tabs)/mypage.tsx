@@ -142,6 +142,14 @@ export default function MyPage() {
         sub="업데이트 · 이벤트 · 안내"
         onPress={() => router.push('/announcements')} />
 
+      <LinkCard icon="document-text-outline" tint={theme.muted} title="이용약관"
+        sub="서비스 이용 조건 · 결제 · 환불 안내"
+        onPress={() => router.push('/terms')} />
+
+      <LinkCard icon="shield-checkmark-outline" tint={theme.muted} title="운영정책"
+        sub="문의 · 환불 기준 · 제재 · 데이터 운영"
+        onPress={() => router.push('/policy')} />
+
       {/* ── 계정 · 로그아웃 (최하단) ── */}
       {session ? (
         <View style={{ marginTop: 18, gap: 8 }}>
