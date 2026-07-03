@@ -9,6 +9,7 @@ import { computeStandings } from '../data/standings';
 import { amateurRecord } from '../data/amateurRecord';
 import { revealedPotential } from '../data/prospectScout';
 import { prospectReport } from '../data/prospectReport';
+import { draftClassPreview } from '../data/draftPreview';
 import { resolveDraft } from '../engine/draft';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
@@ -97,6 +98,7 @@ function DraftCenterInner() {
 
   const classSorted = [...ctx.cls].sort((a, b) => overall(b) - overall(a));
   const myRank = standings.findIndex((s) => s.teamId === my) + 1;
+  const preview_ = useMemo(() => draftClassPreview(ctx.cls, teamScoutReveal(my)), [ctx, my]);
 
   // 스카우팅 안개(STAFF_SYSTEM) — 공개도↓일수록 현재 OVR은 범위로.
   const reveal = teamScoutReveal(my);
@@ -130,6 +132,13 @@ function DraftCenterInner() {
         <Muted style={{ fontSize: 12, marginTop: 4, color: reveal >= 0.6 ? theme.good : theme.warn }}>
           스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= 0.92 ? '(정밀)' : '— 스카우터를 영입하면 잠재력이 더 많이·선명하게 보입니다'}
         </Muted>
+      </Card>
+
+      <Card accent={theme.warn}>
+        <IconLabel icon="newspaper-outline" color={theme.warn}>{preview_.headline}</IconLabel>
+        {preview_.notes.map((n, i) => (
+          <Muted key={i} style={{ fontSize: 12, marginTop: 4 }}>· {n}</Muted>
+        ))}
       </Card>
 
       <Button label="라이브 드래프트 보기 ▶" onPress={() => router.push('/draft-live')} />
