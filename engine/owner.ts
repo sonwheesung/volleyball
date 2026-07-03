@@ -179,24 +179,48 @@ export const BENCH_MAX = 2;
  * @param ovrGapT   0..1 — 벤치 대상 vs 대체자 OVR 격차가 작을수록 1(수긍 쉬움)
  * @param aceRank   팀 내 OVR 순위(0=에이스)
  */
+const clampP = (v: number): number => Math.max(0.05, Math.min(0.95, v));
+
+/** 벤치 건의 수락 확률(RNG 전, 결정론 입력만) — 수락 판정·거절 사유의 단일 출처(중복 수식 금지). */
+export function benchP(charisma: number, ovrGapT: number, aceRank: number, reason: BenchReason): number {
+  const aceGuard = aceRank === 0 ? 0.4 : aceRank === 1 ? 0.2 : 0;
+  const reasonT = reason === 'noResign' ? 0.2 : reason === 'form' ? 0.1 : 0.05;
+  return clampP(0.5 + 0.3 * ovrGapT - aceGuard - 0.2 * ((charisma - 50) / 50) + reasonT);
+}
 export function benchAccept(
   playerId: string, season: number, day: number,
   charisma: number, ovrGapT: number, aceRank: number, reason: BenchReason,
 ): boolean {
-  const aceGuard = aceRank === 0 ? 0.4 : aceRank === 1 ? 0.2 : 0;
-  const reasonT = reason === 'noResign' ? 0.2 : reason === 'form' ? 0.1 : 0.05;
-  const p = Math.max(0.05, Math.min(0.95,
-    0.5 + 0.3 * ovrGapT - aceGuard - 0.2 * ((charisma - 50) / 50) + reasonT));
-  const rng = createRng(strSeed(`bench:${playerId}:${season}:${day}`));
-  return rng.next() < p;
+  return createRng(strSeed(`bench:${playerId}:${season}:${day}`)).next() < benchP(charisma, ovrGapT, aceRank, reason);
 }
 
-/** 선발 기용 건의 — "이 선수를 선발로 써주시죠". 합리(건의 선수 vs 현 주전 격차)와 소신 사이.
- *  @param gapT 0..1 — 건의 선수가 현 주전과 비등/우위일수록 1(수긍 쉬움) */
+/** 선발 기용 건의 수락 확률(RNG 전). @param gapT 건의 선수가 현 주전과 비등/우위일수록 1. */
+export function startP(charisma: number, gapT: number): number {
+  return clampP(0.35 + 0.5 * gapT - 0.3 * ((charisma - 50) / 50));
+}
 export function startSuggestAccept(playerId: string, season: number, day: number, charisma: number, gapT: number): boolean {
-  const p = Math.max(0.05, Math.min(0.95, 0.35 + 0.5 * gapT - 0.3 * ((charisma - 50) / 50)));
-  const rng = createRng(strSeed(`start:${playerId}:${season}:${day}`));
-  return rng.next() < p;
+  return createRng(strSeed(`start:${playerId}:${season}:${day}`)).next() < startP(charisma, gapT);
+}
+
+// ── 거절 사유 (OWNER §2.2 ★) — 고정 우선순위 금지. **실제 감점량이 가장 큰 요인** + p 게이팅. UI 반환용 ephemeral. ──
+export type OwnerRejectReason = 'ace' | 'ability' | 'conviction' | 'coachCall';
+const GATE_P = 0.55;        // 이 이상이었는데 거절 = 시드 운 → 구조적 원인 없음 → coachCall
+const MIN_SHORTFALL = 0.03; // 최대 감점이 이보다 작으면 "원인"이라 하기 미미 → coachCall
+export function benchRejectReason(charisma: number, ovrGapT: number, aceRank: number, reason: BenchReason): OwnerRejectReason {
+  if (benchP(charisma, ovrGapT, aceRank, reason) >= GATE_P) return 'coachCall';
+  const ace = aceRank === 0 ? 0.4 : aceRank === 1 ? 0.2 : 0;   // 에이스 보호 감점
+  const ability = 0.3 * (1 - ovrGapT);                          // 실력차(대체자와 벌어질수록↑) 감점
+  const conviction = Math.max(0, 0.2 * ((charisma - 50) / 50)); // 감독 소신 감점(카리스마>50만)
+  const m = Math.max(ace, ability, conviction);
+  if (m < MIN_SHORTFALL) return 'coachCall';
+  return m === ace ? 'ace' : m === ability ? 'ability' : 'conviction';
+}
+export function startRejectReason(charisma: number, gapT: number): OwnerRejectReason {
+  if (startP(charisma, gapT) >= GATE_P) return 'coachCall';
+  const ability = 0.5 * (1 - gapT);
+  const conviction = Math.max(0, 0.3 * ((charisma - 50) / 50));
+  if (Math.max(ability, conviction) < MIN_SHORTFALL) return 'coachCall';
+  return ability >= conviction ? 'ability' : 'conviction';
 }
 
 /** 빅매치 판정 — 보러 갈 이유. 상위권 맞대결이거나, 종반의 순위 직결 매치업 */

@@ -27,10 +27,12 @@ import { setTxContext, setOwnerContext, seasonTxLog, seasonScandals, availableFA
 import { captureSimCache, restoreSimCache } from '../data/simCache';
 import {
   meetAccept, persuade, cardMatch,
-  benchAccept, startSuggestAccept, popularityOf, benchAngerPenalty, releaseAngerPenalty, fanScore as fanScoreOf, BENCH_MAX,
+  benchAccept, startSuggestAccept, benchRejectReason, startRejectReason, popularityOf, benchAngerPenalty, releaseAngerPenalty, fanScore as fanScoreOf, BENCH_MAX,
   TALK_COOLDOWN_DAYS, BENCH_COOLDOWN_DAYS,
-  type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx,
+  type DiscontentTopic, type TalkCard, type InterviewLog, type BenchDirective, type BenchReason, type OwnerFx, type OwnerRejectReason,
 } from '../engine/owner';
+import { applyForm } from '../engine/form';
+import { formFactorOnDay } from '../data/dynamics';
 import { discontentNow, teamFanbaseNow, buildOwnerFx } from '../data/owner';
 import { settleSeason, applyNet, stanceCashBonus, type SeasonFinance } from '../engine/finance';
 import { FOREIGN_SALARY, ASIAN_SALARY } from '../engine/foreign';
@@ -170,8 +172,8 @@ interface GameState {
   hireScout: (id: string) => boolean;
   releaseScout: (id: string) => void;
   requestInterview: (playerId: string, card: TalkCard) => { met: boolean; topic: DiscontentTopic | null; ok?: boolean };
-  suggestBench: (playerId: string, reason: BenchReason) => boolean;
-  suggestStart: (playerId: string) => boolean;
+  suggestBench: (playerId: string, reason: BenchReason) => { ok: boolean; reason?: OwnerRejectReason };
+  suggestStart: (playerId: string) => { ok: boolean; reason?: OwnerRejectReason };
   unbench: (playerId: string) => void;
   toggleTryoutWish: (playerId: string) => void;
   replaceForeign: (altId: string) => boolean;
@@ -638,21 +640,26 @@ export const useGameStore = create<GameState>()(
       suggestBench: (playerId, reason) => {
         const s = get();
         const my = s.selectedTeamId;
-        if (!my) return false;
-        if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return false; // 건의 쿨다운(방어)
-        if (s.benchDirectives.length >= BENCH_MAX) return false;
-        if (s.benchDirectives.some((b) => b.playerId === playerId)) return false;
+        if (!my) return { ok: false };
+        if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return { ok: false }; // 건의 쿨다운(방어)
+        if (s.benchDirectives.length >= BENCH_MAX) return { ok: false };
+        if (s.benchDirectives.some((b) => b.playerId === playerId)) return { ok: false };
         const squad = rosterIdsOnDay(my, s.currentDay)
           .map((id) => evolveOnDay(id, s.currentDay))
           .filter((q): q is Player => !!q)
           .sort((a, b) => overall(b) - overall(a));
         const target = squad.find((q) => q.id === playerId);
-        if (!target) return false;
+        if (!target) return { ok: false };
         const aceRank = squad.findIndex((q) => q.id === playerId);
         const alt = squad.find((q) => q.id !== playerId && q.position === target.position);
-        const gap = alt ? overall(target) - overall(alt) : 10;
+        // Form 비대칭(OWNER §2.2 ★): 대체자(alt)의 현재 준비 상태(경기감각) 반영 — 폼 나쁜 백업 위해 주전 빼는 건 무리.
+        //   target(현 주전)은 폼≈1.0이라 순수 OVR. 선발 건의(suggestStart)는 건의선수 폼 미반영(악순환 방지).
+        const altOvr = alt ? overall(applyForm(alt, formFactorOnDay(my, alt.id, s.currentDay))) : null;
+        const gap = altOvr != null ? overall(target) - altOvr : 10;
         const ovrGapT = Math.max(0, Math.min(1, 1 - gap / 10)); // 대체자가 비등할수록 1
-        const ok = benchAccept(playerId, s.season, s.currentDay, coachInfoOf(my)?.charisma ?? 50, ovrGapT, aceRank, reason);
+        const charisma = coachInfoOf(my)?.charisma ?? 50;
+        const ok = benchAccept(playerId, s.season, s.currentDay, charisma, ovrGapT, aceRank, reason);
+        const why = ok ? undefined : benchRejectReason(charisma, ovrGapT, aceRank, reason);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
         if (ok) {
           // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). watchProgress 비어있지 않음 == 현재 경기 관전 중
@@ -663,21 +670,21 @@ export const useGameStore = create<GameState>()(
         } else {
           set({ benchCooldown: benchCd });
         }
-        return ok;
+        return { ok, reason: why };
       },
       // 선발 기용 건의 — 수락 시 동포지션 최약 주전을 벤치 지시(건의 선수가 그 자리를 잇는다)
       suggestStart: (playerId) => {
         const s = get();
         const my = s.selectedTeamId;
-        if (!my) return false;
-        if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return false; // 건의 쿨다운(방어)
-        if (s.benchDirectives.length >= BENCH_MAX) return false;
+        if (!my) return { ok: false };
+        if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return { ok: false }; // 건의 쿨다운(방어)
+        if (s.benchDirectives.length >= BENCH_MAX) return { ok: false };
         const benched = new Set(s.benchDirectives.map((b) => b.playerId));
         const squad = rosterIdsOnDay(my, s.currentDay)
           .map((id) => evolveOnDay(id, s.currentDay))
           .filter((q): q is Player => !!q && !benched.has(q.id));
         const target = squad.find((q) => q.id === playerId);
-        if (!target) return false;
+        if (!target) return { ok: false };
         // 동포지션 '최약 주전'을 벤치 — 건의 선수가 그 자리를 잇는다(주석대로). 과거 최강(에이스)을 벤치하던 버그 수정(EC-LU-02).
         //   주전 판정은 실제 경기 라인업(availableTeamPlayers→buildLineup)으로 — 벤치된 비주전을 골라 무의미해지는 것 방지.
         const lu = buildLineup(availableTeamPlayers(my, s.currentDay));
@@ -688,10 +695,14 @@ export const useGameStore = create<GameState>()(
         if (!incumbent) {
           // 동포지션 대체자가 없어 건의가 무의미해도, 시도했으면 쿨다운 적용(성공·거절·무의미 모두 잠금)
           set({ benchCooldown: { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS } });
-          return false;
+          return { ok: false };
         }
+        // Form 비대칭(OWNER §2.2 ★): 선발 건의는 건의선수의 폼을 보지 않는다(순수 OVR = 원래 능력) — 뛰게 해서 폼 회복시키려는 것,
+        //   자기 러스트로 자기 승격을 막는 자충수 방지. incumbent(현 주전)는 폼≈1.0이라 어차피 순수 OVR.
         const gapT = Math.max(0, Math.min(1, 1 - (overall(incumbent) - overall(target)) / 10));
-        const ok = startSuggestAccept(playerId, s.season, s.currentDay, coachInfoOf(my)?.charisma ?? 50, gapT);
+        const charisma = coachInfoOf(my)?.charisma ?? 50;
+        const ok = startSuggestAccept(playerId, s.season, s.currentDay, charisma, gapT);
+        const why = ok ? undefined : startRejectReason(charisma, gapT);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
         if (ok) {
           // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A)
@@ -702,7 +713,7 @@ export const useGameStore = create<GameState>()(
         } else {
           set({ benchCooldown: benchCd });
         }
-        return ok;
+        return { ok, reason: why };
       },
       unbench: (playerId) => {
         const benchDirectives = get().benchDirectives.filter((b) => b.playerId !== playerId);

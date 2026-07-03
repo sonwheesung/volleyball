@@ -157,7 +157,7 @@ const PASS = '✅ PASS', FAIL = '❌ FAIL', GAP = '⚠️ 미구현', NA = '➖ 
       for (const st of starters) {
         if (G().benchDirectives.some((b) => b.playerId === st.id)) continue;
         tries++;
-        const ok = G().suggestBench(st.id, 'rotation' as any);
+        const ok = G().suggestBench(st.id, 'rotation' as any).ok;
         const nowBenched = G().benchDirectives.some((b) => b.playerId === st.id);
         const after = starterSet(t0, day);
         if (ok) { accepts++; if (nowBenched && !after.ids.has(st.id)) acceptReflected++; G().unbench(st.id); }
@@ -197,7 +197,7 @@ const PASS = '✅ PASS', FAIL = '❌ FAIL', GAP = '⚠️ 미구현', NA = '➖ 
       if (ohStarters.length < 2 || !benchOH.length) continue;
       let done = false;
       for (const cand of benchOH) {
-        const ok = G().suggestStart(cand.id);
+        const ok = G().suggestStart(cand.id).ok;
         if (ok) {
           const benchedId = G().benchDirectives[G().benchDirectives.length - 1]?.playerId;
           const strongest = ohStarters[0], weakest = ohStarters[ohStarters.length - 1];

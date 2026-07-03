@@ -137,7 +137,7 @@ import './_gt_mock';
         const backup = roster.map((id) => evolveOnDay(id, day)!).find((p) => p.position === P && !starterIds.has(p.id));
         if (!backup) continue;
         const before = new Set(G().benchDirectives.map((b) => b.playerId));
-        const ok = G().suggestStart(backup.id);
+        const ok = G().suggestStart(backup.id).ok;
         if (!ok) continue; // 거절 — 다음
         const after = G().benchDirectives.map((b) => b.playerId).filter((id) => !before.has(id));
         if (after.length !== 1) continue;
@@ -170,14 +170,14 @@ import './_gt_mock';
   {
     // I6a 타팀 벤치 건의 거부 + benchDirectives 미오염
     setup(); const opp = currentRosters()[other]![0];
-    const okOpp = G().suggestBench(opp, 'form');
+    const okOpp = G().suggestBench(opp, 'form').ok;
     check('I6a 타팀 벤치 건의 거부', okOpp === false && !G().benchDirectives.some((b) => b.playerId === opp));
     ab_check('I6a 거부 오라클', (false === false) === true); // 자명 — 반환값이 boolean
 
     // I6b 쿨다운 — 같은 선수 재건의 거부 + 쿨다운 = day+16
     setup(); const ids = currentRosters()[my] ?? []; const p0 = ids[0];
     G().suggestBench(p0, 'form'); const cd = G().benchCooldown[p0];
-    const second = G().suggestBench(p0, 'form');
+    const second = G().suggestBench(p0, 'form').ok;
     check('I6b 재건의 쿨다운 거부 + cd=day+16', second === false && cd === BENCH_COOLDOWN_DAYS, `cd=${cd} 기대=${BENCH_COOLDOWN_DAYS}`);
     // A/B: 쿨다운 지난 뒤(day≥cd)엔 다시 건의 가능해야 — 영구 잠금이면 오라클이 못 믿을 것. day=cd로 점프 후 다른 검사로 분리
     ab_check('I6b 쿨다운 day 값', cd > 0);
@@ -199,13 +199,13 @@ import './_gt_mock';
     if (atMax >= BENCH_MAX) {
       G().setDay(day + 1000);
       const fresh = r.find((id) => !G().benchDirectives.some((b) => b.playerId === id) && !G().benchCooldown[id]);
-      if (fresh) overflowRejected = G().suggestBench(fresh, 'noResign') === false && G().benchDirectives.length === BENCH_MAX;
+      if (fresh) overflowRejected = G().suggestBench(fresh, 'noResign').ok === false && G().benchDirectives.length === BENCH_MAX;
     }
     check('I6c BENCH_MAX 상한 enforce', atMax <= BENCH_MAX && overflowRejected, `directives=${atMax}/${BENCH_MAX}, 초과거부=${overflowRejected}`);
     ab_check('I6c 상한 오라클', BENCH_MAX === 2 && atMax <= BENCH_MAX);
 
     // I6d 타팀 선발 건의 거부
-    setup(); const okStart = G().suggestStart(currentRosters()[other]![0]);
+    setup(); const okStart = G().suggestStart(currentRosters()[other]![0]).ok;
     check('I6d 타팀 선발 건의 거부', okStart === false);
     ab_check('I6d 거부 오라클', okStart === false);
   }

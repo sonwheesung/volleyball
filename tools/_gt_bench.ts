@@ -42,11 +42,11 @@ import './_gt_mock';
 
   console.log('\n═══ 벤치/선발 건의 스토어 가드 ═══');
   // B1 타팀 선수 벤치 건의 → 거부
-  { setup(); const opp = currentRosters()[other]![0]; const ok = G().suggestBench(opp, 'form'); check('B1 타팀 선수 벤치 건의 거부', ok === false && !G().benchDirectives.some((b) => b.playerId === opp)); }
+  { setup(); const opp = currentRosters()[other]![0]; const ok = G().suggestBench(opp, 'form').ok; check('B1 타팀 선수 벤치 건의 거부', ok === false && !G().benchDirectives.some((b) => b.playerId === opp)); }
   // B2 같은 선수 연속 벤치 건의 → 2번째 쿨다운 거부
-  { const ids = setup(); const p = ids[0]; G().suggestBench(p, 'form'); const cd = G().benchCooldown[p]; const second = G().suggestBench(p, 'form'); check('B2 연속 벤치 건의 쿨다운 거부', second === false && cd > 0, `쿨다운 day=${cd}`); }
+  { const ids = setup(); const p = ids[0]; G().suggestBench(p, 'form'); const cd = G().benchCooldown[p]; const second = G().suggestBench(p, 'form').ok; check('B2 연속 벤치 건의 쿨다운 거부', second === false && cd > 0, `쿨다운 day=${cd}`); }
   // B3 타팀 선수 선발 건의 → 거부
-  { setup(); const opp = currentRosters()[other]![0]; const ok = G().suggestStart(opp); check('B3 타팀 선수 선발 건의 거부', ok === false); }
+  { setup(); const opp = currentRosters()[other]![0]; const ok = G().suggestStart(opp).ok; check('B3 타팀 선수 선발 건의 거부', ok === false); }
   // B4 suggestStart 수락 시 동포지션 '최약 주전'을 벤치(최강 아님 — EC-LU-02). setOwnerContext 우회 안 하고 실제 액션 구동.
   //    ≥2 동포지션 주전이 있는 후보를 스캔(최약≠최강이라야 의미). 수락 케이스에서 벤치된 선수가 최약인지 단언.
   { let found = false, ok = false, detail = '수락 케이스 못 찾음';

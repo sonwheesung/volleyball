@@ -9,7 +9,7 @@ import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchet
 import { playerFans } from '../../engine/owner';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
 import { SCANDAL_KO } from '../../engine/scandal';
-import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason } from '../../engine/owner';
+import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason, type OwnerRejectReason } from '../../engine/owner';
 import { getEvolvedPlayer, getTeam, shortTeamName as teamShort, currentRosters, teamScoutReveal } from '../../data/league';
 import { buildLineup } from '../../engine/lineup';
 import { getPlayerProduction } from '../../data/production';
@@ -73,6 +73,20 @@ function TraitBadge({ good, color }: { good: boolean; color: string }) {
 
 // 구단주 면담 기능 노출 토글 — 지금은 숨김(테스트 범위 축소, 운영 단계서 재활성 예정). true면 면담 요청 버튼/이력/불만 대화 노출.
 const SHOW_OWNER_TALK = false;
+
+// 건의 거절 사유 문구(OWNER §2.2 ★) — "가장 큰 감점 요인" 파생. coachCall은 결정론이라 "재도전하면 바뀔 것" 호도 금지 워딩.
+const BENCH_REJECT: Record<OwnerRejectReason, string> = {
+  ace: '에이스는 쉽게 뺄 수 없습니다.',
+  ability: '대체할 선수와 실력 차가 커 무리입니다.',
+  conviction: '라인업은 제가 책임집니다 — 감독의 소신입니다.',
+  coachCall: '이날은 마음을 바꾸지 않았습니다.',
+};
+const START_REJECT: Record<OwnerRejectReason, string> = {
+  ace: '지금 라인업이 최선입니다.',
+  ability: '아직은 현 주전이 낫다고 봅니다.',
+  conviction: '라인업은 제가 책임집니다 — 감독의 소신입니다.',
+  coachCall: '이날은 마음을 바꾸지 않았습니다.',
+};
 
 export default function PlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -181,10 +195,10 @@ export default function PlayerDetail() {
         ...(['noResign', 'form', 'prospect'] as BenchReason[]).map((reason) => ({
           text: BENCH_REASON_KO[reason],
           onPress: () => {
-            const ok = suggestBench(p.id, reason);
-            Alert.alert(ok ? '감독 수락' : '감독 거절',
-              ok ? `감독: "알겠습니다. 당분간 ${p.name} 선수는 제외하겠습니다."` + deferNote
-                 : `감독: "받아들일 수 없습니다. 라인업은 제가 책임집니다."\n(에이스 제외 요구·감독 소신·지시 정원 초과 시 거절)`);
+            const res = suggestBench(p.id, reason);
+            Alert.alert(res.ok ? '감독 수락' : '감독 거절',
+              res.ok ? `감독: "알겠습니다. 당분간 ${p.name} 선수는 제외하겠습니다."` + deferNote
+                 : `감독: "${res.reason ? BENCH_REJECT[res.reason] : '받아들일 수 없습니다.'}"`);
           },
         })),
         { text: '취소', style: 'cancel' as const },
@@ -370,10 +384,10 @@ export default function PlayerDetail() {
                     label={benchLeft > 0 ? `선발 기용 건의 (${benchLeft}일 후)` : '선발 기용 건의'}
                     disabled={benchLeft > 0}
                     onPress={() => {
-                      const ok = suggestStart(p.id);
-                      Alert.alert(ok ? '감독 수락' : '감독 거절',
-                        ok ? `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote
-                           : `감독: "지금 라인업이 최선입니다."\n(격차가 크거나 감독 소신이 강하면 거절합니다)`);
+                      const res = suggestStart(p.id);
+                      Alert.alert(res.ok ? '감독 수락' : '감독 거절',
+                        res.ok ? `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote
+                           : `감독: "${res.reason ? START_REJECT[res.reason] : '지금 라인업이 최선입니다.'}"`);
                     }}
                   />
                 ) : isStarter ? (
