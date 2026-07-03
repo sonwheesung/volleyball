@@ -15,7 +15,13 @@ export async function register(): Promise<void> {
 }
 
 // 우리 catch가 삼키지 않고 새어나간 미처리 라우트 에러도 Sentry로(Next 15+ 훅).
+// Next가 이 async 훅을 await하므로 여기선 직접 flush(서버리스 유실 방지 — after 불필요).
 export async function onRequestError(err: unknown): Promise<void> {
   if (!process.env.SENTRY_DSN) return;
-  try { Sentry.captureException(err); } catch { /* 무시 */ }
+  try {
+    Sentry.captureException(err);
+    await Sentry.flush(2000);
+  } catch {
+    /* 무시 */
+  }
 }
