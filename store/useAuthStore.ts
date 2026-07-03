@@ -6,6 +6,7 @@ import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login as serverLogin, setServerToken } from '../lib/server';
 import { getDeviceInfo } from '../lib/device';
+import { track } from '../lib/analytics';
 
 export interface Session {
   userId: string;
@@ -53,9 +54,11 @@ export const useAuthStore = create<AuthState>()(
         const session: Session = { userId: r.userId, provider: r.provider, displayName: r.displayName, token: r.token };
         setServerToken(session.token); // 이후 서버콜에 Bearer
         set({ session });
+        track('login', { provider });
         return { ok: true };
       },
       signOut: () => {
+        track('logout');
         setServerToken(null);
         set({ session: null });
       },

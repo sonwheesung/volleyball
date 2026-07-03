@@ -13,6 +13,7 @@ import { BootGate } from '../components/BootGate';
 import { useGameStore } from '../store/useGameStore';
 import { initIap } from '../lib/iap';
 import { installErrorSink } from '../lib/deviceLog';
+import { track } from '../lib/analytics';
 import { computeStandings } from '../data/standings';
 import { leagueProduction } from '../data/production';
 import { availableTeamPlayers } from '../data/injury';
@@ -71,6 +72,7 @@ export default function RootLayout() {
     loadThemeMode();
     initIap();
     installErrorSink(() => useGameStore.getState().season); // 오류를 진단 버퍼에 시즌 태그로(#44)
+    track('app_open'); // 세션 시작(ANALYTICS_PLAN — 리텐션 자동산출 근간)
   }, []);
   if (!introDone) {
     return (

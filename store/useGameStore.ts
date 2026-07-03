@@ -58,6 +58,7 @@ import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, cours
 import { earnDiamonds, spendDiamonds, getWallet } from '../lib/server';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
 import { useAuthStore } from './useAuthStore';
+import { track } from '../lib/analytics';
 
 /** 전지훈련 기록(MONETIZATION §11.2) — 시드 폴백 재적용용 + 감사.
  *  유니온(H3): 구 모델 엔트리는 stats[](+1/+1 재적용), 코스형(2026-07-02~)은 course(+2/+7 재적용) —
@@ -311,6 +312,8 @@ export const useGameStore = create<GameState>()(
         set({ walletBusy: false });
         if (!r.ok) { void get().syncWallet(); return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'cap' ? 'cap' : 'error' }; }
         set({ diamonds: r.balance, adState }); // 서버 확정 후에만 슬롯·캐시 커밋
+        track('watch_ad');
+        if (r.applied) track('diamond_earned', { source: 'ad', amount: reward });
         return { ok: true, reward: r.applied ? reward : 0 };
       },
       claimAchDiamonds: async () => {
@@ -331,6 +334,7 @@ export const useGameStore = create<GameState>()(
           else { offline = true; break; } // 오프라인/에러 → 여기까지만 확정, 중단(부분 수령)
         }
         set({ walletBusy: false, ...(confirmed.length ? { claimedAch: [...get().claimedAch, ...confirmed] } : {}), ...(lastBalance !== null ? { diamonds: lastBalance } : {}) });
+        if (granted > 0) track('diamond_earned', { source: 'achievement', amount: granted });
         if (offline) { void get().syncWallet(); return { granted, reason: 'offline' }; }
         return { granted };
       },
@@ -362,6 +366,8 @@ export const useGameStore = create<GameState>()(
         }
         applyCampLocal(playerId, course, r.balance, s.season); // 서버 확정(applied true/false=이미 과금) → 스탯 적용+campLog+clear
         set({ walletBusy: false });
+        track('special_training', { course });
+        track('diamond_spent', { source: 'camp', amount: CAMP_COURSE_COST });
         return { ok: true };
       },
       syncWallet: async () => {

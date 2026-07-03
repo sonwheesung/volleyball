@@ -134,6 +134,7 @@ npx tsx tools/_dv_diamonds.ts               # 다이아 이코노미(MONETIZATIO
 npx tsx tools/_dv_walletauth.ts             # 다이아 서버 진실화(BACKEND §13.12) — 순수: 멱등키 빌더 전역유일(userId 포함)·세이브리셋 무료강화 차단(camp saveId 에폭)·업적 계정평생1회 비대칭·econ 금액권위(ad+50/camp−900 서버상수·업적 캡5000)·reason 화이트리스트 + A/B(옛 클라신뢰/무에폭 키 재현). exit 0/1. ※서버 왕복(멱등·잔액게이트·화이트리스트 실증)은 로컬 서버 띄우고 라이브 E2E(임시 스크립트, 검증 후 삭제)
 npx tsx tools/_dv_coupon.ts                 # 쿠폰·관리자 순수(BACKEND §13.14/§13.15) — normalizeCode(대문자+trim)·requireAdmin fail-closed(토큰 미설정/<16자→거부·정확토큰 허용·길이가드). exit 0/1. ※쿠폰 발급·사용·이중지급0·타겟·만료는 로컬 서버 라이브 E2E(임시, 검증 후 삭제)로 실증
 npx tsx tools/_dv_version.ts                 # 버전 비교(BACKEND §13.11/§13.16) — cmpVersion 정수비교·belowVersion(강제 게이트)·needsSoftUpdate(소프트 배너: latest 미만·min 이상) + A/B(문자열 비교였다면 1.10<1.9 오답). exit 0/1
+npx tsx tools/_dv_analytics.ts               # 분석 래퍼(ANALYTICS_PLAN) — track() throw-none(전 이벤트+이상params 무크래시)·taxonomy 중복0·계측대상 등록. SDK는 EAS(현재 no-op stub). exit 0/1
 npx tsx tools/_dv_reset_preserve.ts          # 구단 초기화 계정필드 유지(BACKEND §13.19) — selectTeam/resetSave가 다이아·claimedAch·adState 유지·saveId만 새로·시즌 진행 리셋. 재화 farming 방어(서버측은 라이브 E2E). exit 0/1
 npx tsx tools/_dv_refund.ts                  # 환불 음수허용 게이트(BACKEND §13.17) — allowsNegativeBalance가 refund만 true·나머지 reason 전부 false(머니크리티컬: 하나라도 새면 무한소비). exit 0/1. ※환불 왕복(음수·멱등·티켓refunded·음수→spend차단·기기·티켓·스냅샷)은 로컬 서버 라이브 E2E로 실증
 npx tsx tools/_dv_campeffect.ts 5 25        # 코스형 전지훈련 순효과(§11.2 H4, effect A/B) — 영건 with/without 5시즌 성장 ΔOVR 평균 ≥+1(실측 1.76·분포 1~3)·음수 0·결정론·null-대조 0. "유료인데 체감 0"(4번째 죽은기능) 재발 방지. exit 0/1
