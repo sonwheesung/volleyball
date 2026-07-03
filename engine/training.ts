@@ -117,7 +117,7 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
  * 훈련 1회를 선수 한 명에게 적용한 새 선수를 반환(불변).
  * focus = 감독의 훈련 선호. rng = 시드 RNG(결정론).
  */
-export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boosts?: Partial<Record<TrainingId, number>>, potBonus?: Partial<Record<TrainableStat, number>>): Player {
+export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boosts?: Partial<Record<TrainingId, number>>, potBonus?: Partial<Record<TrainableStat, number>>, boostBias?: Partial<Record<TrainingId, 'young' | 'prime'>>): Player {
   const next = { ...p } as Player;
   const stats = next as unknown as Record<TrainableStat, number>;
   const xp: Partial<Record<TrainableStat, number>> = { ...p.xp };
@@ -151,7 +151,13 @@ export function applyTrainingDay(p: Player, focus: TrainingFocus, rng: Rng, boos
     // 포지션 인식: 감독 선호(coachShare)와 포지션 바닥(POS_FLOOR) 중 큰 값.
     // → 포지션 핵심 스탯은 감독과 무관하게 항상 크고, 감독이 속도·부가 방향을 더한다.
     const share = Math.max(coachShare(t.id, focus), POS_FLOOR);
-    const boost = boosts?.[t.id] ?? 1; // 전문 코치 부스트(STAFF_SYSTEM) — 미지정 시 1(불변)
+    const rawBoost = boosts?.[t.id] ?? 1; // 전문 코치 부스트(STAFF_SYSTEM) — 미지정 시 1(불변)
+    // 성향(육성/즉전) 나이 타깃: 코치 부스트의 초과분(rawBoost−1)을 선수 나이로 재배분(§8.1).
+    //   육성형(young)=전성기 전 선수에 ×1.5·이후 ×0.6 / 즉전형(prime)=반대. bias 없으면 그대로.
+    const bias = boostBias?.[t.id];
+    const boost = (bias && rawBoost > 1)
+      ? 1 + (rawBoost - 1) * (((bias === 'young') === (p.age < p.peakAge)) ? 1.5 : 0.6)
+      : rawBoost;
     // 주 스탯(가중 1.0) — 부 스탯은 0.4
     addXp(t.primary, BASE * pos * share * boost * rng.range(0.85, 1.15));
     // 부 스탯

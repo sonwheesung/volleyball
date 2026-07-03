@@ -23,7 +23,7 @@ export function evolvePlayer(base: Player, focus: TrainingFocus, days: number, e
   let p = base;
   const skip = Math.max(0, Math.min(days, Math.floor(skipTrainDays))); // 앞쪽 skip일은 훈련 생략
   for (let d = 0; d < days; d++) {
-    if (d >= skip) p = applyTrainingDay(p, focus, rng, effects.trainBoost, effects.potBonus); // 정지일엔 훈련 없음
+    if (d >= skip) p = applyTrainingDay(p, focus, rng, effects.trainBoost, effects.potBonus, effects.boostBias); // 정지일엔 훈련 없음
     p = applyAgingDay(p, rng, effects.ageSlow); // 노쇠는 멈추지 않는다
   }
   return p;

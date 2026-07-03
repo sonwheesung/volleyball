@@ -281,12 +281,20 @@ export interface Coach {
 /** 전문 코치 분야 (STAFF_SYSTEM) — 해당 분야 훈련 성장 부스트 */
 export type CoachSpecialty = 'attack' | 'defense' | 'stamina' | 'setter' | 'mental';
 
+// 코치 성향(STAFF_SYSTEM §8.1 스태프 2.0) — 같은 역량도 효과 벡터가 다름(스칼라 지배 방지).
+//   기량계(attack/defense/setter): developer(육성)·winnow(즉전)·finisher(완성) / 체력: antiaging·recovery / 멘탈: stable·clutch
+export type CoachType =
+  | 'developer' | 'winnow' | 'finisher'   // skill 분야
+  | 'antiaging' | 'recovery'              // stamina
+  | 'stable' | 'clutch';                  // mental
+
 /** 전문 코치(보조) — 특정 훈련 분야를 빠르게 키운다 */
 export interface AssistantCoach {
   id: string;
   name: string;
   age: number;
   specialty: CoachSpecialty;
+  type?: CoachType;          // 성향(스태프 2.0 §8.1) — optional=구세이브 호환(undefined→분야 기본 성향으로 해석)
   rating: number;            // 0~100 역량 → 부스트·연봉
   salary: number;            // 연봉(만원)
   teamId: string | null;     // 소속(null=프리)

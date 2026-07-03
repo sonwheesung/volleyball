@@ -1,7 +1,7 @@
 // 스태프(감독·전문코치·스카우터) 순수 로직 — 분야↔훈련 매핑, 부스트·공개도·연봉·예산. React 무의존.
 // 효과는 결정론. 감독 효과(성향·카리스마·훈련선호)는 기존 경기/훈련 엔진이 이미 사용.
 
-import type { CoachSpecialty, TrainingId, TrainableStat, AssistantCoach, Scout } from '../types';
+import type { CoachSpecialty, CoachType, TrainingId, TrainableStat, AssistantCoach, Scout } from '../types';
 
 /** 팀 스태프 총예산(만원) — 감독+코치+스카우터 연봉 합이 이내여야 함. 전부 최고를 못 갖게 빡빡하게. */
 export const STAFF_BUDGET = 60000;
@@ -47,28 +47,71 @@ export const potRaise = (rating: number): number => Math.round((rating / 100) * 
 /** 체력 코치 노쇠 지연율 — rating 100이면 하락 45% 둔화 */
 export const ageSlowOf = (rating: number): number => 0.45 * (rating / 100);
 
+// ── 성향(type) 체계 (STAFF_SYSTEM §8.1) ──
+/** 분야별 가능한 성향(같은 rating도 효과 벡터가 다름 — 스칼라 지배 방지) */
+export const SPECIALTY_TYPES: Record<CoachSpecialty, CoachType[]> = {
+  attack: ['developer', 'winnow', 'finisher'],
+  defense: ['developer', 'winnow', 'finisher'],
+  setter: ['developer', 'winnow', 'finisher'],
+  stamina: ['antiaging', 'recovery'],
+  mental: ['stable', 'clutch'],
+};
+export const TYPE_KO: Record<CoachType, string> = {
+  developer: '육성형', winnow: '즉전형', finisher: '완성형', antiaging: '노쇠억제형', recovery: '회복특화형', stable: '안정형', clutch: '클러치형',
+};
+export const TYPE_DESC: Record<CoachType, string> = {
+  developer: '어린 선수 성장 가속(전성기 전)', winnow: '주전·베테랑 성장 가속(전성기 이후에도)', finisher: '포텐 상한 극대(완성도↑)',
+  antiaging: '노쇠 크게 지연(전성기 연장)', recovery: '체력 훈련 가속(노쇠 지연은 약함)', stable: '기복(consistency) 상한↑', clutch: '집중(clutch/focus) 상한↑',
+};
+/** 구세이브(type=undefined) 호환 — 분야 기본 성향(옛 flat 동작에 가장 가까운 것). */
+export const DEFAULT_TYPE: Record<CoachSpecialty, CoachType> = {
+  attack: 'finisher', defense: 'finisher', setter: 'finisher', stamina: 'antiaging', mental: 'stable',
+};
+
 /** 스태프 종합 효과(승패·성장 결정론 입력) */
 export interface StaffEffects {
-  trainBoost: Partial<Record<TrainingId, number>>;  // 성장 속도(1.x)
-  potBonus: Partial<Record<TrainableStat, number>>; // 포텐 상한 +
-  ageSlow: number;                                  // 노쇠 지연 0~0.45
+  trainBoost: Partial<Record<TrainingId, number>>;              // 성장 속도(1.x)
+  boostBias?: Partial<Record<TrainingId, 'young' | 'prime'>>;   // 육성/즉전 나이 타깃(applyTrainingDay가 p.age·peakAge로 해석)
+  potBonus: Partial<Record<TrainableStat, number>>;             // 포텐 상한 +
+  ageSlow: number;                                             // 노쇠 지연 0~0.45
 }
-export const NO_EFFECTS: StaffEffects = { trainBoost: {}, potBonus: {}, ageSlow: 0 };
+export const NO_EFFECTS: StaffEffects = { trainBoost: {}, boostBias: {}, potBonus: {}, ageSlow: 0 };
 
-/** 팀 보조코치들 → 종합 효과. 같은 분야 중첩은 최고 1명만(과적 방지). */
+/** 팀 보조코치들 → 종합 효과. 같은 분야 중첩은 최고 1명만(과적 방지). 성향(type)이 효과 벡터를 재분배(총량 유지). */
 export function staffEffects(assistants: AssistantCoach[]): StaffEffects {
-  const best: Partial<Record<CoachSpecialty, number>> = {};
-  for (const a of assistants) best[a.specialty] = Math.max(best[a.specialty] ?? 0, a.rating);
+  // 분야별 최고 rating 코치 1명 선정(그 코치의 성향을 적용)
+  const bestBysp: Partial<Record<CoachSpecialty, AssistantCoach>> = {};
+  for (const a of assistants) { const cur = bestBysp[a.specialty]; if (!cur || a.rating > cur.rating) bestBysp[a.specialty] = a; }
   const trainBoost: Partial<Record<TrainingId, number>> = {};
+  const boostBias: Partial<Record<TrainingId, 'young' | 'prime'>> = {};
   const potBonus: Partial<Record<TrainableStat, number>> = {};
   let ageSlow = 0;
-  for (const sp of Object.keys(best) as CoachSpecialty[]) {
-    const r = best[sp]!;
-    for (const tid of SPECIALTY_TRAININGS[sp]) trainBoost[tid] = 1 + assistantBoost(r);
-    for (const st of SPECIALTY_POT_STATS[sp]) potBonus[st] = potRaise(r);
-    if (sp === 'stamina') ageSlow = Math.max(ageSlow, ageSlowOf(r));
+  for (const sp of Object.keys(bestBysp) as CoachSpecialty[]) {
+    const a = bestBysp[sp]!;
+    const r = a.rating;
+    const b = assistantBoost(r), p = potRaise(r);
+    // 구세이브(type=undefined) → 옛 flat 동작 그대로 보존(save-compat·회귀 무변). 성향은 신규 코치부터.
+    if (a.type === undefined) {
+      for (const tid of SPECIALTY_TRAININGS[sp]) trainBoost[tid] = 1 + b;
+      for (const st of SPECIALTY_POT_STATS[sp]) potBonus[st] = p;
+      if (sp === 'stamina') ageSlow = Math.max(ageSlow, ageSlowOf(r));
+      continue;
+    }
+    const setBoost = (mult: number, bias?: 'young' | 'prime') => {
+      for (const tid of SPECIALTY_TRAININGS[sp]) { trainBoost[tid] = 1 + b * mult; if (bias) boostBias[tid] = bias; }
+    };
+    const setPot = (mult: number) => { for (const st of SPECIALTY_POT_STATS[sp]) potBonus[st] = Math.round(p * mult); };
+    switch (a.type) {
+      case 'developer': setBoost(1, 'young'); setPot(0.7); break;
+      case 'winnow': setBoost(1, 'prime'); setPot(0.7); break;
+      case 'finisher': setBoost(1); setPot(1.6); break;
+      case 'antiaging': setBoost(0.6); ageSlow = Math.max(ageSlow, ageSlowOf(r) * 1.4); break;
+      case 'recovery': setBoost(1.4); ageSlow = Math.max(ageSlow, ageSlowOf(r) * 0.6); break;
+      case 'stable': potBonus.consistency = Math.round(p * 1.6); potBonus.focus = Math.round(p * 0.4); break;
+      case 'clutch': potBonus.focus = Math.round(p * 1.6); potBonus.consistency = Math.round(p * 0.4); break;
+    }
   }
-  return { trainBoost, potBonus, ageSlow };
+  return { trainBoost, boostBias, potBonus, ageSlow };
 }
 
 /** 성장 속도 부스트만(하위호환·도구용) */

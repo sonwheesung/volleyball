@@ -209,6 +209,7 @@ npx tsx tools/simOwnerRefuse.ts            # 면담 거부 선수 풀 이동 정
 npx tsx tools/simForeign.ts 40             # 외인 장기 건강(멸종0·바닥보장·캡). parity(우승경험 6/7)는 표본<80 노이즈라 120시즌 arm에서만 판정(2026-07-02 브리틀 교정 — 40시즌 5/7·120시즌 7/7 실증). exit 0/1
 npx tsx tools/simStaffLife.ts              # 스태프 풀 건강(고갈/폭발0·연령·순환) + **tier 붕괴 경고**(정상상태 상위코치 멸종 surface — TEST_METHODOLOGY §4 사각 교정). exit 0/1
 npx tsx tools/_dv_staffscarcity.ts [시즌]  # 스태프 희소성 실측(STAFF §8.1 2.0) — 초기 tier 스냅샷 + N시즌 정상상태 tier 분포 + 수요 대비. ※지속풀은 스냅샷 아닌 정상상태로 판정(사각 교훈)
+npx tsx tools/_dv_coachtype.ts             # 코치 성향 직교성(STAFF §8.1 phase①) — 육성형↔즉전형 나이타깃 교차(스칼라 지배 없음)·완성형 장기천장·노쇠억제형 노장보존·결정론·레거시 save-compat. exit 0/1
 npx tsx tools/simScandalEffect.ts          # 사건사고 정지출전 차단·영구퇴출 정합. exit 0/1
 npx tsx tools/simStatRecord.ts             # 개인 귀속 결정론·팀 누수0·개인합=팀박스. exit 0/1
 npx tsx tools/simNews.ts                   # 뉴스 무결성(빈헤드/본문·내용중복·매달린 teamId 0) + 변주 가드(§4.4 Step4: 고볼륨 kind 변주비율≥0.90·n-gram 최대겹침<0.90 — 해시 붕괴/셀렉터 축소 검출, A/B teeth) + 읽음키 유일성. exit 0/2
