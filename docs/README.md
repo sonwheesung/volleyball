@@ -135,6 +135,7 @@ npx tsx tools/_dv_walletauth.ts             # 다이아 서버 진실화(BACKEND
 npx tsx tools/_dv_coupon.ts                 # 쿠폰·관리자 순수(BACKEND §13.14/§13.15) — normalizeCode(대문자+trim)·requireAdmin fail-closed(토큰 미설정/<16자→거부·정확토큰 허용·길이가드). exit 0/1. ※쿠폰 발급·사용·이중지급0·타겟·만료는 로컬 서버 라이브 E2E(임시, 검증 후 삭제)로 실증
 npx tsx tools/_dv_version.ts                 # 버전 비교(BACKEND §13.11/§13.16) — cmpVersion 정수비교·belowVersion(강제 게이트)·needsSoftUpdate(소프트 배너: latest 미만·min 이상) + A/B(문자열 비교였다면 1.10<1.9 오답). exit 0/1
 npx tsx tools/_dv_analytics.ts               # 분석 래퍼(ANALYTICS_PLAN) — track() throw-none(전 이벤트+이상params 무크래시)·taxonomy 중복0·계측대상 등록. SDK는 EAS(현재 no-op stub). exit 0/1
+npx tsx tools/_dv_scoutreveal.ts             # 스카우터 부분 포텐 공개(FA §3.3 스카우팅2.0 3a) — 개수=reveal함수(0.2미만0·최고≤3=50%상한·단조)·포지션핵심 우선·범위→등급↑축소→최상급 정확·결정론·avg(AI입력). exit 0/1
 npx tsx tools/_dv_potdist.ts                 # 현재↔포텐 분포(FA §3.3 스카우팅2.0 2단계) — corr(현재,미래OVR)∈[.45,.62](대체로 비례·역산불가) + 대기만성/반짝 이상치 존재(prospectArc 3%/3% 주입). N=2만. exit 0/1. ※밸런스 회귀는 simLeague 50×6 A/B(변경 전후 동등 확인)
 npx tsx tools/_dv_amateur.ts                 # 아마추어 성적표(FA §3.3 스카우팅2.0 1단계) — 역산불가 corr(성적,현재)∈[.4,.6]·corr(성적,포텐)≤.35·R²<.35 + A/B(노이즈無 0.81→0.50)·특급빛남·결정론·스카우터무관. N=2만. exit 0/1
 npx tsx tools/_dv_reset_preserve.ts          # 구단 초기화 계정필드 유지(BACKEND §13.19) — selectTeam/resetSave가 다이아·claimedAch·adState 유지·saveId만 새로·시즌 진행 리셋. 재화 farming 방어(서버측은 라이브 E2E). exit 0/1
