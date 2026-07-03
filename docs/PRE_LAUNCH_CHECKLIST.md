@@ -39,10 +39,13 @@
 
 > 사용자 결정: **결제는 모델을 바꿔 진행**(추후). 아래는 그때 처리.
 
-- 🔴 ⬜ **서버 영수증 검증** — 구글 Play Developer API·애플 App Store Server API 직접 검증(RevenueCat 미사용). `POST /api/purchase/verify` → grant → **스토어 consume/finish**. (BACKEND §5·§13.4 H1)
-- 🔴 ⬜ **환불/차지백 웹훅** — 구글 RTDN(Pub/Sub)·애플 ASSN V2(.p8 JWT) 서명검증 → 지갑 음수 차감. "미consume 3일 자동환불" 함정 주의. (BACKEND §5·§13.4 H1·H4)
-- 🟡 ⬜ **수입 롤업에 환불 반영** — `rollupRecent`가 현재 `reason='purchase'`만 집계 → 실환불 웹훅 붙으면 순매출 과대계상. `refund` 차감 반영. (`server/lib/retention.ts` TODO, §13.17)
-- 🟢 ⬜ 결제 비밀키: 구글 서비스계정 JSON·애플 `.p8`(issuerId/keyId/privateKey)·OAuth 클라ID — `.env.example` 자리 채움.
+> **결제 방식 = RevenueCat 게이트웨이**(2026-07-03 재채택, §13.18). RC가 영수증 검증·consume·크로스스토어를 흡수하고, 다이아 지급은 웹훅→우리 원장.
+
+- 🔴 ⬜ **RevenueCat 연동** — `react-native-purchases` SDK(EAS), 로그인 직후 `Purchases.logIn(userId)`(app_user_id=우리 userId — 최대 함정). SKU를 RC 대시보드에 등록. (BACKEND §13.18)
+- 🔴 ⬜ **RC 웹훅 + 폴백** — `POST /api/purchase/webhook/revenuecat`(Authorization 시크릿 검증)·`POST /api/purchase/confirm`(클라 폴백). 멱등키 `purchase:<userId>:<storeTxnId>`. 샌드박스(`environment:SANDBOX`) 필터. (§13.18)
+- 🔴 ⬜ **RC 환불 웹훅** — CANCELLATION/REFUND → 다이아 음수 차감(`refund:<userId>:<storeTxnId>`). 관리자 수동 환불(§13.17)과 이중차감 방지 규칙. (§13.18)
+- 🟡 ⬜ **수입 롤업에 환불 반영** — `rollupRecent`가 `reason='purchase'`만 집계 → 실환불 붙으면 순매출 과대계상. 재무진실=RC 대시보드, KRW 필요 시 RC 웹훅 `price_in_purchased_currency` 적재. (`server/lib/retention.ts` TODO, §13.17·§13.18)
+- 🟢 ⬜ 스토어 결제 크레덴셜(구글 서비스계정·애플 `.p8`)은 **RC 대시보드에 등록**(우리 서버 미보관). 웹훅 시크릿만 `.env`.
 
 ---
 

@@ -77,7 +77,7 @@
 - **구매 복원 버튼**(필수, 스토어 정책) — 재설치·기변 시 스토어 재조회(온라인 1회). 오프라인 재설치면 일단 미소유로 graceful, **진행 데이터는 절대 삭제 금지**(온라인 되면 복원).
 - **엔진 격리** — `removeAds`는 광고 표시 토글(`lib/ads setRemoveAds`)일 뿐 엔진 미참조. `worldCup`만 sim 영향이나 WORLDCUP_SYSTEM의 epoch+forward-only+비트동일 A/B로 격리. (구현: `lib/iap getEntitlements`)
 
-## 6. 검증 ~~(RevenueCat 하이브리드)~~ → **Vercel 단독 직접 검증 (2026-07-01 정정)**
+## 6. 검증 ~~(RevenueCat 하이브리드)~~ → ~~**Vercel 단독 직접 검증 (2026-07-01)**~~ → **RevenueCat 게이트웨이 재채택 (2026-07-03, 사용자 결정)** — 정본 `BACKEND_SYSTEM.md` §13.18 (RC=검증·웹훅·엔타이틀먼트 게이트웨이 / 다이아 잔액 진실=우리 원장·RC virtual currency 금지 / storeTxnId 멱등·웹훅+confirm 폴백)
 
 > ~~RevenueCat~~ **폐기**. **Vercel 서버가 구글 Play / 애플 App Store API로 영수증을 직접 검증**하고 환불 웹훅·consume
 > 라이프사이클까지 담당한다(소셜 로그인 계정·다이아 원장과 한 서버). 아래 RevenueCat 서술은 역사 보존용. 정본 `docs/BACKEND_SYSTEM.md`.

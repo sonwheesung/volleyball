@@ -12,8 +12,8 @@
 |---|---|---|
 | 계정/식별 | **소셜 로그인(구글/애플)** | 기기변경·재설치에도 다이아·구매 따라옴 |
 | 오프라인 기둥 | **폐기 → 온라인 우선** | 관전·시뮬은 캐시로 계속, 다이아·결제만 온라인 필수 |
-| 결제 검증 | **Vercel 단독**(구글 Play/애플 API 직접) | RevenueCat 미사용 |
-| 결제 저장 | **우리 DB(Vercel)** | 영수증·거래·환불 |
+| 결제 검증 | ~~Vercel 단독 직접~~ → **RevenueCat 게이트웨이**(2026-07-03 §13.18) | RC=검증·웹훅·엔타이틀먼트 |
+| 결제 저장 | **다이아 지급=우리 원장** · 재무진실=RC 대시보드 | storeTxnId 멱등·웹훅+confirm 폴백 |
 | 배포 | Vercel(나중) · **지금은 로컬 서버 실행** | Vercel 호환 구조로 |
 
 ---
@@ -144,7 +144,7 @@
 - (이후) `Purchase`(`proj_code` FK, `transactionId` unique/proj, status pending→granted→consumed→refunded, platform, productId, rawReceipt) · `AdReward`(`ssvTransactionId` unique) · `AchievementClaim`(`userId+achievementId` unique) · `Log`(proj_code, level, tag, season) · `Ticket`+`TicketMessage`(proj_code, userId, 카테고리) · `DiagnosticSnapshot`(JSON) · `TelemetrySession`+`Heartbeat`. 전부 `proj_code` FK 포함 신설.
 
 ### 13.3 엔드포인트
-`/api/health` · `/api/auth/login`(ID토큰→Bearer)·`/refresh` · `GET /api/wallet`(balance+최근 원장) · `POST /api/wallet/spend`·`/earn`(멱등키+**행 잠금 트랜잭션**) · `POST /api/purchase/verify`(→grant→**스토어 consume/finish 호출**) · `POST /api/purchase/webhook/google`(RTDN Pub/Sub, JWT 검증)·`/apple`(ASSN V2, JWS 검증) → **환불 시 음수 원장 차감** · `POST /api/ad/ssv`(AdMob 서명 검증) · `POST /api/log` · `/api/ticket`(create/list/reply) · `POST /api/snapshot` · `POST /api/telemetry` · 관리자 대시보드 페이지(인증 보호).
+`/api/health` · `/api/auth/login`(ID토큰→Bearer)·`/refresh` · `GET /api/wallet`(balance+최근 원장) · `POST /api/wallet/spend`·`/earn`(멱등키+**행 잠금 트랜잭션**) · ~~`POST /api/purchase/verify`·`/webhook/google`(RTDN)·`/apple`(ASSN)~~ → **정정(2026-07-03 §13.18)**: `POST /api/purchase/webhook/revenuecat`(RC 웹훅, Authorization 시크릿 검증 → applyWalletTx purchase/refund)·`POST /api/purchase/confirm`(클라 폴백, storeTxnId → RC REST 재검증 → 같은 키 지급) · `POST /api/ad/ssv`(AdMob 서명 검증 — RC 무관, 우리 몫) · `POST /api/log` · `/api/ticket`(create/list)·`/api/admin/ticket`(reply/snapshot) · `POST /api/snapshot` · `POST /api/telemetry` · `/api/admin/{coupon,announcement,setting,refund}` · 관리자 대시보드 페이지(인증 보호).
 
 ### 13.4 리스크 레지스터 (리뷰 지적 — 착수 전 반드시)
 - **H1 결제 소비/환불**: DB `status:consumed` ≠ 실제 consume. 구글은 **미consume 소비성 구매를 ~3일 뒤 자동 환불**. 흐름=verify→grant(원장, transactionId 멱등)→**Play `purchases.products.consume`**(애플=finish)→consumed. **환불/차지백 웹훅→지갑 음수 차감 필수**(정책: 음수 허용+spend는 balance 게이트 → 환불된 고래가 계속 못 씀).
@@ -306,3 +306,21 @@
 - **결정론 격리**: 기기정보·티켓·환불 전부 시드/리플레이 무관 순수 메타. 음수 다이아는 camp가 balance 게이트라 'insufficient'로 거부 → campLog 미기록 = 리플레이 불변(무해).
 - **보관·통계**: `snapshot` 90일(진단 티어 — 3년 묵은 재생 JSON은 가치 0), 티켓 3년, `reason='refund'` 원장 5년(감사·retention 이미 제외). **TODO(#43)**: `rollupRecent`가 purchase만 집계 → 실환불 웹훅 붙으면 순매출 과대계상, refund 차감 반영 필요.
 - **파일**: `server/db/schema.ts`(users 컬럼·tickets·diagnostic_snapshots)·`server/lib/auth.ts`(requireUserId)·`server/lib/wallet.ts`(applyWalletTx refund 음수허용)·`server/app/api/{auth/login,ticket,snapshot}/route.ts`·`server/app/api/admin/{ticket,ticket/reply,ticket/snapshot,refund}/route.ts`·`server/app/admin/page.tsx`·`server/lib/retention.ts`(snapshot 90일)·`lib/device.ts`(신, getDeviceInfo)·`lib/server.ts`(login+device·createTicket+device·refund 타입·'refund' 카테고리)·`store/useAuthStore.ts`(로그인 시 device)·`app/support.tsx`(환불 카테고리·안내 카피). 검증 `tools/_dv_refund.ts`(음수허용 reason파생·멱등키) + 라이브 E2E.
+
+### 13.18 결제 검증 — RevenueCat 게이트웨이 재채택 (#43, 2026-07-03 — 결정 재반전·독립 리뷰)
+> **핑퐁 이력**: RevenueCat(원안) → ~~Vercel 직접검증(2026-07-01 §5·§6)~~ → **RevenueCat 게이트웨이(2026-07-03, 사용자 결정 — 실사용 개발자 추천)**. 전면 RC(원안)도 직접검증 단독(2026-07-01)도 아닌 **제3안: RC는 검증/웹훅/consume 게이트웨이, 다이아 잔액 진실은 계속 우리 원장.** 독립 리뷰(general-purpose)가 발견: 결제 라우트는 아직 백지(#43 미구현)·`lib/iap.ts`는 여전히 RC 스캐폴드 → 재채택 전환비용 거의 0(문서 정합화에 가까움).
+
+- **진실 소유 분리(불변)**: **다이아(소모성) 잔액 = 우리 `wallet_ledger`**(영원히). **엔타이틀먼트(광고제거·DLC, 비소모) = RC `customerInfo`**(+스토어 복원, SDK 로컬 캐시가 오프라인 처리). **RC Virtual Currency 기능 금지**(쓰는 순간 "진실의 원천 2개" 부활 — 2026-07-01이 죽인 것).
+- **검증 경로 통일**: 소모·비소모 **둘 다 RC SDK 한 경로**(`purchasePackage` 하나·웹훅 하나). "다이아=직접검증 / 엔타이틀먼트=RC" 하이브리드는 스택 2벌이라 **기각**(리뷰).
+- **다이아 지급 = 서버 확정, 이중경로 수렴**:
+  - **웹훅**: RC→`POST /api/purchase/webhook/revenuecat`(Authorization 시크릿 검증) → `applyWalletTx(+다이아, 'purchase', key, ref)`.
+  - **폴백(필수)**: 클라 구매 resolve 후 `POST /api/purchase/confirm {storeTxnId}` → 서버가 **RC REST로 재검증** → 같은 키 지급. 웹훅 지연·유실 시 폴백이 메꿈("돈 내고 0개" 방지). 먼저 온 쪽 지급·둘째 `applied:false` dedupe(쿠폰·환불 패턴).
+  - **멱등키 = `purchase:<userId>:<storeTransactionId>`** — **스토어 거래 id가 웹훅·폴백 두 경로 공유 자연키**(유일 정합성 불변식). productId로 키하면 소모성 재구매 차단됨(금지)·RC event id 단독도 이중지급(금지).
+- **환불**: RC 환불 웹훅(CANCELLATION/REFUND) → `applyWalletTx(−다이아, 'refund', key=refund:<userId>:<storeTxnId>)`(음수 허용). **관리자 수동 환불(§13.17)과 이중차감 방지**: storeTxnId 파생 공유키로 둘째가 dedupe되게 하거나 "RC 자동 환불분은 관리자 수동 금지" 명문화.
+- **RC app_user_id = 우리 userId**: 로그인 직후 `Purchases.logIn(userId)`(최대 함정 — 안 하면 웹훅 app_user_id가 유저에 안 붙어 지급 불가).
+- **H1/H4 흡수 범위**: H1(미consume 자동환불)=RC가 consume/acknowledge 스토어측 흡수. H4(영수증 크립토 검증)=RC 흡수 → **우리는 웹훅 Authorization 시크릿만 검증**. **단 AdMob SSV(광고)는 RC 무관 → H4 광고측은 여전히 우리 몫**(착각 주의).
+- **샌드박스 필터**: RC 웹훅 `environment:SANDBOX`는 서버가 무시(테스터가 prod 원장에 유령 다이아 발행 방지).
+- **수입 대시보드 역할 분리**: **재무·세무 진실=RC 대시보드**(실 KRW·환불), **다이아 지급 진실=우리 원장**. KRW가 우리 대시보드에 필요하면 RC 웹훅 `price_in_purchased_currency`를 Purchase 행에 적재(다이아 건수 역산 금지 — §13.17 rollup TODO와 함께).
+- **결정론·관전형 격리·throw-none·부팅 비차단** 유지(RC는 purchase→grant 메타만·시드/리플레이 무관). confirm은 임계경로 밖 네트워크콜.
+- **락인 낮음**: 게이트웨이 패턴이라 나중 RC 제거 = 웹훅/confirm만 직접검증으로 교체, 원장·지급 로직 불변. MTR $2.5k/월 무료·초과 1%(스토어 30% 컷 옆 반올림).
+- **문서 정정 대상**: CLAUDE §8·BACKEND §0/§5/§6/§13.3/§13.4·MONETIZATION §6/§6.1/§11.4·PRE_LAUNCH §3 → 이 §13.18로 포인터. **§6.1 "RC 쓰면 우리 DB 불요"는 취소선 유지**(소모성 다이아 원장은 여전히 필요 — RC 재채택이 되살리지 않음).
