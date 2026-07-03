@@ -1,10 +1,11 @@
 // 아시아쿼터 FA (FOREIGN_SYSTEM §7.4, 2026-27 실규칙) — 트라이아웃 폐지→구단 직접 협상. 팀당 1명·연차 상한(1년/2년)·캡 제외.
 // 노리는 선수(오퍼)를 정하면 선수가 조건을 보고 팀을 고른다(추첨 아님). 기존 구단 보유권(증액/거부→시즌아웃). 미리보기=endSeason 결과(동일 빌더).
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { ForeignResumeDetail } from '../components/ForeignResumeDetail';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
@@ -38,6 +39,7 @@ function AsianTryoutInner() {
   const keepForeign = useGameStore((s) => s.keepForeign);
   const asianWish = useGameStore((s) => s.asianWish);
   const toggleAsianWish = useGameStore((s) => s.toggleAsianWish);
+  const [openId, setOpenId] = useState<string | null>(null);
   const keepAsian = useGameStore((s) => s.keepAsian);
   const setKeepAsian = useGameStore((s) => s.setKeepAsian);
   const currentDay = useGameStore((s) => s.currentDay);
@@ -107,7 +109,7 @@ function AsianTryoutInner() {
         </>
       ) : null}
 
-      <Title>협상 후보 ({pool.length}명) — ★ 노리는 선수 토글</Title>
+      <Title>협상 후보 ({pool.length}명) — 눌러서 이력 · 우측 오퍼</Title>
       {pool
         .slice()
         .sort((a, b) => overall(b) - overall(a))
@@ -115,24 +117,31 @@ function AsianTryoutInner() {
           const wishIdx = asianWish.indexOf(p.id);
           const taker = pickedBy(p.id);
           const returning = !p.id.startsWith('asn-s');
+          const open = openId === p.id;
           return (
-            <Pressable key={p.id} style={styles.row} onPress={() => toggleAsianWish(p.id)}>
-              <PosTag pos={p.position} />
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.name}>{p.name}</Text>
-                  {p.nationality ? <Text style={styles.nat}>{p.nationality}</Text> : null}
-                  {returning ? <Text style={styles.tagReturn}>재참가</Text> : null}
-                  {wishIdx >= 0 ? <Text style={styles.tagWish}>★{wishIdx + 1}</Text> : null}
-                </View>
-                <Text style={styles.sub}>
-                  {p.age}세 · {p.height}cm · OVR {fogOvr(p)}
-                </Text>
+            <View key={p.id} style={[styles.rowWrap, wishIdx >= 0 && { borderColor: theme.warn, borderWidth: 1 }]}>
+              <View style={styles.rowInner}>
+                <Pressable onPress={() => setOpenId(open ? null : p.id)} style={styles.rowTap}>
+                  <PosTag pos={p.position} />
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.name}>{p.name}</Text>
+                      {p.nationality ? <Text style={styles.nat}>{p.nationality}</Text> : null}
+                      {returning ? <Text style={styles.tagReturn}>재참가</Text> : null}
+                    </View>
+                    <Text style={styles.sub}>
+                      {p.age}세 · {p.height}cm · OVR {fogOvr(p)} · {taker ? `→ ${taker}` : '미계약'} · {open ? '접기 ▲' : '이력 ▼'}
+                    </Text>
+                  </View>
+                </Pressable>
+                <Pressable onPress={() => toggleAsianWish(p.id)} hitSlop={8} style={styles.wishBtn}>
+                  <Text style={{ color: wishIdx >= 0 ? theme.warn : theme.muted, fontWeight: '900', fontSize: 13 }}>
+                    {wishIdx >= 0 ? `★${wishIdx + 1}` : '오퍼'}
+                  </Text>
+                </Pressable>
               </View>
-              <Text style={{ color: taker === getTeam(my)?.name ? theme.accent : theme.muted, fontSize: 12, fontWeight: '700' }}>
-                {taker ? `→ ${taker}` : '미계약'}
-              </Text>
-            </Pressable>
+              {open ? <ForeignResumeDetail p={p} reveal={reveal} /> : null}
+            </View>
           );
         })}
 
@@ -147,6 +156,10 @@ function AsianTryoutInner() {
 
 const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border },
+  rowWrap: { backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
+  rowInner: { flexDirection: 'row', alignItems: 'center' },
+  rowTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  wishBtn: { paddingHorizontal: 14, paddingVertical: 14, borderLeftWidth: 1, borderLeftColor: theme.border, minWidth: 60, alignItems: 'center' },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   nat: { color: theme.elite, fontSize: 11, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },

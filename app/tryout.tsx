@@ -1,7 +1,7 @@
 // 외국인 트라이아웃 (FOREIGN_SYSTEM) — 매 오프시즌, 팀당 1명·1년 계약·연봉 고정(캡 제외).
 // 순번은 추첨. 위시리스트로 노리고, 순번에서 뺏기면 차순위. 미리보기 = endSeason 결과(동일 빌더).
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
@@ -9,6 +9,7 @@ import { SpotlightOverlay, SpotlightTarget } from '../components/Spotlight';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
+import { ForeignResumeDetail } from '../components/ForeignResumeDetail';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { FOREIGN_SALARY } from '../engine/foreign';
 import { formatMoney } from '../engine/salary';
@@ -39,6 +40,7 @@ function TryoutInner() {
   const keepForeign = useGameStore((s) => s.keepForeign);
   const setKeepForeign = useGameStore((s) => s.setKeepForeign);
   const currentDay = useGameStore((s) => s.currentDay);
+  const [openId, setOpenId] = useState<string | null>(null);
 
   // endSeason과 같은 체인 — 미리보기=결과
   const ctx = useMemo(
@@ -80,7 +82,7 @@ function TryoutInner() {
         <Muted style={{ fontSize: 12 }}>
           외국인 선수는 <Text style={{ fontWeight: '800', color: theme.text }}>팀당 1명</Text> — 아포짓(OP) 위주의 팀 공격 핵심입니다(여자부 외인 자리). 매 오프시즌
           {' '}<Text style={{ fontWeight: '800', color: theme.text }}>추첨 순번</Text>대로 1명을 데려옵니다 · 1년 계약 · 연봉 {formatMoney(FOREIGN_SALARY)} 고정(샐러리캡 제외, 운영 자금 지출).
-          아래에서 ★로 위시리스트를 정하면 순번에서 가능한 선수를 자동 지명하고, 앞 팀이 뺏으면 차순위로 내려갑니다.
+          선수를 누르면 검증된 이력(이전 리그 성적·폼·수상·부상 — 스카우터 등급 따라 공개)이 펼쳐집니다. 우측 위시로 노리면 순번에서 자동 지명하고, 앞 팀이 뺏으면 차순위로 내려갑니다.
         </Muted>
         <Row>
           <IconLabel icon="globe-outline" color={theme.bad}>내 예상 지명</IconLabel>
@@ -124,23 +126,30 @@ function TryoutInner() {
           const wishIdx = tryoutWish.indexOf(p.id);
           const taker = pickedBy(p.id);
           const returning = !p.id.startsWith('fgn-s');
+          const open = openId === p.id;
           return (
-            <Pressable key={p.id} style={styles.row} onPress={() => toggleTryoutWish(p.id)}>
-              <PosTag pos={p.position} />
-              <View style={{ flex: 1 }}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <Text style={styles.name}>{p.name}</Text>
-                  {returning ? <Text style={styles.tagReturn}>재참가</Text> : null}
-                  {wishIdx >= 0 ? <Text style={styles.tagWish}>★{wishIdx + 1}</Text> : null}
-                </View>
-                <Text style={styles.sub}>
-                  {p.age}세 · {p.height}cm · OVR {fogOvr(p)}
-                </Text>
+            <View key={p.id} style={[styles.rowWrap, wishIdx >= 0 && { borderColor: theme.warn, borderWidth: 1 }]}>
+              <View style={styles.rowInner}>
+                <Pressable onPress={() => setOpenId(open ? null : p.id)} style={styles.rowTap}>
+                  <PosTag pos={p.position} />
+                  <View style={{ flex: 1 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <Text style={styles.name}>{p.name}</Text>
+                      {returning ? <Text style={styles.tagReturn}>재참가</Text> : null}
+                    </View>
+                    <Text style={styles.sub}>
+                      {p.age}세 · {p.height}cm · OVR {fogOvr(p)} · {taker ? `→ ${taker}` : '미지명'} · {open ? '접기 ▲' : '이력 ▼'}
+                    </Text>
+                  </View>
+                </Pressable>
+                <Pressable onPress={() => toggleTryoutWish(p.id)} hitSlop={8} style={styles.wishBtn}>
+                  <Text style={{ color: wishIdx >= 0 ? theme.warn : theme.muted, fontWeight: '900', fontSize: 13 }}>
+                    {wishIdx >= 0 ? `★${wishIdx + 1}` : '위시'}
+                  </Text>
+                </Pressable>
               </View>
-              <Text style={{ color: taker === getTeam(my)?.name ? theme.accent : theme.muted, fontSize: 12, fontWeight: '700' }}>
-                {taker ? `→ ${taker}` : '미지명'}
-              </Text>
-            </Pressable>
+              {open ? <ForeignResumeDetail p={p} reveal={reveal} /> : null}
+            </View>
           );
         })}
 
@@ -156,6 +165,10 @@ function TryoutInner() {
 
 const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border },
+  rowWrap: { backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
+  rowInner: { flexDirection: 'row', alignItems: 'center' },
+  rowTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  wishBtn: { paddingHorizontal: 14, paddingVertical: 14, borderLeftWidth: 1, borderLeftColor: theme.border, minWidth: 60, alignItems: 'center' },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   tagReturn: { color: theme.accent, fontSize: 11, fontWeight: '700' },
