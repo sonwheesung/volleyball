@@ -86,12 +86,20 @@ function Compose({ onDone }: { onDone: () => void }) {
 
   // 스냅샷은 스토어 상태에서 즉석 생성(순수). 무거우니 제출 성공 후 백그라운드 업로드.
   // 전지훈련(다이아 유일 소비처) 진단(§13.17) — diamonds/campLog/pendingCamp 동봉: "차감됐으나 미적용" 추적.
-  const snapInput = useGameStore((s) => ({
-    season: s.season, currentDay: s.currentDay, myTeamId: s.selectedTeamId ?? '',
-    archive: s.archive, milestones: s.milestones, hallOfFame: s.hallOfFame,
-    retirements: s.retirements, released: s.released, playerBase: s.playerBase,
-    diamonds: s.diamonds, campLog: s.campLog, pendingCamp: s.pendingCamp,
-  }));
+  // ★ 개별 셀렉터로 뽑는다 — 셀렉터가 매 렌더 새 객체를 반환하면 zustand 기본 Object.is 비교가 항상 "변경"으로
+  //   보고 무한 리렌더(Maximum update depth exceeded)에 빠진다(2026-07-03 수정). 스냅 객체는 submit에서 조립.
+  const season = useGameStore((s) => s.season);
+  const currentDay = useGameStore((s) => s.currentDay);
+  const myTeamId = useGameStore((s) => s.selectedTeamId ?? '');
+  const archive = useGameStore((s) => s.archive);
+  const milestones = useGameStore((s) => s.milestones);
+  const hallOfFame = useGameStore((s) => s.hallOfFame);
+  const retirements = useGameStore((s) => s.retirements);
+  const released = useGameStore((s) => s.released);
+  const playerBase = useGameStore((s) => s.playerBase);
+  const diamonds = useGameStore((s) => s.diamonds);
+  const campLog = useGameStore((s) => s.campLog);
+  const pendingCamp = useGameStore((s) => s.pendingCamp);
 
   const submit = async () => {
     if (content.trim().length < 5) { Alert.alert('내용을 입력하세요', '조금 더 자세히 적어주시면 도움이 됩니다(5자 이상).'); return; }
@@ -107,12 +115,13 @@ function Compose({ onDone }: { onDone: () => void }) {
     const ticketId = r.ticketId;
     void (async () => {
       try {
-        const logs = await getSnapshotLogs(snapInput.season);
+        const logs = await getSnapshotLogs(season);
         const snapshot = buildDiagnosticSnapshot({
-          ...snapInput, engineVersion: ENGINE_VERSION,
-          players: Object.values(snapInput.playerBase ?? {}),
+          season, currentDay, myTeamId, archive, milestones, hallOfFame,
+          retirements, released, engineVersion: ENGINE_VERSION,
+          players: Object.values(playerBase ?? {}),
           logs, now: Date.now(),
-          diamonds: snapInput.diamonds, campLog: snapInput.campLog, pendingCamp: snapInput.pendingCamp,
+          diamonds, campLog, pendingCamp,
         });
         await uploadSnapshot(ticketId, snapshot);
       } catch { /* 스냅샷 실패는 문의 접수를 막지 않음 */ }
