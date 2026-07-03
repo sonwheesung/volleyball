@@ -90,7 +90,20 @@ export async function countReasonToday(userId: string, reason: WalletReason): Pr
   return rows[0]?.n ?? 0;
 }
 
-/** 현재 잔액 + 최근 원장 N건. */
+/** 오늘(UTC) 광고 적립 상태 — 횟수 + 마지막 시각(ms). 광고 쿨다운/캡의 **서버 진실**(§13.19 — 로컬 리셋으로 못 우회). */
+export async function adStatusToday(userId: string): Promise<{ count: number; lastAtMs: number | null }> {
+  const rows = await db
+    .select({
+      n: sql<number>`count(*)::int`,
+      lastMs: sql<string | null>`(extract(epoch from max(${walletLedger.createdAt})) * 1000)::bigint`,
+    })
+    .from(walletLedger)
+    .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, userId), eq(walletLedger.reason, 'ad'), sql`${walletLedger.createdAt} >= date_trunc('day', now())`));
+  const r = rows[0];
+  return { count: r?.n ?? 0, lastAtMs: r?.lastMs != null ? Number(r.lastMs) : null };
+}
+
+/** 현재 잔액 + 최근 원장 N건 + 오늘 광고 상태(쿨다운/캡 서버 진실). */
 export async function getWallet(userId: string, recent = 20) {
   const u = await db.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).limit(1);
   if (!u.length) return null;
@@ -100,7 +113,8 @@ export async function getWallet(userId: string, recent = 20) {
     .where(eq(walletLedger.userId, userId))
     .orderBy(walletLedger.createdAt)
     .limit(recent);
-  return { balance: u[0].balance, ledger };
+  const adToday = await adStatusToday(userId);
+  return { balance: u[0].balance, ledger, adToday };
 }
 
 /** 이 게임(PROJ_CODE)의 proj_info 행 보장 — FK 대상. 최초 1회만 실제 insert. */

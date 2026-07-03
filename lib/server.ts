@@ -90,7 +90,7 @@ export function getBootstrap(): Promise<ServerResult<BootstrapData>> {
 }
 
 // ── 지갑 ──
-export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[] }>> {
+export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[]; adToday?: { count: number; lastAtMs: number | null } }>> {
   return call('/api/wallet');
 }
 /** 다이아 차감(전지훈련). 서버 확정 후에만 앱이 반영. **금액은 서버 권위**(camp=−900 강제, §13.12) — amount는 표시/호환용.

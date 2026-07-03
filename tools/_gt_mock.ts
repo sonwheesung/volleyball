@@ -2,6 +2,10 @@
 // persist store can be driven in Node. Import this BEFORE importing the store.
 import Module from 'module';
 
+// __DEV__ 전역 정의 — store 그래프가 expo-constants(→expo-modules-core)를 끌어오면 top-level `if (__DEV__)`가
+// Node에서 ReferenceError를 낸다(2026-07-03 device 커밋이 useAuthStore→lib/device→expo-constants 도입). 미리 박아 크래시 차단.
+(globalThis as any).__DEV__ = false;
+
 const mem = new Map<string, string>();
 const impl = {
   getItem: async (k: string) => (mem.has(k) ? mem.get(k)! : null),
@@ -32,6 +36,8 @@ const origReq = (Module.prototype as any).require;
 (Module.prototype as any).require = function (id: string) {
   if (id === '@react-native-async-storage/async-storage') return mock;
   if (id === 'react-native') return rnMock;
+  // expo-constants 스텁 — lib/device(getDeviceInfo)가 앱버전 읽음. 실 네이티브/expo-modules-core 로드 회피.
+  if (id === 'expo-constants') return { default: { expoConfig: { version: '0.0.0' } } };
   return origReq.apply(this, arguments as any);
 };
 

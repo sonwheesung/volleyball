@@ -368,7 +368,15 @@ export const useGameStore = create<GameState>()(
         const userId = useAuthStore.getState().session?.userId;
         if (!userId) return;
         const r = await getWallet();
-        if (r.ok) set({ diamonds: r.balance }); // 서버 잔액으로 캐시 리싱크(P0-3)
+        if (r.ok) {
+          const patch: Partial<GameState> = { diamonds: r.balance }; // 서버 잔액으로 캐시 리싱크(P0-3)
+          // 광고 쿨다운/캡을 서버 원장에서 복원(§13.19) — 구단 초기화·재설치로 못 우회(서버 진실). today=UTC일 정합.
+          if (r.adToday) {
+            const today = Math.floor(Date.now() / 86_400_000);
+            patch.adState = { dayIdx: today, count: r.adToday.count, lastAdAt: r.adToday.lastAtMs ?? 0 };
+          }
+          set(patch);
+        }
         await get().reconcilePendingCamp();      // 아웃박스 정산(재기동/포그라운드 복구)
       },
       reconcilePendingCamp: async () => {
@@ -383,8 +391,10 @@ export const useGameStore = create<GameState>()(
       },
 
       selectTeam: (teamId) => {
+        const prev = get();
         resetLeagueBase();
-        set({ ...freshSave, selectedTeamId: teamId, saveId: newSaveId() }); // 새 세이브 인스턴스 nonce(walletEpoch) — camp 멱등키 스코프
+        // 계정 소유 재화·업적수령·광고상태는 **구단 초기화해도 유지**(§13.19 — 다이아/업적은 서버 진실·계정 평생). saveId만 새로(camp 재과금=정당).
+        set({ ...freshSave, selectedTeamId: teamId, saveId: newSaveId(), diamonds: prev.diamonds, claimedAch: prev.claimedAch, adState: prev.adState });
         setTxContext([], [], teamId);
         setMyTeamStaff(teamId); // 내 팀만 영입 스태프, 나머지는 AI 기본 스태프(STAFF_SYSTEM 7)
         // 시작 기본 스태프(ONBOARDING 6) — 플레이어 팀을 0이 아니라 코치1+스카우터1로 출발시킨다(AI와 대칭).
@@ -1015,6 +1025,7 @@ export const useGameStore = create<GameState>()(
       },
 
       resetSave: () => {
+        const prev = get();
         diag(0, 'save', '새 게임 시작 (resetSave)'); // 진단 로그(#44)
         resetLeagueBase();
         setTxContext([], [], '');
@@ -1024,7 +1035,8 @@ export const useGameStore = create<GameState>()(
         setSalaryEra(MED_REF); // 시대 앵커 리셋(시대 0)
         // 전체 데이터 초기화 = 새 출발 → 스포트라이트 본 기록도 리셋(튜토리얼 다시 봄). 인트로 슬라이드(onboarded)는
         // 유지(다시보기는 replayOnboarding). seenTips는 freshSave 밖이라 명시적으로 비운다(ONBOARDING 4).
-        set({ ...freshSave, seenTips: {} });
+        // **계정 재화·업적수령·광고상태는 유지**(§13.19 — 서버 진실·계정 평생). saveId만 새로(camp 재과금 정당).
+        set({ ...freshSave, seenTips: {}, saveId: newSaveId(), diamonds: prev.diamonds, claimedAch: prev.claimedAch, adState: prev.adState });
       },
       completeOnboarding: () => set({ onboarded: true }),
       replayOnboarding: () => set({ onboarded: false }),

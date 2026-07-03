@@ -324,3 +324,16 @@
 - **결정론·관전형 격리·throw-none·부팅 비차단** 유지(RC는 purchase→grant 메타만·시드/리플레이 무관). confirm은 임계경로 밖 네트워크콜.
 - **락인 낮음**: 게이트웨이 패턴이라 나중 RC 제거 = 웹훅/confirm만 직접검증으로 교체, 원장·지급 로직 불변. MTR $2.5k/월 무료·초과 1%(스토어 30% 컷 옆 반올림).
 - **문서 정정 대상**: CLAUDE §8·BACKEND §0/§5/§6/§13.3/§13.4·MONETIZATION §6/§6.1/§11.4·PRE_LAUNCH §3 → 이 §13.18로 포인터. **§6.1 "RC 쓰면 우리 DB 불요"는 취소선 유지**(소모성 다이아 원장은 여전히 필요 — RC 재채택이 되살리지 않음).
+
+### 13.19 다이아 어뷰징 방어 — 구단 초기화·재설치 (2026-07-03, 사용자 보안 감사)
+> **위협**: 구단 초기화(`selectTeam`/`resetSave`)가 `claimedAch`·`adState`를 로컬 리셋 → "다이아 공장(재수령·광고 재시청 farming)" 우려. **결론: 서버가 이미 막고 있음(라이브 E2E 검증) + 사용자 결정으로 계정 재화는 초기화해도 유지.**
+
+- **farming 불가(서버 진실 — 검증)**:
+  - 업적: 멱등키 `ach:<userId>:<achId>` **계정 평생 1회**(§13.12 P0-5) → 리셋 후 재달성해도 재수령 **0**(applied:false).
+  - 광고: 키 `ad:<userId>:<dayIndex>:<count>` — 리셋으로 count 0이 돼도 **이미 쓴 슬롯과 충돌**(dedup) + earn 라우트 **하루 8회 서버 백스톱**(countReasonToday). 재지급 0.
+  - 다이아 잔액: **서버 진실** — 리셋은 로컬 캐시만, 서버 balance 불변. syncWallet가 복원.
+  - 전지훈련: saveId(walletEpoch)가 리셋 시 새로 발급 → camp 키 새로 → **재과금(정당·무료강화 아님)**.
+- **개선(사용자 결정)**: 구단 초기화해도 **`diamonds`·`claimedAch`·`adState` 유지**(계정 소유 — 서버 진실·계정 평생). `saveId`만 새로. `selectTeam`·`resetSave` 둘 다.
+- **광고 쿨다운/캡 서버 진실화**: `getWallet`가 `adToday{count, lastAtMs}`(오늘 UTC 원장 집계) 반환 → `syncWallet`가 `adState` 복원. **재설치·기기변경·로컬 조작으로 쿨다운/캡 우회 불가**(earn 8회 백스톱이 하드 게이트, 로컬 adState는 UI 편의 캐시).
+- **검증(Opus 4.8)**: 라이브 E2E(리셋 후 ach 재수령 0·광고 슬롯 재사용 0·8회 캡·camp 새 saveId 재과금·adToday 반환) + app/server tsc 0.
+- **파일**: `server/lib/wallet.ts`(adStatusToday·getWallet adToday)·`lib/server.ts`(getWallet adToday 타입)·`store/useGameStore.ts`(syncWallet adState 복원·selectTeam/resetSave 계정필드 유지).
