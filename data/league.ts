@@ -10,7 +10,7 @@ import { generateSeason } from '../engine/season';
 import { evolvePlayer } from '../engine/progression';
 import { rollTraits } from '../engine/traits';
 import { createRng, strSeed } from '../engine/rng';
-import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, type StaffEffects, NO_EFFECTS } from '../engine/staff';
+import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, coachTypeFor, type StaffEffects, NO_EFFECTS } from '../engine/staff';
 
 const LEAGUE_SEED = 20251018;
 const SEASON_SEED = 777;
@@ -88,7 +88,8 @@ function aiTeamAssistants(teamId: string): AssistantCoach[] {
   for (let i = sp.length - 1; i > 0; i--) { const j = rng.int(0, i); [sp[i], sp[j]] = [sp[j], sp[i]]; }
   const list: AssistantCoach[] = sp.slice(0, 2).map((s, i) => {
     const rating = 52 + rng.int(0, 22); // 52~74 기본기 — 플레이어 상위(최대 92) 영입에 밀린다
-    return { id: `ai-ac-${teamId}-${i}`, name: '전임 코치', age: 45 + rng.int(0, 15), specialty: s, rating, salary: assistantSalary(rating), teamId };
+    const id = `ai-ac-${teamId}-${i}`;
+    return { id, name: '전임 코치', age: 45 + rng.int(0, 15), specialty: s, type: coachTypeFor(id, s), rating, salary: assistantSalary(rating), teamId };
   });
   aiAsstCache.set(teamId, list); return list;
 }

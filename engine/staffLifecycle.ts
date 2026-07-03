@@ -4,7 +4,7 @@
 import type { Coach, AssistantCoach, CoachSpecialty, CoachStyle, Player, Position } from '../types';
 import { createRng, strSeed } from './rng';
 import { overall } from './overall';
-import { headCoachSalary, assistantSalary } from './staff';
+import { headCoachSalary, assistantSalary, coachTypeFor } from './staff';
 
 // ── 6.1 노쇠·은퇴 ──
 /** 감독 은퇴 확률 — 현장직은 선수보다 늦게(60대까지). 나이만의 함수. */
@@ -46,7 +46,8 @@ export function playerToCoach(p: Player, isLegend: boolean): AssistantCoach {
   // 역량 = VQ 주도 + 위치선정/반응(지도 능력 근사) + 명성 보너스, 약간의 시드 변동
   const skillAvg = (p.vq + p.positioning + p.reaction) / 3;
   const rating = clamp(Math.round(skillAvg * 0.8 + (isLegend ? 8 : 0) + rng.range(-4, 4)), 45, 95);
-  return { id: `coach_${p.id}`, name: p.name, age: p.age + 1, specialty, rating, salary: assistantSalary(rating), teamId: null };
+  const id = `coach_${p.id}`;
+  return { id, name: p.name, age: p.age + 1, specialty, type: coachTypeFor(id, specialty), rating, salary: assistantSalary(rating), teamId: null };
 }
 
 // ── 6.3 코치 → 감독 승격 ──

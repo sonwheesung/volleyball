@@ -8,7 +8,7 @@ import {
   staffSpend, staffBudget, staffBudgetLeft,
 } from '../data/league';
 import { computeStandings, leagueDisplayDay } from '../data/standings';
-import { SPECIALTY_KO, SPECIALTY_DESC } from '../engine/staff';
+import { SPECIALTY_KO, SPECIALTY_DESC, TYPE_KO, TYPE_DESC } from '../engine/staff';
 import { firedMidSeason } from '../engine/staffLifecycle';
 import { coachSlots } from '../data/league';
 import { formatMoney } from '../engine/salary';
@@ -165,8 +165,8 @@ export default function Staff() {
         <Card key={a.id}>
           <Row>
             <View style={{ flex: 1 }}>
-              <Title>{SPECIALTY_KO[a.specialty]} · {a.name}</Title>
-              <Muted style={{ marginTop: 2 }}>{SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}만</Muted>
+              <Title>{SPECIALTY_KO[a.specialty]}{a.type ? ` · ${TYPE_KO[a.type]}` : ''} · {a.name}</Title>
+              <Muted style={{ marginTop: 2 }}>{a.type ? TYPE_DESC[a.type] : SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}만</Muted>
             </View>
             <Button label="방출" variant="ghost" onPress={() => tryReleaseAsst(a.id, a.name)} />
           </Row>
@@ -177,8 +177,8 @@ export default function Staff() {
         <Card key={a.id}>
           <Row>
             <View style={{ flex: 1 }}>
-              <Title>{SPECIALTY_KO[a.specialty]} · {a.name}</Title>
-              <Muted style={{ marginTop: 2 }}>{SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}만</Muted>
+              <Title>{SPECIALTY_KO[a.specialty]}{a.type ? ` · ${TYPE_KO[a.type]}` : ''} · {a.name}</Title>
+              <Muted style={{ marginTop: 2 }}>{a.type ? TYPE_DESC[a.type] : SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}만</Muted>
             </View>
             <Button label="영입" onPress={() => tryHireAsst(a.id, a.name, a.salary)} disabled={asst.length >= coachSlots()} />
           </Row>

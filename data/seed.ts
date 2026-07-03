@@ -8,7 +8,7 @@ import { rollTraits } from '../engine/traits';
 import { computeSalary } from '../engine/salary';
 import { MED_REF } from '../engine/overall';
 import { ASIAN_SALARY } from '../engine/foreign';
-import { headCoachSalary, assistantSalary, scoutSalary } from '../engine/staff';
+import { headCoachSalary, assistantSalary, scoutSalary, coachTypeFor } from '../engine/staff';
 import type {
   AssistantCoach,
   CareerStats,
@@ -422,9 +422,10 @@ export function generateLeague(seed: number): League {
   let ai = 0;
   for (const sp of SPECIALTIES) for (let k = 0; k < 4; k++) {
     const rating = rng.int(52, 92);
+    const id = `ac${ai++}`;
     assistants.push({
-      id: `ac${ai++}`, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(38, 62),
-      specialty: sp, rating, salary: assistantSalary(rating), teamId: null,
+      id, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(38, 62),
+      specialty: sp, type: coachTypeFor(id, sp), rating, salary: assistantSalary(rating), teamId: null,
     });
   }
   // 스카우터 12명

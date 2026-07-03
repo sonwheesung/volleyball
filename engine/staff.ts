@@ -2,6 +2,7 @@
 // 효과는 결정론. 감독 효과(성향·카리스마·훈련선호)는 기존 경기/훈련 엔진이 이미 사용.
 
 import type { CoachSpecialty, CoachType, TrainingId, TrainableStat, AssistantCoach, Scout } from '../types';
+import { strSeed } from './rng';
 
 /** 팀 스태프 총예산(만원) — 감독+코치+스카우터 연봉 합이 이내여야 함. 전부 최고를 못 갖게 빡빡하게. */
 export const STAFF_BUDGET = 60000;
@@ -67,6 +68,13 @@ export const TYPE_DESC: Record<CoachType, string> = {
 export const DEFAULT_TYPE: Record<CoachSpecialty, CoachType> = {
   attack: 'finisher', defense: 'finisher', setter: 'finisher', stamina: 'antiaging', mental: 'stable',
 };
+/** 코치 성향 결정론 배정 — id 시드(메인 rng 불간섭, 분야별 균등). 신규 코치 생성 시 부여.
+ *  NO_COACHTYPE env면 undefined(레거시 flat) 반환 — 밸런스 A/B 베이스라인용. */
+export function coachTypeFor(id: string, specialty: CoachSpecialty): CoachType | undefined {
+  if (typeof process !== 'undefined' && process.env && process.env.NO_COACHTYPE) return undefined;
+  const types = SPECIALTY_TYPES[specialty];
+  return types[strSeed(`ctype:${id}`) % types.length];
+}
 
 /** 스태프 종합 효과(승패·성장 결정론 입력) */
 export interface StaffEffects {
@@ -104,7 +112,7 @@ export function staffEffects(assistants: AssistantCoach[]): StaffEffects {
     switch (a.type) {
       case 'developer': setBoost(1, 'young'); setPot(0.7); break;
       case 'winnow': setBoost(1, 'prime'); setPot(0.7); break;
-      case 'finisher': setBoost(1); setPot(1.6); break;
+      case 'finisher': setBoost(0.7); setPot(1.6); break; // 천장↑ 대신 성장속도↓ 트레이드(레거시보다 strictly 강하지 않게 — 밸런스 중립)
       case 'antiaging': setBoost(0.6); ageSlow = Math.max(ageSlow, ageSlowOf(r) * 1.4); break;
       case 'recovery': setBoost(1.4); ageSlow = Math.max(ageSlow, ageSlowOf(r) * 0.6); break;
       case 'stable': potBonus.consistency = Math.round(p * 1.6); potBonus.focus = Math.round(p * 0.4); break;
