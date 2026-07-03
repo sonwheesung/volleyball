@@ -351,3 +351,14 @@
 - **[최대 리스크] 엔진버전 pin**: 운영툴이 `meta.engineVersion`과 **다른 엔진 빌드로 재생하면 유령 버그**(B전환이 engineVersion 게이트 쓰는 이유). 운영 리플레이 도구는 그 커밋을 pin, 불일치면 **거부/경고**. 재현 fidelity의 단일 최대 변수. 운영툴은 손파서 금지 — 앱 실제 로드 경로(`migrateSave`+`onRehydrateStorage`) 그대로 재사용해야 bit-identical.
 - **보관·프라이버시**: replay는 게임 데이터라 PII 없음(가상 선수)이나 userId에 묶여 보관 → 개인정보처리방침에 **"문의 시 게임 저장 데이터 첨부"** 한 줄(§13.17 OS·앱버전 고지 확장, PIPA 최소수집). 스냅샷 90일 보관 유지(진단 티어).
 - **파일(예정)**: `data/diagnosticSnapshot.ts`(snapshotVersion·replay 필드)·`app/support.tsx`(replay=partialize 주입·전 카테고리)·`store/useGameStore.ts`(diag 확정사건 확대·partialize 접근)·`lib/deviceLog.ts`(무변경). 검증 `tools/_dv_savesize.ts`(크기 회귀)+`tools/_dv_snapshot_replay.ts`(신, replay 왕복=세이브 동일·엔진버전 일치)+에뮬 E2E(버그 문의 제출→DB replay+logs 확인).
+
+### 13.21 Sentry 서버 관측 (2026-07-04, GPT 리뷰 — "지금 Sentry, Crashlytics는 EAS 이후")
+> **왜**: 문의 시스템(진단 스냅샷·deviceLog·전역 크래시 핸들러 §13.20 ④-0)은 **게임 내부** "왜 이 상태가 됐나"를 잘 잡지만, **서버(API)에서 무슨 오류가 났는지**는 운영자가 볼 수단이 없었다(라우트가 catch로 삼켜 JSON만 반환). GPT+내 판단: **서버 오류 가시화가 현 단계 운영효율을 가장 크게 높인다** → Sentry(Node) 우선. Crashlytics(앱 네이티브 크래시)는 **EAS Build 이후**(Expo Go 불가)라 보류.
+
+- **@sentry/node 채택(≠@sentry/nextjs)**: 서버가 "순수 API + 관리자 대시보드"라 `withSentryConfig` 빌드통합(소스맵/클라 번들/터널)이 불필요 → `@sentry/node`가 더 가볍고 부팅 안전. Next 16.2.9/React 19.
+- **부팅 안전(핵심 — 광고/IAP와 동일 계약)**: **`SENTRY_DSN` 없으면 완전 no-op**. `instrumentation.ts register()`가 DSN 없으면 early-return(init 안 함), `lib/observability.ts reportError()`는 미init 시 `captureException` no-op(throw 없음, tsx 실증). dev·미연결에서도 서버가 정상 기동. Node 런타임에서만 init(`NEXT_RUNTIME==='nodejs'`, edge 제외).
+- **캡처 2경로**: ① **`onRequestError`**(instrumentation) = 우리 catch가 못 삼킨 미처리 라우트 에러. ② **`reportError(e, where)`** = 라우트 catch가 삼키는 에러 — 16개 route.ts의 23개 catch를 `catch (e) { reportError(e, '<route>'); … }`로 스윕(where 태그=라우트 경로, 예 `wallet/spend`·`admin/refund`). catch는 여전히 JSON 반환(사용자 흐름 불변) + Sentry에도 보고.
+- **결정론·throw-none 격리**: 관측은 재화·시드·리플레이와 무관한 순수 운영 메타(§8). 실패해도 요청 흐름 안 깸.
+- **활성화(사용자 몫)**: Sentry.io에서 Node 프로젝트 생성 → DSN을 `server/.env.local` **+ Vercel env**의 `SENTRY_DSN`에 넣으면 즉시 켜짐. 소스맵 업로드(스택트레이스 정확도)는 후속(`SENTRY_AUTH_TOKEN`+빌드 플러그인, 선택).
+- **검증(Opus 4.8)**: 서버 tsc 0 · 스윕 16파일/23catch import 경로 정확 · **부팅 안전 실증**(DSN 없이 reportError no-op, throw 0). 실제 캡처는 DSN 주입 후 Sentry 대시보드에서 확인(운영자).
+- **파일**: `server/instrumentation.ts`(신·register+onRequestError)·`server/lib/observability.ts`(신·reportError)·`server/app/api/**/route.ts`(16파일 catch 스윕)·`server/.env.example`·`.env.local`(SENTRY_DSN·SENTRY_TRACES_SAMPLE_RATE). Crashlytics는 EAS 빌드 마일스톤에서(앱 네이티브·JS·ANR·기기별).

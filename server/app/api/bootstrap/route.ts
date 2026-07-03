@@ -1,6 +1,7 @@
 // GET /api/bootstrap — 앱 부팅 시 단일 조회(AUTH_SYSTEM §4·BACKEND §13.11): 점검·버전·공지.
 // 전부 DB(server_setting·announcements)에서. 앱 로컬 신뢰 금지 — 진입 게이트는 이 응답으로 결정.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../lib/observability';
 import { and, desc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 import { db } from '../../../db';
 import { serverSetting, announcements } from '../../../db/schema';
@@ -37,7 +38,7 @@ export async function GET() {
       },
       announcements: anns.map((a) => ({ id: a.id, title: a.title, body: a.body, pinned: a.pinned })),
     });
-  } catch {
+  } catch (e) { reportError(e, 'bootstrap');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

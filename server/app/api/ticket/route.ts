@@ -1,6 +1,7 @@
 // /api/ticket — 문의 등록(POST)·내 문의 목록(GET). requireUserId(익명 폴백 금지 §13.17 P0-5).
 // 제출 시점 기기(진단)를 티켓에 박는다("어떤 폰서 문제났나"). 진단 스냅샷은 별도 /api/snapshot.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../lib/observability';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../../db';
 import { tickets } from '../../../db/schema';
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
       })
       .returning({ id: tickets.id });
     return NextResponse.json({ ok: true, ticketId: ins[0].id });
-  } catch {
+  } catch (e) { reportError(e, 'ticket');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
       .orderBy(desc(tickets.createdAt))
       .limit(50);
     return NextResponse.json({ ok: true, tickets: rows });
-  } catch {
+  } catch (e) { reportError(e, 'ticket');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

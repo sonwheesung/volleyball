@@ -1,5 +1,6 @@
 // POST /api/admin/ticket/reply — 문의 답변/상태변경. body: { ticketId, reply, status? }. requireAdmin.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../../lib/observability';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../../../../../db';
 import { tickets } from '../../../../../db/schema';
@@ -21,7 +22,7 @@ export async function POST(req: Request) {
     if (status) patch.status = status;
     await db.update(tickets).set(patch).where(eq(tickets.id, b.ticketId));
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) { reportError(e, 'admin/ticket/reply');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

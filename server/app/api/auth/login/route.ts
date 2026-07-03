@@ -2,6 +2,7 @@
 // body: { provider: 'google'|'apple'|'dev', providerId, displayName? }
 // 스텁(dev): provider+providerId 신뢰. EAS: idToken을 구글/애플 JWKS로 검증 후 sub 도출로 교체.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../lib/observability';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { users } from '../../../../db/schema';
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
       .where(eq(users.id, userId));
     const token = signToken(`${provider}:${providerId}`);
     return NextResponse.json({ ok: true, token, userId, provider, displayName: displayName ?? null });
-  } catch {
+  } catch (e) { reportError(e, 'auth/login');
     return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
   }
 }

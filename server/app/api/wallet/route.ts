@@ -1,5 +1,6 @@
 // GET /api/wallet — 현재 잔액 + 최근 원장. (인증은 마일스톤3 — 지금은 dev 유저)
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../lib/observability';
 import { getWallet } from '../../../lib/wallet';
 import { resolveUserId } from '../../../lib/auth';
 
@@ -10,7 +11,7 @@ export async function GET(req: Request) {
     const userId = await resolveUserId(req);
     const w = await getWallet(userId);
     return NextResponse.json({ ok: true, ...w });
-  } catch (e) {
+  } catch (e) { reportError(e, 'wallet');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

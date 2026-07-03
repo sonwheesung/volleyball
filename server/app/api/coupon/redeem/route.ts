@@ -1,6 +1,7 @@
 // POST /api/coupon/redeem — 쿠폰 사용. body: { code }. Bearer→userId 귀속.
 // 서버 진실: redeemCoupon이 단일 트랜잭션으로 검증+지급(§13.14). 앱은 성공 후 syncWallet로만 캐시 갱신.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../lib/observability';
 import { redeemCoupon } from '../../../../lib/coupon';
 import { resolveUserId } from '../../../../lib/auth';
 
@@ -15,7 +16,7 @@ export async function POST(req: Request) {
     const userId = await resolveUserId(req);
     const r = await redeemCoupon(userId, body.code);
     return NextResponse.json(r, { status: r.ok ? 200 : r.reason === 'error' ? 500 : 409 });
-  } catch {
+  } catch (e) { reportError(e, 'coupon/redeem');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

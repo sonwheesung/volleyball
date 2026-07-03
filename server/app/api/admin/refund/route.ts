@@ -3,6 +3,7 @@
 // 멱등키는 **관리자 UI가 생성**(P0-2 — 서버 생성 시 더블클릭 이중환불). ref=note가 곧 감사기록(원장 5년 보존).
 // ※실 결제 환불(카드)은 스토어 정책 경유(#43 웹훅) — 이 라우트는 재화(다이아) 조정만.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../lib/observability';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { tickets } from '../../../../db/schema';
@@ -33,7 +34,7 @@ export async function POST(req: Request) {
       return w;
     });
     return NextResponse.json({ ok: true, balance: r.balance, applied: r.applied });
-  } catch {
+  } catch (e) { reportError(e, 'admin/refund');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

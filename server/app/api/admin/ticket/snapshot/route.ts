@@ -1,5 +1,6 @@
 // GET /api/admin/ticket/snapshot?ticketId= — 티켓의 진단 스냅샷 lazy load(§13.17 P0-4, 상세 열 때만). requireAdmin.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../../lib/observability';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../../../../db';
 import { diagnosticSnapshots } from '../../../../../db/schema';
@@ -19,7 +20,7 @@ export async function GET(req: Request) {
       .orderBy(desc(diagnosticSnapshots.createdAt))
       .limit(1);
     return NextResponse.json({ ok: true, snapshot: rows[0]?.snapshot ?? null, createdAt: rows[0]?.createdAt ?? null });
-  } catch {
+  } catch (e) { reportError(e, 'admin/ticket/snapshot');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

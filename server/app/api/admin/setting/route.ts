@@ -1,6 +1,7 @@
 // /api/admin/setting — 운영 설정(server_setting §13.11) 조회(GET)·갱신(POST upsert). requireAdmin.
 // 버전 게이트(minVersion/latestVersion·스토어URL) + 서버 점검(maintenance/title/body). 앱은 /api/bootstrap로 읽음.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../lib/observability';
 import { eq } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { serverSetting } from '../../../../db/schema';
@@ -15,7 +16,7 @@ export async function GET(req: Request) {
   try {
     const rows = await db.select().from(serverSetting).where(eq(serverSetting.projCode, PROJ_CODE)).limit(1);
     return NextResponse.json({ ok: true, setting: rows[0] ?? null });
-  } catch {
+  } catch (e) { reportError(e, 'admin/setting');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }
@@ -40,7 +41,7 @@ export async function POST(req: Request) {
       .onConflictDoUpdate({ target: serverSetting.projCode, set: patch });
     const rows = await db.select().from(serverSetting).where(eq(serverSetting.projCode, PROJ_CODE)).limit(1);
     return NextResponse.json({ ok: true, setting: rows[0] ?? null });
-  } catch {
+  } catch (e) { reportError(e, 'admin/setting');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

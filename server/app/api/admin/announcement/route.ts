@@ -1,5 +1,6 @@
 // /api/admin/announcement — 공지 발행(POST)·목록(GET, 활성 무관 전체)·삭제(DELETE ?id=). requireAdmin.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../lib/observability';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { announcements } from '../../../../db/schema';
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
       .values({ projCode: PROJ_CODE, title, body, startsAt, endsAt, pinned: !!b.pinned })
       .returning({ id: announcements.id });
     return NextResponse.json({ ok: true, id: ins[0].id });
-  } catch {
+  } catch (e) { reportError(e, 'admin/announcement');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }
@@ -39,7 +40,7 @@ export async function GET(req: Request) {
   try {
     const rows = await db.select().from(announcements).where(eq(announcements.projCode, PROJ_CODE)).orderBy(desc(announcements.createdAt)).limit(200);
     return NextResponse.json({ ok: true, announcements: rows });
-  } catch {
+  } catch (e) { reportError(e, 'admin/announcement');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }
@@ -51,7 +52,7 @@ export async function DELETE(req: Request) {
     if (!id) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     await db.delete(announcements).where(eq(announcements.id, id));
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) { reportError(e, 'admin/announcement');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

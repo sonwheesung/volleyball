@@ -1,5 +1,6 @@
 // /api/admin/coupon — 쿠폰 발급(POST)·목록(GET). requireAdmin(fail-closed §13.15).
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../lib/observability';
 import { desc, eq } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { coupons } from '../../../../db/schema';
@@ -33,10 +34,10 @@ export async function POST(req: Request) {
         .values({ projCode: PROJ_CODE, code, rewardDiamonds: reward, targetUserId: b.targetUserId || null, startsAt, endsAt, disabled: false })
         .returning({ id: coupons.id });
       return NextResponse.json({ ok: true, id: ins[0].id, code });
-    } catch {
+    } catch (e) { reportError(e, 'admin/coupon');
       return NextResponse.json({ ok: false, reason: 'duplicate' }, { status: 409 }); // UNIQUE(code) 충돌 등 → 4xx(500 아님)
     }
-  } catch {
+  } catch (e) { reportError(e, 'admin/coupon');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }
@@ -46,7 +47,7 @@ export async function GET(req: Request) {
   try {
     const rows = await db.select().from(coupons).where(eq(coupons.projCode, PROJ_CODE)).orderBy(desc(coupons.createdAt)).limit(200);
     return NextResponse.json({ ok: true, coupons: rows });
-  } catch {
+  } catch (e) { reportError(e, 'admin/coupon');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

@@ -2,6 +2,7 @@
 // 멱등키(§4)로 이중지급 차단 + **금액은 서버 권위**(§13.12 P0-2): ad=+50 서버상수·achievement만 클라값(캡 5000).
 // reason 화이트리스트(§13.12) — 'purchase'/'coupon' 사칭 차단. ad는 하루 8회 서버 백스톱.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../../lib/observability';
 import { applyWallet } from '../../../../lib/wallet';
 import { countReasonToday } from '../../../../lib/wallet';
 import { earnAmount, isEarnReason, AD_DAILY_CAP } from '../../../../lib/econ';
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
     }
     const r = await applyWallet(userId, amount, reason, body.idempotencyKey, body.ref);
     return NextResponse.json(r, { status: r.ok ? 200 : r.reason === 'error' ? 500 : 409 });
-  } catch {
+  } catch (e) { reportError(e, 'wallet/earn');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

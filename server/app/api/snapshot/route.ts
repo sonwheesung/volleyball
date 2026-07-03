@@ -1,6 +1,7 @@
 // POST /api/snapshot — 문의에 진단 스냅샷 첨부(§13.17). body: { ticketId, snapshot }. requireUserId + 티켓 소유권 확인.
 // 별도 테이블(diagnostic_snapshots) 저장 — 90일 보관(retention). 전지훈련 내역·로그·선수가 재생돼 담김.
 import { NextResponse } from 'next/server';
+import { reportError } from '../../../lib/observability';
 import { and, eq } from 'drizzle-orm';
 import { db } from '../../../db';
 import { tickets, diagnosticSnapshots } from '../../../db/schema';
@@ -20,7 +21,7 @@ export async function POST(req: Request) {
     if (!own.length) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
     await db.insert(diagnosticSnapshots).values({ projCode: PROJ_CODE, ticketId: b.ticketId, snapshot: b.snapshot });
     return NextResponse.json({ ok: true });
-  } catch {
+  } catch (e) { reportError(e, 'snapshot');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }
