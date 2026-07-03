@@ -49,9 +49,21 @@ export function revealedPotential(p: Player, reveal: number): RevealedStat[] {
   return out;
 }
 
-/** AI 평가·검증용 — 공개된 부분 포텐의 평균(0~100). 아무것도 안 공개면 null(천장 못 봄). ※표시 금지(비스칼라 원칙)·내부용. */
+/** AI 평가·검증용 — 공개된 부분 포텐의 평균(0~100). 아무것도 안 공개면 null(천장 못 봄). ※표시 금지·내부용. */
 export function revealedPotentialAvg(p: Player, reveal: number): number | null {
   const rs = revealedPotential(p, reveal);
   if (!rs.length) return null;
   return rs.reduce((s, r) => s + r.value, 0) / rs.length;
+}
+
+/** AI 천장 추정(0~100) — 포지션 핵심 rating별로 **공개된 상위 count개는 포텐, 나머지는 현재값**.
+ *  reveal에 단조(0=현재 평균=보수적 → 최고=천장 평균). "적게 공개면 최상위만 봐서 부풀림" 편향 제거. ※표시 금지·AI 내부용. */
+export function potentialEstimate(p: Player, reveal: number): number {
+  const keys = POS_KEY[p.position];
+  const curR = deriveRatings(p);
+  const potR = deriveRatings({ ...p, ...p.potential });
+  const count = revealedCount(p.position, reveal);
+  let sum = 0;
+  for (let i = 0; i < keys.length; i++) sum += (i < count ? potR : curR)[keys[i]];
+  return sum / keys.length;
 }
