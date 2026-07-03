@@ -33,14 +33,15 @@ export interface DeviceInfo { platform: string; osVersion: string; appVersion: s
 type Fail = { ok: false; reason: 'offline' | 'unauthorized' | 'insufficient' | 'bad-request' | 'cap' | 'error'; status?: number };
 export type ServerResult<T> = ({ ok: true } & T) | Fail;
 
-const REQ_TIMEOUT_MS = 8000;
+const REQ_TIMEOUT_MS = 8000; // 대화형 호출 기본(지갑·로그인 등 — 빠른 응답 기대)
 
-/** 공통 호출 — throw 없이 typed 결과. 서버 미설정/네트워크 실패는 offline로 흡수. */
-async function call<T>(path: string, init?: RequestInit): Promise<ServerResult<T>> {
+/** 공통 호출 — throw 없이 typed 결과. 서버 미설정/네트워크 실패는 offline로 흡수.
+ *  timeoutMs: 무거운 백그라운드 업로드(진단 스냅샷 §13.20 — 재현키 포함 수백KB)는 8초로 부족 → 호출부가 상향. */
+async function call<T>(path: string, init?: RequestInit, timeoutMs: number = REQ_TIMEOUT_MS): Promise<ServerResult<T>> {
   if (!SERVER_URL) return { ok: false, reason: 'offline' };
   try {
     const ctrl = new AbortController();
-    const timer = setTimeout(() => ctrl.abort(), REQ_TIMEOUT_MS);
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
     const res = await fetch(SERVER_URL + path, {
       ...init,
       signal: ctrl.signal,
@@ -138,7 +139,8 @@ export function listTickets() {
 }
 /** 진단 스냅샷(최근 10시즌 재생 JSON)을 비동기로 티켓에 첨부. 무거우니 제출 후 백그라운드. */
 export function uploadSnapshot(ticketId: string, snapshot: unknown) {
-  return call<{ ok: true }>('/api/snapshot', { method: 'POST', body: JSON.stringify({ ticketId, snapshot }) });
+  // 재현키(§13.20) 포함으로 수백KB — 백그라운드/비블로킹이라 넉넉히 30초(8초 기본은 Aborted, 실기 발견 2026-07-04).
+  return call<{ ok: true }>('/api/snapshot', { method: 'POST', body: JSON.stringify({ ticketId, snapshot }) }, 30000);
 }
 
 // ── 텔레메트리(통계 — 세션/하트비트) ──

@@ -15,6 +15,14 @@ async function main() {
   console.log('\n=== seasons (count) ===', Array.isArray(s?.seasons) ? s.seasons.length : typeof s?.seasons, JSON.stringify(s?.seasons)?.slice(0, 400));
   console.log('\n=== logs (count) ===', Array.isArray(s?.logs) ? s.logs.length : typeof s?.logs);
   console.log('    logs sample:', JSON.stringify(s?.logs)?.slice(0, 400));
+  console.log('\n=== snapshotVersion ===', s?.meta?.snapshotVersion);
+  const rep = s?.replay;
+  console.log('=== replay(재현키) ===', rep ? `version=${rep.version} · state 필드 ${Object.keys(rep.state ?? {}).length}개 · bytes ${Buffer.byteLength(JSON.stringify(rep))}` : '없음');
+  if (rep?.state) {
+    const st: any = rep.state;
+    console.log('    핵심 필드:', ['selectedTeamId', 'season', 'currentDay'].map((k) => `${k}=${JSON.stringify(st[k])}`).join(' · '),
+      `· playerBase ${Object.keys(st.playerBase ?? {}).length}명 · results ${Object.keys(st.results ?? {}).length} · archive ${Array.isArray(st.archive) ? st.archive.length : '?'}`);
+  }
   console.log('\n=== players (count) ===', Array.isArray(s?.players) ? s.players.length : typeof s?.players);
   console.log('\n=== releasedNow ===', JSON.stringify(s?.releasedNow)?.slice(0, 200));
   await db.$client.end();
