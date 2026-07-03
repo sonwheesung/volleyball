@@ -211,6 +211,7 @@ npx tsx tools/simStaffLife.ts              # 스태프 풀 건강(고갈/폭발0
 npx tsx tools/_dv_staffscarcity.ts [시즌]  # 스태프 희소성/붕괴 게이트(STAFF §8.1 2.0) — 초기 tier 스냅샷 + N시즌 정상상태 tier + 수요 대비 + **붕괴 해소 게이트**(정상상태 코치 A≥1.5=소수시장, <1.5 멸종이면 exit1). exit 0/1
 npx tsx tools/_dv_coachgrowth.ts           # 코치 성장·재생성(STAFF §8.1 phase②③) — 성장 상한92·성과차등(상위팀>하위팀)·수렴·엘리트 은퇴자→A급 유입·레전드보너스·결정론. exit 0/1
 npx tsx tools/_dv_fitpick.ts               # AI 로스터적합 성향 픽(STAFF §8.1 phase④) — 팀 나이별 적합 성향(어린→육성·노장→즉전)·5종 다양(메타 아님)·나이극단 대조·결정론. exit 0/1
+npx tsx tools/_e2e_twocycle.ts             # 2사이클 E2E(docs/E2E_TWOCYCLE_CHECKLIST) — 헤드리스 실store+engine, 서버 fetch스텁. 온보딩→전지훈련(다이아−900·3스탯↑·원자성)→감독/FA/외인→endSeason×2→업적→AI팀성장(OVR·감독카리스마↑). exit 0/1
 npx tsx tools/_dv_coachtype.ts             # 코치 성향 직교성(STAFF §8.1 phase①a) — 육성형↔즉전형 나이타깃 교차(스칼라 지배 없음)·완성형 장기천장·노쇠억제형 노장보존·결정론·레거시 save-compat. exit 0/1
 npx tsx tools/_dv_coachtype_dist.ts        # 코치 성향 배정(STAFF §8.1 phase①b) — 분야 균등(33/33/33·50/50)·결정론·시드풀+AI팀 전원 typed(허위오라클 방지). exit 0/1
 npx tsx tools/simScandalEffect.ts          # 사건사고 정지출전 차단·영구퇴출 정합. exit 0/1
