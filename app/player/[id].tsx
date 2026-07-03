@@ -1,6 +1,6 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { Button, Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, StatBar, theme, themedStyles } from '../../components/Screen';
@@ -10,6 +10,7 @@ import { playerFans } from '../../engine/owner';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
 import { SCANDAL_KO } from '../../engine/scandal';
 import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason, type OwnerRejectReason } from '../../engine/owner';
+import { ActionSheet } from '../../components/Popup';
 import { getEvolvedPlayer, getTeam, shortTeamName as teamShort, currentRosters, teamScoutReveal } from '../../data/league';
 import { buildLineup } from '../../engine/lineup';
 import { getPlayerProduction } from '../../data/production';
@@ -111,6 +112,7 @@ export default function PlayerDetail() {
   const released = useGameStore((s) => s.released);
   const [talkAsk, setTalkAsk] = useState(false);
   const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
+  const [benchAsk, setBenchAsk] = useState(false); // 벤치 건의 명분 선택 시트(네이티브 Alert 대신 커스텀 — UI-21)
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
   // 시즌 파생(생산·부상·정지·role)은 **치른 경기까지만**(leagueDisplayDay=currentDay−1) — 대시보드·기록과 동일 컷오프.
   // raw currentDay는 안 치른 다음 경기를 포함(스포일러·불일치)했고, 시즌 시작 전(day0→−1)이면 빈 구간/일자<0 가드로
@@ -187,24 +189,11 @@ export default function PlayerDetail() {
     else setTalkResult({ title: '면담 결렬', color: theme.bad, msg: `${p.name}: "…기대했던 제가 어리석었네요."\n마음이 오히려 멀어졌습니다 — 이적 의향이 올랐습니다.` });
   };
 
-  const openBench = () => {
-    Alert.alert(
-      `감독에게 벤치 건의 — ${p.name}`,
-      '어떤 명분으로 건의하시겠습니까?',
-      [
-        ...(['noResign', 'form', 'prospect'] as BenchReason[]).map((reason) => ({
-          text: BENCH_REASON_KO[reason],
-          onPress: () => {
-            const res = suggestBench(p.id, reason);
-            Alert.alert(res.ok ? '감독 수락' : '감독 거절',
-              res.ok ? `감독: "알겠습니다. 당분간 ${p.name} 선수는 제외하겠습니다."` + deferNote
-                 : `감독: "${res.reason ? BENCH_REJECT[res.reason] : '받아들일 수 없습니다.'}"`);
-          },
-        })),
-        { text: '취소', style: 'cancel' as const },
-      ],
-    );
-  };
+  // 건의 결과는 앱 테마 커스텀 모달(talkResult)로 — 네이티브 Alert 금지(UI-21)
+  const benchResult = (res: { ok: boolean; reason?: OwnerRejectReason }) => setTalkResult(res.ok
+    ? { title: '감독 수락', color: theme.good, msg: `감독: "알겠습니다. 당분간 ${p.name} 선수는 제외하겠습니다."` + deferNote }
+    : { title: '감독 거절', color: theme.muted, msg: `감독: "${res.reason ? BENCH_REJECT[res.reason] : '받아들일 수 없습니다.'}"` });
+  const openBench = () => setBenchAsk(true);
 
   return (
     <Screen>
@@ -369,7 +358,7 @@ export default function PlayerDetail() {
           <IconLabel icon="clipboard-outline" color={theme.violet}>감독 건의</IconLabel>
           <Card accent={theme.violet}>
             {benched ? (
-              <Button label="복귀 지시 (벤치 해제)" onPress={() => { unbench(p.id); Alert.alert('복귀', `${p.name} 선수가 출전 명단에 복귀합니다. 실전 감각은 몇 경기에 걸쳐 돌아옵니다.`); }} />
+              <Button label="복귀 지시 (벤치 해제)" onPress={() => { unbench(p.id); setTalkResult({ title: '복귀', color: theme.good, msg: `${p.name} 선수가 출전 명단에 복귀합니다. 실전 감각은 몇 경기에 걸쳐 돌아옵니다.` }); }} />
             ) : (
               <>
                 <Muted style={{ fontSize: 12 }}>
@@ -385,9 +374,9 @@ export default function PlayerDetail() {
                     disabled={benchLeft > 0}
                     onPress={() => {
                       const res = suggestStart(p.id);
-                      Alert.alert(res.ok ? '감독 수락' : '감독 거절',
-                        res.ok ? `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote
-                           : `감독: "${res.reason ? START_REJECT[res.reason] : '지금 라인업이 최선입니다.'}"`);
+                      setTalkResult(res.ok
+                        ? { title: '감독 수락', color: theme.good, msg: `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote }
+                        : { title: '감독 거절', color: theme.muted, msg: `감독: "${res.reason ? START_REJECT[res.reason] : '지금 라인업이 최선입니다.'}"` });
                     }}
                   />
                 ) : isStarter ? (
@@ -574,6 +563,17 @@ export default function PlayerDetail() {
         <StatBar label="세팅기술" value={p.skSet} reveal={reveal} potential={pot('skSet')} />
         <StatBar label="서브기술" value={p.skServe} reveal={reveal} potential={pot('skServe')} />
       </Card>
+
+      {/* 벤치 건의 명분 선택 — 커스텀 ActionSheet(네이티브 Alert 대신, UI-21) */}
+      <ActionSheet
+        visible={benchAsk}
+        title={`벤치 건의 — ${p.name}`}
+        message="어떤 명분으로 건의하시겠습니까?"
+        actions={(['noResign', 'form', 'prospect'] as BenchReason[]).map((reason) => ({
+          label: BENCH_REASON_KO[reason], onPress: () => benchResult(suggestBench(p.id, reason)),
+        }))}
+        onClose={() => setBenchAsk(false)}
+      />
 
       {/* 면담 모달 — 시스템 Alert 대신 앱 테마 디자인 */}
       <Modal
