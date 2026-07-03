@@ -71,6 +71,9 @@ function TraitBadge({ good, color }: { good: boolean; color: string }) {
 }
 
 
+// 구단주 면담 기능 노출 토글 — 지금은 숨김(테스트 범위 축소, 운영 단계서 재활성 예정). true면 면담 요청 버튼/이력/불만 대화 노출.
+const SHOW_OWNER_TALK = false;
+
 export default function PlayerDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const currentDay = useGameStore((s) => s.currentDay);
@@ -209,7 +212,7 @@ export default function PlayerDetail() {
               {p.isAsianQuota ? <Text style={{ color: theme.elite, fontWeight: '700', fontSize: 12 }}>아시아쿼터{p.nationality ? `·${p.nationality}` : ''}</Text> : p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700', fontSize: 12 }}>외국인</Text> : null}
               {isFranchise(p) ? <Text style={{ color: theme.warn, fontWeight: '700', fontSize: 12 }}>프랜차이즈</Text> : null}
             </View>
-            <Muted style={{ fontSize: 13 }}>{p.age}세 · {p.height}cm · 전성기 {p.peakAge}세</Muted>
+            <Muted style={{ fontSize: 13 }}>{p.age}세 · {p.height}cm</Muted>
           </View>
           {isMine || reveal >= 0.92 ? (
             <OvrBadge value={overallRaw(p)} size={62} />
@@ -271,7 +274,7 @@ export default function PlayerDetail() {
             <Card accent={theme.rose}>
               {rel.friends.length > 0 ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 }}>
-                  <View style={{ backgroundColor: theme.good + '22', borderWidth: 1, borderColor: theme.good + '66', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3 }}>
+                  <View style={{ backgroundColor: theme.good + '22', borderWidth: 1, borderColor: theme.good + '66', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, minWidth: 54, alignItems: 'center' }}>
                     <Text style={{ color: theme.good, fontWeight: '800', fontSize: 13 }}>친한</Text>
                   </View>
                   <Text style={{ color: theme.text, flex: 1, fontSize: 14 }}>{rel.friends.map((f) => f.name).join(', ')}</Text>
@@ -279,7 +282,7 @@ export default function PlayerDetail() {
               ) : null}
               {rel.rivals.length > 0 ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 }}>
-                  <View style={{ backgroundColor: theme.bad + '22', borderWidth: 1, borderColor: theme.bad + '66', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3 }}>
+                  <View style={{ backgroundColor: theme.bad + '22', borderWidth: 1, borderColor: theme.bad + '66', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, minWidth: 54, alignItems: 'center' }}>
                     <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13 }}>라이벌</Text>
                   </View>
                   <Text style={{ color: theme.text, flex: 1, fontSize: 14 }}>{rel.rivals.map((r) => r.name).join(', ')}</Text>
@@ -297,7 +300,7 @@ export default function PlayerDetail() {
 
       {isMine && cond ? (
         <>
-          <IconLabel icon="chatbubbles-outline" color={theme.rose}>구단주 면담</IconLabel>
+          <IconLabel icon={SHOW_OWNER_TALK ? 'chatbubbles-outline' : 'pulse-outline'} color={theme.rose}>{SHOW_OWNER_TALK ? '구단주 면담' : '선수 상태'}</IconLabel>
           <Card accent={theme.rose}>
             <Row>
               <Muted>컨디션</Muted>
@@ -311,7 +314,7 @@ export default function PlayerDetail() {
                     {ARCHETYPE_KO[effectiveArchetypeOf(p)].emoji} {ARCHETYPE_KO[effectiveArchetypeOf(p)].label}
                   </Text>
                 </Row>
-                <Muted style={{ fontSize: 12 }}>{ARCHETYPE_KO[effectiveArchetypeOf(p)].note}</Muted>
+                {/* 성격 부가설명은 게임 가이드(선수>성격)로 이동 — 선수 상세는 간결하게(2026-07-03) */}
               </>
             ) : null}
             {moodInfo ? (
@@ -322,25 +325,30 @@ export default function PlayerDetail() {
                 </Text>
               </Row>
             ) : null}
-            {topic ? (
+            {/* 면담 요청/이력/불만 대화는 SHOW_OWNER_TALK로 숨김(운영 단계서 재활성). 컨디션·성격·지금 마음은 상태 정보로 유지. */}
+            {SHOW_OWNER_TALK ? (
               <>
-                <Text style={{ color: theme.bad, fontWeight: '800', marginTop: 4 }}>😟 {topicBadgeText}</Text>
-                <Muted style={{ fontSize: 13 }}>{topicSpeechText}</Muted>
-                {lastTalkFailed ? <Muted style={{ fontSize: 12, color: theme.bad }}>💔 지난 면담이 결렬됐습니다 — 다시 문을 두드리면 거절당할 수 있습니다.</Muted> : null}
-                {talkLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 면담 — 약 {talkLeft}일 뒤 다시 가능합니다.</Muted> : null}
-                <Button label={talkLeft > 0 ? `면담 (${talkLeft}일 후)` : '면담 요청'} onPress={openTalk} disabled={talkLeft > 0} />
+                {topic ? (
+                  <>
+                    <Text style={{ color: theme.bad, fontWeight: '800', marginTop: 4 }}>😟 {topicBadgeText}</Text>
+                    <Muted style={{ fontSize: 13 }}>{topicSpeechText}</Muted>
+                    {lastTalkFailed ? <Muted style={{ fontSize: 12, color: theme.bad }}>💔 지난 면담이 결렬됐습니다 — 다시 문을 두드리면 거절당할 수 있습니다.</Muted> : null}
+                    {talkLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 면담 — 약 {talkLeft}일 뒤 다시 가능합니다.</Muted> : null}
+                    <Button label={talkLeft > 0 ? `면담 (${talkLeft}일 후)` : '면담 요청'} onPress={openTalk} disabled={talkLeft > 0} />
+                  </>
+                ) : (
+                  <Muted style={{ marginTop: 4 }}>😊 특별한 불만 없음 — "괜찮습니다, 구단주님."</Muted>
+                )}
+                {myTalks.length > 0 ? (
+                  <View style={{ marginTop: 6, gap: 2 }}>
+                    {myTalks.map((l, i) => (
+                      <Muted key={i} style={{ fontSize: 12 }}>
+                        {l.day}일차 · {TOPIC_BADGE[l.topic]} · "{CARD_KO[l.card]}" → {l.ok ? '성공' : '결렬'}
+                      </Muted>
+                    ))}
+                  </View>
+                ) : null}
               </>
-            ) : (
-              <Muted style={{ marginTop: 4 }}>😊 특별한 불만 없음 — "괜찮습니다, 구단주님."</Muted>
-            )}
-            {myTalks.length > 0 ? (
-              <View style={{ marginTop: 6, gap: 2 }}>
-                {myTalks.map((l, i) => (
-                  <Muted key={i} style={{ fontSize: 12 }}>
-                    {l.day}일차 · {TOPIC_BADGE[l.topic]} · "{CARD_KO[l.card]}" → {l.ok ? '성공' : '결렬'}
-                  </Muted>
-                ))}
-              </View>
             ) : null}
           </Card>
 
@@ -351,8 +359,8 @@ export default function PlayerDetail() {
             ) : (
               <>
                 <Muted style={{ fontSize: 12 }}>
-                  현장 권한은 감독에게 — 구단주는 건의합니다. 감독 성향에 따라 거절할 수 있고,
-                  인기 선수를 오래 벤치에 두면 팬들이 분노합니다(기사·관중·예산).
+                  선발·교체 등 현장 권한은 감독에게 있고, 구단주는 건의만 할 수 있습니다.
+                  감독 성향에 따라 거절할 수 있고, 인기 선수를 오래 벤치에 두면 팬들이 분노합니다(기사·관중·예산).
                 </Muted>
                 {benchLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 건의 — 약 {benchLeft}일 뒤 다시 건의할 수 있습니다.</Muted> : null}
                 {/* 상태에 맞는 건의 하나만 노출(사용자 요청 2026-06-30) — 후보면 '선발 기용', 주전이면 '벤치'.
@@ -543,7 +551,7 @@ export default function PlayerDetail() {
         <StatBar label="VQ" value={p.vq} reveal={reveal} potential={pot('vq')} />
       </Card>
 
-      <IconLabel icon="trending-up-outline" color={theme.good}>기술치{isMine ? <Text style={{ color: theme.good, fontSize: 12 }}>  (→ = 성장 포텐셜)</Text> : null}</IconLabel>
+      <IconLabel icon="trending-up-outline" color={theme.good}>기술치</IconLabel>
       <Card accent={theme.good}>
         <StatBar label="공격기술" value={p.skSpike} reveal={reveal} potential={pot('skSpike')} />
         <StatBar label="블로킹기술" value={p.skBlock} reveal={reveal} potential={pot('skBlock')} />

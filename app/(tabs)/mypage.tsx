@@ -106,17 +106,14 @@ export default function MyPage() {
           </Pressable>
         ) : null}
       </Card>
-      <LinkCard icon="airplane-outline" tint={theme.good} title="전지훈련"
-        sub="오프시즌 — 다이아로 선수 능력 강화"
-        onPress={() => router.push('/training-camp')} />
+      {/* ── 자주 보는 것 (공지·상점·기록·업적) ── */}
+      <LinkCard icon="megaphone-outline" tint={theme.accent} title="공지사항"
+        sub="업데이트 · 이벤트 · 안내"
+        onPress={() => router.push('/announcements')} />
 
       <LinkCard icon="bag-handle-outline" tint={theme.sky} title="상점"
         sub="다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원"
         onPress={() => router.push('/shop')} />
-
-      <LinkCard icon="pricetag-outline" tint={theme.gold} title="쿠폰 입력"
-        sub="쿠폰 코드를 입력하고 다이아를 받으세요"
-        onPress={() => router.push('/coupon')} />
 
       <SpotlightTarget id="history-top">
         <LinkCard icon="trophy-outline" tint={theme.gold} title="기록"
@@ -130,17 +127,23 @@ export default function MyPage() {
           onPress={() => router.push('/achievements')} />
       </SpotlightTarget>
 
-      <LinkCard icon="settings-outline" tint={theme.accent} title="설정"
-        sub="효과음 · 세이브 관리 · 버전"
-        onPress={() => router.push('/settings')} />
+      {/* ── 재화 · 가이드 ── */}
+      <LinkCard icon="pricetag-outline" tint={theme.gold} title="쿠폰 입력"
+        sub="쿠폰 코드를 입력하고 다이아를 받으세요"
+        onPress={() => router.push('/coupon')} />
 
+      <LinkCard icon="airplane-outline" tint={theme.good} title="전지훈련"
+        sub="오프시즌 — 다이아로 선수 능력 강화"
+        onPress={() => router.push('/training-camp')} />
+
+      <LinkCard icon="book-outline" tint={theme.accent} title="게임 가이드"
+        sub="경기 · 선수 · 스탯 · 특성 · FA · 드래프트 · 외국인 — 알면 좋은 개념"
+        onPress={() => router.push('/guide')} />
+
+      {/* ── 도움 · 약관 (하단) ── */}
       <LinkCard icon="chatbubble-ellipses-outline" tint={theme.sky} title="문의하기"
         sub="오류 · 건의 · 질문 — 최근 기록 진단 정보 자동 첨부"
         onPress={() => router.push('/support')} />
-
-      <LinkCard icon="megaphone-outline" tint={theme.accent} title="공지사항"
-        sub="업데이트 · 이벤트 · 안내"
-        onPress={() => router.push('/announcements')} />
 
       <LinkCard icon="document-text-outline" tint={theme.muted} title="이용약관"
         sub="서비스 이용 조건 · 결제 · 환불 안내"

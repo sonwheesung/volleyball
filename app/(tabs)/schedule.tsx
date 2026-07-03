@@ -150,13 +150,6 @@ export default function Schedule() {
               : preview.important ? '관전하러 가기 →' : '경기 시작'}
             onPress={onAdvance}
           />
-          <Muted style={{ fontSize: 12 }}>
-            {preview.isRival && preview.rivalNote
-              ? `${preview.rivalNote} — 숙적과의 일전입니다. 직접 관전을 권합니다.`
-              : preview.important
-                ? '순위 직결 빅매치입니다 — 직접 관전을 권합니다(현장 운영은 감독 몫).'
-                : '경기 사이 기간 동안 모든 선수가 자동으로 훈련합니다.'}
-          </Muted>
         </Card>
         </SpotlightTarget>
       ) : (

@@ -288,8 +288,10 @@ export function PosTag({ pos, full, solid, compact }: { pos: string; full?: bool
 export function StatBar({ label, value, potential, reveal = 1 }: { label: string; value: number; potential?: number; reveal?: number }) {
   const fog = reveal < 1 ? fogStat(value, reveal) : null;
   const shown = fog ? fog.fill : value;
-  const color = value >= 80 ? theme.good : value >= 65 ? theme.accent : value >= 50 ? theme.warn : theme.bad;
-  const showPot = potential != null && potential > value && (!fog || fog.exact);
+  // 성장 여지 없음(현재값이 포텐 천장 도달) → 빨강으로 표시(더 못 큼). 이전 "→포텐" 화살표 표기는 제거(사용자 요청).
+  const maxed = potential != null && value >= potential && (!fog || fog.exact);
+  const color = maxed ? theme.bad
+    : value >= 80 ? theme.good : value >= 65 ? theme.accent : value >= 50 ? theme.warn : theme.bad;
   return (
     <View style={styles.statRow}>
       <Text style={styles.statLabel}>{label}</Text>
@@ -297,10 +299,9 @@ export function StatBar({ label, value, potential, reveal = 1 }: { label: string
         {shown != null ? (
           <View style={[styles.barFill, { width: `${Math.max(0, Math.min(100, shown))}%`, backgroundColor: fog && !fog.exact ? theme.muted : color, opacity: fog && !fog.exact ? 0.55 : 1 }]} />
         ) : null}
-        {showPot ? <View style={[styles.potMark, { left: `${Math.max(0, Math.min(100, potential!))}%` }]} /> : null}
       </View>
-      <Text style={styles.statVal} numberOfLines={1}>
-        {fog ? fog.text : value}{showPot ? <Text style={styles.potTxt}>→{potential}</Text> : null}
+      <Text style={[styles.statVal, maxed ? { color: theme.bad } : null]} numberOfLines={1}>
+        {fog ? fog.text : value}
       </Text>
     </View>
   );
