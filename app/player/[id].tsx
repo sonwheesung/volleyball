@@ -76,16 +76,16 @@ const SHOW_OWNER_TALK = false;
 
 // 건의 거절 사유 문구(OWNER §2.2 ★) — "가장 큰 감점 요인" 파생. coachCall은 결정론이라 "재도전하면 바뀔 것" 호도 금지 워딩.
 const BENCH_REJECT: Record<OwnerRejectReason, string> = {
-  ace: '에이스는 쉽게 뺄 수 없습니다.',
-  ability: '대체할 선수와 실력 차가 커 무리입니다.',
-  conviction: '라인업은 제가 책임집니다 — 감독의 소신입니다.',
-  coachCall: '이날은 마음을 바꾸지 않았습니다.',
+  ace: '에이스를 그렇게 쉽게 뺄 순 없습니다.',
+  ability: '대신 넣을 선수와 기량 차가 커서 지금은 무리입니다.',
+  conviction: '라인업은 제가 책임집니다. 제 판단을 믿어주십시오.',
+  coachCall: '지금은 이대로 가겠습니다.',
 };
 const START_REJECT: Record<OwnerRejectReason, string> = {
   ace: '지금 라인업이 최선입니다.',
-  ability: '아직은 현 주전이 낫다고 봅니다.',
-  conviction: '라인업은 제가 책임집니다 — 감독의 소신입니다.',
-  coachCall: '이날은 마음을 바꾸지 않았습니다.',
+  ability: '아직은 현 주전이 더 낫다고 봅니다.',
+  conviction: '라인업은 제가 책임집니다. 제 판단을 믿어주십시오.',
+  coachCall: '지금은 이대로 가겠습니다.',
 };
 
 export default function PlayerDetail() {
