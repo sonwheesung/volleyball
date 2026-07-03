@@ -3,7 +3,7 @@
 // rosters    = 팀 구성(가변). 시드 기본값에서 은퇴/영입/드래프트로 바뀐다.
 // 시즌 내 진화는 스냅샷에서 currentDay 만큼 리플레이.
 
-import type { AssistantCoach, Coach, CoachSpecialty, CoachStyle, Fixture, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
+import type { AssistantCoach, Coach, CoachSpecialty, CoachType, CoachStyle, Fixture, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
 import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
@@ -81,6 +81,17 @@ export function setMyTeamStaff(teamId: string): void { myTeamStaff = teamId; }
 const AI_SPECIALTIES: CoachSpecialty[] = ['attack', 'defense', 'setter', 'stamina', 'mental'];
 const aiAsstCache = new Map<string, AssistantCoach[]>();
 const aiScoutCache = new Map<string, Scout[]>();
+/** AI 로스터적합 성향 픽 (STAFF §8.1 phase④) — 팀 로스터 나이 프로필에 맞는 성향 선택("메타"가 아니라 팀 상황 전략).
+ *  어린 팀=육성/회복/클러치 · 노장 팀=즉전/노쇠억제/안정 · 중간=완성. NO_FITPICK env면 랜덤(A/B 베이스라인). */
+function aiFitType(teamId: string, sp: CoachSpecialty, seedId: string): CoachType {
+  if (typeof process !== 'undefined' && process.env && process.env.NO_FITPICK) return coachTypeFor(seedId, sp)!;
+  const ages = (rosters[teamId] ?? []).map((id) => playerMap.get(id)?.age).filter((a): a is number => a != null);
+  const avg = ages.length ? ages.reduce((s, a) => s + a, 0) / ages.length : 26;
+  const young = avg < 25.5, old = avg >= 27.5;
+  if (sp === 'stamina') return old ? 'antiaging' : 'recovery';
+  if (sp === 'mental') return old ? 'stable' : 'clutch';
+  return young ? 'developer' : old ? 'winnow' : 'finisher'; // 기량계
+}
 function aiTeamAssistants(teamId: string): AssistantCoach[] {
   const hit = aiAsstCache.get(teamId); if (hit) return hit;
   const rng = createRng(strSeed(`aistaff:${teamId}`));
@@ -89,7 +100,7 @@ function aiTeamAssistants(teamId: string): AssistantCoach[] {
   const list: AssistantCoach[] = sp.slice(0, 2).map((s, i) => {
     const rating = 52 + rng.int(0, 22); // 52~74 기본기 — 플레이어 상위(최대 92) 영입에 밀린다
     const id = `ai-ac-${teamId}-${i}`;
-    return { id, name: '전임 코치', age: 45 + rng.int(0, 15), specialty: s, type: coachTypeFor(id, s), rating, salary: assistantSalary(rating), teamId };
+    return { id, name: '전임 코치', age: 45 + rng.int(0, 15), specialty: s, type: aiFitType(teamId, s, id), rating, salary: assistantSalary(rating), teamId };
   });
   aiAsstCache.set(teamId, list); return list;
 }
