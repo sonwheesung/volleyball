@@ -10,6 +10,7 @@ import { belowVersion } from '../lib/bootstrap';
 import { useAuthStore } from '../store/useAuthStore';
 import { useGameStore } from '../store/useGameStore';
 import { LoginScreen } from './LoginScreen';
+import { AnnouncementModal } from './AnnouncementModal';
 
 function GateScreen({ icon, title, body, actionLabel, onAction }: { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; body: string; actionLabel: string; onAction: () => void }) {
   return (
@@ -29,8 +30,12 @@ function GateScreen({ icon, title, body, actionLabel, onAction }: { icon: React.
 export function BootGate({ children }: { children: ReactNode }) {
   const session = useAuthStore((s) => s.session);
   const authHydrated = useAuthStore((s) => s.hydrated);
+  const readAnnouncements = useAuthStore((s) => s.readAnnouncements);
+  const markAnnouncementsRead = useAuthStore((s) => s.markAnnouncementsRead);
+  const pruneReadAnnouncements = useAuthStore((s) => s.pruneReadAnnouncements);
   const [boot, setBoot] = useState<BootstrapData | null | undefined>(undefined); // undefined=조회중, null=오프라인/실패(게이트 스킵)
   const [reloadKey, setReloadKey] = useState(0);
+  const [annDismissed, setAnnDismissed] = useState(false); // 이번 실행에 공지 모달 닫음(다음 실행에 안 본 것만 재계산)
 
   useEffect(() => {
     let settled = false;
@@ -56,6 +61,13 @@ export function BootGate({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [userId]);
 
+  // 읽음 목록 prune — 활성 공지 id와 교집합만 유지(만료 공지 id 무한증가 차단, §13.13)
+  const activeAnns = boot?.announcements ?? [];
+  useEffect(() => {
+    if (activeAnns.length) pruneReadAnnouncements(activeAnns.map((a) => a.id));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [boot]);
+
   if (!authHydrated || boot === undefined) return <Loading variant="brand" />;
 
   // ① 서버 점검 — 진입 차단
@@ -70,8 +82,16 @@ export function BootGate({ children }: { children: ReactNode }) {
   // ③ 로그인 벽 — 세션 없으면 진입 불가(캐시 세션이면 오프라인도 통과)
   if (!session) return <LoginScreen />;
 
-  // 통과 → 게임(소프트 업데이트 안내·공지는 게임 내에서 surface)
-  return <>{children}</>;
+  // 통과 → 게임 + 안 본 활성 공지 모달(무푸시 — 진입 시에만, §13.13). 닫으면 표시분 읽음 처리.
+  const unread = activeAnns.filter((a) => !readAnnouncements.includes(a.id));
+  return (
+    <>
+      {children}
+      {!annDismissed && unread.length ? (
+        <AnnouncementModal items={unread} onClose={() => { markAnnouncementsRead(unread.map((a) => a.id)); setAnnDismissed(true); }} />
+      ) : null}
+    </>
+  );
 }
 
 const styles = themedStyles(() =>

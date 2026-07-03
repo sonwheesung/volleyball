@@ -74,6 +74,40 @@ export const announcements = pgTable(
   (t) => [index('ann_proj_idx').on(t.projCode)],
 );
 
+// ── 쿠폰(§13.14) — 전체용(targetUserId null)·개인용(set), 둘 다 기간제. 보상=다이아. 관리자 발급, 유저 코드입력 사용.
+export const coupons = pgTable(
+  'coupons',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode),
+    code: text('code').notNull(), // 정규형(대문자+trim) 저장/조회
+    rewardDiamonds: integer('reward_diamonds').notNull(), // >0 (관리자 발급 시 강제 + 상한캡)
+    targetUserId: uuid('target_user_id').references(() => users.id), // null=전체(모두 1회) · set=개인(그 유저만)
+    startsAt: timestamp('starts_at', { withTimezone: true }).notNull().defaultNow(),
+    endsAt: timestamp('ends_at', { withTimezone: true }), // null=무기한
+    disabled: boolean('disabled').notNull().default(false),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [uniqueIndex('coupons_proj_code_uniq').on(t.projCode, t.code), index('coupons_proj_idx').on(t.projCode)],
+);
+
+// ── 쿠폰 사용기록 — 유저당 1회 게이트(UNIQUE) + 감사. **파기 제외**(§13.14 P0-C — 활성/무기한 쿠폰 재수령 구멍 차단).
+export const couponRedemptions = pgTable(
+  'coupon_redemptions',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode),
+    couponId: uuid('coupon_id').notNull().references(() => coupons.id),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    redeemedAt: timestamp('redeemed_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('redemption_proj_coupon_user_uniq').on(t.projCode, t.couponId, t.userId),
+    index('redemption_coupon_idx').on(t.couponId),
+    index('redemption_user_idx').on(t.userId),
+  ],
+);
+
 // ── 수입 일집계(롤업) — 영구 보존(§13.10). 원본 결제가 5년 뒤 파기돼도 총수입은 여기 생존.
 // 매일 크론이 어제치를 재집계 upsert(멱등). 관리자 대시보드(#46)가 즉시 조회(원본 5년 스캔 불필요).
 export const statsDaily = pgTable(
@@ -96,3 +130,5 @@ export type User = typeof users.$inferSelect;
 export type WalletLedgerRow = typeof walletLedger.$inferSelect;
 export type StatsDailyRow = typeof statsDaily.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
+export type Coupon = typeof coupons.$inferSelect;
+export type CouponRedemption = typeof couponRedemptions.$inferSelect;

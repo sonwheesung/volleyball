@@ -14,45 +14,57 @@ export type WalletResult =
   | { ok: false; reason: 'insufficient' | 'no-user'; balance: number }
   | { ok: false; reason: 'error' };
 
+/** drizzle 트랜잭션 핸들 타입(내부 타입 import 없이 유도) — applyWalletTx 주입용. */
+export type WalletTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
 /**
- * 지갑에 delta 를 원자적으로 적용. delta>0 적립, delta<0 차감.
- * @param idempotencyKey 스토어 transaction_id / AdMob SSV id / 업적id / (saveId,season,playerId,stat) 등 자연키
+ * 지갑 delta 적용 — **주어진 트랜잭션 안에서**(쿠폰 redeem 등과 원자 합성용, §13.14 P0-A).
+ * 멱등(중복키=재적용 안 함) + 잔액게이트(음수 거부). 호출부가 tx 소유·커밋/롤백. throw 없이 typed 반환.
+ * @param idempotencyKey 스토어 transaction_id / SSV id / 업적id / camp키 / coupon:<userId>:<couponId> 등 자연키
+ */
+export async function applyWalletTx(
+  tx: WalletTx,
+  userId: string,
+  delta: number,
+  reason: WalletReason,
+  idempotencyKey: string,
+  ref?: string,
+): Promise<WalletResult> {
+  // 1) 멱등 — 같은 (proj, 키)가 이미 있으면 그때의 잔액을 그대로 반환(재적용 금지)
+  const dup = await tx
+    .select({ balanceAfter: walletLedger.balanceAfter })
+    .from(walletLedger)
+    .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, idempotencyKey)))
+    .limit(1);
+  if (dup.length) return { ok: true as const, balance: dup[0].balanceAfter, applied: false };
+
+  // 2) 행 잠금 — 동시 spend 직렬화(FOR UPDATE)
+  const locked = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).for('update').limit(1);
+  if (!locked.length) return { ok: false as const, reason: 'no-user' as const, balance: 0 };
+
+  const cur = locked[0].balance;
+  const next = cur + delta;
+  if (next < 0) return { ok: false as const, reason: 'insufficient' as const, balance: cur };
+
+  // 3) 잔액 갱신 + 원장 기록(같은 트랜잭션 = 원자적)
+  await tx.update(users).set({ balance: next }).where(eq(users.id, userId));
+  await tx.insert(walletLedger).values({ projCode: PROJ_CODE, userId, delta, reason, ref, idempotencyKey, balanceAfter: next });
+  return { ok: true as const, balance: next, applied: true };
+}
+
+/**
+ * 지갑에 delta 를 원자적으로 적용(자체 트랜잭션). delta>0 적립, delta<0 차감.
+ * applyWalletTx를 얇게 감싸 재사용(중복로직 0). earn/spend 라우트용.
  */
 export async function applyWallet(
   userId: string,
   delta: number,
   reason: WalletReason,
   idempotencyKey: string,
-  ref?: string, // 출처 상세 감사(§13.2): 업적id·상품id·SSV id·전지훈련(playerId:stat) 등
+  ref?: string,
 ): Promise<WalletResult> {
   try {
-    return await db.transaction(async (tx) => {
-      // 1) 멱등 — 같은 (proj, 키)가 이미 있으면 그때의 잔액을 그대로 반환(재적용 금지)
-      const dup = await tx
-        .select({ balanceAfter: walletLedger.balanceAfter })
-        .from(walletLedger)
-        .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, idempotencyKey)))
-        .limit(1);
-      if (dup.length) return { ok: true as const, balance: dup[0].balanceAfter, applied: false };
-
-      // 2) 행 잠금 — 동시 spend 직렬화(FOR UPDATE)
-      const locked = await tx
-        .select({ balance: users.balance })
-        .from(users)
-        .where(eq(users.id, userId))
-        .for('update')
-        .limit(1);
-      if (!locked.length) return { ok: false as const, reason: 'no-user' as const, balance: 0 };
-
-      const cur = locked[0].balance;
-      const next = cur + delta;
-      if (next < 0) return { ok: false as const, reason: 'insufficient' as const, balance: cur };
-
-      // 3) 잔액 갱신 + 원장 기록(같은 트랜잭션 = 원자적)
-      await tx.update(users).set({ balance: next }).where(eq(users.id, userId));
-      await tx.insert(walletLedger).values({ projCode: PROJ_CODE, userId, delta, reason, ref, idempotencyKey, balanceAfter: next });
-      return { ok: true as const, balance: next, applied: true };
-    });
+    return await db.transaction((tx) => applyWalletTx(tx, userId, delta, reason, idempotencyKey, ref));
   } catch {
     // idempotencyKey unique 충돌(동시에 같은 키 2건)도 여기로 — 재조회로 수렴시킬 수 있으나 P1은 error 반환.
     return { ok: false as const, reason: 'error' as const };

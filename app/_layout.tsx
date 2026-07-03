@@ -108,6 +108,8 @@ export default function RootLayout() {
         <Stack.Screen name="awards-ceremony" options={{ title: '시상식' }} />
         <Stack.Screen name="training-camp" options={{ title: '전지훈련' }} />
         <Stack.Screen name="support" options={{ title: '문의하기' }} />
+        <Stack.Screen name="announcements" options={{ title: '공지사항' }} />
+        <Stack.Screen name="coupon" options={{ title: '쿠폰 입력' }} />
         <Stack.Screen name="shop" options={{ title: '상점' }} />
         <Stack.Screen name="season-recap" options={{ title: '시즌 결산' }} />
         <Stack.Screen name="season-start" options={{ headerShown: false, gestureEnabled: false }} />

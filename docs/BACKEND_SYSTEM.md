@@ -255,3 +255,32 @@
 - **검증(Opus 4.8)**: `tools/_dv_walletauth.ts`(순수 — 멱등키 빌더 유일성·세이브리셋 비충돌·applied 게이팅·econ 금액권위 A/B) + 라이브 E2E(실 Vercel 서버: camp amount=1 보내도 −900 강제·이중 spend 2번째 applied:false·insufficient 리싱크). 앱/서버 tsc 0.
 - **파일**: `server/lib/econ.ts`(신)·`server/lib/wallet.ts`(countReasonToday·'coupon' reason)·`server/app/api/wallet/{earn,spend}/route.ts`·`lib/walletKeys.ts`(신, 순수)·`lib/server.ts`(earn/spend ref·cap reason)·`store/useGameStore.ts`(async 3함수+syncWallet+reconcilePendingCamp+applyCampLocal+saveId/pendingCamp/walletBusy)·`store/saveMigration.ts`(saveId/pendingCamp 정규화, 58필드)·`components/BootGate.tsx`(userId 확보/포그라운드 syncWallet)·`app/(tabs)/mypage.tsx`·`app/training-camp.tsx`.
 - **EAS 승격 잔여**: 광고 금액/진위=AdMob SSV 서버검증, 업적=서버 재계산(현 캡만), 결제=영수증 검증(#43). 구조(서버확정·멱등·잔액게이트·applied게이팅·아웃박스)는 지금 실물과 동일.
+
+### 13.13 공지사항 in-app 노출 (#57, 2026-07-03)
+> **서버는 이미 완성**(§13.11 — `announcements` 테이블 + `/api/bootstrap`가 활성분 pinned·최신순 반환). 이번은 **앱 표시**만. 무푸시 관전형 유지 — 앱 진입 시에만 조용히 surface.
+
+- **진입 모달**: BootGate가 게이트 통과 후 `boot.announcements` 중 **안 본 것**을 **하나의 리스트/페이징 모달**로(N연발 금지 — 관전형 nag 방지, 리뷰 지적). pinned은 정렬 우선일 뿐 "항상 표시" 규칙 없음.
+- **읽음 추적**: 본 공지 id를 **기기 로컬**(`useAuthStore.readAnnouncements`, persist)에 저장 → 다음 실행 시 안 본 것만 모달. 매 부팅 시 **현재 활성 id와 교집합으로 prune**(무한증가 차단). 다기기/재설치 재노출은 **의도된 트레이드오프**(서버 per-user 읽음테이블 불필요 — 관전형에 맞음).
+- **재열람**: 마이페이지 → "공지사항" → 활성 공지 전체 목록(읽음 무관). `app/announcements.tsx`.
+- **정정 정책**: 같은 id 본문 수정은 이미 읽은 유저에 재노출 안 됨 → **정정은 신규 공지로**(관리자 운영 규칙).
+- **파일**: `components/AnnouncementModal.tsx`(신)·`components/BootGate.tsx`(모달 오버레이)·`store/useAuthStore.ts`(readAnnouncements)·`app/announcements.tsx`(신)·`app/(tabs)/mypage.tsx`(진입점)·`app/_layout.tsx`(라우트).
+
+### 13.14 쿠폰 (#58, 2026-07-03 — 독립 리뷰 3구멍 반영)
+> 전체용(모두)·개인용(특정 유저) 쿠폰, **둘 다 기간제**. 관리자가 발급(§13.15), 유저가 코드 입력으로 사용. 보상=다이아(서버 진실 — [[server-authoritative-currency]]).
+
+- **스키마(신규 2테이블, Expand-only — [[prod-schema-migration-caution]] generate+migrate)**:
+  - `coupons`(id, proj_code FK, `code`, rewardDiamonds int>0, `targetUserId` uuid null=전체·set=개인, startsAt, endsAt, disabled bool, createdAt) — `UNIQUE(proj_code, code)`(정규형=대문자+trim 저장/조회) + `index(proj_code)`.
+  - `coupon_redemptions`(id, proj_code FK, couponId FK, userId FK, redeemedAt) — `UNIQUE(proj_code, couponId, userId)`=**유저당 1회** + `index(couponId)`·`index(userId)`.
+- **사용 `POST /api/coupon/redeem {code}`**(Bearer→userId) — **단일 트랜잭션(P0-A)**: `redeemCoupon`이 ① 코드 정규화·조회 ② disabled ③ 기간(now∈[starts,ends]) ④ target 있으면 userId 일치(아니면 "유효하지 않은 쿠폰" — 남의 개인쿠폰 존재 은폐) ⑤ 소프트삭제 계정 거부 ⑥ redemption INSERT(`onConflictDoNothing`, rowcount==0=이미 사용) ⑦ `applyWalletTx(tx, +reward, 'coupon', 'coupon:<userId>:<couponId>', ref=code)`를 **한 트랜잭션**에 담음.
+- **원자성(P0-A)**: `applyWallet`을 `applyWalletTx(tx,…)`(tx 주입)로 추출하고 `applyWallet`은 얇게 감싸 재사용(중복로직 0). redeem은 자체 `db.transaction`으로 위 전부를 원자화 → "기록만 남고 미지급" 크래시 창 제거. 이중지급은 redemption UNIQUE(직렬화·롤백) + ledger 멱등키 3중 백스톱.
+- **앱**: 마이페이지 → "쿠폰 입력" → 코드 입력·등록 → `lib/server.redeemCoupon` → **성공 후 `syncWallet()`로만 캐시 갱신**(낙관적 반영 금지). 결과 reason은 typed(invalid·expired·used·not-eligible·offline). `app/coupon.tsx`.
+- **보관기간(P0-C)**: `coupon_redemptions`는 **파기 제외**(활성/무기한 쿠폰 재수령 구멍 차단 — 현 `purgeExpired`가 wallet_ledger만 건드려 기본 안전, 명기). `wallet_ledger reason='coupon'`은 게임경제 원장 2년 티어(결제 아님 → 5년 아님, §13.9 정합).
+- **결정론 격리**: 쿠폰 다이아는 balance 합류 순수 재화. camp campLog는 applied 게이팅·saveId 멱등이라 다이아 출처와 무관하게 결정론 불변. 엔진 무파급.
+
+### 13.15 관리자 대시보드 (#58 발급·#57 발행·#56 게이트, 2026-07-03)
+> 최소 운영 콘솔(1인 운영·유저관대). Next.js 페이지 `/admin`(공개 HTML, `noindex`, 인라인만) + ADMIN_TOKEN 보호 API.
+
+- **인증 `requireAdmin(req)` — fail-closed(P0-B)**: `Authorization: Bearer <ADMIN_TOKEN>` 상수시간 비교. **`ADMIN_TOKEN` 미설정/짧으면(<16자) 무조건 401/503**(크론의 fail-open 패턴 복제 금지 — env 누락=전면 거부). Bearer 헤더라 CSRF 내성(쿠키 인증 미도입). 토큰은 localStorage.
+- **엔드포인트**(전부 requireAdmin): `POST/GET /api/admin/coupon`(발급/목록 — 발급 시 code 정규화·reward>0·상한캡·UNIQUE 충돌 4xx)·`POST/GET /api/admin/announcement`(발행/목록/비활성)·`POST/GET /api/admin/setting`(server_setting 점검·버전·스토어URL).
+- **파일**: `server/lib/admin.ts`(requireAdmin)·`server/lib/coupon.ts`(redeemCoupon 단일tx)·`server/lib/wallet.ts`(applyWalletTx 추출)·`server/db/schema.ts`(coupons·coupon_redemptions)·`server/app/api/coupon/redeem/route.ts`·`server/app/api/admin/{coupon,announcement,setting}/route.ts`·`server/app/admin/page.tsx`·`lib/server.ts`(redeemCoupon)·`app/coupon.tsx`.
+- **검증(Opus 4.8)**: 라이브 E2E(admin 발급→redeem +N·이중사용 "used"·개인쿠폰 타유저 거부·만료 거부·requireAdmin 토큰없이 401)·app/server/test tsc 0.

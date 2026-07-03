@@ -1,0 +1,57 @@
+// /api/admin/announcement — 공지 발행(POST)·목록(GET, 활성 무관 전체)·삭제(DELETE ?id=). requireAdmin.
+import { NextResponse } from 'next/server';
+import { desc, eq } from 'drizzle-orm';
+import { db } from '../../../../db';
+import { announcements } from '../../../../db/schema';
+import { isAdmin } from '../../../../lib/admin';
+import { ensureProj } from '../../../../lib/wallet';
+import { PROJ_CODE } from '../../../../lib/proj';
+
+export const dynamic = 'force-dynamic';
+
+export async function POST(req: Request) {
+  if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+  try {
+    const b = (await req.json()) as { title?: string; body?: string; startsAt?: string; endsAt?: string | null; pinned?: boolean };
+    const title = (b.title ?? '').trim();
+    const body = (b.body ?? '').trim();
+    if (!title || !body) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
+    // startsAt 미지정이면 DB defaultNow()에 맡긴다(undefined) — 서버 JS 클럭과 DB now()가 어긋나도(테스트/스큐)
+    // bootstrap의 `startsAt ≤ now()` 필터와 같은 DB 클럭을 써서 발행 즉시 노출됨.
+    const startsAt = b.startsAt ? new Date(b.startsAt) : undefined;
+    const endsAt = b.endsAt ? new Date(b.endsAt) : null;
+    if ((startsAt && Number.isNaN(startsAt.getTime())) || (endsAt && Number.isNaN(endsAt.getTime()))) {
+      return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
+    }
+    await ensureProj();
+    const ins = await db
+      .insert(announcements)
+      .values({ projCode: PROJ_CODE, title, body, startsAt, endsAt, pinned: !!b.pinned })
+      .returning({ id: announcements.id });
+    return NextResponse.json({ ok: true, id: ins[0].id });
+  } catch {
+    return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
+  }
+}
+
+export async function GET(req: Request) {
+  if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+  try {
+    const rows = await db.select().from(announcements).where(eq(announcements.projCode, PROJ_CODE)).orderBy(desc(announcements.createdAt)).limit(200);
+    return NextResponse.json({ ok: true, announcements: rows });
+  } catch {
+    return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
+  }
+}
+
+export async function DELETE(req: Request) {
+  if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+  try {
+    const id = new URL(req.url).searchParams.get('id');
+    if (!id) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
+    await db.delete(announcements).where(eq(announcements.id, id));
+    return NextResponse.json({ ok: true });
+  } catch {
+    return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
+  }
+}

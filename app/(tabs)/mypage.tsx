@@ -114,6 +114,10 @@ export default function MyPage() {
         sub="다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원"
         onPress={() => router.push('/shop')} />
 
+      <LinkCard icon="pricetag-outline" tint={theme.gold} title="쿠폰 입력"
+        sub="쿠폰 코드를 입력하고 다이아를 받으세요"
+        onPress={() => router.push('/coupon')} />
+
       <SpotlightTarget id="history-top">
         <LinkCard icon="trophy-outline" tint={theme.gold} title="기록"
           sub="시즌 · 통산 리더보드 · 명예의전당 · 연표"
@@ -133,6 +137,10 @@ export default function MyPage() {
       <LinkCard icon="chatbubble-ellipses-outline" tint={theme.sky} title="문의하기"
         sub="오류 · 건의 · 질문 — 최근 기록 진단 정보 자동 첨부"
         onPress={() => router.push('/support')} />
+
+      <LinkCard icon="megaphone-outline" tint={theme.accent} title="공지사항"
+        sub="업데이트 · 이벤트 · 안내"
+        onPress={() => router.push('/announcements')} />
 
       {/* ── 계정 · 로그아웃 (최하단) ── */}
       {session ? (
