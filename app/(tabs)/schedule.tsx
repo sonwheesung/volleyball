@@ -121,14 +121,13 @@ export default function Schedule() {
       {nextFixture && preview ? (
         <SpotlightTarget id="sched-next">
         <Card accent={theme.sky}>
-          <Row>
-            <IconLabel icon="calendar-outline" color={theme.sky}>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</IconLabel>
-            {preview.important ? (
-              <View style={styles.bigMatch}>
-                <Text style={styles.bigMatchText}>⭐ 중요 · {preview.reason}</Text>
-              </View>
-            ) : null}
-          </Row>
+          <IconLabel icon="calendar-outline" color={theme.sky}>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</IconLabel>
+          {preview.important ? (
+            // 긴 빅매치 배지는 날짜와 한 줄에 두면 카드 폭을 넘어 잘린다(UI-20) → 자기 줄로 내리고 좌측 정렬
+            <View style={[styles.bigMatch, { alignSelf: 'flex-start', marginTop: 6 }]}>
+              <Text style={styles.bigMatchText}>⭐ 중요 · {preview.reason}</Text>
+            </View>
+          ) : null}
           <Row>
             <Text style={{ color: theme.text, fontSize: 18, fontWeight: '800' }}>
               {preview.isHome ? '홈' : '원정'} vs {preview.oppName}
