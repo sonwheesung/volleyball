@@ -10,6 +10,7 @@ import { buildNewsFeed } from './news';
 import { leagueDisplayDay } from './standings';
 
 export const SNAPSHOT_SPAN = 10; // 현재 포함 최근 (SNAPSHOT_SPAN+1)시즌 — 사용자 정의(15→5..15)
+export const SNAPSHOT_VERSION = 2; // §13.20 — v2부터 replay(재현 키) 포함. v1(무버전)=경량만(운영툴이 undefined⇒1로 해석)
 
 export interface SnapshotInput {
   season: number; // 현재 시즌(0-based)
@@ -28,6 +29,9 @@ export interface SnapshotInput {
   diamonds?: number; // 다이아 캐시 잔액(표시)
   campLog?: Array<{ season: number; playerId: string; course?: string; stats?: string[] }>; // 적용된 전지훈련 내역
   pendingCamp?: { key: string; playerId: string; course: string; season: number } | null; // 미정산 아웃박스(차감↔적용 사이 흔적)
+  // 재현 키(§13.20 ①) — persist 세이브 통째 {state, version}. 전 문의에 항상 첨부(게이팅 없음, 사용자 결정).
+  // 운영툴이 migrateSave+하이드레이션으로 그 게임을 그대로 리플레이. 크기 실측 100시즌 744KB(Vercel 4.5MB캡 1/6).
+  replay?: { state: Record<string, unknown>; version: number } | null;
 }
 
 export interface SnapshotSeason {
@@ -51,6 +55,7 @@ export interface SnapshotPlayer {
 
 export interface DiagnosticSnapshot {
   meta: {
+    snapshotVersion: number; // §13.20 — 운영툴 버전 디스패치(2=replay 포함). undefined면 운영툴이 1로 해석
     generatedAt: number;
     engineVersion: number;
     myTeamId: string;
@@ -63,6 +68,8 @@ export interface DiagnosticSnapshot {
   players: SnapshotPlayer[];
   releasedNow: string[];
   logs: DiagLogEntry[];
+  // 재현 키(§13.20 ①) — persist 세이브 통째. 운영툴이 이걸로 그 게임을 bit-identical 리플레이(서버 미해석 증거물).
+  replay?: { state: Record<string, unknown>; version: number } | null;
   // 전지훈련·다이아 진단(§13.17) — 서버 wallet_ledger(권위)와 대조해 "차감됐으나 미적용" 판별
   wallet: {
     diamonds: number | null;
@@ -123,6 +130,7 @@ export function buildDiagnosticSnapshot(input: SnapshotInput): DiagnosticSnapsho
 
   return {
     meta: {
+      snapshotVersion: SNAPSHOT_VERSION,
       generatedAt: input.now,
       engineVersion: input.engineVersion,
       myTeamId: input.myTeamId,
@@ -135,6 +143,7 @@ export function buildDiagnosticSnapshot(input: SnapshotInput): DiagnosticSnapsho
     players,
     releasedNow: input.released,
     logs: input.logs.filter((e) => inRange(e.season)),
+    replay: input.replay ?? null, // 재현 키(§13.20 ①) — 호출부가 captureReplaySave()로 주입
     wallet: {
       diamonds: input.diamonds ?? null,
       campLog: (input.campLog ?? []).filter((e) => inRange(e.season)),

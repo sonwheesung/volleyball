@@ -448,6 +448,7 @@ export const useGameStore = create<GameState>()(
           if (dom > LEAGUE_CAP) return;
         }
         set((st) => ({ contractOverrides: { ...st.contractOverrides, [playerId]: contract } }));
+        diag(s.season, 'transaction', `재계약 ${playerId} 연봉 ${salary}·${years}년`); // 진단 로그(§13.20 ④)
       },
       // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용.
       // 정원 하한(ROSTER_MIN) 게이트 — 명단이 비어 경기 불가가 되는 상태를 원천 차단.
@@ -472,6 +473,7 @@ export const useGameStore = create<GameState>()(
         // 팬 분노 적립(방출 시점 인기 — TRANSACTION_SYSTEM 0.5③). endSeason서 fanScore에 반영.
         const anger = releaseAngerOf(playerId, s.archive, s.currentDay);
         set({ released: [...s.released, playerId], inSeasonTx, cash: s.cash - fee, releaseAnger: s.releaseAnger + anger });
+        diag(s.season, 'transaction', `방출 ${playerId} 위약금 ${fee}`); // 진단 로그(§13.20 ④)
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
@@ -513,6 +515,7 @@ export const useGameStore = create<GameState>()(
         if (signCost > s.cash) return false; // 운영 자금 부족(FINANCE) — 캡이 남아도 지갑이 비면 못 뽑는다
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId: faId, kind: 'sign' }];
         set({ inSeasonTx, cash: s.cash - signCost, careerLog: { ...s.careerLog, faSigns: s.careerLog.faSigns + 1 } }); // 지갑 즉시 차감 + 영입 카운트
+        diag(s.season, 'transaction', `시즌중 FA 영입 ${faId} 비용 ${signCost}`); // 진단 로그(§13.20 ④)
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
@@ -563,7 +566,7 @@ export const useGameStore = create<GameState>()(
         const tid = get().selectedTeamId;
         if (!tid) return false;
         const ok = hireHeadCoach(tid, coachId);
-        if (ok) { const s = getStaffState(); set((st) => ({ staffHead: s.head, staffAssistants: s.asst, staffScouts: s.scout, coachPool: currentCoachPool(), careerLog: { ...st.careerLog, coachHires: st.careerLog.coachHires + 1 } })); }
+        if (ok) { const s = getStaffState(); set((st) => ({ staffHead: s.head, staffAssistants: s.asst, staffScouts: s.scout, coachPool: currentCoachPool(), careerLog: { ...st.careerLog, coachHires: st.careerLog.coachHires + 1 } })); diag(get().season, 'staff', `감독 선임 ${coachId}`); } // 진단 로그(§13.20 ④)
         return ok;
       },
       // 감독 재계약 — 계약 3년 연장(만료/임박 시). 풀 변화 영속.
@@ -580,6 +583,7 @@ export const useGameStore = create<GameState>()(
         if (!tid) return { acting: null };
         const r = fireCoachLeague(tid);
         set({ coachPool: currentCoachPool(), staffHead: getStaffState().head });
+        diag(get().season, 'staff', `감독 경질 (대행 ${r.acting ?? '공석'})`); // 진단 로그(§13.20 ④)
         return r;
       },
       hireAssistant: (id) => {
@@ -670,6 +674,7 @@ export const useGameStore = create<GameState>()(
         } else {
           set({ benchCooldown: benchCd });
         }
+        diag(s.season, 'bench', `벤치 건의 ${playerId}(${reason}) → ${ok ? '수락' : '거절'}`); // 진단 로그(§13.20 ④)
         return { ok, reason: why };
       },
       // 선발 기용 건의 — 수락 시 동포지션 최약 주전을 벤치 지시(건의 선수가 그 자리를 잇는다)
@@ -713,6 +718,7 @@ export const useGameStore = create<GameState>()(
         } else {
           set({ benchCooldown: benchCd });
         }
+        diag(s.season, 'bench', `선발 건의 ${playerId} → ${ok ? '수락' : '거절'}`); // 진단 로그(§13.20 ④)
         return { ok, reason: why };
       },
       unbench: (playerId) => {
@@ -736,6 +742,7 @@ export const useGameStore = create<GameState>()(
           { day: s.currentDay, teamId: my, playerId: curForeign.id, kind: 'release' },
           { day: s.currentDay, teamId: my, playerId: altId, kind: 'sign' }];
         set({ inSeasonTx, foreignSubUsed: true, cash: s.cash - FOREIGN_SALARY, foreignAltPool: s.foreignAltPool.filter((id) => id !== altId) });
+        diag(s.season, 'transaction', `외국인 교체 ${curForeign.id} → ${altId}`); // 진단 로그(§13.20 ④)
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
@@ -868,6 +875,8 @@ export const useGameStore = create<GameState>()(
         const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
         const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf, teamScoutReveal);
         for (const p of drafted.picked) snapshot[p.id] = p;
+        const myDrafted = drafted.picked.filter((p) => (drafted.rosters[my] ?? []).includes(p.id)); // 내 지명만(§13.20 ④)
+        if (myDrafted.length) diag(season, 'draft', `드래프트 지명 ${myDrafted.map((p) => p.name).join(', ')}`); // 진단 로그
 
         // 3) 클래스 소진 등 남은 빈자리 신인 자동 충원
         const filled = fillRosters(drafted.rosters, (id) => snapshot[id], nextSeason);
@@ -1175,3 +1184,12 @@ export const useGameStore = create<GameState>()(
     },
   ),
 );
+
+/** 진단 스냅샷용 재현 키(§13.20 ①) — persist가 저장하는 것과 **정확히 동일한** {state, version} 블롭.
+ *  partialize를 그대로 재사용해 미래 필드가 추가돼도 자동 포함(손 선별 금지 — 로더 계약 "영속 객체 통째를 다시 먹여라").
+ *  운영툴은 이걸 migrateSave+onRehydrateStorage로 먹여 그 게임을 bit-identical 재현한다(서버는 해석 안 하는 불투명 증거물). */
+export function captureReplaySave(): { state: Record<string, unknown>; version: number } | null {
+  const opts = useGameStore.persist.getOptions();
+  if (!opts.partialize) return null;
+  return { state: opts.partialize(useGameStore.getState()) as Record<string, unknown>, version: opts.version ?? 0 };
+}

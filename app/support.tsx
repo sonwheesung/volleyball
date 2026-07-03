@@ -6,7 +6,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 
 import { showAlert } from '../components/AppDialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
-import { useGameStore } from '../store/useGameStore';
+import { useGameStore, captureReplaySave } from '../store/useGameStore';
 import { ENGINE_VERSION } from '../engine/match';
 import { buildDiagnosticSnapshot } from '../data/diagnosticSnapshot';
 import { getSnapshotLogs } from '../lib/deviceLog';
@@ -124,6 +124,7 @@ function Compose({ onDone }: { onDone: () => void }) {
           players: Object.values(playerBase ?? {}),
           logs, now: Date.now(),
           diamonds, campLog, pendingCamp,
+          replay: captureReplaySave(), // 재현 키(§13.20 ①) — 전 문의 항상 첨부, 제출 시점 세이브 통째
         });
         await uploadSnapshot(ticketId, snapshot);
       } catch { /* 스냅샷 실패는 문의 접수를 막지 않음 */ }
