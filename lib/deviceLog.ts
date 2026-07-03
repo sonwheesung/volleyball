@@ -82,6 +82,19 @@ export function installErrorSink(getSeason: () => number): void {
   });
 }
 
+/** 앱 시작 시 1회 — **미처리 예외(진짜 크래시)** 를 진단 버퍼에 남긴다(BACKEND §13.20 ④).
+ *  전역 핸들러가 없으면 logError로 명시 로깅한 것만 잡혀 크래시가 스냅샷에 안 남는다(전역 핸들러 부재 = 갭).
+ *  기존 핸들러(dev 레드박스·prod 종료)는 보존 — 로깅만 얹고 기본 동작은 그대로 흘려보낸다. throw 안 함. */
+export function installCrashHandler(): void {
+  const EU = (globalThis as unknown as { ErrorUtils?: { getGlobalHandler?: () => (e: unknown, f?: boolean) => void; setGlobalHandler?: (h: (e: unknown, f?: boolean) => void) => void } }).ErrorUtils;
+  if (!EU?.setGlobalHandler) return; // RN 런타임 아님(tsx 등) — 조용히 무시
+  const prev = EU.getGlobalHandler?.();
+  EU.setGlobalHandler((err, isFatal) => {
+    try { logError(`uncaught${isFatal ? ':fatal' : ''}`, err); } catch { /* 로깅 실패 무시 */ }
+    prev?.(err, isFatal); // 기존 동작(레드박스/종료) 보존
+  });
+}
+
 export async function clearDiag(): Promise<void> {
   buf = [];
   if (flushTimer) { clearTimeout(flushTimer); flushTimer = null; }

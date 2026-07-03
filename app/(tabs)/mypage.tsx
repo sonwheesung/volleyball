@@ -13,6 +13,7 @@ import { useGameStore } from '../../store/useGameStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd } from '../../engine/diamonds';
 import { DEV_TOOLS } from '../../data/flags';
+import { logError } from '../../lib/log';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -102,9 +103,18 @@ export default function MyPage() {
           <Pressable onPress={claimAch} disabled={walletBusy} style={[styles.diaBtn, walletBusy && { opacity: 0.5 }]}><Text style={styles.diaBtnTxt}>🏅 업적 보상 받기</Text></Pressable>
         </View>
         {DEV_TOOLS ? (
-          <Pressable onPress={() => useGameStore.setState({ diamonds: diamonds + 1000 })} style={{ alignItems: 'center', paddingTop: 8 }}>
-            <Text style={{ color: theme.muted, fontSize: 12, fontWeight: '700' }}>＋1000 💎 (개발용)</Text>
-          </Pressable>
+          <View style={{ paddingTop: 8, gap: 6 }}>
+            <Pressable onPress={() => useGameStore.setState({ diamonds: diamonds + 1000 })} style={{ alignItems: 'center' }}>
+              <Text style={{ color: theme.muted, fontSize: 12, fontWeight: '700' }}>＋1000 💎 (개발용)</Text>
+            </Pressable>
+            {/* 에러 캡처 파이프라인 검증(§13.20 ④) — logError 경로 / 미처리 예외 경로 각각 */}
+            <Pressable onPress={() => logError('dev-test', new Error('의도적 logError 테스트 — 진단버퍼 캡처 확인'))} style={{ alignItems: 'center' }}>
+              <Text style={{ color: theme.warn, fontSize: 12, fontWeight: '700' }}>🧪 logError 캡처 테스트</Text>
+            </Pressable>
+            <Pressable onPress={() => { setTimeout(() => { throw new Error('의도적 미처리 예외 크래시 테스트 — 전역 핸들러 확인'); }, 0); }} style={{ alignItems: 'center' }}>
+              <Text style={{ color: theme.bad, fontSize: 12, fontWeight: '700' }}>🧪 미처리 예외 크래시 테스트</Text>
+            </Pressable>
+          </View>
         ) : null}
       </Card>
       {/* ── 자주 보는 것 (공지·상점·기록·업적) ── */}
