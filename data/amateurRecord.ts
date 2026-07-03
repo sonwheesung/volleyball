@@ -64,6 +64,15 @@ const CATS: Record<Position, Cat[]> = {
 
 function clampPct(v: number): number { return Math.max(30, Math.min(90, v)); }
 
+// 카테고리별 약체 인플레 범위(min~max) — 0~1 정규화 기준. amateurScore·amateurImpression·스카우트 리포트가 공유(단일 출처).
+const NORM: Record<string, [number, number]> = {
+  pts: [1.5, 6.0], atk: [45, 75], rcv: [50, 82], ace: [0.1, 1.1], blk: [0.3, 1.4], qk: [50, 78], ast: [6, 14], dig: [1.5, 5.5],
+};
+const normOf = (key: string, value: number): number => {
+  const [lo, hi] = NORM[key] ?? [0, 100];
+  return Math.max(0, Math.min(1, (value - lo) / (hi - lo)));
+};
+
 /** 유망주 아마추어 성적표(순수·결정론). 현재 실력 × 인플레(지표) × 노이즈(id×카테고리). 포텐 무관.
  *  @param noiseless 검증(A/B) 전용 — 노이즈 무력화(역산 밴드 대조군). 실사용은 항상 false. */
 export function amateurRecord(p: Player, noiseless = false): AmateurRecord {
@@ -80,15 +89,14 @@ export function amateurRecord(p: Player, noiseless = false): AmateurRecord {
  *  ※ 화면 표시 금지(합성 OVR = 역산). AI(pickWithReason)가 아마추어 신호로 쓸 때만. */
 export function amateurScore(p: Player, noiseless = false): number {
   const rec = amateurRecord(p, noiseless);
-  // 카테고리별 대략 min~max(약체 인플레 범위)로 0~1 정규화 후 평균.
-  const NORM: Record<string, [number, number]> = {
-    pts: [1.5, 6.0], atk: [45, 75], rcv: [50, 82], ace: [0.1, 1.1], blk: [0.3, 1.4], qk: [50, 78], ast: [6, 14], dig: [1.5, 5.5],
-  };
+  // 카테고리별 min~max(약체 인플레 범위)로 0~1 정규화 후 평균.
   let sum = 0, n = 0;
-  for (const s of rec.stats) {
-    const [lo, hi] = NORM[s.key] ?? [0, 100];
-    sum += Math.max(0, Math.min(1, (s.value - lo) / (hi - lo)));
-    n++;
-  }
+  for (const s of rec.stats) { sum += normOf(s.key, s.value); n++; }
   return n ? sum / n : 0.5;
+}
+
+export interface AmateurImpression extends AmateurStat { norm: number } // norm=0~1 카테고리 정규화(표시 성적 기반, 역산 아님)
+/** 성적표 지표 + 정규화(0~1) — 스카우트 리포트가 "가장 좋은/아쉬운 지표"를 뽑을 때 쓰는 가시 신호(현재·노이즈 반영, 포텐 무관). */
+export function amateurImpression(p: Player): AmateurImpression[] {
+  return amateurRecord(p).stats.map((s) => ({ ...s, norm: normOf(s.key, s.value) }));
 }
