@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { teamColors } from '../lib/teamColor';
 import { shortTeamName } from '../data/league';
+import { prospectArcRetro } from '../data/seed';
 import { jerseyNumber, SUPER_LEGEND_POINTS } from '../engine/jersey';
 import { numberLineage } from '../data/legends';
 import { useGameStore } from '../store/useGameStore';
@@ -40,6 +41,7 @@ export default function Enshrine() {
           const c = teamColors(h.teamId);
           const isSuper = h.points >= SUPER_LEGEND_POINTS;
           const lineage = numberLineage(hallOfFame, h.teamId, num, h.id, h.retiredSeason);
+          const arc = prospectArcRetro(h.id); // 드래프트 출신 레전드의 커리어 유형 회고(대기만성/즉시전력 — 현역 미노출)
           return (
             <View key={h.id} style={[styles.card, { backgroundColor: c.bg }]}>
               <Text style={styles.tier}>{isSuper ? '👑 초레전드 헌액' : '🎖️ 명예의전당 헌액'}{h.teamId === my ? ' · 내 구단' : ''}</Text>
@@ -49,6 +51,7 @@ export default function Enshrine() {
                 {shortTeamName(h.teamId)} · {isSuper ? '초레전드' : '헌액 번호'} {num}번
               </Text>
               <Text style={styles.stat}>{h.seasons}시즌 · 통산 {h.points.toLocaleString()}점</Text>
+              {arc ? <Text style={[styles.lineage, { fontStyle: 'italic' }]}>{arc}</Text> : null}
               {lineage.length > 0 ? (
                 <Text style={styles.lineage} numberOfLines={2}>
                   {num}번 계보 — {lineage.map((g) => `${g.name}(${g.points.toLocaleString()}점)`).join(', ')}

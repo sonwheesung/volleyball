@@ -139,6 +139,9 @@ npx tsx tools/_dv_draftai.ts                 # AI 드래프트 평가(FA §3.3 3
 npx tsx tools/_dv_scoutreveal.ts             # 스카우터 부분 포텐 공개(FA §3.3 스카우팅2.0 3a) — 개수=reveal함수(0.2미만0·최고≤3=50%상한·단조)·포지션핵심 우선·범위→등급↑축소→최상급 정확·결정론·avg(AI입력). exit 0/1
 npx tsx tools/_dv_potdist.ts                 # 현재↔포텐 분포(FA §3.3 스카우팅2.0 2단계) — corr(현재,미래OVR)∈[.45,.62](대체로 비례·역산불가) + 대기만성/반짝 이상치 존재(prospectArc 3%/3% 주입). N=2만. exit 0/1. ※밸런스 회귀는 simLeague 50×6 A/B(변경 전후 동등 확인)
 npx tsx tools/_dv_amateur.ts                 # 아마추어 성적표(FA §3.3 스카우팅2.0 1단계) — 역산불가 corr(성적,현재)∈[.4,.6]·corr(성적,포텐)≤.35·R²<.35 + A/B(노이즈無 0.81→0.50)·특급빛남·결정론·스카우터무관. N=2만. exit 0/1
+npx tsx tools/_dv_report.ts                  # 스카우트 리포트(FA §3.3 4a) — 두 하드룰: 숨은포텐 누출0(reveal0 불변)·성장주장⊆공개포텐·날조단어0 + reveal↑안갯속감소·A/B·결정론. N=2만. exit 0/1
+npx tsx tools/_dv_draftpreview.ts            # 드래프트 클래스 프리뷰(FA §3.3 4c) — 누출0(reveal0 포텐무관)·최대어/풍년/기근·강약 헤드라인 민감도·결정론. exit 0/1
+npx tsx tools/_dv_arcretro.ts                # 커리어 유형 회고(FA §3.3 4d) — 날조0(비드래프티 아크 누출0)·드래프트출신 1:1·~6%·현역미노출 게이트·결정론. exit 0/1
 npx tsx tools/_dv_reset_preserve.ts          # 구단 초기화 계정필드 유지(BACKEND §13.19) — selectTeam/resetSave가 다이아·claimedAch·adState 유지·saveId만 새로·시즌 진행 리셋. 재화 farming 방어(서버측은 라이브 E2E). exit 0/1
 npx tsx tools/_dv_refund.ts                  # 환불 음수허용 게이트(BACKEND §13.17) — allowsNegativeBalance가 refund만 true·나머지 reason 전부 false(머니크리티컬: 하나라도 새면 무한소비). exit 0/1. ※환불 왕복(음수·멱등·티켓refunded·음수→spend차단·기기·티켓·스냅샷)은 로컬 서버 라이브 E2E로 실증
 npx tsx tools/_dv_campeffect.ts 5 25        # 코스형 전지훈련 순효과(§11.2 H4, effect A/B) — 영건 with/without 5시즌 성장 ΔOVR 평균 ≥+1(실측 1.76·분포 1~3)·음수 0·결정론·null-대조 0. "유료인데 체감 0"(4번째 죽은기능) 재발 방지. exit 0/1

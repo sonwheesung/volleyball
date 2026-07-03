@@ -212,6 +212,20 @@ export function prospectArcFlavor(id: string): string | null {
   return ARC_FLAVOR[arc][strSeed(`${id}::arcf`) % 4];
 }
 
+/** 드래프트 클래스 생성 id(`d{시즌}_{i}`)인가 — 아크는 makeProspect에서만 실제 적용되므로 시드 초기선수엔 붙이면 날조. */
+export const isDrafteeId = (id: string): boolean => /^d\d+_\d+$/.test(id);
+
+/** 은퇴/헌액 회고용 커리어 유형 한 줄(과거형 origin story). **드래프트 출신에게만**(아크가 실제 적용된 대상) — 아니면 null.
+ *  현역엔 쓰지 않는다(대기만성 노출=성장 스포일러). 커리어 종료 시점 회고에서만. */
+export function prospectArcRetro(id: string): string | null {
+  if (!isDrafteeId(id)) return null;
+  const arc = prospectArc(id);
+  if (!arc) return null;
+  return arc === 'late_bloomer'
+    ? '드래프트 당시엔 주목받지 못한 원석이었지만, 프로에서 뒤늦게 만개한 대기만성형이었다.'
+    : '대학 무대에서 일찌감치 완성형으로 평가받아 곧장 즉시전력이 된 유형이었다.';
+}
+
 // 신인(유망주) 생성 — 현재 OVR은 낮게(육성 대상), 포텐셜은 높게.
 // 드래프트 클래스 + 자동 충원 공용. KOVO 신인 기준(대부분 즉전감 아님).
 export function makeProspect(rng: Rng, id: string, pos: Position): Player {
