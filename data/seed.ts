@@ -192,6 +192,26 @@ export function makePlayer(
   return player;
 }
 
+// 유망주 커리어 유형 (FA_SYSTEM §3.3 2단계) — id 시드 결정론·**저장 안 함(파생)**. 드래프트엔 숨기고
+//   은퇴 회고/연대기에서만 노출("이 선수는 대기만성형이었다"). ~6%: 대기만성 3%·반짝 3%(단일 소스 — makeProspect 공유).
+export type ProspectArc = 'late_bloomer' | 'flash';
+export function prospectArc(id: string): ProspectArc | null {
+  const olr = (strSeed(`${id}::olr`) % 10000) / 10000;
+  if (olr < 0.03) return 'late_bloomer'; // 저현재·고천장(숨은 보석)
+  if (olr < 0.06) return 'flash';        // 고현재·저천장(bust)
+  return null;
+}
+const ARC_FLAVOR: Record<ProspectArc, string[]> = {
+  late_bloomer: ['늦은 성장형', '원석', '신체 성장 중', '기술 습득이 느린 유형'],
+  flash: ['대학 무대 특화', '즉시전력형', '성장 여지 부족', '완성형 선수'],
+};
+/** 커리어 유형 서술(은퇴 회고용, 파생·결정론). 유형 없으면 null. */
+export function prospectArcFlavor(id: string): string | null {
+  const arc = prospectArc(id);
+  if (!arc) return null;
+  return ARC_FLAVOR[arc][strSeed(`${id}::arcf`) % 4];
+}
+
 // 신인(유망주) 생성 — 현재 OVR은 낮게(육성 대상), 포텐셜은 높게.
 // 드래프트 클래스 + 자동 충원 공용. KOVO 신인 기준(대부분 즉전감 아님).
 export function makeProspect(rng: Rng, id: string, pos: Position): Player {
@@ -213,7 +233,12 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
     skill: 0.85 + rng.next() * 0.3,
     mental: 0.85 + rng.next() * 0.3,
   };
-  const boost = Math.round((talentBase - 0.95) * 16); // 재능 보너스 (대략 -5 ~ +7)
+  // 이상치(FA_SYSTEM §3.3 2단계) — prospectArc(id) 단일 소스(메인 rng 불간섭 → 결정론·리플레이 보존). ~6%(각 3%).
+  //   대기만성: 현재 낮은데 포텐 천장↑(숨은 보석) · 반짝: 현재 소폭↑(성적 좋게)·포텐 천장은 현재 근처(bust).
+  const arc = prospectArc(id);
+  const lateBloomer = arc === 'late_bloomer';
+  const flash = arc === 'flash';
+  const boost = Math.round((talentBase - 0.95) * 16) + (flash ? 6 : 0); // 반짝은 현재 소폭↑(성적이 좋아 보이게)
   const clamp = (v: number) => Math.max(30, Math.min(80, v));
   const sk = (isCore: boolean) => clamp((isCore ? rng.int(46, 64) : rng.int(36, 54)) + boost);
 
@@ -238,7 +263,11 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
   const potential = {} as Record<TrainableStat, number>;
   for (const s of TRAINABLE_STATS) {
     const base = (cur as Record<string, number>)[s];
-    const head = Math.round((12 + rng.int(0, 18)) * talentBase); // 큰 성장 여지
+    // 기본 성장여지는 **원래 그대로**(밸런스 보존 — head 축소는 corr을 못 올리며 성장만 깎음, 측정 확인).
+    // 2단계 드라마는 8% 이상치 주입으로만(밸런스 최소 교란). corr(현재↔미래)은 자연값 ~0.5(대체로 비례·역산 불가) 유지.
+    let head = Math.round((12 + rng.int(0, 18)) * talentBase);
+    if (lateBloomer) head += 18;              // 대기만성: 천장 대폭↑(저현재·고포텐 = 숨은 보석)
+    else if (flash) head = Math.min(head, 3); // 반짝: 천장 현재 근처(성장 거의 없음 = bust)
     potential[s] = Math.min(99, base + Math.max(0, head));
   }
 
