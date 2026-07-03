@@ -131,6 +131,7 @@ npx tsx tools/_dv_name_space.ts             # 절차적 이름 생성 공간(FOR
 npx tsx tools/_dv_diamonds.ts               # 다이아 이코노미(MONETIZATION §11) — 광고 30분쿨다운/하루8회·업적 1회수령(중복지급0)·전지훈련 구모델(+1/+1, 재적용 전용)+코스형(3스탯 +2/+7·H1 스탯구성·900💎·cap99) + A/B(쿨다운 무력 검출). exit 0/1
 npx tsx tools/_dv_walletauth.ts             # 다이아 서버 진실화(BACKEND §13.12) — 순수: 멱등키 빌더 전역유일(userId 포함)·세이브리셋 무료강화 차단(camp saveId 에폭)·업적 계정평생1회 비대칭·econ 금액권위(ad+50/camp−900 서버상수·업적 캡5000)·reason 화이트리스트 + A/B(옛 클라신뢰/무에폭 키 재현). exit 0/1. ※서버 왕복(멱등·잔액게이트·화이트리스트 실증)은 로컬 서버 띄우고 라이브 E2E(임시 스크립트, 검증 후 삭제)
 npx tsx tools/_dv_coupon.ts                 # 쿠폰·관리자 순수(BACKEND §13.14/§13.15) — normalizeCode(대문자+trim)·requireAdmin fail-closed(토큰 미설정/<16자→거부·정확토큰 허용·길이가드). exit 0/1. ※쿠폰 발급·사용·이중지급0·타겟·만료는 로컬 서버 라이브 E2E(임시, 검증 후 삭제)로 실증
+npx tsx tools/_dv_version.ts                 # 버전 비교(BACKEND §13.11/§13.16) — cmpVersion 정수비교·belowVersion(강제 게이트)·needsSoftUpdate(소프트 배너: latest 미만·min 이상) + A/B(문자열 비교였다면 1.10<1.9 오답). exit 0/1
 npx tsx tools/_dv_campeffect.ts 5 25        # 코스형 전지훈련 순효과(§11.2 H4, effect A/B) — 영건 with/without 5시즌 성장 ΔOVR 평균 ≥+1(실측 1.76·분포 1~3)·음수 0·결정론·null-대조 0. "유료인데 체감 0"(4번째 죽은기능) 재발 방지. exit 0/1
 npx tsx tools/_dv_devicelog.ts              # 기기 진단 로그 버퍼 순수 헬퍼(BACKEND §13.6 #44) — prune 시즌경계(최근10)·하드상한·범위·시간순·미래제외 + A/B. exit 0/1
 npx tsx tools/_dv_snapshot.ts 14            # 진단 스냅샷 생성기(BACKEND §13.6 #45) — 실 store 14시즌 후 스냅샷: 범위[max(0,cur-10)..cur]·미래제외·비어있지않음·뉴스/선수 시즌정합·로그필터·결정론. exit 0/1

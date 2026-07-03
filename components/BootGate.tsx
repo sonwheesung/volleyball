@@ -9,6 +9,7 @@ import { getBootstrap, type BootstrapData } from '../lib/server';
 import { belowVersion } from '../lib/bootstrap';
 import { useAuthStore } from '../store/useAuthStore';
 import { useGameStore } from '../store/useGameStore';
+import { useServerConfig } from '../store/useServerConfig';
 import { LoginScreen } from './LoginScreen';
 import { AnnouncementModal } from './AnnouncementModal';
 
@@ -39,7 +40,7 @@ export function BootGate({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let settled = false;
-    const settle = (v: BootstrapData | null) => { if (!settled) { settled = true; setBoot(v); } };
+    const settle = (v: BootstrapData | null) => { if (!settled) { settled = true; setBoot(v); useServerConfig.getState().setBoot(v); } }; // 배너 등이 재조회 없이 읽도록 캐시(§13.16)
     const timer = setTimeout(() => settle(null), 3000); // 오프라인/지연 시 게이트 스킵(캐시 세션 진입)
     getBootstrap()
       .then((r) => settle(r.ok ? r : null))

@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Text, View } from 'react-native';
 import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
+import { SoftUpdateBanner } from '../../components/SoftUpdateBanner';
 import { getEvolvedTeamPlayers, getTeam } from '../../data/league';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings, leagueDisplayDay, seasonResults } from '../../data/standings';
@@ -76,6 +77,7 @@ export default function Dashboard() {
 
   return (
     <Screen title={team.name} scroll={false}>
+      <SoftUpdateBanner />
       {/* 전력 + 성적 */}
       <SpotlightTarget id="dash-top">
         <Card accent={theme.elite} flat>

@@ -284,3 +284,12 @@
 - **엔드포인트**(전부 requireAdmin): `POST/GET /api/admin/coupon`(발급/목록 — 발급 시 code 정규화·reward>0·상한캡·UNIQUE 충돌 4xx)·`POST/GET /api/admin/announcement`(발행/목록/비활성)·`POST/GET /api/admin/setting`(server_setting 점검·버전·스토어URL).
 - **파일**: `server/lib/admin.ts`(requireAdmin)·`server/lib/coupon.ts`(redeemCoupon 단일tx)·`server/lib/wallet.ts`(applyWalletTx 추출)·`server/db/schema.ts`(coupons·coupon_redemptions)·`server/app/api/coupon/redeem/route.ts`·`server/app/api/admin/{coupon,announcement,setting}/route.ts`·`server/app/admin/page.tsx`·`lib/server.ts`(redeemCoupon)·`app/coupon.tsx`.
 - **검증(Opus 4.8)**: 라이브 E2E(admin 발급→redeem +N·이중사용 "used"·개인쿠폰 타유저 거부·만료 거부·requireAdmin 토큰없이 401)·app/server/test tsc 0.
+
+### 13.16 소프트 업데이트 배너 + 스토어 URL (#56 소프트, 2026-07-03)
+> **강제 업데이트**(minVersion 미만=진입 차단)는 BootGate가 이미 하드 게이트(§13.11·AUTH §4). 이번은 **소프트 안내**(latestVersion 미만) — 진입은 막지 않고 대시보드 상단 **배너**로 "업데이트 있어요". 관전형 무푸시 — 닫으면 그 버전은 다시 안 뜬다.
+
+- **스토어 URL**: `server_setting.androidStoreUrl`·`iosStoreUrl`은 스키마(§13.11)·admin `/api/admin/setting` patch에 **기존 존재** → 이번은 **관리자 페이지 입력칸만** 추가. **애플은 미리 준비**(값 비워두면 iOS 배너는 안내만, 스토어 이동 버튼 숨김) — 인기 많으면 iosStoreUrl 채워 활성.
+- **판정** `lib/bootstrap.needsSoftUpdate(appVer, {min,latest})` = `belowVersion(latest) && !belowVersion(min)`(강제 대상은 이미 하드 게이트가 막아 대시보드 도달 못 하므로 소프트만 남음). 배너는 `Platform.OS`별 스토어 URL로 이동.
+- **닫음 추적**: `useAuthStore.dismissedUpdateVersion=latest`(persist) → 닫으면 그 latest는 재노출 안 함. **새 latest 발행 시 재노출**(dismissed ≠ 새 latest). 다기기/재설치 재노출은 읽음추적과 동일 트레이드오프.
+- **boot 공유**: BootGate가 받은 bootstrap을 `useServerConfig`(비영속 zustand)에 넣어 배너가 재조회 없이 읽음.
+- **파일**: `lib/bootstrap.ts`(needsSoftUpdate)·`store/useServerConfig.ts`(신)·`store/useAuthStore.ts`(dismissedUpdateVersion)·`components/SoftUpdateBanner.tsx`(신)·`components/BootGate.tsx`(setBoot)·`app/(tabs)/index.tsx`(배너)·`server/app/admin/page.tsx`(스토어URL 입력). 검증 `tools/_dv_version.ts`(cmpVersion·belowVersion·needsSoftUpdate A/B).

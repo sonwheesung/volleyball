@@ -14,3 +14,7 @@ export function cmpVersion(a: string, b: string): number {
 /** 앱 버전이 target 미만인가(target null이면 게이트 없음 → false). */
 export const belowVersion = (appVer: string, target: string | null | undefined): boolean =>
   !!target && cmpVersion(appVer, target) < 0;
+
+/** 소프트 업데이트 안내 대상인가 — latest 미만이되 강제(min 미만)는 아님(그건 하드 게이트가 이미 진입 차단, §13.16). */
+export const needsSoftUpdate = (appVer: string, version: { min: string | null; latest: string | null }): boolean =>
+  belowVersion(appVer, version.latest) && !belowVersion(appVer, version.min);

@@ -18,11 +18,13 @@ interface AuthState {
   session: Session | null;
   deviceId: string | null; // 스텁 providerId(기기 안정). EAS에선 실제 소셜 sub로 대체.
   readAnnouncements: string[]; // 본 공지 id(기기 로컬 — BACKEND §13.13). 재노출 방지, 매 부팅 활성분과 교집합 prune.
+  dismissedUpdateVersion: string | null; // 닫은 소프트 업데이트 latest(§13.16) — 새 latest 발행 시 재노출
   hydrated: boolean;
   signIn: (provider: 'google' | 'apple' | 'dev', displayName?: string) => Promise<SignInResult>;
   signOut: () => void;
   markAnnouncementsRead: (ids: string[]) => void; // 모달/재열람에서 본 공지 기록
   pruneReadAnnouncements: (activeIds: string[]) => void; // 활성 id와 교집합만 유지(무한증가 차단)
+  dismissUpdate: (latest: string) => void; // 소프트 업데이트 배너 닫음(그 latest는 재노출 안 함)
 }
 
 // 스텁용 기기 id(엔진 무관 — UI 런타임이라 Math.random 허용). 최초 로그인 때 1회 생성·영속.
@@ -34,9 +36,11 @@ export const useAuthStore = create<AuthState>()(
       session: null,
       deviceId: null,
       readAnnouncements: [],
+      dismissedUpdateVersion: null,
       hydrated: false,
       markAnnouncementsRead: (ids) => set((s) => ({ readAnnouncements: Array.from(new Set([...s.readAnnouncements, ...ids])) })),
       pruneReadAnnouncements: (activeIds) => set((s) => { const a = new Set(activeIds); return { readAnnouncements: s.readAnnouncements.filter((id) => a.has(id)) }; }),
+      dismissUpdate: (latest) => set({ dismissedUpdateVersion: latest }),
       signIn: async (provider, displayName) => {
         let deviceId = get().deviceId;
         if (!deviceId) {
@@ -58,7 +62,7 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'auth.v1',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (s) => ({ session: s.session, deviceId: s.deviceId, readAnnouncements: s.readAnnouncements }),
+      partialize: (s) => ({ session: s.session, deviceId: s.deviceId, readAnnouncements: s.readAnnouncements, dismissedUpdateVersion: s.dismissedUpdateVersion }),
       onRehydrateStorage: () => (state) => {
         if (state?.session?.token) setServerToken(state.session.token); // 캐시 세션 → 오프라인 진입
         useAuthStore.setState({ hydrated: true });

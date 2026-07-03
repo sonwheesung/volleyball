@@ -54,14 +54,16 @@ export default function AdminPage() {
 
   // ── 운영 설정 ──
   const [minV, setMinV] = useState(''); const [latV, setLatV] = useState('');
+  const [androidUrl, setAndroidUrl] = useState(''); const [iosUrl, setIosUrl] = useState('');
   const [maint, setMaint] = useState(false); const [maintT, setMaintT] = useState(''); const [maintB, setMaintB] = useState('');
   useEffect(() => {
     if (!setting) return;
     setMinV((setting.minVersion as string) ?? ''); setLatV((setting.latestVersion as string) ?? '');
+    setAndroidUrl((setting.androidStoreUrl as string) ?? ''); setIosUrl((setting.iosStoreUrl as string) ?? '');
     setMaint(!!setting.maintenance); setMaintT((setting.maintenanceTitle as string) ?? ''); setMaintB((setting.maintenanceBody as string) ?? '');
   }, [setting]);
   const saveSetting = async () => {
-    const r = await api('/api/admin/setting', { method: 'POST', body: JSON.stringify({ minVersion: minV || null, latestVersion: latV || null, maintenance: maint, maintenanceTitle: maintT || null, maintenanceBody: maintB || null }) });
+    const r = await api('/api/admin/setting', { method: 'POST', body: JSON.stringify({ minVersion: minV || null, latestVersion: latV || null, androidStoreUrl: androidUrl || null, iosStoreUrl: iosUrl || null, maintenance: maint, maintenanceTitle: maintT || null, maintenanceBody: maintB || null }) });
     setMsg(r.body.ok ? '✅ 설정 저장' : `❌ 저장 실패(${r.status})`); if (r.body.ok) refresh();
   };
 
@@ -116,8 +118,12 @@ export default function AdminPage() {
 
       <div style={S.card}>
         <div style={S.h2}>운영 설정(버전 게이트 · 서버 점검)</div>
-        <input placeholder="강제 최소버전(minVersion)" value={minV} onChange={(e) => setMinV(e.target.value)} style={S.input} />
-        <input placeholder="최신버전(latestVersion)" value={latV} onChange={(e) => setLatV(e.target.value)} style={S.input} />
+        <input placeholder="강제 최소버전(minVersion, 미만=진입 차단)" value={minV} onChange={(e) => setMinV(e.target.value)} style={{ ...S.input, width: 260 }} />
+        <input placeholder="최신버전(latestVersion, 미만=소프트 배너)" value={latV} onChange={(e) => setLatV(e.target.value)} style={{ ...S.input, width: 260 }} />
+        <br />
+        <input placeholder="플레이스토어 주소(androidStoreUrl)" value={androidUrl} onChange={(e) => setAndroidUrl(e.target.value)} style={{ ...S.input, width: 420 }} />
+        <br />
+        <input placeholder="앱스토어 주소(iosStoreUrl, 애플 출시 전엔 비워둠)" value={iosUrl} onChange={(e) => setIosUrl(e.target.value)} style={{ ...S.input, width: 420 }} />
         <br />
         <label style={{ fontSize: 13, marginRight: 8 }}><input type="checkbox" checked={maint} onChange={(e) => setMaint(e.target.checked)} /> 점검 모드(진입 차단)</label>
         <br />
