@@ -109,6 +109,17 @@ export default function Schedule() {
         </Row>
       </Card>
 
+      {/* 전지훈련 — 오프시즌(currentDay 0, 시즌 시작 전)에만 활성화. 시즌 중엔 불가라 안 뜬다(MONETIZATION §11.2) */}
+      {currentDay === 0 ? (
+        <Card accent={theme.good} onPress={() => router.push('/training-camp')}>
+          <Row>
+            <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
+            <Text style={{ color: theme.good, fontWeight: '800' }}>보내기 →</Text>
+          </Row>
+          <Muted style={{ fontSize: 12, marginTop: 2 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다.</Muted>
+        </Card>
+      ) : null}
+
       {clinchView ? (
         <Card accent={theme.accent}>
           <Row>

@@ -132,10 +132,6 @@ export default function MyPage() {
         sub="쿠폰 코드를 입력하고 다이아를 받으세요"
         onPress={() => router.push('/coupon')} />
 
-      <LinkCard icon="airplane-outline" tint={theme.good} title="전지훈련"
-        sub="오프시즌 — 다이아로 선수 능력 강화"
-        onPress={() => router.push('/training-camp')} />
-
       <LinkCard icon="book-outline" tint={theme.accent} title="게임 가이드"
         sub="경기 · 선수 · 스탯 · 특성 · FA · 드래프트 · 외국인 — 알면 좋은 개념"
         onPress={() => router.push('/guide')} />
