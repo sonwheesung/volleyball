@@ -193,7 +193,9 @@ export const staffBudget = (): number => STAFF_BUDGET;
 export const staffBudgetLeft = (teamId: string): number => STAFF_BUDGET - staffSpend(teamId);
 
 /** 드래프트 유망주 공개도 0~1 (스카우터 기반) */
-export const teamScoutReveal = (teamId: string): number => scoutReveal(teamScoutsOf(teamId));
+export const teamScoutReveal = (teamId: string): number =>
+  // 진단 전용(밸런스 A/B 3번째 팔): FORCE_REVEAL=1이면 전 팀 공개도 1 → 스카우팅 비대칭 제거, 새 타게팅만 격리 측정.
+  (typeof process !== 'undefined' && process.env && process.env.FORCE_REVEAL) ? 1 : scoutReveal(teamScoutsOf(teamId));
 
 function invalidateStaff(affectsTraining: boolean): void {
   // baseVersion(전 시즌 결과/생산 캐시 키)은 *시뮬에 영향을 주는* 스태프 변경에서만 올린다.

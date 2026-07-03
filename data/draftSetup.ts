@@ -4,12 +4,19 @@
 import type { Contract, Player } from '../types';
 import { createRng } from '../engine/rng';
 import { ROSTER_IDEAL } from '../engine/aiGM';
-import { buildDraftOrder, lotteryRound1 } from '../engine/draft';
+import { buildDraftOrder, lotteryRound1, setDraftValuer } from '../engine/draft';
+import { aiProspectValue, AI_SUPER_PV } from './draftAI';
 import { generateDraftClass } from './draftClass';
 import { resolvePreDraft, type ExpelEvent } from './offseason';
 import { standingsWorstFirst } from './standings';
 
 const ROSTER_TOTAL = Object.values(ROSTER_IDEAL).reduce((a, b) => a + b, 0); // 16
+
+// 스카우팅 2.0 3b(FA_SYSTEM §3.3) — AI 유망주 평가를 부분공개 포텐+아마추어성적(플레이어와 동일 정보)로 주입.
+// engine/draft.pickWithReason 이 이 밸류어를 쓴다. OLD_AI env면 등록 스킵 → 옛 전지적 prospectValue 유지(밸런스 A/B 베이스라인).
+if (!(typeof process !== 'undefined' && process.env && process.env.OLD_AI)) {
+  setDraftValuer(aiProspectValue, AI_SUPER_PV);
+}
 
 export interface DraftContext {
   snapshot: Record<string, Player>;

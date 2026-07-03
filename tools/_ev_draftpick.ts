@@ -6,8 +6,11 @@
 import './_gt_mock';
 import type { Position } from '../types';
 (async () => {
-  const { buildDraftContext } = await import('../data/draftSetup');
-  const { resolveDraft, pickWithReason, isSuperProspect } = await import('../engine/draft');
+  const { buildDraftContext } = await import('../data/draftSetup'); // import 시 새 AI 밸류어 등록
+  const { resolveDraft, pickWithReason, isSuperProspect, setDraftValuer, prospectValue, SUPER_PV } = await import('../engine/draft');
+  // 이 가드는 3티어 엔진 로직(super/need/best 불변식)을 검증한다 — 로직은 밸류어와 무관하므로 옛 기준(prospectValue/SUPER_PV)으로 고정.
+  // 새 밸류어(aiProspectValue)의 특성(누출0·단조·특급률)은 _dv_draftai가 담당. 통합 밸런스는 simLeague A/B.
+  setDraftValuer(prospectValue, SUPER_PV);
   const { positionGap, ROSTER_IDEAL } = await import('../engine/aiGM');
   const { getTeam, teamScoutReveal } = await import('../data/league');
   const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';

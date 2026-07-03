@@ -87,6 +87,17 @@ export function prospectValue(p: Player): number {
 export const SUPER_PV = 81;
 export const isSuperProspect = (p: Player): boolean => prospectValue(p) >= SUPER_PV;
 
+// AI 유망주 가치 주입(스카우팅 2.0 3b, FA_SYSTEM §3.3) — data 계층이 setDraftValuer로 aiProspectValue(부분공개 포텐+아마추어성적)를 등록.
+// engine→data 역참조를 피한 주입식(SOLID). 미등록(기본)이면 옛 전지적 prospectValue로 폴백 → 기존 로직·가드는 옛 동작 유지.
+// data/draftSetup가 import 시 등록(OLD_AI env면 스킵=옛 AI 베이스라인 — 밸런스 A/B용). reveal은 팀 스카우팅 공개도.
+let _valuer: ((p: Player, reveal: number) => number) | null = null;
+let _superT = SUPER_PV;
+/** AI 유망주 평가기 주입. fn=null이면 옛 전지적 prospectValue/SUPER_PV로 복귀. */
+export function setDraftValuer(fn: ((p: Player, reveal: number) => number) | null, superThreshold: number = SUPER_PV): void {
+  _valuer = fn;
+  _superT = superThreshold;
+}
+
 /** 유망주 별 등급 — 드래프트가치(prospectValue) 기준(측정 보정): ★★★ 상위~11%(특급)·★★ ~33%·★ ~56%·· 그 외.
  *  구 maxPot 기준(★★★ 71% 포화)을 대체 — 별이 실제 희소도를 반영. */
 export function prospectStars(p: Player): string {
@@ -117,13 +128,16 @@ export function pickWithReason(
 ): { player: Player; reason: PickReason } | null {
   if (available.length === 0) return null;
   const gap = positionGap(rosterIds, get);
+  // 유망주 가치 — 주입된 aiProspectValue(reveal 의존)면 그걸, 아니면 옛 전지적 prospectValue. 특급 컷도 그에 맞춰 전환.
+  const value = _valuer ? (p: Player) => _valuer!(p, reveal) : prospectValue;
+  const superT = _valuer ? _superT : SUPER_PV;
   const styleScout = (p: Player) => styleWeight(p.position, style) * scoutMult(p.id, teamId, reveal);
   // 1) 특급 유망주 — 포지션 무관 베스트(BPA)
-  const supers = available.filter(isSuperProspect);
-  if (supers.length) return { player: bestBy(supers, (p) => prospectValue(p) * styleScout(p)), reason: 'super' };
+  const supers = available.filter((p) => value(p) >= superT);
+  if (supers.length) return { player: bestBy(supers, (p) => value(p) * styleScout(p)), reason: 'super' };
   // 2) 부족 포지션 우선 — 잉여 포지션은 보지 않음(aiFillFromPool과 동일 정책)
   const needed = available.filter((p) => gap[p.position] > 0);
-  if (needed.length) return { player: bestBy(needed, (p) => prospectValue(p) * needWeight(gap[p.position]) * styleScout(p)), reason: 'need' };
+  if (needed.length) return { player: bestBy(needed, (p) => value(p) * needWeight(gap[p.position]) * styleScout(p)), reason: 'need' };
   // 3) 부족 없음 — 현재 실력(OVR) + 성격
   return { player: bestBy(available, (p) => overall(p) * personalityFactor(p) * styleScout(p)), reason: 'best' };
 }
