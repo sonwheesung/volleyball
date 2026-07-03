@@ -83,6 +83,17 @@ log(`은퇴 ${totalRetired}명 · 경질 ${totalFired}명 · 계약만료 FA ${t
 log(`역대 등장 감독 ${totalHeadsEver}명 중 선수 출신 ${starOriginHeads}명 (${(starOriginHeads / Math.max(1, totalHeadsEver) * 100).toFixed(0)}%)`);
 log(`종료 시점 — 감독 ${fin.coaches.length}명(프리 ${fin.coaches.filter((c) => c.teamId === null).length}) · 전문코치 ${fin.assistants.length}명`);
 
+// ── 질(tier) 검사 — 사각 교정(TEST_METHODOLOGY §4 "스태프 2.0 전제 반전"): 크기·연령만 보던 '건강' 정의에 상위 tier 생존을 추가.
+//    상위 코치가 멸종하면(전원 C) 풀 크기·연령은 정상이라 위 지표는 통과하지만 스태프가 무의미해진다.
+const tierS = (v: number) => v >= 90; const tierA = (v: number) => v >= 80;
+const headTop = fin.coaches.filter((c) => tierA(c.charisma)).length;
+const headElite = fin.coaches.filter((c) => tierS(c.charisma)).length;
+const asstTop = fin.assistants.filter((a) => tierA(a.rating)).length;
+log(`종료 시점 상위 tier — 감독 A+ ${headTop}(S ${headElite}) · 전문코치 A+ ${asstTop}  (수요: 감독 7·코치 21)`);
+const qualityCollapsed = headTop < 3 && asstTop < 3; // 상위 코치 사실상 멸종
+if (qualityCollapsed) log('⚠️  질(tier) 붕괴 — 정상상태 상위 코치 멸종(신규 C급 유입·성장 경로 부재). 스태프 2.0 대상(STAFF §8.1).');
+
 const ok = Math.min(...poolSizes) >= 7 && Math.max(...poolSizes) < 200 && avg(avgAges) < 65;
-log(ok ? '\n✅ 풀 건강 — 고갈/폭발 없음, 연령 안정, 순환 작동' : '\n❌ 풀 이상 — 고갈·폭발·노령화 점검');
+log(ok ? '\n✅ 풀 순환(크기·연령) 건강 — 고갈/폭발 없음, 연령 안정' + (qualityCollapsed ? ' · 단 상위 tier 붕괴(위 ⚠️)' : '')
+  : '\n❌ 풀 이상 — 고갈·폭발·노령화 점검');
 process.exit(ok ? 0 : 1);
