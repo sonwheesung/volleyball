@@ -10,6 +10,7 @@ import { loadThemeMode } from '../components/theme';
 import { SpotlightProvider } from '../components/Spotlight';
 import { IntroSplash } from '../components/IntroSplash';
 import { BootGate } from '../components/BootGate';
+import { DialogHost } from '../components/AppDialog';
 import { useGameStore } from '../store/useGameStore';
 import { initIap } from '../lib/iap';
 import { installErrorSink } from '../lib/deviceLog';
@@ -144,6 +145,7 @@ export default function RootLayout() {
         <Stack.Screen name="news/[id]" options={{ title: '뉴스' }} />
       </Stack>
       </BootGate>
+      <DialogHost />{/* 전역 커스텀 다이얼로그(UI-21) — showAlert가 여기로 렌더. BootGate 밖: 로그인/점검 화면에서도 동작 */}
       </SpotlightProvider>
       </ThemeProvider>
     </SafeAreaProvider>

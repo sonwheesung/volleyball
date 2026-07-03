@@ -2,7 +2,8 @@
 //   dev=시뮬 알림, 운영=스토어 결제→우리 서버 직접 검증(RevenueCat 폐기, BACKEND §5). 정본 MONETIZATION_SYSTEM §4.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { type ComponentProps } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { showAlert } from '../components/AppDialog';
 import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { purchase, restorePurchases, skuLabel, type Sku } from '../lib/iap';
@@ -32,16 +33,16 @@ export default function Shop() {
   // 상점 결제 — IAP 추상화(lib/iap). dev는 시뮬 알림, 운영은 스토어 결제→우리 서버 직접 검증(RevenueCat 폐기). throw 없이 결과 반환.
   const buy = async (sku: Sku) => {
     const r = await purchase(sku);
-    if (r.ok) Alert.alert('구매 완료', `${skuLabel(sku)}이(가) 적용되었습니다. 감사합니다!`);
+    if (r.ok) showAlert('구매 완료', `${skuLabel(sku)}이(가) 적용되었습니다. 감사합니다!`);
     else if (r.reason === 'cancelled') return; // 유저 취소 — 조용히
-    else Alert.alert('구매 실패',
+    else showAlert('구매 실패',
       r.reason === 'network' ? '네트워크 연결을 확인한 뒤 다시 시도해 주세요.'
       : r.reason === 'unavailable' ? '상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
       : '구매를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.');
   };
   const restore = async () => {
     const r = await restorePurchases();
-    Alert.alert(r.ok ? '구매 복원' : '복원 실패',
+    showAlert(r.ok ? '구매 복원' : '복원 실패',
       r.ok ? '구매 내역을 확인했습니다.' : '잠시 후 다시 시도해 주세요(네트워크 확인).');
   };
 
@@ -61,7 +62,7 @@ export default function Shop() {
       <Text style={styles.section}>다이아</Text>
       <ShopCard icon="diamond-outline" tint={theme.sky} title="다이아 구매"
         sub="전지훈련용 — 100개 ₩1,000 · 500개 ₩4,800 (출시 시 결제 연결)"
-        onPress={() => Alert.alert('다이아 구매', '결제는 출시 빌드에서 연결됩니다. 지금은 광고·업적으로 다이아를 모을 수 있어요.')} />
+        onPress={() => showAlert('다이아 구매', '결제는 출시 빌드에서 연결됩니다. 지금은 광고·업적으로 다이아를 모을 수 있어요.')} />
 
       <Text style={styles.section}>아이템</Text>
       <ShopCard icon="remove-circle-outline" tint={theme.rose} title="광고 제거"

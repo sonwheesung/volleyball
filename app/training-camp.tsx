@@ -3,7 +3,8 @@
 // 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지. 포텐 +7이 본체: 젊을수록 성장으로 실현되는 폭이 크다(H2).
 import { useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { showAlert } from '../components/AppDialog';
 import { Button, Card, IconLabel, Muted, PosTag, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { getPlayer, teamPlayerIds } from '../data/league';
@@ -106,10 +107,10 @@ export default function TrainingCamp() {
     if (!course || walletBusy) return;
     const r = await trainingCamp(player.id, course); // 서버 차감 확정 후에만 반영(BACKEND §13.12)
     if (r.ok) {
-      Alert.alert('전지훈련 완료', `${player.name} 선수가 ${CAMP_COURSES[course].label}을 마치고 왔습니다. 열린 성장 한계는 이후 시즌 성장으로 실현됩니다.`);
+      showAlert('전지훈련 완료', `${player.name} 선수가 ${CAMP_COURSES[course].label}을 마치고 왔습니다. 열린 성장 한계는 이후 시즌 성장으로 실현됩니다.`);
       setPicked(null); setCourse(null); force((n) => n + 1);
     } else {
-      Alert.alert(r.reason === 'offline' ? '온라인 연결 필요' : '전지훈련 불가',
+      showAlert(r.reason === 'offline' ? '온라인 연결 필요' : '전지훈련 불가',
         r.reason === 'no-diamonds' ? '다이아가 부족합니다.'
         : r.reason === 'offline' ? '다이아 사용(전지훈련)은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.'
         : r.reason === 'busy' ? '처리 중입니다. 잠시만 기다려 주세요.'

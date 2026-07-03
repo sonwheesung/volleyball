@@ -5,7 +5,8 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useState, type ComponentProps } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { showAlert } from '../../components/AppDialog';
 import { Card, Muted, Screen, theme, themedStyles } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
@@ -47,7 +48,7 @@ export default function MyPage() {
     ? session.displayName || (session.provider === 'dev' ? '개발자 계정' : session.provider === 'google' ? 'Google 계정' : session.provider === 'apple' ? 'Apple 계정' : '계정')
     : null;
   const confirmLogout = () => {
-    Alert.alert('로그아웃', '로그아웃하시겠어요? 다시 로그인하면 다이아·구매 내역이 그대로 복원됩니다.', [
+    showAlert('로그아웃', '로그아웃하시겠어요? 다시 로그인하면 다이아·구매 내역이 그대로 복원됩니다.', [
       { text: '취소', style: 'cancel' },
       { text: '로그아웃', style: 'destructive', onPress: () => signOut() }, // 세션 제거 → BootGate가 로그인 벽으로 전환
     ]);
@@ -62,8 +63,8 @@ export default function MyPage() {
   // 광고 보고 다이아(MONETIZATION §11.1) — 서버 확정 후 캐시 갱신(BACKEND §13.12). AdMob SSV는 EAS 후.
   const watchAd = async () => {
     const r = await watchAdForDiamonds();
-    if (r.ok) Alert.alert('광고 시청 완료', `+${r.reward} 💎 적립되었습니다.`);
-    else Alert.alert(
+    if (r.ok) showAlert('광고 시청 완료', `+${r.reward} 💎 적립되었습니다.`);
+    else showAlert(
       r.reason === 'offline' ? '온라인 연결 필요' : '잠시 후 다시',
       r.reason === 'cap' ? '오늘 광고 보상은 모두 받았어요(하루 8회). 내일 다시 와주세요.'
         : r.reason === 'offline' ? '다이아 적립은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.'
@@ -73,10 +74,10 @@ export default function MyPage() {
   };
   const claimAch = async () => {
     const r = await claimAchDiamonds();
-    if (r.granted > 0) Alert.alert('업적 보상 수령', `달성 업적 보상 +${r.granted} 💎`);
-    else if (r.reason === 'offline') Alert.alert('온라인 연결 필요', '업적 보상 수령은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.');
-    else if (r.reason === 'busy') Alert.alert('처리 중', '잠시만 기다려 주세요.');
-    else Alert.alert('수령할 보상 없음', '새로 달성한 업적이 없습니다.');
+    if (r.granted > 0) showAlert('업적 보상 수령', `달성 업적 보상 +${r.granted} 💎`);
+    else if (r.reason === 'offline') showAlert('온라인 연결 필요', '업적 보상 수령은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.');
+    else if (r.reason === 'busy') showAlert('처리 중', '잠시만 기다려 주세요.');
+    else showAlert('수령할 보상 없음', '새로 달성한 업적이 없습니다.');
   };
 
   return (

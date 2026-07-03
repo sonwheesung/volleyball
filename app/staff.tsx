@@ -1,6 +1,7 @@
 // 스태프 계약(STAFF_SYSTEM) — 단장이 감독·전문코치·스카우터를 예산 안에서 영입/방출.
 import { useEffect, useRef, useState } from 'react';
-import { Alert, InteractionManager, View } from 'react-native';
+import { InteractionManager, View } from 'react-native';
+import { showAlert } from '../components/AppDialog';
 import { Button, Card, IconLabel, Loading, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../components/Screen';
 import {
   getTeamCoach, teamAssistants, teamScouts, teamScoutReveal,
@@ -62,31 +63,31 @@ export default function Staff() {
   const left = staffBudgetLeft(teamId);
   const reveal = teamScoutReveal(teamId);
 
-  const overBudget = (msg: string) => Alert.alert('스태프 예산 초과', `${msg}\n예산 여유: ${formatMoney(left)}만`);
+  const overBudget = (msg: string) => showAlert('스태프 예산 초과', `${msg}\n예산 여유: ${formatMoney(left)}만`);
 
   // 코치/감독 = 무거움(시즌 재계산) → 로딩 뒤에서 실행. 스카우터 = 즉시. 모두 confirm으로 묻는다.
   const tryHireCoach = (id: string, name: string, salary: number) =>
-    Alert.alert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만 · 3년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
+    showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만 · 3년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
       { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}만) 불가.`); }) },
     ]);
   const tryHireAsst = (id: string, name: string, salary: number) =>
-    Alert.alert('코치 영입', `${name} 코치를 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만\n\n새 코치를 반영해 시즌 전력을 다시 계산합니다.`, [
+    showAlert('코치 영입', `${name} 코치를 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만\n\n새 코치를 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
       { text: '영입', onPress: () => heavyAction(() => { if (!hireAssistant(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}만) 불가.`); }) },
     ]);
   const tryReleaseAsst = (id: string, name: string) =>
-    Alert.alert('코치 방출', `${name} 코치를 방출하시겠습니까?\n\n전력 변화로 시즌을 다시 계산합니다.`, [
+    showAlert('코치 방출', `${name} 코치를 방출하시겠습니까?\n\n전력 변화로 시즌을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
       { text: '방출', style: 'destructive', onPress: () => heavyAction(() => releaseAssistant(id)) },
     ]);
   const tryHireScout = (id: string, name: string, salary: number) =>
-    Alert.alert('스카우터 영입', `${name}을(를) 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만`, [
+    showAlert('스카우터 영입', `${name}을(를) 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만`, [
       { text: '취소', style: 'cancel' },
       { text: '영입', onPress: () => { if (!hireScout(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}만) 불가.`); } },
     ]);
   const tryReleaseScout = (id: string, name: string) =>
-    Alert.alert('스카우터 방출', `${name}을(를) 방출하시겠습니까?`, [
+    showAlert('스카우터 방출', `${name}을(를) 방출하시겠습니까?`, [
       { text: '취소', style: 'cancel' },
       { text: '방출', style: 'destructive', onPress: () => releaseScout(id) },
     ]);
@@ -131,12 +132,12 @@ export default function Staff() {
                     계약 {yrs <= 0 ? '만료 — 재계약 필요' : `잔여 ${yrs}년`}
                   </Muted>
                   {expiring ? (
-                    <Button label="재계약(3년)" onPress={() => { if (resignCoach()) Alert.alert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); }} />
+                    <Button label="재계약(3년)" onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); }} />
                   ) : null}
                 </Row>
-                <Button label="감독 경질" onPress={() => Alert.alert('감독 경질', `${head.name} 감독을 경질하시겠습니까? 전문 코치가 대행을 맡고, 그 감독은 우리 팀에 다시 오지 않습니다.`, [
+                <Button label="감독 경질" onPress={() => showAlert('감독 경질', `${head.name} 감독을 경질하시겠습니까? 전문 코치가 대행을 맡고, 그 감독은 우리 팀에 다시 오지 않습니다.`, [
                   { text: '취소', style: 'cancel' },
-                  { text: '경질', style: 'destructive', onPress: () => heavyAction(() => { const r = fireCoach(); Alert.alert('경질 완료', r.acting ? `${r.acting} 코치가 감독 대행을 맡습니다.` : '대행할 코치가 없어 공석입니다. 감독을 영입하세요.'); }) },
+                  { text: '경질', style: 'destructive', onPress: () => heavyAction(() => { const r = fireCoach(); showAlert('경질 완료', r.acting ? `${r.acting} 코치가 감독 대행을 맡습니다.` : '대행할 코치가 없어 공석입니다. 감독을 영입하세요.'); }) },
                 ])} />
               </View>
             );

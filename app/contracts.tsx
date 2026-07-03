@@ -2,7 +2,8 @@
 // 1행 = 선수 1명. 행을 누르면 재계약/방출 선택(액션시트). FA 예정·방출 선수도 여기서 처리.
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { showAlert } from '../components/AppDialog';
 import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles } from '../components/Screen';
 import { ActionSheet } from '../components/Popup';
 import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
@@ -57,7 +58,7 @@ export default function Contracts() {
   // 오퍼 선택 → 캡 체크 후 확정 시트 오픈(캡 초과는 즉시 안내)
   const pickOffer = (p: Player, o: ResignOpt) => {
     if (!canAfford(total - p.contract.salary, o.salary, { franchise: isFranchise(p) })) {
-      Alert.alert('샐러리캡 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
+      showAlert('샐러리캡 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
       return;
     }
     const contract: Contract = { salary: o.salary, years: o.years, remaining: o.years, signedAtAge: p.age };
@@ -68,7 +69,7 @@ export default function Contracts() {
     const fee = severanceFee(p.contract.salary, p.contract.remaining);
     // 위약금 지불 못 하면 방출 자체가 불가(재정 무게 — TRANSACTION_SYSTEM 0.5①)
     if (fee > cash) {
-      Alert.alert('위약금 부족', `${p.name} 방출에는 위약금 ${formatMoney(fee)}가 듭니다.\n현재 운영 자금 ${formatMoney(cash)} — 지불할 수 없습니다.`);
+      showAlert('위약금 부족', `${p.name} 방출에는 위약금 ${formatMoney(fee)}가 듭니다.\n현재 운영 자금 ${formatMoney(cash)} — 지불할 수 없습니다.`);
       return;
     }
     // 함께한 세월·통산을 회고로(감정 무게 — TRANSACTION_SYSTEM 0.5②). 포지션별 대표 스탯.
@@ -89,14 +90,14 @@ export default function Contracts() {
     const friendWarn = friends.length
       ? `\n\n💔 각별한 동료 ${friends.map((f) => f.name).join(', ')} — 방출에 동요할 수 있습니다 (재계약 거부 위험↑)`
       : '';
-    Alert.alert(
+    showAlert(
       `${p.name} 방출`,
       `${retro}${friendWarn}\n\n위약금 ${formatMoney(fee)} 지불 · 연봉 ${formatMoney(p.contract.salary)} 절감\n(당일 철회 가능)${tone}`,
       [
         { text: '취소', style: 'cancel' },
         {
           text: '방출', style: 'destructive',
-          onPress: () => { if (!release(p.id)) Alert.alert('방출 불가', `로스터 하한(${ROSTER_MIN}명) 또는 위약금(${formatMoney(fee)}) 문제로 방출할 수 없습니다.`); },
+          onPress: () => { if (!release(p.id)) showAlert('방출 불가', `로스터 하한(${ROSTER_MIN}명) 또는 위약금(${formatMoney(fee)}) 문제로 방출할 수 없습니다.`); },
         },
       ],
     );
@@ -216,7 +217,7 @@ export default function Contracts() {
                   <Text style={styles.sub}>{p.age}세 · {formatMoney(p.contract.salary)}</Text>
                 </View>
                 <Pressable
-                  onPress={() => { if (!unrelease(p.id)) Alert.alert('복귀 불가', '방출 철회는 방출 당일에만 가능합니다(이후엔 FA 시장에서 재영입).'); }}
+                  onPress={() => { if (!unrelease(p.id)) showAlert('복귀 불가', '방출 철회는 방출 당일에만 가능합니다(이후엔 FA 시장에서 재영입).'); }}
                   style={[styles.btn, { borderColor: theme.good }]}
                 >
                   <Text style={[styles.btnText, { color: theme.good }]}>복귀</Text>

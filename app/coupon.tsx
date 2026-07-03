@@ -1,7 +1,8 @@
 // 쿠폰 입력 (BACKEND_SYSTEM §13.14) — 마이페이지 진입점. 코드 입력·등록 → 서버 확정 후 syncWallet로 캐시 갱신.
 // 서버 진실([[server-authoritative-currency]]): 낙관적 반영 없음. 결과 reason은 typed(invalid·expired·used·not-eligible·offline).
 import { useState } from 'react';
-import { Alert, StyleSheet, Text, TextInput, View } from 'react-native';
+import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { showAlert } from '../components/AppDialog';
 import { useRouter } from 'expo-router';
 import { Button, Card, IconLabel, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { redeemCoupon } from '../lib/server';
@@ -19,15 +20,15 @@ export default function Coupon() {
   const submit = async () => {
     const c = code.trim();
     if (!c || busy) return;
-    if (!session) { Alert.alert('로그인 필요', '쿠폰 사용은 로그인이 필요합니다.'); return; }
+    if (!session) { showAlert('로그인 필요', '쿠폰 사용은 로그인이 필요합니다.'); return; }
     setBusy(true);
     const r = await redeemCoupon(c);
     if (r.ok) {
       await syncWallet(); // 서버 확정 잔액으로 캐시 갱신(낙관적 반영 금지)
       setCode('');
-      Alert.alert('쿠폰 사용 완료', `+${r.reward} 💎 지급되었습니다.`, [{ text: '확인', onPress: () => router.back() }]);
+      showAlert('쿠폰 사용 완료', `+${r.reward} 💎 지급되었습니다.`, [{ text: '확인', onPress: () => router.back() }]);
     } else {
-      Alert.alert(
+      showAlert(
         r.reason === 'offline' ? '온라인 연결 필요' : '쿠폰 사용 불가',
         r.reason === 'used' ? '이미 사용한 쿠폰입니다.'
           : r.reason === 'expired' ? '사용 기간이 아닌 쿠폰입니다.'
@@ -56,6 +57,7 @@ export default function Coupon() {
           placeholderTextColor={theme.muted}
           autoCapitalize="characters"
           autoCorrect={false}
+          maxLength={32}
           style={styles.input}
           editable={!busy}
         />

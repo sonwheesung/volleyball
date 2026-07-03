@@ -2,7 +2,8 @@
 // 카테고리(오류/건의/질문/기타) + 내용. 제출 시 진단 스냅샷(최근 10시즌 재계산)을 **비동기로** 첨부.
 // 서버는 lib/server.ts(throw 없음) — 오프라인이면 조용히 안내(온라인 연결 후 재시도). 관전/게임엔 영향 0.
 import { useCallback, useEffect, useState } from 'react';
-import { ActivityIndicator, Alert, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
+import { showAlert } from '../components/AppDialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
@@ -22,6 +23,7 @@ const CATS: { key: TicketCategory; label: string; icon: React.ComponentProps<typ
   { key: 'refund', label: '환불', icon: 'card-outline' },
   { key: 'etc', label: '기타', icon: 'ellipsis-horizontal-outline' },
 ];
+const SUPPORT_MAX = 2000; // 문의 내용 입력 상한(서버는 4000 slice — 그보다 넉넉히 아래, UI-23). 최소 5자(trim)는 submit에서 검사
 const CAT_KO: Record<TicketCategory, string> = { bug: '오류', suggestion: '건의', question: '질문', refund: '환불 신청', etc: '기타' };
 const STATUS_KO: Record<string, string> = { open: '답변 대기', replied: '답변 완료', resolved: '처리 완료', refunded: '환불 완료' };
 
@@ -102,12 +104,12 @@ function Compose({ onDone }: { onDone: () => void }) {
   const pendingCamp = useGameStore((s) => s.pendingCamp);
 
   const submit = async () => {
-    if (content.trim().length < 5) { Alert.alert('내용을 입력하세요', '조금 더 자세히 적어주시면 도움이 됩니다(5자 이상).'); return; }
+    if (content.trim().length < 5) { showAlert('내용을 입력하세요', '조금 더 자세히 적어주시면 도움이 됩니다(5자 이상).'); return; }
     setSending(true);
     const r = await createTicket(cat, content.trim(), getDeviceInfo()); // 진단 기기정보 동봉(§13.17)
     setSending(false);
     if (!r.ok) {
-      Alert.alert(r.reason === 'offline' ? '오프라인' : '전송 실패',
+      showAlert(r.reason === 'offline' ? '오프라인' : '전송 실패',
         r.reason === 'offline' ? '지금은 서버에 연결할 수 없습니다. 온라인일 때 다시 시도해 주세요.' : '잠시 후 다시 시도해 주세요.');
       return;
     }
@@ -126,7 +128,7 @@ function Compose({ onDone }: { onDone: () => void }) {
         await uploadSnapshot(ticketId, snapshot);
       } catch { /* 스냅샷 실패는 문의 접수를 막지 않음 */ }
     })();
-    Alert.alert('문의 접수', '문의가 접수되었습니다. 최근 기록 진단 정보가 함께 첨부됩니다. 답변은 이 화면에서 확인할 수 있어요.');
+    showAlert('문의 접수', '문의가 접수되었습니다. 최근 기록 진단 정보가 함께 첨부됩니다. 답변은 이 화면에서 확인할 수 있어요.');
     onDone();
   };
 
@@ -162,7 +164,9 @@ function Compose({ onDone }: { onDone: () => void }) {
         onChangeText={setContent}
         multiline
         textAlignVertical="top"
+        maxLength={SUPPORT_MAX}
       />
+      <Text style={styles.counter}>{content.length} / {SUPPORT_MAX}</Text>
       <Pressable onPress={submit} disabled={sending} style={[styles.submit, sending && { opacity: 0.6 }]}>
         {sending ? <ActivityIndicator color="#04150E" /> : <Text style={styles.submitTxt}>문의 보내기</Text>}
       </Pressable>
@@ -189,6 +193,7 @@ const styles = themedStyles(() => StyleSheet.create({
   catOn: { backgroundColor: theme.accentGlass, borderColor: theme.accent },
   catTxt: { color: theme.muted, fontSize: 13, fontWeight: '800' },
   input: { minHeight: 160, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 14, color: theme.text, fontSize: 15, lineHeight: 22 },
+  counter: { color: theme.muted, fontSize: 11.5, textAlign: 'right', marginTop: 5 },
   submit: { marginTop: 14, backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },
   submitTxt: { color: '#04150E', fontSize: 15, fontWeight: '900' },
 }));

@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
-import { Alert, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { showAlert } from '../components/AppDialog';
 import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles } from '../components/Screen';
 import { evolveOnDay } from '../data/league';
 import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
@@ -48,13 +49,13 @@ export default function Transactions() {
   const onSign = (p: Player) => {
     const betrayed = isBetrayed(p.id);
     const cost = inSeasonCost(marketVal(p), betrayed);
-    Alert.alert('FA 영입', `${p.name} (${p.position})\n연봉 ${formatMoney(cost)}${betrayed ? ' (방출 재영입 웃돈 ×1.5)' : ''} · 즉시 합류`, [
+    showAlert('FA 영입', `${p.name} (${p.position})\n연봉 ${formatMoney(cost)}${betrayed ? ' (방출 재영입 웃돈 ×1.5)' : ''} · 즉시 합류`, [
       { text: '취소', style: 'cancel' },
       {
         text: '영입',
         onPress: () => {
           if (!signInSeason(p.id)) {
-            Alert.alert('영입 불가', full
+            showAlert('영입 불가', full
               ? `로스터 정원(${ROSTER_MAX}명) 초과`
               : cost > cash
                 ? `운영 자금 부족 — 잔고 ${formatMoney(cash)} (캡과 별개로 구단 지갑이 비었습니다)`
@@ -115,12 +116,12 @@ export default function Transactions() {
                 </View>
                 <Pressable
                   onPress={() => {
-                    Alert.alert('외인 교체', `${p.name}을(를) 영입하고 현 외국인 선수를 퇴출합니다.\n추가 부담 ${formatMoney(FOREIGN_SALARY)} · 시즌 1회`, [
+                    showAlert('외인 교체', `${p.name}을(를) 영입하고 현 외국인 선수를 퇴출합니다.\n추가 부담 ${formatMoney(FOREIGN_SALARY)} · 시즌 1회`, [
                       { text: '취소', style: 'cancel' },
                       {
                         text: '교체', style: 'destructive',
                         onPress: () => {
-                          if (!replaceForeign(p.id)) Alert.alert('교체 불가', foreignSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : FOREIGN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 외국인 선수가 없습니다.');
+                          if (!replaceForeign(p.id)) showAlert('교체 불가', foreignSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : FOREIGN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 외국인 선수가 없습니다.');
                         },
                       },
                     ]);
@@ -156,12 +157,12 @@ export default function Transactions() {
                 </View>
                 <Pressable
                   onPress={() => {
-                    Alert.alert('아시아쿼터 교체', `${p.name}을(를) 영입하고 현 아시아쿼터 선수를 퇴출합니다.\n추가 부담 ${formatMoney(ASIAN_SALARY)} · 시즌 1회`, [
+                    showAlert('아시아쿼터 교체', `${p.name}을(를) 영입하고 현 아시아쿼터 선수를 퇴출합니다.\n추가 부담 ${formatMoney(ASIAN_SALARY)} · 시즌 1회`, [
                       { text: '취소', style: 'cancel' },
                       {
                         text: '교체', style: 'destructive',
                         onPress: () => {
-                          if (!replaceAsian(p.id)) Alert.alert('교체 불가', asianSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : ASIAN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 아시아쿼터 선수가 없습니다.');
+                          if (!replaceAsian(p.id)) showAlert('교체 불가', asianSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : ASIAN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 아시아쿼터 선수가 없습니다.');
                         },
                       },
                     ]);

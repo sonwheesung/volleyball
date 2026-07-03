@@ -1,5 +1,6 @@
 import { useRouter } from 'expo-router';
-import { Alert, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
+import { showAlert } from '../../components/AppDialog';
 import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, Title, theme, themedStyles } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { SEASON, LEAGUE, getTeam } from '../../data/league';
@@ -55,7 +56,7 @@ export default function Schedule() {
 
   const onAdvance = () => {
     if (!nextFixture) {
-      Alert.alert('시즌 종료', '정규리그 모든 일정을 마쳤습니다.');
+      showAlert('시즌 종료', '정규리그 모든 일정을 마쳤습니다.');
       return;
     }
     setDay(nextFixture.dayIndex); // 경기일까지 진행(사이 기간은 자동 훈련/노쇠 재계산)
@@ -72,7 +73,7 @@ export default function Schedule() {
       }
     }
     setDay(SEASON_DAYS); // 시즌말일 → 순위·결과·시상 전체 공개
-    Alert.alert('시즌 즉시 완료 (개발)', '정규리그 전 경기를 결정론 결과로 기록했습니다. "포스트시즌 →"으로 진행하세요.');
+    showAlert('시즌 즉시 완료 (개발)', '정규리그 전 경기를 결정론 결과로 기록했습니다. "포스트시즌 →"으로 진행하세요.');
   };
 
   const preview = nextFixture
