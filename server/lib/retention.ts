@@ -2,7 +2,7 @@
 // 크론(/api/cron/purge)이 매일: ① 롤업(결제→stats_daily) → ② 티어별 파기. throw 없이 count 반환.
 import { and, eq, lt, notInArray, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { walletLedger, statsDaily } from '../db/schema';
+import { walletLedger, statsDaily, diagnosticSnapshots, tickets } from '../db/schema';
 import { PROJ_CODE } from './proj';
 
 // 보관 티어(일). 결제/환불=법정 5년(수입), 게임경제=2년(재무 아님). 로그/텔레메트리는 미래 테이블(각 90일).
@@ -16,6 +16,7 @@ export const RETENTION_DAYS = {
 
 /** 최근 2일 결제·신규가입을 stats_daily로 재집계 upsert(멱등). 수입 원본이 파기돼도 여기 집계는 영구 생존. */
 export async function rollupRecent(): Promise<number> {
+  // TODO(#43): 실 결제환불 웹훅 붙으면 reason='refund'를 순매출에서 차감해야 함(현재는 다이아 회수라 매출 무관 — 과대계상 주의).
   // 결제 원장 일별 집계(현재: 다이아 지급 카운트/합. KRW 매출은 Purchase 테이블 #43 연결 시 채움)
   const pRows = (await db.execute(sql`
     SELECT (created_at AT TIME ZONE 'UTC')::date::text AS day,
@@ -50,9 +51,9 @@ export async function rollupRecent(): Promise<number> {
   return n;
 }
 
-/** 티어별 파기 — 경과분 delete만(현재 데이터 무영향). 결제/환불(5년)은 법정·수입이라 여기서 건드리지 않음(수년 뒤 별도·롤업 보장 후). */
-export async function purgeExpired(): Promise<{ economyLedger: number }> {
-  const deleted = await db
+/** 티어별 파기 — 경과분 delete만. 결제/환불(5년)·쿠폰사용기록(§13.14 P0-C)은 파기 제외. */
+export async function purgeExpired(): Promise<{ economyLedger: number; snapshots: number; tickets: number }> {
+  const eco = await db
     .delete(walletLedger)
     .where(
       and(
@@ -62,5 +63,15 @@ export async function purgeExpired(): Promise<{ economyLedger: number }> {
       ),
     )
     .returning({ id: walletLedger.id });
-  return { economyLedger: deleted.length };
+  // 진단 스냅샷 90일(§13.17 P0-4 — 큰 재생 blob, 오래되면 진단 가치 0). 먼저 파기해야 티켓 파기 시 FK 안전.
+  const snaps = await db
+    .delete(diagnosticSnapshots)
+    .where(and(eq(diagnosticSnapshots.projCode, PROJ_CODE), lt(diagnosticSnapshots.createdAt, sql`now() - make_interval(days => ${RETENTION_DAYS.serverLogs})`)))
+    .returning({ id: diagnosticSnapshots.id });
+  // 문의 3년(스냅샷은 이미 90일에 파기돼 FK 종속 없음)
+  const tix = await db
+    .delete(tickets)
+    .where(and(eq(tickets.projCode, PROJ_CODE), lt(tickets.createdAt, sql`now() - make_interval(days => ${RETENTION_DAYS.tickets})`)))
+    .returning({ id: tickets.id });
+  return { economyLedger: eco.length, snapshots: snaps.length, tickets: tix.length };
 }

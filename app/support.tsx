@@ -13,16 +13,19 @@ import {
   createTicket, listTickets, uploadSnapshot,
   type TicketCategory,
 } from '../lib/server';
+import { getDeviceInfo } from '../lib/device';
 
 const CATS: { key: TicketCategory; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { key: 'bug', label: '오류', icon: 'bug-outline' },
   { key: 'suggestion', label: '건의', icon: 'bulb-outline' },
   { key: 'question', label: '질문', icon: 'help-circle-outline' },
+  { key: 'refund', label: '환불', icon: 'card-outline' },
   { key: 'etc', label: '기타', icon: 'ellipsis-horizontal-outline' },
 ];
-const CAT_KO: Record<TicketCategory, string> = { bug: '오류', suggestion: '건의', question: '질문', etc: '기타' };
+const CAT_KO: Record<TicketCategory, string> = { bug: '오류', suggestion: '건의', question: '질문', refund: '환불 신청', etc: '기타' };
+const STATUS_KO: Record<string, string> = { open: '답변 대기', replied: '답변 완료', resolved: '처리 완료', refunded: '환불 완료' };
 
-type Ticket = { id: string; category: TicketCategory; content: string; reply?: string; createdAt: string };
+type Ticket = { id: string; category: TicketCategory; content: string; status?: string; reply?: string; createdAt: string };
 
 export default function Support() {
   const [mode, setMode] = useState<'list' | 'compose'>('list');
@@ -60,7 +63,7 @@ export default function Support() {
           <Card key={t.id} accent={t.reply ? theme.good : theme.muted}>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={styles.catChip}><Text style={styles.catChipTxt}>{CAT_KO[t.category]}</Text></View>
-              <Text style={{ color: t.reply ? theme.good : theme.warn, fontSize: 12, fontWeight: '800' }}>{t.reply ? '답변 완료' : '답변 대기'}</Text>
+              <Text style={{ color: t.status === 'refunded' ? theme.gold : t.reply ? theme.good : theme.warn, fontSize: 12, fontWeight: '800' }}>{STATUS_KO[t.status ?? (t.reply ? 'replied' : 'open')] ?? '답변 대기'}</Text>
             </View>
             <Text style={styles.tContent} numberOfLines={3}>{t.content}</Text>
             {t.reply ? (
@@ -82,16 +85,18 @@ function Compose({ onDone }: { onDone: () => void }) {
   const [sending, setSending] = useState(false);
 
   // 스냅샷은 스토어 상태에서 즉석 생성(순수). 무거우니 제출 성공 후 백그라운드 업로드.
+  // 전지훈련(다이아 유일 소비처) 진단(§13.17) — diamonds/campLog/pendingCamp 동봉: "차감됐으나 미적용" 추적.
   const snapInput = useGameStore((s) => ({
     season: s.season, currentDay: s.currentDay, myTeamId: s.selectedTeamId ?? '',
     archive: s.archive, milestones: s.milestones, hallOfFame: s.hallOfFame,
     retirements: s.retirements, released: s.released, playerBase: s.playerBase,
+    diamonds: s.diamonds, campLog: s.campLog, pendingCamp: s.pendingCamp,
   }));
 
   const submit = async () => {
     if (content.trim().length < 5) { Alert.alert('내용을 입력하세요', '조금 더 자세히 적어주시면 도움이 됩니다(5자 이상).'); return; }
     setSending(true);
-    const r = await createTicket(cat, content.trim());
+    const r = await createTicket(cat, content.trim(), getDeviceInfo()); // 진단 기기정보 동봉(§13.17)
     setSending(false);
     if (!r.ok) {
       Alert.alert(r.reason === 'offline' ? '오프라인' : '전송 실패',
@@ -107,6 +112,7 @@ function Compose({ onDone }: { onDone: () => void }) {
           ...snapInput, engineVersion: ENGINE_VERSION,
           players: Object.values(snapInput.playerBase ?? {}),
           logs, now: Date.now(),
+          diamonds: snapInput.diamonds, campLog: snapInput.campLog, pendingCamp: snapInput.pendingCamp,
         });
         await uploadSnapshot(ticketId, snapshot);
       } catch { /* 스냅샷 실패는 문의 접수를 막지 않음 */ }
@@ -129,6 +135,16 @@ function Compose({ onDone }: { onDone: () => void }) {
           </Pressable>
         ))}
       </View>
+      {cat === 'refund' ? (
+        <View style={styles.refundNote}>
+          <Text style={styles.refundNoteTxt}>
+            • 환불 신청은 접수(문의)이며 자동 환불이 아닙니다. 검토 후 안내드립니다.{'\n'}
+            • 결제 환불은 Google Play·App Store 정책에 따라 처리됩니다(판매 주체=스토어).{'\n'}
+            • 정상적으로 소비된 다이아·완료된 특별훈련은 환불 대상이 아닙니다.{'\n'}
+            • 다만 <Text style={{ fontWeight: '800', color: theme.text }}>결제 오류·중복 결제, 또는 다이아가 차감됐으나 특별훈련이 적용되지 않은 경우</Text>는 재화를 조정해 드립니다. 상황을 자세히 적어주세요.
+          </Text>
+        </View>
+      ) : null}
       <TextInput
         style={styles.input}
         placeholder="어떤 점이 궁금하거나 불편하셨나요?"
@@ -157,6 +173,8 @@ const styles = themedStyles(() => StyleSheet.create({
   reply: { marginTop: 8, backgroundColor: theme.good + '14', borderRadius: 10, padding: 10 },
   replyLabel: { color: theme.good, fontSize: 11, fontWeight: '800', marginBottom: 2 },
   replyTxt: { color: theme.text, fontSize: 13, lineHeight: 19 },
+  refundNote: { backgroundColor: theme.warn + '14', borderWidth: 1, borderColor: theme.warn + '44', borderRadius: 10, padding: 11, marginBottom: 12 },
+  refundNoteTxt: { color: theme.muted, fontSize: 12.5, lineHeight: 19 },
   catRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
   cat: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 10 },
   catOn: { backgroundColor: theme.accentGlass, borderColor: theme.accent },

@@ -27,7 +27,8 @@ export interface LedgerRow {
   balanceAfter: number;
   createdAt: string;
 }
-export type TicketCategory = 'bug' | 'suggestion' | 'question' | 'etc';
+export type TicketCategory = 'bug' | 'suggestion' | 'question' | 'etc' | 'refund';
+export interface DeviceInfo { platform: string; osVersion: string; appVersion: string } // 진단 기기정보(§13.17)
 
 type Fail = { ok: false; reason: 'offline' | 'unauthorized' | 'insufficient' | 'bad-request' | 'cap' | 'error'; status?: number };
 export type ServerResult<T> = ({ ok: true } & T) | Fail;
@@ -71,10 +72,10 @@ async function call<T>(path: string, init?: RequestInit): Promise<ServerResult<T
 
 // ── 인증(AUTH_SYSTEM) ──
 /** 신원 → 자체 Bearer 세션. 스텁: provider+providerId. 성공 시 setServerToken은 호출부(useAuthStore)가. */
-export function login(provider: string, providerId: string, displayName?: string) {
+export function login(provider: string, providerId: string, displayName?: string, device?: DeviceInfo) {
   return call<{ token: string; userId: string; provider: string; displayName: string | null }>('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ provider, providerId, displayName }),
+    body: JSON.stringify({ provider, providerId, displayName, device }),
   });
 }
 
@@ -124,14 +125,14 @@ export function uploadLogs(entries: unknown[]) {
 }
 
 // ── 문의 ──
-export function createTicket(category: TicketCategory, content: string) {
+export function createTicket(category: TicketCategory, content: string, device?: DeviceInfo) {
   return call<{ ticketId: string }>('/api/ticket', {
     method: 'POST',
-    body: JSON.stringify({ category, content }),
+    body: JSON.stringify({ category, content, device }),
   });
 }
 export function listTickets() {
-  return call<{ tickets: Array<{ id: string; category: TicketCategory; content: string; reply?: string; createdAt: string }> }>(
+  return call<{ tickets: Array<{ id: string; category: TicketCategory; content: string; status?: string; reply?: string; createdAt: string }> }>(
     '/api/ticket',
   );
 }

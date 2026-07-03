@@ -11,6 +11,7 @@ export default function AdminPage() {
   const [coupons, setCoupons] = useState<Json[]>([]);
   const [anns, setAnns] = useState<Json[]>([]);
   const [setting, setSetting] = useState<Json | null>(null);
+  const [tickets, setTickets] = useState<Json[]>([]);
 
   useEffect(() => { setToken(localStorage.getItem('adminToken') ?? ''); }, []);
   const saveToken = (t: string) => { setToken(t); localStorage.setItem('adminToken', t); };
@@ -22,11 +23,12 @@ export default function AdminPage() {
   }, [token]);
 
   const refresh = useCallback(async () => {
-    const [c, a, s] = await Promise.all([api('/api/admin/coupon'), api('/api/admin/announcement'), api('/api/admin/setting')]);
+    const [c, a, s, tk] = await Promise.all([api('/api/admin/coupon'), api('/api/admin/announcement'), api('/api/admin/setting'), api('/api/admin/ticket')]);
     if (c.status === 401) { setMsg('❌ 토큰이 유효하지 않습니다(401).'); return; }
     setCoupons((c.body.coupons as Json[]) ?? []);
     setAnns((a.body.announcements as Json[]) ?? []);
     setSetting((s.body.setting as Json) ?? null);
+    setTickets((tk.body.tickets as Json[]) ?? []);
     setMsg('✅ 불러왔습니다.');
   }, [api]);
 
@@ -133,6 +135,57 @@ export default function AdminPage() {
         <br />
         <button onClick={saveSetting} style={S.btn}>설정 저장</button>
       </div>
+
+      <div style={S.card}>
+        <div style={S.h2}>문의 · 환불</div>
+        <p style={{ fontSize: 12, color: '#64748b', marginBottom: 8 }}>환불 신청/오류 문의를 확인하고, 필요 시 다이아를 회수(환불 반영)합니다. 환불 시 잔액이 음수가 될 수 있으며, 이 경우 이용자는 추가 소비가 제한됩니다.</p>
+        <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+          {tickets.map((t) => <TicketRow key={String(t.id)} t={t} api={api} onChange={refresh} />)}
+        </ul>
+        {tickets.length === 0 ? <p style={{ fontSize: 13, color: '#64748b' }}>문의가 없습니다(불러오기 후 표시).</p> : null}
+      </div>
     </main>
+  );
+}
+
+function TicketRow({ t, api, onChange }: { t: Json; api: (p: string, init?: RequestInit) => Promise<{ status: number; body: Json }>; onChange: () => void }) {
+  const [reply, setReply] = useState((t.reply as string) ?? '');
+  const [amount, setAmount] = useState('');
+  const [snap, setSnap] = useState('');
+  const [msg, setMsg] = useState('');
+  const CAT: Record<string, string> = { bug: '오류', suggestion: '건의', question: '질문', refund: '환불신청', etc: '기타' };
+  const saveReply = async () => {
+    const r = await api('/api/admin/ticket/reply', { method: 'POST', body: JSON.stringify({ ticketId: t.id, reply }) });
+    setMsg(r.body.ok ? '답변 저장됨' : `실패(${r.status})`); onChange();
+  };
+  const doRefund = async () => {
+    const amt = Math.floor(Number(amount));
+    if (!amt || amt <= 0) { setMsg('환불 다이아를 입력하세요'); return; }
+    const note = reply.trim() || '환불 처리';
+    // 멱등키 = refund:ticket:<ticketId> (티켓당 1회 — 더블클릭/재시도 이중환불 차단, §13.17 P0-2)
+    const r = await api('/api/admin/refund', { method: 'POST', body: JSON.stringify({ userId: t.userId, amount: amt, note, ticketId: t.id, key: `refund:ticket:${t.id}` }) });
+    setMsg(r.body.ok ? `환불 반영 · 잔액 ${r.body.balance}💎${r.body.applied ? '' : ' (이미 처리됨)'}` : `환불 실패(${r.status}: ${r.body.reason ?? ''})`);
+    onChange();
+  };
+  const viewSnap = async () => {
+    const r = await api(`/api/admin/ticket/snapshot?ticketId=${t.id}`);
+    setSnap(r.body.snapshot ? JSON.stringify(r.body.snapshot, null, 2) : '(진단 스냅샷 없음)');
+  };
+  const border = t.status === 'refunded' ? '#16a34a' : t.category === 'refund' ? '#dc2626' : '#e2e8f0';
+  return (
+    <li style={{ border: `1px solid ${border}`, borderRadius: 8, padding: 12, marginBottom: 10, fontSize: 13 }}>
+      <div style={{ fontWeight: 700 }}>[{CAT[String(t.category)] ?? String(t.category)}] · {String(t.status)} · {String(t.displayName ?? t.userId)} · 잔액 {String(t.balance)}💎</div>
+      <div style={{ color: '#475569', fontSize: 12 }}>기기: {String(t.platform ?? t.userPlatform ?? '?')} {String(t.osVersion ?? '')} · 앱 {String(t.appVersion ?? '')} · {String(t.createdAt).slice(0, 19).replace('T', ' ')}</div>
+      <div style={{ margin: '6px 0', whiteSpace: 'pre-wrap' }}>{String(t.content)}</div>
+      <textarea placeholder="답변 / 환불 사유(감사기록에 남음)" value={reply} onChange={(e) => setReply(e.target.value)} style={{ width: '100%', maxWidth: 560, height: 46, padding: 6, border: '1px solid #ccc', borderRadius: 6 }} />
+      <div style={{ marginTop: 6, display: 'flex', gap: 8, alignItems: 'center', flexWrap: 'wrap' }}>
+        <button onClick={saveReply} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#2563eb', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>답변 저장</button>
+        <input placeholder="환불 💎" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 90, padding: 6, border: '1px solid #ccc', borderRadius: 6 }} />
+        <button onClick={doRefund} style={{ padding: '6px 12px', borderRadius: 6, border: 'none', background: '#dc2626', color: '#fff', fontWeight: 700, cursor: 'pointer' }}>환불(다이아 회수)</button>
+        <button onClick={viewSnap} style={{ padding: '6px 12px', borderRadius: 6, border: '1px solid #94a3b8', background: '#fff', fontWeight: 700, cursor: 'pointer' }}>진단 스냅샷</button>
+        {msg ? <span style={{ fontSize: 12 }}>{msg}</span> : null}
+      </div>
+      {snap ? <pre style={{ marginTop: 8, maxHeight: 260, overflow: 'auto', background: '#0f172a', color: '#e2e8f0', padding: 10, borderRadius: 8, fontSize: 11 }}>{snap}</pre> : null}
+    </li>
   );
 }

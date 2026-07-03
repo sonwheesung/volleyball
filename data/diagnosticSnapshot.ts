@@ -24,6 +24,10 @@ export interface SnapshotInput {
   players: Player[]; // 현재 playerBase 값들
   logs: DiagLogEntry[]; // deviceLog 버퍼(범위 내)
   now: number; // Date.now() — 호출부 주입(순수성 유지)
+  // 전지훈련(다이아 유일 소비처) 진단(§13.17) — "차감됐으나 미적용" 케이스 추적용. 선택(구 호출부 호환)
+  diamonds?: number; // 다이아 캐시 잔액(표시)
+  campLog?: Array<{ season: number; playerId: string; course?: string; stats?: string[] }>; // 적용된 전지훈련 내역
+  pendingCamp?: { key: string; playerId: string; course: string; season: number } | null; // 미정산 아웃박스(차감↔적용 사이 흔적)
 }
 
 export interface SnapshotSeason {
@@ -59,6 +63,12 @@ export interface DiagnosticSnapshot {
   players: SnapshotPlayer[];
   releasedNow: string[];
   logs: DiagLogEntry[];
+  // 전지훈련·다이아 진단(§13.17) — 서버 wallet_ledger(권위)와 대조해 "차감됐으나 미적용" 판별
+  wallet: {
+    diamonds: number | null;
+    campLog: Array<{ season: number; playerId: string; course?: string; stats?: string[] }>;
+    pendingCamp: { key: string; playerId: string; course: string; season: number } | null;
+  };
 }
 
 /** 순수 — 입력 상태를 최근 범위로 잘라 진단 스냅샷 JSON을 만든다. 같은 입력 → 같은 출력(결정론). */
@@ -125,5 +135,10 @@ export function buildDiagnosticSnapshot(input: SnapshotInput): DiagnosticSnapsho
     players,
     releasedNow: input.released,
     logs: input.logs.filter((e) => inRange(e.season)),
+    wallet: {
+      diamonds: input.diamonds ?? null,
+      campLog: (input.campLog ?? []).filter((e) => inRange(e.season)),
+      pendingCamp: input.pendingCamp ?? null,
+    },
   };
 }

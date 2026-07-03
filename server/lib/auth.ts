@@ -43,3 +43,16 @@ export async function resolveUserId(req: Request): Promise<string> {
   }
   return ensureUser('dev-user-1', 'dev'); // 익명(비로그인)
 }
+
+/** 요청의 **유효한 Bearer**가 있을 때만 userId, 없으면 null(→401). 익명 폴백 금지(§13.17 P0-5).
+ *  티켓·환불·스냅샷 등 "특정 사용자에 귀속돼야 하는" 라우트용 — 비로그인이 dev-user-1 한 버킷에 붕괴되는 것 차단. */
+export async function requireUserId(req: Request): Promise<string | null> {
+  const auth = req.headers.get('authorization');
+  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
+  const sub = token ? verifyToken(token) : null;
+  if (!sub) return null;
+  const idx = sub.indexOf(':');
+  const provider = idx >= 0 ? sub.slice(0, idx) : 'dev';
+  const providerId = idx >= 0 ? sub.slice(idx + 1) : sub;
+  return ensureUser(providerId, provider);
+}

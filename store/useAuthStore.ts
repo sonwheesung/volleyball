@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login as serverLogin, setServerToken } from '../lib/server';
+import { getDeviceInfo } from '../lib/device';
 
 export interface Session {
   userId: string;
@@ -47,7 +48,7 @@ export const useAuthStore = create<AuthState>()(
           deviceId = genDeviceId();
           set({ deviceId });
         }
-        const r = await serverLogin(provider, deviceId, displayName);
+        const r = await serverLogin(provider, deviceId, displayName, getDeviceInfo()); // 진단 기기정보 동봉(§13.17)
         if (!r.ok) return { ok: false, reason: r.reason === 'offline' ? 'offline' : 'error' };
         const session: Session = { userId: r.userId, provider: r.provider, displayName: r.displayName, token: r.token };
         setServerToken(session.token); // 이후 서버콜에 Bearer

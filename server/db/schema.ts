@@ -1,6 +1,6 @@
 // Drizzle 스키마 (BACKEND_SYSTEM §13.2). 멀티게임: 부모 proj_info + 모든 테이블 proj_code FK로 게임별 격리.
 // balance는 원장 fold(O(n)) 회피 + 동시성 잠금 대상(H2). 원장은 append-only 감사추적(reason+ref로 "어떻게 얻었나" 영구 기록).
-import { pgTable, uuid, text, integer, boolean, timestamp, date, uniqueIndex, index, primaryKey } from 'drizzle-orm/pg-core';
+import { pgTable, uuid, text, integer, boolean, timestamp, date, jsonb, uniqueIndex, index, primaryKey } from 'drizzle-orm/pg-core';
 
 // ── 부모: 게임 카탈로그(정체성) ── 이 서버는 배구명가로 시작, 향후 타 스포츠게임이 같은 재화·결제 구조 공유(§13.2).
 export const projInfo = pgTable('proj_info', {
@@ -31,7 +31,12 @@ export const users = pgTable(
     provider: text('provider').notNull().default('dev'), // google | apple | dev
     providerId: text('provider_id').notNull(),
     displayName: text('display_name'), // 표시 이름(비필수 개인정보 — 파기 대상 가능, §13.9)
-    balance: integer('balance').notNull().default(0), // 영속 다이아 잔액(원장 합과 항상 일치)
+    balance: integer('balance').notNull().default(0), // 영속 다이아 잔액(원장 합과 항상 일치, 환불 시 음수 가능 §13.17)
+    // 진단용 기기정보(§13.17) — 로그인 때 갱신되는 "마지막 로그인 기기"(보조). 최소수집(OS·버전). nullable(Expand-only)
+    platform: text('platform'), // ios | android | web
+    osVersion: text('os_version'),
+    appVersion: text('app_version'),
+    lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }), // 소프트삭제 — 결제 원장 5년 보존 위해 하드삭제 대신(§13.9)
   },
@@ -108,6 +113,40 @@ export const couponRedemptions = pgTable(
   ],
 );
 
+// ── 문의(티켓) — §13.17. 카테고리에 'refund'(환불 신청) 포함. 제출 시점 기기 스냅(어떤 폰서 문제났나)을 박는다.
+export const tickets = pgTable(
+  'tickets',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    category: text('category').notNull(), // bug | suggestion | question | etc | refund
+    content: text('content').notNull(),
+    status: text('status').notNull().default('open'), // open | replied | resolved | refunded
+    reply: text('reply'), // 관리자 답변
+    platform: text('platform'), // 제출 시점 기기(진단) — users.platform과 별개(문제 난 그 기기)
+    osVersion: text('os_version'),
+    appVersion: text('app_version'),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    repliedAt: timestamp('replied_at', { withTimezone: true }),
+  },
+  (t) => [index('tickets_proj_idx').on(t.projCode), index('tickets_user_idx').on(t.userId)],
+);
+
+// ── 진단 스냅샷 — 티켓 분리 테이블(§13.17 P0-4). 10시즌 재생 JSON이 커서 목록 쿼리에 안 붙이고 상세 열 때만 로드.
+// 보관 90일(진단 티어 — 오래된 재생은 가치 0). 티켓 텍스트(3년)보다 짧게 파기.
+export const diagnosticSnapshots = pgTable(
+  'diagnostic_snapshots',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode),
+    ticketId: uuid('ticket_id').notNull().references(() => tickets.id),
+    snapshot: jsonb('snapshot').notNull(), // 최근 10시즌 재생 진단 JSON(전지훈련 내역·로그·선수 포함)
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('snapshot_ticket_idx').on(t.ticketId)],
+);
+
 // ── 수입 일집계(롤업) — 영구 보존(§13.10). 원본 결제가 5년 뒤 파기돼도 총수입은 여기 생존.
 // 매일 크론이 어제치를 재집계 upsert(멱등). 관리자 대시보드(#46)가 즉시 조회(원본 5년 스캔 불필요).
 export const statsDaily = pgTable(
@@ -132,3 +171,5 @@ export type StatsDailyRow = typeof statsDaily.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type CouponRedemption = typeof couponRedemptions.$inferSelect;
+export type Ticket = typeof tickets.$inferSelect;
+export type DiagnosticSnapshot = typeof diagnosticSnapshots.$inferSelect;

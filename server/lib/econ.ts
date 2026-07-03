@@ -33,3 +33,7 @@ export function spendAmount(reason: string): number | null {
   if (reason === 'camp') return CAMP_COST;
   return null;
 }
+
+/** 잔액게이트(next<0) 우회 대상 — **환불만** 음수 balance 허용(§13.17 P0-1). reason 파생(자유 플래그 아님 →
+ *  spend/earn/coupon/camp에 실수로 켜질 사고 구조적 차단). 다 써버린 고래 환불→음수→spend 게이트가 막음(§13.4 H1). */
+export const allowsNegativeBalance = (reason: string): boolean => reason === 'refund';

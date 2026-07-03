@@ -6,6 +6,7 @@ import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { users, walletLedger, projInfo } from '../db/schema';
 import { PROJ_CODE } from './proj';
+import { allowsNegativeBalance } from './econ';
 
 export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon';
 
@@ -44,7 +45,9 @@ export async function applyWalletTx(
 
   const cur = locked[0].balance;
   const next = cur + delta;
-  if (next < 0) return { ok: false as const, reason: 'insufficient' as const, balance: cur };
+  // 환불만 음수 balance 허용(§13.17 P0-1) — reason에서 파생(자유 플래그 아님 → spend에 실수로 켜질 사고 차단).
+  // 다 써버린 고래 환불 → 음수 → spend는 balance 게이트라 더는 못 씀(§13.4 H1). balance==Σledger 불변식 유지.
+  if (!allowsNegativeBalance(reason) && next < 0) return { ok: false as const, reason: 'insufficient' as const, balance: cur };
 
   // 3) 잔액 갱신 + 원장 기록(같은 트랜잭션 = 원자적)
   await tx.update(users).set({ balance: next }).where(eq(users.id, userId));
