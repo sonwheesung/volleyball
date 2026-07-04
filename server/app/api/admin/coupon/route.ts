@@ -17,10 +17,10 @@ export async function POST(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   try {
     const b = (await req.json()) as { code?: string; rewardDiamonds?: number; targetUserId?: string | null; startsAt?: string; endsAt?: string | null };
-    const code = normalizeCode(b.code ?? ''); // 대문자+trim
+    const code = normalizeCode(b.code ?? ''); // 대문자+trim (매칭은 대소문자 무관 — redeem도 normalizeCode)
     const reward = Math.floor(Number(b.rewardDiamonds));
-    // 코드 규격 = 6자리 영문·숫자 고정(클라 입력과 동일 — 발급도 강제해 항상 사용 가능한 코드만 생성)
-    if (!/^[A-Z0-9]{6}$/.test(code) || !Number.isFinite(reward) || reward <= 0 || reward > REWARD_CAP) {
+    // 코드 = 자유 문자열 1~30자(welcome·volleyball·SEASON2627 등). 대소문자 무관(normalizeCode 대문자화)
+    if (!code || code.length > 30 || !Number.isFinite(reward) || reward <= 0 || reward > REWARD_CAP) {
       return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     }
     const startsAt = b.startsAt ? new Date(b.startsAt) : undefined; // 미지정=DB defaultNow()(클럭 일관)
