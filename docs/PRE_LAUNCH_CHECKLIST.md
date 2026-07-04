@@ -13,10 +13,10 @@
 
 > 개발 중 **채팅/문서에 노출된 비밀키**는 그대로 출시하면 안 된다. 전부 새 값으로 회전 후 `.env.local`(로컬)·Vercel 환경변수(운영)에 반영.
 
-- 🔴 ⬜ **DB 비밀번호 회전** — Supabase Dashboard → Database → Reset password → `DATABASE_URL`·`MIGRATE_DATABASE_URL`(로컬 `.env.local` + Vercel env) 갱신. (개발 중 채팅 노출분. 정본 [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) §13.8)
-- 🔴 ⬜ **`SESSION_JWT_SECRET` 회전** — 세션 토큰 서명키. 회전 시 기존 세션 전부 무효(재로그인) — 출시 전이라 무해. 32바이트+ 랜덤.
-- 🔴 ⬜ **`ADMIN_TOKEN` 회전** — 관리자 대시보드 마스터키(= 이거 알면 쿠폰 발급·점검·환불 다 됨). 32바이트+ 랜덤, **16자 이상 필수**(`requireAdmin` fail-closed, §13.15). 로컬 dev 값(`dev-admin-token-000`)과 운영 값 분리.
-- 🔴 ⬜ **`CRON_SECRET`을 Vercel env에 설정** — 미설정 시 크론 라우트가 통과되나 무방비. 스케줄 `0 18 * * *`(3am KST). (§13.10)
+- 🔴 ⬜ **DB 비밀번호 회전** — Supabase Dashboard → Database → Reset password → `DATABASE_URL`·`MIGRATE_DATABASE_URL`(로컬 `.env.local` + Vercel env) 갱신. (개발 중 채팅 노출분. 정본 [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) §13.8) — **미완**(로컬까지 동시 갱신 필요, 다음 세션).
+- 🔴 🔶 **`SESSION_JWT_SECRET` 회전** — 세션 토큰 서명키. 회전 시 기존 세션 전부 무효(재로그인) — 출시 전이라 무해. 32바이트+ 랜덤. **2026-07-04 강random으로 회전+Vercel 재배포+라이브 검증(로그인 토큰 발급 정상)**. ⚠️ 단 회전값이 채팅 경유 → **출시 직전 채팅 무경유 값으로 최종 1회 더 회전 필요**.
+- 🔴 🔶 **`ADMIN_TOKEN` 회전** — 관리자 대시보드 마스터키(= 이거 알면 쿠폰 발급·점검·환불 다 됨). 32바이트+ 랜덤, **16자 이상 필수**(`requireAdmin` fail-closed, §13.15). 로컬 dev 값(`dev-admin-token-000`)과 운영 값 분리. **2026-07-04 강random(43자)으로 회전+검증(가짜/무토큰 401 fail-closed)**. ⚠️ 채팅 경유값 → 출시 직전 최종 회전.
+- 🔴 ✅ **`CRON_SECRET`을 Vercel env에 설정** — 미설정 시 크론 라우트가 통과되나 무방비. 스케줄 `0 18 * * *`(3am KST). (§13.10) **2026-07-04 Vercel Production+Preview 설정 확인.**
 - 🟡 ⬜ `.env.local`은 **절대 커밋 금지** 재확인(`.gitignore` 차단됨). `.env.example`만 커밋(양식). (§13.4 M4)
 - 🟢 ⬜ Supabase 2FA·복구코드 보관 확인(이미 활성).
 
