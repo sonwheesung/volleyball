@@ -1,5 +1,7 @@
 // 선수 아바타 피처 검증 (AVATAR_SYSTEM, 2026-07-04) — faceFeatures가 id 시드 결정론이고 골고루 변형되는지.
 //   npx tsx tools/_dv_face.ts
+// ※ faceCell/FACE_SHEETS는 data/faceSheets.ts(require '*.png' — Metro 전용)라 Node 가드에선 임포트 불가.
+//   여기선 절차적 폴백용 faceFeatures만 검증(시트 칸 배정은 앱에서 실기기 확인 — 단순 인덱스 로직).
 import { faceFeatures, SKIN, HAIR, BG, HAIR_STYLES } from '../data/playerFace';
 
 let fail = 0;

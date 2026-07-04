@@ -17,6 +17,9 @@ export interface FaceFeatures {
 }
 
 // djb2 계열 시드 해시(id+salt) — salt로 독립 인덱스를 여러 개 뽑는다.
+export function faceHash(id: string, salt: string): number {
+  return hash(id, salt);
+}
 function hash(id: string, salt: string): number {
   let h = 5381;
   const s = id + '|' + salt;

@@ -1,8 +1,10 @@
 // 선수 아바타 — id 시드 결정론 얼굴 레이어(여자 V리그 톤) + 유니폼을 react-native-svg로 직접 그린다(오프라인·저장 없음).
 // 온브랜드(B, 2026-07-04): LegendIllustration 스타일 재사용. 이미지 에셋 0. 유대감 1순위 — 전원 회색 아이콘 → 고유 얼굴.
 import { memo } from 'react';
+import { Image, View } from 'react-native';
 import Svg, { Rect, Path, Circle, Ellipse, G } from 'react-native-svg';
 import { faceFeatures } from '../data/playerFace';
+import { faceCell } from '../data/faceSheets';
 
 const EYE = '#2B2320';
 
@@ -50,6 +52,20 @@ function Mouth({ style }: { style: number }) {
 
 export const PlayerAvatar = memo(function PlayerAvatar({ id, size = 84, jersey = '#2E6E8E', trim = '#8FD3E8' }: { id: string; size?: number; jersey?: string; trim?: string }) {
   const f = faceFeatures(id);
+  // 실제 얼굴 시트가 있으면 그 칸을 잘라 렌더(id→칸 결정론). 투명 배경 뒤엔 id별 파스텔.
+  const cell = faceCell(id);
+  if (cell) {
+    return (
+      <View style={{ width: size, height: size, backgroundColor: f.bg, overflow: 'hidden' }}>
+        <Image
+          source={cell.src}
+          style={{ width: size * cell.cols, height: size * cell.rows, position: 'absolute', left: -cell.col * size, top: -cell.row * size }}
+          resizeMode="stretch"
+          fadeDuration={0}
+        />
+      </View>
+    );
+  }
   const hairDark = f.hair;
   return (
     <Svg width={size} height={size} viewBox="0 0 100 100">
