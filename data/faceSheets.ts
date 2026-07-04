@@ -4,22 +4,9 @@
 import { faceHash } from './playerFace';
 
 interface FaceSheet { src: number; cols: number; rows: number; count: number }
-// 화풍: 반실사 애니풍(2026-07-04 사용자 선택 A). ~~플랫 벡터 시트 1~4~~ 폐기하고 이 톤으로 통일.
+// 화풍: 고품질 반실사(2026-07-05 사용자 재선택). ~~반실사 애니풍 시트 1~14(350명)~~ 전량 폐기하고 이 톤으로 재시작.
 export const FACE_SHEETS: FaceSheet[] = [
   { src: require('../assets/players/faces1.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces2.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces3.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces4.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces5.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces6.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces7.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces8.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces9.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces10.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces11.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces12.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces13.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces14.png'), cols: 5, rows: 5, count: 25 },
 ];
 const TOTAL_FACES = FACE_SHEETS.reduce((n, s) => n + s.count, 0);
 
