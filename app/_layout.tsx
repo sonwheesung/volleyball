@@ -120,6 +120,7 @@ export default function RootLayout() {
         <Stack.Screen name="playoffs" options={{ title: '포스트시즌' }} />
         <Stack.Screen name="awards-ceremony" options={{ title: '시상식' }} />
         <Stack.Screen name="training-camp" options={{ title: '전지훈련' }} />
+        <Stack.Screen name="training-policy" options={{ title: '훈련 방침' }} />
         <Stack.Screen name="guide" options={{ title: '게임 가이드' }} />
         <Stack.Screen name="support" options={{ title: '문의하기' }} />
         <Stack.Screen name="announcements" options={{ title: '공지사항' }} />

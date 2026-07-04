@@ -37,15 +37,15 @@ export default function TabsLayout() {
             <Ionicons name="settings-outline" size={22} color={theme.text} />
           </Pressable>
         ),
-        // 탭바 — 글래스(theme.card)는 반투명이라 바닥이 비쳐 지저분 → 솔리드 다크로 또렷하게
-        tabBarStyle: { backgroundColor: '#0E1521', borderTopColor: theme.border },
+        // 탭바 — 글래스(theme.card)는 반투명이라 바닥이 비쳐 지저분 → 솔리드로 또렷하게. 모드별(다크 #0E1521 / 라이트 #FFF, UI-25)
+        tabBarStyle: { backgroundColor: theme.tabBar, borderTopColor: theme.border },
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.muted,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },
         sceneStyle: { backgroundColor: theme.bg },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: '대시보드', tabBarLabel: '구단', tabBarIcon: tabIcon('home-outline', 'home') }} />
+      <Tabs.Screen name="index" options={{ title: '대시보드', tabBarLabel: '홈', tabBarIcon: tabIcon('home-outline', 'home') }} />
       <Tabs.Screen name="schedule" options={{ title: '일정', tabBarLabel: '일정', tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
       <Tabs.Screen name="squad" options={{ title: '선수단', tabBarLabel: '선수단', tabBarIcon: tabIcon('people-outline', 'people') }} />
       <Tabs.Screen name="office" options={{ title: '단장실', tabBarLabel: '단장실', tabBarIcon: tabIcon('briefcase-outline', 'briefcase') }} />

@@ -1,15 +1,9 @@
 import { useLocalSearchParams } from 'expo-router';
-import { Pressable, Text, View } from 'react-native';
+import { Text } from 'react-native';
 import { Card, IconLabel, Muted, Row, Screen, StatBar, STYLE_LABEL, theme } from '../../components/Screen';
 import { getCoach, getTeam } from '../../data/league';
 import { TRAINING_NAME } from '../../engine/training';
-import { ARCHETYPES } from '../../data/seed';
 import { useGameStore } from '../../store/useGameStore';
-import type { TrainingFocus } from '../../types';
-
-const sameFocus = (a: TrainingFocus, b: TrainingFocus): boolean =>
-  [...a.primary].sort().join() === [...b.primary].sort().join() &&
-  [...a.secondary].sort().join() === [...b.secondary].sort().join();
 
 const STYLE_DESC = {
   attack: '공격적 서브·속공 비중↑, 공격적 블로킹. 타임아웃을 아끼고 밀어붙인다.',
@@ -21,8 +15,6 @@ export default function CoachDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const c = id ? getCoach(id) : undefined;
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
-  const trainingFocus = useGameStore((s) => s.trainingFocus);
-  const setTrainingFocus = useGameStore((s) => s.setTrainingFocus);
 
   if (!c) {
     return (
@@ -34,8 +26,6 @@ export default function CoachDetail() {
 
   const team = c.teamId ? getTeam(c.teamId) : undefined;
   const isMine = !!selectedTeamId && c.teamId === selectedTeamId;
-  // 실제 적용 중인 방향: 단장 오버라이드 우선, 없으면 감독 기본
-  const applied: TrainingFocus = isMine && trainingFocus ? trainingFocus : c.trainingFocus;
 
   return (
     <Screen title={c.name}>
@@ -72,51 +62,12 @@ export default function CoachDetail() {
         <Muted style={{ marginTop: 6 }}>
           이 성향에 따라 선수들이 서로 다른 스탯으로 천천히 성장한다.
         </Muted>
+        {isMine ? (
+          <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700', marginTop: 8 }}>
+            → 훈련 방향은 단장실 · 훈련 방침에서 바꿀 수 있습니다.
+          </Text>
+        ) : null}
       </Card>
-
-      {isMine ? (
-        <>
-          <IconLabel icon="trending-up-outline" color={theme.good}>훈련 방향 변경 (단장)</IconLabel>
-          <Card accent={theme.good}>
-            <Muted>팀의 장기 성장 방향을 직접 고른다. 다음 진행부터 즉시 반영.</Muted>
-            <View style={{ gap: 6, marginTop: 8 }}>
-              <FocusOption
-                label={`감독 기본 · ${c.archetype}`}
-                selected={!trainingFocus}
-                onPress={() => setTrainingFocus(null)}
-              />
-              {ARCHETYPES.map((a) => (
-                <FocusOption
-                  key={a.name}
-                  label={`${a.name} · ${a.focus.primary.map((id) => TRAINING_NAME[id]).join('/')}`}
-                  selected={!!trainingFocus && sameFocus(applied, a.focus)}
-                  onPress={() => setTrainingFocus(a.focus)}
-                />
-              ))}
-            </View>
-          </Card>
-        </>
-      ) : null}
     </Screen>
-  );
-}
-
-function FocusOption({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
-  return (
-    <Pressable
-      onPress={onPress}
-      style={({ pressed }) => [
-        {
-          borderWidth: 1.5, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12,
-          borderColor: selected ? theme.accent : theme.border,
-          backgroundColor: selected ? theme.accent + '22' : 'transparent',
-        },
-        pressed && { opacity: 0.7 },
-      ]}
-    >
-      <Text style={{ color: selected ? theme.accent : theme.text, fontWeight: selected ? '800' : '600' }}>
-        {selected ? '✓ ' : ''}{label}
-      </Text>
-    </Pressable>
   );
 }

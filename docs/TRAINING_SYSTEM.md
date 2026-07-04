@@ -17,7 +17,7 @@
 | 12종 훈련 + posRelevance + coachShare | ✅ 구현 | `TRAININGS`(12), `coachShare`= 핵심 0.25 / 보조 0.12 / 나머지 0.02 |
 | **포지션 인식 성장 플로어 + 속도 캘리브레이션** | ✅ 구현(2026-06) | `engine/training.ts` `POS_FLOOR`·상향 `BASE` — 위 ★★ 절 |
 | 노쇠(점프·민첩·체력·체젠 하락) | ✅ 구현 | `engine/aging.ts` — `DECAY_STATS=['jump','agility','staminaMax','staminaRegen']`, `FLOOR=25`. 특성 보정 `agingTraitMult`(대기만성 ×0.8 / 짧은전성기 ×1.25) |
-| 감독 핵심2+보조3 | ✅ 구현 | `data/seed.ts` 7개 아키타입(팀당 1명 결정론 배정). **단장 커스터마이즈 ✅**(`app/coach/[id].tsx` — 7개 아키타입 중 선택해 팀 훈련 방향 오버라이드, `setTrainingFocus`) |
+| 감독 핵심2+보조3 | ✅ 구현 | `data/seed.ts` 7개 아키타입(팀당 1명 결정론 배정). **단장 커스터마이즈 ✅**(감독 기본 또는 7개 아키타입 중 선택해 팀 훈련 방향 오버라이드, `setTrainingFocus`). **2026-07-04 위치 이동+저장확정**: 감독 정보 화면(`app/coach/[id].tsx`)의 즉시적용 셀렉터 → **단장실 → 훈련 방침**(`app/training-policy.tsx`)으로 이동. 초안 선택 → **저장 버튼 + confirm 모달** 확정(오조작 방지, 커스텀 모달 UI-21). 감독 화면엔 읽기전용 성향 + "단장실 · 훈련 방침에서 변경" 안내만 |
 | 일자별 진행(훈련+노쇠) | ✅ 구현 | `engine/progression.ts`(오케스트레이션), 시드 리플레이 |
 | **경기 출전·생산 → 성장(추가 성장원)** | ✅ 구현 | `engine/experience.ts` — 본 문서 외 신규. 아래 1.7 참고 |
 | **선수 특성의 성장·노쇠 보정** | ✅ 구현(2026-06) | `engine/traits.ts` — 훈련 `trainTraitMult`(노력형 ×1.12)·노쇠 `agingTraitMult`. 상세는 TRAIT_SYSTEM |
