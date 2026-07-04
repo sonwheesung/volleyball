@@ -333,6 +333,12 @@
 - **결정론·관전형 격리·throw-none·부팅 비차단** 유지(RC는 purchase→grant 메타만·시드/리플레이 무관). confirm은 임계경로 밖 네트워크콜.
 - **락인 낮음**: 게이트웨이 패턴이라 나중 RC 제거 = 웹훅/confirm만 직접검증으로 교체, 원장·지급 로직 불변. MTR $2.5k/월 무료·초과 1%(스토어 30% 컷 옆 반올림).
 - **문서 정정 대상**: CLAUDE §8·BACKEND §0/§5/§6/§13.3/§13.4·MONETIZATION §6/§6.1/§11.4·PRE_LAUNCH §3 → 이 §13.18로 포인터. **§6.1 "RC 쓰면 우리 DB 불요"는 취소선 유지**(소모성 다이아 원장은 여전히 필요 — RC 재채택이 되살리지 않음).
+- **서버측 구현 완료(2026-07-04, 검증 Opus 4.8)**: 결제 검증 머니패스(라우트·순수판정·매출롤업)를 §13.18대로 구현. **클라 SDK·스토어 상품·EAS·실결제 테스트는 별도**(구조상 서버 밖).
+  - **파일**: `server/lib/products.ts`(다이아 팩 productId→다이아 매핑 = 서버 권위·클라값 무시 / 엔타이틀먼트는 RC customerInfo 소유·원장 무관)·`server/lib/revenuecat.ts`(`verifyWebhookAuth` fail-closed·`decidePurchaseEvent` 순수판정·`rcVerifyPurchase` REST 재검증·`purchaseKey/refundKey`·`recordPurchaseRevenue` statsDaily 롤업)·`server/app/api/purchase/webhook/revenuecat/route.ts`(웹훅)·`server/app/api/purchase/confirm/route.ts`(폴백).
+  - **env(운영 세팅 시 주입)**: `RC_WEBHOOK_SECRET`(웹훅 Authorization·≥16자·미설정=전거부)·`RC_REST_API_KEY`(confirm 폴백 재검증·미설정=confirm 503). Vercel 환경변수·`server/.env.local`.
+  - **매출 롤업**: 지급이 **실제 적용된(applied) 웹훅**만 `statsDaily`(revenueKrw += price·purchaseCount+1·diamondsPurchased += 다이아) 갱신 → 대시보드 매출/전환율 원천. confirm이 grant 경쟁 승리 시 KRW만 유실(재무진실=RC 대시보드라 무해). 환불은 원장만(대시보드 매출은 gross).
+  - **검증**: `server/tools/_dv_purchase.ts`(인증 fail-closed·샌드박스/엔타이틀먼트/미등록/타입 무시·grant/refund·**멱등 dedup**·라우트 통합 401/+1000/재전송 dedup/−1000·테스트유저 정리) 전항 PASS + server tsc 0.
+  - **남은 것(외부)**: `lib/iap.ts` 소모성 다이아 `purchasePackage` + `Purchases.logIn(userId)`(웹훅 귀속 필수) + 구매 resolve 후 `/api/purchase/confirm` 호출 · RC 대시보드 상품/웹훅/키 · Google Play·App Store 다이아 팩 상품 · EAS 빌드 · 샌드박스 실결제.
 
 ### 13.19 다이아 어뷰징 방어 — 구단 초기화·재설치 (2026-07-03, 사용자 보안 감사)
 > **위협**: 구단 초기화(`selectTeam`/`resetSave`)가 `claimedAch`·`adState`를 로컬 리셋 → "다이아 공장(재수령·광고 재시청 farming)" 우려. **결론: 서버가 이미 막고 있음(라이브 E2E 검증) + 사용자 결정으로 계정 재화는 초기화해도 유지.**
