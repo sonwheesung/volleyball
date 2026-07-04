@@ -22,6 +22,7 @@ import { isFranchise } from '../../engine/cap';
 import { overall, overallRaw, displayOvr, fogOvr } from '../../engine/overall';
 import { TRAITS } from '../../engine/traits';
 import { deriveRatings } from '../../engine/ratings';
+import { growthOutlook } from '../../data/growthOutlook';
 import { contractStatus, formatMoney } from '../../engine/salary';
 import { marketVal } from '../../data/awardSalary';
 import { useGameStore } from '../../store/useGameStore';
@@ -218,6 +219,17 @@ export default function PlayerDetail() {
               ) : null}
               {p.isAsianQuota ? <Text style={{ color: theme.elite, fontWeight: '700', fontSize: 12 }}>아시아쿼터{p.nationality ? `·${p.nationality}` : ''}</Text> : p.isForeign ? <Text style={{ color: theme.bad, fontWeight: '700', fontSize: 12 }}>외국인</Text> : null}
               {isFranchise(p) ? <Text style={{ color: theme.warn, fontWeight: '700', fontSize: 12 }}>프랜차이즈</Text> : null}
+              {isMine ? (() => {
+                // 성장 상태(GPT ③) — 숫자 숨기고 성장 여력만 한 눈에. 내 팀 선수만(포텐 공개).
+                const go = growthOutlook(p);
+                const c = go.tone === 'near' ? theme.elite : go.tone === 'plateau' ? theme.muted : theme.good;
+                const icon = go.tone === 'fast' ? '⚡ ' : go.tone === 'growing' ? '📈 ' : go.tone === 'near' ? '🌟 ' : '';
+                return (
+                  <View style={{ backgroundColor: c + '22', borderRadius: 6, paddingHorizontal: 8, paddingVertical: 2 }}>
+                    <Text style={{ color: c, fontWeight: '800', fontSize: 12 }}>{icon}{go.label}</Text>
+                  </View>
+                );
+              })() : null}
             </View>
             <Muted style={{ fontSize: 13 }}>{p.age}세 · {p.height}cm</Muted>
           </View>
