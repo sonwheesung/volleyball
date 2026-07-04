@@ -33,7 +33,7 @@ export const TIPS: Tip[] = [
   { id: 'sched.next', screen: 'tab-schedule', order: 0, anchor: 'sched-next',
     title: '다음 경기', body: '여기서 경기를 진행합니다. ⭐ 빅매치는 직접 관전을 권해요 — 현장 운영(교체·작전)은 감독 몫, 당신은 보는 게임입니다.' },
   { id: 'sched.calendar', screen: 'tab-schedule', order: 1, anchor: 'sched-calendar',
-    title: '일정 캘린더', body: '시즌 전체 일정을 달력으로 봅니다. 다가오는 경기와 빅매치를 미리 가늠하세요.' },
+    title: '우리 팀 일정', body: '우리 팀 시즌 일정을 날짜·요일·홈/원정·상대로 봅니다. 치른 경기는 결과, 앞으로는 예정으로 표시돼요.' },
   { id: 'sched.results', screen: 'tab-schedule', order: 2, anchor: 'sched-results',
     title: '전 구단 경기 결과', body: '리그의 모든 경기 결과를 한눈에. 라이벌 구단들이 어떻게 하고 있는지 확인합니다.' },
 

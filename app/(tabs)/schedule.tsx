@@ -24,7 +24,6 @@ export default function Schedule() {
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
   const campDoneSeason = useGameStore((s) => s.campDoneSeason);
-  const finishCamp = useGameStore((s) => s.finishCamp);
   const results = useGameStore((s) => s.results);
   const archive = useGameStore((s) => s.archive);
   const watchProgress = useGameStore((s) => s.watchProgress);
@@ -103,14 +102,8 @@ export default function Schedule() {
     : null;
 
   // 오프시즌 게이트(2026-07-04 사용자 요청): currentDay 0 + 이번 시즌 전지훈련 미완료 → **전지훈련만** 노출하고
-  // 다음 경기(개막전)는 숨긴다. "전지훈련 마치기"를 눌러야 개막전이 나온다(전지훈련↔다음경기 동시 노출 금지).
+  // 다음 경기(개막전)는 숨긴다. **반드시 캠프를 거쳐** 그 화면의 "마치고 개막전으로"(finishCamp)를 눌러야 개막전이 나온다.
   const offseason = currentDay === 0 && campDoneSeason !== season;
-  const confirmFinishCamp = () => {
-    showAlert('전지훈련 마치기', '이번 시즌 전지훈련을 마치고 개막전을 준비할까요?\n이후에는 이번 시즌 전지훈련을 보낼 수 없어요.', [
-      { text: '취소', style: 'cancel' },
-      { text: '마치기', onPress: () => finishCamp() },
-    ]);
-  };
 
   return (
     <Screen title={`${seasonYear(season)} 일정 · ${season + 1}번째 시즌`}>
@@ -123,13 +116,13 @@ export default function Schedule() {
         </Row>
       </Card>
 
-      {/* 전지훈련 — 오프시즌(currentDay 0, 전지훈련 미완료)에만. 마치면 개막전이 열린다(다음경기와 동시 노출 금지, 2026-07-04). */}
+      {/* 전지훈련 — 오프시즌(currentDay 0, 미완료)엔 이것만(다음경기 숨김). 반드시 전지훈련을 거쳐야 개막전이 열린다:
+          "하러 가기"로 캠프 진입 → 캠프 화면에서 "마치고 개막전으로" → campDone → 다음경기 노출(2026-07-04 사용자 요청). */}
       {offseason ? (
         <Card accent={theme.good}>
           <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
-          <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 마치면 개막전이 시작됩니다.</Muted>
-          <Button label="전지훈련 보내기 →" variant="ghost" onPress={() => router.push('/training-camp')} />
-          <Button label="전지훈련 마치고 개막전으로 →" onPress={confirmFinishCamp} />
+          <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 전지훈련을 마쳐야 개막전이 시작됩니다.</Muted>
+          <Button label="전지훈련 하러 가기 →" onPress={() => router.push('/training-camp')} />
         </Card>
       ) : null}
 
@@ -186,7 +179,7 @@ export default function Schedule() {
       )}
 
       <SpotlightTarget id="sched-calendar">
-        <Button label="일정 보러 가기 (캘린더)" variant="ghost" onPress={() => router.push('/calendar')} />
+        <Button label="우리 팀 일정 보기" variant="ghost" onPress={() => router.push('/calendar')} />
       </SpotlightTarget>
       <SpotlightTarget id="sched-results">
         <Button label="전 구단 경기 결과 보기" variant="ghost" onPress={() => router.push('/results')} />

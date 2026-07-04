@@ -25,11 +25,19 @@ export default function TrainingCamp() {
   const { chain } = useLocalSearchParams<{ chain?: string }>();
   const inChain = chain === '1';
   const goNext = () => router.replace('/enshrine'); // 헌액(0명이면 자동 통과 → 대시보드)
+  // 스케줄 오프시즌 게이트에서 진입(비-chain) — 캠프를 마치면 campDoneSeason 세팅 → 스케줄에 개막전(다음 경기) 노출(2026-07-04).
+  const finishToOpener = () => {
+    showAlert('전지훈련 마치기', '전지훈련을 마치고 개막전을 시작할까요?\n이후에는 이번 시즌 전지훈련을 보낼 수 없어요.', [
+      { text: '더 훈련하기', style: 'cancel' },
+      { text: '마치고 개막전으로', onPress: () => { finishCamp(); router.back(); } },
+    ]);
+  };
   const my = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const diamonds = useGameStore((s) => s.diamonds);
   const camped = useGameStore((s) => s.campTrainedThisOffseason);
   const trainingCamp = useGameStore((s) => s.trainingCamp);
+  const finishCamp = useGameStore((s) => s.finishCamp);
   const walletBusy = useGameStore((s) => s.walletBusy);
   const [picked, setPicked] = useState<string | null>(null);
   const [course, setCourse] = useState<CampCourse | null>(null);
@@ -92,11 +100,11 @@ export default function TrainingCamp() {
             </Pressable>
           );
         })}
-        {inChain ? (
-          <View style={{ marginTop: 14 }}>
-            <Button label="새 시즌으로 ▶" onPress={goNext} />
-          </View>
-        ) : null}
+        <View style={{ marginTop: 14 }}>
+          {inChain
+            ? <Button label="새 시즌으로 ▶" onPress={goNext} />
+            : <Button label="전지훈련 마치고 개막전으로 →" onPress={finishToOpener} />}
+        </View>
       </Screen>
     );
   }
