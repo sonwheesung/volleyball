@@ -337,7 +337,8 @@
   - **파일**: `server/lib/products.ts`(다이아 팩 productId→다이아 매핑 = 서버 권위·클라값 무시 / 엔타이틀먼트는 RC customerInfo 소유·원장 무관)·`server/lib/revenuecat.ts`(`verifyWebhookAuth` fail-closed·`decidePurchaseEvent` 순수판정·`rcVerifyPurchase` REST 재검증·`purchaseKey/refundKey`·`recordPurchaseRevenue` statsDaily 롤업)·`server/app/api/purchase/webhook/revenuecat/route.ts`(웹훅)·`server/app/api/purchase/confirm/route.ts`(폴백).
   - **env(운영 세팅 시 주입)**: `RC_WEBHOOK_SECRET`(웹훅 Authorization·≥16자·미설정=전거부)·`RC_REST_API_KEY`(confirm 폴백 재검증·미설정=confirm 503). Vercel 환경변수·`server/.env.local`.
   - **매출 롤업**: 지급이 **실제 적용된(applied) 웹훅**만 `statsDaily`(revenueKrw += price·purchaseCount+1·diamondsPurchased += 다이아) 갱신 → 대시보드 매출/전환율 원천. confirm이 grant 경쟁 승리 시 KRW만 유실(재무진실=RC 대시보드라 무해). 환불은 원장만(대시보드 매출은 gross).
-  - **검증**: `server/tools/_dv_purchase.ts`(인증 fail-closed·샌드박스/엔타이틀먼트/미등록/타입 무시·grant/refund·**멱등 dedup**·라우트 통합 401/+1000/재전송 dedup/−1000·테스트유저 정리) 전항 PASS + server tsc 0.
+  - **엣지 처리(2026-07-04)**: ① **소모성 전용 타입만** — 지급=INITIAL/NON_RENEWING만, 회수=CANCELLATION/REFUND만. RENEWAL/UNCANCELLATION/EXPIRATION(구독)은 무시(UNCANCELLATION을 지급 두면 원구매 키와 dedup돼 환불 되돌림 어긋남). ② **익명 app_user_id 방어** — `$RCAnonymousID`·비-UUID면 무시(200, 재시도 폭풍 방지) → confirm 폴백이 메꿈(클라 `logIn` 누락 대비). ③ **순서역전 안전** — 가법 원장이라 환불이 지급보다 먼저 와도 순 0 수렴. ④ **이중 환불 dedup**(같은 txn 재전송). ⑤ **관리자 수동환불↔RC 자동환불 이중차감** — 키가 달라(ticket vs storeTxn) 자동 dedup 안 됨 → **운영 규칙 분리**(스토어 결제분은 RC만·수동 금지, `admin/refund` 주석 명문화).
+  - **검증**: `server/tools/_dv_purchase.ts`(인증 fail-closed·샌드박스/엔타이틀먼트/미등록/구독타입/익명 무시·grant/refund·**멱등 dedup**·이중환불 dedup·순서역전 순0·라우트 통합 401/+1000/재전송 dedup/−1000·테스트유저 정리) 전항 PASS + server tsc 0.
   - **남은 것(외부)**: `lib/iap.ts` 소모성 다이아 `purchasePackage` + `Purchases.logIn(userId)`(웹훅 귀속 필수) + 구매 resolve 후 `/api/purchase/confirm` 호출 · RC 대시보드 상품/웹훅/키 · Google Play·App Store 다이아 팩 상품 · EAS 빌드 · 샌드박스 실결제.
 
 ### 13.19 다이아 어뷰징 방어 — 구단 초기화·재설치 (2026-07-03, 사용자 보안 감사)

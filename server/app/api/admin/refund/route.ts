@@ -2,6 +2,9 @@
 // 단일 트랜잭션(§13.17 P0-3): applyWalletTx(−amount, 'refund', key) + 티켓 status='refunded'. 음수 balance 허용(reason='refund').
 // 멱등키는 **관리자 UI가 생성**(P0-2 — 서버 생성 시 더블클릭 이중환불). ref=note가 곧 감사기록(원장 5년 보존).
 // ※실 결제 환불(카드)은 스토어 정책 경유(#43 웹훅) — 이 라우트는 재화(다이아) 조정만.
+// ⚠ **RC 자동환불과 이중차감 주의(§13.18)**: RC 웹훅 CANCELLATION/REFUND가 이미 `refund:<userId>:<storeTxnId>`로 다이아를
+//    회수한다. **스토어 결제분은 여기서 수동 환불 금지**(RC가 처리) — 관리자 수동 환불은 RC가 못 잡는 건(광고/업적/굿윌)만.
+//    두 경로 키가 달라(ticket키 vs storeTxn키) 자동 dedup 안 됨 → 운영 규칙으로 분리(§13.18 명문화).
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/observability';
 import { eq, sql } from 'drizzle-orm';

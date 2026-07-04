@@ -22,7 +22,7 @@ process.env.RC_WEBHOOK_SECRET = 'test-secret-abcdef0123456789'; // ≥16자(fail
   ok(verifyWebhookAuth(null) === false, '헤더 없음 → 거부');
 
   console.log('── 이벤트 판정(순수·서버 권위) ──');
-  const base = { app_user_id: 'u1', transaction_id: 'GPA.001', environment: 'PRODUCTION' };
+  const base = { app_user_id: '11111111-1111-1111-1111-111111111111', transaction_id: 'GPA.001', environment: 'PRODUCTION' };
   const grant = decidePurchaseEvent({ ...base, type: 'NON_RENEWING_PURCHASE', product_id: 'dia_1000', currency: 'KRW', price_in_purchased_currency: 3300 });
   ok(grant.action === 'grant' && grant.action === 'grant' && grant.diamonds === 1000 && grant.priceKrw === 3300, 'dia_1000 구매 → grant 1000·KRW 3300');
   const refund = decidePurchaseEvent({ ...base, type: 'CANCELLATION', product_id: 'dia_1000' });
@@ -32,6 +32,12 @@ process.env.RC_WEBHOOK_SECRET = 'test-secret-abcdef0123456789'; // ≥16자(fail
   ok(decidePurchaseEvent({ ...base, type: 'NON_RENEWING_PURCHASE', product_id: 'dia_99999' }).action === 'ignore', '미등록 상품 → 무시(fail-closed)');
   ok(decidePurchaseEvent({ ...base, type: 'TEST', product_id: 'dia_1000' }).action === 'ignore', '미지원 타입 → 무시');
   ok(decidePurchaseEvent({ type: 'NON_RENEWING_PURCHASE', product_id: 'dia_1000' }).action === 'ignore', '필수 필드 누락 → 무시');
+  // 엣지: 구독 이벤트(소모성엔 안 옴) 무시 — UNCANCELLATION이 지급이면 원구매 키와 dedup되어 환불 되돌림 어긋남
+  for (const t of ['RENEWAL', 'UNCANCELLATION', 'EXPIRATION']) ok(decidePurchaseEvent({ ...base, type: t, product_id: 'dia_1000' }).action === 'ignore', `구독 이벤트 ${t} → 무시(소모성 전용)`);
+  // 엣지: 익명 app_user_id($RCAnonymousID)·비-UUID → 무시(재시도 폭풍 방지, confirm 폴백이 메꿈)
+  ok(decidePurchaseEvent({ ...base, app_user_id: '$RCAnonymousID:abc', type: 'NON_RENEWING_PURCHASE', product_id: 'dia_1000' }).action === 'ignore', '익명 id($RCAnonymousID) → 무시(logIn 누락 방어)');
+  ok(decidePurchaseEvent({ ...base, app_user_id: 'not-a-uuid', type: 'NON_RENEWING_PURCHASE', product_id: 'dia_1000' }).action === 'ignore', '비-UUID app_user_id → 무시');
+  ok(decidePurchaseEvent({ ...base, app_user_id: '12e03390-f90d-40d0-b3f4-2a1a6ac3698d', type: 'NON_RENEWING_PURCHASE', product_id: 'dia_1000' }).action === 'grant', 'UUID app_user_id → 정상 grant');
   ok(productDiamonds('dia_2500') === 2500 && productDiamonds('nope') === null, '상품 매핑(서버 권위·클라값 무시)');
   ok(priceKrwOf({ currency: 'USD', price_in_purchased_currency: 2.99 }) === null, '비-KRW 통화 → null(역산 금지)');
   ok(purchaseKey('u1', 'T9') === 'purchase:u1:T9' && refundKey('u1', 'T9') === 'refund:u1:T9', '멱등키=스토어거래id 자연키');
@@ -54,6 +60,12 @@ process.env.RC_WEBHOOK_SECRET = 'test-secret-abcdef0123456789'; // ≥16자(fail
   ok(await bal() === 1000, '  이중지급 없음(잔액 그대로)');
   const rRef = await (await post({ ...ev, transaction_id: '_TEST_TXN_1', type: 'CANCELLATION' }, SEC)).json();
   ok(rRef.ok && await bal() === 0, '환불 웹훅(refund 키) → −1000(잔액 0)');
+  const rRef2 = await (await post({ ...ev, transaction_id: '_TEST_TXN_1', type: 'REFUND' }, SEC)).json();
+  ok(rRef2.ok && rRef2.applied === false && await bal() === 0, '엣지: 이중 환불(같은 txn) → dedup(잔액 0 유지·이중차감 없음)');
+  // 엣지: 순서 역전 — 환불 웹훅이 지급보다 먼저 도착(새 txn). 가법 원장이라 순서 무관하게 순 0으로 수렴.
+  const ev2 = { ...ev, transaction_id: '_TEST_TXN_2' };
+  await post({ ...ev2, type: 'CANCELLATION' }, SEC); ok(await bal() === -1000, '  순서역전: 환불 먼저 → −1000(음수 허용)');
+  await post({ ...ev2, type: 'NON_RENEWING_PURCHASE' }, SEC); ok(await bal() === 0, '  순서역전: 지급 나중 → 순 0(가법 수렴)');
 
   // 정리 — 테스트 원장·유저 삭제(공유 DB 오염 방지). statsDaily는 priceKrw 미포함(KRW 0)이라 매출 무변, count만 +1 — 복구.
   await db.delete(walletLedger).where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, uid!)));

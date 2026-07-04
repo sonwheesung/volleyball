@@ -10,9 +10,11 @@ import { productDiamonds } from './products';
 export const RC_WEBHOOK_SECRET = process.env.RC_WEBHOOK_SECRET ?? '';
 export const RC_REST_API_KEY = process.env.RC_REST_API_KEY ?? '';
 
-// RC 웹훅 이벤트 타입 → 지급/환불/무시. 소모성(다이아) 기준: 최초구매·비갱신구매·갱신=지급 / 취소·환불·만료=회수.
-const GRANT_TYPES = new Set(['INITIAL_PURCHASE', 'NON_RENEWING_PURCHASE', 'RENEWAL', 'UNCANCELLATION']);
-const REFUND_TYPES = new Set(['CANCELLATION', 'REFUND', 'EXPIRATION']);
+// RC 웹훅 이벤트 타입 → 지급/환불/무시. **소모성 다이아 팩 전용**(구독 없음)이라 일회성 이벤트만 처리:
+//   지급=INITIAL_PURCHASE·NON_RENEWING_PURCHASE / 회수=CANCELLATION·REFUND. RENEWAL/UNCANCELLATION/EXPIRATION(구독용)은
+//   무시 — UNCANCELLATION을 지급으로 두면 원구매와 같은 purchaseKey라 dedup되며 환불 되돌림이 어긋남(엣지). 소모성엔 애초에 안 옴.
+const GRANT_TYPES = new Set(['INITIAL_PURCHASE', 'NON_RENEWING_PURCHASE']);
+const REFUND_TYPES = new Set(['CANCELLATION', 'REFUND']);
 
 export type PurchaseDecision =
   | { action: 'grant' | 'refund'; userId: string; diamonds: number; storeTxnId: string; productId: string; priceKrw: number | null }
@@ -42,6 +44,11 @@ export function decidePurchaseEvent(ev: unknown): PurchaseDecision {
   const productId = String(e.product_id ?? '');
   const storeTxnId = String(e.transaction_id ?? e.id ?? '');
   if (!userId || !productId || !storeTxnId) return { action: 'ignore', reason: 'missing-fields' };
+  // 익명 id($RCAnonymousID:…) — 클라가 Purchases.logIn(userId)를 안 함(§13.18 최대 함정). 유저 FK가 없어 지급 불가라
+  // 무시(200)로 재시도 폭풍 방지 → confirm 폴백(진짜 userId Bearer)이 메꾼다. UUID 아닌 app_user_id도 동일 처리.
+  if (userId.startsWith('$') || !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    return { action: 'ignore', reason: 'anonymous-user' };
+  }
   const type = String(e.type ?? '');
   const isGrant = GRANT_TYPES.has(type), isRefund = REFUND_TYPES.has(type);
   if (!isGrant && !isRefund) return { action: 'ignore', reason: `type:${type}` };
