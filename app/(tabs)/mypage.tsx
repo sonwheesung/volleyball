@@ -4,14 +4,16 @@
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { useEffect, useState, type ComponentProps } from 'react';
+import { useEffect, useMemo, useState, type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../../components/AppDialog';
 import { Card, Muted, Screen, theme, themedStyles } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
 import { useAuthStore } from '../../store/useAuthStore';
-import { AD_REWARD, AD_DAILY_CAP, canWatchAd } from '../../engine/diamonds';
+import { AD_REWARD, AD_DAILY_CAP, canWatchAd, unclaimedReward } from '../../engine/diamonds';
+import { evalAchievements } from '../../engine/achievements';
+import { achTotals } from '../../data/careerTotals';
 import { DEV_TOOLS } from '../../data/flags';
 import { logError } from '../../lib/log';
 
@@ -41,6 +43,22 @@ export default function MyPage() {
   const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
   const walletBusy = useGameStore((s) => s.walletBusy);
   const adState = useGameStore((s) => s.adState);
+  // 수령 가능한 업적 보상 유무 — 없으면 버튼 비활성(색·무동작). achTotals로 시즌중 통산 업적도 반영.
+  const myTeamId = useGameStore((s) => s.selectedTeamId) ?? '';
+  const archive = useGameStore((s) => s.archive);
+  const hof = useGameStore((s) => s.hallOfFame);
+  const milestones = useGameStore((s) => s.milestones);
+  const cash = useGameStore((s) => s.cash);
+  const fanScore = useGameStore((s) => s.fanScore);
+  const careerLog = useGameStore((s) => s.careerLog);
+  const careerTotals = useGameStore((s) => s.careerTotals);
+  const results = useGameStore((s) => s.results);
+  const claimedAch = useGameStore((s) => s.claimedAch);
+  const unclaimedCount = useMemo(() => {
+    if (!myTeamId) return 0;
+    const statuses = evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals: achTotals(myTeamId, careerTotals, results) });
+    return unclaimedReward(statuses, claimedAch).ids.length;
+  }, [myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals, results, claimedAch]);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
@@ -100,7 +118,9 @@ export default function MyPage() {
                 : `⏳ ${fmtLeft(adAvail.msLeft)} 후`}
             </Text>
           </Pressable>
-          <Pressable onPress={claimAch} disabled={walletBusy} style={[styles.diaBtn, walletBusy && { opacity: 0.5 }]}><Text style={styles.diaBtnTxt}>🏅 업적 보상 받기</Text></Pressable>
+          <Pressable onPress={claimAch} disabled={walletBusy || unclaimedCount === 0} style={[styles.diaBtn, (walletBusy || unclaimedCount === 0) && styles.diaBtnOff]}>
+            <Text style={[styles.diaBtnTxt, unclaimedCount === 0 && styles.diaBtnTxtOff]}>{unclaimedCount > 0 ? `🏅 업적 보상 받기 (${unclaimedCount})` : '🏅 받을 보상 없음'}</Text>
+          </Pressable>
         </View>
         {DEV_TOOLS ? (
           <View style={{ paddingTop: 8, gap: 6 }}>
@@ -184,6 +204,8 @@ const styles = themedStyles(() => StyleSheet.create({
   arrow: { color: theme.accent, fontSize: 24, fontWeight: '900' },
   diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '800' },
+  diaBtnOff: { backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.border, opacity: 0.6 }, // 수령 불가 — 회색 비활성
+  diaBtnTxtOff: { color: theme.muted },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 22, borderRadius: 11, borderWidth: 1, borderColor: theme.bad + '55', backgroundColor: theme.bad + '12' },
   logoutTxt: { color: theme.bad, fontSize: 13.5, fontWeight: '800' },
 }));
