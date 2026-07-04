@@ -8,7 +8,7 @@ import { getEvolvedTeamPlayers, getTeam } from '../../data/league';
 import { seasonYear } from '../../data/seasonLabel';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings, leagueDisplayDay, seasonResults } from '../../data/standings';
-import { teamInjuriesOn, availableTeamPlayers } from '../../data/injury';
+import { availableTeamPlayers } from '../../data/injury';
 import { buildNewsFeed, newsKey } from '../../data/news';
 import { teamOverallRaw } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
@@ -57,7 +57,6 @@ export default function Dashboard() {
 
   const standings = useMemo(() => computeStandings(leagueDisplayDay(currentDay)), [currentDay, season]);
   const myRank = standings.findIndex((s) => s.teamId === teamId) + 1;
-  const injuries = useMemo(() => teamInjuriesOn(teamId, currentDay), [teamId, currentDay, season]);
   const milestones = useGameStore((s) => s.milestones);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const expelledLog = useGameStore((s) => s.expelledLog);
@@ -123,14 +122,13 @@ export default function Dashboard() {
         </Card>
       </SpotlightTarget>
 
-      {/* 순위 + 부상자 수(있으면) — 누르면 순위표만 */}
+      {/* 순위 — 누르면 순위표. 부상은 여기 표시하지 않는다(순위와 무관) — 선수단 탭 🚑 배지로만(2026-07-04 사용자 결정) */}
       <SpotlightTarget id="dash-standings">
         <Card accent={theme.accent} onPress={() => router.push('/standings')}>
           <Row>
             <IconLabel icon="podium-outline" color={theme.accent}>리그 순위</IconLabel>
             <Text style={{ color: theme.text, fontWeight: '800' }}>
               {myRank > 0 ? `${myRank}위 / ${standings.length}` : '-'}
-              {injuries.length > 0 ? <Text style={{ color: theme.bad }}>{`  · 🩹 ${injuries.length}`}</Text> : null}
               {' ›'}
             </Text>
           </Row>

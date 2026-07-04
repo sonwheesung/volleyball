@@ -405,9 +405,9 @@ export function buildNewsFeed(
       body3('retire', key, `${teamName(r.teamId)}의 ${posKo} ${r.name}이(가) ${r.seasons}시즌의 커리어를 마치고 코트를 떠난다. ${josa(stat, '이었다', '였다')}.` + tail), r.playerId);
   }
 
-  // 4) 이번 시즌 큰 부상(중상·시즌아웃만 — 경미는 단신 제외)
+  // 4) 이번 시즌 부상 — 경미 포함 전 심각도 단신(2026-07-04 사용자 결정: 부상 소식을 뉴스 한 곳에서 다 보게).
+  //    시즌아웃만 big(★). 선수당 시즌 1건(key dedup)이라 도배 방지. 미래 부상은 리그 진행 컷오프로 제외.
   for (const s of seasonInjuryReport()) {
-    if (s.severity !== 'major' && s.severity !== 'season') continue;
     if (s.from > leagueDay) continue; // 아직 안 일어난 미래 부상 제외 — 리그 진행 컷오프(NEWS_SYSTEM §3.5)
     const out = s.severity === 'season' ? '시즌아웃' : `약 ${s.missMatches}경기 결장`;
     const key = `${currentSeason}:inj:${s.playerId}`;

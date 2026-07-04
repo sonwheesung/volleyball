@@ -64,7 +64,7 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 | **연패** | streak | 팀 시즌 중 연패 ≥ 임계 | 10+=★ | 동상 |
 | **업셋** | match | 하위팀이 상위팀을 꺾음(순위차/OVR차 임계 이상) | 큰격차=★ | 경기 결과 + 그 시점 순위 |
 | **선두 등극·순위 변동** | standing | 라운드 경계에서 1위 등극/추락 등 변동 | 1위등극=★ | 라운드별 순위 |
-| 부상(중상·시즌아웃) | injury | seasonInjuryReport (기존) | 시즌아웃=★ | seasonInjuryReport |
+| 부상(전 심각도 — 경미 포함, 2026-07-04) | injury | seasonInjuryReport (기존) | 시즌아웃=★ | seasonInjuryReport |
 | 사건·사고/영구제명 | scandal | seasonScandals/expelled (기존) | ★ | dynamics/expel |
 | 간판선수 벤치 술렁 | owner | benchDirectives, pop≥60 (기존) | pop≥78=★ | benchDirectives |
 
