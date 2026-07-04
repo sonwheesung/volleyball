@@ -4,9 +4,12 @@
 import { faceHash } from './playerFace';
 
 interface FaceSheet { src: number; cols: number; rows: number; count: number }
-// 화풍 재정비(2026-07-05 사용자): 기존 시트 전량 제거하고 **빈 상태로 리셋**. 시트 없으면 faceCell=null →
-// PlayerAvatar가 절차적 아바타로 폴백(회색 아이콘 아님). 새 3×3 클린 반실사 시트를 받으면 여기 다시 채운다.
-export const FACE_SHEETS: FaceSheet[] = [];
+// 화풍 재정비(2026-07-05 사용자): 기존 시트 전량 제거 후 새 **클린 반실사 3×3** 시트로 재구축.
+// 시트 없으면 faceCell=null → PlayerAvatar가 절차적 아바타로 폴백(회색 아이콘 아님).
+// faces1: GPT 생성 3×3(9명), 크로마키 초록 제거된 투명 PNG. 화풍 = 한국 웹툰 반실사·틸 민소매.
+export const FACE_SHEETS: FaceSheet[] = [
+  { src: require('../assets/players/faces1.png'), cols: 3, rows: 3, count: 9 },
+];
 const TOTAL_FACES = FACE_SHEETS.reduce((n, s) => n + s.count, 0);
 
 export interface FaceCell { src: number; cols: number; rows: number; col: number; row: number }
