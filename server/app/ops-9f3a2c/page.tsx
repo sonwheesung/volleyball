@@ -645,6 +645,14 @@ function CouponModal({ coupon, api, reload, flash, onClose }: { coupon: Json | n
   const [target, setTarget] = useState(coupon?.targetUserId ? String(coupon.targetUserId) : '');
   const [ends, setEnds] = useState(coupon?.endsAt ? String(coupon.endsAt).slice(0, 10) : '');
   const [disabled, setDisabled] = useState(!!coupon?.disabled);
+  // 사용 내역(누가·언제 썼나) — 기존 쿠폰 상세 열 때 로드
+  const [redemptions, setRedemptions] = useState<Json[] | null>(null);
+  useEffect(() => {
+    if (!coupon) return;
+    let live = true;
+    api(`/api/admin/coupon/redemptions?couponId=${encodeURIComponent(String(coupon.id))}`).then((r) => { if (live) setRedemptions((r.body.redemptions as Json[]) ?? []); });
+    return () => { live = false; };
+  }, [api, coupon]);
   const save = async () => {
     setBusy(true);
     const target2 = mode === 'user' ? (target.trim() || null) : null;
@@ -675,7 +683,25 @@ function CouponModal({ coupon, api, reload, flash, onClose }: { coupon: Json | n
         <div className="oc-dl-row"><span className="oc-dl-k">상태</span><span className="oc-dl-v">{coupon.disabled ? <span className="oc-badge dg">비활성</span> : <span className="oc-badge gd">활성</span>}</span></div>
         <div className="oc-dl-row"><span className="oc-dl-k">종료일</span><span className="oc-dl-v">{coupon.endsAt ? String(coupon.endsAt).slice(0, 10) : '무기한'}</span></div>
         <div className="oc-dl-row"><span className="oc-dl-k">생성일</span><span className="oc-dl-v">{coupon.createdAt ? String(coupon.createdAt).slice(0, 19).replace('T', ' ') : '—'}</span></div>
+        <div className="oc-dl-row"><span className="oc-dl-k">사용 횟수</span><span className="oc-dl-v">{redemptions == null ? '불러오는 중…' : `${redemptions.length}회`}</span></div>
       </div>
+      {redemptions && redemptions.length > 0 ? (
+        <div className="oc-dl-block">
+          <div className="oc-dl-k" style={{ marginBottom: 8 }}>사용자 내역 (누가·언제)</div>
+          <table className="oc-table">
+            <thead><tr><th>사용자</th><th>로그인</th><th style={{ textAlign: 'right' }}>사용 시각</th></tr></thead>
+            <tbody>{redemptions.map((r, i) => (
+              <tr key={i}>
+                <td className="oc-mut" title={String(r.userId)}>{r.name ? String(r.name) : String(r.userId).slice(0, 8) + '…'}</td>
+                <td className="oc-mut">{String(r.provider ?? '—')}</td>
+                <td className="oc-mut" style={{ textAlign: 'right' }}>{String(r.redeemedAt).slice(0, 19).replace('T', ' ')}</td>
+              </tr>
+            ))}</tbody>
+          </table>
+        </div>
+      ) : redemptions && redemptions.length === 0 ? (
+        <div className="oc-mut" style={{ fontSize: 13, marginTop: 2 }}>아직 아무도 사용하지 않았습니다.</div>
+      ) : null}
     </Modal>
   );
 
