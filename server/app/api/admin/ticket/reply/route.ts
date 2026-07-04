@@ -8,7 +8,8 @@ import { isAdmin } from '../../../../../lib/admin';
 
 export const dynamic = 'force-dynamic';
 
-const STATUSES = new Set(['open', 'replied', 'resolved', 'refunded']);
+// 상태 워크플로: open(대기) → reviewing(확인 중) → answered(답변완료) + refunded(환불완료). 관리자가 답변 시 직접 지정.
+const STATUSES = new Set(['open', 'reviewing', 'answered', 'refunded', 'replied', 'resolved']); // replied/resolved=레거시 허용
 
 export async function POST(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
@@ -16,7 +17,7 @@ export async function POST(req: Request) {
     const b = (await req.json()) as { ticketId?: string; reply?: string; status?: string };
     if (!b.ticketId) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     const reply = typeof b.reply === 'string' ? b.reply.slice(0, 4000) : undefined;
-    const status = b.status && STATUSES.has(b.status) ? b.status : reply ? 'replied' : undefined;
+    const status = b.status && STATUSES.has(b.status) ? b.status : reply ? 'answered' : undefined;
     const patch: Record<string, unknown> = { repliedAt: sql`now()` };
     if (reply !== undefined) patch.reply = reply;
     if (status) patch.status = status;

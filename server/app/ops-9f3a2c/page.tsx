@@ -210,7 +210,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   useEffect(() => { load(); }, [load]);
 
-  const openTickets = useMemo(() => tickets.filter((t) => t.status !== 'answered' && t.status !== 'refunded').length, [tickets]);
+  // 미처리 = 대기(open) + 확인 중(reviewing). 답변완료·환불완료·레거시(replied/resolved)는 처리됨.
+  const openTickets = useMemo(() => tickets.filter((t) => { const s = String(t.status ?? 'open'); return s === 'open' || s === 'reviewing'; }).length, [tickets]);
 
   return (
     <div className="oc-shell">
@@ -379,8 +380,9 @@ function LineCard({ title, value, labels, data, color }: { title: string; value:
 
 const CAT: Record<string, string> = { bug: '오류', suggestion: '건의', question: '질문', refund: '환불신청', etc: '기타' };
 function StatusBadge({ s }: { s: string }) {
-  const cls = s === 'refunded' ? 'gd' : s === 'answered' ? 'ac' : 'wn';
-  const ko = s === 'refunded' ? '환불완료' : s === 'answered' ? '답변완료' : s === 'open' ? '대기' : s;
+  const done = s === 'answered' || s === 'replied' || s === 'resolved'; // 레거시 replied/resolved=답변완료 취급
+  const cls = s === 'refunded' ? 'ac' : done ? 'gd' : s === 'reviewing' ? 'wn' : 'mut';
+  const ko = s === 'refunded' ? '환불완료' : done ? '답변완료' : s === 'reviewing' ? '확인 중' : '대기';
   return <span className={`oc-badge ${cls}`}>{ko}</span>;
 }
 
@@ -808,13 +810,16 @@ function Settings({ setting, api, reload, flash }: { setting: Json | null; api: 
 
 function Tickets({ tickets, api, reload }: { tickets: Json[]; api: Api; reload: () => void }) {
   const [cat, setCat] = useState('all');
-  const [st, setSt] = useState<'all' | 'answered' | 'unanswered'>('unanswered');
+  const [st, setSt] = useState<'all' | 'pending' | 'open' | 'reviewing' | 'answered'>('pending');
   const [sel, setSel] = useState<Json | null>(null);
   const filtered = tickets.filter((t) => {
     if (cat !== 'all' && String(t.category) !== cat) return false;
-    const isOpen = String(t.status ?? 'open') === 'open';
-    if (st === 'unanswered' && !isOpen) return false;
-    if (st === 'answered' && isOpen) return false;
+    const s = String(t.status ?? 'open');
+    const done = s === 'answered' || s === 'replied' || s === 'resolved' || s === 'refunded';
+    if (st === 'pending' && !(s === 'open' || s === 'reviewing')) return false; // 미처리 = 대기+확인중
+    if (st === 'open' && s !== 'open') return false;
+    if (st === 'reviewing' && s !== 'reviewing') return false;
+    if (st === 'answered' && !done) return false;
     return true;
   });
   const ss = { padding: '8px 10px', width: 126 } as const;
@@ -826,8 +831,8 @@ function Tickets({ tickets, api, reload }: { tickets: Json[]; api: Api; reload: 
           <select className="oc-input" value={cat} onChange={(e) => setCat(e.target.value)} style={ss}>
             <option value="all">전체 유형</option><option value="bug">오류</option><option value="suggestion">건의</option><option value="question">질문</option><option value="refund">환불신청</option><option value="etc">기타</option>
           </select>
-          <select className="oc-input" value={st} onChange={(e) => setSt(e.target.value as 'all' | 'answered' | 'unanswered')} style={{ ...ss, width: 116 }}>
-            <option value="all">전체 상태</option><option value="unanswered">미답변</option><option value="answered">답변</option>
+          <select className="oc-input" value={st} onChange={(e) => setSt(e.target.value as 'all' | 'pending' | 'open' | 'reviewing' | 'answered')} style={{ ...ss, width: 140 }}>
+            <option value="all">전체 상태</option><option value="pending">미처리(대기+확인중)</option><option value="open">대기</option><option value="reviewing">확인 중</option><option value="answered">답변완료</option>
           </select>
         </div>
       </div>
@@ -857,7 +862,12 @@ function TicketModal({ t, api, reload, onClose }: { t: Json; api: Api; reload: (
   const [amount, setAmount] = useState('');
   const [snap, setSnap] = useState('');
   const [msg, setMsg] = useState('');
-  const saveReply = async () => { const r = await api('/api/admin/ticket/reply', { method: 'POST', body: JSON.stringify({ ticketId: t.id, reply }) }); setMsg(r.body.ok ? '답변 저장됨' : `실패(${r.status})`); reload(); };
+  // 답변 저장 시 상태를 함께 지정: reviewing(확인 중 — "확인해보겠습니다") / answered(답변완료 — 원인·해결 안내).
+  const saveReply = async (status: 'reviewing' | 'answered') => {
+    const r = await api('/api/admin/ticket/reply', { method: 'POST', body: JSON.stringify({ ticketId: t.id, reply, status }) });
+    setMsg(r.body.ok ? (status === 'reviewing' ? '확인 중으로 저장됨' : '답변완료로 저장됨') : `실패(${r.status})`);
+    reload();
+  };
   const doRefund = async () => {
     const amt = Math.floor(Number(amount));
     if (!amt || amt <= 0) { setMsg('환불 다이아를 입력하세요'); return; }
@@ -880,7 +890,8 @@ function TicketModal({ t, api, reload, onClose }: { t: Json; api: Api; reload: (
       <div style={{ whiteSpace: 'pre-wrap', fontSize: 14, background: 'var(--card2)', border: '1px solid var(--bd)', borderRadius: 10, padding: 14, lineHeight: 1.6 }}>{String(t.content)}</div>
       <div className="oc-fld"><label className="oc-label">답변 / 환불 사유 (감사기록에 남음)</label><textarea className="oc-input" value={reply} onChange={(e) => setReply(e.target.value)} style={{ height: 70 }} /></div>
       <div className="oc-row">
-        <button className="oc-btn blue sm" onClick={saveReply}>답변 저장</button>
+        <button className="oc-btn ghost sm" onClick={() => saveReply('reviewing')}>확인 중으로</button>
+        <button className="oc-btn blue sm" onClick={() => saveReply('answered')}>답변완료로</button>
         {String(t.category) === 'refund' ? (
           <>
             <input className="oc-input" placeholder="환불 💎" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 110 }} />
