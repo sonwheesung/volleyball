@@ -9,6 +9,7 @@ import { useGameStore } from '../store/useGameStore';
 import { tipsForScreen } from '../data/tutorialSteps';
 import { theme } from './Screen';
 import { themedStyles } from './theme';
+import { ScrollCtrlCtx } from './spotlightCtx';
 
 // 현재 경로(expo-router usePathname)를 스포트라이트 screen 키로 환원. **Provider에서 한 번만** 계산해 모든
 // 오버레이가 같은 값을 공유 → at most one만 매치 → "이중 스포트라이트" 구조적 불가(탭마다 각자 포커스로 인식하던
@@ -27,6 +28,8 @@ function screenFromPathname(p: string | null | undefined): string | null {
 }
 /** 현재 활성 화면 키 — Provider가 usePathname으로 1회 계산해 공유. 오버레이는 자기 screen과 같을 때만 표시. */
 const ActiveScreenCtx = createContext<string | null>(null);
+/** 지금 스포트라이트가 가리키는 anchor id(활성 화면의 첫 미본 팁) — SpotlightTarget이 자기 id와 같으면 화면 안으로 스크롤. */
+const ActiveAnchorCtx = createContext<string | null>(null);
 
 const CARD_RADIUS = 18; // 기본 카드 borderRadius(components/Screen Card) — 대상이 안 알려주면 이 값 사용
 
@@ -42,6 +45,13 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
   const [targets, setTargets] = useState<Record<string, Rect>>({});
   const pathname = usePathname();                     // 전역 현재 경로(1회) — 탭 전환마다 갱신
   const activeScreen = screenFromPathname(pathname);  // 모든 오버레이가 공유 → 동시 표시 불가
+  // 활성 화면의 "첫 미본 팁" anchor(오버레이가 띄우는 것과 동일 = queue[0]) — primitive 셀렉터라 값이 바뀔 때만 재렌더.
+  const activeAnchor = useGameStore((s) => {
+    if (!activeScreen) return null;
+    const seen = s.seenTips ?? {};
+    const tip = tipsForScreen(activeScreen).find((t) => !seen[t.id]);
+    return tip?.anchor ?? null;
+  });
   const setTarget = useCallback((id: string, r: Rect | null) => {
     setTargets((prev) => {
       if (!r) { if (!(id in prev)) return prev; const n = { ...prev }; delete n[id]; return n; }
@@ -53,7 +63,9 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
   return (
     <SetTargetCtx.Provider value={setTarget}>
       <TargetsCtx.Provider value={targets}>
-        <ActiveScreenCtx.Provider value={activeScreen}>{children}</ActiveScreenCtx.Provider>
+        <ActiveScreenCtx.Provider value={activeScreen}>
+          <ActiveAnchorCtx.Provider value={activeAnchor}>{children}</ActiveAnchorCtx.Provider>
+        </ActiveScreenCtx.Provider>
       </TargetsCtx.Provider>
     </SetTargetCtx.Provider>
   );
@@ -62,6 +74,8 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
 /** 밝게 띄울 요소를 감싼다 — onLayout + 마운트 직후 여러 번 윈도우 절대좌표를 측정해 등록(언마운트 시만 해제). */
 export function SpotlightTarget({ id, children, style }: { id: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const setTarget = useContext(SetTargetCtx); // 고정 참조 — 아래 effect가 한 번만 돌게 한다
+  const activeAnchor = useContext(ActiveAnchorCtx);
+  const scrollCtrl = useContext(ScrollCtrlCtx);
   const ref = useRef<View>(null);
   const measure = useCallback(() => {
     const node = ref.current;
@@ -75,6 +89,16 @@ export function SpotlightTarget({ id, children, style }: { id: string; children:
     const ts = [0, 60, 200, 500, 900].map((d) => setTimeout(measure, d));
     return () => { ts.forEach(clearTimeout); setTarget(id, null); };
   }, [measure, setTarget, id]);
+  // 내가 지금 스포트라이트 대상이면 → 화면 밖/아래에 걸쳐 있어도 ScrollView가 나를 위로 끌어올린 뒤 재측정.
+  // (구 버그: 대상이 화면 하단에 걸쳐 링이 밑동에만 그려짐 — 사용자 지적 2026-07-04. 스크롤 후 안착시켜 표시.)
+  useEffect(() => {
+    if (activeAnchor !== id) return;
+    let alive = true;
+    scrollCtrl?.scrollIntoView(ref.current); // 대상을 화면 안으로(measureInWindow 기반 — Fabric 안전)
+    // 스크롤 애니메이션이 안착한 뒤 창 좌표 재측정(오버레이가 새 위치에 구멍을 판다).
+    const ts = [260, 460, 720].map((d) => setTimeout(() => { if (alive) measure(); }, d));
+    return () => { alive = false; ts.forEach(clearTimeout); };
+  }, [activeAnchor, id, measure, scrollCtrl]);
   return (
     <View ref={ref} collapsable={false} onLayout={measure} style={style}>
       {children}
@@ -127,12 +151,15 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
     ? { x: Math.max(0, rect.x - PAD), y: Math.max(0, rect.y - PAD), w: rect.width + PAD * 2, h: rect.height + PAD * 2 }
     : null;
 
-  // 카드 위치 — 구멍 아래 공간이 넉넉하면 아래, 아니면 위, 둘 다 좁으면 가운데
+  // 카드 위치 — 구멍 아래가 넉넉하면 아래, 위가 넉넉하면 위, 둘 다 좁으면(대상이 화면보다 큼) 하단에 겹쳐 띄운다.
   let cardTop = SH / 2 - 80;
   let cardLeft = (SW - CARD_W) / 2;
   if (hole) {
-    const below = SH - (hole.y + hole.h);
-    cardTop = below > 180 ? hole.y + hole.h + 14 : Math.max(40, hole.y - 170);
+    const below = SH - (hole.y + hole.h); // 구멍 아래 여백
+    const above = hole.y;                 // 구멍 위 여백
+    cardTop = below > 180 ? hole.y + hole.h + 14
+      : above > 200 ? hole.y - 170
+      : SH - 250; // 대상이 화면을 꽉 채움(예: 선수단 전체) — 카드를 하단에 얹어 대상 위에 겹침
     cardLeft = Math.min(Math.max(12, hole.x + hole.w / 2 - CARD_W / 2), SW - CARD_W - 12);
   }
 

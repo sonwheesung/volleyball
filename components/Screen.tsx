@@ -6,6 +6,8 @@ import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { displayOvr, fogStat } from '../engine/overall';
 import { POS_COLOR, POS_LABEL } from './posTokens';
+import { ScrollCtrlCtx, SPOTLIGHT_SCROLL_MARGIN } from './spotlightCtx';
+import type { SpotlightScrollController } from './spotlightCtx';
 
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
 export const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
@@ -27,6 +29,22 @@ interface ScreenProps {
  *  헤더 있는 화면에 top inset을 또 주면 이중 여백이 된다. */
 export function Screen({ title, children, scroll = true }: ScreenProps) {
   useThemeMode(); // 테마 토글 시 리렌더(배경·스크림 갱신)
+  // 튜토리얼 스포트라이트 대상이 화면 밖이면 이 화면의 ScrollView가 대상을 위로 끌어온다.
+  // 오프셋은 "콘텐츠 최상단 센티넬 View"와 대상을 각각 measureInWindow로 재 계산(Fabric 안전 — measureLayout 회피).
+  const scrollRef = useRef<ScrollView>(null);
+  const topRef = useRef<View>(null);
+  const ctrlRef = useRef<SpotlightScrollController>({
+    scrollIntoView: (node) => {
+      const sv = scrollRef.current, top = topRef.current;
+      if (!sv || !top || !node?.measureInWindow) return;
+      top.measureInWindow((_x: number, topY: number) => {
+        node.measureInWindow((_tx: number, ty: number) => {
+          // 대상의 콘텐츠 오프셋 = (대상 창Y − 센티넬 창Y). 여백만큼 위로 여유.
+          sv.scrollTo({ y: Math.max(0, ty - topY - SPOTLIGHT_SCROLL_MARGIN), animated: true });
+        });
+      });
+    },
+  });
   const inner = (
     <>
       {title ? <Text style={styles.title}>{title}</Text> : null}
@@ -39,9 +57,12 @@ export function Screen({ title, children, scroll = true }: ScreenProps) {
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: themeAssets.scrim }]} />
       <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
         {scroll ? (
-          <ScrollView style={styles.safe} contentContainerStyle={styles.contentScroll}>
-            {inner}
-          </ScrollView>
+          <ScrollCtrlCtx.Provider value={ctrlRef.current}>
+            <ScrollView ref={scrollRef} style={styles.safe} contentContainerStyle={styles.contentScroll}>
+              <View ref={topRef} collapsable={false} style={styles.scrollTop} />
+              {inner}
+            </ScrollView>
+          </ScrollCtrlCtx.Provider>
         ) : (
           <View style={[styles.safe, styles.content]}>{inner}</View>
         )}
@@ -328,6 +349,7 @@ const styles = themedStyles(() => StyleSheet.create({
   scrim: { backgroundColor: 'rgba(236,241,247,0.72)' }, // [라이트] 밝은 베일 강화 — 산만한 사진을 부드러운 밝은 면으로
   content: { padding: 16, gap: 12 },
   contentScroll: { padding: 16, paddingBottom: 32, gap: 12 }, // 스크롤 하단 여유(실제 inset은 SafeAreaView가 처리)
+  scrollTop: { position: 'absolute', top: 0, left: 0, width: 1, height: 1 }, // 스포트라이트 스크롤 오프셋 기준(레이아웃 무영향)
   title: { color: theme.text, fontSize: 24, fontWeight: '800', marginBottom: 2 },
   h2: { color: theme.text, fontSize: 16, fontWeight: '700' },
   card: {

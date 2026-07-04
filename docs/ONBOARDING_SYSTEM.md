@@ -63,11 +63,20 @@ export const tipsForScreen = (screen: string): Tip[] =>
 - **`SpotlightTarget id`**: 밝게 띄울 요소를 감싼다. `onLayout` + 마운트 직후 **여러 차례**(0·60·200·
   500·900ms) `measureInWindow`로 **윈도우 절대 좌표**를 측정해 Provider에 등록(스크롤뷰·화면전환
   애니메이션으로 첫 측정이 0/미안정인 경우 보강). 언마운트 시 해제.
-- **측정 실패/화면 밖 폴백(중요)**: 오버레이가 대상 좌표를 ≈720ms(6회 재시도) 안에 못 받거나,
-  받은 좌표가 **뷰포트 밖**(스크롤해야 보이는 대상 — 예: 긴 로스터 아래 운영하기 버튼)이면 **구멍 없이
-  전체 어둠 + 가운데 카드**로 띄운다. 화면 밖 좌표로 구멍을 파면 어둠 띠가 화면 전체를 덮고 카드도 밖으로
-  나가 **"시커멓고 스크롤 안 되는 멈춘 화면"**이 된다(사용자 보고 2026-06-24 — team-detail team.start가
-  화면 밖 버튼을 앵커). `onScreen` 검사로 화면 밖이면 가운데 카드 폴백 → 안 보이거나 먹통되는 일 없음.
+- **대상 자동 스크롤(2026-07-04 신설 — 화면 밖 폴백 개선)**: 대상이 화면 밖/하단에 걸쳐 있으면 **먼저 그
+  대상을 화면 안으로 스크롤한 뒤** 스포트라이트를 띄운다. 사용자 보고(2026-07-04): team-detail의 **team.roster**
+  (선수단 전체를 감싼 큰 앵커)가 화면 하단에 살짝 걸쳐 `onScreen=true`가 되며 **링이 화면 밑동에만** 그려짐
+  ("해당 섹션으로 슬라이드한 후 나와야"). → 각 화면 공통 `<Screen>`의 ScrollView를 `ScrollCtrlCtx`(leaf
+  `components/spotlightCtx.ts`)로 자손 `SpotlightTarget`에 내려주고, 내가 현재 활성 anchor(`ActiveAnchorCtx` =
+  활성 화면 첫 미본 팁)면 **콘텐츠 최상단 센티넬 View + 대상**을 각각 `measureInWindow`로 재 스크롤 오프셋을
+  계산해 `scrollTo`(대상을 상단 90px 아래로) → 안착 후 재측정 → 오버레이가 새 위치에 구멍을 판다.
+  카드 위치: 대상이 화면보다 크면(예: 선수단 전체) 카드를 **하단에 얹어** 대상 위에 겹친다.
+  - ⚠ **`measureLayout` 금지(Fabric)**: 숫자 노드핸들 `node.measureLayout(handle,…)`은 New Architecture에서
+    `"ref.measureLayout must be called with a ref to a native component"` 런타임 에러(에뮬 실측 2026-07-04) →
+    센티넬+`measureInWindow` 방식으로 회피(양 아키텍처 안전). 에뮬 see-and-tap로 team.ovr/coach/roster/start 4스텝 전부 안착 확인.
+  - **잔여 안전망(구 폴백 유지)**: 스크롤이 불가하거나(비-`<Screen>` 화면 — 예 `select-team` 자체 ScrollView,
+    단 그 팁은 최상단 카드라 무관) 좌표를 ≈720ms 안에 못 받으면 여전히 **구멍 없이 전체 어둠 + 가운데 카드**
+    폴백(`onScreen` 검사) — 화면 밖 좌표로 구멍 파면 "시커멓고 멈춘 화면"이 되던 구 버그(2026-06-24 team.start) 방지.
 - **`SpotlightOverlay screen`**: 각 화면 끝에 1개. 그 화면의 미본 스텝 큐(`tipsForScreen(screen)
   .filter(!seen)`)의 **첫 스텝**을 띄운다. 투명 `Modal`(최상위·탭바 위 포함) 위에:
   - **둥근 구멍(2026-06-25 재교정 — 거대 테두리 기법)**: 구 4밴드는 **직각 구멍**이라 둥근 카드와 안 맞아 모서리가
