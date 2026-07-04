@@ -23,6 +23,8 @@ export default function Schedule() {
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
+  const campDoneSeason = useGameStore((s) => s.campDoneSeason);
+  const finishCamp = useGameStore((s) => s.finishCamp);
   const results = useGameStore((s) => s.results);
   const archive = useGameStore((s) => s.archive);
   const watchProgress = useGameStore((s) => s.watchProgress);
@@ -100,6 +102,16 @@ export default function Schedule() {
       })()
     : null;
 
+  // 오프시즌 게이트(2026-07-04 사용자 요청): currentDay 0 + 이번 시즌 전지훈련 미완료 → **전지훈련만** 노출하고
+  // 다음 경기(개막전)는 숨긴다. "전지훈련 마치기"를 눌러야 개막전이 나온다(전지훈련↔다음경기 동시 노출 금지).
+  const offseason = currentDay === 0 && campDoneSeason !== season;
+  const confirmFinishCamp = () => {
+    showAlert('전지훈련 마치기', '이번 시즌 전지훈련을 마치고 개막전을 준비할까요?\n이후에는 이번 시즌 전지훈련을 보낼 수 없어요.', [
+      { text: '취소', style: 'cancel' },
+      { text: '마치기', onPress: () => finishCamp() },
+    ]);
+  };
+
   return (
     <Screen title={`${seasonYear(season)} 일정 · ${season + 1}번째 시즌`}>
       <Card accent={theme.sky}>
@@ -111,14 +123,13 @@ export default function Schedule() {
         </Row>
       </Card>
 
-      {/* 전지훈련 — 오프시즌(currentDay 0, 시즌 시작 전)에만 활성화. 시즌 중엔 불가라 안 뜬다(MONETIZATION §11.2) */}
-      {currentDay === 0 ? (
-        <Card accent={theme.good} onPress={() => router.push('/training-camp')}>
-          <Row>
-            <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
-            <Text style={{ color: theme.good, fontWeight: '800' }}>보내기 →</Text>
-          </Row>
-          <Muted style={{ fontSize: 12, marginTop: 2 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다.</Muted>
+      {/* 전지훈련 — 오프시즌(currentDay 0, 전지훈련 미완료)에만. 마치면 개막전이 열린다(다음경기와 동시 노출 금지, 2026-07-04). */}
+      {offseason ? (
+        <Card accent={theme.good}>
+          <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
+          <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 마치면 개막전이 시작됩니다.</Muted>
+          <Button label="전지훈련 보내기 →" variant="ghost" onPress={() => router.push('/training-camp')} />
+          <Button label="전지훈련 마치고 개막전으로 →" onPress={confirmFinishCamp} />
         </Card>
       ) : null}
 
@@ -131,7 +142,7 @@ export default function Schedule() {
         </Card>
       ) : null}
 
-      {nextFixture && preview ? (
+      {offseason ? null : nextFixture && preview ? (
         <SpotlightTarget id="sched-next">
         <Card accent={theme.sky}>
           <IconLabel icon="calendar-outline" color={theme.sky}>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</IconLabel>

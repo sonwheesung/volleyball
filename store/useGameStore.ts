@@ -107,6 +107,7 @@ interface GameState {
   saveId: string;                              // 세이브 인스턴스 nonce(walletEpoch) — camp 멱등키 스코프(세이브 리셋 무료강화 차단)
   campLog: CampEntry[];                        // 전지훈련 기록(시드 폴백 재적용·감사)
   campTrainedThisOffseason: string[];          // 이번 오프시즌 전지훈련한 선수(선수당 1회) — 새 시즌 시작 시 초기화
+  campDoneSeason: number;                       // 전지훈련을 "마친" 시즌(=이 시즌엔 오프시즌 종료 → 개막전 노출). 시즌번호라 새 시즌 자동 리셋. 기본 -1
   pendingCamp: PendingCamp | null;             // 전지훈련 아웃박스(§13.12 P0-4) — 서버차감↔로컬적용 사이 크래시 복구
   walletBusy: boolean;                         // 다이아 서버 왕복 in-flight 래치(비영속) — 버튼 연타 이중적용 차단(P0-1)
   claimedAch: string[];                        // 다이아 수령한 업적 id(1회 지급)
@@ -147,6 +148,7 @@ interface GameState {
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
+  finishCamp: () => void; // 전지훈련 마치기 → 이번 시즌 오프시즌 종료(개막전 노출). currentDay는 그대로(경기 시작이 진행).
   recordResult: (r: MatchResult) => void;
   saveWatchProgress: (fixtureId: string, idx: number) => void; // 이어보기 위치 저장
   clearWatchProgress: (fixtureId: string) => void;             // 종료·결과 확정 시 삭제
@@ -217,6 +219,7 @@ const freshSave = {
   saveId: '', // 첫 전지훈련/새 게임 시작 시 생성(newSaveId) — camp 멱등키 스코프
   campLog: [] as CampEntry[],
   campTrainedThisOffseason: [] as string[],
+  campDoneSeason: -1,
   pendingCamp: null as PendingCamp | null,
   claimedAch: [] as string[],
   adState: { ...FRESH_AD_STATE } as AdState,
@@ -414,6 +417,7 @@ export const useGameStore = create<GameState>()(
         setSalaryEra(medianOvr(currentBasePlayers().filter((p) => !p.isForeign))); // 시대 앵커(SALARY 2장) — 시드 시대 ≈ MED_REF
       },
       setDay: (day) => set((s) => (Number.isFinite(day) ? { currentDay: Math.max(s.currentDay, day) } : {})), // NaN/Infinity 거부(currentDay 오염 전파 차단)
+      finishCamp: () => set((s) => (s.campDoneSeason === s.season ? {} : { campDoneSeason: s.season })), // 이번 시즌 오프시즌 종료 표시(멱등). currentDay 불변 — 개막전은 "경기 시작"이 진행
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
       saveWatchProgress: (fixtureId, idx) => set((s) => ({ watchProgress: { ...s.watchProgress, [fixtureId]: idx } })),
       clearWatchProgress: (fixtureId) => set((s) => {
@@ -1107,6 +1111,7 @@ export const useGameStore = create<GameState>()(
         saveId: s.saveId,
         campLog: s.campLog,
         campTrainedThisOffseason: s.campTrainedThisOffseason,
+        campDoneSeason: s.campDoneSeason,
         pendingCamp: s.pendingCamp,
         claimedAch: s.claimedAch,
         adState: s.adState,

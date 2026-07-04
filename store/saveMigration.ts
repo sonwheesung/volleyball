@@ -4,7 +4,7 @@
 
 export const SAVE_VERSION = 1;
 
-// 영속 58필드 기본값 — freshSave(store/useGameStore.ts) + 설정 4필드와 1:1. 정규화 기준 단일 소스.
+// 영속 59필드 기본값 — freshSave(store/useGameStore.ts) + 설정 4필드와 1:1. 정규화 기준 단일 소스.
 // (drift 가드: _dv_migrate가 이 키 집합 == partialize 키 집합을 단언한다.)
 export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 설정(새 게임에도 유지)
@@ -32,7 +32,7 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 인간관계(RELATIONSHIP_SYSTEM) — 함께한 세월 우정(pairKey→0~0.3)
   bonds: {},
   // 다이아 이코노미(MONETIZATION §11) — 소비성 재화(표시 캐시)·세이브nonce·전지훈련 기록·아웃박스·업적수령·광고상태
-  diamonds: 0, saveId: '', campLog: [], campTrainedThisOffseason: [], pendingCamp: null, claimedAch: [],
+  diamonds: 0, saveId: '', campLog: [], campTrainedThisOffseason: [], campDoneSeason: -1, pendingCamp: null, claimedAch: [],
   adState: { dayIdx: 0, count: 0, lastAdAt: 0 },
   // 시뮬 결과 캐시(REALTIME_SIM Phase1) — 계산된 시즌 결과(재로드 시 재계산 제거). 폐기 가능(특수 분기). null=재계산
   simCache: null,
@@ -56,7 +56,7 @@ const KIND: Record<string, Kind> = {
   tryoutWish: 'arr', foreignAltPool: 'arr', foreignSubUsed: 'bool', keepForeign: 'nbool',
   asianWish: 'arr', asianAltPool: 'arr', asianSubUsed: 'bool', keepAsian: 'nbool',
   bonds: 'rec',
-  diamonds: 'num', saveId: 'nstr', campLog: 'arr', campTrainedThisOffseason: 'arr', claimedAch: 'arr',
+  diamonds: 'num', saveId: 'nstr', campLog: 'arr', campTrainedThisOffseason: 'arr', campDoneSeason: 'num', claimedAch: 'arr',
   // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, lastFinance, adState, pendingCamp
 };
 
