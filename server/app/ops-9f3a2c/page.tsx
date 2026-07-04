@@ -41,7 +41,7 @@ select.oc-input option{background:var(--card);color:var(--tx);}
 .oc-navitem.on{background:rgba(25,194,174,.14);color:var(--ac);font-weight:800;}
 .oc-navitem .ic{width:18px;text-align:center;font-size:15px;}
 .oc-navitem .bdg{margin-left:auto;background:var(--dg);color:#fff;font-size:11px;font-weight:800;border-radius:999px;padding:1px 7px;}
-.oc-main{padding:26px 30px;max-width:1080px;}
+.oc-main{padding:26px 34px;min-width:0;max-width:1200px;margin:0 auto;width:100%;}
 .oc-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:22px;}
 .oc-h1{font-size:22px;font-weight:900;letter-spacing:-.3px;} .oc-crumb{color:var(--mut);font-size:13px;margin-top:3px;}
 .oc-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px;margin-bottom:24px;}
@@ -469,6 +469,20 @@ function Payments({ stats, api }: { stats: Json | null; api: Api }) {
   const [gran, setGran] = useState('day');
   const [rev, setRev] = useState<Json | null>(null);
   const [refund, setRefund] = useState<Json | null>(null);
+  // 결제/환불 개별 내역 목록(사용자 목록처럼) — kind 필터 + 페이지네이션
+  const [kind, setKind] = useState('all');
+  const [pOffset, setPOffset] = useState(0);
+  const [pRows, setPRows] = useState<Json[]>([]);
+  const [pTotal, setPTotal] = useState(0);
+  const [pLoading, setPLoading] = useState(true);
+  const PLIM = 50;
+  useEffect(() => {
+    let live = true; setPLoading(true);
+    api(`/api/admin/payments?kind=${kind}&limit=${PLIM}&offset=${pOffset}`).then((r) => { if (!live) return; setPRows((r.body.payments as Json[]) ?? []); setPTotal(nnum(r.body.total)); setPLoading(false); });
+    return () => { live = false; };
+  }, [api, kind, pOffset]);
+  const pickKind = (k: string) => { setKind(k); setPOffset(0); };
+  const KIND_F = [{ v: 'all', l: '전체' }, { v: 'purchase', l: '구매' }, { v: 'refund', l: '환불' }];
   useEffect(() => {
     let live = true;
     Promise.all([api(`/api/admin/series?metric=revenue&granularity=${gran}`), api(`/api/admin/series?metric=refund&granularity=${gran}`)]).then(([a, b]) => { if (!live) return; setRev(a.body.ok ? a.body : null); setRefund(b.body.ok ? b.body : null); });
@@ -493,6 +507,30 @@ function Payments({ stats, api }: { stats: Json | null; api: Api }) {
         <BarsCard title="결제 건수" value={`${buyTotal} 건`} labels={labels} data={purchases} color="#5b9bff" unit="건" />
         <BarsCard title="환불 건수" value={`${refTotal} 건`} labels={rlabels} data={rcount} color="#f05a5a" unit="건" />
         <BarsCard title="환불 다이아" value={`${rdia.reduce((a, b) => a + b, 0).toLocaleString()}`} labels={rlabels} data={rdia} color="#ff8f8f" unit="" />
+      </div>
+      <div className="oc-card">
+        <div className="oc-cardhead"><h3>결제 · 환불 내역 <span className="oc-mut">({pTotal.toLocaleString()})</span></h3><GranTabs gran={kind} set={pickKind} opts={KIND_F} /></div>
+        {pLoading ? <div className="oc-empty">불러오는 중…</div> : pRows.length === 0 ? <div className="oc-empty">해당 내역이 없습니다. (결제 원장 이벤트 · #43 연동 후 KRW 금액 표시)</div> : (
+          <table className="oc-table">
+            <thead><tr><th>시각</th><th>유저</th><th>종류</th><th>상품</th><th style={{ textAlign: 'right' }}>다이아</th><th style={{ textAlign: 'right' }}>잔액</th></tr></thead>
+            <tbody>{pRows.map((p) => { const buy = p.reason === 'purchase'; const dv = nnum(p.delta); return (
+              <tr key={p.id as string}>
+                <td>{fmtDT(p.createdAt)}</td>
+                <td className="oc-mut" title={String(p.userId)}>{String(p.userId).slice(0, 8)}…</td>
+                <td><span className={`oc-pill ${buy ? 'g' : 'r'}`}>{buy ? '구매' : '환불'}</span></td>
+                <td className="oc-mut">{(p.ref as string) || '—'}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700, color: dv >= 0 ? 'var(--ac)' : '#ff8f8f' }}>{dv >= 0 ? '+' : ''}{dv.toLocaleString()}</td>
+                <td style={{ textAlign: 'right' }} className="oc-mut">{nnum(p.balanceAfter).toLocaleString()}</td>
+              </tr>); })}</tbody>
+          </table>
+        )}
+        {pTotal > PLIM ? (
+          <div className="oc-pager">
+            <button className="oc-btn ghost sm" disabled={pOffset === 0} onClick={() => setPOffset(Math.max(0, pOffset - PLIM))}>← 이전</button>
+            <span>{pOffset + 1}–{Math.min(pOffset + PLIM, pTotal)} / {pTotal.toLocaleString()}</span>
+            <button className="oc-btn ghost sm" disabled={pOffset + PLIM >= pTotal} onClick={() => setPOffset(pOffset + PLIM)}>다음 →</button>
+          </div>
+        ) : null}
       </div>
     </>
   );
