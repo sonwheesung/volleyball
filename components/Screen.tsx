@@ -307,8 +307,10 @@ export function PosTag({ pos, full, solid, compact }: { pos: string; full?: bool
 export function StatBar({ label, value, potential, reveal = 1 }: { label: string; value: number; potential?: number; reveal?: number }) {
   const fog = reveal < 1 ? fogStat(value, reveal) : null;
   const shown = fog ? fog.fill : value;
-  // 성장 여지 없음(현재값이 포텐 천장 도달) → 빨강으로 표시(더 못 큼). 이전 "→포텐" 화살표 표기는 제거(사용자 요청).
+  // 성장 여지 없음(현재값이 포텐 천장 도달) → 빨강으로 표시(더 못 큼). "→NN" 화살표 텍스트는 제거하되(사용자 요청)
+  // 포텐셜은 **바 위 천장 틱**으로 시각화(사용자 요청 2026-07-04 — 차트에 나오게). 안개 낀 타 구단은 제외.
   const maxed = potential != null && value >= potential && (!fog || fog.exact);
+  const showPot = potential != null && !fog && potential > value; // 내 팀 + 성장 여지 있을 때만 천장 틱
   const color = maxed ? theme.bad
     : value >= 80 ? theme.good : value >= 65 ? theme.accent : value >= 50 ? theme.warn : theme.bad;
   return (
@@ -318,6 +320,7 @@ export function StatBar({ label, value, potential, reveal = 1 }: { label: string
         {shown != null ? (
           <View style={[styles.barFill, { width: `${Math.max(0, Math.min(100, shown))}%`, backgroundColor: fog && !fog.exact ? theme.muted : color, opacity: fog && !fog.exact ? 0.55 : 1 }]} />
         ) : null}
+        {showPot ? <View style={[styles.potMark, { left: `${Math.min(100, potential!)}%` }]} /> : null}
       </View>
       <Text style={[styles.statVal, maxed ? { color: theme.bad } : null]} numberOfLines={1}>
         {fog ? fog.text : value}
@@ -393,7 +396,7 @@ const styles = themedStyles(() => StyleSheet.create({
   potTxt: { color: theme.good, fontSize: 12, fontWeight: '800' },
   barTrack: { flex: 1, height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4 },
-  potMark: { position: 'absolute', top: 0, width: 2, height: 8, backgroundColor: theme.good, opacity: 0.9 },
+  potMark: { position: 'absolute', top: 0, width: 3, height: 8, marginLeft: -1.5, borderRadius: 1, backgroundColor: theme.good }, // 포텐 천장 틱(성장 여지 상한) — 밝은 green
   rowBetween: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   emptyState: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 24, paddingBottom: 40 },
   emptyStateText: { color: theme.muted, fontSize: 15, lineHeight: 22, textAlign: 'center' },
