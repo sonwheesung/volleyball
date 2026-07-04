@@ -14,6 +14,7 @@ import { DialogHost } from '../components/AppDialog';
 import { useGameStore } from '../store/useGameStore';
 import { initIap } from '../lib/iap';
 import { installErrorSink, installCrashHandler } from '../lib/deviceLog';
+import { installKoreanKeepAll } from '../lib/koreanLineBreak';
 import { track } from '../lib/analytics';
 import { computeStandings } from '../data/standings';
 import { leagueProduction } from '../data/production';
@@ -53,9 +54,13 @@ const NAV_THEME = {
 const TextDefaults = Text as unknown as { defaultProps?: { style?: unknown; textBreakStrategy?: string } };
 TextDefaults.defaultProps = TextDefaults.defaultProps ?? {};
 TextDefaults.defaultProps.style = { fontFamily: 'Pretendard', color: theme.text };
-// 줄바꿈을 **어절(단어) 단위**로(2026-06-30 사용자 요청) — Android 기본 'highQuality'는 한글을 CJK로 보고
-// 어절 중간에서도 끊어 긴 문장이 글자 단위로 쪼개졌다. 'simple'=공백(어절) 경계에서만 줄바꿈(웹 word-break:keep-all 격).
+// 줄바꿈을 **어절(단어) 단위**로(2026-06-30 사용자 요청).
+// ⚠️ 구 방식 `textBreakStrategy='simple'`은 **실기기(RN0.81/Android/React19)에서 효과 없음** 확인(2026-07-04 에뮬 검증):
+//   Android 라인브레이커는 breakStrategy와 무관하게 한글 음절 사이를 항상 끊을 수 있어 `구단주입|니다`처럼 쪼개졌다.
+//   → 실제 keep-all은 아래 installKoreanKeepAll(WORD JOINER 삽입, lib/koreanLineBreak.ts)로 처리. 이 줄은 보조(무해)로 유지.
 TextDefaults.defaultProps.textBreakStrategy = 'simple';
+// 한글 어절 단위 줄바꿈(웹 word-break:keep-all 격) — JSX 런타임을 감싸 `<Text>` 문자열 자식의 인접 한글 사이에 U+2060 삽입.
+installKoreanKeepAll(Text);
 
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
