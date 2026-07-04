@@ -1,7 +1,7 @@
 // /api/admin/announcement — 공지 발행(POST)·목록(GET, 활성 무관 전체)·삭제(DELETE ?id=). requireAdmin.
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/observability';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { announcements } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
@@ -40,6 +40,26 @@ export async function GET(req: Request) {
   try {
     const rows = await db.select().from(announcements).where(eq(announcements.projCode, PROJ_CODE)).orderBy(desc(announcements.createdAt)).limit(200);
     return NextResponse.json({ ok: true, announcements: rows });
+  } catch (e) { reportError(e, 'admin/announcement');
+    return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
+  }
+}
+
+// 수정 — 제목/내용/종료일/고정. requireAdmin.
+export async function PATCH(req: Request) {
+  if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+  try {
+    const b = (await req.json()) as { id?: string; title?: string; body?: string; endsAt?: string | null; pinned?: boolean };
+    if (!b.id) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
+    const upd: Record<string, unknown> = {};
+    if (b.title !== undefined) { const t = b.title.trim(); if (!t) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.title = t; }
+    if (b.body !== undefined) { const bd = b.body.trim(); if (!bd) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.body = bd; }
+    if (b.endsAt !== undefined) { const d = b.endsAt ? new Date(b.endsAt) : null; if (d && Number.isNaN(d.getTime())) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.endsAt = d; }
+    if (typeof b.pinned === 'boolean') upd.pinned = b.pinned;
+    if (Object.keys(upd).length === 0) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
+    const r = await db.update(announcements).set(upd).where(and(eq(announcements.projCode, PROJ_CODE), eq(announcements.id, b.id))).returning({ id: announcements.id });
+    if (!r.length) return NextResponse.json({ ok: false, reason: 'not-found' }, { status: 404 });
+    return NextResponse.json({ ok: true, id: r[0].id });
   } catch (e) { reportError(e, 'admin/announcement');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }

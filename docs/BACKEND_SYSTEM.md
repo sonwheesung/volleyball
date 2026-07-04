@@ -277,12 +277,15 @@
 - **보관기간(P0-C)**: `coupon_redemptions`는 **파기 제외**(활성/무기한 쿠폰 재수령 구멍 차단 — 현 `purgeExpired`가 wallet_ledger만 건드려 기본 안전, 명기). `wallet_ledger reason='coupon'`은 게임경제 원장 2년 티어(결제 아님 → 5년 아님, §13.9 정합).
 - **결정론 격리**: 쿠폰 다이아는 balance 합류 순수 재화. camp campLog는 applied 게이팅·saveId 멱등이라 다이아 출처와 무관하게 결정론 불변. 엔진 무파급.
 
-### 13.15 관리자 대시보드 (#58 발급·#57 발행·#56 게이트, 2026-07-03)
-> 최소 운영 콘솔(1인 운영·유저관대). Next.js 페이지 `/admin`(공개 HTML, `noindex`, 인라인만) + ADMIN_TOKEN 보호 API.
+### 13.15 관리자 대시보드 (#58 발급·#57 발행·#56 게이트, 2026-07-03 · **2026-07-04 UI 개편 + #46 통계**)
+> 운영 콘솔(1인 운영). Next.js 페이지 + ADMIN_TOKEN 보호 API. 인라인 스타일 + 내장 `<style>`만(외부 스크립트 0, XSS 표면 최소), `noindex`.
+> - **경로 은닉(2026-07-04 사용자 요청)**: `/admin` → **`/ops-9f3a2c`**(추측 차단 — 유저가 `/admin` 접근 우려). 실보안은 ADMIN_TOKEN(경로는 보조). `/admin` 라우트 삭제(404).
+> - **UI 개편(2026-07-04)**: 폼 나열 콘솔 → **로그인 게이트 화면 → 사이드바 대시보드**(다크 모던, Vercel/Tremor 참조). 첫 화면=**대시보드**(KPI 카드 + 차트 4개). 나머지 탭: 쿠폰·공지·운영설정·문의/환불. 로그아웃.
+> - **통계(#46 착수, `/api/admin/stats`)**: KPI(총가입·실시간접속(최근30분·로그인기준)·DAU·오늘신규·서버상태·버전) + 14일 시계열 차트(매출[statsDaily, 결제#43 전 0]·신규가입·DAU 라인·시간대별 접속[lastSeenAt 시간분포]). SVG 인라인 차트(그라데이션·베지어곡선, 라이브러리 0). **한계**: 진짜 실시간/시간대별은 하트비트 필요(미구현) — lastSeenAt(로그인 시 갱신) 근사. 다운로드는 Install Referrer(EAS) 후. 매출은 #43 후.
 
 - **인증 `requireAdmin(req)` — fail-closed(P0-B)**: `Authorization: Bearer <ADMIN_TOKEN>` 상수시간 비교. **`ADMIN_TOKEN` 미설정/짧으면(<16자) 무조건 401/503**(크론의 fail-open 패턴 복제 금지 — env 누락=전면 거부). Bearer 헤더라 CSRF 내성(쿠키 인증 미도입). 토큰은 localStorage.
 - **엔드포인트**(전부 requireAdmin): `POST/GET /api/admin/coupon`(발급/목록 — 발급 시 code 정규화·reward>0·상한캡·UNIQUE 충돌 4xx)·`POST/GET /api/admin/announcement`(발행/목록/비활성)·`POST/GET /api/admin/setting`(server_setting 점검·버전·스토어URL).
-- **파일**: `server/lib/admin.ts`(requireAdmin)·`server/lib/coupon.ts`(redeemCoupon 단일tx)·`server/lib/wallet.ts`(applyWalletTx 추출)·`server/db/schema.ts`(coupons·coupon_redemptions)·`server/app/api/coupon/redeem/route.ts`·`server/app/api/admin/{coupon,announcement,setting}/route.ts`·`server/app/admin/page.tsx`·`lib/server.ts`(redeemCoupon)·`app/coupon.tsx`.
+- **파일**: `server/lib/admin.ts`(requireAdmin)·`server/lib/coupon.ts`(redeemCoupon 단일tx)·`server/lib/wallet.ts`(applyWalletTx 추출)·`server/db/schema.ts`(coupons·coupon_redemptions)·`server/app/api/coupon/redeem/route.ts`·`server/app/api/admin/{coupon,announcement,setting,stats}/route.ts`·`server/app/ops-9f3a2c/{page,layout}.tsx`(운영 콘솔 UI)·`lib/server.ts`(redeemCoupon)·`app/coupon.tsx`.
 - **검증(Opus 4.8)**: 라이브 E2E(admin 발급→redeem +N·이중사용 "used"·개인쿠폰 타유저 거부·만료 거부·requireAdmin 토큰없이 401)·app/server/test tsc 0.
 
 ### 13.16 소프트 업데이트 배너 + 스토어 URL (#56 소프트, 2026-07-03)
@@ -292,7 +295,7 @@
 - **판정** `lib/bootstrap.needsSoftUpdate(appVer, {min,latest})` = `belowVersion(latest) && !belowVersion(min)`(강제 대상은 이미 하드 게이트가 막아 대시보드 도달 못 하므로 소프트만 남음). 배너는 `Platform.OS`별 스토어 URL로 이동.
 - **닫음 추적**: `useAuthStore.dismissedUpdateVersion=latest`(persist) → 닫으면 그 latest는 재노출 안 함. **새 latest 발행 시 재노출**(dismissed ≠ 새 latest). 다기기/재설치 재노출은 읽음추적과 동일 트레이드오프.
 - **boot 공유**: BootGate가 받은 bootstrap을 `useServerConfig`(비영속 zustand)에 넣어 배너가 재조회 없이 읽음.
-- **파일**: `lib/bootstrap.ts`(needsSoftUpdate)·`store/useServerConfig.ts`(신)·`store/useAuthStore.ts`(dismissedUpdateVersion)·`components/SoftUpdateBanner.tsx`(신)·`components/BootGate.tsx`(setBoot)·`app/(tabs)/index.tsx`(배너)·`server/app/admin/page.tsx`(스토어URL 입력). 검증 `tools/_dv_version.ts`(cmpVersion·belowVersion·needsSoftUpdate A/B).
+- **파일**: `lib/bootstrap.ts`(needsSoftUpdate)·`store/useServerConfig.ts`(신)·`store/useAuthStore.ts`(dismissedUpdateVersion)·`components/SoftUpdateBanner.tsx`(신)·`components/BootGate.tsx`(setBoot)·`app/(tabs)/index.tsx`(배너)·`server/app/ops-9f3a2c/page.tsx`(스토어URL 입력). 검증 `tools/_dv_version.ts`(cmpVersion·belowVersion·needsSoftUpdate A/B).
 
 ### 13.17 기기 정보 + 문의(티켓) 서버 + 환불 (#45 서버·#46 환불, 2026-07-03 — 독립 리뷰 5구멍 반영)
 > **왜**: 문의 화면(§13.6 #45)은 앱만 완성돼 있고 **서버 저장이 없었다**(제출이 offline로 소실). 이번에 ①로그인 기기정보 수집(진단 — "어떤 폰에서 깨지나") ②문의 서버화 + **환불 신청** 카테고리 ③관리자 **환불 처리**를 붙인다. 독립 리뷰(general-purpose)가 방향 승인 + 5구멍 지적.

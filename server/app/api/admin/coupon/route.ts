@@ -1,7 +1,7 @@
-// /api/admin/coupon — 쿠폰 발급(POST)·목록(GET). requireAdmin(fail-closed §13.15).
+// /api/admin/coupon — 쿠폰 발급(POST)·목록(GET)·수정(PATCH)·삭제(DELETE). requireAdmin(fail-closed §13.15).
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/observability';
-import { desc, eq } from 'drizzle-orm';
+import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { coupons } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
@@ -50,5 +50,39 @@ export async function GET(req: Request) {
     return NextResponse.json({ ok: true, coupons: rows });
   } catch (e) { reportError(e, 'admin/coupon');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
+  }
+}
+
+// 수정 — 보상/종료일/활성여부만(코드는 UNIQUE 키라 불변). 대상(target)도 변경 가능.
+export async function PATCH(req: Request) {
+  if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+  try {
+    const b = (await req.json()) as { id?: string; rewardDiamonds?: number; endsAt?: string | null; disabled?: boolean; targetUserId?: string | null };
+    if (!b.id) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
+    const upd: Record<string, unknown> = {};
+    if (b.rewardDiamonds !== undefined) { const r = Math.floor(Number(b.rewardDiamonds)); if (!Number.isFinite(r) || r <= 0 || r > REWARD_CAP) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.rewardDiamonds = r; }
+    if (b.endsAt !== undefined) { const d = b.endsAt ? new Date(b.endsAt) : null; if (d && Number.isNaN(d.getTime())) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.endsAt = d; }
+    if (typeof b.disabled === 'boolean') upd.disabled = b.disabled;
+    if (b.targetUserId !== undefined) upd.targetUserId = b.targetUserId || null;
+    if (Object.keys(upd).length === 0) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
+    const r = await db.update(coupons).set(upd).where(and(eq(coupons.projCode, PROJ_CODE), eq(coupons.id, b.id))).returning({ id: coupons.id });
+    if (!r.length) return NextResponse.json({ ok: false, reason: 'not-found' }, { status: 404 });
+    return NextResponse.json({ ok: true, id: r[0].id });
+  } catch (e) { reportError(e, 'admin/coupon');
+    return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
+  }
+}
+
+// 삭제 — 사용 기록(FK) 있으면 삭제 불가(감사 보존) → 'has-redemptions'로 안내(비활성화 권장).
+export async function DELETE(req: Request) {
+  if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+  const id = new URL(req.url).searchParams.get('id');
+  if (!id) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
+  try {
+    const r = await db.delete(coupons).where(and(eq(coupons.projCode, PROJ_CODE), eq(coupons.id, id))).returning({ id: coupons.id });
+    if (!r.length) return NextResponse.json({ ok: false, reason: 'not-found' }, { status: 404 });
+    return NextResponse.json({ ok: true });
+  } catch { // FK 위반(coupon_redemptions 참조) 등 — 사용된 쿠폰은 하드삭제 대신 비활성화
+    return NextResponse.json({ ok: false, reason: 'has-redemptions' }, { status: 409 });
   }
 }
