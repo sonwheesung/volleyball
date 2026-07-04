@@ -9,6 +9,16 @@ interface FaceSheet { src: number; cols: number; rows: number; count: number }
 // faces1: GPT 생성 3×3(9명), 크로마키 초록 제거된 투명 PNG. 화풍 = 한국 웹툰 반실사·틸 민소매.
 export const FACE_SHEETS: FaceSheet[] = [
   { src: require('../assets/players/faces1.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces2.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces3.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces4.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces5.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces6.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces7.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces8.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces9.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces10.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces11.png'), cols: 3, rows: 3, count: 9 },
 ];
 const TOTAL_FACES = FACE_SHEETS.reduce((n, s) => n + s.count, 0);
 
