@@ -88,12 +88,12 @@ const sheet = themedStyles(() => StyleSheet.create({
 
 const styles = themedStyles(() => StyleSheet.create({
   // 배경막 — 진한 스크림(0.82)으로 뒤 보드를 확실히 가라앉혀 팝업이 뜨게(다크 위 다크 50%는 거의 안 어두워져
-  // 경계가 안 보였다, 2026-06-28). 카드 — 불투명 표면(#161E2E, 배경보다 한 톤 밝게) + 헤어라인 보더 + 큰 그림자로
+  // 경계가 안 보였다, 2026-06-28). 카드 — 불투명 표면(theme.popup: 다크 #161E2E / 라이트 #FFFFFF) + 헤어라인 보더 + 큰 그림자로
   // "떠 있는 패널"로 경계를 또렷하게(반투명 theme.card는 다크 보드와 섞여 어디부터 팝업인지 안 보였다).
   backdrop: { flex: 1, backgroundColor: 'rgba(7,10,16,0.82)', alignItems: 'center', justifyContent: 'center', padding: 16 },
   card: {
-    backgroundColor: '#161E2E', borderRadius: 18, padding: 18, gap: 12, alignSelf: 'stretch', maxWidth: 560, width: '100%',
-    borderWidth: 1.5, borderColor: theme.accent + '66', // 다크 배경에 묻히던 경계 — 민트 틴트로 또렷하게(UI-10)
+    backgroundColor: theme.popup, borderRadius: 18, padding: 18, gap: 12, alignSelf: 'stretch', maxWidth: 560, width: '100%',
+    borderWidth: 1.5, borderColor: theme.accent + '66', // 배경에 묻히던 경계 — 민트 틴트로 또렷하게(UI-10). 표면색은 테마별(다크/라이트)
     shadowColor: '#000', shadowOpacity: 0.5, shadowRadius: 24, shadowOffset: { width: 0, height: 12 }, elevation: 14,
   },
 }));
