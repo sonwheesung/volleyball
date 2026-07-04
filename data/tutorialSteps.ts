@@ -58,7 +58,9 @@ export const TIPS: Tip[] = [
     title: '계약 관리', body: '선수 재계약·방출, 시즌 종료 FA 잔류/포기를 결정합니다. 단장의 핵심 권한이에요.' },
   { id: 'office.staff', screen: 'tab-office', order: 1, anchor: 'office-staff',
     title: '스태프 계약', body: '감독·전문 코치(훈련 부스트)·스카우터(드래프트 공개도)를 예산 안에서 영입합니다.' },
-  { id: 'office.tx', screen: 'tab-office', order: 2, anchor: 'office-tx',
+  { id: 'office.training', screen: 'tab-office', order: 2, anchor: 'office-training',
+    title: '훈련 방침', body: '우리 팀이 어떤 스탯 위주로 성장할지 방향을 정합니다. 감독 기본값을 따를 수도, 단장이 직접(체력·공격·수비 등) 정할 수도 있어요.' },
+  { id: 'office.tx', screen: 'tab-office', order: 3, anchor: 'office-tx',
     title: '시즌 중 FA 영입', body: '부상 등으로 포지션에 구멍이 나면, 미계약 FA를 시즌 중 즉시 수혈합니다(캡·정원 적용).' },
 
   // ── 외국인 트라이아웃(오프시즌 첫 진입 — 2026-06-30 신설) ──

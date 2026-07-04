@@ -34,14 +34,12 @@ export function Screen({ title, children, scroll = true }: ScreenProps) {
   const scrollRef = useRef<ScrollView>(null);
   const topRef = useRef<View>(null);
   const ctrlRef = useRef<SpotlightScrollController>({
-    scrollIntoView: (node) => {
+    scrollToWindowY: (targetWindowY) => {
       const sv = scrollRef.current, top = topRef.current;
-      if (!sv || !top || !node?.measureInWindow) return;
+      if (!sv || !top) return;
       top.measureInWindow((_x: number, topY: number) => {
-        node.measureInWindow((_tx: number, ty: number) => {
-          // 대상의 콘텐츠 오프셋 = (대상 창Y − 센티넬 창Y). 여백만큼 위로 여유.
-          sv.scrollTo({ y: Math.max(0, ty - topY - SPOTLIGHT_SCROLL_MARGIN), animated: true });
-        });
+        // 대상의 콘텐츠 오프셋 = (대상 창Y − 센티넬 창Y). 여백만큼 위로 여유.
+        sv.scrollTo({ y: Math.max(0, targetWindowY - topY - SPOTLIGHT_SCROLL_MARGIN), animated: true });
       });
     },
   });

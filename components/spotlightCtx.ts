@@ -7,8 +7,8 @@ import { createContext } from 'react';
 export const SPOTLIGHT_SCROLL_MARGIN = 90; // 대상을 ScrollView 상단에서 이만큼 아래에 두도록 스크롤(카드 여백 확보)
 
 export interface SpotlightScrollController {
-  // 대상 View(measureInWindow 가능)를 화면 안으로 끌어온다. 대상이 이 ScrollView 밖이면 무해하게 무시.
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  scrollIntoView: (node: any) => void;
+  // 대상의 현재 창 Y좌표를 받아 그 대상을 화면 상단 근처로 스크롤한다(센티넬 기준 오프셋 계산).
+  // 오버레이가 "스크롤 → 안착 대기 → 표시" 순서를 조율하므로 좌표만 넘긴다(스크롤/표시 동시 발생 방지).
+  scrollToWindowY: (targetWindowY: number) => void;
 }
 export const ScrollCtrlCtx = createContext<SpotlightScrollController | null>(null);

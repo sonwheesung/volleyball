@@ -75,7 +75,6 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
 export function SpotlightTarget({ id, children, style }: { id: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const setTarget = useContext(SetTargetCtx); // 고정 참조 — 아래 effect가 한 번만 돌게 한다
   const activeAnchor = useContext(ActiveAnchorCtx);
-  const scrollCtrl = useContext(ScrollCtrlCtx);
   const ref = useRef<View>(null);
   const measure = useCallback(() => {
     const node = ref.current;
@@ -89,16 +88,14 @@ export function SpotlightTarget({ id, children, style }: { id: string; children:
     const ts = [0, 60, 200, 500, 900].map((d) => setTimeout(measure, d));
     return () => { ts.forEach(clearTimeout); setTarget(id, null); };
   }, [measure, setTarget, id]);
-  // 내가 지금 스포트라이트 대상이면 → 화면 밖/아래에 걸쳐 있어도 ScrollView가 나를 위로 끌어올린 뒤 재측정.
-  // (구 버그: 대상이 화면 하단에 걸쳐 링이 밑동에만 그려짐 — 사용자 지적 2026-07-04. 스크롤 후 안착시켜 표시.)
+  // 내가 지금 스포트라이트 대상이면 → 오버레이가 스크롤을 거는 동안/직후 창 좌표를 여러 번 재측정
+  // (스크롤로 위치가 바뀌므로). 스크롤 트리거·표시 순서는 오버레이가 조율(스크롤·표시 동시 발생 방지).
   useEffect(() => {
     if (activeAnchor !== id) return;
     let alive = true;
-    scrollCtrl?.scrollIntoView(ref.current); // 대상을 화면 안으로(measureInWindow 기반 — Fabric 안전)
-    // 스크롤 애니메이션이 안착한 뒤 창 좌표 재측정(오버레이가 새 위치에 구멍을 판다).
-    const ts = [260, 460, 720].map((d) => setTimeout(() => { if (alive) measure(); }, d));
+    const ts = [260, 480, 660].map((d) => setTimeout(() => { if (alive) measure(); }, d));
     return () => { alive = false; ts.forEach(clearTimeout); };
-  }, [activeAnchor, id, measure, scrollCtrl]);
+  }, [activeAnchor, id, measure]);
   return (
     <View ref={ref} collapsable={false} onLayout={measure} style={style}>
       {children}
@@ -112,9 +109,13 @@ const CARD_W = 300;  // 설명 카드 폭
 /** 각 화면 끝에 1개 — 그 화면의 미본 스텝 큐의 첫 스텝을 스포트라이트로 띄운다. */
 export function SpotlightOverlay({ screen }: { screen: string }) {
   const targets = useContext(TargetsCtx);
+  const scrollCtrl = useContext(ScrollCtrlCtx);
   const seen = useGameStore((s) => s.seenTips) ?? {};
   const markTip = useGameStore((s) => s.markTip);
   const [attempt, setAttempt] = useState(0);
+  const [revealed, setRevealed] = useState(false); // 스크롤 안착 후에만 true → 스크롤·표시 동시 발생 방지
+  const handledRef = useRef<string | null>(null);   // 이 팁에 대해 스크롤/표시 결정을 이미 내렸나
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // 안착 타이머 — effect 재실행에 취소되면 안 됨(ref 보관)
 
   // 활성 화면(Provider가 공유)과 같을 때만 표시. 모든 오버레이가 같은 값을 보므로 둘 이상 동시 표시 불가.
   // 폴백 없음(불일치=숨김) — "이중 표시 방지"가 "한 화면 누락"보다 우선(누락은 자기 화면 들어가면 바로 뜸).
@@ -125,8 +126,13 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   const active = queue[0];
   const rect = active?.anchor ? targets[active.anchor] : undefined;
 
-  // 새 스텝마다 측정 시도 카운트 리셋
-  useEffect(() => { setAttempt(0); }, [active?.id]);
+  // 새 스텝마다 측정 시도·표시 상태 리셋(다음 팁은 다시 "스크롤→안착→표시"). 이전 안착 타이머는 취소.
+  useEffect(() => {
+    setAttempt(0); setRevealed(false); handledRef.current = null;
+    if (revealTimer.current) { clearTimeout(revealTimer.current); revealTimer.current = null; }
+  }, [active?.id]);
+  // 언마운트 시 타이머 정리
+  useEffect(() => () => { if (revealTimer.current) clearTimeout(revealTimer.current); }, []);
   // 대상이 아직 측정 안 됐으면 재시도. 단 일정 횟수(≈720ms) 넘으면 포기하고 가운데 카드로 폴백(안 보이는 일 없게).
   useEffect(() => {
     if (active?.anchor && !rect && attempt < 6) {
@@ -135,10 +141,29 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
     }
   }, [active, rect, attempt]);
 
+  // 표시 순서 조율: 대상이 편안한 위치(상단~중앙)가 아니면 **먼저 스크롤 → 안착 대기 → 표시**.
+  // 이미 편안하거나 스크롤 불가(비-Screen 화면)면 즉시 표시. 팁당 1회만 결정(handledRef).
+  // ⚠ 타이머는 ref에 보관 — 이 effect는 rect 변화(스크롤 후 재측정)로 재실행되는데, cleanup으로 타이머를
+  //    지우면 안착 전에 취소돼 영영 안 뜬다(에뮬 실측 버그 2026-07-04). 재실행 시 handledRef로 즉시 return만.
+  useEffect(() => {
+    if (!active || !focused || handledRef.current === active.id) return;
+    if (active.anchor && !rect && attempt < 6) return; // 아직 측정 중 — 대기
+    handledRef.current = active.id;
+    const SH = Dimensions.get('window').height;
+    const comfy = !!rect && rect.y >= 60 && rect.y <= SH * 0.5; // 이미 화면 상단~중앙에 보임
+    if (rect && active.anchor && scrollCtrl && !comfy) {
+      scrollCtrl.scrollToWindowY(rect.y);                                  // 스크롤만 먼저
+      revealTimer.current = setTimeout(() => setRevealed(true), 680);      // 안착(≈애니 300ms + 재측정 여유) 후 표시
+    } else {
+      setRevealed(true); // 스크롤 불필요 → 즉시
+    }
+  }, [active, focused, rect, attempt, scrollCtrl]);
+
   if (!active) return null;
   // 이중 모달 걱정 없음 — 모달이 탭바까지 덮어 안내를 탭으로 넘기기 전엔 다른 화면 이동 불가(이미 본 화면은 큐가 빔).
   const measuring = !!active.anchor && !rect && attempt < 6;
   if (measuring) return null; // 잠깐 측정 대기(최대 ≈720ms). 그 뒤엔 폴백으로 무조건 표시.
+  if (!revealed) return null; // 스크롤 안착 전엔 아무것도 안 그림(스크롤과 스포트라이트 동시 표시 방지 — 사용자 지적 2026-07-04)
 
   const { width: SW, height: SH } = Dimensions.get('window');
   const total = tipsForScreen(screen).length;

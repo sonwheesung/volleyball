@@ -63,20 +63,24 @@ export const tipsForScreen = (screen: string): Tip[] =>
 - **`SpotlightTarget id`**: 밝게 띄울 요소를 감싼다. `onLayout` + 마운트 직후 **여러 차례**(0·60·200·
   500·900ms) `measureInWindow`로 **윈도우 절대 좌표**를 측정해 Provider에 등록(스크롤뷰·화면전환
   애니메이션으로 첫 측정이 0/미안정인 경우 보강). 언마운트 시 해제.
-- **대상 자동 스크롤(2026-07-04 신설 — 화면 밖 폴백 개선)**: 대상이 화면 밖/하단에 걸쳐 있으면 **먼저 그
-  대상을 화면 안으로 스크롤한 뒤** 스포트라이트를 띄운다. 사용자 보고(2026-07-04): team-detail의 **team.roster**
-  (선수단 전체를 감싼 큰 앵커)가 화면 하단에 살짝 걸쳐 `onScreen=true`가 되며 **링이 화면 밑동에만** 그려짐
-  ("해당 섹션으로 슬라이드한 후 나와야"). → 각 화면 공통 `<Screen>`의 ScrollView를 `ScrollCtrlCtx`(leaf
-  `components/spotlightCtx.ts`)로 자손 `SpotlightTarget`에 내려주고, 내가 현재 활성 anchor(`ActiveAnchorCtx` =
-  활성 화면 첫 미본 팁)면 **콘텐츠 최상단 센티넬 View + 대상**을 각각 `measureInWindow`로 재 스크롤 오프셋을
-  계산해 `scrollTo`(대상을 상단 90px 아래로) → 안착 후 재측정 → 오버레이가 새 위치에 구멍을 판다.
-  카드 위치: 대상이 화면보다 크면(예: 선수단 전체) 카드를 **하단에 얹어** 대상 위에 겹친다.
+- **대상 자동 스크롤 → 안착 대기 → 표시(2026-07-04 신설·순서 분리)**: 대상이 편안한 위치(상단~중앙, `rect.y`가
+  60~0.5×화면높이)가 **아니면** ① **스크롤만 먼저** 걸고 ② **안착(≈680ms)까지 오버레이를 안 그리다가** ③ 안착 후 표시한다.
+  - **왜 순서 분리**: 사용자 1차 보고(team.roster가 하단에 걸쳐 링이 밑동에만) → 스크롤 도입. 2차 보고: "스크롤과
+    스포트라이트가 **동시에** 떠 이상" → 스크롤 중엔 오버레이를 숨기고(`revealed=false` → `return null`) 안착 후에만 표시.
+  - **구현**: 각 화면 공통 `<Screen>`의 ScrollView를 `ScrollCtrlCtx`(leaf `components/spotlightCtx.ts`)로 내려줌.
+    오버레이가 조율: 활성 팁의 `rect`가 안 편안하면 `scrollCtrl.scrollToWindowY(rect.y)` 호출(콘텐츠 최상단 센티넬 View +
+    대상을 각각 `measureInWindow`로 오프셋 계산, 상단 90px 아래로) → `setTimeout(680ms)` 후 `revealed=true`.
+    `SpotlightTarget`은 활성일 때 스크롤 직후 위치를 재측정([260·480·660ms])만 하고 스크롤은 안 건다(조율은 오버레이 단독).
+    카드 위치: 대상이 화면보다 크면(선수단 전체) 카드를 **하단에 얹는다**.
+  - ⚠ **안착 타이머는 `useRef` 보관(effect cleanup으로 지우지 말 것)**: 표시 결정 effect는 `rect` 변화(스크롤 후 재측정)로
+    재실행되는데, 타이머를 effect 로컬 변수로 두고 cleanup에서 `clearTimeout`하면 재실행 때 **안착 전에 취소돼 팁이 영영 안 뜬다**
+    (에뮬 실측 2026-07-04 — 3/4에서 아무 것도 안 뜸). 팁당 1회만 결정(`handledRef`)하고 타이머는 `revealTimer` ref에 담아
+    **팁 교체/언마운트 때만** 정리. React useEffect의 흔한 함정.
   - ⚠ **`measureLayout` 금지(Fabric)**: 숫자 노드핸들 `node.measureLayout(handle,…)`은 New Architecture에서
-    `"ref.measureLayout must be called with a ref to a native component"` 런타임 에러(에뮬 실측 2026-07-04) →
-    센티넬+`measureInWindow` 방식으로 회피(양 아키텍처 안전). 에뮬 see-and-tap로 team.ovr/coach/roster/start 4스텝 전부 안착 확인.
-  - **잔여 안전망(구 폴백 유지)**: 스크롤이 불가하거나(비-`<Screen>` 화면 — 예 `select-team` 자체 ScrollView,
-    단 그 팁은 최상단 카드라 무관) 좌표를 ≈720ms 안에 못 받으면 여전히 **구멍 없이 전체 어둠 + 가운데 카드**
-    폴백(`onScreen` 검사) — 화면 밖 좌표로 구멍 파면 "시커멓고 멈춘 화면"이 되던 구 버그(2026-06-24 team.start) 방지.
+    `"ref.measureLayout must be called with a ref to a native component"` 런타임 에러(에뮬 실측) → 센티넬+`measureInWindow`로 회피.
+  - **검증**: 에뮬 see-and-tap로 team.ovr(즉시)·coach·roster·operate(스크롤 후 표시) 전부 확인. 커버리지 가드 `tools/_dv_tips.ts`.
+  - **잔여 안전망(구 폴백 유지)**: 스크롤 불가(비-`<Screen>` — 예 `select-team` 자체 ScrollView, 팁은 최상단 카드라 무관)거나
+    좌표를 ≈720ms 안에 못 받으면 **구멍 없이 전체 어둠 + 가운데 카드**(`onScreen` 검사) — 구 "시커멓고 멈춘 화면"(team.start) 방지.
 - **`SpotlightOverlay screen`**: 각 화면 끝에 1개. 그 화면의 미본 스텝 큐(`tipsForScreen(screen)
   .filter(!seen)`)의 **첫 스텝**을 띄운다. 투명 `Modal`(최상위·탭바 위 포함) 위에:
   - **둥근 구멍(2026-06-25 재교정 — 거대 테두리 기법)**: 구 4밴드는 **직각 구멍**이라 둥근 카드와 안 맞아 모서리가

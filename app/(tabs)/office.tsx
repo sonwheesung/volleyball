@@ -55,13 +55,15 @@ export default function Office() {
         </Card>
       </SpotlightTarget>
 
-      <Card accent={theme.good} onPress={() => router.push('/training-policy')}>
-        <Row>
-          <Title>훈련 방침</Title>
-          <Muted>팀 성장 방향 →</Muted>
-        </Row>
-        <Muted style={{ fontSize: 12, marginTop: 2 }}>감독 기본 또는 단장이 직접 선택(체력·공격·수비 등). 저장 시 다음 진행부터 반영</Muted>
-      </Card>
+      <SpotlightTarget id="office-training">
+        <Card accent={theme.good} onPress={() => router.push('/training-policy')}>
+          <Row>
+            <Title>훈련 방침</Title>
+            <Muted>팀 성장 방향 →</Muted>
+          </Row>
+          <Muted style={{ fontSize: 12, marginTop: 2 }}>감독 기본 또는 단장이 직접 선택(체력·공격·수비 등)</Muted>
+        </Card>
+      </SpotlightTarget>
 
       <SpotlightTarget id="office-tx">
         <Card accent={theme.sky} onPress={() => router.push('/transactions')}>

@@ -66,7 +66,7 @@ export default function TrainingPolicy() {
 
       <IconLabel icon="options-outline" color={theme.good}>훈련 방침 선택 (단장)</IconLabel>
       <Card accent={theme.good}>
-        <Muted>팀의 장기 성장 방향을 직접 고른다. 아래에서 고른 뒤 저장하면 다음 진행부터 반영.</Muted>
+        <Muted>팀의 장기 성장 방향을 직접 고른다.</Muted>
         <View style={{ gap: 6, marginTop: 8 }}>
           <FocusOption
             label={`감독 기본 · ${coach?.archetype ?? ''}`}

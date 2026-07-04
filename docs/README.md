@@ -226,6 +226,7 @@ npx tsx tools/_dv_capdomestic.ts           # 샐러리캡=국내 전용(EC-CAP-0
 npx tsx tools/_dv_seasonlabel.ts           # 시즌 연도 라벨(EC-REC-01 후속, 2026-07-04) — seasonYear: 1시즌=2025-26·3시즌=2027-28·배경 음수idx·100년 겹침0·세기경계·범위·A/B(YYYY-YY 형식). exit 0/1
 npx tsx tools/_dv_careerseasons.ts 3       # 통산 기록 표시 분모(EC-REC-01, 2026-07-04 실기기 발견) — 실store 3시즌: 통산경기수==ΣseasonLines.matches(분모=seasonLines.length 정당)·career.seasons>seasonLines.length 재현(시드 백스토리)·음수갭0·A/B 최대갭. exit 0/1
 npx tsx tools/_dv_keepall.ts               # 한글 어절 줄바꿈 keep-all(UI-24, 2026-07-04 에뮬 발견) — keepAllHangul가 인접 한글 사이에만 U+2060 삽입·공백/부호/이모지 불변·멱등 + A/B 민감도. exit 0/1
+npx tsx tools/_dv_tips.ts                   # 스포트라이트 튜토리얼 커버리지(ONBOARDING §3, 2026-07-04) — 전 팁 anchor가 실제 SpotlightTarget id에 매칭(동적 team-card-0 포함)·오버레이 없는 화면 0·중복 id 0·고아 앵커 0 + A/B(가짜 anchor/화면/중복 주입 시 FAIL). exit 0/1
 npx tsx tools/_dv_copylint.ts              # 유저 문구 정합(2026-06-30, 에뮬 발견 회귀 분석) — data/engine/app/components 소스에 남성형(사나이·그의/그가 경계인식)·배구 오용어(라켓·홈런·골키퍼) 0건 + A/B(더러운 문장 ≥3 적발·깨끗한 문장 "리그가/리그의" 오탐 0). exit 0/2
 npx tsx tools/simSuggest.ts                # 건의 시스템(감독 성향이 수락/거절 가른다). exit 0/1
 npx tsx tools/_ev_suggest_defer.ts         # 건의 반영 시점(OWNER 2.3, 2026-06-28) — 관전 중(이어보기 대기) 경기엔 미적용·다음 경기부터(fromDay=currentDay+1) + A/B(델타=1, 옛 미적용 검출). 시간차/stale-resume·리롤 차단. exit 0/1
