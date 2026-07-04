@@ -17,9 +17,12 @@ export default function Coupon() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
 
+  // 입력 정규화: 영문+숫자만, 자동 대문자, 6자리(붙여넣기 방어까지). 서버도 normalizeCode로 재대문자화(BACKEND §13.14).
+  const onChangeCode = (t: string) => setCode(t.toUpperCase().replace(/[^A-Z0-9]/g, '').slice(0, 6));
+
   const submit = async () => {
-    const c = code.trim();
-    if (!c || busy) return;
+    const c = code; // 이미 정규화됨(대문자·영숫자)
+    if (c.length !== 6 || busy) return;
     if (!session) { showAlert('로그인 필요', '쿠폰 사용은 로그인이 필요합니다.'); return; }
     setBusy(true);
     const r = await redeemCoupon(c);
@@ -48,20 +51,20 @@ export default function Coupon() {
       <Card accent={theme.gold}>
         <IconLabel icon="pricetag-outline" color={theme.gold}>쿠폰 코드</IconLabel>
         <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
-          받은 쿠폰 코드를 입력하면 다이아가 지급됩니다. 쿠폰당 한 번만 사용할 수 있어요.
+          받은 쿠폰 코드를 입력하면 다이아가 지급됩니다. 6자리 영문·숫자 조합, 쿠폰당 한 번만 사용할 수 있어요.
         </Muted>
         <TextInput
           value={code}
-          onChangeText={setCode}
-          placeholder="쿠폰 코드 입력"
+          onChangeText={onChangeCode}
+          placeholder="6자리 영문·숫자"
           placeholderTextColor={theme.muted}
           autoCapitalize="characters"
           autoCorrect={false}
-          maxLength={32}
+          maxLength={6}
           style={styles.input}
           editable={!busy}
         />
-        <Button label={busy ? '확인 중…' : '쿠폰 사용'} onPress={submit} disabled={busy || !code.trim()} />
+        <Button label={busy ? '확인 중…' : '쿠폰 사용'} onPress={submit} disabled={busy || code.length !== 6} />
       </Card>
     </Screen>
   );

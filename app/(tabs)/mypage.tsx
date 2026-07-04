@@ -144,7 +144,7 @@ export default function MyPage() {
         onPress={() => router.push('/coupon')} />
 
       <LinkCard icon="book-outline" tint={theme.accent} title="게임 가이드"
-        sub="경기 · 선수 · 스탯 · 특성 · FA · 드래프트 · 외국인 — 알면 좋은 개념"
+        sub="경기 · 선수 · FA · 드래프트 등 핵심 개념"
         onPress={() => router.push('/guide')} />
 
       {/* ── 도움 · 약관 (하단) ── */}

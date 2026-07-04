@@ -49,7 +49,7 @@ export default function Support() {
       <View style={styles.topBar}>
         <Pressable onPress={() => setMode('compose')} hitSlop={10} style={styles.topBtn}>
           <Ionicons name="create-outline" size={16} color={theme.accent} />
-          <Text style={styles.newBtn}>문의</Text>
+          <Text style={styles.newBtn}>문의하기</Text>
         </Pressable>
       </View>
       {tickets === null ? (
@@ -58,7 +58,7 @@ export default function Support() {
         <View style={{ paddingTop: 60, alignItems: 'center', gap: 8 }}>
           <Ionicons name="chatbubbles-outline" size={40} color={theme.muted} />
           <Muted style={{ fontSize: 14 }}>{offline ? '오프라인 — 온라인 연결 후 문의 내역이 표시됩니다' : '문의 내역이 없습니다'}</Muted>
-          <Pressable onPress={() => setMode('compose')} style={styles.emptyBtn}><Text style={styles.emptyBtnTxt}>문의하기</Text></Pressable>
+          <Muted style={{ fontSize: 12 }}>우측 상단 버튼으로 등록하세요.</Muted>
         </View>
       ) : (
         tickets.map((t) => (
