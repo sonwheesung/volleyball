@@ -280,12 +280,17 @@
 ### 13.15 관리자 대시보드 (#58 발급·#57 발행·#56 게이트, 2026-07-03 · **2026-07-04 UI 개편 + #46 통계**)
 > 운영 콘솔(1인 운영). Next.js 페이지 + ADMIN_TOKEN 보호 API. 인라인 스타일 + 내장 `<style>`만(외부 스크립트 0, XSS 표면 최소), `noindex`.
 > - **경로 은닉(2026-07-04 사용자 요청)**: `/admin` → **`/ops-9f3a2c`**(추측 차단 — 유저가 `/admin` 접근 우려). 실보안은 ADMIN_TOKEN(경로는 보조). `/admin` 라우트 삭제(404).
-> - **UI 개편(2026-07-04)**: 폼 나열 콘솔 → **로그인 게이트 화면 → 사이드바 대시보드**(다크 모던, Vercel/Tremor 참조). 첫 화면=**대시보드**(KPI 카드 + 차트 4개). 나머지 탭: 쿠폰·공지·운영설정·문의/환불. 로그아웃.
-> - **통계(#46 착수, `/api/admin/stats`)**: KPI(총가입·실시간접속(최근30분·로그인기준)·DAU·오늘신규·서버상태·버전) + 14일 시계열 차트(매출[statsDaily, 결제#43 전 0]·신규가입·DAU 라인·시간대별 접속[lastSeenAt 시간분포]). SVG 인라인 차트(그라데이션·베지어곡선, 라이브러리 0). **한계**: 진짜 실시간/시간대별은 하트비트 필요(미구현) — lastSeenAt(로그인 시 갱신) 근사. 다운로드는 Install Referrer(EAS) 후. 매출은 #43 후.
+> - **UI 개편(2026-07-04)**: 폼 나열 콘솔 → **로그인 게이트 화면 → 사이드바 대시보드**(다크 모던, Vercel/Tremor 참조). 상세/수정/삭제는 **행 클릭→팝업 모달**(리스트 화면과 분리 — 사용자 지적 "조회에서 등록 별로"). 쿠폰·공지: 행 클릭→상세(정의목록)→모달 안에서 수정/삭제. 티켓: 유형·상태 필터(기본 전체·미답변), 환불 컨트롤은 **category==='refund'에만**(오류 티켓에 환불 안 뜸).
+> - **메뉴 IA(2026-07-04 사용자 요청 "대시보드에 다 넣지 마라")**: 사이드바 **분석 그룹**(사용자·결제·광고·업적) + **운영 그룹**(쿠폰·공지·문의/환불·운영설정). **대시보드=한눈에 볼 핵심만**(6 KPI: 서버상태·실시간접속·DAU·총가입·미처리문의·결제전환율 + 차트 2개[DAU·신규가입]). 상세는 각 분석 메뉴로 분리:
+>   - **사용자**(`/api/admin/users`): 가입일·최근접속(+상대시간)·상태(활성/비활성/탈퇴 pill)·provider·버전·다이아 목록 + 상태 필터 + 페이지네이션(50) + 신규가입·시간대별 차트.
+>   - **결제**(`/api/admin/series?metric=revenue|refund`): **일/주/월** 토글. 매출[statsDaily, #43 전 0]·결제건수·환불건수·환불다이아 + 전환율 KPI.
+>   - **광고**(`/api/admin/series?metric=ad`): **일/주/월/연** 토글. 시청횟수·고유시청자·지급다이아(원장 reason='ad', 1회=+50).
+>   - **업적**(`/api/admin/achievements`): 86개 카탈로그 카테고리별 + **달성율 바**. 원천=`walletLedger(reason='achievement', ref=업적id)` 고유유저/총가입 — 업적 보상 적립이 계정평생 1회(achKey 멱등)라 ref별 고유유저=달성자. **별도 텔레메트리 불필요·결정론 격리 유지**(원장=다이아 진실, 시드/리플레이 무관). 카탈로그(제목)는 ops 페이지가 미러(engine tsconfig 격리 — econ.ts와 동일 정책).
+> - **통계(#46, `/api/admin/stats`)**: 대시보드/사용자용 KPI(총가입·실시간접속(최근30분)·DAU·신규·탈퇴·비활성·결제전환율·광고) + 14일 시계열(신규가입·DAU·매출·광고) + 시간대별. SVG 인라인 차트(그라데이션·베지어, 라이브러리 0). 시계열 일/주/월/연 집계는 `/api/admin/series`(UTC 버킷). **한계**: 진짜 실시간/시간대별은 하트비트 필요(미구현) — lastSeenAt(로그인 시 갱신) 근사. 다운로드는 Install Referrer(EAS) 후. 매출은 #43 후.
 
 - **인증 `requireAdmin(req)` — fail-closed(P0-B)**: `Authorization: Bearer <ADMIN_TOKEN>` 상수시간 비교. **`ADMIN_TOKEN` 미설정/짧으면(<16자) 무조건 401/503**(크론의 fail-open 패턴 복제 금지 — env 누락=전면 거부). Bearer 헤더라 CSRF 내성(쿠키 인증 미도입). 토큰은 localStorage.
-- **엔드포인트**(전부 requireAdmin): `POST/GET /api/admin/coupon`(발급/목록 — 발급 시 code 정규화·reward>0·상한캡·UNIQUE 충돌 4xx)·`POST/GET /api/admin/announcement`(발행/목록/비활성)·`POST/GET /api/admin/setting`(server_setting 점검·버전·스토어URL).
-- **파일**: `server/lib/admin.ts`(requireAdmin)·`server/lib/coupon.ts`(redeemCoupon 단일tx)·`server/lib/wallet.ts`(applyWalletTx 추출)·`server/db/schema.ts`(coupons·coupon_redemptions)·`server/app/api/coupon/redeem/route.ts`·`server/app/api/admin/{coupon,announcement,setting,stats}/route.ts`·`server/app/ops-9f3a2c/{page,layout}.tsx`(운영 콘솔 UI)·`lib/server.ts`(redeemCoupon)·`app/coupon.tsx`.
+- **엔드포인트**(전부 requireAdmin): `POST/GET/PATCH/DELETE /api/admin/coupon`(발급/목록/수정/삭제 — 발급 시 code 정규화·reward>0·상한캡·UNIQUE 충돌 4xx, 삭제는 사용기록 FK 있으면 'has-redemptions' 409→비활성화 권장)·`POST/GET/PATCH/DELETE /api/admin/announcement`(발행/목록/수정/삭제)·`POST/GET /api/admin/setting` · `GET /api/admin/stats`(대시보드 KPI+14일 시계열) · `GET /api/admin/users`(목록·상태필터·페이지네이션) · `GET /api/admin/series?metric=revenue|ad|refund&granularity=day|week|month|year`(UTC 버킷 시계열) · `GET /api/admin/achievements`(업적별 달성유저=원장 ref 고유유저).
+- **파일**: `server/lib/admin.ts`(requireAdmin)·`server/lib/coupon.ts`·`server/lib/wallet.ts`·`server/db/schema.ts`·`server/app/api/coupon/redeem/route.ts`·`server/app/api/admin/{coupon,announcement,setting,stats,users,series,achievements}/route.ts`·`server/app/ops-9f3a2c/{page,layout}.tsx`(운영 콘솔 UI — 로그인·대시보드·사용자·결제·광고·업적·쿠폰·공지·설정·문의)·`lib/server.ts`·`app/coupon.tsx`.
 - **검증(Opus 4.8)**: 라이브 E2E(admin 발급→redeem +N·이중사용 "used"·개인쿠폰 타유저 거부·만료 거부·requireAdmin 토큰없이 401)·app/server/test tsc 0.
 
 ### 13.16 소프트 업데이트 배너 + 스토어 URL (#56 소프트, 2026-07-03)

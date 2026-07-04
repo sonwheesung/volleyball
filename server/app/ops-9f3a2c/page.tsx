@@ -2,10 +2,10 @@
 // 배구명가 운영 콘솔 (BACKEND_SYSTEM §13.15) — 로그인 게이트 + 대시보드(개요·쿠폰·공지·운영설정·문의/환불).
 // URL은 /admin 아님(추측 차단, 2026-07-04 사용자 요청) — 실제 보안은 ADMIN_TOKEN(requireAdmin fail-closed §13.15).
 // 인라인 스타일 + 내장 <style>(정적 CSS)만 — 외부 스크립트/스타일 0(XSS 표면 최소). 관리자 전용 화면.
-import { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
 
 type Json = Record<string, unknown>;
-type Tab = 'overview' | 'coupons' | 'anns' | 'settings' | 'tickets';
+type Tab = 'overview' | 'users' | 'payments' | 'ads' | 'achv' | 'coupons' | 'anns' | 'settings' | 'tickets';
 
 async function apiCall(path: string, token: string, init?: RequestInit): Promise<{ status: number; body: Json }> {
   const res = await fetch(path, { ...init, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(init?.headers || {}) } });
@@ -102,6 +102,18 @@ textarea.oc-input{resize:vertical;min-height:44px;font-family:inherit;}
 .oc-dl-block .txt{font-size:14px;line-height:1.65;white-space:pre-wrap;}
 .oc-modal-f.split{justify-content:space-between;}
 .oc-modal-b.tight{gap:0;padding-top:8px;padding-bottom:8px;}
+.oc-navgrp{font-size:10.5px;font-weight:800;letter-spacing:1px;color:var(--mut);opacity:.62;text-transform:uppercase;padding:15px 13px 6px;}
+.oc-seg{display:inline-flex;background:var(--panel);border:1px solid var(--bd);border-radius:10px;padding:3px;gap:2px;}
+.oc-segb{border:none;background:transparent;color:var(--mut);font-size:12.5px;font-weight:700;padding:6px 14px;border-radius:8px;cursor:pointer;transition:background .12s,color .12s;}
+.oc-segb:hover{color:var(--tx);} .oc-segb.on{background:var(--ac);color:#04110d;font-weight:800;}
+.oc-bar{height:8px;border-radius:999px;background:var(--bd2);overflow:hidden;flex:1;} .oc-bar>i{display:block;height:100%;border-radius:999px;background:linear-gradient(90deg,#19c2ae,#3ad6a6);}
+.oc-achrow{display:flex;align-items:center;gap:14px;padding:11px 4px;border-bottom:1px solid var(--bd2);} .oc-achrow:last-child{border-bottom:none;}
+.oc-achrow .t{font-size:13.5px;font-weight:700;} .oc-achrow .d{font-size:11.5px;color:var(--mut);margin-top:2px;}
+.oc-achrow .meta{width:210px;flex-shrink:0;} .oc-achrow .pct{width:78px;text-align:right;font-weight:800;font-size:13px;flex-shrink:0;} .oc-achrow .cnt{font-size:11px;color:var(--mut);text-align:right;}
+.oc-pill{display:inline-block;font-size:11px;font-weight:800;padding:2px 9px;border-radius:999px;}
+.oc-pill.g{background:rgba(43,209,126,.16);color:#4fe0a0;} .oc-pill.y{background:rgba(242,169,59,.16);color:#f2b95f;} .oc-pill.r{background:rgba(240,90,90,.16);color:#ff8f8f;} .oc-pill.b{background:rgba(91,155,255,.16);color:#8fb8ff;}
+.oc-mut{color:var(--mut);font-weight:600;}
+.oc-pager{display:flex;align-items:center;justify-content:flex-end;gap:12px;margin-top:14px;font-size:13px;color:var(--mut);}
 `;
 
 export default function OpsConsole() {
@@ -162,14 +174,18 @@ function Login({ initial, onLogin }: { initial: string; onLogin: (t: string) => 
   );
 }
 
-const NAV: { id: Tab; ic: string; label: string }[] = [
+const NAV: { id: Tab; ic: string; label: string; grp?: string }[] = [
   { id: 'overview', ic: '📊', label: '대시보드' },
-  { id: 'coupons', ic: '🎟', label: '쿠폰' },
-  { id: 'anns', ic: '📢', label: '공지' },
-  { id: 'settings', ic: '⚙', label: '운영 설정' },
-  { id: 'tickets', ic: '✉', label: '문의 · 환불' },
+  { id: 'users', ic: '👥', label: '사용자', grp: '분석' },
+  { id: 'payments', ic: '💳', label: '결제', grp: '분석' },
+  { id: 'ads', ic: '📺', label: '광고', grp: '분석' },
+  { id: 'achv', ic: '🏆', label: '업적', grp: '분석' },
+  { id: 'coupons', ic: '🎟', label: '쿠폰', grp: '운영' },
+  { id: 'anns', ic: '📢', label: '공지', grp: '운영' },
+  { id: 'tickets', ic: '✉', label: '문의 · 환불', grp: '운영' },
+  { id: 'settings', ic: '⚙', label: '운영 설정', grp: '운영' },
 ];
-const TITLES: Record<Tab, string> = { overview: '대시보드', coupons: '쿠폰 관리', anns: '공지 관리', settings: '운영 설정', tickets: '문의 · 환불' };
+const TITLES: Record<Tab, string> = { overview: '대시보드', users: '사용자', payments: '결제', ads: '광고', achv: '업적', coupons: '쿠폰 관리', anns: '공지 관리', settings: '운영 설정', tickets: '문의 · 환불' };
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
@@ -201,11 +217,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
       <aside className="oc-side">
         <div className="oc-logo" style={{ fontSize: 19, paddingLeft: 6 }}>🏐 운영 콘솔</div>
         <nav className="oc-nav">
-          {NAV.map((n) => (
-            <button key={n.id} className={`oc-navitem${tab === n.id ? ' on' : ''}`} onClick={() => setTab(n.id)}>
-              <span className="ic">{n.ic}</span>{n.label}
-              {n.id === 'tickets' && openTickets > 0 ? <span className="bdg">{openTickets}</span> : null}
-            </button>
+          {NAV.map((n, i) => (
+            <React.Fragment key={n.id}>
+              {n.grp && n.grp !== NAV[i - 1]?.grp ? <div className="oc-navgrp">{n.grp}</div> : null}
+              <button className={`oc-navitem${tab === n.id ? ' on' : ''}`} onClick={() => setTab(n.id)}>
+                <span className="ic">{n.ic}</span>{n.label}
+                {n.id === 'tickets' && openTickets > 0 ? <span className="bdg">{openTickets}</span> : null}
+              </button>
+            </React.Fragment>
           ))}
         </nav>
         <button className="oc-btn ghost sm" onClick={onLogout}>로그아웃</button>
@@ -221,6 +240,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         </div>
 
         {tab === 'overview' && <Overview stats={stats} setting={setting} openTickets={openTickets} />}
+        {tab === 'users' && <Users stats={stats} api={api} />}
+        {tab === 'payments' && <Payments stats={stats} api={api} />}
+        {tab === 'ads' && <Ads api={api} />}
+        {tab === 'achv' && <Achievements api={api} />}
         {tab === 'coupons' && <Coupons coupons={coupons} api={api} reload={load} flash={flash} />}
         {tab === 'anns' && <Anns anns={anns} api={api} reload={load} flash={flash} />}
         {tab === 'settings' && <Settings setting={setting} api={api} reload={load} flash={flash} />}
@@ -262,6 +285,7 @@ function axisLabels(labels: string[]): string[] {
   return labels.filter((_, i) => i % step === 0 || i === labels.length - 1);
 }
 
+// 대시보드 = 한눈에 볼 핵심만. 상세(사용자·매출·광고·업적)는 좌측 분석 메뉴로 분리.
 function Overview({ stats, setting, openTickets }: { stats: Json | null; setting: Json | null; openTickets: number }) {
   const maint = !!setting?.maintenance;
   const minV = (setting?.minVersion as string) || '—';
@@ -269,28 +293,20 @@ function Overview({ stats, setting, openTickets }: { stats: Json | null; setting
   const kpi = (stats?.kpi as Json) ?? {};
   const labels = (stats?.labels as string[]) ?? [];
   const series = (stats?.series as Json) ?? {};
-  const newUsers = narr(series.newUsers), dau = narr(series.dau), revenue = narr(series.revenue), ad = narr(series.ad), hourly = narr(stats?.hourly);
-  const revTotal = revenue.reduce((a, b) => a + b, 0);
-  const hourTotal = hourly.reduce((a, b) => a + b, 0);
+  const dau = narr(series.dau), newUsers = narr(series.newUsers);
   return (
     <>
       <div className="oc-grid">
         <Stat ic={maint ? '🔧' : '🟢'} k="서버 상태" v={maint ? '점검 중' : '정상'} s={maint ? '진입 차단' : '서비스 중'} />
-        <Stat ic="👥" k="총 가입자" v={nnum(kpi.totalUsers).toLocaleString()} s={`오늘 신규 +${nnum(kpi.newToday)}`} />
-        <Stat ic="🟢" k="실시간 접속" v={String(nnum(kpi.active30m))} s="최근 30분(로그인)" />
+        <Stat ic="🟢" k="실시간 접속" v={String(nnum(kpi.active30m))} s="최근 30분" />
+        <Stat ic="🔵" k="오늘 활성(DAU)" v={nnum(kpi.dauToday).toLocaleString()} s={`오늘 신규 +${nnum(kpi.newToday)}`} />
+        <Stat ic="👥" k="총 가입자" v={nnum(kpi.totalUsers).toLocaleString()} s={`탈퇴 ${nnum(kpi.withdrawn)} · 비활성 ${nnum(kpi.inactive)}`} />
         <Stat ic="✉" k="미처리 문의" v={String(openTickets)} s="답변 대기" />
-        <Stat ic="💳" k="결제 전환율" v={`${nnum(kpi.conversion)}%`} s={`결제자 ${nnum(kpi.payers)}명`} />
-        <Stat ic="📺" k="오늘 광고" v={String(nnum(kpi.adToday))} s={`시청자 ${nnum(kpi.adUsersToday)}명`} />
-        <Stat ic="💤" k="비활성" v={nnum(kpi.inactive).toLocaleString()} s="14일+ 미접속" />
-        <Stat ic="🚪" k="탈퇴" v={nnum(kpi.withdrawn).toLocaleString()} s="계정 삭제" />
-        <Stat ic="⬆" k="버전 게이트" v={`${minV} / ${latV}`} s="강제 / 최신" />
+        <Stat ic="💳" k="결제 전환율" v={`${nnum(kpi.conversion)}%`} s={`결제자 ${nnum(kpi.payers)}명 · v${minV}/${latV}`} />
       </div>
       <div className="oc-charts">
-        <BarsCard title="일별 매출" value={`₩${revTotal.toLocaleString()}`} tag="결제 #43 후" labels={labels} data={revenue} color="#2bd17e" unit="원" />
-        <BarsCard title="신규 가입" value={`+${nnum(kpi.newToday)} 오늘`} labels={labels} data={newUsers} color="#5b9bff" unit="명" />
         <LineCard title="일일 활성 사용자 (DAU)" value={`${nnum(kpi.dauToday)} 오늘`} labels={labels} data={dau} color="#19c2ae" />
-        <BarsCard title="일별 광고 시청" value={`${nnum(kpi.adToday)} 오늘`} labels={labels} data={ad} color="#f2a93b" unit="회" />
-        <BarsCard title="시간대별 접속" value={`${hourTotal}건`} tag="로그인 기준" labels={HOUR_LABELS} data={hourly} color="#9b7bff" unit="" />
+        <BarsCard title="신규 가입 (최근 14일)" value={`+${nnum(kpi.newToday)} 오늘`} labels={labels} data={newUsers} color="#5b9bff" unit="명" />
       </div>
     </>
   );
@@ -369,6 +385,189 @@ function StatusBadge({ s }: { s: string }) {
 }
 
 type Api = (p: string, i?: RequestInit) => Promise<{ status: number; body: Json }>;
+
+// ── 날짜/상태 헬퍼 ──
+const pad = (n: number) => String(n).padStart(2, '0');
+const fmtD = (iso: unknown): string => { if (!iso) return '—'; const d = new Date(iso as string); return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`; };
+const fmtDT = (iso: unknown): string => { if (!iso) return '—'; const d = new Date(iso as string); return `${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`; };
+const ago = (iso: unknown): string => { if (!iso) return '접속 없음'; const ms = Date.now() - new Date(iso as string).getTime(); const dy = Math.floor(ms / 86400000); if (dy <= 0) { const hr = Math.floor(ms / 3600000); return hr <= 0 ? '방금' : `${hr}시간 전`; } return `${dy}일 전`; };
+function userStatus(u: Json): { label: string; cls: string } {
+  if (u.deletedAt) return { label: '탈퇴', cls: 'r' };
+  const ls = u.lastSeenAt ? new Date(u.lastSeenAt as string).getTime() : 0;
+  if (!ls || Date.now() - ls > 14 * 86400000) return { label: '비활성', cls: 'y' };
+  return { label: '활성', cls: 'g' };
+}
+
+// 분석 공용 — 기간 세그먼트 토글
+function GranTabs({ gran, set, opts }: { gran: string; set: (g: string) => void; opts: { v: string; l: string }[] }) {
+  return <div className="oc-seg">{opts.map((o) => <button key={o.v} className={`oc-segb${gran === o.v ? ' on' : ''}`} onClick={() => set(o.v)}>{o.l}</button>)}</div>;
+}
+
+// ── 사용자: 가입일·최근접속·상태 목록 + 상태 필터 + 페이지네이션 ──
+function Users({ stats, api }: { stats: Json | null; api: Api }) {
+  const kpi = (stats?.kpi as Json) ?? {};
+  const labels = (stats?.labels as string[]) ?? [];
+  const series = (stats?.series as Json) ?? {};
+  const newUsers = narr(series.newUsers), hourly = narr(stats?.hourly);
+  const [status, setStatus] = useState('all');
+  const [offset, setOffset] = useState(0);
+  const [rows, setRows] = useState<Json[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const LIM = 50;
+  useEffect(() => {
+    let live = true; setLoading(true);
+    api(`/api/admin/users?status=${status}&limit=${LIM}&offset=${offset}`).then((r) => { if (!live) return; setRows((r.body.users as Json[]) ?? []); setTotal(nnum(r.body.total)); setLoading(false); });
+    return () => { live = false; };
+  }, [api, status, offset]);
+  const pick = (s: string) => { setStatus(s); setOffset(0); };
+  const FILT = [{ v: 'all', l: '전체' }, { v: 'active', l: '활성' }, { v: 'inactive', l: '비활성' }, { v: 'withdrawn', l: '탈퇴' }];
+  return (
+    <>
+      <div className="oc-grid">
+        <Stat ic="👥" k="총 가입자" v={nnum(kpi.totalUsers).toLocaleString()} s={`오늘 신규 +${nnum(kpi.newToday)}`} />
+        <Stat ic="🔵" k="오늘 활성(DAU)" v={nnum(kpi.dauToday).toLocaleString()} s="오늘 접속 유저" />
+        <Stat ic="🟢" k="실시간 접속" v={String(nnum(kpi.active30m))} s="최근 30분" />
+        <Stat ic="💤" k="비활성" v={nnum(kpi.inactive).toLocaleString()} s="14일+ 미접속" />
+        <Stat ic="🚪" k="탈퇴" v={nnum(kpi.withdrawn).toLocaleString()} s="계정 삭제" />
+      </div>
+      <div className="oc-charts">
+        <BarsCard title="신규 가입 (최근 14일)" value={`+${nnum(kpi.newToday)} 오늘`} labels={labels} data={newUsers} color="#5b9bff" unit="명" />
+        <BarsCard title="시간대별 접속" value="로그인 기준" labels={HOUR_LABELS} data={hourly} color="#9b7bff" unit="" />
+      </div>
+      <div className="oc-card">
+        <div className="oc-cardhead"><h3>사용자 목록 <span className="oc-mut">({total.toLocaleString()})</span></h3><GranTabs gran={status} set={pick} opts={FILT} /></div>
+        {loading ? <div className="oc-empty">불러오는 중…</div> : rows.length === 0 ? <div className="oc-empty">해당 조건의 사용자가 없습니다.</div> : (
+          <table className="oc-table">
+            <thead><tr><th>가입일</th><th>최근 접속</th><th>상태</th><th>로그인</th><th>버전</th><th style={{ textAlign: 'right' }}>다이아</th></tr></thead>
+            <tbody>{rows.map((u) => { const st = userStatus(u); return (
+              <tr key={u.id as string}>
+                <td>{fmtD(u.createdAt)}</td>
+                <td>{fmtDT(u.lastSeenAt)} <span className="oc-mut" style={{ fontSize: 11 }}>· {ago(u.lastSeenAt)}</span></td>
+                <td><span className={`oc-pill ${st.cls}`}>{st.label}</span></td>
+                <td className="oc-mut">{(u.provider as string) || '—'}</td>
+                <td className="oc-mut">{(u.appVersion as string) || '—'}</td>
+                <td style={{ textAlign: 'right', fontWeight: 700 }}>{nnum(u.balance).toLocaleString()}</td>
+              </tr>); })}</tbody>
+          </table>
+        )}
+        {total > LIM ? (
+          <div className="oc-pager">
+            <button className="oc-btn ghost sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - LIM))}>← 이전</button>
+            <span>{offset + 1}–{Math.min(offset + LIM, total)} / {total.toLocaleString()}</span>
+            <button className="oc-btn ghost sm" disabled={offset + LIM >= total} onClick={() => setOffset(offset + LIM)}>다음 →</button>
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
+// ── 결제: 일/주/월 매출·결제건수·환불 ──
+function Payments({ stats, api }: { stats: Json | null; api: Api }) {
+  const kpi = (stats?.kpi as Json) ?? {};
+  const [gran, setGran] = useState('day');
+  const [rev, setRev] = useState<Json | null>(null);
+  const [refund, setRefund] = useState<Json | null>(null);
+  useEffect(() => {
+    let live = true;
+    Promise.all([api(`/api/admin/series?metric=revenue&granularity=${gran}`), api(`/api/admin/series?metric=refund&granularity=${gran}`)]).then(([a, b]) => { if (!live) return; setRev(a.body.ok ? a.body : null); setRefund(b.body.ok ? b.body : null); });
+    return () => { live = false; };
+  }, [api, gran]);
+  const labels = (rev?.labels as string[]) ?? [];
+  const revenue = narr(rev?.revenue), purchases = narr(rev?.purchases);
+  const rlabels = (refund?.labels as string[]) ?? [], rcount = narr(refund?.count), rdia = narr(refund?.diamonds);
+  const revTotal = revenue.reduce((a, b) => a + b, 0), buyTotal = purchases.reduce((a, b) => a + b, 0), refTotal = rcount.reduce((a, b) => a + b, 0);
+  const GR = [{ v: 'day', l: '일별' }, { v: 'week', l: '주별' }, { v: 'month', l: '월별' }];
+  return (
+    <>
+      <div className="oc-cardhead" style={{ marginBottom: 18 }}><div className="oc-mut" style={{ fontSize: 13 }}>매출 데이터는 결제 검증(#43) 연동 후 채워집니다.</div><GranTabs gran={gran} set={setGran} opts={GR} /></div>
+      <div className="oc-grid">
+        <Stat ic="₩" k="총 매출" v={`₩${revTotal.toLocaleString()}`} s={`최근 ${labels.length}구간`} />
+        <Stat ic="🧾" k="결제 건수" v={buyTotal.toLocaleString()} s="구매 원장" />
+        <Stat ic="💳" k="결제 전환율" v={`${nnum(kpi.conversion)}%`} s={`결제자 ${nnum(kpi.payers)}명`} />
+        <Stat ic="↩" k="환불 건수" v={refTotal.toLocaleString()} s={`다이아 ${rdia.reduce((a, b) => a + b, 0).toLocaleString()} 회수`} />
+      </div>
+      <div className="oc-charts">
+        <BarsCard title="매출" value={`₩${revTotal.toLocaleString()}`} tag="#43 후" labels={labels} data={revenue} color="#2bd17e" unit="원" />
+        <BarsCard title="결제 건수" value={`${buyTotal} 건`} labels={labels} data={purchases} color="#5b9bff" unit="건" />
+        <BarsCard title="환불 건수" value={`${refTotal} 건`} labels={rlabels} data={rcount} color="#f05a5a" unit="건" />
+        <BarsCard title="환불 다이아" value={`${rdia.reduce((a, b) => a + b, 0).toLocaleString()}`} labels={rlabels} data={rdia} color="#ff8f8f" unit="" />
+      </div>
+    </>
+  );
+}
+
+// ── 광고: 일/주/월/연 시청 횟수·고유 시청자 ──
+function Ads({ api }: { api: Api }) {
+  const [gran, setGran] = useState('day');
+  const [d, setD] = useState<Json | null>(null);
+  useEffect(() => { let live = true; api(`/api/admin/series?metric=ad&granularity=${gran}`).then((r) => { if (live) setD(r.body.ok ? r.body : null); }); return () => { live = false; }; }, [api, gran]);
+  const labels = (d?.labels as string[]) ?? [], count = narr(d?.count), usersA = narr(d?.users);
+  const cTotal = count.reduce((a, b) => a + b, 0), last = count[count.length - 1] ?? 0, lastU = usersA[usersA.length - 1] ?? 0;
+  const GR = [{ v: 'day', l: '일별' }, { v: 'week', l: '주별' }, { v: 'month', l: '월별' }, { v: 'year', l: '연별' }];
+  return (
+    <>
+      <div className="oc-cardhead" style={{ marginBottom: 18 }}><div className="oc-mut" style={{ fontSize: 13 }}>광고 1회 시청 = 다이아 +50 (하루 8회 상한).</div><GranTabs gran={gran} set={setGran} opts={GR} /></div>
+      <div className="oc-grid">
+        <Stat ic="📺" k="총 시청 횟수" v={cTotal.toLocaleString()} s={`최근 ${labels.length}구간 합`} />
+        <Stat ic="👁" k="최근 구간 시청" v={String(last)} s={`시청자 ${lastU}명`} />
+        <Stat ic="💎" k="지급 다이아" v={(cTotal * 50).toLocaleString()} s="시청 보상 합" />
+      </div>
+      <div className="oc-charts">
+        <BarsCard title="광고 시청 횟수" value={`${cTotal.toLocaleString()} 회`} labels={labels} data={count} color="#f2a93b" unit="회" />
+        <LineCard title="고유 시청자" value={`${lastU} 명`} labels={labels} data={usersA} color="#19c2ae" />
+      </div>
+    </>
+  );
+}
+
+// 업적 카탈로그(제목·카테고리) — engine/achievements.ts 미러(서버 tsconfig 격리로 import 불가, econ.ts와 동일 정책).
+const ACH_CAT: { id: string; t: string; c: string }[] = [
+  { id: 'first_title', t: '첫 우승', c: '우승' }, { id: 'titles_3', t: '도전자', c: '우승' }, { id: 'titles_5', t: '명문 구단', c: '우승' }, { id: 'titles_10', t: '불멸의 명가', c: '우승' }, { id: 'titles_15', t: '리그의 지배자', c: '우승' }, { id: 'titles_20', t: '전설의 구단', c: '우승' }, { id: 'back_to_back', t: '왕좌 수성', c: '우승' }, { id: 'three_peat', t: '왕조의 시작', c: '우승' }, { id: 'five_peat', t: '대왕조', c: '우승' },
+  { id: 'make_mvp', t: '리그 최고', c: '시상' }, { id: 'mvp_3', t: 'MVP 명가', c: '시상' }, { id: 'mvp_5', t: 'MVP 군단', c: '시상' }, { id: 'mvp_b2b', t: '절대 강자', c: '시상' }, { id: 'make_finals_mvp', t: '결승의 주인공', c: '시상' }, { id: 'make_rookie', t: '미래를 키우다', c: '시상' }, { id: 'rookie_3', t: '신인 명가', c: '시상' }, { id: 'make_improved', t: '성장의 증명', c: '시상' }, { id: 'make_scoring_king', t: '득점 기계', c: '시상' }, { id: 'title_kings_5', t: '타이틀 컬렉터', c: '시상' }, { id: 'title_kings_15', t: '타이틀 수집가', c: '시상' }, { id: 'sweep4_titles', t: '부문 장악', c: '시상' }, { id: 'best7_trio', t: '베스트7 군단', c: '시상' }, { id: 'best7_10', t: '베스트7 단골', c: '시상' }, { id: 'award_sweep', t: '시상식 싹쓸이', c: '시상' }, { id: 'round_mvp_5', t: '라운드의 지배자', c: '시상' },
+  { id: 'first_hof', t: '명예의 전당', c: '레전드' }, { id: 'hof_3', t: '레전드의 요람', c: '레전드' }, { id: 'hof_5', t: '레전드 사관학교', c: '레전드' }, { id: 'hof_10', t: '전설의 산실', c: '레전드' }, { id: 'make_legend', t: '헌액 레전드', c: '레전드' }, { id: 'legend_3', t: '불멸의 군단', c: '레전드' }, { id: 'hof_all_pos', t: '다재다능한 명가', c: '레전드' }, { id: 'hof_8000', t: '불세출의 에이스', c: '레전드' }, { id: 'hof_longevity', t: '철인 레전드', c: '레전드' },
+  { id: 'league_record', t: '리그를 새로 쓰다', c: '기록' }, { id: 'big_milestone', t: '역사를 넘어서', c: '기록' }, { id: 'big_milestone_5', t: '역사의 산증인', c: '기록' }, { id: 'club_record', t: '구단 신기록', c: '기록' }, { id: 'milestones_20', t: '기록의 보고', c: '기록' },
+  { id: 'win_streak_10', t: '파죽지세', c: '서사' }, { id: 'win_streak_15', t: '무적함대', c: '서사' }, { id: 'lose_streak_10', t: '악몽의 시즌', c: '서사' }, { id: 'all_ranks', t: '산전수전', c: '서사' }, { id: 'worst_to_first', t: '최하위의 반란', c: '서사' }, { id: 'last_3peat', t: '암흑기', c: '서사' }, { id: 'runner_up_3', t: '만년 2위', c: '서사' }, { id: 'podium_10', t: '가을 단골', c: '서사' }, { id: 'podium_streak_5', t: '꾸준한 강호', c: '서사' }, { id: 'reverse_sweep', t: '대역전극', c: '서사' }, { id: 'sweep_title', t: '완벽한 대관식', c: '서사' }, { id: 'blown_lead', t: '통한의 준우승', c: '서사' }, { id: 'perfect_season', t: '무패의 전설', c: '서사' }, { id: 'wins_30', t: '압도적 시즌', c: '서사' }, { id: 'wins_20s', t: '강호의 반열', c: '서사' }, { id: 'wins_10s', t: '평범한 한 해', c: '서사' }, { id: 'wins_single', t: '다사다난', c: '서사' }, { id: 'winless_season', t: '굴욕의 시즌', c: '서사' },
+  { id: 'first_draft', t: '첫 드래프트', c: '단장' }, { id: 'draft_veteran', t: '드래프트 베테랑', c: '단장' }, { id: 'first_fa', t: '첫 영입', c: '단장' }, { id: 'fa_mogul', t: '영입의 큰손', c: '단장' }, { id: 'first_coach', t: '감독 선임', c: '단장' }, { id: 'coach_collector', t: '명장 편력', c: '단장' }, { id: 'first_staff', t: '프런트 강화', c: '단장' }, { id: 'first_interview', t: '첫 면담', c: '단장' }, { id: 'interview_master', t: '소통의 달인', c: '단장' },
+  { id: 'first_point', t: '첫 득점', c: '통산' }, { id: 'first_concede', t: '첫 실점', c: '통산' }, { id: 'first_ace', t: '첫 서브 에이스', c: '통산' }, { id: 'first_set_win', t: '첫 세트 승리', c: '통산' }, { id: 'first_set_loss', t: '첫 세트 패배', c: '통산' }, { id: 'first_match_win', t: '첫 경기 승리', c: '통산' }, { id: 'first_match_loss', t: '첫 경기 패배', c: '통산' }, { id: 'points_100', t: '백 점 돌파', c: '통산' }, { id: 'points_1k', t: '천 점 클럽', c: '통산' }, { id: 'points_10k', t: '만 점의 탑', c: '통산' }, { id: 'points_100k', t: '십만 득점', c: '통산' }, { id: 'points_1m', t: '백만 득점', c: '통산' },
+  { id: 'cash_200k', t: '흑자 경영', c: '운영' }, { id: 'cash_500k', t: '탄탄한 곳간', c: '운영' }, { id: 'cash_1m', t: '재벌 구단', c: '운영' }, { id: 'fan_70', t: '지역 명문', c: '운영' }, { id: 'fan_90', t: '국민 구단', c: '운영' }, { id: 'seasons_10', t: '한 세대', c: '운영' }, { id: 'seasons_50', t: '반세기 명가', c: '운영' }, { id: 'seasons_100', t: '백년 구단', c: '운영' },
+];
+// ── 업적: 카탈로그 + 달성율(원장 ref 기반) ──
+function Achievements({ api }: { api: Api }) {
+  const [d, setD] = useState<Json | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { let live = true; setLoading(true); api('/api/admin/achievements').then((r) => { if (live) { setD(r.body.ok ? r.body : null); setLoading(false); } }); return () => { live = false; }; }, [api]);
+  const total = nnum(d?.totalUsers);
+  const counts = (d?.counts as Record<string, number>) ?? {};
+  const cats = Array.from(new Set(ACH_CAT.map((a) => a.c)));
+  const unlockedAny = ACH_CAT.filter((a) => (counts[a.id] ?? 0) > 0).length;
+  return (
+    <>
+      <div className="oc-grid">
+        <Stat ic="🏆" k="업적 수" v={String(ACH_CAT.length)} s={`${cats.length}개 카테고리`} />
+        <Stat ic="👥" k="집계 대상" v={total.toLocaleString()} s="현재 사용자(달성율 분모)" />
+        <Stat ic="✅" k="1명+ 달성 업적" v={`${unlockedAny} / ${ACH_CAT.length}`} s="누구든 달성한 업적" />
+      </div>
+      {loading ? <div className="oc-card"><div className="oc-empty">불러오는 중…</div></div> : cats.map((cat) => (
+        <div className="oc-card" key={cat}>
+          <div className="oc-cardhead"><h3>{cat}</h3></div>
+          {ACH_CAT.filter((a) => a.c === cat).map((a) => {
+            const n = counts[a.id] ?? 0;
+            const pct = total > 0 ? Math.round((n / total) * 1000) / 10 : 0;
+            return (
+              <div className="oc-achrow" key={a.id}>
+                <div style={{ flex: 1 }}><div className="t">{a.t}</div><div className="d">{a.id}</div></div>
+                <div className="meta"><div className="oc-bar"><i style={{ width: `${Math.min(100, pct)}%` }} /></div></div>
+                <div className="pct">{pct}%<div className="cnt">{n.toLocaleString()}명</div></div>
+              </div>
+            );
+          })}
+        </div>
+      ))}
+    </>
+  );
+}
 
 function Coupons({ coupons, api, reload, flash }: { coupons: Json[]; api: Api; reload: () => void; flash: (m: string) => void }) {
   const [modal, setModal] = useState<null | 'new' | Json>(null);
