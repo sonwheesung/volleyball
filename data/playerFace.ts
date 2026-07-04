@@ -1,26 +1,44 @@
-// 선수 얼굴 포트레이트 풀 — 선수 id 해시로 결정론 배정(같은 선수 = 항상 같은 얼굴, 저장 불필요).
-// 이름은 이미지에 박지 않는다(이름은 화면 텍스트가 표시) — 100시즌+ 세대교체로 이름이 계속 바뀌므로
-// 얼굴 이미지는 이름과 무관한 풀에서 돌려 쓴다(2026-06-28, 선수 정보 화면 시안).
-//
-// 사용법: assets/players/ 에 정사각 포트레이트(앞/측면 얼굴)를 넣고 아래 FACES에 require를 추가하면
-// 자동으로 풀에 들어간다. 풀이 비어 있으면 화면은 기본 인물 아이콘으로 폴백한다(빈 상태 안전).
+// 선수 얼굴 아바타 — 선수 id를 시드로 결정론 '피처'(피부·헤어스타일·헤어색·눈·입·배경)를 뽑는다.
+// 실제 그리기는 components/PlayerAvatar.tsx(react-native-svg, 온브랜드 배구선수 — 여자부 톤·유니폼).
+// 저장 없음(id→피처 재계산). 100시즌+ 세대교체로 이름이 바뀌어도 id 고정 → 얼굴 안정.
+// ※ 채택 경위(2026-07-04, 유대감 1순위): 회색 아이콘 → (multiavatar 장난톤/성별섞임 반려) → 온브랜드 레이어 아바타(B).
 
-const FACES: number[] = [
-  // require('../assets/players/f01.png'),
-  // require('../assets/players/f02.png'),
-  // ... 원하는 만큼 추가
-];
+// 팔레트 (여자 V리그 톤). 인덱스는 id 해시로 결정.
+export const SKIN = ['#F4CDA6', '#EBB88E', '#DCA074', '#C08658', '#9C6A44'];
+export const HAIR = ['#241C18', '#3E2C1E', '#5A4230', '#7A5236', '#A24A3A', '#33384A', '#6B4E7A'];
+export const BG = ['#D9E6F4', '#E7DCF4', '#F4DCE7', '#DCF2E6', '#F4ECD9', '#DDEEF0'];
+export const HAIR_STYLES = 5; // 0 롱스트레이트 · 1 포니테일 · 2 단발 · 3 번(올림) · 4 숏뱅
+export const EYE_STYLES = 3;
+export const MOUTH_STYLES = 3;
 
-// 작은 결정론 해시(djb2 계열) — id 문자열 → 풀 인덱스
-function hashId(id: string): number {
+export interface FaceFeatures {
+  skin: string; hair: string; bg: string;
+  style: number; eyes: number; mouth: number;
+}
+
+// djb2 계열 시드 해시(id+salt) — salt로 독립 인덱스를 여러 개 뽑는다.
+function hash(id: string, salt: string): number {
   let h = 5381;
-  for (let i = 0; i < id.length; i++) h = ((h * 33) ^ id.charCodeAt(i)) >>> 0;
+  const s = id + '|' + salt;
+  for (let i = 0; i < s.length; i++) h = ((h * 33) ^ s.charCodeAt(i)) >>> 0;
   return h;
 }
 
-/** 선수 id에 배정된 얼굴(없으면 null → 아이콘 폴백) */
-export function faceFor(id: string): number | null {
-  return FACES.length ? FACES[hashId(id) % FACES.length] : null;
-}
+const cache = new Map<string, FaceFeatures>();
 
-export const FACE_POOL_SIZE = FACES.length;
+/** 선수 id → 결정론 얼굴 피처. */
+export function faceFeatures(id: string): FaceFeatures {
+  const hit = cache.get(id);
+  if (hit) return hit;
+  const pick = (salt: string, n: number) => hash(id, salt) % n;
+  const f: FaceFeatures = {
+    skin: SKIN[pick('skin', SKIN.length)],
+    hair: HAIR[pick('hair', HAIR.length)],
+    bg: BG[pick('bg', BG.length)],
+    style: pick('style', HAIR_STYLES),
+    eyes: pick('eyes', EYE_STYLES),
+    mouth: pick('mouth', MOUTH_STYLES),
+  };
+  cache.set(id, f);
+  return f;
+}

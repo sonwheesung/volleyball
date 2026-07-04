@@ -1,10 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import { Image, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { Button, Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, StatBar, theme, themedStyles } from '../../components/Screen';
-import { faceFor } from '../../data/playerFace';
+import { PlayerAvatar } from '../../components/PlayerAvatar';
 import { seasonYear, seasonYearRange } from '../../data/seasonLabel';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchetypeOf, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans } from '../../engine/owner';
@@ -139,7 +139,6 @@ export default function PlayerDetail() {
   const contract = effectiveContract(p, overrides);
   const market = marketVal(p, prod);
   const status = contractStatus(contract.salary, market);
-  const face = faceFor(p.id);                         // 얼굴 포트레이트(풀 비면 null→아이콘)
   const pop = popularityNow(p, currentDay, archive);  // 인기(시작 전 day≤0이면 통산만, 한 번만 계산)
 
   // ── 구단주 레이어 (내 팀 선수만) ──
@@ -206,7 +205,7 @@ export default function PlayerDetail() {
       <Card>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <View style={styles.avatar}>
-            {face ? <Image source={face} style={styles.avatarImg} /> : <Ionicons name="person" size={42} color={theme.muted} />}
+            <PlayerAvatar id={p.id} size={84} />
           </View>
           <View style={{ flex: 1, gap: 6 }}>
             <Text style={styles.pName} numberOfLines={1}>{p.name}</Text>
