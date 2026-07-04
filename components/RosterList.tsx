@@ -4,6 +4,7 @@ import type { Player } from '../types';
 import { overall, overallRaw, displayOvr, fogOvr } from '../engine/overall';
 import { formatMoney } from '../engine/salary';
 import { OvrBadge, PosTag, theme } from './Screen';
+import { PlayerAvatar } from './PlayerAvatar';
 import { themedStyles } from './theme';
 import { POS_COLOR, POS_ORDER } from './posTokens';
 
@@ -38,6 +39,7 @@ export function RosterList({ players, decor, starterIds, sort = 'position', reve
             onPress={() => router.push(`/player/${p.id}`)}
             style={({ pressed }) => [styles.row, { borderLeftWidth: 4, borderLeftColor: POS_COLOR[p.position] }, pressed && { opacity: 0.7 }]}
           >
+            <View style={styles.rowAvatar}><PlayerAvatar id={p.id} size={40} /></View>
             <PosTag pos={p.position} />
             <View style={{ flex: 1 }}>
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -72,6 +74,7 @@ export function RosterList({ players, decor, starterIds, sort = 'position', reve
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  rowAvatar: { width: 40, height: 40, borderRadius: 20, overflow: 'hidden', backgroundColor: theme.cardAlt },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
