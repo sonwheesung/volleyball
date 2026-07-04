@@ -91,6 +91,17 @@ textarea.oc-input{resize:vertical;min-height:44px;font-family:inherit;}
 .oc-modal-f{display:flex;justify-content:flex-end;gap:10px;padding:15px 22px;border-top:1px solid var(--bd2);}
 .oc-fld{display:flex;flex-direction:column;gap:7px;} .oc-fld .oc-input{width:100%;}
 .oc-frow{display:flex;gap:12px;} .oc-frow .oc-fld{flex:1;}
+.oc-dl{display:flex;flex-direction:column;}
+.oc-dl-row{display:flex;justify-content:space-between;align-items:flex-start;gap:20px;padding:13px 2px;border-bottom:1px solid var(--bd2);}
+.oc-dl-row:last-child{border-bottom:none;}
+.oc-dl-k{color:var(--mut);font-size:13px;font-weight:600;flex-shrink:0;}
+.oc-dl-v{font-size:14px;font-weight:600;text-align:right;word-break:break-word;}
+.oc-dl-v.mono{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:13px;letter-spacing:.3px;}
+.oc-dl-block{padding:13px 2px;border-bottom:1px solid var(--bd2);}
+.oc-dl-block .oc-dl-k{margin-bottom:8px;}
+.oc-dl-block .txt{font-size:14px;line-height:1.65;white-space:pre-wrap;}
+.oc-modal-f.split{justify-content:space-between;}
+.oc-modal-b.tight{gap:0;padding-top:8px;padding-bottom:8px;}
 `;
 
 export default function OpsConsole() {
@@ -258,22 +269,27 @@ function Overview({ stats, setting, openTickets }: { stats: Json | null; setting
   const kpi = (stats?.kpi as Json) ?? {};
   const labels = (stats?.labels as string[]) ?? [];
   const series = (stats?.series as Json) ?? {};
-  const newUsers = narr(series.newUsers), dau = narr(series.dau), revenue = narr(series.revenue), hourly = narr(stats?.hourly);
+  const newUsers = narr(series.newUsers), dau = narr(series.dau), revenue = narr(series.revenue), ad = narr(series.ad), hourly = narr(stats?.hourly);
   const revTotal = revenue.reduce((a, b) => a + b, 0);
   const hourTotal = hourly.reduce((a, b) => a + b, 0);
   return (
     <>
       <div className="oc-grid">
         <Stat ic={maint ? '🔧' : '🟢'} k="서버 상태" v={maint ? '점검 중' : '정상'} s={maint ? '진입 차단' : '서비스 중'} />
-        <Stat ic="✉" k="미처리 문의" v={String(openTickets)} s="답변 대기" />
-        <Stat ic="🟣" k="실시간 접속" v={String(nnum(kpi.active30m))} s="최근 30분(로그인)" />
         <Stat ic="👥" k="총 가입자" v={nnum(kpi.totalUsers).toLocaleString()} s={`오늘 신규 +${nnum(kpi.newToday)}`} />
+        <Stat ic="🟢" k="실시간 접속" v={String(nnum(kpi.active30m))} s="최근 30분(로그인)" />
+        <Stat ic="✉" k="미처리 문의" v={String(openTickets)} s="답변 대기" />
+        <Stat ic="💳" k="결제 전환율" v={`${nnum(kpi.conversion)}%`} s={`결제자 ${nnum(kpi.payers)}명`} />
+        <Stat ic="📺" k="오늘 광고" v={String(nnum(kpi.adToday))} s={`시청자 ${nnum(kpi.adUsersToday)}명`} />
+        <Stat ic="💤" k="비활성" v={nnum(kpi.inactive).toLocaleString()} s="14일+ 미접속" />
+        <Stat ic="🚪" k="탈퇴" v={nnum(kpi.withdrawn).toLocaleString()} s="계정 삭제" />
         <Stat ic="⬆" k="버전 게이트" v={`${minV} / ${latV}`} s="강제 / 최신" />
       </div>
       <div className="oc-charts">
-        <BarsCard title="일별 매출" value={`₩${revTotal.toLocaleString()}`} tag="결제 연동 전" labels={labels} data={revenue} color="#2bd17e" unit="원" />
-        <BarsCard title="신규 가입 (≈다운로드)" value={`+${nnum(kpi.newToday)} 오늘`} tag="설치추적 EAS 후" labels={labels} data={newUsers} color="#5b9bff" unit="명" />
+        <BarsCard title="일별 매출" value={`₩${revTotal.toLocaleString()}`} tag="결제 #43 후" labels={labels} data={revenue} color="#2bd17e" unit="원" />
+        <BarsCard title="신규 가입" value={`+${nnum(kpi.newToday)} 오늘`} labels={labels} data={newUsers} color="#5b9bff" unit="명" />
         <LineCard title="일일 활성 사용자 (DAU)" value={`${nnum(kpi.dauToday)} 오늘`} labels={labels} data={dau} color="#19c2ae" />
+        <BarsCard title="일별 광고 시청" value={`${nnum(kpi.adToday)} 오늘`} labels={labels} data={ad} color="#f2a93b" unit="회" />
         <BarsCard title="시간대별 접속" value={`${hourTotal}건`} tag="로그인 기준" labels={HOUR_LABELS} data={hourly} color="#9b7bff" unit="" />
       </div>
     </>
@@ -356,19 +372,12 @@ type Api = (p: string, i?: RequestInit) => Promise<{ status: number; body: Json 
 
 function Coupons({ coupons, api, reload, flash }: { coupons: Json[]; api: Api; reload: () => void; flash: (m: string) => void }) {
   const [modal, setModal] = useState<null | 'new' | Json>(null);
-  const del = async (c: Json, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!window.confirm(`쿠폰 "${String(c.code)}"을(를) 삭제할까요?`)) return;
-    const r = await api(`/api/admin/coupon?id=${encodeURIComponent(String(c.id))}`, { method: 'DELETE' });
-    if (r.body.ok) { flash('쿠폰 삭제됨'); reload(); }
-    else flash(r.body.reason === 'has-redemptions' ? '사용 기록이 있어 삭제 불가 — 비활성화하세요' : `삭제 실패(${r.status})`);
-  };
   return (
     <div className="oc-card">
       <div className="oc-cardhead"><h3>쿠폰 <span className="oc-mut">({coupons.length})</span></h3><button className="oc-btn sm" onClick={() => setModal('new')}>＋ 쿠폰 발급</button></div>
       {coupons.length === 0 ? <div className="oc-empty">발급된 쿠폰이 없습니다. 우측 상단 “＋ 쿠폰 발급”으로 만드세요.</div> : (
         <table className="oc-table">
-          <thead><tr><th>코드</th><th>보상</th><th>대상</th><th>상태</th><th>종료</th><th style={{ textAlign: 'right' }}>관리</th></tr></thead>
+          <thead><tr><th>코드</th><th>보상</th><th>대상</th><th>상태</th><th>종료</th></tr></thead>
           <tbody>
             {coupons.map((c) => (
               <tr key={String(c.id)} className="clk" onClick={() => setModal(c)}>
@@ -377,7 +386,6 @@ function Coupons({ coupons, api, reload, flash }: { coupons: Json[]; api: Api; r
                 <td>{c.targetUserId ? <span className="oc-badge ac">개인</span> : <span className="oc-badge mut">전체</span>}</td>
                 <td>{c.disabled ? <span className="oc-badge dg">비활성</span> : <span className="oc-badge gd">활성</span>}</td>
                 <td className="oc-mut">{c.endsAt ? String(c.endsAt).slice(0, 10) : '무기한'}</td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><button className="oc-btn ghost sm" onClick={(e) => { e.stopPropagation(); setModal(c); }}>수정</button> <button className="oc-btn red sm" onClick={(e) => del(c, e)}>삭제</button></td>
               </tr>
             ))}
           </tbody>
@@ -389,57 +397,78 @@ function Coupons({ coupons, api, reload, flash }: { coupons: Json[]; api: Api; r
 }
 
 function CouponModal({ coupon, api, reload, flash, onClose }: { coupon: Json | null; api: Api; reload: () => void; flash: (m: string) => void; onClose: () => void }) {
-  const editing = !!coupon;
+  const isNew = !coupon;
+  const [editMode, setEditMode] = useState(isNew); // 신규=바로 편집 / 기존=상세보기 먼저
+  const [busy, setBusy] = useState(false);
   const [code, setCode] = useState(coupon ? String(coupon.code) : '');
   const [reward, setReward] = useState(coupon ? String(coupon.rewardDiamonds) : '100');
   const [mode, setMode] = useState<'all' | 'user'>(coupon?.targetUserId ? 'user' : 'all');
   const [target, setTarget] = useState(coupon?.targetUserId ? String(coupon.targetUserId) : '');
   const [ends, setEnds] = useState(coupon?.endsAt ? String(coupon.endsAt).slice(0, 10) : '');
   const [disabled, setDisabled] = useState(!!coupon?.disabled);
-  const submit = async () => {
+  const save = async () => {
+    setBusy(true);
     const target2 = mode === 'user' ? (target.trim() || null) : null;
-    const r = editing
-      ? await api('/api/admin/coupon', { method: 'PATCH', body: JSON.stringify({ id: coupon!.id, rewardDiamonds: Number(reward), endsAt: ends || null, disabled, targetUserId: target2 }) })
-      : await api('/api/admin/coupon', { method: 'POST', body: JSON.stringify({ code, rewardDiamonds: Number(reward), targetUserId: target2, endsAt: ends || null }) });
-    if (r.body.ok) { flash(editing ? '쿠폰 수정됨' : `쿠폰 발급: ${r.body.code}`); reload(); onClose(); }
-    else flash(`${editing ? '수정' : '발급'} 실패: ${r.body.reason ?? r.status}`);
+    const r = isNew
+      ? await api('/api/admin/coupon', { method: 'POST', body: JSON.stringify({ code, rewardDiamonds: Number(reward), targetUserId: target2, endsAt: ends || null }) })
+      : await api('/api/admin/coupon', { method: 'PATCH', body: JSON.stringify({ id: coupon!.id, rewardDiamonds: Number(reward), endsAt: ends || null, disabled, targetUserId: target2 }) });
+    setBusy(false);
+    if (r.body.ok) { flash(isNew ? `쿠폰 발급: ${r.body.code}` : '쿠폰 수정됨'); reload(); onClose(); }
+    else flash(`${isNew ? '발급' : '수정'} 실패: ${r.body.reason ?? r.status}`);
   };
-  const invalid = editing ? false : (!code.trim() || (mode === 'user' && !target.trim()));
+  const del = async () => {
+    if (!window.confirm(`쿠폰 "${String(coupon!.code)}"을(를) 삭제할까요?`)) return;
+    setBusy(true);
+    const r = await api(`/api/admin/coupon?id=${encodeURIComponent(String(coupon!.id))}`, { method: 'DELETE' });
+    setBusy(false);
+    if (r.body.ok) { flash('쿠폰 삭제됨'); reload(); onClose(); }
+    else flash(r.body.reason === 'has-redemptions' ? '사용 기록이 있어 삭제 불가 — 비활성화하세요' : `삭제 실패(${r.status})`);
+  };
+  const invalid = isNew ? (!code.trim() || (mode === 'user' && !target.trim())) : false;
+
+  if (!editMode && coupon) return (
+    <Modal title={String(coupon.code)} sub="쿠폰 상세" onClose={onClose}
+      footer={<><button className="oc-btn ghost" style={{ color: 'var(--dg)', borderColor: 'rgba(255,107,90,.35)', marginRight: 'auto' }} onClick={del} disabled={busy}>삭제</button><button className="oc-btn ghost" onClick={onClose}>닫기</button><button className="oc-btn" onClick={() => setEditMode(true)}>수정</button></>}>
+      <div className="oc-dl">
+        <div className="oc-dl-row"><span className="oc-dl-k">코드</span><span className="oc-dl-v mono">{String(coupon.code)}</span></div>
+        <div className="oc-dl-row"><span className="oc-dl-k">보상</span><span className="oc-dl-v">{String(coupon.rewardDiamonds)} 💎</span></div>
+        <div className="oc-dl-row"><span className="oc-dl-k">대상</span><span className="oc-dl-v">{coupon.targetUserId ? <>{'개인 '}<span className="mono" style={{ fontSize: 12.5 }}>{String(coupon.targetUserId)}</span></> : <span className="oc-badge mut">전체</span>}</span></div>
+        <div className="oc-dl-row"><span className="oc-dl-k">상태</span><span className="oc-dl-v">{coupon.disabled ? <span className="oc-badge dg">비활성</span> : <span className="oc-badge gd">활성</span>}</span></div>
+        <div className="oc-dl-row"><span className="oc-dl-k">종료일</span><span className="oc-dl-v">{coupon.endsAt ? String(coupon.endsAt).slice(0, 10) : '무기한'}</span></div>
+        <div className="oc-dl-row"><span className="oc-dl-k">생성일</span><span className="oc-dl-v">{coupon.createdAt ? String(coupon.createdAt).slice(0, 19).replace('T', ' ') : '—'}</span></div>
+      </div>
+    </Modal>
+  );
+
   return (
-    <Modal title={editing ? '쿠폰 수정' : '쿠폰 발급'} sub={editing ? String(coupon!.code) : '새 쿠폰을 만듭니다'} onClose={onClose}
-      footer={<><button className="oc-btn ghost" onClick={onClose}>취소</button><button className="oc-btn" onClick={submit} disabled={invalid}>{editing ? '저장' : '발급'}</button></>}>
-      <div className="oc-fld"><label className="oc-label">코드</label><input className="oc-input" placeholder="welcome, SEASON2627 …" value={code} onChange={(e) => setCode(e.target.value)} disabled={editing} /></div>
+    <Modal title={isNew ? '쿠폰 발급' : '쿠폰 수정'} sub={isNew ? '새 쿠폰을 만듭니다' : String(coupon!.code)} onClose={onClose}
+      footer={<><button className="oc-btn ghost" onClick={isNew ? onClose : () => setEditMode(false)} disabled={busy}>취소</button><button className="oc-btn" onClick={save} disabled={invalid || busy}>{busy ? '처리 중…' : isNew ? '발급' : '저장'}</button></>}>
+      <div className="oc-fld"><label className="oc-label">코드</label><input className="oc-input" placeholder="welcome, SEASON2627 …" value={code} onChange={(e) => setCode(e.target.value)} disabled={!isNew} /></div>
       <div className="oc-frow">
         <div className="oc-fld"><label className="oc-label">보상 다이아</label><input className="oc-input" type="number" value={reward} onChange={(e) => setReward(e.target.value)} /></div>
         <div className="oc-fld"><label className="oc-label">대상</label><select className="oc-input" value={mode} onChange={(e) => setMode(e.target.value as 'all' | 'user')}><option value="all">전체</option><option value="user">개인</option></select></div>
       </div>
       {mode === 'user' ? <div className="oc-fld"><label className="oc-label">대상 user id</label><input className="oc-input" placeholder="userId" value={target} onChange={(e) => setTarget(e.target.value)} /></div> : null}
       <div className="oc-fld"><label className="oc-label">종료일 (빈칸=무기한)</label><input className="oc-input" placeholder="YYYY-MM-DD" value={ends} onChange={(e) => setEnds(e.target.value)} /></div>
-      {editing ? <div className="oc-fld"><label className="oc-label">상태</label><select className="oc-input" value={disabled ? '1' : '0'} onChange={(e) => setDisabled(e.target.value === '1')}><option value="0">활성</option><option value="1">비활성</option></select></div> : null}
+      {!isNew ? <div className="oc-fld"><label className="oc-label">상태</label><select className="oc-input" value={disabled ? '1' : '0'} onChange={(e) => setDisabled(e.target.value === '1')}><option value="0">활성</option><option value="1">비활성</option></select></div> : null}
     </Modal>
   );
 }
 
 function Anns({ anns, api, reload, flash }: { anns: Json[]; api: Api; reload: () => void; flash: (m: string) => void }) {
   const [modal, setModal] = useState<null | 'new' | Json>(null);
-  const del = async (a: Json, e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!window.confirm(`공지 "${String(a.title)}"을(를) 삭제할까요?`)) return;
-    const r = await api(`/api/admin/announcement?id=${encodeURIComponent(String(a.id))}`, { method: 'DELETE' });
-    flash(r.body.ok ? '공지 삭제됨' : '삭제 실패'); reload();
-  };
   return (
     <div className="oc-card">
       <div className="oc-cardhead"><h3>공지 <span className="oc-mut">({anns.length})</span></h3><button className="oc-btn sm" onClick={() => setModal('new')}>＋ 공지 발행</button></div>
       {anns.length === 0 ? <div className="oc-empty">발행된 공지가 없습니다. 우측 상단 “＋ 공지 발행”으로 만드세요.</div> : (
         <table className="oc-table">
-          <thead><tr><th>제목</th><th>종료</th><th style={{ textAlign: 'right' }}>관리</th></tr></thead>
+          <thead><tr><th>제목</th><th>고정</th><th>종료</th></tr></thead>
           <tbody>
             {anns.map((a) => (
               <tr key={String(a.id)} className="clk" onClick={() => setModal(a)}>
-                <td style={{ fontWeight: 700 }}>{a.pinned ? <span className="oc-badge wn" style={{ marginRight: 7 }}>📌 고정</span> : null}{String(a.title)}</td>
+                <td style={{ fontWeight: 700 }}>{String(a.title)}</td>
+                <td>{a.pinned ? <span className="oc-badge wn">📌 고정</span> : <span className="oc-mut">—</span>}</td>
                 <td className="oc-mut">{a.endsAt ? String(a.endsAt).slice(0, 10) : '무기한'}</td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}><button className="oc-btn ghost sm" onClick={(e) => { e.stopPropagation(); setModal(a); }}>수정</button> <button className="oc-btn red sm" onClick={(e) => del(a, e)}>삭제</button></td>
               </tr>
             ))}
           </tbody>
@@ -451,21 +480,45 @@ function Anns({ anns, api, reload, flash }: { anns: Json[]; api: Api; reload: ()
 }
 
 function AnnModal({ ann, api, reload, flash, onClose }: { ann: Json | null; api: Api; reload: () => void; flash: (m: string) => void; onClose: () => void }) {
-  const editing = !!ann;
+  const isNew = !ann;
+  const [editMode, setEditMode] = useState(isNew);
+  const [busy, setBusy] = useState(false);
   const [title, setTitle] = useState(ann ? String(ann.title ?? '') : '');
   const [body, setBody] = useState(ann ? String(ann.body ?? '') : '');
   const [ends, setEnds] = useState(ann?.endsAt ? String(ann.endsAt).slice(0, 10) : '');
   const [pinned, setPinned] = useState(!!ann?.pinned);
-  const submit = async () => {
-    const r = editing
-      ? await api('/api/admin/announcement', { method: 'PATCH', body: JSON.stringify({ id: ann!.id, title, body, endsAt: ends || null, pinned }) })
-      : await api('/api/admin/announcement', { method: 'POST', body: JSON.stringify({ title, body, endsAt: ends || null, pinned }) });
-    if (r.body.ok) { flash(editing ? '공지 수정됨' : '공지 발행됨'); reload(); onClose(); }
-    else flash(`${editing ? '수정' : '발행'} 실패: ${r.body.reason ?? r.status}`);
+  const save = async () => {
+    setBusy(true);
+    const r = isNew
+      ? await api('/api/admin/announcement', { method: 'POST', body: JSON.stringify({ title, body, endsAt: ends || null, pinned }) })
+      : await api('/api/admin/announcement', { method: 'PATCH', body: JSON.stringify({ id: ann!.id, title, body, endsAt: ends || null, pinned }) });
+    setBusy(false);
+    if (r.body.ok) { flash(isNew ? '공지 발행됨' : '공지 수정됨'); reload(); onClose(); }
+    else flash(`${isNew ? '발행' : '수정'} 실패: ${r.body.reason ?? r.status}`);
   };
+  const del = async () => {
+    if (!window.confirm(`공지 "${String(ann!.title)}"을(를) 삭제할까요?`)) return;
+    setBusy(true);
+    const r = await api(`/api/admin/announcement?id=${encodeURIComponent(String(ann!.id))}`, { method: 'DELETE' });
+    setBusy(false);
+    if (r.body.ok) { flash('공지 삭제됨'); reload(); onClose(); } else flash('삭제 실패');
+  };
+
+  if (!editMode && ann) return (
+    <Modal title={String(ann.title)} sub="공지 상세" onClose={onClose}
+      footer={<><button className="oc-btn ghost" style={{ color: 'var(--dg)', borderColor: 'rgba(255,107,90,.35)', marginRight: 'auto' }} onClick={del} disabled={busy}>삭제</button><button className="oc-btn ghost" onClick={onClose}>닫기</button><button className="oc-btn" onClick={() => setEditMode(true)}>수정</button></>}>
+      <div className="oc-dl">
+        <div className="oc-dl-block"><div className="oc-dl-k">내용</div><div className="txt">{String(ann.body)}</div></div>
+        <div className="oc-dl-row"><span className="oc-dl-k">상단 고정</span><span className="oc-dl-v">{ann.pinned ? <span className="oc-badge wn">📌 고정</span> : '아니오'}</span></div>
+        <div className="oc-dl-row"><span className="oc-dl-k">종료일</span><span className="oc-dl-v">{ann.endsAt ? String(ann.endsAt).slice(0, 10) : '무기한'}</span></div>
+        <div className="oc-dl-row"><span className="oc-dl-k">발행일</span><span className="oc-dl-v">{ann.createdAt ? String(ann.createdAt).slice(0, 19).replace('T', ' ') : '—'}</span></div>
+      </div>
+    </Modal>
+  );
+
   return (
-    <Modal title={editing ? '공지 수정' : '공지 발행'} onClose={onClose}
-      footer={<><button className="oc-btn ghost" onClick={onClose}>취소</button><button className="oc-btn" onClick={submit} disabled={!title.trim() || !body.trim()}>{editing ? '저장' : '발행'}</button></>}>
+    <Modal title={isNew ? '공지 발행' : '공지 수정'} sub={isNew ? undefined : String(ann!.title)} onClose={onClose}
+      footer={<><button className="oc-btn ghost" onClick={isNew ? onClose : () => setEditMode(false)} disabled={busy}>취소</button><button className="oc-btn" onClick={save} disabled={!title.trim() || !body.trim() || busy}>{busy ? '처리 중…' : isNew ? '발행' : '저장'}</button></>}>
       <div className="oc-fld"><label className="oc-label">제목</label><input className="oc-input" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
       <div className="oc-fld"><label className="oc-label">내용</label><textarea className="oc-input" value={body} onChange={(e) => setBody(e.target.value)} style={{ height: 100 }} /></div>
       <div className="oc-frow">
