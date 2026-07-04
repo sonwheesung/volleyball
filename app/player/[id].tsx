@@ -115,10 +115,13 @@ export default function PlayerDetail() {
   const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
   const [benchAsk, setBenchAsk] = useState(false); // 벤치 건의 명분 선택 시트(네이티브 Alert 대신 커스텀 — UI-21)
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
-  // 시즌 파생(생산·부상·정지·role)은 **치른 경기까지만**(leagueDisplayDay=currentDay−1) — 대시보드·기록과 동일 컷오프.
+  // 시즌 **통계 파생(생산·시장가)** 은 **치른 경기까지만**(leagueDisplayDay=currentDay−1) — 대시보드·기록과 동일 컷오프.
   // raw currentDay는 안 치른 다음 경기를 포함(스포일러·불일치)했고, 시즌 시작 전(day0→−1)이면 빈 구간/일자<0 가드로
   // 콜드 전 시즌 시뮬(생산·dyn)을 통째로 회피한다 → 구단 선택 플로우 선수 화면 15s 제거(2026-06-28).
   const displayDay = leagueDisplayDay(currentDay);
+  // **출전 상태(부상·정지·명단·role)는 현재(currentDay) 기준** — 선수단(squad)·대시보드와 동일 날짜여야 표기가 일치한다.
+  // (2026-07-04 사용자 보고: 부상 첫날 선수단 🚑 인데 상세엔 부상 표기 없음 — 상세만 displayDay라 하루 어긋났음.
+  //  부상 span from은 항상 과거 경기서 굴려져 currentDay 사용은 스포일러 아님 — 이미 치른 경기 파생. 생산 통계만 컷오프 유지.)
   const prod = id ? getPlayerProduction(id, displayDay) : undefined;
   const awardHist = id ? awardHistoryOf(archive, id) : [];
   const myMilestones = id ? milestones.filter((m) => m.playerId === id) : [];
@@ -160,10 +163,10 @@ export default function PlayerDetail() {
   const teamOfP = (() => { const rs = currentRosters(); for (const t of Object.keys(rs)) if (rs[t].includes(p.id)) return t; return null; })();
   const role: { text: string; color: string } | null = (() => {
     if (!teamOfP) return null;
-    const avail = availableTeamPlayers(teamOfP, displayDay);
+    const avail = availableTeamPlayers(teamOfP, currentDay); // 현재 출전 가능(선수단·대시보드와 동일 기준)
     if (!avail.some((x) => x.id === p.id)) {
-      if (suspendedOnDay(displayDay).has(p.id)) return { text: '출장 정지', color: theme.bad };
-      if (teamInjuriesOn(teamOfP, displayDay).some((s) => s.playerId === p.id)) return { text: '부상 결장', color: theme.bad };
+      if (suspendedOnDay(currentDay).has(p.id)) return { text: '출장 정지', color: theme.bad };
+      if (teamInjuriesOn(teamOfP, currentDay).some((s) => s.playerId === p.id)) return { text: '부상 결장', color: theme.bad };
       if (benched) return { text: '벤치(감독 지시)', color: theme.warn };
       return { text: '출전 명단 외', color: theme.muted };
     }
@@ -232,7 +235,7 @@ export default function PlayerDetail() {
             🔍 타 구단 — 스카우팅 공개도 {Math.round(reveal * 100)}%. 스카우터를 영입하면 더 선명해집니다.
           </Text>
         ) : null}
-        {suspendedOnDay(displayDay).has(p.id) ? (
+        {suspendedOnDay(currentDay).has(p.id) ? ( // 출전 상태는 현재(currentDay) 기준 — role 배지·선수단과 동일(2026-07-04)
           <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13, marginTop: 6 }}>
             🚫 출장 정지 중 — {SCANDAL_KO[seasonScandals().find((s) => s.playerId === p.id)!.kind]}
           </Text>
