@@ -4,10 +4,9 @@
 import { faceHash } from './playerFace';
 
 interface FaceSheet { src: number; cols: number; rows: number; count: number }
-// 화풍: 고품질 반실사(2026-07-05 사용자 재선택). ~~반실사 애니풍 시트 1~14(350명)~~ 전량 폐기하고 이 톤으로 재시작.
-export const FACE_SHEETS: FaceSheet[] = [
-  { src: require('../assets/players/faces1.png'), cols: 5, rows: 5, count: 25 },
-];
+// 화풍 재정비(2026-07-05 사용자): 기존 시트 전량 제거하고 **빈 상태로 리셋**. 시트 없으면 faceCell=null →
+// PlayerAvatar가 절차적 아바타로 폴백(회색 아이콘 아님). 새 3×3 클린 반실사 시트를 받으면 여기 다시 채운다.
+export const FACE_SHEETS: FaceSheet[] = [];
 const TOTAL_FACES = FACE_SHEETS.reduce((n, s) => n + s.count, 0);
 
 export interface FaceCell { src: number; cols: number; rows: number; col: number; row: number }
