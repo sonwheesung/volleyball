@@ -6,6 +6,7 @@ import { RosterList } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeamCoach } from '../../data/league';
 import { activeRoster } from '../../data/roster';
 import { availableTeamPlayers } from '../../data/injury';
+import { injuredOnDay, suspendedOnDay } from '../../data/dynamics';
 import { buildLineup } from '../../engine/lineup';
 import { conditionOf } from '../../data/owner';
 import { useGameStore } from '../../store/useGameStore';
@@ -31,17 +32,21 @@ export default function Squad() {
       availIds: new Set<string>(avail.map((x) => x.id)),
     };
   })();
-  // 구단주 레이어 데코 — 컨디션 점(●) + 결장(🚑)/벤치 지시(🪑).
+  const injuredSet = injuredOnDay(currentDay);   // 그날 부상자 전체(팀 무관) — 마커 사유 구분용
+  const suspendedSet = suspendedOnDay(currentDay); // 그날 출장 정지자
+  // 구단주 레이어 데코 — 컨디션 점(●) + 결장(부상/정지 마커)/벤치 지시(🪑).
   // 불만(😟)은 목록에 안 띄운다(2026-06-30 사용자 요청) — 명단은 이름·기본 상태만, 감정은 상세에서.
-  // 🚑/🪑는 "왜 주전서 빠졌나"를 설명하는 출전 상태라 유지(주전 정렬과 직결).
+  // 부상/정지 마커·🪑는 "왜 주전서 빠졌나"를 설명하는 출전 상태(주전 정렬과 직결).
   const decor = (p: (typeof players)[number]) => {
     const cond = conditionOf(teamId, p.id, currentDay);
     const benched = benchDirectives.some((b) => b.playerId === p.id);
-    const out = !availIds.has(p.id); // 출전 명단 외(부상·정지) — 주전 불가 사유
+    // 결장 사유별 마커(2026-07-04 사용자 요청): 부상/정지는 포지션 태그 같은 라벨 pill, 벤치 지시는 🪑.
+    const injured = injuredSet.has(p.id);
+    const suspended = suspendedSet.has(p.id);
     return {
       dotColor: cond.color,
-      mood: out ? '✚' : benched ? '🪑' : undefined, // 결장(부상·정지)=빨간 십자, 벤치 지시=의자
-      moodColor: out ? theme.bad : undefined,        // 십자만 빨강 강조(🪑는 이모지 색 유지)
+      tag: injured ? { text: '부상', color: theme.bad } : suspended ? { text: '정지', color: theme.bad } : undefined,
+      mood: !injured && !suspended && benched ? '🪑' : undefined, // 벤치 지시(부상/정지 아닐 때만)
     };
   };
 
@@ -62,7 +67,7 @@ export default function Squad() {
 
       <SpotlightTarget id="squad-top">
         <Title>선수 ({players.length}명)</Title>
-        <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다. ● 경기감각 · <Text style={{ color: theme.bad, fontWeight: '900' }}>✚</Text> 결장(부상·정지) · 🪑 벤치 지시</Muted>
+        <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다. ● 경기감각 · <Text style={{ color: theme.bad, fontWeight: '900' }}>부상·정지</Text> 결장 · 🪑 벤치 지시</Muted>
       </SpotlightTarget>
       <RosterList players={players} decor={decor} starterIds={starterIds} />
       <SpotlightOverlay screen="tab-squad" />

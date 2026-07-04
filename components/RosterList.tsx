@@ -7,7 +7,7 @@ import { OvrBadge, PosTag, theme } from './Screen';
 import { themedStyles } from './theme';
 import { POS_COLOR, POS_ORDER } from './posTokens';
 
-export interface RosterDecor { dotColor?: string; mood?: string; moodColor?: string }
+export interface RosterDecor { dotColor?: string; mood?: string; moodColor?: string; tag?: { text: string; color: string } }
 
 /** 포지션 → 연령 정렬된 선수 행 목록. 각 행 탭 시 상세로 이동.
  *  decor: 선수별 컨디션 점(●)·기분 뱃지(😟🪑) — 구단주 레이어 표시(선택).
@@ -43,6 +43,11 @@ export function RosterList({ players, decor, starterIds, sort = 'position', reve
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 {d?.dotColor ? <Text style={{ color: d.dotColor, fontSize: 11 }}>●</Text> : null}
                 <Text style={styles.name}>{p.name}</Text>
+                {d?.tag ? (
+                  <View style={[styles.statusTag, { borderColor: d.tag.color, backgroundColor: d.tag.color + '22' }]}>
+                    <Text style={[styles.statusTagTxt, { color: d.tag.color }]}>{d.tag.text}</Text>
+                  </View>
+                ) : null}
                 {d?.mood ? <Text style={{ fontSize: 12, color: d.moodColor, fontWeight: d.moodColor ? '900' : undefined }}>{d.mood}</Text> : null}
                 {p.isAsianQuota ? <Text style={styles.asian}>아시아쿼터{p.nationality ? `·${p.nationality}` : ''}</Text> : p.isForeign ? <Text style={styles.foreign}>외국인</Text> : null}
               </View>
@@ -80,6 +85,9 @@ const styles = themedStyles(() => StyleSheet.create({
   },
   groupLabel: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 6, marginLeft: 2 },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  // 상태 마커(부상·정지) — 포지션 태그처럼 라벨 pill(2026-07-04 사용자 요청, ✚ 대체)
+  statusTag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, borderWidth: 1 },
+  statusTagTxt: { fontSize: 11, fontWeight: '800' },
   foreign: { color: theme.bad, fontSize: 11, fontWeight: '700' },
   asian: { color: theme.elite, fontSize: 11, fontWeight: '700' }, // 아시아쿼터 — 외국인(코랄)과 구분되는 블루
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
