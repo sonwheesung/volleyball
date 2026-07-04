@@ -302,7 +302,7 @@ function Overview({ stats, setting, openTickets }: { stats: Json | null; setting
         <Stat ic="🔵" k="오늘 활성(DAU)" v={nnum(kpi.dauToday).toLocaleString()} s={`오늘 신규 +${nnum(kpi.newToday)}`} />
         <Stat ic="👥" k="총 가입자" v={nnum(kpi.totalUsers).toLocaleString()} s={`탈퇴 ${nnum(kpi.withdrawn)} · 비활성 ${nnum(kpi.inactive)}`} />
         <Stat ic="✉" k="미처리 문의" v={String(openTickets)} s="답변 대기" />
-        <Stat ic="💳" k="결제 전환율" v={`${nnum(kpi.conversion)}%`} s={`결제자 ${nnum(kpi.payers)}명 · v${minV}/${latV}`} />
+        <Stat ic="⬆" k="버전 게이트" v={`${minV} / ${latV}`} s="강제 / 최신" />
       </div>
       <div className="oc-charts">
         <LineCard title="일일 활성 사용자 (DAU)" value={`${nnum(kpi.dauToday)} 오늘`} labels={labels} data={dau} color="#19c2ae" />
