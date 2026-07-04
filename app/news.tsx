@@ -33,6 +33,7 @@ function NewsListInner() {
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const expelledLog = useGameStore((s) => s.expelledLog);
   const readNews = useGameStore((s) => s.readNews);
+  const markNewsRead = useGameStore((s) => s.markNewsRead);
   const benchDirectives = useGameStore((s) => s.benchDirectives);
   const transfers = useGameStore((s) => s.transfers);
   const retirements = useGameStore((s) => s.retirements);
@@ -45,6 +46,8 @@ function NewsListInner() {
   // readNews를 live로 구독(상세를 열면 그 기사만 markNewsRead → 목록 즉시 갱신 = 즉시성, 6b 정정). **목록 진입만으론
   // 읽음 처리 안 함**(읽음은 상세 news/[id]를 열 때만 — NEWS_SYSTEM §6). 진입 시 마킹이 없으니 강조 안정성은 그대로 유지.
   const readSet = useMemo(() => new Set(readNews), [readNews]);
+  // 안읽음이 하나라도 있으면 "모두 읽기" 노출 — 누르면 목록 전체 키를 markNewsRead(상세 열 때와 동일 처리, 즉시 반영).
+  const unreadKeys = useMemo(() => feed.map(newsKey).filter((k) => !readSet.has(k)), [feed, readSet]);
 
   if (feed.length === 0) {
     return (
@@ -55,7 +58,20 @@ function NewsListInner() {
   }
 
   return (
-    <Screen title="리그 뉴스">
+    <Screen
+      title="리그 뉴스"
+      headerRight={
+        unreadKeys.length > 0 ? (
+          <Pressable
+            onPress={() => markNewsRead(unreadKeys)}
+            style={({ pressed }) => [styles.readAllBtn, pressed && { opacity: 0.6 }]}
+            hitSlop={8}
+          >
+            <Text style={styles.readAllTxt}>모두 읽기 ({unreadKeys.length})</Text>
+          </Pressable>
+        ) : null
+      }
+    >
       {feed.map((n, i) => {
           const unread = !readSet.has(newsKey(n));
           const headColor = !unread ? theme.muted : n.teamId === teamId ? theme.accent : n.big ? theme.warn : theme.text;
@@ -86,6 +102,11 @@ const styles = themedStyles(() => StyleSheet.create({
     backgroundColor: theme.card, borderRadius: 12, padding: 14,
     borderWidth: 1, borderColor: theme.border,
   },
+  readAllBtn: {
+    paddingVertical: 7, paddingHorizontal: 14, borderRadius: 999,
+    backgroundColor: theme.cardAlt, borderWidth: 1, borderColor: theme.border,
+  },
+  readAllTxt: { color: theme.accent, fontSize: 13, fontWeight: '700' },
   dot: { width: 7, height: 7, borderRadius: 4 }, // 안읽음 = accent 점, 읽음 = 투명(자리만)
   head: { color: theme.text, fontSize: 15, fontWeight: '700', lineHeight: 20 },
   meta: { color: theme.muted, fontSize: 12, marginTop: 4 },

@@ -513,11 +513,27 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
             ))}
           </Animated.View>
         ) : null}
-        {finished ? (
-          <View style={styles.finishOverlay}>
-            <Text style={styles.finishTxt}>경기 종료</Text>
-          </View>
-        ) : null}
+        {finished ? (() => {
+          // 종료 오버레이 — "경기 종료" 대신 누가 몇 대 몇으로 이겼는지(세트 스코어). 관전이 끝난 시점이라 스포일러 무관.
+          const homeWon = sim.homeSets > sim.awaySets;
+          const winName = (homeWon ? homeName : awayName) ?? (homeWon ? '홈' : '원정');
+          const win = Math.max(sim.homeSets, sim.awaySets), lose = Math.min(sim.homeSets, sim.awaySets);
+          const mineWon = mineSide != null && (mineSide === 'home') === homeWon;
+          return (
+            <View style={styles.finishOverlay}>
+              <View style={styles.finishCard}>
+                <Text style={styles.finishLabel}>경기 종료</Text>
+                <Text style={styles.finishWinner} numberOfLines={2}>🏐 {winName} 승</Text>
+                <Text style={styles.finishScore}>{win} : {lose}</Text>
+                {mineSide != null ? (
+                  <Text style={[styles.finishMine, { color: mineWon ? theme.good : theme.muted }]}>
+                    {mineWon ? '우리 팀 승리 🎉' : '우리 팀 패배'}
+                  </Text>
+                ) : null}
+              </View>
+            </View>
+          );
+        })() : null}
         {/* 5세트 코인토스 연출(순수 표시 — 승패 무영향). coinActive 동안만 표시·랠리 정지 */}
         {coinActive && coinIdx !== null ? (
           <CoinTossOverlay
@@ -679,7 +695,11 @@ const styles = themedStyles(() => StyleSheet.create({
     backgroundColor: theme.accent + 'cc',
   },
   finishOverlay: { ...StyleSheet.absoluteFillObject, alignItems: 'center', justifyContent: 'center' },
-  finishTxt: { color: '#FFFFFF', fontSize: 22, fontWeight: '900', backgroundColor: '#15202BD9', paddingHorizontal: 16, paddingVertical: 8, borderRadius: 10 },
+  finishCard: { alignItems: 'center', backgroundColor: '#15202BF2', paddingHorizontal: 24, paddingVertical: 16, borderRadius: 14, borderWidth: 1, borderColor: theme.accent + '66' },
+  finishLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', letterSpacing: 2, marginBottom: 4 },
+  finishWinner: { color: '#FFFFFF', fontSize: 20, fontWeight: '900', textAlign: 'center' },
+  finishScore: { color: theme.accent, fontSize: 34, fontWeight: '900', marginTop: 2, letterSpacing: 3 },
+  finishMine: { fontSize: 14, fontWeight: '800', marginTop: 6 },
   controls: { flexDirection: 'row', justifyContent: 'center', gap: 10 },
   ctrl: {
     color: theme.text, fontSize: 15, fontWeight: '800', overflow: 'hidden',
