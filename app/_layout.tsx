@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { ThemeProvider, DarkTheme } from '@react-navigation/native';
+import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { theme, useThemeMode } from '../components/Screen';
 import { loadThemeMode } from '../components/theme';
 import { SpotlightProvider } from '../components/Spotlight';
@@ -33,19 +33,23 @@ function warmCachesForIntro(): void {
   } catch { /* 워밍 실패해도 진입은 진행(해당 화면이 폴백 재계산) */ }
 }
 
-// 네비게이션 컨테이너(화면 뒤 바탕)도 다크로 — 기본 흰색이라 화면 전환/뒤로가기 시 슬라이드되며 한 프레임
-// 흰 바탕이 새어 깜박였다(사용자 보고 2026-06-28). card=헤더 바탕도 다크 동기. 전환은 slide_from_right(가로 슬라이드).
-const NAV_THEME = {
-  ...DarkTheme,
-  colors: {
-    ...DarkTheme.colors,
-    background: theme.bg,
-    card: theme.bg,
-    text: theme.text,
-    border: theme.border,
-    primary: theme.accent,
-  },
-};
+// 네비게이션 컨테이너(화면 뒤 바탕 = 전환/뒤로가기 슬라이드 중 노출되는 면)를 **현재 모드**에 맞춘다.
+// 다크만 박제하면(구 NAV_THEME) 다크의 흰 깜박임은 막지만 **라이트 모드에선 이 다크 바탕이 검정으로 샜다**
+// (화이트모드 기록 화면 뒤로가기 시 검은 화면, 사용자 보고 2026-07-04). 렌더에서 mode로 생성해 토글에 따라간다.
+function makeNavTheme(mode: 'light' | 'dark') {
+  const base = mode === 'light' ? DefaultTheme : DarkTheme;
+  return {
+    ...base,
+    colors: {
+      ...base.colors,
+      background: theme.bg,
+      card: theme.bg,
+      text: theme.text,
+      border: theme.border,
+      primary: theme.accent,
+    },
+  };
+}
 
 // 전역 기본 폰트 = Pretendard(가변) + 기본 텍스트 색 = 밝은 잉크(theme.text).
 // (RN Text.defaultProps — 전 화면 Text를 건드리지 않고 한 번에 적용)
@@ -91,9 +95,9 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider key={mode}>
+    <SafeAreaProvider key={mode} style={{ flex: 1, backgroundColor: theme.bg }}>
       <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
-      <ThemeProvider value={NAV_THEME}>
+      <ThemeProvider value={makeNavTheme(mode)}>
       <SpotlightProvider>
       <BootGate>
       <Stack
