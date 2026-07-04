@@ -4,11 +4,11 @@
 import { faceHash } from './playerFace';
 
 interface FaceSheet { src: number; cols: number; rows: number; count: number }
+// 화풍: 반실사 애니풍(2026-07-04 사용자 선택 A). ~~플랫 벡터 시트 1~4~~ 폐기하고 이 톤으로 통일.
 export const FACE_SHEETS: FaceSheet[] = [
   { src: require('../assets/players/faces1.png'), cols: 5, rows: 5, count: 25 },
   { src: require('../assets/players/faces2.png'), cols: 5, rows: 5, count: 25 },
   { src: require('../assets/players/faces3.png'), cols: 5, rows: 5, count: 25 },
-  { src: require('../assets/players/faces4.png'), cols: 5, rows: 5, count: 25 },
 ];
 const TOTAL_FACES = FACE_SHEETS.reduce((n, s) => n + s.count, 0);
 
