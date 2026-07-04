@@ -1,8 +1,11 @@
-import { useRouter } from 'expo-router';
+import { useCallback, useState } from 'react';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../../components/AppDialog';
 import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, Title, theme, themedStyles } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
+import { GrowthReportModal } from '../../components/GrowthReportModal';
+import { growthReport, type PlayerGrowth } from '../../data/growthReport';
 import { SEASON, LEAGUE, getTeam } from '../../data/league';
 import { computeStandings, playedThroughDay, leagueDisplayDay } from '../../data/standings';
 import { rivalOf } from '../../data/rivalry';
@@ -29,6 +32,18 @@ export default function Schedule() {
   const watchProgress = useGameStore((s) => s.watchProgress);
   const setDay = useGameStore((s) => s.setDay);
   const recordResult = useGameStore((s) => s.recordResult);
+
+  // 성장 리포트(TRAINING §성장리포트) — 일정 화면에 포커스될 때(경기 관전 후 복귀 포함) 마지막으로 본 날부터
+  // 지금까지 내 팀 종합 스탯 변화를 diff로 모달. 변화 없으면 조용히 통과. 엔진 무변경(결정론 재계산 diff).
+  const [growth, setGrowth] = useState<PlayerGrowth[]>([]);
+  useFocusEffect(useCallback(() => {
+    const s = useGameStore.getState();
+    if (s.lastGrowthDay < 0) { s.setLastGrowthDay(s.currentDay); return; } // 미초기화 → 조용히 세팅(catch-up 폭탄 방지)
+    if (s.currentDay <= s.lastGrowthDay) return;
+    const rep = growthReport(s.selectedTeamId ?? '', s.lastGrowthDay, s.currentDay);
+    s.setLastGrowthDay(s.currentDay); // 구간 소비(표시 여부 무관 bump — 중복 방지)
+    if (rep.length) setGrowth(rep);
+  }, []));
 
   const rival = rivalOf(teamId, archive, results, SEASON, LEAGUE.teams.map((t) => t.id));
 
@@ -191,6 +206,7 @@ export default function Schedule() {
         </>
       ) : null}
       <SpotlightOverlay screen="tab-schedule" />
+      <GrowthReportModal visible={growth.length > 0} report={growth} onClose={() => setGrowth([])} />
     </Screen>
   );
 }

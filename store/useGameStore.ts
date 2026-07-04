@@ -87,6 +87,7 @@ interface GameState {
   selectedTeamId: string | null;
   season: number;                              // 0-based 경과 시즌
   currentDay: number;                          // 시즌 내 경과 일수
+  lastGrowthDay: number;                        // 성장 리포트 모달 — 마지막으로 성장 diff를 본 날(-1=미초기화). TRAINING §성장리포트
   results: Record<string, MatchResult>;
   watchProgress: Record<string, number>;       // fixtureId → 관전한 랠리 인덱스(이어보기). 종료/확정 시 삭제
   contractOverrides: Record<string, Contract>;
@@ -149,6 +150,8 @@ interface GameState {
 
   selectTeam: (teamId: string) => void;
   setDay: (day: number) => void;
+  setLastGrowthDay: (day: number) => void; // 성장 리포트 모달이 구간을 소비한 뒤 bump
+
   finishCamp: () => void; // 전지훈련 마치기 → 이번 시즌 오프시즌 종료(개막전 노출). currentDay는 그대로(경기 시작이 진행).
   recordResult: (r: MatchResult) => void;
   saveWatchProgress: (fixtureId: string, idx: number) => void; // 이어보기 위치 저장
@@ -199,6 +202,7 @@ const freshSave = {
   selectedTeamId: null as string | null,
   season: 0,
   currentDay: 0,
+  lastGrowthDay: -1, // 성장 리포트 — 미초기화(-1). 첫 일정 포커스에서 currentDay로 세팅
   results: {} as Record<string, MatchResult>,
   watchProgress: {} as Record<string, number>,
   contractOverrides: {} as Record<string, Contract>,
@@ -419,6 +423,7 @@ export const useGameStore = create<GameState>()(
         setSalaryEra(medianOvr(currentBasePlayers().filter((p) => !p.isForeign))); // 시대 앵커(SALARY 2장) — 시드 시대 ≈ MED_REF
       },
       setDay: (day) => set((s) => (Number.isFinite(day) ? { currentDay: Math.max(s.currentDay, day) } : {})), // NaN/Infinity 거부(currentDay 오염 전파 차단)
+      setLastGrowthDay: (day) => set(() => (Number.isFinite(day) ? { lastGrowthDay: day } : {})),
       finishCamp: () => set((s) => (s.campDoneSeason === s.season ? {} : { campDoneSeason: s.season })), // 이번 시즌 오프시즌 종료 표시(멱등). currentDay 불변 — 개막전은 "경기 시작"이 진행
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
       saveWatchProgress: (fixtureId, idx) => set((s) => ({ watchProgress: { ...s.watchProgress, [fixtureId]: idx } })),
@@ -1031,6 +1036,7 @@ export const useGameStore = create<GameState>()(
           keepAsian: null,
           season: nextSeason,
           currentDay: 0,
+          lastGrowthDay: -1, // 새 시즌 — 성장 리포트 재초기화(시즌 경계 diff는 로스터·나이 변동 얽혀 제외, TRAINING §성장리포트)
           campTrainedThisOffseason: [], // 새 오프시즌 — 전지훈련 1회 제한 초기화(MONETIZATION §11.2)
           results: {},
           watchProgress: {}, // 새 시즌 — 이어보기 위치 초기화
@@ -1092,6 +1098,7 @@ export const useGameStore = create<GameState>()(
         selectedTeamId: s.selectedTeamId,
         season: s.season,
         currentDay: s.currentDay,
+        lastGrowthDay: s.lastGrowthDay,
         results: s.results,
         watchProgress: s.watchProgress,
         contractOverrides: s.contractOverrides,
