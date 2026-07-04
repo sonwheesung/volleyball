@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, Screen, Title, theme, themedStyles } from '../components/Screen';
 import { evalAchievements, achievementSummary, type AchCategory, type AchStatus } from '../engine/achievements';
+import { achTotals } from '../data/careerTotals';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 
@@ -28,10 +29,12 @@ export default function Achievements() {
   const fanScore = useGameStore((s) => s.fanScore);
   const careerLog = useGameStore((s) => s.careerLog);
   const careerTotals = useGameStore((s) => s.careerTotals);
+  const results = useGameStore((s) => s.results);
 
+  // 통산 업적을 시즌 중에도 반영: 저장 careerTotals + 이번 시즌 진행분(achTotals). endSeason 누적과 이음매 없음.
   const statuses = useMemo(
-    () => evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals }),
-    [myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals],
+    () => evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals: achTotals(myTeamId, careerTotals, results) }),
+    [myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals, results],
   );
   const { done, total } = achievementSummary(statuses);
   const byCat = useMemo(() => {

@@ -22,9 +22,16 @@
 | `milestones: Milestone[]` | 기록 경신 감지 | 리그·구단 기록 |
 | `cash` / `fanScore` | 재정·팬심 | 운영 |
 | `careerLog{faSigns,coachHires,staffHires,interviews}` | 스토어가 액션마다 누적 | 단장(GM 액션) |
-| `careerTotals{points,aces,sets,matches}` | 스토어가 매 시즌 누적(production+standings) | 통산(첫 사건·누적 득점) |
+| `careerTotals{points,aces,sets,matches}` | 스토어가 매 시즌말 누적(production+standings) + **평가 시 이번 시즌 진행분 실시간 가산** | 통산(첫 사건·누적 득점) |
 | `selectedTeamId` | 내 팀 | 전부(귀속 판정) |
 
+> **통산 업적 시즌중 반영(2026-07-04 버그수정, 문의 12e03390)**: `careerTotals`는 `endSeason`에서만 누적돼 **시즌 중엔 0**
+> → 첫 득점·첫 승·백점 등 통산 업적이 시즌 끝까지 안 열리던 버그(진단 스냅샷: 4경기 진행·careerTotals 전부 0). **평가 시**
+> `data/careerTotals.achTotals(저장 + 이번 시즌 진행분)`을 쓴다(진행분=endSeason과 동일 leagueProduction/seasonResults/
+> computeStandings, cutoff만 `playedThroughDay`). 적용처: 업적 화면 표시(`app/achievements.tsx`)·수령(`claimAchDiamonds`).
+> 시즌 경계 이중계산 없음(경계에서 stored += 시즌분, 새 시즌 진행분 0 — `_gt_achmid` A/B/C 검증). rehydrate 마이그레이션 시드는
+> stored만(일회성 pre-claim은 과거 누적분만).
+>
 > `careerLog`는 경기 리플레이로 파생 불가(드래프트·영입·면담은 플레이어 액션) — cash·fanScore처럼
 > 스토어 영속 카운터. 드래프트 업적만 예외로 `archive.length`(완료 시즌수)에서 파생.
 

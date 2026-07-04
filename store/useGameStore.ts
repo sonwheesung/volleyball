@@ -56,6 +56,7 @@ import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
 import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
 import { evalAchievements, achReward } from '../engine/achievements';
+import { achTotals } from '../data/careerTotals';
 import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
 import { earnDiamonds, spendDiamonds, getWallet } from '../lib/server';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
@@ -328,7 +329,8 @@ export const useGameStore = create<GameState>()(
         if (!my) return { granted: 0, reason: 'none' };
         const userId = useAuthStore.getState().session?.userId;
         if (!userId) return { granted: 0, reason: 'offline' };
-        const statuses = evalAchievements({ myTeamId: my, archive: s.archive, hof: s.hallOfFame, milestones: s.milestones, cash: s.cash, fanScore: s.fanScore, careerLog: s.careerLog, careerTotals: s.careerTotals });
+        // 통산 업적을 시즌 중에도 실시간 반영: 저장 careerTotals + 이번 시즌 진행분(achTotals). endSeason 누적과 이음매 없음.
+        const statuses = evalAchievements({ myTeamId: my, archive: s.archive, hof: s.hallOfFame, milestones: s.milestones, cash: s.cash, fanScore: s.fanScore, careerLog: s.careerLog, careerTotals: achTotals(my, s.careerTotals, s.results) });
         const { ids } = unclaimedReward(statuses, s.claimedAch);
         if (!ids.length) return { granted: 0, reason: 'none' };
         set({ walletBusy: true });
