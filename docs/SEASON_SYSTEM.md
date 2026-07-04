@@ -29,6 +29,15 @@
 - 시즌 시작 `2025-10-18`(`SEASON_START`). `dateForDay(dayIndex)` → 실제 날짜.
 - `monthGrid` 6주(42칸) 그리드. UI 캘린더가 현재일(`currentDay`)을 추적.
 
+### 2.1 시즌 연도 라벨 — "N시즌" → V리그식 연도 (2026-07-04 사용자 결정, EC-REC-01 후속)
+
+- **표기 정책**: 시즌은 세는 숫자("3시즌")가 아니라 **연도**("2027-28")로 부른다. `data/seasonLabel.ts`:
+  - `seasonYear(idx)` — 0-based 시즌 인덱스 → `"YYYY-YY"`. **1시즌(idx0)=2025-26**(SEASON_START 2025-10 기준, 게임 직전 배경 5시즌=2020-21~2024-25 다음). 음수 idx(배경)·세기 경계 지원, 100시즌+ 라벨 겹침 0.
+  - `seasonYearRange(from, to)` — 통산 범위("2025-26 ~ 2027-28").
+- **적용**: 일정 헤더(`2025-26 일정 · 1번째 시즌` — 연도+몇번째)·선수상세(시즌별기록/통산범위/수상/마일스톤)·기록화면(스텝퍼·연표·마일스톤·HOF은퇴)·순위/포스트/시상/FA/뉴스/대시보드/설정·배경스토리(select-team·team). 로직용 `season+1`(buildDraftContext 등)은 표시 아님 → 불변.
+- **예외(count 유지, 연도 아님)**: 통산 리더보드 현역 스팬(`seasonLines.length` "N시즌 활약")·HOF 커리어 longevity(`h.seasons`). 특정 시즌이 아니라 "몇 시즌에 걸쳐"라서.
+- 가드 `tools/_dv_seasonlabel.ts`(앵커·겹침0·범위)·`_dv_careerseasons.ts`(분모 정당성).
+
 ## 3. 순위·리더보드 (data/standings.ts)
 
 - `seasonResults(uptoDay)` — 전 경기 결정론 재시뮬 중 `dayIndex ≤ uptoDay`만.

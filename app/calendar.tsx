@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Calendar } from '../components/Calendar';
 import { Screen } from '../components/Screen';
 import { SEASON } from '../data/league';
+import { seasonYear } from '../data/seasonLabel';
 import { teamScheduleEntries } from '../engine/season';
 import { planNextAction } from '../engine/advance';
 import { useGameStore } from '../store/useGameStore';
@@ -17,7 +18,7 @@ export default function CalendarScreen() {
   const focusDayIndex = action.kind === 'match' ? action.fixture.dayIndex : 0;
 
   return (
-    <Screen title={`${season + 1}시즌 일정`} scroll={false}>
+    <Screen title={`${seasonYear(season)} 일정`} scroll={false}>
       <Calendar entries={entries} results={results} focusDayIndex={focusDayIndex} />
     </Screen>
   );

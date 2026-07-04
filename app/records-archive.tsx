@@ -11,6 +11,7 @@ import { Best7Court } from '../components/Best7Court';
 import { teamColors } from '../lib/teamColor';
 import { jerseyNumber, SUPER_LEGEND_POINTS } from '../engine/jersey';
 import { numberLineage } from '../data/legends';
+import { seasonYear } from '../data/seasonLabel';
 import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../data/league';
 import { leagueProduction } from '../data/production';
 import { computeStandings, leagueDisplayDay } from '../data/standings';
@@ -146,7 +147,7 @@ function SeasonView({
           <Text style={styles.stepArrow}>‹</Text>
         </Pressable>
         <View style={styles.stepCenter}>
-          <Text style={styles.stepSeason}>{viewSeason + 1}시즌</Text>
+          <Text style={styles.stepSeason}>{seasonYear(viewSeason)}</Text>
           {snap.isCurrent ? (
             <Text style={[styles.stepTag, { color: theme.accent }]}>진행 중{provisional ? ' · 잠정' : ''}</Text>
           ) : snap.championId ? (
@@ -339,7 +340,7 @@ function HofView({ hallOfFame, teamId }: { hallOfFame: ReturnType<typeof useGame
               <PosTag pos={h.position} />
               <View style={{ flex: 1 }}>
                 <Text style={[styles.team, h.teamId === teamId && styles.mine]} numberOfLines={1}>🏅 {h.name}</Text>
-                <Muted style={{ fontSize: 11 }}>{short(h.teamId)} · {h.seasons}시즌 · {h.retiredSeason + 1}시즌 은퇴</Muted>
+                <Muted style={{ fontSize: 11 }}>{short(h.teamId)} · {h.seasons}시즌 · {seasonYear(h.retiredSeason)} 은퇴</Muted>
               </View>
               <Text style={styles.lbVal}>{h.points.toLocaleString()}점</Text>
             </View>
@@ -359,7 +360,7 @@ function HofView({ hallOfFame, teamId }: { hallOfFame: ReturnType<typeof useGame
                 {isSuper ? '👑 ' : '🎖️ '}{h.name}
                 <Text style={{ color: numColor, fontSize: 11, fontWeight: '800' }}>  {isSuper ? '초레전드' : '헌액 번호'} {num}번</Text>
               </Text>
-              <Muted style={{ fontSize: 11 }}>{short(h.teamId)} · {h.seasons}시즌 · {h.retiredSeason + 1}시즌 은퇴 · {h.points.toLocaleString()}점</Muted>
+              <Muted style={{ fontSize: 11 }}>{short(h.teamId)} · {h.seasons}시즌 · {seasonYear(h.retiredSeason)} 은퇴 · {h.points.toLocaleString()}점</Muted>
               {lineage.length > 0 ? (
                 <Text style={{ fontSize: 10.5, color: theme.muted }} numberOfLines={1}>
                   {num}번 계보 · {lineage.map((g) => `${g.name}(${g.points.toLocaleString()})`).join(', ')}
@@ -389,7 +390,7 @@ function ChronicleView({
           <Card accent={theme.gold}>
             {archive.slice().reverse().map((a) => (
               <Pressable key={a.season} onPress={() => onSeason(a.season)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
-                <Text style={[styles.team, { flex: 0, width: 64 }]}>{a.season + 1}시즌</Text>
+                <Text style={[styles.team, { flex: 0, width: 72 }]}>{seasonYear(a.season)}</Text>
                 <Text style={[styles.team, a.championId === teamId && styles.mine]} numberOfLines={1}>
                   🏆 {getTeam(a.championId)?.name ?? a.championId}
                 </Text>
@@ -407,7 +408,7 @@ function ChronicleView({
           <Card accent={theme.gold}>
             {milestones.slice(-40).reverse().map((m, i) => (
               <View key={`${m.season}-${m.playerId}-${i}`} style={styles.msRow}>
-                <Text style={styles.msSeason}>{m.season + 1}시즌</Text>
+                <Text style={styles.msSeason}>{seasonYear(m.season)}</Text>
                 <Text style={[styles.msText, m.big && { color: theme.warn, fontWeight: '800' }, m.teamId === teamId && styles.mine]} numberOfLines={1}>
                   {m.big ? '★ ' : ''}{m.text}
                 </Text>

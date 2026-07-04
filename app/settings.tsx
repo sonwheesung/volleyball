@@ -6,6 +6,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 import { Muted, Screen, theme, themedStyles, useThemeMode, setThemeMode } from '../components/Screen';
 import { DEV_TOOLS } from '../data/flags';
+import { seasonYear } from '../data/seasonLabel';
 import { useGameStore } from '../store/useGameStore';
 
 const ROSE = '#FF5C8D';
@@ -90,7 +91,7 @@ export default function Settings() {
 
       <Text style={styles.section}>데이터</Text>
       <View style={styles.group}>
-        <Row icon="refresh-outline" tint={theme.bad} label="세이브 초기화" sub={`현재 ${season + 1}시즌 — 구단 변경(진행 기록 삭제)`} danger
+        <Row icon="refresh-outline" tint={theme.bad} label="세이브 초기화" sub={`현재 ${seasonYear(season)} — 구단 변경(진행 기록 삭제)`} danger
           onPress={() => setConfirmReset(true)} />
       </View>
 

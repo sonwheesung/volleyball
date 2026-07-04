@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { Button, Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, StatBar, theme, themedStyles } from '../../components/Screen';
 import { faceFor } from '../../data/playerFace';
+import { seasonYear, seasonYearRange } from '../../data/seasonLabel';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchetypeOf, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans } from '../../engine/owner';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
@@ -444,7 +445,10 @@ export default function PlayerDetail() {
 
       {p.career.matches > 0 ? (
         <>
-          <IconLabel icon="trophy-outline" color={theme.gold}>통산 기록 ({p.career.seasons}시즌)</IconLabel>
+          {/* 시즌 표기는 연도(EC-REC-01, 2026-07-04 사용자 결정) — career.seasons(시드 백스토리 포함)가 아니라 실제 뛴 인게임 시즌 범위. 구세이브(seasonLines 없음)만 카운트 폴백. */}
+          <IconLabel icon="trophy-outline" color={theme.gold}>
+            통산 기록{p.seasonLines && p.seasonLines.length > 0 ? ` · ${seasonYearRange(p.seasonLines[0].season, p.seasonLines[p.seasonLines.length - 1].season)}` : ` (${p.career.seasons}시즌)`}
+          </IconLabel>
           <Card accent={theme.gold}>
             <Row>
               <Muted>경기</Muted>
@@ -478,8 +482,8 @@ export default function PlayerDetail() {
           <Card accent={theme.elite}>
             {p.seasonLines.slice().reverse().map((l) => (
               <View key={l.season} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
-                <Text style={{ color: theme.muted, fontSize: 12, width: 56 }}>{l.season + 1}시즌</Text>
-                <Text style={{ color: theme.muted, fontSize: 12, width: 56 }} numberOfLines={1}>{teamShort(l.teamId)}</Text>
+                <Text style={{ color: theme.muted, fontSize: 12, width: 72 }}>{seasonYear(l.season)}</Text>
+                <Text style={{ color: theme.muted, fontSize: 12, width: 52 }} numberOfLines={1}>{teamShort(l.teamId)}</Text>
                 <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700', flex: 1 }}>
                   {l.matches}경기 · {l.points}점
                   {l.assists > 0 ? ` · 세트${l.assists}` : ''}
@@ -497,7 +501,7 @@ export default function PlayerDetail() {
           <Card accent={theme.gold}>
             {awardHist.map((a, i) => (
               <View key={`${a.season}-${a.label}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
-                <Text style={{ color: theme.muted, fontSize: 12, width: 56 }}>{a.season + 1}시즌</Text>
+                <Text style={{ color: theme.muted, fontSize: 12, width: 72 }}>{seasonYear(a.season)}</Text>
                 <Text style={{ color: theme.warn, fontSize: 13, fontWeight: '800' }}>🏆 {a.label}</Text>
               </View>
             ))}
@@ -511,7 +515,7 @@ export default function PlayerDetail() {
           <Card accent={theme.gold}>
             {myMilestones.slice(-8).reverse().map((m, i) => (
               <View key={`${m.season}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
-                <Text style={{ color: theme.muted, fontSize: 12, width: 56 }}>{m.season + 1}시즌</Text>
+                <Text style={{ color: theme.muted, fontSize: 12, width: 72 }}>{seasonYear(m.season)}</Text>
                 <Text style={{ color: m.big ? theme.warn : theme.text, fontSize: 13, flex: 1 }}>{m.text}</Text>
               </View>
             ))}

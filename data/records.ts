@@ -46,8 +46,9 @@ export function careerLeaderboard(cat: RecordCat, hof: HofEntry[]): CareerRow[] 
     const p = getPlayer(id);
     if (!p) continue;
     rows.push({
+      // 현역 표시 시즌 수 = 인게임 시즌(seasonLines) — career.seasons는 시드 백스토리 포함이라 통산 값과 어긋남(EC-REC-01)
       id, name: p.name, position: p.position, teamId,
-      value: p.career[cat], seasons: p.career.seasons, retired: false, legend: false,
+      value: p.career[cat], seasons: p.seasonLines?.length || p.career.seasons, retired: false, legend: false,
     });
   }
   for (const h of hof) {

@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EmptyState, Loading, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { buildNewsFeed, newsKey } from '../data/news';
+import { seasonYear } from '../data/seasonLabel';
 import { leagueDisplayDay } from '../data/standings';
 import { useGameStore } from '../store/useGameStore';
 import type { NewsItem } from '../types';
@@ -69,7 +70,7 @@ function NewsListInner() {
                 <Text style={[styles.head, { color: headColor, fontWeight: unread ? '700' : '600' }]} numberOfLines={2}>
                   {n.big ? '★ ' : ''}{n.headline}
                 </Text>
-                <Text style={styles.meta}>{n.season + 1}시즌 · {KIND_KO[n.kind]}</Text>
+                <Text style={styles.meta}>{seasonYear(n.season)} · {KIND_KO[n.kind]}</Text>
               </View>
               <Text style={styles.arrow}>›</Text>
             </Pressable>

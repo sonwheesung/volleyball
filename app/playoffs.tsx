@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Muted, Screen, Title, theme, themedStyles } from '../components/Screen';
 import { getTeam, getPlayer } from '../data/league';
+import { seasonYear } from '../data/seasonLabel';
 import { buildPlayoffs, type Matchup } from '../data/playoffs';
 import { currentSeasonAwards } from '../data/awards';
 import { useGameStore } from '../store/useGameStore';
@@ -74,7 +75,7 @@ export default function Playoffs() {
   const shown = (item: 'po' | 'final' | 'champ') => { const i = order.indexOf(item); return i >= 0 && i < revealed; };
 
   return (
-    <Screen title={`${season + 1}시즌 포스트시즌`}>
+    <Screen title={`${seasonYear(season)} 포스트시즌`}>
       {/* 우승 세리머니는 우승팀이 공개되는 마지막 단계에서만(진입 즉시 발화=스포일러 차단) */}
       {iWon && champRevealed ? (
         <ChampionCelebration

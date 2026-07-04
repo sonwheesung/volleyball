@@ -27,7 +27,7 @@ const C = {
 const teamHue = (id: string): number => clubIdentity(id)?.hue ?? 210;
 const accent = (h: number) => `hsl(${h}, 74%, 62%)`;
 const tint = (h: number) => `hsla(${h}, 65%, 50%, 0.10)`;
-const SEASONS = ['20-21', '21-22', '22-23', '23-24', '24-25'];
+const SEASONS = ['2020-21', '2021-22', '2022-23', '2023-24', '2024-25'];
 
 /** 최근 5시즌 순위 — 시즌별 등수를 숫자 셀로. recentRanks index0=최신 → 좌(과거)→우(최신). 1위=골드 강조. */
 function RecentRanks({ ranks, accentColor }: { ranks: number[]; accentColor: string }) {

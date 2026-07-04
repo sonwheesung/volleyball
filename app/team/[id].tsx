@@ -29,7 +29,7 @@ const EMBLEMS = [
 const C = { gold: '#E8C46A', faint: '#6B7892' };
 const teamHue = (id: string): number => clubIdentity(id)?.hue ?? 210;
 const accent = (h: number) => `hsl(${h}, 74%, 62%)`;
-const SEASONS = ['20-21', '21-22', '22-23', '23-24', '24-25'];
+const SEASONS = ['2020-21', '2021-22', '2022-23', '2023-24', '2024-25'];
 const SORT_LABEL: Record<RosterSort, string> = { salary: '연봉순', ovr: '전력순', position: '포지션순' };
 
 /** 최근 N시즌 순위 — 시즌 라벨 + 등수. 1위=골드 강조 박스. recentRanks index0=최신 → 좌(과거)→우(최신) */

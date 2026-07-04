@@ -3,6 +3,7 @@ import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { shortTeamName as shortTeam } from '../data/league';
+import { seasonYear } from '../data/seasonLabel';
 import { faMarketPreview } from '../data/offseason';
 import { buildOwnerFx } from '../data/owner';
 import { projectSettledCash } from '../data/financeProjection';
@@ -78,7 +79,7 @@ function FACenterInner() {
   const moneyOnlyCount = [...pv.signedByMe].filter((id) => moneyOnlyIds.includes(id) && needsCompensationPlayer(grades.get(id) ?? 'C')).length;
 
   return (
-    <Screen title={`${season + 1}→${season + 2}시즌 FA 시장`}>
+    <Screen title={`${seasonYear(season)} → ${seasonYear(season + 1)} FA 시장`}>
       <Card accent={theme.sky}>
         <Row>
           <IconLabel icon="person-add-outline" color={theme.sky}>영입 성공 / 시도</IconLabel>

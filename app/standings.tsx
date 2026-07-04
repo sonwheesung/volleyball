@@ -4,6 +4,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Card, IconLabel, Screen, theme, themedStyles } from '../components/Screen';
 import { computeStandings, leagueDisplayDay } from '../data/standings';
 import { getTeam } from '../data/league';
+import { seasonYear } from '../data/seasonLabel';
 import { useGameStore } from '../store/useGameStore';
 
 export default function Standings() {
@@ -14,7 +15,7 @@ export default function Standings() {
   const standings = useMemo(() => computeStandings(leagueDisplayDay(currentDay)), [currentDay, season]);
 
   return (
-    <Screen title={`${season + 1}시즌 순위`}>
+    <Screen title={`${seasonYear(season)} 순위`}>
       <Card accent={theme.accent}>
         <IconLabel icon="podium-outline" color={theme.accent}>리그 순위</IconLabel>
         <View style={[styles.row, styles.head]}>

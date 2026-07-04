@@ -6,6 +6,7 @@ import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { SEASON, LEAGUE, getTeam } from '../../data/league';
 import { computeStandings, playedThroughDay, leagueDisplayDay } from '../../data/standings';
 import { rivalOf } from '../../data/rivalry';
+import { seasonYear } from '../../data/seasonLabel';
 import { teamClinch } from '../../data/clinch';
 import { availableTeamPlayers } from '../../data/injury';
 import { buildMatchBox } from '../../data/matchBox';
@@ -100,7 +101,7 @@ export default function Schedule() {
     : null;
 
   return (
-    <Screen title={`${season + 1}시즌 일정`}>
+    <Screen title={`${seasonYear(season)} 일정 · ${season + 1}번째 시즌`}>
       <Card accent={theme.sky}>
         <Row>
           <IconLabel icon="calendar-outline" color={theme.sky}>정규리그 진행</IconLabel>

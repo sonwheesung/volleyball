@@ -10,6 +10,7 @@ import { AwardIllustration } from '../components/AwardIllustration';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { currentSeasonAwards } from '../data/awards';
 import { getPlayer, shortTeamName } from '../data/league';
+import { seasonYear } from '../data/seasonLabel';
 import { emblemFor } from '../data/emblems';
 import { teamColors } from '../lib/teamColor';
 import { jerseyNumber } from '../engine/jersey';
@@ -96,7 +97,7 @@ function CeremonyInner() {
 
   if (beats.length === 0) {
     return (
-      <Screen title={`${season + 1}시즌 시상식`}>
+      <Screen title={`${seasonYear(season)} 시상식`}>
         <Muted style={{ textAlign: 'center', marginTop: 40 }}>이번 시즌 시상 내역이 없습니다.</Muted>
         <Button label="시즌 결산 →" onPress={goRecap} />
       </Screen>
@@ -104,7 +105,7 @@ function CeremonyInner() {
   }
 
   return (
-    <Screen title={`${season + 1}시즌 시상식`}>
+    <Screen title={`${seasonYear(season)} 시상식`}>
       {/* 진행 표시 + 건너뛰기 */}
       <View style={styles.topRow}>
         <View style={styles.dots}>

@@ -9,6 +9,7 @@ import { seasonSnapshot } from '../data/records';
 import { computeStandings, leagueDisplayDay } from '../data/standings';
 import { leagueProduction } from '../data/production';
 import { getPlayer, getTeam, teamPlayerIds } from '../data/league';
+import { seasonYear } from '../data/seasonLabel';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
@@ -71,10 +72,10 @@ function RecapInner() {
     + (l.assists > 0 ? ` · 세트${l.assists}` : '') + (l.digs > 0 ? ` · 디그${l.digs}` : '');
 
   return (
-    <Screen title={`${season + 1}시즌 결산`}>
+    <Screen title={`${seasonYear(season)} 결산`}>
       {/* ① 우리 팀 헤드라인 한 줄 */}
       <Card accent={headline.color}>
-        <Muted>{getTeam(my)?.name ?? my} · {season + 1}시즌</Muted>
+        <Muted>{getTeam(my)?.name ?? my} · {seasonYear(season)}</Muted>
         <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 2 }}>
           <Text style={{ color: headline.color, fontSize: 22, fontWeight: '900' }}>{headline.text}</Text>
           {myStanding ? (

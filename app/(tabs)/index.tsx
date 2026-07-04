@@ -5,6 +5,7 @@ import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, theme } from '..
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { SoftUpdateBanner } from '../../components/SoftUpdateBanner';
 import { getEvolvedTeamPlayers, getTeam } from '../../data/league';
+import { seasonYear } from '../../data/seasonLabel';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings, leagueDisplayDay, seasonResults } from '../../data/standings';
 import { teamInjuriesOn, availableTeamPlayers } from '../../data/injury';
@@ -88,7 +89,7 @@ export default function Dashboard() {
               <OvrBadge value={ovr} size={60} />
             </View>
             <View style={{ alignItems: 'flex-end' }}>
-              <Muted>{season + 1}시즌 성적</Muted>
+              <Muted>{seasonYear(season)} 성적</Muted>
               <Text style={{ color: theme.text, fontSize: 26, fontWeight: '900' }}>
                 {record.w}승 {record.l}패
               </Text>

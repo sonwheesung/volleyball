@@ -6,6 +6,7 @@ import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { Card, IconLabel, Muted, Screen, theme, themedStyles } from '../../components/Screen';
 import { buildNewsFeed, newsKey } from '../../data/news';
+import { seasonYear } from '../../data/seasonLabel';
 import { leagueDisplayDay } from '../../data/standings';
 import { KIND_KO } from '../news';
 import { getTeam } from '../../data/league';
@@ -72,7 +73,7 @@ export default function NewsArticle() {
       <Card accent={theme.violet}>
         <IconLabel icon="newspaper-outline" color={theme.violet}>{KIND_KO[n.kind]}{n.big ? ' · 헤드라인' : ''}</IconLabel>
         <Text style={styles.headline}>{n.headline}</Text>
-        <Text style={styles.byline}>{n.season + 1}시즌{team ? ` · ${team.name}` : ''}</Text>
+        <Text style={styles.byline}>{seasonYear(n.season)}{team ? ` · ${team.name}` : ''}</Text>
       </Card>
       <Card accent={theme.violet}>
         <Text style={styles.body}>{n.body ?? LEAD[n.kind]}</Text>

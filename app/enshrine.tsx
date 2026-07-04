@@ -8,6 +8,7 @@ import { Screen } from '../components/Screen';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { teamColors } from '../lib/teamColor';
 import { shortTeamName } from '../data/league';
+import { seasonYear } from '../data/seasonLabel';
 import { prospectArcRetro } from '../data/seed';
 import { jerseyNumber, SUPER_LEGEND_POINTS } from '../engine/jersey';
 import { numberLineage } from '../data/legends';
@@ -33,7 +34,7 @@ export default function Enshrine() {
   if (newLegends.length === 0) return null;
 
   return (
-    <Screen title={`${season}시즌 명예의전당 헌액`}>
+    <Screen title={`${seasonYear(season - 1)} 명예의전당 헌액`}>
       <Text style={styles.lead}>한 시대가 전당에 새겨졌다 — {newLegends.length}명의 레전드</Text>
       <View style={{ gap: 14 }}>
         {newLegends.map((h) => {
