@@ -7,7 +7,7 @@ import { OvrBadge, PosTag, theme } from './Screen';
 import { themedStyles } from './theme';
 import { POS_COLOR, POS_ORDER } from './posTokens';
 
-export interface RosterDecor { dotColor?: string; mood?: string }
+export interface RosterDecor { dotColor?: string; mood?: string; moodColor?: string }
 
 /** 포지션 → 연령 정렬된 선수 행 목록. 각 행 탭 시 상세로 이동.
  *  decor: 선수별 컨디션 점(●)·기분 뱃지(😟🪑) — 구단주 레이어 표시(선택).
@@ -43,7 +43,7 @@ export function RosterList({ players, decor, starterIds, sort = 'position', reve
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 {d?.dotColor ? <Text style={{ color: d.dotColor, fontSize: 11 }}>●</Text> : null}
                 <Text style={styles.name}>{p.name}</Text>
-                {d?.mood ? <Text style={{ fontSize: 12 }}>{d.mood}</Text> : null}
+                {d?.mood ? <Text style={{ fontSize: 12, color: d.moodColor, fontWeight: d.moodColor ? '900' : undefined }}>{d.mood}</Text> : null}
                 {p.isAsianQuota ? <Text style={styles.asian}>아시아쿼터{p.nationality ? `·${p.nationality}` : ''}</Text> : p.isForeign ? <Text style={styles.foreign}>외국인</Text> : null}
               </View>
               <Text style={styles.sub}>

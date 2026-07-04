@@ -40,7 +40,8 @@ export default function Squad() {
     const out = !availIds.has(p.id); // 출전 명단 외(부상·정지) — 주전 불가 사유
     return {
       dotColor: cond.color,
-      mood: out ? '🚑' : benched ? '🪑' : undefined,
+      mood: out ? '✚' : benched ? '🪑' : undefined, // 결장(부상·정지)=빨간 십자, 벤치 지시=의자
+      moodColor: out ? theme.bad : undefined,        // 십자만 빨강 강조(🪑는 이모지 색 유지)
     };
   };
 
@@ -61,7 +62,7 @@ export default function Squad() {
 
       <SpotlightTarget id="squad-top">
         <Title>선수 ({players.length}명)</Title>
-        <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다. ● 경기감각 · 🚑 결장(부상·정지) · 🪑 벤치 지시</Muted>
+        <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다. ● 경기감각 · <Text style={{ color: theme.bad, fontWeight: '900' }}>✚</Text> 결장(부상·정지) · 🪑 벤치 지시</Muted>
       </SpotlightTarget>
       <RosterList players={players} decor={decor} starterIds={starterIds} />
       <SpotlightOverlay screen="tab-squad" />
