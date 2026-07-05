@@ -9,7 +9,7 @@ import { seasonYear } from '../../data/seasonLabel';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
 import { computeStandings, leagueDisplayDay, seasonResults } from '../../data/standings';
 import { availableTeamPlayers } from '../../data/injury';
-import { buildNewsFeed, newsKey } from '../../data/news';
+import { buildNewsFeed, freshNews, newsKey } from '../../data/news';
 import { teamOverallRaw } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
 import { teamFanbaseNow } from '../../data/owner';
@@ -65,7 +65,7 @@ export default function Dashboard() {
   const transfers = useGameStore((s) => s.transfers);
   const retirements = useGameStore((s) => s.retirements);
   const allNews = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId, transfers, retirements),
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId, transfers, retirements), leagueDisplayDay(currentDay)),
     [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
   );
   const unreadNews = useMemo(() => {

@@ -5,7 +5,7 @@ import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EmptyState, Loading, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
-import { buildNewsFeed, newsKey } from '../data/news';
+import { buildNewsFeed, freshNews, newsKey } from '../data/news';
 import { seasonYear } from '../data/seasonLabel';
 import { leagueDisplayDay } from '../data/standings';
 import { useGameStore } from '../store/useGameStore';
@@ -39,7 +39,7 @@ function NewsListInner() {
   const retirements = useGameStore((s) => s.retirements);
 
   const feed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId ?? '', transfers, retirements),
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId ?? '', transfers, retirements), leagueDisplayDay(currentDay)),
     [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
   );
 

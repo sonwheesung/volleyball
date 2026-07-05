@@ -177,13 +177,14 @@ export function buildNewsFeed(
   // 명시 ref를 주면 그걸 우선(엔티티 앵커). 기사 SET/push 순서는 사실로 결정 → 버전 내 결정론.
   const kindOrd = new Map<string, number>();
   // 조사 병기("코메츠이(가)") 일괄 교정 — 헤드라인·본문 전체에 받침 기준 적용(NEWS_SYSTEM §4.5).
-  const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string, body?: string, ref?: string) => {
+  const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string, body?: string, ref?: string, day?: number) => {
     // kord = (season:kind)당 결정론 순번 → 읽음키(newsKey) 기반. ref(엔티티 앵커, 이적 게이트용)와 분리해
     // 한 선수가 시즌에 여러 기사(밀스톤 2개·트리플+폭발 등)를 받아도 읽음키가 충돌하지 않는다(§4.4 Step0).
+    // day = 발생 전역일(현재 시즌 인게임만) → 최신순 정렬·2주 만료(§9). 시즌요약(과거)은 undefined.
     const ok = `${season}:${kind}`;
     const ord = kindOrd.get(ok) ?? 0;
     kindOrd.set(ok, ord + 1);
-    items.push({ season, kind, headline: resolveJosa(headline), big, teamId, body: body ? resolveJosa(body) : body, ref, kord: String(ord) });
+    items.push({ season, kind, headline: resolveJosa(headline), big, teamId, body: body ? resolveJosa(body) : body, ref, kord: String(ord), day });
   };
 
   // ── Step1 fact-hook 파생층(§4.4) — archive 스캔으로 "사실"을 만든다(문구 아님). Step2 core가 전제조건으로 골라 씀.
@@ -412,14 +413,14 @@ export function buildNewsFeed(
     const out = s.severity === 'season' ? '시즌아웃' : `약 ${s.missMatches}경기 결장`;
     const key = `${currentSeason}:inj:${s.playerId}`;
     push(currentSeason, 'injury', `${pName(s.playerId)} ${SEVERITY_KO[s.severity]} — ${out}`, s.severity === 'season', s.teamId,
-      body3('injury', key, `${pName(s.playerId)}(${teamName(s.teamId)})이(가) ${SEVERITY_KO[s.severity]} 판정을 받아 ${out}이(가) 예상된다. ${teamName(s.teamId)}은(는) 당분간 ${posKoOf(s.playerId)} 자리를 메워야 한다.`), s.playerId);
+      body3('injury', key, `${pName(s.playerId)}(${teamName(s.teamId)})이(가) ${SEVERITY_KO[s.severity]} 판정을 받아 ${out}이(가) 예상된다. ${teamName(s.teamId)}은(는) 당분간 ${posKoOf(s.playerId)} 자리를 메워야 한다.`), s.playerId, s.from);
   }
 
   // 5) 사건·사고 — 아주 가끔, 리그를 뒤흔드는 헤드라인
   for (const s of seasonScandals()) {
     if (s.from > leagueDay) continue; // 아직 안 터진 미래 사건 제외 — 리그 진행 컷오프(NEWS_SYSTEM §3.5)
     push(currentSeason, 'scandal', `[단독] ${pName(s.playerId)}(${teamName(s.teamId)}), ${SCANDAL_KO[s.kind]} — ${s.missMatches}경기 출장 정지`, true, s.teamId,
-      body3('scandal', `${currentSeason}:sc:${s.playerId}`, `${pName(s.playerId)}(${teamName(s.teamId)})이(가) ${SCANDAL_KO[s.kind]}으로(로) ${s.missMatches}경기 출장 정지 징계를 받았다.`), s.playerId);
+      body3('scandal', `${currentSeason}:sc:${s.playerId}`, `${pName(s.playerId)}(${teamName(s.teamId)})이(가) ${SCANDAL_KO[s.kind]}으로(로) ${s.missMatches}경기 출장 정지 징계를 받았다.`), s.playerId, s.from);
   }
 
   // 6) 영구제명 — 리그를 뒤흔드는 최대 사건(승부조작·학폭). 영속 기록에서.
@@ -434,7 +435,7 @@ export function buildNewsFeed(
     const pop = popularityNow(p, leagueDay, archive);
     if (pop < 60) continue; // 인기 스타만 — 무명 선수 벤치는 기사 안 남
     push(currentSeason, 'owner', `팬들, 간판 ${p.name} 벤치 기용에 술렁 — "왜 안 쓰나"`, pop >= 78, myTeamId,
-      body3('owner', `${currentSeason}:own:${b.playerId}`, `${teamName(myTeamId)}의 간판 ${p.name}이(가) 최근 출전 명단에서 빠지면서 팬들이 술렁이고 있다. "왜 안 쓰나"라는 목소리가 커지고 있다.`), b.playerId);
+      body3('owner', `${currentSeason}:own:${b.playerId}`, `${teamName(myTeamId)}의 간판 ${p.name}이(가) 최근 출전 명단에서 빠지면서 팬들이 술렁이고 있다. "왜 안 쓰나"라는 목소리가 커지고 있다.`), b.playerId, leagueDay);
   }
 
   // 7.5) FA 이적·방출(슬라이스3·4) — 내 팀 in/out + 타팀 거물(포착 단계서 게이트됨, NEWS_SYSTEM §3.3).
@@ -488,8 +489,8 @@ export function buildNewsFeed(
   const PROSPECT_MIN = 1.12, ELITE_MIN = 1.25; // A급 이상만 기사화, S급은 ★(특급 기대주)
   const debuted = new Set<string>(); // 이번 시즌 첫 선발 1회만
   // 트리플 크라운·한 경기 폭발은 선수당 1건으로 묶는다(한 시즌 8건 폭주 방지, 2026-06-25 에디터) — 시즌 N번째/최고 경기.
-  const tc = new Map<string, { count: number; tid: string; name: string; back: number; b: number; a: number }>();
-  const bg = new Map<string, { tid: string; name: string; points: number; spikes: number; aces: number; blocks: number; opp: string }>();
+  const tc = new Map<string, { count: number; tid: string; name: string; back: number; b: number; a: number; day: number }>();
+  const bg = new Map<string, { tid: string; name: string; points: number; spikes: number; aces: number; blocks: number; opp: string; day: number }>();
   for (const mp of seasonMatchProds(leagueDay)) {
     const teamOf = (id: string) => (mp.homeIds.has(id) ? mp.homeTeamId : mp.awayTeamId);
     for (const [id, l] of mp.lines) {
@@ -499,7 +500,7 @@ export function buildNewsFeed(
       // 트리플 크라운(KOVO) — 후위공격·블로킹·서브 각 3+. 선수당 누적(첫 경기 스탯 + 시즌 횟수).
       if (l.backSpikes >= TRIPLE_MIN && l.blocks >= TRIPLE_MIN && l.aces >= TRIPLE_MIN) {
         const e = tc.get(id);
-        if (e) e.count++; else tc.set(id, { count: 1, tid, name: p.name, back: l.backSpikes, b: l.blocks, a: l.aces });
+        if (e) { e.count++; e.day = mp.dayIndex; } else tc.set(id, { count: 1, tid, name: p.name, back: l.backSpikes, b: l.blocks, a: l.aces, day: mp.dayIndex });
       }
       // 데뷔전 — 통산 출전 0(이번 시즌이 데뷔)인 선수의 첫 선발만. **유망주(잠재력 높은 신인)만**: 리그 전체
       // 신인 데뷔를 다 기사화하면 첫 경기에 ~50건 쏟아짐 → talentBase A급 이상(상위 15%)만, S급은 ★(2026-06-21 사용자 보고).
@@ -516,12 +517,12 @@ export function buildNewsFeed(
           body3('debut', `${currentSeason}:db:${id}`, more(
             `${teamName(tid)}의 ${tier} ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}을(를) 기록했다.`,
             `상대 ${teamName(opp)}을(를) 맞은 데뷔전이었다.`,
-            elite ? 'S급 재능으로 분류된 특급 유망주로, 팀의 미래를 책임질 재목으로 꼽힌다.' : '높은 잠재력을 인정받은 기대주로, 성장 곡선에 시선이 모인다.')), id);
+            elite ? 'S급 재능으로 분류된 특급 유망주로, 팀의 미래를 책임질 재목으로 꼽힌다.' : '높은 잠재력을 인정받은 기대주로, 성장 곡선에 시선이 모인다.')), id, mp.dayIndex);
       }
       // 한 경기 폭발(커리어하이급) — 30점 이상(데뷔 기사로 이미 다룬 경기는 제외). 선수당 시즌 최고 경기만.
       else if (l.points >= BIG_GAME) {
         const e = bg.get(id);
-        if (!e || l.points > e.points) bg.set(id, { tid, name: p.name, points: l.points, spikes: l.spikes, aces: l.aces, blocks: l.blocks, opp });
+        if (!e || l.points > e.points) bg.set(id, { tid, name: p.name, points: l.points, spikes: l.spikes, aces: l.aces, blocks: l.blocks, opp, day: mp.dayIndex });
       }
     }
   }
@@ -529,14 +530,14 @@ export function buildNewsFeed(
   for (const [id, e] of tc) {
     const multi = e.count > 1 ? ` (시즌 ${e.count}번째)` : '';
     push(currentSeason, 'match', `${e.name} 트리플 크라운${multi} — 후위공격 ${e.back}·블로킹 ${e.b}·서브 ${e.a}`, true, e.tid,
-      body3('triple', `${currentSeason}:tc:${id}`, `${e.name}(${teamName(e.tid)})이(가) 후위공격 ${e.back}개·블로킹 ${e.b}개·서브 에이스 ${e.a}개로 트리플 크라운을 달성했다.${e.count > 1 ? ` 이번 시즌 ${e.count}번째 대기록이다.` : ' KOVO 공식 기록에 이름을 올렸다.'}`), id);
+      body3('triple', `${currentSeason}:tc:${id}`, `${e.name}(${teamName(e.tid)})이(가) 후위공격 ${e.back}개·블로킹 ${e.b}개·서브 에이스 ${e.a}개로 트리플 크라운을 달성했다.${e.count > 1 ? ` 이번 시즌 ${e.count}번째 대기록이다.` : ' KOVO 공식 기록에 이름을 올렸다.'}`), id, e.day);
   }
   // 한 경기 폭발 — 선수당 시즌 최고 경기 1건
   for (const [id, e] of bg) {
     push(currentSeason, 'match', `${e.name}, 한 경기 ${e.points}점 폭발`, e.points >= 35, e.tid,
       body3('biggame', `${currentSeason}:bg:${id}`, more(
         `${e.name}(${teamName(e.tid)})이(가) 한 경기 ${e.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`,
-        `상대 ${teamName(e.opp)}을(를) 상대로 공격 성공 ${e.spikes}개·서브 에이스 ${e.aces}개·블로킹 ${e.blocks}개를 곁들였다.`)), id);
+        `상대 ${teamName(e.opp)}을(를) 상대로 공격 성공 ${e.spikes}개·서브 에이스 ${e.aces}개·블로킹 ${e.blocks}개를 곁들였다.`)), id, e.day);
   }
 
   // 9) 모기업 기조 예고(FINANCE 2.0 Stage2b) — 막 끝난 시즌(lastSeason) 기준 다가오는 오프시즌 FA 기류.
@@ -565,5 +566,20 @@ export function buildNewsFeed(
     }
   }
 
-  return items.sort((x, y) => y.season - x.season || Number(y.big) - Number(x.big));
+  // 정렬(NEWS_SYSTEM §9 — 2026-07-05 최신순 전환): 현재 시즌 인게임 뉴스(day 있음)를 **최신순(같은 날 중요도순)** 으로
+  //   최상단에, 그 아래 과거 시즌 요약뉴스(day 없음)는 시즌↓·중요도↓. **완전한 목록**(가드는 전량 검증) —
+  //   2주 만료는 표시 계층(`freshNews`)에서 걸러 목록/카운트에 적용(buildNewsFeed는 순수·전량 유지).
+  return items.sort((x, y) => {
+    const xd = x.day, yd = y.day;
+    if (xd != null && yd != null) return yd - xd || Number(y.big) - Number(x.big); // 둘 다 인게임 → 최신순, 같은 날 중요도
+    if (xd != null) return -1; // 인게임(신선)이 요약보다 위
+    if (yd != null) return 1;
+    return y.season - x.season || Number(y.big) - Number(x.big);                    // 과거 요약끼리 — 기존(시즌↓·중요도↓)
+  });
+}
+
+/** 표시용 최신 뉴스 — 2주(14일) 지난 인게임 뉴스는 만료 제외(요약뉴스=day 없음은 유지). 목록·미읽음 카운트 공용(NEWS_SYSTEM §9). */
+export const NEWS_FRESH_DAYS = 14;
+export function freshNews(feed: NewsItem[], displayDay: number): NewsItem[] {
+  return feed.filter((n) => n.day == null || n.day >= displayDay - NEWS_FRESH_DAYS);
 }
