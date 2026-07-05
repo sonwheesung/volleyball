@@ -31,7 +31,7 @@ export const TIPS: Tip[] = [
 
   // ── 일정 탭(첫 진입 화면) ──
   { id: 'sched.next', screen: 'tab-schedule', order: 0, anchor: 'sched-next',
-    title: '다음 경기', body: '여기서 경기를 진행합니다. ⭐ 빅매치는 직접 관전을 권해요 — 현장 운영(교체·작전)은 감독 몫, 당신은 보는 게임입니다.' },
+    title: '여기서 시즌을 진행', body: '오프시즌엔 전지훈련으로 선수를 키우고, 개막하면 경기를 치릅니다. ⭐ 빅매치는 직접 관전을 권해요 — 현장 운영(교체·작전)은 감독 몫, 당신은 보는 게임입니다.' },
   { id: 'sched.calendar', screen: 'tab-schedule', order: 1, anchor: 'sched-calendar',
     title: '우리 팀 일정', body: '우리 팀 시즌 일정을 날짜·요일·홈/원정·상대로 봅니다. 치른 경기는 결과, 앞으로는 예정으로 표시돼요.' },
   { id: 'sched.results', screen: 'tab-schedule', order: 2, anchor: 'sched-results',
@@ -69,11 +69,7 @@ export const TIPS: Tip[] = [
   { id: 'tryout.wish', screen: 'tryout', order: 1, anchor: 'tryout-wish',
     title: '위시리스트로 노리기', body: '원하는 외인을 ★로 담아두면 순번에서 가능한 선수를 자동 지명합니다. 앞 순번 팀이 먼저 데려가면 다음 우선순위로 내려가요. 잘하던 현 외인은 "재계약 우선권"으로 드래프트 없이 갱신할 수 있습니다. 스카우터를 영입하면 능력치가 더 선명해져요.' },
 
-  // ── 마이페이지 탭(구 기록 탭 — 2026-06-30 네비 개편으로 screen 키만 tab-history→tab-mypage 이동, id는 보존) ──
-  { id: 'history.intro', screen: 'tab-mypage', order: 0, anchor: 'history-top',
-    title: '기록', body: '시즌·통산·명예의전당·연표 — 세월이 흘러야 채워집니다. 배구명가의 진짜 재미입니다.' },
-  { id: 'history.ach', screen: 'tab-mypage', order: 1, anchor: 'history-ach',
-    title: '업적', body: '구단주 본인의 장기 발자취 — 우승·시상·레전드·기록·운영을 트로피로 모읍니다.' },
+  // ── 마이페이지 탭 스포트라이트 제거(2026-07-05 사용자 요청) — 온보딩 스텝 과다·어색. 화면 자체는 유지, 튜토리얼 팁만 뺌.
 ];
 
 /** 그 화면의 팁을 순서대로 */

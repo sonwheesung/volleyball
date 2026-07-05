@@ -134,11 +134,14 @@ export default function Schedule() {
       {/* 전지훈련 — 오프시즌(currentDay 0, 미완료)엔 이것만(다음경기 숨김). 반드시 전지훈련을 거쳐야 개막전이 열린다:
           "하러 가기"로 캠프 진입 → 캠프 화면에서 "마치고 개막전으로" → campDone → 다음경기 노출(2026-07-04 사용자 요청). */}
       {offseason ? (
-        <Card accent={theme.good}>
-          <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
-          <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 전지훈련을 마쳐야 개막전이 시작됩니다.</Muted>
-          <Button label="전지훈련 하러 가기 →" onPress={() => router.push('/training-camp')} />
-        </Card>
+        // 오프시즌엔 이 카드가 sched-next 앵커 — 스포트라이트가 "다음 경기" 자리(전지훈련)를 정확히 가리키게(2026-07-05 불일치 수정)
+        <SpotlightTarget id="sched-next">
+          <Card accent={theme.good}>
+            <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
+            <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 전지훈련을 마쳐야 개막전이 시작됩니다.</Muted>
+            <Button label="전지훈련 하러 가기 →" onPress={() => router.push('/training-camp')} />
+          </Card>
+        </SpotlightTarget>
       ) : null}
 
       {clinchView ? (

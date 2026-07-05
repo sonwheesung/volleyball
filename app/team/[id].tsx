@@ -244,7 +244,7 @@ export default function TeamDetail() {
         </Card>
       ) : null}
 
-      {/* ── 선수단 ── */}
+      {/* ── 선수단 ── 스포트라이트 앵커는 헤더만 감싼다(전체 리스트를 감싸면 타겟이 화면보다 커 하이라이트가 안 보임 — 2026-07-05 수정) */}
       <SpotlightTarget id="team-roster">
         <View style={styles.rosterHead}>
           <IconLabel icon="people-outline" color={theme.accent}>선수단 ({players.length}명)</IconLabel>
@@ -256,9 +256,9 @@ export default function TeamDetail() {
             <Ionicons name="chevron-down" size={13} color={theme.muted} />
           </Pressable>
         </View>
-        <View style={{ height: 8 }} />
-        <RosterList players={players} sort={sort} reveal={isCurrent ? 1 : (selectedTeamId ? teamScoutReveal(selectedTeamId) : 1)} />
       </SpotlightTarget>
+      <View style={{ height: 8 }} />
+      <RosterList players={players} sort={sort} reveal={isCurrent ? 1 : (selectedTeamId ? teamScoutReveal(selectedTeamId) : 1)} />
 
       <View style={{ height: 6 }} />
       {isCurrent ? (
