@@ -314,12 +314,18 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
 
   const seg = !finished && segIdx < segCount ? { from: path[segIdx], to: path[segIdx + 1] } : null;
 
-  // 화면에 표시할 상태
-  const view = shown >= 0 ? rallies[Math.min(shown, total - 1)] : null;
-  const homeSets = finished ? sim.homeSets : view?.homeSetsBefore ?? 0;
-  const awaySets = finished ? sim.awaySets : view?.awaySetsBefore ?? 0;
-  const curPts = view ? { h: view.home, a: view.away } : { h: 0, a: 0 };
-  const setNo = view?.setNo ?? 1;
+  // 화면에 표시할 상태 — 스코어보드는 "지금 진행 중인 세트"(idx) 기준.
+  //  버그수정(2026-07-05): 이전엔 view=rallies[shown]이라 세트 경계에서 shown이 아직 직전 세트 마지막 랠리 →
+  //  새 세트 첫 점이 날 때까지 **이전 세트 점수·세트번호(25:23·1세트)를 들고 있었다**(사용자 제보). 이제 idx의 세트를
+  //  기준으로, 그 세트에서 이미 난 점수(shown이 같은 세트일 때)만 반영하고 아니면 0:0(세트 시작)으로 표시.
+  const curIdx = Math.min(idx, total - 1);
+  const cur = rallies[curIdx];
+  const scoredView = shown >= 0 ? rallies[Math.min(shown, total - 1)] : null;
+  const sameSet = scoredView != null && cur != null && scoredView.setNo === cur.setNo; // 이번 세트에서 이미 난 점수?
+  const homeSets = finished ? sim.homeSets : cur?.homeSetsBefore ?? 0;
+  const awaySets = finished ? sim.awaySets : cur?.awaySetsBefore ?? 0;
+  const curPts = sameSet && scoredView ? { h: scoredView.home, a: scoredView.away } : { h: 0, a: 0 };
+  const setNo = finished ? (rallies[total - 1]?.setNo ?? 1) : cur?.setNo ?? 1;
 
   // 관전 점수를 부모(헤더)로 올린다 — 스코어보드를 헤더 팀명 옆에 표시(별도 영역 제거)
   useEffect(() => {
@@ -434,10 +440,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   }, [segSig]);
 
   // 종결 자막 — 공이 죽은 순간(바운드)부터 다음 서브 전까지. 바운드 중엔 진행 랠리, 그 후엔 점수 반영 랠리
-  const capRally = finished ? null
-    : segKind === 'bounce' ? rallies[Math.min(idx, total - 1)]
-    : !inPlay && shown >= 0 ? rallies[Math.min(shown, total - 1)]
-    : null;
+  // 현재 랠리(idx)가 종결(바운드~정산: segKind==='bounce' 또는 seg===null)이면 그 랠리의 자막을 쓴다.
+  //  버그수정(2026-07-05): 이전엔 seg===null(바운드 직후, setShown(idx) 이펙트 커밋 전 ~90ms)에 shown이
+  //  아직 직전 랠리(idx-1)라 rallies[shown]으로 **직전 득점 뱃지가 한 프레임 스쳤다 복귀**(색·너비 튐, 사용자 제보).
+  //  워크백(return/walk = 다음 랠리 시작 전)만 직전 득점(shown) 유지.
+  const capIdx = finished ? -1
+    : (segKind === 'bounce' || segKind === null) ? Math.min(idx, total - 1)
+    : !inPlay && shown >= 0 ? Math.min(shown, total - 1)
+    : -1;
+  const capRally = capIdx >= 0 ? rallies[capIdx] : null;
   const caption = capRally?.how ? HOW_CAPTION[capRally.how] : null;
 
   // 공 궤적(흰 점선) — 경기 중(인플레이)에만. 끝점은 의도(aim)가 있으면 그쪽으로(터치아웃: 점선=의도 코스)
