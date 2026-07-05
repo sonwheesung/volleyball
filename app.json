@@ -34,8 +34,12 @@
       "expo-sqlite",
       [
         "expo-audio",
-        { "microphonePermission": false }
-      ]
+        {
+          "microphonePermission": false
+        }
+      ],
+      "expo-font",
+      "expo-asset"
     ],
     "experiments": {
       "typedRoutes": false
