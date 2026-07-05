@@ -8,6 +8,8 @@ export function GET() {
     ok: true,
     service: 'volleyball-server',
     phase: 'P1-scaffold',
+    // 배포 진단(§13.22): Vercel이 빌드 시 주입하는 커밋 SHA — 어느 코드가 라이브인지 확인용.
+    commit: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'local',
     time: new Date().toISOString(),
   });
 }
