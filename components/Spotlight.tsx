@@ -79,8 +79,11 @@ export function SpotlightTarget({ id, children, style }: { id: string; children:
   const measure = useCallback(() => {
     const node = ref.current;
     if (!node) return;
-    node.measureInWindow((x, y, width, height) => {
-      if (width > 0 && height > 0) setTarget(id, { x, y, width, height });
+    // measure(pageX/pageY=절대 화면 좌표)를 쓴다. measureInWindow는 독립 빌드(New Arch/Android)에서
+    // 상태바 높이만큼 뺀 값을 줘서 전체화면 Modal 오버레이와 어긋났다(Expo Go는 우연히 실화면 좌표라 맞았음).
+    // pageX/pageY는 Expo Go·독립 빌드 모두 실화면 좌표라 상태바 하드코딩 없이 어디서든 정렬된다.
+    node.measure((_x, _y, width, height, pageX, pageY) => {
+      if (width > 0 && height > 0) setTarget(id, { x: pageX, y: pageY, width, height });
     });
   }, [setTarget, id]);
   // 마운트 후 몇 차례 재측정(스크롤뷰·전환으로 첫 측정이 0/미안정인 경우 보강). cleanup은 언마운트에서만 해제.
