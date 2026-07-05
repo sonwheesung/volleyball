@@ -163,6 +163,50 @@ export const statsDaily = pgTable(
   (t) => [primaryKey({ columns: [t.projCode, t.day] })],
 );
 
+// ── 결제 이벤트 감사 로그(§13.22, 2026-07-05) — **append-only 진단**(돈 진실은 walletLedger·statsDaily). 결제 생애주기
+//   단계마다 1행: 성공/dedup/실패사유·상관ID(requestId, storeTxnId, rcEventId)·금액/환경/기기 컨텍스트. "돈 내고 0개"를
+//   idempotencyKey로 walletLedger와 JOIN해 감사. **관찰 전용**(로깅 실패가 지급을 되돌리지 않음 — logPaymentEvent가 삼킴).
+//   PII/토큰/영수증/시크릿 금지(§13.22 §E — scrub). userId/rcAppUserId는 text(익명 $RCAnonymousID·비UUID도 로깅되게 — insert 실패 방지).
+export const purchaseEvent = pgTable(
+  'purchase_event',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    // 상관·귀속
+    userId: text('user_id'),                 // 우리 유저 참조(이메일·이름 금지). auth 전 단계면 null
+    rcAppUserId: text('rc_app_user_id'),     // RC app_user_id(익명일 수 있음)
+    requestId: text('request_id'),           // client→confirm 한 시도 상관(웹훅은 storeTxnId로 매칭)
+    storeTxnId: text('store_txn_id'),        // 원장 앵커(스토어 거래 id)
+    rcEventId: text('rc_event_id'),          // 웹훅 dedupe 키(event.id)
+    idempotencyKey: text('idempotency_key'), // walletLedger JOIN → 지급 여부 증명
+    // 무엇/결과
+    source: text('source').notNull(),        // client | webhook | confirm
+    stage: text('stage').notNull(),          // 생애주기 단계(webhook.grant.applied 등)
+    eventType: text('event_type'),           // RC 웹훅 타입(INITIAL_PURCHASE 등)
+    ok: boolean('ok').notNull(),
+    outcome: text('outcome'),                // applied|deduped|rejected|pending|cancelled|ignored|error
+    reasonCode: text('reason_code'),         // 실패/무시 사유(정규화 코드 또는 원사유)
+    errorMessage: text('error_message'),     // ≤500자 truncate·스크럽
+    // 상품/금액/환경
+    productId: text('product_id'),
+    price: integer('price'),                 // 구매통화 정수(반올림) — currency와 함께 해석
+    currency: text('currency'),
+    diamondsDelta: integer('diamonds_delta'),
+    balanceAfter: integer('balance_after'),
+    environment: text('environment'),        // SANDBOX | PRODUCTION
+    platform: text('platform'),              // ios | android
+    appVersion: text('app_version'),
+    detail: jsonb('detail'),                 // 화이트리스트 추가정보만(원본 웹훅 바디 덤프 금지)
+  },
+  (t) => [
+    index('pe_user_time_idx').on(t.userId, t.createdAt),
+    index('pe_txn_idx').on(t.storeTxnId),
+    index('pe_rc_event_idx').on(t.rcEventId),
+    index('pe_reason_idx').on(t.reasonCode),
+  ],
+);
+
 export type ProjInfo = typeof projInfo.$inferSelect;
 export type ServerSetting = typeof serverSetting.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -173,3 +217,4 @@ export type Coupon = typeof coupons.$inferSelect;
 export type CouponRedemption = typeof couponRedemptions.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 export type DiagnosticSnapshot = typeof diagnosticSnapshots.$inferSelect;
+export type PurchaseEvent = typeof purchaseEvent.$inferSelect;

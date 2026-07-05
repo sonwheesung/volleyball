@@ -14,6 +14,7 @@ import { Alert } from 'react-native';
 import { setRemoveAds } from './ads';
 import { logEvent, logError } from './log';
 import { confirmPurchase } from './server';
+import { getDeviceInfo } from './device';
 import { DIAMOND_TIERS } from '../data/diamondTiers';
 
 export type Sku = 'remove_ads' | 'dlc_worldcup';
@@ -185,28 +186,33 @@ export async function purchaseDiamonds(productId: string): Promise<DiamondResult
       ], { onDismiss: () => resolve({ ok: false, reason: 'cancelled' }) });
     });
   }
+  // 상관 requestId(§13.22) — 클라 브레드크럼 ↔ 서버 confirm/webhook 로그를 한 결제로 잇는다(UI 런타임이라 random 허용).
+  const requestId = 'rq_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  const dev = getDeviceInfo();
   try {
     const Purchases = rc();
     if (!Purchases || !REVENUECAT_API_KEY) return { ok: false, reason: 'unavailable', message: 'IAP 미설정' }; // 키 없으면 "출시 빌드에서 연결" 안내
+    logEvent('iap:diamonds:offerings', { productId, requestId });
     const offerings = await Purchases.getOfferings();
     const pkgs: any[] = offerings?.current?.availablePackages ?? [];
     const pkg = pkgs.find((p) => p?.product?.identifier === productId || p?.identifier === productId);
-    if (!pkg) return { ok: false, reason: 'unavailable', message: '상품을 찾을 수 없음' };
+    if (!pkg) { logError('iap.purchaseDiamonds', `상품 없음(offerings) ${productId} rq=${requestId}`); return { ok: false, reason: 'unavailable', message: '상품을 찾을 수 없음' }; }
+    logEvent('iap:diamonds:purchase', { productId, requestId });
     const res: any = await Purchases.purchasePackage(pkg); // 결제 완료(취소면 throw). 지급은 서버 원장(웹훅+confirm 폴백)
     // 폴백(§13.18 필수): 스토어 거래id로 서버 재검증·지급 — 웹훅 지연·유실 시 "돈 내고 0개" 방지.
     //   웹훅과 동일 멱등키(purchase:<userId>:<storeTxnId>)라 먼저 온 쪽 지급·둘째 applied:false로 dedupe.
     const storeTxnId = String(res?.transaction?.transactionIdentifier ?? res?.transaction?.storeTransactionId ?? '');
     if (storeTxnId) {
-      const c = await confirmPurchase(storeTxnId, productId);
-      if (!c.ok) logError('iap.purchaseDiamonds.confirm', c.reason); // 폴백 실패해도 웹훅이 메꿈 → syncWallet로 수렴(치명 아님)
+      const c = await confirmPurchase(storeTxnId, productId, { requestId, platform: dev.platform, appVersion: dev.appVersion });
+      if (!c.ok) logError('iap.purchaseDiamonds.confirm', `${c.reason} rq=${requestId} txn=${storeTxnId}`); // 폴백 실패해도 웹훅이 메꿈 → syncWallet로 수렴(치명 아님)
     } else {
-      logError('iap.purchaseDiamonds', 'storeTxnId 없음 — 웹훅 단독 의존'); // 거래id 미추출: 웹훅만으로 지급(폴백 스킵)
+      logError('iap.purchaseDiamonds', `storeTxnId 없음 — 웹훅 단독 의존 rq=${requestId}`); // 거래id 미추출: 웹훅만으로 지급(폴백 스킵)
     }
-    logEvent('iap:diamonds:ok', { productId });
+    logEvent('iap:diamonds:ok', { productId, requestId, storeTxnId });
     return { ok: true, productId, amount: tier.amount };
   } catch (e: any) {
-    if (e?.userCancelled) return { ok: false, reason: 'cancelled' };
-    logError('iap.purchaseDiamonds', e);
+    if (e?.userCancelled) { logEvent('iap:diamonds:cancelled', { productId, requestId }); return { ok: false, reason: 'cancelled' }; }
+    logError('iap.purchaseDiamonds', `${e?.readableErrorCode ?? e?.code ?? ''} ${e?.message ?? e} rq=${requestId}`);
     const net = /network|offline|connection/i.test(String(e?.message ?? ''));
     return { ok: false, reason: net ? 'network' : 'error', message: String(e?.message ?? e) };
   }
