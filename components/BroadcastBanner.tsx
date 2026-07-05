@@ -13,8 +13,10 @@ export function BroadcastBanner({ banners }: { banners: Banner[] }) {
   const [idx, setIdx] = useState(0);
   const slide = useRef(new Animated.Value(0)).current; // 0 숨김 → 1 표시
 
+  // 현재 idx의 배너가 아직 표시 대기/중인가 — 큐가 뒤에서 더 늘어나도(append) 이 값은 안 변한다.
+  const pending = idx < banners.length;
   useEffect(() => {
-    if (idx >= banners.length) return;
+    if (!pending) return;
     slide.setValue(0);
     const anim = Animated.sequence([
       Animated.timing(slide, { toValue: 1, duration: 320, useNativeDriver: true }),
@@ -23,7 +25,10 @@ export function BroadcastBanner({ banners }: { banners: Banner[] }) {
     ]);
     anim.start(({ finished }) => { if (finished) setIdx((i) => i + 1); });
     return () => anim.stop();
-  }, [idx, banners.length, slide]);
+    // 버그수정(2026-07-05): deps에서 banners.length 제거. 이전엔 표시 중 큐가 늘면(연속 사건) effect가
+    //   재실행돼 slide.setValue(0)로 현 배너를 순간 숨겼다(빈 배너 깜빡) 다시 슬라이드 → "빈 현수막 앞, 내용 뒤"
+    //   (사용자 제보). 이제 idx 전진/유휴→새배너(pending 토글)에만 재생, 뒤쪽 append엔 무반응.
+  }, [idx, pending, slide]);
 
   if (idx >= banners.length) return null;
   const b = banners[idx];
