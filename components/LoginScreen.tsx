@@ -1,5 +1,6 @@
 // 로그인 벽 (AUTH_SYSTEM §4) — 하드 게이트. 로그인 전엔 게임 진입 불가. 성공 시 BootGate가 session 감지→게임 전환.
-// 스텁: 실제 소셜 OAuth 없이 서버 dev 로그인. EAS에서 구글/애플 SDK로 교체(호출부 불변).
+// 구글: 네이티브 @react-native-google-signin → idToken → 서버 verifyGoogleIdToken(2026-07-05 실기기 연결).
+//       개발자 로그인(dev)은 __DEV__ 빌드에만 노출(Expo Go/네이티브 미탑재 폴백). 애플은 iOS 정식 빌드 예정.
 import { useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -59,8 +60,8 @@ export function LoginScreen() {
         {err ? <Text style={styles.err}>{err}</Text> : null}
 
         <Text style={styles.notice}>
-          로그인하면 다이아·구매 내역이 계정에 안전하게 보관되어 기기를 바꿔도 이어집니다.{'\n'}
-          * 현재는 개발용 로그인이며, 출시 시 실제 소셜 로그인이 연결됩니다.
+          로그인하면 다이아·구매 내역이 계정에 안전하게 보관되어 기기를 바꿔도 이어집니다.
+          {__DEV__ ? '\n* 개발 빌드입니다 — 정식 빌드에서는 Google 로그인만 노출됩니다.' : ''}
         </Text>
       </View>
     </Screen>
