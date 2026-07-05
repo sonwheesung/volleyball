@@ -10,6 +10,7 @@ import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { purchase, restorePurchases, skuLabel, type Sku } from '../lib/iap';
 import { WORLDCUP_ENABLED } from '../data/flags';
+import { useRouter } from 'expo-router';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -32,6 +33,7 @@ function ShopCard({ icon, tint, title, sub, onPress }: { icon: IoniconName; tint
 
 export default function Shop() {
   const diamonds = useGameStore((s) => s.diamonds);
+  const router = useRouter();
 
   // 상점 결제 — IAP 추상화(lib/iap). dev는 시뮬 알림, 운영은 스토어 결제→RevenueCat 검증(재채택 2026-07-03, BACKEND §13.18). throw 없이 결과 반환.
   const buy = async (sku: Sku) => {
@@ -64,8 +66,8 @@ export default function Shop() {
 
       <Text style={styles.section}>다이아</Text>
       <ShopCard icon="diamond-outline" tint={theme.sky} title="다이아 구매"
-        sub="전지훈련용 — 100개 ₩1,000 · 500개 ₩4,800 (출시 시 결제 연결)"
-        onPress={() => showAlert('다이아 구매', '결제는 출시 빌드에서 연결됩니다. 지금은 광고·업적으로 다이아를 모을 수 있어요.')} />
+        sub="전지훈련용 — 100~10,000 다이아 · 큰 팩일수록 개당 저렴"
+        onPress={() => router.push('/buy-diamonds')} />
 
       <Text style={styles.section}>아이템</Text>
       <ShopCard icon="remove-circle-outline" tint={theme.rose} title="광고 제거"

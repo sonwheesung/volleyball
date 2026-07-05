@@ -13,6 +13,7 @@
 import { Alert } from 'react-native';
 import { setRemoveAds } from './ads';
 import { logEvent, logError } from './log';
+import { DIAMOND_TIERS } from '../data/diamondTiers';
 
 export type Sku = 'remove_ads' | 'dlc_worldcup';
 export type PurchaseResult =
@@ -134,3 +135,40 @@ export async function restorePurchases(): Promise<{ ok: boolean; entitlements?: 
 }
 
 export const skuLabel = (sku: Sku): string => SKU_LABEL[sku];
+
+export type DiamondResult =
+  | { ok: true; productId: string; amount: number }
+  | { ok: false; reason: 'cancelled' | 'network' | 'unavailable' | 'error'; message?: string };
+
+/** 다이아 팩(소모성) 구매 — 항상 결과 반환(throw 없음). 실지급은 **서버(영수증 검증)만**:
+ *  dev=시뮬(미지급 — 서버가 'purchase' earn 사칭 차단). prod=RC 소모품 결제 → RC 웹훅이 서버 원장에 지급(§13.18)
+ *  → 호출부가 `syncWallet()`으로 잔액 반영. 상품 amount는 서버 권위(`DIAMOND_PRODUCTS`), 여기 amount는 표시용. */
+export async function purchaseDiamonds(productId: string): Promise<DiamondResult> {
+  const tier = DIAMOND_TIERS.find((t) => t.id === productId);
+  if (!tier) return { ok: false, reason: 'unavailable', message: '상품 없음' };
+  logEvent('iap:diamonds:start', { productId });
+  if (__DEV__) {
+    return await new Promise<DiamondResult>((resolve) => {
+      Alert.alert('다이아 구매 (개발)', `${tier.amount.toLocaleString()} 💎 구매 시뮬레이션\n운영 빌드에선 실제 결제(RevenueCat) → 서버 검증 후 지급됩니다.`, [
+        { text: '취소', style: 'cancel', onPress: () => resolve({ ok: false, reason: 'cancelled' }) },
+        { text: '구매(시뮬)', onPress: () => resolve({ ok: true, productId, amount: tier.amount }) },
+      ], { onDismiss: () => resolve({ ok: false, reason: 'cancelled' }) });
+    });
+  }
+  try {
+    const Purchases = rc();
+    if (!Purchases) return { ok: false, reason: 'unavailable', message: 'IAP 모듈 없음' };
+    const offerings = await Purchases.getOfferings();
+    const pkgs: any[] = offerings?.current?.availablePackages ?? [];
+    const pkg = pkgs.find((p) => p?.product?.identifier === productId || p?.identifier === productId);
+    if (!pkg) return { ok: false, reason: 'unavailable', message: '상품을 찾을 수 없음' };
+    await Purchases.purchasePackage(pkg); // RC 웹훅이 서버 원장에 지급 — 잔액은 호출부 syncWallet로 반영
+    logEvent('iap:diamonds:ok', { productId });
+    return { ok: true, productId, amount: tier.amount };
+  } catch (e: any) {
+    if (e?.userCancelled) return { ok: false, reason: 'cancelled' };
+    logError('iap.purchaseDiamonds', e);
+    const net = /network|offline|connection/i.test(String(e?.message ?? ''));
+    return { ok: false, reason: net ? 'network' : 'error', message: String(e?.message ?? e) };
+  }
+}
