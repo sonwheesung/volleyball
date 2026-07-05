@@ -13,7 +13,7 @@
     },
     "android": {
       "package": "com.son0925.volleyball",
-      "versionCode": 1,
+      "versionCode": 2,
       "backgroundColor": "#0B1018",
       "adaptiveIcon": {
         "backgroundColor": "#0f172a"
@@ -40,7 +40,13 @@
       ],
       "expo-font",
       "expo-asset",
-      "@react-native-google-signin/google-signin"
+      "@react-native-google-signin/google-signin",
+      [
+        "react-native-google-mobile-ads",
+        {
+          "androidAppId": "ca-app-pub-2731473780180274~2622190257"
+        }
+      ]
     ],
     "experiments": {
       "typedRoutes": false

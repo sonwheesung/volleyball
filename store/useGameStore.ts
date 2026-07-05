@@ -58,6 +58,7 @@ import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, R
 import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
 import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
+import { showRewardedForDiamonds } from '../lib/ads';
 import { earnDiamonds, spendDiamonds, getWallet } from '../lib/server';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
 import { useAuthStore } from './useAuthStore';
@@ -114,7 +115,7 @@ interface GameState {
   walletBusy: boolean;                         // 다이아 서버 왕복 in-flight 래치(비영속) — 버튼 연타 이중적용 차단(P0-1)
   claimedAch: string[];                        // 다이아 수령한 업적 id(1회 지급)
   adState: AdState;                            // 광고 보상 쿨다운/하루상한 상태(메타 — 시드 무관)
-  watchAdForDiamonds: () => Promise<{ ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' | 'offline' | 'busy' | 'error' }>;
+  watchAdForDiamonds: () => Promise<{ ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' | 'offline' | 'busy' | 'error' | 'no-ad' }>;
   claimAchDiamonds: () => Promise<{ granted: number; reason?: 'offline' | 'busy' | 'none' }>; // 새로 달성한 업적 다이아 수령(서버 확정)
   trainingCamp: (playerId: string, course: CampCourse) => Promise<{ ok: boolean; reason?: string }>; // 오프시즌 전지훈련(서버 차감 후, §11.2)
   syncWallet: () => Promise<void>;             // 서버 잔액으로 캐시 리싱크(로그인/포그라운드/실패후 — §13.12 P0-3) + 아웃박스 정산
@@ -316,8 +317,12 @@ export const useGameStore = create<GameState>()(
         if (!c.ok) return { ok: false, reason: c.reason };
         const userId = useAuthStore.getState().session?.userId;
         if (!userId) return { ok: false, reason: 'offline' }; // 로그인 안 됨 → 서버 귀속 불가
-        const { adState, reward } = grantAd(s.adState, now); // 새 슬롯(count↑) — 실패 시 미커밋이라 재시도 동일키(멱등)
+        // 실제 보상형 광고를 재생하고 **완주(earned)해야만** 지급(free-faucet 차단 §3.2). 미완주/노필/취소면 지급·쿨다운 소모 없음.
         set({ walletBusy: true });
+        const adRes = await showRewardedForDiamonds();
+        if (!adRes.earned) { set({ walletBusy: false }); return { ok: false, reason: 'no-ad' }; } // 광고 못 봄 → 슬롯 미소모(adState 불변)
+        const now2 = Date.now(); // 광고 시청(수초~수십초) 후 시점으로 쿨다운 시작
+        const { adState, reward } = grantAd(s.adState, now2); // 새 슬롯(count↑) — 실패 시 미커밋이라 재시도 동일키(멱등)
         const r = await earnDiamonds(reward, 'ad', adKey(userId, adState.dayIdx, adState.count));
         set({ walletBusy: false });
         if (!r.ok) { void get().syncWallet(); return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'cap' ? 'cap' : 'error' }; }

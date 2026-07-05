@@ -13,6 +13,7 @@ import { BootGate } from '../components/BootGate';
 import { DialogHost } from '../components/AppDialog';
 import { useGameStore } from '../store/useGameStore';
 import { initIap } from '../lib/iap';
+import { initAds } from '../lib/ads';
 import { installErrorSink, installCrashHandler } from '../lib/deviceLog';
 import { installKoreanKeepAll } from '../lib/koreanLineBreak';
 import { track } from '../lib/analytics';
@@ -81,6 +82,7 @@ export default function RootLayout() {
   useEffect(() => {
     loadThemeMode();
     initIap();
+    initAds(); // AdMob SDK 초기화 + UMP 동의(매 실행, EEA만 폼 표시) — dev/미설치 graceful(MONETIZATION §3.2)
     installErrorSink(() => useGameStore.getState().season); // 오류를 진단 버퍼에 시즌 태그로(#44)
     installCrashHandler(); // 미처리 예외도 진단 버퍼에(BACKEND §13.20 ④) — 없으면 크래시가 스냅샷에 안 남음
     track('app_open'); // 세션 시작(ANALYTICS_PLAN — 리텐션 자동산출 근간)
