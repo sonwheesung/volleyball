@@ -1,9 +1,29 @@
-// 결제 디스코드 알림 (BACKEND_SYSTEM §13.22) — 실제 지급된 결제/환불을 디스코드 채널로 통지.
+// 디스코드 알림 (BACKEND_SYSTEM §13.22) — 결제/환불·신규 문의를 디스코드 채널로 통지.
 //
-// 원칙: **DISCORD_WEBHOOK_URL 미설정이면 완전 no-op**(dev·미연결 무해). **절대 throw 없음**(알림 실패가 결제 흐름과 무관).
-//   호출은 라우트에서 `after(() => notifyPurchase(...))`로 **응답 후** 실행(웹훅 200 지연 0 — RC는 빠른 200 선호).
-//   **정확히 1건**: 웹훅·confirm 두 경로 중 원장에 실제 반영된(applied=true) 쪽만 호출 → 멱등 dedup으로 중복 알림 없음.
-//   PII 금지(§E): 이메일·이름 없음. userId는 뒤 6자만 마스킹 표시.
+// 원칙: **웹훅 URL 미설정이면 완전 no-op**(dev·미연결 무해). **절대 throw 없음**(알림 실패가 요청 흐름과 무관).
+//   호출은 라우트에서 `after(() => notifyXxx(...))`로 **응답 후** 실행(응답 지연 0 — 서버리스 freeze 유실 방지 §13.22).
+//   결제 알림은 **정확히 1건**: 웹훅·confirm 중 원장에 실제 반영된(applied=true) 쪽만 → 멱등 dedup으로 중복 없음.
+//   PII 금지(§E): 이메일·이름 없음. userId는 뒤 6자만 마스킹. 문의 본문은 사용자가 직접 쓴 것이라 표시하되 길이 컷.
+//   채널: 결제=`DISCORD_WEBHOOK_URL`. 문의=`DISCORD_TICKET_WEBHOOK_URL`(없으면 결제 채널로 폴백).
+
+/** 공통 전송 — url 없으면 no-op, 실패는 삼킴, 4초 타임아웃. */
+async function postDiscord(url: string, username: string, embed: Record<string, unknown>): Promise<void> {
+  if (!url) return;
+  try {
+    const ctrl = new AbortController();
+    const t = setTimeout(() => ctrl.abort(), 4000); // 디스코드 지연에도 함수 안 물리게
+    await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, embeds: [embed] }),
+      signal: ctrl.signal,
+    }).finally(() => clearTimeout(t));
+  } catch {
+    /* 알림 실패는 무시 — 요청/응답 흐름과 완전 분리 */
+  }
+}
+
+const maskUser = (userId?: string | null): string => (userId ? '…' + userId.slice(-6) : '-'); // PII 마스킹(부분만)
 
 export interface PurchaseNotice {
   kind: 'purchase' | 'refund';
@@ -18,32 +38,47 @@ export interface PurchaseNotice {
 /** 결제/환불 1건 디스코드 통지. no-op·throw-none. 라우트에서 after()로 감싸 응답 후 전송 권장. */
 export async function notifyPurchase(n: PurchaseNotice): Promise<void> {
   const url = process.env.DISCORD_WEBHOOK_URL ?? ''; // 호출 시점 읽기(콜드스타트 env 타이밍·테스트 견고)
-  if (!url) return;
-  try {
-    const isRefund = n.kind === 'refund';
-    const uid = n.userId ? '…' + n.userId.slice(-6) : '-'; // PII 마스킹(부분만)
-    const embed = {
-      title: isRefund ? '↩️ 환불' : '💎 결제 완료',
-      color: isRefund ? 0xe03e3e : 0x2ecc71,
-      fields: [
-        { name: '상품', value: n.productId || '-', inline: true },
-        { name: '다이아', value: `${isRefund ? '−' : '+'}${n.diamonds.toLocaleString()}`, inline: true },
-        { name: '금액', value: n.priceKrw != null ? `₩${n.priceKrw.toLocaleString()}` : '—', inline: true },
-        { name: '환경', value: n.environment ?? '—', inline: true },
-        { name: '경로', value: n.source, inline: true },
-        { name: '유저', value: uid, inline: true },
-      ],
-      timestamp: new Date().toISOString(), // 서버 런타임 시각(엔진/시드 무관)
-    };
-    const ctrl = new AbortController();
-    const t = setTimeout(() => ctrl.abort(), 4000); // 디스코드 지연에도 함수 안 물리게
-    await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: '배구명가 결제', embeds: [embed] }),
-      signal: ctrl.signal,
-    }).finally(() => clearTimeout(t));
-  } catch {
-    /* 알림 실패는 무시 — 결제/응답 흐름과 완전 분리 */
-  }
+  const isRefund = n.kind === 'refund';
+  await postDiscord(url, '배구명가 결제', {
+    title: isRefund ? '↩️ 환불' : '💎 결제 완료',
+    color: isRefund ? 0xe03e3e : 0x2ecc71,
+    fields: [
+      { name: '상품', value: n.productId || '-', inline: true },
+      { name: '다이아', value: `${isRefund ? '−' : '+'}${n.diamonds.toLocaleString()}`, inline: true },
+      { name: '금액', value: n.priceKrw != null ? `₩${n.priceKrw.toLocaleString()}` : '—', inline: true },
+      { name: '환경', value: n.environment ?? '—', inline: true },
+      { name: '경로', value: n.source, inline: true },
+      { name: '유저', value: maskUser(n.userId), inline: true },
+    ],
+    timestamp: new Date().toISOString(), // 서버 런타임 시각(엔진/시드 무관)
+  });
+}
+
+const TICKET_CAT_KO: Record<string, string> = { bug: '🐞 버그', suggestion: '💡 건의', question: '❓ 질문', refund: '↩️ 환불', etc: '🗂 기타' };
+
+export interface TicketNotice {
+  ticketId: string;
+  category: string;            // bug | suggestion | question | refund | etc
+  content: string;             // 사용자 작성 본문(표시하되 길이 컷)
+  userId?: string | null;
+  platform?: string | null;
+  appVersion?: string | null;
+}
+
+/** 신규 문의 1건 디스코드 통지. 문의 전용 채널(DISCORD_TICKET_WEBHOOK_URL) 없으면 결제 채널로 폴백. no-op·throw-none. */
+export async function notifyTicket(n: TicketNotice): Promise<void> {
+  const url = process.env.DISCORD_TICKET_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || '';
+  const body = (n.content ?? '').slice(0, 1000); // Discord 필드 상한(1024) 안에서 컷
+  await postDiscord(url, '배구명가 문의', {
+    title: '📨 새 문의',
+    color: 0x3498db,
+    fields: [
+      { name: '분류', value: TICKET_CAT_KO[n.category] ?? n.category, inline: true },
+      { name: '유저', value: maskUser(n.userId), inline: true },
+      { name: '기기', value: `${n.platform ?? '—'}${n.appVersion ? ` · v${n.appVersion}` : ''}`, inline: true },
+      { name: '내용', value: body || '—', inline: false },
+    ],
+    footer: { text: `ticket ${n.ticketId}` },
+    timestamp: new Date().toISOString(),
+  });
 }
