@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login as serverLogin, setServerToken } from '../lib/server';
+import { signInGoogle, signOutGoogle } from '../lib/googleAuth';
 import { getDeviceInfo } from '../lib/device';
 import { track } from '../lib/analytics';
 
@@ -14,7 +15,7 @@ export interface Session {
   displayName: string | null;
   token: string; // 자체 Bearer(HS256). 서버가 발급, 여기 캐시.
 }
-export type SignInResult = { ok: true } | { ok: false; reason: 'offline' | 'error' };
+export type SignInResult = { ok: true } | { ok: false; reason: 'offline' | 'error' | 'cancelled' | 'unavailable' };
 
 interface AuthState {
   session: Session | null;
@@ -22,7 +23,7 @@ interface AuthState {
   readAnnouncements: string[]; // 본 공지 id(기기 로컬 — BACKEND §13.13). 재노출 방지, 매 부팅 활성분과 교집합 prune.
   dismissedUpdateVersion: string | null; // 닫은 소프트 업데이트 latest(§13.16) — 새 latest 발행 시 재노출
   hydrated: boolean;
-  signIn: (provider: 'google' | 'apple' | 'dev', displayName?: string) => Promise<SignInResult>;
+  signIn: (provider: 'google' | 'apple' | 'dev') => Promise<SignInResult>;
   signOut: () => void;
   markAnnouncementsRead: (ids: string[]) => void; // 모달/재열람에서 본 공지 기록
   pruneReadAnnouncements: (activeIds: string[]) => void; // 활성 id와 교집합만 유지(무한증가 차단)
@@ -43,13 +44,20 @@ export const useAuthStore = create<AuthState>()(
       markAnnouncementsRead: (ids) => set((s) => ({ readAnnouncements: Array.from(new Set([...s.readAnnouncements, ...ids])) })),
       pruneReadAnnouncements: (activeIds) => set((s) => { const a = new Set(activeIds); return { readAnnouncements: s.readAnnouncements.filter((id) => a.has(id)) }; }),
       dismissUpdate: (latest) => set({ dismissedUpdateVersion: latest }),
-      signIn: async (provider, displayName) => {
-        let deviceId = get().deviceId;
-        if (!deviceId) {
-          deviceId = genDeviceId();
-          set({ deviceId });
+      signIn: async (provider) => {
+        const device = getDeviceInfo(); // 진단 기기정보 동봉(§13.17)
+        // google=네이티브 계정선택 → idToken(서버가 검증해 sub만 저장). dev/apple=기기ID 스텁.
+        let cred: { providerId?: string; idToken?: string };
+        if (provider === 'google') {
+          const g = await signInGoogle();
+          if (!g.ok) return { ok: false, reason: g.reason === 'cancelled' ? 'cancelled' : g.reason === 'unavailable' ? 'unavailable' : 'error' };
+          cred = { idToken: g.idToken };
+        } else {
+          let deviceId = get().deviceId;
+          if (!deviceId) { deviceId = genDeviceId(); set({ deviceId }); }
+          cred = { providerId: deviceId };
         }
-        const r = await serverLogin(provider, deviceId, displayName, getDeviceInfo()); // 진단 기기정보 동봉(§13.17)
+        const r = await serverLogin(provider, cred, device);
         if (!r.ok) return { ok: false, reason: r.reason === 'offline' ? 'offline' : 'error' };
         const session: Session = { userId: r.userId, provider: r.provider, displayName: r.displayName, token: r.token };
         setServerToken(session.token); // 이후 서버콜에 Bearer
@@ -59,6 +67,7 @@ export const useAuthStore = create<AuthState>()(
       },
       signOut: () => {
         track('logout');
+        void signOutGoogle(); // 구글 세션도 정리(다음 로그인 계정 재선택)
         setServerToken(null);
         set({ session: null });
       },

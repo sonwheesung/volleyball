@@ -27,7 +27,13 @@ export function LoginScreen() {
     setErr(null);
     const r = await signIn(provider);
     setBusy(null);
-    if (!r.ok) setErr(r.reason === 'offline' ? '네트워크 연결이 필요합니다 (최초 로그인 1회).' : '로그인에 실패했어요. 잠시 후 다시 시도해 주세요.');
+    if (!r.ok) {
+      if (r.reason === 'cancelled') return; // 유저가 계정 선택 취소 — 조용히
+      setErr(
+        r.reason === 'offline' ? '네트워크 연결이 필요합니다 (최초 로그인 1회).'
+          : r.reason === 'unavailable' ? 'Google 로그인은 정식 빌드에서 지원됩니다. 개발 중에는 개발자 로그인을 이용하세요.'
+            : '로그인에 실패했어요. 잠시 후 다시 시도해 주세요.');
+    }
     // 성공 시 별도 네비 없음 — BootGate가 session 변화를 감지해 자동으로 게임으로 전환
   };
 

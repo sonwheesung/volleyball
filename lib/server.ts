@@ -72,11 +72,12 @@ async function call<T>(path: string, init?: RequestInit, timeoutMs: number = REQ
 }
 
 // ── 인증(AUTH_SYSTEM) ──
-/** 신원 → 자체 Bearer 세션. 스텁: provider+providerId. 성공 시 setServerToken은 호출부(useAuthStore)가. */
-export function login(provider: string, providerId: string, displayName?: string, device?: DeviceInfo) {
+/** 신원 → 자체 Bearer 세션. google=idToken(서버가 검증해 sub 도출) · dev=providerId(기기ID). 개인정보 최소화(이메일·이름 미전송).
+ *  성공 시 setServerToken은 호출부(useAuthStore)가. */
+export function login(provider: string, cred: { providerId?: string; idToken?: string }, device?: DeviceInfo) {
   return call<{ token: string; userId: string; provider: string; displayName: string | null }>('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ provider, providerId, displayName, device }),
+    body: JSON.stringify({ provider, providerId: cred.providerId, idToken: cred.idToken, device }),
   });
 }
 
