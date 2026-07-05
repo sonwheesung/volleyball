@@ -196,7 +196,7 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   const BIG = SW + SH;
 
   return (
-    <Modal transparent animationType="fade" visible onRequestClose={() => markTip(active.id)}>
+    <Modal transparent statusBarTranslucent animationType="fade" visible onRequestClose={() => markTip(active.id)}>
       <Pressable style={StyleSheet.absoluteFill} onPress={() => markTip(active.id)}>
         {hole ? (
           <>
