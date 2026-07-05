@@ -8,7 +8,7 @@ import { users, walletLedger, projInfo } from '../db/schema';
 import { PROJ_CODE } from './proj';
 import { allowsNegativeBalance } from './econ';
 
-export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon';
+export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon' | 'welcome';
 
 export type WalletResult =
   | { ok: true; balance: number; applied: boolean } // applied=false → 멱등 재시도(이미 처리됨, 재적용 안 함)

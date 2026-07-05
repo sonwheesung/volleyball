@@ -41,12 +41,13 @@ ok(earnAmount('achievement', 999999) === ACH_MAX_TOTAL, `achievement 상한 캡 
 ok(earnAmount('achievement', 0) === null, 'achievement 0/음수 거부');
 ok(earnAmount('purchase', 1000) === null, 'earn 화이트리스트: purchase 거부(별도 영수증 라우트)');
 ok(earnAmount('coupon', 1000) === null, 'earn 화이트리스트: coupon 거부(별도 쿠폰 라우트)');
+ok(earnAmount('welcome', 1) === 1000 && earnAmount('welcome', 99999) === 1000, 'welcome 서버 고정 1000(클라값 무시 — 멱등키가 계정당 1회)');
 // A/B 대조군: 옛(클라 신뢰) 산식이면 camp amount=1이 통과 = 무료강화
 const oldSpend = (amount: number) => amount;
 ok(oldSpend(1) === 1 && spendAmount('camp') === 900, 'A/B 대조군: 옛 클라신뢰면 amount=1로 전지훈련(=버그) vs 서버권위 900');
 
 console.log('── 5. reason 화이트리스트 ──');
-ok(isEarnReason('ad') && isEarnReason('achievement') && !isEarnReason('purchase') && !isEarnReason('camp'), 'earn = {ad, achievement}만');
+ok(isEarnReason('ad') && isEarnReason('achievement') && isEarnReason('welcome') && !isEarnReason('purchase') && !isEarnReason('camp'), 'earn = {ad, achievement, welcome}만');
 ok(isSpendReason('camp') && !isSpendReason('ad') && !isSpendReason('purchase'), 'spend = {camp}만');
 
 console.log(fail === 0 ? '\n✅ PASS _dv_walletauth (모든 순수 불변식)' : `\n❌ FAIL ${fail}건`);

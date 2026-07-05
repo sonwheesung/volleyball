@@ -1,7 +1,7 @@
 // 전지훈련 (MONETIZATION §11.2 코스형, 2026-07-02) — 오프시즌 해외 캠프. 다이아로 선수 1명을 보내
 // 5코스(공격/수비/블로킹/세터/서브) 중 하나로 관련 3스탯을 현재+2·포텐+7(최대 99). 선수당 오프시즌 1회.
 // 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지. 포텐 +7이 본체: 젊을수록 성장으로 실현되는 폭이 크다(H2).
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
@@ -39,9 +39,24 @@ export default function TrainingCamp() {
   const trainingCamp = useGameStore((s) => s.trainingCamp);
   const finishCamp = useGameStore((s) => s.finishCamp);
   const walletBusy = useGameStore((s) => s.walletBusy);
+  const claimWelcomeDiamonds = useGameStore((s) => s.claimWelcomeDiamonds);
   const [picked, setPicked] = useState<string | null>(null);
   const [course, setCourse] = useState<CampCourse | null>(null);
   const [, force] = useState(0); // 적용 후 리렌더
+
+  // 첫 전지훈련 진입 환영 선물(계정당 1회, 서버 멱등) — 신규 유저가 다이아 0이라 온보딩이 막히던 문제 해결.
+  //   applied=true(첫 지급)일 때만 팝업. 오프라인이면 다음 온라인 진입에서 재시도(서버가 진실).
+  const welcomeTried = useRef(false);
+  useEffect(() => {
+    if (welcomeTried.current) return;
+    welcomeTried.current = true;
+    void (async () => {
+      const r = await claimWelcomeDiamonds();
+      if (r.applied) {
+        showAlert('환영 선물 🎁', `환영합니다! 전지훈련에 쓸 다이아 ${(1000).toLocaleString()}💎를 드립니다.\n마음에 드는 선수를 골라 능력을 키워보세요.`);
+      }
+    })();
+  }, [claimWelcomeDiamonds]);
 
   const offseason = currentDay === 0;
   const roster: Player[] = my ? teamPlayerIds(my).map((id) => getPlayer(id)).filter((p): p is Player => !!p) : [];

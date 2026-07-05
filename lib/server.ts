@@ -20,7 +20,7 @@ export function isServerConfigured(): boolean {
   return !!SERVER_URL;
 }
 
-export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon';
+export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon' | 'welcome';
 export interface LedgerRow {
   delta: number;
   reason: string;

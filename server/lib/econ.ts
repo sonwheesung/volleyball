@@ -6,11 +6,12 @@ export const AD_REWARD = 50; // 광고 1회 (engine/diamonds AD_REWARD)
 export const CAMP_COST = 900; // 전지훈련 코스 (engine/diamonds CAMP_COURSE_COST)
 export const ACH_MAX_TOTAL = 5000; // 업적 평생합 백스톱 상한(H3 — 서버 리플레이 안 하므로 캡만)
 export const AD_DAILY_CAP = 8; // 광고 하루 상한 서버 백스톱 (engine/diamonds AD_DAILY_CAP)
+export const WELCOME_DIAMONDS = 1000; // 첫 전지훈련 진입 환영 선물(계정당 1회, 멱등키 welcome:<userId>) — 온보딩·다이아 훅
 
-export type EarnReason = 'ad' | 'achievement';
+export type EarnReason = 'ad' | 'achievement' | 'welcome';
 export type SpendReason = 'camp';
 
-const EARN_OK = new Set<string>(['ad', 'achievement']);
+const EARN_OK = new Set<string>(['ad', 'achievement', 'welcome']);
 const SPEND_OK = new Set<string>(['camp']);
 
 /** 라우트 화이트리스트 — 클라의 'purchase'/'coupon' 사칭 차단(그건 별도 검증 라우트). */
@@ -20,6 +21,7 @@ export const isSpendReason = (r: string): r is SpendReason => SPEND_OK.has(r);
 /** 적립 권위 금액 — ad는 서버 상수, achievement만 클라값이되 상한 캡. 허용 외/무효면 null. */
 export function earnAmount(reason: string, clientAmount: number): number | null {
   if (reason === 'ad') return AD_REWARD;
+  if (reason === 'welcome') return WELCOME_DIAMONDS; // 서버 고정 1000(클라값 무시) — 멱등키가 계정당 1회 보장
   if (reason === 'achievement') {
     const a = Math.floor(clientAmount);
     if (!Number.isFinite(a) || a <= 0) return null;

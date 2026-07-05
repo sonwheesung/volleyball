@@ -8,6 +8,7 @@ export const CAMP_PER_STAT = 300;             // 전지훈련 부위당 다이�
 export const AD_REWARD = 50;                   // 광고 1회 다이아
 export const AD_COOLDOWN_MS = 30 * 60 * 1000;  // 30분 쿨다운
 export const AD_DAILY_CAP = 8;                 // 하루 상한
+export const WELCOME_DIAMONDS = 1000;          // 첫 전지훈련 진입 환영 선물(계정당 1회 — 서버 econ WELCOME_DIAMONDS와 일치)
 
 export interface AdState { dayIdx: number; count: number; lastAdAt: number }
 export const FRESH_AD_STATE: AdState = { dayIdx: 0, count: 0, lastAdAt: 0 };

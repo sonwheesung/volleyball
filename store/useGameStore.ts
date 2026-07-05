@@ -57,7 +57,7 @@ import { PROTECT_COUNT } from '../engine/compensation';
 import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
 import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
-import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
+import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
 import { showRewardedForDiamonds } from '../lib/ads';
 import { earnDiamonds, spendDiamonds, getWallet } from '../lib/server';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
@@ -117,6 +117,7 @@ interface GameState {
   adState: AdState;                            // 광고 보상 쿨다운/하루상한 상태(메타 — 시드 무관)
   watchAdForDiamonds: () => Promise<{ ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' | 'offline' | 'busy' | 'error' | 'no-ad' }>;
   claimAchDiamonds: () => Promise<{ granted: number; reason?: 'offline' | 'busy' | 'none' }>; // 새로 달성한 업적 다이아 수령(서버 확정)
+  claimWelcomeDiamonds: () => Promise<{ applied: boolean }>; // 첫 전지훈련 진입 환영 선물(계정당 1회, 서버 멱등)
   trainingCamp: (playerId: string, course: CampCourse) => Promise<{ ok: boolean; reason?: string }>; // 오프시즌 전지훈련(서버 차감 후, §11.2)
   syncWallet: () => Promise<void>;             // 서버 잔액으로 캐시 리싱크(로그인/포그라운드/실패후 — §13.12 P0-3) + 아웃박스 정산
   reconcilePendingCamp: () => Promise<void>;   // 아웃박스 정산(재기동 복구)
@@ -353,6 +354,17 @@ export const useGameStore = create<GameState>()(
         if (granted > 0) track('diamond_earned', { source: 'achievement', amount: granted });
         if (offline) { void get().syncWallet(); return { granted, reason: 'offline' }; }
         return { granted };
+      },
+      // 첫 전지훈련 진입 환영 선물 — 서버가 계정당 1회 지급(멱등키 welcome:<userId>, 금액 서버 고정 1000).
+      // applied=true면 이번이 첫 지급(호출부가 팝업). false=이미 받음(조용). 다이아=서버 진실이라 서버 확정 후 캐시 반영.
+      claimWelcomeDiamonds: async () => {
+        const userId = useAuthStore.getState().session?.userId;
+        if (!userId) return { applied: false }; // 로그인 안 됨(오프라인) — 다음 온라인 진입에서 재시도
+        const r = await earnDiamonds(WELCOME_DIAMONDS, 'welcome', `welcome:${userId}`);
+        if (!r.ok) { void get().syncWallet(); return { applied: false }; }
+        set({ diamonds: r.balance }); // 서버 확정 후에만 캐시
+        if (r.applied) track('diamond_earned', { source: 'welcome', amount: WELCOME_DIAMONDS });
+        return { applied: r.applied };
       },
       trainingCamp: async (playerId, course) => {
         const s = get();
