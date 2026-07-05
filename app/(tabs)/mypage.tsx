@@ -180,6 +180,10 @@ export default function MyPage() {
         sub="문의 · 환불 기준 · 제재 · 데이터 운영"
         onPress={() => router.push('/policy')} />
 
+      <LinkCard icon="lock-closed-outline" tint={theme.muted} title="개인정보처리방침"
+        sub="수집 항목 · 목적 · 보관 · 위탁 · 이용자 권리"
+        onPress={() => router.push('/privacy')} />
+
       {/* ── 계정 · 로그아웃 (최하단) ── */}
       {session ? (
         <View style={{ marginTop: 18, gap: 8 }}>

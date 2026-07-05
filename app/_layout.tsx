@@ -127,6 +127,7 @@ export default function RootLayout() {
         <Stack.Screen name="coupon" options={{ title: '쿠폰 입력' }} />
         <Stack.Screen name="terms" options={{ title: '이용약관' }} />
         <Stack.Screen name="policy" options={{ title: '운영정책' }} />
+        <Stack.Screen name="privacy" options={{ title: '개인정보처리방침' }} />
         <Stack.Screen name="shop" options={{ title: '상점' }} />
         <Stack.Screen name="buy-diamonds" options={{ title: '다이아 구매' }} />
         <Stack.Screen name="season-recap" options={{ title: '시즌 결산' }} />
