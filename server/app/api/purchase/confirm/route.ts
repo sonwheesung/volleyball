@@ -5,7 +5,7 @@ import { NextResponse, after } from 'next/server';
 import { requireUserId } from '../../../../lib/auth';
 import { applyWallet } from '../../../../lib/wallet';
 import { rcVerifyPurchase, purchaseKey, recordPurchaseRevenue } from '../../../../lib/revenuecat';
-import { logPaymentEvent } from '../../../../lib/paymentLog';
+import { logPaymentEventAfter } from '../../../../lib/paymentLog';
 import { notifyPurchase } from '../../../../lib/notify';
 import { reportError } from '../../../../lib/observability';
 
@@ -24,7 +24,7 @@ function reasonCodeOf(reason: string): string {
 export async function POST(req: Request) {
   const userId = await requireUserId(req); // 익명 폴백 금지(진짜 Bearer sub만) — §13.17 패턴
   if (!userId) {
-    void logPaymentEvent({ source: 'confirm', stage: 'confirm.auth.rejected', ok: false, outcome: 'rejected', reasonCode: 'unauthorized' });
+    logPaymentEventAfter({ source: 'confirm', stage: 'confirm.auth.rejected', ok: false, outcome: 'rejected', reasonCode: 'unauthorized' });
     return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   }
   let ctx: { requestId?: string; platform?: string; appVersion?: string; storeTxnId?: string; productId?: string } = {};
@@ -33,27 +33,27 @@ export async function POST(req: Request) {
     const storeTxnId = String(b.storeTxnId ?? '').trim();
     const productId = String(b.productId ?? '').trim();
     ctx = { requestId: b.requestId ? String(b.requestId).slice(0, 64) : undefined, platform: b.platform ? String(b.platform).slice(0, 16) : undefined, appVersion: b.appVersion ? String(b.appVersion).slice(0, 24) : undefined, storeTxnId, productId };
-    void logPaymentEvent({ source: 'confirm', stage: 'confirm.received', ok: true, userId, storeTxnId, productId, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
+    logPaymentEventAfter({ source: 'confirm', stage: 'confirm.received', ok: true, userId, storeTxnId, productId, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
 
     if (!storeTxnId || !productId) {
-      void logPaymentEvent({ source: 'confirm', stage: 'confirm.rejected', ok: false, outcome: 'rejected', reasonCode: 'bad-request', userId, requestId: ctx.requestId });
+      logPaymentEventAfter({ source: 'confirm', stage: 'confirm.rejected', ok: false, outcome: 'rejected', reasonCode: 'bad-request', userId, requestId: ctx.requestId });
       return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     }
 
     const v = await rcVerifyPurchase(userId, storeTxnId, productId); // 서버 권위 재검증
     if (!v.ok) {
-      void logPaymentEvent({ source: 'confirm', stage: 'confirm.reverify.rejected', ok: false, outcome: 'rejected', reasonCode: reasonCodeOf(v.reason), userId, storeTxnId, productId, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion, detail: { rcReason: v.reason } });
+      logPaymentEventAfter({ source: 'confirm', stage: 'confirm.reverify.rejected', ok: false, outcome: 'rejected', reasonCode: reasonCodeOf(v.reason), userId, storeTxnId, productId, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion, detail: { rcReason: v.reason } });
       return NextResponse.json({ ok: false, reason: v.reason }, { status: v.reason === 'rc-unconfigured' ? 503 : 402 });
     }
 
     const key = purchaseKey(userId, storeTxnId);
     const r = await applyWallet(userId, v.diamonds, 'purchase', key, productId);
     if (!r.ok) {
-      void logPaymentEvent({ source: 'confirm', stage: 'confirm.grant.error', ok: false, outcome: 'error', reasonCode: r.reason, userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, requestId: ctx.requestId });
+      logPaymentEventAfter({ source: 'confirm', stage: 'confirm.grant.error', ok: false, outcome: 'error', reasonCode: r.reason, userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, requestId: ctx.requestId });
       return NextResponse.json({ ok: false, reason: r.reason }, { status: 500 });
     }
     // applied=이 폴백이 지급(웹훅보다 먼저 도착) · deduped=웹훅이 이미 지급(정상). 어느 경로가 이겼는지 감사(§F6·폴백 유효성 지표).
-    void logPaymentEvent({ source: 'confirm', stage: r.applied ? 'confirm.grant.applied' : 'confirm.grant.deduped', ok: true, outcome: r.applied ? 'applied' : 'deduped', userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, balanceAfter: r.balance, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
+    logPaymentEventAfter({ source: 'confirm', stage: r.applied ? 'confirm.grant.applied' : 'confirm.grant.deduped', ok: true, outcome: r.applied ? 'applied' : 'deduped', userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, balanceAfter: r.balance, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
     if (r.applied) {
       await recordPurchaseRevenue(null, v.diamonds); // 매출(KRW)는 웹훅이 채움 — confirm은 다이아만(이중집계 방지 위해 KRW null)
       after(() => notifyPurchase({ kind: 'purchase', productId, diamonds: v.diamonds, priceKrw: null, source: 'confirm', userId })); // 폴백이 이겼을 때만(웹훅이 먼저면 여기 deduped→알림 없음)
@@ -61,7 +61,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, applied: r.applied, balance: r.balance });
   } catch (e) {
     reportError(e, 'purchase/confirm');
-    void logPaymentEvent({ source: 'confirm', stage: 'confirm.error', ok: false, outcome: 'error', errorMessage: e instanceof Error ? e.message : String(e), userId, storeTxnId: ctx.storeTxnId, productId: ctx.productId, requestId: ctx.requestId });
+    logPaymentEventAfter({ source: 'confirm', stage: 'confirm.error', ok: false, outcome: 'error', errorMessage: e instanceof Error ? e.message : String(e), userId, storeTxnId: ctx.storeTxnId, productId: ctx.productId, requestId: ctx.requestId });
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

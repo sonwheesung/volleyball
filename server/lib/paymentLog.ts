@@ -5,6 +5,7 @@
 //   • **돈 진실 아님** — 잔액 진실은 walletLedger. 여기는 진단(상관ID·dedup·실패사유). idempotencyKey로 원장과 JOIN.
 //   • **원장 커밋 뒤 로깅** — 별도 insert라 로깅이 트랜잭션을 안 잡는다(지급 롤백 불가).
 //   • **PII/토큰/시크릿 금지(§E)** — 이메일·영수증·purchaseToken·Authorization·API키는 스크럽. 원본 웹훅 바디 덤프 금지(화이트리스트만).
+import { after } from 'next/server';
 import { db } from '../db';
 import { purchaseEvent } from '../db/schema';
 import { PROJ_CODE } from './proj';
@@ -56,7 +57,18 @@ function scrubDetail(obj: Record<string, unknown> | null | undefined): Record<st
 
 const trunc = (s?: string | null): string | null => (s == null ? null : String(s).slice(0, 500));
 
-/** 결제 이벤트 1건 기록. **절대 throw 안 함** — await 해도 안전하고, 흐름 차단이 싫으면 `void logPaymentEvent(...)`로 던져도 됨. */
+/** ★ 라우트용 — **응답 후(after)** 로깅해 서버리스(Vercel) freeze로 insert가 유실되는 걸 막는다(§13.21과 동일 함정).
+ *  `void logPaymentEvent()`는 await 안 된 채 응답이 나가면 함수가 얼어 insert가 죽는다(로컬은 살아서 통과 — 운영만 누락).
+ *  after()는 응답 뒤 waitUntil로 함수를 유지해 insert 완료 보장(응답 지연 0). 요청 컨텍스트 밖(테스트/tsx)이면 after() throw → 즉시 실행. */
+export function logPaymentEventAfter(e: PaymentEventInput): void {
+  try {
+    after(() => logPaymentEvent(e));
+  } catch {
+    void logPaymentEvent(e); // 요청 밖 — 직접 실행(테스트는 await 가능 지점에서 호출)
+  }
+}
+
+/** 결제 이벤트 1건 기록. **절대 throw 안 함**. 라우트에선 `logPaymentEventAfter`를 쓸 것(서버리스 유실 방지). */
 export async function logPaymentEvent(e: PaymentEventInput): Promise<void> {
   try {
     await db.insert(purchaseEvent).values({

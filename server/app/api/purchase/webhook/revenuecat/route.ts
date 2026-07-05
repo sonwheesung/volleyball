@@ -5,7 +5,7 @@
 import { NextResponse, after } from 'next/server';
 import { applyWallet } from '../../../../../lib/wallet';
 import { verifyWebhookAuth, decidePurchaseEvent, purchaseKey, refundKey, recordPurchaseRevenue, priceKrwOf } from '../../../../../lib/revenuecat';
-import { logPaymentEvent } from '../../../../../lib/paymentLog';
+import { logPaymentEventAfter } from '../../../../../lib/paymentLog';
 import { notifyPurchase } from '../../../../../lib/notify';
 import { reportError } from '../../../../../lib/observability';
 
@@ -29,24 +29,24 @@ function evMeta(ev: unknown): { rcEventId: string | null; eventType: string | nu
 export async function POST(req: Request) {
   // 인증 실패면 401(RC가 재시도 안 하게 — 위조 방지). fail-closed: 시크릿 미설정도 거부.
   if (!verifyWebhookAuth(req.headers.get('authorization'))) {
-    void logPaymentEvent({ source: 'webhook', stage: 'webhook.auth.rejected', ok: false, outcome: 'rejected', reasonCode: 'SIGNATURE_MISMATCH' });
+    logPaymentEventAfter({ source: 'webhook', stage: 'webhook.auth.rejected', ok: false, outcome: 'rejected', reasonCode: 'SIGNATURE_MISMATCH' });
     return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   }
   let m: ReturnType<typeof evMeta> | null = null;
   try {
     const body = (await req.json()) as { event?: unknown };
     m = evMeta(body?.event);
-    void logPaymentEvent({ source: 'webhook', stage: 'webhook.received', ok: true, ...m });
+    logPaymentEventAfter({ source: 'webhook', stage: 'webhook.received', ok: true, ...m });
 
     const d = decidePurchaseEvent(body?.event);
     if (d.action === 'ignore') {
       // 무시도 기록(샌드박스·익명유저·미지원타입·미등록상품) — "지급 왜 안 됐나" 감사. 샌드박스는 별도 stage로.
       const stage = d.reason === 'sandbox' ? 'webhook.sandbox.filtered' : 'webhook.ignored';
-      void logPaymentEvent({ source: 'webhook', stage, ok: true, outcome: 'ignored', reasonCode: d.reason, ...m });
+      logPaymentEventAfter({ source: 'webhook', stage, ok: true, outcome: 'ignored', reasonCode: d.reason, ...m });
       return NextResponse.json({ ok: true, ignored: d.reason });
     }
 
-    void logPaymentEvent({ source: 'webhook', stage: 'webhook.type.decided', ok: true, ...m, productId: d.productId, storeTxnId: d.storeTxnId, rcAppUserId: d.userId, diamondsDelta: d.action === 'grant' ? d.diamonds : -d.diamonds, price: d.priceKrw });
+    logPaymentEventAfter({ source: 'webhook', stage: 'webhook.type.decided', ok: true, ...m, productId: d.productId, storeTxnId: d.storeTxnId, rcAppUserId: d.userId, diamondsDelta: d.action === 'grant' ? d.diamonds : -d.diamonds, price: d.priceKrw });
 
     const grant = d.action === 'grant';
     const key = grant ? purchaseKey(d.userId, d.storeTxnId) : refundKey(d.userId, d.storeTxnId);
@@ -54,11 +54,11 @@ export async function POST(req: Request) {
     const r = await applyWallet(d.userId, delta, grant ? 'purchase' : 'refund', key, d.productId);
     if (!r.ok) {
       // 유저 미존재(FK)·DB 오류 등 → 500으로 RC 재시도 유도(confirm 폴백도 별도 수렴). 위조 아님.
-      void logPaymentEvent({ source: 'webhook', stage: grant ? 'webhook.grant.error' : 'webhook.refund.error', ok: false, outcome: 'error', reasonCode: r.reason, idempotencyKey: key, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: delta });
+      logPaymentEventAfter({ source: 'webhook', stage: grant ? 'webhook.grant.error' : 'webhook.refund.error', ok: false, outcome: 'error', reasonCode: r.reason, idempotencyKey: key, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: delta });
       return NextResponse.json({ ok: false, reason: r.reason }, { status: 500 });
     }
     // applied=지급/회수 실제 반영 · applied=false=멱등 dedup(웹훅 재시도/폴백 경쟁에서 짐 — 정상). 둘을 구분 로깅(§F6 경쟁 감사).
-    void logPaymentEvent({
+    logPaymentEventAfter({
       source: 'webhook',
       stage: grant ? (r.applied ? 'webhook.grant.applied' : 'webhook.grant.deduped') : (r.applied ? 'webhook.refund.applied' : 'webhook.refund.deduped'),
       ok: true, outcome: r.applied ? 'applied' : 'deduped', idempotencyKey: key,
@@ -71,7 +71,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: true, applied: r.applied, balance: r.balance });
   } catch (e) {
     reportError(e, 'purchase/webhook/revenuecat');
-    void logPaymentEvent({ source: 'webhook', stage: 'webhook.error', ok: false, outcome: 'error', errorMessage: e instanceof Error ? e.message : String(e), ...(m ?? {}) });
+    logPaymentEventAfter({ source: 'webhook', stage: 'webhook.error', ok: false, outcome: 'error', errorMessage: e instanceof Error ? e.message : String(e), ...(m ?? {}) });
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }
