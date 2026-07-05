@@ -4,8 +4,8 @@
 // 원본 스탯은 정수(XP 바가 1 채우면 +1) → 선수 상세 StatBar 표시값과 정확히 일치.
 import { evolveOnDay, currentRosters } from './league';
 
-export interface StatDelta { label: string; delta: number } // +면 성장(초록) / -면 노쇠(빨강)
-export interface PlayerGrowth { id: string; name: string; deltas: StatDelta[] }
+export interface StatDelta { label: string; delta: number; from: number; to: number } // +면 성장(초록) / -면 노쇠(빨강). from→to 이전·이후 값
+export interface PlayerGrowth { id: string; name: string; position: string; deltas: StatDelta[] }
 
 // 선수 상세(app/player/[id].tsx StatBar)와 동일 라벨·순서(신체→공통→멘탈→기술)
 const STAT_ROWS: [string, string][] = [
@@ -29,10 +29,12 @@ export function growthReport(teamId: string, fromDay: number, toDay: number): Pl
     const a = after as unknown as Record<string, number>;
     const deltas: StatDelta[] = [];
     for (const [k, label] of STAT_ROWS) {
-      const d = (a[k] ?? 0) - (b[k] ?? 0);
-      if (d !== 0) deltas.push({ label, delta: d });
+      const from = a[k] != null && b[k] != null ? b[k] : 0;
+      const to = a[k] ?? 0;
+      const d = to - from;
+      if (d !== 0) deltas.push({ label, delta: d, from, to });
     }
-    if (deltas.length) out.push({ id, name: after.name, deltas });
+    if (deltas.length) out.push({ id, name: after.name, position: after.position, deltas });
   }
   return out;
 }
