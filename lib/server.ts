@@ -111,6 +111,16 @@ export function earnDiamonds(amount: number, reason: WalletReason, idempotencyKe
   });
 }
 
+// ── 결제 폴백(§13.18) ──
+/** 클라 구매 resolve 후 폴백 — 스토어 거래id로 서버가 RC REST 재검증 → 같은 멱등키 지급. 웹훅 지연·유실 메꿈.
+ *  성공/이미지급(applied:false) 모두 ok. 실패해도 웹훅이 결국 지급하므로 호출부는 로그만 남기고 syncWallet로 수렴. */
+export function confirmPurchase(storeTxnId: string, productId: string) {
+  return call<{ applied: boolean; balance: number }>('/api/purchase/confirm', {
+    method: 'POST',
+    body: JSON.stringify({ storeTxnId, productId }),
+  });
+}
+
 // ── 쿠폰 ──
 export type CouponRedeemResult =
   | { ok: true; reward: number; balance: number }

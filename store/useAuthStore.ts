@@ -5,6 +5,7 @@ import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { login as serverLogin, setServerToken } from '../lib/server';
+import { identifyUser, logoutUser } from '../lib/iap';
 import { signInGoogle, signOutGoogle } from '../lib/googleAuth';
 import { getDeviceInfo } from '../lib/device';
 import { track } from '../lib/analytics';
@@ -62,12 +63,14 @@ export const useAuthStore = create<AuthState>()(
         const session: Session = { userId: r.userId, provider: r.provider, displayName: r.displayName, token: r.token };
         setServerToken(session.token); // 이후 서버콜에 Bearer
         set({ session });
+        void identifyUser(session.userId); // RC app_user_id=우리 userId 고정(§13.18 최대 함정) — 비동기, 결제 전 완료
         track('login', { provider });
         return { ok: true };
       },
       signOut: () => {
         track('logout');
         void signOutGoogle(); // 구글 세션도 정리(다음 로그인 계정 재선택)
+        void logoutUser();     // RC도 익명으로(다음 로그인 계정 재귀속)
         setServerToken(null);
         set({ session: null });
       },

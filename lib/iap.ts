@@ -13,6 +13,7 @@
 import { Alert } from 'react-native';
 import { setRemoveAds } from './ads';
 import { logEvent, logError } from './log';
+import { confirmPurchase } from './server';
 import { DIAMOND_TIERS } from '../data/diamondTiers';
 
 export type Sku = 'remove_ads' | 'dlc_worldcup';
@@ -22,8 +23,9 @@ export type PurchaseResult =
 
 export interface Entitlements { removeAds: boolean; worldCup: boolean }
 
-// P2: RevenueCat 대시보드에서 발급한 공개 API 키(플랫폼별)로 교체. 비면 configure 생략 → 전부 미소유(graceful).
-const REVENUECAT_API_KEY = '';
+// RevenueCat 공개 SDK 키(publishable — 번들 인라인 OK, 구글 로그인 키와 동일 패턴). `.env`의 EXPO_PUBLIC_REVENUECAT_API_KEY로
+// 주입 → EAS 재빌드해야 반영(EXPO_PUBLIC_*은 빌드타임 인라인). 비면 configure 생략 → 결제·엔타이틀먼트 전부 미소유(graceful).
+const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ?? '';
 
 const SKU_LABEL: Record<Sku, string> = { remove_ads: '광고 제거', dlc_worldcup: '월드컵 시즌 구매' };
 // RevenueCat 대시보드 엔타이틀먼트 식별자(설정값과 일치시킬 것)
@@ -67,6 +69,34 @@ export async function initIap(): Promise<void> {
     await loadEntitlements();
   } catch (e) {
     logError('iap.initIap', e);
+  }
+}
+
+/** 로그인 직후 1회 — RC app_user_id를 우리 userId로 고정(§13.18 "최대 함정": 안 하면 웹훅 app_user_id가
+ *  유저에 안 붙어 지급 불가). dev/미설치/미설정이면 no-op. 실패해도 graceful(구매 시 confirm 폴백이 userId로 지급). */
+export async function identifyUser(userId: string): Promise<void> {
+  if (__DEV__ || !userId) return;
+  try {
+    const Purchases = rc();
+    if (!Purchases || !REVENUECAT_API_KEY) return;
+    if (!configured) { Purchases.configure({ apiKey: REVENUECAT_API_KEY }); configured = true; }
+    await Purchases.logIn(userId);
+    await loadEntitlements();               // 계정 전환 후 소유 엔타이틀먼트 재로드
+  } catch (e) {
+    logError('iap.identifyUser', e);
+  }
+}
+
+/** 로그아웃 시 — RC 익명 사용자로 되돌림(다음 로그인 계정 재귀속). dev/미설치면 no-op. */
+export async function logoutUser(): Promise<void> {
+  if (__DEV__) return;
+  try {
+    const Purchases = rc();
+    if (!Purchases || !REVENUECAT_API_KEY || !configured) return;
+    await Purchases.logOut();
+    apply({ removeAds: false, worldCup: false }); // 익명 = 미소유로 초기화
+  } catch (e) {
+    logError('iap.logoutUser', e);
   }
 }
 
@@ -157,12 +187,21 @@ export async function purchaseDiamonds(productId: string): Promise<DiamondResult
   }
   try {
     const Purchases = rc();
-    if (!Purchases) return { ok: false, reason: 'unavailable', message: 'IAP 모듈 없음' };
+    if (!Purchases || !REVENUECAT_API_KEY) return { ok: false, reason: 'unavailable', message: 'IAP 미설정' }; // 키 없으면 "출시 빌드에서 연결" 안내
     const offerings = await Purchases.getOfferings();
     const pkgs: any[] = offerings?.current?.availablePackages ?? [];
     const pkg = pkgs.find((p) => p?.product?.identifier === productId || p?.identifier === productId);
     if (!pkg) return { ok: false, reason: 'unavailable', message: '상품을 찾을 수 없음' };
-    await Purchases.purchasePackage(pkg); // RC 웹훅이 서버 원장에 지급 — 잔액은 호출부 syncWallet로 반영
+    const res: any = await Purchases.purchasePackage(pkg); // 결제 완료(취소면 throw). 지급은 서버 원장(웹훅+confirm 폴백)
+    // 폴백(§13.18 필수): 스토어 거래id로 서버 재검증·지급 — 웹훅 지연·유실 시 "돈 내고 0개" 방지.
+    //   웹훅과 동일 멱등키(purchase:<userId>:<storeTxnId>)라 먼저 온 쪽 지급·둘째 applied:false로 dedupe.
+    const storeTxnId = String(res?.transaction?.transactionIdentifier ?? res?.transaction?.storeTransactionId ?? '');
+    if (storeTxnId) {
+      const c = await confirmPurchase(storeTxnId, productId);
+      if (!c.ok) logError('iap.purchaseDiamonds.confirm', c.reason); // 폴백 실패해도 웹훅이 메꿈 → syncWallet로 수렴(치명 아님)
+    } else {
+      logError('iap.purchaseDiamonds', 'storeTxnId 없음 — 웹훅 단독 의존'); // 거래id 미추출: 웹훅만으로 지급(폴백 스킵)
+    }
     logEvent('iap:diamonds:ok', { productId });
     return { ok: true, productId, amount: tier.amount };
   } catch (e: any) {
