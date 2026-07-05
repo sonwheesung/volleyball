@@ -9,3 +9,7 @@
 //     Fast Refresh가 없어 변경이 폰에 안 붙는다(번들 캐시 정체). 도구를 다시 쓰려면 true로.
 const SHOW_DEV_TOOLS = false; // ← 개발 도구 노출 토글(운영 확인 중엔 false)
 export const DEV_TOOLS = __DEV__ && SHOW_DEV_TOOLS;
+
+// 기능 노출 플래그 — 아직 안 만든 기능을 상점/메뉴에서 숨긴다(팔지 않는다).
+//   월드컵 DLC(WORLDCUP_SYSTEM)는 설계만 있고 미구현(P0~P1 계획) → 구현 완료 시 true로.
+export const WORLDCUP_ENABLED = false;

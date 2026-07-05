@@ -1,8 +1,8 @@
 // 경량 로거 (MONETIZATION_SYSTEM) — 결제·광고 등 이벤트/오류를 한 곳에서 일관 기록.
 //
 // ~~★ "진실 로그"는 서버측에: 결제 = RevenueCat 대시보드, 광고 = AdMob 대시보드. 자체 로그백엔드 없음(local-first).~~
-//   → **정정(2026-07-01, 온라인 전환)**: RevenueCat 폐기·오프라인 기둥 폐기. 결제 진실=우리 Vercel DB(직접 검증),
-//   진단 로그=**기기 롤링 버퍼(`lib/deviceLog.ts`, 최근 10시즌)** + 중요 이벤트 서버 적재(BACKEND_SYSTEM §7·§13.6).
+//   → **정정(2026-07-01, 온라인 전환 / RC는 2026-07-03 재채택)**: 오프라인 기둥 폐기. 결제 검증·엔타이틀먼트=RevenueCat,
+//   **다이아 잔액 진실=우리 Vercel DB(원장)**. 진단 로그=**기기 롤링 버퍼(`lib/deviceLog.ts`, 최근 10시즌)** + 중요 이벤트 서버 적재(BACKEND_SYSTEM §7·§13.6).
 //   여기 `logEvent`/`logError`는 개발 콘솔용 저수준 훅으로 유지 — 진단 버퍼/서버 전송은 deviceLog·server가 담당.
 
 // 외부 싱크(진단 버퍼 등) — 순환참조 회피용. log은 store/deviceLog를 import 하지 않고, 앱 시작 시

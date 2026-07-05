@@ -14,7 +14,7 @@ import { useAuthStore } from '../../store/useAuthStore';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd, unclaimedReward } from '../../engine/diamonds';
 import { evalAchievements } from '../../engine/achievements';
 import { achTotals } from '../../data/careerTotals';
-import { DEV_TOOLS } from '../../data/flags';
+import { DEV_TOOLS, WORLDCUP_ENABLED } from '../../data/flags';
 import { logError } from '../../lib/log';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -143,7 +143,7 @@ export default function MyPage() {
         onPress={() => router.push('/announcements')} />
 
       <LinkCard icon="bag-handle-outline" tint={theme.sky} title="상점"
-        sub="다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원"
+        sub={WORLDCUP_ENABLED ? '다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원' : '다이아 구매 · 광고 제거 · 구매 복원'}
         onPress={() => router.push('/shop')} />
 
       <SpotlightTarget id="history-top">

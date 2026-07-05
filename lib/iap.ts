@@ -1,15 +1,14 @@
 // IAP 추상화 (MONETIZATION_SYSTEM) — 결제·복원·엔타이틀먼트의 유일한 연결점.
 //
-// ~~검증·저장·로그 = RevenueCat(서버측). 앱은 SDK만 호출 → 자체 결제 서버/DB/로그 불필요(Supabase 불요).~~
-//   → **정정(2026-07-01, 온라인 전환)**: RevenueCat 폐기. 결제 검증·저장·로그 = **우리 Vercel 서버가 직접**
-//   (구글 Play/애플 App Store Server API 직접 검증 + consume/환불 웹훅, BACKEND_SYSTEM §5·§13.4 H1). 즉 결제 흐름은
-//   **client가 스토어 결제 → 영수증/토큰을 `lib/server.ts`로 전송 → 서버가 검증·지급·consume**로 재작성 예정(#43, PG 연결 후).
-//   dev(__DEV__): 실제 청구 없이 **시뮬 알림**으로 흐름 확인(현행 유지). prod: 네이티브 결제(react-native-iap 등, 지연 require)
-//   + 서버 검증. 활성화(P2): 스토어 상품 등록 + EAS 빌드 + 서버 결제 라우트 연결.
+// **결제 게이트웨이 = RevenueCat**(정정 2026-07-03, BACKEND_SYSTEM §13.18 — 사용자 결정으로 RC 재채택).
+//   ~~2026-07-01: RC 폐기 → 우리 서버가 스토어 API로 직접 검증~~ → **되돌림**: RC를 영수증검증·환불 웹훅·
+//   엔타이틀먼트(광고제거·DLC) 게이트웨이로 쓴다. 단 **다이아 잔액 진실은 계속 우리 원장**(RC virtual currency 금지) —
+//   다이아 소모품 결제는 RC 검증 후 서버 `wallet/earn`으로 지급(#43). 엔타이틀먼트(remove_ads·worldcup)는 RC가 직접 소유.
+//   dev(__DEV__): 실제 청구 없이 **시뮬 알림**으로 흐름 확인. prod: RevenueCat SDK(`react-native-purchases`, 지연 require).
+//   활성화: RC 대시보드 상품/엔타이틀먼트 + `REVENUECAT_API_KEY` + EAS 빌드(네이티브 모듈). 서버 RC 웹훅은 이미 구현.
 //
 // 원칙: **모든 함수는 throw하지 않고 결과를 반환**(예외는 전부 잡아 typed reason으로) → UI가 안전하게 분기·안내.
 //   엔타이틀먼트(광고제거·DLC)는 표시/가용성만 게이트(엔진 격리, MONETIZATION §2.4). 비소모품은 스토어 복원 + 서버 엔타이틀먼트.
-//   ⚠ 현재 구현은 아직 RevenueCat 잔재(아래) — #43에서 서버 직접검증으로 교체. 지금은 dev 스텁으로 흐름만 동작.
 
 import { Alert } from 'react-native';
 import { setRemoveAds } from './ads';

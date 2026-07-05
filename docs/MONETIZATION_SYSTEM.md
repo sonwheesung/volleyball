@@ -15,7 +15,7 @@
 | 광고: 정적 메뉴 배너·앱오픈(선택) | 📋 설계 | 멈춘 화면 하단만. 경기보드·진행 중 금지. 추후 |
 | 광고: 자동진행·관전 가로채기 | 🚫 **제외** | 리뷰 기각 — 관전형·오프라인 위반(§9) |
 | 상점(마이페이지): **광고 제거 · 월드컵 시즌 구매 + 구매 복원** | ✅ UI+추상화 / 📋 SDK | `mypage.tsx` → `lib/iap` purchase/restore. dev 시뮬 알림·운영 RevenueCat. EAS 후 SDK 설치만 |
-| DLC 월드컵(`dlc_worldcup`) | 📋 설계 | WORLDCUP_SYSTEM 별도. 같은 IAP 인프라(`lib/iap`) |
+| DLC 월드컵(`dlc_worldcup`) | 📋 설계 · **상점 숨김** | WORLDCUP_SYSTEM 별도(미구현). 같은 IAP 인프라(`lib/iap`). **`data/flags.WORLDCUP_ENABLED=false`로 상점 카드·마이페이지 부제에서 숨김**(2026-07-05) — 기능 구현 완료 시 true로 노출 |
 | 엔타이틀먼트(표시 전용·엔진 격리) | ✅ 추상화 / 📋 SDK | `lib/iap` getEntitlements·setRemoveAds. RevenueCat SDK 로컬 캐시가 오프라인 처리. 엔진 직참조 금지 |
 | 검증: RevenueCat 하이브리드 | ✅ 추상화 / 📋 SDK | `lib/iap`(initIap·purchase·restore·loadEntitlements) 지연 require·**throw 없음·graceful**. 진행경로 불간섭 |
 | **예외처리·로깅** | ✅ | 모든 IAP/광고 함수 throw 없이 typed 결과·`lib/log`. 결제 로그=RevenueCat·광고=AdMob 대시보드. **자체 로그 백엔드 불요** |

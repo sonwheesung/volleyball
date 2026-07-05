@@ -1,5 +1,7 @@
-// 상점 — IAP 전용 화면(2026-07-01, 마이페이지 상점 섹션 분리). 다이아 구매·광고 제거·월드컵 DLC·구매 복원.
-//   dev=시뮬 알림, 운영=스토어 결제→우리 서버 직접 검증(RevenueCat 폐기, BACKEND §5). 정본 MONETIZATION_SYSTEM §4.
+// 상점 — IAP 전용 화면(2026-07-01, 마이페이지 상점 섹션 분리). 다이아 구매·광고 제거·(월드컵 DLC)·구매 복원.
+//   dev=시뮬 알림, 운영=스토어 결제→**RevenueCat** 게이트웨이(영수증검증·환불웹훅·엔타이틀먼트). 다이아 잔액 진실은
+//   우리 원장(RC virtual currency 미사용). 정본 MONETIZATION_SYSTEM §4 · BACKEND §13.18(2026-07-03 RC 재채택).
+//   ※ 월드컵 DLC(WORLDCUP_SYSTEM)는 미구현 → `WORLDCUP_ENABLED`로 카드 숨김(구현 완료 시 노출).
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { type ComponentProps } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
@@ -7,6 +9,7 @@ import { showAlert } from '../components/AppDialog';
 import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { purchase, restorePurchases, skuLabel, type Sku } from '../lib/iap';
+import { WORLDCUP_ENABLED } from '../data/flags';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -30,7 +33,7 @@ function ShopCard({ icon, tint, title, sub, onPress }: { icon: IoniconName; tint
 export default function Shop() {
   const diamonds = useGameStore((s) => s.diamonds);
 
-  // 상점 결제 — IAP 추상화(lib/iap). dev는 시뮬 알림, 운영은 스토어 결제→우리 서버 직접 검증(RevenueCat 폐기). throw 없이 결과 반환.
+  // 상점 결제 — IAP 추상화(lib/iap). dev는 시뮬 알림, 운영은 스토어 결제→RevenueCat 검증(재채택 2026-07-03, BACKEND §13.18). throw 없이 결과 반환.
   const buy = async (sku: Sku) => {
     const r = await purchase(sku);
     if (r.ok) showAlert('구매 완료', `${skuLabel(sku)}이(가) 적용되었습니다. 감사합니다!`);
@@ -68,9 +71,11 @@ export default function Shop() {
       <ShopCard icon="remove-circle-outline" tint={theme.rose} title="광고 제거"
         sub="게임 내 모든 광고를 없앱니다"
         onPress={() => buy('remove_ads')} />
-      <ShopCard icon="globe-outline" tint={theme.sky} title="월드컵 시즌 구매"
-        sub="DLC · 4년마다 국가대표 차출(월드컵)"
-        onPress={() => buy('dlc_worldcup')} />
+      {WORLDCUP_ENABLED ? (
+        <ShopCard icon="globe-outline" tint={theme.sky} title="월드컵 시즌 구매"
+          sub="DLC · 4년마다 국가대표 차출(월드컵)"
+          onPress={() => buy('dlc_worldcup')} />
+      ) : null}
 
       <Pressable onPress={restore} style={{ alignItems: 'center', paddingVertical: 12 }}>
         <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>구매 복원</Text>
