@@ -141,11 +141,12 @@ export default function TrainingCamp() {
       </View>
       <Muted style={{ fontSize: 12.5, marginBottom: 6 }}>코스를 선택하세요 — 관련 3개 능력치가 현재 +{CAMP_CUR_GAIN} · 포텐 +{CAMP_POT_GAIN}</Muted>
       <ScrollView style={{ flex: 1 }}>
-        {COURSE_KEYS.map((key) => {
+        {/* 포지션에 맞는 코스만 노출(2026-07-05 사용자 결정) — 세터에게 공격훈련 등 결이 다른 코스는 숨긴다.
+            모든 포지션이 ≥1개 적합 코스 보유(engine/diamonds forPos): S=세터·서브 / L=수비 / OH·OP·MB=다수. */}
+        {COURSE_KEYS.filter((key) => CAMP_COURSES[key].forPos.includes(player.position)).map((key) => {
           const c = CAMP_COURSES[key];
           const on = course === key;
           const disabled = !courseUpgradable(player, key); // 3스탯 전부 현재·포텐 99
-          const mismatch = !c.forPos.includes(player.position); // 포지션-코스 미스매치 경고(차단 아님 — 유저 자유)
           return (
             <Pressable key={key} disabled={disabled} onPress={() => setCourse(key)}
               style={({ pressed }) => [styles.crow, disabled && { opacity: 0.4 }, on && styles.crowOn, pressed && { opacity: 0.75 }]}>
@@ -167,9 +168,6 @@ export default function TrainingCamp() {
                   );
                 })}
               </View>
-              {mismatch ? (
-                <Text style={styles.mismatch}>⚠ {player.position} 포지션과 결이 다른 코스입니다 — 보낼 수는 있어요</Text>
-              ) : null}
             </Pressable>
           );
         })}
