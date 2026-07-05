@@ -98,7 +98,7 @@ function withBounce(wp: WP[], W: number, H: number): WP[] {
 }
 
 /** 한 랠리의 공 이동 경로 — 스위칭(전문 포지션) 기반. prevLast: 직전 낙구점(공 순간이동 방지) */
-export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[]): WP[] {
+export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[], coverSink?: { atk: Atk; atkIdx: number; front: number[]; cover: number[] }[]): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
   const rotOf = (s: Side) => (s === 'home' ? r.homeRot : r.awayRot);
@@ -445,18 +445,23 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       : { x: sw[att].pos[atkIdx].x, y: hitY };
     const ahx = hit.x;
 
-    // 속공 페이크(미끼) 런은 넣지 않는다 — 톱뷰 2D에선 토스 중 세터 쪽 질주가 "토서 방해"로만
-    // 읽힌다(사용자 보고 3회). 비커버 전위(decoys)는 네트 앞 자기 자리를 지키는 걸로 위협을 표현.
-    const decoys = attFront.filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch && rng.next() < 0.6);
-    // 공격 커버: 반원(가까운 2 좌우 측면 + 1 깊은 중앙), 좌→우 슬롯 배정(동선 교차 방지)
-    // 첫 터치(리시브/디그)한 선수는 제외 — 패스 직후 한 박자 머물러야지 즉시 커버로 뛰면 어색하다
-    // 커버 풀이 비면(백어택 시 전위가 전부 미끼로 빠진 경우) 미끼라도 1명은 받친다 — 무방비 금지.
-    //   후위 공격의 블록 리바운드는 네트 앞에 떨어지므로 전위 선수가 커버로 들어오는 게 정석.
-    let coverPool = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch && !decoys.includes(i));
+    // 커버 안무 v2(BOARD_RULES 룰 62): 토스 순간 "누가 칠지" 위장이 배구 핵심 — 이번 랠리 공격 옵션은
+    //  커버로 안 빠지고 위협(자리 유지). 커버는 공격 못하는 선수(리베로·비옵션) 몫. approach 질주는 안 넣는다
+    //  (룰 13) — 위협은 자리 유지로, 커버 이동은 비옵션만이라 어느 전위가 칠지 안 드러난다.
+    //  rng.next()는 스트림 보존(구 decoys 소비분)을 위해 유지 — 소비만 하고 값은 안 쓴다.
+    attFront.forEach((i) => { if (i !== atkIdx && i !== tosserIdx && i !== firstTouch) rng.next(); });
+    const options: Set<number> =
+      atk === 'back' ? new Set([atkIdx])                 // 백어택: 유일 히터=후위 → 전위는 네트 앞 커버로 collapse
+      : atk === 'quick' ? new Set([atkIdx])              // 속공: 이미 MB 확정·초고속 → 위장 무관, 기존처럼 커버
+      : new Set(attFront);                               // open/tempo: 전위 히터 전원 옵션(위장) → 커버 금지
+    // 커버 = 옵션·세터·퍼스트터치 제외. open/tempo면 후위 비공격+리베로, 백어택이면 전위가 네트 앞.
+    let coverPool = [0, 1, 2, 3, 4, 5].filter((i) => !options.has(i) && i !== tosserIdx && i !== firstTouch);
+    // 안전망: 풀이 비면(옵션·세터·퍼스트터치가 다 먹음) 옵션 아닌 최소 1명이라도 — 무방비 금지.
     if (coverPool.length === 0) coverPool = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch);
     const coverCand = coverPool
       .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
       .sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
+    coverSink?.push({ atk, atkIdx, front: attFront, cover: coverCand }); // 측정(룰 62 — 커버 옵션 제외)
     const cSpots = coverSpots(att, ahx, coverCand.length, W, H, atk === 'back');
     const coverMovers: Mover[] = coverCand.length === 3
       ? [
