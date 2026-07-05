@@ -17,7 +17,11 @@
       "backgroundColor": "#0B1018",
       "adaptiveIcon": {
         "backgroundColor": "#0f172a"
-      }
+      },
+      "permissions": [
+        "android.permission.RECORD_AUDIO",
+        "android.permission.MODIFY_AUDIO_SETTINGS"
+      ]
     },
     "web": {
       "bundler": "metro",
@@ -30,6 +34,13 @@
     ],
     "experiments": {
       "typedRoutes": false
-    }
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "09515027-a8b3-4ace-902b-ee759e446c63"
+      }
+    },
+    "owner": "shs00925"
   }
 }
