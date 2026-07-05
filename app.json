@@ -8,9 +8,12 @@
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0B1018",
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.son0925.volleyball"
     },
     "android": {
+      "package": "com.son0925.volleyball",
+      "versionCode": 1,
       "backgroundColor": "#0B1018",
       "adaptiveIcon": {
         "backgroundColor": "#0f172a"
