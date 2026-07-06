@@ -112,7 +112,7 @@ npx tsx tools/_gt_facontract.ts            # 재계약·FA 영입 시나리오 1
 npx tsx tools/_gt_bench.ts                  # 주전·벤치 시나리오 9케이스(라인업·마지막리베로·7인가드·건의게이트·suggestStart 최약주전 EC-LU-02, exit 0/1)
 npx tsx tools/_dv_bench2.ts                 # 독립검증 — EC-LU-02 옛버그(최강벤치) 재주입 A/B 88/88 검출·사유 우선순위 (독립 세션 산출)
 # (_dv_bench.ts = 라인업·게이트·pickRest 독립검증 13체크, 무거움 — on-demand)
-npx tsx tools/_dv_drift_posrate.ts 600      # 포지션 세트당 생산 vs box baseline 드리프트(STATS_PROTOCOL §3). baseline 2026-06-26: OP톱 4.3(공격집중 ATK_FOCUS 도입 후·MATCH 4.x)·MB블록 0.98·세터 12·리베로 4.7. 해석 분해 _dv_op_interp(on-demand)
+npx tsx tools/_dv_drift_posrate.ts 600      # 포지션 세트당 생산 vs box baseline 드리프트(STATS_PROTOCOL §3). baseline: OP톱 4.5(ENGINE_VERSION 4·2026-07-06 서브에이스 공식화 지분 +0.12)·MB블록 0.98·세터 12·리베로 4.7. 해석 분해 _dv_op_interp(on-demand)
 npx tsx tools/_dv_drift2_agility.ts         # 노쇠 그룹 멤버십 가드(문서 enum ↔ engine DECAY_STATS) — agility 노쇠 실측 + A/B 대조군(반응·위치 Δ0). EDGE_CASES §3.7, exit 0/1
 npx tsx tools/_dv_fa_relations.ts           # FA 점수→확률+관계(FA §2.7) — relT ±·우승파강행/의리파기피·acceptProb S곡선·SIT_OUT·결정론. exit 0/1
 npx tsx tools/_dv_relations.ts              # 인간관계망 모델(RELATIONSHIP_SYSTEM §8 Phase 1a) — affinity 결정론·대칭·innate분포·포지션라이벌·bond단조·외인0. exit 0/1

@@ -58,7 +58,8 @@ function teamOracle(sim: SimResult): { kills: number; aces: number; stuffs: numb
   let kills = 0, aces = 0, stuffs = 0;
   for (const p of sim.points) {
     if (p.how === 'kill' || p.how === 'tip' || p.how === 'blockout' || p.how === 'cap') kills++;
-    else if (p.how === 'ace') aces++;
+    // box.srvAce = FIVB 공식 inclusive(노터치 direct how='ace' + 리시브범실 indirect how='recvErr') — 둘 다 서버 에이스 기장(2026-07-06)
+    else if (p.how === 'ace' || p.how === 'recvErr') aces++;
     else if (p.how === 'stuff') stuffs++;
   }
   return { kills, aces, stuffs };

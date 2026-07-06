@@ -90,6 +90,8 @@ marketValue = BASE × abilityMul × serviceFactor(age) × POSITION_MUL × foreig
 
 > **KOVO 여자배구 분포 맞춤(2026-06 측정·재확인)**: 득점유형 비율을 엔진 실측에 맞춤
 > (공격킬 57.9% / 스터프 9.0% / 에이스 5.7% / 상대범실 27.4%, N=2,571경기·44.4만 랠리 — `tools/simStatRecord.ts`).
+> ⚠ **분포 '에이스' = 노터치 direct(`how='ace'`)만** — 리시브범실 실점은 여기선 '상대범실'로 집계(내부 유형분류). **개인 기록**(box.srvAce·서브왕·통산)은
+> 2026-07-06부터 FIVB 공식 inclusive(direct + 리시브범실 indirect, MATCH_SYSTEM L49) — **분포 에이스 ≠ 개인기록 에이스**. `_dv_drift_kovo`는 how='ace'로 분포 보존.
 > 공격 점유 `ATTACK = {OP 1.38, OH 0.98, MB 0.42, S 0.08}` + 집중도 `ATK_FOCUS=2.0`
 > (좋은 공격수에게 세트 몰림 → 1옵션 에이스 부각). 한 시즌 측정: OP(아포짓) 득점 ~29%·톱 ~5.3점/세트(~21/경기),
 > OH 좌우 ~47%, MB(센터) ~21%·블록 0.5/세트, 세터 ~12 assist/세트, 리베로 ~4.7 dig/세트 — 실제 여자배구 수렴.
@@ -106,7 +108,7 @@ marketValue = BASE × abilityMul × serviceFactor(age) × POSITION_MUL × foreig
 > ✅ **밸런스 적용(2026-06-26, 사용자 결정 A)**: ~~엔진의 OP 에이스 집중(~13/경기·~20%)이 KOVO(~25~30%)보다 약함~~ →
 > **엔진 공격 집중 도입**(`rally.ts ATK_FOCUS=3.0`·`ATTACK_SHARE.OP 1.0→2.0`, MATCH_SYSTEM 4.x). **OP 톱 3.26→4.31/세트**
 > (~16.9/경기·팀 자력득점 ~27%), 리그 최고 OP 4.78 — KOVO 4.5~6 진입. KOVO 23지표·parity(std 2.60)·결정론 전부 보존.
-> 가드 baseline OP 4.3. (구 5.3은 legacy 오버레이 과장값으로 무효 — 신 4.31은 엔진 실스윙.)
+> 가드 baseline OP 4.3 → **4.5(ENGINE_VERSION 4·2026-07-06)**: 서브 에이스 개인기장 공식화로 OP 톱 득점(srvAce 포함)에 indirect ace 지분 +0.12/세트(A/B 동시드). (구 5.3은 legacy 오버레이 과장값으로 무효 — 4.31은 엔진 실스윙, 4.5는 공식 에이스 반영.)
 > 교훈: 통계 경로 변경(단일화) 시 **팀합 분포뿐 아니라 §1.1 포지션 절대수치 전수를 box로 재측정**해야 한다.
 >
 > **스탯→생산 기울기 검증(252판 측정)**: 능력치 3분위로 분리해 생산이 따라 오르는지 확인.

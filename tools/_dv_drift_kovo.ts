@@ -9,8 +9,11 @@
 // → STATS_PROTOCOL §3: 측정 경로/엔진 로직이 바뀌면 기존 통계는 재측정 대상.
 //   이 도구는 box 경로의 득점유형 분포를 재측정해 문서값과 대조(드리프트 검출).
 //
-// box 득점유형 귀속: 한 점은 box.atkKill↑면 킬 · box.blockPt↑면 스터프 · box.srvAce↑면 에이스
+// box 득점유형 귀속: 한 점은 box.atkKill↑면 킬 · box.blockPt↑면 스터프 · how='ace'면 에이스
 //   · 셋 다 아니면 상대범실(무귀속). 합계 = 총 득점. → 분포 산출.
+// ⚠ 에이스는 box.srvAce가 아니라 **종결유형 how='ace'(노터치 direct)**로 센다(2026-07-06 이원화):
+//   box.srvAce는 이제 FIVB 공식 inclusive(direct + 리시브범실 indirect)라 개인 기록용. KOVO '득점유형' 분포에선
+//   리시브범실 실점을 '상대범실'로 집계(내부 유형분류=stats/how) — 분포 튜닝 기준을 보존하려 how='ace'만 에이스로.
 //
 // A/B 자가검증(허위 오라클 차단):
 //   (대조) box 유형 합 == 총 득점(home+away points) 이어야(모든 점이 정확히 한 유형). 안 맞으면 도구 결함.
@@ -44,9 +47,10 @@ while (m < N) {
   for (const sc of sim.setScores) pts += sc.home + sc.away;
   totalPts += pts;
   rallyCount += sim.points.length;
-  // box 라인 합산으로 유형별 카운트
+  // box 라인 합산(킬·스터프) + 종결유형(에이스=how='ace' direct만) — box.srvAce 대신(위 이원화 주석)
   let k = 0, st = 0, ac = 0;
-  for (const [, l] of box) { k += l.atkKill; st += l.blockPt; ac += l.srvAce; }
+  for (const [, l] of box) { k += l.atkKill; st += l.blockPt; }
+  for (const p of sim.points) if (p.how === 'ace') ac++;
   kill += k; stuff += st; ace += ac;
   oppErr += pts - k - st - ac;
   m++;

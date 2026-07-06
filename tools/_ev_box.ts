@@ -64,7 +64,7 @@ allOk = chk('공격 범실  atkErr == stats.attackErrs', box.err, acc.attackErrs
 allOk = chk('차단당함  atkBlocked == stats.stuffs', box.blk, acc.stuffs) && allOk;
 allOk = chk('블록 득점  blockPt == stats.stuffs', box.blkPt, acc.stuffs) && allOk;
 allOk = chk('서브 시도  srvAtt == stats.serves', box.srv, acc.serves) && allOk;
-allOk = chk('서브 에이스 srvAce == stats.aces', box.ace, acc.aces) && allOk;
+allOk = chk('서브 에이스 srvAce == aces+recvErrs(공식 inclusive: 노터치 direct + 리시브범실 indirect)', box.ace, acc.aces + acc.recvErrs) && allOk;
 allOk = chk('서브 범실  srvErr == stats.serveErrs', box.srvErr, acc.serveErrs) && allOk;
 allOk = chk('세트 어시  assist == kills+blockouts', box.assist, acc.kills + acc.blockouts) && allOk;
 allOk = chk('디그 성공  digSucc == stats.digs(클린+팁 디그 전부 귀속)', box.dig, acc.digs) && allOk;

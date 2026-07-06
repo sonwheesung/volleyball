@@ -45,7 +45,8 @@ function auditMatch(seed: number, A: Player[], B: Player[], base: any): { fails:
     ['atkBlocked', sumBox(box, 'atkBlocked'), stats.stuffs],
     ['blockPt', sumBox(box, 'blockPt'), stats.stuffs],
     ['srvAtt', sumBox(box, 'srvAtt'), stats.serves],
-    ['srvAce', sumBox(box, 'srvAce'), stats.aces],
+    ['srvAce', sumBox(box, 'srvAce'), stats.aces + stats.recvErrs], // 공식 inclusive: 노터치 direct(stats.aces) + 리시브범실 indirect(stats.recvErrs)
+
     ['srvErr', sumBox(box, 'srvErr'), stats.serveErrs],
     ['assist', sumBox(box, 'assist'), stats.kills + stats.blockouts],
     ['recvAtt', sumBox(box, 'recvAtt'), stats.aces + stats.recvErrs + stats.recvQN],
@@ -134,7 +135,7 @@ log(`\n(F) A/B 자가검증 (검사기 민감도 — 깨진 박스를 반드시 
 const oracleMismatch = (box: BoxSink, stats: RallyStats) =>
   sumBox(box, 'atkAtt') !== stats.attacks || sumBox(box, 'atkKill') !== stats.kills + stats.blockouts
   || sumBox(box, 'atkErr') !== stats.attackErrs || sumBox(box, 'atkBlocked') !== stats.stuffs
-  || sumBox(box, 'srvAtt') !== stats.serves || sumBox(box, 'srvAce') !== stats.aces
+  || sumBox(box, 'srvAtt') !== stats.serves || sumBox(box, 'srvAce') !== stats.aces + stats.recvErrs
   || sumBox(box, 'srvErr') !== stats.serveErrs || sumBox(box, 'blockPt') !== stats.stuffs
   || sumBox(box, 'assist') !== stats.kills + stats.blockouts
   || sumBox(box, 'recvAtt') !== stats.aces + stats.recvErrs + stats.recvQN

@@ -292,7 +292,7 @@ export const newRallyStats = (): RallyStats => ({
  *  공격까지 포함 → 성공률(atkKill/atkAtt)이 실제 KOVO 분모(~45~55%)와 일치. */
 export interface BoxLine {
   atkAtt: number; atkKill: number; atkErr: number; atkBlocked: number; // 공격: 시도/성공/범실/차단당함
-  srvAtt: number; srvAce: number; srvErr: number;                       // 서브: 시도/에이스/범실
+  srvAtt: number; srvAce: number; srvErr: number;                       // 서브: 시도/에이스/범실. srvAce = FIVB 공식 inclusive(노터치 direct + 리시브범실 indirect) ≠ stats.aces(how='ace' direct만)
   blockPt: number; digSucc: number; assist: number;                     // 블록 득점/디그 성공/세트(어시)
   recvAtt: number; recvGood: number; recvErr: number;                   // 리시브: 시도/정확(q≥0.45=KOVO 정확 리시브, 세터 공격 전개 가능)/실패(에이스+셰이크). KOVO 효율=(정확−실패)/시도
 }
@@ -414,7 +414,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const recvErrP = clamp(0.10 - 0.13 * q, 0.005, 0.10);
   if (rng.next() < recvErrP) {
     if (stats) stats.recvErrs++;
-    { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; tch?.('recv', recvSide, rv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 셰이크 = 리시브 실패
+    bx?.(sp.id, (l) => { l.srvAce++; }); // FIVB/NCAA 공식: 리시브 범실이 기장되면 서버에게 서비스 에이스(indirect ace) — 개인 박스는 공식 정의로 inclusive. stats.aces(=how='ace' 노터치 direct)와 별개(2026-07-06, 발견=사용자 실관전·도메인=Fable 5 FIVB출처·수정=Opus)
+    { const rv = pickRecv?.(recv); recvPlayer = rv ?? null; tch?.('recv', recvSide, rv); if (rv) bx?.(rv.id, (l) => { l.recvAtt++; l.recvErr++; }); } // 셰이크 = 리시브 실패(공식도 리시버에 리시브 범실 기장 — 서버 에이스와 둘 다 기록)
     if (trace) trace.push(`리시브 범실 [${sideKo(recvSide)}] (서브팀 득점)`);
     if (E && passer) {
       const land = serveLanding(recvSide, passerXY, srvTarget, 'in', sj, 0.05);

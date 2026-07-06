@@ -51,6 +51,11 @@
 `docs/BOARD_RULES.md`(수치 기준), `tools/*.ts` 헤더의 측정 이력 주석.
 
 > **무효화 사건 로그**(엔진 변경 시 여기 + 영향 문서에 기록):
+> - **2026-07-06 ENGINE_VERSION 4**(`engine/rally.ts` — 서브 에이스 개인기장 공식화: 리시브범실 실점을 서버 `box.srvAce`에도 기장, FIVB indirect ace):
+>   개인 기록(box)만 영향 — production `aces`/`points`·서브왕·기록왕·`skServe` XP 변동(승패·서브확률·유형분포·밸런스 불변, box는 메인 rng 무관).
+>   **재측정(N=4,000~10,000·2026-07-06)**: 서버 에이스 +1.27/세트(direct 2.11→inclusive box.srvAce 3.39·4.83%→7.74%/서브, `_ev_box`) ·
+>   `_dv_drift_posrate` OP 톱 baseline **4.3→4.5**(A/B 동시드 지분 +0.12·나머지 background drift +0.08) · **KOVO 유형분포 불변**
+>   (`_dv_drift_kovo` 에이스 4.8%·상대범실 25.7% — how='ace' direct 기준으로 재조준해 보존). ⚠ 분포 '에이스'(direct only) ≠ 개인기록 에이스(inclusive) — 분포 재튜닝은 별도 과제.
 > - **2026-06-28 ENGINE_VERSION 2**(`engine/match.ts` — 체력 회복 0.009→0.005·세트 사이 0.12→0.035): 경기 분포 영향.
 >   **재측정 완료(2026-06-29, N=10,000 · 엔진 19d9bed)** — 득점유형(킬 59.0·스터프 9.5·에이스 5.2·상대범실 26.3, `_dv_drift_kovo`)·
 >   세트스코어(3-0 36.3·3-1 34.1·3-2 29.6·홈 50.2, `_dv_setscore_dist`)·체력 곡선(`simStamCurve`)·생산 baseline(`_dv_drift_posrate` OP 4.3)·

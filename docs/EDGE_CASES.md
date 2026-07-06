@@ -474,6 +474,20 @@
 
 ---
 
+## 3.17 서브 에이스 개인 기장 공식화 (indirect ace) — 사용자 실관전 발견 (2026-07-06) · ✅ 수정
+
+> 발견=사용자 실관전(recvErr 서브[리시버 터치 후 컨트롤 실패로 데드]+노터치 ace 연속 → 스코어박스 에이스 1로 표시) · 도메인검증=Fable 5(FIVB/NCAA 공식 출처) · 수정·문서=Opus 에이전트.
+> 트리플크라운 오정의와 같은 클래스([[verify-domain-definitions]]) — 표기/기장 분리 결정 시 공식 규정 미대조.
+
+| ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
+|---|---|---|---|
+| EC-STAT-01 | **서브 에이스 개인 기장 공식 위반** — recvErr(난조 리시브 직접 실점) 랠리에서 보드는 "서브 에이스"로 표기하나 서버 개인 박스엔 에이스가 안 붙음(`srvAtt`만) → 서브왕·통산·연봉이 공식보다 서버 에이스를 과소 계상. FIVB/NCAA 공식: 리시브 범실이 기장되면 서버에게 **자동 서비스 에이스**(indirect ace, 실전에서 더 흔함) | 06-19 "보드 표기=에이스·개인 기장=리시브범실만" 결정이 표기는 맞으나 기장이 공식 위반. → `engine/rally.ts` recvErr 반환 경로에 `bx?.(sp.id, l=>{l.srvAce++;})` 추가(리시버 `recvErr` 기장은 불변 — 공식도 둘 다 기록). **분포 이원화**: `stats.aces`는 how='ace'(노터치 direct)만 유지(KOVO 유형분포·튜닝 보존), box.srvAce는 공식 inclusive(direct+indirect). `ENGINE_VERSION 4`(production/서브왕/skServe XP 변동→캐시 무효, 승패·서브확률·밸런스·유형분포 불변) | `_ev_box`·`_ev_box_audit`(오라클 `srvAce==stats.aces+stats.recvErrs` + A/B `srvAce+1` 검출) · `_iv_scorebox`(팀합 오라클 how='ace'∪'recvErr') · `_dv_drift_kovo`(how='ace' direct로 분포 불변 확인) · `_ev_scorer`(recvErr byId 없음=종결자 규칙 불변) |
+
+> 실측(N=4,000경기·15,635세트·2026-07-06): 서버 에이스 **+1.27/세트**(direct 2.11→inclusive box.srvAce 3.39 · 4.83%→7.74%/서브). KOVO 유형분포 불변(에이스 4.8% direct·상대범실 25.7%, `_dv_drift_kovo` N=3,000). `_dv_drift_posrate` OP 톱 baseline 4.3→4.5(A/B 동시드 지분 +0.12).
+> 사각(왜 못 잡았나): 가드가 box==stats **자기정합**만 봐(srvAce==stats.aces 일치=PASS) 정의의 옳음은 안 물음 → TEST_METHODOLOGY §4 "도메인 정의 미검증 — 표기/기장 분리 결정" 행.
+
+---
+
 ## 4. 회귀 프로토콜 (로직 수정 시)
 
 영입/오프시즌 계열 엔진·셀렉터(`engine/compensation·faMarket·cap·draft·staff·staffLifecycle·foreign·transactions·finance`,

@@ -2,6 +2,9 @@
 //
 // baseline = box 단일 진실 실측(N=10,000·2026-06-26):
 //   OP 톱 4.31 · MB 블록(1인) 0.98 · 세터 어시 11.75 · 리베로 디그 4.57.
+// ENGINE_VERSION 4(2026-07-06): 서브 에이스 개인기장 공식화(indirect ace를 서버 box.srvAce에 기장) → OP 톱 득점(=atkKill+blockPt+srvAce)에
+//   지분 +0.12/세트(A/B 동시드 N=10,000: srvAce line off 4.38 vs on 4.50). → OP 톱 baseline 4.3→4.5로 갱신. 나머지 행(MB블록·세터·리베로)은
+//   내 변경과 무관(srvAce 미접촉) — N=10,000 실측 MB 1.02·세터 11.95·리베로 4.92는 v2→현행 background drift(≤+5%, 별도 stale). 여기선 미갱신.
 // 이력: 구 doc(OP 5.3·MB 0.5, legacy 오버레이)은 stale → box 재측정 OP 3.26(76c66ad). 이후 **공격 집중 도입
 //   (rally.ts ATK_FOCUS 3.0·OP share 2.0, KOVO 외인 의존도 ~27%)** 로 OP 톱 3.26→4.31(의도된 변경, MATCH_SYSTEM 4장).
 // 이 가드는 baseline 대비 이후 드리프트만 잡는다(box 경로 세트당 생산, STATS_PROTOCOL §3).
@@ -109,7 +112,7 @@ log(`표본: ${N}경기 · 총 세트 ${totalSets} · 총 득점 ${totalPts}\n`)
 log(`지표                    실측/세트   문서값/세트   차이`);
 // 기대값 = box 단일 진실 baseline(N=10,000·엔진 76c66ad·2026-06-26 재측정). 구 doc(OP 5.3·MB 0.5)은 legacy 오버레이라 stale였음.
 const rows: [string, number, number][] = [
-  ['OP 톱 득점', topOpPerSet, 4.3],   // 공격 집중(ATK_FOCUS 3.0·OP 2.0) 도입 후 box 4.31(구 3.26→KOVO ~27%)
+  ['OP 톱 득점', topOpPerSet, 4.5],   // ENGINE_VERSION 4(2026-07-06): 서브 에이스 개인기장 공식화(indirect ace) → OP 톱에 지분 +0.12/세트(A/B, 4.38→4.50 N=10,000 동시드). 구 4.3(v2·2026-06-26)은 background drift +0.08 포함 stale. 공격 집중(ATK_FOCUS 3.0·OP 2.0) 도입 후 box 4.31
   ['MB 블록(1인)', mbBlockPerSet, 0.98], // box 실제 리드블로커 MB
   ['세터 어시', setterAssistPerSet, 12],
   ['리베로 디그', liberoDigPerSet, 4.7],
