@@ -26,6 +26,12 @@ export interface CareerStats {
   assists: number;     // 세트 성공(세터) — 2026-06-11 추가, 구세이브는 0에서 시작
 }
 
+/** 입단 시점 스냅샷 — 커리어 누적 성장(입단 OVR→현재, 스탯별 누적) 표시 전용. 저장은 선수당 소량(OVR+15원본). */
+export interface DebutSnapshot {
+  ovr: number;                          // 입단 시점 종합(displayOvr(overallRaw) — 로스터 카드와 동일 함수라 수치 정합)
+  stats: Record<TrainableStat, number>; // 입단 시점 15 원본 훈련 스탯(스탯별 누적 성장 diff = 현재 − 입단)
+}
+
 /** 한 시즌 개인 기록 라인 — 선수 상세 "시즌별 기록". 시즌 경계에서 적립, 은퇴 시 베이스와 함께 정리 */
 export interface SeasonLine {
   season: number;   // 0-based
@@ -89,6 +95,12 @@ export interface Player {
   peakAge: number;     // 전성기 나이(노쇠 곡선용)
   career: CareerStats;
   seasonLines?: SeasonLine[]; // 시즌별 기록(선수 상세) — 없으면 빈 이력(구세이브 호환)
+
+  // 입단(생성) 시점 스냅샷 — "내가 이 선수를 이렇게 키웠다" 커리어 누적 성장 표시 전용(TRAINING_SYSTEM 성장리포트).
+  // **패시브 기록**: 생성 시 1회 박고 이후 진화/노쇠/XP가 스프레드로 통과시킬 뿐 — 시드/rng/엔진 공식 무관(결정론 무영향).
+  // 신인(makeProspect)=진짜 데뷔치, 시드 베테랑(makePlayer)=게임 시작 시점(그 선수가 내 세이브에 등장한 순간).
+  // 없으면(구세이브·필드 도입 전 생성) 커리어 누적 표시를 생략(UI 폴백). NOTE: 리플레이/시뮬 입력에 절대 안 들어간다.
+  debut?: DebutSnapshot;
 
   // FA 성향 (FA_SYSTEM 2.5) — 선수마다 이적 동기가 다르다. id 시드로 결정론 생성.
   faPref?: FAPref;

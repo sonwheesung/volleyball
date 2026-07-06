@@ -57,7 +57,7 @@
 ### 선수·로스터 (base 스냅샷)
 | 필드 | 자료구조 | 기본 | 비고 |
 |---|---|---|---|
-| `playerBase` | Record<playerId, Player> \| null | null | **전체 Player**(신체·멘탈·기술·xp·potential·talentBase·catTalent·contract·career·seasonLines·traits·faPref·isForeign·isAsianQuota·nationality). types/index.ts 42-95 |
+| `playerBase` | Record<playerId, Player> \| null | null | **전체 Player**(신체·멘탈·기술·xp·potential·talentBase·catTalent·contract·career·seasonLines·traits·faPref·isForeign·isAsianQuota·nationality·**debut**). types/index.ts 42-95. **debut**(2026-07-06 신설, additive 옵셔널)=입단 스냅샷{ovr,15원본} — 커리어 누적 성장 표시 전용·생성 시 1회·엔진 불간섭. 통째 영속이라 자동 포함, 구세이브/도입 전 선수는 `undefined`(UI 폴백) → **버전 불변**(additive=자동, TRAINING §성장리포트) |
 | `rosters` | Record<teamId, playerId[]> \| null | null | 팀별 명단 |
 | `bonds` | Record<playerId, number> | {} | 함께한 시즌 bond 누적(RELATIONSHIP — 복원 시 `setRelationContext`). 맵 바운드 |
 

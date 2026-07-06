@@ -134,7 +134,7 @@ npx tsx tools/_dv_foreign_contract.ts       # 계약관리 외인 차단 — rel
 npx tsx tools/_dv_tryout_pool.ts            # 트라이아웃 풀 생성 종료 가드(EDGE_CASES §3.14 — edge-swarm 클러스터A) — 정상 domesticAvg 바닥충족·고/극단 domesticAvg 종료(옛 무캡 while은 hang=A/B 이빨). exit 0/1
 npx tsx tools/_dv_name_dedupe.ts            # 동명이인 방지(FOREIGN_SYSTEM §8, 2026-06-30) — 초기 리그·트라이아웃 풀·드래프트 클래스 부류별 표시 중복 0 + taken 회피 + A/B(충돌 배치 dedup 전>0→후 0=오라클 민감) + 결정론. exit 0/1
 npx tsx tools/_dv_name_space.ts             # 절차적 이름 생성 공간(FOREIGN_SYSTEM §8 A', 2026-06-30) — 20k 생성 시 고유 이름 국내>5000·외인>1000·아시아>150+국적 전수(절차성=옛 수십리스트 압도, 고갈 없음)·결정론·육안 샘플. exit 0/1
-npx tsx tools/_dv_diamonds.ts               # 다이아 이코노미(MONETIZATION §11) — 광고 30분쿨다운/하루8회·업적 1회수령(중복지급0)·전지훈련 구모델(+1/+1, 재적용 전용)+코스형(3스탯 +2/+7·H1 스탯구성·900💎·cap99) + A/B(쿨다운 무력 검출). exit 0/1
+npx tsx tools/_dv_diamonds.ts               # 다이아 이코노미(MONETIZATION §11) — 광고 30분쿨다운/하루8회·업적 1회수령(중복지급0)·전지훈련 구모델(+1/+1, 재적용 전용)+코스형(3스탯 +2/+7·H1 스탯구성·300💎 정액·cap99) + A/B(쿨다운 무력 검출). exit 0/1
 npx tsx tools/_dv_walletauth.ts             # 다이아 서버 진실화(BACKEND §13.12) — 순수: 멱등키 빌더 전역유일(userId 포함)·세이브리셋 무료강화 차단(camp saveId 에폭)·업적 계정평생1회 비대칭·econ 금액권위(ad+50/camp−300 서버상수·업적 캡5000)·reason 화이트리스트 + A/B(옛 클라신뢰/무에폭 키 재현). exit 0/1. ※서버 왕복(멱등·잔액게이트·화이트리스트 실증)은 로컬 서버 띄우고 라이브 E2E(임시 스크립트, 검증 후 삭제)
 (cd server && node_modules/.bin/tsx tools/_dv_walletreplay.ts)  # 지갑 멱등 재시도 잔액(BACKEND §4, 2026-07-06) — 라이브 dev DB: 지급+1000→지출−900→같은키 재시도 반환==현재잔액 100(스냅샷 1000 아님)·불변식 balance==Σledger + A/B(원장 balanceAfter=1000 대조군). exit 0/1. server/.env.local DATABASE_URL 필요(던지기 유저 자동 정리)
 npx tsx tools/_dv_coupon.ts                 # 쿠폰·관리자 순수(BACKEND §13.14/§13.15) — normalizeCode(대문자+trim)·requireAdmin fail-closed(토큰 미설정/<16자→거부·정확토큰 허용·길이가드). exit 0/1. ※쿠폰 발급·사용·이중지급0·타겟·만료는 로컬 서버 라이브 E2E(임시, 검증 후 삭제)로 실증
@@ -232,6 +232,7 @@ npx tsx tools/_dv_careerseasons.ts 3       # 통산 기록 표시 분모(EC-REC-
 npx tsx tools/_dv_keepall.ts               # 한글 어절 줄바꿈 keep-all(UI-24, 2026-07-04 에뮬 발견) — keepAllHangul가 인접 한글 사이에만 U+2060 삽입·공백/부호/이모지 불변·멱등 + A/B 민감도. exit 0/1
 npx tsx tools/_dv_injury_daybasis.ts       # 부상/정지 표기 날짜기준 일치(EC-UI-03, 2026-07-04 사용자 발견) — 선수단 currentDay ↔ 상세 currentDay(수정 전 displayDay) 대조. 시드리그 7팀×166일 A/B: 구 basis 불일치 37건(선수단🚑·상세무 19 + stale 18) 재현 → 신 basis 0건. 상세 role·정지배너 회귀 차단. exit 0/1
 npx tsx tools/_dv_growthreport.ts          # 성장 리포트 모달(TRAINING §성장리포트, 2026-07-04 사용자 요청) — growthReport가 카드 표시값(deriveRatings 정수) 변화를 정확히 diff. 구간 가드(0폭/역/음수)·시즌 성장 검출·오라클 자가대조(delta==재계산 diff)·결정론. exit 0/1
+npx tsx tools/_dv_debut.ts                  # 입단 스냅샷 커리어 누적(TRAINING §성장리포트, 2026-07-06) — Player.debut 생성 시 캡처(OVR+15원본, 로스터 카드 정합)·전 변환 스프레드 보존·커리어 누적=현재−입단 + **A/B: debut 유무가 evolve 스탯 무변경(엔진 불간섭=결정론 무영향)**. exit 0/1
 npx tsx tools/_dv_face.ts                   # 선수 아바타 피처(AVATAR_SYSTEM, 2026-07-04 유대감) — faceFeatures 결정론(같은 id 동일) + 변형 분포(5스타일·5피부·7헤어·6배경 전부·편중<40%). exit 0/1
 npx tsx tools/_dv_tips.ts                   # 스포트라이트 튜토리얼 커버리지(ONBOARDING §3, 2026-07-04) — 전 팁 anchor가 실제 SpotlightTarget id에 매칭(동적 team-card-0 포함)·오버레이 없는 화면 0·중복 id 0·고아 앵커 0 + A/B(가짜 anchor/화면/중복 주입 시 FAIL). exit 0/1
 npx tsx tools/_dv_copylint.ts              # 유저 문구 정합(2026-06-30, 에뮬 발견 회귀 분석) — data/engine/app/components 소스에 남성형(사나이·그의/그가 경계인식)·배구 오용어(라켓·홈런·골키퍼) 0건 + A/B(더러운 문장 ≥3 적발·깨끗한 문장 "리그가/리그의" 오탐 0). exit 0/2

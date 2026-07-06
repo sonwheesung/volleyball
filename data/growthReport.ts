@@ -3,9 +3,12 @@
 // 종합 6개(deriveRatings)는 여러 스탯의 조합이라 잘 안 바뀜 → 사용자 요청으로 밑단(점프·기술치 등)까지 전부 표시.
 // 원본 스탯은 정수(XP 바가 1 채우면 +1) → 선수 상세 StatBar 표시값과 정확히 일치.
 import { evolveOnDay, currentRosters } from './league';
+import { overallRaw, displayOvr } from '../engine/overall';
 
 export interface StatDelta { label: string; delta: number; from: number; to: number } // +면 성장(초록) / -면 노쇠(빨강). from→to 이전·이후 값
-export interface PlayerGrowth { id: string; name: string; position: string; deltas: StatDelta[] }
+/** 입단 이후 커리어 누적(있을 때만 — debut 필드 도입 후 생성 선수). OVR·스탯별 누적. */
+export interface CareerGrowth { debutOvr: number; curOvr: number; deltaOvr: number; statDeltas: StatDelta[] }
+export interface PlayerGrowth { id: string; name: string; position: string; deltas: StatDelta[]; career?: CareerGrowth }
 
 // 선수 상세(app/player/[id].tsx StatBar)와 동일 라벨·순서(신체→공통→멘탈→기술)
 const STAT_ROWS: [string, string][] = [
@@ -34,7 +37,20 @@ export function growthReport(teamId: string, fromDay: number, toDay: number): Pl
       const d = to - from;
       if (d !== 0) deltas.push({ label, delta: d, from, to });
     }
-    if (deltas.length) out.push({ id, name: after.name, position: after.position, deltas });
+    // 입단 이후 커리어 누적(debut 있을 때만) — "내가 이 선수를 이렇게 키웠다"의 주인공
+    let career: CareerGrowth | undefined;
+    if (after.debut) {
+      const curOvr = Math.round(displayOvr(overallRaw(after)));
+      const statDeltas: StatDelta[] = [];
+      for (const [k, label] of STAT_ROWS) {
+        const from = after.debut.stats[k as keyof typeof after.debut.stats] ?? 0;
+        const to = a[k] ?? 0;
+        const d = to - from;
+        if (d !== 0) statDeltas.push({ label, delta: d, from, to });
+      }
+      career = { debutOvr: after.debut.ovr, curOvr, deltaOvr: curOvr - after.debut.ovr, statDeltas };
+    }
+    if (deltas.length) out.push({ id, name: after.name, position: after.position, deltas, career });
   }
   return out;
 }

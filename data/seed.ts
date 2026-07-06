@@ -6,7 +6,7 @@ import { TRAINABLE_STATS } from '../engine/training';
 import { rollFAPref } from '../engine/faMarket';
 import { rollTraits } from '../engine/traits';
 import { computeSalary } from '../engine/salary';
-import { MED_REF } from '../engine/overall';
+import { MED_REF, overallRaw, displayOvr } from '../engine/overall';
 import { ASIAN_SALARY } from '../engine/foreign';
 import { headCoachSalary, assistantSalary, scoutSalary, coachTypeFor } from '../engine/staff';
 import type {
@@ -15,6 +15,7 @@ import type {
   Coach,
   CoachSpecialty,
   CoachStyle,
+  DebutSnapshot,
   Player,
   Position,
   Scout,
@@ -189,6 +190,7 @@ export function makePlayer(
   player.contract.salary = computeSalary(player, MED_REF, signedAtAge, rng); // 시드=시대 0(MED_REF) — 시드 연봉 불변·day0 캡 정합 유지
   player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length, isForeign); // 외국인=연고 성향·선호팀 없음(EC-DOM-01)
   player.traits = rollTraits(id);
+  player.debut = captureDebut(player); // 시드 베테랑=게임 시작 시점(내 세이브에 등장한 순간)이 입단 기준
   return player;
 }
 
@@ -228,6 +230,14 @@ export function prospectArcRetro(id: string): string | null {
 
 // 신인(유망주) 생성 — 현재 OVR은 낮게(육성 대상), 포텐셜은 높게.
 // 드래프트 클래스 + 자동 충원 공용. KOVO 신인 기준(대부분 즉전감 아님).
+/** 입단 시점 스냅샷 캡처(패시브 — 표시 전용, 시드/rng 불간섭). OVR은 로스터 카드와 동일 함수(displayOvr∘overallRaw)로 수치 정합. */
+function captureDebut(p: Player): DebutSnapshot {
+  const s = p as unknown as Record<TrainableStat, number>;
+  const stats = {} as Record<TrainableStat, number>;
+  for (const k of TRAINABLE_STATS) stats[k] = s[k];
+  return { ovr: Math.round(displayOvr(overallRaw(p))), stats };
+}
+
 export function makeProspect(rng: Rng, id: string, pos: Position): Player {
   const name = genKoreanName(id); // 절차적 음절 조합(FOREIGN_SYSTEM §8 A') — id 시드, 메인 rng 불간섭
   const age = rng.int(18, 20);
@@ -297,6 +307,7 @@ export function makeProspect(rng: Rng, id: string, pos: Position): Player {
   player.contract.salary = computeSalary(player, MED_REF, age, rng); // 신인 진입 연봉 = 고정 스케일(시대 0) — 현실 루키 스케일은 시대 무관
   player.faPref = rollFAPref(createRng(strSeed(id)), TEAM_NAMES.length);
   player.traits = rollTraits(id);
+  player.debut = captureDebut(player); // 진짜 데뷔치(신인 18~20) — 커리어 누적 성장 기준
   return player;
 }
 
