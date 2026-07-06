@@ -96,6 +96,16 @@ export async function countReasonToday(userId: string, reason: WalletReason): Pr
   return rows[0]?.n ?? 0;
 }
 
+/** 특정 reason 원장 delta 합계(평생·프로젝트/유저 스코프) — 업적 평생합 백스톱의 **서버 진실**(§13.12 H3).
+ *  countReasonToday(건수)와 짝: 그건 광고 하루 상한, 이건 업적 평생합. 원장이 진실이라 세이브 리셋으로 못 우회. */
+export async function sumReason(userId: string, reason: WalletReason): Promise<number> {
+  const rows = await db
+    .select({ s: sql<number>`coalesce(sum(${walletLedger.delta}), 0)::int` })
+    .from(walletLedger)
+    .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, userId), eq(walletLedger.reason, reason)));
+  return rows[0]?.s ?? 0;
+}
+
 /** 오늘(UTC) 광고 적립 상태 — 횟수 + 마지막 시각(ms). 광고 쿨다운/캡의 **서버 진실**(§13.19 — 로컬 리셋으로 못 우회). */
 export async function adStatusToday(userId: string): Promise<{ count: number; lastAtMs: number | null }> {
   const rows = await db

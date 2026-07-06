@@ -4,7 +4,13 @@
 // 서버는 앱 engine을 import 못 하므로(별 tsconfig) 복제하고, 드리프트는 클라측 가드 `_dv_walletauth`가 대조.
 export const AD_REWARD = 50; // 광고 1회 (engine/diamonds AD_REWARD)
 export const CAMP_COST = 300; // 전지훈련 코스 (engine/diamonds CAMP_COURSE_COST) — 2026-07-06 900→300 정액 인하(사용자 결정)
-export const ACH_MAX_TOTAL = 5000; // 업적 평생합 백스톱 상한(H3 — 서버 리플레이 안 하므로 캡만)
+// 업적 적립 백스톱(H3) — 서버는 시즌 리플레이를 안 하므로 클라가 보낸 achievement 금액을 사전 검증만 한다.
+//   · ACH_MAX_PER_CLAIM: 카탈로그 최대 단건(1000 — titles_20·hof_10·perfect_season·points_1m·seasons_100).
+//     한 호출이 그 이상 뜯지 못하게 클램프. (engine/achievements ACH_REWARD 실측 2026-07-06)
+//   · ACH_LIFETIME_CAP: 평생 합 상한. 카탈로그 86개 총합 16,220(실측 2026-07-06) + 확장 헤드룸 → 20,000.
+//     정당 유저는 총합 16,220 < 20,000이라 절대 안 닿음(치터 전용 blast-radius 바운드). earn 라우트가 원장 sum으로 강제.
+export const ACH_MAX_PER_CLAIM = 1000; // 업적 1회 적립 상한(카탈로그 최대 단건)
+export const ACH_LIFETIME_CAP = 20000; // 업적 평생합 상한(카탈로그 16,220 + 헤드룸)
 export const AD_DAILY_CAP = 8; // 광고 하루 상한 서버 백스톱 (engine/diamonds AD_DAILY_CAP)
 export const WELCOME_DIAMONDS = 1000; // 첫 전지훈련 진입 환영 선물(계정당 1회, 멱등키 welcome:<userId>) — 온보딩·다이아 훅
 
@@ -25,7 +31,7 @@ export function earnAmount(reason: string, clientAmount: number): number | null 
   if (reason === 'achievement') {
     const a = Math.floor(clientAmount);
     if (!Number.isFinite(a) || a <= 0) return null;
-    return Math.min(a, ACH_MAX_TOTAL);
+    return Math.min(a, ACH_MAX_PER_CLAIM); // 호출당 클램프(최대 단건). 평생합은 earn 라우트가 원장 sum으로 별도 강제.
   }
   return null;
 }

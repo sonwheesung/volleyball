@@ -3,7 +3,8 @@
 // A/B 자가검증: 옛 결함(클라 신뢰 금액·에폭 없는 camp 키)을 재주입해 오라클 민감도를 증명(허위 오라클 차단).
 // 서버 왕복(applied 게이팅·이중차감·리싱크)은 라이브 E2E(_walletlive)가 실 서버로 증명.
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
-import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, ACH_MAX_TOTAL } from '../server/lib/econ';
+import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, ACH_MAX_PER_CLAIM, ACH_LIFETIME_CAP } from '../server/lib/econ';
+import { ACHIEVEMENTS, achReward } from '../engine/achievements';
 
 let fail = 0;
 const ok = (c: boolean, m: string) => { if (!c) { console.error('  ✗ FAIL:', m); fail++; } else console.log('  ✓', m); };
@@ -36,15 +37,24 @@ ok(spendAmount('purchase') === null, 'spend 화이트리스트: camp 외 거부(
 ok(spendAmount('ad') === null, 'spend 화이트리스트: ad 거부(적립을 차감으로 못 씀)');
 ok(earnAmount('ad', 1) === AD_REWARD && AD_REWARD === 50, 'ad 서버 상수 +50 (클라 amount=1 보내도 50)');
 ok(earnAmount('ad', 99999) === 50, 'ad 클라 과다금액 무시(항상 50)');
-ok(earnAmount('achievement', 120) === 120, 'achievement 클라값 통과(캡 이하)');
-ok(earnAmount('achievement', 999999) === ACH_MAX_TOTAL, `achievement 상한 캡 ${ACH_MAX_TOTAL}(백스톱)`);
+ok(earnAmount('achievement', 120) === 120, 'achievement 클라값 통과(호출당 캡 이하)');
+ok(earnAmount('achievement', 99999) === ACH_MAX_PER_CLAIM && ACH_MAX_PER_CLAIM === 1000, `achievement 호출당 클램프 ${ACH_MAX_PER_CLAIM}(최대 단건)`);
 ok(earnAmount('achievement', 0) === null, 'achievement 0/음수 거부');
+ok(earnAmount('achievement', -5) === null, 'achievement 음수 거부');
 ok(earnAmount('purchase', 1000) === null, 'earn 화이트리스트: purchase 거부(별도 영수증 라우트)');
 ok(earnAmount('coupon', 1000) === null, 'earn 화이트리스트: coupon 거부(별도 쿠폰 라우트)');
 ok(earnAmount('welcome', 1) === 1000 && earnAmount('welcome', 99999) === 1000, 'welcome 서버 고정 1000(클라값 무시 — 멱등키가 계정당 1회)');
 // A/B 대조군: 옛(클라 신뢰) 산식이면 camp amount=1이 통과 = 무료강화
 const oldSpend = (amount: number) => amount;
 ok(oldSpend(1) === 1 && spendAmount('camp') === 300, 'A/B 대조군: 옛 클라신뢰면 amount=1로 전지훈련(=버그) vs 서버권위 300');
+
+console.log('── 4b. 카탈로그↔캡 정합 드리프트 가드 (보상 테이블과 백스톱이 서로 알게) ──');
+// 문서의 "평생합 상한"이 구현엔 없었고(A1) 값 5000이 정당 총합 16,220과 모순(A2)했던 사각 재발 방지:
+// 카탈로그가 커져 캡을 넘으면 FAIL(정당 유저 손실) · 최대 단건이 per-claim 클램프를 넘으면 FAIL(정당 수령이 잘림).
+const achTotal = ACHIEVEMENTS.reduce((s, a) => s + achReward(a.id), 0);
+const achMaxSingle = Math.max(...ACHIEVEMENTS.map((a) => achReward(a.id)));
+ok(achTotal <= ACH_LIFETIME_CAP, `카탈로그 총합(${achTotal}) ≤ 평생합 캡(${ACH_LIFETIME_CAP}) — 넘으면 정당 유저 손실(2026-07-06 실측 16220/86개)`);
+ok(achMaxSingle <= ACH_MAX_PER_CLAIM, `카탈로그 최대 단건(${achMaxSingle}) ≤ 호출당 캡(${ACH_MAX_PER_CLAIM}) — 넘으면 정당 단건 수령이 클램프에 잘림`);
 
 console.log('── 5. reason 화이트리스트 ──');
 ok(isEarnReason('ad') && isEarnReason('achievement') && isEarnReason('welcome') && !isEarnReason('purchase') && !isEarnReason('camp'), 'earn = {ad, achievement, welcome}만');
