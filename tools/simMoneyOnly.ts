@@ -7,7 +7,7 @@
 //   (3) 보상금(compCash) ON > OFF, 비율 = A 1.5배(300/200)·B 2배(200/100)
 
 import { resetLeagueBase, setMyTeamStaff, getTeam, LEAGUE } from '../data/league';
-import { faMarketPreview } from '../data/offseason';
+import { buildOffseason } from '../data/offseason';
 import { buildDraftContext } from '../data/draftSetup';
 import { assignFAGrades } from '../engine/faMarket';
 import { needsCompensationPlayer } from '../engine/compensation';
@@ -26,11 +26,14 @@ let checked = 0, violations = 0, outflowCases = 0;
 const fail = (s: number, msg: string) => { violations++; log(`  ❌ [시즌 ${s}] ${msg}`); };
 
 for (let s = 1; s <= SCAN && checked < 14; s++) {
-  // 풀에서 타팀 소속 A/B FA 중 최고 OVR 1명만 노린다(보상선수 경로 격리)
-  const pre = faMarketPreview(myTeam, {}, {}, [], true, [], s, undefined, BIG_CASH);
-  const grades = assignFAGrades(pre.pool.map((id) => pre.snapshot[id]).filter(Boolean) as Player[]);
-  const target = [...pre.pool]
-    .map((id) => pre.snapshot[id]).filter((p): p is NonNullable<typeof p> => !!p)
+  // 풀에서 타팀 소속 A/B FA 중 최고 OVR 1명만 노린다(보상선수 경로 격리).
+  //   ⚠ 등급은 반드시 pre-FA(직전연봉) 스냅샷으로 매긴다 — 엔진 resolveFAMarket이 등급을 매기는 입력과 동일.
+  //   faMarketPreview.snapshot은 시장 해석 뒤(신규 계약 연봉 반영)라 연봉 순위가 뒤바뀌어(EC-FA-08)
+  //   등급이 엔진과 어긋난다(예: 직전연봉 C인데 신규 계약 연봉으론 A로 오분류 → 0→0을 위반으로 오판).
+  const base = buildOffseason(myTeam, {}, {}, s, undefined);
+  const grades = assignFAGrades(base.pool.map((id) => base.snapshot[id]).filter(Boolean) as Player[]);
+  const target = [...base.pool]
+    .map((id) => base.snapshot[id]).filter((p): p is NonNullable<typeof p> => !!p)
     .filter((p) => { const g = grades.get(p.id); return g && needsCompensationPlayer(g); })
     .sort((a, b) => overall(b) - overall(a))[0];
   if (!target) continue;

@@ -141,6 +141,7 @@
 | EC-FA-02 | 보상선수로 외인이 빠져 받는 팀 외인 2명 | 외인이 보상 후보에 포함 → `if (p.isForeign) continue` (`c6d0968`) | simFaDup(e)·audit `foreign` |
 | EC-FA-03 | FA 센터에서 "영입 불가"인데 실제론 가능(미리보기≠결과) | 정산 전 자금으로 미리보기 → 모기업 지원 누락. `projectSettledCash`로 정산 후 자금 사용 (`072779a`) | fa.tsx=endSeason 동일 소스 |
 | EC-FA-04 | (예방) '돈만' 선택인데 보상선수가 빠지거나 보상금 미가중 | 신규 기능 — `moneyOnlyIds` 전파 + `pickCompensation` 건너뜀 + `compensationMoneyOnly` (`e9bb4b6`) | simMoneyOnly |
+| EC-FA-08 | **가드 오라클 오판(엔진 WAI)** — `simMoneyOnly`가 등급을 `faMarketPreview.snapshot`(시장 해석 후·신규 계약 연봉 반영)으로 매겨, 직전연봉 순위로는 C인 선수를 A로 오분류 → C 영입의 정상 `compCash=0`을 "돈만 미가중" 위반으로 오판(신재은 2건, FA_SYSTEM §2.2 "직전연봉 순위"). 엔진 `resolveFAMarket`은 pre-FA 스냅샷으로 등급을 매겨 정확. **엔진 무결·가드 결함**(진단·수정=Opus 에이전트, 발견·검증=Fable 5, 2026-07-06) | 가드가 `buildOffseason(pre-FA).snapshot`으로 등급 산정하도록 정정(엔진 등급 입력과 동일) → simMoneyOnly 위반 0·A/B 민감도(가중 무력화 변이=8위반) 유지 | simMoneyOnly |
 | EC-CA-01 | 현금 없는데 국내 FA 영입됨 | 입찰 게이트가 캡만 봄 → `offer + compCost <= cashLeft` 추가 (`a91f967`) | audit `cash2` |
 | EC-CA-02 | 외인 트라이아웃 + 국내 FA 합산이 정산현금 초과(각자 전액 게이팅 → 이중 사용) | `resolvePreDraft`/`faMarketPreview`가 `runTryout`·`resolveFAMarket`에 같은 `myCash` 전달 → 외인 incoming 비용을 국내 FA 지갑에서 차감(`cashAfterForeign`) | simBrokeSign |
 | EC-CA-03 | 생애주기 keep(자기 선수 유지)로 팀 국내연봉이 캡 소폭 초과(대전 +1.5% @S6) — `buildOffseason` keep 경로(`offseason.ts:257`, 미만료 선수)는 캡 미게이트. **결정: (A) 정상 인정(WAI)** — 현실 배구도 자기 선수 유지는 캡 초과 허용, 트레이드 없는 게임서 미만료 강제 방출은 과함. 새 영입/재계약(만료자)은 게임이 `≤캡` 하드 게이트 유지. **감사 비최종 캡 임계 `×1.0→×1.05`**(>5%=진짜 새영입 버그는 계속 잡힘) (`acquisitionAudit.ts:167`, 2026-06-20) | audit `cap`(비최종 ×1.05) |
