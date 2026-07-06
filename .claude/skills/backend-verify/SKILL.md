@@ -5,6 +5,10 @@ description: Verify the server (backend) surface against the canonical BACKEND_S
 
 # backend-verify — 서버 표면을 문서 조항과 대조하고 라이브 가드로 봉인
 
+> **상위 방법론 = `spec-audit`(기법 M, 명세 대조 발견 7기법)**. backend-verify는 그 발견 프로토콜을
+> **서버 라우트에 특화한 인스턴스**다(서버 5렌즈 = M을 인증 귀속·proj 격리·타임존·머니패스에 겨눔).
+> 보드·엔진·클라·가드 자신 등 서버 밖 표면을 발견 모드로 감사하려면 `spec-audit`을 쓴다.
+
 > **왜**: 2026-07-06 백엔드 4라운드 검증에서 **14건**(결제 afterSafe 1·공지 6·쿠폰 4·업적 3)이
 > *전부 기존 테스트 장치를 통과한 채 잠복*했다. 뿌리: ① `run-all-tests`가 서버 가드를 안 돌렸고(있던
 > `_dv_purchase`조차 afterSafe 회귀로 이틀 깨진 채) ② `TEST_METHODOLOGY` 기법 A~K가 전부 엔진·보드·앱
