@@ -514,14 +514,22 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
           </View>
         ) : null}
         {subEvsNow.length > 0 ? (
+          // 룰 30c — 배지를 **이벤트별** 블록으로: 각 교체가 자기 사유(투입=🔄 {kind}·복귀=↩ 원위치)+측(홈/원정)을
+          // 스스로 표시한다. 헤더 단수(subEvsNow[0]) 가정을 없애 같은 랠리 2건+(대부분 홈·원정 동시 교체 5%)의
+          // 사유·측 소실을 막는다. 실측(_measSubBadge, 800경기) 최대 동시 3행 → SHOW_MAX=3, 초과분은 +N.
           <Animated.View style={[styles.subBadge, { transform: [{ scale: subPop }] }]}>
-            <Text style={styles.subBadgeHdr}>{subEvsNow[0].enter ? `🔄 ${SUB_KIND_KO[subEvsNow[0].kind]}` : '↩ 원위치 복귀'}</Text>
-            {subEvsNow.slice(0, 2).map((e, k) => (
-              <View key={k} style={{ marginTop: k ? 2 : 0 }}>
+            {subEvsNow.slice(0, 3).map((e, k) => (
+              <View key={k} style={{ marginTop: k ? 6 : 0 }}>
+                <Text style={styles.subBadgeHdr}>
+                  {`[${e.side === 'home' ? '홈' : '원정'}] `}{e.enter ? `🔄 ${SUB_KIND_KO[e.kind]}` : '↩ 원위치 복귀'}
+                </Text>
                 <Text style={styles.subInTxt}>{byId.get(e.inId)?.name ?? '선수'} IN</Text>
                 <Text style={styles.subOutTxt}>{byId.get(e.outId)?.name ?? '선수'} OUT</Text>
               </View>
             ))}
+            {subEvsNow.length > 3 ? (
+              <Text style={styles.subBadgeMore}>+{subEvsNow.length - 3}</Text>
+            ) : null}
           </Animated.View>
         ) : null}
         {finished ? (() => {
@@ -691,6 +699,7 @@ const styles = themedStyles(() => StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: 4,
   },
   subBadgeHdr: { color: '#B8860B', fontSize: 10, fontWeight: '900', marginBottom: 2 },
+  subBadgeMore: { color: '#B8860B', fontSize: 9, fontWeight: '800', marginTop: 4, opacity: 0.85 },
   subInTxt: { color: '#2563EB', fontSize: 12.5, fontWeight: '900' },   // IN 파랑
   subOutTxt: { color: '#EF4444', fontSize: 11, fontWeight: '800' },    // OUT 빨강
   feedBox: { backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingHorizontal: 10, paddingVertical: 6, gap: 1 },
