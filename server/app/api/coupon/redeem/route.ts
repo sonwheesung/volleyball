@@ -3,7 +3,7 @@
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/observability';
 import { redeemCoupon } from '../../../../lib/coupon';
-import { resolveUserId } from '../../../../lib/auth';
+import { requireUserId } from '../../../../lib/auth';
 
 export const dynamic = 'force-dynamic';
 
@@ -13,7 +13,9 @@ export async function POST(req: Request) {
     if (!body.code || typeof body.code !== 'string') {
       return NextResponse.json({ ok: false, reason: 'invalid' }, { status: 400 });
     }
-    const userId = await resolveUserId(req);
+    // 사용자 귀속 필수 — 익명 폴백 금지(§13.17 P0-5). 세션 만료면 401(익명 dev-user-1 지갑 오적립 차단, C1).
+    const userId = await requireUserId(req);
+    if (!userId) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
     const r = await redeemCoupon(userId, body.code);
     return NextResponse.json(r, { status: r.ok ? 200 : r.reason === 'error' ? 500 : 409 });
   } catch (e) { reportError(e, 'coupon/redeem');

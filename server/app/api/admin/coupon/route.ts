@@ -3,11 +3,12 @@ import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/observability';
 import { and, desc, eq } from 'drizzle-orm';
 import { db } from '../../../../db';
-import { coupons } from '../../../../db/schema';
+import { coupons, users } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
 import { normalizeCode } from '../../../../lib/coupon';
 import { ensureProj } from '../../../../lib/wallet';
 import { PROJ_CODE } from '../../../../lib/proj';
+import { normalizeEndsAt } from '../../../../lib/dates'; // date-only endsAt KST 정규화(공지와 공용, C2/§13.15)
 
 export const dynamic = 'force-dynamic';
 
@@ -24,11 +25,21 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     }
     const startsAt = b.startsAt ? new Date(b.startsAt) : undefined; // 미지정=DB defaultNow()(클럭 일관)
-    const endsAt = b.endsAt ? new Date(b.endsAt) : null;
+    const endsAt = b.endsAt ? normalizeEndsAt(b.endsAt) : null; // date-only는 KST 그날 23:59:59.999로(C2, 공지와 통일)
     if ((startsAt && Number.isNaN(startsAt.getTime())) || (endsAt && Number.isNaN(endsAt.getTime()))) {
       return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     }
     await ensureProj(); // FK 부모 보장
+    // 개인 쿠폰 targetUserId는 insert 전에 존재 확인 — 없으면 FK 위반이 catch에서 'duplicate'로 위장되던 것 차단(C3).
+    // 잘못된 uuid 형식은 select 자체가 throw할 수 있어 try로 감싸 실패도 '없음'과 동일 처리(no-such-user 400).
+    if (b.targetUserId) {
+      let exists = false;
+      try {
+        const u = await db.select({ id: users.id }).from(users).where(eq(users.id, b.targetUserId)).limit(1);
+        exists = u.length > 0;
+      } catch { exists = false; }
+      if (!exists) return NextResponse.json({ ok: false, reason: 'no-such-user' }, { status: 400 });
+    }
     try {
       const ins = await db
         .insert(coupons)
@@ -61,7 +72,7 @@ export async function PATCH(req: Request) {
     if (!b.id) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     const upd: Record<string, unknown> = {};
     if (b.rewardDiamonds !== undefined) { const r = Math.floor(Number(b.rewardDiamonds)); if (!Number.isFinite(r) || r <= 0 || r > REWARD_CAP) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.rewardDiamonds = r; }
-    if (b.endsAt !== undefined) { const d = b.endsAt ? new Date(b.endsAt) : null; if (d && Number.isNaN(d.getTime())) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.endsAt = d; }
+    if (b.endsAt !== undefined) { const d = b.endsAt ? normalizeEndsAt(b.endsAt) : null; if (d && Number.isNaN(d.getTime())) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.endsAt = d; } // date-only KST 정규화(C2)
     if (typeof b.disabled === 'boolean') upd.disabled = b.disabled;
     if (b.targetUserId !== undefined) upd.targetUserId = b.targetUserId || null;
     if (Object.keys(upd).length === 0) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });

@@ -7,15 +7,9 @@ import { announcements } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
 import { ensureProj } from '../../../../lib/wallet';
 import { PROJ_CODE } from '../../../../lib/proj';
+import { normalizeEndsAt } from '../../../../lib/dates'; // date-only endsAt KST 정규화(공지·쿠폰 공용, §13.15)
 
 export const dynamic = 'force-dynamic';
-
-// date-only endsAt('YYYY-MM-DD')는 운영자 기대(그날 밤까지)에 맞춰 KST 그날 23:59:59.999(= 해당일 UTC T14:59:59.999Z)로 정규화.
-// new Date('YYYY-MM-DD')=UTC 자정=KST 오전 9시라 9시간 일찍 만료되는 함정 방지(§13.15). 시각 포함 ISO 전체 문자열은 그대로 파싱.
-function normalizeEndsAt(raw: string): Date {
-  if (/^\d{4}-\d{2}-\d{2}$/.test(raw)) return new Date(`${raw}T14:59:59.999Z`);
-  return new Date(raw);
-}
 
 export async function POST(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });

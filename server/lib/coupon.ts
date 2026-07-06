@@ -1,6 +1,6 @@
 // 쿠폰 사용 (BACKEND_SYSTEM §13.14) — **단일 트랜잭션(P0-A)**: 검증 + redemption INSERT + applyWalletTx 원자화.
 // 두 트랜잭션을 이으면 "기록만 남고 미지급" 크래시 창이 생김 → 하나의 db.transaction으로 묶는다.
-import { and, eq } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { coupons, couponRedemptions, users } from '../db/schema';
 import { applyWalletTx } from './wallet';
@@ -28,8 +28,10 @@ export async function redeemCoupon(userId: string, rawCode: string): Promise<Red
       const c = rows[0];
       // ② disabled
       if (c.disabled) return { ok: false as const, reason: 'invalid' as const };
-      // ③ 기간 — 서버 시각 기준(now ∈ [starts, ends(null=무기한)]). 시작 전/종료 후 모두 'expired'로 안내
-      const nowMs = Date.now();
+      // ③ 기간 — DB now() 기준(now ∈ [starts, ends(null=무기한)]). 시작 전/종료 후 모두 'expired'로 안내.
+      // 발행측(admin POST)이 startsAt 미지정 시 DB defaultNow()를 쓰므로(JS 클럭 스큐 회피) 판정도 같은 DB 클럭으로 통일(C4).
+      const nowRows = (await tx.execute(sql`select now() as "dbNow"`)) as unknown as Array<{ dbNow: Date }>;
+      const nowMs = new Date(nowRows[0].dbNow).getTime();
       if (c.startsAt.getTime() > nowMs) return { ok: false as const, reason: 'expired' as const };
       if (c.endsAt && c.endsAt.getTime() < nowMs) return { ok: false as const, reason: 'expired' as const };
       // ④ target — 개인 쿠폰이면 소유자만(불일치는 존재 은폐 위해 'invalid')

@@ -284,6 +284,13 @@
 - **보관기간(P0-C)**: `coupon_redemptions`는 **파기 제외**(활성/무기한 쿠폰 재수령 구멍 차단 — 현 `purgeExpired`가 wallet_ledger만 건드려 기본 안전, 명기). `wallet_ledger reason='coupon'`은 게임경제 원장 2년 티어(결제 아님 → 5년 아님, §13.9 정합).
 - **결정론 격리**: 쿠폰 다이아는 balance 합류 순수 재화. camp campLog는 applied 게이팅·saveId 멱등이라 다이아 출처와 무관하게 결정론 불변. 엔진 무파급.
 
+- **정정(2026-07-06, 발견·검증=Fable 5 / 수정·문서=Opus 에이전트)** — 쿠폰 라운드 4건 잠복(공지 라운드와 같은 날·같은 클래스). 상설 가드 `server/tools/_dv_coupon_live.ts`(12항+A/B)로 회귀 봉인:
+  - **C1(MED-HIGH) — redeem 익명 폴백**: ~~`/api/coupon/redeem`가 `resolveUserId`(무토큰이면 공유 익명 `dev-user-1`로 폴백)~~ → **`requireUserId`로 교체, null이면 401 `unauthorized`**(§13.17 P0-5 정합). 증상: 세션 만료 유저가 쿠폰 사용 시 "지급 완료"로 보이는데 지급은 익명 버킷에 들어가 **본인 지갑 불변**(split-brain). 클라(`app/coupon.tsx`)는 이미 'unauthorized' 분기("로그인이 만료되었습니다")·`CouponRedeemResult` 타입에도 이미 포함 — 무수정.
+  - **C2(MED-LOW) — endsAt date-only KST 함정(공지 F5 형제)**: ~~`new Date(b.endsAt)`(‘YYYY-MM-DD’=UTC 자정=KST 오전 9시라 9시간 일찍 만료)~~ → 공지 라우트의 `normalizeEndsAt`를 **공용 `server/lib/dates.ts`로 추출**(date-only→해당일 `T14:59:59.999Z`=KST 23:59:59.999), 공지·쿠폰 POST·PATCH가 **동일 헬퍼 공유**(startsAt은 무변경).
+  - **C3(LOW) — POST 오류 뭉뚱그림**: ~~존재하지 않는 `targetUserId`(FK 위반)도 insert catch에서 전부 409 'duplicate'로 위장~~ → insert **전에** `users`에서 존재 확인(잘못된 uuid 형식은 select 자체가 throw할 수 있어 try로 감싸 실패도 동일 처리), 없으면 **400 `no-such-user`**. insert catch의 'duplicate' 409는 이제 실제 UNIQUE 충돌만. ops 콘솔은 `reason`을 그대로 표시(flash) → 무수정.
+  - **C4(LOW) — 기간 판정 클럭 통일**: ~~`redeemCoupon`이 `Date.now()`(JS 클럭)로 기간 비교~~ → 트랜잭션 안에서 **DB `now()` 1회 조회** 후 그 값으로 startsAt/endsAt 비교. 발행측(admin POST)이 startsAt 미지정 시 DB `defaultNow()`를 쓰므로(스큐 회피) **판정도 같은 DB 클럭으로 통일**.
+  - **보류(의식적)**: `wallet earn/spend/get` 3종 라우트도 `resolveUserId`(익명 폴백)를 쓰나 — **하드 로그인 벽**(토큰 없이는 호출 경로 자체가 없음)이라 실위험 낮아 이번엔 보류. `requireUserId` 통일은 후속 과제.
+
 ### 13.15 관리자 대시보드 (#58 발급·#57 발행·#56 게이트, 2026-07-03 · **2026-07-04 UI 개편 + #46 통계**)
 > 운영 콘솔(1인 운영). Next.js 페이지 + ADMIN_TOKEN 보호 API. 인라인 스타일 + 내장 `<style>`만(외부 스크립트 0, XSS 표면 최소), `noindex`.
 > - **경로 은닉(2026-07-04 사용자 요청)**: `/admin` → **`/ops-9f3a2c`**(추측 차단 — 유저가 `/admin` 접근 우려). 실보안은 ADMIN_TOKEN(경로는 보조). `/admin` 라우트 삭제(404).
