@@ -206,6 +206,9 @@
   — season0 클리어 불필요·소급 0). 신규 액션 `trainingCamp(playerId, course)`는 코스만 받음. day0 적용 유지.
 - **검증(H4)**: **`_dv_campeffect`**(effect A/B — 영건+코스 성장 후 ΔOVR ≥ +1 vs 무캠프 대조군 0 · cap99 · 결정론 ·
   구 stats 엔트리 재적용 정합, README 루틴 등록) + `_dv_diamonds` 코스 모델 갱신 + `_gt_determinism`(campLog 리플레이 불변).
+- **상설 가드 — 아웃박스·campLog 재적용(발견·검증=Fable 5 / 가드·문서=Opus 에이전트, 2026-07-07)**: `tools/_dv_campoutbox.ts` —
+  시즌0(base null) 재수화 시 `campLog` 시드 재적용 +2/+7(정확히 1회)·시즌≥1(playerBase 존재)은 재적용 스킵(이중적용 0)을
+  실 `persist.rehydrate`로 검증(store/useGameStore.ts:1183-1191 else-if 구조). 아웃박스·게이트도 동봉. README 루틴 등록.
 - **MED(부분 채택)**: 포지션-코스 미스매치 UI 경고 ✅(예: 리베로에 공격 코스 — 경고만, 차단 안 함: 유저 자유).
   오프시즌 코스 인원 캡·"벤치는 sk* 실현 60~80%" 이중게이트 명시는 보류(§11.5 미해결로).
 - **상태**: ✅ **구현 완료(2026-07-02)** — 엔진(`CAMP_COURSES`·`applyCampCourse`)·store(course 액션+유니온 재적용)·
