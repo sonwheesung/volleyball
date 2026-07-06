@@ -45,7 +45,7 @@
 | `engine/draft.test.ts` | 드래프트 위시 우선순위·중복 지명·슬롯 한도 | 1 | — |
 | `tools/_gt_facontract.ts` | **재계약·FA 영입 시나리오 15케이스**(reSign 게이트: 정상/타팀/음수·0·NaN/years·잔여/8억초과/캡/외인면제/프랜차이즈11억 · FA: 큐·등급 A>B>C·endSeason 정원·캡 불변식). 정상=적용·비정상=거부 양방향(A/B). exit 0/1 | 1·2·연봉/캡 | — |
 | `tools/_gt_bench.ts` | **주전·벤치 시나리오 9케이스**(라인업 6+리베로·벤치 제외·마지막 리베로 EC-LU-01·7인 가드·ownerBenched 사유 · 건의 게이트: 타팀/쿨다운16 · suggestStart 최약 주전 벤치 EC-LU-02 실제 액션). exit 0/1 | 5·라인업 | — |
-| `tools/_dv_bench.ts`·`_dv_bench2.ts` | **독립 검증(2026-06-24 독립 세션)** — 문서서 불변식 9종 도출, A/B 자가검증 내장. _dv_bench2: EC-LU-02 옛버그(최강벤치) 재주입 88/88 검출·사유 우선순위. _dv_bench: 라인업·게이트·pickRest(리베로 휴식 0·≤2명, 무거움). 메인 _gt_bench가 허위 오라클 아님 교차확인 | 5·라인업 | `_dv_bench` 무거움(on-demand) |
+| `tools/_dv_bench.ts`·`_dv_bench2.ts` | **독립 검증(2026-06-24 독립 세션)** — 문서서 불변식 9종 도출, A/B 자가검증 내장. _dv_bench2: EC-LU-02 옛버그(최강벤치) 재주입 91/91 검출·incumbent 명세일치(I5++)·사유 우선순위. _dv_bench: 라인업·게이트·pickRest(리베로 휴식 0·≤2명, 무거움). 메인 _gt_bench가 허위 오라클 아님 교차확인. **2026-07-07 오라클 정정(Opus)**: `suggestStart` 반환이 boolean→`{ok,reason}`(06-24 이후)으로 바뀌어 I5++가 감독 거부(coachCall)를 성공으로 오판 → 스퓨리어스 FAIL(엔진 WAI). `.ok` 판정+거부 스킵으로 수정, 재계산 오라클을 엔진과 동일 키(멤버십=폼 라인업·최약=순수 OVR)로 정렬. TEST_METHODOLOGY §4 "return-shape drift" | 5·라인업 | `_dv_bench` 무거움(on-demand) |
 
 **악질 유저/원숭이(adversarial·monkey) 퍼저군** — 실제 zustand 스토어를 Node에서 구동(액션 난사·적대 입력).
 **먼저 `import './_gt_mock'`**(AsyncStorage 인메모리 모킹)이 필요. 시드 결정론·재현 가능.
@@ -207,7 +207,7 @@
 | ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
 |---|---|---|---|
 | EC-LU-01 | **벤치 지시가 팀의 마지막 리베로까지 빼서 리베로 0으로 경기**(상대 리베로는 정상 출전 → 우리 팀만 리베로 없음). 프로팀이 리베로 없이 뛰는 비현실. 사용자 보고(2026-06-22) | `availableTeamPlayers`/forward-pass의 벤치 필터가 **총원 7인 가드만** 보고 포지션은 안 봄 → 리베로 전원 벤치 시 코트 리베로 null. → 공유 헬퍼 `applyBenchDirective`에 **마지막 리베로 보호**(리베로 벤치만 무효) 추가, 양 경로 공유로 결정론 유지 (`data/dynamics.ts`) | **`simStarters`** G1 (전 리베로 벤치 → 코트 리베로 존재, A/B FAIL→PASS) |
-| EC-LU-02 | **선발 기용 건의(`suggestStart`) 수락 시 동포지션 '최강' 주전을 벤치**(에이스 강등). 주석은 "최약 주전"인데 코드가 정반대 → 백업 선발 건의가 에이스(90+)를 벤치로 | `suggestStart` 인컴번트 선택이 `sort((x,y)=>overall(y)-overall(x))[0]`(내림차순=최강). → 실제 경기 라인업(`buildLineup(availableTeamPlayers)`)의 동포지션 **최약 주전**을 벤치하도록 수정 (`store/useGameStore.ts`) | **`simStarters`** G2 (수락 시 벤치=최약 주전인지, A/B FAIL→PASS) |
+| EC-LU-02 | **선발 기용 건의(`suggestStart`) 수락 시 동포지션 '최강' 주전을 벤치**(에이스 강등). 주석은 "최약 주전"인데 코드가 정반대 → 백업 선발 건의가 에이스(90+)를 벤치로 | `suggestStart` 인컴번트 선택이 `sort((x,y)=>overall(y)-overall(x))[0]`(내림차순=최강). → 실제 경기 라인업(`buildLineup(availableTeamPlayers)`)의 동포지션 **최약 주전**을 벤치하도록 수정 (`store/useGameStore.ts`). **"최약 주전" 정의(2026-07-07 정밀화)**: *주전 멤버십*은 폼 반영 라인업(`buildLineup(availableTeamPlayers)` — bestByPos가 폼-조정 OVR로 선발)로 정하되, 그중 *'최약' 판정*은 **순수 OVR**(`squad`=`rosterIdsOnDay`→`evolveOnDay`, 폼 미반영)로 오름차 정렬한 첫 선수 — 주전은 폼≈1.0이라 통상 동일하나 폼≠1이면 갈릴 수 있어 규칙을 명시(코드 주석 = 정본) | **`simStarters`** G2 (수락 시 벤치=최약 주전인지, A/B FAIL→PASS) |
 
 > EC-LU 발견 방법: 사용자 관전 보고("우리 리베로만 경기 안 나옴, 90+인데") → **home/away 대칭 엔진에서 팀-특정 필터 추적**(injured/suspended는 전역 → 유일 비대칭 = 벤치 지시) → 재현 프로브(`_ev_libero_bench`) → **선발 검증 시뮬(`simStarters`)** 로 5요인(지시·OVR·징계·부상·폼) 전수 + 가드 상설화. 도구 자체 A/B(수정 전 FAIL 확인 → 수정 후 PASS).
 

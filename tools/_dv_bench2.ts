@@ -34,8 +34,8 @@ import './_gt_mock';
         const backup = roster.map((id) => evolveOnDay(id, day)!).find((p) => p.position === P && !starterIds.has(p.id));
         if (!backup) continue;
         const before = new Set(G().benchDirectives.map((b) => b.playerId));
-        const ok = G().suggestStart(backup.id);
-        if (!ok) continue;
+        const r = G().suggestStart(backup.id); // 반환은 {ok, reason?} 객체 — .ok로 판정(2026-07-03 API 변경)
+        if (!r.ok) continue; // 감독 거절(coachCall 등)이면 벤치 미발생 — 대조 대상 아님
         const benchedId = G().benchDirectives.map((b) => b.playerId).filter((id) => !before.has(id))[0];
         if (!benchedId) continue;
         cases++;
@@ -70,17 +70,21 @@ import './_gt_mock';
         const starterIds = new Set(startersP.map((p) => p.id));
         const backup = roster.map((id) => evolveOnDay(id, day)!).find((p) => p.position === P && !starterIds.has(p.id));
         if (!backup) continue;
-        // 명세 재계산: buildLineup(availableTeamPlayers(벤치 반영)) 의 동포지션 최약 주전
+        // 명세 재계산(엔진 suggestStart와 동일 규칙): 멤버십=폼 반영 라인업(buildLineup(availableTeamPlayers)),
+        //   '최약'=순수 OVR(evolveOnDay, 폼 미반영) — 엔진은 squad(rosterIdsOnDay·폼 없음)를 starterIds로 필터 후 오름차 정렬.
         const benchedNow = new Set(G().benchDirectives.map((b) => b.playerId));
-        const avail = availableTeamPlayers(my, day);
-        const luNow = buildLineup(avail);
-        const starterNowP = [...luNow.six, ...(luNow.libero ? [luNow.libero] : [])].filter((p) => p.position === P && !benchedNow.has(p.id) && p.id !== backup.id);
-        if (starterNowP.length < 1) continue;
-        const expectedWeak = [...starterNowP].sort((a, b) => overall(a) - overall(b))[0].id;
+        const luNow = buildLineup(availableTeamPlayers(my, day));
+        const starterIdsNow = new Set<string>([...luNow.six.map((p) => p.id), ...(luNow.libero ? [luNow.libero.id] : [])]);
+        const cand = roster
+          .map((id) => evolveOnDay(id, day)!)
+          .filter((q) => q.position === P && q.id !== backup.id && starterIdsNow.has(q.id) && !benchedNow.has(q.id));
+        if (cand.length < 1) continue;
+        const expectedWeak = [...cand].sort((a, b) => overall(a) - overall(b))[0].id;
         const before = new Set(G().benchDirectives.map((b) => b.playerId));
-        const ok = G().suggestStart(backup.id);
-        if (!ok) continue;
+        const r = G().suggestStart(backup.id); // 반환은 {ok, reason?} 객체 — .ok로 판정(2026-07-03 API 변경)
+        if (!r.ok) continue; // 감독 거절(coachCall 등)이면 벤치 미발생 — 대조 대상 아님(엔진 WAI)
         const benchedId = G().benchDirectives.map((b) => b.playerId).filter((id) => !before.has(id))[0];
+        if (!benchedId) continue; // 방어: 벤치 미추가면 스킵(거절과 동일 처리)
         tested++;
         if (benchedId !== expectedWeak) mismatches++;
         break;
