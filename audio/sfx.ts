@@ -1,7 +1,8 @@
 // 경기 보드 효과음(휘슬·스파이크·서브) — UI 레이어 전용. 엔진(/engine)은 오디오를 모른다(순수성 유지).
 // 음원: 합성 효과음(assets/audio/*.wav, 44.1kHz·16bit·모노 — 2026-06-28 numpy 합성으로 무음 플레이스홀더 교체).
 //   더 좋은 음원으로 바꾸려면 같은 파일명으로 덮으면 끝(코드 무변경). 다른 확장자면 아래 SOURCES require만 변경.
-import { createAudioPlayer, setAudioModeAsync } from 'expo-audio';
+import { createAudioPlayer } from 'expo-audio';
+import { ensureAudioMode } from './bgm'; // 오디오 모드는 BGM 매니저가 단일 소유(SOUND_SYSTEM §2.7) — 여기선 재사용
 
 export type SfxKey = 'serve' | 'spike' | 'whistle';
 type Player = ReturnType<typeof createAudioPlayer>;
@@ -26,8 +27,8 @@ export function initSfx(): void {
   if (ready) return;
   ready = true;
   try {
-    // 폰 무음 스위치 존중(관전형 — 조용히 보고 싶은 사람을 방해 안 함) + 다른 앱 오디오와 공존
-    setAudioModeAsync({ playsInSilentMode: false, interruptionMode: 'mixWithOthers' }).catch(() => {});
+    // 폰 무음 스위치 존중(관전형) + 다른 앱 오디오와 공존 — 설정은 BGM 매니저와 공유(중복 금지, audio/bgm.ts)
+    ensureAudioMode();
     for (const k of Object.keys(SOURCES) as SfxKey[]) {
       const p = createAudioPlayer(SOURCES[k]);
       p.volume = k === 'whistle' ? 0.7 : 0.9;

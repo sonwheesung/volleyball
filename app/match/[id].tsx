@@ -1,4 +1,4 @@
-import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -14,6 +14,7 @@ import { getFixture, getTeam, shortTeamName } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
 import { DEV_TOOLS } from '../../data/flags';
 import { teamOverallRaw } from '../../engine/overall';
+import { setBgmSuppressed } from '../../audio/bgm';
 import { useGameStore } from '../../store/useGameStore';
 
 export default function MatchBoard() {
@@ -40,6 +41,12 @@ export default function MatchBoard() {
   // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거). ptIdx=현재 점수가 반영된 득점 인덱스(타임라인 조회용)
   const [score, setScore] = useState({ h: 0, a: 0, homeSets: 0, awaySets: 0, setNo: 1, ptIdx: -1 });
   const handleScore = useCallback((s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number; ptIdx: number }) => setScore(s), []);
+
+  // 경기 관전 중엔 배경음악 정지(SOUND_SYSTEM §2.4) — 보드 자체 연출·SFX에 자리를 내준다. 모든 이탈은 router.back() 수렴.
+  useFocusEffect(useCallback(() => {
+    setBgmSuppressed(true);
+    return () => setBgmSuppressed(false);
+  }, []));
 
   const isSandbox = sandbox === '1';
   const fixture = id && !isSandbox ? getFixture(id) : undefined;

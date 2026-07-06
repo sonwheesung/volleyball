@@ -1,12 +1,14 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import Slider from '@react-native-community/slider';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 import { Muted, Screen, theme, themedStyles, useThemeMode, setThemeMode } from '../components/Screen';
 import { DEV_TOOLS } from '../data/flags';
 import { seasonYear } from '../data/seasonLabel';
+import { setBgmVolume as applyBgmVolume } from '../audio/bgm';
 import { useGameStore } from '../store/useGameStore';
 
 const ROSE = '#FF5C8D';
@@ -42,8 +44,12 @@ export default function Settings() {
   const setSupporter = useGameStore((s) => s.setSupporter);
   const sfxEnabled = useGameStore((s) => s.sfxEnabled);
   const setSfx = useGameStore((s) => s.setSfx);
+  const bgmVolume = useGameStore((s) => s.bgmVolume);
+  const setBgmVolumeStore = useGameStore((s) => s.setBgmVolume);
   const mode = useThemeMode();
   const [confirmReset, setConfirmReset] = useState(false);
+  // 슬라이더 라이브 값(드래그 중 즉시 청음 반영 — 렌더 churn과 스토어 커밋 분리, SOUND_SYSTEM §3)
+  const [bgmLive, setBgmLive] = useState(bgmVolume);
 
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
 
@@ -74,6 +80,26 @@ export default function Settings() {
             <Muted style={{ fontSize: 12, marginTop: 1 }}>경기 보드 휘슬·스파이크·서브 소리 (무음 모드 존중)</Muted>
           </View>
           <Switch value={sfxEnabled} onValueChange={setSfx} trackColor={{ true: theme.accent, false: theme.cardAlt }} />
+        </View>
+        <View style={styles.toggleRow}>
+          <View style={[styles.rowIcon, { backgroundColor: theme.accent + '1A' }]}>
+            <Ionicons name={bgmLive > 0 ? 'musical-notes-outline' : 'musical-note-outline'} size={18} color={theme.accent} />
+          </View>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.rowLabel}>배경음악</Text>
+            <Muted style={{ fontSize: 12, marginTop: 1 }}>{`앱 배경에 흐르는 음악 · ${Math.round(bgmLive * 100)}% (경기 중엔 멈춤)`}</Muted>
+            <Slider
+              style={{ width: '100%', height: 32, marginTop: 4 }}
+              minimumValue={0}
+              maximumValue={1}
+              value={bgmVolume}
+              minimumTrackTintColor={theme.accent}
+              maximumTrackTintColor={theme.cardAlt}
+              thumbTintColor={theme.accent}
+              onValueChange={(v) => { setBgmLive(v); applyBgmVolume(v); }}
+              onSlidingComplete={(v) => setBgmVolumeStore(v)}
+            />
+          </View>
         </View>
         <View style={styles.toggleRow}>
           <View style={[styles.rowIcon, { backgroundColor: theme.accent + '1A' }]}>

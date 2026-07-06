@@ -4,11 +4,11 @@
 
 export const SAVE_VERSION = 1;
 
-// 영속 60필드 기본값 — freshSave(store/useGameStore.ts) + 설정 4필드와 1:1. 정규화 기준 단일 소스.
+// 영속 61필드 기본값 — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
 // (drift 가드: _dv_migrate가 이 키 집합 == partialize 키 집합을 단언한다.)
 export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 설정(새 게임에도 유지)
-  onboarded: false, supporter: false, sfxEnabled: true, seenTips: {},
+  onboarded: false, supporter: false, sfxEnabled: true, bgmVolume: 0.8, seenTips: {},
   // 기본 진행
   selectedTeamId: null, season: 0, currentDay: 0, results: {}, watchProgress: {},
   // 계약·방출·거래
@@ -43,7 +43,7 @@ type Kind = 'bool' | 'nbool' | 'num' | 'nstr' | 'rec' | 'nrec' | 'arr';
 
 // 필드별 자료구조(SAVE_SYSTEM §1). 특수(중첩) 필드는 여기 없고 sanitizeSave switch default가 처리.
 const KIND: Record<string, Kind> = {
-  onboarded: 'bool', supporter: 'bool', sfxEnabled: 'bool', seenTips: 'rec',
+  onboarded: 'bool', supporter: 'bool', sfxEnabled: 'bool', bgmVolume: 'num', seenTips: 'rec',
   selectedTeamId: 'nstr', season: 'num', currentDay: 'num', results: 'rec', watchProgress: 'rec',
   contractOverrides: 'rec', released: 'arr', inSeasonTx: 'arr', faPool: 'arr',
   resignDecisions: 'rec', faSignings: 'arr', faAggressive: 'bool',

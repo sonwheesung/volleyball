@@ -14,6 +14,7 @@ import { DialogHost } from '../components/AppDialog';
 import { useGameStore } from '../store/useGameStore';
 import { initIap } from '../lib/iap';
 import { initAds } from '../lib/ads';
+import { initBgm, startBgm, setBgmVolume } from '../audio/bgm';
 import { installErrorSink, installCrashHandler } from '../lib/deviceLog';
 import { installKoreanKeepAll } from '../lib/koreanLineBreak';
 import { track } from '../lib/analytics';
@@ -86,7 +87,11 @@ export default function RootLayout() {
     installErrorSink(() => useGameStore.getState().season); // 오류를 진단 버퍼에 시즌 태그로(#44)
     installCrashHandler(); // 미처리 예외도 진단 버퍼에(BACKEND §13.20 ④) — 없으면 크래시가 스냅샷에 안 남음
     track('app_open'); // 세션 시작(ANALYTICS_PLAN — 리텐션 자동산출 근간)
+    initBgm(); startBgm(); // 배경음악(SOUND_SYSTEM §2) — 루트 1회, 게임 실행 전체(인트로·로그인 포함). 경기 화면은 자체 suppress
   }, []);
+  // 저장된 BGM 볼륨을 반영(hydration 완료·설정 변경 시 반응적으로). 슬라이더 라이브는 setBgmVolume 직접, 커밋은 이 경로.
+  const bgmVolume = useGameStore((s) => s.bgmVolume);
+  useEffect(() => { setBgmVolume(bgmVolume); }, [bgmVolume]);
   if (!introDone) {
     return (
       <>

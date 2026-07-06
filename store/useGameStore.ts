@@ -84,6 +84,7 @@ interface GameState {
   onboarded: boolean;                          // 온보딩(첫 안내) 완료 — 세이브와 별개(초기화해도 유지)
   supporter: boolean;                          // 서포터 팩(비소모성 IAP) 보유 — 구매 자산이라 초기화해도 유지
   sfxEnabled: boolean;                         // 경기 효과음(휘슬·스파이크·서브) 켬 — 사용자 환경설정(초기화해도 유지)
+  bgmVolume: number;                           // 배경음악 볼륨 0..1(SOUND_SYSTEM §3) — 사용자 환경설정(초기화해도 유지)
   seenTips: Record<string, true>;              // 본 스포트라이트 스텝 id 집합(ONBOARDING) — 세이브와 별개(초기화해도 유지)
   selectedTeamId: string | null;
   season: number;                              // 0-based 경과 시즌
@@ -198,6 +199,7 @@ interface GameState {
   grantSupporter: () => void;
   setSupporter: (v: boolean) => void;
   setSfx: (v: boolean) => void;
+  setBgmVolume: (v: number) => void;
 }
 
 const freshSave = {
@@ -304,6 +306,7 @@ export const useGameStore = create<GameState>()(
       onboarded: false,
       supporter: false,
       sfxEnabled: true,
+      bgmVolume: 0.8,
       seenTips: {},
       ...freshSave,
 
@@ -1102,6 +1105,7 @@ export const useGameStore = create<GameState>()(
       grantSupporter: () => set({ supporter: true }), // 결제 성공 시 호출(출시 시 IAP 콜백에 연결)
       setSupporter: (v) => set({ supporter: v }),     // 미리보기 토글(개발용) — 적용된 모습 확인
       setSfx: (v) => set({ sfxEnabled: v }),          // 효과음 켬/끔(설정) — 영속
+      setBgmVolume: (v) => set({ bgmVolume: Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.8)) }), // BGM 볼륨 0..1 클램프 — 영속
     }),
     {
       name: 'baeknyeon-save',
@@ -1113,6 +1117,7 @@ export const useGameStore = create<GameState>()(
         onboarded: s.onboarded,
         supporter: s.supporter,
         sfxEnabled: s.sfxEnabled,
+        bgmVolume: s.bgmVolume,
         seenTips: s.seenTips, // 본 스포트라이트 스텝(영구 추적 — 리로드/새 게임에도 유지, ONBOARDING 1·4)
         selectedTeamId: s.selectedTeamId,
         season: s.season,
