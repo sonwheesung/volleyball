@@ -95,7 +95,7 @@ export function getBootstrap(): Promise<ServerResult<BootstrapData>> {
 export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[]; adToday?: { count: number; lastAtMs: number | null } }>> {
   return call('/api/wallet');
 }
-/** 다이아 차감(전지훈련). 서버 확정 후에만 앱이 반영. **금액은 서버 권위**(camp=−900 강제, §13.12) — amount는 표시/호환용.
+/** 다이아 차감(전지훈련). 서버 확정 후에만 앱이 반영. **금액은 서버 권위**(camp=−300 강제(2026-07-06 인하), §13.12) — amount는 표시/호환용.
  *  idempotencyKey = camp:<userId>:<saveId>:<season>:<playerId>. ref = 감사용 상세(playerId:course). */
 export function spendDiamonds(amount: number, reason: WalletReason, idempotencyKey: string, ref?: string) {
   return call<{ balance: number; applied: boolean }>('/api/wallet/spend', {

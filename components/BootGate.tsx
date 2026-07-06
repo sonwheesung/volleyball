@@ -62,10 +62,12 @@ export function BootGate({ children }: { children: ReactNode }) {
     return () => sub.remove();
   }, [userId]);
 
-  // 읽음 목록 prune — 활성 공지 id와 교집합만 유지(만료 공지 id 무한증가 차단, §13.13)
+  // 읽음 목록 prune — 활성 공지 id와 교집합만 유지(만료 공지 id 무한증가 차단, §13.13).
+  // 서버 응답 존재 시에만(빈 배열 포함) prune. 오프라인(boot=null)엔 스킵 — 응답 없는데 prune하면
+  // 만료 아닌 공지 읽음까지 지워져 재노출된다(오프라인 보호).
   const activeAnns = boot?.announcements ?? [];
   useEffect(() => {
-    if (activeAnns.length) pruneReadAnnouncements(activeAnns.map((a) => a.id));
+    if (boot) pruneReadAnnouncements((boot.announcements ?? []).map((a) => a.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boot]);
 

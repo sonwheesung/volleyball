@@ -23,7 +23,8 @@ export async function GET() {
           or(isNull(announcements.endsAt), gte(announcements.endsAt, sql`now()`)),
         ),
       )
-      .orderBy(desc(announcements.pinned), desc(announcements.createdAt));
+      .orderBy(desc(announcements.pinned), desc(announcements.createdAt))
+      .limit(50); // 부팅 페이로드 방어 — admin 목록 200과 별개
 
     return NextResponse.json({
       ok: true,

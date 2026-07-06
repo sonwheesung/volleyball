@@ -266,10 +266,11 @@
 > **서버는 이미 완성**(§13.11 — `announcements` 테이블 + `/api/bootstrap`가 활성분 pinned·최신순 반환). 이번은 **앱 표시**만. 무푸시 관전형 유지 — 앱 진입 시에만 조용히 surface.
 
 - **진입 모달**: BootGate가 게이트 통과 후 `boot.announcements` 중 **안 본 것**을 **하나의 리스트/페이징 모달**로(N연발 금지 — 관전형 nag 방지, 리뷰 지적). pinned은 정렬 우선일 뿐 "항상 표시" 규칙 없음.
-- **읽음 추적**: 본 공지 id를 **기기 로컬**(`useAuthStore.readAnnouncements`, persist)에 저장 → 다음 실행 시 안 본 것만 모달. 매 부팅 시 **현재 활성 id와 교집합으로 prune**(무한증가 차단). 다기기/재설치 재노출은 **의도된 트레이드오프**(서버 per-user 읽음테이블 불필요 — 관전형에 맞음).
-- **재열람**: 마이페이지 → "공지사항" → 활성 공지 전체 목록(읽음 무관). `app/announcements.tsx`.
+- **읽음 추적**: 본 공지 id를 **기기 로컬**(`useAuthStore.readAnnouncements`, persist)에 저장 → 다음 실행 시 안 본 것만 모달. **prune는 서버 응답이 있을 때만 매 부팅 현재 활성 id와 교집합**(빈 배열 포함 — 활성 0개면 읽음 목록도 비움), **오프라인(boot=null)엔 스킵**(2026-07-06 정정 — 응답 없는데 prune하면 만료 아닌 공지 읽음까지 지워져 재노출됨). 다기기/재설치 재노출은 **의도된 트레이드오프**(서버 per-user 읽음테이블 불필요 — 관전형에 맞음).
+- **재열람**: 마이페이지 → "공지사항" → 활성 공지 전체 목록(읽음 무관). `app/announcements.tsx`. **재열람도 나열된 공지를 읽음 처리**(2026-07-06 정정: 재열람 화면에서 본 공지를 `markAnnouncementsRead` → 다음 부팅 모달 중복 노출 방지 — 관전형 nag 방지 정합).
 - **정정 정책**: 같은 id 본문 수정은 이미 읽은 유저에 재노출 안 됨 → **정정은 신규 공지로**(관리자 운영 규칙).
 - **파일**: `components/AnnouncementModal.tsx`(신)·`components/BootGate.tsx`(모달 오버레이)·`store/useAuthStore.ts`(readAnnouncements)·`app/announcements.tsx`(신)·`app/(tabs)/mypage.tsx`(진입점)·`app/_layout.tsx`(라우트).
+- **검증 정정(2026-07-06, 발견·검증=Fable 5 / 수정·문서=Opus 에이전트)**: 재열람 화면이 `markAnnouncementsRead` 미호출로 다음 부팅 모달에 중복 노출(F2) → 재열람도 읽음 처리. prune 가드가 `activeAnns.length` 조건이라 활성 0개면 스킵되던 것을 **서버 응답 존재(`boot`) 기준으로 교정**(빈 배열도 prune, 오프라인만 스킵 — F3). 가드 `server/tools/_dv_announce.ts` 상설.
 
 ### 13.14 쿠폰 (#58, 2026-07-03 — 독립 리뷰 3구멍 반영)
 > 전체용(모두)·개인용(특정 유저) 쿠폰, **둘 다 기간제**. 관리자가 발급(§13.15), 유저가 코드 입력으로 사용. 보상=다이아(서버 진실 — [[server-authoritative-currency]]).
@@ -299,6 +300,11 @@
 - **레이아웃(2026-07-04)**: 콘텐츠 영역 `.oc-main`은 **max-width 1200 + margin auto 중앙 정렬**(사이드바 이후 영역 기준) — 풀폭은 너비가 넓어 가독성↓(사용자 지적), 좌측 쏠림도 해소. 전 메뉴 공통.
 - **파일**: `server/lib/admin.ts`(requireAdmin)·`server/lib/coupon.ts`·`server/lib/wallet.ts`·`server/db/schema.ts`·`server/app/api/coupon/redeem/route.ts`·`server/app/api/admin/{coupon,announcement,setting,stats,users,series,achievements}/route.ts`·`server/app/ops-9f3a2c/{page,layout}.tsx`(운영 콘솔 UI — 로그인·대시보드·사용자·결제·광고·업적·쿠폰·공지·설정·문의)·`lib/server.ts`·`app/coupon.tsx`.
 - **검증(Opus 4.8)**: 라이브 E2E(admin 발급→redeem +N·이중사용 "used"·개인쿠폰 타유저 거부·만료 거부·requireAdmin 토큰없이 401)·app/server/test tsc 0.
+- **공지 라우트 정정(2026-07-06, 발견·검증=Fable 5 / 수정·문서=Opus 에이전트)**:
+  - **DELETE proj 스코프 + 404 대칭(F1)**: `DELETE /api/admin/announcement`가 `id`만으로 삭제(projCode 미스코프 — §13.2 멀티게임 격리 위반, POST/GET/PATCH는 전부 스코프됨)에서 `and(projCode, id)` + `.returning` 0건이면 `{ok:false,reason:'not-found'}` **404**로 교정(PATCH와 대칭).
+  - **endsAt date-only KST 정규화(F5)**: 콘솔은 `YYYY-MM-DD`만 입력받는데 `new Date('YYYY-MM-DD')`=UTC 자정=**KST 오전 9시 종료**(운영자 기대 "그날 밤까지"와 9시간 어긋남). 서버가 `/^\d{4}-\d{2}-\d{2}$/`(date-only) endsAt을 **KST 그날 23:59:59.999(= 해당일 `T14:59:59.999Z`)로 정규화**(POST·PATCH 양쪽, 파일 내 `normalizeEndsAt`). 시각 포함 ISO 전체 문자열은 그대로 파싱. **startsAt은 미건드림 — 예약발행(startsAt)은 서버만 지원·콘솔 미노출**.
+  - **bootstrap 방어 limit(F6)**: `/api/bootstrap` 공지 쿼리에 `.limit(50)`(부팅 페이로드 방어 — admin 목록 `.limit(200)`과 별개).
+  - **가드**: `server/tools/_dv_announce.ts` 상설(발행→노출·만료/미래 필터·pinned 정렬·PATCH/DELETE 404 대칭·proj 스코프·date-only 타임존·fail-closed 인증 8항목 + 만료 필터 민감도 A/B 자가검증).
 
 ### 13.16 소프트 업데이트 배너 + 스토어 URL (#56 소프트, 2026-07-03)
 > **강제 업데이트**(minVersion 미만=진입 차단)는 BootGate가 이미 하드 게이트(§13.11·AUTH §4). 이번은 **소프트 안내**(latestVersion 미만) — 진입은 막지 않고 대시보드 상단 **배너**로 "업데이트 있어요". 관전형 무푸시 — 닫으면 그 버전은 다시 안 뜬다.

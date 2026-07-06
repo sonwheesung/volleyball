@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, IconLabel, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { getBootstrap } from '../lib/server';
+import { useAuthStore } from '../store/useAuthStore';
 
 type Ann = { id: string; title: string; body: string; pinned: boolean };
 
@@ -13,7 +14,13 @@ export default function Announcements() {
   useEffect(() => {
     let alive = true;
     getBootstrap()
-      .then((r) => { if (alive) setState({ loading: false, items: r.ok ? r.announcements : [], offline: !r.ok }); })
+      .then((r) => {
+        if (!alive) return;
+        const items = r.ok ? r.announcements : [];
+        setState({ loading: false, items, offline: !r.ok });
+        // 재열람 화면에 나열된 공지 = 본 것 → 읽음 처리(다음 부팅 모달 중복 노출 방지, §13.13).
+        if (items.length) useAuthStore.getState().markAnnouncementsRead(items.map((a) => a.id));
+      })
       .catch(() => { if (alive) setState({ loading: false, items: [], offline: true }); });
     return () => { alive = false; };
   }, []);

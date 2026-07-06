@@ -125,6 +125,7 @@ npx tsx tools/_dv_snapshot_replay.ts        # 진단 재현키+로그강화(BACK
 npx tsx tools/_dv_savesize.ts               # 세이브(재현키) 크기 실측(BACKEND §13.20) — N시즌 partialize raw/gzip 바이트 + 필드분해 vs Vercel 4.5MB캡. 100시즌 744KB. 측정 도구(무거움, on-demand)
 node --version >/dev/null; (cd server && npx tsx --env-file=.env.local tools/_dv_sentry_verify.ts)  # Sentry 서버 관측(BACKEND §13.21) — DSN 주입 시 이벤트 전송 flush=true(대시보드 확인). DSN 없으면 no-op. on-demand
 (cd server && npx tsx --env-file=.env.local tools/_dv_purchase.ts)  # 결제 검증 머니패스(BACKEND §13.18 #43, 2026-07-04) — RC 웹훅 인증 fail-closed·샌드박스/엔타이틀먼트/미등록 무시·grant/refund·멱등 dedup·라우트 통합(401/+1000/재전송 dedup/−1000)·테스트유저 정리. exit 0/1
+(cd server && npx tsx --env-file=.env.local tools/_dv_announce.ts)  # 공지 CRUD 가드(BACKEND §13.11·13.13·13.15, 2026-07-06) — 라이브 dev DB: 발행→bootstrap 노출·기간 필터(만료/미래)·pinned 정렬·PATCH/DELETE 404 대칭·proj 스코프·date-only endsAt KST 정규화(14:59:59.999Z)·fail-closed 인증 8항목 + 만료 필터 A/B 자가검증. _DV_ANN_ 테스트공지 자동정리. exit 0/1
 npx tsx tools/_dv_severance.ts              # 방출 위약금(TRANSACTION_SYSTEM 0.5①) — release가 cash서 severanceFee 차감·unrelease 환불·지갑부족 차단·잔여연수 단조성. exit 0/1
 npx tsx tools/_dv_releasefan.ts 8           # 스타 방출→팬 분노(TRANSACTION_SYSTEM 0.5③) — releaseAnger==releaseAngerPenalty(명성)·철회 환불·무명 0(인기 게이트)·fanScore 방향성. 느림(빌드업 4회). exit 0/1
 npx tsx tools/_dv_release_unrest.ts 8       # 핵심 방출→선수단 동요(TRANSACTION_SYSTEM 0.5④) — buildOwnerFx 만료 선수 refuseProb += releaseUnrestBias(명성)·무명 0(게이트)·순수함수 단조/상한. exit 0/1
