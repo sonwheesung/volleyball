@@ -47,7 +47,7 @@ export default function NewsArticle() {
 
   const feed = useMemo(
     () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId ?? '', transfers, retirements),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
+    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements],
   );
   const n = feed[Number(id)];
   const markNewsRead = useGameStore((s) => s.markNewsRead);

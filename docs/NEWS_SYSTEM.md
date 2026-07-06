@@ -91,7 +91,9 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 | **시즌 기록** | standing | record: 전승/30승+/한자릿수승/무승 | 전승·무승=★ |
 | **순위 서사** | standing | standings: 최하위 탈출/통한의 2위/가을야구(3위내) | 최하위탈출=★ |
 | 기록 경신 | milestone | milestones (기존) | m.big |
-| 명예의전당 헌액 | hof | hallOfFame (기존) | legend=★ |
+| 명예의전당 헌액 | hof | hallOfFame (기존) — 레전드는 본문 "헌액 번호 N번" + 번호 계보(BROADCAST §8.2·§8.3) | legend=★ |
+
+> **검증(2026-07-07, 에이전트 자체 확장 — Fable 사후 검증·수용)**: 리그 뉴스 전 가드 PASS. N1 세 뉴스 화면(index·news·news/[id])의 `useMemo` deps에 `retirements` 누락 정정(무실해였으나 계약 위반 — 단독 변경 시 은퇴 뉴스 스테일 방지). N2 `_dv_legendnews`를 관찰 스크립트→실가드 승격(레전드 전원 헌액 번호 본문 + 합성 케이스 번호 계보 + POISON A/B 이빨). N3 `_dv_newsorder` README 등재. 발견·수정·문서=에이전트(지시 범위 밖 자체 확장) / 사후 검증·수용=Fable 5.
 
 ### 3.3 타팀 선수 이동 — 방출·이적 (슬라이스4, 2026-06-25)
 

@@ -66,7 +66,7 @@ export default function Dashboard() {
   const retirements = useGameStore((s) => s.retirements);
   const allNews = useMemo(
     () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId, transfers, retirements), leagueDisplayDay(currentDay)),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers],
+    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements],
   );
   const unreadNews = useMemo(() => {
     const read = new Set(readNews);
