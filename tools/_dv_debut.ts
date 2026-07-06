@@ -9,11 +9,12 @@ import { applyAgingDay } from '../engine/aging';
 import { createRng, strSeed } from '../engine/rng';
 import { overallRaw, displayOvr } from '../engine/overall';
 import { TRAINABLE_STATS } from '../engine/training';
-import type { Player, TrainableStat, ProdLine } from '../types';
+import type { ProdLine } from '../engine/production';
+import type { Player, TrainableStat, TrainingFocus } from '../types';
 
 let fail = 0;
 const ok = (c: boolean, m: string) => { if (!c) { console.error('  ✗ FAIL:', m); fail++; } else console.log('  ✓', m); };
-const focus = { core: [1, 2] as [number, number], sub: [3, 4, 5] as [number, number, number] };
+const focus: TrainingFocus = { primary: [1, 2], secondary: [3, 4, 5] };
 const raw = (p: Player, k: TrainableStat) => (p as unknown as Record<TrainableStat, number>)[k];
 
 console.log('── 1. 생성 시 debut 캡처 ──');
@@ -23,7 +24,7 @@ ok(rookie.debut != null && rookie.debut.ovr === Math.round(displayOvr(overallRaw
 ok(rookie.debut != null && TRAINABLE_STATS.every((k) => rookie.debut!.stats[k] === raw(rookie, k)), 'debut.stats = 생성 시점 15 원본 전부');
 
 console.log('── 2. 전 변환이 debut 보존(스프레드 통과) ──');
-const prod: ProdLine = { matches: 30, points: 300, spikes: 200, blocks: 20, aces: 15, digs: 40, assists: 5, receives: 60 };
+const prod: ProdLine = { matches: 30, points: 300, spikes: 200, backSpikes: 30, blocks: 20, aces: 15, digs: 40, assists: 5, receives: 60 };
 let grown = evolvePlayer(rookie, focus, 300); // 300일 성장+노쇠
 ok(JSON.stringify(grown.debut) === JSON.stringify(rookie.debut), 'evolvePlayer 후 debut 불변');
 grown = applyMatchXp(grown, prod);
