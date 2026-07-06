@@ -348,7 +348,7 @@
 | **영속 bond** | 같은 팀 누적→0.3·떨어지면 옛정 감쇠 | **맵 바운드 ≤4000**(100시즌+ 저장폭주 0)·prune<0.02·외인 쌍 미생성·손상세이브 정규화(rec) | `_dv_relations`(누적·바운드)·`_dv_migrate`(bonds drift·키일치)·`_dv_migrate_e2e` |
 | **FA 점수→확률** | offerScore±관계→S곡선→정렬·롤·fallback | **단일소속 보존**(순차+슬롯차감, 이중계약0)·캡·자금 게이트·1팀=자동·결정론(시드 롤) | `simAudit`(13체크 0)·`simFaDup`·`_dv_fa_relations`(4시나리오·S곡선·SIT) |
 | **4시나리오 트레이드오프** | relT ± 가중합 | 우승파=싫어도 강행·의리파=앙숙 회피·연봉 양보+친구·우승+친구 동반 | `_dv_fa_relations`(성향별 점수 플립 A/B) |
-| **재계약 관계** | 친한 동료 방출→그 친구 거부↑ | uniform unrest 위에 가산(친구는 초과)·내 팀 한정(parity 무관)·미리보기=결과 | `_dv_release_unrest`(≥uniform·친구 초과)·`simMood` |
+| **재계약 관계** | 친한 동료 방출→그 친구 거부↑ | uniform unrest 위에 가산(친구는 초과)·내 팀 한정(parity 무관)·미리보기=결과. **방출은 만료자의 출전 역할도 바꾼다**(동포지션 밀린 만료자=주전 승격→출전불만 base 소멸): unrest 항은 늘 가산되나 total은 base 이동으로 내려갈 수 있음(0.5④=항 가산만 보장, total 단조 아님, EC-REL-04) | `_dv_release_unrest`(base불변=정확히+uCore·역할변동=floor≥uCore+rel·친구 초과)·`simMood` |
 | **미리보기=결과** | setRelationContext 모듈 컨텍스트 | rehydrate+endSeason 동기·로컬 affinity(친구연쇄) preview==actual | `simAudit`(영입 일관)·결정론 |
 
 ### 발견·수정된 엣지(이번 세션 — 구현/검증 중)
@@ -357,6 +357,7 @@
 | EC-REL-01 | **친구 연쇄 장기 parity 집중** — 30시즌×8 관계 ON std 4.06 vs OFF 3.42·왕조 11. 친구가 컨텐더에 몰려 super-team(20×6 단기 측정엔 안 보임) | rel 가중 ~0.05→0.03·`REL_SCALE_FA` 3.5→6 → ON std **3.12**(OFF보다 낮음)·왕조 8·r −0.18 (e45b13b) | **`simLeague 30 8` A/B**(관계 격리 NO_REL 진단)·sim-league 스킬 |
 | EC-REL-02 | **friendStay가 기준 refuse 음수화** → refuseProb는 양수만 저장 → 방출 델타 측정 교란(`_dv_release_unrest` FAIL) | friendStay 제거(친구 잔류는 Phase 2 FA 시장 relT가 처리) → friendLeave만 가산 (49f61a4) | `_dv_release_unrest`(델타 ≥uniform) |
 | EC-REL-03 | `rollFAPref` 가중치 합 테스트 FAIL — rel 키 추가로 6개 정규화인데 테스트는 5개만 합산 | 테스트 합산에 `rel` 포함 (8a17887) | `faMarket.test`(합≈1) |
+| EC-REL-04 | **가드 기대 모델 스테일 — 방출 전 refuse를 기준선으로 오용**(`_dv_release_unrest` FAIL: d4_5 핵심방출 후 0.127 < 0.638). 구모델 `B[id] ≥ A[id](방출前)+uCore`는 **base 불변**을 전제. 그러나 방출된 핵심(MB)과 **동포지션에서 밀려 벤치(outclassed→출전불만)였던 만료자**는 핵심이 빠지자 **주전 승격→출전불만 base 소멸**(discontentNow가 라커룸과 별개로 정당 반응). unrest(+uCore)를 받아도 사라진 base(0.51)를 못 되살려 total↓. **엔진 WAI**(0.5④=unrest 항 전원 가산만 보장, total 단조 미보장) — **가드 모델이 스테일**(성장C 앵커 수술 07-02·구성변화로 동포지션 승격 만료자가 표면화) | **엔진 무수정**. 가드 기대식 정정: 만료자를 방출前後 discontent 지문(topic·weight·playRatio)으로 **두 갈래** — base불변=`B==A+uCore+relTerm` 정확히 / 역할변동=`B≥uCore+relTerm`(방출후 base≥0 하한). 무명 게이트도 동일 스코핑. 발견·검증=Fable 5 / 진단·수정=Opus 에이전트 (2026-07-06, 미커밋) | `_dv_release_unrest`(base불변 정확·역할변동 floor·A/B 변이 민감도: unrest 제거 시 양 갈래 FAIL 확인) |
 
 ### 감시 대상(잠재 — verify-cases 후속)
 - **시즌 아웃 → 로스터 구멍**: 최고 점수<`SIT_OUT`(0.14)면 미입단. `SIT_OUT` 낮아 드물지만, 약팀 다수 시즌아웃 누적 시 `ROSTER_MIN` 압박 가능 → `fillRosters`(신인)가 메움. 감시: `simAudit roster`(정원 하한)·SIT 빈도 측정 도구 필요.
