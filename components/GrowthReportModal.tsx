@@ -140,7 +140,7 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
         )) : null}
       </ScrollView>
 
-      <View style={{ height: 32 }} />
+      <View style={{ height: 38 }} />
       <Button label="확인" onPress={onClose} />
     </Popup>
   );
@@ -158,35 +158,35 @@ const styles = themedStyles(() => StyleSheet.create({
   card: {
     backgroundColor: theme.cardAlt, borderRadius: 13, paddingTop: 10, paddingBottom: 8, paddingLeft: 14, paddingRight: 16, gap: 8,
     borderWidth: 1, borderColor: theme.muted + '4D',
-    shadowColor: '#000', shadowOpacity: 0.3, shadowRadius: 10, shadowOffset: { width: 0, height: 3 }, elevation: 5,
+    shadowColor: '#000', shadowOpacity: 0.34, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headCol: { flex: 1, gap: 1 },
+  headCol: { flex: 1, gap: 6 }, // 이름 ↔ OVR 여백(정보 위계)
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  name: { color: theme.text, fontSize: 18, fontWeight: '900', flexShrink: 1 }, // 이름 = 주인공(더 크게)
-  // OVR 변화 — 베이스라인 정렬 행. "79 → 80" 한 Text + ▲1 간격 두고 분리
+  name: { color: theme.text, fontSize: 18, fontWeight: '900', flexShrink: 1 }, // 이름 = 주인공
+  // OVR 변화 — 베이스라인 정렬 행. "79 → 80" 한 Text + ▲1 넉넉히 분리
   ovrRow: { flexDirection: 'row', alignItems: 'baseline' },
   ovrMain: { color: theme.text },
   ovrFrom: { color: theme.muted, fontSize: 13, fontWeight: '600' },
   ovrTo: { color: theme.text, fontSize: 24, fontWeight: '900' },
-  ovrDelta: { fontSize: 18, fontWeight: '900', marginLeft: 10 }, // 결과 정보 — 간격 두고 분리
+  ovrDelta: { fontSize: 18, fontWeight: '900', marginLeft: 15 }, // 결과 정보 — 넉넉히 분리(80과 ▲1 독립)
   ovrFlat: { color: theme.muted, fontSize: 15, fontWeight: '700', opacity: 0.55 }, // 변화 없으면 연하게
-  ovrHold: { color: theme.muted, fontSize: 11.5, fontWeight: '600', opacity: 0.3, marginLeft: 7 },
+  ovrHold: { color: theme.muted, fontSize: 11.5, fontWeight: '600', opacity: 0.3, marginLeft: 8 },
   // 이번 변화 — 섹션 제목(제목↔스탯 4)
   section: { gap: 4 },
   secHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   secBar: { width: 2.5, height: 10, borderRadius: 2, backgroundColor: theme.accent },
   lblNow: { color: theme.accent, fontSize: 13, fontWeight: '900', letterSpacing: 0.2 },
-  // 스탯 2열 그리드 — 컬럼 시작 고정(50%)·▲ 우측정렬(minWidth+textAlign)
+  // 스탯 2열 그리드 — 스탯명 고정폭 컬럼 → ▲가 매 행 같은 x에서 시작(표처럼 딱 맞음)
   statWrap: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
-  cell: { width: '50%', flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline', paddingRight: 16 },
-  statName: { color: theme.text, fontSize: 13, fontWeight: '700', flexShrink: 1 },
-  delta: { color: theme.good, fontSize: 13.5, fontWeight: '900', minWidth: 26, textAlign: 'right' },
-  deltaBig: { color: theme.good, fontSize: 14.5, fontWeight: '900', minWidth: 26, textAlign: 'right' },
+  cell: { width: '50%', flexDirection: 'row', alignItems: 'baseline', paddingRight: 10 },
+  statName: { color: theme.text, fontSize: 13, fontWeight: '700', width: 78 }, // 고정폭 = ▲ 시작선 정렬
+  delta: { color: theme.good, fontSize: 13.5, fontWeight: '900' },   // 스탯명 컬럼 뒤 고정 x에서 시작
+  deltaBig: { color: theme.good, fontSize: 14.5, fontWeight: '900' }, // 큰 폭 더 눈에
   // 누적 성장 — 참고(저대비)
   lblSub: { color: theme.muted, fontSize: 10.5, fontWeight: '700', opacity: 0.85 },
-  statNameSub: { color: theme.muted, fontSize: 12, fontWeight: '600', flexShrink: 1 },
-  deltaSub: { color: theme.good, fontSize: 12, fontWeight: '700', opacity: 0.7, minWidth: 24, textAlign: 'right' },
+  statNameSub: { color: theme.muted, fontSize: 12, fontWeight: '600', width: 76 },
+  deltaSub: { color: theme.good, fontSize: 12, fontWeight: '700', opacity: 0.7 },
   // 노쇠 — 가장 연하게
   down: { color: theme.muted, fontSize: 11, fontWeight: '600', opacity: 0.45 },
   more: { color: theme.accent, fontSize: 13, fontWeight: '800', textAlign: 'center', paddingVertical: 8 },
