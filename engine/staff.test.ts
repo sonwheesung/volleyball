@@ -2,6 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { trainingBoosts, staffEffects, NO_EFFECTS, scoutReveal, SPECIALTY_TRAININGS, assistantBoost, potRaise, headCoachSalary, assistantSalary, scoutSalary, STAFF_BUDGET, COACH_SLOTS } from './staff';
 import { evolvePlayer } from './progression';
+import { overallRaw } from './overall';
 import type { AssistantCoach, Scout, Player, Position, TrainableStat, TrainingFocus } from '../types';
 import { TRAINABLE_STATS } from './training';
 
@@ -37,6 +38,22 @@ test('공격코치(기량): skSpike 더 빨리 + 훈련 상한(포텐−GAP) 위
   assert.ok(plain.skSpike <= 72, `기본은 훈련 상한 72(=84−GAP)에서 멈춤(실측 ${plain.skSpike})`);
   assert.ok(coached.skSpike > 72, `코치는 상한을 올려 그 위로 성장(${coached.skSpike} > 72, 포텐 +${potRaise(90)})`);
   assert.ok(coached.skSpike > plain.skSpike, '코치가 더 높이');
+});
+
+test('코치 역량 등급 단조성: 역량↑ → 성장(OVR) 단조 증가 + potRaise 산식', () => {
+  // §1.8 봉인(2026-07-07, 검증=Fable 5): 코치無 < 역량60 < 역량95 OVR 단조.
+  // 하드코딩 수치가 아니라 단조 관계로 어서션(시드/밸런스 변경에 강건). 결정론이라 flaky 없음.
+  const base = mkPlayer('OH');
+  base.skSpike = 70; base.potential.skSpike = 84; base.potential.skServe = 84; // 공격 스킬에 성장 여지
+  const focus: TrainingFocus = { primary: [4, 5], secondary: [1, 2, 3] }; // 공격코치가 부스트하는 훈련(4·5)
+  const none = evolvePlayer(base, focus, 600);
+  const mid = evolvePlayer(base, focus, 600, staffEffects([asst('attack', 60)]));
+  const high = evolvePlayer(base, focus, 600, staffEffects([asst('attack', 95)]));
+  assert.ok(overallRaw(none) < overallRaw(mid), `코치無 ${overallRaw(none).toFixed(2)} < 역량60 ${overallRaw(mid).toFixed(2)}`);
+  assert.ok(overallRaw(mid) < overallRaw(high), `역량60 ${overallRaw(mid).toFixed(2)} < 역량95 ${overallRaw(high).toFixed(2)}`);
+  // potRaise 산식: round((rating/100)*5) — 60→3, 95→5
+  assert.equal(potRaise(60), 3, 'potRaise(60)=3');
+  assert.equal(potRaise(95), 5, 'potRaise(95)=5');
 });
 
 test('체력코치(노쇠 지연): 나이든 선수 jump 덜 하락', () => {
