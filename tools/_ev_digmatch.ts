@@ -101,3 +101,4 @@ log(`  엔진(박스) 디거: ${fmt(engPos, engTot)}`);
 log(`  보드 렌더 디거: ${fmt(boardPos, Object.values(boardPos).reduce((a, b) => a + b, 0))}`);
 const rate = match / paired;
 log(`\n판정: ${rate >= 0.85 ? '✅' : '⚠'} 보드 디그 마커 ${(rate * 100).toFixed(1)}% 엔진 귀속 일치 (잔여는 보드 hop 구조 분기 — 프리볼/커버로 디그 수 어긋남, 폴백)`);
+process.exit(rate >= 0.85 ? 0 : 1); // 배터리 게이트: 판정을 exit code로 배선(로그만이면 영구 허위 초록)

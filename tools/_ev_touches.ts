@@ -43,3 +43,4 @@ log(`③ 킬류 종결: 마지막 atk == byId  ${lastAtkMatchById}/${killish}  (
 log(`③ 에이스 종결: 마지막 serve == byId  ${aceMatch}/${aces}  (기대 100%)`);
 log(`불일치 합계: ${mism}`);
 log(noTouch === 0 && firstNotServe === 0 && mism === 0 ? '✅ PASS — 터치 기록 코히런트(가산·중립 sanity)' : '❌ FAIL');
+process.exit(noTouch === 0 && firstNotServe === 0 && mism === 0 ? 0 : 1); // 배터리 게이트: 판정을 exit code로 배선(로그만이면 영구 허위 초록)

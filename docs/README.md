@@ -170,16 +170,16 @@ npx tsx tools/simStarters.ts               # 선발 검증(지시·OVR·징계·
 npx tsx tools/simMood.ts                    # 선수 심리(벤치 사유 귀속·부상자 불만없음·성격/기대치별 기분 A/B·누적→FA·⑦실력밀림 주전급 성격갈림)
 npx tsx tools/_ev_rest.ts                   # 로드매니지먼트(#3) — 굳은 순위 주전 휴식·관전==순위 일치(결정론)
 # ── 교차 계층 귀속(보드가 보여준 선수 == 박스 귀속 선수) — 스코어박스 충실도 가드(TEST_METHODOLOGY §1.J) ──
-npx tsx tools/_ev_box.ts                    # 박스 밸런스 무영향(box 유무 sim.points 바이트 동일)·타임라인 정합·오라클(atkAtt/atkKill) 일치
-npx tsx tools/_ev_box_audit.ts 200          # 박스 무결성(보존식) 0위반·KOVO 밴드·A/B 검출 민감도(허위 오라클 차단)
-npx tsx tools/_ev_scorer.ts 200             # 보드 종결 스파이커 == 박스 byId 100%(팬텀 킬 0)·A/B shuffle 대조
-npx tsx tools/_ev_recvmatch.ts 300          # 보드 서브 리시버 == 박스 recvId: 클린 100%·노클린은 전부 ace(누수 0)·A/B(shuffle 모드)
-npx tsx tools/_ev_setmatch.ts 300           # 보드 종결 토서 == 박스 어시 세터(setId) 100.0%(touches·교체반영·세터 디그 시 비상세터 재귀속)·A/B(shuffle)
+npx tsx tools/_ev_box.ts                    # 박스 밸런스 무영향(box 유무 sim.points 바이트 동일)·타임라인 정합·오라클(atkAtt/atkKill) 일치. exit 0/1
+npx tsx tools/_ev_box_audit.ts 200          # 박스 무결성(보존식) 0위반·KOVO 밴드·A/B 검출 민감도(허위 오라클 차단). exit 0/1
+npx tsx tools/_ev_scorer.ts 200             # 보드 종결 스파이커 == 박스 byId 100%(팬텀 킬 0)·A/B shuffle 대조. exit 0/1
+npx tsx tools/_ev_recvmatch.ts 300          # 보드 서브 리시버 == 박스 recvId: 클린 100%(교체반영=applySubsToSix)·노클린은 전부 ace(누수 0)·A/B(shuffle 모드→exit 1). exit 0/1
+npx tsx tools/_ev_setmatch.ts 300           # 보드 종결 토서 == 박스 어시 세터(setId) 100.0%(touches·교체반영·세터 디그 시 비상세터 재귀속·잔여 7=OOS 스크램블)·A/B(shuffle). exit 0/1
 npx tsx tools/_ev_digdist.ts 300            # 디그 귀속 현실 분산 가드(2026-06-24 재모델) — 개인 디그왕=리베로(15.6%)·디거≥10명·리베로<50%. 구 best-dig(87.7%·5명) 폐기
-npx tsx tools/_ev_digmatch.ts 300           # 보드 디그 마커 == 엔진 디그 귀속(2b) 100.0%·A/B chance 10%·드리프트 0·분포 byte동일. auditBoard도 touches:true로 실제 렌더 감사
-npx tsx tools/_ev_touches.ts 200            # 랠리 터치 스크립트 1단계 — 엔진 touches 기록 코히런트(첫=서브·종결 atk==byId·ace serve==byId 100%, 가산·중립 sanity)
+npx tsx tools/_ev_digmatch.ts 300           # 보드 디그 마커 == 엔진 디그 귀속(2b) 100.0%·A/B chance 10%·드리프트 0·분포 byte동일. auditBoard도 touches:true로 실제 렌더 감사. exit 0/1
+npx tsx tools/_ev_touches.ts 200            # 랠리 터치 스크립트 1단계 — 엔진 touches 기록 코히런트(첫=서브·종결 atk==byId·ace serve==byId 100%, 가산·중립 sanity). exit 0/1
 npx tsx tools/_ev_statsource.ts 2000        # 통계 단일화 가드 — 통합 prod(box 먹임)가 스코어박스와 선수별 0 분기(5카테고리)·레거시는 분기(도구 민감)·A/B(box vs box=0)
-npx tsx tools/_ev_blockcomment.ts 200       # 스터프 중계가 byId 블로커를 호명 100%(블록=킬 수준 충실)
+npx tsx tools/_ev_blockcomment.ts 200       # 스터프 중계가 byId 블로커를 호명 100%(블록=킬 수준 충실). exit 0/1
 npx tsx tools/_ev_situation.ts 200          # 상황 인지 중계(BOARD_RULES 60) — 세트/매치포인트·듀스 검출 == 독립오라클 100%·합성경계 A/B. exit 0/1
 npx tsx tools/_dv_livebanner.ts 40          # 경기 중 실시간 현수막(BROADCAST Phase3) — 세트획득·연속득점·에이스/블록 누적: ①스포일러 안전(배너 at은 rallies[0..at]로 재현·미래 미참조 + A/B 민감)·②세트승자/세트수 정합·③빈도 ~8/경기(스팸 아님)·④결정론. exit 0/1
 npx tsx tools/_ev_matchmvp.ts 300           # 경기 MVP(AWARDS §1) — 이긴 팀 최고생산자 == 독립오라클 100%·승자측·points>0·결정론. exit 0/1

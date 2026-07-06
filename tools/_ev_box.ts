@@ -84,3 +84,4 @@ const errRate = box.err / box.att * 100, blkRate = box.blk / box.att * 100;
 log(`    참고: 범실률 ${errRate.toFixed(1)}% · 차단당함률 ${blkRate.toFixed(1)}% (시도 대비)`);
 
 log(`\n종합: ${neutralOk && tlOk && allOk && realistic ? '✅ ALL PASS' : '❌ FAIL 있음'}`);
+process.exit(neutralOk && tlOk && allOk && realistic ? 0 : 1); // 배터리 게이트: 판정을 exit code로 배선(로그만이면 영구 허위 초록)

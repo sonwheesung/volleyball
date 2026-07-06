@@ -54,3 +54,4 @@ const rate = named / stuff * 100;
 log(`스터프 득점 ${stuff}건 (시드 ${N}, 교체 반영)`);
 log(`중계가 byId 블로커 이름을 부름: ${named}건 (${rate.toFixed(2)}%)`);
 log(`판정: ${rate >= 99 ? '✅ PASS — 블로커 100% 호명(킬 수준 충실)' : '❌ CHECK'}`);
+process.exit(rate >= 99 ? 0 : 1); // 배터리 게이트: 판정을 exit code로 배선(로그만이면 영구 허위 초록)

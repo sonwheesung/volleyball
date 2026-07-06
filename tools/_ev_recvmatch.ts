@@ -4,10 +4,11 @@
 import { resetLeagueBase, LEAGUE, coachInfoOf } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
 import { simulateMatch } from '../engine/match';
-import { reconstructRallies } from '../components/courtDirector';
+import { reconstructRallies, applySubsToSix } from '../components/courtDirector';
 import { ballPath, type Lineups } from '../components/courtPath';
 import { buildLineup } from '../engine/lineup';
 import type { BoxSink } from '../engine/rally';
+import type { Player } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
 resetLeagueBase();
@@ -15,7 +16,15 @@ const W = 360, H = 500, SO = 22;
 const N = parseInt(process.argv[2] || '200', 10);
 const t0 = LEAGUE.teams[0].id, t1 = LEAGUE.teams[1].id;
 const A = availableTeamPlayers(t0, 0), B = availableTeamPlayers(t1, 0);
-const L: Lineups = { home: buildLineup(A), away: buildLineup(B) };
+// 실앱(MatchCourt)과 동일하게 **작전 교체 반영 라인업(applySubsToSix)** 으로 보드 재생 —
+// 정적 six로 재생하면 교체 투입 리시버(recvId)가 six에 없어 근접 폴백→불일치로 잘못 계측(2026-07-06 진단).
+const baseL: Lineups = { home: buildLineup(A), away: buildLineup(B) };
+const byIdMap = new Map<string, Player>();
+for (const p of [...A, ...B]) byIdMap.set(p.id, p);
+const effAt = (sim: any, i: number): Lineups => ({
+  home: { ...baseL.home, six: applySubsToSix(baseL.home.six, 'home', sim.subEvents, i, byIdMap) },
+  away: { ...baseL.away, six: applySubsToSix(baseL.away.six, 'away', sim.subEvents, i, byIdMap) },
+});
 const base = { home: coachInfoOf(t0), away: coachInfoOf(t1) } as any;
 
 // 두 버킷으로 정직하게 나눈다:
@@ -37,8 +46,9 @@ for (let s = 1; s <= N; s++) {
     const r = rallies[i];
     const recvId = SHUFFLE ? recvIds[(i + 1) % recvIds.length] : recvIds[i];
     if (!recvId) continue; // 리시브 없음(서브 범실 등) → 박스 recvAtt 없음 → 비교 대상 아님
+    const L = effAt(sim, i);
     let prevLast: { x: number; y: number } | undefined;
-    if (i > 0) { const pp = ballPath(rallies[i - 1], s, L, W, H, SO); const w = pp[pp.length - 1]; prevLast = { x: w.x, y: w.y }; }
+    if (i > 0) { const pp = ballPath(rallies[i - 1], s, effAt(sim, i - 1), W, H, SO); const w = pp[pp.length - 1]; prevLast = { x: w.x, y: w.y }; }
     const path = ballPath(r, s, L, W, H, SO, prevLast);
     const sv = path.find((w) => w.kind === 'serve' && w.idx >= 0); // 클린 서브 리시브 처리자
     if (!sv) { // (B) 노클린 — 에이스여야 함
@@ -63,3 +73,4 @@ if (cleanMis) log(`    불일치 ${cleanMis}건, 보드 슬롯 포지션별: ${J
 log(`(B) 노클린=에이스 ${ace}건 중 how!=ace 누수: ${aceLeak}건 (0이어야 정상 — 박스는 지정 리시버 recvErr로 기장)`);
 const okAll = pct >= 99.5 && aceLeak === 0;
 log(okAll ? '✅ 리시브 귀속 일치(클린=보드=박스 100% · 노클린은 전부 에이스)' : '❌ 리시브 sibling 불일치/누수 잔존');
+process.exit(okAll ? 0 : 1); // 배터리 게이트: 판정을 exit code로 배선(로그만이면 영구 허위 초록)

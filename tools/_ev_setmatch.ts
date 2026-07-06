@@ -63,3 +63,4 @@ log(`보드 종결 토서 == 박스 어시 세터(setId) : ${match}/${total} = $
 if (noTosser) log(`(종결 토서 미렌더 ${noTosser}건 — 팬텀/경계)`);
 if (mismatch) log(`불일치 ${mismatch}건, 보드 토서 포지션별: ${JSON.stringify(misBy)}`);
 log(pct >= 99.5 ? '✅ 세트(어시) 귀속 일치(스코어박스 세트 칸 = 보드)' : '❌ 세트 sibling 불일치 잔존');
+process.exit(pct >= 99.5 ? 0 : 1); // 배터리 게이트: 판정을 exit code로 배선(로그만이면 영구 허위 초록)

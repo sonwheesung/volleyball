@@ -65,3 +65,4 @@ log(`(A) [그려진 스파이크] 그 선수==byId : ${rMatch}/${rN}  ${(rMatch 
 log(`(B) A/B 자가검증 — shuffle 비교     : ${(rShuf / rN * 100).toFixed(1)}%  (실측보다 훨씬 낮아야 도구 신뢰)`);
 const fixOk = (rMatch / rN) >= 0.999 && (rMatch / rN) - (rShuf / rN) >= 0.4;
 log(`\n판정: ${fixOk ? '✅ PASS — 보드가 보여준 스파이커는 100% 박스 귀속(byId)과 동일. 팬텀 킬은 별개(종결 스파이크 자체 미렌더, 박스는 정확)' : '❌ CHECK'}`);
+process.exit(fixOk ? 0 : 1); // 배터리 게이트: 판정을 exit code로 배선(로그만이면 영구 허위 초록)

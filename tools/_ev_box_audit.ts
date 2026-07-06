@@ -162,3 +162,4 @@ abOk = corruptDetected((l) => { l.atkErr += 1; }, 'atkErr +1 (검출돼야)') &&
 abOk = corruptDetected(null, '오염 없음 (검출되면 안 됨)') && abOk;
 
 log(`\n종합: ${failedMatches === 0 && bandsOk && abOk ? '✅ ALL PASS — 통계 정확(무결성 0위반·KOVO 밴드·A/B 민감)' : '❌ FAIL 있음'}`);
+process.exit(failedMatches === 0 && bandsOk && abOk ? 0 : 1); // 배터리 게이트: 판정을 exit code로 배선(로그만이면 영구 허위 초록)
