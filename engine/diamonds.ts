@@ -65,7 +65,7 @@ export const upgradableStats = (p: Player, stats: TrainableStat[]): TrainableSta
 // H1: reaction은 스파이크/서브 레이팅 0기여(죽은 스탯) → 공격·서브 코스는 consistency로 교체.
 //     블로킹 코스의 reaction은 블록 레이팅 0.18 기여라 유지.
 export type CampCourse = 'attack' | 'defense' | 'block' | 'setter' | 'serve';
-export const CAMP_COURSE_COST = 900;   // 3스탯 × 300(락값 유지)
+export const CAMP_COURSE_COST = 300;   // 코스 정액 300(2026-07-06 사용자 결정 — 구 900=3스탯×300에서 정액 인하). CAMP_PER_STAT(구 모델)와 분리
 export const CAMP_CUR_GAIN = 2;        // 현재 +2
 export const CAMP_POT_GAIN = 7;        // 포텐 +7 — "성장 후 +2 OVR" 체감의 본체(젊을수록 실현 폭 큼)
 

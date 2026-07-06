@@ -31,7 +31,7 @@ for (let i = 0; i < 5000; i++) ids.add(newSaveId());
 ok(ids.size === 5000, `newSaveId 5000개 전부 유일(충돌 0) — 실측 ${ids.size}`);
 
 console.log('── 4. econ 금액 권위 (P0-2 — 서버가 고정값 강제, 클라 amount 무시) ──');
-ok(spendAmount('camp') === CAMP_COST && CAMP_COST === 900, 'camp 서버 상수 −900');
+ok(spendAmount('camp') === CAMP_COST && CAMP_COST === 300, 'camp 서버 상수 −300');
 ok(spendAmount('purchase') === null, 'spend 화이트리스트: camp 외 거부(purchase→null)');
 ok(spendAmount('ad') === null, 'spend 화이트리스트: ad 거부(적립을 차감으로 못 씀)');
 ok(earnAmount('ad', 1) === AD_REWARD && AD_REWARD === 50, 'ad 서버 상수 +50 (클라 amount=1 보내도 50)');
@@ -44,7 +44,7 @@ ok(earnAmount('coupon', 1000) === null, 'earn 화이트리스트: coupon 거부(
 ok(earnAmount('welcome', 1) === 1000 && earnAmount('welcome', 99999) === 1000, 'welcome 서버 고정 1000(클라값 무시 — 멱등키가 계정당 1회)');
 // A/B 대조군: 옛(클라 신뢰) 산식이면 camp amount=1이 통과 = 무료강화
 const oldSpend = (amount: number) => amount;
-ok(oldSpend(1) === 1 && spendAmount('camp') === 900, 'A/B 대조군: 옛 클라신뢰면 amount=1로 전지훈련(=버그) vs 서버권위 900');
+ok(oldSpend(1) === 1 && spendAmount('camp') === 300, 'A/B 대조군: 옛 클라신뢰면 amount=1로 전지훈련(=버그) vs 서버권위 300');
 
 console.log('── 5. reason 화이트리스트 ──');
 ok(isEarnReason('ad') && isEarnReason('achievement') && isEarnReason('welcome') && !isEarnReason('purchase') && !isEarnReason('camp'), 'earn = {ad, achievement, welcome}만');

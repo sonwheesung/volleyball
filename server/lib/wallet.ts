@@ -31,13 +31,19 @@ export async function applyWalletTx(
   idempotencyKey: string,
   ref?: string,
 ): Promise<WalletResult> {
-  // 1) 멱등 — 같은 (proj, 키)가 이미 있으면 그때의 잔액을 그대로 반환(재적용 금지)
+  // 1) 멱등 — 같은 (proj, 키)가 이미 있으면 재적용 안 함. 단 잔액은 원장의 그때 balanceAfter(스냅샷)가
+  //    아니라 **현재 지갑 잔액**을 반환한다. balanceAfter는 그 거래 시점 값이라 이후 다른 거래(지출·적립)가
+  //    있으면 stale → 클라가 옛 잔액으로 되돌아가 split-brain 표시(에뮬 재현 2026-07-06: 환영 +1000 후
+  //    캠프 −900으로 100인데, 화면 재진입 시 환영 멱등재시도가 옛 1000을 반환해 100을 덮어씀). 현재값으로 수렴.
   const dup = await tx
-    .select({ balanceAfter: walletLedger.balanceAfter })
+    .select({ id: walletLedger.id })
     .from(walletLedger)
     .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, idempotencyKey)))
     .limit(1);
-  if (dup.length) return { ok: true as const, balance: dup[0].balanceAfter, applied: false };
+  if (dup.length) {
+    const u = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).limit(1);
+    return { ok: true as const, balance: u.length ? u[0].balance : 0, applied: false };
+  }
 
   // 2) 행 잠금 — 동시 spend 직렬화(FOR UPDATE)
   const locked = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).for('update').limit(1);
