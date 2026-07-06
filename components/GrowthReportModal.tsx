@@ -153,40 +153,40 @@ const styles = themedStyles(() => StyleSheet.create({
   // 헤더 — 성장 메인(크게) / 노쇠 보조(가장 연하게)
   summary: { marginTop: 4, marginBottom: 14 },
   grew: { color: theme.good, fontSize: 17, fontWeight: '900' },
-  agedSum: { color: theme.muted, fontSize: 10, fontWeight: '600', marginTop: 2, opacity: 0.3 },
-  // 카드 — 상하 padding 축소(컴팩트), 살짝 떠 보이는 그림자
+  agedSum: { color: theme.muted, fontSize: 10, fontWeight: '600', marginTop: 2, opacity: 0.25 },
+  // 카드 — 상하 패딩 동일(고급감)·최소 높이(리스트 안정)·부드러운 그림자
   card: {
-    backgroundColor: theme.cardAlt, borderRadius: 13, paddingTop: 10, paddingBottom: 8, paddingLeft: 14, paddingRight: 16, gap: 8,
+    backgroundColor: theme.cardAlt, borderRadius: 13, paddingVertical: 11, paddingLeft: 14, paddingRight: 16, gap: 8, minHeight: 96,
     borderWidth: 1, borderColor: theme.muted + '4D',
-    shadowColor: '#000', shadowOpacity: 0.34, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 6,
+    shadowColor: '#000', shadowOpacity: 0.38, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 7,
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   headCol: { flex: 1, gap: 6 }, // 이름 ↔ OVR 여백(정보 위계)
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  name: { color: theme.text, fontSize: 18, fontWeight: '900', flexShrink: 1 }, // 이름 = 주인공
+  name: { color: theme.text, fontSize: 18, fontWeight: '900', lineHeight: 22, flexShrink: 1 }, // 이름 = 주인공(라인박스 고정 → 배지 수직정렬)
   // OVR 변화 — 베이스라인 정렬 행. "79 → 80" 한 Text + ▲1 넉넉히 분리
   ovrRow: { flexDirection: 'row', alignItems: 'baseline' },
   ovrMain: { color: theme.text },
   ovrFrom: { color: theme.muted, fontSize: 13, fontWeight: '600' },
   ovrTo: { color: theme.text, fontSize: 24, fontWeight: '900' },
-  ovrDelta: { fontSize: 18, fontWeight: '900', marginLeft: 15 }, // 결과 정보 — 넉넉히 분리(80과 ▲1 독립)
+  ovrDelta: { fontSize: 18, fontWeight: '900', marginLeft: 18 }, // 결과 정보 — 넉넉히 분리(80과 ▲1 독립)
   ovrFlat: { color: theme.muted, fontSize: 15, fontWeight: '700', opacity: 0.55 }, // 변화 없으면 연하게
   ovrHold: { color: theme.muted, fontSize: 11.5, fontWeight: '600', opacity: 0.3, marginLeft: 8 },
-  // 이번 변화 — 섹션 제목(제목↔스탯 4)
-  section: { gap: 4 },
+  // 이번 변화 — 섹션 제목(제목↔스탯 8)
+  section: { gap: 8 },
   secHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   secBar: { width: 2.5, height: 10, borderRadius: 2, backgroundColor: theme.accent },
   lblNow: { color: theme.accent, fontSize: 13, fontWeight: '900', letterSpacing: 0.2 },
-  // 스탯 2열 그리드 — 스탯명 고정폭 컬럼 → ▲가 매 행 같은 x에서 시작(표처럼 딱 맞음)
+  // 스탯 2열 그리드 — 스탯명 고정폭(왼쪽) + ▲ 우측정렬(오른쪽 끝) = 표
   statWrap: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
-  cell: { width: '50%', flexDirection: 'row', alignItems: 'baseline', paddingRight: 10 },
-  statName: { color: theme.text, fontSize: 13, fontWeight: '700', width: 78 }, // 고정폭 = ▲ 시작선 정렬
-  delta: { color: theme.good, fontSize: 13.5, fontWeight: '900' },   // 스탯명 컬럼 뒤 고정 x에서 시작
-  deltaBig: { color: theme.good, fontSize: 14.5, fontWeight: '900' }, // 큰 폭 더 눈에
+  cell: { width: '50%', flexDirection: 'row', alignItems: 'baseline', paddingRight: 14 },
+  statName: { color: theme.text, fontSize: 13, fontWeight: '700', width: 74 }, // 고정폭 컬럼(왼쪽 정렬)
+  delta: { color: theme.good, fontSize: 13.5, fontWeight: '900', flex: 1, textAlign: 'right' },   // 우측 끝 정렬
+  deltaBig: { color: theme.good, fontSize: 14.5, fontWeight: '900', flex: 1, textAlign: 'right' }, // 큰 폭 더 눈에
   // 누적 성장 — 참고(저대비)
   lblSub: { color: theme.muted, fontSize: 10.5, fontWeight: '700', opacity: 0.85 },
-  statNameSub: { color: theme.muted, fontSize: 12, fontWeight: '600', width: 76 },
-  deltaSub: { color: theme.good, fontSize: 12, fontWeight: '700', opacity: 0.7 },
+  statNameSub: { color: theme.muted, fontSize: 12, fontWeight: '600', width: 74 },
+  deltaSub: { color: theme.good, fontSize: 12, fontWeight: '700', opacity: 0.7, flex: 1, textAlign: 'right' },
   // 노쇠 — 가장 연하게
   down: { color: theme.muted, fontSize: 11, fontWeight: '600', opacity: 0.45 },
   more: { color: theme.accent, fontSize: 13, fontWeight: '800', textAlign: 'center', paddingVertical: 8 },
