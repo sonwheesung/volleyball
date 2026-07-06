@@ -26,6 +26,28 @@ description: Run the project's FULL documented verification suite (docs/README.m
 > 무거운 도구가 많다 → **백그라운드 병렬**로 띄우고(run_in_background) 결과 파일을 모아 표로 정리한다.
 > auditBoard는 코트 ASCII를 쏟으니 판정 줄(`이상 … 0건` / `❌ 이상 N건`)만 grep해 확인한다.
 
+### 1.5 서버 가드 배터리 (백엔드 표면 — 2026-07-06 신설)
+
+README "검증 루틴"에 흩어져 있던 **서버 가드**를 하나의 배터리로 묶는다. **`server/` 하위(라우트·lib·
+스키마)가 바뀌면 필수, 안 바뀌었어도 "전체 테스트"엔 포함**한다. 배경: 2026-07-06 백엔드 14건이 전부
+기존 장치를 통과한 채 잠복 — 뿌리 하나가 **`run-all-tests`가 서버 가드를 안 돌려 `_dv_purchase`가
+배터리 밖에서 afterSafe 회귀로 이틀 잠복**한 것(엔진 배터리와 같은 밀도로 상설·등록해야 안 샌다).
+
+- **순수 2**(repo 루트, DB 불필요):
+  - `npx tsx tools/_dv_walletauth.ts` — 지갑 순수(멱등키·econ 금액·카탈로그 총합≤평생합캡 드리프트 + A/B)
+  - `npx tsx tools/_dv_coupon.ts` — 쿠폰 순수(normalizeCode·requireAdmin fail-closed)
+- **라이브 6**(`server/`, `.env.local`의 `DATABASE_URL` 필요 — dev Postgres):
+  - `cd server && node_modules/.bin/tsx --env-file=.env.local tools/_dv_purchase.ts` — 결제 머니패스(afterSafe·grant/refund·멱등)
+  - `… tools/_dv_announce.ts` — 공지 CRUD(기간·정렬·proj 스코프·404 대칭·KST 타임존)
+  - `… tools/_dv_coupon_live.ts` — 쿠폰 발급·사용(인증폴백 C1·이중사용·기간·타겟·KST C2)
+  - `… tools/_dv_achearn.ts` — 업적 적립(멱등·호출당·평생합 경계·409 cap)
+  - `… tools/_dv_walletreplay.ts` — 지갑 멱등 재시도 현재잔액(stale 방지)
+  - `… tools/walletConcurrency.ts` — 동시 spend 이중지불 방지(FOR UPDATE)
+
+> 전부 exit 0이어야 통과. 라이브 6은 테스트 데이터를 프리픽스(`_DV_ANN_`·`_DVCPN_`·`_DVACH_` 등)로
+> 만들고 `finally`에서 정리한다. 서버 표면 조항 단위 대조가 필요하면 **`backend-verify` 스킬**(서버
+> 5렌즈·파이프라인) — 이 배터리는 그 스킬 §4와 동일 명령이다.
+
 ## 2. 어떻게 판정하나
 
 - 각 명령의 **판정 줄**(PASS/FAIL/✅/❌/`# pass`·`# fail`/`이상 … 0건`)을 뽑아 **한 표**로 보고한다.
