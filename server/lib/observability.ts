@@ -6,16 +6,12 @@
 //   함수를 살려둠)로 **응답 뒤 flush**해 유실을 막는다(응답 지연 0). 요청 컨텍스트 밖(테스트 등)에선 after()가
 //   throw → 무시(그쪽은 호출부가 직접 flush). 결정론/시드와 무관한 순수 운영 메타.
 import * as Sentry from '@sentry/node';
-import { after } from 'next/server';
+import { afterSafe } from './afterSafe';
 
 export function reportError(e: unknown, where?: string): void {
   try {
     Sentry.captureException(e, where ? { tags: { where } } : undefined);
-    try {
-      after(async () => { await Sentry.flush(2000); }); // 응답 후 전송 보장(서버리스)
-    } catch {
-      /* 요청 컨텍스트 밖 — 호출부가 직접 flush(예: tsx 검증) */
-    }
+    afterSafe(async () => { await Sentry.flush(2000); }); // 응답 후 전송 보장(서버리스). 요청 밖이면 즉시 flush
   } catch {
     /* 관측 실패는 무시 — 요청 흐름 보존 */
   }

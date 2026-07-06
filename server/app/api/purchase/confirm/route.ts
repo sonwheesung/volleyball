@@ -1,13 +1,14 @@
 // POST /api/purchase/confirm — 클라 구매 resolve 후 폴백(BACKEND_SYSTEM §13.18). 웹훅 지연·유실 시 "돈 내고 0개" 방지.
 // body: { storeTxnId, productId, requestId?, platform?, appVersion? }. requireUserId(Bearer). RC REST 재검증 → applyWallet(같은 키) → 웹훅과 dedup 수렴.
 // **감사 로깅(§13.22)**: received/reverify.result/grant.applied|deduped/rejected/error 단계 기록(상관 requestId — 클라 브레드크럼과 이음).
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 import { requireUserId } from '../../../../lib/auth';
 import { applyWallet } from '../../../../lib/wallet';
 import { rcVerifyPurchase, purchaseKey, recordPurchaseRevenue } from '../../../../lib/revenuecat';
 import { logPaymentEventAfter } from '../../../../lib/paymentLog';
 import { notifyPurchase } from '../../../../lib/notify';
 import { reportError } from '../../../../lib/observability';
+import { afterSafe } from '../../../../lib/afterSafe';
 
 export const dynamic = 'force-dynamic';
 
@@ -56,7 +57,7 @@ export async function POST(req: Request) {
     logPaymentEventAfter({ source: 'confirm', stage: r.applied ? 'confirm.grant.applied' : 'confirm.grant.deduped', ok: true, outcome: r.applied ? 'applied' : 'deduped', userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, balanceAfter: r.balance, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
     if (r.applied) {
       await recordPurchaseRevenue(null, v.diamonds); // 매출(KRW)는 웹훅이 채움 — confirm은 다이아만(이중집계 방지 위해 KRW null)
-      after(() => notifyPurchase({ kind: 'purchase', productId, diamonds: v.diamonds, priceKrw: null, source: 'confirm', userId })); // 폴백이 이겼을 때만(웹훅이 먼저면 여기 deduped→알림 없음)
+      afterSafe(() => notifyPurchase({ kind: 'purchase', productId, diamonds: v.diamonds, priceKrw: null, source: 'confirm', userId })); // 폴백이 이겼을 때만(웹훅이 먼저면 여기 deduped→알림 없음)
     }
     return NextResponse.json({ ok: true, applied: r.applied, balance: r.balance });
   } catch (e) {

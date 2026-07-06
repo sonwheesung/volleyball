@@ -2,12 +2,13 @@
 // RC → 이 웹훅 → decidePurchaseEvent(순수) → applyWallet(+/−다이아, 멱등키=스토어거래id) → (지급 적용 시) 매출 롤업.
 // 소모성 다이아만 원장 지급. 엔타이틀먼트(광고제거·DLC)는 RC customerInfo 소유라 무시. 샌드박스 무시.
 // **감사 로깅(§13.22)**: 단계마다 purchase_event 1행(received/auth/decided/grant.applied|deduped/refund/ignored/error) — 관찰 전용(fire-and-forget).
-import { NextResponse, after } from 'next/server';
+import { NextResponse } from 'next/server';
 import { applyWallet } from '../../../../../lib/wallet';
 import { verifyWebhookAuth, decidePurchaseEvent, purchaseKey, refundKey, recordPurchaseRevenue, priceKrwOf } from '../../../../../lib/revenuecat';
 import { logPaymentEventAfter } from '../../../../../lib/paymentLog';
 import { notifyPurchase } from '../../../../../lib/notify';
 import { reportError } from '../../../../../lib/observability';
+import { afterSafe } from '../../../../../lib/afterSafe';
 
 export const dynamic = 'force-dynamic';
 
@@ -67,7 +68,7 @@ export async function POST(req: Request) {
     // 매출 롤업은 **실제 적용된 지급**만(멱등 — 웹훅 재시도/폴백 중복 시 이중집계 방지).
     if (grant && r.applied) await recordPurchaseRevenue(d.priceKrw, d.diamonds);
     // 디스코드 알림은 실제 반영(applied)만 — 응답 후(after) 전송, 정확히 1건(dedup된 재시도/폴백은 알림 없음).
-    if (r.applied) after(() => notifyPurchase({ kind: grant ? 'purchase' : 'refund', productId: d.productId, diamonds: d.diamonds, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
+    if (r.applied) afterSafe(() => notifyPurchase({ kind: grant ? 'purchase' : 'refund', productId: d.productId, diamonds: d.diamonds, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
     return NextResponse.json({ ok: true, applied: r.applied, balance: r.balance });
   } catch (e) {
     reportError(e, 'purchase/webhook/revenuecat');
