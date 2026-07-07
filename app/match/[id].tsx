@@ -1,6 +1,6 @@
 import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { AppState, BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Button, Muted, theme, themedStyles } from '../../components/Screen';
 import { emblemFor } from '../../data/emblems';
@@ -109,6 +109,19 @@ export default function MatchBoard() {
     if (finished || isSandbox) handleExit();
     else setConfirmExit(true);
   }, [finished, isSandbox, handleExit]);
+
+  // 앱이 백그라운드/비활성으로 갈 때 관전 위치를 자동 저장 — 홈 버튼 후 OS가 앱을 종료해도
+  // 이어보기 위치가 보존된다("나중에 이어보기"를 안 눌러도). 종료(finished)엔 저장 안 함
+  // (결과가 확정/확정 중이고 watchProgress는 확정 시 삭제 — 저장하면 낡은 위치가 되살아남).
+  useEffect(() => {
+    const sub = AppState.addEventListener('change', (next) => {
+      if (next !== 'background' && next !== 'inactive') return;
+      if (!isSandbox && fixture && !finished && progressRef.current > 0) {
+        saveWatchProgress(fixture.id, progressRef.current);
+      }
+    });
+    return () => sub.remove();
+  }, [isSandbox, fixture, finished, saveWatchProgress]);
 
   // Android 하드웨어 백 가로채기 — 관전 중엔 확인 모달을 띄운다(결과가 바로 확정되므로)
   useEffect(() => {
