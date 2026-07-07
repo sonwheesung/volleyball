@@ -2,9 +2,18 @@
 // 독립리뷰(2026-07-03) 5구멍 중 순수 검증 가능분(P0-2 금액권위·P0-5 키 비대칭·세이브리셋 충돌).
 // A/B 자가검증: 옛 결함(클라 신뢰 금액·에폭 없는 camp 키)을 재주입해 오라클 민감도를 증명(허위 오라클 차단).
 // 서버 왕복(applied 게이팅·이중차감·리싱크)은 라이브 E2E(_walletlive)가 실 서버로 증명.
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
-import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, ACH_MAX_PER_CLAIM, ACH_LIFETIME_CAP } from '../server/lib/econ';
+import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, AD_DAILY_CAP, WELCOME_DIAMONDS, ACH_MAX_PER_CLAIM, ACH_LIFETIME_CAP } from '../server/lib/econ';
 import { ACHIEVEMENTS, achReward } from '../engine/achievements';
+// E2 크로스가드 — engine/diamonds(앱)와 server/lib/econ(서버 손복제) 값 일치 대조. 둘 다 import-free 상수모듈이라
+//   tsx가 repo 루트에서 직접 import 가능(서버 전용 deps 없음 → 정규식 추출 불필요). 미러가 어긋나면 여기서 FAIL.
+import { AD_REWARD as ENG_AD_REWARD, CAMP_COURSE_COST as ENG_CAMP_COST, AD_DAILY_CAP as ENG_AD_DAILY_CAP, WELCOME_DIAMONDS as ENG_WELCOME } from '../engine/diamonds';
+// E3/E4 — server/lib/products·data/diamondTiers 둘 다 import-free 상수모듈 → 직접 import. iap.ts는 react-native를
+//   transitive import(Alert 등)라 tsx로 import 불가 → SKU 상수만 소스 정규식 추출(아래 §9).
+import { DIAMOND_PRODUCTS, ENTITLEMENT_PRODUCTS } from '../server/lib/products';
+import { DIAMOND_TIERS } from '../data/diamondTiers';
 
 let fail = 0;
 const ok = (c: boolean, m: string) => { if (!c) { console.error('  ✗ FAIL:', m); fail++; } else console.log('  ✓', m); };
@@ -59,6 +68,26 @@ ok(achMaxSingle <= ACH_MAX_PER_CLAIM, `카탈로그 최대 단건(${achMaxSingle
 console.log('── 5. reason 화이트리스트 ──');
 ok(isEarnReason('ad') && isEarnReason('achievement') && isEarnReason('welcome') && !isEarnReason('purchase') && !isEarnReason('camp'), 'earn = {ad, achievement, welcome}만');
 ok(isSpendReason('camp') && !isSpendReason('ad') && !isSpendReason('purchase'), 'spend = {camp}만');
+
+console.log('── 6. engine↔server econ 미러 크로스가드 (E2 — 손복제 드리프트 차단, 4값 전부) ──');
+ok(ENG_AD_REWARD === AD_REWARD, `AD_REWARD engine(${ENG_AD_REWARD}) = server(${AD_REWARD})`);
+ok(ENG_CAMP_COST === CAMP_COST, `전지훈련 비용 engine CAMP_COURSE_COST(${ENG_CAMP_COST}) = server CAMP_COST(${CAMP_COST})`);
+ok(ENG_AD_DAILY_CAP === AD_DAILY_CAP, `AD_DAILY_CAP engine(${ENG_AD_DAILY_CAP}) = server(${AD_DAILY_CAP})`);
+ok(ENG_WELCOME === WELCOME_DIAMONDS, `WELCOME_DIAMONDS engine(${ENG_WELCOME}) = server(${WELCOME_DIAMONDS})`);
+
+console.log('── 7. 다이아 팩 카탈로그 정합 (E3 — server products ↔ data diamondTiers, id+amount) ──');
+ok(DIAMOND_TIERS.length === Object.keys(DIAMOND_PRODUCTS).length, `팩 수 일치(client ${DIAMOND_TIERS.length} = server ${Object.keys(DIAMOND_PRODUCTS).length})`);
+for (const t of DIAMOND_TIERS) ok(DIAMOND_PRODUCTS[t.id] === t.amount, `${t.id}: server 지급(${DIAMOND_PRODUCTS[t.id]}) = client amount(${t.amount})`);
+for (const id of Object.keys(DIAMOND_PRODUCTS)) ok(DIAMOND_TIERS.some((t) => t.id === id), `server 팩 ${id} 클라 카탈로그에 존재(누락 0)`);
+
+console.log('── 8. 엔타이틀먼트 SKU 클라↔서버 정합 (E4 — lib/iap 상수 ↔ server ENTITLEMENT_PRODUCTS) ──');
+const iapSrc = readFileSync(join(__dirname, '..', 'lib', 'iap.ts'), 'utf8');
+const skuOf = (name: string): string | null => { const m = iapSrc.match(new RegExp(`export const ${name} = '([^']+)'`)); return m ? m[1] : null; };
+const CLI_REMOVE_ADS = skuOf('SKU_REMOVE_ADS'), CLI_DLC_WORLDCUP = skuOf('SKU_DLC_WORLDCUP'), CLI_RC_WORLDCUP = skuOf('RC_ENTITLEMENT_WORLDCUP');
+ok(!!CLI_REMOVE_ADS && !!CLI_DLC_WORLDCUP && !!CLI_RC_WORLDCUP, `lib/iap SKU 상수 3종 추출(${CLI_REMOVE_ADS}·${CLI_DLC_WORLDCUP}·${CLI_RC_WORLDCUP})`);
+ok(!!CLI_REMOVE_ADS && ENTITLEMENT_PRODUCTS.has(CLI_REMOVE_ADS), `SKU_REMOVE_ADS(${CLI_REMOVE_ADS}) ∈ 서버 ENTITLEMENT_PRODUCTS`);
+ok(!!CLI_DLC_WORLDCUP && ENTITLEMENT_PRODUCTS.has(CLI_DLC_WORLDCUP), `SKU_DLC_WORLDCUP(${CLI_DLC_WORLDCUP}) ∈ 서버 ENTITLEMENT_PRODUCTS`);
+ok(CLI_RC_WORLDCUP === 'worldcup' && CLI_RC_WORLDCUP !== CLI_DLC_WORLDCUP, `RC 엔타이틀먼트 id(${CLI_RC_WORLDCUP}) ≠ 구매 상품 id(${CLI_DLC_WORLDCUP}) — 한 개념 두 문자열`);
 
 console.log(fail === 0 ? '\n✅ PASS _dv_walletauth (모든 순수 불변식)' : `\n❌ FAIL ${fail}건`);
 process.exit(fail === 0 ? 0 : 1);

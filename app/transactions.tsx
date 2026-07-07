@@ -10,6 +10,7 @@ import { ROSTER_MAX, inSeasonCost } from '../engine/transactions';
 import { FOREIGN_SALARY, ASIAN_SALARY } from '../engine/foreign';
 import { formatMoney } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
+import { capPayroll } from '../data/roster';
 import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
 
@@ -18,6 +19,7 @@ export default function Transactions() {
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
   const inSeasonTx = useGameStore((s) => s.inSeasonTx);
+  const overrides = useGameStore((s) => s.contractOverrides);
   const signInSeason = useGameStore((s) => s.signInSeason);
   const cash = useGameStore((s) => s.cash); // 운영 자금(FINANCE) — 캡과 별개 게이트
   const foreignAltPool = useGameStore((s) => s.foreignAltPool);
@@ -29,9 +31,13 @@ export default function Transactions() {
 
   // 내 팀 현재 명단(날짜 인지) — 정원·캡 계산
   const myIds = rosterIdsOnDay(teamId, currentDay);
-  // 캡 계산은 국내 선수만(외인=1년 트라이아웃 별개 지갑, FOREIGN_SYSTEM 2장). 외인 연봉(~7억)을 캡에 넣으면
-  // capLeft가 줄어 멀쩡한 팀이 시즌 중 영입에 막힌다(기능 버그) + 표시 허위 초과 — EC-CAP-01(2026-06-30).
-  const payroll = myIds.reduce((s, id) => { const pl = evolveOnDay(id, currentDay); return s + (pl && !pl.isForeign ? pl.contract.salary : 0); }, 0);
+  // 내가 이번 시즌 방출한 선수 — 재영입엔 배신 웃돈 ×1.5
+  const isBetrayed = (id: string) => inSeasonTx.some((t) => t.kind === 'release' && t.teamId === teamId && t.playerId === id);
+  // 캡 계산은 단일 규칙(capPayroll §7): 국내만(외인=별개 지갑, EC-CAP-01) + 재계약 override + 시즌 중 영입비(inSeasonCost).
+  // 과거엔 시즌 영입을 base 연봉으로 세고 override를 무시해 store 게이트(signInSeason)보다 느슨했다 → capLeft 표시가 게이트와 어긋남.
+  const inSeasonSigned = new Set(inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === teamId).map((t) => t.playerId));
+  const capPlayers = myIds.map((id) => evolveOnDay(id, currentDay)).filter((p): p is Player => !!p);
+  const payroll = capPayroll(capPlayers, overrides, inSeasonSigned, isBetrayed);
   const capLeft = Math.max(0, LEAGUE_CAP - payroll);
   const full = myIds.length >= ROSTER_MAX;
 
@@ -42,9 +48,6 @@ export default function Transactions() {
     .sort((a, b) => overall(b) - overall(a));
 
   const signedThis = inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === teamId);
-
-  // 내가 이번 시즌 방출한 선수 — 재영입엔 배신 웃돈 ×1.5
-  const isBetrayed = (id: string) => inSeasonTx.some((t) => t.kind === 'release' && t.teamId === teamId && t.playerId === id);
 
   const onSign = (p: Player) => {
     const betrayed = isBetrayed(p.id);

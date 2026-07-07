@@ -47,6 +47,7 @@ import { planNextAction } from '../engine/advance';
 import { marketVal, setAwardScores, setSalaryEra } from '../data/awardSalary';
 import { setSeasonHistory, upcomingStanceOf } from '../data/leagueHistory';
 import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
+import { capPayroll } from '../data/roster';
 import { ROSTER_MAX, canRelease, inSeasonCost, severanceFee } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
 import { diag } from '../lib/deviceLog';
@@ -63,6 +64,9 @@ import { earnDiamonds, earnDiamondsBatch, spendDiamonds, getWallet } from '../li
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
 import { useAuthStore } from './useAuthStore';
 import { track } from '../lib/analytics';
+
+/** zustand persist 스토리지 키 — 세이브 도구(_dv_campoutbox·_dv_migrate_e2e)와 공유(리터럴 재타이핑 금지). */
+export const SAVE_KEY = 'baeknyeon-save';
 
 /** 전지훈련 기록(MONETIZATION §11.2) — 시드 폴백 재적용용 + 감사.
  *  유니온(H3): 구 모델 엔트리는 stats[](+1/+1 재적용), 코스형(2026-07-02~)은 course(+2/+7 재적용) —
@@ -519,13 +523,15 @@ export const useGameStore = create<GameState>()(
         // 개인 연봉 상한(MAX_SALARY 8억 / 프랜차이즈 11억) — 팀캡만 보면 단일선수 거대연봉으로 우회 가능(EC-TX-04 잔여)
         if (target && !target.isForeign && salary > maxSalaryFor(target)) return;
         if (target && !target.isForeign) {
-          let dom = 0;
-          for (const id of rosterIds) {
-            const p = evolveOnDay(id, s.currentDay);
-            if (!p || p.isForeign) continue;
-            dom += id === playerId ? salary : (s.contractOverrides[id]?.salary ?? p.contract.salary);
-          }
-          if (dom > LEAGUE_CAP) return;
+          // 캡 게이트 = 단일 규칙(capPayroll §7): 그날 유효 명단(방출 제외 + 시즌 중 영입 포함)에 재계약 override
+          // (playerId=제안 연봉)·시즌 중 영입비까지 반영. 과거 인라인 루프는 시즌 중 영입분을 빠뜨려 캡을 저평가했다.
+          const { myReleased, mySigned } = myRosterDelta(my, s.inSeasonTx, rosterIds);
+          const betrayedBy = (id: string) => s.inSeasonTx.some((t) => t.kind === 'release' && t.teamId === my && t.playerId === id);
+          const effPlayers = [...rosterIds.filter((id) => !myReleased.has(id)), ...mySigned]
+            .map((id) => evolveOnDay(id, s.currentDay))
+            .filter((p): p is Player => !!p);
+          const nextOverrides = { ...s.contractOverrides, [playerId]: contract };
+          if (capPayroll(effPlayers, nextOverrides, new Set(mySigned), betrayedBy) > LEAGUE_CAP) return;
         }
         set((st) => ({ contractOverrides: { ...st.contractOverrides, [playerId]: contract } }));
         diag(s.season, 'transaction', `재계약 ${playerId} 연봉 ${salary}·${years}년`); // 진단 로그(§13.20 ④)
@@ -587,9 +593,11 @@ export const useGameStore = create<GameState>()(
         if (size >= ROSTER_MAX) return false;
         // 배신 웃돈: 내가 이번 시즌 방출한 선수의 재영입은 몸값 ×1.5 (당일 철회는 unrelease로 무료)
         const betrayedBy = (id: string) => s.inSeasonTx.some((t) => t.kind === 'release' && t.teamId === my && t.playerId === id);
-        let payroll = 0;
-        for (const id of rosterIds) if (!myReleased.has(id)) { const rp = evolveOnDay(id, s.currentDay); if (rp && !rp.isForeign) payroll += rp.contract.salary; } // 캡=국내 전용
-        for (const id of mySigned) { const p = evolveOnDay(id, s.currentDay); if (p) payroll += inSeasonCost(marketVal(p), betrayedBy(id)); }
+        // 캡 게이트 = 단일 규칙(capPayroll §7): 기존 로스터는 override 인지(과거 base 연봉만), 시즌 중 영입은 inSeasonCost. 국내 전용.
+        const effPlayers = [...rosterIds.filter((id) => !myReleased.has(id)), ...mySigned]
+          .map((id) => evolveOnDay(id, s.currentDay))
+          .filter((p): p is Player => !!p);
+        const payroll = capPayroll(effPlayers, s.contractOverrides, new Set(mySigned), betrayedBy);
         const signCost = inSeasonCost(marketVal(fa), betrayedBy(faId));
         if (payroll + signCost > LEAGUE_CAP) return false;
         if (signCost > s.cash) return false; // 운영 자금 부족(FINANCE) — 캡이 남아도 지갑이 비면 못 뽑는다
@@ -1160,7 +1168,7 @@ export const useGameStore = create<GameState>()(
       setBgmVolume: (v) => set({ bgmVolume: Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.8)) }), // BGM 볼륨 0..1 클램프 — 영속
     }),
     {
-      name: 'baeknyeon-save',
+      name: SAVE_KEY,
       storage: debouncedAsyncStorage(), // 매 set마다 직렬화+쓰기 폭주 → 디바운스로 합침(A6 성능, 저장 내용 불변)
       version: SAVE_VERSION,
       // 구버전/손상 세이브 → 정규화(컨테이너 모양 강제) + 향후 breaking 변경 단계 변환. SAVE_SYSTEM.md.

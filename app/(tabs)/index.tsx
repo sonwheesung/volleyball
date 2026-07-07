@@ -4,11 +4,12 @@ import { Text, View } from 'react-native';
 import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { SoftUpdateBanner } from '../../components/SoftUpdateBanner';
-import { getEvolvedTeamPlayers, getTeam } from '../../data/league';
+import { evolveOnDay, getTeam } from '../../data/league';
 import { seasonYear } from '../../data/seasonLabel';
-import { activeRoster, payroll as sumPayroll } from '../../data/roster';
+import { capPayroll } from '../../data/roster';
 import { computeStandings, displayCutoff, seasonResults } from '../../data/standings';
 import { availableTeamPlayers } from '../../data/injury';
+import { rosterIdsOnDay } from '../../data/dynamics';
 import { buildNewsFeed, freshNews, newsKey } from '../../data/news';
 import { teamOverallRaw } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
@@ -23,15 +24,17 @@ export default function Dashboard() {
   const season = useGameStore((s) => s.season);
   const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
-  const released = useGameStore((s) => s.released);
+  const inSeasonTx = useGameStore((s) => s.inSeasonTx);
 
   const team = getTeam(teamId);
-  const basePlayers = getEvolvedTeamPlayers(teamId, currentDay);
-  const roster = activeRoster(basePlayers, overrides, released);
   const ovr = teamOverallRaw(availableTeamPlayers(teamId, currentDay)); // 전력은 그날 출전 가능 명단 기준(경기 엔진과 일치 — EC-UI-01, 부상·결장 반영)
-  // 샐러리캡은 **국내 선수만** 적용(외인은 1년 트라이아웃 별개 지갑 — FOREIGN_SYSTEM 2장, roster.ts domesticPayroll).
-  // 외인 연봉을 포함해 국내 전용 캡과 비교하면 멀쩡한 팀도 빨강(허위 초과)이 된다(EC-CAP-01, 2026-06-30). 계약관리 화면과 동일 기준.
-  const payroll = sumPayroll(roster.filter((p) => !p.isForeign));
+  // 총연봉/캡 = 단일 규칙(capPayroll §7): 그날 명단(시즌 중 영입 포함·방출 제외)에 재계약 override·영입비(inSeasonCost) 반영.
+  // 국내만(외인=1년 트라이아웃 별개 지갑, EC-CAP-01) — 시즌 중 FA 영입/재계약이 대시보드 총연봉에 진실되게 잡힌다(store 게이트와 동일 기준).
+  const capIds = rosterIdsOnDay(teamId, currentDay);
+  const inSeasonSigned = new Set(inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === teamId).map((t) => t.playerId));
+  const isBetrayed = (id: string) => inSeasonTx.some((t) => t.kind === 'release' && t.teamId === teamId && t.playerId === id);
+  const capPlayers = capIds.flatMap((id) => { const p = evolveOnDay(id, currentDay); return p ? [p] : []; });
+  const payroll = capPayroll(capPlayers, overrides, inSeasonSigned, isBetrayed);
   const fanScore = useGameStore((s) => s.fanScore); // 팬심(직전 시즌 정산)
   const archive = useGameStore((s) => s.archive);
   const cash = useGameStore((s) => s.cash);         // 운영 자금(FINANCE)

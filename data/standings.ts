@@ -126,7 +126,8 @@ export function playedThroughDay(results: Record<string, MatchResult>): number {
 
 /** §3.2(2026-06-24) — 표시용 "리그 진행" 컷오프 = 현재 경기일 **직전**까지. 현재 경기일은 관전 중이라 제외.
  *  ⚠ **표시엔 deprecated(§3.3, 2026-07-07)** — 이 단독 헬퍼는 "방금 관전한 경기"(F2-a)와 "시즌 마지막 경기일"(F2-b)을
- *  놓친다. 표시 화면은 `displayCutoff(currentDay, results, myTeamId)`를 써라. 비표시 용도(진단 리플레이·계약 시장가)만 유지. */
+ *  놓친다. 표시 화면은 `displayCutoff(currentDay, results, myTeamId)`를 써라. 비표시 용도(진단 리플레이)만 유지.
+ *  ~~계약 시장가~~ 도 **표시**라 `displayCutoff`로 이행(2026-07-07, §3.3) — player 상세(displayCutoff)와 계약 화면(leagueDisplayDay) 이원화 해소. */
 export const leagueDisplayDay = (currentDay: number): number => currentDay - 1;
 
 /** 내 팀의 이번 시즌 전 일정을 기록(관전) 완료했는가 — 시즌 종료 판정(표시 컷오프 승격·잠정 라벨 경계용, §3.3). */

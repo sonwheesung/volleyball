@@ -17,7 +17,13 @@ import { confirmPurchase } from './server';
 import { getDeviceInfo } from './device';
 import { DIAMOND_TIERS } from '../data/diamondTiers';
 
-export type Sku = 'remove_ads' | 'dlc_worldcup';
+// 상품·엔타이틀먼트 식별자 — 클라 단일 출처(리터럴 재타이핑 금지). **서버 미러 = `server/lib/products.ts`
+//   ENTITLEMENT_PRODUCTS**(둘이 일치해야 함, 가드 `_dv_walletauth`가 대조). 스토어(Play/App Store)·RC 대시보드 등록값과도 일치.
+export const SKU_REMOVE_ADS = 'remove_ads';
+export const SKU_DLC_WORLDCUP = 'dlc_worldcup';        // 구매 상품 id(스토어 등록 = 서버 ENTITLEMENT_PRODUCTS)
+export const RC_ENTITLEMENT_WORLDCUP = 'worldcup';     // RC 엔타이틀먼트 id — 구매 상품 id('dlc_worldcup')와 **다른 한 개념의 두 문자열**
+
+export type Sku = typeof SKU_REMOVE_ADS | typeof SKU_DLC_WORLDCUP;
 export type PurchaseResult =
   | { ok: true; sku: Sku }
   | { ok: false; reason: 'cancelled' | 'network' | 'unavailable' | 'error'; message?: string };
@@ -28,9 +34,9 @@ export interface Entitlements { removeAds: boolean; worldCup: boolean }
 // 주입 → EAS 재빌드해야 반영(EXPO_PUBLIC_*은 빌드타임 인라인). 비면 configure 생략 → 결제·엔타이틀먼트 전부 미소유(graceful).
 const REVENUECAT_API_KEY = process.env.EXPO_PUBLIC_REVENUECAT_API_KEY ?? '';
 
-const SKU_LABEL: Record<Sku, string> = { remove_ads: '광고 제거', dlc_worldcup: '월드컵 시즌 구매' };
-// RevenueCat 대시보드 엔타이틀먼트 식별자(설정값과 일치시킬 것)
-const ENT_ID: Record<keyof Entitlements, string> = { removeAds: 'remove_ads', worldCup: 'worldcup' };
+const SKU_LABEL: Record<Sku, string> = { [SKU_REMOVE_ADS]: '광고 제거', [SKU_DLC_WORLDCUP]: '월드컵 시즌 구매' };
+// RevenueCat 대시보드 엔타이틀먼트 식별자(설정값과 일치시킬 것) — worldCup은 구매 상품 id가 아니라 RC 엔타이틀먼트 id.
+const ENT_ID: Record<keyof Entitlements, string> = { removeAds: SKU_REMOVE_ADS, worldCup: RC_ENTITLEMENT_WORLDCUP };
 
 let cached: Entitlements = { removeAds: false, worldCup: false };
 export function getEntitlements(): Entitlements { return cached; }
@@ -41,7 +47,7 @@ function apply(e: Entitlements): void {
   logEvent('iap:entitlements', { ...e });
 }
 function grant(sku: Sku): void {
-  apply({ removeAds: cached.removeAds || sku === 'remove_ads', worldCup: cached.worldCup || sku === 'dlc_worldcup' });
+  apply({ removeAds: cached.removeAds || sku === SKU_REMOVE_ADS, worldCup: cached.worldCup || sku === SKU_DLC_WORLDCUP });
 }
 
 /** RevenueCat SDK 지연 로드 — 미설치(Expo Go)·예외면 null(호출부가 graceful 처리). */

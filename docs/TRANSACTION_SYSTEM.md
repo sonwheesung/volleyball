@@ -107,3 +107,26 @@
 - 결정론: 같은 세이브·거래 = 같은 시즌(골든 테스트 보존, 합성 무영향).
 - sim-league parity 회귀(전 구단 AI 영입 후 균형 유지).
 - 무결성: 로스터 ≤ 18·캡 준수·과거 결과 고정.
+
+## 7. 캡 계산 단일화 — `capPayroll` (2026-07-07, 5-사이트 정합)
+> **문제**: "캡에 잡히는 국내 연봉 합"을 다섯 곳이 **서로 다르게** 셈했다 — ① `reSign` 게이트(override 반영·시즌중
+> 영입 무시) ② `signInSeason` 게이트(override 미반영·시즌중 영입은 `inSeasonCost`) ③ `transactions.tsx` capLeft 표시
+> (override 미반영·시즌중 영입을 base 연봉으로) ④ 대시보드 총연봉(override 반영·시즌중 영입 무시·정적 명단) ⑤
+> `data/roster.ts domesticPayroll`(base 연봉 원시 합). ③이 `②` 게이트보다 느슨해 **"캡 여유 있다" 표시 후 영입이 캡초과로
+> 거부**되는 불일치가 났고, ①④가 시즌중 영입비를 캡에 안 실어 **게이트가 셌다가 약했다가** 했다.
+
+- **정본 규칙(`data/roster.ts capPayroll`)** — 국내 선수만(외인은 1년 트라이아웃 별개 지갑, 캡 제외 — FOREIGN_SYSTEM 2장):
+  - **시즌 중 영입 선수**(내 팀 `inSeasonTx.kind==='sign'`): **`inSeasonCost(marketVal, betrayed)`** (배신 웃돈 ×1.5 포함 —
+    실제 캡에 실리는 취득가. `signInSeason` 게이트가 이미 쓰던 권위값).
+  - **그 외**: **재계약 override 연봉이 있으면 그 값, 없으면 base `contract.salary`** (재계약으로 오른 연봉이 캡에 반영).
+  - 명단 = 그날 유효 로스터(시즌 중 영입 포함·방출 제외) — 호출부가 제공(store는 `currentRosters()±myRosterDelta`,
+    app 화면은 `rosterIdsOnDay`). `capPayroll`은 진화된 `Player[]`+override+시즌영입 집합+배신판정을 받아 **평가 규칙만** 단일화(순수).
+- **⑤ `domesticPayroll`은 base 연봉 원시 합 프리미티브로 유지**(offseason 등 캡 무관 합산이 계속 사용) — `capPayroll`은
+  그 위의 캡 인지 상위 함수.
+- **게이트 방향 변화(전부 강화 — 약화 0)**:
+  - ① `reSign`: 이제 시즌 중 영입분도 캡에 합산(과거엔 무시 → 저평가) → **더 엄격**.
+  - ② `signInSeason`: 기존 로스터를 override 인지로(과거 base 연봉) → 재계약으로 오른 연봉이 잡혀 **더 엄격**.
+  - ③ `transactions.tsx` capLeft: 시즌 영입을 `inSeasonCost`+override로(과거 base·override미반영) → **② 게이트와 정확히 일치**(허위 여유 제거).
+  - ④ 대시보드 총연봉: 그날 명단(시즌 영입 `inSeasonCost` 포함)으로 → **실제 캡 부담을 진실되게** 표시.
+- **검증**: 동일 입력에서 네 사이트가 같은 값 반환(임시 리프로) + 결정론·sim-league parity 불변. 게이트 강화는 캡 초과
+  영입/재계약을 더 막을 뿐 정당 케이스는 불변.

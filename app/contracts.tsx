@@ -9,7 +9,7 @@ import { ActionSheet } from '../components/Popup';
 import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
 import { teamRelations } from '../data/relationships';
 import { getPlayerProduction } from '../data/production';
-import { leagueDisplayDay } from '../data/standings';
+import { displayCutoff } from '../data/standings';
 import { activeRoster, payroll } from '../data/roster';
 import { overall, overallRaw } from '../engine/overall';
 import { canAfford, isFranchise, LEAGUE_CAP } from '../engine/cap';
@@ -34,6 +34,7 @@ function ContractsInner() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
   const released = useGameStore((s) => s.released);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
@@ -53,10 +54,12 @@ function ContractsInner() {
   const releasedPlayers = released.map((id) => getPlayer(id)).filter((p): p is Player => !!p);
   const faList = roster.filter(willBeFA);
   const faGrades = assignFAGrades(faList);
+  // 시장가·저평가 라벨·재계약 오퍼 가격은 **표시 컷오프**(§3.3 displayCutoff) — player 상세와 동일 데이터 경로(이원화 해소, 2026-07-07).
+  const displayDay = displayCutoff(currentDay, results, teamId);
 
   // 재계약 오퍼 선택 → 다크 글래스 액션시트(네이티브 흰 Alert 대체, 테마 통일 2026-07-01). 오퍼 선택 → 확정 시트 2단계.
   const doResign = (p: Player) => {
-    const market = marketVal(p, getPlayerProduction(p.id, leagueDisplayDay(currentDay)));
+    const market = marketVal(p, getPlayerProduction(p.id, displayDay));
     // 표준 → 후하게 → 짧게 순으로 정렬(추천=표준 최상단·강조). 후하게=충성·길게 / 짧게=싸게·곧 재협상(FA 2.5b)
     const order = ['표준', '후하게', '짧게'];
     const opts = [...resignOptions(p, market)].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
@@ -131,7 +134,7 @@ function ContractsInner() {
 
       <Title>선수 계약</Title>
       {roster.map((p) => {
-        const market = marketVal(p, getPlayerProduction(p.id, leagueDisplayDay(currentDay)));
+        const market = marketVal(p, getPlayerProduction(p.id, displayDay));
         const status = contractStatus(p.contract.salary, market);
         return (
           <Pressable key={p.id} onPress={() => setManage(p)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
@@ -178,7 +181,7 @@ function ContractsInner() {
           </Muted>
           {faList.map((p) => {
             const grade = faGrades.get(p.id)!;
-            const ask = askingPrice(marketVal(p, getPlayerProduction(p.id, leagueDisplayDay(currentDay))), grade);
+            const ask = askingPrice(marketVal(p, getPlayerProduction(p.id, displayDay)), grade);
             const keep = resignDecisions[p.id] !== false;
             return (
               <View key={p.id} style={styles.rowCol}>

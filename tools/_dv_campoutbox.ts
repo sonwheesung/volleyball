@@ -39,7 +39,7 @@ const origReq = (Module.prototype as any).require;
 };
 
 (async () => {
-  const { useGameStore } = await import('../store/useGameStore');
+  const { useGameStore, SAVE_KEY } = await import('../store/useGameStore');
   const { useAuthStore } = await import('../store/useAuthStore');
   const { LEAGUE, getPlayer, commitPlayerBase, currentRosters } = await import('../data/league');
   const { applyCampCourse, CAMP_COURSES } = await import('../engine/diamonds');
@@ -155,7 +155,7 @@ const origReq = (Module.prototype as any).require;
     // persist가 저장하는 것과 동일한 블롭을 구성 → 재수화가 실제 onRehydrateStorage(1183-1191)를 탄다
     const opts = useGameStore.persist.getOptions();
     const persisted = { state: (opts.partialize as any)(G()), version: SAVE_VERSION };
-    __asyncStorageMem.set('baeknyeon-save', JSON.stringify(persisted));
+    __asyncStorageMem.set(SAVE_KEY, JSON.stringify(persisted));
     await useGameStore.persist.rehydrate();
     ok(eqAfter(p5, base, 2, 7), '(A) base null: 재수화가 시드에 +2/+7 재적용(정확히 1회)');
 
@@ -168,7 +168,7 @@ const origReq = (Module.prototype as any).require;
     useGameStore.setState({ playerBase: { [p5]: oneShot } as any, campLog: [{ season: 1, playerId: p5, course: COURSE } as any], campTrainedThisOffseason: [] });
     const opts2 = useGameStore.persist.getOptions();
     const persisted2 = { state: (opts2.partialize as any)(G()), version: SAVE_VERSION };
-    __asyncStorageMem.set('baeknyeon-save', JSON.stringify(persisted2));
+    __asyncStorageMem.set(SAVE_KEY, JSON.stringify(persisted2));
     await useGameStore.persist.rehydrate();
     ok(eqAfter(p5, base2, 2, 7), '(B) base 존재: base 로드만·campLog 재적용 스킵 → +2/+7(1회, +4/+14 아님)');
   }

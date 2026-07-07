@@ -5,13 +5,12 @@
 import './_gt_mock';
 import { __asyncStorageMem } from './_gt_mock';
 
-const KEY = 'baeknyeon-save';
 let fail = 0;
 const check = (n: string, c: boolean) => { process.stdout.write(`${c ? '✅' : '❌'} ${n}\n`); if (!c) fail++; };
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === 'object' && v !== null && !Array.isArray(v);
 
 async function main() {
-  const { useGameStore } = await import('../store/useGameStore');
+  const { useGameStore, SAVE_KEY: KEY } = await import('../store/useGameStore'); // persist 키 = store 단일 출처
   // 초기 auto-rehydrate(빈 스토리지) 정착
   await useGameStore.persist.rehydrate();
 

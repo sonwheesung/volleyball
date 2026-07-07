@@ -3,6 +3,7 @@
 // URL은 /admin 아님(추측 차단, 2026-07-04 사용자 요청) — 실제 보안은 ADMIN_TOKEN(requireAdmin fail-closed §13.15).
 // 인라인 스타일 + 내장 <style>(정적 CSS)만 — 외부 스크립트/스타일 0(XSS 표면 최소). 관리자 전용 화면.
 import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import { AD_REWARD, AD_DAILY_CAP } from '../../lib/econ'; // 다이아 econ 권위(서버) — ×50/하루8 리터럴 금지(engine/diamonds 미러)
 
 type Json = Record<string, unknown>;
 type Tab = 'overview' | 'users' | 'payments' | 'ads' | 'achv' | 'coupons' | 'anns' | 'settings' | 'tickets';
@@ -548,11 +549,11 @@ function Ads({ api }: { api: Api }) {
   const GR = [{ v: 'day', l: '일별' }, { v: 'week', l: '주별' }, { v: 'month', l: '월별' }, { v: 'year', l: '연별' }];
   return (
     <>
-      <div className="oc-cardhead" style={{ marginBottom: 18 }}><div className="oc-mut" style={{ fontSize: 13 }}>광고 1회 시청 = 다이아 +50 (하루 8회 상한).</div><GranTabs gran={gran} set={setGran} opts={GR} /></div>
+      <div className="oc-cardhead" style={{ marginBottom: 18 }}><div className="oc-mut" style={{ fontSize: 13 }}>광고 1회 시청 = 다이아 +{AD_REWARD} (하루 {AD_DAILY_CAP}회 상한).</div><GranTabs gran={gran} set={setGran} opts={GR} /></div>
       <div className="oc-grid">
         <Stat ic="📺" k="총 시청 횟수" v={cTotal.toLocaleString()} s={`최근 ${labels.length}구간 합`} />
         <Stat ic="👁" k="최근 구간 시청" v={String(last)} s={`시청자 ${lastU}명`} />
-        <Stat ic="💎" k="지급 다이아" v={(cTotal * 50).toLocaleString()} s="시청 보상 합" />
+        <Stat ic="💎" k="지급 다이아" v={(cTotal * AD_REWARD).toLocaleString()} s="시청 보상 합" />
       </div>
       <div className="oc-charts">
         <BarsCard title="광고 시청 횟수" value={`${cTotal.toLocaleString()} 회`} labels={labels} data={count} color="#f2a93b" unit="회" />

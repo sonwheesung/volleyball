@@ -67,7 +67,7 @@
   리그가 완료한 경기(현재 경기일은 관전 중이라 제외 → 스포일러 안전). 시작(currentDay 0)엔 −1 → 빈 집계. 결과/순위/
   대시보드/시즌리더가 **모두 이 컷오프**를 쓴다(집계 화면은 좌우대칭 — 내 현재경기만 빼는 비대칭 없음).
   > **⚠ 표시엔 §3.3의 `displayCutoff`로 승격됨(2026-07-07)** — `leagueDisplayDay` 단독은 "방금 관전한 경기"와
-  > "시즌 마지막 경기일"을 놓친다(아래 §3.3). 비표시 용도(진단 리플레이·계약 시장가)만 이 헬퍼를 계속 쓴다.
+  > "시즌 마지막 경기일"을 놓친다(아래 §3.3). 비표시 용도(진단 리플레이)만 이 헬퍼를 계속 쓴다(~~계약 시장가~~ 는 §3.3 이행분).
 - **✅ 전수 통일 완료(2026-06-24) — `leagueDisplayDay` 균일 적용(내부 불일치 0)**:
   - `app/results.tsx`(결과 목록): `seasonResults(leagueDisplayDay(currentDay))` — `results`(관전) 의존 제거, 순수 리그 기준.
   - `app/standings.tsx`·`app/(tabs)/index.tsx`(대시보드 순위 + **성적 W/L 카드**): `playedThroughDay` → `leagueDisplayDay(currentDay)`.
@@ -103,6 +103,10 @@
   `results`·`news`+`news/[id]`(피드 인자)·`records-archive`(라이브 리더 + **잠정 라벨 경계도 같은 `seasonComplete`로**)·
   `season-recap`·`staff`·`player/[id]`(시즌 생산)·`data/records.ts seasonSnapshot`(cutoff 인자화). **면담 설득 perfT**
   (`store` §3, F3)도 같은 컷오프로 통일(치른 경기 0이면 직전 시즌 최종 순위 폴백).
+- **계약 시장가도 `displayCutoff`로 이행(2026-07-07)** — 사유: `player/[id]`(displayCutoff)와 `contracts`(구 `leagueDisplayDay`)가
+  같은 선수의 시장가/저평가 라벨을 **이원화**해 보였고, 재계약 오퍼 가격이 stale 컷오프로 계산됐다. `app/contracts.tsx`의
+  3개 `getPlayerProduction(…, leagueDisplayDay(currentDay))` 사이트(재계약 오퍼·행 라벨·FA 요구액)를 `displayCutoff(currentDay,
+  results, teamId)`로 통일 → player 상세와 동일 데이터 경로. (§3.2 "비표시=계약 시장가" 서술은 이로써 취소.)
 - **F1 근원 노트(형제 배선)**: 표시 계층 필터(`freshNews`) 도입 시 **상세 화면 배선 누락**으로 목록↔상세 인덱스가
   어긋났다(NEWS §3.6, F1 — 사용자 보고 버그). 공통 컷오프/필터를 새로 넣으면 **모든 파생 표면이 같이 쓰는지 grep 전수**
   가 규율이다(TEST_METHODOLOGY 형제 사냥) — "표시 계층 필터 도입 시 상세 화면 누락".

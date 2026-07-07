@@ -217,6 +217,8 @@
 - **실환경 검증(Opus 4.8)**: 공개 URL `GET /api/health` 200 + `GET /api/wallet` **Vercel 서버리스 → Supabase 6543 풀러 DB 왕복 정상**(balance:0). 서버리스에서 `prepare:false` 필수 확인.
 - **앱 연결**: 루트 `.env`의 `EXPO_PUBLIC_SERVER_URL=https://volleyball-jet-nine.vercel.app`(비밀 아님 → 커밋). 비면 오프라인 모드(§13.6). dev에서 로컬 서버로 바꾸려면 `.env.local`에 `EXPO_PUBLIC_SERVER_URL=http://localhost:3000` 오버라이드(단 실기기·에뮬레이터는 localhost 불가 → Vercel URL 사용).
 - **TODO(출시 전)**: DB 비밀번호 회전(개발 중 채팅 노출분) → Supabase reset 후 `.env.local`·Vercel env 갱신. 2FA는 계정에 활성화됨(복구코드 보관 완료).
+- **비밀·환경변수 회전 체크리스트(양쪽 동시 갱신 필수 — 한쪽만 돌리면 로그인/검증 전면 실패)**:
+  - **구글 클라이언트 ID 회전 시 양쪽 동시 갱신**: 앱 `.env`의 `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`(빌드 인라인 → EAS 재빌드) **=** 서버 `GOOGLE_OAUTH_CLIENT_IDS`(콤마구분 목록에 같은 웹 클라이언트 ID 포함, `server/lib/googleVerify.ts` audience). 한쪽만 회전하면 audience 불일치로 **모든 구글 로그인이 fail-closed**로 거부된다. (SESSION_JWT_SECRET·ADMIN_TOKEN 회전은 위 §13.8 배포 env — 서버 단독이라 별개.)
 
 ### 13.9 데이터 보관·파기 (법정 — 2026-07-02 조사)
 > 결제·개인정보 보관은 **추정 금지 — 실제 법령 조사**(전자상거래법 시행령 제6조). 근거: law.go.kr·easylaw.go.kr.

@@ -8,7 +8,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
-import { purchase, restorePurchases, skuLabel, type Sku } from '../lib/iap';
+import { purchase, restorePurchases, skuLabel, SKU_REMOVE_ADS, SKU_DLC_WORLDCUP, type Sku } from '../lib/iap';
 import { WORLDCUP_ENABLED } from '../data/flags';
 import { useRouter } from 'expo-router';
 
@@ -72,11 +72,11 @@ export default function Shop() {
       <Text style={styles.section}>아이템</Text>
       <ShopCard icon="remove-circle-outline" tint={theme.rose} title="광고 제거"
         sub="게임 내 모든 광고를 없앱니다"
-        onPress={() => buy('remove_ads')} />
+        onPress={() => buy(SKU_REMOVE_ADS)} />
       {WORLDCUP_ENABLED ? (
         <ShopCard icon="globe-outline" tint={theme.sky} title="월드컵 시즌 구매"
           sub="DLC · 4년마다 국가대표 차출(월드컵)"
-          onPress={() => buy('dlc_worldcup')} />
+          onPress={() => buy(SKU_DLC_WORLDCUP)} />
       ) : null}
 
       <Pressable onPress={restore} style={{ alignItems: 'center', paddingVertical: 12 }}>
