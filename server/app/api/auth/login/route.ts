@@ -10,6 +10,7 @@ import { users } from '../../../../db/schema';
 import { ensureUser } from '../../../../lib/wallet';
 import { signToken } from '../../../../lib/auth';
 import { verifyGoogleIdToken } from '../../../../lib/googleVerify';
+import { checkLimit, clientIp } from '../../../../lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,10 @@ type Device = { platform?: string; osVersion?: string; appVersion?: string };
 const str = (v: unknown): string | null => (typeof v === 'string' && v ? v.slice(0, 64) : null);
 
 export async function POST(req: Request) {
+  // #3 레이트리밋(2026-07-07) — 미인증 로그인 플러딩 차단. IP 키로 DB/구글검증 전에 컷(fail-open: Upstash 미설정 시 통과).
+  if (!(await checkLimit('login', clientIp(req))).ok) {
+    return NextResponse.json({ ok: false, reason: 'rate-limited' }, { status: 429 });
+  }
   try {
     const body = (await req.json()) as { provider?: string; providerId?: string; idToken?: string; device?: Device };
     const provider = body.provider === 'google' || body.provider === 'apple' ? body.provider : 'dev';

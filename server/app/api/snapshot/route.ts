@@ -7,6 +7,7 @@ import { db } from '../../../db';
 import { tickets, diagnosticSnapshots } from '../../../db/schema';
 import { requireUserId } from '../../../lib/auth';
 import { PROJ_CODE } from '../../../lib/proj';
+import { checkLimit } from '../../../lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -17,6 +18,10 @@ export const SNAPSHOT_MAX_BYTES = 262144;
 export async function POST(req: Request) {
   const userId = await requireUserId(req);
   if (!userId) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+  // #3 레이트리밋(2026-07-07) — 스냅샷 폭주 차단. userId 키, 크기검사/insert 전에 컷.
+  if (!(await checkLimit('snapshot', userId)).ok) {
+    return NextResponse.json({ ok: false, reason: 'rate-limited' }, { status: 429 });
+  }
   try {
     const b = (await req.json()) as { ticketId?: string; snapshot?: unknown };
     if (!b.ticketId || b.snapshot === undefined) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });

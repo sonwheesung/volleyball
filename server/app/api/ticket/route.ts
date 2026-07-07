@@ -10,6 +10,7 @@ import { requireUserId } from '../../../lib/auth';
 import { ensureProj } from '../../../lib/wallet';
 import { notifyTicket } from '../../../lib/notify';
 import { PROJ_CODE } from '../../../lib/proj';
+import { checkLimit } from '../../../lib/ratelimit';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,6 +20,10 @@ const clip = (v: unknown, max: number): string | null => (typeof v === 'string' 
 export async function POST(req: Request) {
   const userId = await requireUserId(req);
   if (!userId) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+  // #3 레이트리밋(2026-07-07) — 문의 폭주(+Discord 웹훅 스팸) 차단. userId 키, insert/Discord 전에 컷.
+  if (!(await checkLimit('ticket', userId)).ok) {
+    return NextResponse.json({ ok: false, reason: 'rate-limited' }, { status: 429 });
+  }
   try {
     const b = (await req.json()) as { category?: string; content?: string; device?: { platform?: string; osVersion?: string; appVersion?: string } };
     const category = CATS.has(b.category ?? '') ? (b.category as string) : 'etc';

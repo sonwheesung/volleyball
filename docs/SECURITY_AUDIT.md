@@ -20,7 +20,7 @@
 |---|---|---|---|
 | 🔴 CRITICAL | 1 | 무한 다이아 발행(`welcome` 캡 부재, **배포된 코드에 존재**) | ✅ 수정+검증(2026-07-07) |
 | 🔴 CRITICAL/HIGH | 2 | 세션 시크릿 fail-open(라이브 완화·코드 잠재) + dev/apple 로그인 백도어(라이브 오픈, 계정 탈취) | ✅ 수정+검증(2026-07-07) — #2(b) Apple은 JWKS 검증 구현 전까지 prod 차단 유지 |
-| 🟠 HIGH | 3 | 서버 전역 레이트리밋 부재 | ⬜ 미착수(Q2 대기) |
+| 🟠 HIGH | 3 | 서버 전역 레이트리밋 부재 | ✅ 수정+검증(2026-07-07) — Upstash @upstash/ratelimit(env 세팅 시 활성·미설정=fail-open no-op), 가드 _dv_ratelimit 17/17. 라이브 429는 Upstash env 주입 후 활성 |
 | 🟠 HIGH | 4 | `/api/snapshot` 무제한 JSON blob 저장 → 스토리지 고갈 | ✅ 수정+검증(2026-07-07) |
 | 🟡 MEDIUM | 5 | 멱등키 userId 미바인딩 → 피해자 적립 선점(griefing) | ✅ 수정+검증(2026-07-07) |
 | 🟡 MEDIUM | 6 | `wallet/earn·spend`가 `resolveUserId`(익명 폴백) 사용 | ✅ 수정+검증(2026-07-07) |
@@ -88,14 +88,28 @@
 
 ## 🟠 3. HIGH — 서버 전역 레이트리밋 부재
 
-- **상태:** ⬜ 미착수 (Q2 레이트리밋 구현 방식 결정 대기 — 2026-07-07 Q2-독립 수정 라운드에서 **의도적 제외**)
-- **경로:** 전 라우트 (`server/middleware.ts` 부재, rate-limit 유틸/의존성 0)
+- **상태:** ✅ 수정+코드검증(2026-07-07, 구현=Opus/검증=Fable 5: _dv_ratelimit 17/17·서버 tsc exit0·정적 diff·게이트 배선 확인) — Upstash `@upstash/ratelimit`(슬라이딩 윈도). **라이브 429 A/B는 Upstash env 주입 후 재확인(팔로우업).**
+  `env(UPSTASH_REDIS_REST_URL/TOKEN)` 세팅 시 활성, **미설정=fail-open no-op**(세팅 전에도 안전 커밋·로컬 dev 무영향).
+  순수 가드 `_dv_ratelimit`. (Fable이 독립 재검증 후 `✅ 완료`로 전환.)
+  - **수정 내용:** `server/lib/ratelimit.ts`(신규) — 지연 초기화 Redis 클라 + 5개 슬라이딩 윈도 리미터.
+    **두 겹 fail-open**: ① env 둘 중 하나라도 없으면 `checkLimit`이 항상 `{ok:true}`(no-op, 모듈 로드 시 throw 안 함),
+    ② 한도 검사 예외(Redis 다운/타임아웃)면 `reportError` 후 허용(인프라 장애로 정상 유저 차단 금지).
+    `clientIp(req)`가 `x-forwarded-for` 첫 홉 파싱(Vercel), `checkLimit`이 엔드포인트명으로 identifier 프리픽스(cross-endpoint 충돌 방지).
+    4개 라우트 최상단(무거운 작업 전)에 게이트 → 초과 시 429 `{ok:false, reason:'rate-limited'}`:
+    login=`clientIp`(미인증, DB/구글검증 전), coupon/redeem=IP(선)+userId(후, requireUserId 뒤·둘 중 하나라도 초과 거부),
+    ticket POST=userId(insert/Discord 전), snapshot POST=userId(크기검사/insert 전). 기존 인증·소유권·검증 로직은 그대로.
+  - **한도(튜너블, `LIMITS` 상수):** login 10/분·IP · coupon 8/분·user + 20/10분·IP · ticket 5/10분·user · snapshot 10/5분·user.
+  - **⚠ 활성화 조건(사용자 작업):** Vercel 대시보드 → **Storage → Upstash Redis** 인테그레이션을 추가해
+    `UPSTASH_REDIS_REST_URL`·`UPSTASH_REDIS_REST_TOKEN`이 프로덕션 env에 주입돼야 리미터가 실제로 동작한다.
+    그 전까지는 fail-open no-op(429 없음)이라 이 코드는 세팅 완료 전에 안전하게 배포 가능.
+- **경로:** 전 라우트 (`server/middleware.ts` 부재, rate-limit 유틸/의존성 0) → `server/lib/ratelimit.ts` 신설·4라우트 게이트.
 - **익스플로잇:** 인증 없는 auth/login 플러딩(+users 행 무한 생성 via `ensureUser`), 쿠폰 무차별 대입
   (coupon/redeem 락아웃 없음, 각 시도가 다중쿼리 트랜잭션), 문의 폭주(+Discord 웹훅 스팸).
   **#2 위조 세션과 결합 시 per-user 캡(ad/achievement)도 신원마다 리셋.**
-- **수정 방향:** IP+userId 키 레이트리밋 유틸 1개를 login·coupon·ticket·snapshot에 적용.
-  방식은 [OPEN QUESTION](#open-questions-수정-착수-전-사용자-답-대기)(Vercel KV / Upstash / DB 카운터).
-- **수정 후 검증:** (수정 방식 확정 후) 임계 초과 요청이 429로 차단되는지 + 정상 사용자 무영향 A/B.
+- **수정 방향:** IP+userId 키 레이트리밋 유틸 1개를 login·coupon·ticket·snapshot에 적용. (방식: **Upstash Redis** 채택.)
+- **수정 후 검증:** 순수 가드 `_dv_ratelimit`가 (a) env 미설정 시 반복 호출(한도 3배+) 전부 허용(fail-open),
+  (b) `clientIp` xff 첫 홉 파싱, (c) `LIMITS` 상수 = 의도 윈도(드리프트 가드), (d) 엔드포인트별 프리픽스 구분 검증(17/17 PASS·변이 자가검증).
+  라이브 429 차단(실 Upstash env 주입 후 임계 초과 A/B)은 Upstash 세팅 완료 후 재확인(팔로우업).
 
 ---
 
@@ -197,7 +211,8 @@
    사용자에게 필요한 건 (i) 그 값들이 **지금도** Vercel 프로덕션에 설정돼 있는지 재확인(에이전트/메인은 대시보드 값 조회 불가) +
    (ii) `SESSION_JWT_SECRET`·`ADMIN_TOKEN`은 회전값이 **채팅 경유**라 **출시 직전 채팅 무경유 값으로 최종 1회 더 회전**(§1 ⚠ 항목).
    → 이 재확인/최종회전이 #2(a)·#7의 "라이브 완화" 전제를 보증한다.
-2. **레이트리밋 구현 방식: Vercel KV / Upstash Redis / DB 카운터 중?** (#3 수정 방식 결정.)
+2. **레이트리밋 구현 방식: Vercel KV / Upstash Redis / DB 카운터 중?** — ✅ **ANSWERED(2026-07-07)** — **Upstash Redis** 채택
+   (`@upstash/ratelimit` 슬라이딩 윈도, fail-open no-op으로 미설정/장애 무해). #3 수정 완료(위). 잔여: Vercel Storage→Upstash 인테그레이션 추가로 활성화.
 
 ---
 
@@ -231,3 +246,6 @@
 - 2026-07-07 — Q2-독립 수정 착수(#1·#2·#4·#5·#6·#7): 멱등키 서버강제/userId바인딩·requireUserId·시크릿 prod fail-closed+토큰만료·dev/apple prod차단·스냅샷256KB상한·cron fail-closed.
   가드 _dv_security(순수). #3 레이트리밋은 Q2 대기. 구현=Opus/검증·커밋=Fable 5.
   (상태는 `🔧 수정함` — Fable이 독립 재검증 후 `✅ 완료`로 전환. 라이브 dedup은 dev DB에서 walletConcurrency/_dv_walletreplay로 재확인 권장.)
+- 2026-07-07 — #3 레이트리밋 수정(Q2 확정: Upstash Redis): `server/lib/ratelimit.ts`(@upstash/ratelimit 슬라이딩 윈도, 두 겹 fail-open — 미설정 no-op·Redis 오류 허용) +
+  login·coupon/redeem·ticket·snapshot 4라우트 429 게이트. 한도 login 10/분·IP·coupon 8/분·user+20/10분·IP·ticket 5/10분·user·snapshot 10/5분·user(튜너블).
+  순수 가드 `_dv_ratelimit`(17/17 PASS·변이 자가검증). 서버 tsc exit0. **활성화는 Vercel Storage→Upstash Redis 인테그레이션 추가 필요**(그 전까지 fail-open). 구현=Opus/검증·커밋=Fable 5.
