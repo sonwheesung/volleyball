@@ -46,7 +46,7 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: theme.bg },
       }}
     >
-      <Tabs.Screen name="index" options={{ title: '대시보드', tabBarLabel: '홈', tabBarIcon: tabIcon('home-outline', 'home') }} />
+      <Tabs.Screen name="index" options={{ title: '홈', tabBarLabel: '홈', tabBarIcon: tabIcon('home-outline', 'home') }} />
       <Tabs.Screen name="schedule" options={{ title: '일정', tabBarLabel: '일정', tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
       <Tabs.Screen name="squad" options={{ title: '선수단', tabBarLabel: '선수단', tabBarIcon: tabIcon('people-outline', 'people') }} />
       <Tabs.Screen name="office" options={{ title: '단장실', tabBarLabel: '단장실', tabBarIcon: tabIcon('briefcase-outline', 'briefcase') }} />

@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
-import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
+import { Card, IconLabel, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { SoftUpdateBanner } from '../../components/SoftUpdateBanner';
 import { evolveOnDay, getTeam } from '../../data/league';
@@ -82,11 +82,10 @@ export default function Dashboard() {
   return (
     <Screen title={team.name} scroll={false}>
       <SoftUpdateBanner />
-      {/* 다음 경기 = 메인 진입점으로 승격(UI polish, 관전형 1순위). 홈엔 전용 "다음 경기" 카드(상대·전력비교)가
-          없고 — 그 데이터는 일정 탭에서 계산 — 가장 가까운 next-match 요소인 "경기 진행" CTA를 최상단으로 올려
-          가장 먼저 보이게 한다. 팀 종합 전력은 아래로 내려 보조(secondary). 새 데이터/기능 추가 없이 순서·강조만 변경. */}
-      <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
-      {/* 팀 종합 전력 + 성적 (보조) */}
+      {/* ~~"일정 보기 / 경기 진행" CTA 최상단 승격(UI polish)~~ → 제거(2026-07-07, 사용자 결정) —
+          경기 진입은 하단 탭 "일정"이 담당(중복 CTA 정리, 홈=현황 요약 집중). 스포트라이트 앵커(dash-top
+          이하)는 이 버튼 밖이었고 위치는 런타임 재측정(Spotlight measure)이라 영향 없음. */}
+      {/* 팀 종합 전력 + 성적 */}
       <SpotlightTarget id="dash-top">
         <Card accent={theme.elite} flat>
           <Row>

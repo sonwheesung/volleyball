@@ -13,7 +13,7 @@ const ROSE = '#FF5C8D';      // 후원/응원 — 따뜻한 로즈
 const ROSE_DK = '#E63E72';
 
 const PERKS: { icon: IoniconName; title: string; sub: string }[] = [
-  { icon: 'heart', title: '후원자 뱃지', sub: '대시보드·설정에 ♥ 후원자 표시 (영구)' },
+  { icon: 'heart', title: '후원자 뱃지', sub: '홈·설정에 ♥ 후원자 표시 (영구)' },
   { icon: 'document-text', title: '크레딧 등재', sub: '"이 게임을 응원해주신 분들"에 함께' },
   { icon: 'sparkles', title: '개발 응원', sub: '한 사람이 만든 배구명가를 계속 가꾸는 힘' },
 ];
