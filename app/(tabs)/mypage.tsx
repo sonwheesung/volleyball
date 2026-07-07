@@ -55,6 +55,8 @@ export default function MyPage() {
   const careerTotals = useGameStore((s) => s.careerTotals);
   const results = useGameStore((s) => s.results);
   const claimedAch = useGameStore((s) => s.claimedAch);
+  const resetSave = useGameStore((s) => s.resetSave);
+  const replayOnboarding = useGameStore((s) => s.replayOnboarding);
   const unclaimedCount = useMemo(() => {
     if (!myTeamId) return 0;
     const statuses = evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals: achTotals(myTeamId, careerTotals, results) });
@@ -71,6 +73,19 @@ export default function MyPage() {
     showAlert('로그아웃', '로그아웃하시겠어요? 다시 로그인하면 다이아·구매 내역이 그대로 복원됩니다.', [
       { text: '취소', style: 'cancel' },
       { text: '로그아웃', style: 'destructive', onPress: () => signOut() }, // 세션 제거 → BootGate가 로그인 벽으로 전환
+    ]);
+  };
+  // 개발용 — 첫 진입(온보딩)부터 다시 체험. 파괴적이라 showAlert(커스텀 다이얼로그, UI-21) 확인 후에만.
+  const confirmResetToOnboarding = () => {
+    showAlert('게임 초기화 (개발용)', '게임을 초기화하고 온보딩부터 다시 시작합니다. 진행 상황이 사라집니다. (개발용)', [
+      { text: '취소', style: 'cancel' },
+      { text: '초기화', style: 'destructive', onPress: () => {
+        resetSave(); // 세이브 초기화(selectedTeamId=null, seenTips 비움 → 스포트라이트 재생). onboarded·claimedAch는 보존됨.
+        // resetSave가 claimedAch를 보존하므로 그 뒤에 환영 다이아 센티넬을 제거 → 개발 환영 지급이 다시 트리거되게.
+        useGameStore.setState((s) => ({ claimedAch: s.claimedAch.filter((id) => id !== '__welcome_local__') }));
+        replayOnboarding(); // onboarded=false → (tabs) 게이트가 온보딩 인트로로. 첫 진입 완전 재현.
+        router.replace('/onboarding'); // 진짜 첫 화면(설정 "튜토리얼 다시보기"와 동일 타깃)
+      } },
     ]);
   };
 
@@ -144,6 +159,10 @@ export default function MyPage() {
             </Pressable>
             <Pressable onPress={() => { setTimeout(() => { throw new Error('의도적 미처리 예외 크래시 테스트 — 전역 핸들러 확인'); }, 0); }} style={{ alignItems: 'center' }}>
               <Text style={{ color: theme.bad, fontSize: 12, fontWeight: '700' }}>🧪 미처리 예외 크래시 테스트</Text>
+            </Pressable>
+            {/* 첫 진입(온보딩) 재현 — 세이브 초기화 + 온보딩 인트로부터. 파괴적이라 확인 다이얼로그. */}
+            <Pressable onPress={confirmResetToOnboarding} style={{ alignItems: 'center' }}>
+              <Text style={{ color: theme.bad, fontSize: 12, fontWeight: '700' }}>🔄 게임 초기화 (온보딩부터)</Text>
             </Pressable>
           </View>
         ) : null}
