@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { RoleBadge } from '../components/RoleBadge';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { shortTeamName as shortTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
@@ -11,7 +13,8 @@ import { projectSettledCash } from '../data/financeProjection';
 import { LEAGUE_CAP } from '../engine/cap';
 import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
 import { assignFAGrades, askingPrice } from '../engine/faMarket';
-import { overall, overallRaw } from '../engine/overall';
+import { buildLineup } from '../engine/lineup';
+import { ALL_POSITIONS, overall, overallRaw } from '../engine/overall';
 import { formatMoney } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
 import { teamRelations } from '../data/relationships';
@@ -66,6 +69,26 @@ function FACenterInner() {
   const poolPlayers = pv.pool.map((id) => snap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
   const grades = assignFAGrades(poolPlayers);
   const myRoster = pv.myRoster.map((id) => snap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
+
+  // 예상 역할(주전/리베로) — 개막전이 실제로 쓰는 라인업(engine/lineup.buildLineup)을 **이 화면이 그리는
+  // 다음시즌 스냅샷 로스터**에 적용해 도출(외인 포함 → OP 승부 반영). 뱃지는 아래 보호명단 행에 붙어
+  // "뺏기면 아픈 주전"을 한눈에. training-camp roleOf와 같은 경로(스냅샷 로스터를 먹인다는 점만 다름).
+  const roleOf: Record<string, '주전' | '리베로'> = {};
+  if (myRoster.length) {
+    const lu = buildLineup(myRoster);
+    for (const p of lu.six) roleOf[p.id] = '주전';
+    if (lu.libero) roleOf[lu.libero.id] = '리베로';
+  }
+  const isStarter = (id: string) => roleOf[id] === '주전' || roleOf[id] === '리베로';
+  // 보호명단 = 국내 선수만(외인은 1년 계약이라 보상 대상 아님). 정렬: 주전+리베로 그룹 먼저(뺏기면 아픈 순),
+  // 그다음 벤치 — 각 그룹 내 포지션순(ALL_POSITIONS), 동순위는 OVR 내림차순.
+  const protectList = myRoster
+    .filter((p) => !p.isForeign)
+    .sort((a, b) => {
+      const ga = isStarter(a.id) ? 0 : 1, gb = isStarter(b.id) ? 0 : 1;
+      if (ga !== gb) return ga - gb;
+      return ALL_POSITIONS.indexOf(a.position) - ALL_POSITIONS.indexOf(b.position) || overall(b) - overall(a);
+    });
 
   // 캡은 국내 선수만(외인=별개 지갑, FOREIGN_SYSTEM 2장) — EC-CAP-01(2026-06-30). 외인 포함 시 허위 캡 초과.
   const myPayroll = pv.myRoster.reduce((s, id) => { const pl = snap[id]; return s + (pl && !pl.isForeign ? pl.contract.salary : 0); }, 0);
@@ -138,8 +161,11 @@ function FACenterInner() {
       ) : null}
 
       <Title>보호선수 명단 ({protectedIds.length}/{PROTECT_COUNT})</Title>
-      <Muted style={{ fontSize: 12 }}>보호하지 않은 선수가 보상선수로 지명될 수 있습니다. (외국인은 1년 계약이라 보상선수 대상이 아니라 제외)</Muted>
-      {myRoster.filter((p) => !p.isForeign).map((p) => {
+      <Muted style={{ fontSize: 12, lineHeight: 17 }}>
+        보호하지 않은 선수 중 <Text style={{ color: theme.text, fontWeight: '700' }}>OVR이 가장 높은 선수부터</Text> 상대팀이
+        보상선수로 데려갑니다. 주전을 지키세요. (외국인은 1년 계약이라 보상 대상이 아니라 제외)
+      </Muted>
+      {protectList.map((p) => {
         const prot = protectedIds.includes(p.id);
         return (
           <Pressable
@@ -149,10 +175,16 @@ function FACenterInner() {
           >
             <PosTag pos={p.position} />
             <Text style={[styles.name, { flex: 1 }]} numberOfLines={1}>{p.name}</Text>
+            <Text style={styles.age}>{p.age}세</Text>
+            <RoleBadge role={roleOf[p.id]} />
             <OvrBadge value={overallRaw(p)} />
-            <Text style={{ color: prot ? theme.good : theme.muted, fontWeight: '800', width: 36, textAlign: 'right' }}>
+            <Text style={{ color: prot ? theme.good : theme.muted, fontWeight: '800', width: 30, textAlign: 'right' }}>
               {prot ? '보호' : '—'}
             </Text>
+            {/* 검사용 — 선수 상세로. hitSlop으로 터치 영역을 넓혀 보호 토글 오탭과 분리(행 탭=보호, 이 아이콘=상세) */}
+            <Pressable onPress={() => router.push(`/player/${p.id}`)} hitSlop={10} style={styles.infoBtn}>
+              <Ionicons name="information-circle-outline" size={20} color={theme.muted} />
+            </Pressable>
           </Pressable>
         );
       })}
@@ -243,8 +275,10 @@ const styles = themedStyles(() => StyleSheet.create({
   btnText: { fontSize: 14, fontWeight: '800' },
   toggle: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 8, alignItems: 'center', marginTop: 4 },
   protectRow: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
+    flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: theme.card, borderRadius: 10, borderWidth: 1, borderColor: theme.border,
     paddingHorizontal: 12, paddingVertical: 8,
   },
+  age: { color: theme.muted, fontSize: 13, fontWeight: '700' },
+  infoBtn: { paddingLeft: 2 },
 }));

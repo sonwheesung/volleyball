@@ -7,6 +7,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { Button, Card, IconLabel, Muted, PosTag, Screen, theme, themedStyles } from '../components/Screen';
+import { RoleBadge } from '../components/RoleBadge';
 import { useGameStore } from '../store/useGameStore';
 import { getPlayer, teamPlayerIds } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
@@ -22,17 +23,6 @@ const LABEL: Record<TrainableStat, string> = {
   skSpike: '공격기술', skBlock: '블로킹기술', skDig: '디그기술', skReceive: '리시브기술', skSet: '세팅기술', skServe: '서브기술',
 };
 const COURSE_KEYS: CampCourse[] = ['attack', 'defense', 'block', 'setter', 'serve'];
-
-// 예상 역할 배지 — 주전(good)·리베로(gold, 주전 리베로라 구분 색)·벤치(muted). squad statusTag pill과 같은 시각 언어.
-function RoleBadge({ role }: { role?: '주전' | '리베로' }) {
-  const c = role === '주전' ? theme.good : role === '리베로' ? theme.gold : theme.muted;
-  const label = role ?? '벤치';
-  return (
-    <View style={[styles.roleBadge, { borderColor: c, backgroundColor: c + '22' }]}>
-      <Text style={[styles.roleBadgeTxt, { color: c }]}>{label}</Text>
-    </View>
-  );
-}
 
 export default function TrainingCamp() {
   const router = useRouter();
@@ -298,8 +288,6 @@ const styles = themedStyles(() => StyleSheet.create({
   prow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 14, paddingVertical: 11, marginTop: 6 },
   pname: { flex: 1, color: theme.text, fontSize: 15, fontWeight: '700' },
   groupLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginTop: 8, marginLeft: 2 },
-  roleBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, borderWidth: 1 },
-  roleBadgeTxt: { fontSize: 11, fontWeight: '800' },
   psub: { color: theme.muted, fontSize: 13 },
   doneTag: { color: theme.muted, fontSize: 12, fontWeight: '800' },
   arrow: { color: theme.accent, fontSize: 22, fontWeight: '900' },
