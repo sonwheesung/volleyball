@@ -2,12 +2,20 @@
 //   개인정보 최소화: 이메일·이름은 서버에 저장하지 않는다(서버는 idToken에서 sub만 추출). AUTH_SYSTEM.
 //   Expo Go엔 네이티브 모듈이 없으므로 **지연 require + graceful**(미설정/미설치면 unavailable). 실동작은 EAS 빌드.
 //   webClientId = Google Cloud "웹 애플리케이션" OAuth 클라이언트 ID(EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID) — 미설정이면 로그인 불가.
+import Constants from 'expo-constants';
 import { logError } from './log';
 
 const WEB_CLIENT_ID = process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID ?? '';
 
-/** 네이티브 모듈 지연 로드 — 미설치(Expo Go)면 null. */
+// Expo Go(개발 클라이언트)엔 네이티브 구글 로그인 모듈이 없다. 그래도 require를 태우면 모듈 top-level의
+// TurboModuleRegistry.getEnforcing('RNGoogleSignin')가 던지고, dev의 guardedLoadModule이
+// 그 init 에러를 아래 try/catch가 삼키기 전에 전역 핸들러(RedBox)로 먼저 보고한다(앱은 계속 돌지만 RedBox가 뜸).
+// → Expo Go에선 require 자체를 건너뛴다(구글 로그인은 Expo Go에 원래 없음 — 실 빌드엔 모듈 존재). storeClient = Expo Go.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+
+/** 네이티브 모듈 지연 로드 — Expo Go·미설치면 null. */
 function gsi(): any | null {
+  if (isExpoGo) return null; // Expo Go — 네이티브 모듈 부재. require를 태우지 않아 RedBox(모듈 init 에러) 자체가 안 뜬다.
   try {
     // @ts-ignore — 선택적 네이티브 모듈(EAS 빌드에만 존재)
     return require('@react-native-google-signin/google-signin');
