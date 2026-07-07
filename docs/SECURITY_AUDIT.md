@@ -20,7 +20,7 @@
 |---|---|---|---|
 | 🔴 CRITICAL | 1 | 무한 다이아 발행(`welcome` 캡 부재, **배포된 코드에 존재**) | ✅ 수정+검증(2026-07-07) |
 | 🔴 CRITICAL/HIGH | 2 | 세션 시크릿 fail-open(라이브 완화·코드 잠재) + dev/apple 로그인 백도어(라이브 오픈, 계정 탈취) | ✅ 수정+검증(2026-07-07) — #2(b) Apple은 JWKS 검증 구현 전까지 prod 차단 유지 |
-| 🟠 HIGH | 3 | 서버 전역 레이트리밋 부재 | ✅ 수정+검증(2026-07-07) — Upstash @upstash/ratelimit(env 세팅 시 활성·미설정=fail-open no-op), 가드 _dv_ratelimit 17/17. 라이브 429는 Upstash env 주입 후 활성 |
+| 🟠 HIGH | 3 | 서버 전역 레이트리밋 부재 | ✅ 수정+검증(2026-07-07) — Upstash @upstash/ratelimit(env 세팅 시 활성·미설정=fail-open no-op), 가드 _dv_ratelimit 17/17. **라이브 검증 완료(2026-07-07): Upstash Redis 연결·프로덕션 실호출 login 10회/분 → 11번째 HTTP 429** |
 | 🟠 HIGH | 4 | `/api/snapshot` 무제한 JSON blob 저장 → 스토리지 고갈 | ✅ 수정+검증(2026-07-07) |
 | 🟡 MEDIUM | 5 | 멱등키 userId 미바인딩 → 피해자 적립 선점(griefing) | ✅ 수정+검증(2026-07-07) |
 | 🟡 MEDIUM | 6 | `wallet/earn·spend`가 `resolveUserId`(익명 폴백) 사용 | ✅ 수정+검증(2026-07-07) |
@@ -88,7 +88,7 @@
 
 ## 🟠 3. HIGH — 서버 전역 레이트리밋 부재
 
-- **상태:** ✅ 수정+코드검증(2026-07-07, 구현=Opus/검증=Fable 5: _dv_ratelimit 17/17·서버 tsc exit0·정적 diff·게이트 배선 확인) — Upstash `@upstash/ratelimit`(슬라이딩 윈도). **라이브 429 A/B는 Upstash env 주입 후 재확인(팔로우업).**
+- **상태:** ✅ 수정+코드검증(2026-07-07, 구현=Opus/검증=Fable 5: _dv_ratelimit 17/17·서버 tsc exit0·정적 diff·게이트 배선 확인) — Upstash `@upstash/ratelimit`(슬라이딩 윈도). **라이브 검증 완료(2026-07-07): Vercel Storage→Upstash Redis 연결(프리픽스 KV → `KV_REST_API_URL/TOKEN`, 코드가 UPSTASH_*·KV_* 둘 다 인식), 프로덕션 `POST /api/auth/login` 실호출 = 1~10회 401·11회째부터 429. IP 10/분 게이트 동작 확인.**
   `env(UPSTASH_REDIS_REST_URL/TOKEN)` 세팅 시 활성, **미설정=fail-open no-op**(세팅 전에도 안전 커밋·로컬 dev 무영향).
   순수 가드 `_dv_ratelimit`. (Fable이 독립 재검증 후 `✅ 완료`로 전환.)
   - **수정 내용:** `server/lib/ratelimit.ts`(신규) — 지연 초기화 Redis 클라 + 5개 슬라이딩 윈도 리미터.
@@ -109,7 +109,7 @@
 - **수정 방향:** IP+userId 키 레이트리밋 유틸 1개를 login·coupon·ticket·snapshot에 적용. (방식: **Upstash Redis** 채택.)
 - **수정 후 검증:** 순수 가드 `_dv_ratelimit`가 (a) env 미설정 시 반복 호출(한도 3배+) 전부 허용(fail-open),
   (b) `clientIp` xff 첫 홉 파싱, (c) `LIMITS` 상수 = 의도 윈도(드리프트 가드), (d) 엔드포인트별 프리픽스 구분 검증(17/17 PASS·변이 자가검증).
-  라이브 429 차단(실 Upstash env 주입 후 임계 초과 A/B)은 Upstash 세팅 완료 후 재확인(팔로우업).
+  라이브 429 차단 = **검증 완료(2026-07-07)**: 프로덕션 login 실호출 11회째 429(IP 10/분). Upstash Redis 연결(env `KV_REST_API_URL/TOKEN`).
 
 ---
 
