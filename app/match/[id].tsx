@@ -17,6 +17,10 @@ import { teamOverallRaw } from '../../engine/overall';
 import { setBgmSuppressed } from '../../audio/bgm';
 import { useGameStore } from '../../store/useGameStore';
 
+// 주기적 이어보기 체크포인트 — 크래시/강제종료(백그라운드 이벤트 없이 죽는 경우)까지 커버.
+// 5초마다, 위치 변화 시에만 저장(풀세이브 쓰기 최소화). 튜닝값
+const WATCH_SAVE_INTERVAL_MS = 5000;
+
 export default function MatchBoard() {
   const { id, sandbox, home: homeParam, away: awayParam, seed: seedParam } = useLocalSearchParams<{
     id: string; sandbox?: string; home?: string; away?: string; seed?: string;
@@ -34,6 +38,7 @@ export default function MatchBoard() {
   const [showTip, setShowTip] = useState(() => sandbox !== '1' && !(useGameStore.getState().seenTips?.['match-spectate']));
   const recorded = useRef(false);
   const progressRef = useRef(0); // MatchCourt가 보고하는 현재 랠리 인덱스(이어보기 저장용)
+  const lastSavedRef = useRef(0); // 마지막으로 저장한 인덱스 — 위치 미변화 시 중복 풀세이브 쓰기 스킵
   // 관전이 끝나기 전엔 경기 결과(세트 스코어·승패)를 숨긴다 — 결정론 시뮬이라 미리 계산돼 있어도 스포일러 금지
   const [finished, setFinished] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false); // 관전 중 나가기 확인
@@ -118,9 +123,22 @@ export default function MatchBoard() {
       if (next !== 'background' && next !== 'inactive') return;
       if (!isSandbox && fixture && !finished && progressRef.current > 0) {
         saveWatchProgress(fixture.id, progressRef.current);
+        lastSavedRef.current = progressRef.current; // 주기 체크포인트와 중복 저장 방지
       }
     });
     return () => sub.remove();
+  }, [isSandbox, fixture, finished, saveWatchProgress]);
+
+  // 주기적 이어보기 체크포인트 — 백그라운드 이벤트 없이 죽는 크래시/강제종료까지 커버(위 AppState 저장의 보완).
+  // 5초마다 위치가 진전됐을 때만 저장(풀세이브 쓰기 최소화 — 일시정지/랠리 사이/정체 중엔 스킵).
+  useEffect(() => {
+    const timer = setInterval(() => {
+      if (!isSandbox && fixture && !finished && progressRef.current > 0 && progressRef.current !== lastSavedRef.current) {
+        saveWatchProgress(fixture.id, progressRef.current);
+        lastSavedRef.current = progressRef.current;
+      }
+    }, WATCH_SAVE_INTERVAL_MS);
+    return () => clearInterval(timer);
   }, [isSandbox, fixture, finished, saveWatchProgress]);
 
   // Android 하드웨어 백 가로채기 — 관전 중엔 확인 모달을 띄운다(결과가 바로 확정되므로)
