@@ -1,8 +1,8 @@
 // 훈련 방침 — 단장이 팀 장기 성장 방향을 고른다(감독 기본 또는 아키타입 오버라이드).
 // 감독 정보 화면에 있던 "훈련 방향 변경(단장)" 셀렉터를 단장실로 이동(2026-07-04 사용자 요청).
 // 즉시 적용 → **초안 선택 후 저장(confirm) 확정** 방식으로 변경(오조작 방지). 저장은 다음 진행부터 반영.
-import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useRouter, useNavigation } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Muted, Screen, theme } from '../components/Screen';
 import { showAlert } from '../components/AppDialog';
@@ -28,6 +28,25 @@ export default function TrainingPolicy() {
   const [draft, setDraft] = useState<TrainingFocus | null>(trainingFocus); // 아직 저장 안 한 선택
 
   const dirty = !focusEq(draft, trainingFocus);
+
+  // 저장 안 한 변경이 있을 때만 뒤로가기(하드웨어/헤더/제스처) 확인 — 오조작으로 초안 유실 방지(P3).
+  //   dirtyRef로 fresh 값 읽기(staleness 함정). 저장 후엔 dirty=false라 무개입. onSave의 router.back()은 이미 저장돼 통과.
+  const navigation = useNavigation();
+  const dirtyRef = useRef(dirty);
+  dirtyRef.current = dirty;
+  useEffect(() => {
+    const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
+      const t = e?.data?.action?.type;
+      if (!dirtyRef.current || (t !== 'GO_BACK' && t !== 'POP')) return;
+      e.preventDefault();
+      showAlert('변경사항이 있습니다', '변경사항을 저장하지 않고 나갈까요?', [
+        { text: '계속 편집', style: 'cancel' },
+        { text: '저장 안 함', style: 'destructive', onPress: () => { dirtyRef.current = false; (navigation as any).dispatch(e.data.action); } },
+      ]);
+    });
+    return unsub;
+  }, [navigation]);
+
   const draftLabel = draft === null
     ? `감독 기본 · ${coach?.archetype ?? ''}`
     : ARCHETYPES.find((a) => sameFocus(a.focus, draft))?.name ?? '선택한 방향';

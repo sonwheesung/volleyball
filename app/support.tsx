@@ -1,7 +1,8 @@
 // 문의하기 (BACKEND_SYSTEM §8·§13.6, #45 표면) — 마이페이지 진입. 목록(빈 상태) + 우상단 [문의] → 등록.
 // 카테고리(오류/건의/질문/기타) + 내용. 제출 시 진단 스냅샷(최근 10시즌 재계산)을 **비동기로** 첨부.
 // 서버는 lib/server.ts(throw 없음) — 오프라인이면 조용히 안내(온라인 연결 후 재시도). 관전/게임엔 영향 0.
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
+import { useNavigation } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -31,6 +32,9 @@ type Ticket = { id: string; category: TicketCategory; content: string; status?: 
 
 export default function Support() {
   const [mode, setMode] = useState<'list' | 'compose'>('list');
+  // 초안(분류·내용)은 부모에 리프트 — 컴포즈→목록 뒤로가기로 Compose가 언마운트돼도 입력이 살아남아 재진입 시 복원(2026-07-07).
+  const [cat, setCat] = useState<TicketCategory>('bug');
+  const [content, setContent] = useState('');
   const [tickets, setTickets] = useState<Ticket[] | null>(null); // null=로딩, []=빈, [...]=목록
   const [offline, setOffline] = useState(false);
 
@@ -42,7 +46,30 @@ export default function Support() {
   }, []);
   useEffect(() => { void load(); }, [load]);
 
-  if (mode === 'compose') return <Compose onDone={() => { setMode('list'); void load(); }} />;
+  // 컴포즈 모드에서 뒤로가기(하드웨어/헤더/제스처)는 화면을 빠져나가지 말고 목록으로 — 입력 초안은 유지(위 리프트 상태라 보존).
+  //   staleness 함정: 리스너 클로저가 초기 mode만 보면 안 됨 → modeRef로 fresh 값을 읽는다(training-camp pickedRef 패턴).
+  const navigation = useNavigation();
+  const modeRef = useRef(mode);
+  modeRef.current = mode;
+  useEffect(() => {
+    const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
+      const t = e?.data?.action?.type;
+      if (modeRef.current === 'compose' && (t === 'GO_BACK' || t === 'POP')) {
+        e.preventDefault();
+        setMode('list');
+      }
+    });
+    return unsub;
+  }, [navigation]);
+
+  if (mode === 'compose') return (
+    <Compose
+      cat={cat} setCat={setCat}
+      content={content} setContent={setContent}
+      onCancel={() => setMode('list')}                                  // 취소도 초안 유지(재진입 복원)
+      onDone={() => { setContent(''); setMode('list'); void load(); }}  // 제출 성공 시에만 초안 비움
+    />
+  );
 
   return (
     <Screen title="문의하기">
@@ -81,9 +108,11 @@ export default function Support() {
   );
 }
 
-function Compose({ onDone }: { onDone: () => void }) {
-  const [cat, setCat] = useState<TicketCategory>('bug');
-  const [content, setContent] = useState('');
+function Compose({ cat, setCat, content, setContent, onCancel, onDone }: {
+  cat: TicketCategory; setCat: (c: TicketCategory) => void;
+  content: string; setContent: (s: string) => void;
+  onCancel: () => void; onDone: () => void;
+}) {
   const [sending, setSending] = useState(false);
 
   // 스냅샷은 스토어 상태에서 즉석 생성(순수). 무거우니 제출 성공 후 백그라운드 업로드.
@@ -136,7 +165,7 @@ function Compose({ onDone }: { onDone: () => void }) {
   return (
     <Screen title="문의 등록">
       <View style={styles.topBar}>
-        <Pressable onPress={onDone} hitSlop={10} style={styles.topBtn}><Text style={styles.newBtn}>취소</Text></Pressable>
+        <Pressable onPress={onCancel} hitSlop={10} style={styles.topBtn}><Text style={styles.newBtn}>취소</Text></Pressable>
       </View>
       <Muted style={{ fontSize: 12.5, marginBottom: 8 }}>분류를 고르고 내용을 적어주세요. 최근 10시즌의 진단 정보가 자동 첨부돼 분석에 도움이 됩니다.</Muted>
       <View style={styles.catRow}>

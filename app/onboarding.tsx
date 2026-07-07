@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
-import { ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useState } from 'react';
+import { BackHandler, ImageBackground, Pressable, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
@@ -56,6 +56,16 @@ export default function Onboarding() {
   const last = step === SLIDES.length - 1;
 
   const finish = () => { completeOnboarding(); router.replace('/select-team'); };
+
+  // 안드로이드 하드웨어 백: 중간 단계에선 앱 종료가 아니라 이전 슬라이드로(step 0은 기본 동작 유지). 제스처백은 _layout에서 이미 비활성.
+  useEffect(() => {
+    const onBack = () => {
+      if (step > 0) { setStep((s) => s - 1); return true; }
+      return false;
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [step]);
 
   return (
     <ImageBackground source={themeAssets.bg} style={styles.bgRoot} resizeMode="cover">

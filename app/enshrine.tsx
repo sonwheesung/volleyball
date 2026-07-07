@@ -1,9 +1,9 @@
 // 명예의전당 헌액 화면 — 오프시즌 진행 중(드래프트 직후 endSeason 후) 이번 시즌 새 레전드를
 // 유니폼 + 헌액 번호 일러스트로 기린다(관전형 1순위 — 보는 경험). 새 레전드 0명이면 즉시 통과.
 // docs/BROADCAST_SYSTEM §8.4. 번호 계보(사실)는 같은 구단·같은 번호 과거 레전드만 나열(가짜 인과 금지).
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
 import { useEffect, useMemo } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { teamColors } from '../lib/teamColor';
@@ -28,9 +28,21 @@ export default function Enshrine() {
     [hallOfFame, season, my],
   );
 
-  // 새 레전드 0명이면 화면 없이 통과(관전형 — 빈 화면 강요 안 함)
-  const done = () => router.replace('/(tabs)');
+  // 헌액 완료 → 소비된 오프시즌 스택(playoffs·시상식·트라이아웃·FA·드래프트)을 전부 비우고 새 시즌 대시보드로.
+  //   dismissAll(POP_TO_TOP)로 루트((tabs))까지 pop → replace로 그 자리를 대시보드로 확정(잔재 0 — 뒤로가기/제스처로 드래프트 재노출 차단, D).
+  const done = () => { router.dismissAll(); router.replace('/(tabs)'); };
   useEffect(() => { if (newLegends.length === 0) done(); }, [newLegends.length]);
+  // 헌액 흐름은 되돌릴 수 없다 — 하드웨어 백·제스처·POP 무력화(B). done()의 dismissAll/replace(POP_TO_TOP/REPLACE)만 통과.
+  const navigation = useNavigation();
+  useEffect(() => {
+    const onBack = () => true;
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
+      const t = e?.data?.action?.type;
+      if (t === 'GO_BACK' || t === 'POP') e.preventDefault();
+    });
+    return () => { sub.remove(); unsub(); };
+  }, [navigation]);
   if (newLegends.length === 0) return null;
 
   return (

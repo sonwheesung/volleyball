@@ -66,17 +66,24 @@ export default function TrainingCamp() {
   const navigation = useNavigation();
   const pickedRef = useRef<string | null>(null);
   pickedRef.current = picked;
+  // 체인 모드(오프시즌 진행): 헤더 뒤로가기 버튼·iOS 엣지 제스처를 숨겨 소비된 스택(드래프트/FA)으로의 이탈을 원천 차단.
+  //   비-chain(마이페이지·스케줄 게이트)은 기존대로 노출 — 2단계 뒤로가기 동작 유지.
+  useEffect(() => {
+    (navigation as any).setOptions({ headerBackVisible: !inChain, gestureEnabled: !inChain });
+  }, [navigation, inChain]);
   useEffect(() => {
     const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
       const t = e?.data?.action?.type;
-      if (pickedRef.current !== null && (t === 'GO_BACK' || t === 'POP')) {
+      if (t !== 'GO_BACK' && t !== 'POP') return; // REPLACE(goNext)·POP_TO_TOP는 통과 — 개막전/헌액 진행 안 막힘
+      if (inChain) { e.preventDefault(); return; } // 체인 모드: 뒤로가기 전면 무력화(picked 무관 — 소비된 스택 잔재 이탈 차단)
+      if (pickedRef.current !== null) { // 비-chain 2단계: 코스 화면 → 선수 목록으로(일정 이탈 방지)
         e.preventDefault();
         setPicked(null);
         setCourse(null);
       }
     });
     return unsub;
-  }, [navigation]);
+  }, [navigation, inChain]);
 
   // 첫 전지훈련 진입 환영 선물(계정당 1회, 서버 멱등) — 신규 유저가 다이아 0이라 온보딩이 막히던 문제 해결.
   //   applied=true(첫 지급)일 때만 팝업. 오프라인이면 다음 온라인 진입에서 재시도(서버가 진실).

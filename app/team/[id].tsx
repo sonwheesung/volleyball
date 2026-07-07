@@ -5,6 +5,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import MaterialCommunityIcons from '@expo/vector-icons/MaterialCommunityIcons';
 import Svg, { Circle } from 'react-native-svg';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, Screen, STYLE_LABEL, theme, themedStyles } from '../../components/Screen';
+import { showAlert } from '../../components/AppDialog';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList, type RosterSort } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal, LEAGUE } from '../../data/league';
@@ -112,6 +113,8 @@ export default function TeamDetail() {
         selectTeam(team.id);
         computeStandings(Number.MAX_SAFE_INTEGER);
         leagueProduction(Number.MAX_SAFE_INTEGER);
+        // 스택 전체 비우고(첫 실행 잔재 [select-team] 등) 대시보드로 확정 — 뒤로가기로 구단선택 재노출/재선택(세이브 초기화) 차단(E).
+        router.dismissAll();
         router.replace('/(tabs)/schedule');
       });
     });
@@ -143,6 +146,19 @@ export default function TeamDetail() {
   const chipColor = isDyn ? C.gold : ac;
   const chipBg = isDyn ? C.gold + '22' : `hsla(${h}, 74%, 62%, 0.14)`;
   const chipBorder = isDyn ? C.gold + '66' : `hsla(${h}, 74%, 62%, 0.45)`;
+
+  // 방어(2026-07-07): 기존 세이브가 있으면 새 구단 시작이 세이브를 초기화(store.selectTeam)한다 → 확인 후에만 진행.
+  //   신규(세이브 없음)는 한 번 탭으로 바로 시작. isCurrent(운영 중 구단)는 이 버튼이 뜨지 않음(다른 팀만 노출).
+  const beginOperate = () => {
+    if (selectedTeamId != null) {
+      showAlert('구단을 바꿀까요?', '새 구단으로 시작하면 현재 진행 중인 세이브(선수단·기록·시즌)가 모두 초기화됩니다. 되돌릴 수 없어요.', [
+        { text: '취소', style: 'cancel' },
+        { text: '새로 시작', style: 'destructive', onPress: () => setStarting(true) },
+      ]);
+    } else {
+      setStarting(true);
+    }
+  };
 
   if (starting) {
     return <Loading title={team.name} message={`${team.name} 운영을 준비하는 중…\n시즌 일정과 선수단을 구성하고 있습니다.`} variant="brand" />;
@@ -265,7 +281,7 @@ export default function TeamDetail() {
         <Button label="현재 운영 중인 구단" onPress={() => router.replace('/(tabs)/schedule')} variant="ghost" />
       ) : (
         <SpotlightTarget id="team-operate">
-          <Button label={`${team.name} 운영하기`} onPress={() => setStarting(true)} />
+          <Button label={`${team.name} 운영하기`} onPress={beginOperate} />
         </SpotlightTarget>
       )}
       <SpotlightOverlay screen="team-detail" />

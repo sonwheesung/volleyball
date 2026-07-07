@@ -6,7 +6,8 @@
 //   애니(useNativeDriver)도 에뮬에서 멈춘다(실측 — 블록 전 프레임만 움직임). 멈춘 회전 링은 거슬리지 않지만 첫
 //   메시지로 고정된다. 블록 내내 돌고 메시지가 순차로 바뀌게 하려면 endSeason 청크화 필요(SEASON_SYSTEM §5.5 D 미결).
 import { useEffect, useRef, useState } from 'react';
-import { useRouter } from 'expo-router';
+import { useRouter, useNavigation } from 'expo-router';
+import { BackHandler } from 'react-native';
 import { Loading } from '../components/Screen';
 import { logError } from '../lib/log';
 import { useGameStore } from '../store/useGameStore';
@@ -19,6 +20,19 @@ export default function SeasonStart() {
   const endSeason = useGameStore((s) => s.endSeason);
   const [msg, setMsg] = useState(MSGS[0]);
   const ran = useRef(false);
+
+  // 로딩(endSeason 실행) 중 하드웨어 백·POP 무력화(C) — 타이머 취소로 endSeason이 안 도는 걸 방지.
+  //   replace('/training-camp?chain=1')(REPLACE)만 통과시켜 정상 진행.
+  const navigation = useNavigation();
+  useEffect(() => {
+    const onBack = () => true;
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
+      const t = e?.data?.action?.type;
+      if (t === 'GO_BACK' || t === 'POP') e.preventDefault();
+    });
+    return () => { sub.remove(); unsub(); };
+  }, [navigation]);
 
   useEffect(() => {
     let i = 0;
