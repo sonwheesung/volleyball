@@ -298,6 +298,20 @@ function applyCampLocal(playerId: string, course: CampCourse, balance: number, s
   diag(season, 'wallet', `전지훈련 ${playerId} ${CAMP_COURSES[course].label} -${CAMP_COURSE_COST}💎`); // 진단 로그(#44)
 }
 
+// ── dev-local(오프라인 개발 세션) 다이아 로컬 처리 — __DEV__ 전용, 운영 무영향 ──────────────────
+// "개발자 로그인"은 서버 Bearer 없는 세션(provider 'dev' + 빈 토큰, useAuthStore signIn dev 폴백)을 만든다.
+// 이 세션엔 서버가 없어 earn/spend가 401로 실패 → 다이아 이코노미 전체가 막힌다. 개발 테스트를 위해
+// **오직 이 세션에서만** 다이아를 로컬 캐시(diamonds)로 처리한다. 운영 빌드는 __DEV__===false라 항상 false이고,
+// 실세션(google 등)은 provider·token 조건에서 걸러져 서버 진실 경로가 그대로 돈다([[server-authoritative-currency]]).
+function isDevLocalSession(): boolean {
+  if (!__DEV__) return false;
+  const sess = useAuthStore.getState().session;
+  return !!sess && sess.provider === 'dev' && !sess.token; // === userId.startsWith('dev-local:')
+}
+// 환영 다이아 계정당 1회 지급을 로컬로 표시(서버 멱등키 welcome:<userId>의 로컬 대체). claimedAch는 계정 단위로
+// 영속·보존(selectTeam/새게임에서 유지)되므로 재선택해도 재지급되지 않는다. 실제 업적 id와 충돌 없는 센티넬.
+const WELCOME_LOCAL_MARK = '__welcome_local__';
+
 export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
@@ -327,6 +341,14 @@ export const useGameStore = create<GameState>()(
         if (!adRes.earned) { set({ walletBusy: false }); return { ok: false, reason: 'no-ad' }; } // 광고 못 봄 → 슬롯 미소모(adState 불변)
         const now2 = Date.now(); // 광고 시청(수초~수십초) 후 시점으로 쿨다운 시작
         const { adState, reward } = grantAd(s.adState, now2); // 새 슬롯(count↑) — 실패 시 미커밋이라 재시도 동일키(멱등)
+        // dev-local(오프라인 개발 세션)엔 서버가 없어 다이아를 로컬로 처리 — __DEV__ 전용, 운영 무영향.
+        // 쿨다운/상한(canWatchAd·grantAd)은 그대로 두고 서버 적립만 로컬 잔액 반영으로 대체.
+        if (isDevLocalSession()) {
+          set({ walletBusy: false, diamonds: get().diamonds + reward, adState });
+          track('watch_ad');
+          track('diamond_earned', { source: 'ad', amount: reward });
+          return { ok: true, reward };
+        }
         const r = await earnDiamonds(reward, 'ad', adKey(userId, adState.dayIdx, adState.count));
         set({ walletBusy: false });
         if (!r.ok) { void get().syncWallet(); return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'cap' ? 'cap' : 'error' }; }
@@ -372,6 +394,14 @@ export const useGameStore = create<GameState>()(
       claimWelcomeDiamonds: async () => {
         const userId = useAuthStore.getState().session?.userId;
         if (!userId) return { applied: false }; // 로그인 안 됨(오프라인) — 다음 온라인 진입에서 재시도
+        // dev-local(오프라인 개발 세션)엔 서버가 없어 다이아를 로컬로 처리 — __DEV__ 전용, 운영 무영향.
+        // 계정당 1회: claimedAch의 센티넬로 이미 받았는지 확인(서버 applied 멱등 모사). 첫 지급만 applied:true.
+        if (isDevLocalSession()) {
+          if (get().claimedAch.includes(WELCOME_LOCAL_MARK)) return { applied: false };
+          set({ diamonds: get().diamonds + WELCOME_DIAMONDS, claimedAch: [...get().claimedAch, WELCOME_LOCAL_MARK] });
+          track('diamond_earned', { source: 'welcome', amount: WELCOME_DIAMONDS });
+          return { applied: true };
+        }
         const r = await earnDiamonds(WELCOME_DIAMONDS, 'welcome', `welcome:${userId}`);
         if (!r.ok) { void get().syncWallet(); return { applied: false }; }
         set({ diamonds: r.balance }); // 서버 확정 후에만 캐시
@@ -392,6 +422,16 @@ export const useGameStore = create<GameState>()(
         if (!courseUpgradable(base, course)) return { ok: false, reason: 'maxed' }; // 3스탯 전부 현재·포텐 99
         const userId = useAuthStore.getState().session?.userId;
         if (!userId) return { ok: false, reason: 'offline' };
+        // dev-local(오프라인 개발 세션)엔 서버가 없어 다이아를 로컬로 처리 — __DEV__ 전용, 운영 무영향.
+        // 서버 차감(spendDiamonds)·아웃박스(pendingCamp) 대신 로컬 잔액에서 직접 차감. 스탯 부스트·campLog는
+        // 기존 applyCampLocal 로직 그대로(로컬 효과 보존) — 서버 게이트만 로컬 잔액 검사로 대체. 실세션은 아래 서버 경로 불변.
+        if (isDevLocalSession()) {
+          if (s.diamonds < CAMP_COURSE_COST) return { ok: false, reason: 'no-diamonds' };
+          applyCampLocal(playerId, course, s.diamonds - CAMP_COURSE_COST, s.season); // 차감 잔액으로 캐시 갱신 + 스탯 + campLog
+          track('special_training', { course });
+          track('diamond_spent', { source: 'camp', amount: CAMP_COURSE_COST });
+          return { ok: true };
+        }
         // saveId(walletEpoch) 지연 생성 — camp 멱등키 세이브 스코프(리셋 무료강화 차단)
         let saveId = s.saveId;
         if (!saveId) { saveId = newSaveId(); set({ saveId }); }
