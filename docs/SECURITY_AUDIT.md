@@ -18,13 +18,13 @@
 
 | 심각도 | # | 항목 | 상태 |
 |---|---|---|---|
-| 🔴 CRITICAL | 1 | 무한 다이아 발행(`welcome` 캡 부재, **배포된 코드에 존재**) | ⬜ 미착수 |
-| 🔴 CRITICAL/HIGH | 2 | 세션 시크릿 fail-open(라이브 완화·코드 잠재) + dev/apple 로그인 백도어(라이브 오픈, 계정 탈취) | ⬜ 미착수 |
-| 🟠 HIGH | 3 | 서버 전역 레이트리밋 부재 | ⬜ 미착수 |
-| 🟠 HIGH | 4 | `/api/snapshot` 무제한 JSON blob 저장 → 스토리지 고갈 | ⬜ 미착수 |
-| 🟡 MEDIUM | 5 | 멱등키 userId 미바인딩 → 피해자 적립 선점(griefing) | ⬜ 미착수 |
-| 🟡 MEDIUM | 6 | `wallet/earn·spend`가 `resolveUserId`(익명 폴백) 사용 | ⬜ 미착수 |
-| ⚪ LOW(잠재) | 7 | `cron/purge` 시크릿 미설정 시 fail-open(프로덕션 시크릿 설정됨 → 라이브 트리거 불가) | ⬜ 미착수 |
+| 🔴 CRITICAL | 1 | 무한 다이아 발행(`welcome` 캡 부재, **배포된 코드에 존재**) | ✅ 수정+검증(2026-07-07) |
+| 🔴 CRITICAL/HIGH | 2 | 세션 시크릿 fail-open(라이브 완화·코드 잠재) + dev/apple 로그인 백도어(라이브 오픈, 계정 탈취) | ✅ 수정+검증(2026-07-07) — #2(b) Apple은 JWKS 검증 구현 전까지 prod 차단 유지 |
+| 🟠 HIGH | 3 | 서버 전역 레이트리밋 부재 | ⬜ 미착수(Q2 대기) |
+| 🟠 HIGH | 4 | `/api/snapshot` 무제한 JSON blob 저장 → 스토리지 고갈 | ✅ 수정+검증(2026-07-07) |
+| 🟡 MEDIUM | 5 | 멱등키 userId 미바인딩 → 피해자 적립 선점(griefing) | ✅ 수정+검증(2026-07-07) |
+| 🟡 MEDIUM | 6 | `wallet/earn·spend`가 `resolveUserId`(익명 폴백) 사용 | ✅ 수정+검증(2026-07-07) |
+| ⚪ LOW(잠재) | 7 | `cron/purge` 시크릿 미설정 시 fail-open(프로덕션 시크릿 설정됨 → 라이브 트리거 불가) | ✅ 수정+검증(2026-07-07) |
 | ⚪ LOW | 8 | 방어심화·패키지(세션 만료·상수시간 비교·DB CHECK 등) | ⬜ 미착수 |
 
 > **라이브 vs 잠재:** #2의 시크릿 fail-open(a)과 #7은 §1 기록(2026-07-04 프로덕션 시크릿 설정+검증)으로
@@ -36,7 +36,9 @@
 
 ## 🔴 1. CRITICAL — 무한 다이아 발행 (배포된 코드에 존재)
 
-- **상태:** ⬜ 미착수
+- **상태:** ✅ 수정+코드검증(2026-07-07, Fable 재검증: _dv_security 23/23·서버 tsc exit0·정적 diff) — 라이브 dedup은 기존 UNIQUE 증명(walletConcurrency) 승계·dev DB 있으면 재확인 권장
+  - **수정 내용:** `server/lib/walletKey.ts`(순수) 신설 — `earnClientKeyPart('welcome', k)`가 클라 키를 무시하고 상수 `'welcome'` 반환.
+    earn 라우트가 저장키를 `walletIdemKey(userId, 'welcome')` = `${userId}:welcome`로 강제 → 모든 반복이 UNIQUE(proj_code, idempotency_key)로 1행 dedupe(무한발행 차단).
 - **경로:** `server/lib/econ.ts:20,30` → `server/app/api/wallet/earn/route.ts:26,34,42`
 - **익스플로잇:** `welcome`이 EARN_OK 화이트리스트에 있고 `earnAmount('welcome')`이 서버 고정 1000을 반환하는데,
   earn 라우트의 백스톱은 ad(하루 8회 `countReasonToday`)·achievement(평생 20,000 `sumReason`)뿐이라
@@ -55,7 +57,9 @@
 
 ## 🔴 2. CRITICAL/HIGH — 세션 시크릿 fail-open + dev/apple 로그인 백도어 (계정 탈취)
 
-- **상태:** ⬜ 미착수
+- **상태:** ✅ 수정+코드검증(2026-07-07, Fable 재검증: _dv_security 23/23·서버 tsc exit0·정적 diff) — 라이브 dedup은 기존 UNIQUE 증명(walletConcurrency) 승계·dev DB 있으면 재확인 권장. **#2(b) Apple은 실 JWKS 검증 구현 전까지 prod 차단 유지(팔로우업).**
+  - **수정 내용 (a):** `server/lib/auth.ts` — 시크릿을 **호출 시점**에 읽고, 프로덕션(`VERCEL_ENV`/`NODE_ENV==='production'`)에서 `SESSION_JWT_SECRET`이 미설정/32자 미만/기본값이면 `signToken` throw·`verifyToken` null(fail-closed). 로컬 dev는 기본키 유지(경고 1회). ④ `verifyToken`이 iat 기준 TTL(180일) 초과 토큰 거부(관대).
+  - **수정 내용 (b):** `server/app/api/auth/login/route.ts` — 프로덕션에선 실 idToken 검증하는 `google`만 허용, `dev`·`apple`은 401. 비프로덕션은 스텁 유지. Apple JWKS(appleid.apple.com) 서명·audience·iss/exp 검증은 **Apple 로그인 출시 전 필수 팔로우업**(주석 명시).
 - **경로:** `server/lib/auth.ts:6` · `server/app/api/auth/login/route.ts:22-30`
 - **라이브 상태(2026-07-07 재검증):**
   - **(a) 시크릿 fail-open = 프로덕션에선 이미 완화됨(잠재 footgun).** [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) §1이
@@ -84,7 +88,7 @@
 
 ## 🟠 3. HIGH — 서버 전역 레이트리밋 부재
 
-- **상태:** ⬜ 미착수
+- **상태:** ⬜ 미착수 (Q2 레이트리밋 구현 방식 결정 대기 — 2026-07-07 Q2-독립 수정 라운드에서 **의도적 제외**)
 - **경로:** 전 라우트 (`server/middleware.ts` 부재, rate-limit 유틸/의존성 0)
 - **익스플로잇:** 인증 없는 auth/login 플러딩(+users 행 무한 생성 via `ensureUser`), 쿠폰 무차별 대입
   (coupon/redeem 락아웃 없음, 각 시도가 다중쿼리 트랜잭션), 문의 폭주(+Discord 웹훅 스팸).
@@ -97,7 +101,8 @@
 
 ## 🟠 4. HIGH — /api/snapshot 무제한 JSON blob 저장 → 스토리지 고갈
 
-- **상태:** ⬜ 미착수
+- **상태:** ✅ 수정+코드검증(2026-07-07, Fable 재검증: _dv_security 23/23·서버 tsc exit0·정적 diff) — 라이브 dedup은 기존 UNIQUE 증명(walletConcurrency) 승계·dev DB 있으면 재확인 권장
+  - **수정 내용:** `server/app/api/snapshot/route.ts` — `SNAPSHOT_MAX_BYTES=262144`(256KB) 상한. `JSON.stringify(b.snapshot).length > 상한`이면 INSERT 전 413(too-large). 소유권 체크는 유지.
 - **경로:** `server/app/api/snapshot/route.ts:17,22`
 - **익스플로잇:** `b.snapshot`(임의 unknown JSON)을 크기 검증 없이 그대로 INSERT(유일 체크는 `!== undefined`).
   `next.config`에 body limit 없어 Vercel ~4.5MB까지 blob 루프 → `diagnostic_snapshots`에 90일 보존되는
@@ -109,7 +114,8 @@
 
 ## 🟡 5. MEDIUM — 멱등키 userId 미바인딩 → 피해자 적립 선점(griefing)
 
-- **상태:** ⬜ 미착수
+- **상태:** ✅ 수정+코드검증(2026-07-07, Fable 재검증: _dv_security 23/23·서버 tsc exit0·정적 diff) — 라이브 dedup은 기존 UNIQUE 증명(walletConcurrency) 승계·dev DB 있으면 재확인 권장
+  - **수정 내용:** earn/spend 라우트가 저장키를 `walletIdemKey(userId, clientKey)` = `${userId}:${clientKey}`로 서버해석 userId 프리픽스. 공격자가 피해자 userId를 임베드한 클라키로 선점 시도해도 저장키는 공격자 userId로 시작 → 교차유저 선점 불가. 정당 재시도(동일 userId+클라키)는 동일 저장키라 dedupe 유지. (coupon/purchase는 이미 서버측 userId 임베드 — 미변경.)
 - **경로:** `server/db/schema.ts:63`(`ledger_proj_idem_uniq = (projCode, idempotencyKey)`, userId 제외) ·
   `earn/route.ts:42` · `spend/route.ts:24`
 - **익스플로잇:** 서버 빌드 키(`coupon:${userId}:${id}`, `purchase:<userId>:<txn>`)는 userId 임베드라 안전하지만,
@@ -123,7 +129,8 @@
 
 ## 🟡 6. MEDIUM — wallet/earn·spend가 resolveUserId(익명 dev-user-1 폴백) 사용
 
-- **상태:** ⬜ 미착수
+- **상태:** ✅ 수정+코드검증(2026-07-07, Fable 재검증: _dv_security 23/23·서버 tsc exit0·정적 diff) — 라이브 dedup은 기존 UNIQUE 증명(walletConcurrency) 승계·dev DB 있으면 재확인 권장
+  - **수정 내용:** `wallet/earn`·`wallet/spend`·`wallet` GET을 `requireUserId`로 전환(→ 유효 Bearer 없으면 401 `{ok:false, reason:'unauthorized'}`). 키 빌드 전에 실 userId 확정. coupon/ticket/snapshot/purchase와 일관(§13.17 P0-5 익명 폴백 금지).
 - **경로:** `server/lib/auth.ts:34-45` · `wallet/route.ts:11` · `earn/route.ts:24` · `spend/route.ts:23`
 - **익스플로잇:** `resolveUserId`는 Bearer 없거나 무효면 공유 `ensureUser('dev-user-1','dev')`로 조용히 폴백.
   세션 만료 중 전지훈련 차감(spend)이 엉뚱한 지갑에 가고 클라는 `applied===true`로 지불 진행 → **스플릿브레인.**
@@ -135,7 +142,8 @@
 
 ## ⚪ 7. LOW(잠재) — cron/purge 시크릿 미설정 시 fail-open
 
-- **상태:** ⬜ 미착수
+- **상태:** ✅ 수정+코드검증(2026-07-07, Fable 재검증: _dv_security 23/23·서버 tsc exit0·정적 diff) — 라이브 dedup은 기존 UNIQUE 증명(walletConcurrency) 승계·dev DB 있으면 재확인 권장
+  - **수정 내용:** `server/app/api/cron/purge/route.ts` — `if (!secret || 헤더!==Bearer secret)`로 fail-closed(admin.ts 패턴 미러). `CRON_SECRET` 미설정 시 가드 스킵되던 구 `if (secret && ...)` 제거 → 시크릿 설정+일치할 때만 통과.
 - **경로:** `server/app/api/cron/purge/route.ts:11-14`
 - **라이브 상태(2026-07-07 재검증):** [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) §1이 `CRON_SECRET`을
   **2026-07-04 Vercel Production+Preview 설정 확인**으로 기록 → **라이브 익스플로잇 닫힘(현재 트리거 불가).**
@@ -182,7 +190,9 @@
 
 > 아래 두 질문의 답이 나와야 해당 항목 수정을 마무리할 수 있다.
 
-1. **시크릿 3종 재확인 + 최종 회전** — [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) §1이
+1. **시크릿 3종 재확인 + 최종 회전** — ✅ **ANSWERED(2026-07-07)** — 사용자 Vercel 스크린샷으로 `SESSION_JWT_SECRET`·`ADMIN_TOKEN`·`CRON_SECRET`
+   3개 모두 **Production+Preview 설정 확인**. 잔여: 출시 직전 채팅 무경유 최종 회전(`SESSION_JWT_SECRET`·`ADMIN_TOKEN`).
+   (원문 보존) [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) §1이
    `SESSION_JWT_SECRET`·`ADMIN_TOKEN`·`CRON_SECRET` 모두 **2026-07-04 프로덕션 설정+라이브 검증**을 기록했다("미지"가 아님).
    사용자에게 필요한 건 (i) 그 값들이 **지금도** Vercel 프로덕션에 설정돼 있는지 재확인(에이전트/메인은 대시보드 값 조회 불가) +
    (ii) `SESSION_JWT_SECRET`·`ADMIN_TOKEN`은 회전값이 **채팅 경유**라 **출시 직전 채팅 무경유 값으로 최종 1회 더 회전**(§1 ⚠ 항목).
@@ -218,3 +228,6 @@
 
 - 2026-07-07 — 감사 수행·본 문서 작성(READ-ONLY 발견 기록, 코드 미변경). 8개 발견 전부 `⬜ 미착수`.
   수정 착수 시 각 항목 상태를 `✅ 완료`로 갱신하고 "수정 후 검증" 가드를 README 검증 루틴/서버 가드 배터리에 등록.
+- 2026-07-07 — Q2-독립 수정 착수(#1·#2·#4·#5·#6·#7): 멱등키 서버강제/userId바인딩·requireUserId·시크릿 prod fail-closed+토큰만료·dev/apple prod차단·스냅샷256KB상한·cron fail-closed.
+  가드 _dv_security(순수). #3 레이트리밋은 Q2 대기. 구현=Opus/검증·커밋=Fable 5.
+  (상태는 `🔧 수정함` — Fable이 독립 재검증 후 `✅ 완료`로 전환. 라이브 dedup은 dev DB에서 walletConcurrency/_dv_walletreplay로 재확인 권장.)

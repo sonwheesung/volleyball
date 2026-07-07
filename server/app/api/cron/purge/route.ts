@@ -8,8 +8,9 @@ export const dynamic = 'force-dynamic';
 // maxDuration 미지정 — 플랜 기본값 사용(파기/롤업은 가벼워 충분). Hobby 플랜 한도 초과 배포실패 회피.
 
 export async function GET(req: Request) {
+  // #7(2026-07-07): fail-closed(admin.ts 패턴 미러) — CRON_SECRET 미설정이면 거부(구 `if(secret && ...)`는 미설정 시 가드 스킵).
   const secret = process.env.CRON_SECRET;
-  if (secret && req.headers.get('authorization') !== `Bearer ${secret}`) {
+  if (!secret || req.headers.get('authorization') !== `Bearer ${secret}`) {
     return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   }
   try {

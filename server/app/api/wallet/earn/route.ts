@@ -6,7 +6,8 @@ import { reportError } from '../../../../lib/observability';
 import { applyWallet } from '../../../../lib/wallet';
 import { countReasonToday, sumReason } from '../../../../lib/wallet';
 import { earnAmount, isEarnReason, AD_DAILY_CAP, ACH_LIFETIME_CAP } from '../../../../lib/econ';
-import { resolveUserId } from '../../../../lib/auth';
+import { requireUserId } from '../../../../lib/auth';
+import { earnClientKeyPart, walletIdemKey } from '../../../../lib/walletKey';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,9 @@ export async function POST(req: Request) {
     if (amount === null || !Number.isFinite(amount) || amount <= 0) {
       return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     }
-    const userId = await resolveUserId(req);
+    // 익명 폴백 금지(#6·§13.17 P0-5) — 유효 Bearer 없으면 401(dev-user-1 버킷 붕괴 차단). 키 빌드 전에 실 userId 확정.
+    const userId = await requireUserId(req);
+    if (!userId) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
     // 광고 하루 상한 서버 백스톱(스텁 멱등키 무한증가 방지 — 멱등은 슬롯 재시도만 막지 rate는 안 막음)
     if (reason === 'ad' && (await countReasonToday(userId, 'ad')) >= AD_DAILY_CAP) {
       return NextResponse.json({ ok: false, reason: 'cap' }, { status: 409 });
@@ -39,7 +42,9 @@ export async function POST(req: Request) {
       }
       amountToGrant = Math.min(amount, remaining);
     }
-    const r = await applyWallet(userId, amountToGrant, reason, body.idempotencyKey, body.ref);
+    // 멱등키 서버 강제(#1·#5) — welcome은 클라 키 무시(계정당 상수), 저장키는 서버 userId로 네임스페이스(교차유저 선점 차단).
+    const idemKey = walletIdemKey(userId, earnClientKeyPart(reason, body.idempotencyKey));
+    const r = await applyWallet(userId, amountToGrant, reason, idemKey, body.ref);
     return NextResponse.json(r, { status: r.ok ? 200 : r.reason === 'error' ? 500 : 409 });
   } catch (e) { reportError(e, 'wallet/earn');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });

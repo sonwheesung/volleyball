@@ -5,7 +5,8 @@ import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/observability';
 import { applyWallet } from '../../../../lib/wallet';
 import { spendAmount, isSpendReason } from '../../../../lib/econ';
-import { resolveUserId } from '../../../../lib/auth';
+import { requireUserId } from '../../../../lib/auth';
+import { walletIdemKey } from '../../../../lib/walletKey';
 
 export const dynamic = 'force-dynamic';
 
@@ -20,8 +21,12 @@ export async function POST(req: Request) {
     if (amount === null || amount <= 0) {
       return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     }
-    const userId = await resolveUserId(req);
-    const r = await applyWallet(userId, -amount, reason, body.idempotencyKey, body.ref);
+    // 익명 폴백 금지(#6·§13.17 P0-5) — 유효 Bearer 없으면 401(엉뚱한 지갑 차감·split-brain 차단).
+    const userId = await requireUserId(req);
+    if (!userId) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+    // 저장키는 서버 userId로 네임스페이스(#5 교차유저 선점 차단).
+    const idemKey = walletIdemKey(userId, body.idempotencyKey);
+    const r = await applyWallet(userId, -amount, reason, idemKey, body.ref);
     return NextResponse.json(r, { status: r.ok ? 200 : r.reason === 'error' ? 500 : 409 });
   } catch (e) { reportError(e, 'wallet/spend');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });

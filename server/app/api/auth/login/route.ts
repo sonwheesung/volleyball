@@ -20,6 +20,12 @@ export async function POST(req: Request) {
   try {
     const body = (await req.json()) as { provider?: string; providerId?: string; idToken?: string; device?: Device };
     const provider = body.provider === 'google' || body.provider === 'apple' ? body.provider : 'dev';
+    // #2(b)(2026-07-07): 프로덕션에선 실 idToken을 검증하는 google만 허용. dev(무검증 백도어)·apple(토큰검증 미구현)은 401.
+    // TODO(Apple 로그인 출시 전 필수): Apple JWKS(appleid.apple.com) 서명·audience(bundle id)·iss/exp 검증 구현 후
+    //   apple을 프로덕션 화이트리스트에 추가(별도 EAS 마일스톤 작업). 그 전까지 apple도 프로덕션 차단.
+    if (process.env.VERCEL_ENV === 'production' && provider !== 'google') {
+      return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+    }
     let providerId: string;
     if (provider === 'google') {
       const sub = await verifyGoogleIdToken(body.idToken); // 서명·audience·만료 검증 → sub

@@ -250,7 +250,7 @@ npm run sim:web                            # 엔진 테스트 콘솔(웹) → lo
 
 `server/` 하위(라우트·lib·스키마)가 바뀌면 **필수**, 안 바뀌었어도 전체 테스트 시 포함한다. 조항 단위
 대조·서버 5렌즈(인증 귀속·proj 스코프·상한 단위·date-only 타임존·관찰 채널 머니패스)는 **`backend-verify`
-스킬**(TEST_METHODOLOGY 기법 L). 전부 exit 0이어야 통과 — 순수 2(DB 불필요)·라이브 6(`server/.env.local`의
+스킬**(TEST_METHODOLOGY 기법 L). 전부 exit 0이어야 통과 — 순수 3(DB 불필요)·라이브 6(`server/.env.local`의
 `DATABASE_URL`=dev Postgres 필요, 테스트 데이터는 프리픽스로 자동 정리).
 
 > **상설 가드 원칙**: ~~쿠폰/환불 왕복은 로컬 서버 라이브 E2E(임시 스크립트, 검증 후 삭제)로 실증~~ →
@@ -259,12 +259,13 @@ npm run sim:web                            # 엔진 테스트 콘솔(웹) → lo
 > 조용히 깨진다 — `_dv_purchase` afterSafe 이틀 잠복).
 
 ```
-# ── 전체 배터리 복붙 체인(순수 2 + 라이브 6, 하나라도 실패 시 중단) ──
-npx tsx tools/_dv_walletauth.ts && npx tsx tools/_dv_coupon.ts && (cd server && for t in _dv_purchase _dv_announce _dv_coupon_live _dv_achearn _dv_walletreplay walletConcurrency; do node_modules/.bin/tsx --env-file=.env.local tools/$t.ts || exit 1; done)
+# ── 전체 배터리 복붙 체인(순수 3 + 라이브 6, 하나라도 실패 시 중단) ──
+npx tsx tools/_dv_walletauth.ts && npx tsx tools/_dv_coupon.ts && (cd server && npx tsx tools/_dv_security.ts) && (cd server && for t in _dv_purchase _dv_announce _dv_coupon_live _dv_achearn _dv_walletreplay walletConcurrency; do node_modules/.bin/tsx --env-file=.env.local tools/$t.ts || exit 1; done)
 
 # ── 순수(repo 루트, DB 불필요) ──
 npx tsx tools/_dv_walletauth.ts             # 다이아 서버 진실화(BACKEND §13.12) — 순수: 멱등키 빌더 전역유일(userId 포함)·세이브리셋 무료강화 차단(camp saveId 에폭)·업적 계정평생1회 비대칭·econ 금액권위(ad+50/camp−300 서버상수·업적 호출당1000 클램프)·카탈로그 총합(16220)≤평생합캡(20000) 드리프트 가드·reason 화이트리스트 + A/B(옛 클라신뢰/무에폭 키 재현). exit 0/1. ※평생합 서버 왕복(원장 sum·경계·409 cap)은 라이브 _dv_achearn이 실증
 npx tsx tools/_dv_coupon.ts                 # 쿠폰·관리자 순수(BACKEND §13.14/§13.15) — normalizeCode(대문자+trim)·requireAdmin fail-closed(토큰 미설정/<16자→거부·정확토큰 허용·길이가드). exit 0/1. ※발급·사용·이중지급0·타겟·만료는 상설 라이브 _dv_coupon_live가 실증
+(cd server && npx tsx tools/_dv_security.ts) # 보안 수정 순수 가드(SECURITY_AUDIT #1·#2(a)·#4·#5, 2026-07-07, 구현=Opus/검증·커밋=Fable 5) — DB불필요: welcome 클라키무시 계정당상수·earn/spend 저장키 userId 서버바인딩(교차유저 선점차단)·세션시크릿 prod fail-closed(미설정/<32자/기본값→signToken throw·verifyToken null)+토큰만료(iat 180일)·스냅샷 256KB 상한 + A/B(강한시크릿 왕복·신선토큰 통과=만료 오탐 아님·변이 자가검증). exit 0/1. ※라이브 dedup(welcome varying-key·선점)은 dev DB walletConcurrency/_dv_walletreplay가 실증
 # ── 라이브(server/, .env.local DATABASE_URL 필요 — dev Postgres) ──
 (cd server && node_modules/.bin/tsx --env-file=.env.local tools/_dv_purchase.ts)  # 결제 검증 머니패스(BACKEND §13.18 #43) — RC 웹훅 인증 fail-closed·샌드박스/엔타이틀먼트/미등록 무시·grant/refund·멱등 dedup·라우트 통합(401/+1000/재전송 dedup/−1000)·afterSafe(관찰 채널 throw가 응답 오염 안 함)·테스트유저 정리. exit 0/1
 (cd server && node_modules/.bin/tsx --env-file=.env.local tools/_dv_announce.ts)  # 공지 CRUD 가드(BACKEND §13.11·13.13·13.15, 2026-07-06) — 라이브 dev DB: 발행→bootstrap 노출·기간 필터(만료/미래)·pinned 정렬·PATCH/DELETE 404 대칭·proj 스코프 4메서드·date-only endsAt KST 정규화(14:59:59.999Z)·fail-closed 인증 8항목 + 만료 필터 A/B. _DV_ANN_ 자동정리. exit 0/1

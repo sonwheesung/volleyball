@@ -2,13 +2,15 @@
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../lib/observability';
 import { getWallet } from '../../../lib/wallet';
-import { resolveUserId } from '../../../lib/auth';
+import { requireUserId } from '../../../lib/auth';
 
 export const dynamic = 'force-dynamic';
 
 export async function GET(req: Request) {
   try {
-    const userId = await resolveUserId(req);
+    // 익명 폴백 금지(#6·§13.17 P0-5) — 유효 Bearer 없으면 401(dev-user-1 공유 지갑 노출 차단).
+    const userId = await requireUserId(req);
+    if (!userId) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
     const w = await getWallet(userId);
     return NextResponse.json({ ok: true, ...w });
   } catch (e) { reportError(e, 'wallet');
