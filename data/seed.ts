@@ -37,7 +37,9 @@ import type { Team } from '../types';
 
 // 한 팀의 포지션 구성 (16인) — KOVO 여자부 등록 규모 기준.
 // 세터 3 / 아웃사이드 5 / 아포짓 2(외국인 1) / 미들 4 / 리베로 2
-const ROSTER: Position[] = [
+// ⚠ 이 배열의 생성 순서가 시드 RNG로 선수를 뽑는 순서 → 재구성 금지(세이브 파괴). aiGM.ROSTER_IDEAL와
+//   포지션별 개수가 일치해야 하며(constants.test 가드), 이 배열이 정본(수동 미러 아님).
+export const ROSTER: Position[] = [
   'S', 'S', 'S',
   'OH', 'OH', 'OH', 'OH', 'OH',
   'OP', 'OP',

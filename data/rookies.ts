@@ -5,11 +5,12 @@
 import { createRng } from '../engine/rng';
 import { ROSTER_IDEAL } from '../engine/aiGM';
 import { ROSTER_MAX } from '../engine/transactions';
+import { ALL_POSITIONS } from '../engine/overall';
 import { makeProspect, dedupeNames } from './seed';
 import type { Player, Position } from '../types';
 
 const IDEAL = ROSTER_IDEAL;
-const FILL_ORDER: Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
+const FILL_ORDER = ALL_POSITIONS; // 포지션 충원순(= 전 포지션 고정순) 단일 출처
 
 function countByPos(players: Player[]): Record<Position, number> {
   const c: Record<Position, number> = { S: 0, OH: 0, OP: 0, MB: 0, L: 0 };

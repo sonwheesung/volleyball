@@ -7,14 +7,12 @@
 // 집계 포텐 별(★)은 제거하고 이 부분공개가 대체. 표시(app/draft)·AI 평가(pickWithReason 동일정보)가 공유.
 import type { Player, Position } from '../types';
 import { deriveRatings, type Ratings } from '../engine/ratings';
-import { overallRaw, displayOvr } from '../engine/overall';
+import { overallRaw, displayOvr, fogOvr as fogOvrDisplay, REVEAL_PRECISE } from '../engine/overall';
 
-/** OVR 안개 표시 문자열 — reveal≥0.92면 정확치, 아니면 범위(예 "62~76"). draft·draft-live 공유(중복 제거). */
+/** OVR 안개 표시 문자열 — reveal≥REVEAL_PRECISE면 정확치, 아니면 범위(예 "62~76"). draft·draft-live 공유(중복 제거).
+ *  유망주(Player) 입력을 displayOvr로 환산해 정본 fogOvr(engine/overall)에 위임 — 단일 구현. */
 export function fogOvr(p: Player, reveal: number): string {
-  const o = displayOvr(overallRaw(p));
-  if (reveal >= 0.92) return `${o}`;
-  const w = Math.max(2, Math.round((1 - reveal) * 14));
-  return `${Math.max(40, o - w)}~${Math.min(99, o + w)}`;
+  return fogOvrDisplay(displayOvr(overallRaw(p)), reveal);
 }
 
 type RKey = keyof Ratings; // spike·block·dig·receive·set·serve
@@ -45,7 +43,7 @@ export function revealedPotential(p: Player, reveal: number): RevealedStat[] {
   const count = revealedCount(p.position, reveal);
   if (count === 0) return [];
   const potR = deriveRatings({ ...p, ...p.potential }); // 미래 윗단(전 스탯이 천장일 때)
-  const w = reveal >= 0.92 ? 0 : Math.max(2, Math.round((1 - reveal) * 12)); // 범위폭(정밀=0)
+  const w = reveal >= REVEAL_PRECISE ? 0 : Math.max(2, Math.round((1 - reveal) * 12)); // 범위폭(정밀=0)
   const out: RevealedStat[] = [];
   for (let i = 0; i < count; i++) {
     const rk = POS_KEY[p.position][i];

@@ -2,10 +2,13 @@
 // 이 상수들은 함수 동작이 아니라 *문서화된 설정값*이라, 동작 테스트 대신 계약 단언으로 핀다.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { ROSTER_MAX, ROSTER_MIN } from './transactions';
+import { ROSTER_MAX, ROSTER_MIN, STARTER_NEED } from './transactions';
 import { COACH_SLOTS } from './staff';
 import { POS_FLOOR } from './training';
 import { SCANDAL_PROB } from './scandal';
+import { ROSTER_IDEAL } from './aiGM';
+import type { Position } from '../types';
+import { ROSTER } from '../data/seed';
 
 test('로스터 정원 계약: MAX 18 · MIN 10', () => {
   assert.equal(ROSTER_MAX, 18); // 오프시즌 충원 상한(EC-RM-01 가드와 짝)
@@ -24,4 +27,17 @@ test('훈련 포지션 성장 바닥 = 0.14 (감독 선호 무관 핵심 스탯 
 
 test('사건 확률은 드물게(<1%)', () => {
   assert.ok(SCANDAL_PROB > 0 && SCANDAL_PROB < 0.01, `SCANDAL_PROB=${SCANDAL_PROB}`);
+});
+
+test('선발 구성 계약: STARTER_NEED = 1S·2OH·1OP·2MB·1L (production.ON_COURT·lineup 공유 출처)', () => {
+  // K5: production.ON_COURT 와 lineup.buildLineup 이 이 상수를 직접 참조 → 드리프트 불가. 값 자체를 핀다.
+  assert.deepEqual(STARTER_NEED, { S: 1, OH: 2, OP: 1, MB: 2, L: 1 });
+});
+
+test('시드 로스터 구성 == AI 이상 구성(ROSTER_IDEAL) — 포지션별 개수 일치', () => {
+  // K6: data/seed.ROSTER(16인 템플릿, 생성 순서=시드 소비 순서라 재구성 불가) 의 포지션별 개수가
+  //     engine/aiGM.ROSTER_IDEAL 과 일치하는지 정적 단언(수동 미러 드리프트 방지).
+  const counts: Record<Position, number> = { S: 0, OH: 0, OP: 0, MB: 0, L: 0 };
+  for (const pos of ROSTER) counts[pos]++;
+  assert.deepEqual(counts, ROSTER_IDEAL);
 });

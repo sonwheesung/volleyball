@@ -2,7 +2,7 @@
 // "포지션 구멍날 때만" 영입: healthy 가용 < 선발 필요. 캡·정원 제약.
 
 import type { Player, Position } from '../types';
-import { overall } from './overall';
+import { overall, ALL_POSITIONS } from './overall';
 
 /** 선발 코트 필요 인원(포지션별) */
 export const STARTER_NEED: Record<Position, number> = { S: 1, OH: 2, OP: 1, MB: 2, L: 1 };
@@ -36,7 +36,7 @@ export function healthyByPos(players: Player[]): Record<Position, number> {
 
 /** 구멍난 포지션(가용 < 필요) — 부족폭 큰 순, 동률은 포지션 고정순 */
 export function shortagePositions(healthy: Record<Position, number>): Position[] {
-  const order: Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
+  const order = ALL_POSITIONS; // 포지션 고정순(S·OH·OP·MB·L) 단일 출처
   return order
     .filter((p) => healthy[p] < STARTER_NEED[p])
     .sort((a, b) => (STARTER_NEED[b] - healthy[b]) - (STARTER_NEED[a] - healthy[a]) || order.indexOf(a) - order.indexOf(b));

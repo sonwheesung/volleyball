@@ -9,25 +9,13 @@ import { leagueProduction, leagueProductionRange } from './production';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
 import { SEASON_DAYS } from '../engine/calendar';
+import { legRanges } from '../engine/season';
 
 const REF_DAY = SEASON_DAYS; // 시즌 종료 전력(playoffs 와 동일) — 단일 출처(engine/calendar)
-const LEGS = 6;      // KOVO 여자부 6라운드
 
-/** 라운드(leg)별 [from, to] 일자 구간 — SEASON 의 round 구조에서 도출 */
+/** 라운드(leg)별 [from, to] 일자 구간 — SEASON 의 round 구조에서 도출(공용 legRanges) */
 export function seasonLegRanges(): { from: number; to: number }[] {
-  const rounds = [...new Set(SEASON.map((f) => f.round))].sort((a, b) => a - b);
-  const total = rounds.length;
-  if (total === 0) return [];
-  const rpl = Math.max(1, Math.round(total / LEGS));
-  const legs: { from: number; to: number }[] = [];
-  for (let leg = 0; leg < LEGS; leg++) {
-    const lo = leg * rpl;
-    const hi = leg === LEGS - 1 ? total : (leg + 1) * rpl;
-    const days = SEASON.filter((f) => f.round >= lo && f.round < hi).map((f) => f.dayIndex);
-    if (!days.length) continue;
-    legs.push({ from: Math.min(...days), to: Math.max(...days) });
-  }
-  return legs;
+  return legRanges(SEASON);
 }
 
 /** 선수 → 현재 소속팀 맵 */

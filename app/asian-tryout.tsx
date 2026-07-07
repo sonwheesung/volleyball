@@ -10,6 +10,7 @@ import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
+import { fogOvr as fogOvrShared } from '../data/prospectScout';
 import { ASIAN_SALARY_Y1, ASIAN_SALARY_Y2 } from '../engine/foreign';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
@@ -59,12 +60,8 @@ function AsianTryoutInner() {
   const myPickId = tryout.picks[my];
 
   const reveal = teamScoutReveal(my);
-  const fogOvr = (p: Player): string => {
-    const o = displayOvr(overallRaw(p));
-    if (reveal >= 0.92) return `${o}`;
-    const w = Math.max(2, Math.round((1 - reveal) * 14));
-    return `${Math.max(40, o - w)}~${Math.min(99, o + w)}`;
-  };
+  // 공용 fogOvr(data/prospectScout → engine/overall 정본)에 위임 — 로컬 중복 제거(동작 동일).
+  const fogOvr = (p: Player): string => fogOvrShared(p, reveal);
 
   const pool = tryout.poolIds.map((id) => snap[id]).filter((p): p is Player => !!p);
   const pickedBy = (pid: string): string | null => {

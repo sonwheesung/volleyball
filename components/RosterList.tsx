@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import type { Player } from '../types';
-import { overall, overallRaw, displayOvr, fogOvr } from '../engine/overall';
+import { overall, overallRaw, displayOvr, fogOvr, REVEAL_PRECISE } from '../engine/overall';
 import { formatMoney } from '../engine/salary';
 import { OvrBadge, PosTag, theme } from './Screen';
 import { PlayerAvatar } from './PlayerAvatar';
@@ -58,7 +58,7 @@ export function RosterList({ players, decor, starterIds, sort = 'position', reve
               </Text>
             </View>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-              {reveal >= 0.92 ? (
+              {reveal >= REVEAL_PRECISE ? (
                 <OvrBadge value={overallRaw(p)} />
               ) : (
                 <View style={styles.fogOvr}><Text style={styles.fogOvrTxt}>{fogOvr(displayOvr(overallRaw(p)), reveal)}</Text></View>

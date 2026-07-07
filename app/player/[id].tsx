@@ -19,7 +19,7 @@ import { displayCutoff } from '../../data/standings';
 import { awardHistoryOf } from '../../data/awards';
 import { effectiveContract } from '../../data/roster';
 import { isFranchise } from '../../engine/cap';
-import { overall, overallRaw, displayOvr, fogOvr } from '../../engine/overall';
+import { overall, overallRaw, displayOvr, fogOvr, REVEAL_PRECISE } from '../../engine/overall';
 import { TRAITS } from '../../engine/traits';
 import { deriveRatings } from '../../engine/ratings';
 import { growthOutlook } from '../../data/growthOutlook';
@@ -289,7 +289,7 @@ function PlayerDetailInner() {
             </View>
             <Muted style={{ fontSize: 13 }}>{p.age}세 · {p.height}cm</Muted>
           </View>
-          {isMine || reveal >= 0.92 ? (
+          {isMine || reveal >= REVEAL_PRECISE ? (
             <OvrBadge value={overallRaw(p)} size={62} />
           ) : (
             <View style={styles.fogBadge}>
@@ -298,7 +298,7 @@ function PlayerDetailInner() {
             </View>
           )}
         </View>
-        {!isMine && reveal < 0.92 ? (
+        {!isMine && reveal < REVEAL_PRECISE ? (
           <Text style={{ color: theme.warn, fontSize: 12, marginTop: 6 }}>
             🔍 타 구단 — 스카우팅 공개도 {Math.round(reveal * 100)}%. 스카우터를 영입하면 더 선명해집니다.
           </Text>

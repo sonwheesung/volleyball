@@ -14,9 +14,9 @@ import { marketVal } from './awardSalary';
 import { LEAGUE_CAP } from '../engine/cap';
 import { baseVersion, currentRosters, getPlayer, evolveOnDay, LEAGUE, SEASON } from './league';
 import { domesticPayroll } from './roster';
+import { legRanges } from '../engine/season';
 
 const GAME_INTERVAL = 4;
-const LEGS = 6;
 
 export type TxKind = 'sign' | 'release';
 export interface Tx { day: number; teamId: string; playerId: string; kind: TxKind }
@@ -75,17 +75,9 @@ let cache: { key: string; dyn: Dyn } | null = null;
 export const getDynCacheRaw = (): { key: string; dyn: Dyn } | null => cache;
 export const setDynCacheRaw = (c: { key: string; dyn: Dyn } | null): void => { cache = c; };
 
-/** 레그(라운드 묶음) 경계 = 각 레그 첫 매치데이 */
+/** 레그(라운드 묶음) 경계 = 각 레그 첫 매치데이(공용 legRanges 의 from) */
 function legBoundaryDays(): Set<number> {
-  const rounds = [...new Set(SEASON.map((f) => f.round))].sort((a, b) => a - b);
-  const rpl = Math.max(1, Math.round(rounds.length / LEGS));
-  const firstDayOfLeg = new Map<number, number>();
-  for (const f of SEASON) {
-    const leg = Math.min(LEGS - 1, Math.floor(f.round / rpl));
-    const cur = firstDayOfLeg.get(leg);
-    if (cur === undefined || f.dayIndex < cur) firstDayOfLeg.set(leg, f.dayIndex);
-  }
-  return new Set(firstDayOfLeg.values());
+  return new Set(legRanges(SEASON).map((r) => r.from));
 }
 
 // ── 콘솔 what-if 주입(SIM_CONSOLE) — 강제 부상/사고. **앱·세이브 무관**(스토어는 호출 안 함).

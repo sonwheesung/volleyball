@@ -4,6 +4,10 @@
 import type { Player, Position } from '../types';
 import { deriveRatings, type Ratings } from './ratings';
 
+/** 전 포지션 열거(런타임 배열) — 고정 순서 S·OH·OP·MB·L. 포지션 순회의 단일 출처.
+ *  ※ 다른 순서가 필요한 곳(awards BEST7_SLOTS·draftClass POS_DIST 등)은 이걸 쓰지 말 것. */
+export const ALL_POSITIONS: readonly Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
+
 // 가중치 순서: [spike, block, dig, receive, set, serve]
 const WEIGHTS: Record<Position, [number, number, number, number, number, number]> = {
   S: [0, 1, 2, 1, 3, 2],
@@ -79,18 +83,23 @@ export function displayOvr(rawContinuous: number): number {
 //   내 팀은 항상 reveal=1(전부 보임, 포텐까지). 표시 전용·결정론 무관(엔진 scoutMult는 별개로 유지).
 //   STAFF_SYSTEM(스카우터 역할)·UI_RULES. draft.tsx도 이 헬퍼를 공유(중복 제거).
 
-/** 표시 OVR을 공개도로 흐리게 — 정밀(≥0.92)이면 정확값, 아니면 범위("78~84"). 입력=displayOvr 값. */
+// 스카우팅 공개도 임계(단일 출처) — 모든 fog 게이트가 공유(리터럴 산재 방지, EC-DR-03 계열).
+export const REVEAL_PRECISE = 0.92; // 이 이상 = 정밀(정확치 노출)
+export const REVEAL_MID = 0.5;      // 이 이상 = 중간(대략치), 미만 = 물음표
+
+/** 표시 OVR을 공개도로 흐리게 — 정밀(≥REVEAL_PRECISE)이면 정확값, 아니면 범위("78~84"). 입력=displayOvr 값.
+ *  fogOvr 정본(단일 구현) — data/prospectScout(유망주)·app 트라이아웃이 이 함수를 공유한다. */
 export function fogOvr(displayValue: number, reveal: number): string {
-  if (reveal >= 0.92) return `${displayValue}`;
+  if (reveal >= REVEAL_PRECISE) return `${displayValue}`;
   const w = Math.max(2, Math.round((1 - reveal) * 14));
   const lo = Math.max(50, displayValue - w);
   const hi = Math.min(99, displayValue + w);
   return `${lo}~${hi}`;
 }
 
-/** 0~100 스탯을 공개도로 흐리게. fill=막대 채움(null=불명), text=표시 숫자. 정밀(≥0.92)=정확, 중간(≥0.5)=대략(~70), 낮음=물음표. */
+/** 0~100 스탯을 공개도로 흐리게. fill=막대 채움(null=불명), text=표시 숫자. 정밀(≥PRECISE)=정확, 중간(≥MID)=대략(~70), 낮음=물음표. */
 export function fogStat(value: number, reveal: number): { fill: number | null; text: string; exact: boolean } {
-  if (reveal >= 0.92) return { fill: value, text: `${value}`, exact: true };
-  if (reveal >= 0.5) { const coarse = Math.round(value / 10) * 10; return { fill: coarse, text: `~${coarse}`, exact: false }; }
+  if (reveal >= REVEAL_PRECISE) return { fill: value, text: `${value}`, exact: true };
+  if (reveal >= REVEAL_MID) { const coarse = Math.round(value / 10) * 10; return { fill: coarse, text: `~${coarse}`, exact: false }; }
   return { fill: null, text: '?', exact: false };
 }

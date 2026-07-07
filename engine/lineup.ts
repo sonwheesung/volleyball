@@ -5,6 +5,7 @@
 
 import type { Player, Position } from '../types';
 import { overall } from './overall';
+import { STARTER_NEED } from './transactions';
 import { createRng, strSeed } from './rng';
 
 export interface Lineup {
@@ -25,12 +26,13 @@ function bestByPos(players: Player[], pos: Position, n: number, used: Set<string
  *  빈 로스터는 명시적 거부 — 시즌 계층(부상 상한 3·방출 하한 ROSTER_MIN)이 원천 차단해야 하는 상태. */
 export function buildLineup(players: Player[]): Lineup {
   if (players.length === 0) throw new Error('빈 로스터 — 라인업을 구성할 수 없습니다(시즌 계층 가드 위반)');
+  // 선발 구성 인원은 STARTER_NEED(engine/transactions) 단일 출처. 픽 순서는 유지(각 pos 배타 필터라 결과 불변).
   const used = new Set<string>();
-  const S = bestByPos(players, 'S', 1, used);
-  const OH = bestByPos(players, 'OH', 2, used);
-  const MB = bestByPos(players, 'MB', 2, used);
-  const OP = bestByPos(players, 'OP', 1, used);
-  const libero = bestByPos(players, 'L', 1, used)[0] ?? null;
+  const S = bestByPos(players, 'S', STARTER_NEED.S, used);
+  const OH = bestByPos(players, 'OH', STARTER_NEED.OH, used);
+  const MB = bestByPos(players, 'MB', STARTER_NEED.MB, used);
+  const OP = bestByPos(players, 'OP', STARTER_NEED.OP, used);
+  const libero = bestByPos(players, 'L', STARTER_NEED.L, used)[0] ?? null;
 
   // 대각 배치: 세터(0)↔아포짓(3), OH(1)↔OH(4), MB(2)↔MB(5)
   const slots: (Player | undefined)[] = [S[0], OH[0], MB[0], OP[0], OH[1], MB[1]];

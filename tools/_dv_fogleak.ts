@@ -53,8 +53,8 @@ for (const p of prospects) {
 }
 
 // ── (b) 형제 정적: 유망주 OVR 렌더 경로가 reveal 게이트/fogOvr를 쓰는지 ──
-//   한계(주석): 정규식 휴리스틱 — overallRaw( 렌더 라인 ±3줄에 `reveal >= 0.92`(공백 무시) 게이트나
-//   같은 라인 fogOvr(가 있어야 통과. import 라인·비유망주(외인 트라이아웃 자체 fog)는 제외. 오탐 낮게 유지.
+//   한계(주석): 정규식 휴리스틱 — overallRaw( 렌더 라인 ±3줄에 `reveal >= REVEAL_PRECISE`(또는 옛 리터럴
+//   `reveal >= 0.92`, 공백 무시) 게이트나 같은 라인 fogOvr(가 있어야 통과. import 라인·비유망주(외인 트라이아웃 자체 fog)는 제외.
 const norm = (s: string) => s.replace(/\s+/g, '');
 function siblingViolations(rel: string): string[] {
   const src = readFileSync(join(root, rel), 'utf8').split('\n');
@@ -64,7 +64,7 @@ function siblingViolations(rel: string): string[] {
     if (/^\s*import\b/.test(line)) return;                 // import 라인 제외
     if (line.includes('fogOvr(')) return;                 // 같은 라인 안개 헬퍼 → 안전
     const win = norm(src.slice(Math.max(0, i - 3), i + 4).join('\n'));
-    const gated = win.includes('reveal>=0.92') || win.includes('fogOvr(');
+    const gated = win.includes('reveal>=REVEAL_PRECISE') || win.includes('reveal>=0.92') || win.includes('fogOvr(');
     if (!gated) v.push(`${rel}:${i + 1}  ${line.trim()}`);
   });
   return v;

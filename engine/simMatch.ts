@@ -4,6 +4,7 @@
 // 결정론: 같은 (seed, ovr) = 같은 경기.
 
 import { createRng } from './rng';
+import { isSetOver, SETS_TO_WIN } from './match';
 
 import type { PointHow, TouchEvent } from './rally';
 import type { Side } from '../types';
@@ -20,6 +21,10 @@ export interface PointLog {
   touches?: TouchEvent[]; // 이 점의 터치 순서(서브→리시브→세트→공격→디그…) — opts.touches일 때만. 보드 재생용·승패 불변
 }
 
+/** 교체 사유 union(정본) — 작전 3종(pinch/block/def) + rest(피로 교체 1.3e) + injury(경기 내 부상 교체 1.3d).
+ *  match.ts(activeSubs·subIn)·MatchCourt(SUB_KIND_KO)가 이 타입을 공유해 재타이핑 드리프트를 막는다. */
+export type SubKind = 'pinch' | 'block' | 'def' | 'injury' | 'rest';
+
 /** 작전 교체 1건 — 보드 연출용 로그(승패 무영향, 순수 가산). 엔진이 st.six 를 실제로 바꾼 순간을 기록. */
 export interface SubEvent {
   point: number;   // 기록 시점 points.length = 이 교체가 처음 반영되는 랠리 인덱스(0-based)
@@ -28,7 +33,7 @@ export interface SubEvent {
   slot: number;    // 라인업 슬롯 0..5
   inId: string;    // 코트로 들어온 선수
   outId: string;   // 코트에서 나간 선수
-  kind: 'pinch' | 'block' | 'def' | 'injury' | 'rest'; // injury = 경기 내 부상 교체(1.3d, 영구·enter만) · rest = 피로 교체(1.3e, net-zero 왕복 — 지친 주전을 잠시 쉬게)
+  kind: SubKind;   // injury = 경기 내 부상 교체(1.3d, 영구·enter만) · rest = 피로 교체(1.3e, net-zero 왕복 — 지친 주전을 잠시 쉬게)
   enter: boolean;  // true=벤치 스페셜리스트 투입, false=원선발 복귀(원위치). injury는 항상 true(복귀 없음)
 }
 
@@ -61,10 +66,6 @@ export interface SimResult {
                                     // 소비자(보드 복원·production)가 setNo%2로 재도출하면 어긋남 → 엔진이 진실을 실어 보낸다.
 }
 
-function targetPoints(setNo: number): number {
-  return setNo >= 5 ? 15 : 25;
-}
-
 export function simulateMatchSimple(seed: number, homeOvr: number, awayOvr: number): SimResult {
   const rng = createRng(seed);
 
@@ -78,11 +79,10 @@ export function simulateMatchSimple(seed: number, homeOvr: number, awayOvr: numb
   let awaySets = 0;
   let setNo = 1;
 
-  while (homeSets < 3 && awaySets < 3) {
-    const target = targetPoints(setNo);
+  while (homeSets < SETS_TO_WIN && awaySets < SETS_TO_WIN) {
     let h = 0;
     let a = 0;
-    while (!((h >= target || a >= target) && Math.abs(h - a) >= 2)) {
+    while (!isSetOver(h, a, setNo)) {
       // 약간의 랜덤 흔들림으로 런(연속 득점) 느낌
       const noise = (rng.next() - 0.5) * 0.08;
       const homeScores = rng.chance(pHome + noise);

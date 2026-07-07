@@ -3,10 +3,11 @@
 //   가짜 드라마 금지: 기록에 근거한 사실만. 중요도(big)로 헤드라인/단신 구분.
 //   본문은 조립식(opener+사실+closer) + 안정 시드 변주 → 같은 종류라도 표현이 다르다(NEWS_SYSTEM §4).
 
-import type { ExpelRecord, HofEntry, Milestone, NewsItem, Position, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
+import type { ExpelRecord, HofEntry, Milestone, NewsItem, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
 import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
 import { jerseyNumber } from '../engine/jersey';
+import { ALL_POSITIONS } from '../engine/overall';
 import { prospectArcRetro } from './seed';
 import { numberLineage } from './legends';
 import { topFriendOnTeam } from './relationships';
@@ -156,7 +157,7 @@ const TITLE_KO: Record<string, string> = {
 };
 const TITLE_UNIT: Record<string, string> = { scoring: '점', spike: '개', block: '개', serve: '개', dig: '개', set: '개', receive: '개' };
 const SUB_TITLES: (keyof SeasonAwards['titles'])[] = ['spike', 'block', 'serve', 'dig', 'set', 'receive'];
-const BEST7_ORDER: Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
+const BEST7_ORDER = ALL_POSITIONS; // 포지션 표시순(= 전 포지션 고정순) 단일 출처
 
 /** 전체 뉴스 피드(최신 시즌 우선, 같은 시즌 내 헤드라인 우선) */
 export function buildNewsFeed(

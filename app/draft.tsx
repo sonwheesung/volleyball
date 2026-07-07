@@ -11,7 +11,7 @@ import { revealedPotential, fogOvr } from '../data/prospectScout';
 import { prospectReport } from '../data/prospectReport';
 import { draftClassPreview } from '../data/draftPreview';
 import { resolveDraft } from '../engine/draft';
-import { overall, overallRaw } from '../engine/overall';
+import { overall, overallRaw, REVEAL_PRECISE } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
 import { showSeasonStartAd } from '../lib/ads';
 import type { Player } from '../types';
@@ -124,7 +124,7 @@ function DraftCenterInner() {
           선수를 누르면 아마추어 성적·스카우트 리포트를 볼 수 있어요.
         </Muted>
         <Muted style={{ fontSize: 12, marginTop: 4, color: reveal >= 0.6 ? theme.good : theme.warn }}>
-          스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= 0.92 ? '(정밀)' : '— 스카우터를 영입하면 잠재력이 더 많이·선명하게 보입니다'}
+          스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= REVEAL_PRECISE ? '(정밀)' : '— 스카우터를 영입하면 잠재력이 더 많이·선명하게 보입니다'}
         </Muted>
       </Card>
 
@@ -148,7 +148,7 @@ function DraftCenterInner() {
           <View key={p.id} style={styles.row}>
             <PosTag pos={p.position} />
             <Text style={[styles.name, { flex: 1 }]}>{p.name}</Text>
-            {reveal >= 0.92
+            {reveal >= REVEAL_PRECISE
               ? <OvrBadge value={overallRaw(p)} />
               : <Text style={styles.fogOvr}>{fogOvr(p, reveal)}</Text>}
           </View>
@@ -169,7 +169,7 @@ function DraftCenterInner() {
                   <Text style={styles.name}>{p.name}</Text>
                   <Text style={styles.sub}>{p.age}세 · {p.height}cm · {open ? '접기 ▲' : '자세히 ▼'}</Text>
                 </View>
-                {reveal >= 0.92
+                {reveal >= REVEAL_PRECISE
                   ? <OvrBadge value={overallRaw(p)} />
                   : <Text style={styles.fogOvr}>{fogOvr(p, reveal)}</Text>}
               </Pressable>

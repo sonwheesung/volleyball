@@ -4,7 +4,7 @@
 // playRally를 돌려 SimResult(간이 시뮬과 동일 계약)를 출력 → 드롭인 교체 가능.
 
 import type { Player, Side, CoachStyle, SubPolicy, Position } from '../types';
-import type { SimResult, PointLog, SubEvent, TimeoutEvent, TimeoutCourtStam } from './simMatch';
+import type { SimResult, PointLog, SubEvent, TimeoutEvent, TimeoutCourtStam, SubKind } from './simMatch';
 import type { Ratings } from './ratings';
 import { createRng, strSeed } from './rng';
 import { deriveRatings } from './ratings';
@@ -41,6 +41,9 @@ export function isSetOver(home: number, away: number, setNo: number): boolean {
   const target = targetPoints(setNo);
   return (home >= target || away >= target) && Math.abs(home - away) >= 2;
 }
+
+/** 경기 승리에 필요한 세트 수(5세트 3선승, CLAUDE.md 4.4). 세트 규칙 정본 — simMatch(간이)도 공유. */
+export const SETS_TO_WIN = 3;
 
 const START_MOMENTUM = 50;
 const TIMEOUTS_PER_SET = 2;
@@ -192,7 +195,7 @@ export function simulateMatch(
   const SET_CARRY = 16; // 세트 간 "흐름" — 직전 세트 승자의 시작 기세 우위(KOVO 세트 분포 정렬)
   let lastSetWinner: Side | null = null;
 
-  while (homeSets < 3 && awaySets < 3) {
+  while (homeSets < SETS_TO_WIN && awaySets < SETS_TO_WIN) {
     let h = 0;
     let a = 0;
 
@@ -215,13 +218,14 @@ export function simulateMatch(
 
     // 작전 교체 상태(세트 단위): 예산 + 활성 교체(slotIdx → 원선발·종류)
     const subBudget = { home: SUBS_PER_SET, away: SUBS_PER_SET };
-    type SubKind = 'pinch' | 'block' | 'def' | 'rest';
-    const activeSubs: Record<Side, Map<number, { orig: Player; kind: SubKind }>> = { home: new Map(), away: new Map() };
+    // 작전/피로 교체만 activeSubs에 들어간다(injury는 injuryReplaced로 분리 — 세트말 원복 안 함). = 정본 SubKind − 'injury'.
+    type TacticalSubKind = Exclude<SubKind, 'injury'>;
+    const activeSubs: Record<Side, Map<number, { orig: Player; kind: TacticalSubKind }>> = { home: new Map(), away: new Map() };
     // FIVB 교체 규칙(세트 단위 리셋) — ① 교체선수는 세트당 1회만 진입(재진입 금지) ② 선발은 세트당 1왕복만(나갔다 돌아온 뒤 재이탈 금지).
     //   구현 누락으로 같은 스페셜리스트가 예산(6) 남는 한 핑퐁 투입되던 버그 수정(2026-07-01). checkSubs 규칙검사로 박제.
     const usedSubIn: Record<Side, Set<string>> = { home: new Set(), away: new Set() };       // 이 세트에 이미 투입된 교체선수 id
     const usedStarterOut: Record<Side, Set<string>> = { home: new Set(), away: new Set() };  // 이 세트에 이미 교체 아웃된 선발 id
-    const subIn = (side: Side, slot: number, player: Player | null, kind: SubKind): void => {
+    const subIn = (side: Side, slot: number, player: Player | null, kind: TacticalSubKind): void => {
       if (!player) return;
       const st = teamOf(side);
       if (injuryReplaced[side].has(slot)) return; // 부상 교체 슬롯은 작전 교체 대상 제외 — 부상 교체 선수를 영구 유지(1.3d)

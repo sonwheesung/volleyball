@@ -6,7 +6,26 @@ import type { Fixture, ScheduleEntry } from '../types';
 
 const GAME_INTERVAL = 4; // 매치데이 간 간격(일)
 const SEASON_OFFSET = 0; // 시즌 시작일의 첫 매치데이
-const LEGS = 6;          // KOVO 여자부 정규리그 6라운드 풀리그
+export const LEGS = 6;   // KOVO 여자부 정규리그 6라운드 풀리그 — 레그 분할의 단일 출처(awards·dynamics 공유)
+
+/** 레그(라운드 묶음)별 [from, to] 일자 구간 — fixtures의 round 구조에서 도출.
+ *  awards(seasonLegRanges)·dynamics(legBoundaryDays=각 레그 첫날 from)의 공용 레그 분할.
+ *  round 값은 0..(라운드수-1) 연속(generateSeason)이라 round 값=인덱스로 취급. 빈 레그는 스킵. */
+export function legRanges(fixtures: { round: number; dayIndex: number }[]): { from: number; to: number }[] {
+  const rounds = [...new Set(fixtures.map((f) => f.round))].sort((a, b) => a - b);
+  const total = rounds.length;
+  if (total === 0) return [];
+  const rpl = Math.max(1, Math.round(total / LEGS));
+  const legs: { from: number; to: number }[] = [];
+  for (let leg = 0; leg < LEGS; leg++) {
+    const lo = leg * rpl;
+    const hi = leg === LEGS - 1 ? total : (leg + 1) * rpl;
+    const days = fixtures.filter((f) => f.round >= lo && f.round < hi).map((f) => f.dayIndex);
+    if (!days.length) continue;
+    legs.push({ from: Math.min(...days), to: Math.max(...days) });
+  }
+  return legs;
+}
 
 /** 서클 방식 1차 라운드로빈: 각 라운드의 [home, away] 페어 목록 */
 function singleRoundRobin(ids: string[]): [string, string][][] {

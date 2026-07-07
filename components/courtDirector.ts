@@ -4,6 +4,7 @@
 
 import type { Player, Side } from '../types';
 import type { SimResult, SubEvent, TimeoutEvent } from '../engine/simMatch';
+import { isSetOver } from '../engine/match';
 import {
   lineupIdxAt, zonePx, switchedSpots, receiveFormation, serveFormation, fanSlots, blockerWall, separateTargets,
   type Lineup, type Px,
@@ -268,8 +269,7 @@ export function buildLiveBanners(
       if (BLK_TH.has(n)) out.push({ at: i, banner: { kind: 'blockmulti', tint: LIVE_TINT.block, icon: 'shield', mine: mineSide === r.scorer, title: `${names.nameOf(r.byId)} 블로킹 ${n}개!` } });
     }
     // 세트 획득 — 그 랠리의 세트 점수만으로 판정(미래 미참조): 타깃 도달 + 2점차. scorer=세트 승자.
-    const target = r.setNo >= 5 ? 15 : 25;
-    if ((r.home >= target || r.away >= target) && Math.abs(r.home - r.away) >= 2) {
+    if (isSetOver(r.home, r.away, r.setNo)) {
       out.push({ at: i, banner: { kind: 'setwon', tint: LIVE_TINT.setwon, icon: 'flag', mine: mineSide === r.scorer, title: `${teamName(r.scorer)} ${r.setNo}세트 획득!` } });
       runSide = null; run = 0; // 세트 경계서 연속 리셋
     }

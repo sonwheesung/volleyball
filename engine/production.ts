@@ -5,6 +5,7 @@
 import type { Player, Position, SeasonLine } from '../types';
 import { createRng } from './rng';
 import { overall } from './overall';
+import { STARTER_NEED } from './transactions';
 import type { SimResult } from './simMatch';
 import type { BoxSink } from './rally';
 
@@ -65,8 +66,8 @@ export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {
   };
 }
 
-// 코트 위 인원(선발) — 1S·2OH·1OP·2MB·1L = 7
-const ON_COURT: Record<Position, number> = { S: 1, OH: 2, OP: 1, MB: 2, L: 1 };
+// 코트 위 인원(선발) — 1S·2OH·1OP·2MB·1L = 7. 선발 구성 단일 출처(STARTER_NEED, engine/transactions).
+const ON_COURT = STARTER_NEED;
 
 // 공격 점유 — OP(아포짓)가 확실한 1옵션, OH 좌우, MB(센터)는 속공 위주로 비중 낮음(실제 여자배구)
 // 엔진(rally.chooseAtk)의 실제 공격 분포(센터 ~18%)에 맞춰 MB 비중 상향(2026-06)

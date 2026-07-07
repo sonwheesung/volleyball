@@ -2,7 +2,7 @@
 // 마일스톤과 동일: 새 시뮬 없이 기존 누적 산출물(archive/hof/milestones/cash/fanScore)을 읽어 판정.
 // 달성 여부는 저장하지 않고 세이브 상태에서 재계산한다(결정론·세이브 다이어트). React/스토어 무의존.
 
-import type { HofEntry, Milestone, Position, SeasonArchive, SeasonAwards } from '../types';
+import type { HofEntry, Milestone, SeasonArchive, SeasonAwards } from '../types';
 
 export type AchCategory = '우승' | '시상' | '레전드' | '기록' | '서사' | '단장' | '통산' | '운영';
 
@@ -168,7 +168,6 @@ export const ACH_REWARD: Record<string, number> = {
 /** 업적 다이아 보상(미지정=30). */
 export const achReward = (id: string): number => ACH_REWARD[id] ?? 30;
 
-const POSITIONS: Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
 type Arch = AchInput['archive'];
 
 /** championId === my 가 연속한 최대 구간 */
