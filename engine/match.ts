@@ -3,7 +3,7 @@
 // 매 세트 서브권 시작 팀 교대. 사이드아웃 시 회전(1.1) + 기세 갱신(7.2) + 타임아웃(7.4).
 // playRally를 돌려 SimResult(간이 시뮬과 동일 계약)를 출력 → 드롭인 교체 가능.
 
-import type { Player, Side, CoachStyle, SubPolicy } from '../types';
+import type { Player, Side, CoachStyle, SubPolicy, Position } from '../types';
 import type { SimResult, PointLog, SubEvent, TimeoutEvent, TimeoutCourtStam } from './simMatch';
 import type { Ratings } from './ratings';
 import { createRng, strSeed } from './rng';
@@ -17,7 +17,8 @@ import { rotate, serverIndex, frontRow, backRow } from './rotation';
 // (dyn 재생을 바꾸는 시즌 계층 규칙 변경도 포함 — 캐시가 dyn을 함께 영속하므로, v3.)
 // REALTIME_SIM Phase2(G3): simCache는 이 버전을 태깅·게이트해, 엔진 재튜닝(앱 업데이트) 후 저장된 옛-엔진
 // 순위를 폐기하고 새 엔진으로 재계산한다 → 저장 순위 ↔ 과거경기 보드 재생 일관성 보장.
-export const ENGINE_VERSION = 4; // 4(2026-07-06): 서브 에이스 개인기장 공식화 — 리시브범실 실점을 서버 box.srvAce에도 기장(FIVB indirect ace) → production aces/points·서브왕·skServe XP 변동 → 저장 캐시 무효화. 유형 분포·밸런스·서브 확률·승패 불변(box는 메인 rng 무관)
+export const ENGINE_VERSION = 5; // 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
+// 4(2026-07-06): 서브 에이스 개인기장 공식화 — 리시브범실 실점을 서버 box.srvAce에도 기장(FIVB indirect ace) → production aces/points·서브왕·skServe XP 변동 → 저장 캐시 무효화. 유형 분포·밸런스·서브 확률·승패 불변(box는 메인 rng 무관)
 // 3(2026-07-02): AI 자기방출 재영입 금지(TRANSACTION 0장 ⑥) — dyn(시즌 중 거래) 재생 변동 → 저장 캐시 무효화
 // 2(2026-06-28): 체력 튜닝(회복 0.009→0.005·세트사이 0.12→0.035) — 경기 결과 변동 → 저장 캐시 무효화
 
@@ -104,8 +105,8 @@ export function simulateMatch(
   for (const p of onCourt(homeLineup)) homeStam.set(p.id, 1);
   for (const p of onCourt(awayLineup)) awayStam.set(p.id, 1);
 
-  const home: RallyTeam = { six: homeLineup.six, libero: homeLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: homeStam, injured: new Set(), style: hc.style };
-  const away: RallyTeam = { six: awayLineup.six, libero: awayLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: awayStam, injured: new Set(), style: ac.style };
+  const home: RallyTeam = { six: homeLineup.six, libero: homeLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: homeStam, injured: new Set(), style: hc.style, pendingSevere: [] };
+  const away: RallyTeam = { six: awayLineup.six, libero: awayLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: awayStam, injured: new Set(), style: ac.style, pendingSevere: [] };
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const charismaOf = (s: Side) => (s === 'home' ? hc.charisma : ac.charisma);
   const policyOf = (s: Side) => (s === 'home' ? (opts.homePolicy ?? DEFAULT_POLICY) : (opts.awayPolicy ?? DEFAULT_POLICY));
@@ -146,6 +147,29 @@ export function simulateMatch(
   const subUse: Record<string, number> = {}; // 교체 출전 선수 id → 출전 랠리 수(출전 성장 XP용)
   const subEvents: SubEvent[] = [];           // 교체 연출 로그(보드용, 순수 가산 — 승패 무영향)
   const timeoutEvents: TimeoutEvent[] = [];   // 타임아웃 로그(보드용, 순수 가산 — 승패 무영향)
+  // 경기 내 부상 교체(1.3d) — 세트 넘어 지속(작전 교체 activeSubs와 달리 세트 단위 리셋 없음). slot→{out:부상선수, in:교체선수}.
+  // 작전 교체 복원 루프·세트말 원복은 activeSubs만 훑으므로 이 슬롯을 절대 되돌리지 않는다(부상 선수 영구 복귀 불가).
+  const injuryReplaced: Record<Side, Map<number, { out: Player; in: Player }>> = { home: new Map(), away: new Map() };
+  // 부상 교체 후보 점수 — 슬롯 역할 주 스탯(결정론 픽, rng 없음). 세터는 세터로 유지(setterOf 폴백 방지).
+  const roleScore: Record<Position, (r: Ratings) => number> = {
+    S: (r) => r.set, OH: (r) => r.spike + r.receive, OP: (r) => r.spike, MB: (r) => r.block + r.spike, L: (r) => r.dig + r.receive,
+  };
+  // 부상 교체 선수 선정 — 벤치에서 injured·현재 코트·리베로·이전 부상 교체 제외, **포지션 매치 우선**, 결정론(레이팅 최고).
+  //   없으면 null(폴백: 부상 선수 코트 유지 ×0.5, 몰수·크래시 없음).
+  const pickInjuryReplacement = (side: Side, injuredP: Player): Player | null => {
+    const st = teamOf(side);
+    const players = side === 'home' ? homePlayers : awayPlayers;
+    const excluded = new Set<string>(st.six.map((p) => p.id));
+    if (st.libero) excluded.add(st.libero.id);
+    for (const id of st.injured) excluded.add(id);
+    for (const rec of injuryReplaced[side].values()) excluded.add(rec.in.id);
+    const pool = players.filter((p) => !excluded.has(p.id) && p.position !== 'L');
+    if (!pool.length) return null;
+    const samePos = pool.filter((p) => p.position === injuredP.position);
+    const cand = samePos.length ? samePos : pool; // 포지션 매치 우선(특히 세터↔세터)
+    const score = roleScore[injuredP.position];
+    return cand.reduce((b, p) => (score(R(p)) > score(R(b)) ? p : b));
+  };
   let homeSets = 0;
   let awaySets = 0;
   let setNo = 1;
@@ -183,6 +207,7 @@ export function simulateMatch(
     const subIn = (side: Side, slot: number, player: Player | null, kind: SubKind): void => {
       if (!player) return;
       const st = teamOf(side);
+      if (injuryReplaced[side].has(slot)) return; // 부상 교체 슬롯은 작전 교체 대상 제외 — 부상 교체 선수를 영구 유지(1.3d)
       if (activeSubs[side].has(slot) || subBudget[side] < 2) return;
       // 이미 코트에 있으면 불가 — 같은 벤치 스페셜리스트가 두 슬롯에 중복 투입되는 것 방지
       if (st.six.some((p) => p.id === player.id)) return;
@@ -269,6 +294,26 @@ export function simulateMatch(
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner, how, byId, recvId, setId, touches });
       if (opts.boxTimeline) opts.boxTimeline.push(cloneBox(accBox!)); // 이 득점까지의 누적 스냅샷(points와 1:1)
+
+      // ── 경기 내 부상 교체 (1.3d) — 중상(pendingSevere)만 실제 코트 교체. FIVB 예외적 교체(예산·재진입 밖) ──
+      //   rng 미소비(결정론 픽) — 심각도 판정은 이미 랠리 중 maybeInjure가 소비. 교체 못 하면(벤치 소진) 부상 선수 코트 유지(×0.5).
+      for (const side of ['home', 'away'] as Side[]) {
+        const st = teamOf(side);
+        const pend = st.pendingSevere;
+        while (pend && pend.length) {
+          const injId = pend.shift()!;
+          const slot = st.six.findIndex((p) => p.id === injId);
+          if (slot < 0) continue; // 이미 코트에 없음(방어) — 리베로는 공격 안 하므로 pendingSevere에 애초에 없음
+          const injuredP = st.six[slot];
+          const replacement = pickInjuryReplacement(side, injuredP);
+          if (!replacement) continue; // 폴백: 벤치 소진 → 부상 선수 코트 유지(×0.5), 몰수·크래시 없음
+          activeSubs[side].delete(slot); // 부상 슬롯이 작전 교체 중이면 그 항목 삭제 → 복원 루프/세트말이 못 되돌림(작전 orig 부활 방지)
+          st.six[slot] = replacement;
+          injuryReplaced[side].set(slot, { out: injuredP, in: replacement });
+          if (!st.stam.has(replacement.id)) { st.stam.set(replacement.id, 1); tracked[side].push(replacement); }
+          subEvents.push({ point: points.length, setNo, side, slot, inId: replacement.id, outId: injuredP.id, kind: 'injury', enter: true });
+        }
+      }
 
       // 기세 갱신 (연속 득점 가속, 7.2)
       streak = winner === lastScorer ? streak + 1 : 1;

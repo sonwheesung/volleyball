@@ -35,6 +35,8 @@ const STAM_FLOOR = 0.70;
 const HOP_COST = 0.024;
 export const STAM_REGEN_BASE = 0.005; // 랠리 사이 회복(2026-06-28 튜닝)
 const INJ_EFF = 0.5; // 부상 시 효율 배수(9.3)
+// 부상 발동 중 실제 코트 교체(중상)로 승격되는 비율 — placeholder(측정으로 튜닝, 1.3d). 대부분은 참고 뛴다(×0.5).
+const SEVERE_INJURY_FRAC = 0.12;
 
 // ── 서브 타입 (2장) ── [에이스 기저, 범실 기저]
 type ServeT = 'safe' | 'float' | 'jumpfloat' | 'spike';
@@ -79,6 +81,7 @@ export interface RallyTeam {
   stam: Map<string, number>;   // 선수 id → 체력 잔량(0..1)
   injured: Set<string>;        // 경기 중 부상자(효율 급감)
   style: CoachStyle;           // 감독 성향(8장)
+  pendingSevere?: string[];    // 이번 랠리에 중상(부상 교체 대기) 판정된 공격수 id — match.ts가 랠리 후 소비(FIVB 예외적 교체, 1.3d). 없으면(간이 시뮬) 교체 없음
 }
 
 export type Rate = (p: Player) => Ratings;
@@ -142,13 +145,21 @@ function drain(t: RallyTeam, p: Player, mult: number): void {
   t.stam.set(p.id, Math.max(0, cur - (HOP_COST * mult) / (0.6 + n(p.staminaMax) * 0.8)));
 }
 
-/** 부상 판정(9.3) — 노쇠·체력 고갈 시 ↑. 경기 한정(시즌 영향 없음). */
-function maybeInjure(t: RallyTeam, p: Player, rng: Rng): void {
+/** 부상 판정(9.3·1.3d) — 노쇠·체력 고갈 시 ↑. 경기 한정(시즌 영향 없음 — 결정론 격리, INJURY 0.1장).
+ *  호출부: playRally 공격 스윙 직후(공격수=six[] 멤버)만. **리베로는 공격하지 않으므로 여기 도달 불가**
+ *  (호출부 드리프트 방어 주석 — 리베로 부상 교체 로직 불필요). 흔한 경우는 참고 뛴다(injured Set → ×0.5),
+ *  드물게(SEVERE_INJURY_FRAC) 중상만 실제 교체 대기열(pendingSevere)에 올린다. 심각도 판정은 **기존 rng 스트림**(결정론). */
+function maybeInjure(t: RallyTeam, p: Player, rng: Rng, stats?: RallyStats): void {
   if (t.injured.has(p.id)) return;
   const frac = t.stam.get(p.id) ?? 1;
   const ageF = 1 + Math.max(0, p.age - 30) * 0.15;
   const tiredF = 1 + (1 - frac) * 1.5;
-  if (rng.next() < 0.0006 * ageF * tiredF) t.injured.add(p.id);
+  if (rng.next() < 0.0006 * ageF * tiredF) {
+    t.injured.add(p.id);                            // 흔한 경우: 참고 뛴다(효율 ×0.5)
+    const severe = rng.next() < SEVERE_INJURY_FRAC; // 심각도 게이트 — 발동마다 항상 rng 소비(pendingSevere 유무와 무관·결정론)
+    if (stats) { stats.injuries++; if (severe) stats.injurySevere++; } // 계측(rng 무관·결과 불변)
+    if (severe) t.pendingSevere?.push(p.id);        // 중상만 match.ts가 랠리 후 실제 교체(1.3d)
+  }
 }
 
 function strength(players: Player[], pick: (r: Ratings) => number, R: Rate, t: RallyTeam): number {
@@ -254,6 +265,7 @@ export interface RallyStats {
   digRegSum: number; digRegN: number;    // 일반 디그(기저 0.40)
   digTipSum: number; digTipN: number;    // 팁(페인트) 디그(기저 0.55)
   digSoftSum: number; digSoftN: number;  // 소프트 블록 전환(기저 0.70)
+  injuries: number; injurySevere: number; // 부상 관측(1.3d) — 발동(참고뛰기+중상) 총건·중상(교체 승격) 건. rng 무관·결과 불변(계측 전용)
 }
 
 /** 포지션별 동작 계측(서브/세트/공격/속공/블로킹 처리자) — 포지션 역할 검증용 */
@@ -284,6 +296,7 @@ export const newRallyStats = (): RallyStats => ({
   digRegSum: 0, digRegN: 0,
   digTipSum: 0, digTipN: 0,
   digSoftSum: 0, digSoftN: 0,
+  injuries: 0, injurySevere: 0,
 });
 
 /** 선수별 박스스코어 싱크 — 실제 스윙 단위 귀속(통계 재구성 아님). 선택적(비우면 무영향·결과 불변).
@@ -463,7 +476,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       ? (at.six.filter((p) => p.id !== setter.id && p.id !== attacker.id).reduce<Player | null>((b, p) => (!b || p.skSet > b.skSet ? p : b), null) ?? setter)
       : setter;
     drain(at, attacker, 1.2); // 스파이크 점프가 가장 힘들다(7.1) — 리시브 면제 공격수(OP)도 지치게
-    maybeInjure(at, attacker, rng);
+    maybeInjure(at, attacker, rng, stats);
     const quickKind: QuickKind | undefined = atk === 'quick' ? quickKindOf(q, setter, attacker) : undefined; // 난수 없는 결정론 분류
 
     // 세트(토스) 선택 계측 — 센터 토스(속공/시간차)를 패스 품질별로

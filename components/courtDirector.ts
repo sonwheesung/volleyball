@@ -169,6 +169,8 @@ export interface RallyState {
  * subEvents 는 점(point) 오름차순 — point ≤ uptoRally 인 모든 교체를 슬롯에 순서대로 적용.
  * (subIn·subOut·세트말 원복 모두 "슬롯 = inId" 형태라 누적 적용하면 그 랠리의 실제 점유자가 됨.)
  * 결정론·승패 무영향: 보드 연출 전용. subEvents 없으면 base 그대로(기존 동작).
+ * **부상 교체(kind:'injury', 1.3d)는 영구(비원복) 스왑** — 엔진이 대응 OUT 이벤트를 절대 push하지 않으므로(작전
+ * 교체 activeSubs 밖) 여기서도 그 슬롯이 base로 되돌지 않고 교체 선수가 경기 끝까지 남는다(별도 처리 불필요, 구조상 자동).
  */
 export function applySubsToSix(
   baseSix: Player[], side: Side, subEvents: SubEvent[] | undefined, uptoRally: number, byId: Map<string, Player>,
