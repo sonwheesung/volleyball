@@ -61,13 +61,17 @@ export const upgradableStats = (p: Player, stats: TrainableStat[]): TrainableSta
   stats.filter((s) => (p as unknown as Record<string, number>)[s] < 99 || (p.potential[s] ?? 99) < 99);
 
 // ── 코스형 전지훈련 (MONETIZATION §11.2 개편, 2026-07-02 — 독립리뷰 H1 반영) ──
-// 15스탯 개별선택(+1/+1, OVR +0.06/부위 = 죽은 기능) → 5코스 택1(3스탯 현재+2·포텐+7).
+// 15스탯 개별선택(+1/+1, OVR +0.06/부위 = 죽은 기능) → 5코스 택1(3스탯 현재+3·포텐+3, 2026-07-08~).
 // H1: reaction은 스파이크/서브 레이팅 0기여(죽은 스탯) → 공격·서브 코스는 consistency로 교체.
 //     블로킹 코스의 reaction은 블록 레이팅 0.18 기여라 유지.
 export type CampCourse = 'attack' | 'defense' | 'block' | 'setter' | 'serve';
 export const CAMP_COURSE_COST = 300;   // 코스 정액 300(2026-07-06 사용자 결정 — 구 900=3스탯×300에서 정액 인하). CAMP_PER_STAT(구 모델)와 분리
-export const CAMP_CUR_GAIN = 2;        // 현재 +2
-export const CAMP_POT_GAIN = 7;        // 포텐 +7 — "성장 후 +2 OVR" 체감의 본체(젊을수록 실현 폭 큼)
+export const CAMP_CUR_GAIN = 3;        // 현재 +3 (사용자 결정 2026-07-08 — 구 +2. 포텐과 대칭, 즉효 체감 우선)
+export const CAMP_POT_GAIN = 3;        // 포텐 +3 (사용자 결정 2026-07-08 — 구 +7이 오버밸런스라 현재와 동일 +3. 성장 후 실현 폭은 축소, 대신 3스탯 즉시 +3 체감을 선택)
+// 소급 보존(H3): 이미 구매된 구 코스 엔트리(cur/pot 미임베드)는 구 산식으로 재적용해야 결정론이 깨지지 않는다.
+// 신규 구매는 엔트리에 {cur,pot}를 임베드(applyCampLocal) → 미래 리밸런스도 소급 무영향(임베드 우선, 미존재 시 레거시 폴백).
+export const CAMP_LEGACY_CUR_GAIN = 2; // 구 코스 엔트리(2026-07-02~07-07, cur/pot 필드 없음) 재적용용 — 소급 +2 보존
+export const CAMP_LEGACY_POT_GAIN = 7; // 구 코스 엔트리 재적용용 — 소급 +7 보존
 
 export const CAMP_COURSES: Record<CampCourse, { label: string; desc: string; stats: [TrainableStat, TrainableStat, TrainableStat]; forPos: string[] }> = {
   attack:  { label: '공격 특별훈련',  desc: '스파이크 결정력 집중 — 타점과 한 방의 안정감', stats: ['skSpike', 'jump', 'consistency'], forPos: ['OH', 'OP', 'MB'] },
@@ -77,13 +81,15 @@ export const CAMP_COURSES: Record<CampCourse, { label: string; desc: string; sta
   serve:   { label: '서브 특별훈련',  desc: '서브 한 방 — 흐름을 끊는 무기',             stats: ['skServe', 'focus', 'consistency'], forPos: ['OH', 'OP', 'MB', 'S'] },
 };
 
-/** 코스 적용 — 3스탯 각 현재 +2·포텐 +7(최대 99). 불변(클론). 이미 99인 칸만 변화 없음. */
-export function applyCampCourse(p: Player, course: CampCourse): Player {
+/** 코스 적용 — 3스탯 각 현재 +curGain·포텐 +potGain(최대 99). 불변(클론). 이미 99인 칸만 변화 없음.
+ *  기본값 = 현행 상수(3/3, 신규 구매). 소급 재적용은 임베드된 {cur,pot} 또는 레거시(2/7)를 명시 전달해
+ *  구 세이브가 원 산식대로 재현되게 한다(H3 결정론 — 미래 리밸런스도 소급 무영향). */
+export function applyCampCourse(p: Player, course: CampCourse, curGain = CAMP_CUR_GAIN, potGain = CAMP_POT_GAIN): Player {
   const next: Player = { ...p, potential: { ...p.potential } };
   const cur = next as unknown as Record<string, number>;
   for (const s of CAMP_COURSES[course].stats) {
-    cur[s] = Math.min(99, (cur[s] ?? 0) + CAMP_CUR_GAIN);
-    next.potential[s] = Math.min(99, (next.potential[s] ?? cur[s]) + CAMP_POT_GAIN);
+    cur[s] = Math.min(99, (cur[s] ?? 0) + curGain);
+    next.potential[s] = Math.min(99, (next.potential[s] ?? cur[s]) + potGain);
   }
   return next;
 }

@@ -1,6 +1,6 @@
 // 전지훈련 (MONETIZATION §11.2 코스형, 2026-07-02) — 오프시즌 해외 캠프. 다이아로 선수 1명을 보내
-// 5코스(공격/수비/블로킹/세터/서브) 중 하나로 관련 3스탯을 현재+2·포텐+7(최대 99). 선수당 오프시즌 1회.
-// 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지. 포텐 +7이 본체: 젊을수록 성장으로 실현되는 폭이 크다(H2).
+// 5코스(공격/수비/블로킹/세터/서브) 중 하나로 관련 3스탯을 현재+3·포텐+3(최대 99 — 2026-07-08 사용자 결정 +2/+7→+3/+3 대칭). 선수당 오프시즌 1회.
+// 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지. 현재·포텐 대칭(+3/+3) — 즉효 체감과 성장 여지를 함께(기구매는 레거시 +2/+7 보존, cur/pot 내장).
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
@@ -167,8 +167,8 @@ export default function TrainingCamp() {
           <IconLabel icon="airplane-outline" color={theme.good}>오프시즌 해외 캠프</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
             선수 한 명을 코스 하나로 보내면, 관련 능력치 3개에 두 가지가 함께 붙습니다.{'\n'}
-            ① <Text style={{ color: theme.good, fontWeight: '800' }}>지금 실력 +{CAMP_CUR_GAIN}</Text> — 아래 카드의 82→84처럼 바로 오릅니다.{'\n'}
-            ② <Text style={{ color: theme.good, fontWeight: '800' }}>앞으로 클 수 있는 천장(포텐) +{CAMP_POT_GAIN}</Text> — 카드의 포텐 87→94(최대 99). 천장은 당장 오르는 게 아니라 <Text style={{ color: theme.text, fontWeight: '700' }}>다음 시즌부터 훈련·경기로 천천히 채워집니다.</Text>{'\n'}
+            ① <Text style={{ color: theme.good, fontWeight: '800' }}>지금 실력 +{CAMP_CUR_GAIN}</Text> — 아래 카드의 82→85처럼 바로 오릅니다.{'\n'}
+            ② <Text style={{ color: theme.good, fontWeight: '800' }}>앞으로 클 수 있는 천장(포텐) +{CAMP_POT_GAIN}</Text> — 카드의 포텐 87→90(최대 99). 천장은 당장 오르는 게 아니라 <Text style={{ color: theme.text, fontWeight: '700' }}>다음 시즌부터 훈련·경기로 천천히 채워집니다.</Text>{'\n'}
             • 비용 <Text style={{ color: theme.good, fontWeight: '800' }}>{CAMP_COURSE_COST}💎</Text> · 선수 1명당 오프시즌 1회 · 어릴수록 천장 채울 시간이 많아 이득 · 효과는 영구(환불 불가)
           </Muted>
         </Card>

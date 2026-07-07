@@ -61,7 +61,7 @@ const T0 = 19675 * 86_400_000; // 고정 기준시각 = UTC 자정 정렬(상한
   log(`[전지훈련·구모델(재적용 전용)] 현재+1·포텐+1·원본불변: ${grew ? '✅' : '❌'} · 99상한 유지: ${capped ? '✅' : '❌'} · 비용 3부위=${CAMP_PER_STAT * 3}: ${costPass ? '✅' : '❌'}`);
   ok = ok && grew && capped && costPass;
 }
-// ── (4b) 코스형 전지훈련 (§11.2 개편, 2026-07-02) — +2/+7·cap99·H1 스탯 구성·비용 300(2026-07-06 인하) ──
+// ── (4b) 코스형 전지훈련 (§11.2 개편, 2026-07-02 · 2026-07-08 대칭 +3/+3) — cap99·H1 스탯 구성·비용 300(2026-07-06 인하) ──
 {
   const p0 = makeProspect(createRng(strSeed('crs')), 'crs', 'OH');
   const before = { sk: (p0 as any).skSpike as number, jp: (p0 as any).jump as number, cs: (p0 as any).consistency as number, pot: p0.potential.skSpike ?? 0 };

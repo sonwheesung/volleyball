@@ -58,7 +58,7 @@ import { PROTECT_COUNT } from '../engine/compensation';
 import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
 import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
-import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
+import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, CAMP_LEGACY_CUR_GAIN, CAMP_LEGACY_POT_GAIN, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
 import { showRewardedForDiamonds } from '../lib/ads';
 import { earnDiamonds, earnDiamondsBatch, spendDiamonds, getWallet } from '../lib/server';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
@@ -69,9 +69,11 @@ import { track } from '../lib/analytics';
 export const SAVE_KEY = 'baeknyeon-save';
 
 /** 전지훈련 기록(MONETIZATION §11.2) — 시드 폴백 재적용용 + 감사.
- *  유니온(H3): 구 모델 엔트리는 stats[](+1/+1 재적용), 코스형(2026-07-02~)은 course(+2/+7 재적용) —
- *  각자 원 산식으로 재현해 구 세이브 결정론 보존(과다적용 0). */
-interface CampEntry { season: number; playerId: string; stats?: TrainableStat[]; course?: CampCourse }
+ *  유니온(H3 · 소급 보존): 구 모델 엔트리 stats[]→+1/+1, 코스 엔트리 course→ 임베드 {cur,pot}.
+ *  cur/pot 폴백 매트릭스: stats[]=+1/+1 · course & cur/pot 없음(구 2026-07-02~07-07)=+2/+7(레거시) ·
+ *  course & {cur,pot} 임베드(신규 2026-07-08~)=그 값(현행 +3/+3). 구매 시점 수치를 엔트리에 박아
+ *  이후 상수 리밸런스가 이미 산 캠프를 소급으로 바꾸지 않게 한다(결정론·유료재화 소급 약화 금지). */
+interface CampEntry { season: number; playerId: string; stats?: TrainableStat[]; course?: CampCourse; cur?: number; pot?: number }
 /** 전지훈련 아웃박스(BACKEND §13.12 P0-4) — 서버 차감 성공 후 로컬 스탯 적용 전 크래시 복구용.
  *  서버 호출 전에 persist → 성공 시 적용+clear → 재기동 reconcile이 같은 key로 재확인 후 적용. */
 interface PendingCamp { key: string; playerId: string; course: CampCourse; season: number }
@@ -289,11 +291,12 @@ function applyCampLocal(playerId: string, course: CampCourse, balance: number, s
   if (st.campTrainedThisOffseason.includes(playerId)) { useGameStore.setState({ diamonds: balance, pendingCamp: null }); return; }
   const p = getPlayer(playerId);
   if (!p) { useGameStore.setState({ diamonds: balance, pendingCamp: null }); return; }
-  const camped = applyCampCourse(p, course); // 3스탯 현재+2·포텐+7(§11.2 코스형)
+  const camped = applyCampCourse(p, course); // 3스탯 현재+3·포텐+3(§11.2 코스형, 2026-07-08 대칭)
   commitPlayerBase({ [playerId]: camped }); // 레지스트리 즉시 반영(evoCache 무효화 → 화면 즉시)
   useGameStore.setState({
     diamonds: balance, // 표시 캐시 = 서버 확정 잔액
-    campLog: [...st.campLog, { season, playerId, course }],
+    // 구매 시점 수치를 임베드(cur/pot) → 이후 상수 리밸런스가 이 캠프를 소급으로 바꾸지 않음(H3)
+    campLog: [...st.campLog, { season, playerId, course, cur: CAMP_CUR_GAIN, pot: CAMP_POT_GAIN }],
     campTrainedThisOffseason: [...st.campTrainedThisOffseason, playerId],
     pendingCamp: null,
     // 시즌≥1: 영속 base에도 굽기. 시즌0(base null): campLog가 재로드 시 시드에 재적용(§11.2 — 이중적용 없음)
@@ -1249,8 +1252,9 @@ export const useGameStore = create<GameState>()(
             for (const e of state.campLog) {
               const p = getPlayer(e.playerId);
               if (!p) continue;
-              // 유니온 재적용(H3): 구 엔트리(stats[])는 구 산식(+1/+1), 코스 엔트리는 코스 산식(+2/+7) — 원 모델 재현
-              if (e.course && CAMP_COURSES[e.course]) commitPlayerBase({ [e.playerId]: applyCampCourse(p, e.course) });
+              // 유니온 재적용(H3 소급 보존): stats[]=구 산식(+1/+1) · 코스 엔트리=임베드 {cur,pot}(신규 +3/+3)
+              // 또는 cur/pot 없는 구 코스 엔트리는 레거시(+2/+7)로 폴백 → 각 캠프가 구매 시점 산식대로 재현(결정론)
+              if (e.course && CAMP_COURSES[e.course]) commitPlayerBase({ [e.playerId]: applyCampCourse(p, e.course, e.cur ?? CAMP_LEGACY_CUR_GAIN, e.pot ?? CAMP_LEGACY_POT_GAIN) });
               else if (e.stats?.length) commitPlayerBase({ [e.playerId]: applyCamp(p, e.stats) });
             }
           }

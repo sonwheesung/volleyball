@@ -7,7 +7,9 @@
 //   ok/offline/dup 시나리오를 재현한다. 순수 로직(_dv_diamonds·_dv_walletauth)이 못 덮는 "store 왕복·아웃박스·재수화"를 봉인.
 //
 // A/B 자가검증(허위 오라클 차단): 시나리오 ④의 campTrained 게이트를 **무력화한 대조**(applyCampCourse 재호출)가
-//   실제로 이중적용(+4/+14)을 만드는지 실측 → 오라클이 +2/+7만 통과시키는 이빨을 증명.
+//   실제로 이중적용(+6/+6)을 만드는지 실측 → 오라클이 +3/+3만 통과시키는 이빨을 증명.
+// 수치 재보정(2026-07-08 사용자 결정): 신규 구매 = +3/+3(대칭). 구 코스 엔트리(cur/pot 미임베드)는 재적용 시
+//   레거시 +2/+7 폴백 — ⑤(C)가 실 rehydrate 경로로 소급 보존을 봉인.
 //
 //   npx tsx tools/_dv_campoutbox.ts
 import './_gt_mock';
@@ -67,7 +69,7 @@ const origReq = (Module.prototype as any).require;
   const seedId = myRoster[0];
 
   // ── ① 정상 전지훈련 (spend ok, applied true) ──
-  console.log('── ① 정상: trainingCamp → spend ok(applied true) → 스탯+2/+7·campLog·campTrained·pending null·diamonds=서버잔액 ──');
+  console.log('── ① 정상: trainingCamp → spend ok(applied true) → 스탯+3/+3·campLog(cur/pot 임베드)·campTrained·pending null·diamonds=서버잔액 ──');
   {
     useGameStore.setState({ diamonds: 5000, campLog: [], campTrainedThisOffseason: [], pendingCamp: null, currentDay: 0 });
     const base = snap(seedId);
@@ -76,15 +78,16 @@ const origReq = (Module.prototype as any).require;
     const r = await G().trainingCamp(seedId, COURSE);
     ok(r.ok, 'trainingCamp ok');
     ok(spendCalls.length === before + 1 && spendCalls[before].reason === 'camp', 'spend 1회 호출(reason=camp)');
-    ok(eqAfter(seedId, base, 2, 7), '스탯 현재+2·포텐+7 정확');
+    ok(eqAfter(seedId, base, 3, 3), '스탯 현재+3·포텐+3 정확(2026-07-08 대칭)');
     ok(G().campLog.length === 1 && G().campLog[0].playerId === seedId && G().campLog[0].course === COURSE, 'campLog 엔트리 추가');
+    ok(G().campLog[0].cur === 3 && G().campLog[0].pot === 3, 'campLog 엔트리에 구매 시점 수치 임베드(cur/pot=3/3 — 소급 보존)');
     ok(G().campTrainedThisOffseason.includes(seedId), 'campTrainedThisOffseason 추가');
     ok(G().pendingCamp === null, 'pendingCamp null(아웃박스 clear)');
     ok(G().diamonds === 4700, 'diamonds = 서버 확정 잔액(4700)');
   }
 
   // ── ② 아웃박스 크래시 복구 (pending만 남음, 적용 전 크래시) → reconcile → spend dup(applied false) ──
-  console.log('── ② 아웃박스 복구: pendingCamp만 존재(미적용) → reconcile → spend dup(applied false) → 스탯 적용·이중과금 없음·pending clear ──');
+  console.log('── ② 아웃박스 복구: pendingCamp만 존재(미적용) → reconcile → spend dup(applied false) → 스탯+3/+3 적용·이중과금 없음·pending clear ──');
   {
     const p2 = myRoster[1];
     const base = snap(p2);
@@ -95,7 +98,7 @@ const origReq = (Module.prototype as any).require;
     const before = spendCalls.length;
     await G().reconcilePendingCamp();
     ok(spendCalls.length === before + 1 && spendCalls[before].key === key, 'reconcile이 같은 멱등키로 spend 재호출(dup)');
-    ok(eqAfter(p2, base, 2, 7), '스탯 현재+2·포텐+7 적용(applied false여도 로컬 적용)');
+    ok(eqAfter(p2, base, 3, 3), '스탯 현재+3·포텐+3 적용(applied false여도 로컬 적용)');
     ok(G().diamonds === 700, '이중과금 없음: diamonds=서버 잔액(700) — 로컬 재차감 안 함');
     ok(G().campTrainedThisOffseason.includes(p2), 'campTrained 추가');
     ok(G().pendingCamp === null, 'pending clear');
@@ -126,51 +129,62 @@ const origReq = (Module.prototype as any).require;
     commitPlayerBase({ [p4]: camped });
     const key = `camp:u-camp:sid:0:${p4}`;
     useGameStore.setState({ campTrainedThisOffseason: [p4], pendingCamp: { key, playerId: p4, course: COURSE, season: 0 } as any });
-    const appliedOnce = snap(p4); // +2/+7 기준
-    ok(appliedOnce.cur[0] === Math.min(99, base.cur[0] + 2), '사전조건: 이미 +2 적용됨');
+    const appliedOnce = snap(p4); // +3/+3 기준
+    ok(appliedOnce.cur[0] === Math.min(99, base.cur[0] + 3), '사전조건: 이미 +3 적용됨');
     const before = spendCalls.length;
     await G().reconcilePendingCamp();
     ok(spendCalls.length === before, 'reconcile이 spend를 호출하지 않음(재과금 없음)');
-    ok(eqAfter(p4, base, 2, 7), '스탯 여전히 +2/+7(이중적용 아님 — +4/+14 아님)');
+    ok(eqAfter(p4, base, 3, 3), '스탯 여전히 +3/+3(이중적용 아님 — +6/+6 아님)');
     ok(G().pendingCamp === null, 'pending만 clear');
 
-    // A/B 자가검증: campTrained 게이트를 무력화하면(=applyCampCourse 재호출) 이중적용(+4/+14)이 실제로 생기는가
+    // A/B 자가검증: campTrained 게이트를 무력화하면(=applyCampCourse 재호출) 이중적용(+6/+6)이 실제로 생기는가
     const doubled = applyCampCourse(getPlayer(p4)!, COURSE); // 게이트 없는 가상 재적용
-    const dblCurOk = STATS.every((s, i) => (doubled as any)[s] === Math.min(99, base.cur[i] + 4));
-    const dblPotOk = STATS.every((s, i) => doubled.potential[s] === Math.min(99, base.pot[i] + 14));
-    ok(dblCurOk && dblPotOk, 'A/B: 게이트 무력화 대조는 +4/+14(이중적용)를 만든다 → 오라클 민감도 증명');
+    const dblCurOk = STATS.every((s, i) => (doubled as any)[s] === Math.min(99, base.cur[i] + 6));
+    const dblPotOk = STATS.every((s, i) => doubled.potential[s] === Math.min(99, base.pot[i] + 6));
+    ok(dblCurOk && dblPotOk, 'A/B: 게이트 무력화 대조는 +6/+6(이중적용)를 만든다 → 오라클 민감도 증명');
   }
 
   // ── ⑤ campLog 시드 재적용 (실제 onRehydrateStorage 경로: persist.rehydrate) ──
-  console.log('── ⑤ campLog 시드 재적용: 시즌0(base null) 재수화 → 시드에 +2/+7(1회) · playerBase 있으면 재적용 안 함 ──');
+  console.log('── ⑤ campLog 시드 재적용: 시즌0(base null) 재수화 → 시드에 재적용(1회) · playerBase 있으면 재적용 안 함 · 구 엔트리 소급 +2/+7 ──');
   {
-    // (A) 시즌0(playerBase null) + campLog 엔트리 → 재수화 시 시드 레지스트리에 재적용
+    // (A) 시즌0(playerBase null) + 신 코스 엔트리(cur/pot 임베드) → 재수화 시 시드 레지스트리에 +3/+3 재적용
     const p5 = myRoster[4];
-    // 레지스트리를 baseline으로 되돌려(이전 시나리오 오염 방지) 스냅
-    // (선택 팀 재선택으로 리그 시드 초기화)
+    // 레지스트리를 baseline으로 되돌려(이전 시나리오 오염 방지) 스냅 (선택 팀 재선택으로 리그 시드 초기화)
     G().selectTeam(myId);
     setAuthed();
     const base = snap(p5);
-    useGameStore.setState({ playerBase: null, campLog: [{ season: 0, playerId: p5, course: COURSE } as any], campTrainedThisOffseason: [] });
-    // persist가 저장하는 것과 동일한 블롭을 구성 → 재수화가 실제 onRehydrateStorage(1183-1191)를 탄다
+    useGameStore.setState({ playerBase: null, campLog: [{ season: 0, playerId: p5, course: COURSE, cur: 3, pot: 3 } as any], campTrainedThisOffseason: [] });
+    // persist가 저장하는 것과 동일한 블롭을 구성 → 재수화가 실제 onRehydrateStorage를 탄다
     const opts = useGameStore.persist.getOptions();
     const persisted = { state: (opts.partialize as any)(G()), version: SAVE_VERSION };
     __asyncStorageMem.set(SAVE_KEY, JSON.stringify(persisted));
     await useGameStore.persist.rehydrate();
-    ok(eqAfter(p5, base, 2, 7), '(A) base null: 재수화가 시드에 +2/+7 재적용(정확히 1회)');
+    ok(eqAfter(p5, base, 3, 3), '(A) base null·신 엔트리(cur/pot=3): 재수화가 시드에 +3/+3 재적용(정확히 1회)');
 
     // (B) 시즌≥1(playerBase 존재 = 이미 구운 base) → else-if 스킵, 재적용 안 함(이중적용 차단)
-    // base 기준 "1회 적용" 선수 객체를 playerBase에 넣고 재수화 → 재적용되면 +4/+14가 되어야(=버그), 스킵이면 +2/+7
+    // base 기준 "1회 적용" 선수 객체를 playerBase에 넣고 재수화 → 재적용되면 +6/+6이 되어야(=버그), 스킵이면 +3/+3
     G().selectTeam(myId); // 레지스트리 baseline 복원
     setAuthed();
     const base2 = snap(p5);
-    const oneShot = applyCampCourse(getPlayer(p5)!, COURSE); // base2 + 2/+7
-    useGameStore.setState({ playerBase: { [p5]: oneShot } as any, campLog: [{ season: 1, playerId: p5, course: COURSE } as any], campTrainedThisOffseason: [] });
+    const oneShot = applyCampCourse(getPlayer(p5)!, COURSE); // base2 + 3/+3(기본 상수)
+    useGameStore.setState({ playerBase: { [p5]: oneShot } as any, campLog: [{ season: 1, playerId: p5, course: COURSE, cur: 3, pot: 3 } as any], campTrainedThisOffseason: [] });
     const opts2 = useGameStore.persist.getOptions();
     const persisted2 = { state: (opts2.partialize as any)(G()), version: SAVE_VERSION };
     __asyncStorageMem.set(SAVE_KEY, JSON.stringify(persisted2));
     await useGameStore.persist.rehydrate();
-    ok(eqAfter(p5, base2, 2, 7), '(B) base 존재: base 로드만·campLog 재적용 스킵 → +2/+7(1회, +4/+14 아님)');
+    ok(eqAfter(p5, base2, 3, 3), '(B) base 존재: base 로드만·campLog 재적용 스킵 → +3/+3(1회, +6/+6 아님)');
+
+    // (C) 소급 보존: 구 코스 엔트리(cur/pot 필드 없음, 2026-07-02~07-07) → 재수화 시 레거시 +2/+7로 재현(결정론).
+    //     리밸런스(+3/+3) 후에도 이미 구매된 구 캠프가 원 산식대로 재생돼야 유료재화 소급 약화 0.
+    G().selectTeam(myId);
+    setAuthed();
+    const base3 = snap(p5);
+    useGameStore.setState({ playerBase: null, campLog: [{ season: 0, playerId: p5, course: COURSE } as any], campTrainedThisOffseason: [] }); // cur/pot 없음 = 구 엔트리
+    const opts3 = useGameStore.persist.getOptions();
+    const persisted3 = { state: (opts3.partialize as any)(G()), version: SAVE_VERSION };
+    __asyncStorageMem.set(SAVE_KEY, JSON.stringify(persisted3));
+    await useGameStore.persist.rehydrate();
+    ok(eqAfter(p5, base3, 2, 7), '(C) 소급 보존: 구 엔트리(cur/pot 없음) → 레거시 +2/+7 재현(리밸런스 후에도 원 산식)');
   }
 
   // ── ⑥ 게이트: not-mine · maxed · not-offseason · already ──
