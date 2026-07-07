@@ -132,6 +132,81 @@ SAVE_VERSION 하드 범프 불요(재생성 가능 — Phase3 정책).
 순위(평범 배열)만 sig로 검증하고 **production.lines를 복원 후 반복하는 검사가 없었다**(직렬화 라운드트립 사각). →
 가드 추가: `_dv_simcache`[8] = production을 JSON 라운드트립 후 `lines` 반복(무크래시 + 재로드==원본). 형제: dyn(6.1)도 같은 검사 보유.
 
+## 7. minAffectedDay 캐시 스플라이스 (Phase 4, 2026-07-08) — 파생 캐시 부분 무효화
+
+**문제**: 파생 캐시(순위 `data/standings.ts allResults` · 생산 `data/production.ts allProdRows` · 부상/거래
+`data/dynamics.ts dyn`)는 전부 `${baseVersion}:${txVersion}` 단일 키다. **어떤 bump(벤치 건의·시즌 중
+이동·훈련방침 변경·스태프)든 키가 바뀌면 캐시 전체를 버리고 전 시즌을 재시뮬**한다(데스크탑 ~0.6s tx-only,
+진화 재빌드 동반 시 ~2s / 폰 3~10×). 그런데 이 액션들은 **전부 forward-only** — 바꾼 날(fromDay/txDay)
+이전의 경기 결과는 byte 불변인데 그 과거 행까지 통째로 다시 계산했다.
+
+**핵심 불변식(감사 증명 2026-07-08)**: 각 무효화 액션의 영향 구간은 **접미(suffix) `[minDay, ∞)`**.
+- 벤치 ADD = `fromDay`(`fromDay ≥ playedThroughDay+1` 강제 — A2/A3). 언벤치 = `toDay+1`(과거 보존, `toDay` 이후만 복귀).
+- 시즌 중 이동(방출/영입/외인·아시아 교체) = `txDay`(= 그 시점 `currentDay`). 방출 취소 = 취소되는 tx의 `day`.
+- 훈련방침 변경 = 새 세그먼트 `fromDay`(그 이전 진화·경기 byte 불변 — A4 forward-only).
+- 스태프 선임/경질·commitPlayerBase·commitRosters·전지훈련·endSeason·reset·reseed = **0**(소급/전체 — 스플라이스 불가).
+
+여러 bump가 재계산 전에 쌓이면 **MIN**(접미들의 합집합 = 최소 시작일부터의 접미)을 쓴다.
+
+**스플라이스 오라클(절대 기준)**: 스플라이스 결과는 **전체 재계산과 byte(deep) 동일해야 한다.** 이게 안 되는
+어떤 것도 스플라이스하지 않는다. 가드 `tools/_dv_splice.ts`가 ≥40 랜덤 액션열 × 시즌 진행 지점에서 매 액션 후
+스플라이스 경로 == 강제 전체 재계산을 deep-equal 대조(+off-by-one minDay 변이 A/B로 도구 민감도 증명).
+
+### 7.1 메커니즘
+- **bump가 minAffectedDay를 나른다**: `data/spliceLog.ts`가 전역 단조 시퀀스(`seq`)와 bump 로그를 유지.
+  `recordBump(minDay)` — minDay=0이면 로그를 절단(이전 bump는 전체 무효화에 포섭 → 메모리 바운드).
+  `minAffectedDaySince(fromSeq)` = 그 seq 이후 bump들의 min. 각 캐시 엔트리는 계산 시점 `seq`를 저장.
+  bump 지점(dynamics `setOwnerContext`/`setTxContext`/what-if, league `setFocusTimeline`/`invalidateStaff`/
+  `commitPlayerBase`/`commitRosters`/reset·reseed·restore)이 각자 minDay로 `recordBump` 호출. 스토어 콜러가
+  날(fromDay/txDay)을 넘긴다(이미 계산한 값) — 안 넘기면 기본 0(=현행 전체 재계산, 안전 폴백).
+- **allResults/allProdRows 스플라이스**: 재계산 시 이전 세대 캐시가 있고 `0 < minDay < ∞`면 —
+  `dayIndex < minDay` 행은 **그대로 재사용**, `dayIndex ≥ minDay`만 재시뮬. 최종 정렬·순서는 전체 경로와 동일.
+- **러닝 상태 재구성(핵심)**: `allResults`의 하루 시뮬은 **러닝 순위**(로드매니지먼트 휴식이 day−1까지의 실제
+  순위에 의존)를 날짜에 걸쳐 실어 나른다. 스플라이스는 이 상태를 **재사용 행에서 재구성**(재시뮬 아님) — 재사용
+  행의 homeSets/awaySets로 `running[team]={wins,played}`를 다시 쌓아 minDay 진입 시점 상태를 복원한 뒤 이어 돈다.
+  생산(`allProdRows`)은 러닝 상태를 자체로 나르지 않고 `restedOnDay`(→`teamClinch`→순위 캐시)에 의존하므로,
+  순위 스플라이스가 byte-동일하면 생산의 재시뮬 구간도 올바른 휴식을 본다(캐시 자가치유 — 순서 무관).
+- **영속 호환**: 스플라이스는 bump 사이의 **인메모리 최적화**다. `simCache` 영속 모양은 불변(seq는 비직렬화 —
+  복원 시 현재 `spliceSeq()` 주입). `restoreSimCache`/`captureSimCache` 스키마 무변경.
+
+### 7.2 스플라이스 안 한 것 (그리고 이유)
+- **dyn(부상/거래) forward-pass = 전체 유지.** 부상은 그날 라인업의 RNG로 굴려 **미래로 캐스케이드**(span이
+  뒤 경기를 깎음)라 접미 재사용이 byte-동일을 보장 못 한다. 게다가 tx-only bump에선 dyn 재계산이 **이미 싸다**
+  (11ms warm — evoOneCache가 baseVersion 불변이라 데워짐). 0.6s의 실체는 **순위·생산의 경기 시뮬 루프**였고
+  그건 스플라이스가 죽인다. dyn은 전체 재계산이 정답(단순·안전).
+- **진화 메모(`evoOneCache`) 날짜범위 무효화 = 유보(deferred).** 유혹: 훈련방침 변경(base++)은 fromDay 이전
+  진화가 불변이라 `day < fromDay` 메모 엔트리를 살릴 수 있다. **그러나** `evoOneCache`의 세대 키가
+  **baseVersion에 결합**돼 있어(`evoOneKey !== _baseVersion`이면 통째 clear) 날짜범위 부분 무효화를 하려면
+  세대키를 baseVersion에서 **분리**해야 하고, 그 변경은 evolveOnDay의 결정론 핵심을 건드려 침습적·고위험이다.
+  반면 실익은 **훈련방침 변경(base++) 케이스 한정** — 그마저도 dyn의 전체 forward-pass(1,308ms cold evo)가
+  지배해 메모 스플라이스만으로는 못 줄인다. **주력 목표(0.6s tx-only)는 순위·생산 스플라이스로 완전 해결**(dyn은
+  tx-only에서 warm)되므로, evo 스플라이스는 유보하고 문서화한다. 훈련방침 변경에서도 순위·생산은 `day ≥ fromDay`만
+  evolveOnDay를 호출하므로 부분 이득은 있다(과거 행 재사용 → 그 날들의 진화 조회 생략).
+
+### 7.3 오프시즌 프리뷰 메모 분리 (탭당 ~2s 근본 수정)
+**문제(UI 진단)**: 외인/아시아 트라이아웃·FA 센터에서 위시/보호/영입 **토글 한 번**마다 `buildDraftContext`/
+`faMarketPreview` useMemo가 통째 재실행 → **리그 전 선수 롤오버+은퇴 스냅샷**(`buildOffseason`, 무거움)을 매번
+재빌드. 그 스냅샷은 토글과 **무관**(안정 deps: my·season·resignDecisions·contractOverrides·ownerFx)하고, 정작
+토글이 바꾸는 건 **가벼운 해결**(트라이아웃 지명·FA 경쟁 resolve)뿐이었다.
+
+**수정 — 스냅샷/해결 2단계 분리**(`data/offseason.ts`):
+- `buildOffseasonBase(my, resignDecisions, overrides, nextSeason, ownerFx)` = 무거운 안정부 → `buildOffseason`
+  결과 + prevTeamOf/prevForeignOf/prevAsianOf + prestige. **메모 가능**(안정 deps).
+- `resolvePreDraftFrom(base, …토글)` · `faMarketPreviewFrom(base, …토글)` · `buildDraftContextFrom(base, …토글)`
+  = 가벼운 해결부. **base의 snapshot/rosters를 clone 후** 트라이아웃/FA를 굴린다(트라이아웃·FA가 snapshot/rosters를
+  **변이**하므로 메모된 base 보호 — 이 clone이 유일한 차이, 값은 byte-동일).
+- 기존 `resolvePreDraft`/`faMarketPreview`/`buildDraftContext`는 `base 빌드 + …From`의 합성으로 **시그니처·결과
+  불변**(byte-동일, 가드 `_dv_splice` §3 프리뷰 상등으로 증명).
+- 앱(`app/tryout.tsx`·`app/asian-tryout.tsx`·`app/fa.tsx`)은 useMemo를 둘로 쪼갬 — base 메모(안정 deps) + resolve
+  메모(base + 토글). 토글은 resolve만 재실행(싼 쪽). `app/draft.tsx`/`draft-live.tsx`는 이미 안정 deps 메모(조정 C) — 무변경.
+
+### 7.4 검증
+- `tools/_dv_splice.ts`: ①byte-상등 프로퍼티(≥40 랜덤열, 매 액션 후 splice==force-full deep-equal, 순위+생산)
+  ②결정론 ×2 ③타이밍(늦은 시즌 벤치 add에서 splice ms ≤ ~20% full) ④off-by-one minDay 변이 → FAIL(민감도)
+  ⑤프리뷰 상등(split-path == 옛 monolithic) + 토글 재실행 << 스냅샷 빌드 타이밍.
+- 풀 배터리(run-all-tests): tsc·유닛·auditBoard·`_dv_batch_*`·`_dv_bench(2)`·`_dv_displaycutoff`·`_dv_focus`·
+  `_ev_suggest_defer`·checkSubs·`_dv_campoutbox`·`_dv_migrate_e2e`·simNews·`_dv_drift_kovo`·`_gt_determinism` 무회귀.
+
 ## 4. 검증 (각 Phase 통과 조건)
 - Phase 0: `_gt_determinism` in-process 2회 동일 + A/B 이빨 복구. 풀 배터리(run-all-tests) 0건.
 - Phase 1: 저장값 == 재생값(드리프트 0, 전환 검증) · 1만 시즌 세이브 크기 상한 가드 · KOVO 분포 불변.

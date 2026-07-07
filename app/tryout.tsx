@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { SpotlightOverlay, SpotlightTarget } from '../components/Spotlight';
-import { buildDraftContext } from '../data/draftSetup';
+import { buildDraftContextFrom, buildOffseasonBase } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
 import { ForeignResumeDetail } from '../components/ForeignResumeDetail';
@@ -43,14 +43,19 @@ function TryoutInner() {
   const setKeepForeign = useGameStore((s) => s.setKeepForeign);
   const currentDay = useGameStore((s) => s.currentDay);
   const [openId, setOpenId] = useState<string | null>(null);
-  // 위시/보유 토글은 ctx(buildDraftContext) useMemo의 dep이라 매 탭마다 리그 전체 진화 스냅샷을 재빌드(무거움) → 오버레이 마스킹(UI-27)
+  // 스냅샷/해결 분리(REALTIME_SIM §7.3): 무거운 리그 롤오버 스냅샷(base)은 안정 deps로 메모, 위시/보유 토글은
+  //   가벼운 해결(buildDraftContextFrom)만 재실행 → 탭마다 스냅샷 재빌드하던 낭비 제거. 여전히 오버레이 마스킹(UI-27).
   const busy = useBusyRun();
 
   // endSeason과 같은 체인 — 미리보기=결과
+  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore), [interviews, season, my, fanScore]);
+  const base = useMemo(
+    () => buildOffseasonBase(my, resignDecisions, contractOverrides, season + 1, ownerFx),
+    [my, resignDecisions, contractOverrides, season, ownerFx],
+  );
   const ctx = useMemo(
-    () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
-      buildOwnerFx(interviews, season, my, fanScore), cash, tryoutWish, keepForeign),
-    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, cash, tryoutWish, keepForeign],
+    () => buildDraftContextFrom(base, my, faSignings, faAggressive, protectedIds, season + 1, ownerFx, cash, tryoutWish, keepForeign),
+    [base, my, faSignings, faAggressive, protectedIds, season, ownerFx, cash, tryoutWish, keepForeign],
   );
   const myForeign = useMemo(
     () => getEvolvedTeamPlayers(my, currentDay).find((p) => p.isForeign),

@@ -15,6 +15,7 @@ import { LEAGUE_CAP } from '../engine/cap';
 import { baseVersion, currentRosters, getPlayer, evolveOnDay, LEAGUE, SEASON } from './league';
 import { domesticPayroll } from './roster';
 import { legRanges } from '../engine/season';
+import { recordBump } from './spliceLog';
 
 const GAME_INTERVAL = 4;
 
@@ -29,8 +30,11 @@ let playerTx: Tx[] = [];
 let faPoolSeed: string[] = [];   // 오프시즌 미계약 FA(시즌 시작 풀)
 let myTeamId = '';               // 플레이어 팀(AI 자동영입 제외)
 let txVersion = 0;
-export function setTxContext(tx: Tx[], faPool: string[], myTeam: string): void {
+// minAffectedDay(REALTIME_SIM §7): 새/취소 tx의 day(= 그 시점 currentDay). 스플라이스는 그 이전 경기 결과를 재사용.
+// 기본 0 = 전체 재계산(안전 폴백 — 새 게임 init·리셋·복원 등 날 정보 없는 콜러).
+export function setTxContext(tx: Tx[], faPool: string[], myTeam: string, minAffectedDay = 0): void {
   playerTx = [...tx]; faPoolSeed = [...faPool]; myTeamId = myTeam; txVersion++;
+  recordBump(minAffectedDay);
 }
 export function getTxContext(): { playerTx: Tx[]; faPoolSeed: string[]; myTeamId: string } {
   return { playerTx: [...playerTx], faPoolSeed: [...faPoolSeed], myTeamId };
@@ -42,8 +46,10 @@ export const setTxVersion = (n: number): void => { txVersion = n; };
 
 // ── 구단주 컨텍스트(OWNER_SYSTEM) — 벤치 지시. 부상과 같은 "그날 출전 후보" 필터 ──
 let benchDirectives: BenchDirective[] = [];
-export function setOwnerContext(bench: BenchDirective[]): void {
+// minAffectedDay(REALTIME_SIM §7): 벤치 ADD=fromDay · 언벤치=toDay+1 (스토어가 계산해 넘김). 기본 0=전체 재계산.
+export function setOwnerContext(bench: BenchDirective[], minAffectedDay = 0): void {
   benchDirectives = [...bench]; txVersion++; // 파생 캐시(순위·생산·dyn) 일괄 무효화
+  recordBump(minAffectedDay);
 }
 // 종결일(toDay) 인지(A3, 2026-07-08) — 철회된 지시는 삭제 대신 toDay가 박혀 [fromDay, toDay] 구간에만 유효.
 // 이미 치른(관전·기록된) 경기일은 그대로 벤치 유지(리플레이 소급 변경 금지), 종결 이후 미관전 미래 경기는 복귀.
@@ -86,9 +92,10 @@ function legBoundaryDays(): Set<number> {
 //   빈 배열이면 무동작(forward-pass 동일). 셋되면 시즌 전체(순위·생산·뉴스·라인업)에 파급. txVersion++로 dyn 캐시 무효화. ──
 let injuryOverride: InjurySpan[] = [];
 let scandalOverride: ScandalSpan[] = [];
-export function setInjuryOverride(spans: InjurySpan[]): void { injuryOverride = [...spans]; txVersion++; }
-export function setScandalOverride(spans: ScandalSpan[]): void { scandalOverride = [...spans]; txVersion++; }
-export function clearWhatIf(): void { injuryOverride = []; scandalOverride = []; txVersion++; }
+// what-if 주입은 시즌 어디든 부상/사고를 심을 수 있어 접미 보장 불가 → recordBump(0)(전체 무효화, 스플라이스 불가).
+export function setInjuryOverride(spans: InjurySpan[]): void { injuryOverride = [...spans]; txVersion++; recordBump(0); }
+export function setScandalOverride(spans: ScandalSpan[]): void { scandalOverride = [...spans]; txVersion++; recordBump(0); }
+export function clearWhatIf(): void { injuryOverride = []; scandalOverride = []; txVersion++; recordBump(0); }
 
 function compute(): Dyn {
   const byDay = new Map<number, typeof SEASON>();

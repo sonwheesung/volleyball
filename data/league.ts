@@ -11,6 +11,7 @@ import { evolvePlayer, type FocusResolver } from '../engine/progression';
 import { rollTraits } from '../engine/traits';
 import { createRng, strSeed } from '../engine/rng';
 import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, coachTypeFor, type StaffEffects, NO_EFFECTS } from '../engine/staff';
+import { recordBump } from './spliceLog';
 
 const LEAGUE_SEED = 20251018;
 const SEASON_SEED = 777;
@@ -159,14 +160,16 @@ rebuildFocus();
 
 /** 팀 훈련 방향 **타임라인** 통째 설정(A4) — 스토어가 소유한 focusLog를 데이터층에 주입(setOwnerContext 패턴).
  *  진화 캐시 무효화 → 즉시 반영. baseVersion++ 은 유지(변경 시 그날 이후 진화가 달라짐).
- *  ※ 향후 스플라이스 단계: 변경의 minAffectedDay = 새 세그먼트 fromDay(그 이전 날짜는 캐시 재사용 가능 — 지금은 전체 무효화). */
-export function setFocusTimeline(teamId: string, segments: FocusSeg[]): void {
+ *  minAffectedDay(REALTIME_SIM §7) = 새 세그먼트 fromDay — 순위·생산 캐시는 그 이전 행을 스플라이스 재사용한다
+ *  (스토어가 fromDay를 넘김). 단 진화 메모(evoOneCache)는 세대키가 baseVersion에 결합돼 여전히 전체 리셋(§7.2 유보). */
+export function setFocusTimeline(teamId: string, segments: FocusSeg[], minAffectedDay = 0): void {
   const clean = segments.filter((s): s is FocusSeg => !!s && Number.isFinite(s.fromDay));
   if (clean.length) focusTimeline[teamId] = [...clean].sort((a, b) => a.fromDay - b.fromDay);
   else delete focusTimeline[teamId];
   rebuildFocus();
   evoCache = null;
   _baseVersion++;
+  recordBump(minAffectedDay); // 순위·생산 스플라이스(§7): 새 세그먼트 fromDay 이전 행 재사용. evoOneCache는 base++로 전체 리셋(§7.2 유보)
 }
 
 /** 단장 훈련 방향 설정(null=감독 기본 복원) — **day0부터 상수 방침**(단일 세그먼트) 호환 경로.
@@ -251,7 +254,7 @@ function invalidateStaff(affectsTraining: boolean): void {
   // 스카우터(드래프트 표시만)·감독 재계약(계약만)은 경기 결과가 byte 동일 → 무효화하면
   // 같은 숫자를 1.7s 재시뮬하는 순수 낭비 프리즈였다(검증: A/B 결과 동일, baseVersion 키 캐시는
   // 전부 진화/경기 시뮬용뿐 — 스카우팅 공개도는 baseVersion 무관). 2026-06-24 교정.
-  if (affectsTraining) { rebuildFocus(); evoCache = null; _baseVersion++; }
+  if (affectsTraining) { rebuildFocus(); evoCache = null; _baseVersion++; recordBump(0); } // 스태프 효과는 day0부터 전 시즌 적용 → 소급(스플라이스 불가)
 }
 
 /** 감독 영입(시드 감독 대체). 예산 초과면 거부(false). */
@@ -355,7 +358,7 @@ export function commitStaff(head: Record<string, string>, asst: Record<string, s
   headCoachOverride = { ...head };
   teamAssistantIds = { ...asst };
   teamScoutIds = { ...scout };
-  rebuildFocus(); evoCache = null; _baseVersion++;
+  rebuildFocus(); evoCache = null; _baseVersion++; recordBump(0);
 }
 
 // ─── 격리 실행용 스냅샷/복원 (영입 무결성 감사 등 — 라이브 세이브를 건드리지 않고 시뮬) ───
@@ -394,7 +397,7 @@ export function restoreLeagueState(s: LeagueSnapshot): void {
   teamScoutIds = jclone(s.scout);
   focusTimeline = jclone(s.focus);
   myTeamStaff = s.myTeamStaff;
-  rebuildFocus(); evoCache = null; _baseVersion++;
+  rebuildFocus(); evoCache = null; _baseVersion++; recordBump(0);
 }
 export const getStaffState = () => ({ head: { ...headCoachOverride }, asst: { ...teamAssistantIds }, scout: { ...teamScoutIds } });
 
@@ -445,6 +448,7 @@ export function commitPlayerBase(snapshot: Record<string, Player>): void {
   }
   evoCache = null;
   _baseVersion++;
+  recordBump(0); // 선수 베이스 스냅샷 반영 = 전 시즌 진화/경기 소급 변경 가능 → 전체 무효화
 }
 
 /** 가변 로스터 반영 */
@@ -453,6 +457,7 @@ export function commitRosters(next: Record<string, string[]>): void {
   rebuildFocus();
   evoCache = null;
   _baseVersion++;
+  recordBump(0); // 로스터 통째 교체 = 전 시즌 소급 → 전체 무효화
 }
 
 export const currentRosters = (): Record<string, string[]> => rosters;
@@ -472,6 +477,7 @@ export function resetLeagueBase(): void {
   rebuildFocus();
   evoCache = null;
   _baseVersion++;
+  recordBump(0); // 세이브 초기화 = 전체
 }
 
 /**
@@ -502,6 +508,7 @@ export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
   rebuildFocus();
   evoCache = null;
   _baseVersion++;
+  recordBump(0); // 새 유니버스 = 전체
 }
 
 // ─── 진화(성장/노쇠) 적용 선수 — currentDay 기준, 날짜별 캐시 ───

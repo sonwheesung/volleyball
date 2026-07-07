@@ -572,7 +572,7 @@ export const useGameStore = create<GameState>()(
         const anger = releaseAngerOf(playerId, s.archive, s.currentDay);
         set({ released: [...s.released, playerId], inSeasonTx, cash: s.cash - fee, releaseAnger: s.releaseAnger + anger });
         diag(s.season, 'transaction', `방출 ${playerId} 위약금 ${fee}`); // 진단 로그(§13.20 ④)
-        setTxContext(inSeasonTx, get().faPool, my);
+        setTxContext(inSeasonTx, get().faPool, my, s.currentDay); // §7 스플라이스: tx day 이전 경기 재사용
         return true;
       },
       // 방출 철회는 당일만 — 다음 날부터는 리플레이가 이미 그 명단으로 경기를 굴렸으므로
@@ -587,7 +587,7 @@ export const useGameStore = create<GameState>()(
         const fee = c ? severanceFee(c.salary, c.remaining) : 0;
         const anger = releaseAngerOf(playerId, s.archive, s.currentDay);
         set({ released: s.released.filter((id) => id !== playerId), inSeasonTx, cash: s.cash + fee, releaseAnger: Math.max(0, s.releaseAnger - anger) });
-        setTxContext(inSeasonTx, get().faPool, get().selectedTeamId ?? '');
+        setTxContext(inSeasonTx, get().faPool, get().selectedTeamId ?? '', tx.day); // §7: 취소되는 방출 day(=currentDay) 이후만 재시뮬
         return true;
       },
       // 시즌 중 FA 영입(캡·정원 검증). dynamics는 플레이어 거래를 검증 없이 적용하므로 여기서 게이트.
@@ -616,7 +616,7 @@ export const useGameStore = create<GameState>()(
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId: faId, kind: 'sign' }];
         set({ inSeasonTx, cash: s.cash - signCost, careerLog: { ...s.careerLog, faSigns: s.careerLog.faSigns + 1 } }); // 지갑 즉시 차감 + 영입 카운트
         diag(s.season, 'transaction', `시즌중 FA 영입 ${faId} 비용 ${signCost}`); // 진단 로그(§13.20 ④)
-        setTxContext(inSeasonTx, get().faPool, my);
+        setTxContext(inSeasonTx, get().faPool, my, s.currentDay); // §7 스플라이스
         return true;
       },
       // 상류 FA/재계약 변경은 드래프트 순번(myPickSlots)·클래스 구성을 바꾼다 → 라이브에서 확정한 draftSelections를
@@ -671,7 +671,7 @@ export const useGameStore = create<GameState>()(
         if (!tid) { set({ trainingFocus: focus }); return; }
         const fromDay = Math.max(s.currentDay, playedThroughDay(s.results) + 1);
         const focusLog: FocusSeg[] = [...s.focusLog.filter((seg) => seg.fromDay < fromDay), { fromDay, focus }];
-        setFocusTimeline(tid, focusLog);
+        setFocusTimeline(tid, focusLog, fromDay); // §7 스플라이스: fromDay 이전 진화·경기 불변 → 재사용
         set({ trainingFocus: focus, focusLog });
       },
       // 스태프 계약(STAFF_SYSTEM) — league가 예산·중복을 판정하고, 성공 시 상태를 동기화
@@ -793,7 +793,7 @@ export const useGameStore = create<GameState>()(
           const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);
           const benchDirectives = [...s.benchDirectives, { playerId, fromDay }];
           set({ benchDirectives, benchCooldown: benchCd });
-          setOwnerContext(benchDirectives);
+          setOwnerContext(benchDirectives, fromDay); // §7 스플라이스: fromDay 이전 경기 재사용
         } else {
           set({ benchCooldown: benchCd });
         }
@@ -839,7 +839,7 @@ export const useGameStore = create<GameState>()(
           const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);
           const benchDirectives = [...s.benchDirectives, { playerId: incumbent.id, fromDay }];
           set({ benchDirectives, benchCooldown: benchCd });
-          setOwnerContext(benchDirectives);
+          setOwnerContext(benchDirectives, fromDay); // §7 스플라이스
         } else {
           set({ benchCooldown: benchCd });
         }
@@ -856,7 +856,7 @@ export const useGameStore = create<GameState>()(
         const benchDirectives = s.benchDirectives.map((b) =>
           b.playerId === playerId && b.toDay == null ? { ...b, toDay: end } : b);
         set({ benchDirectives });
-        setOwnerContext(benchDirectives);
+        setOwnerContext(benchDirectives, end + 1); // §7: 언벤치는 toDay+1부터 복귀 — 그 이전(≤toDay, 벤치 유지)은 재사용
       },
       setKeepForeign: (keep) => set({ keepForeign: keep }),
       toggleTryoutWish: (playerId) =>
@@ -875,7 +875,7 @@ export const useGameStore = create<GameState>()(
           { day: s.currentDay, teamId: my, playerId: altId, kind: 'sign' }];
         set({ inSeasonTx, foreignSubUsed: true, cash: s.cash - FOREIGN_SALARY, foreignAltPool: s.foreignAltPool.filter((id) => id !== altId) });
         diag(s.season, 'transaction', `외국인 교체 ${curForeign.id} → ${altId}`); // 진단 로그(§13.20 ④)
-        setTxContext(inSeasonTx, get().faPool, my);
+        setTxContext(inSeasonTx, get().faPool, my, s.currentDay); // §7 스플라이스
         return true;
       },
       setKeepAsian: (keep) => set({ keepAsian: keep }),
@@ -894,7 +894,7 @@ export const useGameStore = create<GameState>()(
           { day: s.currentDay, teamId: my, playerId: curAsian.id, kind: 'release' },
           { day: s.currentDay, teamId: my, playerId: altId, kind: 'sign' }];
         set({ inSeasonTx, asianSubUsed: true, cash: s.cash - ASIAN_SALARY, asianAltPool: s.asianAltPool.filter((id) => id !== altId) });
-        setTxContext(inSeasonTx, get().faPool, my);
+        setTxContext(inSeasonTx, get().faPool, my, s.currentDay); // §7 스플라이스
         return true;
       },
 

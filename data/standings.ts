@@ -10,6 +10,7 @@ import { simulateMatch } from '../engine/match';
 import { pickRest } from '../engine/lineup';
 import { clinchStatus } from '../engine/clinch';
 import { SEASON_DAYS } from '../engine/calendar';
+import { minAffectedDaySince, spliceSeq } from './spliceLog';
 
 const PLAYOFF_CUTOFF = 3; // data/clinch.PLAYOFF_CUTOFF와 동일(순환 import 회피 위해 로컬 — 로드매니지먼트 #3)
 
@@ -42,21 +43,32 @@ export interface Standing {
 const ratio = (won: number, lost: number): number => (lost > 0 ? won / lost : won > 0 ? Infinity : 0);
 const winRate = (s: Standing): number => (s.played > 0 ? s.wins / s.played : 0);
 
-let cache: { key: string; rows: ResultRow[] } | null = null;
+let cache: { key: string; rows: ResultRow[]; seq: number } | null = null;
 
 // 캐시 영속(REALTIME_SIM Phase1) — 계산된 시즌 결과를 세이브에 저장→복원해 재로드 시 재계산(로딩) 제거.
 // 결정론 보장(Phase0 수정)이라 같은 키면 행이 동일 → 저장값을 안전히 재사용. 키 불일치(상태 변경)면 재계산(폴백).
-export const getStandingsCacheRaw = (): { key: string; rows: ResultRow[] } | null => cache;
-export const setStandingsCacheRaw = (c: { key: string; rows: ResultRow[] } | null): void => { cache = c; };
+// seq(§7 스플라이스): 인메모리 스플라이스용 계산시점 시퀀스 — 영속 안 함(복원 시 현재 seq 주입).
+export const getStandingsCacheRaw = (): { key: string; rows: ResultRow[]; seq: number } | null => cache;
+export const setStandingsCacheRaw = (c: { key: string; rows: ResultRow[]; seq?: number } | null): void => {
+  cache = c ? { key: c.key, rows: c.rows, seq: c.seq ?? spliceSeq() } : null;
+};
 
-/** 전 경기 결과(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영 */
+/** 전 경기 결과(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영.
+ *  스플라이스(REALTIME_SIM §7): 이전 세대 캐시가 있고 minAffectedDay가 접미(0<minDay<∞)면 dayIndex<minDay 행을
+ *  그대로 재사용하고 minDay 이후만 재시뮬 — 결과는 전체 재계산과 byte-동일(_dv_splice 오라클). */
 function allResults(): ResultRow[] {
   const key = `${baseVersion()}:${currentTxVersion()}`;
   if (cache && cache.key === key) return cache.rows;
 
-  // 경기일별로 묶어 그 날 OVR 한 번만 계산
+  const prev = cache;
+  const minDay = prev ? minAffectedDaySince(prev.seq) : Infinity;
+  const splice = !!prev && minDay > 0 && Number.isFinite(minDay);
+  const reuse: ResultRow[] = splice ? prev!.rows.filter((r) => r.dayIndex < minDay) : [];
+
+  // 경기일별로 묶어 그 날 OVR 한 번만 계산 (스플라이스 시 minDay 이후 날만)
   const byDay = new Map<number, Fixture[]>();
   for (const f of SEASON) {
+    if (splice && f.dayIndex < minDay) continue; // 재사용 구간 — 시뮬 생략
     const arr = byDay.get(f.dayIndex) ?? [];
     arr.push(f);
     byDay.set(f.dayIndex, arr);
@@ -67,8 +79,14 @@ function allResults(): ResultRow[] {
   for (const f of SEASON) { totalGames[f.homeTeamId] = (totalGames[f.homeTeamId] ?? 0) + 1; totalGames[f.awayTeamId] = (totalGames[f.awayTeamId] ?? 0) + 1; }
   const running: Record<string, { wins: number; played: number }> = {};
   for (const t of LEAGUE.teams) running[t.id] = { wins: 0, played: 0 };
+  // 러닝 상태 재구성(§7.1): 재사용 행(dayIndex<minDay)에서 minDay 진입 시점 순위를 다시 쌓는다(재시뮬 아님 —
+  // 합산이라 순서 무관, 전체 경로가 minDay 진입 시 가지는 running과 동일).
+  for (const r of reuse) {
+    running[r.homeTeamId].played++; running[r.awayTeamId].played++;
+    if (r.homeSets > r.awaySets) running[r.homeTeamId].wins++; else running[r.awayTeamId].wins++;
+  }
 
-  const rows: ResultRow[] = [];
+  const rows: ResultRow[] = [...reuse];
   for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
     // 그 시점(day−1까지) 순위가 굳은(확정/탈락) 팀만 휴식 자격
     const clinch = clinchStatus(LEAGUE.teams.map((t) => ({ teamId: t.id, wins: running[t.id].wins, remaining: Math.max(0, (totalGames[t.id] ?? 0) - running[t.id].played) })), PLAYOFF_CUTOFF);
@@ -99,7 +117,7 @@ function allResults(): ResultRow[] {
     }
   }
   rows.sort((a, b) => a.dayIndex - b.dayIndex);
-  cache = { key, rows };
+  cache = { key, rows, seq: spliceSeq() };
   return rows;
 }
 

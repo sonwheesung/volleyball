@@ -7,7 +7,7 @@ import { ROSTER_IDEAL } from '../engine/aiGM';
 import { buildDraftOrder, lotteryRound1, setDraftValuer } from '../engine/draft';
 import { aiProspectValue, AI_SUPER_PV } from './draftAI';
 import { generateDraftClass } from './draftClass';
-import { resolvePreDraft, type ExpelEvent } from './offseason';
+import { resolvePreDraftFrom, buildOffseasonBase, type ExpelEvent, type OffseasonBase } from './offseason';
 import { standingsWorstFirst } from './standings';
 
 const ROSTER_TOTAL = Object.values(ROSTER_IDEAL).reduce((a, b) => a + b, 0); // 16
@@ -33,10 +33,13 @@ export interface DraftContext {
   compCash: number;                       // 내가 낸 FA 보상금 합(운영 자금 차감)
 }
 
-export function buildDraftContext(
+// 스냅샷/해결 분리(REALTIME_SIM §7.3) 재노출 — 앱이 base(안정 deps)를 따로 메모하게. buildOffseasonBase는 offseason 정본.
+export { buildOffseasonBase, type OffseasonBase } from './offseason';
+
+/** 드래프트 컨텍스트 해결부(가벼움) — 메모된 base에서 FA 해결 + 드래프트 순번·클래스. 토글만 재실행. */
+export function buildDraftContextFrom(
+  base: OffseasonBase,
   myTeam: string,
-  resignDecisions: Record<string, boolean>,
-  overrides: Record<string, Contract>,
   faSignings: string[],
   aggressive: boolean,
   protectedIds: string[],
@@ -49,7 +52,7 @@ export function buildDraftContext(
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
 ): DraftContext {
-  const pre = resolvePreDraft(myTeam, resignDecisions, overrides, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
+  const pre = resolvePreDraftFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
   const holes: Record<string, number> = {};
   for (const t of Object.keys(pre.rosters)) holes[t] = Math.max(0, ROSTER_TOTAL - pre.rosters[t].length);
   const totalHoles = Object.values(holes).reduce((a, b) => a + b, 0);
@@ -80,4 +83,25 @@ export function buildDraftContext(
     asianTryout: pre.asianTryout,
     compCash: pre.compCash,
   };
+}
+
+/** 드래프트 컨텍스트 = base 빌드 + 해결 합성(시그니처·결과 byte-동일). 헤드리스/합성 호출용. */
+export function buildDraftContext(
+  myTeam: string,
+  resignDecisions: Record<string, boolean>,
+  overrides: Record<string, Contract>,
+  faSignings: string[],
+  aggressive: boolean,
+  protectedIds: string[],
+  nextSeason: number,
+  ownerFx?: import('../engine/owner').OwnerFx,
+  myCash?: number,
+  tryoutWish: string[] = [],
+  myKeepForeign: boolean | null = null,
+  moneyOnlyIds: string[] = [],
+  asianWish: string[] = [],
+  myKeepAsian: boolean | null = null,
+): DraftContext {
+  const base = buildOffseasonBase(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
+  return buildDraftContextFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
 }

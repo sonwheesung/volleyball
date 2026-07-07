@@ -350,8 +350,92 @@ export interface PreDraft {
 }
 
 /**
+ * 오프시즌 **스냅샷 베이스**(REALTIME_SIM §7.3) — 무겁고 **토글 무관**한 안정부.
+ * 리그 전 선수 롤오버+은퇴+AI 잔류+영구제명(`buildOffseason`) + 전 시즌 팀별 외인/아시아쿼터 + 우승권 신호(prestige).
+ * deps = my·resignDecisions·overrides·nextSeason·ownerFx(전부 위시/영입 토글과 무관) → 앱에서 이 결과만 메모하면
+ * 토글마다 재빌드하던 낭비(탭당 ~2s)를 없앤다. 해결(트라이아웃·FA)은 `resolvePreDraftFrom`/`faMarketPreviewFrom`이 담당.
+ */
+export interface OffseasonBase {
+  off: Offseason;
+  prevTeamOf: Record<string, string>;
+  prevForeignOf: Record<string, string>;   // 전 시즌 팀별 외인 — 재계약 우선권의 주체
+  prevAsianOf: Record<string, string>;      // 전 시즌 팀별 아시아쿼터
+  prestige: Record<string, number>;         // 우승권 신호(offerScore win 항)
+}
+
+export function buildOffseasonBase(
+  myTeam: string,
+  resignDecisions: Record<string, boolean>,
+  overrides: Record<string, Contract>,
+  nextSeason: number,
+  ownerFx?: OwnerFx,
+): OffseasonBase {
+  const committed = currentRosters();
+  const prevTeamOf: Record<string, string> = {};
+  for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
+  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
+  const prevForeignOf: Record<string, string> = {};
+  for (const t of Object.keys(committed)) {
+    const f = committed[t].find((id) => off.snapshot[id]?.isForeign && !off.snapshot[id]?.isAsianQuota);
+    if (f) prevForeignOf[t] = f;
+  }
+  const prevAsianOf: Record<string, string> = {};
+  for (const t of Object.keys(committed)) {
+    const a = committed[t].find((id) => off.snapshot[id]?.isAsianQuota);
+    if (a) prevAsianOf[t] = a;
+  }
+  const prestige = teamPrestige(nextSeason - 1);
+  return { off, prevTeamOf, prevForeignOf, prevAsianOf, prestige };
+}
+
+/** 메모된 base 보호용 얕은 클론 — 트라이아웃/FA가 snapshot(엔트리 교체/삭제)·rosters(배열 교체)를 **변이**하므로,
+ *  해결 전에 base.off의 snapshot/rosters를 복제한다. Player 객체는 항상 spread로 새로 만들어져 in-place 변이 없음
+ *  → Record 얕은 복사 + rosters 배열별 복사로 충분(값은 monolithic과 byte-동일, 이 clone이 유일한 차이). */
+function cloneOffForResolve(base: OffseasonBase) {
+  return {
+    snapshot: { ...base.off.snapshot },
+    rosters: Object.fromEntries(Object.entries(base.off.rosters).map(([k, v]) => [k, [...v]])) as Record<string, string[]>,
+    pool: base.off.pool,
+    returningForeign: base.off.returningForeign,
+    returningAsian: base.off.returningAsian,
+    retired: base.off.retired,
+    expelled: base.off.expelled,
+  };
+}
+
+/** 해결부(가벼움) — 메모된 base에서 트라이아웃(외인·아시아쿼터)+국내 FA 경쟁을 굴린다. 토글(위시/영입/보호/공격적)만 재실행. */
+export function resolvePreDraftFrom(
+  base: OffseasonBase,
+  myTeam: string,
+  faSignings: string[],
+  aggressive: boolean,
+  protectedIds: string[],
+  nextSeason: number,
+  ownerFx?: OwnerFx,
+  myCash?: number,
+  tryoutWish: string[] = [],
+  myKeepForeign: boolean | null = null,
+  moneyOnlyIds: string[] = [],
+  asianWish: string[] = [],
+  myKeepAsian: boolean | null = null,
+): PreDraft {
+  const { prevTeamOf, prevForeignOf, prevAsianOf, prestige } = base;
+  const off = cloneOffForResolve(base);
+  // 외국인 트라이아웃 — FA 시장 앞(외인이 OP를 채워야 AI가 FA로 중복 영입하지 않는다)
+  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY);
+  // 아시아쿼터 게이트: 외인 신규 영입 비용 차감 후 남은 자금으로만(외인 우선). 자금 부족 → 아시아쿼터 공석(안티과금)
+  const myF = (off.rosters[myTeam] ?? []).find((id) => { const p = off.snapshot[id]; return p?.isForeign && !p.isAsianQuota; });
+  const foreignCostMine = myF && prevTeamOf[myF] !== myTeam ? FOREIGN_SALARY : 0;
+  const asianCash = myCash === undefined ? Number.POSITIVE_INFINITY : Math.max(0, myCash - foreignCostMine);
+  const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash);
+  const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds);
+  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, expelled: off.expelled, tryout, asianTryout, compCash: fa.compCash };
+}
+
+/**
  * 드래프트 직전 상태: 롤오버·은퇴·FA(내 영입+보상+AI 충원)까지 적용.
- * 드래프트 센터 프리뷰와 endSeason 이 공유(미리보기=결과 보장).
+ * 드래프트 센터 프리뷰와 endSeason 이 공유(미리보기=결과 보장). = base 빌드 + 해결 합성(byte-동일).
  */
 export function resolvePreDraft(
   myTeam: string,
@@ -369,38 +453,52 @@ export function resolvePreDraft(
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
 ): PreDraft {
-  const committed = currentRosters();
-  const prevTeamOf: Record<string, string> = {};
-  for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
+  const base = buildOffseasonBase(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
+  return resolvePreDraftFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
+}
 
-  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
-  // 전 시즌 팀별 외인 — 재계약 우선권의 주체
-  const prevForeignOf: Record<string, string> = {};
-  for (const t of Object.keys(committed)) {
-    const f = committed[t].find((id) => off.snapshot[id]?.isForeign && !off.snapshot[id]?.isAsianQuota);
-    if (f) prevForeignOf[t] = f;
-  }
-  // 외국인 트라이아웃 — FA 시장 앞(외인이 OP를 채워야 AI가 FA로 중복 영입하지 않는다)
+export interface FAPreview {
+  pool: string[];
+  snapshot: Record<string, Player>;
+  myRoster: string[];
+  signedByMe: Set<string>;
+  lostTo: Record<string, string>;
+  tryout: TryoutOutcome;
+  asianTryout: TryoutOutcome;
+  compCash: number;
+}
+
+/** FA 센터 미리보기 해결부(가벼움) — 메모된 base에서 트라이아웃+FA 경쟁 굴림. 토글만 재실행(§7.3). */
+export function faMarketPreviewFrom(
+  base: OffseasonBase,
+  myTeam: string,
+  faSignings: string[],
+  aggressive: boolean,
+  protectedIds: string[],
+  nextSeason: number,
+  ownerFx?: OwnerFx,
+  myCash?: number,
+  tryoutWish: string[] = [],
+  myKeepForeign: boolean | null = null,
+  moneyOnlyIds: string[] = [],
+  asianWish: string[] = [],
+  myKeepAsian: boolean | null = null,
+): FAPreview {
+  const { prevTeamOf, prevForeignOf, prevAsianOf, prestige } = base;
+  const off = cloneOffForResolve(base);
   const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY);
-  // 아시아쿼터 트라이아웃 — 외인 다음·FA 앞. 수입 슬롯이 먼저 채워져 16칸 중 1칸 차지(경제 수학 불변).
-  //   (Step 2: AI 자동·자금 게이트 미적용 — 유저 위시리스트·재정 게이트는 후속 단계)
-  const prevAsianOf: Record<string, string> = {};
-  for (const t of Object.keys(committed)) {
-    const a = committed[t].find((id) => off.snapshot[id]?.isAsianQuota);
-    if (a) prevAsianOf[t] = a;
-  }
-  // 아시아쿼터 게이트: 외인 신규 영입 비용 차감 후 남은 자금으로만(외인 우선). 자금 부족 → 아시아쿼터 공석(안티과금)
   const myF = (off.rosters[myTeam] ?? []).find((id) => { const p = off.snapshot[id]; return p?.isForeign && !p.isAsianQuota; });
   const foreignCostMine = myF && prevTeamOf[myF] !== myTeam ? FOREIGN_SALARY : 0;
   const asianCash = myCash === undefined ? Number.POSITIVE_INFINITY : Math.max(0, myCash - foreignCostMine);
   const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash);
-  const prestige = teamPrestige(nextSeason - 1);
+  const pool = [...off.pool];
+  const myRoster = [...(off.rosters[myTeam] ?? [])];
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds);
-  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, expelled: off.expelled, tryout, asianTryout, compCash: fa.compCash };
+  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, tryout, asianTryout, compCash: fa.compCash };
 }
 
-/** FA 센터 미리보기: 풀 + 내 영입 성공/실패 예상 (resolvePreDraft와 동일 소스) */
+/** FA 센터 미리보기: 풀 + 내 영입 성공/실패 예상 (resolvePreDraft와 동일 소스). = base 빌드 + 해결 합성(byte-동일). */
 export function faMarketPreview(
   myTeam: string,
   resignDecisions: Record<string, boolean>,
@@ -416,40 +514,7 @@ export function faMarketPreview(
   moneyOnlyIds: string[] = [],
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
-): {
-  pool: string[];
-  snapshot: Record<string, Player>;
-  myRoster: string[];
-  signedByMe: Set<string>;
-  lostTo: Record<string, string>;
-  tryout: TryoutOutcome;
-  asianTryout: TryoutOutcome;
-  compCash: number;
-} {
-  const committed = currentRosters();
-  const prevTeamOf: Record<string, string> = {};
-  for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
-
-  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
-  const prevForeignOf: Record<string, string> = {};
-  for (const t of Object.keys(committed)) {
-    const f = committed[t].find((id) => off.snapshot[id]?.isForeign && !off.snapshot[id]?.isAsianQuota);
-    if (f) prevForeignOf[t] = f;
-  }
-  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY);
-  const prevAsianOf: Record<string, string> = {};
-  for (const t of Object.keys(committed)) {
-    const a = committed[t].find((id) => off.snapshot[id]?.isAsianQuota);
-    if (a) prevAsianOf[t] = a;
-  }
-  const myF = (off.rosters[myTeam] ?? []).find((id) => { const p = off.snapshot[id]; return p?.isForeign && !p.isAsianQuota; });
-  const foreignCostMine = myF && prevTeamOf[myF] !== myTeam ? FOREIGN_SALARY : 0;
-  const asianCash = myCash === undefined ? Number.POSITIVE_INFINITY : Math.max(0, myCash - foreignCostMine);
-  const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash);
-  const pool = [...off.pool];
-  const myRoster = [...(off.rosters[myTeam] ?? [])];
-  const prestige = teamPrestige(nextSeason - 1);
-  const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds);
-  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, tryout, asianTryout, compCash: fa.compCash };
+): FAPreview {
+  const base = buildOffseasonBase(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
+  return faMarketPreviewFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
 }

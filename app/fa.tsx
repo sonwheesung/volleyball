@@ -7,7 +7,7 @@ import { RoleBadge } from '../components/RoleBadge';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { shortTeamName as shortTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
-import { faMarketPreview } from '../data/offseason';
+import { faMarketPreviewFrom, buildOffseasonBase } from '../data/offseason';
 import { buildOwnerFx } from '../data/owner';
 import { projectSettledCash } from '../data/financeProjection';
 import { LEAGUE_CAP } from '../engine/cap';
@@ -58,11 +58,16 @@ function FACenterInner() {
   );
 
   // 경쟁 결과 미리보기(결정론) — 영입 성공/실패 예상.
-  // endSeason과 동일한 ownerFx(면담·불만 거부)+정산 후 운영 자금을 넣어야 미리보기=결과가 보장된다
+  // endSeason과 동일한 ownerFx(면담·불만 거부)+정산 후 운영 자금을 넣어야 미리보기=결과가 보장된다.
+  // 스냅샷/해결 분리(REALTIME_SIM §7.3): 무거운 롤오버 base는 안정 deps로 메모, 영입/보호/돈만/공격적 토글은 가벼운 해결만 재실행.
+  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore), [interviews, season, my, fanScore]);
+  const base = useMemo(
+    () => buildOffseasonBase(my, resignDecisions, contractOverrides, season + 1, ownerFx),
+    [my, resignDecisions, contractOverrides, season, ownerFx],
+  );
   const pv = useMemo(
-    () => faMarketPreview(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
-      buildOwnerFx(interviews, season, my, fanScore), budgetCash, [], null, moneyOnlyIds),
-    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, budgetCash, moneyOnlyIds],
+    () => faMarketPreviewFrom(base, my, faSignings, faAggressive, protectedIds, season + 1, ownerFx, budgetCash, [], null, moneyOnlyIds),
+    [base, my, faSignings, faAggressive, protectedIds, season, ownerFx, budgetCash, moneyOnlyIds],
   );
   const snap = pv.snapshot;
 

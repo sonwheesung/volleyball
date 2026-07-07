@@ -10,6 +10,7 @@ import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from 
 import { availableTeamPlayers } from './injury';
 import { currentTxVersion } from './dynamics';
 import { restedOnDay } from './rotation';
+import { minAffectedDaySince, spliceSeq } from './spliceLog';
 
 export interface ProdRow {
   dayIndex: number;
@@ -30,25 +31,36 @@ export interface MatchProd {
   starters: Set<string>;
 }
 
-let cache: { key: string; rows: ProdRow[] } | null = null;
+let cache: { key: string; rows: ProdRow[]; seq: number } | null = null;
 
 // 캐시 영속(REALTIME_SIM Phase1) — 생산 결과를 세이브에 저장→복원해 재로드 시 재계산 제거(standings와 동일 패턴).
-export const getProductionCacheRaw = (): { key: string; rows: ProdRow[] } | null => cache;
-export const setProductionCacheRaw = (c: { key: string; rows: ProdRow[] } | null): void => { cache = c; };
+// seq(§7 스플라이스): 인메모리 계산시점 시퀀스(영속 안 함 — 복원 시 현재 seq 주입).
+export const getProductionCacheRaw = (): { key: string; rows: ProdRow[]; seq: number } | null => cache;
+export const setProductionCacheRaw = (c: { key: string; rows: ProdRow[]; seq?: number } | null): void => {
+  cache = c ? { key: c.key, rows: c.rows, seq: c.seq ?? spliceSeq() } : null;
+};
 
-/** 전 경기 선수별 생산(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영 */
+/** 전 경기 선수별 생산(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영.
+ *  스플라이스(REALTIME_SIM §7): dayIndex<minAffectedDay 행은 재사용, 이후만 재시뮬. 생산은 러닝 상태를
+ *  자체로 안 나르고 restedOnDay(→순위 캐시)에 의존하므로 순위 스플라이스가 byte-동일하면 재시뮬 구간도 올바른 휴식을 본다. */
 function allProdRows(): ProdRow[] {
   const key = `${baseVersion()}:${currentTxVersion()}`;
   if (cache && cache.key === key) return cache.rows;
 
+  const prev = cache;
+  const minDay = prev ? minAffectedDaySince(prev.seq) : Infinity;
+  const splice = !!prev && minDay > 0 && Number.isFinite(minDay);
+  const reuse: ProdRow[] = splice ? prev!.rows.filter((r) => r.dayIndex < minDay) : [];
+
   const byDay = new Map<number, Fixture[]>();
   for (const f of SEASON) {
+    if (splice && f.dayIndex < minDay) continue; // 재사용 구간 — 시뮬 생략
     const arr = byDay.get(f.dayIndex) ?? [];
     arr.push(f);
     byDay.set(f.dayIndex, arr);
   }
 
-  const rows: ProdRow[] = [];
+  const rows: ProdRow[] = [...reuse]; // 재사용 행(dayIndex<minDay, day-정렬) 뒤에 재시뮬 행을 이어 붙임 → 전체 경로와 동일 순서
   for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
     const roster: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
     for (const t of LEAGUE.teams) {
@@ -72,7 +84,7 @@ function allProdRows(): ProdRow[] {
       rows.push({ dayIndex: f.dayIndex, homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId, homeIds, lines, starters });
     }
   }
-  cache = { key, rows };
+  cache = { key, rows, seq: spliceSeq() };
   return rows;
 }
 
