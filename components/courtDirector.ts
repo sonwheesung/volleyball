@@ -3,7 +3,7 @@
 // → 화면에 보이는 위치 = 감사기가 검사하는 위치(단일 소스, 검증 가능).
 
 import type { Player, Side } from '../types';
-import type { SimResult, SubEvent } from '../engine/simMatch';
+import type { SimResult, SubEvent, TimeoutEvent } from '../engine/simMatch';
 import {
   lineupIdxAt, zonePx, switchedSpots, receiveFormation, serveFormation, fanSlots, blockerWall, separateTargets,
   type Lineup, type Px,
@@ -186,6 +186,16 @@ export function applySubsToSix(
     six[e.slot] = p;
   }
   return six ?? baseSix;
+}
+
+/**
+ * 특정 랠리(point=idx) 직후에 걸린 **모든** 타임아웃 이벤트.
+ * 엔진은 같은 점수(같은 point)에 감독 작전 타임아웃 + KOVO 테크니컬 타임아웃(8·16점)을 함께 push할 수 있어
+ * (동시 발생 45.7~52.5%) — `.find()`(첫 건만)로 집으면 표시 수 < 데이터 수(TTO 소실, EC-BD-01). **반드시 전건**
+ * 을 모아 한 모달에 함께 보여준다(렌더 단수 가정 금지). MatchCourt 렌더와 `tools/_dv_todisplay` 가드가 이 함수를 공유.
+ */
+export function timeoutsAt(sim: SimResult, idx: number): TimeoutEvent[] {
+  return (sim.timeouts ?? []).filter((t) => t.point === idx);
 }
 
 /** points[] → 랠리별 서브권·로테이션·세트 상태 복원 (engine/match.ts 규칙과 동일) */

@@ -17,7 +17,7 @@ import {
 } from './courtLayout';
 import { ballPath as ballPathRaw, SEG_DUR as DUR, markerTravelMs, type Move, type WP } from './courtPath';
 import type { PointHow } from '../engine/rally';
-import { segmentTargets, reconstructRallies, isInPlay, applySubsToSix, type RallyState } from './courtDirector';
+import { segmentTargets, reconstructRallies, isInPlay, applySubsToSix, timeoutsAt, type RallyState } from './courtDirector';
 import { commentLine, situationFeed } from './courtCommentary';
 import { CoinTossOverlay } from './CoinTossOverlay';
 import { initSfx, playSfx, setSfxEnabled } from '../audio/sfx';
@@ -210,10 +210,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
 
   // 이 랠리(idx) 직후에 잡힌 타임아웃 — 점수 반영 후 보드를 멈추고 코트 체력을 보여준다.
   // 엔진이 같은 점수에 작전 타임아웃 + 테크니컬 타임아웃을 함께 push할 수 있어(8·16점에서 감독 호출과 겹침)
-  // .find(단건)이 아니라 filter(전부)로 모아 한 모달에 함께 보여준다(45.7% 매치에서 발생하던 소실 수정 2026-07-07).
+  // .find(단건)이 아니라 timeoutsAt(전건)으로 모아 한 모달에 함께 보여준다(45.7% 매치에서 발생하던 소실 수정 2026-07-07).
+  // 선택 로직은 courtDirector.timeoutsAt(순수)로 추출 — 렌더와 tools/_dv_todisplay 가드가 같은 함수를 공유.
   const timeoutHere = useMemo(
-    () => (finished ? [] : (sim.timeouts ?? []).filter((t) => t.point === idx)),
-    [sim.timeouts, idx, finished],
+    () => (finished ? [] : timeoutsAt(sim, idx)),
+    [sim, idx, finished],
   );
 
   // 5세트(결승) 코인토스 오버레이 — 첫 5세트 랠리 직전 1회(MATCH_SYSTEM v2.1). 순수 연출(승패·기록 무영향).
