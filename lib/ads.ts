@@ -12,13 +12,21 @@
 //   • **전면 하드 타임아웃 + 빈도캡** — 관전형은 시즌 연타로 광고 폭탄 위험 → N분 캡. 못 뜨면 즉시 진행.
 //   • throw 없이 결과 반환. 로깅은 lib/log(운영 로그=AdMob 대시보드).
 
+import Constants from 'expo-constants';
 import { logError, logEvent } from './log';
 import { AD_UNIT_REWARDED_ANDROID, AD_UNIT_INTERSTITIAL_ANDROID } from '../data/adConfig';
 
-/** 선택적 네이티브 모듈 지연 로드. 미설치(Expo Go)·예외면 null(호출부 graceful). */
+// Expo Go(개발 클라이언트)엔 네이티브 광고 모듈이 없다. 그래도 require를 태우면 모듈 top-level의
+// TurboModuleRegistry.getEnforcing('RNGoogleMobileAdsModule')가 던지고, dev의 guardedLoadModule이
+// 그 init 에러를 아래 try/catch가 삼키기 전에 전역 핸들러(RedBox)로 먼저 보고한다(앱은 계속 돌지만 RedBox가 뜸).
+// → Expo Go에선 require 자체를 건너뛴다(광고는 Expo Go에 원래 없음 — 실 빌드엔 모듈 존재). storeClient = Expo Go.
+const isExpoGo = Constants.executionEnvironment === 'storeClient';
+
+/** 선택적 네이티브 모듈 지연 로드. Expo Go·미설치·예외면 null(호출부 graceful). */
 function admob(): any | null {
+  if (isExpoGo) return null; // Expo Go — 네이티브 모듈 부재. require를 태우지 않아 RedBox(모듈 init 에러) 자체가 안 뜬다.
   try {
-    // @ts-ignore — 운영 빌드에서 expo install. 미설치 시 throw → null.
+    // @ts-ignore — 운영 빌드에서 expo install. 미설치(dev client 등) 시 throw → null.
     return require('react-native-google-mobile-ads');
   } catch {
     return null;
