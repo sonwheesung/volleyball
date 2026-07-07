@@ -116,9 +116,13 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   const seen = useGameStore((s) => s.seenTips) ?? {};
   const markTip = useGameStore((s) => s.markTip);
   const [attempt, setAttempt] = useState(0);
-  const [revealed, setRevealed] = useState(false); // 스크롤 안착 후에만 true → 스크롤·표시 동시 발생 방지
-  const handledRef = useRef<string | null>(null);   // 이 팁에 대해 스크롤/표시 결정을 이미 내렸나
-  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // 안착 타이머 — effect 재실행에 취소되면 안 됨(ref 보관)
+  // 표시 결정을 **팁 id 단위**로 담는다(불리언 아님): 렌더 가드가 `revealedId === active.id`라, 팁이 바뀌면
+  // 리셋 effect가 돌기 전이라도 새 팁 id ≠ 옛 revealedId → 곧바로 null → 이전 스텝의 링이 새 스텝의 stale 좌표에
+  // 한 프레임 튀는 현상(스텝 전환 "탁 끊김")이 원천 차단된다.
+  const [revealedId, setRevealedId] = useState<string | null>(null);
+  const handledRef = useRef<string | null>(null);   // 이 팁에 대해 스크롤 트리거를 이미 걸었나
+  const needScrollRef = useRef(false);              // 이 팁이 스크롤이 필요했나 → 표시는 재측정으로 안착(comfy)된 뒤에
+  const revealTimer = useRef<ReturnType<typeof setTimeout> | null>(null); // 안전망 타이머 — effect 재실행에 취소되면 안 됨(ref 보관)
 
   // 활성 화면(Provider가 공유)과 같을 때만 표시. 모든 오버레이가 같은 값을 보므로 둘 이상 동시 표시 불가.
   // 폴백 없음(불일치=숨김) — "이중 표시 방지"가 "한 화면 누락"보다 우선(누락은 자기 화면 들어가면 바로 뜸).
@@ -129,9 +133,10 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
   const active = queue[0];
   const rect = active?.anchor ? targets[active.anchor] : undefined;
 
-  // 새 스텝마다 측정 시도·표시 상태 리셋(다음 팁은 다시 "스크롤→안착→표시"). 이전 안착 타이머는 취소.
+  // 새 스텝마다 측정 시도·스크롤/표시 결정 리셋(다음 팁은 다시 "스크롤→안착→표시"). 이전 안전망 타이머는 취소.
+  // revealedId는 여기서 비우지 않아도 된다 — 새 active.id와 자동으로 불일치라 렌더 가드가 즉시 숨긴다.
   useEffect(() => {
-    setAttempt(0); setRevealed(false); handledRef.current = null;
+    setAttempt(0); handledRef.current = null; needScrollRef.current = false;
     if (revealTimer.current) { clearTimeout(revealTimer.current); revealTimer.current = null; }
   }, [active?.id]);
   // 언마운트 시 타이머 정리
@@ -144,29 +149,41 @@ export function SpotlightOverlay({ screen }: { screen: string }) {
     }
   }, [active, rect, attempt]);
 
-  // 표시 순서 조율: 대상이 편안한 위치(상단~중앙)가 아니면 **먼저 스크롤 → 안착 대기 → 표시**.
-  // 이미 편안하거나 스크롤 불가(비-Screen 화면)면 즉시 표시. 팁당 1회만 결정(handledRef).
+  // 표시 순서 조율: 대상이 편안한 위치(상단~중앙)가 아니면 **먼저 스크롤 → (재측정으로) 안착 확인 → 표시**.
+  // 스크롤을 건 팁은 고정 지연(680ms)으로 무작정 표시하지 않고, **재측정으로 대상이 화면 안(comfy)으로
+  // 들어온 걸 확인한 뒤** 표시한다 → 스크롤 애니메이션/비동기 measure 콜백이 늦어 링이 stale(화면 밖) 좌표에
+  // 먼저 번쩍였다가 안착 위치로 튀는 현상 제거. 재측정이 끝내 안 와도 안전망 타이머로 결국 표시.
   // ⚠ 타이머는 ref에 보관 — 이 effect는 rect 변화(스크롤 후 재측정)로 재실행되는데, cleanup으로 타이머를
-  //    지우면 안착 전에 취소돼 영영 안 뜬다(에뮬 실측 버그 2026-07-04). 재실행 시 handledRef로 즉시 return만.
+  //    지우면 안착 전에 취소돼 영영 안 뜬다(에뮬 실측 버그 2026-07-04). 재실행 시 가드로 즉시 return만.
   useEffect(() => {
-    if (!active || !focused || handledRef.current === active.id) return;
+    if (!active || !focused || revealedId === active.id) return;
     if (active.anchor && !rect && attempt < 6) return; // 아직 측정 중 — 대기
-    handledRef.current = active.id;
     const SH = Dimensions.get('window').height;
-    const comfy = !!rect && rect.y >= 60 && rect.y <= SH * 0.5; // 이미 화면 상단~중앙에 보임
-    if (rect && active.anchor && scrollCtrl && !comfy) {
-      scrollCtrl.scrollToWindowY(rect.y);                                  // 스크롤만 먼저
-      revealTimer.current = setTimeout(() => setRevealed(true), 680);      // 안착(≈애니 300ms + 재측정 여유) 후 표시
-    } else {
-      setRevealed(true); // 스크롤 불필요 → 즉시
+    const comfy = !!rect && rect.y >= 60 && rect.y <= SH * 0.5; // 화면 상단~중앙에 보임(안착 판정)
+    if (handledRef.current !== active.id) {
+      // 팁당 1회: 스크롤이 필요하면 스크롤만 걸고 표시는 미룬다(안착 후 아래 조건에서). 아니면 즉시 표시.
+      handledRef.current = active.id;
+      if (rect && active.anchor && scrollCtrl && !comfy) {
+        needScrollRef.current = true;
+        scrollCtrl.scrollToWindowY(rect.y);                                        // 스크롤만 먼저
+        revealTimer.current = setTimeout(() => setRevealedId(active.id), 1200);     // 안전망: 재측정이 안 와도 결국 표시
+        return;
+      }
+      setRevealedId(active.id); // 스크롤 불필요(이미 편안/비-Screen 화면) → 즉시
+      return;
     }
-  }, [active, focused, rect, attempt, scrollCtrl]);
+    // 스크롤을 건 팁: rect 재측정으로 대상이 안착(comfy)되면 그때 표시 — stale 좌표 번쩍임 없이.
+    if (needScrollRef.current && comfy) {
+      if (revealTimer.current) { clearTimeout(revealTimer.current); revealTimer.current = null; }
+      setRevealedId(active.id);
+    }
+  }, [active, focused, rect, attempt, scrollCtrl, revealedId]);
 
   if (!active) return null;
   // 이중 모달 걱정 없음 — 모달이 탭바까지 덮어 안내를 탭으로 넘기기 전엔 다른 화면 이동 불가(이미 본 화면은 큐가 빔).
   const measuring = !!active.anchor && !rect && attempt < 6;
   if (measuring) return null; // 잠깐 측정 대기(최대 ≈720ms). 그 뒤엔 폴백으로 무조건 표시.
-  if (!revealed) return null; // 스크롤 안착 전엔 아무것도 안 그림(스크롤과 스포트라이트 동시 표시 방지 — 사용자 지적 2026-07-04)
+  if (revealedId !== active.id) return null; // 이 팁의 안착 확인 전엔 아무것도 안 그림 — 스크롤 중 표시·스텝 전환 stale 좌표 번쩍임 방지
 
   const { width: SW, height: SH } = Dimensions.get('window');
   const total = tipsForScreen(screen).length;

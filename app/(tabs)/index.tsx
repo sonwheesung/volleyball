@@ -139,19 +139,26 @@ export default function Dashboard() {
         </Card>
       </SpotlightTarget>
 
-      {/* 리그 뉴스 — 진입점만(내용은 뉴스 화면에서). 안읽음 수만 표시 */}
-      {allNews.length > 0 ? (
-        <SpotlightTarget id="dash-news">
-          <Card accent={theme.violet} onPress={() => router.push('/news')}>
+      {/* 리그 뉴스 — 진입점만(내용은 뉴스 화면에서). 안읽음 수만 표시.
+          카드+앵커는 **항상** 렌더한다: 온보딩(day 0)엔 뉴스가 없어도 dash.news 스포트라이트가 가리킬 대상이 있어야 한다.
+          비었을 땐 안읽음 배지 대신 카드 안에 뮤트 안내(시즌이 흐르면 채워짐). onPress·앵커는 그대로. */}
+      <SpotlightTarget id="dash-news">
+        <Card accent={theme.violet} onPress={() => router.push('/news')}>
+          {allNews.length > 0 ? (
             <Row>
               <IconLabel icon="newspaper-outline" color={theme.violet}>리그 뉴스</IconLabel>
               <Text style={{ color: theme.accent, fontWeight: '700' }}>
                 {unreadNews > 0 ? `새 소식 ${unreadNews} ›` : '전체 보기 ›'}
               </Text>
             </Row>
-          </Card>
-        </SpotlightTarget>
-      ) : null}
+          ) : (
+            <>
+              <IconLabel icon="newspaper-outline" color={theme.violet}>리그 뉴스</IconLabel>
+              <Muted>아직 리그 소식이 없어요 — 시즌이 흐르면 기록·사건이 쌓입니다</Muted>
+            </>
+          )}
+        </Card>
+      </SpotlightTarget>
 
       <View style={{ flex: 1 }} />
       <SpotlightOverlay screen="tab-dashboard" />
