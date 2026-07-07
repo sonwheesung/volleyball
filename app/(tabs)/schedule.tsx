@@ -125,7 +125,7 @@ export default function Schedule() {
       <Card accent={theme.sky}>
         <Row>
           <IconLabel icon="calendar-outline" color={theme.sky}>정규리그 진행</IconLabel>
-          <Text style={{ color: theme.text, fontWeight: '800' }}>
+          <Text style={{ color: theme.text, fontWeight: '700' }}>
             {playedCount} / {totalMatches} 경기
           </Text>
         </Row>
@@ -148,7 +148,7 @@ export default function Schedule() {
         <Card accent={theme.accent}>
           <Row>
             <IconLabel icon="podium-outline" color={theme.accent}>플레이오프</IconLabel>
-            <Text style={{ color: clinchView.color, fontWeight: '800' }}>{clinchView.text}</Text>
+            <Text style={{ color: clinchView.color, fontWeight: '700' }}>{clinchView.text}</Text>
           </Row>
         </Card>
       ) : null}
@@ -164,7 +164,7 @@ export default function Schedule() {
             </View>
           ) : null}
           <Row>
-            <Text style={{ color: theme.text, fontSize: 18, fontWeight: '800' }}>
+            <Text style={{ color: theme.text, fontSize: 18, fontWeight: '700' }}>
               {preview.isHome ? '홈' : '원정'} vs {preview.oppName}
             </Text>
           </Row>
@@ -173,13 +173,14 @@ export default function Schedule() {
               <Muted style={{ fontSize: 11 }}>우리</Muted>
               <OvrBadge value={preview.myOvr} />
             </View>
-            <Text style={{ color: theme.muted, fontWeight: '800' }}>VS</Text>
+            <Text style={{ color: theme.muted, fontSize: 17, fontWeight: '700' }}>VS</Text>
             <View style={{ alignItems: 'center', gap: 2 }}>
               <Muted style={{ fontSize: 11 }}>상대</Muted>
               <OvrBadge value={preview.oppOvr} />
             </View>
           </Row>
           <Button
+            compact
             label={nextFixture && watchProgress[nextFixture.id] !== undefined
               ? '이어보기 →'
               : preview.important ? '관전하러 가기 →' : '경기 시작'}
@@ -216,5 +217,5 @@ export default function Schedule() {
 
 const styles = themedStyles(() => StyleSheet.create({
   bigMatch: { backgroundColor: theme.warn + '26', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
-  bigMatchText: { color: theme.warn, fontSize: 12, fontWeight: '800' },
+  bigMatchText: { color: theme.warn, fontSize: 12, fontWeight: '700' },
 }));

@@ -18,12 +18,12 @@ const SHARED = {
 // 다크 = 변경 전(원본) · 라이트 = 밝은 코트 테스트본
 const DARK = {
   bg: '#0B1018', card: 'rgba(16,22,34,0.86)', cardAlt: 'rgba(40,50,68,0.92)',
-  text: '#F2F5FA', muted: '#9AA7BC', border: 'rgba(255,255,255,0.14)',
-  tabBar: '#0E1521', popup: '#161E2E', ...SHARED, // popup=불투명 팝업 표면(반투명 card는 배경에 묻힘). 탭바 솔리드 — 모드별(UI-25)
+  text: '#F2F5FA', muted: '#9AA7BC', mutedBright: '#B4BFCE', border: 'rgba(255,255,255,0.14)',
+  tabBar: '#0E1521', popup: '#161E2E', ...SHARED, // popup=불투명 팝업 표면(반투명 card는 배경에 묻힘). 탭바 솔리드 — 모드별(UI-25). mutedBright=muted보다 한 톤 밝은 회색(선수 메타 등)
 };
 const LIGHT = {
   bg: '#EAF0F6', card: 'rgba(255,255,255,0.93)', cardAlt: 'rgba(228,235,244,0.92)',
-  text: '#16202C', muted: '#5A6678', border: 'rgba(0,0,0,0.12)',
+  text: '#16202C', muted: '#5A6678', mutedBright: '#6E7A8C', border: 'rgba(0,0,0,0.12)',
   tabBar: '#FFFFFF', popup: '#FFFFFF', ...SHARED, // popup 밝은 표면 — 라이트 모드에서 다크 팝업+검정 텍스트(안 보임) 버그 교정(2026-07-04)
 };
 

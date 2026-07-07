@@ -30,10 +30,11 @@ export default function TabsLayout() {
       screenOptions={{
         headerStyle: { backgroundColor: theme.bg },
         headerTintColor: theme.text,
-        headerTitleStyle: { fontWeight: '800' },
+        headerTitleStyle: { fontWeight: '700' },
         // 설정 = 전 탭 공통 헤더 우측 톱니(2026-06-28) — 구단 대시보드 본문에 있던 "설정" 버튼을 옮김(유틸리티 분리)
+        // 아이콘 크기(22)는 유지, 터치 영역만 확대(hitSlop 10→12 + paddingVertical 4→10) — 오탭 방지(UI polish).
         headerRight: () => (
-          <Pressable hitSlop={10} onPress={() => router.push('/settings')} style={{ paddingHorizontal: 14, paddingVertical: 4 }}>
+          <Pressable hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }} onPress={() => router.push('/settings')} style={{ paddingHorizontal: 14, paddingVertical: 10 }}>
             <Ionicons name="settings-outline" size={22} color={theme.text} />
           </Pressable>
         ),

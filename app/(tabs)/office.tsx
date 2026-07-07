@@ -1,6 +1,7 @@
 // 단장실 — 메뉴 허브. 계약 관리·스태프·시즌 중 FA는 각 상세 화면에서 처리.
 import { useRouter } from 'expo-router';
-import { Text } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { Text, View } from 'react-native';
 import { Card, IconLabel, Muted, Row, Screen, Title, theme } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getEvolvedTeamPlayers } from '../../data/league';
@@ -26,7 +27,7 @@ export default function Office() {
       <Card accent={theme.warn} flat>
         <Row>
           <IconLabel icon="wallet-outline" color={theme.warn}>팀 총연봉 / 예산</IconLabel>
-          <Text style={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '800' }}>
+          <Text style={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '700' }}>
             {formatMoney(total)} / {formatMoney(LEAGUE_CAP)}
           </Text>
         </Row>
@@ -38,7 +39,11 @@ export default function Office() {
       <SpotlightTarget id="office-top">
         <Card accent={theme.accent} onPress={() => router.push('/contracts')}>
           <Row>
-            <Title>계약 관리</Title>
+            {/* 계약 관리만 아이콘+액센트 제목으로 약간 강조(UI polish, item 5) — 나머지 메뉴는 기본 Title 유지 */}
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
+              <Ionicons name="document-text-outline" size={18} color={theme.accent} />
+              <Text style={{ color: theme.accent, fontSize: 17, fontWeight: '700' }}>계약 관리</Text>
+            </View>
             <Muted>재계약 · 방출 · FA 예정 →</Muted>
           </Row>
           <Muted style={{ fontSize: 12, marginTop: 2 }}>선수 재계약·방출, 시즌 종료 FA 잔류/포기, 방출 선수 복귀</Muted>

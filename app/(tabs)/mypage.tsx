@@ -148,52 +148,60 @@ export default function MyPage() {
           </View>
         ) : null}
       </Card>
+      {/* 그룹 사이 여백만 넓혀 자연스럽게 구분(UI polish, item 6 — 구분선 없음, 그룹 내부 간격 12 유지).
+          각 group 래퍼 marginTop 10 + 스크롤 gap 12 = 그룹 사이 ~22, 그룹 내부는 12. */}
       {/* ── 자주 보는 것 (공지·상점·기록·업적) ── */}
-      <LinkCard icon="megaphone-outline" tint={theme.accent} title="공지사항"
-        sub="업데이트 · 이벤트 · 안내"
-        onPress={() => router.push('/announcements')} />
+      <View style={styles.group}>
+        <LinkCard icon="megaphone-outline" tint={theme.accent} title="공지사항"
+          sub="업데이트 · 이벤트 · 안내"
+          onPress={() => router.push('/announcements')} />
 
-      <LinkCard icon="bag-handle-outline" tint={theme.sky} title="상점"
-        sub={WORLDCUP_ENABLED ? '다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원' : '다이아 구매 · 광고 제거 · 구매 복원'}
-        onPress={() => router.push('/shop')} />
+        <LinkCard icon="bag-handle-outline" tint={theme.sky} title="상점"
+          sub={WORLDCUP_ENABLED ? '다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원' : '다이아 구매 · 광고 제거 · 구매 복원'}
+          onPress={() => router.push('/shop')} />
 
-      <SpotlightTarget id="history-top">
-        <LinkCard icon="trophy-outline" tint={theme.gold} title="기록"
-          sub="시즌 · 통산 리더보드 · 명예의전당 · 연표"
-          onPress={() => router.push('/records-archive')} />
-      </SpotlightTarget>
+        <SpotlightTarget id="history-top">
+          <LinkCard icon="trophy-outline" tint={theme.gold} title="기록"
+            sub="시즌 · 통산 리더보드 · 명예의전당 · 연표"
+            onPress={() => router.push('/records-archive')} />
+        </SpotlightTarget>
 
-      <SpotlightTarget id="history-ach">
-        <LinkCard icon="ribbon-outline" tint={theme.warn} title="업적"
-          sub="구단주의 발자취 — 우승 · 시상 · 레전드 · 기록 · 운영"
-          onPress={() => router.push('/achievements')} />
-      </SpotlightTarget>
+        <SpotlightTarget id="history-ach">
+          <LinkCard icon="ribbon-outline" tint={theme.warn} title="업적"
+            sub="구단주의 발자취 — 우승 · 시상 · 레전드 · 기록 · 운영"
+            onPress={() => router.push('/achievements')} />
+        </SpotlightTarget>
+      </View>
 
       {/* ── 재화 · 가이드 ── */}
-      <LinkCard icon="pricetag-outline" tint={theme.gold} title="쿠폰 입력"
-        sub="쿠폰 코드를 입력하고 다이아를 받으세요"
-        onPress={() => router.push('/coupon')} />
+      <View style={styles.group}>
+        <LinkCard icon="pricetag-outline" tint={theme.gold} title="쿠폰 입력"
+          sub="쿠폰 코드를 입력하고 다이아를 받으세요"
+          onPress={() => router.push('/coupon')} />
 
-      <LinkCard icon="book-outline" tint={theme.accent} title="게임 가이드"
-        sub="경기 · 선수 · FA · 드래프트 등 핵심 개념"
-        onPress={() => router.push('/guide')} />
+        <LinkCard icon="book-outline" tint={theme.accent} title="게임 가이드"
+          sub="경기 · 선수 · FA · 드래프트 등 핵심 개념"
+          onPress={() => router.push('/guide')} />
+      </View>
 
       {/* ── 도움 · 약관 (하단) ── */}
-      <LinkCard icon="chatbubble-ellipses-outline" tint={theme.sky} title="문의하기"
-        sub="오류 · 건의 · 질문 — 최근 기록 진단 정보 자동 첨부"
-        onPress={() => router.push('/support')} />
+      <View style={styles.group}>
+        <LinkCard icon="chatbubble-ellipses-outline" tint={theme.sky} title="문의하기"
+          sub="오류 · 건의 · 질문 — 최근 기록 진단 정보 자동 첨부"
+          onPress={() => router.push('/support')} />
 
-      <LinkCard icon="document-text-outline" tint={theme.muted} title="이용약관"
-        sub="서비스 이용 조건 · 결제 · 환불 안내"
-        onPress={() => router.push('/terms')} />
+        <LinkCard icon="document-text-outline" tint={theme.muted} title="이용약관"
+          sub="서비스 이용 조건 · 결제 · 환불 안내"
+          onPress={() => router.push('/terms')} />
 
-      <LinkCard icon="shield-checkmark-outline" tint={theme.muted} title="운영정책"
-        sub="문의 · 환불 기준 · 제재 · 데이터 운영"
-        onPress={() => router.push('/policy')} />
+        <LinkCard icon="shield-checkmark-outline" tint={theme.muted} title="운영정책"
+          sub="문의 · 환불 기준 · 제재 · 데이터 운영"
+          onPress={() => router.push('/policy')} />
 
-      <LinkCard icon="lock-closed-outline" tint={theme.muted} title="개인정보처리방침"
-        sub="수집 항목 · 목적 · 보관 · 위탁 · 이용자 권리"
-        onPress={() => router.push('/privacy')} />
+        <LinkCard icon="lock-closed-outline" tint={theme.muted} title="개인정보처리방침"
+          sub="수집 항목 · 목적 · 보관 · 위탁 · 이용자 권리"
+          onPress={() => router.push('/privacy')} />
+      </View>
 
       {/* ── 계정 · 로그아웃 (최하단) ── */}
       {session ? (
@@ -222,13 +230,14 @@ export default function MyPage() {
 
 const styles = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
+  group: { gap: 12, marginTop: 10 }, // 카드 그룹 래퍼 — 그룹 내부 gap 12 유지, marginTop으로 그룹 사이만 벌림(item 6)
   iconChip: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
-  title: { color: theme.text, fontSize: 16, fontWeight: '800' },
-  arrow: { color: theme.accent, fontSize: 24, fontWeight: '900' },
+  title: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  arrow: { color: theme.muted, fontSize: 24, fontWeight: '400' }, // 화살표 = 장식 → 민트 대신 회색으로(민트 희소성, item 9)
   diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
-  diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '800' },
+  diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },
   diaBtnOff: { backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.border, opacity: 0.6 }, // 수령 불가 — 회색 비활성
   diaBtnTxtOff: { color: theme.muted },
   logoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 7, alignSelf: 'center', paddingVertical: 10, paddingHorizontal: 22, borderRadius: 11, borderWidth: 1, borderColor: theme.bad + '55', backgroundColor: theme.bad + '12' },
-  logoutTxt: { color: theme.bad, fontSize: 13.5, fontWeight: '800' },
+  logoutTxt: { color: theme.bad, fontSize: 13.5, fontWeight: '700' },
 }));

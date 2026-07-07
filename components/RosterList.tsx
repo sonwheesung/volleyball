@@ -86,15 +86,15 @@ const styles = themedStyles(() => StyleSheet.create({
     borderWidth: 1,
     borderColor: theme.border,
   },
-  groupLabel: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 6, marginLeft: 2 },
-  name: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  groupLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginTop: 6, marginLeft: 2 },
+  name: { color: theme.text, fontSize: 15, fontWeight: '700' }, // 이름 16→15(−1pt, UI polish)
   // 상태 마커(부상·정지) — 포지션 태그처럼 라벨 pill(2026-07-04 사용자 요청, ✚ 대체)
   statusTag: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, borderWidth: 1 },
-  statusTagTxt: { fontSize: 11, fontWeight: '800' },
-  foreign: { color: theme.bad, fontSize: 11, fontWeight: '700' },
-  asian: { color: theme.elite, fontSize: 11, fontWeight: '700' }, // 아시아쿼터 — 외국인(코랄)과 구분되는 블루
-  sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
-  salary: { color: theme.text, fontSize: 13, fontWeight: '800', minWidth: 52, textAlign: 'right' },
+  statusTagTxt: { fontSize: 11, fontWeight: '700' },
+  foreign: { color: theme.bad, fontSize: 11, fontWeight: '500' },
+  asian: { color: theme.elite, fontSize: 11, fontWeight: '500' }, // 아시아쿼터 — 외국인(코랄)과 구분되는 블루
+  sub: { color: theme.mutedBright, fontSize: 13, marginTop: 1 }, // 나이/키 — muted보다 한 톤 밝게(가독, UI polish)
+  salary: { color: theme.text, fontSize: 15, fontWeight: '700', minWidth: 52, textAlign: 'right' }, // 연봉 13→15(+2pt, UI polish)
   fogOvr: { width: 46, height: 46, borderRadius: 23, borderWidth: 1.5, borderColor: theme.border, alignItems: 'center', justifyContent: 'center' },
-  fogOvrTxt: { color: theme.muted, fontSize: 12, fontWeight: '800' },
+  fogOvrTxt: { color: theme.muted, fontSize: 12, fontWeight: '700' },
 }));

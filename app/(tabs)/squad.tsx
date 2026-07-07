@@ -59,7 +59,7 @@ export default function Squad() {
               <Text style={{ color: theme.text, fontWeight: '700' }}>
                 감독 {coach.name} · {STYLE_LABEL[coach.style]} · 카리스마 {coach.charisma}
               </Text>
-              <Text style={{ color: theme.accent }}>›</Text>
+              <Text style={{ color: theme.muted }}>›</Text>
             </Row>
           </Card>
         </SpotlightTarget>
@@ -67,7 +67,7 @@ export default function Squad() {
 
       <SpotlightTarget id="squad-top">
         <Title>선수 ({players.length}명)</Title>
-        <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다. ● 경기감각 · <Text style={{ color: theme.bad, fontWeight: '900' }}>부상·정지</Text> 결장 · 🪑 벤치 지시</Muted>
+        <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다. ● 경기감각 · <Text style={{ color: theme.bad, fontWeight: '700' }}>부상·정지</Text> 결장 · 🪑 벤치 지시</Muted>
       </SpotlightTarget>
       <RosterList players={players} decor={decor} starterIds={starterIds} />
       <SpotlightOverlay screen="tab-squad" />

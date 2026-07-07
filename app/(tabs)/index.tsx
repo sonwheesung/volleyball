@@ -78,7 +78,11 @@ export default function Dashboard() {
   return (
     <Screen title={team.name} scroll={false}>
       <SoftUpdateBanner />
-      {/* 전력 + 성적 */}
+      {/* 다음 경기 = 메인 진입점으로 승격(UI polish, 관전형 1순위). 홈엔 전용 "다음 경기" 카드(상대·전력비교)가
+          없고 — 그 데이터는 일정 탭에서 계산 — 가장 가까운 next-match 요소인 "경기 진행" CTA를 최상단으로 올려
+          가장 먼저 보이게 한다. 팀 종합 전력은 아래로 내려 보조(secondary). 새 데이터/기능 추가 없이 순서·강조만 변경. */}
+      <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
+      {/* 팀 종합 전력 + 성적 (보조) */}
       <SpotlightTarget id="dash-top">
         <Card accent={theme.elite} flat>
           <Row>
@@ -89,7 +93,7 @@ export default function Dashboard() {
             </View>
             <View style={{ alignItems: 'flex-end' }}>
               <Muted>{seasonYear(season)} 성적</Muted>
-              <Text style={{ color: theme.text, fontSize: 26, fontWeight: '900' }}>
+              <Text style={{ color: theme.text, fontSize: 26, fontWeight: '700' }}>
                 {record.w}승 {record.l}패
               </Text>
             </View>
@@ -102,20 +106,20 @@ export default function Dashboard() {
         <Card accent={theme.warn} flat>
           <Row>
             <IconLabel icon="card-outline" color={theme.warn}>총연봉 / 캡</IconLabel>
-            <Text style={{ color: payroll > LEAGUE_CAP ? theme.bad : theme.text, fontWeight: '800' }}>
+            <Text style={{ color: payroll > LEAGUE_CAP ? theme.bad : theme.text, fontWeight: '700' }}>
               {formatMoney(payroll)} / {formatMoney(LEAGUE_CAP)}
             </Text>
           </Row>
           <Row>
             <IconLabel icon="wallet-outline" color={theme.warn}>운영 자금</IconLabel>
-            <Text style={{ color: cash < 20000 ? theme.bad : theme.text, fontWeight: '800' }}>
+            <Text style={{ color: cash < 20000 ? theme.bad : theme.text, fontWeight: '700' }}>
               {formatMoney(cash)}
               {lastFinance ? ` (전 시즌 ${lastFinance.net >= 0 ? '+' : ''}${formatMoney(lastFinance.net)})` : ''}
             </Text>
           </Row>
           <Row>
             <IconLabel icon="heart-outline" color={theme.rose}>팬덤</IconLabel>
-            <Text style={{ color: fanScore >= 60 ? theme.good : fanScore >= 35 ? theme.text : theme.bad, fontWeight: '800' }}>
+            <Text style={{ color: fanScore >= 60 ? theme.good : fanScore >= 35 ? theme.text : theme.bad, fontWeight: '700' }}>
               {fanbaseInfo.total.toLocaleString()}명 · 팬심 {fanScore}
             </Text>
           </Row>
@@ -127,7 +131,7 @@ export default function Dashboard() {
         <Card accent={theme.accent} onPress={() => router.push('/standings')}>
           <Row>
             <IconLabel icon="podium-outline" color={theme.accent}>리그 순위</IconLabel>
-            <Text style={{ color: theme.text, fontWeight: '800' }}>
+            <Text style={{ color: theme.text, fontWeight: '700' }}>
               {myRank > 0 ? `${myRank}위 / ${standings.length}` : '-'}
               {' ›'}
             </Text>
@@ -141,7 +145,7 @@ export default function Dashboard() {
           <Card accent={theme.violet} onPress={() => router.push('/news')}>
             <Row>
               <IconLabel icon="newspaper-outline" color={theme.violet}>리그 뉴스</IconLabel>
-              <Text style={{ color: theme.accent, fontWeight: '800' }}>
+              <Text style={{ color: theme.accent, fontWeight: '700' }}>
                 {unreadNews > 0 ? `새 소식 ${unreadNews} ›` : '전체 보기 ›'}
               </Text>
             </Row>
@@ -150,8 +154,6 @@ export default function Dashboard() {
       ) : null}
 
       <View style={{ flex: 1 }} />
-
-      <Button label="일정 보기 / 경기 진행" onPress={() => router.push('/(tabs)/schedule')} />
       <SpotlightOverlay screen="tab-dashboard" />
     </Screen>
   );

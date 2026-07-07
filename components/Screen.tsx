@@ -197,7 +197,7 @@ export function Card({ children, onPress, accent, flat }: { children: ReactNode;
     const borderAccent = accent ? { borderColor: accent + '99', borderWidth: 1.5 } : null;
     return <View style={[styles.cardFlat, borderAccent]}>{children}</View>;
   }
-  const accentStyle = accent ? { borderLeftWidth: 4, borderLeftColor: accent } : null;
+  const accentStyle = accent ? { borderLeftWidth: 2.8, borderLeftColor: accent } : null;
   if (onPress) {
     return (
       <Pressable
@@ -237,11 +237,15 @@ export function Button({
   onPress,
   variant = 'primary',
   disabled,
+  compact,
 }: {
   label: string;
   onPress: () => void;
   variant?: 'primary' | 'ghost';
   disabled?: boolean;
+  /** compact: 높이 ~10%↓(paddingVertical 15→13.5) + primary는 배경 살짝 더 밝게(클릭 가능 강조).
+   *  일정 화면 "다음 경기" CTA(이어보기/경기 시작) 전용 — 기본값 false라 다른 버튼엔 무영향. */
+  compact?: boolean;
 }) {
   return (
     <Pressable
@@ -250,6 +254,8 @@ export function Button({
       style={({ pressed }) => [
         styles.btn,
         variant === 'primary' ? styles.btnPrimary : styles.btnGhost,
+        compact && { paddingVertical: 13.5 },
+        compact && variant === 'primary' && { backgroundColor: theme.accent + '38' }, // accentGlass(0.16)보다 밝은 ~0.22 틴트
         disabled && { opacity: 0.4 },
         pressed && !disabled && { opacity: 0.8 },
       ]}
@@ -361,25 +367,27 @@ const styles = themedStyles(() => StyleSheet.create({
   content: { padding: 16, gap: 12 },
   contentScroll: { padding: 16, paddingBottom: 32, gap: 12 }, // 스크롤 하단 여유(실제 inset은 SafeAreaView가 처리)
   scrollTop: { position: 'absolute', top: 0, left: 0, width: 1, height: 1 }, // 스포트라이트 스크롤 오프셋 기준(레이아웃 무영향)
-  title: { color: theme.text, fontSize: 24, fontWeight: '800', marginBottom: 2 },
-  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 2 },
+  // 제목↔첫 카드 사이 숨통(UI polish) — marginBottom 2→7로 앱 전역 여백 +5.
+  title: { color: theme.text, fontSize: 24, fontWeight: '700', marginBottom: 7 },
+  titleRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 7 },
   h2: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  // 카드: 더 단단한 14R + 상하 축소(13)·우측 여유(23, 숫자가 가장자리에 안 붙게) 비대칭 패딩(UI polish).
   card: {
-    backgroundColor: theme.card, borderRadius: 18, padding: 16, gap: 8,
+    backgroundColor: theme.card, borderRadius: 14, paddingVertical: 13, paddingLeft: 15, paddingRight: 23, gap: 8,
     borderWidth: 1, borderColor: theme.border,
     shadowColor: '#000', shadowOpacity: 0.35, shadowRadius: 10, shadowOffset: { width: 0, height: 6 },
     elevation: 4,
   },
   // 정보(읽기용) 패널 — 입체감(그림자/elevation) 없이 납작. 탭 카드와 구분(UI-13). 배경은 theme.card라 다크/라이트 자동 반전.
   cardFlat: {
-    backgroundColor: theme.card, borderRadius: 12, padding: 14, gap: 8,
+    backgroundColor: theme.card, borderRadius: 10, paddingVertical: 12, paddingLeft: 13, paddingRight: 20, gap: 8,
     borderWidth: 1, borderColor: theme.border,
   },
   muted: { color: theme.muted, fontSize: 14, lineHeight: 20 },
   loadingMsg: { color: theme.muted, fontSize: 14, textAlign: 'center', lineHeight: 20 },
-  brandMark: { color: theme.text, fontSize: 26, fontWeight: '900', letterSpacing: 1 },
-  // 스켈레톤 카드 — 실제 카드(card)와 같은 골격(둥근모서리·패딩·헤어라인)이되 그림자는 빼 가벼운 플레이스홀더로
-  skCard: { backgroundColor: theme.card, borderRadius: 18, padding: 16, gap: 10, borderWidth: 1, borderColor: theme.border },
+  brandMark: { color: theme.text, fontSize: 26, fontWeight: '700', letterSpacing: 1 },
+  // 스켈레톤 카드 — 실제 카드(card)와 같은 골격(둥근모서리·패딩·헤어라인)이되 그림자는 빼 가벼운 플레이스홀더로. card 반경/패딩 미러.
+  skCard: { backgroundColor: theme.card, borderRadius: 14, paddingVertical: 13, paddingLeft: 15, paddingRight: 23, gap: 10, borderWidth: 1, borderColor: theme.border },
   // 글래스 버튼(2026-06-28 UI-7, 사용자 선택) — 카드와 같은 14R + 다크 글래스 결.
   // primary: 액센트 글래스(민트 틴트 반투명) + 민트 보더 1.5 + 민트 글씨 + 액센트 글로우 → 유리판처럼 얹힌 CTA.
   // ghost: 중립 다크 글래스(theme.card) + 은은한 헤어라인 → 보조 버튼(primary보다 차분).
@@ -392,19 +400,20 @@ const styles = themedStyles(() => StyleSheet.create({
     shadowColor: theme.accent, shadowOpacity: 0.35, shadowRadius: 12, shadowOffset: { width: 0, height: 3 },
   },
   btnGhost: { backgroundColor: theme.card, borderColor: theme.border },
-  btnText: { color: theme.accent, fontSize: 16, fontWeight: '800', letterSpacing: 0.3 },
+  btnText: { color: theme.accent, fontSize: 16, fontWeight: '700', letterSpacing: 0.3 },
   ovr: { alignItems: 'center', justifyContent: 'center' },
-  ovrText: { fontWeight: '900' },
+  // includeFontPadding:false + textAlign center → 안드로이드 폰트 상하 패딩 제거로 원 안 숫자 완전 중앙정렬(UI polish).
+  ovrText: { fontWeight: '700', textAlign: 'center', includeFontPadding: false },
   // 약어 배지 — minWidth로 1글자(S·L)와 2글자(OH·OP·MB)가 같은 폭으로 정렬(들쭉날쭉 제거)
   pos: { minWidth: 34, paddingHorizontal: 8, paddingVertical: 3, borderRadius: 8, alignItems: 'center', justifyContent: 'center' },
-  posText: { fontSize: 12, fontWeight: '800' },
+  posText: { fontSize: 12, fontWeight: '700' },
   posFull: { minWidth: 0, paddingHorizontal: 10 }, // 풀라벨(세터·아웃사이드…)은 가변 폭
   posCompact: { width: 28, paddingVertical: 2, borderRadius: 5, alignItems: 'center', justifyContent: 'center' }, // 박스스코어 열 정렬용 고정폭
-  posTextCompact: { fontSize: 9.5, fontWeight: '800' },
+  posTextCompact: { fontSize: 9.5, fontWeight: '700' },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statLabel: { color: theme.muted, fontSize: 13, width: 64 },
   statVal: { color: theme.text, fontSize: 13, fontWeight: '700', width: 58, textAlign: 'right' },
-  potTxt: { color: theme.good, fontSize: 12, fontWeight: '800' },
+  potTxt: { color: theme.good, fontSize: 12, fontWeight: '700' },
   barTrack: { flex: 1, height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4 },
   potMark: { position: 'absolute', top: 0, width: 3, height: 8, marginLeft: -1.5, borderRadius: 1, backgroundColor: theme.good }, // 포텐 천장 틱(성장 여지 상한) — 밝은 green
