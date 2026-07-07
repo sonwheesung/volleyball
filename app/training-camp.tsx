@@ -2,7 +2,7 @@
 // 5코스(공격/수비/블로킹/세터/서브) 중 하나로 관련 3스탯을 현재+2·포텐+7(최대 99). 선수당 오프시즌 1회.
 // 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지. 포텐 +7이 본체: 젊을수록 성장으로 실현되는 폭이 크다(H2).
 import { useEffect, useRef, useState } from 'react';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Button, Card, IconLabel, Muted, PosTag, Screen, theme, themedStyles } from '../components/Screen';
@@ -43,6 +43,25 @@ export default function TrainingCamp() {
   const [picked, setPicked] = useState<string | null>(null);
   const [course, setCourse] = useState<CampCourse | null>(null);
   const [, force] = useState(0); // 적용 후 리렌더
+
+  // 2단계 뒤로가기(2026-07-07 버그수정): 코스 화면(picked!==null)에서 ← / 안드로이드 하드웨어백 / iOS 제스처백은
+  //   화면을 pop(일정으로 이탈)하지 말고 선수 목록으로 돌아가야 한다. beforeRemove로 뒤로가기 액션만 가로챈다.
+  //   staleness 함정: 리스너 클로저가 초기 picked(null)만 보면 안 됨 → pickedRef를 매 렌더 최신화해 리스너가 fresh 값을 읽는다.
+  //   chain 흐름(goNext=router.replace)은 REPLACE 액션이라 미개입(GO_BACK/POP만 가로챔) — 개막전/헌액 진행 안 막힘.
+  const navigation = useNavigation();
+  const pickedRef = useRef<string | null>(null);
+  pickedRef.current = picked;
+  useEffect(() => {
+    const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
+      const t = e?.data?.action?.type;
+      if (pickedRef.current !== null && (t === 'GO_BACK' || t === 'POP')) {
+        e.preventDefault();
+        setPicked(null);
+        setCourse(null);
+      }
+    });
+    return unsub;
+  }, [navigation]);
 
   // 첫 전지훈련 진입 환영 선물(계정당 1회, 서버 멱등) — 신규 유저가 다이아 0이라 온보딩이 막히던 문제 해결.
   //   applied=true(첫 지급)일 때만 팝업. 오프라인이면 다음 온라인 진입에서 재시도(서버가 진실).
@@ -97,9 +116,10 @@ export default function TrainingCamp() {
         <Card accent={theme.good}>
           <IconLabel icon="airplane-outline" color={theme.good}>오프시즌 해외 캠프</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
-            선수 한 명을 특별훈련 코스로 보냅니다. 코스의 관련 능력치 3개가 <Text style={{ color: theme.good, fontWeight: '800' }}>현재 +{CAMP_CUR_GAIN} · 성장 한계(포텐) +{CAMP_POT_GAIN}</Text> (최대 99).{'\n'}
-            • 코스당 <Text style={{ color: theme.good, fontWeight: '800' }}>{CAMP_COURSE_COST} 💎</Text> · 선수 1명당 오프시즌 1회 · 코스 1개{'\n'}
-            • 포텐이 크게 열리므로 <Text style={{ color: theme.text, fontWeight: '700' }}>어린 선수일수록 효과가 큽니다</Text> — 이후 시즌 성장으로 실현 · 영구(환불 불가)
+            선수 한 명을 코스 하나로 보내면, 관련 능력치 3개에 두 가지가 함께 붙습니다.{'\n'}
+            ① <Text style={{ color: theme.good, fontWeight: '800' }}>지금 실력 +{CAMP_CUR_GAIN}</Text> — 아래 카드의 82→84처럼 바로 오릅니다.{'\n'}
+            ② <Text style={{ color: theme.good, fontWeight: '800' }}>앞으로 클 수 있는 천장(포텐) +{CAMP_POT_GAIN}</Text> — 카드의 포텐 87→94(최대 99). 천장은 당장 오르는 게 아니라 <Text style={{ color: theme.text, fontWeight: '700' }}>다음 시즌부터 훈련·경기로 천천히 채워집니다.</Text>{'\n'}
+            • 비용 <Text style={{ color: theme.good, fontWeight: '800' }}>{CAMP_COURSE_COST}💎</Text> · 선수 1명당 오프시즌 1회 · 어릴수록 천장 채울 시간이 많아 이득 · 효과는 영구(환불 불가)
           </Muted>
         </Card>
         <IconLabel icon="people-outline" color={theme.accent}>선수 선택</IconLabel>
@@ -154,7 +174,7 @@ export default function TrainingCamp() {
         <Text style={styles.psub}>{player.age}세</Text>
         <Pressable onPress={() => { setPicked(null); setCourse(null); }}><Text style={styles.change}>선수 변경</Text></Pressable>
       </View>
-      <Muted style={{ fontSize: 12.5, marginBottom: 6 }}>코스를 선택하세요 — 관련 3개 능력치가 현재 +{CAMP_CUR_GAIN} · 포텐 +{CAMP_POT_GAIN}</Muted>
+      <Muted style={{ fontSize: 12.5, marginBottom: 6 }}>코스 1개 선택 — 관련 3개 능력치: 지금 실력 +{CAMP_CUR_GAIN} · 성장 천장(포텐) +{CAMP_POT_GAIN}</Muted>
       <ScrollView style={{ flex: 1 }}>
         {/* 포지션에 맞는 코스만 노출(2026-07-05 사용자 결정) — 세터에게 공격훈련 등 결이 다른 코스는 숨긴다.
             모든 포지션이 ≥1개 적합 코스 보유(engine/diamonds forPos): S=세터·서브 / L=수비 / OH·OP·MB=다수. */}
