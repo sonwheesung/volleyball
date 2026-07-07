@@ -534,6 +534,55 @@ coverChance  = f(coverPlayers 수, 그들의 dig·reaction·positioning)
 
 ---
 
+## 5.9 ★ 스탯 엔드투엔드 적용 검증 (죽은 스탯 0개, 2026-07-07)
+
+화면에 뜨는 선수 스탯이 **실제로 경기 엔진 결과를 움직이는지**(입력만 받고 안 쓰이는 "죽은 스탯"이
+없는지)를 전수 검증했다. 배선 경로는 두 갈래 — ① `engine/ratings.ts deriveRatings`가 밑단→윗단으로
+합성(spike/block/dig/receive/set/serve), ② `rally.ts`의 랠리 확률식이 원시값을 직접 읽음
+(focus/consistency/vq/reaction/staminaMax).
+
+**방법(동일 시드 페어드 A/B)**: 미러 두 팀(A=`LEAGUE.teams[0]` vs B=`[1]`)에서 A 로스터의 **딱 한 스탯만**
+고정폭 boost한 판을 만들고, 동일 시드 1..600으로 `A(boost) vs B`와 `A(baseline) vs B`를 각 600경기 돌려
+`BoxSink`로 A의 박스 스탯을 합산, boost-arm과 baseline-arm의 지표를 대조한다(결정론 → 완전 재현).
+boost 폭은 **필드별 스케일 분리** — 0~100 스탯은 `+20/clamp 99`, **키(height)는 센티미터라 `+8cm/clamp 210`**.
+
+**측정 결과 (N=600 · 엔진 `ENGINE_VERSION=4` · 2026-07-07 · 검증·실측=Fable 5)** — baseline→boost, 전 15스탯 방향 정상:
+
+| 스탯 | 파생 경로 | 측정 지표 | baseline→boost | |
+|---|---|---|---|---|
+| skSpike(스파이크기술) | ratings.spike | 킬% (atkKill/atkAtt) | 41.44→42.75 ↑ | ✅ |
+| skSet(세팅기술) | ratings.set(팀공격 승수) | 킬% | 41.44→42.19 ↑ | ✅ |
+| skServe(서브기술) | ratings.serve | 에이스% (srvAce/srvAtt) | 9.38→12.30 ↑ | ✅ |
+| skBlock(블로킹기술) | ratings.block | 블록득점(blockPt) | 5802→6073 ↑ | ✅ |
+| skDig(디그기술) | ratings.dig | 디그성공(digSucc) | 36831→37930 ↑ | ✅ |
+| skReceive(리시브기술) | ratings.receive | 리시브범실% (recvErr/recvAtt) | 8.73→8.15 ↓ | ✅ |
+| jump(점프력) | ratings.spike·block | 블록득점(+킬도↑) | 5802→6044 ↑ | ✅ |
+| height(키) ★cm | ratings.spikeHeight·blockHeight | 킬%(+블록도↑) | 41.44→42.88 ↑ | ✅ |
+| agility(민첩성) | ratings.dig | 디그성공 | 36831→38333 ↑ | ✅ |
+| reaction(반응속도) | ratings.block·dig·receive | 블록득점(+디그도↑) | 5802→6060 ↑ | ✅ |
+| positioning(위치선정) | ratings.dig·receive | 리시브범실%(+디그도↑) | 8.73→7.98 ↓ | ✅ |
+| focus(집중력) | rally 서브식 + ratings.set·serve | 에이스% | 9.38→11.03 ↑ | ✅ |
+| consistency(기복) | rally 공격범실식 + ratings.spike | 공격범실% (atkErr/atkAtt) | 5.70→5.28 ↓ | ✅ |
+| vq(배구IQ) | rally 공격범실·팁·블록아웃식 | 공격범실% | 5.70→5.43 ↓ | ✅ |
+| staminaMax(체력) | rally 체력소모 + ratings 경유 | 킬% | 41.44→42.01 ↑ | ✅ |
+
+> **죽은 스탯 0개.** 15개 전부 올바른 방향으로 움직인다. 효과 **크기는 소폭**(예: 기술 +20에 킬% +0.7~1.3%p,
+> 키 +8cm에 킬% +1.4%p) — 한 스탯을 극단으로 올려도 경기를 지배하지 못하는 **밸런스 철학에 부합**(선수는
+> 스탯 총합·궁합으로 이기지 단일 스탯 폭주로 이기지 않는다). 체젠(staminaRegen)만 이 박스 A/B에서 제외 —
+> 회복속도는 경기 내내 누적되는 간접 효과라 노쇠·체력 가드가 별도로 커버.
+
+> **★ 스케일 함정(측정도구 결함, Fable가 잡음)**: 대부분 스탯은 0~100이라 `Math.min(99, x+20)`로 boost해도
+> 되지만 **키만 cm(약 165~190)**다. 키를 0~100 스탯처럼 `Math.min(99, height+20)`로 클램프하면 182cm가
+> **99cm로 뭉개져** spike/block이 폭락 → 킬%가 거꾸로(41.44→37.12 ↓) 나와 "방향 틀림" 오탐이 뜬다(엔진은 정상).
+> 상비 가드는 **필드별 스케일을 분리**(키=cm/+8/210)하고, mutant 블록이 "틀린 0~100 스케일이면 키 검사가 ❌로
+> 뒤집힌다"를 재현해 스스로의 민감도를 증명한다. `docs/TEST_METHODOLOGY.md` "사각 분석"에 등록.
+
+**상비 가드**: `tools/_dv_stats.ts` (`npx tsx tools/_dv_stats.ts` → 위 15스탯 방향 A/B + cm-스케일 mutant +
+무boost 동률 자가검증, `STATS PASS (15/15)`·exit 0). 엔진 계수 변경 시 재실행하면 어느 스탯이 죽거나
+방향이 뒤집혔는지 즉시 잡힌다. 검증·실측=Fable 5 / 가드=Opus 에이전트, 2026-07-07.
+
+---
+
 ## 6. 찬스볼 (네 요청 반영)
 
 수비가 흐트러져 겨우 살린 공. 정상 공격 루트가 깨진 상태.
