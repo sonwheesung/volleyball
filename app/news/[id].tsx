@@ -30,6 +30,9 @@ const LEAD: Record<NewsItem['kind'], string> = {
   release: '한 선수가 정든 팀을 떠나 FA 시장에 나왔다. 재계약 불발 끝에 새 둥지를 찾아야 하는 처지다.',
   retire: '오랜 커리어를 마치고 한 선수가 코트를 떠난다. 통산 기록과 함께 긴 여정이 마무리된다.',
   sponsor: '다가오는 FA 시장을 앞두고 구단 안팎의 기류가 전해졌다. 어디까지나 소문, 시장이 열려봐야 안다.',
+  offseason: '새 시즌을 앞두고 선수 이동이 마무리됐다. 누가 들어오고 누가 떠났는지, 개막 진용이 정리됐다.',
+  draft: '신인 드래프트가 미래의 자원을 호명했다. 잠재력은 이제 코트에서 확인될 것이다.',
+  foreign: '외국인 선수 자리의 주인이 바뀌었다. 용병 농사는 한 시즌의 성패를 가르는 가장 큰 도박이다.',
 };
 
 export default function NewsArticle() {
@@ -51,13 +54,15 @@ function NewsArticleInner() {
   const benchDirectives = useGameStore((s) => s.benchDirectives);
   const transfers = useGameStore((s) => s.transfers);
   const retirements = useGameStore((s) => s.retirements);
+  const seasonDraftLog = useGameStore((s) => s.seasonDraftLog);
+  const seasonForeignLog = useGameStore((s) => s.seasonForeignLog);
   const teamId = useGameStore((s) => s.selectedTeamId);
 
   // 목록(news.tsx)과 **완전히 동일한 파생**(displayCutoff §3.3 + freshNews) — 안정 키로 같은 기사를 집어야 어긋나지 않는다(F1).
   const cutoff = displayCutoff(currentDay, results, teamId ?? undefined);
   const feed = useMemo(
-    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements), cutoff),
-    [archive, milestones, hallOfFame, season, cutoff, expelledLog, benchDirectives, teamId, transfers, retirements],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements, seasonDraftLog, seasonForeignLog), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog],
   );
   const key = id ? decodeURIComponent(id) : '';
   const n = feed.find((x) => newsKey(x) === key);

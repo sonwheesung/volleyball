@@ -68,9 +68,11 @@ export default function Dashboard() {
   const benchDirectives = useGameStore((s) => s.benchDirectives);
   const transfers = useGameStore((s) => s.transfers);
   const retirements = useGameStore((s) => s.retirements);
+  const seasonDraftLog = useGameStore((s) => s.seasonDraftLog);
+  const seasonForeignLog = useGameStore((s) => s.seasonForeignLog);
   const allNews = useMemo(
-    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId, transfers, retirements), cutoff),
-    [archive, milestones, hallOfFame, season, cutoff, expelledLog, benchDirectives, teamId, transfers, retirements],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog],
   );
   const unreadNews = useMemo(() => {
     const read = new Set(readNews);

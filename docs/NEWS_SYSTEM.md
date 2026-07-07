@@ -56,8 +56,8 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 
 ## 3. 기사 소재 카탈로그 (전체)
 
-`kind`(NewsItem.kind) = `champion|award|milestone|hof|injury|scandal|owner|match|debut|streak|standing|transfer|release|retire|sponsor`
-(신규 kind: `match`·`debut`·`streak`·`standing` + 이적류 `transfer`·`release`(§3.3)·`retire`(§3.4) + **`sponsor`**(모기업 기조 예고, FINANCE 2.0 Stage2b·2026-06-29))
+`kind`(NewsItem.kind) = `champion|award|milestone|hof|injury|scandal|owner|match|debut|streak|standing|transfer|release|retire|sponsor|offseason|draft|foreign`
+(신규 kind: `match`·`debut`·`streak`·`standing` + 이적류 `transfer`·`release`(§3.3)·`retire`(§3.4) + **`sponsor`**(모기업 기조 예고, FINANCE 2.0 Stage2b·2026-06-29) + **`offseason`·`draft`·`foreign`**(오프시즌 결산 — 종합·드래프트 입단·외인 교체, §3.7·2026-07-08))
 
 ### 3.1 실시간 (시즌 중) — 초반을 채운다
 
@@ -160,6 +160,44 @@ day 경계 자체가 없어 **시즌 전체 미래 사건**을 노출했다(`dyn
   - **목록·상세는 컷오프(§3.3 `displayCutoff`)와 `freshNews` 인자를 반드시 동일하게** 넘긴다(배선 규율 유지).
 - 검증: `tools/_dv_newskey.ts`(만료 기사 있는 상태에서 목록 인덱스 k의 키 == 상세가 그 키로 집는 기사, 0 불일치;
   읽음 대상 정확; A/B: 인덱스 라우팅으로 되돌리면 어긋남 재현).
+
+### 3.7 오프시즌 결산 — "누가 왔고 누가 갔나" (슬라이스6, 2026-07-08, 사용자 보고 버그)
+
+> **증상(사용자)**: "시즌 시작하려는데 누가 왔고 누가 갔는지 뉴스가 없다." — 진단(코드 대조): FA 이적·방출은 이미
+> 기사화(§3.3, `transfers` 연표)되지만 **세 구멍**이 있어 **조용한 오프시즌엔 개막 피드가 텅 빈다**:
+> ① **드래프트 신인 입단 = 무음**(이적 루프가 `prevTeamOf`를 요구 → 신인은 직전 소속이 없어 배제).
+> ② **외국인/아시아쿼터 교체 = 무음**(`!p.isForeign` 필터로 외인 제외). ③ 내 팀 FA in/out이 하나도 없으면 기사 0건 →
+> 무슨 일이 있었는지 알 길 없음.
+
+**설계(3층 — 전부 기존 로그·엔진 무파급 순수 파생. 새 사건 생성 0)**
+
+1. **오프시즌 결산 종합(`kind='offseason'`) — 내 팀, 오프시즌마다 항상 1건(캡스톤·리브니스)**: 개막 피드의 정답.
+   IN(드래프트 지명 입단·FA 영입·외인 교체 in)·OUT(FA 이적·방출·외인 교체 out)을 **한 기사로 종합**. 변동이 하나도
+   없으면 **"기존 전력 유지 — 조용한 오프시즌"** 변형(항상 나오므로 텅 빈 피드가 원천 차단). 결정론(newsKey=`season:offseason:kord`,
+   기존 push/vh/조립 기계 재사용).
+2. **드래프트 입단 개별(`kind='draft'`)**: 내 팀 **전 픽** + 타팀 **1라운드 픽**(리그 뉴스거리). 헤드라인 "{전체순위}순위
+   지명 — {포지션} {이름}". **안개 원칙**: 포지션·이름·순번만, **정확 OVR 미표기**(신인 실력은 경기로 드러남 — 데뷔전 기사가 이어받음).
+3. **외인/아시아쿼터 교체 개별(`kind='foreign'`)**: **전 팀**(외인=리그 가시). in+out 있으면 "새 외인 {in} 영입 — {out} 결별",
+   in만=신규 영입, out만=결별 후 공석. 아시아쿼터는 `asian=true`로 톤 구분.
+
+**표시 타이밍(§9 정합)**: 세 종류 모두 **`day=0`·`season=currentSeason`**(개막 당일)로 부여 → 최신순 정렬 **최상단**(개막 피드
+맨 위) + `freshNews` 2주 만료로 시즌 진행 시 자연 소멸(관전형 — 개막 소식은 개막 무렵만). **리그 진행 컷오프(§3.5)를 타지 않는다**
+(오프시즌 사건은 첫 경기 전에 이미 확정 — leagueDay=−1에서도 노출). 버전 내 결정론.
+
+**데이터 모델(새 영속 로그 2종 — 재화·결정론 무관, additive)**: 드래프트/외인 결과는 로스터엔 남지만 **"누가 드래프트로/외인
+교체로 왔나"를 로스터만으론 역산 불가**(신인=직전소속 없음, 떠난 외인=snapshot서 삭제됨) → endSeason이 **최소 로그**를 적립.
+- `seasonDraftLog: DraftPickRecord[]` — `{season,teamId,playerId,name,position,round,overallPick}`. 포착 게이트 = **내 팀 전 픽 ∪ 타팀 1R**(린).
+  round/overallPick은 `resolveDraft.sequence`를 회차 재구성(팀이 한 라운드에 두 번 나오면 새 라운드). 최근 **150**(transfers식 slice).
+- `seasonForeignLog: ForeignSwapRecord[]` — `{season,teamId,asian,outId?,outName?,inId?,inName?}`. 전 팀, **id가 바뀐 팀만**(재계약=동일 id는 미기록).
+  OUT 이름은 **오프시즌 해소 전(commitRosters(finalR) 직후)** 캡처(트라이아웃 cleanup이 snapshot서 삭제하기 전). 최근 **150**.
+- 마이그레이션 §2① 자동(additive `'arr'`+partialize+freshSave, SAVE_SYSTEM §1). 구세이브=`[]`(기존 동작).
+
+**무결성**: 매달린 참조 0(드래프트 신인·외인 모두 playerBase 잔존), 중복 0(kord 유일), 결정론(같은 상태 → 같은 기사),
+가짜 드라마 0(전부 실제 draft/roster diff 파생), **OVR 누수 0**(신인 기사에 정확 OVR 미포함 — 안개). 검증 `tools/_ev_offseasonnews.ts`.
+
+**app 배선(피처 활성 — 뉴스 3 호출부·KIND_KO, 뉴스팀 소유 밖)**: `buildNewsFeed`는 새 인자 2종(`seasonDraftLog`·`seasonForeignLog`,
+기본 `[]`=하위호환)을 받는다. 실제 앱 노출은 3 호출부(`index`·`news`·`news/[id]`)가 store의 두 로그를 넘기고 `app/news.tsx`
+`KIND_KO`에 `offseason·draft·foreign` 한글 라벨을 추가해야 완성(엔진/가드는 인자 직접 주입으로 검증 가능 — 앱 배선과 독립).
 
 ---
 
@@ -389,6 +427,9 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
   `kind='transfer'`. ~~리그 전체 거물 이적은 추후(career 데이터 필요).~~
 - ~~리그 전체 거물 이적~~ → **슬라이스4 구현(2026-06-25, §3.3)**: 타팀 **방출(release)** + **거물 이적**을
   거물 게이트(`overall≥REL_NEWS_OVR`)로 surface. 내 팀은 OVR 무관 항상. `Transfer.kind`·`toTeam=''`(방출).
+- ~~드래프트 신인 입단·외인 교체 기사~~ → **슬라이스6 구현(2026-07-08, §3.7)**: "누가 왔고 갔는지" 개막 뉴스 공백 수정.
+  오프시즌 결산 종합(`offseason`, 내 팀 항상 1건·조용한 오프시즌 변형) + 드래프트 입단(`draft`, 내 팀 전 픽·타팀 1R) +
+  외인/아시아쿼터 교체(`foreign`, 전 팀). 새 영속 로그 `seasonDraftLog`·`seasonForeignLog`(endSeason 파생, 각 최근 150).
 - 라이벌 구도, 선수 인터뷰 — 영속/판정 데이터 추가 후(아직 보류).
 
 ---

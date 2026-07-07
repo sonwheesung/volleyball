@@ -18,7 +18,7 @@
 
 ---
 
-## 1. 영속 스키마 (57 필드 — 단일 진실)
+## 1. 영속 스키마 (59 필드 — 단일 진실)
 
 > **다이아 이코노미 필드**(표 미개별화, 정본=`store/saveMigration.ts SAVE_DEFAULTS`): `diamonds·saveId·campLog·campTrainedThisOffseason·campDoneSeason·pendingCamp·claimedAch·adState`. **`campDoneSeason`**(num, 기본 -1, 2026-07-04 추가): 전지훈련을 "마친" 시즌번호 — 오프시즌↔개막전 게이트(MONETIZATION §11.2). `===season`이면 완료(시즌번호라 새 시즌 자동 리셋). 추가는 §2① 자동 처리(누락=기본값 -1).
 
@@ -71,6 +71,8 @@
 | `expelledLog` | ExpelRecord[] | [] | 무제한 |
 | `transfers` | Transfer[]{season,playerId,name,fromTeam,toTeam,kind?,ovr?} | [] | 최근 200 |
 | `retirements` | RetireRecord[] | [] | 최근 200 |
+| `seasonDraftLog` (2026-07-08, 슬라이스6) | DraftPickRecord[]{season,teamId,playerId,name,position,round,overallPick} | [] | 최근 150 (오프시즌 결산 개막 뉴스 — 드래프트 입단. NEWS §3.7) |
+| `seasonForeignLog` (2026-07-08, 슬라이스6) | ForeignSwapRecord[]{season,teamId,asian,outId?,outName?,inId?,inName?} | [] | 최근 150 (외인·아시아쿼터 교체. NEWS §3.7) |
 | `milestones` | Milestone[]{season,playerId,name,teamId,kind,text,big} | [] | 최근 300(big 무제한) |
 | `readNews` | string[] | [] | 최근 1500 |
 | `careerLog` | {faSigns,coachHires,staffHires,interviews:number} | 0×4 | 누적 |

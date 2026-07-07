@@ -55,7 +55,7 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, ExpelRecord, FocusSeg, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
+import type { Contract, DraftPickRecord, ExpelRecord, FocusSeg, ForeignSwapRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
 import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
 import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, CAMP_LEGACY_CUR_GAIN, CAMP_LEGACY_POT_GAIN, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
@@ -135,6 +135,8 @@ interface GameState {
   expelledLog: ExpelRecord[];                  // 영구제명 연표(승부조작·학폭 — 불명예 퇴출, 뉴스/서사용)
   transfers: Transfer[];                       // FA 이적 연표(오프시즌 팀 이동, 뉴스 슬라이스3)
   retirements: RetireRecord[];                 // 은퇴 연표(주목 은퇴자 작별·회고, 뉴스 슬라이스5)
+  seasonDraftLog: DraftPickRecord[];           // 드래프트 입단 연표(오프시즌 결산 뉴스 슬라이스6, §3.7)
+  seasonForeignLog: ForeignSwapRecord[];       // 외인·아시아쿼터 교체 연표(슬라이스6, §3.7)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   readNews: string[];                          // 읽은 뉴스 키(season:kind:headline) — 읽음/안읽음 구분(NEWS_SYSTEM)
   trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 **현재** 훈련 방향(null=감독 기본, 표시·UI용)
@@ -248,6 +250,8 @@ const freshSave = {
   expelledLog: [] as ExpelRecord[],
   transfers: [] as Transfer[],
   retirements: [] as RetireRecord[],
+  seasonDraftLog: [] as DraftPickRecord[],   // 드래프트 입단 연표(오프시즌 결산 뉴스 §3.7) — 최근 150
+  seasonForeignLog: [] as ForeignSwapRecord[], // 외인·아시아쿼터 교체 연표(§3.7) — 최근 150
   milestones: [] as Milestone[],
   readNews: [] as string[],
   trainingFocus: null as TrainingFocus | null,
@@ -895,7 +899,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, draftSelections, hallOfFame, expelledLog, transfers, retirements, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, draftSelections, hallOfFame, expelledLog, transfers, retirements, seasonDraftLog, seasonForeignLog, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
         diag(season, 'season', `시즌 종료 ${season + 1}→${nextSeason + 1} (오프시즌 진입)`); // 진단 로그(#44)
@@ -918,6 +922,18 @@ export const useGameStore = create<GameState>()(
           else if (!arr.includes(tx.playerId)) finalR[tx.teamId] = [...arr, tx.playerId];
         }
         commitRosters(finalR);
+        // 오프시즌 결산 뉴스(§3.7) — 외인/아시아쿼터 교체 OUT 이름은 트라이아웃 해소(runTryout cleanup) 전에 캡처.
+        //   여기서 getPlayer는 아직 오프시즌 전 base(외인 잔존)를 읽는다(commitPlayerBase는 롤오버 말미). finalR = 이번 시즌 최종 명단.
+        type SwapSide = { id: string; name: string };
+        const prevForeign: Record<string, SwapSide> = {}; // teamId → 직전 외국인
+        const prevAsian: Record<string, SwapSide> = {};    // teamId → 직전 아시아쿼터
+        for (const tid of Object.keys(finalR)) {
+          for (const id of finalR[tid]) {
+            const p = getPlayer(id); if (!p) continue;
+            if (p.isForeign && !p.isAsianQuota) prevForeign[tid] = { id, name: p.name };
+            else if (p.isAsianQuota) prevAsian[tid] = { id, name: p.name };
+          }
+        }
         // 마일스톤: big(역대·구단·레전드)은 영구 보존, 일반 통산 임계는 최근 300건만(방치형 장기 저장 바운딩)
         const allMs = [...milestones, ...detectSeasonMilestones(season, hallOfFame)];
         const nextMilestones = [...allMs.filter((m) => m.big), ...allMs.filter((m) => !m.big).slice(-300)]
@@ -1124,6 +1140,43 @@ export const useGameStore = create<GameState>()(
         }
         const nextTransfers = [...transfers, ...seasonTransfers, ...seasonReleases].slice(-200);
 
+        // 오프시즌 결산 뉴스(§3.7) — ① 드래프트 입단 로그: 내 팀 전 픽 ∪ 타팀 1라운드.
+        //   round/overallPick은 drafted.sequence를 회차 재구성(한 라운드에 팀이 두 번 나오면 새 라운드 — buildDraftOrder 구조).
+        const seasonDraft: DraftPickRecord[] = [];
+        {
+          let round = 1, overallPick = 0;
+          const seenThisRound = new Set<string>();
+          for (const pk of drafted.sequence) {
+            if (seenThisRound.has(pk.teamId)) { round++; seenThisRound.clear(); }
+            seenThisRound.add(pk.teamId);
+            overallPick++;
+            if (pk.teamId === my || round === 1) {
+              const p = snapshot[pk.playerId];
+              if (p) seasonDraft.push({ season, teamId: pk.teamId, playerId: pk.playerId, name: p.name, position: p.position, round, overallPick });
+            }
+          }
+        }
+        const nextDraftLog = [...seasonDraftLog, ...seasonDraft].slice(-150);
+
+        // ② 외인·아시아쿼터 교체 로그: 전 팀, id가 바뀐 팀만(재계약=동일 id는 미기록). in/out 중 하나는 반드시 존재.
+        const nextSideOf = (tid: string, asian: boolean): SwapSide | undefined => {
+          for (const id of filled.rosters[tid] ?? []) {
+            const p = snapshot[id]; if (!p || !p.isForeign) continue;
+            if (asian ? p.isAsianQuota : !p.isAsianQuota) return { id, name: p.name };
+          }
+          return undefined;
+        };
+        const seasonForeign: ForeignSwapRecord[] = [];
+        for (const tid of Object.keys(filled.rosters)) {
+          for (const asian of [false, true]) {
+            const prev = asian ? prevAsian[tid] : prevForeign[tid];
+            const next = nextSideOf(tid, asian);
+            if ((prev?.id ?? '') === (next?.id ?? '')) continue; // 유임 또는 계속 공석 — 뉴스거리 아님
+            seasonForeign.push({ season, teamId: tid, asian, outId: prev?.id, outName: prev?.name, inId: next?.id, inName: next?.name });
+          }
+        }
+        const nextForeignLog = [...seasonForeignLog, ...seasonForeign].slice(-150);
+
         const nextBonds = accrueBonds(bonds, filled.rosters); // 인간관계 우정 누적(같은 팀 +·옛정 감쇠)
         setRelationContext(nextBonds);    // 새 시즌 관계 컨텍스트(FA preview=result)
         commitPlayerBase(snapshot);
@@ -1183,6 +1236,8 @@ export const useGameStore = create<GameState>()(
           expelledLog: [...expelledLog, ...ctx.expelled.map((e) => ({ season, playerId: e.playerId, name: snapshot[e.playerId]?.name ?? e.playerId, teamId: e.teamId, kind: e.kind }))],
           transfers: nextTransfers,
           retirements: nextRetirements,
+          seasonDraftLog: nextDraftLog,
+          seasonForeignLog: nextForeignLog,
           archive: nextArchive,
           milestones: nextMilestones,
         });
@@ -1260,6 +1315,8 @@ export const useGameStore = create<GameState>()(
         expelledLog: s.expelledLog,
         transfers: s.transfers,
         retirements: s.retirements,
+        seasonDraftLog: s.seasonDraftLog,
+        seasonForeignLog: s.seasonForeignLog,
         milestones: s.milestones,
         readNews: s.readNews,
         trainingFocus: s.trainingFocus,

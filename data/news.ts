@@ -3,7 +3,7 @@
 //   가짜 드라마 금지: 기록에 근거한 사실만. 중요도(big)로 헤드라인/단신 구분.
 //   본문은 조립식(opener+사실+closer) + 안정 시드 변주 → 같은 종류라도 표현이 다르다(NEWS_SYSTEM §4).
 
-import type { ExpelRecord, HofEntry, Milestone, NewsItem, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
+import type { DraftPickRecord, ExpelRecord, ForeignSwapRecord, HofEntry, Milestone, NewsItem, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
 import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
 import { jerseyNumber } from '../engine/jersey';
@@ -146,6 +146,22 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
     open: ['구단 안팎에서 큰손 등판설이 흘러나온다.', '모기업이 지갑을 열 채비라는 말이 돈다.', 'FA 시장을 앞두고 공격적 영입 기류가 감지된다.', '오프시즌을 앞두고 분위기가 심상치 않다.'],
     close: ['다만 영입은 상대가 있는 일, 뜻대로 될지는 미지수다.', '실제 영입으로 이어질지는 시장이 열려봐야 안다.', '소문이 현실이 될지 시선이 쏠린다.', '거물 쟁탈전의 한 축이 될 전망이다.'],
   },
+  offseason: { // 오프시즌 결산 종합(§3.7) — 내 팀 개막 진용 브리핑
+    open: ['새 시즌을 앞두고 진용이 정리됐다.', '오프시즌의 선수 이동이 마무리됐다.', '개막을 앞두고 스쿼드가 확정됐다.', '겨울 동안의 전력 재편이 끝났다.'],
+    close: ['새 시즌의 출발선이 정해졌다.', '완성된 스쿼드로 개막을 맞는다.', '이제 코트에서 답을 낼 차례다.', '한 시즌의 밑그림이 그려졌다.'],
+  },
+  quietOff: { // 조용한 오프시즌(변동 0) — 관망 톤(리브니스: 변동 없어도 항상 한 건)
+    open: ['이번 겨울은 조용했다.', '큰 움직임 없는 오프시즌이었다.', '전력의 큰 변화 없이 겨울이 지났다.', '영입도 유출도 눈에 띄지 않았다.'],
+    close: ['익숙한 얼굴들로 새 시즌을 맞는다.', '기존 전력의 조직력에 기대를 건다.', '변화보다 지속을 택한 겨울이다.', '손발을 맞춰온 스쿼드 그대로 개막에 나선다.'],
+  },
+  draft: { // 드래프트 입단 개별(§3.7) — 안개 원칙(포지션·순번만, 정확 OVR 없음)
+    open: ['미래의 자원이 새 유니폼을 입는다.', '신인 드래프트가 한 이름을 호명했다.', '다음 세대의 씨앗이 뿌려졌다.', '한 팀의 미래가 지명으로 정해졌다.'],
+    close: ['잠재력은 이제 코트에서 확인될 것이다.', '성장 곡선은 데뷔 이후 그려진다.', '기대주의 첫 페이지가 열렸다.', '이름값은 앞으로 경기가 증명한다.'],
+  },
+  foreign: { // 외인·아시아쿼터 교체 개별(§3.7) — 리그 가시(전 팀)
+    open: ['용병 시장이 움직였다.', '외인 자리의 주인이 바뀌었다.', '새 외국인 카드가 공개됐다.', '팀 공격의 핵이 교체됐다.'],
+    close: ['용병 농사가 시즌을 좌우한다.', '새 얼굴의 활약에 시즌이 걸렸다.', '외인 결정은 늘 가장 큰 도박이다.', '코트에서의 증명만 남았다.'],
+  },
   sponsorThrift: { // 모기업 긴축·관망 예고(FINANCE 2.0 Stage2b)
     open: ['모기업이 허리띠를 졸라맨다는 말이 나온다.', '이번 오프시즌은 관망 기조라는 기류다.', '큰 영입보다 내실을 다질 분위기다.', '지갑을 닫을 것이라는 전망이 우세하다.'],
     close: ['FA 시장에서 조용한 행보가 예상된다.', '실속형 운영으로 시즌을 준비할 전망이다.', '큰 변화보다 기존 전력 유지에 무게가 실린다.', '시장이 열려봐야 알겠지만 움직임은 크지 않을 듯하다.'],
@@ -171,6 +187,8 @@ export function buildNewsFeed(
   myTeamId = '',
   transfers: Transfer[] = [], // FA 이적 연표(슬라이스3) — 내 팀 in/out만 기사화
   retirements: RetireRecord[] = [], // 은퇴 연표(슬라이스5) — 주목 은퇴자 작별·회고
+  seasonDraftLog: DraftPickRecord[] = [], // 드래프트 입단 연표(슬라이스6, §3.7) — 오프시즌 결산 개막 뉴스
+  seasonForeignLog: ForeignSwapRecord[] = [], // 외인·아시아쿼터 교체 연표(슬라이스6, §3.7)
 ): NewsItem[] {
   const items: NewsItem[] = [];
   // 뉴스 안정 키(Step0, §4.4): ref = (season:kind)당 결정론 순번(ordinal). 문구 무관 → Step1~3에서
@@ -566,6 +584,66 @@ export function buildNewsFeed(
         ], spKey(teamId), teamName(teamId)), false, teamId,
           body3('sponsorThrift', spKey(teamId), `${teamName(teamId)} 모기업이 다가오는 FA 시장에서 신중한 행보를 보일 전망이다.`), teamId);
       }
+    }
+  }
+
+  // 10) 오프시즌 결산(§3.7) — "누가 왔고 갔나" 개막 뉴스. 직전 오프시즌(currentSeason−1)의 draft/transfer/foreign 로그 파생.
+  //   day=0·season=currentSeason(개막 당일 최상단) — 리그 진행 컷오프 무관(오프시즌 사건은 첫 경기 전 확정, leagueDay=−1도 노출).
+  const offSeason = currentSeason - 1;
+  if (offSeason >= 0) {
+    const posKoD = (pos: string) => POS_KO[pos] ?? '';
+    // ── ① 종합 결산(내 팀, 오프시즌마다 항상 1건 — 리브니스) ──
+    if (myTeamId) {
+      const myDraft = seasonDraftLog.filter((d) => d.season === offSeason && d.teamId === myTeamId);
+      const faIn = transfers.filter((t) => t.season === offSeason && t.toTeam === myTeamId && t.kind !== 'release');
+      const faOut = transfers.filter((t) => t.season === offSeason && t.fromTeam === myTeamId && t.kind !== 'release' && t.toTeam);
+      const relOut = transfers.filter((t) => t.season === offSeason && t.fromTeam === myTeamId && t.kind === 'release');
+      const myForeign = seasonForeignLog.filter((f) => f.season === offSeason && f.teamId === myTeamId);
+      const inNames = [
+        ...myDraft.map((d) => `${posKoD(d.position)} ${d.name}(신인)`),
+        ...faIn.map((t) => `${t.name}(FA)`),
+        ...myForeign.filter((f) => f.inName).map((f) => `${f.inName}(${f.asian ? '아시아쿼터' : '외인'})`),
+      ];
+      const outNames = [
+        ...faOut.map((t) => `${t.name}(→${teamName(t.toTeam)})`),
+        ...relOut.map((t) => `${t.name}(방출)`),
+        ...myForeign.filter((f) => f.outName).map((f) => `${f.outName}(${f.asian ? '아시아쿼터' : '외인'})`),
+      ];
+      const S = currentSeason + 1;
+      const quiet = inNames.length === 0 && outNames.length === 0;
+      const detail = [inNames.length ? `영입·입단 — ${inNames.join(', ')}.` : '', outNames.length ? `방출·이적 — ${outNames.join(', ')}.` : ''].filter(Boolean).join(' ');
+      const core = quiet
+        ? `${teamName(myTeamId)}은(는) 이렇다 할 영입도 유출도 없이 기존 전력으로 ${S}시즌을 맞는다.`
+        : `${teamName(myTeamId)}의 ${S}시즌 진용이 확정됐다. ${detail}`;
+      push(currentSeason, 'offseason', quiet
+        ? `${teamName(myTeamId)}, ${S}시즌 전력 유지 — 조용한 오프시즌`
+        : `${teamName(myTeamId)}, ${S}시즌 진용 확정 (영입 ${inNames.length}·유출 ${outNames.length})`,
+        true, myTeamId, body3(quiet ? 'quietOff' : 'offseason', `${offSeason}:recap:${myTeamId}`, core), myTeamId, 0);
+    }
+
+    // ── ② 드래프트 입단 개별(내 팀 전 픽 + 타팀 1R). 안개: 포지션·순번만, 정확 OVR 없음 ──
+    for (const d of seasonDraftLog.filter((dd) => dd.season === offSeason && (dd.teamId === myTeamId || dd.round === 1))) {
+      const posKo = posKoD(d.position);
+      const dkey = `${offSeason}:draft:${d.playerId}`;
+      push(currentSeason, 'draft', vh([
+        (n) => `${d.overallPick}순위 지명 — ${posKo} ${n} (${teamName(d.teamId)})`,
+        (n) => `${teamName(d.teamId)}, ${d.round}R ${d.overallPick}순위로 ${posKo} ${n} 지명`,
+        (n) => `신인 ${posKo} ${n}, ${teamName(d.teamId)} 유니폼`,
+      ], dkey, d.name), d.teamId === myTeamId && d.round === 1, d.teamId,
+        body3('draft', dkey, `${teamName(d.teamId)}이(가) 신인 드래프트 ${d.round}라운드 전체 ${d.overallPick}순위로 ${posKo} ${d.name}을(를) 지명했다.`), d.playerId, 0);
+    }
+
+    // ── ③ 외인·아시아쿼터 교체 개별(전 팀 — 외인=리그 가시) ──
+    for (const f of seasonForeignLog.filter((ff) => ff.season === offSeason)) {
+      const ko = f.asian ? '아시아쿼터' : '외국인 선수';
+      const fkey = `${offSeason}:foreign:${f.teamId}:${f.asian ? 'a' : 'f'}`;
+      const headline = f.inName && f.outName ? `${teamName(f.teamId)}, 새 ${ko} ${f.inName} 영입 — ${f.outName}와(과) 결별`
+        : f.inName ? `${teamName(f.teamId)}, ${ko} ${f.inName} 영입`
+        : `${teamName(f.teamId)}, ${ko} ${f.outName} 결별 — 자리 공백`;
+      const core = f.inName && f.outName ? `${teamName(f.teamId)}이(가) ${ko} ${f.outName}을(를) 내보내고 새 ${ko} ${f.inName}을(를) 영입했다.`
+        : f.inName ? `${teamName(f.teamId)}이(가) 새 ${ko} ${f.inName}을(를) 영입했다.`
+        : `${teamName(f.teamId)}이(가) ${ko} ${f.outName}와(과) 결별하며 그 자리가 비었다.`;
+      push(currentSeason, 'foreign', headline, f.teamId === myTeamId, f.teamId, body3('foreign', fkey, core), f.inId ?? f.outId, 0);
     }
   }
 

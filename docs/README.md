@@ -235,6 +235,7 @@ npx tsx tools/simStatRecord.ts             # 개인 귀속 결정론·팀 누수
 npx tsx tools/simNews.ts                   # 뉴스 무결성(빈헤드/본문·내용중복·매달린 teamId 0) + 변주 가드(§4.4 Step4: 고볼륨 kind 변주비율≥0.90·n-gram 최대겹침<0.90 — 해시 붕괴/셀렉터 축소 검출, A/B teeth) + 읽음키 유일성. exit 0/2
 npx tsx tools/_dv_newsday0.ts              # 첫 경기 전 뉴스 스포일러 차단(EC-NEWS-01·NEWS §3.5, 2026-06-30) — leagueDay=-1 실시간 뉴스 0 + A/B(경계해제 시 재현=필터 민감). 미관전 데뷔·미래 부상/사건 노출 회귀 차단. exit 0/2
 npx tsx tools/_dv_newsorder.ts             # 뉴스 2주 만료(NEWS §9, 2026-07-05 최신순) — freshNews: 요약(day없음) 유지·14일 경계 유지·15일+ 만료 + A/B(표시일 급증 시 인게임 전부 만료=요약만 잔존, 필터가 진짜 day로 거름). exit 0/1
+npx tsx tools/_ev_offseasonnews.ts 32      # 오프시즌 결산 뉴스(NEWS §3.7 슬라이스6, 2026-07-08) — 32오프시즌: 내 팀 결산 종합 항상 1건(조용한 오프시즌 포함=리브니스)·드래프트 픽 전원 기사화·외인교체 로그정합(누락/날조0)·결정론·신인 OVR 누수0(안개) + A/B(팀없음→결산0·OVR정규식 teeth). exit 0/1
 npx tsx tools/_dv_newskey.ts               # 뉴스 목록↔상세 안정키 배선(NEWS §3.6, F1 2026-07-07) — 만료 기사 있는 상태서 목록 인덱스 k의 newsKey == 상세가 그 키로 집는 기사(0 불일치)·읽음대상 정확 + A/B(인덱스 라우팅으로 되돌리면 어긋남 재현). exit 0/1
 npx tsx tools/_dv_displaycutoff.ts         # 표시 컷오프 결과인지(SEASON §3.3, F2 2026-07-07) — 방금 기록 경기 포함·시즌말 리그 최종일 전체 공개(=아카이브/PO 수치 일치)·미관전 미래 누수 0 + A/B(leagueDisplayDay 단독으로 되돌리면 방금경기/시즌말 누락 재현). exit 0/1
 npx tsx tools/_dv_batch_a123.ts             # day<0 빈구간 가드(A1)·기록경기 소급차단 fromDay(A2)·unbench 종결일(A3) — 콜드 타이밍 증명(-1 경로 0ms vs 풀시뮬 2s)·리플레이 first-changed-day 검증 (2026-07-08). exit 0/1

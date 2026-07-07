@@ -204,7 +204,7 @@ export interface Milestone {
 /** 뉴스 피드 (NEWS_SYSTEM) — 자동 진행된 리그를 읽을 수 있는 기사로. 1~4 종합 파생 */
 export interface NewsItem {
   season: number;                                            // 0-based
-  kind: 'champion' | 'award' | 'milestone' | 'hof' | 'injury' | 'scandal' | 'owner' | 'streak' | 'standing' | 'match' | 'debut' | 'transfer' | 'release' | 'retire' | 'sponsor';
+  kind: 'champion' | 'award' | 'milestone' | 'hof' | 'injury' | 'scandal' | 'owner' | 'streak' | 'standing' | 'match' | 'debut' | 'transfer' | 'release' | 'retire' | 'sponsor' | 'offseason' | 'draft' | 'foreign';
   headline: string;
   big: boolean;                                              // 헤드라인급
   teamId?: string;                                           // 내 팀 강조용
@@ -243,6 +243,26 @@ export interface RetireRecord {
   teamId: string;                                            // 마지막 소속(prevTeamOf)
   seasons: number; points: number; blocks: number; digs: number; aces: number; assists: number; // 통산
   hof: boolean; legend: boolean;                             // 명전 등재 / 영구결번급
+}
+
+/** 드래프트 입단 영속 기록 — 오프시즌 신인 지명(NEWS_SYSTEM 슬라이스6 오프시즌 결산). 안개 원칙: 포지션만, 정확 OVR 미저장(신인 실력은 경기로 드러남). */
+export interface DraftPickRecord {
+  season: number;                                            // 지명 시즌(직전 시즌 종료 = 오프시즌). 새 시즌 시작 시 season+1 개막 뉴스로 노출
+  teamId: string;
+  playerId: string;
+  name: string;
+  position: Position;                                        // 포지션만 표시(OVR 안개 — TRAIT/드래프트 스카우팅 원칙)
+  round: number;                                             // 라운드(1-based) — buildDraftOrder 회차 재구성
+  overallPick: number;                                       // 전체 지명 순번(1-based)
+}
+
+/** 외국인·아시아쿼터 교체 영속 기록 — 오프시즌 외인 in/out(NEWS_SYSTEM 슬라이스6). 전 팀(외인=리그 가시). 재계약(동일 id)은 미기록(변동만). */
+export interface ForeignSwapRecord {
+  season: number;                                            // 교체 시즌(직전 시즌 종료 = 오프시즌)
+  teamId: string;
+  asian: boolean;                                            // true=아시아쿼터, false=외국인(연봉·톤 구분)
+  outId?: string; outName?: string;                          // 떠난 외인(없으면 신규 영입 — prev 없음)
+  inId?: string; inName?: string;                            // 새 외인(없으면 결별 후 공석 — next 없음)
 }
 
 export interface SubPolicy {
