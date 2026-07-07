@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useState } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Muted, Screen, Title, theme, themedStyles } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { getTeam, getPlayer } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { buildPlayoffs, type Matchup } from '../data/playoffs';
@@ -10,6 +10,13 @@ import { useGameStore } from '../store/useGameStore';
 import { ChampionCelebration } from '../components/ChampionCelebration';
 
 export default function Playoffs() {
+  // 포스트시즌은 무겁다(대진·시리즈 시뮬 buildPlayoffs). 한 틱 미뤄 로딩부터 그린다.
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading title="포스트시즌" variant="list" />;
+  return <PlayoffsInner />;
+}
+
+function PlayoffsInner() {
   const router = useRouter();
   const my = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);

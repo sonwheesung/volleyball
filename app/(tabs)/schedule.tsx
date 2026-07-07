@@ -2,7 +2,7 @@ import { useCallback, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../../components/AppDialog';
-import { Button, Card, IconLabel, Muted, OvrBadge, Row, Screen, Title, theme, themedStyles } from '../../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { GrowthReportModal } from '../../components/GrowthReportModal';
 import { growthReport, type PlayerGrowth } from '../../data/growthReport';
@@ -22,6 +22,13 @@ import { DEV_TOOLS } from '../../data/flags';
 import { useGameStore } from '../../store/useGameStore';
 
 export default function Schedule() {
+  // 일정은 무겁다(순위·전력 프리뷰·클린치·라이벌 재계산). 한 틱 미뤄 로딩부터 그린다.
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading title="일정" variant="list" />;
+  return <ScheduleInner />;
+}
+
+function ScheduleInner() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);

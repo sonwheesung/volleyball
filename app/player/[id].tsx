@@ -3,7 +3,7 @@ import { useState } from 'react';
 import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
-import { Button, Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, StatBar, theme, themedStyles } from '../../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, StatBar, theme, themedStyles, useDeferredReady } from '../../components/Screen';
 import { PlayerAvatar } from '../../components/PlayerAvatar';
 import { seasonYear, seasonYearRange } from '../../data/seasonLabel';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchetypeOf, conditionOf, popularityNow } from '../../data/owner';
@@ -92,6 +92,13 @@ const START_REJECT: Record<OwnerRejectReason, string> = {
 };
 
 export default function PlayerDetail() {
+  // 선수 상세는 무겁다(선수 진화·생산 집계·인기·레이팅 파생). 한 틱 미뤄 로딩부터 그린다.
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading variant="list" />;
+  return <PlayerDetailInner />;
+}
+
+function PlayerDetailInner() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const currentDay = useGameStore((s) => s.currentDay);
   const overrides = useGameStore((s) => s.contractOverrides);

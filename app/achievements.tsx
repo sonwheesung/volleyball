@@ -3,7 +3,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Muted, Screen, Title, theme, themedStyles } from '../components/Screen';
+import { Button, Card, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { evalAchievements, achievementSummary, type AchCategory, type AchStatus } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
 import { formatMoney } from '../engine/salary';
@@ -20,6 +20,13 @@ const progressLabel = (s: AchStatus): string => {
 };
 
 export default function Achievements() {
+  // 업적은 무겁다(전 업적 재평가 evalAchievements + 통산 집계). 한 틱 미뤄 로딩부터 그린다.
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading title="업적" variant="list" />;
+  return <AchievementsInner />;
+}
+
+function AchievementsInner() {
   const router = useRouter();
   const myTeamId = useGameStore((s) => s.selectedTeamId) ?? '';
   const archive = useGameStore((s) => s.archive);

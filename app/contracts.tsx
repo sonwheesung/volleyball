@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
-import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles } from '../components/Screen';
+import { Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { ActionSheet } from '../components/Popup';
 import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
 import { teamRelations } from '../data/relationships';
@@ -24,6 +24,13 @@ const STATUS_COLOR = { 저평가: theme.good, 적정: theme.muted, 고평가: th
 type ResignOpt = ReturnType<typeof resignOptions>[number];
 
 export default function Contracts() {
+  // 계약 관리는 무겁다(전 로스터 진화 + 선수별 생산·시장가 집계). 한 틱 미뤄 로딩부터 그린다.
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading title="계약 관리" variant="list" />;
+  return <ContractsInner />;
+}
+
+function ContractsInner() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);

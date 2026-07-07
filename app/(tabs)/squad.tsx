@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native';
-import { Card, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../../components/Screen';
+import { Card, Loading, Muted, Row, Screen, SCREEN_LOADING_MIN_MS, STYLE_LABEL, Title, theme, useDeferredReady } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeamCoach } from '../../data/league';
@@ -12,6 +12,13 @@ import { conditionOf } from '../../data/owner';
 import { useGameStore } from '../../store/useGameStore';
 
 export default function Squad() {
+  // 선수단은 무겁다(전 로스터 진화 + 라인업 산출). 한 틱 미뤄 로딩부터 그린다(team/[id] 패턴).
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading variant="list" />;
+  return <SquadInner />;
+}
+
+function SquadInner() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);

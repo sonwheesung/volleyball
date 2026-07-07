@@ -4,7 +4,7 @@
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
-import { Card, IconLabel, Muted, Screen, theme, themedStyles } from '../../components/Screen';
+import { Card, IconLabel, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../../components/Screen';
 import { buildNewsFeed, newsKey } from '../../data/news';
 import { seasonYear } from '../../data/seasonLabel';
 import { leagueDisplayDay } from '../../data/standings';
@@ -33,6 +33,13 @@ const LEAD: Record<NewsItem['kind'], string> = {
 };
 
 export default function NewsArticle() {
+  // 뉴스 상세는 무겁다(전 리그 뉴스 피드 재구성 후 id로 조회). 한 틱 미뤄 로딩부터 그린다.
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading variant="list" />;
+  return <NewsArticleInner />;
+}
+
+function NewsArticleInner() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);

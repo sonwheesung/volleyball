@@ -1,13 +1,20 @@
 // 리그 순위표 전용 화면 — 대시보드 "리그 순위"에서 진입(순위만 본다).
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
-import { Card, IconLabel, Screen, theme, themedStyles } from '../components/Screen';
+import { Card, IconLabel, Loading, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { computeStandings, leagueDisplayDay } from '../data/standings';
 import { getTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { useGameStore } from '../store/useGameStore';
 
 export default function Standings() {
+  // 순위표는 무겁다(리그 전체 순위 재계산). 한 틱 미뤄 로딩부터 그린다.
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading title="순위" variant="list" />;
+  return <StandingsInner />;
+}
+
+function StandingsInner() {
   const teamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const season = useGameStore((s) => s.season);

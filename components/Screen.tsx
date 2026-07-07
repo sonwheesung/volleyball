@@ -176,16 +176,29 @@ export function Loading({ title, message, variant = 'spinner' }: { title?: strin
   );
 }
 
+/** 로딩 화면 최소 표시 시간(ms) — 튜닝 가능(사용자가 실시간으로 조절).
+ *  0 = 즉시/구 동작(캐시-웜 화면은 1프레임 깜빡임), ~800ms = 편안(의도적 로딩으로 읽힘),
+ *  1500~2000 = 묵직한 연출. useDeferredReady(SCREEN_LOADING_MIN_MS)로 넘겨 쓴다. */
+export const SCREEN_LOADING_MIN_MS = 800;
+
 /** 무거운 동기 생성/재계산 화면용 — 첫 프레임에 로딩을 그리고 다음 인터랙션 틱에 본문을 마운트해
  *  "탭했는데 화면이 멈춘" 체감을 없앤다(team/[id] 패턴 일반화). 동기 계산이라 "빠르면 안 보이게"가
- *  불가하므로 즉시 뜨는 가벼운 화면엔 쓰지 말 것(불필요한 깜빡임). 반환값 false 동안 <Loading/>을 렌더. */
-export function useDeferredReady(): boolean {
-  const [ready, setReady] = useState(false);
+ *  불가하므로 즉시 뜨는 가벼운 화면엔 쓰지 말 것(불필요한 깜빡임). 반환값 false 동안 <Loading/>을 렌더.
+ *  minMs를 주면 인터랙션 완료 + 최소 minMs 경과 **둘 다** 충족해야 true — 캐시-웜 화면이 1프레임
+ *  깜빡이고 사라지는 걸 막아 로딩이 "의도적"으로 읽힌다(minMs=0이면 기존 동작 그대로). */
+export function useDeferredReady(minMs = 0): boolean {
+  const [interactionsDone, setInteractionsDone] = useState(false);
+  const [minElapsed, setMinElapsed] = useState(minMs <= 0);
   useEffect(() => {
-    const task = InteractionManager.runAfterInteractions(() => setReady(true));
-    return () => task.cancel();
-  }, []);
-  return ready;
+    const task = InteractionManager.runAfterInteractions(() => setInteractionsDone(true));
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    if (minMs > 0) timer = setTimeout(() => setMinElapsed(true), minMs);
+    return () => {
+      task.cancel();
+      if (timer) clearTimeout(timer);
+    };
+  }, [minMs]);
+  return interactionsDone && minElapsed;
 }
 
 // accent: 좌측 컬러 바(카테고리 구분, UI-12). borderLeftWidth를 키워 라운드 코너 자동 준수(overflow 불필요).
