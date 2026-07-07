@@ -82,6 +82,19 @@ function moodLabel(cause: SitCause, mood: Mood, topic: DiscontentTopic | null): 
 export function discontentNow(
   p: Player, myTeamId: string, day: number,
 ): { topic: DiscontentTopic | null; weight: number; mood: Mood; cause: SitCause; label: string; playRatio: number } {
+  // 시즌 시작 전(day≤0, 구단 선택·온보딩 currentDay=0)은 경기가 0 → 불만의 근거(출전율·성적)가 없다.
+  // 여기서 옛 폴백은 refDay=MAX였는데, computeStandings(MAX)·leagueProduction(MAX)가 '전 시즌 미래 경기'를
+  // 통째로 시뮬(콜드 ~844ms/dev, 폰 ~15s) — ① 첫 선수 상세만 15s 멈춤 ② 안 치른 경기 스포일러.
+  // popularityNow의 day-guard(day>0?day:-1)와 같은 취지로, 무거운 셀렉터 호출 전에 중립(불만 없음)으로 단락.
+  // ※ MAX→-1로만 바꾸면 prod undefined→playRatio=0→모든 선수 '안 뛰어서 불만' 오탐이 되므로 중립 리턴이 정답.
+  // ★ 성능(2026-07-07): benchCauseOf조차 부르면 안 된다 — benchCauseOf→restedOnDay→computeStandings(0)이
+  //   콜드 시즌 시뮬(폰 ~15s)을 트리거해 온보딩 첫 선수 상세가 얼어붙는다(콜드 측정으로 확인, 워밍 후 측정은 캐시에
+  //   가려 0.28ms 허위 PASS였음). 프리게임은 경기가 0 → 벤치 상황 자체가 없으므로 사유를 '계산'하지 말고
+  //   중립 상수 'starter'(벤치 이슈 없음)를 그대로 반환한다. moodLabel은 순수 문자열 맵이라 값싸다.
+  if (day <= 0) {
+    const cause: SitCause = 'starter'; // 프리게임=경기0=벤치 상황 없음. 시뮬 유발 함수 호출 금지(콜드 15s freeze)
+    return { topic: null, weight: 0, mood: 'neutral', cause, label: moodLabel(cause, 'neutral', null), playRatio: 1 };
+  }
   const refDay = day > 0 ? day : Number.MAX_SAFE_INTEGER;
   const standings = computeStandings(refDay);
   const rank = Math.max(1, standings.findIndex((s) => s.teamId === myTeamId) + 1);

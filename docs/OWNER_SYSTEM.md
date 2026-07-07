@@ -65,6 +65,12 @@
   불만 없음**("아직 부족하지"), 에이스가 벤치면 부글부글. → 출전 불만 = `w.play × 사유 스케일 × 기대치`.
 - **기분 3종**(`moodOf`): 불만(😟)/무감정(😐)/긍정(😊, 주전+상위권). 선수 상세 "지금 마음" 한 줄로 노출.
 - 엔진 `discontentOf`(`engine/owner.ts`)·셀렉터 `discontentNow`(`data/owner.ts`). 파생·무저장. 검증 `tools/simMood.ts`.
+- **★ 성능(2026-07-07)**: 프리게임(`day≤0`, 구단 선택·온보딩 `currentDay=0`) `discontentNow`는 경기가 0이라 벤치 상황
+  자체가 없다 → 시즌 시뮬(`computeStandings`/`leagueProduction`)을 **부르지 않고 중립 상수**(`cause:'starter'`, topic null,
+  mood neutral)로 즉시 반환한다. 이전엔 조기반환이 `benchCauseOf`를 호출했는데, 그게 `restedOnDay→computeStandings(0)`을
+  전이적으로 타 **온보딩 첫 선수 상세가 콜드 시즌 시뮬(폰 ~15s)로 freeze**했다. 이 콜드 비용은 워밍 후 측정하면 캐시에
+  가려 안 보인다(0.28ms 허위 PASS) → **콜드 측정**(`resetLeagueBase()` 직후 워밍 없이 첫 호출)으로만 드러났고, 수정 후
+  콜드 첫 호출 0.13ms. 근거: TEST_METHODOLOGY §사각분석 "성능 fix 검증이 워밍 후 측정으로 false PASS".
 - **누적→FA 이탈(C.4)**: 시즌 내내 부당하게 벤치에 묵힌 선수(낮은 출전율 × 출전 불만)는 정 떨어져 **재계약 거부↑ → FA**.
   `sustainedBenchRefuse`를 `buildOwnerFx` 거부 확률에 가산(출전율=묵힌 기간). 부상 결장은 무관(불만 아님).
 - 상세 설계(+ #3 휴식): [ROTATION_MORALE](./ROTATION_MORALE_SYSTEM.md).
