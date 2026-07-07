@@ -30,8 +30,10 @@ let initTried = false;
 function getLimiters(): Record<LimiterName, RatelimitLike> | null {
   if (initTried) return cachedLimiters;
   initTried = true;
-  const url = process.env.UPSTASH_REDIS_REST_URL;
-  const token = process.env.UPSTASH_REDIS_REST_TOKEN;
+  // Vercel Upstash 통합은 커스텀 프리픽스에 따라 이름이 갈린다(KV_REST_API_* / UPSTASH_REDIS_REST_*).
+  // 둘 다 인식(프리픽스 KV로 연결 시 KV_REST_API_*, @upstash SDK 표준은 UPSTASH_REDIS_REST_*).
+  const url = process.env.UPSTASH_REDIS_REST_URL ?? process.env.KV_REST_API_URL;
+  const token = process.env.UPSTASH_REDIS_REST_TOKEN ?? process.env.KV_REST_API_TOKEN;
   if (!url || !token) return null; // 미설정 → fail-open no-op
   try {
     // 지연 require — 미설정 경로에선 모듈을 아예 안 만진다.
