@@ -5,7 +5,7 @@ import { simulateMatch } from '../engine/match';
 import type { Player } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
-const KO: Record<string, string> = { pinch: '서브 보강', block: '블로킹 보강', def: '수비 보강', injury: '몸 상태 · 교체' };
+const KO: Record<string, string> = { pinch: '서브 보강', block: '블로킹 보강', def: '수비 보강', injury: '몸 상태 · 교체', rest: '체력 안배' };
 
 resetLeagueBase();
 const ids = LEAGUE.teams.map((t) => t.id);

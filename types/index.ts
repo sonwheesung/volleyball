@@ -249,6 +249,7 @@ export interface SubPolicy {
   pinchServer: boolean; // 약한 서버(세터 등) 차례에 벤치 서브 스페셜리스트 투입
   blockSub: boolean;    // (페이즈2) 접전 시 전위 블로킹 강화
   defSub: boolean;      // (페이즈3) 후위 수비 강화(리시브 약한 선발 교체)
+  restSub: boolean;     // (1.3e) 피로 교체 — 지친 주전(비세터·비접전)을 같은 포지션 벤치로 잠시 쉬게(다음 세트 복귀)
 }
 
 /** 다년 계약 — 연봉은 서명 시점 시장가치로 고정 (단위: 만원) */

@@ -28,7 +28,7 @@ export interface SubEvent {
   slot: number;    // 라인업 슬롯 0..5
   inId: string;    // 코트로 들어온 선수
   outId: string;   // 코트에서 나간 선수
-  kind: 'pinch' | 'block' | 'def' | 'injury'; // injury = 경기 내 부상 교체(FIVB 예외적 교체, 1.3d) — 영구(비원복)·enter만 발생
+  kind: 'pinch' | 'block' | 'def' | 'injury' | 'rest'; // injury = 경기 내 부상 교체(1.3d, 영구·enter만) · rest = 피로 교체(1.3e, net-zero 왕복 — 지친 주전을 잠시 쉬게)
   enter: boolean;  // true=벤치 스페셜리스트 투입, false=원선발 복귀(원위치). injury는 항상 true(복귀 없음)
 }
 

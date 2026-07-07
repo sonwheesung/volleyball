@@ -19,7 +19,7 @@ const N = Math.max(1, Number(process.argv[2]) || 400);
 
 let matches = 0, withSubs = 0, totalEvents = 0, totalEnters = 0;
 let failConsistency = 0, failNetZero = 0, failOccupant = 0, failOrder = 0, failReentry = 0, failReout = 0;
-const kindCount: Record<string, number> = { pinch: 0, block: 0, def: 0, injury: 0 };
+const kindCount: Record<string, number> = { pinch: 0, block: 0, def: 0, injury: 0, rest: 0 };
 let injuryEnters = 0; // 경기 내 부상 교체(1.3d) — 영구 스왑(net-zero·재진입 규칙 면제 대상)
 
 let seed = 990000;
@@ -86,7 +86,7 @@ for (let m = 0; m < N; m++) {
 
 log(`\n경기 ${matches}건 · 교체 있던 경기 ${withSubs} (${(100 * withSubs / matches).toFixed(0)}%)`);
 log(`총 교체 이벤트 ${totalEvents} (경기당 ${(totalEvents / matches).toFixed(1)}) · 그중 투입(enter) ${totalEnters}`);
-log(`투입 종류: 핀치서버 ${kindCount.pinch} · 블로킹 ${kindCount.block} · 수비 ${kindCount.def} · 부상교체 ${kindCount.injury} (경기당 ${(injuryEnters / matches).toFixed(3)})`);
+log(`투입 종류: 핀치서버 ${kindCount.pinch} · 블로킹 ${kindCount.block} · 수비 ${kindCount.def} · 부상교체 ${kindCount.injury} (경기당 ${(injuryEnters / matches).toFixed(3)}) · 피로교체 ${kindCount.rest} (경기당 ${(kindCount.rest / matches).toFixed(3)})`);
 log('\n검증:');
 const assert = (c: boolean, label: string, detail = '') => log(`  ${c ? 'PASS' : 'FAIL ❌'} — ${label}${detail}`);
 assert(failOrder === 0, 'subEvents point 오름차순', failOrder ? ` (위반 ${failOrder})` : '');

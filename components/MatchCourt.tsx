@@ -30,7 +30,7 @@ const SUB_GOLD = '#F2A93B';
 // 중계 자막(일시정지 위 텍스트) 표시 여부 — 숨김(2026-06-28, 사용자: "한 번도 안 본다"). 출시 후 원하면 true.
 const SHOW_FEED = false;
 // 부상 교체(1.3d)는 **소프트 문구**('몸 상태 · 교체') — 시즌 영향 0이라 들것/중상 프레임 금지. 상단-좌측 사유 배지(styles.subBadge)에 그대로 노출.
-const SUB_KIND_KO: Record<'pinch' | 'block' | 'def' | 'injury', string> = { pinch: '서브 보강', block: '블로킹 보강', def: '수비 보강', injury: '몸 상태 · 교체' };
+const SUB_KIND_KO: Record<'pinch' | 'block' | 'def' | 'injury' | 'rest', string> = { pinch: '서브 보강', block: '블로킹 보강', def: '수비 보강', injury: '몸 상태 · 교체', rest: '체력 안배' };
 
 // 랠리 종결 자막 — 엔진이 기록한 사실(PointLog.how)을 그대로 외친다(보드가 지어내지 않음)
 // 색은 다크 글래스 콜아웃 뱃지 위에서 또렷하게(2026-06-28 다크 코트 전환 — 밝은 톤으로 상향)
