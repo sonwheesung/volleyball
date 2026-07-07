@@ -86,8 +86,21 @@ for (let m = 0; m < N; m++) {
   }
 
   // (c1) 부상 아웃 선수가 작전 교체 inId로 재활용되지 않는다(예산·재진입 밖 → 부상자 복귀 통로 없음).
-  const injuredOut = new Set(injEvs.map((e) => `${e.side}:${e.outId}`));
-  for (const e of tacEvs) if (e.enter && injuredOut.has(`${e.side}:${e.inId}`)) failRecycle++;
+  //   순서 인식: 진짜 재활용은 그 선수의 부상 아웃(setNo,point) '이후' 발생한 작전 진입뿐이다.
+  //   (합법적으로 먼저 작전 투입된 뒤 나중에 부상 아웃된 선수는 재활용이 아님 — 과다계수 방지.)
+  const injOutAt = new Map<string, { setNo: number; point: number }>(); // side:id → 가장 이른 부상 아웃 시점
+  for (const e of injEvs) {
+    const k = `${e.side}:${e.outId}`;
+    const prev = injOutAt.get(k);
+    if (!prev || e.setNo < prev.setNo || (e.setNo === prev.setNo && e.point < prev.point)) {
+      injOutAt.set(k, { setNo: e.setNo, point: e.point });
+    }
+  }
+  for (const e of tacEvs) {
+    if (!e.enter) continue;
+    const out = injOutAt.get(`${e.side}:${e.inId}`);
+    if (out && (e.setNo > out.setNo || (e.setNo === out.setNo && e.point > out.point))) failRecycle++;
+  }
 
   // (c2) 부상 슬롯엔 그 뒤 작전 교체가 붙지 않는다(subIn 가드 → 부상 교체 선수 영구 유지).
   for (const ie of injEvs) {

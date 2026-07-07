@@ -17,7 +17,7 @@ import { rotate, serverIndex, frontRow, backRow } from './rotation';
 // (dyn 재생을 바꾸는 시즌 계층 규칙 변경도 포함 — 캐시가 dyn을 함께 영속하므로, v3.)
 // REALTIME_SIM Phase2(G3): simCache는 이 버전을 태깅·게이트해, 엔진 재튜닝(앱 업데이트) 후 저장된 옛-엔진
 // 순위를 폐기하고 새 엔진으로 재계산한다 → 저장 순위 ↔ 과거경기 보드 재생 일관성 보장.
-export const ENGINE_VERSION = 5; // 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
+export const ENGINE_VERSION = 6; // 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
 // 4(2026-07-06): 서브 에이스 개인기장 공식화 — 리시브범실 실점을 서버 box.srvAce에도 기장(FIVB indirect ace) → production aces/points·서브왕·skServe XP 변동 → 저장 캐시 무효화. 유형 분포·밸런스·서브 확률·승패 불변(box는 메인 rng 무관)
 // 3(2026-07-02): AI 자기방출 재영입 금지(TRANSACTION 0장 ⑥) — dyn(시즌 중 거래) 재생 변동 → 저장 캐시 무효화
 // 2(2026-06-28): 체력 튜닝(회복 0.009→0.005·세트사이 0.12→0.035) — 경기 결과 변동 → 저장 캐시 무효화
@@ -211,6 +211,7 @@ export function simulateMatch(
       if (activeSubs[side].has(slot) || subBudget[side] < 2) return;
       // 이미 코트에 있으면 불가 — 같은 벤치 스페셜리스트가 두 슬롯에 중복 투입되는 것 방지
       if (st.six.some((p) => p.id === player.id)) return;
+      if (st.injured.has(player.id)) return; // 부상 선수는 어떤 교체로도 코트 복귀 불가(1.3d) — benchSpecialists가 경기 시작 고정이라 이중부상 벤치교체 선수를 재투입하던 잠복버그 차단(subIn·injuryReplaced 이중 차단)
       if (usedSubIn[side].has(player.id)) return; // FIVB: 교체선수는 세트당 1회만 진입(재진입 금지)
       const outP = st.six[slot];
       if (usedStarterOut[side].has(outP.id)) return; // FIVB: 선발은 세트당 1왕복만(돌아온 선발 재이탈 금지)
