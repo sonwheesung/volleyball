@@ -101,7 +101,8 @@ test('작전 타임아웃: 이벤트 방출 + 유효 스냅샷(MATCH_SYSTEM 7.4)
       assert.ok(t.point >= 0 && t.point < r.points.length, 'point가 유효 랠리 인덱스');
       assert.ok(t.setNo >= 1 && t.setNo <= 5, 'setNo 1~5');
       assert.ok(t.side === 'home' || t.side === 'away', 'side 유효');
-      assert.ok(t.streak >= 2, '연속 실점 임계 이상');
+      // 테크니컬 타임아웃(7.4b)은 연속실점이 아니라 8·16점 고정 트리거 → streak 임계 무관. 코치 타임아웃만 검사.
+      if (!t.technical) assert.ok(t.streak >= 2, '연속 실점 임계 이상');
       // 코트 체력 스냅샷(선발6+리베로) 0~1
       assert.ok(t.stamHome.length > 0 && t.stamAway.length > 0, '양 팀 체력 스냅샷');
       assert.ok([...t.stamHome, ...t.stamAway].every((x) => x.stam >= 0 && x.stam <= 1), '체력 0~1');

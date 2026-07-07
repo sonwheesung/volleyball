@@ -593,9 +593,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
               const callerMine = mineSide != null && timeoutModal.side === mineSide;
               return (
                 <>
-                  <Text style={styles.toTitle}>⏱ 작전 타임아웃</Text>
+                  <Text style={styles.toTitle}>{timeoutModal.technical ? '⏱ 테크니컬 타임아웃' : '⏱ 작전 타임아웃'}</Text>
                   <Text style={styles.toSub}>
-                    {callerMine ? '우리 벤치에서 타임아웃' : mineSide != null ? '상대 벤치에서 타임아웃' : `${timeoutModal.side === 'home' ? '홈' : '원정'} 타임아웃`}
+                    {timeoutModal.technical
+                      ? '공식 자동 휴식 (8·16점)'
+                      : callerMine ? '우리 벤치에서 타임아웃' : mineSide != null ? '상대 벤치에서 타임아웃' : `${timeoutModal.side === 'home' ? '홈' : '원정'} 타임아웃`}
                     {'  ·  '}{timeoutModal.home}:{timeoutModal.away}
                   </Text>
                   <Text style={styles.toSectionLabel}>코트 선수 체력</Text>

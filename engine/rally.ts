@@ -411,10 +411,13 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     return { winner: recvSide, how: 'serveErr' };
   }
 
-  // ── 포지션 폴트 (1.4) ──
-  for (const side of [serving, recvSide] as Side[]) {
-    const t = teamOf(side);
-    if (rng.next() < clamp(0.012 * (1 - teamVQ(t)), 0, 0.02)) { if (stats) stats.faults++; return { winner: other(side), how: 'fault' }; }
+  // ── 포지션 폴트 (1.4) — 받는 팀만 (FIVB 2025-2028 Rule 7.4 + KOVO 25-26 채택) ──
+  //   서브 순간 서브 팀 전원은 위치 자유(오버랩 면제) → 오버랩 폴트는 받는 팀만 성립.
+  //   서브 팀 판정 제거·받는 팀만 굴리되 계수 2배(0.012→0.024·상한 0.02→0.04)로 총 기대 폴트율 보존
+  //   (KOVO 상대범실 분포 정렬 유지). rng 소비 2→1회로 감소 → ENGINE_VERSION 7.
+  {
+    const t = teamOf(recvSide);
+    if (rng.next() < clamp(0.024 * (1 - teamVQ(t)), 0, 0.04)) { if (stats) stats.faults++; return { winner: other(recvSide), how: 'fault' }; }
   }
 
   // ── 랠리 루프 (4·5·6장) ── 서브 난이도만큼 첫 리시브 품질 하락

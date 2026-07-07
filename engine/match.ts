@@ -17,7 +17,7 @@ import { rotate, serverIndex, frontRow, backRow } from './rotation';
 // (dyn 재생을 바꾸는 시즌 계층 규칙 변경도 포함 — 캐시가 dyn을 함께 영속하므로, v3.)
 // REALTIME_SIM Phase2(G3): simCache는 이 버전을 태깅·게이트해, 엔진 재튜닝(앱 업데이트) 후 저장된 옛-엔진
 // 순위를 폐기하고 새 엔진으로 재계산한다 → 저장 순위 ↔ 과거경기 보드 재생 일관성 보장.
-export const ENGINE_VERSION = 6; // 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
+export const ENGINE_VERSION = 7; // 7(2026-07-07): ① 포지션 폴트 받는 팀만 판정(FIVB 2025-2028 7.4·KOVO 25-26, rally.ts) — rng 소비 2→1회/서브 → 랠리 스트림 이동 → 결과 변동. ② KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식 — recover+기세수렴, rng 미소비) → 체력·기세 변동 → 경기 결과 변동. 둘 다 저장 캐시 무효화. 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
 // 4(2026-07-06): 서브 에이스 개인기장 공식화 — 리시브범실 실점을 서버 box.srvAce에도 기장(FIVB indirect ace) → production aces/points·서브왕·skServe XP 변동 → 저장 캐시 무효화. 유형 분포·밸런스·서브 확률·승패 불변(box는 메인 rng 무관)
 // 3(2026-07-02): AI 자기방출 재영입 금지(TRANSACTION 0장 ⑥) — dyn(시즌 중 거래) 재생 변동 → 저장 캐시 무효화
 // 2(2026-06-28): 체력 튜닝(회복 0.009→0.005·세트사이 0.12→0.035) — 경기 결과 변동 → 저장 캐시 무효화
@@ -43,6 +43,10 @@ const TIMEOUTS_PER_SET = 2;
 // 감독 성향별 타임아웃 호출 임계(상대 연속득점 수). 수비형은 일찍, 공격형은 늦게(아낀다)
 const TO_THRESHOLD: Record<CoachStyle, number> = { defense: 3, balanced: 4, attack: 5 };
 const TIMEOUT_REST = 0.04; // 타임아웃 휴식 회복(7.1·7.4) — 양 팀 모두 쉰다(차이는 기세 수렴이 만듦)
+// KOVO 테크니컬 타임아웃(7.4b): 1~4세트 리드팀 8·16점 첫 도달 시 자동 60초 휴식. TTO는 감독이 부른 게
+// 아니라 공식 자동 휴식이라 카리스마 무관 → 중립 고정 수렴폭(코치 타임아웃 charisma 50 상당 = 0.5×0.6). rng 미소비.
+const TTO_THRESHOLDS = [8, 16] as const; // 1~4세트 자동 TTO 발화 점수(리드팀 max(h,a) 기준)
+const TTO_PULL = 0.3;      // 테크니컬 타임아웃 기세 수렴폭(중립 고정)
 const SET_REST = 0.035;    // 세트 사이 회복(2026-06-28 튜닝 — 세트 누적 피로)
 const TIRED_STAM = 0.5;    // 코트에 이 미만으로 퍼진 선수가 있으면 감독이 타임아웃을 한 박자 일찍 부른다
 
@@ -195,6 +199,7 @@ export function simulateMatch(
 
     let lastScorer: Side | null = null;
     let streak = 0;
+    const ttoFired = new Set<number>(); // 이 세트에 이미 발화한 테크니컬 타임아웃 임계(8·16) — 세트당 임계별 1회(7.4b)
 
     // 작전 교체 상태(세트 단위): 예산 + 활성 교체(slotIdx → 원선발·종류)
     const subBudget = { home: SUBS_PER_SET, away: SUBS_PER_SET };
@@ -357,6 +362,33 @@ export function simulateMatch(
           streak = 0;
           lastScorer = null;
           recover('home', homeStam, TIMEOUT_REST); // 타임아웃 = 쉬는 시간(7.1) — 양 팀 회복
+          recover('away', awayStam, TIMEOUT_REST);
+        }
+      }
+
+      // ── 테크니컬 타임아웃 (7.4b, KOVO) — 1~4세트 리드팀 8·16점 첫 도달 시 자동 휴식. rng 미소비(고정 점수 트리거) ──
+      //   코치 타임아웃과 동일 효과(recover+기세 수렴+streak 리셋)지만 감독 호출이 아니라 자동이라 팀 타임아웃 예산 무차감.
+      //   5세트는 미발생(8점 코트체인지는 코트 추상화 — 시뮬 무영향).
+      if (setNo <= 4 && !isSetOver(h, a, setNo)) {
+        const leadScore = Math.max(h, a);
+        for (const thr of TTO_THRESHOLDS) {
+          if (ttoFired.has(thr) || leadScore < thr) continue;
+          ttoFired.add(thr); // 세트당 임계별 1회(점수는 1점씩 → 첫 도달 = 정확히 thr 순간)
+          const leadSide: Side = h >= a ? 'home' : 'away'; // 리드팀(임계 도달자) — 첫 도달 순간이라 동점 아님
+          const courtStamSnap = (st: typeof home, m: Map<string, number>): TimeoutCourtStam[] =>
+            [...st.six, ...(st.libero ? [st.libero] : [])].map((p) => ({ id: p.id, stam: m.get(p.id) ?? 1 }));
+          timeoutEvents.push({
+            point: points.length - 1, setNo, side: leadSide, home: h, away: a, streak,
+            stamHome: courtStamSnap(home, homeStam), stamAway: courtStamSnap(away, awayStam),
+            momHome: home.momentum, momAway: away.momentum, technical: true,
+          });
+          if (opts.trace) opts.trace.push(`테크니컬 타임아웃 (${thr}점 도달) [${h}:${a}]`);
+          // 기세 50 수렴(중립 고정폭) + streak 리셋 + 양 팀 휴식 회복 — 코치 타임아웃과 동일. 팀 예산 timeouts[]는 건드리지 않음.
+          home.momentum += (50 - home.momentum) * TTO_PULL;
+          away.momentum += (50 - away.momentum) * TTO_PULL;
+          streak = 0;
+          lastScorer = null;
+          recover('home', homeStam, TIMEOUT_REST);
           recover('away', awayStam, TIMEOUT_REST);
         }
       }

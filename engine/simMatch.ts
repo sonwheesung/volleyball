@@ -46,6 +46,7 @@ export interface TimeoutEvent {
   stamAway: TimeoutCourtStam[];
   momHome: number; // 기세(수렴 전, 0..100)
   momAway: number;
+  technical?: boolean; // true = KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식, 감독 호출 아님·팀 예산 무차감). 없거나 false = 감독 작전 타임아웃. 보드가 라벨 분기(2026-07-07)
 }
 
 export interface SimResult {
