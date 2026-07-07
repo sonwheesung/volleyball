@@ -135,6 +135,7 @@ npx tsx tools/_dv_firstserve.ts 24000       # 5세트 첫 서브=코인토스(MA
 npx tsx tools/_dv_foreign_fa_leak.ts        # 외인 FA 풀 오염 가드 — release 후 외인 미포함·재영입 거부(signInSeason)·국내 대조군 + A/B(구 전부-add 검출). EDGE_CASES §3.8, exit 0/1
 npx tsx tools/_dv_foreign_contract.ts       # 계약관리 외인 차단 — release/reSign(외인·아시아) 거부·국내 대조군·willBeFA 외인 false + A/B(가드 제거 시 release(외인)=true). EDGE_CASES §3.9, exit 0/1
 npx tsx tools/_dv_tryout_pool.ts            # 트라이아웃 풀 생성 종료 가드(EDGE_CASES §3.14 — edge-swarm 클러스터A) — 정상 domesticAvg 바닥충족·고/극단 domesticAvg 종료(옛 무캡 while은 hang=A/B 이빨). exit 0/1
+npx tsx tools/_dv_lottery.ts                # 추첨/드래프트 순번 분포(FA §3·FOREIGN §1, 검증·실측=Fable 5/가드=Opus) — 두 순번모델 POSITION 분포 N=20000: ①드래프트 1R lotteryRound1 **가중**(꼴찌 1픽률 25.0%≫1위 3.6%·평균 픽위치 1.88→4.79 단조) ②외인 tryoutOrder **균등**(성적무관 전 팀 평균 ≈3.00·1픽률 ≈14.3%=1/7·스프레드 0.063) + A/B 교차(균등→가중검사 FAIL·가중→균등검사 FAIL). exit 0/1
 npx tsx tools/_dv_name_dedupe.ts            # 동명이인 방지(FOREIGN_SYSTEM §8, 2026-06-30) — 초기 리그·트라이아웃 풀·드래프트 클래스 부류별 표시 중복 0 + taken 회피 + A/B(충돌 배치 dedup 전>0→후 0=오라클 민감) + 결정론. exit 0/1
 npx tsx tools/_dv_name_space.ts             # 절차적 이름 생성 공간(FOREIGN_SYSTEM §8 A', 2026-06-30) — 20k 생성 시 고유 이름 국내>5000·외인>1000·아시아>150+국적 전수(절차성=옛 수십리스트 압도, 고갈 없음)·결정론·육안 샘플. exit 0/1
 npx tsx tools/_dv_diamonds.ts               # 다이아 이코노미(MONETIZATION §11) — 광고 30분쿨다운/하루8회·업적 1회수령(중복지급0)·전지훈련 구모델(+1/+1, 재적용 전용)+코스형(3스탯 +2/+7·H1 스탯구성·300💎 정액·cap99) + A/B(쿨다운 무력 검출). exit 0/1
