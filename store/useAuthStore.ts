@@ -59,7 +59,22 @@ export const useAuthStore = create<AuthState>()(
           cred = { providerId: deviceId };
         }
         const r = await serverLogin(provider, cred, device);
-        if (!r.ok) return { ok: false, reason: r.reason === 'offline' ? 'offline' : 'error' };
+        if (!r.ok) {
+          // dev 로컬 폴백(__DEV__ 전용): 운영 서버는 계정 탈취 백도어를 막으려 dev provider를 401로 차단한다
+          // (SECURITY_AUDIT #2(b), server .../auth/login: prod && provider!=='google' → 401). 그 차단은 유지돼야 한다.
+          // 개발 빌드에서만, 서버가 dev를 거부하면(prod 401 등) 로컬 dev 세션을 합성해 UI/게임플레이 테스트 진입을 허용한다.
+          // 운영 빌드엔 dev 버튼 자체가 없고(__DEV__===false) 서버도 계속 dev를 막으므로 이 폴백은 운영에서 아무것도 재개방하지 않는다.
+          // 로컬 dev 세션은 서버 Bearer가 없어 온라인/지갑 기능은 typed 실패만 돌려준다 — 개발엔 무방.
+          if (provider === 'dev' && __DEV__) {
+            const deviceId = get().deviceId ?? genDeviceId();
+            const session: Session = { userId: 'dev-local:' + deviceId, provider: 'dev', displayName: '개발자(로컬)', token: '' };
+            setServerToken(null); // 유효한 서버 Bearer 없음 — 온라인 기능은 조용히 실패(관전/시뮬은 로컬이라 정상)
+            set({ session });
+            track('login', { provider });
+            return { ok: true };
+          }
+          return { ok: false, reason: r.reason === 'offline' ? 'offline' : 'error' };
+        }
         const session: Session = { userId: r.userId, provider: r.provider, displayName: r.displayName, token: r.token };
         setServerToken(session.token); // 이후 서버콜에 Bearer
         set({ session });
