@@ -189,6 +189,7 @@ npx tsx tools/_ev_blockcomment.ts 200       # 스터프 중계가 byId 블로커
 npx tsx tools/_ev_situation.ts 200          # 상황 인지 중계(BOARD_RULES 60) — 세트/매치포인트·듀스 검출 == 독립오라클 100%·합성경계 A/B. exit 0/1
 npx tsx tools/_dv_livebanner.ts 40          # 경기 중 실시간 현수막(BROADCAST Phase3) — 세트획득·연속득점·에이스/블록 누적: ①스포일러 안전(배너 at은 rallies[0..at]로 재현·미래 미참조 + A/B 민감)·②세트승자/세트수 정합·③빈도 ~8/경기(스팸 아님)·④결정론. exit 0/1
 npx tsx tools/_ev_matchmvp.ts 300           # 경기 MVP(AWARDS §1) — 이긴 팀 최고생산자 == 독립오라클 100%·승자측·points>0·결정론. exit 0/1
+npx tsx tools/_dv_playoffs.ts               # 포스트시즌 브라켓(SEASON §5, 검증·실측=Fable 5/가드=Opus) — 고정 상위3시드 위 몬테카를로 N=500: 불변식 0/500(seeds=top3·2v3준PO·1위직행결승·champion∈seeds=final승자·시리즈 target도달)·상위시드 우세(PO 83.8%·결승 85.2%)·챔피언 85.2/13.8/1.0·시리즈길이(PO 2/3게임·결승 3/4/5)·결정론 + A/B(오염 Playoffs→검사기 4위반 검출). ~수초. exit 0/1
 npx tsx tools/_ev_retirenews.ts 20          # 은퇴 세리머니 뉴스(NEWS 슬라이스5) — 게이트(8시즌/HOF)·전원기사화·매달린0·중복0·결정론. exit 0/1
 npx tsx tools/_ev_rival.ts 12               # 라이벌 구도(CLUB_IDENTITY 6) — 순위인접·접전 가중·임계·결정론·합성 A/B. exit 0/1
 npx tsx tools/_ev_josa.ts 18                # 조사 자동교정(NEWS §4.5) — 실기사 잔여 병기 0·합성 경계 A/B(받침·괄호건너뜀·ㄹ예외). exit 0/1
