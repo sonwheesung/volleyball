@@ -1,10 +1,11 @@
 // 훈련 방침 — 단장이 팀 장기 성장 방향을 고른다(감독 기본 또는 아키타입 오버라이드).
 // 감독 정보 화면에 있던 "훈련 방향 변경(단장)" 셀렉터를 단장실로 이동(2026-07-04 사용자 요청).
-// 즉시 적용 → **초안 선택 후 저장(confirm) 확정** 방식으로 변경(오조작 방지). 저장은 다음 진행부터 반영.
+// 즉시 적용 → **초안 선택 후 저장(confirm) 확정** 방식으로 변경(오조작 방지). 저장은 오늘부터 적용(지난 경기·성장은 불변).
 import { useRouter, useNavigation } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
 import { Pressable, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Muted, Screen, theme } from '../components/Screen';
+import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { showAlert } from '../components/AppDialog';
 import { getTeamCoach } from '../data/league';
 import { TRAINING_NAME } from '../engine/training';
@@ -25,6 +26,7 @@ export default function TrainingPolicy() {
   const trainingFocus = useGameStore((s) => s.trainingFocus); // 현재 저장된 방침(null=감독 기본)
   const setTrainingFocus = useGameStore((s) => s.setTrainingFocus);
   const coach = getTeamCoach(teamId);
+  const busy = useBusyRun(); // 저장(setTrainingFocus)은 성장 파이프라인을 건드려 재계산 유발 → 오버레이로 마스킹(UI-27)
   const [draft, setDraft] = useState<TrainingFocus | null>(trainingFocus); // 아직 저장 안 한 선택
 
   const dirty = !focusEq(draft, trainingFocus);
@@ -52,22 +54,23 @@ export default function TrainingPolicy() {
     : ARCHETYPES.find((a) => sameFocus(a.focus, draft))?.name ?? '선택한 방향';
 
   const onSave = () => {
-    showAlert('훈련 방침 저장', `팀을 "${draftLabel}" 방향으로 육성할까요?\n다음 경기 진행부터 반영됩니다.`, [
+    showAlert('훈련 방침 저장', `팀을 "${draftLabel}" 방향으로 육성할까요?\n오늘부터 적용됩니다 — 지난 경기·성장은 그대로예요.`, [
       { text: '취소', style: 'cancel' },
       {
         text: '저장',
-        onPress: () => {
+        onPress: () => busy.run('코칭스태프가 새 훈련 일정을 짜는 중…', () => {
           setTrainingFocus(draft);
-          showAlert('저장 완료', '다음 경기 진행부터 새 훈련 방침이 반영됩니다.', [
+          showAlert('저장 완료', '오늘부터 새 훈련 방침이 적용됩니다. 지난 경기·성장은 그대로예요.', [
             { text: '확인', onPress: () => router.back() },
           ]);
-        },
+        }),
       },
     ]);
   };
 
   return (
     <Screen title="훈련 방침">
+      <BusyOverlay visible={busy.busy} message={busy.message} />
       {coach ? (
         <>
           <IconLabel icon="person-outline" color={theme.violet}>현재 감독 · {coach.name}</IconLabel>

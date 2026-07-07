@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal } from '../data/league';
@@ -78,6 +79,8 @@ function DraftCenterInner() {
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
   const [openId, setOpenId] = useState<string | null>(null);
+  // 담기/빼기 토글은 매 렌더 resolveDraft(지명 시뮬)를 재실행(아래, 비메모)해 무겁다 → 오버레이 마스킹(UI-27)
+  const busy = useBusyRun();
   // endSeason과 동일한 ownerFx+자금 — 미리보기=결과 보장(면담 거부·자금 게이트가 명단·순번에 반영)
   const ctx = useMemo(
     () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
@@ -173,7 +176,7 @@ function DraftCenterInner() {
                   ? <OvrBadge value={overallRaw(p)} />
                   : <Text style={styles.fogOvr}>{fogOvr(p, reveal)}</Text>}
               </Pressable>
-              <Pressable onPress={() => toggleDraftPick(p.id)} hitSlop={8} style={styles.pickBtn}>
+              <Pressable onPress={() => busy.run('지명 결과를 정리하는 중…', () => toggleDraftPick(p.id))} hitSlop={8} style={styles.pickBtn}>
                 <Text style={{ color: picked ? theme.accent : theme.muted, fontWeight: '800', fontSize: 13 }}>
                   {picked ? `담음${wi + 1}` : '담기'}
                 </Text>
@@ -183,6 +186,7 @@ function DraftCenterInner() {
           </View>
         );
       })}
+      <BusyOverlay visible={busy.busy} message={busy.message} />
     </Screen>
   );
 }

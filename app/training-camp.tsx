@@ -5,6 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
+import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { Button, Card, IconLabel, Muted, PosTag, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { getPlayer, teamPlayerIds } from '../data/league';
@@ -40,11 +41,14 @@ export default function TrainingCamp() {
   const { chain } = useLocalSearchParams<{ chain?: string }>();
   const inChain = chain === '1';
   const goNext = () => router.replace('/enshrine'); // 헌액(0명이면 자동 통과 → 대시보드)
+  // 무거운 작업 마스킹(UI-27): finishCamp+귀환(base 재계산)=동기 → useBusyRun, 전지훈련 보내기(서버 차감)=비동기 → sending 로컬 state.
+  const busy = useBusyRun();
+  const [sending, setSending] = useState<string | null>(null);
   // 스케줄 오프시즌 게이트에서 진입(비-chain) — 캠프를 마치면 campDoneSeason 세팅 → 스케줄에 개막전(다음 경기) 노출(2026-07-04).
   const finishToOpener = () => {
     showAlert('전지훈련 마치기', '전지훈련을 마치고 개막전을 시작할까요?\n이후에는 이번 시즌 전지훈련을 보낼 수 없어요.', [
       { text: '더 훈련하기', style: 'cancel' },
-      { text: '마치고 개막전으로', onPress: () => { finishCamp(); router.back(); } },
+      { text: '마치고 개막전으로', onPress: () => busy.run('선수들이 전지훈련에서 구슬땀을 흘리고 있습니다…', () => { finishCamp(); router.back(); }) },
     ]);
   };
   const my = useGameStore((s) => s.selectedTeamId);
@@ -135,6 +139,8 @@ export default function TrainingCamp() {
   const balance = (
     <View style={styles.bal}><Text style={styles.gem}>💎</Text><Text style={styles.balN}>{diamonds.toLocaleString()}</Text></View>
   );
+  // 무거운 작업 오버레이(UI-27) — 어느 오프시즌 화면(선수목록=finish / 코스=send)에서 눌러도 뜨도록 각 return에 배치.
+  const busyOverlay = <BusyOverlay visible={busy.busy || !!sending} message={busy.message || sending || ''} />;
 
   if (!offseason) {
     return (
@@ -154,6 +160,7 @@ export default function TrainingCamp() {
   if (!player) {
     return (
       <Screen title="전지훈련">
+        {busyOverlay}
         {balance}
         {inChain ? (
           <Card accent={theme.warn}>
@@ -206,8 +213,14 @@ export default function TrainingCamp() {
   // ── 코스 선택 ──
   const cur = player as unknown as Record<string, number>;
   const send = async () => {
-    if (!course || walletBusy) return;
-    const r = await trainingCamp(player.id, course); // 서버 차감 확정 후에만 반영(BACKEND §13.12)
+    if (!course || walletBusy || sending) return;
+    setSending('코치진이 훈련 프로그램을 준비하는 중…'); // 서버 왕복(await) 동안 오버레이 유지(UI-27, 비동기 경로)
+    let r: { ok: boolean; reason?: string };
+    try {
+      r = await trainingCamp(player.id, course); // 서버 차감 확정 후에만 반영(BACKEND §13.12)
+    } finally {
+      setSending(null);
+    }
     if (r.ok) {
       showAlert('전지훈련 완료', `${player.name} 선수가 ${CAMP_COURSES[course].label}을 마치고 왔습니다. 열린 성장 한계는 이후 시즌 성장으로 실현됩니다.`);
       setPicked(null); setCourse(null); force((n) => n + 1);
@@ -226,6 +239,7 @@ export default function TrainingCamp() {
 
   return (
     <Screen title="전지훈련" scroll={false}>
+      {busyOverlay}
       {balance}
       <View style={styles.phead}>
         <PosTag pos={player.position} />

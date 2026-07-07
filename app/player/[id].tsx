@@ -4,6 +4,8 @@ import { Modal, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Circle, Line, Polygon, Text as SvgText } from 'react-native-svg';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, StatBar, theme, themedStyles, useDeferredReady } from '../../components/Screen';
+import { BusyOverlay, useBusyRun } from '../../components/BusyOverlay';
+import { showAlert } from '../../components/AppDialog';
 import { PlayerAvatar } from '../../components/PlayerAvatar';
 import { seasonYear, seasonYearRange } from '../../data/seasonLabel';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchetypeOf, conditionOf, popularityNow } from '../../data/owner';
@@ -124,6 +126,7 @@ function PlayerDetailInner() {
   const [talkAsk, setTalkAsk] = useState(false);
   const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
   const [benchAsk, setBenchAsk] = useState(false); // 벤치 건의 명분 선택 시트(네이티브 Alert 대신 커스텀 — UI-21)
+  const busy = useBusyRun(); // 건의/복귀 = 벤치지시 갱신 → 출전 라인업(buildLineup) 재도출(무거움) → 오버레이 마스킹(UI-27)
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
   // 시즌 **통계 파생(생산·시장가)** 은 **결과 인지 표시 컷오프**(§3.3 displayCutoff) — 대시보드·기록과 동일 컷오프.
   // 방금 관전한 경기·시즌말 최종일을 포함하고, 시즌 시작 전(cutoff<0)이면 빈 구간/일자<0 가드로 콜드 전 시즌 시뮬을 회피한다.
@@ -430,7 +433,10 @@ function PlayerDetailInner() {
           <IconLabel icon="clipboard-outline" color={theme.violet}>감독 건의</IconLabel>
           <Card accent={theme.violet}>
             {benched ? (
-              <Button label="복귀 지시 (벤치 해제)" onPress={() => { unbench(p.id); setTalkResult({ title: '복귀', color: theme.good, msg: `${p.name} 선수가 출전 명단에 복귀합니다. 실전 감각은 몇 경기에 걸쳐 돌아옵니다.` }); }} />
+              <Button label="복귀 지시 (벤치 해제)" onPress={() => showAlert('복귀 지시', `정말 ${p.name} 선수의 복귀를 지시할까요?\n출전 명단에 다시 포함됩니다.`, [
+                { text: '취소', style: 'cancel' },
+                { text: '복귀 지시', onPress: () => busy.run('감독이 라인업을 다시 그리는 중…', () => { unbench(p.id); setTalkResult({ title: '복귀', color: theme.good, msg: `${p.name} 선수가 출전 명단에 복귀합니다. 실전 감각은 몇 경기에 걸쳐 돌아옵니다.` }); }) },
+              ])} />
             ) : (
               <>
                 <Muted style={{ fontSize: 12 }}>
@@ -444,12 +450,15 @@ function PlayerDetailInner() {
                   <Button
                     label={benchLeft > 0 ? `선발 기용 건의 (${benchLeft}일 후)` : '선발 기용 건의'}
                     disabled={benchLeft > 0}
-                    onPress={() => {
-                      const res = suggestStart(p.id);
-                      setTalkResult(res.ok
-                        ? { title: '감독 수락', color: theme.good, msg: `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote }
-                        : { title: '감독 거절', color: theme.muted, msg: `감독: "${res.reason ? START_REJECT[res.reason] : '지금 라인업이 최선입니다.'}"` });
-                    }}
+                    onPress={() => showAlert('선발 기용 건의', `정말 ${p.name} 선수를 선발로 추천할까요?\n감독이 판단해 수락하거나 거절합니다.`, [
+                      { text: '취소', style: 'cancel' },
+                      { text: '건의', onPress: () => busy.run('감독이 라인업을 다시 그리는 중…', () => {
+                        const res = suggestStart(p.id);
+                        setTalkResult(res.ok
+                          ? { title: '감독 수락', color: theme.good, msg: `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote }
+                          : { title: '감독 거절', color: theme.muted, msg: `감독: "${res.reason ? START_REJECT[res.reason] : '지금 라인업이 최선입니다.'}"` });
+                      }) },
+                    ])}
                   />
                 ) : isStarter ? (
                   <Button label={benchLeft > 0 ? `벤치 건의 (${benchLeft}일 후)` : '벤치 건의'} onPress={openBench} disabled={benchLeft > 0} />
@@ -643,12 +652,13 @@ function PlayerDetailInner() {
       <ActionSheet
         visible={benchAsk}
         title={`벤치 건의 — ${p.name}`}
-        message="어떤 명분으로 건의하시겠습니까?"
+        message={`정말 ${p.name} 선수의 휴식을 건의할까요? 감독이 판단해 수락하거나 거절합니다.\n어떤 명분으로 건의하시겠습니까?`}
         actions={(['noResign', 'form', 'prospect'] as BenchReason[]).map((reason) => ({
-          label: BENCH_REASON_KO[reason], onPress: () => benchResult(suggestBench(p.id, reason)),
+          label: BENCH_REASON_KO[reason], onPress: () => busy.run('감독이 라인업을 다시 그리는 중…', () => benchResult(suggestBench(p.id, reason))),
         }))}
         onClose={() => setBenchAsk(false)}
       />
+      <BusyOverlay visible={busy.busy} message={busy.message} />
 
       {/* 면담 모달 — 시스템 Alert 대신 앱 테마 디자인 */}
       <Modal

@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { shortTeamName as shortTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { faMarketPreview } from '../data/offseason';
@@ -43,6 +44,8 @@ function FACenterInner() {
   const cash = useGameStore((s) => s.cash);
   const archive = useGameStore((s) => s.archive);
   const bonds = useGameStore((s) => s.bonds);
+  // 영입/보호/돈만/공격적 토글은 pv(faMarketPreview) useMemo의 dep이라 매 탭마다 FA 경쟁 결정론을 전면 재해결(무거움) → 오버레이 마스킹(UI-27)
+  const busy = useBusyRun();
 
   // 이번 시즌 정산 후 운영 자금 — endSeason이 FA에 쓰는 실제 지갑(모기업 지원·관중 수입 반영).
   //   store.cash(직전 정산값)로 미리보기하면 모기업 지원(14~28억)이 빠져 "영입 불가"로 오표시된다.
@@ -104,7 +107,7 @@ function FACenterInner() {
           </Text>
         </Row>
         <Pressable
-          onPress={() => setAggressive(!faAggressive)}
+          onPress={() => busy.run('협상 테이블을 차리는 중…', () => setAggressive(!faAggressive))}
           style={[styles.toggle, faAggressive && { borderColor: theme.warn, backgroundColor: theme.warn + '20' }]}
         >
           <Text style={{ color: faAggressive ? theme.warn : theme.muted, fontWeight: '800' }}>
@@ -141,7 +144,7 @@ function FACenterInner() {
         return (
           <Pressable
             key={p.id}
-            onPress={() => toggleProtect(p.id)}
+            onPress={() => busy.run('협상 테이블을 차리는 중…', () => toggleProtect(p.id))}
             style={[styles.protectRow, prot && { borderColor: theme.good, backgroundColor: theme.good + '18' }]}
           >
             <PosTag pos={p.position} />
@@ -199,7 +202,7 @@ function FACenterInner() {
                 <OvrBadge value={overallRaw(p)} />
               </View>
               <Pressable
-                onPress={() => (targeted ? unsignFA(p.id) : signFA(p.id))}
+                onPress={() => busy.run('협상 테이블을 차리는 중…', () => (targeted ? unsignFA(p.id) : signFA(p.id)))}
                 style={[
                   styles.btn,
                   { borderColor: targeted ? theme.bad : theme.accent, backgroundColor: targeted ? theme.bad + '22' : theme.accent + '22' },
@@ -212,7 +215,7 @@ function FACenterInner() {
               {/* A/B FA만 — 보상선수 대신 보상금만 내고 선수단 보호 */}
               {targeted && needsCompensationPlayer(grade) ? (
                 <Pressable
-                  onPress={() => toggleMoneyOnly(p.id)}
+                  onPress={() => busy.run('협상 테이블을 차리는 중…', () => toggleMoneyOnly(p.id))}
                   style={[styles.btn, moneyOnlyIds.includes(p.id)
                     ? { borderColor: theme.good, backgroundColor: theme.good + '22' }
                     : { borderColor: theme.border }]}
@@ -226,6 +229,7 @@ function FACenterInner() {
           );
         })
       )}
+      <BusyOverlay visible={busy.busy} message={busy.message} />
     </Screen>
   );
 }

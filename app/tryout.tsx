@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { SpotlightOverlay, SpotlightTarget } from '../components/Spotlight';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
@@ -42,6 +43,8 @@ function TryoutInner() {
   const setKeepForeign = useGameStore((s) => s.setKeepForeign);
   const currentDay = useGameStore((s) => s.currentDay);
   const [openId, setOpenId] = useState<string | null>(null);
+  // 위시/보유 토글은 ctx(buildDraftContext) useMemo의 dep이라 매 탭마다 리그 전체 진화 스냅샷을 재빌드(무거움) → 오버레이 마스킹(UI-27)
+  const busy = useBusyRun();
 
   // endSeason과 같은 체인 — 미리보기=결과
   const ctx = useMemo(
@@ -102,7 +105,7 @@ function TryoutInner() {
               {([['자동(추천)', null], ['재계약', true], ['풀로 보냄', false]] as const).map(([label, v]) => (
                 <Pressable
                   key={label}
-                  onPress={() => setKeepForeign(v)}
+                  onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => setKeepForeign(v))}
                   style={[styles.chip, keepForeign === v && styles.chipOn]}
                 >
                   <Text style={[styles.chipTxt, keepForeign === v && { color: theme.bg }]}>{label}</Text>
@@ -139,7 +142,7 @@ function TryoutInner() {
                     </Text>
                   </View>
                 </Pressable>
-                <Pressable onPress={() => toggleTryoutWish(p.id)} hitSlop={8} style={styles.wishBtn}>
+                <Pressable onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => toggleTryoutWish(p.id))} hitSlop={8} style={styles.wishBtn}>
                   <Text style={{ color: wishIdx >= 0 ? theme.warn : theme.muted, fontWeight: '900', fontSize: 13 }}>
                     {wishIdx >= 0 ? `★${wishIdx + 1}` : '위시'}
                   </Text>
@@ -156,6 +159,7 @@ function TryoutInner() {
       </Muted>
       <Button label="아시아쿼터 트라이아웃 →" onPress={() => router.push('/asian-tryout')} />
       <SpotlightOverlay screen="tryout" />
+      <BusyOverlay visible={busy.busy} message={busy.message} />
     </Screen>
   );
 }

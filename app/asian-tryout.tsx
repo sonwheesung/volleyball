@@ -5,6 +5,7 @@ import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { ForeignResumeDetail } from '../components/ForeignResumeDetail';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
@@ -44,6 +45,8 @@ function AsianTryoutInner() {
   const keepAsian = useGameStore((s) => s.keepAsian);
   const setKeepAsian = useGameStore((s) => s.setKeepAsian);
   const currentDay = useGameStore((s) => s.currentDay);
+  // 오퍼/보유 토글은 ctx(buildDraftContext) useMemo의 dep이라 매 탭마다 리그 전체 진화 스냅샷 재빌드(무거움) → 오버레이 마스킹(UI-27)
+  const busy = useBusyRun();
 
   // endSeason과 같은 체인 — 미리보기=결과
   const ctx = useMemo(
@@ -95,7 +98,7 @@ function AsianTryoutInner() {
               {([['자동(추천)', null], ['보유(증액)', true], ['놓아줌', false]] as const).map(([label, v]) => (
                 <Pressable
                   key={label}
-                  onPress={() => setKeepAsian(v)}
+                  onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => setKeepAsian(v))}
                   style={[styles.chip, keepAsian === v && styles.chipOn]}
                 >
                   <Text style={[styles.chipTxt, keepAsian === v && { color: theme.bg }]}>{label}</Text>
@@ -131,7 +134,7 @@ function AsianTryoutInner() {
                     </Text>
                   </View>
                 </Pressable>
-                <Pressable onPress={() => toggleAsianWish(p.id)} hitSlop={8} style={styles.wishBtn}>
+                <Pressable onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => toggleAsianWish(p.id))} hitSlop={8} style={styles.wishBtn}>
                   <Text style={{ color: wishIdx >= 0 ? theme.warn : theme.muted, fontWeight: '900', fontSize: 13 }}>
                     {wishIdx >= 0 ? `★${wishIdx + 1}` : '오퍼'}
                   </Text>
@@ -147,6 +150,7 @@ function AsianTryoutInner() {
         스카우터 투자(공개도 {(reveal * 100).toFixed(0)}%)가 협상의 보험입니다.
       </Muted>
       <Button label="FA 센터 →" onPress={() => router.push('/fa')} />
+      <BusyOverlay visible={busy.busy} message={busy.message} />
     </Screen>
   );
 }
