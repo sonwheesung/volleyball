@@ -110,6 +110,15 @@ export function earnDiamonds(amount: number, reason: WalletReason, idempotencyKe
     body: JSON.stringify({ amount, reason, idempotencyKey, ref }),
   });
 }
+/** 업적 보상 **배치** 적립 — reason은 서버가 'achievement' 강제(§4). 업적 N개 수령을 **1왕복 1트랜잭션**으로(순차 earn N회 ≈40s → ≈2~4s).
+ *  results는 items와 **동일 순서** — applied(신규지급)·capped(평생합 캡, 지급 0)·둘 다 아님(멱등 재시도). balance=최종 잔액.
+ *  멱등키는 achKey(userId,id) 그대로(서버가 userId로 네임스페이스) — achId별 계정평생 dedup 보존. */
+export function earnDiamondsBatch(items: Array<{ amount: number; idempotencyKey: string; ref?: string }>) {
+  return call<{ results: Array<{ applied: boolean; capped?: boolean }>; balance: number }>('/api/wallet/earn-batch', {
+    method: 'POST',
+    body: JSON.stringify({ items }),
+  });
+}
 
 // ── 결제 폴백(§13.18) ──
 /** 클라 구매 resolve 후 폴백 — 스토어 거래id로 서버가 RC REST 재검증 → 같은 멱등키 지급. 웹훅 지연·유실 메꿈.

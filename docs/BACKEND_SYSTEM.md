@@ -62,6 +62,17 @@
 - **결정론 격리(중요)**: 지갑은 메타라 시드 입력에 **절대 안 들어간다**. **전지훈련 차감은 서버 차감 성공 뒤에만 `campLog` 기록**
   → 서버 잔액과 로컬 campLog가 어긋날 일(split-brain) 자체가 없음. 잔액 *표시*만 캐시. (campLog = 로컬 시뮬 진실, 리플레이 재적용 — §MONETIZATION 11.2.)
   **재생 시 campLog만 로컬로 읽고 원장을 재조회하지 않는다** — 이 선이 결정론 격리의 성립 조건(독립리뷰 2026-07-03 §④-10).
+- **업적 보상 배치 적립 `/api/wallet/earn-batch`(2026-07-07, 검증 Fable 5)**: 업적 수령은 미수령 업적 **여러 개를 한 번에** 지급한다.
+  구 구현은 업적마다 단건 `/api/wallet/earn`을 **순차 await** → 수령당 (HTTPS+Vercel 콜드스타트+`requireUserId`(ensureUser 재실행)+
+  `applyWallet` 트랜잭션 ~8왕복). Supabase 풀러 ~0.3~0.7s/왕복 × 직렬 → **4개 수령 ≈ 40s**(실측 진단). 배치 라우트는
+  **`requireUserId` 1회 + `db.transaction` 1개** 안에서 N개의 값싼 in-tx `applyWalletTx`로 처리해 **≈2~4s**로 단축.
+  · body `{ items: [{ amount, idempotencyKey, ref? }] }`, **reason은 서버가 `'achievement'` 강제**(임의 reason 불가 — ad/welcome/purchase 캡을 스코프 밖으로 격리),
+    items ≤ 64. 각 amount는 `earnAmount('achievement',_)`로 서버 클램프([1,1000]), 하나라도 손상되면 전체 400.
+  · **평생합 캡 보존**: 트랜잭션 진입 전 `sumReason(userId,'achievement')`를 **1회** baseline으로 읽고, 순수 함수 `allocateAchGrants(used, wanted[])`가
+    `remaining = ACH_LIFETIME_CAP − used − grantedSoFar`를 **아이템 누적**으로 배분(부분 지급=applied·capped:false, 소진=grant0·capped:true=단건 409 cap 동의).
+  · **멱등 보존**: 클라 `idempotencyKey`는 `achKey(userId,id)` 그대로, 서버가 `walletIdemKey(userId,_)`로 네임스페이스 → achId별 계정평생 dedup·교차유저 선점 차단 불변.
+    응답 `{ ok, results:[{applied, capped?}], balance }`(results는 items와 동순서). throw 시 `{ ok:false, reason:'error' }`(500) → 클라는 아무것도 확정 안 하고 `syncWallet`로 수렴(원자적, 재수령은 서버가 dedupe).
+  · **단건 `/api/wallet/earn`은 불변**(광고/환영 경로). 가드: 순수 조각(누적 배분·키 네임스페이스)은 `server/tools/_dv_earnbatch.ts`(DB 무의존, A/B 자가검증), 트랜잭션은 기존 `_dv_achearn` 라이브 가드.
 
 ## 5. 결제 (Vercel 직접 검증)
 

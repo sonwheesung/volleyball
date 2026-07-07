@@ -59,7 +59,7 @@ import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
 import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
 import { showRewardedForDiamonds } from '../lib/ads';
-import { earnDiamonds, spendDiamonds, getWallet } from '../lib/server';
+import { earnDiamonds, earnDiamondsBatch, spendDiamonds, getWallet } from '../lib/server';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
 import { useAuthStore } from './useAuthStore';
 import { track } from '../lib/analytics';
@@ -347,16 +347,23 @@ export const useGameStore = create<GameState>()(
         const { ids } = unclaimedReward(statuses, s.claimedAch);
         if (!ids.length) return { granted: 0, reason: 'none' };
         set({ walletBusy: true });
-        let granted = 0; let lastBalance: number | null = null; const confirmed: string[] = []; let offline = false; let capped = false;
-        for (const id of ids) { // 업적별 개별 earn(배치 아님) — achId별 dedup 정확(계정 평생 1회, 세이브 리셋 재수령 0)
-          const r = await earnDiamonds(achReward(id), 'achievement', achKey(userId, id), id);
-          if (r.ok) { confirmed.push(id); lastBalance = r.balance; if (r.applied) granted += achReward(id); }
-          else if (r.reason === 'cap') { confirmed.push(id); capped = true; } // 평생합 캡 도달(치터 전용, 정당 유저 도달불가) — 확정 처리해 영구 재시도 차단, 중단 없이 계속
-          else { offline = true; break; } // 오프라인/에러 → 여기까지만 확정, 중단(부분 수령)
+        // 배치 적립 — N개 업적을 **1왕복 1트랜잭션**으로(순차 earn N회의 ~40s 병목 제거, BACKEND §4). achId별 dedup·평생합 캡·금액 서버권위는 서버가 보존.
+        const items = ids.map((id) => ({ amount: achReward(id), idempotencyKey: achKey(userId, id), ref: id }));
+        const r = await earnDiamondsBatch(items);
+        if (!r.ok) { // 오프라인/에러 → 아무것도 확정 안 함(원자적). 재수령은 서버가 멱등 dedup.
+          set({ walletBusy: false });
+          void get().syncWallet();
+          return { granted: 0, reason: 'offline' };
         }
-        set({ walletBusy: false, ...(confirmed.length ? { claimedAch: [...get().claimedAch, ...confirmed] } : {}), ...(lastBalance !== null ? { diamonds: lastBalance } : {}) });
+        // results는 ids와 동일 순서. applied=신규지급(granted 합산) · capped=평생합 캡(지급0) · 둘 다 아님=멱등 재시도. 모두 confirm(재시도 차단).
+        let granted = 0; const confirmed: string[] = []; let capped = false;
+        r.results.forEach((res, i) => {
+          confirmed.push(ids[i]);
+          if (res.applied) granted += achReward(ids[i]); // 부분지급도 applied — 현 단건 의미 보존(정당 유저는 캡 경계 미도달)
+          else if (res.capped) capped = true; // 평생합 캡 도달(치터 전용) — 확정 처리해 영구 재시도 차단
+        });
+        set({ walletBusy: false, ...(confirmed.length ? { claimedAch: [...get().claimedAch, ...confirmed] } : {}), diamonds: r.balance });
         if (granted > 0) track('diamond_earned', { source: 'achievement', amount: granted });
-        if (offline) { void get().syncWallet(); return { granted, reason: 'offline' }; }
         if (capped) return { granted, reason: 'cap' };
         return { granted };
       },

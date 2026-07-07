@@ -5,8 +5,9 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useState, type ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../../components/AppDialog';
+import { Popup } from '../../components/Popup';
 import { Card, Muted, Screen, theme, themedStyles } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
@@ -92,13 +93,21 @@ export default function MyPage() {
         : r.reason === 'error' ? '적립에 실패했습니다. 잠시 후 다시 시도해 주세요.'
         : '다음 광고까지 잠시 기다려 주세요(30분 간격).');
   };
+  // 업적 수령 중 로딩 오버레이 게이트 — walletBusy(광고·전지훈련과 공유)와 분리한 로컬 상태(이 수령만 스코프).
+  // 다건 배치라도 서버 왕복은 수초 걸릴 수 있어 사용자에게 명확한 "받는 중" 로딩을 보여준다(사용자 요청, UI-1).
+  const [claiming, setClaiming] = useState(false);
   const claimAch = async () => {
-    const r = await claimAchDiamonds();
-    if (r.granted > 0) showAlert('업적 보상 수령', `달성 업적 보상 +${r.granted} 💎`);
-    else if (r.reason === 'cap') showAlert('수령 한도', '업적 보상 지급 한도에 도달했습니다.');
-    else if (r.reason === 'offline') showAlert('온라인 연결 필요', '업적 보상 수령은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.');
-    else if (r.reason === 'busy') showAlert('처리 중', '잠시만 기다려 주세요.');
-    else showAlert('수령할 보상 없음', '새로 달성한 업적이 없습니다.');
+    setClaiming(true);
+    try {
+      const r = await claimAchDiamonds();
+      if (r.granted > 0) showAlert('업적 보상 수령', `달성 업적 보상 +${r.granted} 💎`);
+      else if (r.reason === 'cap') showAlert('수령 한도', '업적 보상 지급 한도에 도달했습니다.');
+      else if (r.reason === 'offline') showAlert('온라인 연결 필요', '업적 보상 수령은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.');
+      else if (r.reason === 'busy') showAlert('처리 중', '잠시만 기다려 주세요.');
+      else showAlert('수령할 보상 없음', '새로 달성한 업적이 없습니다.');
+    } finally {
+      setClaiming(false);
+    }
   };
 
   return (
@@ -121,7 +130,7 @@ export default function MyPage() {
             </Text>
           </Pressable>
           <Pressable onPress={claimAch} disabled={walletBusy || unclaimedCount === 0} style={[styles.diaBtn, (walletBusy || unclaimedCount === 0) && styles.diaBtnOff]}>
-            <Text style={[styles.diaBtnTxt, unclaimedCount === 0 && styles.diaBtnTxtOff]}>{unclaimedCount > 0 ? `🏅 업적 보상 받기 (${unclaimedCount})` : '🏅 받을 보상 없음'}</Text>
+            <Text style={[styles.diaBtnTxt, unclaimedCount === 0 && styles.diaBtnTxtOff]}>{claiming ? '받는 중…' : unclaimedCount > 0 ? `🏅 업적 보상 받기 (${unclaimedCount})` : '🏅 받을 보상 없음'}</Text>
           </Pressable>
         </View>
         {DEV_TOOLS ? (
@@ -198,6 +207,14 @@ export default function MyPage() {
       ) : null}
 
       <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 14 }}>배구명가 v{version}</Muted>
+      {/* 업적 보상 수령 중 블로킹 로딩 오버레이(사용자 요청 "로딩화면") — 공용 Popup(다크 글래스) + 스피너로 무거운 서버 왕복을 가림. */}
+      <Popup visible={claiming}>
+        <View style={{ alignItems: 'center', gap: 14, paddingVertical: 6 }}>
+          <ActivityIndicator size="large" color={theme.accent} />
+          <Text style={styles.title}>업적 보상 받는 중…</Text>
+          <Muted style={{ fontSize: 12.5, textAlign: 'center' }}>서버에 안전하게 적립하고 있어요. 잠시만 기다려 주세요.</Muted>
+        </View>
+      </Popup>
       <SpotlightOverlay screen="tab-mypage" />
     </Screen>
   );

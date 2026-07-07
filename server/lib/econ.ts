@@ -42,6 +42,24 @@ export function spendAmount(reason: string): number | null {
   return null;
 }
 
+/** 업적 배치 적립의 평생합 캡 배분 — **순수·DB 무의존**(가드 _dv_earnbatch가 직접 테스트).
+ *  used(원장 achievement 평생합)를 baseline으로, wantedAmounts(각 earnAmount('achievement',_) 클램프 후)를
+ *  순서대로 배정한다. earn 라우트의 per-call remaining 로직을 **배치에 맞게 grantedSoFar 누적**으로 확장:
+ *    remaining = ACH_LIFETIME_CAP - used - grantedSoFar
+ *  · remaining<=0 → grant 0, capped:true (단건 라우트의 409 cap과 동일 의미 — 지급 없음, 호출부가 confirm해 재시도 차단)
+ *  · remaining>0 → grant = min(wanted, remaining), capped:false (부분 지급도 applied이지 cap 아님 — 단건 라우트와 동일)
+ *  누적을 빼먹으면 캡을 여러 아이템이 각자 통과해 초과지급(치터) — 가드가 이 누적을 A/B로 못 박는다. */
+export function allocateAchGrants(used: number, wantedAmounts: number[]): Array<{ grant: number; capped: boolean }> {
+  let grantedSoFar = 0;
+  return wantedAmounts.map((wanted) => {
+    const remaining = ACH_LIFETIME_CAP - used - grantedSoFar;
+    if (remaining <= 0) return { grant: 0, capped: true };
+    const grant = Math.min(wanted, remaining);
+    grantedSoFar += grant;
+    return { grant, capped: false };
+  });
+}
+
 /** 잔액게이트(next<0) 우회 대상 — **환불만** 음수 balance 허용(§13.17 P0-1). reason 파생(자유 플래그 아님 →
  *  spend/earn/coupon/camp에 실수로 켜질 사고 구조적 차단). 다 써버린 고래 환불→음수→spend 게이트가 막음(§13.4 H1). */
 export const allowsNegativeBalance = (reason: string): boolean => reason === 'refund';
