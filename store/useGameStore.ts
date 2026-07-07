@@ -109,7 +109,8 @@ interface GameState {
   faAggressive: boolean;                       // 공격적 영입(연봉↑로 경쟁 우위)
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
   moneyOnlyIds: string[];                      // '돈만' 보상 선택 A/B FA id — 보상선수 면제·보상금 가중(FA_SYSTEM 2.2)
-  draftPicks: string[];                        // 드래프트 지명 위시리스트(우선순위)
+  draftPicks: string[];                        // 드래프트 찜(shortlist·우선순위) — 라이브 위시폴백/미표 자동지명 (FA_SYSTEM §3.2.1)
+  draftSelections: string[];                   // 라이브 드래프트 내 슬롯 순서 확정 픽 — endSeason resolveDraft mySelections. FA/재계약 변경 시 clear
   archive: SeasonArchive[];                    // 역대 우승 + 시상 + 순위/연승연패/플옵
   careerLog: { faSigns: number; coachHires: number; staffHires: number; interviews: number }; // 단장 통산 액션(업적용)
   careerTotals: { points: number; aces: number; setsWon: number; setsLost: number; matchWins: number; matchLosses: number }; // 내 팀 통산 경기 기록(업적용)
@@ -177,6 +178,7 @@ interface GameState {
   toggleProtect: (playerId: string) => void;
   toggleMoneyOnly: (playerId: string) => void;
   toggleDraftPick: (playerId: string) => void;
+  setDraftSelections: (ids: string[]) => void;  // 라이브 드래프트 확정 픽(내 슬롯 순서) — 확정마다 즉시 영속
   recordChampion: (season: number, championId: string) => void;
   markNewsRead: (keys: string[]) => void;
   setTrainingFocus: (focus: TrainingFocus | null) => void;
@@ -228,6 +230,7 @@ const freshSave = {
   protectedIds: [] as string[],
   moneyOnlyIds: [] as string[],
   draftPicks: [] as string[],
+  draftSelections: [] as string[],
   archive: [] as SeasonArchive[],
   careerLog: { faSigns: 0, coachHires: 0, staffHires: 0, interviews: 0 },
   careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 },
@@ -538,7 +541,7 @@ export const useGameStore = create<GameState>()(
           const nextOverrides = { ...s.contractOverrides, [playerId]: contract };
           if (capPayroll(effPlayers, nextOverrides, new Set(mySigned), betrayedBy) > LEAGUE_CAP) return;
         }
-        set((st) => ({ contractOverrides: { ...st.contractOverrides, [playerId]: contract } }));
+        set((st) => ({ contractOverrides: { ...st.contractOverrides, [playerId]: contract }, draftSelections: [] })); // 재계약=구성 변동 → 확정 픽 무효
         diag(s.season, 'transaction', `재계약 ${playerId} 연봉 ${salary}·${years}년`); // 진단 로그(§13.20 ④)
       },
       // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용.
@@ -612,34 +615,40 @@ export const useGameStore = create<GameState>()(
         setTxContext(inSeasonTx, get().faPool, my);
         return true;
       },
+      // 상류 FA/재계약 변경은 드래프트 순번(myPickSlots)·클래스 구성을 바꾼다 → 라이브에서 확정한 draftSelections를
+      //   무효화(clear). 안 지우면 슬롯이 밀려 다른 선수를 지명하는 stale-pick 발생(FA_SYSTEM §3.2.1 조정 D).
       setResign: (playerId, keep) =>
-        set((s) => ({ resignDecisions: { ...s.resignDecisions, [playerId]: keep } })),
+        set((s) => ({ resignDecisions: { ...s.resignDecisions, [playerId]: keep }, draftSelections: [] })),
       signFA: (playerId) =>
-        set((s) => (s.faSignings.includes(playerId) ? s : { faSignings: [...s.faSignings, playerId] })),
+        set((s) => (s.faSignings.includes(playerId) ? s : { faSignings: [...s.faSignings, playerId], draftSelections: [] })),
       unsignFA: (playerId) =>
         set((s) => ({
           faSignings: s.faSignings.filter((id) => id !== playerId),
           moneyOnlyIds: s.moneyOnlyIds.filter((id) => id !== playerId), // 지명 취소 시 '돈만' 선택도 해제
+          draftSelections: [], // 순번·구성 변동 → 확정 픽 무효
         })),
-      setAggressive: (on) => set({ faAggressive: on }),
+      setAggressive: (on) => set({ faAggressive: on, draftSelections: [] }),
       toggleProtect: (playerId) =>
         set((s) => {
           if (s.protectedIds.includes(playerId))
-            return { protectedIds: s.protectedIds.filter((id) => id !== playerId) };
+            return { protectedIds: s.protectedIds.filter((id) => id !== playerId), draftSelections: [] };
           if (!(currentRosters()[s.selectedTeamId ?? ''] ?? []).includes(playerId)) return s; // 내 로스터만 보호(유령/타팀 id 무시 — 보호슬롯 낭비 방지)
           if (s.protectedIds.length >= PROTECT_COUNT) return s; // 정원 초과 무시
-          return { protectedIds: [...s.protectedIds, playerId] };
+          return { protectedIds: [...s.protectedIds, playerId], draftSelections: [] };
         }),
       toggleMoneyOnly: (playerId) =>
         set((s) => (s.moneyOnlyIds.includes(playerId)
-          ? { moneyOnlyIds: s.moneyOnlyIds.filter((id) => id !== playerId) }
-          : { moneyOnlyIds: [...s.moneyOnlyIds, playerId] })),
+          ? { moneyOnlyIds: s.moneyOnlyIds.filter((id) => id !== playerId), draftSelections: [] }
+          : { moneyOnlyIds: [...s.moneyOnlyIds, playerId], draftSelections: [] })),
       toggleDraftPick: (playerId) =>
         set((s) =>
           s.draftPicks.includes(playerId)
             ? { draftPicks: s.draftPicks.filter((id) => id !== playerId) }
             : { draftPicks: [...s.draftPicks, playerId] },
         ),
+      // 라이브 드래프트 확정 픽(내 슬롯 순서, FA_SYSTEM §3.2.1 조정 D) — 확정마다 즉시 set(디바운스 영속).
+      //   endSeason의 resolveDraft가 mySelections로 소비. 재개(앱 종료 후)는 이 배열로 시퀀스 재계산 → fast-forward.
+      setDraftSelections: (ids) => set({ draftSelections: [...ids] }),
       recordChampion: (season, championId) =>
         set((s) =>
           s.archive.some((a) => a.season === season)
@@ -886,7 +895,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, hallOfFame, expelledLog, transfers, retirements, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, draftSelections, hallOfFame, expelledLog, transfers, retirements, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
         diag(season, 'season', `시즌 종료 ${season + 1}→${nextSeason + 1} (오프시즌 진입)`); // 진단 로그(#44)
@@ -993,9 +1002,9 @@ export const useGameStore = create<GameState>()(
         const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, walletCash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian);
         const snapshot = ctx.snapshot;
 
-        // 2) 드래프트 해석(내 위시리스트 + AI 자동, 순번 존중)
+        // 2) 드래프트 해석(라이브 확정 픽 mySelections 우선 → 찜 위시폴백 → AI 자동, 순번 존중. FA_SYSTEM §3.2.1)
         const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf, teamScoutReveal);
+        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf, teamScoutReveal, draftSelections);
         for (const p of drafted.picked) snapshot[p.id] = p;
         const myDrafted = drafted.picked.filter((p) => (drafted.rosters[my] ?? []).includes(p.id)); // 내 지명만(§13.20 ④)
         if (myDrafted.length) diag(season, 'draft', `드래프트 지명 ${myDrafted.map((p) => p.name).join(', ')}`); // 진단 로그
@@ -1167,6 +1176,7 @@ export const useGameStore = create<GameState>()(
           protectedIds: [],
           moneyOnlyIds: [],
           draftPicks: [],
+          draftSelections: [], // 라이브 드래프트 확정 픽 — 새 오프시즌 초기화(FA_SYSTEM §3.2.1)
           playerBase: snapshot,
           rosters: filled.rosters,
           hallOfFame: [...hallOfFame, ...hofAdds],
@@ -1231,6 +1241,7 @@ export const useGameStore = create<GameState>()(
         protectedIds: s.protectedIds,
         moneyOnlyIds: s.moneyOnlyIds,
         draftPicks: s.draftPicks,
+        draftSelections: s.draftSelections,
         archive: s.archive,
         careerLog: s.careerLog,
         careerTotals: s.careerTotals,

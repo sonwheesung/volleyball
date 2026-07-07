@@ -5,20 +5,20 @@ import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen,
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
-import { getTeam, teamScoutReveal } from '../data/league';
+import { teamScoutReveal } from '../data/league';
 import { computeStandings } from '../data/standings';
 import { amateurRecord } from '../data/amateurRecord';
 import { revealedPotential, fogOvr } from '../data/prospectScout';
 import { prospectReport } from '../data/prospectReport';
 import { draftClassPreview } from '../data/draftPreview';
-import { resolveDraft } from '../engine/draft';
 import { overall, overallRaw, REVEAL_PRECISE } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
 import { showSeasonStartAd } from '../lib/ads';
 import type { Player } from '../types';
 
 // 아마추어 성적표 + 스카우터 공개 잠재력 + 스카우트 리포트 (★ 포텐 별 제거 — 스카우팅 2.0 4단계)
-function ProspectDetail({ p, reveal }: { p: Player; reveal: number }) {
+// export: 라이브 드래프트(app/draft-live.tsx) 내 픽 선택 패널이 같은 안개 존중 상세를 재사용(FA_SYSTEM §3.2.1).
+export function ProspectDetail({ p, reveal }: { p: Player; reveal: number }) {
   const rec = amateurRecord(p);
   const rev = revealedPotential(p, reveal);
   const report = prospectReport(p, reveal);
@@ -57,7 +57,7 @@ function ProspectDetail({ p, reveal }: { p: Player; reveal: number }) {
 }
 
 export default function DraftCenter() {
-  // 드래프트 컨텍스트 생성(buildDraftContext)+지명 시뮬(resolveDraft)은 무거워 한 틱 미뤄 로딩부터 그린다
+  // 드래프트 컨텍스트 생성(buildDraftContext)은 무거워 한 틱 미뤄 로딩부터 그린다(미리보기 삭제로 resolveDraft 재실행 없음)
   const ready = useDeferredReady();
   if (!ready) return <Loading title="신인 드래프트" variant="list" />;
   return <DraftCenterInner />;
@@ -79,25 +79,15 @@ function DraftCenterInner() {
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
   const [openId, setOpenId] = useState<string | null>(null);
-  // 담기/빼기 토글은 매 렌더 resolveDraft(지명 시뮬)를 재실행(아래, 비메모)해 무겁다 → 오버레이 마스킹(UI-27)
+  // 찜 담기/빼기는 가벼운 토글(더 이상 resolveDraft 재실행 없음 — 미리보기 삭제, 조정 A). 짧은 마스킹만.
   const busy = useBusyRun();
-  // endSeason과 동일한 ownerFx+자금 — 미리보기=결과 보장(면담 거부·자금 게이트가 명단·순번에 반영)
+  // endSeason과 동일한 ownerFx+자금 — 지명 순번·클래스가 결과와 동일하게(면담 거부·자금 게이트 반영)
   const ctx = useMemo(
     () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
       buildOwnerFx(interviews, season, my, fanScore), cash),
     [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, cash],
   );
   const standings = useMemo(() => computeStandings(Number.MAX_SAFE_INTEGER), [season]);
-
-  // 미리보기: 내가 실제로 지명하게 될 신인
-  const clsById = useMemo(() => new Map(ctx.cls.map((p) => [p.id, p])), [ctx]);
-  const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-  const preview = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => ctx.snapshot[id], my, draftPicks, styleOf, teamScoutReveal);
-  const beforeMy = new Set(ctx.rosters[my] ?? []);
-  const myDrafted = (preview.rosters[my] ?? [])
-    .filter((id) => !beforeMy.has(id))
-    .map((id) => clsById.get(id))
-    .filter((p): p is Player => !!p);
 
   const classSorted = [...ctx.cls].sort((a, b) => overall(b) - overall(a));
   const myRank = standings.findIndex((s) => s.teamId === my) + 1;
@@ -123,7 +113,7 @@ function DraftCenterInner() {
           </Text>
         </Row>
         <Muted style={{ fontSize: 12 }}>
-          하위 팀이 앞 순번(추첨). 원하는 신인을 담아두면 순번에서 가능한 선수를 자동 지명합니다.
+          하위 팀이 앞 순번(추첨). 원하는 신인을 찜해두면 라이브 드래프트에서 위에 뜨고, 내 차례에 직접 지명합니다.
           선수를 누르면 아마추어 성적·스카우트 리포트를 볼 수 있어요.
         </Muted>
         <Muted style={{ fontSize: 12, marginTop: 4, color: reveal >= 0.6 ? theme.good : theme.warn }}>
@@ -140,23 +130,8 @@ function DraftCenterInner() {
 
       <Button label="라이브 드래프트 보기 ▶" onPress={() => router.push('/draft-live')} />
       <Pressable onPress={onFinish} style={{ paddingVertical: 8, alignItems: 'center' }}>
-        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>건너뛰고 시즌 시작하기</Text>
+        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>건너뛰면 찜 순서대로 자동 지명합니다</Text>
       </Pressable>
-
-      <Title>내 지명 결과 (미리보기)</Title>
-      {myDrafted.length === 0 ? (
-        <Card><Muted>아직 지명 예정 선수가 없습니다. 아래에서 신인을 담아보세요.</Muted></Card>
-      ) : (
-        myDrafted.map((p) => (
-          <View key={p.id} style={styles.row}>
-            <PosTag pos={p.position} />
-            <Text style={[styles.name, { flex: 1 }]}>{p.name}</Text>
-            {reveal >= REVEAL_PRECISE
-              ? <OvrBadge value={overallRaw(p)} />
-              : <Text style={styles.fogOvr}>{fogOvr(p, reveal)}</Text>}
-          </View>
-        ))
-      )}
 
       <Title>드래프트 클래스 ({classSorted.length}명)</Title>
       {classSorted.map((p) => {

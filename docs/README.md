@@ -171,6 +171,7 @@ npx tsx tools/_a8_verify.ts 14              # 선수 상세 데이터 흐름(A8,
 npx tsx tools/_ev_transfernews.ts 15        # 타팀 이적/방출 뉴스(NEWS 슬라이스4) — 거물 게이트 볼륨·매달린참조0·중복0·결정론·이동시점OVR. exit 0/1
 npx tsx tools/_dv_releasenews.ts            # 방출 뉴스 인간관계 한 줄(RELATIONSHIP §6) — 합성 방출+잔류 각별한동료 "남기고 떠난다" 박힘 + A/B(친구없으면 줄 없음=허위오라클 차단)·조사교정. exit 0/1
 npx tsx tools/_ev_draftpick.ts              # AI 드래프트 3티어(FA §3.1) — 특급 BPA·포지션 필요·OVR+성격 불변식 + 성격 A/B + 결정론. exit 0/1
+npx tsx tools/_dv_draftlive.ts              # 라이브 인터랙티브 드래프트(FA §3.2.1) — resolveDraft(mySelections): (a)결정론 50시즌×2 (b)존중/소진폴백·풀무결 (c)재개 fast-forward 등가 (d)0내픽·총0 형태 (e)A/B(무시=폴백 재현). exit 0/1
 npx tsx tools/_dv_ownerreject.ts            # 감독 건의 거절사유+Form 비대칭(OWNER §2.2) — 실감점량 랭킹(고정순위 아님)·p게이팅·benchP=accept임계·결정론·Form기전 실재. exit 0/1
 npx tsx tools/_ev_airetain.ts 12            # AI 재계약 확률(aiRetainProb, FA §4) — 절벽해소(나이/OVR 그라데이션)·순잔류 50~62%밴드·단조·엘리트유지·연속. 구 aiKeepsFA 이진 A/B. 2026-07-02 상대 앵커(medianOvr) 전환 후 12시즌 56.9%·24시즌 54.2%(EC-FA-06 — 다지평 확인은 24 인자로). exit 0/1
 npx tsx tools/_ev_promise.ts                # 면담 공약 파기(OWNER 1.3) — 주전약속+벤치=거부급등(0.95) vs 약속+출전=0 vs 전력보강+벤치=파기아님. A/B 4시나리오. exit 0/1

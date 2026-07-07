@@ -149,9 +149,11 @@ export function aiDraftPick(
 
 /**
  * 드래프트 해석(순수). 순번대로 진행:
- * - 내 슬롯: 위시리스트(우선순위) 중 남아있는 첫 선수, 없으면 AI 로직
+ * - 내 슬롯(i번째): 확정 선택 `mySelections[i]`(라이브 인터랙티브 지명) 중 남아있으면 그것,
+ *   없으면 위시리스트(찜 `draftPicks`, 우선순위) 중 남아있는 첫 선수, 그것도 없으면 AI 로직
  * - AI 슬롯: aiDraftPick
  * 반환: 갱신 로스터 + 지명된 선수 목록(레지스트리 추가용)
+ * mySelections는 옵셔널(기본 [])이라 옛 8-인자 호출은 위시폴백=옛 동작 그대로(FA_SYSTEM §3.2.1 조정 E).
  */
 export function resolveDraft(
   order: string[],
@@ -162,6 +164,7 @@ export function resolveDraft(
   wishlist: string[],
   styleOf: (teamId: string) => CoachStyle,
   revealOf: (teamId: string) => number = () => 1, // 팀 스카우팅 공개도(기본 1=정밀)
+  mySelections: string[] = [],                    // 내 슬롯 순서 확정 픽(라이브 인터랙티브, 조정 E). 슬롯 i가 소비
 ): { rosters: Record<string, string[]>; picked: Player[]; sequence: { teamId: string; playerId: string; reason: PickReason }[] } {
   const rosters: Record<string, string[]> = {};
   for (const k of Object.keys(rostersIn)) rosters[k] = [...rostersIn[k]];
@@ -172,14 +175,23 @@ export function resolveDraft(
   const wl = [...wishlist];
   const picked: Player[] = [];
   const sequence: { teamId: string; playerId: string; reason: PickReason }[] = [];
+  let myPickIdx = 0; // 내 몇 번째 픽인가(내 슬롯마다 +1) — mySelections[myPickIdx] 매핑
 
   for (const teamId of order) {
     let chosen: Player | null = null;
     let reason: PickReason = 'best';
     if (teamId === myTeam) {
-      for (const id of wl) {
-        const idx = available.findIndex((a) => a.id === id);
-        if (idx >= 0) { chosen = available[idx]; reason = 'wish'; break; }
+      const sel = mySelections[myPickIdx]; // 이 슬롯의 확정 선택(있으면)
+      myPickIdx++;                          // 내 슬롯마다 소비(선택 유무 무관 — 슬롯 i 고정)
+      if (sel) {
+        const idx = available.findIndex((a) => a.id === sel); // 아직 남아있으면 그대로, 앞선 픽에 소진됐으면 폴백
+        if (idx >= 0) { chosen = available[idx]; reason = 'wish'; }
+      }
+      if (!chosen) {
+        for (const id of wl) {
+          const idx = available.findIndex((a) => a.id === id);
+          if (idx >= 0) { chosen = available[idx]; reason = 'wish'; break; }
+        }
       }
     }
     if (!chosen) {

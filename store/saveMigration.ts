@@ -4,7 +4,7 @@
 
 export const SAVE_VERSION = 2; // v2(2026-07-08): 훈련 방침 타임라인 focusLog 추가 — 구 단일 trainingFocus를 [{fromDay:0}]로 시드(A4)
 
-// 영속 62필드 기본값 — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
+// 영속 63필드 기본값 — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
 // (drift 가드: _dv_migrate가 이 키 집합 == partialize 키 집합을 단언한다.)
 export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 설정(새 게임에도 유지)
@@ -14,7 +14,7 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 계약·방출·거래
   contractOverrides: {}, released: [], inSeasonTx: [], faPool: [],
   resignDecisions: {}, faSignings: [], faAggressive: false,
-  protectedIds: [], moneyOnlyIds: [], draftPicks: [],
+  protectedIds: [], moneyOnlyIds: [], draftPicks: [], draftSelections: [],
   // 선수·로스터
   playerBase: null, rosters: null,
   // 역대 기록
@@ -47,7 +47,7 @@ const KIND: Record<string, Kind> = {
   selectedTeamId: 'nstr', season: 'num', currentDay: 'num', results: 'rec', watchProgress: 'rec',
   contractOverrides: 'rec', released: 'arr', inSeasonTx: 'arr', faPool: 'arr',
   resignDecisions: 'rec', faSignings: 'arr', faAggressive: 'bool',
-  protectedIds: 'arr', moneyOnlyIds: 'arr', draftPicks: 'arr',
+  protectedIds: 'arr', moneyOnlyIds: 'arr', draftPicks: 'arr', draftSelections: 'arr',
   playerBase: 'nrec', rosters: 'nrec',
   archive: 'arr', hallOfFame: 'arr', expelledLog: 'arr', transfers: 'arr', retirements: 'arr',
   milestones: 'arr', readNews: 'arr',

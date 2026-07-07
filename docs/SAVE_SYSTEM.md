@@ -18,7 +18,7 @@
 
 ---
 
-## 1. 영속 스키마 (56 필드 — 단일 진실)
+## 1. 영속 스키마 (57 필드 — 단일 진실)
 
 > **다이아 이코노미 필드**(표 미개별화, 정본=`store/saveMigration.ts SAVE_DEFAULTS`): `diamonds·saveId·campLog·campTrainedThisOffseason·campDoneSeason·pendingCamp·claimedAch·adState`. **`campDoneSeason`**(num, 기본 -1, 2026-07-04 추가): 전지훈련을 "마친" 시즌번호 — 오프시즌↔개막전 게이트(MONETIZATION §11.2). `===season`이면 완료(시즌번호라 새 시즌 자동 리셋). 추가는 §2① 자동 처리(누락=기본값 -1).
 
@@ -54,6 +54,7 @@
 | `faSignings` | string[] | [] |
 | `faAggressive` | scalar(boolean) | false |
 | `protectedIds` · `moneyOnlyIds` · `draftPicks` | string[] | [] |
+| `draftSelections` (2026-07-08) | string[] | [] (라이브 드래프트 내 슬롯 순서 확정 픽 — endSeason resolveDraft mySelections. FA/재계약 변경 시 clear. FA_SYSTEM §3.2.1) |
 
 ### 선수·로스터 (base 스냅샷)
 | 필드 | 자료구조 | 기본 | 비고 |
