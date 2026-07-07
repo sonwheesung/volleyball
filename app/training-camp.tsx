@@ -1,13 +1,17 @@
 // 전지훈련 (MONETIZATION §11.2 코스형, 2026-07-02) — 오프시즌 해외 캠프. 다이아로 선수 1명을 보내
 // 5코스(공격/수비/블로킹/세터/서브) 중 하나로 관련 3스탯을 현재+2·포텐+7(최대 99). 선수당 오프시즌 1회.
 // 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지. 포텐 +7이 본체: 젊을수록 성장으로 실현되는 폭이 크다(H2).
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Button, Card, IconLabel, Muted, PosTag, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { getPlayer, teamPlayerIds } from '../data/league';
+import { availableTeamPlayers } from '../data/injury';
+import { buildLineup } from '../engine/lineup';
+import { overall } from '../engine/overall';
+import { POS_ORDER } from '../components/posTokens';
 import { CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, WELCOME_DIAMONDS, courseUpgradable, type CampCourse } from '../engine/diamonds';
 import type { Player, TrainableStat } from '../types';
 
@@ -17,6 +21,17 @@ const LABEL: Record<TrainableStat, string> = {
   skSpike: '공격기술', skBlock: '블로킹기술', skDig: '디그기술', skReceive: '리시브기술', skSet: '세팅기술', skServe: '서브기술',
 };
 const COURSE_KEYS: CampCourse[] = ['attack', 'defense', 'block', 'setter', 'serve'];
+
+// 예상 역할 배지 — 주전(good)·리베로(gold, 주전 리베로라 구분 색)·벤치(muted). squad statusTag pill과 같은 시각 언어.
+function RoleBadge({ role }: { role?: '주전' | '리베로' }) {
+  const c = role === '주전' ? theme.good : role === '리베로' ? theme.gold : theme.muted;
+  const label = role ?? '벤치';
+  return (
+    <View style={[styles.roleBadge, { borderColor: c, backgroundColor: c + '22' }]}>
+      <Text style={[styles.roleBadgeTxt, { color: c }]}>{label}</Text>
+    </View>
+  );
+}
 
 export default function TrainingCamp() {
   const router = useRouter();
@@ -82,6 +97,34 @@ export default function TrainingCamp() {
   const player = picked ? getPlayer(picked) : null;
   const canAfford = diamonds >= CAMP_COURSE_COST;
 
+  // 예상 주전/리베로 — 개막전이 실제로 쓰는 라인업(engine/lineup.buildLineup)을 그날(오프시즌=day0) 출전 가능
+  // 로스터에 적용해 도출 → 신규 유저가 "누구에게 다이아를 쓸지"를 진실되게 판단(squad.tsx와 동일 경로).
+  // availableTeamPlayers는 스토어 스냅샷(dyn())을 읽어 오프시즌 동안 정적 → my 기준으로만 memo.
+  const roleOf = useMemo(() => {
+    const map: Record<string, '주전' | '리베로'> = {};
+    if (my) {
+      const avail = availableTeamPlayers(my, 0);
+      if (avail.length) {
+        const lu = buildLineup(avail);
+        for (const p of lu.six) map[p.id] = '주전';
+        if (lu.libero) map[lu.libero.id] = '리베로';
+      }
+    }
+    return map;
+  }, [my]);
+  const isStarter = (id: string) => roleOf[id] === '주전' || roleOf[id] === '리베로';
+  // 정렬: 주전+리베로를 한 그룹으로 위에(주전 먼저 → 포지션순), 벤치를 아래에(포지션순). 기존 행 스타일은 유지.
+  const sortedRoster = useMemo(
+    () => [...roster].sort((a, b) => {
+      const ga = isStarter(a.id) ? 0 : 1, gb = isStarter(b.id) ? 0 : 1;
+      if (ga !== gb) return ga - gb;
+      return POS_ORDER[a.position] - POS_ORDER[b.position] || overall(b) - overall(a);
+    }),
+    [roster, roleOf], // eslint-disable-line react-hooks/exhaustive-deps
+  );
+  const firstBenchIdx = sortedRoster.findIndex((p) => !isStarter(p.id));
+  const showGroups = firstBenchIdx > 0; // 주전·벤치가 둘 다 있을 때만 구분 라벨
+
   const balance = (
     <View style={styles.bal}><Text style={styles.gem}>💎</Text><Text style={styles.balN}>{diamonds.toLocaleString()}</Text></View>
   );
@@ -123,16 +166,25 @@ export default function TrainingCamp() {
           </Muted>
         </Card>
         <IconLabel icon="people-outline" color={theme.accent}>선수 선택</IconLabel>
-        {roster.map((p) => {
+        <Muted style={{ fontSize: 12.5, marginTop: 2, marginBottom: 2, lineHeight: 18 }}>
+          <Text style={{ color: theme.good, fontWeight: '800' }}>주전</Text>은 출전이 많아 키운 실력이 성장으로 빨리 실현됩니다. 어린 벤치 선수는 훗날 주전을 꿰찰 재목일 때 값어치가 커요 — 누구에게 투자할지, 이 표시가 기준선입니다.
+        </Muted>
+        {sortedRoster.map((p, i) => {
           const done = camped.includes(p.id);
+          const role = roleOf[p.id]; // '주전' | '리베로' | undefined(벤치)
           return (
-            <Pressable key={p.id} disabled={done} onPress={() => { setPicked(p.id); setCourse(null); }}
-              style={({ pressed }) => [styles.prow, done && { opacity: 0.45 }, pressed && { opacity: 0.7 }]}>
-              <PosTag pos={p.position} />
-              <Text style={styles.pname} numberOfLines={1}>{p.name}</Text>
-              <Text style={styles.psub}>{p.age}세</Text>
-              {done ? <Text style={styles.doneTag}>완료</Text> : <Text style={styles.arrow}>›</Text>}
-            </Pressable>
+            <View key={p.id}>
+              {showGroups && i === 0 ? <Text style={styles.groupLabel}>주전</Text> : null}
+              {showGroups && i === firstBenchIdx ? <Text style={styles.groupLabel}>벤치</Text> : null}
+              <Pressable disabled={done} onPress={() => { setPicked(p.id); setCourse(null); }}
+                style={({ pressed }) => [styles.prow, done && { opacity: 0.45 }, pressed && { opacity: 0.7 }]}>
+                <PosTag pos={p.position} />
+                <Text style={styles.pname} numberOfLines={1}>{p.name}</Text>
+                <RoleBadge role={role} />
+                <Text style={styles.psub}>{p.age}세</Text>
+                {done ? <Text style={styles.doneTag}>완료</Text> : <Text style={styles.arrow}>›</Text>}
+              </Pressable>
+            </View>
           );
         })}
         <View style={{ marginTop: 14 }}>
@@ -171,6 +223,7 @@ export default function TrainingCamp() {
       <View style={styles.phead}>
         <PosTag pos={player.position} />
         <Text style={styles.pnameBig} numberOfLines={1}>{player.name}</Text>
+        <RoleBadge role={roleOf[player.id]} />
         <Text style={styles.psub}>{player.age}세</Text>
         <Pressable onPress={() => { setPicked(null); setCourse(null); }}><Text style={styles.change}>선수 변경</Text></Pressable>
       </View>
@@ -223,6 +276,9 @@ const styles = themedStyles(() => StyleSheet.create({
   gem: { fontSize: 16 }, balN: { color: theme.text, fontSize: 18, fontWeight: '900' },
   prow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 14, paddingVertical: 11, marginTop: 6 },
   pname: { flex: 1, color: theme.text, fontSize: 15, fontWeight: '700' },
+  groupLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginTop: 8, marginLeft: 2 },
+  roleBadge: { paddingHorizontal: 6, paddingVertical: 1, borderRadius: 5, borderWidth: 1 },
+  roleBadgeTxt: { fontSize: 11, fontWeight: '800' },
   psub: { color: theme.muted, fontSize: 13 },
   doneTag: { color: theme.muted, fontSize: 12, fontWeight: '800' },
   arrow: { color: theme.accent, fontSize: 22, fontWeight: '900' },
