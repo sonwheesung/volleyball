@@ -3,11 +3,11 @@
 // rosters    = 팀 구성(가변). 시드 기본값에서 은퇴/영입/드래프트로 바뀐다.
 // 시즌 내 진화는 스냅샷에서 currentDay 만큼 리플레이.
 
-import type { AssistantCoach, Coach, CoachSpecialty, CoachType, CoachStyle, Fixture, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
+import type { AssistantCoach, Coach, CoachSpecialty, CoachType, CoachStyle, Fixture, FocusSeg, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
 import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
-import { evolvePlayer } from '../engine/progression';
+import { evolvePlayer, type FocusResolver } from '../engine/progression';
 import { rollTraits } from '../engine/traits';
 import { createRng, strSeed } from '../engine/rng';
 import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, coachTypeFor, type StaffEffects, NO_EFFECTS } from '../engine/staff';
@@ -47,9 +47,11 @@ const seedRosters = (): Record<string, string[]> =>
   Object.fromEntries(LEAGUE.teams.map((t) => [t.id, [...t.players]]));
 
 let rosters: Record<string, string[]> = seedRosters();
-let playerFocus = new Map<string, TrainingFocus>();
+let playerFocus = new Map<string, FocusResolver>(); // 선수 → 소속팀 날짜별 방침 해석기(A4 타임라인)
 let playerEffects = new Map<string, StaffEffects>(); // 선수 → 소속팀 전문코치 종합 효과
-let focusOverride: Record<string, TrainingFocus> = {}; // 단장이 고른 팀별 훈련 방향(감독 기본 대체)
+// 단장이 고른 팀별 훈련 방향 **타임라인**(A4, 2026-07-08 — "바꾼 날부터 적용"). 없으면 감독 기본.
+//   구 `focusOverride: Record<string, TrainingFocus>`(단일 오버라이드=day0부터 소급)를 세그먼트 타임라인으로 교체.
+let focusTimeline: Record<string, FocusSeg[]> = {};
 let evoCache: { day: number; map: Map<string, Player> } | null = null;
 let _baseVersion = 0; // 선수/로스터 베이스가 바뀔 때마다 증가(파생 캐시 무효화용)
 export const baseVersion = (): number => _baseVersion;
@@ -57,9 +59,30 @@ export const baseVersion = (): number => _baseVersion;
 // (저장된 건 standings/production 계산결과뿐 — 진화 캐시는 필요 시 재빌드). _gt 검증에서만 호출되도록 신중히.
 export const setBaseVersion = (n: number): void => { _baseVersion = n; evoCache = null; };
 
-/** 팀의 실제 훈련 방향 — 단장 오버라이드 우선, 없으면 (영입/시드) 감독 기본 */
+/** 팀 감독 기본 방침(오버라이드 없을 때 폴백) */
+const coachDefaultFocus = (teamId: string): TrainingFocus =>
+  teamHeadCoach(teamId)?.trainingFocus ?? DEFAULT_FOCUS;
+
+/** 팀의 **현재(최신)** 훈련 방향 — 타임라인 마지막 세그먼트 우선(단장 오버라이드), 없으면 감독 기본.
+ *  표시·AI 등 "지금 방침"이 필요한 곳용. 진화(성장 리플레이)는 날짜별이라 teamFocusResolver를 쓴다. */
 function teamFocus(teamId: string): TrainingFocus {
-  return focusOverride[teamId] ?? teamHeadCoach(teamId)?.trainingFocus ?? DEFAULT_FOCUS;
+  const segs = focusTimeline[teamId];
+  if (segs && segs.length) return segs[segs.length - 1].focus ?? coachDefaultFocus(teamId);
+  return coachDefaultFocus(teamId);
+}
+
+/** 팀의 **날짜별** 훈련 방향 해석기(A4) — 진화 리플레이가 "그날의 방침"으로 성장시키게. fromDay ≤ day 인 마지막
+ *  세그먼트의 focus(null이면 감독 기본으로 복귀). 세그먼트가 없으면(AI 팀 등) 매일 감독 기본. */
+function teamFocusResolver(teamId: string): FocusResolver {
+  const def = coachDefaultFocus(teamId);
+  const segs = focusTimeline[teamId];
+  if (!segs || !segs.length) return () => def;
+  const sorted = [...segs].sort((a, b) => a.fromDay - b.fromDay);
+  return (day: number): TrainingFocus => {
+    let f: TrainingFocus | null = null;
+    for (const s of sorted) { if (s.fromDay <= day) f = s.focus; else break; }
+    return f ?? def;
+  };
 }
 
 /** 팀 현재 감독 — 영입/배정 오버라이드 우선. 없으면 시드 감독으로 폴백하되,
@@ -127,22 +150,36 @@ function rebuildFocus(): void {
   playerFocus = new Map();
   playerEffects = new Map();
   for (const t of LEAGUE.teams) {
-    const focus = teamFocus(t.id);
+    const resolver = teamFocusResolver(t.id); // 날짜별 방침(A4 타임라인) — 팀 전원 공유
     const effects = staffEffects(teamAssistantsOf(t.id));
-    for (const pid of rosters[t.id] ?? []) { playerFocus.set(pid, focus); playerEffects.set(pid, effects); }
+    for (const pid of rosters[t.id] ?? []) { playerFocus.set(pid, resolver); playerEffects.set(pid, effects); }
   }
 }
 rebuildFocus();
 
-/** 단장 훈련 방향 설정(null=감독 기본 복원). 진화 캐시 무효화 → 즉시 반영. */
-export function setFocusOverride(teamId: string, focus: TrainingFocus | null): void {
-  if (focus) focusOverride[teamId] = focus;
-  else delete focusOverride[teamId];
+/** 팀 훈련 방향 **타임라인** 통째 설정(A4) — 스토어가 소유한 focusLog를 데이터층에 주입(setOwnerContext 패턴).
+ *  진화 캐시 무효화 → 즉시 반영. baseVersion++ 은 유지(변경 시 그날 이후 진화가 달라짐).
+ *  ※ 향후 스플라이스 단계: 변경의 minAffectedDay = 새 세그먼트 fromDay(그 이전 날짜는 캐시 재사용 가능 — 지금은 전체 무효화). */
+export function setFocusTimeline(teamId: string, segments: FocusSeg[]): void {
+  const clean = segments.filter((s): s is FocusSeg => !!s && Number.isFinite(s.fromDay));
+  if (clean.length) focusTimeline[teamId] = [...clean].sort((a, b) => a.fromDay - b.fromDay);
+  else delete focusTimeline[teamId];
   rebuildFocus();
   evoCache = null;
   _baseVersion++;
 }
-export const getFocusOverride = (teamId: string): TrainingFocus | null => focusOverride[teamId] ?? null;
+
+/** 단장 훈련 방향 설정(null=감독 기본 복원) — **day0부터 상수 방침**(단일 세그먼트) 호환 경로.
+ *  시뮬 도구·가드·구경로용. 스토어의 "바꾼 날부터"는 setFocusTimeline(타임라인)을 쓴다. */
+export function setFocusOverride(teamId: string, focus: TrainingFocus | null): void {
+  setFocusTimeline(teamId, focus ? [{ fromDay: 0, focus }] : []);
+}
+
+/** 팀의 현재(최신) 단장 오버라이드 방침 — 없으면 null(감독 기본과 구분). 표시·가드용. */
+export const getFocusOverride = (teamId: string): TrainingFocus | null => {
+  const segs = focusTimeline[teamId];
+  return segs && segs.length ? (segs[segs.length - 1].focus ?? null) : null;
+};
 
 export const getTeam = (id: string): Team | undefined => teamMap.get(id);
 /** 팀명 짧은 표기 — "도시 팀명"에서 팀명(마지막 어절)만. 마커·좁은 칸용 */
@@ -329,7 +366,7 @@ export interface LeagueSnapshot {
   players: Player[];                 // 참조 보관(감사는 새 객체로 덮어쓰므로 원본 불변)
   coaches: Coach[]; assistants: AssistantCoach[];
   head: Record<string, string>; asst: Record<string, string[]>; scout: Record<string, string[]>;
-  focus: Record<string, TrainingFocus>;
+  focus: Record<string, FocusSeg[]>; // 훈련 방침 타임라인(A4)
   myTeamStaff: string;
 }
 
@@ -341,7 +378,7 @@ export function snapshotLeagueState(): LeagueSnapshot {
     coaches: coachPool.map((c) => ({ ...c, firedFrom: c.firedFrom ? [...c.firedFrom] : undefined, trainingFocus: jclone(c.trainingFocus) })),
     assistants: assistantPool.map((a) => ({ ...a })),
     head: { ...headCoachOverride }, asst: jclone(teamAssistantIds), scout: jclone(teamScoutIds),
-    focus: jclone(focusOverride),
+    focus: jclone(focusTimeline),
     myTeamStaff,
   };
 }
@@ -355,7 +392,7 @@ export function restoreLeagueState(s: LeagueSnapshot): void {
   headCoachOverride = { ...s.head };
   teamAssistantIds = jclone(s.asst);
   teamScoutIds = jclone(s.scout);
-  focusOverride = jclone(s.focus);
+  focusTimeline = jclone(s.focus);
   myTeamStaff = s.myTeamStaff;
   rebuildFocus(); evoCache = null; _baseVersion++;
 }
@@ -379,8 +416,9 @@ export function grantStartingStaff(teamId: string): { head: Record<string, strin
   return getStaffState();
 }
 
-/** 선수 → 소속팀 감독 훈련선호 (롤오버/진화 성장 방향) */
-export const focusOf = (p: Player): TrainingFocus => playerFocus.get(p.id) ?? DEFAULT_FOCUS;
+/** 선수 → 소속팀 **날짜별** 훈련방침 해석기 (롤오버/진화 성장 방향, A4 타임라인).
+ *  로스터 밖(FA 등)은 상수 감독기본(DEFAULT_FOCUS) 해석기 — 기존 단일 focus와 바이트 동일. */
+export const focusOf = (p: Player): FocusResolver => playerFocus.get(p.id) ?? (() => DEFAULT_FOCUS);
 
 /** 선수 → 소속팀 전문코치 종합 효과 (롤오버 영구 성장에 반영) */
 export const effectsOf = (p: Player): StaffEffects => playerEffects.get(p.id) ?? NO_EFFECTS;
@@ -427,7 +465,7 @@ export function resetLeagueBase(): void {
   // pristine 클론으로 복원 — in-place 변이(teamId)된 참조가 아니라 시드 원본을 되살린다(결정론·새게임 스타팅스태프 일관)
   commitCoachPool(seedCoaches.map((c) => ({ ...c })), seedAssistants.map((a) => ({ ...a })));
   scoutMap = new Map(seedScouts.map((s) => [s.id, { ...s }]));
-  focusOverride = {};
+  focusTimeline = {};
   headCoachOverride = {};
   teamAssistantIds = {};
   teamScoutIds = {};
@@ -456,7 +494,7 @@ export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
   fixtureMap.clear();
   for (const f of SEASON) fixtureMap.set(f.id, f);
   rosters = seedRosters();
-  focusOverride = {};
+  focusTimeline = {};
   headCoachOverride = {};
   teamAssistantIds = {};
   teamScoutIds = {};
@@ -472,11 +510,11 @@ export function evolvedPlayers(day: number): Map<string, Player> {
   if (evoCache && evoCache.day === day) return evoCache.map;
   const map = new Map<string, Player>();
   for (const team of LEAGUE.teams) {
-    const focus = teamFocus(team.id); // 단장 오버라이드 우선
+    const resolver = teamFocusResolver(team.id); // 날짜별 방침(A4 — "바꾼 날부터" 세그먼트 반영)
     const effects = staffEffects(teamAssistantsOf(team.id)); // 전문 코치 효과(속도·포텐·노쇠)
     for (const pid of rosters[team.id] ?? []) {
       const base = playerMap.get(pid);
-      if (base) map.set(pid, evolvePlayer(base, focus, day, effects));
+      if (base) map.set(pid, evolvePlayer(base, resolver, day, effects));
     }
   }
   evoCache = { day, map };

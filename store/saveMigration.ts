@@ -2,9 +2,9 @@
 // 핵심: 컨테이너 모양(array/record/scalar)을 강제해 복원 경로의 [...arr]·Object.keys·destructure 크래시를 닫는다.
 // version+migrate로 향후 breaking 구조 변경(필드 이름변경·재편)도 단계 변환으로 흡수.
 
-export const SAVE_VERSION = 1;
+export const SAVE_VERSION = 2; // v2(2026-07-08): 훈련 방침 타임라인 focusLog 추가 — 구 단일 trainingFocus를 [{fromDay:0}]로 시드(A4)
 
-// 영속 61필드 기본값 — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
+// 영속 62필드 기본값 — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
 // (drift 가드: _dv_migrate가 이 키 집합 == partialize 키 집합을 단언한다.)
 export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 설정(새 게임에도 유지)
@@ -22,7 +22,7 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 },
   hallOfFame: [], expelledLog: [], transfers: [], retirements: [], milestones: [], readNews: [],
   // 감독·스태프·훈련
-  coachPool: null, staffHead: {}, staffAssistants: {}, staffScouts: {}, trainingFocus: null,
+  coachPool: null, staffHead: {}, staffAssistants: {}, staffScouts: {}, trainingFocus: null, focusLog: [],
   // 구단주·재정
   interviews: [], benchDirectives: [], talkCooldown: {}, benchCooldown: {},
   fanScore: 50, releaseAnger: 0, cash: 50000, lastFinance: null,
@@ -58,7 +58,7 @@ const KIND: Record<string, Kind> = {
   asianWish: 'arr', asianAltPool: 'arr', asianSubUsed: 'bool', keepAsian: 'nbool',
   bonds: 'rec',
   diamonds: 'num', saveId: 'nstr', campLog: 'arr', campTrainedThisOffseason: 'arr', campDoneSeason: 'num', claimedAch: 'arr', lastGrowthDay: 'num',
-  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, lastFinance, adState, pendingCamp
+  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, focusLog, lastFinance, adState, pendingCamp
 };
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -95,6 +95,12 @@ function sanitizeField(key: string, v: unknown): unknown {
       // malformed → null: 리그가 감독 기본 trainingFocus로 재유도(안전)
       if (v === null) return null;
       return isObj(v) && Array.isArray(v.primary) && Array.isArray(v.secondary) ? v : null;
+    case 'focusLog': {
+      // 훈련 방침 타임라인(A4) — [{fromDay:number, focus: null | {primary,secondary}}]. 손상 세그먼트는 제거(안전).
+      if (!Array.isArray(v)) return [];
+      const okFocus = (f: unknown) => f === null || (isObj(f) && Array.isArray((f as Record<string, unknown>).primary) && Array.isArray((f as Record<string, unknown>).secondary));
+      return v.filter((seg) => isObj(seg) && typeof seg.fromDay === 'number' && Number.isFinite(seg.fromDay) && okFocus(seg.focus));
+    }
     case 'lastFinance':
       return v === null || isObj(v) ? v : null;
     case 'adState':
@@ -123,11 +129,10 @@ export function sanitizeSave(raw: unknown): Record<string, unknown> {
 
 /**
  * zustand persist migrate 훅. (persisted, version) → 정규화된 유효 상태.
- * version < 1: 현 구조와 동일 → 정규화만. 향후 breaking 변경 시 단계 추가:
- *   let s = persisted;
- *   if (version < 2) s = v1_to_v2(s);   // 옛 모양 → 새 모양
+ * v<2(2026-07-08, A4): 훈련 방침 타임라인 focusLog 도입. 구세이브는 단일 `trainingFocus`(day0부터 소급 적용)라
+ *   → `[{fromDay:0, focus:구값}]`로 시드해 **리플레이가 바이트 동일**하게(day0부터 상수 = 옛 동작). trainingFocus 없으면 [].
+ * 향후 breaking 변경 시 단계 추가:
  *   if (version < 3) s = v2_to_v3(s);
- *   return sanitizeSave(s);
  */
 let _pendingClaimSeed = false;
 /** 다이아 기능 이전 세이브였는지(소급 폭탄 방지 시드 필요, §11.3) — rehydrate가 1회 소비. 출력 키 오염 없음. */
@@ -136,5 +141,11 @@ export const consumePendingClaimSeed = (): boolean => { const v = _pendingClaimS
 export function migrateSave(persisted: unknown, _version: number): Record<string, unknown> {
   // 다이아 기능 이전 세이브(진행 중)는 claimedAch 키가 없다 → 현 달성분을 claimed로 시드(rehydrate에서).
   if (isObj(persisted) && persisted.claimedAch === undefined && !!persisted.selectedTeamId) _pendingClaimSeed = true;
-  return sanitizeSave(persisted);
+  const out = sanitizeSave(persisted);
+  // A4 마이그레이션 — focusLog 없던 구세이브: 단일 trainingFocus를 [{fromDay:0}]로 시드(day0부터 상수 = 옛 리플레이와 바이트 동일).
+  //   신규 세이브는 focusLog를 항상 함께 저장하므로 비어있으면 = 구세이브(또는 방침 미설정). trainingFocus 있을 때만 시드.
+  if ((out.focusLog as unknown[]).length === 0 && out.trainingFocus) {
+    out.focusLog = [{ fromDay: 0, focus: out.trainingFocus }];
+  }
+  return out;
 }

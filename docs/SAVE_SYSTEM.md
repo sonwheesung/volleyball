@@ -11,14 +11,14 @@
 - **저장소**: `zustand persist` + `AsyncStorage`, 키 `baeknyeon-save`. 각 기기 로컬 JSON 1개.
 - **얇은 리플레이 세이브**: 진화된 스탯·순위·생산을 저장하지 않는다. **base 스냅샷(`playerBase`/`rosters`) +
   `currentDay` + `results` + 누적 기록(archive/통산/명전/마일스톤…)** 만 저장하고, 화면·순위·생산은 시드로 **재계산**.
-- **부호화**: `partialize`(저장 필드 화이트리스트, 53필드 §1) → 직렬화. 복원은 `onRehydrateStorage`가 base를
+- **부호화**: `partialize`(저장 필드 화이트리스트, §1) → 직렬화. 복원은 `onRehydrateStorage`가 base를
   레지스트리에 커밋(`commitPlayerBase`/`commitRosters`/`commitStaff` 등).
 - **시뮬 결과 캐시(2026-06-27, REALTIME_SIM Phase1)**: 53번째 필드 `simCache`(계산된 순위·생산) — 재로드 시 재계산
   제거. **폐기 가능**(검증 실패/구세이브=null→재계산 폴백)이라 하드 마이그레이션 불요. 워밍된 것만 저장(stale 금지).
 
 ---
 
-## 1. 영속 스키마 (55 필드 — 단일 진실)
+## 1. 영속 스키마 (56 필드 — 단일 진실)
 
 > **다이아 이코노미 필드**(표 미개별화, 정본=`store/saveMigration.ts SAVE_DEFAULTS`): `diamonds·saveId·campLog·campTrainedThisOffseason·campDoneSeason·pendingCamp·claimedAch·adState`. **`campDoneSeason`**(num, 기본 -1, 2026-07-04 추가): 전지훈련을 "마친" 시즌번호 — 오프시즌↔개막전 게이트(MONETIZATION §11.2). `===season`이면 완료(시즌번호라 새 시즌 자동 리셋). 추가는 §2① 자동 처리(누락=기본값 -1).
 
@@ -81,13 +81,14 @@
 | `coachPool` | {coaches:Coach[],assistants:AssistantCoach[]} \| null | null |
 | `staffHead` | Record<teamId, coachId> | {} |
 | `staffAssistants` · `staffScouts` | Record<teamId, id[]> | {} |
-| `trainingFocus` | {primary:[id,id],secondary:[id,id,id]} \| null | null |
+| `trainingFocus` | {primary:[id,id],secondary:[id,id,id]} \| null | null (현재 방침 — 표시·UI용) |
+| `focusLog` (A4, v2) | FocusSeg[]{fromDay:number, focus:{primary,secondary}\|null} | [] (훈련 방침 타임라인 — 진화가 소비) |
 
 ### 구단주 레이어·재정
 | 필드 | 자료구조 | 기본 |
 |---|---|---|
 | `interviews` | InterviewLog[]{playerId,season,day,topic,card,ok} | [] (최근 200) |
-| `benchDirectives` | BenchDirective[]{playerId,fromDay} | [] |
+| `benchDirectives` | BenchDirective[]{playerId,fromDay,toDay?} | [] (A3: `toDay`=철회 종결일, 옵셔널 — 없으면 활성) |
 | `talkCooldown` · `benchCooldown` | Record<playerId, number> | {} |
 | `fanScore` | scalar(number) | 50 |
 | `releaseAnger` | scalar(number) | 0 |
@@ -120,11 +121,15 @@
 ## 3. 마이그레이션 정책 (구현 — `store/saveMigration.ts`)
 
 ### 3.1 버전 + migrate
-- `persist`에 **`version: SAVE_VERSION`**(현재 1)을 둔다. 기존 무버전 세이브 = version 0 → 로드 시 `migrate` 호출.
+- `persist`에 **`version: SAVE_VERSION`**(현재 **2**)을 둔다. 기존 무버전 세이브 = version 0 → 로드 시 `migrate` 호출.
 - **`migrate(persisted, fromVersion)`** = `migrateSave`:
   1. (향후) `fromVersion`이 낮으면 그 버전→다음 버전 **변환 단계**를 순서대로 적용(필드 이름변경·구조재편).
   2. 마지막에 **`sanitizeSave`**(컨테이너 모양 정규화)로 모든 필드를 기대 자료구조로 강제.
   - v0→v1은 **구조 동일** → 변환 단계 없이 정규화만(현 세이브를 안전하게 수선).
+  - **v1→v2(2026-07-08, A4 훈련 방침 타임라인)**: 구세이브는 단일 `trainingFocus`(day0부터 소급 적용)만 있고 `focusLog`가 없다 →
+    `focusLog`가 비어있고 `trainingFocus`가 있으면 **`[{fromDay:0, focus:trainingFocus}]`로 시드**한다. day0부터 상수 방침 = **옛
+    리플레이와 바이트 동일**(회귀 무해). 방침 미설정(trainingFocus=null)이면 `[]`. 신규 세이브(focusLog 존재)는 시드 스킵(보존).
+    가드: `tools/_dv_batch_a4.ts`(마이그레이션 바이트 동일 + focusLog 시드 케이스).
 
 ### 3.2 정규화기(`sanitizeSave`) — 컨테이너 모양 강제
 필드별 자료구조(§1)대로 코어스(coerce):

@@ -103,6 +103,10 @@ export const getPlayerProduction = (id: string, uptoDay: number): ProdLine | und
 
 /** uptoDay 까지 치러진 경기별 생산 + 선발 명단(경기일 오름차순). 뉴스 실시간 소재용. */
 export function seasonMatchProds(uptoDay: number): MatchProd[] {
+  // 빈 구간 가드(2026-07-08, leagueProductionRange 선례) — day0 오프시즌 뉴스 피드가 seasonMatchProds(-1)를
+  // 부르면 옛 코드는 allProdRows()(전 시즌 시드 재생, 콜드 265~544ms)를 돌려 **빈 결과**를 냈다.
+  // 경기일(dayIndex)은 항상 ≥0이라 uptoDay<0이면 치른 경기 0 → 시뮬 없이 즉시 빈 배열.
+  if (uptoDay < 0) return [];
   return allProdRows()
     .filter((r) => r.dayIndex <= uptoDay)
     .map((r) => ({ dayIndex: r.dayIndex, homeTeamId: r.homeTeamId, awayTeamId: r.awayTeamId, homeIds: r.homeIds, lines: r.lines, starters: r.starters }));

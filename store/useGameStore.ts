@@ -7,7 +7,7 @@ import { persist } from 'zustand/middleware';
 import { debouncedAsyncStorage } from './persistStorage';
 import { SAVE_VERSION, migrateSave, consumePendingClaimSeed } from './saveMigration';
 import { accrueBonds, setRelationContext } from '../data/relationships';
-import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusOverride,
+import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusTimeline,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
   currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, fireCoach as fireCoachLeague, getTeamCoach, grantStartingStaff, LEAGUE,
@@ -39,7 +39,7 @@ import { FOREIGN_SALARY, ASIAN_SALARY } from '../engine/foreign';
 import { staffSpend, setMyTeamStaff } from '../data/league';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
-import { computeStandings, displayCutoff, seasonStreaks, seasonResults } from '../data/standings';
+import { computeStandings, displayCutoff, seasonStreaks, seasonResults, playedThroughDay } from '../data/standings';
 import { coachInfoOf } from '../data/league';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
@@ -55,7 +55,7 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
-import type { Contract, ExpelRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
+import type { Contract, ExpelRecord, FocusSeg, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
 import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
 import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, CAMP_LEGACY_CUR_GAIN, CAMP_LEGACY_POT_GAIN, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
@@ -136,7 +136,8 @@ interface GameState {
   retirements: RetireRecord[];                 // 은퇴 연표(주목 은퇴자 작별·회고, 뉴스 슬라이스5)
   milestones: Milestone[];                     // 기록 경신 피드(MILESTONE_SYSTEM)
   readNews: string[];                          // 읽은 뉴스 키(season:kind:headline) — 읽음/안읽음 구분(NEWS_SYSTEM)
-  trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 훈련 방향(null=감독 기본)
+  trainingFocus: TrainingFocus | null;         // 단장이 고른 내 팀 **현재** 훈련 방향(null=감독 기본, 표시·UI용)
+  focusLog: FocusSeg[];                        // 훈련 방침 **타임라인**(A4 — "바꾼 날부터 적용", 본 역사 보존). 데이터층 진화가 소비
   staffHead: Record<string, string>;           // teamId → 영입 감독 id(STAFF_SYSTEM)
   staffAssistants: Record<string, string[]>;   // teamId → 영입 코치 ids
   staffScouts: Record<string, string[]>;       // teamId → 영입 스카우터 ids
@@ -247,6 +248,7 @@ const freshSave = {
   milestones: [] as Milestone[],
   readNews: [] as string[],
   trainingFocus: null as TrainingFocus | null,
+  focusLog: [] as FocusSeg[], // 훈련 방침 타임라인(A4)
   staffHead: {} as Record<string, string>,
   staffAssistants: {} as Record<string, string[]>,
   staffScouts: {} as Record<string, string[]>,
@@ -648,9 +650,16 @@ export const useGameStore = create<GameState>()(
       // 그 기사는 피드 소스(transfers 200·retirements 200·milestones 300 등)서 이미 빠져 다시 안 뜨므로 안전.
       markNewsRead: (keys) => set((s) => ({ readNews: Array.from(new Set([...s.readNews, ...keys])).slice(-1500) })),
       setTrainingFocus: (focus) => {
-        const tid = get().selectedTeamId;
-        if (tid) setFocusOverride(tid, focus);
-        set({ trainingFocus: focus });
+        // A4(2026-07-08, 사용자 결정): 방침은 **바꾼 날부터** 적용(본 역사 보존) — day0 소급 금지.
+        //   타임라인(focusLog)에 forward-only 세그먼트를 덧댄다. fromDay = max(currentDay, playedThroughDay+1)
+        //   (A2와 동일 불변식 — 이미 관전·기록한 경기일엔 절대 새 방침이 소급 안 됨). 같은 날 재변경은 그 날 세그먼트 덮어씀.
+        const s = get();
+        const tid = s.selectedTeamId;
+        if (!tid) { set({ trainingFocus: focus }); return; }
+        const fromDay = Math.max(s.currentDay, playedThroughDay(s.results) + 1);
+        const focusLog: FocusSeg[] = [...s.focusLog.filter((seg) => seg.fromDay < fromDay), { fromDay, focus }];
+        setFocusTimeline(tid, focusLog);
+        set({ trainingFocus: focus, focusLog });
       },
       // 스태프 계약(STAFF_SYSTEM) — league가 예산·중복을 판정하고, 성공 시 상태를 동기화
       hireCoach: (coachId) => {
@@ -742,8 +751,10 @@ export const useGameStore = create<GameState>()(
         const my = s.selectedTeamId;
         if (!my) return { ok: false };
         if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return { ok: false }; // 건의 쿨다운(방어)
-        if (s.benchDirectives.length >= BENCH_MAX) return { ok: false };
-        if (s.benchDirectives.some((b) => b.playerId === playerId)) return { ok: false };
+        // 활성(미철회) 지시만 슬롯·중복 판정(A3) — 철회(toDay 박힘)된 지시는 슬롯을 비우고 재건의를 허용한다.
+        const activeDirectives = s.benchDirectives.filter((b) => b.toDay == null);
+        if (activeDirectives.length >= BENCH_MAX) return { ok: false };
+        if (activeDirectives.some((b) => b.playerId === playerId)) return { ok: false };
         const squad = rosterIdsOnDay(my, s.currentDay)
           .map((id) => evolveOnDay(id, s.currentDay))
           .filter((q): q is Player => !!q)
@@ -762,8 +773,11 @@ export const useGameStore = create<GameState>()(
         const why = ok ? undefined : benchRejectReason(charisma, ovrGapT, aceRank, reason);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
         if (ok) {
-          // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). watchProgress 비어있지 않음 == 현재 경기 관전 중
-          const fromDay = Object.keys(s.watchProgress).length > 0 ? s.currentDay + 1 : s.currentDay;
+          // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). watchProgress 비어있지 않음 == 현재 경기 관전 중.
+          // 소급 방어(A2, 2026-07-08): 오늘 경기를 기록(watchProgress 비움·setDay 전)한 직후엔 currentDay가 아직 그
+          //   기록된 경기일이라 fromDay=currentDay가 **이미 관전한 경기를 리플레이에서 소급 변경**한다. playedThroughDay+1로
+          //   바닥을 대 기록된 경기일엔 절대 지시가 걸리지 않게 한다(forward-only — 본 역사 보존).
+          const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);
           const benchDirectives = [...s.benchDirectives, { playerId, fromDay }];
           set({ benchDirectives, benchCooldown: benchCd });
           setOwnerContext(benchDirectives);
@@ -779,8 +793,10 @@ export const useGameStore = create<GameState>()(
         const my = s.selectedTeamId;
         if (!my) return { ok: false };
         if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return { ok: false }; // 건의 쿨다운(방어)
-        if (s.benchDirectives.length >= BENCH_MAX) return { ok: false };
-        const benched = new Set(s.benchDirectives.map((b) => b.playerId));
+        // 활성(미철회) 지시만 슬롯·후보 제외 판정(A3) — 철회된 지시는 슬롯을 비운다.
+        const activeDirectives = s.benchDirectives.filter((b) => b.toDay == null);
+        if (activeDirectives.length >= BENCH_MAX) return { ok: false };
+        const benched = new Set(activeDirectives.map((b) => b.playerId));
         const squad = rosterIdsOnDay(my, s.currentDay)
           .map((id) => evolveOnDay(id, s.currentDay))
           .filter((q): q is Player => !!q && !benched.has(q.id));
@@ -806,8 +822,8 @@ export const useGameStore = create<GameState>()(
         const why = ok ? undefined : startRejectReason(charisma, gapT);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
         if (ok) {
-          // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A)
-          const fromDay = Object.keys(s.watchProgress).length > 0 ? s.currentDay + 1 : s.currentDay;
+          // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). 소급 방어(A2) — suggestBench와 동일.
+          const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);
           const benchDirectives = [...s.benchDirectives, { playerId: incumbent.id, fromDay }];
           set({ benchDirectives, benchCooldown: benchCd });
           setOwnerContext(benchDirectives);
@@ -818,7 +834,14 @@ export const useGameStore = create<GameState>()(
         return { ok, reason: why };
       },
       unbench: (playerId) => {
-        const benchDirectives = get().benchDirectives.filter((b) => b.playerId !== playerId);
+        // 소급 삭제 금지(A3, 2026-07-08): 삭제하면 이미 관전·기록한 경기 구간에서 그 지시가 사라져 **리플레이가
+        //   본 역사를 다시 씀**(서사 위반). 대신 **종결일(toDay)** 을 박는다 — toDay = playedThroughDay(마지막 치른 경기일).
+        //   [fromDay, playedThroughDay]는 벤치 유지(치른 경기 보존), 그 이후 미관전 미래 경기는 복귀. playedThroughDay<fromDay면
+        //   (아직 한 경기도 안 치름) toDay<fromDay라 구간이 비어 완전 무효(즉시 취소와 동치).
+        const s = get();
+        const end = playedThroughDay(s.results);
+        const benchDirectives = s.benchDirectives.map((b) =>
+          b.playerId === playerId && b.toDay == null ? { ...b, toDay: end } : b);
         set({ benchDirectives });
         setOwnerContext(benchDirectives);
       },
@@ -934,7 +957,10 @@ export const useGameStore = create<GameState>()(
           const bp = evolveOnDay(b.playerId, SEASON_END_DAY);
           if (!bp) continue;
           const pop = popularityOf(bp.career.points, awardHistoryOf(archive, b.playerId).length, bp.clubTenure, prodAll.get(b.playerId)?.points ?? 0);
-          if (pop >= 60) angerSum += benchAngerPenalty(Math.round((SEASON_END_DAY - b.fromDay) / GAME_EVERY));
+          // 벤치 연속 결장 분노는 지시가 유효했던 구간만(A3) — 철회(toDay)됐으면 그날까지, 아니면 시즌말까지.
+          const benchEnd = b.toDay ?? SEASON_END_DAY;
+          const missed = Math.round((benchEnd - b.fromDay) / GAME_EVERY);
+          if (pop >= 60 && missed > 0) angerSum += benchAngerPenalty(missed);
         }
         // 내 팀 선수의 사건·사고 — 팬들이 등을 돌린다(사안이 클수록 = 정지 경기 많을수록 더 떠난다)
         for (const sc of seasonScandals()) if (sc.teamId === my) angerSum += Math.min(28, 6 + sc.missMatches);
@@ -1095,6 +1121,10 @@ export const useGameStore = create<GameState>()(
         commitRosters(filled.rosters);
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
         setOwnerContext([]);              // 벤치 지시는 시즌 단위 — 새 시즌 전원 복귀
+        // 훈련 방침 타임라인 접기(A4) — 새 시즌 currentDay=0 리셋에 맞춰 **현재 방침을 day0 baseline**으로 붕괴.
+        //   (롤오버는 위 buildDraftContext에서 이번 시즌 타임라인으로 이미 진화 완료. 다음 시즌은 현재 방침이 처음부터.)
+        const nextFocusLog: FocusSeg[] = get().trainingFocus ? [{ fromDay: 0, focus: get().trainingFocus }] : [];
+        setFocusTimeline(my, nextFocusLog);
         setSalaryEra(medianOvr(currentBasePlayers().filter((p) => !p.isForeign))); // 시대 앵커 갱신(SALARY 2장) — 새 base 기준
         set({
           coachPool: nextCoachPool,          // 감독 생애주기 풀 영속(STAFF_SYSTEM 6)
@@ -1105,6 +1135,7 @@ export const useGameStore = create<GameState>()(
           bonds: nextBonds, // 인간관계 우정 누적(같은 팀 +·옛정 감쇠, RELATIONSHIP §1.1)
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
           benchDirectives: [],
+          focusLog: nextFocusLog, // 훈련 방침 타임라인 — 새 시즌 day0 baseline으로 접음(A4)
           talkCooldown: {},   // 시즌말 currentDay 0 리셋과 함께 쿨다운 초기화
           benchCooldown: {},
           // 영구제명(승부조작·학폭) — 내 팀이면 팬심 대폭락(사건당 −35). 리그 최대 충격.
@@ -1221,6 +1252,7 @@ export const useGameStore = create<GameState>()(
         milestones: s.milestones,
         readNews: s.readNews,
         trainingFocus: s.trainingFocus,
+        focusLog: s.focusLog, // 훈련 방침 타임라인(A4)
         staffHead: s.staffHead,
         staffAssistants: s.staffAssistants,
         staffScouts: s.staffScouts,
@@ -1260,7 +1292,8 @@ export const useGameStore = create<GameState>()(
           }
           if (state?.rosters) commitRosters(state.rosters);
           if (state?.coachPool) commitCoachPool(state.coachPool.coaches, state.coachPool.assistants); // 감독 풀 복원(commitStaff 전 — staffHead가 참조)
-          if (state?.selectedTeamId && state?.trainingFocus) setFocusOverride(state.selectedTeamId, state.trainingFocus);
+          // 훈련 방침 타임라인 복원(A4) — 마이그레이션이 구세이브의 단일 trainingFocus를 focusLog로 시드해 둠([{fromDay:0}]).
+          if (state?.selectedTeamId) setFocusTimeline(state.selectedTeamId, state.focusLog ?? []);
           if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
           setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
           setRelationContext(state?.bonds ?? {}); // 인간관계 우정 컨텍스트(FA 해석)

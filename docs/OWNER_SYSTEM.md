@@ -153,19 +153,34 @@ base 0.5
   UI 버튼 비활성화 + 남은 일수. store `benchCooldown`(playerId→가능일), 시즌말 초기화.
 
 ### 2.3 수락 시 — 벤치 지시
-- `benchDirectives: { playerId, fromDay }[]` 저장. **부상과 같은 패턴**으로 시즌 계층이
-  "그날 출전 후보"에서 제외(로스터엔 남음, 페이롤 유지). 언제든 철회 가능(즉시 복귀).
+- `benchDirectives: { playerId, fromDay, toDay? }[]` 저장. **부상과 같은 패턴**으로 시즌 계층이
+  "그날 출전 후보"에서 제외(로스터엔 남음, 페이롤 유지). 언제든 철회 가능(다음 미관전 경기부터 복귀).
 - **건의 반영 시점 — 관전 중인 경기엔 미적용, 다음 경기부터(2026-06-28 결정, 옵션 A)**:
-  평소 `fromDay = currentDay`(다음에 관전할 그날 경기부터 반영). 단 **이어보기 대기 중인 경기가 있으면
-  (`watchProgress` 비어있지 않음) `fromDay = currentDay + 1`** 로 빼서 **관전 중인 그 경기엔 적용하지 않고
-  다음 경기부터** 반영한다. 플레이어 화면은 그때 "관전 중인 경기엔 적용되지 않고 다음 경기부터" 알림.
+  ~~평소 `fromDay = currentDay`~~ · ~~이어보기 대기 중이면 `fromDay = currentDay + 1`~~
+  → **정정(A2, 2026-07-08 — 소급 방어)**: `fromDay = max(currentDay + (이어보기 대기? 1 : 0), playedThroughDay(results) + 1)`.
+  옛 식(`currentDay` 또는 `+1`)만으로는 **오늘 경기를 관전·기록한 직후(watchProgress 비움·setDay 전)** currentDay가 아직
+  그 기록된 경기일이라 `fromDay=currentDay`가 **이미 관전·기록한 경기를 리플레이에서 소급 변경**했다(감사 5b: 리플레이 첫
+  변경일 == fromDay == 기록된 경기일). `playedThroughDay+1` 바닥을 대 **기록된 경기일엔 절대 지시가 걸리지 않게**(forward-only,
+  본 역사 보존). 관전 중 방어(이어보기 +1)만 있던 사각을 닫음. 플레이어 화면은 "관전 중인 경기엔 적용되지 않고 다음 경기부터" 알림.
   - **왜**: 경기는 매 진입 시 `availableTeamPlayers(dayIndex)`로 재시뮬(EC-UI-01). 관전 중(이어보기 대기)
     경기의 라인업을 바꾸면 ① 저장된 이어보기 지점이 *바뀐 경기*로 이어져 어긋나고(시간차/stale-resume —
     TEST_METHODOLOGY §4 ①) ② "질 것 같으면 나가서 선발 바꿔 리롤"이 가능해진다(관전형 = 결과는 정해진다).
     `fromDay`를 다음날로 빼면 그 경기는 시작 라인업 그대로(코히런트) + 변경은 다음 경기부터 — 현실(이미 시작한
     경기는 못 바꿈)과도 맞다. `watchProgress`는 다음 미관전 경기에만 생기고 건너뛰기가 없어(schedule
     `setDay(nextFixture)`) 스테일 항목이 없으므로 "비어있지 않음 == 현재 경기 관전 중" 단순 판정이 성립.
-  - 가드: `tools/_ev_suggest_defer.ts`(이어보기 대기 시 fromDay=currentDay+1·미대기 시 currentDay·A/B).
+  - 가드: `tools/_ev_suggest_defer.ts`(이어보기 대기 시 fromDay=currentDay+1·미대기 시 currentDay·A/B — 기록 0일 때 baseline).
+    A2 소급 방어(기록 직후 fromDay>기록일)·A3 종결일은 `tools/_dv_batch_a123.ts`(임시 프루프)로 실측.
+- **철회 = 삭제가 아니라 종결일(A3, 2026-07-08 — 소급 삭제 방지)**: `unbench`는 지시를 배열에서 **지우지 않고**
+  `toDay = playedThroughDay(results)`(마지막 치른 경기일)를 박는다. 옛 삭제 방식은 지시가 **관전·기록된 구간에서
+  통째로 사라져** 리플레이가 그 경기들의 라인업을 다시 썼다(서사 위반 — 감사: 리플레이 첫 변경일 == 옛 fromDay).
+  종결일을 박으면 **[fromDay, toDay]=치른 구간은 벤치 유지(본 역사 보존)**, 그 이후 **미관전 미래 경기는 복귀**한다.
+  `playedThroughDay < fromDay`(아직 한 경기도 안 치름)면 `toDay < fromDay`라 구간이 비어 **완전 취소와 동치**(부작용 0).
+  - 리플레이 필터(`data/dynamics.benchedOn`): `fromDay ≤ day ≤ (toDay ?? Infinity)`.
+  - **슬롯(BENCH_MAX=2)·중복·후보제외·팬분노 뉴스·표시는 활성(`toDay==null`)만** 카운트 — 종결된 지시는 슬롯을 비우고
+    재건의를 허용한다. 소비처(활성 필터 적용): `store.suggestBench`/`suggestStart`(슬롯·중복·후보제외)·`data/news.ts`(팬 분노)·
+    `store.endSeason`(벤치 분노는 [fromDay,toDay] 구간만). **UI 표시**(`app/(tabs)/squad.tsx`·`app/player/[id].tsx`의
+    `benchDirectives.some(...)`)도 `b.toDay==null` 필터 필요 — **동시 작업 UI 에이전트 인계**(store는 원배열 노출).
+  - 가드: `tools/_gt_owner.ts`(활성 카운트로 BENCH_MAX·중복 검사)·`tools/_dv_bench.ts` I7b(종결일 박힘+data층 복귀).
 - 연쇄 효과(이 시스템의 본체):
   - 벤치된 선수 → **경기감각 하락**(FORM_SYSTEM) → 복귀해도 한동안 제 기량이 아님
   - minutes 성향이면 불만 발화 → 면담 대상화(1장)

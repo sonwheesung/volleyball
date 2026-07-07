@@ -105,6 +105,10 @@ function allResults(): ResultRow[] {
 
 /** uptoDay 까지 치른 경기 결과(최근순 정렬은 호출측에서) */
 export function seasonResults(uptoDay: number): ResultRow[] {
+  // 빈 구간 가드(2026-07-08, leagueProductionRange 선례) — day0 오프시즌 대시보드가 computeStandings(-1)/
+  // seasonResults(-1)를 부르면 옛 코드는 allResults()(전 시즌 시드 재생, 콜드 265~544ms)를 돌려 **빈 결과**를 냈다.
+  // 경기일(dayIndex)은 항상 ≥0이라 uptoDay<0이면 치른 경기 0 → 시뮬 없이 즉시 빈 배열.
+  if (uptoDay < 0) return [];
   return allResults().filter((r) => r.dayIndex <= uptoDay);
 }
 

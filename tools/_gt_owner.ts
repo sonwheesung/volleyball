@@ -16,9 +16,12 @@ import './_gt_mock';
     const fs = G().fanScore;
     if (!Number.isFinite(fs) || fs < 0 || fs > 100) v.push(`${tag}: fanScore=${fs} (0~100 벗어남)`);
     const bd = G().benchDirectives;
-    if (bd.length > BENCH_MAX) v.push(`${tag}: benchDirectives ${bd.length} > ${BENCH_MAX}`);
-    const ids = bd.map((b) => b.playerId);
-    if (new Set(ids).size !== ids.length) v.push(`${tag}: benchDirectives 중복 ${ids.join(',')}`);
+    // A3(2026-07-08): 철회는 삭제가 아니라 종결일(toDay)을 박아 배열에 남는다 → 슬롯·중복 불변식은 **활성(toDay==null)만** 적용.
+    //   (종결된 지시가 배열에 누적돼도 슬롯을 안 먹고 재건의를 허용 — 소급 삭제로 본 역사를 다시 쓰지 않기 위함.)
+    const active = bd.filter((b) => b.toDay == null);
+    if (active.length > BENCH_MAX) v.push(`${tag}: active benchDirectives ${active.length} > ${BENCH_MAX}`);
+    const ids = active.map((b) => b.playerId);
+    if (new Set(ids).size !== ids.length) v.push(`${tag}: active benchDirectives 중복 ${ids.join(',')}`);
     for (const b of bd) if (!Number.isFinite(b.fromDay)) v.push(`${tag}: fromDay=${b.fromDay}`);
     return v;
   };

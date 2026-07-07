@@ -169,7 +169,10 @@ export const BENCH_REASON_KO: Record<BenchReason, string> = {
   prospect: '유망주에게 기회를 주고 싶습니다',
 };
 
-export interface BenchDirective { playerId: string; fromDay: number }
+/** 벤치 지시. fromDay = 적용 시작 매치데이(forward-only). toDay(옵셔널) = **마지막으로 유효한 날**(철회 종결일) —
+ *  unbench가 삭제 대신 종결일을 박아 **이미 관전·기록한 경기의 라인업을 소급 변경하지 않는다**(A3, 서사 보존).
+ *  없으면(=null) 아직 활성. 리플레이 필터는 `fromDay <= day <= (toDay ?? Infinity)`, 슬롯/중복/뉴스/표시는 `toDay==null`(활성)만. */
+export interface BenchDirective { playerId: string; fromDay: number; toDay?: number }
 
 /** 동시 벤치 지시 상한 — 전원 벤치 같은 악용 차단 */
 export const BENCH_MAX = 2;

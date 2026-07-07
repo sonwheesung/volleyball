@@ -46,7 +46,7 @@ function SquadInner() {
   // 부상/정지 마커·🪑는 "왜 주전서 빠졌나"를 설명하는 출전 상태(주전 정렬과 직결).
   const decor = (p: (typeof players)[number]) => {
     const cond = conditionOf(teamId, p.id, currentDay);
-    const benched = benchDirectives.some((b) => b.playerId === p.id);
+    const benched = benchDirectives.some((b) => b.playerId === p.id && b.toDay == null); // 활성 지시만(종결 toDay 제외 — OWNER 2.3 A3)
     // 결장 사유별 마커(2026-07-04 사용자 요청): 부상/정지는 포지션 태그 같은 라벨 pill, 벤치 지시는 🪑.
     const injured = injuredSet.has(p.id);
     const suspended = suspendedSet.has(p.id);

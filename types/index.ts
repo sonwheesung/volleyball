@@ -277,6 +277,15 @@ export interface TrainingFocus {
   secondary: [TrainingId, TrainingId, TrainingId];
 }
 
+/** 훈련 방침 타임라인 세그먼트(A4, 2026-07-08 — "바꾼 날부터 적용", 본 역사 보존).
+ *  fromDay = 이 방침이 유효해지는 매치데이(0-based, 경과일). focus = 그 구간 방침(null=감독 기본으로 복귀).
+ *  세그먼트는 fromDay 오름차순. 어떤 날 d의 유효 방침 = fromDay ≤ d 인 마지막 세그먼트의 focus(없으면 감독 기본).
+ *  구세이브(단일 오버라이드=day0부터)는 `[{fromDay:0, focus:구값}]`로 마이그레이션 → 리플레이 바이트 동일. */
+export interface FocusSeg {
+  fromDay: number;
+  focus: TrainingFocus | null;
+}
+
 /** 감독 — 플레이어가 선임하는 별개 존재 (MATCH_SYSTEM 8장, STAFF_SYSTEM) */
 export interface Coach {
   id: string;

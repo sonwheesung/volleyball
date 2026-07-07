@@ -2,8 +2,8 @@
 // 한 시즌치 성장/노쇠를 누적 → 나이 +1 → 계약 -1(만료 시 자동 재계약).
 // 시즌 경계에서 1회 호출해 다음 시즌의 base 스냅샷을 만든다.
 
-import type { Contract, Player, TrainableStat, TrainingFocus } from '../types';
-import { evolvePlayer } from './progression';
+import type { Contract, Player, TrainableStat } from '../types';
+import { evolvePlayer, type FocusInput } from './progression';
 import { type StaffEffects, NO_EFFECTS } from './staff';
 import { FIRST_FA_SEASONS } from './faMarket';
 import { clampSalary, LEAGUE_CAP } from './cap';
@@ -48,7 +48,7 @@ export function renewedContract(p: Player, medOvr: number): Contract {
 
 /** 한 선수의 시즌 롤오버. medOvr = 시대 앵커(영건 자동연장 연봉용). override = 시즌 중 재계약된 계약(있으면 우선).
  *  effects = 전문 코치 효과(STAFF). lostDays = 출장정지 결장일(훈련 생략 — 성장 정체·노장 하락, OWNER_SYSTEM 4.6) */
-export function rolloverPlayer(base: Player, focus: TrainingFocus, medOvr: number, override?: Contract, effects: StaffEffects = NO_EFFECTS, lostDays = 0): Player {
+export function rolloverPlayer(base: Player, focus: FocusInput, medOvr: number, override?: Contract, effects: StaffEffects = NO_EFFECTS, lostDays = 0): Player {
   // 1) 시즌치 성장/노쇠 누적 — 전문 코치 효과(속도·포텐 상한·노쇠 지연)를 영구 반영. 정지일은 훈련 생략.
   //    + 어린 선수 희귀 돌파(갑자기 확 큼, TRAINING 9장)
   const grown = maybeBreakthrough(evolvePlayer(base, focus, SEASON_LENGTH, effects, lostDays));
@@ -75,7 +75,7 @@ export function rolloverPlayer(base: Player, focus: TrainingFocus, medOvr: numbe
 /** 리그 전체 롤오버 → 다음 시즌 base 스냅샷. medOvr = 시대 앵커(호출부가 medianOvr로 계산). */
 export function rolloverLeague(
   players: Player[],
-  focusOf: (p: Player) => TrainingFocus,
+  focusOf: (p: Player) => FocusInput, // 상수 방침 또는 날짜별 해석기(A4 — 시즌 중 방침 변경 세그먼트 반영)
   medOvr: number,
   overrides: Record<string, Contract>,
   effectsOf?: (p: Player) => StaffEffects,

@@ -234,9 +234,12 @@ import './_gt_mock';
       const benchedIdLocal = G().benchDirectives[0]?.playerId;
       const goneStore = benchedIdLocal && !availableTeamPlayers(my, G().currentDay).some((p) => p.id === benchedIdLocal);
       G().unbench(benchedIdLocal!);
-      const dirCleared = !G().benchDirectives.some((b) => b.playerId === benchedIdLocal);
+      // A3(2026-07-08): unbench는 삭제가 아니라 **종결일(toDay)** 을 박는다 — 배열엔 남되 비활성(toDay!=null) + 가용 복귀.
+      //   (results 없음 → toDay=playedThroughDay=-1 → 구간 [fromDay,-1] 공집합 → 전 경기 미벤치 = 즉시 취소와 동치.)
+      const dirLocal = G().benchDirectives.find((b) => b.playerId === benchedIdLocal);
+      const dirEnded = !!dirLocal && dirLocal.toDay != null;
       const backStore = availableTeamPlayers(my, G().currentDay).some((p) => p.id === benchedIdLocal);
-      check('I7b 스토어 unbench → data층 동기 복귀', !!goneStore && dirCleared && backStore, `gone=${goneStore} cleared=${dirCleared} back=${backStore}`);
+      check('I7b 스토어 unbench → 종결일 박힘 + data층 복귀', !!goneStore && dirEnded && backStore, `gone=${goneStore} ended=${dirEnded} back=${backStore}`);
     } else check('I7b 스토어 unbench 동기', true, 'skip(벤치 수락 0)');
   }
 

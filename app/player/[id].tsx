@@ -216,7 +216,7 @@ function PlayerDetailInner() {
   const cond = isMine && myTeamId ? conditionOf(myTeamId, p.id, currentDay) : null;
   const myTalks = interviews.filter((l) => l.playerId === p.id && l.season === season);
   const lastTalkFailed = myTalks.length > 0 && !myTalks[myTalks.length - 1].ok;
-  const benched = benchDirectives.some((b) => b.playerId === p.id);
+  const benched = benchDirectives.some((b) => b.playerId === p.id && b.toDay == null); // 활성 지시만(종결 toDay 제외 — OWNER 2.3 A3)
 
   // 주전/후보 — 그 팀의 실제 출전 라인업(부상·정지·벤치 제외 = 경기 엔진과 동일)에서 선발 6인+리베로 여부.
   // 구단주가 선발/벤치 건의 여부를 판단하는 핵심 정보(사용자 보고). 결장 사유가 있으면 그걸 우선 표시.

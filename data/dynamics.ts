@@ -45,8 +45,10 @@ let benchDirectives: BenchDirective[] = [];
 export function setOwnerContext(bench: BenchDirective[]): void {
   benchDirectives = [...bench]; txVersion++; // 파생 캐시(순위·생산·dyn) 일괄 무효화
 }
+// 종결일(toDay) 인지(A3, 2026-07-08) — 철회된 지시는 삭제 대신 toDay가 박혀 [fromDay, toDay] 구간에만 유효.
+// 이미 치른(관전·기록된) 경기일은 그대로 벤치 유지(리플레이 소급 변경 금지), 종결 이후 미관전 미래 경기는 복귀.
 const benchedOn = (day: number): Set<string> =>
-  new Set(benchDirectives.filter((b) => b.fromDay <= day).map((b) => b.playerId));
+  new Set(benchDirectives.filter((b) => b.fromDay <= day && day <= (b.toDay ?? Infinity)).map((b) => b.playerId));
 
 /** 벤치 지시 적용 — ①출전 7인 미만이 되면 그 경기 한정 전체 무시(부상 우선·경기 성립),
  *  ②마지막 리베로까지 빼면 리베로 벤치만 무효(프로팀은 항상 리베로를 코트에 둔다 — 현실성 가드, EC-LU-01).

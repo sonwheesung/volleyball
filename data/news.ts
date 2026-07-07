@@ -431,7 +431,9 @@ export function buildNewsFeed(
   }
 
   // 7) 구단주 — 인기 스타를 벤치로 보낸 건의가 받아들여졌을 때 팬심이 술렁(OWNER_SYSTEM 팬 분노 연동)
+  //   철회된 지시(toDay 박힘, A3)는 선수가 복귀했으므로 술렁 기사 대상 아님 — 활성 지시만.
   for (const b of benchDirectives) {
+    if (b.toDay != null) continue; // 철회(종결)된 지시 제외 — 활성만 팬 분노
     const p = getPlayer(b.playerId); if (!p) continue;
     const pop = popularityNow(p, leagueDay, archive);
     if (pop < 60) continue; // 인기 스타만 — 무명 선수 벤치는 기사 안 남
