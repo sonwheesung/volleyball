@@ -6,7 +6,7 @@ import { useRouter } from 'expo-router';
 import { Text, View, StyleSheet } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { seasonSnapshot } from '../data/records';
-import { computeStandings, leagueDisplayDay } from '../data/standings';
+import { computeStandings, displayCutoff } from '../data/standings';
 import { leagueProduction } from '../data/production';
 import { getPlayer, getTeam, teamPlayerIds } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
@@ -26,12 +26,14 @@ function RecapInner() {
   const my = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const archive = useGameStore((s) => s.archive);
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
 
-  const day = leagueDisplayDay(currentDay);
-  const snap = useMemo(() => seasonSnapshot(season, season, currentDay, archive), [season, currentDay, archive]);
+  // 결과 인지 표시 컷오프(§3.3) — 결산은 시즌 종료 직후라 seasonComplete=true → 리그 최종일 전체 공개(SEASON_DAYS).
+  const day = displayCutoff(currentDay, results, my);
+  const snap = useMemo(() => seasonSnapshot(season, season, currentDay, archive, results, my), [season, currentDay, archive, results, my]);
   const aw = snap.awards;
   // 우승팀 = 포스트시즌 recordChampion이 박은 archive 부분기록(이번 시즌, endSeason 전)
   const championId = useMemo(() => archive.find((a) => a.season === season)?.championId ?? null, [archive, season]);

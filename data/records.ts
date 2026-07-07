@@ -2,10 +2,10 @@
 // SOLID: 순수 셀렉터. 현역은 data/league 로스터에서, 은퇴는 store.hallOfFame 을 인자로 받는다
 //        (awardHistoryOf 와 동일 패턴 — store 무의존). 시즌 스냅샷은 archive(과거)/라이브(현재)를 합성.
 
-import type { HofEntry, Position, SeasonArchive, SeasonAwards } from '../types';
+import type { HofEntry, MatchResult, Position, SeasonArchive, SeasonAwards } from '../types';
 import { currentRosters, getPlayer } from './league';
 import { currentSeasonAwards } from './awards';
-import { computeStandings, leagueDisplayDay } from './standings';
+import { computeStandings, displayCutoff } from './standings';
 
 // ─── 통산 리더보드 (현역 + 은퇴) ───────────────────────────────
 // CareerStats 누적 6종 — HOF 는 spikes/aces/assists 가 구세이브에서 없을 수 있어 ?? 0.
@@ -84,10 +84,11 @@ export interface SeasonSnapshot {
  */
 export function seasonSnapshot(
   season: number, currentSeason: number, currentDay: number, archive: SeasonArchive[],
+  results: Record<string, MatchResult> = {}, myTeamId?: string,
 ): SeasonSnapshot {
   if (season >= currentSeason) {
-    // 현재(진행 중) 시즌 — 라이브. 리그 진행 기준(§3.2 leagueDisplayDay: 현재 경기일 직전까지, 미관전 선반영 방지).
-    const day = leagueDisplayDay(currentDay);
+    // 현재(진행 중) 시즌 — 라이브. 결과 인지 표시 컷오프(§3.3 displayCutoff: 방금 관전 경기 포함·시즌말 전체 공개).
+    const day = displayCutoff(currentDay, results, myTeamId);
     const st = computeStandings(day);
     return {
       season, isCurrent: true, championId: null,

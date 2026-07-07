@@ -9,6 +9,7 @@ import { currentTxVersion } from './dynamics';
 import { simulateMatch } from '../engine/match';
 import { pickRest } from '../engine/lineup';
 import { clinchStatus } from '../engine/clinch';
+import { SEASON_DAYS } from '../engine/calendar';
 
 const PLAYOFF_CUTOFF = 3; // data/clinch.PLAYOFF_CUTOFF와 동일(순환 import 회피 위해 로컬 — 로드매니지먼트 #3)
 
@@ -123,10 +124,32 @@ export function playedThroughDay(results: Record<string, MatchResult>): number {
   return max;
 }
 
-/** §3.2(2026-06-24) — 표시용 "리그 진행" 컷오프 = 현재 경기일 **직전**까지. 현재 경기일은 관전 중이라 제외
- *  (스포일러 안전). 시작(currentDay 0)엔 −1 → 빈 집계. 결과/순위/대시보드/시즌리더가 모두 이걸 쓴다(좌우대칭).
- *  clinch(PO 확정)는 BROADCAST 스포일러 정책상 예외 — `playedThroughDay`를 따로 쓴다. */
+/** §3.2(2026-06-24) — 표시용 "리그 진행" 컷오프 = 현재 경기일 **직전**까지. 현재 경기일은 관전 중이라 제외.
+ *  ⚠ **표시엔 deprecated(§3.3, 2026-07-07)** — 이 단독 헬퍼는 "방금 관전한 경기"(F2-a)와 "시즌 마지막 경기일"(F2-b)을
+ *  놓친다. 표시 화면은 `displayCutoff(currentDay, results, myTeamId)`를 써라. 비표시 용도(진단 리플레이·계약 시장가)만 유지. */
 export const leagueDisplayDay = (currentDay: number): number => currentDay - 1;
+
+/** 내 팀의 이번 시즌 전 일정을 기록(관전) 완료했는가 — 시즌 종료 판정(표시 컷오프 승격·잠정 라벨 경계용, §3.3). */
+export function seasonComplete(results: Record<string, MatchResult>, myTeamId: string): boolean {
+  let total = 0, played = 0;
+  for (const f of SEASON) {
+    if (f.homeTeamId !== myTeamId && f.awayTeamId !== myTeamId) continue;
+    total++;
+    if (results[f.id]) played++;
+  }
+  return total > 0 && played === total;
+}
+
+/** §3.3(2026-07-07) — 결과 인지 표시 컷오프. `leagueDisplayDay`(currentDay−1) 단독의 두 사각을 보완:
+ *  (F2-a) 방금 관전·기록한 현재 경기일(currentDay는 다음 경기 진행 때까지 안 올라감) → `playedThroughDay`로 포함.
+ *  (F2-b) 시즌 종료(내 팀 전 일정 완료) → 다음 경기가 없어 currentDay가 마지막 경기일에 멈춤 → `SEASON_DAYS`로
+ *         승격해 리그 최종일 전체 공개(순위·결과·기록·뉴스가 PO/시상/아카이브와 일치).
+ *  스포일러 안전: `playedThroughDay`는 내가 이미 관전·기록한 경기만 반영(같은 날 타팀 경기는 "다음" 버튼과 동일하게 공개),
+ *  내 미관전 미래 경기일은 항상 `playedThroughDay`보다 크므로 미래 결과 누수 0. clinch는 계속 `playedThroughDay`(문서화된 예외). */
+export function displayCutoff(currentDay: number, results: Record<string, MatchResult>, myTeamId?: string): number {
+  if (myTeamId && seasonComplete(results, myTeamId)) return SEASON_DAYS;
+  return Math.max(currentDay - 1, playedThroughDay(results));
+}
 
 /** 팀별 그 시즌 최장 연승·연패 — 각 팀의 경기를 날짜순으로 보고 W/L 런 최댓값(연승/연패 업적용) */
 export function seasonStreaks(uptoDay: number): Record<string, [number, number]> {

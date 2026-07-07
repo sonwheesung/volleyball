@@ -7,7 +7,7 @@ import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { GrowthReportModal } from '../../components/GrowthReportModal';
 import { growthReport, type PlayerGrowth } from '../../data/growthReport';
 import { SEASON, LEAGUE, getTeam } from '../../data/league';
-import { computeStandings, playedThroughDay, leagueDisplayDay } from '../../data/standings';
+import { computeStandings, playedThroughDay, displayCutoff } from '../../data/standings';
 import { rivalOf } from '../../data/rivalry';
 import { seasonYear } from '../../data/seasonLabel';
 import { teamClinch } from '../../data/clinch';
@@ -108,7 +108,7 @@ function ScheduleInner() {
         const myOvr = teamOverallRaw(availableTeamPlayers(teamId, nextFixture.dayIndex));
         const oppOvr = teamOverallRaw(availableTeamPlayers(oppId, nextFixture.dayIndex));
         // 빅매치 판정(Phase 4): 순위 직결이 1순위 — 상위권 맞대결·종반 인접 순위전. 그 다음 접전/강팀
-        const standings = computeStandings(leagueDisplayDay(currentDay)); // 리그 진행 기준(§3.2) — 구 day0 MAX는 전 시즌 선반영 스포일러였음
+        const standings = computeStandings(displayCutoff(currentDay, results, teamId)); // 결과 인지 표시 컷오프(§3.3)
         const myRank = Math.max(1, standings.findIndex((r) => r.teamId === teamId) + 1);
         const oppRank = Math.max(1, standings.findIndex((r) => r.teamId === oppId) + 1);
         const big = isBigMatch(myRank, oppRank, nextFixture.dayIndex);

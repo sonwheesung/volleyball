@@ -2,7 +2,7 @@
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, IconLabel, Loading, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../components/Screen';
-import { computeStandings, leagueDisplayDay } from '../data/standings';
+import { computeStandings, displayCutoff } from '../data/standings';
 import { getTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { useGameStore } from '../store/useGameStore';
@@ -18,8 +18,10 @@ function StandingsInner() {
   const teamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const season = useGameStore((s) => s.season);
-  // 리그 진행 기준(§3.2) — 현재 경기일 직전까지(관전 중 경기 제외, 스포일러 안전). 결과/대시보드/시즌리더와 동일 컷오프.
-  const standings = useMemo(() => computeStandings(leagueDisplayDay(currentDay)), [currentDay, season]);
+  const results = useGameStore((s) => s.results);
+  // 결과 인지 표시 컷오프(§3.3) — 방금 관전 경기 포함·시즌말 전체 공개(관전 중 경기 제외). 결과/대시보드/시즌리더와 동일 컷오프.
+  const cutoff = displayCutoff(currentDay, results, teamId ?? undefined);
+  const standings = useMemo(() => computeStandings(cutoff), [cutoff, season]);
 
   return (
     <Screen title={`${seasonYear(season)} 순위`}>

@@ -66,6 +66,8 @@
 - **단일 컷오프 헬퍼 — `leagueDisplayDay(currentDay) = currentDay − 1`** (`data/standings.ts`): "현재 경기일 **직전**까지"가
   리그가 완료한 경기(현재 경기일은 관전 중이라 제외 → 스포일러 안전). 시작(currentDay 0)엔 −1 → 빈 집계. 결과/순위/
   대시보드/시즌리더가 **모두 이 컷오프**를 쓴다(집계 화면은 좌우대칭 — 내 현재경기만 빼는 비대칭 없음).
+  > **⚠ 표시엔 §3.3의 `displayCutoff`로 승격됨(2026-07-07)** — `leagueDisplayDay` 단독은 "방금 관전한 경기"와
+  > "시즌 마지막 경기일"을 놓친다(아래 §3.3). 비표시 용도(진단 리플레이·계약 시장가)만 이 헬퍼를 계속 쓴다.
 - **✅ 전수 통일 완료(2026-06-24) — `leagueDisplayDay` 균일 적용(내부 불일치 0)**:
   - `app/results.tsx`(결과 목록): `seasonResults(leagueDisplayDay(currentDay))` — `results`(관전) 의존 제거, 순수 리그 기준.
   - `app/standings.tsx`·`app/(tabs)/index.tsx`(대시보드 순위 + **성적 W/L 카드**): `playedThroughDay` → `leagueDisplayDay(currentDay)`.
@@ -77,6 +79,35 @@
 - **clinch(PO 확정)는 예외 — `playedThroughDay(results)` 유지**: PO 확정 노출은 `BROADCAST_SYSTEM` 스포일러 정책상
   "결과-결정"이라 관전 후에만. 표시 기준 통일과 별개 개념이라 관전 기준을 지킨다.
 - 검증: `results`/`standings`/`index`(순위·성적)/leaders 모두 currentDay 0→빈집계·진행 후→리그 진행분 동일 수치. 회귀: `checkRecords`·`_ev_rest`·205 테스트·tsc.
+
+### 3.3 표시 컷오프 결함 2건 → `displayCutoff(currentDay, results, myTeamId?)` (2026-07-07, 4-에이전트 UI 감사)
+
+> **정정**: §3.2의 ~~`leagueDisplayDay(currentDay) = currentDay − 1` **단독** 표시 컷오프~~ 는 결정론 리프로로 확인된
+> 두 사각이 있었다. **결과 인지(results-aware) 컷오프 `displayCutoff`로 승격**한다(표시 화면 전용).
+
+- **결함 F2-a (방금 관전한 경기 누락)**: `currentDay`는 다음 경기 진행(`schedule` `setDay`) 때만 올라가고
+  `recordResult`는 올리지 않는다. 그래서 내 D일 경기를 막 기록한 직후에도 `currentDay=D` → `leagueDisplayDay=D−1`
+  이라 **방금 본 D일 경기가 순위·결과·대시보드·뉴스에서 빠졌다**(대시보드 성적 31-4가 실제 32-4보다 1경기 적게 보임).
+- **결함 F2-b (시즌 마지막 경기일 영구 누락)**: 시즌 끝엔 다음 경기가 없어 `currentDay`가 내 마지막 경기일에서
+  멈춘다. 그래서 리그 최종 매치데이(최대 6경기)가 **영원히** 순위/결과/대시보드/뉴스/기록에 안 뜬다 — 반면
+  플레이오프·시상·아카이브는 `MAX` 기준이라 **화면끼리 모순**(대시보드 vs 순위표, PO 시드 vs 순위, 기록왕 불일치).
+- **해결 — `displayCutoff(currentDay, results, myTeamId?)`** (`data/standings.ts`):
+  - 시즌 종료(내 팀 전 일정 기록 완료 = `seasonComplete(results, myTeamId)`)면 **`SEASON_DAYS`(engine/calendar=164)로 승격**
+    → 리그 최종일 전체 공개(순위·결과·기록·뉴스가 PO/시상/아카이브와 일치).
+  - 아니면 **`max(currentDay − 1, playedThroughDay(results))`** → 방금 기록한 경기까지 포함.
+- **스포일러 안전성(논증)**: `playedThroughDay`는 내가 **이미 관전·기록한** 경기만 반영한다. 같은 날 타팀 경기는
+  기존 "다음" 버튼이 하던 것과 **똑같이 함께** 공개될 뿐이고, 내 **미관전 미래 경기일은 항상 `playedThroughDay`보다
+  크므로** 미래 결과는 새지 않는다. 즉 이 변경은 이미 `playedThroughDay`를 쓰던 clinch(문서화된 예외, §3.2)의
+  기준으로 **표시 계층을 통일**하는 것이다. `leagueDisplayDay`는 표시엔 **deprecated**(주석 명기), 비표시 용도만 유지.
+- **재배선(전수 — grep `leagueDisplayDay` 형제 사냥)**: `index`(순위·성적·뉴스)·`schedule`(빅매치 순위)·`standings`·
+  `results`·`news`+`news/[id]`(피드 인자)·`records-archive`(라이브 리더 + **잠정 라벨 경계도 같은 `seasonComplete`로**)·
+  `season-recap`·`staff`·`player/[id]`(시즌 생산)·`data/records.ts seasonSnapshot`(cutoff 인자화). **면담 설득 perfT**
+  (`store` §3, F3)도 같은 컷오프로 통일(치른 경기 0이면 직전 시즌 최종 순위 폴백).
+- **F1 근원 노트(형제 배선)**: 표시 계층 필터(`freshNews`) 도입 시 **상세 화면 배선 누락**으로 목록↔상세 인덱스가
+  어긋났다(NEWS §3.6, F1 — 사용자 보고 버그). 공통 컷오프/필터를 새로 넣으면 **모든 파생 표면이 같이 쓰는지 grep 전수**
+  가 규율이다(TEST_METHODOLOGY 형제 사냥) — "표시 계층 필터 도입 시 상세 화면 누락".
+- 검증: `tools/_dv_displaycutoff.ts`(F2 경계 — 방금 기록 경기 포함 / 시즌말 전 리그 최종일 공개 = 아카이브·PO 수치
+  일치 / 미래 누수 0, A/B) + 기존 `_dv_newsday0`·`_dv_newsorder`·`_dv_seasondays`·205 테스트·tsc.
 
 ## 4. 경기 진행 ("진행" 1일)
 

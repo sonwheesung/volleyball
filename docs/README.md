@@ -231,6 +231,8 @@ npx tsx tools/simStatRecord.ts             # 개인 귀속 결정론·팀 누수
 npx tsx tools/simNews.ts                   # 뉴스 무결성(빈헤드/본문·내용중복·매달린 teamId 0) + 변주 가드(§4.4 Step4: 고볼륨 kind 변주비율≥0.90·n-gram 최대겹침<0.90 — 해시 붕괴/셀렉터 축소 검출, A/B teeth) + 읽음키 유일성. exit 0/2
 npx tsx tools/_dv_newsday0.ts              # 첫 경기 전 뉴스 스포일러 차단(EC-NEWS-01·NEWS §3.5, 2026-06-30) — leagueDay=-1 실시간 뉴스 0 + A/B(경계해제 시 재현=필터 민감). 미관전 데뷔·미래 부상/사건 노출 회귀 차단. exit 0/2
 npx tsx tools/_dv_newsorder.ts             # 뉴스 2주 만료(NEWS §9, 2026-07-05 최신순) — freshNews: 요약(day없음) 유지·14일 경계 유지·15일+ 만료 + A/B(표시일 급증 시 인게임 전부 만료=요약만 잔존, 필터가 진짜 day로 거름). exit 0/1
+npx tsx tools/_dv_newskey.ts               # 뉴스 목록↔상세 안정키 배선(NEWS §3.6, F1 2026-07-07) — 만료 기사 있는 상태서 목록 인덱스 k의 newsKey == 상세가 그 키로 집는 기사(0 불일치)·읽음대상 정확 + A/B(인덱스 라우팅으로 되돌리면 어긋남 재현). exit 0/1
+npx tsx tools/_dv_displaycutoff.ts         # 표시 컷오프 결과인지(SEASON §3.3, F2 2026-07-07) — 방금 기록 경기 포함·시즌말 리그 최종일 전체 공개(=아카이브/PO 수치 일치)·미관전 미래 누수 0 + A/B(leagueDisplayDay 단독으로 되돌리면 방금경기/시즌말 누락 재현). exit 0/1
 npx tsx tools/_dv_legendnews.ts [시즌=60]  # 헌액 번호/계보 뉴스 실가드(BROADCAST §8.2·§8.3, 2026-07-07 관찰→실가드 승격) — ①레전드 전원 kind='hof'+본문 '헌액 번호 N번' ②합성 케이스(같은 팀·같은 번호 레전드 2명, 자연표본선 희귀)로 '같은 N번을 달았던 과거 레전드' 계보 문구 박힘 + A/B(LEGENDNEWS_POISON=1 기대문자열 오염→FAIL). exit 0/1
 npx tsx tools/_dv_capdomestic.ts           # 샐러리캡=국내 전용(EC-CAP-01, 2026-06-30) — day0 전 구단 국내 페이롤 ≤ 캡(초과 0) + A/B(외인 포함 규칙은 ≥1팀 초과로 잡힘=필터 민감) + 인천 사례 국내<캡<전체. 대시보드·단장실·이동·FA 외인혼입 빨강/영입차단 회귀 차단. exit 0/2
 npx tsx tools/_dv_seasonlabel.ts           # 시즌 연도 라벨(EC-REC-01 후속, 2026-07-04) — seasonYear: 1시즌=2025-26·3시즌=2027-28·배경 음수idx·100년 겹침0·세기경계·범위·A/B(YYYY-YY 형식). exit 0/1

@@ -12,10 +12,10 @@ import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, t
 import { SCANDAL_KO } from '../../engine/scandal';
 import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason, type OwnerRejectReason } from '../../engine/owner';
 import { ActionSheet } from '../../components/Popup';
-import { getEvolvedPlayer, getTeam, shortTeamName as teamShort, currentRosters, teamScoutReveal } from '../../data/league';
+import { getEvolvedPlayer, getPlayer, getTeam, shortTeamName as teamShort, currentRosters, teamScoutReveal } from '../../data/league';
 import { buildLineup } from '../../engine/lineup';
 import { getPlayerProduction } from '../../data/production';
-import { leagueDisplayDay } from '../../data/standings';
+import { displayCutoff } from '../../data/standings';
 import { awardHistoryOf } from '../../data/awards';
 import { effectiveContract } from '../../data/roster';
 import { isFranchise } from '../../engine/cap';
@@ -101,9 +101,11 @@ export default function PlayerDetail() {
 function PlayerDetailInner() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
   const archive = useGameStore((s) => s.archive);
   const milestones = useGameStore((s) => s.milestones);
+  const hallOfFame = useGameStore((s) => s.hallOfFame);
   const myTeamId = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);
   const interviews = useGameStore((s) => s.interviews);
@@ -123,10 +125,9 @@ function PlayerDetailInner() {
   const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
   const [benchAsk, setBenchAsk] = useState(false); // 벤치 건의 명분 선택 시트(네이티브 Alert 대신 커스텀 — UI-21)
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
-  // 시즌 **통계 파생(생산·시장가)** 은 **치른 경기까지만**(leagueDisplayDay=currentDay−1) — 대시보드·기록과 동일 컷오프.
-  // raw currentDay는 안 치른 다음 경기를 포함(스포일러·불일치)했고, 시즌 시작 전(day0→−1)이면 빈 구간/일자<0 가드로
-  // 콜드 전 시즌 시뮬(생산·dyn)을 통째로 회피한다 → 구단 선택 플로우 선수 화면 15s 제거(2026-06-28).
-  const displayDay = leagueDisplayDay(currentDay);
+  // 시즌 **통계 파생(생산·시장가)** 은 **결과 인지 표시 컷오프**(§3.3 displayCutoff) — 대시보드·기록과 동일 컷오프.
+  // 방금 관전한 경기·시즌말 최종일을 포함하고, 시즌 시작 전(cutoff<0)이면 빈 구간/일자<0 가드로 콜드 전 시즌 시뮬을 회피한다.
+  const displayDay = displayCutoff(currentDay, results, myTeamId ?? undefined);
   // **출전 상태(부상·정지·명단·role)는 현재(currentDay) 기준** — 선수단(squad)·대시보드와 동일 날짜여야 표기가 일치한다.
   // (2026-07-04 사용자 보고: 부상 첫날 선수단 🚑 인데 상세엔 부상 표기 없음 — 상세만 displayDay라 하루 어긋났음.
   //  부상 span from은 항상 과거 경기서 굴려져 currentDay 사용은 스포일러 아님 — 이미 치른 경기 파생. 생산 통계만 컷오프 유지.)
@@ -135,6 +136,55 @@ function PlayerDetailInner() {
   const myMilestones = id ? milestones.filter((m) => m.playerId === id) : [];
 
   if (!p) {
+    // 은퇴/방출 선수(로스터 밖) — getEvolvedPlayer는 undefined다. 통산 리더보드(records)에서 여기로 딥링크되면
+    // "존재하지 않는 선수" 막다른 길이었다(F4). 명예의전당(영속) → base playerBase 순으로 폴백해 통산 기록을 읽기전용 열람.
+    const hof = hallOfFame.find((h) => h.id === id);
+    const base = id ? getPlayer(id) : undefined;
+    const c = base?.career;
+    if (hof || c) {
+      const nm = hof?.name ?? base!.name;
+      const pos = hof?.position ?? base!.position;
+      const tid = hof?.teamId; // Player(base)에는 팀 필드가 없음 → HOF 있을 때만 소속 표시
+      const seasons = hof?.seasons ?? c?.seasons ?? 0;
+      const careerStats = ([
+        ['통산 득점', hof?.points ?? c?.points ?? 0],
+        ['공격 성공', hof?.spikes ?? c?.spikes ?? 0],
+        ['블로킹', hof?.blocks ?? c?.blocks ?? 0],
+        ['서브 에이스', hof?.aces ?? c?.aces ?? 0],
+        ['디그', hof?.digs ?? c?.digs ?? 0],
+        ['세트(어시스트)', hof?.assists ?? c?.assists ?? 0],
+      ] as [string, number][]).filter(([, v]) => v > 0);
+      return (
+        <Screen title={nm}>
+          <Card accent={theme.gold}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+              <PosTag pos={pos} />
+              <Text style={styles.pName}>{nm}</Text>
+              {hof?.legend ? <Text style={{ color: theme.gold, fontSize: 12, fontWeight: '800' }}>헌액 번호</Text> : null}
+            </View>
+            <Text style={{ color: theme.muted, fontSize: 13, marginTop: 6 }}>
+              {(tid ? `${getTeam(tid)?.name ?? teamShort(tid)} · ` : '')}{hof ? '명예의전당' : '은퇴/방출'} · 통산 {seasons}시즌
+            </Text>
+          </Card>
+          <Card accent={theme.accent}>
+            <IconLabel icon="stats-chart-outline" color={theme.accent}>통산 기록</IconLabel>
+            {careerStats.length === 0 ? (
+              <Muted>기록된 통산 성적이 없습니다.</Muted>
+            ) : careerStats.map(([label, v]) => (
+              <View key={label} style={{ flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 6 }}>
+                <Text style={{ color: theme.muted, fontSize: 14 }}>{label}</Text>
+                <Text style={{ color: theme.text, fontSize: 15, fontWeight: '800' }}>{v.toLocaleString()}</Text>
+              </View>
+            ))}
+          </Card>
+          {hof ? (
+            <Card accent={theme.gold}>
+              <Muted>{seasonYear(hof.retiredSeason)} 명예의전당 헌액{hof.legend ? ' · 영구결번급' : ''}. 통산 기록은 영원히 보존됩니다.</Muted>
+            </Card>
+          ) : null}
+        </Screen>
+      );
+    }
     return (
       <Screen title="선수 없음">
         <Muted>존재하지 않는 선수입니다.</Muted>

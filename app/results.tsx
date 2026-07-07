@@ -4,7 +4,7 @@ import { useMemo } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EmptyState, IconLabel, Screen, theme, themedStyles } from '../components/Screen';
-import { seasonResults, leagueDisplayDay, type ResultRow } from '../data/standings';
+import { seasonResults, displayCutoff, type ResultRow } from '../data/standings';
 import { shortTeamName as short } from '../data/league';
 import { dateForDay, formatDate } from '../lib/calendar';
 import { useGameStore } from '../store/useGameStore';
@@ -14,11 +14,13 @@ export default function Results() {
   const teamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const season = useGameStore((s) => s.season);
+  const results = useGameStore((s) => s.results);
 
-  // **리그 진행 기준**(§3.2 — 순위·대시보드·시즌리더와 동일 컷오프 `leagueDisplayDay`): 리그가 친 경기를 전부
-  // 표시(관전 안 한 것도 — 이미 지나간 경기). 현재 경기일은 관전 중이라 제외(스포일러 안전). 시작 시 빈 상태.
+  // **결과 인지 표시 컷오프**(§3.3 — 순위·대시보드·시즌리더와 동일 `displayCutoff`): 리그가 친 경기를 전부
+  // 표시(관전 안 한 것도 — 이미 지나간 경기) + 방금 관전한 경기·시즌말 최종일 포함. 현재 경기일 미관전 경기는 제외(스포일러 안전).
+  const cutoff = displayCutoff(currentDay, results, teamId ?? undefined);
   const days = useMemo(() => {
-    const sorted = seasonResults(leagueDisplayDay(currentDay)).slice().sort((a, b) => b.dayIndex - a.dayIndex);
+    const sorted = seasonResults(cutoff).slice().sort((a, b) => b.dayIndex - a.dayIndex);
     const groups: { dayIndex: number; rows: ResultRow[] }[] = [];
     for (const r of sorted) {
       const last = groups[groups.length - 1];
@@ -26,7 +28,7 @@ export default function Results() {
       else groups.push({ dayIndex: r.dayIndex, rows: [r] });
     }
     return groups;
-  }, [currentDay, season]);
+  }, [cutoff, season]);
 
   if (days.length === 0) {
     return (

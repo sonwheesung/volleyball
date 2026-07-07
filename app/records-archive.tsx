@@ -14,13 +14,12 @@ import { numberLineage } from '../data/legends';
 import { seasonYear } from '../data/seasonLabel';
 import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../data/league';
 import { leagueProduction } from '../data/production';
-import { computeStandings, leagueDisplayDay } from '../data/standings';
+import { computeStandings, displayCutoff, seasonComplete } from '../data/standings';
 import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, seasonSnapshot, type RecordCat } from '../data/records';
 import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
 import type { AwardWinner, Position, SeasonAwards } from '../types';
 
-const FINISHED = 164; // 시즌 종료 기준일(잠정 라벨)
 const AWARD_MIN_GAMES = 12; // 잠정 시상 노출 최소 경기수(팀당, 36경기 시즌의 1/3)
 const MEDAL = ['🥇', '🥈', '🥉'];
 
@@ -49,6 +48,7 @@ function RecordsInner() {
   const teamId = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const archive = useGameStore((s) => s.archive);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const milestones = useGameStore((s) => s.milestones);
@@ -67,14 +67,17 @@ function RecordsInner() {
   const pPos = (id: string): Position => getPlayer(id)?.position ?? hofMap.get(id)?.position ?? 'OH';
   const isMine = (id: string) => !!teamId && teamPlayerIds(teamId).includes(id);
 
+  // 결과 인지 표시 컷오프(§3.3) + 시즌 종료 판정(잠정 라벨 경계 = 대시보드/PO와 동일 조건).
+  const cutoff = displayCutoff(currentDay, results, teamId ?? undefined);
+  const seasonOver = !!teamId && seasonComplete(results, teamId);
   const snap = useMemo(
-    () => seasonSnapshot(viewSeason, season, currentDay, archive),
-    [viewSeason, season, currentDay, archive],
+    () => seasonSnapshot(viewSeason, season, currentDay, archive, results, teamId ?? undefined),
+    [viewSeason, season, currentDay, archive, results, teamId],
   );
 
-  // 현재 진행 시즌 라이브 리더보드 — 리그 진행 기준(§3.2 leagueDisplayDay: 현재 경기일 직전까지).
+  // 현재 진행 시즌 라이브 리더보드 — 결과 인지 표시 컷오프(§3.3).
   const leaders = useMemo(() => {
-    const prod = leagueProduction(leagueDisplayDay(currentDay));
+    const prod = leagueProduction(cutoff);
     const rows = [...prod.entries()].map(([id, l]) => ({ id, l }));
     const top = (key: keyof ProdLine, n = 5) =>
       rows.filter((r) => (r.l[key] as number) > 0)
@@ -85,7 +88,7 @@ function RecordsInner() {
       { label: '디그', key: 'digs' as const, list: top('digs') },
       { label: '어시스트', key: 'assists' as const, list: top('assists') },
     ];
-  }, [currentDay, season]);
+  }, [cutoff, season]);
 
   return (
     <Screen title="기록">
@@ -94,7 +97,7 @@ function RecordsInner() {
       {tab === 0 ? (
         <SeasonView
           snap={snap} viewSeason={viewSeason} maxSeason={season} setViewSeason={setViewSeason}
-          currentDay={currentDay} teamId={teamId} leaders={leaders}
+          seasonOver={seasonOver} teamId={teamId} leaders={leaders}
           pName={pName} pPos={pPos} isMine={isMine}
         />
       ) : null}
@@ -123,15 +126,16 @@ function RecordsInner() {
 
 // ─── 탭 0 · 시즌 ───────────────────────────────────────────────
 function SeasonView({
-  snap, viewSeason, maxSeason, setViewSeason, currentDay, teamId, leaders, pName, pPos, isMine,
+  snap, viewSeason, maxSeason, setViewSeason, seasonOver, teamId, leaders, pName, pPos, isMine,
 }: {
   snap: ReturnType<typeof seasonSnapshot>; viewSeason: number; maxSeason: number;
-  setViewSeason: (s: number) => void; currentDay: number; teamId: string | null;
+  setViewSeason: (s: number) => void; seasonOver: boolean; teamId: string | null;
   leaders: { label: string; key: keyof ProdLine; list: { id: string; l: ProdLine }[] }[];
   pName: (id: string) => string; pPos: (id: string) => Position; isMine: (id: string) => boolean;
 }) {
   const aw = snap.awards;
-  const provisional = snap.isCurrent && currentDay < FINISHED;
+  // 잠정 라벨: 진행 중 + 아직 시즌 미완료(§3.3 seasonComplete). 구 `currentDay < 164`는 시즌말 라벨을 하루 일찍 떼던 결함.
+  const provisional = snap.isCurrent && !seasonOver;
   // 잠정 시상은 시즌이 무르익은 뒤에만 — 2~3경기에 "MVP·득점왕"은 무의미(36경기 중 1/3=12 경과 기준).
   const gamesPlayed = snap.standings.reduce((mx, s) => Math.max(mx, s.wins + s.losses), 0);
   const awardsReady = !snap.isCurrent || gamesPlayed >= AWARD_MIN_GAMES;

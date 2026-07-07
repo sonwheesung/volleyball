@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EmptyState, Loading, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { buildNewsFeed, freshNews, newsKey } from '../data/news';
 import { seasonYear } from '../data/seasonLabel';
-import { leagueDisplayDay } from '../data/standings';
+import { displayCutoff } from '../data/standings';
 import { useGameStore } from '../store/useGameStore';
 import type { NewsItem } from '../types';
 
@@ -28,6 +28,7 @@ function NewsListInner() {
   const teamId = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const archive = useGameStore((s) => s.archive);
   const milestones = useGameStore((s) => s.milestones);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
@@ -38,9 +39,11 @@ function NewsListInner() {
   const transfers = useGameStore((s) => s.transfers);
   const retirements = useGameStore((s) => s.retirements);
 
+  // 결과 인지 표시 컷오프(§3.3) — 상세(news/[id])와 **완전히 동일한 인자**로 피드를 파생해야 목록↔상세가 일치(F1, NEWS §3.6).
+  const cutoff = displayCutoff(currentDay, results, teamId ?? undefined);
   const feed = useMemo(
-    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId ?? '', transfers, retirements), leagueDisplayDay(currentDay)),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, expelledLog, benchDirectives, teamId, transfers, retirements],
   );
 
   // readNews를 live로 구독(상세를 열면 그 기사만 markNewsRead → 목록 즉시 갱신 = 즉시성, 6b 정정). **목록 진입만으론
@@ -72,13 +75,14 @@ function NewsListInner() {
         ) : null
       }
     >
-      {feed.map((n, i) => {
-          const unread = !readSet.has(newsKey(n));
+      {feed.map((n) => {
+          const key = newsKey(n);
+          const unread = !readSet.has(key);
           const headColor = !unread ? theme.muted : n.teamId === teamId ? theme.accent : n.big ? theme.warn : theme.text;
           return (
             <Pressable
-              key={i}
-              onPress={() => router.push(`/news/${i}`)}
+              key={key}
+              onPress={() => router.push(`/news/${encodeURIComponent(key)}`)} // 인덱스 대신 안정 키 라우팅(F1, NEWS §3.6)
               style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}
             >
               <View style={[styles.dot, { backgroundColor: unread ? theme.accent : 'transparent' }]} />

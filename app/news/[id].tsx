@@ -1,13 +1,13 @@
 // 뉴스 기사 상세 — 목록(/news)에서 진입. 헤드라인 + 분류 + 시즌/구단 + 분류별 리드 문장.
-// 뉴스는 저장 없이 archive·milestones·hallOfFame 등에서 파생되므로(결정론), 목록과 동일 피드를
-// 재구성해 id(인덱스)로 같은 기사를 집어낸다.
+// 뉴스는 저장 없이 archive·milestones·hallOfFame 등에서 파생되므로(결정론), 목록과 **완전히 동일한 피드**를
+// 재구성해 안정 키(newsKey)로 같은 기사를 집어낸다(인덱스 금지 — 목록/상세 필터 비대칭으로 어긋났던 F1, NEWS §3.6).
 import { useLocalSearchParams } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { StyleSheet, Text } from 'react-native';
 import { Card, IconLabel, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../../components/Screen';
-import { buildNewsFeed, newsKey } from '../../data/news';
+import { buildNewsFeed, freshNews, newsKey } from '../../data/news';
 import { seasonYear } from '../../data/seasonLabel';
-import { leagueDisplayDay } from '../../data/standings';
+import { displayCutoff } from '../../data/standings';
 import { KIND_KO } from '../news';
 import { getTeam } from '../../data/league';
 import { useGameStore } from '../../store/useGameStore';
@@ -43,6 +43,7 @@ function NewsArticleInner() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const archive = useGameStore((s) => s.archive);
   const milestones = useGameStore((s) => s.milestones);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
@@ -52,11 +53,14 @@ function NewsArticleInner() {
   const retirements = useGameStore((s) => s.retirements);
   const teamId = useGameStore((s) => s.selectedTeamId);
 
+  // 목록(news.tsx)과 **완전히 동일한 파생**(displayCutoff §3.3 + freshNews) — 안정 키로 같은 기사를 집어야 어긋나지 않는다(F1).
+  const cutoff = displayCutoff(currentDay, results, teamId ?? undefined);
   const feed = useMemo(
-    () => buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId ?? '', transfers, retirements),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, expelledLog, benchDirectives, teamId, transfers, retirements],
   );
-  const n = feed[Number(id)];
+  const key = id ? decodeURIComponent(id) : '';
+  const n = feed.find((x) => newsKey(x) === key);
   const markNewsRead = useGameStore((s) => s.markNewsRead);
 
   // 읽음 처리는 **상세를 실제로 열 때만**(목록 진입만으론 안 됨 — NEWS_SYSTEM §6). 이 기사 하나만.
@@ -66,9 +70,10 @@ function NewsArticleInner() {
   }, [id]);
 
   if (!n) {
+    // 만료(2주 지난 인게임 뉴스)·부재 시 graceful 안내(F1, NEWS §3.6) — 목록에서 만료된 기사로 딥링크된 경우.
     return (
       <Screen title="뉴스">
-        <Muted>기사를 찾을 수 없습니다.</Muted>
+        <Muted>만료됐거나 찾을 수 없는 기사입니다. 오래된 소식은 목록에서 사라집니다.</Muted>
       </Screen>
     );
   }

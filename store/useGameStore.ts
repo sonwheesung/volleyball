@@ -39,7 +39,7 @@ import { FOREIGN_SALARY, ASIAN_SALARY } from '../engine/foreign';
 import { staffSpend, setMyTeamStaff } from '../data/league';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
-import { computeStandings, seasonStreaks, seasonResults } from '../data/standings';
+import { computeStandings, displayCutoff, seasonStreaks, seasonResults } from '../data/standings';
 import { coachInfoOf } from '../data/league';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
@@ -708,9 +708,14 @@ export const useGameStore = create<GameState>()(
         const seasonLogs = s.interviews.filter((l) => l.playerId === playerId && l.season === s.season);
         const lastFailed = seasonLogs.length > 0 && !seasonLogs[seasonLogs.length - 1].ok;
         if (!meetAccept(playerId, s.season, seasonLogs.length, lastFailed)) { set({ talkCooldown: nextCd }); return { met: false, topic }; }
-        const standings = computeStandings(s.currentDay > 0 ? s.currentDay : Number.MAX_SAFE_INTEGER);
-        const rank = Math.max(1, standings.findIndex((r) => r.teamId === my) + 1);
-        const perfT = standings.length <= 1 ? 1 : 1 - (rank - 1) / (standings.length - 1);
+        // 성적 가중(perfT): 앱 표준 표시 컷오프(§3.3 displayCutoff, results-aware, F3 2026-07-07)로 통일. 치른 경기 0
+        // (cutoff<0: 시즌 초·오프시즌)이면 순위가 비어 무의미하므로 직전 시즌 최종 순위로 폴백(막 끝난 성적 = 현재 팀 위상).
+        const cut = displayCutoff(s.currentDay, s.results, my);
+        const order = cut >= 0
+          ? computeStandings(cut).map((r) => r.teamId)
+          : (s.archive.length ? s.archive.reduce((m, a) => (a.season > m.season ? a : m)).standings ?? [] : []);
+        const rank = Math.max(1, order.indexOf(my) + 1);
+        const perfT = order.length <= 1 ? 1 : 1 - (rank - 1) / (order.length - 1);
         const fails = s.interviews.filter((l) => l.playerId === playerId && !l.ok).length;
         const ok = persuade(playerId, s.season, seasonLogs.length, cardMatch(card, topic, p), perfT, fails);
         set({

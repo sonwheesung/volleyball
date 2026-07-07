@@ -7,7 +7,7 @@ import { SoftUpdateBanner } from '../../components/SoftUpdateBanner';
 import { getEvolvedTeamPlayers, getTeam } from '../../data/league';
 import { seasonYear } from '../../data/seasonLabel';
 import { activeRoster, payroll as sumPayroll } from '../../data/roster';
-import { computeStandings, leagueDisplayDay, seasonResults } from '../../data/standings';
+import { computeStandings, displayCutoff, seasonResults } from '../../data/standings';
 import { availableTeamPlayers } from '../../data/injury';
 import { buildNewsFeed, freshNews, newsKey } from '../../data/news';
 import { teamOverallRaw } from '../../engine/overall';
@@ -21,6 +21,7 @@ export default function Dashboard() {
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
   const season = useGameStore((s) => s.season);
+  const results = useGameStore((s) => s.results);
   const overrides = useGameStore((s) => s.contractOverrides);
   const released = useGameStore((s) => s.released);
 
@@ -40,12 +41,12 @@ export default function Dashboard() {
     [teamId, currentDay, fanScore, archive, season],
   );
 
-  // 성적·순위 모두 **리그 진행 기준**(§3.2 — leagueDisplayDay: 현재 경기일 직전까지, 관전 중 경기 제외).
-  // 구버전은 성적=results(관전)·순위=playedThroughDay라 자동진행 리그와 어긋났다. 이제 결과/시즌리더와 동일 컷오프.
+  // 성적·순위 모두 **결과 인지 표시 컷오프**(§3.3 — displayCutoff: 방금 관전 경기 포함·시즌말 전체 공개, 관전 중 경기 제외).
+  const cutoff = displayCutoff(currentDay, results, teamId);
   const record = useMemo(() => {
     let w = 0;
     let l = 0;
-    for (const r of seasonResults(leagueDisplayDay(currentDay))) {
+    for (const r of seasonResults(cutoff)) {
       const isHome = r.homeTeamId === teamId, isAway = r.awayTeamId === teamId;
       if (!isHome && !isAway) continue;
       const myWin = isHome ? r.homeSets > r.awaySets : r.awaySets > r.homeSets;
@@ -53,9 +54,9 @@ export default function Dashboard() {
       else l++;
     }
     return { w, l };
-  }, [teamId, currentDay, season]);
+  }, [teamId, cutoff, season]);
 
-  const standings = useMemo(() => computeStandings(leagueDisplayDay(currentDay)), [currentDay, season]);
+  const standings = useMemo(() => computeStandings(cutoff), [cutoff, season]);
   const myRank = standings.findIndex((s) => s.teamId === teamId) + 1;
   const milestones = useGameStore((s) => s.milestones);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
@@ -65,8 +66,8 @@ export default function Dashboard() {
   const transfers = useGameStore((s) => s.transfers);
   const retirements = useGameStore((s) => s.retirements);
   const allNews = useMemo(
-    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, leagueDisplayDay(currentDay), teamId, transfers, retirements), leagueDisplayDay(currentDay)),
-    [archive, milestones, hallOfFame, season, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId, transfers, retirements), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, expelledLog, benchDirectives, teamId, transfers, retirements],
   );
   const unreadNews = useMemo(() => {
     const read = new Set(readNews);

@@ -8,7 +8,7 @@ import {
   availableCoaches, availableAssistants, availableScouts,
   staffSpend, staffBudget, staffBudgetLeft,
 } from '../data/league';
-import { computeStandings, leagueDisplayDay } from '../data/standings';
+import { computeStandings, displayCutoff } from '../data/standings';
 import { SPECIALTY_KO, SPECIALTY_DESC, TYPE_KO, TYPE_DESC } from '../engine/staff';
 import { firedMidSeason } from '../engine/staffLifecycle';
 import { coachSlots } from '../data/league';
@@ -24,6 +24,7 @@ export default function Staff() {
   useGameStore((s) => s.staffScouts);
   useGameStore((s) => s.coachPool); // 계약 변화 시 재렌더
   const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const hireCoach = useGameStore((s) => s.hireCoach);
   const resignCoach = useGameStore((s) => s.resignCoach);
   const fireCoach = useGameStore((s) => s.fireCoach);
@@ -41,7 +42,8 @@ export default function Staff() {
     if (!busy) return;
     const task = InteractionManager.runAfterInteractions(() => {
       pending.current?.(); // 영입/방출 실행(성공 시 baseVersion 무효화)
-      const day = leagueDisplayDay(useGameStore.getState().currentDay);
+      const st = useGameStore.getState();
+      const day = displayCutoff(st.currentDay, st.results, teamId ?? undefined);
       computeStandings(day); // 로딩 중 캐시 워밍(무거운 재시뮬을 여기서 끝낸다)
       pending.current = null;
       setBusy(false); // 클리어 → 본문은 워밍된 캐시로 즉시 렌더
@@ -55,7 +57,7 @@ export default function Staff() {
 
   const head = getTeamCoach(teamId);
   const acting = !!head?.id.startsWith('acting_');
-  const myRow = computeStandings(leagueDisplayDay(currentDay)).find((r) => r.teamId === teamId); // 리그 진행 기준(§3.2)
+  const myRow = computeStandings(displayCutoff(currentDay, results, teamId ?? undefined)).find((r) => r.teamId === teamId); // 결과 인지 표시 컷오프(§3.3)
   const slumping = !!myRow && firedMidSeason(myRow.wins, myRow.losses); // 시즌 중 부진(경질 권유)
   const asst = teamAssistants(teamId);
   const scouts = teamScouts(teamId);
