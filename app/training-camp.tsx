@@ -8,7 +8,7 @@ import { showAlert } from '../components/AppDialog';
 import { Button, Card, IconLabel, Muted, PosTag, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
 import { getPlayer, teamPlayerIds } from '../data/league';
-import { CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, courseUpgradable, type CampCourse } from '../engine/diamonds';
+import { CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, WELCOME_DIAMONDS, courseUpgradable, type CampCourse } from '../engine/diamonds';
 import type { Player, TrainableStat } from '../types';
 
 const LABEL: Record<TrainableStat, string> = {
@@ -53,7 +53,7 @@ export default function TrainingCamp() {
     void (async () => {
       const r = await claimWelcomeDiamonds();
       if (r.applied) {
-        showAlert('환영 선물 🎁', `환영합니다! 전지훈련에 쓸 다이아 ${(1000).toLocaleString()}💎를 드립니다.\n마음에 드는 선수를 골라 능력을 키워보세요.`);
+        showAlert('환영 선물 🎁', `환영합니다! 전지훈련에 쓸 다이아 ${WELCOME_DIAMONDS.toLocaleString()}💎를 드립니다.\n마음에 드는 선수를 골라 능력을 키워보세요.`);
       }
     })();
   }, [claimWelcomeDiamonds]);

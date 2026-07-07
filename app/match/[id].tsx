@@ -13,7 +13,6 @@ import { reconstructRallies, buildLiveBanners } from '../../components/courtDire
 import { getFixture, getTeam, shortTeamName } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
 import { DEV_TOOLS } from '../../data/flags';
-import { teamOverallRaw } from '../../engine/overall';
 import { setBgmSuppressed } from '../../audio/bgm';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -77,7 +76,6 @@ export default function MatchBoard() {
     const { homeSquad, awaySquad, sim, boxTimeline } = buildMatchBox(home.id, away.id, dayIndex, seed);
     return {
       home, away, homeSquad, awaySquad, seed, sim, boxTimeline,
-      homeOvr: teamOverallRaw(homeSquad), awayOvr: teamOverallRaw(awaySquad),
     };
   }, [fixture, isSandbox, homeParam, awayParam, seedParam, currentDay, selectedTeamId]);
 
@@ -178,9 +176,12 @@ export default function MatchBoard() {
     });
   }, [data, mineSide]);
   const [liveQueue, setLiveQueue] = useState<Banner[]>([]);
+  // 이어보기 재개 시 재생 위치(shown)는 resumeAt-1에서 시작한다 → 그 지점 배너는 지난 세션에서 이미 봤다.
+  // 마운트 시점의 시작 위치를 기억해 at <= 시작위치인 배너를 다시 큐에 넣지 않는다(4.6% 재개에서 배너 재생 수정 2026-07-07).
+  const initialPtIdx = useRef(fixture ? (watchProgress[fixture.id] ?? 0) - 1 : -1);
   useEffect(() => {
     if (finished) return;
-    const hits = liveBanners.filter((b) => b.at === score.ptIdx).map((b) => b.banner);
+    const hits = liveBanners.filter((b) => b.at === score.ptIdx && b.at > initialPtIdx.current).map((b) => b.banner);
     if (hits.length) setLiveQueue((q) => [...q, ...hits]);
   }, [score.ptIdx, liveBanners, finished]);
 

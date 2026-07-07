@@ -149,7 +149,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   const [playing, setPlaying] = useState(true);
   const [fast, setFast] = useState(false);
   const [feed, setFeed] = useState<string[]>([]); // 중계 텍스트(최근 라인 유지)
-  const [timeoutModal, setTimeoutModal] = useState<TimeoutEvent | null>(null); // 작전 타임아웃 — 멈춤+체력
+  const [timeoutModal, setTimeoutModal] = useState<TimeoutEvent[] | null>(null); // 같은 점수에 걸린 타임아웃 전부(작전+테크니컬 동시 발생) — 멈춤+체력
   const [toCount, setToCount] = useState(0); // 타임아웃 자동 진행 카운트다운(초) — 관전형: 안 눌러도 진행
   const [confirmEnd, setConfirmEnd] = useState(false); // ⏭ 결과(경기 종료) 확인 — 즉시 종료 방지
   const ackTO = useRef<Set<number>>(new Set()); // 이미 본 타임아웃(랠리 인덱스) — 재진입 시 재팝업 방지
@@ -208,9 +208,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [idx]);
 
-  // 이 랠리(idx) 직후에 잡힌 작전 타임아웃 — 점수 반영 후 보드를 멈추고 코트 체력을 보여준다
+  // 이 랠리(idx) 직후에 잡힌 타임아웃 — 점수 반영 후 보드를 멈추고 코트 체력을 보여준다.
+  // 엔진이 같은 점수에 작전 타임아웃 + 테크니컬 타임아웃을 함께 push할 수 있어(8·16점에서 감독 호출과 겹침)
+  // .find(단건)이 아니라 filter(전부)로 모아 한 모달에 함께 보여준다(45.7% 매치에서 발생하던 소실 수정 2026-07-07).
   const timeoutHere = useMemo(
-    () => (finished ? undefined : (sim.timeouts ?? []).find((t) => t.point === idx)),
+    () => (finished ? [] : (sim.timeouts ?? []).filter((t) => t.point === idx)),
     [sim.timeouts, idx, finished],
   );
 
@@ -249,7 +251,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
         playSfx('whistle'); // 종결 휘슬 — 랠리가 끝나 점수가 났다
       }
       // 작전 타임아웃: 득점 자막을 한 박자 보여준 뒤 멈추고 모달(코트 체력)을 띄운다(아직 안 본 것만).
-      if (timeoutHere && !ackTO.current.has(idx)) {
+      if (timeoutHere.length > 0 && !ackTO.current.has(idx)) {
         const t = setTimeout(() => { setPlaying(false); setTimeoutModal(timeoutHere); }, fast ? 320 : 1300);
         return () => clearTimeout(t);
       }
@@ -279,7 +281,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
 
   // 타임아웃 종료 — "경기 진행하기" 누르면 다음 랠리로 재개(이 타임아웃은 본 것으로 표시)
   const resumeFromTimeout = useCallback(() => {
-    setTimeoutModal((to) => { if (to) ackTO.current.add(to.point); return null; });
+    setTimeoutModal((tos) => { if (tos && tos.length) ackTO.current.add(tos[0].point); return null; });
     setIdx((i) => i + 1);
     setSegIdx(0);
     setPlaying(true);
@@ -516,8 +518,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
         ) : null}
         {subEvsNow.length > 0 ? (
           // 룰 30c — 배지를 **이벤트별** 블록으로: 각 교체가 자기 사유(투입=🔄 {kind}·복귀=↩ 원위치)+측(홈/원정)을
-          // 스스로 표시한다. 헤더 단수(subEvsNow[0]) 가정을 없애 같은 랠리 2건+(대부분 홈·원정 동시 교체 5%)의
-          // 사유·측 소실을 막는다. 실측(_measSubBadge, 800경기) 최대 동시 3행 → SHOW_MAX=3, 초과분은 +N.
+          // 스스로 표시한다. 헤더 단수(subEvsNow[0]) 가정을 없애 같은 랠리 2건+(대부분 홈·원정 동시 교체 5.3%)의
+          // 사유·측 소실을 막는다. 실측(_measSubBadge, 3000경기 · ENGINE_VERSION 8 피로교체 반영 · 2026-07-07)
+          // 최대 동시 4행(2건, 0.0%) → SHOW_MAX=3 유지, 4번째부터는 +N 오버플로가 처리(정상 동작).
           <Animated.View style={[styles.subBadge, { transform: [{ scale: subPop }] }]}>
             {subEvsNow.slice(0, 3).map((e, k) => (
               <View key={k} style={{ marginTop: k ? 6 : 0 }}>
@@ -587,19 +590,28 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
 
       {/* 작전 타임아웃 — 경기 멈춤 + 코트 선수 체력(미래: 교체·기세) */}
       <Popup visible={!!timeoutModal} onRequestClose={resumeFromTimeout} card={styles.toModal}>
-            {timeoutModal ? (() => {
-              const dSide: Side = mineSide ?? timeoutModal.side;
-              const stam = dSide === 'home' ? timeoutModal.stamHome : timeoutModal.stamAway;
-              const callerMine = mineSide != null && timeoutModal.side === mineSide;
+            {timeoutModal && timeoutModal.length ? (() => {
+              // 같은 점수에 여러 타임아웃(작전+테크니컬)이 걸리면 헤더 블록을 이벤트별로 쌓아 모두 보여준다.
+              // 체력 스냅샷은 같은 점수라 동일 → 마지막 이벤트 것 하나만 아래에 표시(한 번만 acknowledge).
+              const dSide: Side = mineSide ?? timeoutModal[0].side;
+              const stamSrc = timeoutModal[timeoutModal.length - 1];
+              const stam = dSide === 'home' ? stamSrc.stamHome : stamSrc.stamAway;
               return (
                 <>
-                  <Text style={styles.toTitle}>{timeoutModal.technical ? '⏱ 테크니컬 타임아웃' : '⏱ 작전 타임아웃'}</Text>
-                  <Text style={styles.toSub}>
-                    {timeoutModal.technical
-                      ? '공식 자동 휴식 (8·16점)'
-                      : callerMine ? '우리 벤치에서 타임아웃' : mineSide != null ? '상대 벤치에서 타임아웃' : `${timeoutModal.side === 'home' ? '홈' : '원정'} 타임아웃`}
-                    {'  ·  '}{timeoutModal.home}:{timeoutModal.away}
-                  </Text>
+                  {timeoutModal.map((to, ei) => {
+                    const callerMine = mineSide != null && to.side === mineSide;
+                    return (
+                      <View key={ei} style={ei ? { marginTop: 10 } : undefined}>
+                        <Text style={styles.toTitle}>{to.technical ? '⏱ 테크니컬 타임아웃' : '⏱ 작전 타임아웃'}</Text>
+                        <Text style={styles.toSub}>
+                          {to.technical
+                            ? '공식 자동 휴식 (8·16점)'
+                            : callerMine ? '우리 벤치에서 타임아웃' : mineSide != null ? '상대 벤치에서 타임아웃' : `${to.side === 'home' ? '홈' : '원정'} 타임아웃`}
+                          {'  ·  '}{to.home}:{to.away}
+                        </Text>
+                      </View>
+                    );
+                  })}
                   <Text style={styles.toSectionLabel}>코트 선수 체력</Text>
                   <ScrollView style={{ maxHeight: 260 }} showsVerticalScrollIndicator={false}>
                     {stam.map(({ id, stam: s }) => {

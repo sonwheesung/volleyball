@@ -7,6 +7,15 @@
 // 집계 포텐 별(★)은 제거하고 이 부분공개가 대체. 표시(app/draft)·AI 평가(pickWithReason 동일정보)가 공유.
 import type { Player, Position } from '../types';
 import { deriveRatings, type Ratings } from '../engine/ratings';
+import { overallRaw, displayOvr } from '../engine/overall';
+
+/** OVR 안개 표시 문자열 — reveal≥0.92면 정확치, 아니면 범위(예 "62~76"). draft·draft-live 공유(중복 제거). */
+export function fogOvr(p: Player, reveal: number): string {
+  const o = displayOvr(overallRaw(p));
+  if (reveal >= 0.92) return `${o}`;
+  const w = Math.max(2, Math.round((1 - reveal) * 14));
+  return `${Math.max(40, o - w)}~${Math.min(99, o + w)}`;
+}
 
 type RKey = keyof Ratings; // spike·block·dig·receive·set·serve
 const RATING_LABEL: Record<RKey, string> = { spike: '공격', block: '블로킹', dig: '디그', receive: '리시브', set: '세팅', serve: '서브' };

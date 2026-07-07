@@ -8,7 +8,7 @@ import { buildDraftContext } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, shortTeamName, teamScoutReveal } from '../data/league';
 import { resolveDraft, type PickReason } from '../engine/draft';
-import { overall, overallRaw, displayOvr } from '../engine/overall';
+import { fogOvr } from '../data/prospectScout';
 import { useGameStore } from '../store/useGameStore';
 import { showSeasonStartAd } from '../lib/ads';
 import type { Player } from '../types';
@@ -121,7 +121,7 @@ function DraftLiveInner() {
                   {p.mine ? <Text style={{ color: theme.accent }}>★ </Text> : null}
                   {p.player.name}
                 </Text>
-                <Text style={styles.sub}>{esc(p.teamId)} · OVR {reveal >= 0.92 ? displayOvr(overallRaw(p.player)) : '?'}</Text>
+                <Text style={styles.sub}>{esc(p.teamId)} · OVR {fogOvr(p.player, reveal)}</Text>
               </View>
               <View style={[styles.badge, { backgroundColor: r.color + '22', borderColor: r.color + '55' }]}>
                 <Text style={{ color: r.color, fontSize: 11, fontWeight: '800' }}>{why}</Text>

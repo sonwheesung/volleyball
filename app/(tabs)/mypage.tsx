@@ -101,7 +101,7 @@ export default function MyPage() {
     if (r.ok) showAlert('광고 시청 완료', `+${r.reward} 💎 적립되었습니다.`);
     else showAlert(
       r.reason === 'offline' ? '온라인 연결 필요' : r.reason === 'no-ad' ? '광고 준비 안 됨' : '잠시 후 다시',
-      r.reason === 'cap' ? '오늘 광고 보상은 모두 받았어요(하루 8회). 내일 다시 와주세요.'
+      r.reason === 'cap' ? `오늘 광고 보상은 모두 받았어요(하루 ${AD_DAILY_CAP}회). 내일 다시 와주세요.`
         : r.reason === 'offline' ? '다이아 적립은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.'
         : r.reason === 'no-ad' ? '지금은 광고를 불러오지 못했어요. 잠시 후 다시 시도해 주세요(끝까지 봐야 적립됩니다).'
         : r.reason === 'busy' ? '처리 중입니다. 잠시만 기다려 주세요.'

@@ -5,6 +5,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Muted, OvrBadge, Row, Screen, theme, themedStyles } from '../components/Screen';
 import { LEAGUE, shortTeamName as shortName } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
+import { restedOnDay } from '../data/rotation';
 import { teamOverallRaw } from '../engine/overall';
 import { DEV_TOOLS } from '../data/flags';
 import { useGameStore } from '../store/useGameStore';
@@ -21,9 +22,14 @@ export default function Exhibition() {
   const [awayId, setAwayId] = useState(() => (teams.find((t) => t.id !== firstId) ?? teams[0]).id);
   const [seed, setSeed] = useState(1);
 
-  // 프리뷰 전력 = sandbox 경기가 실제로 쓰는 출전 가능 명단(match/[id] dayIndex=currentDay)과 동일 소스
-  const homeOvr = useMemo(() => teamOverallRaw(availableTeamPlayers(homeId, currentDay)), [homeId, currentDay]);
-  const awayOvr = useMemo(() => teamOverallRaw(availableTeamPlayers(awayId, currentDay)), [awayId, currentDay]);
+  // 프리뷰 전력 = sandbox 경기(buildMatchBox)가 실제로 쓰는 명단과 동일 — 출전 가능(부상·정지·벤치) + 주전 휴식(restedOnDay) 제외.
+  const rosterFor = (teamId: string) => {
+    const rest = restedOnDay(teamId, currentDay);
+    const avail = availableTeamPlayers(teamId, currentDay);
+    return rest.size ? avail.filter((p) => !rest.has(p.id)) : avail;
+  };
+  const homeOvr = useMemo(() => teamOverallRaw(rosterFor(homeId)), [homeId, currentDay]);
+  const awayOvr = useMemo(() => teamOverallRaw(rosterFor(awayId)), [awayId, currentDay]);
 
   const same = homeId === awayId;
 

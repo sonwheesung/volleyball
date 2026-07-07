@@ -7,11 +7,11 @@ import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal } from '../data/league';
 import { computeStandings } from '../data/standings';
 import { amateurRecord } from '../data/amateurRecord';
-import { revealedPotential } from '../data/prospectScout';
+import { revealedPotential, fogOvr } from '../data/prospectScout';
 import { prospectReport } from '../data/prospectReport';
 import { draftClassPreview } from '../data/draftPreview';
 import { resolveDraft } from '../engine/draft';
-import { overall, overallRaw, displayOvr } from '../engine/overall';
+import { overall, overallRaw } from '../engine/overall';
 import { useGameStore } from '../store/useGameStore';
 import { showSeasonStartAd } from '../lib/ads';
 import type { Player } from '../types';
@@ -102,12 +102,6 @@ function DraftCenterInner() {
 
   // 스카우팅 안개(STAFF_SYSTEM) — 공개도↓일수록 현재 OVR은 범위로.
   const reveal = teamScoutReveal(my);
-  const fogOvr = (p: Player): string => {
-    const o = displayOvr(overallRaw(p));
-    if (reveal >= 0.92) return `${o}`;
-    const w = Math.max(2, Math.round((1 - reveal) * 14));
-    return `${Math.max(40, o - w)}~${Math.min(99, o + w)}`;
-  };
 
   const onFinish = async () => {
     // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 시즌 시작 로딩으로.
@@ -154,7 +148,9 @@ function DraftCenterInner() {
           <View key={p.id} style={styles.row}>
             <PosTag pos={p.position} />
             <Text style={[styles.name, { flex: 1 }]}>{p.name}</Text>
-            <OvrBadge value={overallRaw(p)} />
+            {reveal >= 0.92
+              ? <OvrBadge value={overallRaw(p)} />
+              : <Text style={styles.fogOvr}>{fogOvr(p, reveal)}</Text>}
           </View>
         ))
       )}
@@ -175,7 +171,7 @@ function DraftCenterInner() {
                 </View>
                 {reveal >= 0.92
                   ? <OvrBadge value={overallRaw(p)} />
-                  : <Text style={styles.fogOvr}>{fogOvr(p)}</Text>}
+                  : <Text style={styles.fogOvr}>{fogOvr(p, reveal)}</Text>}
               </Pressable>
               <Pressable onPress={() => toggleDraftPick(p.id)} hitSlop={8} style={styles.pickBtn}>
                 <Text style={{ color: picked ? theme.accent : theme.muted, fontWeight: '800', fontSize: 13 }}>
