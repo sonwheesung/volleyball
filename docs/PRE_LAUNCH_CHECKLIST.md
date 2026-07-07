@@ -77,6 +77,7 @@
 - 🟡 ⬜ **Vercel 환경변수 전량 확인** — DATABASE_URL(6543 풀러 `prepare:false`)·SESSION_JWT_SECRET·ADMIN_TOKEN·CRON_SECRET (Production+Preview). (§13.7·§13.8)
 - 🟢 ⬜ **운영 스키마 변경 주의** — 출시 후 DB 변경은 Expand/Contract 3단계(NOT NULL 추가·rename·삭제 금지). `drizzle-kit generate`+`migrate`(push 아님). ([[prod-schema-migration-caution]], §13.7)
 - 🟢 ⬜ Supabase 요금제·백업 정책 확인(무료 티어 한도).
+- 🟡 ⬜ 📋 **dev 환경 구축(2026-07-07 설계, 미구현 — 온라인 기능 개발 전 필요)** — 현재 dev 앱이 prod Vercel/Supabase 하나에 붙어 보안수정 #2(b)가 dev provider를 401 차단 → 개발자 로그인이 로컬 세션 폴백(UI만 진입)이라 **온라인 기능(지갑·다이아·쿠폰·결제) 테스트 불가**. #43 결제·#46 통계 착수 시 셋업: 두 번째 Supabase 프로젝트=dev DB(무료티어 2개)+마이그레이션 · Vercel `DATABASE_URL` 환경별 분리(Production=prod / Preview·Development=dev, Preview는 `VERCEL_ENV=preview`라 dev 로그인 자동 허용) · dev 앱 `EXPO_PUBLIC_SERVER_URL`=Preview URL 또는 로컬 `npm run dev`. dev DB 생기면 라이브 가드(`walletConcurrency`·`_dv_walletreplay`·`_e2e_backend`) 실행 가능. (정본 [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) §13.24)
 
 ---
 

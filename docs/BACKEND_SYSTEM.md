@@ -432,3 +432,38 @@
   - 공통: `after(() => …)`로 **응답 후** 전송(응답 지연 0·서버리스 유실 방지). PII 금지(userId 뒤 6자 마스킹, 이메일·이름 없음). 활성화(사용자 몫): 디스코드 웹후크 URL → Vercel env. **검증**: 결제 임베드 로컬 캡처 왕복 + 라이브 실발사 2건(204). 문의 임베드 로컬 캡처.
 - **`afterSafe` 공용 가드(2026-07-06, 발견 검증 Fable 5)**: `next/server`의 `after()`는 요청 컨텍스트 밖(tsx 테스트 하니스·스크립트)에서 **throw**한다. 라우트가 지갑 반영(applyWallet) 뒤 `after(() => notify…)`를 **무가드로 직접** 부르면 알림 예약 throw가 라우트 catch로 떨어져 **"돈은 이동했는데 응답 500"**(_dv_purchase 웹훅 통합테스트 2FAIL로 재현 — `r.applied===true`일 때만 그 줄 도달과 일치). 대조군 `logPaymentEventAfter`는 이미 `try{after}catch{즉시실행}` 가드라 통과했었다. 수정: 그 가드를 **`server/lib/afterSafe.ts`의 공용 `afterSafe(task)`**(요청 밖이면 즉시 실행·throw-none 관찰 task 전용)로 추출해 알림·감사로깅(`paymentLog`)·Sentry flush(`observability`) 전 라우트를 통일 — 관찰 사이드채널이 머니패스 응답을 오염시키지 못하게. 형제 가드: 라우트에 관찰 채널 추가 시 _dv_purchase 재실행(TEST_METHODOLOGY §4).
 - **파일**: `server/db/schema.ts`(purchase_event)·`server/lib/paymentLog.ts`(신)·`server/lib/notify.ts`(신·디스코드)·`server/app/api/purchase/webhook/revenuecat/route.ts`·`.../confirm/route.ts`(단계 로깅+알림)·`server/app/api/admin/payment-events/route.ts`(신·조회)·`lib/iap.ts`·`lib/server.ts`(requestId 상관·클라 컨텍스트).
+
+### 13.23 세이브 복구 채널 (손상 세이브 복구) — 📋 설계(2026-07-07, 미구현 — #43 결제/온라인 백엔드 뒤 착수)
+> **아직 안 만듦.** 사용자와 확정한 설계만 기록한다. **#43 결제/온라인 백엔드가 자리 잡은 뒤 착수.**
+
+- **배경/문제**: 게임 세이브는 **기기 로컬**(결정론 격리 — 서버는 재화·계정·결제·로그·문의·통계만, 시드/리플레이엔 안 들어감 §1·§8).
+  서버에 세이브 사본이 없어, 모종의 사유로 사용자 세이브가 손상되면 **직접 복구할 길이 없다**. 현재 방어는 두 가지뿐:
+  (a) **세이브 마이그레이션**(version/migrate/안전복원 — 구조 변경 안전, [SAVE_SYSTEM](./SAVE_SYSTEM.md)) + (b) **문의 진단 스냅샷**(사용자 세이브+리플레이가 서버로 업로드돼 관리자가 조회 §13.20).
+  즉 "**안 깨지게** + **문제 재현**"까지만 커버하고, **고친 세이브를 기기로 되돌려주는 채널이 없다.**
+- **설계(사용자 확정안 — 파일 주고받기 없음)**: 서버 `users`에 **`recoveryData` 컬럼(nullable)** 추가. 이 컬럼 하나가
+  **권한 신호 + 실제 데이터(payload) + 자동 회수**를 겸한다:
+  1. 관리자가 (진단 스냅샷으로 받은 손상 세이브를) 고쳐서 그 컬럼에 넣는다 → **값 존재 = 권한** → 그 계정 앱에 "데이터 복구하기" 버튼이 활성.
+  2. 사용자가 버튼을 누르면 앱이 그 데이터를 받아 적용(로컬 세이브 교체).
+  3. 적용 성공 → **서버가 그 컬럼을 삭제** → 버튼 자동 비활성(권한 소멸).
+  - 사용자는 **아무것도 업로드하지 않는다**(서버가 배달) → **임의 세이브 주입 불가**(체크섬/파일검증 불필요). 개인 쿠폰(targetUserId §13.14)·공지(§13.13)와 같은 "계정별 서버 관리" 결.
+- **완성 조건 3(필수)**:
+  ① **적용 시 version/migrate/스키마 검증**(깨진 데이터 재주입 방지 — SAVE_SYSTEM 경유).
+  ② **적용 직전 현재 세이브 자동 백업**(복구본이 잘못돼도 되돌리기).
+  ③ **컬럼 삭제는 반드시 앱이 적용 성공을 서버에 보고한 뒤**(받자마자 삭제 금지 — 중간 크래시 시 복구본 소실 방지).
+- **보안**: 게임 세이브는 **싱글플레이 + 로컬**이고 **다이아·결제는 서버 진실(세이브에 없음)** → 세이브를 교체해도 **과금 치팅 통로가 아니다**
+  (이미 개발용 +1000💎와 같은 결 — §6 유저 관대). 서버 게이팅 + 서버 배달로 남용 원천 차단.
+- **인프라 궁합 / 순서**: `recoveryData`는 개인 쿠폰·공지와 **동일한 계정별 서버 관리 패턴**. 앱은 **부팅(bootstrap)** 때 읽어 버튼 노출.
+  관리자 대시보드(§13.15)에 **"복구본 입력(userId별)"** 추가. **#43 결제/온라인 백엔드가 자리 잡은 뒤 착수.**
+  이 채널이 향후 **기기변경 이어하기·클라우드 백업(Phase 7)** 의 발판.
+- **스키마 주의**: 운영 단계에서 컬럼 추가는 **Expand/Contract**(NOT NULL 추가 금지, **nullable**로) — 기존 prod-schema-migration 규율(§13.7) 준수.
+
+### 13.24 dev 환경 구축 (온라인 기능 개발 전 필요) — 📋 설계(2026-07-07, 미구현 — 온라인 기능 개발 착수 시)
+> **아직 안 갖춤.** #43 결제·#46 통계 등 온라인 기능을 dev에서 실제로 테스트하려면 dev용 서버/DB가 필요하다는 메모.
+
+- **현재 문제**: dev 앱이 **prod Vercel/Supabase 하나**에 붙는다 → 보안수정 #2(b)가 **prod에서 dev provider를 401 차단**([SECURITY_AUDIT](./SECURITY_AUDIT.md)) →
+  개발자 로그인이 **로컬 세션 폴백**(`useAuthStore` `__DEV__`, 커밋 7c8de2a)으로 **UI만 진입**, **온라인 기능(지갑·다이아·쿠폰·결제) 테스트 불가**.
+- **셋업(#43 결제·#46 통계 등 온라인 기능 개발 착수 시)**:
+  1. **두 번째 Supabase 프로젝트 = dev DB**(무료티어 2개 가능) + 마이그레이션.
+  2. **Vercel `DATABASE_URL` 환경별 분리**(Production=prod / Preview·Development=dev) — Preview 배포는 `VERCEL_ENV=preview`라 **dev 로그인 자동 허용**(#2b는 production만 차단).
+  3. **dev 앱 `EXPO_PUBLIC_SERVER_URL`=Preview URL 또는 로컬 `npm run dev`**.
+- **효과**: dev DB가 생기면 못 돌린 **라이브 가드**(`walletConcurrency`·`_dv_walletreplay`·`_e2e_backend`)도 실행 가능.
