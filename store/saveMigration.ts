@@ -8,7 +8,7 @@
 export const SAVE_VERSION = 3;
 const POSTSEASON_LAST_DAY = 183; // engine/calendar.POSTSEASON_LAST_DAY 손복제 회피용 로컬(saveMigration은 leaf 유지 — engine import 시 순환 위험). _dv_postseason이 일치 가드.
 
-// 영속 65필드 기본값 — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
+// 영속 67필드 기본값(수는 참고용 — 정본은 이 키 집합 자체) — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
 // (drift 가드: _dv_migrate가 이 키 집합 == partialize 키 집합을 단언한다.)
 export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 설정(새 게임에도 유지)

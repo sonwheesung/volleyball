@@ -18,7 +18,9 @@
 
 ---
 
-## 1. 영속 스키마 (59 필드 — 단일 진실)
+## 1. 영속 스키마 (~~59~~ **67** 필드 — 단일 진실)
+
+> **정정(2026-07-08, 전수조사 #67)**: 실측 67필드(partialize == SAVE_DEFAULTS, `_dv_migrate`가 동치 단언 — 코드끼리는 일치). 구 제목 "59"·saveMigration 주석 "65"는 가산 필드 추가를 따라가지 못한 표기 드리프트. 아래 표에 빠져 있던 `simCache`(§0 시뮬 결과 캐시)·`lastGrowthDay`(num — 성장 리포트 기준일)도 영속 필드다. **필드 수의 정본은 문서 숫자가 아니라 `SAVE_DEFAULTS` 키 집합**(가드 `_dv_migrate`) — 문서 숫자는 참고용.
 
 > **다이아 이코노미 필드**(표 미개별화, 정본=`store/saveMigration.ts SAVE_DEFAULTS`): `diamonds·saveId·campLog·campTrainedThisOffseason·campDoneSeason·pendingCamp·claimedAch·adState`. **`campDoneSeason`**(num, 기본 -1, 2026-07-04 추가): 전지훈련을 "마친" 시즌번호 — 오프시즌↔개막전 게이트(MONETIZATION §11.2). `===season`이면 완료(시즌번호라 새 시즌 자동 리셋). 추가는 §2① 자동 처리(누락=기본값 -1).
 
