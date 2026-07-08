@@ -1,12 +1,12 @@
 // 계약 관리 전용 화면 — 단장실 "계약 관리"에서 진입.
 // 1행 = 선수 1명. 행을 누르면 재계약/방출 선택(액션시트). FA 예정·방출 선수도 여기서 처리.
 import { useRouter } from 'expo-router';
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { ActionSheet } from '../components/Popup';
-import { getEvolvedTeamPlayers, getPlayer } from '../data/league';
+import { getEvolvedTeamPlayers, getPlayer, LEAGUE } from '../data/league';
 import { teamRelations } from '../data/relationships';
 import { getPlayerProduction } from '../data/production';
 import { displayCutoff } from '../data/standings';
@@ -53,7 +53,18 @@ function ContractsInner() {
   const total = payroll(roster);
   const releasedPlayers = released.map((id) => getPlayer(id)).filter((p): p is Player => !!p);
   const faList = roster.filter(willBeFA);
-  const faGrades = assignFAGrades(faList);
+  // FA 등급은 **리그 전체 FA 예정 풀** 순위로 매긴다(assignFAGrades는 상대 순위 — 내 팀 부분집합으로 매기면
+  //   1명일 때 무조건 A로 오표시). 오프시즌 풀 근사: 전 구단 현재 명단에서 willBeFA 국내 선수 수집(EC-FA-09 형제).
+  const leagueFaGrades = useMemo(() => {
+    const pool: Player[] = [];
+    for (const t of LEAGUE.teams) {
+      for (const p of getEvolvedTeamPlayers(t.id, currentDay)) {
+        if (!p.isForeign && willBeFA(p)) pool.push(p);
+      }
+    }
+    return assignFAGrades(pool);
+  }, [currentDay]);
+  const faGrades = leagueFaGrades;
   // 시장가·저평가 라벨·재계약 오퍼 가격은 **표시 컷오프**(§3.3 displayCutoff) — player 상세와 동일 데이터 경로(이원화 해소, 2026-07-07).
   const displayDay = displayCutoff(currentDay, results, teamId);
 

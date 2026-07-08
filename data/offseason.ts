@@ -23,8 +23,9 @@ import { domesticPayroll } from './roster';
 import { upcomingStances } from './leagueHistory';
 import type { SponsorStance } from '../engine/sponsorStance';
 
-/** 직전 시즌 사고 선수 → 다음 재계약·FA 평판 계수(playerId→≤1). 사안 클수록 더 깎인다. */
-function scandalRepMap(): Map<string, number> {
+/** 직전 시즌 사고 선수 → 다음 재계약·FA 평판 계수(playerId→≤1). 사안 클수록 더 깎인다.
+ *  export: fa.tsx 요구연봉 표시가 엔진 asking 산식(`askingPrice×rep`, :150)과 동일하게 할인하도록 공유(EC-FA-09). */
+export function scandalRepMap(): Map<string, number> {
   const m = new Map<string, number>();
   for (const sc of seasonScandals()) m.set(sc.playerId, scandalRepMul(sc.missMatches));
   return m;
@@ -50,7 +51,7 @@ function cashAfterImports(
   return Math.max(0, myCash - importCost(rosters, snapshot, myTeam, prevTeamOf));
 }
 import { runTryout, runAsianQuota, type TryoutOutcome } from './tryout';
-import { FOREIGN_SALARY, ASIAN_SALARY } from '../engine/foreign';
+import { FOREIGN_SALARY, ASIAN_SALARY, importAgesOut } from '../engine/foreign';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
 
@@ -149,7 +150,10 @@ export function resolveFAMarket(
     const grade = grades.get(id) ?? 'C';
     const asking = round100(askingPrice(marketVal(p), grade) * (repMap.get(id) ?? 1));
     // 내가 영입 시 추가로 낼 보상금 — '돈만' 선택 시 가중 보상금(보상선수 면제), 아니면 기본(보상선수 동반)
-    const compCost = needsCompensationPlayer(grade)
+    //   보상은 '타 구단 영입 시'만(FA_SYSTEM §2.2): 원소속이 내 팀(계약 만료·재계약 거부로 풀에 나온 내 선수를 되잡음)이면
+    //   보상금·보상선수 모두 없음 → prevTeamOf[id]===myTeam이면 compCost=0(입찰 게이트·차감·compCash 모두).
+    //   보상선수 루프(하단)는 이미 prev===myTeam을 스킵 — 돈만 부과되던 "돈은 내고 선수는 안 뺏기는" 모순 제거.
+    const compCost = needsCompensationPlayer(grade) && prevTeamOf[id] !== myTeam
       ? (moneyOnly.has(id) ? compensationMoneyOnly(grade, p.contract.salary) : compensationMoney(grade, p.contract.salary))
       : 0;
 
@@ -299,8 +303,10 @@ export function buildOffseason(
       if (expelledSet.has(id)) continue; // 영구제명 — 명단에서 영구 제거
       // 수입 선수는 1년 계약 만료 — 국내 흐름과 분리, 각자 트라이아웃 재참가(FOREIGN_SYSTEM 7).
       //   아시아쿼터를 외인보다 먼저 체크(아시아쿼터=isForeign+isAsianQuota라 순서 중요).
-      if (p.isAsianQuota) { returningAsian.push(id); continue; }
-      if (p.isForeign) { returningForeign.push(id); continue; }
+      //   정년(FOREIGN_SYSTEM §1.6): 다음 시즌 나이 40+ 수입선수는 returning에서 제외 → keep·풀 재참가·AI 픽이
+      //   한 번에 차단(runTryout/runAsianQuota가 returning 멤버십으로 게이트) → cleanup에서 소멸(리그 이탈).
+      if (p.isAsianQuota) { if (!importAgesOut(p)) returningAsian.push(id); continue; }
+      if (p.isForeign) { if (!importAgesOut(p)) returningForeign.push(id); continue; }
       if (p.contract.remaining <= 0) expiring.push(p);
       else { keep.push(id); payroll += p.contract.salary; }
     }

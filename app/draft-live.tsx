@@ -5,7 +5,8 @@ import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
-import { buildDraftContext } from '../data/draftSetup';
+import { buildOffseasonBase } from '../data/draftSetup';
+import { resolveDraftContextFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, shortTeamName, teamScoutReveal, SEASON } from '../data/league';
 import { resolveDraft, neededPositions, type PickReason } from '../engine/draft';
@@ -45,17 +46,30 @@ function DraftLiveInner() {
   const protectedIds = useGameStore((s) => s.protectedIds);
   const draftPicks = useGameStore((s) => s.draftPicks);
   const faAggressive = useGameStore((s) => s.faAggressive);
+  const moneyOnlyIds = useGameStore((s) => s.moneyOnlyIds);
+  const tryoutWish = useGameStore((s) => s.tryoutWish);
+  const keepForeign = useGameStore((s) => s.keepForeign);
+  const asianWish = useGameStore((s) => s.asianWish);
+  const keepAsian = useGameStore((s) => s.keepAsian);
   const interviews = useGameStore((s) => s.interviews);
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
   const draftSelections = useGameStore((s) => s.draftSelections);
   const setDraftSelections = useGameStore((s) => s.setDraftSelections);
 
-  // 무거운 컨텍스트 — 픽 독립(buildDraftContext). 안정 deps로 메모(조정 C — 확정마다 재계산 안 함).
+  // 무거운 컨텍스트 — 픽 독립(스냅샷/해결 분리). 안정 deps로 메모(조정 C — 확정마다 재계산 안 함).
+  //   endSeason과 동일한 인자 전체(트라이아웃/아시아 토글·돈만 보상 포함)로 만들어 라이브 시퀀스=결과 보장
+  //   (EC-FA-09 — 누락 인자로 확정 지명 신인이 실제 입단 안 하던 문제). 공용 조립 함수 경유.
+  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore), [interviews, season, my, fanScore]);
+  const base = useMemo(
+    () => buildOffseasonBase(my, resignDecisions, contractOverrides, season + 1, ownerFx),
+    [my, resignDecisions, contractOverrides, season, ownerFx],
+  );
   const ctx = useMemo(
-    () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
-      buildOwnerFx(interviews, season, my, fanScore), cash),
-    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, cash],
+    () => resolveDraftContextFor(base, { my, resignDecisions, contractOverrides, faSignings, faAggressive,
+      protectedIds, nextSeason: season + 1, ownerFx, myCash: cash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian }),
+    [base, my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, ownerFx, cash,
+      tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian],
   );
   const clsById = useMemo(() => new Map(ctx.cls.map((p) => [p.id, p])), [ctx]);
   const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';

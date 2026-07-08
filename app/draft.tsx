@@ -3,7 +3,8 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
-import { buildDraftContext } from '../data/draftSetup';
+import { buildOffseasonBase } from '../data/draftSetup';
+import { resolveDraftContextFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
 import { teamScoutReveal } from '../data/league';
 import { computeStandings } from '../data/standings';
@@ -75,17 +76,29 @@ function DraftCenterInner() {
   const toggleDraftPick = useGameStore((s) => s.toggleDraftPick);
 
   const faAggressive = useGameStore((s) => s.faAggressive);
+  const moneyOnlyIds = useGameStore((s) => s.moneyOnlyIds);
+  const tryoutWish = useGameStore((s) => s.tryoutWish);
+  const keepForeign = useGameStore((s) => s.keepForeign);
+  const asianWish = useGameStore((s) => s.asianWish);
+  const keepAsian = useGameStore((s) => s.keepAsian);
   const interviews = useGameStore((s) => s.interviews);
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
   const [openId, setOpenId] = useState<string | null>(null);
   // 찜 담기/빼기는 가벼운 토글(더 이상 resolveDraft 재실행 없음 — 미리보기 삭제, 조정 A). 짧은 마스킹만.
   const busy = useBusyRun();
-  // endSeason과 동일한 ownerFx+자금 — 지명 순번·클래스가 결과와 동일하게(면담 거부·자금 게이트 반영)
+  // endSeason과 동일한 인자 전체(면담 거부·자금·트라이아웃/아시아 토글·돈만 보상)로 컨텍스트를 만들어
+  //   지명 순번·클래스가 결과와 동일하게(EC-FA-09 — 누락 인자로 라이브 확정픽 유실/발산 차단). 공용 조립 함수 경유.
+  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore), [interviews, season, my, fanScore]);
+  const base = useMemo(
+    () => buildOffseasonBase(my, resignDecisions, contractOverrides, season + 1, ownerFx),
+    [my, resignDecisions, contractOverrides, season, ownerFx],
+  );
   const ctx = useMemo(
-    () => buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season + 1,
-      buildOwnerFx(interviews, season, my, fanScore), cash),
-    [my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, interviews, fanScore, cash],
+    () => resolveDraftContextFor(base, { my, resignDecisions, contractOverrides, faSignings, faAggressive,
+      protectedIds, nextSeason: season + 1, ownerFx, myCash: cash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian }),
+    [base, my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, ownerFx, cash,
+      tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian],
   );
   const standings = useMemo(() => computeStandings(Number.MAX_SAFE_INTEGER), [season]);
 

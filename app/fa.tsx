@@ -7,7 +7,8 @@ import { RoleBadge } from '../components/RoleBadge';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { shortTeamName as shortTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
-import { faMarketPreviewFrom, buildOffseasonBase } from '../data/offseason';
+import { buildOffseasonBase, scandalRepMap } from '../data/offseason';
+import { resolveFAPreviewFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
 import { projectSettledCash } from '../data/financeProjection';
 import { LEAGUE_CAP } from '../engine/cap';
@@ -37,6 +38,12 @@ function FACenterInner() {
   const faAggressive = useGameStore((s) => s.faAggressive);
   const protectedIds = useGameStore((s) => s.protectedIds);
   const moneyOnlyIds = useGameStore((s) => s.moneyOnlyIds);
+  // 트라이아웃/아시아 토글 — endSeason과 동일 인자로 미리보기해야 preview=result(EC-FA-09).
+  //   외인/아시아 영입은 국내 FA 지갑(cashAfterImports)·로스터 구멍에 영향 → FA 경쟁 결과가 바뀐다.
+  const tryoutWish = useGameStore((s) => s.tryoutWish);
+  const keepForeign = useGameStore((s) => s.keepForeign);
+  const asianWish = useGameStore((s) => s.asianWish);
+  const keepAsian = useGameStore((s) => s.keepAsian);
   const signFA = useGameStore((s) => s.signFA);
   const unsignFA = useGameStore((s) => s.unsignFA);
   const setAggressive = useGameStore((s) => s.setAggressive);
@@ -66,12 +73,19 @@ function FACenterInner() {
     [my, resignDecisions, contractOverrides, season, ownerFx],
   );
   const pv = useMemo(
-    () => faMarketPreviewFrom(base, my, faSignings, faAggressive, protectedIds, season + 1, ownerFx, budgetCash, [], null, moneyOnlyIds),
-    [base, my, faSignings, faAggressive, protectedIds, season, ownerFx, budgetCash, moneyOnlyIds],
+    () => resolveFAPreviewFor(base, { my, resignDecisions, contractOverrides, faSignings, faAggressive,
+      protectedIds, nextSeason: season + 1, ownerFx, myCash: budgetCash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian }),
+    [base, my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, ownerFx, budgetCash,
+      tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian],
   );
   const snap = pv.snapshot;
+  // 등급·요구연봉은 **pre-FA(시장 해석 전) 스냅샷**으로 매긴다(FA_SYSTEM §2.2 — 엔진 resolveFAMarket이 등급·보상금을
+  //   직전연봉으로 산정). pv.snapshot(해석 후)은 영입 성사 선수의 연봉이 새 계약값이라 순위가 뒤바뀐다(EC-FA-09/08 형제).
+  const preSnap = base.off.snapshot;
+  const repMap = useMemo(() => scandalRepMap(), [season]); // 사고 선수 요구연봉 할인(엔진 :150과 동일 산식)
+  const round100 = (x: number) => Math.round(x / 100) * 100;
 
-  const poolPlayers = pv.pool.map((id) => snap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
+  const poolPlayers = pv.pool.map((id) => preSnap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
   const grades = assignFAGrades(poolPlayers);
   const myRoster = pv.myRoster.map((id) => snap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
 
@@ -200,7 +214,8 @@ function FACenterInner() {
       ) : (
         poolPlayers.map((p) => {
           const grade = grades.get(p.id)!;
-          const ask = askingPrice(marketVal(p), grade);
+          // 요구연봉 = 시장가×등급 프리미엄 × 사고 평판 할인(엔진 resolveFAMarket :150과 동일 산식).
+          const ask = round100(askingPrice(marketVal(p), grade) * (repMap.get(p.id) ?? 1));
           const targeted = faSignings.includes(p.id);
           const won = pv.signedByMe.has(p.id);
           const lost = pv.lostTo[p.id];
