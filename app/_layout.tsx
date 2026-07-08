@@ -138,6 +138,7 @@ export default function RootLayout() {
         <Stack.Screen name="shop" options={{ title: '상점' }} />
         <Stack.Screen name="buy-diamonds" options={{ title: '다이아 구매' }} />
         <Stack.Screen name="season-recap" options={{ title: '시즌 결산' }} />
+        <Stack.Screen name="season-recap-detail/[section]" options={{ title: '결산 상세' }} />
         <Stack.Screen name="season-start" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="tryout" options={{ title: '외국인 트라이아웃' }} />
         <Stack.Screen name="asian-tryout" options={{ title: '아시아쿼터 트라이아웃' }} />

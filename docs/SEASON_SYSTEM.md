@@ -297,10 +297,21 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
 - **연출 규율(리뷰)**: **강제 도착·선택 정독·단일 한 장**(스크롤 1장 + 하단 "외국인 트라이아웃 →" 버튼 하나).
   🚫 **다단계 캐러셀/"탭하여 계속 n/총" 순차 공개 금지**(그 순간 "손이 가는 게임"=관전형 위반). 결산은 정적 표지.
 - **카드 요약 + 상세 보기 drill-down(2026-07-08, 사용자 결정 — "한 장" 규율의 보완, 정정 아님)**: 내용이 많아지면 본문은
-  **섹션별 카드의 요약(1~3줄)** 만 두고, 더 있으면 **"상세 보기 ›"로 인라인 확장**(아코디언, 화면 이탈 없음 — guide.tsx 패턴).
-  기준: **"단장이 3초 안에 시즌을 파악"할 수치는 요약**에(순위·연승·순익·수상 개수), **명단·부문별 나열은 상세**로(수상자 전체·숙제 명단·생산 2~3위).
+  **섹션별 카드의 요약(1~3줄)** 만 두고, 더 있으면 **"상세 보기 ›"** 로 심화.
+  기준: **"단장이 3초 안에 시즌을 파악"할 수치는 요약**에(순위·연승·순익·수상 개수), **명단·부문별 나열은 상세**로(수상자 전체·숙제 명단·생산 전 선수).
   ✅ **캐러셀과 충돌 없음**: 캐러셀=강제 순차 공개, 상세 보기=선택 정독(안 펼치면 여전히 한 장 표지). ①포스트시즌 여정만 헤드라인
-  고정(카드/확장 아님 — 시즌 결말은 즉시 보여야). 컴포넌트 = `season-recap.tsx` 로컬 `ExpandCard`(요약 children + 선택 detail).
+  고정(카드/확장 아님 — 시즌 결말은 즉시 보여야).
+  - ~~**인라인 확장(아코디언, 화면 이탈 없음 — guide.tsx 패턴). 컴포넌트 = `season-recap.tsx` 로컬 `ExpandCard`(요약 children + 선택 detail). 상세=생산 2~3위 등 소량.**~~
+    → **정정(2026-07-08, 사용자 피드백 "보여줄 게 너무 적음 — 마이페이지처럼 카드로 만들고 상세 페이지에서 전부").** 아코디언은 담을 양이 적어
+    "결산이 시즌 결말을 못 말한다"는 피드백을 못 풀었다. **인라인 아코디언 → 별도 상세 스택 화면으로 격상**(records-archive 마이페이지 패턴):
+    - 결산 본문(`season-recap.tsx`)은 **요약 카드**만(3초 파악) — 각 카드에 **"상세 보기 ›"가 `router.push('/season-recap-detail/[section]')`** (인라인 확장 아님, 화면 이탈 후 뒤로가기로 복귀).
+    - 상세 화면(`app/season-recap-detail/[section].tsx`, 신규 · 단일 동적 라우트 4섹션 `awards|squad|story|tasks`)은 **내용 대폭 확대**. 모두 **재계산 파생**(신규 영속 0):
+      · **awards** — 리그 전체 시상 요약본: 정규MVP·챔프MVP·신인·기량발전 카드 + 부문 기록왕 7종 + 베스트7 코트(`Best7Court` 재사용). **내 팀 선수 강조**(`isMine`→accent). 경로 = `seasonSnapshot(season).awards`(=`currentSeasonAwards`, finalsMvp는 poDay 게이트). champion-ceremony·awards-ceremony와 중복이 아니라 그 **요약본**(캐러셀 없는 정적 열람).
+      · **squad** — 우리 팀 **전 선수** 시즌 생산 정렬 목록(경기·득점·스/블/서·세트·디그). 명단=`rosterIdsOnDay(my,day)`(영입 포함·방출 제외), 생산=`leagueProduction(day)`.
+      · **story** — 최종 순위표(전 구단, 내 팀·우승 강조) + 최다 연승/연패(`seasonStreaks(day)[my]`) + 재정 상세(`lastFinance`: 후원·보너스·입장·굿즈·인건비·순익·평균관중) + **주요 사건**(`milestones` 중 이번 시즌·내 팀 — 실데이터, 없으면 생략).
+      · **tasks** — 다음 시즌 숙제 **전 명단**: `recapBriefing`의 faSoon/expiring/retireSoon를 이름·나이·포지션·잔여계약까지, 우선순위 색(FA 🔥 > 만료 ⚠ > 정년 ℹ). 요약과 동일 정본 셀렉터(가드 `_dv_recap` [B]가 덮음).
+    - **스포일러 게이트(상세도 이중 가드)**: 상세 화면 진입도 `archive[season].championId` 존재 확인 → 없으면(결승 전 딥링크) awards의 우승/챔프MVP·story의 우승 표기 **비노출**(결산 진입 자체가 championId 게이트지만 상세는 독립 라우트라 자체 가드). finalsMvp는 `currentSeasonAwards` poDay 게이트로 자동 미노출.
+    - **성능**: 상세도 `leagueProduction` 재계산이 무거움 → `useDeferredReady`+`<Loading variant="list">`. 결산 첫 화면은 요약만이라 가볍게 유지(무거운 나열은 상세로 미룸).
 - ~~**내용 한정**(과부하 방지 — 깊은 건 기록 탭 drill-down): ① 우리 팀 헤드라인 한 줄(최종 순위·W/L·우승/PO)
   ② 우리 선수 하이라이트(내 수상자 + 내 팀 생산 상위 1~3 = 단장 결정의 성적표) ③ 리그 시상 3종(MVP·신인·기량발전,
   이름+팀+한 줄 스탯) ④ **베스트7 코트**(아래). + (선택, 하단 한 줄) 재정·팬덤.~~
@@ -312,7 +323,7 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
     데이터 = `buildPlayoffs(season)`(seeds·po·final·championId) + `Matchup.series.hiWins/loWins`. **스포일러 게이트**: 결산은
     `archive[season].championId` 존재(= champion-ceremony 통과) 후에만 진입 → `championRevealed`=true, 플옵 전부 공개 상태. 섹션 렌더도 championId≠null로 이중 가드.
   - ② **우리 팀 수상 종합** — 정규 MVP·베스트7 외 **챔프MVP·기록왕(부문별)·신인상·기량발전상** 중 내 팀 선수 수상 전부.
-    경로 = `seasonSnapshot(season).awards`(= `currentSeasonAwards(season, displayCutoff=164, poDay=raw currentDay)`) — finalsMvp는 poDay 게이트로 결승 확정 후에만. 내 수상 0이면 섹션 생략.
+    경로 = `seasonSnapshot(season).awards`(= `currentSeasonAwards(season, displayCutoff=164, poDay=raw currentDay)`) — finalsMvp는 poDay 게이트로 결승 확정 후에만. **요약 카드**=내 첫 수상+개수(내 수상 0이면 카드 생략), **상세(`/season-recap-detail/awards`)**=리그 전체 시상 요약본(내 팀 강조).
   - ③ **시즌 스토리 수치** — 최다 연승(`seasonStreaks(day)[my][0]`, 정규 결과 파생) · 팬심 현재값 · 전 시즌 순익(`lastFinance.net`) · 평균 관중(`lastFinance.attendance`).
     **파생 가능한 실데이터만**(가짜 수치 금지). 팬심 히스토리 미보존이라 "전 시즌 대비 증감"은 lastFinance(직전 정산) 문맥으로 대체.
   - ④ **다음 시즌 숙제 브리핑(단장 프리뷰)** — ⓐFA 자격 도래 예정(`willBeFA(p)` = 경력+1≥6 & 잔여≤1) ⓑ계약 만료 임박(잔여≤1, FA 예정 아닌 자만 — ⓐ와 중복 제거)
@@ -323,7 +334,7 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
       · **계약 = `contractOverrides` 합성** — `activeRoster(evolved, overrides, released)`로 시즌 중 재계약(잔여 갱신)을 반영해 `willBeFA`/`remaining` 판정. base 계약(override 무시) 금지.
       · **정년(39세=`RETIRE_AGE−1`) 확정자는 ⓒ 정년 줄에만** — ⓐ FA 자격 줄에서 제외(`willBeFA(p) && p.age < RETIRE_AGE−1`). 중복 계상 금지("39세 정년만 확정 사실").
       · 상비 가드 `tools/_dv_recap.ts` [B] ⑤⑥⑦: `recapBriefing` 예측 ⊆ 실제 `buildOffseason`(FA 풀 진입자 ⊆ faSoon∪expiring·faSoon∩실제잔류=∅) + 39세 전원 은퇴·FA 줄 미등장 + A/B 뮤턴트(override·시즌이동 무시→위반 검출).
-  - ⑤ **우리 선수 생산 상위 1~3**(유지 — 단장 결정의 성적표) + 재정·팬덤(③에 흡수).
+  - ⑤ **우리 선수 활약**(단장 결정의 성적표) + 재정·팬덤(③에 흡수). **요약 카드**=최고 생산 1명, **상세(`/season-recap-detail/squad`)**=우리 팀 전 선수 생산 정렬.
     - **명단 = `rosterIdsOnDay(my, day)`**(④와 동일 — 시즌 중 영입 포함·방출 제외). ~~`teamPlayerIds`~~ 금지(전수조사 수정, 2026-07-08).
   🚫 제외(유지): 리그 전체 순위표 풀버전·기록왕 전체(내 선수가 왕일 때만 강조)·라운드MVP·박스스코어·다단계 캐러셀.
 - **베스트7 코트(`components/Best7Court.tsx`, 재사용)**: 베스트7(S·OH·OH·OP·MB·MB·L)을 코트 포메이션 7마커

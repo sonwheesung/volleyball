@@ -1,9 +1,10 @@
 // 시즌 결산 (SEASON_SYSTEM §5.5) — 포스트시즌 → [결산] → 외국인 트라이아웃.
 // 강제 도착·선택 정독·단일 한 장(스크롤 + 하단 버튼 하나). 다단계 캐러셀 금지.
-// 구조(2026-07-08 사용자 결정): 요약 카드(1~3줄) + "상세 보기 ›" 인라인 확장(화면 이탈 없는 선택 정독).
-//   3초 안에 시즌을 파악할 수치는 요약에, 명단·부문별 나열은 상세로. 캐러셀=강제 순차와 별개(선택 drill-down).
+// 구조(2026-07-08 사용자 결정): 요약 카드(1~3줄) + "상세 보기 ›" → **별도 상세 스택 화면**(app/season-recap-detail/[section]).
+//   3초 안에 시즌을 파악할 수치는 요약에, 명단·부문별 나열은 상세 화면으로(화면 이탈 후 뒤로가기 복귀 — 마이페이지 패턴).
+//   ~~인라인 아코디언(ExpandCard)~~ → 담을 양이 적어 "결산이 시즌 결말을 못 말한다"는 피드백을 못 풀어 상세 화면으로 격상.
 // endSeason 이전이라 시상은 재계산(seasonSnapshot=currentSeasonAwards+computeStandings, leagueProduction). 새 영속 0.
-import { useMemo, useState, type ReactNode } from 'react';
+import { useMemo, type ReactNode } from 'react';
 import { useRouter } from 'expo-router';
 import { Text, View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -19,7 +20,7 @@ import { seasonYear } from '../data/seasonLabel';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
-import type { AwardWinner, Player } from '../types';
+import type { AwardWinner } from '../types';
 
 // 부문 기록왕 라벨(awards.titles 키 → 한국어) — data/awards.ts TITLE_KO의 사본(표시 전용). ⚠ set 키만 다름: 여기 '세트왕' vs awards.ts '어시스트왕'(라벨 통일 OPEN Q — AWARDS_SYSTEM §1).
 const TITLE_KO: Record<string, string> = {
@@ -27,17 +28,14 @@ const TITLE_KO: Record<string, string> = {
   serve: '서브왕', dig: '디그왕', set: '세트왕', receive: '리시브왕',
 };
 
-/** 요약 + (선택) 상세. 상세가 있으면 카드 탭으로 인라인 확장(화면 이탈 없음). 캐러셀 아님 — 선택 정독. */
-function ExpandCard({ accent, children, detail }: { accent: string; children: ReactNode; detail?: ReactNode }) {
-  const [open, setOpen] = useState(false);
-  if (!detail) return <Card accent={accent}>{children}</Card>;
+/** 요약 카드 + "상세 보기 ›" — 탭하면 별도 상세 화면으로(인라인 확장 아님, 화면 이탈 후 뒤로가기 복귀). */
+function NavCard({ accent, children, onPress }: { accent: string; children: ReactNode; onPress: () => void }) {
   return (
-    <Card accent={accent} onPress={() => setOpen((o) => !o)}>
+    <Card accent={accent} onPress={onPress}>
       {children}
-      {open ? <View style={styles.detailBox}>{detail}</View> : null}
       <View style={styles.moreRow}>
-        <Text style={styles.moreText}>{open ? '접기' : '상세 보기'}</Text>
-        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={15} color={theme.muted} />
+        <Text style={styles.moreText}>상세 보기</Text>
+        <Ionicons name="chevron-forward" size={15} color={theme.muted} />
       </View>
     </Card>
   );
@@ -117,7 +115,7 @@ function RecapInner() {
   const briefing = useMemo(() => recapBriefing(my, day, overrides, released), [my, day, overrides, released]);
   const briefCount = briefing.faSoon.length + briefing.expiring.length + briefing.retireSoon.length;
   // 요약 = 우선순위 3줄 스택(FA > 계약 만료 > 정년 — 색+아이콘 시선 유도, 사용자+GPT 검토 2026-07-08). 해당 없는 줄 생략.
-  const briefStack: { icon: string; text: string; color: string }[] = [
+  const briefStack = [
     briefing.faSoon.length ? { icon: '🔥', text: `FA 자격 ${briefing.faSoon.length}명`, color: theme.bad } : null,
     briefing.expiring.length ? { icon: '⚠', text: `계약 만료 ${briefing.expiring.length}명`, color: theme.warn } : null,
     briefing.retireSoon.length ? { icon: 'ℹ', text: `정년 임박 ${briefing.retireSoon.length}명`, color: theme.muted } : null,
@@ -128,12 +126,11 @@ function RecapInner() {
     const prod = leagueProduction(day);
     const ids = new Set(rosterIdsOnDay(my, day));
     const rows = [...prod.entries()].filter(([id]) => ids.has(id)).map(([id, l]) => ({ id, l }));
-    return rows.filter((r) => r.l.points > 0).sort((a, b) => b.l.points - a.l.points).slice(0, 3);
+    return rows.filter((r) => r.l.points > 0).sort((a, b) => b.l.points - a.l.points);
   }, [day, my]);
 
   const prodLine = (l: ProdLine) => `${l.matches}경기 · ${l.points}점 (스${l.spikes}·블${l.blocks}·서${l.aces})`
     + (l.assists > 0 ? ` · 세트${l.assists}` : '') + (l.digs > 0 ? ` · 디그${l.digs}` : '');
-  const faceLine = (list: Player[]) => list.map((p) => `${p.name} ${p.age}·${p.position}`).join(' · ');
 
   const prodRow = (r: { id: string; l: ProdLine }, i: number) => (
     <View key={r.id} style={styles.pRow}>
@@ -145,6 +142,8 @@ function RecapInner() {
       </View>
     </View>
   );
+
+  const go = (section: string) => router.push(`/season-recap-detail/${section}`);
 
   return (
     <Screen title={`${seasonYear(season)} 결산`}>
@@ -159,30 +158,30 @@ function RecapInner() {
         </View>
       </Card>
 
-      {/* ② 우리 선수 활약 — 요약 = 최고 생산 1줄, 상세 = 상위 3명 */}
+      {/* ② 우리 선수 활약 — 요약 = 최고 생산 1명, 상세 = 전 선수 생산 정렬 */}
       <IconLabel icon="people-outline" color={theme.elite}>우리 선수 활약</IconLabel>
       {myTop.length === 0 ? (
         <Card accent={theme.elite}><Muted style={{ fontSize: 13 }}>이번 시즌 집계된 생산 기록이 없습니다.</Muted></Card>
       ) : (
-        <ExpandCard accent={theme.elite} detail={myTop.length > 1 ? <>{myTop.slice(1).map((r, i) => prodRow(r, i + 1))}</> : undefined}>
+        <NavCard accent={theme.elite} onPress={() => go('squad')}>
           {prodRow(myTop[0], 0)}
-        </ExpandCard>
+        </NavCard>
       )}
 
-      {/* ③ 우리 팀 수상 종합(내 수상 있을 때만) — 요약 = 첫 수상 + 개수, 상세 = 전체 나열 */}
+      {/* ③ 우리 팀 수상 종합(내 수상 있을 때만) — 요약 = 첫 수상 + 개수, 상세 = 리그 전체 시상 요약본 */}
       {awardLines.length > 0 ? (
         <>
           <IconLabel icon="trophy-outline" color={theme.gold}>우리 팀 수상</IconLabel>
-          <ExpandCard accent={theme.gold} detail={awardLines.length > 1 ? <>{awardLines.slice(1).map((a) => <Text key={a} style={styles.awardRow}>{a}</Text>)}</> : undefined}>
+          <NavCard accent={theme.gold} onPress={() => go('awards')}>
             <Text style={styles.awardRow}>{awardLines[0]}</Text>
             {awardLines.length > 1 ? <Muted style={{ fontSize: 12.5, marginTop: 2 }}>수상 {awardLines.length}건</Muted> : null}
-          </ExpandCard>
+          </NavCard>
         </>
       ) : null}
 
-      {/* ④ 시즌 스토리 수치 — 3초 파악 수치(요약만, 상세 없음) */}
+      {/* ④ 시즌 스토리 — 요약 = 3초 파악 수치, 상세 = 순위·연승·재정·주요 사건 */}
       <IconLabel icon="stats-chart-outline" color={theme.accent}>시즌 스토리</IconLabel>
-      <Card accent={theme.accent}>
+      <NavCard accent={theme.accent} onPress={() => go('story')}>
         {maxWinStreak >= 2 ? <Row><Muted>최다 연승</Muted><Text style={styles.fin}>{maxWinStreak}연승</Text></Row> : null}
         <Row><Muted>팬심</Muted><Text style={styles.fin}>{fanScore}</Text></Row>
         <Row><Muted>운영 자금</Muted><Text style={styles.fin}>{formatMoney(cash)}</Text></Row>
@@ -192,26 +191,13 @@ function RecapInner() {
             <Row><Muted>평균 관중</Muted><Text style={styles.fin}>{lastFinance.attendance.toLocaleString()}명</Text></Row>
           </>
         ) : null}
-      </Card>
+      </NavCard>
 
-      {/* ⑤ 다음 시즌 숙제 — 요약 = 개수, 상세 = 명단 */}
+      {/* ⑤ 다음 시즌 숙제 — 요약 = 우선순위 3줄 스택, 상세 = 전 명단(나이·계약) */}
       {briefCount > 0 ? (
         <>
           <IconLabel icon="clipboard-outline" color={theme.warn}>다음 시즌 숙제</IconLabel>
-          <ExpandCard accent={theme.warn} detail={
-            <>
-              {/* 상세 명단 — 요약과 동일 우선순위 순서·색(FA > 계약 만료 > 정년) */}
-              {briefing.faSoon.length > 0 ? (
-                <View style={styles.taskRow}><Text style={[styles.taskLabel, { color: theme.bad }]}>🔥 FA 자격 도래</Text><Text style={styles.taskFaces}>{faceLine(briefing.faSoon)}</Text></View>
-              ) : null}
-              {briefing.expiring.length > 0 ? (
-                <View style={styles.taskRow}><Text style={[styles.taskLabel, { color: theme.warn }]}>⚠ 계약 만료 임박</Text><Text style={styles.taskFaces}>{faceLine(briefing.expiring)}</Text></View>
-              ) : null}
-              {briefing.retireSoon.length > 0 ? (
-                <View style={styles.taskRow}><Text style={[styles.taskLabel, { color: theme.muted }]}>ℹ 정년 임박(39세)</Text><Text style={styles.taskFaces}>{faceLine(briefing.retireSoon)}</Text></View>
-              ) : null}
-            </>
-          }>
+          <NavCard accent={theme.warn} onPress={() => go('tasks')}>
             {briefStack.map((b) => (
               <View key={b.text} style={styles.briefRow}>
                 <Text style={styles.briefIcon}>{b.icon}</Text>
@@ -219,11 +205,11 @@ function RecapInner() {
               </View>
             ))}
             <Muted style={{ fontSize: 12.5, marginTop: 2 }}>다음 오프시즌에 챙길 선수들</Muted>
-          </ExpandCard>
+          </NavCard>
         </>
       ) : null}
 
-      {/* 리그 시상·베스트7은 시상식 화면(champion/awards-ceremony)으로 이관(삼중 표시 방지, AWARDS_SYSTEM §7). 여기선 내 팀 수상만. */}
+      {/* 리그 시상·베스트7은 시상식 화면(champion/awards-ceremony)으로 이관(삼중 표시 방지, AWARDS_SYSTEM §7). 결산 상세(awards)는 그 요약본. */}
 
       {/* 하단 안내 문구 제거(2026-07-08 검토) — 다른 메뉴 이동 유도 대신 시즌의 여운 유지. 버튼만. */}
       <Button label="오프시즌 · 외국인 트라이아웃 →" onPress={() => router.push('/tryout')} />
@@ -238,13 +224,9 @@ const styles = themedStyles(() => StyleSheet.create({
   pSub: { color: theme.muted, fontSize: 12.5, marginTop: 1 },
   fin: { color: theme.text, fontWeight: '800', fontSize: 15 },
   awardRow: { color: theme.text, fontSize: 14, fontWeight: '700', paddingVertical: 2 },
-  taskRow: { paddingVertical: 4 },
-  taskLabel: { color: theme.warn, fontSize: 12.5, fontWeight: '800' },
   briefRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
   briefIcon: { fontSize: 13, width: 18, textAlign: 'center' },
   briefText: { fontSize: 14.5, fontWeight: '800' },
-  taskFaces: { color: theme.text, fontSize: 13.5, fontWeight: '600', marginTop: 1 },
-  detailBox: { marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border },
   moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 6 },
   moreText: { color: theme.muted, fontSize: 12.5, fontWeight: '700' },
 }));
