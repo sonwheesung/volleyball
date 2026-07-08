@@ -300,7 +300,14 @@ KOVO 방식:
 > 워드마크 "배구명가" + **원형 스피너(회전 링)**)으로 가린다. 관전형 1순위(연출=투자처)에 부합.
 
 - **흐름**: 드래프트(`onFinish`) → `showSeasonStartAd()`(MONETIZATION §3, 첫 시즌 외 광고 — 항상 resolve) →
-  `router.replace('/season-start')` → 로딩 표시 → `endSeason()` → `router.replace('/enshrine')` → (헌액 0명이면 통과) 탭.
+  `router.replace('/season-start')` → 로딩 표시 → `endSeason()` → ~~`router.replace('/enshrine')` → (헌액 0명이면 통과) 탭.~~
+  → **정정(2026-07-08 사용자 결정 — 오프시즌 꼬리 순서 변경)**: `endSeason()` 후
+  **`enshrine`(헌액=지난 시즌 마무리) → `training-camp?chain=1`(전지훈련=새 시즌 준비) → `season-opening`(개막 브리지) → 탭(홈)**.
+  과거(은퇴 레전드 기림)를 먼저 마무리하고 미래(선수 강화)를 준비한 뒤 개막하는 서사. ~~구 순서: 전지훈련 → 헌액 → 탭~~
+  (구현상 season-start가 `enshrine`으로 replace, 각 화면이 다음 단계로 `router.replace` 체인, beforeRemove가 GO_BACK/POP 차단·REPLACE/POP_TO_TOP 통과 — UI-28).
+- **체인 두 안내 화면(2026-07-08 사용자 결정 — 스킵 방지)**:
+  ① **헌액자 0명 안내**(`app/enshrine.tsx`) — 자동 통과하지 않고 "이번 시즌 헌액자는 없습니다." 조용한 한 장(명전 톤) + "새 시즌 준비로 →". 강제 대기·타이머 없이 탭 한 번.
+  ② **개막 브리지**(`app/season-opening.tsx`, 신규) — 전지훈련 종료 → 홈 사이 "시즌이 시작됩니다."를 시즌 연도(`seasonYear(season)`)와 함께 미니멀하게. "개막전으로 →" 탭 한 번으로 `dismissAll`+`replace('/(tabs)')`(소비된 오프시즌 스택 정리). 과한 애니메이션 금지(사용자가 시상식 UI·BGM 별도 작업 예정).
 - **⚠ 페인트-전-블록 버그(실기기 발견·교정 2026-06-30)**: 초기 구현은 `InteractionManager.runAfterInteractions`로
   endSeason을 미뤘으나, 이게 **화면 전환 애니메이션/첫 페인트보다 일찍 발화**해 endSeason 동기 블록이
   **직전 화면(드래프트)을 그대로 얼린 채** 돌았다(브랜드 로딩이 끝까지 안 보임 — 45프레임 ≈18s 전수 드래프트 동결 확인).

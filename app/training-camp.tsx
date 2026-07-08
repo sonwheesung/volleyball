@@ -27,11 +27,12 @@ const COURSE_KEYS: CampCourse[] = ['attack', 'defense', 'block', 'setter', 'serv
 
 export default function TrainingCamp() {
   const router = useRouter();
-  // 오프시즌 체인 진입(season-start → 여기 → enshrine, A3)이면 chain=1 — "새 시즌으로 ▶"로 다음 단계(헌액) 진행.
-  // replace 로 들어와 뒤로 가도 season-start(endSeason)를 재실행하지 않음. 비-chain(마이페이지)은 뒤로가기만.
+  // 오프시즌 체인 진입(season-start → enshrine → 여기, A3)이면 chain=1 — "새 시즌으로 ▶"로 다음 단계(개막 브리지) 진행.
+  //   순서 변경(2026-07-08 사용자 결정): 헌액이 전지훈련보다 앞. 전지훈련이 체인의 마지막 상호작용 단계.
+  // replace 로 들어와(enshrine에서) 뒤로 가도 앞 단계(헌액/드래프트)를 재노출하지 않음. 비-chain(마이페이지)은 뒤로가기만.
   const { chain } = useLocalSearchParams<{ chain?: string }>();
   const inChain = chain === '1';
-  const goNext = () => router.replace('/enshrine'); // 헌액(0명이면 자동 통과 → 대시보드)
+  const goNext = () => router.replace('/season-opening'); // 개막 브리지("새 시즌이 시작됩니다") → 홈
   // 무거운 작업 마스킹(UI-27): finishCamp+귀환(base 재계산)=동기 → useBusyRun, 전지훈련 보내기(서버 차감)=비동기 → sending 로컬 state.
   const busy = useBusyRun();
   const [sending, setSending] = useState<string | null>(null);
@@ -57,7 +58,7 @@ export default function TrainingCamp() {
   // 2단계 뒤로가기(2026-07-07 버그수정): 코스 화면(picked!==null)에서 ← / 안드로이드 하드웨어백 / iOS 제스처백은
   //   화면을 pop(일정으로 이탈)하지 말고 선수 목록으로 돌아가야 한다. beforeRemove로 뒤로가기 액션만 가로챈다.
   //   staleness 함정: 리스너 클로저가 초기 picked(null)만 보면 안 됨 → pickedRef를 매 렌더 최신화해 리스너가 fresh 값을 읽는다.
-  //   chain 흐름(goNext=router.replace)은 REPLACE 액션이라 미개입(GO_BACK/POP만 가로챔) — 개막전/헌액 진행 안 막힘.
+  //   chain 흐름(goNext=router.replace)은 REPLACE 액션이라 미개입(GO_BACK/POP만 가로챔) — 개막 브리지 진행 안 막힘.
   const navigation = useNavigation();
   const pickedRef = useRef<string | null>(null);
   pickedRef.current = picked;
@@ -69,7 +70,7 @@ export default function TrainingCamp() {
   useEffect(() => {
     const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
       const t = e?.data?.action?.type;
-      if (t !== 'GO_BACK' && t !== 'POP') return; // REPLACE(goNext)·POP_TO_TOP는 통과 — 개막전/헌액 진행 안 막힘
+      if (t !== 'GO_BACK' && t !== 'POP') return; // REPLACE(goNext)·POP_TO_TOP는 통과 — 개막 브리지 진행 안 막힘
       if (inChain) { e.preventDefault(); return; } // 체인 모드: 뒤로가기 전면 무력화(picked 무관 — 소비된 스택 잔재 이탈 차단)
       if (pickedRef.current !== null) { // 비-chain 2단계: 코스 화면 → 선수 목록으로(일정 이탈 방지)
         e.preventDefault();

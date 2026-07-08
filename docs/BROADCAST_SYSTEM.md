@@ -142,7 +142,9 @@
   번호 계보 한 줄. 비-레전드 HOF는 기존 행 유지.
 - **뉴스(`data/news.ts`)**: HOF 헌액/은퇴 세리머니 본문의 "영구결번" 문구를 "헌액 번호 N번"으로 교체 +
   번호 계보가 있으면 사실 문장 추가("이 번호를 단 과거 레전드: …").
-- **헌액 화면(`app/enshrine.tsx`, 2026-06-26 구현)**: 오프시즌 진행 중 — **드래프트 종료(`endSeason`) 직후** 진입.
+- **헌액 화면(`app/enshrine.tsx`, 2026-06-26 구현)**: 오프시즌 진행 중 — **season-start(`endSeason`) 직후** 진입(체인 첫 상호작용 단계).
   이번 시즌(`retiredSeason === season-1`) 새 레전드를 유니폼+헌액 번호+계보로 큰 화면 연출(내 구단 강조,
-  ChampionCelebration 패턴). **새 레전드 0명이면 즉시 통과**(`router.replace('/(tabs)')` — 빈 화면 강요 안 함, 관전형).
-  draft.tsx·draft-live.tsx 의 `onFinish` 가 `/(tabs)` 대신 `/enshrine` 으로 라우팅(헌액 화면이 다음 시즌 입구).
+  ChampionCelebration 패턴). ~~**새 레전드 0명이면 즉시 통과**(`router.replace('/(tabs)')` — 빈 화면 강요 안 함, 관전형).~~
+  → **정정(2026-07-08 사용자 결정 — 스킵 방지)**: 0명이어도 자동 통과하지 않고 **"이번 시즌 헌액자는 없습니다." 조용한 한 장**(명전 톤) + "새 시즌 준비로 →"로 탭 한 번 진행(강제 대기·타이머 없음).
+  진행 시 `/(tabs)`가 아니라 **다음 단계 `training-camp?chain=1`(전지훈련)로 `router.replace`**(체인 순서 변경 2026-07-08: 헌액 → 전지훈련 → 개막 브리지 → 홈, SEASON §5.5 D).
+  ~~draft.tsx·draft-live.tsx 의 `onFinish` 가 `/(tabs)` 대신 `/enshrine` 으로 라우팅(헌액 화면이 다음 시즌 입구).~~ → 현재는 `onFinish → season-start → enshrine`(season-start 로딩이 endSeason을 돌린 뒤 enshrine으로 replace).

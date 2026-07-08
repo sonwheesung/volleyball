@@ -145,6 +145,7 @@ export default function RootLayout() {
         <Stack.Screen name="draft" options={{ title: '신인 드래프트' }} />
         <Stack.Screen name="draft-live" options={{ title: '라이브 드래프트' }} />
         <Stack.Screen name="enshrine" options={{ headerShown: false, gestureEnabled: false }} />
+        <Stack.Screen name="season-opening" options={{ headerShown: false, gestureEnabled: false }} />
         <Stack.Screen name="exhibition" options={{ title: '테스트 경기' }} />
         <Stack.Screen name="achievements" options={{ title: '업적' }} />
         <Stack.Screen name="records" options={{ title: '통산 순위' }} />

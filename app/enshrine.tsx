@@ -1,5 +1,7 @@
-// 명예의전당 헌액 화면 — 오프시즌 진행 중(드래프트 직후 endSeason 후) 이번 시즌 새 레전드를
-// 유니폼 + 헌액 번호 일러스트로 기린다(관전형 1순위 — 보는 경험). 새 레전드 0명이면 즉시 통과.
+// 명예의전당 헌액 화면 — 오프시즌 진행 중(드래프트 → season-start endSeason 직후, 전지훈련보다 먼저)
+// 이번 시즌 새 레전드를 유니폼 + 헌액 번호 일러스트로 기린다(관전형 1순위 — 보는 경험).
+// 순서(2026-07-08 사용자 결정): 헌액(지난 시즌 마무리) → 전지훈련(새 시즌 준비) → 개막 브리지 → 홈.
+// 새 레전드 0명이어도 자동 통과하지 않고 "헌액자 없음" 한 장을 조용히 보여준다(스킵 방지 — 사용자 결정).
 // docs/BROADCAST_SYSTEM §8.4. 번호 계보(사실)는 같은 구단·같은 번호 과거 레전드만 나열(가짜 인과 금지).
 import { useRouter, useNavigation } from 'expo-router';
 import { useEffect, useMemo } from 'react';
@@ -28,11 +30,11 @@ export default function Enshrine() {
     [hallOfFame, season, my],
   );
 
-  // 헌액 완료 → 소비된 오프시즌 스택(playoffs·시상식·트라이아웃·FA·드래프트)을 전부 비우고 새 시즌 대시보드로.
-  //   dismissAll(POP_TO_TOP)로 루트((tabs))까지 pop → replace로 그 자리를 대시보드로 확정(잔재 0 — 뒤로가기/제스처로 드래프트 재노출 차단, D).
-  const done = () => { router.dismissAll(); router.replace('/(tabs)'); };
-  useEffect(() => { if (newLegends.length === 0) done(); }, [newLegends.length]);
-  // 헌액 흐름은 되돌릴 수 없다 — 하드웨어 백·제스처·POP 무력화(B). done()의 dismissAll/replace(POP_TO_TOP/REPLACE)만 통과.
+  // 헌액 완료 → 다음 단계(전지훈련, chain=1)로. 소비된 오프시즌 스택 정리는 체인 마지막(개막 브리지)이 dismissAll로 수행.
+  //   replace(REPLACE)로 넘어가 헌액 화면은 스택에서 교체된다(뒤로가기로 재노출 안 됨 — beforeRemove가 GO_BACK/POP 차단, B).
+  const done = () => { router.replace('/training-camp?chain=1'); };
+  // 0명 자동 통과 제거(2026-07-08 사용자 결정) — 아래 "헌액자 없음" 안내 한 장을 보여주고 탭 한 번으로 진행.
+  // 헌액 흐름은 되돌릴 수 없다 — 하드웨어 백·제스처·POP 무력화(B). done()의 replace(REPLACE)만 통과.
   const navigation = useNavigation();
   useEffect(() => {
     const onBack = () => true;
@@ -43,7 +45,22 @@ export default function Enshrine() {
     });
     return () => { sub.remove(); unsub(); };
   }, [navigation]);
-  if (newLegends.length === 0) return null;
+
+  // 헌액자 없음 — 조용한 한 장(강제 대기 없이 탭 한 번으로 다음). 스쳐 지나가듯 스킵되지 않게 명시(2026-07-08 사용자 결정).
+  if (newLegends.length === 0) {
+    return (
+      <Screen title={`${seasonYear(season - 1)} 명예의전당`}>
+        <View style={styles.emptyWrap}>
+          <Text style={styles.emptyMark}>🏛️</Text>
+          <Text style={styles.emptyLead}>이번 시즌 헌액자는 없습니다.</Text>
+          <Text style={styles.emptySub}>전당에 새겨질 은퇴 레전드가 나오지 않았습니다.</Text>
+        </View>
+        <Pressable style={styles.btn} onPress={done}>
+          <Text style={styles.btnTxt}>새 시즌 준비로 →</Text>
+        </Pressable>
+      </Screen>
+    );
+  }
 
   return (
     <Screen title={`${seasonYear(season - 1)} 명예의전당 헌액`}>
@@ -75,7 +92,7 @@ export default function Enshrine() {
         })}
       </View>
       <Pressable style={styles.btn} onPress={done}>
-        <Text style={styles.btnTxt}>새 시즌으로 →</Text>
+        <Text style={styles.btnTxt}>새 시즌 준비로 →</Text>
       </Pressable>
     </Screen>
   );
@@ -91,4 +108,8 @@ const styles = StyleSheet.create({
   lineage: { color: '#9FB0C4', fontSize: 11, marginTop: 8, paddingHorizontal: 18, textAlign: 'center' },
   btn: { marginTop: 16, alignSelf: 'center', backgroundColor: '#FFD879', paddingVertical: 12, paddingHorizontal: 32, borderRadius: 999 },
   btnTxt: { color: '#3A2A08', fontSize: 14, fontWeight: '800' },
+  emptyWrap: { alignItems: 'center', paddingVertical: 48, gap: 8 },
+  emptyMark: { fontSize: 44, marginBottom: 4 },
+  emptyLead: { color: '#FFD879', fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  emptySub: { color: '#9FB0C4', fontSize: 12.5, textAlign: 'center' },
 });

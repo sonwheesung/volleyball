@@ -22,7 +22,7 @@ export default function SeasonStart() {
   const ran = useRef(false);
 
   // 로딩(endSeason 실행) 중 하드웨어 백·POP 무력화(C) — 타이머 취소로 endSeason이 안 도는 걸 방지.
-  //   replace('/training-camp?chain=1')(REPLACE)만 통과시켜 정상 진행.
+  //   replace('/enshrine')(REPLACE)만 통과시켜 정상 진행.
   const navigation = useNavigation();
   useEffect(() => {
     const onBack = () => true;
@@ -47,8 +47,9 @@ export default function SeasonStart() {
           ran.current = true;
           try { endSeason(); } catch (e) { logError('seasonStart.endSeason', e); }
           clearInterval(iv);
-          // endSeason 직후 currentDay=0(새 로스터 확정) → 전지훈련(A3, day0 제약) → 헌액 → 대시보드.
-          router.replace('/training-camp?chain=1');
+          // endSeason 직후 currentDay=0(새 로스터 확정) → 헌액(지난 시즌 마무리) → 전지훈련(A3, day0 제약) → 개막 브리지 → 대시보드.
+          //   순서 변경(2026-07-08 사용자 결정): 과거(헌액=은퇴자 기림)를 먼저 마무리하고 미래(전훈=새 시즌 준비)를 준비한 뒤 개막.
+          router.replace('/enshrine');
         });
       });
     }, PAINT_DELAY);
