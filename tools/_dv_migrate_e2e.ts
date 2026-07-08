@@ -81,6 +81,64 @@ async function main() {
   check('fresh 리셋됨 — selectedTeamId null', r3.st.selectedTeamId === null);
   check('fresh 리셋됨 — season 0', r3.st.season === 0);
 
+  // ── ④ 현행 버전(v=SAVE_VERSION) 손상 세이브 → 상시 정규화(merge)로 수선 로드(전손 아님) ──
+  // persist는 저장 version==현행이면 migrate를 건너뛴다 → 현행 세이브 손상 시 정규화가 안 돌던 회귀(SAVE_SYSTEM §3.2).
+  //   merge 상시 sanitize로 버전 무관 수선. ①과 동일 손상 페이로드를 version=현행으로 실어 재현.
+  process.stdout.write('\n[④ 현행 버전 손상 세이브 → merge 상시 sanitize로 수선(전손 아님)]\n');
+  const { SAVE_VERSION } = await import('../store/saveMigration');
+  const corruptPayload = {
+    selectedTeamId: 't4',           // 유효 — 보존되어야(전손 아님 증명)
+    season: null, currentDay: 'x',  // 손상 scalar
+    inSeasonTx: {}, faPool: 7, archive: 'x', // 손상 array
+    staffHead: [], results: 5,      // 손상 record
+    cash: 'lots', fanScore: NaN,    // 손상 num
+    playerBase: null, rosters: null,
+    coachPool: [], trainingFocus: { primary: 'bad' },
+  };
+  const r4 = await load({ ...corruptPayload }, SAVE_VERSION);
+  check('rehydrate 무예외(전손 아님)', !r4.threw);
+  check('hydrated=true', r4.st.hydrated === true);
+  check('selectedTeamId "t4" 보존(=전손 아님)', r4.st.selectedTeamId === 't4');
+  check('season null → 0 (정규화)', r4.st.season === 0);
+  check('currentDay "x" → 0 (정규화)', r4.st.currentDay === 0);
+  check('inSeasonTx {} → [] (정규화)', Array.isArray(r4.st.inSeasonTx) && r4.st.inSeasonTx.length === 0);
+  check('faPool 7 → [] (정규화)', Array.isArray(r4.st.faPool));
+  check('archive "x" → [] (정규화)', Array.isArray(r4.st.archive));
+  check('staffHead [] → {} (정규화)', isObj(r4.st.staffHead));
+  check('results 5 → {} (정규화)', isObj(r4.st.results));
+  check('cash "lots" → 50000 (정규화)', r4.st.cash === 50000);
+  check('fanScore NaN → 50 (정규화)', r4.st.fanScore === 50);
+  check('coachPool [] → null (정규화)', r4.st.coachPool === null);
+  check('trainingFocus malformed → null (정규화)', r4.st.trainingFocus === null);
+
+  // ── ④-A/B 대조 — merge 상시 sanitize를 제거한 store(구현 이전 모사)는 같은 손상 v3 페이로드를 정규화 못 함(FAIL 감지) ──
+  //   가드 민감도 증명: "상시 경유"가 없으면 현행 버전 손상값이 그대로 state에 새어든다(migrate 스킵).
+  process.stdout.write('\n[④-A/B 대조 — merge 없는 store(상시경유 제거 모사)는 손상값 누출]\n');
+  const { create } = await import('zustand');
+  const { persist: persistMw, createJSONStorage } = await import('zustand/middleware');
+  const { migrateSave } = await import('../store/saveMigration');
+  const CTRL_KEY = 'CTRL_NOMERGE';
+  const memStorage = createJSONStorage(() => ({
+    getItem: async (k: string) => (__asyncStorageMem.has(k) ? __asyncStorageMem.get(k)! : null),
+    setItem: async (k: string, v: string) => { __asyncStorageMem.set(k, v); },
+    removeItem: async (k: string) => { __asyncStorageMem.delete(k); },
+  }));
+  const ctrl = create<Record<string, unknown>>()(
+    persistMw((): Record<string, unknown> => ({ selectedTeamId: null, season: 0, currentDay: 0, cash: 50000 }), {
+      name: CTRL_KEY, version: SAVE_VERSION,
+      migrate: (p, v) => migrateSave(p, v) as never, // migrate만 — merge 상시 sanitize 없음(구현 이전과 동일)
+      storage: memStorage as never,
+    }),
+  );
+  await ctrl.persist.rehydrate(); // 빈 스토리지 정착
+  __asyncStorageMem.set(CTRL_KEY, JSON.stringify({ state: { ...corruptPayload }, version: SAVE_VERSION }));
+  await ctrl.persist.rehydrate();
+  const cs = ctrl.getState();
+  // 대조군은 정규화가 안 돼야 정상(가드가 실제 결함을 잡는다는 증명). 하나라도 정규화됐다면 A/B 무의미 → FAIL.
+  const leaked = cs.season === null || cs.currentDay === 'x' || !Array.isArray(cs.archive);
+  check('대조군(merge 없음): 손상값 누출 확인(가드 민감)', leaked);
+  check('본 store(merge 있음)는 같은 케이스를 정규화(위 ④ PASS) — A/B 격차 존재', leaked && r4.st.season === 0);
+
   process.stdout.write(fail === 0 ? '\n✅ ALL PASS — 실제 persist 파이프라인 정상 동작\n' : `\n❌ ${fail} FAIL\n`);
   process.exit(fail === 0 ? 0 : 1);
 }

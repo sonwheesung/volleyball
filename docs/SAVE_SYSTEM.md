@@ -113,7 +113,7 @@
 
 | 변경 종류 | 자동 처리? | 메커니즘 |
 |---|---|---|
-| **① 필드 추가**(새 옵셔널 필드) | ✅ 자동·안전 | zustand 기본 merge `{...초기값, ...저장값}` — 새 필드는 저장본에 없어도 초기 기본값으로 채움. 지금까지 모든 신기능이 이 패턴 |
+| **① 필드 추가**(새 옵셔널 필드) | ✅ 자동·안전 | 커스텀 `merge`(§3.2.1) `{...초기값, ...sanitizeSave(저장값)}` — 새 필드는 저장본에 없어도 `SAVE_DEFAULTS` 기본값으로 채움(정정 2026-07-08 #1: 구 "zustand 기본 merge" → 상시 정규화 merge로 교체, 동작 동일+손상 수선 추가). 지금까지 모든 신기능이 이 패턴 |
 | **② 엔진 로직 변경**(예: OP 공격 집중) | ✅ 안전 | 파생값 미저장 → 옛 세이브를 **새 엔진으로 재계산**. 과거 확정 기록(archive·통산·명전)은 시즌 경계 박제로 보존, 미래만 새 엔진 |
 | **③ 기존 필드 모양/의미 변경**(이름·구조 재편) | ⚠ **version+migrate 필요** | 옛 값이 그대로 병합돼 새 코드가 깨질 수 있음 → §3 마이그레이션으로 변환 |
 
@@ -150,6 +150,20 @@
   리그가 감독 기본값으로 재유도). `lastFinance`는 null이거나 객체.
 - 기준 기본값은 `SAVE_DEFAULTS`(= `freshSave` + 설정 4필드) **단일 소스**.
 
+#### 3.2.1 상시 정규화 — `merge`로 버전 무관 경유 (정정 2026-07-08, 재판정 #1)
+- **문제(회귀)**: `persist`는 저장본 `version`이 **현행과 다를 때만** `migrate`를 부른다. 그래서 `sanitizeSave`가
+  `migrate` 안에만 있으면 **현행 버전(=SAVE_VERSION) 세이브가 손상돼도 정규화를 아예 안 탄다** —
+  ~~"손상 세이브는 항상 `sanitizeSave`가 수선한다"~~는 §3.2·§3.3의 전제가 **구버전에만 참**이었다.
+  실측: 동일 손상 페이로드가 v0에선 수선 로드, v3(현행)에선 비정규화 값이 그대로 state로 유입되거나
+  `onRehydrateStorage`의 커밋이 throw → §3.3 안전망이 **fresh로 전손 리셋**.
+- **수정**: `persist`에 **`merge` 옵션**을 두어 `sanitizeSave`를 **버전 무관 매 rehydrate 상시 경유**시킨다.
+  `merge(persisted, current)`는 zustand가 버전과 무관하게 항상 호출한다 →
+  `persisted == null`(신규 설치)이면 `current` 그대로(기본값 덮어쓰기 금지), 아니면 `{...current, ...sanitizeSave(persisted)}`.
+- **멱등 보장**: 구버전은 `migrate`가 먼저 `sanitizeSave`(+단계 변환)한 뒤 `merge`가 **다시** `sanitizeSave`한다.
+  `sanitizeSave`는 멱등(각 필드 코어스는 이미 정규화된 값에 무변화; `migrate`가 시드한 `focusLog`·승격한 `currentDay`도
+  정규화가 보존) → 이중 적용이 결과를 바꾸지 않는다. §3.3 fresh 리셋 폴백은 **최후 방어**로 유지.
+- 가드: `_dv_migrate_e2e.ts` ④(version=현행 손상 → 수선 로드·`selectedTeamId` 보존·정규화 적용) + ④-A/B(merge 없는 대조 store → 손상값 누출로 가드 민감도 증명).
+
 > 범위: v1은 **컨테이너 모양**(array/record/scalar)을 보장해 *크래시*를 닫는다. 배열 *항목*의 깊은 필드 검증
 > (예: 모든 archive의 awards 모양)은 소비처의 옵셔널 체이닝 + 향후 per-item 정규화로(과한 비용 회피). 깊은 접근
 > 크래시 후보(archive.awards·playerBase.contract·hallOfFame 옵셔널·interviews/benchDirectives 인덱스)는
@@ -159,6 +173,9 @@
 - `onRehydrateStorage` 본문을 **try/catch**로 감싼다. 정규화에도 불구하고 커밋이 throw하면(심층 방어):
   콘솔 경고 + **fresh 상태로 리셋** + `hydrated:true` → **크래시 루프 대신 깨끗한 새 게임**으로 진입(데이터 1개라 최악도 1인 손실).
 - migrate/sanitize는 순수 코어스(throw 없음)라 정상 경로에선 리셋이 안 일어난다.
+- **정정(2026-07-08, #1)**: 이 리셋은 이제 **버전 무관 상시 정규화(§3.2.1 `merge`) 이후**의 최후 방어다. 과거엔 현행 버전
+  손상 세이브가 정규화를 건너뛰어 여기로 곧장 떨어져 **전손**했다 → merge 상시 경유로 대부분 수선 로드되고, 리셋은 커밋이
+  여전히 throw하는 잔여 케이스에만 발동한다.
 
 ---
 
@@ -177,7 +194,7 @@
 
 ## 5. 코드 맵
 - `store/saveMigration.ts` — `SAVE_VERSION`·`SAVE_DEFAULTS`·`sanitizeSave`·`migrateSave`(신규).
-- `store/useGameStore.ts` — `persist` 옵션에 `version`·`migrate` 추가, `onRehydrateStorage` try/catch.
+- `store/useGameStore.ts` — `persist` 옵션에 `version`·`migrate`·**`merge`(§3.2.1 상시 정규화)** 추가, `onRehydrateStorage` try/catch.
 - `data/league.ts`·`data/dynamics.ts`·`data/awardSalary.ts` — 복원 커밋(`commitPlayerBase` 등). 정규화 후 입력이라 안전.
 - `tools/_dv_migrate.ts` — 마이그레이션 가드(아래).
 
@@ -195,5 +212,8 @@
   끝까지 태운다. ① 손상 타입 세이브 → 크래시 없이 live store에 sanitize 로드(+유효 필드 보존=리셋 아님 증명) ②
   유효 세이브 → 값 보존 + `playerBase` 실제 커밋(`getPlayer` 동작) ③ sanitize 통과하나 commit이 throw(playerBase
   값이 null) → try/catch가 fresh 리셋(hydrated=true·크래시 루프 없음). ③의 콘솔 경고는 안전망 작동의 의도된 출력.
+  **④(2026-07-08, #1) 현행 버전(version=SAVE_VERSION) 손상 세이브** → `merge` 상시 정규화(§3.2.1)로 수선 로드(전손 아님)·
+  `selectedTeamId` 보존·비정규 값 정규화 확인 + **④-A/B**: `merge` 없는 대조 store(구현 이전 모사)에 같은 손상 v3 페이로드를
+  넣으면 정규화 못 해 손상값이 그대로 누출됨을 단언(가드가 실제 결함을 잡는다는 민감도 증명 — 허위 오라클 차단).
 
 > 검증 루틴(README)에 `_dv_migrate`(순수)·`_dv_migrate_e2e`(실 store) 등록. 세이브 필드 추가·구조 변경 시 갱신·재실행.

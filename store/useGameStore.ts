@@ -5,7 +5,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { debouncedAsyncStorage } from './persistStorage';
-import { SAVE_VERSION, migrateSave, consumePendingClaimSeed } from './saveMigration';
+import { SAVE_VERSION, migrateSave, sanitizeSave, consumePendingClaimSeed } from './saveMigration';
 import { accrueBonds, setRelationContext } from '../data/relationships';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusTimeline,
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
@@ -46,7 +46,7 @@ import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
 import { planNextAction } from '../engine/advance';
 import { marketVal, setAwardScores, setSalaryEra } from '../data/awardSalary';
 import { setSeasonHistory, upcomingStanceOf } from '../data/leagueHistory';
-import { LEAGUE_CAP, maxSalaryFor } from '../engine/cap';
+import { LEAGUE_CAP, maxSalaryFor, isFranchise } from '../engine/cap';
 import { capPayroll } from '../data/roster';
 import { ROSTER_MAX, canRelease, inSeasonCost, severanceFee } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
@@ -78,6 +78,9 @@ interface CampEntry { season: number; playerId: string; stats?: TrainableStat[];
 /** 전지훈련 아웃박스(BACKEND §13.12 P0-4) — 서버 차감 성공 후 로컬 스탯 적용 전 크래시 복구용.
  *  서버 호출 전에 persist → 성공 시 적용+clear → 재기동 reconcile이 같은 key로 재확인 후 적용. */
 interface PendingCamp { key: string; playerId: string; course: CampCourse; season: number }
+// 재계약 결과(FA_SYSTEM §2.4) — 조용한 거부 대신 이유를 반환. 프랜차이즈는 팀캡 예외(over-team-cap 미발생).
+export type ReSignReject = 'not-on-roster' | 'foreign' | 'invalid-contract' | 'over-individual-cap' | 'over-team-cap';
+export type ReSignResult = { ok: true } | { ok: false; reason: ReSignReject };
 
 const HOF_POINTS = 4000;   // 통산 득점 명예의전당 등재 기준
 const RETIRE_NEWS_MIN_SEASONS = 8; // 작별 뉴스 대상 — 8시즌+ 뛴 노장(또는 HOF). 버스트(단명)는 무음
@@ -170,7 +173,8 @@ interface GameState {
   recordResult: (r: MatchResult) => void;
   saveWatchProgress: (fixtureId: string, idx: number) => void; // 이어보기 위치 저장
   clearWatchProgress: (fixtureId: string) => void;             // 종료·결과 확정 시 삭제
-  reSign: (playerId: string, contract: Contract) => void;
+  // 반환값(ok/reason) — 조용한 거부를 남기지 않음(호출부는 무시해도 무방, 배선은 제안). 캡 예외는 프랜차이즈만.
+  reSign: (playerId: string, contract: Contract) => ReSignResult;
   release: (playerId: string) => boolean;
   unrelease: (playerId: string) => boolean;
   signInSeason: (faId: string) => boolean;
@@ -524,21 +528,24 @@ export const useGameStore = create<GameState>()(
       reSign: (playerId, contract) => {
         // 내 로스터 선수 + 정상 계약 + **캡 인지**만 허용. 검증 없으면 음수 연봉(payroll 음수→캡 무력화)
         // 또는 거대 연봉(개인 7천만배·팀 캡 초과)으로 캡을 뚫는다(전체게임 퍼저 Defect3·확장몽키, EC-TX-04).
-        // reSign은 void라 비정상 입력은 조용히 무시(UI는 항상 정상 계약을 보냄).
+        // 반환값(ok/reason)으로 거부 이유를 알린다(조용한 무시 제거). UI는 항상 정상 계약을 보냄.
         const s = get();
         const my = s.selectedTeamId ?? '';
         const rosterIds = currentRosters()[my] ?? [];
-        if (!rosterIds.includes(playerId)) return;
+        if (!rosterIds.includes(playerId)) return { ok: false, reason: 'not-on-roster' };
         // 외인/아시아쿼터는 국내 재계약 흐름 비대상 — 트라이아웃 재지명(keepForeign)으로만 갱신(FOREIGN_SYSTEM 3장)
-        if (getPlayer(playerId)?.isForeign) return;
+        if (getPlayer(playerId)?.isForeign) return { ok: false, reason: 'foreign' };
         const { salary, years, remaining } = contract;
-        if (![salary, years, remaining].every((v) => Number.isFinite(v))) return;
-        if (salary <= 0 || years < 1 || remaining < 1 || remaining > years) return;
+        if (![salary, years, remaining].every((v) => Number.isFinite(v))) return { ok: false, reason: 'invalid-contract' };
+        if (salary <= 0 || years < 1 || remaining < 1 || remaining > years) return { ok: false, reason: 'invalid-contract' };
         // 재계약 후 내 국내 payroll이 캡 초과면 거부(다른 영입과 일관 — 캡은 하드). 외인은 캡 제외.
         const target = evolveOnDay(playerId, s.currentDay);
         // 개인 연봉 상한(MAX_SALARY 8억 / 프랜차이즈 11억) — 팀캡만 보면 단일선수 거대연봉으로 우회 가능(EC-TX-04 잔여)
-        if (target && !target.isForeign && salary > maxSalaryFor(target)) return;
-        if (target && !target.isForeign) {
+        if (target && !target.isForeign && salary > maxSalaryFor(target)) return { ok: false, reason: 'over-individual-cap' };
+        // 프랜차이즈 재계약은 팀캡 예외(FA_SYSTEM §2.4 "재계약 시 샐러리캡 일부 예외") — engine/cap.canAfford(franchise=true)와 동일 규칙.
+        //   UI(app/contracts.tsx pickOffer)는 canAfford로 이 예외를 이미 통과시키는데, store 하드캡이 다시 막아 "조용한 거부"가 나던 걸 통일한다.
+        //   개인 상한(위 maxSalaryFor=FRANCHISE_MAX 11억)은 프랜차이즈에도 여전히 적용 — 팀캡만 면제(canAfford의 "일부 예외" 의미를 정본으로 따름).
+        if (target && !target.isForeign && !isFranchise(target)) {
           // 캡 게이트 = 단일 규칙(capPayroll §7): 그날 유효 명단(방출 제외 + 시즌 중 영입 포함)에 재계약 override
           // (playerId=제안 연봉)·시즌 중 영입비까지 반영. 과거 인라인 루프는 시즌 중 영입분을 빠뜨려 캡을 저평가했다.
           const { myReleased, mySigned } = myRosterDelta(my, s.inSeasonTx, rosterIds);
@@ -547,10 +554,11 @@ export const useGameStore = create<GameState>()(
             .map((id) => evolveOnDay(id, s.currentDay))
             .filter((p): p is Player => !!p);
           const nextOverrides = { ...s.contractOverrides, [playerId]: contract };
-          if (capPayroll(effPlayers, nextOverrides, new Set(mySigned), betrayedBy) > LEAGUE_CAP) return;
+          if (capPayroll(effPlayers, nextOverrides, new Set(mySigned), betrayedBy) > LEAGUE_CAP) return { ok: false, reason: 'over-team-cap' };
         }
         set((st) => ({ contractOverrides: { ...st.contractOverrides, [playerId]: contract }, draftSelections: [] })); // 재계약=구성 변동 → 확정 픽 무효
         diag(s.season, 'transaction', `재계약 ${playerId} 연봉 ${salary}·${years}년`); // 진단 로그(§13.20 ④)
+        return { ok: true };
       },
       // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용.
       // 정원 하한(ROSTER_MIN) 게이트 — 명단이 비어 경기 불가가 되는 상태를 원천 차단.
@@ -1282,6 +1290,12 @@ export const useGameStore = create<GameState>()(
       version: SAVE_VERSION,
       // 구버전/손상 세이브 → 정규화(컨테이너 모양 강제) + 향후 breaking 변경 단계 변환. SAVE_SYSTEM.md.
       migrate: (persisted, version) => migrateSave(persisted, version) as never,
+      // 상시 정규화(SAVE_SYSTEM §3.2) — persist는 저장 version==현행일 때 migrate를 건너뛰므로, 현행 버전 세이브가
+      //   손상되면 sanitizeSave를 안 탄다(비정규화 값이 state로 유입·throw 시 전손). merge는 버전 무관 매 rehydrate 실행되니
+      //   여기서 sanitizeSave를 항상 경유시킨다. migrate 경로와 중복 적용돼도 sanitizeSave는 멱등(구세이브는 migrate가
+      //   먼저 정규화 후 merge가 재정규화 — 동일 결과). persisted 없으면(신규 설치) 현재 상태 그대로(기본값 덮어쓰기 금지).
+      merge: (persisted, current) =>
+        persisted == null ? (current as never) : ({ ...(current as object), ...sanitizeSave(persisted) } as never),
       partialize: (s) => ({
         onboarded: s.onboarded,
         supporter: s.supporter,

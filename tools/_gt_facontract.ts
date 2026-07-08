@@ -37,8 +37,13 @@ import './_gt_mock';
   { const ids = setup(); const id = firstDom(ids); G().reSign(id, C(30000, { years: 2, remaining: 5 })); check('S7 잔여>계약연수 거부', !applied(id)); }
   // S8 비프랜차이즈 8억 초과 → 무시
   { const ids = setup(); const id = ids.find((x) => { const p = evolveOnDay(x, 0); return p && !p.isForeign && !isFranchise(p); })!; G().reSign(id, C(MAX_SALARY + 10000)); check('S8 비프랜차이즈 8억 초과 거부', !applied(id), `시도 ${MAX_SALARY + 10000}>${MAX_SALARY}`); }
-  // S9 캡 가드: 국내 전원 8억 재계약해도 국내 payroll ≤ 35억(초과분 거부)
-  { const ids = setup(); let attempted = 0; for (const id of ids) { const p = evolveOnDay(id, 0); if (!p || p.isForeign) continue; attempted++; G().reSign(id, C(MAX_SALARY)); } const pay = domSalary(ids); check('S9 캡 가드(전원 8억 시도 → payroll ≤ 35억)', pay <= LEAGUE_CAP, `국내payroll ${pay} ≤ ${LEAGUE_CAP} · 시도 ${attempted}명`); }
+  // S9 캡 가드(비프랜차이즈 하드캡): 프랜차이즈 없는 팀서 국내 전원 8억 재계약해도 국내 payroll ≤ 35억(초과분 거부).
+  //   ※ 프랜차이즈 재계약은 팀캡 예외(canAfford franchise=true = 전액 면제 — FA_SYSTEM §2.4)라, 프랜차이즈가 있는 팀은
+  //     그 예외로 payroll이 캡을 넘을 수 있어 하드캡 단언 대상이 아니다(S16에서 별도 검증). 그래서 프랜차 0인 팀으로 측정.
+  { const noFr = LEAGUE.teams.find((x) => !(currentRosters()[x.id] ?? []).some((id) => { const p = evolveOnDay(id, 0); return p && isFranchise(p); }))?.id ?? my;
+    G().resetSave(); G().selectTeam(noFr); const ids = currentRosters()[noFr] ?? [];
+    let attempted = 0; for (const id of ids) { const p = evolveOnDay(id, 0); if (!p || p.isForeign) continue; attempted++; G().reSign(id, C(MAX_SALARY)); }
+    const pay = domSalary(ids); check('S9 캡 가드(비프랜차 팀 전원 8억 → payroll ≤ 35억)', pay <= LEAGUE_CAP, `팀 ${noFr} 국내payroll ${pay} ≤ ${LEAGUE_CAP} · 시도 ${attempted}명`); }
   // S10 외인은 국내 reSign 비대상(트라이아웃 전용, 2026-06-25 — FOREIGN_SYSTEM 3장·EDGE_CASES §3.9). reSign(외인)은 거부(override 미생성).
   { const ids = setup(); const fid = firstForeign(ids); if (fid) { G().reSign(fid, C(2_000_000)); check('S10 외인 reSign 거부(트라이아웃 전용)', !applied(fid), '외인은 국내 재계약 비대상 — keepForeign으로만'); } else check('S10 외인 reSign 거부', true, '로스터에 외인 없음 — skip'); }
   // S11 프랜차이즈 개인상한 11억(8억 초과 적용·11억 초과 거부) — 팀 캡과 분리하려 다른 선수를 최저로 재계약해 캡 여유 확보
@@ -52,6 +57,36 @@ import './_gt_mock';
       const overRej = G().contractOverrides[fr]?.salary === MAX_SALARY + 10000;
       check('S11 프랜차이즈 개인상한(8억 초과 적용·11억 초과 거부)', maxSalaryFor(frP) === FRANCHISE_MAX && above && overRej, `9억적용=${above}·12억거부=${overRej}`);
     } else { const dp = evolveOnDay(firstDom(ids), 0)!; check('S11 프랜차이즈(maxSalaryFor 단위)', maxSalaryFor(dp) === MAX_SALARY && FRANCHISE_MAX > MAX_SALARY, '로스터 프랜차이즈 없음 — 비프랜차 상한=8억·프랜차 상한 11억 확인'); } }
+
+  // ── S16/S17 프랜차이즈 팀캡 예외 A/B(FA_SYSTEM §2.4) — reSign 팀캡 게이트에 isFranchise 예외 도입 ──
+  //   canAfford(franchise=true)=전액 면제와 통일. UI(app/contracts.tsx)는 통과시키는데 store가 하드캡으로 조용히 거부하던 회귀 수정.
+  //   A(프랜차)=팀캡 초과 재계약 적용 · B(비프랜차)=동일 상황 거부. 둘 다 참이어야 예외가 "프랜차이즈에만" 적용됨을 증명(허위 오라클 방지).
+  { // 프랜차이즈 1명+ & 비프랜차 국내 1명+ 팀
+    const t = LEAGUE.teams.find((x) => { const r = currentRosters()[x.id] ?? [];
+      return r.some((id) => { const p = evolveOnDay(id, 0); return p && isFranchise(p); }) && r.some((id) => { const p = evolveOnDay(id, 0); return p && !p.isForeign && !isFranchise(p); }); });
+    if (t) {
+      const tid = t.id;
+      const loadT = () => { G().resetSave(); G().selectTeam(tid); return currentRosters()[tid] ?? []; };
+      // 비프랜차 국내만 8억으로 채워 팀캡을 가득(프랜차/외인/대상 제외 — 프랜차 예외 loophole로 캡이 부푸는 것 방지).
+      const fillNonFr = (exclude: string) => { for (const id of currentRosters()[tid] ?? []) { const p = evolveOnDay(id, 0); if (!p || p.isForeign || isFranchise(p) || id === exclude) continue; G().reSign(id, C(MAX_SALARY)); } };
+      // S16(A): 프랜차이즈 — 팀캡을 넘기는 금액(개인상한 11억 이내)으로 재계약 → 적용(예외).
+      { const ids = loadT(); const fr = ids.find((id) => { const p = evolveOnDay(id, 0); return p && isFranchise(p); })!;
+        const frP = evolveOnDay(fr, 0)!; fillNonFr(fr);
+        const before = domSalary(ids); // fr 현 연봉 포함
+        const wouldExceed = before - frP.contract.salary + FRANCHISE_MAX > LEAGUE_CAP;
+        G().reSign(fr, C(FRANCHISE_MAX));
+        const applied16 = G().contractOverrides[fr]?.salary === FRANCHISE_MAX;
+        check('S16 프랜차이즈 팀캡 초과 재계약 적용(예외)', wouldExceed && applied16, `팀캡초과=${wouldExceed}·적용=${applied16}`); }
+      // S17(B): 비프랜차이즈 — 동일 팀캡 초과 상황서 8억 재계약 → 거부(하드캡 유지).
+      { const ids = loadT(); const nf = ids.find((id) => { const p = evolveOnDay(id, 0); return p && !p.isForeign && !isFranchise(p); })!;
+        const nfP = evolveOnDay(nf, 0)!; fillNonFr(nf);
+        const before = domSalary(ids);
+        const wouldExceed = before - nfP.contract.salary + MAX_SALARY > LEAGUE_CAP;
+        G().reSign(nf, C(MAX_SALARY));
+        const rejected17 = G().contractOverrides[nf]?.salary !== MAX_SALARY;
+        check('S17 비프랜차이즈 팀캡 초과 재계약 거부(대조)', wouldExceed && rejected17, `팀캡초과=${wouldExceed}·거부=${rejected17}`); }
+    } else { check('S16/S17 프랜차이즈 팀캡 예외', true, '적격 팀 없음 — skip'); }
+  }
 
   console.log('\n═══ FA 영입 시나리오 ═══');
   // S12 signFA/unsignFA 큐
