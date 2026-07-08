@@ -23,7 +23,7 @@
 | [DOC_DISCIPLINE](./DOC_DISCIPLINE.md) | 문서 작업법 — 결정 先문서·취소선 정정 보존·`*_SYSTEM.md`·색인 유지·날짜/통계 절대화·새 시스템 체크리스트 | (전 docs) |
 | [TRAINING_SYSTEM](./TRAINING_SYSTEM.md) | 훈련·성장·노쇠·재능·경기경험 성장 | `engine/training.ts`, `aging.ts`, `experience.ts`, `progression.ts` |
 | [SALARY_SYSTEM](./SALARY_SYSTEM.md) | 개인 생산 귀속·시장가치·계약 고착·루키스케일 | `engine/salary.ts`, `production.ts`, `data/production.ts` |
-| [FA_SYSTEM](./FA_SYSTEM.md) | FA(등급·보상·보호명단·프랜차이즈)·드래프트·세대교체·캡·AI GM | `engine/faMarket.ts`, `compensation.ts`, `cap.ts`, `draft.ts`, `aiGM.ts`, `rollover.ts`, `retire.ts` |
+| [FA_SYSTEM](./FA_SYSTEM.md) | FA(등급·보상·보호명단·프랜차이즈)·드래프트·세대교체·캡·AI GM. **📋 설계 확정·미구현(2026-07-09)**: 가변 로스터(계약 상한 20·드래프트 예외, §1.5)·자동충원 floor≈12(§1.6)·attrition 강화(§1.7)·대체 FA 필러 안전망 4층(§2.9)·KOVO식 드래프트 전면 개정(유망주 발굴·4라운드·패스·순위역순 추첨 35/30/20/8/4/2/1, §3.0)·검증계획(§8.1) | `engine/faMarket.ts`, `compensation.ts`, `cap.ts`, `draft.ts`, `aiGM.ts`, `rollover.ts`, `retire.ts` |
 | [SEASON_SYSTEM](./SEASON_SYSTEM.md) | 시즌 진행·일정·순위·포스트시즌·오프시즌 오케스트레이션 | `engine/season.ts`, `playoffs.ts`, `data/standings.ts`, `store/useGameStore.ts` |
 | [STAFF_SYSTEM](./STAFF_SYSTEM.md) | 스태프 계약(감독·전문코치·스카우터)·예산·훈련부스트·드래프트 안개 | `engine/staff.ts`, `data/league.ts`, `app/staff.tsx`, `app/draft.tsx` |
 | [AWARDS_SYSTEM](./AWARDS_SYSTEM.md) | 시상식(MVP·신인상·기량발전상·기록왕·베스트7·라운드MVP) | `engine/awards.ts`, `data/awards.ts` |
