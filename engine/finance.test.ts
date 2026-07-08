@@ -2,9 +2,9 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { sponsorBase, sponsorBonus, turnoutRate, gateRevenue, merchRevenue, settleSeason, applyNet, sponsorThrift } from './finance';
 
-test('모기업 베이스: 팀별 차등 24.3~32.3억, 결정론', () => {
+test('모기업 베이스: 팀별 차등 22.5~30.5억, 결정론', () => {
   const a = sponsorBase('t1');
-  assert.ok(a >= 243000 && a <= 323000); // 2026-06-28 FINANCE 2.0 Stage1: v2 체력 재조율(250000→243000)
+  assert.ok(a >= 225000 && a <= 305000); // 2026-07-08 EC-FN-03 이중과금 제거 재보정(243000→225000, 다중유니버스 100×8 좌절 27%·보전 12%·잔고 17.5억 복원)
 
   assert.equal(sponsorBase('t1'), a);
   assert.notEqual(sponsorBase('t1'), sponsorBase('t2')); // 모기업이 다르면 지갑도 다르다(높은 확률)

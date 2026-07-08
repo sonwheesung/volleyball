@@ -1125,12 +1125,15 @@ export const useGameStore = create<GameState>()(
         const expelledSet = new Set(ctx.expelled.map((e) => e.playerId)); // 영구제명자는 FA 풀로도 안 감(리그 소멸)
         const nextFaPool = Object.keys(snapshot).filter((id) => !rosteredNext.has(id) && !retiredSet.has(id) && !expelledSet.has(id) && !snapshot[id].isForeign); // 외인은 FA 풀 비대상(트라이아웃 전용)
 
-        // FA 영입 지출 차감 — 내 새 명단에 합류한 타 구단 출신(드래프트·신인 제외)의 첫 해 연봉 + A/B 보상금
-        let faSpend = ctx.compCash; // FA 보상금(A 200%·B 100% × 직전연봉, FA_SYSTEM 2.2) — 운영 자금에서
+        // FA 영입 지출 차감 — A/B 보상금만(운영 자금). 몸값(첫해 salary)은 여기서 빼지 않는다.
+        //   [이중과금 수정, EC-FN-03] 영입 FA의 첫해 몸값은 다음 시즌 myPayroll(finalR 전원 salary)이
+        //   단일 채널로 전액 부과한다. faSpend에도 더하면 첫해가 payroll+faSpend 이중 차감(N년 계약=salary×(N+1)).
+        //   → 국내·외인 공통으로 salary 가산을 제거. faSpend = compCash(보상금)만. offseasonSigns는 카운트만.
+        let faSpend = ctx.compCash; // FA 보상금(A 200%·B 100% × 직전연봉, FA_SYSTEM 2.2) — 유일한 오프시즌 몸값-외 비용
         let offseasonSigns = 0;
         for (const id of filled.rosters[my] ?? []) {
           const prev = ctx.prevTeamOf[id];
-          if (prev && prev !== my) { faSpend += snapshot[id]?.contract.salary ?? 0; offseasonSigns += 1; } // 영입 수(업적 careerLog)
+          if (prev && prev !== my) offseasonSigns += 1; // 영입 수(업적 careerLog) — 카운트만, salary 가산과 분리
         }
 
         // FA 이적·방출 연표(뉴스 슬라이스3·4) — 오프시즌 선수 이동. 최근 200건.
