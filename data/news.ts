@@ -686,7 +686,7 @@ export function buildNewsFeed(
       }
     };
     if (p.po) {
-      gameNews(p.po, '준플레이오프', PO_SLOTS, rv.poRevealed, 'po');
+      gameNews(p.po, '플레이오프', PO_SLOTS, rv.poRevealed, 'po');
       if (rv.poDone) { // 시리즈 확정 — 결승 대진 확정 기사
         const w = p.po.winnerId;
         const wWins = p.po.series.hiWon ? p.po.series.hiWins : p.po.series.loWins;
@@ -696,7 +696,7 @@ export function buildNewsFeed(
           (t) => `${t}, 챔피언결정전 진출 — 결승 대진 확정`,
           (t) => `결승 대진 확정 — ${teamName(p.seeds[0])} vs ${t}`,
         ], ckey, teamName(w)), true, w,
-          body3('playoff', ckey, `${teamName(w)}이(가) 준플레이오프 시리즈를 ${wWins}-${lWins}로 끝내고 챔피언결정전에 진출했다. 정규리그 1위 ${teamName(p.seeds[0])}와(과) 왕좌를 다툰다.`),
+          body3('playoff', ckey, `${teamName(w)}이(가) 플레이오프 시리즈를 ${wWins}-${lWins}로 끝내고 챔피언결정전에 진출했다. 정규리그 1위 ${teamName(p.seeds[0])}와(과) 왕좌를 다툰다.`),
           'po:clinch', PO_SLOTS[p.po.series.games.length - 1]);
       }
     }

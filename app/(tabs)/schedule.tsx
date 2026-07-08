@@ -84,12 +84,12 @@ function ScheduleInner() {
   const showPlayoff = !!clinch && (clinch.state !== 'contention' || playedFrac >= 0.6);
   const clinchView = showPlayoff && clinch
     ? clinch.state === 'clinched'
-      ? { text: `🎉 플레이오프 진출 확정 · 현재 ${clinch.rank}위`, color: theme.good }
+      ? { text: `🎉 포스트시즌 진출 확정 · 현재 ${clinch.rank}위`, color: theme.good }
       : clinch.state === 'eliminated'
-        ? { text: `플레이오프 탈락 · 현재 ${clinch.rank}위`, color: theme.bad }
+        ? { text: `포스트시즌 탈락 · 현재 ${clinch.rank}위`, color: theme.bad }
         : clinch.magic != null
-          ? { text: `플레이오프 매직넘버 ${clinch.magic} · 현재 ${clinch.rank}위`, color: theme.accent }
-          : { text: `플레이오프 경합 중 · 현재 ${clinch.rank}위`, color: theme.accent }
+          ? { text: `포스트시즌 매직넘버 ${clinch.magic} · 현재 ${clinch.rank}위`, color: theme.accent }
+          : { text: `포스트시즌 경합 중 · 현재 ${clinch.rank}위`, color: theme.accent }
     : null;
 
   const onAdvance = () => {
@@ -143,14 +143,17 @@ function ScheduleInner() {
 
   return (
     <Screen title={`${seasonYear(season)} 일정 · ${season + 1}번째 시즌`}>
-      <Card accent={theme.sky}>
-        <Row>
-          <IconLabel icon="calendar-outline" color={theme.sky}>정규리그 진행</IconLabel>
-          <Text style={{ color: theme.text, fontWeight: '700' }}>
-            {playedCount} / {totalMatches} 경기
-          </Text>
-        </Row>
-      </Card>
+      {/* 포스트시즌 구간(§5.1.2)엔 스테일 정규 정보(진행 164/164·clinch)를 숨겨 브라켓/다음경기를 최상단으로. */}
+      {postseason ? null : (
+        <Card accent={theme.sky}>
+          <Row>
+            <IconLabel icon="calendar-outline" color={theme.sky}>정규리그 진행</IconLabel>
+            <Text style={{ color: theme.text, fontWeight: '700' }}>
+              {playedCount} / {totalMatches} 경기
+            </Text>
+          </Row>
+        </Card>
+      )}
 
       {/* 전지훈련 — 오프시즌(currentDay 0, 미완료)엔 이것만(다음경기 숨김). 반드시 전지훈련을 거쳐야 개막전이 열린다:
           "하러 가기"로 캠프 진입 → 캠프 화면에서 "마치고 개막전으로" → campDone → 다음경기 노출(2026-07-04 사용자 요청). */}
@@ -165,10 +168,10 @@ function ScheduleInner() {
         </SpotlightTarget>
       ) : null}
 
-      {clinchView ? (
+      {clinchView && !postseason ? (
         <Card accent={theme.accent}>
           <Row>
-            <IconLabel icon="podium-outline" color={theme.accent}>플레이오프</IconLabel>
+            <IconLabel icon="podium-outline" color={theme.accent}>포스트시즌</IconLabel>
             <Text style={{ color: clinchView.color, fontWeight: '700' }}>{clinchView.text}</Text>
           </Row>
         </Card>
@@ -245,7 +248,7 @@ function ScheduleInner() {
               {next ? (
                 <Card accent={theme.sky}>
                   <IconLabel icon="calendar-outline" color={theme.sky}>
-                    {next.round === 'po' ? '준플레이오프' : '챔피언결정전'} {next.g + 1}차전 · {formatDate(dateForDay(next.day))}
+                    {next.round === 'po' ? '플레이오프' : '챔피언결정전'} {next.g + 1}차전 · {formatDate(dateForDay(next.day))}
                   </IconLabel>
                   <Row><Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>{name(next.hiId)} vs {name(next.loId)}</Text></Row>
                   {next.mine ? (

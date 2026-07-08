@@ -11,6 +11,7 @@ import { resetLeagueBase } from '../data/league';
 import { buildPlayoffs } from '../data/playoffs';
 import {
   postseasonReveal, revealedChampionId, postseasonSchedule, nextPoGame, buildPlayoffBox, inPostseason,
+  myPostseasonCalendarRows,
 } from '../data/postseason';
 import { currentSeasonAwards } from '../data/awards';
 import { buildNewsFeed, newsKey } from '../data/news';
@@ -186,6 +187,42 @@ check(finalsMvpLeak === 0, '시상 게이트: 결승 확정 전 currentSeasonAwa
   let champOk = true;
   for (let s = 0; s < 40; s++) { const p = buildPlayoffs(s); if (revealedChampionId(p, POSTSEASON_LAST_DAY) !== p.championId) champOk = false; }
   check(champOk, '구플로우 대비 champion 바이트 동일(전 슬롯 진행 후 = buildPlayoffs.championId)');
+}
+
+// ── ⑧ 우리 팀 일정 포스트시즌 편입(app/calendar.tsx, SEASON §5.1.3) ──────────────
+// teamScheduleEntries(정규만)의 구조적 누락을 캘린더가 myPostseasonCalendarRows로 메운다. 이 파생 로직을 검증:
+//   진출 3팀은 각 ≥1경기 편입 · 첫 플옵 전(day165)엔 치른 경기 0(미래 결과 누수 0) · 미래는 다음 1경기만(브라켓 스포일러 0) · 미진출 0행.
+{
+  let entered = 0, rowsOk = true, spoilerOk = true, nextOnlyOk = true, resultOk = true;
+  for (let s = 0; s < 40; s++) {
+    const p = buildPlayoffs(s);
+    if (p.seeds.length < 3) continue;
+    for (const my of p.seeds) { // 진출 3팀
+      entered++;
+      // 포스트시즌 마지막 날 = 내 팀 전 경기 공개
+      const rowsEnd = myPostseasonCalendarRows(p, my, POSTSEASON_LAST_DAY);
+      if (rowsEnd.length === 0) rowsOk = false; // 진출팀은 최소 1경기
+      // 편입 행의 세트스코어가 실제 시리즈 게임과 일치(내 팀 시점) — 결과 정합
+      for (const r of rowsEnd) {
+        const m = r.round === 'po' ? p.po! : p.final!;
+        const g = m.series.games[r.g];
+        const iAmHi = m.hiId === my;
+        const myS = iAmHi ? g.hiSets : g.loSets, oppS = iAmHi ? g.loSets : g.hiSets;
+        if (r.played && (r.myS !== myS || r.oppS !== oppS || r.win !== (myS > oppS) || r.isHome !== iAmHi)) resultOk = false;
+      }
+      // 첫 플옵 경기(167) 전날 = day165: 치른 경기 0, 예정(미래)은 다음 1경기만
+      const rowsStart = myPostseasonCalendarRows(p, my, SEASON_DAYS + 1);
+      if (rowsStart.some((r) => r.played)) spoilerOk = false;
+      if (rowsStart.filter((r) => !r.played).length > 1) nextOnlyOk = false;
+    }
+  }
+  check(rowsOk && entered > 0, `우리 팀 일정: 포스트시즌 진출 3팀 각 최소 1경기 편입(${entered} 팀·시즌)`);
+  check(resultOk, '우리 팀 일정: 편입 행 세트스코어·홈/원정·승패 = 실제 시리즈 게임(내 팀 시점) 일치');
+  check(spoilerOk, '우리 팀 일정: 첫 플옵 전(day165)엔 치른 경기 0(미래 결과 누수 0)');
+  check(nextOnlyOk, '우리 팀 일정: 미래 경기는 "다음 1경기"만(더 깊은 브라켓 스포일러 0)');
+  // 미진출(비참가) 팀 = 0행
+  const p0 = buildPlayoffs(0);
+  check(myPostseasonCalendarRows(p0, '__notInPlayoffs__', POSTSEASON_LAST_DAY).length === 0, '우리 팀 일정: 미진출 팀은 포스트시즌 경기 0행');
 }
 
 // ── A/B 자가검증: "전부 공개" 버그 함수가 스포일러를 낸다 → 검사기 이빨 증명 ──

@@ -95,6 +95,47 @@ export function nextPoGame(p: Playoffs, currentDay: number, myTeamId: string | n
   return null;
 }
 
+// ── 우리 팀 일정(캘린더) 편입 (SEASON_SYSTEM §5.1.3) ─────────────────────────────
+// teamScheduleEntries(engine/season)는 정규 SEASON만 순회 → 내 팀 플옵 경기가 "우리 팀 일정"에 구조적으로 안 나온다.
+// 캘린더가 정규 엔트리 뒤에 이 함수의 행을 append. 스포일러: 치른 경기(결과) + 다음 1경기(예정)만 — 더 깊은 브라켓·미래 결과 누수 0.
+export interface PoCalendarRow {
+  round: PoRound;
+  g: number;
+  day: number;
+  oppId: string;
+  isHome: boolean;   // hi=홈(§5.1) → 내가 상위 시드면 홈
+  played: boolean;   // day <= currentDay(치른·공개)
+  myS: number;       // 내 세트(미공개면 0)
+  oppS: number;      // 상대 세트(미공개면 0)
+  win: boolean;      // 치른 경기의 승리 여부
+  isNext: boolean;   // 다음 1경기(예정)
+}
+
+/** 내 팀 포스트시즌 경기 행 — 치른 게임(결과) + 다음 1경기(예정). 진출 못 하면 []. */
+export function myPostseasonCalendarRows(p: Playoffs, myTeamId: string, currentDay: number): PoCalendarRow[] {
+  const mine = postseasonSchedule(p, myTeamId).filter((s) => s.mine);
+  const next = mine.find((s) => s.day > currentDay); // 첫 미래 경기(브라켓 스포일러 방지 — 이 1경기까지만)
+  const rows: PoCalendarRow[] = [];
+  for (const s of mine) {
+    const future = s.day > currentDay;
+    if (future && s !== next) continue; // 미래는 다음 1경기만
+    const m = s.round === 'po' ? p.po : p.final;
+    if (!m) continue;
+    const game = m.series.games[s.g];
+    const iAmHi = s.hiId === myTeamId;
+    const myS = iAmHi ? game.hiSets : game.loSets;
+    const oppS = iAmHi ? game.loSets : game.hiSets;
+    rows.push({
+      round: s.round, g: s.g, day: s.day,
+      oppId: iAmHi ? s.loId : s.hiId, isHome: iAmHi,
+      played: !future,
+      myS: future ? 0 : myS, oppS: future ? 0 : oppS, // 미래 결과는 노출 안 함
+      win: !future && myS > oppS, isNext: s === next,
+    });
+  }
+  return rows;
+}
+
 // ── 보드 재생 전용 박스 빌더(playSeries 바이트 공유) ────────────────────────────
 // 일반 buildMatchBox(dayIndex 기반 restedOnDay·부상)를 쓰면 점수판과 다른 경기가 재생된다(금지). 이 함수는
 // playSeries의 게임 g 호출과 동일한 입력(164 동결 스쿼드·HI_EDGE·hi=홈·base+g*1009 시드·rest 미적용)을 만든다.

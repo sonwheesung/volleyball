@@ -76,8 +76,8 @@ export function buildMatchBanners(homeId: string, awayId: string, dayIndex: numb
     const cb = teamClinch(teamId, Math.max(0, dayIndex - 1))?.state;
     const ca = teamClinch(teamId, dayIndex)?.state;
     const name = shortTeamName(teamId);
-    if (cb !== 'clinched' && ca === 'clinched') out.push({ kind: 'clinch', tint: CLINCH_TINT, icon: 'checkmark-circle', mine, title: `${name} 플레이오프 확정!` });
-    else if (cb !== 'eliminated' && ca === 'eliminated') out.push({ kind: 'eliminated', tint: ELIM_TINT, icon: 'close-circle', mine, title: `${name} 플레이오프 탈락` });
+    if (cb !== 'clinched' && ca === 'clinched') out.push({ kind: 'clinch', tint: CLINCH_TINT, icon: 'checkmark-circle', mine, title: `${name} 포스트시즌 확정!` });
+    else if (cb !== 'eliminated' && ca === 'eliminated') out.push({ kind: 'eliminated', tint: ELIM_TINT, icon: 'close-circle', mine, title: `${name} 포스트시즌 탈락` });
   }
 
   // 내 팀 사건 먼저, 그다음 우승(가장 특별) → 트리플 → 기록 → 확정/탈락 순

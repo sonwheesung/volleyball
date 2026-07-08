@@ -11,13 +11,15 @@ import { join } from 'path';
 
 const log = (m: string) => process.stdout.write(m + '\n');
 
-// 명사형 금지어(부분문자열 안전 — 정상 단어의 조각이 아님)
-const NOUN_DENY: { term: string; why: string }[] = [
+// 명사형 금지어. 기본은 부분문자열(정상 단어의 조각이 아닌 것). `re` 있으면 경계 인식(정상어 오탐 회피).
+//   '라켓'은 '브라켓(bracket)'의 조각이라 부분문자열이면 오탐 → 앞이 '브'가 아닐 때만(negative lookbehind).
+const NOUN_DENY: { term: string; why: string; re?: RegExp }[] = [
   { term: '사나이', why: '남성형(여자부)' },
   { term: '사내대장부', why: '남성형' },
-  { term: '라켓', why: '배구에 없는 도구(타 종목)' },
+  { term: '라켓', why: '배구에 없는 도구(타 종목)', re: /(?<!브)라켓/ },
   { term: '홈런', why: '야구 용어' },
   { term: '골키퍼', why: '축구 용어' },
+  { term: '준플레이오프', why: '포스트시즌 명칭 통일(SEASON §5.1.1 — 오기, 2위vs3위 시리즈명은 "플레이오프")' },
 ];
 // 남성 3인칭 대명사 — 경계(줄시작/공백/따옴표/괄호) 뒤일 때만(리그의·리그가 오탐 회피). 여자부=그녀 또는 무대명사.
 const PRONOUN_RE = /(?:^|[\s"'(《「【>·\-—])(그가|그의)(?=[\s.,!?)"'」】》:]|$)/;
@@ -36,7 +38,7 @@ function walk(dir: string, out: string[]): void {
 
 function scanLine(line: string): string[] {
   const hits: string[] = [];
-  for (const d of NOUN_DENY) if (line.includes(d.term)) hits.push(`${d.term}(${d.why})`);
+  for (const d of NOUN_DENY) if (d.re ? d.re.test(line) : line.includes(d.term)) hits.push(`${d.term}(${d.why})`);
   const m = PRONOUN_RE.exec(line);
   if (m) hits.push(`${m[1]}(남성 대명사)`);
   return hits;
@@ -55,7 +57,7 @@ for (const f of files) {
 
 // ── A/B 자가검증(매처 민감도) ──
 const dirty = '결승의 사나이가 라켓을 들고, 그가 외쳤다';
-const clean = '리그가 주목한 그 선수의 활약 — 리그의 역사가 된다';
+const clean = '리그가 주목한 그 선수의 활약 — 리그의 역사가 된다. 포스트시즌 브라켓 대진 확정';
 const dirtyHits = scanLine(dirty);           // ≥3(사나이·라켓·그가) 잡혀야
 const cleanHits = scanLine(clean);           // 0(리그가·리그의·그 선수의 오탐 없어야)
 

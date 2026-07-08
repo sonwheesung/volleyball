@@ -6,7 +6,10 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen, theme, themedStyles } from '../components/Screen';
 import { SEASON, getTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
+import { buildPlayoffs } from '../data/playoffs';
+import { myPostseasonCalendarRows } from '../data/postseason';
 import { teamScheduleEntries } from '../engine/season';
+import { SEASON_DAYS } from '../engine/calendar';
 import { planNextAction } from '../engine/advance';
 import { dateForDay, formatDate } from '../lib/calendar';
 import { useGameStore } from '../store/useGameStore';
@@ -16,8 +19,14 @@ export default function CalendarScreen() {
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const results = useGameStore((s) => s.results);
   const season = useGameStore((s) => s.season);
+  const currentDay = useGameStore((s) => s.currentDay);
 
   const entries = useMemo(() => teamScheduleEntries(SEASON, teamId), [teamId]);
+  // 포스트시즌 편입(§5.1.3) — 정규 종료(164) 후 내 팀 플옵 경기를 정규 엔트리 뒤에 append. 미진출 시즌은 [].
+  const poRows = useMemo(
+    () => (currentDay > SEASON_DAYS ? myPostseasonCalendarRows(buildPlayoffs(season), teamId, currentDay) : []),
+    [season, teamId, currentDay],
+  );
   const action = planNextAction(SEASON, teamId, results);
   const nextId = action.kind === 'match' ? action.fixture.id : null;
 
@@ -49,6 +58,32 @@ export default function CalendarScreen() {
             </Pressable>
           );
         })}
+        {/* 포스트시즌(§5.1.3) — 정규 엔트리 뒤에 내 팀 플옵 경기(플레이오프/챔피언결정전). 탭하면 보드 재생/관전. */}
+        {poRows.length > 0 ? (
+          <View style={[styles.row, styles.divider, styles.poHeader]}>
+            <Text style={styles.poHeaderTxt}>포스트시즌</Text>
+          </View>
+        ) : null}
+        {poRows.map((r) => {
+          const oppName = getTeam(r.oppId)?.name ?? '';
+          const roundLabel = r.round === 'po' ? '플레이오프' : '챔피언결정전';
+          return (
+            <Pressable key={`po:${r.round}:${r.g}`}
+              onPress={() => router.push(`/match/playoff?po=${r.round}&g=${r.g}&season=${season}`)}
+              style={({ pressed }) => [styles.row, styles.divider, r.isNext && styles.nextRow, pressed ? { opacity: 0.6 } : null]}>
+              <Text style={styles.date} numberOfLines={1}>{formatDate(dateForDay(r.day))}</Text>
+              <View style={[styles.ha, { backgroundColor: (r.isHome ? theme.sky : theme.warn) + '22' }]}>
+                <Text style={[styles.haTxt, { color: r.isHome ? theme.sky : theme.warn }]}>{r.isHome ? '홈' : '원정'}</Text>
+              </View>
+              <Text style={styles.opp} numberOfLines={1}>{roundLabel} · {oppName}</Text>
+              {r.played ? (
+                <Text style={[styles.score, r.win ? styles.win : styles.lose]}>{r.win ? '승' : '패'} {r.myS}:{r.oppS}</Text>
+              ) : (
+                <Text style={[styles.pending, r.isNext && styles.next]}>{r.isNext ? '다음 경기' : '예정'}</Text>
+              )}
+            </Pressable>
+          );
+        })}
       </View>
     </Screen>
   );
@@ -67,4 +102,6 @@ const styles = themedStyles(() => StyleSheet.create({
   win: { color: theme.good }, lose: { color: theme.bad },
   pending: { color: theme.muted, fontSize: 13, fontWeight: '700', minWidth: 56, textAlign: 'right' },
   next: { color: theme.accent, fontWeight: '800' },
+  poHeader: { backgroundColor: theme.gold + '14', paddingVertical: 7 },
+  poHeaderTxt: { color: theme.gold, fontSize: 12.5, fontWeight: '800', letterSpacing: 0.5 },
 }));

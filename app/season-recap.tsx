@@ -85,7 +85,7 @@ function RecapInner() {
         case 'integrated': return { text: '통합 우승 🏆', color: theme.gold };
         case 'champion': return { text: '우승 🏆', color: theme.gold };
         case 'runnerUp': return { text: `챔피언결정전 준우승 (${outcome.myWins}-${outcome.myLosses})`, color: theme.accent };
-        case 'poOut': return { text: `플레이오프 탈락 (준PO ${outcome.myWins}-${outcome.myLosses})`, color: theme.text };
+        case 'poOut': return { text: `플레이오프 탈락 (${outcome.myWins}-${outcome.myLosses})`, color: theme.text };
         case 'missed': return { text: `포스트시즌 진출 실패 · ${myRank}위`, color: theme.text };
       }
     }
