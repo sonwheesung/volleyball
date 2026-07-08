@@ -112,12 +112,22 @@
 - sim-league parity 회귀(전 구단 AI 영입 후 균형 유지).
 - 무결성: 로스터 ≤ 18·캡 준수·과거 결과 고정.
 
-## 7. 캡 계산 단일화 — `capPayroll` (2026-07-07, 5-사이트 정합)
+## 7. 캡 계산 단일화 — `capPayroll` (2026-07-07, ~~5~~ **6**-사이트 정합)
 > **문제**: "캡에 잡히는 국내 연봉 합"을 다섯 곳이 **서로 다르게** 셈했다 — ① `reSign` 게이트(override 반영·시즌중
 > 영입 무시) ② `signInSeason` 게이트(override 미반영·시즌중 영입은 `inSeasonCost`) ③ `transactions.tsx` capLeft 표시
 > (override 미반영·시즌중 영입을 base 연봉으로) ④ 대시보드 총연봉(override 반영·시즌중 영입 무시·정적 명단) ⑤
 > `data/roster.ts domesticPayroll`(base 연봉 원시 합). ③이 `②` 게이트보다 느슨해 **"캡 여유 있다" 표시 후 영입이 캡초과로
 > 거부**되는 불일치가 났고, ①④가 시즌중 영입비를 캡에 안 실어 **게이트가 셌다가 약했다가** 했다.
+>
+> **정정(2026-07-08, ⑥ 추가)**: `app/contracts.tsx` **`pickOffer`(재계약 오퍼 사전체크)** 가 위 5-사이트 단일화에서
+> **누락**돼 있었다 — `canAfford(payroll(getEvolvedTeamPlayers) − p.salary, offer)` 로 셈해 `getEvolvedTeamPlayers`(시즌초
+> 커밋 명단)의 base 합만 봤고 **시즌 중 영입 선수의 취득가(`inSeasonCost`)를 빠뜨렸다**. 그래서 ① `reSign` 게이트(cd3d99a에서
+> `capPayroll`+franchise 예외+`ReSignResult` 반환으로 강화됨)보다 **느슨** → 캡 근접 + 시즌 중 영입 보유 시 UI는 "여유 있음"으로
+> 통과시키고 store가 **조용히 거부**(③과 같은 결의 허위 여유). → ⑥ `pickOffer` 도 store와 **동일한 `capPayroll` 경로**
+> (`rosterIdsOnDay` 명단 · `inSeasonCost` · 배신 웃돈 · 개인 상한 `maxSalaryFor` · **프랜차이즈 팀캡 예외**)로 교체해 6번째
+> 사이트로 편입. 더해 `pickOffer→reSign` 호출부가 `ReSignResult({ok,reason})` 를 확인해 실패 시 사유를 커스텀 모달
+> (`showAlert`, UI-21)로 노출 — **조용한 거부 완전 제거**. 가드 `tools/_dv_capprecheck.ts`(새 사전체크==store 게이트 ·
+> 구 사전체크와 flip A/B).
 
 - **정본 규칙(`data/roster.ts capPayroll`)** — 국내 선수만(외인은 1년 트라이아웃 별개 지갑, 캡 제외 — FOREIGN_SYSTEM 2장):
   - **시즌 중 영입 선수**(내 팀 `inSeasonTx.kind==='sign'`): **`inSeasonCost(marketVal, betrayed)`** (배신 웃돈 ×1.5 포함 —
@@ -132,5 +142,6 @@
   - ② `signInSeason`: 기존 로스터를 override 인지로(과거 base 연봉) → 재계약으로 오른 연봉이 잡혀 **더 엄격**.
   - ③ `transactions.tsx` capLeft: 시즌 영입을 `inSeasonCost`+override로(과거 base·override미반영) → **② 게이트와 정확히 일치**(허위 여유 제거).
   - ④ 대시보드 총연봉: 그날 명단(시즌 영입 `inSeasonCost` 포함)으로 → **실제 캡 부담을 진실되게** 표시.
-- **검증**: 동일 입력에서 네 사이트가 같은 값 반환(임시 리프로) + 결정론·sim-league parity 불변. 게이트 강화는 캡 초과
-  영입/재계약을 더 막을 뿐 정당 케이스는 불변.
+  - ⑥ `contracts.tsx` `pickOffer`: 시즌 영입비(`inSeasonCost`)+override+프랜차이즈 예외를 반영 → **① `reSign` 게이트와 정확히 일치**(허위 여유·조용한 거부 제거).
+- **검증**: 동일 입력에서 ~~네~~ **여섯** 사이트가 같은 값 반환(임시 리프로) + 결정론·sim-league parity 불변. 게이트 강화는 캡 초과
+  영입/재계약을 더 막을 뿐 정당 케이스는 불변. ⑥은 `tools/_dv_capprecheck.ts`(사전체크==게이트 불변식 + 구/신 flip A/B).

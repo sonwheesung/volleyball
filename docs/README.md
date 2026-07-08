@@ -179,6 +179,7 @@ npx tsx tools/_ev_airetain.ts 12            # AI 재계약 확률(aiRetainProb, 
 npx tsx tools/_ev_promise.ts                # 면담 공약 파기(OWNER 1.3) — 주전약속+벤치=거부급등(0.95) vs 약속+출전=0 vs 전력보강+벤치=파기아님. A/B 4시나리오. exit 0/1
 npx tsx tools/_ev_resign.ts                 # 재계약 협상 3택(FA 2.5c) — 후하게≥표준≥짧게·후하게≥시장가·캡내·나이적합 연수(어림5/노장2). exit 0/1
 npx tsx tools/_dv_resignrollover.ts         # 인시즌 재계약 발효 규칙(FA §2.5c, 2026-07-08 이음매) — override는 다음 시즌부터 발효(최초 롤오버 선차감 생략): years=N→정확히 N시즌 재직(1년=1시즌, 구 버그는 0시즌 no-op) + 자동연장 경로 불변 + A/B(선차감 재도입 모사→재직 2시즌 검출). exit 0/1
+npx tsx tools/_dv_capprecheck.ts            # 계약관리 재계약 사전체크==store 게이트(TRANSACTION §7, 2026-07-08) — pickOffer 사전체크가 capPayroll(inSeasonCost·배신웃돈·franchise 팀캡예외) = store reSign과 동일 판정(허위 여유 0=조용한 거부 제거) + A/B(구 사전체크는 시즌중 영입 보유 시 store와 flip=inSeasonCost load-bearing). exit 0/1
 npx tsx tools/_dv_faown.ts                  # 내 원소속 FA 재영입 보상 면제(FA §2.2, 2026-07-08 이음매) — prevTeamOf===myTeam이면 compCash==0(보상금·차감·게이트 모두), 타 구단은 compensationMoney>0(가드 이빨). resolveFAMarket 직접 구동 A/B. exit 0/1
 npx tsx tools/_dv_retire.ts                 # 은퇴 재정비(FA §1.2·MONETIZATION §11.2, 2026-07-08) — ①40세+현역0(200시즌sim) ②HIGH(medOvr+δ7)이상 은퇴0·연속곡선(OVR 1점 항상 유효=절벽금지)·40정년=1 ③결정론+외인 은퇴루프 제외(rng 미소비=국내 스트림 불변) ④39세 전지훈련 차단(store reason=retiring, 38세 대조) ⑤계약연한 40−나이 초과0(capContractYears) ⑥수입선수 정년(importAgesOut: 외인·아시아쿼터 40세 리그 이탈·39세 마지막 시즌·A/B) + A/B 뮤턴트 이빨(하드월/HIGH0/캡 제거 모사→FAIL). exit 0/1
 # (2026-06-25 독립 3세션 엣지 도구 = _dv_docs_*·_dv_code_*·_dv_drift_* — EDGE_CASES §3.6, 무거움 on-demand)

@@ -6,22 +6,36 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { ActionSheet } from '../components/Popup';
-import { getEvolvedTeamPlayers, getPlayer, LEAGUE } from '../data/league';
+import { getEvolvedTeamPlayers, getPlayer, evolveOnDay, LEAGUE } from '../data/league';
+import { rosterIdsOnDay } from '../data/dynamics';
 import { teamRelations } from '../data/relationships';
 import { getPlayerProduction } from '../data/production';
 import { displayCutoff } from '../data/standings';
-import { activeRoster, payroll } from '../data/roster';
-import { overall, overallRaw } from '../engine/overall';
-import { canAfford, isFranchise, LEAGUE_CAP } from '../engine/cap';
+import { activeRoster, capPayroll, payroll } from '../data/roster';
+import { overallRaw } from '../engine/overall';
+import { isFranchise, maxSalaryFor, LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MIN, severanceFee } from '../engine/transactions';
 import { assignFAGrades, askingPrice, willBeFA } from '../engine/faMarket';
 import { contractStatus, formatMoney, resignOptions } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
 import { useGameStore } from '../store/useGameStore';
+import type { ReSignReject } from '../store/useGameStore';
 import type { Contract, Player } from '../types';
 
 const STATUS_COLOR = { 저평가: theme.good, 적정: theme.muted, 고평가: theme.bad } as const;
 type ResignOpt = ReturnType<typeof resignOptions>[number];
+
+// store reSign 거부 사유 → 사용자 문구(조용한 거부 제거). 사전체크가 못 잡은 잔여 케이스의 안전망.
+function resignRejectMessage(p: Player, reason: ReSignReject): string {
+  switch (reason) {
+    case 'over-team-cap': return `${p.name} 재계약이 샐러리캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`;
+    case 'over-individual-cap': return `${p.name}의 연봉이 개인 상한(${formatMoney(maxSalaryFor(p))})을 넘습니다.`;
+    case 'foreign': return '외국인 선수는 국내 재계약 대상이 아닙니다.';
+    case 'not-on-roster': return `${p.name}은(는) 현재 로스터에 없어 재계약할 수 없습니다.`;
+    case 'invalid-contract': return '계약 조건이 올바르지 않습니다.';
+    default: return '재계약할 수 없습니다.';
+  }
+}
 
 export default function Contracts() {
   // 계약 관리는 무겁다(전 로스터 진화 + 선수별 생산·시장가 집계). 한 틱 미뤄 로딩부터 그린다.
@@ -35,6 +49,7 @@ function ContractsInner() {
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
+  const inSeasonTx = useGameStore((s) => s.inSeasonTx);
   const overrides = useGameStore((s) => s.contractOverrides);
   const released = useGameStore((s) => s.released);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
@@ -76,13 +91,31 @@ function ContractsInner() {
     const opts = [...resignOptions(p, market)].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
     setResignSheet({ p, market, opts });
   };
-  // 오퍼 선택 → 캡 체크 후 확정 시트 오픈(캡 초과는 즉시 안내)
+  // 오퍼 선택 → 캡 체크 후 확정 시트 오픈(캡 초과는 즉시 안내).
+  // 사전체크 = store reSign 게이트와 **동일 규칙**(capPayroll §7 · TRANSACTION_SYSTEM §7의 6번째 사이트):
+  //   그날 유효 명단(rosterIdsOnDay — 시즌 중 영입 포함·방출 제외)에 재계약 override(이 선수=새 오퍼)·시즌
+  //   영입비(inSeasonCost)·배신 웃돈을 반영한다. 개인 상한(maxSalaryFor)·프랜차이즈 팀캡 예외까지 store와 일치.
+  //   과거엔 payroll(getEvolvedTeamPlayers=시즌초 명단) base 합만 봐 시즌 중 영입비를 빠뜨려 store보다 느슨 →
+  //   캡 근접 + 시즌 중 영입 보유 시 UI는 "여유 있음"으로 통과시키고 store가 조용히 거부하던 걸 통일한다(허위 여유 0).
   const pickOffer = (p: Player, o: ResignOpt) => {
-    if (!canAfford(total - p.contract.salary, o.salary, { franchise: isFranchise(p) })) {
-      showAlert('샐러리캡 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
+    const contract: Contract = { salary: o.salary, years: o.years, remaining: o.years, signedAtAge: p.age };
+    // ① 개인 연봉 상한(MAX_SALARY 8억 / 프랜차이즈 11억) — store 1차 게이트와 동일
+    if (o.salary > maxSalaryFor(p)) {
+      showAlert('개인 연봉 상한 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 개인 상한(${formatMoney(maxSalaryFor(p))})을 넘습니다.`);
       return;
     }
-    const contract: Contract = { salary: o.salary, years: o.years, remaining: o.years, signedAtAge: p.age };
+    // ② 팀 캡 — 프랜차이즈 재계약은 팀캡 예외(store cd3d99a와 일치). 비프랜차이즈만 capPayroll로 하드 체크.
+    if (!isFranchise(p)) {
+      const myIds = rosterIdsOnDay(teamId, currentDay);
+      const isBetrayed = (id: string) => inSeasonTx.some((t) => t.kind === 'release' && t.teamId === teamId && t.playerId === id);
+      const inSeasonSigned = new Set(inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === teamId).map((t) => t.playerId));
+      const capPlayers = myIds.map((id) => evolveOnDay(id, currentDay)).filter((pl): pl is Player => !!pl);
+      const nextOverrides = { ...overrides, [p.id]: contract };
+      if (capPayroll(capPlayers, nextOverrides, inSeasonSigned, isBetrayed) > LEAGUE_CAP) {
+        showAlert('샐러리캡 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
+        return;
+      }
+    }
     setConfirmSheet({ p, o, contract });
   };
 
@@ -279,14 +312,21 @@ function ContractsInner() {
         })) : []}
       />
 
-      {/* 재계약 확정 */}
+      {/* 재계약 확정 — store reSign 결과 확인 후 실패 시 사유를 커스텀 모달로(조용한 거부 제거, UI-21) */}
       <ActionSheet
         visible={!!confirmSheet}
         title="재계약 확정"
         message={confirmSheet ? `${confirmSheet.p.name} — ${confirmSheet.o.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.o.salary)} · ${confirmSheet.o.years}년\n${confirmSheet.o.note}` : undefined}
         onClose={() => setConfirmSheet(null)}
         actions={confirmSheet ? [
-          { label: '확정', tone: 'primary', onPress: () => reSign(confirmSheet.p.id, confirmSheet.contract) },
+          {
+            label: '확정', tone: 'primary',
+            onPress: () => {
+              const cs = confirmSheet;
+              const res = reSign(cs.p.id, cs.contract);
+              if (!res.ok) showAlert('재계약 불가', resignRejectMessage(cs.p, res.reason));
+            },
+          },
         ] : []}
       />
     </Screen>
