@@ -283,7 +283,13 @@ KOVO 방식:
   - ④ **다음 시즌 숙제 브리핑(단장 프리뷰)** — ⓐFA 자격 도래 예정(`willBeFA(p)` = 경력+1≥6 & 잔여≤1) ⓑ계약 만료 임박(잔여≤1, FA 예정 아닌 자만 — ⓐ와 중복 제거)
     ⓒ정년 임박(현재 39세 = `RETIRE_AGE−1`, 이번 롤오버에 40세 도달). 각 2~4명 요약(이름·나이·포지션), 없으면 생략.
     🚫 **은퇴 확정자 예측 금지**(롤오버 전 미확정 — 39세 정년만 확정 사실). ⓒ는 "정년 임박"이지 "은퇴 확정" 아님.
+    - **산출 기준(정본 일치, 2026-07-08 전수조사 수정 — `data/recapBriefing.ts` `recapBriefing()`)**: 예측 명단·계약은 반드시 **endSeason이 실제로 쓰는 최종 상태**와 일치해야 한다(어긋나면 재계약한 선수가 🔥FA로, 방출 선수가 잔존, 영입 선수가 누락).
+      · **명단 = 시즌 중 이동 반영** — `rosterIdsOnDay(my, day)`(영입 포함·방출 제외) + `evolveOnDay`(로스터 밖 신규 영입도 진화). ~~`teamPlayerIds`(base 시즌초 명단)~~ **금지**(시즌 중 재계약/방출/영입 무지).
+      · **계약 = `contractOverrides` 합성** — `activeRoster(evolved, overrides, released)`로 시즌 중 재계약(잔여 갱신)을 반영해 `willBeFA`/`remaining` 판정. base 계약(override 무시) 금지.
+      · **정년(39세=`RETIRE_AGE−1`) 확정자는 ⓒ 정년 줄에만** — ⓐ FA 자격 줄에서 제외(`willBeFA(p) && p.age < RETIRE_AGE−1`). 중복 계상 금지("39세 정년만 확정 사실").
+      · 상비 가드 `tools/_dv_recap.ts` [B] ⑤⑥⑦: `recapBriefing` 예측 ⊆ 실제 `buildOffseason`(FA 풀 진입자 ⊆ faSoon∪expiring·faSoon∩실제잔류=∅) + 39세 전원 은퇴·FA 줄 미등장 + A/B 뮤턴트(override·시즌이동 무시→위반 검출).
   - ⑤ **우리 선수 생산 상위 1~3**(유지 — 단장 결정의 성적표) + 재정·팬덤(③에 흡수).
+    - **명단 = `rosterIdsOnDay(my, day)`**(④와 동일 — 시즌 중 영입 포함·방출 제외). ~~`teamPlayerIds`~~ 금지(전수조사 수정, 2026-07-08).
   🚫 제외(유지): 리그 전체 순위표 풀버전·기록왕 전체(내 선수가 왕일 때만 강조)·라운드MVP·박스스코어·다단계 캐러셀.
 - **베스트7 코트(`components/Best7Court.tsx`, 재사용)**: 베스트7(S·OH·OH·OP·MB·MB·L)을 코트 포메이션 7마커
   (이름·팀·포지션)로. **구단색 틴트(teamColors) + 우리 팀 선수 border 강조.** `SeasonAwards` 입력만 받아

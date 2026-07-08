@@ -11,11 +11,11 @@ import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, theme, th
 import { seasonSnapshot } from '../data/records';
 import { computeStandings, displayCutoff, seasonStreaks } from '../data/standings';
 import { leagueProduction } from '../data/production';
-import { getPlayer, getTeam, teamPlayerIds } from '../data/league';
+import { getPlayer, getTeam } from '../data/league';
+import { rosterIdsOnDay } from '../data/dynamics';
+import { recapBriefing } from '../data/recapBriefing';
 import { buildPlayoffs, myPostseasonOutcome } from '../data/playoffs';
 import { seasonYear } from '../data/seasonLabel';
-import { willBeFA } from '../engine/faMarket';
-import { RETIRE_AGE } from '../engine/retire';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
@@ -59,6 +59,8 @@ function RecapInner() {
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
   const lastFinance = useGameStore((s) => s.lastFinance);
+  const overrides = useGameStore((s) => s.contractOverrides); // 시즌 중 재계약(잔여 갱신) — willBeFA 판정에 반영
+  const released = useGameStore((s) => s.released);            // 시즌 중 방출 — 숙제 명단에서 제외
 
   // 결과 인지 표시 컷오프(§3.3) — 결산은 시즌 종료 직후라 seasonComplete=true → 리그 최종일 전체 공개(SEASON_DAYS).
   const day = displayCutoff(currentDay, results, my);
@@ -110,14 +112,9 @@ function RecapInner() {
   // ③ 시즌 스토리 수치 — 최다 연승(정규 결과 파생). 팬심·재정은 직전 정산(lastFinance) 문맥.
   const maxWinStreak = useMemo(() => seasonStreaks(day)[my]?.[0] ?? 0, [day, my]);
 
-  // ④ 다음 시즌 숙제 — 내 로스터에서 FA 예정/계약 만료/정년 임박(현재 39세). 은퇴 확정 예측 금지.
-  const briefing = useMemo(() => {
-    const roster = teamPlayerIds(my).map(getPlayer).filter((p): p is Player => !!p);
-    const faSoon = roster.filter(willBeFA);
-    const expiring = roster.filter((p) => !p.isForeign && p.contract.remaining <= 1 && !willBeFA(p));
-    const retireSoon = roster.filter((p) => !p.isForeign && p.age >= RETIRE_AGE - 1);
-    return { faSoon, expiring, retireSoon };
-  }, [my]);
+  // ④ 다음 시즌 숙제 — 내 최종 명단(시즌 중 이동 반영)에서 FA 예정/계약 만료/정년 임박(현재 39세). 은퇴 확정 예측 금지.
+  //   endSeason이 실제로 쓰는 정본과 일치: rosterIdsOnDay(영입 포함·방출 제외) × contractOverrides(재계약 잔여 갱신). §5.5 ④
+  const briefing = useMemo(() => recapBriefing(my, day, overrides, released), [my, day, overrides, released]);
   const briefCount = briefing.faSoon.length + briefing.expiring.length + briefing.retireSoon.length;
   // 요약 = 우선순위 3줄 스택(FA > 계약 만료 > 정년 — 색+아이콘 시선 유도, 사용자+GPT 검토 2026-07-08). 해당 없는 줄 생략.
   const briefStack: { icon: string; text: string; color: string }[] = [
@@ -126,10 +123,10 @@ function RecapInner() {
     briefing.retireSoon.length ? { icon: 'ℹ', text: `정년 임박 ${briefing.retireSoon.length}명`, color: theme.muted } : null,
   ].filter((x): x is { icon: string; text: string; color: string } => !!x);
 
-  // ⑤ 우리 선수 생산 상위(단장 결정의 성적표) — leagueProduction 중 내 로스터
+  // ⑤ 우리 선수 생산 상위(단장 결정의 성적표) — leagueProduction 중 내 최종 명단(시즌 중 영입 포함·방출 제외, §5.5)
   const myTop = useMemo(() => {
     const prod = leagueProduction(day);
-    const ids = new Set(teamPlayerIds(my));
+    const ids = new Set(rosterIdsOnDay(my, day));
     const rows = [...prod.entries()].filter(([id]) => ids.has(id)).map(([id, l]) => ({ id, l }));
     return rows.filter((r) => r.l.points > 0).sort((a, b) => b.l.points - a.l.points).slice(0, 3);
   }, [day, my]);
