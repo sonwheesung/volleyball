@@ -5,7 +5,7 @@ import { showAlert } from '../../components/AppDialog';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { GrowthReportModal } from '../../components/GrowthReportModal';
-import { growthReport, type PlayerGrowth } from '../../data/growthReport';
+import { growthTrigger, type PlayerGrowth } from '../../data/growthReport';
 import { SEASON, LEAGUE, getTeam } from '../../data/league';
 import { computeStandings, playedThroughDay, displayCutoff } from '../../data/standings';
 import { rivalOf } from '../../data/rivalry';
@@ -43,15 +43,15 @@ function ScheduleInner() {
   const recordResult = useGameStore((s) => s.recordResult);
 
   // 성장 리포트(TRAINING §성장리포트) — 일정 화면에 포커스될 때(경기 관전 후 복귀 포함) 마지막으로 본 날부터
-  // 지금까지 내 팀 종합 스탯 변화를 diff로 모달. 변화 없으면 조용히 통과. 엔진 무변경(결정론 재계산 diff).
+  // 지금까지 내 팀 스탯 변화를 diff로 모달. 변화 없으면 조용히 통과. 엔진 무변경(결정론 재계산 diff).
+  // 게이트(growthTrigger, 2026-07-08): onAdvance가 경기 진입 직전 currentDay를 올려두므로, 1세트만 보고
+  //   "이어보기"로 이탈(경기 미기록)하면 미완 경기에 모달이 떴다 → "직전 경기가 실제로 완료됐을 때만" 표시·bump.
   const [growth, setGrowth] = useState<PlayerGrowth[]>([]);
   useFocusEffect(useCallback(() => {
     const s = useGameStore.getState();
-    if (s.lastGrowthDay < 0) { s.setLastGrowthDay(s.currentDay); return; } // 미초기화 → 조용히 세팅(catch-up 폭탄 방지)
-    if (s.currentDay <= s.lastGrowthDay) return;
-    const rep = growthReport(s.selectedTeamId ?? '', s.lastGrowthDay, s.currentDay);
-    s.setLastGrowthDay(s.currentDay); // 구간 소비(표시 여부 무관 bump — 중복 방지)
-    if (rep.length) setGrowth(rep);
+    const t = growthTrigger(SEASON, s.selectedTeamId ?? '', s.results, s.lastGrowthDay, s.currentDay);
+    if (t.bumpTo != null) s.setLastGrowthDay(t.bumpTo); // 보류(null)면 lastGrowthDay 그대로 — 다음 완료 때 그 구간 표시
+    if (t.show) setGrowth(t.report);
   }, []));
 
   const rival = rivalOf(teamId, archive, results, SEASON, LEAGUE.teams.map((t) => t.id));

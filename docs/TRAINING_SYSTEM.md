@@ -159,6 +159,15 @@ read-only live binding이라 몽키패치 불가)에서 (b)(c)가 FAIL함을 증
 - **범위 = 내 팀 로스터만.** 7팀 전체 성장은 노이즈·스포일러 → 내 선수만(관전형 [[idle-definition]]).
 - **표시 스탯 = 모든 스탯(15종 원본 훈련 스탯)** — 선수 상세 StatBar와 동일(점프력·민첩성·체력·체젠·반응속도·위치선정·집중력·기복·VQ·공격/블로킹/디그/리시브/세팅/서브 기술). ~~종합 6개(deriveRatings)~~는 여러 스탯 조합이라 잘 안 바뀜(시즌 14건·구간 대부분 0) → **"성장 재미가 1개도 없다"(사용자)** → 밑단까지 전부로 전환(2026-07-04). 원본 스탯은 정수(XP 바 1채우면 +1)라 카드/상세 표시값과 일치. **+N=초록 · −N=빨강**. **빈도 실측(`_dv_growthreport`)**: 경기 간격(4일) 구간의 **84%에서 변화, 구간당 평균 5.15건**(전 팀) — 거의 매 경기 체감.
 - **트리거 = 일정 화면 포커스**(`schedule.tsx` `useFocusEffect`). 날짜 진행(`setDay`)의 유일한 진입점이 일정 화면이라, 경기 관전 후 돌아오면 그 구간 성장을 보여준다. 변화 0이면 모달 없이 조용히 통과(관전형 — 강제 없음).
+  - **정정(2026-07-08, 버그수정 — "미완 경기에 성장 모달")**: ~~currentDay>lastGrowthDay면 곧바로 표시·bump~~ →
+    **직전 진행 경기가 실제로 완료(`results` 기록)됐을 때만** 표시·bump. `onAdvance`가 경기 진입 **직전** `setDay(경기일)`로
+    currentDay를 먼저 올리므로(사이 기간 AI경기·훈련 재계산 진입점 — 유지), 1세트만 보고 **"이어보기"**(handleResume —
+    `recordResult`·`setDay` 안 함)로 이탈하면 그 경기 result는 미기록인데 currentDay는 이미 경기일 → 복귀 시
+    `currentDay>lastGrowthDay`가 성립해 **미완 경기에 모달**이 떴다. **A안(결정론·날짜흐름 무변경, 표시 게이트만)**:
+    `data/growthReport.ts growthTrigger`가 `planNextAction`으로 "currentDay 이하의 미기록 내 팀 경기가 남았나"를 보고,
+    남았으면(이어보기 이탈) 그 구간을 **다음 완료 때까지 보류**(`bumpTo=null` → lastGrowthDay 그대로). 경기 완료 시
+    `recordResult`는 currentDay를 안 바꾸므로 `planNextAction`이 더 늦은 경기(또는 seasonOver)를 반환 → 게이트 통과 →
+    보류됐던 구간 `[lastGrowthDay, currentDay]`가 그때 표시된다. 상설 가드 `tools/_dv_growthgate.ts`(미완→false·완료→true·A/B).
 - **상태 = `lastGrowthDay`**(영속, 기본 −1=미초기화 → 첫 확인 때 currentDay로 조용히 세팅해 "밀린 catch-up 폭탄" 방지). 구간 = `[lastGrowthDay, currentDay]`. 모달 표시 여부와 무관하게 확인 즉시 `lastGrowthDay=currentDay`로 bump. **새 시즌 롤오버 시 −1로 리셋**(시즌 경계 diff는 로스터 변동·나이+1이 얽혀 혼란 → 시즌 내 진행만 대상. 시즌 성장 총평은 별도 향후 과제).
 - **엔진 무변경**: `deriveRatings(evolveOnDay(id, from))` vs `deriveRatings(evolveOnDay(id, to))` 순수 diff. 저장·파생 없음(재계산). `data/growthReport.ts`.
 
