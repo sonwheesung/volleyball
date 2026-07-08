@@ -556,6 +556,7 @@ export const useGameStore = create<GameState>()(
       // 정원 하한(ROSTER_MIN) 게이트 — 명단이 비어 경기 불가가 되는 상태를 원천 차단.
       release: (playerId) => {
         const s = get();
+        if (s.currentDay > SEASON_DAYS) return false; // 플옵 엔트리 동결(SEASON §5.0) — 지갑·명단 변경 차단(딥링크/UI 우회 방어)
         if (s.released.includes(playerId)) return false;
         const my = s.selectedTeamId ?? '';
         const rosterIds = currentRosters()[my] ?? [];
@@ -599,6 +600,7 @@ export const useGameStore = create<GameState>()(
         const s = get();
         const my = s.selectedTeamId;
         if (!my) return false;
+        if (s.currentDay > SEASON_DAYS) return false; // 플옵 엔트리 동결(SEASON §5.0) — 지갑·명단 변경 차단(딥링크/UI 우회 방어)
         if (s.inSeasonTx.some((t) => t.kind === 'sign' && t.playerId === faId)) return false;
         // FA 풀 멤버십 검증 — 풀 밖 id(타 팀 소속 선수 등)를 영입하면 한 선수가 두 명단에 존재하게 된다
         if (!availableFAsOnDay(s.currentDay).includes(faId)) return false;
@@ -872,6 +874,7 @@ export const useGameStore = create<GameState>()(
         const s = get();
         const my = s.selectedTeamId;
         if (!my || s.foreignSubUsed) return false;
+        if (s.currentDay > SEASON_DAYS) return false; // 플옵 엔트리 동결(SEASON §5.0) — 교체권·지갑 소모 차단(플옵 엔트리는 164 동결이라 새 외인 0경기)
         if (!s.foreignAltPool.includes(altId)) return false;
         const curForeign = rosterIdsOnDay(my, s.currentDay).map((id) => evolveOnDay(id, s.currentDay)).find((p) => p?.isForeign && !p?.isAsianQuota);
         if (!curForeign) return false;
@@ -892,6 +895,7 @@ export const useGameStore = create<GameState>()(
         const s = get();
         const my = s.selectedTeamId;
         if (!my || s.asianSubUsed) return false;
+        if (s.currentDay > SEASON_DAYS) return false; // 플옵 엔트리 동결(SEASON §5.0) — 교체권·지갑 소모 차단(플옵 엔트리는 164 동결이라 새 선수 0경기)
         if (!s.asianAltPool.includes(altId)) return false;
         const curAsian = rosterIdsOnDay(my, s.currentDay).map((id) => evolveOnDay(id, s.currentDay)).find((p) => p?.isAsianQuota);
         if (!curAsian) return false;

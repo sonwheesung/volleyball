@@ -1,13 +1,14 @@
 // 포스트시즌 브라켓/시리즈 현황 (SEASON_SYSTEM §5, 2026-07-08 달력 편입 후 재편).
 //   ★ 진입 즉시 recordChampion·세리머니 발화 제거(스포일러). 진행/우승 노출은 일정 화면(schedule)이 담당 —
-//   이 화면은 currentDay 기준 **치른(공개) 경기까지만** 읽는 읽기 전용 브라켓(deep-link 안전). postseasonReveal 컷오프.
+//   이 화면은 currentDay 기준 **치른(공개) 경기까지만** 읽는 읽기 전용 브라켓. postseasonReveal 컷오프.
+//   ★ deep-link 방어(2026-07-08): 정규 종료(inPostseason) 전 진입은 진출 시드(=최종 top3)가 스포일러라 안내로 가림.
 import { StyleSheet, Text, View } from 'react-native';
 import { useMemo } from 'react';
 import { Card, IconLabel, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { getTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { buildPlayoffs, type Matchup } from '../data/playoffs';
-import { postseasonReveal } from '../data/postseason';
+import { postseasonReveal, inPostseason } from '../data/postseason';
 import { useGameStore } from '../store/useGameStore';
 
 export default function Playoffs() {
@@ -24,6 +25,19 @@ function PlayoffsInner() {
   const po = useMemo(() => buildPlayoffs(season), [season]);
   const reveal = useMemo(() => postseasonReveal(po, currentDay), [po, currentDay]);
   const name = (id: string) => getTeam(id)?.name ?? id;
+
+  // 정규 종료(포스트시즌 진입) 전엔 진출 시드(=최종 순위 top3)가 스포일러 — 딥링크로 들어와도 가린다(§5.2).
+  //   inPostseason(currentDay)=165..183만 true. 그 전(오프시즌 0·정규 1~164)엔 브라켓 대신 안내.
+  if (!inPostseason(currentDay)) {
+    return (
+      <Screen title={`${seasonYear(season)} 포스트시즌`}>
+        <Card accent={theme.muted}>
+          <IconLabel icon="lock-closed-outline" color={theme.muted}>대기 중</IconLabel>
+          <Muted style={{ marginTop: 6, lineHeight: 20 }}>포스트시즌은 정규 리그 종료 후 열립니다. 진출 팀과 대진은 정규 일정을 모두 마친 뒤 공개돼요.</Muted>
+        </Card>
+      </Screen>
+    );
+  }
 
   const SeriesCard = ({ title, m, revealed }: { title: string; m: Matchup; revealed: number }) => {
     const games = m.series.games.slice(0, revealed); // 공개된 게임만(스포일러 컷오프)

@@ -290,13 +290,16 @@ export default function MatchBoard() {
       </ScrollView>
 
       {/* 관전 중 나가기 확인 — 나가면 결정론 결과가 바로 확정된다. 밖 영역 탭으로 안 닫힘(Popup) */}
+      {/* 플옵 경기는 fixture가 없어 이어보기(watchProgress)를 저장하지 않는다(§5.1 — 결과는 currentDay 파생). 문구를 사실대로 분기. */}
       <Popup visible={confirmExit} onRequestClose={() => setConfirmExit(false)}>
         <Text style={styles.modalTitle}>경기를 나갈까요?</Text>
         <Text style={styles.modalBody}>
-          지금까지 본 위치를 저장합니다.{'\n'}다음에 이 지점부터 이어서 볼 수 있어요.
+          {isPlayoff
+            ? '포스트시즌 경기는 이어보기가 없어\n다음에 처음부터 다시 재생됩니다.'
+            : '지금까지 본 위치를 저장합니다.\n다음에 이 지점부터 이어서 볼 수 있어요.'}
         </Text>
         <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={handleResume}>
-          <Text style={styles.mPrimaryText}>나중에 이어보기</Text>
+          <Text style={styles.mPrimaryText}>{isPlayoff ? '나가기' : '나중에 이어보기'}</Text>
         </Pressable>
         <Pressable style={styles.mTextBtn} onPress={() => setConfirmExit(false)}>
           <Text style={styles.mTextBtnTxt}>계속 관전</Text>

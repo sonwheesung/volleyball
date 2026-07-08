@@ -157,6 +157,16 @@ KOVO 방식:
   currentDay>164여도 스탯·순위·생산이 정규 종료값으로 고정되므로 `currentDay>164 전수 스윕`을 캘러 단위가 아닌 **루트 클램프**로 방어.
 - **플옵 기간 개입 비활성**: 선발/벤치 건의는 **비활성 + 사유 표기**("포스트시즌 엔트리 확정") — no-op 건의 금지.
   day-aware 개입(플옵 라인업 반영)은 **Phase2 별도(이번 범위 밖, 보류)**.
+- **플옵 기간 지갑·명단 액션 차단(2026-07-08 추가)**: ~~건의(선발/벤치)만 차단하고 지갑·명단 변경 액션은 열려 있던 사각~~ →
+  정정. 엔트리가 164로 동결이라 **플옵 기간 선수단·지갑 변경은 새 선수가 0경기 뛰는데 돈·교체권만 태우는 유해 no-op**. 스토어가
+  `currentDay>SEASON_DAYS`면 **전부 `false`로 차단**(딥링크/UI 우회 방어): **`release`·`signInSeason`·`replaceForeign`·`replaceAsian`**
+  (건의 `suggestBench`/`suggestStart`는 기존대로 `reason:'postseason'`). `app/transactions.tsx`는 플옵 기간 안내 카드
+  ("포스트시즌 — 선수단 이동은 시즌 종료 후") + 영입/교체 버튼 비활성(단장실 진입점은 유지, 화면에서 사유 노출).
+  가드: `_dv_postseason` ⑦(4종 전부 false·지갑/교체권/명단 무변화 + day164 성공 A/B 경계 이빨). *참고: 오프시즌 전용 액션
+  (`trainingCamp`=`currentDay!==0`·FA/드래프트 계획 토글)은 이미 오프시즌 게이트가 있어 중복 게이트 안 함. `unrelease`는 당일
+  release만 되돌리는데 플옵 release 자체가 차단이라 자연 무효.*
+- **`app/playoffs.tsx` 딥링크 스포일러 방어(2026-07-08)**: 진출 시드(=최종 순위 top3)를 무조건 렌더하던 것 → 정규 종료
+  전(`!inPostseason(currentDay)`) 진입 시 브라켓 대신 안내("포스트시즌은 정규 리그 종료 후")로 가림(구 헤더 주석의 'deep-link 안전' 주장 정정).
 
 ### 5.1 진행·관전 (app/(tabs)/schedule.tsx, app/match/[id].tsx)
 
@@ -206,7 +216,8 @@ KOVO 방식:
 ### ★ 상비 가드
 - `tools/_dv_playoffs.ts`(확장): 기존 8검사(불변식·상위시드·결정론·A/B) + **보드 재생 == series.games 세트스코어**(내 팀·타 팀).
 - `tools/_dv_postseason.ts`(신규): ①달력 슬롯·조기종료 소멸 ②치른 경기 파생(컷오프) 스포일러 0(결승 전 finalsMvp/우승기사/champion 비노출)
-  ③recordChampion 시점 ④세이브 A안 마이그레이션 경로 ⑤결정론(같은 시드 2회) ⑥구플로우 대비 champion 바이트 동일(시드 보존).
+  ③recordChampion 시점 ④세이브 A안 마이그레이션 경로 ⑤결정론(같은 시드 2회) ⑥구플로우 대비 champion 바이트 동일(시드 보존)
+  **⑦플옵 기간 지갑·명단 액션 차단**(release·signInSeason·replaceForeign·replaceAsian 4종 false·무변화 + day164 성공 경계 A/B).
 
 ### ★ 플레이오프 검증 (2026-07-07) — 검증·실측=Fable 5 / 가드=Opus 에이전트
 

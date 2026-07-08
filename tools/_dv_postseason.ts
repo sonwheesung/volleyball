@@ -6,6 +6,7 @@
 //   ⑥구플로우 대비 champion 바이트 동일(시드 보존) + 보드재생 바이트 동일 크로스체크.
 // A/B 자가검증(허위 오라클 금지): "전부 공개"하는 버그 함수를 넣어 스포일러 검사기가 실제로 이빨이 있는지 증명.
 
+import './_gt_mock'; // AsyncStorage/react-native 스텁 — ⑦ store 지갑·명단 액션 구동용(BEFORE store import)
 import { resetLeagueBase } from '../data/league';
 import { buildPlayoffs } from '../data/playoffs';
 import {
@@ -200,7 +201,72 @@ check(finalsMvpLeak === 0, '시상 게이트: 결승 확정 전 currentSeasonAwa
   check(realHides && buggyLeaks, 'mutant 감지: "전부 공개" 버그는 결승 전 챔피언을 새고(누수), 실제 컷오프는 숨김(검사기 이빨)');
 }
 
-log('');
-if (fails.length) { log(`POSTSEASON FAIL — ${fails.length}건: ${fails.join(' / ')}`); process.exit(1); }
-log('POSTSEASON PASS — 달력슬롯·조기소멸 · 스포일러0(champion/finalsMvp 게이트) · recordChampion 시점 · 세이브 A안 · 결정론 · 보드재생 바이트동일 · A/B 이빨');
-process.exit(0);
+// ── ⑦ 플옵 기간 개입 차단 — store 지갑·명단 액션(SEASON §5.0, 2026-07-08) ──────────
+// release·signInSeason·replaceForeign·replaceAsian 는 currentDay>SEASON_DAYS(플옵)면 no-op(false)이고
+// 지갑(cash)·교체권(foreignSubUsed/asianSubUsed)·명단(inSeasonTx/released)을 절대 안 건드려야 한다.
+//   플옵 엔트리는 164 동결이라 새 선수는 0경기 뛰는데 지갑·시즌1회 교체권만 소모되는 사각을 막는 가드.
+// A/B 자가검증(경계 이빨 = "게이트 제거 모사"): 같은 셋업을 day=SEASON_DAYS(164, 정규 마지막날)에서 돌리면
+//   성공(true·상태변경)해야 한다 — day를 1 올려 경계(>164)를 넘는 것만으로 결과가 뒤집힘 = 게이트가 유일한 차단 원인.
+//   게이트를 제거하면 165 호출도 164처럼 성공해 아래 "차단" 검사가 FAIL하므로, 이 A/B가 오라클의 이빨을 증명한다.
+(async () => {
+  const { useGameStore } = await import('../store/useGameStore');
+  const { LEAGUE, evolveOnDay } = await import('../data/league');
+  const { rosterIdsOnDay, setTxContext } = await import('../data/dynamics');
+  const { FOREIGN_SALARY, ASIAN_SALARY } = await import('../engine/foreign');
+  const G = () => useGameStore.getState();
+  const REG = SEASON_DAYS;      // 164 — 정규 마지막날(허용)
+  const PO = SEASON_DAYS + 1;   // 165 — 첫 포스트시즌 구간(차단)
+  const my = LEAGUE.teams[0].id;
+  const other = LEAGUE.teams[1].id;
+  const ros = (t: string) => rosterIdsOnDay(t, 0).map((id) => evolveOnDay(id, 0));
+  const domId = ros(my).find((p) => p && !p.isForeign)!.id;
+  const altF = ros(other).find((p) => p && p.isForeign && !p.isAsianQuota)!.id; // 실 선수 id(setTxContext 안전)
+  const altA = ros(other).find((p) => p && p.isAsianQuota)!.id;
+  const fresh = () => { G().resetSave(); G().selectTeam(my); };
+
+  // ⑦a release
+  fresh(); G().setDay(REG);
+  const relReg = G().release(domId) && G().released.length === 1 && G().inSeasonTx.length === 1;
+  fresh(); G().setDay(PO); const cB = G().cash;
+  const relPo = !G().release(domId) && G().released.length === 0 && G().inSeasonTx.length === 0 && G().cash === cB;
+  check(relPo, 'release 플옵(day165) 차단 — false·released/inSeasonTx/cash 무변화');
+  check(relReg, 'A/B: release 정규(day164) 성공·명단변경 — 경계 1일차로 뒤집힘(게이트가 유일 원인)');
+
+  // ⑦b signInSeason — 방출로 FA 풀 주입 후 재영입
+  const setupFA = (day: number) => {
+    fresh();
+    const tx: any[] = [{ day: 0, teamId: my, playerId: domId, kind: 'release' }];
+    useGameStore.setState({ inSeasonTx: tx, released: [domId], cash: 9_999_999 });
+    setTxContext(tx, G().faPool, my, 0);
+    G().setDay(day);
+  };
+  setupFA(REG);
+  const sigReg = G().signInSeason(domId) && G().inSeasonTx.some((t) => t.kind === 'sign' && t.playerId === domId);
+  setupFA(PO); const cB2 = G().cash;
+  const sigPo = !G().signInSeason(domId) && !G().inSeasonTx.some((t) => t.kind === 'sign') && G().cash === cB2;
+  check(sigPo, 'signInSeason 플옵(day165) 차단 — false·sign tx/cash 무변화');
+  check(sigReg, 'A/B: signInSeason 정규(day164) 성공(FA 재영입·경계 뒤집힘)');
+
+  // ⑦c replaceForeign
+  fresh(); useGameStore.setState({ foreignAltPool: [altF] }); G().setDay(REG);
+  const cashF0 = G().cash;
+  const frReg = G().replaceForeign(altF) && G().foreignSubUsed && G().cash === cashF0 - FOREIGN_SALARY;
+  fresh(); useGameStore.setState({ foreignAltPool: [altF] }); G().setDay(PO); const cB3 = G().cash;
+  const frPo = !G().replaceForeign(altF) && !G().foreignSubUsed && G().cash === cB3 && G().foreignAltPool.includes(altF) && G().inSeasonTx.length === 0;
+  check(frPo, 'replaceForeign 플옵(day165) 차단 — false·교체권/cash/altPool/명단 무변화');
+  check(frReg, 'A/B: replaceForeign 정규(day164) 성공·교체권소모·cash차감(경계 뒤집힘)');
+
+  // ⑦d replaceAsian
+  fresh(); useGameStore.setState({ asianAltPool: [altA] }); G().setDay(REG);
+  const cashA0 = G().cash;
+  const arReg = G().replaceAsian(altA) && G().asianSubUsed && G().cash === cashA0 - ASIAN_SALARY;
+  fresh(); useGameStore.setState({ asianAltPool: [altA] }); G().setDay(PO); const cB4 = G().cash;
+  const arPo = !G().replaceAsian(altA) && !G().asianSubUsed && G().cash === cB4 && G().asianAltPool.includes(altA) && G().inSeasonTx.length === 0;
+  check(arPo, 'replaceAsian 플옵(day165) 차단 — false·교체권/cash/altPool/명단 무변화');
+  check(arReg, 'A/B: replaceAsian 정규(day164) 성공·교체권소모·cash차감(경계 뒤집힘)');
+
+  log('');
+  if (fails.length) { log(`POSTSEASON FAIL — ${fails.length}건: ${fails.join(' / ')}`); process.exit(1); }
+  log('POSTSEASON PASS — 달력슬롯·조기소멸 · 스포일러0(champion/finalsMvp 게이트) · recordChampion 시점 · 세이브 A안 · 결정론 · 보드재생 바이트동일 · 플옵개입차단(지갑4종) · A/B 이빨');
+  process.exit(0);
+})().catch((e) => { log(`POSTSEASON FAIL(exception) — ${e?.stack || e}`); process.exit(1); });

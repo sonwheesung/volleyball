@@ -7,6 +7,7 @@ import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MAX, inSeasonCost } from '../engine/transactions';
+import { SEASON_DAYS } from '../engine/calendar';
 import { FOREIGN_SALARY, ASIAN_SALARY } from '../engine/foreign';
 import { formatMoney } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
@@ -29,6 +30,8 @@ export default function Transactions() {
   const asianSubUsed = useGameStore((s) => s.asianSubUsed);
   const replaceAsian = useGameStore((s) => s.replaceAsian);
 
+  // 플옵 기간(§5.0) — 선수단 이동은 엔트리 동결이라 무의미/유해(스토어가 차단). 화면도 사유 노출 + 버튼 비활성.
+  const postseason = currentDay > SEASON_DAYS;
   // 내 팀 현재 명단(날짜 인지) — 정원·캡 계산
   const myIds = rosterIdsOnDay(teamId, currentDay);
   // 내가 이번 시즌 방출한 선수 — 재영입엔 배신 웃돈 ×1.5
@@ -83,6 +86,15 @@ export default function Transactions() {
         </Muted>
       </Card>
 
+      {postseason ? (
+        <Card accent={theme.muted}>
+          <IconLabel icon="lock-closed-outline" color={theme.muted}>포스트시즌 — 선수단 이동은 시즌 종료 후</IconLabel>
+          <Muted style={{ fontSize: 12, marginTop: 2 }}>
+            포스트시즌 엔트리는 정규 종료 시점으로 확정됩니다. 영입·외국인 교체는 이번 시즌엔 반영되지 않아 잠깁니다.
+          </Muted>
+        </Card>
+      ) : null}
+
       {signedThis.length > 0 ? (
         <>
           <Title>이번 시즌 영입</Title>
@@ -109,7 +121,7 @@ export default function Transactions() {
           {foreignAltPool.map((id) => {
             const p = evolveOnDay(id, currentDay);
             if (!p) return null;
-            const can = !foreignSubUsed && FOREIGN_SALARY <= cash;
+            const can = !postseason && !foreignSubUsed && FOREIGN_SALARY <= cash;
             return (
               <View key={id} style={styles.row}>
                 <PosTag pos={p.position} />
@@ -150,7 +162,7 @@ export default function Transactions() {
           {asianAltPool.map((id) => {
             const p = evolveOnDay(id, currentDay);
             if (!p) return null;
-            const can = !asianSubUsed && ASIAN_SALARY <= cash;
+            const can = !postseason && !asianSubUsed && ASIAN_SALARY <= cash;
             return (
               <View key={id} style={styles.row}>
                 <PosTag pos={p.position} />
@@ -188,7 +200,7 @@ export default function Transactions() {
         fas.map((p) => {
           const betrayed = isBetrayed(p.id);
           const cost = inSeasonCost(marketVal(p), betrayed);
-          const afford = payroll + cost <= LEAGUE_CAP && !full && cost <= cash;
+          const afford = !postseason && payroll + cost <= LEAGUE_CAP && !full && cost <= cash;
           return (
             <Pressable
               key={p.id}
