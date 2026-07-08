@@ -32,7 +32,10 @@ export default function TrainingCamp() {
   // replace 로 들어와(enshrine에서) 뒤로 가도 앞 단계(헌액/드래프트)를 재노출하지 않음. 비-chain(마이페이지)은 뒤로가기만.
   const { chain } = useLocalSearchParams<{ chain?: string }>();
   const inChain = chain === '1';
-  const goNext = () => router.replace('/season-opening'); // 개막 브리지("새 시즌이 시작됩니다") → 홈
+  // 체인 완료(전지훈련은 체인의 마지막 상호작용 단계) = 전지훈련을 "마친" 시점 → finishCamp()로 campDoneSeason=season 세팅.
+  //   이 세팅이 없으면 홈 도착 후 schedule 오프시즌 게이트(currentDay===0 && campDoneSeason!==season)가 살아 전지훈련이 2차로 재노출된다(버그).
+  //   비-chain "마치고 개막전으로"(finishToOpener)와 동일하게 캠프 화면 종료가 finishCamp를 부른다 — 게이트의 개막전 숨김(MONETIZATION §11.2)은 그대로 유지.
+  const goNext = () => { finishCamp(); router.replace('/season-opening'); }; // 개막 브리지("새 시즌이 시작됩니다") → 홈
   // 무거운 작업 마스킹(UI-27): finishCamp+귀환(base 재계산)=동기 → useBusyRun, 전지훈련 보내기(서버 차감)=비동기 → sending 로컬 state.
   const busy = useBusyRun();
   const [sending, setSending] = useState<string | null>(null);

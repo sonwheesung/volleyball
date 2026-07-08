@@ -191,6 +191,7 @@
 - **39세(정년임박) 판매 차단(2026-07-08 사용자 결정 — 경고가 아니라 차단)**: day0의 `age >= 39`(=RETIRE_AGE−1)는 이번 시즌 뒤 정년(40) 은퇴가 확정이라 "동행 연장"을 팔 수 없다.
   `store.trainingCamp`가 `{ok:false, reason:'retiring'}`로 **차단**(getPlayer·course 게이트 뒤, 세션 확인 앞), `app/training-camp.tsx`가 명단에서 **비활성(정년 배지)** + 카피 "정년(40세)을 앞둔 선수는 이번 시즌 뒤 은퇴하므로 캠프 명단에서 제외됩니다". 상수는 `engine/retire.RETIRE_AGE` 단일 출처.
 - **오프시즌↔개막전 게이트(2026-07-04 사용자 요청)**: 일정 화면(`app/(tabs)/schedule.tsx`)에서 **오프시즌엔 전지훈련 카드만, 다음 경기(개막전)는 숨긴다** — "전지훈련이 보이면 다음 경기가 아니어야"(둘 동시 노출 금지). 오프시즌 = `currentDay===0 && campDoneSeason!==season`. 전지훈련 카드의 **"전지훈련 마치고 개막전으로 →"**(confirm) → `finishCamp()`가 `campDoneSeason=season` 세팅 → 그때 다음 경기 노출(개막전은 여전히 "경기 시작"이 진행, `currentDay` 불변). `campDoneSeason`은 **시즌번호라 새 시즌 자동 리셋**(=season이면 완료). 영속 필드(SAVE §1). 마친 뒤엔 그 시즌 전지훈련 불가(캠프는 day0 한정이라 정합). 검증: 에뮬 — 오프시즌 전지훈련만 표시 → 마치기 → 개막전(10/18) 노출·전지훈련 사라짐.
+  - **오프시즌 체인 경로도 `finishCamp()` 호출(2026-07-09 버그수정)**: 명전→전지훈련 체인(training-camp `chain=1`)의 "새 시즌으로 ▶"(`goNext`)는 비-chain "마치고 개막전으로"와 **동일하게** `finishCamp()`로 `campDoneSeason=season`을 세팅한 뒤 season-opening→홈으로 진행한다. 미세팅 시 홈 도착 후 위 게이트(`campDoneSeason!==season`)가 살아 **전지훈련이 2차로 재노출**되던 버그를 차단(전지훈련은 체인의 마지막 상호작용 단계 = "마친" 시점). 첫 시즌 새 게임(체인 없음)은 게이트 단독 발동(1차 노출)이 정상. 가드: `_dv_campoutbox` ⑦(finishCamp가 게이트 predicate를 OFF로 뒤집음 + A/B 미호출 시 ON 유지 + 다음 시즌 재활성).
 - **타이밍=오프시즌(day0)이 핵심**: 시즌 생산은 `data/production.allProdRows`가 baseVersion 키로 **시즌 전체를 한 번에 캐시**
   → 시즌 중 현재 스탯을 바꾸면 ①전 시즌 재시뮬(느림) ②치른 경기 소급 변경(결정론 붕괴). **경기 0개인 시즌시작(day0)에만 적용**해
   재시뮬·소급 0 보장(검증된 제약). 다음 시즌부터 반영.

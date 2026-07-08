@@ -229,6 +229,29 @@ const origReq = (Module.prototype as any).require;
     ok(spendCalls.length === before, '  → spend 미호출');
   }
 
+  // ── ⑦ 오프시즌 게이트 차단: 체인 완료가 finishCamp()로 campDoneSeason=season 세팅 → schedule 오프시즌 게이트 OFF ──
+  //   (2026-07-09 버그수정) 오프시즌 체인(명전 → 전지훈련)이 campDoneSeason을 안 세팅해, 홈 도착 후 schedule 게이트가
+  //   살아 전지훈련이 **2차로 재노출**되던 버그. training-camp goNext가 finishCamp() 호출하도록 수정 →
+  //   이 가드는 store 측 계약(finishCamp가 게이트 predicate를 뒤집음 + 다음 시즌 정상 재활성)을 봉인. MONETIZATION §11.2.
+  console.log('── ⑦ 오프시즌 게이트: 시즌 롤오버(campDoneSeason≠season, day0) → 게이트 ON → finishCamp() → OFF · A/B(미호출 시 ON 유지) · 다음 시즌 재활성 ──');
+  {
+    // schedule.tsx 오프시즌 게이트 predicate 복제(정본: app/(tabs)/schedule.tsx) — currentDay 0 + 이번 시즌 전지훈련 미완료
+    const gateOn = () => { const s = G(); return s.currentDay === 0 && s.campDoneSeason !== s.season; };
+    // 시즌 롤오버 직후 모사: endSeason은 campDoneSeason을 안 건드림 → 새 시즌과 항상 불일치(첫 노출은 정상)
+    useGameStore.setState({ season: 3, currentDay: 0, campDoneSeason: 2 });
+    // A/B 대조(control): finishCamp 미호출 = 수정 전 체인 → 게이트 ON 유지(= 홈 도착 후 2차 재노출 버그)
+    ok(gateOn(), 'A/B control: finishCamp 미호출 시 게이트 ON 유지(수정 전 2차 노출 버그 재현) — 오라클 민감도');
+    // 수정 경로(treatment): 체인 완료 = finishCamp() → campDoneSeason=season → 게이트 OFF
+    G().finishCamp();
+    ok(G().campDoneSeason === 3, 'finishCamp()가 campDoneSeason=season(3) 세팅');
+    ok(!gateOn(), '게이트 OFF: 홈 도착 시 전지훈련 2차 재노출 0(게이트 충족)');
+    G().finishCamp();
+    ok(G().campDoneSeason === 3 && !gateOn(), 'finishCamp 멱등(재호출도 게이트 OFF 유지)');
+    // 다음 시즌 롤오버 → 게이트 재활성(첫 시즌 새 게임·다음 오프시즌 1차 노출 경로 안 깨짐)
+    useGameStore.setState({ season: 4 });
+    ok(gateOn(), '다음 시즌 롤오버 → 게이트 재활성(campDoneSeason=3≠season=4) — 첫 노출 경로 정상');
+  }
+
   console.log(fail === 0 ? '\n✅ CAMPOUTBOX PASS (아웃박스·campLog 재적용·게이트 봉인)' : `\n❌ CAMPOUTBOX FAIL ${fail}건`);
   process.exit(fail === 0 ? 0 : 1);
 })();
