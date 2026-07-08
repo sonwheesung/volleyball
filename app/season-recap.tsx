@@ -119,11 +119,12 @@ function RecapInner() {
     return { faSoon, expiring, retireSoon };
   }, [my]);
   const briefCount = briefing.faSoon.length + briefing.expiring.length + briefing.retireSoon.length;
-  const briefSummary = [
-    briefing.faSoon.length ? `FA 자격 ${briefing.faSoon.length}` : null,
-    briefing.expiring.length ? `계약 만료 ${briefing.expiring.length}` : null,
-    briefing.retireSoon.length ? `정년 임박 ${briefing.retireSoon.length}` : null,
-  ].filter(Boolean).join(' · ');
+  // 요약 = 우선순위 3줄 스택(FA > 계약 만료 > 정년 — 색+아이콘 시선 유도, 사용자+GPT 검토 2026-07-08). 해당 없는 줄 생략.
+  const briefStack: { icon: string; text: string; color: string }[] = [
+    briefing.faSoon.length ? { icon: '🔥', text: `FA 자격 ${briefing.faSoon.length}명`, color: theme.bad } : null,
+    briefing.expiring.length ? { icon: '⚠', text: `계약 만료 ${briefing.expiring.length}명`, color: theme.warn } : null,
+    briefing.retireSoon.length ? { icon: 'ℹ', text: `정년 임박 ${briefing.retireSoon.length}명`, color: theme.muted } : null,
+  ].filter((x): x is { icon: string; text: string; color: string } => !!x);
 
   // ⑤ 우리 선수 생산 상위(단장 결정의 성적표) — leagueProduction 중 내 로스터
   const myTop = useMemo(() => {
@@ -202,18 +203,24 @@ function RecapInner() {
           <IconLabel icon="clipboard-outline" color={theme.warn}>다음 시즌 숙제</IconLabel>
           <ExpandCard accent={theme.warn} detail={
             <>
+              {/* 상세 명단 — 요약과 동일 우선순위 순서·색(FA > 계약 만료 > 정년) */}
               {briefing.faSoon.length > 0 ? (
-                <View style={styles.taskRow}><Text style={styles.taskLabel}>FA 자격 도래</Text><Text style={styles.taskFaces}>{faceLine(briefing.faSoon)}</Text></View>
+                <View style={styles.taskRow}><Text style={[styles.taskLabel, { color: theme.bad }]}>🔥 FA 자격 도래</Text><Text style={styles.taskFaces}>{faceLine(briefing.faSoon)}</Text></View>
               ) : null}
               {briefing.expiring.length > 0 ? (
-                <View style={styles.taskRow}><Text style={styles.taskLabel}>계약 만료 임박</Text><Text style={styles.taskFaces}>{faceLine(briefing.expiring)}</Text></View>
+                <View style={styles.taskRow}><Text style={[styles.taskLabel, { color: theme.warn }]}>⚠ 계약 만료 임박</Text><Text style={styles.taskFaces}>{faceLine(briefing.expiring)}</Text></View>
               ) : null}
               {briefing.retireSoon.length > 0 ? (
-                <View style={styles.taskRow}><Text style={styles.taskLabel}>정년 임박(39세)</Text><Text style={styles.taskFaces}>{faceLine(briefing.retireSoon)}</Text></View>
+                <View style={styles.taskRow}><Text style={[styles.taskLabel, { color: theme.muted }]}>ℹ 정년 임박(39세)</Text><Text style={styles.taskFaces}>{faceLine(briefing.retireSoon)}</Text></View>
               ) : null}
             </>
           }>
-            <Text style={styles.awardRow}>{briefSummary}</Text>
+            {briefStack.map((b) => (
+              <View key={b.text} style={styles.briefRow}>
+                <Text style={styles.briefIcon}>{b.icon}</Text>
+                <Text style={[styles.briefText, { color: b.color }]}>{b.text}</Text>
+              </View>
+            ))}
             <Muted style={{ fontSize: 12.5, marginTop: 2 }}>다음 오프시즌에 챙길 선수들</Muted>
           </ExpandCard>
         </>
@@ -221,7 +228,7 @@ function RecapInner() {
 
       {/* 리그 시상·베스트7은 시상식 화면(champion/awards-ceremony)으로 이관(삼중 표시 방지, AWARDS_SYSTEM §7). 여기선 내 팀 수상만. */}
 
-      <Muted style={{ fontSize: 12, textAlign: 'center' }}>한 시즌이 끝났습니다. 통산 기록·연표는 마이페이지 → 기록에서.</Muted>
+      {/* 하단 안내 문구 제거(2026-07-08 검토) — 다른 메뉴 이동 유도 대신 시즌의 여운 유지. 버튼만. */}
       <Button label="오프시즌 · 외국인 트라이아웃 →" onPress={() => router.push('/tryout')} />
     </Screen>
   );
@@ -236,6 +243,9 @@ const styles = themedStyles(() => StyleSheet.create({
   awardRow: { color: theme.text, fontSize: 14, fontWeight: '700', paddingVertical: 2 },
   taskRow: { paddingVertical: 4 },
   taskLabel: { color: theme.warn, fontSize: 12.5, fontWeight: '800' },
+  briefRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
+  briefIcon: { fontSize: 13, width: 18, textAlign: 'center' },
+  briefText: { fontSize: 14.5, fontWeight: '800' },
   taskFaces: { color: theme.text, fontSize: 13.5, fontWeight: '600', marginTop: 1 },
   detailBox: { marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border },
   moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 6 },
