@@ -1,22 +1,50 @@
 // 시즌 결산 (SEASON_SYSTEM §5.5) — 포스트시즌 → [결산] → 외국인 트라이아웃.
 // 강제 도착·선택 정독·단일 한 장(스크롤 + 하단 버튼 하나). 다단계 캐러셀 금지.
+// 구조(2026-07-08 사용자 결정): 요약 카드(1~3줄) + "상세 보기 ›" 인라인 확장(화면 이탈 없는 선택 정독).
+//   3초 안에 시즌을 파악할 수치는 요약에, 명단·부문별 나열은 상세로. 캐러셀=강제 순차와 별개(선택 drill-down).
 // endSeason 이전이라 시상은 재계산(seasonSnapshot=currentSeasonAwards+computeStandings, leagueProduction). 새 영속 0.
-import { useMemo } from 'react';
+import { useMemo, useState, type ReactNode } from 'react';
 import { useRouter } from 'expo-router';
 import { Text, View, StyleSheet } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { seasonSnapshot } from '../data/records';
-import { computeStandings, displayCutoff } from '../data/standings';
+import { computeStandings, displayCutoff, seasonStreaks } from '../data/standings';
 import { leagueProduction } from '../data/production';
 import { getPlayer, getTeam, teamPlayerIds } from '../data/league';
+import { buildPlayoffs, myPostseasonOutcome } from '../data/playoffs';
 import { seasonYear } from '../data/seasonLabel';
+import { willBeFA } from '../engine/faMarket';
+import { RETIRE_AGE } from '../engine/retire';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
-import type { AwardWinner } from '../types';
+import type { AwardWinner, Player } from '../types';
+
+// 부문 기록왕 라벨(awards.titles 키 → 한국어) — records.ts TITLE_KO와 동일 매핑(표시 전용).
+const TITLE_KO: Record<string, string> = {
+  scoring: '득점왕', spike: '공격상', block: '블로킹왕',
+  serve: '서브왕', dig: '디그왕', set: '세트왕', receive: '리시브왕',
+};
+
+/** 요약 + (선택) 상세. 상세가 있으면 카드 탭으로 인라인 확장(화면 이탈 없음). 캐러셀 아님 — 선택 정독. */
+function ExpandCard({ accent, children, detail }: { accent: string; children: ReactNode; detail?: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  if (!detail) return <Card accent={accent}>{children}</Card>;
+  return (
+    <Card accent={accent} onPress={() => setOpen((o) => !o)}>
+      {children}
+      {open ? <View style={styles.detailBox}>{detail}</View> : null}
+      <View style={styles.moreRow}>
+        <Text style={styles.moreText}>{open ? '접기' : '상세 보기'}</Text>
+        <Ionicons name={open ? 'chevron-up' : 'chevron-forward'} size={15} color={theme.muted} />
+      </View>
+    </Card>
+  );
+}
 
 export default function SeasonRecap() {
-  const ready = useDeferredReady(); // leagueProduction 풀시즌 재계산이 무거움 — 로딩부터(SEASON §5.5)
+  const ready = useDeferredReady(); // leagueProduction 풀시즌 + buildPlayoffs 재계산이 무거움 — 로딩부터(SEASON §5.5)
   if (!ready) return <Loading title="시즌 결산" variant="list" />;
   return <RecapInner />;
 }
@@ -30,24 +58,74 @@ function RecapInner() {
   const archive = useGameStore((s) => s.archive);
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
+  const lastFinance = useGameStore((s) => s.lastFinance);
 
   // 결과 인지 표시 컷오프(§3.3) — 결산은 시즌 종료 직후라 seasonComplete=true → 리그 최종일 전체 공개(SEASON_DAYS).
   const day = displayCutoff(currentDay, results, my);
   const snap = useMemo(() => seasonSnapshot(season, season, currentDay, archive, results, my), [season, currentDay, archive, results, my]);
   const aw = snap.awards;
-  // 우승팀 = 포스트시즌 recordChampion이 박은 archive 부분기록(이번 시즌, endSeason 전)
+  // 우승팀 = 포스트시즌 recordChampion이 박은 archive 부분기록(이번 시즌, endSeason 전) — 이 화면 진입 게이트(챔프 시상식 통과).
   const championId = useMemo(() => archive.find((a) => a.season === season)?.championId ?? null, [archive, season]);
 
   const standings = useMemo(() => computeStandings(day), [day]);
   const myIdx = standings.findIndex((s) => s.teamId === my);
   const myRank = myIdx + 1;
   const myStanding = standings[myIdx];
-  const teamCount = standings.length;
 
   const pName = (id: string) => getPlayer(id)?.name ?? id;
   const isMine = (w: AwardWinner | null) => !!w && w.teamId === my;
 
-  // 우리 선수 생산 상위(단장 결정의 성적표) — leagueProduction 중 내 로스터
+  // ① 포스트시즌 여정 — championId 존재(챔프 시상식 통과) 후에만 buildPlayoffs 전부 공개 상태(스포일러 안전, §5.2).
+  const outcome = useMemo(() => (championId ? myPostseasonOutcome(buildPlayoffs(season), my) : null), [championId, season, my]);
+  const headline = (() => {
+    if (outcome) {
+      switch (outcome.kind) {
+        case 'integrated': return { text: '통합 우승 🏆', color: theme.gold };
+        case 'champion': return { text: '우승 🏆', color: theme.gold };
+        case 'runnerUp': return { text: `챔피언결정전 준우승 (${outcome.myWins}-${outcome.myLosses})`, color: theme.accent };
+        case 'poOut': return { text: `플레이오프 탈락 (준PO ${outcome.myWins}-${outcome.myLosses})`, color: theme.text };
+        case 'missed': return { text: `포스트시즌 진출 실패 · ${myRank}위`, color: theme.text };
+      }
+    }
+    // 폴백(championId 미확정 — 정상 흐름에선 도달 안 함)
+    return myRank > 0 && myRank <= 3 ? { text: `포스트시즌 진출 · ${myRank}위`, color: theme.accent }
+      : myRank > 0 ? { text: `정규리그 ${myRank}위`, color: theme.text }
+      : { text: '시즌 종료', color: theme.text };
+  })();
+
+  // ② 우리 팀 수상 종합 — MVP·챔프MVP·신인·기량발전 + 부문 기록왕 전부. 같은 poDay 게이트(snap.awards).
+  const awardLines: string[] = [];
+  if (aw) {
+    if (isMine(aw.mvp)) awardLines.push(`정규 MVP — ${pName(aw.mvp!.playerId)}`);
+    if (isMine(aw.finalsMvp)) awardLines.push(`챔프전 MVP — ${pName(aw.finalsMvp!.playerId)}`);
+    if (isMine(aw.rookie)) awardLines.push(`신인상 — ${pName(aw.rookie!.playerId)}`);
+    if (isMine(aw.mostImproved)) awardLines.push(`기량발전상 — ${pName(aw.mostImproved!.playerId)}`);
+    for (const [k, w] of Object.entries(aw.titles)) {
+      if (isMine(w)) awardLines.push(`${TITLE_KO[k] ?? k} — ${pName(w!.playerId)}`);
+    }
+    const b7 = aw.best7.filter((s) => isMine(s.winner)).length;
+    if (b7 > 0) awardLines.push(`베스트7 선정 — ${b7}명`);
+  }
+
+  // ③ 시즌 스토리 수치 — 최다 연승(정규 결과 파생). 팬심·재정은 직전 정산(lastFinance) 문맥.
+  const maxWinStreak = useMemo(() => seasonStreaks(day)[my]?.[0] ?? 0, [day, my]);
+
+  // ④ 다음 시즌 숙제 — 내 로스터에서 FA 예정/계약 만료/정년 임박(현재 39세). 은퇴 확정 예측 금지.
+  const briefing = useMemo(() => {
+    const roster = teamPlayerIds(my).map(getPlayer).filter((p): p is Player => !!p);
+    const faSoon = roster.filter(willBeFA);
+    const expiring = roster.filter((p) => !p.isForeign && p.contract.remaining <= 1 && !willBeFA(p));
+    const retireSoon = roster.filter((p) => !p.isForeign && p.age >= RETIRE_AGE - 1);
+    return { faSoon, expiring, retireSoon };
+  }, [my]);
+  const briefCount = briefing.faSoon.length + briefing.expiring.length + briefing.retireSoon.length;
+  const briefSummary = [
+    briefing.faSoon.length ? `FA 자격 ${briefing.faSoon.length}` : null,
+    briefing.expiring.length ? `계약 만료 ${briefing.expiring.length}` : null,
+    briefing.retireSoon.length ? `정년 임박 ${briefing.retireSoon.length}` : null,
+  ].filter(Boolean).join(' · ');
+
+  // ⑤ 우리 선수 생산 상위(단장 결정의 성적표) — leagueProduction 중 내 로스터
   const myTop = useMemo(() => {
     const prod = leagueProduction(day);
     const ids = new Set(teamPlayerIds(my));
@@ -55,66 +133,93 @@ function RecapInner() {
     return rows.filter((r) => r.l.points > 0).sort((a, b) => b.l.points - a.l.points).slice(0, 3);
   }, [day, my]);
 
-  const headline = championId === my ? { text: '🏆 우승!', color: theme.gold }
-    : myRank > 0 && myRank <= 3 ? { text: `포스트시즌 진출 · ${myRank}위`, color: theme.accent }
-    : myRank > 0 ? { text: `정규리그 ${myRank}위`, color: theme.text }
-    : { text: '시즌 종료', color: theme.text };
-
-  // 우리 선수 수상(있으면 강조)
-  const myAwards: string[] = [];
-  if (aw) {
-    if (isMine(aw.mvp)) myAwards.push(`정규 MVP — ${pName(aw.mvp!.playerId)}`);
-    if (isMine(aw.finalsMvp)) myAwards.push(`챔프전 MVP — ${pName(aw.finalsMvp!.playerId)}`);
-    if (isMine(aw.rookie)) myAwards.push(`신인상 — ${pName(aw.rookie!.playerId)}`);
-    if (isMine(aw.mostImproved)) myAwards.push(`기량발전상 — ${pName(aw.mostImproved!.playerId)}`);
-  }
-  const myBest7 = aw ? aw.best7.filter((s) => isMine(s.winner)).length : 0;
-
   const prodLine = (l: ProdLine) => `${l.matches}경기 · ${l.points}점 (스${l.spikes}·블${l.blocks}·서${l.aces})`
     + (l.assists > 0 ? ` · 세트${l.assists}` : '') + (l.digs > 0 ? ` · 디그${l.digs}` : '');
+  const faceLine = (list: Player[]) => list.map((p) => `${p.name} ${p.age}·${p.position}`).join(' · ');
+
+  const prodRow = (r: { id: string; l: ProdLine }, i: number) => (
+    <View key={r.id} style={styles.pRow}>
+      <Text style={styles.rank}>{i + 1}</Text>
+      <PosTag pos={getPlayer(r.id)?.position ?? 'OH'} />
+      <View style={{ flex: 1 }}>
+        <Text style={styles.pName} numberOfLines={1}>{pName(r.id)}</Text>
+        <Text style={styles.pSub} numberOfLines={1}>{prodLine(r.l)}</Text>
+      </View>
+    </View>
+  );
 
   return (
     <Screen title={`${seasonYear(season)} 결산`}>
-      {/* ① 우리 팀 헤드라인 한 줄 */}
+      {/* ① 포스트시즌 여정 헤드라인 — 시즌 결말은 즉시 보여야 함(카드 아닌 최상단 고정). */}
       <Card accent={headline.color}>
         <Muted>{getTeam(my)?.name ?? my} · {seasonYear(season)}</Muted>
-        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 2 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 10, marginTop: 2, flexWrap: 'wrap' }}>
           <Text style={{ color: headline.color, fontSize: 22, fontWeight: '900' }}>{headline.text}</Text>
           {myStanding ? (
-            <Text style={{ color: theme.text, fontSize: 16, fontWeight: '800' }}>{myStanding.wins}승 {myStanding.losses}패</Text>
+            <Text style={{ color: theme.text, fontSize: 16, fontWeight: '800' }}>정규 {myRank}위 · {myStanding.wins}승 {myStanding.losses}패</Text>
           ) : null}
         </View>
-        {(myAwards.length > 0 || myBest7 > 0) ? (
-          <Text style={{ color: theme.accent, fontSize: 13, fontWeight: '700', marginTop: 6 }}>
-            {[...myAwards, myBest7 > 0 ? `베스트7 ${myBest7}명` : null].filter(Boolean).join(' · ')}
-          </Text>
+      </Card>
+
+      {/* ② 우리 선수 활약 — 요약 = 최고 생산 1줄, 상세 = 상위 3명 */}
+      <IconLabel icon="people-outline" color={theme.elite}>우리 선수 활약</IconLabel>
+      {myTop.length === 0 ? (
+        <Card accent={theme.elite}><Muted style={{ fontSize: 13 }}>이번 시즌 집계된 생산 기록이 없습니다.</Muted></Card>
+      ) : (
+        <ExpandCard accent={theme.elite} detail={myTop.length > 1 ? <>{myTop.slice(1).map((r, i) => prodRow(r, i + 1))}</> : undefined}>
+          {prodRow(myTop[0], 0)}
+        </ExpandCard>
+      )}
+
+      {/* ③ 우리 팀 수상 종합(내 수상 있을 때만) — 요약 = 첫 수상 + 개수, 상세 = 전체 나열 */}
+      {awardLines.length > 0 ? (
+        <>
+          <IconLabel icon="trophy-outline" color={theme.gold}>우리 팀 수상</IconLabel>
+          <ExpandCard accent={theme.gold} detail={awardLines.length > 1 ? <>{awardLines.slice(1).map((a) => <Text key={a} style={styles.awardRow}>{a}</Text>)}</> : undefined}>
+            <Text style={styles.awardRow}>{awardLines[0]}</Text>
+            {awardLines.length > 1 ? <Muted style={{ fontSize: 12.5, marginTop: 2 }}>수상 {awardLines.length}건</Muted> : null}
+          </ExpandCard>
+        </>
+      ) : null}
+
+      {/* ④ 시즌 스토리 수치 — 3초 파악 수치(요약만, 상세 없음) */}
+      <IconLabel icon="stats-chart-outline" color={theme.accent}>시즌 스토리</IconLabel>
+      <Card accent={theme.accent}>
+        {maxWinStreak >= 2 ? <Row><Muted>최다 연승</Muted><Text style={styles.fin}>{maxWinStreak}연승</Text></Row> : null}
+        <Row><Muted>팬심</Muted><Text style={styles.fin}>{fanScore}</Text></Row>
+        <Row><Muted>운영 자금</Muted><Text style={styles.fin}>{formatMoney(cash)}</Text></Row>
+        {lastFinance ? (
+          <>
+            <Row><Muted>전 시즌 순익</Muted><Text style={[styles.fin, { color: lastFinance.net >= 0 ? theme.good : theme.bad }]}>{lastFinance.net >= 0 ? '+' : ''}{formatMoney(lastFinance.net)}</Text></Row>
+            <Row><Muted>평균 관중</Muted><Text style={styles.fin}>{lastFinance.attendance.toLocaleString()}명</Text></Row>
+          </>
         ) : null}
       </Card>
 
-      {/* ② 우리 선수 하이라이트(단장 결정의 성적표) */}
-      <IconLabel icon="people-outline" color={theme.elite}>우리 선수 활약</IconLabel>
-      <Card accent={theme.elite}>
-        {myTop.length === 0 ? (
-          <Muted style={{ fontSize: 13 }}>이번 시즌 집계된 생산 기록이 없습니다.</Muted>
-        ) : myTop.map((r, i) => (
-          <View key={r.id} style={styles.pRow}>
-            <Text style={styles.rank}>{i + 1}</Text>
-            <PosTag pos={getPlayer(r.id)?.position ?? 'OH'} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.pName} numberOfLines={1}>{pName(r.id)}</Text>
-              <Text style={styles.pSub} numberOfLines={1}>{prodLine(r.l)}</Text>
-            </View>
-          </View>
-        ))}
-      </Card>
+      {/* ⑤ 다음 시즌 숙제 — 요약 = 개수, 상세 = 명단 */}
+      {briefCount > 0 ? (
+        <>
+          <IconLabel icon="clipboard-outline" color={theme.warn}>다음 시즌 숙제</IconLabel>
+          <ExpandCard accent={theme.warn} detail={
+            <>
+              {briefing.faSoon.length > 0 ? (
+                <View style={styles.taskRow}><Text style={styles.taskLabel}>FA 자격 도래</Text><Text style={styles.taskFaces}>{faceLine(briefing.faSoon)}</Text></View>
+              ) : null}
+              {briefing.expiring.length > 0 ? (
+                <View style={styles.taskRow}><Text style={styles.taskLabel}>계약 만료 임박</Text><Text style={styles.taskFaces}>{faceLine(briefing.expiring)}</Text></View>
+              ) : null}
+              {briefing.retireSoon.length > 0 ? (
+                <View style={styles.taskRow}><Text style={styles.taskLabel}>정년 임박(39세)</Text><Text style={styles.taskFaces}>{faceLine(briefing.retireSoon)}</Text></View>
+              ) : null}
+            </>
+          }>
+            <Text style={styles.awardRow}>{briefSummary}</Text>
+            <Muted style={{ fontSize: 12.5, marginTop: 2 }}>다음 오프시즌에 챙길 선수들</Muted>
+          </ExpandCard>
+        </>
+      ) : null}
 
-      {/* 리그 시상·베스트7은 시상식 화면(awards-ceremony)으로 이관(삼중 표시 방지, AWARDS_SYSTEM §7). 여기선 ① 내 팀 수상 요약만 */}
-
-      {/* 재정·팬덤 한 줄(선택) */}
-      <Card accent={theme.warn}>
-        <Row><Muted>운영 자금</Muted><Text style={styles.fin}>{formatMoney(cash)}</Text></Row>
-        <Row><Muted>팬심</Muted><Text style={styles.fin}>{fanScore}</Text></Row>
-      </Card>
+      {/* 리그 시상·베스트7은 시상식 화면(champion/awards-ceremony)으로 이관(삼중 표시 방지, AWARDS_SYSTEM §7). 여기선 내 팀 수상만. */}
 
       <Muted style={{ fontSize: 12, textAlign: 'center' }}>한 시즌이 끝났습니다. 통산 기록·연표는 마이페이지 → 기록에서.</Muted>
       <Button label="오프시즌 · 외국인 트라이아웃 →" onPress={() => router.push('/tryout')} />
@@ -128,4 +233,11 @@ const styles = themedStyles(() => StyleSheet.create({
   pName: { color: theme.text, fontSize: 15, fontWeight: '700' },
   pSub: { color: theme.muted, fontSize: 12.5, marginTop: 1 },
   fin: { color: theme.text, fontWeight: '800', fontSize: 15 },
+  awardRow: { color: theme.text, fontSize: 14, fontWeight: '700', paddingVertical: 2 },
+  taskRow: { paddingVertical: 4 },
+  taskLabel: { color: theme.warn, fontSize: 12.5, fontWeight: '800' },
+  taskFaces: { color: theme.text, fontSize: 13.5, fontWeight: '600', marginTop: 1 },
+  detailBox: { marginTop: 8, paddingTop: 8, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border },
+  moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 6 },
+  moreText: { color: theme.muted, fontSize: 12.5, fontWeight: '700' },
 }));

@@ -51,6 +51,35 @@ export function buildPlayoffs(season: number): Playoffs {
   return { seeds, po, final, championId };
 }
 
+// ── 시즌 결산 헤드라인용: 내 팀의 포스트시즌 결말(한 줄 서사) ─────────────────
+// season-recap이 "시즌 최대 사건"을 첫 줄로 말하려고 읽는다(SEASON_SYSTEM §5.5). 순수 파생.
+// 스포일러: 호출측이 championId(archive) 존재 = champion-ceremony 통과 후에만 부른다(플옵 전부 공개 상태).
+export type PostseasonOutcomeKind = 'integrated' | 'champion' | 'runnerUp' | 'poOut' | 'missed';
+export interface PostseasonOutcome {
+  kind: PostseasonOutcomeKind;
+  myWins: number;   // 마지막으로 치른 시리즈의 내 팀 게임 승(시점 보정)
+  myLosses: number; // 〃 패
+  round: 'final' | 'po' | null;
+}
+
+/** 내 팀 시점 시리즈 게임 승패 [승, 패] */
+function myGamesWL(m: Matchup, myTeamId: string): [number, number] {
+  return m.hiId === myTeamId ? [m.series.hiWins, m.series.loWins] : [m.series.loWins, m.series.hiWins];
+}
+
+/** buildPlayoffs 결과에서 내 팀의 시즌 결말을 도출. 통합우승(정규1위+챔프)/우승(하위시드 챔프)/준우승/PO탈락/미진출. */
+export function myPostseasonOutcome(p: Playoffs, myTeamId: string): PostseasonOutcome {
+  const inFinal = !!p.final && (p.final.hiId === myTeamId || p.final.loId === myTeamId);
+  const inPo = !!p.po && (p.po.hiId === myTeamId || p.po.loId === myTeamId);
+  if (p.championId === myTeamId) {
+    const [w, l] = p.final ? myGamesWL(p.final, myTeamId) : [0, 0];
+    return { kind: p.seeds[0] === myTeamId ? 'integrated' : 'champion', myWins: w, myLosses: l, round: p.final ? 'final' : null };
+  }
+  if (inFinal) { const [w, l] = myGamesWL(p.final!, myTeamId); return { kind: 'runnerUp', myWins: w, myLosses: l, round: 'final' }; }
+  if (inPo) { const [w, l] = myGamesWL(p.po!, myTeamId); return { kind: 'poOut', myWins: w, myLosses: l, round: 'po' }; }
+  return { kind: 'missed', myWins: 0, myLosses: 0, round: null };
+}
+
 /** 팀별 그 시즌 플옵 시리즈 경기 결과(W/L 시퀀스, 팀 시점) — 리버스 스윕·블론 등 서사 업적용.
  *  한 팀이 PO와 결승을 모두 치르면 2개 시리즈가 쌓인다(시간순: PO 먼저). */
 export function seriesByTeam(p: Playoffs): Record<string, ('W' | 'L')[][]> {
