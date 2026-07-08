@@ -243,6 +243,7 @@ export interface RetireRecord {
   teamId: string;                                            // 마지막 소속(prevTeamOf)
   seasons: number; points: number; blocks: number; digs: number; aces: number; assists: number; // 통산
   hof: boolean; legend: boolean;                             // 명전 등재 / 영구결번급
+  age?: number;                                              // 은퇴 나이(정년40 기사 구분 — 옵셔널, 구세이브 호환)
 }
 
 /** 드래프트 입단 영속 기록 — 오프시즌 신인 지명(NEWS_SYSTEM 슬라이스6 오프시즌 결산). 안개 원칙: 포지션만, 정확 OVR 미저장(신인 실력은 경기로 드러남). */

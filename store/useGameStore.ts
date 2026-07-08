@@ -55,6 +55,7 @@ import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
+import { RETIRE_AGE } from '../engine/retire';
 import type { Contract, DraftPickRecord, ExpelRecord, FocusSeg, ForeignSwapRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
 import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
@@ -435,6 +436,9 @@ export const useGameStore = create<GameState>()(
         if (!(currentRosters()[my] ?? []).includes(playerId)) return { ok: false, reason: 'not-mine' };
         const base = getPlayer(playerId);
         if (!base) return { ok: false, reason: 'not-found' };
+        // 정년(40세) 앞둔 선수 차단(2026-07-08): day0의 age>=39는 이번 시즌 뒤 무조건 은퇴 → "동행 연장"을 팔 수 없다.
+        //   경고가 아니라 차단(사용자 결정). RETIRE_AGE-1 이상 = 다음 롤오버 정년 도달.
+        if (base.age >= RETIRE_AGE - 1) return { ok: false, reason: 'retiring' };
         if (!courseUpgradable(base, course)) return { ok: false, reason: 'maxed' }; // 3스탯 전부 현재·포텐 99
         const userId = useAuthStore.getState().session?.userId;
         if (!userId) return { ok: false, reason: 'offline' };
@@ -1060,7 +1064,7 @@ export const useGameStore = create<GameState>()(
             seasonRetires.push({
               season, playerId: id, name: base.name, position: base.position, teamId: ctx.prevTeamOf[id] ?? '',
               seasons: c.seasons, points: c.points, blocks: c.blocks, digs: c.digs, aces: c.aces, assists: c.assists,
-              hof: isHof, legend: c.points >= LEGEND_POINTS,
+              hof: isHof, legend: c.points >= LEGEND_POINTS, age: base.age, // 정년(40) 기사 구분
             });
           }
         }

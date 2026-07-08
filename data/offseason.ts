@@ -4,7 +4,7 @@
 
 import type { Contract, Player } from '../types';
 import { createRng } from '../engine/rng';
-import { applyRetirements } from '../engine/retire';
+import { applyRetirements, capContractYears } from '../engine/retire';
 import { rollExpulsion, scandalRepMul, type ExpelKind } from '../engine/scandal';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
 import { aiRetainProb, medianOvr, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
@@ -202,7 +202,7 @@ export function resolveFAMarket(
     const finalSalary = clampSalary(win.offer, p); // 개인 상한(프랜차이즈 예외) 적용
     snapshot[id] = {
       ...p,
-      contract: { salary: finalSalary, years: RENEW_FA_YEARS, remaining: RENEW_FA_YEARS, signedAtAge: p.age },
+      contract: { salary: finalSalary, years: capContractYears(p.age, RENEW_FA_YEARS), remaining: capContractYears(p.age, RENEW_FA_YEARS), signedAtAge: p.age },
     };
     rosters[win.teamId] = [...rosters[win.teamId], id];
     payroll[win.teamId] += finalSalary;
@@ -268,7 +268,8 @@ export function buildOffseason(
   setSalaryEra(leagueMedOvr); // marketVal(주입 컨텍스트) 사용처(FA 요구액·AI 수혈 등)와 동기화
   const snapshot = rolloverLeague(currentBasePlayers(), focusOf, leagueMedOvr, contractOverrides, effectsOf, (p) => lostDays.get(p.id) ?? 0);
   const retireRng = createRng(70000 + nextSeason * 977);
-  const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng);
+  // medOvr = 시대 앵커(위 leagueMedOvr) — 은퇴 기준선 HIGH도 시대상대(연봉·AI잔류와 같은 패턴).
+  const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng, leagueMedOvr);
 
   // 영구제명(SCANDAL terminal) — 은퇴 생존자 중 승부조작·학폭 등으로 리그 영구 퇴출(결정론).
   //   제명자는 잔류도 FA 풀도 아닌 '소멸'(은퇴와 동급 종착이나 불명예 — HOF 불가).

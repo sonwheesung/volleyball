@@ -13,6 +13,7 @@ import { getPlayer, teamPlayerIds } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
 import { buildLineup } from '../engine/lineup';
 import { overall } from '../engine/overall';
+import { RETIRE_AGE } from '../engine/retire';
 import { POS_ORDER } from '../components/posTokens';
 import { CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, WELCOME_DIAMONDS, courseUpgradable, type CampCourse } from '../engine/diamonds';
 import type { Player, TrainableStat } from '../types';
@@ -173,20 +174,26 @@ export default function TrainingCamp() {
         <Muted style={{ fontSize: 12.5, marginTop: 2, marginBottom: 2, lineHeight: 18 }}>
           <Text style={{ color: theme.good, fontWeight: '800' }}>주전</Text>은 출전이 많아 키운 실력이 성장으로 빨리 실현됩니다. 어린 벤치 선수는 훗날 주전을 꿰찰 재목일 때 값어치가 커요 — 누구에게 투자할지, 이 표시가 기준선입니다.
         </Muted>
+        <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 2, lineHeight: 17 }}>
+          정년({RETIRE_AGE}세)을 앞둔 선수는 이번 시즌 뒤 은퇴하므로 캠프 명단에서 제외됩니다.
+        </Muted>
         {sortedRoster.map((p, i) => {
           const done = camped.includes(p.id);
+          const retiring = p.age >= RETIRE_AGE - 1; // 정년 임박(다음 롤오버 은퇴) — 차단(스토어 가드와 동일 기준)
           const role = roleOf[p.id]; // '주전' | '리베로' | undefined(벤치)
           return (
             <View key={p.id}>
               {showGroups && i === 0 ? <Text style={styles.groupLabel}>주전</Text> : null}
               {showGroups && i === firstBenchIdx ? <Text style={styles.groupLabel}>벤치</Text> : null}
-              <Pressable disabled={done} onPress={() => { setPicked(p.id); setCourse(null); }}
-                style={({ pressed }) => [styles.prow, done && { opacity: 0.45 }, pressed && { opacity: 0.7 }]}>
+              <Pressable disabled={done || retiring} onPress={() => { setPicked(p.id); setCourse(null); }}
+                style={({ pressed }) => [styles.prow, (done || retiring) && { opacity: 0.45 }, pressed && { opacity: 0.7 }]}>
                 <PosTag pos={p.position} />
                 <Text style={styles.pname} numberOfLines={1}>{p.name}</Text>
                 <RoleBadge role={role} />
                 <Text style={styles.psub}>{p.age}세</Text>
-                {done ? <Text style={styles.doneTag}>완료</Text> : <Text style={styles.arrow}>›</Text>}
+                {done ? <Text style={styles.doneTag}>완료</Text>
+                  : retiring ? <Text style={styles.doneTag}>정년</Text>
+                  : <Text style={styles.arrow}>›</Text>}
               </Pressable>
             </View>
           );
@@ -223,6 +230,7 @@ export default function TrainingCamp() {
         : r.reason === 'already' ? '이 선수는 이번 오프시즌에 이미 다녀왔습니다.'
         : r.reason === 'not-offseason' ? '오프시즌에만 가능합니다.'
         : r.reason === 'maxed' ? '이 코스의 능력치가 모두 한계(99)입니다.'
+        : r.reason === 'retiring' ? `정년(${RETIRE_AGE}세)을 앞둔 선수는 이번 시즌 뒤 은퇴하므로 전지훈련을 보낼 수 없습니다.`
         : '전지훈련을 보낼 수 없습니다.');
     }
   };

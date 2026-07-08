@@ -7,6 +7,7 @@ import { evolvePlayer, type FocusInput } from './progression';
 import { type StaffEffects, NO_EFFECTS } from './staff';
 import { FIRST_FA_SEASONS } from './faMarket';
 import { clampSalary, LEAGUE_CAP } from './cap';
+import { capContractYears } from './retire';
 import { marketValue } from './salary';
 import { createRng, strSeed } from './rng';
 import { TRAINABLE_STATS } from './training';
@@ -43,7 +44,9 @@ export function maybeBreakthrough(grown: Player): Player {
 /** 시장가치로 재계약된 계약(자동연장·잔류). 개인 연봉 상한(프랜차이즈 예외) 적용.
  *  medOvr = 리그 국내 OVR 중앙값(시대 앵커, SALARY 2장 2026-07-02) — buildOffseason이 계산해 전달. */
 export function renewedContract(p: Player, medOvr: number): Contract {
-  return { salary: clampSalary(marketValue(p, medOvr), p), years: RENEW_YEARS, remaining: RENEW_YEARS, signedAtAge: p.age };
+  // 정년 캡: p.age = 롤오버된 나이(=계약 첫 시즌 나이) → 39세까지만(RETIRE_AGE−age). 노장 다년계약 캡누수 차단.
+  const yrs = capContractYears(p.age, RENEW_YEARS);
+  return { salary: clampSalary(marketValue(p, medOvr), p), years: yrs, remaining: yrs, signedAtAge: p.age };
 }
 
 /** 한 선수의 시즌 롤오버. medOvr = 시대 앵커(영건 자동연장 연봉용). override = 시즌 중 재계약된 계약(있으면 우선).

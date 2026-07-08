@@ -8,6 +8,7 @@ import type { Rng } from './rng';
 import type { ProdLine } from './production';
 import { MED_REF, overall } from './overall';
 import { clampSalary, maxSalaryFor } from './cap';
+import { capContractYears } from './retire';
 
 const BASE = 24000;          // 중립 배수에서 ~2.4억
 
@@ -17,10 +18,12 @@ export function resignOptions(p: Player, market: number): ResignOption[] {
   const r100 = (x: number) => Math.round(x / 100) * 100;
   const cap = maxSalaryFor(p);                       // 개인 상한(프랜차이즈 11억 / 8억)
   const old = p.age >= 32, young = p.age <= 27;
-  const genYears = old ? 2 : young ? 5 : 4;          // 나이 적합 — 노장 후하게도 단기
-  const shortYears = old ? 1 : 2;
+  // 정년 캡: 재계약은 인시즌 결정 → 다음 시즌(age+1)부터 발효. 39세까지만(RETIRE_AGE−(age+1)). 노장 다년계약 차단.
+  const cy = (y: number) => capContractYears(p.age + 1, y);
+  const genYears = cy(old ? 2 : young ? 5 : 4);      // 나이 적합 — 노장 후하게도 단기
+  const shortYears = cy(old ? 1 : 2);
   return [
-    { key: 'standard', label: '표준', salary: Math.min(cap, r100(market)), years: 3, note: '시장가 · 3년' },
+    { key: 'standard', label: '표준', salary: Math.min(cap, r100(market)), years: cy(3), note: `시장가 · ${cy(3)}년` },
     { key: 'generous', label: '후하게', salary: Math.min(cap, r100(market * 1.15)), years: genYears, note: `+15% · ${genYears}년 — 충성·길게 묶기(캡 부담)` },
     { key: 'short', label: '짧게', salary: Math.min(cap, r100(market * 0.85)), years: shortYears, note: `−15% · ${shortYears}년 — 싸게·곧 재협상(불만 위험)` },
   ];

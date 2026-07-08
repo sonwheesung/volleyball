@@ -7,6 +7,7 @@ import type { DraftPickRecord, ExpelRecord, ForeignSwapRecord, HofEntry, Milesto
 import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
 import { jerseyNumber } from '../engine/jersey';
+import { RETIRE_AGE } from '../engine/retire';
 import { ALL_POSITIONS } from '../engine/overall';
 import { prospectArcRetro } from './seed';
 import { numberLineage } from './legends';
@@ -415,7 +416,8 @@ export function buildNewsFeed(
       : r.position === 'MB' ? (r.blocks > 0 ? `블로킹 ${r.blocks.toLocaleString()}개로 네트 앞을 지킨 벽` : `${r.seasons}시즌 코트를 지킨 미들 블로커`)
       : (r.points > 0 ? `통산 ${r.points.toLocaleString()}점을 책임진 득점원` : `${r.seasons}시즌 코트를 지킨 ${posKo}`);
     const arc = prospectArcRetro(r.playerId); // 드래프트 출신 은퇴자 커리어 유형 회고(대기만성/즉시전력 — 현역엔 미노출)
-    const tail = (r.legend ? ` ${teamName(r.teamId)}은(는) 헌액 번호 ${jerseyNumber(r.playerId)}번을 전당에 새겨 영원히 기린다.`
+    const ageTail = (r.age ?? 0) >= RETIRE_AGE ? ` 리그 정년(${RETIRE_AGE}세)을 맞아 코트를 정리했다.` : ''; // 40세 정년 은퇴는 사실 기반 문구
+    const tail = ageTail + (r.legend ? ` ${teamName(r.teamId)}은(는) 헌액 번호 ${jerseyNumber(r.playerId)}번을 전당에 새겨 영원히 기린다.`
       : r.hof ? ' 통산 기록은 명예의전당에 새겨진다.' : '') + (arc ? ` ${arc}` : '');
     push(r.season, 'retire', vh([
       (n) => `${n}, ${r.seasons}시즌 커리어 마치고 은퇴`,

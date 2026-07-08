@@ -433,7 +433,8 @@
 - **[B] clinch 승수 vs 승점 불일치(2세션)**: `engine/clinch.ts`는 `t.wins`(승 수)로 PO 확정/탈락 판정하나 `data/standings.ts`는
   KOVO 승점(3-0/3-1=3·3-2=2·풀세트패=1)으로 정렬 → 헤더가 '확정/탈락 100% 신뢰'라 보장하나 듀스 잦은 시즌에 표시 rank와 모순 가능. **감시 — verify-cases 확정 필요**.
 - **[C] 외인 은퇴 누수(1세션)**: `engine/retire.ts applyRetirements`가 isForeign 미제외(offseason.expel은 제외) → 노장 외인이
-  국내 은퇴/HOF/코치 파이프라인에 샐 가능(FOREIGN_SYSTEM 7 위반). **감시**.
+  국내 은퇴/HOF/코치 파이프라인에 샐 가능(FOREIGN_SYSTEM 7 위반). ~~**감시**~~ → **✅ 수정(2026-07-08, 은퇴 재정비)**: `applyRetirements`가
+  외인을 은퇴 루프에서 제외(rng 미소비·로스터 유지 → 하류 `returningForeign` 분리). 정년 40 외인도 국내 은퇴자 목록 비포함. 가드 `tools/_dv_retire.ts` ③(외인 41세 제외·rng 미소비 국내 판정 불변).
 - **[D] 손상세이브 NaN 내성**(potential/catTalent 결손·salary/bonds NaN, 다수 세션): sanitize가 값 검증 약함 → NaN 전파. **감시**.
 - **[E] 가용<7(부상 cap3 + 스캔들 정지 무캡 겹침)**: §3.6/§3.12 기지 클래스 재확인(스웜이 독립 재발견 = 검출 신뢰).
 
