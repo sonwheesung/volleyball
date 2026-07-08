@@ -124,7 +124,7 @@
 ## 3. 마이그레이션 정책 (구현 — `store/saveMigration.ts`)
 
 ### 3.1 버전 + migrate
-- `persist`에 **`version: SAVE_VERSION`**(현재 **2**)을 둔다. 기존 무버전 세이브 = version 0 → 로드 시 `migrate` 호출.
+- `persist`에 **`version: SAVE_VERSION`**(현재 **3**)을 둔다. 기존 무버전 세이브 = version 0 → 로드 시 `migrate` 호출.
 - **`migrate(persisted, fromVersion)`** = `migrateSave`:
   1. (향후) `fromVersion`이 낮으면 그 버전→다음 버전 **변환 단계**를 순서대로 적용(필드 이름변경·구조재편).
   2. 마지막에 **`sanitizeSave`**(컨테이너 모양 정규화)로 모든 필드를 기대 자료구조로 강제.
@@ -133,6 +133,10 @@
     `focusLog`가 비어있고 `trainingFocus`가 있으면 **`[{fromDay:0, focus:trainingFocus}]`로 시드**한다. day0부터 상수 방침 = **옛
     리플레이와 바이트 동일**(회귀 무해). 방침 미설정(trainingFocus=null)이면 `[]`. 신규 세이브(focusLog 존재)는 시드 스킵(보존).
     가드: `tools/_dv_batch_a4.ts`(마이그레이션 바이트 동일 + focusLog 시드 케이스).
+  - **v2→v3(2026-07-08, A안 포스트시즌 달력 편입 SEASON §5.3)**: 구세이브가 **정규 완료 + `archive[season].championId` 존재**
+    (=이미 포스트시즌을 소비)인데 `currentDay`가 정규 범위(<`POSTSEASON_LAST_DAY=183`)에 멈춰 있으면, 새 일정 화면이 이를
+    "플옵 미진행"으로 오인해 **재관전을 강요**한다 → `currentDay`를 `183`으로 승격해 오프시즌 체인 직행. 진화 조회는
+    `min(day, SEASON_DAYS)` 클램프라 currentDay 승격이 스탯·순위·생산에 **무영향**(동결 규칙). 가드: `tools/_dv_postseason.ts` ④.
 
 ### 3.2 정규화기(`sanitizeSave`) — 컨테이너 모양 강제
 필드별 자료구조(§1)대로 코어스(coerce):

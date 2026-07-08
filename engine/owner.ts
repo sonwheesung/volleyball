@@ -206,7 +206,7 @@ export function startSuggestAccept(playerId: string, season: number, day: number
 }
 
 // ── 거절 사유 (OWNER §2.2 ★) — 고정 우선순위 금지. **실제 감점량이 가장 큰 요인** + p 게이팅. UI 반환용 ephemeral. ──
-export type OwnerRejectReason = 'ace' | 'ability' | 'conviction' | 'coachCall';
+export type OwnerRejectReason = 'ace' | 'ability' | 'conviction' | 'coachCall' | 'postseason'; // postseason: 플옵 엔트리 동결(SEASON §5.0) — 성향 무관 무조건 거절
 const GATE_P = 0.55;        // 이 이상이었는데 거절 = 시드 운 → 구조적 원인 없음 → coachCall
 const MIN_SHORTFALL = 0.03; // 최대 감점이 이보다 작으면 "원인"이라 하기 미미 → coachCall
 export function benchRejectReason(charisma: number, ovrGapT: number, aceRank: number, reason: BenchReason): OwnerRejectReason {

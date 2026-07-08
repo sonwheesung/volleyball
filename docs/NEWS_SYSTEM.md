@@ -56,7 +56,7 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 
 ## 3. 기사 소재 카탈로그 (전체)
 
-`kind`(NewsItem.kind) = `champion|award|milestone|hof|injury|scandal|owner|match|debut|streak|standing|transfer|release|retire|sponsor|offseason|draft|foreign`
+`kind`(NewsItem.kind) = `champion|award|milestone|hof|injury|scandal|owner|match|debut|streak|standing|transfer|release|retire|sponsor|offseason|draft|foreign|playoff`
 (신규 kind: `match`·`debut`·`streak`·`standing` + 이적류 `transfer`·`release`(§3.3)·`retire`(§3.4) + **`sponsor`**(모기업 기조 예고, FINANCE 2.0 Stage2b·2026-06-29) + **`offseason`·`draft`·`foreign`**(오프시즌 결산 — 종합·드래프트 입단·외인 교체, §3.7·2026-07-08))
 
 ### 3.1 실시간 (시즌 중) — 초반을 채운다
@@ -83,6 +83,7 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 |---|---|---|---|
 | 우승 | champion | archive.championId (기존) | ★ |
 | **준우승·리버스스윕 피해** | champion | series에서 결승 패/2승후 3패 | 리버스스윕피해=★ |
+| **준PO/결승 경기·시리즈 확정** | playoff | data/postseason `postseasonReveal` — **치른(공개) 게임/시리즈만** (2026-07-08 달력 편입 §5.2) | 결승 확정=★ |
 | 정규 MVP / 챔프 MVP | award | awards.mvp / finalsMvp (기존) | mvp=★ |
 | 신인상 / 기량발전상 | award | awards.rookie / mostImproved (기존) | 단신 |
 | **기록왕 6종** | award | awards.titles.{scoring,spike,block,serve,dig,set,receive} — **전부** | 단신 |

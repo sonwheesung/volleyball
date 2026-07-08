@@ -2,7 +2,11 @@
 // 핵심: 컨테이너 모양(array/record/scalar)을 강제해 복원 경로의 [...arr]·Object.keys·destructure 크래시를 닫는다.
 // version+migrate로 향후 breaking 구조 변경(필드 이름변경·재편)도 단계 변환으로 흡수.
 
-export const SAVE_VERSION = 2; // v2(2026-07-08): 훈련 방침 타임라인 focusLog 추가 — 구 단일 trainingFocus를 [{fromDay:0}]로 시드(A4)
+// v3(2026-07-08): 포스트시즌 달력 편입(SEASON_SYSTEM §5). 구세이브가 이미 포스트시즌을 소비(archive[season].championId 존재)
+//   했는데 currentDay가 정규 범위(≤164)에 멈춰 있으면, 새 일정 화면이 이를 "플옵 미진행"으로 오인해 재관전을 강요한다.
+//   → A안: 그런 세이브는 currentDay를 포스트시즌 종료일(POSTSEASON_LAST_DAY=183)로 승격해 오프시즌 체인으로 직행(재관전 금지).
+export const SAVE_VERSION = 3;
+const POSTSEASON_LAST_DAY = 183; // engine/calendar.POSTSEASON_LAST_DAY 손복제 회피용 로컬(saveMigration은 leaf 유지 — engine import 시 순환 위험). _dv_postseason이 일치 가드.
 
 // 영속 65필드 기본값 — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
 // (drift 가드: _dv_migrate가 이 키 집합 == partialize 키 집합을 단언한다.)
@@ -147,6 +151,15 @@ export function migrateSave(persisted: unknown, _version: number): Record<string
   //   신규 세이브는 focusLog를 항상 함께 저장하므로 비어있으면 = 구세이브(또는 방침 미설정). trainingFocus 있을 때만 시드.
   if ((out.focusLog as unknown[]).length === 0 && out.trainingFocus) {
     out.focusLog = [{ fromDay: 0, focus: out.trainingFocus }];
+  }
+  // v3 마이그레이션(A안, 포스트시즌 달력 편입) — 이미 우승 확정된 시즌(archive[season].championId 존재)인데
+  //   currentDay가 정규 범위(≤183 미만)에 있으면 포스트시즌 종료일로 승격 → 오프시즌 직행(재관전 강요 금지).
+  //   진화 조회는 min(day, SEASON_DAYS) 클램프라 currentDay 승격이 스탯·순위·생산에 무영향(동결 규칙).
+  {
+    const season = out.season as number;
+    const archive = out.archive as Array<{ season?: number; championId?: string }>;
+    const done = Array.isArray(archive) && archive.some((a) => a && a.season === season && !!a.championId);
+    if (done && (out.currentDay as number) < POSTSEASON_LAST_DAY) out.currentDay = POSTSEASON_LAST_DAY;
   }
   return out;
 }

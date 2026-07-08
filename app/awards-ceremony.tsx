@@ -73,7 +73,7 @@ function CeremonyInner() {
         </>
       ) });
     }
-    if (aw.finalsMvp) out.push({ key: 'finals', el: winnerCard('medal-outline', '챔피언결정전 MVP', aw.finalsMvp) });
+    // 챔프전 MVP는 champion-ceremony(우승팀 시상식)에서만 수여(중복 금지, §5.3). 여기선 제외.
     if (aw.mvp) out.push({ key: 'mvp', el: winnerCard('ribbon-outline', '정규리그 MVP', aw.mvp, '', true) });
     return out;
   }, [aw, my]);
@@ -89,7 +89,8 @@ function CeremonyInner() {
     Animated.timing(t, { toValue: 1, duration: 380, useNativeDriver: true }).start();
   }, [idx, t]);
 
-  const goRecap = () => router.push('/season-recap');
+  // §5.3 세리머니 체인(2026-07-08): 시상식이 끝나면 **일정 화면으로 복귀** — 일정이 "시즌 결산" 버튼을 노출(마커=archive.championId).
+  const goRecap = () => { router.dismissAll(); router.replace('/(tabs)/schedule'); };
   const next = () => {
     if (onLast) return; // 마지막은 버튼으로 진행(클라이맥스 음미)
     Animated.timing(t, { toValue: 0, duration: 170, useNativeDriver: true }).start(() => setIdx((i) => Math.min(i + 1, last)));
@@ -99,7 +100,7 @@ function CeremonyInner() {
     return (
       <Screen title={`${seasonYear(season)} 시상식`}>
         <Muted style={{ textAlign: 'center', marginTop: 40 }}>이번 시즌 시상 내역이 없습니다.</Muted>
-        <Button label="시즌 결산 →" onPress={goRecap} />
+        <Button label="일정으로 돌아가기 →" onPress={goRecap} />
       </Screen>
     );
   }
@@ -126,7 +127,7 @@ function CeremonyInner() {
         </AnimView>
       </Pressable>
 
-      {onLast ? <Button label="시즌 결산 →" onPress={goRecap} /> : null}
+      {onLast ? <Button label="일정으로 돌아가기 →" onPress={goRecap} /> : null}
     </Screen>
   );
 }

@@ -29,6 +29,7 @@
 import { resetLeagueBase } from '../data/league';
 import { computeStandings } from '../data/standings';
 import { buildPlayoffs, type Playoffs } from '../data/playoffs';
+import { buildPlayoffBox } from '../data/postseason'; // 보드 재생 바이트 공유 검증(2026-07-08 달력 편입)
 
 const log = (m: string) => process.stdout.write(m + '\n');
 const fails: string[] = [];
@@ -166,8 +167,32 @@ check(champ.s1 > champ.s2 && champ.s2 > champ.s3, `챔피언 분포 상위시드
   check(realViol === 0, `실제 데이터는 0 위반 (오라클이 정상판을 잘못 잡지 않음)`);
 }
 
+// ── (d) 보드 재생 == series.games 바이트 동일(달력 편입 §5.1 — 최대 급소) ──
+//   내 경기 보드는 buildPlayoffBox(playSeries 바이트 공유)로 재생 → 점수판(series.games[g])과 재생 세트스코어 일치.
+//   box 빌더는 팀 무관 경로라 "내 팀(hi)·타 팀(lo) 매치업" 모두 같은 코드 — 준PO·결승 각 1케이스 + 전 시즌 스윕.
+{
+  let boardBad = 0, boardTotal = 0;
+  for (let s = 0; s < 60; s++) {
+    const p = buildPlayoffs(s);
+    for (const round of ['po', 'final'] as const) {
+      const m = round === 'po' ? p.po : p.final;
+      if (!m) continue;
+      for (let g = 0; g < m.series.games.length; g++) {
+        boardTotal++;
+        const box = buildPlayoffBox(s, round, g, p);
+        if (box.sim.homeSets !== m.series.games[g].hiSets || box.sim.awaySets !== m.series.games[g].loSets) boardBad++;
+      }
+    }
+  }
+  check(boardBad === 0, `보드 재생 세트스코어 == series.games[g] (준PO·결승 전 게임, ${boardTotal}게임 전부 일치 · 내 팀=hi/타 팀=lo 공용 경로)`);
+  // 명시 케이스: season 0 준PO g0(하위 시드=lo 관점) + 결승 g0(상위 시드=hi 관점)
+  const p0 = buildPlayoffs(0);
+  if (p0.po) { const b = buildPlayoffBox(0, 'po', 0, p0); check(b.sim.homeSets === p0.po.series.games[0].hiSets && b.sim.awaySets === p0.po.series.games[0].loSets, '보드재생 케이스: 준PO g0 세트스코어 == 점수판'); }
+  if (p0.final) { const b = buildPlayoffBox(0, 'final', 0, p0); check(b.sim.homeSets === p0.final.series.games[0].hiSets && b.sim.awaySets === p0.final.series.games[0].loSets, '보드재생 케이스: 결승 g0 세트스코어 == 점수판'); }
+}
+
 log('');
 if (fails.length) { log(`PLAYOFFS FAIL — ${fails.length}건: ${fails.join(' / ')}`); process.exit(1); }
-const total = 8; // 상단 check 총수
+const total = 11; // 상단 check 총수(기존 8 + 보드재생 스윕 1 + 명시 케이스 2)
 log(`PLAYOFFS PASS (${total}/${total}) — 불변식 0/${N} · 상위시드 우세(PO ${pct(poHiWins)}%·결승 ${pct(finalHiWins)}%) · 챔피언 ${pct(champ.s1)}/${pct(champ.s2)}/${pct(champ.s3)} · 결정론 · mutant 자가검증`);
 process.exit(0);

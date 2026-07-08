@@ -132,14 +132,81 @@ advance(targetDay):
 - 개인 생산은 순위/리더보드 조회 시 `leagueProduction`이 `attributeProduction`으로 재귀속.
 - **모든 팀**에 진화·생산이 동일 적용(사용자 팀 특례 없음). 현재 전 구단 자동.
 
-## 5. 포스트시즌 (engine/playoffs.ts, data/playoffs.ts)
+## 5. 포스트시즌 — 달력 편입 (engine/playoffs.ts, data/playoffs.ts, data/postseason.ts)
 
 KOVO 방식:
 - **준PO/PO**: 정규 2위 vs 3위, **3전 2선승**(target=2).
 - **챔피언결정전**: 정규 1위 vs PO 승자, **5전 3선승**(target=3).
 - 상위 시드 홈 어드밴티지 **×1.03 능력 승수**(`HI_EDGE`, OVR가산 아님). 매치업별 시드로 `playSeries` 결정론.
 - 우승 팀은 `recordChampion(season, championId)` → `archive`에 연표 보존.
-- **단계별 공개(A2, 2026-07-01 — 스포일러 제거)**: `app/playoffs.tsx`는 PO 결과·챔프전 결과·우승팀을 **한 화면에 동시에** 쏟아냈다(우승 시 세리머니 오버레이도 진입 즉시 발화 = 스포일러). → **탭마다 한 단계씩** 공개: ① 진출 3팀(브라켓) → ② 플레이오프 결과 → ③ 챔피언결정전 결과 → ④ 우승팀(+우승 세리머니). `BROADCAST_SYSTEM` 스포일러 정책("결과-결정 사건은 관전 종료 후/능동 공개")의 적용. 존재하는 시리즈만 단계화(`po.po`/`po.final` null이면 건너뜀). `recordChampion`(데이터 적립)은 진입 시 그대로 — 표시만 지연. 마지막 단계에서 "시상식 →".
+
+### 5.0 달력 편입 (2026-07-08, 사용자 결정 + 독립 리뷰 반영) — 구 "한 화면 단계 공개" 대체
+
+> **정정**: ~~**단계별 공개(A2, 2026-07-01)** — `app/playoffs.tsx`가 진입 즉시 buildPlayoffs로 준PO·챔프전·우승을
+> 일괄 계산하고 탭마다 한 단계씩 공개(recordChampion은 진입 시 적립)~~ 는 **플옵을 달력 밖에 두어** 시즌 서사를
+> 끊었다(정규 164일 종료 후 별도 화면에서 결과 통보). → **포스트시즌을 시즌 달력 안으로 편입**한다: currentDay가 164를
+> 넘어 흐르고, 준PO·결승 경기가 **고정 슬롯**에 놓여 정규 경기와 **같은 진행/관전 패턴**으로 소비된다.
+
+- **고정 슬롯(격일, `engine/calendar.ts`)**: 정규 종료 `SEASON_DAYS=164` 뒤 —
+  휴식 2일(165·166) → **준PO 1·2·3차전 = day 167·169·171**(`PO_SLOTS`) → 휴식(172~174) →
+  **결승 1~5차전 = day 175·177·179·181·183**(`FINAL_SLOTS`) → `POSTSEASON_LAST_DAY=183`. 시리즈 조기 종료 시
+  남은 슬롯은 **자연 소멸**(진행이 다음 라운드/오프시즌으로 점프). 게임 인덱스 g(0-based) → 슬롯 day는 `poSlotDay`/`finalSlotDay`.
+- **동결 규칙(사실화)**: 진화 조회는 **전역 `min(day, SEASON_DAYS)` 클램프**(`evolvedPlayers`·`evolveOnDay`·
+  `availableTeamPlayers` 3개 루트, awards.ts REF_DAY 클램프 선례). 즉 **플옵 기간 훈련·노쇠·부상 복귀 없음** —
+  "포스트시즌 엔트리·훈련은 정규 종료(164) 시점 확정". `buildPlayoffs`/보드 재생은 `availableTeamPlayers(id, 164)`로 명시 동결.
+  currentDay>164여도 스탯·순위·생산이 정규 종료값으로 고정되므로 `currentDay>164 전수 스윕`을 캘러 단위가 아닌 **루트 클램프**로 방어.
+- **플옵 기간 개입 비활성**: 선발/벤치 건의는 **비활성 + 사유 표기**("포스트시즌 엔트리 확정") — no-op 건의 금지.
+  day-aware 개입(플옵 라인업 반영)은 **Phase2 별도(이번 범위 밖, 보류)**.
+
+### 5.1 진행·관전 (app/(tabs)/schedule.tsx, app/match/[id].tsx)
+
+- **진행 단위 = 다음 플옵 경기일로 점프**(`nextPoGame`, data/postseason). 휴식일을 하루씩 탭하지 않는다(지루함 방지, 리뷰 확정).
+- **내 팀 경기 = 보러가기 경유 강제**(경기 보드 진입이 유일한 진행 경로 — 정규와 동일 패턴). 단 **보드 내 "⏭ 결과"·나가기
+  "결과 확정" 경로는 유지**(경유 강제 ≠ 정주행 강제 — 관전형, `BOARD_RULES` 스킵 경로 보존). 보드 종료(확정/⏭/끝까지) 시
+  `setDay(슬롯day)`로 currentDay 전진 → 그 경기 공개.
+- **타 구단 경기 = 결과 확인만**(자동 진행: `setDay(슬롯day)` 즉시 + 그날 결과·시리즈 현황 표시). 미진출 시즌도 동일(전 경기 타팀).
+- **보드 재생 = 재생(바이트 동일, 최대 급소)**: `playSeries`는 `availableTeamPlayers(id,164)` 동결 스쿼드 + `HI_EDGE=1.03` +
+  게임 시드(`seedBase+g*1009`, hi=홈)로 돈다. 내 경기 보드 재생은 **플옵 전용 박스 빌더 `buildPlayoffBox`**(data/postseason)로
+  playSeries와 **입력을 바이트 공유** — 일반 `buildMatchBox`(dayIndex 기반 rest·부상)를 쓰면 점수판과 **다른 경기가 재생된다(금지)**.
+  가드가 "보드 재생 g게임 세트 스코어 == series.games[g]" 증명(`_dv_playoffs`, 실측 180/180 게임 일치).
+
+### 5.2 스포일러 — 포스트시즌 컷오프 트랙 (data/postseason.ts)
+
+- **치른 플옵 경기 = currentDay에서 파생**(신규 영속 필드 0 — results에 안 씀). `postseasonReveal(playoffs, currentDay)` →
+  `{poRevealed, finalRevealed, poDone, finalDone, championRevealed}`. 슬롯 day ≤ currentDay 인 게임만 공개(내 미관전
+  미래 게임은 보드 경유 후에만 currentDay가 그 슬롯에 도달 → 누수 0).
+- **§3.3 `displayCutoff`와 충돌 회피**: `displayCutoff`는 시즌완료 시 `SEASON_DAYS(164)`로 승격해 순위·결과를 전부 공개하지만,
+  **우승/챔프MVP는 그와 별개**(결승 진행 중 우승 스포일 금지). 따라서 **포스트시즌 전용 컷오프 트랙**을 둔다 —
+  `currentSeasonAwards(season, uptoDay, poDay=raw currentDay)`가 챔피언/finalsMvp를 `revealedChampionId(…, poDay)`로 게이트
+  (표준 uptoDay=164 클램프는 순위/생산용, poDay=raw currentDay는 우승 노출용). `recordChampion`은 `championRevealed`(결승 전
+  게임 공개) 후 **시상식(champion-ceremony) 진입 시** 적립(§5.3 — archive.championId가 "시상식 봤음" 마커를 겸함, 영속 0).
+- **미래 결과 읽는 표면 전수 게이트**: 기록 탭 잠정 시상 `finalsMvp`(우승팀 소속=우승 스포일러)·대시보드·뉴스·업적 —
+  플옵 기간 `buildPlayoffs` 미공개 결과가 새는 곳 전부 컷오프 트랙 적용. **결승 노출 게이트는 일정 화면이 건다**(뉴스가 게이트 역할 금지).
+- **뉴스(playoff kind, NEWS §3.2)**: `buildNewsFeed(..., poDay=raw currentDay)`가 준PO/결승 **치른(공개) 게임 결과** +
+  **준PO 시리즈 확정("결승 대진 확정")** 기사를 생성 — kord=결정론 순번(생성 순서=게임 순서 append-only라 안정),
+  ref=`po:g`/`final:g`/`po:clinch`(헤드라인 키 금지). **우승 기사는 archive(champion) 경로**(recordChampion 후에만 존재 →
+  타이밍 자동 게이트, 중복 금지). 가드: `_dv_postseason` ②b(결승 확정 전 우승 기사 0·기사 수=공개 게임 수·키 안정) + simNews.
+
+### 5.3 세리머니 3단 고정 (리뷰 확정) + 세이브 호환
+
+- **체인**: 결승 종료 → 일정 화면 "**시상식 보러가기**" → **`app/champion-ceremony.tsx`(우승팀 시상식 — 우승·챔프MVP.
+  ChampionCelebration 오버레이 흡수·대체, 미니멀. **진입 시 recordChampion 적립**)** → 기존 `awards-ceremony`(리그 시상식 —
+  MVP·신인·베스트7, **최소 수정**: 사용자 UI+BGM 작업 예정. 종료·건너뛰기 = `dismissAll`+`replace`로 **일정 복귀**) →
+  일정 화면이 "**시즌 결산**" 버튼 노출(마커 = `archive[season].championId` 존재 — 영속 0 파생, 앱 재시작에도 유지) →
+  `season-recap` → 기존 오프시즌 체인(외국인→드래프트→전지훈련) 불변.
+  챔프MVP 수여 연출은 champion-ceremony 한 곳만(중복 금지 — awards-ceremony의 챔프MVP 비트 제거). **미우승 시즌**: 우승팀
+  시상식은 짧은 결과 통지(타 구단 대관식 풀 연출 강제 금지).
+- **플옵 기간 건의 비활성(§5.0)**: player 상세 "감독 건의" 카드가 `currentDay>SEASON_DAYS`면 버튼 대신
+  "포스트시즌 엔트리 확정 — 건의는 다음 시즌부터" 안내. 스토어 `suggestBench`/`suggestStart`도 `reason:'postseason'`으로
+  거절(UI 우회·딥링크 방어) — `OwnerRejectReason`에 `postseason` 추가.
+- **`app/playoffs.tsx`는 브라켓/시리즈 현황 화면으로 재편**(스포일러 없이 `postseasonReveal`로 치른 경기까지) — 진입 즉시 recordChampion 제거.
+- **세이브 호환(A안)**: `saveMigration` v3 정규화 — 구세이브가 "정규 완료 + `archive[season].championId` 존재"면 포스트시즌 소비로
+  간주하고 `currentDay`를 `POSTSEASON_LAST_DAY(183)`로 승격 → 오프시즌 체인 직행(재관전 강요 금지). `SAVE_VERSION` 2→3.
+
+### ★ 상비 가드
+- `tools/_dv_playoffs.ts`(확장): 기존 8검사(불변식·상위시드·결정론·A/B) + **보드 재생 == series.games 세트스코어**(내 팀·타 팀).
+- `tools/_dv_postseason.ts`(신규): ①달력 슬롯·조기종료 소멸 ②치른 경기 파생(컷오프) 스포일러 0(결승 전 finalsMvp/우승기사/champion 비노출)
+  ③recordChampion 시점 ④세이브 A안 마이그레이션 경로 ⑤결정론(같은 시드 2회) ⑥구플로우 대비 champion 바이트 동일(시드 보존).
 
 ### ★ 플레이오프 검증 (2026-07-07) — 검증·실측=Fable 5 / 가드=Opus 에이전트
 
@@ -151,13 +218,16 @@ KOVO 방식:
 인덱스는 오직 시리즈 RNG만 바꾸므로, **같은 3팀을 두고 season=0..499 서로 다른 시드로 N=500회** 돌리는 몬테카를로.
 매 판 불변식을 검사하고 상위시드 승률·챔피언 분포·시리즈 길이를 집계.
 
-| 지표 | 실측 (N=500, `data/playoffs.ts`·`engine/playoffs.ts`, 2026-07-07) |
+| 지표 | 실측 (N=500 · `data/playoffs.ts`·`engine/playoffs.ts` · **2026-07-08 재측정** — 이후 엔진 커밋 드리프트로 갱신, 구 2026-07-07 수치 취소선) |
 |---|---|
 | 불변식 위반 | **0/500** (seeds=top3 · po=2v3 · final.hi=1위 · champion∈seeds=final승자 · 시리즈 target 도달) |
-| 상위시드 승률 | PO 2위(hi) **83.8%** · 챔프전 1위(hi) **85.2%** (둘 다 >50%) |
-| 챔피언 분포 | 1위 **85.2%** · 2위 **13.8%** · 3위 **1.0%** (상위시드 우세, 이변 ~15% — 현실적) |
-| 시리즈 길이 | PO 2게임=312 / 3게임=188 · 결승 3=214 / 4=172 / 5=114 (유효 best-of-3/5, 풀5차 결승 발생) |
+| 상위시드 승률 | PO 2위(hi) **80.6%**(~~83.8%~~) · 챔프전 1위(hi) **90.0%**(~~85.2%~~) (둘 다 >50%) |
+| 챔피언 분포 | 1위 **90.0%**(~~85.2%~~) · 2위 **10.0%**(~~13.8%~~) · 3위 **0.0%**(~~1.0%~~) (상위시드 우세) |
+| 시리즈 길이 | PO 2게임=305(~~312~~) / 3게임=195(~~188~~) · 결승 3=214 / 4=181(~~172~~) / 5=105(~~114~~) (유효 best-of-3/5, 풀5차 결승 발생) |
 | 결정론 | `buildPlayoffs(7)` 2회 → championId·시리즈 게임 완전 동일 |
+
+> **재측정(2026-07-08, STATS_PROTOCOL — "은퇴 재정비 후 재측정")**: 2026-07-07 표는 그 이후 엔진 커밋으로
+> 시드 유니버스가 바뀌어 분포가 드리프트했다. 가드 단언은 방향성(>50% · 1위>2위>3위)이라 계속 PASS — 표만 현재 값으로 갱신.
 
 **상비 가드 `tools/_dv_playoffs.ts`**(exit 0/1): 위 8검사 + **A/B 자가검증**(오염 Playoffs — championId를 시드 밖
 팀으로·po.hiId를 3시드로 → 검사기가 4건 위반으로 잡음, 실제 데이터는 0 위반 → 오라클 이빨 증명, 허위 오라클 방지).
@@ -172,7 +242,9 @@ KOVO 방식:
 > 기록 탭 텍스트 배열로만 묻혀 유저가 *뉴스 기사로* "누가 MVP였지"를 확인하는 미달 구현이었다(사용자 피드백).
 > 결산은 신규 스코프가 아니라 **이미 내려진 결정의 이행** — 관전형 1순위(연출=1순위 투자처)에 정면 부합.
 
-- **위치**: 포스트시즌 → **[시즌 결산]** → 외국인 트라이아웃. `endSeason` **이전**이라 이번 시즌 시상은 아직
+- **위치(2026-07-08 달력 편입 후)**: 결승 종료 → 일정 화면 "시상식 보러가기" → `champion-ceremony`(우승팀) →
+  `awards-ceremony`(리그 시상) → **일정 화면 복귀 후 "시즌 결산"** → **[시즌 결산]** → 외국인 트라이아웃(§5.3 체인).
+  `endSeason` **이전**이라 이번 시즌 시상은 아직
   archive에 안 구워짐 → **`seasonSnapshot(season, season, currentDay)`(=`currentSeasonAwards`+`computeStandings`)
   + `leagueProduction(leagueDisplayDay)`로 그 자리 재계산**(tryout 잠정 시상·records 탭과 동일 경로). 우승팀은
   포스트시즌 `recordChampion`이 박은 `archive.find(a=>a.season===season)?.championId`로 읽음. **새 영속 필드 0**.

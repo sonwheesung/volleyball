@@ -76,9 +76,14 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 - 공통 가드: 가짜 드라마 금지(**상명+실선수+실스탯만**, 없는 인과 서술 금지). 빈 상(챔프 MVP 없는 시즌 등) 비트
   자동 생략. **결산의 시상 카드는 이 화면으로 흡수**(삼중 표시 금지 — 결산엔 시상 카드 제거).
 
-- **화면**: `app/awards-ceremony.tsx` — 플레이오프 **다음, 결산 앞**(현 flow: playoffs → **awards-ceremony** →
-  season-recap → 오프시즌). 이 구간은 `endSeason` 전이라 `currentSeasonAwards()`(production 캐시)가 유효 —
+- **화면**: `app/awards-ceremony.tsx` — 이 구간은 `endSeason` 전이라 `currentSeasonAwards()`(production 캐시)가 유효 —
   **endSeason 후(캐시 롤오버)로 두면 안 됨**(archive를 읽어야 함). 결정론·새 영속 0(시상은 재계산).
+- **세리머니 3단 체인(2026-07-08, 포스트시즌 달력 편입 §5.3 — 리뷰 확정)**: 결승 종료 → 일정 화면 "시상식 보러가기" →
+  **`app/champion-ceremony.tsx`(우승팀 시상식 — 우승·챔프MVP, `ChampionCelebration` 흡수·대체, 미니멀)** →
+  **`awards-ceremony`(리그 시상 — 이 화면은 최소 수정: 사용자 UI+BGM 작업 예정)** → 일정 화면 복귀 후 "시즌 결산" →
+  `season-recap` → 오프시즌 체인 불변. **챔프MVP 수여 연출은 champion-ceremony 한 곳만**(중복 금지 — awards-ceremony의
+  챔프MVP 비트는 제거·중복 회피). **미우승 시즌**: champion-ceremony는 짧은 결과 통지(타 구단 대관식 풀 연출 강제 금지).
+  ~~현 flow: playoffs → awards-ceremony → season-recap~~ 는 champion-ceremony 선행 + recap을 일정 버튼 경유로 정정.
 - **연출**: 한 상씩 단독 표시 + **탭하면 다음 상**(현재 상 슬라이드 아웃 → 다음 상 슬라이드 인, Animated
   opacity/translate, `useNativeDriver`). 순서 = 신인상 → 기량발전상 → 베스트7(코트) → 챔프전 MVP →
   **정규 MVP(클라이맥스, `AwardIllustration` 금 트로피 재사용)**. 내 팀 수상자는 구단 액센트 강조. 진행 표시(N/총)·

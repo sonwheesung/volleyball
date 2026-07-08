@@ -8,6 +8,7 @@ import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { generateSeason } from '../engine/season';
 import { evolvePlayer, type FocusResolver } from '../engine/progression';
+import { SEASON_DAYS } from '../engine/calendar';
 import { rollTraits } from '../engine/traits';
 import { createRng, strSeed } from '../engine/rng';
 import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, coachTypeFor, type StaffEffects, NO_EFFECTS } from '../engine/staff';
@@ -514,6 +515,7 @@ export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
 // ─── 진화(성장/노쇠) 적용 선수 — currentDay 기준, 날짜별 캐시 ───
 
 export function evolvedPlayers(day: number): Map<string, Player> {
+  day = Math.min(day, SEASON_DAYS); // 포스트시즌 동결(§5): currentDay>164여도 진화는 정규 종료(164)로 클램프 — 플옵 기간 훈련/노쇠 없음
   if (evoCache && evoCache.day === day) return evoCache.map;
   const map = new Map<string, Player>();
   for (const team of LEAGUE.teams) {
@@ -535,6 +537,7 @@ export const getEvolvedPlayer = (id: string, day: number): Player | undefined =>
 const evoOneCache = new Map<string, Player>();
 let evoOneKey = -1;
 export function evolveOnDay(id: string, day: number): Player | undefined {
+  day = Math.min(day, SEASON_DAYS); // 포스트시즌 동결(§5) — evolvedPlayers와 동일 클램프
   if (evoOneKey !== _baseVersion) { evoOneCache.clear(); evoOneKey = _baseVersion; }
   const k = `${id}:${day}`;
   const hit = evoOneCache.get(k);

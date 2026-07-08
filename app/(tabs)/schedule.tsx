@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../../components/AppDialog';
@@ -13,6 +13,8 @@ import { seasonYear } from '../../data/seasonLabel';
 import { teamClinch } from '../../data/clinch';
 import { availableTeamPlayers } from '../../data/injury';
 import { buildMatchBox } from '../../data/matchBox';
+import { buildPlayoffs, type Matchup } from '../../data/playoffs';
+import { postseasonReveal, nextPoGame } from '../../data/postseason';
 import { SEASON_DAYS } from '../../engine/calendar';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
@@ -57,6 +59,18 @@ function ScheduleInner() {
   // "진행" 의사결정은 순수 오케스트레이터에 위임
   const action = planNextAction(SEASON, teamId, results);
   const nextFixture = action.kind === 'match' ? action.fixture : null;
+
+  // ── 포스트시즌 달력 편입(§5) — 정규 완료(seasonOver)면 플옵 진행/브라켓을 일정 화면에서 소비. ──
+  const postseason = useMemo(() => {
+    if (action.kind !== 'seasonOver') return null;
+    const p = buildPlayoffs(season);
+    return { p, reveal: postseasonReveal(p, currentDay), next: nextPoGame(p, currentDay, teamId) };
+  }, [action.kind, season, currentDay, teamId]);
+  // 세리머니 마커(§5.3, 영속 0 파생) — recordChampion은 **시상식(champion-ceremony) 진입 시** 적립.
+  //   archive[season].championId 존재 = 시상식을 봤다(세이브 A안 마이그레이션 구세이브 포함 — 재관전 강요 금지)
+  //   → 그때부터 "시즌 결산" 버튼. 없으면 "시상식 보러가기"(결승 확정 후). 앱 재시작에도 파생 유지(archive 영속).
+  const ceremonyDone = archive.some((a) => a.season === season && !!a.championId);
+  const name = (id: string) => getTeam(id)?.name ?? id;
 
   const totalMatches = SEASON.filter((f) => f.homeTeamId === teamId || f.awayTeamId === teamId).length;
   const playedCount = SEASON.filter(
@@ -195,12 +209,76 @@ function ScheduleInner() {
           />
         </Card>
         </SpotlightTarget>
+      ) : postseason ? (
+        // 포스트시즌 달력 편입(§5) — 진출 3팀 브라켓 + 치른(공개) 시리즈 + 다음 경기(내 팀=보드 경유/타 팀=결과 확인).
+        (() => {
+          const { p, reveal, next } = postseason;
+          const seriesCard = (title: string, m: Matchup | null, revealed: number) => {
+            if (!m || revealed === 0) return null;
+            const games = m.series.games.slice(0, revealed);
+            const hiW = games.filter((g) => g.hiSets > g.loSets).length;
+            const loW = games.filter((g) => g.loSets > g.hiSets).length;
+            return (
+              <Card accent={theme.gold} key={title}>
+                <IconLabel icon="trophy-outline" color={theme.gold}>{title}</IconLabel>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
+                  <Text style={[{ flex: 1, textAlign: 'right', color: theme.text, fontWeight: '700' }, m.hiId === teamId && { color: theme.accent }]} numberOfLines={1}>{name(m.hiId)}</Text>
+                  <Text style={{ color: theme.text, fontSize: 18, fontWeight: '900', minWidth: 52, textAlign: 'center' }}>{hiW} : {loW}</Text>
+                  <Text style={[{ flex: 1, color: theme.text, fontWeight: '700' }, m.loId === teamId && { color: theme.accent }]} numberOfLines={1}>{name(m.loId)}</Text>
+                </View>
+                <Text style={{ color: theme.muted, fontSize: 12, textAlign: 'center', marginTop: 4 }}>{games.map((g) => `${g.hiSets}-${g.loSets}`).join('  ')}</Text>
+              </Card>
+            );
+          };
+          return (
+            <>
+              <Card accent={theme.accent}>
+                <IconLabel icon="podium-outline" color={theme.accent}>포스트시즌 · 진출 3팀</IconLabel>
+                {p.seeds.map((id, i) => (
+                  <Text key={id} style={[{ color: theme.text, fontSize: 15, fontWeight: '600', marginTop: 2 }, id === teamId && { color: theme.accent }]}>
+                    {i + 1}위 {name(id)}{i === 0 ? ' (챔프전 직행)' : ''}
+                  </Text>
+                ))}
+              </Card>
+              {seriesCard('플레이오프 (2위 vs 3위 · 3전2선승)', p.po, reveal.poRevealed)}
+              {seriesCard('챔피언결정전 (5전3선승)', p.final, reveal.finalRevealed)}
+              {next ? (
+                <Card accent={theme.sky}>
+                  <IconLabel icon="calendar-outline" color={theme.sky}>
+                    {next.round === 'po' ? '준플레이오프' : '챔피언결정전'} {next.g + 1}차전 · {formatDate(dateForDay(next.day))}
+                  </IconLabel>
+                  <Row><Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>{name(next.hiId)} vs {name(next.loId)}</Text></Row>
+                  {next.mine ? (
+                    <Button label="관전하러 가기 →" onPress={() => router.push(`/match/playoff?po=${next.round}&g=${next.g}&season=${season}`)} />
+                  ) : (
+                    // 타 구단 경기 = 결과 확인만(자동 진행). setDay로 슬롯 도달 → 위 시리즈 카드에 결과 공개.
+                    <Button label="결과 확인 →" onPress={() => setDay(next.day)} />
+                  )}
+                </Card>
+              ) : reveal.championRevealed ? (
+                // 세리머니 3단(§5.3): ①시상식(champion→awards, recordChampion은 시상식 진입 시) → 일정 복귀 → ②시즌 결산.
+                <Card accent={theme.gold}>
+                  <Title>🏆 우승 — {name(p.championId ?? '')}</Title>
+                  {!ceremonyDone ? (
+                    <>
+                      <Muted>포스트시즌이 끝났습니다. 시상식을 관람한 뒤 오프시즌으로 넘어갑니다.</Muted>
+                      <Button label="시상식 보러가기 →" onPress={() => router.push('/champion-ceremony')} />
+                    </>
+                  ) : (
+                    <>
+                      <Muted>시상식이 끝났습니다. 시즌을 결산하고 오프시즌(외국인 트라이아웃 → 드래프트)으로 넘어갑니다.</Muted>
+                      <Button label="시즌 결산 →" onPress={() => router.push('/season-recap')} />
+                    </>
+                  )}
+                </Card>
+              ) : null}
+            </>
+          );
+        })()
       ) : (
         <Card accent={theme.accent}>
           <Title>시즌 종료</Title>
-          <Muted>정규리그 일정을 모두 마쳤습니다. 포스트시즌(상위 3팀)을 치른 뒤 오프시즌으로
-            넘어갑니다. (이후 나이 +1·성장/노쇠·계약 -1년)</Muted>
-          <Button label="포스트시즌 →" onPress={() => router.push('/playoffs')} />
+          <Muted>정규리그 일정을 모두 마쳤습니다.</Muted>
         </Card>
       )}
 

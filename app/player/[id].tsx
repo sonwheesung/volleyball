@@ -10,6 +10,7 @@ import { PlayerAvatar } from '../../components/PlayerAvatar';
 import { seasonYear, seasonYearRange } from '../../data/seasonLabel';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchetypeOf, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans } from '../../engine/owner';
+import { SEASON_DAYS } from '../../engine/calendar';
 import { rosterIdsOnDay, seasonScandals, suspendedOnDay, availableTeamPlayers, teamInjuriesOn } from '../../data/dynamics';
 import { SCANDAL_KO } from '../../engine/scandal';
 import { CARD_KO, BENCH_REASON_KO, type TalkCard, type BenchReason, type OwnerRejectReason } from '../../engine/owner';
@@ -85,12 +86,14 @@ const BENCH_REJECT: Record<OwnerRejectReason, string> = {
   ability: '대신 넣을 선수와 기량 차가 커서 지금은 무리입니다.',
   conviction: '라인업은 제가 책임집니다. 제 판단을 믿어주십시오.',
   coachCall: '지금은 이대로 가겠습니다.',
+  postseason: '포스트시즌 엔트리는 이미 확정됐습니다. 다음 시즌에 반영하겠습니다.',
 };
 const START_REJECT: Record<OwnerRejectReason, string> = {
   ace: '지금 라인업이 최선입니다.',
   ability: '아직은 현 주전이 더 낫다고 봅니다.',
   conviction: '라인업은 제가 책임집니다. 제 판단을 믿어주십시오.',
   coachCall: '지금은 이대로 가겠습니다.',
+  postseason: '포스트시즌 엔트리는 이미 확정됐습니다. 다음 시즌에 반영하겠습니다.',
 };
 
 export default function PlayerDetail() {
@@ -128,6 +131,7 @@ function PlayerDetailInner() {
   const [benchAsk, setBenchAsk] = useState(false); // 벤치 건의 명분 선택 시트(네이티브 Alert 대신 커스텀 — UI-21)
   const busy = useBusyRun(); // 건의/복귀 = 벤치지시 갱신 → 출전 라인업(buildLineup) 재도출(무거움) → 오버레이 마스킹(UI-27)
   const p = id ? getEvolvedPlayer(id, currentDay) : undefined;
+  const inPostseasonNow = currentDay > SEASON_DAYS; // 포스트시즌 동결(SEASON §5.0) — 건의 비활성(엔트리 확정)
   // 시즌 **통계 파생(생산·시장가)** 은 **결과 인지 표시 컷오프**(§3.3 displayCutoff) — 대시보드·기록과 동일 컷오프.
   // 방금 관전한 경기·시즌말 최종일을 포함하고, 시즌 시작 전(cutoff<0)이면 빈 구간/일자<0 가드로 콜드 전 시즌 시뮬을 회피한다.
   const displayDay = displayCutoff(currentDay, results, myTeamId ?? undefined);
@@ -432,7 +436,10 @@ function PlayerDetailInner() {
 
           <IconLabel icon="clipboard-outline" color={theme.violet}>감독 건의</IconLabel>
           <Card accent={theme.violet}>
-            {benched ? (
+            {inPostseasonNow ? (
+              // 포스트시즌 동결(SEASON §5.0) — 엔트리는 정규 종료 시점 확정. no-op 건의 금지(스토어도 postseason 사유로 거절).
+              <Muted style={{ fontSize: 12 }}>포스트시즌 엔트리 확정 — 건의는 다음 시즌부터 가능합니다.</Muted>
+            ) : benched ? (
               <Button label="복귀 지시 (벤치 해제)" onPress={() => showAlert('복귀 지시', `정말 ${p.name} 선수의 복귀를 지시할까요?\n출전 명단에 다시 포함됩니다.`, [
                 { text: '취소', style: 'cancel' },
                 { text: '복귀 지시', onPress: () => busy.run('감독이 라인업을 다시 그리는 중…', () => { unbench(p.id); setTalkResult({ title: '복귀', color: theme.good, msg: `${p.name} 선수가 출전 명단에 복귀합니다. 실전 감각은 몇 경기에 걸쳐 돌아옵니다.` }); }) },

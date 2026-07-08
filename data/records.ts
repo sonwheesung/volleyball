@@ -92,7 +92,8 @@ export function seasonSnapshot(
     const st = computeStandings(day);
     return {
       season, isCurrent: true, championId: null,
-      awards: currentSeasonAwards(season, day),
+      // poDay=raw currentDay(§5 포스트시즌 컷오프 트랙) — 챔프MVP는 결승 확정 후에만(displayCutoff 164 승격이 우승 스포일 못 하게).
+      awards: currentSeasonAwards(season, day, currentDay),
       standings: st.map((s) => ({ teamId: s.teamId, wins: s.wins, losses: s.losses })),
     };
   }

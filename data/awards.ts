@@ -8,6 +8,7 @@ import { LEAGUE, SEASON, getPlayer, getEvolvedTeamPlayers, currentRosters } from
 import { leagueProduction, leagueProductionRange } from './production';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
+import { revealedChampionId } from './postseason';
 import { SEASON_DAYS } from '../engine/calendar';
 import { legRanges } from '../engine/season';
 
@@ -42,8 +43,13 @@ function improvementMap(day: number): Map<string, number> {
  * 시즌 시상 결과. season = 0-based 시즌 번호.
  * uptoDay = 집계 기준일(기본 = 시즌 전체). history 탭은 currentDay 를 넘겨 "현재까지" 표시,
  * store.endSeason 은 전체(MAX)로 계산해 archive 에 박는다. 챔프전 MVP 는 시즌 종료 후에만.
+ *
+ * poDay(2026-07-08 포스트시즌 달력 편입) = 우승/챔프MVP **공개 게이트**용 raw currentDay(기본 = uptoDay).
+ *   챔프MVP(finalsMvp)·championId는 우승팀 소속 = 우승 스포일러다. displayCutoff는 시즌완료 시 SEASON_DAYS(164)로
+ *   승격돼 championId를 새므로, 포스트시즌 컷오프 트랙(revealedChampionId)으로 **결승 전 게임 공개 후에만** 산출한다.
+ *   호출측이 clamped cutoff(uptoDay=164)만 넘기면 결승 전엔 자동 은폐(안전 기본) — 결승 종료 후 노출하려면 raw currentDay를 poDay로 전달.
  */
-export function currentSeasonAwards(season: number, uptoDay: number = Number.MAX_SAFE_INTEGER): SeasonAwards {
+export function currentSeasonAwards(season: number, uptoDay: number = Number.MAX_SAFE_INTEGER, poDay: number = uptoDay): SeasonAwards {
   const teamMap = rosterTeamMap();
   const standings = computeStandings(uptoDay);
   const teamRank = new Map<string, number>();
@@ -66,7 +72,8 @@ export function currentSeasonAwards(season: number, uptoDay: number = Number.MAX
     teamCount: standings.length,
     rookies,
     improvement: improvementMap(Math.min(uptoDay, REF_DAY)),
-    championId: seasonDone ? buildPlayoffs(season).championId : null,
+    // 우승/챔프MVP 스포일러 게이트(§5) — 결승 전 게임 공개(poDay가 결승 마지막 슬롯 도달) 후에만. 그 전엔 null.
+    championId: seasonDone ? revealedChampionId(buildPlayoffs(season), poDay) : null,
     legProd,
   });
 }

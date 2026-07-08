@@ -23,6 +23,7 @@ const unfiltered: NewsItem[] = [
   mk('match', 'm2', D - 5),      // fresh
   mk('injury', 'i1', D - 40),    // 만료(12<38)  ← 인덱스 시프트
   mk('milestone', 'ms0', D - 6), // fresh
+  mk('playoff', 'p0', D - 3),    // fresh — 포스트시즌 kind(달력 편입 §5.2, 2026-07-08)도 키 배선 동일
   mk('champion', 'c0', undefined), // 요약(day 없음) — 유지
   mk('award', 'a0', undefined),    // 요약 — 유지
 ];

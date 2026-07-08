@@ -71,8 +71,8 @@ export default function Dashboard() {
   const seasonDraftLog = useGameStore((s) => s.seasonDraftLog);
   const seasonForeignLog = useGameStore((s) => s.seasonForeignLog);
   const allNews = useMemo(
-    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog), cutoff),
-    [archive, milestones, hallOfFame, season, cutoff, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, currentDay), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog],
   );
   const unreadNews = useMemo(() => {
     const read = new Set(readNews);

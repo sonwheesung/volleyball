@@ -12,6 +12,7 @@ import { rollScandal, SCANDAL_MISS, type ScandalKind } from '../engine/scandal';
 import type { BenchDirective } from '../engine/owner';
 import { marketVal } from './awardSalary';
 import { LEAGUE_CAP } from '../engine/cap';
+import { SEASON_DAYS } from '../engine/calendar';
 import { baseVersion, currentRosters, getPlayer, evolveOnDay, LEAGUE, SEASON } from './league';
 import { domesticPayroll } from './roster';
 import { legRanges } from '../engine/season';
@@ -280,6 +281,7 @@ export function suspendedOnDay(day: number): Set<string> {
 }
 
 export function availableTeamPlayers(teamId: string, day: number): Player[] {
+  day = Math.min(day, SEASON_DAYS); // 포스트시즌 동결(§5): 부상 복귀·명단 시제도 정규 종료(164)로 클램프 — "엔트리는 정규 종료 시점 확정"
   const injured = injuredOnDay(day);
   const suspended = suspendedOnDay(day);
   const ids0 = rosterIdsOnDay(teamId, day).filter((id) => !injured.has(id) && !suspended.has(id));

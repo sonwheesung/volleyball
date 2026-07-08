@@ -12,6 +12,9 @@ import { buildMatchBanners, type Banner } from '../../data/broadcast';
 import { reconstructRallies, buildLiveBanners } from '../../components/courtDirector';
 import { getFixture, getTeam, shortTeamName } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
+import { buildPlayoffs, poSeedBase, finalSeedBase } from '../../data/playoffs';
+import { buildPlayoffBox, type PoRound } from '../../data/postseason';
+import { PO_SLOTS, FINAL_SLOTS } from '../../engine/calendar';
 import { DEV_TOOLS } from '../../data/flags';
 import { setBgmSuppressed } from '../../audio/bgm';
 import { useGameStore } from '../../store/useGameStore';
@@ -21,14 +24,22 @@ import { useGameStore } from '../../store/useGameStore';
 const WATCH_SAVE_INTERVAL_MS = 5000;
 
 export default function MatchBoard() {
-  const { id, sandbox, home: homeParam, away: awayParam, seed: seedParam } = useLocalSearchParams<{
-    id: string; sandbox?: string; home?: string; away?: string; seed?: string;
+  const { id, sandbox, home: homeParam, away: awayParam, seed: seedParam, po: poParam, g: gParam, season: seasonParam } = useLocalSearchParams<{
+    id: string; sandbox?: string; home?: string; away?: string; seed?: string; po?: string; g?: string; season?: string;
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const recordResult = useGameStore((s) => s.recordResult);
+  const setDay = useGameStore((s) => s.setDay);
+  // ── 포스트시즌 보드(달력 편입 §5.1) — po=round(po|final)·g=게임인덱스·season. 있으면 플옵 재생 모드. ──
+  //   결과를 results에 안 씀(신규 영속 0) — 종료 시 setDay(슬롯day)로 currentDay 전진 = "치른 경기" 파생.
+  const isPlayoff = (poParam === 'po' || poParam === 'final') && gParam != null && seasonParam != null;
+  const poRound = poParam as PoRound;
+  const poG = Number(gParam);
+  const poSeason = Number(seasonParam);
+  const poSlotDay = isPlayoff ? (poRound === 'po' ? PO_SLOTS[poG] : FINAL_SLOTS[poG]) : undefined;
   const watchProgress = useGameStore((s) => s.watchProgress);
   const saveWatchProgress = useGameStore((s) => s.saveWatchProgress);
   const clearWatchProgress = useGameStore((s) => s.clearWatchProgress);
@@ -57,6 +68,18 @@ export default function MatchBoard() {
 
   const data = useMemo(() => {
     let home, away, dayIndex: number, seed: number;
+    if (isPlayoff) {
+      // 포스트시즌 재생 — buildPlayoffBox가 playSeries와 입력 바이트 공유(§5.1). hi=홈.
+      const p = buildPlayoffs(poSeason);
+      const m = poRound === 'po' ? p.po : p.final;
+      if (!m || poG < 0 || poG >= m.series.games.length) return null;
+      home = getTeam(m.hiId);
+      away = getTeam(m.loId);
+      if (!home || !away) return null;
+      const box = buildPlayoffBox(poSeason, poRound, poG, p);
+      seed = (poRound === 'po' ? poSeedBase(poSeason) : finalSeedBase(poSeason)) + poG * 1009;
+      return { home, away, homeSquad: box.homeSquad, awaySquad: box.awaySquad, seed, sim: box.sim, boxTimeline: box.boxTimeline };
+    }
     if (isSandbox) {
       home = homeParam ? getTeam(homeParam) : undefined;
       away = awayParam ? getTeam(awayParam) : undefined;
@@ -77,15 +100,19 @@ export default function MatchBoard() {
     return {
       home, away, homeSquad, awaySquad, seed, sim, boxTimeline,
     };
-  }, [fixture, isSandbox, homeParam, awayParam, seedParam, currentDay, selectedTeamId]);
+  }, [fixture, isSandbox, isPlayoff, poSeason, poRound, poG, homeParam, awayParam, seedParam, currentDay, selectedTeamId]);
 
   const onFinished = useCallback(() => {
     setFinished(true); // 관전 종료 — 이제부터 결과 공개
+    if (isPlayoff) { // 플옵: results에 안 쓰고 currentDay를 슬롯day로 전진(치른 경기 파생, §5.1)
+      if (!recorded.current && poSlotDay != null) { recorded.current = true; setDay(poSlotDay); }
+      return;
+    }
     if (isSandbox || !data || !fixture || recorded.current) return;
     recorded.current = true;
     recordResult({ fixtureId: fixture.id, homeSets: data.sim.homeSets, awaySets: data.sim.awaySets });
     clearWatchProgress(fixture.id); // 끝까지 봤으니 이어보기 위치 삭제
-  }, [isSandbox, data, fixture, recordResult, clearWatchProgress]);
+  }, [isPlayoff, poSlotDay, setDay, isSandbox, data, fixture, recordResult, clearWatchProgress]);
 
   const onProgress = useCallback((i: number) => { progressRef.current = i; }, []);
 
@@ -98,6 +125,12 @@ export default function MatchBoard() {
 
   // 결과 확정 = 결정론 결과를 바로 적립(끝까지 본 것과 동일). 이어보기 위치는 삭제.
   const handleExit = useCallback(() => {
+    if (isPlayoff) { // 플옵 "결과 확정"(⏭·나가기) — currentDay 전진(§5.1). 스킵 경로 유지(BOARD_RULES 룰49).
+      if (!recorded.current && poSlotDay != null) { recorded.current = true; setDay(poSlotDay); }
+      setConfirmExit(false);
+      router.back();
+      return;
+    }
     if (!isSandbox && data && fixture && !recorded.current) {
       recorded.current = true;
       recordResult({ fixtureId: fixture.id, homeSets: data.sim.homeSets, awaySets: data.sim.awaySets });
@@ -105,7 +138,7 @@ export default function MatchBoard() {
     if (!isSandbox && fixture) clearWatchProgress(fixture.id);
     setConfirmExit(false);
     router.back();
-  }, [isSandbox, data, fixture, recordResult, clearWatchProgress, router]);
+  }, [isPlayoff, poSlotDay, setDay, isSandbox, data, fixture, recordResult, clearWatchProgress, router]);
 
   // 나가기 요청 — 관전 중(미종료)이면 확인 모달(이어보기/확정 선택), 종료/샌드박스면 즉시 이탈
   const requestExit = useCallback(() => {

@@ -17,6 +17,9 @@ import { seasonInjuryReport } from './injury';
 import { seasonMatchProds } from './production';
 import { SEVERITY_KO } from '../engine/injury';
 import { seasonScandals } from './dynamics';
+import { buildPlayoffs } from './playoffs';
+import { postseasonReveal } from './postseason';
+import { PO_SLOTS, FINAL_SLOTS, SEASON_DAYS } from '../engine/calendar';
 import { SCANDAL_KO, EXPEL_KO } from '../engine/scandal';
 import { resolveJosa, josa } from '../lib/josa';
 import { sponsorStanceOf } from '../engine/sponsorStance';
@@ -119,6 +122,10 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
     open: ['리그를 뒤흔든 소식이다.', '코트 밖에서 터진 사건이다.', '예상치 못한 후폭풍이 일었다.'],
     close: ['구단과 리그는 후속 조치를 검토 중이다.', '팀은 핵심 자원을 잃은 채 일정을 소화하게 됐다.', '여파는 시즌 내내 이어질 전망이다.'],
   },
+  playoff: {
+    open: ['봄배구의 열기가 코트를 달궜다.', '한 경기가 시즌의 무게를 짊어졌다.', '단기전의 긴장감이 그대로 전해졌다.', '가을부터 달려온 여정의 끝자락이다.'],
+    close: ['시리즈의 향방이 점점 또렷해진다.', '다음 경기에 더 큰 무게가 실린다.', '봄배구는 한 경기 한 경기가 역사가 된다.', '단기전엔 내일이 없다.'],
+  },
   owner: {
     open: ['관중석이 술렁였다.', '팬심이 출렁인 한 장면이다.', '코트 밖 여론이 움직였다.'],
     close: ['구단 운영은 성적만큼이나 정서도 살펴야 한다.', '팬과 구단 사이의 거리가 시험대에 올랐다.', '여론의 향배가 다음 행보에 영향을 줄 전망이다.'],
@@ -190,6 +197,8 @@ export function buildNewsFeed(
   retirements: RetireRecord[] = [], // 은퇴 연표(슬라이스5) — 주목 은퇴자 작별·회고
   seasonDraftLog: DraftPickRecord[] = [], // 드래프트 입단 연표(슬라이스6, §3.7) — 오프시즌 결산 개막 뉴스
   seasonForeignLog: ForeignSwapRecord[] = [], // 외인·아시아쿼터 교체 연표(슬라이스6, §3.7)
+  poDay = leagueDay, // 포스트시즌 컷오프 트랙(§5.2 달력 편입) = raw currentDay. 치른(공개) 플옵 경기까지만 기사화 —
+                     //   leagueDay(displayCutoff)는 시즌완료 시 164로 클램프돼 플옵 진행을 못 보므로 별도 트랙. 기본=leagueDay(구 호출 무변).
 ): NewsItem[] {
   const items: NewsItem[] = [];
   // 뉴스 안정 키(Step0, §4.4): ref = (season:kind)당 결정론 순번(ordinal). 문구 무관 → Step1~3에서
@@ -647,6 +656,48 @@ export function buildNewsFeed(
         : `${teamName(f.teamId)}이(가) ${ko} ${f.outName}와(과) 결별하며 그 자리가 비었다.`;
       push(currentSeason, 'foreign', headline, f.teamId === myTeamId, f.teamId, body3('foreign', fkey, core), f.inId ?? f.outId, 0);
     }
+  }
+
+  // 11) 포스트시즌(달력 편입, SEASON_SYSTEM §5.2) — **치른(공개) 경기까지만**. 컷오프 = 포스트시즌 트랙(poDay=raw currentDay,
+  //   postseasonReveal 파생 — 결승 전 우승 누출 0). kord=자동 순번이지만 생성 순서가 게임 순서로 고정(append-only)이라 안정,
+  //   ref=시리즈:게임 번호(엔티티 앵커 — 헤드라인 키 금지). **우승 기사는 archive(champion) 경로**(recordChampion이 결승 확정
+  //   후에만 적립 → 타이밍 자동 게이트) — 여기선 경기·시리즈 확정 기사만(중복 금지). 노출 게이트는 일정 화면이 건다(뉴스는 파생만).
+  if (poDay > SEASON_DAYS) {
+    const p = buildPlayoffs(currentSeason);
+    const rv = postseasonReveal(p, poDay);
+    const gameNews = (m: NonNullable<typeof p.po>, roundKo: string, slots: readonly number[], revealed: number, refBase: string) => {
+      let hiW = 0, loW = 0;
+      for (let g = 0; g < revealed; g++) {
+        const gm = m.series.games[g];
+        const hiWon = gm.hiSets > gm.loSets;
+        if (hiWon) hiW++; else loW++;
+        const wId = hiWon ? m.hiId : m.loId, lId = hiWon ? m.loId : m.hiId;
+        const wS = Math.max(gm.hiSets, gm.loSets), lS = Math.min(gm.hiSets, gm.loSets);
+        const gkey = `${currentSeason}:${refBase}:${g}`;
+        const core = `${roundKo} ${g + 1}차전에서 ${teamName(wId)}이(가) ${teamName(lId)}을(를) 세트 ${wS}-${lS}로 꺾었다. 시리즈 스코어 ${hiW}-${loW}.`;
+        push(currentSeason, 'playoff', vh([
+          (w) => `${roundKo} ${g + 1}차전 — ${w} 승리 (시리즈 ${hiW}-${loW})`,
+          (w) => `${w}, ${roundKo} ${g + 1}차전 잡았다 — 세트 ${wS}-${lS}`,
+          (w) => `${roundKo} ${g + 1}차전은 ${w}의 것 (${hiW}-${loW})`,
+        ], gkey, teamName(wId)), false, wId, body3('playoff', gkey, core), `${refBase}:${g}`, slots[g]);
+      }
+    };
+    if (p.po) {
+      gameNews(p.po, '준플레이오프', PO_SLOTS, rv.poRevealed, 'po');
+      if (rv.poDone) { // 시리즈 확정 — 결승 대진 확정 기사
+        const w = p.po.winnerId;
+        const wWins = p.po.series.hiWon ? p.po.series.hiWins : p.po.series.loWins;
+        const lWins = p.po.series.hiWon ? p.po.series.loWins : p.po.series.hiWins;
+        const ckey = `${currentSeason}:poclinch`;
+        push(currentSeason, 'playoff', vh([
+          (t) => `${t}, 챔피언결정전 진출 — 결승 대진 확정`,
+          (t) => `결승 대진 확정 — ${teamName(p.seeds[0])} vs ${t}`,
+        ], ckey, teamName(w)), true, w,
+          body3('playoff', ckey, `${teamName(w)}이(가) 준플레이오프 시리즈를 ${wWins}-${lWins}로 끝내고 챔피언결정전에 진출했다. 정규리그 1위 ${teamName(p.seeds[0])}와(과) 왕좌를 다툰다.`),
+          'po:clinch', PO_SLOTS[p.po.series.games.length - 1]);
+      }
+    }
+    if (p.final) gameNews(p.final, '챔피언결정전', FINAL_SLOTS, rv.finalRevealed, 'final');
   }
 
   // 정렬(NEWS_SYSTEM §9 — 2026-07-05 최신순 전환): 현재 시즌 인게임 뉴스(day 있음)를 **최신순(같은 날 중요도순)** 으로

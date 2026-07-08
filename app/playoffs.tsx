@@ -1,122 +1,61 @@
-import { useRouter } from 'expo-router';
-import { useEffect, useMemo, useState } from 'react';
+// 포스트시즌 브라켓/시리즈 현황 (SEASON_SYSTEM §5, 2026-07-08 달력 편입 후 재편).
+//   ★ 진입 즉시 recordChampion·세리머니 발화 제거(스포일러). 진행/우승 노출은 일정 화면(schedule)이 담당 —
+//   이 화면은 currentDay 기준 **치른(공개) 경기까지만** 읽는 읽기 전용 브라켓(deep-link 안전). postseasonReveal 컷오프.
 import { StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
-import { getTeam, getPlayer } from '../data/league';
+import { useMemo } from 'react';
+import { Card, IconLabel, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { getTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { buildPlayoffs, type Matchup } from '../data/playoffs';
-import { currentSeasonAwards } from '../data/awards';
+import { postseasonReveal } from '../data/postseason';
 import { useGameStore } from '../store/useGameStore';
-import { ChampionCelebration } from '../components/ChampionCelebration';
 
 export default function Playoffs() {
-  // 포스트시즌은 무겁다(대진·시리즈 시뮬 buildPlayoffs). 한 틱 미뤄 로딩부터 그린다.
   const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
   if (!ready) return <Loading title="포스트시즌" variant="list" />;
   return <PlayoffsInner />;
 }
 
 function PlayoffsInner() {
-  const router = useRouter();
   const my = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);
-  const recordChampion = useGameStore((s) => s.recordChampion);
+  const currentDay = useGameStore((s) => s.currentDay);
 
   const po = useMemo(() => buildPlayoffs(season), [season]);
-
-  useEffect(() => {
-    if (po.championId) recordChampion(season, po.championId);
-  }, [season, po.championId, recordChampion]);
-
+  const reveal = useMemo(() => postseasonReveal(po, currentDay), [po, currentDay]);
   const name = (id: string) => getTeam(id)?.name ?? id;
-  const champ = po.championId ? name(po.championId) : '-';
 
-  const SeriesCard = ({ title, m }: { title: string; m: Matchup }) => {
-    const hiName = name(m.hiId);
-    const loName = name(m.loId);
+  const SeriesCard = ({ title, m, revealed }: { title: string; m: Matchup; revealed: number }) => {
+    const games = m.series.games.slice(0, revealed); // 공개된 게임만(스포일러 컷오프)
+    const hiW = games.filter((g) => g.hiSets > g.loSets).length;
+    const loW = games.filter((g) => g.loSets > g.hiSets).length;
+    const decided = revealed === m.series.games.length; // 시리즈 확정 공개 여부
     return (
       <Card accent={theme.gold}>
         <IconLabel icon="trophy-outline" color={theme.gold}>{title}</IconLabel>
         <View style={styles.matchup}>
-          <Text style={[styles.team, { textAlign: 'right' }, m.winnerId === m.hiId && styles.win, m.hiId === my && styles.mine]} numberOfLines={1}>
-            {hiName}
-          </Text>
-          <Text style={styles.score}>{m.series.hiWins} : {m.series.loWins}</Text>
-          <Text style={[styles.team, m.winnerId === m.loId && styles.win, m.loId === my && styles.mine]} numberOfLines={1}>
-            {loName}
-          </Text>
+          <Text style={[styles.team, { textAlign: 'right' }, decided && m.winnerId === m.hiId && styles.win, m.hiId === my && styles.mine]} numberOfLines={1}>{name(m.hiId)}</Text>
+          <Text style={styles.score}>{hiW} : {loW}</Text>
+          <Text style={[styles.team, decided && m.winnerId === m.loId && styles.win, m.loId === my && styles.mine]} numberOfLines={1}>{name(m.loId)}</Text>
         </View>
-        <Text style={styles.games}>
-          {m.series.games.map((g) => `${g.hiSets}-${g.loSets}`).join('  ')}
-        </Text>
+        {games.length > 0 ? <Text style={styles.games}>{games.map((g) => `${g.hiSets}-${g.loSets}`).join('  ')}</Text> : <Muted style={{ fontSize: 12, textAlign: 'center', marginTop: 4 }}>대기 중</Muted>}
       </Card>
     );
   };
 
-  const iWon = po.championId === my && !!my;
-  // 챔프전 MVP — 시즌 종료 시점이라 currentSeasonAwards로 이미 산출 가능(우승 세리머니에 표시). 우승 시에만 계산(무거움 회피)
-  const finalsMvpName = useMemo(() => {
-    if (!iWon) return undefined;
-    const id = currentSeasonAwards(season).finalsMvp?.playerId;
-    return id ? getPlayer(id)?.name : undefined;
-  }, [iWon, season]);
-
-  // ── 단계별 공개(A2, 스포일러 제거) — 존재하는 시리즈만 순서대로. 탭마다 한 단계씩 공개. ──
-  // 진출 3팀은 진입 시 보이고, 그 뒤 PO결과 → 챔프전결과 → 우승(+세리머니)을 능동 공개.
-  const order = useMemo(() => {
-    const seq: ('po' | 'final' | 'champ')[] = [];
-    if (po.po) seq.push('po');
-    if (po.final) seq.push('final');
-    seq.push('champ');
-    return seq;
-  }, [po.po, po.final]);
-  const [revealed, setRevealed] = useState(0); // order[0..revealed-1]까지 공개됨
-  const next = order[revealed] as 'po' | 'final' | 'champ' | undefined;
-  const champRevealed = revealed >= order.indexOf('champ') + 1 && order.includes('champ');
-  const nextLabel =
-    next === 'po' ? '플레이오프 결과 보기 ▶'
-    : next === 'final' ? '챔피언결정전 보기 ▶'
-    : next === 'champ' ? '우승 팀 확인 ▶'
-    : '시상식 →';
-  const onNext = () => (next ? setRevealed((r) => r + 1) : router.push('/awards-ceremony'));
-  const shown = (item: 'po' | 'final' | 'champ') => { const i = order.indexOf(item); return i >= 0 && i < revealed; };
-
   return (
     <Screen title={`${seasonYear(season)} 포스트시즌`}>
-      {/* 우승 세리머니는 우승팀이 공개되는 마지막 단계에서만(진입 즉시 발화=스포일러 차단) */}
-      {iWon && champRevealed ? (
-        <ChampionCelebration
-          teamName={champ}
-          teamId={my!}
-          season={season}
-          mvpName={finalsMvpName}
-          onDone={() => router.push('/awards-ceremony')}
-        />
-      ) : null}
-
       <Card accent={theme.accent}>
         <IconLabel icon="podium-outline" color={theme.accent}>진출 (상위 3팀)</IconLabel>
         {po.seeds.map((id, i) => (
-          <Text key={id} style={[styles.seed, id === my && styles.mine]}>
-            {i + 1}위 {name(id)} {i === 0 ? '(챔프전 직행)' : ''}
-          </Text>
+          <Text key={id} style={[styles.seed, id === my && styles.mine]}>{i + 1}위 {name(id)} {i === 0 ? '(챔프전 직행)' : ''}</Text>
         ))}
       </Card>
-
-      {shown('po') && po.po ? <SeriesCard title="플레이오프 (2위 vs 3위 · 3전2선승)" m={po.po} /> : null}
-      {shown('final') && po.final ? <SeriesCard title="챔피언결정전 (5전3선승)" m={po.final} /> : null}
-      {shown('champ') ? (
-        <Card accent={theme.gold}>
-          <Title>🏆 우승 — {champ}</Title>
-        </Card>
+      {po.po && reveal.poRevealed > 0 ? <SeriesCard title="플레이오프 (2위 vs 3위 · 3전2선승)" m={po.po} revealed={reveal.poRevealed} /> : null}
+      {po.final && reveal.finalRevealed > 0 ? <SeriesCard title="챔피언결정전 (5전3선승)" m={po.final} revealed={reveal.finalRevealed} /> : null}
+      {reveal.championRevealed && po.championId ? (
+        <Card accent={theme.gold}><Text style={styles.champ}>🏆 우승 — {name(po.championId)}</Text></Card>
       ) : null}
-
-      {!champRevealed ? (
-        <Muted style={{ textAlign: 'center', fontSize: 12, marginTop: 2 }}>
-          탭하여 한 단계씩 결과를 확인하세요 (스포일러 방지)
-        </Muted>
-      ) : null}
-      <Button label={nextLabel} onPress={onNext} />
     </Screen>
   );
 }
@@ -129,4 +68,5 @@ const styles = themedStyles(() => StyleSheet.create({
   games: { color: theme.muted, fontSize: 12, textAlign: 'center', marginTop: 4 },
   win: { color: theme.good, fontWeight: '800' },
   mine: { color: theme.accent },
+  champ: { color: theme.text, fontSize: 20, fontWeight: '900' },
 }));

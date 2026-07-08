@@ -767,6 +767,7 @@ export const useGameStore = create<GameState>()(
         const s = get();
         const my = s.selectedTeamId;
         if (!my) return { ok: false };
+        if (s.currentDay > SEASON_DAYS) return { ok: false, reason: 'postseason' }; // 플옵 엔트리 동결(SEASON §5.0) — UI 우회(딥링크) 방어
         if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return { ok: false }; // 건의 쿨다운(방어)
         // 활성(미철회) 지시만 슬롯·중복 판정(A3) — 철회(toDay 박힘)된 지시는 슬롯을 비우고 재건의를 허용한다.
         const activeDirectives = s.benchDirectives.filter((b) => b.toDay == null);
@@ -809,6 +810,7 @@ export const useGameStore = create<GameState>()(
         const s = get();
         const my = s.selectedTeamId;
         if (!my) return { ok: false };
+        if (s.currentDay > SEASON_DAYS) return { ok: false, reason: 'postseason' }; // 플옵 엔트리 동결(SEASON §5.0) — UI 우회(딥링크) 방어
         if (s.currentDay < (s.benchCooldown[playerId] ?? 0)) return { ok: false }; // 건의 쿨다운(방어)
         // 활성(미철회) 지시만 슬롯·후보 제외 판정(A3) — 철회된 지시는 슬롯을 비운다.
         const activeDirectives = s.benchDirectives.filter((b) => b.toDay == null);

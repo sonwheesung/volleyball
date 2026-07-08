@@ -6,9 +6,13 @@ import { computeStandings } from './standings';
 import { playSeries, type Series } from '../engine/playoffs';
 import { SEASON_DAYS } from '../engine/calendar';
 
-const REF_DAY = SEASON_DAYS; // 시즌 종료 전력 — 단일 출처(engine/calendar)
-const PO_TARGET = 2; // 3전 2선승
-const FINAL_TARGET = 3; // 5전 3선승
+export const REF_DAY = SEASON_DAYS; // 시즌 종료 전력 — 단일 출처(engine/calendar). 포스트시즌 동결 규칙(§5): 진화 조회는 이 날로 클램프.
+export const PO_TARGET = 2; // 3전 2선승
+export const FINAL_TARGET = 3; // 5전 3선승
+
+// 매치업별 결정론 시드(단일 출처) — 플옵 보드 재생(data/postseason)이 playSeries와 동일 시드로 게임 g를 재현하려고 읽는다.
+export const poSeedBase = (season: number): number => 90000 + season * 17;
+export const finalSeedBase = (season: number): number => 95000 + season * 17;
 
 export interface Matchup {
   hiId: string;
@@ -35,12 +39,12 @@ export function buildPlayoffs(season: number): Playoffs {
   for (const id of seeds) sq[id] = availableTeamPlayers(id, REF_DAY); // 부상자 제외(플옵 결장 드라마)
 
   // 플레이오프: 2위(hi) vs 3위(lo)
-  const poSeries = playSeries(90000 + season * 17, sq[s2], sq[s3], PO_TARGET, coachInfoOf(s2), coachInfoOf(s3));
+  const poSeries = playSeries(poSeedBase(season), sq[s2], sq[s3], PO_TARGET, coachInfoOf(s2), coachInfoOf(s3));
   const poWinner = poSeries.hiWon ? s2 : s3;
   const po: Matchup = { hiId: s2, loId: s3, series: poSeries, winnerId: poWinner };
 
   // 챔피언결정전: 1위(hi) vs PO 승자(lo)
-  const finalSeries = playSeries(95000 + season * 17, sq[s1], sq[poWinner], FINAL_TARGET, coachInfoOf(s1), coachInfoOf(poWinner));
+  const finalSeries = playSeries(finalSeedBase(season), sq[s1], sq[poWinner], FINAL_TARGET, coachInfoOf(s1), coachInfoOf(poWinner));
   const championId = finalSeries.hiWon ? s1 : poWinner;
   const final: Matchup = { hiId: s1, loId: poWinner, series: finalSeries, winnerId: championId };
 
