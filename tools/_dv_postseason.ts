@@ -96,6 +96,44 @@ check(finalsMvpLeak === 0, '시상 게이트: 결승 확정 전 currentSeasonAwa
   check(a.every((k) => c.includes(k)), '뉴스: 진행 후에도 기존 기사 읽음키 불변(append-only — 읽음추적 안정)');
 }
 
+// ── ②c 시리즈 스코어 관점 축 — 경기 기사는 **승자 관점**(하위 시드 승리도 "승자 (시리즈 a-b)"에서 a=승자 누적) ───
+//   버그: 시드 관점(hiW-loW)으로 쓰면 하위 시드가 이겨도 "화성 승리 (시리즈 0-1)"로 승자가 뒤지는 것처럼 읽힘.
+//   불변식: 각 playoff 경기 기사의 시리즈 스코어 첫 수 = 그 경기 승자의 누적 승수(≥1, 방금 이겼으므로) · 둘째 수 = 패자 누적.
+//   A/B: 시드 관점으로 되뒤집는 뮤턴트가 하위 시드 승리 경기에서 a<1(=0)을 내며 실패 → 검사기 이빨 증명.
+{
+  const parseSeries = (body: string): [number, number] | null => {
+    const mm = /시리즈 스코어 (\d+)-(\d+)\./.exec(body);
+    return mm ? [Number(mm[1]), Number(mm[2])] : null;
+  };
+  let perspBad = 0, checked = 0, mutantWouldFail = 0, lowerSeedWins = 0;
+  for (let s = 0; s < 60; s++) {
+    const p = buildPlayoffs(s);
+    const feed = buildNewsFeed([], [], [], s, [], [], SEASON_DAYS, '', [], [], [], [], POSTSEASON_LAST_DAY);
+    for (const [round, refBase] of [['po', 'po'], ['final', 'final']] as const) {
+      const m = round === 'po' ? p.po : p.final;
+      if (!m) continue;
+      let hiW = 0, loW = 0;
+      for (let g = 0; g < m.series.games.length; g++) {
+        const gm = m.series.games[g];
+        const hiWon = gm.hiSets > gm.loSets;
+        if (hiWon) hiW++; else loW++;
+        if (!hiWon) lowerSeedWins++;
+        const wW = hiWon ? hiW : loW, lW = hiWon ? loW : hiW;                 // 승자 관점(정답)
+        const buggyA = hiW;                                                    // 시드 관점(뮤턴트) 첫 수
+        if (buggyA !== wW) mutantWouldFail++;                                  // 뮤턴트가 정답과 갈라지는 경기(=하위 시드 승)
+        const art = feed.find((n) => n.kind === 'playoff' && n.ref === `${refBase}:${g}` && n.season === s);
+        if (!art || !art.body) { perspBad++; continue; }
+        const parsed = parseSeries(art.body);
+        checked++;
+        if (!parsed || parsed[0] !== wW || parsed[1] !== lW || parsed[0] < 1) perspBad++;
+      }
+    }
+  }
+  check(perspBad === 0, `뉴스: playoff 경기 기사 시리즈 스코어 = 승자 관점(첫 수=승자 누적≥1) — ${checked}기사 · N=60시즌`);
+  check(lowerSeedWins > 0 && mutantWouldFail > 0,
+    `A/B 이빨: 하위 시드 승리 경기 존재(${lowerSeedWins}건) → 시드 관점 뮤턴트는 그 경기에서 승자 누적을 오기(${mutantWouldFail}건)`);
+}
+
 // ── ③ recordChampion 시점(revealedChampionId) ─────────────────────
 {
   const p = buildPlayoffs(3);

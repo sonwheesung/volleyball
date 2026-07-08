@@ -83,7 +83,7 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 |---|---|---|---|
 | 우승 | champion | archive.championId (기존) | ★ |
 | **준우승·리버스스윕 피해** | champion | series에서 결승 패/2승후 3패 | 리버스스윕피해=★ |
-| **준PO/결승 경기·시리즈 확정** | playoff | data/postseason `postseasonReveal` — **치른(공개) 게임/시리즈만** (2026-07-08 달력 편입 §5.2) | 결승 확정=★ |
+| **준PO/결승 경기·시리즈 확정** | playoff | data/postseason `postseasonReveal` — **치른(공개) 게임/시리즈만** (2026-07-08 달력 편입 §5.2). **시리즈 스코어는 그 경기 승자 관점**(wW-lW): 하위 시드가 이겨도 "승자 (시리즈 1-0)"로 읽히게 — 시드 관점(hiW-loW)이면 승자가 뒤지는 것처럼 보임(2026-07-08 정정). 시리즈 확정 기사와 동일 관례. 가드 `_dv_postseason` ②c(관점 축+A/B) | 결승 확정=★ |
 | 정규 MVP / 챔프 MVP | award | awards.mvp / finalsMvp (기존) | mvp=★ |
 | 신인상 / 기량발전상 | award | awards.rookie / mostImproved (기존) | 단신 |
 | **기록왕 6종** | award | awards.titles.{scoring,spike,block,serve,dig,set,receive} — **전부** | 단신 |

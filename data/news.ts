@@ -673,12 +673,15 @@ export function buildNewsFeed(
         if (hiWon) hiW++; else loW++;
         const wId = hiWon ? m.hiId : m.loId, lId = hiWon ? m.loId : m.hiId;
         const wS = Math.max(gm.hiSets, gm.loSets), lS = Math.min(gm.hiSets, gm.loSets);
+        // 시리즈 스코어는 **그 경기 승자 관점**(wW-lW) — 하위 시드가 이겨도 "승자 X (시리즈 1-0)"로 읽히게
+        //   (시리즈 확정 기사 :688와 동일 관례). hiW-loW(시드 관점)로 쓰면 승자가 뒤지는 것처럼 보이는 버그.
+        const wW = hiWon ? hiW : loW, lW = hiWon ? loW : hiW;
         const gkey = `${currentSeason}:${refBase}:${g}`;
-        const core = `${roundKo} ${g + 1}차전에서 ${teamName(wId)}이(가) ${teamName(lId)}을(를) 세트 ${wS}-${lS}로 꺾었다. 시리즈 스코어 ${hiW}-${loW}.`;
+        const core = `${roundKo} ${g + 1}차전에서 ${teamName(wId)}이(가) ${teamName(lId)}을(를) 세트 ${wS}-${lS}로 꺾었다. 시리즈 스코어 ${wW}-${lW}.`;
         push(currentSeason, 'playoff', vh([
-          (w) => `${roundKo} ${g + 1}차전 — ${w} 승리 (시리즈 ${hiW}-${loW})`,
+          (w) => `${roundKo} ${g + 1}차전 — ${w} 승리 (시리즈 ${wW}-${lW})`,
           (w) => `${w}, ${roundKo} ${g + 1}차전 잡았다 — 세트 ${wS}-${lS}`,
-          (w) => `${roundKo} ${g + 1}차전은 ${w}의 것 (${hiW}-${loW})`,
+          (w) => `${roundKo} ${g + 1}차전은 ${w}의 것 (${wW}-${lW})`,
         ], gkey, teamName(wId)), false, wId, body3('playoff', gkey, core), `${refBase}:${g}`, slots[g]);
       }
     };
