@@ -11,6 +11,7 @@ import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
 import { overall } from '../engine/overall';
 import { FOREIGN_SALARY } from '../engine/foreign';
+import { RETIRE_AGE } from '../engine/retire';
 import { LEAGUE_CAP } from '../engine/cap';
 import type { Player } from '../types';
 
@@ -28,6 +29,7 @@ const stat = {
   capOverDomestic: 0,          // 국내 페이롤 캡 초과(0이어야)
   foreignAvgSum: 0, domesticAvgSum: 0,
   opPointsSum: 0, opSets: 0,   // 외인 생산(세트당)
+  foreignMaxAge: 0,            // 외인 현역 최고령(정년 40 → ≤39여야, FOREIGN_SYSTEM §1.6)
 };
 const titles: Record<string, number> = {};
 for (const id of ids) titles[id] = 0;
@@ -52,7 +54,7 @@ for (let s = 0; s < seasons; s++) {
       const p = getPlayer(id);
       if (!p) continue;
       if (p.isAsianQuota) continue; // 아시아쿼터는 외인/국내 지표서 제외(별도 슬롯 — simAsianQuota가 측정)
-      if (p.isForeign) { fCount++; fSum += overall(p); }
+      if (p.isForeign) { fCount++; fSum += overall(p); stat.foreignMaxAge = Math.max(stat.foreignMaxAge, p.age); }
       else { dSum += overall(p); dCount++; domesticPay += p.contract.salary; }
     }
     // committed(드래프트 후) 로스터 측정 — 신인 의무수급(저가 슬롯)·다년계약 누적으로 캡 직전 팀이
@@ -116,6 +118,7 @@ log(`▸ 성능: 외인 평균 OVR ${(stat.foreignAvgSum / seasons).toFixed(1)} 
 log(`▸ 재지명(같은 팀 잔류) ${stat.resignSame} vs 새 얼굴 ${stat.switched} (${(stat.resignSame / Math.max(1, stat.resignSame + stat.switched) * 100).toFixed(0)}% 잔류)`);
 log(`▸ 외인 생산: 시즌당 평균 ${(stat.opPointsSum / Math.max(1, stat.opSets)).toFixed(0)}점/인`);
 log(`▸ 무결: 국내 페이롤 캡 초과 ${stat.capOverDomestic}건 (FA 풀 외인 오염은 _dv_foreign_fa_leak.ts가 검증)`);
+log(`▸ 정년: 외인 현역 최고령 ${stat.foreignMaxAge}세 (${stat.foreignMaxAge < RETIRE_AGE ? `< ${RETIRE_AGE} ✓` : `≥ ${RETIRE_AGE} ❌`} — FOREIGN_SYSTEM §1.6)`);
 const tArr = ids.map((id) => titles[id]);
 // parity(우승경험 ≥6/7)는 표본 노이즈가 큰 지표 — 40시즌 단일 유니버스는 2팀 무관이 순수 운으로도 나온다
 // (2026-07-02: 시대 앵커 변경이 우승 이력을 재섞어 40시즌 5/7·120시즌 7/7 — 브리틀 가드 클래스, #48류).
@@ -123,6 +126,6 @@ const tArr = ids.map((id) => titles[id]);
 const parityOk = seasons < 80 || tArr.filter((t) => t > 0).length >= ids.length - 1;
 log(`▸ 리그 건강: 우승경험 ${tArr.filter((t) => t > 0).length}/${ids.length} · 최다 ${Math.max(...tArr)}회${seasons < 80 ? ' (표본<80 — parity 판정 제외, 120시즌 arm에서 검사)' : ''}`);
 const ok = stat.foreignMin === 7 && stat.foreignMax === 7 && stat.floorViolations < seasons * 0.5
-  && stat.capOverDomestic === 0 && parityOk;
-log(ok ? '\n✅ 외국인 시스템 장기 건강 — 멸종 0·바닥 보장·캡 무결' : '\n❌ 점검 필요');
+  && stat.capOverDomestic === 0 && parityOk && stat.foreignMaxAge < RETIRE_AGE;
+log(ok ? '\n✅ 외국인 시스템 장기 건강 — 멸종 0·바닥 보장·캡 무결·정년 준수' : '\n❌ 점검 필요');
 process.exit(ok ? 0 : 1);

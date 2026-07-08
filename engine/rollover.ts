@@ -64,12 +64,19 @@ export function rolloverPlayer(base: Player, focus: FocusInput, medOvr: number, 
   //    (심층 방어: 손상 세이브·버그성 override가 payroll 음수→캡 무력화하는 것 차단. EC-TX-04)
   const okOverride = override && Number.isFinite(override.salary) && override.salary > 0 && override.salary <= LEAGUE_CAP
     && Number.isFinite(override.remaining) && override.remaining >= 1;
-  const cur = okOverride ? override! : aged.contract;
-  const remaining = cur.remaining - 1;
   let contract: Contract;
-  if (remaining > 0) contract = { ...cur, remaining };
-  else if (career.seasons >= FIRST_FA_SEASONS) contract = { ...cur, remaining: 0 }; // FA 공시
-  else contract = renewedContract(aged, medOvr); // 영건 자동연장
+  if (okOverride) {
+    // 인시즌 재계약 override는 "다음 시즌부터 발효"(FA_SYSTEM §2.5c·salary.ts:21) — 최초 롤오버에서 잔여 **선차감 생략**.
+    //   years=N이면 정확히 N시즌 재직(FA 신규계약·renewedContract가 롤오버 뒤 fresh로 세팅돼 그 시즌 안 깎이는 것과 같은 반열).
+    //   remaining 유지 → 이후 시즌 롤오버부터 정상 −1. override는 endSeason 1회 소비 후 리셋되므로 이 생략은 최초 1회만.
+    //   ※ 구 버그: 여기서 remaining−1을 해 '1년' 재계약이 발효 0시즌 no-op(즉시 만료)이었다. 과거 base는 불변(향후 롤오버만 변화).
+    contract = { ...override! };
+  } else {
+    const remaining = aged.contract.remaining - 1;
+    if (remaining > 0) contract = { ...aged.contract, remaining };
+    else if (career.seasons >= FIRST_FA_SEASONS) contract = { ...aged.contract, remaining: 0 }; // FA 공시
+    else contract = renewedContract(aged, medOvr); // 영건 자동연장
+  }
   // 현 구단 근속 +1 (이적 시 store 에서 0으로 리셋)
   const clubTenure = (aged.clubTenure ?? 0) + 1;
   return { ...aged, contract, career, clubTenure };

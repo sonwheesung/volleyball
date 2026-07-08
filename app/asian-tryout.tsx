@@ -13,6 +13,7 @@ import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league'
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { fogOvr as fogOvrShared } from '../data/prospectScout';
 import { ASIAN_SALARY_Y1, ASIAN_SALARY_Y2 } from '../engine/foreign';
+import { RETIRE_AGE } from '../engine/retire';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
@@ -95,20 +96,29 @@ function AsianTryoutInner() {
         <>
           <Title>기존 구단 보유권 — {myAsian.name} ({myAsian.nationality ?? ''} · {myAsian.age}세 · OVR {displayOvr(overallRaw(myAsian))})</Title>
           <Card accent={theme.bad}>
-            <Muted style={{ fontSize: 12 }}>
-              보유권 — 2년차 상한({formatMoney(ASIAN_SALARY_Y2)})으로 증액 제시하면 우선 잔류. 놓아주면 자유계약 시장으로 나가 다른 팀과 협상할 수 있습니다.
-            </Muted>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-              {([['자동(추천)', null], ['보유(증액)', true], ['놓아줌', false]] as const).map(([label, v]) => (
-                <Pressable
-                  key={label}
-                  onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => setKeepAsian(v))}
-                  style={[styles.chip, keepAsian === v && styles.chipOn]}
-                >
-                  <Text style={[styles.chipTxt, keepAsian === v && { color: theme.bg }]}>{label}</Text>
-                </Pressable>
-              ))}
-            </View>
+            {myAsian.age + 1 >= RETIRE_AGE ? (
+              // 정년(FOREIGN_SYSTEM §1.6): 다음 시즌 나이 40+ → 보유(재계약) 불가(리그 정년은 수입선수에도 적용).
+              <Muted style={{ fontSize: 12 }}>
+                정년 도달({RETIRE_AGE}세) — 보유(재계약) 불가입니다(리그 정년은 아시아쿼터에도 적용). 아래 후보에서 새 얼굴에게 오퍼하세요.
+              </Muted>
+            ) : (
+              <>
+                <Muted style={{ fontSize: 12 }}>
+                  보유권 — 2년차 상한({formatMoney(ASIAN_SALARY_Y2)})으로 증액 제시하면 우선 잔류. 놓아주면 자유계약 시장으로 나가 다른 팀과 협상할 수 있습니다.
+                </Muted>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                  {([['자동(추천)', null], ['보유(증액)', true], ['놓아줌', false]] as const).map(([label, v]) => (
+                    <Pressable
+                      key={label}
+                      onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => setKeepAsian(v))}
+                      style={[styles.chip, keepAsian === v && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipTxt, keepAsian === v && { color: theme.bg }]}>{label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
           </Card>
         </>
       ) : null}

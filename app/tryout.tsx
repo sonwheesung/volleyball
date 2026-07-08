@@ -14,6 +14,7 @@ import { ForeignResumeDetail } from '../components/ForeignResumeDetail';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { fogOvr as fogOvrShared } from '../data/prospectScout';
 import { FOREIGN_SALARY } from '../engine/foreign';
+import { RETIRE_AGE } from '../engine/retire';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
@@ -102,21 +103,30 @@ function TryoutInner() {
         <>
           <Title>재계약 우선권 — {myForeign.name} ({myForeign.age}세 · OVR {displayOvr(overallRaw(myForeign))})</Title>
           <Card accent={theme.bad}>
-            <Muted style={{ fontSize: 12 }}>
-              드래프트 없이 현 외인과 갱신할 수 있습니다(1년 단위 — 잘하는 용병은 수 시즌 함께).
-              풀로 보내면 다른 팀이 지명할 수 있습니다.
-            </Muted>
-            <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
-              {([['자동(추천)', null], ['재계약', true], ['풀로 보냄', false]] as const).map(([label, v]) => (
-                <Pressable
-                  key={label}
-                  onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => setKeepForeign(v))}
-                  style={[styles.chip, keepForeign === v && styles.chipOn]}
-                >
-                  <Text style={[styles.chipTxt, keepForeign === v && { color: theme.bg }]}>{label}</Text>
-                </Pressable>
-              ))}
-            </View>
+            {myForeign.age + 1 >= RETIRE_AGE ? (
+              // 정년(FOREIGN_SYSTEM §1.6): 다음 시즌 나이 40+ → 재계약 불가(리그 정년). 새 얼굴을 지명하세요.
+              <Muted style={{ fontSize: 12 }}>
+                정년 도달({RETIRE_AGE}세) — 재계약 불가입니다(리그 정년은 외인에도 적용). 아래 후보에서 새 얼굴을 지명하세요.
+              </Muted>
+            ) : (
+              <>
+                <Muted style={{ fontSize: 12 }}>
+                  드래프트 없이 현 외인과 갱신할 수 있습니다(1년 단위 — 잘하는 용병은 수 시즌 함께).
+                  풀로 보내면 다른 팀이 지명할 수 있습니다.
+                </Muted>
+                <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
+                  {([['자동(추천)', null], ['재계약', true], ['풀로 보냄', false]] as const).map(([label, v]) => (
+                    <Pressable
+                      key={label}
+                      onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => setKeepForeign(v))}
+                      style={[styles.chip, keepForeign === v && styles.chipOn]}
+                    >
+                      <Text style={[styles.chipTxt, keepForeign === v && { color: theme.bg }]}>{label}</Text>
+                    </Pressable>
+                  ))}
+                </View>
+              </>
+            )}
           </Card>
         </>
       ) : null}

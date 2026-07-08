@@ -4,6 +4,13 @@
 import type { Player } from '../types';
 import { createRng, strSeed } from './rng';
 import { overall } from './overall';
+import { RETIRE_AGE } from './retire';
+
+/** 수입선수 정년(FOREIGN_SYSTEM §1.6) — 리그 정년 40세는 외인·아시아쿼터에도 적용.
+ *  p = 롤오버된(다음 시즌) 나이 기준. true면 리그를 떠난다(keep·풀 재참가·AI 픽 모두 불가). 39세는 마지막 시즌 가능. */
+export function importAgesOut(p: Player): boolean {
+  return p.age >= RETIRE_AGE;
+}
 
 /** 외인 연봉 — 전 구단 동일(30만 달러 상당). 샐러리캡 제외, 운영 자금(FINANCE)에서 지출 */
 export const FOREIGN_SALARY = 41000;
