@@ -75,12 +75,18 @@ const RENEW_FA_YEARS = 2;
 const AGGRESSIVE_MULT = 1.2;
 const AI_AGGRESSIVE_MULT = 1.2; // 모기업 aggressive AI 봇 오퍼 배수(캡 천장 clamp). parity로 튜닝(FINANCE 2.0 Stage3)
 
+/** 내가 지명한 FA가 왜 실패했는지(FA 센터 사유 표기 — FA_SYSTEM §2.7 UX).
+ *  화면이 '경합/불발'로 뭉개던 5경로를 게이트별로 세분: 정원(ROSTER)·캡초과(CAP)·자금부족(CASH)·
+ *  경쟁 입찰 패배(LOST)·선수 잔류 선택(SIT_OUT). 결정론 산출물(엔진 resolve 로직 불변, 관측만 추가). */
+export type FAFailCode = 'CAP' | 'CASH' | 'ROSTER' | 'LOST' | 'SIT_OUT';
+
 export interface FAMarketResult {
   snapshot: Record<string, Player>;
   rosters: Record<string, string[]>;
   signedByMe: string[];                 // 내가 영입 성공
   lostTo: Record<string, string>;       // 내가 노렸으나 뺏긴 선수 → 영입팀
   compCash: number;                     // 내가 낸 보상금 합(A/B FA 영입 — 직전연봉 배수, FA_SYSTEM 2.2)
+  faFail: Record<string, FAFailCode>;   // 내가 지명했으나 실패한 선수 → 사유 코드(영입 성공한 선수는 미포함)
 }
 
 /**
@@ -138,6 +144,10 @@ export function resolveFAMarket(
   let cashLeft = myCash ?? Number.POSITIVE_INFINITY; // 다중 영입은 잔고를 차감하며 순차 판정
   const signedByMe: string[] = [];
   const lostTo: Record<string, string> = {};
+  // 내가 지명한 선수의 "내 팀 입찰 게이트" 결과 기록 — 실패 사유 세분화용(FA_SYSTEM §2.7 UX).
+  //   ROSTER=정원 참(입찰 전 컷)·CAP=캡 초과·CASH=운영 자금 부족·BID=입찰 성사(성공/뺏김/잔류로 갈림).
+  //   순수 관측(resolve 결정에 미개입) — 아래 faFail 조립에만 쓰인다.
+  const myGate: Record<string, 'ROSTER' | 'CAP' | 'CASH' | 'BID'> = {};
   let compCash = 0; // 내가 낸 FA 보상금 누계(A/B 영입 — FA_SYSTEM 2.2)
   const wanted = new Set(faSignings);
 
@@ -159,7 +169,7 @@ export function resolveFAMarket(
 
     const bids: { teamId: string; offer: number; score: number }[] = [];
     for (const t of teams) {
-      if (ROSTER_TOTAL - rosters[t].length <= 0) continue; // 자리 없음
+      if (ROSTER_TOTAL - rosters[t].length <= 0) { if (t === myTeam && wanted.has(id)) myGate[id] = 'ROSTER'; continue; } // 자리 없음
       const gap = positionGap(rosters[t], get)[p.position];
       const isMe = t === myTeam;
       const stance = stanceOf[t];
@@ -179,8 +189,12 @@ export function resolveFAMarket(
           ? Math.min(round100(asking * AI_AGGRESSIVE_MULT), room)
           : asking;
       // 내 팀: 캡 AND 운영 자금(FINANCE, 연봉+보상금) — 캡은 남아도 지갑이 비면 못 뽑는다. AI: 모기업 무한 보전(캡만)
-      const ok = isMe ? canAfford(payroll[t], offer) && offer + compCost <= cashLeft : payroll[t] + offer <= LEAGUE_CAP;
-      if (!ok) continue;
+      const affordCap = canAfford(payroll[t], offer);      // 국내 캡 여유
+      const affordCash = offer + compCost <= cashLeft;      // 운영 자금(연봉+보상금) — 캡 남아도 지갑 비면 불가
+      const ok = isMe ? affordCap && affordCash : payroll[t] + offer <= LEAGUE_CAP;
+      if (!ok) { if (isMe && wanted.has(id)) myGate[id] = !affordCap ? 'CAP' : 'CASH'; continue; }
+      if (isMe && wanted.has(id)) myGate[id] = 'BID'; // 내 팀 입찰 성사 — 이후 성공/뺏김/잔류로 갈림
+      // ↑ 실패 사유 관측만: ok/continue 값은 이전과 byte-동일(affordCap&&affordCash === 기존 인라인식)
       const score = offerScore({
         teamOvr: ovr[t],
         prestige: prestige[t] ?? 0,
@@ -233,7 +247,20 @@ export function resolveFAMarket(
     rosters[prev] = [...rosters[prev], compId];
   }
 
-  return { snapshot, rosters, signedByMe, lostTo, compCash };
+  // 실패 사유 조립(FA_SYSTEM §2.7 UX) — 내가 지명했으나 못 뽑은 선수만.
+  //   내 입찰이 아예 안 들어간 경우(ROSTER/CAP/CASH)가 우선 — AI가 그 선수를 뽑아 lostTo가 찍혀도
+  //   "뺏김"이 아니라 "자금/캡/정원" 사유로 보여 오해를 없앤다(자금 없어 입찰조차 못 함 ≠ 경쟁 패배).
+  //   내 입찰이 들어간(BID) 경우만 lostTo면 LOST(경쟁 패배), 아니면 SIT_OUT(선수 잔류 선택).
+  const faFail: Record<string, FAFailCode> = {};
+  const signedSet = new Set(signedByMe);
+  for (const id of wanted) {
+    if (signedSet.has(id)) continue;
+    const g = myGate[id];
+    if (g === 'ROSTER' || g === 'CAP' || g === 'CASH') faFail[id] = g;
+    else if (g === 'BID') faFail[id] = lostTo[id] ? 'LOST' : 'SIT_OUT';
+  }
+
+  return { snapshot, rosters, signedByMe, lostTo, compCash, faFail };
 }
 
 /** 영구제명 사건 — 그 시즌 소속팀에서 리그 영구 퇴출(불명예, HOF 불가) */
@@ -470,6 +497,7 @@ export interface FAPreview {
   myRoster: string[];
   signedByMe: Set<string>;
   lostTo: Record<string, string>;
+  faFail: Record<string, FAFailCode>;   // 지명 실패 사유(FA 센터 표기 — FA_SYSTEM §2.7 UX)
   tryout: TryoutOutcome;
   asianTryout: TryoutOutcome;
   compCash: number;
@@ -502,7 +530,7 @@ export function faMarketPreviewFrom(
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds);
-  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, tryout, asianTryout, compCash: fa.compCash };
+  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, faFail: fa.faFail, tryout, asianTryout, compCash: fa.compCash };
 }
 
 /** FA 센터 미리보기: 풀 + 내 영입 성공/실패 예상 (resolvePreDraft와 동일 소스). = base 빌드 + 해결 합성(byte-동일). */

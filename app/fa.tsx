@@ -1,9 +1,10 @@
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { RoleBadge } from '../components/RoleBadge';
+import { Popup } from '../components/Popup';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { shortTeamName as shortTeam } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
@@ -56,6 +57,8 @@ function FACenterInner() {
   const bonds = useGameStore((s) => s.bonds);
   // 영입/보호/돈만/공격적 토글은 pv(faMarketPreview) useMemo의 dep이라 매 탭마다 FA 경쟁 결정론을 전면 재해결(무거움) → 오버레이 마스킹(UI-27)
   const busy = useBusyRun();
+  // 개념 안내 모달(UI-21 — 네이티브 Alert 금지). 'delay'=지연 구조, 'comp'=보상선수/돈만
+  const [info, setInfo] = useState<null | 'delay' | 'comp'>(null);
 
   // 이번 시즌 정산 후 운영 자금 — endSeason이 FA에 쓰는 실제 지갑(모기업 지원·관중 수입 반영).
   //   store.cash(직전 정산값)로 미리보기하면 모기업 지원(14~28억)이 빠져 "영입 불가"로 오표시된다.
@@ -125,16 +128,27 @@ function FACenterInner() {
 
   return (
     <Screen title={`${seasonYear(season)} → ${seasonYear(season + 1)} FA 시장`}>
+      {/* 지연 구조 안내(항상 표시) — "지금은 지명, 결과는 시즌 시작 때 확정"을 상단에 못박아
+          "영입 눌렀는데 실패"로 오해하는 걸 막는다(FA_SYSTEM §2.7 UX). */}
+      <Pressable onPress={() => setInfo('delay')} style={styles.notice}>
+        <Ionicons name="hourglass-outline" size={18} color={theme.sky} />
+        <Text style={styles.noticeText}>
+          지금은 선수를 <Text style={{ color: theme.text, fontWeight: '800' }}>'지명'</Text>하는 단계예요.
+          최종 결과는 <Text style={{ color: theme.text, fontWeight: '800' }}>시즌이 시작될 때</Text> 다른 구단과의
+          경쟁으로 확정됩니다. <Text style={{ color: theme.sky, fontWeight: '800' }}>자세히 ›</Text>
+        </Text>
+      </Pressable>
+
       <Card accent={theme.sky}>
         <Row>
-          <IconLabel icon="person-add-outline" color={theme.sky}>영입 성공 / 시도</IconLabel>
+          <IconLabel icon="person-add-outline" color={theme.sky}>영입 성공 / 지명</IconLabel>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
             {pv.signedByMe.size} / {faSignings.length}
           </Text>
         </Row>
         <Muted style={{ fontSize: 12 }}>
-          영입을 눌러도 선수는 팀 전력·출전기회·충성도·연봉을 보고 결정합니다. 다른 구단과 경합에서
-          질 수 있어요. 캡 안에서만 가능.
+          지명해도 선수는 팀 전력·출전기회·충성도·연봉을 보고 결정합니다. 다른 구단과 경합에서
+          질 수도, 선수가 잔류를 택할 수도 있어요. 캡·운영 자금 안에서만 입찰합니다.
         </Muted>
         <Row>
           <Muted>샐러리캡(예상)</Muted>
@@ -162,6 +176,10 @@ function FACenterInner() {
 
       {(compNeeded > 0 || moneyOnlyCount > 0) ? (
         <Card accent={theme.warn}>
+          <Pressable onPress={() => setInfo('comp')} style={styles.compHeader}>
+            <Ionicons name="help-circle-outline" size={16} color={theme.sky} />
+            <Text style={{ color: theme.sky, fontSize: 12, fontWeight: '800' }}>보상선수 · '돈만'이 뭔가요?</Text>
+          </Pressable>
           {compNeeded > 0 ? (
             <>
               <Text style={{ color: theme.warn, fontSize: 13, fontWeight: '700' }}>
@@ -219,10 +237,19 @@ function FACenterInner() {
           const targeted = faSignings.includes(p.id);
           const won = pv.signedByMe.has(p.id);
           const lost = pv.lostTo[p.id];
+          // 실패 사유 세분화(FA_SYSTEM §2.7 UX) — '경합/불발' 뭉뚱그림 제거. 엔진이 준 게이트 코드로 사유별 표기.
+          //   자금/캡/정원은 "입찰 자체가 안 들어간" 경우라 타팀이 뽑아도(lostTo) '뺏김'이 아니라 그 사유로 보여준다.
           let badge: { t: string; c: string } | null = null;
           if (won) badge = { t: '영입 성공', c: theme.good };
-          else if (targeted && lost) badge = { t: `실패 → ${shortTeam(lost)}`, c: theme.bad };
-          else if (targeted) badge = { t: '경합/불발', c: theme.warn };
+          else if (targeted) {
+            const code = pv.faFail[p.id];
+            if (code === 'LOST') badge = { t: `${shortTeam(lost)}에 뺏김 (경쟁 입찰 패배)`, c: theme.bad };
+            else if (code === 'CASH') badge = { t: '운영 자금 부족 — 입찰 못 함', c: theme.warn };
+            else if (code === 'CAP') badge = { t: '샐러리캡 초과 — 입찰 못 함', c: theme.warn };
+            else if (code === 'ROSTER') badge = { t: '선수 자리 없음 — 정원 초과', c: theme.warn };
+            else if (code === 'SIT_OUT') badge = { t: `${p.name} 선수가 잔류를 택함`, c: theme.muted };
+            else badge = { t: '지명함 — 시즌 시작 때 확정', c: theme.sky };
+          }
           return (
             <View key={p.id} style={styles.row}>
               <View style={styles.info}>
@@ -282,6 +309,53 @@ function FACenterInner() {
         })
       )}
       <BusyOverlay visible={busy.busy} message={busy.message} />
+
+      {/* 개념 안내 모달(UI-21 — 커스텀 다크 글래스, 네이티브 Alert 금지) */}
+      <Popup visible={info !== null} onRequestClose={() => setInfo(null)} dismissable>
+        {info === 'delay' ? (
+          <>
+            <Text style={styles.modalTitle}>지금은 '지명' 단계예요</Text>
+            <Text style={styles.modalBody}>
+              영입 시도는 <Text style={styles.modalStrong}>곧바로 계약이 아니라 '지명'</Text>입니다.
+              내가 지명한 선수들의 최종 결과는 <Text style={styles.modalStrong}>시즌이 시작될 때</Text> 한 번에 확정됩니다.
+            </Text>
+            <Text style={styles.modalBody}>
+              그때 선수는 우리 팀만이 아니라 <Text style={styles.modalStrong}>관심 있는 다른 구단의 제안까지 비교</Text>해
+              한 팀을 고릅니다. 그래서 지명해도:
+            </Text>
+            <Text style={styles.modalBullet}>· 다른 구단에 뺏길 수 있고(경쟁 입찰)</Text>
+            <Text style={styles.modalBullet}>· 마음에 드는 제안이 없으면 선수가 잔류를 택할 수 있고</Text>
+            <Text style={styles.modalBullet}>· 우리 캡·운영 자금이 부족하면 입찰조차 못 합니다</Text>
+            <Text style={styles.modalBody}>
+              결과가 나오면 각 선수 카드에 <Text style={styles.modalStrong}>왜 됐는지/안 됐는지</Text>가 사유로 표시됩니다.
+            </Text>
+          </>
+        ) : info === 'comp' ? (
+          <>
+            <Text style={styles.modalTitle}>보상선수 · '돈만' 보상</Text>
+            <Text style={styles.modalBody}>
+              <Text style={styles.modalStrong}>A·B 등급 FA</Text>를 영입하면, 그 선수의 원소속팀이
+              우리 팀 <Text style={styles.modalStrong}>비보호 선수 1명</Text>을 보상선수로 데려갑니다.
+              좋은 선수를 얻는 대신 우리 선수 하나를 내주는 거예요.
+            </Text>
+            <Text style={styles.modalBody}>
+              <Text style={styles.modalStrong}>보호선수 명단(6명)</Text>에 넣은 선수는 안전합니다.
+              명단 밖에서 <Text style={styles.modalStrong}>OVR이 가장 높은 선수부터</Text> 넘어가니 주전을 지키세요.
+            </Text>
+            <Text style={styles.modalBody}>
+              <Text style={{ color: theme.good, fontWeight: '800' }}>'돈만' 보상</Text>을 켜면 보상선수 없이
+              돈을 더 내고(A 300%·B 200%) 우리 선수단을 <Text style={styles.modalStrong}>그대로 지킵니다</Text>.
+              부자 구단이 핵심 선수를 지킬 때 쓰는 옵션이에요.
+            </Text>
+            <Text style={styles.modalBody}>
+              <Text style={styles.modalStrong}>C 등급 FA</Text>는 보상이 없어 '돈만' 옵션이 뜨지 않습니다.
+            </Text>
+          </>
+        ) : null}
+        <Pressable onPress={() => setInfo(null)} style={styles.modalClose}>
+          <Text style={styles.modalCloseTxt}>확인</Text>
+        </Pressable>
+      </Popup>
     </Screen>
   );
 }
@@ -301,4 +375,20 @@ const styles = themedStyles(() => StyleSheet.create({
   },
   age: { color: theme.muted, fontSize: 13, fontWeight: '700' },
   infoBtn: { paddingLeft: 2 },
+  notice: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    backgroundColor: theme.sky + '14', borderRadius: 12, borderWidth: 1, borderColor: theme.sky + '40',
+    paddingHorizontal: 12, paddingVertical: 10,
+  },
+  noticeText: { flex: 1, color: theme.muted, fontSize: 12, lineHeight: 17 },
+  compHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start' },
+  modalTitle: { color: theme.text, fontSize: 19, fontWeight: '900' },
+  modalBody: { color: theme.muted, fontSize: 13, lineHeight: 20 },
+  modalStrong: { color: theme.text, fontWeight: '800' },
+  modalBullet: { color: theme.muted, fontSize: 13, lineHeight: 20, marginLeft: 2 },
+  modalClose: {
+    backgroundColor: theme.accentGlass, borderColor: theme.accent, borderWidth: 1.5,
+    borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 2,
+  },
+  modalCloseTxt: { color: theme.accent, fontSize: 15, fontWeight: '800' },
 }));
