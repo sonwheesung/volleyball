@@ -21,7 +21,7 @@ import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
 import type { AwardWinner, Player } from '../types';
 
-// 부문 기록왕 라벨(awards.titles 키 → 한국어) — records.ts TITLE_KO와 동일 매핑(표시 전용).
+// 부문 기록왕 라벨(awards.titles 키 → 한국어) — data/awards.ts TITLE_KO의 사본(표시 전용). ⚠ set 키만 다름: 여기 '세트왕' vs awards.ts '어시스트왕'(라벨 통일 OPEN Q — AWARDS_SYSTEM §1).
 const TITLE_KO: Record<string, string> = {
   scoring: '득점왕', spike: '공격상', block: '블로킹왕',
   serve: '서브왕', dig: '디그왕', set: '세트왕', receive: '리시브왕',

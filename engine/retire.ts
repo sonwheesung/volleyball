@@ -40,7 +40,7 @@ const envNum = (k: string, d: number): number => {
 };
 
 // 락된 기본값(2026-07-08 캘리브레이션 — simLeague A/B, δ 스윕 3/5/7 중 7 채택: 평균연령·신인유입·왕조 최건강).
-//   aLo/aHi는 나이×gap 곡선 기울기 — 30~32 저OVR ≈10~12% / 39 저OVR ≈60% 목표에 맞춰 튜닝. env는 스윕 전용(앱 미설정).
+//   aLo/aHi는 나이×gap 곡선 기울기 — 30~32 저OVR ≈6~21% / 39 저OVR ≈60% 목표에 맞춰 튜닝(실측 tools/_dv_retire_curve.ts). env는 스윕 전용(앱 미설정).
 export const RETIRE_PARAMS: RetireParams = {
   highDelta: envNum('RT_DELTA', 7),
   aLo: envNum('RT_ALO', 0.008),
