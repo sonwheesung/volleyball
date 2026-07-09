@@ -84,6 +84,12 @@ const draftDist = tally(
 printDist('가중 분포(꼴찌 우대):', draftDist);
 check(isMonotonicWeighted(draftDist),
   `가중 단조: 평균 픽위치 꼴찌→1위 증가(${draftDist.avg[0].toFixed(2)}→${draftDist.avg[6].toFixed(2)}) AND 꼴찌 1픽률(${pct(draftDist.firstRate[0])}%) > 1위(${pct(draftDist.firstRate[6])}%)`);
+// KOVO 재보정 단언(FA_SYSTEM §3.0, 2026-07-09) — 1픽률이 KOVO 규정 확률 35/30/20/8/4/2/1(합 100)에 수렴하는가.
+//   ~~구 선형가중(25/21/18/14/11/7/4)~~ → KOVO 실측 확률로 재캘리브레이션. 허용오차 ±1.5%p(N=20000 표본오차 여유).
+const KOVO_TARGET = [0.35, 0.30, 0.20, 0.08, 0.04, 0.02, 0.01];
+const kovoErr = Math.max(...draftDist.firstRate.map((r, i) => Math.abs(r - KOVO_TARGET[i])));
+check(kovoErr < 0.015,
+  `KOVO 확률 정합: 1픽률 ${TEAMS.map((_, i) => pct(draftDist.firstRate[i])).join('/')}% ≈ 목표 35/30/20/8/4/2/1 (최대오차 ${(100 * kovoErr).toFixed(1)}%p < 1.5%p)`);
 
 // ── ② 외인 트라이아웃 = 균등 셔플(tryoutOrder), 성적 무관 ──
 log('');
@@ -107,7 +113,7 @@ log(`  (b) 가중 분포 → isUniform = ${mutB} (avg 스프레드 ${spread(draf
 check(mutB === false, `mutant(b) 감지: 가중 lotteryRound1은 "균등" 검사를 FAIL시킴 (외인 검사기가 균등아님을 진짜 감지)`);
 
 log('');
-const total = 4;
+const total = 5;
 const passed = total - fails.length;
 if (fails.length) { log(`LOTTERY FAIL (${passed}/${total}) — ${fails.join(' / ')}`); process.exit(1); }
 log(`LOTTERY PASS (${passed}/${total}) — ① 드래프트 가중 단조(1픽률 ${pct(draftDist.firstRate[0])}%≫${pct(draftDist.firstRate[6])}%·평균 ${draftDist.avg[0].toFixed(2)}→${draftDist.avg[6].toFixed(2)}) · ② 외인 균등(스프레드 ${spread(foreignDist.avg).toFixed(3)}·1픽률 ${(100 * spread(foreignDist.firstRate)).toFixed(1)}%p) · A/B 교차 mutant 자가검증`);

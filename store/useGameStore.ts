@@ -18,6 +18,7 @@ import { bottomStreak } from '../engine/staffLifecycle';
 import { SEASON_DAYS } from '../engine/calendar';
 import type { Coach, AssistantCoach } from '../types';
 import { buildDraftContext } from '../data/draftSetup';
+import { aiTargetOf } from '../data/rosterTarget';
 import { leagueProduction } from '../data/production';
 import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
@@ -48,7 +49,7 @@ import { marketVal, setAwardScores, setSalaryEra } from '../data/awardSalary';
 import { setSeasonHistory, upcomingStanceOf } from '../data/leagueHistory';
 import { LEAGUE_CAP, maxSalaryFor, isFranchise } from '../engine/cap';
 import { capPayroll } from '../data/roster';
-import { ROSTER_MAX, canRelease, inSeasonCost, severanceFee } from '../engine/transactions';
+import { ROSTER_MAX, canReleasePosition, inSeasonCost, severanceFee } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
 import { diag } from '../lib/deviceLog';
 import { fillRosters } from '../data/rookies';
@@ -568,14 +569,19 @@ export const useGameStore = create<GameState>()(
         if (s.released.includes(playerId)) return false;
         const my = s.selectedTeamId ?? '';
         const rosterIds = currentRosters()[my] ?? [];
-        const { mySigned, size } = myRosterDelta(my, s.inSeasonTx, rosterIds);
+        const { myReleased, mySigned } = myRosterDelta(my, s.inSeasonTx, rosterIds);
         // 내 유효 로스터(시즌초 명단 + 시즌 중 영입) 선수만 방출 가능 — 타 팀/존재 안 함 id 주입 차단.
         // (없으면 팬텀 방출로 이중 소속·영입비 누수·자기 방출 DoS, 2026-06-20 전체게임 퍼저 발견)
         if (!rosterIds.includes(playerId) && !mySigned.includes(playerId)) return false;
         // 외인/아시아쿼터 방출 차단 — 외인은 FA 풀로 안 가므로(FOREIGN_SYSTEM 3장) 방출 시 시즌 1회 교체 외엔
         // 못 메우는 공석이 된다. 외인은 시즌 중 교체(replaceForeign)·오프시즌 트라이아웃에서만 정리(리뷰 발견 2026-06-25).
         if (getPlayer(playerId)?.isForeign) return false;
-        if (!canRelease(size)) return false;
+        // 방출 하한 = 포지션 인지 floor(FA_SYSTEM §1.6) — 그 포지션이 floor 미만이 되는 방출 차단('세터 0명' 방지).
+        //   유효 명단(시즌초−방출+영입)의 포지션 카운트로 판정. buildLineup throw-guard와 같은 결(경기 성립 사전 보장).
+        const effPlayers = [...rosterIds.filter((id) => !myReleased.has(id)), ...mySigned]
+          .map((id) => evolveOnDay(id, s.currentDay))
+          .filter((p): p is Player => !!p);
+        if (!canReleasePosition(effPlayers, playerId)) return false;
         // 위약금(TRANSACTION_SYSTEM 0.5①) — 잔여 보장액의 일부를 운영 자금에서 즉시 정산. 지갑이 모자라면 방출 불가.
         const c = getPlayer(playerId)?.contract;
         const fee = c ? severanceFee(c.salary, c.remaining) : 0;
@@ -1038,7 +1044,7 @@ export const useGameStore = create<GameState>()(
 
         // 2) 드래프트 해석(라이브 확정 픽 mySelections 우선 → 찜 위시폴백 → AI 자동, 순번 존중. FA_SYSTEM §3.2.1)
         const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf, teamScoutReveal, draftSelections);
+        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf, teamScoutReveal, draftSelections, aiTargetOf());
         for (const p of drafted.picked) snapshot[p.id] = p;
         const myDrafted = drafted.picked.filter((p) => (drafted.rosters[my] ?? []).includes(p.id)); // 내 지명만(§13.20 ④)
         if (myDrafted.length) diag(season, 'draft', `드래프트 지명 ${myDrafted.map((p) => p.name).join(', ')}`); // 진단 로그

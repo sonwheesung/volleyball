@@ -3,14 +3,15 @@
 
 import type { Contract, Player } from '../types';
 import { createRng } from '../engine/rng';
-import { ROSTER_IDEAL } from '../engine/aiGM';
-import { buildDraftOrder, lotteryRound1, setDraftValuer } from '../engine/draft';
+import { positionGap } from '../engine/aiGM';
+import { buildDraftOrder, lotteryRound1, setDraftValuer, DRAFT_ROUNDS } from '../engine/draft';
 import { aiProspectValue, AI_SUPER_PV } from './draftAI';
 import { generateDraftClass } from './draftClass';
 import { resolvePreDraftFrom, buildOffseasonBase, type ExpelEvent, type OffseasonBase } from './offseason';
 import { standingsWorstFirst } from './standings';
 
-const ROSTER_TOTAL = Object.values(ROSTER_IDEAL).reduce((a, b) => a + b, 0); // 16
+/** 드래프트 클래스 규모 = ~40명/년(KOVO 지원 규모, FA_SYSTEM §3.0). 4라운드×7팀=28슬롯 + 미지명 여유. */
+const DRAFT_CLASS_SIZE = 40;
 
 // 스카우팅 2.0 3b(FA_SYSTEM §3.3) — AI 유망주 평가를 부분공개 포텐+아마추어성적(플레이어와 동일 정보)로 주입.
 // engine/draft.pickWithReason 이 이 밸류어를 쓴다. OLD_AI env면 등록 스킵 → 옛 전지적 prospectValue 유지(밸런스 A/B 베이스라인).
@@ -53,21 +54,21 @@ export function buildDraftContextFrom(
   myKeepAsian: boolean | null = null,
 ): DraftContext {
   const pre = resolvePreDraftFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
-  const holes: Record<string, number> = {};
-  for (const t of Object.keys(pre.rosters)) holes[t] = Math.max(0, ROSTER_TOTAL - pre.rosters[t].length);
-  const totalHoles = Object.values(holes).reduce((a, b) => a + b, 0);
-
+  // KOVO 4라운드제(FA_SYSTEM §3.0): 순번 = 1R 가중추첨 × 4라운드. 팀별 지명 수는 resolveDraft가 슬롯마다 지명/패스 판정.
   const r1 = lotteryRound1(standingsWorstFirst(), createRng(60000 + nextSeason * 331));
-  const order = buildDraftOrder(r1, holes, totalHoles);
-  // 드래프트 클래스 — 리그 현 국내 선수 이름을 taken으로 줘 동명이인 방지(FOREIGN_SYSTEM §8)
+  const order = buildDraftOrder(r1, DRAFT_ROUNDS);
+  // 드래프트 클래스 ~40명(KOVO 지원 규모) — 리그 현 국내 선수 이름을 taken으로 줘 동명이인 방지(FOREIGN_SYSTEM §8)
   const takenKorean = Object.values(pre.snapshot)
     .filter((p): p is Player => !!p && !p.isForeign).map((p) => p.name);
-  const cls = generateDraftClass(nextSeason, totalHoles + 8, takenKorean); // 여유분(미지명 풀)
+  const cls = generateDraftClass(nextSeason, DRAFT_CLASS_SIZE, takenKorean);
 
   const myPickSlots: number[] = [];
   order.forEach((t, i) => {
     if (t === myTeam) myPickSlots.push(i);
   });
+  // myHoles = ideal(16) 대비 발굴 여지(표시용) — floor↔ideal 간극. 지명권은 4라운드 고정(발굴 모델, 로스터 무관).
+  const myGap = positionGap(pre.rosters[myTeam] ?? [], (id) => pre.snapshot[id]);
+  const myHoles = Object.values(myGap).reduce((a, g) => a + Math.max(0, g), 0);
 
   return {
     snapshot: pre.snapshot,
@@ -77,7 +78,7 @@ export function buildDraftContextFrom(
     expelled: pre.expelled,
     order,
     cls,
-    myHoles: holes[myTeam] ?? 0,
+    myHoles,
     myPickSlots,
     tryout: pre.tryout,
     asianTryout: pre.asianTryout,

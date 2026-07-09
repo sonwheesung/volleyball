@@ -6,14 +6,36 @@ import { overall, ALL_POSITIONS } from './overall';
 
 /** 선발 코트 필요 인원(포지션별) */
 export const STARTER_NEED: Record<Position, number> = { S: 1, OH: 2, OP: 1, MB: 2, L: 1 };
-/** 시즌 중 로스터 상한(영입 버퍼 — AI 방출 없이도 긴급 수혈 가능) */
-export const ROSTER_MAX = 18;
-/** 시즌 중 로스터 하한 — 선발 필요 7명(6인+리베로) + 동시부상 상한 3 여유.
- *  이 밑으로 방출 불가: 명단이 비어 경기 자체가 불가능해지는 상태를 원천 차단. */
+
+/** 계약 보유 상한(하드캡, FA_SYSTEM §1.5) — 재계약·FA·시즌중 영입은 이 초과면 불가.
+ *  ROSTER_MAX(구 18)를 대체하는 새 상한. **드래프트만 예외**(지명은 임시 초과 허용, 다음 오프시즌 자연 정리). */
+export const ROSTER_CONTRACT_CAP = 20;
+/** 하위호환 별칭 — 기존 호출부(pickSigning·store 시즌중 영입 게이트)가 참조. 값=계약 상한 20. */
+export const ROSTER_MAX = ROSTER_CONTRACT_CAP;
+
+/** 포지션 인지 floor(FA_SYSTEM §1.6) — 자동충원 목표·방출 하한의 단일 출처.
+ *  S2·OH3·OP2·MB3·L2(합 12) = 주전 1세트 + 부상 1명 흡수 여유. 이 위(12→20)는 자동으로 안 채운다(단장 몫). */
+export const ROSTER_FLOOR: Record<Position, number> = { S: 2, OH: 3, OP: 2, MB: 3, L: 2 };
+export const ROSTER_FLOOR_TOTAL = Object.values(ROSTER_FLOOR).reduce((a, b) => a + b, 0); // 12
+
+/** 시즌 중 로스터 하한 — 선발 필요 7명(6인+리베로) + 동시부상 상한 3 여유(하위호환 최소 총원).
+ *  포지션 인지 방출 게이트(canReleasePosition)가 정본이나, 총원 방어값으로도 유지. */
 export const ROSTER_MIN = 10;
 
-/** 방출 가능 여부 — 방출 후에도 하한을 지키는가(스토어/UI 게이트용 순수 판정) */
+/** 방출 가능 여부(총원만 — 하위호환). 포지션 인지 게이트는 canReleasePosition 사용. */
 export const canRelease = (rosterSize: number): boolean => rosterSize - 1 >= ROSTER_MIN;
+
+/** 방출 가능 여부(포지션 인지, FA_SYSTEM §1.6) — 방출 후 그 포지션이 floor 미만이 되면 차단('세터 0명' 방지).
+ *  buildLineup throw-guard와 같은 결(경기 성립 불가 사전 차단). roster=현 유효 국내 명단, releasedId=방출 대상. */
+export function canReleasePosition(roster: Player[], releasedId: string): boolean {
+  const target = roster.find((p) => p.id === releasedId);
+  if (!target) return false;
+  if (target.isForeign) return false; // 외인 방출은 상류에서 이미 차단(여긴 국내 방출만)
+  const pos = target.position;
+  // floor 카운트는 전 선수(외인 포함) — positionGap/fillRosters와 동일 회계(OP는 외인이 채우는 자리라 총량 기준).
+  const after = roster.filter((p) => p.position === pos && p.id !== releasedId).length;
+  return after >= ROSTER_FLOOR[pos];
+}
 
 /** 배신 웃돈 — 같은 시즌 내 "내가 방출한 선수"를 다시 부르는 값.
  *  방출당한 선수는 배신감이 남는다: 당일 철회(unrelease)는 무료(실수 정정)지만,

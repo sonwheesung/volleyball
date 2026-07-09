@@ -17,6 +17,7 @@ import { computeStandings } from './standings';
 import { leagueProduction } from './production';
 import { advanceCoaches } from './staffLifecycle';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from './rosterTarget';
 import { fillRosters } from './rookies';
 import { applyMatchXp } from '../engine/experience';
 import { accrueCareer } from '../engine/production';
@@ -238,7 +239,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
       // 드래프트 + 신인 → 다음 시즌
       const preDraftIds = new Set<string>(Object.values(ctx.rosters).flat()); // 드래프트 전 모든 소속 선수
       const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';
-      const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], myTeam, [], styleOf, teamScoutReveal);
+      const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], myTeam, [], styleOf, teamScoutReveal, [], aiTargetOf());
       // 신인/외인 신규 id가 기존 소속 선수 id와 충돌하면 레지스트리를 덮어써 선수가 증발한다
       const draftedSeen = new Set<string>();
       for (const p of d.picked) {

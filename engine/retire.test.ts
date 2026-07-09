@@ -98,10 +98,12 @@ test('capContractYears: 정년(40) 초과 연한 차단, 최소 1', () => {
   assert.equal(capContractYears(25, 3), 3);   // 젊으면 무영향
 });
 
-test('fillRosters: 빈 자리를 신인(18~20세)으로 16인까지 채움', () => {
+test('fillRosters: 빈 자리를 신인(18~20세)으로 포지션 floor(12인)까지 채움', () => {
+  // FA_SYSTEM §1.6(Phase 1): 자동충원 목표 = 포지션 인지 floor(S2·OH3·OP2·MB3·L2=12), ~~ideal 16~~ 폐기.
+  //   S1+OH1 입력 → floor까지 +10(S1·OH2·OP2·MB3·L2) = 12. floor 위(12→20)는 드래프트/FA로 단장이 능동 확보.
   const reg: Record<string, Player> = { a: mk('a', 24, 'S'), b: mk('b', 25, 'OH') };
   const r1 = fillRosters({ t: ['a', 'b'] }, (id) => reg[id], 1);
-  assert.equal(r1.rosters.t.length, 16);
+  assert.equal(r1.rosters.t.length, 12);
   for (const p of r1.newPlayers) {
     assert.ok(p.age >= 18 && p.age <= 20);
     assert.equal(p.isForeign, false);

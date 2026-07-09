@@ -10,8 +10,8 @@ import { ROSTER_IDEAL } from './aiGM';
 import type { Position } from '../types';
 import { ROSTER } from '../data/seed';
 
-test('로스터 정원 계약: MAX 18 · MIN 10', () => {
-  assert.equal(ROSTER_MAX, 18); // 오프시즌 충원 상한(EC-RM-01 가드와 짝)
+test('로스터 정원 계약: 계약 상한(MAX) 20 · MIN 10', () => {
+  assert.equal(ROSTER_MAX, 20); // 계약 보유 상한(FA_SYSTEM §1.5, Phase 1) — 구 18 → 20. ROSTER_CONTRACT_CAP 별칭.
   assert.equal(ROSTER_MIN, 10);
 });
 

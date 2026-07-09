@@ -14,6 +14,7 @@ import { computeStandings } from '../data/standings';
 import { buildPlayoffs } from '../data/playoffs';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget';
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
@@ -41,7 +42,7 @@ export function advanceOffseason(season: number, championId = '', standings: str
   const ctx = buildDraftContext(my, {}, {}, [], false, [], nextSeason);
   const snapshot = ctx.snapshot;
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf, teamScoutReveal);
+  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const p of drafted.picked) snapshot[p.id] = p;
   const filled = fillRosters(drafted.rosters, (id) => snapshot[id], nextSeason);
   for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;

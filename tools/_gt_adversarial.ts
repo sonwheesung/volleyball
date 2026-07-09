@@ -14,6 +14,7 @@ import './_gt_mock'; // for consistency (some transitive imports)
   const { LEAGUE_CAP } = await import('../engine/cap');
   const { domesticPayroll } = await import('../data/roster');
   const inv = await import('./_gt_invariants');
+  const { aiTargetOf } = await import('../data/rosterTarget');
 
   let fails = 0;
   const FAIL = (name: string, msg: string) => { fails++; console.log(`  FAIL [${name}] ${msg}`); };
@@ -34,7 +35,7 @@ import './_gt_mock'; // for consistency (some transitive imports)
         opts.keepForeign ?? null, opts.moneyOnly ?? [], opts.asianWish ?? [], opts.keepAsian ?? null);
       const snapshot = ctx.snapshot;
       const styleOf = (tid: string) => L.getTeam(tid)?.coachStyle ?? 'balanced';
-      const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, opts.draftPicks ?? [], styleOf, L.teamScoutReveal);
+      const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, opts.draftPicks ?? [], styleOf, L.teamScoutReveal, [], aiTargetOf());
       for (const p of drafted.picked) snapshot[p.id] = p;
       const filled = fillRosters(drafted.rosters, (id) => snapshot[id], opts.nextSeason ?? 1);
       for (const r of filled.newPlayers) snapshot[r.id] = r;
@@ -97,7 +98,7 @@ import './_gt_mock'; // for consistency (some transitive imports)
       const ctx = buildDraftContext(my, {}, {}, wish, true, [], s, undefined, 99999999, [], null, [], [], null);
       const snapshot = ctx.snapshot;
       const styleOf = (tid: string) => L.getTeam(tid)?.coachStyle ?? 'balanced';
-      const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf, L.teamScoutReveal);
+      const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf, L.teamScoutReveal, [], aiTargetOf());
       for (const p of d.picked) snapshot[p.id] = p;
       const f = fillRosters(d.rosters, (id) => snapshot[id], s);
       for (const r of f.newPlayers) snapshot[r.id] = r;

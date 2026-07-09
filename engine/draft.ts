@@ -6,6 +6,10 @@ import type { CoachStyle, Player, Position } from '../types';
 import { type Rng, strSeed } from './rng';
 import { overall } from './overall';
 import { positionGap, ROSTER_IDEAL, needWeight, styleWeight, personalityFactor } from './aiGM';
+import { ROSTER_CONTRACT_CAP } from './transactions';
+
+/** KOVO 여자부 신인 드래프트 = 4라운드제(FA_SYSTEM §3.0). 각 라운드 순번대로 지명/패스. */
+export const DRAFT_ROUNDS = 4;
 
 /** 한 AI 픽의 사유 — wish(인간 위시) / super(특급 BPA) / need(부족 포지션) / best(필요없음→OVR+성격) */
 export type PickReason = 'wish' | 'super' | 'need' | 'best';
@@ -20,9 +24,30 @@ function scoutMult(playerId: string, teamId: string, reveal: number): number {
   return 1 + (hash01(`${playerId}:${teamId}`) * 2 - 1) * SCOUT_NOISE * (1 - reveal);
 }
 
-/** 1라운드 순번 = 하위 팀 가중 추첨 */
+/** KOVO 1R 지명 순번 가중치(꼴찌→1위, FA_SYSTEM §3.0) — 7팀 = 35/30/20/8/4/2/1(합 100).
+ *  하위 팀 우대(꼴찌 최고 확률)이되 보장 아님. 팀 수 변동 시 7-슬롯 곡선을 n점 재샘플(선형보간)해 일반화. */
+export const KOVO_LOTTERY_WEIGHTS_7 = [35, 30, 20, 8, 4, 2, 1];
+
+/** worstFirst.length 개 팀의 1R 추첨 가중치 배열(index 0=꼴찌). n=7이면 KOVO 정확표, 그 외는 곡선 재샘플. */
+export function lotteryWeights(n: number): number[] {
+  if (n <= 1) return n === 1 ? [1] : [];
+  const base = KOVO_LOTTERY_WEIGHTS_7;
+  if (n === base.length) return [...base];
+  // base(7점, t=j/6)를 n점(t=i/(n-1))에서 선형보간 → 하위 우대 곡선 유지, 합은 무관(가중추첨은 비율만 사용)
+  const out: number[] = [];
+  for (let i = 0; i < n; i++) {
+    const t = i / (n - 1);
+    const x = t * (base.length - 1);
+    const lo = Math.floor(x), hi = Math.min(base.length - 1, lo + 1);
+    out.push(base[lo] + (base[hi] - base[lo]) * (x - lo));
+  }
+  return out;
+}
+
+/** 1라운드 순번 = 하위 팀 가중 추첨(KOVO 확률, FA_SYSTEM §3.0). worstFirst[0]=꼴찌(최고 가중). */
 export function lotteryRound1(worstFirst: string[], rng: Rng): string[] {
-  const pool = worstFirst.map((id, i) => ({ id, w: worstFirst.length - i }));
+  const w = lotteryWeights(worstFirst.length);
+  const pool = worstFirst.map((id, i) => ({ id, w: w[i] }));
   const order: string[] = [];
   while (pool.length) {
     const total = pool.reduce((s, p) => s + p.w, 0);
@@ -41,27 +66,31 @@ export function lotteryRound1(worstFirst: string[], rng: Rng): string[] {
   return order;
 }
 
-/** 전체 지명 순번(슬롯별 teamId) — 라운드 반복, 빈자리 채울 때까지 */
-export function buildDraftOrder(
-  round1: string[],
-  holes: Record<string, number>,
-  maxSlots: number,
-): string[] {
-  const remaining: Record<string, number> = { ...holes };
+/** 전체 지명 순번(슬롯별 teamId) = 1R 순번 × rounds 라운드(KOVO 4라운드제, FA_SYSTEM §3.0).
+ *  각 라운드 전 팀이 순번대로 등장하되, 실제 지명/패스는 resolveDraft가 슬롯마다 판정(팀당 지명 수 가변). */
+export function buildDraftOrder(round1: string[], rounds: number = DRAFT_ROUNDS): string[] {
   const order: string[] = [];
-  let any = true;
-  while (any && order.length < maxSlots) {
-    any = false;
-    for (const t of round1) {
-      if ((remaining[t] ?? 0) > 0 && order.length < maxSlots) {
-        order.push(t);
-        remaining[t]--;
-        any = true;
-      }
-    }
-  }
+  for (let r = 0; r < rounds; r++) order.push(...round1);
   return order;
 }
+
+/** AI 패스 판정(FA_SYSTEM §3.0) — 슬롯에서 지명 대신 패스할지. 순수·결정론.
+ *  ①특급 있으면 절대 패스 안 함(BPA) ②계약 상한(20) 도달 시 패스 ③ideal(16) 구멍 있으면 라운드 무관 지명(발굴 니즈)
+ *  ④구멍 없어도 로스터 여유(< PASS_COMFORT) 있으면 지명(발굴) ⑤구멍 없고 로스터 두터우면 패스(팽창 방지).
+ *  로스터 균형(KOVO 12~17)을 유지하며 팀당 지명 가변 — 강팀 소수·약팀 다수. §E 검증·튜닝. */
+export function aiShouldPass(rosterLen: number, needCount: number, round: number, hasSuper: boolean): boolean {
+  if (rosterLen >= ROSTER_CONTRACT_CAP) return true; // 계약 상한(20) — 하드 자기억제(AI는 특급도 초과 안 함, 커밋 로스터 ≤20 불변식 보호)
+  if (hasSuper) return false;                        // 특급은 무조건 지명(BPA)
+  if (round <= 2) return false;                      // 1·2R 거의 무조건 지명(강팀도 — 미래 발굴, 빈자리≠픽수)
+  if (needCount > 0) return false;                   // ideal 대비 구멍 있으면 3·4R도 지명
+  // 3·4R & 구멍 없음 — 라운드 후반일수록·로스터 두터울수록만 패스(패스는 예외, 기본은 지명. 사용자 2026-07-09)
+  return rosterLen >= (round <= 3 ? PASS_R3 : PASS_R4);
+}
+/** 3·4R 구멍없을 때 패스 문턱(로스터 두께). 후반일수록 낮춰(패스 쉬워짐) → 라운드별 패스율 단조↑. §E 튜닝. */
+const PASS_R3 = 17;
+const PASS_R4 = 15;
+/** 발굴 여유 기준(로스터 두께) — 구멍 없어도 이 미만이면 지명(미래 발굴). ideal(16) 근처로 팽창 억제. §E 튜닝값. */
+const PASS_COMFORT = 16;
 
 export function neededPositions(rosterIds: string[], get: Lookup): Position[] {
   const have: Record<Position, number> = { S: 0, OH: 0, OP: 0, MB: 0, L: 0 };
@@ -165,6 +194,7 @@ export function resolveDraft(
   styleOf: (teamId: string) => CoachStyle,
   revealOf: (teamId: string) => number = () => 1, // 팀 스카우팅 공개도(기본 1=정밀)
   mySelections: string[] = [],                    // 내 슬롯 순서 확정 픽(라이브 인터랙티브, 조정 E). 슬롯 i가 소비
+  targetOf: (teamId: string) => number = () => ROSTER_CONTRACT_CAP, // 팀 목표 로스터 크기(Phase 1.5) — 기본=하드 상한(옛 동작)
 ): { rosters: Record<string, string[]>; picked: Player[]; sequence: { teamId: string; playerId: string; reason: PickReason }[] } {
   const rosters: Record<string, string[]> = {};
   for (const k of Object.keys(rostersIn)) rosters[k] = [...rostersIn[k]];
@@ -176,8 +206,10 @@ export function resolveDraft(
   const picked: Player[] = [];
   const sequence: { teamId: string; playerId: string; reason: PickReason }[] = [];
   let myPickIdx = 0; // 내 몇 번째 픽인가(내 슬롯마다 +1) — mySelections[myPickIdx] 매핑
+  const roundOf: Record<string, number> = {}; // 팀별 등장 횟수 = 그 팀 현재 라운드(1..) — order 구조 무관 결정론
 
   for (const teamId of order) {
+    const round = (roundOf[teamId] = (roundOf[teamId] ?? 0) + 1);
     let chosen: Player | null = null;
     let reason: PickReason = 'best';
     if (teamId === myTeam) {
@@ -195,8 +227,24 @@ export function resolveDraft(
       }
     }
     if (!chosen) {
+      // AI(또는 위시 소진된 내 팀) 지명 — 패스 판정(FA_SYSTEM §3.0 4라운드제). 특급(super)은 패스 없음(BPA).
+      const rosterLen = (rosters[teamId] ?? []).length;
       const r = pickWithReason(available, rosters[teamId] ?? [], get, styleOf(teamId), teamId, revealOf(teamId));
-      if (r) { chosen = r.player; reason = r.reason; }
+      if (r) {
+        // 특급(super)이라도 계약 상한(20) 도달 시 패스 — 커밋 로스터 ≤20 불변식 보호(외인 포함 총원 기준). 특급은 목표 초과해도 지명(BPA).
+        if (r.reason === 'super' && rosterLen < ROSTER_CONTRACT_CAP) { chosen = r.player; reason = r.reason; }
+        else if (r.reason !== 'super') {
+          // Phase 1.5: 팀 목표(targetOf) 도달 시 패스 — 드래프트가 로스터를 목표 위로 팽창시키지 않게(재계약·FA와 동일 목표).
+          const target = targetOf(teamId);
+          if (rosterLen < target) {
+            const gap = positionGap(rosters[teamId] ?? [], get); // vs ROSTER_IDEAL — 발굴 니즈
+            const needCount = Object.values(gap).filter((g) => g > 0).length;
+            if (!aiShouldPass(rosterLen, needCount, round, false)) { chosen = r.player; reason = r.reason; }
+            // else: 이 슬롯 패스(지명 없음) — 팀당 지명 수 가변
+          }
+          // else: 목표 도달 → 패스(로스터 크기 자율 관리)
+        }
+      }
     }
     if (!chosen) continue;
     const idx = available.findIndex((a) => a.id === chosen!.id);

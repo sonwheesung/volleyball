@@ -4,8 +4,9 @@
 import type { CoachStyle, Player, Position } from '../types';
 import { MED_REF, overall } from './overall';
 import { TRAITS } from './traits';
+import { ROSTER_FLOOR, ROSTER_FLOOR_TOTAL } from './transactions';
 
-// 팀 포지션 이상 구성(16인) — 공용
+// 팀 포지션 이상 구성(16인) — 공용. 드래프트/FA가 floor(12)↔ideal(16) 간극을 능동 채움(FA_SYSTEM §1.6).
 export const ROSTER_IDEAL: Record<Position, number> = { S: 3, OH: 5, OP: 2, MB: 4, L: 2 };
 
 // 특급(슈퍼) 유망주 컷은 draft.ts(`SUPER_PV`·`isSuperProspect`)에 둔다 — prospectValue(현재+포텐) 기반.
@@ -21,6 +22,19 @@ export function personalityFactor(p: Player): number {
 }
 export const ROSTER_TOTAL = Object.values(ROSTER_IDEAL).reduce((a, b) => a + b, 0);
 
+// ── AI 로스터 크기 자율 관리(FA_SYSTEM §1.5~1.7, Phase 1.5 2026-07-09) ──
+//   로스터가 상한(20)으로 팽창하지 않고 **팀 상황별 목표(12~18)** 에 앉게 — 우승권/명문=두껍게, 하위/리빌딩/신생=얇게.
+//   목표는 **직전 순위(성적) 기반 = 평균회귀**(우승권이 곧 상위팀 → 두꺼움; 몰락하면 얇아짐)라 permanent 서열고착이 없다.
+//   정체성은 소폭 nudge(±1, bench 1명 = 코트 무영향)로만 색을 입힌다 — parity A/B로 무회귀 확인(엔진 무파급 기둥6 유지).
+export const AI_TARGET_MIN = 12; // = 포지션 floor 총합(경기 성립 하한). 어떤 팀도 이 밑을 목표하지 않음.
+export const AI_TARGET_MAX = 18; // 우승권·명문 상한(두꺼운 선수층). 계약 상한 20보다 낮춰 여유(부상 수혈 버퍼).
+/** AI 목표 로스터 크기 — 직전 순위(1=최고) 기반 평균회귀 + 정체성 bias(±1). rank 1-based, n=팀수.
+ *  s: 최고순위 1 … 꼴찌 0. base 12 + 5·s → 12(꼴찌)~17(1위), bias로 ±1(명문/신흥 +1·약체/신생/리빌딩 −1). [12,18] 클램프. */
+export function aiRosterTarget(rank: number, n: number, bias = 0): number {
+  const s = n <= 1 ? 0.5 : Math.max(0, Math.min(1, 1 - (rank - 1) / (n - 1)));
+  return Math.max(AI_TARGET_MIN, Math.min(AI_TARGET_MAX, Math.round(AI_TARGET_MIN + 5 * s + bias)));
+}
+
 type Lookup = (id: string) => Player | undefined;
 
 // 감독 성향별 포지션 선호(원하는 선수 색깔)
@@ -33,14 +47,14 @@ export function styleWeight(pos: Position, style: CoachStyle): number {
   return STYLE_WEIGHT[style][pos];
 }
 
-/** 포지션별 부족도(이상-보유). 음수면 잉여 */
-export function positionGap(rosterIds: string[], get: Lookup): Record<Position, number> {
+/** 포지션별 부족도(대비 target, 기본=이상 구성). 음수면 잉여 */
+export function positionGap(rosterIds: string[], get: Lookup, target: Record<Position, number> = ROSTER_IDEAL): Record<Position, number> {
   const have: Record<Position, number> = { S: 0, OH: 0, OP: 0, MB: 0, L: 0 };
   for (const id of rosterIds) {
     const p = get(id);
     if (p) have[p.position]++;
   }
-  return { S: ROSTER_IDEAL.S - have.S, OH: ROSTER_IDEAL.OH - have.OH, OP: ROSTER_IDEAL.OP - have.OP, MB: ROSTER_IDEAL.MB - have.MB, L: ROSTER_IDEAL.L - have.L };
+  return { S: target.S - have.S, OH: target.OH - have.OH, OP: target.OP - have.OP, MB: target.MB - have.MB, L: target.L - have.L };
 }
 
 /** 부족할수록 더 원함, 잉여면 거의 안 원함 */
@@ -99,15 +113,16 @@ export function aiFillFromPool(
     const ids = [...rosters[teamId]];
     if (teamId !== myTeam) {
       const style = styleOf(teamId);
-      while (ids.length < ROSTER_TOTAL && remaining.length) {
-        const gap = positionGap(ids, get);
-        if (!Object.values(gap).some((g) => g > 0)) break; // 빈 포지션 없으면 그만
+      // floor(12)까지만 자동 수혈 — floor↔ideal(16) 간극은 드래프트/FA로 단장(AI)이 능동 확보(FA_SYSTEM §1.6).
+      while (ids.length < ROSTER_FLOOR_TOTAL && remaining.length) {
+        const gap = positionGap(ids, get, ROSTER_FLOOR);
+        if (!Object.values(gap).some((g) => g > 0)) break; // floor 다 채웠으면 그만
         let bestIdx = -1;
         let bestScore = -1;
         for (let i = 0; i < remaining.length; i++) {
           const p = snapshot[remaining[i]];
           if (!p) continue;
-          if (gap[p.position] <= 0) continue; // 잉여 포지션은 충원 안 함
+          if (gap[p.position] <= 0) continue; // floor 충족 포지션은 자동 충원 안 함
           const sc = wantScore(p, overall(p), gap, style);
           if (sc > bestScore) {
             bestScore = sc;

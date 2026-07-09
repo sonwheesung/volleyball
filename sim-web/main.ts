@@ -24,6 +24,7 @@ import { formatMoney, resignOptions } from '../engine/salary';
 import { LEAGUE_CAP, isFranchise } from '../engine/cap';
 import { leagueProduction } from '../data/production';
 import { buildDraftContext } from '../data/draftSetup';
+import { aiTargetOf } from '../data/rosterTarget';
 import { buildMatchBox } from '../data/matchBox';
 import { reconstructRallies } from '../components/courtDirector';
 import { situationFeed } from '../components/courtCommentary';
@@ -572,8 +573,8 @@ function runDraftLive() {
   const get = (id: string) => ctx.snapshot[id] ?? clsById.get(id);
   const worstFirst = [...DL.ranking].reverse(); // 꼴찌가 앞 순번
   const r1 = DL.lottery ? lotteryRound1(worstFirst, createRng(DL.seed)) : worstFirst;
-  const order = buildDraftOrder(r1, holes, total);
-  const res = resolveDraft(order, cls, rosters, get, '', [], styleOf);
+  const order = buildDraftOrder(r1); // KOVO 4라운드제(FA_SYSTEM §3.0) — 팀당 지명/패스는 resolveDraft가 판정
+  const res = resolveDraft(order, cls, rosters, get, '', [], styleOf, undefined, [], aiTargetOf());
   const seen: Record<string, number> = {};
   DL.seq = res.sequence.map((s) => { seen[s.teamId] = (seen[s.teamId] ?? 0) + 1; return { teamId: s.teamId, player: clsById.get(s.playerId)!, reason: s.reason, round: seen[s.teamId] }; });
   DL.revealed = 0;

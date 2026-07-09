@@ -10,6 +10,7 @@ import { resolveDraftContextFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, shortTeamName, teamScoutReveal, SEASON } from '../data/league';
 import { resolveDraft, neededPositions, type PickReason } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget';
 import { planNextAction } from '../engine/advance';
 import { overall } from '../engine/overall';
 import { fogOvr } from '../data/prospectScout';
@@ -84,7 +85,7 @@ function DraftLiveInner() {
 
   // 픽 시퀀스 — [ctx, mySelections]에만 의존(값싼 재계산, 조정 C). 내 슬롯은 mySelections 우선 → 찜 폴백 → AI.
   const seq = useMemo<SeqItem[]>(() => {
-    const res = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => ctx.snapshot[id], my, draftPicks, styleOf, teamScoutReveal, mySelections);
+    const res = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => ctx.snapshot[id], my, draftPicks, styleOf, teamScoutReveal, mySelections, aiTargetOf());
     const seen: Record<string, number> = {};
     return res.sequence.map((s, i) => {
       seen[s.teamId] = (seen[s.teamId] ?? 0) + 1;

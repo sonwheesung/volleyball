@@ -7,7 +7,15 @@ import { createRng } from '../engine/rng';
 import { applyRetirements, capContractYears } from '../engine/retire';
 import { rollExpulsion, scandalRepMul, type ExpelKind } from '../engine/scandal';
 import { rolloverLeague, renewedContract } from '../engine/rollover';
-import { aiRetainProb, medianOvr, positionGap, ROSTER_TOTAL } from '../engine/aiGM';
+import { aiRetainProb, medianOvr, positionGap } from '../engine/aiGM';
+import { ROSTER_CONTRACT_CAP, ROSTER_FLOOR } from '../engine/transactions';
+import { aiReserveTargets, aiDomesticCaps } from './rosterTarget';
+
+/** §1.7 attrition — AI 재계약 의향에 곱하는 감쇠(비연장 소폭 강화). 드래프트 유입(R1·R2 지명)만큼
+ *  노장이 나가게 해 로스터가 상한(20)으로 팽창하지 않게. parity A/B 튜닝값.
+ *  Phase 1.5(2026-07-09): 재계약을 **팀 목표(aiRosterTargets)로 상한** 하는 능동 배출이 주 레버가 되면서,
+ *  이 확률 감쇠는 "목표 미달팀에서도 노장이 가끔 빠지는" 생동 역할로 축소(0.6→0.85, 과이탈 완화). */
+const AI_RETAIN_ATTRITION = 0.85;
 import { assignFAGrades, askingPrice, offerScore, prefWeightsOf, acceptProb, SIT_OUT } from '../engine/faMarket';
 import { affinity, pairKey } from '../engine/relationships';
 import { relationBonds } from './relationships';
@@ -135,6 +143,9 @@ export function resolveFAMarket(
     ovr[t] = teamOverall(rosters[t].map(get).filter((p): p is Player => !!p));
   }
 
+  // AI FA 예약 상한(FA_SYSTEM §1.5·§1.7, Phase 1.5) = 목표−RESERVE — 재계약과 동일 상한. AI는 여기까지만 FA 수혈하고
+  //   나머지 ~RESERVE칸은 드래프트(발굴)에 양보한다. 내 팀은 하드 상한(20). 직전 순위+정체성(평균회귀).
+  const aiReserve = aiReserveTargets();
   const rng = createRng(80000 + season * 131);
   // 모기업 기조(FINANCE 2.0 Stage3) — 막 끝난 시즌(season-1) 기준, 전 구단 stance.
   //   **upcomingStances = 라이브 병합**(막 끝난 시즌을 computeStandings로 덧댐) → FA 프리뷰(archive에 S 미포함)와
@@ -169,7 +180,9 @@ export function resolveFAMarket(
 
     const bids: { teamId: string; offer: number; score: number }[] = [];
     for (const t of teams) {
-      if (ROSTER_TOTAL - rosters[t].length <= 0) { if (t === myTeam && wanted.has(id)) myGate[id] = 'ROSTER'; continue; } // 자리 없음
+      // 내 팀 = 하드 계약 상한(20). AI = 예약 상한(목표−RESERVE) — 드래프트 자리 확보 + 상위팀 두껍게·하위팀 얇게(§1.5·§1.7).
+      const rosterCeil = t === myTeam ? ROSTER_CONTRACT_CAP : (aiReserve[t] ?? 11);
+      if (rosters[t].length >= rosterCeil) { if (t === myTeam && wanted.has(id)) myGate[id] = 'ROSTER'; continue; } // 자리 없음
       const gap = positionGap(rosters[t], get)[p.position];
       const isMe = t === myTeam;
       const stance = stanceOf[t];
@@ -297,6 +310,9 @@ export function buildOffseason(
   //   분포가 이동해도 순잔류율(~58%)·연봉 스케일(캡 압박)이 유지된다(과이탈·재정 긴장 사멸 방지).
   const leagueMedOvr = medianOvr(currentBasePlayers().filter((p) => !p.isForeign));
   setSalaryEra(leagueMedOvr); // marketVal(주입 컨텍스트) 사용처(FA 요구액·AI 수혈 등)와 동기화
+  // AI 국내 재계약/방출 상한(FA_SYSTEM §1.7, Phase 1.5) = 목표−RESERVE−IMPORTS(국내만) — 매 오프시즌 신인+수입에게 자리를 비운다.
+  //   트라이아웃(외인·아시아)이 뒤에서 IMPORTS칸을 채우므로 국내는 그만큼 낮게 잡는다. 내 팀은 무제한(단장 결정).
+  const aiRetainCap = aiDomesticCaps();
   const snapshot = rolloverLeague(currentBasePlayers(), focusOf, leagueMedOvr, contractOverrides, effectsOf, (p) => lostDays.get(p.id) ?? 0);
   const retireRng = createRng(70000 + nextSeason * 977);
   // medOvr = 시대 앵커(위 leagueMedOvr) — 은퇴 기준선 HIGH도 시대상대(연봉·AI잔류와 같은 패턴).
@@ -348,12 +364,17 @@ export function buildOffseason(
       return rng.next() < prob;
     };
     // AI 재계약: 절벽 컷(aiKeepsFA) 대신 확률(aiRetainProb)을 결정론 시드로 굴림 — 가끔 노장 잔류·영건 이탈(리그 생동)
-    const aiRetains = (p: Player): boolean => createRng(strSeed(`airetain:${p.id}:${nextSeason}`)).next() < aiRetainProb(p, leagueMedOvr);
+    const aiRetains = (p: Player): boolean => createRng(strSeed(`airetain:${p.id}:${nextSeason}`)).next() < aiRetainProb(p, leagueMedOvr) * AI_RETAIN_ATTRITION;
     const wantRetain = expiring
       .filter((p) => (teamId === myTeam ? resignDecisions[p.id] !== false && !refuses(p) : aiRetains(p)))
       .sort((a, b) => overall(b) - overall(a));
-    const retainSet = new Set(wantRetain.map((p) => p.id));
+    // AI 능동 배출(FA_SYSTEM §1.7, Phase 1.5) — 재계약 의사가 있어도 **로스터가 팀 목표에 도달하면 비연장**(늙고 약한 순으로 컷).
+    //   wantRetain은 OVR 내림차순 → 목표 초과분은 가치 낮은(=대개 노장) 선수부터 풀로. 드래프트 유망주가 들어올 자리를 능동적으로 비운다.
+    //   내 팀(myTeam)은 무제한(단장 결정) — 캡만 제약. 목표는 이미 keep(계약 잔여 선수) 포함 총원 기준.
+    const target = teamId === myTeam ? Number.POSITIVE_INFINITY : (aiRetainCap[teamId] ?? 9);
+    const wantRetainSet = new Set(wantRetain.map((p) => p.id)); // 잔류 "의사" 있던 만료자(아래 미의사 만료자 풀행 가드)
     for (const p of wantRetain) {
+      if (keep.length >= target) { pool.push(p.id); continue; } // 목표 초과 — 비연장(가치 낮은 순, 능동 배출)
       const rc = renewedContract(p, leagueMedOvr);
       // 직전 시즌 사고 선수는 평판 할인(사안 경중만큼 연봉↓) — 다음 재계약에 반영(OWNER_SYSTEM 4.6)
       const rep = repMap.get(p.id) ?? 1;
@@ -366,7 +387,32 @@ export function buildOffseason(
         pool.push(p.id); // 캡 초과 → 잔류 불가
       }
     }
-    for (const p of expiring) if (!retainSet.has(p.id)) pool.push(p.id); // 잔류 의사 없던 만료자
+    for (const p of expiring) if (!wantRetainSet.has(p.id)) pool.push(p.id); // 잔류 의사 없던 만료자(의사자 중 컷/캡탈락은 위에서 이미 풀행)
+
+    // AI 능동 방출(FA_SYSTEM §1.7, Phase 1.5) — 재계약(비연장)만으론 **3년 계약 신인**(seed.ts)이 쌓여 로스터가 예약 상한
+    //   아래로 안 내려간다(드래프트 굶음). 그래서 계약 잔여 선수까지 포함해 **예약 상한 초과분을 가치 낮은(늙고 약한) 순으로 방출**한다.
+    //   방출자는 FA 풀로(remaining 0) — 타 팀이 주워갈 수 있음. **포지션 floor는 지킨다**(경기 성립·'세터 0명' 방지, canReleasePosition과 같은 결).
+    //   드래프트+fillRosters가 뒤에서 목표/floor로 되채워 커밋 로스터 = 목표(T). 내 팀은 방출 안 함(단장 결정).
+    if (teamId !== myTeam) {
+      const cap = aiRetainCap[teamId] ?? 9;
+      while (keep.length > cap) {
+        const posCount: Record<string, number> = {};
+        for (const id of keep) { const q = snapshot[id]; if (q) posCount[q.position] = (posCount[q.position] ?? 0) + 1; }
+        let worstId: string | null = null, worstVal = Infinity;
+        for (const id of keep) {
+          const q = snapshot[id];
+          if (!q || q.isForeign) continue; // 외인은 트라이아웃 별도 흐름 — 방출 대상 아님
+          if (posCount[q.position] <= ROSTER_FLOOR[q.position]) continue; // 포지션 floor 보호(경기 성립)
+          const v = overall(q);
+          if (v < worstVal) { worstVal = v; worstId = id; }
+        }
+        if (!worstId) break; // 전부 floor 경계 — 더 못 자름
+        keep.splice(keep.indexOf(worstId), 1);
+        payroll -= snapshot[worstId].contract.salary; // 방출 → 캡 여유 회복(음수 방어 불필요, 누적 payroll≥0)
+        snapshot[worstId] = { ...snapshot[worstId], contract: { ...snapshot[worstId].contract, remaining: 0 } }; // FA화
+        pool.push(worstId);
+      }
+    }
     rosters[teamId] = keep;
   }
   return { snapshot, rosters, pool, retired: afterRetire.retired, returningForeign, returningAsian, expelled };
