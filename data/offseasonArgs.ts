@@ -7,7 +7,7 @@
 //   여기 한 곳에서 "해결 꼬리 튜플"을 만들어 spread 하면, 화면이 인자를 빠뜨리는 게 **구조적으로 불가능**.
 //   상설 가드 `tools/_dv_uictx.ts` 가 이 튜플 == endSeason 인자 정합을 검사(EC-FA-09).
 
-import type { Contract } from '../types';
+import type { Contract, FAOffer } from '../types';
 import type { OwnerFx } from '../engine/owner';
 import {
   buildDraftContext, buildDraftContextFrom, type DraftContext, type OffseasonBase,
@@ -19,8 +19,7 @@ export interface OffseasonInputs {
   my: string;
   resignDecisions: Record<string, boolean>;
   contractOverrides: Record<string, Contract>;
-  faSignings: string[];
-  faAggressive: boolean;
+  faOffers: Record<string, FAOffer>;   // FA 오퍼 다레버(§2.8 Phase1) — 구 faSignings[]+faAggressive 대체. keys=지명, 값=오퍼
   protectedIds: string[];
   nextSeason: number;                  // season + 1
   ownerFx?: OwnerFx;                    // buildOwnerFx(interviews, season, my, fanScore)
@@ -37,8 +36,8 @@ export interface OffseasonInputs {
  * 공유하는 동일 순서 튜플. 세 진입점의 시그니처가 byte-동일하므로 하나로 조립해 spread 한다.
  */
 export type OffseasonResolveArgs = [
-  faSignings: string[],
-  aggressive: boolean,
+  faSignings: string[],           // = Object.keys(faOffers) — resolveFAMarket의 wanted 집합(who)
+  aggressive: boolean,            // 항상 false(전역 aggressive는 per-오퍼 faOffers[id].aggressive로 이관 — §2.8)
   protectedIds: string[],
   nextSeason: number,
   ownerFx: OwnerFx | undefined,
@@ -48,13 +47,15 @@ export type OffseasonResolveArgs = [
   moneyOnlyIds: string[],
   asianWish: string[],
   keepAsian: boolean | null,
+  faOffers: Record<string, FAOffer>, // 오퍼 레버(연봉/연수/주전보장/약속·per-오퍼 aggressive) — 엔진이 who×레버로 해석
 ];
 
-/** 입력 → 해결 꼬리 튜플(단일 소스). 순서·개수를 여기서만 정의한다. */
+/** 입력 → 해결 꼬리 튜플(단일 소스). 순서·개수를 여기서만 정의한다.
+ *  faSignings=keys·aggressive=false로 파생 — 엔진은 faSignings(누구)를 wanted로, faOffers(레버)로 오퍼를 만든다. */
 export function offseasonResolveArgs(inp: OffseasonInputs): OffseasonResolveArgs {
   return [
-    inp.faSignings, inp.faAggressive, inp.protectedIds, inp.nextSeason, inp.ownerFx,
-    inp.myCash, inp.tryoutWish, inp.keepForeign, inp.moneyOnlyIds, inp.asianWish, inp.keepAsian,
+    Object.keys(inp.faOffers), false, inp.protectedIds, inp.nextSeason, inp.ownerFx,
+    inp.myCash, inp.tryoutWish, inp.keepForeign, inp.moneyOnlyIds, inp.asianWish, inp.keepAsian, inp.faOffers,
   ];
 }
 

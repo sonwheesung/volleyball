@@ -70,12 +70,11 @@ function DraftCenterInner() {
   const season = useGameStore((s) => s.season);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
   const contractOverrides = useGameStore((s) => s.contractOverrides);
-  const faSignings = useGameStore((s) => s.faSignings);
+  const faOffers = useGameStore((s) => s.faOffers); // FA 오퍼 다레버(§2.8 Phase1) — 구 faSignings+faAggressive 대체
   const protectedIds = useGameStore((s) => s.protectedIds);
   const draftPicks = useGameStore((s) => s.draftPicks);
   const toggleDraftPick = useGameStore((s) => s.toggleDraftPick);
 
-  const faAggressive = useGameStore((s) => s.faAggressive);
   const moneyOnlyIds = useGameStore((s) => s.moneyOnlyIds);
   const tryoutWish = useGameStore((s) => s.tryoutWish);
   const keepForeign = useGameStore((s) => s.keepForeign);
@@ -95,9 +94,9 @@ function DraftCenterInner() {
     [my, resignDecisions, contractOverrides, season, ownerFx],
   );
   const ctx = useMemo(
-    () => resolveDraftContextFor(base, { my, resignDecisions, contractOverrides, faSignings, faAggressive,
+    () => resolveDraftContextFor(base, { my, resignDecisions, contractOverrides, faOffers,
       protectedIds, nextSeason: season + 1, ownerFx, myCash: cash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian }),
-    [base, my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, ownerFx, cash,
+    [base, my, resignDecisions, contractOverrides, faOffers, protectedIds, season, ownerFx, cash,
       tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian],
   );
   const standings = useMemo(() => computeStandings(Number.MAX_SAFE_INTEGER), [season]);

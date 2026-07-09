@@ -35,8 +35,10 @@ function FACenterInner() {
   const season = useGameStore((s) => s.season);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
   const contractOverrides = useGameStore((s) => s.contractOverrides);
-  const faSignings = useGameStore((s) => s.faSignings);
-  const faAggressive = useGameStore((s) => s.faAggressive);
+  const faOffers = useGameStore((s) => s.faOffers);
+  // 파생(§2.8 Phase1) — faSignings=지명 keys, faAggressive=오퍼 중 하나라도 공격적(전역 토글 표시용). 레버 UI는 Phase 4.
+  const faSignings = useMemo(() => Object.keys(faOffers), [faOffers]);
+  const faAggressive = useMemo(() => Object.values(faOffers).some((o) => o.aggressive), [faOffers]);
   const protectedIds = useGameStore((s) => s.protectedIds);
   const moneyOnlyIds = useGameStore((s) => s.moneyOnlyIds);
   // 트라이아웃/아시아 토글 — endSeason과 동일 인자로 미리보기해야 preview=result(EC-FA-09).
@@ -76,9 +78,9 @@ function FACenterInner() {
     [my, resignDecisions, contractOverrides, season, ownerFx],
   );
   const pv = useMemo(
-    () => resolveFAPreviewFor(base, { my, resignDecisions, contractOverrides, faSignings, faAggressive,
+    () => resolveFAPreviewFor(base, { my, resignDecisions, contractOverrides, faOffers,
       protectedIds, nextSeason: season + 1, ownerFx, myCash: budgetCash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian }),
-    [base, my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, season, ownerFx, budgetCash,
+    [base, my, resignDecisions, contractOverrides, faOffers, protectedIds, season, ownerFx, budgetCash,
       tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian],
   );
   const snap = pv.snapshot;

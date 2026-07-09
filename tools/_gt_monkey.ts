@@ -57,7 +57,7 @@ import type { Violation } from './_gt_invariants';
     { name: 'setDay', fn: () => { const r = rnd(); const d = r < 0.6 ? (pick(matchdays) ?? 0) : r < 0.85 ? Math.floor((rnd() - 0.3) * 400) : (r < 0.93 ? NaN : Infinity); G().setDay(d); if (!Number.isFinite(G().currentDay)) throw new Error(`currentDay 오염=${G().currentDay} (EC-ST-01 — setDay NaN/Inf 미가드)`); } },
     { name: 'recordResult', fn: () => { const f = pick(SEASON); if (f) G().recordResult({ fixtureId: f.id, homeSets: Math.floor(rnd()*4), awaySets: Math.floor(rnd()*4) }); } },
     { name: 'signFA', fn: () => G().signFA(randId()) },
-    { name: 'unsignFA', fn: () => G().unsignFA(pick(G().faSignings) ?? randId()) },
+    { name: 'unsignFA', fn: () => G().unsignFA(pick(Object.keys(G().faOffers)) ?? randId()) },
     { name: 'setResign', fn: () => G().setResign(randId(), rnd() < 0.5) },
     { name: 'toggleProtect', fn: () => G().toggleProtect(randId()) },
     { name: 'toggleMoneyOnly', fn: () => G().toggleMoneyOnly(randId()) },

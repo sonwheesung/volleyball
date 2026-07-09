@@ -125,6 +125,18 @@ export interface FAPref {
   preferredTeamId?: string; // 연고/선호팀(있으면 그 팀에 home 가중)
 }
 
+/** FA 오퍼(FA_SYSTEM §2.8 격상 — 다레버) — 플레이어가 FA 지명 시 내는 제안. persisted 입력(시드 아님, 결정론 격리).
+ *  구 `faSignings:string[]`+`faAggressive:boolean` 2-레버를 대체(마이그레이션으로 기본 오퍼 변환).
+ *  - salary:'auto' = 해석 시점 askingPrice(p) × (aggressive ? 1.2 : 1). 마이그레이션 시점엔 asking 미상이라 센티넬 저장(§2.8.1 ④).
+ *  - aggressive: 구 faAggressive 전역토글(공격적 영입) 재현 마커 — 'auto' 해석 ×1.2. Phase 3+ 레버는 salary를 직접 지정. */
+export interface FAOffer {
+  salary: number | 'auto';
+  years: 1 | 2 | 3 | 4 | 5;
+  starterGuarantee: boolean;
+  promises: { captain?: boolean; number?: boolean };
+  aggressive?: boolean;
+}
+
 /** 명예의전당 등재 — 은퇴 레전드의 통산 기록 영구 보존 (백년 서사) */
 export interface HofEntry {
   id: string;

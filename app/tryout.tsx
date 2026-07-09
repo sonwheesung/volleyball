@@ -32,8 +32,7 @@ function TryoutInner() {
   const season = useGameStore((s) => s.season);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
   const contractOverrides = useGameStore((s) => s.contractOverrides);
-  const faSignings = useGameStore((s) => s.faSignings);
-  const faAggressive = useGameStore((s) => s.faAggressive);
+  const faOffers = useGameStore((s) => s.faOffers); // FA 오퍼 다레버(§2.8 Phase1) — 구 faSignings+faAggressive 대체
   const protectedIds = useGameStore((s) => s.protectedIds);
   const interviews = useGameStore((s) => s.interviews);
   const fanScore = useGameStore((s) => s.fanScore);
@@ -55,8 +54,8 @@ function TryoutInner() {
     [my, resignDecisions, contractOverrides, season, ownerFx],
   );
   const ctx = useMemo(
-    () => buildDraftContextFrom(base, my, faSignings, faAggressive, protectedIds, season + 1, ownerFx, cash, tryoutWish, keepForeign),
-    [base, my, faSignings, faAggressive, protectedIds, season, ownerFx, cash, tryoutWish, keepForeign],
+    () => buildDraftContextFrom(base, my, Object.keys(faOffers), false, protectedIds, season + 1, ownerFx, cash, tryoutWish, keepForeign, [], [], null, faOffers),
+    [base, my, faOffers, protectedIds, season, ownerFx, cash, tryoutWish, keepForeign],
   );
   const myForeign = useMemo(
     () => getEvolvedTeamPlayers(my, currentDay).find((p) => p.isForeign),

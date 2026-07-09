@@ -1,10 +1,14 @@
 // FA 시장 — 자격·등급·요구연봉 (FA_SYSTEM 2장). 순수 함수.
 // 협상/수락·보상은 후속(2b/2c). 여기선 "누가 FA가 되고, 어느 등급이며, 얼마를 원하나".
 
-import type { FAArchetype, FAPref, FAWeights, Player } from '../types';
+import type { FAArchetype, FAOffer, FAPref, FAWeights, Player } from '../types';
 import type { Rng } from './rng';
 
 export type FAGrade = 'A' | 'B' | 'C';
+
+/** 기본 오퍼(FA_SYSTEM §2.8.1 ④ 원탭 자동) — 관전형 유저의 "영입 시도" 한 번 = 이 오퍼.
+ *  salary:'auto'(=asking×1)·years:2(구 RENEW_FA_YEARS)·주전보장 off·약속 none → offerScore 기여가 구 동작과 동일(0드리프트). */
+export const DEFAULT_FA_OFFER: FAOffer = { salary: 'auto', years: 2, starterGuarantee: false, promises: {} };
 
 // ─── FA 성향 프로필 (선수마다 다른 이적 동기) ───
 
@@ -102,6 +106,10 @@ export interface OfferCtx {
   rand: number;        // 0~1 결정론 난수
   talkBias?: number;   // 구단주 면담 보정(OWNER_SYSTEM) — 설득 성공 +, 결렬 −. 내 팀 오퍼에만
   relT?: number;       // 인간관계 affinity −1..1 (친구 +·싫은 선수 −) — RELATIONSHIP_SYSTEM
+  // FA 오퍼 다레버(FA_SYSTEM §2.8 Phase1) — 내 팀 오퍼에만(AI/미지정은 undefined=기본 기여 0 → 0드리프트).
+  years?: number;      // 계약 연수(기본 2). 2 초과분 = 안정감(출전·잔류 지속) → playT 소폭 상향. 2 이하는 무보정.
+  starterGuarantee?: boolean; // 주전 보장 → playT 확정 상향(출전 기회 항). 대가(벤치 시 불만)는 Phase 2.
+  promises?: { captain?: boolean; number?: boolean }; // 주장/등번호 약속 — §2.8.1 v1 제외(엔진 훅+대가 전까지 기여 0)
 }
 
 // FA 수락 = 점수→확률 (FA_SYSTEM 2.7). offerScore는 [0,~1] 가중합 → acceptProb가 완만 S곡선으로.
@@ -126,13 +134,22 @@ export function offerScore(c: OfferCtx): number {
   // 우승권 매력 = 현재 전력 위주 + 최근 성적 소폭. prestige(우승 기록)는 자기강화 항이라
   // 비중을 낮춰야 왕조 부익부 루프가 폭주하지 않는다(밸런싱: 200시즌 parity).
   const winT = Math.max(0, Math.min(1, 0.7 * strength + 0.3 * c.prestige));
-  const playT = c.posGap > 0 ? Math.min(1, 0.4 + 0.25 * c.posGap) : 0.15;     // 출전 기회
+  // 출전 기회(playT) — 포지션 구멍 기본 + FA 오퍼 다레버(주전보장·다년 안정감, FA_SYSTEM §2.8 Phase1).
+  //   기본 오퍼(보장 off·years≤2)면 아래 두 보정이 정확히 0 → playT는 구 값과 bit-동일(0드리프트).
+  let playT = c.posGap > 0 ? Math.min(1, 0.4 + 0.25 * c.posGap) : 0.15;
+  if (c.starterGuarantee) playT = Math.min(1, playT + 0.30);           // 주전 보장 = 출전 확정 상향
+  const yearBonus = c.years != null ? Math.max(0, c.years - 2) * 0.05 : 0; // 다년(2 초과분) = 안정감. 2 이하=0(무보정)
+  if (yearBonus > 0) playT = Math.min(1, playT + yearBonus);
   const loyT = c.isOriginal ? (c.isFranchise ? 1 : 0.5) : 0;            // 잔류
   const homeT = c.isPreferred ? 1 : 0;                                  // 연고/선호팀
   const w = c.w;
   // 인간관계 항: relT(−1..1) × w.rel. 친구 있는 팀 +, 싫은 선수 있는 팀 −(감점). RELATIONSHIP_SYSTEM.
   const relTerm = (w.rel ?? 0) * (c.relT ?? 0);
-  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + relTerm + 0.05 * c.rand + (c.talkBias ?? 0);
+  // 약속(주장/등번호) — §2.8.1 v1 제외: 엔진 훅[라커룸/번호계보]+대가가 붙는 v2까지 기여 0(공짜 CERTAIN 돌파 방지).
+  //   필드·스레딩은 모델 완결성 위해 유지하되, PROMISE_SAT=0으로 Phase1 무보정(v2에서 상수만 올리면 활성).
+  const PROMISE_SAT = 0;
+  const promiseT = ((c.promises?.captain ? 1 : 0) + (c.promises?.number ? 1 : 0)) * PROMISE_SAT;
+  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + relTerm + 0.05 * c.rand + (c.talkBias ?? 0) + promiseT;
 }
 
 /** 자격 FA 목록 + 등급 (한 오프시즌 스냅샷) */

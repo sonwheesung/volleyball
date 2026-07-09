@@ -57,7 +57,8 @@ import { resolveDraft } from '../engine/draft';
 import { applyMatchXp } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
 import { RETIRE_AGE } from '../engine/retire';
-import type { Contract, DraftPickRecord, ExpelRecord, FocusSeg, ForeignSwapRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
+import type { Contract, DraftPickRecord, ExpelRecord, FAOffer, FocusSeg, ForeignSwapRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
+import { DEFAULT_FA_OFFER } from '../engine/faMarket';
 import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
 import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, CAMP_LEGACY_CUR_GAIN, CAMP_LEGACY_POT_GAIN, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
@@ -110,8 +111,7 @@ interface GameState {
   playerBase: Record<string, Player> | null;   // 시즌 시작 시점 선수 스냅샷(null=시드)
   rosters: Record<string, string[]> | null;    // 가변 팀 구성(null=시드)
   resignDecisions: Record<string, boolean>;    // 내 FA 잔류(true)/포기(false), 기본=잔류
-  faSignings: string[];                        // 오프시즌에 영입 시도할 풀 FA id
-  faAggressive: boolean;                       // 공격적 영입(연봉↑로 경쟁 우위)
+  faOffers: Record<string, FAOffer>;           // 오프시즌 FA 지명별 오퍼(FA_SYSTEM §2.8 격상) — keys=영입 시도 id, 값=다레버 오퍼. 구 faSignings[]+faAggressive 대체
   protectedIds: string[];                      // 보호선수 명단(최대 PROTECT_COUNT)
   moneyOnlyIds: string[];                      // '돈만' 보상 선택 A/B FA id — 보상선수 면제·보상금 가중(FA_SYSTEM 2.2)
   draftPicks: string[];                        // 드래프트 찜(shortlist·우선순위) — 라이브 위시폴백/미표 자동지명 (FA_SYSTEM §3.2.1)
@@ -180,9 +180,11 @@ interface GameState {
   unrelease: (playerId: string) => boolean;
   signInSeason: (faId: string) => boolean;
   setResign: (playerId: string, keep: boolean) => void;
-  signFA: (playerId: string) => void;
-  unsignFA: (playerId: string) => void;
-  setAggressive: (on: boolean) => void;
+  setOffer: (playerId: string, offer: FAOffer) => void;   // FA 오퍼 설정/교체(§2.8 Phase1 — 레버 UI는 Phase 4)
+  clearOffer: (playerId: string) => void;                 // FA 오퍼 제거(지명 취소)
+  signFA: (playerId: string) => void;                     // 컨비니언스 = 기본 오퍼로 setOffer(공격적 상태 승계)
+  unsignFA: (playerId: string) => void;                   // 컨비니언스 = clearOffer
+  setAggressive: (on: boolean) => void;                   // 공격적 영입(전역) = 전 오퍼 aggressive 마커 일괄 설정
   toggleProtect: (playerId: string) => void;
   toggleMoneyOnly: (playerId: string) => void;
   toggleDraftPick: (playerId: string) => void;
@@ -233,8 +235,7 @@ const freshSave = {
   playerBase: null as Record<string, Player> | null,
   rosters: null as Record<string, string[]> | null,
   resignDecisions: {} as Record<string, boolean>,
-  faSignings: [] as string[],
-  faAggressive: false,
+  faOffers: {} as Record<string, FAOffer>,
   protectedIds: [] as string[],
   moneyOnlyIds: [] as string[],
   draftPicks: [] as string[],
@@ -643,15 +644,36 @@ export const useGameStore = create<GameState>()(
       //   무효화(clear). 안 지우면 슬롯이 밀려 다른 선수를 지명하는 stale-pick 발생(FA_SYSTEM §3.2.1 조정 D).
       setResign: (playerId, keep) =>
         set((s) => ({ resignDecisions: { ...s.resignDecisions, [playerId]: keep }, draftSelections: [] })),
+      // FA 오퍼(§2.8 Phase1) — setOffer/clearOffer가 정본 primitive. signFA/unsignFA/setAggressive는 컨비니언스 래퍼(Phase 4 레버 UI 전).
+      //   상류 FA 변경은 드래프트 순번·클래스를 바꾸므로 확정 픽(draftSelections) 무효화(§3.2.1 조정 D).
+      setOffer: (playerId, offer) =>
+        set((s) => ({ faOffers: { ...s.faOffers, [playerId]: offer }, draftSelections: [] })),
+      clearOffer: (playerId) =>
+        set((s) => {
+          if (!s.faOffers[playerId]) return s;
+          const next = { ...s.faOffers }; delete next[playerId];
+          return { faOffers: next, moneyOnlyIds: s.moneyOnlyIds.filter((id) => id !== playerId), draftSelections: [] }; // 지명 취소 시 '돈만'도 해제
+        }),
       signFA: (playerId) =>
-        set((s) => (s.faSignings.includes(playerId) ? s : { faSignings: [...s.faSignings, playerId], draftSelections: [] })),
+        set((s) => {
+          if (s.faOffers[playerId]) return s;
+          // 기본 오퍼(원탭 자동, §2.8.1 ④). 현재 공격적 영입(전역) 상태를 승계 — aggressive 오퍼가 하나라도 있으면 새 오퍼도 공격적.
+          const aggr = Object.values(s.faOffers).some((o) => o.aggressive);
+          const offer: FAOffer = { ...DEFAULT_FA_OFFER, promises: {}, ...(aggr ? { aggressive: true } : {}) };
+          return { faOffers: { ...s.faOffers, [playerId]: offer }, draftSelections: [] };
+        }),
       unsignFA: (playerId) =>
+        set((s) => {
+          if (!s.faOffers[playerId]) return s;
+          const next = { ...s.faOffers }; delete next[playerId];
+          return { faOffers: next, moneyOnlyIds: s.moneyOnlyIds.filter((id) => id !== playerId), draftSelections: [] };
+        }),
+      // 공격적 영입(전역 토글) — 구 faAggressive 재현: 현 오퍼 전부에 aggressive 마커를 일괄 설정('auto' 해석 ×1.2).
+      setAggressive: (on) =>
         set((s) => ({
-          faSignings: s.faSignings.filter((id) => id !== playerId),
-          moneyOnlyIds: s.moneyOnlyIds.filter((id) => id !== playerId), // 지명 취소 시 '돈만' 선택도 해제
-          draftSelections: [], // 순번·구성 변동 → 확정 픽 무효
+          faOffers: Object.fromEntries(Object.entries(s.faOffers).map(([id, o]) => [id, { ...o, aggressive: on }])),
+          draftSelections: [],
         })),
-      setAggressive: (on) => set({ faAggressive: on, draftSelections: [] }),
       toggleProtect: (playerId) =>
         set((s) => {
           if (s.protectedIds.includes(playerId))
@@ -923,7 +945,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faSignings, faAggressive, protectedIds, moneyOnlyIds, draftPicks, draftSelections, hallOfFame, expelledLog, transfers, retirements, seasonDraftLog, seasonForeignLog, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faOffers, protectedIds, moneyOnlyIds, draftPicks, draftSelections, hallOfFame, expelledLog, transfers, retirements, seasonDraftLog, seasonForeignLog, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
         diag(season, 'season', `시즌 종료 ${season + 1}→${nextSeason + 1} (오프시즌 진입)`); // 진단 로그(#44)
@@ -1039,7 +1061,8 @@ export const useGameStore = create<GameState>()(
 
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
         //    FA 입찰은 캡 AND 새 잔고(지갑) — 캡이 남아도 돈이 없으면 못 뽑는다
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, faSignings, faAggressive, protectedIds, nextSeason, ownerFx, walletCash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian);
+        // FA 오퍼 다레버(§2.8 Phase1) — faSignings=지명 keys·aggressive=false(전역은 per-오퍼 aggressive로 이관), faOffers=레버 전달.
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, Object.keys(faOffers), false, protectedIds, nextSeason, ownerFx, walletCash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian, faOffers);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(라이브 확정 픽 mySelections 우선 → 찜 위시폴백 → AI 자동, 순번 존중. FA_SYSTEM §3.2.1)
@@ -1251,8 +1274,7 @@ export const useGameStore = create<GameState>()(
           inSeasonTx: [],
           faPool: nextFaPool,
           resignDecisions: {},
-          faSignings: [],
-          faAggressive: false,
+          faOffers: {},
           protectedIds: [],
           moneyOnlyIds: [],
           draftPicks: [],
@@ -1324,8 +1346,7 @@ export const useGameStore = create<GameState>()(
         playerBase: s.playerBase,
         rosters: s.rosters,
         resignDecisions: s.resignDecisions,
-        faSignings: s.faSignings,
-        faAggressive: s.faAggressive,
+        faOffers: s.faOffers,
         protectedIds: s.protectedIds,
         moneyOnlyIds: s.moneyOnlyIds,
         draftPicks: s.draftPicks,

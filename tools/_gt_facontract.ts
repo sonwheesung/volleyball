@@ -90,7 +90,7 @@ import './_gt_mock';
 
   console.log('\n═══ FA 영입 시나리오 ═══');
   // S12 signFA/unsignFA 큐
-  { setup(); const fa = LEAGUE.teams.flatMap((t) => currentRosters()[t.id] ?? []).find((id) => isFAEligible(evolveOnDay(id, 0)!)) ?? currentRosters()[LEAGUE.teams[1].id]![0]; G().signFA(fa); const q1 = G().faSignings.includes(fa); G().signFA(fa); const noDup = G().faSignings.filter((x) => x === fa).length === 1; G().unsignFA(fa); const q2 = !G().faSignings.includes(fa); check('S12 signFA 큐 추가·중복없음·unsignFA 제거', q1 && noDup && q2); }
+  { setup(); const fa = LEAGUE.teams.flatMap((t) => currentRosters()[t.id] ?? []).find((id) => isFAEligible(evolveOnDay(id, 0)!)) ?? currentRosters()[LEAGUE.teams[1].id]![0]; G().signFA(fa); const q1 = !!G().faOffers[fa]; G().signFA(fa); const noDup = Object.keys(G().faOffers).filter((x) => x === fa).length === 1; G().unsignFA(fa); const q2 = !G().faOffers[fa]; check('S12 signFA 큐 추가·중복없음·unsignFA 제거', q1 && noDup && q2); }
   // S13 askingPrice 등급 단조: A > B > C (같은 market)
   { const m = 50000; const a = askingPrice(m, 'A'), b = askingPrice(m, 'B'), c = askingPrice(m, 'C'); check('S13 요구연봉 A>B>C', a > b && b > c, `A${a}>B${b}>C${c}`); }
   // S14 등급 배정: 연봉 상위=A, 하위=C

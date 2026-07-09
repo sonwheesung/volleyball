@@ -2,7 +2,7 @@
 // FA 센터 프리뷰와 store.endSeason 이 동일 함수를 써서 미리보기=결과 보장.
 // data 계층(엔진 합성). 순수에 가깝게(모듈 base 읽기).
 
-import type { Contract, Player } from '../types';
+import type { Contract, FAOffer, Player } from '../types';
 import { createRng } from '../engine/rng';
 import { applyRetirements, capContractYears } from '../engine/retire';
 import { rollExpulsion, scandalRepMul, type ExpelKind } from '../engine/scandal';
@@ -137,6 +137,9 @@ export function resolveFAMarket(
   ownerFx?: OwnerFx, // 구단주 면담 보정(내 팀 오퍼에만 가산)
   myCash?: number,   // 내 운영 자금(FINANCE) — 캡이 남아도 지갑이 비면 입찰 불가
   moneyOnlyIds: string[] = [], // 내가 '돈만' 보상 선택한 A/B FA id — 보상선수 면제, 보상금 가중(FA_SYSTEM 2.2)
+  // FA 오퍼 다레버(FA_SYSTEM §2.8 Phase1) — 내 팀 지명별 오퍼(연봉/연수/주전보장/약속). 미제공(undefined)이면
+  //   레거시 경로: faSignings 전원 기본 오퍼(salary='auto'×(aggressive?1.2:1)·years=RENEW_FA_YEARS) = 구 동작 bit-동일(0드리프트).
+  faOffers?: Record<string, FAOffer>,
 ): FAMarketResult {
   const moneyOnly = new Set(moneyOnlyIds);
   const snapshot = off.snapshot;
@@ -188,7 +191,7 @@ export function resolveFAMarket(
       ? (moneyOnly.has(id) ? compensationMoneyOnly(grade, p.contract.salary) : compensationMoney(grade, p.contract.salary))
       : 0;
 
-    const bids: { teamId: string; offer: number; score: number }[] = [];
+    const bids: { teamId: string; offer: number; score: number; years: number }[] = [];
     for (const t of teams) {
       // 내 팀 = 하드 계약 상한(20). AI = 예약 상한(목표−RESERVE) — 드래프트 자리 확보 + 상위팀 두껍게·하위팀 얇게(§1.5·§1.7).
       const rosterCeil = t === myTeam ? ROSTER_CONTRACT_CAP : (aiReserve[t] ?? 11);
@@ -202,12 +205,18 @@ export function resolveFAMarket(
       else if (stance === 'aggressive') { if (gap < 0) continue; }
       else if (stance === 'thrifty') { if (gap < 2) continue; }
       else { if (gap <= 0) continue; }
-      // 오퍼 — 내 팀=aggressive 토글 배수. AI aggressive=배수, 단 캡 천장 안 clamp(결정#1, 단순×배수면 캡근접팀 탈락 역설).
+      // 오퍼 — 내 팀=오퍼 다레버(FA_SYSTEM §2.8). AI aggressive=배수, 단 캡 천장 안 clamp(결정#1, 단순×배수면 캡근접팀 탈락 역설).
       //   ※ 캡룸이 asking 위로 있을 때만 프리미엄(room>asking) — payroll≥cap이면 음수/0·MIN_SALARY 미만 오퍼 방지(EC-FN-02).
       //     room≤asking이면 asking으로 두고 아래 ok 게이트(payroll+asking≤cap)가 정상 차단.
       const room = LEAGUE_CAP - payroll[t];
+      // 내 오퍼 레버: cfg 없으면(레거시/faOffers 미제공) faSignings 전원 기본 오퍼로 간주 — aggressive 파라미터·RENEW_FA_YEARS 폴백(bit-동일).
+      const cfg = isMe ? faOffers?.[id] : undefined;
+      const myAggr = cfg ? !!cfg.aggressive : aggressive;
+      const myYears = cfg?.years ?? RENEW_FA_YEARS;
       const offer = isMe
-        ? Math.round((asking * (aggressive ? AGGRESSIVE_MULT : 1)) / 100) * 100
+        ? (cfg && typeof cfg.salary === 'number'
+            ? round100(Math.max(0, cfg.salary))                        // 명시 연봉(Phase 3+ UI) — 캡/자금 게이트가 상한 차단
+            : Math.round((asking * (myAggr ? AGGRESSIVE_MULT : 1)) / 100) * 100) // 'auto' = asking×(공격적?1.2:1)
         : stance === 'aggressive' && room > asking
           ? Math.min(round100(asking * AI_AGGRESSIVE_MULT), room)
           : asking;
@@ -231,8 +240,13 @@ export function resolveFAMarket(
         rand: rng.next(),
         talkBias: isMe ? ownerFx?.offerBias[id] : undefined, // 면담의 기억은 우리 구단에만 작용
         relT: teamAffinityFor(p, rosters[t], get, bondsCtx), // 인간관계(그 시점 로스터 — 친구 연쇄) RELATIONSHIP
+        // FA 오퍼 다레버(§2.8 Phase1) — 내 팀 오퍼에만. AI는 undefined(기본 기여 0). 기본 오퍼(years=2·보장off)면 score 무변(0드리프트).
+        years: cfg?.years,
+        starterGuarantee: cfg?.starterGuarantee,
+        promises: cfg?.promises,
       });
-      bids.push({ teamId: t, offer, score });
+      // years = 계약 연수(§2.8 Phase1) — 내 팀=오퍼 연수, AI=RENEW_FA_YEARS. 승자의 years로 계약 생성(기본 2 → 구 동작 bit-동일).
+      bids.push({ teamId: t, offer, score, years: isMe ? myYears : RENEW_FA_YEARS });
     }
     if (bids.length === 0) continue; // 미계약(팀이 안 원함 — 양방향)
     // 점수 → 확률 → 정렬·롤·fallback·SIT (FA_SYSTEM 2.7, 사용자 결정)
@@ -241,9 +255,10 @@ export function resolveFAMarket(
     let win = scored[0]; // fallback = 최고 확률 팀(전부 실패 시)
     for (const cand of scored) { if (rng.next() < cand.prob) { win = cand; break; } } // 위에서부터 롤, 첫 성공 입단
     const finalSalary = clampSalary(win.offer, p); // 개인 상한(프랜차이즈 예외) 적용
+    const winYears = capContractYears(p.age, win.years); // 승자 오퍼 연수(§2.8 Phase1) — 정년 캡. 기본 2 → 구 RENEW_FA_YEARS와 동일.
     snapshot[id] = {
       ...p,
-      contract: { salary: finalSalary, years: capContractYears(p.age, RENEW_FA_YEARS), remaining: capContractYears(p.age, RENEW_FA_YEARS), signedAtAge: p.age },
+      contract: { salary: finalSalary, years: winYears, remaining: winYears, signedAtAge: p.age },
     };
     rosters[win.teamId] = [...rosters[win.teamId], id];
     payroll[win.teamId] += finalSalary;
@@ -508,6 +523,7 @@ export function resolvePreDraftFrom(
   moneyOnlyIds: string[] = [],
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
+  faOffers?: Record<string, FAOffer>, // FA 오퍼 다레버(§2.8 Phase1) — 미제공이면 레거시(faSignings 기본 오퍼)
 ): PreDraft {
   const { prevTeamOf, prevForeignOf, prevAsianOf, prestige } = base;
   const off = cloneOffForResolve(base);
@@ -520,7 +536,7 @@ export function resolvePreDraftFrom(
   const asianCash = myCash === undefined ? Number.POSITIVE_INFINITY : Math.max(0, myCash - foreignCostMine);
   const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash, perf);
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds, faOffers);
   return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, expelled: off.expelled, tryout, asianTryout, compCash: fa.compCash };
 }
 
@@ -543,9 +559,10 @@ export function resolvePreDraft(
   moneyOnlyIds: string[] = [],
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
+  faOffers?: Record<string, FAOffer>,
 ): PreDraft {
   const base = buildOffseasonBase(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
-  return resolvePreDraftFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
+  return resolvePreDraftFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian, faOffers);
 }
 
 export interface FAPreview {
@@ -575,6 +592,7 @@ export function faMarketPreviewFrom(
   moneyOnlyIds: string[] = [],
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
+  faOffers?: Record<string, FAOffer>, // FA 오퍼 다레버(§2.8 Phase1) — 미제공이면 레거시(faSignings 기본 오퍼)
 ): FAPreview {
   const { prevTeamOf, prevForeignOf, prevAsianOf, prestige } = base;
   const off = cloneOffForResolve(base);
@@ -587,7 +605,7 @@ export function faMarketPreviewFrom(
   const pool = [...off.pool];
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds, faOffers);
   return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, faFail: fa.faFail, tryout, asianTryout, compCash: fa.compCash };
 }
 
@@ -607,7 +625,8 @@ export function faMarketPreview(
   moneyOnlyIds: string[] = [],
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
+  faOffers?: Record<string, FAOffer>,
 ): FAPreview {
   const base = buildOffseasonBase(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
-  return faMarketPreviewFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
+  return faMarketPreviewFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian, faOffers);
 }

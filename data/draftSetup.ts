@@ -52,8 +52,9 @@ export function buildDraftContextFrom(
   moneyOnlyIds: string[] = [],
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
+  faOffers?: Record<string, import('../types').FAOffer>, // FA 오퍼 다레버(§2.8 Phase1)
 ): DraftContext {
-  const pre = resolvePreDraftFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
+  const pre = resolvePreDraftFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian, faOffers);
   // KOVO 4라운드제(FA_SYSTEM §3.0): 순번 = 1R 가중추첨 × 4라운드. 팀별 지명 수는 resolveDraft가 슬롯마다 지명/패스 판정.
   const r1 = lotteryRound1(standingsWorstFirst(), createRng(60000 + nextSeason * 331));
   const order = buildDraftOrder(r1, DRAFT_ROUNDS);
@@ -102,7 +103,8 @@ export function buildDraftContext(
   moneyOnlyIds: string[] = [],
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
+  faOffers?: Record<string, import('../types').FAOffer>, // FA 오퍼 다레버(§2.8 Phase1)
 ): DraftContext {
   const base = buildOffseasonBase(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
-  return buildDraftContextFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian);
+  return buildDraftContextFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian, faOffers);
 }

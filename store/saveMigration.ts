@@ -17,7 +17,7 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   selectedTeamId: null, season: 0, currentDay: 0, results: {}, watchProgress: {},
   // 계약·방출·거래
   contractOverrides: {}, released: [], inSeasonTx: [], faPool: [],
-  resignDecisions: {}, faSignings: [], faAggressive: false,
+  resignDecisions: {}, faOffers: {}, // faOffers(FA_SYSTEM §2.8) — 구 faSignings[]+faAggressive 대체(migrate가 변환)
   protectedIds: [], moneyOnlyIds: [], draftPicks: [], draftSelections: [],
   // 선수·로스터
   playerBase: null, rosters: null,
@@ -50,7 +50,7 @@ const KIND: Record<string, Kind> = {
   onboarded: 'bool', supporter: 'bool', sfxEnabled: 'bool', bgmVolume: 'num', seenTips: 'rec',
   selectedTeamId: 'nstr', season: 'num', currentDay: 'num', results: 'rec', watchProgress: 'rec',
   contractOverrides: 'rec', released: 'arr', inSeasonTx: 'arr', faPool: 'arr',
-  resignDecisions: 'rec', faSignings: 'arr', faAggressive: 'bool',
+  resignDecisions: 'rec', // faOffers는 특수(중첩) — default 분기가 처리
   protectedIds: 'arr', moneyOnlyIds: 'arr', draftPicks: 'arr', draftSelections: 'arr',
   playerBase: 'nrec', rosters: 'nrec',
   archive: 'arr', hallOfFame: 'arr', expelledLog: 'arr', transfers: 'arr', retirements: 'arr',
@@ -63,7 +63,7 @@ const KIND: Record<string, Kind> = {
   asianWish: 'arr', asianAltPool: 'arr', asianSubUsed: 'bool', keepAsian: 'nbool',
   bonds: 'rec',
   diamonds: 'num', saveId: 'nstr', campLog: 'arr', campTrainedThisOffseason: 'arr', campDoneSeason: 'num', claimedAch: 'arr', lastGrowthDay: 'num',
-  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, focusLog, lastFinance, adState, pendingCamp
+  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, focusLog, lastFinance, adState, pendingCamp, faOffers
 };
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -113,6 +113,23 @@ function sanitizeField(key: string, v: unknown): unknown {
     case 'pendingCamp':
       // 전지훈련 아웃박스(§13.12) — null 또는 {key,playerId,course,season} 모양. 어긋나면 null(안전 — 미정산 취소)
       return v === null || (isObj(v) && typeof v.key === 'string' && typeof v.playerId === 'string' && typeof v.course === 'string' && typeof v.season === 'number') ? v : null;
+    case 'faOffers': {
+      // FA 오퍼 다레버(FA_SYSTEM §2.8) — Record<id, {salary:number|'auto', years:1..5, starterGuarantee, promises, aggressive?}>.
+      //   손상 엔트리는 제거, 필드는 기본값으로 코어스(salary→'auto', years→2, 나머지 off). migrate가 구 faSignings→여기로 변환.
+      if (!isObj(v)) return {};
+      const out: Record<string, unknown> = {};
+      for (const [id, o] of Object.entries(v)) {
+        if (!isObj(o)) continue;
+        const salary = o.salary === 'auto' || (typeof o.salary === 'number' && Number.isFinite(o.salary)) ? o.salary : 'auto';
+        const years = typeof o.years === 'number' && o.years >= 1 && o.years <= 5 ? Math.round(o.years) : 2;
+        const starterGuarantee = o.starterGuarantee === true;
+        const promises = isObj(o.promises)
+          ? { ...(o.promises.captain ? { captain: true } : {}), ...(o.promises.number ? { number: true } : {}) }
+          : {};
+        out[id] = { salary, years, starterGuarantee, promises, ...(o.aggressive === true ? { aggressive: true } : {}) };
+      }
+      return out;
+    }
     case 'simCache':
       // 모양 검증(baseVersion·txVersion 숫자 + standings/production/dyn은 있으면 배열/객체). 어긋나면 null(재계산 폴백) — 폐기 가능
       return isObj(v) && typeof v.baseVersion === 'number' && typeof v.txVersion === 'number'
@@ -147,6 +164,19 @@ export function migrateSave(persisted: unknown, _version: number): Record<string
   // 다이아 기능 이전 세이브(진행 중)는 claimedAch 키가 없다 → 현 달성분을 claimed로 시드(rehydrate에서).
   if (isObj(persisted) && persisted.claimedAch === undefined && !!persisted.selectedTeamId) _pendingClaimSeed = true;
   const out = sanitizeSave(persisted);
+  // FA 오퍼 모델 마이그레이션(FA_SYSTEM §2.8 Phase1) — 구 faSignings[]+faAggressive → faOffers 기본 오퍼.
+  //   salary:'auto'(해석 시점 asking×(aggressive?1.2:1)) — 구 aggressive=on이면 aggressive 마커를 박아 ×1.2를 정확히 재현(결과 바이트 동일).
+  //   조건: 구 필드가 있고 faOffers가 아직 없을 때만(신규 세이브 보호). sanitizeSave가 out.faOffers를 {}로 둔 걸 덮어쓴다.
+  if (isObj(persisted) && (persisted.faSignings !== undefined || persisted.faAggressive !== undefined) && !isObj((persisted as Record<string, unknown>).faOffers)) {
+    const signings = Array.isArray(persisted.faSignings) ? persisted.faSignings : [];
+    const aggr = persisted.faAggressive === true;
+    const off: Record<string, unknown> = {};
+    for (const id of signings) {
+      if (typeof id !== 'string') continue;
+      off[id] = { salary: 'auto', years: 2, starterGuarantee: false, promises: {}, ...(aggr ? { aggressive: true } : {}) };
+    }
+    out.faOffers = off;
+  }
   // A4 마이그레이션 — focusLog 없던 구세이브: 단일 trainingFocus를 [{fromDay:0}]로 시드(day0부터 상수 = 옛 리플레이와 바이트 동일).
   //   신규 세이브는 focusLog를 항상 함께 저장하므로 비어있으면 = 구세이브(또는 방침 미설정). trainingFocus 있을 때만 시드.
   if ((out.focusLog as unknown[]).length === 0 && out.trainingFocus) {

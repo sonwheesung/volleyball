@@ -34,7 +34,7 @@ import type { OffseasonInputs } from '../data/offseasonArgs';
     signedByMe: p.signedByMe, lostTo: p.lostTo, compCash: p.compCash });
 
   const baseInp = (nextSeason: number): OffseasonInputs => ({
-    my, resignDecisions: {}, contractOverrides: {}, faSignings: [], faAggressive: false, protectedIds: [],
+    my, resignDecisions: {}, contractOverrides: {}, faOffers: {}, protectedIds: [],
     nextSeason, ownerFx: undefined, myCash: BIG, tryoutWish: [], keepForeign: null, moneyOnlyIds: [], asianWish: [], keepAsian: null,
   });
 
@@ -53,29 +53,31 @@ import type { OffseasonInputs } from '../data/offseasonArgs';
       const base = buildOffseasonBase(inp.my, inp.resignDecisions, inp.contractOverrides, inp.nextSeason, inp.ownerFx);
       // 드래프트: endSeason 경로(draftContextFor) vs 손수 나열 vs 화면 경로(resolveDraftContextFor). 셋 다 동일해야.
       const endseasonLiteral = buildDraftContext(inp.my, inp.resignDecisions, inp.contractOverrides,
-        inp.faSignings, inp.faAggressive, inp.protectedIds, inp.nextSeason, inp.ownerFx, inp.myCash,
-        inp.tryoutWish, inp.keepForeign, inp.moneyOnlyIds, inp.asianWish, inp.keepAsian);
+        Object.keys(inp.faOffers), false, inp.protectedIds, inp.nextSeason, inp.ownerFx, inp.myCash,
+        inp.tryoutWish, inp.keepForeign, inp.moneyOnlyIds, inp.asianWish, inp.keepAsian, inp.faOffers);
       const viaHelper = draftContextFor(inp);
       const viaScreen = resolveDraftContextFor(base, inp);
       aChecks++;
       if (serDraft(viaHelper) !== serDraft(endseasonLiteral)) fails.push(`(A) draftContextFor≠endSeason나열 s=${s} kf=${inp.keepForeign} ka=${inp.keepAsian}`);
       if (serDraft(viaScreen) !== serDraft(endseasonLiteral)) fails.push(`(A) 화면경로≠endSeason나열 s=${s} kf=${inp.keepForeign} ka=${inp.keepAsian}`);
       // FA 미리보기: 화면 경로(resolveFAPreviewFor) vs 손수 나열(faMarketPreviewFrom 14인자).
-      const faLiteral = faMarketPreviewFrom(base, inp.my, inp.faSignings, inp.faAggressive, inp.protectedIds,
-        inp.nextSeason, inp.ownerFx, inp.myCash, inp.tryoutWish, inp.keepForeign, inp.moneyOnlyIds, inp.asianWish, inp.keepAsian);
+      const faLiteral = faMarketPreviewFrom(base, inp.my, Object.keys(inp.faOffers), false, inp.protectedIds,
+        inp.nextSeason, inp.ownerFx, inp.myCash, inp.tryoutWish, inp.keepForeign, inp.moneyOnlyIds, inp.asianWish, inp.keepAsian, inp.faOffers);
       const faHelper = resolveFAPreviewFor(base, inp);
       if (serFA(faHelper) !== serFA(faLiteral)) fails.push(`(A) resolveFAPreviewFor≠나열 s=${s} kf=${inp.keepForeign} ka=${inp.keepAsian}`);
     }
   }
   // offseasonResolveArgs 순서/개수 명시 검사 — 드리프트 조기 경보.
   {
-    const inp = { ...baseInp(3), faSignings: ['x'], faAggressive: true, protectedIds: ['p'], myCash: 123,
+    const offX = { salary: 'auto' as const, years: 2 as const, starterGuarantee: false, promises: {}, aggressive: true };
+    const inp: OffseasonInputs = { ...baseInp(3), faOffers: { x: offX }, protectedIds: ['p'], myCash: 123,
       tryoutWish: ['a'], keepForeign: false, moneyOnlyIds: ['m'], asianWish: ['b'], keepAsian: true };
     const args = offseasonResolveArgs(inp);
-    const expect = [inp.faSignings, inp.faAggressive, inp.protectedIds, inp.nextSeason, inp.ownerFx, inp.myCash,
-      inp.tryoutWish, inp.keepForeign, inp.moneyOnlyIds, inp.asianWish, inp.keepAsian];
+    // 파생 튜플: faSignings=keys, aggressive=false(전역은 per-오퍼로 이관), 꼬리 끝에 faOffers.
+    const expect = [Object.keys(inp.faOffers), false, inp.protectedIds, inp.nextSeason, inp.ownerFx, inp.myCash,
+      inp.tryoutWish, inp.keepForeign, inp.moneyOnlyIds, inp.asianWish, inp.keepAsian, inp.faOffers];
     if (ser(args) !== ser(expect)) fails.push('(A) offseasonResolveArgs 튜플 순서/개수 드리프트');
-    if (args.length !== 11) fails.push(`(A) 꼬리 인자 개수 ${args.length}≠11`);
+    if (args.length !== 12) fails.push(`(A) 꼬리 인자 개수 ${args.length}≠12`);
   }
 
   // ─────────────────────────────────────────────────────────────────────────────
@@ -117,7 +119,7 @@ import type { OffseasonInputs } from '../data/offseasonArgs';
     const correct = draftContextFor(inp);
     // 옛 버그 재현: 5 꼬리 인자를 빠뜨린 호출(tryoutWish=[]·keepForeign=null·moneyOnly=[]·asianWish=[]·keepAsian=null 디폴트)
     const broken = buildDraftContext(inp.my, inp.resignDecisions, inp.contractOverrides,
-      inp.faSignings, inp.faAggressive, inp.protectedIds, inp.nextSeason, inp.ownerFx, inp.myCash);
+      Object.keys(inp.faOffers), false, inp.protectedIds, inp.nextSeason, inp.ownerFx, inp.myCash);
     cChecked++;
     if (serDraft(correct) !== serDraft(broken)) cDiffSeasons++;
   }
