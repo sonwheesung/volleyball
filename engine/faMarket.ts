@@ -108,8 +108,8 @@ export interface OfferCtx {
   relT?: number;       // 인간관계 affinity −1..1 (친구 +·싫은 선수 −) — RELATIONSHIP_SYSTEM
   // FA 오퍼 다레버(FA_SYSTEM §2.8 Phase1) — 내 팀 오퍼에만(AI/미지정은 undefined=기본 기여 0 → 0드리프트).
   years?: number;      // 계약 연수(기본 2). 2 초과분 = 안정감(출전·잔류 지속) → playT 소폭 상향. 2 이하는 무보정.
-  starterGuarantee?: boolean; // 주전 보장 → playT 확정 상향(출전 기회 항). 대가(벤치 시 불만)는 Phase 2.
-  promises?: { captain?: boolean; number?: boolean }; // 주장/등번호 약속 — §2.8.1 v1 제외(엔진 훅+대가 전까지 기여 0)
+  starterGuarantee?: boolean; // 주전 보장 → playT 확정 상향(출전 기회 항). 대가(벤치 시 공약파기·불만·팬심·폼)=Phase2 구현(data/owner + contract.starterGuarantee).
+  promises?: { captain?: boolean; number?: boolean }; // 주장/등번호 약속 — §2.8.1 v1·Phase2 여전히 v2 보류(엔진 훅+대가 부재 → PROMISE_SAT=0). SOFT_SAT_CAP 클램프만 선반영
 }
 
 // FA 수락 = 점수→확률 (FA_SYSTEM 2.7). offerScore는 [0,~1] 가중합 → acceptProb가 완만 S곡선으로.
@@ -145,11 +145,17 @@ export function offerScore(c: OfferCtx): number {
   const w = c.w;
   // 인간관계 항: relT(−1..1) × w.rel. 친구 있는 팀 +, 싫은 선수 있는 팀 −(감점). RELATIONSHIP_SYSTEM.
   const relTerm = (w.rel ?? 0) * (c.relT ?? 0);
-  // 약속(주장/등번호) — §2.8.1 v1 제외: 엔진 훅[라커룸/번호계보]+대가가 붙는 v2까지 기여 0(공짜 CERTAIN 돌파 방지).
-  //   필드·스레딩은 모델 완결성 위해 유지하되, PROMISE_SAT=0으로 Phase1 무보정(v2에서 상수만 올리면 활성).
+  // 약속(주장/등번호) — §2.8.1 v1·Phase2 여전히 v2 보류: 주장(라커룸)·등번호는 엔진 훅이 없고(jersey=표시 라벨,
+  //   captain 시스템 부재) **대가 기계장치도 없다** → 활성화하면 '공짜 수락 슬라이더'(부익부)라 PROMISE_SAT=0 유지.
+  //   v2에서 훅+대가를 붙이며 상수만 올린다. 그때 대비해 **소프트 만족 클램프(SOFT_SAT_CAP)** 를 미리 건다(Phase2 안전망).
   const PROMISE_SAT = 0;
   const promiseT = ((c.promises?.captain ? 1 : 0) + (c.promises?.number ? 1 : 0)) * PROMISE_SAT;
-  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + relTerm + 0.05 * c.rand + (c.talkBias ?? 0) + promiseT;
+  // 클램프(§2.8.1 ③ — 약속·면담 등 '말/약속' 소프트 만족의 합 상한): 이것만으로 CERTAIN(0.60) 돌파 못 하게 막는다.
+  //   현재 talkBias∈[−0.15,0.15]·promiseT=0 → 합 ≤0.15 < SOFT_SAT_CAP(0.20)이라 클램프 미발동 = 0드리프트.
+  //   v2에서 PROMISE_SAT>0으로 promiseT가 붙어도 talkBias와의 합이 0.20을 넘지 못해 레버 스택 폭주를 원천 차단.
+  const SOFT_SAT_CAP = 0.20;
+  const softSat = Math.min(SOFT_SAT_CAP, (c.talkBias ?? 0) + promiseT);
+  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + relTerm + 0.05 * c.rand + softSat;
 }
 
 /** 자격 FA 목록 + 등급 (한 오프시즌 스냅샷) */

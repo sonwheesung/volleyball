@@ -256,9 +256,13 @@ export function resolveFAMarket(
     for (const cand of scored) { if (rng.next() < cand.prob) { win = cand; break; } } // 위에서부터 롤, 첫 성공 입단
     const finalSalary = clampSalary(win.offer, p); // 개인 상한(프랜차이즈 예외) 적용
     const winYears = capContractYears(p.age, win.years); // 승자 오퍼 연수(§2.8 Phase1) — 정년 캡. 기본 2 → 구 RENEW_FA_YEARS와 동일.
+    // 주전 보장 레버 대가(§2.8 Phase2) — 내가 주전보장으로 데려온 FA만 계약에 flag를 남긴다(AI/타팀=미보장).
+    //   이후 시즌에 벤치(ownerBenched/outclassed)하면 공약 파기로 재계약 거부·불만·팬심·폼 대가(data/owner buildOwnerFx).
+    //   기본 오퍼(보장 off)·AI는 undefined → 계약 객체 byte-동일(all-auto 0드리프트).
+    const winGuarantee = win.teamId === myTeam && !!faOffers?.[id]?.starterGuarantee;
     snapshot[id] = {
       ...p,
-      contract: { salary: finalSalary, years: winYears, remaining: winYears, signedAtAge: p.age },
+      contract: { salary: finalSalary, years: winYears, remaining: winYears, signedAtAge: p.age, ...(winGuarantee ? { starterGuarantee: true } : {}) },
     };
     rosters[win.teamId] = [...rosters[win.teamId], id];
     payroll[win.teamId] += finalSalary;

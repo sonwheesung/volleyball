@@ -291,6 +291,10 @@ export interface Contract {
   years: number;        // 총 계약 연수
   remaining: number;    // 잔여 연수
   signedAtAge: number;  // 서명 당시 나이(시장가치 산정 기준)
+  // FA 오퍼 '주전 보장' 레버(FA_SYSTEM §2.8 Phase2 대가) — 내가 starterGuarantee:true로 서명한 FA 계약에만 박힌다.
+  //   faOffers는 오프시즌 해석 후 비워지므로(store), 계약에 flag를 남겨 이후 시즌 벤치 시 '공약 파기'를 재파생한다.
+  //   신규 영속 최소화: 기존 계약 객체에 optional 1비트만 추가(undefined=미보장 → 구세이브·all-auto 무영향/0드리프트).
+  starterGuarantee?: boolean;
 }
 
 // 훈련으로 성장하는 스탯 (키는 고정 → 제외) — TRAINING_SYSTEM 1.1

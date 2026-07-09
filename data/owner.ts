@@ -57,6 +57,9 @@ export function expectsPlayOf(p: Player, myTeamId: string, day: number): number 
   let e = Math.max(0, Math.min(1, 1 - (weakest - overall(p)) / EXPECT_GAP)); // 양수 격차=내가 더 약함→기대↓
   if (p.career.seasons >= 6) e = Math.max(e, 0.5); // 베테랑은 역할 기대
   if (p.career.seasons <= 1) e *= 0.5;             // 신인은 배우는 자세(기대↓)
+  // 주전 보장 레버 대가(FA_SYSTEM §2.8 Phase2) — '주전 보장'으로 데려온 선수는 OVR·경력과 무관하게 주전을 기대한다.
+  //   → 벤치 시 minutesGrievance가 확실히 발화(무명에게 주전 약속하고 앉히는 공짜 회피 차단). 미보장=undefined면 무변(0드리프트).
+  if (p.contract.starterGuarantee) e = 1;
   return e;
 }
 
@@ -139,8 +142,11 @@ export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamI
     const { topic, weight, playRatio } = discontentNow(p, myTeamId, SEASON_END_DAY);
     // 누적(C.4): 시즌 내내 부당하게 앉아있던 만큼(낮은 출전율) 정 떨어져 거부↑. 출전 불만일 때만.
     const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight) : 0;
-    // 공약 파기(OWNER_SYSTEM 1.3): '주전 보장' 약속을 했는데 여전히 출전 불만(=벤치) → 배신. 거부 급등(성공 보정 상쇄+α).
-    const breach = topic === 'minutes' && starterPromised(interviews, season, id) ? PROMISE_BREACH_REFUSE : 0;
+    // 공약 파기(OWNER_SYSTEM 1.3 · FA_SYSTEM §2.8 Phase2): '주전 보장' 약속(면담 카드 OR FA 오퍼 레버)을 했는데
+    //   여전히 출전 불만(=벤치) → 배신. 거부 급등(성공 보정 상쇄+α). FA 보장은 계약 flag(p.contract.starterGuarantee)가
+    //   두 번째 출처 — faOffers가 오프시즌 후 비워져도 계약에 남아 이후 시즌 벤치까지 파기를 물린다. 미보장=undefined면 무변.
+    const promisedStarter = starterPromised(interviews, season, id) || !!p.contract.starterGuarantee;
+    const breach = topic === 'minutes' && promisedStarter ? PROMISE_BREACH_REFUSE : 0;
     // 방출된 친한 동료(positive affinity)만큼 추가 동요(+) — 절친 방출일수록 강하게.
     let friendLeave = 0;
     for (const rp of releasedPlayers) friendLeave += Math.max(0, affinity(p, rp, bonds[pairKey(id, rp.id)] ?? 0, false));
