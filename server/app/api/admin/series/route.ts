@@ -1,10 +1,10 @@
-// /api/admin/series — 관리자 시계열(매출·광고·환불) 일/주/월/연 집계. requireAdmin(fail-closed §13.15).
-//   metric=revenue: statsDaily 롤업(매출·결제건수). metric=ad|refund: walletLedger 이벤트(건수·고유유저·다이아).
-//   버킷: day 30 · week 12 · month 12 · year 5. 전부 UTC 경계.
+// /api/admin/series — 관리자 시계열(가입·매출·광고·환불) 일/주/월/연 집계. requireAdmin(fail-closed §13.15).
+//   metric=signups: users.createdAt 버킷(① 사용자 현황). metric=revenue: statsDaily 롤업(매출·결제건수).
+//   metric=ad|refund: walletLedger 이벤트(건수·고유유저·다이아). 버킷: day 30 · week 12 · month 12 · year 5. 전부 UTC 경계.
 import { NextResponse } from 'next/server';
 import { and, eq, gte } from 'drizzle-orm';
 import { db } from '../../../../db';
-import { statsDaily, walletLedger } from '../../../../db/schema';
+import { statsDaily, walletLedger, users } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
@@ -43,6 +43,14 @@ export async function GET(req: Request) {
     const bk = buildBuckets(gran, new Date());
     const labels = bk.map((b) => b.label);
 
+    if (metric === 'signups') {
+      // ① 사용자 현황 — 가입 수(신규/일주월). 소프트삭제 포함(가입은 일어난 사실 — 총 유입).
+      const rows = await db.select({ c: users.createdAt }).from(users)
+        .where(and(eq(users.projCode, PROJ_CODE), gte(users.createdAt, new Date(bk[0].start))));
+      const count = new Array(bk.length).fill(0);
+      for (const r of rows) { if (!r.c) continue; const i = bidx(bk, r.c.getTime()); if (i >= 0) count[i]++; }
+      return NextResponse.json({ ok: true, metric, gran, labels, count });
+    }
     if (metric === 'revenue') {
       const fromDay = new Date(bk[0].start).toISOString().slice(0, 10);
       const sd = await db.select().from(statsDaily).where(and(eq(statsDaily.projCode, PROJ_CODE), gte(statsDaily.day, fromDay)));

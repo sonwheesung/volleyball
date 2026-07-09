@@ -470,9 +470,16 @@
   3. **dev 앱 `EXPO_PUBLIC_SERVER_URL`=Preview URL 또는 로컬 `npm run dev`**.
 - **효과**: dev DB가 생기면 못 돌린 **라이브 가드**(`walletConcurrency`·`_dv_walletreplay`·`_e2e_backend`)도 실행 가능.
 
-### 13.25 관리자 대시보드 11섹션 지표 명세 — pull-and-cache 롤업·집계·화면 (📋 명세 확정·미구현 — 2026-07-09, 구현은 EAS 계측 후)
-> **상태**: 사용자 확정(2026-07-09). **명세만** — 코드 미구현. 이 절은 §13.15(관리자 대시보드) **확장**이며 서버측 정본(롤업 스키마·집계 라우트·ops 화면·CSV·이상징후).
+### 13.25 관리자 대시보드 11섹션 지표 명세 — pull-and-cache 롤업·집계·화면 (🚧 지금-가능분 구현 2026-07-09 · 나머지 EAS 계측 후)
+> **상태**: 사용자 확정(2026-07-09). **지금-가능분 구현 완료(2026-07-09)** — 11섹션 골격 재구성 + 원장/서버 파생 실데이터. 나머지(외부-sync·게임 도메인 [자체-롤업])는 **EAS 계측 후**. 이 절은 §13.15(관리자 대시보드) **확장**이며 서버측 정본(롤업 스키마·집계 라우트·ops 화면·CSV·이상징후).
 > "무엇을 보여줄지(지표·출처 분류·track 이벤트)"는 **[ANALYTICS_PLAN §6](./ANALYTICS_PLAN.md)** 이 정본 — 이 절과 짝. 대부분 **EAS 계측(track()) 이후** 가능(원장 파생분·서버 근사·Sentry API는 그전).
+
+> **✅ 지금-가능분 구현(2026-07-09)** — §F-1 스코프(원장·서버 보유분)만. 커밋 전 서버 tsc·`next build` PASS(신규 라우트 `/api/admin/bm`·`/api/admin/errors` 등록 확인).
+> - **화면 재구성**: `ops-9f3a2c`를 11섹션 IA로 재정렬 — 대시보드(⑪ 메인 KPI 카드행 + ⑩ 운영 알림) · **분석 그룹** ①사용자현황 ②리텐션 ③플레이 ④오프시즌 ⑤BM ⑥광고 ⑦경기 ⑧선수 ·업적 · **운영 그룹** ⑨오류 ·쿠폰·공지·문의·설정. 기존 탭(쿠폰·공지·문의·환불·설정·업적) **무회귀 유지**(재배치일 뿐 삭제 아님).
+> - **실데이터(구현)**: **①**(가입 추이 series `metric=signups` 일/주/월 토글 + 사용자 목록 + CSV) · **⑤ BM**(상품별 다이아 지급 건수·합·결제자 = 원장 reason='purchase' ref=productId `/api/admin/bm`; 결제전환·환불 기존 재사용) · **⑥ 광고**(원장 reason='ad' 기존 series 재사용 + CSV) · **⑨ 오류**(서버 머니패스 오류 = `purchaseEvent` ok=false 사유별·최근목록 `/api/admin/errors`) · **⑩ 운영 알림**(stats.alerts — 완결 어제 vs 그제 신규가입 급감·결제오류 급증 임계 판정, baseline 노이즈 차단) · **⑪ 메인 KPI**(DAU근사·총가입·신규·결제전환·매출[0] 실값). **CSV는 클라 생성**(BOM+escape — 서버 export 라우트는 데이터가 클라 fetch분을 넘을 때 도입, 현 볼륨 불요).
+> - **placeholder(EAS 후)**: **②리텐션·③플레이·④오프시즌·⑦경기·⑧선수** = 골격 카드("무슨 지표를·언제 보여줄지" 명시) · ⑤ ARPU/ARPPU/상품별 매출액(RevenueCat #43 후) · ⑥ eCPM/노출/수익(AdMob API 후) · ⑨ Sentry(API키 후 pull; `SENTRY_API_TOKEN` 있으면 골격 통과·없으면 "미설정" 배지 throw-none)·Crashlytics(EAS 후) · ⑪ MAU·D1/D7/D30·ARPU 등 "—"+"EAS 후" 배지.
+> - **Discord push**: ⑩ 알림은 **화면 카드**만 구현(GET마다 push=스팸이라 금지). Discord 발송은 §E대로 **Cron 배치**가 담당(배포 시 Vercel Cron + `DISCORD_WEBHOOK_URL` `notify.ts` 패턴) — 미배선.
+> - **파일**: `server/app/api/admin/{stats(alerts 추가),series(signups 추가),bm(신),errors(신)}/route.ts` · `server/app/ops-9f3a2c/page.tsx`(11섹션) · `.env.example`(SENTRY_API_TOKEN 등 주석). 롤업 신테이블(externalDaily·gameRollupDaily)은 **EAS/외부-sync 단계에 도입**(현 실데이터는 기존 users·walletLedger·statsDaily·purchaseEvent로 충분).
 
 **핵심 결정 — 모든 걸 우리 화면 한 곳에서(pull-and-cache)**: 관리자가 외부 콘솔(Firebase·RevenueCat·AdMob·Sentry)을 따로 열지 않고 **ops-9f3a2c 한 화면에서 11섹션 전부** 본다. 아키텍처:
 ```

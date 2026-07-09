@@ -6,7 +6,7 @@
 import { NextResponse } from 'next/server';
 import { and, eq, isNull, isNotNull, gte, count } from 'drizzle-orm';
 import { db } from '../../../../db';
-import { users, statsDaily, walletLedger } from '../../../../db/schema';
+import { users, statsDaily, walletLedger, purchaseEvent } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
@@ -70,15 +70,33 @@ export async function GET(req: Request) {
     const payers = payerRows.length;
     const conversion = totalUsers > 0 ? Math.round((payers / totalUsers) * 1000) / 10 : 0; // %
 
+    // ⑩ 운영 알림(이상징후) — 전일 대비 임계 초과. 진행 중인 "오늘"은 부분치라 노이즈 → **완결된 어제(d0) vs 그제(d1)** 비교.
+    //   서버 오류 = purchaseEvent(ok=false)의 머니패스 실패 건수(현 서버 보유 오류 로그). newUsers는 위 시계열 재사용(이중집계 방지).
+    //   baseline(최소 표본)으로 소수 노이즈 차단. 판정만(Discord push는 Cron 배치가 §13.25-E — GET마다 알림 스팸 금지).
+    const errFrom = new Date(dayStart.getTime() - 2 * 86400000); // 그제 00:00부터
+    const errRows = await db.select({ c: purchaseEvent.createdAt }).from(purchaseEvent)
+      .where(and(eq(purchaseEvent.projCode, PROJ_CODE), eq(purchaseEvent.ok, false), gte(purchaseEvent.createdAt, errFrom)));
+    let errToday = 0, errD0 = 0, errD1 = 0; // 오늘 / 어제 / 그제
+    const y0 = dayStart.getTime() - 86400000, y1 = dayStart.getTime() - 2 * 86400000;
+    for (const r of errRows) { if (!r.c) continue; const t = r.c.getTime();
+      if (t >= dayStart.getTime()) errToday++; else if (t >= y0) errD0++; else if (t >= y1) errD1++; }
+    const newD0 = newUsers[DAYS - 2] ?? 0, newD1 = newUsers[DAYS - 3] ?? 0; // 어제 / 그제 신규가입
+    const alerts: { key: string; label: string; prev: number; cur: number; deltaPct: number; severity: 'warn' | 'crit' }[] = [];
+    // 신규가입 급감: 그제 대비 어제 −30%+ (그제 표본 ≥5)
+    if (newD1 >= 5 && newD0 < newD1 * 0.7) alerts.push({ key: 'signups_drop', label: '신규 가입 급감', prev: newD1, cur: newD0, deltaPct: Math.round((newD0 / newD1 - 1) * 100), severity: newD0 < newD1 * 0.5 ? 'crit' : 'warn' });
+    // 서버(머니패스) 오류 급증: 어제가 그제의 2배+ (어제 ≥5) 또는 무→급증
+    if (errD0 >= 5 && (errD1 === 0 ? errD0 >= 10 : errD0 > errD1 * 2)) alerts.push({ key: 'server_error_spike', label: '결제 오류 급증', prev: errD1, cur: errD0, deltaPct: errD1 > 0 ? Math.round((errD0 / errD1 - 1) * 100) : 100, severity: errD0 >= 20 ? 'crit' : 'warn' });
+
     return NextResponse.json({
       ok: true,
       kpi: {
         totalUsers, active30m, dauToday, newToday, withdrawn, inactive,
-        revenueToday: revenue[DAYS - 1] ?? 0, adToday, adUsersToday: adUsersToday.size, payers, conversion,
+        revenueToday: revenue[DAYS - 1] ?? 0, adToday, adUsersToday: adUsersToday.size, payers, conversion, errToday,
       },
       labels: days.map((d) => d.label),
       series: { newUsers, dau, revenue, ad: adSeries },
       hourly,
+      alerts,
     });
   } catch (e) {
     reportError(e, 'admin/stats');
