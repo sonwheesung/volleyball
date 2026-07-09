@@ -131,6 +131,9 @@ function Compose({ cat, setCat, content, setContent, onCancel, onDone }: {
   const diamonds = useGameStore((s) => s.diamonds);
   const campLog = useGameStore((s) => s.campLog);
   const pendingCamp = useGameStore((s) => s.pendingCamp);
+  const transfers = useGameStore((s) => s.transfers);
+  const seasonDraftLog = useGameStore((s) => s.seasonDraftLog);
+  const seasonForeignLog = useGameStore((s) => s.seasonForeignLog);
 
   const submit = async () => {
     if (content.trim().length < 5) { showAlert('내용을 입력하세요', '조금 더 자세히 적어주시면 도움이 됩니다(5자 이상).'); return; }
@@ -153,6 +156,7 @@ function Compose({ cat, setCat, content, setContent, onCancel, onDone }: {
           players: Object.values(playerBase ?? {}),
           logs, now: Date.now(),
           diamonds, campLog, pendingCamp,
+          transfers, seasonDraftLog, seasonForeignLog, // 선수 이동 연표(FA·드래프트·외국인) — 요약+movements 노출(2026-07-10)
           replay: captureReplaySave(), // 재현 키(§13.20 ①) — 전 문의 항상 첨부, 제출 시점 세이브 통째
         });
         await uploadSnapshot(ticketId, snapshot);

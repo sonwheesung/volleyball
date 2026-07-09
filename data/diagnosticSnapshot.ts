@@ -4,7 +4,7 @@
 // 범위: `[max(0, season-10) .. season]`(0-based) — 사용자 예시(15시즌→5~15시즌·5시즌→1~5시즌, 1-based)와 일치.
 // 게임 기록을 새로 저장하지 않고, 이미 재계산 가능한 소스(archive·milestones·retirements·hof·뉴스 재생·선수 seasonLines)를
 // 범위로 잘라 담는다. 업로드는 lib/server.ts(무거우니 문의 제출 후 백그라운드). "now"는 호출부(앱 런타임)가 주입.
-import type { SeasonArchive, Milestone, RetireRecord, HofEntry, Player, NewsItem } from '../types';
+import type { SeasonArchive, Milestone, RetireRecord, HofEntry, Player, NewsItem, Transfer, DraftPickRecord, ForeignSwapRecord } from '../types';
 import type { DiagLogEntry } from '../lib/deviceLog';
 import { buildNewsFeed } from './news';
 import { leagueDisplayDay } from './standings';
@@ -24,6 +24,12 @@ export interface SnapshotInput {
   released: string[];
   players: Player[]; // 현재 playerBase 값들
   logs: DiagLogEntry[]; // deviceLog 버퍼(범위 내)
+  // 선수 이동 연표(§13.6 보강 2026-07-10) — FA 이적·드래프트 입단·외국인/아시아쿼터 교체.
+  // buildNewsFeed에 넘겨 요약 뉴스에 내 팀 FA in/out을 띄우고, movements로 리그 전체를 직접 노출.
+  // replay(세이브 통째)에도 이미 있으나 "한눈 확인"이 안 돼 요약을 추가. 선택(구 호출부 호환).
+  transfers?: Transfer[]; // FA 이적 연표(오프시즌 팀 이동)
+  seasonDraftLog?: DraftPickRecord[]; // 드래프트 입단 연표
+  seasonForeignLog?: ForeignSwapRecord[]; // 외국인·아시아쿼터 교체 연표
   now: number; // Date.now() — 호출부 주입(순수성 유지)
   // 전지훈련(다이아 유일 소비처) 진단(§13.17) — "차감됐으나 미적용" 케이스 추적용. 선택(구 호출부 호환)
   diamonds?: number; // 다이아 캐시 잔액(표시)
@@ -68,6 +74,13 @@ export interface DiagnosticSnapshot {
   players: SnapshotPlayer[];
   releasedNow: string[];
   logs: DiagLogEntry[];
+  // 선수 이동 연표(범위 내, 리그 전체) — FA 이적·드래프트 입단·외국인 교체를 한눈에(보강 2026-07-10).
+  // 내 팀만 기사화되는 뉴스와 달리 리그 전체를 직접 노출. replay(세이브)에도 있으나 가독용 요약.
+  movements: {
+    transfers: Transfer[]; // FA 이적/방출
+    draft: DraftPickRecord[]; // 드래프트 입단
+    foreign: ForeignSwapRecord[]; // 외국인·아시아쿼터 교체
+  };
   // 재현 키(§13.20 ①) — persist 세이브 통째. 운영툴이 이걸로 그 게임을 bit-identical 리플레이(서버 미해석 증거물).
   replay?: { state: Record<string, unknown>; version: number } | null;
   // 전지훈련·다이아 진단(§13.17) — 서버 wallet_ledger(권위)와 대조해 "차감됐으나 미적용" 판별
@@ -94,8 +107,10 @@ export function buildDiagnosticSnapshot(input: SnapshotInput): DiagnosticSnapsho
     [],
     leagueDisplayDay(input.currentDay),
     input.myTeamId,
-    [],
+    input.transfers ?? [], // FA 이적(내 팀 in/out 기사화) — 요약 뉴스에 노출(보강 2026-07-10)
     input.retirements,
+    input.seasonDraftLog ?? [], // 드래프트 입단 연표
+    input.seasonForeignLog ?? [], // 외국인·아시아쿼터 교체 연표
   );
 
   const seasons: SnapshotSeason[] = [];
@@ -143,6 +158,11 @@ export function buildDiagnosticSnapshot(input: SnapshotInput): DiagnosticSnapsho
     players,
     releasedNow: input.released,
     logs: input.logs.filter((e) => inRange(e.season)),
+    movements: {
+      transfers: (input.transfers ?? []).filter((t) => inRange(t.season)),
+      draft: (input.seasonDraftLog ?? []).filter((d) => inRange(d.season)),
+      foreign: (input.seasonForeignLog ?? []).filter((f) => inRange(f.season)),
+    },
     replay: input.replay ?? null, // 재현 키(§13.20 ①) — 호출부가 captureReplaySave()로 주입
     wallet: {
       diamonds: input.diamonds ?? null,
