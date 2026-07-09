@@ -469,3 +469,56 @@
   2. **Vercel `DATABASE_URL` 환경별 분리**(Production=prod / Preview·Development=dev) — Preview 배포는 `VERCEL_ENV=preview`라 **dev 로그인 자동 허용**(#2b는 production만 차단).
   3. **dev 앱 `EXPO_PUBLIC_SERVER_URL`=Preview URL 또는 로컬 `npm run dev`**.
 - **효과**: dev DB가 생기면 못 돌린 **라이브 가드**(`walletConcurrency`·`_dv_walletreplay`·`_e2e_backend`)도 실행 가능.
+
+### 13.25 관리자 대시보드 11섹션 지표 명세 — pull-and-cache 롤업·집계·화면 (📋 명세 확정·미구현 — 2026-07-09, 구현은 EAS 계측 후)
+> **상태**: 사용자 확정(2026-07-09). **명세만** — 코드 미구현. 이 절은 §13.15(관리자 대시보드) **확장**이며 서버측 정본(롤업 스키마·집계 라우트·ops 화면·CSV·이상징후).
+> "무엇을 보여줄지(지표·출처 분류·track 이벤트)"는 **[ANALYTICS_PLAN §6](./ANALYTICS_PLAN.md)** 이 정본 — 이 절과 짝. 대부분 **EAS 계측(track()) 이후** 가능(원장 파생분·서버 근사·Sentry API는 그전).
+
+**핵심 결정 — 모든 걸 우리 화면 한 곳에서(pull-and-cache)**: 관리자가 외부 콘솔(Firebase·RevenueCat·AdMob·Sentry)을 따로 열지 않고 **ops-9f3a2c 한 화면에서 11섹션 전부** 본다. 아키텍처:
+```
+[외부 원천]  GA4/BigQuery · RevenueCat · AdMob · Sentry/Crashlytics
+     │  서버 배치가 외부 API/Export로 pull(일 1회 등)
+     ▼
+[서버 롤업/캐시]  statsDaily(확장) + externalDaily(신) + gameRollupDaily(신)
+     ▼
+[ops-9f3a2c]  11섹션 탭/카드 · 일/주/월 · 그래프+숫자 · CSV
+```
+- **진실 원천 분리 유지**(재계산·이중수집 금지): 외부 지표는 그 도구가 원천, 우리는 **값을 캐시만** 한다. 게임 도메인 지표는 우리가 직접 롤업.
+- **결정론 격리 명시**: 통계·외부 sync 캐시는 **재화/시드/리플레이와 무관한 순수 메타**(§8). 시드/리플레이엔 안 들어가고, 통계 실패가 지급/응답을 롤백하지 않음(§13.21·13.22 관찰 사이드채널 계약과 동일 — `afterSafe`/throw-none).
+
+**A. 서버 롤업/캐시 스키마 초안**(전부 `proj_code` FK — §13.2 멀티게임 격리, PK=`(projCode, day)`):
+- **`statsDaily`(기존 확장)**: 현 컬럼(revenueKrw·purchaseCount·diamondsPurchased·newUsers) 유지 + **Expand-only 추가**(nullable/default 0 — prod 스키마 규율 §13.7): `dauApprox`·`wanU`·`manU`(서버 근사 활성, lastSeenAt 기반) · `withdrawn` · `adCount`·`adRevenueMicros`(원장/AdMob) · `payers`.
+- **`externalDaily`(신, [외부-sync] 캐시)**: `source`(ga4|revenuecat|admob|sentry) · `day` · `metric`(dau|wau|mau|d1|d7|d30|arpu|arppu|sessionLenMs|ecpm|adImpressions|crashFreeRate|apiErrorCount…) · `valueNum` · `valueJson`(코호트 매트릭스 등 구조값) · `syncedAt`. **원천이 계산한 값을 그대로 적재**(우리가 재계산 안 함). PK `(projCode, source, day, metric)`.
+- **`gameRollupDaily`(신, [자체-롤업])**: 게임 도메인 일별 집계 — `metric`(seasonComplete1|3|5|10 · offseasonFunnelStage · matchCount · avgMatchMs · avgSets · draftPickPos · foreignSign · retireAge · ovrGrowth · trainingCampRate …) · `dim`(포지션·팀·시즌번호 등 분해축) · `valueNum`. track() 이벤트 수신 집계 또는 BigQuery 쿼리 결과 적재. PK `(projCode, day, metric, dim)`.
+- (선택) **`cohortRetention`(신)**: `installDay`·`dN`(1/3/7/14/30)·`retainedPct` — ② 코호트 표 전용(externalDaily.valueJson로 대체 가능, 표가 크면 분리).
+
+**B. 외부 API sync 배치**(서버, [외부-sync] 공통 계약):
+- **주기**: 기본 **일 1회 배치**(Vercel Cron `/api/admin/sync/*` 또는 스케줄 라우트). 실시간성 필요분(⑩ 알림 판정)은 앱 대시보드 열 때 on-demand 재sync 허용.
+- **커넥터**: `POST /api/admin/sync/revenuecat`(RC REST → 매출·ARPU·ARPPU·상품별) · `/sync/ga4`(GA4 Data API → DAU/WAU/MAU·세션·리텐션) · `/sync/bigquery`(코호트 SQL) · `/sync/admob`(AdMob API → 노출·eCPM·수익) · `/sync/sentry`(Sentry API → API오류 건수·최근 이슈). 각각 `externalDaily` upsert.
+- **인증**: 외부 API 키는 **서버 env 보관**(`RC_REST_API_KEY` 이미 존재 §13.18 · `GA4_*`·`ADMOB_*`·`SENTRY_API_TOKEN`·`BIGQUERY_SA_JSON` 신규 — `.env.example`만 커밋, 실키 연결단계 §12·M4). 클라 노출 0.
+- **실패 폴백**: sync 실패 시 **마지막 캐시(externalDaily 직전 값) 표시** + "n시간 전 동기화" 배지. **화면 절대 안 막음**(throw-none). 실패는 Sentry/Discord로만.
+
+**C. 집계·조회 라우트**(전부 `requireAdmin` fail-closed §13.15): 기존 `/api/admin/{stats,series,users,payments,achievements,payment-events}` **유지** + 신설:
+- `GET /api/admin/dashboard?granularity=day|week|month` — 11섹션 **합성** 페이로드(메인 KPI + 각 섹션 요약). externalDaily+gameRollupDaily+statsDaily 조합.
+- `GET /api/admin/section/{play|offseason|match|player|retention|error|alerts}?granularity=` — 섹션별 상세(그래프 시계열+표).
+- `GET /api/admin/export?section=&granularity=&format=csv` — **CSV/엑셀 다운로드**(전 섹션 공통 요구). UTC 버킷·헤더행·escape. (§13.15 series의 UTC 버킷 규약 재사용.)
+- `POST /api/admin/sync/{revenuecat|ga4|bigquery|admob|sentry}` — B의 커넥터(Cron/수동 트리거).
+
+**D. ops-9f3a2c 화면 — 11섹션 IA**(§13.15 "분석/운영 그룹" 사이드바 확장. "대시보드에 다 넣지 마라" 원칙 유지 — 대시보드=합성 KPI만, 상세는 각 메뉴):
+- **최상단 = ⑪ 메인 KPI 카드행**(가장 크게): DAU·MAU·D1·D7·D30·첫시즌완료율·평균플레이시간·결제율·ARPU·ARPPU·일매출·월매출. [외부-sync]+[자체-롤업] 합성.
+- **⑩ 운영 알림 = 대시보드 상단 이상징후 카드**(빨강): D1급감·결제율급감·광고수익급감·서버오류증가·크래시증가. 배치가 전일 대비 임계 판정 → 카드 + Discord.
+- **분석 그룹 메뉴**(각 탭, 일/주/월 토글 + 그래프+숫자 + CSV): ① 사용자현황 · ② 리텐션 코호트(설치일 매트릭스 표) · ③ 플레이(★시즌 진행률) · ④ 오프시즌 funnel · ⑤ BM · ⑥ 광고 · ⑦ 경기데이터 · ⑧ 선수데이터.
+- **운영 그룹**: ⑨ 오류 모니터링(크래시·API·로그인 건수+최근로그) — 기존 쿠폰·공지·문의/환불·설정과 같은 그룹.
+- **표시 규율**(§13.15 계승): 인라인 스타일 + 내장 `<style>`만(외부 스크립트 0·XSS 최소)·`noindex`·`.oc-main` max-width 1200 중앙정렬. 차트는 기존 SVG 인라인(라이브러리 0) 재사용.
+
+**E. ⑩ 이상징후 판정**(서버 배치 — [합성]): 전일/전주 대비 임계(예: D1 −30%·결제율 −40%·광고수익 −40%·서버오류 +N배·크래시 +N배) 초과 시 `alerts` 생성 → **Discord 알림**(§13.22 `notify.ts` 패턴 재사용, `afterSafe`·PII 금지) + 대시보드 상단 카드. 임계는 setting으로 조정 가능하게.
+
+**F. 의존성·순서**:
+1. **지금~서버 단계**(원장·서버 보유): ⑤ 원장 파생(purchase 건수·다이아)·⑥ 원장 reason='ad'·① 서버 근사 DAU·⑨ Sentry API·⑩ 서버오류 알림. statsDaily 확장 + externalDaily(sentry) + 알림 배치.
+2. **EAS 계측(track()) + 서버 이벤트 수신 파이프라인 후**: ③④⑦⑧ 게임 도메인 [자체-롤업](gameRollupDaily). track() 이벤트가 서버에 도달해야 집계.
+3. **EAS 빌드 + 외부 API 키 연결 후**: [외부-sync] 전부(GA4/BigQuery 리텐션·플레이시간, RevenueCat ARPU/ARPPU, AdMob eCPM, Crashlytics).
+> **track() 이벤트 수신 파이프라인**: 현재 track()은 Firebase/GameAnalytics로만 감(§2-1). 게임 도메인 [자체-롤업]은 **서버가 그 이벤트를 받거나(신 `/api/telemetry` 확장·이미 스키마 `TelemetrySession` 예정 §13.2) BigQuery Export를 쿼리**해야 함 — 둘 중 선택은 구현 시 결정(BigQuery 경유가 이중수집 없음).
+
+**G. 검증(구현 시)**: 롤업 순수 집계는 `_dv_*`(DB 무의존 A/B 자가검증) · sync 커넥터는 폴백/throw-none 라이브 가드 · CSV escape/UTC 버킷 가드 · 이상징후 임계 판정 A/B. §13.15 라이브 E2E(requireAdmin 401·proj 스코프) 계승.
+
+**H. 파일(구현 시 예상)**: `server/db/schema.ts`(statsDaily 확장·externalDaily·gameRollupDaily·cohortRetention)·`server/lib/rollup.ts`(게임 도메인 집계)·`server/lib/externalSync/{revenuecat,ga4,bigquery,admob,sentry}.ts`(커넥터)·`server/app/api/admin/{dashboard,section/*,export,sync/*}/route.ts`·`server/app/ops-9f3a2c/page.tsx`(11섹션 탭)·`.env.example`(외부 API 키). track 이벤트 taxonomy 개정은 앱 `lib/analytics`(ANALYTICS_PLAN §6.3).
