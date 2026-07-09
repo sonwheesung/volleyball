@@ -25,9 +25,12 @@ interface ScreenProps {
   headerRight?: ReactNode; // 제목 행 우측 액션(예: 뉴스 "모두 읽기"). 없으면 미표시 — 무파급 옵션.
 }
 
-/** 기본 화면 래퍼 — SafeArea를 한 곳에서 중앙 관리(하단 홈인디케이터·좌우 라운드/노치).
- *  상단은 네비게이션 헤더가 담당(전 Stack/Tabs 화면이 헤더 보유)하므로 top edge는 제외 —
- *  헤더 있는 화면에 top inset을 또 주면 이중 여백이 된다. */
+/** 기본 화면 래퍼 — SafeArea를 한 곳에서 중앙 관리(상단 상태바·하단 홈인디케이터·좌우 라운드/노치).
+ *  top edge 포함(2026-07-08): `react-native-safe-area-context`의 SafeAreaView는 **헤더-인지적**이라
+ *  네이티브 헤더가 있는 화면(전 Tabs/대부분 Stack)에선 안전영역 프레임이 헤더 아래에서 시작해 top inset이
+ *  0에 수렴 → 이중 여백 없음(회귀 0). headerShown:false 화면(enshrine·season-opening·champion 등
+ *  세리머니)에선 top inset = 상태바 높이가 되어 타이틀이 상태바(시계) 아래로 내려온다.
+ *  ⚠ `useSafeAreaInsets().top`(raw)은 헤더를 몰라 헤더 화면에서 이중 패딩 회귀 — 반드시 SafeAreaView(edges top) 사용. */
 export function Screen({ title, children, scroll = true, headerRight }: ScreenProps) {
   useThemeMode(); // 테마 토글 시 리렌더(배경·스크림 갱신)
   // 튜토리얼 스포트라이트 대상이 화면 밖이면 이 화면의 ScrollView가 대상을 위로 끌어온다.
@@ -63,7 +66,7 @@ export function Screen({ title, children, scroll = true, headerRight }: ScreenPr
     <ImageBackground source={themeAssets.bg} style={styles.bgRoot} resizeMode="cover">
       {/* 가독성 스크림 — 모드별 톤(다크=검정 베일 / 라이트=밝은 베일)으로 배경 위 카드·텍스트 가독 */}
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: themeAssets.scrim }]} />
-      <SafeAreaView style={styles.safe} edges={['bottom', 'left', 'right']}>
+      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
         {scroll ? (
           <ScrollCtrlCtx.Provider value={ctrlRef.current}>
             <ScrollView ref={scrollRef} style={styles.safe} contentContainerStyle={styles.contentScroll}>

@@ -38,6 +38,8 @@
 
 > **UI-28 (2026-07-08 사후 등재 — 내비 커밋 34eb5b9 규칙 명문화)**: **오프시즌 체인(정산 이후 ~~season-start→training-camp→enshrine~~ → **정정 2026-07-08: season-start→enshrine→training-camp→season-opening**, 드래프트 라이브 포함)은 뒤로가기 불가가 정본** — 소비된 결정 화면(드래프트/FA)으로 되돌아가면 다음 오프시즌으로 상태가 누수된다. 체인 화면은 ①헤더백 숨김+제스처 off ②beforeRemove GO_BACK/POP 차단 ③종료는 dismissAll()+replace()(스택 잔재 0)로 잠근다. draft-live도 같은 규칙(오프시즌 게이트+완료 후 재진입 불가). 체인 마지막 dismissAll+replace는 이제 **season-opening(개막 브리지)** 가 수행(구: enshrine).
 
+> **UI-29 (2026-07-08 — 에뮬레이터 세리머니 흐름 육안 발견)**: 세리머니/헤더 두 건 수정. **(A) 라우트 등록**: `champion-ceremony`(우승 시상식)가 `app/_layout.tsx` Stack에 미등록이라 네이티브 헤더가 파일/라우트명 "champion-ceremony"(영문)를 축하 화면에 노출 — UI-15 형제 재발. `<Stack.Screen name="champion-ceremony" options={{ title: '시상식' }} />` 등록으로 교정(awards-ceremony 인근). **(B) 타이틀↔상태바 겹침**: `headerShown:false` 화면(enshrine·season-opening·champion 등 세리머니)은 네이티브 헤더가 없어 `components/Screen.tsx` 타이틀이 top:0에 렌더돼 상태바(시계)와 겹쳤다 — 원인은 Screen의 SafeAreaView가 `edges` top을 제외해 top inset이 안 붙음. **SafeAreaView edges에 `'top'` 추가**로 교정. **회귀 0 근거**: `react-native-safe-area-context`의 SafeAreaView는 **헤더-인지적** — 네이티브 헤더 화면(전 Tabs/대부분 Stack)은 안전영역 프레임이 헤더 아래에서 시작해 top inset이 0에 수렴하므로 이중 여백이 안 생기고, 헤더 없는 화면만 top inset=상태바 높이가 붙어 타이틀이 내려온다. `useSafeAreaInsets().top`(raw)은 헤더를 몰라 이중 패딩을 만드니 금지 — 반드시 SafeAreaView(edges) 사용.
+
 ## UI-27 세계관 사유 문구 예시 (BusyOverlay message — 2026-07-08 사용자 결정)
 
 > 문구는 **그 작업이 실제 하는 일**을 게임 언어로 옮긴다(가짜 사유 금지). 코치·감독·스카우트·프런트가

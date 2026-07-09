@@ -125,6 +125,7 @@ export default function RootLayout() {
         <Stack.Screen name="staff" options={{ title: '스태프 계약' }} />
         <Stack.Screen name="transactions" options={{ title: '시즌 중 FA 영입' }} />
         <Stack.Screen name="playoffs" options={{ title: '포스트시즌' }} />
+        <Stack.Screen name="champion-ceremony" options={{ title: '시상식' }} />
         <Stack.Screen name="awards-ceremony" options={{ title: '시상식' }} />
         <Stack.Screen name="training-camp" options={{ title: '전지훈련' }} />
         <Stack.Screen name="training-policy" options={{ title: '훈련 방침' }} />
