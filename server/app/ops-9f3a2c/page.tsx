@@ -1086,15 +1086,19 @@ function Tickets({ tickets, api, reload }: { tickets: Json[]; api: Api; reload: 
 }
 
 function TicketModal({ t, api, reload, onClose }: { t: Json; api: Api; reload: () => void; onClose: () => void }) {
+  // 상태는 select로 선택(기본값=현재 상태). 바꿔도 즉시 적용 X — [저장]을 눌러야만 반영(관리자 UX 원칙: 모든 수정은 저장 버튼).
+  const curStatus = (() => { const s = String(t.status ?? 'open'); return s === 'replied' || s === 'resolved' ? 'answered' : s; })();
+  const [status, setStatus] = useState(curStatus);
   const [reply, setReply] = useState((t.reply as string) ?? '');
   const [amount, setAmount] = useState('');
   const [snap, setSnap] = useState('');
   const [msg, setMsg] = useState('');
-  // 답변 저장 시 상태를 함께 지정: reviewing(확인 중 — "확인해보겠습니다") / answered(답변완료 — 원인·해결 안내).
-  const saveReply = async (status: 'reviewing' | 'answered') => {
+  const dirty = status !== curStatus || reply !== ((t.reply as string) ?? '');
+  // 답변+상태 함께 저장(단일 저장 버튼). 저장 전엔 서버 무변경.
+  const saveReply = async () => {
     const r = await api('/api/admin/ticket/reply', { method: 'POST', body: JSON.stringify({ ticketId: t.id, reply, status }) });
-    setMsg(r.body.ok ? (status === 'reviewing' ? '확인 중으로 저장됨' : '답변완료로 저장됨') : `실패(${r.status})`);
-    reload();
+    setMsg(r.body.ok ? '저장됨' : `실패(${r.status})`);
+    if (r.body.ok) reload();
   };
   const doRefund = async () => {
     const amt = Math.floor(Number(amount));
@@ -1107,7 +1111,7 @@ function TicketModal({ t, api, reload, onClose }: { t: Json; api: Api; reload: (
   const viewSnap = async () => { const r = await api(`/api/admin/ticket/snapshot?ticketId=${t.id}`); setSnap(r.body.snapshot ? JSON.stringify(r.body.snapshot, null, 2) : '(진단 스냅샷 없음)'); };
   return (
     <Modal wide title="문의 상세" sub={`${CAT[String(t.category)] ?? String(t.category)} · ${String(t.displayName ?? t.userId)}`} onClose={onClose}
-      footer={<button className="oc-btn ghost" onClick={onClose}>닫기</button>}>
+      footer={<><button className="oc-btn sm" onClick={saveReply} disabled={!dirty}>저장</button><button className="oc-btn ghost sm" onClick={onClose}>닫기</button></>}>
       <div className="oc-row" style={{ gap: 8 }}>
         <span className="oc-badge ac">{CAT[String(t.category)] ?? String(t.category)}</span>
         <StatusBadge s={String(t.status)} />
@@ -1117,16 +1121,23 @@ function TicketModal({ t, api, reload, onClose }: { t: Json; api: Api; reload: (
       <div className="oc-mut">기기 {String(t.platform ?? t.userPlatform ?? '?')} {String(t.osVersion ?? '')} · 앱 {String(t.appVersion ?? '')} · {String(t.createdAt).slice(0, 19).replace('T', ' ')}</div>
       <div style={{ whiteSpace: 'pre-wrap', fontSize: 14, background: 'var(--card2)', border: '1px solid var(--bd)', borderRadius: 10, padding: 14, lineHeight: 1.6 }}>{String(t.content)}</div>
       <div className="oc-fld"><label className="oc-label">답변 / 환불 사유 (감사기록에 남음)</label><textarea className="oc-input" value={reply} onChange={(e) => setReply(e.target.value)} style={{ height: 70 }} /></div>
-      <div className="oc-row">
-        <button className="oc-btn ghost sm" onClick={() => saveReply('reviewing')}>확인 중으로</button>
-        <button className="oc-btn blue sm" onClick={() => saveReply('answered')}>답변완료로</button>
+      <div className="oc-row" style={{ alignItems: 'flex-end' }}>
+        <div className="oc-fld" style={{ maxWidth: 150 }}>
+          <label className="oc-label">상태</label>
+          <select className="oc-input" value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="open">대기</option>
+            <option value="reviewing">확인 중</option>
+            <option value="answered">답변완료</option>
+            {curStatus === 'refunded' ? <option value="refunded">환불완료</option> : null}
+          </select>
+        </div>
         {String(t.category) === 'refund' ? (
           <>
             <input className="oc-input" placeholder="환불 💎" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 110 }} />
-            <button className="oc-btn red sm" onClick={doRefund}>환불(회수)</button>
+            <button className="oc-btn red" onClick={doRefund}>환불(회수)</button>
           </>
         ) : null}
-        <button className="oc-btn ghost sm" onClick={viewSnap}>진단 스냅샷</button>
+        <button className="oc-btn ghost" onClick={viewSnap}>진단 스냅샷</button>
         {msg ? <span className="oc-mut" style={{ fontSize: 12.5 }}>{msg}</span> : null}
       </div>
       {snap ? <pre className="oc-pre">{snap}</pre> : null}
