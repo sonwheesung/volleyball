@@ -4,10 +4,64 @@
 import type { Player, Position } from '../types';
 import { createRng, strSeed } from '../engine/rng';
 import { overall } from '../engine/overall';
-import { FOREIGN_SALARY, ASIAN_SALARY_Y1, ASIAN_SALARY_Y2, ALT_POOL_SIZE, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, aiKeepsForeign, type TryoutPicks } from '../engine/foreign';
+import type { ProdLine } from '../engine/production';
+import { FOREIGN_SALARY, ASIAN_SALARY_Y1, ASIAN_SALARY_Y2, ALT_POOL_SIZE, FRESH_POOL_SIZE, tryoutOrder, resolveTryout, type TryoutPicks } from '../engine/foreign';
 import { offerScore, acceptProb, SIT_OUT, prefWeightsOf } from '../engine/faMarket';
 import { aiRetainProb, medianOvr, positionGap } from '../engine/aiGM';
 import { makePlayer, applyAsianIdentity, dedupeNames } from './seed';
+
+// ─── 수입선수 재계약 활약도 계수 (FOREIGN_SYSTEM §7.1 재계약, #77 2026-07-09) ───
+// aiRetainProb(OVR·나이 연속 확률, 국내 FA·아시아쿼터 공용)에 **직전 시즌 실제 생산** 기반 곱수를 얹는다.
+// 이진 게이트(aiKeepsForeign)의 절벽·활약도 무시·OVR 무의미를 근본 해소 — "OVR이 높아도 못했으면 덜 남기고,
+// 맹활약했으면 노장도 붙든다". 엔진 순수성: aiRetainProb은 불변(국내 FA 무영향), perfMult 곱은 이 호출부(data)에서만.
+export interface PerfCtx {
+  prodOf: (id: string) => ProdLine | undefined; // 직전 시즌 선수별 생산(leagueProduction)
+  awardOf: (id: string) => number;              // 통산 수상 점수 0~1(awardScoreOf)
+}
+// 계수는 placeholder(튜닝 대상) — simForeign A/B 잔류율로 조정. 생산만 [FLOOR, PROD_CEIL], 수상 가산 후 [FLOOR, CEIL].
+const PERF_FLOOR = 0.6;      // 부진(저생산) 최저 배수
+const PERF_CEIL = 1.30;      // 최종 천장(수상 헤드룸 포함)
+const PERF_PROD_CEIL = 1.25; // 생산만의 천장(맹활약, 수상 전)
+const PERF_LO = 0.40;        // ratio 이 이하 → 바닥(중앙값의 40% 미만 생산)
+const PERF_HI = 1.70;        // ratio 이 이상 → 생산 천장(중앙값의 170%+ 생산)
+const AWARD_W = 0.08;        // 수상 가산(작게 — 수상은 OVR과 대부분 중복, 리뷰 §)
+// 외인 전용 재계약 감쇠(#77 A/B 튜닝, 2026-07-09) — 확률형 aiRetainProb은 고OVR 외인(avg~85.5, 엘리트 플로어)에
+// near-1이라 확률형 통일만으로 잔류율이 68%→83%로 과잉(§0 "매년 강제 도박=새 얼굴" 기둥을 무디게 하고 parity 소폭 악화).
+// perfMult(어떤 외인이 남는지=성능 인지)는 유지하고, 임계값에 외인만 감쇠를 곱해 검증 baseline ~68%로 되돌린다.
+// 아시아쿼터엔 미적용(#77 전에도 aiRetainProb 기반이라 잔류율 안정 — 외인만 문제). 롤 소비 불변(임계값만 조정).
+export const IMPORT_RETAIN_ATTRITION = 0.70;
+
+function smoothstep01(x: number, lo: number, hi: number): number {
+  if (hi <= lo) return 0;
+  const t = Math.max(0, Math.min(1, (x - lo) / (hi - lo)));
+  return t * t * (3 - 2 * t);
+}
+
+/** 동류(외인 or 아시아쿼터) 직전 시즌 득점 중앙값 = 활약도 기준선. 생산한(matches>0 → points>0) 선수만.
+ *  중앙값은 이상치에 강건 + 자기보정(시대 앵커 불필요 — 같은 시즌 동류 대비). 없으면 0(→ perfMult 중립). */
+function importBaseline(snapshot: Record<string, Player>, ctx: PerfCtx | undefined, asian: boolean): number {
+  if (!ctx) return 0;
+  const pts = Object.values(snapshot)
+    .filter((p): p is Player => !!p && !!p.isForeign && (asian ? !!p.isAsianQuota : !p.isAsianQuota))
+    .map((p) => ctx.prodOf(p.id)?.points ?? 0)
+    .filter((v) => v > 0)
+    .sort((a, b) => a - b);
+  if (!pts.length) return 0;
+  const m = Math.floor(pts.length / 2);
+  return pts.length % 2 ? pts[m] : (pts[m - 1] + pts[m]) / 2;
+}
+
+/** 직전 시즌 생산 대비 활약도 → 재계약 확률 곱수. ratio = 선수 득점 / 동류 중앙값(baseline).
+ *  두 조각 피벗(ratio=1=기대치를 정확히 1.0× 통과, 양끝 완만한 smoothstep) — 부진→<1×, 맹활약→>1×.
+ *  수상 소폭 가산(작게). 생산 없거나 baseline 0(초기·동류 부재)이면 중립 1.0(측정 불가 → 무보정, 가짜인과 금지). */
+export function perfMult(p: Player, ctx: PerfCtx | undefined, baseline: number): number {
+  if (!ctx || baseline <= 0) return 1;
+  const ratio = (ctx.prodOf(p.id)?.points ?? 0) / baseline;
+  const prod = ratio <= 1
+    ? PERF_FLOOR + (1 - PERF_FLOOR) * smoothstep01(ratio, PERF_LO, 1)
+    : 1 + (PERF_PROD_CEIL - 1) * smoothstep01(ratio, 1, PERF_HI);
+  return Math.max(PERF_FLOOR, Math.min(PERF_CEIL, prod + AWARD_W * ctx.awardOf(p.id)));
+}
 
 const clampS = (v: number) => Math.max(20, Math.min(96, Math.round(v)));
 const LIFT_KEYS = ['jump', 'agility', 'reaction', 'positioning', 'focus', 'consistency', 'vq',
@@ -83,6 +137,7 @@ export function runAsianQuota(
   prevAsianOf: Record<string, string>,
   myKeep: boolean | null = null,
   myCash: number = Number.POSITIVE_INFINITY,
+  perf?: PerfCtx, // 직전 시즌 활약도(생산·수상) — 미주입 시 perfMult 중립 1.0(구 호출부·테스트 호환)
 ): TryoutOutcome {
   const teamIds = Object.keys(rosters).sort(); // 안정 순회(결정론)
   const get = (id: string): Player | undefined => snapshot[id];
@@ -99,6 +154,7 @@ export function runAsianQuota(
   // 전용 시드(국내 FA rng 무오염 — 리뷰 §2). 롤 소비는 분기 무관하게 결정론.
   const retainRng = createRng(strSeed(`asian-retain:${nextSeason}`));
   const faRng = createRng(strSeed(`asian-fa:${nextSeason}`));
+  const perfBaseline = importBaseline(snapshot, perf, true); // 아시아쿼터 동류 득점 중앙값(활약도 기준선)
 
   // ── 1) 보유권 (기존 구단 우선권) — Y2 증액 제시, 거부→시즌아웃 ──
   const picks: Record<string, string> = {};
@@ -109,7 +165,7 @@ export function runAsianQuota(
     if (!pid) continue;
     const p = snapshot[pid];
     if (!p || !returningAsian.includes(pid)) continue; // 은퇴/이탈자는 갱신 불가
-    const wantRoll = retainRng.next() < aiRetainProb(p, domesticMed); // 항상 소비(분기 무관 결정론)
+    const wantRoll = retainRng.next() < aiRetainProb(p, domesticMed) * perfMult(p, perf, perfBaseline); // 항상 소비(분기 무관 결정론). 활약도 곱(부진→↓·맹활약→↑)
     const rand = retainRng.next();
     const accRoll = retainRng.next();
     const canAffordY2 = teamId === myTeam ? myCash >= ASIAN_SALARY_Y2 : true;
@@ -208,6 +264,7 @@ export function runTryout(
   prevForeignOf: Record<string, string>, // 전 시즌 팀별 외인(재계약 우선권의 주체)
   myKeep: boolean | null = null,         // 내 재계약 결정(null=자동 — AI 판단과 동일)
   myCash: number = Number.POSITIVE_INFINITY, // 내 운영 자금 — 외인 연봉 못 내면 외인 공석(시즌 중 교체와 일관)
+  perf?: PerfCtx, // 직전 시즌 활약도(생산·수상) — 미주입 시 perfMult 중립 1.0(구 호출부·테스트 호환)
 ): TryoutOutcome {
   // 내 팀: 외인 연봉(FOREIGN_SALARY)을 못 내면 이번 오프시즌 외인 영입/재계약 불가(AI는 모기업 보전 — 무관).
   const myCanAffordForeign = myCash >= FOREIGN_SALARY;
@@ -217,15 +274,23 @@ export function runTryout(
   const domesticAvg = domestic.length
     ? domestic.reduce((s, p) => s + overall(p), 0) / domestic.length : 65;
 
-  // 재계약 우선권(실제 KOVO) — 드래프트 전에 구단이 자기 외인과 갱신. 잘하는 용병은 수 시즌 잔류
+  // 재계약 우선권(실제 KOVO) — 드래프트 전에 구단이 자기 외인과 갱신. 잘하는 용병은 수 시즌 잔류.
+  //   이진 게이트(aiKeepsForeign) → 확률형 aiRetainProb × 활약도(perfMult)로 통일(#77) — 아시아쿼터·국내 FA와 같은 모델.
+  //   전용 시드(국내 FA·드래프트 rng 무오염). 롤은 분기 무관 항상 소비(결정론) — 아시아쿼터 보유권 루프 미러.
+  const domesticMed = medianOvr(domestic);                 // 시대 앵커(aiRetainProb) — 잔류 확률도 시대 보정
+  const perfBaseline = importBaseline(snapshot, perf, false); // 외인 동류 득점 중앙값(활약도 기준선)
+  const retainRng = createRng(strSeed(`foreign-retain:${nextSeason}`));
   const kept: Record<string, string> = {};
   const keptSet = new Set<string>();
-  for (const [teamId, pid] of Object.entries(prevForeignOf)) {
+  for (const teamId of Object.keys(rosters).sort()) {      // 안정 순회(결정론 — Object.entries 순서 비의존)
+    const pid = prevForeignOf[teamId];
+    if (!pid) continue;
     const p = snapshot[pid];
-    if (!p || !returningForeign.includes(pid)) continue; // 은퇴/이탈자는 갱신 불가
-    if (teamId === myTeam && !myCanAffordForeign) continue; // 자금 부족 — 내 외인 재계약 불가(공석)
-    const wants = teamId === myTeam && myKeep !== null ? myKeep : aiKeepsForeign(p, domesticAvg);
-    if (!wants) continue;
+    if (!p || !returningForeign.includes(pid)) continue;   // 은퇴/이탈자는 갱신 불가
+    const wantRoll = retainRng.next() < aiRetainProb(p, domesticMed) * perfMult(p, perf, perfBaseline) * IMPORT_RETAIN_ATTRITION; // 항상 소비(분기 무관). 활약도 곱 + 외인 전용 감쇠(§0 도박 기둥)
+    const canAfford = teamId === myTeam ? myCanAffordForeign : true; // 자금 부족 — 내 외인 재계약 불가(공석)
+    const wantRetain = teamId === myTeam ? (myKeep !== null ? myKeep : wantRoll) : wantRoll;
+    if (!wantRetain || !canAfford) continue;
     kept[teamId] = pid;
     keptSet.add(pid);
     snapshot[pid] = { ...p, contract: { salary: FOREIGN_SALARY, years: 1, remaining: 1, signedAtAge: p.age } };

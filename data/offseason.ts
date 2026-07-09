@@ -23,7 +23,9 @@ import { needsCompensationPlayer, pickCompensation, compensationMoney, compensat
 import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
 import { strSeed } from '../engine/rng';
 import type { OwnerFx } from '../engine/owner';
-import { marketVal, setSalaryEra } from './awardSalary';
+import { marketVal, setSalaryEra, awardScoreOf } from './awardSalary';
+import { leagueProduction } from './production';
+import type { PerfCtx } from './tryout';
 import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
 import { seasonScandals } from './dynamics';
@@ -62,6 +64,14 @@ import { runTryout, runAsianQuota, type TryoutOutcome } from './tryout';
 import { FOREIGN_SALARY, ASIAN_SALARY, importAgesOut } from '../engine/foreign';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
+
+/** 수입선수 재계약 활약도 컨텍스트(#77) — 직전 시즌 선수별 생산(leagueProduction 캐시) + 통산 수상(awardScoreOf).
+ *  무저장 재계산(결정론): 오프시즌 resolve 시점 leagueProduction(MAX)=직전 시즌 전 경기 생산. setAwardScores는
+ *  store.endSeason이 buildDraftContext 앞에 주입(직전 시즌 수상 반영). 미리보기·결과가 같은 소스라 일관. */
+function importPerfCtx(): PerfCtx {
+  const prod = leagueProduction(Number.MAX_SAFE_INTEGER);
+  return { prodOf: (id) => prod.get(id), awardOf: awardScoreOf };
+}
 
 /**
  * 팀별 "우승권" 신호(0..1) — 직전 시즌 정규 순위 + 우승 여부.
@@ -501,13 +511,14 @@ export function resolvePreDraftFrom(
 ): PreDraft {
   const { prevTeamOf, prevForeignOf, prevAsianOf, prestige } = base;
   const off = cloneOffForResolve(base);
+  const perf = importPerfCtx(); // 직전 시즌 활약도(생산·수상) — 외인/아시아쿼터 재계약 곱수(#77)
   // 외국인 트라이아웃 — FA 시장 앞(외인이 OP를 채워야 AI가 FA로 중복 영입하지 않는다)
-  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY);
+  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY, perf);
   // 아시아쿼터 게이트: 외인 신규 영입 비용 차감 후 남은 자금으로만(외인 우선). 자금 부족 → 아시아쿼터 공석(안티과금)
   const myF = (off.rosters[myTeam] ?? []).find((id) => { const p = off.snapshot[id]; return p?.isForeign && !p.isAsianQuota; });
   const foreignCostMine = myF && prevTeamOf[myF] !== myTeam ? FOREIGN_SALARY : 0;
   const asianCash = myCash === undefined ? Number.POSITIVE_INFINITY : Math.max(0, myCash - foreignCostMine);
-  const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash);
+  const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash, perf);
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds);
   return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, expelled: off.expelled, tryout, asianTryout, compCash: fa.compCash };
@@ -567,11 +578,12 @@ export function faMarketPreviewFrom(
 ): FAPreview {
   const { prevTeamOf, prevForeignOf, prevAsianOf, prestige } = base;
   const off = cloneOffForResolve(base);
-  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY);
+  const perf = importPerfCtx(); // 직전 시즌 활약도(생산·수상) — 미리보기=결과(같은 perf) 보장(#77)
+  const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY, perf);
   const myF = (off.rosters[myTeam] ?? []).find((id) => { const p = off.snapshot[id]; return p?.isForeign && !p.isAsianQuota; });
   const foreignCostMine = myF && prevTeamOf[myF] !== myTeam ? FOREIGN_SALARY : 0;
   const asianCash = myCash === undefined ? Number.POSITIVE_INFINITY : Math.max(0, myCash - foreignCostMine);
-  const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash);
+  const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash, perf);
   const pool = [...off.pool];
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑

@@ -41,8 +41,11 @@ export function tryoutOrder(season: number, teamIds: string[], tag = 'tryout-ord
   return arr;
 }
 
-/** 재계약 우선권(실제 KOVO) — 구단은 자기 외인과 드래프트 없이 갱신할 수 있다(1년 단위).
- *  AI 판단: 충분히 강하고(국내 평균 +15↑) 32세 이하면 잔류 — 잘하는 용병은 3~5시즌 함께 간다(잔류 ~63%). */
+/** @deprecated (#77, 2026-07-09) 외인 재계약이 이진 게이트 → 확률형 `aiRetainProb × perfMult`(활약도)로 통일됨
+ *  (data/tryout.ts runTryout, 아시아쿼터·국내 FA와 같은 모델). 이 함수는 호출부에서 제거됨 — 레거시 테스트
+ *  (engine/foreign.test.ts)만 참조. 문제였던 점: ①이진 절벽(±1 OVR에 −4 잔류) ②시즌 실제 활약 무시
+ *  ③외인풀 OVR이 이미 게이트 초과(격차~18>15)라 OVR 항 사실상 무의미. 삭제 금지(테스트 보존).
+ *  재계약 우선권(실제 KOVO) — 구단은 자기 외인과 드래프트 없이 갱신할 수 있다(1년 단위). */
 export function aiKeepsForeign(p: Player, domesticAvg: number): boolean {
   return overall(p) >= domesticAvg + 15 && p.age <= 32; // 확실한 에이스급만 — 애매하면 새 얼굴 도박(현실 잔류 ~절반)
 }
