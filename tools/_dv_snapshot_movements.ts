@@ -46,11 +46,11 @@ ok(m.foreign.length === 1 && m.foreign[0].inId === 'f1', `foreign 범위내 1건
 
 console.log('[news — 내 팀 FA in/out 기사화]');
 const allNews = snap.seasons.flatMap((s) => s.news);
-const faNews = allNews.filter((n) => n.category === 'transfer' || /이적|영입|떠나|방출|이별|합류|입단/.test(n.title + (n.body ?? '')));
+const faNews = allNews.filter((n) => n.kind === 'transfer' || n.kind === 'release' || /이적|영입|떠나|방출|이별|합류|입단/.test(n.headline + (n.body ?? '')));
 console.log(`  뉴스 총 ${allNews.length}건, FA/이적성 ${faNews.length}건`);
-// 내 팀 IN(가나다)·OUT(라마바)이 뉴스에 등장하는지(제목/본문)
-const hasIn = allNews.some((n) => (n.title + (n.body ?? '')).includes('가나다'));
-const hasOut = allNews.some((n) => (n.title + (n.body ?? '')).includes('라마바'));
+// 내 팀 IN(가나다)·OUT(라마바)이 뉴스에 등장하는지(헤드라인/본문)
+const hasIn = allNews.some((n) => (n.headline + (n.body ?? '')).includes('가나다'));
+const hasOut = allNews.some((n) => (n.headline + (n.body ?? '')).includes('라마바'));
 ok(hasIn, '내 팀 영입(가나다) 뉴스 노출');
 ok(hasOut, '내 팀 유출(라마바) 뉴스 노출');
 

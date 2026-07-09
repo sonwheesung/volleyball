@@ -92,6 +92,11 @@ function teamPrestige(prevSeason: number): Record<string, number> {
 const RENEW_FA_YEARS = 2;
 const AGGRESSIVE_MULT = 1.2;
 const AI_AGGRESSIVE_MULT = 1.2; // 모기업 aggressive AI 봇 오퍼 배수(캡 천장 clamp). parity로 튜닝(FINANCE 2.0 Stage3)
+// AI GM 성향별 레버(FA_SYSTEM §2.8.1 ③ Phase3, 2026-07-10) — 내 팀 faOffers와 대칭으로 AI도 주전보장·다년을 **선별** 사용.
+//   부익부 차단이 핵심: 두 레버 모두 **실제 구멍(gap>0)** 이 있을 때만 켠다 → 로스터가 두꺼운 강팀(gap≤0)은 레버를 못 써
+//   depth에 남발하지 못하고, 구멍 많은 약·리빌딩 팀이 주전급 FA를 데려와 메운다(§2.8.1 ③ "약팀도 구멍 메우게"). 계수=placeholder(200시즌 parity 튜닝).
+const AI_MULTIYEAR_AGE = 28;   // 다년 락인 대상 상한 나이 — 젊은 엘리트만(늙은 선수 장기계약은 캡 락업·위약금 리스크만 큼)
+const AI_MULTIYEAR_YEARS = 3;  // 엘리트 다년 계약 연수(RENEW 2 + 1). 캡 락업·조기 방출 위약금(salary×remaining×0.4) 대가가 남발 억제
 
 /** 내가 지명한 FA가 왜 실패했는지(FA 센터 사유 표기 — FA_SYSTEM §2.7 UX).
  *  화면이 '경합/불발'로 뭉개던 5경로를 게이트별로 세분: 정원(ROSTER)·캡초과(CAP)·자금부족(CASH)·
@@ -191,7 +196,7 @@ export function resolveFAMarket(
       ? (moneyOnly.has(id) ? compensationMoneyOnly(grade, p.contract.salary) : compensationMoney(grade, p.contract.salary))
       : 0;
 
-    const bids: { teamId: string; offer: number; score: number; years: number }[] = [];
+    const bids: { teamId: string; offer: number; score: number; years: number; guarantee: boolean }[] = [];
     for (const t of teams) {
       // 내 팀 = 하드 계약 상한(20). AI = 예약 상한(목표−RESERVE) — 드래프트 자리 확보 + 상위팀 두껍게·하위팀 얇게(§1.5·§1.7).
       const rosterCeil = t === myTeam ? ROSTER_CONTRACT_CAP : (aiReserve[t] ?? 11);
@@ -213,6 +218,14 @@ export function resolveFAMarket(
       const cfg = isMe ? faOffers?.[id] : undefined;
       const myAggr = cfg ? !!cfg.aggressive : aggressive;
       const myYears = cfg?.years ?? RENEW_FA_YEARS;
+      // AI 성향별 레버(§2.8.1 ③ Phase3) — gap·등급·나이로 순수 결정(rng 미소비). 내 팀은 cfg(faOffers)로만.
+      //   주전보장: 실제 구멍(gap>0 → 서명=즉시 주전, 벤치 안 됨)+주전급(A/B) → depth(gap≤0, aggressive가 입찰)엔 안 검(대가 회피).
+      //   다년: 젊은 엘리트(A·나이≤28)를 need(gap>0) 있을 때만 락인. 캡 락업·위약금이 남발 억제.
+      const aiGuarantee = !isMe && gap > 0 && (grade === 'A' || grade === 'B');
+      const aiYears = !isMe && gap > 0 && grade === 'A' && p.age <= AI_MULTIYEAR_AGE ? AI_MULTIYEAR_YEARS : RENEW_FA_YEARS;
+      // 승자 계약에 남길 레버 값(내 팀=cfg / AI=위 결정). 주전보장 flag·years 모두 승자 오퍼 기준으로 계약에 반영(item 3).
+      const bidGuarantee = isMe ? !!cfg?.starterGuarantee : aiGuarantee;
+      const bidYears = isMe ? myYears : aiYears;
       const offer = isMe
         ? (cfg && typeof cfg.salary === 'number'
             ? round100(Math.max(0, cfg.salary))                        // 명시 연봉(Phase 3+ UI) — 캡/자금 게이트가 상한 차단
@@ -240,13 +253,13 @@ export function resolveFAMarket(
         rand: rng.next(),
         talkBias: isMe ? ownerFx?.offerBias[id] : undefined, // 면담의 기억은 우리 구단에만 작용
         relT: teamAffinityFor(p, rosters[t], get, bondsCtx), // 인간관계(그 시점 로스터 — 친구 연쇄) RELATIONSHIP
-        // FA 오퍼 다레버(§2.8 Phase1) — 내 팀 오퍼에만. AI는 undefined(기본 기여 0). 기본 오퍼(years=2·보장off)면 score 무변(0드리프트).
-        years: cfg?.years,
-        starterGuarantee: cfg?.starterGuarantee,
+        // FA 오퍼 다레버 — 내 팀=cfg / AI=성향별 레버(§2.8.1 ③ Phase3). 레버 미발동(기본 오퍼·gap≤0·C등급)이면 undefined → score 기여 0.
+        years: isMe ? cfg?.years : (aiYears !== RENEW_FA_YEARS ? aiYears : undefined),
+        starterGuarantee: isMe ? cfg?.starterGuarantee : (aiGuarantee || undefined),
         promises: cfg?.promises,
       });
-      // years = 계약 연수(§2.8 Phase1) — 내 팀=오퍼 연수, AI=RENEW_FA_YEARS. 승자의 years로 계약 생성(기본 2 → 구 동작 bit-동일).
-      bids.push({ teamId: t, offer, score, years: isMe ? myYears : RENEW_FA_YEARS });
+      // years = 계약 연수(§2.8 Phase1·Phase3) — 내 팀=오퍼 연수, AI=성향 레버(기본 2, 젊은 엘리트+구멍이면 3). 승자의 years로 계약 생성.
+      bids.push({ teamId: t, offer, score, years: bidYears, guarantee: bidGuarantee });
     }
     if (bids.length === 0) continue; // 미계약(팀이 안 원함 — 양방향)
     // 점수 → 확률 → 정렬·롤·fallback·SIT (FA_SYSTEM 2.7, 사용자 결정)
@@ -256,10 +269,10 @@ export function resolveFAMarket(
     for (const cand of scored) { if (rng.next() < cand.prob) { win = cand; break; } } // 위에서부터 롤, 첫 성공 입단
     const finalSalary = clampSalary(win.offer, p); // 개인 상한(프랜차이즈 예외) 적용
     const winYears = capContractYears(p.age, win.years); // 승자 오퍼 연수(§2.8 Phase1) — 정년 캡. 기본 2 → 구 RENEW_FA_YEARS와 동일.
-    // 주전 보장 레버 대가(§2.8 Phase2) — 내가 주전보장으로 데려온 FA만 계약에 flag를 남긴다(AI/타팀=미보장).
+    // 주전 보장 레버 대가(§2.8 Phase2·Phase3) — 승자 오퍼가 주전보장이면 계약에 flag를 남긴다(내 팀=faOffers / AI=성향 레버).
     //   이후 시즌에 벤치(ownerBenched/outclassed)하면 공약 파기로 재계약 거부·불만·팬심·폼 대가(data/owner buildOwnerFx).
-    //   기본 오퍼(보장 off)·AI는 undefined → 계약 객체 byte-동일(all-auto 0드리프트).
-    const winGuarantee = win.teamId === myTeam && !!faOffers?.[id]?.starterGuarantee;
+    //   기본 오퍼(보장 off, gap≤0·C등급 AI)면 false → 계약 객체 byte-동일(all-auto 0드리프트는 내 팀 기준 유지).
+    const winGuarantee = win.guarantee;
     snapshot[id] = {
       ...p,
       contract: { salary: finalSalary, years: winYears, remaining: winYears, signedAtAge: p.age, ...(winGuarantee ? { starterGuarantee: true } : {}) },
