@@ -11,7 +11,7 @@
 | 영역 | 상태 | 메모 |
 |---|---|---|
 | 모델 결정(무료+광고+광고제거+DLC) | ✅ 설계 확정 | 독립 리뷰 통과(아래 §9) |
-| 광고: **"시즌 시작하기" 버튼 → 동영상 광고** | ✅ 흐름·게이트 / 📋 SDK | `lib/ads.ts showSeasonStartAd()` 단일 연결점 + `draft.tsx`·`draft-live.tsx` onFinish 게이트. Expo Go 스텁(no-op) → EAS 후 AdMob 한 블록 교체. 첫 시즌 무광고·오프라인 즉시진행·관전 무관 |
+| 광고: **"시즌 시작하기" 버튼 → 동영상 광고** | ✅ 흐름·게이트 / 📋 SDK | `lib/ads.ts showSeasonStartAd()` 단일 연결점 + `draft.tsx`·`draft-live.tsx` onFinish 게이트. Expo Go 스텁(no-op) → EAS 후 AdMob 한 블록 교체. 첫 시즌 무광고·오프라인 즉시진행·관전 무관. **테스트 전용 목 모달**(`components/MockAdHost.tsx`)로 Expo Go/개발에서 슬롯 발동 가시화(§3.2 — 운영 릴리스 미마운트) |
 | 광고: 정적 메뉴 배너·앱오픈(선택) | 📋 설계 | 멈춘 화면 하단만. 경기보드·진행 중 금지. 추후 |
 | 광고: 자동진행·관전 가로채기 | 🚫 **제외** | 리뷰 기각 — 관전형·오프라인 위반(§9) |
 | 상점(마이페이지): **광고 제거 · 월드컵 시즌 구매 + 구매 복원** | ✅ UI+추상화 / 📋 SDK | `mypage.tsx` → `lib/iap` purchase/restore. dev 시뮬 알림·운영 RevenueCat. EAS 후 SDK 설치만 |
@@ -72,6 +72,12 @@
 - **광고 단위(AdMob 콘솔)**: 앱ID `ca-app-pub-2731473780180274~2622190257`(공개 — app.json 플러그인). 보상형 `rewarded_diamonds`·전면 `interstitial_season`(각 ID는 공개 상수). 정산(수익 수령)은 세금정보 필요 → 나중(테스트 광고는 즉시 동작).
 - **개인정보/데이터안전성**: 개인정보처리방침에 AdMob(광고ID 수집·Google 파트너) 명시 + Play 데이터안전성에 '기기ID 광고목적 수집/공유' 신고. 원장·custom_data에 광고ID/PII 저장 금지.
 - **미디에이션·SSV·앱오프닝·배너 = 보류**(과설계 방지 — 필요 시 후속). 실기기 테스트광고 검증 필수(에뮬≠기기, Expo54 플러그인 마찰 조기 확인).
+- **★ 테스트 전용 목(mock) 전면광고 모달(2026-07-09 구현)**: AdMob은 네이티브라 Expo Go에 없어 `showSeasonStartAd()`가 **조용히 통과**(no-op) → 개발/QA에서 "시즌 시작 광고 슬롯이 실제로 발동하는지" **눈으로 확인 불가**였다. 실 빌드에서 전면광고가 재생될 자리에 **목 모달**(전체 화면 딤 오버레이 + "닫고 시즌 시작 →", 자동 닫힘 금지 = 실 인터스티셜 close 모사)을 띄워 흐름을 시각 검증한다.
+  - **게이팅(운영 오염 절대 금지)**: `lib/ads.IS_MOCK_AD_ENV = __DEV__ || (executionEnvironment==='storeClient')`(개발 or Expo Go)일 때만. 운영 릴리스(standalone·비-dev)면 false → **목 절대 안 뜸**. 이중 안전: ① 목 호스트(`<MockAdHost>`)는 루트(`_layout`)에서 `IS_MOCK_AD_ENV`일 때만 마운트 → 운영은 컨트롤러 등록 자체가 없음(호스트 없으면 graceful 통과) ② `showSeasonStartAd`가 removeAds·네이티브모듈 존재를 먼저 갈라 운영은 애초에 실광고 경로.
+  - **removeAds 존중**: 광고 제거 구매자는 목도 skip(실광고와 동일).
+  - **빈도캡(4분) 무시 = 의도**: 목은 **QA 가시성**이 목적이라 테스트 환경에선 캡을 무시하고 **매 시즌 시작마다** 뜬다(removeAds만 존중). 빈도캡은 **운영 실광고 경로에만** 적용(관전형 연타 폭탄 방지 대상은 실광고). 이 결정은 `lib/ads.ts showSeasonStartAd` 주석에 명기.
+  - **아키텍처**: `lib/ads`(순수 모듈, React 아님)는 모달을 못 그림 → 모듈-레벨 컨트롤러(`registerMockAdController`)를 두고 루트의 `<MockAdHost>`가 자기 show를 등록 → `showSeasonStartAd`가 그 컨트롤러를 호출하고 닫힐 때까지 await(AppDialog/DialogHost 레지스트리 패턴 재사용). 실광고 경로(네이티브 존재 시)는 **무변경**(목은 순수 추가 분기).
+  - **결정론 격리**: 광고는 UI 런타임 — 시드·리플레이·세이브에 절대 미개입(현행 원칙 유지).
 
 ## 4. IAP / SKU · 상점
 

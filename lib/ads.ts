@@ -22,6 +22,10 @@ import { AD_UNIT_REWARDED_ANDROID, AD_UNIT_INTERSTITIAL_ANDROID } from '../data/
 // → Expo Go에선 require 자체를 건너뛴다(광고는 Expo Go에 원래 없음 — 실 빌드엔 모듈 존재). storeClient = Expo Go.
 const isExpoGo = Constants.executionEnvironment === 'storeClient';
 
+// **목(mock) 전면광고 가시성 환경**(테스트 전용) — 개발(__DEV__) 또는 Expo Go(storeClient).
+// 운영 릴리스(standalone·비-dev)면 false → 목 모달은 **절대** 안 뜬다(네이티브 실광고만). 게이팅 단일 출처(§3.2 목 모달).
+export const IS_MOCK_AD_ENV = __DEV__ || isExpoGo;
+
 /** 선택적 네이티브 모듈 지연 로드. Expo Go·미설치·예외면 null(호출부 graceful). */
 function admob(): any | null {
   if (isExpoGo) return null; // Expo Go — 네이티브 모듈 부재. require를 태우지 않아 RedBox(모듈 init 에러) 자체가 안 뜬다.
@@ -70,16 +74,44 @@ function unitId(mod: any, kind: 'interstitial' | 'rewarded'): string {
   return kind === 'rewarded' ? AD_UNIT_REWARDED_ANDROID : AD_UNIT_INTERSTITIAL_ANDROID;
 }
 
+// ── 목(mock) 전면광고 컨트롤러 (테스트 전용) ──────────────────────────────────
+// lib/ads는 순수 모듈(React 아님)이라 모달을 직접 못 그린다 → 루트에 마운트한 <MockAdHost>가
+// show 함수를 여기 등록하고, showSeasonStartAd가 그 함수를 호출해 Promise를 await한다.
+// 호스트 미등록(운영 릴리스 — 목 안 뜸)이면 graceful 통과(현행 no-op과 동일).
+type MockAdController = () => Promise<void>;
+let mockAdController: MockAdController | null = null;
+/** <MockAdHost>가 마운트 시 자기 show를 등록(언마운트 시 null). 테스트 환경에서만 마운트됨. */
+export function registerMockAdController(fn: MockAdController | null): void { mockAdController = fn; }
+
+/** 테스트 환경에서 목 전면광고 모달을 띄우고 닫힐 때까지 await. 호스트 없으면 통과. throw 없음. */
+async function showMockSeasonStartAd(): Promise<void> {
+  if (!mockAdController) { logEvent('ads:mock:no-host'); return; } // 호스트 미마운트 → graceful 통과
+  logEvent('ads:mock:interstitial');
+  try { await mockAdController(); } catch (e) { logError('ads.showMockSeasonStartAd', e); }
+}
+
 /**
  * "시즌 시작하기" 버튼 — 전면광고 표시 후(또는 스킵/실패/캡 즉시) resolve. **절대 reject 안 함**.
  * removeAds 소유·빈도캡·미설치·오프라인·로드실패 → 즉시 통과(하드블록 금지 — 관전형·오프라인 기둥).
+ *
+ * 게이트 순서(중요):
+ *   1) removeAds 소유 → 실광고·목 **둘 다** skip(광고 제거는 목 QA에도 존중 — §3.2).
+ *   2) 네이티브 광고 모듈 없음(Expo Go/미설치):
+ *        - **테스트 환경(IS_MOCK_AD_ENV)** → 목 모달을 띄워 슬롯 발동을 눈으로 확인(조용한 통과 대신).
+ *          **빈도캡 무시** — 목은 QA 가시성이 목적이라 매 시즌 시작마다 뜬다(removeAds만 존중). 캡은 실광고 전용.
+ *        - 운영 릴리스(IS_MOCK_AD_ENV=false, 애초에 모듈이 있어 이 분기 안 옴) → 통과.
+ *   3) 네이티브 모듈 있음(dev client·운영) → **기존 실광고 경로 그대로**(빈도캡 적용). 목은 이 경로에 개입 안 함.
  */
 export async function showSeasonStartAd(): Promise<void> {
-  if (removeAdsOwned) return;                                   // 광고 제거 구매자 — 즉시 통과
+  if (removeAdsOwned) return;                                   // 광고 제거 구매자 — 실광고·목 둘 다 통과
+  const mod = admob();
+  if (!mod) {                                                  // 미설치(Expo Go/dev) — 실광고 불가
+    if (IS_MOCK_AD_ENV) await showMockSeasonStartAd();         // 테스트 환경만: 목 모달(빈도캡 무시, QA 가시성)
+    return;
+  }
+  // ── 실광고 경로(네이티브 모듈 존재 — 무변경). 빈도캡은 여기(실광고)에만 적용. ──
   const now = Date.now();
   if (now - lastInterstitialAt < INTERSTITIAL_MIN_INTERVAL_MS) { logEvent('ads:interstitial:capped'); return; } // 빈도캡
-  const mod = admob();
-  if (!mod) return;                                             // 미설치(Expo Go) — 통과
 
   try {
     const { InterstitialAd, AdEventType } = mod;
