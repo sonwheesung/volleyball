@@ -51,7 +51,8 @@ export function RosterList({ players, decor, starterIds, sort = 'position', reve
                   </View>
                 ) : null}
                 {d?.mood ? <Text style={{ fontSize: 12, color: d.moodColor, fontWeight: d.moodColor ? '900' : undefined }}>{d.mood}</Text> : null}
-                {p.isAsianQuota ? <Text style={styles.asian}>아시아쿼터{p.nationality ? `·${p.nationality}` : ''}</Text> : p.isForeign ? <Text style={styles.foreign}>외국인</Text> : null}
+                {/* 선수단 행은 카테고리명만(국적 접미사 제거 — OVR 원과 겹쳐 잘림, 국적은 상세 페이지에 유지). 일반 용병 '외국인'과 패턴 일치 */}
+                {p.isAsianQuota ? <Text style={styles.asian}>아시아쿼터</Text> : p.isForeign ? <Text style={styles.foreign}>외국인</Text> : null}
               </View>
               <Text style={styles.sub}>
                 {p.age}세 · {p.height}cm
