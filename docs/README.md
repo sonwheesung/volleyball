@@ -27,23 +27,23 @@
 | [SEASON_SYSTEM](./SEASON_SYSTEM.md) | 시즌 진행·일정·순위·포스트시즌·오프시즌 오케스트레이션 | `engine/season.ts`, `playoffs.ts`, `data/standings.ts`, `store/useGameStore.ts` |
 | [STAFF_SYSTEM](./STAFF_SYSTEM.md) | 스태프 계약(감독·전문코치·스카우터)·예산·훈련부스트·드래프트 안개 | `engine/staff.ts`, `data/league.ts`, `app/staff.tsx`, `app/draft.tsx` |
 | [AWARDS_SYSTEM](./AWARDS_SYSTEM.md) | 시상식(MVP·신인상·기량발전상·기록왕·베스트7·라운드MVP) | `engine/awards.ts`, `data/awards.ts` |
-| [MILESTONE_SYSTEM](./MILESTONE_SYSTEM.md) | 기록 경신(개인 통산·구단·레전드 추월) | `engine/milestones.ts`, `data/milestones.ts` |
+| [MILESTONE_SYSTEM](./MILESTONE_SYSTEM.md) | 기록 경신(개인 통산·구단·레전드 추월). 📋 출시 후: 구단 레전드 시스템(통산출전·원클럽맨·헌액번호 재조합, 주장=신규개념 review-plan 검토) | `engine/milestones.ts`, `data/milestones.ts` |
 | [ACHIEVEMENT_SYSTEM](./ACHIEVEMENT_SYSTEM.md) | 플레이어 업적(우승·시상·레전드·기록·운영, 누적 데이터 파생) | `engine/achievements.ts`, `app/achievements.tsx` |
 | [TRAIT_SYSTEM](./TRAIT_SYSTEM.md) | 선수 특성(긍정+부정, 결정론 부여, 소폭 엔진영향) | `engine/traits.ts` |
 | [INJURY_SYSTEM](./INJURY_SYSTEM.md) | 부상(시즌 계층 격리·출전결장·만성) | `engine/injury.ts`, `data/injury.ts` |
-| [NEWS_SYSTEM](./NEWS_SYSTEM.md) | 뉴스 피드(1~4 종합 파생, 캡스톤) | `data/news.ts` |
+| [NEWS_SYSTEM](./NEWS_SYSTEM.md) | 뉴스 피드(1~4 종합 파생, 캡스톤). 📋 출시 후: 시즌 서사 강화(실데이터만 — clubIdentity.titles 배선 선행) | `data/news.ts` |
 | [BROADCAST_SYSTEM](./BROADCAST_SYSTEM.md) | 중계 현수막(기록·PO확정·정규우승) + **경기 중 실시간(세트획득·연속·에이스/블록, Phase3)** + 우승 축하 화면 + **§8 헌액 연출·헌액 번호** | ✅ Phase1·3 — `data/broadcast.ts`·`components/courtDirector.buildLiveBanners`·`BroadcastBanner`·`ChampionCelebration`·`tools/_dv_livebanner`. §8 — `engine/jersey.ts`·`data/legends.ts`·`LegendIllustration` |
 | [TRANSACTION_SYSTEM](./TRANSACTION_SYSTEM.md) | 시즌 중 이동(방출→FA·구멍 영입, 전 구단 AI, 날짜 인지 명단) | `engine/transactions.ts`, `data/dynamics.ts`, `app/transactions.tsx` |
-| [OWNER_SYSTEM](./OWNER_SYSTEM.md) | 구단주 레이어: 선수 면담·감독 벤치 건의·팬심 | `engine/owner.ts`·`data/owner.ts` (뉴스 연동만 보류) |
+| [OWNER_SYSTEM](./OWNER_SYSTEM.md) | 구단주 레이어: 선수 면담·감독 벤치 건의·팬심. 📋 출시 후: 팬 커뮤니티(SNS) 반응(실경기 데이터 기반) | `engine/owner.ts`·`data/owner.ts` (뉴스 연동만 보류) |
 | [FORM_SYSTEM](./FORM_SYSTEM.md) | 경기감각: 결장 누적 → 체감 하락, 출전 이력 파생 | `engine/form.ts`·`data/dynamics.ts` |
 | [FOREIGN_SYSTEM](./FOREIGN_SYSTEM.md) | 용병 트라이아웃: 1년 계약·연봉 고정·추첨 지명·시즌 중 교체 | engine/foreign.ts, data/tryout.ts, app/tryout.tsx |
-| [FINANCE_SYSTEM](./FINANCE_SYSTEM.md) | 구단 재정(모기업+직관+굿즈, 캡 별개 지갑) + **FINANCE 2.0**(모기업 기조 sponsorStance→AI FA 입찰·내 팀 1회성 보너스·예고 뉴스) | `engine/finance.ts`·`engine/sponsorStance.ts`·`data/leagueHistory.ts`, store, `tools/simFinance.ts` |
+| [FINANCE_SYSTEM](./FINANCE_SYSTEM.md) | 구단 재정(모기업+직관+굿즈, 캡 별개 지갑) + **FINANCE 2.0**(모기업 기조 sponsorStance→AI FA 입찰·내 팀 1회성 보너스·예고 뉴스). 📋 출시 후: 재정 3종(시즌 운영계약·프리미엄 투자 BM·계약 확장) ↔ **FA §1.5 운영자금 억제(시설료)와 통합** | `engine/finance.ts`·`engine/sponsorStance.ts`·`data/leagueHistory.ts`, store, `tools/simFinance.ts` |
 | [CLUB_IDENTITY_SYSTEM](./CLUB_IDENTITY_SYSTEM.md) | 구단 정체성(명문·신흥강호·황혼·만년약체·신생팀): 선택 화면 서사 + 선수단 생성 연동(고정 배정) | `data/clubIdentity.ts`, `data/seed.ts`, `app/select-team.tsx`, `app/team/[id].tsx`, `tools/clubIdentity.ts` |
-| [RELATIONSHIP_SYSTEM](./RELATIONSHIP_SYSTEM.md) | **선수 인간관계망**(친구/라이벌 affinity → FA 영입·재계약·방출 ± 가중) — ✅ Phase 1a 구현 | `engine/relationships.ts`·`data/relationships.ts` |
+| [RELATIONSHIP_SYSTEM](./RELATIONSHIP_SYSTEM.md) | **선수 인간관계망**(친구/라이벌 affinity → FA 영입·재계약·방출 ± 가중) — ✅ Phase 1a 구현. 📋 출시 후: 선수 인연 스토리(친정팀·복수전·통산·은퇴경기 — 실데이터만) | `engine/relationships.ts`·`data/relationships.ts` |
 | [WORLDCUP_SYSTEM](./WORLDCUP_SYSTEM.md) | **월드컵 참가 유료 DLC**(4년 비시즌 국가대표 차출→성장+사고면제+업적, **스카우팅 쇼케이스=차출선수 FA 영입**) — 📋 설계 완료·구현 추후. 100세션 재검증·현실일정 출처 반영 | `engine/nationalTeam.ts`·`engine/seasonBake.ts`·`data/worldCup.ts`(예정) |
 | [SAVE_SYSTEM](./SAVE_SYSTEM.md) | **세이브·마이그레이션**(영속 53필드 스키마·version/migrate·정규화기·안전 복원) — 출시 후 구조 변경 안전 | `store/saveMigration.ts`·`store/useGameStore.ts`(persist) |
 | [REALTIME_SIM_SYSTEM](./REALTIME_SIM_SYSTEM.md) | **전진 시뮬+결과 저장 전환(B안)** — 게으른 씨앗 재생 → 1회 치르고 저장(로딩·재생버그 제거). 독립리뷰·함정 7게이트·Phase0~3 | `store/useGameStore.ts`·`data/standings.ts`·`data/production.ts`(전환 중) |
-| [MONETIZATION_SYSTEM](./MONETIZATION_SYSTEM.md) | **수익화**(무료+광고+다이아 IAP+DLC) — 다이아(소비성=전지훈련)·광고 쿨다운 카운트다운(A4 ✅ 2026-07-01)·광고="시즌 시작하기" 버튼. **온라인 전환(2026-07-01)**: 오프라인/RevenueCat 폐기→Vercel(BACKEND_SYSTEM). 📋 **추후 DLC 후보: 올림픽·올스타전(2026-07-07 아이디어, 미설계, §4.1)** | `engine/diamonds.ts`·`app/(tabs)/mypage.tsx`·`app/training-camp.tsx`·`lib/ads·iap·log` |
+| [MONETIZATION_SYSTEM](./MONETIZATION_SYSTEM.md) | **수익화**(무료+광고+다이아 IAP+DLC) — 다이아(소비성=전지훈련)·광고 쿨다운 카운트다운(A4 ✅ 2026-07-01)·광고="시즌 시작하기" 버튼. **온라인 전환(2026-07-01)**: 오프라인/RevenueCat 폐기→Vercel(BACKEND_SYSTEM). 📋 **추후 DLC 후보: 올림픽·올스타전(2026-07-07 아이디어, 미설계, §4.1)** · **스킨 BM(코스메틱 — 경기장·UI테마·BGM·프로필·엠블럼, P2W 아님)** · **프리미엄 시즌 투자(구단주 특별투자 +운영비, FINANCE #5)** | `engine/diamonds.ts`·`app/(tabs)/mypage.tsx`·`app/training-camp.tsx`·`lib/ads·iap·log` |
 | [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) | **온라인 백엔드(2026-07-01 신설)** — 소셜 로그인·online-first(관전/시뮬 캐시 오프라인·다이아/결제 온라인필수)·Vercel 단독 영수증검증+환불웹훅·다이아 지갑(append-only 원장·멱등)·로그(기기 롤링+서버)·문의+진단스냅샷·관리자+통계. **Supabase Postgres 연결·Vercel 배포 라이브(2026-07-02)**·**멀티게임 proj_code FK(§13.2)**·**보관기간 법정 조사(§13.9)**·**다이아 서버 진실화(§13.12)**·**공지 in-app(§13.13)·쿠폰(§13.14)·관리자 대시보드(§13.15)** · 📋 **설계·미구현(2026-07-07)**: 세이브 복구 채널(§13.23)·dev 환경 구축(§13.24) | `server/`(Next.js)·`lib/server.ts`·`server/db/schema.ts`(proj_info·users·wallet_ledger·coupons·announcements·server_setting) |
 | [ANALYTICS_PLAN](./ANALYTICS_PLAN.md) | **운영/분석 스택(2026-07-03 신설)** — Firebase(Analytics·Crashlytics)·RevenueCat·GameAnalytics·BigQuery·Install Referrer·Discord·Vercel Observability·UptimeRobot(+Sentry/PostHog 추후). track() 래퍼·이벤트 taxonomy·KPI. 대부분 EAS 단계 | (계측 — 전 화면 걸침) |
 | [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) | **출시 전 수정사항(2026-07-03 신설)** — 비밀키 회전·EAS 실물전환(소셜로그인·IAP·AdMob)·결제환불(#43)·스토어 등록정보·법무/개인정보·QA. 스텁·플레이스홀더·노출키를 실물로 교체 | (전 시스템 걸침) |
