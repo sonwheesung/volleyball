@@ -14,11 +14,12 @@
     },
     "android": {
       "package": "com.son0925.volleyball",
-      "versionCode": 4,
+      "versionCode": 5,
       "backgroundColor": "#0B1018",
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon/adaptive-fg.png",
-        "backgroundColor": "#0f172a"
+        "backgroundImage": "./assets/icon/adaptive-bg.png",
+        "backgroundColor": "#0a1530"
       },
       "permissions": [
         "android.permission.MODIFY_AUDIO_SETTINGS"
