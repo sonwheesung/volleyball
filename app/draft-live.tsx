@@ -18,6 +18,7 @@ import { prospectGradeLabel } from '../data/prospectGrade';
 import { consensusOrder, projectionBand, pickTimingBadge } from '../data/draftProjection';
 import { pickReasonProse } from '../data/draftPickReason';
 import { myDraftSummary } from '../data/draftSummary';
+import { passReasonFor, PASS_REASON_COPY } from '../data/draftPlan';
 import { useGameStore } from '../store/useGameStore';
 import { showSeasonStartAd } from '../lib/ads';
 import { ProspectDetail } from './draft';
@@ -101,6 +102,10 @@ function DraftLiveInner() {
   const myPickPositions = useMemo(() => seq.reduce<number[]>((a, p, k) => (p.mine ? [...a, k] : a), []), [seq]);
   const myCount = myPickPositions.length;
   const confirmedMyCount = mySelections.length;
+  // DL-1/DL-2: 보유 지명권(권리 — order 슬롯 수, 4라운드 고정) vs 예상 지명(myCount)·PASS 예정.
+  //   PASS 예정 = 보유 − 예상 지명. 현재 mySelections를 반영한 seq에서 파생 → 개입으로 예상이 바뀌면 따라간다(실 행동 반영).
+  const slots = ctx.myPickSlots.length;
+  const passRemaining = Math.max(0, slots - myCount);
 
   // stopAt: 아직 확정 안 된 첫 내 픽 위치(그 앞까지만 공개). 다 확정(또는 0픽)이면 total(끝까지).
   const stopAt = confirmedMyCount < myCount ? myPickPositions[confirmedMyCount] : total;
@@ -164,6 +169,12 @@ function DraftLiveInner() {
     () => myDraftSummary(seq.map((s) => ({ teamId: s.teamId, playerId: s.playerId, reason: s.reason })), my, getP),
     [seq, my],
   );
+  // ③ 내 PASS 사유(실 지명 결과 근거만 — 로스터 충분/가득). 첫 PASS 라운드에 한 줄. 가짜 드라마 금지(중립 폴백).
+  const summaryPassReason = useMemo(
+    () => passReasonFor(ctx, my, seq.filter((s) => s.mine).map((s) => s.playerId)),
+    [ctx, my, seq],
+  );
+  const firstPassRound = summary.rows.find((r) => r.pass)?.round;
 
   // ── 내 픽 선택 패널 데이터(atMyPick일 때만 계산) ──
   let panel: null | {
@@ -196,7 +207,7 @@ function DraftLiveInner() {
   return (
     <Screen title={`${season + 2}시즌 드래프트`}>
       <View style={styles.bar}>
-        <Muted>{revealed} / {total}픽 · 내 지명 {confirmedMyCount}/{myCount}</Muted>
+        <Muted>{revealed} / {total}픽 · 내 지명 {confirmedMyCount}/{slots}{passRemaining > 0 ? ` · PASS 예정 ${passRemaining}회` : ''}</Muted>
         <Text style={{ color: atMyPick ? theme.accent : theme.text, fontWeight: '800' }}>{roundLabel}</Text>
       </View>
 
@@ -217,7 +228,12 @@ function DraftLiveInner() {
                 <View key={row.round} style={styles.sumRow}>
                   <Text style={styles.sumR}>{row.round}R</Text>
                   {row.pass ? (
-                    <Text style={styles.sumPass}>PASS</Text>
+                    <View style={{ flex: 1 }}>
+                      <Text style={styles.sumPass}>PASS</Text>
+                      {row.round === firstPassRound ? (
+                        <Text style={styles.sumReason}>{PASS_REASON_COPY[summaryPassReason]}</Text>
+                      ) : null}
+                    </View>
                   ) : (
                     <>
                       <PosTag pos={row.position!} />
@@ -381,4 +397,5 @@ const styles = themedStyles(() => StyleSheet.create({
   sumName: { color: theme.text, fontSize: 14, fontWeight: '700', flex: 1 },
   sumGrade: { color: theme.sky, fontSize: 12, fontWeight: '800' },
   sumPass: { color: theme.muted, fontSize: 13, fontWeight: '800' },
+  sumReason: { color: theme.muted, fontSize: 12, fontWeight: '600', marginTop: 3, lineHeight: 16 },
 }));

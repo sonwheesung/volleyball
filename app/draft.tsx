@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { buildOffseasonBase } from '../data/draftSetup';
 import { resolveDraftContextFor } from '../data/offseasonArgs';
@@ -14,6 +14,7 @@ import { prospectReport } from '../data/prospectReport';
 import { draftClassPreview } from '../data/draftPreview';
 import { prospectGradeLabel } from '../data/prospectGrade';
 import { consensusOrder, projectionBand } from '../data/draftProjection';
+import { myDraftPlan, passRoundsLabel } from '../data/draftPlan';
 import { neededPositions } from '../engine/draft';
 import { overallRaw, REVEAL_PRECISE } from '../engine/overall';
 import type { Position } from '../types';
@@ -116,6 +117,8 @@ function DraftCenterInner() {
     [ctx, rankMap],
   );
   const myRank = standings.findIndex((s) => s.teamId === my) + 1;
+  // DL-1/DL-2: 보유 지명권(권리) vs 예상 지명/PASS(행사 예정) 분리 — 찜(draftPicks)만 반영한 자연 진행 투영(표시 전용).
+  const plan = useMemo(() => myDraftPlan(ctx, my, draftPicks), [ctx, my, draftPicks]);
   const preview_ = useMemo(() => draftClassPreview(ctx.cls, reveal), [ctx, reveal]);
   // DL-1: 우리 필요 포지션(floor 대비 부족 힌트) — 공개 로스터 파생.
   const myNeeds = useMemo<Position[]>(
@@ -133,12 +136,29 @@ function DraftCenterInner() {
   return (
     <Screen title={`${season + 2}시즌 신인 드래프트`}>
       <Card accent={theme.sky}>
-        <Row>
-          <IconLabel icon="person-add-outline" color={theme.sky}>내 순위 {myRank}위 · 지명권 {ctx.myPickSlots.length}장</IconLabel>
-          <Text style={{ color: theme.text, fontWeight: '800' }}>
-            지명 순번 {ctx.myPickSlots.map((i) => i + 1).join(', ') || '-'}
-          </Text>
-        </Row>
+        <IconLabel icon="person-add-outline" color={theme.sky}>내 순위 {myRank}위</IconLabel>
+        <View style={styles.planGrid}>
+          <View style={styles.planRow}>
+            <Text style={styles.planLabel}>보유 지명권</Text>
+            <Text style={styles.planVal}>{plan.slotNos.join('·') || '-'}순위</Text>
+          </View>
+          <View style={styles.planRow}>
+            <Text style={styles.planLabel}>예상 지명</Text>
+            <Text style={styles.planVal}>{plan.expectedPicks}명</Text>
+          </View>
+          <View style={styles.planRow}>
+            <Text style={styles.planLabel}>예상 PASS</Text>
+            <Text style={[styles.planVal, { color: plan.expectedPasses ? theme.warn : theme.muted }]}>{plan.expectedPasses}회</Text>
+          </View>
+        </View>
+        {plan.expectedPasses > 0 ? (
+          <Muted style={{ fontSize: 12, marginTop: 6 }}>
+            현재 선수단 상황을 기준으로 {passRoundsLabel(plan.passRounds)}라운드는 자동 PASS가 예상됩니다. 필요 시
+            라이브 드래프트에서 직접 지명할 수 있습니다.
+          </Muted>
+        ) : (
+          <Muted style={{ fontSize: 12, marginTop: 6 }}>전 라운드 지명이 예상됩니다.</Muted>
+        )}
         <Text style={{ color: myNeeds.length ? theme.good : theme.muted, fontSize: 12, fontWeight: '800', marginTop: 4 }}>
           {myNeeds.length ? `우리 필요 포지션: ${myNeeds.map((p) => POS_KO[p]).join(' · ')}` : '구성 균형 — 미래를 위한 최고 자원 위주'}
         </Text>
@@ -215,6 +235,10 @@ const styles = themedStyles(() => StyleSheet.create({
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   gradeLine: { fontSize: 12, marginTop: 2 },
+  planGrid: { marginTop: 8, gap: 3 },
+  planRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  planLabel: { color: theme.muted, fontSize: 13, fontWeight: '700' },
+  planVal: { color: theme.text, fontSize: 14, fontWeight: '800' },
   fogOvr: { minWidth: 52, textAlign: 'center', color: theme.muted, fontWeight: '800', fontSize: 13 },
   detail: { paddingHorizontal: 12, paddingBottom: 12, paddingTop: 2, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.bg + '00' },
   detailHead: { color: theme.muted, fontSize: 12, fontWeight: '800', marginBottom: 5, marginTop: 6 },
