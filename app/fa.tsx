@@ -1,13 +1,15 @@
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { RoleBadge } from '../components/RoleBadge';
 import { Popup } from '../components/Popup';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
+import { ToastHost, useToastQueue } from '../components/Toast';
 import { shortTeamName as shortTeam, getTeam, teamScoutReveal } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
+import { repRecordLine } from '../data/recordLine';
 import { buildOffseasonBase, scandalRepMap } from '../data/offseason';
 import { resolveFAPreviewFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
@@ -31,6 +33,30 @@ import { useGameStore } from '../store/useGameStore';
 // 선수 역제안 카운터 한도(FA_SYSTEM §2.8.6) — +0 ~ +1.0억, step 0.1억(연봉 단위 만원). +0=미설정(counterTolerance undefined → 0드리프트).
 const COUNTER_STEP = 1000;  // 0.1억
 const COUNTER_MAX = 10000;  // +1.0억
+
+/** 상태 배지 — 텍스트가 바뀔 때만 페이드+스케일로 전환 연출(FA_SYSTEM §2.8.7). 첫 렌더·무변경 시엔 무연출(안 바뀐 선수는 그대로). */
+function AnimatedBadge({ text, color }: { text: string; color: string }) {
+  const a = useRef(new Animated.Value(1)).current;
+  const prev = useRef(text);
+  useEffect(() => {
+    if (prev.current !== text) {
+      prev.current = text;
+      a.setValue(0.3);
+      Animated.spring(a, { toValue: 1, useNativeDriver: true, friction: 6, tension: 80 }).start();
+    }
+  }, [text, a]);
+  return (
+    <Animated.Text
+      style={{
+        color, fontSize: 12, fontWeight: '800', marginTop: 2,
+        opacity: a,
+        transform: [{ scale: a.interpolate({ inputRange: [0.3, 1], outputRange: [0.9, 1] }) }],
+      }}
+    >
+      {text}
+    </Animated.Text>
+  );
+}
 
 export default function FACenter() {
   // FA 시장 경쟁 미리보기(faMarketPreview)+정산 자금 투영은 무거워 한 틱 미뤄 로딩부터 그린다
@@ -107,6 +133,40 @@ function FACenterInner() {
   const repMap = useMemo(() => scandalRepMap(), [season]); // 사고 선수 요구연봉 할인(엔진 :150과 동일 산식)
   const round100 = (x: number) => Math.round(x / 100) * 100;
 
+  // FA 시장 변화 피드백(FA_SYSTEM §2.8.7) — pv(관측 파생)만 읽는다. 엔진·스토어 영속 무변경(가짜 드라마 금지: 실제 faFail/rank에서만).
+  //   내 선택으로 지명 선수의 상태(성공/뺏김/게이트/미계약/협상중)가 pv 재해소로 바뀌면, "크게" 바뀐 선수만 하단 토스트로 알린다.
+  //   배지 전환 연출은 각 배지(AnimatedBadge)가 텍스트가 바뀔 때 스스로 페이드+스케일 → 안 바뀐 선수는 무연출.
+  const toast = useToastQueue();
+  const statusOf = (id: string): { s: string; rank?: number } => {
+    if (pv.signedByMe.has(id)) return { s: 'won' };
+    const code = pv.faFail[id];
+    const rank = pv.faCompete[id]?.myRank;
+    if (code === 'LOST') return { s: 'lost', rank };
+    if (code === 'CASH' || code === 'CAP' || code === 'ROSTER') return { s: 'gate' };
+    if (code === 'SIT_OUT') return { s: 'sitout' };
+    return { s: 'pending', rank };
+  };
+  const prevStatus = useRef<Record<string, { s: string; rank?: number }> | null>(null);
+  useEffect(() => {
+    const cur: Record<string, { s: string; rank?: number }> = {};
+    for (const id of Object.keys(faOffers)) cur[id] = statusOf(id);
+    const prev = prevStatus.current;
+    if (prev) {
+      for (const id of Object.keys(cur)) {
+        const a = prev[id];
+        const b = cur[id];
+        if (!a) continue; // 새로 지명한 선수 — 첫 상태라 '변화'가 아님
+        const nm = preSnap[id]?.name ?? '선수';
+        if (a.s !== 'won' && b.s === 'won') toast.push(`FA 시장 변화 — ${nm} 영입 가능성이 높아졌습니다.`);
+        else if (a.s === 'won' && b.s !== 'won') toast.push(`FA 시장 변화 — ${nm}과의 계약 가능성이 낮아졌습니다.`);
+        else if (a.s === 'pending' && b.s === 'pending' && a.rank === 1 && (b.rank ?? 99) > 1)
+          toast.push(`FA 시장 변화 — ${nm} 협상 순위가 ${b.rank}위로 밀렸습니다.`);
+      }
+    }
+    prevStatus.current = cur;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pv]);
+
   const poolPlayers = pv.pool.map((id) => preSnap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
   const grades = assignFAGrades(poolPlayers);
   const myRoster = pv.myRoster.map((id) => snap[id]).filter(Boolean).sort((a, b) => overall(b) - overall(a));
@@ -146,7 +206,7 @@ function FACenterInner() {
   const moneyOnlyCount = [...pv.signedByMe].filter((id) => moneyOnlyIds.includes(id) && needsCompensationPlayer(grades.get(id) ?? 'C')).length;
 
   return (
-    <Screen title={`${seasonYear(season)} → ${seasonYear(season + 1)} FA 시장`}>
+    <Screen title={`${seasonYear(season)} → ${seasonYear(season + 1)} FA 시장`} overlay={<ToastHost toasts={toast.toasts} />}>
       {/* 지연 구조 안내(항상 표시) — "지금은 지명, 결과는 시즌 시작 때 확정"을 상단에 못박아
           "영입 눌렀는데 실패"로 오해하는 걸 막는다(FA_SYSTEM §2.7 UX). */}
       <Pressable onPress={() => setInfo('delay')} style={styles.notice}>
@@ -167,7 +227,7 @@ function FACenterInner() {
         </Row>
         <Muted style={{ fontSize: 12 }}>
           지명해도 선수는 팀 전력·출전기회·충성도·연봉을 보고 결정합니다. 다른 구단과 경합에서
-          질 수도, 선수가 잔류를 택할 수도 있어요. 캡·운영 자금 안에서만 입찰합니다.
+          질 수도, 마음에 드는 제안이 없으면 선수가 모든 제안을 거절할 수도 있어요. 캡·운영 자금 안에서만 입찰합니다.
         </Muted>
         <Row>
           <Muted>샐러리캡(예상)</Muted>
@@ -270,7 +330,7 @@ function FACenterInner() {
             else if (code === 'CASH') badge = { t: '운영 자금 부족 — 입찰하지 못했습니다', c: theme.warn };
             else if (code === 'CAP') badge = { t: '샐러리캡이 부족해 입찰하지 못했습니다', c: theme.warn };
             else if (code === 'ROSTER') badge = { t: '정원이 가득 차 입찰하지 못했습니다', c: theme.warn };
-            else if (code === 'SIT_OUT') badge = { t: '모든 제안을 물리치고 잔류를 택했습니다', c: theme.muted };
+            else if (code === 'SIT_OUT') badge = { t: '모든 제안을 거절해 계약 없이 시즌을 보냅니다', c: theme.muted };
             else badge = { t: '지명함 — 시즌 시작 때 확정', c: theme.sky };
           }
           return (
@@ -303,7 +363,7 @@ function FACenterInner() {
                       </Text>
                     );
                   })()}
-                  {badge ? <Text style={{ color: badge.c, fontSize: 12, fontWeight: '800', marginTop: 2 }}>{badge.t}</Text> : null}
+                  {badge ? <AnimatedBadge text={badge.t} color={badge.c} /> : null}
                 </View>
                 <OvrBadge value={overallRaw(p)} />
                 {!p.isForeign ? (
@@ -370,8 +430,7 @@ function FACenterInner() {
                         <Text style={styles.detailHead}>최근 성적</Text>
                         {p.seasonLines.slice(-2).reverse().map((l) => (
                           <Text key={l.season} style={styles.seasonLine}>
-                            {seasonYear(l.season)} · {shortTeam(l.teamId)} · {l.matches}경기 {l.points}점
-                            {l.assists > 0 ? ` · 세트${l.assists}` : ''}{l.digs > 0 ? ` · 디그${l.digs}` : ''}
+                            {seasonYear(l.season)} · {shortTeam(l.teamId)} · {repRecordLine(p.position, l)}
                           </Text>
                         ))}
                       </>
@@ -516,7 +575,7 @@ function FACenterInner() {
               한 팀을 고릅니다. 그래서 지명해도:
             </Text>
             <Text style={styles.modalBullet}>· 다른 구단에 뺏길 수 있고(경쟁 입찰)</Text>
-            <Text style={styles.modalBullet}>· 마음에 드는 제안이 없으면 선수가 잔류를 택할 수 있고</Text>
+            <Text style={styles.modalBullet}>· 마음에 드는 제안이 없으면 선수가 어느 구단과도 계약하지 않을 수 있고</Text>
             <Text style={styles.modalBullet}>· 우리 캡·운영 자금이 부족하면 입찰조차 못 합니다</Text>
             <Text style={styles.modalBody}>
               결과가 나오면 각 선수 카드에 <Text style={styles.modalStrong}>왜 됐는지/안 됐는지</Text>가 사유로 표시됩니다.

@@ -12,7 +12,7 @@
 |---|---|---|
 | [MATCH_SYSTEM](./MATCH_SYSTEM.md) | 경기 시뮬(로테이션·서브타입·랠리·블로킹3축·찬스볼·체력·기세·타임아웃·감독) | `engine/match.ts`·`rally.ts`·`lineup.ts`·`rotation.ts`(풀 랠리 체인 v2) |
 | [BOARD_RULES](./BOARD_RULES.md) | 관전 연출 검증 기준(사용자 주의사항 ↔ 감사 룰 A~P, `/verify-board` 스킬) | `components/courtPath.ts`·`courtDirector.ts`, `tools/auditBoard.ts` |
-| [UI_RULES](./UI_RULES.md) | **UI 상호작용 규칙**(버튼·로딩·비활성·빈상태 — 무거운 작업 로딩+비활성 등). `verify-board`(UI 검수기)가 대조 | `sim-web/main.ts`(runHeavy)·`components/Screen.tsx`(Loading) |
+| [UI_RULES](./UI_RULES.md) | **UI 상호작용 규칙**(버튼·로딩·비활성·빈상태 — 무거운 작업 로딩+비활성, **UI-30 비차단 하단 토스트**). `verify-board`(UI 검수기)가 대조 | `sim-web/main.ts`(runHeavy)·`components/Screen.tsx`(Loading·`overlay` 슬롯)·`components/Toast.tsx`(토스트 큐) |
 | [EMULATOR_E2E](./EMULATOR_E2E.md) | **에뮬레이터 실기기 테스트 케이스 대본**(C1 온보딩 19스텝~C5 — 화면·확인포인트·탭 좌표/순서). `emulator-test` 스킬이 이 대본대로 see-and-tap | `data/tutorialSteps.ts`(TIPS), `.claude/skills/emulator-test/SKILL.md` |
 | [COURT_POSITIONING](./COURT_POSITIONING.md) | **수비/리시브 포지셔닝 모델**(역할→위치 자동화 SPEC, 세터 후위/전위 × 서브/리시브). 확정 후 구현 | `components/courtLayout.ts`·`courtDirector.ts` |
 | [ROTATION_MORALE](./ROTATION_MORALE_SYSTEM.md) | **선발 휴식(순위 기반 로드매니지먼트) + 벤치 사유 인지 + 감정=f(사유,성격) + 누적→FA**. ✅ 구현(2026-06-22) | `engine/lineup.ts`(pickRest)·`data/rotation.ts`·`engine/owner.ts`·`data/owner.ts`, `tools/simMood·simStarters·_ev_rest` |
@@ -23,7 +23,7 @@
 | [DOC_DISCIPLINE](./DOC_DISCIPLINE.md) | 문서 작업법 — 결정 先문서·취소선 정정 보존·`*_SYSTEM.md`·색인 유지·날짜/통계 절대화·새 시스템 체크리스트 | (전 docs) |
 | [TRAINING_SYSTEM](./TRAINING_SYSTEM.md) | 훈련·성장·노쇠·재능·경기경험 성장 | `engine/training.ts`, `aging.ts`, `experience.ts`, `progression.ts` |
 | [SALARY_SYSTEM](./SALARY_SYSTEM.md) | 개인 생산 귀속·시장가치·계약 고착·루키스케일 | `engine/salary.ts`, `production.ts`, `data/production.ts` |
-| [FA_SYSTEM](./FA_SYSTEM.md) | FA(등급·보상·보호명단·프랜차이즈)·드래프트·세대교체·캡·AI GM. **📋 설계 확정·미구현(2026-07-09)**: 가변 로스터(계약 상한 20·드래프트 예외, §1.5)·자동충원 floor≈12(§1.6)·attrition 강화(§1.7)·대체 FA 필러 안전망 4층(§2.9)·KOVO식 드래프트 전면 개정(유망주 발굴·4라운드·패스·순위역순 추첨 35/30/20/8/4/2/1, §3.0)·검증계획(§8.1) | `engine/faMarket.ts`, `compensation.ts`, `cap.ts`, `draft.ts`, `aiGM.ts`, `rollover.ts`, `retire.ts` |
+| [FA_SYSTEM](./FA_SYSTEM.md) | FA(등급·보상·보호명단·프랜차이즈)·드래프트·세대교체·캡·AI GM. **✅ §2.8.7 FA 시장 변화 피드백(2026-07-10)**: 배지 diff 전환 연출(`AnimatedBadge`)+비차단 토스트(성공↔실패·순위 밀림, UI 관측 0드리프트). **SIT_OUT="잔류" 폐기→"무소속 미계약"(2026-07-10 정정, §2.8.5/§2.8.6)**. **📋 설계 확정·미구현(2026-07-09)**: 가변 로스터(계약 상한 20·드래프트 예외, §1.5)·자동충원 floor≈12(§1.6)·attrition 강화(§1.7)·대체 FA 필러 안전망 4층(§2.9)·KOVO식 드래프트 전면 개정(유망주 발굴·4라운드·패스·순위역순 추첨 35/30/20/8/4/2/1, §3.0)·검증계획(§8.1) | `engine/faMarket.ts`, `compensation.ts`, `cap.ts`, `draft.ts`, `aiGM.ts`, `rollover.ts`, `retire.ts`, `app/fa.tsx`, `data/recordLine.ts`, `data/money.ts` |
 | [SEASON_SYSTEM](./SEASON_SYSTEM.md) | 시즌 진행·일정·순위·포스트시즌·오프시즌 오케스트레이션 | `engine/season.ts`, `playoffs.ts`, `data/standings.ts`, `store/useGameStore.ts` |
 | [STAFF_SYSTEM](./STAFF_SYSTEM.md) | 스태프 계약(감독·전문코치·스카우터)·예산·훈련부스트·드래프트 안개 | `engine/staff.ts`, `data/league.ts`, `app/staff.tsx`, `app/draft.tsx` |
 | [AWARDS_SYSTEM](./AWARDS_SYSTEM.md) | 시상식(MVP·신인상·기량발전상·기록왕·베스트7·라운드MVP) | `engine/awards.ts`, `data/awards.ts` |

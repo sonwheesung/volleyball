@@ -481,15 +481,16 @@ export function buildNewsFeed(
     if (t.kind === 'release') {
       const bigRel = (t.ovr ?? 0) >= 82; // 이동 시점 OVR — 거물 베테랑 방출 = 헤드라인(이후 노쇠 무관)
       const rkey = `${t.season}:rel:${t.playerId}`;
-      // ② SIT_OUT 잔류(FA_SYSTEM §2.8.6) — 입찰이 있었는데도 선수가 잔류를 택함. bids 0(아무도 안 부름)엔 이 톤 금지(가짜 드라마).
+      // ② SIT_OUT 미계약(FA_SYSTEM §2.8.6) — 입찰이 있었는데도 선수가 전부 거절해 어느 팀과도 계약 못 함(무소속 시즌).
+      //   bids 0(아무도 안 부름)엔 이 톤 금지(가짜 드라마 — 물리칠 제안이 없었으니).
       if (t.satOut) {
         push(t.season, 'release', vh([
-          (n) => `${n}, 모든 제안 물리치고 잔류 택했다`,
-          (n) => `FA ${n}, 이적 대신 잔류 — "이번엔 움직이지 않는다"`,
-          (n) => `${n}, 러브콜 뿌리치고 남는다`,
+          (n) => `${n}, 모든 제안 거절하고 계약 없이 한 시즌`,
+          (n) => `FA ${n}, 시장에서 계약하지 못했다 — 무소속`,
+          (n) => `${n}, 러브콜 모두 뿌리쳐 소속팀 없이`,
         ], rkey, t.name), bigRel, t.fromTeam,
           body3('release', rkey, more(
-            `${t.name}이(가) 여러 구단의 관심을 받았지만 이적하지 않고 잔류를 택했다.`,
+            `${t.name}이(가) 여러 구단의 제안을 받았지만 모두 거절해, 이번 시즌을 소속팀 없이 보내게 됐다.`,
             careerLine(t.playerId),
             outMine ? `${teamName(myTeamId)}으로서는 익숙한 얼굴을 시장에서 지켜본 셈이다.` : '')), t.playerId);
         continue;

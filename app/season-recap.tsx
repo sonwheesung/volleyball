@@ -17,6 +17,7 @@ import { rosterIdsOnDay } from '../data/dynamics';
 import { recapBriefing } from '../data/recapBriefing';
 import { buildPlayoffs, myPostseasonOutcome } from '../data/playoffs';
 import { seasonYear } from '../data/seasonLabel';
+import { repRecordLine } from '../data/recordLine';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
@@ -129,19 +130,20 @@ function RecapInner() {
     return rows.filter((r) => r.l.points > 0).sort((a, b) => b.l.points - a.l.points);
   }, [day, my]);
 
-  const prodLine = (l: ProdLine) => `${l.matches}경기 · ${l.points}점 (스${l.spikes}·블${l.blocks}·서${l.aces})`
-    + (l.assists > 0 ? ` · 세트${l.assists}` : '') + (l.digs > 0 ? ` · 디그${l.digs}` : '');
-
-  const prodRow = (r: { id: string; l: ProdLine }, i: number) => (
-    <View key={r.id} style={styles.pRow}>
-      <Text style={styles.rank}>{i + 1}</Text>
-      <PosTag pos={getPlayer(r.id)?.position ?? 'OH'} />
-      <View style={{ flex: 1 }}>
-        <Text style={styles.pName} numberOfLines={1}>{pName(r.id)}</Text>
-        <Text style={styles.pSub} numberOfLines={1}>{prodLine(r.l)}</Text>
+  // 요약 카드는 포지션 대표 기록 한 줄(리스트 표면). 전 기록(스·블·서 세부)은 상세 화면(season-recap-detail)이 그대로 보여준다.
+  const prodRow = (r: { id: string; l: ProdLine }, i: number) => {
+    const pos = getPlayer(r.id)?.position ?? 'OH';
+    return (
+      <View key={r.id} style={styles.pRow}>
+        <Text style={styles.rank}>{i + 1}</Text>
+        <PosTag pos={pos} />
+        <View style={{ flex: 1 }}>
+          <Text style={styles.pName} numberOfLines={1}>{pName(r.id)}</Text>
+          <Text style={styles.pSub} numberOfLines={1}>{repRecordLine(pos, r.l)}</Text>
+        </View>
       </View>
-    </View>
-  );
+    );
+  };
 
   const go = (section: string) => router.push(`/season-recap-detail/${section}`);
 

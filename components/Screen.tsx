@@ -23,6 +23,7 @@ interface ScreenProps {
   children?: ReactNode;
   scroll?: boolean;
   headerRight?: ReactNode; // 제목 행 우측 액션(예: 뉴스 "모두 읽기"). 없으면 미표시 — 무파급 옵션.
+  overlay?: ReactNode;     // 뷰포트 고정 오버레이 슬롯(ScrollView 밖) — 하단 토스트 등. 없으면 미표시 — 무파급 옵션.
 }
 
 /** 기본 화면 래퍼 — SafeArea를 한 곳에서 중앙 관리(상단 상태바·하단 홈인디케이터·좌우 라운드/노치).
@@ -31,7 +32,7 @@ interface ScreenProps {
  *  0에 수렴 → 이중 여백 없음(회귀 0). headerShown:false 화면(enshrine·season-opening·champion 등
  *  세리머니)에선 top inset = 상태바 높이가 되어 타이틀이 상태바(시계) 아래로 내려온다.
  *  ⚠ `useSafeAreaInsets().top`(raw)은 헤더를 몰라 헤더 화면에서 이중 패딩 회귀 — 반드시 SafeAreaView(edges top) 사용. */
-export function Screen({ title, children, scroll = true, headerRight }: ScreenProps) {
+export function Screen({ title, children, scroll = true, headerRight, overlay }: ScreenProps) {
   useThemeMode(); // 테마 토글 시 리렌더(배경·스크림 갱신)
   // 튜토리얼 스포트라이트 대상이 화면 밖이면 이 화면의 ScrollView가 대상을 위로 끌어온다.
   // 오프셋은 "콘텐츠 최상단 센티넬 View"와 대상을 각각 measureInWindow로 재 계산(Fabric 안전 — measureLayout 회피).
@@ -77,6 +78,7 @@ export function Screen({ title, children, scroll = true, headerRight }: ScreenPr
         ) : (
           <View style={[styles.safe, styles.content]}>{inner}</View>
         )}
+        {overlay}
       </SafeAreaView>
     </ImageBackground>
   );

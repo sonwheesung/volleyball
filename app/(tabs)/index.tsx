@@ -13,6 +13,7 @@ import { rosterIdsOnDay } from '../../data/dynamics';
 import { buildNewsFeed, freshNews, newsKey } from '../../data/news';
 import { teamOverallRaw } from '../../engine/overall';
 import { formatMoney } from '../../engine/salary';
+import { formatMoneyShort } from '../../data/money';
 import { teamFanbaseNow } from '../../data/owner';
 import { LEAGUE_CAP } from '../../engine/cap';
 import { useGameStore } from '../../store/useGameStore';
@@ -119,7 +120,7 @@ export default function Dashboard() {
             <IconLabel icon="wallet-outline" color={theme.warn}>운영 자금</IconLabel>
             <Text style={{ color: cash < 20000 ? theme.bad : theme.text, fontWeight: '700' }}>
               {formatMoney(cash)}
-              {lastFinance ? ` (전 시즌 ${lastFinance.net >= 0 ? '+' : ''}${formatMoney(lastFinance.net)})` : ''}
+              {lastFinance ? ` (전 시즌 ${lastFinance.net >= 0 ? '+' : ''}${formatMoneyShort(lastFinance.net)})` : ''}
             </Text>
           </Row>
           <Row>
