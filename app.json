@@ -4,6 +4,7 @@
     "slug": "volleyball",
     "version": "0.1.0",
     "orientation": "portrait",
+    "icon": "./assets/icon/icon.png",
     "scheme": "volleyball",
     "userInterfaceStyle": "dark",
     "backgroundColor": "#0B1018",
@@ -13,9 +14,10 @@
     },
     "android": {
       "package": "com.son0925.volleyball",
-      "versionCode": 3,
+      "versionCode": 4,
       "backgroundColor": "#0B1018",
       "adaptiveIcon": {
+        "foregroundImage": "./assets/icon/adaptive-fg.png",
         "backgroundColor": "#0f172a"
       },
       "permissions": [

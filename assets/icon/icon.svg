@@ -1,0 +1,43 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="38%" r="75%">
+      <stop offset="0%" stop-color="#16283f"/>
+      <stop offset="55%" stop-color="#0e1828"/>
+      <stop offset="100%" stop-color="#0B1018"/>
+    </radialGradient>
+    <radialGradient id="ball" cx="40%" cy="32%" r="85%">
+      <stop offset="0%" stop-color="#ffffff"/>
+      <stop offset="65%" stop-color="#eef1f5"/>
+      <stop offset="100%" stop-color="#c4cdd8"/>
+    </radialGradient>
+    <radialGradient id="glow" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#2dd4bf" stop-opacity="0.38"/>
+      <stop offset="70%" stop-color="#2dd4bf" stop-opacity="0.08"/>
+      <stop offset="100%" stop-color="#2dd4bf" stop-opacity="0"/>
+    </radialGradient>
+    <clipPath id="clip"><circle cx="512" cy="520" r="300"/></clipPath>
+  </defs>
+  <rect width="1024" height="1024" fill="url(#bg)"/>
+  <g stroke="#2dd4bf" stroke-opacity="0.15" stroke-width="6" fill="none">
+    <path d="M -60 872 L 1084 872"/>
+    <path d="M 60 1000 L 380 720"/>
+    <path d="M 964 1000 L 644 720"/>
+  </g>
+  <g fill="#dbeafe" fill-opacity="0.5">
+    <circle cx="180" cy="120" r="10"/><circle cx="330" cy="80" r="7"/><circle cx="512" cy="60" r="11"/>
+    <circle cx="700" cy="82" r="7"/><circle cx="850" cy="125" r="10"/>
+  </g>
+  <circle cx="512" cy="520" r="430" fill="url(#glow)"/>
+  <circle cx="512" cy="520" r="300" fill="url(#ball)"/>
+  <g clip-path="url(#clip)" stroke="#3b4a5c" stroke-width="17" fill="none">
+    <!-- Y자 3분할(중심 455,470) — 끝은 원 밖까지 연장해 클립으로 정리 -->
+    <path d="M 455 470 Q 650 508 860 442"/>
+    <path d="M 455 470 Q 420 660 296 840"/>
+    <path d="M 455 470 Q 470 320 566 200"/>
+    <!-- 패널 평행 곡선(양끝 원 밖) -->
+    <path d="M 392 662 Q 650 688 860 592"/>
+    <path d="M 330 838 Q 243 590 240 372"/>
+    <path d="M 612 212 Q 726 322 812 478"/>
+  </g>
+  <circle cx="512" cy="520" r="300" stroke="#3b4a5c" stroke-width="15" fill="none"/>
+</svg>
