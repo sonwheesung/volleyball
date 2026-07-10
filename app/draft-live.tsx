@@ -14,6 +14,10 @@ import { aiTargetOf } from '../data/rosterTarget';
 import { planNextAction } from '../engine/advance';
 import { overall } from '../engine/overall';
 import { fogOvr } from '../data/prospectScout';
+import { prospectGradeLabel } from '../data/prospectGrade';
+import { consensusOrder, projectionBand, pickTimingBadge } from '../data/draftProjection';
+import { pickReasonProse } from '../data/draftPickReason';
+import { myDraftSummary } from '../data/draftSummary';
 import { useGameStore } from '../store/useGameStore';
 import { showSeasonStartAd } from '../lib/ads';
 import { ProspectDetail } from './draft';
@@ -22,7 +26,7 @@ import type { Player, Position } from '../types';
 const REASON: Record<PickReason, { ko: string; color: string }> = {
   super: { ko: '특급 영입', color: theme.warn },
   need: { ko: '포지션 보강', color: theme.accent },
-  best: { ko: '최고 + 성격', color: theme.muted },
+  best: { ko: '미래 자원', color: theme.muted }, // reason=best(니즈 없음·BPA) — 내부 용어 노출 금지, DL-6 문장 톤 일치(EC-DR-05)
   wish: { ko: '구단 지명', color: theme.good },
 };
 
@@ -140,6 +144,27 @@ function DraftLiveInner() {
 
   const shown = seq.slice(0, revealed).slice().reverse(); // 최신이 위로
 
+  // DL-5/DL-6/DL-8 파생(표시 전용·reveal-gated·무저장) — 내 팀 시선(UI-16).
+  const myReveal = teamScoutReveal(my);
+  const getP = (id: string) => ctx.snapshot[id] ?? clsById.get(id);
+  const rankMap = useMemo(() => consensusOrder(ctx.cls, myReveal), [ctx, myReveal]);
+  // DL-6: 각 픽 직전 그 팀의 공개 로스터(누적 픽 포함) — positionGap/주전 나이 근거.
+  const rosterBeforePick = useMemo(() => {
+    const acc: Record<string, string[]> = {};
+    for (const k of Object.keys(ctx.rosters)) acc[k] = [...ctx.rosters[k]];
+    const before: Record<number, string[]> = {};
+    for (const s of seq) {
+      before[s.i] = [...(acc[s.teamId] ?? [])];
+      acc[s.teamId] = [...(acc[s.teamId] ?? []), s.playerId];
+    }
+    return before;
+  }, [seq, ctx]);
+  // DL-8: 내 팀 지명 요약(라운드 1~4 완결 + PASS). done일 때만 표시.
+  const summary = useMemo(
+    () => myDraftSummary(seq.map((s) => ({ teamId: s.teamId, playerId: s.playerId, reason: s.reason })), my, getP),
+    [seq, my],
+  );
+
   // ── 내 픽 선택 패널 데이터(atMyPick일 때만 계산) ──
   let panel: null | {
     recommended: SeqItem;
@@ -182,7 +207,30 @@ function DraftLiveInner() {
           <Button label="시즌 시작하기 ▶" onPress={onFinish} />
         </>
       ) : done ? (
-        <Button label="시즌 시작하기 ▶" onPress={onFinish} />
+        <>
+          <Card accent={theme.accent}>
+            <IconLabel icon="clipboard-outline" color={theme.accent}>우리 팀 지명 요약</IconLabel>
+            {summary.pickCount === 0 ? (
+              <Muted style={{ fontSize: 13, marginTop: 6 }}>이번은 참관 — 다음 기약. (지명 없이 마쳤습니다)</Muted>
+            ) : (
+              summary.rows.map((row) => (
+                <View key={row.round} style={styles.sumRow}>
+                  <Text style={styles.sumR}>{row.round}R</Text>
+                  {row.pass ? (
+                    <Text style={styles.sumPass}>PASS</Text>
+                  ) : (
+                    <>
+                      <PosTag pos={row.position!} />
+                      <Text style={styles.sumName}>{row.name}</Text>
+                      <Text style={styles.sumGrade}>{row.grade}</Text>
+                    </>
+                  )}
+                </View>
+              ))
+            )}
+          </Card>
+          <Button label="시즌 시작하기 ▶" onPress={onFinish} />
+        </>
       ) : atMyPick && panel ? (
         // ── 내 픽 하드정지: 직접 지명 패널 ──
         <Card accent={theme.accent}>
@@ -265,20 +313,37 @@ function DraftLiveInner() {
           const r = REASON[p.reason];
           const why = p.reason === 'need' ? `${r.ko} (${p.player.position})` : r.ko;
           const reveal = teamScoutReveal(p.teamId);
+          const steal = !p.mine && draftPicks.includes(p.playerId); // DL-7: 찜 강탈
+          // DL-6: 타팀 지명 사유 자연어(공개 로스터 근거만). DL-5: 예상↔실제 괴리 배지.
+          const prose = p.mine ? null : pickReasonProse({ player: p.player, reason: p.reason }, rosterBeforePick[p.i] ?? [], getP, myReveal);
+          const band = projectionBand(rankMap.get(p.playerId) ?? 0, ctx.cls.length, myReveal);
+          const timing = pickTimingBadge(p.i, band); // '이른' | '늦은' | null
           return (
-            <View key={p.i} style={[styles.row, p.mine && styles.mineRow]}>
-              <Text style={styles.pk}>{p.round}R</Text>
-              <PosTag pos={p.player.position} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.nm}>
-                  {p.mine ? <Text style={{ color: theme.accent }}>★ </Text> : null}
-                  {p.player.name}
-                </Text>
-                <Text style={styles.sub}>{shortTeamName(p.teamId)} · OVR {fogOvr(p.player, reveal)}</Text>
+            <View key={p.i} style={[styles.row, p.mine && styles.mineRow, steal && styles.stealRow]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                <Text style={styles.pk}>{p.round}R</Text>
+                <PosTag pos={p.player.position} />
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.nm}>
+                    {p.mine ? <Text style={{ color: theme.accent }}>★ </Text> : null}
+                    {steal ? <Text style={{ color: theme.warn }}>💔 </Text> : null}
+                    {p.player.name}
+                  </Text>
+                  <Text style={styles.sub}>{shortTeamName(p.teamId)} · OVR {fogOvr(p.player, reveal)}</Text>
+                </View>
+                <View style={{ alignItems: 'flex-end', gap: 3 }}>
+                  <View style={[styles.badge, { backgroundColor: r.color + '22', borderColor: r.color + '55' }]}>
+                    <Text style={{ color: r.color, fontSize: 11, fontWeight: '800' }}>{why}</Text>
+                  </View>
+                  {timing ? (
+                    <Text style={{ color: timing === '이른' ? theme.warn : theme.muted, fontSize: 10, fontWeight: '800' }}>
+                      예상보다 {timing} 지명
+                    </Text>
+                  ) : null}
+                </View>
               </View>
-              <View style={[styles.badge, { backgroundColor: r.color + '22', borderColor: r.color + '55' }]}>
-                <Text style={{ color: r.color, fontSize: 11, fontWeight: '800' }}>{why}</Text>
-              </View>
+              {steal ? <Text style={styles.stealLine}>💔 {p.player.name}가 {shortTeamName(p.teamId)}의 지명을 받았습니다</Text> : null}
+              {prose ? <Text style={styles.proseLine}>{prose}</Text> : null}
             </View>
           );
         })}
@@ -300,13 +365,20 @@ const styles = themedStyles(() => StyleSheet.create({
   rowTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 11, paddingVertical: 9 },
   pickBtn: { paddingHorizontal: 16, paddingVertical: 16, borderLeftWidth: 1, borderLeftColor: theme.border, alignItems: 'center' },
   row: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
     backgroundColor: theme.card, borderRadius: 10, paddingHorizontal: 11, paddingVertical: 9,
     borderWidth: 1, borderColor: theme.border, marginBottom: 6,
   },
   mineRow: { borderColor: theme.accent, backgroundColor: theme.accent + '12' },
+  stealRow: { borderColor: theme.warn, backgroundColor: theme.warn + '14' },
+  stealLine: { color: theme.warn, fontSize: 12, fontWeight: '700', marginTop: 6 },
+  proseLine: { color: theme.text, fontSize: 12, lineHeight: 17, marginTop: 6 },
   pk: { color: theme.muted, fontWeight: '800', fontSize: 12, width: 34 },
   nm: { color: theme.text, fontSize: 15, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 12, marginTop: 1 },
   badge: { borderWidth: 1, borderRadius: 9, paddingHorizontal: 8, paddingVertical: 4 },
+  sumRow: { flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 7 },
+  sumR: { color: theme.muted, fontWeight: '800', fontSize: 12, width: 30 },
+  sumName: { color: theme.text, fontSize: 14, fontWeight: '700', flex: 1 },
+  sumGrade: { color: theme.sky, fontSize: 12, fontWeight: '800' },
+  sumPass: { color: theme.muted, fontSize: 13, fontWeight: '800' },
 }));

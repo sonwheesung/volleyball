@@ -12,10 +12,16 @@ import { amateurRecord } from '../data/amateurRecord';
 import { revealedPotential, fogOvr } from '../data/prospectScout';
 import { prospectReport } from '../data/prospectReport';
 import { draftClassPreview } from '../data/draftPreview';
-import { overall, overallRaw, REVEAL_PRECISE } from '../engine/overall';
+import { prospectGradeLabel } from '../data/prospectGrade';
+import { consensusOrder, projectionBand } from '../data/draftProjection';
+import { neededPositions } from '../engine/draft';
+import { overallRaw, REVEAL_PRECISE } from '../engine/overall';
+import type { Position } from '../types';
 import { useGameStore } from '../store/useGameStore';
 import { showSeasonStartAd } from '../lib/ads';
 import type { Player } from '../types';
+
+const POS_KO: Record<Position, string> = { S: '세터', OH: '아웃사이드', OP: '아포짓', MB: '미들', L: '리베로' };
 
 // 아마추어 성적표 + 스카우터 공개 잠재력 + 스카우트 리포트 (★ 포텐 별 제거 — 스카우팅 2.0 4단계)
 // export: 라이브 드래프트(app/draft-live.tsx) 내 픽 선택 패널이 같은 안개 존중 상세를 재사용(FA_SYSTEM §3.2.1).
@@ -101,12 +107,21 @@ function DraftCenterInner() {
   );
   const standings = useMemo(() => computeStandings(Number.MAX_SAFE_INTEGER), [season]);
 
-  const classSorted = [...ctx.cls].sort((a, b) => overall(b) - overall(a));
-  const myRank = standings.findIndex((s) => s.teamId === my) + 1;
-  const preview_ = useMemo(() => draftClassPreview(ctx.cls, teamScoutReveal(my)), [ctx, my]);
-
   // 스카우팅 안개(STAFF_SYSTEM) — 공개도↓일수록 현재 OVR은 범위로.
   const reveal = teamScoutReveal(my);
+  // DL-5: 예상 지명순(리그 컨센서스) 정렬 + 순위 밴드. reveal-gated·숨은 포텐 미참조.
+  const rankMap = useMemo(() => consensusOrder(ctx.cls, reveal), [ctx, reveal]);
+  const classSorted = useMemo(
+    () => [...ctx.cls].sort((a, b) => (rankMap.get(a.id) ?? 0) - (rankMap.get(b.id) ?? 0)),
+    [ctx, rankMap],
+  );
+  const myRank = standings.findIndex((s) => s.teamId === my) + 1;
+  const preview_ = useMemo(() => draftClassPreview(ctx.cls, reveal), [ctx, reveal]);
+  // DL-1: 우리 필요 포지션(floor 대비 부족 힌트) — 공개 로스터 파생.
+  const myNeeds = useMemo<Position[]>(
+    () => Array.from(new Set(neededPositions(ctx.rosters[my] ?? [], (id) => ctx.snapshot[id]))),
+    [ctx, my],
+  );
 
   const onFinish = async () => {
     // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 시즌 시작 로딩으로.
@@ -119,14 +134,17 @@ function DraftCenterInner() {
     <Screen title={`${season + 2}시즌 신인 드래프트`}>
       <Card accent={theme.sky}>
         <Row>
-          <IconLabel icon="person-add-outline" color={theme.sky}>내 순위 {myRank}위 · 지명권 {ctx.myHoles}장</IconLabel>
+          <IconLabel icon="person-add-outline" color={theme.sky}>내 순위 {myRank}위 · 지명권 {ctx.myPickSlots.length}장</IconLabel>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
             지명 순번 {ctx.myPickSlots.map((i) => i + 1).join(', ') || '-'}
           </Text>
         </Row>
-        <Muted style={{ fontSize: 12 }}>
-          하위 팀이 앞 순번(추첨). 원하는 신인을 찜해두면 라이브 드래프트에서 위에 뜨고, 내 차례에 직접 지명합니다.
-          선수를 누르면 아마추어 성적·스카우트 리포트를 볼 수 있어요.
+        <Text style={{ color: myNeeds.length ? theme.good : theme.muted, fontSize: 12, fontWeight: '800', marginTop: 4 }}>
+          {myNeeds.length ? `우리 필요 포지션: ${myNeeds.map((p) => POS_KO[p]).join(' · ')}` : '구성 균형 — 미래를 위한 최고 자원 위주'}
+        </Text>
+        <Muted style={{ fontSize: 12, marginTop: 2 }}>
+          매 라운드 지명 또는 패스 — 미래를 위한 어린 선수를 뽑습니다. 원하는 신인을 찜해두면 라이브 드래프트에서
+          위에 뜨고, 내 차례에 직접 지명합니다. 선수를 누르면 아마추어 성적·스카우트 리포트를 볼 수 있어요.
         </Muted>
         <Muted style={{ fontSize: 12, marginTop: 4, color: reveal >= 0.6 ? theme.good : theme.warn }}>
           스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= REVEAL_PRECISE ? '(정밀)' : '— 스카우터를 영입하면 잠재력이 더 많이·선명하게 보입니다'}
@@ -158,6 +176,10 @@ function DraftCenterInner() {
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>{p.name}</Text>
                   <Text style={styles.sub}>{p.age}세 · {p.height}cm · {open ? '접기 ▲' : '자세히 ▼'}</Text>
+                  <Text style={styles.gradeLine}>
+                    <Text style={{ color: theme.sky, fontWeight: '800' }}>{prospectGradeLabel(p, reveal)}</Text>
+                    <Text style={{ color: theme.muted }}>  ·  {projectionBand(rankMap.get(p.id) ?? 0, ctx.cls.length, reveal).text}</Text>
+                  </Text>
                 </View>
                 {reveal >= REVEAL_PRECISE
                   ? <OvrBadge value={overallRaw(p)} />
@@ -192,6 +214,7 @@ const styles = themedStyles(() => StyleSheet.create({
   pickBtn: { paddingHorizontal: 14, paddingVertical: 14, borderLeftWidth: 1, borderLeftColor: theme.border, minWidth: 64, alignItems: 'center' },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
+  gradeLine: { fontSize: 12, marginTop: 2 },
   fogOvr: { minWidth: 52, textAlign: 'center', color: theme.muted, fontWeight: '800', fontSize: 13 },
   detail: { paddingHorizontal: 12, paddingBottom: 12, paddingTop: 2, borderTopWidth: 1, borderTopColor: theme.border, backgroundColor: theme.bg + '00' },
   detailHead: { color: theme.muted, fontSize: 12, fontWeight: '800', marginBottom: 5, marginTop: 6 },

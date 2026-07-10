@@ -39,3 +39,6 @@ yarn-error.*
 # 엔진 테스트 콘솔 빌드 산출물
 sim-web/dist/
 /_intake/
+
+.vercel
+.env*
