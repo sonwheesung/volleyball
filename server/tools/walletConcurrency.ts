@@ -1,7 +1,9 @@
 // H2 검증 — 동시 spend 이중지불 방지 증명 (BACKEND_SYSTEM §13.4 H2).
 // 잔액 K인 유저에 1씩 차감하는 spend를 N(>K)건 동시에 발사 → 정확히 K건만 성공·나머지 insufficient·
 // 잔액 0·음수 0·원장 delta 합 == 초기적립 - 성공차감. FOR UPDATE가 없으면(또는 깨지면) 초과지출로 음수.
-// ※ 반드시 실제 Postgres 필요(SQLite/단일연결은 동시성 마스킹). 사용: DATABASE_URL=... npx tsx tools/walletConcurrency.ts
+// ※ 반드시 실제 Postgres 필요(SQLite/단일연결은 동시성 마스킹). 사용: npx tsx tools/walletConcurrency.ts
+//   (dev는 .env.development.local(로컬 Supabase) 우선, 없으면 .env.local — 운영 겨냥 시 DATABASE_URL 오버라이드)
+import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — 첫 import)
 import { sql } from 'drizzle-orm';
 import { db } from '../db';
 import { users, walletLedger } from '../db/schema';

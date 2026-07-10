@@ -1,7 +1,8 @@
 // 공지사항 CRUD 가드 (BACKEND_SYSTEM §13.11·§13.13·§13.15) — 라우트 핸들러 직접 import·호출, 라이브 dev DB.
 // 검증: 발행→bootstrap 노출·기간 필터(만료/미래)·pinned 정렬·PATCH/DELETE 반영+404 대칭·proj 스코프·
 //       date-only endsAt KST 정규화(F5)·fail-closed 인증. A/B 자가검증 1개(만료 필터 민감도) 포함.
-// Usage: cd server && npx tsx --env-file=.env.local tools/_dv_announce.ts
+// Usage: cd server && npx tsx tools/_dv_announce.ts (dev는 .env.development.local 우선, 없으면 .env.local — 운영 겨냥 시 DATABASE_URL 오버라이드)
+import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — 첫 import)
 process.env.ADMIN_TOKEN = 'test-admin-token-abcdef0123456789'; // ≥16자(fail-closed 통과용) — import 전 주입
 
 (async () => {

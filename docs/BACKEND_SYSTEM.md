@@ -143,7 +143,7 @@
 | 층 | 선택 | 이유(리뷰 반영) |
 |---|---|---|
 | 서버 | **Next.js(App Router)** — `/server` 독립 패키지 | API 라우트 핸들러 + 관리자 대시보드 페이지 일체, Vercel 네이티브, 로컬 `next dev` |
-| DB/ORM | **Drizzle + Postgres**(~~로컬 Docker `postgres:16`~~ → **Supabase Postgres**, dev·prod 공통 — 2026-07-02 사용자 결정) | ~~SQLite~~ 폐기 — SQLite는 단일라이터라 **동시성 버그(이중지불)를 로컬서 가림**(리뷰 C2/H2). dev==prod로 Postgres 고정. **호스트를 로컬 Docker→Supabase로 전환**(개발부터 실 Postgres라 H2 동시성이 로컬서 그대로 드러남 — Docker Desktop 의존 제거). Drizzle=서버리스 콜드스타트 가벼움·SQL 우선(엔진 바이너리 없음). ⚠ **연결 규칙**(§13.7): 런타임=Transaction 풀러(:6543)+`prepare:false`, 마이그레이션=Session/Direct(:5432) |
+| DB/ORM | **Drizzle + Postgres**(~~로컬 Docker `postgres:16`~~ → **Supabase Postgres**, ~~dev·prod 공통~~ **prod=Supabase 호스팅 / dev=로컬 Supabase**(2026-07-10 정정 §13.7·§13.7.1) — 2026-07-02 사용자 결정) | ~~SQLite~~ 폐기 — SQLite는 단일라이터라 **동시성 버그(이중지불)를 로컬서 가림**(리뷰 C2/H2). dev==prod로 Postgres 고정. **호스트를 로컬 Docker→Supabase로 전환**(개발부터 실 Postgres라 H2 동시성이 로컬서 그대로 드러남 — Docker Desktop 의존 제거). Drizzle=서버리스 콜드스타트 가벼움·SQL 우선(엔진 바이너리 없음). ⚠ **연결 규칙**(§13.7): 런타임=Transaction 풀러(:6543)+`prepare:false`, 마이그레이션=Session/Direct(:5432) |
 | 인증 | **네이티브 ID토큰 검증(jose+JWKS) → 자체 Bearer 토큰** | ~~Auth.js(NextAuth)~~ 폐기(리뷰 C1) — Auth.js는 **브라우저 쿠키/리다이렉트** 전제라 RN 네이티브 클라에 안 맞음. 클라가 `expo-auth-session`/`expo-apple-authentication`로 ID토큰 획득→서버가 JWKS로 검증→자체 세션 JWT 발급→클라 `expo-secure-store` 보관→`Authorization: Bearer`. 쿠키 0. (구글 로그인 제공 시 iOS는 Apple 로그인 병행 필수 — App Store 4.8) |
 | 클라이언트 | `lib/server.ts`(Expo 앱) — **throw 없는** 타입드 | 광고 스텁과 동일 계약. 잔액 *표시*=캐시, 사용/적립/결제=서버 확인 후. **어떤 서버콜도 앱 렌더 임계경로에 두지 않음**(리뷰 M3 — 오프라인 부팅 보장) |
 
@@ -196,13 +196,18 @@
 6. **AdMob SSV + 업적**(서명검증·상한·1회).
 7. **로그/문의/텔레메트리** → **관리자 대시보드**(맨 마지막, 데이터 존재 후 read-only).
 
-### 13.7 Supabase 연결 (2026-07-02 확정 — Docker 폐기, dev·prod 공통 호스트)
+### 13.7 Supabase 연결 (2026-07-02 확정 — ~~Docker 폐기, dev·prod 공통 호스트~~ · 2026-07-10 정정: dev는 로컬 Supabase 부활)
 > DB 호스트를 로컬 Docker Postgres → **Supabase Postgres**로 전환(§13.1). ORM/스키마/쿼리는 전부 그대로(Supabase=순정 Postgres).
 > Supabase는 **DB 호스트로만** 쓴다 — Auth·Realtime·Storage·PostgREST는 안 쓴다(인증은 §13.1 자체 Bearer, 서버리스 API는 Next.js).
 > 결정론 격리 불변(§8)은 유지: 서버 DB는 재화·계정·결제·로그·문의·통계만. 시드/리플레이엔 안 들어간다.
+>
+> **정정(2026-07-10, 사용자 결정)**: ~~dev·prod 공통으로 Supabase 호스팅, 로컬 Docker 폐기~~ →
+> **dev에 한해 로컬 Supabase(Supabase CLI `supabase start`, Postgres 단독) 부활**. 사유: 무료(호스팅 free-tier 프로젝트가
+> 미사용 시 자동 정지되는 성가심 회피) + Docker Desktop 하나로 로컬 DB 완결. **prod는 Supabase 호스팅 유지**(아래 3종 연결 규칙은
+> **호스팅 prod 전용** — 로컬은 PgBouncer 풀러가 없어 6543/`prepare:false`·5432 구분이 없다). dev 셋업 절차는 §13.7.1.
 
 - **비밀은 `server/.env.local`**(gitignore됨, 커밋 금지 — M4). `.env.example`은 양식 견본만.
-- **연결 문자열이 3종**(Supabase 대시보드 → Project Settings → Database):
+- **연결 문자열이 3종**(Supabase 대시보드 → Project Settings → Database) — **호스팅 prod 전용**(로컬 dev는 §13.7.1: 풀러 없음, DB 하나뿐):
   | 용도 | 연결 | 포트 | prepared stmt | 비고 |
   |---|---|---|---|---|
   | **런타임**(Vercel 서버리스 API·`db/index.ts`) | **Transaction 풀러** | 6543 | ✗ | PgBouncer transaction 모드 → `postgres()` 옵션에 **`prepare:false` 필수**(없으면 런타임 에러). 서버리스 커넥션 폭발 방지 |
@@ -210,6 +215,20 @@
   | **동시성 테스트**(`tools/walletConcurrency.ts`) | 런타임과 동일(6543) | 6543 | ✗ | `FOR UPDATE` 행잠금은 transaction 풀러서 정상 작동 → H2 이중지불 0 증명 |
 - **`db/index.ts`**: `postgres(DATABASE_URL, { max: 10, prepare: false })` — `prepare:false`는 풀러 필수이면서 direct에서도 무해(항상 안전한 기본값)이라 무조건 켠다.
 - **검증 순서**: `.env.local`(DATABASE_URL=런타임 6543 문자열) → `DATABASE_URL=<5432 문자열> npx drizzle-kit push`(스키마 생성) → `npm run dev`(부팅) → `GET /api/health` 200 → `tools/walletConcurrency.ts`로 H2 이중지불 0.
+
+#### 13.7.1 로컬 dev DB 셋업 (2026-07-10 — 로컬 Supabase, 무료)
+> dev는 로컬 Supabase Postgres(단독)로 돈다. prod(위 3종 연결·§13.8)와 완전 분리 — 로컬은 **풀러가 없어** 6543/`prepare:false`·5432 구분이 없고 DB 하나뿐이다.
+
+1. **Docker Desktop** 실행(로컬 Supabase 컨테이너 호스트).
+2. `cd server && npx supabase start -x realtime,storage-api,imgproxy,edge-runtime,logflare,vector,mailpit,supavisor`
+   — Postgres 컨테이너(`supabase_db_server`)만 기동(Auth·REST·Studio 등 나머지 서비스는 제외 — 우린 DB만 쓴다). `supabase/config.toml`은 이미 초기화됨.
+3. **DB_URL** = `postgresql://postgres:postgres@127.0.0.1:54322/postgres`(로컬 고정).
+4. 스키마 적용: `DATABASE_URL=postgresql://postgres:postgres@127.0.0.1:54322/postgres npx drizzle-kit push`(11테이블). 로컬엔 풀러가 없으니 런타임/마이그레이션 URL이 동일하다.
+5. **`server/.env.development.local`** 생성(`DATABASE_URL`·`MIGRATE_DATABASE_URL`=위 로컬 URL). Next dev는 `.env.development.local`을 `.env.local`(운영 크리덴셜)보다 **우선** 로드하므로 `npm run dev`가 자동으로 로컬 DB를 쓴다. `.env.local`(운영)은 그대로 둔다.
+6. `npm run dev`(:3000) → dev 로그인→지갑 왕복으로 로컬 DB 확인.
+
+- **가드(`tools/_*.ts`)도 dev DB를 때린다**: `tools/_env.ts`가 `.env.development.local`(있으면) 우선 → 없으면 `.env.local` 보충으로 주입(각 가드의 첫 import). 셸에 `DATABASE_URL`이 없으면 로컬 dev가 이긴다.
+  **운영 DB를 명시적으로 검증**해야 하면 실행 셸에서 `DATABASE_URL=<prod 6543 문자열> npx tsx tools/_dv_*.ts`로 오버라이드(이미 설정된 키는 안 덮으므로 그게 이긴다).
 
 ### 13.8 Vercel 배포 (2026-07-02 프로덕션 라이브)
 - **프로덕션 URL**: `https://volleyball-jet-nine.vercel.app` (프로덕션 alias — 배포마다 불변. 배포전용 `...-<hash>-sonws.vercel.app`와 별개).

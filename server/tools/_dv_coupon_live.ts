@@ -3,7 +3,8 @@
 //       **무토큰 redeem 401 + 익명 dev-user-1 지갑 무변화(C1)**·date-only endsAt KST 정규화(C2)·
 //       존재X targetUserId 400 no-such-user(C3)·중복코드 409·사용기록 DELETE 409·무토큰 admin 401.
 //       A/B 자가검증 1개(이중사용 UNIQUE 게이트 민감도 — 허위 오라클 방지).
-// Usage: cd server && npx tsx --env-file=.env.local tools/_dv_coupon_live.ts
+// Usage: cd server && npx tsx tools/_dv_coupon_live.ts (dev는 .env.development.local 우선, 없으면 .env.local — 운영 겨냥 시 DATABASE_URL 오버라이드)
+import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — 첫 import)
 process.env.ADMIN_TOKEN = 'test-admin-token-abcdef0123456789'; // ≥16자(fail-closed 통과) — import 전 주입
 process.env.SESSION_JWT_SECRET = 'test-session-secret-abcdef0123456789'; // signToken↔verifyToken 일관 — import 전 주입
 

@@ -1,9 +1,7 @@
 // 백엔드 통합 E2E — 실행 중 서버(localhost:3000) + 실 Supabase. 각 플로우 검증 후 **테스트 데이터 전량 정리**.
 //   공지 발행→bootstrap 노출→삭제 · 쿠폰 개인+단체 발급→(단체)수령→지갑적립 · 문의 등록→조회. 전부 'E2E' 마킹 + 정리.
 //   npx tsx tools/_e2e_backend.ts
-import * as fs from 'fs';
-const env = fs.readFileSync('.env.local', 'utf8');
-for (const line of env.split('\n')) { const m = line.match(/^(\w+)="?([^"]*)"?$/); if (m && !process.env[m[1]]) process.env[m[1]] = m[2]; }
+import './_env'; // dev는 .env.development.local(로컬 Supabase) 우선, 없으면 .env.local — db/postgres 연결 전에 주입
 const ADMIN = process.env.ADMIN_TOKEN!;
 const BASE = 'http://localhost:3000';
 

@@ -1,6 +1,7 @@
 // 결제 검증 가드 (BACKEND_SYSTEM §13.18) — RC 웹훅 머니패스. 순수 판정 + 웹훅 라우트 통합(테스트 유저·정리).
 // 검증: fail-closed 인증·샌드박스 무시·상품 매핑(서버 권위)·grant/refund·멱등 dedup·엔타이틀먼트 무시.
-// Usage: cd server && npx tsx --env-file=.env.local tools/_dv_purchase.ts
+// Usage: cd server && npx tsx tools/_dv_purchase.ts (dev는 .env.development.local 우선, 없으면 .env.local — 운영 겨냥 시 DATABASE_URL 오버라이드)
+import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — 첫 import)
 process.env.RC_WEBHOOK_SECRET = 'test-secret-abcdef0123456789'; // ≥16자(fail-closed 통과용) — import 전 주입
 
 (async () => {

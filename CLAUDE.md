@@ -263,8 +263,9 @@
   - **세이브 마이그레이션(2026-06-26)**: `version`+`migrate`(정규화기)+안전 복원으로 **출시 후 구조 변경에도
     사용자 세이브가 안 깨진다**(필드 추가=자동, 모양 변경=버전+변환). 영속 52필드 스키마·정책은 `docs/SAVE_SYSTEM.md`.
   - ~~Supabase는 **나중에** 클라우드 백업·글로벌 명예의전당·랭킹 붙일 때 옵션으로. MVP에서 서버부터 깔면 방치형 본질과 어긋나고 개발만 무거워짐.~~
-    → **정정(2026-07-02, 사용자 결정)**: 온라인 전환(위)으로 백엔드를 지금 구축 중이라, **Supabase를 Vercel 서버의 Postgres 호스트로 채택**(dev·prod 공통, 로컬 Docker 폐기).
-    Supabase는 **DB 호스트로만** 쓴다(Auth·Realtime·Storage 미사용 — 인증은 자체 Bearer). 결정론 격리는 유지: 서버 DB는 재화·계정·결제·로그·문의·통계만, 시드/리플레이엔 안 들어감. 연결 규칙(풀러:6543 `prepare:false` / 마이그레이션:5432)은 `docs/BACKEND_SYSTEM.md` §13.7.
+    → **정정(2026-07-02, 사용자 결정)**: 온라인 전환(위)으로 백엔드를 지금 구축 중이라, **Supabase를 Vercel 서버의 Postgres 호스트로 채택**(~~dev·prod 공통, 로컬 Docker 폐기~~).
+    → **재정정(2026-07-10, 사용자 결정)**: **dev는 로컬 Supabase 부활**(Supabase CLI `supabase start`, Postgres 단독 — 무료·호스팅 free-tier 정지 성가심 회피), **prod만 Supabase 호스팅**. 로컬 dev 셋업·env 우선 로드는 `docs/BACKEND_SYSTEM.md` §13.7.1.
+    Supabase는 **DB 호스트로만** 쓴다(Auth·Realtime·Storage 미사용 — 인증은 자체 Bearer). 결정론 격리는 유지: 서버 DB는 재화·계정·결제·로그·문의·통계만, 시드/리플레이엔 안 들어감. 연결 규칙(풀러:6543 `prepare:false` / 마이그레이션:5432)은 **호스팅 prod 전용**, `docs/BACKEND_SYSTEM.md` §13.7.
 - **네비게이션**: expo-router (파일 기반)
 - **시뮬 엔진**: 순수 TS 모듈(`/engine`). React 의존성 0. 시드 결정론. 단독 테스트 가능.
   - 엔진은 "상태 + 시드 → 다음 상태"의 순수 함수 집합으로. UI와 완전 분리.

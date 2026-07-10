@@ -3,17 +3,7 @@
 //   반영 안 된 stale 잔액으로 클라를 덮어씀(환영 +1000 → 캠프 −900 = 100인데 화면 재진입 시 1000 표시).
 // 수정: 멱등 재시도 시 현재 users.balance를 반환. 이 테스트가 A/B로 오라클 민감도 증명(원장 balanceAfter=1000 vs 현재 100).
 // 실행: server 디렉터리에서 `node_modules/.bin/tsx tools/_dv_walletreplay.ts`. 던지기 유저 생성→검증→정리(finally).
-import { readFileSync } from 'fs';
-import { join } from 'path';
-
-// server/.env.local 의 DATABASE_URL 주입 (db 모듈 import 전에)
-try {
-  const envPath = join(__dirname, '..', '.env.local');
-  for (const line of readFileSync(envPath, 'utf8').split('\n')) {
-    const m = line.match(/^\s*([A-Z_]+)\s*=\s*"?([^"\n]*)"?\s*$/);
-    if (m && !process.env[m[1]]) process.env[m[1]] = m[2];
-  }
-} catch { /* env 없으면 db 기본값(localhost) — 연결 실패 시 ERROR로 드러남 */ }
+import './_env'; // dev는 .env.development.local(로컬 Supabase) 우선, 없으면 .env.local — db 모듈 import 전에 주입
 
 async function main(): Promise<number> {
   const { db, schema } = await import('../db');

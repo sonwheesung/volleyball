@@ -44,7 +44,7 @@
 | [SAVE_SYSTEM](./SAVE_SYSTEM.md) | **세이브·마이그레이션**(영속 53필드 스키마·version/migrate·정규화기·안전 복원) — 출시 후 구조 변경 안전 | `store/saveMigration.ts`·`store/useGameStore.ts`(persist) |
 | [REALTIME_SIM_SYSTEM](./REALTIME_SIM_SYSTEM.md) | **전진 시뮬+결과 저장 전환(B안)** — 게으른 씨앗 재생 → 1회 치르고 저장(로딩·재생버그 제거). 독립리뷰·함정 7게이트·Phase0~3 | `store/useGameStore.ts`·`data/standings.ts`·`data/production.ts`(전환 중) |
 | [MONETIZATION_SYSTEM](./MONETIZATION_SYSTEM.md) | **수익화**(무료+광고+다이아 IAP+DLC) — 다이아(소비성=전지훈련)·광고 쿨다운 카운트다운(A4 ✅ 2026-07-01)·광고="시즌 시작하기" 버튼. **온라인 전환(2026-07-01)**: 오프라인/RevenueCat 폐기→Vercel(BACKEND_SYSTEM). 📋 **추후 DLC 후보: 올림픽·올스타전(2026-07-07 아이디어, 미설계, §4.1)** · **스킨 BM(코스메틱 — 경기장·UI테마·BGM·프로필·엠블럼, P2W 아님)** · **프리미엄 시즌 투자(구단주 특별투자 +운영비, FINANCE #5)** | `engine/diamonds.ts`·`app/(tabs)/mypage.tsx`·`app/training-camp.tsx`·`lib/ads·iap·log` |
-| [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) | **온라인 백엔드(2026-07-01 신설)** — 소셜 로그인·online-first(관전/시뮬 캐시 오프라인·다이아/결제 온라인필수)·Vercel 단독 영수증검증+환불웹훅·다이아 지갑(append-only 원장·멱등)·로그(기기 롤링+서버)·문의+진단스냅샷·관리자+통계. **Supabase Postgres 연결·Vercel 배포 라이브(2026-07-02)**·**멀티게임 proj_code FK(§13.2)**·**보관기간 법정 조사(§13.9)**·**다이아 서버 진실화(§13.12)**·**공지 in-app(§13.13)·쿠폰(§13.14)·관리자 대시보드(§13.15)** · 📋 **설계·미구현**: 세이브 복구 채널(§13.23)·dev 환경 구축(§13.24, 2026-07-07)·**관리자 대시보드 11섹션 pull-and-cache 롤업(§13.25, 2026-07-09)** | `server/`(Next.js)·`lib/server.ts`·`server/db/schema.ts`(proj_info·users·wallet_ledger·coupons·announcements·server_setting) |
+| [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) | **온라인 백엔드(2026-07-01 신설)** — 소셜 로그인·online-first(관전/시뮬 캐시 오프라인·다이아/결제 온라인필수)·Vercel 단독 영수증검증+환불웹훅·다이아 지갑(append-only 원장·멱등)·로그(기기 롤링+서버)·문의+진단스냅샷·관리자+통계. **Supabase Postgres 연결·Vercel 배포 라이브(2026-07-02)**·**dev=로컬 Supabase 부활(2026-07-10, §13.7.1) — prod만 호스팅, 가드는 `_env.ts`로 `.env.development.local` 우선 로드**·**멀티게임 proj_code FK(§13.2)**·**보관기간 법정 조사(§13.9)**·**다이아 서버 진실화(§13.12)**·**공지 in-app(§13.13)·쿠폰(§13.14)·관리자 대시보드(§13.15)** · 📋 **설계·미구현**: 세이브 복구 채널(§13.23)·dev 환경 구축(§13.24, 2026-07-07)·**관리자 대시보드 11섹션 pull-and-cache 롤업(§13.25, 2026-07-09)** | `server/`(Next.js)·`lib/server.ts`·`server/db/schema.ts`(proj_info·users·wallet_ledger·coupons·announcements·server_setting) |
 | [ANALYTICS_PLAN](./ANALYTICS_PLAN.md) | **운영/분석 스택(2026-07-03 신설)** — Firebase(Analytics·Crashlytics)·RevenueCat·GameAnalytics·BigQuery·Install Referrer·Discord·Vercel Observability·UptimeRobot(+Sentry/PostHog 추후). track() 래퍼·이벤트 taxonomy·KPI. 대부분 EAS 단계. 📋 **관리자 대시보드 11섹션 지표 명세(§6, 2026-07-09, pull-and-cache — 외부 원천 API sync + 게임도메인 자체 롤업을 우리 화면 한 곳에, 미구현)** | (계측 — 전 화면 걸침) |
 | [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) | **출시 전 수정사항(2026-07-03 신설)** — 비밀키 회전·EAS 실물전환(소셜로그인·IAP·AdMob)·결제환불(#43)·스토어 등록정보·법무/개인정보·QA. 스텁·플레이스홀더·노출키를 실물로 교체 | (전 시스템 걸침) |
 | [SECURITY_AUDIT](./SECURITY_AUDIT.md) | **백엔드 보안 감사·발견·수정 체크리스트(2026-07-07 신설)** — 온라인 백엔드(`server/`) 방어 감사: 8개 발견(🔴 무한 다이아 발행·🔴 세션 fail-open/로그인 백도어·🟠 레이트리밋/스냅샷·🟡 멱등키/익명폴백/크론). 상태 체크리스트(⬜→✅)·견고한 것 확인 목록·OPEN QUESTIONS | `server/lib/{auth,wallet,econ,admin}.ts`·wallet routes(`earn`/`spend`) |
@@ -283,8 +283,10 @@ npm run sim:web                            # 엔진 테스트 콘솔(웹) → lo
 
 `server/` 하위(라우트·lib·스키마)가 바뀌면 **필수**, 안 바뀌었어도 전체 테스트 시 포함한다. 조항 단위
 대조·서버 5렌즈(인증 귀속·proj 스코프·상한 단위·date-only 타임존·관찰 채널 머니패스)는 **`backend-verify`
-스킬**(TEST_METHODOLOGY 기법 L). 전부 exit 0이어야 통과 — 순수 3(DB 불필요)·라이브 6(`server/.env.local`의
-`DATABASE_URL`=dev Postgres 필요, 테스트 데이터는 프리픽스로 자동 정리).
+스킬**(TEST_METHODOLOGY 기법 L). 전부 exit 0이어야 통과 — 순수 3(DB 불필요)·라이브 6(`DATABASE_URL`=dev Postgres 필요,
+테스트 데이터는 프리픽스로 자동 정리). **env 로드(2026-07-10)**: 라이브 가드는 `tools/_env.ts`가 `.env.development.local`(로컬
+Supabase, §13.7.1) 우선 → 없으면 `.env.local`(운영) 보충으로 주입한다 — `--env-file` 없이 실행(그 플래그를 쓰면 운영 URL이
+코드보다 먼저 박혀 dev 우선이 깨진다). 운영 DB 겨냥 시 셸에서 `DATABASE_URL=<prod> npx tsx tools/_dv_*.ts` 오버라이드.
 
 > **상설 가드 원칙**: ~~쿠폰/환불 왕복은 로컬 서버 라이브 E2E(임시 스크립트, 검증 후 삭제)로 실증~~ →
 > **폐기(2026-07-06)**: 임시 E2E를 검증 후 삭제하면 회귀 무방비 — **14건 잠복의 공통 뿌리**. 라이브 가드는
@@ -293,21 +295,21 @@ npm run sim:web                            # 엔진 테스트 콘솔(웹) → lo
 
 ```
 # ── 전체 배터리 복붙 체인(순수 3 + 라이브 6, 하나라도 실패 시 중단) ──
-npx tsx tools/_dv_walletauth.ts && npx tsx tools/_dv_coupon.ts && (cd server && npx tsx tools/_dv_security.ts) && (cd server && npx tsx tools/_dv_ratelimit.ts) && (cd server && for t in _dv_purchase _dv_announce _dv_coupon_live _dv_achearn _dv_walletreplay walletConcurrency; do node_modules/.bin/tsx --env-file=.env.local tools/$t.ts || exit 1; done)
+npx tsx tools/_dv_walletauth.ts && npx tsx tools/_dv_coupon.ts && (cd server && npx tsx tools/_dv_security.ts) && (cd server && npx tsx tools/_dv_ratelimit.ts) && (cd server && for t in _dv_purchase _dv_announce _dv_coupon_live _dv_achearn _dv_walletreplay walletConcurrency; do node_modules/.bin/tsx tools/$t.ts || exit 1; done)  # 라이브 6: --env-file 없이 → _env.ts가 dev(.env.development.local) 우선 로드
 
 # ── 순수(repo 루트, DB 불필요) ──
 npx tsx tools/_dv_walletauth.ts             # 다이아 서버 진실화(BACKEND §13.12) — 순수: 멱등키 빌더 전역유일(userId 포함)·세이브리셋 무료강화 차단(camp saveId 에폭)·업적 계정평생1회 비대칭·econ 금액권위(ad+50/camp−300 서버상수·업적 호출당1000 클램프)·카탈로그 총합(16220)≤평생합캡(20000) 드리프트 가드·reason 화이트리스트 + **engine↔server econ 미러 크로스가드(AD_REWARD/CAMP/AD_DAILY_CAP/WELCOME 4값, 2026-07-07)·다이아 팩 카탈로그(server products↔diamondTiers 6팩 id+수량)·엔타이틀먼트 SKU 클라(lib/iap 정규식)↔서버 정합** + A/B(옛 클라신뢰/무에폭 키/econ 51 변이 재현). exit 0/1. ※평생합 서버 왕복(원장 sum·경계·409 cap)은 라이브 _dv_achearn이 실증
 npx tsx tools/_dv_coupon.ts                 # 쿠폰·관리자 순수(BACKEND §13.14/§13.15) — normalizeCode(대문자+trim)·requireAdmin fail-closed(토큰 미설정/<16자→거부·정확토큰 허용·길이가드). exit 0/1. ※발급·사용·이중지급0·타겟·만료는 상설 라이브 _dv_coupon_live가 실증
 (cd server && npx tsx tools/_dv_security.ts) # 보안 수정 순수 가드(SECURITY_AUDIT #1·#2(a)·#4·#5, 2026-07-07, 구현=Opus/검증·커밋=Fable 5) — DB불필요: welcome 클라키무시 계정당상수·earn/spend 저장키 userId 서버바인딩(교차유저 선점차단)·세션시크릿 prod fail-closed(미설정/<32자/기본값→signToken throw·verifyToken null)+토큰만료(iat 180일)·스냅샷 256KB 상한 + A/B(강한시크릿 왕복·신선토큰 통과=만료 오탐 아님·변이 자가검증). exit 0/1. ※라이브 dedup(welcome varying-key·선점)은 dev DB walletConcurrency/_dv_walletreplay가 실증
 (cd server && npx tsx tools/_dv_ratelimit.ts) # 레이트리밋 순수 가드(SECURITY_AUDIT #3, 2026-07-07, 구현=Opus/검증·커밋=Fable 5) — DB·Redis불필요: env(UPSTASH_*) 미설정 시 checkLimit 항상 허용(fail-open no-op, 세팅 전 커밋 안전 증명)·clientIp xff 첫 홉 파싱(폴백 unknown)·LIMITS 상수=의도 윈도(login10/60·coupon user8/60+IP20/600·ticket5/600·snapshot10/300 드리프트 가드)·엔드포인트별 프리픽스 구분 + 변이 자가검증. exit 0/1. ※라이브 429 차단은 Upstash env 주입 후 A/B(팔로우업)
-# ── 라이브(server/, .env.local DATABASE_URL 필요 — dev Postgres) ──
-(cd server && node_modules/.bin/tsx --env-file=.env.local tools/_dv_purchase.ts)  # 결제 검증 머니패스(BACKEND §13.18 #43) — RC 웹훅 인증 fail-closed·샌드박스/엔타이틀먼트/미등록 무시·grant/refund·멱등 dedup·라우트 통합(401/+1000/재전송 dedup/−1000)·afterSafe(관찰 채널 throw가 응답 오염 안 함)·테스트유저 정리. exit 0/1
-(cd server && node_modules/.bin/tsx --env-file=.env.local tools/_dv_announce.ts)  # 공지 CRUD 가드(BACKEND §13.11·13.13·13.15, 2026-07-06) — 라이브 dev DB: 발행→bootstrap 노출·기간 필터(만료/미래)·pinned 정렬·PATCH/DELETE 404 대칭·proj 스코프 4메서드·date-only endsAt KST 정규화(14:59:59.999Z)·fail-closed 인증 8항목 + 만료 필터 A/B. _DV_ANN_ 자동정리. exit 0/1
-(cd server && node_modules/.bin/tsx --env-file=.env.local tools/_dv_coupon_live.ts)  # 쿠폰 발급·사용 라이브 가드(BACKEND §13.14·13.15·13.17 P0-5, 2026-07-06) — 라이브 dev DB: 발급→redeem(+reward DB대조)·이중사용 used·기간·개인타겟 은폐·무토큰 redeem 401+dev-user-1 무변화(C1 인증폴백)·date-only endsAt KST(C2)·미존재 targetUserId 400(C3)·중복 409·DELETE 409·무토큰 admin 401 12항목 + 이중사용 UNIQUE A/B. _DVCPN_ 자동정리. exit 0/1
-(cd server && node_modules/.bin/tsx --env-file=.env.local tools/_dv_achearn.ts)  # 업적 적립 라이브 가드(BACKEND §13.12 P0-2·H3, 2026-07-06 발견·검증=Fable 5/수정·문서=Opus) — 라이브 dev DB 실토큰: 정상 earn(+applied)·멱등 재호출(applied:false)·호출당 클램프(99999→1000)·평생합 경계(19,900→+100 클램프)·초과 409 cap·A/B(백스톱 없으면 통과 대조). _DVACH_ 자동정리. exit 0/1
-(cd server && node_modules/.bin/tsx --env-file=.env.local tools/_dv_walletreplay.ts)  # 지갑 멱등 재시도 잔액(BACKEND §4, 2026-07-06) — 라이브 dev DB: 지급+1000→지출−900→같은키 재시도 반환==현재잔액 100(스냅샷 1000 아님)·불변식 balance==Σledger + A/B(원장 balanceAfter=1000 대조군). 던지기 유저 자동 정리. exit 0/1
-(cd server && node_modules/.bin/tsx --env-file=.env.local tools/walletConcurrency.ts)  # 동시 spend 이중지불 방지(BACKEND §13.4 H2) — 잔액 K에 N(>K) 동시 −1 → 정확히 K건만 성공·음수 0·원장 delta 합==적립−성공차감(FOR UPDATE 없으면 초과지출로 음수). conc-test-user 리셋. exit 0/1
-# (on-demand) (cd server && node_modules/.bin/tsx --env-file=.env.local tools/_dv_sentry_verify.ts)  # Sentry 서버 관측(BACKEND §13.21) — DSN 주입 시 이벤트 flush=true(대시보드 확인). DSN 없으면 no-op이라 배터리 제외
+# ── 라이브(server/, DATABASE_URL 필요 — _env.ts가 .env.development.local(로컬 Supabase) 우선, 없으면 .env.local) ──
+(cd server && node_modules/.bin/tsx tools/_dv_purchase.ts)  # 결제 검증 머니패스(BACKEND §13.18 #43) — RC 웹훅 인증 fail-closed·샌드박스/엔타이틀먼트/미등록 무시·grant/refund·멱등 dedup·라우트 통합(401/+1000/재전송 dedup/−1000)·afterSafe(관찰 채널 throw가 응답 오염 안 함)·테스트유저 정리. exit 0/1
+(cd server && node_modules/.bin/tsx tools/_dv_announce.ts)  # 공지 CRUD 가드(BACKEND §13.11·13.13·13.15, 2026-07-06) — 라이브 dev DB: 발행→bootstrap 노출·기간 필터(만료/미래)·pinned 정렬·PATCH/DELETE 404 대칭·proj 스코프 4메서드·date-only endsAt KST 정규화(14:59:59.999Z)·fail-closed 인증 8항목 + 만료 필터 A/B. _DV_ANN_ 자동정리. exit 0/1
+(cd server && node_modules/.bin/tsx tools/_dv_coupon_live.ts)  # 쿠폰 발급·사용 라이브 가드(BACKEND §13.14·13.15·13.17 P0-5, 2026-07-06) — 라이브 dev DB: 발급→redeem(+reward DB대조)·이중사용 used·기간·개인타겟 은폐·무토큰 redeem 401+dev-user-1 무변화(C1 인증폴백)·date-only endsAt KST(C2)·미존재 targetUserId 400(C3)·중복 409·DELETE 409·무토큰 admin 401 12항목 + 이중사용 UNIQUE A/B. _DVCPN_ 자동정리. exit 0/1
+(cd server && node_modules/.bin/tsx tools/_dv_achearn.ts)  # 업적 적립 라이브 가드(BACKEND §13.12 P0-2·H3, 2026-07-06 발견·검증=Fable 5/수정·문서=Opus) — 라이브 dev DB 실토큰: 정상 earn(+applied)·멱등 재호출(applied:false)·호출당 클램프(99999→1000)·평생합 경계(19,900→+100 클램프)·초과 409 cap·A/B(백스톱 없으면 통과 대조). _DVACH_ 자동정리. exit 0/1
+(cd server && node_modules/.bin/tsx tools/_dv_walletreplay.ts)  # 지갑 멱등 재시도 잔액(BACKEND §4, 2026-07-06) — 라이브 dev DB: 지급+1000→지출−900→같은키 재시도 반환==현재잔액 100(스냅샷 1000 아님)·불변식 balance==Σledger + A/B(원장 balanceAfter=1000 대조군). 던지기 유저 자동 정리. exit 0/1
+(cd server && node_modules/.bin/tsx tools/walletConcurrency.ts)  # 동시 spend 이중지불 방지(BACKEND §13.4 H2) — 잔액 K에 N(>K) 동시 −1 → 정확히 K건만 성공·음수 0·원장 delta 합==적립−성공차감(FOR UPDATE 없으면 초과지출로 음수). conc-test-user 리셋. exit 0/1
+# (on-demand) (cd server && node_modules/.bin/tsx tools/_dv_sentry_verify.ts)  # Sentry 서버 관측(BACKEND §13.21) — DSN 주입 시 이벤트 flush=true(대시보드 확인). DSN 없으면 no-op이라 배터리 제외
 ```
 
 ## 아키텍처 원칙 (CLAUDE.md 11장)

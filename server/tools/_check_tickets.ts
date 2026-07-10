@@ -1,4 +1,6 @@
-// 읽기 전용 — 최근 문의(티켓) + 진단 스냅샷 실제 구조 덤프. `npx tsx --env-file=.env.local tools/_check_tickets.ts`
+// 읽기 전용 — 최근 문의(티켓) + 진단 스냅샷 실제 구조 덤프. `npx tsx tools/_check_tickets.ts`
+// dev는 .env.development.local(로컬 Supabase) 우선, 없으면 .env.local(운영). 운영 겨냥 시 DATABASE_URL 오버라이드.
+import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — 첫 import)
 import { db } from '../db';
 import { tickets, diagnosticSnapshots } from '../db/schema';
 import { desc, eq } from 'drizzle-orm';
