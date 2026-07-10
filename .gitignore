@@ -42,3 +42,6 @@ sim-web/dist/
 
 .vercel
 .env*
+
+# 로컬 빌드 산출물(AAB/APK — GitHub 100MB 제한·EAS가 원본 보관)
+dist-builds/
