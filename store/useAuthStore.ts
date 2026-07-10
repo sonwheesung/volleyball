@@ -96,6 +96,9 @@ export const useAuthStore = create<AuthState>()(
       partialize: (s) => ({ session: s.session, deviceId: s.deviceId, readAnnouncements: s.readAnnouncements, dismissedUpdateVersion: s.dismissedUpdateVersion }),
       onRehydrateStorage: () => (state) => {
         if (state?.session?.token) setServerToken(state.session.token); // 캐시 세션 → 오프라인 진입
+        // 재시작 복원 경로에서도 RC app_user_id를 우리 userId로 고정(§13.18 최대 함정) — 안 하면 앱 재시작 후
+        // 자동 로그인된 유저의 구매가 익명 RC id로 붙어 웹훅 지급이 유저에 안 붙는다. fire-and-forget(graceful·dev no-op).
+        if (state?.session?.userId) void identifyUser(state.session.userId);
         useAuthStore.setState({ hydrated: true });
       },
     },

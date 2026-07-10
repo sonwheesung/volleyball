@@ -391,7 +391,19 @@
   - **매출 롤업**: 지급이 **실제 적용된(applied) 웹훅**만 `statsDaily`(revenueKrw += price·purchaseCount+1·diamondsPurchased += 다이아) 갱신 → 대시보드 매출/전환율 원천. confirm이 grant 경쟁 승리 시 KRW만 유실(재무진실=RC 대시보드라 무해). 환불은 원장만(대시보드 매출은 gross).
   - **엣지 처리(2026-07-04)**: ① **소모성 전용 타입만** — 지급=INITIAL/NON_RENEWING만, 회수=CANCELLATION/REFUND만. RENEWAL/UNCANCELLATION/EXPIRATION(구독)은 무시(UNCANCELLATION을 지급 두면 원구매 키와 dedup돼 환불 되돌림 어긋남). ② **익명 app_user_id 방어** — `$RCAnonymousID`·비-UUID면 무시(200, 재시도 폭풍 방지) → confirm 폴백이 메꿈(클라 `logIn` 누락 대비). ③ **순서역전 안전** — 가법 원장이라 환불이 지급보다 먼저 와도 순 0 수렴. ④ **이중 환불 dedup**(같은 txn 재전송). ⑤ **관리자 수동환불↔RC 자동환불 이중차감** — 키가 달라(ticket vs storeTxn) 자동 dedup 안 됨 → **운영 규칙 분리**(스토어 결제분은 RC만·수동 금지, `admin/refund` 주석 명문화).
   - **검증**: `server/tools/_dv_purchase.ts`(인증 fail-closed·샌드박스/엔타이틀먼트/미등록/구독타입/익명 무시·grant/refund·**멱등 dedup**·이중환불 dedup·순서역전 순0·라우트 통합 401/+1000/재전송 dedup/−1000·테스트유저 정리) 전항 PASS + server tsc 0.
-  - **남은 것(외부)**: `lib/iap.ts` 소모성 다이아 `purchasePackage` + `Purchases.logIn(userId)`(웹훅 귀속 필수) + 구매 resolve 후 `/api/purchase/confirm` 호출 · RC 대시보드 상품/웹훅/키 · Google Play·App Store 다이아 팩 상품 · EAS 빌드 · 샌드박스 실결제.
+  - ~~**남은 것(외부)**: `lib/iap.ts` 소모성 다이아 `purchasePackage` + `Purchases.logIn(userId)`(웹훅 귀속 필수) + 구매 resolve 후 `/api/purchase/confirm` 호출~~ → **클라측 코드 완료(2026-07-05·07-10)**. 진짜 남은 것 = RC 계정/대시보드·EAS·스토어 상품 등록(아래 운영 체크리스트).
+- **클라 SDK 배선 완료(2026-07-10, 검증 Fable·수정 Opus 에이전트)** — `lib/iap.ts`는 완성형(`identifyUser`=`Purchases.logIn(userId)`·`logoutUser`=`logOut`·`purchaseDiamonds`=`purchasePackage`→`storeTxnId`→`confirmPurchase` 폴백)이었으나 **호출 배선 3지점**을 확정:
+  - **로그인 성공 직후** → `store/useAuthStore.ts:81`(`signIn` 성공 경로에서 `void identifyUser(session.userId)`).
+  - **앱 재시작 복원 경로** → `store/useAuthStore.ts:onRehydrateStorage`(저장 세션 자동로그인 지점 — 여기서도 `void identifyUser(state.session.userId)`. **안 하면 재시작 후 구매가 익명 RC id로 붙어 웹훅 지급 불가** = §13.18 "최대 함정"의 재시작 사각).
+  - **로그아웃** → `store/useAuthStore.ts:88`(`signOut`에서 `void logoutUser()` — 다음 유저 오염 방지). 셋 다 fire-and-forget·graceful(dev/미설정 no-op, throw 없음 — 로그인/로그아웃 흐름 무차단).
+  - **라우트 LIVE E2E 가드 등재**: `server/tools/_e2e_purchase_live.ts` — 실행 중 서버(:3000)에 **실제 HTTP 왕복**(_dv_purchase의 순수판정+in-process 호출이 못 덮는 층): ①dev 로그인→userId ②웹훅(Authorization 시크릿)→원장 +1000 ③같은 txn 재전송→dedup(불변) ④confirm 폴백(RC 키 없어 `rc-unconfigured` 503 관측·Bearer 없음 401) ⑤CANCELLATION 환불→−1000(잔액 0)·이중환불 dedup ⑥SANDBOX→무시(원장 무변) ⑦Authorization 불일치→401. 전항 PASS + 테스트 유저·원장·감사로그·매출롤업 복구. **로컬 전용 `RC_WEBHOOK_SECRET`은 `.env.development.local`에만**(운영 `.env.local` 무접촉) — 서버가 이 시크릿을 로드하려면 dev 서버 **재시작** 필요.
+  - **남은 운영 체크리스트(출시 순서 — 코드 밖·수동)**:
+    1. **RC 계정/앱 등록** — RevenueCat 대시보드에서 프로젝트+Android/iOS 앱 생성, 스토어 자격증명 연결.
+    2. **public SDK 키** → `EXPO_PUBLIC_REVENUECAT_API_KEY`(EXPO_PUBLIC_*은 빌드타임 인라인 → **EAS 재빌드**해야 반영).
+    3. **웹훅 URL + 시크릿** — RC 대시보드 웹훅에 `<prod>/api/purchase/webhook/revenuecat` + Authorization 커스텀 헤더값 등록, 같은 값을 Vercel `RC_WEBHOOK_SECRET`(≥16자, 미설정=전거부 fail-closed)에 주입.
+    4. **RC REST 키** → Vercel `RC_REST_API_KEY`(confirm 폴백 재검증용, 미설정=confirm 503 `rc-unconfigured`).
+    5. **스토어 상품 등록** — Google Play Console(+App Store) 소모성 다이아 팩을 `server/lib/products.ts` `DIAMOND_PRODUCTS`의 productId(`dia_100`…`dia_10000`)와 **정확히 일치**(오타=지급 0 fail-closed) + RC 대시보드 Products/Offerings 연결. **EAS 빌드 후** 스토어 등록 가능.
+    6. **샌드박스 실결제** — 테스트 계정으로 실제 구매→웹훅 수신→원장 지급→confirm 폴백까지 왕복 확인(SANDBOX는 서버가 무시하므로 지급 검증은 프로덕션 트랙 필요).
 
 ### 13.19 다이아 어뷰징 방어 — 구단 초기화·재설치 (2026-07-03, 사용자 보안 감사)
 > **위협**: 구단 초기화(`selectTeam`/`resetSave`)가 `claimedAch`·`adState`를 로컬 리셋 → "다이아 공장(재수령·광고 재시청 farming)" 우려. **결론: 서버가 이미 막고 있음(라이브 E2E 검증) + 사용자 결정으로 계정 재화는 초기화해도 유지.**
