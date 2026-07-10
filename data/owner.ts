@@ -1,7 +1,7 @@
 // 구단주 레이어 셀렉터 (OWNER_SYSTEM) — 불만 파생·면담 대사·컨디션. UI와 store가 공유.
 // 불만은 저장하지 않는다: FA 성향과 현실(순위·출전·연봉)의 불일치에서 그때그때 파생.
 
-import type { Player, SeasonAwards, FAArchetype } from '../types';
+import type { Player, SeasonAwards, FAArchetype, Contract } from '../types';
 import {
   discontentOf, moodOf, popularityOf, fanbase, playerFans, fanOverlapRatio,
   interviewEffects, refuseResignProb, sustainedBenchRefuse, sinkingShipBias,
@@ -84,6 +84,7 @@ function moodLabel(cause: SitCause, mood: Mood, topic: DiscontentTopic | null): 
 /** 선수의 현재 마음 — 사유(왜 벤치인가)+성격으로 불만/무감정/긍정 + 면담용 주제·가중. 시즌 진행 시점(day) 기준 */
 export function discontentNow(
   p: Player, myTeamId: string, day: number,
+  overrides?: Record<string, Contract>, // 대기 중 인시즌 재계약(§2.5c D안 2단계) — 있으면 그 연봉으로 money 불만 재평가
 ): { topic: DiscontentTopic | null; weight: number; mood: Mood; cause: SitCause; label: string; playRatio: number } {
   // 시즌 시작 전(day≤0, 구단 선택·온보딩 currentDay=0)은 경기가 0 → 불만의 근거(출전율·성적)가 없다.
   // 여기서 옛 폴백은 refDay=MAX였는데, computeStandings(MAX)·leagueProduction(MAX)가 '전 시즌 미래 경기'를
@@ -109,7 +110,9 @@ export function discontentNow(
     recentRankAvg: rank,
     teamCount: standings.length,
     playRatio,
-    salaryRatio: p.contract.salary / Math.max(1, marketValue(p, salaryEraNow())),
+    // money 불만은 **대기 중 override(인시즌 재계약) 연봉이 있으면 그 값**으로 평가(§2.5c D안 2단계) — '후하게'가 연봉
+    //   불만을 실제로 풀고 '짧게'(−15%)는 불씨를 남긴다. override 없으면 현재 계약 연봉(기존). win/minutes/hometown 불만은 무영향(돈 면역).
+    salaryRatio: (overrides?.[p.id]?.salary ?? p.contract.salary) / Math.max(1, marketValue(p, salaryEraNow())),
     myTeamId,
     sitCause: cause,
     expectsPlay: expectsPlayOf(p, myTeamId, day),
@@ -125,7 +128,10 @@ export function discontentNow(
 const REL_LEAVE_K = 0.15;  // 친한 동료 방출 1명당 거부 가산(affinity×) — 절친(0.7)≈+0.10
 
 /** 시즌말 FA 판정용 ownerFx 조립 — store.endSeason과 FA/드래프트 센터 미리보기가 공유(미리보기=결과) */
-export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamId: string, fanScore: number): OwnerFx {
+export function buildOwnerFx(
+  interviews: InterviewLog[], season: number, myTeamId: string, fanScore: number,
+  overrides: Record<string, Contract> = {}, // 대기 중 인시즌 재계약(§2.5c D안 2단계) — money 불만 재평가에 반영. 6개 호출처 동일 전달 = 미리보기=결과.
+): OwnerFx {
   const fx = interviewEffects(interviews, season);
   const refuseProb: Record<string, number> = {};
   // 핵심·충성 동료 방출 → 남은 선수단 동요(TRANSACTION_SYSTEM 0.5④). 이번 시즌 내 방출자의 명성(career·근속)으로 팀 단위 거부 가중.
@@ -139,7 +145,7 @@ export function buildOwnerFx(interviews: InterviewLog[], season: number, myTeamI
   for (const id of rosterIdsOnDay(myTeamId, SEASON_END_DAY)) {
     const p = evolveOnDay(id, SEASON_END_DAY);
     if (!p || p.contract.remaining > 1) continue; // 이번 오프시즌 만료자만 거부권 행사
-    const { topic, weight, playRatio } = discontentNow(p, myTeamId, SEASON_END_DAY);
+    const { topic, weight, playRatio } = discontentNow(p, myTeamId, SEASON_END_DAY, overrides);
     // 누적(C.4): 시즌 내내 부당하게 앉아있던 만큼(낮은 출전율) 정 떨어져 거부↑. 출전 불만일 때만.
     const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight) : 0;
     // 공약 파기(OWNER_SYSTEM 1.3 · FA_SYSTEM §2.8 Phase2): '주전 보장' 약속(면담 카드 OR FA 오퍼 레버)을 했는데
@@ -168,6 +174,35 @@ export const TOPIC_SPEECH: Record<DiscontentTopic, string> = {
 export const TOPIC_BADGE: Record<DiscontentTopic, string> = {
   win: '우승 갈망', minutes: '출전 불만', money: '연봉 불만', hometown: '연고 향수',
 };
+
+/** 재계약 잔류 전망(계약 관리 UI — FA §2.5c-보완 3단계). **엔진 산출 위임**: `discontentNow(currentDay)` + `refuseResignProb`
+ *  + 누적/공약파기 가산항(`buildOwnerFx`와 동일 primitive)을 그대로 재사용해 **재구현이 아니라 조립**한다.
+ *  ★ 시즌 종료(SEASON_END_DAY) 파생을 시즌 중 부르면 미래 경기 시뮬(스포일러·콜드 수초)이라, 여기선 **currentDay** 입력만 쓴다
+ *    → 팀단위 SEASON_END_DAY 항(친구 방출 unrest·침몰선 sinkingShip)은 제외(그건 시즌말 확정 시 반영). 표시엔 "시즌 종료 시 확정" 캡션 필수.
+ *  overrides = 대기 중 인시즌 재계약 연봉(§2.5c-보완 ② — '후하게'가 money 불만을 실제로 풀어 전망을 낮춤). */
+export type ResignBand = 'stable' | 'fluid' | 'risk';
+export interface ResignOutlook { prob: number; band: ResignBand; topic: DiscontentTopic | null; chips: string[] }
+export function resignOutlookNow(
+  p: Player, myTeamId: string, day: number,
+  interviews: InterviewLog[], season: number,
+  overrides?: Record<string, Contract>,
+): ResignOutlook {
+  const { topic, weight, playRatio } = discontentNow(p, myTeamId, day, overrides);
+  const fx = interviewEffects(interviews, season);
+  const refuseBias = fx.refuseBias[p.id] ?? 0;
+  const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight) : 0;
+  const promisedStarter = starterPromised(interviews, season, p.id) || !!p.contract.starterGuarantee;
+  const breach = topic === 'minutes' && promisedStarter ? PROMISE_BREACH_REFUSE : 0;
+  const prob = Math.min(0.95, refuseResignProb(topic, weight, refuseBias) + accum + breach);
+  const band: ResignBand = prob >= 0.45 ? 'risk' : prob >= 0.15 ? 'fluid' : 'stable';
+  const chips: string[] = [];
+  if (topic) chips.push(TOPIC_BADGE[topic]);          // 불만 주제(연봉/출전/우승/연고)
+  if (breach > 0) chips.push('주전 공약 파기');        // 주전 보장 약속 후 벤치 = 배신(거부 급등)
+  if (accum > 0.12) chips.push('출전 누적 불만');       // 시즌 내내 묵힌 출전 불만
+  if (refuseBias > 0.01) chips.push('면담 역효과');     // 실패 면담이 정을 떨어뜨림
+  else if (refuseBias < -0.01) chips.push('면담으로 달램'); // 성공 면담이 마음을 붙잡음
+  return { prob, band, topic, chips };
+}
 
 /** 선수 성격(FA 동기 아키타입) 표시 라벨 + 벤치 태도 설명 — "왜 이 마음인지" 가독성용(OWNER_SYSTEM).
  *  화면에 성격을 드러내 "얘는 충성형이라 백업도 수용 / 출전형이라 벤치에 민감"이 한눈에 보이게. */

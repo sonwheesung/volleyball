@@ -15,14 +15,21 @@ import { activeRoster, capPayroll, payroll } from '../data/roster';
 import { overallRaw } from '../engine/overall';
 import { isFranchise, maxSalaryFor, LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MIN, severanceFee } from '../engine/transactions';
-import { assignFAGrades, askingPrice, willBeFA } from '../engine/faMarket';
+import { assignFAGrades, willBeFA } from '../engine/faMarket';
 import { contractStatus, formatMoney, resignOptions } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
+import { resignOutlookNow, type ResignBand } from '../data/owner';
 import { useGameStore } from '../store/useGameStore';
 import type { ReSignReject } from '../store/useGameStore';
 import type { Contract, Player } from '../types';
 
 const STATUS_COLOR = { 저평가: theme.good, 적정: theme.muted, 고평가: theme.bad } as const;
+// 잔류 전망 밴드(FA §2.5c-보완 3단계) — 재계약 거부 확률(currentDay 파생)의 3구간. color·label 표시.
+const BAND_META: Record<ResignBand, { label: string; color: string }> = {
+  stable: { label: '안정', color: theme.good },
+  fluid: { label: '유동', color: theme.warn },
+  risk: { label: '위험', color: theme.bad },
+};
 type ResignOpt = ReturnType<typeof resignOptions>[number];
 
 // store reSign 거부 사유 → 사용자 문구(조용한 거부 제거). 사전체크가 못 잡은 잔여 케이스의 안전망.
@@ -59,6 +66,8 @@ function ContractsInner() {
   const setResign = useGameStore((s) => s.setResign);
   const cash = useGameStore((s) => s.cash);
   const bonds = useGameStore((s) => s.bonds);
+  const interviews = useGameStore((s) => s.interviews);
+  const season = useGameStore((s) => s.season);
 
   const evolved = getEvolvedTeamPlayers(teamId, currentDay);
   const active = activeRoster(evolved, overrides, released);
@@ -80,6 +89,14 @@ function ContractsInner() {
     return assignFAGrades(pool);
   }, [currentDay]);
   const faGrades = leagueFaGrades;
+  // 잔류 전망(FA §2.5c-보완 3단계) — resignOutlookNow(엔진 refuseResignProb+가산항 위임, currentDay 파생·미래 미시뮬).
+  //   대기 override(인시즌 재계약) 연봉이 money 불만을 재평가하도록 overrides 전달. 위험(잔류 거부 확률 높음) 선수 먼저 정렬(만료 임박 강조).
+  const faSorted = useMemo(
+    () => faList
+      .map((p) => ({ p, outlook: resignOutlookNow(p, teamId, currentDay, interviews, season, overrides) }))
+      .sort((a, b) => b.outlook.prob - a.outlook.prob),
+    [faList, teamId, currentDay, interviews, season, overrides],
+  );
   // 시장가·저평가 라벨·재계약 오퍼 가격은 **표시 컷오프**(§3.3 displayCutoff) — player 상세와 동일 데이터 경로(이원화 해소, 2026-07-07).
   const displayDay = displayCutoff(currentDay, results, teamId);
 
@@ -221,11 +238,13 @@ function ContractsInner() {
         <>
           <Title>FA 예정 (시즌 종료 시)</Title>
           <Muted style={{ fontSize: 12 }}>
-            잔류하려면 요구연봉(시장가치×등급 프리미엄)을 지불합니다. 포기하면 떠납니다.
+            잔류를 택하면 시장가로 재계약을 제안합니다(등급 프리미엄은 타 구단 영입가 — 내 재계약은 시장가). 포기하면 떠납니다.
+            {'\n'}선수의 마음은 시즌 종료 시 확정됩니다 — 불만이 크면 잡아도 뿌리칠 수 있습니다.
           </Muted>
-          {faList.map((p) => {
+          {faSorted.map(({ p, outlook }) => {
             const grade = faGrades.get(p.id)!;
-            const ask = askingPrice(marketVal(p, getPlayerProduction(p.id, displayDay)), grade);
+            const reSalary = marketVal(p, getPlayerProduction(p.id, displayDay)); // 잔류 연봉 = 시장가(renewedContract, rollover.ts:49). ask(×프리미엄)는 타팀 영입가
+            const bm = BAND_META[outlook.band];
             const keep = resignDecisions[p.id] !== false;
             return (
               <View key={p.id} style={styles.rowCol}>
@@ -235,9 +254,18 @@ function ContractsInner() {
                     <Text style={styles.name}>
                       {p.name} <Text style={{ color: theme.accent }}>{grade}등급</Text>
                     </Text>
-                    <Text style={styles.sub}>{p.age}세 · 요구 {formatMoney(ask)}</Text>
+                    <Text style={styles.sub}>{p.age}세 · 잔류 연봉 {formatMoney(reSalary)} · 시장가</Text>
                   </View>
                   <OvrBadge value={overallRaw(p)} />
+                </View>
+                {/* 잔류 전망 밴드 + 사유 칩 — resignOutlookNow(엔진 위임). "시즌 종료 시 확정" 캡션은 상단 안내에. */}
+                <View style={styles.outlookRow}>
+                  <View style={[styles.bandTag, { borderColor: bm.color, backgroundColor: bm.color + '22' }]}>
+                    <Text style={[styles.bandText, { color: bm.color }]}>잔류 {bm.label}</Text>
+                  </View>
+                  {outlook.chips.map((c) => (
+                    <View key={c} style={styles.chip}><Text style={styles.chipText}>{c}</Text></View>
+                  ))}
                 </View>
                 <View style={styles.actions}>
                   <Pressable
@@ -312,15 +340,15 @@ function ContractsInner() {
         })) : []}
       />
 
-      {/* 재계약 확정 — store reSign 결과 확인 후 실패 시 사유를 커스텀 모달로(조용한 거부 제거, UI-21) */}
+      {/* 재계약 제안 — 오퍼일 뿐, 확정(선수 수락)은 시즌 종료 시(FA §2.5c-보완 봉인). store reSign 실패 시 사유 모달(UI-21) */}
       <ActionSheet
         visible={!!confirmSheet}
-        title="재계약 확정"
-        message={confirmSheet ? `${confirmSheet.p.name} — ${confirmSheet.o.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.o.salary)} · ${confirmSheet.o.years}년\n${confirmSheet.o.note}` : undefined}
+        title="재계약 제안"
+        message={confirmSheet ? `${confirmSheet.p.name} — ${confirmSheet.o.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.o.salary)} · ${confirmSheet.o.years}년\n${confirmSheet.o.note}\n\n※ 제안일 뿐입니다 — 불만이 큰 선수는 시즌 종료 시 뿌리치고 FA로 나갈 수 있습니다.` : undefined}
         onClose={() => setConfirmSheet(null)}
         actions={confirmSheet ? [
           {
-            label: '확정', tone: 'primary',
+            label: '제안', tone: 'primary',
             onPress: () => {
               const cs = confirmSheet;
               const res = reSign(cs.p.id, cs.contract);
@@ -346,4 +374,9 @@ const styles = themedStyles(() => StyleSheet.create({
   actions: { flexDirection: 'row', gap: 8 },
   btn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
   btnText: { fontSize: 14, fontWeight: '800' },
+  outlookRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
+  bandTag: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
+  bandText: { fontSize: 12, fontWeight: '800' },
+  chip: { backgroundColor: theme.border + '55', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
+  chipText: { color: theme.muted, fontSize: 11, fontWeight: '700' },
 }));

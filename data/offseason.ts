@@ -16,7 +16,7 @@ import { aiReserveTargets, aiDomesticCaps } from './rosterTarget';
  *  Phase 1.5(2026-07-09): 재계약을 **팀 목표(aiRosterTargets)로 상한** 하는 능동 배출이 주 레버가 되면서,
  *  이 확률 감쇠는 "목표 미달팀에서도 노장이 가끔 빠지는" 생동 역할로 축소(0.6→0.85, 과이탈 완화). */
 const AI_RETAIN_ATTRITION = 0.85;
-import { assignFAGrades, askingPrice, offerScore, prefWeightsOf, acceptProb, SIT_OUT, CERTAIN } from '../engine/faMarket';
+import { assignFAGrades, askingPrice, offerScore, prefWeightsOf, acceptProb, SIT_OUT, CERTAIN, willBeFA } from '../engine/faMarket';
 import { affinity, pairKey } from '../engine/relationships';
 import { relationBonds } from './relationships';
 import { needsCompensationPlayer, pickCompensation, compensationMoney, compensationMoneyOnly } from '../engine/compensation';
@@ -396,7 +396,20 @@ export function buildOffseason(
   // AI 국내 재계약/방출 상한(FA_SYSTEM §1.7, Phase 1.5) = 목표−RESERVE−IMPORTS(국내만) — 매 오프시즌 신인+수입에게 자리를 비운다.
   //   트라이아웃(외인·아시아)이 뒤에서 IMPORTS칸을 채우므로 국내는 그만큼 낮게 잡는다. 내 팀은 무제한(단장 결정).
   const aiRetainCap = aiDomesticCaps();
-  const snapshot = rolloverLeague(currentBasePlayers(), focusOf, leagueMedOvr, contractOverrides, effectsOf, (p) => lostDays.get(p.id) ?? 0);
+  const basePlayers = currentBasePlayers();
+  const snapshot = rolloverLeague(basePlayers, focusOf, leagueMedOvr, contractOverrides, effectsOf, (p) => lostDays.get(p.id) ?? 0);
+  // ── 인시즌 재계약(override) 우회 봉인(FA_SYSTEM §2.5c·D안, 2026-07-10) ──
+  //   실버그: 인시즌 재계약은 contractOverrides[id]에 담겨 rolloverPlayer가 remaining≥1로 **교체** → buildOffseason에서
+  //   만료(remaining≤0) 버킷이 아니라 keep 버킷으로 가 refuses()(재계약 거부 롤)를 **완전히 우회**했다. "재계약 확정=불만
+  //   무시 100% 잔류"가 되어 OWNER_SYSTEM("단장이 잡아도 선수가 떠날 수 있다")·§2.5와 모순(시뮬 확증 46/46 잔류).
+  //   봉인: override 보유 **만료자**(원계약 기준 이번 오프시즌 FA가 될 선수)도 refuses() 롤을 태운다. 거부 시 override 폐기 → FA 풀.
+  //   **만료자 판정 = 롤오버 전 base 계약의 willBeFA**(career≥FIRST_FA_SEASONS−1 & remaining≤1) — 롤오버하면 career+1≥6·remaining−1≤0으로
+  //   FA 공시될 선수. remaining≥2(계약 중 재계약)·비FA자격(영건 자동연장) override는 애초에 만료가 아니라 refuses() 무대상(무변).
+  //   ※ refuses() 시드는 per-player 해시(resign-refuse:{id}:{nextSeason} = 정상 만료 경로와 동일) — 공유 rng 미소비라 순서 무영향, 세이브 안전.
+  const overrideResign = new Set<string>();
+  for (const p of basePlayers) {
+    if (contractOverrides[p.id] && willBeFA(p)) overrideResign.add(p.id);
+  }
   const retireRng = createRng(70000 + nextSeason * 977);
   // medOvr = 시대 앵커(위 leagueMedOvr) — 은퇴 기준선 HIGH도 시대상대(연봉·AI잔류와 같은 패턴).
   const afterRetire = applyRetirements(currentRosters(), snapshot, retireRng, leagueMedOvr);
@@ -419,6 +432,15 @@ export function buildOffseason(
   const returningForeign: string[] = [];
   const returningAsian: string[] = [];
   for (const teamId of Object.keys(afterRetire.rosters)) {
+    // 내 팀 만료자: 단장이 잡고 싶어도(resign) 불만 선수는 거부하고 시장으로 나갈 수 있다(면담이 좌우).
+    //   ★ 봉인(위 overrideResign)을 위해 버킷팅 루프보다 먼저 정의 — override 만료자도 이 롤을 태운다.
+    const refuses = (p: Player): boolean => {
+      if (teamId !== myTeam) return false;
+      const prob = ownerFx?.refuseProb[p.id] ?? 0;
+      if (prob <= 0) return false;
+      const rng = createRng(strSeed(`resign-refuse:${p.id}:${nextSeason}`));
+      return rng.next() < prob;
+    };
     // 1) 계약 남은 선수는 무조건 보유 + 팀 연봉 누적
     const keep: string[] = [];
     let payroll = 0;
@@ -434,18 +456,18 @@ export function buildOffseason(
       if (p.isAsianQuota) { if (!importAgesOut(p)) returningAsian.push(id); continue; }
       if (p.isForeign) { if (!importAgesOut(p)) returningForeign.push(id); continue; }
       if (p.contract.remaining <= 0) expiring.push(p);
+      // 인시즌 재계약(override) 만료자 봉인 — override로 remaining≥1이 됐어도 원계약 만료자(overrideResign)면
+      //   재계약 거부 롤을 태운다(재계약도 오퍼다·D안). 거부 시 override 폐기 → 원계약(remaining 0)으로 FA 풀행
+      //   (정상 만료 FA와 동일 계약 형태 — 등급/요구연봉이 override 연봉이 아닌 원 연봉 기준). teamId===myTeam은 refuses가 보장.
+      else if (overrideResign.has(id) && refuses(p)) {
+        const baseC = basePlayers.find((b) => b.id === id)!.contract;
+        snapshot[id] = { ...p, contract: { ...baseC, remaining: 0 } };
+        pool.push(id);
+      }
       else { keep.push(id); payroll += p.contract.salary; }
     }
     // 2) 만료자: 잔류 의사(내 팀=단장 결정 / AI=aiKeepsFA) 있는 선수를 가치 높은 순으로,
     //    팀 샐러리캡 한도 내에서만 재계약. 캡 초과분은 잔류 못 하고 FA 시장으로(왕조 억제 레버).
-    // 내 팀 만료자: 단장이 잡고 싶어도(resign) 불만 선수는 거부하고 시장으로 나갈 수 있다(면담이 좌우)
-    const refuses = (p: Player): boolean => {
-      if (teamId !== myTeam) return false;
-      const prob = ownerFx?.refuseProb[p.id] ?? 0;
-      if (prob <= 0) return false;
-      const rng = createRng(strSeed(`resign-refuse:${p.id}:${nextSeason}`));
-      return rng.next() < prob;
-    };
     // AI 재계약: 절벽 컷(aiKeepsFA) 대신 확률(aiRetainProb)을 결정론 시드로 굴림 — 가끔 노장 잔류·영건 이탈(리그 생동)
     const aiRetains = (p: Player): boolean => createRng(strSeed(`airetain:${p.id}:${nextSeason}`)).next() < aiRetainProb(p, leagueMedOvr) * AI_RETAIN_ATTRITION;
     const wantRetain = expiring

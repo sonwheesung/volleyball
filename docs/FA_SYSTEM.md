@@ -301,6 +301,30 @@ offerScore = w.money·(연봉/asking) + w.win·우승권(0.7·전력+0.3·presti
   - **결정론 주의**: 이미 구워진 **과거 base 스냅샷은 불변** — 이 수정은 앞으로의 롤오버 결과만 바꾼다(진행 중 오프시즌
     재계산 시 재직 연수가 정정될 수 있으나, 오프시즌은 1회 확정 사건이라 수용 — §1.2 세이브 호환과 같은 결). 가드 `tools/_dv_resignrollover.ts`.
 
+#### 2.5c-보완 — 재계약 거부 우회 실버그 + 봉인(D안, 발견·수정 2026-07-10)
+> ~~인시즌 재계약(override)은 재계약 거부(`refuseProb`)를 우회한다~~ → **봉인**. "재계약도 오퍼다" 정합화(독립 리뷰 D안).
+
+- **실버그(미등재, 시뮬 확증)**: 인시즌 재계약이 `contractOverrides[id]`에 담겨 `rolloverPlayer`가 `remaining≥1`로 계약을 교체하면,
+  `buildOffseason`에서 **만료(`remaining≤0`) 버킷이 아니라 keep 버킷**으로 가 `refuses()`(불만 선수 재계약 거부 롤)를 **완전히 우회**했다.
+  프로브(`refuseProb` 0.99 강제): override 보유자 **46/46 잔류**(override 없으면 46/46 이탈). 결과: "재계약 확정 = 불만 무시 **100% 잔류** 버튼",
+  '짧게'(−15%)와 조합 시 **최저가 확정 익스플로잇**. OWNER_SYSTEM("단장이 잡아도 선수가 떠날 수 있다")·§2.5와 모순.
+- **봉인**: `buildOffseason`이 **override 보유 만료자**도 `refuses()` 롤을 태운다. 거부 시 **override 폐기 → 원계약(`remaining 0`)으로 FA 풀행**
+  (정상 만료 FA와 동일 형태 — 등급·요구연봉이 override 연봉이 아닌 **원 연봉** 기준).
+  - **만료자 판정 기준 = 롤오버 전 base 계약의 `willBeFA`**(`career.seasons ≥ FIRST_FA_SEASONS−1(5)` **AND** `contract.remaining ≤ 1`) —
+    롤오버하면 `career+1≥6`·`remaining−1≤0`으로 **이번 오프시즌 FA 공시될 선수**. `remaining≥2`(계약 중 조기 재계약)·비FA자격(영건 자동연장) override는
+    애초에 만료가 아니므로 refuses() **무대상**(무변). `data/offseason.ts overrideResign` 집합.
+  - **시드 재사용·rng 안전**: 거부 롤 시드는 정상 만료 경로와 **동일** `resign-refuse:{id}:{nextSeason}` (per-player 해시 — 공유 rng 미소비).
+    따라서 override 만료자를 추가로 굴려도 **다른 선수 롤·오프시즌 결과가 밀리지 않는다**(기존 세이브 안전).
+  - **preview=result**: FA/드래프트 센터 미리보기와 `endSeason`이 같은 `buildOffseason`을 쓰므로 자동 보전(가드로 증명).
+  - **AI 무관**: `refuses`는 `myTeam` 전용 → AI 리그·parity **무영향**(all-auto `simLeague` md5 0드리프트로 증명).
+- **② money 불만이 override 연봉에 반응(같은 D안)**: 거부 판정용 `salaryRatio`(`discontentNow`)가 **대기 중 override 연봉**을 쓴다
+  (`overrides?.[id]?.salary ?? contract.salary`) → '**후하게**'(+15%)가 연봉 불만을 실제로 풀고, '**짧게**'(−15%)는 불씨를 남긴다.
+  win/minutes/hometown 불만은 여전히 **돈 면역**(입력 시점 교정만 — 새 확률 항 없음, 리뷰가 B안 기각). `buildOwnerFx(...,overrides)` 6개 호출처 동일 전달 = 미리보기=결과.
+- **기존 세이브**: 마이그레이션 불요 — 봉인은 `buildOffseason` **다음 실행부터** 적용(이후 오프시즌). 과거 확정 오프시즌 base는 불변(§1.2 세이브 호환과 같은 결).
+- **형제 사냥**: `Record<string,Contract>` override 경로 중 재계약 거부를 우회할 수 있는 건 `contractOverrides` **뿐**. `keepForeign`/`keepAsian`은
+  boolean·외인 전용(외인은 `refuses` 무대상·트라이아웃 별도 흐름)이라 유사 우회 없음. `data/roster.effectiveContract`·`recapBriefing`는 표시 전용.
+- 가드 `tools/_dv_resignrefuse.ts`(HI 이탈/LO 잔류 A/B·봉인 제거 mutant 검출·preview=result·money 토글) + `tools/simOwnerRefuse.ts`(override 케이스 유일성 확장). EC-FA-16.
+
 ### 2.5b 선수별 FA 성향 (이적 동기 차등) ★ — 2026-06 구현
 
 현실의 FA는 선수마다 동기가 다르다. "돈 좇는 선수 / 우승 좇는 선수 / 남고 싶은 선수 /

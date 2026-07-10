@@ -1017,7 +1017,7 @@ export const useGameStore = create<GameState>()(
 
         // 0.6) 구단주 레이어(OWNER_SYSTEM) — 면담 결과·불만·팬심 → FA 거부/오퍼 보정 + 시즌 팬심 정산
         //   FA/드래프트 센터 미리보기와 같은 빌더(buildOwnerFx) — 미리보기=결과 보장
-        const ownerFx: OwnerFx = buildOwnerFx(interviews, season, my, fanScore);
+        const ownerFx: OwnerFx = buildOwnerFx(interviews, season, my, fanScore, contractOverrides);
         // 팬심 정산: 성적 + 인기 스타 벤치 분노 → 다음 시즌 팬심(예산·침몰선 정서 입력)
         const finalStandings = computeStandings(Number.MAX_SAFE_INTEGER);
         const myRow = finalStandings.find((r) => r.teamId === my);

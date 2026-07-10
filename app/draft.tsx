@@ -95,7 +95,7 @@ function DraftCenterInner() {
   const busy = useBusyRun();
   // endSeason과 동일한 인자 전체(면담 거부·자금·트라이아웃/아시아 토글·돈만 보상)로 컨텍스트를 만들어
   //   지명 순번·클래스가 결과와 동일하게(EC-FA-09 — 누락 인자로 라이브 확정픽 유실/발산 차단). 공용 조립 함수 경유.
-  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore), [interviews, season, my, fanScore]);
+  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore, contractOverrides), [interviews, season, my, fanScore, contractOverrides]);
   const base = useMemo(
     () => buildOffseasonBase(my, resignDecisions, contractOverrides, season + 1, ownerFx),
     [my, resignDecisions, contractOverrides, season, ownerFx],

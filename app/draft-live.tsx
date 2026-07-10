@@ -65,7 +65,7 @@ function DraftLiveInner() {
   // 무거운 컨텍스트 — 픽 독립(스냅샷/해결 분리). 안정 deps로 메모(조정 C — 확정마다 재계산 안 함).
   //   endSeason과 동일한 인자 전체(트라이아웃/아시아 토글·돈만 보상 포함)로 만들어 라이브 시퀀스=결과 보장
   //   (EC-FA-09 — 누락 인자로 확정 지명 신인이 실제 입단 안 하던 문제). 공용 조립 함수 경유.
-  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore), [interviews, season, my, fanScore]);
+  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore, contractOverrides), [interviews, season, my, fanScore, contractOverrides]);
   const base = useMemo(
     () => buildOffseasonBase(my, resignDecisions, contractOverrides, season + 1, ownerFx),
     [my, resignDecisions, contractOverrides, season, ownerFx],

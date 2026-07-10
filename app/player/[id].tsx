@@ -210,7 +210,7 @@ function PlayerDetailInner() {
   // 스카우팅 공개도 — 내 팀 선수는 전부(포텐까지) 보이고, 타 구단 선수는 스카우터 공개도만큼만(흐림). STAFF_SYSTEM
   const reveal = isMine ? 1 : (myTeamId ? teamScoutReveal(myTeamId) : 1);
   const pot = (s: keyof NonNullable<typeof p.potential>): number | undefined => (isMine ? p.potential?.[s] : undefined);
-  const moodInfo = isMine && myTeamId ? discontentNow(p, myTeamId, currentDay) : null;
+  const moodInfo = isMine && myTeamId ? discontentNow(p, myTeamId, currentDay, overrides) : null;
   const topic = moodInfo?.topic ?? null;
   // 연고 향수(hometown)면 어느 팀을 그리는지 이름으로(사용자 요청 2026-06-30) — "연고 팀에서 뛰고 싶다"(막연)가
   // 아니라 "○○에서 뛰고 싶다"(구체). preferredTeamId(t0~t6)→팀명. 없으면(구세이브) 기존 막연 문구 폴백.

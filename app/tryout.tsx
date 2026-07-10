@@ -48,7 +48,7 @@ function TryoutInner() {
   const busy = useBusyRun();
 
   // endSeason과 같은 체인 — 미리보기=결과
-  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore), [interviews, season, my, fanScore]);
+  const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore, contractOverrides), [interviews, season, my, fanScore, contractOverrides]);
   const base = useMemo(
     () => buildOffseasonBase(my, resignDecisions, contractOverrides, season + 1, ownerFx),
     [my, resignDecisions, contractOverrides, season, ownerFx],

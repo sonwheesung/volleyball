@@ -24,8 +24,9 @@ export function resignOptions(p: Player, market: number): ResignOption[] {
   const shortYears = cy(old ? 1 : 2);
   return [
     { key: 'standard', label: '표준', salary: Math.min(cap, r100(market)), years: cy(3), note: `시장가 · ${cy(3)}년` },
-    { key: 'generous', label: '후하게', salary: Math.min(cap, r100(market * 1.15)), years: genYears, note: `+15% · ${genYears}년 — 충성·길게 묶기(캡 부담)` },
-    { key: 'short', label: '짧게', salary: Math.min(cap, r100(market * 0.85)), years: shortYears, note: `−15% · ${shortYears}년 — 싸게·곧 재협상(불만 위험)` },
+    // 카피(FA §2.5c-보완 3단계): '후하게'=엔진상 연봉 불만만 봉쇄(충성은 엔진 무관 삭제) · '짧게'=지연·조건부 불씨(즉시 불만 아님)
+    { key: 'generous', label: '후하게', salary: Math.min(cap, r100(market * 1.15)), years: genYears, note: `+15% · ${genYears}년 — 연봉 불만 봉쇄·FA 늦춤(캡 부담)` },
+    { key: 'short', label: '짧게', salary: Math.min(cap, r100(market * 0.85)), years: shortYears, note: `−15% · ${shortYears}년 — 싸게·다음 시즌 시장가 오르면 연봉 불만 불씨` },
   ];
 }
 const MIN_SALARY = 3000;     // 최저 (0.3억)
