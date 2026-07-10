@@ -110,6 +110,10 @@ export interface FAMarketResult {
   lostTo: Record<string, string>;       // 내가 노렸으나 뺏긴 선수 → 영입팀
   compCash: number;                     // 내가 낸 보상금 합(A/B FA 영입 — 직전연봉 배수, FA_SYSTEM 2.2)
   faFail: Record<string, FAFailCode>;   // 내가 지명했으나 실패한 선수 → 사유 코드(영입 성공한 선수는 미포함)
+  // 경쟁 관측(FA_SYSTEM §2.8.5 Phase5) — 이미 계산된 bids에서 파생만(rng 미소비·해소 로직 불변).
+  //   bidders=입찰(오퍼 제출)한 팀 id 배열(점수 내림차순=해소 우선순위), myRank=내 입찰의 순위(1-based, 미입찰이면 undefined).
+  //   금액·offerScore 원값은 노출 안 함(§2.8 "실제 금액 비공개"). 모든 풀 FA에 기록(내가 지명 안 한 선수 포함).
+  faCompete: Record<string, { bidders: string[]; myRank?: number }>;
 }
 
 /**
@@ -178,6 +182,8 @@ export function resolveFAMarket(
   //   ROSTER=정원 참(입찰 전 컷)·CAP=캡 초과·CASH=운영 자금 부족·BID=입찰 성사(성공/뺏김/잔류로 갈림).
   //   순수 관측(resolve 결정에 미개입) — 아래 faFail 조립에만 쓰인다.
   const myGate: Record<string, 'ROSTER' | 'CAP' | 'CASH' | 'BID'> = {};
+  // 경쟁 관측(FA_SYSTEM §2.8.5) — 순수 파생(resolve 결정에 미개입). bids에서 점수순 팀 목록·내 순위만 뽑는다.
+  const faCompete: Record<string, { bidders: string[]; myRank?: number }> = {};
   let compCash = 0; // 내가 낸 FA 보상금 누계(A/B 영입 — FA_SYSTEM 2.2)
   const wanted = new Set(faSignings);
 
@@ -262,6 +268,13 @@ export function resolveFAMarket(
       // years = 계약 연수(§2.8 Phase1·Phase3) — 내 팀=오퍼 연수, AI=성향 레버(기본 2, 젊은 엘리트+구멍이면 3). 승자의 years로 계약 생성.
       bids.push({ teamId: t, offer, score, years: bidYears, guarantee: bidGuarantee });
     }
+    // 경쟁 관측(FA_SYSTEM §2.8.5) — 모든 풀 FA에 기록(빈 bids면 bidders:[]). 점수 내림차순(해소 우선순위와 동일).
+    //   ※ 순수 파생: rng 미소비·아래 해소 로직/롤 순서에 미개입(관측만).
+    {
+      const orderedBidders = [...bids].sort((a, b) => b.score - a.score).map((b) => b.teamId);
+      const myIdx = orderedBidders.indexOf(myTeam);
+      faCompete[id] = myIdx >= 0 ? { bidders: orderedBidders, myRank: myIdx + 1 } : { bidders: orderedBidders };
+    }
     if (bids.length === 0) continue; // 미계약(팀이 안 원함 — 양방향)
     // 점수 → 확률 → 정렬·롤·fallback·SIT (FA_SYSTEM 2.7, 사용자 결정)
     const scored = bids.map((b) => ({ ...b, prob: acceptProb(b.score) })).sort((a, b) => b.prob - a.prob || b.score - a.score);
@@ -316,7 +329,7 @@ export function resolveFAMarket(
     else if (g === 'BID') faFail[id] = lostTo[id] ? 'LOST' : 'SIT_OUT';
   }
 
-  return { snapshot, rosters, signedByMe, lostTo, compCash, faFail };
+  return { snapshot, rosters, signedByMe, lostTo, compCash, faFail, faCompete };
 }
 
 /** 영구제명 사건 — 그 시즌 소속팀에서 리그 영구 퇴출(불명예, HOF 불가) */
@@ -590,6 +603,7 @@ export interface FAPreview {
   signedByMe: Set<string>;
   lostTo: Record<string, string>;
   faFail: Record<string, FAFailCode>;   // 지명 실패 사유(FA 센터 표기 — FA_SYSTEM §2.7 UX)
+  faCompete: Record<string, { bidders: string[]; myRank?: number }>; // 경쟁 구단·협상 순위(FA_SYSTEM §2.8.5)
   tryout: TryoutOutcome;
   asianTryout: TryoutOutcome;
   compCash: number;
@@ -624,7 +638,7 @@ export function faMarketPreviewFrom(
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds, faOffers);
-  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, faFail: fa.faFail, tryout, asianTryout, compCash: fa.compCash };
+  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, faFail: fa.faFail, faCompete: fa.faCompete, tryout, asianTryout, compCash: fa.compCash };
 }
 
 /** FA 센터 미리보기: 풀 + 내 영입 성공/실패 예상 (resolvePreDraft와 동일 소스). = base 빌드 + 해결 합성(byte-동일). */

@@ -6,7 +6,7 @@ import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen,
 import { RoleBadge } from '../components/RoleBadge';
 import { Popup } from '../components/Popup';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
-import { shortTeamName as shortTeam, teamScoutReveal } from '../data/league';
+import { shortTeamName as shortTeam, getTeam, teamScoutReveal } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { buildOffseasonBase, scandalRepMap } from '../data/offseason';
 import { resolveFAPreviewFor } from '../data/offseasonArgs';
@@ -254,15 +254,18 @@ function FACenterInner() {
           const lost = pv.lostTo[p.id];
           // 실패 사유 세분화(FA_SYSTEM §2.7 UX) — '경합/불발' 뭉뚱그림 제거. 엔진이 준 게이트 코드로 사유별 표기.
           //   자금/캡/정원은 "입찰 자체가 안 들어간" 경우라 타팀이 뽑아도(lostTo) '뺏김'이 아니라 그 사유로 보여준다.
+          // 실패 카피(FA_SYSTEM §2.8.5 ③) — 5경로만(지어내기 금지). LOST엔 협상 순위(faCompete) 연결.
+          const myRank = pv.faCompete[p.id]?.myRank;
           let badge: { t: string; c: string } | null = null;
           if (won) badge = { t: '영입 성공', c: theme.good };
           else if (targeted) {
             const code = pv.faFail[p.id];
-            if (code === 'LOST') badge = { t: `${shortTeam(lost)}에 뺏김 (경쟁 입찰 패배)`, c: theme.bad };
-            else if (code === 'CASH') badge = { t: '운영 자금 부족 — 입찰 못 함', c: theme.warn };
-            else if (code === 'CAP') badge = { t: '샐러리캡 초과 — 입찰 못 함', c: theme.warn };
-            else if (code === 'ROSTER') badge = { t: '선수 자리 없음 — 정원 초과', c: theme.warn };
-            else if (code === 'SIT_OUT') badge = { t: `${p.name} 선수가 잔류를 택함`, c: theme.muted };
+            const lostName = getTeam(lost)?.name ?? shortTeam(lost);
+            if (code === 'LOST') badge = { t: myRank ? `${lostName}에 뺏겼습니다 (협상 ${myRank}위)` : `${lostName}에 뺏겼습니다 (경쟁 입찰 패배)`, c: theme.bad };
+            else if (code === 'CASH') badge = { t: '운영 자금 부족 — 입찰하지 못했습니다', c: theme.warn };
+            else if (code === 'CAP') badge = { t: '샐러리캡이 부족해 입찰하지 못했습니다', c: theme.warn };
+            else if (code === 'ROSTER') badge = { t: '정원이 가득 차 입찰하지 못했습니다', c: theme.warn };
+            else if (code === 'SIT_OUT') badge = { t: '모든 제안을 물리치고 잔류를 택했습니다', c: theme.muted };
             else badge = { t: '지명함 — 시즌 시작 때 확정', c: theme.sky };
           }
           return (
@@ -429,6 +432,33 @@ function FACenterInner() {
                       시즌이 시작될 때 확정됩니다.
                     </Muted>
 
+                    {/* 경쟁 구단 + 협상 순위(FA_SYSTEM §2.8.5) — 금액 비공개, pv(=엔진 해소)에서만 */}
+                    {(() => {
+                      const comp = pv.faCompete[p.id];
+                      const rivals = (comp?.bidders ?? []).filter((t) => t !== my);
+                      const rank = comp?.myRank;
+                      return (
+                        <View style={styles.competBox}>
+                          <Text style={styles.detailHead}>경쟁 구단</Text>
+                          {rivals.length ? (
+                            <Text style={styles.competText}>
+                              관심 구단 {rivals.length}곳 — {rivals.map((t) => getTeam(t)?.name ?? shortTeam(t)).join(', ')}
+                            </Text>
+                          ) : (
+                            <Muted style={{ fontSize: 12 }}>아직 관심을 보인 다른 구단이 없습니다.</Muted>
+                          )}
+                          {targeted && rank ? (
+                            <>
+                              <Text style={styles.competRank}>협상 순위 {rank}위 / {comp!.bidders.length}곳</Text>
+                              <Muted style={{ fontSize: 11, marginTop: 1, lineHeight: 15 }}>
+                                가장 앞서 있어도 확정은 아니에요 — 선수가 시즌 시작 때 최종 선택합니다.
+                              </Muted>
+                            </>
+                          ) : null}
+                        </View>
+                      );
+                    })()}
+
                     <Pressable
                       onPress={() => busy.run('협상 테이블을 차리는 중…', () => setOffer(p.id, draft))}
                       style={[styles.applyBtn, { borderColor: theme.accent, backgroundColor: theme.accent + '22' }]}
@@ -589,5 +619,8 @@ const styles = themedStyles(() => StyleSheet.create({
   satHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
   satBarBg: { height: 10, borderRadius: 5, backgroundColor: theme.border, overflow: 'hidden' },
   satBarFill: { height: 10, borderRadius: 5 },
+  competBox: { marginTop: 8, paddingTop: 6, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border },
+  competText: { color: theme.text, fontSize: 12, lineHeight: 17, marginTop: 2 },
+  competRank: { color: theme.accent, fontSize: 13, fontWeight: '900', marginTop: 6 },
   applyBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 6 },
 }));
