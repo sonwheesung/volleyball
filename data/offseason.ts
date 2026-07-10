@@ -16,11 +16,11 @@ import { aiReserveTargets, aiDomesticCaps } from './rosterTarget';
  *  Phase 1.5(2026-07-09): 재계약을 **팀 목표(aiRosterTargets)로 상한** 하는 능동 배출이 주 레버가 되면서,
  *  이 확률 감쇠는 "목표 미달팀에서도 노장이 가끔 빠지는" 생동 역할로 축소(0.6→0.85, 과이탈 완화). */
 const AI_RETAIN_ATTRITION = 0.85;
-import { assignFAGrades, askingPrice, offerScore, prefWeightsOf, acceptProb, SIT_OUT } from '../engine/faMarket';
+import { assignFAGrades, askingPrice, offerScore, prefWeightsOf, acceptProb, SIT_OUT, CERTAIN } from '../engine/faMarket';
 import { affinity, pairKey } from '../engine/relationships';
 import { relationBonds } from './relationships';
 import { needsCompensationPlayer, pickCompensation, compensationMoney, compensationMoneyOnly } from '../engine/compensation';
-import { canAfford, clampSalary, isFranchise, LEAGUE_CAP } from '../engine/cap';
+import { canAfford, clampSalary, isFranchise, maxSalaryFor, LEAGUE_CAP } from '../engine/cap';
 import { strSeed } from '../engine/rng';
 import type { OwnerFx } from '../engine/owner';
 import { marketVal, setSalaryEra, awardScoreOf } from './awardSalary';
@@ -114,6 +114,12 @@ export interface FAMarketResult {
   //   bidders=입찰(오퍼 제출)한 팀 id 배열(점수 내림차순=해소 우선순위), myRank=내 입찰의 순위(1-based, 미입찰이면 undefined).
   //   금액·offerScore 원값은 노출 안 함(§2.8 "실제 금액 비공개"). 모든 풀 FA에 기록(내가 지명 안 한 선수 포함).
   faCompete: Record<string, { bidders: string[]; myRank?: number }>;
+  // 선수 역제안 카운터(FA_SYSTEM §2.8.6 Phase6) — 내 오퍼가 counterTolerance로 counterAsk까지 상향된 케이스.
+  //   from=원 오퍼·to=counterAsk(선클램프 → 서명 시 최종 계약 연봉). 순수 관측(발동 안 하면 키 없음, rng 미소비).
+  counterFired: Record<string, { from: number; to: number }>;
+  // SIT_OUT 잔류 관측(§2.8.6 뉴스 ②) — 입찰(bids)이 있었는데도 선수가 잔류를 택한 풀 FA id.
+  //   bids 0(아무도 안 부름)은 제외 → "모든 제안을 물리치고 잔류" 가짜 드라마 차단. 순수 관측.
+  faSatOut: string[];
 }
 
 /**
@@ -184,6 +190,9 @@ export function resolveFAMarket(
   const myGate: Record<string, 'ROSTER' | 'CAP' | 'CASH' | 'BID'> = {};
   // 경쟁 관측(FA_SYSTEM §2.8.5) — 순수 파생(resolve 결정에 미개입). bids에서 점수순 팀 목록·내 순위만 뽑는다.
   const faCompete: Record<string, { bidders: string[]; myRank?: number }> = {};
+  // 카운터 발동 관측(FA_SYSTEM §2.8.6) — 순수(rng 미소비·해소에 미개입, 오퍼 상향은 counterTolerance 있을 때만).
+  const counterFired: Record<string, { from: number; to: number }> = {};
+  const faSatOut: string[] = []; // SIT_OUT + bids>0(뉴스 ②)
   let compCash = 0; // 내가 낸 FA 보상금 누계(A/B 영입 — FA_SYSTEM 2.2)
   const wanted = new Set(faSignings);
 
@@ -247,17 +256,19 @@ export function resolveFAMarket(
       if (!ok) { if (isMe && wanted.has(id)) myGate[id] = !affordCap ? 'CAP' : 'CASH'; continue; }
       if (isMe && wanted.has(id)) myGate[id] = 'BID'; // 내 팀 입찰 성사 — 이후 성공/뺏김/잔류로 갈림
       // ↑ 실패 사유 관측만: ok/continue 값은 이전과 byte-동일(affordCap&&affordCash === 기존 인라인식)
-      const score = offerScore({
+      // rand는 팀당 정확히 1회 소비(hoist) — 카운터 발동 유무와 무관해야 rng 스트림이 안 밀린다(§2.8.6 0드리프트 핵심).
+      const rand = rng.next();
+      const scoreOf = (offerSalary: number) => offerScore({
         teamOvr: ovr[t],
         prestige: prestige[t] ?? 0,
         posGap: gap,
         isOriginal: prevTeamOf[id] === t,
         isFranchise: isFranchise(p) && prevTeamOf[id] === t,
         isPreferred: p.faPref?.preferredTeamId === t,
-        offerSalary: offer,
+        offerSalary,
         asking,
         w: prefWeightsOf(p),
-        rand: rng.next(),
+        rand,
         talkBias: isMe ? ownerFx?.offerBias[id] : undefined, // 면담의 기억은 우리 구단에만 작용
         relT: teamAffinityFor(p, rosters[t], get, bondsCtx), // 인간관계(그 시점 로스터 — 친구 연쇄) RELATIONSHIP
         // FA 오퍼 다레버 — 내 팀=cfg / AI=성향별 레버(§2.8.1 ③ Phase3). 레버 미발동(기본 오퍼·gap≤0·C등급)이면 undefined → score 기여 0.
@@ -265,8 +276,24 @@ export function resolveFAMarket(
         starterGuarantee: isMe ? cfg?.starterGuarantee : (aiGuarantee || undefined),
         promises: cfg?.promises,
       });
+      let bidOffer = offer;
+      let score = scoreOf(offer); // baseScore(원 오퍼)
+      // 선수 역제안 카운터(FA_SYSTEM §2.8.6 Phase6) — 내 팀 오퍼만. counterTolerance 사전 커밋으로 counterAsk까지 자동 상향.
+      //   δ는 facounter 해시 서브스트림(메인 rng 밖). 발동 후 재계산은 위 rand를 그대로 재사용 → rng 소비 불변(0드리프트).
+      if (isMe && cfg?.counterTolerance && (grade === 'A' || grade === 'B')) {
+        const delta = 0.05 + createRng(strSeed(`facounter:${id}:${season}`)).next() * 0.20; // 5~25% 균등
+        const counterAsk = Math.min(round100(asking * (1 + delta)), maxSalaryFor(p)); // 선클램프 → to===최종 계약 연봉
+        const up = Math.max(0, cfg.counterTolerance.salaryUp);
+        // 전부 AND: 원 오퍼<counterAsk · 아직 확정권 아님(baseScore<CERTAIN) · all-or-nothing 커버 · 캡·자금 게이트 통과
+        if (bidOffer < counterAsk && score < CERTAIN && bidOffer + up >= counterAsk
+            && canAfford(payroll[t], counterAsk) && counterAsk + compCost <= cashLeft) {
+          bidOffer = counterAsk;
+          score = scoreOf(counterAsk); // 같은 rand 재사용(rng 미소비) — 자동수락 아님, 정상 롤로 경쟁 유지
+          counterFired[id] = { from: offer, to: counterAsk };
+        }
+      }
       // years = 계약 연수(§2.8 Phase1·Phase3) — 내 팀=오퍼 연수, AI=성향 레버(기본 2, 젊은 엘리트+구멍이면 3). 승자의 years로 계약 생성.
-      bids.push({ teamId: t, offer, score, years: bidYears, guarantee: bidGuarantee });
+      bids.push({ teamId: t, offer: bidOffer, score, years: bidYears, guarantee: bidGuarantee });
     }
     // 경쟁 관측(FA_SYSTEM §2.8.5) — 모든 풀 FA에 기록(빈 bids면 bidders:[]). 점수 내림차순(해소 우선순위와 동일).
     //   ※ 순수 파생: rng 미소비·아래 해소 로직/롤 순서에 미개입(관측만).
@@ -278,7 +305,7 @@ export function resolveFAMarket(
     if (bids.length === 0) continue; // 미계약(팀이 안 원함 — 양방향)
     // 점수 → 확률 → 정렬·롤·fallback·SIT (FA_SYSTEM 2.7, 사용자 결정)
     const scored = bids.map((b) => ({ ...b, prob: acceptProb(b.score) })).sort((a, b) => b.prob - a.prob || b.score - a.score);
-    if (scored[0].score < SIT_OUT) continue; // 최고 점수도 바닥 미만 → 시즌 아웃(FA 잔류)
+    if (scored[0].score < SIT_OUT) { faSatOut.push(id); continue; } // 최고 점수도 바닥 미만 → 시즌 아웃(FA 잔류). bids>0(위 게이트 통과) → 뉴스 ② 대상
     let win = scored[0]; // fallback = 최고 확률 팀(전부 실패 시)
     for (const cand of scored) { if (rng.next() < cand.prob) { win = cand; break; } } // 위에서부터 롤, 첫 성공 입단
     const finalSalary = clampSalary(win.offer, p); // 개인 상한(프랜차이즈 예외) 적용
@@ -329,7 +356,7 @@ export function resolveFAMarket(
     else if (g === 'BID') faFail[id] = lostTo[id] ? 'LOST' : 'SIT_OUT';
   }
 
-  return { snapshot, rosters, signedByMe, lostTo, compCash, faFail, faCompete };
+  return { snapshot, rosters, signedByMe, lostTo, compCash, faFail, faCompete, counterFired, faSatOut };
 }
 
 /** 영구제명 사건 — 그 시즌 소속팀에서 리그 영구 퇴출(불명예, HOF 불가) */
@@ -483,6 +510,8 @@ export interface PreDraft {
   tryout: TryoutOutcome;                 // 외국인 트라이아웃 결과(풀·지명·대체 풀 — 미리보기 공유)
   asianTryout: TryoutOutcome;            // 아시아쿼터 트라이아웃 결과(FOREIGN_SYSTEM 7)
   compCash: number;                      // 내가 낸 FA 보상금 합(운영 자금 차감용)
+  counterFired: Record<string, { from: number; to: number }>; // 카운터 발동 관측(FA_SYSTEM §2.8.6 — 뉴스 ①·UI 배지)
+  faSatOut: string[];                    // SIT_OUT+bids>0 잔류자(§2.8.6 뉴스 ②)
 }
 
 /**
@@ -568,7 +597,7 @@ export function resolvePreDraftFrom(
   const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash, perf);
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds, faOffers);
-  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, expelled: off.expelled, tryout, asianTryout, compCash: fa.compCash };
+  return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, expelled: off.expelled, tryout, asianTryout, compCash: fa.compCash, counterFired: fa.counterFired, faSatOut: fa.faSatOut };
 }
 
 /**
@@ -604,6 +633,7 @@ export interface FAPreview {
   lostTo: Record<string, string>;
   faFail: Record<string, FAFailCode>;   // 지명 실패 사유(FA 센터 표기 — FA_SYSTEM §2.7 UX)
   faCompete: Record<string, { bidders: string[]; myRank?: number }>; // 경쟁 구단·협상 순위(FA_SYSTEM §2.8.5)
+  counterFired: Record<string, { from: number; to: number }>; // 카운터 발동 관측(FA_SYSTEM §2.8.6 — 카드 배지)
   tryout: TryoutOutcome;
   asianTryout: TryoutOutcome;
   compCash: number;
@@ -638,7 +668,7 @@ export function faMarketPreviewFrom(
   const myRoster = [...(off.rosters[myTeam] ?? [])];
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
   const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds, faOffers);
-  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, faFail: fa.faFail, faCompete: fa.faCompete, tryout, asianTryout, compCash: fa.compCash };
+  return { pool, snapshot: fa.snapshot, myRoster, signedByMe: new Set(fa.signedByMe), lostTo: fa.lostTo, faFail: fa.faFail, faCompete: fa.faCompete, counterFired: fa.counterFired, tryout, asianTryout, compCash: fa.compCash };
 }
 
 /** FA 센터 미리보기: 풀 + 내 영입 성공/실패 예상 (resolvePreDraft와 동일 소스). = base 빌드 + 해결 합성(byte-동일). */

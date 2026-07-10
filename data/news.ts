@@ -8,6 +8,7 @@ import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam } from './league';
 import { jerseyNumber } from '../engine/jersey';
 import { RETIRE_AGE } from '../engine/retire';
+import { formatMoney } from '../engine/salary';
 import { ALL_POSITIONS } from '../engine/overall';
 import { prospectArcRetro } from './seed';
 import { numberLineage } from './legends';
@@ -480,6 +481,19 @@ export function buildNewsFeed(
     if (t.kind === 'release') {
       const bigRel = (t.ovr ?? 0) >= 82; // 이동 시점 OVR — 거물 베테랑 방출 = 헤드라인(이후 노쇠 무관)
       const rkey = `${t.season}:rel:${t.playerId}`;
+      // ② SIT_OUT 잔류(FA_SYSTEM §2.8.6) — 입찰이 있었는데도 선수가 잔류를 택함. bids 0(아무도 안 부름)엔 이 톤 금지(가짜 드라마).
+      if (t.satOut) {
+        push(t.season, 'release', vh([
+          (n) => `${n}, 모든 제안 물리치고 잔류 택했다`,
+          (n) => `FA ${n}, 이적 대신 잔류 — "이번엔 움직이지 않는다"`,
+          (n) => `${n}, 러브콜 뿌리치고 남는다`,
+        ], rkey, t.name), bigRel, t.fromTeam,
+          body3('release', rkey, more(
+            `${t.name}이(가) 여러 구단의 관심을 받았지만 이적하지 않고 잔류를 택했다.`,
+            careerLine(t.playerId),
+            outMine ? `${teamName(myTeamId)}으로서는 익숙한 얼굴을 시장에서 지켜본 셈이다.` : '')), t.playerId);
+        continue;
+      }
       push(t.season, 'release', vh([
         (n) => `${teamName(t.fromTeam)}, ${n} 방출 — FA 시장으로`,
         (n) => `${n}, ${teamName(t.fromTeam)}와(과) 재계약 불발`,
@@ -495,7 +509,13 @@ export function buildNewsFeed(
     }
     // ── 팀→팀 이적(transfer) — 내 팀은 헤드라인, 타팀 거물은 단신 ──
     const key = `${t.season}:tr:${t.playerId}`;
-    push(t.season, 'transfer', vh([
+    // ① 카운터 수락 계약(FA_SYSTEM §2.8.6) — 내가 counterTolerance로 선수의 추가 요구를 수용해 서명(inMine 서명만 기록됨).
+    const cameByCounter = inMine && typeof t.counteredTo === 'number';
+    push(t.season, 'transfer', cameByCounter ? vh([
+      (n) => `${teamName(t.toTeam)}, ${n} 요구 수용해 영입 — ${formatMoney(t.counteredTo!)}`,
+      (n) => `FA ${n}, 더 나은 대우 받고 ${teamName(t.toTeam)}행`,
+      (n) => `${teamName(t.toTeam)}, ${n} 붙잡으려 지갑 열었다`,
+    ], key, t.name) : vh([
       (n) => `${n}, ${teamName(t.fromTeam)} 떠나 ${teamName(t.toTeam)} 이적`,
       (n) => inMine ? `${teamName(t.toTeam)}, FA ${n} 영입` : `FA ${n}, ${teamName(t.fromTeam)} → ${teamName(t.toTeam)}`,
       (n) => `FA ${n}, ${teamName(t.toTeam)} 합류`,
@@ -509,8 +529,10 @@ export function buildNewsFeed(
         // 인간관계(현재 사실 — 가짜 드라마 아님): 옮긴 팀에 가까운 동료가 있으면 재회 한 줄(RELATIONSHIP §6)
         const friend = topFriendOnTeam(t.playerId, t.toTeam);
         const friendLine = friend ? ` 새 팀에는 각별한 동료 ${friend.name}이(가) 있다.` : '';
+        // 카운터 수용 한 줄(§2.8.6) — 선수가 더 요구했고 우리가 받아들였다는 사실(가짜 드라마 아님).
+        const counterLine = cameByCounter ? ` ${teamName(myTeamId)}은(는) 선수의 추가 요구를 받아들여 ${formatMoney(t.counteredTo!)}에 계약을 매듭지었다.` : '';
         return body3('transfer', key, `${lead}이(가) ${teamName(t.fromTeam)}을(를) 떠나 ${teamName(t.toTeam)}으로(로) 둥지를 옮겼다.`
-          + (inMine ? ` ${teamName(myTeamId)}이(가) ${gain}.` : outMine ? ` ${teamName(myTeamId)}은(는) ${lose}.` : ` ${teamName(t.toTeam)}이(가) ${gain}.`) + friendLine);
+          + (inMine ? ` ${teamName(myTeamId)}이(가) ${gain}.` : outMine ? ` ${teamName(myTeamId)}은(는) ${lose}.` : ` ${teamName(t.toTeam)}이(가) ${gain}.`) + counterLine + friendLine);
       })(), t.playerId);
   }
 

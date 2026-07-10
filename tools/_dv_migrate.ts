@@ -52,11 +52,14 @@ check('전 필드 존재(SAVE_DEFAULTS 키 집합)', Object.keys(SAVE_DEFAULTS).
 
 // ── ①b faOffers 엔트리 정규화(FA_SYSTEM §2.8) ──────────────────────
 process.stdout.write('\n[①b faOffers 엔트리 코어스]\n');
-const foRaw = { faOffers: { p1: { salary: 'auto', years: 9, starterGuarantee: 'x', promises: 7 }, p2: { salary: 42, years: 3, starterGuarantee: true, promises: { captain: true }, aggressive: true }, bad: 5 } };
+const foRaw = { faOffers: { p1: { salary: 'auto', years: 9, starterGuarantee: 'x', promises: 7, counterTolerance: { salaryUp: 0 } }, p2: { salary: 42, years: 3, starterGuarantee: true, promises: { captain: true }, aggressive: true, counterTolerance: { salaryUp: 5000 } }, p3: { salary: 'auto', years: 2, starterGuarantee: false, promises: {}, counterTolerance: { salaryUp: 'bad' } }, bad: 5 } };
 const fo = sanitizeSave(foRaw).faOffers as Record<string, any>;
 check('p1: years 9→2·보장 "x"→false·promises 7→{}', fo.p1 && fo.p1.years === 2 && fo.p1.starterGuarantee === false && isObj(fo.p1.promises) && Object.keys(fo.p1.promises).length === 0);
 check('p1: salary "auto" 보존', fo.p1.salary === 'auto');
+check('p1: counterTolerance salaryUp 0 → 드롭(§2.8.6 — 0=미설정)', fo.p1.counterTolerance === undefined);
 check('p2: salary 42·years 3·보장 true·promises{captain}·aggressive true 보존', fo.p2 && fo.p2.salary === 42 && fo.p2.years === 3 && fo.p2.starterGuarantee === true && fo.p2.promises.captain === true && fo.p2.aggressive === true);
+check('p2: counterTolerance{salaryUp:5000} 보존(round-trip)', isObj(fo.p2.counterTolerance) && fo.p2.counterTolerance.salaryUp === 5000);
+check('p3: counterTolerance salaryUp "bad" → 드롭', fo.p3 && fo.p3.counterTolerance === undefined);
 check('bad(5) 엔트리 제거', !('bad' in fo));
 
 // ── ①c 구 faSignings+faAggressive → faOffers 마이그레이션 ───────────

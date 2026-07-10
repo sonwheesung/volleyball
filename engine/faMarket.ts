@@ -114,7 +114,7 @@ export interface OfferCtx {
 
 // FA 수락 = 점수→확률 (FA_SYSTEM 2.7). offerScore는 [0,~1] 가중합 → acceptProb가 완만 S곡선으로.
 const SIT_FLOOR = 0.22;   // 이하 거의 거절(확률 0 부근)
-const CERTAIN = 0.60;     // 이상 거의 확정(확률 1 부근)
+export const CERTAIN = 0.60;     // 이상 거의 확정(확률 1 부근) — FA_SYSTEM §2.8.6 카운터 발동 상한(이미 확정권이면 카운터 무의미)
 export const SIT_OUT = 0.14; // 최고 점수도 이 미만이면 시즌 아웃(FA 잔류) — 드물게
 
 /** 점수(offerScore, [0,~1]) → 수락 확률(완만 S곡선 smoothstep) */

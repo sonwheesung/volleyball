@@ -32,6 +32,8 @@ export interface DraftContext {
   tryout: import('./tryout').TryoutOutcome; // 외국인 트라이아웃 결과(미리보기=결과 공유)
   asianTryout: import('./tryout').TryoutOutcome; // 아시아쿼터 트라이아웃 결과(FOREIGN_SYSTEM 7)
   compCash: number;                       // 내가 낸 FA 보상금 합(운영 자금 차감)
+  counterFired: Record<string, { from: number; to: number }>; // 카운터 발동 관측(FA_SYSTEM §2.8.6 — endSeason 뉴스 ①)
+  faSatOut: string[];                     // SIT_OUT+bids>0 잔류자(§2.8.6 뉴스 ②)
 }
 
 // 스냅샷/해결 분리(REALTIME_SIM §7.3) 재노출 — 앱이 base(안정 deps)를 따로 메모하게. buildOffseasonBase는 offseason 정본.
@@ -84,6 +86,8 @@ export function buildDraftContextFrom(
     tryout: pre.tryout,
     asianTryout: pre.asianTryout,
     compCash: pre.compCash,
+    counterFired: pre.counterFired,
+    faSatOut: pre.faSatOut,
   };
 }
 

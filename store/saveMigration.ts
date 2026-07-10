@@ -126,7 +126,11 @@ function sanitizeField(key: string, v: unknown): unknown {
         const promises = isObj(o.promises)
           ? { ...(o.promises.captain ? { captain: true } : {}), ...(o.promises.number ? { number: true } : {}) }
           : {};
-        out[id] = { salary, years, starterGuarantee, promises, ...(o.aggressive === true ? { aggressive: true } : {}) };
+        // 카운터 tolerance(FA_SYSTEM §2.8.6) — {salaryUp:number}만, 유효 양수일 때만 보존(미설정/손상=드롭 → 0드리프트).
+        const ct = isObj(o.counterTolerance) && typeof o.counterTolerance.salaryUp === 'number'
+          && Number.isFinite(o.counterTolerance.salaryUp) && o.counterTolerance.salaryUp > 0
+          ? { counterTolerance: { salaryUp: Math.round(o.counterTolerance.salaryUp) } } : {};
+        out[id] = { salary, years, starterGuarantee, promises, ...(o.aggressive === true ? { aggressive: true } : {}), ...ct };
       }
       return out;
     }

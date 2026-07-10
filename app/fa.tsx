@@ -28,6 +28,10 @@ import {
 import type { FAOffer } from '../types';
 import { useGameStore } from '../store/useGameStore';
 
+// 선수 역제안 카운터 한도(FA_SYSTEM §2.8.6) — +0 ~ +1.0억, step 0.1억(연봉 단위 만원). +0=미설정(counterTolerance undefined → 0드리프트).
+const COUNTER_STEP = 1000;  // 0.1억
+const COUNTER_MAX = 10000;  // +1.0억
+
 export default function FACenter() {
   // FA 시장 경쟁 미리보기(faMarketPreview)+정산 자금 투영은 무거워 한 틱 미뤄 로딩부터 그린다
   const ready = useDeferredReady();
@@ -256,8 +260,9 @@ function FACenterInner() {
           //   자금/캡/정원은 "입찰 자체가 안 들어간" 경우라 타팀이 뽑아도(lostTo) '뺏김'이 아니라 그 사유로 보여준다.
           // 실패 카피(FA_SYSTEM §2.8.5 ③) — 5경로만(지어내기 금지). LOST엔 협상 순위(faCompete) 연결.
           const myRank = pv.faCompete[p.id]?.myRank;
+          const countered = pv.counterFired[p.id]; // 카운터 발동(FA_SYSTEM §2.8.6) — 내 오퍼가 요구를 수용해 상향된 케이스
           let badge: { t: string; c: string } | null = null;
-          if (won) badge = { t: '영입 성공', c: theme.good };
+          if (won) badge = countered ? { t: `요구를 수용해 ${formatMoney(countered.to)}에 계약 예정`, c: theme.good } : { t: '영입 성공', c: theme.good };
           else if (targeted) {
             const code = pv.faFail[p.id];
             const lostName = getTeam(lost)?.name ?? shortTeam(lost);
@@ -418,6 +423,27 @@ function FACenterInner() {
                     <Muted style={{ fontSize: 11 }}>
                       캡 여유 {formatMoney(Math.max(0, capRoom))}{maxYears < 5 ? ` · 나이 상 기간 최대 ${maxYears}년` : ''}
                     </Muted>
+                    {/* 선수 역제안 카운터 한도(FA_SYSTEM §2.8.6) — counterAsk·δ는 은닉, 한도만 노출. +0=미설정(0드리프트). */}
+                    {(() => {
+                      const up = draft.counterTolerance?.salaryUp ?? 0;
+                      return (
+                        <>
+                          <Stepper
+                            label="추가 요구 양보"
+                            display={up > 0 ? `+${formatMoney(up)}` : '설정 안 함'}
+                            decOff={up <= 0}
+                            incOff={up >= COUNTER_MAX}
+                            onDec={() => { const v = Math.max(0, up - COUNTER_STEP); setDraft({ counterTolerance: v > 0 ? { salaryUp: v } : undefined }); }}
+                            onInc={() => { const v = Math.min(COUNTER_MAX, up + COUNTER_STEP); setDraft({ counterTolerance: { salaryUp: v } }); }}
+                          />
+                          <Muted style={{ fontSize: 11, lineHeight: 15 }}>
+                            {up > 0
+                              ? '선수가 더 요구하면 이 한도 안에서 자동으로 받아들입니다.'
+                              : '선수가 더 나은 대우를 요구할 때 여기까지 양보할 한도를 정해두세요.'}
+                          </Muted>
+                        </>
+                      );
+                    })()}
 
                     {/* 실시간 선수 만족도 — 성공률 아님(§2.8.4 ②) */}
                     <View style={styles.satHead}>

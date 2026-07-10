@@ -135,6 +135,10 @@ export interface FAOffer {
   starterGuarantee: boolean;
   promises: { captain?: boolean; number?: boolean };
   aggressive?: boolean;
+  // 선수 역제안 카운터(FA_SYSTEM §2.8.6 Phase6) — "선수가 더 요구하면 여기까지 양보"의 사전 커밋.
+  //   salaryUp(만원, salary와 동일 단위) = 카운터 요구가 오면 자동 수락하는 연봉 상향 한도. 미설정=undefined(0드리프트).
+  //   카운터 발동 = counterAsk(asking×(1+δ), δ=facounter 해시)를 offer+salaryUp이 all-or-nothing으로 덮을 때만(§2.8.6).
+  counterTolerance?: { salaryUp: number };
 }
 
 /** 명예의전당 등재 — 은퇴 레전드의 통산 기록 영구 보존 (백년 서사) */
@@ -244,6 +248,9 @@ export interface Transfer {
   toTeam: string;                                            // 새 시즌 소속 ('' = 방출(미계약), kind='release')
   kind?: 'transfer' | 'release';                             // 미지정=transfer(구세이브 호환). release=방출/재계약 불발(슬라이스4)
   ovr?: number;                                              // 이동 시점 OVR(거물 게이트·헤드라인 판정 — 이후 노쇠 무관 고정)
+  // FA_SYSTEM §2.8.6 Phase6 — optional(구세이브 호환). 카운터 수락 이적이면 to연봉, SIT_OUT(bids>0) 잔류면 satOut.
+  counteredTo?: number;                                      // 카운터(counterTolerance) 수락 계약의 최종 연봉 — 뉴스 ① 톤
+  satOut?: boolean;                                          // 입찰이 있었는데도 잔류를 택함(SIT_OUT+bids>0) — 뉴스 ② 톤(release에만)
 }
 
 /** 은퇴 영속 기록 — 주목 은퇴자(career≥8시즌 또는 HOF)의 작별·회고(NEWS_SYSTEM 슬라이스5). */

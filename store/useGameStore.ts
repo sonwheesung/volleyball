@@ -1169,14 +1169,19 @@ export const useGameStore = create<GameState>()(
         //  노이즈 정책(NEWS_SYSTEM §3.3): 내 팀 in/out은 항상, 타팀은 거물(overall≥REL_NEWS_OVR)만 적립 → 로그를 린하게.
         const REL_NEWS_OVR = 71; // 타팀 이동 기사화 게이트(리그 국내평균 ~68 위 = 주전급. _ev_transfernews 보정 — 타팀 수건/시즌, 잡선수 노이즈 차단)
         const notable = (id: string) => { const p = snapshot[id]; return !!p && overall(p) >= REL_NEWS_OVR; };
+        // 카운터 수락 관측(FA_SYSTEM §2.8.6) — 내가 counterTolerance로 요구를 수용해 서명한 계약이면 to연봉을 로그에 실어 뉴스 ①로.
+        const counterFired = ctx.counterFired ?? {};
+        const satOutSet = new Set(ctx.faSatOut ?? []); // SIT_OUT+bids>0(뉴스 ②) — 아무도 안 부른 미계약과 구분
         const seasonTransfers: Transfer[] = [];
         for (const tid of Object.keys(filled.rosters)) {
           for (const id of filled.rosters[tid]) {
             const prev = ctx.prevTeamOf[id];
             const p = snapshot[id];
             // 팀→팀 이동(국내). 내 팀 in/out은 항상, 타팀은 거물만.
-            if (prev && prev !== tid && p && !p.isForeign && (prev === my || tid === my || notable(id)))
-              seasonTransfers.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: tid, kind: 'transfer', ovr: overall(p) });
+            if (prev && prev !== tid && p && !p.isForeign && (prev === my || tid === my || notable(id))) {
+              const cf = tid === my ? counterFired[id] : undefined; // 카운터는 내 팀 서명만 발동(§2.8.6)
+              seasonTransfers.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: tid, kind: 'transfer', ovr: overall(p), ...(cf ? { counteredTo: cf.to } : {}) });
+            }
           }
         }
         // 방출/재계약 불발 — 직전 소속(prevTeamOf)이 있는데 새 시즌 어느 명단에도 없는 국내 선수(=FA 풀행, 미계약).
@@ -1186,7 +1191,7 @@ export const useGameStore = create<GameState>()(
           const prev = ctx.prevTeamOf[id];
           const p = snapshot[id];
           if (!prev || !p) continue; // 직전 소속 없으면 풀 잔류자(신규 방출 아님)
-          if (prev === my || notable(id)) seasonReleases.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: '', kind: 'release', ovr: overall(p) });
+          if (prev === my || notable(id)) seasonReleases.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: '', kind: 'release', ovr: overall(p), ...(satOutSet.has(id) ? { satOut: true } : {}) });
         }
         const nextTransfers = [...transfers, ...seasonTransfers, ...seasonReleases].slice(-200);
 
