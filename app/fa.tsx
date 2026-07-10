@@ -2,11 +2,11 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { RoleBadge } from '../components/RoleBadge';
 import { Popup } from '../components/Popup';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
-import { shortTeamName as shortTeam } from '../data/league';
+import { shortTeamName as shortTeam, teamScoutReveal } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { buildOffseasonBase, scandalRepMap } from '../data/offseason';
 import { resolveFAPreviewFor } from '../data/offseasonArgs';
@@ -14,12 +14,18 @@ import { buildOwnerFx } from '../data/owner';
 import { projectSettledCash } from '../data/financeProjection';
 import { LEAGUE_CAP } from '../engine/cap';
 import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
-import { assignFAGrades, askingPrice } from '../engine/faMarket';
+import { assignFAGrades, askingPrice, DEFAULT_FA_OFFER, prefWeightsOf } from '../engine/faMarket';
 import { buildLineup } from '../engine/lineup';
-import { ALL_POSITIONS, overall, overallRaw } from '../engine/overall';
+import { ALL_POSITIONS, overall, overallRaw, REVEAL_PRECISE } from '../engine/overall';
+import { capContractYears } from '../engine/retire';
+import { deriveRatings } from '../engine/ratings';
 import { formatMoney } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
-import { teamRelations } from '../data/relationships';
+import { teamRelations, relationBonds } from '../data/relationships';
+import {
+  offerSatisfaction, offerSalaryBounds, PREF_STAR_AXES, starsFromWeight,
+} from '../data/faOfferSatisfaction';
+import type { FAOffer } from '../types';
 import { useGameStore } from '../store/useGameStore';
 
 export default function FACenter() {
@@ -49,6 +55,7 @@ function FACenterInner() {
   const keepAsian = useGameStore((s) => s.keepAsian);
   const signFA = useGameStore((s) => s.signFA);
   const unsignFA = useGameStore((s) => s.unsignFA);
+  const setOffer = useGameStore((s) => s.setOffer);
   const setAggressive = useGameStore((s) => s.setAggressive);
   const toggleProtect = useGameStore((s) => s.toggleProtect);
   const toggleMoneyOnly = useGameStore((s) => s.toggleMoneyOnly);
@@ -61,6 +68,12 @@ function FACenterInner() {
   const busy = useBusyRun();
   // 개념 안내 모달(UI-21 — 네이티브 Alert 금지). 'delay'=지연 구조, 'comp'=보상선수/돈만
   const [info, setInfo] = useState<null | 'delay' | 'comp'>(null);
+  // 상세 펼침(오퍼 폼) — 관전형 옵트인(§2.8.4 ④): 한 번에 하나만, 펼친 사람에게만 폼 공개.
+  const [openId, setOpenId] = useState<string | null>(null);
+  // 오퍼 폼 로컬 draft(적용 전까지 미영속) — 슬라이더 조작이 무거운 pv 재해결을 안 건드리게(만족도만 즉시 갱신).
+  const [drafts, setDrafts] = useState<Record<string, FAOffer>>({});
+  const reveal = teamScoutReveal(my); // 스카우팅 공개도 — 성향 별점 안개 게이트(드래프트와 동일 소스)
+  const bondsCtx = useMemo(() => relationBonds(), [bonds]); // relT 소스 — 미리보기(resolveFAMarket)와 동일
 
   // 이번 시즌 정산 후 운영 자금 — endSeason이 FA에 쓰는 실제 지갑(모기업 지원·관중 수입 반영).
   //   store.cash(직전 정산값)로 미리보기하면 모기업 지원(14~28억)이 빠져 "영입 불가"로 오표시된다.
@@ -254,7 +267,10 @@ function FACenterInner() {
           }
           return (
             <View key={p.id} style={styles.row}>
-              <View style={styles.info}>
+              <Pressable
+                style={styles.info}
+                onPress={p.isForeign ? undefined : () => setOpenId((cur) => (cur === p.id ? null : p.id))}
+              >
                 <PosTag pos={p.position} />
                 <View style={{ flex: 1 }}>
                   <Text style={styles.name}>
@@ -264,6 +280,7 @@ function FACenterInner() {
                   <Text style={styles.sub}>
                     {p.age}세 · 요구 {formatMoney(ask)}
                     {needsCompensationPlayer(grade) ? ' · 보상선수' : ''}
+                    {!p.isForeign ? (openId === p.id ? ' · 접기 ▲' : ' · 오퍼 만들기 ▼') : ''}
                   </Text>
                   {/* 우리 팀 친구/라이벌 — 영입 확률 판단 정보(RELATIONSHIP_SYSTEM) */}
                   {(() => {
@@ -281,7 +298,10 @@ function FACenterInner() {
                   {badge ? <Text style={{ color: badge.c, fontSize: 12, fontWeight: '800', marginTop: 2 }}>{badge.t}</Text> : null}
                 </View>
                 <OvrBadge value={overallRaw(p)} />
-              </View>
+                {!p.isForeign ? (
+                  <Ionicons name={openId === p.id ? 'chevron-up-outline' : 'chevron-down-outline'} size={18} color={theme.muted} />
+                ) : null}
+              </Pressable>
               <Pressable
                 onPress={() => busy.run('협상 테이블을 차리는 중…', () => (targeted ? unsignFA(p.id) : signFA(p.id)))}
                 style={[
@@ -306,6 +326,120 @@ function FACenterInner() {
                   </Text>
                 </Pressable>
               ) : null}
+              {/* 상세 펼침(오퍼 폼) — 관전형 옵트인(§2.8.4): 펼친 국내 FA에게만. 아무것도 안 만지면 위 '영입 시도'(자동 오퍼)로 그대로 동작. */}
+              {openId === p.id && !p.isForeign ? (() => {
+                const draft: FAOffer = drafts[p.id] ?? faOffers[p.id] ?? DEFAULT_FA_OFFER;
+                const ratings = deriveRatings(p);
+                const myRosterIds = base.off.rosters[my] ?? [];
+                // 만족도 — 엔진 offerScore→acceptProb 위임(재구현 X). 재료는 pv와 동일한 base.off(pre-FA)에서.
+                const sat = offerSatisfaction({
+                  player: p, myTeam: my, snapshot: preSnap, myRosterIds,
+                  prevTeamOf: base.prevTeamOf, prestige: base.prestige[my] ?? 0,
+                  grade, repMult: repMap.get(p.id) ?? 1, offer: draft,
+                  talkBias: ownerFx.offerBias[p.id], bonds: bondsCtx,
+                });
+                const bounds = offerSalaryBounds(ask, p, myPayroll);
+                const curSalary = typeof draft.salary === 'number' ? draft.salary : ask; // 'auto' → 요구연봉 표시
+                const maxYears = capContractYears(p.age, 5);
+                const setDraft = (patch: Partial<FAOffer>) =>
+                  setDrafts((d) => ({ ...d, [p.id]: { ...draft, ...patch } }));
+                const pct = Math.round(sat.prob * 100);
+                const tier = pct >= 80 ? { t: '매우 높음', c: theme.good } : pct >= 55 ? { t: '높음', c: theme.good }
+                  : pct >= 30 ? { t: '보통', c: theme.warn } : { t: '낮음', c: theme.bad };
+                const capRoom = LEAGUE_CAP - myPayroll;
+                return (
+                  <View style={styles.detail}>
+                    {/* 능력 */}
+                    <Text style={styles.detailHead}>능력</Text>
+                    <StatBar label="스파이크" value={ratings.spike} reveal={reveal} />
+                    <StatBar label="블로킹" value={ratings.block} reveal={reveal} />
+                    <StatBar label="디그" value={ratings.dig} reveal={reveal} />
+                    <StatBar label="리시브" value={ratings.receive} reveal={reveal} />
+                    <StatBar label="세팅" value={ratings.set} reveal={reveal} />
+                    <StatBar label="서브" value={ratings.serve} reveal={reveal} />
+                    {p.seasonLines && p.seasonLines.length ? (
+                      <>
+                        <Text style={styles.detailHead}>최근 성적</Text>
+                        {p.seasonLines.slice(-2).reverse().map((l) => (
+                          <Text key={l.season} style={styles.seasonLine}>
+                            {seasonYear(l.season)} · {shortTeam(l.teamId)} · {l.matches}경기 {l.points}점
+                            {l.assists > 0 ? ` · 세트${l.assists}` : ''}{l.digs > 0 ? ` · 디그${l.digs}` : ''}
+                          </Text>
+                        ))}
+                      </>
+                    ) : null}
+
+                    {/* 이적 성향(성향 별점) — 스카우팅 낮으면 ??? 안개 */}
+                    <View style={styles.detailHeadRow}>
+                      <Text style={styles.detailHead}>이적 성향</Text>
+                      <Text style={styles.revealHint}>스카우팅 {Math.round(reveal * 100)}%</Text>
+                    </View>
+                    {reveal >= REVEAL_PRECISE ? (
+                      PREF_STAR_AXES.map((ax) => (
+                        <StarRow key={ax.key} label={ax.label} weight={prefWeightsOf(p)[ax.key] ?? 0} />
+                      ))
+                    ) : (
+                      <>
+                        {PREF_STAR_AXES.map((ax) => <StarRow key={ax.key} label={ax.label} fog />)}
+                        <Muted style={{ fontSize: 11, marginTop: 2 }}>스카우터를 영입하면 이 선수의 이적 성향이 드러납니다.</Muted>
+                      </>
+                    )}
+
+                    {/* 오퍼 폼 */}
+                    <Text style={styles.detailHead}>오퍼</Text>
+                    <Stepper
+                      label="연봉"
+                      display={formatMoney(curSalary)}
+                      decOff={curSalary <= bounds.min}
+                      incOff={curSalary >= bounds.max}
+                      onDec={() => setDraft({ salary: Math.max(bounds.min, curSalary - bounds.step) })}
+                      onInc={() => setDraft({ salary: Math.min(bounds.max, curSalary + bounds.step) })}
+                    />
+                    <Stepper
+                      label="기간"
+                      display={`${draft.years}년`}
+                      decOff={draft.years <= 1}
+                      incOff={draft.years >= maxYears}
+                      onDec={() => setDraft({ years: Math.max(1, draft.years - 1) as FAOffer['years'] })}
+                      onInc={() => setDraft({ years: Math.min(maxYears, draft.years + 1) as FAOffer['years'] })}
+                    />
+                    <Pressable
+                      onPress={() => setDraft({ starterGuarantee: !draft.starterGuarantee })}
+                      style={[styles.guarToggle, draft.starterGuarantee && { borderColor: theme.good, backgroundColor: theme.good + '18' }]}
+                    >
+                      <Text style={{ color: draft.starterGuarantee ? theme.good : theme.muted, fontWeight: '800', fontSize: 13 }}>
+                        주전 보장 {draft.starterGuarantee ? 'ON' : 'OFF'}
+                      </Text>
+                      <Text style={{ color: theme.muted, fontSize: 11, marginTop: 1 }}>약속하고 벤치에 앉히면 불만·팬심·재계약 거부로 돌아옵니다.</Text>
+                    </Pressable>
+                    <Muted style={{ fontSize: 11 }}>
+                      캡 여유 {formatMoney(Math.max(0, capRoom))}{maxYears < 5 ? ` · 나이 상 기간 최대 ${maxYears}년` : ''}
+                    </Muted>
+
+                    {/* 실시간 선수 만족도 — 성공률 아님(§2.8.4 ②) */}
+                    <View style={styles.satHead}>
+                      <Text style={styles.detailHead}>선수 만족도</Text>
+                      <Text style={{ color: tier.c, fontWeight: '900', fontSize: 15 }}>{pct}% · {tier.t}</Text>
+                    </View>
+                    <View style={styles.satBarBg}>
+                      <View style={[styles.satBarFill, { width: `${pct}%`, backgroundColor: tier.c }]} />
+                    </View>
+                    <Muted style={{ fontSize: 11, lineHeight: 16 }}>
+                      내 오퍼만 보고 이 선수가 얼마나 끌리는지예요. 다른 구단과의 경쟁에서 이길지(영입 성공/실패)는
+                      시즌이 시작될 때 확정됩니다.
+                    </Muted>
+
+                    <Pressable
+                      onPress={() => busy.run('협상 테이블을 차리는 중…', () => setOffer(p.id, draft))}
+                      style={[styles.applyBtn, { borderColor: theme.accent, backgroundColor: theme.accent + '22' }]}
+                    >
+                      <Text style={{ color: theme.accent, fontWeight: '800', fontSize: 14 }}>
+                        {targeted ? '이 오퍼로 갱신' : '이 오퍼로 영입 시도'}
+                      </Text>
+                    </Pressable>
+                  </View>
+                );
+              })() : null}
             </View>
           );
         })
@@ -362,6 +496,42 @@ function FACenterInner() {
   );
 }
 
+/** 성향 별점 한 줄 — 가중치를 ★1~5로. fog=스카우팅 낮아 ??? 안개. */
+function StarRow({ label, weight, fog }: { label: string; weight?: number; fog?: boolean }) {
+  const n = fog ? 0 : starsFromWeight(weight ?? 0);
+  return (
+    <View style={styles.starRow}>
+      <Text style={styles.starLabel}>{label}</Text>
+      {fog ? (
+        <Text style={[styles.stars, { color: theme.muted }]}>? ? ?</Text>
+      ) : (
+        <Text style={styles.stars}>
+          <Text style={{ color: theme.accent }}>{'★'.repeat(n)}</Text>
+          <Text style={{ color: theme.border }}>{'★'.repeat(5 - n)}</Text>
+        </Text>
+      )}
+    </View>
+  );
+}
+
+/** −/＋ 스텝퍼(연봉·기간) */
+function Stepper({ label, display, onDec, onInc, decOff, incOff }: {
+  label: string; display: string; onDec: () => void; onInc: () => void; decOff?: boolean; incOff?: boolean;
+}) {
+  return (
+    <View style={styles.stepper}>
+      <Text style={styles.stepLabel}>{label}</Text>
+      <Pressable onPress={onDec} disabled={decOff} hitSlop={6} style={[styles.stepBtn, decOff && styles.stepBtnOff]}>
+        <Text style={styles.stepBtnTxt}>−</Text>
+      </Pressable>
+      <Text style={styles.stepVal}>{display}</Text>
+      <Pressable onPress={onInc} disabled={incOff} hitSlop={6} style={[styles.stepBtn, incOff && styles.stepBtnOff]}>
+        <Text style={styles.stepBtnTxt}>＋</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, gap: 10, borderWidth: 1, borderColor: theme.border },
   info: { flexDirection: 'row', alignItems: 'center', gap: 10 },
@@ -393,4 +563,31 @@ const styles = themedStyles(() => StyleSheet.create({
     borderRadius: 12, paddingVertical: 12, alignItems: 'center', marginTop: 2,
   },
   modalCloseTxt: { color: theme.accent, fontSize: 15, fontWeight: '800' },
+  // ── 상세 펼침(오퍼 폼) §2.8.4 ──
+  detail: {
+    borderTopWidth: 1, borderTopColor: theme.border, marginTop: 2, paddingTop: 10, gap: 6,
+  },
+  detailHead: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 6 },
+  detailHeadRow: { flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between' },
+  revealHint: { color: theme.muted, fontSize: 11, marginBottom: 1 },
+  seasonLine: { color: theme.text, fontSize: 12, fontWeight: '600' },
+  starRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  starLabel: { color: theme.muted, fontSize: 13, width: 44 },
+  stars: { fontSize: 15, letterSpacing: 1 },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepLabel: { color: theme.text, fontSize: 13, fontWeight: '700', width: 44 },
+  stepBtn: {
+    width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: theme.accent,
+    backgroundColor: theme.accent + '18', alignItems: 'center', justifyContent: 'center',
+  },
+  stepBtnOff: { borderColor: theme.border, backgroundColor: 'transparent' },
+  stepBtnTxt: { color: theme.text, fontSize: 18, fontWeight: '900', lineHeight: 20 },
+  stepVal: { color: theme.text, fontSize: 14, fontWeight: '800', flex: 1, textAlign: 'center' },
+  guarToggle: {
+    borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, marginTop: 2,
+  },
+  satHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: 6 },
+  satBarBg: { height: 10, borderRadius: 5, backgroundColor: theme.border, overflow: 'hidden' },
+  satBarFill: { height: 10, borderRadius: 5 },
+  applyBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 6 },
 }));
