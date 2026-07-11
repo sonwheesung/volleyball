@@ -53,8 +53,8 @@ export default function Shop() {
 
   return (
     <Screen title="상점">
-      {/* 보유 다이아 지갑(2026-07-11 테스터 — "상품명"이 아니라 "내 잔액"으로 읽히게 '보유 다이아' 라벨+큰 숫자) */}
-      <Card accent={theme.sky}>
+      {/* 보유 다이아 지갑(2026-07-11 테스터 — "내 잔액"으로 읽히게 '보유 다이아' 라벨+큰 숫자. flat=클릭 불가 정보 패널(전체 보더)) */}
+      <Card accent={theme.sky} flat>
         <View style={styles.row}>
           <View style={[styles.iconChip, { backgroundColor: theme.sky + '22' }]}><Text style={{ fontSize: 20 }}>💎</Text></View>
           <View style={{ flex: 1 }}>
