@@ -2,22 +2,35 @@
 // 뉴스는 저장 없이 archive·milestones·hallOfFame 등에서 파생되므로(결정론), 목록과 **완전히 동일한 피드**를
 // 재구성해 안정 키(newsKey)로 같은 기사를 집어낸다(인덱스 금지 — 목록/상세 필터 비대칭으로 어긋났던 F1, NEWS §3.6).
 //
-// kind='draft'는 실제 스포츠 기사처럼 **리치 레이아웃**(선수 정보·스카우트 총평·드래프트 정보 카드, NEWS §11 Phase1).
-// 나머지 kind는 기존 단순 레이아웃(헤드라인+본문). 전부 기존 상태 읽기전용 파생 — 신규 영속 0·결정론(Date.now/random 금지).
+// **모든 kind가 리치 레이아웃**(NEWS §11): 카테고리 칩·부제·본문 + 사건별 실데이터 카드 + 관련 기사.
+//   kind='draft'는 전용 리치(DraftArticle, §11 Phase1 승인본, 무변경), 그 외는 공통 RichArticle로 확장.
+//   ★ 인터뷰·가짜 드라마·가짜 수치 금지(§11.2): 3인칭 기자 총평만, 이름·팀·수치는 전부 store/파생 실값(없으면 생략).
+//   안개(fog): 내 팀 아닌 선수 스탯은 fogOvr/teamScoutReveal. 전부 기존 상태 읽기전용 파생 — 신규 영속 0·결정론(Date.now/random 금지).
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useMemo } from 'react';
+import type { ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { Card, IconLabel, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../../components/Screen';
 import { POS_LABEL } from '../../components/posTokens';
 import { buildNewsFeed, freshNews, newsKey } from '../../data/news';
 import { seasonYear } from '../../data/seasonLabel';
 import { displayCutoff } from '../../data/standings';
 import { KIND_KO } from '../news';
-import { getPlayer, getTeam, teamScoutReveal } from '../../data/league';
+import { getPlayer, getTeam, teamScoutReveal, reconstructForeignName } from '../../data/league';
 import { fogOvr, potentialEstimate, revealedCount } from '../../data/prospectScout';
 import { overallRaw, displayOvr, REVEAL_PRECISE } from '../../engine/overall';
+import { seasonInjuryReport } from '../../data/injury';
+import { seasonScandals } from '../../data/dynamics';
+import { SEVERITY_KO } from '../../engine/injury';
+import { SCANDAL_KO } from '../../engine/scandal';
+import { popularityNow } from '../../data/owner';
+import { sponsorStanceOf } from '../../engine/sponsorStance';
+import { formatMoney } from '../../engine/salary';
+import { jerseyNumber } from '../../engine/jersey';
+import { resolveJosa } from '../../lib/josa';
 import { useGameStore } from '../../store/useGameStore';
-import type { DraftPickRecord, NewsItem, Player } from '../../types';
+import type { DraftPickRecord, ForeignSwapRecord, HofEntry, Milestone, NewsItem, Player, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../../types';
 
 // 본문 데이터가 없으면(구결과·예외) 분류별 리드 문단으로 폴백(헤드라인이 구체 사실을 담는다).
 const LEAD: Record<NewsItem['kind'], string> = {
@@ -51,6 +64,62 @@ const dhash = (s: string): number => {
   return h >>> 0;
 };
 const dpick = <T,>(arr: T[], key: string, salt = 0): T => arr[dhash(`${key}|${salt}`) % arr.length];
+
+// ── 부제(teal 한 줄) — kind별 톤(§11.3): 우승=축하 / 부상·징계=담담 / 이적·외인·모기업=시장 / 데뷔=기대 /
+//    은퇴·HOF=회고 / 수상·기록·순위=객관. 변형은 뉴스키 해시(결정론). 억지 사실 금지 — 톤 프레이밍만(실사실은 카드가 전달). ──
+const SUBTITLE_BY_KIND: Record<NewsItem['kind'], string[]> = {
+  champion: ['긴 시즌의 마지막 정상 — 그 무게를 증명했다', '정규리그부터 봄배구까지, 모든 길의 끝에 섰다', '한 시즌을 관통한 저력이 왕좌에서 확인됐다'],
+  award: ['코트 위 생산이 만든 한 시즌의 훈장', '기록이 증명한 그해의 이름', '한 시즌의 꾸준함이 상으로 이어졌다'],
+  milestone: ['세월이 쌓여 새겨진 통산의 이정표', '오랜 누적이 마침내 한 고비를 넘었다', '커리어에 굵은 이정표가 하나 세워졌다'],
+  hof: ['코트를 떠나 전당에 이름을 새기다', '긴 여정의 끝, 기록은 역사로 남는다', '한 시대를 마감하고 전당으로 향한다'],
+  injury: ['전력 공백 — 로테이션에 변수가 생겼다', '반갑지 않은 소식, 복귀 시점이 관건이다', '팀은 당분간 빈자리를 메워야 한다'],
+  scandal: ['코트 밖에서 불거진 사건, 후폭풍이 남았다', '팀은 핵심 자원을 잃은 채 일정을 소화한다', '징계의 무게가 시즌에 그림자를 드리웠다'],
+  owner: ['성적과 정서 사이 — 팬심이 출렁였다', '간판의 기용을 두고 여론이 움직였다', '구단 운영은 성적만큼 정서도 살펴야 한다'],
+  streak: ['분위기가 곧 순위로 이어진 흐름', '한 시즌의 물길을 가른 연속 기록', '흐름을 탄 순간이 시즌을 흔들었다'],
+  standing: ['한 시즌의 성적표가 순위로 정리됐다', '다음 시즌의 출발선이 여기서 정해졌다', '성적은 팬심과 구단 살림으로 이어진다'],
+  match: ['한 경기에 새겨진 인상적인 기록', '코트 위 활약이 숫자로 남았다', '시즌을 통틀어 손꼽을 한 장면이다'],
+  debut: ['미래의 자원이 코트에 첫발을 디뎠다', '데뷔 무대의 기록이 커리어의 출발점이 된다', '다음 세대의 성장 곡선이 여기서 시작된다'],
+  transfer: ['시장이 움직였다 — 새 유니폼의 도전', 'FA 시장에 또 하나의 계약이 성사됐다', '익숙한 코트를 떠나 새 도전을 시작한다'],
+  release: ['재계약 불발 — 새 둥지를 찾아야 하는 처지', 'FA 시장에 새 이름이 나왔다', '한 시즌의 마침표이자 새 출발선이다'],
+  retire: ['긴 여정의 마침표 — 남는 것은 기록', '오랜 시간 코트를 지킨 이름이 떠난다', '한 시대를 함께한 선수가 유니폼을 벗는다'],
+  sponsor: ['다가오는 FA 시장, 구단 안팎의 기류', '어디까지나 소문 — 시장이 열려봐야 안다', '오프시즌을 앞둔 모기업의 온도차'],
+  offseason: ['겨울의 전력 재편 — 개막 진용이 섰다', '누가 오고 누가 떠났는지, 스쿼드가 정리됐다', '새 시즌의 밑그림이 그려졌다'],
+  draft: ['잠재력 높은 신인 자원 — 미래를 위한 투자', '즉시 전력보다 성장 여지에 무게를 실었다', '미래의 씨앗이 새 유니폼을 입는다'],
+  foreign: ['외국인 자리의 주인이 바뀌었다', '팀 공격의 핵을 다시 짰다', '외인 결정은 늘 시즌 최대의 도박이다'],
+  playoff: ['봄배구 — 한 경기가 시즌의 운명을 가른다', '단기전엔 내일이 없다', '가을부터 달려온 여정의 끝자락이다'],
+  clinch: ['치른 경기만으로 굳어진 순위의 향방', '남은 결과와 무관하게 방향이 정해졌다', '수학이 순위를 먼저 확정했다'],
+};
+
+// 관련 기사(§11 골격 6) — 같은 kind + 연관 kind. 실제 피드 링크만(없으면 생략).
+const RELATED_KINDS: Record<NewsItem['kind'], NewsItem['kind'][]> = {
+  champion: ['playoff', 'award', 'clinch'], award: ['award', 'milestone', 'match'], milestone: ['milestone', 'award', 'match'],
+  hof: ['retire', 'milestone', 'award'], injury: ['injury', 'scandal'], scandal: ['scandal', 'injury'],
+  owner: ['owner', 'standing'], streak: ['streak', 'standing', 'clinch'], standing: ['standing', 'streak', 'clinch'],
+  match: ['match', 'debut', 'award'], debut: ['debut', 'draft', 'match'], transfer: ['transfer', 'release', 'foreign'],
+  release: ['release', 'transfer', 'foreign'], retire: ['retire', 'hof'], sponsor: ['sponsor', 'transfer', 'offseason'],
+  offseason: ['offseason', 'transfer', 'foreign', 'draft'], draft: ['draft', 'foreign', 'offseason'],
+  foreign: ['foreign', 'transfer', 'offseason'], playoff: ['playoff', 'champion', 'clinch'], clinch: ['clinch', 'standing', 'playoff'],
+};
+
+// kind별 헤더 아이콘(카테고리 시각 구분). Ionicons 글리프 — 오타는 tsc가 잡음.
+const KIND_ICON: Record<NewsItem['kind'], ComponentProps<typeof Ionicons>['name']> = {
+  champion: 'trophy-outline', award: 'medal-outline', milestone: 'flag-outline', hof: 'ribbon-outline',
+  injury: 'medkit-outline', scandal: 'warning-outline', owner: 'megaphone-outline', streak: 'trending-up-outline',
+  standing: 'podium-outline', match: 'flame-outline', debut: 'sparkles-outline', transfer: 'swap-horizontal-outline',
+  release: 'exit-outline', retire: 'flower-outline', sponsor: 'business-outline', offseason: 'construct-outline',
+  draft: 'sparkles-outline', foreign: 'globe-outline', playoff: 'flash-outline', clinch: 'checkmark-circle-outline',
+};
+
+// 선수 포지션별 대표 통산 스탯 한 줄(실값만) — 밀스톤/커리어 카드 보강. 값 0은 생략(가짜 드라마 방지).
+function careerStatRow(p: Player): { label: string; value: string } | null {
+  const c = p.career;
+  if (!c || c.matches <= 0) return null;
+  const v = p.position === 'L' ? { label: '통산 디그', value: `${c.digs.toLocaleString()}개` }
+    : p.position === 'S' ? { label: '통산 세트', value: `${c.assists.toLocaleString()}개` }
+    : p.position === 'MB' ? { label: '통산 블로킹', value: `${c.blocks.toLocaleString()}개` }
+    : { label: '통산 득점', value: `${c.points.toLocaleString()}점` };
+  return v;
+}
 
 type PosGroup = 'attack' | 'set' | 'libero';
 const posGroup = (pos: Player['position']): PosGroup => (pos === 'S' ? 'set' : pos === 'L' ? 'libero' : 'attack');
@@ -125,23 +194,17 @@ function NewsArticleInner() {
     );
   }
 
-  // 드래프트 기사만 리치 레이아웃(NEWS §11 Phase1). 나머지는 기존 단순 레이아웃 유지.
+  const onOpen = (k: string) => router.push(`/news/${encodeURIComponent(k)}`);
+  // 드래프트는 전용 리치(§11 Phase1 승인본, 무변경). 그 외 전 kind는 공통 RichArticle로 리치 확장(§11).
   if (n.kind === 'draft') {
-    return <DraftArticle n={n} feed={feed} myTeamId={teamId ?? ''} seasonDraftLog={seasonDraftLog} onOpen={(k) => router.push(`/news/${encodeURIComponent(k)}`)} />;
+    return <DraftArticle n={n} feed={feed} myTeamId={teamId ?? ''} seasonDraftLog={seasonDraftLog} onOpen={onOpen} />;
   }
-
-  const team = n.teamId ? getTeam(n.teamId) : undefined;
   return (
-    <Screen title="">
-      <Card accent={theme.violet}>
-        <IconLabel icon="newspaper-outline" color={theme.violet}>{KIND_KO[n.kind]}{n.big ? ' · 헤드라인' : ''}</IconLabel>
-        <Text style={styles.headline}>{n.headline}</Text>
-        <Text style={styles.byline}>{seasonYear(n.season)}{team ? ` · ${team.name}` : ''}</Text>
-      </Card>
-      <Card accent={theme.violet}>
-        <Text style={styles.body}>{n.body ?? LEAD[n.kind]}</Text>
-      </Card>
-    </Screen>
+    <RichArticle
+      n={n} feed={feed} myTeamId={teamId ?? ''} currentSeason={season} leagueDay={cutoff}
+      archive={archive} milestones={milestones} hallOfFame={hallOfFame} retirements={retirements}
+      transfers={transfers} seasonForeignLog={seasonForeignLog} onOpen={onOpen}
+    />
   );
 }
 
@@ -283,6 +346,258 @@ function DraftArticle({ n, feed, myTeamId, seasonDraftLog, onOpen }: {
       ) : null}
     </Screen>
   );
+}
+
+// ── 공통 리치 기사(NEWS §11) — 드래프트 외 전 kind. 사건별 실데이터 카드 + 기자 총평(인터뷰 아님). ──
+const teamNameOf = (id?: string): string => (id ? getTeam(id)?.name ?? id : '');
+const pNameOf = (id: string): string => getPlayer(id)?.name ?? reconstructForeignName(id) ?? id;
+
+/** 한 시즌 시상 결과에서 특정 선수가 받은 상 목록(라벨+근거 수치, 실값만). */
+function awardsForPlayer(aw: SeasonAwards, playerId: string): { label: string; value?: string }[] {
+  const out: { label: string; value?: string }[] = [];
+  if (aw.mvp?.playerId === playerId) out.push({ label: '정규리그 MVP' });
+  if (aw.finalsMvp?.playerId === playerId) out.push({ label: '챔프전 MVP' });
+  if (aw.rookie?.playerId === playerId) out.push({ label: '신인상' });
+  if (aw.mostImproved?.playerId === playerId) out.push({ label: '기량발전상' });
+  const TK: Record<string, [string, string]> = { // titles 키 → [라벨, 단위]
+    scoring: ['득점왕', '점'], spike: ['공격상', '개'], block: ['블로킹왕', '개'], serve: ['서브왕', '개'], dig: ['디그왕', '개'], set: ['세트왕', '개'], receive: ['리시브왕', '개'],
+  };
+  for (const [k, [label, unit]] of Object.entries(TK)) {
+    const w = aw.titles[k as keyof SeasonAwards['titles']];
+    if (w?.playerId === playerId) out.push({ label, value: `${w.value.toLocaleString()}${unit}` });
+  }
+  for (const s of aw.best7 ?? []) if (s.winner?.playerId === playerId) out.push({ label: `베스트7 (${POS_LABEL[s.pos]})` });
+  (aw.roundMvps ?? []).forEach((w, i) => { if (w?.playerId === playerId) out.push({ label: `${i + 1}라운드 MVP` }); });
+  return out;
+}
+
+/** 관측된 연속 우승 수(왕조) — archive 우승 시즌만으로(가짜 드라마 아님, buildNewsFeed와 동일 규칙). */
+function dynastyRunOf(archive: SeasonArchive[], teamId: string, season: number): number {
+  const ss = archive.filter((a) => a.championId === teamId).map((a) => a.season).sort((x, y) => x - y);
+  const idx = ss.indexOf(season);
+  if (idx < 0) return 1;
+  let run = 1;
+  for (let i = idx; i > 0 && ss[i] === ss[i - 1] + 1; i--) run++;
+  return run;
+}
+
+function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, milestones, hallOfFame, retirements, transfers, seasonForeignLog, onOpen }: {
+  n: NewsItem; feed: NewsItem[]; myTeamId: string; currentSeason: number; leagueDay: number;
+  archive: SeasonArchive[]; milestones: Milestone[]; hallOfFame: HofEntry[]; retirements: RetireRecord[];
+  transfers: Transfer[]; seasonForeignLog: ForeignSwapRecord[]; onOpen: (key: string) => void;
+}) {
+  const nk = newsKey(n);
+  const team = n.teamId ? getTeam(n.teamId) : undefined;
+  const p = n.ref ? getPlayer(n.ref) : undefined; // ref가 실제 선수일 때만(champion/clinch/sponsor 등 팀 ref·플옵 게임키는 undefined)
+  const isMyTeam = !!n.teamId && n.teamId === myTeamId;
+  const accent = KIND_ACCENT()[n.kind];
+  const subtitle = dpick(SUBTITLE_BY_KIND[n.kind], nk, 0);
+
+  // 본문 — n.body(사실 조립본) 또는 분류 리드 + 선수 주인공이면 신체·역할 사실 한 줄(실값, 감정 금지).
+  const paras: string[] = [n.body ?? LEAD[n.kind]];
+  if (p) paras.push(`신장 ${p.height}cm · ${p.age}세 ${POS_LABEL[p.position]}.`);
+
+  // 선수 정보 카드(안개 준수 — 내 팀=정확 OVR / 타팀=스카우터 등급만큼 범위). draft 기사와 동일 처리.
+  const reveal = isMyTeam ? 1 : teamScoutReveal(myTeamId);
+  const scoutOvr = p ? fogOvr(p, reveal) : '';
+
+  // ── kind별 실데이터 카드(있는 것만 — 지어내기 금지) ──
+  const rows: { label: string; value: string; accent?: boolean }[] = [];
+  let cardTitle = '', cardIcon: ComponentProps<typeof Ionicons>['name'] = 'clipboard-outline', cardColor = accent, cardNote = '';
+
+  if (n.kind === 'injury' && n.season === currentSeason) {
+    const s = seasonInjuryReport().find((x) => x.playerId === n.ref);
+    if (s) {
+      cardTitle = '부상 정보'; cardIcon = 'medkit-outline'; cardColor = theme.bad;
+      rows.push({ label: '부상 정도', value: SEVERITY_KO[s.severity], accent: true });
+      rows.push({ label: '예상 결장', value: s.severity === 'season' ? '시즌아웃' : `약 ${s.missMatches}경기` });
+      if (p) rows.push({ label: '포지션 공백', value: POS_LABEL[p.position] });
+    }
+  } else if (n.kind === 'scandal') {
+    const s = seasonScandals().find((x) => x.playerId === n.ref);
+    if (s) {
+      cardTitle = '징계 정보'; cardIcon = 'warning-outline'; cardColor = theme.warn;
+      rows.push({ label: '사유', value: SCANDAL_KO[s.kind], accent: true });
+      rows.push({ label: '출장 정지', value: `${s.missMatches}경기` });
+      if (p) rows.push({ label: '포지션 공백', value: POS_LABEL[p.position] });
+    }
+  } else if (n.kind === 'champion') {
+    const a = archive.find((x) => x.season === n.season);
+    if (a?.championId) {
+      cardTitle = '우승 여정'; cardIcon = 'trophy-outline'; cardColor = theme.gold;
+      const rank = a.standings ? a.standings.indexOf(a.championId) + 1 : 0;
+      if (rank > 0) rows.push({ label: '정규리그 순위', value: `${rank}위` });
+      const series = a.series?.[a.championId]?.find((sq) => sq.length >= 3);
+      const sweep = series && series.length === 3 && series.every((g) => g === 'W');
+      const reverse = series && series.length === 5 && series[0] === 'L' && series[1] === 'L' && series.slice(2).every((g) => g === 'W');
+      rows.push({ label: '우승 방식', value: reverse ? '리버스 스윕 대역전' : sweep ? '챔프전 3-0 스윕' : '챔프전 제패', accent: true });
+      const run = dynastyRunOf(archive, a.championId, a.season);
+      if (run >= 2) rows.push({ label: '연속 우승', value: `${run}연패` });
+      if (a.awards?.mvp && a.awards.mvp.teamId === a.championId) rows.push({ label: '정규 MVP', value: pNameOf(a.awards.mvp.playerId) });
+    }
+  } else if (n.kind === 'award') {
+    const a = archive.find((x) => x.season === n.season);
+    if (a?.awards && n.ref) {
+      const list = awardsForPlayer(a.awards, n.ref);
+      if (list.length) {
+        cardTitle = '수상 내역'; cardIcon = 'medal-outline'; cardColor = theme.gold;
+        for (const w of list) rows.push({ label: w.label, value: w.value ?? '수상', accent: !w.value });
+      }
+    }
+  } else if (n.kind === 'milestone') {
+    const m = milestones.find((mm) => mm.season === n.season && mm.playerId === n.ref && resolveJosa(mm.text) === n.headline)
+      ?? milestones.find((mm) => mm.season === n.season && mm.playerId === n.ref);
+    if (m) {
+      cardTitle = '통산 기록'; cardIcon = 'flag-outline'; cardColor = theme.sky;
+      rows.push({ label: '기록 구분', value: m.kind === 'league' ? '리그 역대 기록' : m.kind === 'club' ? '구단 통산 기록' : '개인 통산 기록', accent: true });
+      const cs = p ? careerStatRow(p) : null;
+      if (cs) rows.push({ label: cs.label, value: cs.value });
+    }
+  } else if (n.kind === 'retire') {
+    const r = retirements.find((rr) => rr.season === n.season && rr.playerId === n.ref);
+    if (r) {
+      cardTitle = '커리어 요약'; cardIcon = 'time-outline'; cardColor = theme.violet;
+      rows.push({ label: '통산', value: `${r.seasons}시즌`, accent: true });
+      const stat = r.position === 'L' ? (r.digs > 0 ? { l: '통산 디그', v: `${r.digs.toLocaleString()}개` } : null)
+        : r.position === 'S' ? (r.assists > 0 ? { l: '통산 세트', v: `${r.assists.toLocaleString()}개` } : null)
+        : r.position === 'MB' ? (r.blocks > 0 ? { l: '통산 블로킹', v: `${r.blocks.toLocaleString()}개` } : null)
+        : (r.points > 0 ? { l: '통산 득점', v: `${r.points.toLocaleString()}점` } : null);
+      if (stat) rows.push({ label: stat.l, value: stat.v });
+      if (r.age != null) rows.push({ label: '은퇴 나이', value: `${r.age}세` });
+      if (r.legend) rows.push({ label: '영구결번급', value: '헌액' });
+      else if (r.hof) rows.push({ label: '명예의전당', value: '헌액' });
+    }
+  } else if (n.kind === 'hof') {
+    const h = hallOfFame.find((hh) => hh.id === n.ref && hh.retiredSeason === n.season);
+    if (h) {
+      cardTitle = '통산 커리어'; cardIcon = 'ribbon-outline'; cardColor = theme.gold;
+      rows.push({ label: '통산', value: `${h.seasons}시즌`, accent: true });
+      if (h.points > 0) rows.push({ label: '통산 득점', value: `${h.points.toLocaleString()}점` });
+      if (h.blocks > 0) rows.push({ label: '통산 블로킹', value: `${h.blocks.toLocaleString()}개` });
+      if (h.digs > 0) rows.push({ label: '통산 디그', value: `${h.digs.toLocaleString()}개` });
+      if (h.legend) rows.push({ label: '헌액 번호', value: `${jerseyNumber(h.id)}번` });
+    }
+  } else if (n.kind === 'transfer' || n.kind === 'release') {
+    const t = transfers.find((tt) => tt.season === n.season && tt.playerId === n.ref && (n.kind === 'release' ? tt.kind === 'release' : tt.kind !== 'release'));
+    if (t) {
+      cardTitle = '이동 정보'; cardIcon = 'swap-horizontal-outline'; cardColor = theme.sky;
+      rows.push({ label: '전 소속', value: teamNameOf(t.fromTeam) });
+      if (n.kind === 'release') {
+        rows.push({ label: '거취', value: t.satOut ? '제안 거절·무소속' : 'FA 시장(미계약)', accent: true });
+        if (t.reason) rows.push({ label: '사유', value: t.reason === 'capSqueezed' ? '샐러리캡 압박' : t.reason === 'refused' ? '재계약 거절' : '재계약 미제안' });
+      } else {
+        rows.push({ label: '새 소속', value: teamNameOf(t.toTeam), accent: true });
+        if (typeof t.counteredTo === 'number') rows.push({ label: '계약', value: formatMoney(t.counteredTo) });
+      }
+      if (t.ovr) rows.push({ label: '이동 시점 OVR', value: `${t.ovr}` });
+    }
+  } else if (n.kind === 'foreign') {
+    const f = seasonForeignLog.find((ff) => ff.season === n.season - 1 && ff.teamId === n.teamId && (ff.inId ?? ff.outId) === n.ref)
+      ?? seasonForeignLog.find((ff) => ff.season === n.season - 1 && ff.teamId === n.teamId);
+    if (f) {
+      cardTitle = '외국인 이동'; cardIcon = 'globe-outline'; cardColor = theme.elite;
+      rows.push({ label: '유형', value: f.asian ? '아시아쿼터' : '외국인 선수', accent: true });
+      if (f.inName) rows.push({ label: '영입', value: f.inName });
+      if (f.outName) rows.push({ label: '결별', value: f.outName });
+    }
+  } else if (n.kind === 'owner' && p) {
+    cardTitle = '팬심'; cardIcon = 'heart-outline'; cardColor = theme.rose;
+    rows.push({ label: '팬 인기도', value: `${Math.round(popularityNow(p, leagueDay, archive))}/100`, accent: true });
+  } else if (n.kind === 'sponsor' && n.teamId) {
+    const stance = sponsorStanceOf(n.teamId, n.season, archive);
+    cardTitle = '모기업 기조'; cardIcon = 'business-outline'; cardColor = theme.gold;
+    rows.push({ label: '다가오는 FA', value: stance === 'aggressive' ? '공격적 투자 예고' : stance === 'thrifty' ? '긴축·관망 기조' : '평년 기조', accent: true });
+    cardNote = '※ 어디까지나 전망 — 시장이 열려봐야 안다.';
+  } else if (n.kind === 'standing') {
+    const a = archive.find((x) => x.season === n.season);
+    if (a && n.teamId) {
+      cardTitle = '팀 성적'; cardIcon = 'podium-outline'; cardColor = theme.sky;
+      const rank = a.standings ? a.standings.indexOf(n.teamId) + 1 : 0;
+      if (rank > 0) rows.push({ label: '최종 순위', value: `${rank}위`, accent: true });
+      const rec = a.record?.[n.teamId];
+      if (rec) rows.push({ label: '정규리그 성적', value: `${rec[0]}승 ${rec[1]}패` });
+    }
+  } else if (n.kind === 'streak') {
+    const a = archive.find((x) => x.season === n.season);
+    const s = a?.streaks?.[n.teamId ?? ''];
+    if (s) {
+      cardTitle = '연속 기록'; cardIcon = 'trending-up-outline'; cardColor = theme.accent;
+      if (s[0] > 0) rows.push({ label: '시즌 최장 연승', value: `${s[0]}연승`, accent: true });
+      if (s[1] > 0) rows.push({ label: '시즌 최장 연패', value: `${s[1]}연패` });
+      const rec = a?.record?.[n.teamId ?? ''];
+      if (rec) rows.push({ label: '정규리그 성적', value: `${rec[0]}승 ${rec[1]}패` });
+    }
+  }
+
+  // 관련 기사 — 같은 kind + 연관 kind(§11 골격 6). 실제 피드 링크만.
+  const rel = feed.filter((x) => newsKey(x) !== nk && (x.kind === n.kind || RELATED_KINDS[n.kind].includes(x.kind))).slice(0, 3);
+
+  return (
+    <Screen title="">
+      {/* 1) 카테고리 칩 + 인게임 날짜·구단 + 헤드라인 + 부제(teal) */}
+      <Card accent={accent}>
+        <IconLabel icon={KIND_ICON[n.kind]} color={accent}>{KIND_KO[n.kind]}{n.big ? ' · 헤드라인' : ''}</IconLabel>
+        <Text style={styles.byline}>{seasonYear(n.season)}{team ? ` · ${team.name}` : ''}</Text>
+        <Text style={styles.headline}>{n.headline}</Text>
+        <Text style={styles.subtitle}>{subtitle}</Text>
+      </Card>
+
+      {/* 2) 본문(사실 문단) */}
+      <Card accent={accent}>
+        {paras.map((t, i) => (
+          <Text key={i} style={[styles.body, i > 0 ? { marginTop: 10 } : null]}>{t}</Text>
+        ))}
+      </Card>
+
+      {/* 3) 선수 정보 카드(안개 준수) — ref가 실제 선수일 때만 */}
+      {p ? (
+        <Card flat accent={theme.sky}>
+          <IconLabel icon="person-outline" color={theme.sky}>선수 정보</IconLabel>
+          <View style={styles.infoGrid}>
+            <InfoRow label="포지션" value={`${p.position} (${POS_LABEL[p.position]})`} />
+            <InfoRow label="나이" value={`${p.age}세`} />
+            <InfoRow label="신장" value={`${p.height}cm`} />
+            <InfoRow label="종합 능력" value={`OVR ${scoutOvr}${isMyTeam ? '' : ' (추정)'}`} accent />
+          </View>
+          {!isMyTeam ? <Muted style={styles.fogNote}>※ 타 구단 선수 — 스카우터 공개도만큼만 파악됩니다.</Muted> : null}
+        </Card>
+      ) : null}
+
+      {/* 4) kind별 실데이터 카드(있을 때만 — 지어내기 금지) */}
+      {rows.length > 0 ? (
+        <Card flat accent={cardColor}>
+          <IconLabel icon={cardIcon} color={cardColor}>{cardTitle}</IconLabel>
+          <View style={styles.infoGrid}>
+            {rows.map((r, i) => <InfoRow key={i} label={r.label} value={r.value} accent={r.accent} />)}
+          </View>
+          {cardNote ? <Muted style={styles.fogNote}>{cardNote}</Muted> : null}
+        </Card>
+      ) : null}
+
+      {/* 5) 관련 기사 — 같은/연관 kind 링크(있을 때만) */}
+      {rel.length > 0 ? (
+        <Card flat accent={theme.muted}>
+          <IconLabel icon="link-outline" color={theme.mutedBright}>관련 기사</IconLabel>
+          {rel.map((x) => (
+            <Text key={newsKey(x)} style={styles.relLink} numberOfLines={2} onPress={() => onOpen(newsKey(x))}>
+              › {x.headline}
+            </Text>
+          ))}
+        </Card>
+      ) : null}
+    </Screen>
+  );
+}
+
+// kind별 헤더 액센트 색(전부 SHARED 팔레트 = 다크/라이트 동일 — 렌더 시 읽어 토글 안전).
+function KIND_ACCENT(): Record<NewsItem['kind'], string> {
+  return {
+    champion: theme.gold, award: theme.gold, milestone: theme.sky, hof: theme.gold,
+    injury: theme.bad, scandal: theme.warn, owner: theme.rose, streak: theme.accent,
+    standing: theme.sky, match: theme.bad, debut: theme.accent, transfer: theme.sky,
+    release: theme.warn, retire: theme.violet, sponsor: theme.gold, offseason: theme.sky,
+    draft: theme.accent, foreign: theme.elite, playoff: theme.rose, clinch: theme.good,
+  };
 }
 
 const styles = themedStyles(() => StyleSheet.create({
