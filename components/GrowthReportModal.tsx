@@ -21,19 +21,25 @@ const growthScore = (p: PlayerGrowth): number => {
 // 성장량 큰 순 정렬(무엇이 가장 컸나 한눈에) — 표시 전용, 원본 불변
 const upsOf = (ds: StatDelta[]) => ds.filter((d) => d.delta > 0).sort((a, b) => b.delta - a.delta);
 
-/** 스탯 목록 — 2열 그리드(표): 스탯명 왼쪽 · "77 → 78" from→to 값 우측정렬. */
-function StatGrid({ ups, styles }: { ups: StatDelta[]; styles: any }) {
+/** 스탯 목록 — 2열 그리드(표): 스탯명 왼쪽 · "77 → 78" from→to 값 우측정렬.
+ *  상승(초록)·하락(빨강) 동일 디자인 — 부호로 색만 다르게(2026-07-11 테스터). */
+function StatGrid({ changes, styles }: { changes: StatDelta[]; styles: any }) {
   return (
     <View style={styles.statWrap}>
-      {ups.map((d, i) => (
-        <View key={i} style={styles.cell}>
-          <Text style={styles.statName} numberOfLines={1}>{d.label}</Text>
-          <Text style={styles.fromTo} numberOfLines={1}>
-            <Text style={styles.ftFrom}>{d.from} → </Text>
-            <Text style={d.delta >= 3 ? styles.ftToBig : styles.ftTo}>{d.to}</Text>
-          </Text>
-        </View>
-      ))}
+      {changes.map((d, i) => {
+        const down = d.delta < 0;
+        const to = down ? (Math.abs(d.delta) >= 3 ? styles.ftToDownBig : styles.ftToDown)
+                        : (d.delta >= 3 ? styles.ftToBig : styles.ftTo);
+        return (
+          <View key={i} style={styles.cell}>
+            <Text style={styles.statName} numberOfLines={1}>{d.label}</Text>
+            <Text style={styles.fromTo} numberOfLines={1}>
+              <Text style={styles.ftFrom}>{d.from} → </Text>
+              <Text style={to}>{d.to}</Text>
+            </Text>
+          </View>
+        );
+      })}
     </View>
   );
 }
@@ -77,20 +83,9 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
                 </View>
               </View>
 
-              {/* 이번 변화 — 섹션 제목(얇은 바) + 구간 from→to 2열 그리드(주인공) */}
-              {ups.length ? (
-                <View style={styles.section}>
-                  <View style={styles.secHead}>
-                    <View style={styles.secBar} />
-                    <Text style={styles.lblNow}>이번 변화</Text>
-                  </View>
-                  <StatGrid ups={ups} styles={styles} />
-                </View>
-              ) : null}
-
-              {/* 노쇠 — 가장 연하게 */}
-              {downs.length ? (
-                <Text style={styles.down} numberOfLines={1}>▼ {downs.map((d) => `${d.label} ${d.delta}`).join('  ')}</Text>
+              {/* 변화 스탯 — 상승(초록)·하락(빨강) 동일 from→to 2열 그리드. "이번 변화" 라벨 제거(2026-07-11 테스터) */}
+              {(ups.length || downs.length) ? (
+                <StatGrid changes={[...ups, ...downs]} styles={styles} />
               ) : null}
             </View>
           );
@@ -135,11 +130,6 @@ const styles = themedStyles(() => StyleSheet.create({
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
   name: { color: theme.text, fontSize: 18, fontWeight: '900', lineHeight: 22, flexShrink: 1 }, // 이름 = 주인공
-  // 이번 변화 — 섹션 제목(제목↔스탯 8)
-  section: { gap: 8 },
-  secHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  secBar: { width: 2.5, height: 10, borderRadius: 2, backgroundColor: theme.accent },
-  lblNow: { color: theme.accent, fontSize: 13, fontWeight: '900', letterSpacing: 0.2 },
   // 스탯 2열 그리드 — 스탯명 고정폭(왼쪽) + 값 우측정렬(오른쪽 끝) = 표
   statWrap: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
   cell: { width: '50%', flexDirection: 'row', alignItems: 'baseline', paddingRight: 14 },
@@ -149,8 +139,9 @@ const styles = themedStyles(() => StyleSheet.create({
   ftFrom: { color: theme.muted, fontSize: 12.5, fontWeight: '600' },
   ftTo: { color: theme.good, fontSize: 13.5, fontWeight: '900' },
   ftToBig: { color: theme.good, fontSize: 14.5, fontWeight: '900' }, // 큰 폭 더 눈에
-  // 노쇠 — 가장 연하게
-  down: { color: theme.muted, fontSize: 11, fontWeight: '600', opacity: 0.45 },
+  // 하락 — 상승과 동일 디자인, 색만 빨강(2026-07-11 테스터)
+  ftToDown: { color: theme.bad, fontSize: 13.5, fontWeight: '900' },
+  ftToDownBig: { color: theme.bad, fontSize: 14.5, fontWeight: '900' },
   more: { color: theme.accent, fontSize: 13, fontWeight: '800', textAlign: 'center', paddingVertical: 8 },
   mini: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 7, gap: 8 },
   miniName: { color: theme.text, fontSize: 13, fontWeight: '700', flexShrink: 1 },
