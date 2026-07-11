@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
-import { evalAchievements, achievementSummary, type AchCategory, type AchStatus } from '../engine/achievements';
+import { evalAchievements, achievementSummary, achReward, type AchCategory, type AchStatus } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
@@ -76,6 +76,8 @@ function AchievementsInner() {
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.title, s.unlocked && { color: theme.text }]}>{s.ach.title}</Text>
                   <Text style={styles.desc}>{s.ach.desc}</Text>
+                  {/* 보상 다이아 명시(테스터 요청 2026-07-11) — 달성 전엔 연하게, 달성 시 또렷하게 */}
+                  <Text style={[styles.reward, s.unlocked && styles.rewardOn]}>보상 +{achReward(s.ach.id)} 💎</Text>
                   {s.ach.target > 1 && !s.unlocked ? (
                     <View style={styles.miniTrack}><View style={[styles.miniFill, { width: `${Math.min(100, (s.cur / s.ach.target) * 100)}%` }]} /></View>
                   ) : null}
@@ -113,6 +115,8 @@ const styles = themedStyles(() => StyleSheet.create({
   iconLocked: { opacity: 0.6 },
   title: { color: theme.muted, fontSize: 15, fontWeight: '800' },
   desc: { color: theme.muted, fontSize: 12, marginTop: 1 },
+  reward: { color: theme.muted, fontSize: 11.5, fontWeight: '800', marginTop: 3, opacity: 0.7 },
+  rewardOn: { color: theme.sky, opacity: 1 },
   prog: { color: theme.muted, fontSize: 12, fontWeight: '700', textAlign: 'right' },
   miniTrack: { height: 4, backgroundColor: theme.cardAlt, borderRadius: 2, overflow: 'hidden', marginTop: 5 },
   miniFill: { height: 4, backgroundColor: theme.accent },

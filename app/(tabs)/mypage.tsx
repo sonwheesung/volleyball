@@ -119,7 +119,7 @@ export default function MyPage() {
       else if (r.reason === 'cap') showAlert('수령 한도', '업적 보상 지급 한도에 도달했습니다.');
       else if (r.reason === 'offline') showAlert('연결이 불안정합니다', '보상이 이미 지급됐을 수 있어요 — 잔액을 확인해 주세요.\n다시 시도해도 중복 지급되지 않습니다.');
       else if (r.reason === 'busy') showAlert('처리 중', '잠시만 기다려 주세요.');
-      else if (r.reason === 'already') showAlert('이미 수령된 보상', '이전 시도에서 이미 지급된 보상입니다. 현재 잔액에 반영되어 있어요.');
+      else if (r.reason === 'already') showAlert('보상 반영 완료', '이 업적 보상은 이미 다이아로 지급되어 잔액에 반영돼 있습니다. 추가 지급이나 손해는 없어요.');
       else showAlert('수령할 보상 없음', '새로 달성한 업적이 없습니다.');
     } finally {
       setClaiming(false);
