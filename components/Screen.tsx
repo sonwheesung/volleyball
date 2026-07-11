@@ -278,6 +278,7 @@ export function Button({
   variant = 'primary',
   disabled,
   compact,
+  small,
 }: {
   label: string;
   onPress: () => void;
@@ -286,6 +287,9 @@ export function Button({
   /** compact: 높이 ~10%↓(paddingVertical 15→13.5) + primary는 배경 살짝 더 밝게(클릭 가능 강조).
    *  일정 화면 "다음 경기" CTA(이어보기/경기 시작) 전용 — 기본값 false라 다른 버튼엔 무영향. */
   compact?: boolean;
+  /** small: 리스트 행 액션용 컴팩트 사이즈(pad 8/14·radius 10·minWidth 0·14pt). transactions/tryout 영입버튼과 동일 규격.
+   *  스태프 시장(감독/코치/스카우터) 영입·방출처럼 카드 우측 인라인 액션에 쓴다(2026-07-11 규격 통일). */
+  small?: boolean;
 }) {
   // 내비게이션 래치(UI-33) — 연타로 화면이 이중 push 되거나 액션이 두 번 발화되는 것을 막는다.
   //   state는 비동기라 같은 프레임의 두 번째 탭이 stale 값을 보므로 **동기 ref**만이 확실히 차단(UI-31과 같은 원리).
@@ -304,13 +308,14 @@ export function Button({
       style={({ pressed }) => [
         styles.btn,
         variant === 'primary' ? styles.btnPrimary : styles.btnGhost,
+        small && styles.btnSmall, // 리스트 액션 규격(pad 8/14·radius 10·minWidth 0)
         compact && { paddingVertical: 13.5 },
         compact && variant === 'primary' && { backgroundColor: theme.accent + '38' }, // accentGlass(0.16)보다 밝은 ~0.22 틴트
         disabled && { opacity: 0.4 },
         pressed && !disabled && { opacity: 0.8 },
       ]}
     >
-      <Text style={styles.btnText}>{label}</Text>
+      <Text style={[styles.btnText, small && styles.btnTextSmall]}>{label}</Text>
     </Pressable>
   );
 }
@@ -444,6 +449,9 @@ const styles = themedStyles(() => StyleSheet.create({
   // paddingHorizontal 필수 — 인라인(Row 안) 버튼은 폭이 글자에 맞춰지므로, 없으면 "영입"처럼 짧은
   // 라벨이 세로로 길쭉한 캡슐이 된다. 전체폭 버튼(Card 안)은 stretch라 영향 없음.
   btn: { borderRadius: 14, paddingVertical: 15, paddingHorizontal: 22, minWidth: 76, alignItems: 'center', justifyContent: 'center', borderWidth: 1 },
+  // small: 리스트 행 인라인 액션(transactions/tryout 영입버튼과 동일 규격) — 카드 우측에 얹는 작은 액션
+  btnSmall: { borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, minWidth: 0 },
+  btnTextSmall: { fontSize: 14 },
   btnPrimary: {
     backgroundColor: theme.accentGlass, borderWidth: 1.5, borderColor: theme.accent,
     // iOS 액센트 글로우만(elevation 제거 — Android는 반투명 배경 위 elevation이 사각 그림자 아티팩트를 만든다. 2026-06-28)

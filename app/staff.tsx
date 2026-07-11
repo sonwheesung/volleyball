@@ -37,6 +37,7 @@ export default function Staff() {
   // UI-4: 그 재계산을 로딩 뒤에서 미리 데운다(스피너는 네이티브라 JS가 막혀도 계속 돈다).
   // 스카우터·재계약은 시뮬 무영향(캐시 무효 없음) → busy 안 거치고 즉시.
   const [busy, setBusy] = useState(false);
+  const [busyMsg, setBusyMsg] = useState('새 스태프를 반영해\n시즌 전력을 다시 계산하는 중…');
   const pending = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!busy) return;
@@ -60,10 +61,11 @@ export default function Staff() {
       cancelAnimationFrame(r2);
     };
   }, [busy]);
-  const heavyAction = (fn: () => void) => { pending.current = fn; setBusy(true); };
+  // 로딩 문구를 동작별로(테스터 요청 2026-07-11: 재계산 문구 대신 센스있는 장면). 기본=재계산 문구.
+  const heavyAction = (fn: () => void, msg?: string) => { pending.current = fn; if (msg) setBusyMsg(msg); setBusy(true); };
 
   if (!teamId) return <Screen title="스태프"><Muted>먼저 구단을 선택하세요.</Muted></Screen>;
-  if (busy) return <Loading title="스태프 계약" message={'새 스태프를 반영해\n시즌 전력을 다시 계산하는 중…'} variant="brand" />;
+  if (busy) return <Loading title="스태프 계약" message={busyMsg} variant="brand" />;
 
   const head = getTeamCoach(teamId);
   const acting = !!head?.id.startsWith('acting_');
@@ -88,18 +90,18 @@ export default function Staff() {
     }
     showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)} · 3년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
-      { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다. 새 감독의 성향으로 팀이 움직입니다.`); }) },
+      { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다. 새 감독의 성향으로 팀이 움직입니다.`); }, `${name} 감독이 부임해\n선수들에게 전술을 설명하는 중…`) },
     ]);
   };
   const tryHireAsst = (id: string, name: string, salary: number) =>
     showAlert('코치 영입', `${name} 코치를 영입하시겠습니까?\n연봉 ${formatMoney(salary)}\n\n새 코치를 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
-      { text: '영입', onPress: () => heavyAction(() => { if (!hireAssistant(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 코치가 합류했습니다.`); }) },
+      { text: '영입', onPress: () => heavyAction(() => { if (!hireAssistant(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 코치가 합류했습니다.`); }, `${name} 코치가 합류해\n훈련 계획을 짜는 중…`) },
     ]);
   const tryReleaseAsst = (id: string, name: string) =>
     showAlert('코치 방출', `${name} 코치를 방출하시겠습니까?\n\n전력 변화로 시즌을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
-      { text: '방출', style: 'destructive', onPress: () => heavyAction(() => releaseAssistant(id)) },
+      { text: '방출', style: 'destructive', onPress: () => heavyAction(() => releaseAssistant(id), `${name} 코치가 짐을 정리하고\n팀을 떠날 준비를 하는 중…`) },
     ]);
   const tryHireScout = (id: string, name: string, salary: number) =>
     showAlert('스카우터 영입', `${name}을(를) 영입하시겠습니까?\n연봉 ${formatMoney(salary)}`, [
@@ -152,12 +154,12 @@ export default function Staff() {
                     계약 {yrs <= 0 ? '만료 — 재계약 필요' : `잔여 ${yrs}년`}
                   </Muted>
                   {expiring ? (
-                    <Button label="재계약(3년)" onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); }} />
+                    <Button small label="재계약(3년)" onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); }} />
                   ) : null}
                 </Row>
                 <Button label="감독 경질" onPress={() => showAlert('감독 경질', `${head.name} 감독을 경질하시겠습니까? 전문 코치가 대행을 맡고, 그 감독은 우리 팀에 다시 오지 않습니다.`, [
                   { text: '취소', style: 'cancel' },
-                  { text: '경질', style: 'destructive', onPress: () => heavyAction(() => { const r = fireCoach(); showAlert('경질 완료', r.acting ? `${r.acting} 코치가 감독 대행을 맡습니다.` : '대행할 코치가 없어 공석입니다. 감독을 영입하세요.'); }) },
+                  { text: '경질', style: 'destructive', onPress: () => heavyAction(() => { const r = fireCoach(); showAlert('경질 완료', r.acting ? `${r.acting} 코치가 감독 대행을 맡습니다.` : '대행할 코치가 없어 공석입니다. 감독을 영입하세요.'); }, `${head!.name} 감독이 짐을 정리하고\n경기장을 떠나는 중…`) },
                 ])} />
               </View>
             );
@@ -177,7 +179,7 @@ export default function Staff() {
               <Title>{c.name}</Title>
               <Muted style={{ marginTop: 2 }}>{STYLE_LABEL[c.style]} · 카리스마 {c.charisma} · {c.archetype} · 연봉 {formatMoney(c.salary)}</Muted>
             </View>
-            <Button label="영입" onPress={() => tryHireCoach(c.id, c.name, c.salary)} disabled={hasHeadCoach} />
+            <Button small label="영입" onPress={() => tryHireCoach(c.id, c.name, c.salary)} disabled={hasHeadCoach} />
           </Row>
         </Card>
       ))}
@@ -192,7 +194,7 @@ export default function Staff() {
               <Title>{SPECIALTY_KO[a.specialty]}{a.type ? ` · ${TYPE_KO[a.type]}` : ''} · {a.name}</Title>
               <Muted style={{ marginTop: 2 }}>{a.type ? TYPE_DESC[a.type] : SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}</Muted>
             </View>
-            <Button label="방출" variant="ghost" onPress={() => tryReleaseAsst(a.id, a.name)} />
+            <Button small label="방출" variant="ghost" onPress={() => tryReleaseAsst(a.id, a.name)} />
           </Row>
         </Card>
       ))}
@@ -204,7 +206,7 @@ export default function Staff() {
               <Title>{SPECIALTY_KO[a.specialty]}{a.type ? ` · ${TYPE_KO[a.type]}` : ''} · {a.name}</Title>
               <Muted style={{ marginTop: 2 }}>{a.type ? TYPE_DESC[a.type] : SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}</Muted>
             </View>
-            <Button label="영입" onPress={() => tryHireAsst(a.id, a.name, a.salary)} disabled={asst.length >= coachSlots()} />
+            <Button small label="영입" onPress={() => tryHireAsst(a.id, a.name, a.salary)} disabled={asst.length >= coachSlots()} />
           </Row>
         </Card>
       ))}
@@ -219,7 +221,7 @@ export default function Staff() {
               <Title>{s.name}</Title>
               <Muted style={{ marginTop: 2 }}>스카우팅 {s.scouting} · 연봉 {formatMoney(s.salary)}</Muted>
             </View>
-            <Button label="방출" variant="ghost" onPress={() => tryReleaseScout(s.id, s.name)} />
+            <Button small label="방출" variant="ghost" onPress={() => tryReleaseScout(s.id, s.name)} />
           </Row>
         </Card>
       ))}
@@ -231,7 +233,7 @@ export default function Staff() {
               <Title>{s.name}</Title>
               <Muted style={{ marginTop: 2 }}>스카우팅 {s.scouting} · 연봉 {formatMoney(s.salary)}</Muted>
             </View>
-            <Button label="영입" onPress={() => tryHireScout(s.id, s.name, s.salary)} />
+            <Button small label="영입" onPress={() => tryHireScout(s.id, s.name, s.salary)} />
           </Row>
         </Card>
       ))}

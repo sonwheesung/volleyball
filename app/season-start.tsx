@@ -12,7 +12,15 @@ import { Loading } from '../components/Screen';
 import { logError } from '../lib/log';
 import { useGameStore } from '../store/useGameStore';
 
-const MSGS = ['시즌 시작 준비 중…', '경기 코트 점검 중…', '배구공 준비 중…', '선수단 소집 중…'];
+// 개막 장면 플레이버(2026-07-11 테스터 — 재계산 문구 대신 경기장 준비 장면). 회전 노출.
+const MSGS = [
+  '코트를 닦고 라인을 긋는 중…',
+  '네트 높이를 맞추는 중…',
+  '배구공에 바람을 넣는 중…',
+  '선수단을 소집하는 중…',
+  '워밍업 스트레칭 중…',
+  '관중석에 불이 켜지는 중…',
+];
 const PAINT_DELAY = 500; // 화면 전환(≈350ms) + 첫 페인트 여유 — 이 동안 브랜드 로딩이 뜨고 공이 통통 튄다
 
 export default function SeasonStart() {
