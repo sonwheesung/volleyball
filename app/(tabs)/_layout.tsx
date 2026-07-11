@@ -48,9 +48,10 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        headerStyle: { backgroundColor: theme.bg },
+        // 헤더 높이 압축(2026-07-11 테스터 — 기본 툴바가 너무 높음). 총높이 = 상단 인셋 + 44dp 툴바.
+        headerStyle: { backgroundColor: theme.bg, height: insets.top + 44 },
         headerTintColor: theme.text,
-        headerTitleStyle: { fontWeight: '700' },
+        headerTitleStyle: { fontWeight: '700', fontSize: 19 },
         // 설정 = 전 탭 공통 헤더 우측 톱니(2026-06-28) — 구단 대시보드 본문에 있던 "설정" 버튼을 옮김(유틸리티 분리)
         // 아이콘 크기(22)는 유지, 터치 영역만 확대(hitSlop 10→12 + paddingVertical 4→10) — 오탭 방지(UI polish).
         headerRight: () => (
