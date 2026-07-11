@@ -159,24 +159,21 @@ function TryoutInner() {
             <View key={p.id} style={[styles.rowWrap, wishIdx >= 0 && { borderColor: theme.warn, borderWidth: 1 }]}>
               <View style={styles.rowInner}>
                 <Pressable onPress={() => setOpenId(open ? null : p.id)} style={styles.rowTap}>
-                  {/* 아바타 + 하단 OVR 범위 오버레이 배지(안개 fogOvr — 스카우터 등급 따라 범위) */}
                   <View style={styles.avatarWrap}>
                     <PlayerAvatar id={p.id} size={60} />
-                    <View style={styles.ovrOverlay}>
-                      <Text style={styles.ovrOverlayTxt} numberOfLines={1}>{fogOvr(p)}</Text>
-                    </View>
                   </View>
                   <View style={{ flex: 1 }}>
+                    {/* 이름 + 포지션 + 지명 팀(포지션 오른쪽, 2026-07-12 테스터) */}
                     <View style={styles.nameRow}>
                       <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
                       <PosTag pos={p.position} />
+                      <Text style={[styles.taker, taker ? { color: theme.accent } : null]} numberOfLines={1}>
+                        {taker ? `→ ${taker}` : '미지명'}
+                      </Text>
                       {returning ? <Text style={styles.tagReturn}>재참가</Text> : null}
                     </View>
                     <Text style={styles.sub} numberOfLines={1}>
                       {p.age}세 · {p.height}cm · OVR {fogOvr(p)}
-                    </Text>
-                    <Text style={[styles.taker, taker ? { color: theme.accent } : null]} numberOfLines={1}>
-                      {taker ? `→ ${taker}` : '미지명'}
                     </Text>
                     {/* 이력 토글 — 메타 텍스트에 파묻히지 않게 별도 칩(2026-07-11 테스터: UI 그룹화) */}
                     <View style={[styles.resumeChip, open && styles.resumeChipOn]}>
