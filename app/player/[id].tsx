@@ -81,6 +81,19 @@ function TraitBadge({ good, color }: { good: boolean; color: string }) {
 // 구단주 면담 기능 노출 토글 — 지금은 숨김(테스트 범위 축소, 운영 단계서 재활성 예정). true면 면담 요청 버튼/이력/불만 대화 노출.
 const SHOW_OWNER_TALK = false;
 
+// ── [?] 도움말 카피 (엔진 진실 기반, 추정 금지) ──
+//   인간관계: RELATIONSHIP_SYSTEM §3(FA offerScore relT·재계약 friendLeave)·§1.1(posRivalry) — 경기 엔진 무파급(KOVO 불변).
+//   선수 상태: FORM_SYSTEM(결장 누적 최대 −7%·복귀 5경기 회복)·OWNER_SYSTEM(성격 아키타입·불만 topic).
+const REL_HELP =
+  '선수끼리의 친분과 앙숙입니다. 코트 위 경기력에는 영향이 없고, 이적·계약을 정하는 "마음"에만 작용합니다.\n\n' +
+  '• 친한 사이 — FA 시장에서 친한 동료가 있는 팀에 더 끌립니다(영입 성공 확률↑). 팀에 친한 동료가 남아 있으면 재계약도 잘 받아들이고, 반대로 각별한 동료를 방출하면 동요해 재계약을 거부할 위험이 커집니다.\n\n' +
+  '• 라이벌 — 같은 포지션에서 주전을 다투는 껄끄러운 사이입니다. FA 때 라이벌이 있는 팀은 피하려는 경향이 있습니다.\n\n' +
+  '관계는 우승·연봉 같은 큰 요인 다음의 "타이브레이커"라 은은하게 작용합니다.';
+const STATUS_HELP =
+  '• 컨디션(경기감각) — 최근 실전 출전에 따라 오르내립니다. 꾸준히 경기에 나서면 "좋음"을 유지하고, 오래 결장하면 감각이 녹슬어 기량이 최대 7%까지 떨어집니다(주전으로 계속 뛰면 변화 없음). 다시 코트에 서서 대여섯 경기를 뛰면 감각이 돌아옵니다.\n\n' +
+  '• 성격 — 이 선수가 무엇을 가장 중시하는지(연봉·우승·출전·연고·팀 충성)입니다. 벤치에 앉히거나 재계약을 논할 때 반응이 성격마다 다릅니다.\n\n' +
+  '• 지금 마음 — 순위·출전·연봉·연고를 지금 어떻게 받아들이는지입니다. 불만이 쌓이면 재계약을 거부하거나 이적을 원할 수 있습니다.';
+
 // 건의 거절 사유 문구(OWNER §2.2 ★) — "가장 큰 감점 요인" 파생. coachCall은 결정론이라 "재도전하면 바뀔 것" 호도 금지 워딩.
 const BENCH_REJECT: Record<OwnerRejectReason, string> = {
   ace: '에이스를 그렇게 쉽게 뺄 순 없습니다.',
@@ -358,7 +371,7 @@ function PlayerDetailInner() {
         const lostFriends = rel.friends.filter((f) => released.includes(f.id));
         return (
           <>
-            <IconLabel icon="people-circle-outline" color={theme.rose}>인간관계</IconLabel>
+            <IconLabel icon="people-circle-outline" color={theme.rose} help={() => showAlert('인간관계란?', REL_HELP)}>인간관계</IconLabel>
             <Card accent={theme.rose}>
               {rel.friends.length > 0 ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 }}>
@@ -388,7 +401,7 @@ function PlayerDetailInner() {
 
       {isMine && cond ? (
         <>
-          <IconLabel icon={SHOW_OWNER_TALK ? 'chatbubbles-outline' : 'pulse-outline'} color={theme.rose}>{SHOW_OWNER_TALK ? '구단주 면담' : '선수 상태'}</IconLabel>
+          <IconLabel icon={SHOW_OWNER_TALK ? 'chatbubbles-outline' : 'pulse-outline'} color={theme.rose} help={SHOW_OWNER_TALK ? undefined : () => showAlert('선수 상태란?', STATUS_HELP)}>{SHOW_OWNER_TALK ? '구단주 면담' : '선수 상태'}</IconLabel>
           <Card accent={theme.rose}>
             <Row>
               <Muted>컨디션</Muted>
@@ -641,7 +654,7 @@ function PlayerDetailInner() {
         <StatBar label="점프력" value={p.jump} reveal={reveal} potential={pot('jump')} />
         <StatBar label="민첩성" value={p.agility} reveal={reveal} potential={pot('agility')} />
         <StatBar label="체력" value={p.staminaMax} reveal={reveal} potential={pot('staminaMax')} />
-        <StatBar label="체젠" value={p.staminaRegen} reveal={reveal} potential={pot('staminaRegen')} />
+        <StatBar label="체력재생" value={p.staminaRegen} reveal={reveal} potential={pot('staminaRegen')} />
         <View style={{ height: 6 }} />
         <Muted style={{ marginBottom: 2 }}>공통 / 멘탈</Muted>
         <StatBar label="반응속도" value={p.reaction} reveal={reveal} potential={pot('reaction')} />

@@ -1,8 +1,11 @@
 import type { ComponentProps } from 'react';
+import { useEffect } from 'react';
 import { Redirect, Tabs, useRouter } from 'expo-router';
-import { Pressable } from 'react-native';
+import { BackHandler, Pressable } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Loading, theme } from '../../components/Screen';
+import { showAlert } from '../../components/AppDialog';
 import { useGameStore } from '../../store/useGameStore';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -13,9 +16,26 @@ const tabIcon = (outline: IoniconName, filled: IoniconName) =>
 
 export default function TabsLayout() {
   const router = useRouter();
+  const insets = useSafeAreaInsets();
   const hydrated = useGameStore((s) => s.hydrated);
   const onboarded = useGameStore((s) => s.onboarded);
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
+
+  // 뒤로가기 앱 종료 확인(UI-35, Android 전용) — 탭 루트에서 더 갈 곳이 없을 때만 종료 다이얼로그.
+  //   스택 화면(선수·계약 등)이 위에 있으면 canGoBack()=true → 기본 pop을 그대로 둔다(정상 뒤로가기 유지).
+  //   iOS는 hardwareBackPress가 없어 무영향. 훅은 조기 return 전에 무조건 호출(hooks 규칙).
+  useEffect(() => {
+    const onBack = () => {
+      if (router.canGoBack()) return false; // 스택 화면 위에 있음 → 기본 뒤로가기(pop)
+      showAlert('게임을 종료할까요?', undefined, [
+        { text: '계속하기', style: 'cancel' },
+        { text: '종료', style: 'destructive', onPress: () => BackHandler.exitApp() },
+      ]);
+      return true; // 기본 동작(앱 즉시 종료) 차단 — 확인 후 exitApp
+    };
+    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
+    return () => sub.remove();
+  }, [router]);
 
   // 저장 데이터 로드 전(AsyncStorage 복원 = 유일한 진짜 비동기 로드): 로딩 화면
   if (!hydrated) return <Loading message="저장된 시즌을 불러오는 중…" variant="brand" />;
@@ -39,7 +59,15 @@ export default function TabsLayout() {
           </Pressable>
         ),
         // 탭바 — 글래스(theme.card)는 반투명이라 바닥이 비쳐 지저분 → 솔리드로 또렷하게. 모드별(다크 #0E1521 / 라이트 #FFF, UI-25)
-        tabBarStyle: { backgroundColor: theme.tabBar, borderTopColor: theme.border },
+        //   하단 여백(UI-34): safe-area inset(홈 인디케이터/제스처 바) + 상단과 균형 잡힌 패딩. inset이 0인 기기에도 최소 여백을
+        //   둬 라벨이 바 하단에 붙어 잘려 보이던 문제를 없앤다. 콘텐츠 높이 = height − padTop − padBottom ≈ 44(아이콘+라벨 여유).
+        tabBarStyle: {
+          backgroundColor: theme.tabBar,
+          borderTopColor: theme.border,
+          height: 60 + insets.bottom,
+          paddingTop: 8,
+          paddingBottom: insets.bottom + 8,
+        },
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.muted,
         tabBarLabelStyle: { fontSize: 11, fontWeight: '700' },

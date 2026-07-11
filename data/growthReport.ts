@@ -19,7 +19,7 @@ export interface CampLogLike { playerId: string; course?: CampCourse; stats?: st
 
 // 선수 상세(app/player/[id].tsx StatBar)와 동일 라벨·순서(신체→공통→멘탈→기술)
 const STAT_ROWS: [string, string][] = [
-  ['jump', '점프력'], ['agility', '민첩성'], ['staminaMax', '체력'], ['staminaRegen', '체젠'],
+  ['jump', '점프력'], ['agility', '민첩성'], ['staminaMax', '체력'], ['staminaRegen', '체력재생'],
   ['reaction', '반응속도'], ['positioning', '위치선정'],
   ['focus', '집중력'], ['consistency', '기복'], ['vq', 'VQ'],
   ['skSpike', '공격기술'], ['skBlock', '블로킹기술'], ['skDig', '디그기술'],

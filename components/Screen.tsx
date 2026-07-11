@@ -239,16 +239,25 @@ export function Title({ children }: { children: ReactNode }) {
 
 // 카테고리 컬러 아이콘 칩 + 보조 라벨(UI-12) — 다크 단조로움 해소. 아이콘을 틴트 배경 칩에 담아 색 존재감↑.
 // 화면마다 재구현 금지(UI-3), 여기 단일 소스.
-export function IconLabel({ icon, color, children }: { icon: ComponentProps<typeof Ionicons>['name']; color: string; children: ReactNode }) {
+// help: 주면 라벨 오른쪽에 작은 [?] 아이콘 → 탭 시 콜백(도움말 팝업 등). 없으면 미표시 — 무파급 옵션.
+export function IconLabel({ icon, color, children, help }: { icon: ComponentProps<typeof Ionicons>['name']; color: string; children: ReactNode; help?: () => void }) {
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
       <View style={{ width: 28, height: 28, borderRadius: 9, backgroundColor: color + '26', alignItems: 'center', justifyContent: 'center' }}>
         <Ionicons name={icon} size={16} color={color} />
       </View>
       <Text style={styles.muted}>{children}</Text>
+      {help ? (
+        <Pressable onPress={help} hitSlop={{ top: 10, bottom: 10, left: 8, right: 10 }} style={{ marginLeft: 1 }}>
+          <Ionicons name="help-circle-outline" size={17} color={theme.muted} />
+        </Pressable>
+      ) : null}
     </View>
   );
 }
+
+/** 공용 Button 내비게이션 래치 시간(ms, UI-33) — onPress 발화 후 이 시간 내 재발화는 무시(연타 이중 화면 방지). */
+export const BUTTON_LATCH_MS = 600;
 
 export function Button({
   label,
@@ -265,9 +274,19 @@ export function Button({
    *  일정 화면 "다음 경기" CTA(이어보기/경기 시작) 전용 — 기본값 false라 다른 버튼엔 무영향. */
   compact?: boolean;
 }) {
+  // 내비게이션 래치(UI-33) — 연타로 화면이 이중 push 되거나 액션이 두 번 발화되는 것을 막는다.
+  //   state는 비동기라 같은 프레임의 두 번째 탭이 stale 값을 보므로 **동기 ref**만이 확실히 차단(UI-31과 같은 원리).
+  //   광고 래치(UI-31)와 달리 일반 규칙 — onPress 발화 후 LATCH_MS 내 재발화 무시. 시간 경과로 자동 해제(영구 잠금 없음).
+  const lockRef = useRef(0);
+  const guardedPress = () => {
+    const now = Date.now();
+    if (now - lockRef.current < BUTTON_LATCH_MS) return;
+    lockRef.current = now;
+    onPress();
+  };
   return (
     <Pressable
-      onPress={onPress}
+      onPress={guardedPress}
       disabled={disabled}
       style={({ pressed }) => [
         styles.btn,

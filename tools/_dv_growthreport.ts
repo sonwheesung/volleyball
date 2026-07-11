@@ -26,7 +26,7 @@ ok(season.some((p) => p.deltas.some((d) => d.delta > 0)), '성장(+) 최소 1건
 console.log('── 오라클 자가대조(리포트 delta == evolveOnDay 원본 스탯 diff) ──');
 let mismatch = 0, checked = 0;
 const KEY: Record<string, string> = {
-  '점프력': 'jump', '민첩성': 'agility', '체력': 'staminaMax', '체젠': 'staminaRegen',
+  '점프력': 'jump', '민첩성': 'agility', '체력': 'staminaMax', '체력재생': 'staminaRegen',
   '반응속도': 'reaction', '위치선정': 'positioning', '집중력': 'focus', '기복': 'consistency', 'VQ': 'vq',
   '공격기술': 'skSpike', '블로킹기술': 'skBlock', '디그기술': 'skDig', '리시브기술': 'skReceive', '세팅기술': 'skSet', '서브기술': 'skServe',
 };

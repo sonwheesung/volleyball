@@ -54,6 +54,14 @@
 > 재계약 제안(contracts — 별도 격상 트랙) · FA 오퍼 갱신(fa — 토스트 추가) · 스태프 영입(staff — 완료 알림 추가) ·
 > 시즌 중 영입(transactions — 완료 알림 추가). 새 액션을 추가할 때 이 체크리스트로 자가 검사.
 
+> **UI-33 (2026-07-11 — 공용 Button 내비게이션 래치)**: 공용 `components/Screen.tsx Button`은 onPress 발화 후 **`BUTTON_LATCH_MS`(600ms) 동안 재발화를 무시**한다 — 연타로 같은 화면이 두 번 push 되거나 액션이 이중 실행되는 것을 막는다(테스터 보고 2026-07-11). **동기 `useRef` 래치**여야 한다: state 갱신은 비동기라 같은 프레임의 두 번째 탭이 stale 값을 봐 통과하므로(UI-31 광고 래치와 같은 원리) ref만이 확실히 차단. UI-31(광고 트리거 전용)과 **구분되는 일반 규칙** — 모든 Button에 무조건 적용. 시간 경과로 자동 해제(영구 잠금 없음). **영향 범위**: `Button` 컴포넌트만 — 스텝퍼/토글 등 고빈도 Pressable 직접 구현은 Button을 안 써서 무영향(확인). disabled Button은 Pressable이 이미 차단.
+
+> **UI-34 (2026-07-11 — 탭바 하단 safe-area 여백)**: `app/(tabs)/_layout.tsx` `tabBarStyle`은 **safe-area inset**(홈 인디케이터/제스처 바)을 반영한다 — `height: 60 + insets.bottom` · `paddingTop: 8` · `paddingBottom: insets.bottom + 8`(`useSafeAreaInsets`). inset이 0인 기기에도 상·하 최소 여백(8)을 둬 라벨이 바 하단에 붙어 잘려 보이던 문제를 없앤다(테스터 보고). 콘텐츠 높이 = height − padTop − padBottom ≈ 44(아이콘 size≈24 + 라벨 11px 여유).
+
+> **UI-35 (2026-07-11 — 뒤로가기 앱 종료 확인, Android)**: 탭 루트에서 **더 갈 곳이 없는 하드웨어 뒤로가기**는 곧장 앱을 죽이지 않고 다크 글래스 다이얼로그 "게임을 종료할까요?" [계속하기/종료]를 띄운다(`showAlert`, `BackHandler.exitApp()`으로 종료). `app/(tabs)/_layout.tsx`에서 `BackHandler.addEventListener('hardwareBackPress')` — **`router.canGoBack()`이 true면(스택 화면이 위에 있음) `return false`로 기본 pop을 유지**(정상 뒤로가기 불변), false일 때만 종료 다이얼로그+`return true`. 훅은 조기 return 전에 호출(hooks 규칙). **iOS 무영향**(hardwareBackPress 없음).
+
+> **UI-36 (2026-07-11 — 경기 관전 화면 켜짐 유지)**: 경기 보드(`app/match/[id].tsx`)는 `useKeepAwake()`(`expo-keep-awake`)로 관전 중 화면 자동 꺼짐을 막는다(관전형 1순위 = 보는 경험). 훅이라 **화면 이탈(언마운트) 시 자동 해제** — 별도 정리 코드 불필요. `expo-keep-awake`는 `expo`의 전이 의존이라 package.json에 직접 명시(top-level 해석).
+
 ## UI-27 세계관 사유 문구 예시 (BusyOverlay message — 2026-07-08 사용자 결정)
 
 > 문구는 **그 작업이 실제 하는 일**을 게임 언어로 옮긴다(가짜 사유 금지). 코치·감독·스카우트·프런트가

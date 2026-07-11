@@ -19,7 +19,7 @@ import { CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, WELCOME_D
 import type { Player, TrainableStat } from '../types';
 
 const LABEL: Record<TrainableStat, string> = {
-  jump: '점프력', agility: '민첩성', staminaMax: '체력', staminaRegen: '체젠',
+  jump: '점프력', agility: '민첩성', staminaMax: '체력', staminaRegen: '체력재생',
   reaction: '반응속도', positioning: '위치선정', focus: '집중력', consistency: '기복', vq: 'VQ',
   skSpike: '공격기술', skBlock: '블로킹기술', skDig: '디그기술', skReceive: '리시브기술', skSet: '세팅기술', skServe: '서브기술',
 };

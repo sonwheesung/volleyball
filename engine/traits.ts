@@ -10,17 +10,40 @@ import { strSeed } from './rng';
 
 export interface TraitDef { name: string; desc: string; good: boolean; cat: '멘탈' | '성장' | '내구' | '플레이'; }
 
+// ★ 특성 효과 계수 — 단일 소스(SSOT). 아래 접근자 함수와 TRAITS.desc(화면 표시 문구)가 **둘 다 이 상수만** 참조한다.
+//   → 계수를 바꾸면 엔진 산출과 설명 문구가 동시에 따라가 드리프트가 원천 차단(가드 tools/_dv_traitcopy.ts가 대조).
+//   야구천재 유저 건의(2026-07-11): "특성 설명에 실제 수치를 병기해달라" → 문구를 상수에서 문자열로 합성.
+export const TRAIT_FX = {
+  lateBloomerAging: 0.8,    // 노쇠 배수(↓ = 노쇠 느림)
+  earlyDeclineAging: 1.25,  // 노쇠 배수(↑ = 노쇠 빠름)
+  diligentTrain: 1.12,      // 훈련 성장 배수
+  glassInjury: 1.7,         // 부상 확률 배수
+  ironInjury: 0.55,         // 부상 확률 배수
+  clutchFocus: 0.08,        // 큰 고비 집중 보정(+)
+  bigGameFocus: 0.05,       // 큰 고비 집중 보정(+)
+  chokeFocus: 0.08,         // 큰 고비 집중 보정(− 로 적용)
+  serveMachineAggr: 0.06,   // 서브 적극성 보정(+)
+} as const;
+
+// 계수 → 표시 % 변환(문구용). 배수는 1.0 기준 증감%, 가감 보정은 ×100 %p. 반올림 정수라 문구=계수 대조가 명확.
+const upPct = (m: number) => `+${Math.round((m - 1) * 100)}%`;   // 1.12 → +12% · 1.7 → +70%
+const fastPct = (m: number) => `${Math.round((m - 1) * 100)}%`;  // 1.25 → 25%
+const slowPct = (m: number) => `${Math.round((1 - m) * 100)}%`;  // 0.8 → 20%
+const cutPct = (m: number) => `−${Math.round((1 - m) * 100)}%`;  // 0.55 → −45%
+const addPP = (a: number) => `+${Math.round(a * 100)}%`;         // 0.08 → +8%
+const cutPP = (a: number) => `−${Math.round(a * 100)}%`;         // 0.08 → −8%
+
 export const TRAITS: Record<Trait, TraitDef> = {
-  clutch:       { name: '클러치', desc: '듀스·매치포인트 같은 큰 고비에 강하다', good: true, cat: '멘탈' },
-  bigGame:      { name: '큰경기형', desc: '중요한 순간 집중력이 오른다', good: true, cat: '멘탈' },
-  choke:        { name: '새가슴', desc: '접전 고비에 흔들린다', good: false, cat: '멘탈' },
-  lateBloomer:  { name: '대기만성', desc: '노쇠가 더디다 — 전성기가 길다', good: true, cat: '성장' },
-  earlyDecline: { name: '짧은전성기', desc: '전성기가 짧다 — 신체 능력이 또래보다 일찍 저문다', good: false, cat: '성장' },
-  diligent:     { name: '노력형', desc: '훈련 효율이 높아 더 빨리 성장한다', good: true, cat: '성장' },
-  glass:        { name: '유리몸', desc: '부상이 잦다', good: false, cat: '내구' },
-  iron:         { name: '철강', desc: '좀처럼 다치지 않는다', good: true, cat: '내구' },
-  serveMachine: { name: '서브머신', desc: '공격적인 서브를 즐긴다', good: true, cat: '플레이' },
-  leader:       { name: '리더', desc: '팀의 정신적 지주', good: true, cat: '플레이' },
+  clutch:       { name: '클러치', desc: `듀스·매치포인트 같은 큰 고비에 집중력이 오른다 (${addPP(TRAIT_FX.clutchFocus)})`, good: true, cat: '멘탈' },
+  bigGame:      { name: '큰경기형', desc: `중요한 순간 집중력이 오른다 (${addPP(TRAIT_FX.bigGameFocus)})`, good: true, cat: '멘탈' },
+  choke:        { name: '새가슴', desc: `접전 고비에 집중력이 흔들린다 (${cutPP(TRAIT_FX.chokeFocus)})`, good: false, cat: '멘탈' },
+  lateBloomer:  { name: '대기만성', desc: `전성기가 길다 — 신체 능력 하락이 ${slowPct(TRAIT_FX.lateBloomerAging)} 느리다`, good: true, cat: '성장' },
+  earlyDecline: { name: '짧은전성기', desc: `전성기가 짧다 — 신체 능력 하락이 ${fastPct(TRAIT_FX.earlyDeclineAging)} 빠르다`, good: false, cat: '성장' },
+  diligent:     { name: '노력형', desc: `훈련 효율이 높아 더 빨리 성장한다 (${upPct(TRAIT_FX.diligentTrain)})`, good: true, cat: '성장' },
+  glass:        { name: '유리몸', desc: `부상이 잦다 — 부상 확률 ${upPct(TRAIT_FX.glassInjury)}`, good: false, cat: '내구' },
+  iron:         { name: '철강', desc: `좀처럼 다치지 않는다 — 부상 확률 ${cutPct(TRAIT_FX.ironInjury)}`, good: true, cat: '내구' },
+  serveMachine: { name: '서브머신', desc: `공격적인 서브를 즐긴다 — 서브 적극성 ${addPP(TRAIT_FX.serveMachineAggr)}`, good: true, cat: '플레이' },
+  leader:       { name: '리더', desc: '팀의 정신적 지주 (경기 효과는 없음)', good: true, cat: '플레이' },
 };
 
 // 등장 가중치 — 좋은 특성이 흔하고 부정 특성은 드물게(도박은 성립하되 희소)
@@ -61,34 +84,34 @@ const has = (traits: Trait[] | undefined, t: Trait): boolean => !!traits && trai
 /** 노쇠 배수 — 대기만성 둔화, 짧은전성기 가속 (aging.ts) */
 export function agingTraitMult(traits?: Trait[]): number {
   let m = 1;
-  if (has(traits, 'lateBloomer')) m *= 0.8;
-  if (has(traits, 'earlyDecline')) m *= 1.25;
+  if (has(traits, 'lateBloomer')) m *= TRAIT_FX.lateBloomerAging;
+  if (has(traits, 'earlyDecline')) m *= TRAIT_FX.earlyDeclineAging;
   return m;
 }
 
 /** 훈련 성장 배수 — 노력형 (training.ts) */
 export function trainTraitMult(traits?: Trait[]): number {
-  return has(traits, 'diligent') ? 1.12 : 1;
+  return has(traits, 'diligent') ? TRAIT_FX.diligentTrain : 1;
 }
 
 /** 부상 확률 배수 — 유리몸↑·철강↓ (injury P4) */
 export function injuryTraitMult(traits?: Trait[]): number {
   let m = 1;
-  if (has(traits, 'glass')) m *= 1.7;
-  if (has(traits, 'iron')) m *= 0.55;
+  if (has(traits, 'glass')) m *= TRAIT_FX.glassInjury;
+  if (has(traits, 'iron')) m *= TRAIT_FX.ironInjury;
   return m;
 }
 
 /** 클러치 상황(듀스/매치포인트) 집중 보정 — 클러치/큰경기↑·새가슴↓ (rally clutch 한정) */
 export function clutchFocusAdj(traits?: Trait[]): number {
   let a = 0;
-  if (has(traits, 'clutch')) a += 0.08;
-  if (has(traits, 'bigGame')) a += 0.05;
-  if (has(traits, 'choke')) a -= 0.08;
+  if (has(traits, 'clutch')) a += TRAIT_FX.clutchFocus;
+  if (has(traits, 'bigGame')) a += TRAIT_FX.bigGameFocus;
+  if (has(traits, 'choke')) a -= TRAIT_FX.chokeFocus;
   return a;
 }
 
 /** 서브 공격성 보정 — 서브머신 (rally chooseServe, 상시) */
 export function serveAggrAdj(traits?: Trait[]): number {
-  return has(traits, 'serveMachine') ? 0.06 : 0;
+  return has(traits, 'serveMachine') ? TRAIT_FX.serveMachineAggr : 0;
 }

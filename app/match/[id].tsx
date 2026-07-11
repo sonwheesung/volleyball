@@ -2,6 +2,7 @@ import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useKeepAwake } from 'expo-keep-awake';
 import { Button, Muted, theme, themedStyles } from '../../components/Screen';
 import { emblemFor } from '../../data/emblems';
 import { MatchCourt } from '../../components/MatchCourt';
@@ -28,6 +29,8 @@ export default function MatchBoard() {
   }>();
   const router = useRouter();
   const insets = useSafeAreaInsets();
+  // 경기 관전 중 화면 자동 꺼짐 방지(관전형 1순위 = 보는 경험). 화면 이탈(언마운트) 시 훅이 자동 해제.
+  useKeepAwake();
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const recordResult = useGameStore((s) => s.recordResult);
