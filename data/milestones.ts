@@ -4,7 +4,7 @@
 import type { CareerStats, HofEntry, Milestone } from '../types';
 import { accrueCareer } from '../engine/production';
 import { personalMilestones, passedValues } from '../engine/milestones';
-import { getPlayer, getTeam, currentRosters } from './league';
+import { getPlayer, getTeam, currentRosters, reconstructForeignName } from './league';
 import { leagueProduction } from './production';
 
 const STAT_KO: Record<string, string> = {
@@ -52,7 +52,7 @@ export function detectSeasonMilestones(season: number, hof: HofEntry[]): Milesto
   for (const [id, aft] of after) {
     const bef = before.get(id)!;
     const tid = teamOf.get(id) ?? '';
-    const name = getPlayer(id)?.name ?? id;
+    const name = getPlayer(id)?.name ?? reconstructForeignName(id) ?? id;
     const push = (kind: Milestone['kind'], text: string, big: boolean, routine = false) =>
       out.push({ season, playerId: id, name, teamId: tid, kind, text, big, routine });
 

@@ -12,7 +12,7 @@ import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, theme, th
 import { seasonSnapshot } from '../data/records';
 import { computeStandings, displayCutoff, seasonStreaks } from '../data/standings';
 import { leagueProduction } from '../data/production';
-import { getPlayer, getTeam } from '../data/league';
+import { getPlayer, getTeam, reconstructForeignName } from '../data/league';
 import { rosterIdsOnDay } from '../data/dynamics';
 import { recapBriefing } from '../data/recapBriefing';
 import { buildPlayoffs, myPostseasonOutcome } from '../data/playoffs';
@@ -74,7 +74,7 @@ function RecapInner() {
   const myRank = myIdx + 1;
   const myStanding = standings[myIdx];
 
-  const pName = (id: string) => getPlayer(id)?.name ?? id;
+  const pName = (id: string) => getPlayer(id)?.name ?? reconstructForeignName(id) ?? id;
   const isMine = (w: AwardWinner | null) => !!w && w.teamId === my;
 
   // ① 포스트시즌 여정 — championId 존재(챔프 시상식 통과) 후에만 buildPlayoffs 전부 공개 상태(스포일러 안전, §5.2).

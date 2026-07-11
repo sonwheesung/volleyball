@@ -5,7 +5,7 @@
 
 import type { DraftPickRecord, ExpelRecord, ForeignSwapRecord, HofEntry, Milestone, NewsItem, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
 import type { BenchDirective } from '../engine/owner';
-import { getPlayer, getTeam } from './league';
+import { getPlayer, getTeam, reconstructForeignName } from './league';
 import { jerseyNumber } from '../engine/jersey';
 import { RETIRE_AGE } from '../engine/retire';
 import { formatMoney } from '../engine/salary';
@@ -27,7 +27,7 @@ import { resolveJosa, josa } from '../lib/josa';
 import { sponsorStanceOf } from '../engine/sponsorStance';
 
 const teamName = (id: string) => getTeam(id)?.name ?? id;
-const pName = (id: string) => getPlayer(id)?.name ?? id;
+const pName = (id: string) => getPlayer(id)?.name ?? reconstructForeignName(id) ?? id;
 const POS_KO: Record<string, string> = { S: '세터', OH: '아웃사이드 히터', OP: '아포짓', MB: '미들 블로커', L: '리베로' };
 const posKoOf = (id: string) => POS_KO[getPlayer(id)?.position ?? ''] ?? '주전';
 /** 선수 통산 사실 한 줄(포지션별 대표 스탯) — 본문 보강용. 은퇴/조회 불가 시 빈 문자열. 전부 실제 누적값(가짜 드라마 금지). */
