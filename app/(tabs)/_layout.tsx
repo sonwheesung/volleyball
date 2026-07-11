@@ -59,14 +59,15 @@ export default function TabsLayout() {
           </Pressable>
         ),
         // 탭바 — 글래스(theme.card)는 반투명이라 바닥이 비쳐 지저분 → 솔리드로 또렷하게. 모드별(다크 #0E1521 / 라이트 #FFF, UI-25)
-        //   하단 여백(UI-34): safe-area inset(홈 인디케이터/제스처 바) + 상단과 균형 잡힌 패딩. inset이 0인 기기에도 최소 여백을
-        //   둬 라벨이 바 하단에 붙어 잘려 보이던 문제를 없앤다. 콘텐츠 높이 = height − padTop − padBottom ≈ 44(아이콘+라벨 여유).
+        //   하단 여백(UI-34·UI-40 정정): 몰입 모드(UI-40)가 시스템 내비바를 숨기면 insets.bottom=0이 돼 라벨이 화면 끝에
+        //   붙는다(테스터 제보 2026-07-11) → inset과 무관한 **최소 하단 여백 16**을 보장(max로 제스처바 인셋도 존중).
+        //   콘텐츠 높이 = height − padTop − padBottom ≈ 44(아이콘+라벨 여유).
         tabBarStyle: {
           backgroundColor: theme.tabBar,
           borderTopColor: theme.border,
-          height: 60 + insets.bottom,
+          height: 60 + Math.max(insets.bottom, 16),
           paddingTop: 8,
-          paddingBottom: insets.bottom + 8,
+          paddingBottom: Math.max(insets.bottom, 16) + 6,
         },
         tabBarActiveTintColor: theme.accent,
         tabBarInactiveTintColor: theme.muted,
