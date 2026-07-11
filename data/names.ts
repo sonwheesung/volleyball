@@ -7,6 +7,17 @@ import { createRng, strSeed, type Rng } from '../engine/rng';
 
 const pick = <T>(arr: readonly T[], r: Rng): T => arr[r.int(0, arr.length - 1)];
 
+// 비속어·혐오·성적 표현 차단(2026-07-11 테스터: 음절 조합이 '자지나'·'보지나'·'한남' 등을 낼 수 있음).
+// 생성 이름에 아래 부분문자열이 있으면 같은 rng 스트림에서 재추첨한다 → 결정론 보존(깨끗한 이름은 첫 시도
+// 통과라 소비/결과 바이트 불변, 비속어만 교체). 실제 조합공간 대비 매우 드물어 회귀 0.
+const SLUR = [
+  '한남', '김치녀', '된장', '패미', '메갈', '일베', '엠창',
+  '시발', '씨발', '씨팔', '시팔', '쓰발', '병신', '븅신', '빙신', '지랄',
+  '보지', '자지', '좆', '좃', '섹스', '강간', '창녀', '걸레',
+  '니미', '애미', '애비', '개년', '개놈', '개새', '짱깨', '짱개', '쪽바', '쪽발', '홍어',
+];
+const hasSlur = (name: string): boolean => SLUR.some((w) => name.includes(w));
+
 // ─────────────────────────── 국내(한국) ───────────────────────────
 // 성 — 실제 한국 흔한 성(유한해도 무방, 현실 성씨도 유한). 이름은 음절 조합으로 무한히 분화.
 export const SURNAMES = [
@@ -92,23 +103,34 @@ export const ASIAN_SYL: Record<string, { a: readonly string[]; b: readonly strin
 };
 
 // ─────────────────────────── 생성기(순수 f(id)) ───────────────────────────
-/** 국내 선수 이름 — 성 + (이름1+이름2 또는 1음절). id 시드 결정론. */
+/** 국내 선수 이름 — 성 + (이름1+이름2 또는 1음절). id 시드 결정론. 비속어면 같은 스트림서 재추첨. */
 export function genKoreanName(seedKey: string): string {
   const r = createRng(strSeed(`kname:${seedKey}`));
-  const surname = pick(SURNAMES, r);
-  const given = r.next() < 0.06 ? pick(GIVEN_SOLO, r) : pick(GIVEN_SYL1, r) + pick(GIVEN_SYL2, r);
-  return surname + given;
+  for (let a = 0; a < 8; a++) {
+    const surname = pick(SURNAMES, r);
+    const given = r.next() < 0.06 ? pick(GIVEN_SOLO, r) : pick(GIVEN_SYL1, r) + pick(GIVEN_SYL2, r);
+    const name = surname + given;
+    if (!hasSlur(name)) return name; // 깨끗하면 즉시 반환(첫 시도=기존과 소비·결과 동일)
+  }
+  return '무명'; // 도달 불가 폴백(조합공간 대비 비속어 극소)
 }
 
 /** 외국인 이름 — 열린접두+일반접미(75%) 또는 받침접두+안전접미(25%). 같은음절 중복은 재추첨. id 시드 결정론. */
 export function genForeignName(seedKey: string): string {
   const r = createRng(strSeed(`fname:${seedKey}`));
-  if (r.next() < 0.25) return pick(FGN_CODA, r) + pick(FGN_CODA_SUFFIX, r); // 받침풍(산드라·알비나)
-  const prefix = pick(FGN_OPEN, r);
-  let suffix = pick(FGN_SUFFIX, r);
-  // 같은 음절로 시작하는 접미면 재추첨(바+바나=바바나·미+미라=미미라 등 중복음절 회피)
-  for (let k = 0; k < 4 && suffix.charAt(0) === prefix; k++) suffix = pick(FGN_SUFFIX, r);
-  return prefix + suffix;
+  for (let a = 0; a < 8; a++) {
+    let name: string;
+    if (r.next() < 0.25) { name = pick(FGN_CODA, r) + pick(FGN_CODA_SUFFIX, r); } // 받침풍(산드라·알비나)
+    else {
+      const prefix = pick(FGN_OPEN, r);
+      let suffix = pick(FGN_SUFFIX, r);
+      // 같은 음절로 시작하는 접미면 재추첨(바+바나=바바나·미+미라=미미라 등 중복음절 회피)
+      for (let k = 0; k < 4 && suffix.charAt(0) === prefix; k++) suffix = pick(FGN_SUFFIX, r);
+      name = prefix + suffix;
+    }
+    if (!hasSlur(name)) return name;
+  }
+  return '노바';
 }
 
 export interface AsianIdentity { name: string; nat: string }
@@ -117,12 +139,16 @@ export function genAsianIdentity(seedKey: string): AsianIdentity {
   const r = createRng(strSeed(`aname:${seedKey}`));
   const nat = pick(ASIAN_NATS, r);
   const pool = ASIAN_SYL[nat];
-  return { name: pick(pool.a, r) + pick(pool.b, r), nat };
+  for (let a = 0; a < 8; a++) {
+    const name = pick(pool.a, r) + pick(pool.b, r);
+    if (!hasSlur(name)) return { name, nat };
+  }
+  return { name: '아이', nat };
 }
 
 export const COACH_NAMES = [
   '차상우', '문병호', '서남원', '강성형', '고희진', '권순찬',
-  '이영택', '마우리시오', '아본단자', '필립', '한상길', '오한남',
+  '이영택', '마우리시오', '아본단자', '필립', '한상길', '오세진',
 ];
 
 // 한국 여자배구(KOVO V리그) 기준 7개 구단 — 가상 명칭
