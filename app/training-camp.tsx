@@ -174,6 +174,12 @@ export default function TrainingCamp() {
             • 비용 <Text style={{ color: theme.good, fontWeight: '800' }}>{CAMP_COURSE_COST}💎</Text> · 선수 1명당 오프시즌 1회 · 어릴수록 천장 채울 시간이 많아 이득 · 효과는 영구(환불 불가)
           </Muted>
         </Card>
+        {/* 진행 버튼은 목록 위(드래프트·트라이아웃과 동일 패턴 — 2026-07-11 사용자 요청) */}
+        <View style={{ marginBottom: 6 }}>
+          {inChain
+            ? <Button label="새 시즌으로 ▶" onPress={goNext} />
+            : <Button label="전지훈련 마치고 개막전으로 →" onPress={finishToOpener} />}
+        </View>
         <IconLabel icon="people-outline" color={theme.accent}>선수 선택</IconLabel>
         <Muted style={{ fontSize: 12.5, marginTop: 2, marginBottom: 2, lineHeight: 18 }}>
           <Text style={{ color: theme.good, fontWeight: '800' }}>주전</Text>은 출전이 많아 키운 실력이 성장으로 빨리 실현됩니다. 어린 벤치 선수는 훗날 주전을 꿰찰 재목일 때 값어치가 커요 — 누구에게 투자할지, 이 표시가 기준선입니다.
@@ -202,11 +208,6 @@ export default function TrainingCamp() {
             </View>
           );
         })}
-        <View style={{ marginTop: 14 }}>
-          {inChain
-            ? <Button label="새 시즌으로 ▶" onPress={goNext} />
-            : <Button label="전지훈련 마치고 개막전으로 →" onPress={finishToOpener} />}
-        </View>
       </Screen>
     );
   }
