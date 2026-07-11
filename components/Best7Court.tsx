@@ -10,15 +10,19 @@ import { teamColors } from '../lib/teamColor';
 import { shortTeamName } from '../data/league';
 import type { Best7Slot } from '../types';
 
-// 코트 위 7슬롯 배치(%, 네트=상단). 명예 포메이션이라 실제 로테이션이 아니라 읽기 좋은 분산.
+// 코트 위 7슬롯 배치(%, 네트=상단). 명예 포메이션이라 실제 로테이션이 아니라 읽기 좋은 3단 분산.
+// ★ 겹침 방지 규칙(2026-07-11): 한 슬롯 블록 = 마커40 + 이름~15 + 팀~13 + 여백 ≈ 72px로,
+//   spot 기준 상단 ~22px·하단 ~50px를 차지한다. 따라서 아래 행 마커가 위 행 팀 라벨을 가리지 않으려면
+//   행 간 spot 세로 간격 ≥ 72px여야 한다. 코트 340px에서 행 간 27%(≈92px)로 확보.
+//   구 300px·3행은 리베로 팀 라벨이 하단서 잘리고 S 라벨을 L 마커가 덮었음 → 코트 340px + 세터/리베로 27% 분리로 해소.
 const SPOT: { left: number; top: number }[] = [
-  { left: 50, top: 56 }, // 0 S  — 중앙 후위(세터)
-  { left: 20, top: 28 }, // 1 OH — 전위 좌
-  { left: 20, top: 60 }, // 2 OH — 후위 좌
-  { left: 80, top: 28 }, // 3 OP — 전위 우
-  { left: 50, top: 24 }, // 4 MB — 전위 중앙(네트)
-  { left: 80, top: 60 }, // 5 MB — 후위 우
-  { left: 50, top: 76 }, // 6 L  — 후위 중앙 깊이(리베로). ※84%였으나 마커 아래 이름·팀명이 코트 하단(300px)에 잘려 76%로(UI_RULES)
+  { left: 50, top: 50 }, // 0 S  — 후위 중앙(세터)
+  { left: 20, top: 23 }, // 1 OH — 전위 좌
+  { left: 20, top: 50 }, // 2 OH — 후위 좌
+  { left: 80, top: 23 }, // 3 OP — 전위 우
+  { left: 50, top: 23 }, // 4 MB — 전위 중앙(네트)
+  { left: 80, top: 50 }, // 5 MB — 후위 우
+  { left: 50, top: 77 }, // 6 L  — 리베로: 후위 뒤 별도 최후열 중앙. S(50%)와 27% 간격 → 세터 팀 라벨 겹침 원천 제거
 ];
 
 export function Best7Court({
@@ -65,7 +69,7 @@ export function Best7Court({
 
 const styles = themedStyles(() => StyleSheet.create({
   court: {
-    height: 300, borderRadius: 16, overflow: 'hidden',
+    height: 340, borderRadius: 16, overflow: 'hidden', // 3행(전위/후위/리베로) 라벨 잘림 방지 위해 300→340(2026-07-11)
     backgroundColor: 'hsl(28, 30%, 22%)', // 코트 바닥 톤(우드)
     borderWidth: 1, borderColor: theme.border,
   },
