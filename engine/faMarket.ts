@@ -158,6 +158,39 @@ export function offerScore(c: OfferCtx): number {
   return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + relTerm + 0.05 * c.rand + softSat;
 }
 
+/** offerScore 요소별 기여(표시용 — FA 센터 '우세 이유' #7). **offerScore 본문은 불변** — 여기서 동일 산식을
+ *  미러링해 각 동기 항(가중치×정규화항)의 최종 기여만 뽑는다(rand·softSat 등 '동기 아님' 항은 제외 = "왜 이 팀이
+ *  끌리나"의 순수 동기만). 값 내림차순 정렬. 순수함수(rng 미소비) — offerScore와 같은 OfferCtx만 읽는 읽기전용 파생. */
+export interface OfferFactor { key: keyof FAWeights; label: string; value: number }
+const FACTOR_LABELS: Record<keyof FAWeights, string> = {
+  money: '계약 조건', win: '우승 경쟁력', play: '출전 기회',
+  loyalty: '잔류·원소속', home: '연고 선호', rel: '팀 케미',
+};
+export function offerScoreFactors(c: OfferCtx): OfferFactor[] {
+  // ↓ offerScore(:130~158)의 항별 산식을 그대로 미러(offerScore 함수 자체는 안 건드림). 계수 변경 시 동기화 대상.
+  const ratio = Math.max(0.6, Math.min(1.6, c.offerSalary / Math.max(1, c.asking)));
+  const moneyT = (ratio - 0.6) / 1.0;
+  const strength = Math.max(0, Math.min(1, (c.teamOvr - 58) / 18));
+  const winT = Math.max(0, Math.min(1, 0.7 * strength + 0.3 * c.prestige));
+  let playT = c.posGap > 0 ? Math.min(1, 0.4 + 0.25 * c.posGap) : 0.15;
+  if (c.starterGuarantee) playT = Math.min(1, playT + 0.30);
+  const yearBonus = c.years != null ? Math.max(0, c.years - 2) * 0.05 : 0;
+  if (yearBonus > 0) playT = Math.min(1, playT + yearBonus);
+  const loyT = c.isOriginal ? (c.isFranchise ? 1 : 0.5) : 0;
+  const homeT = c.isPreferred ? 1 : 0;
+  const w = c.w;
+  const relTerm = (w.rel ?? 0) * (c.relT ?? 0);
+  const factors: OfferFactor[] = [
+    { key: 'money', label: FACTOR_LABELS.money, value: w.money * moneyT },
+    { key: 'win', label: FACTOR_LABELS.win, value: w.win * winT },
+    { key: 'play', label: FACTOR_LABELS.play, value: w.play * playT },
+    { key: 'loyalty', label: FACTOR_LABELS.loyalty, value: w.loyalty * loyT },
+    { key: 'home', label: FACTOR_LABELS.home, value: w.home * homeT },
+    { key: 'rel', label: FACTOR_LABELS.rel, value: relTerm },
+  ];
+  return factors.sort((a, b) => b.value - a.value);
+}
+
 /** 자격 FA 목록 + 등급 (한 오프시즌 스냅샷) */
 export function listFreeAgents(players: Player[]): { player: Player; grade: FAGrade }[] {
   const pool = players.filter(isFAEligible);

@@ -25,7 +25,7 @@ import { formatMoney } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
 import { teamRelations, relationBonds } from '../data/relationships';
 import {
-  offerSatisfaction, offerSalaryBounds, PREF_STAR_AXES, starsFromWeight,
+  offerSatisfaction, offerSalaryBounds, PREF_STAR_AXES, starsFromWeight, resolveMyOfferSalary,
 } from '../data/faOfferSatisfaction';
 import type { FAOffer } from '../types';
 import { useGameStore } from '../store/useGameStore';
@@ -160,7 +160,7 @@ function FACenterInner() {
         if (a.s !== 'won' && b.s === 'won') toast.push(`FA 시장 변화 — ${nm} 영입 가능성이 높아졌습니다.`);
         else if (a.s === 'won' && b.s !== 'won') toast.push(`FA 시장 변화 — ${nm}과의 계약 가능성이 낮아졌습니다.`);
         else if (a.s === 'pending' && b.s === 'pending' && a.rank === 1 && (b.rank ?? 99) > 1)
-          toast.push(`FA 시장 변화 — ${nm} 협상 순위가 ${b.rank}위로 밀렸습니다.`);
+          toast.push(`FA 시장 변화 — ${nm} 계약에 다른 구단이 더 유력해졌습니다.`);
       }
     }
     prevStatus.current = cur;
@@ -207,15 +207,18 @@ function FACenterInner() {
 
   return (
     <Screen title={`${seasonYear(season)} → ${seasonYear(season + 1)} FA 시장`} overlay={<ToastHost toasts={toast.toasts} />}>
-      {/* 지연 구조 안내(항상 표시) — "지금은 지명, 결과는 시즌 시작 때 확정"을 상단에 못박아
-          "영입 눌렀는데 실패"로 오해하는 걸 막는다(FA_SYSTEM §2.7 UX). */}
+      {/* 협상 진행 안내(항상 표시, §2.8.9 #1) — 이 화면이 "계약 완료"가 아니라 "협상(미리보기) 진행 중"임을
+          상단에 못박는다. 아래 모든 표시는 현재 오퍼 기준 예상 결과이며, 오퍼를 바꾸면 즉시 재계산된다. */}
       <Pressable onPress={() => setInfo('delay')} style={styles.notice}>
         <Ionicons name="hourglass-outline" size={18} color={theme.sky} />
-        <Text style={styles.noticeText}>
-          지금은 선수에게 <Text style={{ color: theme.text, fontWeight: '800' }}>영입 제안(오퍼)</Text>을 보내는 단계예요.
-          최종 결과는 <Text style={{ color: theme.text, fontWeight: '800' }}>시즌이 시작될 때</Text> 다른 구단과의
-          경쟁으로 확정됩니다. <Text style={{ color: theme.sky, fontWeight: '800' }}>자세히 ›</Text>
-        </Text>
+        <View style={{ flex: 1 }}>
+          <Text style={styles.noticeTitle}>FA 협상 진행 중</Text>
+          <Text style={styles.noticeText}>
+            현재는 모든 구단이 선수에게 계약을 제안하는 단계입니다. 시즌 시작 시 선수가 모든 제안을 비교한 뒤
+            최종 팀을 선택합니다. 오퍼를 변경하거나 취소하면 예상 결과도 즉시 다시 계산됩니다.
+            {' '}<Text style={{ color: theme.sky, fontWeight: '800' }}>자세히 ›</Text>
+          </Text>
+        </View>
       </Pressable>
 
       <Card accent={theme.sky}>
@@ -306,6 +309,10 @@ function FACenterInner() {
       })}
 
       <Title>FA 시장 ({poolPlayers.length}명)</Title>
+      {/* 실시간 재계산 안내(§2.8.9 #4) — 아래 배지·계약 가능성은 모두 현재 오퍼 기준 예상 결과. */}
+      <Muted style={{ fontSize: 12, lineHeight: 17 }}>
+        현재 오퍼 기준으로 계산된 예상 결과입니다. 오퍼를 변경하면 예상 결과도 함께 다시 계산됩니다.
+      </Muted>
       {poolPlayers.length === 0 ? (
         <Card><Muted>이번 오프시즌 풀린 FA가 없습니다.</Muted></Card>
       ) : (
@@ -316,23 +323,29 @@ function FACenterInner() {
           const targeted = faSignings.includes(p.id);
           const won = pv.signedByMe.has(p.id);
           const lost = pv.lostTo[p.id];
-          // 실패 사유 세분화(FA_SYSTEM §2.7 UX) — '경합/불발' 뭉뚱그림 제거. 엔진이 준 게이트 코드로 사유별 표기.
-          //   자금/캡/정원은 "입찰 자체가 안 들어간" 경우라 타팀이 뽑아도(lostTo) '뺏김'이 아니라 그 사유로 보여준다.
-          // 실패 카피(FA_SYSTEM §2.8.5 ③) — 5경로만(지어내기 금지). LOST엔 협상 순위(faCompete) 연결.
-          const myRank = pv.faCompete[p.id]?.myRank;
-          const countered = pv.counterFired[p.id]; // 카운터 발동(FA_SYSTEM §2.8.6) — 내 오퍼가 요구를 수용해 상향된 케이스
+          // 예상형 배지(§2.8.9 #2·#3) — 이 화면은 "협상(미리보기) 진행 중". 확정 표현("뺏김"·"영입 성공")·순위 숫자
+          //   ("협상 N위")를 없애고 "현재 예상 — …" 톤으로. 게이트(CASH/CAP/ROSTER)는 사실이라 유지(어조만 완화).
+          const comp = pv.faCompete[p.id];
+          const winProb = comp?.winProb;                 // 예상 승자 수락 확률(이미 계산됨) — #5 계약 가능성 코스
+          const countered = pv.counterFired[p.id];       // 카운터 발동(§2.8.6) — 내 오퍼가 요구를 수용해 상향된 케이스
           let badge: { t: string; c: string } | null = null;
-          if (won) badge = countered ? { t: `요구를 수용해 ${formatMoney(countered.to)}에 계약 예정`, c: theme.good } : { t: '영입 성공', c: theme.good };
+          if (won) badge = countered
+            ? { t: `현재 예상 — 요구를 수용해 ${formatMoney(countered.to)}에 계약이 유력합니다`, c: theme.good }
+            : { t: '현재 예상 — 우리 팀 계약이 유력합니다', c: theme.good };
           else if (targeted) {
             const code = pv.faFail[p.id];
             const lostName = getTeam(lost)?.name ?? shortTeam(lost);
-            if (code === 'LOST') badge = { t: myRank ? `${lostName}에 뺏겼습니다 (협상 ${myRank}위)` : `${lostName}에 뺏겼습니다 (경쟁 입찰 패배)`, c: theme.bad };
-            else if (code === 'CASH') badge = { t: '운영 자금 부족 — 입찰하지 못했습니다', c: theme.warn };
-            else if (code === 'CAP') badge = { t: '샐러리캡이 부족해 입찰하지 못했습니다', c: theme.warn };
-            else if (code === 'ROSTER') badge = { t: '정원이 가득 차 입찰하지 못했습니다', c: theme.warn };
-            else if (code === 'SIT_OUT') badge = { t: '모든 제안을 거절해 계약 없이 시즌을 보냅니다', c: theme.muted };
-            else badge = { t: '제안함 — 시즌 시작 때 확정', c: theme.sky };
+            if (code === 'LOST') badge = { t: `현재 예상 — ${lostName}와 계약 가능성이 가장 높습니다`, c: theme.warn };
+            else if (code === 'CASH') badge = { t: '운영 자금이 부족해 아직 제안하지 못했습니다', c: theme.warn };
+            else if (code === 'CAP') badge = { t: '샐러리캡이 부족해 아직 제안하지 못했습니다', c: theme.warn };
+            else if (code === 'ROSTER') badge = { t: '정원이 가득 차 아직 제안하지 못했습니다', c: theme.warn };
+            else if (code === 'SIT_OUT') badge = { t: '현재 예상 — 어느 구단과도 계약하지 않을 것으로 보입니다', c: theme.muted };
+            else badge = { t: '제안 전달됨 — 시즌 시작 때 결과가 확정됩니다', c: theme.sky };
           }
+          // #5 계약 가능성(코스) — 예상 승자 prob를 높음/보통/낮음으로(정확 % 대신 우세 정도). 지명+승자 있을 때만.
+          const chance = (targeted && (won || pv.faFail[p.id] === 'LOST' || pv.faFail[p.id] === 'SIT_OUT') && winProb !== undefined)
+            ? (winProb >= 0.7 ? { t: '높음', c: theme.good } : winProb >= 0.4 ? { t: '보통', c: theme.warn } : { t: '낮음', c: theme.bad })
+            : null;
           return (
             <View key={p.id} style={styles.row}>
               <Pressable
@@ -364,6 +377,26 @@ function FACenterInner() {
                     );
                   })()}
                   {badge ? <AnimatedBadge text={badge.t} color={badge.c} /> : null}
+                  {/* #5 계약 가능성(코스) — 예상이 얼마나 우세한지. 정확 %는 숨기고 높음/보통/낮음만. */}
+                  {chance ? (
+                    <Text style={{ fontSize: 11, fontWeight: '800', marginTop: 2, color: chance.c }}>
+                      계약 가능성 {chance.t}
+                    </Text>
+                  ) : null}
+                  {/* #9 현재 제안 요약 — 내가 이 선수에게 넣은 오퍼(faOffers) 한 줄. 지명한 국내 FA만. */}
+                  {targeted && !p.isForeign ? (() => {
+                    const o = faOffers[p.id];
+                    if (!o) return null;
+                    const sal = resolveMyOfferSalary(o, ask);
+                    const compLabel = needsCompensationPlayer(grade)
+                      ? (moneyOnlyIds.includes(p.id) ? '돈만' : '보상선수+현금')
+                      : '보상 없음';
+                    return (
+                      <Text style={styles.offerSummary} numberOfLines={1}>
+                        현재 제안 · 연봉 {formatMoney(sal)} · {o.years}년 · 주전보장 {o.starterGuarantee ? 'O' : 'X'} · 보상 {compLabel}
+                      </Text>
+                    );
+                  })() : null}
                 </View>
                 <OvrBadge value={overallRaw(p)} />
                 {!p.isForeign ? (
@@ -385,9 +418,9 @@ function FACenterInner() {
                   {targeted ? '제안 취소' : '영입 제안'}
                 </Text>
               </Pressable>
-              {/* 지명은 시즌 시작 시 확정되는 예약(§2.8.8 ③) — 왜 '지명 취소'가 있는지 맥락 캡션 */}
+              {/* 지명은 시즌 시작 시 확정되는 예약(§2.8.8 ③·§2.8.9 #6) — 취소 시 예산·캡 즉시 반환 안내 */}
               {targeted ? (
-                <Text style={styles.cancelHint}>시즌 시작 전까지 제안을 물릴 수 있어요.</Text>
+                <Text style={styles.cancelHint}>제안을 취소하면 예산과 샐러리캡이 즉시 반환됩니다. 시즌 시작 전까지 다시 제안할 수 있습니다.</Text>
               ) : null}
               {/* A/B FA만 — 보상선수 대신 보상금만 내고 선수단 보호 */}
               {targeted && needsCompensationPlayer(grade) ? (
@@ -462,7 +495,11 @@ function FACenterInner() {
                     ) : (
                       <>
                         {PREF_STAR_AXES.map((ax) => <StarRow key={ax.key} label={ax.label} fog />)}
-                        <Muted style={{ fontSize: 11, marginTop: 2 }}>스카우터를 영입하면 이 선수의 이적 성향이 드러납니다.</Muted>
+                        {/* #8 성향 ??? 안내 — 정밀 임계(REVEAL_PRECISE=0.92) 명시. 스카우터 영입으로 도달. */}
+                        <Muted style={{ fontSize: 11, marginTop: 2, lineHeight: 15 }}>
+                          이 선수의 이적 성향은 현재 스카우팅 정보가 부족하여 확인할 수 없습니다.
+                          스카우팅 {Math.round(REVEAL_PRECISE * 100)}% 이상 달성 시 공개됩니다.
+                        </Muted>
                       </>
                     )}
 
@@ -531,11 +568,18 @@ function FACenterInner() {
                       시즌이 시작될 때 확정됩니다.
                     </Muted>
 
-                    {/* 경쟁 구단 + 협상 순위(FA_SYSTEM §2.8.5) — 금액 비공개, pv(=엔진 해소)에서만 */}
+                    {/* 경쟁 구단 + 계약 가능성 + 우세 이유(§2.8.5·§2.8.9 #3·#5·#7) — 금액·순위 숫자 비공개, pv(=엔진 해소)에서만 */}
                     {(() => {
                       const comp = pv.faCompete[p.id];
                       const rivals = (comp?.bidders ?? []).filter((t) => t !== my);
-                      const rank = comp?.myRank;
+                      // #5 계약 가능성(코스) — 순위 숫자 대신. 예상 승자 prob를 높음/보통/낮음으로.
+                      const wp = comp?.winProb;
+                      const tierC = wp === undefined ? null
+                        : wp >= 0.7 ? { t: '높음', c: theme.good } : wp >= 0.4 ? { t: '보통', c: theme.warn } : { t: '낮음', c: theme.bad };
+                      // #7 우세 이유 — 예상 승자가 우세한 실제 offerScore 상위 동기(엔진이 계산). 성향 정밀 게이트(스카우팅) 통과 시만.
+                      const factors = comp?.winFactors;
+                      const winnerName = won ? '우리 팀' : (pv.faFail[p.id] === 'LOST' ? (getTeam(lost)?.name ?? shortTeam(lost)) : null);
+                      const showFactors = reveal >= REVEAL_PRECISE && !!factors?.length && !!winnerName;
                       return (
                         <View style={styles.competBox}>
                           <Text style={styles.detailHead}>경쟁 구단</Text>
@@ -546,13 +590,18 @@ function FACenterInner() {
                           ) : (
                             <Muted style={{ fontSize: 12 }}>아직 관심을 보인 다른 구단이 없습니다.</Muted>
                           )}
-                          {targeted && rank ? (
+                          {targeted && tierC ? (
                             <>
-                              <Text style={styles.competRank}>협상 순위 {rank}위 / {comp!.bidders.length}곳</Text>
+                              <Text style={[styles.competRank, { color: tierC.c }]}>계약 가능성 {tierC.t}</Text>
                               <Muted style={{ fontSize: 11, marginTop: 1, lineHeight: 15 }}>
                                 가장 앞서 있어도 확정은 아니에요 — 선수가 시즌 시작 때 최종 선택합니다.
                               </Muted>
                             </>
+                          ) : null}
+                          {showFactors ? (
+                            <Text style={styles.competText}>
+                              현재 {winnerName}가 우세한 이유 · {factors!.join(' · ')}
+                            </Text>
                           ) : null}
                         </View>
                       );
@@ -683,11 +732,13 @@ const styles = themedStyles(() => StyleSheet.create({
   age: { color: theme.muted, fontSize: 13, fontWeight: '700' },
   infoBtn: { paddingLeft: 2 },
   notice: {
-    flexDirection: 'row', alignItems: 'center', gap: 8,
+    flexDirection: 'row', alignItems: 'flex-start', gap: 8,
     backgroundColor: theme.sky + '14', borderRadius: 12, borderWidth: 1, borderColor: theme.sky + '40',
     paddingHorizontal: 12, paddingVertical: 10,
   },
-  noticeText: { flex: 1, color: theme.muted, fontSize: 12, lineHeight: 17 },
+  noticeTitle: { color: theme.text, fontSize: 13, fontWeight: '900', marginBottom: 2 },
+  noticeText: { color: theme.muted, fontSize: 12, lineHeight: 17 },
+  offerSummary: { color: theme.muted, fontSize: 11, fontWeight: '700', marginTop: 3 },
   compHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start' },
   modalTitle: { color: theme.text, fontSize: 19, fontWeight: '900' },
   modalBody: { color: theme.muted, fontSize: 13, lineHeight: 20 },

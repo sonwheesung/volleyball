@@ -16,7 +16,7 @@ import { aiReserveTargets, aiDomesticCaps } from './rosterTarget';
  *  Phase 1.5(2026-07-09): 재계약을 **팀 목표(aiRosterTargets)로 상한** 하는 능동 배출이 주 레버가 되면서,
  *  이 확률 감쇠는 "목표 미달팀에서도 노장이 가끔 빠지는" 생동 역할로 축소(0.6→0.85, 과이탈 완화). */
 const AI_RETAIN_ATTRITION = 0.85;
-import { assignFAGrades, askingPrice, offerScore, prefWeightsOf, acceptProb, SIT_OUT, CERTAIN, willBeFA } from '../engine/faMarket';
+import { assignFAGrades, askingPrice, offerScore, offerScoreFactors, prefWeightsOf, acceptProb, SIT_OUT, CERTAIN, willBeFA, type OfferCtx } from '../engine/faMarket';
 import { affinity, pairKey } from '../engine/relationships';
 import { relationBonds } from './relationships';
 import { needsCompensationPlayer, pickCompensation, compensationMoney, compensationMoneyOnly } from '../engine/compensation';
@@ -113,7 +113,9 @@ export interface FAMarketResult {
   // 경쟁 관측(FA_SYSTEM §2.8.5 Phase5) — 이미 계산된 bids에서 파생만(rng 미소비·해소 로직 불변).
   //   bidders=입찰(오퍼 제출)한 팀 id 배열(점수 내림차순=해소 우선순위), myRank=내 입찰의 순위(1-based, 미입찰이면 undefined).
   //   금액·offerScore 원값은 노출 안 함(§2.8 "실제 금액 비공개"). 모든 풀 FA에 기록(내가 지명 안 한 선수 포함).
-  faCompete: Record<string, { bidders: string[]; myRank?: number }>;
+  //   winProb/winFactors = 예상 승자(해소된 win) 관측(§2.8.9 협상 화면 #5·#7) — 이미 계산된 win.prob(acceptProb)와
+  //     win 오퍼의 offerScore 상위 동기 라벨(offerScoreFactors)을 **읽기전용 캡처**(rng 미소비·해소 로직 불변). 승자 없으면 미기록.
+  faCompete: Record<string, { bidders: string[]; myRank?: number; winProb?: number; winFactors?: string[] }>;
   // 선수 역제안 카운터(FA_SYSTEM §2.8.6 Phase6) — 내 오퍼가 counterTolerance로 counterAsk까지 상향된 케이스.
   //   from=원 오퍼·to=counterAsk(선클램프 → 서명 시 최종 계약 연봉). 순수 관측(발동 안 하면 키 없음, rng 미소비).
   counterFired: Record<string, { from: number; to: number }>;
@@ -189,7 +191,8 @@ export function resolveFAMarket(
   //   순수 관측(resolve 결정에 미개입) — 아래 faFail 조립에만 쓰인다.
   const myGate: Record<string, 'ROSTER' | 'CAP' | 'CASH' | 'BID'> = {};
   // 경쟁 관측(FA_SYSTEM §2.8.5) — 순수 파생(resolve 결정에 미개입). bids에서 점수순 팀 목록·내 순위만 뽑는다.
-  const faCompete: Record<string, { bidders: string[]; myRank?: number }> = {};
+  //   winProb/winFactors(§2.8.9)도 여기 승자 확정 후 읽기전용 캡처(아래).
+  const faCompete: Record<string, { bidders: string[]; myRank?: number; winProb?: number; winFactors?: string[] }> = {};
   // 카운터 발동 관측(FA_SYSTEM §2.8.6) — 순수(rng 미소비·해소에 미개입, 오퍼 상향은 counterTolerance 있을 때만).
   const counterFired: Record<string, { from: number; to: number }> = {};
   const faSatOut: string[] = []; // SIT_OUT + bids>0(뉴스 ②)
@@ -212,7 +215,8 @@ export function resolveFAMarket(
       ? (moneyOnly.has(id) ? compensationMoneyOnly(grade, p.contract.salary) : compensationMoney(grade, p.contract.salary))
       : 0;
 
-    const bids: { teamId: string; offer: number; score: number; years: number; guarantee: boolean }[] = [];
+    // ctx = 각 입찰의 OfferCtx(승자 winFactors #7 캡처용, 읽기전용). offerScore에 넘긴 것과 byte-동일 객체를 저장만 한다.
+    const bids: { teamId: string; offer: number; score: number; years: number; guarantee: boolean; ctx: OfferCtx }[] = [];
     for (const t of teams) {
       // 내 팀 = 하드 계약 상한(20). AI = 예약 상한(목표−RESERVE) — 드래프트 자리 확보 + 상위팀 두껍게·하위팀 얇게(§1.5·§1.7).
       const rosterCeil = t === myTeam ? ROSTER_CONTRACT_CAP : (aiReserve[t] ?? 11);
@@ -258,7 +262,9 @@ export function resolveFAMarket(
       // ↑ 실패 사유 관측만: ok/continue 값은 이전과 byte-동일(affordCap&&affordCash === 기존 인라인식)
       // rand는 팀당 정확히 1회 소비(hoist) — 카운터 발동 유무와 무관해야 rng 스트림이 안 밀린다(§2.8.6 0드리프트 핵심).
       const rand = rng.next();
-      const scoreOf = (offerSalary: number) => offerScore({
+      // mkCtx = offerScore에 넘길 OfferCtx 조립(구 인라인 객체와 byte-동일). scoreOf는 이 ctx를 offerScore에 위임만 —
+      //   offerScore 입력/호출 순서/rand 소비 모두 불변(순수 리팩터). 승자 ctx는 bids에 저장해 winFactors(#7)에 재사용.
+      const mkCtx = (offerSalary: number): OfferCtx => ({
         teamOvr: ovr[t],
         prestige: prestige[t] ?? 0,
         posGap: gap,
@@ -276,6 +282,7 @@ export function resolveFAMarket(
         starterGuarantee: isMe ? cfg?.starterGuarantee : (aiGuarantee || undefined),
         promises: cfg?.promises,
       });
+      const scoreOf = (offerSalary: number) => offerScore(mkCtx(offerSalary));
       let bidOffer = offer;
       let score = scoreOf(offer); // baseScore(원 오퍼)
       // 선수 역제안 카운터(FA_SYSTEM §2.8.6 Phase6) — 내 팀 오퍼만. counterTolerance 사전 커밋으로 counterAsk까지 자동 상향.
@@ -293,7 +300,7 @@ export function resolveFAMarket(
         }
       }
       // years = 계약 연수(§2.8 Phase1·Phase3) — 내 팀=오퍼 연수, AI=성향 레버(기본 2, 젊은 엘리트+구멍이면 3). 승자의 years로 계약 생성.
-      bids.push({ teamId: t, offer: bidOffer, score, years: bidYears, guarantee: bidGuarantee });
+      bids.push({ teamId: t, offer: bidOffer, score, years: bidYears, guarantee: bidGuarantee, ctx: mkCtx(bidOffer) });
     }
     // 경쟁 관측(FA_SYSTEM §2.8.5) — 모든 풀 FA에 기록(빈 bids면 bidders:[]). 점수 내림차순(해소 우선순위와 동일).
     //   ※ 순수 파생: rng 미소비·아래 해소 로직/롤 순서에 미개입(관측만).
@@ -308,6 +315,10 @@ export function resolveFAMarket(
     if (scored[0].score < SIT_OUT) { faSatOut.push(id); continue; } // 최고 점수도 바닥 미만 → 시즌 아웃(FA 잔류). bids>0(위 게이트 통과) → 뉴스 ② 대상
     let win = scored[0]; // fallback = 최고 확률 팀(전부 실패 시)
     for (const cand of scored) { if (rng.next() < cand.prob) { win = cand; break; } } // 위에서부터 롤, 첫 성공 입단
+    // 예상 승자 관측(§2.8.9 #5·#7) — 이미 계산된 win.prob(acceptProb)와 win 오퍼의 offerScore 상위 동기(≥0.05, 최대 3)를
+    //   읽기전용 캡처. 순수(rng 미소비·해소 미개입) — 위 faCompete[id]에 필드만 덧붙인다.
+    faCompete[id].winProb = win.prob;
+    faCompete[id].winFactors = offerScoreFactors(win.ctx).filter((f) => f.value > 0.05).slice(0, 3).map((f) => f.label);
     const finalSalary = clampSalary(win.offer, p); // 개인 상한(프랜차이즈 예외) 적용
     const winYears = capContractYears(p.age, win.years); // 승자 오퍼 연수(§2.8 Phase1) — 정년 캡. 기본 2 → 구 RENEW_FA_YEARS와 동일.
     // 주전 보장 레버 대가(§2.8 Phase2·Phase3) — 승자 오퍼가 주전보장이면 계약에 flag를 남긴다(내 팀=faOffers / AI=성향 레버).
@@ -669,7 +680,7 @@ export interface FAPreview {
   signedByMe: Set<string>;
   lostTo: Record<string, string>;
   faFail: Record<string, FAFailCode>;   // 지명 실패 사유(FA 센터 표기 — FA_SYSTEM §2.7 UX)
-  faCompete: Record<string, { bidders: string[]; myRank?: number }>; // 경쟁 구단·협상 순위(FA_SYSTEM §2.8.5)
+  faCompete: Record<string, { bidders: string[]; myRank?: number; winProb?: number; winFactors?: string[] }>; // 경쟁 구단·순위·예상 승자(FA_SYSTEM §2.8.5·§2.8.9)
   counterFired: Record<string, { from: number; to: number }>; // 카운터 발동 관측(FA_SYSTEM §2.8.6 — 카드 배지)
   tryout: TryoutOutcome;
   asianTryout: TryoutOutcome;
