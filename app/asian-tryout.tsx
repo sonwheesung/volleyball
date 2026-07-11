@@ -143,8 +143,12 @@ function AsianTryoutInner() {
                       {returning ? <Text style={styles.tagReturn}>재참가</Text> : null}
                     </View>
                     <Text style={styles.sub}>
-                      {p.age}세 · {p.height}cm · OVR {fogOvr(p)} · {taker ? `→ ${taker}` : '미계약'} · {open ? '접기 ▲' : '이력 ▼'}
+                      {p.age}세 · {p.height}cm · OVR {fogOvr(p)} · {taker ? `→ ${taker}` : '미계약'}
                     </Text>
+                    {/* 이력 토글 — 메타 텍스트에 파묻히지 않게 별도 칩(2026-07-11 테스터: UI 그룹화) */}
+                    <View style={[styles.resumeChip, open && styles.resumeChipOn]}>
+                      <Text style={[styles.resumeChipTxt, open && styles.resumeChipTxtOn]}>{open ? '이력 접기 ▲' : '이력 보기 ▼'}</Text>
+                    </View>
                   </View>
                 </Pressable>
                 <Pressable onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => toggleAsianWish(p.id))} hitSlop={8} style={styles.wishBtn}>
@@ -182,4 +186,9 @@ const styles = themedStyles(() => StyleSheet.create({
   chip: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 12 },
   chipOn: { backgroundColor: theme.accent, borderColor: theme.accent },
   chipTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },
+  // 이력 토글 칩 — 텍스트와 분리된 또렷한 인터랙션 어포던스(테두리 pill, 눌리면 accent)
+  resumeChip: { alignSelf: 'flex-start', marginTop: 6, borderWidth: 1, borderColor: theme.accent + '80', borderRadius: 8, paddingVertical: 3, paddingHorizontal: 9 },
+  resumeChipOn: { backgroundColor: theme.accent + '1A' },
+  resumeChipTxt: { color: theme.accent, fontSize: 12, fontWeight: '800' },
+  resumeChipTxtOn: { color: theme.accent },
 }));
