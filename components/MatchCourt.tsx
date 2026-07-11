@@ -610,12 +610,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
         </View>
       ) : null}
 
-      {/* 플레이 컨트롤 */}
-      <View style={styles.controls}>
-        <Ctrl label={playing ? '⏸' : '▶'} onPress={() => setPlaying((p) => !p)} />
-        <Ctrl label="2x" on={fast} onPress={() => setFast((f) => !f)} />
-        <Ctrl label="⏭ 결과" onPress={() => setConfirmEnd(true)} />
-      </View>
+      {/* 플레이 컨트롤 — 경기 종료(스코어 오버레이) 후엔 숨긴다(2026-07-11 테스터). 진행/2x/결과는
+          관전 중에만 의미가 있고, 종료 뒤엔 화면의 "나가기"가 결과 확정을 맡는다. */}
+      {!finished ? (
+        <View style={styles.controls}>
+          <Ctrl label={playing ? '⏸' : '▶'} onPress={() => setPlaying((p) => !p)} />
+          <Ctrl label="2x" on={fast} onPress={() => setFast((f) => !f)} />
+          <Ctrl label="⏭ 결과" onPress={() => setConfirmEnd(true)} />
+        </View>
+      ) : null}
 
       {/* 작전 타임아웃 — 경기 멈춤 + 코트 선수 체력(미래: 교체·기세) */}
       <Popup visible={!!timeoutModal} onRequestClose={resumeFromTimeout} card={styles.toModal}>
