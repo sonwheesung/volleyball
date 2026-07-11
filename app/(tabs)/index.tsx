@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { Text, View } from 'react-native';
-import { Card, IconLabel, Muted, OvrBadge, Row, Screen, theme } from '../../components/Screen';
+import { Card, IconLabel, Loading, Muted, OvrBadge, Row, Screen, SCREEN_LOADING_MIN_MS, theme, useDeferredReady } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { SoftUpdateBanner } from '../../components/SoftUpdateBanner';
 import { evolveOnDay, getTeam } from '../../data/league';
@@ -19,6 +19,14 @@ import { LEAGUE_CAP } from '../../engine/cap';
 import { useGameStore } from '../../store/useGameStore';
 
 export default function Dashboard() {
+  // 대시보드는 무겁다(순위·생산·dyn·뉴스 재계산). 인트로 워밍이 첫 진입은 커버하나 세션 중 baseVersion
+  // 범프(훈련방침·스태프 영입) 뒤 재진입은 콜드 재계산 → 한 틱 미뤄 로딩부터 그린다(squad 패턴, UI-4).
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading variant="list" />;
+  return <DashboardInner />;
+}
+
+function DashboardInner() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);

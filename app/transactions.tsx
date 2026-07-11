@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
-import { Card, IconLabel, Muted, OvrBadge, PosTag, Row, Screen, Title, theme, themedStyles } from '../components/Screen';
+import { Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { evolveOnDay } from '../data/league';
 import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
@@ -16,6 +16,14 @@ import { useGameStore } from '../store/useGameStore';
 import type { Player } from '../types';
 
 export default function Transactions() {
+  // 무겁다(rosterIdsOnDay·availableFAsOnDay = dyn 재계산). 세션 중 baseVersion 범프(훈련방침·스태프) 뒤
+  // 진입하면 콜드 재계산이 프리즈를 유발 → 한 틱 미뤄 로딩부터 그린다(squad·standings 패턴, UI-4).
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading title="시즌 중 FA 영입" variant="list" />;
+  return <TransactionsInner />;
+}
+
+function TransactionsInner() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);

@@ -43,7 +43,7 @@ export default function Coupon() {
   };
 
   return (
-    <Screen title="쿠폰 입력">
+    <Screen title="쿠폰 입력" keyboard>
       <View style={styles.bal}><Text style={styles.gem}>💎</Text><Text style={styles.balN}>{diamonds.toLocaleString()}</Text></View>
       <Card accent={theme.gold}>
         <IconLabel icon="pricetag-outline" color={theme.gold}>쿠폰 코드</IconLabel>

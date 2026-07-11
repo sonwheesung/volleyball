@@ -1,7 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react';
 import { useEffect, useRef, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { ActivityIndicator, Animated, Easing, ImageBackground, InteractionManager, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Animated, Easing, ImageBackground, InteractionManager, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { displayOvr, fogStat } from '../engine/overall';
@@ -24,6 +24,7 @@ interface ScreenProps {
   scroll?: boolean;
   headerRight?: ReactNode; // 제목 행 우측 액션(예: 뉴스 "모두 읽기"). 없으면 미표시 — 무파급 옵션.
   overlay?: ReactNode;     // 뷰포트 고정 오버레이 슬롯(ScrollView 밖) — 하단 토스트 등. 없으면 미표시 — 무파급 옵션.
+  keyboard?: boolean;      // 텍스트 입력 화면(문의·쿠폰 등) — KeyboardAvoidingView로 입력창이 키보드에 가리지 않게(UI-38). 기본 false — 입력 없는 화면 무영향.
 }
 
 /** 기본 화면 래퍼 — SafeArea를 한 곳에서 중앙 관리(상단 상태바·하단 홈인디케이터·좌우 라운드/노치).
@@ -32,7 +33,7 @@ interface ScreenProps {
  *  0에 수렴 → 이중 여백 없음(회귀 0). headerShown:false 화면(enshrine·season-opening·champion 등
  *  세리머니)에선 top inset = 상태바 높이가 되어 타이틀이 상태바(시계) 아래로 내려온다.
  *  ⚠ `useSafeAreaInsets().top`(raw)은 헤더를 몰라 헤더 화면에서 이중 패딩 회귀 — 반드시 SafeAreaView(edges top) 사용. */
-export function Screen({ title, children, scroll = true, headerRight, overlay }: ScreenProps) {
+export function Screen({ title, children, scroll = true, headerRight, overlay, keyboard = false }: ScreenProps) {
   useThemeMode(); // 테마 토글 시 리렌더(배경·스크림 갱신)
   // 튜토리얼 스포트라이트 대상이 화면 밖이면 이 화면의 ScrollView가 대상을 위로 끌어온다.
   // 오프셋은 "콘텐츠 최상단 센티넬 View"와 대상을 각각 measureInWindow로 재 계산(Fabric 안전 — measureLayout 회피).
@@ -63,21 +64,33 @@ export function Screen({ title, children, scroll = true, headerRight, overlay }:
       {children}
     </>
   );
+  const body = scroll ? (
+    <ScrollCtrlCtx.Provider value={ctrlRef.current}>
+      <ScrollView
+        ref={scrollRef}
+        style={styles.safe}
+        contentContainerStyle={styles.contentScroll}
+        keyboardShouldPersistTaps={keyboard ? 'handled' : undefined} // 키보드 떠 있을 때 버튼 첫 탭이 먹히게(입력 화면만)
+      >
+        <View ref={topRef} collapsable={false} style={styles.scrollTop} />
+        {inner}
+      </ScrollView>
+    </ScrollCtrlCtx.Provider>
+  ) : (
+    <View style={[styles.safe, styles.content]}>{inner}</View>
+  );
   return (
     <ImageBackground source={themeAssets.bg} style={styles.bgRoot} resizeMode="cover">
       {/* 가독성 스크림 — 모드별 톤(다크=검정 베일 / 라이트=밝은 베일)으로 배경 위 카드·텍스트 가독 */}
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: themeAssets.scrim }]} />
       <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
-        {scroll ? (
-          <ScrollCtrlCtx.Provider value={ctrlRef.current}>
-            <ScrollView ref={scrollRef} style={styles.safe} contentContainerStyle={styles.contentScroll}>
-              <View ref={topRef} collapsable={false} style={styles.scrollTop} />
-              {inner}
-            </ScrollView>
-          </ScrollCtrlCtx.Provider>
-        ) : (
-          <View style={[styles.safe, styles.content]}>{inner}</View>
-        )}
+        {keyboard ? (
+          // 입력 화면 전용(UI-38): iOS는 padding으로 입력창을 키보드 위로 밀어 올린다. Android는 앱 기본
+          // softInputMode=resize라 창이 줄며 ScrollView가 알아서 스크롤 → behavior 불필요(undefined).
+          <KeyboardAvoidingView style={styles.safe} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            {body}
+          </KeyboardAvoidingView>
+        ) : body}
         {overlay}
       </SafeAreaView>
     </ImageBackground>

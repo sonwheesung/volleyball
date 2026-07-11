@@ -167,7 +167,7 @@ function Compose({ cat, setCat, content, setContent, onCancel, onDone }: {
   };
 
   return (
-    <Screen title="문의 등록">
+    <Screen title="문의 등록" keyboard>
       <View style={styles.topBar}>
         <Pressable onPress={onCancel} hitSlop={10} style={styles.topBtn}><Text style={styles.newBtn}>취소</Text></Pressable>
       </View>

@@ -1,6 +1,6 @@
 // 스태프 계약(STAFF_SYSTEM) — 단장이 감독·전문코치·스카우터를 예산 안에서 영입/방출.
 import { useEffect, useRef, useState } from 'react';
-import { InteractionManager, View } from 'react-native';
+import { View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Button, Card, IconLabel, Loading, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../components/Screen';
 import {
@@ -40,15 +40,25 @@ export default function Staff() {
   const pending = useRef<(() => void) | null>(null);
   useEffect(() => {
     if (!busy) return;
-    const task = InteractionManager.runAfterInteractions(() => {
-      pending.current?.(); // 영입/방출 실행(성공 시 baseVersion 무효화)
-      const st = useGameStore.getState();
-      const day = displayCutoff(st.currentDay, st.results, teamId ?? undefined);
-      computeStandings(day); // 로딩 중 캐시 워밍(무거운 재시뮬을 여기서 끝낸다)
-      pending.current = null;
-      setBusy(false); // 클리어 → 본문은 워밍된 캐시로 즉시 렌더
+    // rAF×2(UI-13): InteractionManager는 커밋 전에 콜백이 돌아 20~30s 동기 블록의 첫 프레임에 <Loading>이
+    //   아직 페인트되지 않을 수 있다(화면 동결). rAF 2회면 커밋→네이티브 렌더가 한 프레임 지나 로딩이 확실히
+    //   얹힌 뒤 무거운 블록을 시작한다(useBusyRun과 동일 원리).
+    let r1 = 0;
+    let r2 = 0;
+    r1 = requestAnimationFrame(() => {
+      r2 = requestAnimationFrame(() => {
+        pending.current?.(); // 영입/방출 실행(성공 시 baseVersion 무효화)
+        const st = useGameStore.getState();
+        const day = displayCutoff(st.currentDay, st.results, teamId ?? undefined);
+        computeStandings(day); // 로딩 중 캐시 워밍(무거운 재시뮬을 여기서 끝낸다)
+        pending.current = null;
+        setBusy(false); // 클리어 → 본문은 워밍된 캐시로 즉시 렌더
+      });
     });
-    return () => task.cancel();
+    return () => {
+      cancelAnimationFrame(r1);
+      cancelAnimationFrame(r2);
+    };
   }, [busy]);
   const heavyAction = (fn: () => void) => { pending.current = fn; setBusy(true); };
 

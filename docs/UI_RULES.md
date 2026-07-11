@@ -62,6 +62,12 @@
 
 > **UI-36 (2026-07-11 — 경기 관전 화면 켜짐 유지)**: 경기 보드(`app/match/[id].tsx`)는 `useKeepAwake()`(`expo-keep-awake`)로 관전 중 화면 자동 꺼짐을 막는다(관전형 1순위 = 보는 경험). 훅이라 **화면 이탈(언마운트) 시 자동 해제** — 별도 정리 코드 불필요. `expo-keep-awake`는 `expo`의 전이 의존이라 package.json에 직접 명시(top-level 해석).
 
+> **UI-37 (2026-07-11 — 재계산 트리거 전수조사 #62 누락분: 로딩 게이트·워밍 마감)**: UI-4(무거운 캐시는 유발 액션의 로딩 뒤에서 데운다)·UI-1(무거운 화면은 진입 로딩 게이트)의 **누락 화면 4곳**을 마감했다(테스터 보고 2026-07-11 — 훈련방침 저장/감독영입 후 20~30초 프리즈). 세션 중 `baseVersion` 범프(훈련방침·스태프 계약)는 순위(`computeStandings`)·생산(`leagueProduction`)·dyn(부상·이동) 캐시를 통째 무효화하는데, 그 재계산 비용이 **로딩 게이트 없는 도착 화면**으로 떠넘겨져 진짜 동결이 됐다. **①`app/training-policy.tsx`(근본 — 떠넘김 제거)**: `setTrainingFocus`(=`setFocusTimeline` `_baseVersion++`) 직후 `busy.run` 오버레이 **안에서** `warmAfterPolicyChange`(computeStandings/leagueProduction MAX + `availableTeamPlayers`로 dyn) 워밍 → transactions·대시보드가 캐시히트로 즉시. 문구도 실제 일 반영("새 훈련 방침을 반영해\n전력을 다시 계산하는 중…", copylint 통과). **②`app/transactions.tsx`(시즌 중 FA)**: 로딩 게이트 전무 → `useDeferredReady(SCREEN_LOADING_MIN_MS)`+`<Loading variant="list">` 추가(inner 분리), `rosterIdsOnDay`·`availableFAsOnDay`(dyn) 콜드 재계산이 로딩 뒤로. **③`app/(tabs)/index.tsx`(대시보드)·`app/exhibition.tsx`**: 동일 게이트 — 인트로 워밍은 첫 진입만 커버, 세션 중 재범프는 미커버라 잠재 노출 방지. **④`app/staff.tsx`**: 재계산 워밍을 `InteractionManager.runAfterInteractions`→**rAF×2**(UI-13 권고)로 교체 — 20~30초 동기 블록의 첫 프레임에 `<Loading>`이 확실히 페인트된 뒤 블록 시작(InteractionManager는 커밋 전 발화 위험). **범위 밖(별도 티켓 후보)**: 이건 재계산을 **가리는** 것이지 **없애는** 게 아니다 — 감독 영입이 과거 시즌 전체를 재시뮬해야 하는가(minAffectedDay 스플라이스로 부분화 가능?)는 엔진 비용 축소로 별건. 검증: tsc 0(신규 delta 0) · `_dv_copylint` PASS · 워밍 후 같은 캐시키 히트(콜드 기준 [[cold-measure-perf-fixes]]).
+
+> **UI-38 (2026-07-11 — 텍스트 입력 키보드 회피)**: 텍스트 입력이 있는 화면은 공용 `Screen`에 **`keyboard` prop**을 준다 — 포커스 시 소프트 키보드가 입력창/전송 버튼을 가리지 않게(테스터 보고 — 문의 textarea가 키보드에 가림). `components/Screen.tsx`가 `keyboard`일 때 ScrollView를 **`KeyboardAvoidingView`**로 감싸고(`behavior` = iOS `padding` / Android는 앱 기본 softInputMode=resize라 `undefined`) `keyboardShouldPersistTaps="handled"`(키보드 떠 있을 때 버튼 첫 탭이 먹히게)를 건다. **opt-in**(기본 false)이라 입력 없는 화면 무영향. **적용**: 자유 입력 2곳(UI-23) — `app/support.tsx`(문의 Compose)·`app/coupon.tsx`(쿠폰 코드). 새 `TextInput` 화면 추가 시 `Screen keyboard`도 세트로.
+
+> **UI-39 (2026-07-11 — 아코디언/리스트 항목 구분선은 하단에)**: 카드 안에 세로로 쌓이는 항목(게임 가이드 아코디언 등)의 구분선은 **top이 아니라 bottom**에 둔다 — top-only면 카드 내 **마지막 항목 아래가 비어** 보인다(테스터 보고 — `app/guide.tsx`). `borderBottomWidth`로 마지막 항목도 닫히고, 첫 항목 상단은 카드 자체 보더가 감싸 위아래 균형이 맞는다(시각 전용·로직 무관).
+
 ## UI-27 세계관 사유 문구 예시 (BusyOverlay message — 2026-07-08 사용자 결정)
 
 > 문구는 **그 작업이 실제 하는 일**을 게임 언어로 옮긴다(가짜 사유 금지). 코치·감독·스카우트·프런트가
@@ -71,7 +77,7 @@
 |---|---|---|
 | training-camp · 코스 구매(전지훈련 보내기) | 서버 다이아 차감 후 선수 스탯/포텐 반영(비동기) | `코치진이 훈련 프로그램을 준비하는 중…` |
 | training-camp · 전지훈련 마치고 개막전으로 | 오프시즌 종료·개막전 노출(base 재계산 워밍) | `선수들이 전지훈련에서 구슬땀을 흘리고 있습니다…` |
-| training-policy · 방침 저장 | 팀 훈련 포커스 갱신(성장 파이프라인 반영) | `코칭스태프가 새 훈련 일정을 짜는 중…` |
+| training-policy · 방침 저장 | 팀 훈련 포커스 갱신(base++) + **무효화 캐시 워밍**(순위·생산·dyn, UI-37) | `새 훈련 방침을 반영해\n전력을 다시 계산하는 중…` |
 | player/[id] · 선발/벤치 건의 · 복귀 지시 | 벤치 지시 갱신 → 출전 라인업(buildLineup) 재도출 | `감독이 라인업을 다시 그리는 중…` |
 | tryout · asian-tryout · 위시/보유 토글 | buildDraftContext(리그 전체 진화 스냅샷) 재빌드 | `스카우트 리포트를 정리하는 중…` |
 | fa · 영입 시도/취소·보호·돈만·공격적 | faMarketPreview(FA 경쟁 결정론 재해결) | `협상 테이블을 차리는 중…` |

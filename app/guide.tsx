@@ -183,7 +183,9 @@ export default function Guide() {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
-  item: { borderTopWidth: 1, borderTopColor: theme.border },
+  // 항목 구분선은 하단에(top-only는 카드 내 마지막 항목 아래가 비어 보였음 — 테스터 피드백). 하단 규칙으로
+  // 마지막 항목도 닫히고, 첫 항목 상단은 카드 자체 보더가 감싸 위아래 균형이 맞는다.
+  item: { borderBottomWidth: 1, borderBottomColor: theme.border },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
   headL: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   title: { color: theme.text, fontSize: 15, fontWeight: '800', flexShrink: 1 },

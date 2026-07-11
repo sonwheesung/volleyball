@@ -8,10 +8,25 @@ import { Button, Card, IconLabel, Muted, Screen, theme } from '../components/Scr
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { showAlert } from '../components/AppDialog';
 import { getTeamCoach } from '../data/league';
+import { computeStandings } from '../data/standings';
+import { leagueProduction } from '../data/production';
+import { availableTeamPlayers } from '../data/injury';
 import { TRAINING_NAME } from '../engine/training';
 import { ARCHETYPES } from '../data/seed';
 import { useGameStore } from '../store/useGameStore';
 import type { TrainingFocus } from '../types';
+
+// 방침 저장 = setTrainingFocus → setFocusTimeline이 baseVersion++ (순위·생산·dyn 캐시 무효화).
+// 그 재계산 비용이 다음 도착 화면(시즌 중 FA 영입·대시보드)으로 떠넘겨져 20~30s 프리즈를 유발했다(#62 누락분).
+// → 저장 오버레이 안에서 무효화된 캐시를 미리 데운다(warmCachesForIntro 패턴): 도착 화면은 캐시히트로 즉시.
+function warmAfterPolicyChange(teamId: string): void {
+  try {
+    computeStandings(Number.MAX_SAFE_INTEGER);
+    leagueProduction(Number.MAX_SAFE_INTEGER);
+    const st = useGameStore.getState();
+    availableTeamPlayers(teamId, st.currentDay); // dyn 워밍 — transactions rosterIdsOnDay/availableFAsOnDay가 캐시히트
+  } catch { /* 워밍 실패해도 저장은 완료 — 도착 화면이 폴백 재계산 */ }
+}
 
 const sameFocus = (a: TrainingFocus, b: TrainingFocus): boolean =>
   [...a.primary].sort().join() === [...b.primary].sort().join() &&
@@ -58,8 +73,9 @@ export default function TrainingPolicy() {
       { text: '취소', style: 'cancel' },
       {
         text: '저장',
-        onPress: () => busy.run('코칭스태프가 새 훈련 일정을 짜는 중…', () => {
-          setTrainingFocus(draft);
+        onPress: () => busy.run('새 훈련 방침을 반영해\n전력을 다시 계산하는 중…', () => {
+          setTrainingFocus(draft);          // baseVersion++ — 순위·생산·dyn 캐시 무효
+          warmAfterPolicyChange(teamId);    // 무효화된 캐시를 이 오버레이 안에서 다시 데운다(도착 화면 프리즈 제거)
           showAlert('저장 완료', '오늘부터 새 훈련 방침이 적용됩니다. 지난 경기·성장은 그대로예요.', [
             { text: '확인', onPress: () => router.back() },
           ]);

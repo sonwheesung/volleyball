@@ -2,7 +2,7 @@
 import { Redirect, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, Muted, OvrBadge, Row, Screen, theme, themedStyles } from '../components/Screen';
+import { Button, Card, Loading, Muted, OvrBadge, Row, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { LEAGUE, shortTeamName as shortName } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
 import { restedOnDay } from '../data/rotation';
@@ -12,6 +12,14 @@ import { useGameStore } from '../store/useGameStore';
 
 export default function Exhibition() {
   if (!DEV_TOOLS) return <Redirect href="/(tabs)/" />; // 테스트 경기 — 실전 빌드 차단
+  // 프리뷰 전력이 availableTeamPlayers(dyn) 재계산에 의존 → 세션 중 baseVersion 범프 뒤 진입 프리즈 방지(UI-4).
+  // DEV_TOOLS는 모듈 상수라 위 조기 반환 뒤 훅 순서는 렌더마다 안정(기존 useState/useRouter도 동일).
+  const ready = useDeferredReady(SCREEN_LOADING_MIN_MS);
+  if (!ready) return <Loading title="테스트 경기" variant="list" />;
+  return <ExhibitionInner />;
+}
+
+function ExhibitionInner() {
   const router = useRouter();
   const currentDay = useGameStore((s) => s.currentDay);
   const myId = useGameStore((s) => s.selectedTeamId);
