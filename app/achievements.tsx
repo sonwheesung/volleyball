@@ -71,7 +71,8 @@ function AchievementsInner() {
             <Text style={styles.catHead}>{CATEGORY_ICON[cat]} {cat} <Text style={styles.catCount}>{catDone}/{items.length}</Text></Text>
             {items.map((s) => (
               <View key={s.ach.id} style={[styles.ach, s.unlocked && styles.achDone]}>
-                <Text style={[styles.icon, !s.unlocked && styles.iconLocked]}>{s.unlocked ? '✓' : '🔒'}</Text>
+                {/* 달성 아이콘: 어두운 배경에 묻히던 체크(✓)→트로피(색 있는 이모지라 잘 보임, 테스터 제보 2026-07-11) */}
+                <Text style={[styles.icon, !s.unlocked && styles.iconLocked]}>{s.unlocked ? '🏆' : '🔒'}</Text>
                 <View style={{ flex: 1 }}>
                   <Text style={[styles.title, s.unlocked && { color: theme.text }]}>{s.ach.title}</Text>
                   <Text style={styles.desc}>{s.ach.desc}</Text>
