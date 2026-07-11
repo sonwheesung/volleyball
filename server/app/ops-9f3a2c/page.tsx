@@ -284,7 +284,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === 'coupons' && <Coupons coupons={coupons} api={api} reload={load} flash={flash} />}
         {tab === 'anns' && <Anns anns={anns} api={api} reload={load} flash={flash} />}
         {tab === 'settings' && <Settings setting={setting} api={api} reload={load} flash={flash} />}
-        {tab === 'tickets' && <Tickets tickets={tickets} api={api} reload={load} />}
+        {tab === 'tickets' && <Tickets tickets={tickets} api={api} reload={load} flash={flash} />}
       </main>
       {toast ? <div className="oc-toast">{toast}</div> : null}
     </div>
@@ -877,7 +877,7 @@ function CouponModal({ coupon, api, reload, flash, onClose }: { coupon: Json | n
 
   if (!editMode && coupon) return (
     <Modal title={String(coupon.code)} sub="쿠폰 상세" onClose={onClose}
-      footer={<><button className="oc-btn ghost" style={{ color: 'var(--dg)', borderColor: 'rgba(255,107,90,.35)', marginRight: 'auto' }} onClick={del} disabled={busy}>삭제</button><button className="oc-btn ghost" onClick={onClose}>닫기</button><button className="oc-btn" onClick={() => setEditMode(true)}>수정</button></>}>
+      footer={<><button className="oc-btn" onClick={() => setEditMode(true)} disabled={busy}>수정</button><button className="oc-btn red" onClick={del} disabled={busy}>삭제</button><button className="oc-btn ghost" onClick={onClose} disabled={busy}>닫기</button></>}>
       <div className="oc-dl">
         <div className="oc-dl-row"><span className="oc-dl-k">코드</span><span className="oc-dl-v mono">{String(coupon.code)}</span></div>
         <div className="oc-dl-row"><span className="oc-dl-k">보상</span><span className="oc-dl-v">{String(coupon.rewardDiamonds)} 💎</span></div>
@@ -1036,7 +1036,7 @@ function Settings({ setting, api, reload, flash }: { setting: Json | null; api: 
   );
 }
 
-function Tickets({ tickets, api, reload }: { tickets: Json[]; api: Api; reload: () => void }) {
+function Tickets({ tickets, api, reload, flash }: { tickets: Json[]; api: Api; reload: () => void; flash: (m: string) => void }) {
   const [cat, setCat] = useState('all');
   const [st, setSt] = useState<'all' | 'pending' | 'open' | 'reviewing' | 'answered'>('pending');
   const [sel, setSel] = useState<Json | null>(null);
@@ -1080,38 +1080,44 @@ function Tickets({ tickets, api, reload }: { tickets: Json[]; api: Api; reload: 
           </tbody>
         </table>
       )}
-      {sel ? <TicketModal t={sel} api={api} reload={reload} onClose={() => setSel(null)} /> : null}
+      {sel ? <TicketModal t={sel} api={api} reload={reload} flash={flash} onClose={() => setSel(null)} /> : null}
     </div>
   );
 }
 
-function TicketModal({ t, api, reload, onClose }: { t: Json; api: Api; reload: () => void; onClose: () => void }) {
+function TicketModal({ t, api, reload, flash, onClose }: { t: Json; api: Api; reload: () => void; flash: (m: string) => void; onClose: () => void }) {
   // 상태는 select로 선택(기본값=현재 상태). 바꿔도 즉시 적용 X — [저장]을 눌러야만 반영(관리자 UX 원칙: 모든 수정은 저장 버튼).
   const curStatus = (() => { const s = String(t.status ?? 'open'); return s === 'replied' || s === 'resolved' ? 'answered' : s; })();
+  const origReply = (t.reply as string) ?? '';
   const [status, setStatus] = useState(curStatus);
-  const [reply, setReply] = useState((t.reply as string) ?? '');
+  const [reply, setReply] = useState(origReply);
   const [amount, setAmount] = useState('');
   const [snap, setSnap] = useState('');
-  const [msg, setMsg] = useState('');
-  const dirty = status !== curStatus || reply !== ((t.reply as string) ?? '');
-  // 답변+상태 함께 저장(단일 저장 버튼). 저장 전엔 서버 무변경.
+  const [msg, setMsg] = useState(''); // 인라인 에러/검증 전용(성공은 상단 토스트로)
+  const [busy, setBusy] = useState(false);
+  const dirty = status !== curStatus || reply !== origReply;
+  // 답변+상태 함께 저장(단일 저장 버튼). 성공 시 토스트 + 모달 닫기 + 목록 갱신. 실패 시 인라인 에러(모달 유지).
   const saveReply = async () => {
+    setBusy(true); setMsg('');
     const r = await api('/api/admin/ticket/reply', { method: 'POST', body: JSON.stringify({ ticketId: t.id, reply, status }) });
-    setMsg(r.body.ok ? '저장됨' : `실패(${r.status})`);
-    if (r.body.ok) reload();
+    setBusy(false);
+    if (r.body.ok) { flash(reply !== origReply ? '답변이 저장되었습니다' : '상태가 변경되었습니다'); reload(); onClose(); }
+    else setMsg(`저장 실패 (${r.status})`);
   };
   const doRefund = async () => {
     const amt = Math.floor(Number(amount));
     if (!amt || amt <= 0) { setMsg('환불 다이아를 입력하세요'); return; }
     const note = reply.trim() || '환불 처리';
+    setBusy(true); setMsg('');
     const r = await api('/api/admin/refund', { method: 'POST', body: JSON.stringify({ userId: t.userId, amount: amt, note, ticketId: t.id, key: `refund:ticket:${t.id}` }) });
-    setMsg(r.body.ok ? `환불 반영 · 잔액 ${r.body.balance}💎${r.body.applied ? '' : ' (이미 처리됨)'}` : `환불 실패(${r.status}: ${r.body.reason ?? ''})`);
-    reload();
+    setBusy(false);
+    if (r.body.ok) { flash(`환불 반영됨 · 잔액 ${r.body.balance}💎${r.body.applied ? '' : ' (이미 처리됨)'}`); reload(); onClose(); }
+    else setMsg(`환불 실패 (${r.status}: ${r.body.reason ?? ''})`);
   };
   const viewSnap = async () => { const r = await api(`/api/admin/ticket/snapshot?ticketId=${t.id}`); setSnap(r.body.snapshot ? JSON.stringify(r.body.snapshot, null, 2) : '(진단 스냅샷 없음)'); };
   return (
     <Modal wide title="문의 상세" sub={`${CAT[String(t.category)] ?? String(t.category)} · ${String(t.displayName ?? t.userId)}`} onClose={onClose}
-      footer={<><button className="oc-btn sm" onClick={saveReply} disabled={!dirty}>저장</button><button className="oc-btn ghost sm" onClick={onClose}>닫기</button></>}>
+      footer={<><button className="oc-btn sm" onClick={saveReply} disabled={!dirty || busy}>{busy ? '처리 중…' : '저장'}</button><button className="oc-btn ghost sm" onClick={onClose} disabled={busy}>닫기</button></>}>
       <div className="oc-row" style={{ gap: 8 }}>
         <span className="oc-badge ac">{CAT[String(t.category)] ?? String(t.category)}</span>
         <StatusBadge s={String(t.status)} />
@@ -1134,11 +1140,11 @@ function TicketModal({ t, api, reload, onClose }: { t: Json; api: Api; reload: (
         {String(t.category) === 'refund' ? (
           <>
             <input className="oc-input" placeholder="환불 💎" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} style={{ width: 110 }} />
-            <button className="oc-btn red" onClick={doRefund}>환불(회수)</button>
+            <button className="oc-btn red" onClick={doRefund} disabled={busy}>환불(회수)</button>
           </>
         ) : null}
         <button className="oc-btn ghost" onClick={viewSnap}>진단 스냅샷</button>
-        {msg ? <span className="oc-mut" style={{ fontSize: 12.5 }}>{msg}</span> : null}
+        {msg ? <span style={{ fontSize: 12.5, color: 'var(--dg)', fontWeight: 700 }}>{msg}</span> : null}
       </div>
       {snap ? <pre className="oc-pre">{snap}</pre> : null}
     </Modal>
