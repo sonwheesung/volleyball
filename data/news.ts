@@ -181,7 +181,7 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
     close: ['챔피언결정전 직행 티켓이 손에 들어왔다.', '정규리그 1위의 프리미엄을 안고 봄배구를 기다린다.', '남은 건 왕좌를 향한 마지막 한 걸음이다.'],
   },
   clinchPo: { // 포스트시즌(봄배구) 진출 확정 — 안도와 기대
-    open: ['봄배구로 가는 문이 열렸다.', '가을부터 달려온 여정이 결실을 맺었다.', '포스트시즌 진출이 수학적으로 굳어졌다.'],
+    open: ['봄배구로 가는 문이 열렸다.', '가을부터 달려온 여정이 결실을 맺었다.', '포스트시즌 진출을 일찌감치 확정했다.'],
     close: ['이제 더 높은 곳을 바라본다.', '단기전을 향한 채비가 시작됐다.', '정규리그 마지막까지 순위 싸움은 계속된다.'],
   },
   clinchElim: { // 포스트시즌 탈락 확정 — 담담한 톤(축포 금지)
@@ -635,14 +635,14 @@ export function buildNewsFeed(
         (t) => `정규리그 우승(1위) 확정 — ${t} 챔피언결정전으로`,
         (t) => `${t}, ${S}시즌 정규 1위 굳혔다 — 봄배구 직행`,
       ], ckey, name), true, ev.teamId,
-        body3('clinchTitle', ckey, `${name}이(가) ${S}시즌 정규리그 1위를 확정하며 챔피언결정전에 직행했다. 남은 경기 결과와 무관하게 최종 1위가 수학적으로 확정됐다.`), ev.teamId, ev.day);
+        body3('clinchTitle', ckey, `${name}이(가) ${S}시즌 정규리그 1위를 확정하며 챔피언결정전에 직행했다. 남은 경기 결과와 관계없이 최종 1위를 조기 확정했다.`), ev.teamId, ev.day);
     } else if (ev.kind === 'po') {
       push(currentSeason, 'clinch', vh([
         (t) => `${t}, ${S}시즌 포스트시즌 진출 확정`,
         (t) => `${t} 봄배구 확정 — 포스트시즌行`,
         (t) => `포스트시즌 진출 확정 — ${t}`,
       ], ckey, name), mine, ev.teamId,
-        body3('clinchPo', ckey, `${name}이(가) ${S}시즌 포스트시즌 진출을 확정했다. 남은 경기 결과와 무관하게 상위 3위 안이 수학적으로 보장됐다.`), ev.teamId, ev.day);
+        body3('clinchPo', ckey, `${name}이(가) ${S}시즌 포스트시즌 진출을 확정했다. 남은 경기 결과와 관계없이 상위 3위 안을 일찌감치 확정했다.`), ev.teamId, ev.day);
     } else {
       push(currentSeason, 'clinch', vh([
         (t) => `${t}, ${S}시즌 포스트시즌 탈락 확정`,
