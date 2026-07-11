@@ -3,7 +3,7 @@ import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
 import { Text } from 'react-native';
 import { useFonts } from 'expo-font';
-import { SafeAreaProvider } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
 import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { theme, useThemeMode } from '../components/Screen';
 import { loadThemeMode } from '../components/theme';
@@ -105,7 +105,7 @@ export default function RootLayout() {
   }
 
   return (
-    <SafeAreaProvider key={mode} style={{ flex: 1, backgroundColor: theme.bg }}>
+    <SafeAreaProvider key={mode} initialMetrics={initialWindowMetrics} style={{ flex: 1, backgroundColor: theme.bg }}>
       <StatusBar style={mode === 'light' ? 'dark' : 'light'} />
       <ThemeProvider value={makeNavTheme(mode)}>
       <SpotlightProvider>

@@ -67,6 +67,9 @@ export default function Staff() {
 
   const head = getTeamCoach(teamId);
   const acting = !!head?.id.startsWith('acting_');
+  // 정식 감독이 이미 있으면 새 감독을 바로 영입할 수 없다 — 먼저 경질해야(2026-07-11 테스터: 자동 교체가 실수 유발).
+  //   대행/공석(acting || !head)은 정식 감독을 세우는 절차라 영입 허용.
+  const hasHeadCoach = !!head && !acting;
   const myRow = computeStandings(displayCutoff(currentDay, results, teamId ?? undefined)).find((r) => r.teamId === teamId); // 결과 인지 표시 컷오프(§3.3)
   const slumping = !!myRow && firedMidSeason(myRow.wins, myRow.losses); // 시즌 중 부진(경질 권유)
   const asst = teamAssistants(teamId);
@@ -78,11 +81,16 @@ export default function Staff() {
   const overBudget = (msg: string) => showAlert('스태프 예산 초과', `${msg}\n예산 여유: ${formatMoney(left)}`);
 
   // 코치/감독 = 무거움(시즌 재계산) → 로딩 뒤에서 실행. 스카우터 = 즉시. 모두 confirm으로 묻는다.
-  const tryHireCoach = (id: string, name: string, salary: number) =>
+  const tryHireCoach = (id: string, name: string, salary: number) => {
+    if (hasHeadCoach) { // 정식 감독 재직 중 — 경질 먼저(위 감독 카드의 "감독 경질")
+      showAlert('먼저 감독을 경질하세요', `${head!.name} 감독이 재직 중입니다.\n새 감독을 영입하려면 위에서 현재 감독을 먼저 경질해 주세요.`);
+      return;
+    }
     showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)} · 3년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
       { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다. 새 감독의 성향으로 팀이 움직입니다.`); }) },
     ]);
+  };
   const tryHireAsst = (id: string, name: string, salary: number) =>
     showAlert('코치 영입', `${name} 코치를 영입하시겠습니까?\n연봉 ${formatMoney(salary)}\n\n새 코치를 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
@@ -159,6 +167,9 @@ export default function Staff() {
       <View style={{ marginTop: 8, marginBottom: 4 }}>
         <IconLabel icon="clipboard-outline" color={theme.violet}>감독 시장 (프리에이전트)</IconLabel>
       </View>
+      {hasHeadCoach ? (
+        <Muted style={{ color: theme.warn, marginBottom: 4 }}>현재 감독을 먼저 경질해야 새 감독을 영입할 수 있습니다.</Muted>
+      ) : null}
       {availableCoaches(teamId).map((c) => (
         <Card key={c.id}>
           <Row>
@@ -166,7 +177,7 @@ export default function Staff() {
               <Title>{c.name}</Title>
               <Muted style={{ marginTop: 2 }}>{STYLE_LABEL[c.style]} · 카리스마 {c.charisma} · {c.archetype} · 연봉 {formatMoney(c.salary)}</Muted>
             </View>
-            <Button label="영입" onPress={() => tryHireCoach(c.id, c.name, c.salary)} />
+            <Button label="영입" onPress={() => tryHireCoach(c.id, c.name, c.salary)} disabled={hasHeadCoach} />
           </Row>
         </Card>
       ))}

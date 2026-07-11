@@ -76,7 +76,8 @@ function SquadInner() {
           제목 텍스트가 아니라 선수 리스트다. 링이 "선수 목록" 섹션 전체를 프레이밍하도록 함께 래핑(RosterList 동작 불변). */}
       <SpotlightTarget id="squad-top">
         <Title>선수 ({players.length}명)</Title>
-        <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다. ● 경기감각 · <Text style={{ color: theme.bad, fontWeight: '700' }}>부상·정지</Text> 결장 · 🪑 벤치 지시</Muted>
+        <Muted>이름을 누르면 상세 스탯·면담을 볼 수 있습니다.</Muted>
+        <Muted style={{ marginTop: 1 }}>● 경기감각 · <Text style={{ color: theme.bad, fontWeight: '700' }}>부상·정지</Text> 결장 · 🪑 벤치 지시</Muted>
         <RosterList players={players} decor={decor} starterIds={starterIds} />
       </SpotlightTarget>
       <SpotlightOverlay screen="tab-squad" />
