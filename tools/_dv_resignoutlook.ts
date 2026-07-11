@@ -11,8 +11,8 @@ import { resetLeagueBase, setMyTeamStaff, LEAGUE, getEvolvedTeamPlayers } from '
 import { resignOutlookNow, discontentNow } from '../data/owner';
 import { refuseResignProb, sustainedBenchRefuse, PROMISE_BREACH_REFUSE, starterPromised, interviewEffects } from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
-import { marketValue } from '../engine/salary';
-import { salaryEraNow } from '../data/awardSalary';
+import { marketVal } from '../data/awardSalary';
+import { getPlayerProduction } from '../data/production';
 import type { Contract } from '../types';
 
 let fail = 0;
@@ -46,12 +46,13 @@ ok(checked >= 3, `표본 충분(${checked})`);
 ok(mismatch === 0, `prob == 엔진 산출(refuseResignProb+가산항) — UI 위임(불일치 ${mismatch})`);
 ok(bandBad === 0, `band 경계 0.15/0.45 정합(불일치 ${bandBad})`);
 
-// (3) override money 반영 — money 성향 선수에 stingy→전망 악화, generous→개선
-const era = salaryEraNow();
+// (3) override money 반영 — money 성향 선수에 stingy→전망 악화, generous→개선.
+//   ★ 오퍼 배율은 **오퍼를 만든 시장가**(marketVal=prod+수상 반영)로 산정해야 lowOfferRefuse(FA §2.5c-격상)와 정합
+//     (marketValue[무prod]로 만들면 수상·호성적 선수의 1.2×가 실제 시장가의 <0.95× → 저연봉 가산 발화 → 전망 악화가 정답인데 이 단순 단조성 테스트가 오판).
 let mTested = 0, mUp = 0, mDown = 0;
 for (const p of players) {
   if (prefWeightsOf(p).money < 0.25) continue;
-  const mv = marketValue(p, era);
+  const mv = marketVal(p, getPlayerProduction(p.id, DAY));
   const base = resignOutlookNow(p, my, DAY, interviews, season).prob;
   const stingy: Record<string, Contract> = { [p.id]: { salary: Math.round(mv * 0.3), years: 3, remaining: 3, signedAtAge: p.age } };
   const gen: Record<string, Contract> = { [p.id]: { salary: Math.round(mv * 1.2), years: 3, remaining: 3, signedAtAge: p.age } };

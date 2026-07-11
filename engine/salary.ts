@@ -29,6 +29,23 @@ export function resignOptions(p: Player, market: number): ResignOption[] {
     { key: 'short', label: '짧게', salary: Math.min(cap, r100(market * 0.85)), years: shortYears, note: `−15% · ${shortYears}년 — 싸게·다음 시즌 시장가 오르면 연봉 불만 불씨` },
   ];
 }
+
+// 재계약 오퍼 빌더(FA §2.5c-격상, 2026-07-11) — 3 프리셋을 FA식 슬라이더로. 연봉=시장가 배율 0.8×~1.3×(개인상한 클램프).
+//   기본값(원탭)=표준=min(cap, r100(market))(1.0×) 그대로. 레버는 옵트인(관전형). FA offerSalaryBounds와 같은 결(배율 레인지·상한 클램프).
+export const RESIGN_MULT_MIN = 0.8;
+export const RESIGN_MULT_MAX = 1.3;
+export const RESIGN_MULT_STEP = 0.05;
+export function resignSalaryBounds(p: Player, market: number): { min: number; max: number; step: number; standard: number } {
+  const r100 = (x: number) => Math.round(x / 100) * 100;
+  const cap = maxSalaryFor(p);                              // 개인 상한(프랜차이즈 11억 / 8억)
+  return {
+    min: Math.min(cap, Math.max(MIN_SALARY, r100(market * RESIGN_MULT_MIN))),
+    max: Math.min(cap, Math.max(r100(market), r100(market * RESIGN_MULT_MAX))), // 상한은 최소 시장가엔 도달(캡이 시장가보다 낮은 초거물 예외)
+    step: Math.max(100, r100(market * RESIGN_MULT_STEP)),
+    standard: Math.min(cap, r100(market)),                  // 원탭 기본값(표준=시장가)
+  };
+}
+
 const MIN_SALARY = 3000;     // 최저 (0.3억)
 const AWARD_BONUS = 0.25;    // 수상 이력 최대 프리미엄(+25%) — MVP·베스트7 누적 스타는 몸값↑(SALARY 2장)
 

@@ -159,6 +159,32 @@ export function sustainedBenchRefuse(playRatio: number, weight: number): number 
   return Math.min(0.35, Math.max(0, 1 - playRatio) * 0.45 * weight);
 }
 
+// ── 재계약 오퍼 레버(FA §2.5c-격상, 2026-07-11) — 저연봉 오퍼 거부 가산 + 주전보장 완화. 공유 primitive. ──
+// buildOwnerFx(data/owner)·resignOutlookNow가 이 두 순수 함수를 그대로 써 **미리보기=결과**를 자동 보장한다(재구현 금지).
+
+/** 저연봉 재계약 오퍼 거부 가산 — 오퍼 연봉이 시장가(R0) 아래일수록, w.money에 비례해 거부↑.
+ *  기존 money 문턱(`discontentOf`: salaryRatio<0.75 && w.money≥0.25)과 **독립 가산**: 비-money 아키타입도 w.money만큼
+ *  반응해 '최저가+주전보장' 콤보의 공짜 락업(우회)을 막는다. salaryRatio ≥ R0(표준=시장가=1.0×)이면 **정확히 0**
+ *  → 표준 오퍼·무오퍼 경로 0드리프트(bit-동일). K·R0는 밸런스 측정(`tools/_ms_resignfeedback.ts` ④)으로 고정. */
+export const LOW_OFFER_R0 = 0.95;   // 이 배율(시장가 대비) 미만 오퍼부터 거부 가산 시작. 표준(1.0×)은 무가산.
+export const LOW_OFFER_K = 2.0;     // 가산 계수(측정 고정 — 0.8× vs 1.0× 델타 단조·유의)
+export function lowOfferRefuse(salaryRatio: number, wMoney: number): number {
+  return LOW_OFFER_K * Math.max(0, wMoney) * Math.max(0, LOW_OFFER_R0 - salaryRatio);
+}
+
+/** 재계약 오퍼 '주전 보장' 레버 = **출전 불만(minutes) 완화량**. 완화 대상 = `refuseResignProb`의 minutes 기여 +
+ *  `sustainedBenchRefuse`뿐 — **breach(파기)·lowOffer·비-minutes 불만엔 무영향**(채널 분리: 파기=기존 계약 flag의
+ *  이번 시즌 배신, 완화=이번 오퍼 flag의 미래 약속. 보장→벤치→재보장 세탁 봉인).
+ *  면담 starter 카드 하향(refuseBias<0)과 **합산 상한 `GUARANTEE_RELIEF_CAP`**(과완화·중복 하향 차단). 완화 후에도
+ *  `MINUTES_RELIEF_FLOOR` 잔여 거부를 남긴다(약속=확정 잔류 금지). */
+export const MINUTES_GUARANTEE_RELIEF = 0.25; // 오퍼 보장이 상쇄하는 출전 불만(원값)
+export const GUARANTEE_RELIEF_CAP = 0.25;     // (면담 카드 하향 + 보장 완화) 합산 상한(≈−0.25급)
+export const MINUTES_RELIEF_FLOOR = 0.05;     // 완화해도 남는 잔여 거부(약속 ≠ 확정 잔류)
+export function guaranteeRelief(refuseBias: number): number {
+  const cardRelief = Math.max(0, -refuseBias);  // 면담 성공 카드의 하향분(음수 refuseBias) — 이미 base에 반영됨
+  return Math.max(0, Math.min(MINUTES_GUARANTEE_RELIEF, GUARANTEE_RELIEF_CAP - cardRelief));
+}
+
 // ─── 감독 벤치 건의 ───────────────────────────────────────────
 
 export type BenchReason = 'noResign' | 'form' | 'prospect';

@@ -6,6 +6,7 @@ import {
   discontentOf, moodOf, popularityOf, fanbase, playerFans, fanOverlapRatio,
   interviewEffects, refuseResignProb, sustainedBenchRefuse, sinkingShipBias,
   starterPromised, PROMISE_BREACH_REFUSE, releaseUnrestBias,
+  lowOfferRefuse, guaranteeRelief, MINUTES_RELIEF_FLOOR,
   type DiscontentTopic, type Mood, type SitCause, type Fanbase, type InterviewLog, type OwnerFx,
 } from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
@@ -15,11 +16,11 @@ import { SEASON_DAYS } from '../engine/calendar';
 import { buildLineup } from '../engine/lineup';
 import { overall } from '../engine/overall';
 import { marketValue, resignOptions } from '../engine/salary';
-import { salaryEraNow } from './awardSalary';
+import { salaryEraNow, marketVal } from './awardSalary';
 import { formFactor, formGrade } from '../engine/form';
 import { awardHistoryOf } from './awards';
 import { computeStandings } from './standings';
-import { leagueProduction } from './production';
+import { leagueProduction, getPlayerProduction } from './production';
 import { formFactorOnDay, rosterIdsOnDay, seasonScandals, injuredOnDay, suspendedOnDay, availableTeamPlayers, getTxContext } from './dynamics';
 import { restedOnDay } from './rotation';
 import { SCANDAL_POP_FACTOR } from '../engine/scandal';
@@ -151,13 +152,33 @@ export function buildOwnerFx(
     // 공약 파기(OWNER_SYSTEM 1.3 · FA_SYSTEM §2.8 Phase2): '주전 보장' 약속(면담 카드 OR FA 오퍼 레버)을 했는데
     //   여전히 출전 불만(=벤치) → 배신. 거부 급등(성공 보정 상쇄+α). FA 보장은 계약 flag(p.contract.starterGuarantee)가
     //   두 번째 출처 — faOffers가 오프시즌 후 비워져도 계약에 남아 이후 시즌 벤치까지 파기를 물린다. 미보장=undefined면 무변.
+    // 파기(breach) 채널 = **기존 계약**의 주전보장(이번 시즌 배신) — 면담 카드 OR p.contract.starterGuarantee. 이번 오퍼로 세탁 불가.
     const promisedStarter = starterPromised(interviews, season, id) || !!p.contract.starterGuarantee;
     const breach = topic === 'minutes' && promisedStarter ? PROMISE_BREACH_REFUSE : 0;
     // 방출된 친한 동료(positive affinity)만큼 추가 동요(+) — 절친 방출일수록 강하게.
     let friendLeave = 0;
     for (const rp of releasedPlayers) friendLeave += Math.max(0, affinity(p, rp, bonds[pairKey(id, rp.id)] ?? 0, false));
     const relTerm = REL_LEAVE_K * friendLeave;
-    const prob = refuseResignProb(topic, weight, fx.refuseBias[id] ?? 0) + sinkingShipBias(fanScore) + accum + breach + unrest + relTerm;
+    const refuseBias = fx.refuseBias[id] ?? 0;
+    // 오퍼 레버(FA §2.5c-격상, resignOutlookNow와 **공유 primitive** — 미리보기=결과). 대기 중 override(이번 오퍼)에만 반응.
+    //   저연봉 가산(lowOfferRefuse) + 주전보장 완화(guaranteeRelief). 무오퍼·표준(1.0×·보장off)이면 둘 다 0 → 전후 bit-동일(0드리프트).
+    const offer = overrides[id];
+    let lowRefuse = 0, relief = 0;
+    if (offer) {
+      const mkt = marketVal(p, getPlayerProduction(id, SEASON_END_DAY));
+      lowRefuse = lowOfferRefuse(offer.salary / Math.max(1, mkt), prefWeightsOf(p).money);
+      // 완화 채널 = **이번 오퍼**의 주전보장(override.starterGuarantee) — minutes 불만만 완화(breach는 위 기존 계약 flag, 무관).
+      if (topic === 'minutes' && offer.starterGuarantee) relief = guaranteeRelief(refuseBias);
+    }
+    let prob: number;
+    if (relief > 0) {
+      // 완화는 minutes 기여(refuseResignProb+accum)에만. breach·팀단위 항(sinking/unrest/relTerm)·lowRefuse는 불변. 잔여 하한 유지.
+      const relaxed = Math.max(MINUTES_RELIEF_FLOOR, refuseResignProb(topic, weight, refuseBias) + accum - relief);
+      prob = relaxed + sinkingShipBias(fanScore) + breach + unrest + relTerm + lowRefuse;
+    } else {
+      // relief 0·lowRefuse 0(무오퍼/표준)이면 `+ 0.0`이라 기존 식과 bit-동일.
+      prob = refuseResignProb(topic, weight, refuseBias) + sinkingShipBias(fanScore) + accum + breach + unrest + relTerm + lowRefuse;
+    }
     if (prob > 0) refuseProb[id] = Math.min(0.95, prob);
   }
   return { refuseProb, offerBias: fx.offerBias };
@@ -191,13 +212,28 @@ export function resignOutlookNow(
   const fx = interviewEffects(interviews, season);
   const refuseBias = fx.refuseBias[p.id] ?? 0;
   const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight) : 0;
+  // 파기(breach) 채널 = **기존 계약**의 주전보장(이번 시즌 배신) — 이번 오퍼로 세탁 불가(채널 분리).
   const promisedStarter = starterPromised(interviews, season, p.id) || !!p.contract.starterGuarantee;
   const breach = topic === 'minutes' && promisedStarter ? PROMISE_BREACH_REFUSE : 0;
-  const prob = Math.min(0.95, refuseResignProb(topic, weight, refuseBias) + accum + breach);
+  // 오퍼 레버(FA §2.5c-격상) — buildOwnerFx와 **공유 primitive**(미리보기=결과). 이번 오퍼(override)에만 반응.
+  //   무오퍼·표준(1.0×·보장off)이면 lowRefuse·relief 둘 다 0 → `+ 0.0`이라 기존 식과 bit-동일(0드리프트).
+  const offer = overrides?.[p.id];
+  let lowRefuse = 0, relief = 0;
+  if (offer) {
+    const mkt = marketVal(p, getPlayerProduction(p.id, day));
+    lowRefuse = lowOfferRefuse(offer.salary / Math.max(1, mkt), prefWeightsOf(p).money);
+    // 완화 채널 = **이번 오퍼**의 주전보장(override.starterGuarantee). minutes 불만만 완화(breach 무관).
+    if (topic === 'minutes' && offer.starterGuarantee) relief = guaranteeRelief(refuseBias);
+  }
+  const minutesPortion = refuseResignProb(topic, weight, refuseBias) + accum;
+  const relaxed = relief > 0 ? Math.max(MINUTES_RELIEF_FLOOR, minutesPortion - relief) : minutesPortion;
+  const prob = Math.min(0.95, relaxed + breach + lowRefuse);
   const band: ResignBand = prob >= 0.45 ? 'risk' : prob >= 0.15 ? 'fluid' : 'stable';
   const chips: string[] = [];
   if (topic) chips.push(TOPIC_BADGE[topic]);          // 불만 주제(연봉/출전/우승/연고)
   if (breach > 0) chips.push('주전 공약 파기');        // 주전 보장 약속 후 벤치 = 배신(거부 급등)
+  if (relief > 0) chips.push('주전보장 약속');          // 이번 오퍼의 주전보장이 출전 불만을 달램(완화)
+  if (lowRefuse > 0.01) chips.push('저연봉 제안');      // 시장가 아래 오퍼 = 거부 가산(레버 대가)
   if (accum > 0.12) chips.push('출전 누적 불만');       // 시즌 내내 묵힌 출전 불만
   if (refuseBias > 0.01) chips.push('면담 역효과');     // 실패 면담이 정을 떨어뜨림
   else if (refuseBias < -0.01) chips.push('면담으로 달램'); // 성공 면담이 마음을 붙잡음

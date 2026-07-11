@@ -5,7 +5,7 @@ import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
-import { ActionSheet } from '../components/Popup';
+import { ActionSheet, Popup } from '../components/Popup';
 import { getEvolvedTeamPlayers, getPlayer, evolveOnDay, LEAGUE } from '../data/league';
 import { rosterIdsOnDay } from '../data/dynamics';
 import { teamRelations } from '../data/relationships';
@@ -16,9 +16,10 @@ import { overallRaw } from '../engine/overall';
 import { isFranchise, maxSalaryFor, LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_MIN, severanceFee } from '../engine/transactions';
 import { assignFAGrades, willBeFA } from '../engine/faMarket';
-import { contractStatus, formatMoney, resignOptions } from '../engine/salary';
+import { contractStatus, formatMoney, resignSalaryBounds } from '../engine/salary';
+import { capContractYears } from '../engine/retire';
 import { marketVal } from '../data/awardSalary';
-import { resignOutlookNow, resignOptionOutlooks, resignCaptionOf, resignReactionCopy, type ResignBand } from '../data/owner';
+import { resignOutlookNow, resignCaptionOf, resignReactionCopy, type ResignBand } from '../data/owner';
 import { useGameStore } from '../store/useGameStore';
 import type { ReSignReject } from '../store/useGameStore';
 import type { Contract, Player } from '../types';
@@ -30,7 +31,6 @@ const BAND_META: Record<ResignBand, { label: string; color: string }> = {
   fluid: { label: '유동', color: theme.warn },
   risk: { label: '위험', color: theme.bad },
 };
-type ResignOpt = ReturnType<typeof resignOptions>[number];
 
 // store reSign 거부 사유 → 사용자 문구(조용한 거부 제거). 사전체크가 못 잡은 잔여 케이스의 안전망.
 function resignRejectMessage(p: Player, reason: ReSignReject): string {
@@ -100,29 +100,21 @@ function ContractsInner() {
   // 시장가·저평가 라벨·재계약 오퍼 가격은 **표시 컷오프**(§3.3 displayCutoff) — player 상세와 동일 데이터 경로(이원화 해소, 2026-07-07).
   const displayDay = displayCutoff(currentDay, results, teamId);
 
-  // 재계약 오퍼 선택 → 다크 글래스 액션시트(네이티브 흰 Alert 대체, 테마 통일 2026-07-01). 오퍼 선택 → 확정 시트 2단계.
+  // 재계약 오퍼 빌더 열기(FA §2.5c-격상) — 3 프리셋을 FA식 슬라이더로. 기본값=표준(시장가·3년·보장off, 원탭 상당).
   const doResign = (p: Player) => {
     const market = marketVal(p, getPlayerProduction(p.id, displayDay));
-    // 표준 → 후하게 → 짧게 순으로 정렬(추천=표준 최상단·강조). 후하게=충성·길게 / 짧게=싸게·곧 재협상(FA 2.5b)
-    const order = ['표준', '후하게', '짧게'];
-    const opts = [...resignOptions(p, market)].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
-    // 옵션별 잔류 전망(FA §2.5c-격상 step2) — 엔진 위임(resignOptionOutlooks=옵션 계약 override→resignOutlookNow). money 불만만 갈림.
-    const bandByKey: Record<string, ResignBand> = {};
-    for (const o of resignOptionOutlooks(p, market, teamId, currentDay, interviews, season)) bandByKey[o.key] = o.outlook.band;
-    const topic = resignOutlookNow(p, teamId, currentDay, interviews, season, overrides).topic;
-    setResignSheet({ p, market, opts, bandByKey, caption: resignCaptionOf(topic) });
+    const b = resignSalaryBounds(p, market);
+    const stdYears = capContractYears(p.age + 1, 3); // 표준=3년(정년 캡)
+    setBuilder({ p, market, salary: b.standard, years: stdYears, guarantee: false });
   };
-  // 오퍼 선택 → 캡 체크 후 확정 시트 오픈(캡 초과는 즉시 안내).
+  // 오퍼 확정(빌더 '제안') → 캡 체크 후 확정 시트 오픈(캡 초과는 즉시 안내).
   // 사전체크 = store reSign 게이트와 **동일 규칙**(capPayroll §7 · TRANSACTION_SYSTEM §7의 6번째 사이트):
   //   그날 유효 명단(rosterIdsOnDay — 시즌 중 영입 포함·방출 제외)에 재계약 override(이 선수=새 오퍼)·시즌
   //   영입비(inSeasonCost)·배신 웃돈을 반영한다. 개인 상한(maxSalaryFor)·프랜차이즈 팀캡 예외까지 store와 일치.
-  //   과거엔 payroll(getEvolvedTeamPlayers=시즌초 명단) base 합만 봐 시즌 중 영입비를 빠뜨려 store보다 느슨 →
-  //   캡 근접 + 시즌 중 영입 보유 시 UI는 "여유 있음"으로 통과시키고 store가 조용히 거부하던 걸 통일한다(허위 여유 0).
-  const pickOffer = (p: Player, o: ResignOpt, band: ResignBand) => {
-    const contract: Contract = { salary: o.salary, years: o.years, remaining: o.years, signedAtAge: p.age };
+  const pickOffer = (p: Player, contract: Contract, band: ResignBand, label: string, note: string) => {
     // ① 개인 연봉 상한(MAX_SALARY 8억 / 프랜차이즈 11억) — store 1차 게이트와 동일
-    if (o.salary > maxSalaryFor(p)) {
-      showAlert('개인 연봉 상한 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 개인 상한(${formatMoney(maxSalaryFor(p))})을 넘습니다.`);
+    if (contract.salary > maxSalaryFor(p)) {
+      showAlert('개인 연봉 상한 초과', `${p.name} ${label}(${formatMoney(contract.salary)})이 개인 상한(${formatMoney(maxSalaryFor(p))})을 넘습니다.`);
       return;
     }
     // ② 팀 캡 — 프랜차이즈 재계약은 팀캡 예외(store cd3d99a와 일치). 비프랜차이즈만 capPayroll로 하드 체크.
@@ -133,11 +125,12 @@ function ContractsInner() {
       const capPlayers = myIds.map((id) => evolveOnDay(id, currentDay)).filter((pl): pl is Player => !!pl);
       const nextOverrides = { ...overrides, [p.id]: contract };
       if (capPayroll(capPlayers, nextOverrides, inSeasonSigned, isBetrayed) > LEAGUE_CAP) {
-        showAlert('샐러리캡 초과', `${p.name} ${o.label}(${formatMoney(o.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
+        showAlert('샐러리캡 초과', `${p.name} ${label}(${formatMoney(contract.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
         return;
       }
     }
-    setConfirmSheet({ p, o, contract, band });
+    setBuilder(null);
+    setConfirmSheet({ p, contract, band, label, note });
   };
 
   const doRelease = (p: Player) => {
@@ -180,8 +173,8 @@ function ContractsInner() {
 
   // 행을 누르면 처리 메뉴(1행 1선수) — 다크 글래스 액션시트(네이티브 흰 Alert 대체)
   const [manage, setManage] = useState<Player | null>(null);
-  const [resignSheet, setResignSheet] = useState<{ p: Player; market: number; opts: ResignOpt[]; bandByKey: Record<string, ResignBand>; caption: ReturnType<typeof resignCaptionOf> } | null>(null);
-  const [confirmSheet, setConfirmSheet] = useState<{ p: Player; o: ResignOpt; contract: Contract; band: ResignBand } | null>(null);
+  const [builder, setBuilder] = useState<{ p: Player; market: number; salary: number; years: number; guarantee: boolean } | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{ p: Player; contract: Contract; band: ResignBand; label: string; note: string } | null>(null);
   // 제안 직후 결과 피드백(FA §2.5c-격상 step3) — 선수 반응·밴드 변화·"시즌 종료 시 확정" 리마인드
   const [resultSheet, setResultSheet] = useState<{ p: Player; reaction: ReturnType<typeof resignReactionCopy> } | null>(null);
 
@@ -334,31 +327,92 @@ function ContractsInner() {
         ] : []}
       />
 
-      {/* 재계약 오퍼 선택 — 다크 글래스(네이티브 흰 Alert 대체). 표준=강조 + 선수 마음 캡션(3분기) + money면 옵션별 밴드 */}
-      <ActionSheet
-        visible={!!resignSheet}
-        title={resignSheet ? `${resignSheet.p.name} 재계약` : ''}
-        message={resignSheet ? `시장가 ${formatMoney(resignSheet.market)} · ${resignSheet.p.age}세\n${resignSheet.caption.text}` : undefined}
-        onClose={() => setResignSheet(null)}
-        actions={resignSheet ? resignSheet.opts.map((o) => {
-          const rs = resignSheet;
-          const key = o.label === '표준' ? 'standard' : o.label === '후하게' ? 'generous' : 'short';
-          const band = rs.bandByKey[key] ?? 'stable';
-          // money 불만일 때만 옵션별 밴드가 갈리므로 표시(비-money/무불만은 동일 → 깔끔하게 생략, 측정 ② 근거)
-          const bandTag = rs.caption.kind === 'money' ? ` — 잔류 ${BAND_META[band].label}` : '';
-          return {
-            label: `${o.label} · ${formatMoney(o.salary)} · ${o.years}년${bandTag}`,
-            tone: (o.label === '표준' ? 'primary' : 'default') as 'primary' | 'default',
-            onPress: () => pickOffer(rs.p, o, band),
-          };
-        }) : []}
-      />
+      {/* 재계약 오퍼 빌더(FA §2.5c-격상) — 연봉 배율·기간·주전보장 슬라이더. 원탭 기본값=표준(시장가·3년·보장off). 레버는 옵트인. */}
+      <Popup visible={!!builder} onRequestClose={() => setBuilder(null)} dismissable>
+        {builder ? (() => {
+          const b = builder;
+          const bounds = resignSalaryBounds(b.p, b.market);
+          const maxYears = capContractYears(b.p.age + 1, 5);
+          const mult = b.salary / Math.max(1, b.market);
+          const draft: Contract = { salary: b.salary, years: b.years, remaining: b.years, signedAtAge: b.p.age, ...(b.guarantee ? { starterGuarantee: true } : {}) };
+          // 라이브 잔류 전망 — 엔진 위임(단일 resignOutlookNow 호출, 레버 조합 실시간 반응). 대기 override 위에 이 오퍼를 얹어 평가.
+          const outlook = resignOutlookNow(b.p, teamId, currentDay, interviews, season, { ...overrides, [b.p.id]: draft });
+          // 캡션은 '기저 불만'(오퍼 무관 = 무엇으로 마음이 걸렸나)으로 판정 — 보장이 의미 있는지(minutes 불만)와 3분기.
+          const baseTopic = resignOutlookNow(b.p, teamId, currentDay, interviews, season, overrides).topic;
+          const cap = resignCaptionOf(baseTopic);
+          const bm = BAND_META[outlook.band];
+          const label = Math.abs(mult - 1) < 0.001 ? '표준' : mult > 1 ? `후하게 ×${mult.toFixed(2)}` : `짧게 ×${mult.toFixed(2)}`;
+          const note = `${label} · ${formatMoney(b.salary)} · ${b.years}년${b.guarantee ? ' · 주전보장' : ''}`;
+          const guarMeaningful = baseTopic === 'minutes';
+          return (
+            <>
+              <Text style={styles.builderTitle}>{b.p.name} 재계약</Text>
+              <Text style={styles.builderSub}>시장가 {formatMoney(b.market)} · {b.p.age}세{'\n'}{cap.text}</Text>
+
+              <Stepper
+                label="연봉"
+                display={`${formatMoney(b.salary)}  (×${mult.toFixed(2)})`}
+                decOff={b.salary <= bounds.min}
+                incOff={b.salary >= bounds.max}
+                onDec={() => setBuilder({ ...b, salary: Math.max(bounds.min, b.salary - bounds.step) })}
+                onInc={() => setBuilder({ ...b, salary: Math.min(bounds.max, b.salary + bounds.step) })}
+              />
+              <Stepper
+                label="기간"
+                display={`${b.years}년`}
+                decOff={b.years <= 1}
+                incOff={b.years >= maxYears}
+                onDec={() => setBuilder({ ...b, years: Math.max(1, b.years - 1) })}
+                onInc={() => setBuilder({ ...b, years: Math.min(maxYears, b.years + 1) })}
+              />
+              {/* 정직성: 기간은 수락 확률에 무영향(resignOutlookNow는 years 미사용) — 캡 구속·다음 FA 시점만 바뀐다. */}
+              <Muted style={styles.builderHint}>
+                기간은 수락 확률에 영향이 없습니다 — 캡 구속·다음 FA 시점의 트레이드오프입니다.{maxYears < 5 ? ` (나이 상 최대 ${maxYears}년)` : ''}
+              </Muted>
+
+              <Pressable
+                onPress={() => setBuilder({ ...b, guarantee: !b.guarantee })}
+                style={[styles.guarToggle, b.guarantee && { borderColor: theme.good, backgroundColor: theme.good + '18' }]}
+              >
+                <Text style={{ color: b.guarantee ? theme.good : theme.muted, fontWeight: '800', fontSize: 13 }}>
+                  주전 보장 {b.guarantee ? 'ON' : 'OFF'}
+                </Text>
+                <Text style={{ color: theme.muted, fontSize: 11, marginTop: 1, lineHeight: 15 }}>
+                  {guarMeaningful
+                    ? '출전 불만을 달래는 약속입니다 — 지키지 못하고 벤치에 앉히면 배신(재계약 거부 급등)으로 돌아옵니다.'
+                    : '이 선수에겐 의미 없는 약속입니다 (출전 불만 없음) — 켜도 미래 파기 위험만 남습니다.'}
+                </Text>
+              </Pressable>
+
+              {/* 라이브 잔류 전망 — 레버 조합에 실시간 반응(엔진 위임) */}
+              <View style={styles.builderOutlook}>
+                <View style={[styles.bandTag, { borderColor: bm.color, backgroundColor: bm.color + '22' }]}>
+                  <Text style={[styles.bandText, { color: bm.color }]}>잔류 {bm.label}</Text>
+                </View>
+                {outlook.chips.map((c) => (
+                  <View key={c} style={styles.chip}><Text style={styles.chipText}>{c}</Text></View>
+                ))}
+              </View>
+
+              <Pressable
+                onPress={() => pickOffer(b.p, draft, outlook.band, label, note)}
+                style={[styles.applyBtn, { borderColor: theme.accent, backgroundColor: theme.accent + '22' }]}
+              >
+                <Text style={{ color: theme.accent, fontWeight: '800', fontSize: 15 }}>이 오퍼로 제안</Text>
+              </Pressable>
+              <Pressable onPress={() => setBuilder(null)} style={styles.builderCancel}>
+                <Text style={styles.builderCancelTxt}>취소</Text>
+              </Pressable>
+            </>
+          );
+        })() : null}
+      </Popup>
 
       {/* 재계약 제안 — 오퍼일 뿐, 확정(선수 수락)은 시즌 종료 시(FA §2.5c-보완 봉인). store reSign 실패 시 사유 모달(UI-21) */}
       <ActionSheet
         visible={!!confirmSheet}
         title="재계약 제안"
-        message={confirmSheet ? `${confirmSheet.p.name} — ${confirmSheet.o.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.o.salary)} · ${confirmSheet.o.years}년\n${confirmSheet.o.note}\n잔류 전망: ${BAND_META[confirmSheet.band].label}\n\n※ 제안일 뿐입니다 — 불만이 큰 선수는 시즌 종료 시 뿌리치고 FA로 나갈 수 있습니다.` : undefined}
+        message={confirmSheet ? `${confirmSheet.p.name} — ${confirmSheet.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.contract.salary)} · ${confirmSheet.contract.years}년${confirmSheet.contract.starterGuarantee ? ' · 주전보장' : ''}\n잔류 전망: ${BAND_META[confirmSheet.band].label}\n\n※ 제안일 뿐입니다 — 불만이 큰 선수는 시즌 종료 시 뿌리치고 FA로 나갈 수 있습니다.` : undefined}
         onClose={() => setConfirmSheet(null)}
         actions={confirmSheet ? [
           {
@@ -388,6 +442,24 @@ function ContractsInner() {
   );
 }
 
+/** −/＋ 스텝퍼(연봉·기간) — FA 오퍼 폼과 같은 결. */
+function Stepper({ label, display, onDec, onInc, decOff, incOff }: {
+  label: string; display: string; onDec: () => void; onInc: () => void; decOff?: boolean; incOff?: boolean;
+}) {
+  return (
+    <View style={styles.stepper}>
+      <Text style={styles.stepLabel}>{label}</Text>
+      <Pressable onPress={onDec} disabled={decOff} hitSlop={6} style={[styles.stepBtn, decOff && styles.stepBtnOff]}>
+        <Text style={styles.stepBtnTxt}>−</Text>
+      </Pressable>
+      <Text style={styles.stepVal}>{display}</Text>
+      <Pressable onPress={onInc} disabled={incOff} hitSlop={6} style={[styles.stepBtn, incOff && styles.stepBtnOff]}>
+        <Text style={styles.stepBtnTxt}>＋</Text>
+      </Pressable>
+    </View>
+  );
+}
+
 const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -406,4 +478,22 @@ const styles = themedStyles(() => StyleSheet.create({
   bandText: { fontSize: 12, fontWeight: '800' },
   chip: { backgroundColor: theme.border + '55', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
   chipText: { color: theme.muted, fontSize: 11, fontWeight: '700' },
+  // ── 재계약 오퍼 빌더(FA §2.5c-격상) ──
+  builderTitle: { color: theme.text, fontSize: 19, fontWeight: '900' },
+  builderSub: { color: theme.muted, fontSize: 13, lineHeight: 19, marginTop: -4 },
+  builderHint: { fontSize: 11, lineHeight: 15, marginTop: -4 },
+  builderOutlook: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6, marginTop: 2 },
+  guarToggle: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10 },
+  applyBtn: { borderWidth: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 2 },
+  builderCancel: { paddingVertical: 11, alignItems: 'center' },
+  builderCancelTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
+  stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  stepLabel: { color: theme.text, fontSize: 13, fontWeight: '700', width: 44 },
+  stepBtn: {
+    width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: theme.accent,
+    backgroundColor: theme.accent + '18', alignItems: 'center', justifyContent: 'center',
+  },
+  stepBtnOff: { borderColor: theme.border, backgroundColor: 'transparent' },
+  stepBtnTxt: { color: theme.text, fontSize: 18, fontWeight: '900', lineHeight: 20 },
+  stepVal: { color: theme.text, fontSize: 14, fontWeight: '800', flex: 1, textAlign: 'center' },
 }));
