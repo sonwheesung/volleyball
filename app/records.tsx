@@ -99,10 +99,8 @@ function RecordsInner() {
                     </Text>
                   </View>
                   <View style={styles.valWrap}>
+                    {/* 게이지바 제거(2026-07-11 테스터 — 순위표는 미션 진행도가 아니라 게이지 부적합) */}
                     <Text style={[styles.val, top3 && styles.valTop, mine && styles.mine]}>{r.value.toLocaleString()}</Text>
-                    <View style={styles.barTrack}>
-                      <View style={[styles.barFill, { width: `${Math.max(3, (r.value / max) * 100)}%`, backgroundColor: top3 ? theme.warn : mine ? theme.accent : theme.border }]} />
-                    </View>
                   </View>
                 </Pressable>
               );

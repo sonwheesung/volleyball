@@ -183,9 +183,9 @@ export default function Guide() {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
-  // 항목 구분선은 위·아래 둘 다(테스터 재요청 2026-07-11 — 하단만 두니 top이 사라져 어색). 각 항목이 상·하 선으로
-  // 감싸여 명확히 구분된다. 인접 항목은 hairline이 겹쳐도 subtle. 첫 항목 상단·마지막 항목 하단까지 닫힌다.
-  item: { borderTopWidth: 1, borderTopColor: theme.border, borderBottomWidth: 1, borderBottomColor: theme.border },
+  // 항목 구분선: 상·하 선 + marginTop -1로 인접 항목의 상단선이 이전 항목 하단선에 겹쳐 **경계마다 1줄**이 된다
+  // (테스터 2026-07-11 — 상하 둘 다 두니 인접부가 2줄로 겹쳐 보임). 첫 항목 상단·마지막 항목 하단은 그대로 닫힘.
+  item: { borderTopWidth: StyleSheet.hairlineWidth, borderBottomWidth: StyleSheet.hairlineWidth, borderColor: theme.border, marginTop: -StyleSheet.hairlineWidth },
   head: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 12 },
   headL: { flexDirection: 'row', alignItems: 'center', gap: 8, flexShrink: 1 },
   title: { color: theme.text, fontSize: 15, fontWeight: '800', flexShrink: 1 },
