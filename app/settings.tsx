@@ -85,7 +85,7 @@ export default function Settings() {
           </View>
           <View style={{ flex: 1 }}>
             <Text style={styles.rowLabel}>배경음악</Text>
-            <Muted style={{ fontSize: 12, marginTop: 1 }}>{`앱 배경에 흐르는 음악 · ${Math.round(bgmLive * 100)}% (경기 중엔 멈춤)`}</Muted>
+            <Muted style={{ fontSize: 12, marginTop: 1 }}>{`앱 배경에 흐르는 음악 · ${Math.round(bgmLive * 100)}%`}</Muted>
             <Slider
               style={{ width: '100%', height: 32, marginTop: 4 }}
               minimumValue={0}

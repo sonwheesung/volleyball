@@ -1,4 +1,4 @@
-import { Redirect, useFocusEffect, useLocalSearchParams, useRouter } from 'expo-router';
+import { Redirect, useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { AppState, BackHandler, Image, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -16,7 +16,6 @@ import { buildPlayoffs, poSeedBase, finalSeedBase } from '../../data/playoffs';
 import { buildPlayoffBox, type PoRound } from '../../data/postseason';
 import { PO_SLOTS, FINAL_SLOTS } from '../../engine/calendar';
 import { DEV_TOOLS } from '../../data/flags';
-import { setBgmSuppressed } from '../../audio/bgm';
 import { useGameStore } from '../../store/useGameStore';
 
 // 주기적 이어보기 체크포인트 — 크래시/강제종료(백그라운드 이벤트 없이 죽는 경우)까지 커버.
@@ -56,12 +55,6 @@ export default function MatchBoard() {
   // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거). ptIdx=현재 점수가 반영된 득점 인덱스(타임라인 조회용)
   const [score, setScore] = useState({ h: 0, a: 0, homeSets: 0, awaySets: 0, setNo: 1, ptIdx: -1 });
   const handleScore = useCallback((s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number; ptIdx: number }) => setScore(s), []);
-
-  // 경기 관전 중엔 배경음악 정지(SOUND_SYSTEM §2.4) — 보드 자체 연출·SFX에 자리를 내준다. 모든 이탈은 router.back() 수렴.
-  useFocusEffect(useCallback(() => {
-    setBgmSuppressed(true);
-    return () => setBgmSuppressed(false);
-  }, []));
 
   const isSandbox = sandbox === '1';
   const fixture = id && !isSandbox ? getFixture(id) : undefined;
@@ -310,8 +303,8 @@ export default function MatchBoard() {
       <Popup visible={showTip} onRequestClose={() => { markTip('match-spectate'); setShowTip(false); }}>
         <Text style={styles.modalTitle}>📺 관전 모드</Text>
         <Text style={styles.modalBody}>
-          경기는 감독과 선수가 치릅니다. 결과는 선수 전력·라인업으로 정해져요 — 다시 봐도 같습니다.{'\n'}
-          마음에 안 들면 영입·훈련·선발 기용으로 다음 경기를 바꾸세요.
+          경기는 감독과 선수가 치릅니다.{'\n'}
+          영입·훈련·선발 기용으로 다음 경기를 준비하세요.
         </Text>
         <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={() => { markTip('match-spectate'); setShowTip(false); }}>
           <Text style={styles.mPrimaryText}>관전 시작 ▶</Text>

@@ -81,13 +81,18 @@
 
 ```
 started      : startBgm() 됐는가(루트 1회)
-suppressed   : 경기 화면인가(관전 중 = 음악 정지)
+suppressed   : 경기 화면인가(관전 중 = 음악 정지) — 2026-07-11부터 호출부 없음(아래 정정)
 backgrounded : 앱이 백그라운드인가(AppState)
 volume       : 0..1 (0이면 정지 — 배터리)
 
 desired = started && !suppressed && !backgrounded && volume > 0
 applyState(): desired면 play(), 아니면 pause()  ← 유일한 재생/정지 진입점
 ```
+
+> **정정(2026-07-11, 사용자 결정)**: ~~경기 관전 중엔 BGM 정지(보드 연출·SFX에 자리를 내준다)~~ →
+> **경기 화면에서도 BGM 계속 재생.** match/[id]의 `setBgmSuppressed(true/false)` useFocusEffect 호출을 제거.
+> `suppressed` 플래그·API는 상태 모델의 일부로 남겨둔다(호출부 0 — 재도입 시 이 플래그로).
+> 설정 화면 볼륨 설명의 "(경기 중엔 멈춤)" 카피도 함께 제거.
 
 - **모든** 상태 변화(startBgm·suppress·AppState·volume)는 플래그만 바꾸고 `applyState()`를 호출한다 →
   AppState × 경기화면 × 볼륨의 순서 경합이 원천 차단된다.
@@ -104,7 +109,7 @@ applyState(): desired면 play(), 아니면 pause()  ← 유일한 재생/정지 
 |---|---|
 | `initBgm()` | 부트 1회 — 오디오 모드 보장 + 단일 플레이어 생성 + 리스너 부착 + Fast Refresh 가드. 멱등 |
 | `startBgm()` | 재생 시작(멱등 — 이미 시작이면 no-op, 중복재생 금지) |
-| `setBgmSuppressed(v)` | 경기 화면 진입/이탈(true=정지). `applyState` 경유 |
+| `setBgmSuppressed(v)` | ~~경기 화면 진입/이탈(true=정지)~~ 호출부 없음(2026-07-11 정정 — 경기 중에도 재생). `applyState` 경유 |
 | `setBgmVolume(v)` | 0..1 클램프 후 플레이어 즉시 반영. **v==0이면 pause(위치 보존)**, >0 복귀 시 재생 |
 
 ### 2.7 오디오 모드 단일화
