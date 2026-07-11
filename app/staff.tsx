@@ -65,18 +65,18 @@ export default function Staff() {
   const left = staffBudgetLeft(teamId);
   const reveal = teamScoutReveal(teamId);
 
-  const overBudget = (msg: string) => showAlert('스태프 예산 초과', `${msg}\n예산 여유: ${formatMoney(left)}만`);
+  const overBudget = (msg: string) => showAlert('스태프 예산 초과', `${msg}\n예산 여유: ${formatMoney(left)}`);
 
   // 코치/감독 = 무거움(시즌 재계산) → 로딩 뒤에서 실행. 스카우터 = 즉시. 모두 confirm으로 묻는다.
   const tryHireCoach = (id: string, name: string, salary: number) =>
-    showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만 · 3년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
+    showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)} · 3년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
-      { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}만) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다. 새 감독의 성향으로 팀이 움직입니다.`); }) },
+      { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다. 새 감독의 성향으로 팀이 움직입니다.`); }) },
     ]);
   const tryHireAsst = (id: string, name: string, salary: number) =>
-    showAlert('코치 영입', `${name} 코치를 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만\n\n새 코치를 반영해 시즌 전력을 다시 계산합니다.`, [
+    showAlert('코치 영입', `${name} 코치를 영입하시겠습니까?\n연봉 ${formatMoney(salary)}\n\n새 코치를 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
-      { text: '영입', onPress: () => heavyAction(() => { if (!hireAssistant(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}만) 불가.`); else showAlert('영입 완료', `${name} 코치가 합류했습니다.`); }) },
+      { text: '영입', onPress: () => heavyAction(() => { if (!hireAssistant(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 코치가 합류했습니다.`); }) },
     ]);
   const tryReleaseAsst = (id: string, name: string) =>
     showAlert('코치 방출', `${name} 코치를 방출하시겠습니까?\n\n전력 변화로 시즌을 다시 계산합니다.`, [
@@ -84,9 +84,9 @@ export default function Staff() {
       { text: '방출', style: 'destructive', onPress: () => heavyAction(() => releaseAssistant(id)) },
     ]);
   const tryHireScout = (id: string, name: string, salary: number) =>
-    showAlert('스카우터 영입', `${name}을(를) 영입하시겠습니까?\n연봉 ${formatMoney(salary)}만`, [
+    showAlert('스카우터 영입', `${name}을(를) 영입하시겠습니까?\n연봉 ${formatMoney(salary)}`, [
       { text: '취소', style: 'cancel' },
-      { text: '영입', onPress: () => { if (!hireScout(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}만) 불가.`); } },
+      { text: '영입', onPress: () => { if (!hireScout(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}) 불가.`); } },
     ]);
   const tryReleaseScout = (id: string, name: string) =>
     showAlert('스카우터 방출', `${name}을(를) 방출하시겠습니까?`, [
@@ -102,12 +102,12 @@ export default function Staff() {
       <Card accent={theme.warn}>
         <Row>
           <IconLabel icon="wallet-outline" color={theme.warn}>스태프 예산</IconLabel>
-          <Muted>{formatMoney(spend)} / {formatMoney(staffBudget())}만</Muted>
+          <Muted>{formatMoney(spend)} / {formatMoney(staffBudget())}</Muted>
         </Row>
         <View style={{ height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, marginTop: 8, overflow: 'hidden' }}>
           <View style={{ width: `${pct}%`, height: 8, backgroundColor: pct >= 95 ? theme.bad : pct >= 80 ? theme.warn : theme.good }} />
         </View>
-        <Muted style={{ marginTop: 6 }}>여유 {formatMoney(left)}만</Muted>
+        <Muted style={{ marginTop: 6 }}>여유 {formatMoney(left)}</Muted>
       </Card>
 
       {/* 감독 */}
@@ -119,7 +119,7 @@ export default function Staff() {
         <Card accent={theme.violet}>
           <Row>
             <Title>{head.name}</Title>
-            <Muted>{head.age}세 · {head.salary > 0 ? `연봉 ${formatMoney(head.salary)}만` : '대행'}</Muted>
+            <Muted>{head.age}세 · {head.salary > 0 ? `연봉 ${formatMoney(head.salary)}` : '대행'}</Muted>
           </Row>
           <Muted style={{ marginTop: 4 }}>성향 {STYLE_LABEL[head.style]} · 카리스마 {head.charisma} · {head.archetype}</Muted>
           {acting ? (
@@ -154,7 +154,7 @@ export default function Staff() {
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{c.name}</Title>
-              <Muted style={{ marginTop: 2 }}>{STYLE_LABEL[c.style]} · 카리스마 {c.charisma} · {c.archetype} · 연봉 {formatMoney(c.salary)}만</Muted>
+              <Muted style={{ marginTop: 2 }}>{STYLE_LABEL[c.style]} · 카리스마 {c.charisma} · {c.archetype} · 연봉 {formatMoney(c.salary)}</Muted>
             </View>
             <Button label="영입" onPress={() => tryHireCoach(c.id, c.name, c.salary)} />
           </Row>
@@ -169,7 +169,7 @@ export default function Staff() {
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{SPECIALTY_KO[a.specialty]}{a.type ? ` · ${TYPE_KO[a.type]}` : ''} · {a.name}</Title>
-              <Muted style={{ marginTop: 2 }}>{a.type ? TYPE_DESC[a.type] : SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}만</Muted>
+              <Muted style={{ marginTop: 2 }}>{a.type ? TYPE_DESC[a.type] : SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}</Muted>
             </View>
             <Button label="방출" variant="ghost" onPress={() => tryReleaseAsst(a.id, a.name)} />
           </Row>
@@ -181,7 +181,7 @@ export default function Staff() {
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{SPECIALTY_KO[a.specialty]}{a.type ? ` · ${TYPE_KO[a.type]}` : ''} · {a.name}</Title>
-              <Muted style={{ marginTop: 2 }}>{a.type ? TYPE_DESC[a.type] : SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}만</Muted>
+              <Muted style={{ marginTop: 2 }}>{a.type ? TYPE_DESC[a.type] : SPECIALTY_DESC[a.specialty]} · 역량 {a.rating} · 연봉 {formatMoney(a.salary)}</Muted>
             </View>
             <Button label="영입" onPress={() => tryHireAsst(a.id, a.name, a.salary)} disabled={asst.length >= coachSlots()} />
           </Row>
@@ -196,7 +196,7 @@ export default function Staff() {
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{s.name}</Title>
-              <Muted style={{ marginTop: 2 }}>스카우팅 {s.scouting} · 연봉 {formatMoney(s.salary)}만</Muted>
+              <Muted style={{ marginTop: 2 }}>스카우팅 {s.scouting} · 연봉 {formatMoney(s.salary)}</Muted>
             </View>
             <Button label="방출" variant="ghost" onPress={() => tryReleaseScout(s.id, s.name)} />
           </Row>
@@ -208,7 +208,7 @@ export default function Staff() {
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{s.name}</Title>
-              <Muted style={{ marginTop: 2 }}>스카우팅 {s.scouting} · 연봉 {formatMoney(s.salary)}만</Muted>
+              <Muted style={{ marginTop: 2 }}>스카우팅 {s.scouting} · 연봉 {formatMoney(s.salary)}</Muted>
             </View>
             <Button label="영입" onPress={() => tryHireScout(s.id, s.name, s.salary)} />
           </Row>
