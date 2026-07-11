@@ -139,7 +139,8 @@ export default function MyPage() {
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
           <Pressable onPress={watchAd} disabled={!adAvail.ok || walletBusy} style={[styles.diaBtn, (!adAvail.ok || walletBusy) && { opacity: 0.5 }]}>
             <Text style={styles.diaBtnTxt}>
-              {adAvail.ok ? `📺 광고 보고 +${AD_REWARD} 💎`
+              {walletBusy ? '적립 중…'
+                : adAvail.ok ? `📺 광고 보고 +${AD_REWARD} 💎`
                 : adAvail.reason === 'cap' ? `오늘 광고 끝 (하루 ${AD_DAILY_CAP}회)`
                 : `⏳ ${fmtLeft(adAvail.msLeft)} 후`}
             </Text>

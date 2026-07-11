@@ -142,7 +142,22 @@ function DraftLiveInner() {
   };
 
   // 시즌 시작 — 오늘과 동일 출구(광고 후 /season-start replace → endSeason 체인). draft-live:78 관계 유지.
-  const onFinish = async () => { setPaused(true); await showSeasonStartAd(); router.replace('/season-start'); };
+  // 광고 뜨기 전 연타 재진입 가드(UI-31) — ref는 동기 차단, state는 로딩 표시용.
+  const startingRef = useRef(false);
+  const [starting, setStarting] = useState(false);
+  const onFinish = async () => {
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
+    setPaused(true);
+    try {
+      await showSeasonStartAd();
+      router.replace('/season-start');
+    } finally {
+      startingRef.current = false; // 광고 실패·미로드·오프라인에도 잠금 해제(UI-31 finally 필수)
+      setStarting(false);
+    }
+  };
 
   // 오프시즌 게이트(조정 B) — 드래프트 창(seasonOver) 밖이면 리다이렉트(stale-input 주입 차단). ★ 모든 훅 뒤.
   if (planNextAction(SEASON, my, results).kind !== 'seasonOver') return <Redirect href="/(tabs)/schedule" />;
@@ -215,7 +230,7 @@ function DraftLiveInner() {
         // 총 픽 0 — 즉시 완료 상태(지명할 신인 자리 없음)
         <>
           <Card><Muted>이번 드래프트는 지명할 자리가 없습니다. 바로 시즌을 시작하세요.</Muted></Card>
-          <Button label="시즌 시작하기 ▶" onPress={onFinish} />
+          <Button label={starting ? '시즌 준비 중…' : '시즌 시작하기 ▶'} onPress={onFinish} disabled={starting} />
         </>
       ) : done ? (
         <>
@@ -245,7 +260,7 @@ function DraftLiveInner() {
               ))
             )}
           </Card>
-          <Button label="시즌 시작하기 ▶" onPress={onFinish} />
+          <Button label={starting ? '시즌 준비 중…' : '시즌 시작하기 ▶'} onPress={onFinish} disabled={starting} />
         </>
       ) : atMyPick && panel ? (
         // ── 내 픽 하드정지: 직접 지명 패널 ──

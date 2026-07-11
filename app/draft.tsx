@@ -1,5 +1,5 @@
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
@@ -126,11 +126,22 @@ function DraftCenterInner() {
     [ctx, my],
   );
 
+  // 광고 뜨기 전 연타 재진입 가드(UI-31) — ref는 동기 차단(같은 프레임 두 번째 탭), state는 로딩 표시용.
+  const startingRef = useRef(false);
+  const [starting, setStarting] = useState(false);
   const onFinish = async () => {
-    // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 시즌 시작 로딩으로.
-    // 광고는 항상 resolve(스킵/실패/오프라인이어도 진행 하드블록 없음). endSeason은 로딩 화면이 페인트 후 실행(SEASON §5.5 D).
-    await showSeasonStartAd();
-    router.replace('/season-start');
+    if (startingRef.current) return;
+    startingRef.current = true;
+    setStarting(true);
+    try {
+      // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 시즌 시작 로딩으로.
+      // 광고는 항상 resolve(스킵/실패/오프라인이어도 진행 하드블록 없음). endSeason은 로딩 화면이 페인트 후 실행(SEASON §5.5 D).
+      await showSeasonStartAd();
+      router.replace('/season-start');
+    } finally {
+      startingRef.current = false; // 광고 실패·미로드·오프라인에도 잠금 해제(UI-31 finally 필수)
+      setStarting(false);
+    }
   };
 
   return (
@@ -179,8 +190,8 @@ function DraftCenterInner() {
       </Card>
 
       <Button label="라이브 드래프트 보기 ▶" onPress={() => router.push('/draft-live')} />
-      <Pressable onPress={onFinish} style={{ paddingVertical: 8, alignItems: 'center' }}>
-        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>건너뛰면 찜 순서대로 자동 지명합니다</Text>
+      <Pressable onPress={onFinish} disabled={starting} style={{ paddingVertical: 8, alignItems: 'center', opacity: starting ? 0.5 : 1 }}>
+        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>{starting ? '시즌 준비 중…' : '건너뛰면 찜 순서대로 자동 지명합니다'}</Text>
       </Pressable>
 
       <Title>드래프트 클래스 ({classSorted.length}명)</Title>

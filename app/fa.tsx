@@ -371,28 +371,42 @@ function FACenterInner() {
                 ) : null}
               </Pressable>
               <Pressable
-                onPress={() => busy.run('협상 테이블을 차리는 중…', () => (targeted ? unsignFA(p.id) : signFA(p.id)))}
+                onPress={() => {
+                  // '영입 시도' 시 오퍼 만들기 아코디언 자동 펼침(§2.8.8 ① — 국내 FA만, 지명 취소엔 미적용)
+                  if (!targeted && !p.isForeign) setOpenId(p.id);
+                  busy.run('협상 테이블을 차리는 중…', () => (targeted ? unsignFA(p.id) : signFA(p.id)));
+                }}
                 style={[
                   styles.btn,
                   { borderColor: targeted ? theme.bad : theme.accent, backgroundColor: targeted ? theme.bad + '22' : theme.accent + '22' },
                 ]}
               >
                 <Text style={[styles.btnText, { color: targeted ? theme.bad : theme.accent }]}>
-                  {targeted ? '취소' : '영입 시도'}
+                  {targeted ? '지명 취소' : '영입 시도'}
                 </Text>
               </Pressable>
+              {/* 지명은 시즌 시작 시 확정되는 예약(§2.8.8 ③) — 왜 '지명 취소'가 있는지 맥락 캡션 */}
+              {targeted ? (
+                <Text style={styles.cancelHint}>시즌 시작 전까지 지명을 물릴 수 있어요.</Text>
+              ) : null}
               {/* A/B FA만 — 보상선수 대신 보상금만 내고 선수단 보호 */}
               {targeted && needsCompensationPlayer(grade) ? (
-                <Pressable
-                  onPress={() => busy.run('협상 테이블을 차리는 중…', () => toggleMoneyOnly(p.id))}
-                  style={[styles.btn, moneyOnlyIds.includes(p.id)
-                    ? { borderColor: theme.good, backgroundColor: theme.good + '22' }
-                    : { borderColor: theme.border }]}
-                >
-                  <Text style={[styles.btnText, { color: moneyOnlyIds.includes(p.id) ? theme.good : theme.muted }]}>
-                    {moneyOnlyIds.includes(p.id) ? `✓ 돈만 보상 (${grade === 'A' ? '300' : '200'}%)` : '보상선수 보호 (돈만)'}
+                <>
+                  <Pressable
+                    onPress={() => busy.run('협상 테이블을 차리는 중…', () => toggleMoneyOnly(p.id))}
+                    style={[styles.btn, moneyOnlyIds.includes(p.id)
+                      ? { borderColor: theme.good, backgroundColor: theme.good + '22' }
+                      : { borderColor: theme.border }]}
+                  >
+                    <Text style={[styles.btnText, { color: moneyOnlyIds.includes(p.id) ? theme.good : theme.muted }]}>
+                      {moneyOnlyIds.includes(p.id) ? `✓ 돈만 보상 (${grade === 'A' ? '300' : '200'}%)` : '보상선수 보호 (돈만)'}
+                    </Text>
+                  </Pressable>
+                  {/* '돈만' 인라인 설명(§2.8.8 ② — §2.2~2.3·§253 '돈만'(선수단 보호) 용어 일치) */}
+                  <Text style={styles.moneyOnlyHint}>
+                    비보호 선수 1명을 내주는 대신 보상금을 더 내고(A 300%·B 200%) 선수단을 지킵니다.
                   </Text>
-                </Pressable>
+                </>
               ) : null}
               {/* 상세 펼침(오퍼 폼) — 관전형 옵트인(§2.8.4): 펼친 국내 FA에게만. 아무것도 안 만지면 위 '영입 시도'(자동 오퍼)로 그대로 동작. */}
               {openId === p.id && !p.isForeign ? (() => {
@@ -654,6 +668,8 @@ const styles = themedStyles(() => StyleSheet.create({
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   btn: { borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
   btnText: { fontSize: 14, fontWeight: '800' },
+  cancelHint: { color: theme.muted, fontSize: 11, lineHeight: 15, textAlign: 'center', marginTop: -4 },
+  moneyOnlyHint: { color: theme.muted, fontSize: 11, lineHeight: 15, marginTop: -4 },
   toggle: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 8, alignItems: 'center', marginTop: 4 },
   protectRow: {
     flexDirection: 'row', alignItems: 'center', gap: 8,
