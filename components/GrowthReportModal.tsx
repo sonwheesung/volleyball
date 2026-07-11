@@ -64,7 +64,7 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
       {(grew > 0 || aged > 0) ? (
         <View style={styles.summary}>
           {grew > 0 ? <Text style={styles.grew}>{grew}명 성장</Text> : null}
-          {aged > 0 ? <Text style={styles.agedSum}>{aged}명 소폭 노쇠</Text> : null}
+          {aged > 0 ? <Text style={styles.agedSum}>{aged}명 소폭 하락세</Text> : null}
         </View>
       ) : null}
 

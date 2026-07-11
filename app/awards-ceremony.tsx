@@ -37,7 +37,7 @@ function CeremonyInner() {
   // 공개 비트(빈 상 생략) — 신인 → 기량발전 → 베스트7 → 챔프MVP → 정규MVP(클라이맥스)
   const beats = useMemo(() => {
     const out: { key: string; el: React.ReactNode }[] = [];
-    const winnerCard = (icon: React.ComponentProps<typeof IconLabel>['icon'], label: string, w: AwardWinner, suffix = '', climax = false) => {
+    const winnerCard = (icon: React.ComponentProps<typeof IconLabel>['icon'], label: string, w: AwardWinner, suffix = '', climax = false, growth = false) => {
       const c = teamColors(w.teamId);
       const pos = getPlayer(w.playerId)?.position;
       const num = jerseyNumber(w.playerId);
@@ -59,12 +59,15 @@ function CeremonyInner() {
             <Text style={styles.team}>{shortTeamName(w.teamId)}</Text>
             {isMine(w) ? <Text style={styles.mineTag}>우리 구단</Text> : null}
           </View>
-          <Muted style={{ fontSize: 13, textAlign: 'center', marginTop: 4 }}>{w.value}{suffix}</Muted>
+          {/* 기량발전상은 OVR 상승폭 → 'OVR' 대신 성장 화살표 ▲N(초록). 나머지는 기록값+접미사 */}
+          {growth
+            ? <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 4, color: theme.good, fontWeight: '800' }}>▲{w.value}</Text>
+            : <Muted style={{ fontSize: 13, textAlign: 'center', marginTop: 4 }}>{w.value}{suffix}</Muted>}
         </Card>
       );
     };
     if (aw.rookie) out.push({ key: 'rookie', el: winnerCard('sparkles-outline', '신인상', aw.rookie) });
-    if (aw.mostImproved) out.push({ key: 'improved', el: winnerCard('trending-up-outline', '기량발전상', aw.mostImproved, ' OVR') });
+    if (aw.mostImproved) out.push({ key: 'improved', el: winnerCard('trending-up-outline', '기량발전상', aw.mostImproved, '', false, true) });
     if (aw.best7.some((s) => s.winner)) {
       out.push({ key: 'best7', el: (
         <>

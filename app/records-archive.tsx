@@ -179,17 +179,18 @@ function SeasonView({
             </View>
             <Text style={styles.cardHead}>시상식{provisional ? ' (잠정)' : ''}</Text>
             {([
-              { label: '정규 MVP', w: aw.mvp, hi: true, suffix: '' },
-              { label: '챔프전 MVP', w: aw.finalsMvp, hi: true, suffix: '' },
-              { label: '신인상', w: aw.rookie, hi: false, suffix: '' },
-              { label: '기량발전상', w: aw.mostImproved, hi: false, suffix: ' OVR' },
+              { label: '정규 MVP', w: aw.mvp, hi: true, suffix: '', growth: false },
+              { label: '챔프전 MVP', w: aw.finalsMvp, hi: true, suffix: '', growth: false },
+              { label: '신인상', w: aw.rookie, hi: false, suffix: '', growth: false },
+              // 기량발전상 = OVR 상승폭 → 'OVR' 단어 대신 성장 화살표(▲N·초록)로(2026-07-11 사용자 선택)
+              { label: '기량발전상', w: aw.mostImproved, hi: false, suffix: '', growth: true },
             ]).map((a) => a.w ? (
               <View key={a.label} style={styles.awRow}>
                 <Text style={[styles.awLabel, a.hi && { color: theme.warn }]}>{a.label}</Text>
                 <PosTag pos={pPos(a.w.playerId)} />
                 <Text style={[styles.awName, isMine(a.w.playerId) && styles.mine]} numberOfLines={1}>{awName(a.w)}</Text>
                 <Text style={styles.lbTeam} numberOfLines={1}>{short(a.w.teamId)}</Text>
-                <Text style={styles.lbVal}>{a.w.value}{a.suffix}</Text>
+                <Text style={[styles.lbVal, a.growth && { color: theme.good }]}>{a.growth ? `▲${a.w.value}` : `${a.w.value}${a.suffix}`}</Text>
               </View>
             ) : null)}
           </Card>
