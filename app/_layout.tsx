@@ -1,9 +1,11 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Text } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFonts } from 'expo-font';
-import { SafeAreaProvider, initialWindowMetrics } from 'react-native-safe-area-context';
+import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
+import type { NativeStackHeaderProps } from '@react-navigation/native-stack';
 import { ThemeProvider, DarkTheme, DefaultTheme } from '@react-navigation/native';
 import { theme, useThemeMode } from '../components/Screen';
 import { loadThemeMode } from '../components/theme';
@@ -70,6 +72,30 @@ TextDefaults.defaultProps.textBreakStrategy = 'simple';
 // 한글 어절 단위 줄바꿈(웹 word-break:keep-all 격) — JSX 런타임을 감싸 `<Text>` 문자열 자식의 인접 한글 사이에 U+2060 삽입.
 installKoreanKeepAll(Text);
 
+// 컴팩트 스택 헤더(2026-07-11 테스터 — native-stack 기본 툴바가 높고 headerStyle.height 미지원이라 커스텀).
+// 총높이 = 상단인셋 + 44dp 툴바(탭 네비와 동일). 뒤로가기 + 제목만. _layout 인라인(별도 파일 import 이슈 회피).
+function CompactStackHeader({ navigation, options, back }: NativeStackHeaderProps) {
+  useThemeMode(); // 테마 토글 시 리렌더
+  const insets = useSafeAreaInsets();
+  const title = typeof options.headerTitle === 'string' ? options.headerTitle : (options.title ?? '');
+  return (
+    <View style={[hdrStyles.bar, { backgroundColor: theme.bg, paddingTop: insets.top, height: insets.top + 44 }]}>
+      {back ? (
+        <Pressable onPress={navigation.goBack} hitSlop={12} style={hdrStyles.back} accessibilityRole="button" accessibilityLabel="뒤로">
+          <Ionicons name="arrow-back" size={24} color={theme.text} />
+        </Pressable>
+      ) : <View style={hdrStyles.pad} />}
+      <Text style={[hdrStyles.title, { color: theme.text }]} numberOfLines={1}>{title}</Text>
+    </View>
+  );
+}
+const hdrStyles = StyleSheet.create({
+  bar: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8 },
+  back: { padding: 6, marginRight: 2 },
+  pad: { width: 12 },
+  title: { fontSize: 18, fontWeight: '800', flex: 1 },
+});
+
 export default function RootLayout() {
   const [fontsLoaded] = useFonts({
     Pretendard: require('../assets/fonts/PretendardVariable.ttf'),
@@ -112,6 +138,9 @@ export default function RootLayout() {
       <BootGate>
       <Stack
         screenOptions={{
+          // 헤더 컴팩트(2026-07-11 테스터 — 네이티브 스택 기본 툴바가 높음). native-stack은 headerStyle.height 미지원 →
+          // 인라인 커스텀 헤더(총높이 상단인셋+44dp)로 대체. 탭 네비(insets.top+44)와 동일 높이.
+          header: (props) => <CompactStackHeader {...props} />,
           headerStyle: { backgroundColor: theme.bg },
           headerTintColor: theme.text,
           headerTitleStyle: { fontWeight: '800' },

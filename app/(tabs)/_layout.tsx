@@ -48,12 +48,10 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        // 헤더 — 탭·스택 동일 기본 높이로 통일(2026-07-11 재정정). "너무 높다"는 실은 safe-area 첫 프레임
-        // 인셋 0→실측 점프(플래시)가 상단 여백을 부풀린 것 — initialWindowMetrics(app/_layout)로 근본 수정.
-        // 탭만 height를 줄이면 스택(구단정보·선수정보 등)과 어긋나 되레 이질 → 기본값 유지.
-        headerStyle: { backgroundColor: theme.bg },
+        // 헤더 컴팩트(2026-07-11 테스터 — 기본 툴바가 높음). 총높이 = 상단인셋 + 44dp 툴바. 루트 Stack과 동일값(탭↔스택 일치).
+        headerStyle: { backgroundColor: theme.bg, height: insets.top + 44 },
         headerTintColor: theme.text,
-        headerTitleStyle: { fontWeight: '700' },
+        headerTitleStyle: { fontWeight: '700', fontSize: 18 },
         // 설정 = 전 탭 공통 헤더 우측 톱니(2026-06-28) — 구단 대시보드 본문에 있던 "설정" 버튼을 옮김(유틸리티 분리)
         // 아이콘 크기(22)는 유지, 터치 영역만 확대(hitSlop 10→12 + paddingVertical 4→10) — 오탭 방지(UI polish).
         headerRight: () => (
