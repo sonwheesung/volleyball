@@ -751,7 +751,8 @@ export function buildNewsFeed(
   if (poDay > SEASON_DAYS) {
     const p = buildPlayoffs(currentSeason);
     const rv = postseasonReveal(p, poDay);
-    const gameNews = (m: NonNullable<typeof p.po>, roundKo: string, slots: readonly number[], revealed: number, refBase: string) => {
+    // champClinch: 결승 마지막(클린치) 게임 전용 — 그 경기 기사에 "다음 경기" 대신 우승 확정 + 대역전/스윕 서사(실 시리즈 데이터).
+    const gameNews = (m: NonNullable<typeof p.po>, roundKo: string, slots: readonly number[], revealed: number, refBase: string, done = false, champClinch = false) => {
       let hiW = 0, loW = 0;
       for (let g = 0; g < revealed; g++) {
         const gm = m.series.games[g];
@@ -763,6 +764,20 @@ export function buildNewsFeed(
         //   (시리즈 확정 기사 :688와 동일 관례). hiW-loW(시드 관점)로 쓰면 승자가 뒤지는 것처럼 보이는 버그.
         const wW = hiWon ? hiW : loW, lW = hiWon ? loW : hiW;
         const gkey = `${currentSeason}:${refBase}:${g}`;
+        // 결승 클린치 게임(시리즈 종료 + 마지막 공개 경기) — 그 승자가 챔피언. "다음 경기" close 금지, 우승 서사(테스터 2026-07-12).
+        if (champClinch && done && g === revealed - 1) {
+          // 우승팀 게임별 승패 패턴(우승팀 관점)으로 대역전/스윕 판정 — champion 뉴스(:255)와 동일 사실 기반.
+          const pat = m.series.games.slice(0, revealed).map((x) => ((x.hiSets > x.loSets ? m.hiId : m.loId) === wId ? 'W' : 'L'));
+          const reverse = pat.length === 5 && pat[0] === 'L' && pat[1] === 'L' && pat.slice(2).every((c) => c === 'W');
+          const sweep = pat.length === 3 && pat.every((c) => c === 'W');
+          const champBody = `${roundKo} ${g + 1}차전에서 ${teamName(wId)}이(가) ${teamName(lId)}을(를) 세트 ${wS}-${lS}로 꺾고 시리즈 ${wW}-${lW}로 ${currentSeason + 1}시즌 정상에 올랐다.`
+            + (reverse ? ' 2패 뒤 3연승, 리버스 스윕의 대역전 우승이다.' : sweep ? ' 3-0 스윕으로 끝낸 완벽한 대관식이다.' : '');
+          push(currentSeason, 'playoff', vh([
+            (w) => `${roundKo}는 ${w}의 것 (${wW}-${lW}) — 우승 확정${reverse ? ' · 대역전' : ''}`,
+            (w) => `${w}, ${roundKo} 제패 — ${wW}-${lW}로 정상${reverse ? ' (리버스 스윕)' : ''}`,
+          ], gkey, teamName(wId)), true, wId, champBody, `${refBase}:${g}`, slots[g]);
+          continue;
+        }
         const core = `${roundKo} ${g + 1}차전에서 ${teamName(wId)}이(가) ${teamName(lId)}을(를) 세트 ${wS}-${lS}로 꺾었다. 시리즈 스코어 ${wW}-${lW}.`;
         push(currentSeason, 'playoff', vh([
           (w) => `${roundKo} ${g + 1}차전 — ${w} 승리 (시리즈 ${wW}-${lW})`,
@@ -786,7 +801,7 @@ export function buildNewsFeed(
           'po:clinch', PO_SLOTS[p.po.series.games.length - 1]);
       }
     }
-    if (p.final) gameNews(p.final, '챔피언결정전', FINAL_SLOTS, rv.finalRevealed, 'final');
+    if (p.final) gameNews(p.final, '챔피언결정전', FINAL_SLOTS, rv.finalRevealed, 'final', rv.finalDone, true);
   }
 
   // 정렬(NEWS_SYSTEM §9 — 2026-07-05 최신순 전환): 현재 시즌 인게임 뉴스(day 있음)를 **최신순(같은 날 중요도순)** 으로
