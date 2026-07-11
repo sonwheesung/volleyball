@@ -53,13 +53,13 @@ export default function Shop() {
 
   return (
     <Screen title="상점">
-      {/* 다이아 잔액(맥락) — 적립(광고·업적)·소비(전지훈련)는 마이페이지 다이아 허브에서 */}
+      {/* 보유 다이아 지갑(2026-07-11 테스터 — "상품명"이 아니라 "내 잔액"으로 읽히게 '보유 다이아' 라벨+큰 숫자) */}
       <Card accent={theme.sky}>
         <View style={styles.row}>
           <View style={[styles.iconChip, { backgroundColor: theme.sky + '22' }]}><Text style={{ fontSize: 20 }}>💎</Text></View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>다이아 {diamonds.toLocaleString()}</Text>
-            <Muted style={{ fontSize: 12.5, marginTop: 1 }}>전지훈련으로 선수 능력을 키웁니다</Muted>
+            <Muted style={{ fontSize: 12.5 }}>보유 다이아</Muted>
+            <Text style={styles.balance}>{diamonds.toLocaleString()}</Text>
           </View>
         </View>
       </Card>
@@ -94,6 +94,7 @@ const styles = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', gap: 12 },
   iconChip: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   title: { color: theme.text, fontSize: 16, fontWeight: '800' },
+  balance: { color: theme.text, fontSize: 26, fontWeight: '900', marginTop: 1 },
   arrow: { color: theme.accent, fontSize: 24, fontWeight: '900' },
   section: { color: theme.muted, fontSize: 12, fontWeight: '800', marginTop: 14, marginBottom: 2, marginLeft: 2 },
 }));

@@ -133,8 +133,8 @@ export default function MyPage() {
         <View style={styles.row}>
           <View style={[styles.iconChip, { backgroundColor: theme.sky + '22' }]}><Text style={{ fontSize: 20 }}>💎</Text></View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.title}>다이아 {diamonds.toLocaleString()}</Text>
-            <Muted style={{ fontSize: 12.5, marginTop: 1 }}>전지훈련으로 선수 능력을 키웁니다</Muted>
+            <Muted style={{ fontSize: 12.5 }}>보유 다이아</Muted>
+            <Text style={styles.balance}>{diamonds.toLocaleString()}</Text>
           </View>
         </View>
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
@@ -254,6 +254,7 @@ const styles = themedStyles(() => StyleSheet.create({
   group: { gap: 12, marginTop: 10 }, // 카드 그룹 래퍼 — 그룹 내부 gap 12 유지, marginTop으로 그룹 사이만 벌림(item 6)
   iconChip: { width: 38, height: 38, borderRadius: 11, alignItems: 'center', justifyContent: 'center' },
   title: { color: theme.text, fontSize: 16, fontWeight: '700' },
+  balance: { color: theme.text, fontSize: 26, fontWeight: '900', marginTop: 1 },
   arrow: { color: theme.muted, fontSize: 24, fontWeight: '400' }, // 화살표 = 장식 → 민트 대신 회색으로(민트 희소성, item 9)
   diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },
