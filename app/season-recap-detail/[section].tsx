@@ -12,7 +12,7 @@ import { teamColors } from '../../lib/teamColor';
 import { seasonSnapshot } from '../../data/records';
 import { computeStandings, displayCutoff, seasonStreaks } from '../../data/standings';
 import { leagueProduction } from '../../data/production';
-import { getPlayer, getTeam, shortTeamName as short } from '../../data/league';
+import { getPlayer, getTeam, shortTeamName as short, reconstructForeignName } from '../../data/league';
 import { rosterIdsOnDay } from '../../data/dynamics';
 import { recapBriefing } from '../../data/recapBriefing';
 import { seasonYear } from '../../data/seasonLabel';
@@ -67,7 +67,7 @@ function DetailInner({ section, title }: { section: Section; title: string }) {
   const snap = useMemo(() => seasonSnapshot(season, season, currentDay, archive, results, my), [season, currentDay, archive, results, my]);
   const aw = snap.awards;
 
-  const pName = (id: string) => getPlayer(id)?.name ?? id;
+  const pName = (id: string) => getPlayer(id)?.name ?? reconstructForeignName(id) ?? id;
   const pPos = (id: string): Position => getPlayer(id)?.position ?? 'OH';
   const isMineW = (w: AwardWinner | null) => !!w && w.teamId === my; // 수상자 귀속(구단 강조)
 
@@ -99,13 +99,14 @@ function AwardsDetail({
   if (!aw || !aw.mvp) {
     return <Card><Muted>이 시즌의 시상 기록이 없습니다.</Muted></Card>;
   }
-  const awRow = (label: string, w: AwardWinner | null, opts?: { hi?: boolean; suffix?: string }) => w ? (
+  const awRow = (label: string, w: AwardWinner | null, opts?: { hi?: boolean; suffix?: string; growth?: boolean }) => w ? (
     <View key={label} style={styles.awRow}>
       <Text style={[styles.awLabel, opts?.hi && { color: theme.warn }]}>{label}</Text>
       <PosTag pos={pPos(w.playerId)} />
       <Text style={[styles.awName, isMineW(w) && styles.mine]} numberOfLines={1}>{pName(w.playerId)}</Text>
       <Text style={styles.awTeam} numberOfLines={1}>{short(w.teamId)}</Text>
-      <Text style={styles.awVal}>{w.value}{opts?.suffix ?? ''}</Text>
+      {/* 기량발전상=OVR 상승폭 → ▲N 초록(2026-07-11 사용자 선택). 나머지는 값+접미사 */}
+      <Text style={[styles.awVal, opts?.growth && { color: theme.good }]}>{opts?.growth ? `▲${w.value}` : `${w.value}${opts?.suffix ?? ''}`}</Text>
     </View>
   ) : null;
 
@@ -126,7 +127,7 @@ function AwardsDetail({
         {/* 챔프MVP는 우승 확정(championId) 후에만 — 결승 전 딥링크 스포일러 차단(finalsMvp도 poDay 게이트) */}
         {championId ? awRow('챔프전 MVP', aw.finalsMvp, { hi: true }) : null}
         {awRow('신인상', aw.rookie)}
-        {awRow('기량발전상', aw.mostImproved, { suffix: ' OVR' })}
+        {awRow('기량발전상', aw.mostImproved, { growth: true })}
       </Card>
 
       <Card accent={theme.gold}>

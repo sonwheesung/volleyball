@@ -12,7 +12,7 @@ import { teamColors } from '../lib/teamColor';
 import { jerseyNumber, SUPER_LEGEND_POINTS } from '../engine/jersey';
 import { numberLineage } from '../data/legends';
 import { seasonYear } from '../data/seasonLabel';
-import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short } from '../data/league';
+import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short, reconstructForeignName } from '../data/league';
 import { leagueProduction } from '../data/production';
 import { computeStandings, displayCutoff, seasonComplete } from '../data/standings';
 import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, seasonSnapshot, type RecordCat } from '../data/records';
@@ -63,7 +63,7 @@ function RecordsInner() {
     for (const h of hallOfFame) m.set(h.id, { name: h.name, position: h.position });
     return m;
   }, [hallOfFame]);
-  const pName = (id: string) => getPlayer(id)?.name ?? hofMap.get(id)?.name ?? id;
+  const pName = (id: string) => getPlayer(id)?.name ?? hofMap.get(id)?.name ?? reconstructForeignName(id) ?? id;
   const pPos = (id: string): Position => getPlayer(id)?.position ?? hofMap.get(id)?.position ?? 'OH';
   const isMine = (id: string) => !!teamId && teamPlayerIds(teamId).includes(id);
 
@@ -399,7 +399,7 @@ function ChronicleView({
                 <Text style={[styles.team, a.championId === teamId && styles.mine]} numberOfLines={1}>
                   🏆 {getTeam(a.championId)?.name ?? a.championId}
                 </Text>
-                {a.awards?.mvp ? <Muted style={{ fontSize: 11 }}>MVP {getPlayer(a.awards.mvp.playerId)?.name ?? ''}</Muted> : null}
+                {a.awards?.mvp ? <Muted style={{ fontSize: 11 }}>MVP {getPlayer(a.awards.mvp.playerId)?.name ?? reconstructForeignName(a.awards.mvp.playerId) ?? ''}</Muted> : null}
                 <Text style={styles.achLinkArrow}>›</Text>
               </Pressable>
             ))}

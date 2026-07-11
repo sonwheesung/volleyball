@@ -6,6 +6,7 @@
 import type { AssistantCoach, Coach, CoachSpecialty, CoachType, CoachStyle, Fixture, FocusSeg, Player, Scout, Team, TrainingFocus, TrainingId } from '../types';
 import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
+import { genForeignName, genAsianIdentity } from './names';
 import { generateSeason } from '../engine/season';
 import { evolvePlayer, type FocusResolver } from '../engine/progression';
 import { SEASON_DAYS } from '../engine/calendar';
@@ -255,6 +256,16 @@ export const shortTeamName = (id: string): string => {
   return n.split(' ').slice(-1)[0] || n;
 };
 export const getPlayer = (id: string): Player | undefined => playerMap.get(id);
+
+/** 떠난 외국인·아시아쿼터 이름 복원 — 활동 풀에서 사라진 선수(시상식·연표 기록에 playerId만 남음)의 이름을
+ *  id 결정론으로 재구성한다(makePlayer가 `genForeignName(id)`/`genAsianIdentity(id)`로 이름을 붙임 — 순수 함수라
+ *  언제든 동일 복원. dedup 재배정은 드문 동명 충돌 시에만이라 표시상 무시 가능). 국내 선수는 대상 아님(null →
+ *  호출부가 HOF·raw id로 폴백). 버그: fgn-s1-6 같은 원시 ID/공백 노출(2026-07-11 테스터). */
+export function reconstructForeignName(id: string): string | null {
+  if (id.startsWith('fgn-')) return genForeignName(id);
+  if (id.startsWith('asn-')) return genAsianIdentity(id).name;
+  return null;
+}
 export const getCoach = (id: string): Coach | undefined => coachMap.get(id);
 export const getFixture = (id: string): Fixture | undefined => fixtureMap.get(id);
 

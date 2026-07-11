@@ -8,7 +8,7 @@ import { useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { ChampionCelebration } from '../components/ChampionCelebration';
-import { getTeam, getPlayer } from '../data/league';
+import { getTeam, getPlayer, reconstructForeignName } from '../data/league';
 import { currentSeasonAwards } from '../data/awards';
 import { buildPlayoffs } from '../data/playoffs';
 import { revealedChampionId } from '../data/postseason';
@@ -44,7 +44,7 @@ function Inner() {
   const mvpName = useMemo(() => {
     if (!championId) return undefined;
     const id = currentSeasonAwards(season).finalsMvp?.playerId;
-    return id ? getPlayer(id)?.name : undefined;
+    return id ? (getPlayer(id)?.name ?? reconstructForeignName(id) ?? undefined) : undefined;
   }, [championId, season]);
   const champName = championId ? (getTeam(championId)?.name ?? championId) : '-';
 

@@ -9,7 +9,7 @@ import { Best7Court } from '../components/Best7Court';
 import { AwardIllustration } from '../components/AwardIllustration';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { currentSeasonAwards } from '../data/awards';
-import { getPlayer, shortTeamName } from '../data/league';
+import { getPlayer, shortTeamName, reconstructForeignName } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { emblemFor } from '../data/emblems';
 import { teamColors } from '../lib/teamColor';
@@ -31,7 +31,7 @@ function CeremonyInner() {
   const season = useGameStore((s) => s.season);
   const aw = useMemo(() => currentSeasonAwards(season), [season]);
 
-  const pName = (id: string) => getPlayer(id)?.name ?? id;
+  const pName = (id: string) => getPlayer(id)?.name ?? reconstructForeignName(id) ?? id;
   const isMine = (w?: AwardWinner | null) => !!w && !!my && w.teamId === my;
 
   // 공개 비트(빈 상 생략) — 신인 → 기량발전 → 베스트7 → 챔프MVP → 정규MVP(클라이맥스)
