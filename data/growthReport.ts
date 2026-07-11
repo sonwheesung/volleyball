@@ -11,7 +11,8 @@ import type { Fixture, MatchResult } from '../types';
 export interface StatDelta { label: string; delta: number; from: number; to: number } // +면 성장(초록) / -면 노쇠(빨강). from→to 이전·이후 값
 /** 입단 이후 커리어 누적(있을 때만 — debut 필드 도입 후 생성 선수). OVR·스탯별 누적(전지훈련 구매분 차감 = 순수 성장). */
 export interface CareerGrowth { debutOvr: number; curOvr: number; deltaOvr: number; statDeltas: StatDelta[] }
-export interface PlayerGrowth { id: string; name: string; position: string; deltas: StatDelta[]; career?: CareerGrowth }
+// 모달(구간 변화 전용)에는 career를 싣지 않는다(2026-07-11 재정정 — 누적은 선수 상세로 이동). 누적은 playerCareerGrowth로 단일 선수만.
+export interface PlayerGrowth { id: string; name: string; position: string; deltas: StatDelta[] }
 
 /** 전지훈련 로그 최소 형태(store CampEntry의 표시용 부분집합 — 레이어 격리 위해 로컬 정의). */
 export interface CampLogLike { playerId: string; course?: CampCourse; stats?: string[]; cur?: number }
@@ -43,8 +44,8 @@ function campCurGains(campLog: CampLogLike[], playerId: string): Record<string, 
 }
 
 /** teamId 로스터의 [fromDay, toDay] 구간 모든 스탯 변화. 변화 없는 선수는 제외.
- *  career(누적)는 debut→현재. campLog를 주면 전지훈련 구매분(cur)을 스탯별로 차감해 **순수(유기적) 성장**만 남긴다. */
-export function growthReport(teamId: string, fromDay: number, toDay: number, campLog: CampLogLike[] = []): PlayerGrowth[] {
+ *  모달(구간 변화 전용) 데이터 — career(누적)는 여기서 계산하지 않는다(2026-07-11 재정정, 선수 상세로 이동). */
+export function growthReport(teamId: string, fromDay: number, toDay: number): PlayerGrowth[] {
   if (!teamId || toDay <= fromDay || fromDay < 0) return [];
   const ids = currentRosters()[teamId] ?? [];
   const out: PlayerGrowth[] = [];
@@ -61,23 +62,34 @@ export function growthReport(teamId: string, fromDay: number, toDay: number, cam
       const d = to - from;
       if (d !== 0) deltas.push({ label, delta: d, from, to });
     }
-    // 입단 이후 커리어 누적(debut 있을 때만) — 보조. 전지훈련 구매분(cur)은 차감해 순수 성장만.
-    let career: CareerGrowth | undefined;
-    if (after.debut) {
-      const curOvr = Math.round(displayOvr(overallRaw(after)));
-      const camp = campCurGains(campLog, id);
-      const statDeltas: StatDelta[] = [];
-      for (const [k, label] of STAT_ROWS) {
-        const from = after.debut.stats[k as keyof typeof after.debut.stats] ?? 0;
-        const raw = (a[k] ?? 0) - from;      // 입단→현재(전지훈련 구매분 포함)
-        const organic = raw - (camp[k] ?? 0); // 구매분 차감 = 순수 성장
-        if (organic !== 0) statDeltas.push({ label, delta: organic, from, to: from + organic });
-      }
-      career = { debutOvr: after.debut.ovr, curOvr, deltaOvr: curOvr - after.debut.ovr, statDeltas };
-    }
-    if (deltas.length) out.push({ id, name: after.name, position: after.position, deltas, career });
+    if (deltas.length) out.push({ id, name: after.name, position: after.position, deltas });
   }
   return out;
+}
+
+/** 이미 진화된 선수(evolveOnDay/getEvolvedPlayer 결과) 1명의 입단 이후 누적 성장.
+ *  debut 스냅샷이 있을 때만(도입 후 생성 선수). campLog로 전지훈련 구매분(cur)을 스탯별로 차감해 **순수(유기적) 성장**만.
+ *  선수 상세 "입단 후 성장" 카드용 — 이미 진화된 p를 재사용해 evolveOnDay 재호출 비용을 없앤다. */
+export function careerGrowthOf(after: { debut?: { ovr: number; stats: Record<string, number> } } & Record<string, unknown>, campLog: CampLogLike[] = []): CareerGrowth | undefined {
+  if (!after.debut) return undefined;
+  const a = after as unknown as Record<string, number>;
+  const curOvr = Math.round(displayOvr(overallRaw(after as any)));
+  const camp = campCurGains(campLog, String((after as any).id ?? ''));
+  const statDeltas: StatDelta[] = [];
+  for (const [k, label] of STAT_ROWS) {
+    const from = after.debut.stats[k] ?? 0;
+    const raw = (a[k] ?? 0) - from;       // 입단→현재(전지훈련 구매분 포함)
+    const organic = raw - (camp[k] ?? 0); // 구매분 차감 = 순수 성장
+    if (organic !== 0) statDeltas.push({ label, delta: organic, from, to: from + organic });
+  }
+  return { debutOvr: after.debut.ovr, curOvr, deltaOvr: curOvr - after.debut.ovr, statDeltas };
+}
+
+/** 선수 1명의 입단 이후 누적 성장(id·날짜로 진화 후 careerGrowthOf). 가드·비UI 호출용 편의 래퍼. */
+export function playerCareerGrowth(playerId: string, atDay: number, campLog: CampLogLike[] = []): CareerGrowth | undefined {
+  const after = evolveOnDay(playerId, atDay);
+  if (!after) return undefined;
+  return careerGrowthOf(after as any, campLog);
 }
 
 // ── 성장 리포트 트리거 게이트 (TRAINING §성장리포트, 2026-07-08 버그수정) ──
@@ -95,14 +107,14 @@ export interface GrowthTrigger {
   bumpTo: number | null;       // lastGrowthDay를 이 값으로 bump(null=보류, 건드리지 않음)
 }
 
-/** 성장 모달 트리거 판정(순수). 호출측(schedule.tsx useFocusEffect)이 결과대로 setLastGrowthDay/모달 처리. */
+/** 성장 모달 트리거 판정(순수). 호출측(schedule.tsx useFocusEffect)이 결과대로 setLastGrowthDay/모달 처리.
+ *  모달은 구간 변화 전용(2026-07-11 재정정) — campLog(누적 캠프 차감)는 여기서 안 쓴다(선수 상세로 이동). */
 export function growthTrigger(
   season: Fixture[],
   teamId: string,
   results: Record<string, MatchResult>,
   lastGrowthDay: number,
   currentDay: number,
-  campLog: CampLogLike[] = [],
 ): GrowthTrigger {
   // 미초기화(-1) → currentDay로 조용히 세팅(밀린 catch-up 폭탄 방지). 표시 없음.
   if (lastGrowthDay < 0) return { show: false, report: [], bumpTo: currentDay };
@@ -115,6 +127,6 @@ export function growthTrigger(
     return { show: false, report: [], bumpTo: null };
   }
   // 완료됨 → 그 구간 성장 표시 + bump.
-  const report = growthReport(teamId, lastGrowthDay, currentDay, campLog);
+  const report = growthReport(teamId, lastGrowthDay, currentDay);
   return { show: report.length > 0, report, bumpTo: currentDay };
 }

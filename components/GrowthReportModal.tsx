@@ -1,6 +1,6 @@
-// 성장 리포트 모달 (TRAINING §성장리포트 — 2026-07-11 정정: 주인공=구간, 누적=보조·전지훈련 제외).
-// 시선: 이름 → 이번 변화(구간 from→to, 주인공) → 누적 성장(캠프 제외, 소형 보조) → 노쇠(조용히).
-// OVR 히어로 블록 제거(매 리포트 누적 재노출 피로 해소). 요약·정렬은 구간 기준. 엔진/데이터/공식 무변경.
+// 성장 리포트 모달 (TRAINING §성장리포트 — 2026-07-11 재정정: 구간 변화 전용, 누적은 선수 상세로 이동).
+// 시선: 이름 → 이번 변화(구간 from→to, 주인공) → 노쇠(조용히). 누적(career) 블록 제거(매 리포트 반복 노출 피로 해소).
+// 요약·정렬은 구간 기준. 엔진/데이터/공식 무변경.
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -20,24 +20,18 @@ const growthScore = (p: PlayerGrowth): number => {
 
 // 성장량 큰 순 정렬(무엇이 가장 컸나 한눈에) — 표시 전용, 원본 불변
 const upsOf = (ds: StatDelta[]) => ds.filter((d) => d.delta > 0).sort((a, b) => b.delta - a.delta);
-const sig = (ds: StatDelta[]) => ds.map((d) => `${d.label}${d.delta}`).join('|'); // 이번==누적 중복 판정
 
-/** 스탯 목록 — 2열 그리드(표): 스탯명 왼쪽 · 값 우측정렬.
- *  주(이번 변화): "77 → 78" from→to(주인공). 보조(누적): "▲N" 소형. */
-function StatGrid({ ups, styles, sub }: { ups: StatDelta[]; styles: any; sub?: boolean }) {
+/** 스탯 목록 — 2열 그리드(표): 스탯명 왼쪽 · "77 → 78" from→to 값 우측정렬. */
+function StatGrid({ ups, styles }: { ups: StatDelta[]; styles: any }) {
   return (
     <View style={styles.statWrap}>
       {ups.map((d, i) => (
         <View key={i} style={styles.cell}>
-          <Text style={sub ? styles.statNameSub : styles.statName} numberOfLines={1}>{d.label}</Text>
-          {sub ? (
-            <Text style={styles.deltaSub}>▲{d.delta}</Text>
-          ) : (
-            <Text style={styles.fromTo} numberOfLines={1}>
-              <Text style={styles.ftFrom}>{d.from} → </Text>
-              <Text style={d.delta >= 3 ? styles.ftToBig : styles.ftTo}>{d.to}</Text>
-            </Text>
-          )}
+          <Text style={styles.statName} numberOfLines={1}>{d.label}</Text>
+          <Text style={styles.fromTo} numberOfLines={1}>
+            <Text style={styles.ftFrom}>{d.from} → </Text>
+            <Text style={d.delta >= 3 ? styles.ftToBig : styles.ftTo}>{d.to}</Text>
+          </Text>
         </View>
       ))}
     </View>
@@ -72,8 +66,6 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
         {shown.map((p) => {
           const ups = upsOf(p.deltas);
           const downs = p.deltas.filter((d) => d.delta < 0);
-          const careerUps = upsOf(p.career?.statDeltas ?? []); // 이미 캠프 제외(data/growthReport)
-          const dupCareer = sig(careerUps) === sig(ups); // 이번==누적이면 누적 줄 생략(중복 제거)
           return (
             <View key={p.id} style={styles.card}>
               {/* 상단 — 이름 + 포지션(OVR 히어로 없음) */}
@@ -93,14 +85,6 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
                     <Text style={styles.lblNow}>이번 변화</Text>
                   </View>
                   <StatGrid ups={ups} styles={styles} />
-                </View>
-              ) : null}
-
-              {/* 누적 성장 — 보조(저대비)·전지훈련 제외 */}
-              {careerUps.length && !dupCareer ? (
-                <View style={styles.section}>
-                  <Text style={styles.lblSub}>입단 후 누적 (전지훈련 제외)</Text>
-                  <StatGrid ups={careerUps} styles={styles} sub />
                 </View>
               ) : null}
 
@@ -165,10 +149,6 @@ const styles = themedStyles(() => StyleSheet.create({
   ftFrom: { color: theme.muted, fontSize: 12.5, fontWeight: '600' },
   ftTo: { color: theme.good, fontSize: 13.5, fontWeight: '900' },
   ftToBig: { color: theme.good, fontSize: 14.5, fontWeight: '900' }, // 큰 폭 더 눈에
-  // 누적 성장 — 보조(저대비)
-  lblSub: { color: theme.muted, fontSize: 10.5, fontWeight: '700', opacity: 0.85 },
-  statNameSub: { color: theme.muted, fontSize: 12, fontWeight: '600', width: 74 },
-  deltaSub: { color: theme.good, fontSize: 12, fontWeight: '700', opacity: 0.7, flex: 1, textAlign: 'right' },
   // 노쇠 — 가장 연하게
   down: { color: theme.muted, fontSize: 11, fontWeight: '600', opacity: 0.45 },
   more: { color: theme.accent, fontSize: 13, fontWeight: '800', textAlign: 'center', paddingVertical: 8 },

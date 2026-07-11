@@ -49,7 +49,7 @@ function ScheduleInner() {
   const [growth, setGrowth] = useState<PlayerGrowth[]>([]);
   useFocusEffect(useCallback(() => {
     const s = useGameStore.getState();
-    const t = growthTrigger(SEASON, s.selectedTeamId ?? '', s.results, s.lastGrowthDay, s.currentDay, s.campLog); // campLog → 누적 표기에서 전지훈련 구매분 차감
+    const t = growthTrigger(SEASON, s.selectedTeamId ?? '', s.results, s.lastGrowthDay, s.currentDay); // 모달=구간 변화 전용(누적은 선수 상세로 이동, 2026-07-11 재정정)
     if (t.bumpTo != null) s.setLastGrowthDay(t.bumpTo); // 보류(null)면 lastGrowthDay 그대로 — 다음 완료 때 그 구간 표시
     if (t.show) setGrowth(t.report);
   }, []));

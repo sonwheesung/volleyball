@@ -1,9 +1,10 @@
-// 경기 보드 — 코트 위 마커(선수)와 노란 공으로 랠리를 시각화.
+// 경기 보드 — 코트 위 마커(선수)와 3색 대회공(VolleyBall)으로 랠리를 시각화.
 // 엔진 SimResult.points 만으로 각 랠리의 서브권·로테이션을 복원(엔진과 동일한 사이드아웃 규칙)
 // → 마커를 실제 코트 위치에 놓고 공을 득점 결과와 일치하게 애니메이션.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Animated, Dimensions, Easing, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import Svg, { Circle, ClipPath, Defs, G, Path } from 'react-native-svg';
 import { Popup } from './Popup';
 import { theme } from './Screen';
 import { themedStyles } from './theme';
@@ -87,6 +88,31 @@ const serveOutY = (side: Side) => (side === 'home' ? COURT_H + SERVE_OUT : -SERV
 /** 한 랠리의 공 이동 경로 — courtPath(순수 모듈, 헤드리스 검증 가능)에 위임 */
 const ballPath = (r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y: number }): WP[] =>
   ballPathRaw(r, seed, L, COURT_W, COURT_H, SERVE_OUT, prevLast);
+
+// 경기공 — 오리지널 3색(백/청/황) 곡선 패널 배구공(저작권: 실물 공인구 특유 패턴 복제 금지, BOARD_RULES 62).
+//  다크 코트 위 고대비(흰 바탕 + 청·황 패널 + 남색 윤곽). 정적 SVG(매 프레임 재렌더 없음 — 이동/크기는 부모 Animated.View transform).
+//  성능: Path 2 + 이음선 2 + 원 2, 그래디언트/필터 없음. viewBox 24로 그려 12px 렌더(확대돼도 SVG라 선명).
+const BALL_PX = 12;
+function VolleyBall() {
+  return (
+    <Svg width={BALL_PX} height={BALL_PX} viewBox="0 0 24 24">
+      <Defs>
+        <ClipPath id="vbClip"><Circle cx={12} cy={12} r={11.2} /></ClipPath>
+      </Defs>
+      <G clipPath="url(#vbClip)">
+        <Circle cx={12} cy={12} r={11.2} fill="#F7FAFF" />
+        {/* 청색 패널(좌) — 원 밖은 클립됨 */}
+        <Path d="M12 0.5 C 5.5 5, 5.5 19, 12 23.5 L -3 23.5 L -3 0.5 Z" fill="#1E6BE6" />
+        {/* 황색 패널(우) */}
+        <Path d="M12 0.5 C 18.5 5, 18.5 19, 12 23.5 L 27 23.5 L 27 0.5 Z" fill="#FFC01E" />
+      </G>
+      {/* 윤곽 + 패널 이음선(진한 남색) */}
+      <Circle cx={12} cy={12} r={11.2} fill="none" stroke="#0B2A5B" strokeWidth={1.1} />
+      <Path d="M12 0.5 C 5.5 5, 5.5 19, 12 23.5" fill="none" stroke="#0B2A5B" strokeWidth={0.8} />
+      <Path d="M12 0.5 C 18.5 5, 18.5 19, 12 23.5" fill="none" stroke="#0B2A5B" strokeWidth={0.8} />
+    </Svg>
+  );
+}
 
 const easingFor = (k: Move) =>
   k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : k === 'bounce' ? Easing.out(Easing.quad) : Easing.linear;
@@ -511,7 +537,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
         {trailDots.map((d) => (
           <View key={d.key} style={[styles.trailDot, { left: d.x - 1.5, top: d.y - 1.5 }]} />
         ))}
-        <Animated.View style={[styles.ball, { transform: ballTransform }]} />
+        <Animated.View style={[styles.ball, { transform: ballTransform }]}>
+          <VolleyBall />
+        </Animated.View>
         {caption ? (
           <View style={[styles.howBadge, { borderColor: caption.color }]}>
             <Text style={[styles.howTxt, { color: caption.color }]}>{caption.txt}</Text>
@@ -722,9 +750,9 @@ const styles = themedStyles(() => StyleSheet.create({
   feedLine: { color: theme.muted, fontSize: 11 },
   feedLast: { color: theme.text, fontSize: 12.5, fontWeight: '700' },
   ball: {
-    position: 'absolute', left: 0, top: 0, width: 12, height: 12, borderRadius: 6,
-    marginLeft: -6, marginTop: -6, backgroundColor: '#FFD23F',
-    borderWidth: 1, borderColor: '#B8860B',
+    // 위치·크기(scale) 애니메이션 래퍼 — 실제 공 그림은 <VolleyBall/>(오리지널 3색 SVG). 중심 정렬 위해 -6 마진.
+    position: 'absolute', left: 0, top: 0, width: BALL_PX, height: BALL_PX,
+    marginLeft: -BALL_PX / 2, marginTop: -BALL_PX / 2,
   },
   trailDot: {
     position: 'absolute', width: 3, height: 3, borderRadius: 1.5,

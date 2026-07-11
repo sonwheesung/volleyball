@@ -26,6 +26,7 @@ import { overall, overallRaw, displayOvr, fogOvr, REVEAL_PRECISE } from '../../e
 import { TRAITS } from '../../engine/traits';
 import { deriveRatings } from '../../engine/ratings';
 import { growthOutlook } from '../../data/growthOutlook';
+import { careerGrowthOf } from '../../data/growthReport';
 import { contractStatus, formatMoney } from '../../engine/salary';
 import { marketVal } from '../../data/awardSalary';
 import { useGameStore } from '../../store/useGameStore';
@@ -126,6 +127,7 @@ function PlayerDetailInner() {
   const benchCooldown = useGameStore((s) => s.benchCooldown);
   const bonds = useGameStore((s) => s.bonds);
   const released = useGameStore((s) => s.released);
+  const campLog = useGameStore((s) => s.campLog); // "입단 후 성장" 누적에서 전지훈련 구매분 차감용
   const [talkAsk, setTalkAsk] = useState(false);
   const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
   const [benchAsk, setBenchAsk] = useState(false); // 벤치 건의 명분 선택 시트(네이티브 Alert 대신 커스텀 — UI-21)
@@ -207,6 +209,10 @@ function PlayerDetailInner() {
 
   // ── 구단주 레이어 (내 팀 선수만) ──
   const isMine = !!myTeamId && rosterIdsOnDay(myTeamId, currentDay).includes(p.id);
+  // "입단 후 성장"(누적) — 내 팀 선수만("내가 키웠다" 서사·타 구단 스카우팅 흐림과 충돌 회피). 이미 진화된 p 재사용(evolveOnDay 재호출 X).
+  // 전지훈련 구매분(campLog)은 차감 → 순수(유기적) 성장만. debut 없으면(구세이브·도입 전 선수) undefined. TRAINING §성장리포트 재정정(2026-07-11).
+  const careerGrowth = isMine ? careerGrowthOf(p as any, campLog) : undefined;
+  const careerUps = careerGrowth ? careerGrowth.statDeltas.filter((d) => d.delta > 0).sort((a, b) => b.delta - a.delta) : [];
   // 스카우팅 공개도 — 내 팀 선수는 전부(포텐까지) 보이고, 타 구단 선수는 스카우터 공개도만큼만(흐림). STAFF_SYSTEM
   const reveal = isMine ? 1 : (myTeamId ? teamScoutReveal(myTeamId) : 1);
   const pot = (s: keyof NonNullable<typeof p.potential>): number | undefined => (isMine ? p.potential?.[s] : undefined);
@@ -655,6 +661,23 @@ function PlayerDetailInner() {
         <StatBar label="서브기술" value={p.skServe} reveal={reveal} potential={pot('skServe')} />
       </Card>
 
+      {/* 입단 후 성장 — 내 팀 선수만, 상승 스탯만 ▲N(전지훈련 제외 = 순수 성장). 상승 0이면 섹션 숨김. TRAINING §성장리포트(2026-07-11 재정정) */}
+      {isMine && careerUps.length > 0 ? (
+        <>
+          <IconLabel icon="trending-up-outline" color={theme.good}>입단 후 성장 (전지훈련 제외)</IconLabel>
+          <Card accent={theme.good}>
+            <View style={styles.growWrap}>
+              {careerUps.map((d) => (
+                <View key={d.label} style={styles.growCell}>
+                  <Text style={styles.growName} numberOfLines={1}>{d.label}</Text>
+                  <Text style={styles.growDelta}>▲{d.delta}</Text>
+                </View>
+              ))}
+            </View>
+          </Card>
+        </>
+      ) : null}
+
       {/* 벤치 건의 명분 선택 — 커스텀 ActionSheet(네이티브 Alert 대신, UI-21) */}
       <ActionSheet
         visible={benchAsk}
@@ -717,6 +740,11 @@ const styles = themedStyles(() => StyleSheet.create({
   avatarImg: { width: 84, height: 84, resizeMode: 'cover' },
   pName: { color: theme.text, fontSize: 24, fontWeight: '900' },
   divider: { height: 1, backgroundColor: theme.border, marginVertical: 10 },
+  // 입단 후 성장 — 2열 그리드(스탯명 왼쪽 · ▲N 우측)
+  growWrap: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
+  growCell: { width: '50%', flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between', paddingRight: 14 },
+  growName: { color: theme.text, fontSize: 13, fontWeight: '700', flexShrink: 1 },
+  growDelta: { color: theme.good, fontSize: 13.5, fontWeight: '900', marginLeft: 8 },
 }));
 
 const mstyles = themedStyles(() => StyleSheet.create({
