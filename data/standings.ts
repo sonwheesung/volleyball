@@ -99,7 +99,7 @@ function allResults(): ResultRow[] {
     }
     for (const f of byDay.get(day)!) {
       const sim = simulateMatch(f.seed, squad[f.homeTeamId], squad[f.awayTeamId], {
-        home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId),
+        home: coachInfoOf(f.homeTeamId, f.dayIndex), away: coachInfoOf(f.awayTeamId, f.dayIndex), // 축3: 그날의 감독(부임 이전 경기는 이전 감독)
       });
       rows.push({
         fixtureId: f.id,

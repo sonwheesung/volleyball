@@ -5,7 +5,7 @@ import './_gt_mock';
 import type { Tx } from '../data/dynamics';
 (async () => {
   const { useGameStore } = await import('../store/useGameStore');
-  const { LEAGUE, currentRosters, setFocusTimeline, getPlayer } = await import('../data/league');
+  const { LEAGUE, currentRosters, setFocusTimeline, getPlayer, hireHeadCoach, availableCoaches, assignCoach } = await import('../data/league');
   const { seasonResults, setStandingsCacheRaw } = await import('../data/standings');
   const { seasonMatchProds, setProductionCacheRaw } = await import('../data/production');
   const { setOwnerContext, setTxContext } = await import('../data/dynamics');
@@ -244,6 +244,69 @@ import type { Tx } from '../data/dynamics';
     const tr0 = Date.now(); off.resolvePreDraftFrom(base2, my, faPoolSample.slice(0, 2), true, protectedIds, nextSeason, ownerFx, cash, []); const resolveMs = Date.now() - tr0;
     console.log(`     [타이밍] base 빌드=${baseMs}ms · 해결(토글 재실행)=${resolveMs}ms · 비율=${baseMs > 0 ? (resolveMs / baseMs * 100).toFixed(0) : '?'}%`);
     check('F 토글 해결 ≤ base 빌드(스냅샷 분리 이득)', resolveMs <= baseMs + 1);
+  }
+
+  // ══════════════════════════════════════════════════════════════════
+  // G. 감독 영입/배정 스플라이스 byte-등가 (축3, REALTIME_SIM §7.2 정정)
+  //    hireCoach(forward-only, recordBump(hireDay))·assignCoach(retroactive)·시퀀스(MIN) 후 splice==force-full.
+  //    coachInfoOf가 day-aware라 부임 이전 경기는 이전 감독 → 재사용 행과 byte-동일해야(오라클).
+  // ══════════════════════════════════════════════════════════════════
+  console.log('═══ G. 감독 스플라이스 byte-등가(축3) ═══');
+  {
+    let gPass = true; const gDet: string[] = [];
+    const cheapCoach = (team: string) => availableCoaches(team).slice().sort((a: any, b: any) => a.salary - b.salary)[0];
+    // G1. 시즌 중 감독 영입 — 여러 부임일에서 splice==full
+    const stages = [myMatchdays[Math.floor(myMatchdays.length / 4)], myMatchdays[Math.floor(myMatchdays.length / 2)], myMatchdays[myMatchdays.length - 2]];
+    for (const hireDay of stages) {
+      G().resetSave(); G().selectTeam(my); fullSig();               // 워밍(이전 세대 캐시 = 스플라이스 재사용 원천)
+      const c = cheapCoach(my); if (!c) { gDet.push('no-coach'); continue; }
+      const ok = hireHeadCoach(my, c.id, hireDay);
+      if (!ok) { gDet.push(`hire-fail d${hireDay}`); continue; }
+      const sp = spliceSig(); const fu = fullSig();
+      if (sp.s !== fu.s || sp.p !== fu.p) { gPass = false; gDet.push(`hire d${hireDay} standEq=${sp.s === fu.s} prodEq=${sp.p === fu.p}`); }
+    }
+    // G2. assignCoach(다른 팀, 소급 recordBump0) — day-aware coachInfoOf 경유 전체 재계산도 splice(=full)==full
+    {
+      G().resetSave(); G().selectTeam(my); fullSig();
+      const other = LEAGUE.teams[3].id; const c = cheapCoach(other);
+      if (c) { assignCoach(other, c.id); const sp = spliceSig(); const fu = fullSig(); if (sp.s !== fu.s || sp.p !== fu.p) { gPass = false; gDet.push('assignCoach'); } }
+    }
+    // G3. 시퀀스: 감독 영입(d1) → 훈련방침(d2) → MIN(d1,d2) 접미 스플라이스 == full
+    {
+      G().resetSave(); G().selectTeam(my); fullSig();
+      const d1 = myMatchdays[Math.floor(myMatchdays.length / 3)];
+      const d2 = myMatchdays[Math.floor((myMatchdays.length * 2) / 3)];
+      const c = cheapCoach(my);
+      if (c && hireHeadCoach(my, c.id, d1)) {
+        setFocusTimeline(my, [{ fromDay: d2, focus: { primary: [2, 3], secondary: [5, 7, 9] } }] as any, d2);
+        const sp = spliceSig(); const fu = fullSig();
+        if (sp.s !== fu.s || sp.p !== fu.p) { gPass = false; gDet.push('seq hire+focus'); }
+      }
+    }
+    // G4. forward-only 불변식(축3 핵심) — 시즌 중 영입 후 부임일 **이전** 경기 결과는 byte 불변(이전 감독).
+    //   (G1 splice==full 과 결합하면 coachInfoOf day-aware 정합을 강제: 소급이었다면 full 이 과거를 바꿔 G1 이 FAIL.)
+    //   A/B: 같은 감독을 day0(소급)로 영입하면 과거가 바뀌어야(부임 감독이 실제로 결과에 영향) → 서로 다름을 확인.
+    {
+      const earlyRows = (upto: number) => JSON.stringify(seasonResults(upto).map((r) => [r.dayIndex, r.homeSets, r.awaySets]));
+      G().resetSave(); G().selectTeam(my); fullSig();
+      const hireDay = myMatchdays[Math.floor(myMatchdays.length / 2)];
+      const before = earlyRows(hireDay - 1);            // 부임 이전 구간 baseline(시드 감독)
+      const c = cheapCoach(my);
+      let fwdPreserved = false, retroChanged = false;
+      if (c) {
+        hireHeadCoach(my, c.id, hireDay);               // forward-only
+        const afterFwd = earlyRows(hireDay - 1);
+        fwdPreserved = afterFwd === before;             // 과거 불변(forward-only)
+        // 소급(day0) 영입으로 대조 — 같은 감독이 과거에도 부임했다면 과거 경기가 달라질 수 있음
+        G().resetSave(); G().selectTeam(my); fullSig();
+        const c2 = cheapCoach(my);
+        if (c2) { hireHeadCoach(my, c2.id, 0); retroChanged = earlyRows(hireDay - 1) !== before; }
+      }
+      check('G forward-only: 부임 이전 경기 byte 불변', fwdPreserved);
+      // retroChanged 는 "감독이 실제로 결과에 영향 있을 때만" true — 영향 없는 감독이면 무효(정보용, 실패 아님)
+      console.log(`     [A/B] forward=과거불변(${fwdPreserved}) · 소급day0=과거변화(${retroChanged}) ${retroChanged ? '→ day-aware 실효 확인' : '(이 감독은 과거 스코어 무영향 — 참고)'}`);
+    }
+    check('G 감독 영입/배정/시퀀스 splice==full', gPass, gDet.join(' | '));
   }
 
   console.log(`\n═══ 결과: ${pass} PASS · ${fail} FAIL | A/B: ${ab - abFail}/${ab} 유효(무효 ${abFail}) ═══`);

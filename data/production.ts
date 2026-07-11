@@ -73,7 +73,7 @@ function allProdRows(): ProdRow[] {
       // 그대로 통산/시즌/시상/연봉에 쌓인다(SALARY_SYSTEM 1.3). box는 승패 불변(클론 누적만).
       const box: BoxSink = new Map();
       const sim = simulateMatch(f.seed, roster[f.homeTeamId], roster[f.awayTeamId], {
-        home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId), box,
+        home: coachInfoOf(f.homeTeamId, f.dayIndex), away: coachInfoOf(f.awayTeamId, f.dayIndex), box, // 축3: 그날의 감독
       });
       const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed, box);
       const starters = new Set<string>([

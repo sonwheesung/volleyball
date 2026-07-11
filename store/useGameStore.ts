@@ -11,7 +11,7 @@ import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusTime
   hireHeadCoach, hireAssistant as hireAsstLeague, releaseAssistant as releaseAsstLeague,
   hireScout as hireScoutLeague, releaseScout as releaseScoutLeague, commitStaff, getStaffState, teamScoutReveal,
   currentCoachPool, commitCoachPool, assignCoach, reconcileStaff, resignTeamCoach, fireCoach as fireCoachLeague, getTeamCoach, grantStartingStaff, LEAGUE,
-  currentBasePlayers } from '../data/league';
+  currentBasePlayers, getCoachTimeline } from '../data/league';
 import { medianOvr, MED_REF } from '../engine/overall';
 import { advanceCoaches } from '../data/staffLifecycle';
 import { bottomStreak } from '../engine/staffLifecycle';
@@ -721,9 +721,12 @@ export const useGameStore = create<GameState>()(
       },
       // 스태프 계약(STAFF_SYSTEM) — league가 예산·중복을 판정하고, 성공 시 상태를 동기화
       hireCoach: (coachId) => {
-        const tid = get().selectedTeamId;
+        const s0 = get();
+        const tid = s0.selectedTeamId;
         if (!tid) return false;
-        const ok = hireHeadCoach(tid, coachId);
+        // 축3: 부임일 = 아직 안 치른 다음 경기일(setTrainingFocus와 동일). 그날부터 새 감독 → 이전 경기·성장은 이전 감독(forward-only).
+        const hireDay = Math.max(s0.currentDay, playedThroughDay(s0.results) + 1);
+        const ok = hireHeadCoach(tid, coachId, hireDay);
         if (ok) { const s = getStaffState(); set((st) => ({ staffHead: s.head, staffAssistants: s.asst, staffScouts: s.scout, coachPool: currentCoachPool(), careerLog: { ...st.careerLog, coachHires: st.careerLog.coachHires + 1 } })); diag(get().season, 'staff', `감독 선임 ${coachId}`); } // 진단 로그(§13.20 ④)
         return ok;
       },
@@ -1394,6 +1397,7 @@ export const useGameStore = create<GameState>()(
         trainingFocus: s.trainingFocus,
         focusLog: s.focusLog, // 훈련 방침 타임라인(A4)
         staffHead: s.staffHead,
+        staffHeadTimeline: getCoachTimeline(), // 감독 부임 타임라인(축3) — 재로드 후에도 시즌 중 영입 forward-only 유지(라이브 리그 상태 읽기)
         staffAssistants: s.staffAssistants,
         staffScouts: s.staffScouts,
         interviews: s.interviews,
@@ -1434,7 +1438,7 @@ export const useGameStore = create<GameState>()(
           if (state?.coachPool) commitCoachPool(state.coachPool.coaches, state.coachPool.assistants); // 감독 풀 복원(commitStaff 전 — staffHead가 참조)
           // 훈련 방침 타임라인 복원(A4) — 마이그레이션이 구세이브의 단일 trainingFocus를 focusLog로 시드해 둠([{fromDay:0}]).
           if (state?.selectedTeamId) setFocusTimeline(state.selectedTeamId, state.focusLog ?? []);
-          if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {});
+          if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {}, (state as { staffHeadTimeline?: Record<string, { fromDay: number; coachId: string | null }[]> })?.staffHeadTimeline); // 축3: 타임라인 복원(구세이브=undefined→소급=byte 불변)
           setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
           setRelationContext(state?.bonds ?? {}); // 인간관계 우정 컨텍스트(FA 해석)
           setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)

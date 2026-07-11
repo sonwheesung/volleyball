@@ -40,9 +40,29 @@ let seedAssistants: AssistantCoach[] = LEAGUE.assistants.map((a) => ({ ...a }));
 let seedScouts: Scout[] = LEAGUE.scouts.map((s) => ({ ...s }));
 
 // ─── 스태프 계약(STAFF_SYSTEM) — 단장이 영입한 감독/코치/스카우터 ───
-let headCoachOverride: Record<string, string> = {};                 // teamId → 영입 감독 id(시드 감독 대체)
+let headCoachOverride: Record<string, string> = {};                 // teamId → 영입 감독 id(시드 감독 대체, **현재**)
 let teamAssistantIds: Record<string, string[]> = {};                // teamId → 영입 코치 ids
 let teamScoutIds: Record<string, string[]> = {};                    // teamId → 영입 스카우터 ids
+
+// ─── 감독 부임 타임라인(축3, REALTIME_SIM §7.2 정정) — coachInfoOf/coachDefaultFocus를 **day-aware**로 만들어
+//   시즌 중 감독 영입을 forward-only(부임일 이전 경기·성장은 이전 감독)로 만든다. 없으면(빈 타임라인) coachInfoOf가
+//   현재 감독(headCoachOverride)으로 폴백 = **소급**(=day0 백필 = 구세이브·정상게임 byte 불변). 세그먼트는 시즌 중
+//   영입에서만 쌓이고, 소급/전체 무효화 이벤트(assignCoach·fireCoach·commitStaff·reset·reseed)에서 비워진다(=day0 붕괴). ───
+type CoachSeg = { fromDay: number; coachId: string | null }; // coachId=null → 시드/공석 복귀
+let headCoachTimeline: Record<string, CoachSeg[]> = {};
+
+/** 시즌 중 감독 부임 세그먼트 추가(fromDay>0). 첫 세그먼트면 부임 전 현 감독을 day0 baseline으로 먼저 심어
+ *  부임일 이전이 시드로 새는 것 방지(경질 후 대행이 day0..부임일을 지킨 경우 등). 반드시 headCoachOverride 갱신 **전** 호출. */
+function pushCoachSeg(teamId: string, fromDay: number, coachId: string | null): void {
+  const d = Math.max(0, Math.floor(fromDay));
+  let segs = headCoachTimeline[teamId] ?? [];
+  // 부임 전 감독을 day0 baseline으로 보존 — **id를 명시**(시드 감독 포함). null로 두면 영입 시 시드 감독이 teamId=null로
+  //   분리돼 teamHeadCoachOn의 "시드-잔류" 폴백이 깨져 부임 이전이 DEFAULT_FOCUS로 새는 버그(발견 2026-07-11 _dv_splice G).
+  if (!segs.length && d > 0) segs = [{ fromDay: 0, coachId: teamHeadCoach(teamId)?.id ?? null }];
+  segs = segs.filter((s) => s.fromDay < d);
+  segs.push({ fromDay: d, coachId });
+  headCoachTimeline[teamId] = segs;
+}
 
 // ─── 가변 로스터 + 캐시 ───
 const seedRosters = (): Record<string, string[]> =>
@@ -51,6 +71,23 @@ const seedRosters = (): Record<string, string[]> =>
 let rosters: Record<string, string[]> = seedRosters();
 let playerFocus = new Map<string, FocusResolver>(); // 선수 → 소속팀 날짜별 방침 해석기(A4 타임라인)
 let playerEffects = new Map<string, StaffEffects>(); // 선수 → 소속팀 전문코치 종합 효과
+// 축1(evoOneCache 콘텐츠 시그니처) — 선수별 진화 입력 서명. base는 참조동일로, focus/effects는 이 문자열로 판정.
+//   focusOf(base)·effectsOf(base)와 **정확히 대응**해야 함(누락=stale). rebuildFocus에서 팀 서명을 소속 선수에 배포.
+let playerFocusSig = new Map<string, string>();     // 선수 → 소속팀 방침 서명(focusTimeline + 감독 타임라인 focus)
+let playerEffectsSig = new Map<string, string>();   // 선수 → 소속팀 스태프효과 서명
+const SENT_FOCUS_SIG = '__FA_default__';            // 로스터 밖(FA) — focusOf=()=>DEFAULT_FOCUS 대응(팀 서명과 불충돌)
+const SENT_EFFECTS_SIG = '__FA_noeff__';            // 로스터 밖(FA) — effectsOf=NO_EFFECTS 대응
+
+/** 팀의 날짜별 방침 리졸버를 **결정론 직렬화**한 서명 — teamFocusResolver가 쓰는 입력 전부(훈련 오버라이드
+ *  세그먼트 + 감독 타임라인의 그날 기본 focus)를 담는다. 감독 변경 경계와 day0에서만 focus가 바뀌므로 그 경계들의
+ *  유효 focus를 직렬화하면 리졸버 전체가 결정된다. */
+function teamFocusSig(teamId: string): string {
+  const focus = JSON.stringify(focusTimeline[teamId] ?? []);
+  const cs = headCoachTimeline[teamId] ?? [];
+  const boundaries = [0, ...cs.map((s) => s.fromDay)]; // day0 + 각 감독 변경일
+  const coach = boundaries.map((d) => `${d}:${JSON.stringify(coachDefaultFocusOn(teamId, d))}`).join(',');
+  return `${focus}#${coach}`;
+}
 // 단장이 고른 팀별 훈련 방향 **타임라인**(A4, 2026-07-08 — "바꾼 날부터 적용"). 없으면 감독 기본.
 //   구 `focusOverride: Record<string, TrainingFocus>`(단일 오버라이드=day0부터 소급)를 세그먼트 타임라인으로 교체.
 let focusTimeline: Record<string, FocusSeg[]> = {};
@@ -61,9 +98,13 @@ export const baseVersion = (): number => _baseVersion;
 // (저장된 건 standings/production 계산결과뿐 — 진화 캐시는 필요 시 재빌드). _gt 검증에서만 호출되도록 신중히.
 export const setBaseVersion = (n: number): void => { _baseVersion = n; evoCache = null; };
 
-/** 팀 감독 기본 방침(오버라이드 없을 때 폴백) */
+/** 팀 감독 기본 방침(오버라이드 없을 때 폴백, **현재** 감독) */
 const coachDefaultFocus = (teamId: string): TrainingFocus =>
   teamHeadCoach(teamId)?.trainingFocus ?? DEFAULT_FOCUS;
+
+/** 팀 감독 기본 방침 — **day 시점** 감독(축3 forward-only). 타임라인 없으면 현재 감독(=소급, byte 불변). */
+const coachDefaultFocusOn = (teamId: string, day: number): TrainingFocus =>
+  teamHeadCoachOn(teamId, day)?.trainingFocus ?? DEFAULT_FOCUS;
 
 /** 팀의 **현재(최신)** 훈련 방향 — 타임라인 마지막 세그먼트 우선(단장 오버라이드), 없으면 감독 기본.
  *  표시·AI 등 "지금 방침"이 필요한 곳용. 진화(성장 리플레이)는 날짜별이라 teamFocusResolver를 쓴다. */
@@ -76,14 +117,16 @@ function teamFocus(teamId: string): TrainingFocus {
 /** 팀의 **날짜별** 훈련 방향 해석기(A4) — 진화 리플레이가 "그날의 방침"으로 성장시키게. fromDay ≤ day 인 마지막
  *  세그먼트의 focus(null이면 감독 기본으로 복귀). 세그먼트가 없으면(AI 팀 등) 매일 감독 기본. */
 function teamFocusResolver(teamId: string): FocusResolver {
-  const def = coachDefaultFocus(teamId);
   const segs = focusTimeline[teamId];
-  if (!segs || !segs.length) return () => def;
-  const sorted = [...segs].sort((a, b) => a.fromDay - b.fromDay);
+  const cs = headCoachTimeline[teamId];
+  const hasCoachTl = !!(cs && cs.length);
+  // 훈련 오버라이드도, 감독 타임라인도 없으면 상수 방침(현재 감독 기본) — 기존과 byte 동일(빠른 경로).
+  if ((!segs || !segs.length) && !hasCoachTl) { const def = coachDefaultFocus(teamId); return () => def; }
+  const sorted = segs && segs.length ? [...segs].sort((a, b) => a.fromDay - b.fromDay) : null;
   return (day: number): TrainingFocus => {
     let f: TrainingFocus | null = null;
-    for (const s of sorted) { if (s.fromDay <= day) f = s.focus; else break; }
-    return f ?? def;
+    if (sorted) for (const s of sorted) { if (s.fromDay <= day) f = s.focus; else break; }
+    return f ?? coachDefaultFocusOn(teamId, day); // 감독 기본은 그날의 감독(축3)
   };
 }
 
@@ -94,6 +137,19 @@ function teamHeadCoach(teamId: string): Coach | undefined {
   if (ov && coachMap.has(ov)) return coachMap.get(ov);
   const seed = coachMap.get(teamMap.get(teamId)?.coachId ?? '');
   return seed && seed.teamId === teamId ? seed : undefined; // 떠난 시드 감독은 폴백 안 함(공석→기본 감독)
+}
+
+/** 팀 감독 — **day 시점**(축3 forward-only). 부임 타임라인이 있으면 그날 유효 세그먼트의 감독,
+ *  타임라인 없으면 현재 감독(teamHeadCoach)으로 폴백(=소급 = 정상게임·구세이브 byte 불변). */
+function teamHeadCoachOn(teamId: string, day: number): Coach | undefined {
+  const segs = headCoachTimeline[teamId];
+  if (!segs || !segs.length) return teamHeadCoach(teamId);
+  let cid: string | null | undefined;
+  for (const s of segs) { if (s.fromDay <= day) cid = s.coachId; else break; } // 세그먼트는 fromDay 오름차순 유지
+  if (cid && coachMap.has(cid)) return coachMap.get(cid);
+  // cid=null(시드/공석/부임 이전) → 시드 감독(아직 그 팀 소속일 때만)
+  const seed = coachMap.get(teamMap.get(teamId)?.coachId ?? '');
+  return seed && seed.teamId === teamId ? seed : undefined;
 }
 
 // ─── AI 팀 기본 스태프(STAFF_SYSTEM 7) — 전엔 AI가 시드 감독뿐, 코치·스카우터 0이라 성장·스카우팅
@@ -151,10 +207,17 @@ function teamScoutsOf(teamId: string): Scout[] {
 function rebuildFocus(): void {
   playerFocus = new Map();
   playerEffects = new Map();
+  playerFocusSig = new Map();     // 서명도 매 리빌드마다 새로 — 로스터를 떠난 선수의 stale 서명 제거(FA→센티넬로 폴백)
+  playerEffectsSig = new Map();
   for (const t of LEAGUE.teams) {
     const resolver = teamFocusResolver(t.id); // 날짜별 방침(A4 타임라인) — 팀 전원 공유
     const effects = staffEffects(teamAssistantsOf(t.id));
-    for (const pid of rosters[t.id] ?? []) { playerFocus.set(pid, resolver); playerEffects.set(pid, effects); }
+    const fsig = teamFocusSig(t.id);          // 축1: 팀 방침 서명(진화 입력 대응)
+    const esig = JSON.stringify(effects);      // 축1: 팀 스태프효과 서명
+    for (const pid of rosters[t.id] ?? []) {
+      playerFocus.set(pid, resolver); playerEffects.set(pid, effects);
+      playerFocusSig.set(pid, fsig); playerEffectsSig.set(pid, esig);
+    }
   }
 }
 rebuildFocus();
@@ -204,9 +267,10 @@ export const getTeamPlayers = (teamId: string): Player[] =>
 
 export const getTeamCoach = (teamId: string): Coach | undefined => teamHeadCoach(teamId);
 
-/** 경기 엔진용 감독 정보(성향·카리스마) — MATCH_SYSTEM 8장. 영입 감독 반영. */
-export const coachInfoOf = (teamId: string): CoachInfo | undefined => {
-  const c = teamHeadCoach(teamId);
+/** 경기 엔진용 감독 정보(성향·카리스마) — MATCH_SYSTEM 8장. 영입 감독 반영.
+ *  day 주면 **그날의 감독**(축3 forward-only, 부임 이전 경기는 이전 감독). 생략하면 현재 감독(포스트시즌·표시·도구용). */
+export const coachInfoOf = (teamId: string, day?: number): CoachInfo | undefined => {
+  const c = day === undefined ? teamHeadCoach(teamId) : teamHeadCoachOn(teamId, day);
   return c ? { style: c.style, charisma: c.charisma } : undefined;
 };
 
@@ -250,28 +314,35 @@ export const teamScoutReveal = (teamId: string): number =>
   // 진단 전용(밸런스 A/B 3번째 팔): FORCE_REVEAL=1이면 전 팀 공개도 1 → 스카우팅 비대칭 제거, 새 타게팅만 격리 측정.
   (typeof process !== 'undefined' && process.env && process.env.FORCE_REVEAL) ? 1 : scoutReveal(teamScoutsOf(teamId));
 
-function invalidateStaff(affectsTraining: boolean): void {
+function invalidateStaff(affectsTraining: boolean, minAffectedDay = 0): void {
   // baseVersion(전 시즌 결과/생산 캐시 키)은 *시뮬에 영향을 주는* 스태프 변경에서만 올린다.
   // 스카우터(드래프트 표시만)·감독 재계약(계약만)은 경기 결과가 byte 동일 → 무효화하면
   // 같은 숫자를 1.7s 재시뮬하는 순수 낭비 프리즈였다(검증: A/B 결과 동일, baseVersion 키 캐시는
   // 전부 진화/경기 시뮬용뿐 — 스카우팅 공개도는 baseVersion 무관). 2026-06-24 교정.
-  if (affectsTraining) { rebuildFocus(); evoCache = null; _baseVersion++; recordBump(0); } // 스태프 효과는 day0부터 전 시즌 적용 → 소급(스플라이스 불가)
+  // minAffectedDay(축3): 시즌 중 감독 영입은 부임일 접미만 무효화(forward-only, 순위·생산 스플라이스). 기본 0=소급(전체).
+  if (affectsTraining) { rebuildFocus(); evoCache = null; _baseVersion++; recordBump(minAffectedDay); }
 }
 
-/** 감독 영입(시드 감독 대체). 예산 초과면 거부(false). */
-export function hireHeadCoach(teamId: string, coachId: string): boolean {
+/** 감독 영입(시드 감독 대체). 예산 초과면 거부(false).
+ *  hireDay(축3, 기본 0): 부임일. 0이면 소급(day0부터 = 구경로·도구 byte 불변), >0이면 forward-only(부임 이전 경기는 이전 감독). */
+export function hireHeadCoach(teamId: string, coachId: string, hireDay = 0): boolean {
   const c = coachMap.get(coachId);
   if (!c || (c.teamId !== null) || isCoachHired(coachId)) return false;
   if ((c.firedFrom ?? []).includes(teamId)) return false; // 그 팀에서 경질된 감독은 다시 영입 불가(STAFF_SYSTEM 6.4)
   const newSpend = staffSpend(teamId) - (teamHeadCoach(teamId)?.salary ?? 0) + c.salary;
   if (newSpend > STAFF_BUDGET) return false;
+  if (hireDay > 0) pushCoachSeg(teamId, hireDay, coachId); // 축3: headCoachOverride 갱신 **전**(부임 전 감독을 baseline으로)
+  else headCoachTimeline[teamId] = []; // day0 영입=소급 → 타임라인 붕괴(현재 감독 = day0)
   const prev = headCoachOverride[teamId];
-  if (prev?.startsWith('acting_')) { coachPool = coachPool.filter((x) => x.id !== prev); coachMap.delete(prev); } // 대행은 임시 — 제거
+  if (prev?.startsWith('acting_')) {
+    coachPool = coachPool.filter((x) => x.id !== prev); // 대행은 영입 목록에서 제거
+    if (hireDay <= 0) coachMap.delete(prev); // 소급이면 과거 세그먼트가 대행을 참조 안 함 → 맵에서도 제거. forward면 [0,hireDay) 세그먼트가 참조 → 맵 유지(coachInfoOf 해석용)
+  }
   else if (prev) { const pc = coachMap.get(prev); if (pc) { pc.teamId = null; pc.contractYears = undefined; } } // 기존 감독 FA로
   else { const seed = teamHeadCoach(teamId); if (seed && seed.id !== coachId) { seed.teamId = null; seed.contractYears = undefined; } } // 오버라이드 없던(시드 감독) 교체 — 떠나는 시드 감독을 FA로(teamId 고아 점유 방지)
   headCoachOverride[teamId] = coachId;
   c.teamId = teamId; c.contractYears = 3; // 단일 진실 + 3년 계약
-  invalidateStaff(true); // 성향·훈련선호 바뀜
+  invalidateStaff(true, hireDay); // 성향·훈련선호 바뀜 — 부임일 접미만(forward-only)
   return true;
 }
 /** 생애주기 재배정 — 예산·검증 없이 감독을 팀에 배정(AI 자동 선임, STAFF_SYSTEM 6). null=배정 해제(기본 감독). */
@@ -279,6 +350,7 @@ export function assignCoach(teamId: string, coachId: string | null): void {
   const prev = headCoachOverride[teamId]; if (prev && prev !== coachId) { const pc = coachMap.get(prev); if (pc) { pc.teamId = null; pc.contractYears = undefined; } }
   if (coachId === null) delete headCoachOverride[teamId];
   else { headCoachOverride[teamId] = coachId; const c = coachMap.get(coachId); if (c) c.teamId = teamId; }
+  delete headCoachTimeline[teamId]; // 소급 배정(오프시즌 AI 재배정 등, recordBump 0) → 타임라인 붕괴(day0부터 새 감독)
   invalidateStaff(true);
 }
 
@@ -288,6 +360,7 @@ export function fireCoach(teamId: string): { acting: string | null } {
   const cur = teamHeadCoach(teamId);
   if (cur && !cur.id.startsWith('acting_')) { cur.teamId = null; cur.contractYears = undefined; cur.firedFrom = [...(cur.firedFrom ?? []), teamId]; }
   delete headCoachOverride[teamId];
+  delete headCoachTimeline[teamId]; // 경질=소급(recordBump 0, 현행 유지) → 타임라인 붕괴(대행/공석이 day0부터)
   // 전문 코치 중 최고 역량을 대행으로 캐스팅(임시 Coach — 새 감독 영입 시 제거)
   const best = teamAssistantsOf(teamId).sort((a, b) => b.rating - a.rating)[0];
   if (best) {
@@ -321,6 +394,7 @@ export function resignTeamCoach(teamId: string): boolean {
 export function reconcileStaff(): { head: Record<string, string>; asst: Record<string, string[]>; scout: Record<string, string[]> } {
   for (const tid of Object.keys(headCoachOverride)) if (!coachMap.has(headCoachOverride[tid])) delete headCoachOverride[tid];
   for (const tid of Object.keys(teamAssistantIds)) teamAssistantIds[tid] = teamAssistantIds[tid].filter((id) => assistantMap.has(id));
+  headCoachTimeline = {}; // 오프시즌 경계(축3): 지난 시즌 중 영입 세그먼트를 붕괴 — 다음 시즌은 현재 감독이 day0부터
   invalidateStaff(true);
   return getStaffState();
 }
@@ -354,12 +428,16 @@ export function releaseScout(teamId: string, id: string): void {
   invalidateStaff(false);
 }
 
-/** 세이브 동기화 — 스토어에서 영입 상태 주입 */
-export function commitStaff(head: Record<string, string>, asst: Record<string, string[]>, scout: Record<string, string[]>): void {
+/** 세이브 동기화 — 스토어에서 영입 상태 주입.
+ *  timeline(축3, 가법): 감독 부임 타임라인 복원. 없으면(구세이브) 빈 타임라인 → coachInfoOf가 현재 감독 소급(day0 백필과
+ *  동일 = 과거 byte 불변). 신세이브는 저장된 타임라인으로 forward-only(시즌 중 영입) 재현이 재로드 후에도 유지된다. */
+export function commitStaff(head: Record<string, string>, asst: Record<string, string[]>, scout: Record<string, string[]>, timeline?: Record<string, CoachSeg[]>): void {
   headCoachOverride = { ...head };
   teamAssistantIds = { ...asst };
   teamScoutIds = { ...scout };
-  rebuildFocus(); evoCache = null; _baseVersion++; recordBump(0);
+  headCoachTimeline = {};
+  if (timeline) for (const t of Object.keys(timeline)) { const segs = (timeline[t] ?? []).filter((s) => s && Number.isFinite(s.fromDay)); if (segs.length) headCoachTimeline[t] = [...segs].sort((a, b) => a.fromDay - b.fromDay); }
+  rebuildFocus(); evoCache = null; clearEvoOne(); _baseVersion++; recordBump(0);
 }
 
 // ─── 격리 실행용 스냅샷/복원 (영입 무결성 감사 등 — 라이브 세이브를 건드리지 않고 시뮬) ───
@@ -371,6 +449,7 @@ export interface LeagueSnapshot {
   coaches: Coach[]; assistants: AssistantCoach[];
   head: Record<string, string>; asst: Record<string, string[]>; scout: Record<string, string[]>;
   focus: Record<string, FocusSeg[]>; // 훈련 방침 타임라인(A4)
+  coachTl: Record<string, CoachSeg[]>; // 감독 부임 타임라인(축3) — 격리 감사가 라이브 forward-only 상태를 보존
   myTeamStaff: string;
 }
 
@@ -383,6 +462,7 @@ export function snapshotLeagueState(): LeagueSnapshot {
     assistants: assistantPool.map((a) => ({ ...a })),
     head: { ...headCoachOverride }, asst: jclone(teamAssistantIds), scout: jclone(teamScoutIds),
     focus: jclone(focusTimeline),
+    coachTl: jclone(headCoachTimeline),
     myTeamStaff,
   };
 }
@@ -397,10 +477,18 @@ export function restoreLeagueState(s: LeagueSnapshot): void {
   teamAssistantIds = jclone(s.asst);
   teamScoutIds = jclone(s.scout);
   focusTimeline = jclone(s.focus);
+  headCoachTimeline = s.coachTl ? jclone(s.coachTl) : {}; // 축3: 라이브 감독 타임라인 복원(구 스냅샷=없음→{})
   myTeamStaff = s.myTeamStaff;
-  rebuildFocus(); evoCache = null; _baseVersion++; recordBump(0);
+  rebuildFocus(); evoCache = null; clearEvoOne(); _baseVersion++; recordBump(0);
 }
 export const getStaffState = () => ({ head: { ...headCoachOverride }, asst: { ...teamAssistantIds }, scout: { ...teamScoutIds } });
+
+/** 감독 부임 타임라인(축3) — 세이브 영속용(partialize가 저장 시점 라이브 상태를 읽음). 시즌 중 영입이 없으면 대개 {}. */
+export const getCoachTimeline = (): Record<string, CoachSeg[]> => {
+  const out: Record<string, CoachSeg[]> = {};
+  for (const t of Object.keys(headCoachTimeline)) { const segs = headCoachTimeline[t]; if (segs && segs.length) out[t] = segs.map((s) => ({ ...s })); }
+  return out;
+};
 
 /** 시작 기본 스태프(ONBOARDING 6) — 플레이어 팀이 영입 스태프 0이면 FA 풀에서 **중위권** 전문코치 1 +
  *  스카우터 1을 결정론(역량 정렬 후 중앙값)으로 자동 영입(예산·슬롯 내). 이미 있으면 무시(멱등).
@@ -448,6 +536,7 @@ export function commitPlayerBase(snapshot: Record<string, Player>): void {
     playerMap.set(id, p.traits ? p : { ...p, traits: rollTraits(id) });
   }
   evoCache = null;
+  clearEvoOne(); // 축1: 시즌 경계 base 교체 → 메모 비움(메모리 바운드). 참조검사가 정확성은 보장하나 여기서 정리
   _baseVersion++;
   recordBump(0); // 선수 베이스 스냅샷 반영 = 전 시즌 진화/경기 소급 변경 가능 → 전체 무효화
 }
@@ -457,6 +546,7 @@ export function commitRosters(next: Record<string, string[]>): void {
   rosters = next;
   rebuildFocus();
   evoCache = null;
+  clearEvoOne(); // 축1: 로스터 교체 → 메모 비움(메모리 바운드)
   _baseVersion++;
   recordBump(0); // 로스터 통째 교체 = 전 시즌 소급 → 전체 무효화
 }
@@ -473,10 +563,12 @@ export function resetLeagueBase(): void {
   scoutMap = new Map(seedScouts.map((s) => [s.id, { ...s }]));
   focusTimeline = {};
   headCoachOverride = {};
+  headCoachTimeline = {};
   teamAssistantIds = {};
   teamScoutIds = {};
   rebuildFocus();
   evoCache = null;
+  clearEvoOne();
   _baseVersion++;
   recordBump(0); // 세이브 초기화 = 전체
 }
@@ -503,11 +595,13 @@ export function reseedLeague(leagueSeed: number, seasonSeed: number): void {
   rosters = seedRosters();
   focusTimeline = {};
   headCoachOverride = {};
+  headCoachTimeline = {};
   teamAssistantIds = {};
   teamScoutIds = {};
   aiAsstCache.clear(); aiScoutCache.clear(); // 새 유니버스 — AI 기본 스태프 캐시 무효화
   rebuildFocus();
   evoCache = null;
+  clearEvoOne();
   _baseVersion++;
   recordBump(0); // 새 유니버스 = 전체
 }
@@ -533,19 +627,27 @@ export function evolvedPlayers(day: number): Map<string, Player> {
 export const getEvolvedPlayer = (id: string, day: number): Player | undefined =>
   evolvedPlayers(day).get(id);
 
-// 임의 선수(로스터 외 FA 포함)를 day까지 진화 — 날짜 인지 명단(dynamics)용. baseVersion 단위 메모.
-const evoOneCache = new Map<string, Player>();
-let evoOneKey = -1;
+// 임의 선수(로스터 외 FA 포함)를 day까지 진화 — 날짜 인지 명단(dynamics)용.
+// 축1(콘텐츠 시그니처 캐싱, REALTIME_SIM §7.2 정정): 구현은 baseVersion 단일 세대키로 **전체 clear**였다 —
+//   어떤 bump(감독 영입 등)든 6/7팀이 안 바뀌는데도 헛계산(폰 ~11s의 86%). 이제 엔트리마다 **선수별 진화 입력
+//   서명**을 저장하고, 입력이 그대로면 baseVersion이 올라도 자동 재사용(self-healing). 서명 =
+//   base(참조동일) + 팀 focus 서명 + 팀 effects 서명. 이 셋이 evolvePlayer(base, focusOf, day, effectsOf) 입력과 대응.
+//   evolvePlayer 순수함수·결정론 핵심은 미변 — 캐시 키 정밀도만 상향(§7.2가 유보했던 건 "날짜범위 분리", 이건 "팀/콘텐츠 분리").
+// 메모리 바운드: 시즌 경계(commitPlayerBase/commitRosters/reset/reseed/restore)에서 clearEvoOne()로 비운다 —
+//   시즌 중 액션(영입·훈련·거래·벤치)은 안 비워 재사용 유지(축1 이득), 크기 ≈ 선수수 × 조회날짜(1시즌분) bounded.
+const evoOneCache = new Map<string, { base: Player; fsig: string; esig: string; player: Player }>();
+function clearEvoOne(): void { evoOneCache.clear(); }
 export function evolveOnDay(id: string, day: number): Player | undefined {
   day = Math.min(day, SEASON_DAYS); // 포스트시즌 동결(§5) — evolvedPlayers와 동일 클램프
-  if (evoOneKey !== _baseVersion) { evoOneCache.clear(); evoOneKey = _baseVersion; }
-  const k = `${id}:${day}`;
-  const hit = evoOneCache.get(k);
-  if (hit) return hit;
   const base = playerMap.get(id);
   if (!base) return undefined;
+  const fsig = playerFocusSig.get(id) ?? SENT_FOCUS_SIG;   // 로스터 밖(FA)=센티넬(focusOf=()=>DEFAULT_FOCUS 대응)
+  const esig = playerEffectsSig.get(id) ?? SENT_EFFECTS_SIG;
+  const k = `${id}:${day}`;
+  const hit = evoOneCache.get(k);
+  if (hit && hit.base === base && hit.fsig === fsig && hit.esig === esig) return hit.player; // 입력 불변 → 재사용
   const ev = evolvePlayer(base, focusOf(base), day, effectsOf(base));
-  evoOneCache.set(k, ev);
+  evoOneCache.set(k, { base, fsig, esig, player: ev });
   return ev;
 }
 

@@ -171,17 +171,76 @@ SAVE_VERSION 하드 범프 불요(재생성 가능 — Phase3 정책).
 
 ### 7.2 스플라이스 안 한 것 (그리고 이유)
 - **dyn(부상/거래) forward-pass = 전체 유지.** 부상은 그날 라인업의 RNG로 굴려 **미래로 캐스케이드**(span이
-  뒤 경기를 깎음)라 접미 재사용이 byte-동일을 보장 못 한다. 게다가 tx-only bump에선 dyn 재계산이 **이미 싸다**
-  (11ms warm — evoOneCache가 baseVersion 불변이라 데워짐). 0.6s의 실체는 **순위·생산의 경기 시뮬 루프**였고
-  그건 스플라이스가 죽인다. dyn은 전체 재계산이 정답(단순·안전).
+  뒤 경기를 깎음)라 접미 재사용이 byte-동일을 보장 못 한다. **그러나 dyn 재계산 비용의 지배항(evolveOnDay
+  86%)은 아래 축1 콘텐츠 시그니처로 죽였다** — baseVersion bump 시 dyn 전체 forward-pass는 여전히 돌지만,
+  그 안의 evolveOnDay가 안 바뀐 6팀 선수를 재사용하므로 콜드 비용이 급감(측정 §7.5). dyn 자체의 접미 스플라이스는
+  여전히 미채택(캐스케이드 때문). 정답: dyn 전체 forward-pass는 유지하되 그 안의 진화를 시그니처로 재사용.
+
+### 7.2.1 축1 — evoOneCache 콘텐츠 시그니처 캐싱 (2026-07-11, §7.2 "evo 메모 유보" 해제·정정)
+> **정정**: 아래 "유보" 판단은 **날짜범위 분리**를 전제로 위험을 봤다. 실제 채택한 건 **팀/콘텐츠 분리**(키
+> 정밀도만 상향, 날짜범위 미변)라 evolveOnDay 순수함수·결정론 핵심을 안 건드린다. 유보를 해제하고 구현했다.
+
+- **문제**: 구 `evoOneCache`는 `baseVersion` 단일 세대키였다 — 어떤 bump(감독 영입·훈련방침·거래)든 baseVersion이
+  오르면 **캐시 전체를 clear**. 그런데 evolveOnDay(base++)는 **완전 팀 분할**(그 선수 소속팀 focus/effects에만
+  의존)이라 6/7팀은 입력 불변인데도 헛계산했다(폰 ~11s의 86% — 측정 `_ms_axis13`).
+- **구현**: 엔트리마다 **선수별 진화 입력 서명**을 저장한다 — `{ base(참조동일), fsig(팀 focus 서명), esig(팀
+  effects 서명), player }`. 조회 시 셋이 현재와 일치하면 재사용, 불일치만 evolvePlayer 재계산. baseVersion이 올라도
+  **입력 불변 선수는 자동 재사용**(self-healing) → 6/7 헛계산 제거. `base`는 참조동일(commitPlayerBase가 새 객체로
+  교체하면 자동 무효), fsig/esig는 `rebuildFocus`에서 팀별로 계산해 소속 선수에 배포(`teamFocusSig`: focusTimeline
+  세그먼트 + 감독 타임라인의 그날 기본 focus). 로스터 밖(FA)은 센티넬 서명(focusOf=()=>DEFAULT_FOCUS 대응).
+- **메모리 바운드**: 세대키 clear가 사라졌으므로 시즌 경계(commitPlayerBase/commitRosters/reset/reseed/restore)에서
+  `clearEvoOne()`으로 비운다 — 시즌 중 액션(영입·훈련·거래·벤치)은 안 비워 재사용 유지, 크기 ≈ 선수수 × 조회날짜(1시즌분).
+- **결정론 불변 증명**: `_dv_evosig`(신설) — (a) 감독/훈련 변경 후 캐시 경로 == clean 전체 재계산 **byte-동일**,
+  (b) 팀 분할 변이(한 팀만 바꾸면 그 팀 선수만 변하고 나머지 6팀 byte 불변), (c) 재로드 forward-only 보존. 자가검증(A/B) 4/4.
+
+### 7.2.2 축3 — 감독 효과 forward-only 날짜 splice (2026-07-11, 사용자 승인)
+- **동기**: 시즌 중 감독 영입은 구 `invalidateStaff(true)→recordBump(0)`으로 **전체 소급 재계산**(126경기 재시뮬,
+  폰 ~9s)이었다. 감독 효과(coachDefaultFocus·coachInfoOf)는 **날짜 무관=소급**이라 부임 이전 경기·성장까지 바꿨다.
+- **구현**: `coachInfoOf`를 `coachInfoOf(teamId, day)` **day-aware**로, `coachDefaultFocus`를 부임일 기준
+  **타임라인화**(`headCoachTimeline: teamId→{fromDay,coachId}[]`). 감독 부임일(hireDay) 이전 경기·성장은 **이전 감독**으로.
+  `hireHeadCoach(teamId, coachId, hireDay)`가 부임일 세그먼트를 쌓고 `invalidateStaff(true, hireDay)`→`recordBump(hireDay)`
+  → 순위·생산이 **자동 접미 스플라이스**(훈련방침과 동일 경로, day<hireDay 재사용). 소급/전체 이벤트(assignCoach·fireCoach·
+  offseason reconcileStaff·reset·reseed)는 타임라인을 붕괴(day0=현재 감독) = 소급 유지(byte 불변).
+  - **핵심 버그(가드가 잡음)**: 부임 baseline 세그먼트를 `coachId:null`(시드-잔류 폴백 의존)로 두면, 영입 시 시드 감독이
+    `teamId=null`로 분리돼 폴백이 깨져 부임 이전이 DEFAULT_FOCUS로 샜다 → **부임 전 감독 id를 명시 캡처**로 수정
+    (`pushCoachSeg`, `_dv_splice` G가 splice≠full로 검출).
+- **세이브(가법·비파괴)**: `staffHeadTimeline`(partialize가 라이브 `getCoachTimeline()` 읽음, SAVE_DEFAULTS+KIND 등재).
+  구세이브=필드 없음 → **commitStaff 빈 타임라인 = 소급**(=day0 백필 = 과거 byte 불변). 신세이브는 타임라인 복원 →
+  재로드 후에도 forward-only 유지(`_dv_evosig` (c) + A/B가 영속 필드 실효 증명). SAVE_VERSION 하드범프 불요(가법 필드).
+- **검증**: `_dv_splice` §G(신설) — 감독 영입(여러 부임일)·assignCoach·시퀀스(MIN)에서 splice==force-full **byte-동일** +
+  forward-only 불변식(부임 이전 경기 byte 불변) + A/B(소급 day0은 과거 변화 → day-aware 실효). **정상게임(감독 영입 없음)은
+  byte 불변**(30시즌 sim + 프레시시즌 순위·생산 sha256 before==after).
+
+### 7.2.3 축2 — 팀 필터 경기 재시뮬 = 기각(결정론 불가)
+- **로드매니지먼트 크로스팀 커플링**(`standings.ts` clinchStatus→pickRest): 굳은 순위 팀의 주전 휴식이 **팀 경계를 넘어**
+  경기 결과를 커플한다(A팀 결과가 B팀 clinch를 바꿔 B팀 휴식이 바뀜). 팀 단위로 경기를 걸러 재시뮬하면 이 커플이 깨져
+  **결정론(byte-동일) 불가** → 기각. 대체: 날짜 splice(전팀 [minDay,종료] 재시뮬 + 러닝순위 재구성, §7.1)가 안전하고
+  축3가 감독 케이스를 그 경로로 흡수. (구 유보 문단은 아래 보존.)
+
+<details><summary>구 유보 판단 보존(2026-07-08 — 정정 전 원문)</summary>
+
 - **진화 메모(`evoOneCache`) 날짜범위 무효화 = 유보(deferred).** 유혹: 훈련방침 변경(base++)은 fromDay 이전
   진화가 불변이라 `day < fromDay` 메모 엔트리를 살릴 수 있다. **그러나** `evoOneCache`의 세대 키가
   **baseVersion에 결합**돼 있어(`evoOneKey !== _baseVersion`이면 통째 clear) 날짜범위 부분 무효화를 하려면
   세대키를 baseVersion에서 **분리**해야 하고, 그 변경은 evolveOnDay의 결정론 핵심을 건드려 침습적·고위험이다.
   반면 실익은 **훈련방침 변경(base++) 케이스 한정** — 그마저도 dyn의 전체 forward-pass(1,308ms cold evo)가
-  지배해 메모 스플라이스만으로는 못 줄인다. **주력 목표(0.6s tx-only)는 순위·생산 스플라이스로 완전 해결**(dyn은
-  tx-only에서 warm)되므로, evo 스플라이스는 유보하고 문서화한다. 훈련방침 변경에서도 순위·생산은 `day ≥ fromDay`만
-  evolveOnDay를 호출하므로 부분 이득은 있다(과거 행 재사용 → 그 날들의 진화 조회 생략).
+  지배해 메모 스플라이스만으로는 못 줄인다.
+  → **해제(2026-07-11, §7.2.1)**: 날짜범위 분리가 아니라 **콘텐츠 서명**(팀/입력 분리)로 구현 — 세대키를 날짜로 안 쪼개고
+  입력 동일성만 판정하므로 evolveOnDay 순수함수 미변. 유보 사유(침습성)가 해소됨.
+
+</details>
+
+### 7.5 축1+축3 성능 A/B (측정 `tools/_ms_axis13.ts`, 데스크탑 콜드·중앙값3, 2026-07-11)
+같은 코드에서 OLD(전체 재시뮬 = 옛 감독영입 recordBump0 + evoOneCache 전체 clear) vs NEW(스플라이스+시그니처 재사용):
+
+| 액션 | 진행 | OLD(full) | NEW(opt) | 절감 | 폰추정(×5) |
+|---|---|---|---|---|---|
+| 감독 영입 mid-season | 초반 d40 | 3919ms | 1324ms | 66% | 19.6s→6.6s |
+| 감독 영입 mid-season | 중반 d110 | 4329ms | 939ms | 78% | 21.6s→4.7s |
+| 감독 영입 mid-season | 종반 d160 | 4098ms | 414ms | 90% | 20.5s→2.1s |
+| 훈련방침 mid-season | 종반 d160 | 3670ms | 454ms | 88% | 18.4s→2.3s |
+
+목표(폰 20~30s→한자릿수) 달성. 늦은 시즌일수록 재사용 커 절감 큼(부임일 접미 = 과거 대부분 재사용).
 
 ### 7.3 오프시즌 프리뷰 메모 분리 (탭당 ~2s 근본 수정)
 **문제(UI 진단)**: 외인/아시아 트라이아웃·FA 센터에서 위시/보호/영입 **토글 한 번**마다 `buildDraftContext`/
@@ -203,9 +262,14 @@ SAVE_VERSION 하드 범프 불요(재생성 가능 — Phase3 정책).
 ### 7.4 검증
 - `tools/_dv_splice.ts`: ①byte-상등 프로퍼티(≥40 랜덤열, 매 액션 후 splice==force-full deep-equal, 순위+생산)
   ②결정론 ×2 ③타이밍(늦은 시즌 벤치 add에서 splice ms ≤ ~20% full) ④off-by-one minDay 변이 → FAIL(민감도)
-  ⑤프리뷰 상등(split-path == 옛 monolithic) + 토글 재실행 << 스냅샷 빌드 타이밍.
+  ⑤프리뷰 상등(split-path == 옛 monolithic) + 토글 재실행 << 스냅샷 빌드 타이밍
+  ⑥**§G 감독 스플라이스(축3, 2026-07-11)**: 감독 영입(여러 부임일)·assignCoach·시퀀스(MIN)에서 splice==force-full byte-동일 +
+    forward-only 불변식(부임 이전 경기 byte 불변) + A/B(소급 day0은 과거 변화 → day-aware 실효).
+- `tools/_dv_evosig.ts`(신설, 축1): (a)시그니처 캐시 재사용 == clean 재계산 byte-동일 (b)팀 분할 변이(한 팀만 바꾸면 그 팀만 변함)
+  (c)감독 forward-only 재로드 보존 + 각 A/B 민감도(4/4). `tools/_ms_axis13.ts`(측정, 축1+축3 A/B 콜드 ms).
 - 풀 배터리(run-all-tests): tsc·유닛·auditBoard·`_dv_batch_*`·`_dv_bench(2)`·`_dv_displaycutoff`·`_dv_focus`·
-  `_ev_suggest_defer`·checkSubs·`_dv_campoutbox`·`_dv_migrate_e2e`·simNews·`_dv_drift_kovo`·`_gt_determinism` 무회귀.
+  `_ev_suggest_defer`·checkSubs·`_dv_campoutbox`·`_dv_migrate_e2e`·simNews·`_dv_drift_kovo`·`_gt_determinism`·
+  `_dv_splice`(§G)·`_dv_evosig` 무회귀. **정상게임 byte 불변 증명**: 30시즌 sim + 프레시시즌 순위·생산 sha256 before==after.
 
 ## 4. 검증 (각 Phase 통과 조건)
 - Phase 0: `_gt_determinism` in-process 2회 동일 + A/B 이빨 복구. 풀 배터리(run-all-tests) 0건.

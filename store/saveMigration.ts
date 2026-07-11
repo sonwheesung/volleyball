@@ -26,7 +26,7 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   careerTotals: { points: 0, aces: 0, setsWon: 0, setsLost: 0, matchWins: 0, matchLosses: 0 },
   hallOfFame: [], expelledLog: [], transfers: [], retirements: [], seasonDraftLog: [], seasonForeignLog: [], milestones: [], readNews: [],
   // 감독·스태프·훈련
-  coachPool: null, staffHead: {}, staffAssistants: {}, staffScouts: {}, trainingFocus: null, focusLog: [],
+  coachPool: null, staffHead: {}, staffHeadTimeline: {}, staffAssistants: {}, staffScouts: {}, trainingFocus: null, focusLog: [],
   // 구단주·재정
   interviews: [], benchDirectives: [], talkCooldown: {}, benchCooldown: {},
   fanScore: 50, releaseAnger: 0, cash: 50000, lastFinance: null,
@@ -63,7 +63,7 @@ const KIND: Record<string, Kind> = {
   asianWish: 'arr', asianAltPool: 'arr', asianSubUsed: 'bool', keepAsian: 'nbool',
   bonds: 'rec',
   diamonds: 'num', saveId: 'nstr', campLog: 'arr', campTrainedThisOffseason: 'arr', campDoneSeason: 'num', claimedAch: 'arr', lastGrowthDay: 'num',
-  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, focusLog, lastFinance, adState, pendingCamp, faOffers
+  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, focusLog, staffHeadTimeline, lastFinance, adState, pendingCamp, faOffers
 };
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -131,6 +131,17 @@ function sanitizeField(key: string, v: unknown): unknown {
           && Number.isFinite(o.counterTolerance.salaryUp) && o.counterTolerance.salaryUp > 0
           ? { counterTolerance: { salaryUp: Math.round(o.counterTolerance.salaryUp) } } : {};
         out[id] = { salary, years, starterGuarantee, promises, ...(o.aggressive === true ? { aggressive: true } : {}), ...ct };
+      }
+      return out;
+    }
+    case 'staffHeadTimeline': {
+      // 감독 부임 타임라인(축3) — Record<teamId, {fromDay:number, coachId:string|null}[]>. 손상 세그먼트/비배열 값은 제거(안전).
+      if (!isObj(v)) return {};
+      const out: Record<string, unknown> = {};
+      for (const [tid, segs] of Object.entries(v)) {
+        if (!Array.isArray(segs)) continue;
+        const clean = segs.filter((s) => isObj(s) && typeof s.fromDay === 'number' && Number.isFinite(s.fromDay) && (s.coachId === null || typeof s.coachId === 'string'));
+        if (clean.length) out[tid] = clean;
       }
       return out;
     }
