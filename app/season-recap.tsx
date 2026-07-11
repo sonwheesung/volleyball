@@ -30,17 +30,18 @@ const TITLE_KO: Record<string, string> = {
   serve: '서브왕', dig: '디그왕', set: '세트왕', receive: '리시브왕',
 };
 
-/** 요약 카드 + "상세 보기 ›" — 탭하면 별도 상세 화면으로. 라벨(아이콘+제목)을 카드 안 헤더로(마이페이지식, 2026-07-12 테스터). */
-function NavCard({ accent, icon, label, children, onPress }: {
-  accent: string; icon: React.ComponentProps<typeof IconLabel>['icon']; label: string; children: ReactNode; onPress: () => void;
+/** 메뉴형 내비 카드(마이페이지식, 2026-07-12 테스터) — 미리보기 내용 대신 **상세 화면 설명**만. "상세 보기" 텍스트 제거, 화살표만. */
+function NavCard({ accent, icon, label, desc, onPress }: {
+  accent: string; icon: React.ComponentProps<typeof IconLabel>['icon']; label: string; desc: string; onPress: () => void;
 }) {
   return (
     <Card accent={accent} onPress={onPress}>
-      <IconLabel icon={icon} color={accent}>{label}</IconLabel>
-      <View style={{ marginTop: 8 }}>{children}</View>
-      <View style={styles.moreRow}>
-        <Text style={styles.moreText}>상세 보기</Text>
-        <Ionicons name="chevron-forward" size={15} color={theme.muted} />
+      <View style={styles.navRow}>
+        <View style={{ flex: 1 }}>
+          <IconLabel icon={icon} color={accent}>{label}</IconLabel>
+          <Muted style={{ fontSize: 13, marginTop: 6 }}>{desc}</Muted>
+        </View>
+        <Ionicons name="chevron-forward" size={20} color={theme.muted} />
       </View>
     </Card>
   );
@@ -164,52 +165,31 @@ function RecapInner() {
         </View>
       </Card>
 
-      {/* ② 우리 선수 활약 — 요약 = 최고 생산 1명, 상세 = 전 선수 생산 정렬. 라벨은 카드 안(마이페이지식). */}
+      {/* ② 우리 선수 활약 — 메뉴형(내용 제거·설명만, 2026-07-12 테스터). 상세 = 전 선수 생산 정렬 */}
       {myTop.length === 0 ? (
         <Card accent={theme.elite} flat>
           <IconLabel icon="people-outline" color={theme.elite}>우리 선수 활약</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 8 }}>이번 시즌 집계된 생산 기록이 없습니다.</Muted>
         </Card>
       ) : (
-        <NavCard accent={theme.elite} icon="people-outline" label="우리 선수 활약" onPress={() => go('squad')}>
-          {prodRow(myTop[0], 0)}
-        </NavCard>
+        <NavCard accent={theme.elite} icon="people-outline" label="우리 선수 활약"
+          desc="선수별 시즌 생산 순위와 상세 기록" onPress={() => go('squad')} />
       )}
 
-      {/* ③ 우리 팀 수상 종합(내 수상 있을 때만) — 요약 = 첫 수상 + 개수, 상세 = 리그 전체 시상 요약본 */}
+      {/* ③ 우리 팀 수상 종합(내 수상 있을 때만) — 상세 = 리그 전체 시상 요약본 */}
       {awardLines.length > 0 ? (
-        <NavCard accent={theme.gold} icon="trophy-outline" label="우리 팀 수상" onPress={() => go('awards')}>
-          <Text style={styles.awardRow}>{awardLines[0]}</Text>
-          {awardLines.length > 1 ? <Muted style={{ fontSize: 12.5, marginTop: 2 }}>수상 {awardLines.length}건</Muted> : null}
-        </NavCard>
+        <NavCard accent={theme.gold} icon="trophy-outline" label="우리 팀 수상"
+          desc="우리 팀·리그 전체 시상 요약" onPress={() => go('awards')} />
       ) : null}
 
-      {/* ④ 시즌 스토리 — 요약 = 3초 파악 수치, 상세 = 순위·연승·재정·주요 사건 */}
-      <NavCard accent={theme.accent} icon="stats-chart-outline" label="시즌 스토리" onPress={() => go('story')}>
-        {maxWinStreak >= 2 ? <Row><Muted>최다 연승</Muted><Text style={styles.fin}>{maxWinStreak}연승</Text></Row> : null}
-        <Row><Muted>팬심</Muted><Text style={styles.fin}>{fanScore}</Text></Row>
-        <Row><Muted>운영 자금</Muted><Text style={styles.fin}>{formatMoney(cash)}</Text></Row>
-        {lastFinance ? (
-          <>
-            <Row><Muted>전 시즌 순익</Muted><Text style={[styles.fin, { color: lastFinance.net >= 0 ? theme.good : theme.bad }]}>{lastFinance.net >= 0 ? '+' : ''}{formatMoneyShort(lastFinance.net)}</Text></Row>
-            <Row><Muted>평균 관중</Muted><Text style={styles.fin}>{lastFinance.attendance.toLocaleString()}명</Text></Row>
-          </>
-        ) : null}
-      </NavCard>
+      {/* ④ 시즌 스토리 — 상세 = 순위·연승·재정·주요 사건 */}
+      <NavCard accent={theme.accent} icon="stats-chart-outline" label="시즌 스토리"
+        desc="순위·연승·팬심·재정과 주요 사건" onPress={() => go('story')} />
 
-      {/* ⑤ 다음 시즌 숙제 — 요약 = 우선순위 3줄 스택, 상세 = 전 명단(나이·계약) */}
+      {/* ⑤ 다음 시즌 숙제 — 상세 = 전 명단(나이·계약) */}
       {briefCount > 0 ? (
-        <>
-          <NavCard accent={theme.warn} icon="clipboard-outline" label="다음 시즌 숙제" onPress={() => go('tasks')}>
-            {briefStack.map((b) => (
-              <View key={b.text} style={styles.briefRow}>
-                <Text style={styles.briefIcon}>{b.icon}</Text>
-                <Text style={[styles.briefText, { color: b.color }]}>{b.text}</Text>
-              </View>
-            ))}
-            <Muted style={{ fontSize: 12.5, marginTop: 2 }}>다음 오프시즌에 챙길 선수들</Muted>
-          </NavCard>
-        </>
+        <NavCard accent={theme.warn} icon="clipboard-outline" label="다음 시즌 숙제"
+          desc="다음 오프시즌에 챙길 선수들(FA·계약·노장)" onPress={() => go('tasks')} />
       ) : null}
 
       {/* 리그 시상·베스트7은 시상식 화면(champion/awards-ceremony)으로 이관(삼중 표시 방지, AWARDS_SYSTEM §7). 결산 상세(awards)는 그 요약본. */}
@@ -230,6 +210,7 @@ const styles = themedStyles(() => StyleSheet.create({
   briefRow: { flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 2 },
   briefIcon: { fontSize: 13, width: 18, textAlign: 'center' },
   briefText: { fontSize: 14.5, fontWeight: '800' },
+  navRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 6 },
   moreText: { color: theme.muted, fontSize: 12.5, fontWeight: '700' },
 }));
