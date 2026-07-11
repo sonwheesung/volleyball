@@ -19,6 +19,7 @@ import { buildPlayoffs, myPostseasonOutcome } from '../data/playoffs';
 import { seasonYear } from '../data/seasonLabel';
 import { repRecordLine } from '../data/recordLine';
 import { formatMoney } from '../engine/salary';
+import { formatMoneyShort } from '../data/money';
 import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
 import type { AwardWinner } from '../types';
@@ -189,7 +190,7 @@ function RecapInner() {
         <Row><Muted>운영 자금</Muted><Text style={styles.fin}>{formatMoney(cash)}</Text></Row>
         {lastFinance ? (
           <>
-            <Row><Muted>전 시즌 순익</Muted><Text style={[styles.fin, { color: lastFinance.net >= 0 ? theme.good : theme.bad }]}>{lastFinance.net >= 0 ? '+' : ''}{formatMoney(lastFinance.net)}</Text></Row>
+            <Row><Muted>전 시즌 순익</Muted><Text style={[styles.fin, { color: lastFinance.net >= 0 ? theme.good : theme.bad }]}>{lastFinance.net >= 0 ? '+' : ''}{formatMoneyShort(lastFinance.net)}</Text></Row>
             <Row><Muted>평균 관중</Muted><Text style={styles.fin}>{lastFinance.attendance.toLocaleString()}명</Text></Row>
           </>
         ) : null}

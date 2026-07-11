@@ -17,6 +17,7 @@ import { rosterIdsOnDay } from '../../data/dynamics';
 import { recapBriefing } from '../../data/recapBriefing';
 import { seasonYear } from '../../data/seasonLabel';
 import { formatMoney } from '../../engine/salary';
+import { formatMoneyShort } from '../../data/money';
 import { useGameStore } from '../../store/useGameStore';
 import type { ProdLine } from '../../engine/production';
 import type { AwardWinner, Player, Position } from '../../types';
@@ -256,7 +257,7 @@ function StoryDetail({
             <Row><Muted>인건비</Muted><Text style={[styles.fin, { color: theme.bad }]}>-{formatMoney(lastFinance.payroll)}</Text></Row>
             <Row><Muted>스태프 급여</Muted><Text style={[styles.fin, { color: theme.bad }]}>-{formatMoney(lastFinance.staff)}</Text></Row>
             <View style={styles.finDivider} />
-            <Row><Text style={styles.finNetLabel}>순익</Text><Text style={[styles.finNet, { color: lastFinance.net >= 0 ? theme.good : theme.bad }]}>{lastFinance.net >= 0 ? '+' : ''}{formatMoney(lastFinance.net)}</Text></Row>
+            <Row><Text style={styles.finNetLabel}>순익</Text><Text style={[styles.finNet, { color: lastFinance.net >= 0 ? theme.good : theme.bad }]}>{lastFinance.net >= 0 ? '+' : ''}{formatMoneyShort(lastFinance.net)}</Text></Row>
             <Row><Muted>평균 관중</Muted><Text style={styles.fin}>{lastFinance.attendance.toLocaleString()}명</Text></Row>
             {lastFinance.bailout ? <Muted style={{ fontSize: 12, color: theme.warn, marginTop: 4 }}>⚠ 잔고 바닥 — 모기업 적자 보전 발생</Muted> : null}
           </Card>
