@@ -45,3 +45,11 @@ sim-web/dist/
 
 # 로컬 빌드 산출물(AAB/APK — GitHub 100MB 제한·EAS가 원본 보관)
 dist-builds/
+
+# 로컬 서명 자격(절대 커밋 금지)
+credentials.json
+credentials/
+
+# CNG 네이티브 산출물(로컬 빌드용 — prebuild로 재생성)
+/android
+/ios
