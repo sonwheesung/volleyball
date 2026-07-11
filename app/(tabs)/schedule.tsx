@@ -49,7 +49,7 @@ function ScheduleInner() {
   const [growth, setGrowth] = useState<PlayerGrowth[]>([]);
   useFocusEffect(useCallback(() => {
     const s = useGameStore.getState();
-    const t = growthTrigger(SEASON, s.selectedTeamId ?? '', s.results, s.lastGrowthDay, s.currentDay);
+    const t = growthTrigger(SEASON, s.selectedTeamId ?? '', s.results, s.lastGrowthDay, s.currentDay, s.campLog); // campLog → 누적 표기에서 전지훈련 구매분 차감
     if (t.bumpTo != null) s.setLastGrowthDay(t.bumpTo); // 보류(null)면 lastGrowthDay 그대로 — 다음 완료 때 그 구간 표시
     if (t.show) setGrowth(t.report);
   }, []));
@@ -163,7 +163,8 @@ function ScheduleInner() {
           <Card accent={theme.good}>
             <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
             <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 전지훈련을 마쳐야 개막전이 시작됩니다.</Muted>
-            <Button label="전지훈련 하러 가기 →" onPress={() => router.push('/training-camp')} />
+            {/* navigate(≠push): 스택에 이미 캠프가 있으면 재사용 — 중복 인스턴스가 쌓여 "마쳐도 또 나오는" 반복 노출 방지(2026-07-11) */}
+            <Button label="전지훈련 하러 가기 →" onPress={() => router.navigate('/training-camp')} />
           </Card>
         </SpotlightTarget>
       ) : null}

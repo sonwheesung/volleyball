@@ -262,6 +262,7 @@ npx tsx tools/_dv_newsday0.ts              # 첫 경기 전 뉴스 스포일러 
 npx tsx tools/_dv_newsorder.ts             # 뉴스 2주 만료(NEWS §9, 2026-07-05 최신순) — freshNews: 요약(day없음) 유지·14일 경계 유지·15일+ 만료 + A/B(표시일 급증 시 인게임 전부 만료=요약만 잔존, 필터가 진짜 day로 거름). exit 0/1
 npx tsx tools/_ev_offseasonnews.ts 32      # 오프시즌 결산 뉴스(NEWS §3.7 슬라이스6, 2026-07-08) — 32오프시즌: 내 팀 결산 종합 항상 1건(조용한 오프시즌 포함=리브니스)·드래프트 픽 전원 기사화·외인교체 로그정합(누락/날조0)·결정론·신인 OVR 누수0(안개) + A/B(팀없음→결산0·OVR정규식 teeth). exit 0/1
 npx tsx tools/_dv_newskey.ts               # 뉴스 목록↔상세 안정키 배선(NEWS §3.6, F1 2026-07-07) — 만료 기사 있는 상태서 목록 인덱스 k의 newsKey == 상세가 그 키로 집는 기사(0 불일치)·읽음대상 정확 + A/B(인덱스 라우팅으로 되돌리면 어긋남 재현). exit 0/1
+npx tsx tools/_dv_clinchnews.ts            # 순위 확정(clinch) 뉴스(NEWS §3.1, 2026-07-11) — PO진출/정규1위직행/PO탈락 확정 "순간"을 전 구단 연대기로. 독립 오라클(broadcast day-1↔day 전이 브루트포스, teamClinch/teamTitleClinch)와 (팀·종류·확정일) 집합 완전일치·3종 발화·중복0·전건 day존재 + 스포일러 A/B(확정일 직전 컷오프엔 없고 확정일엔 노출·첫 경기 전 0)·결정론. exit 0/2
 npx tsx tools/_dv_displaycutoff.ts         # 표시 컷오프 결과인지(SEASON §3.3, F2 2026-07-07) — 방금 기록 경기 포함·시즌말 리그 최종일 전체 공개(=아카이브/PO 수치 일치)·미관전 미래 누수 0 + A/B(leagueDisplayDay 단독으로 되돌리면 방금경기/시즌말 누락 재현). exit 0/1
 npx tsx tools/_dv_batch_a123.ts             # day<0 빈구간 가드(A1)·기록경기 소급차단 fromDay(A2)·unbench 종결일(A3) — 콜드 타이밍 증명(-1 경로 0ms vs 풀시뮬 2s)·리플레이 first-changed-day 검증 (2026-07-08). exit 0/1
 npx tsx tools/_dv_batch_a4.ts               # 훈련 방침 타임라인(TRAINING §1.9.1, 사용자 결정 2026-07-08 "바꾼 날부터") — 쌍대조 양방향(변경일 前 바이트동일 20/20·後 분기 20/20)·세이브 v1→v2 마이그레이션 바이트동일(60/60)·focusLog 시드/스킵. exit 0/1
@@ -274,6 +275,7 @@ npx tsx tools/_dv_keepall.ts               # 한글 어절 줄바꿈 keep-all(UI
 npx tsx tools/_dv_injury_daybasis.ts       # 부상/정지 표기 날짜기준 일치(EC-UI-03, 2026-07-04 사용자 발견) — 선수단 currentDay ↔ 상세 currentDay(수정 전 displayDay) 대조. 시드리그 7팀×166일 A/B: 구 basis 불일치 37건(선수단🚑·상세무 19 + stale 18) 재현 → 신 basis 0건. 상세 role·정지배너 회귀 차단. exit 0/1
 npx tsx tools/_dv_growthgate.ts             # 성장 리포트 트리거 게이트(TRAINING §성장리포트, 2026-07-08) — 미완 경기 이탈(이어보기·결과 미기록·currentDay 전진)엔 모달 안 뜸(보류)·경기 완료(recordResult) 후 그 구간 표시·중복 방지·미초기화 catch-up 방지·결정론 + A/B(게이트 제거 모사→미완에서 뜸 검출). exit 0/1
 npx tsx tools/_dv_growthreport.ts          # 성장 리포트 모달(TRAINING §성장리포트, 2026-07-04 사용자 요청) — growthReport가 카드 표시값(deriveRatings 정수) 변화를 정확히 diff. 구간 가드(0폭/역/음수)·시즌 성장 검출·오라클 자가대조(delta==재계산 diff)·결정론. exit 0/1
+npx tsx tools/_dv_growthcamp.ts            # 성장 리포트 전지훈련 차감(TRAINING §성장리포트 정정, 2026-07-11) — career(입단 누적)에서 캠프 구매분(cur) 스탯별 차감. A/B: 캠프 보낸 선수 career==캠프 전(구매분 미반영) + 민감도(차감 OFF면 정확히 +3 부풀어야)·결정론. exit 0/1
 npx tsx tools/_dv_debut.ts                  # 입단 스냅샷 커리어 누적(TRAINING §성장리포트, 2026-07-06) — Player.debut 생성 시 캡처(OVR+15원본, 로스터 카드 정합)·전 변환 스프레드 보존·커리어 누적=현재−입단 + **A/B: debut 유무가 evolve 스탯 무변경(엔진 불간섭=결정론 무영향)**. exit 0/1
 npx tsx tools/_dv_bgm.ts                    # BGM 자산·배선 정합(SOUND_SYSTEM §4) — assets/bgm .m4a 10개·명명(bgm_01..10)·bgm.ts TRACKS require 수 일치·bgmVolume 마이그레이션 키 3곳(SAVE_DEFAULTS/KIND/partialize). exit 0/1
 npx tsx tools/_dv_face.ts                   # 선수 아바타 피처(AVATAR_SYSTEM, 2026-07-04 유대감) — faceFeatures 결정론(같은 id 동일) + 변형 분포(5스타일·5피부·7헤어·6배경 전부·편중<40%). exit 0/1

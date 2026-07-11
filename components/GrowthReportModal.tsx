@@ -1,6 +1,6 @@
-// 성장 리포트 모달 (TRAINING §성장리포트) — 상용 퀄 마감(2026-07-06 6차 최종).
-// "지난 경기 이후 변화". 시선: 이름 → OVR 변화(79 → 80  ▲1) → 이번 변화(섹션) → 세부 스탯(2열 표).
-// OVR: "79 → 80"은 한 Text(베이스라인 고정) + ▲1 분리(간격). 스탯: 2열 그리드·▲ 우측정렬. 엔진/데이터/공식 무변경.
+// 성장 리포트 모달 (TRAINING §성장리포트 — 2026-07-11 정정: 주인공=구간, 누적=보조·전지훈련 제외).
+// 시선: 이름 → 이번 변화(구간 from→to, 주인공) → 누적 성장(캠프 제외, 소형 보조) → 노쇠(조용히).
+// OVR 히어로 블록 제거(매 리포트 누적 재노출 피로 해소). 요약·정렬은 구간 기준. 엔진/데이터/공식 무변경.
 import { useMemo, useState } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -12,21 +12,32 @@ import type { PlayerGrowth, StatDelta } from '../data/growthReport';
 
 const MAX_CARDS = 10; // 다일 점프·긴 로스터로 벽이 되지 않게 — 상위 성장선수만, 나머지는 한 줄로 축약
 
-const growthScore = (p: PlayerGrowth): number =>
-  (p.career ? p.career.deltaOvr * 100 : 0) + p.deltas.filter((d) => d.delta > 0).length;
+// 정렬·요약 = 구간(이번 변화) 기준: 성장 스탯 수(주) + 총 성장폭(부, 동점 타이브레이크). 누적(career)은 미반영.
+const growthScore = (p: PlayerGrowth): number => {
+  const ups = p.deltas.filter((d) => d.delta > 0);
+  return ups.length * 1000 + ups.reduce((n, d) => n + d.delta, 0);
+};
 
 // 성장량 큰 순 정렬(무엇이 가장 컸나 한눈에) — 표시 전용, 원본 불변
 const upsOf = (ds: StatDelta[]) => ds.filter((d) => d.delta > 0).sort((a, b) => b.delta - a.delta);
 const sig = (ds: StatDelta[]) => ds.map((d) => `${d.label}${d.delta}`).join('|'); // 이번==누적 중복 판정
 
-/** 스탯 목록 — 2열 그리드(표): 스탯명 흰색 왼쪽 · ▲숫자 초록 우측정렬(minWidth+textAlign로 컬럼 고정). */
+/** 스탯 목록 — 2열 그리드(표): 스탯명 왼쪽 · 값 우측정렬.
+ *  주(이번 변화): "77 → 78" from→to(주인공). 보조(누적): "▲N" 소형. */
 function StatGrid({ ups, styles, sub }: { ups: StatDelta[]; styles: any; sub?: boolean }) {
   return (
     <View style={styles.statWrap}>
       {ups.map((d, i) => (
         <View key={i} style={styles.cell}>
           <Text style={sub ? styles.statNameSub : styles.statName} numberOfLines={1}>{d.label}</Text>
-          <Text style={sub ? styles.deltaSub : (d.delta >= 3 ? styles.deltaBig : styles.delta)}>▲{d.delta}</Text>
+          {sub ? (
+            <Text style={styles.deltaSub}>▲{d.delta}</Text>
+          ) : (
+            <Text style={styles.fromTo} numberOfLines={1}>
+              <Text style={styles.ftFrom}>{d.from} → </Text>
+              <Text style={d.delta >= 3 ? styles.ftToBig : styles.ftTo}>{d.to}</Text>
+            </Text>
+          )}
         </View>
       ))}
     </View>
@@ -37,7 +48,7 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
   const sorted = useMemo(() => [...report].sort((a, b) => growthScore(b) - growthScore(a)), [report]);
   const shown = sorted.slice(0, MAX_CARDS);
   const rest = sorted.length - shown.length;
-  const grew = report.filter((p) => (p.career ? p.career.deltaOvr > 0 : p.deltas.some((d) => d.delta > 0))).length;
+  const grew = report.filter((p) => p.deltas.some((d) => d.delta > 0)).length; // 구간 기준
   const aged = report.filter((p) => p.deltas.some((d) => d.delta < 0)).length;
   const [expanded, setExpanded] = useState(false);
 
@@ -47,9 +58,9 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
         <Ionicons name="trending-up" size={19} color={theme.good} />
         <Text style={styles.title}>선수단 성장 리포트</Text>
       </View>
-      <Text style={styles.sub}>지난 경기 이후 변화한 선수들</Text>
+      <Text style={styles.sub}>지난 경기 이후 훈련으로 성장한 선수들</Text>
 
-      {/* 헤더 — 성장 메인(크게) / 노쇠 보조(가장 연하게) */}
+      {/* 헤더 — 성장 메인(크게) / 노쇠 보조(가장 연하게) · 모두 구간 기준 */}
       {(grew > 0 || aged > 0) ? (
         <View style={styles.summary}>
           {grew > 0 ? <Text style={styles.grew}>{grew}명 성장</Text> : null}
@@ -61,42 +72,20 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
         {shown.map((p) => {
           const ups = upsOf(p.deltas);
           const downs = p.deltas.filter((d) => d.delta < 0);
-          const careerUps = upsOf(p.career?.statDeltas ?? []);
+          const careerUps = upsOf(p.career?.statDeltas ?? []); // 이미 캠프 제외(data/growthReport)
           const dupCareer = sig(careerUps) === sig(ups); // 이번==누적이면 누적 줄 생략(중복 제거)
-          const dOvr = p.career?.deltaOvr ?? 0;
-          const flat = dOvr === 0; // OVR 변화 없음 → "유지"로 강조↓
           return (
             <View key={p.id} style={styles.card}>
-              {/* 상단 — 이름(주인공) + OVR 변화. "79 → 80"은 한 Text(베이스라인), ▲1은 간격 두고 분리 */}
+              {/* 상단 — 이름 + 포지션(OVR 히어로 없음) */}
               <View style={styles.head}>
                 <PlayerAvatar id={p.id} size={40} />
-                <View style={styles.headCol}>
-                  <View style={styles.nameRow}>
-                    <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
-                    <PosTag pos={p.position} solid />
-                  </View>
-                  {p.career ? (
-                    <View style={styles.ovrRow}>
-                      {flat ? (
-                        <>
-                          <Text style={styles.ovrFlat}>{p.career.curOvr}</Text>
-                          <Text style={styles.ovrHold}>유지</Text>
-                        </>
-                      ) : (
-                        <>
-                          <Text style={styles.ovrMain}>
-                            <Text style={styles.ovrFrom}>{p.career.debutOvr} → </Text>
-                            <Text style={styles.ovrTo}>{p.career.curOvr}</Text>
-                          </Text>
-                          <Text style={[styles.ovrDelta, { color: dOvr > 0 ? theme.good : theme.bad }]}>{dOvr > 0 ? `▲${dOvr}` : `▼${-dOvr}`}</Text>
-                        </>
-                      )}
-                    </View>
-                  ) : null}
+                <View style={styles.nameRow}>
+                  <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
+                  <PosTag pos={p.position} solid />
                 </View>
               </View>
 
-              {/* 이번 변화 — 섹션 제목(얇은 바) + 성장량 큰 순 2열 그리드 */}
+              {/* 이번 변화 — 섹션 제목(얇은 바) + 구간 from→to 2열 그리드(주인공) */}
               {ups.length ? (
                 <View style={styles.section}>
                   <View style={styles.secHead}>
@@ -107,10 +96,10 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
                 </View>
               ) : null}
 
-              {/* 누적 성장 — 참고(저대비) */}
+              {/* 누적 성장 — 보조(저대비)·전지훈련 제외 */}
               {careerUps.length && !dupCareer ? (
                 <View style={styles.section}>
-                  <Text style={styles.lblSub}>누적 성장</Text>
+                  <Text style={styles.lblSub}>입단 후 누적 (전지훈련 제외)</Text>
                   <StatGrid ups={careerUps} styles={styles} sub />
                 </View>
               ) : null}
@@ -126,18 +115,17 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
         {rest > 0 && !expanded ? (
           <Text style={styles.more} onPress={() => setExpanded(true)}>그 외 {rest}명도 성장했어요  ▾</Text>
         ) : null}
-        {expanded ? sorted.slice(MAX_CARDS).map((p) => (
-          <View key={p.id} style={styles.mini}>
-            <Text style={styles.miniName} numberOfLines={1}>{p.name}</Text>
-            {p.career ? (
-              <Text style={[styles.miniDelta, { color: p.career.deltaOvr > 0 ? theme.good : p.career.deltaOvr < 0 ? theme.bad : theme.muted }]}>
-                {p.career.deltaOvr === 0
-                  ? `${p.career.curOvr}  유지`
-                  : `${p.career.debutOvr} → ${p.career.curOvr}${p.career.deltaOvr > 0 ? `  ▲${p.career.deltaOvr}` : `  ▼${-p.career.deltaOvr}`}`}
-              </Text>
-            ) : null}
-          </View>
-        )) : null}
+        {expanded ? sorted.slice(MAX_CARDS).map((p) => {
+          const top = upsOf(p.deltas)[0]; // 구간 최대 성장 스탯
+          return (
+            <View key={p.id} style={styles.mini}>
+              <Text style={styles.miniName} numberOfLines={1}>{p.name}</Text>
+              {top ? (
+                <Text style={styles.miniDelta} numberOfLines={1}>{top.label} {top.from} → {top.to}</Text>
+              ) : null}
+            </View>
+          );
+        }) : null}
       </ScrollView>
 
       <View style={{ height: 38 }} />
@@ -154,36 +142,30 @@ const styles = themedStyles(() => StyleSheet.create({
   summary: { marginTop: 4, marginBottom: 14 },
   grew: { color: theme.good, fontSize: 17, fontWeight: '900' },
   agedSum: { color: theme.muted, fontSize: 10, fontWeight: '600', marginTop: 2, opacity: 0.25 },
-  // 카드 — 상하 패딩 동일(고급감)·최소 높이(리스트 안정)·부드러운 그림자
+  // 카드 — 상하 패딩 동일(고급감)·부드러운 그림자
   card: {
-    backgroundColor: theme.cardAlt, borderRadius: 13, paddingVertical: 11, paddingLeft: 14, paddingRight: 16, gap: 8, minHeight: 96,
+    backgroundColor: theme.cardAlt, borderRadius: 13, paddingVertical: 11, paddingLeft: 14, paddingRight: 16, gap: 10,
     borderWidth: 1, borderColor: theme.muted + '4D',
     shadowColor: '#000', shadowOpacity: 0.38, shadowRadius: 14, shadowOffset: { width: 0, height: 4 }, elevation: 7,
   },
   head: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  headCol: { flex: 1, gap: 6 }, // 이름 ↔ OVR 여백(정보 위계)
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  name: { color: theme.text, fontSize: 18, fontWeight: '900', lineHeight: 22, flexShrink: 1 }, // 이름 = 주인공(라인박스 고정 → 배지 수직정렬)
-  // OVR 변화 — 베이스라인 정렬 행. "79 → 80" 한 Text + ▲1 넉넉히 분리
-  ovrRow: { flexDirection: 'row', alignItems: 'baseline' },
-  ovrMain: { color: theme.text },
-  ovrFrom: { color: theme.muted, fontSize: 13, fontWeight: '600' },
-  ovrTo: { color: theme.text, fontSize: 24, fontWeight: '900' },
-  ovrDelta: { fontSize: 18, fontWeight: '900', marginLeft: 18 }, // 결과 정보 — 넉넉히 분리(80과 ▲1 독립)
-  ovrFlat: { color: theme.muted, fontSize: 15, fontWeight: '700', opacity: 0.55 }, // 변화 없으면 연하게
-  ovrHold: { color: theme.muted, fontSize: 11.5, fontWeight: '600', opacity: 0.3, marginLeft: 8 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 8, flex: 1 },
+  name: { color: theme.text, fontSize: 18, fontWeight: '900', lineHeight: 22, flexShrink: 1 }, // 이름 = 주인공
   // 이번 변화 — 섹션 제목(제목↔스탯 8)
   section: { gap: 8 },
   secHead: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   secBar: { width: 2.5, height: 10, borderRadius: 2, backgroundColor: theme.accent },
   lblNow: { color: theme.accent, fontSize: 13, fontWeight: '900', letterSpacing: 0.2 },
-  // 스탯 2열 그리드 — 스탯명 고정폭(왼쪽) + ▲ 우측정렬(오른쪽 끝) = 표
+  // 스탯 2열 그리드 — 스탯명 고정폭(왼쪽) + 값 우측정렬(오른쪽 끝) = 표
   statWrap: { flexDirection: 'row', flexWrap: 'wrap', rowGap: 8 },
   cell: { width: '50%', flexDirection: 'row', alignItems: 'baseline', paddingRight: 14 },
   statName: { color: theme.text, fontSize: 13, fontWeight: '700', width: 74 }, // 고정폭 컬럼(왼쪽 정렬)
-  delta: { color: theme.good, fontSize: 13.5, fontWeight: '900', flex: 1, textAlign: 'right' },   // 우측 끝 정렬
-  deltaBig: { color: theme.good, fontSize: 14.5, fontWeight: '900', flex: 1, textAlign: 'right' }, // 큰 폭 더 눈에
-  // 누적 성장 — 참고(저대비)
+  // 이번 변화 값 — "77 → 78" from→to(우측 끝 정렬)
+  fromTo: { flex: 1, textAlign: 'right' },
+  ftFrom: { color: theme.muted, fontSize: 12.5, fontWeight: '600' },
+  ftTo: { color: theme.good, fontSize: 13.5, fontWeight: '900' },
+  ftToBig: { color: theme.good, fontSize: 14.5, fontWeight: '900' }, // 큰 폭 더 눈에
+  // 누적 성장 — 보조(저대비)
   lblSub: { color: theme.muted, fontSize: 10.5, fontWeight: '700', opacity: 0.85 },
   statNameSub: { color: theme.muted, fontSize: 12, fontWeight: '600', width: 74 },
   deltaSub: { color: theme.good, fontSize: 12, fontWeight: '700', opacity: 0.7, flex: 1, textAlign: 'right' },
@@ -192,5 +174,5 @@ const styles = themedStyles(() => StyleSheet.create({
   more: { color: theme.accent, fontSize: 13, fontWeight: '800', textAlign: 'center', paddingVertical: 8 },
   mini: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 10, paddingVertical: 7, gap: 8 },
   miniName: { color: theme.text, fontSize: 13, fontWeight: '700', flexShrink: 1 },
-  miniDelta: { fontSize: 12, fontWeight: '800' },
+  miniDelta: { color: theme.good, fontSize: 12, fontWeight: '800' },
 }));

@@ -40,10 +40,16 @@ export default function TrainingCamp() {
   const busy = useBusyRun();
   const [sending, setSending] = useState<string | null>(null);
   // 스케줄 오프시즌 게이트에서 진입(비-chain) — 캠프를 마치면 campDoneSeason 세팅 → 스케줄에 개막전(다음 경기) 노출(2026-07-04).
+  // 귀환은 router.back() 대신 결정론적으로(2026-07-11): back()은 스택 모양에 의존해, 캠프 인스턴스가 여러 장
+  // 쌓였거나(중복 진입) 캠프가 스택 루트(프로세스 복원 딥링크)면 "마쳤는데 전지훈련이 또 나오는" 반복 노출이 된다(사용자 제보).
+  // dismissAll이 캠프를 전부 걷어 탭으로, 걷을 게 없으면(루트) 일정 탭으로 replace — 어느 스택 모양이든 한 번에 일정으로 귀환.
   const finishToOpener = () => {
     showAlert('전지훈련 마치기', '전지훈련을 마치고 개막전을 시작할까요?\n이후에는 이번 시즌 전지훈련을 보낼 수 없어요.', [
       { text: '더 훈련하기', style: 'cancel' },
-      { text: '마치고 개막전으로', onPress: () => busy.run('선수들이 전지훈련에서 구슬땀을 흘리고 있습니다…', () => { finishCamp(); router.back(); }) },
+      { text: '마치고 개막전으로', onPress: () => busy.run('선수들이 전지훈련에서 구슬땀을 흘리고 있습니다…', () => {
+        finishCamp();
+        if (router.canDismiss()) router.dismissAll(); else router.replace('/(tabs)/schedule');
+      }) },
     ]);
   };
   const my = useGameStore((s) => s.selectedTeamId);
@@ -132,7 +138,13 @@ export default function TrainingCamp() {
   const showGroups = firstBenchIdx > 0; // 주전·벤치가 둘 다 있을 때만 구분 라벨
 
   const balance = (
-    <View style={styles.bal}><Text style={styles.gem}>💎</Text><Text style={styles.balN}>{diamonds.toLocaleString()}</Text></View>
+    <View style={styles.bal}>
+      <Text style={styles.gem}>💎</Text><Text style={styles.balN}>{diamonds.toLocaleString()}</Text>
+      <Pressable onPress={() => router.push('/buy-diamonds')} hitSlop={8}
+        style={({ pressed }) => [styles.buyChip, pressed && { opacity: 0.7 }]}>
+        <Text style={styles.buyChipText}>+ 구매</Text>
+      </Pressable>
+    </View>
   );
   // 무거운 작업 오버레이(UI-27) — 어느 오프시즌 화면(선수목록=finish / 코스=send)에서 눌러도 뜨도록 각 return에 배치.
   const busyOverlay = <BusyOverlay visible={busy.busy || !!sending} message={busy.message || sending || ''} />;
@@ -298,6 +310,8 @@ export default function TrainingCamp() {
 const styles = themedStyles(() => StyleSheet.create({
   bal: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 4, marginBottom: 6 },
   gem: { fontSize: 16 }, balN: { color: theme.text, fontSize: 18, fontWeight: '900' },
+  buyChip: { marginLeft: 6, borderRadius: 999, borderWidth: 1, borderColor: theme.accent, paddingHorizontal: 10, paddingVertical: 3 },
+  buyChipText: { color: theme.accent, fontSize: 12, fontWeight: '800' },
   prow: { flexDirection: 'row', alignItems: 'center', gap: 10, backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, paddingHorizontal: 14, paddingVertical: 11, marginTop: 6 },
   pname: { flex: 1, color: theme.text, fontSize: 15, fontWeight: '700' },
   groupLabel: { color: theme.muted, fontSize: 12, fontWeight: '700', marginTop: 8, marginLeft: 2 },
