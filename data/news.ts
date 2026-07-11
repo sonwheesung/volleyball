@@ -18,6 +18,7 @@ import { seasonInjuryReport } from './injury';
 import { seasonMatchProds } from './production';
 import { SEVERITY_KO } from '../engine/injury';
 import { seasonScandals } from './dynamics';
+import { seasonClinchTransitions } from './clinch';
 import { buildPlayoffs } from './playoffs';
 import { postseasonReveal } from './postseason';
 import { PO_SLOTS, FINAL_SLOTS, SEASON_DAYS } from '../engine/calendar';
@@ -174,6 +175,18 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
   sponsorThrift: { // 모기업 긴축·관망 예고(FINANCE 2.0 Stage2b)
     open: ['모기업이 허리띠를 졸라맨다는 말이 나온다.', '이번 오프시즌은 관망 기조라는 기류다.', '큰 영입보다 내실을 다질 분위기다.', '지갑을 닫을 것이라는 전망이 우세하다.'],
     close: ['FA 시장에서 조용한 행보가 예상된다.', '실속형 운영으로 시즌을 준비할 전망이다.', '큰 변화보다 기존 전력 유지에 무게가 실린다.', '시장이 열려봐야 알겠지만 움직임은 크지 않을 듯하다.'],
+  },
+  clinchTitle: { // 정규리그 1위(챔프전 직행) 확정 — 최고 영예, 골드 톤(§3.1)
+    open: ['정규리그의 왕좌가 주인을 찾았다.', '길고 치열했던 선두 다툼이 끝났다.', '레이스의 정점에 한 팀이 우뚝 섰다.'],
+    close: ['챔피언결정전 직행 티켓이 손에 들어왔다.', '정규리그 1위의 프리미엄을 안고 봄배구를 기다린다.', '남은 건 왕좌를 향한 마지막 한 걸음이다.'],
+  },
+  clinchPo: { // 포스트시즌(봄배구) 진출 확정 — 안도와 기대
+    open: ['봄배구로 가는 문이 열렸다.', '가을부터 달려온 여정이 결실을 맺었다.', '포스트시즌 진출이 수학적으로 굳어졌다.'],
+    close: ['이제 더 높은 곳을 바라본다.', '단기전을 향한 채비가 시작됐다.', '정규리그 마지막까지 순위 싸움은 계속된다.'],
+  },
+  clinchElim: { // 포스트시즌 탈락 확정 — 담담한 톤(축포 금지)
+    open: ['봄배구의 문이 닫혔다.', '포스트시즌 경쟁에서 한발 물러섰다.', '다음 가을을 기약하게 됐다.'],
+    close: ['남은 일정은 다음 시즌을 위한 실험대가 된다.', '아쉬움을 뒤로하고 긴 겨울을 준비한다.', '반등의 청사진이 필요한 겨울이 왔다.'],
   },
 };
 
@@ -593,6 +606,39 @@ export function buildNewsFeed(
       body3('biggame', `${currentSeason}:bg:${id}`, more(
         `${e.name}(${teamName(e.tid)})이(가) 한 경기 ${e.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`,
         `상대 ${teamName(e.opp)}을(를) 상대로 공격 성공 ${e.spikes}개·서브 에이스 ${e.aces}개·블로킹 ${e.blocks}개를 곁들였다.`)), id, e.day);
+  }
+
+  // 8.5) 순위 확정(clinch, NEWS_SYSTEM §3.1) — PO진출/정규1위직행/PO탈락이 **막 수학적으로 확정된 경기일**을 연대기로.
+  //   전 구단(내 팀 포함) · 치른 경기 수학만(스포일러 안전 — 미래 결과 무관). day=확정 경기일 → 최신순·2주 만료.
+  //   leagueDay 컷오프로 확정일 이후에만 노출(그 경기일을 관전해야 뜸). BROADCAST와 **병행**: 현수막=관전 연출(경기 종료 순간),
+  //   뉴스=피드에 남는 연대기. 결과-중립 아님(확정 사건) — 그래서 leagueDay 게이트로 미래 확정 누출을 막는다.
+  for (const ev of seasonClinchTransitions(leagueDay)) {
+    const name = teamName(ev.teamId);
+    const mine = ev.teamId === myTeamId;
+    const S = currentSeason + 1;
+    const ckey = `${currentSeason}:clinch:${ev.teamId}:${ev.kind}`; // 팀·종류당 1건(단조 → 전이 1회)
+    if (ev.kind === 'title') {
+      push(currentSeason, 'clinch', vh([
+        (t) => `${t}, ${S}시즌 정규리그 1위 확정 — 챔프전 직행`,
+        (t) => `정규리그 우승(1위) 확정 — ${t} 챔피언결정전으로`,
+        (t) => `${t}, ${S}시즌 정규 1위 굳혔다 — 봄배구 직행`,
+      ], ckey, name), true, ev.teamId,
+        body3('clinchTitle', ckey, `${name}이(가) ${S}시즌 정규리그 1위를 확정하며 챔피언결정전에 직행했다. 남은 경기 결과와 무관하게 최종 1위가 수학적으로 확정됐다.`), ev.teamId, ev.day);
+    } else if (ev.kind === 'po') {
+      push(currentSeason, 'clinch', vh([
+        (t) => `${t}, ${S}시즌 포스트시즌 진출 확정`,
+        (t) => `${t} 봄배구 확정 — 포스트시즌行`,
+        (t) => `포스트시즌 진출 확정 — ${t}`,
+      ], ckey, name), mine, ev.teamId,
+        body3('clinchPo', ckey, `${name}이(가) ${S}시즌 포스트시즌 진출을 확정했다. 남은 경기 결과와 무관하게 상위 3위 안이 수학적으로 보장됐다.`), ev.teamId, ev.day);
+    } else {
+      push(currentSeason, 'clinch', vh([
+        (t) => `${t}, ${S}시즌 포스트시즌 탈락 확정`,
+        (t) => `${t} 봄배구 좌절 — 포스트시즌 탈락`,
+        (t) => `포스트시즌 탈락 확정 — ${t}`,
+      ], ckey, name), false, ev.teamId,
+        body3('clinchElim', ckey, `${name}이(가) ${S}시즌 포스트시즌 진출이 좌절됐다. 남은 경기를 모두 이겨도 상위 3위 안에 들 수 없어 탈락이 확정됐다.`), ev.teamId, ev.day);
+    }
   }
 
   // 9) 모기업 기조 예고(FINANCE 2.0 Stage2b) — 막 끝난 시즌(lastSeason) 기준 다가오는 오프시즌 FA 기류.

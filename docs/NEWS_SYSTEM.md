@@ -56,8 +56,8 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 
 ## 3. 기사 소재 카탈로그 (전체)
 
-`kind`(NewsItem.kind) = `champion|award|milestone|hof|injury|scandal|owner|match|debut|streak|standing|transfer|release|retire|sponsor|offseason|draft|foreign|playoff`
-(신규 kind: `match`·`debut`·`streak`·`standing` + 이적류 `transfer`·`release`(§3.3)·`retire`(§3.4) + **`sponsor`**(모기업 기조 예고, FINANCE 2.0 Stage2b·2026-06-29) + **`offseason`·`draft`·`foreign`**(오프시즌 결산 — 종합·드래프트 입단·외인 교체, §3.7·2026-07-08))
+`kind`(NewsItem.kind) = `champion|award|milestone|hof|injury|scandal|owner|match|debut|streak|standing|transfer|release|retire|sponsor|offseason|draft|foreign|playoff|clinch`
+(신규 kind: `match`·`debut`·`streak`·`standing` + 이적류 `transfer`·`release`(§3.3)·`retire`(§3.4) + **`sponsor`**(모기업 기조 예고, FINANCE 2.0 Stage2b·2026-06-29) + **`offseason`·`draft`·`foreign`**(오프시즌 결산 — 종합·드래프트 입단·외인 교체, §3.7·2026-07-08) + **`clinch`**(순위 확정 — PO진출/정규1위/PO탈락, §3.1·2026-07-11 — BROADCAST 현수막과 **병행**: 현수막=관전 연출, 뉴스=피드 연대기))
 
 ### 3.1 실시간 (시즌 중) — 초반을 채운다
 
@@ -70,6 +70,7 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 | **연패** | streak | 팀 시즌 중 연패 ≥ 임계 | 10+=★ | 동상 |
 | **업셋** | match | 하위팀이 상위팀을 꺾음(순위차/OVR차 임계 이상) | 큰격차=★ | 경기 결과 + 그 시점 순위 |
 | **선두 등극·순위 변동** | standing | 라운드 경계에서 1위 등극/추락 등 변동 | 1위등극=★ | 라운드별 순위 |
+| **순위 확정(clinch)** (2026-07-11) | clinch | PO진출 확정 / 정규 1위(직행) 확정 / PO 탈락 확정 이 **막 수학적으로 확정된 경기일**(전이 검출). **결과-중립 아님**(확정 사건) · **본인 팀 포함 전 구단** · **치른 경기 기준**(잔여 일정 수학만 → 미래 결과 누출 0, 스포일러 안전). day=확정 경기일 → 확정일 이후에만 노출·2주 만료 | 정규1위=★, PO진출=내 팀=★, 탈락=담담(단신) | `data/clinch.seasonClinchTransitions(leagueDay)` (cutoff3=PO진출/탈락 · cutoff1=1위직행, 단조성으로 경기일만 스캔) |
 | 부상(전 심각도 — 경미 포함, 2026-07-04) | injury | seasonInjuryReport (기존) | 시즌아웃=★ | seasonInjuryReport |
 | 사건·사고/영구제명 | scandal | seasonScandals/expelled (기존) | ★ | dynamics/expel |
 | 간판선수 벤치 술렁 | owner | benchDirectives, pop≥60 (기존) | pop≥78=★ | benchDirectives |
