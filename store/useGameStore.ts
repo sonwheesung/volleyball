@@ -129,7 +129,7 @@ interface GameState {
   claimedAch: string[];                        // 다이아 수령한 업적 id(1회 지급)
   adState: AdState;                            // 광고 보상 쿨다운/하루상한 상태(메타 — 시드 무관)
   watchAdForDiamonds: () => Promise<{ ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' | 'offline' | 'busy' | 'error' | 'no-ad' }>;
-  claimAchDiamonds: () => Promise<{ granted: number; reason?: 'offline' | 'busy' | 'none' | 'cap' }>; // 새로 달성한 업적 다이아 수령(서버 확정)
+  claimAchDiamonds: () => Promise<{ granted: number; reason?: 'offline' | 'busy' | 'none' | 'cap' | 'already' }>; // 새로 달성한 업적 다이아 수령(서버 확정). already=이전 시도가 응답 유실로 이미 지급됨(멱등 재시도 확인)
   claimWelcomeDiamonds: () => Promise<{ applied: boolean }>; // 첫 전지훈련 진입 환영 선물(계정당 1회, 서버 멱등)
   trainingCamp: (playerId: string, course: CampCourse) => Promise<{ ok: boolean; reason?: string }>; // 오프시즌 전지훈련(서버 차감 후, §11.2)
   syncWallet: () => Promise<void>;             // 서버 잔액으로 캐시 리싱크(로그인/포그라운드/실패후 — §13.12 P0-3) + 아웃박스 정산
@@ -410,6 +410,9 @@ export const useGameStore = create<GameState>()(
         set({ walletBusy: false, ...(confirmed.length ? { claimedAch: [...get().claimedAch, ...confirmed] } : {}), diamonds: r.balance });
         if (granted > 0) track('diamond_earned', { source: 'achievement', amount: granted });
         if (capped) return { granted, reason: 'cap' };
+        // 전부 멱등 재시도(applied·capped 둘 다 아님) = 이전 시도가 응답 유실로 이미 지급된 케이스(운영 사고 2026-07-11).
+        // "새로 달성한 업적이 없습니다"라고 하면 거짓 — 이미 반영됐음을 알린다.
+        if (granted === 0 && confirmed.length > 0) return { granted, reason: 'already' };
         return { granted };
       },
       // 첫 전지훈련 진입 환영 선물 — 서버가 계정당 1회 지급(멱등키 welcome:<userId>, 금액 서버 고정 1000).

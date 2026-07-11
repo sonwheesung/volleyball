@@ -114,10 +114,12 @@ export function earnDiamonds(amount: number, reason: WalletReason, idempotencyKe
  *  results는 items와 **동일 순서** — applied(신규지급)·capped(평생합 캡, 지급 0)·둘 다 아님(멱등 재시도). balance=최종 잔액.
  *  멱등키는 achKey(userId,id) 그대로(서버가 userId로 네임스페이스) — achId별 계정평생 dedup 보존. */
 export function earnDiamondsBatch(items: Array<{ amount: number; idempotencyKey: string; ref?: string }>) {
+  // 타임아웃 20s(기본 8s 상향) — 업적 수십 건 배치 + Vercel 콜드스타트면 8s를 넘겨 "서버는 지급 완료·클라는 실패 표시"
+  // 응답 유실이 났다(운영 사고 2026-07-11: 연결 오류 표시 후 재시도에 '수령할 보상 없음'). 수령 중 로딩 오버레이가 가린다.
   return call<{ results: Array<{ applied: boolean; capped?: boolean }>; balance: number }>('/api/wallet/earn-batch', {
     method: 'POST',
     body: JSON.stringify({ items }),
-  });
+  }, 20000);
 }
 
 // ── 결제 폴백(§13.18) ──

@@ -117,8 +117,9 @@ export default function MyPage() {
       const r = await claimAchDiamonds();
       if (r.granted > 0) showAlert('업적 보상 수령', `달성 업적 보상 +${r.granted} 💎`);
       else if (r.reason === 'cap') showAlert('수령 한도', '업적 보상 지급 한도에 도달했습니다.');
-      else if (r.reason === 'offline') showAlert('온라인 연결 필요', '업적 보상 수령은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.');
+      else if (r.reason === 'offline') showAlert('연결이 불안정합니다', '보상이 이미 지급됐을 수 있어요 — 잔액을 확인해 주세요.\n다시 시도해도 중복 지급되지 않습니다.');
       else if (r.reason === 'busy') showAlert('처리 중', '잠시만 기다려 주세요.');
+      else if (r.reason === 'already') showAlert('이미 수령된 보상', '이전 시도에서 이미 지급된 보상입니다. 현재 잔액에 반영되어 있어요.');
       else showAlert('수령할 보상 없음', '새로 달성한 업적이 없습니다.');
     } finally {
       setClaiming(false);

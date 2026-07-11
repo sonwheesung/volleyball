@@ -68,6 +68,10 @@
   **`requireUserId` 1회 + `db.transaction` 1개** 안에서 N개의 값싼 in-tx `applyWalletTx`로 처리해 **≈2~4s**로 단축.
   · body `{ items: [{ amount, idempotencyKey, ref? }] }`, **reason은 서버가 `'achievement'` 강제**(임의 reason 불가 — ad/welcome/purchase 캡을 스코프 밖으로 격리),
     items ≤ 64. 각 amount는 `earnAmount('achievement',_)`로 서버 클램프([1,1000]), 하나라도 손상되면 전체 400.
+  · **응답 유실 UX(운영 사고 2026-07-11)**: 배치+콜드스타트가 클라 기본 타임아웃 8s를 넘겨 "서버는 지급 완료·클라는 연결 오류 표시"가
+    났고, 재시도는 멱등 dedup(applied:false)이라 "수령할 보상 없음"으로 보였다(재화는 무손상 — 이중지급 없음). 수정: ①earn-batch 클라
+    타임아웃 20s ②전건 멱등 재시도(granted 0·confirmed>0)면 reason `'already'` → "이미 수령된 보상, 잔액에 반영" 안내 ③실패 문구를
+    "이미 지급됐을 수 있어요 — 재시도해도 중복 지급 없음"으로 교정. 원칙: **멱등 재화 API의 클라 실패 문구는 '실패 확정'처럼 쓰지 않는다.**
   · **평생합 캡 보존**: 트랜잭션 진입 전 `sumReason(userId,'achievement')`를 **1회** baseline으로 읽고, 순수 함수 `allocateAchGrants(used, wanted[])`가
     `remaining = ACH_LIFETIME_CAP − used − grantedSoFar`를 **아이템 누적**으로 배분(부분 지급=applied·capped:false, 소진=grant0·capped:true=단건 409 cap 동의).
   · **멱등 보존**: 클라 `idempotencyKey`는 `achKey(userId,id)` 그대로, 서버가 `walletIdemKey(userId,_)`로 네임스페이스 → achId별 계정평생 dedup·교차유저 선점 차단 불변.
