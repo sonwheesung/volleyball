@@ -54,8 +54,10 @@ const styles = themedStyles(() => StyleSheet.create({
     paddingVertical: 11, paddingHorizontal: 14, alignSelf: 'stretch',
     shadowColor: '#1B2A4A', shadowOpacity: 0.16, shadowRadius: 12, shadowOffset: { width: 0, height: 4 }, elevation: 5,
   },
-  title: { flex: 1, color: theme.text, fontSize: 14.5, fontWeight: '800' },
+  // 바 배경이 테마 무관 흰색(#FFFFFFF2 위)이므로 내부 텍스트도 고정 어두운 색으로 짝을 맞춘다.
+  // theme.text를 쓰면 다크 모드에서 근백색(#F2F5FA)이 흰 바에 얹혀 화이트-온-화이트로 안 보인다(사용자 제보 2026-07-11).
+  title: { flex: 1, color: '#16202C', fontSize: 14.5, fontWeight: '800' },
   mine: { borderRadius: 999, paddingHorizontal: 8, paddingVertical: 2 },
   mineText: { color: '#FFFFFF', fontSize: 10, fontWeight: '800' },
-  count: { color: theme.muted, fontSize: 11, fontWeight: '700' },
+  count: { color: '#5B6B82', fontSize: 11, fontWeight: '700' },
 }));
