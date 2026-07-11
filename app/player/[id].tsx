@@ -631,11 +631,11 @@ function PlayerDetailInner() {
 
       <IconLabel icon="stats-chart-outline" color={theme.elite}>종합 스탯</IconLabel>
       <Card accent={theme.elite}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <RadarChart
             values={[r.spike, r.block, r.dig, r.receive, r.set, r.serve]}
             labels={['스파이크', '블로킹', '디그', '리시브', '세팅', '서브']}
-            size={158}
+            size={124}
           />
           <View style={{ flex: 1, gap: 2 }}>
             <StatBar label="스파이크" value={r.spike} reveal={reveal} />
