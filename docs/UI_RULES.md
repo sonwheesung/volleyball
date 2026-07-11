@@ -68,6 +68,11 @@
 
 > **UI-39 (2026-07-11 — 아코디언/리스트 항목 구분선은 하단에)**: 카드 안에 세로로 쌓이는 항목(게임 가이드 아코디언 등)의 구분선은 **top이 아니라 bottom**에 둔다 — top-only면 카드 내 **마지막 항목 아래가 비어** 보인다(테스터 보고 — `app/guide.tsx`). `borderBottomWidth`로 마지막 항목도 닫히고, 첫 항목 상단은 카드 자체 보더가 감싸 위아래 균형이 맞는다(시각 전용·로직 무관).
 
+> **UI-40 (2026-07-11 — 안드로이드 몰입 모드)**: 게임 전 화면에서 안드로이드 시스템 내비게이션 바(하단 3버튼)를
+> `expo-navigation-bar` sticky-immersive(`overlay-swipe`+`hidden`)로 숨긴다(다른 모바일 게임 관례·사용자 요청). 화면 하단을
+> 쓸어올리면 잠깐 나타났다 다시 숨음. AppState 'active' 복귀 시 시스템이 바를 되살리므로 재적용(`lib/immersive.ts` reassert).
+> 루트(`app/_layout.tsx`)에서 1회 install. iOS·web no-op. **네이티브 추가라 OTA 불가 — versionCode 범프+재빌드 필요**(v10).
+
 ## UI-27 세계관 사유 문구 예시 (BusyOverlay message — 2026-07-08 사용자 결정)
 
 > 문구는 **그 작업이 실제 하는 일**을 게임 언어로 옮긴다(가짜 사유 금지). 코치·감독·스카우트·프런트가
