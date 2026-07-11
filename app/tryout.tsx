@@ -4,13 +4,14 @@
 import { useMemo, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
-import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { SpotlightOverlay, SpotlightTarget } from '../components/Spotlight';
 import { buildDraftContextFrom, buildOffseasonBase } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
 import { ForeignResumeDetail } from '../components/ForeignResumeDetail';
+import { PlayerAvatar } from '../components/PlayerAvatar';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { fogOvr as fogOvrShared } from '../data/prospectScout';
 import { FOREIGN_SALARY } from '../engine/foreign';
@@ -83,18 +84,31 @@ function TryoutInner() {
   return (
     <Screen title="외국인 트라이아웃">
       <SpotlightTarget id="tryout-pick">
-      <Card accent={theme.bad}>
+      <Card accent={theme.bad} flat>
+        <IconLabel icon="globe-outline" color={theme.bad}>트라이아웃 현황</IconLabel>
+        <View style={styles.statHeader}>
+          <View style={styles.statCell}>
+            <Text style={styles.statCellLabel}>등록 선수</Text>
+            <Text style={styles.statCellVal} numberOfLines={1}>{pool.length}명</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCell}>
+            <Text style={styles.statCellLabel}>스카우터 공개도</Text>
+            <Text style={styles.statCellVal} numberOfLines={1}>{(reveal * 100).toFixed(0)}%</Text>
+          </View>
+          <View style={styles.statDivider} />
+          <View style={styles.statCell}>
+            <Text style={styles.statCellLabel}>내 예상 지명</Text>
+            <Text style={[styles.statCellVal, { color: theme.accent }]} numberOfLines={1}>
+              {myPickId && snap[myPickId] ? snap[myPickId].name : '-'}
+            </Text>
+          </View>
+        </View>
         <Muted style={{ fontSize: 12 }}>
           외국인 선수는 <Text style={{ fontWeight: '800', color: theme.text }}>팀당 1명</Text> — 아포짓(OP) 위주의 팀 공격 핵심입니다(여자부 외인 자리). 매 오프시즌
           {' '}<Text style={{ fontWeight: '800', color: theme.text }}>추첨 순번</Text>대로 1명을 데려옵니다 · 1년 계약 · 연봉 {formatMoney(FOREIGN_SALARY)} 고정(샐러리캡 제외, 운영 자금 지출).
           선수를 누르면 검증된 이력(이전 리그 성적·폼·수상·부상 — 스카우터 등급 따라 공개)이 펼쳐집니다. 우측 위시로 노리면 순번에서 자동 지명하고, 앞 팀이 뺏으면 차순위로 내려갑니다.
         </Muted>
-        <Row>
-          <IconLabel icon="globe-outline" color={theme.bad}>내 예상 지명</IconLabel>
-          <Text style={{ color: theme.accent, fontWeight: '800' }}>
-            {myPickId && snap[myPickId] ? `${snap[myPickId].name} (${snap[myPickId].position})` : '-'}
-          </Text>
-        </Row>
       </Card>
       </SpotlightTarget>
 
@@ -145,14 +159,24 @@ function TryoutInner() {
             <View key={p.id} style={[styles.rowWrap, wishIdx >= 0 && { borderColor: theme.warn, borderWidth: 1 }]}>
               <View style={styles.rowInner}>
                 <Pressable onPress={() => setOpenId(open ? null : p.id)} style={styles.rowTap}>
-                  <PosTag pos={p.position} />
+                  {/* 아바타 + 하단 OVR 범위 오버레이 배지(안개 fogOvr — 스카우터 등급 따라 범위) */}
+                  <View style={styles.avatarWrap}>
+                    <PlayerAvatar id={p.id} size={60} />
+                    <View style={styles.ovrOverlay}>
+                      <Text style={styles.ovrOverlayTxt} numberOfLines={1}>{fogOvr(p)}</Text>
+                    </View>
+                  </View>
                   <View style={{ flex: 1 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                      <Text style={styles.name}>{p.name}</Text>
+                    <View style={styles.nameRow}>
+                      <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
+                      <PosTag pos={p.position} />
                       {returning ? <Text style={styles.tagReturn}>재참가</Text> : null}
                     </View>
-                    <Text style={styles.sub}>
-                      {p.age}세 · {p.height}cm · OVR {fogOvr(p)} · {taker ? `→ ${taker}` : '미지명'}
+                    <Text style={styles.sub} numberOfLines={1}>
+                      {p.age}세 · {p.height}cm · OVR {fogOvr(p)}
+                    </Text>
+                    <Text style={[styles.taker, taker ? { color: theme.accent } : null]} numberOfLines={1}>
+                      {taker ? `→ ${taker}` : '미지명'}
                     </Text>
                     {/* 이력 토글 — 메타 텍스트에 파묻히지 않게 별도 칩(2026-07-11 테스터: UI 그룹화) */}
                     <View style={[styles.resumeChip, open && styles.resumeChipOn]}>
@@ -186,10 +210,22 @@ const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border },
   rowWrap: { backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
   rowInner: { flexDirection: 'row', alignItems: 'center' },
-  rowTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
+  rowTap: { flex: 1, flexDirection: 'row', alignItems: 'flex-start', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
   wishBtn: { paddingHorizontal: 14, paddingVertical: 14, borderLeftWidth: 1, borderLeftColor: theme.border, minWidth: 60, alignItems: 'center' },
-  name: { color: theme.text, fontSize: 16, fontWeight: '700' },
-  sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
+  // 현황 헤더 카드 — 가로 3칸 스탯(등록 선수·공개도·예상 지명), 셀 사이 얇은 구분선
+  statHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
+  statCell: { flex: 1, gap: 2 },
+  statCellLabel: { color: theme.muted, fontSize: 11 },
+  statCellVal: { color: theme.text, fontSize: 15, fontWeight: '800' },
+  statDivider: { width: 1, alignSelf: 'stretch', backgroundColor: theme.border, marginHorizontal: 10 },
+  // 아바타(60) + 하단 OVR 범위 오버레이 배지(반투명 검정 바 위 흰 글씨)
+  avatarWrap: { width: 60, height: 60, borderRadius: 10, overflow: 'hidden', backgroundColor: theme.cardAlt },
+  ovrOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.62)', paddingVertical: 1.5, alignItems: 'center' },
+  ovrOverlayTxt: { color: '#FFFFFF', fontSize: 9.5, fontWeight: '800', letterSpacing: 0.2 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 6, flexWrap: 'wrap' },
+  name: { color: theme.text, fontSize: 16, fontWeight: '700', flexShrink: 1 },
+  sub: { color: theme.muted, fontSize: 13, marginTop: 2 },
+  taker: { color: theme.muted, fontSize: 12.5, fontWeight: '600', marginTop: 1 },
   tagReturn: { color: theme.accent, fontSize: 11, fontWeight: '700' },
   tagWish: { color: theme.warn, fontSize: 12, fontWeight: '900' },
   chip: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 6, paddingHorizontal: 12 },
