@@ -48,6 +48,12 @@
 > | `draft` · `draft-live` — 시즌 시작하기 | 전면 `showSeasonStartAd()` | `startingRef`(동기 래치) + `starting` state → 라벨 "시즌 준비 중…"·disabled, `try/finally` 해제 |
 > | `mypage` — 광고 보고 +💎 | 보상형 `showRewardedForDiamonds()` | store `walletBusy` 래치(watchAdForDiamonds가 **첫 await 전 동기 `set`**) + 버튼 `disabled` + "적립 중…" 라벨 |
 
+> **UI-32 (2026-07-11 — 성공 무피드백 금지)**: 사용자 액션의 **성공 경로**는 반드시 눈에 보이는 반응을 남긴다 —
+> ⓐ showAlert ⓑ 토스트 ⓒ 화면 전환 ⓓ 즉시 보이는 상태 변화(행 이동·뱃지·숫자) 중 최소 1개. "실패만 알림,
+> 성공은 침묵" 패턴 금지(사용자 보고 2026-07-11 — "행동을 했는데 피드백이 없다"). 전수 스윕에서 걸린 4곳:
+> 재계약 제안(contracts — 별도 격상 트랙) · FA 오퍼 갱신(fa — 토스트 추가) · 스태프 영입(staff — 완료 알림 추가) ·
+> 시즌 중 영입(transactions — 완료 알림 추가). 새 액션을 추가할 때 이 체크리스트로 자가 검사.
+
 ## UI-27 세계관 사유 문구 예시 (BusyOverlay message — 2026-07-08 사용자 결정)
 
 > 문구는 **그 작업이 실제 하는 일**을 게임 언어로 옮긴다(가짜 사유 금지). 코치·감독·스카우트·프런트가

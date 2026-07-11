@@ -66,6 +66,8 @@ export default function Transactions() {
               : cost > cash
                 ? `운영 자금 부족 — 잔고 ${formatMoney(cash)} (캡과 별개로 구단 지갑이 비었습니다)`
                 : `샐러리캡 초과 — 잔여 ${formatMoney(capLeft)}`);
+          } else {
+            showAlert('영입 완료', `${p.name} 선수가 즉시 합류했습니다. 다음 경기부터 출전 가능합니다.`);
           }
         },
       },

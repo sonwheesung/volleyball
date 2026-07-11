@@ -559,7 +559,11 @@ function FACenterInner() {
                     })()}
 
                     <Pressable
-                      onPress={() => busy.run('협상 테이블을 차리는 중…', () => setOffer(p.id, draft))}
+                      onPress={() => busy.run('협상 테이블을 차리는 중…', () => {
+                        setOffer(p.id, draft);
+                        // 성공 피드백(2026-07-11 무피드백 스윕 #2) — 경쟁 뒤집힘 토스트(#81)는 변화 때만 떠서 단순 갱신이 조용했다
+                        toast.push(`${p.name} — 오퍼를 ${targeted ? '갱신했습니다' : '냈습니다'}. 결과는 시즌 시작 때 확정됩니다.`);
+                      })}
                       style={[styles.applyBtn, { borderColor: theme.accent, backgroundColor: theme.accent + '22' }]}
                     >
                       <Text style={{ color: theme.accent, fontWeight: '800', fontSize: 14 }}>
