@@ -1194,9 +1194,19 @@ export const useGameStore = create<GameState>()(
           const prev = ctx.prevTeamOf[id];
           const p = snapshot[id];
           if (!prev || !p) continue; // 직전 소속 없으면 풀 잔류자(신규 방출 아님)
-          if (prev === my || notable(id)) seasonReleases.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: '', kind: 'release', ovr: overall(p), ...(satOutSet.has(id) ? { satOut: true } : {}) });
+          // 재계약 불발 사유(FA §2.5c-격상) — 내 팀 만료FA만 buildOffseason 버킷팅 진실(ctx.myReleaseReasons)에서. 은퇴자는 nextFaPool에 없어 자동 제외.
+          const reason = prev === my ? ctx.myReleaseReasons[id] : undefined;
+          if (prev === my || notable(id)) seasonReleases.push({ season, playerId: id, name: p.name, fromTeam: prev, toTeam: '', kind: 'release', ovr: overall(p), ...(satOutSet.has(id) ? { satOut: true } : {}), ...(reason ? { reason } : {}) });
         }
-        const nextTransfers = [...transfers, ...seasonTransfers, ...seasonReleases].slice(-200);
+        // 재계약 도장(FA §2.5c-격상) — 내 팀 만료FA 중 keep 버킷(refuse 롤 통과). 결산 뉴스 전용, fromTeam=toTeam=my.
+        const rosteredMine = new Set(filled.rosters[my] ?? []);
+        const seasonResigns: Transfer[] = [];
+        for (const id of ctx.myResigned) {
+          const p = snapshot[id];
+          if (!p || !rosteredMine.has(id)) continue; // 최종 로스터에 실제 남은 도장만(방어적 — keep 버킷은 항상 남음)
+          seasonResigns.push({ season, playerId: id, name: p.name, fromTeam: my, toTeam: my, kind: 'resign', ovr: overall(p) });
+        }
+        const nextTransfers = [...transfers, ...seasonTransfers, ...seasonReleases, ...seasonResigns].slice(-200);
 
         // 오프시즌 결산 뉴스(§3.7) — ① 드래프트 입단 로그: 내 팀 전 픽 ∪ 타팀 1라운드.
         //   round/overallPick은 drafted.sequence를 회차 재구성(한 라운드에 팀이 두 번 나오면 새 라운드 — buildDraftOrder 구조).

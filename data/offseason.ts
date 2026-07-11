@@ -370,7 +370,13 @@ export interface Offseason {
   returningForeign: string[];           // 전 시즌 외인(생존자) — 트라이아웃 재참가(국내 흐름과 분리)
   returningAsian: string[];             // 전 시즌 아시아쿼터(생존자) — 아시아쿼터 트라이아웃 재참가(FOREIGN_SYSTEM 7)
   expelled: ExpelEvent[];               // 이번 오프시즌 영구제명자(승부조작·학폭 등 — 리그 영구 퇴출)
+  // FA §2.5c-격상(2026-07-11) — 내 팀 만료 FA의 오프시즌 재계약 결과(뉴스 사유·도장). 은퇴자는 별도 버킷이라 여기 없음.
+  myReleaseReasons: Record<string, ReleaseReason>; // 내 팀 만료자가 FA 풀行 사유(캡압박/뿌리침/미제안)
+  myResigned: string[];                 // 내 팀 만료 FA 중 실제 재계약(keep 버킷 — refuse 롤 통과) = 수락 도장
 }
+
+/** 내 팀 만료 FA가 재계약 못 하고 FA 풀로 간 사유(FA §2.5c-격상) — 뉴스 카피 분기. */
+export type ReleaseReason = 'refused' | 'notOffered' | 'capSqueezed';
 
 /**
  * 다음 시즌 오프시즌 상태 계산.
@@ -431,6 +437,9 @@ export function buildOffseason(
   const pool: string[] = [];
   const returningForeign: string[] = [];
   const returningAsian: string[] = [];
+  // FA §2.5c-격상 — 내 팀 만료 FA 재계약 결과(뉴스 사유·도장). 버킷팅 중 기록(진실의 원천).
+  const myReleaseReasons: Record<string, ReleaseReason> = {};
+  const myResigned: string[] = [];
   for (const teamId of Object.keys(afterRetire.rosters)) {
     // 내 팀 만료자: 단장이 잡고 싶어도(resign) 불만 선수는 거부하고 시장으로 나갈 수 있다(면담이 좌우).
     //   ★ 봉인(위 overrideResign)을 위해 버킷팅 루프보다 먼저 정의 — override 만료자도 이 롤을 태운다.
@@ -463,8 +472,9 @@ export function buildOffseason(
         const baseC = basePlayers.find((b) => b.id === id)!.contract;
         snapshot[id] = { ...p, contract: { ...baseC, remaining: 0 } };
         pool.push(id);
+        if (teamId === myTeam) myReleaseReasons[id] = 'refused'; // 인시즌 재계약도 시즌말 거부 롤에 뿌리침
       }
-      else { keep.push(id); payroll += p.contract.salary; }
+      else { keep.push(id); payroll += p.contract.salary; if (teamId === myTeam && overrideResign.has(id)) myResigned.push(id); } // override 만료자 잔류 = 재계약 도장
     }
     // 2) 만료자: 잔류 의사(내 팀=단장 결정 / AI=aiKeepsFA) 있는 선수를 가치 높은 순으로,
     //    팀 샐러리캡 한도 내에서만 재계약. 캡 초과분은 잔류 못 하고 FA 시장으로(왕조 억제 레버).
@@ -488,11 +498,16 @@ export function buildOffseason(
         snapshot[p.id] = { ...p, contract: renewed };
         keep.push(p.id);
         payroll += renewed.salary;
+        if (teamId === myTeam) myResigned.push(p.id); // 오프시즌 재계약 성사 = 도장(refuse 롤 통과·캡 이내)
       } else {
         pool.push(p.id); // 캡 초과 → 잔류 불가
+        if (teamId === myTeam) myReleaseReasons[p.id] = 'capSqueezed'; // 잡고 싶었으나 캡에 밀림
       }
     }
-    for (const p of expiring) if (!wantRetainSet.has(p.id)) pool.push(p.id); // 잔류 의사 없던 만료자(의사자 중 컷/캡탈락은 위에서 이미 풀행)
+    for (const p of expiring) if (!wantRetainSet.has(p.id)) { // 잔류 의사 없던 만료자(의사자 중 컷/캡탈락은 위에서 이미 풀행)
+      pool.push(p.id);
+      if (teamId === myTeam) myReleaseReasons[p.id] = refuses(p) ? 'refused' : 'notOffered'; // 뿌리침 vs 미제안(resignDecisions=false)
+    }
 
     // AI 능동 방출(FA_SYSTEM §1.7, Phase 1.5) — 재계약(비연장)만으론 **3년 계약 신인**(seed.ts)이 쌓여 로스터가 예약 상한
     //   아래로 안 내려간다(드래프트 굶음). 그래서 계약 잔여 선수까지 포함해 **예약 상한 초과분을 가치 낮은(늙고 약한) 순으로 방출**한다.
@@ -520,7 +535,7 @@ export function buildOffseason(
     }
     rosters[teamId] = keep;
   }
-  return { snapshot, rosters, pool, retired: afterRetire.retired, returningForeign, returningAsian, expelled };
+  return { snapshot, rosters, pool, retired: afterRetire.retired, returningForeign, returningAsian, expelled, myReleaseReasons, myResigned };
 }
 
 export interface PreDraft {

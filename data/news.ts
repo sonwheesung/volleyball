@@ -488,6 +488,7 @@ export function buildNewsFeed(
   //   렌더 단계서도 타팀은 거물(이동시점 ovr≥REL_NEWS_OVR)만 — 구세이브(ovr 없는 무게이트 이적 로그) 범람 차단.
   const REL_NEWS_OVR = 71;
   for (const t of transfers) {
+    if (t.kind === 'resign') continue; // 재계약 도장(FA §2.5c-격상)은 오프시즌 결산 1건에만 묶임(개별 기사 X — 노이즈 정책)
     const inMine = t.toTeam === myTeamId, outMine = t.fromTeam === myTeamId;
     if (!inMine && !outMine && (t.ovr ?? 0) < REL_NEWS_OVR) continue; // 타팀은 거물만(ovr 없으면=구세이브 무게이트 → 숨김)
     // ── 방출/재계약 불발(release) — toTeam='' ──
@@ -508,13 +509,24 @@ export function buildNewsFeed(
             outMine ? `${teamName(myTeamId)}으로서는 익숙한 얼굴을 시장에서 지켜본 셈이다.` : '')), t.playerId);
         continue;
       }
+      // 재계약 불발 사유(FA §2.5c-격상 — 내 팀 만료FA에만 t.reason). 캡압박·뿌리침·미제안으로 헤드라인·리드 분기.
+      const headByReason = outMine && t.reason ? ({
+        capSqueezed: (n: string) => `${teamName(myTeamId)}, ${n} 캡에 밀려 이별 — FA 시장으로`,
+        refused: (n: string) => `${n}, ${teamName(myTeamId)} 제안 뿌리치고 FA행`,
+        notOffered: (n: string) => `${teamName(myTeamId)}, ${n} 재계약 접고 결별`,
+      } as const)[t.reason] : null;
+      const leadByReason = outMine && t.reason ? ({
+        capSqueezed: `${t.name}이(가) 샐러리캡에 밀려 ${teamName(myTeamId)}과(와) 재계약하지 못하고 FA 시장에 나왔다.`,
+        refused: `${t.name}이(가) ${teamName(myTeamId)}의 재계약 제안을 뿌리치고 FA 시장에 나왔다. 한 시즌을 건 약속은 성사되지 못했다.`,
+        notOffered: `${teamName(myTeamId)}이(가) ${t.name}에게 재계약을 제안하지 않아, 선수는 FA 시장에 나왔다.`,
+      } as const)[t.reason] : `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 FA 시장에 나왔다. 새 시즌 명단에 이름을 올리지 못했다.`;
       push(t.season, 'release', vh([
-        (n) => `${teamName(t.fromTeam)}, ${n} 방출 — FA 시장으로`,
+        headByReason ?? ((n) => `${teamName(t.fromTeam)}, ${n} 방출 — FA 시장으로`),
         (n) => `${n}, ${teamName(t.fromTeam)}와(과) 재계약 불발`,
         (n) => outMine ? `${teamName(myTeamId)}, ${n} 방출` : `FA ${n}, ${teamName(t.fromTeam)} 떠난다`,
       ], rkey, t.name), bigRel, t.fromTeam,
         body3('release', rkey, more(
-          `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 FA 시장에 나왔다. 새 시즌 명단에 이름을 올리지 못했다.`,
+          leadByReason,
           careerLine(t.playerId),
           // 인간관계(현재 사실 — 가짜 드라마 아님): 떠난 팀에 가까운 동료가 남아 있으면 이별 한 줄(이적의 정서적 대칭, RELATIONSHIP §6)
           (() => { const f = topFriendOnTeam(t.playerId, t.fromTeam); return f ? `각별한 동료 ${f.name}을(를) ${teamName(t.fromTeam)}에 남기고 떠난다.` : ''; })(),
@@ -675,9 +687,10 @@ export function buildNewsFeed(
     // ── ① 종합 결산(내 팀, 오프시즌마다 항상 1건 — 리브니스) ──
     if (myTeamId) {
       const myDraft = seasonDraftLog.filter((d) => d.season === offSeason && d.teamId === myTeamId);
-      const faIn = transfers.filter((t) => t.season === offSeason && t.toTeam === myTeamId && t.kind !== 'release');
-      const faOut = transfers.filter((t) => t.season === offSeason && t.fromTeam === myTeamId && t.kind !== 'release' && t.toTeam);
+      const faIn = transfers.filter((t) => t.season === offSeason && t.toTeam === myTeamId && t.kind !== 'release' && t.kind !== 'resign');
+      const faOut = transfers.filter((t) => t.season === offSeason && t.fromTeam === myTeamId && t.kind !== 'release' && t.kind !== 'resign' && t.toTeam);
       const relOut = transfers.filter((t) => t.season === offSeason && t.fromTeam === myTeamId && t.kind === 'release');
+      const resignKept = transfers.filter((t) => t.season === offSeason && t.toTeam === myTeamId && t.kind === 'resign'); // 재계약 도장(FA §2.5c-격상)
       const myForeign = seasonForeignLog.filter((f) => f.season === offSeason && f.teamId === myTeamId);
       const inNames = [
         ...myDraft.map((d) => `${posKoD(d.position)} ${d.name}(신인)`),
@@ -690,14 +703,18 @@ export function buildNewsFeed(
         ...myForeign.filter((f) => f.outName).map((f) => `${f.outName}(${f.asian ? '아시아쿼터' : '외인'})`),
       ];
       const S = currentSeason + 1;
-      const quiet = inNames.length === 0 && outNames.length === 0;
-      const detail = [inNames.length ? `영입·입단 — ${inNames.join(', ')}.` : '', outNames.length ? `방출·이적 — ${outNames.join(', ')}.` : ''].filter(Boolean).join(' ');
+      const quiet = inNames.length === 0 && outNames.length === 0 && resignKept.length === 0;
+      const detail = [
+        inNames.length ? `영입·입단 — ${inNames.join(', ')}.` : '',
+        resignKept.length ? `재계약 유지 — ${resignKept.map((t) => t.name).join(', ')}.` : '', // 수락 도장(FA §2.5c-격상)
+        outNames.length ? `방출·이적 — ${outNames.join(', ')}.` : '',
+      ].filter(Boolean).join(' ');
       const core = quiet
         ? `${teamName(myTeamId)}은(는) 이렇다 할 영입도 유출도 없이 기존 전력으로 ${S}시즌을 맞는다.`
         : `${teamName(myTeamId)}의 ${S}시즌 진용이 확정됐다. ${detail}`;
       push(currentSeason, 'offseason', quiet
         ? `${teamName(myTeamId)}, ${S}시즌 전력 유지 — 조용한 오프시즌`
-        : `${teamName(myTeamId)}, ${S}시즌 진용 확정 (영입 ${inNames.length}·유출 ${outNames.length})`,
+        : `${teamName(myTeamId)}, ${S}시즌 진용 확정 (영입 ${inNames.length}·유출 ${outNames.length}${resignKept.length ? `·재계약 ${resignKept.length}` : ''})`,
         true, myTeamId, body3(quiet ? 'quietOff' : 'offseason', `${offSeason}:recap:${myTeamId}`, core), myTeamId, 0);
     }
 

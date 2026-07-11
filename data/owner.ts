@@ -14,7 +14,7 @@ import { relationBonds } from './relationships';
 import { SEASON_DAYS } from '../engine/calendar';
 import { buildLineup } from '../engine/lineup';
 import { overall } from '../engine/overall';
-import { marketValue } from '../engine/salary';
+import { marketValue, resignOptions } from '../engine/salary';
 import { salaryEraNow } from './awardSalary';
 import { formFactor, formGrade } from '../engine/form';
 import { awardHistoryOf } from './awards';
@@ -202,6 +202,46 @@ export function resignOutlookNow(
   if (refuseBias > 0.01) chips.push('면담 역효과');     // 실패 면담이 정을 떨어뜨림
   else if (refuseBias < -0.01) chips.push('면담으로 달램'); // 성공 면담이 마음을 붙잡음
   return { prob, band, topic, chips };
+}
+
+// ── 재계약 오퍼 프리뷰·피드백(FA §2.5c-격상, 2026-07-11) — 엔진 위임(resignOutlookNow 재사용, 재구현 아님) ──
+
+/** 재계약 3택 각 옵션의 잔류 전망(밴드) — 옵션 계약을 override로 `resignOutlookNow`에 넣어 산출.
+ *  UI는 이 셀렉터만 부른다(옵션별 밴드 재구현 금지 — 가드 _dv_resignfeedback ①이 동일성 A/B로 봉인). */
+export interface ResignOptionOutlook { key: 'standard' | 'generous' | 'short'; label: string; salary: number; years: number; note: string; outlook: ResignOutlook }
+export function resignOptionOutlooks(
+  p: Player, market: number, myTeamId: string, day: number,
+  interviews: InterviewLog[], season: number,
+): ResignOptionOutlook[] {
+  return resignOptions(p, market).map((o) => {
+    const ov: Record<string, Contract> = { [p.id]: { salary: o.salary, years: o.years, remaining: o.years, signedAtAge: p.age } };
+    return { key: o.key, label: o.label, salary: o.salary, years: o.years, note: o.note, outlook: resignOutlookNow(p, myTeamId, day, interviews, season, ov) };
+  });
+}
+
+/** 선수 단위 캡션 3분기(step2) — 불만 topic으로 갈린다. money만 옵션으로 갈리므로 옵션별 밴드를 보여주고,
+ *  비-money는 "돈 문제 아님"+면담 유도, 무불만은 면담 유도 금지(무불만자 면담=역효과, OWNER 1.2). */
+export type ResignCaptionKind = 'noGrievance' | 'nonMoney' | 'money';
+export function resignCaptionOf(topic: DiscontentTopic | null): { kind: ResignCaptionKind; text: string; talkPrompt: boolean } {
+  if (!topic) return { kind: 'noGrievance', text: '어떤 조건이든 마음은 같습니다 — 조건보다 팀을 봅니다.', talkPrompt: false };
+  if (topic === 'money') return { kind: 'money', text: '연봉이 마음에 걸립니다 — 오퍼에 따라 잔류 전망이 갈립니다.', talkPrompt: false };
+  return { kind: 'nonMoney', text: `연봉의 문제가 아닙니다 — ${TOPIC_BADGE[topic]}. 면담으로 마음을 들여다보세요.`, talkPrompt: true };
+}
+
+/** 제안 직후 결과 반응(step3) — 밴드별 대사. '안정'도 과약속 금지("마음이 기울어" 톤). 최종은 시즌말 확정.
+ *  before/after 밴드가 갈리면 전→후를, 안 갈리면 "조건이 마음을 바꾸진 않았다"를. moved=밴드 변화 여부. */
+const BAND_REACT: Record<ResignBand, string> = {
+  stable: '마음이 우리 쪽으로 기울어 있습니다.',
+  fluid: '고민이 남아 있습니다 — 아직 확답은 이릅니다.',
+  risk: '표정이 밝지 않습니다 — 시장을 살필 눈치입니다.',
+};
+export function resignReactionCopy(before: ResignBand, after: ResignBand): { line: string; moved: boolean; remind: string; framing: string } {
+  const moved = before !== after;
+  const BAND_KO: Record<ResignBand, string> = { stable: '안정', fluid: '유동', risk: '위험' };
+  const line = moved
+    ? `조건이 마음을 움직였습니다 — 전망이 ${BAND_KO[before]}에서 ${BAND_KO[after]}(으)로 바뀌었습니다. ${BAND_REACT[after]}`
+    : `${BAND_REACT[after]} (조건이 마음을 바꾸진 않았습니다.)`;
+  return { line, moved, remind: '최종 결정은 시즌 종료 시 내려집니다.', framing: '재계약은 한 시즌을 건 약속입니다.' };
 }
 
 /** 선수 성격(FA 동기 아키타입) 표시 라벨 + 벤치 태도 설명 — "왜 이 마음인지" 가독성용(OWNER_SYSTEM).

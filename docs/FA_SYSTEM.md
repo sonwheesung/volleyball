@@ -325,6 +325,45 @@ offerScore = w.money·(연봉/asking) + w.win·우승권(0.7·전력+0.3·presti
   boolean·외인 전용(외인은 `refuses` 무대상·트라이아웃 별도 흐름)이라 유사 우회 없음. `data/roster.effectiveContract`·`recapBriefing`는 표시 전용.
 - 가드 `tools/_dv_resignrefuse.ts`(HI 이탈/LO 잔류 A/B·봉인 제거 mutant 검출·preview=result·money 토글) + `tools/simOwnerRefuse.ts`(override 케이스 유일성 확장). EC-FA-16.
 
+#### 2.5c-격상 — 재계약 UX(피드백·서사) 격상 (독립 리뷰 수정 채택, 2026-07-11)
+> 사용자 불만: "재계약이 FA 대비 재미없고 성공/실패 피드백이 없다"(제안 성공 시 시트만 닫힘, 수락 확정 뉴스 부재).
+> 모델 진실(2.5c-보완 D안 유지)은 **오퍼=제안·수락/뿌리침은 시즌 종료 refuses() 롤**이라, "즉시 확정"으로 바꾸지 않고 **관전형 서사(제안→시즌말 확정)를 읽히게** 격상한다.
+
+**측정 (헤드리스 `tools/_ms_resignfeedback.ts`, N=10,837 만료자 · 560시즌 · OFFER_DAY=115 · 2026-07-11):**
+- ① 만료자(willBeFA) 불만 topic 분포 — **표본 10,837명**: null 84.4% / win 5.5% / minutes 1.3% / **money 0.05%(5명)** / hometown 8.7%.
+  → money 불만은 만료자 중 **극히 드묾**(재계약·시대앵커가 연봉을 시장가로 계속 재정렬해 `salaryRatio<0.75` 문턱을 거의 안 넘김 — 만료 시점 대부분은 저평가 아님).
+- ② money 불만 선수 중 3택(표준/후하게/짧게) 잔류 밴드가 갈리는 비율 = **40%(2/5)** — 조합: stable|stable|stable 60%·stable|stable|risk 40%('짧게' −15%가 문턱을 되넘겨 risk). 15% 문턱 초과 → **밴드 유지(피벗 불요)**.
+  단 ①의 희소성을 반영해 **옵션별 밴드 표기는 money 불만 선수에게만 노출**(비-money·무불만은 옵션 간 밴드 동일이라 생략 — 노이즈 0). 그 외 선수는 선수 단위 캡션 3분기가 전달.
+- ③ 오퍼일→시즌말 밴드 flip율 = **2.5%(85/3,464)** (내 팀 만료자) — 프리뷰가 최종을 잘 예측(stable→stable 82.7%·risk→risk 11.8%). "시즌 종료 시 확정" 캡션으로 남은 flip을 방어.
+
+**1. 잔류 토글 진실 균열 해소 (Direction B — 캡션을 엔진 진실로 교정).** `app/contracts.tsx`의 "잔류를 택하면 시장가로 재계약을 제안합니다" 캡션이,
+  엔진이 **구 연봉으로 money 불만을 평가**(`data/owner.ts` — 잔류 토글은 override를 만들지 않음)하는 것과 어긋났다.
+  - **채택 = B(캡션 교정), 기각 = A(잔류 토글을 시장가 override로 취급).** 근거: (ⅰ) A는 `refuses()` 확률 문턱을 바꿔 **결정론 오프시즌 결과(누가 떠나나)** 를 건드린다 — 6개 `buildOwnerFx` 호출처·리플레이/세이브 전반의 회귀 위험. (ⅱ) A는 "잔류 토글만으로 money 불만 자동 해소"가 되어 **2.5c-보완 D안이 봉인한 익스플로잇**(토글=불만 무시 잔류)의 변종을 재개방한다. (ⅲ) **명시적 재계약 오퍼**(`reSign`→`contractOverrides`)가 이미 올바른 레버 — override가 money 불만을 재평가(D안 ②)하므로, 토글은 순수 방출/보류 결정으로 남긴다. 잔류 밴드(`resignOutlookNow`)는 이미 엔진 진실(구 연봉 기준 flight risk)을 표시 중 → 캡션만 교정하면 밴드↔캡션 정합.
+  - 기존 가드 `_dv_resignoutlook`·`_dv_resignrefuse` 재실행 PASS 유지(엔진 무변).
+
+**2. 오퍼 시트 프리뷰 (3택 각 옵션 밴드 + 선수 단위 캡션 3분기).** `data/owner.ts resignOptionOutlooks`가 3택 각각을
+  override로 `resignOutlookNow`에 넣어 **옵션별 밴드**를 산출(재구현 아님·엔진 위임). 선수 단위 캡션은 불만 topic으로 3분기:
+  - **① 무불만(topic null)**: "어떤 조건이든 마음은 같습니다" — **면담 유도 없음**(무불만자 면담은 역효과 위험, OWNER 1.2).
+  - **② 비-money 불만(win/minutes/hometown)**: "연봉의 문제가 아닙니다 — [불만 칩]" + 면담 유도(돈으로 안 풀림 = 돈 면역).
+  - **③ money 불만**: 옵션별 밴드 차이 표시(갈릴 때 — 측정 ②).
+
+**3. 제안 직후 결과 피드백 (결과 시트).** `reSign` 성공 직후 결과 시트: **선수 한 줄 반응**(밴드별 대사 — '안정'도 과약속 금지:
+  "마음이 기울어 있습니다" 톤 + "최종 결정은 시즌 종료 시" 리마인드). money 불만 해소로 밴드가 실제로 변하면 **전→후** 표시, 무변화면
+  diff를 그리지 말고 "조건이 마음을 바꾸진 않았습니다"로 대사화. "재계약은 한 시즌을 건 약속입니다"로 **FA와의 비대칭(제안≠확정)** 을 읽힌다.
+  대사는 `data/owner.ts resignReactionCopy`(순수·결정론).
+
+**4. 시즌말 결과 뉴스 (수락 도장 신설 + 불발 사유 반영).**
+  - `Transfer`에 옵셔널 `reason?: 'refused'|'notOffered'|'capSqueezed'` + `kind:'resign'`(수락 도장) 추가 — **옵셔널이라 세이브 안전·마이그레이션 불요**(SAVE_SYSTEM ①).
+  - **불발 사유 = `buildOffseason`이 산출**(진실의 원천, 재구현 아님): 내 팀 만료자가 FA 풀로 갈 때 버킷별 사유를 `myReleaseReasons`에 기록.
+    캡 초과=`capSqueezed`("캡에 밀려 이별") · 거부 롤=`refused`("제안 뿌리치고 FA행") · 미제안(`resignDecisions=false`)=`notOffered`("구단이 제안 안 함").
+    **은퇴자는 별도 버킷**(도장도 뿌리침도 아님 — `applyRetirements`가 거부 롤보다 선행, 은퇴자는 FA 풀 비대상). 사유맵은 `DraftContext`로 노출→store가 release Transfer에 실음.
+  - **수락(도장) 뉴스 신설**: `buildOffseason.myResigned`(내 팀 만료 FA 중 keep 버킷 = refuse 롤을 통과해 실제 재계약된 선수)를 store가
+    `kind:'resign'` Transfer로 발행 → 뉴스는 **오프시즌 결산 1건에 묶어** "재계약 유지 — X, Y." 로(NEWS_SYSTEM §3.3 노이즈 정책, 내 팀만).
+  - 사유맵/도장맵은 `buildOffseason` 버킷팅에서 **동일 `refuses()`** (per-player 시드, 재사용 안전)로 산출 → preview=result 자동 보전.
+
+**5·6. 가드·검증**: `tools/_dv_resignfeedback.ts`(① 옵션 프리뷰==`resignOutlookNow` A/B ② `reason`/`myResigned` 분류가 실제 버킷과 일치·은퇴 제외
+  ③ 도장 뉴스가 수락자 집합과 일치·스포일러 무해 ④ 결정론). 측정 도구 `tools/_ms_resignfeedback.ts`. 기존 재계약 가드 전부 재실행 PASS. EC-FA-17.
+
 ### 2.5b 선수별 FA 성향 (이적 동기 차등) ★ — 2026-06 구현
 
 현실의 FA는 선수마다 동기가 다르다. "돈 좇는 선수 / 우승 좇는 선수 / 남고 싶은 선수 /

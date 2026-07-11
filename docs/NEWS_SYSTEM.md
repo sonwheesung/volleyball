@@ -119,6 +119,10 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 - **포착(endSeason)**: 팀→팀 이동(transfer) + **방출(release)** 을 같은 `transfers` 연표에 적립(최근 200).
   포착 게이트 = `fromTeam===myTeam || overall≥REL_NEWS_OVR`(로그를 거물+내 팀으로 린하게 유지).
 - **렌더(news.ts)**: 저장된 전부 렌더(내 팀 accent). 방출=`release` kind, 본문에 `careerLine`(통산 사실).
+- **재계약 서사(FA §2.5c-격상, 2026-07-11)**: `Transfer`에 `reason?: 'refused'|'notOffered'|'capSqueezed'`(release, 내 팀 만료FA만 —
+  `buildOffseason` 버킷팅 진실)와 `kind:'resign'`(수락 도장, `fromTeam=toTeam=my`) 추가 — 전부 옵셔널(구세이브 호환·마이그레이션 불요).
+  release 리드가 사유별 분기(캡에 밀려 이별 / 제안 뿌리치고 FA행 / 구단이 제안 안 함). **resign은 개별 기사 없음** —
+  오프시즌 결산(§3.7) 1건에 "재계약 유지 — X, Y."로 묶임(노이즈 정책·§3.3의 린 로그 원칙). 은퇴자는 사유·도장 무대상(별도 버킷). 가드 `_dv_resignfeedback`.
 
 **무결성**: 매달린 참조 0(방출 선수도 playerBase에 존재 — `commitPlayerBase(snapshot)`이 풀 포함), 중복 0
 (`season:release:playerId` 키), 결정론(같은 시드 동일), 가짜 드라마 0(전부 실제 roster diff). `simNews` 확장 검증.

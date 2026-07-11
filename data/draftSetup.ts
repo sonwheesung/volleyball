@@ -34,6 +34,8 @@ export interface DraftContext {
   compCash: number;                       // 내가 낸 FA 보상금 합(운영 자금 차감)
   counterFired: Record<string, { from: number; to: number }>; // 카운터 발동 관측(FA_SYSTEM §2.8.6 — endSeason 뉴스 ①)
   faSatOut: string[];                     // SIT_OUT+bids>0 잔류자(§2.8.6 뉴스 ②)
+  myReleaseReasons: Record<string, import('./offseason').ReleaseReason>; // 내 팀 만료FA 재계약 불발 사유(FA §2.5c-격상 — endSeason 뉴스 사유)
+  myResigned: string[];                   // 내 팀 만료FA 재계약 성사(도장) — endSeason 결산 뉴스
 }
 
 // 스냅샷/해결 분리(REALTIME_SIM §7.3) 재노출 — 앱이 base(안정 deps)를 따로 메모하게. buildOffseasonBase는 offseason 정본.
@@ -88,6 +90,8 @@ export function buildDraftContextFrom(
     compCash: pre.compCash,
     counterFired: pre.counterFired,
     faSatOut: pre.faSatOut,
+    myReleaseReasons: base.off.myReleaseReasons ?? {}, // 버킷팅 진실(FA §2.5c-격상) — resolve는 이 사유맵을 안 바꿈(재계약자는 keep, 풀행자는 사유 기록됨)
+    myResigned: base.off.myResigned ?? [],
   };
 }
 

@@ -18,7 +18,7 @@ import { ROSTER_MIN, severanceFee } from '../engine/transactions';
 import { assignFAGrades, willBeFA } from '../engine/faMarket';
 import { contractStatus, formatMoney, resignOptions } from '../engine/salary';
 import { marketVal } from '../data/awardSalary';
-import { resignOutlookNow, type ResignBand } from '../data/owner';
+import { resignOutlookNow, resignOptionOutlooks, resignCaptionOf, resignReactionCopy, type ResignBand } from '../data/owner';
 import { useGameStore } from '../store/useGameStore';
 import type { ReSignReject } from '../store/useGameStore';
 import type { Contract, Player } from '../types';
@@ -106,7 +106,11 @@ function ContractsInner() {
     // 표준 → 후하게 → 짧게 순으로 정렬(추천=표준 최상단·강조). 후하게=충성·길게 / 짧게=싸게·곧 재협상(FA 2.5b)
     const order = ['표준', '후하게', '짧게'];
     const opts = [...resignOptions(p, market)].sort((a, b) => order.indexOf(a.label) - order.indexOf(b.label));
-    setResignSheet({ p, market, opts });
+    // 옵션별 잔류 전망(FA §2.5c-격상 step2) — 엔진 위임(resignOptionOutlooks=옵션 계약 override→resignOutlookNow). money 불만만 갈림.
+    const bandByKey: Record<string, ResignBand> = {};
+    for (const o of resignOptionOutlooks(p, market, teamId, currentDay, interviews, season)) bandByKey[o.key] = o.outlook.band;
+    const topic = resignOutlookNow(p, teamId, currentDay, interviews, season, overrides).topic;
+    setResignSheet({ p, market, opts, bandByKey, caption: resignCaptionOf(topic) });
   };
   // 오퍼 선택 → 캡 체크 후 확정 시트 오픈(캡 초과는 즉시 안내).
   // 사전체크 = store reSign 게이트와 **동일 규칙**(capPayroll §7 · TRANSACTION_SYSTEM §7의 6번째 사이트):
@@ -114,7 +118,7 @@ function ContractsInner() {
   //   영입비(inSeasonCost)·배신 웃돈을 반영한다. 개인 상한(maxSalaryFor)·프랜차이즈 팀캡 예외까지 store와 일치.
   //   과거엔 payroll(getEvolvedTeamPlayers=시즌초 명단) base 합만 봐 시즌 중 영입비를 빠뜨려 store보다 느슨 →
   //   캡 근접 + 시즌 중 영입 보유 시 UI는 "여유 있음"으로 통과시키고 store가 조용히 거부하던 걸 통일한다(허위 여유 0).
-  const pickOffer = (p: Player, o: ResignOpt) => {
+  const pickOffer = (p: Player, o: ResignOpt, band: ResignBand) => {
     const contract: Contract = { salary: o.salary, years: o.years, remaining: o.years, signedAtAge: p.age };
     // ① 개인 연봉 상한(MAX_SALARY 8억 / 프랜차이즈 11억) — store 1차 게이트와 동일
     if (o.salary > maxSalaryFor(p)) {
@@ -133,7 +137,7 @@ function ContractsInner() {
         return;
       }
     }
-    setConfirmSheet({ p, o, contract });
+    setConfirmSheet({ p, o, contract, band });
   };
 
   const doRelease = (p: Player) => {
@@ -176,8 +180,10 @@ function ContractsInner() {
 
   // 행을 누르면 처리 메뉴(1행 1선수) — 다크 글래스 액션시트(네이티브 흰 Alert 대체)
   const [manage, setManage] = useState<Player | null>(null);
-  const [resignSheet, setResignSheet] = useState<{ p: Player; market: number; opts: ResignOpt[] } | null>(null);
-  const [confirmSheet, setConfirmSheet] = useState<{ p: Player; o: ResignOpt; contract: Contract } | null>(null);
+  const [resignSheet, setResignSheet] = useState<{ p: Player; market: number; opts: ResignOpt[]; bandByKey: Record<string, ResignBand>; caption: ReturnType<typeof resignCaptionOf> } | null>(null);
+  const [confirmSheet, setConfirmSheet] = useState<{ p: Player; o: ResignOpt; contract: Contract; band: ResignBand } | null>(null);
+  // 제안 직후 결과 피드백(FA §2.5c-격상 step3) — 선수 반응·밴드 변화·"시즌 종료 시 확정" 리마인드
+  const [resultSheet, setResultSheet] = useState<{ p: Player; reaction: ReturnType<typeof resignReactionCopy> } | null>(null);
 
   return (
     <Screen title="계약 관리">
@@ -238,7 +244,8 @@ function ContractsInner() {
         <>
           <Title>FA 예정 (시즌 종료 시)</Title>
           <Muted style={{ fontSize: 12 }}>
-            잔류를 택하면 시장가로 재계약을 제안합니다(등급 프리미엄은 타 구단 영입가 — 내 재계약은 시장가). 포기하면 떠납니다.
+            잔류는 "보낼지 말지"의 결정입니다 — 시즌 종료 시 시장가로 재계약합니다(등급 프리미엄은 타 구단 영입가). 포기하면 떠납니다.
+            {'\n'}단, 이번 시즌 저평가로 불만이 쌓인 선수는 시장가 재계약이어도 FA를 시험할 수 있습니다. 마음을 확실히 잡으려면 행을 눌러 '재계약'으로 후하게 미리 제안하세요.
             {'\n'}선수의 마음은 시즌 종료 시 확정됩니다 — 불만이 크면 잡아도 뿌리칠 수 있습니다.
           </Muted>
           {faSorted.map(({ p, outlook }) => {
@@ -327,35 +334,55 @@ function ContractsInner() {
         ] : []}
       />
 
-      {/* 재계약 오퍼 선택 — 다크 글래스(네이티브 흰 Alert 대체). 표준=강조 */}
+      {/* 재계약 오퍼 선택 — 다크 글래스(네이티브 흰 Alert 대체). 표준=강조 + 선수 마음 캡션(3분기) + money면 옵션별 밴드 */}
       <ActionSheet
         visible={!!resignSheet}
         title={resignSheet ? `${resignSheet.p.name} 재계약` : ''}
-        message={resignSheet ? `시장가 ${formatMoney(resignSheet.market)} · ${resignSheet.p.age}세 — 표준 / 후하게 / 짧게 중 선택` : undefined}
+        message={resignSheet ? `시장가 ${formatMoney(resignSheet.market)} · ${resignSheet.p.age}세\n${resignSheet.caption.text}` : undefined}
         onClose={() => setResignSheet(null)}
-        actions={resignSheet ? resignSheet.opts.map((o) => ({
-          label: `${o.label} · ${formatMoney(o.salary)} · ${o.years}년`,
-          tone: (o.label === '표준' ? 'primary' : 'default') as 'primary' | 'default',
-          onPress: () => pickOffer(resignSheet.p, o),
-        })) : []}
+        actions={resignSheet ? resignSheet.opts.map((o) => {
+          const rs = resignSheet;
+          const key = o.label === '표준' ? 'standard' : o.label === '후하게' ? 'generous' : 'short';
+          const band = rs.bandByKey[key] ?? 'stable';
+          // money 불만일 때만 옵션별 밴드가 갈리므로 표시(비-money/무불만은 동일 → 깔끔하게 생략, 측정 ② 근거)
+          const bandTag = rs.caption.kind === 'money' ? ` — 잔류 ${BAND_META[band].label}` : '';
+          return {
+            label: `${o.label} · ${formatMoney(o.salary)} · ${o.years}년${bandTag}`,
+            tone: (o.label === '표준' ? 'primary' : 'default') as 'primary' | 'default',
+            onPress: () => pickOffer(rs.p, o, band),
+          };
+        }) : []}
       />
 
       {/* 재계약 제안 — 오퍼일 뿐, 확정(선수 수락)은 시즌 종료 시(FA §2.5c-보완 봉인). store reSign 실패 시 사유 모달(UI-21) */}
       <ActionSheet
         visible={!!confirmSheet}
         title="재계약 제안"
-        message={confirmSheet ? `${confirmSheet.p.name} — ${confirmSheet.o.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.o.salary)} · ${confirmSheet.o.years}년\n${confirmSheet.o.note}\n\n※ 제안일 뿐입니다 — 불만이 큰 선수는 시즌 종료 시 뿌리치고 FA로 나갈 수 있습니다.` : undefined}
+        message={confirmSheet ? `${confirmSheet.p.name} — ${confirmSheet.o.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.o.salary)} · ${confirmSheet.o.years}년\n${confirmSheet.o.note}\n잔류 전망: ${BAND_META[confirmSheet.band].label}\n\n※ 제안일 뿐입니다 — 불만이 큰 선수는 시즌 종료 시 뿌리치고 FA로 나갈 수 있습니다.` : undefined}
         onClose={() => setConfirmSheet(null)}
         actions={confirmSheet ? [
           {
             label: '제안', tone: 'primary',
             onPress: () => {
               const cs = confirmSheet;
+              // 제안 전/후 잔류 전망 — 결과 피드백(step3). money 불만 해소면 밴드가 실제로 변한다.
+              const before = resignOutlookNow(cs.p, teamId, currentDay, interviews, season, overrides);
+              const after = resignOutlookNow(cs.p, teamId, currentDay, interviews, season, { ...overrides, [cs.p.id]: cs.contract });
               const res = reSign(cs.p.id, cs.contract);
-              if (!res.ok) showAlert('재계약 불가', resignRejectMessage(cs.p, res.reason));
+              if (!res.ok) { showAlert('재계약 불가', resignRejectMessage(cs.p, res.reason)); return; }
+              setResultSheet({ p: cs.p, reaction: resignReactionCopy(before.band, after.band) });
             },
           },
         ] : []}
+      />
+
+      {/* 제안 직후 결과 피드백(step3) — 선수 반응 + 밴드 변화 + "시즌 종료 시 확정" 리마인드 + FA 비대칭 프레이밍 */}
+      <ActionSheet
+        visible={!!resultSheet}
+        title={resultSheet ? `${resultSheet.p.name} — 제안 전달` : ''}
+        message={resultSheet ? `${resultSheet.reaction.line}\n\n${resultSheet.reaction.remind}\n${resultSheet.reaction.framing}` : undefined}
+        onClose={() => setResultSheet(null)}
+        actions={resultSheet ? [{ label: '확인', tone: 'primary', onPress: () => {} }] : []}
       />
     </Screen>
   );
