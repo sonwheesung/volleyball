@@ -169,8 +169,8 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
     close: ['잠재력은 이제 코트에서 확인될 것이다.', '성장 곡선은 데뷔 이후 그려진다.', '기대주의 첫 페이지가 열렸다.', '이름값은 앞으로 경기가 증명한다.'],
   },
   foreign: { // 외인·아시아쿼터 교체 개별(§3.7) — 리그 가시(전 팀)
-    open: ['용병 시장이 움직였다.', '외인 자리의 주인이 바뀌었다.', '새 외국인 카드가 공개됐다.', '팀 공격의 핵이 교체됐다.'],
-    close: ['용병 농사가 시즌을 좌우한다.', '새 얼굴의 활약에 시즌이 걸렸다.', '외인 결정은 늘 가장 큰 도박이다.', '코트에서의 증명만 남았다.'],
+    open: ['외국인 선수 시장이 움직였다.', '외인 자리의 주인이 바뀌었다.', '새 외국인 카드가 공개됐다.', '팀 공격의 핵이 교체됐다.'],
+    close: ['외국인 선수 하나가 시즌 성패를 좌우한다.', '새 얼굴의 활약에 시즌이 걸렸다.', '외인 결정은 늘 가장 큰 도박이다.', '코트에서의 증명만 남았다.'],
   },
   sponsorThrift: { // 모기업 긴축·관망 예고(FINANCE 2.0 Stage2b)
     open: ['모기업이 허리띠를 졸라맨다는 말이 나온다.', '이번 오프시즌은 관망 기조라는 기류다.', '큰 영입보다 내실을 다질 분위기다.', '지갑을 닫을 것이라는 전망이 우세하다.'],
@@ -377,7 +377,7 @@ export function buildNewsFeed(
         (t) => `${bestLose.n}연패 악몽 — ${t}`,
       ], `${a.season}:lose`, teamName(bestLose.tid)), bestLose.n >= 12, bestLose.tid,
         body3('streakLose', `${a.season}:lose`, more(`${teamName(bestLose.tid)}이(가) ${S}시즌 ${bestLose.n}연패의 긴 터널을 지났다.`,
-          a.record?.[bestLose.tid] ? `최종 성적은 ${a.record[bestLose.tid][0]}승 ${a.record[bestLose.tid][1]}패, 긴 부진이 시즌 농사를 흔들었다.` : '')));
+          a.record?.[bestLose.tid] ? `최종 성적은 ${a.record[bestLose.tid][0]}승 ${a.record[bestLose.tid][1]}패, 긴 부진이 시즌을 흔들었다.` : '')));
     }
   }
 

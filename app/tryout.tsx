@@ -110,7 +110,7 @@ function TryoutInner() {
             ) : (
               <>
                 <Muted style={{ fontSize: 12 }}>
-                  드래프트 없이 현 외인과 갱신할 수 있습니다(1년 단위 — 잘하는 용병은 수 시즌 함께).
+                  드래프트 없이 현 외인과 갱신할 수 있습니다(1년 단위 — 잘하는 외국인 선수는 수 시즌 함께).
                   풀로 보내면 다른 팀이 지명할 수 있습니다.
                 </Muted>
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>

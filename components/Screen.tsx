@@ -10,7 +10,7 @@ import { ScrollCtrlCtx, SPOTLIGHT_SCROLL_MARGIN } from './spotlightCtx';
 import type { SpotlightScrollController } from './spotlightCtx';
 
 /** 감독 성향 한글 라벨 — 여러 화면 공유 */
-export const STYLE_LABEL = { attack: '공격형', defense: '수비형', balanced: '밸런스' } as const;
+export const STYLE_LABEL = { attack: '공격 중심', defense: '수비 중심', balanced: '밸런스형' } as const;
 
 // 디자인 시스템 색·테마는 components/theme.ts(다크/라이트 토글, 2026-07-01). 여기선 재수출(기존 import 경로 유지)
 // + 렌더 시 스타일(themedStyles)·모드별 배경/스크림(themeAssets)만 사용.

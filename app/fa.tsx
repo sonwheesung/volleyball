@@ -212,7 +212,7 @@ function FACenterInner() {
       <Pressable onPress={() => setInfo('delay')} style={styles.notice}>
         <Ionicons name="hourglass-outline" size={18} color={theme.sky} />
         <Text style={styles.noticeText}>
-          지금은 선수를 <Text style={{ color: theme.text, fontWeight: '800' }}>'지명'</Text>하는 단계예요.
+          지금은 선수에게 <Text style={{ color: theme.text, fontWeight: '800' }}>영입 제안(오퍼)</Text>을 보내는 단계예요.
           최종 결과는 <Text style={{ color: theme.text, fontWeight: '800' }}>시즌이 시작될 때</Text> 다른 구단과의
           경쟁으로 확정됩니다. <Text style={{ color: theme.sky, fontWeight: '800' }}>자세히 ›</Text>
         </Text>
@@ -220,13 +220,13 @@ function FACenterInner() {
 
       <Card accent={theme.sky}>
         <Row>
-          <IconLabel icon="person-add-outline" color={theme.sky}>영입 성공 / 지명</IconLabel>
+          <IconLabel icon="person-add-outline" color={theme.sky}>영입 성공 / 제안</IconLabel>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
             {pv.signedByMe.size} / {faSignings.length}
           </Text>
         </Row>
         <Muted style={{ fontSize: 12 }}>
-          지명해도 선수는 팀 전력·출전기회·충성도·연봉을 보고 결정합니다. 다른 구단과 경합에서
+          영입 제안을 보내도 선수는 팀 전력·출전기회·충성도·연봉을 보고 결정합니다. 다른 구단과 경합에서
           질 수도, 마음에 드는 제안이 없으면 선수가 모든 제안을 거절할 수도 있어요. 캡·운영 자금 안에서만 입찰합니다.
         </Muted>
         <Row>
@@ -331,7 +331,7 @@ function FACenterInner() {
             else if (code === 'CAP') badge = { t: '샐러리캡이 부족해 입찰하지 못했습니다', c: theme.warn };
             else if (code === 'ROSTER') badge = { t: '정원이 가득 차 입찰하지 못했습니다', c: theme.warn };
             else if (code === 'SIT_OUT') badge = { t: '모든 제안을 거절해 계약 없이 시즌을 보냅니다', c: theme.muted };
-            else badge = { t: '지명함 — 시즌 시작 때 확정', c: theme.sky };
+            else badge = { t: '제안함 — 시즌 시작 때 확정', c: theme.sky };
           }
           return (
             <View key={p.id} style={styles.row}>
@@ -382,12 +382,12 @@ function FACenterInner() {
                 ]}
               >
                 <Text style={[styles.btnText, { color: targeted ? theme.bad : theme.accent }]}>
-                  {targeted ? '지명 취소' : '영입 시도'}
+                  {targeted ? '제안 취소' : '영입 제안'}
                 </Text>
               </Pressable>
               {/* 지명은 시즌 시작 시 확정되는 예약(§2.8.8 ③) — 왜 '지명 취소'가 있는지 맥락 캡션 */}
               {targeted ? (
-                <Text style={styles.cancelHint}>시즌 시작 전까지 지명을 물릴 수 있어요.</Text>
+                <Text style={styles.cancelHint}>시즌 시작 전까지 제안을 물릴 수 있어요.</Text>
               ) : null}
               {/* A/B FA만 — 보상선수 대신 보상금만 내고 선수단 보호 */}
               {targeted && needsCompensationPlayer(grade) ? (
@@ -583,14 +583,14 @@ function FACenterInner() {
       <Popup visible={info !== null} onRequestClose={() => setInfo(null)} dismissable>
         {info === 'delay' ? (
           <>
-            <Text style={styles.modalTitle}>지금은 '지명' 단계예요</Text>
+            <Text style={styles.modalTitle}>지금은 '영입 제안' 단계예요</Text>
             <Text style={styles.modalBody}>
-              영입 시도는 <Text style={styles.modalStrong}>곧바로 계약이 아니라 '지명'</Text>입니다.
-              내가 지명한 선수들의 최종 결과는 <Text style={styles.modalStrong}>시즌이 시작될 때</Text> 한 번에 확정됩니다.
+              영입 제안은 <Text style={styles.modalStrong}>곧바로 계약이 아니라 '제안(오퍼)'</Text>입니다.
+              내가 제안한 선수들의 최종 결과는 <Text style={styles.modalStrong}>시즌이 시작될 때</Text> 한 번에 확정됩니다.
             </Text>
             <Text style={styles.modalBody}>
               그때 선수는 우리 팀만이 아니라 <Text style={styles.modalStrong}>관심 있는 다른 구단의 제안까지 비교</Text>해
-              한 팀을 고릅니다. 그래서 지명해도:
+              한 팀을 고릅니다. 그래서 제안해도:
             </Text>
             <Text style={styles.modalBullet}>· 다른 구단에 뺏길 수 있고(경쟁 입찰)</Text>
             <Text style={styles.modalBullet}>· 마음에 드는 제안이 없으면 선수가 어느 구단과도 계약하지 않을 수 있고</Text>

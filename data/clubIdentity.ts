@@ -23,7 +23,7 @@ export const CLUB_IDENTITIES: ClubIdentity[] = [
   },
   {
     key: 'aging', label: '황혼의 명가', tagline: '저무는 왕조',
-    blurb: '한 시대를 풍미했지만 주축이 노쇠한 황혼의 명가. 어쩌면 지금이 마지막 전성기다.',
+    blurb: '한 시대를 풍미했지만 주축이 전성기를 지난 황혼의 명가. 어쩌면 지금이 마지막 전성기다.',
     foundedYear: 2001, titles: 5, tradition: 82,
     recentRanks: [4, 4, 3, 2, 1], // 황혼: 5시즌 전 우승(1) → 하락(4)
     strengthBias: 1.5, ageRange: [26, 35], hue: 278, // 수원 페어리스 — 바이올렛(요정/황혼)

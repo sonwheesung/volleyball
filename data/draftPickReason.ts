@@ -66,7 +66,7 @@ export function pickReasonProse(input: PickReasonInput, drafterRoster: string[],
   }
   // 2) 주전 노쇠 대비
   if (starter && starter.age >= vet) {
-    return `주전 ${posKo}의 노쇠를 대비한 지명${tail}`;
+    return `주전 ${posKo}의 세대교체를 대비한 지명${tail}`;
   }
   // 3) 포지션이 얇다(공개 부족 큼: have ≤ ideal−2) — 조사는 받침 기준(josa: "아웃사이드가/미들이", EC-DR-05)
   if (gap >= 2) {
