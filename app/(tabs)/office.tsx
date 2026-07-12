@@ -1,7 +1,5 @@
 // 단장실 — 메뉴 허브. 계약 관리·스태프·시즌 중 FA는 각 상세 화면에서 처리.
 import { useRouter } from 'expo-router';
-import Ionicons from '@expo/vector-icons/Ionicons';
-import { Text, View } from 'react-native';
 import { Card, Muted, Row, Screen, Title, theme } from '../../components/Screen';
 import { SummaryCard } from '../../components/SummaryCard';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
@@ -37,11 +35,8 @@ export default function Office() {
       <SpotlightTarget id="office-top">
         <Card accent={theme.accent} onPress={() => router.push('/contracts')}>
           <Row>
-            {/* 계약 관리만 아이콘+액센트 제목으로 약간 강조(UI polish, item 5) — 나머지 메뉴는 기본 Title 유지 */}
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7 }}>
-              <Ionicons name="document-text-outline" size={18} color={theme.accent} />
-              <Text style={{ color: theme.accent, fontSize: 17, fontWeight: '700' }}>계약 관리</Text>
-            </View>
+            {/* 다른 메뉴 카드와 동일하게 기본 Title(흰색) — 좌측 액센트 줄무늬로만 카테고리 구분(2026-07-12 통일) */}
+            <Title>계약 관리</Title>
             <Muted>재계약 · 방출 · FA 예정 →</Muted>
           </Row>
           <Muted style={{ fontSize: 12, marginTop: 2 }}>선수 재계약·방출, 시즌 종료 FA 잔류/포기, 방출 선수 복귀</Muted>
