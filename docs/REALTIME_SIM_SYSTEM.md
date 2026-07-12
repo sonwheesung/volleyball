@@ -269,6 +269,38 @@ SAVE_VERSION 하드 범프 불요(재생성 가능 — Phase3 정책).
   **forward-only 접미 bump**로 §7.1 스플라이스 불변식과 정합(과거 소급 없음). 안 하면 캐시 키가 안 변해 순위 스테일.
 - **재관전 재생**: 개입 보드는 개입 로그를 재생(프리픽스 불변, MATCH_INTERVENTION_SYSTEM §3). 결과는 스냅샷이 진실.
 
+> **정정(2026-07-13, 구현)**: ~~스냅샷 박제~~는 구현 시 **순수 로그**로 대체됨(MATCH_INTERVENTION_SYSTEM §2.2). 개입 로그를
+> 모든 sim 호출부(관전·순위·생산)에 동일하게 실어 split-brain을 원천 차단(`_dv_intervention_consistency` 증명). **캐시
+> 무효화 축 등록(위)은 그대로 구현**(`data/dynamics.ts setInterventionContext` = txVersion++·recordBump). 스냅샷 동결은 출시 후 하드닝으로 유보.
+
+### 7.7 currentDay high-water cap — 시즌초/콜드 지연 최적화 (설계 2026-07-13, 독립 리뷰 검증)
+**문제**: `data/standings.ts allResults()`·`data/production.ts allProdRows()`는 인자 없이 **전 시즌 126경기(미래 포함)를 시뮬**한 뒤
+`seasonResults(uptoDay)`가 사후 필터링만 한다. 대시보드 표시는 이미 `displayCutoff`(currentDay 바운드)인데, **인트로 워밍
+`app/_layout.tsx warmCachesForIntro`가 `computeStandings(MAX)`+`leagueProduction(MAX)`로 전 시즌을 콜드 시뮬**해 시즌초(day0=0경기인데도)·엔진버전 범프 후 첫 콜드에 지연을 만든다. (사용자 관찰 2026-07-13.)
+
+**cap 축(§7.1 스플라이스와 다른 축)**:
+- **스플라이스 = 후방 무효화**(`dayIndex<minDay` 재사용, `≥minDay` 재계산).
+- **cap = 전방 확장**(`≤computedUpto` 재사용, `(computedUpto, 요청cap]` 신규). day 루프가 **인과적**(day D는 day<D만 참조 —
+  `running`·`clinch(day-1)`·`pickRest(seed rest:team:day)`·`interventionsFor` 전부 그날/과거 국소, 미래 참조 0개)이라
+  cap 이하 행은 풀 시즌 계산과 **byte-동일**(독립 리뷰 무조건 성립 판정).
+- **합성**: 캐시가 K까지 계산 → tx bump로 minDay<K 무효화 → K'>K 요청. `reuse` 필터가 `minDay`(splice)∩`cap` 동시 존중,
+  조기반환(`standings.ts:61`)을 `key 일치 && computedUpto≥cap`으로 일반화. **computedUpto 워터마크는 in-memory 명시 필드**(비영속 —
+  행의 max dayIndex 유도 가능하나 경기 없는 gap 재시도 회피). 세이브 스키마 변경 없음.
+
+**~~축2 팀 필터~~는 여전히 기각**(§7.2.3, 로드매니지먼트 크로스팀 커플로 "두 팀만 독립" 결정론 불가). cap은 "currentDay까지 순차"라 안전.
+
+**워밍 콜러 전환**: `app/_layout.tsx`·`app/team/[id].tsx`·`app/training-policy.tsx`의 MAX → `displayCutoff(currentDay, results, teamId)`.
+시즌말/오프시즌 MAX 콜러(endSeason·offseason·draft·playoffs·financeProjection·rosterTarget)는 그때 currentDay≈SEASON_DAYS라 무해.
+**단 "워밍 인자만 바꾸고 cap 없으면 무효"**(seasonResults가 여전히 allResults() 풀 계산 후 필터) — **cap이 핵심 프리미티브**.
+
+**개입 정합**: 개입 로그는 played 경기(≤playedThroughDay≤cap)에만 있어 잘리지 않음.
+
+**신규 가드(필수, 커밋 전 0건)**: ①부분요청 K → 확장 K' == fresh 풀-후-필터 byte-동일 ②cap∘splice 합성(K→minDay<K bump→K'') == fresh
+③day0/시즌경계 cap. `_dv_splice`(MAX만 커버)는 유지.
+
+**구현 순서**: (1) cap 파라미터+워터마크 코어 → (2) 새 가드 작성 후 현행 GREEN(오라클 신뢰) → (3) 조기반환/reuse 합성 일반화 →
+(4) 가드로 cap∘splice byte-동일 A/B → (5) 워밍 3곳 전환 → (6) 콜드 벤치 절감 실측 + 풀 배터리 0건 → 커밋.
+
 ### 7.4 검증
 - `tools/_dv_splice.ts`: ①byte-상등 프로퍼티(≥40 랜덤열, 매 액션 후 splice==force-full deep-equal, 순위+생산)
   ②결정론 ×2 ③타이밍(늦은 시즌 벤치 add에서 splice ms ≤ ~20% full) ④off-by-one minDay 변이 → FAIL(민감도)
