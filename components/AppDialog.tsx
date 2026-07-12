@@ -72,5 +72,5 @@ const styles = themedStyles(() => StyleSheet.create({
   destructive: { backgroundColor: theme.bad + '1A', borderColor: theme.bad },
   destructiveTxt: { color: theme.bad },
   cancel: { backgroundColor: theme.cardAlt, borderColor: theme.border },
-  cancelTxt: { color: theme.muted },
+  cancelTxt: { color: theme.text },
 }));

@@ -59,7 +59,7 @@ function AchievementsInner() {
           <Text style={styles.count}>{done} / {total}</Text>
         </Row>
         <View style={styles.track}><View style={[styles.fill, { width: `${total ? (done / total) * 100 : 0}%` }]} /></View>
-        <Muted style={{ fontSize: 12 }}>장기 목표를 눈앞에 — 우승·시상·레전드·기록·운영의 발자취가 트로피로 남는다.</Muted>
+        <Muted style={{ fontSize: 12 }}>장기 목표를 눈앞에. 우승·시상·레전드·기록·운영의 발자취가 트로피로 남는다.</Muted>
       </Card>
 
       {CATEGORY_ORDER.map((cat) => {

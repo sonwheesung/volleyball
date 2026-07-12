@@ -32,7 +32,7 @@ const SEASONS = ['2020-21', '2021-22', '2022-23', '2023-24', '2024-25'];
 /** 최근 5시즌 순위 — 시즌별 등수를 숫자 셀로. recentRanks index0=최신 → 좌(과거)→우(최신). 1위=골드 강조. */
 function RecentRanks({ ranks, accentColor }: { ranks: number[]; accentColor: string }) {
   if (!ranks.length) {
-    return <Text style={{ color: C.faint, fontSize: 11.5 }}>창단 첫 시즌 — 기록 없음</Text>;
+    return <Text style={{ color: C.faint, fontSize: 11.5 }}>창단 첫 시즌, 기록 없음</Text>;
   }
   const series = [...ranks].reverse();
   const labels = SEASONS.slice(-series.length);

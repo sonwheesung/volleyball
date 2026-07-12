@@ -44,7 +44,7 @@ export default function BuyDiamonds() {
             : '잠시 후 다시 시도해 주세요.');
       return;
     }
-    if (__DEV__) { showAlert('구매 흐름 확인 (개발)', `${r.amount.toLocaleString()} 💎 — 운영 빌드에선 결제·서버 검증 후 실제로 지급됩니다.`); return; }
+    if (__DEV__) { showAlert('구매 흐름 확인 (개발)', `${r.amount.toLocaleString()} 💎. 운영 빌드에선 결제·서버 검증 후 실제로 지급됩니다.`); return; }
     await syncWallet(); // RC 웹훅이 서버 원장에 지급 → 캐시 리싱크로 잔액 반영
     showAlert('구매 완료', `${r.amount.toLocaleString()} 💎가 지급되었습니다. 감사합니다!`);
   };

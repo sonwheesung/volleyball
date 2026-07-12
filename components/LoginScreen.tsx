@@ -85,7 +85,7 @@ export function LoginScreen() {
         {err ? <Text style={styles.err}>{err}</Text> : null}
 
         {__DEV__ ? (
-          <Text style={styles.notice}>* 개발 빌드입니다 — 정식 빌드에서는 Google 로그인만 노출됩니다.</Text>
+          <Text style={styles.notice}>* 개발 빌드입니다. 정식 빌드에서는 Google 로그인만 노출됩니다.</Text>
         ) : null}
       </View>
     </Screen>

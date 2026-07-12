@@ -130,8 +130,8 @@ function ScheduleInner() {
         const late = totalMatches > 0 && playedCount / totalMatches >= 0.8;
         const isRival = rival?.teamId === oppId;
         // 라이벌전이 최우선 프레이밍(숙적은 순위 무관하게 기대됨)
-        const reason = isRival ? `🔥 라이벌전 — 숙적 ${getTeam(oppId)?.name ?? ''}`
-          : big ? `🔥 빅매치 — ${myRank}위 vs ${oppRank}위` : margin <= 3 ? '접전 예상' : oppOvr >= 76 ? '강팀 상대' : late ? '시즌 막바지' : null;
+        const reason = isRival ? `🔥 라이벌전, 숙적 ${getTeam(oppId)?.name ?? ''}`
+          : big ? `🔥 빅매치, ${myRank}위 vs ${oppRank}위` : margin <= 3 ? '접전 예상' : oppOvr >= 76 ? '강팀 상대' : late ? '시즌 막바지' : null;
         const rivalNote = isRival && rival ? `최근 순위 경쟁 ${rival.adjacent}회 · 시즌 상대전적 ${rival.h2hW}승 ${rival.h2hL}패` : null;
         return { isHome, oppName: getTeam(oppId)?.name ?? '', myOvr, oppOvr, important: !!reason, reason, isRival, rivalNote };
       })()
@@ -262,7 +262,7 @@ function ScheduleInner() {
               ) : reveal.championRevealed ? (
                 // 세리머니 3단(§5.3): ①시상식(champion→awards, recordChampion은 시상식 진입 시) → 일정 복귀 → ②시즌 결산.
                 <Card accent={theme.gold}>
-                  <Title>🏆 우승 — {name(p.championId ?? '')}</Title>
+                  <Title>🏆 우승, {name(p.championId ?? '')}</Title>
                   {!ceremonyDone ? (
                     <>
                       <Muted>포스트시즌이 끝났습니다. 시상식을 관람한 뒤 오프시즌으로 넘어갑니다.</Muted>

@@ -105,26 +105,26 @@ function TryoutInner() {
           </View>
         </View>
         <Muted style={{ fontSize: 12 }}>
-          외국인 선수는 <Text style={{ fontWeight: '800', color: theme.text }}>팀당 1명</Text> — 아포짓(OP) 위주의 팀 공격 핵심입니다(여자부 외인 자리). 매 오프시즌
+          외국인 선수는 <Text style={{ fontWeight: '800', color: theme.text }}>팀당 1명</Text>, 아포짓(OP) 위주의 팀 공격 핵심입니다(여자부 외인 자리). 매 오프시즌
           {' '}<Text style={{ fontWeight: '800', color: theme.text }}>추첨 순번</Text>대로 1명을 데려옵니다 · 1년 계약 · 연봉 {formatMoney(FOREIGN_SALARY)} 고정(샐러리캡 제외, 운영 자금 지출).
-          선수를 누르면 검증된 이력(이전 리그 성적·폼·수상·부상 — 스카우터 등급 따라 공개)이 펼쳐집니다. 우측 위시로 노리면 순번에서 자동 지명하고, 앞 팀이 뺏으면 차순위로 내려갑니다.
+          선수를 누르면 검증된 이력(이전 리그 성적·폼·수상·부상, 스카우터 등급 따라 공개)이 펼쳐집니다. 우측 위시로 노리면 순번에서 자동 지명하고, 앞 팀이 뺏으면 차순위로 내려갑니다.
         </Muted>
       </Card>
       </SpotlightTarget>
 
       {myForeign ? (
         <>
-          <Title>재계약 우선권 — {myForeign.name} ({myForeign.age}세 · OVR {displayOvr(overallRaw(myForeign))})</Title>
+          <Title>재계약 우선권, {myForeign.name} ({myForeign.age}세 · OVR {displayOvr(overallRaw(myForeign))})</Title>
           <Card accent={theme.bad}>
             {myForeign.age + 1 >= RETIRE_AGE ? (
               // 정년(FOREIGN_SYSTEM §1.6): 다음 시즌 나이 40+ → 재계약 불가(리그 정년). 새 얼굴을 지명하세요.
               <Muted style={{ fontSize: 12 }}>
-                정년 도달({RETIRE_AGE}세) — 재계약 불가입니다(리그 정년은 외인에도 적용). 아래 후보에서 새 얼굴을 지명하세요.
+                정년 도달({RETIRE_AGE}세). 재계약 불가입니다(리그 정년은 외인에도 적용). 아래 후보에서 새 얼굴을 지명하세요.
               </Muted>
             ) : (
               <>
                 <Muted style={{ fontSize: 12 }}>
-                  드래프트 없이 현 외인과 갱신할 수 있습니다(1년 단위 — 잘하는 외국인 선수는 수 시즌 함께).
+                  드래프트 없이 현 외인과 갱신할 수 있습니다(1년 단위, 잘하는 외국인 선수는 수 시즌 함께).
                   풀로 보내면 다른 팀이 지명할 수 있습니다.
                 </Muted>
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
@@ -145,7 +145,7 @@ function TryoutInner() {
       ) : null}
 
       <SpotlightTarget id="tryout-wish">
-        <Title>후보 ({pool.length}명) — ★ 위시 토글</Title>
+        <Title>후보 ({pool.length}명), ★ 위시 토글</Title>
       </SpotlightTarget>
       {pool
         .slice()

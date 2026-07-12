@@ -86,13 +86,13 @@ const SHOW_OWNER_TALK = false;
 //   선수 상태: FORM_SYSTEM(결장 누적 최대 −7%·복귀 5경기 회복)·OWNER_SYSTEM(성격 아키타입·불만 topic).
 const REL_HELP =
   '선수끼리의 친분과 앙숙입니다. 코트 위 경기력에는 영향이 없고, 이적·계약을 정하는 "마음"에만 작용합니다.\n\n' +
-  '• 친한 사이 — FA 시장에서 친한 동료가 있는 팀에 더 끌립니다(영입 성공 확률↑). 팀에 친한 동료가 남아 있으면 재계약도 잘 받아들이고, 반대로 각별한 동료를 방출하면 동요해 재계약을 거부할 위험이 커집니다.\n\n' +
-  '• 라이벌 — 같은 포지션에서 주전을 다투는 껄끄러운 사이입니다. FA 때 라이벌이 있는 팀은 피하려는 경향이 있습니다.\n\n' +
+  '• 친한 사이. FA 시장에서 친한 동료가 있는 팀에 더 끌립니다(영입 성공 확률↑). 팀에 친한 동료가 남아 있으면 재계약도 잘 받아들이고, 반대로 각별한 동료를 방출하면 동요해 재계약을 거부할 위험이 커집니다.\n\n' +
+  '• 라이벌. 같은 포지션에서 주전을 다투는 껄끄러운 사이입니다. FA 때 라이벌이 있는 팀은 피하려는 경향이 있습니다.\n\n' +
   '관계는 우승·연봉 같은 큰 요인 다음의 "타이브레이커"라 은은하게 작용합니다.';
 const STATUS_HELP =
-  '• 컨디션(경기감각) — 최근 실전 출전에 따라 오르내립니다. 꾸준히 경기에 나서면 "좋음"을 유지하고, 오래 결장하면 감각이 무뎌져 기량이 최대 7%까지 떨어집니다(주전으로 계속 뛰면 변화 없음). 다시 코트에 서서 대여섯 경기를 뛰면 감각이 돌아옵니다.\n\n' +
-  '• 성격 — 이 선수가 무엇을 가장 중시하는지(연봉·우승·출전·연고·팀 충성)입니다. 벤치에 앉히거나 재계약을 논할 때 반응이 성격마다 다릅니다.\n\n' +
-  '• 지금 마음 — 순위·출전·연봉·연고를 지금 어떻게 받아들이는지입니다. 불만이 쌓이면 재계약을 거부하거나 이적을 원할 수 있습니다.';
+  '• 컨디션(경기감각). 최근 실전 출전에 따라 오르내립니다. 꾸준히 경기에 나서면 "좋음"을 유지하고, 오래 결장하면 감각이 무뎌져 기량이 최대 7%까지 떨어집니다(주전으로 계속 뛰면 변화 없음). 다시 코트에 서서 대여섯 경기를 뛰면 감각이 돌아옵니다.\n\n' +
+  '• 성격. 이 선수가 무엇을 가장 중시하는지(연봉·우승·출전·연고·팀 충성)입니다. 벤치에 앉히거나 재계약을 논할 때 반응이 성격마다 다릅니다.\n\n' +
+  '• 지금 마음. 순위·출전·연봉·연고를 지금 어떻게 받아들이는지입니다. 불만이 쌓이면 재계약을 거부하거나 이적을 원할 수 있습니다.';
 
 // 건의 거절 사유 문구(OWNER §2.2 ★) — "가장 큰 감점 요인" 파생. coachCall은 결정론이라 "재도전하면 바뀔 것" 호도 금지 워딩.
 const BENCH_REJECT: Record<OwnerRejectReason, string> = {
@@ -273,7 +273,7 @@ function PlayerDetailInner() {
     setTalkAsk(false);
     if (!res.met) setTalkResult({ title: '면담 거절', color: theme.muted, msg: `${p.name}: "…드릴 말씀 없습니다."\n최근 면담이 잦았거나, 지난 면담에 실망한 상태입니다.` });
     else if (res.ok) setTalkResult({ title: '설득 성공 ✓', color: theme.good, msg: `${p.name}: "알겠습니다. 구단주님 말씀, 믿어보겠습니다."` });
-    else setTalkResult({ title: '면담 결렬', color: theme.bad, msg: `${p.name}: "…기대했던 제가 어리석었네요."\n마음이 오히려 멀어졌습니다 — 이적 의향이 올랐습니다.` });
+    else setTalkResult({ title: '면담 결렬', color: theme.bad, msg: `${p.name}: "…기대했던 제가 어리석었네요."\n마음이 오히려 멀어졌습니다. 이적 의향이 올랐습니다.` });
   };
 
   // 건의 결과는 앱 테마 커스텀 모달(talkResult)로 — 네이티브 Alert 금지(UI-21)
@@ -326,12 +326,12 @@ function PlayerDetailInner() {
         </View>
         {!isMine && reveal < REVEAL_PRECISE ? (
           <Text style={{ color: theme.warn, fontSize: 12, marginTop: 6 }}>
-            🔍 타 구단 — 스카우팅 공개도 {Math.round(reveal * 100)}%. 스카우터를 영입하면 더 선명해집니다.
+            🔍 타 구단. 스카우팅 공개도 {Math.round(reveal * 100)}%. 스카우터를 영입하면 더 선명해집니다.
           </Text>
         ) : null}
         {suspendedOnDay(currentDay).has(p.id) ? ( // 출전 상태는 현재(currentDay) 기준 — role 배지·선수단과 동일(2026-07-04)
           <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13, marginTop: 6 }}>
-            🚫 출장 정지 중 — {SCANDAL_KO[seasonScandals().find((s) => s.playerId === p.id)!.kind]}
+            🚫 출장 정지 중 ({SCANDAL_KO[seasonScandals().find((s) => s.playerId === p.id)!.kind]})
           </Text>
         ) : null}
         <View style={styles.divider} />
@@ -391,7 +391,7 @@ function PlayerDetailInner() {
               ) : null}
               {isMine && lostFriends.length > 0 ? (
                 <Text style={{ color: theme.bad, fontSize: 12, marginTop: 4 }}>
-                  💔 각별한 동료 {lostFriends.map((f) => f.name).join(', ')} 방출에 동요 중 — 재계약 거부 위험↑
+                  💔 각별한 동료 {lostFriends.map((f) => f.name).join(', ')} 방출에 동요 중, 재계약 거부 위험↑
                 </Text>
               ) : null}
             </Card>
@@ -422,7 +422,7 @@ function PlayerDetailInner() {
               <Row>
                 <Muted>지금 마음</Muted>
                 <Text style={{ color: moodInfo.mood === 'discontent' ? theme.bad : moodInfo.mood === 'positive' ? theme.good : theme.muted, fontWeight: '800', fontSize: 13 }}>
-                  {moodInfo.mood === 'discontent' ? '😟' : moodInfo.mood === 'positive' ? '😊' : '😐'} {homeTeamName ? `연고 향수 — ${homeTeamName} 그리움` : moodInfo.label}
+                  {moodInfo.mood === 'discontent' ? '😟' : moodInfo.mood === 'positive' ? '😊' : '😐'} {homeTeamName ? `연고 향수 (${homeTeamName} 그리움)` : moodInfo.label}
                 </Text>
               </Row>
             ) : null}
@@ -433,12 +433,12 @@ function PlayerDetailInner() {
                   <>
                     <Text style={{ color: theme.bad, fontWeight: '800', marginTop: 4 }}>😟 {topicBadgeText}</Text>
                     <Muted style={{ fontSize: 13 }}>{topicSpeechText}</Muted>
-                    {lastTalkFailed ? <Muted style={{ fontSize: 12, color: theme.bad }}>💔 지난 면담이 결렬됐습니다 — 다시 문을 두드리면 거절당할 수 있습니다.</Muted> : null}
-                    {talkLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 면담 — 약 {talkLeft}일 뒤 다시 가능합니다.</Muted> : null}
+                    {lastTalkFailed ? <Muted style={{ fontSize: 12, color: theme.bad }}>💔 지난 면담이 결렬됐습니다. 다시 문을 두드리면 거절당할 수 있습니다.</Muted> : null}
+                    {talkLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 면담, 약 {talkLeft}일 뒤 다시 가능합니다.</Muted> : null}
                     <Button label={talkLeft > 0 ? `면담 (${talkLeft}일 후)` : '면담 요청'} onPress={openTalk} disabled={talkLeft > 0} />
                   </>
                 ) : (
-                  <Muted style={{ marginTop: 4 }}>😊 특별한 불만 없음 — "괜찮습니다, 구단주님."</Muted>
+                  <Muted style={{ marginTop: 4 }}>😊 특별한 불만 없음. "괜찮습니다, 구단주님."</Muted>
                 )}
                 {myTalks.length > 0 ? (
                   <View style={{ marginTop: 6, gap: 2 }}>
@@ -457,7 +457,7 @@ function PlayerDetailInner() {
           <Card accent={theme.violet}>
             {inPostseasonNow ? (
               // 포스트시즌 동결(SEASON §5.0) — 엔트리는 정규 종료 시점 확정. no-op 건의 금지(스토어도 postseason 사유로 거절).
-              <Muted style={{ fontSize: 12 }}>포스트시즌 엔트리 확정 — 건의는 다음 시즌부터 가능합니다.</Muted>
+              <Muted style={{ fontSize: 12 }}>포스트시즌 엔트리 확정. 건의는 다음 시즌부터 가능합니다.</Muted>
             ) : benched ? (
               <Button label="복귀 지시 (벤치 해제)" onPress={() => showAlert('복귀 지시', `정말 ${p.name} 선수의 복귀를 지시할까요?\n출전 명단에 다시 포함됩니다.`, [
                 { text: '취소', style: 'cancel' },
@@ -469,7 +469,7 @@ function PlayerDetailInner() {
                   선발·교체 등 현장 권한은 감독에게 있고, 구단주는 건의만 할 수 있습니다.
                   감독 성향에 따라 거절할 수 있고, 인기 선수를 오래 벤치에 두면 팬들이 분노합니다(기사·관중·예산).
                 </Muted>
-                {benchLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 건의 — 약 {benchLeft}일 뒤 다시 건의할 수 있습니다.</Muted> : null}
+                {benchLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 건의, 약 {benchLeft}일 뒤 다시 건의할 수 있습니다.</Muted> : null}
                 {/* 상태에 맞는 건의 하나만 노출(사용자 요청 2026-06-30) — 후보면 '선발 기용', 주전이면 '벤치'.
                     둘 다 비활성으로 띄우던 옛 방식 대신 안 맞는 버튼은 숨긴다. 부상·정지·명단 외는 안내만. */}
                 {isCandidate ? (
@@ -694,7 +694,7 @@ function PlayerDetailInner() {
       {/* 벤치 건의 명분 선택 — 커스텀 ActionSheet(네이티브 Alert 대신, UI-21) */}
       <ActionSheet
         visible={benchAsk}
-        title={`벤치 건의 — ${p.name}`}
+        title={`벤치 건의 (${p.name})`}
         message={`정말 ${p.name} 선수의 휴식을 건의할까요? 감독이 판단해 수락하거나 거절합니다.\n어떤 명분으로 건의하시겠습니까?`}
         actions={(['noResign', 'form', 'prospect'] as BenchReason[]).map((reason) => ({
           label: BENCH_REASON_KO[reason], onPress: () => busy.run('감독이 라인업을 다시 그리는 중…', () => benchResult(suggestBench(p.id, reason))),
@@ -723,7 +723,7 @@ function PlayerDetailInner() {
               </>
             ) : topic ? (
               <>
-                <Text style={mstyles.title}>면담 — {p.name}</Text>
+                <Text style={mstyles.title}>면담 ({p.name})</Text>
                 <Text style={mstyles.badge}>😟 {topicBadgeText}</Text>
                 <Text style={mstyles.quote}>{topicSpeechText}</Text>
                 <Text style={mstyles.body}>무엇을 약속하시겠습니까?</Text>

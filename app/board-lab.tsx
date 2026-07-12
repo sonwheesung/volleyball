@@ -224,12 +224,12 @@ export default function BoardLab() {
   const situation = (() => {
     switch (step.kind) {
       case 'walk':
-      case 'serve': return `${teamKo(step.serving)} 서브 — ${serverName}. 상대는 리시브 대형.`;
-      case 'pass': return '리시브/디그 — 공을 세터에게 올리는 중.';
-      case 'toss': return `${step.offSide ? teamKo(step.offSide) + ' ' : ''}세트(토스) — 상대 블로커 형성.`;
-      case 'spike': return `${step.offSide ? teamKo(step.offSide) + ' ' : ''}스파이크 — 상대 블록·수비.`;
-      case 'fault': return '범실 — 데드볼.';
-      case 'bounce': return '공 낙구 — 랠리 종료.';
+      case 'serve': return `${teamKo(step.serving)} 서브, ${serverName}. 상대는 리시브 대형.`;
+      case 'pass': return '리시브/디그. 공을 세터에게 올리는 중.';
+      case 'toss': return `${step.offSide ? teamKo(step.offSide) + ' ' : ''}세트(토스). 상대 블로커 형성.`;
+      case 'spike': return `${step.offSide ? teamKo(step.offSide) + ' ' : ''}스파이크. 상대 블록·수비.`;
+      case 'fault': return '범실. 데드볼.';
+      case 'bounce': return '공 낙구. 랠리 종료.';
       default: return '대형 정리 중.';
     }
   })();
@@ -255,7 +255,7 @@ export default function BoardLab() {
     const changed = markers.filter(isMoved);
     const summary = changed.length
       ? `■ 수정 ${changed.length}건: ` + changed.map((m) => `${m.side === 'home' ? '홈' : '원정'} ${m.pos} z${m.zone} ${m.name}`).join(', ')
-      : '■ 수정 없음 — 드래그한 선수가 없습니다(이 스텝은 코드 위치 그대로).';
+      : '■ 수정 없음. 드래그한 선수가 없습니다(이 스텝은 코드 위치 그대로).';
     const home = markers.filter((m) => m.side === 'home');
     const away = markers.filter((m) => m.side === 'away');
     const text = [head, summary, ` [홈 ${shortTeamName(homeId)}]`, ...home.map(fmt), ` [원정 ${shortTeamName(awayId)}]`, ...away.map(fmt)].join('\n');
@@ -388,7 +388,7 @@ export default function BoardLab() {
       <Muted style={{ fontSize: 12 }}>
         이 스텝에서 옮긴 선수:{' '}
         <Text style={{ color: movedMarkers.length ? theme.accent : theme.muted, fontWeight: '800' }}>{movedMarkers.length}명</Text>
-        {movedMarkers.length ? ` — ${movedMarkers.map((m) => `${m.side === 'home' ? '홈' : '원'} ${m.pos}`).join(', ')}` : ''}
+        {movedMarkers.length ? ` (${movedMarkers.map((m) => `${m.side === 'home' ? '홈' : '원'} ${m.pos}`).join(', ')})` : ''}
       </Muted>
       <Row>
         <View style={{ flex: 1, marginRight: 6 }}>

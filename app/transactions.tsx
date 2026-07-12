@@ -72,8 +72,8 @@ function TransactionsInner() {
             showAlert('영입 불가', full
               ? `로스터 정원(${ROSTER_MAX}명) 초과`
               : cost > cash
-                ? `운영 자금 부족 — 잔고 ${formatMoney(cash)} (캡과 별개로 구단 지갑이 비었습니다)`
-                : `샐러리캡 초과 — 잔여 ${formatMoney(capLeft)}`);
+                ? `운영 자금 부족. 잔고 ${formatMoney(cash)} (캡과 별개로 구단 지갑이 비었습니다)`
+                : `샐러리캡 초과. 잔여 ${formatMoney(capLeft)}`);
           } else {
             showAlert('영입 완료', `${p.name} 선수가 즉시 합류했습니다. 다음 경기부터 출전 가능합니다.`);
           }
@@ -98,7 +98,7 @@ function TransactionsInner() {
 
       {postseason ? (
         <Card accent={theme.muted}>
-          <IconLabel icon="lock-closed-outline" color={theme.muted}>포스트시즌 — 선수단 이동은 시즌 종료 후</IconLabel>
+          <IconLabel icon="lock-closed-outline" color={theme.muted}>포스트시즌, 선수단 이동은 시즌 종료 후</IconLabel>
           <Muted style={{ fontSize: 12, marginTop: 2 }}>
             포스트시즌 엔트리는 정규 종료 시점으로 확정됩니다. 영입·외국인 교체는 이번 시즌엔 반영되지 않아 잠깁니다.
           </Muted>
@@ -114,7 +114,7 @@ function TransactionsInner() {
               <View key={t.playerId} style={styles.row}>
                 <PosTag pos={p?.position ?? 'OH'} />
                 <Text style={styles.name}>{p?.name ?? t.playerId}</Text>
-                <Muted style={{ fontSize: 12 }}>day {t.day} 영입</Muted>
+                <Muted style={{ fontSize: 12 }}>{t.day}일차 영입</Muted>
               </View>
             );
           })}
@@ -123,7 +123,7 @@ function TransactionsInner() {
 
       {foreignAltPool.length > 0 ? (
         <>
-          <Title>외국인 교체 (시즌 1회{foreignSubUsed ? ' — 사용함' : ''})</Title>
+          <Title>외국인 교체 (시즌 1회{foreignSubUsed ? ' · 사용함' : ''})</Title>
           <Muted style={{ fontSize: 12 }}>
             부진한 외인을 퇴출하고 대체 외인을 영입합니다. 퇴출 외인은 리그를 떠나며,
             대체 외인 연봉 {formatMoney(FOREIGN_SALARY)}은 운영 자금에서 추가 부담합니다.
@@ -132,6 +132,7 @@ function TransactionsInner() {
             const p = evolveOnDay(id, currentDay);
             if (!p) return null;
             const can = !postseason && !foreignSubUsed && FOREIGN_SALARY <= cash;
+            const reason = !can && !postseason && !foreignSubUsed ? '자금 부족' : null; // 남은 실패 사유는 자금뿐(포스트시즌·사용함은 별도 표시)
             return (
               <View key={id} style={styles.row}>
                 <PosTag pos={p.position} />
@@ -147,6 +148,7 @@ function TransactionsInner() {
                         text: '교체', style: 'destructive',
                         onPress: () => {
                           if (!replaceForeign(p.id)) showAlert('교체 불가', foreignSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : FOREIGN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 외국인 선수가 없습니다.');
+                          else showAlert('교체 완료', `${p.name} 선수가 합류했습니다. 운영 자금에서 ${formatMoney(FOREIGN_SALARY)}이 추가로 빠집니다.`);
                         },
                       },
                     ]);
@@ -154,7 +156,7 @@ function TransactionsInner() {
                   disabled={!can}
                   style={[styles.btn, { borderColor: can ? theme.warn : theme.border }]}
                 >
-                  <Text style={[styles.btnText, { color: can ? theme.warn : theme.muted }]}>교체</Text>
+                  <Text style={[styles.btnText, { color: can ? theme.warn : theme.muted }]}>{reason ?? '교체'}</Text>
                 </Pressable>
               </View>
             );
@@ -164,7 +166,7 @@ function TransactionsInner() {
 
       {asianAltPool.length > 0 ? (
         <>
-          <Title>아시아쿼터 교체 (시즌 1회{asianSubUsed ? ' — 사용함' : ''})</Title>
+          <Title>아시아쿼터 교체 (시즌 1회{asianSubUsed ? ' · 사용함' : ''})</Title>
           <Muted style={{ fontSize: 12 }}>
             부진한 아시아쿼터를 퇴출하고 대체 선수를 영입합니다. 퇴출 선수는 리그를 떠나며,
             대체 선수 연봉 {formatMoney(ASIAN_SALARY)}은 운영 자금에서 추가 부담합니다.
@@ -173,6 +175,7 @@ function TransactionsInner() {
             const p = evolveOnDay(id, currentDay);
             if (!p) return null;
             const can = !postseason && !asianSubUsed && ASIAN_SALARY <= cash;
+            const reason = !can && !postseason && !asianSubUsed ? '자금 부족' : null; // 남은 실패 사유는 자금뿐(포스트시즌·사용함은 별도 표시)
             return (
               <View key={id} style={styles.row}>
                 <PosTag pos={p.position} />
@@ -188,6 +191,7 @@ function TransactionsInner() {
                         text: '교체', style: 'destructive',
                         onPress: () => {
                           if (!replaceAsian(p.id)) showAlert('교체 불가', asianSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : ASIAN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 아시아쿼터 선수가 없습니다.');
+                          else showAlert('교체 완료', `${p.name} 아시아쿼터 선수가 합류했습니다. 운영 자금에서 ${formatMoney(ASIAN_SALARY)}이 추가로 빠집니다.`);
                         },
                       },
                     ]);
@@ -195,7 +199,7 @@ function TransactionsInner() {
                   disabled={!can}
                   style={[styles.btn, { borderColor: can ? theme.warn : theme.border }]}
                 >
-                  <Text style={[styles.btnText, { color: can ? theme.warn : theme.muted }]}>교체</Text>
+                  <Text style={[styles.btnText, { color: can ? theme.warn : theme.muted }]}>{reason ?? '교체'}</Text>
                 </Pressable>
               </View>
             );
@@ -230,7 +234,7 @@ function TransactionsInner() {
                 disabled={!afford}
                 style={[styles.btn, { borderColor: afford ? theme.accent : theme.border }]}
               >
-                <Text style={[styles.btnText, { color: afford ? theme.accent : theme.muted }]}>영입</Text>
+                <Text style={[styles.btnText, { color: afford ? theme.accent : theme.muted }]}>{afford ? '영입' : full ? '정원 초과' : cost > cash ? '자금 부족' : payroll + cost > LEAGUE_CAP ? '캡 초과' : '영입'}</Text>
               </Pressable>
             </Pressable>
           );

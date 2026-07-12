@@ -66,7 +66,7 @@ export default function Shop() {
 
       <Text style={styles.section}>다이아</Text>
       <ShopCard icon="diamond-outline" tint={theme.sky} title="다이아 구매"
-        sub="전지훈련용 — 100~10,000 다이아 · 큰 팩일수록 개당 저렴"
+        sub="전지훈련용. 100~10,000 다이아 · 큰 팩일수록 개당 저렴"
         onPress={() => router.push('/buy-diamonds')} />
 
       <Text style={styles.section}>아이템</Text>

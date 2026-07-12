@@ -68,7 +68,7 @@ function PlayoffsInner() {
       {po.po && reveal.poRevealed > 0 ? <SeriesCard title="플레이오프 (2위 vs 3위 · 3전2선승)" m={po.po} revealed={reveal.poRevealed} /> : null}
       {po.final && reveal.finalRevealed > 0 ? <SeriesCard title="챔피언결정전 (5전3선승)" m={po.final} revealed={reveal.finalRevealed} /> : null}
       {reveal.championRevealed && po.championId ? (
-        <Card accent={theme.gold}><Text style={styles.champ}>🏆 우승 — {name(po.championId)}</Text></Card>
+        <Card accent={theme.gold}><Text style={styles.champ}>🏆 우승 ({name(po.championId)})</Text></Card>
       ) : null}
     </Screen>
   );

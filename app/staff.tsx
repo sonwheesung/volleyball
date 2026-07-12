@@ -101,17 +101,17 @@ export default function Staff() {
   const tryReleaseAsst = (id: string, name: string) =>
     showAlert('코치 방출', `${name} 코치를 방출하시겠습니까?\n\n전력 변화로 시즌을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
-      { text: '방출', style: 'destructive', onPress: () => heavyAction(() => releaseAssistant(id), `${name} 코치가 짐을 정리하고\n팀을 떠날 준비를 하는 중…`) },
+      { text: '방출', style: 'destructive', onPress: () => heavyAction(() => { releaseAssistant(id); showAlert('방출 완료', `${name} 코치가 팀을 떠났습니다.`); }, `${name} 코치가 짐을 정리하고\n팀을 떠날 준비를 하는 중…`) },
     ]);
   const tryHireScout = (id: string, name: string, salary: number) =>
     showAlert('스카우터 영입', `${name}을(를) 영입하시겠습니까?\n연봉 ${formatMoney(salary)}`, [
       { text: '취소', style: 'cancel' },
-      { text: '영입', onPress: () => { if (!hireScout(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}) 불가.`); } },
+      { text: '영입', onPress: () => { if (!hireScout(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 스카우터가 합류했습니다. 드래프트 공개도가 올라갑니다.`); } },
     ]);
   const tryReleaseScout = (id: string, name: string) =>
     showAlert('스카우터 방출', `${name}을(를) 방출하시겠습니까?`, [
       { text: '취소', style: 'cancel' },
-      { text: '방출', style: 'destructive', onPress: () => releaseScout(id) },
+      { text: '방출', style: 'destructive', onPress: () => { releaseScout(id); showAlert('방출 완료', `${name} 스카우터가 팀을 떠났습니다.`); } },
     ]);
 
   const pct = Math.min(100, Math.round((spend / staffBudget()) * 100));
@@ -133,7 +133,7 @@ export default function Staff() {
       {/* 감독 */}
       <Title>감독</Title>
       {slumping && !acting ? (
-        <Muted style={{ color: theme.bad }}>⚠ 성적 부진({myRow!.wins}승 {myRow!.losses}패) — 감독 교체를 고려할 시점입니다.</Muted>
+        <Muted style={{ color: theme.bad }}>⚠ 성적 부진({myRow!.wins}승 {myRow!.losses}패). 감독 교체를 고려할 시점입니다.</Muted>
       ) : null}
       {head ? (
         <Card accent={theme.violet}>
@@ -143,7 +143,7 @@ export default function Staff() {
           </Row>
           <Muted style={{ marginTop: 4 }}>성향 {STYLE_LABEL[head.style]} · 카리스마 {head.charisma} · {head.archetype}</Muted>
           {acting ? (
-            <Muted style={{ color: theme.warn, marginTop: 4 }}>감독 대행 체제 — 정식 감독을 영입하세요(아래 시장).</Muted>
+            <Muted style={{ color: theme.warn, marginTop: 4 }}>감독 대행 체제. 정식 감독을 영입하세요(아래 시장).</Muted>
           ) : (() => {
             const yrs = head.contractYears ?? 0;
             const expiring = yrs <= 1;
@@ -151,10 +151,10 @@ export default function Staff() {
               <View style={{ gap: 6, marginTop: 4 }}>
                 <Row>
                   <Muted style={{ color: expiring ? theme.warn : theme.muted }}>
-                    계약 {yrs <= 0 ? '만료 — 재계약 필요' : `잔여 ${yrs}년`}
+                    계약 {yrs <= 0 ? '만료, 재계약 필요' : `잔여 ${yrs}년`}
                   </Muted>
                   {expiring ? (
-                    <Button small label="재계약(3년)" onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); }} />
+                    <Button small label="재계약(3년)" onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); else showAlert('재계약 불가', '현재 감독이 없습니다. 먼저 감독을 영입하세요.'); }} />
                   ) : null}
                 </Row>
                 <Button label="감독 경질" onPress={() => showAlert('감독 경질', `${head.name} 감독을 경질하시겠습니까? 전문 코치가 대행을 맡고, 그 감독은 우리 팀에 다시 오지 않습니다.`, [
@@ -165,7 +165,7 @@ export default function Staff() {
             );
           })()}
         </Card>
-      ) : <Muted>감독 없음 — 시장에서 영입하세요</Muted>}
+      ) : <Muted>감독 없음. 시장에서 영입하세요</Muted>}
       <View style={{ marginTop: 8, marginBottom: 4 }}>
         <IconLabel icon="clipboard-outline" color={theme.violet}>감독 시장 (프리에이전트)</IconLabel>
       </View>
@@ -186,7 +186,7 @@ export default function Staff() {
 
       {/* 전문 코치 */}
       <Title>전문 코치 ({asst.length}/{coachSlots()})</Title>
-      <Muted style={{ marginBottom: 4 }}>분야별 효과(같은 분야 최고 1명). 슬롯 {coachSlots()}개 — 어떤 코치를 둘지 선택.</Muted>
+      <Muted style={{ marginBottom: 4 }}>분야별 효과(같은 분야 최고 1명). 슬롯 {coachSlots()}개. 어떤 코치를 둘지 선택.</Muted>
       {asst.map((a) => (
         <Card key={a.id}>
           <Row>
@@ -198,7 +198,7 @@ export default function Staff() {
           </Row>
         </Card>
       ))}
-      <Muted style={{ marginTop: 8, marginBottom: 4 }}>코치 시장 {asst.length >= coachSlots() ? '(슬롯 가득 — 방출 후 영입)' : ''}</Muted>
+      <Muted style={{ marginTop: 8, marginBottom: 4 }}>코치 시장 {asst.length >= coachSlots() ? '(슬롯 가득, 방출 후 영입)' : ''}</Muted>
       {availableAssistants().map((a) => (
         <Card key={a.id}>
           <Row>

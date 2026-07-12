@@ -237,7 +237,7 @@ function DraftLiveInner() {
           <Card accent={theme.accent}>
             <IconLabel icon="clipboard-outline" color={theme.accent}>우리 팀 지명 요약</IconLabel>
             {summary.pickCount === 0 ? (
-              <Muted style={{ fontSize: 13, marginTop: 6 }}>이번은 참관 — 다음 기약. (지명 없이 마쳤습니다)</Muted>
+              <Muted style={{ fontSize: 13, marginTop: 6 }}>이번은 참관. 다음 기약. (지명 없이 마쳤습니다)</Muted>
             ) : (
               summary.rows.map((row) => (
                 <View key={row.round} style={styles.sumRow}>
@@ -265,11 +265,11 @@ function DraftLiveInner() {
       ) : atMyPick && panel ? (
         // ── 내 픽 하드정지: 직접 지명 패널 ──
         <Card accent={theme.accent}>
-          <IconLabel icon="hand-left-outline" color={theme.accent}>내 지명 순번 — 직접 선택 ({confirmedMyCount + 1}/{myCount})</IconLabel>
+          <IconLabel icon="hand-left-outline" color={theme.accent}>내 지명 순번, 직접 선택 ({confirmedMyCount + 1}/{myCount})</IconLabel>
           {panel.needs.length ? (
             <Muted style={{ fontSize: 12, marginTop: 4 }}>필요 포지션: {panel.needs.map((p) => POS_KO[p]).join(' · ')}</Muted>
           ) : (
-            <Muted style={{ fontSize: 12, marginTop: 4 }}>로스터 구성은 채워졌습니다 — 가치 위주로 골라도 좋아요.</Muted>
+            <Muted style={{ fontSize: 12, marginTop: 4 }}>로스터 구성은 채워졌습니다. 가치 위주로 골라도 좋아요.</Muted>
           )}
           <Pressable onPress={() => confirm(panel!.recommended.playerId)} style={[styles.recBtn]}>
             <Text style={styles.recT}>자동 지명(추천 픽) ▸ {panel.recommended.player.name}
@@ -313,7 +313,7 @@ function DraftLiveInner() {
         <View>
           {myCount === 0 ? (
             <Card accent={theme.muted}>
-              <Muted style={{ fontSize: 13 }}>이번 드래프트는 지명권이 없습니다 — 참관합니다.</Muted>
+              <Muted style={{ fontSize: 13 }}>이번 드래프트는 지명권이 없습니다. 참관합니다.</Muted>
             </Card>
           ) : null}
           <View style={styles.ctrl}>

@@ -171,14 +171,14 @@ function DraftCenterInner() {
           <Muted style={{ fontSize: 12, marginTop: 6 }}>전 라운드 지명이 예상됩니다.</Muted>
         )}
         <Text style={{ color: myNeeds.length ? theme.good : theme.muted, fontSize: 12, fontWeight: '800', marginTop: 4 }}>
-          {myNeeds.length ? `우리 필요 포지션: ${myNeeds.map((p) => POS_KO[p]).join(' · ')}` : '구성 균형 — 미래를 위한 최고 자원 위주'}
+          {myNeeds.length ? `우리 필요 포지션: ${myNeeds.map((p) => POS_KO[p]).join(' · ')}` : '구성 균형, 미래를 위한 최고 자원 위주'}
         </Text>
         <Muted style={{ fontSize: 12, marginTop: 2 }}>
-          매 라운드 지명 또는 패스 — 미래를 위한 어린 선수를 뽑습니다. 원하는 신인을 찜해두면 라이브 드래프트에서
+          매 라운드 지명 또는 패스. 미래를 위한 어린 선수를 뽑습니다. 원하는 신인을 찜해두면 라이브 드래프트에서
           위에 뜨고, 내 차례에 직접 지명합니다. 선수를 누르면 아마추어 성적·스카우트 리포트를 볼 수 있어요.
         </Muted>
         <Muted style={{ fontSize: 12, marginTop: 4, color: reveal >= 0.6 ? theme.good : theme.warn }}>
-          스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= REVEAL_PRECISE ? '(정밀)' : '— 스카우터를 영입하면 잠재력이 더 많이·선명하게 보입니다'}
+          스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= REVEAL_PRECISE ? '(정밀)' : '(스카우터를 영입하면 잠재력이 더 많이·선명하게 보입니다)'}
         </Muted>
       </Card>
 

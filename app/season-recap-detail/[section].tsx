@@ -260,7 +260,7 @@ function StoryDetail({
             <View style={styles.finDivider} />
             <Row><Text style={styles.finNetLabel}>순익</Text><Text style={[styles.finNet, { color: lastFinance.net >= 0 ? theme.good : theme.bad }]}>{lastFinance.net >= 0 ? '+' : ''}{formatMoneyShort(lastFinance.net)}</Text></Row>
             <Row><Muted>평균 관중</Muted><Text style={styles.fin}>{lastFinance.attendance.toLocaleString()}명</Text></Row>
-            {lastFinance.bailout ? <Muted style={{ fontSize: 12, color: theme.warn, marginTop: 4 }}>⚠ 잔고 바닥 — 모기업 적자 보전 발생</Muted> : null}
+            {lastFinance.bailout ? <Muted style={{ fontSize: 12, color: theme.warn, marginTop: 4 }}>⚠ 잔고 바닥. 모기업 적자 보전 발생</Muted> : null}
           </Card>
         </>
       ) : null}
@@ -314,8 +314,8 @@ function TasksDetail({
 
   return (
     <>
-      {group('🔥', 'FA 자격 도래', theme.bad, b.faSoon, '다음 시즌 FA 자격을 얻습니다 — 재계약을 서두르지 않으면 시장에 나갈 수 있습니다.')}
-      {group('⚠', '계약 만료 임박', theme.warn, b.expiring, '계약이 곧 끝납니다 — 재계약 여부를 결정하세요.')}
+      {group('🔥', 'FA 자격 도래', theme.bad, b.faSoon, '다음 시즌 FA 자격을 얻습니다. 재계약을 서두르지 않으면 시장에 나갈 수 있습니다.')}
+      {group('⚠', '계약 만료 임박', theme.warn, b.expiring, '계약이 곧 끝납니다. 재계약 여부를 결정하세요.')}
       {group('ℹ', '정년 임박(39세)', theme.muted, b.retireSoon, '이번 롤오버에 40세가 되어 은퇴가 확정됩니다.')}
     </>
   );

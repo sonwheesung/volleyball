@@ -137,7 +137,7 @@ function ContractsInner() {
     const fee = severanceFee(p.contract.salary, p.contract.remaining);
     // 위약금 지불 못 하면 방출 자체가 불가(재정 무게 — TRANSACTION_SYSTEM 0.5①)
     if (fee > cash) {
-      showAlert('위약금 부족', `${p.name} 방출에는 위약금 ${formatMoney(fee)}가 듭니다.\n현재 운영 자금 ${formatMoney(cash)} — 지불할 수 없습니다.`);
+      showAlert('위약금 부족', `${p.name} 방출에는 위약금 ${formatMoney(fee)}가 듭니다.\n현재 운영 자금 ${formatMoney(cash)}. 지불할 수 없습니다.`);
       return;
     }
     // 함께한 세월·통산을 회고로(감정 무게 — TRANSACTION_SYSTEM 0.5②). 포지션별 대표 스탯.
@@ -156,7 +156,7 @@ function ContractsInner() {
     const friends = teamRelations(p.id, teamId, bonds).friends;
     // Alert는 josa 자동교정을 안 거치므로 주격조사(이/가) 병기를 피해 대시로 끊는다.
     const friendWarn = friends.length
-      ? `\n\n💔 각별한 동료 ${friends.map((f) => f.name).join(', ')} — 방출에 동요할 수 있습니다 (재계약 거부 위험↑)`
+      ? `\n\n💔 각별한 동료 ${friends.map((f) => f.name).join(', ')}. 방출에 동요할 수 있습니다 (재계약 거부 위험↑)`
       : '';
     showAlert(
       `${p.name} 방출`,
@@ -237,9 +237,9 @@ function ContractsInner() {
         <>
           <Title>FA 예정 (시즌 종료 시)</Title>
           <Muted style={{ fontSize: 12 }}>
-            잔류는 "보낼지 말지"의 결정입니다 — 시즌 종료 시 시장가로 재계약합니다(등급 프리미엄은 타 구단 영입가). 포기하면 떠납니다.
+            잔류는 "보낼지 말지"의 결정입니다. 시즌 종료 시 시장가로 재계약합니다(등급 프리미엄은 타 구단 영입가). 포기하면 떠납니다.
             {'\n'}단, 이번 시즌 저평가로 불만이 쌓인 선수는 시장가 재계약이어도 FA를 시험할 수 있습니다. 마음을 확실히 잡으려면 행을 눌러 '재계약'으로 후하게 미리 제안하세요.
-            {'\n'}선수의 마음은 시즌 종료 시 확정됩니다 — 불만이 크면 잡아도 뿌리칠 수 있습니다.
+            {'\n'}선수의 마음은 시즌 종료 시 확정됩니다. 불만이 크면 잡아도 뿌리칠 수 있습니다.
           </Muted>
           {faSorted.map(({ p, outlook }) => {
             const grade = faGrades.get(p.id)!;
@@ -254,7 +254,7 @@ function ContractsInner() {
                     <Text style={styles.name}>
                       {p.name} <Text style={{ color: theme.accent }}>{grade}등급</Text>
                     </Text>
-                    <Text style={styles.sub}>{p.age}세 · 잔류 연봉 {formatMoney(reSalary)} · 시장가</Text>
+                    <Text style={styles.sub}>{p.age}세 · 잔류 연봉 {formatMoney(reSalary)} (시장가)</Text>
                   </View>
                   <OvrBadge value={overallRaw(p)} />
                 </View>
@@ -367,7 +367,7 @@ function ContractsInner() {
               />
               {/* 정직성: 기간은 수락 확률에 무영향(resignOutlookNow는 years 미사용) — 캡 구속·다음 FA 시점만 바뀐다. */}
               <Muted style={styles.builderHint}>
-                기간은 수락 확률에 영향이 없습니다 — 캡 구속·다음 FA 시점의 트레이드오프입니다.{maxYears < 5 ? ` (나이 상 최대 ${maxYears}년)` : ''}
+                기간은 수락 확률에 영향이 없습니다. 캡 구속·다음 FA 시점의 트레이드오프입니다.{maxYears < 5 ? ` (나이 상 최대 ${maxYears}년)` : ''}
               </Muted>
 
               <Pressable
@@ -379,8 +379,8 @@ function ContractsInner() {
                 </Text>
                 <Text style={{ color: theme.muted, fontSize: 11, marginTop: 1, lineHeight: 15 }}>
                   {guarMeaningful
-                    ? '출전 불만을 달래는 약속입니다 — 지키지 못하고 벤치에 앉히면 배신(재계약 거부 급등)으로 돌아옵니다.'
-                    : '이 선수에겐 의미 없는 약속입니다 (출전 불만 없음) — 켜도 미래 파기 위험만 남습니다.'}
+                    ? '출전 불만을 달래는 약속입니다. 지키지 못하고 벤치에 앉히면 배신(재계약 거부 급등)으로 돌아옵니다.'
+                    : '이 선수에겐 의미 없는 약속입니다 (출전 불만 없음). 켜도 미래 파기 위험만 남습니다.'}
                 </Text>
               </Pressable>
 
@@ -412,7 +412,7 @@ function ContractsInner() {
       <ActionSheet
         visible={!!confirmSheet}
         title="재계약 제안"
-        message={confirmSheet ? `${confirmSheet.p.name} — ${confirmSheet.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.contract.salary)} · ${confirmSheet.contract.years}년${confirmSheet.contract.starterGuarantee ? ' · 주전보장' : ''}\n잔류 전망: ${BAND_META[confirmSheet.band].label}\n\n※ 제안일 뿐입니다 — 불만이 큰 선수는 시즌 종료 시 뿌리치고 FA로 나갈 수 있습니다.` : undefined}
+        message={confirmSheet ? `${confirmSheet.p.name}, ${confirmSheet.label}\n연봉 ${formatMoney(confirmSheet.p.contract.salary)} → ${formatMoney(confirmSheet.contract.salary)} · ${confirmSheet.contract.years}년${confirmSheet.contract.starterGuarantee ? ' · 주전보장' : ''}\n잔류 전망: ${BAND_META[confirmSheet.band].label}\n\n※ 제안일 뿐입니다. 불만이 큰 선수는 시즌 종료 시 뿌리치고 FA로 나갈 수 있습니다.` : undefined}
         onClose={() => setConfirmSheet(null)}
         actions={confirmSheet ? [
           {
@@ -433,7 +433,7 @@ function ContractsInner() {
       {/* 제안 직후 결과 피드백(step3) — 선수 반응 + 밴드 변화 + "시즌 종료 시 확정" 리마인드 + FA 비대칭 프레이밍 */}
       <ActionSheet
         visible={!!resultSheet}
-        title={resultSheet ? `${resultSheet.p.name} — 제안 전달` : ''}
+        title={resultSheet ? `${resultSheet.p.name}, 제안 전달` : ''}
         message={resultSheet ? `${resultSheet.reaction.line}\n\n${resultSheet.reaction.remind}\n${resultSheet.reaction.framing}` : undefined}
         onClose={() => setResultSheet(null)}
         actions={resultSheet ? [{ label: '확인', tone: 'primary', onPress: () => {} }] : []}

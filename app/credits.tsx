@@ -39,7 +39,7 @@ export default function Credits() {
             <View style={styles.heart}><Ionicons name="heart" size={15} color="#FFFFFF" /></View>
             <View style={{ flex: 1 }}>
               <Text style={styles.youTxt}>당신이 이 게임의 서포터입니다</Text>
-              <Muted style={{ fontSize: 12, marginTop: 1 }}>덕분에 다음 시즌이 이어집니다 — 진심으로 고맙습니다 ♥</Muted>
+              <Muted style={{ fontSize: 12, marginTop: 1 }}>덕분에 다음 시즌이 이어집니다. 진심으로 고맙습니다 ♥</Muted>
             </View>
           </View>
         ) : (

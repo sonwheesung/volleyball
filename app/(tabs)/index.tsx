@@ -168,7 +168,7 @@ function DashboardInner() {
           ) : (
             <>
               <IconLabel icon="newspaper-outline" color={theme.violet}>리그 뉴스</IconLabel>
-              <Muted>아직 리그 소식이 없어요 — 시즌이 흐르면 기록·사건이 쌓입니다</Muted>
+              <Muted>아직 리그 소식이 없어요. 시즌이 흐르면 기록·사건이 쌓입니다</Muted>
             </>
           )}
         </Card>

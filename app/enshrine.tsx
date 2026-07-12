@@ -64,7 +64,7 @@ export default function Enshrine() {
 
   return (
     <Screen title={`${seasonYear(season - 1)} 명예의전당 헌액`}>
-      <Text style={styles.lead}>한 시대가 전당에 새겨졌다 — {newLegends.length}명의 레전드</Text>
+      <Text style={styles.lead}>한 시대가 전당에 새겨졌다. {newLegends.length}명의 레전드</Text>
       <View style={{ gap: 14 }}>
         {newLegends.map((h) => {
           const num = jerseyNumber(h.id);
@@ -84,7 +84,7 @@ export default function Enshrine() {
               {arc ? <Text style={[styles.lineage, { fontStyle: 'italic' }]}>{arc}</Text> : null}
               {lineage.length > 0 ? (
                 <Text style={styles.lineage} numberOfLines={2}>
-                  {num}번 계보 — {lineage.map((g) => `${g.name}(${g.points.toLocaleString()}점)`).join(', ')}
+                  {num}번 계보, {lineage.map((g) => `${g.name}(${g.points.toLocaleString()}점)`).join(', ')}
                 </Text>
               ) : null}
             </View>

@@ -59,7 +59,7 @@ export default function Settings() {
       <Text style={styles.section}>응원</Text>
       <View style={styles.group}>
         <Row icon="heart" tint={ROSE}
-          label={supporter ? '서포터 ♥ — 감사합니다' : '서포터 팩'}
+          label={supporter ? '서포터 ♥, 감사합니다' : '서포터 팩'}
           sub={supporter ? '배구명가를 응원해주셨어요' : '한 번의 응원으로 다음 시즌을 함께'}
           onPress={() => router.push('/supporter')} />
         <Row icon="document-text-outline" tint={theme.muted} label="크레딧" sub="만든 사람 · 응원해주신 분들"
@@ -113,7 +113,7 @@ export default function Settings() {
 
       <Text style={styles.section}>데이터</Text>
       <View style={styles.group}>
-        <Row icon="refresh-outline" tint={theme.bad} label="세이브 초기화" sub={`현재 ${seasonYear(season)} — 구단 변경(진행 기록 삭제)`} danger
+        <Row icon="refresh-outline" tint={theme.bad} label="세이브 초기화" sub={`현재 ${seasonYear(season)}. 구단 변경(진행 기록 삭제)`} danger
           onPress={() => setConfirmReset(true)} />
       </View>
 

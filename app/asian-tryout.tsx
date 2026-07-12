@@ -100,24 +100,24 @@ function AsianTryoutInner() {
           </View>
         </View>
         <Muted style={{ fontSize: 12 }}>
-          외국인과 별개 — 팀당 1명(AVC 국가) · **자유계약**(2026-27~) · 연차 상한 1년 {formatMoney(ASIAN_SALARY_Y1)}·2년 {formatMoney(ASIAN_SALARY_Y2)}(샐러리캡 제외).
-          추첨 아닌 직접 협상 — 노리는 선수를 ★로 정하면, 선수가 팀 전력·출전 기회를 보고 고릅니다(강팀·자리 있는 팀이 유리).
+          외국인과 별개. 팀당 1명(AVC 국가) · **자유계약**(2026-27~) · 연차 상한 1년 {formatMoney(ASIAN_SALARY_Y1)}·2년 {formatMoney(ASIAN_SALARY_Y2)}(샐러리캡 제외).
+          추첨 아닌 직접 협상. 노리는 선수를 ★로 정하면, 선수가 팀 전력·출전 기회를 보고 고릅니다(강팀·자리 있는 팀이 유리).
         </Muted>
       </Card>
 
       {myAsian ? (
         <>
-          <Title>기존 구단 보유권 — {myAsian.name} ({myAsian.nationality ?? ''} · {myAsian.age}세 · OVR {displayOvr(overallRaw(myAsian))})</Title>
+          <Title>기존 구단 보유권, {myAsian.name} ({myAsian.nationality ?? ''} · {myAsian.age}세 · OVR {displayOvr(overallRaw(myAsian))})</Title>
           <Card accent={theme.bad}>
             {myAsian.age + 1 >= RETIRE_AGE ? (
               // 정년(FOREIGN_SYSTEM §1.6): 다음 시즌 나이 40+ → 보유(재계약) 불가(리그 정년은 수입선수에도 적용).
               <Muted style={{ fontSize: 12 }}>
-                정년 도달({RETIRE_AGE}세) — 보유(재계약) 불가입니다(리그 정년은 아시아쿼터에도 적용). 아래 후보에서 새 얼굴에게 오퍼하세요.
+                정년 도달({RETIRE_AGE}세). 보유(재계약) 불가입니다(리그 정년은 아시아쿼터에도 적용). 아래 후보에서 새 얼굴에게 오퍼하세요.
               </Muted>
             ) : (
               <>
                 <Muted style={{ fontSize: 12 }}>
-                  보유권 — 2년차 상한({formatMoney(ASIAN_SALARY_Y2)})으로 증액 제시하면 우선 잔류. 놓아주면 자유계약 시장으로 나가 다른 팀과 협상할 수 있습니다.
+                  보유권. 2년차 상한({formatMoney(ASIAN_SALARY_Y2)})으로 증액 제시하면 우선 잔류. 놓아주면 자유계약 시장으로 나가 다른 팀과 협상할 수 있습니다.
                 </Muted>
                 <View style={{ flexDirection: 'row', gap: 8, marginTop: 6 }}>
                   {([['자동(추천)', null], ['보유(증액)', true], ['놓아줌', false]] as const).map(([label, v]) => (
@@ -136,7 +136,7 @@ function AsianTryoutInner() {
         </>
       ) : null}
 
-      <Title>협상 후보 ({pool.length}명) — 눌러서 이력 · 우측 오퍼</Title>
+      <Title>협상 후보 ({pool.length}명), 눌러서 이력 · 우측 오퍼</Title>
       {pool
         .slice()
         .sort((a, b) => overall(b) - overall(a))

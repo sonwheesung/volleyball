@@ -69,11 +69,11 @@ export default function TrainingPolicy() {
     : ARCHETYPES.find((a) => sameFocus(a.focus, draft))?.name ?? '선택한 방향';
 
   const onSave = () => {
-    showAlert('훈련 방침 저장', `팀을 "${draftLabel}" 방향으로 육성할까요?\n오늘부터 적용됩니다 — 지난 경기·성장은 그대로예요.`, [
+    showAlert('훈련 방침 저장', `팀을 "${draftLabel}" 방향으로 육성할까요?\n오늘부터 적용됩니다. 지난 경기·성장은 그대로예요.`, [
       { text: '취소', style: 'cancel' },
       {
         text: '저장',
-        onPress: () => busy.run('새 훈련 방침을 반영해\n전력을 다시 계산하는 중…', () => {
+        onPress: () => busy.run('감독이 새 훈련 계획을\n선수들에게 전달하는 중…', () => {
           setTrainingFocus(draft);          // baseVersion++ — 순위·생산·dyn 캐시 무효
           warmAfterPolicyChange(teamId);    // 무효화된 캐시를 이 오버레이 안에서 다시 데운다(도착 화면 프리즈 제거)
           showAlert('저장 완료', '오늘부터 새 훈련 방침이 적용됩니다. 지난 경기·성장은 그대로예요.', [
@@ -122,7 +122,7 @@ export default function TrainingPolicy() {
         </View>
       </Card>
 
-      <Button label={dirty ? `저장 — ${draftLabel}` : '변경 없음'} onPress={onSave} disabled={!dirty} />
+      <Button label={dirty ? `저장 (${draftLabel})` : '변경 없음'} onPress={onSave} disabled={!dirty} />
     </Screen>
   );
 }

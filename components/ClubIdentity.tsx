@@ -27,7 +27,7 @@ export function IdentityChip({ identity }: { identity: ClubIdentity }) {
 /** 최근 N시즌 가상 순위 — 1(우승)=민트, 꼴찌권=코랄 */
 export function RecentRanks({ ranks, teamCount = 7 }: { ranks: number[]; teamCount?: number }) {
   if (!ranks.length) {
-    return <Text style={{ color: theme.muted, fontSize: 11 }}>창단 첫 시즌 — 기록 없음</Text>;
+    return <Text style={{ color: theme.muted, fontSize: 11 }}>창단 첫 시즌, 기록 없음</Text>;
   }
   const rankColor = (r: number) => (r === 1 ? theme.good : r <= 3 ? theme.accent : r >= teamCount - 1 ? theme.bad : theme.muted);
   return (

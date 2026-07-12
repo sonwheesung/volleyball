@@ -35,7 +35,7 @@ export function situationLine(c: SituationCtx): string | null {
   }
   // post — 듀스 도달 / 연속 득점
   if (c.home >= target - 1 && c.away >= target - 1 && c.home === c.away) return `🔥 듀스! ${c.home}-${c.away}`;
-  if (c.streak && c.streak >= 4 && c.streakSide) return `${sideName(c, c.streakSide)} ${c.streak}연속 득점 — 흐름이 넘어온다!`;
+  if (c.streak && c.streak >= 4 && c.streakSide) return `${sideName(c, c.streakSide)} ${c.streak}연속 득점, 흐름이 넘어온다!`;
   return null;
 }
 
@@ -116,7 +116,7 @@ export function commentLine(seg: CommentSeg, how: PointHow | undefined, L: Lineu
       // from = 서브 도착점(리시버), to = 연결 도착점(토서)
       const recv = nameAt(L, from.side, rotOf(from.side), from.idx);
       const tosser = nameAt(L, to.side, rotOf(to.side), to.idx);
-      if (recv && tosser) return `${recv} 리시브 — ${tosser} 연결`;
+      if (recv && tosser) return `${recv} 리시브, ${tosser} 연결`;
       return recv ? `${recv} 리시브` : null;
     }
     if (from.kind === 'spike') {
@@ -138,8 +138,8 @@ export function commentLine(seg: CommentSeg, how: PointHow | undefined, L: Lineu
     // to.idx = 공격수, from.idx = 토서, to.atk = 공격 종류
     const attacker = nameAt(L, to.side, rotOf(to.side), to.idx);
     const kind = to.atk ? ATK_KO[to.atk] : null;
-    if (attacker && kind) return `토스 — ${attacker} ${kind}!`;
-    return attacker ? `토스 — ${attacker}!` : null;
+    if (attacker && kind) return `토스, ${attacker} ${kind}!`;
+    return attacker ? `토스, ${attacker}!` : null;
   }
 
   if (to.kind === 'spike' && from.kind === 'toss') {
@@ -152,11 +152,11 @@ export function commentLine(seg: CommentSeg, how: PointHow | undefined, L: Lineu
   if (to.kind === 'fault') {
     // 데드볼 비행 — 종결 종류별 색깔만 더한다(상세는 자막)
     if (how === 'ace') return '네트를 맞고 뚝! 손쓸 새가 없다'; // 네트인 에이스(일반 에이스는 fault 구간이 없다)
-    if (how === 'blockout') return '코트 밖으로 — 끝까지 쫓아가 보지만!';
+    if (how === 'blockout') return '코트 밖으로, 끝까지 쫓아가 보지만!';
     if (how === 'stuff') { const blk = nameById(L, byId); return blk ? `${blk}, 블로킹 차단!` : '벽에 막혀 그대로 꽂힌다!'; }
-    if (how === 'recvErr') return '날카로운 서브! 리시브가 그대로 튕겨 아웃 — 에이스!';
+    if (how === 'recvErr') return '날카로운 서브! 리시브가 그대로 튕겨 아웃, 에이스!';
     if (how === 'miscErr') return '연결이 어긋났다!';
-    if (how === 'fault') return '휘슬 — 포지션 폴트';
+    if (how === 'fault') return '휘슬! 포지션 폴트';
     return null; // serveErr 등은 자막으로 충분
   }
 

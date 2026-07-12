@@ -157,10 +157,10 @@ function FACenterInner() {
         const b = cur[id];
         if (!a) continue; // 새로 지명한 선수 — 첫 상태라 '변화'가 아님
         const nm = preSnap[id]?.name ?? '선수';
-        if (a.s !== 'won' && b.s === 'won') toast.push(`FA 시장 변화 — ${nm} 영입 가능성이 높아졌습니다.`);
-        else if (a.s === 'won' && b.s !== 'won') toast.push(`FA 시장 변화 — ${nm}과의 계약 가능성이 낮아졌습니다.`);
+        if (a.s !== 'won' && b.s === 'won') toast.push(`FA 시장 변화. ${nm} 영입 가능성이 높아졌습니다.`);
+        else if (a.s === 'won' && b.s !== 'won') toast.push(`FA 시장 변화. ${nm}과의 계약 가능성이 낮아졌습니다.`);
         else if (a.s === 'pending' && b.s === 'pending' && a.rank === 1 && (b.rank ?? 99) > 1)
-          toast.push(`FA 시장 변화 — ${nm} 계약에 다른 구단이 더 유력해졌습니다.`);
+          toast.push(`FA 시장 변화. ${nm} 계약에 다른 구단이 더 유력해졌습니다.`);
       }
     }
     prevStatus.current = cur;
@@ -330,17 +330,17 @@ function FACenterInner() {
           const countered = pv.counterFired[p.id];       // 카운터 발동(§2.8.6) — 내 오퍼가 요구를 수용해 상향된 케이스
           let badge: { t: string; c: string } | null = null;
           if (won) badge = countered
-            ? { t: `현재 예상 — 요구를 수용해 ${formatMoney(countered.to)}에 계약이 유력합니다`, c: theme.good }
-            : { t: '현재 예상 — 우리 팀 계약이 유력합니다', c: theme.good };
+            ? { t: `현재 예상. 요구를 수용해 ${formatMoney(countered.to)}에 계약이 유력합니다`, c: theme.good }
+            : { t: '현재 예상. 우리 팀 계약이 유력합니다', c: theme.good };
           else if (targeted) {
             const code = pv.faFail[p.id];
             const lostName = getTeam(lost)?.name ?? shortTeam(lost);
-            if (code === 'LOST') badge = { t: `현재 예상 — ${lostName}와 계약 가능성이 가장 높습니다`, c: theme.warn };
+            if (code === 'LOST') badge = { t: `현재 예상. ${lostName}와 계약 가능성이 가장 높습니다`, c: theme.warn };
             else if (code === 'CASH') badge = { t: '운영 자금이 부족해 아직 제안하지 못했습니다', c: theme.warn };
             else if (code === 'CAP') badge = { t: '샐러리캡이 부족해 아직 제안하지 못했습니다', c: theme.warn };
             else if (code === 'ROSTER') badge = { t: '정원이 가득 차 아직 제안하지 못했습니다', c: theme.warn };
-            else if (code === 'SIT_OUT') badge = { t: '현재 예상 — 어느 구단과도 계약하지 않을 것으로 보입니다', c: theme.muted };
-            else badge = { t: '제안 전달됨 — 시즌 시작 때 결과가 확정됩니다', c: theme.sky };
+            else if (code === 'SIT_OUT') badge = { t: '현재 예상. 어느 구단과도 계약하지 않을 것으로 보입니다', c: theme.muted };
+            else badge = { t: '제안 전달됨. 시즌 시작 때 결과가 확정됩니다', c: theme.sky };
           }
           // #5 계약 가능성(코스) — 예상 승자 prob를 높음/보통/낮음으로(정확 % 대신 우세 정도). 지명+승자 있을 때만.
           const chance = (targeted && (won || pv.faFail[p.id] === 'LOST' || pv.faFail[p.id] === 'SIT_OUT') && winProb !== undefined)
@@ -585,7 +585,7 @@ function FACenterInner() {
                           <Text style={styles.detailHead}>경쟁 구단</Text>
                           {rivals.length ? (
                             <Text style={styles.competText}>
-                              관심 구단 {rivals.length}곳 — {rivals.map((t) => getTeam(t)?.name ?? shortTeam(t)).join(', ')}
+                              관심 구단 {rivals.length}곳 ({rivals.map((t) => getTeam(t)?.name ?? shortTeam(t)).join(', ')})
                             </Text>
                           ) : (
                             <Muted style={{ fontSize: 12 }}>아직 관심을 보인 다른 구단이 없습니다.</Muted>
@@ -594,7 +594,7 @@ function FACenterInner() {
                             <>
                               <Text style={[styles.competRank, { color: tierC.c }]}>계약 가능성 {tierC.t}</Text>
                               <Muted style={{ fontSize: 11, marginTop: 1, lineHeight: 15 }}>
-                                가장 앞서 있어도 확정은 아니에요 — 선수가 시즌 시작 때 최종 선택합니다.
+                                가장 앞서 있어도 확정은 아니에요. 선수가 시즌 시작 때 최종 선택합니다.
                               </Muted>
                             </>
                           ) : null}
@@ -611,7 +611,7 @@ function FACenterInner() {
                       onPress={() => busy.run('협상 테이블을 차리는 중…', () => {
                         setOffer(p.id, draft);
                         // 성공 피드백(2026-07-11 무피드백 스윕 #2) — 경쟁 뒤집힘 토스트(#81)는 변화 때만 떠서 단순 갱신이 조용했다
-                        toast.push(`${p.name} — 오퍼를 ${targeted ? '갱신했습니다' : '냈습니다'}. 결과는 시즌 시작 때 확정됩니다.`);
+                        toast.push(`${p.name}, 오퍼를 ${targeted ? '갱신했습니다' : '냈습니다'}. 결과는 시즌 시작 때 확정됩니다.`);
                       })}
                       style={[styles.applyBtn, { borderColor: theme.accent, backgroundColor: theme.accent + '22' }]}
                     >

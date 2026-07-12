@@ -102,15 +102,15 @@ function RecapInner() {
   // ② 우리 팀 수상 종합 — MVP·챔프MVP·신인·기량발전 + 부문 기록왕 전부. 같은 poDay 게이트(snap.awards).
   const awardLines: string[] = [];
   if (aw) {
-    if (isMine(aw.mvp)) awardLines.push(`정규 MVP — ${pName(aw.mvp!.playerId)}`);
-    if (isMine(aw.finalsMvp)) awardLines.push(`챔프전 MVP — ${pName(aw.finalsMvp!.playerId)}`);
-    if (isMine(aw.rookie)) awardLines.push(`신인상 — ${pName(aw.rookie!.playerId)}`);
-    if (isMine(aw.mostImproved)) awardLines.push(`기량발전상 — ${pName(aw.mostImproved!.playerId)}`);
+    if (isMine(aw.mvp)) awardLines.push(`정규 MVP: ${pName(aw.mvp!.playerId)}`);
+    if (isMine(aw.finalsMvp)) awardLines.push(`챔프전 MVP: ${pName(aw.finalsMvp!.playerId)}`);
+    if (isMine(aw.rookie)) awardLines.push(`신인상: ${pName(aw.rookie!.playerId)}`);
+    if (isMine(aw.mostImproved)) awardLines.push(`기량발전상: ${pName(aw.mostImproved!.playerId)}`);
     for (const [k, w] of Object.entries(aw.titles)) {
-      if (isMine(w)) awardLines.push(`${TITLE_KO[k] ?? k} — ${pName(w!.playerId)}`);
+      if (isMine(w)) awardLines.push(`${TITLE_KO[k] ?? k}: ${pName(w!.playerId)}`);
     }
     const b7 = aw.best7.filter((s) => isMine(s.winner)).length;
-    if (b7 > 0) awardLines.push(`베스트7 선정 — ${b7}명`);
+    if (b7 > 0) awardLines.push(`베스트7 선정: ${b7}명`);
   }
 
   // ③ 시즌 스토리 수치 — 최다 연승(정규 결과 파생). 팬심·재정은 직전 정산(lastFinance) 문맥.

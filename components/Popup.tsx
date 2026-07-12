@@ -83,7 +83,7 @@ const sheet = themedStyles(() => StyleSheet.create({
   neutral: { backgroundColor: theme.cardAlt, borderColor: theme.border },
   neutralTxt: { color: theme.text },
   cancel: { paddingVertical: 11, alignItems: 'center', marginTop: 2 },
-  cancelTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
+  cancelTxt: { color: theme.text, fontSize: 14, fontWeight: '700' },
 }));
 
 const styles = themedStyles(() => StyleSheet.create({

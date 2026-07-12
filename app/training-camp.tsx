@@ -171,7 +171,7 @@ export default function TrainingCamp() {
         {balance}
         {inChain ? (
           <Card accent={theme.warn}>
-            <IconLabel icon="flag-outline" color={theme.warn}>새 시즌 준비 — 마지막 단계</IconLabel>
+            <IconLabel icon="flag-outline" color={theme.warn}>새 시즌 준비, 마지막 단계</IconLabel>
             <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
               영입·드래프트가 끝났습니다. 새 시즌이 시작되기 전, 다이아로 선수를 전지훈련 보낼 수 있습니다. 보낼 선수가 없으면 아래 <Text style={{ color: theme.warn, fontWeight: '800' }}>새 시즌으로 ▶</Text> 로 진행하세요.
             </Muted>
@@ -181,8 +181,8 @@ export default function TrainingCamp() {
           <IconLabel icon="airplane-outline" color={theme.good}>오프시즌 해외 캠프</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
             선수 한 명을 코스 하나로 보내면, 관련 능력치 3개에 두 가지가 함께 붙습니다.{'\n'}
-            ① <Text style={{ color: theme.good, fontWeight: '800' }}>지금 실력 +{CAMP_CUR_GAIN}</Text> — 아래 카드의 82→85처럼 바로 오릅니다.{'\n'}
-            ② <Text style={{ color: theme.good, fontWeight: '800' }}>앞으로 클 수 있는 천장(포텐) +{CAMP_POT_GAIN}</Text> — 카드의 포텐 87→90(최대 99). 천장은 당장 오르는 게 아니라 <Text style={{ color: theme.text, fontWeight: '700' }}>다음 시즌부터 훈련·경기로 천천히 채워집니다.</Text>{'\n'}
+            ① <Text style={{ color: theme.good, fontWeight: '800' }}>지금 실력 +{CAMP_CUR_GAIN}</Text>. 아래 카드의 82→85처럼 바로 오릅니다.{'\n'}
+            ② <Text style={{ color: theme.good, fontWeight: '800' }}>앞으로 클 수 있는 천장(포텐) +{CAMP_POT_GAIN}</Text>. 카드의 포텐 87→90(최대 99). 천장은 당장 오르는 게 아니라 <Text style={{ color: theme.text, fontWeight: '700' }}>다음 시즌부터 훈련·경기로 천천히 채워집니다.</Text>{'\n'}
             • 비용 <Text style={{ color: theme.good, fontWeight: '800' }}>{CAMP_COURSE_COST}💎</Text> · 선수 1명당 오프시즌 1회 · 어릴수록 천장 채울 시간이 많아 이득 · 효과는 영구(환불 불가)
           </Muted>
         </Card>
@@ -194,7 +194,7 @@ export default function TrainingCamp() {
         </View>
         <IconLabel icon="people-outline" color={theme.accent}>선수 선택</IconLabel>
         <Muted style={{ fontSize: 12.5, marginTop: 2, marginBottom: 2, lineHeight: 18 }}>
-          <Text style={{ color: theme.good, fontWeight: '800' }}>주전</Text>은 출전이 많아 키운 실력이 성장으로 빨리 실현됩니다. 어린 벤치 선수는 훗날 주전을 꿰찰 재목일 때 값어치가 커요 — 누구에게 투자할지, 이 표시가 기준선입니다.
+          <Text style={{ color: theme.good, fontWeight: '800' }}>주전</Text>은 출전이 많아 키운 실력이 성장으로 빨리 실현됩니다. 어린 벤치 선수는 훗날 주전을 꿰찰 재목일 때 값어치가 커요. 누구에게 투자할지, 이 표시가 기준선입니다.
         </Muted>
         <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 2, lineHeight: 17 }}>
           정년({RETIRE_AGE}세)을 앞둔 선수는 이번 시즌 뒤 은퇴하므로 캠프 명단에서 제외됩니다.
@@ -263,7 +263,7 @@ export default function TrainingCamp() {
         <Text style={styles.psub}>{player.age}세</Text>
         <Pressable onPress={() => { setPicked(null); setCourse(null); }}><Text style={styles.change}>선수 변경</Text></Pressable>
       </View>
-      <Muted style={{ fontSize: 12.5, marginBottom: 6 }}>코스 1개 선택 — 관련 3개 능력치: 지금 실력 +{CAMP_CUR_GAIN} · 성장 천장(포텐) +{CAMP_POT_GAIN}</Muted>
+      <Muted style={{ fontSize: 12.5, marginBottom: 6 }}>코스 1개 선택. 관련 3개 능력치: 지금 실력 +{CAMP_CUR_GAIN} · 성장 천장(포텐) +{CAMP_POT_GAIN}</Muted>
       <ScrollView style={{ flex: 1 }}>
         {/* 포지션에 맞는 코스만 노출(2026-07-05 사용자 결정) — 세터에게 공격훈련 등 결이 다른 코스는 숨긴다.
             모든 포지션이 ≥1개 적합 코스 보유(engine/diamonds forPos): S=세터·서브 / L=수비 / OH·OP·MB=다수. */}

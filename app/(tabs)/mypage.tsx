@@ -117,7 +117,7 @@ export default function MyPage() {
       const r = await claimAchDiamonds();
       if (r.granted > 0) showAlert('업적 보상 수령', `달성 업적 보상 +${r.granted} 💎`);
       else if (r.reason === 'cap') showAlert('수령 한도', '업적 보상 지급 한도에 도달했습니다.');
-      else if (r.reason === 'offline') showAlert('연결이 불안정합니다', '보상이 이미 지급됐을 수 있어요 — 잔액을 확인해 주세요.\n다시 시도해도 중복 지급되지 않습니다.');
+      else if (r.reason === 'offline') showAlert('연결이 불안정합니다', '보상이 이미 지급됐을 수 있어요. 잔액을 확인해 주세요.\n다시 시도해도 중복 지급되지 않습니다.');
       else if (r.reason === 'busy') showAlert('처리 중', '잠시만 기다려 주세요.');
       else if (r.reason === 'already') showAlert('보상 반영 완료', '이 업적 보상은 이미 다이아로 지급되어 잔액에 반영돼 있습니다. 추가 지급이나 손해는 없어요.');
       else showAlert('수령할 보상 없음', '새로 달성한 업적이 없습니다.');
@@ -189,7 +189,7 @@ export default function MyPage() {
 
         <SpotlightTarget id="history-ach">
           <LinkCard icon="ribbon-outline" tint={theme.warn} title="업적"
-            sub="구단주의 발자취 — 우승 · 시상 · 레전드 · 기록 · 운영"
+            sub="구단주의 발자취. 우승 · 시상 · 레전드 · 기록 · 운영"
             onPress={() => router.push('/achievements')} />
         </SpotlightTarget>
       </View>
@@ -208,7 +208,7 @@ export default function MyPage() {
       {/* ── 도움 · 약관 (하단) ── */}
       <View style={styles.group}>
         <LinkCard icon="chatbubble-ellipses-outline" tint={theme.sky} title="문의하기"
-          sub="오류 · 건의 · 질문 — 최근 기록 진단 정보 자동 첨부"
+          sub="오류 · 건의 · 질문. 최근 기록 진단 정보 자동 첨부"
           onPress={() => router.push('/support')} />
 
         <LinkCard icon="document-text-outline" tint={theme.muted} title="이용약관"
