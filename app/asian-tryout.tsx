@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
+import { StatTriad } from '../components/StatTriad';
 import { ForeignResumeDetail } from '../components/ForeignResumeDetail';
 import { PlayerAvatar } from '../components/PlayerAvatar';
 import { buildDraftContextFrom, buildOffseasonBase } from '../data/draftSetup';
@@ -81,24 +82,11 @@ function AsianTryoutInner() {
     <Screen title="아시아쿼터 FA">
       <Card accent={theme.bad} flat>
         <IconLabel icon="airplane-outline" color={theme.bad}>아시아쿼터 현황</IconLabel>
-        <View style={styles.statHeader}>
-          <View style={styles.statCell}>
-            <Text style={styles.statCellLabel}>등록 선수</Text>
-            <Text style={styles.statCellVal} numberOfLines={1}>{pool.length}명</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statCell}>
-            <Text style={styles.statCellLabel}>스카우터 공개도</Text>
-            <Text style={styles.statCellVal} numberOfLines={1}>{(reveal * 100).toFixed(0)}%</Text>
-          </View>
-          <View style={styles.statDivider} />
-          <View style={styles.statCell}>
-            <Text style={styles.statCellLabel}>내 예상 영입</Text>
-            <Text style={[styles.statCellVal, { color: theme.accent }]} numberOfLines={1}>
-              {myPickId && snap[myPickId] ? snap[myPickId].name : '-'}
-            </Text>
-          </View>
-        </View>
+        <StatTriad cells={[
+          { label: '등록 선수', value: `${pool.length}명` },
+          { label: '스카우터 공개도', value: `${(reveal * 100).toFixed(0)}%` },
+          { label: '내 예상 영입', value: myPickId && snap[myPickId] ? snap[myPickId].name : '-', color: theme.accent },
+        ]} />
         <Muted style={{ fontSize: 12 }}>
           외국인과 별개. 팀당 1명(AVC 국가) · **자유계약**(2026-27~) · 연차 상한 1년 {formatMoney(ASIAN_SALARY_Y1)}·2년 {formatMoney(ASIAN_SALARY_Y2)}(샐러리캡 제외).
           추첨 아닌 직접 협상. 노리는 선수를 ★로 정하면, 선수가 팀 전력·출전 기회를 보고 고릅니다(강팀·자리 있는 팀이 유리).
@@ -199,12 +187,6 @@ const styles = themedStyles(() => StyleSheet.create({
   rowInner: { flexDirection: 'row', alignItems: 'center' },
   rowTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
   wishBtn: { paddingHorizontal: 14, paddingVertical: 14, borderLeftWidth: 1, borderLeftColor: theme.border, minWidth: 60, alignItems: 'center' },
-  // 현황 헤더 카드 — 가로 3칸 스탯(등록 선수·공개도·예상 영입), 셀 사이 얇은 구분선
-  statHeader: { flexDirection: 'row', alignItems: 'center', marginTop: 2 },
-  statCell: { flex: 1, gap: 2 },
-  statCellLabel: { color: theme.muted, fontSize: 11 },
-  statCellVal: { color: theme.text, fontSize: 15, fontWeight: '800' },
-  statDivider: { width: 1, alignSelf: 'stretch', backgroundColor: theme.border, marginHorizontal: 10 },
   // 아바타(60) + 하단 OVR 범위 오버레이 배지(반투명 검정 바 위 흰 글씨)
   avatarWrap: { width: 60, height: 60, borderRadius: 10, overflow: 'hidden', backgroundColor: theme.cardAlt },
   ovrOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.62)', paddingVertical: 1.5, alignItems: 'center' },

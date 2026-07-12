@@ -1,7 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
-import { Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { evolveOnDay } from '../data/league';
 import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
@@ -140,7 +140,12 @@ function TransactionsInner() {
                   <Text style={styles.name}>{p.name}</Text>
                   <Text style={styles.sub}>{p.age}세 · OVR {displayOvr(overallRaw(p))}</Text>
                 </View>
-                <Pressable
+                <Button
+                  small
+                  outline
+                  tone="warn"
+                  disabled={!can}
+                  label={reason ?? '교체'}
                   onPress={() => {
                     showAlert('외인 교체', `${p.name}을(를) 영입하고 현 외국인 선수를 퇴출합니다.\n추가 부담 ${formatMoney(FOREIGN_SALARY)} · 시즌 1회`, [
                       { text: '취소', style: 'cancel' },
@@ -153,11 +158,7 @@ function TransactionsInner() {
                       },
                     ]);
                   }}
-                  disabled={!can}
-                  style={[styles.btn, { borderColor: can ? theme.warn : theme.border }]}
-                >
-                  <Text style={[styles.btnText, { color: can ? theme.warn : theme.muted }]}>{reason ?? '교체'}</Text>
-                </Pressable>
+                />
               </View>
             );
           })}
@@ -183,7 +184,12 @@ function TransactionsInner() {
                   <Text style={styles.name}>{p.name}{p.nationality ? ` · ${p.nationality}` : ''}</Text>
                   <Text style={styles.sub}>{p.age}세 · OVR {displayOvr(overallRaw(p))}</Text>
                 </View>
-                <Pressable
+                <Button
+                  small
+                  outline
+                  tone="warn"
+                  disabled={!can}
+                  label={reason ?? '교체'}
                   onPress={() => {
                     showAlert('아시아쿼터 교체', `${p.name}을(를) 영입하고 현 아시아쿼터 선수를 퇴출합니다.\n추가 부담 ${formatMoney(ASIAN_SALARY)} · 시즌 1회`, [
                       { text: '취소', style: 'cancel' },
@@ -196,11 +202,7 @@ function TransactionsInner() {
                       },
                     ]);
                   }}
-                  disabled={!can}
-                  style={[styles.btn, { borderColor: can ? theme.warn : theme.border }]}
-                >
-                  <Text style={[styles.btnText, { color: can ? theme.warn : theme.muted }]}>{reason ?? '교체'}</Text>
-                </Pressable>
+                />
               </View>
             );
           })}
@@ -229,13 +231,14 @@ function TransactionsInner() {
                 </Text>
               </View>
               <OvrBadge value={overallRaw(p)} />
-              <Pressable
-                onPress={() => onSign(p)}
+              <Button
+                small
+                outline
+                tone="accent"
                 disabled={!afford}
-                style={[styles.btn, { borderColor: afford ? theme.accent : theme.border }]}
-              >
-                <Text style={[styles.btnText, { color: afford ? theme.accent : theme.muted }]}>{afford ? '영입' : full ? '정원 초과' : cost > cash ? '자금 부족' : payroll + cost > LEAGUE_CAP ? '캡 초과' : '영입'}</Text>
-              </Pressable>
+                label={afford ? '영입' : full ? '정원 초과' : cost > cash ? '자금 부족' : payroll + cost > LEAGUE_CAP ? '캡 초과' : '영입'}
+                onPress={() => onSign(p)}
+              />
             </Pressable>
           );
         })
@@ -248,6 +251,4 @@ const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
-  btn: { borderWidth: 1, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 14, alignItems: 'center' },
-  btnText: { fontSize: 14, fontWeight: '800' },
 }));

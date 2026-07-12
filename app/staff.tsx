@@ -3,6 +3,7 @@ import { useEffect, useRef, useState } from 'react';
 import { View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Button, Card, IconLabel, Loading, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../components/Screen';
+import { MeterBar } from '../components/MeterBar';
 import {
   getTeamCoach, teamAssistants, teamScouts, teamScoutReveal,
   availableCoaches, availableAssistants, availableScouts,
@@ -124,8 +125,8 @@ export default function Staff() {
           <IconLabel icon="wallet-outline" color={theme.warn}>스태프 예산</IconLabel>
           <Muted>{formatMoney(spend)} / {formatMoney(staffBudget())}</Muted>
         </Row>
-        <View style={{ height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, marginTop: 8, overflow: 'hidden' }}>
-          <View style={{ width: `${pct}%`, height: 8, backgroundColor: pct >= 95 ? theme.bad : pct >= 80 ? theme.warn : theme.good }} />
+        <View style={{ marginTop: 8 }}>
+          <MeterBar pct={pct} color={pct >= 95 ? theme.bad : pct >= 80 ? theme.warn : theme.good} />
         </View>
         <Muted style={{ marginTop: 6 }}>여유 {formatMoney(left)}</Muted>
       </Card>

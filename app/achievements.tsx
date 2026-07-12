@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useMemo } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { MeterBar } from '../components/MeterBar';
 import { evalAchievements, achievementSummary, achReward, type AchCategory, type AchStatus } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
 import { formatMoney } from '../engine/salary';
@@ -58,7 +59,7 @@ function AchievementsInner() {
           <Title>구단주의 발자취</Title>
           <Text style={styles.count}>{done} / {total}</Text>
         </Row>
-        <View style={styles.track}><View style={[styles.fill, { width: `${total ? (done / total) * 100 : 0}%` }]} /></View>
+        <MeterBar pct={total ? (done / total) * 100 : 0} color={theme.accent} />
         <Muted style={{ fontSize: 12 }}>장기 목표를 눈앞에. 우승·시상·레전드·기록·운영의 발자취가 트로피로 남는다.</Muted>
       </Card>
 
@@ -79,7 +80,9 @@ function AchievementsInner() {
                   {/* 보상 다이아 명시(테스터 요청 2026-07-11) — 달성 전엔 연하게, 달성 시 또렷하게 */}
                   <Text style={[styles.reward, s.unlocked && styles.rewardOn]}>보상 +{achReward(s.ach.id)} 💎</Text>
                   {s.ach.target > 1 && !s.unlocked ? (
-                    <View style={styles.miniTrack}><View style={[styles.miniFill, { width: `${Math.min(100, (s.cur / s.ach.target) * 100)}%` }]} /></View>
+                    <View style={{ marginTop: 5 }}>
+                      <MeterBar pct={Math.min(100, (s.cur / s.ach.target) * 100)} color={theme.accent} height={4} />
+                    </View>
                   ) : null}
                 </View>
                 <Text style={[styles.prog, s.unlocked && { color: theme.good }]}>{progressLabel(s)}</Text>
@@ -101,8 +104,6 @@ function Row({ children }: { children: React.ReactNode }) {
 const styles = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   count: { color: theme.accent, fontSize: 18, fontWeight: '900' },
-  track: { height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, overflow: 'hidden' },
-  fill: { height: 8, backgroundColor: theme.accent },
   catHead: { color: theme.text, fontSize: 15, fontWeight: '800', marginTop: 6 },
   catCount: { color: theme.muted, fontSize: 13, fontWeight: '700' },
   ach: {
@@ -118,6 +119,4 @@ const styles = themedStyles(() => StyleSheet.create({
   reward: { color: theme.muted, fontSize: 11.5, fontWeight: '800', marginTop: 3, opacity: 0.7 },
   rewardOn: { color: theme.sky, opacity: 1 },
   prog: { color: theme.muted, fontSize: 12, fontWeight: '700', textAlign: 'right' },
-  miniTrack: { height: 4, backgroundColor: theme.cardAlt, borderRadius: 2, overflow: 'hidden', marginTop: 5 },
-  miniFill: { height: 4, backgroundColor: theme.accent },
 }));

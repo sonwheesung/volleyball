@@ -285,6 +285,10 @@ export function Button({
   disabled,
   compact,
   small,
+  tone,
+  outline,
+  fill,
+  off,
 }: {
   label: string;
   onPress: () => void;
@@ -296,6 +300,16 @@ export function Button({
   /** small: 리스트 행 액션용 컴팩트 사이즈(pad 8/14·radius 10·minWidth 0·14pt). transactions/tryout 영입버튼과 동일 규격.
    *  스태프 시장(감독/코치/스카우터) 영입·방출처럼 카드 우측 인라인 액션에 쓴다(2026-07-11 규격 통일). */
   small?: boolean;
+  /** tone: 리스트 행 인라인 액션 색 프리셋(transactions/fa/contracts 인라인 btn 통일, 2026-07-12). `small`과 함께 쓴다.
+   *  활성 = 컬러 보더 + 컬러 글씨(+ outline 아니면 컬러 배경 22 틴트) + weight 800. muted(disabled/off) = 회색(border)보더 + muted글씨 + 투명 배경.
+   *  tone 지정 시 primary/ghost 배경·글로우·disabled 딤은 적용하지 않는다(인라인 룩 재현). */
+  tone?: 'accent' | 'good' | 'bad' | 'warn' | 'muted';
+  /** outline: tone 활성 배경 틴트 없이(투명) — transactions 교체/영입·contracts 복귀처럼 아웃라인만. */
+  outline?: boolean;
+  /** fill: flex:1로 늘려 채운다 — contracts 잔류/포기 쌍·복귀 등 행 내 균등 배치(인라인 btn flex:1 재현). */
+  fill?: boolean;
+  /** off: press는 살리되 muted(회색) 룩 — 토글 OFF(fa '돈만'·contracts 잔류/포기 미선택). disabled와 룩은 같지만 눌린다. */
+  off?: boolean;
 }) {
   // 내비게이션 래치(UI-33) — 연타로 화면이 이중 push 되거나 액션이 두 번 발화되는 것을 막는다.
   //   state는 비동기라 같은 프레임의 두 번째 탭이 stale 값을 보므로 **동기 ref**만이 확실히 차단(UI-31과 같은 원리).
@@ -307,21 +321,31 @@ export function Button({
     lockRef.current = now;
     onPress();
   };
+  const toneMuted = !!tone && (disabled || off); // 회색 룩(disabled 또는 토글 OFF)
   return (
     <Pressable
       onPress={guardedPress}
       disabled={disabled}
       style={({ pressed }) => [
         styles.btn,
-        variant === 'primary' ? styles.btnPrimary : styles.btnGhost,
+        tone ? null : (variant === 'primary' ? styles.btnPrimary : styles.btnGhost),
         small && styles.btnSmall, // 리스트 액션 규격(pad 8/14·radius 10·minWidth 0)
         compact && { paddingVertical: 13.5 },
         compact && variant === 'primary' && { backgroundColor: theme.accent + '38' }, // accentGlass(0.16)보다 밝은 ~0.22 틴트
-        disabled && { opacity: 0.4 },
+        tone ? {
+          borderColor: toneMuted ? theme.border : theme[tone],
+          backgroundColor: toneMuted ? 'transparent' : (outline ? 'transparent' : theme[tone] + '22'),
+        } : null,
+        fill && { flex: 1 },
+        !tone && disabled && { opacity: 0.4 }, // tone 버튼은 인라인처럼 딤 없이 회색 색상만
         pressed && !disabled && { opacity: 0.8 },
       ]}
     >
-      <Text style={[styles.btnText, small && styles.btnTextSmall]}>{label}</Text>
+      <Text style={[
+        styles.btnText,
+        small && styles.btnTextSmall,
+        tone ? { color: toneMuted ? theme.muted : theme[tone], fontWeight: '800' as const, letterSpacing: 0 } : null,
+      ]}>{label}</Text>
     </Pressable>
   );
 }

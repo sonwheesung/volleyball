@@ -4,8 +4,9 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
-import { Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { ActionSheet, Popup } from '../components/Popup';
+import { Stepper } from '../components/Stepper';
 import { getEvolvedTeamPlayers, getPlayer, evolveOnDay, LEAGUE } from '../data/league';
 import { rosterIdsOnDay } from '../data/dynamics';
 import { teamRelations } from '../data/relationships';
@@ -268,18 +269,8 @@ function ContractsInner() {
                   ))}
                 </View>
                 <View style={styles.actions}>
-                  <Pressable
-                    onPress={() => setResign(p.id, true)}
-                    style={[styles.btn, { borderColor: keep ? theme.good : theme.border, backgroundColor: keep ? theme.good + '22' : 'transparent' }]}
-                  >
-                    <Text style={[styles.btnText, { color: keep ? theme.good : theme.muted }]}>잔류</Text>
-                  </Pressable>
-                  <Pressable
-                    onPress={() => setResign(p.id, false)}
-                    style={[styles.btn, { borderColor: !keep ? theme.bad : theme.border, backgroundColor: !keep ? theme.bad + '22' : 'transparent' }]}
-                  >
-                    <Text style={[styles.btnText, { color: !keep ? theme.bad : theme.muted }]}>포기</Text>
-                  </Pressable>
+                  <Button small fill tone="good" off={!keep} label="잔류" onPress={() => setResign(p.id, true)} />
+                  <Button small fill tone="bad" off={keep} label="포기" onPress={() => setResign(p.id, false)} />
                 </View>
               </View>
             );
@@ -298,12 +289,14 @@ function ContractsInner() {
                   <Text style={[styles.name, { color: theme.muted }]}>{p.name}</Text>
                   <Text style={styles.sub}>{p.age}세 · {formatMoney(p.contract.salary)}</Text>
                 </View>
-                <Pressable
+                <Button
+                  small
+                  fill
+                  outline
+                  tone="good"
+                  label="복귀"
                   onPress={() => { if (!unrelease(p.id)) showAlert('복귀 불가', '방출 철회는 방출 당일에만 가능합니다(이후엔 FA 시장에서 재영입).'); }}
-                  style={[styles.btn, { borderColor: theme.good }]}
-                >
-                  <Text style={[styles.btnText, { color: theme.good }]}>복귀</Text>
-                </Pressable>
+                />
               </View>
             </View>
           ))}
@@ -442,24 +435,6 @@ function ContractsInner() {
   );
 }
 
-/** −/＋ 스텝퍼(연봉·기간) — FA 오퍼 폼과 같은 결. */
-function Stepper({ label, display, onDec, onInc, decOff, incOff }: {
-  label: string; display: string; onDec: () => void; onInc: () => void; decOff?: boolean; incOff?: boolean;
-}) {
-  return (
-    <View style={styles.stepper}>
-      <Text style={styles.stepLabel}>{label}</Text>
-      <Pressable onPress={onDec} disabled={decOff} hitSlop={6} style={[styles.stepBtn, decOff && styles.stepBtnOff]}>
-        <Text style={styles.stepBtnTxt}>−</Text>
-      </Pressable>
-      <Text style={styles.stepVal}>{display}</Text>
-      <Pressable onPress={onInc} disabled={incOff} hitSlop={6} style={[styles.stepBtn, incOff && styles.stepBtnOff]}>
-        <Text style={styles.stepBtnTxt}>＋</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = themedStyles(() => StyleSheet.create({
   row: {
     flexDirection: 'row', alignItems: 'center', gap: 10,
@@ -471,8 +446,6 @@ const styles = themedStyles(() => StyleSheet.create({
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   actions: { flexDirection: 'row', gap: 8 },
-  btn: { flex: 1, borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
-  btnText: { fontSize: 14, fontWeight: '800' },
   outlookRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   bandTag: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   bandText: { fontSize: 12, fontWeight: '800' },
@@ -487,13 +460,4 @@ const styles = themedStyles(() => StyleSheet.create({
   applyBtn: { borderWidth: 1, borderRadius: 12, paddingVertical: 13, alignItems: 'center', marginTop: 2 },
   builderCancel: { paddingVertical: 11, alignItems: 'center' },
   builderCancelTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepLabel: { color: theme.text, fontSize: 13, fontWeight: '700', width: 44 },
-  stepBtn: {
-    width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: theme.accent,
-    backgroundColor: theme.accent + '18', alignItems: 'center', justifyContent: 'center',
-  },
-  stepBtnOff: { borderColor: theme.border, backgroundColor: 'transparent' },
-  stepBtnTxt: { color: theme.text, fontSize: 18, fontWeight: '900', lineHeight: 20 },
-  stepVal: { color: theme.text, fontSize: 14, fontWeight: '800', flex: 1, textAlign: 'center' },
 }));

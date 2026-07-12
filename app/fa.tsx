@@ -4,6 +4,7 @@ import { Animated, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, StatBar, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { RoleBadge } from '../components/RoleBadge';
+import { Stepper } from '../components/Stepper';
 import { Popup } from '../components/Popup';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { ToastHost, useToastQueue } from '../components/Toast';
@@ -403,21 +404,16 @@ function FACenterInner() {
                   <Ionicons name={openId === p.id ? 'chevron-up-outline' : 'chevron-down-outline'} size={18} color={theme.muted} />
                 ) : null}
               </Pressable>
-              <Pressable
+              <Button
+                small
+                tone={targeted ? 'bad' : 'accent'}
+                label={targeted ? '제안 취소' : '영입 제안'}
                 onPress={() => {
                   // '영입 시도' 시 오퍼 만들기 아코디언 자동 펼침(§2.8.8 ① — 국내 FA만, 지명 취소엔 미적용)
                   if (!targeted && !p.isForeign) setOpenId(p.id);
                   busy.run('협상 테이블을 차리는 중…', () => (targeted ? unsignFA(p.id) : signFA(p.id)));
                 }}
-                style={[
-                  styles.btn,
-                  { borderColor: targeted ? theme.bad : theme.accent, backgroundColor: targeted ? theme.bad + '22' : theme.accent + '22' },
-                ]}
-              >
-                <Text style={[styles.btnText, { color: targeted ? theme.bad : theme.accent }]}>
-                  {targeted ? '제안 취소' : '영입 제안'}
-                </Text>
-              </Pressable>
+              />
               {/* 지명은 시즌 시작 시 확정되는 예약(§2.8.8 ③·§2.8.9 #6) — 취소 시 예산·캡 즉시 반환 안내 */}
               {targeted ? (
                 <Text style={styles.cancelHint}>제안을 취소하면 예산과 샐러리캡이 즉시 반환됩니다. 시즌 시작 전까지 다시 제안할 수 있습니다.</Text>
@@ -425,16 +421,13 @@ function FACenterInner() {
               {/* A/B FA만 — 보상선수 대신 보상금만 내고 선수단 보호 */}
               {targeted && needsCompensationPlayer(grade) ? (
                 <>
-                  <Pressable
+                  <Button
+                    small
+                    tone="good"
+                    off={!moneyOnlyIds.includes(p.id)}
+                    label={moneyOnlyIds.includes(p.id) ? `✓ 돈만 보상 (${grade === 'A' ? '300' : '200'}%)` : '보상선수 보호 (돈만)'}
                     onPress={() => busy.run('협상 테이블을 차리는 중…', () => toggleMoneyOnly(p.id))}
-                    style={[styles.btn, moneyOnlyIds.includes(p.id)
-                      ? { borderColor: theme.good, backgroundColor: theme.good + '22' }
-                      : { borderColor: theme.border }]}
-                  >
-                    <Text style={[styles.btnText, { color: moneyOnlyIds.includes(p.id) ? theme.good : theme.muted }]}>
-                      {moneyOnlyIds.includes(p.id) ? `✓ 돈만 보상 (${grade === 'A' ? '300' : '200'}%)` : '보상선수 보호 (돈만)'}
-                    </Text>
-                  </Pressable>
+                  />
                   {/* '돈만' 인라인 설명(§2.8.8 ② — §2.2~2.3·§253 '돈만'(선수단 보호) 용어 일치) */}
                   <Text style={styles.moneyOnlyHint}>
                     비보호 선수 1명을 내주는 대신 보상금을 더 내고(A 300%·B 200%) 선수단을 지킵니다.
@@ -696,31 +689,11 @@ function StarRow({ label, weight, fog }: { label: string; weight?: number; fog?:
   );
 }
 
-/** −/＋ 스텝퍼(연봉·기간) */
-function Stepper({ label, display, onDec, onInc, decOff, incOff }: {
-  label: string; display: string; onDec: () => void; onInc: () => void; decOff?: boolean; incOff?: boolean;
-}) {
-  return (
-    <View style={styles.stepper}>
-      <Text style={styles.stepLabel}>{label}</Text>
-      <Pressable onPress={onDec} disabled={decOff} hitSlop={6} style={[styles.stepBtn, decOff && styles.stepBtnOff]}>
-        <Text style={styles.stepBtnTxt}>−</Text>
-      </Pressable>
-      <Text style={styles.stepVal}>{display}</Text>
-      <Pressable onPress={onInc} disabled={incOff} hitSlop={6} style={[styles.stepBtn, incOff && styles.stepBtnOff]}>
-        <Text style={styles.stepBtnTxt}>＋</Text>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, gap: 10, borderWidth: 1, borderColor: theme.border },
   info: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
-  btn: { borderWidth: 1, borderRadius: 10, paddingVertical: 8, alignItems: 'center' },
-  btnText: { fontSize: 14, fontWeight: '800' },
   cancelHint: { color: theme.muted, fontSize: 11, lineHeight: 15, textAlign: 'center', marginTop: -4 },
   moneyOnlyHint: { color: theme.muted, fontSize: 11, lineHeight: 15, marginTop: -4 },
   toggle: { borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 8, alignItems: 'center', marginTop: 4 },
@@ -760,15 +733,6 @@ const styles = themedStyles(() => StyleSheet.create({
   starRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   starLabel: { color: theme.muted, fontSize: 13, width: 44 },
   stars: { fontSize: 15, letterSpacing: 1 },
-  stepper: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  stepLabel: { color: theme.text, fontSize: 13, fontWeight: '700', width: 44 },
-  stepBtn: {
-    width: 34, height: 34, borderRadius: 9, borderWidth: 1, borderColor: theme.accent,
-    backgroundColor: theme.accent + '18', alignItems: 'center', justifyContent: 'center',
-  },
-  stepBtnOff: { borderColor: theme.border, backgroundColor: 'transparent' },
-  stepBtnTxt: { color: theme.text, fontSize: 18, fontWeight: '900', lineHeight: 20 },
-  stepVal: { color: theme.text, fontSize: 14, fontWeight: '800', flex: 1, textAlign: 'center' },
   guarToggle: {
     borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, marginTop: 2,
   },
