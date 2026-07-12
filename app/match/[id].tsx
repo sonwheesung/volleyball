@@ -73,6 +73,8 @@ export default function MatchBoard() {
   const [pendingIn, setPendingIn] = useState<string | null>(null);              // 넣을 선수(교체 in) 선택 보관 — 확인 단계용
   const [ivSubKind, setIvSubKind] = useState<'manual' | 'pinch'>('manual');     // 교체 종류: 세트 끝까지 / 서브 교체(서브권 잃으면 자동 복귀)
   const [ivError, setIvError] = useState<string | null>(null);                  // 적용 불가 안내(드라이런 실패)
+  // 타임아웃 커밋을 좌표로 MatchCourt에 명시 신호 — seek 추론(index)이 어긋나 모달을 놓치던 것 대신 좌표 매칭으로 확실히 표시(§3 #3)
+  const [toSignal, setToSignal] = useState<{ seq: number; setNo: number; h: number; a: number } | null>(null);
   const { toasts, push: pushToast } = useToastQueue();                          // 성공 피드백(비모달, 관전형)
   // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거). ptIdx=현재 점수가 반영된 득점 인덱스(타임라인 조회용)
   const [score, setScore] = useState({ h: 0, a: 0, homeSets: 0, awaySets: 0, setNo: 1, ptIdx: -1 });
@@ -291,8 +293,12 @@ export default function MatchBoard() {
   const onTimeout = useCallback(() => {
     if (!mineSide) return;
     const ok = commitIntervention({ at: { setNo: score.setNo, h: score.h, a: score.a }, side: mineSide as Side, kind: 'timeout' });
-    if (ok) { pushToast('작전 타임아웃을 요청했어요'); closeIntervene(); }
-    else setIvError('지금은 타임아웃을 쓸 수 없어요. 이번 세트 타임아웃을 이미 다 썼어요.');
+    if (ok) {
+      // 커밋된 타임아웃 좌표를 신호 → MatchCourt가 그 좌표의 타임아웃 이벤트를 찾아 체력 모달을 확실히 띄운다(10초 자동)
+      setToSignal((prev) => ({ seq: (prev?.seq ?? 0) + 1, setNo: score.setNo, h: score.h, a: score.a }));
+      pushToast('작전 타임아웃을 요청했어요');
+      closeIntervene();
+    } else setIvError('지금은 타임아웃을 쓸 수 없어요. 이번 세트 타임아웃을 이미 다 썼어요.');
   }, [mineSide, commitIntervention, score, pushToast, closeIntervene]);
 
   const onConfirmSub = useCallback((inId: string) => {
@@ -378,6 +384,7 @@ export default function MatchBoard() {
           onProgress={onProgress}
           onFinished={onFinished}
           onScore={handleScore}
+          timeoutSignal={toSignal}
           paused={statsOpen || showTip || interveneOpen}
           homeName={data.home.name}
           awayName={data.away.name}

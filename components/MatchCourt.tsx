@@ -145,11 +145,12 @@ interface Props {
   onFinished?: () => void;
   onScore?: (s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number; ptIdx: number }) => void;
   paused?: boolean;                     // 외부 일시정지(스코어박스 모달 등) — true면 진행 멈춤, false면 재개
+  timeoutSignal?: { seq: number; setNo: number; h: number; a: number } | null; // 플레이어 타임아웃 커밋 좌표 신호(§3 #3) — 좌표의 타임아웃 이벤트를 찾아 체력 모달 표시
   homeName?: string;                    // 코인토스 오버레이 등 팀명 표기용(없으면 홈/원정 폴백)
   awayName?: string;
 }
 
-export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgress, onFinished, onScore, paused, homeName, awayName }: Props) {
+export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgress, onFinished, onScore, paused, timeoutSignal, homeName, awayName }: Props) {
   // 선발 라인업(고정) + 전 선수 id 맵(교체 선수 조회용)
   const baseLineups: Lineups = useMemo(() => ({ home: buildLineup(home), away: buildLineup(away) }), [home, away]);
   const byId = useMemo(() => {
@@ -190,19 +191,27 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   useEffect(() => {
     if (firstSimRef.current) { firstSimRef.current = false; return; }
     const s = shownRef.current;
-    // 개입이 타임아웃이면(§3 #3) 그 좌표(=현재 shown 지점)에 새 타임아웃 이벤트가 생긴다 — 재계산 후 shown+1로
-    // 건너뛰면 그 모달을 못 잡아 화면 변화가 없다. 아직 안 본(ackTO 미포함) 타임아웃이 shown에 있으면 그 지점에
-    // 머물러 모달을 직접 띄운다. 교체·서브 등 타임아웃 아닌 개입은 기존대로 shown+1로 이어재생.
-    if (s >= 0 && !ackTO.current.has(s) && timeoutsAt(sim, s).length > 0) {
-      setIdx(s);
-      setSegIdx(0);
-      setPlaying(false);
-      setTimeoutModal(timeoutsAt(sim, s));
-      return;
-    }
-    setIdx(Math.max(0, s + 1)); // 마지막 반영 점수 다음 랠리 = 개입 주입 지점
+    // 교체·서브 등 개입: 마지막 반영 점수 다음 랠리(= 개입 주입 지점)부터 이어재생. 타임아웃 모달은 아래 전용 효과가
+    // 좌표 매칭으로 확실히 띄운다(§3 #3 — seek index 추론은 off-by-one으로 놓치던 것 폐기).
+    setIdx(Math.max(0, s + 1));
     setSegIdx(0);
   }, [sim]);
+
+  // 플레이어 타임아웃(§3 #3) — 커밋 좌표(setNo·h·a)로 sim.timeouts에서 그 이벤트를 찾아 그 지점으로 seek + 체력 모달을 띄운다.
+  //   좌표 매칭이라 index off-by-one에 안전. sim/신호가 함께 바뀌므로 sim은 재계산된(타임아웃 반영) 최신본을 읽는다.
+  useEffect(() => {
+    if (!timeoutSignal) return;
+    const { setNo, h, a } = timeoutSignal;
+    const evs = (sim.timeouts ?? []).filter((t) => t.setNo === setNo && t.home === h && t.away === a && (mineSide ? t.side === mineSide : true));
+    if (!evs.length) return; // 예산 소진 등으로 미발화면 no-op(부모가 이미 안내)
+    const pt = evs[0].point;
+    ackTO.current.delete(pt); // 다시 볼 수 있게(플레이어가 방금 부른 것)
+    setIdx(pt);
+    setSegIdx(0);
+    setPlaying(false);
+    setTimeoutModal(evs);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [timeoutSignal?.seq]);
 
   // 효과음(휘슬·스파이크·서브) — 보드 진입 시 1회 프리로드, 설정 토글 동기화(audio/sfx.ts, UI 전용)
   const sfxOn = useGameStore((s) => s.sfxEnabled);
@@ -340,15 +349,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
 
   // 타임아웃 자동 진행(관전형) — 모달이 뜨면 10초 카운트다운, 0이면 자동 재개. 탭하면 즉시 진행(수동).
   const TO_AUTO_SECS = 10;
+  // 모달이 뜨면 카운트다운 표시 + TO_AUTO_SECS 뒤 자동복귀. 자동복귀를 **타이머 기반**으로(이전 toCount===0 감시 방식은
+  // 모달이 뜨는 순간 직전 toCount=0이 남아 즉시 재개돼 모달이 순식간에 사라지는 경합 — 플레이어 타임아웃 모달 미표시 원인, 2026-07-13).
   useEffect(() => {
     if (!timeoutModal) return;
     setToCount(TO_AUTO_SECS);
     const iv = setInterval(() => setToCount((c) => Math.max(0, c - 1)), 1000);
-    return () => clearInterval(iv);
-  }, [timeoutModal]);
-  useEffect(() => {
-    if (timeoutModal && toCount === 0) resumeFromTimeout();
-  }, [toCount, timeoutModal, resumeFromTimeout]);
+    const auto = setTimeout(() => resumeFromTimeout(), TO_AUTO_SECS * 1000);
+    return () => { clearInterval(iv); clearTimeout(auto); };
+  }, [timeoutModal, resumeFromTimeout]);
 
   // ⏭ 결과 — 확인 후 끝으로 건너뛰기(즉시 종료 방지)
   const endNow = useCallback(() => {
