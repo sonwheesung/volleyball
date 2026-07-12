@@ -256,7 +256,14 @@ function ScheduleInner() {
                     <Button label="관전하러 가기 →" onPress={() => router.push(`/match/playoff?po=${next.round}&g=${next.g}&season=${season}`)} />
                   ) : (
                     // 타 구단 경기 = 결과 확인만(자동 진행). setDay로 슬롯 도달 → 위 시리즈 카드에 결과 공개.
-                    <Button label="결과 확인 →" onPress={() => setDay(next.day)} />
+                    // + 탭 지점 직접 피드백(2026-07-12 무피드백 전수조사): 결과가 위쪽 카드에만 조용히 반영돼 "됐나?" 소지 → 스코어 alert.
+                    //   결과(hiSets/loSets)는 결정론 파생이라 이미 확정값. 버튼이 "결과 확인"이라 스포일러 정책과 무충돌(사용자가 명시적으로 여는 것).
+                    <Button label="결과 확인 →" onPress={() => {
+                      setDay(next.day);
+                      const mm = next.round === 'po' ? p.po : p.final;
+                      const g = mm?.series.games[next.g];
+                      if (g) showAlert('경기 결과', `${name(next.hiId)} ${g.hiSets} : ${g.loSets} ${name(next.loId)}\n${name(g.hiSets > g.loSets ? next.hiId : next.loId)} 승리`);
+                    }} />
                   )}
                 </Card>
               ) : reveal.championRevealed ? (
