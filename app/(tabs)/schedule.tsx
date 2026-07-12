@@ -162,7 +162,7 @@ function ScheduleInner() {
         <SpotlightTarget id="sched-next">
           <Card accent={theme.good} flat>
             <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
-            <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 전지훈련을 마쳐야 개막전이 시작됩니다.</Muted>
+            <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 전지훈련을 마쳐야 개막전이 열립니다.</Muted>
             {/* navigate(≠push): 스택에 이미 캠프가 있으면 재사용 — 중복 인스턴스가 쌓여 "마쳐도 또 나오는" 반복 노출 방지(2026-07-11) */}
             <Button label="전지훈련 하러 가기 →" onPress={() => router.navigate('/training-camp')} />
           </Card>

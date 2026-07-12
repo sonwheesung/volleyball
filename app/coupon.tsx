@@ -48,7 +48,7 @@ export default function Coupon() {
       <Card accent={theme.gold} flat>
         <IconLabel icon="pricetag-outline" color={theme.gold}>쿠폰 코드</IconLabel>
         <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
-          받은 쿠폰 코드를 입력하면 다이아가 지급됩니다. 대소문자는 구분하지 않아요. 쿠폰당 한 번만 사용할 수 있어요.
+          쿠폰 코드를 입력하면 다이아가 지급됩니다. 대소문자 구분 없이, 쿠폰당 한 번만 쓸 수 있어요.
         </Muted>
         <TextInput
           value={code}

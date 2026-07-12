@@ -33,7 +33,7 @@ function PlayoffsInner() {
       <Screen title={`${seasonYear(season)} 포스트시즌`}>
         <Card accent={theme.muted} flat>
           <IconLabel icon="lock-closed-outline" color={theme.muted}>대기 중</IconLabel>
-          <Muted style={{ marginTop: 6, lineHeight: 20 }}>포스트시즌은 정규 리그 종료 후 열립니다. 진출 팀과 대진은 정규 일정을 모두 마친 뒤 공개돼요.</Muted>
+          <Muted style={{ marginTop: 6, lineHeight: 20 }}>포스트시즌은 정규 리그가 끝나면 열립니다. 진출 팀과 대진도 그때 공개돼요.</Muted>
         </Card>
       </Screen>
     );

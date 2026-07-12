@@ -155,7 +155,7 @@ export default function TrainingCamp() {
         {balance}
         <Card accent={theme.warn} flat>
           <IconLabel icon="airplane-outline" color={theme.warn}>오프시즌에만 가능</IconLabel>
-          <Muted style={{ fontSize: 13, marginTop: 4 }}>전지훈련은 시즌이 끝난 뒤(새 시즌 시작 전)에만 보낼 수 있습니다. 이번 시즌을 마치고 오프시즌에 다시 오세요.</Muted>
+          <Muted style={{ fontSize: 13, marginTop: 4 }}>전지훈련은 오프시즌(시즌이 끝난 뒤)에만 보낼 수 있습니다. 이번 시즌을 마치고 다시 오세요.</Muted>
         </Card>
         {/* 체인 진입인데 day0이 아닌 예외(endSeason 실패 등) — 막다른 화면이 되지 않게 진행 버튼 보장 */}
         {inChain ? <View style={{ marginTop: 14 }}><Button label="새 시즌으로 ▶" onPress={goNext} /></View> : null}
@@ -194,7 +194,7 @@ export default function TrainingCamp() {
         </View>
         <IconLabel icon="people-outline" color={theme.accent}>선수 선택</IconLabel>
         <Muted style={{ fontSize: 12.5, marginTop: 2, marginBottom: 2, lineHeight: 18 }}>
-          <Text style={{ color: theme.good, fontWeight: '800' }}>주전</Text>은 출전이 많아 키운 실력이 성장으로 빨리 실현됩니다. 어린 벤치 선수는 훗날 주전을 꿰찰 재목일 때 값어치가 커요. 누구에게 투자할지, 이 표시가 기준선입니다.
+          <Text style={{ color: theme.good, fontWeight: '800' }}>주전</Text>은 출전이 많아 키운 실력이 빨리 실현됩니다. 어린 벤치 선수는 훗날 주전감일 때 값어치가 커요. 누구에게 투자할지, 이 표시가 기준입니다.
         </Muted>
         <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 2, lineHeight: 17 }}>
           정년({RETIRE_AGE}세)을 앞둔 선수는 이번 시즌 뒤 은퇴하므로 캠프 명단에서 제외됩니다.

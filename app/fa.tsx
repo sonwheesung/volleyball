@@ -283,7 +283,7 @@ function FACenterInner() {
       <Title>보호선수 명단 ({protectedIds.length}/{PROTECT_COUNT})</Title>
       <Muted style={{ fontSize: 12, lineHeight: 17 }}>
         보호하지 않은 선수 중 <Text style={{ color: theme.text, fontWeight: '700' }}>OVR이 가장 높은 선수부터</Text> 상대팀이
-        보상선수로 데려갑니다. 주전을 지키세요. (외국인은 1년 계약이라 보상 대상이 아니라 제외)
+        보상선수로 데려갑니다. 주전을 지키세요. (외국인은 1년 계약이라 보상 대상 제외)
       </Muted>
       {protectList.map((p) => {
         const prot = protectedIds.includes(p.id);

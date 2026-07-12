@@ -171,7 +171,7 @@ function Compose({ cat, setCat, content, setContent, onCancel, onDone }: {
       <View style={styles.topBar}>
         <Pressable onPress={onCancel} hitSlop={10} style={styles.topBtn}><Text style={styles.newBtn}>취소</Text></Pressable>
       </View>
-      <Muted style={{ fontSize: 12.5, marginBottom: 8 }}>분류를 고르고 내용을 적어주세요. 최근 10시즌의 진단 정보가 자동 첨부돼 분석에 도움이 됩니다.</Muted>
+      <Muted style={{ fontSize: 12.5, marginBottom: 8 }}>분류를 고르고 내용을 적어주세요. 최근 10시즌 진단 정보가 자동 첨부됩니다.</Muted>
       <View style={styles.catRow}>
         {CATS.map((c) => (
           <Pressable key={c.key} onPress={() => setCat(c.key)} style={[styles.cat, cat === c.key && styles.catOn]}>
