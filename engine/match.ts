@@ -4,7 +4,7 @@
 // playRally를 돌려 SimResult(간이 시뮬과 동일 계약)를 출력 → 드롭인 교체 가능.
 
 import type { Player, Side, CoachStyle, SubPolicy, Position } from '../types';
-import type { SimResult, PointLog, SubEvent, TimeoutEvent, TimeoutCourtStam, SubKind } from './simMatch';
+import type { SimResult, PointLog, SubEvent, TimeoutEvent, TimeoutCourtStam, SubKind, MatchIntervention } from './simMatch';
 import type { Ratings } from './ratings';
 import { createRng, strSeed } from './rng';
 import { deriveRatings } from './ratings';
@@ -73,6 +73,8 @@ export interface MatchOpts {
   // 계측 전용 훅(§7.1) — 매 타임아웃/TTO 순간에 stam 맵을 순수 관측(rng 미소비·결과 불변·기본 off). simStamCurve가
   // 선발6+리베로의 생리 체력(코트 구성과 분리)을 세트별로 뽑는 데 쓴다. stam은 사이드별 id→잔량, courtIds는 그 순간 코트 6인.
   stamProbe?: (setNo: number, stam: Record<Side, Map<string, number>>, courtIds: Record<Side, string[]>) => void;
+  // 플레이어 개입 로그(비면 완전 무동작=바이트 동일). 루프 최상단에서 좌표 매칭 적용. MATCH_INTERVENTION_SYSTEM.
+  interventions?: MatchIntervention[];
 }
 
 const DEFAULT_COACH: CoachInfo = { style: 'balanced', charisma: 50 };
@@ -256,6 +258,41 @@ export function simulateMatch(
     };
 
     while (!isSetOver(h, a, setNo)) {
+      // ── 플레이어 개입 적용 (MATCH_INTERVENTION_SYSTEM §3) — 비면 완전 무동작(바이트 동일). ──
+      //   주입 지점 = 랠리 루프 최상단, 직전 기록 점수 (setNo,h,a)를 좌표로. 좌표 정확 매칭만 적용.
+      //   AI 자동 교체·타임아웃은 그대로 유지(끄지 않음) — 개입은 순수 가산(forward-only/additive).
+      //   교체는 subIn 그대로 재사용(FIVB 예산·재진입·부상·중복 가드 전부 상속). 타임아웃은 감독 임계 무시 강제 호출.
+      if (opts.interventions?.length) {
+        for (const iv of opts.interventions) {
+          if (iv.at.setNo !== setNo || iv.at.h !== h || iv.at.a !== a) continue;
+          if (iv.kind === 'sub') {
+            const st = teamOf(iv.side);
+            const slot = st.six.findIndex((p) => p.id === iv.outId);
+            if (slot < 0) continue; // 코트에 없음(방어)
+            const inP = (iv.side === 'home' ? homePlayers : awayPlayers).find((p) => p.id === iv.inId);
+            if (!inP) continue;     // 벤치에 없음(방어)
+            subIn(iv.side, slot, inP, 'manual'); // FIVB 가드 전부 상속(no-op 자동 처리)
+          } else {
+            // 타임아웃 — 감독 자동 경로와 별개(임계·streak 무시 강제). 기존 타임아웃 블록의 효과를 그대로 복제.
+            if (timeouts[iv.side] <= 0) continue; // 세트 한도 소진 시 no-op
+            timeouts[iv.side]--;
+            const courtStam = (st: typeof home, m: Map<string, number>): TimeoutCourtStam[] =>
+              [...st.six, ...(st.libero ? [st.libero] : [])].map((p) => ({ id: p.id, stam: m.get(p.id) ?? 1 }));
+            timeoutEvents.push({
+              point: points.length > 0 ? points.length - 1 : 0, setNo, side: iv.side, home: h, away: a, streak,
+              stamHome: courtStam(home, homeStam), stamAway: courtStam(away, awayStam),
+              momHome: home.momentum, momAway: away.momentum,
+            });
+            const pull = (charismaOf(iv.side) / 100) * 0.6;
+            home.momentum += (50 - home.momentum) * pull;
+            away.momentum += (50 - away.momentum) * pull;
+            streak = 0;
+            lastScorer = null;
+            recover('home', homeStam, TIMEOUT_REST);
+            recover('away', awayStam, TIMEOUT_REST);
+          }
+        }
+      }
       // ── 작전 교체 평가 (1.3b) — 결정론(상태 기반, RNG 무관) ──
       // 1) 복원: 슬롯이 더는 조건에 안 맞으면 OUT
       for (const side of ['home', 'away'] as Side[]) {

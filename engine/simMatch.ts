@@ -21,9 +21,21 @@ export interface PointLog {
   touches?: TouchEvent[]; // 이 점의 터치 순서(서브→리시브→세트→공격→디그…) — opts.touches일 때만. 보드 재생용·승패 불변
 }
 
-/** 교체 사유 union(정본) — 작전 3종(pinch/block/def) + rest(피로 교체 1.3e) + injury(경기 내 부상 교체 1.3d).
+/** 교체 사유 union(정본) — 작전 3종(pinch/block/def) + rest(피로 교체 1.3e) + injury(경기 내 부상 교체 1.3d)
+ *  + manual(플레이어 개입 교체, MATCH_INTERVENTION_SYSTEM §3·§4).
  *  match.ts(activeSubs·subIn)·MatchCourt(SUB_KIND_KO)가 이 타입을 공유해 재타이핑 드리프트를 막는다. */
-export type SubKind = 'pinch' | 'block' | 'def' | 'injury' | 'rest';
+export type SubKind = 'pinch' | 'block' | 'def' | 'injury' | 'rest' | 'manual';
+
+/** 플레이어 개입 1건(input, 재관전 재생용) — MATCH_INTERVENTION_SYSTEM §2.1·§3·§4.
+ *  좌표(at)는 "직전 기록 점수"(랠리 루프 최상단에서 매칭). 한 세트 내 (h,a)는 단조증가 격자라 좌표 유일.
+ *  interventions가 비면 엔진은 완전 무동작(바이트 동일) — non-empty일 때만 적용된다. */
+export interface MatchIntervention {
+  at: { setNo: number; h: number; a: number };  // 직전 기록 점수 = 주입 좌표(프리픽스 불변, §3)
+  side: Side;                                     // 내 팀 사이드(home|away)
+  kind: 'sub' | 'timeout';
+  outId?: string;  // kind==='sub': 코트에서 뺄 선수 id
+  inId?: string;   // kind==='sub': 벤치에서 넣을 선수 id
+}
 
 /** 작전 교체 1건 — 보드 연출용 로그(승패 무영향, 순수 가산). 엔진이 st.six 를 실제로 바꾼 순간을 기록. */
 export interface SubEvent {
