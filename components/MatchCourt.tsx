@@ -189,7 +189,18 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   const firstSimRef = useRef(true);
   useEffect(() => {
     if (firstSimRef.current) { firstSimRef.current = false; return; }
-    setIdx(Math.max(0, shownRef.current + 1)); // 마지막 반영 점수 다음 랠리 = 개입 주입 지점
+    const s = shownRef.current;
+    // 개입이 타임아웃이면(§3 #3) 그 좌표(=현재 shown 지점)에 새 타임아웃 이벤트가 생긴다 — 재계산 후 shown+1로
+    // 건너뛰면 그 모달을 못 잡아 화면 변화가 없다. 아직 안 본(ackTO 미포함) 타임아웃이 shown에 있으면 그 지점에
+    // 머물러 모달을 직접 띄운다. 교체·서브 등 타임아웃 아닌 개입은 기존대로 shown+1로 이어재생.
+    if (s >= 0 && !ackTO.current.has(s) && timeoutsAt(sim, s).length > 0) {
+      setIdx(s);
+      setSegIdx(0);
+      setPlaying(false);
+      setTimeoutModal(timeoutsAt(sim, s));
+      return;
+    }
+    setIdx(Math.max(0, s + 1)); // 마지막 반영 점수 다음 랠리 = 개입 주입 지점
     setSegIdx(0);
   }, [sim]);
 

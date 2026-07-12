@@ -94,6 +94,9 @@ function AsianTryoutInner() {
         </Muted>
       </Card>
 
+      {/* 다음 단계 버튼 — FA 화면처럼 상단에(후보 목록이 길어 최하단이면 묻힘, 2026-07-13 테스터) */}
+      <Button label="FA 센터 →" onPress={() => router.push('/fa')} />
+
       {myAsian ? (
         <>
           <Title>기존 구단 보유권, {myAsian.name} ({myAsian.nationality ?? ''} · {myAsian.age}세 · OVR {displayOvr(overallRaw(myAsian))})</Title>
@@ -177,7 +180,6 @@ function AsianTryoutInner() {
         미계약자 중 상위 {tryout.altPoolIds.length}명은 대체 풀로 남아 시즌 중 교체(1회)에 쓸 수 있습니다.
         스카우터 투자(공개도 {(reveal * 100).toFixed(0)}%)가 협상의 보험입니다.
       </Muted>
-      <Button label="FA 센터 →" onPress={() => router.push('/fa')} />
       <BusyOverlay visible={busy.busy} message={busy.message} />
     </Screen>
   );

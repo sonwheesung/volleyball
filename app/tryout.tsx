@@ -101,6 +101,9 @@ function TryoutInner() {
       </Card>
       </SpotlightTarget>
 
+      {/* 다음 단계 버튼 — FA 화면처럼 상단에(후보 목록이 길어 최하단이면 묻힘, 2026-07-13 테스터) */}
+      <Button label="아시아쿼터 트라이아웃 →" onPress={() => router.push('/asian-tryout')} />
+
       {myForeign ? (
         <>
           <Title>재계약 우선권, {myForeign.name} ({myForeign.age}세 · OVR {displayOvr(overallRaw(myForeign))})</Title>
@@ -186,7 +189,6 @@ function TryoutInner() {
         미지명자 중 상위 {tryout.altPoolIds.length}명은 대체 풀로 남아 시즌 중 교체(1회)에 쓸 수 있습니다.
         스카우터 투자(공개도 {(reveal * 100).toFixed(0)}%)가 도박의 보험입니다.
       </Muted>
-      <Button label="아시아쿼터 트라이아웃 →" onPress={() => router.push('/asian-tryout')} />
       <SpotlightOverlay screen="tryout" />
       <BusyOverlay visible={busy.busy} message={busy.message} />
     </Screen>

@@ -267,8 +267,16 @@ export function simulateMatch(
           if (iv.at.setNo !== setNo || iv.at.h !== h || iv.at.a !== a) continue;
           if (iv.kind === 'sub') {
             const st = teamOf(iv.side);
-            const slot = st.six.findIndex((p) => p.id === iv.outId);
-            if (slot < 0) continue; // 코트에 없음(방어)
+            // 서브 교체(pinch)는 뺄 선수를 지정하지 않으면(§4 #4) **현재 서버 슬롯을 자동 타겟** — 사용자는 넣을
+            //   서버만 고른다. 단 서버가 세터('S')면 no-op(5-1 무결성 — AI 핀치도 세터는 안 뺀다).
+            let slot: number;
+            if (iv.subKind === 'pinch' && !iv.outId) {
+              slot = serverIndex(st.rotation);
+              if (st.six[slot].position === 'S') continue; // 세터 서브차례 — 무동작
+            } else {
+              slot = st.six.findIndex((p) => p.id === iv.outId);
+              if (slot < 0) continue; // 코트에 없음(방어)
+            }
             const inP = (iv.side === 'home' ? homePlayers : awayPlayers).find((p) => p.id === iv.inId);
             if (!inP) continue;     // 벤치에 없음(방어)
             // 'pinch'=서브 교체(자동복원 루프가 서브권 잃으면 원선발로 되돌림) / 'manual'=세트 끝까지. FIVB 가드 전부 상속(no-op 자동 처리)

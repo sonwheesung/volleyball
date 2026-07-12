@@ -18,8 +18,9 @@ import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
 import { buildLineup } from '../../engine/lineup';
 import { overallRaw, displayOvr } from '../../engine/overall';
+import { deriveRatings } from '../../engine/ratings';
 import type { MatchIntervention } from '../../engine/simMatch';
-import type { Side } from '../../types';
+import type { Side, Player } from '../../types';
 import { buildPlayoffs, poSeedBase, finalSeedBase } from '../../data/playoffs';
 import { buildPlayoffBox, type PoRound } from '../../data/postseason';
 import { PO_SLOTS, FINAL_SLOTS } from '../../engine/calendar';
@@ -67,8 +68,9 @@ export default function MatchBoard() {
   const [statsOpen, setStatsOpen] = useState(false); // 스코어박스 팝업 — 열리면 경기 일시정지(paused), 닫으면 재개
   // ── 경기 개입(MATCH_INTERVENTION_SYSTEM §3·§4) — 내 팀 경기 opt-in. 열리면 재생 일시정지(paused에 OR). ──
   const [interveneOpen, setInterveneOpen] = useState(false);
-  const [ivStep, setIvStep] = useState<'menu' | 'pickOut' | 'pickIn'>('menu'); // 개입 시트 단계
+  const [ivStep, setIvStep] = useState<'menu' | 'pickOut' | 'pickIn' | 'confirm'>('menu'); // 개입 시트 단계
   const [pendingOut, setPendingOut] = useState<string | null>(null);            // 뺄 선수(교체 out) 선택 보관
+  const [pendingIn, setPendingIn] = useState<string | null>(null);              // 넣을 선수(교체 in) 선택 보관 — 확인 단계용
   const [ivSubKind, setIvSubKind] = useState<'manual' | 'pinch'>('manual');     // 교체 종류: 세트 끝까지 / 서브 교체(서브권 잃으면 자동 복귀)
   const [ivError, setIvError] = useState<string | null>(null);                  // 적용 불가 안내(드라이런 실패)
   const { toasts, push: pushToast } = useToastQueue();                          // 성공 피드백(비모달, 관전형)
@@ -238,6 +240,12 @@ export default function MatchBoard() {
     return mySquad.filter((p) => p.position !== 'L' && !onCourt.has(p.id) && !usedIn.has(p.id) && !injuredIn.has(p.id)
       && (!outPos || p.position === outPos));
   }, [mineSide, mySquad, curSix, data.sim, score.setNo, pendingOut, byIdAll]);
+  // 후보 정렬 — 서브 교체(핀치)는 서브 스탯 내림차순(잘 넣는 선수 먼저, 사용자 요청), 일반 교체는 OVR 내림차순.
+  const sortedBench = useMemo(() =>
+    ivSubKind === 'pinch'
+      ? [...benchCands].sort((a, b) => deriveRatings(b).serve - deriveRatings(a).serve)
+      : [...benchCands].sort((a, b) => overallRaw(b) - overallRaw(a)),
+  [benchCands, ivSubKind]);
   // 현재(다음 랠리) 서브권이 내 팀인가 — 서브 교체(핀치)는 서브권이 있어야 실효(없으면 즉시 자동복원). 랠리포인트제:
   //   직전 점수 득점 팀이 다음 서브. 세트 첫 랠리면 setFirstServers.
   const iAmServing = useMemo(() => {
@@ -258,7 +266,7 @@ export default function MatchBoard() {
   }, [data.sim, score.ptIdx, mineSide]);
 
   const closeIntervene = useCallback(() => {
-    setInterveneOpen(false); setIvStep('menu'); setPendingOut(null); setIvError(null);
+    setInterveneOpen(false); setIvStep('menu'); setPendingOut(null); setPendingIn(null); setIvError(null);
   }, []);
 
   // 확정 = 드라이런 검증(§3) → 적용됐으면 커밋. 재시뮬 프리픽스 불변이라 개입 좌표(현재 점수)의 이벤트만 델타.
@@ -288,14 +296,21 @@ export default function MatchBoard() {
   }, [mineSide, commitIntervention, score, pushToast, closeIntervene]);
 
   const onConfirmSub = useCallback((inId: string) => {
-    if (!mineSide || !pendingOut) return;
-    const ok = commitIntervention({ at: { setNo: score.setNo, h: score.h, a: score.a }, side: mineSide as Side, kind: 'sub', outId: pendingOut, inId, subKind: ivSubKind });
+    if (!mineSide) return;
+    if (ivSubKind !== 'pinch' && !pendingOut) return; // 일반 교체는 뺄 선수 필수(서브 교체는 서버 자동 타겟 §4 #4)
+    const ok = commitIntervention({
+      at: { setNo: score.setNo, h: score.h, a: score.a }, side: mineSide as Side, kind: 'sub',
+      // 서브 교체는 outId 없음 → 엔진이 현재 서버 슬롯을 자동 타겟. 일반 교체만 pendingOut 지정.
+      ...(ivSubKind === 'pinch' ? {} : { outId: pendingOut! }), inId, subKind: ivSubKind,
+    });
     if (ok) {
       pushToast(ivSubKind === 'pinch'
         ? `${byIdAll.get(inId)?.name ?? '선수'} 선수를 서브 교체했어요 (서브권 넘어가면 자동 복귀)`
         : `${byIdAll.get(inId)?.name ?? '선수'} 선수를 투입했어요`);
       closeIntervene();
-    } else setIvError('지금은 교체할 수 없어요. 이번 세트 교체 한도가 찼거나 규칙상 불가한 교체예요.');
+    } else setIvError(ivSubKind === 'pinch'
+      ? '지금은 서브 교체가 어려워요. 서브 차례 선수가 세터이거나 이번 세트 교체 한도가 찼어요.'
+      : '지금은 교체할 수 없어요. 이번 세트 교체 한도가 찼거나 규칙상 불가한 교체예요.');
   }, [mineSide, pendingOut, ivSubKind, commitIntervention, score, byIdAll, pushToast, closeIntervene]);
 
   // 중계 현수막 — 관전 종료 후에만 빌드(스포일러 정책: 결과-결정 사건 누출 0). 샌드박스 제외.
@@ -454,8 +469,10 @@ export default function MatchBoard() {
 
         {ivStep === 'menu' ? (
           <>
-            <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={onTimeout}>
-              <Text style={styles.mPrimaryText}>⏱ 작전 타임아웃</Text>
+            {/* 세 메뉴 카드는 동일 구조(제목+부제)·동일 높이(#1). 타임아웃만 강조색(배경)이 다르다. */}
+            <Pressable style={[styles.ivPickBtn, styles.ivPickBtnPrimary]} onPress={onTimeout}>
+              <Text style={[styles.ivPickBtnTxt, styles.ivPickBtnTxtOn]}>⏱ 작전 타임아웃</Text>
+              <Text style={[styles.ivPickSub, styles.ivPickSubOn]}>기세를 끊고 체력 회복</Text>
             </Pressable>
             <Pressable style={styles.ivPickBtn} onPress={() => { setIvSubKind('manual'); setIvError(null); setIvStep('pickOut'); }}>
               <Text style={styles.ivPickBtnTxt}>🔄 선수 교체</Text>
@@ -465,7 +482,8 @@ export default function MatchBoard() {
               style={[styles.ivPickBtn, !iAmServing && { opacity: 0.45 }]}
               onPress={() => {
                 if (!iAmServing) { setIvError('서브 교체는 우리 팀 서브권일 때 쓸 수 있어요.'); return; }
-                setIvSubKind('pinch'); setIvError(null); setIvStep('pickOut');
+                // 서브 교체는 서버가 자동 대상(§4 #4) → 뺄 선수 고르는 단계(pickOut) 건너뛰고 바로 넣을 서버 선택.
+                setIvSubKind('pinch'); setPendingOut(null); setIvError(null); setIvStep('pickIn');
               }}>
               <Text style={styles.ivPickBtnTxt}>🎯 서브 교체</Text>
               <Text style={styles.ivPickSub}>{iAmServing ? '서브권 넘어가면 자동 복귀' : '지금은 서브권이 없어요'}</Text>
@@ -480,7 +498,7 @@ export default function MatchBoard() {
             <Text style={styles.ivHint}>코트에서 뺄 선수를 선택하세요</Text>
             <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
               {curSix.map((p) => (
-                <IvPlayerRow key={p.id} name={p.name} pos={p.position} ovr={displayOvr(overallRaw(p))} stam={stamMap.get(p.id)}
+                <IvPlayerRow key={p.id} name={p.name} pos={p.position} ovr={displayOvr(overallRaw(p))} stam={stamMap.get(p.id)} stats={subStatChips(p, false)}
                   onPress={() => { setPendingOut(p.id); setIvError(null); setIvStep('pickIn'); }} />
               ))}
             </ScrollView>
@@ -488,26 +506,55 @@ export default function MatchBoard() {
               <Text style={styles.mTextBtnTxt}>뒤로</Text>
             </Pressable>
           </>
-        ) : (
+        ) : ivStep === 'pickIn' ? (
           <>
             <Text style={styles.ivHint}>
-              {byIdAll.get(pendingOut ?? '')?.name ?? '선수'} 대신 넣을 선수를 선택하세요
+              {ivSubKind === 'pinch'
+                ? '서브에 투입할 선수를 선택하세요'
+                : `${byIdAll.get(pendingOut ?? '')?.name ?? '선수'} 대신 넣을 선수를 선택하세요`}
             </Text>
             {benchCands.length === 0 ? (
-              <Text style={styles.ivError}>같은 포지션에 투입할 수 있는 벤치 선수가 없어요.</Text>
+              <Text style={styles.ivError}>
+                {ivSubKind === 'pinch' ? '투입할 수 있는 벤치 선수가 없어요.' : '같은 포지션에 투입할 수 있는 벤치 선수가 없어요.'}
+              </Text>
             ) : (
               <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-                {benchCands.map((p) => (
-                  <IvPlayerRow key={p.id} name={p.name} pos={p.position} ovr={displayOvr(overallRaw(p))} stam={stamMap.get(p.id)}
-                    onPress={() => onConfirmSub(p.id)} />
+                {sortedBench.map((p) => (
+                  <IvPlayerRow key={p.id} name={p.name} pos={p.position} ovr={displayOvr(overallRaw(p))} stam={stamMap.get(p.id)} stats={subStatChips(p, ivSubKind === 'pinch')}
+                    onPress={() => { setPendingIn(p.id); setIvError(null); setIvStep('confirm'); }} />
                 ))}
               </ScrollView>
             )}
             {ivError ? <Text style={styles.ivError}>{ivError}</Text> : null}
-            <Pressable style={styles.mTextBtn} onPress={() => { setIvStep('pickOut'); setIvError(null); }}>
+            <Pressable style={styles.mTextBtn} onPress={() => { setIvStep(ivSubKind === 'pinch' ? 'menu' : 'pickOut'); setIvError(null); }}>
               <Text style={styles.mTextBtnTxt}>뒤로</Text>
             </Pressable>
           </>
+        ) : (
+          // 확인 단계(#2) — 확정을 눌러야 실제 커밋. 서브 교체는 뺄 선수 없이 IN만 표시.
+          (() => {
+            const inP = byIdAll.get(pendingIn ?? '');
+            const inLabel = inP ? `${inP.name}(${inP.position})` : '선수';
+            const outP = pendingOut ? (curSix.find((p) => p.id === pendingOut) ?? byIdAll.get(pendingOut)) : undefined;
+            const outLabel = outP ? `${outP.name}(${outP.position})` : '선수';
+            return (
+              <>
+                <Text style={styles.ivConfirmTitle}>{ivSubKind === 'pinch' ? '서브 교체' : '선수 교체'}</Text>
+                <Text style={styles.ivConfirmBody}>
+                  {ivSubKind === 'pinch'
+                    ? `${inLabel} 투입\n서브권이 넘어가면 자동 복귀합니다.`
+                    : `${outLabel} → ${inLabel}\n교체할까요?`}
+                </Text>
+                {ivError ? <Text style={styles.ivError}>{ivError}</Text> : null}
+                <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={() => { if (pendingIn) onConfirmSub(pendingIn); }}>
+                  <Text style={styles.mPrimaryText}>확정</Text>
+                </Pressable>
+                <Pressable style={styles.mTextBtn} onPress={() => { setIvStep('pickIn'); setIvError(null); }}>
+                  <Text style={styles.mTextBtnTxt}>취소</Text>
+                </Pressable>
+              </>
+            );
+          })()
         )}
       </Popup>
 
@@ -516,8 +563,23 @@ export default function MatchBoard() {
   );
 }
 
-// 개입 시트 선수 행 — 포지션 색 점 + 이름 + OVR + (있으면)체력. 교체 판단 근거.
-function IvPlayerRow({ name, pos, ovr, stam, onPress }: { name: string; pos: string; ovr: number; stam?: number; onPress: () => void }) {
+// 교체 판단용 핵심 스탯 2개 — 서브 교체(핀치)면 서브를 앞세우고, 아니면 포지션 주요 스탯. 판단 근거 노출(사용자 요청).
+function subStatChips(p: Player, pinch: boolean): { label: string; value: number }[] {
+  const r = deriveRatings(p);
+  const n = (v: number) => Math.round(v);
+  const byPos: Record<string, { label: string; value: number }[]> = {
+    S: [{ label: '세팅', value: n(r.set) }, { label: '서브', value: n(r.serve) }],
+    OH: [{ label: '공격', value: n(r.spike) }, { label: '리시브', value: n(r.receive) }],
+    OP: [{ label: '공격', value: n(r.spike) }, { label: '서브', value: n(r.serve) }],
+    MB: [{ label: '블로킹', value: n(r.block) }, { label: '공격', value: n(r.spike) }],
+    L: [{ label: '디그', value: n(r.dig) }, { label: '리시브', value: n(r.receive) }],
+  };
+  if (pinch) return [{ label: '서브', value: n(r.serve) }, ...(byPos[p.position] ?? []).filter((c) => c.label !== '서브').slice(0, 1)];
+  return byPos[p.position] ?? [];
+}
+
+// 개입 시트 선수 행 — 포지션 색 점 + 이름 + 핵심 스탯 + OVR + (있으면)체력. 교체 판단 근거.
+function IvPlayerRow({ name, pos, ovr, stam, stats, onPress }: { name: string; pos: string; ovr: number; stam?: number; stats?: { label: string; value: number }[]; onPress: () => void }) {
   const stamPct = stam != null ? Math.round(stam * 100) : null;
   const stamColor = stamPct == null ? theme.muted : stamPct >= 60 ? '#2BAE66' : stamPct >= 35 ? '#E0922B' : '#E1574C';
   return (
@@ -525,7 +587,14 @@ function IvPlayerRow({ name, pos, ovr, stam, onPress }: { name: string; pos: str
       <View style={[styles.ivPosDot, { backgroundColor: POS_COLOR[pos as keyof typeof POS_COLOR] ?? theme.muted }]}>
         <Text style={styles.ivPosTxt}>{pos}</Text>
       </View>
-      <Text style={styles.ivName} numberOfLines={1}>{name}</Text>
+      <View style={{ flex: 1 }}>
+        <Text style={styles.ivName} numberOfLines={1}>{name}</Text>
+        {stats && stats.length ? (
+          <Text style={styles.ivStatLine} numberOfLines={1}>
+            {stats.map((c) => `${c.label} ${c.value}`).join('  ·  ')}
+          </Text>
+        ) : null}
+      </View>
       {stamPct != null ? <Text style={[styles.ivStam, { color: stamColor }]}>{stamPct}%</Text> : null}
       <Text style={styles.ivOvr}>OVR {ovr}</Text>
     </Pressable>
@@ -569,14 +638,20 @@ const styles = themedStyles(() => StyleSheet.create({
   // 경기 개입 시트
   ivScore: { color: theme.accent, fontSize: 15, fontWeight: '900', textAlign: 'center', marginTop: -4 },
   ivPickBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.cardAlt, borderWidth: 1, borderColor: theme.border },
+  ivPickBtnPrimary: { backgroundColor: theme.accent, borderColor: theme.accent }, // 타임아웃 강조 — 배경만 다르고 높이·패딩·부제구조는 동일(#1)
   ivPickBtnTxt: { color: theme.text, fontSize: 15, fontWeight: '800' },
+  ivPickBtnTxtOn: { color: '#FFFFFF' },
   ivPickSub: { color: theme.muted, fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 3 },
+  ivPickSubOn: { color: 'rgba(255,255,255,0.85)' },
+  ivConfirmTitle: { color: theme.text, fontSize: 16, fontWeight: '900', textAlign: 'center' },
+  ivConfirmBody: { color: theme.muted, fontSize: 14, fontWeight: '700', textAlign: 'center', lineHeight: 21 },
   ivHint: { color: theme.muted, fontSize: 13, fontWeight: '700', textAlign: 'center' },
   ivError: { color: theme.bad, fontSize: 13, fontWeight: '700', textAlign: 'center', lineHeight: 19 },
   ivRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: theme.border },
   ivPosDot: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
   ivPosTxt: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
-  ivName: { color: theme.text, fontSize: 14, fontWeight: '800', flex: 1 },
+  ivName: { color: theme.text, fontSize: 14, fontWeight: '800' },
+  ivStatLine: { color: theme.muted, fontSize: 11, fontWeight: '700', marginTop: 2 },
   ivStam: { fontSize: 13, fontWeight: '800', width: 44, textAlign: 'right' },
   ivOvr: { color: theme.muted, fontSize: 12, fontWeight: '800', width: 58, textAlign: 'right' },
 }));
