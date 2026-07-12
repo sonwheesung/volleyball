@@ -259,6 +259,16 @@ SAVE_VERSION 하드 범프 불요(재생성 가능 — Phase3 정책).
 - 앱(`app/tryout.tsx`·`app/asian-tryout.tsx`·`app/fa.tsx`)은 useMemo를 둘로 쪼갬 — base 메모(안정 deps) + resolve
   메모(base + 토글). 토글은 resolve만 재실행(싼 쪽). `app/draft.tsx`/`draft-live.tsx`는 이미 안정 deps 메모(조정 C) — 무변경.
 
+### 7.6 경기 개입 스냅샷 정책 (계획 2026-07-12, 정본 `docs/MATCH_INTERVENTION_SYSTEM.md` §2)
+아직 **미구현(설계만)**. B안 방향("계산 결과를 세이브에 저장하고 재로드 시 읽기", 2026-06-27)의 자연 연장.
+- **개입 경기 결과 박제**: 구단주가 개입한 내 팀 경기는 **최종 세트스코어 + 박스(BoxSink)를 세이브에 스냅샷**한다.
+  순위(`standings.ts`)·생산(`production.ts`)·시상이 그 스냅샷을 **읽고 재시뮬하지 않는다** → ENGINE_VERSION 재튜닝
+  드리프트 면역("내가 본 결과 ≠ 재시뮬 결과" 방지). production 캐시가 이미 전 리그 박스를 영속하므로 저장 증가 미미.
+- **캐시 무효화 축 등록**: 개입 로그(`interventions`) 변경 시 `setOwnerContext` 동형으로 **`txVersion++` +
+  `recordBump(fixture.dayIndex)`**. 개입은 항상 관전 중(=currentDay) 경기라 minAffectedDay=그 경기일 →
+  **forward-only 접미 bump**로 §7.1 스플라이스 불변식과 정합(과거 소급 없음). 안 하면 캐시 키가 안 변해 순위 스테일.
+- **재관전 재생**: 개입 보드는 개입 로그를 재생(프리픽스 불변, MATCH_INTERVENTION_SYSTEM §3). 결과는 스냅샷이 진실.
+
 ### 7.4 검증
 - `tools/_dv_splice.ts`: ①byte-상등 프로퍼티(≥40 랜덤열, 매 액션 후 splice==force-full deep-equal, 순위+생산)
   ②결정론 ×2 ③타이밍(늦은 시즌 벤치 add에서 splice ms ≤ ~20% full) ④off-by-one minDay 변이 → FAIL(민감도)

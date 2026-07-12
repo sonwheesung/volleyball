@@ -100,6 +100,11 @@
 | `cash` | scalar(number) | 50000 |
 | `lastFinance` | SeasonFinance \| null | null |
 
+> **미구현 — 계획(2026-07-12, 경기 개입)**: 아래 필드는 **아직 구현 안 됨(설계만)**, `docs/MATCH_INTERVENTION_SYSTEM.md` §2 정본.
+> 구현 시 §1의 필드 수는 **신규 추가 예정**(현재 67 → 개입 필드만큼 증가). `benchDirectives`와 동형 패턴이라 §2① 자동 처리(누락=기본값).
+> - `interventions`: `Record<fixtureId, MatchIntervention[]>` — 내 팀 경기 개입 로그(타임아웃·교체 좌표), forward-only, bounded(시즌 ~36경기). 기본 `{}`. 재관전 재생 입력(§3 프리픽스 불변).
+> - 개입 경기 **결과·박스 스냅샷** 필드(최종 세트스코어 + BoxSink) — 순위·생산·시상이 재시뮬 없이 읽는 진실. ENGINE_VERSION 재튜닝 드리프트 면역용. 마이그레이션 대상(모양 변경 시 §3 version+migrate).
+
 ### 외국인·아시아쿼터
 | 필드 | 자료구조 | 기본 |
 |---|---|---|

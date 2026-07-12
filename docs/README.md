@@ -12,6 +12,7 @@
 |---|---|---|
 | [MATCH_SYSTEM](./MATCH_SYSTEM.md) | 경기 시뮬(로테이션·서브타입·랠리·블로킹3축·찬스볼·체력·기세·타임아웃·감독) | `engine/match.ts`·`rally.ts`·`lineup.ts`·`rotation.ts`(풀 랠리 체인 v2) |
 | [BOARD_RULES](./BOARD_RULES.md) | 관전 연출 검증 기준(사용자 주의사항 ↔ 감사 룰 A~P, `/verify-board` 스킬) | `components/courtPath.ts`·`courtDirector.ts`, `tools/auditBoard.ts` |
+| [MATCH_INTERVENTION_SYSTEM](./MATCH_INTERVENTION_SYSTEM.md) | **경기 중 타임아웃·교체 직접 개입 + 선발/벤치 직접 확정**(내 팀 전 경기·opt-in, 기본 자동 관전 보존) — 📋 설계 2026-07-12·구현 진행 중. 스냅샷+개입로그 아키텍처·프리픽스 불변·감독 관계 대가. 신규 가드 `_dv_prefix`·`_dv_intervention_empty`·`_dv_snapshot_board`(등록 예정) | `engine/match.ts`(opts.interventions 예정)·`engine/owner.ts`·`data/matchBox.ts`(예정) |
 | [UI_RULES](./UI_RULES.md) | **UI 상호작용 규칙**(버튼·로딩·비활성·빈상태 — 무거운 작업 로딩+비활성, **UI-30 비차단 하단 토스트**). `verify-board`(UI 검수기)가 대조 | `sim-web/main.ts`(runHeavy)·`components/Screen.tsx`(Loading·`overlay` 슬롯)·`components/Toast.tsx`(토스트 큐) |
 | [EMULATOR_E2E](./EMULATOR_E2E.md) | **에뮬레이터 실기기 테스트 케이스 대본**(C1 온보딩 19스텝~C5 — 화면·확인포인트·탭 좌표/순서). `emulator-test` 스킬이 이 대본대로 see-and-tap | `data/tutorialSteps.ts`(TIPS), `.claude/skills/emulator-test/SKILL.md` |
 | [COURT_POSITIONING](./COURT_POSITIONING.md) | **수비/리시브 포지셔닝 모델**(역할→위치 자동화 SPEC, 세터 후위/전위 × 서브/리시브). 확정 후 구현 | `components/courtLayout.ts`·`courtDirector.ts` |
@@ -100,6 +101,10 @@
 ---
 
 ## 검증 루틴
+
+> **등록 예정(계획 2026-07-12, MATCH_INTERVENTION_SYSTEM)**: 경기 개입 구현 시 신규 가드
+> `_dv_prefix`(개입 P 이전 프리픽스 바이트 불변)·`_dv_intervention_empty`(interventions=[] vs 미지정 바이트 동일)·
+> `_dv_snapshot_board`(개입 경기 스냅샷==보드 재생, 플옵 포함)를 아래 배터리에 추가한다.
 
 ```
 npx tsc --noEmit                          # 앱 타입체크
