@@ -404,16 +404,22 @@ function FACenterInner() {
                   <Ionicons name={openId === p.id ? 'chevron-up-outline' : 'chevron-down-outline'} size={18} color={theme.muted} />
                 ) : null}
               </Pressable>
-              <Button
-                small
-                tone={targeted ? 'bad' : 'accent'}
-                label={targeted ? '제안 취소' : '영입 제안'}
-                onPress={() => {
-                  // '영입 시도' 시 오퍼 만들기 아코디언 자동 펼침(§2.8.8 ① — 국내 FA만, 지명 취소엔 미적용)
-                  if (!targeted && !p.isForeign) setOpenId(p.id);
-                  busy.run('협상 테이블을 차리는 중…', () => (targeted ? unsignFA(p.id) : signFA(p.id)));
-                }}
-              />
+              {/* 방어(UX): 이 인라인 액션 버튼이 disabled가 되는 경우 RN 일부 버전에서 disabled Pressable이
+                  responder를 안 잡아 터치가 부모로 새어나갈 수 있다. 감싸는 View가 onStartShouldSetResponder로
+                  터치를 흡수 — 단, 활성 시엔 자식(Button Pressable)이 버블 단계에서 먼저 responder를 잡으므로
+                  기존 영입/취소 동작은 그대로다(캡처가 아니라 버블이라 자식 우선). 레이아웃 무영향. */}
+              <View onStartShouldSetResponder={() => true}>
+                <Button
+                  small
+                  tone={targeted ? 'bad' : 'accent'}
+                  label={targeted ? '제안 취소' : '영입 제안'}
+                  onPress={() => {
+                    // '영입 시도' 시 오퍼 만들기 아코디언 자동 펼침(§2.8.8 ① — 국내 FA만, 지명 취소엔 미적용)
+                    if (!targeted && !p.isForeign) setOpenId(p.id);
+                    busy.run('협상 테이블을 차리는 중…', () => (targeted ? unsignFA(p.id) : signFA(p.id)));
+                  }}
+                />
+              </View>
               {/* 지명은 시즌 시작 시 확정되는 예약(§2.8.8 ③·§2.8.9 #6) — 취소 시 예산·캡 즉시 반환 안내 */}
               {targeted ? (
                 <Text style={styles.cancelHint}>제안을 취소하면 예산과 샐러리캡이 즉시 반환됩니다. 시즌 시작 전까지 다시 제안할 수 있습니다.</Text>

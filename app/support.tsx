@@ -176,7 +176,7 @@ function Compose({ cat, setCat, content, setContent, onCancel, onDone }: {
         {CATS.map((c) => (
           <Pressable key={c.key} onPress={() => setCat(c.key)} style={[styles.cat, cat === c.key && styles.catOn]}>
             <Ionicons name={c.icon} size={18} color={cat === c.key ? theme.accent : theme.muted} />
-            <Text style={[styles.catTxt, cat === c.key && { color: theme.accent }]}>{c.label}</Text>
+            <Text numberOfLines={1} style={[styles.catTxt, cat === c.key && { color: theme.accent }]}>{c.label}</Text>
           </Pressable>
         ))}
       </View>
@@ -223,9 +223,9 @@ const styles = themedStyles(() => StyleSheet.create({
   refundNote: { backgroundColor: theme.warn + '14', borderWidth: 1, borderColor: theme.warn + '44', borderRadius: 10, padding: 11, marginBottom: 12 },
   refundNoteTxt: { color: theme.muted, fontSize: 12.5, lineHeight: 19 },
   catRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
-  cat: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 5, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 10 },
+  cat: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 4, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 10, paddingVertical: 10, paddingHorizontal: 2 },
   catOn: { backgroundColor: theme.accentGlass, borderColor: theme.accent },
-  catTxt: { color: theme.muted, fontSize: 13, fontWeight: '800' },
+  catTxt: { color: theme.muted, fontSize: 12.5, fontWeight: '800' }, // 5칸(환불 추가)이라 좁은 폰 대비 살짝↓ + numberOfLines=1로 오버플로 방지
   input: { minHeight: 160, backgroundColor: theme.card, borderWidth: 1, borderColor: theme.border, borderRadius: 12, padding: 14, color: theme.text, fontSize: 15, lineHeight: 22 },
   counter: { color: theme.muted, fontSize: 11.5, textAlign: 'right', marginTop: 5 },
   submit: { marginTop: 14, backgroundColor: theme.accent, borderRadius: 14, paddingVertical: 15, alignItems: 'center' },

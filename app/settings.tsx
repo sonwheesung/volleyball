@@ -90,7 +90,7 @@ export default function Settings() {
               style={{ width: '100%', height: 32, marginTop: 4 }}
               minimumValue={0}
               maximumValue={1}
-              value={bgmVolume}
+              value={bgmLive}
               minimumTrackTintColor={theme.accent}
               maximumTrackTintColor={theme.cardAlt}
               thumbTintColor={theme.accent}

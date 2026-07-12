@@ -65,7 +65,7 @@ const styles = themedStyles(() => StyleSheet.create({
   h: { color: theme.muted, fontSize: 12, fontWeight: '700' },
   rank: { width: 24, color: theme.text, fontSize: 14, fontWeight: '700' },
   team: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
-  cell: { width: 40, textAlign: 'center', color: theme.text, fontSize: 14 },
+  cell: { width: 34, textAlign: 'center', color: theme.text, fontSize: 14 }, // 40→34: 좁은 폰에서 팀명 폭 확보(5셀 고정 200→170px). 헤더/값 동일 폭이라 정렬 유지
   pts: { fontWeight: '800', color: theme.text }, // 승점 — 순위 결정 1순위라 강조
   mine: { color: theme.accent, fontWeight: '800' },
 }));
