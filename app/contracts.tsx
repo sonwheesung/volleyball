@@ -4,7 +4,9 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
-import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { Button, Loading, Muted, OvrBadge, PosTag, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { PlayerRow } from '../components/PlayerRow';
+import { SummaryCard } from '../components/SummaryCard';
 import { ActionSheet, Popup } from '../components/Popup';
 import { Stepper } from '../components/Stepper';
 import { getEvolvedTeamPlayers, getPlayer, evolveOnDay, LEAGUE } from '../data/league';
@@ -181,35 +183,34 @@ function ContractsInner() {
 
   return (
     <Screen title="계약 관리">
-      <Card accent={theme.warn} flat>
-        <Row>
-          <IconLabel icon="card-outline" color={theme.warn}>팀 총연봉 / 캡</IconLabel>
-          <Text style={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '800' }}>
-            {formatMoney(total)} / {formatMoney(LEAGUE_CAP)}
-          </Text>
-        </Row>
-        <Muted style={{ fontSize: 12 }}>
-          잔여 {formatMoney(Math.max(0, LEAGUE_CAP - total))} · 선수 {roster.length}명 · 행을 누르면 재계약·방출
-        </Muted>
-      </Card>
+      <SummaryCard
+        icon="card-outline"
+        color={theme.warn}
+        label="팀 총연봉 / 캡"
+        value={`${formatMoney(total)} / ${formatMoney(LEAGUE_CAP)}`}
+        valueStyle={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '800' }}
+        caption={`잔여 ${formatMoney(Math.max(0, LEAGUE_CAP - total))} · 선수 ${roster.length}명 · 행을 누르면 재계약·방출`}
+      />
 
       <Title>선수 계약</Title>
       {roster.map((p) => {
         const market = marketVal(p, getPlayerProduction(p.id, displayDay));
         const status = contractStatus(p.contract.salary, market);
         return (
-          <Pressable key={p.id} onPress={() => setManage(p)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
-            <PosTag pos={p.position} />
-            <View style={{ flex: 1 }}>
-              <Text style={styles.name}>{p.name}</Text>
-              <Text style={styles.sub}>
+          <PlayerRow
+            key={p.id}
+            onPress={() => setManage(p)}
+            leading={<PosTag pos={p.position} />}
+            title={p.name}
+            sub={
+              <>
                 {p.age}세 · {formatMoney(p.contract.salary)} · 잔여 {p.contract.remaining}년 ·{' '}
                 <Text style={{ color: STATUS_COLOR[status] }}>{status}</Text>
                 {isFranchise(p) ? <Text style={{ color: theme.warn }}> · 프랜차이즈</Text> : null}
-              </Text>
-            </View>
-            <OvrBadge value={overallRaw(p)} />
-          </Pressable>
+              </>
+            }
+            trailing={<OvrBadge value={overallRaw(p)} />}
+          />
         );
       })}
 
@@ -220,16 +221,14 @@ function ContractsInner() {
             외인·아시아쿼터는 1년 계약이라 방출·재계약 대상이 아닙니다. 재지명·교체는 외인 트라이아웃·시즌 중 교체에서 합니다.
           </Muted>
           {foreigners.map((p) => (
-            <Pressable key={p.id} onPress={() => router.push(`/player/${p.id}`)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.7 }]}>
-              <PosTag pos={p.position} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>
-                  {p.name} <Text style={{ color: theme.accent }}>{p.isAsianQuota ? '아시아쿼터' : '외국인'}</Text>
-                </Text>
-                <Text style={styles.sub}>{p.age}세 · {formatMoney(p.contract.salary)} · 잔여 {p.contract.remaining}년</Text>
-              </View>
-              <OvrBadge value={overallRaw(p)} />
-            </Pressable>
+            <PlayerRow
+              key={p.id}
+              onPress={() => router.push(`/player/${p.id}`)}
+              leading={<PosTag pos={p.position} />}
+              title={<>{p.name} <Text style={{ color: theme.accent }}>{p.isAsianQuota ? '아시아쿼터' : '외국인'}</Text></>}
+              sub={`${p.age}세 · ${formatMoney(p.contract.salary)} · 잔여 ${p.contract.remaining}년`}
+              trailing={<OvrBadge value={overallRaw(p)} />}
+            />
           ))}
         </>
       ) : null}
@@ -249,16 +248,13 @@ function ContractsInner() {
             const keep = resignDecisions[p.id] !== false;
             return (
               <View key={p.id} style={styles.rowCol}>
-                <View style={styles.info}>
-                  <PosTag pos={p.position} />
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.name}>
-                      {p.name} <Text style={{ color: theme.accent }}>{grade}등급</Text>
-                    </Text>
-                    <Text style={styles.sub}>{p.age}세 · 잔류 연봉 {formatMoney(reSalary)} (시장가)</Text>
-                  </View>
-                  <OvrBadge value={overallRaw(p)} />
-                </View>
+                <PlayerRow
+                  bare
+                  leading={<PosTag pos={p.position} />}
+                  title={<>{p.name} <Text style={{ color: theme.accent }}>{grade}등급</Text></>}
+                  sub={`${p.age}세 · 잔류 연봉 ${formatMoney(reSalary)} (시장가)`}
+                  trailing={<OvrBadge value={overallRaw(p)} />}
+                />
                 {/* 잔류 전망 밴드 + 사유 칩 — resignOutlookNow(엔진 위임). "시즌 종료 시 확정" 캡션은 상단 안내에. */}
                 <View style={styles.outlookRow}>
                   <View style={[styles.bandTag, { borderColor: bm.color, backgroundColor: bm.color + '22' }]}>
@@ -283,21 +279,23 @@ function ContractsInner() {
           <Title>방출 선수</Title>
           {releasedPlayers.map((p) => (
             <View key={p.id} style={styles.rowCol}>
-              <View style={styles.info}>
-                <PosTag pos={p.position} />
-                <View style={{ flex: 1 }}>
-                  <Text style={[styles.name, { color: theme.muted }]}>{p.name}</Text>
-                  <Text style={styles.sub}>{p.age}세 · {formatMoney(p.contract.salary)}</Text>
-                </View>
-                <Button
-                  small
-                  fill
-                  outline
-                  tone="good"
-                  label="복귀"
-                  onPress={() => { if (!unrelease(p.id)) showAlert('복귀 불가', '방출 철회는 방출 당일에만 가능합니다(이후엔 FA 시장에서 재영입).'); }}
-                />
-              </View>
+              <PlayerRow
+                bare
+                leading={<PosTag pos={p.position} />}
+                title={p.name}
+                titleStyle={{ color: theme.muted }}
+                sub={`${p.age}세 · ${formatMoney(p.contract.salary)}`}
+                trailing={
+                  <Button
+                    small
+                    fill
+                    outline
+                    tone="good"
+                    label="복귀"
+                    onPress={() => { if (!unrelease(p.id)) showAlert('복귀 불가', '방출 철회는 방출 당일에만 가능합니다(이후엔 FA 시장에서 재영입).'); }}
+                  />
+                }
+              />
             </View>
           ))}
         </>
@@ -436,15 +434,7 @@ function ContractsInner() {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
-  row: {
-    flexDirection: 'row', alignItems: 'center', gap: 10,
-    backgroundColor: theme.card, borderRadius: 12, padding: 12,
-    borderWidth: 1, borderColor: theme.border,
-  },
   rowCol: { backgroundColor: theme.card, borderRadius: 12, padding: 12, gap: 10, borderWidth: 1, borderColor: theme.border },
-  info: { flexDirection: 'row', alignItems: 'center', gap: 10 },
-  name: { color: theme.text, fontSize: 16, fontWeight: '700' },
-  sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   actions: { flexDirection: 'row', gap: 8 },
   outlookRow: { flexDirection: 'row', flexWrap: 'wrap', alignItems: 'center', gap: 6 },
   bandTag: { borderWidth: 1, borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },

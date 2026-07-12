@@ -6,6 +6,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
+import { ExpandableRow } from '../components/ExpandableRow';
 import { StatTriad } from '../components/StatTriad';
 import { SpotlightOverlay, SpotlightTarget } from '../components/Spotlight';
 import { buildDraftContextFrom, buildOffseasonBase } from '../data/draftSetup';
@@ -144,39 +145,40 @@ function TryoutInner() {
           const returning = !p.id.startsWith('fgn-s');
           const open = openId === p.id;
           return (
-            <View key={p.id} style={[styles.rowWrap, wishIdx >= 0 && { borderColor: theme.warn, borderWidth: 1 }]}>
-              <View style={styles.rowInner}>
-                <Pressable onPress={() => setOpenId(open ? null : p.id)} style={styles.rowTap}>
-                  <View style={styles.avatarWrap}>
-                    <PlayerAvatar id={p.id} size={60} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    {/* 이름 + 포지션 + 지명 팀(포지션 오른쪽, 2026-07-12 테스터) */}
-                    <View style={styles.nameRow}>
-                      <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
-                      <PosTag pos={p.position} />
-                      <Text style={[styles.taker, taker ? { color: theme.accent } : null]} numberOfLines={1}>
-                        {taker ? `→ ${taker}` : '미지명'}
-                      </Text>
-                      {returning ? <Text style={styles.tagReturn}>재참가</Text> : null}
-                    </View>
-                    <Text style={styles.sub} numberOfLines={1}>
-                      {p.age}세 · {p.height}cm · OVR {fogOvr(p)}
-                    </Text>
-                    {/* 이력 토글 — 메타 텍스트에 파묻히지 않게 별도 칩(2026-07-11 테스터: UI 그룹화) */}
-                    <View style={[styles.resumeChip, open && styles.resumeChipOn]}>
-                      <Text style={styles.resumeChipTxt}>{open ? '이력 접기 ▲' : '이력 보기 ▼'}</Text>
-                    </View>
-                  </View>
-                </Pressable>
-                <Pressable onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => toggleTryoutWish(p.id))} hitSlop={8} style={styles.wishBtn}>
-                  <Text style={{ color: wishIdx >= 0 ? theme.warn : theme.muted, fontWeight: '900', fontSize: 13 }}>
-                    {wishIdx >= 0 ? `★${wishIdx + 1}` : '위시'}
-                  </Text>
-                </Pressable>
+            <ExpandableRow
+              key={p.id}
+              selected={wishIdx >= 0}
+              onToggle={() => setOpenId(open ? null : p.id)}
+              onAction={() => busy.run('스카우트 리포트를 정리하는 중…', () => toggleTryoutWish(p.id))}
+              action={
+                <Text style={{ color: wishIdx >= 0 ? theme.warn : theme.muted, fontWeight: '900', fontSize: 13 }}>
+                  {wishIdx >= 0 ? `★${wishIdx + 1}` : '위시'}
+                </Text>
+              }
+              detail={open ? <ForeignResumeDetail p={p} reveal={reveal} /> : null}
+            >
+              <View style={styles.avatarWrap}>
+                <PlayerAvatar id={p.id} size={60} />
               </View>
-              {open ? <ForeignResumeDetail p={p} reveal={reveal} /> : null}
-            </View>
+              <View style={{ flex: 1 }}>
+                {/* 이름 + 포지션 + 지명 팀(포지션 오른쪽, 2026-07-12 테스터) */}
+                <View style={styles.nameRow}>
+                  <Text style={styles.name} numberOfLines={1}>{p.name}</Text>
+                  <PosTag pos={p.position} />
+                  <Text style={[styles.taker, taker ? { color: theme.accent } : null]} numberOfLines={1}>
+                    {taker ? `→ ${taker}` : '미지명'}
+                  </Text>
+                  {returning ? <Text style={styles.tagReturn}>재참가</Text> : null}
+                </View>
+                <Text style={styles.sub} numberOfLines={1}>
+                  {p.age}세 · {p.height}cm · OVR {fogOvr(p)}
+                </Text>
+                {/* 이력 토글 — 메타 텍스트에 파묻히지 않게 별도 칩(2026-07-11 테스터: UI 그룹화) */}
+                <View style={[styles.resumeChip, open && styles.resumeChipOn]}>
+                  <Text style={styles.resumeChipTxt}>{open ? '이력 접기 ▲' : '이력 보기 ▼'}</Text>
+                </View>
+              </View>
+            </ExpandableRow>
           );
         })}
 
@@ -193,10 +195,6 @@ function TryoutInner() {
 
 const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border },
-  rowWrap: { backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, overflow: 'hidden' },
-  rowInner: { flexDirection: 'row', alignItems: 'center' },
-  rowTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  wishBtn: { paddingHorizontal: 14, paddingVertical: 14, borderLeftWidth: 1, borderLeftColor: theme.border, minWidth: 60, alignItems: 'center' },
   // 아바타(60) + 하단 OVR 범위 오버레이 배지(반투명 검정 바 위 흰 글씨)
   avatarWrap: { width: 60, height: 60, borderRadius: 10, overflow: 'hidden', backgroundColor: theme.cardAlt },
   ovrOverlay: { position: 'absolute', bottom: 0, left: 0, right: 0, backgroundColor: 'rgba(0,0,0,0.62)', paddingVertical: 1.5, alignItems: 'center' },

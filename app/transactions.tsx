@@ -1,7 +1,9 @@
 import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
-import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { PlayerRow } from '../components/PlayerRow';
+import { SummaryCard } from '../components/SummaryCard';
 import { evolveOnDay } from '../data/league';
 import { availableFAsOnDay, rosterIdsOnDay } from '../data/dynamics';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
@@ -84,17 +86,14 @@ function TransactionsInner() {
 
   return (
     <Screen title="시즌 중 FA 영입">
-      <Card accent={theme.warn} flat>
-        <Row>
-          <IconLabel icon="wallet-outline" color={theme.warn}>캡 잔여 · 운영 자금 · 정원</IconLabel>
-          <Text style={{ color: theme.text, fontWeight: '800' }}>
-            {formatMoney(capLeft)} · {formatMoney(cash)} · {myIds.length}/{ROSTER_MAX}명
-          </Text>
-        </Row>
-        <Muted style={{ fontSize: 12, marginTop: 2 }}>
-          포지션 구멍을 즉시 메웁니다. 방출은 단장 업무(계약 관리)에서. 미영입 방출자는 시즌말 정리됩니다.
-        </Muted>
-      </Card>
+      <SummaryCard
+        icon="wallet-outline"
+        color={theme.warn}
+        label="캡 잔여 · 운영 자금 · 정원"
+        value={`${formatMoney(capLeft)} · ${formatMoney(cash)} · ${myIds.length}/${ROSTER_MAX}명`}
+        caption="포지션 구멍을 즉시 메웁니다. 방출은 단장 업무(계약 관리)에서. 미영입 방출자는 시즌말 정리됩니다."
+        captionStyle={{ marginTop: 2 }}
+      />
 
       {postseason ? (
         <Card accent={theme.muted} flat>
@@ -134,32 +133,33 @@ function TransactionsInner() {
             const can = !postseason && !foreignSubUsed && FOREIGN_SALARY <= cash;
             const reason = !can && !postseason && !foreignSubUsed ? '자금 부족' : null; // 남은 실패 사유는 자금뿐(포스트시즌·사용함은 별도 표시)
             return (
-              <View key={id} style={styles.row}>
-                <PosTag pos={p.position} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{p.name}</Text>
-                  <Text style={styles.sub}>{p.age}세 · OVR {displayOvr(overallRaw(p))}</Text>
-                </View>
-                <Button
-                  small
-                  outline
-                  tone="warn"
-                  disabled={!can}
-                  label={reason ?? '교체'}
-                  onPress={() => {
-                    showAlert('외인 교체', `${p.name}을(를) 영입하고 현 외국인 선수를 퇴출합니다.\n추가 부담 ${formatMoney(FOREIGN_SALARY)} · 시즌 1회`, [
-                      { text: '취소', style: 'cancel' },
-                      {
-                        text: '교체', style: 'destructive',
-                        onPress: () => {
-                          if (!replaceForeign(p.id)) showAlert('교체 불가', foreignSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : FOREIGN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 외국인 선수가 없습니다.');
-                          else showAlert('교체 완료', `${p.name} 선수가 합류했습니다. 운영 자금에서 ${formatMoney(FOREIGN_SALARY)}이 추가로 빠집니다.`);
+              <PlayerRow
+                key={id}
+                leading={<PosTag pos={p.position} />}
+                title={p.name}
+                sub={`${p.age}세 · OVR ${displayOvr(overallRaw(p))}`}
+                trailing={
+                  <Button
+                    small
+                    outline
+                    tone="warn"
+                    disabled={!can}
+                    label={reason ?? '교체'}
+                    onPress={() => {
+                      showAlert('외인 교체', `${p.name}을(를) 영입하고 현 외국인 선수를 퇴출합니다.\n추가 부담 ${formatMoney(FOREIGN_SALARY)} · 시즌 1회`, [
+                        { text: '취소', style: 'cancel' },
+                        {
+                          text: '교체', style: 'destructive',
+                          onPress: () => {
+                            if (!replaceForeign(p.id)) showAlert('교체 불가', foreignSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : FOREIGN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 외국인 선수가 없습니다.');
+                            else showAlert('교체 완료', `${p.name} 선수가 합류했습니다. 운영 자금에서 ${formatMoney(FOREIGN_SALARY)}이 추가로 빠집니다.`);
+                          },
                         },
-                      },
-                    ]);
-                  }}
-                />
-              </View>
+                      ]);
+                    }}
+                  />
+                }
+              />
             );
           })}
         </>
@@ -178,32 +178,33 @@ function TransactionsInner() {
             const can = !postseason && !asianSubUsed && ASIAN_SALARY <= cash;
             const reason = !can && !postseason && !asianSubUsed ? '자금 부족' : null; // 남은 실패 사유는 자금뿐(포스트시즌·사용함은 별도 표시)
             return (
-              <View key={id} style={styles.row}>
-                <PosTag pos={p.position} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{p.name}{p.nationality ? ` · ${p.nationality}` : ''}</Text>
-                  <Text style={styles.sub}>{p.age}세 · OVR {displayOvr(overallRaw(p))}</Text>
-                </View>
-                <Button
-                  small
-                  outline
-                  tone="warn"
-                  disabled={!can}
-                  label={reason ?? '교체'}
-                  onPress={() => {
-                    showAlert('아시아쿼터 교체', `${p.name}을(를) 영입하고 현 아시아쿼터 선수를 퇴출합니다.\n추가 부담 ${formatMoney(ASIAN_SALARY)} · 시즌 1회`, [
-                      { text: '취소', style: 'cancel' },
-                      {
-                        text: '교체', style: 'destructive',
-                        onPress: () => {
-                          if (!replaceAsian(p.id)) showAlert('교체 불가', asianSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : ASIAN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 아시아쿼터 선수가 없습니다.');
-                          else showAlert('교체 완료', `${p.name} 아시아쿼터 선수가 합류했습니다. 운영 자금에서 ${formatMoney(ASIAN_SALARY)}이 추가로 빠집니다.`);
+              <PlayerRow
+                key={id}
+                leading={<PosTag pos={p.position} />}
+                title={`${p.name}${p.nationality ? ` · ${p.nationality}` : ''}`}
+                sub={`${p.age}세 · OVR ${displayOvr(overallRaw(p))}`}
+                trailing={
+                  <Button
+                    small
+                    outline
+                    tone="warn"
+                    disabled={!can}
+                    label={reason ?? '교체'}
+                    onPress={() => {
+                      showAlert('아시아쿼터 교체', `${p.name}을(를) 영입하고 현 아시아쿼터 선수를 퇴출합니다.\n추가 부담 ${formatMoney(ASIAN_SALARY)} · 시즌 1회`, [
+                        { text: '취소', style: 'cancel' },
+                        {
+                          text: '교체', style: 'destructive',
+                          onPress: () => {
+                            if (!replaceAsian(p.id)) showAlert('교체 불가', asianSubUsed ? '이번 시즌 교체를 이미 사용했습니다.' : ASIAN_SALARY > cash ? '운영 자금이 부족합니다.' : '현재 아시아쿼터 선수가 없습니다.');
+                            else showAlert('교체 완료', `${p.name} 아시아쿼터 선수가 합류했습니다. 운영 자금에서 ${formatMoney(ASIAN_SALARY)}이 추가로 빠집니다.`);
+                          },
                         },
-                      },
-                    ]);
-                  }}
-                />
-              </View>
+                      ]);
+                    }}
+                  />
+                }
+              />
             );
           })}
         </>
@@ -218,28 +219,27 @@ function TransactionsInner() {
           const cost = inSeasonCost(marketVal(p), betrayed);
           const afford = !postseason && payroll + cost <= LEAGUE_CAP && !full && cost <= cash;
           return (
-            <Pressable
+            <PlayerRow
               key={p.id}
-              style={styles.row}
+              noDim
               onPress={() => router.push(`/player/${p.id}`)}
-            >
-              <PosTag pos={p.position} />
-              <View style={{ flex: 1 }}>
-                <Text style={styles.name}>{p.name}</Text>
-                <Text style={styles.sub}>
-                  {p.age}세 · {formatMoney(cost)}{betrayed ? ' · 웃돈 ×1.5 (우리가 방출)' : ''}
-                </Text>
-              </View>
-              <OvrBadge value={overallRaw(p)} />
-              <Button
-                small
-                outline
-                tone="accent"
-                disabled={!afford}
-                label={afford ? '영입' : full ? '정원 초과' : cost > cash ? '자금 부족' : payroll + cost > LEAGUE_CAP ? '캡 초과' : '영입'}
-                onPress={() => onSign(p)}
-              />
-            </Pressable>
+              leading={<PosTag pos={p.position} />}
+              title={p.name}
+              sub={`${p.age}세 · ${formatMoney(cost)}${betrayed ? ' · 웃돈 ×1.5 (우리가 방출)' : ''}`}
+              trailing={
+                <>
+                  <OvrBadge value={overallRaw(p)} />
+                  <Button
+                    small
+                    outline
+                    tone="accent"
+                    disabled={!afford}
+                    label={afford ? '영입' : full ? '정원 초과' : cost > cash ? '자금 부족' : payroll + cost > LEAGUE_CAP ? '캡 초과' : '영입'}
+                    onPress={() => onSign(p)}
+                  />
+                </>
+              }
+            />
           );
         })
       )}
@@ -250,5 +250,4 @@ function TransactionsInner() {
 const styles = themedStyles(() => StyleSheet.create({
   row: { backgroundColor: theme.card, borderRadius: 12, padding: 12, flexDirection: 'row', alignItems: 'center', gap: 10, borderWidth: 1, borderColor: theme.border },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
-  sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
 }));

@@ -2,7 +2,8 @@
 import { useRouter } from 'expo-router';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Text, View } from 'react-native';
-import { Card, IconLabel, Muted, Row, Screen, Title, theme } from '../../components/Screen';
+import { Card, Muted, Row, Screen, Title, theme } from '../../components/Screen';
+import { SummaryCard } from '../../components/SummaryCard';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { getEvolvedTeamPlayers } from '../../data/league';
 import { activeRoster, payroll } from '../../data/roster';
@@ -24,17 +25,14 @@ export default function Office() {
 
   return (
     <Screen scroll={false}>
-      <Card accent={theme.warn} flat>
-        <Row>
-          <IconLabel icon="wallet-outline" color={theme.warn}>팀 총연봉 / 예산</IconLabel>
-          <Text style={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '700' }}>
-            {formatMoney(total)} / {formatMoney(LEAGUE_CAP)}
-          </Text>
-        </Row>
-        <Muted style={{ fontSize: 12 }}>
-          잔여 {formatMoney(Math.max(0, LEAGUE_CAP - total))} · 선수 {roster.length}명
-        </Muted>
-      </Card>
+      <SummaryCard
+        icon="wallet-outline"
+        color={theme.warn}
+        label="팀 총연봉 / 예산"
+        value={`${formatMoney(total)} / ${formatMoney(LEAGUE_CAP)}`}
+        valueStyle={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '700' }}
+        caption={`잔여 ${formatMoney(Math.max(0, LEAGUE_CAP - total))} · 선수 ${roster.length}명`}
+      />
 
       <SpotlightTarget id="office-top">
         <Card accent={theme.accent} onPress={() => router.push('/contracts')}>

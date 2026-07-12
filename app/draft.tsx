@@ -2,6 +2,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { ExpandableRow } from '../components/ExpandableRow';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { buildOffseasonBase } from '../data/draftSetup';
 import { resolveDraftContextFor } from '../data/offseasonArgs';
@@ -200,30 +201,33 @@ function DraftCenterInner() {
         const picked = wi >= 0;
         const open = openId === p.id;
         return (
-          <View key={p.id} style={[styles.rowWrap, picked && { borderColor: theme.accent, borderWidth: 1, backgroundColor: theme.accent + '12' }]}>
-            <View style={styles.rowInner}>
-              <Pressable onPress={() => setOpenId(open ? null : p.id)} style={styles.rowTap}>
-                <PosTag pos={p.position} />
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.name}>{p.name}</Text>
-                  <Text style={styles.sub}>{p.age}세 · {p.height}cm · {open ? '접기 ▲' : '자세히 ▼'}</Text>
-                  <Text style={styles.gradeLine}>
-                    <Text style={{ color: theme.sky, fontWeight: '800' }}>{prospectGradeLabel(p, reveal)}</Text>
-                    <Text style={{ color: theme.muted }}>  ·  {projectionBand(rankMap.get(p.id) ?? 0, ctx.cls.length, reveal).text}</Text>
-                  </Text>
-                </View>
-                {reveal >= REVEAL_PRECISE
-                  ? <OvrBadge value={overallRaw(p)} />
-                  : <Text style={styles.fogOvr}>{fogOvr(p, reveal)}</Text>}
-              </Pressable>
-              <Pressable onPress={() => busy.run('지명 결과를 정리하는 중…', () => toggleDraftPick(p.id))} hitSlop={8} style={styles.pickBtn}>
-                <Text style={{ color: picked ? theme.accent : theme.muted, fontWeight: '800', fontSize: 13 }}>
-                  {picked ? `담음${wi + 1}` : '담기'}
-                </Text>
-              </Pressable>
+          <ExpandableRow
+            key={p.id}
+            selected={picked}
+            selectedStyle={{ borderColor: theme.accent, borderWidth: 1, backgroundColor: theme.accent + '12' }}
+            actionMinWidth={64}
+            onToggle={() => setOpenId(open ? null : p.id)}
+            onAction={() => busy.run('지명 결과를 정리하는 중…', () => toggleDraftPick(p.id))}
+            action={
+              <Text style={{ color: picked ? theme.accent : theme.muted, fontWeight: '800', fontSize: 13 }}>
+                {picked ? `담음${wi + 1}` : '담기'}
+              </Text>
+            }
+            detail={open ? <ProspectDetail p={p} reveal={reveal} /> : null}
+          >
+            <PosTag pos={p.position} />
+            <View style={{ flex: 1 }}>
+              <Text style={styles.name}>{p.name}</Text>
+              <Text style={styles.sub}>{p.age}세 · {p.height}cm · {open ? '접기 ▲' : '자세히 ▼'}</Text>
+              <Text style={styles.gradeLine}>
+                <Text style={{ color: theme.sky, fontWeight: '800' }}>{prospectGradeLabel(p, reveal)}</Text>
+                <Text style={{ color: theme.muted }}>  ·  {projectionBand(rankMap.get(p.id) ?? 0, ctx.cls.length, reveal).text}</Text>
+              </Text>
             </View>
-            {open ? <ProspectDetail p={p} reveal={reveal} /> : null}
-          </View>
+            {reveal >= REVEAL_PRECISE
+              ? <OvrBadge value={overallRaw(p)} />
+              : <Text style={styles.fogOvr}>{fogOvr(p, reveal)}</Text>}
+          </ExpandableRow>
         );
       })}
       <BusyOverlay visible={busy.busy} message={busy.message} />
@@ -237,12 +241,6 @@ const styles = themedStyles(() => StyleSheet.create({
     backgroundColor: theme.card, borderRadius: 12, paddingHorizontal: 12, paddingVertical: 10,
     borderWidth: 1, borderColor: theme.border,
   },
-  rowWrap: {
-    backgroundColor: theme.card, borderRadius: 12, borderWidth: 1, borderColor: theme.border, overflow: 'hidden',
-  },
-  rowInner: { flexDirection: 'row', alignItems: 'center' },
-  rowTap: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingHorizontal: 12, paddingVertical: 10 },
-  pickBtn: { paddingHorizontal: 14, paddingVertical: 14, borderLeftWidth: 1, borderLeftColor: theme.border, minWidth: 64, alignItems: 'center' },
   name: { color: theme.text, fontSize: 16, fontWeight: '700' },
   sub: { color: theme.muted, fontSize: 13, marginTop: 1 },
   gradeLine: { fontSize: 12, marginTop: 2 },
