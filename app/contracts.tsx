@@ -236,11 +236,22 @@ function ContractsInner() {
       {faList.length > 0 ? (
         <>
           <Title>FA 예정 (시즌 종료 시)</Title>
-          <Muted style={{ fontSize: 12 }}>
-            잔류는 "보낼지 말지"의 결정입니다. 시즌 종료 시 시장가로 재계약합니다(등급 프리미엄은 타 구단 영입가). 포기하면 떠납니다.
-            {'\n'}단, 이번 시즌 저평가로 불만이 쌓인 선수는 시장가 재계약이어도 FA를 시험할 수 있습니다. 마음을 확실히 잡으려면 행을 눌러 '재계약'으로 후하게 미리 제안하세요.
-            {'\n'}선수의 마음은 시즌 종료 시 확정됩니다. 불만이 크면 잡아도 뿌리칠 수 있습니다.
-          </Muted>
+          <Pressable
+            onPress={() => showAlert(
+              'FA 예정 — 잔류 · 재계약',
+              '잔류\n시즌 종료 시 그 선수를 시장가로 재계약하는 예약입니다. 등급 프리미엄(타 구단 영입가)은 잔류 연봉에 붙지 않습니다.'
+              + '\n\n포기\n시즌 종료 시 팀에서 내보냅니다.'
+              + '\n\n잔류해도 떠날 수 있어요\n이번 시즌 저평가로 불만이 쌓인 선수는 시장가 재계약을 뿌리치고 FA를 시험할 수 있습니다.'
+              + "\n\n확실히 잡으려면 — 재계약\n카드의 '재계약으로 미리 잡기'(또는 위 '선수 계약'에서 그 선수)를 눌러 시장가보다 후하게 미리 제안하세요."
+              + '\n\n잔류 전망(안정 · 유동 · 위험)\n시즌 종료 시 시장가 재계약을 거절할 확률입니다. 선수의 마음은 시즌 종료 시 확정됩니다.',
+            )}
+          >
+            <Muted style={{ fontSize: 12, lineHeight: 17 }}>
+              <Text style={{ color: theme.good, fontWeight: '800' }}>잔류</Text> = 시즌 종료 시 시장가로 재계약 예약 · <Text style={{ color: theme.bad, fontWeight: '800' }}>포기</Text> = 내보냄.
+              {'\n'}불만 큰 선수는 잔류해도 떠날 수 있어요 → <Text style={{ color: theme.accent, fontWeight: '800' }}>재계약</Text>으로 미리 후하게 잡기.
+              {' '}<Text style={{ color: theme.sky, fontWeight: '800' }}>자세히 ›</Text>
+            </Muted>
+          </Pressable>
           {faSorted.map(({ p, outlook }) => {
             const grade = faGrades.get(p.id)!;
             const reSalary = marketVal(p, getPlayerProduction(p.id, displayDay)); // 잔류 연봉 = 시장가(renewedContract, rollover.ts:49). ask(×프리미엄)는 타팀 영입가
@@ -264,6 +275,14 @@ function ContractsInner() {
                     <View key={c} style={styles.chip}><Text style={styles.chipText}>{c}</Text></View>
                   ))}
                 </View>
+                {/* 잔류 위험 = 시장가 재계약 거부 확률 높음. 잔류(예약)와 재계약(선제 후한 제안)의 차이를 카드에서 바로
+                    이해시키는 유도 — 탭하면 기존 재계약 오퍼 빌더(doResign)로 바로. 표시/진입점 연결일 뿐 엔진 불변. */}
+                {outlook.band === 'risk' ? (
+                  <Pressable onPress={() => doResign(p)} style={styles.resignNudge}>
+                    <Text style={styles.resignNudgeWarn}>이대로면 시즌 종료 시 떠날 수 있어요.</Text>
+                    <Text style={styles.resignNudgeCta}>재계약으로 미리 잡기 →</Text>
+                  </Pressable>
+                ) : null}
                 <View style={styles.actions}>
                   <Button small fill tone="good" off={!keep} label="잔류" onPress={() => setResign(p.id, true)} />
                   <Button small fill tone="bad" off={keep} label="포기" onPress={() => setResign(p.id, false)} />
@@ -441,6 +460,10 @@ const styles = themedStyles(() => StyleSheet.create({
   bandText: { fontSize: 12, fontWeight: '800' },
   chip: { backgroundColor: theme.border + '55', borderRadius: 8, paddingHorizontal: 7, paddingVertical: 3 },
   chipText: { color: theme.muted, fontSize: 11, fontWeight: '700' },
+  // 잔류 위험 유도 카드(경고 + 재계약 진입) — 표시 전용, doResign(기존 오퍼 빌더)로 연결.
+  resignNudge: { borderWidth: 1, borderColor: theme.bad + '55', backgroundColor: theme.bad + '14', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, gap: 2 },
+  resignNudgeWarn: { color: theme.bad, fontSize: 12, fontWeight: '700' },
+  resignNudgeCta: { color: theme.accent, fontSize: 13, fontWeight: '800' },
   // ── 재계약 오퍼 빌더(FA §2.5c-격상) ──
   builderTitle: { color: theme.text, fontSize: 19, fontWeight: '900' },
   builderSub: { color: theme.muted, fontSize: 13, lineHeight: 19, marginTop: -4 },
