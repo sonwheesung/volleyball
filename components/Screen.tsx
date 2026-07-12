@@ -1,9 +1,10 @@
 import type { ComponentProps, ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useContext, useEffect, useRef, useState } from 'react';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { ActivityIndicator, Animated, Easing, ImageBackground, InteractionManager, KeyboardAvoidingView, Platform, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import Svg, { Circle } from 'react-native-svg';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { SafeAreaView, type Edge } from 'react-native-safe-area-context';
+import { HeaderShownContext } from '@react-navigation/elements';
 import { displayOvr, fogStat } from '../engine/overall';
 import { POS_COLOR, POS_LABEL } from './posTokens';
 import { ScrollCtrlCtx, SPOTLIGHT_SCROLL_MARGIN } from './spotlightCtx';
@@ -28,13 +29,18 @@ interface ScreenProps {
 }
 
 /** 기본 화면 래퍼 — SafeArea를 한 곳에서 중앙 관리(상단 상태바·하단 홈인디케이터·좌우 라운드/노치).
- *  top edge 포함(2026-07-08): `react-native-safe-area-context`의 SafeAreaView는 **헤더-인지적**이라
- *  네이티브 헤더가 있는 화면(전 Tabs/대부분 Stack)에선 안전영역 프레임이 헤더 아래에서 시작해 top inset이
- *  0에 수렴 → 이중 여백 없음(회귀 0). headerShown:false 화면(enshrine·season-opening·champion 등
- *  세리머니)에선 top inset = 상태바 높이가 되어 타이틀이 상태바(시계) 아래로 내려온다.
- *  ⚠ `useSafeAreaInsets().top`(raw)은 헤더를 몰라 헤더 화면에서 이중 패딩 회귀 — 반드시 SafeAreaView(edges top) 사용. */
+ *  top edge 조건부(2026-07-12 테스터 재보고 — 헤더 아래 빈 band):
+ *  ~~SafeAreaView가 헤더-인지적이라 top이 0에 수렴~~(2026-07-08 가정)은 **틀렸다** — 네이티브 위치감지가
+ *  이 구성에선 안 먹어, 헤더가 이미 소비한 상태바 인셋을 SafeAreaView가 헤더 아래에 **한 번 더** 넣어
+ *  ~28dp 고정 빈 band(경기장 배경이 비침)가 생겼다(스크롤해도 남음 = 스크롤 패딩 아님). →
+ *  **HeaderShownContext로 명시 처리**: 헤더 있는 화면(전 Tabs/대부분 Stack)은 top 엣지를 빼고(헤더가 상태바 담당),
+ *  headerShown:false 세리머니(enshrine·season-opening·champion)만 top 유지(제목이 상태바 밑으로 내려오게).
+ *  ⚠ `useSafeAreaInsets().top`(raw) 직접 패딩 금지 — 헤더 화면에서 이중 패딩. 반드시 이 conditional edges 경유. */
 export function Screen({ title, children, scroll = true, headerRight, overlay, keyboard = false }: ScreenProps) {
   useThemeMode(); // 테마 토글 시 리렌더(배경·스크림 갱신)
+  // 헤더 유무를 컨텍스트로 판정 — 헤더 있으면(=true) 상태바를 헤더가 이미 먹었으니 top 엣지 제외(이중 여백 방지).
+  const headerShown = useContext(HeaderShownContext);
+  const edges: Edge[] = headerShown ? ['bottom', 'left', 'right'] : ['top', 'bottom', 'left', 'right'];
   // 튜토리얼 스포트라이트 대상이 화면 밖이면 이 화면의 ScrollView가 대상을 위로 끌어온다.
   // 오프셋은 "콘텐츠 최상단 센티넬 View"와 대상을 각각 measureInWindow로 재 계산(Fabric 안전 — measureLayout 회피).
   const scrollRef = useRef<ScrollView>(null);
@@ -83,7 +89,7 @@ export function Screen({ title, children, scroll = true, headerRight, overlay, k
     <ImageBackground source={themeAssets.bg} style={styles.bgRoot} resizeMode="cover">
       {/* 가독성 스크림 — 모드별 톤(다크=검정 베일 / 라이트=밝은 베일)으로 배경 위 카드·텍스트 가독 */}
       <View pointerEvents="none" style={[StyleSheet.absoluteFill, { backgroundColor: themeAssets.scrim }]} />
-      <SafeAreaView style={styles.safe} edges={['top', 'bottom', 'left', 'right']}>
+      <SafeAreaView style={styles.safe} edges={edges}>
         {keyboard ? (
           // 입력 화면 전용(UI-38): iOS는 padding으로 입력창을 키보드 위로 밀어 올린다. Android는 앱 기본
           // softInputMode=resize라 창이 줄며 ScrollView가 알아서 스크롤 → behavior 불필요(undefined).

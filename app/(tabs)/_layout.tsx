@@ -48,9 +48,10 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        // 헤더 컴팩트(2026-07-12 테스터 재요청 — 44도 여전히 높다). 총높이 = 상단인셋(OS 강제) + 36dp 툴바.
-        //   상태바 위 영역은 못 줄이므로 툴바 밴드만 44→36으로 표준 이하 타이트. 루트 Stack과 동일값(탭↔스택 일치).
-        headerStyle: { backgroundColor: theme.bg, height: insets.top + 36 },
+        // 헤더 툴바 44dp(표준 최소). 총높이 = 상단인셋(OS 강제) + 44dp 툴바. 루트 Stack과 동일값(탭↔스택 일치).
+        //   2026-07-12: 36dp 시도했으나 실기기에서 제목이 잘리고 너무 낮아 44로 복원. "헤더 아래 빈 band"의 진짜
+        //   원인은 툴바 높이가 아니라 SafeAreaView 이중 top-인셋이었고 그건 components/Screen.tsx에서 별도 수정.
+        headerStyle: { backgroundColor: theme.bg, height: insets.top + 44 },
         headerTintColor: theme.text,
         headerTitleStyle: { fontWeight: '700', fontSize: 18 },
         // 설정 = 전 탭 공통 헤더 우측 톱니(2026-06-28) — 구단 대시보드 본문에 있던 "설정" 버튼을 옮김(유틸리티 분리)
