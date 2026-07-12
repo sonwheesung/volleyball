@@ -70,20 +70,20 @@ function ExhibitionInner() {
 
   return (
     <Screen title="테스트 경기">
-      <Card>
+      <Card flat>
         <Muted style={{ fontSize: 12 }}>
           일정과 무관하게 두 팀을 골라 경기를 돌려봅니다. 현재 시점 스탯으로 시뮬하며
           결과는 시즌에 반영되지 않습니다.
         </Muted>
       </Card>
 
-      <Card>
+      <Card flat>
         <TeamRow label="홈" value={homeId} onPick={setHomeId} />
         <View style={{ height: 12 }} />
         <TeamRow label="원정" value={awayId} onPick={setAwayId} />
       </Card>
 
-      <Card>
+      <Card flat>
         <Row>
           <View style={{ alignItems: 'center', gap: 2, flex: 1 }}>
             <Text style={styles.tname} numberOfLines={1}>{shortName(homeId)}</Text>

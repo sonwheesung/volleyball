@@ -53,7 +53,7 @@ function AchievementsInner() {
 
   return (
     <Screen title="업적">
-      <Card accent={theme.gold}>
+      <Card accent={theme.gold} flat>
         <Row>
           <Title>구단주의 발자취</Title>
           <Text style={styles.count}>{done} / {total}</Text>

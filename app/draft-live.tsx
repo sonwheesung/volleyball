@@ -229,12 +229,12 @@ function DraftLiveInner() {
       {total === 0 ? (
         // 총 픽 0 — 즉시 완료 상태(지명할 신인 자리 없음)
         <>
-          <Card><Muted>이번 드래프트는 지명할 자리가 없습니다. 바로 시즌을 시작하세요.</Muted></Card>
+          <Card flat><Muted>이번 드래프트는 지명할 자리가 없습니다. 바로 시즌을 시작하세요.</Muted></Card>
           <Button label={starting ? '시즌 준비 중…' : '시즌 시작하기 ▶'} onPress={onFinish} disabled={starting} />
         </>
       ) : done ? (
         <>
-          <Card accent={theme.accent}>
+          <Card accent={theme.accent} flat>
             <IconLabel icon="clipboard-outline" color={theme.accent}>우리 팀 지명 요약</IconLabel>
             {summary.pickCount === 0 ? (
               <Muted style={{ fontSize: 13, marginTop: 6 }}>이번은 참관. 다음 기약. (지명 없이 마쳤습니다)</Muted>
@@ -264,7 +264,7 @@ function DraftLiveInner() {
         </>
       ) : atMyPick && panel ? (
         // ── 내 픽 하드정지: 직접 지명 패널 ──
-        <Card accent={theme.accent}>
+        <Card accent={theme.accent} flat>
           <IconLabel icon="hand-left-outline" color={theme.accent}>내 지명 순번, 직접 선택 ({confirmedMyCount + 1}/{myCount})</IconLabel>
           {panel.needs.length ? (
             <Muted style={{ fontSize: 12, marginTop: 4 }}>필요 포지션: {panel.needs.map((p) => POS_KO[p]).join(' · ')}</Muted>
@@ -312,7 +312,7 @@ function DraftLiveInner() {
         // ── 관전 진행 컨트롤 ──
         <View>
           {myCount === 0 ? (
-            <Card accent={theme.muted}>
+            <Card accent={theme.muted} flat>
               <Muted style={{ fontSize: 13 }}>이번 드래프트는 지명권이 없습니다. 참관합니다.</Muted>
             </Card>
           ) : null}

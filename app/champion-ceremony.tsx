@@ -56,7 +56,7 @@ function Inner() {
         <ChampionCelebration teamName={champName} teamId={my!} season={season} mvpName={mvpName} onDone={goAwards} />
       ) : (
         // 미우승 — 짧은 결과 통지(타 구단 대관식 풀 연출 강제 금지).
-        <Card accent={theme.gold}>
+        <Card accent={theme.gold} flat>
           <IconLabel icon="trophy-outline" color={theme.gold}>{seasonYear(season)} 챔피언</IconLabel>
           <Text style={styles.champ}>🏆 {champName}</Text>
           {mvpName ? <Muted style={{ marginTop: 4 }}>챔프전 MVP · {mvpName}</Muted> : null}

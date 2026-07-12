@@ -129,7 +129,7 @@ export default function MyPage() {
   return (
     <Screen>
       {/* ── 다이아 (MONETIZATION §11) — 전지훈련 재화 ── */}
-      <Card accent={theme.sky}>
+      <Card accent={theme.sky} flat>
         <View style={styles.row}>
           <View style={[styles.iconChip, { backgroundColor: theme.sky + '22' }]}><Text style={{ fontSize: 20 }}>💎</Text></View>
           <View style={{ flex: 1 }}>

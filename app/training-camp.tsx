@@ -153,7 +153,7 @@ export default function TrainingCamp() {
     return (
       <Screen title="전지훈련">
         {balance}
-        <Card accent={theme.warn}>
+        <Card accent={theme.warn} flat>
           <IconLabel icon="airplane-outline" color={theme.warn}>오프시즌에만 가능</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4 }}>전지훈련은 시즌이 끝난 뒤(새 시즌 시작 전)에만 보낼 수 있습니다. 이번 시즌을 마치고 오프시즌에 다시 오세요.</Muted>
         </Card>
@@ -170,14 +170,14 @@ export default function TrainingCamp() {
         {busyOverlay}
         {balance}
         {inChain ? (
-          <Card accent={theme.warn}>
+          <Card accent={theme.warn} flat>
             <IconLabel icon="flag-outline" color={theme.warn}>새 시즌 준비, 마지막 단계</IconLabel>
             <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
               영입·드래프트가 끝났습니다. 새 시즌이 시작되기 전, 다이아로 선수를 전지훈련 보낼 수 있습니다. 보낼 선수가 없으면 아래 <Text style={{ color: theme.warn, fontWeight: '800' }}>새 시즌으로 ▶</Text> 로 진행하세요.
             </Muted>
           </Card>
         ) : null}
-        <Card accent={theme.good}>
+        <Card accent={theme.good} flat>
           <IconLabel icon="airplane-outline" color={theme.good}>오프시즌 해외 캠프</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
             선수 한 명을 코스 하나로 보내면, 관련 능력치 3개에 두 가지가 함께 붙습니다.{'\n'}

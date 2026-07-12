@@ -89,7 +89,7 @@ export default function Support() {
         </View>
       ) : (
         tickets.map((t) => (
-          <Card key={t.id} accent={t.reply ? theme.good : theme.muted}>
+          <Card key={t.id} accent={t.reply ? theme.good : theme.muted} flat>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={styles.catChip}><Text style={styles.catChipTxt}>{CAT_KO[t.category]}</Text></View>
               <Text style={{ color: t.status === 'refunded' ? theme.gold : t.reply ? theme.good : theme.warn, fontSize: 12, fontWeight: '800' }}>{STATUS_KO[t.status ?? (t.reply ? 'replied' : 'open')] ?? '답변 대기'}</Text>

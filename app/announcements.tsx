@@ -30,18 +30,18 @@ export default function Announcements() {
       {state.loading ? (
         <Muted style={{ textAlign: 'center', marginTop: 24 }}>불러오는 중…</Muted>
       ) : state.offline ? (
-        <Card accent={theme.warn}>
+        <Card accent={theme.warn} flat>
           <IconLabel icon="cloud-offline-outline" color={theme.warn}>연결 필요</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4 }}>공지사항을 불러오려면 네트워크 연결이 필요합니다.</Muted>
         </Card>
       ) : state.items.length === 0 ? (
-        <Card accent={theme.muted}>
+        <Card accent={theme.muted} flat>
           <IconLabel icon="megaphone-outline" color={theme.muted}>공지 없음</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4 }}>현재 표시할 공지사항이 없습니다.</Muted>
         </Card>
       ) : (
         state.items.map((a) => (
-          <Card key={a.id} accent={a.pinned ? theme.warn : theme.accent}>
+          <Card key={a.id} accent={a.pinned ? theme.warn : theme.accent} flat>
             <View style={styles.head}>
               {a.pinned ? <View style={styles.pin}><Text style={styles.pinTxt}>고정</Text></View> : null}
               <Text style={styles.title}>{a.title}</Text>

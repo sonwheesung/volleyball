@@ -178,7 +178,7 @@ export default function DebugCourt() {
 
   return (
     <Screen title="보드 위치 검증 (개발)">
-      <Card>
+      <Card flat>
         <Muted style={{ fontSize: 12 }}>
           실제 경기 보드와 동일한 위치 계산(courtLayout)을 정지 화면으로 표시.
           마커: 표시 포지션 / 아래 첨자 = 존 번호. 보라 테두리 = 리베로↔MB 교체 슬롯, 노란 테두리 = 서버.
@@ -234,7 +234,7 @@ export default function DebugCourt() {
         </View>
       </View>
 
-      <Card>
+      <Card flat>
         <Muted style={{ fontSize: 12 }}>
           홈(아래) {getTeam(homeId)?.name} vs 원정(위) {getTeam(awayId)?.name} · 로테이션/국면/서브권을 눌러 전 조합 확인.
           헤드리스 전수 검사: npx tsx tools/checkCourtBoard.ts

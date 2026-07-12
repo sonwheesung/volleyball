@@ -119,7 +119,7 @@ export default function Staff() {
   return (
     <Screen title="스태프 계약">
       {/* 예산 바 */}
-      <Card accent={theme.warn}>
+      <Card accent={theme.warn} flat>
         <Row>
           <IconLabel icon="wallet-outline" color={theme.warn}>스태프 예산</IconLabel>
           <Muted>{formatMoney(spend)} / {formatMoney(staffBudget())}</Muted>
@@ -136,7 +136,7 @@ export default function Staff() {
         <Muted style={{ color: theme.bad }}>⚠ 성적 부진({myRow!.wins}승 {myRow!.losses}패). 감독 교체를 고려할 시점입니다.</Muted>
       ) : null}
       {head ? (
-        <Card accent={theme.violet}>
+        <Card accent={theme.violet} flat>
           <Row>
             <Title>{head.name}</Title>
             <Muted>{head.age}세 · {head.salary > 0 ? `연봉 ${formatMoney(head.salary)}` : '대행'}</Muted>
@@ -173,7 +173,7 @@ export default function Staff() {
         <Muted style={{ color: theme.warn, marginBottom: 4 }}>현재 감독을 먼저 경질해야 새 감독을 영입할 수 있습니다.</Muted>
       ) : null}
       {availableCoaches(teamId).map((c) => (
-        <Card key={c.id}>
+        <Card key={c.id} flat>
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{c.name}</Title>
@@ -188,7 +188,7 @@ export default function Staff() {
       <Title>전문 코치 ({asst.length}/{coachSlots()})</Title>
       <Muted style={{ marginBottom: 4 }}>분야별 효과(같은 분야 최고 1명). 슬롯 {coachSlots()}개. 어떤 코치를 둘지 선택.</Muted>
       {asst.map((a) => (
-        <Card key={a.id}>
+        <Card key={a.id} flat>
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{SPECIALTY_KO[a.specialty]}{a.type ? ` · ${TYPE_KO[a.type]}` : ''} · {a.name}</Title>
@@ -200,7 +200,7 @@ export default function Staff() {
       ))}
       <Muted style={{ marginTop: 8, marginBottom: 4 }}>코치 시장 {asst.length >= coachSlots() ? '(슬롯 가득, 방출 후 영입)' : ''}</Muted>
       {availableAssistants().map((a) => (
-        <Card key={a.id}>
+        <Card key={a.id} flat>
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{SPECIALTY_KO[a.specialty]}{a.type ? ` · ${TYPE_KO[a.type]}` : ''} · {a.name}</Title>
@@ -215,7 +215,7 @@ export default function Staff() {
       <Title>스카우터 ({scouts.length})</Title>
       <Muted style={{ marginBottom: 4 }}>드래프트 유망주 공개도: {Math.round(reveal * 100)}%</Muted>
       {scouts.map((s) => (
-        <Card key={s.id}>
+        <Card key={s.id} flat>
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{s.name}</Title>
@@ -227,7 +227,7 @@ export default function Staff() {
       ))}
       <Muted style={{ marginTop: 8, marginBottom: 4 }}>스카우터 시장</Muted>
       {availableScouts().map((s) => (
-        <Card key={s.id}>
+        <Card key={s.id} flat>
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{s.name}</Title>

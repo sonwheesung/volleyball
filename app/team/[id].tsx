@@ -190,7 +190,7 @@ export default function TeamDetail() {
 
       {/* ── 구단 정체성 ── */}
       {identity ? (
-        <Card accent={theme.elite}>
+        <Card accent={theme.elite} flat>
           <IconLabel icon="shield-outline" color={theme.elite}>구단 정체성</IconLabel>
           <Text style={styles.blurb}>{identity.blurb}</Text>
           <View style={styles.statRow}>
@@ -227,7 +227,7 @@ export default function TeamDetail() {
 
       {/* ── 코칭 스태프 ── */}
       {(asst.length > 0 || scouts.length > 0) ? (
-        <Card accent={theme.violet}>
+        <Card accent={theme.violet} flat>
           <IconLabel icon="clipboard-outline" color={theme.violet}>코칭 스태프</IconLabel>
           <View style={styles.staffWrap}>
             {asst.map((a) => (

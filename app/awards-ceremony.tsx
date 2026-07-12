@@ -43,7 +43,7 @@ function CeremonyInner() {
       const num = jerseyNumber(w.playerId);
       const figW = climax ? 132 : 104;
       return (
-        <Card accent={theme.gold}>
+        <Card accent={theme.gold} flat>
           {climax ? <View style={{ alignItems: 'center' }}><AwardIllustration width={150} /></View> : null}
           <IconLabel icon={icon} color={theme.gold}>{label}</IconLabel>
           {/* 선수 실루엣(구단색 유니폼+번호) + 구단 엠블럼 배지 — "어느 팀 선수"를 한눈에(A1) */}

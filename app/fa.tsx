@@ -221,7 +221,7 @@ function FACenterInner() {
         </View>
       </Pressable>
 
-      <Card accent={theme.sky}>
+      <Card accent={theme.sky} flat>
         <Row>
           <IconLabel icon="person-add-outline" color={theme.sky}>영입 성공 / 제안</IconLabel>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
@@ -257,7 +257,7 @@ function FACenterInner() {
       <Button label="신인 드래프트로 →" onPress={() => router.push('/draft')} />
 
       {(compNeeded > 0 || moneyOnlyCount > 0) ? (
-        <Card accent={theme.warn}>
+        <Card accent={theme.warn} flat>
           <Pressable onPress={() => setInfo('comp')} style={styles.compHeader}>
             <Ionicons name="help-circle-outline" size={16} color={theme.sky} />
             <Text style={{ color: theme.sky, fontSize: 12, fontWeight: '800' }}>보상선수 · '돈만'이 뭔가요?</Text>
@@ -314,7 +314,7 @@ function FACenterInner() {
         현재 오퍼 기준으로 계산된 예상 결과입니다. 오퍼를 변경하면 예상 결과도 함께 다시 계산됩니다.
       </Muted>
       {poolPlayers.length === 0 ? (
-        <Card><Muted>이번 오프시즌 풀린 FA가 없습니다.</Muted></Card>
+        <Card flat><Muted>이번 오프시즌 풀린 FA가 없습니다.</Muted></Card>
       ) : (
         poolPlayers.map((p) => {
           const grade = grades.get(p.id)!;

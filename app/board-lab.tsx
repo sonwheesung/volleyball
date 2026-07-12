@@ -282,7 +282,7 @@ export default function BoardLab() {
 
   return (
     <Screen title="수비 위치 실험실 (개발용)">
-      <Card>
+      <Card flat>
         <Muted>
           실제 경기를 <Text style={{ fontWeight: '800', color: theme.text }}>한 스텝씩 진행</Text>하며,
           그 순간 <Text style={{ fontWeight: '800', color: theme.text }}>양 팀 12명</Text> 위치를 직접 끌어 고치세요.
@@ -297,7 +297,7 @@ export default function BoardLab() {
       </Card>
 
       {/* 팀 선택 */}
-      <Card>
+      <Card flat>
         <Muted style={{ fontSize: 12 }}>홈</Muted>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6, paddingVertical: 4 }}>
           {teams.map((t) => <Pill key={t.id} label={shortTeamName(t.id)} on={t.id === homeId} onPress={() => setHomeId(t.id)} small />)}
@@ -314,7 +314,7 @@ export default function BoardLab() {
       </Card>
 
       {/* 스텝 정보 */}
-      <Card>
+      <Card flat>
         <Text style={{ color: theme.text, fontWeight: '800', fontSize: 15, marginBottom: 2 }}>🏐 {situation}</Text>
         <Row>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
@@ -400,7 +400,7 @@ export default function BoardLab() {
       </Row>
 
       {saved ? (
-        <Card>
+        <Card flat>
           <Muted style={{ fontSize: 11, marginBottom: 4 }}>아래 텍스트를 길게 눌러 복사 → 채팅에 붙여넣고 이유를 적어주세요(✎=옮긴 선수). 합의 전엔 경기 미반영.</Muted>
           <Text selectable style={styles.code}>{saved}</Text>
         </Card>

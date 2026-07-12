@@ -27,7 +27,7 @@ export default function MatchResult() {
 
   return (
     <Screen title="경기 상세">
-      <Card accent={theme.sky}>
+      <Card accent={theme.sky} flat>
         <View style={styles.scoreboard}>
           <Text style={[styles.bigTeam, { textAlign: 'right' }]} numberOfLines={2}>{homeName}</Text>
           <Text style={styles.bigScore}>{sim.homeSets} : {sim.awaySets}</Text>
@@ -46,7 +46,7 @@ export default function MatchResult() {
       {mvp ? (
         <>
           <Title>MVP</Title>
-          <Card accent={theme.warn}>
+          <Card accent={theme.warn} flat>
           <View style={styles.mvpRow}>
             <PosTag pos={mvp.position} />
             <View style={{ flex: 1 }}>
@@ -62,9 +62,9 @@ export default function MatchResult() {
       ) : null}
 
       <Title>{homeName}</Title>
-      <Card accent={theme.elite}><BoxScoreTable squad={home} box={box} /></Card>
+      <Card accent={theme.elite} flat><BoxScoreTable squad={home} box={box} /></Card>
       <Title>{awayName}</Title>
-      <Card accent={theme.elite}><BoxScoreTable squad={away} box={box} /></Card>
+      <Card accent={theme.elite} flat><BoxScoreTable squad={away} box={box} /></Card>
       <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 리시브=효율((정확−실패)/시도)</Text>
     </Screen>
   );

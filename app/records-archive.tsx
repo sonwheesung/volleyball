@@ -167,7 +167,7 @@ function SeasonView({
       {/* 시상식 — 시즌이 충분히 진행된 뒤에만(잠정 포함) */}
       {aw && aw.mvp && awardsReady ? (
         <>
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             {/* 시즌 MVP 트로피 배너 — MVP 소속 구단 색(AWARDS_SYSTEM §6) */}
             <View style={[styles.mvpBanner, { backgroundColor: teamColors(aw.mvp.teamId).bg }]}>
               <AwardIllustration width={104} />
@@ -195,7 +195,7 @@ function SeasonView({
             ) : null)}
           </Card>
 
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             <Text style={styles.cardHead}>부문 기록왕</Text>
             {([
               { label: '득점', w: aw.titles.scoring }, { label: '공격', w: aw.titles.spike },
@@ -212,13 +212,13 @@ function SeasonView({
             ))}
           </Card>
 
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             <Text style={styles.cardHead}>베스트7</Text>
             <Best7Court best7={aw.best7} myTeamId={teamId} nameOf={pName} />
           </Card>
         </>
       ) : snap.isCurrent && !awardsReady ? (
-        <Card accent={theme.gold}>
+        <Card accent={theme.gold} flat>
           <Text style={styles.cardHead}>시상식</Text>
           <Muted style={{ fontSize: 12.5 }}>
             아직 시즌 초반입니다 ({gamesPlayed}경기). 정규리그가 1/3({AWARD_MIN_GAMES}경기) 넘게 진행되면
@@ -226,12 +226,12 @@ function SeasonView({
           </Muted>
         </Card>
       ) : (
-        <Card><Muted>이 시즌의 시상 기록이 없습니다.</Muted></Card>
+        <Card flat><Muted>이 시즌의 시상 기록이 없습니다.</Muted></Card>
       )}
 
       {/* 최종 순위 */}
       {snap.standings.length > 0 ? (
-        <Card accent={theme.accent}>
+        <Card accent={theme.accent} flat>
           <Text style={styles.cardHead}>{snap.isCurrent ? '순위표' : '최종 순위'}</Text>
           <View style={[styles.row, styles.head]}>
             <Text style={[styles.rank, styles.h]}>#</Text>
@@ -261,7 +261,7 @@ function SeasonView({
         <>
           <Title>개인 기록 리더보드</Title>
           {leaders.map((cat) => (
-            <Card key={cat.label} accent={theme.elite}>
+            <Card key={cat.label} accent={theme.elite} flat>
               <Text style={styles.cardHead}>{cat.label} TOP 5</Text>
               {cat.list.length === 0 ? <Muted style={{ fontSize: 12 }}>기록 없음</Muted> : cat.list.map((r, i) => (
                 <View key={r.id} style={styles.lbRow}>
@@ -293,13 +293,13 @@ function CareerView({
       <Seg items={['리그 전체', '우리 구단']} value={scope === 'team' ? 1 : 0}
         onChange={(i) => setScope(i === 1 ? 'team' : 'league')} />
       {scope === 'team' && !teamId ? (
-        <Card><Muted>구단을 먼저 선택하세요.</Muted></Card>
+        <Card flat><Muted>구단을 먼저 선택하세요.</Muted></Card>
       ) : (
         RECORD_CATS.map((c) => {
           const rows = (scope === 'team' ? teamCareerLeaderboard(c.key, teamId ?? '', hallOfFame) : careerLeaderboard(c.key, hallOfFame));
           const top = rows.slice(0, 5);
           return (
-            <Card key={c.key} accent={theme.gold}>
+            <Card key={c.key} accent={theme.gold} flat>
               <View style={styles.careerHead}>
                 <Text style={styles.cardHead}>{c.label}</Text>
                 <Pressable onPress={() => onMore(c.key)} hitSlop={8}>
@@ -332,10 +332,10 @@ function CareerView({
 function HofView({ hallOfFame, teamId }: { hallOfFame: ReturnType<typeof useGameStore.getState>['hallOfFame']; teamId: string | null }) {
   const sorted = [...hallOfFame].sort((a, b) => Number(b.legend) - Number(a.legend) || b.points - a.points);
   if (sorted.length === 0) {
-    return <Card><Muted>아직 은퇴한 레전드가 없습니다. 세월이 쌓이면 이곳에 명예가 새겨집니다.</Muted></Card>;
+    return <Card flat><Muted>아직 은퇴한 레전드가 없습니다. 세월이 쌓이면 이곳에 명예가 새겨집니다.</Muted></Card>;
   }
   return (
-    <Card accent={theme.gold}>
+    <Card accent={theme.gold} flat>
       <Text style={styles.cardHead}>은퇴 레전드 · {sorted.length}명</Text>
       {sorted.map((h) => {
         if (!h.legend) {
@@ -392,7 +392,7 @@ function ChronicleView({
       {archive.length > 0 ? (
         <>
           <Title>역대 우승</Title>
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             {archive.slice().reverse().map((a) => (
               <Pressable key={a.season} onPress={() => onSeason(a.season)} style={({ pressed }) => [styles.row, pressed && { opacity: 0.6 }]}>
                 <Text style={[styles.team, { flex: 0, width: 72 }]}>{seasonYear(a.season)}</Text>
@@ -410,7 +410,7 @@ function ChronicleView({
       {milestones.length > 0 ? (
         <>
           <Title>기록 경신 · 마일스톤</Title>
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             {milestones.slice(-40).reverse().map((m, i) => (
               <View key={`${m.season}-${m.playerId}-${i}`} style={styles.msRow}>
                 <Text style={styles.msSeason}>{seasonYear(m.season)}</Text>
@@ -424,7 +424,7 @@ function ChronicleView({
       ) : null}
 
       {archive.length === 0 && milestones.length === 0 ? (
-        <Card><Muted>첫 시즌이 끝나면 이곳에 리그의 역사가 기록됩니다.</Muted></Card>
+        <Card flat><Muted>첫 시즌이 끝나면 이곳에 리그의 역사가 기록됩니다.</Muted></Card>
       ) : null}
     </>
   );

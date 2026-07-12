@@ -103,7 +103,7 @@ export default function TrainingPolicy() {
       ) : null}
 
       <IconLabel icon="options-outline" color={theme.good}>훈련 방침 선택 (단장)</IconLabel>
-      <Card accent={theme.good}>
+      <Card accent={theme.good} flat>
         <Muted>팀의 장기 성장 방향을 직접 고른다.</Muted>
         <View style={{ gap: 6, marginTop: 8 }}>
           <FocusOption

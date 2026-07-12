@@ -180,7 +180,7 @@ function ContractsInner() {
 
   return (
     <Screen title="계약 관리">
-      <Card accent={theme.warn}>
+      <Card accent={theme.warn} flat>
         <Row>
           <IconLabel icon="card-outline" color={theme.warn}>팀 총연봉 / 캡</IconLabel>
           <Text style={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '800' }}>

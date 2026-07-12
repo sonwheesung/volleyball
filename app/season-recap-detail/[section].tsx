@@ -97,7 +97,7 @@ function AwardsDetail({
   pName: (id: string) => string; pPos: (id: string) => Position; isMineW: (w: AwardWinner | null) => boolean;
 }) {
   if (!aw || !aw.mvp) {
-    return <Card><Muted>이 시즌의 시상 기록이 없습니다.</Muted></Card>;
+    return <Card flat><Muted>이 시즌의 시상 기록이 없습니다.</Muted></Card>;
   }
   const awRow = (label: string, w: AwardWinner | null, opts?: { hi?: boolean; suffix?: string; growth?: boolean }) => w ? (
     <View key={label} style={styles.awRow}>
@@ -113,7 +113,7 @@ function AwardsDetail({
   return (
     <>
       {/* MVP 배너(구단색) */}
-      <Card accent={theme.gold}>
+      <Card accent={theme.gold} flat>
         <View style={[styles.mvpBanner, { backgroundColor: teamColors(aw.mvp.teamId).bg }]}>
           <AwardIllustration width={104} />
           <Text style={styles.mvpKick}>시즌 MVP</Text>
@@ -130,7 +130,7 @@ function AwardsDetail({
         {awRow('기량발전상', aw.mostImproved, { growth: true })}
       </Card>
 
-      <Card accent={theme.gold}>
+      <Card accent={theme.gold} flat>
         <Text style={styles.cardHead}>부문 기록왕</Text>
         {([
           { label: '득점왕', w: aw.titles.scoring }, { label: '공격상', w: aw.titles.spike },
@@ -149,7 +149,7 @@ function AwardsDetail({
       </Card>
 
       {aw.best7.some((s) => s.winner) ? (
-        <Card accent={theme.gold}>
+        <Card accent={theme.gold} flat>
           <Text style={styles.cardHead}>베스트7</Text>
           <Best7Court best7={aw.best7} myTeamId={my} nameOf={pName} />
         </Card>
@@ -173,11 +173,11 @@ function SquadDetail({
       .sort((a, b) => b.l.points - a.l.points || b.l.matches - a.l.matches);
   }, [my, day]);
 
-  if (rows.length === 0) return <Card><Muted>이번 시즌 집계된 명단이 없습니다.</Muted></Card>;
+  if (rows.length === 0) return <Card flat><Muted>이번 시즌 집계된 명단이 없습니다.</Muted></Card>;
   return (
     <>
       <IconLabel icon="people-outline" color={theme.elite}>선수 {rows.length}명 · 생산 순</IconLabel>
-      <Card accent={theme.elite}>
+      <Card accent={theme.elite} flat>
         {rows.map((r, i) => (
           <View key={r.id} style={styles.pRow}>
             <Text style={styles.rank}>{i + 1}</Text>
@@ -214,7 +214,7 @@ function StoryDetail({
     <>
       {/* 최종 순위표 */}
       <IconLabel icon="podium-outline" color={theme.accent}>최종 순위</IconLabel>
-      <Card accent={theme.accent}>
+      <Card accent={theme.accent} flat>
         <View style={[styles.stRow, styles.stHead]}>
           <Text style={[styles.stRank, styles.stH]}>#</Text>
           <Text style={[styles.stTeam, styles.stH]}>팀</Text>
@@ -239,7 +239,7 @@ function StoryDetail({
 
       {/* 연승/연패 + 팬심 + 자금 */}
       <IconLabel icon="stats-chart-outline" color={theme.accent}>시즌 지표</IconLabel>
-      <Card accent={theme.accent}>
+      <Card accent={theme.accent} flat>
         {streak[0] >= 2 ? <Row><Muted>최다 연승</Muted><Text style={styles.fin}>{streak[0]}연승</Text></Row> : null}
         {streak[1] >= 2 ? <Row><Muted>최다 연패</Muted><Text style={styles.fin}>{streak[1]}연패</Text></Row> : null}
         <Row><Muted>팬심</Muted><Text style={styles.fin}>{fanScore}</Text></Row>
@@ -250,7 +250,7 @@ function StoryDetail({
       {lastFinance ? (
         <>
           <IconLabel icon="cash-outline" color={theme.good}>전 시즌 정산</IconLabel>
-          <Card accent={theme.good}>
+          <Card accent={theme.good} flat>
             <Row><Muted>모기업 후원</Muted><Text style={styles.fin}>{formatMoney(lastFinance.sponsor)}</Text></Row>
             {lastFinance.bonus > 0 ? <Row><Muted>성적 보너스</Muted><Text style={styles.fin}>{formatMoney(lastFinance.bonus)}</Text></Row> : null}
             <Row><Muted>입장 수입</Muted><Text style={styles.fin}>{formatMoney(lastFinance.gate)}</Text></Row>
@@ -269,7 +269,7 @@ function StoryDetail({
       {events.length > 0 ? (
         <>
           <IconLabel icon="flag-outline" color={theme.gold}>주요 사건</IconLabel>
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             {events.map((m, i) => (
               <View key={`${m.playerId}-${i}`} style={styles.evRow}>
                 <Text style={[styles.evText, m.big && { color: theme.warn, fontWeight: '800' }]} numberOfLines={2}>
@@ -293,12 +293,12 @@ function TasksDetail({
 }) {
   const b = useMemo(() => recapBriefing(my, day, overrides, released), [my, day, overrides, released]);
   const total = b.faSoon.length + b.expiring.length + b.retireSoon.length;
-  if (total === 0) return <Card><Muted>다음 시즌 챙길 선수가 없습니다. 명단이 안정적입니다.</Muted></Card>;
+  if (total === 0) return <Card flat><Muted>다음 시즌 챙길 선수가 없습니다. 명단이 안정적입니다.</Muted></Card>;
 
   const group = (icon: string, label: string, color: string, list: Player[], note: string) => list.length > 0 ? (
     <View style={{ marginBottom: 4 }}>
       <IconLabel icon="ellipse" color={color}>{icon} {label} · {list.length}명</IconLabel>
-      <Card accent={color}>
+      <Card accent={color} flat>
         {list.map((p) => (
           <View key={p.id} style={styles.tRow}>
             <PosTag pos={pPos(p.id)} />

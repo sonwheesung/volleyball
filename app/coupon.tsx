@@ -45,7 +45,7 @@ export default function Coupon() {
   return (
     <Screen title="쿠폰 입력" keyboard>
       <View style={styles.bal}><Text style={styles.gem}>💎</Text><Text style={styles.balN}>{diamonds.toLocaleString()}</Text></View>
-      <Card accent={theme.gold}>
+      <Card accent={theme.gold} flat>
         <IconLabel icon="pricetag-outline" color={theme.gold}>쿠폰 코드</IconLabel>
         <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
           받은 쿠폰 코드를 입력하면 다이아가 지급됩니다. 대소문자는 구분하지 않아요. 쿠폰당 한 번만 사용할 수 있어요.

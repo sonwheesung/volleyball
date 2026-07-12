@@ -282,7 +282,7 @@ function DraftArticle({ n, feed, myTeamId, seasonDraftLog, onOpen }: {
   return (
     <Screen title="">
       {/* 1) 카테고리 칩 + 인게임 날짜(시즌)·구단 + 헤드라인 + 부제(teal) */}
-      <Card accent={theme.accent}>
+      <Card accent={theme.accent} flat>
         <IconLabel icon="sparkles-outline" color={theme.accent}>{KIND_KO.draft}{n.big ? ' · 헤드라인' : ''}</IconLabel>
         <Text style={styles.byline}>{seasonYear(n.season)}{team ? ` · ${team.name}` : ''}</Text>
         <Text style={styles.headline}>{n.headline}</Text>
@@ -290,7 +290,7 @@ function DraftArticle({ n, feed, myTeamId, seasonDraftLog, onOpen }: {
       </Card>
 
       {/* 2) 본문(사실 문단) */}
-      <Card accent={theme.accent}>
+      <Card accent={theme.accent} flat>
         {paras.map((t, i) => (
           <Text key={i} style={[styles.body, i > 0 ? { marginTop: 10 } : null]}>{t}</Text>
         ))}
@@ -538,7 +538,7 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
   return (
     <Screen title="">
       {/* 1) 카테고리 칩 + 인게임 날짜·구단 + 헤드라인 + 부제(teal) */}
-      <Card accent={accent}>
+      <Card accent={accent} flat>
         <IconLabel icon={KIND_ICON[n.kind]} color={accent}>{KIND_KO[n.kind]}{n.big ? ' · 헤드라인' : ''}</IconLabel>
         <Text style={styles.byline}>{seasonYear(n.season)}{team ? ` · ${team.name}` : ''}</Text>
         <Text style={styles.headline}>{n.headline}</Text>
@@ -546,7 +546,7 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
       </Card>
 
       {/* 2) 본문(사실 문단) */}
-      <Card accent={accent}>
+      <Card accent={accent} flat>
         {paras.map((t, i) => (
           <Text key={i} style={[styles.body, i > 0 ? { marginTop: 10 } : null]}>{t}</Text>
         ))}

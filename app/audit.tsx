@@ -30,7 +30,7 @@ export default function Audit() {
 
   return (
     <Screen title="영입 무결성 감사">
-      <Card>
+      <Card flat>
         <Muted>
           FA·드래프트·외국인 트라이아웃·감독/코치/스카우터 영입을 여러 시즌 자동으로 굴려
           <Title> 한 선수·한 감독이 두 팀에 동시에 들어가거나 잘못 배정되는지</Title> 전수 검사합니다.
@@ -48,7 +48,7 @@ export default function Audit() {
       <Muted style={{ fontSize: 12 }}>시즌 수가 클수록 철저하지만 느립니다(휴대폰에서 30시즌은 수 초 소요).</Muted>
 
       {running ? (
-        <Card>
+        <Card flat>
           <Row>
             <ActivityIndicator color={theme.accent} />
             <Muted style={{ marginLeft: 10 }}>{seasons}시즌 감사 중… (화면이 잠시 멈출 수 있습니다)</Muted>
@@ -58,7 +58,7 @@ export default function Audit() {
 
       {report ? (
         <>
-          <Card>
+          <Card flat>
             <Row>
               <Title>{report.ok ? '✅ 전체 통과' : '❌ 위반 발견'}</Title>
               <Muted>{report.seasons}시즌</Muted>

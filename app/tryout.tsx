@@ -115,7 +115,7 @@ function TryoutInner() {
       {myForeign ? (
         <>
           <Title>재계약 우선권, {myForeign.name} ({myForeign.age}세 · OVR {displayOvr(overallRaw(myForeign))})</Title>
-          <Card accent={theme.bad}>
+          <Card accent={theme.bad} flat>
             {myForeign.age + 1 >= RETIRE_AGE ? (
               // 정년(FOREIGN_SYSTEM §1.6): 다음 시즌 나이 40+ → 재계약 불가(리그 정년). 새 얼굴을 지명하세요.
               <Muted style={{ fontSize: 12 }}>

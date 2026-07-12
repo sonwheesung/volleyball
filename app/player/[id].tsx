@@ -178,7 +178,7 @@ function PlayerDetailInner() {
       ] as [string, number][]).filter(([, v]) => v > 0);
       return (
         <Screen title={nm}>
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
               <PosTag pos={pos} />
               <Text style={styles.pName}>{nm}</Text>
@@ -188,7 +188,7 @@ function PlayerDetailInner() {
               {(tid ? `${getTeam(tid)?.name ?? teamShort(tid)} · ` : '')}{hof ? '명예의전당' : '은퇴/방출'} · 통산 {seasons}시즌
             </Text>
           </Card>
-          <Card accent={theme.accent}>
+          <Card accent={theme.accent} flat>
             <IconLabel icon="stats-chart-outline" color={theme.accent}>통산 기록</IconLabel>
             {careerStats.length === 0 ? (
               <Muted>기록된 통산 성적이 없습니다.</Muted>
@@ -200,7 +200,7 @@ function PlayerDetailInner() {
             ))}
           </Card>
           {hof ? (
-            <Card accent={theme.gold}>
+            <Card accent={theme.gold} flat>
               <Muted>{seasonYear(hof.retiredSeason)} 명예의전당 헌액{hof.legend ? ' · 영구결번급' : ''}. 통산 기록은 영원히 보존됩니다.</Muted>
             </Card>
           ) : null}
@@ -285,7 +285,7 @@ function PlayerDetailInner() {
   return (
     <Screen>
       {/* ── 히어로: 얼굴 포트레이트 + 이름 + 포지션/상태 + OVR + 인기/팬 ── */}
-      <Card>
+      <Card flat>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 14 }}>
           <View style={styles.avatar}>
             <PlayerAvatar id={p.id} size={84} />
@@ -346,7 +346,7 @@ function PlayerDetailInner() {
       {p.traits && p.traits.length > 0 ? (
         <>
           <IconLabel icon="sparkles-outline" color={theme.violet}>특성</IconLabel>
-          <Card accent={theme.violet}>
+          <Card accent={theme.violet} flat>
             {p.traits.map((t, i) => {
               const d = TRAITS[t];
               const c = d.good ? theme.good : theme.bad;
@@ -372,7 +372,7 @@ function PlayerDetailInner() {
         return (
           <>
             <IconLabel icon="people-circle-outline" color={theme.rose} help={() => showAlert('인간관계란?', REL_HELP)}>인간관계</IconLabel>
-            <Card accent={theme.rose}>
+            <Card accent={theme.rose} flat>
               {rel.friends.length > 0 ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 }}>
                   <View style={{ backgroundColor: theme.good + '22', borderWidth: 1, borderColor: theme.good + '66', borderRadius: 8, paddingHorizontal: 9, paddingVertical: 3, minWidth: 54, alignItems: 'center' }}>
@@ -402,7 +402,7 @@ function PlayerDetailInner() {
       {isMine && cond ? (
         <>
           <IconLabel icon={SHOW_OWNER_TALK ? 'chatbubbles-outline' : 'pulse-outline'} color={theme.rose} help={SHOW_OWNER_TALK ? undefined : () => showAlert('선수 상태란?', STATUS_HELP)}>{SHOW_OWNER_TALK ? '구단주 면담' : '선수 상태'}</IconLabel>
-          <Card accent={theme.rose}>
+          <Card accent={theme.rose} flat>
             <Row>
               <Muted>컨디션</Muted>
               <Text style={{ color: cond.color, fontWeight: '800' }}>● {cond.label}</Text>
@@ -454,7 +454,7 @@ function PlayerDetailInner() {
           </Card>
 
           <IconLabel icon="clipboard-outline" color={theme.violet}>감독 건의</IconLabel>
-          <Card accent={theme.violet}>
+          <Card accent={theme.violet} flat>
             {inPostseasonNow ? (
               // 포스트시즌 동결(SEASON §5.0) — 엔트리는 정규 종료 시점 확정. no-op 건의 금지(스토어도 postseason 사유로 거절).
               <Muted style={{ fontSize: 12 }}>포스트시즌 엔트리 확정. 건의는 다음 시즌부터 가능합니다.</Muted>
@@ -498,7 +498,7 @@ function PlayerDetailInner() {
       ) : null}
 
       <IconLabel icon="wallet-outline" color={theme.warn}>계약</IconLabel>
-      <Card accent={theme.warn}>
+      <Card accent={theme.warn} flat>
         <Row>
           <Muted>연봉</Muted>
           <Text style={{ color: theme.text, fontSize: 18, fontWeight: '800' }}>
@@ -522,7 +522,7 @@ function PlayerDetailInner() {
       {prod && prod.matches > 0 ? (
         <>
           <IconLabel icon="stats-chart-outline" color={theme.elite}>이번 시즌 기록</IconLabel>
-          <Card accent={theme.elite}>
+          <Card accent={theme.elite} flat>
             <Row>
               <Muted>경기</Muted>
               <Text style={{ color: theme.text, fontWeight: '700' }}>{prod.matches}경기</Text>
@@ -555,7 +555,7 @@ function PlayerDetailInner() {
           <IconLabel icon="trophy-outline" color={theme.gold}>
             통산 기록{p.seasonLines && p.seasonLines.length > 0 ? ` · ${seasonYearRange(p.seasonLines[0].season, p.seasonLines[p.seasonLines.length - 1].season)}` : ` (${p.career.seasons}시즌)`}
           </IconLabel>
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             <Row>
               <Muted>경기</Muted>
               <Text style={{ color: theme.text, fontWeight: '700' }}>{p.career.matches}경기</Text>
@@ -585,7 +585,7 @@ function PlayerDetailInner() {
       {p.seasonLines && p.seasonLines.length > 0 ? (
         <>
           <IconLabel icon="stats-chart-outline" color={theme.elite}>시즌별 기록</IconLabel>
-          <Card accent={theme.elite}>
+          <Card accent={theme.elite} flat>
             {p.seasonLines.slice().reverse().map((l) => (
               <View key={l.season} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
                 <Text style={{ color: theme.muted, fontSize: 12, width: 72 }}>{seasonYear(l.season)}</Text>
@@ -604,7 +604,7 @@ function PlayerDetailInner() {
       {awardHist.length > 0 ? (
         <>
           <IconLabel icon="ribbon-outline" color={theme.gold}>수상 이력</IconLabel>
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             {awardHist.map((a, i) => (
               <View key={`${a.season}-${a.label}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
                 <Text style={{ color: theme.muted, fontSize: 12, width: 72 }}>{seasonYear(a.season)}</Text>
@@ -618,7 +618,7 @@ function PlayerDetailInner() {
       {myMilestones.length > 0 ? (
         <>
           <IconLabel icon="trophy-outline" color={theme.gold}>마일스톤</IconLabel>
-          <Card accent={theme.gold}>
+          <Card accent={theme.gold} flat>
             {myMilestones.slice(-8).reverse().map((m, i) => (
               <View key={`${m.season}-${i}`} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 4 }}>
                 <Text style={{ color: theme.muted, fontSize: 12, width: 72 }}>{seasonYear(m.season)}</Text>
@@ -630,7 +630,7 @@ function PlayerDetailInner() {
       ) : null}
 
       <IconLabel icon="stats-chart-outline" color={theme.elite}>종합 스탯</IconLabel>
-      <Card accent={theme.elite}>
+      <Card accent={theme.elite} flat>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <RadarChart
             values={[r.spike, r.block, r.dig, r.receive, r.set, r.serve]}
@@ -649,7 +649,7 @@ function PlayerDetailInner() {
       </Card>
 
       <IconLabel icon="barbell-outline" color={theme.elite}>세부 스탯 (밑단)</IconLabel>
-      <Card accent={theme.elite}>
+      <Card accent={theme.elite} flat>
         <Muted style={{ marginBottom: 2 }}>신체</Muted>
         <StatBar label="점프력" value={p.jump} reveal={reveal} potential={pot('jump')} />
         <StatBar label="민첩성" value={p.agility} reveal={reveal} potential={pot('agility')} />
@@ -665,7 +665,7 @@ function PlayerDetailInner() {
       </Card>
 
       <IconLabel icon="trending-up-outline" color={theme.good}>기술치</IconLabel>
-      <Card accent={theme.good}>
+      <Card accent={theme.good} flat>
         <StatBar label="공격기술" value={p.skSpike} reveal={reveal} potential={pot('skSpike')} />
         <StatBar label="블로킹기술" value={p.skBlock} reveal={reveal} potential={pot('skBlock')} />
         <StatBar label="디그기술" value={p.skDig} reveal={reveal} potential={pot('skDig')} />
@@ -678,7 +678,7 @@ function PlayerDetailInner() {
       {isMine && careerUps.length > 0 ? (
         <>
           <IconLabel icon="trending-up-outline" color={theme.good}>입단 후 성장 (전지훈련 제외)</IconLabel>
-          <Card accent={theme.good}>
+          <Card accent={theme.good} flat>
             <View style={styles.growWrap}>
               {careerUps.map((d) => (
                 <View key={d.label} style={styles.growCell}>

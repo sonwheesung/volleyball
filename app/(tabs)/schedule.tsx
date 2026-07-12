@@ -145,7 +145,7 @@ function ScheduleInner() {
     <Screen title={`${seasonYear(season)} 일정 · ${season + 1}번째 시즌`}>
       {/* 포스트시즌 구간(§5.1.2)엔 스테일 정규 정보(진행 164/164·clinch)를 숨겨 브라켓/다음경기를 최상단으로. */}
       {postseason ? null : (
-        <Card accent={theme.sky}>
+        <Card accent={theme.sky} flat>
           <Row>
             <IconLabel icon="calendar-outline" color={theme.sky}>정규리그 진행</IconLabel>
             <Text style={{ color: theme.text, fontWeight: '700' }}>
@@ -160,7 +160,7 @@ function ScheduleInner() {
       {offseason ? (
         // 오프시즌엔 이 카드가 sched-next 앵커 — 스포트라이트가 "다음 경기" 자리(전지훈련)를 정확히 가리키게(2026-07-05 불일치 수정)
         <SpotlightTarget id="sched-next">
-          <Card accent={theme.good}>
+          <Card accent={theme.good} flat>
             <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
             <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>시즌 시작 전, 다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 전지훈련을 마쳐야 개막전이 시작됩니다.</Muted>
             {/* navigate(≠push): 스택에 이미 캠프가 있으면 재사용 — 중복 인스턴스가 쌓여 "마쳐도 또 나오는" 반복 노출 방지(2026-07-11) */}
@@ -170,7 +170,7 @@ function ScheduleInner() {
       ) : null}
 
       {clinchView && !postseason ? (
-        <Card accent={theme.accent}>
+        <Card accent={theme.accent} flat>
           <Row>
             <IconLabel icon="podium-outline" color={theme.accent}>포스트시즌</IconLabel>
             <Text style={{ color: clinchView.color, fontWeight: '700' }}>{clinchView.text}</Text>
@@ -180,7 +180,7 @@ function ScheduleInner() {
 
       {offseason ? null : nextFixture && preview ? (
         <SpotlightTarget id="sched-next">
-        <Card accent={theme.sky}>
+        <Card accent={theme.sky} flat>
           <IconLabel icon="calendar-outline" color={theme.sky}>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</IconLabel>
           {preview.important ? (
             // 긴 빅매치 배지는 날짜와 한 줄에 두면 카드 폭을 넘어 잘린다(UI-20) → 자기 줄로 내리고 좌측 정렬
@@ -223,7 +223,7 @@ function ScheduleInner() {
             const hiW = games.filter((g) => g.hiSets > g.loSets).length;
             const loW = games.filter((g) => g.loSets > g.hiSets).length;
             return (
-              <Card accent={theme.gold} key={title}>
+              <Card accent={theme.gold} key={title} flat>
                 <IconLabel icon="trophy-outline" color={theme.gold}>{title}</IconLabel>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 4 }}>
                   <Text style={[{ flex: 1, textAlign: 'right', color: theme.text, fontWeight: '700' }, m.hiId === teamId && { color: theme.accent }]} numberOfLines={1}>{name(m.hiId)}</Text>
@@ -236,7 +236,7 @@ function ScheduleInner() {
           };
           return (
             <>
-              <Card accent={theme.accent}>
+              <Card accent={theme.accent} flat>
                 <IconLabel icon="podium-outline" color={theme.accent}>포스트시즌 · 진출 3팀</IconLabel>
                 {p.seeds.map((id, i) => (
                   <Text key={id} style={[{ color: theme.text, fontSize: 15, fontWeight: '600', marginTop: 2 }, id === teamId && { color: theme.accent }]}>
@@ -247,7 +247,7 @@ function ScheduleInner() {
               {seriesCard('플레이오프 (2위 vs 3위 · 3전2선승)', p.po, reveal.poRevealed)}
               {seriesCard('챔피언결정전 (5전3선승)', p.final, reveal.finalRevealed)}
               {next ? (
-                <Card accent={theme.sky}>
+                <Card accent={theme.sky} flat>
                   <IconLabel icon="calendar-outline" color={theme.sky}>
                     {next.round === 'po' ? '플레이오프' : '챔피언결정전'} {next.g + 1}차전 · {formatDate(dateForDay(next.day))}
                   </IconLabel>
@@ -261,7 +261,7 @@ function ScheduleInner() {
                 </Card>
               ) : reveal.championRevealed ? (
                 // 세리머니 3단(§5.3): ①시상식(champion→awards, recordChampion은 시상식 진입 시) → 일정 복귀 → ②시즌 결산.
-                <Card accent={theme.gold}>
+                <Card accent={theme.gold} flat>
                   <Title>🏆 우승, {name(p.championId ?? '')}</Title>
                   {!ceremonyDone ? (
                     <>
@@ -280,7 +280,7 @@ function ScheduleInner() {
           );
         })()
       ) : (
-        <Card accent={theme.accent}>
+        <Card accent={theme.accent} flat>
           <Title>시즌 종료</Title>
           <Muted>정규리그 일정을 모두 마쳤습니다.</Muted>
         </Card>

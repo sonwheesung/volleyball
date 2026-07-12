@@ -29,7 +29,7 @@ export default function CoachDetail() {
 
   return (
     <Screen title={c.name}>
-      <Card accent={theme.violet}>
+      <Card accent={theme.violet} flat>
         <Row>
           <IconLabel icon="person-outline" color={theme.violet}>{team?.name ?? ''} 감독</IconLabel>
           <Muted>{c.age}세</Muted>
@@ -37,12 +37,12 @@ export default function CoachDetail() {
       </Card>
 
       <IconLabel icon="clipboard-outline" color={theme.violet}>성향 · {STYLE_LABEL[c.style]}</IconLabel>
-      <Card accent={theme.violet}>
+      <Card accent={theme.violet} flat>
         <Muted>{STYLE_DESC[c.style]}</Muted>
       </Card>
 
       <IconLabel icon="barbell-outline" color={theme.elite}>능력</IconLabel>
-      <Card accent={theme.elite}>
+      <Card accent={theme.elite} flat>
         <StatBar label="카리스마" value={c.charisma} />
         <Muted style={{ marginTop: 4 }}>
           카리스마가 높을수록 타임아웃 때 경기 흐름(기세)을 강하게 끌어온다.
@@ -50,7 +50,7 @@ export default function CoachDetail() {
       </Card>
 
       <IconLabel icon="trending-up-outline" color={theme.good}>훈련 성향 · {c.archetype}</IconLabel>
-      <Card accent={theme.good}>
+      <Card accent={theme.good} flat>
         <Muted>핵심 훈련 (집중 육성)</Muted>
         <Text style={{ color: theme.accent, fontWeight: '700' }}>
           {c.trainingFocus.primary.map((id) => TRAINING_NAME[id]).join(' · ')}

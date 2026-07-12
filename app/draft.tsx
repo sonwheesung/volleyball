@@ -146,7 +146,7 @@ function DraftCenterInner() {
 
   return (
     <Screen title={`${season + 2}시즌 신인 드래프트`}>
-      <Card accent={theme.sky}>
+      <Card accent={theme.sky} flat>
         <IconLabel icon="person-add-outline" color={theme.sky}>내 순위 {myRank}위</IconLabel>
         <View style={styles.planGrid}>
           <View style={styles.planRow}>
@@ -182,7 +182,7 @@ function DraftCenterInner() {
         </Muted>
       </Card>
 
-      <Card accent={theme.warn}>
+      <Card accent={theme.warn} flat>
         <IconLabel icon="newspaper-outline" color={theme.warn}>{preview_.headline}</IconLabel>
         {preview_.notes.map((n, i) => (
           <Muted key={i} style={{ fontSize: 12, marginTop: 4 }}>· {n}</Muted>

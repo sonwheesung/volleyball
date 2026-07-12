@@ -37,7 +37,7 @@ export default function Guide() {
       <Muted style={{ marginBottom: 4 }}>항목을 누르면 설명이 펼쳐져요. 배구명가를 처음 한다면 위에서부터 차례로 읽어보세요.</Muted>
 
       <IconLabel icon="compass-outline" color={theme.accent}>먼저 · 이 게임과 시즌 흐름</IconLabel>
-      <Card>
+      <Card flat>
         <Accordion icon="tv-outline" title="이게 무슨 게임이에요? (보는 게임)">
           <P>배구명가는 내가 직접 배구를 하는 게임이 아니라, 배구단을 지켜보는 게임이에요. 나는 배구단의 구단주가 되어 팀을 수십 시즌 동안 오래오래 운영해요. 경기는 자동으로 진행되고, 알림으로 귀찮게 하지 않아요. 내 팀의 경기와 선수들이 만들어 가는 이야기를 지켜보는 게 이 게임의 핵심이에요.</P>
           <P>구단주는 경기장 안의 일(선발·교체·타임아웃)은 직접 못 해요. 그건 감독의 몫이에요. 대신 어떤 선수를 데려오고, 누구와 다시 계약하고, 어떤 감독에게 팀을 맡길지 같은 큰 결정을 해요. 좋은 결정이 쌓이면 팀이 강해지고, 세월이 흐르면 그게 우리 구단의 역사가 돼요.</P>
@@ -52,7 +52,7 @@ export default function Guide() {
       </Card>
 
       <IconLabel icon="play-outline" color={theme.warn}>경기 · 관전</IconLabel>
-      <Card>
+      <Card flat>
         <Accordion icon="eye-outline" title="관전: 직접 보기 vs 자동으로 넘기기">
           <P>경기는 직접 보거나(이어보기) 자동으로 넘길 수 있어요. 이 게임은 조작하는 게임이 아니라 보는 게임이라, 내 팀 경기와 시즌 이야기를 지켜보는 게 가장 큰 재미예요.</P>
           <P>바빠서 안 봐도 경기는 알아서 진행되니 걱정 없어요. 경기와 경기 사이에는 모든 선수가 스스로 훈련하며 조금씩 성장해요.</P>
@@ -68,7 +68,7 @@ export default function Guide() {
       </Card>
 
       <IconLabel icon="body-outline" color={theme.sky}>선수 이해</IconLabel>
-      <Card>
+      <Card flat>
         <Accordion icon="stats-chart-outline" title="스탯: 능력치는 2층으로 되어 있어요">
           <P>겉으로 보이는 종합 능력치(스파이크·블로킹·디그·리시브·세팅·서브)는 그냥 정해진 숫자가 아니라, 밑에 깔린 작은 능력들이 합쳐져 만들어져요.</P>
           <P>· 신체: 키·점프력·민첩성·체력  · 공통: 반응속도·위치선정  · 멘탈: 집중력·기복·배구IQ</P>
@@ -108,7 +108,7 @@ export default function Guide() {
       </Card>
 
       <IconLabel icon="diamond-outline" color={theme.accent}>다이아 · 전지훈련</IconLabel>
-      <Card>
+      <Card flat>
         <Accordion icon="diamond-outline" title="다이아: 어떻게 얻나요">
           <P>다이아는 돈을 내고 사는 유료 재화예요. 결제 말고도 두 가지 방법으로 모을 수 있어요.</P>
           <Line k="📺 광고 시청" v="광고를 한 번 보면 +50 다이아를 받아요 (하루에 받을 수 있는 횟수에 한도가 있어요)." />
@@ -123,7 +123,7 @@ export default function Guide() {
       </Card>
 
       <IconLabel icon="briefcase-outline" color={theme.sky}>단장 결정: 팀 꾸리기</IconLabel>
-      <Card>
+      <Card flat>
         <Accordion icon="person-outline" title="감독: 팀 전체를 좌우하는 사람">
           <P>감독은 경기장 안의 모든 결정(선발·교체·타임아웃)을 맡아요. 구단주는 이걸 직접 못 하고 건의만 할 수 있어요. 그래서 어떤 감독을 앉히느냐에 따라 팀이 통째로 달라져요. 감독은 크게 세 가지를 결정해요.</P>
           <Line k="성향" v="공격형·수비형·밸런스. 경기에서 어떤 전술과 스타일로 싸울지를 정해요." />
@@ -151,7 +151,7 @@ export default function Guide() {
       </Card>
 
       <IconLabel icon="cash-outline" color={theme.warn}>구단 운영: 돈과 팬</IconLabel>
-      <Card>
+      <Card flat>
         <Accordion icon="wallet-outline" title="운영자금: 구단주의 지갑">
           <P>운영자금은 구단을 운영하는 데 쓰는 구단주의 지갑이에요. 선수 연봉을 관리하는 샐러리캡(모든 구단이 똑같이 지켜야 하는 연봉 상한)과는 다른, 별개의 돈이에요.</P>
           <P>이렇게 돈이 들어와요(수입):</P>
@@ -170,7 +170,7 @@ export default function Guide() {
       </Card>
 
       <IconLabel icon="trophy-outline" color={theme.accent}>기록 · 명예</IconLabel>
-      <Card>
+      <Card flat>
         <Accordion icon="ribbon-outline" title="기록과 명예: 세월이 남기는 훈장">
           <P>시즌이 끝날 때마다 시상식(MVP·신인상 등)이 열리고, 선수의 통산 기록이 차곡차곡 쌓여요. 크게 활약한 선수는 명예의 전당에 오르고, 등번호가 영구결번이 되기도 해요.</P>
           <P>이런 기록은 왜 있냐면, 이 게임의 진짜 재미가 '세월이 쌓여 만들어지는 이야기'이기 때문이에요. 한 선수가 신인으로 들어와 스타가 되고 은퇴하기까지의 모든 기록이 남아서, 은퇴한 뒤에도 우리 구단의 역사로 계속 이어져요.</P>

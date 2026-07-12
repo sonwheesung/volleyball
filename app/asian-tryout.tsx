@@ -108,7 +108,7 @@ function AsianTryoutInner() {
       {myAsian ? (
         <>
           <Title>기존 구단 보유권, {myAsian.name} ({myAsian.nationality ?? ''} · {myAsian.age}세 · OVR {displayOvr(overallRaw(myAsian))})</Title>
-          <Card accent={theme.bad}>
+          <Card accent={theme.bad} flat>
             {myAsian.age + 1 >= RETIRE_AGE ? (
               // 정년(FOREIGN_SYSTEM §1.6): 다음 시즌 나이 40+ → 보유(재계약) 불가(리그 정년은 수입선수에도 적용).
               <Muted style={{ fontSize: 12 }}>

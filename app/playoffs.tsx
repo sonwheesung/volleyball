@@ -31,7 +31,7 @@ function PlayoffsInner() {
   if (!inPostseason(currentDay)) {
     return (
       <Screen title={`${seasonYear(season)} 포스트시즌`}>
-        <Card accent={theme.muted}>
+        <Card accent={theme.muted} flat>
           <IconLabel icon="lock-closed-outline" color={theme.muted}>대기 중</IconLabel>
           <Muted style={{ marginTop: 6, lineHeight: 20 }}>포스트시즌은 정규 리그 종료 후 열립니다. 진출 팀과 대진은 정규 일정을 모두 마친 뒤 공개돼요.</Muted>
         </Card>
@@ -45,7 +45,7 @@ function PlayoffsInner() {
     const loW = games.filter((g) => g.loSets > g.hiSets).length;
     const decided = revealed === m.series.games.length; // 시리즈 확정 공개 여부
     return (
-      <Card accent={theme.gold}>
+      <Card accent={theme.gold} flat>
         <IconLabel icon="trophy-outline" color={theme.gold}>{title}</IconLabel>
         <View style={styles.matchup}>
           <Text style={[styles.team, { textAlign: 'right' }, decided && m.winnerId === m.hiId && styles.win, m.hiId === my && styles.mine]} numberOfLines={1}>{name(m.hiId)}</Text>
@@ -59,7 +59,7 @@ function PlayoffsInner() {
 
   return (
     <Screen title={`${seasonYear(season)} 포스트시즌`}>
-      <Card accent={theme.accent}>
+      <Card accent={theme.accent} flat>
         <IconLabel icon="podium-outline" color={theme.accent}>진출 (상위 3팀)</IconLabel>
         {po.seeds.map((id, i) => (
           <Text key={id} style={[styles.seed, id === my && styles.mine]}>{i + 1}위 {name(id)} {i === 0 ? '(챔프전 직행)' : ''}</Text>
@@ -68,7 +68,7 @@ function PlayoffsInner() {
       {po.po && reveal.poRevealed > 0 ? <SeriesCard title="플레이오프 (2위 vs 3위 · 3전2선승)" m={po.po} revealed={reveal.poRevealed} /> : null}
       {po.final && reveal.finalRevealed > 0 ? <SeriesCard title="챔피언결정전 (5전3선승)" m={po.final} revealed={reveal.finalRevealed} /> : null}
       {reveal.championRevealed && po.championId ? (
-        <Card accent={theme.gold}><Text style={styles.champ}>🏆 우승 ({name(po.championId)})</Text></Card>
+        <Card accent={theme.gold} flat><Text style={styles.champ}>🏆 우승 ({name(po.championId)})</Text></Card>
       ) : null}
     </Screen>
   );

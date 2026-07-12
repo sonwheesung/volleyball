@@ -84,7 +84,7 @@ function TransactionsInner() {
 
   return (
     <Screen title="시즌 중 FA 영입">
-      <Card accent={theme.warn}>
+      <Card accent={theme.warn} flat>
         <Row>
           <IconLabel icon="wallet-outline" color={theme.warn}>캡 잔여 · 운영 자금 · 정원</IconLabel>
           <Text style={{ color: theme.text, fontWeight: '800' }}>
@@ -97,7 +97,7 @@ function TransactionsInner() {
       </Card>
 
       {postseason ? (
-        <Card accent={theme.muted}>
+        <Card accent={theme.muted} flat>
           <IconLabel icon="lock-closed-outline" color={theme.muted}>포스트시즌, 선수단 이동은 시즌 종료 후</IconLabel>
           <Muted style={{ fontSize: 12, marginTop: 2 }}>
             포스트시즌 엔트리는 정규 종료 시점으로 확정됩니다. 영입·외국인 교체는 이번 시즌엔 반영되지 않아 잠깁니다.
@@ -209,7 +209,7 @@ function TransactionsInner() {
 
       <Title>영입 가능 FA ({fas.length})</Title>
       {fas.length === 0 ? (
-        <Card accent={theme.sky}><Muted>현재 영입 가능한 FA가 없습니다. (방출 선수·오프시즌 미계약자가 풀에 쌓입니다.)</Muted></Card>
+        <Card accent={theme.sky} flat><Muted>현재 영입 가능한 FA가 없습니다. (방출 선수·오프시즌 미계약자가 풀에 쌓입니다.)</Muted></Card>
       ) : (
         fas.map((p) => {
           const betrayed = isBetrayed(p.id);

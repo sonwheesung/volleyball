@@ -25,7 +25,7 @@ function StandingsInner() {
 
   return (
     <Screen title={`${seasonYear(season)} 순위`}>
-      <Card accent={theme.accent}>
+      <Card accent={theme.accent} flat>
         <IconLabel icon="podium-outline" color={theme.accent}>리그 순위</IconLabel>
         <View style={[styles.row, styles.head]}>
           <Text style={[styles.rank, styles.h]}>#</Text>
