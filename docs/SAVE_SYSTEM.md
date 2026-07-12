@@ -94,16 +94,17 @@
 |---|---|---|
 | `interviews` | InterviewLog[]{playerId,season,day,topic,card,ok} | [] (최근 200) |
 | `benchDirectives` | BenchDirective[]{playerId,fromDay,toDay?} | [] (A3: `toDay`=철회 종결일, 옵셔널 — 없으면 활성) |
+| `interventions` (2단계, 구현) | Record<fixtureId, MatchIntervention[]{at,side,kind,outId?,inId?}> | {} (경기 개입 로그 — 타임아웃·교체 좌표. `KIND='rec'` 정규화. §2① 자동 처리) |
 | `talkCooldown` · `benchCooldown` | Record<playerId, number> | {} |
 | `fanScore` | scalar(number) | 50 |
 | `releaseAnger` | scalar(number) | 0 |
 | `cash` | scalar(number) | 50000 |
 | `lastFinance` | SeasonFinance \| null | null |
 
-> **미구현 — 계획(2026-07-12, 경기 개입)**: 아래 필드는 **아직 구현 안 됨(설계만)**, `docs/MATCH_INTERVENTION_SYSTEM.md` §2 정본.
-> 구현 시 §1의 필드 수는 **신규 추가 예정**(현재 67 → 개입 필드만큼 증가). `benchDirectives`와 동형 패턴이라 §2① 자동 처리(누락=기본값).
+> **구현 완료(2026-07-12, 경기 개입 2단계 — 순수 로그 방식)**: `interventions` 필드 구현. 정본 `docs/MATCH_INTERVENTION_SYSTEM.md` §2.2.
+> §1 필드 수 67 → **68**(개입 1필드 추가). `benchDirectives`와 동형 패턴이라 §2① 자동 처리(누락=기본값 `{}`, `SAVE_DEFAULTS`+`KIND='rec'`).
 > - `interventions`: `Record<fixtureId, MatchIntervention[]>` — 내 팀 경기 개입 로그(타임아웃·교체 좌표), forward-only, bounded(시즌 ~36경기). 기본 `{}`. 재관전 재생 입력(§3 프리픽스 불변).
-> - 개입 경기 **결과·박스 스냅샷** 필드(최종 세트스코어 + BoxSink) — 순위·생산·시상이 재시뮬 없이 읽는 진실. ENGINE_VERSION 재튜닝 드리프트 면역용. 마이그레이션 대상(모양 변경 시 §3 version+migrate).
+> - **스냅샷 필드 없음**(§2.2 조정): 개입 경기 결과·박스를 동결하는 대신, **모든 sim 호출부**(관전 `matchBox`·순위 `standings`·생산 `production`)가 `interventionsFor(id)`로 로그를 실어 재시뮬 → split-brain 원천 소멸. `_dv_intervention_consistency` 가드가 전 호출부 바이트 동일을 증명.
 
 ### 외국인·아시아쿼터
 | 필드 | 자료구조 | 기본 |

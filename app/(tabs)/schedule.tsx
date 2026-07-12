@@ -13,6 +13,7 @@ import { seasonYear } from '../../data/seasonLabel';
 import { teamClinch } from '../../data/clinch';
 import { availableTeamPlayers } from '../../data/injury';
 import { buildMatchBox } from '../../data/matchBox';
+import { interventionsFor } from '../../data/dynamics';
 import { buildPlayoffs, type Matchup } from '../../data/playoffs';
 import { postseasonReveal, nextPoGame } from '../../data/postseason';
 import { SEASON_DAYS } from '../../engine/calendar';
@@ -106,7 +107,7 @@ function ScheduleInner() {
   const devCompleteSeason = () => {
     for (const f of SEASON) {
       if ((f.homeTeamId === teamId || f.awayTeamId === teamId) && !results[f.id]) {
-        const { sim } = buildMatchBox(f.homeTeamId, f.awayTeamId, f.dayIndex, f.seed);
+        const { sim } = buildMatchBox(f.homeTeamId, f.awayTeamId, f.dayIndex, f.seed, interventionsFor(f.id));
         recordResult({ fixtureId: f.id, homeSets: sim.homeSets, awaySets: sim.awaySets });
       }
     }

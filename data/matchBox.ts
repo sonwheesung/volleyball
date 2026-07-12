@@ -3,7 +3,7 @@ import { availableTeamPlayers } from './injury';
 import { restedOnDay } from './rotation';
 import { simulateMatch } from '../engine/match';
 import type { BoxSink } from '../engine/rally';
-import type { SimResult } from '../engine/simMatch';
+import type { SimResult, MatchIntervention } from '../engine/simMatch';
 import type { Player } from '../types';
 
 // 경기 박스스코어 단일 소스 — 관전 보드(match/[id])와 경기 상세(matchresult)가 **같은 기록**을 그리도록
@@ -18,7 +18,9 @@ export interface MatchBox {
   boxTimeline: BoxSink[]; // 득점별 누적 스냅샷(관전 실시간 스코어박스)
 }
 
-export function buildMatchBox(homeId: string, awayId: string, dayIndex: number, seed: number): MatchBox {
+// interventions(§2.2): fixtureId를 아는 호출부(관전 보드·상세)는 interventionsFor(id)를 넘긴다. 모르는 호출부(샌드박스·도구)는
+// 기본 [] → 바이트 동일. buildPlayoffBox(data/postseason)는 이 함수를 안 쓴다(별 경로 — 2단계 범위 밖).
+export function buildMatchBox(homeId: string, awayId: string, dayIndex: number, seed: number, interventions: MatchIntervention[] = []): MatchBox {
   const homeRest = restedOnDay(homeId, dayIndex);
   const awayRest = restedOnDay(awayId, dayIndex);
   const homeSquad = homeRest.size ? availableTeamPlayers(homeId, dayIndex).filter((p) => !homeRest.has(p.id)) : availableTeamPlayers(homeId, dayIndex);
@@ -27,6 +29,7 @@ export function buildMatchBox(homeId: string, awayId: string, dayIndex: number, 
   const boxTimeline: BoxSink[] = [];
   const sim = simulateMatch(seed, homeSquad, awaySquad, {
     home: coachInfoOf(homeId), away: coachInfoOf(awayId), box, boxTimeline, touches: true, // touches: 보드가 디그 마커를 박스 귀속자로 재생(2b)
+    interventions,
   });
   return { homeSquad, awaySquad, sim, box, boxTimeline };
 }

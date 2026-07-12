@@ -13,6 +13,7 @@ import { buildMatchBanners, type Banner } from '../../data/broadcast';
 import { reconstructRallies, buildLiveBanners } from '../../components/courtDirector';
 import { getFixture, getTeam, shortTeamName } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
+import { interventionsFor } from '../../data/dynamics';
 import { buildPlayoffs, poSeedBase, finalSeedBase } from '../../data/playoffs';
 import { buildPlayoffBox, type PoRound } from '../../data/postseason';
 import { PO_SLOTS, FINAL_SLOTS } from '../../engine/calendar';
@@ -92,7 +93,8 @@ export default function MatchBoard() {
     }
     // 박스스코어 단일 소스 — 경기 상세(matchresult)와 동일 명단(부상·정지·벤치 + 휴식 #3)·시뮬·박스.
     // 둘 다 buildMatchBox만 호출 → 같은 기록 보장(드리프트 차단). boxTimeline=실시간 스코어박스용.
-    const { homeSquad, awaySquad, sim, boxTimeline } = buildMatchBox(home.id, away.id, dayIndex, seed);
+    // 개입 로그(§2.2): 정규시즌 fixture만 주입(샌드박스=fixtureId 없음, 플옵은 위 분기에서 이미 return — 2단계 범위 밖).
+    const { homeSquad, awaySquad, sim, boxTimeline } = buildMatchBox(home.id, away.id, dayIndex, seed, isSandbox ? [] : interventionsFor(fixture!.id));
     return {
       home, away, homeSquad, awaySquad, seed, sim, boxTimeline,
     };

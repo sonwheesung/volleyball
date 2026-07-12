@@ -4,6 +4,7 @@ import { Card, Muted, PosTag, Screen, Title, theme, themedStyles } from '../../c
 import { BoxScoreTable } from '../../components/BoxScoreTable';
 import { getFixture, getTeam } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
+import { interventionsFor } from '../../data/dynamics';
 import { matchMvp } from '../../data/matchAward';
 
 export default function MatchResult() {
@@ -19,7 +20,7 @@ export default function MatchResult() {
   }
 
   // 관전 보드와 동일 단일 소스(buildMatchBox) — 명단(부상·정지·벤치+휴식 #3)·시뮬·박스가 항상 일치.
-  const { homeSquad: home, awaySquad: away, sim, box } = buildMatchBox(fixture.homeTeamId, fixture.awayTeamId, fixture.dayIndex, fixture.seed);
+  const { homeSquad: home, awaySquad: away, sim, box } = buildMatchBox(fixture.homeTeamId, fixture.awayTeamId, fixture.dayIndex, fixture.seed, interventionsFor(fixture.id));
 
   const homeName = getTeam(fixture.homeTeamId)?.name ?? '';
   const awayName = getTeam(fixture.awayTeamId)?.name ?? '';

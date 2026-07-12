@@ -10,6 +10,7 @@ import { healthyByPos, shortagePositions, pickSigning } from '../engine/transact
 import { formFactor, applyForm, FORM_WINDOW } from '../engine/form';
 import { rollScandal, SCANDAL_MISS, type ScandalKind } from '../engine/scandal';
 import type { BenchDirective } from '../engine/owner';
+import type { MatchIntervention } from '../engine/simMatch';
 import { marketVal } from './awardSalary';
 import { LEAGUE_CAP } from '../engine/cap';
 import { SEASON_DAYS } from '../engine/calendar';
@@ -52,6 +53,20 @@ export function setOwnerContext(bench: BenchDirective[], minAffectedDay = 0): vo
   benchDirectives = [...bench]; txVersion++; // 파생 캐시(순위·생산·dyn) 일괄 무효화
   recordBump(minAffectedDay);
 }
+// ── 경기 개입 컨텍스트(MATCH_INTERVENTION_SYSTEM §2) — per-fixture 개입 로그. setOwnerContext와 동형.
+//   순수 로그 방식(§2.2): 개입 로그만 영속하고 모든 sim 호출부가 interventionsFor(id)로 조회해 opts.interventions로 넘긴다.
+//   기본값 {}이면 interventionsFor가 항상 [] → 전 호출부 바이트 동일(1단계 회귀 보존). ──
+let interventions: Record<string, MatchIntervention[]> = {};
+// minAffectedDay(§2.3): 개입은 항상 관전 중(=그 경기일) → forward-only 접미 bump. 기본 0=전체 재계산(로드/리셋 등 날 정보 없는 콜러).
+export function setInterventionContext(iv: Record<string, MatchIntervention[]>, minAffectedDay = 0): void {
+  interventions = { ...iv }; txVersion++; // 파생 캐시(순위·생산·dyn) 일괄 무효화 — setOwnerContext 동형
+  recordBump(minAffectedDay);
+}
+/** fixtureId의 개입 로그(순수 조회, 재시뮬 결정론) — 없으면 []. 모든 sim 호출부가 이걸로 로그를 싣는다(§2.2). */
+export function interventionsFor(fixtureId: string): MatchIntervention[] {
+  return interventions[fixtureId] ?? [];
+}
+
 // 종결일(toDay) 인지(A3, 2026-07-08) — 철회된 지시는 삭제 대신 toDay가 박혀 [fromDay, toDay] 구간에만 유효.
 // 이미 치른(관전·기록된) 경기일은 그대로 벤치 유지(리플레이 소급 변경 금지), 종결 이후 미관전 미래 경기는 복귀.
 const benchedOn = (day: number): Set<string> =>

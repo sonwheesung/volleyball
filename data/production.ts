@@ -8,7 +8,7 @@ import { attributeProduction, mergeProd, splitLineup, type ProdLine } from '../e
 import type { BoxSink } from '../engine/rally';
 import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 import { availableTeamPlayers } from './injury';
-import { currentTxVersion } from './dynamics';
+import { currentTxVersion, interventionsFor } from './dynamics';
 import { restedOnDay } from './rotation';
 import { minAffectedDaySince, spliceSeq } from './spliceLog';
 
@@ -74,6 +74,7 @@ function allProdRows(): ProdRow[] {
       const box: BoxSink = new Map();
       const sim = simulateMatch(f.seed, roster[f.homeTeamId], roster[f.awayTeamId], {
         home: coachInfoOf(f.homeTeamId, f.dayIndex), away: coachInfoOf(f.awayTeamId, f.dayIndex), box, // 축3: 그날의 감독
+        interventions: interventionsFor(f.id), // 개입 로그 주입(MATCH_INTERVENTION §2.2) — 비면 [] = 바이트 동일
       });
       const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed, box);
       const starters = new Set<string>([

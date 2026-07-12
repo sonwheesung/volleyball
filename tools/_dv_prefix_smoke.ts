@@ -1,7 +1,8 @@
 // 독립 검증(메인 작성) — 개입의 "프리픽스 불변" + "실제 효과" 스모크.
 // 에이전트가 만든 _dv_intervention_empty(빈=noop)와 별개로, 개입이 (1) 결과를 실제로 바꾸고
 // (2) 개입 좌표 이전 points[]는 바이트 동일함을 증명한다. 이게 인터랙티브 방식의 린치핀.
-import { simulateMatch, type MatchIntervention } from '../engine/match';
+import { simulateMatch } from '../engine/match';
+import type { MatchIntervention } from '../engine/simMatch';
 import { LEAGUE, getEvolvedTeamPlayers, coachInfoOf, resetLeagueBase } from '../data/league';
 
 resetLeagueBase();
@@ -12,8 +13,8 @@ let firstBadPrefix: string | null = null;
 
 for (let i = 0; i < 3000; i++) {
   const seed = (i * 2654435761) >>> 0;
-  const H = getEvolvedTeamPlayers(teams[i % teams.length].id);
-  const A = getEvolvedTeamPlayers(teams[(i + 1) % teams.length].id);
+  const H = getEvolvedTeamPlayers(teams[i % teams.length].id, 0);
+  const A = getEvolvedTeamPlayers(teams[(i + 1) % teams.length].id, 0);
   const opts = { home: coachInfoOf(teams[i % teams.length].id), away: coachInfoOf(teams[(i + 1) % teams.length].id) };
 
   // 기준(개입 없음)
@@ -37,7 +38,7 @@ for (let i = 0; i < 3000; i++) {
   const withIv = simulateMatch(seed, H, A, { ...opts, interventions: iv });
 
   // subEvents에 manual이 실제로 들어갔나(개입이 적용됐나 — 좌표/후보가 유효했을 때)
-  const didApply = withIv.subEvents.some((e) => e.kind === 'manual');
+  const didApply = (withIv.subEvents ?? []).some((e) => e.kind === 'manual');
   if (didApply) applied++;
 
   // (2) 프리픽스 불변: coord 이전(그 점수 이전) points가 바이트 동일
