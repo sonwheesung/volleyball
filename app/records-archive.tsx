@@ -310,9 +310,10 @@ function CareerView({
                 <Pressable key={r.id} onPress={() => onPlayer(r.id)} style={({ pressed }) => [styles.lbRow, pressed && { opacity: 0.6 }]}>
                   <Text style={styles.lbRankMedal}>{i < 3 ? MEDAL[i] : i + 1}</Text>
                   <PosTag pos={r.position} />
-                  <Text style={[styles.lbName, isMine(r.id) && styles.mine]} numberOfLines={1}>
-                    {r.name}{r.legend ? ' 🎖️' : r.retired ? ' ·은' : ''}
-                  </Text>
+                  <View style={styles.lbNameCell}>
+                    <Text style={[styles.lbName, { flex: 0, flexShrink: 1 }, isMine(r.id) && styles.mine]} numberOfLines={1}>{r.name}</Text>
+                    {r.legend ? <Text style={styles.lbLegend}>🎖️</Text> : r.retired ? <Text style={styles.lbRetired}>은퇴</Text> : null}
+                  </View>
                   <Text style={styles.lbTeam} numberOfLines={1}>{short(r.teamId)}</Text>
                   <Text style={styles.lbVal}>{r.value.toLocaleString()}</Text>
                 </Pressable>
@@ -322,7 +323,7 @@ function CareerView({
         })
       )}
       <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 2 }}>
-        현역 + 은퇴(명예의전당) 통합 · 🎖️ 헌액 번호 · ·은 은퇴
+        현역 + 은퇴(명예의전당) 통합 · 🎖️ 헌액 번호 · 은퇴 뱃지 = 은퇴 선수
       </Muted>
     </>
   );
@@ -468,6 +469,9 @@ const styles = themedStyles(() => StyleSheet.create({
   lbRank: { width: 18, color: theme.muted, fontSize: 13, fontWeight: '700', textAlign: 'center' },
   lbRankMedal: { width: 20, color: theme.muted, fontSize: 13, fontWeight: '800', textAlign: 'center' },
   lbName: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '600' },
+  lbNameCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
+  lbLegend: { fontSize: 11 },
+  lbRetired: { color: theme.muted, fontSize: 10, fontWeight: '800', backgroundColor: theme.cardAlt, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' },
   lbTeam: { color: theme.muted, fontSize: 12, width: 52, textAlign: 'right' },
   lbVal: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 44, textAlign: 'right' },
 

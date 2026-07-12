@@ -3,8 +3,8 @@
 //   우리 원장(RC virtual currency 미사용). 정본 MONETIZATION_SYSTEM §4 · BACKEND §13.18(2026-07-03 RC 재채택).
 //   ※ 월드컵 DLC(WORLDCUP_SYSTEM)는 미구현 → `WORLDCUP_ENABLED`로 카드 숨김(구현 완료 시 노출).
 import Ionicons from '@expo/vector-icons/Ionicons';
-import { type ComponentProps } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { type ComponentProps, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore } from '../store/useGameStore';
@@ -14,18 +14,18 @@ import { useRouter } from 'expo-router';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-function ShopCard({ icon, tint, title, sub, onPress }: { icon: IoniconName; tint: string; title: string; sub: string; onPress: () => void }) {
+function ShopCard({ icon, tint, title, sub, onPress, busy }: { icon: IoniconName; tint: string; title: string; sub: string; onPress: () => void; busy?: boolean }) {
   return (
     <Card accent={tint} onPress={onPress}>
-      <View style={styles.row}>
+      <View style={[styles.row, busy && { opacity: 0.6 }]}>
         <View style={[styles.iconChip, { backgroundColor: tint + '22' }]}>
           <Ionicons name={icon} size={20} color={tint} />
         </View>
         <View style={{ flex: 1 }}>
           <Text style={styles.title}>{title}</Text>
-          <Muted style={{ fontSize: 12.5, marginTop: 1 }}>{sub}</Muted>
+          <Muted style={{ fontSize: 12.5, marginTop: 1 }}>{busy ? '처리 중…' : sub}</Muted>
         </View>
-        <Text style={styles.arrow}>›</Text>
+        {busy ? <ActivityIndicator size="small" color={tint} /> : <Text style={styles.arrow}>›</Text>}
       </View>
     </Card>
   );
@@ -34,21 +34,37 @@ function ShopCard({ icon, tint, title, sub, onPress }: { icon: IoniconName; tint
 export default function Shop() {
   const diamonds = useGameStore((s) => s.diamonds);
   const router = useRouter();
+  // 구매/복원 처리 중 로컬 래치 — 스토어 결제 왕복 동안 버튼 잠금 + "처리 중" 피드백(연타·중복 차단). 표시/게이팅만.
+  const [busySku, setBusySku] = useState<Sku | null>(null);
+  const [restoring, setRestoring] = useState(false);
+  const anyBusy = busySku !== null || restoring;
 
   // 상점 결제 — IAP 추상화(lib/iap). dev는 시뮬 알림, 운영은 스토어 결제→RevenueCat 검증(재채택 2026-07-03, BACKEND §13.18). throw 없이 결과 반환.
   const buy = async (sku: Sku) => {
-    const r = await purchase(sku);
-    if (r.ok) showAlert('구매 완료', `${skuLabel(sku)}이(가) 적용되었습니다. 감사합니다!`);
-    else if (r.reason === 'cancelled') return; // 유저 취소 — 조용히
-    else showAlert('구매 실패',
-      r.reason === 'network' ? '네트워크 연결을 확인한 뒤 다시 시도해 주세요.'
-      : r.reason === 'unavailable' ? '상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
-      : '구매를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    if (anyBusy) return; // 이미 처리 중 — 중복 호출 차단
+    setBusySku(sku);
+    try {
+      const r = await purchase(sku);
+      if (r.ok) showAlert('구매 완료', `${skuLabel(sku)}이(가) 적용되었습니다. 감사합니다!`);
+      else if (r.reason === 'cancelled') return; // 유저 취소 — 조용히
+      else showAlert('구매 실패',
+        r.reason === 'network' ? '네트워크 연결을 확인한 뒤 다시 시도해 주세요.'
+        : r.reason === 'unavailable' ? '상품을 불러오지 못했습니다. 잠시 후 다시 시도해 주세요.'
+        : '구매를 완료하지 못했습니다. 잠시 후 다시 시도해 주세요.');
+    } finally {
+      setBusySku(null);
+    }
   };
   const restore = async () => {
-    const r = await restorePurchases();
-    showAlert(r.ok ? '구매 복원' : '복원 실패',
-      r.ok ? '구매 내역을 확인했습니다.' : '잠시 후 다시 시도해 주세요(네트워크 확인).');
+    if (anyBusy) return; // 이미 처리 중 — 중복 호출 차단
+    setRestoring(true);
+    try {
+      const r = await restorePurchases();
+      showAlert(r.ok ? '구매 복원' : '복원 실패',
+        r.ok ? '구매 내역을 확인했습니다.' : '잠시 후 다시 시도해 주세요(네트워크 확인).');
+    } finally {
+      setRestoring(false);
+    }
   };
 
   return (
@@ -72,15 +88,17 @@ export default function Shop() {
       <Text style={styles.section}>아이템</Text>
       <ShopCard icon="remove-circle-outline" tint={theme.rose} title="광고 제거"
         sub="게임 내 모든 광고를 없앱니다"
+        busy={busySku === SKU_REMOVE_ADS}
         onPress={() => buy(SKU_REMOVE_ADS)} />
       {WORLDCUP_ENABLED ? (
         <ShopCard icon="globe-outline" tint={theme.sky} title="월드컵 시즌 구매"
           sub="DLC · 4년마다 국가대표 차출(월드컵)"
+          busy={busySku === SKU_DLC_WORLDCUP}
           onPress={() => buy(SKU_DLC_WORLDCUP)} />
       ) : null}
 
-      <Pressable onPress={restore} style={{ alignItems: 'center', paddingVertical: 12 }}>
-        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>구매 복원</Text>
+      <Pressable onPress={restore} disabled={anyBusy} style={[{ alignItems: 'center', paddingVertical: 12 }, anyBusy && { opacity: 0.5 }]}>
+        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>{restoring ? '복원 중…' : '구매 복원'}</Text>
       </Pressable>
 
       <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 6 }}>
