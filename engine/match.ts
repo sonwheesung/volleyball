@@ -271,7 +271,8 @@ export function simulateMatch(
             if (slot < 0) continue; // 코트에 없음(방어)
             const inP = (iv.side === 'home' ? homePlayers : awayPlayers).find((p) => p.id === iv.inId);
             if (!inP) continue;     // 벤치에 없음(방어)
-            subIn(iv.side, slot, inP, 'manual'); // FIVB 가드 전부 상속(no-op 자동 처리)
+            // 'pinch'=서브 교체(자동복원 루프가 서브권 잃으면 원선발로 되돌림) / 'manual'=세트 끝까지. FIVB 가드 전부 상속(no-op 자동 처리)
+            subIn(iv.side, slot, inP, iv.subKind === 'pinch' ? 'pinch' : 'manual');
           } else {
             // 타임아웃 — 감독 자동 경로와 별개(임계·streak 무시 강제). 기존 타임아웃 블록의 효과를 그대로 복제.
             if (timeouts[iv.side] <= 0) continue; // 세트 한도 소진 시 no-op

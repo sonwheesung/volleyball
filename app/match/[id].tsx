@@ -69,6 +69,7 @@ export default function MatchBoard() {
   const [interveneOpen, setInterveneOpen] = useState(false);
   const [ivStep, setIvStep] = useState<'menu' | 'pickOut' | 'pickIn'>('menu'); // 개입 시트 단계
   const [pendingOut, setPendingOut] = useState<string | null>(null);            // 뺄 선수(교체 out) 선택 보관
+  const [ivSubKind, setIvSubKind] = useState<'manual' | 'pinch'>('manual');     // 교체 종류: 세트 끝까지 / 서브 교체(서브권 잃으면 자동 복귀)
   const [ivError, setIvError] = useState<string | null>(null);                  // 적용 불가 안내(드라이런 실패)
   const { toasts, push: pushToast } = useToastQueue();                          // 성공 피드백(비모달, 관전형)
   // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거). ptIdx=현재 점수가 반영된 득점 인덱스(타임라인 조회용)
@@ -226,14 +227,26 @@ export default function MatchBoard() {
     if (!mineSide || !myBaseSix.length) return [];
     return applySubsToSix(myBaseSix, mineSide, data.sim.subEvents, score.ptIdx + 1, byIdAll);
   }, [mineSide, myBaseSix, data.sim, score.ptIdx, byIdAll]);
-  // 벤치 후보 = 내 로스터 − 현재코트 − 리베로 − 부상(경기 내) − 이번 세트 이미 투입(usedSubIn)
+  // 벤치 후보 = 내 로스터 − 현재코트 − 리베로 − 부상(경기 내) − 이번 세트 이미 투입(usedSubIn) − 뺄 선수와 다른 포지션
+  //   같은 포지션 제한(2026-07-12 사용자 결정): OH 자리에 세터가 들어가는 비현실 라인업 방지. 같은 포지션 벤치가 없으면 후보 0(안내).
   const benchCands = useMemo(() => {
     if (!mineSide || !mySquad.length) return [];
+    const outPos = pendingOut ? (curSix.find((p) => p.id === pendingOut)?.position ?? byIdAll.get(pendingOut)?.position) : null;
     const onCourt = new Set(curSix.map((p) => p.id));
     const usedIn = new Set((data.sim.subEvents ?? []).filter((e) => e.enter && e.side === mineSide && e.setNo === score.setNo).map((e) => e.inId));
     const injuredIn = new Set((data.sim.subEvents ?? []).filter((e) => e.kind === 'injury' && e.side === mineSide).map((e) => e.outId));
-    return mySquad.filter((p) => p.position !== 'L' && !onCourt.has(p.id) && !usedIn.has(p.id) && !injuredIn.has(p.id));
-  }, [mineSide, mySquad, curSix, data.sim, score.setNo]);
+    return mySquad.filter((p) => p.position !== 'L' && !onCourt.has(p.id) && !usedIn.has(p.id) && !injuredIn.has(p.id)
+      && (!outPos || p.position === outPos));
+  }, [mineSide, mySquad, curSix, data.sim, score.setNo, pendingOut, byIdAll]);
+  // 현재(다음 랠리) 서브권이 내 팀인가 — 서브 교체(핀치)는 서브권이 있어야 실효(없으면 즉시 자동복원). 랠리포인트제:
+  //   직전 점수 득점 팀이 다음 서브. 세트 첫 랠리면 setFirstServers.
+  const iAmServing = useMemo(() => {
+    if (!mineSide) return false;
+    const pts = data.sim.points;
+    const i = score.ptIdx;
+    if (i >= 0 && pts[i] && pts[i].setNo === score.setNo) return pts[i].scorer === mineSide;
+    return (data.sim.setFirstServers?.[score.setNo - 1]) === mineSide;
+  }, [mineSide, data.sim, score.ptIdx, score.setNo]);
   // 코트 선수 체력(가능하면) — 현재 지점 직전 마지막 타임아웃 스냅샷에서 id→잔량(0..1)
   const stamMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -255,8 +268,9 @@ export default function MatchBoard() {
     const dry = buildMatchBox(data.home.id, data.away.id, fixture.dayIndex, data.seed, tentative).sim;
     let applied = false;
     if (iv.kind === 'sub') {
-      const has = (sim: typeof dry) => (sim.subEvents ?? []).filter((e) => e.enter && e.kind === 'manual' && e.inId === iv.inId && e.setNo === iv.at.setNo).length;
-      applied = has(dry) > has(data.sim); // 개입 좌표에 manual 투입 엔트리가 새로 생겼나
+      const wantKind = iv.subKind === 'pinch' ? 'pinch' : 'manual';
+      const has = (sim: typeof dry) => (sim.subEvents ?? []).filter((e) => e.enter && e.kind === wantKind && e.inId === iv.inId && e.setNo === iv.at.setNo).length;
+      applied = has(dry) > has(data.sim); // 개입 좌표에 그 종류(manual/pinch) 투입 엔트리가 새로 생겼나
     } else {
       const has = (sim: typeof dry) => (sim.timeouts ?? []).filter((t) => t.side === iv.side && t.setNo === iv.at.setNo && t.home === iv.at.h && t.away === iv.at.a).length;
       applied = has(dry) > has(data.sim);
@@ -275,10 +289,14 @@ export default function MatchBoard() {
 
   const onConfirmSub = useCallback((inId: string) => {
     if (!mineSide || !pendingOut) return;
-    const ok = commitIntervention({ at: { setNo: score.setNo, h: score.h, a: score.a }, side: mineSide as Side, kind: 'sub', outId: pendingOut, inId });
-    if (ok) { pushToast(`${byIdAll.get(inId)?.name ?? '선수'} 선수를 투입했어요`); closeIntervene(); }
-    else setIvError('지금은 교체할 수 없어요. 이번 세트 교체 한도가 찼거나 규칙상 불가한 교체예요.');
-  }, [mineSide, pendingOut, commitIntervention, score, byIdAll, pushToast, closeIntervene]);
+    const ok = commitIntervention({ at: { setNo: score.setNo, h: score.h, a: score.a }, side: mineSide as Side, kind: 'sub', outId: pendingOut, inId, subKind: ivSubKind });
+    if (ok) {
+      pushToast(ivSubKind === 'pinch'
+        ? `${byIdAll.get(inId)?.name ?? '선수'} 선수를 서브 교체했어요 (서브권 넘어가면 자동 복귀)`
+        : `${byIdAll.get(inId)?.name ?? '선수'} 선수를 투입했어요`);
+      closeIntervene();
+    } else setIvError('지금은 교체할 수 없어요. 이번 세트 교체 한도가 찼거나 규칙상 불가한 교체예요.');
+  }, [mineSide, pendingOut, ivSubKind, commitIntervention, score, byIdAll, pushToast, closeIntervene]);
 
   // 중계 현수막 — 관전 종료 후에만 빌드(스포일러 정책: 결과-결정 사건 누출 0). 샌드박스 제외.
   const banners = useMemo(
@@ -439,8 +457,18 @@ export default function MatchBoard() {
             <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={onTimeout}>
               <Text style={styles.mPrimaryText}>⏱ 작전 타임아웃</Text>
             </Pressable>
-            <Pressable style={styles.ivPickBtn} onPress={() => { setIvError(null); setIvStep('pickOut'); }}>
+            <Pressable style={styles.ivPickBtn} onPress={() => { setIvSubKind('manual'); setIvError(null); setIvStep('pickOut'); }}>
               <Text style={styles.ivPickBtnTxt}>🔄 선수 교체</Text>
+              <Text style={styles.ivPickSub}>이번 세트 끝까지 유지</Text>
+            </Pressable>
+            <Pressable
+              style={[styles.ivPickBtn, !iAmServing && { opacity: 0.45 }]}
+              onPress={() => {
+                if (!iAmServing) { setIvError('서브 교체는 우리 팀 서브권일 때 쓸 수 있어요.'); return; }
+                setIvSubKind('pinch'); setIvError(null); setIvStep('pickOut');
+              }}>
+              <Text style={styles.ivPickBtnTxt}>🎯 서브 교체</Text>
+              <Text style={styles.ivPickSub}>{iAmServing ? '서브권 넘어가면 자동 복귀' : '지금은 서브권이 없어요'}</Text>
             </Pressable>
             {ivError ? <Text style={styles.ivError}>{ivError}</Text> : null}
             <Pressable style={styles.mTextBtn} onPress={closeIntervene}>
@@ -466,7 +494,7 @@ export default function MatchBoard() {
               {byIdAll.get(pendingOut ?? '')?.name ?? '선수'} 대신 넣을 선수를 선택하세요
             </Text>
             {benchCands.length === 0 ? (
-              <Text style={styles.ivError}>투입할 수 있는 벤치 선수가 없어요.</Text>
+              <Text style={styles.ivError}>같은 포지션에 투입할 수 있는 벤치 선수가 없어요.</Text>
             ) : (
               <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
                 {benchCands.map((p) => (
@@ -542,6 +570,7 @@ const styles = themedStyles(() => StyleSheet.create({
   ivScore: { color: theme.accent, fontSize: 15, fontWeight: '900', textAlign: 'center', marginTop: -4 },
   ivPickBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.cardAlt, borderWidth: 1, borderColor: theme.border },
   ivPickBtnTxt: { color: theme.text, fontSize: 15, fontWeight: '800' },
+  ivPickSub: { color: theme.muted, fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: 3 },
   ivHint: { color: theme.muted, fontSize: 13, fontWeight: '700', textAlign: 'center' },
   ivError: { color: theme.bad, fontSize: 13, fontWeight: '700', textAlign: 'center', lineHeight: 19 },
   ivRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: theme.border },

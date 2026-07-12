@@ -35,6 +35,7 @@ export interface MatchIntervention {
   kind: 'sub' | 'timeout';
   outId?: string;  // kind==='sub': 코트에서 뺄 선수 id
   inId?: string;   // kind==='sub': 벤치에서 넣을 선수 id
+  subKind?: 'manual' | 'pinch'; // kind==='sub' 세부: 'manual'=세트 끝까지 / 'pinch'=서브 교체(서브권 잃으면 자동 복귀). 미지정=manual
 }
 
 /** 작전 교체 1건 — 보드 연출용 로그(승패 무영향, 순수 가산). 엔진이 st.six 를 실제로 바꾼 순간을 기록. */
