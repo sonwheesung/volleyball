@@ -276,10 +276,12 @@ function PlayerDetailInner() {
     else setTalkResult({ title: '면담 결렬', color: theme.bad, msg: `${p.name}: "…기대했던 제가 어리석었네요."\n마음이 오히려 멀어졌습니다. 이적 의향이 올랐습니다.` });
   };
 
-  // 건의 결과는 앱 테마 커스텀 모달(talkResult)로 — 네이티브 Alert 금지(UI-21)
-  const benchResult = (res: { ok: boolean; reason?: OwnerRejectReason }) => setTalkResult(res.ok
-    ? { title: '감독 수락', color: theme.good, msg: `감독: "알겠습니다. 당분간 ${p.name} 선수는 제외하겠습니다."` + deferNote }
-    : { title: '감독 거절', color: theme.muted, msg: `감독: "${res.reason ? BENCH_REJECT[res.reason] : '받아들일 수 없습니다.'}"` });
+  // 결과는 앱 테마 커스텀 모달(talkResult)로 — 네이티브 Alert 금지(UI-21).
+  // #3 직접 확정(MATCH_INTERVENTION §5): 구조 실패(포스트시즌 동결·쿨다운·정원 초과)가 아니면 항상 확정.
+  //   coachAgrees는 기계 효과 0의 플레이버 — 감독 존재감만 보존(거절 아님).
+  const benchResult = (res: { ok: boolean; reason?: OwnerRejectReason; coachAgrees?: boolean }) => setTalkResult(res.ok
+    ? { title: '벤치 확정', color: theme.good, msg: `당분간 ${p.name} 선수를 출전 명단에서 제외합니다.\n${res.coachAgrees ? '감독도 이 결정에 동의합니다.' : '감독은 내키지 않지만 지시를 따릅니다.'}` + deferNote }
+    : { title: '지금은 불가', color: theme.muted, msg: res.reason ? BENCH_REJECT[res.reason] : '지금은 이 선수를 벤치로 내릴 수 없습니다.' });
   const openBench = () => setBenchAsk(true);
 
   return (
@@ -453,43 +455,43 @@ function PlayerDetailInner() {
             ) : null}
           </Card>
 
-          <IconLabel icon="clipboard-outline" color={theme.violet}>감독 건의</IconLabel>
+          <IconLabel icon="clipboard-outline" color={theme.violet}>라인업 관리</IconLabel>
           <Card accent={theme.violet} flat>
             {inPostseasonNow ? (
-              // 포스트시즌 동결(SEASON §5.0) — 엔트리는 정규 종료 시점 확정. no-op 건의 금지(스토어도 postseason 사유로 거절).
-              <Muted style={{ fontSize: 12 }}>포스트시즌 엔트리 확정. 건의는 다음 시즌부터 가능합니다.</Muted>
+              // 포스트시즌 동결(SEASON §5.0) — 엔트리는 정규 종료 시점 확정. 이 구간엔 라인업 확정 불가.
+              <Muted style={{ fontSize: 12 }}>포스트시즌 엔트리 확정. 라인업 변경은 다음 시즌부터 가능합니다.</Muted>
             ) : benched ? (
-              <Button label="복귀 지시 (벤치 해제)" onPress={() => showAlert('복귀 지시', `정말 ${p.name} 선수의 복귀를 지시할까요?\n출전 명단에 다시 포함됩니다.`, [
+              <Button label="복귀시키기 (벤치 해제)" onPress={() => showAlert('복귀', `정말 ${p.name} 선수를 복귀시킬까요?\n출전 명단에 다시 포함됩니다.`, [
                 { text: '취소', style: 'cancel' },
-                { text: '복귀 지시', onPress: () => busy.run('감독이 라인업을 다시 그리는 중…', () => { unbench(p.id); setTalkResult({ title: '복귀', color: theme.good, msg: `${p.name} 선수가 출전 명단에 복귀합니다. 실전 감각은 몇 경기에 걸쳐 돌아옵니다.` }); }) },
+                { text: '복귀', onPress: () => busy.run('라인업을 조정하는 중…', () => { unbench(p.id); setTalkResult({ title: '복귀', color: theme.good, msg: `${p.name} 선수가 출전 명단에 복귀합니다. 실전 감각은 몇 경기에 걸쳐 돌아옵니다.` }); }) },
               ])} />
             ) : (
               <>
                 <Muted style={{ fontSize: 12 }}>
-                  선발·교체 등 현장 권한은 감독에게 있고, 구단주는 건의만 할 수 있습니다.
-                  감독 성향에 따라 거절할 수 있고, 인기 선수를 오래 벤치에 두면 팬들이 분노합니다(기사·관중·예산).
+                  선발과 벤치는 구단주가 직접 확정합니다. 감독은 그 결정을 따르며, 경기 중 교체·타임아웃은 감독이 맡습니다.
+                  인기 선수를 오래 벤치에 두면 팬들이 분노합니다(기사·관중·예산).
                 </Muted>
-                {benchLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 건의, 약 {benchLeft}일 뒤 다시 건의할 수 있습니다.</Muted> : null}
-                {/* 상태에 맞는 건의 하나만 노출(사용자 요청 2026-06-30) — 후보면 '선발 기용', 주전이면 '벤치'.
-                    둘 다 비활성으로 띄우던 옛 방식 대신 안 맞는 버튼은 숨긴다. 부상·정지·명단 외는 안내만. */}
+                {benchLeft > 0 ? <Muted style={{ fontSize: 12 }}>⏳ 최근 변경, 약 {benchLeft}일 뒤 다시 조정할 수 있습니다.</Muted> : null}
+                {/* 상태에 맞는 버튼 하나만 노출 — 후보면 '선발로 올리기', 주전이면 '벤치로 내리기'.
+                    부상·정지·명단 외는 안내만. */}
                 {isCandidate ? (
                   <Button
-                    label={benchLeft > 0 ? `선발 기용 건의 (${benchLeft}일 후)` : '선발 기용 건의'}
+                    label={benchLeft > 0 ? `선발로 올리기 (${benchLeft}일 후)` : '선발로 올리기'}
                     disabled={benchLeft > 0}
-                    onPress={() => showAlert('선발 기용 건의', `정말 ${p.name} 선수를 선발로 추천할까요?\n감독이 판단해 수락하거나 거절합니다.`, [
+                    onPress={() => showAlert('선발로 올리기', `${p.name} 선수를 선발로 올릴까요?\n동포지션 주전 한 명이 벤치로 내려갑니다.`, [
                       { text: '취소', style: 'cancel' },
-                      { text: '건의', onPress: () => busy.run('감독이 라인업을 다시 그리는 중…', () => {
+                      { text: '확정', onPress: () => busy.run('라인업을 조정하는 중…', () => {
                         const res = suggestStart(p.id);
                         setTalkResult(res.ok
-                          ? { title: '감독 수락', color: theme.good, msg: `감독: "알겠습니다. ${p.name} 선수에게 기회를 주죠."\n(동포지션 주전 한 명이 벤치로 내려갑니다)` + deferNote }
-                          : { title: '감독 거절', color: theme.muted, msg: `감독: "${res.reason ? START_REJECT[res.reason] : '지금 라인업이 최선입니다.'}"` });
+                          ? { title: '선발 확정', color: theme.good, msg: `${p.name} 선수를 선발로 올립니다. 동포지션 주전 한 명이 벤치로 내려갑니다.\n${res.coachAgrees ? '감독도 이 결정에 동의합니다.' : '감독은 내키지 않지만 지시를 따릅니다.'}` + deferNote }
+                          : { title: '지금은 불가', color: theme.muted, msg: res.reason ? START_REJECT[res.reason] : '지금은 이 선수를 선발로 올릴 수 없습니다(대체할 주전이 없습니다).' });
                       }) },
                     ])}
                   />
                 ) : isStarter ? (
-                  <Button label={benchLeft > 0 ? `벤치 건의 (${benchLeft}일 후)` : '벤치 건의'} onPress={openBench} disabled={benchLeft > 0} />
+                  <Button label={benchLeft > 0 ? `벤치로 내리기 (${benchLeft}일 후)` : '벤치로 내리기'} onPress={openBench} disabled={benchLeft > 0} />
                 ) : (
-                  <Muted style={{ fontSize: 12 }}>지금은 출전할 수 없는 상태(부상·정지·명단 외)라 건의할 수 없습니다.</Muted>
+                  <Muted style={{ fontSize: 12 }}>지금은 출전할 수 없는 상태(부상·정지·명단 외)라 라인업을 조정할 수 없습니다.</Muted>
                 )}
               </>
             )}
@@ -695,13 +697,13 @@ function PlayerDetailInner() {
         </>
       ) : null}
 
-      {/* 벤치 건의 명분 선택 — 커스텀 ActionSheet(네이티브 Alert 대신, UI-21) */}
+      {/* 벤치로 내리기 명분 선택 — 커스텀 ActionSheet(네이티브 Alert 대신, UI-21) */}
       <ActionSheet
         visible={benchAsk}
-        title={`벤치 건의 (${p.name})`}
-        message={`정말 ${p.name} 선수의 휴식을 건의할까요? 감독이 판단해 수락하거나 거절합니다.\n어떤 명분으로 건의하시겠습니까?`}
+        title={`벤치로 내리기 (${p.name})`}
+        message={`${p.name} 선수를 당분간 출전 명단에서 제외합니다.\n어떤 이유로 내리시겠습니까?`}
         actions={(['noResign', 'form', 'prospect'] as BenchReason[]).map((reason) => ({
-          label: BENCH_REASON_KO[reason], onPress: () => busy.run('감독이 라인업을 다시 그리는 중…', () => benchResult(suggestBench(p.id, reason))),
+          label: BENCH_REASON_KO[reason], onPress: () => busy.run('라인업을 조정하는 중…', () => benchResult(suggestBench(p.id, reason))),
         }))}
         onClose={() => setBenchAsk(false)}
       />

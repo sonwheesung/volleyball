@@ -203,8 +203,8 @@ interface GameState {
   hireScout: (id: string) => boolean;
   releaseScout: (id: string) => void;
   requestInterview: (playerId: string, card: TalkCard) => { met: boolean; topic: DiscontentTopic | null; ok?: boolean };
-  suggestBench: (playerId: string, reason: BenchReason) => { ok: boolean; reason?: OwnerRejectReason };
-  suggestStart: (playerId: string) => { ok: boolean; reason?: OwnerRejectReason };
+  suggestBench: (playerId: string, reason: BenchReason) => { ok: boolean; reason?: OwnerRejectReason; coachAgrees?: boolean };
+  suggestStart: (playerId: string) => { ok: boolean; reason?: OwnerRejectReason; coachAgrees?: boolean };
   unbench: (playerId: string) => void;
   toggleTryoutWish: (playerId: string) => void;
   replaceForeign: (altId: string) => boolean;
@@ -822,7 +822,8 @@ export const useGameStore = create<GameState>()(
         });
         return { met: true, topic, ok };
       },
-      // 감독 벤치 건의 — 합리(대체자 격차)와 소신(카리스마·에이스 보호) 사이에서 감독이 답한다
+      // 벤치 직접 확정(MATCH_INTERVENTION §5, #3) — 감독 수락 롤을 우회해 항상 적용. 롤 결과는 플레이버(coachAgrees)로만 보존.
+      //   구조가드(플옵 동결·쿨다운·BENCH_MAX·중복·대상 없음)는 그대로 유지 — 오직 감독 거부 롤 지점만 항상 통과.
       suggestBench: (playerId, reason) => {
         const s = get();
         const my = s.selectedTeamId;
@@ -847,25 +848,22 @@ export const useGameStore = create<GameState>()(
         const gap = altOvr != null ? overall(target) - altOvr : 10;
         const ovrGapT = Math.max(0, Math.min(1, 1 - gap / 10)); // 대체자가 비등할수록 1
         const charisma = coachInfoOf(my)?.charisma ?? 50;
-        const ok = benchAccept(playerId, s.season, s.currentDay, charisma, ovrGapT, aceRank, reason);
-        const why = ok ? undefined : benchRejectReason(charisma, ovrGapT, aceRank, reason);
-        const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
-        if (ok) {
-          // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). watchProgress 비어있지 않음 == 현재 경기 관전 중.
-          // 소급 방어(A2, 2026-07-08): 오늘 경기를 기록(watchProgress 비움·setDay 전)한 직후엔 currentDay가 아직 그
-          //   기록된 경기일이라 fromDay=currentDay가 **이미 관전한 경기를 리플레이에서 소급 변경**한다. playedThroughDay+1로
-          //   바닥을 대 기록된 경기일엔 절대 지시가 걸리지 않게 한다(forward-only — 본 역사 보존).
-          const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);
-          const benchDirectives = [...s.benchDirectives, { playerId, fromDay }];
-          set({ benchDirectives, benchCooldown: benchCd });
-          setOwnerContext(benchDirectives, fromDay); // §7 스플라이스: fromDay 이전 경기 재사용
-        } else {
-          set({ benchCooldown: benchCd });
-        }
-        diag(s.season, 'bench', `벤치 건의 ${playerId}(${reason}) → ${ok ? '수락' : '거절'}`); // 진단 로그(§13.20 ④)
-        return { ok, reason: why };
+        // 감독 수락 롤은 플레이버 표시용으로만 계산(coachAgrees) — 기계 효과 0. 확정은 항상 실행(감독 거부 없음).
+        const coachAgrees = benchAccept(playerId, s.season, s.currentDay, charisma, ovrGapT, aceRank, reason);
+        const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 확정했으면 잠금(쿨다운 — 남용 방지)
+        // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). watchProgress 비어있지 않음 == 현재 경기 관전 중.
+        // 소급 방어(A2, 2026-07-08): 오늘 경기를 기록(watchProgress 비움·setDay 전)한 직후엔 currentDay가 아직 그
+        //   기록된 경기일이라 fromDay=currentDay가 **이미 관전한 경기를 리플레이에서 소급 변경**한다. playedThroughDay+1로
+        //   바닥을 대 기록된 경기일엔 절대 지시가 걸리지 않게 한다(forward-only — 본 역사 보존).
+        const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);
+        const benchDirectives = [...s.benchDirectives, { playerId, fromDay }];
+        set({ benchDirectives, benchCooldown: benchCd });
+        setOwnerContext(benchDirectives, fromDay); // §7 스플라이스: fromDay 이전 경기 재사용
+        diag(s.season, 'bench', `벤치 직접 확정 ${playerId}(${reason}) → 감독 ${coachAgrees ? '동의' : '유보'}`); // 진단 로그(§13.20 ④)
+        return { ok: true, coachAgrees };
       },
-      // 선발 기용 건의 — 수락 시 동포지션 최약 주전을 벤치 지시(건의 선수가 그 자리를 잇는다)
+      // 선발 직접 확정(MATCH_INTERVENTION §5, #3) — 동포지션 최약 주전을 벤치로 내리고 이 선수가 자리를 잇는다.
+      //   감독 수락 롤을 우회해 항상 적용(감독 거부 없음). 구조가드(플옵·쿨다운·BENCH_MAX·대상/대체자 없음)는 유지.
       suggestStart: (playerId) => {
         const s = get();
         const my = s.selectedTeamId;
@@ -897,20 +895,16 @@ export const useGameStore = create<GameState>()(
         //   자기 러스트로 자기 승격을 막는 자충수 방지. incumbent(현 주전)는 폼≈1.0이라 어차피 순수 OVR.
         const gapT = Math.max(0, Math.min(1, 1 - (overall(incumbent) - overall(target)) / 10));
         const charisma = coachInfoOf(my)?.charisma ?? 50;
-        const ok = startSuggestAccept(playerId, s.season, s.currentDay, charisma, gapT);
-        const why = ok ? undefined : startRejectReason(charisma, gapT);
-        const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 건의했으면(수락·거절 무관) 잠금
-        if (ok) {
-          // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). 소급 방어(A2) — suggestBench와 동일.
-          const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);
-          const benchDirectives = [...s.benchDirectives, { playerId: incumbent.id, fromDay }];
-          set({ benchDirectives, benchCooldown: benchCd });
-          setOwnerContext(benchDirectives, fromDay); // §7 스플라이스
-        } else {
-          set({ benchCooldown: benchCd });
-        }
-        diag(s.season, 'bench', `선발 건의 ${playerId} → ${ok ? '수락' : '거절'}`); // 진단 로그(§13.20 ④)
-        return { ok, reason: why };
+        // 감독 수락 롤은 플레이버 표시용으로만 계산(coachAgrees) — 기계 효과 0. 확정은 항상 실행(감독 거부 없음).
+        const coachAgrees = startSuggestAccept(playerId, s.season, s.currentDay, charisma, gapT);
+        const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 확정했으면 잠금(쿨다운 — 남용 방지)
+        // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). 소급 방어(A2) — suggestBench와 동일.
+        const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);
+        const benchDirectives = [...s.benchDirectives, { playerId: incumbent.id, fromDay }];
+        set({ benchDirectives, benchCooldown: benchCd });
+        setOwnerContext(benchDirectives, fromDay); // §7 스플라이스
+        diag(s.season, 'bench', `선발 직접 확정 ${playerId} → 감독 ${coachAgrees ? '동의' : '유보'}`); // 진단 로그(§13.20 ④)
+        return { ok: true, coachAgrees };
       },
       unbench: (playerId) => {
         // 소급 삭제 금지(A3, 2026-07-08): 삭제하면 이미 관전·기록한 경기 구간에서 그 지시가 사라져 **리플레이가
