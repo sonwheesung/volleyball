@@ -48,8 +48,9 @@ export default function TabsLayout() {
   return (
     <Tabs
       screenOptions={{
-        // 헤더 컴팩트(2026-07-11 테스터 — 기본 툴바가 높음). 총높이 = 상단인셋 + 44dp 툴바. 루트 Stack과 동일값(탭↔스택 일치).
-        headerStyle: { backgroundColor: theme.bg, height: insets.top + 44 },
+        // 헤더 컴팩트(2026-07-12 테스터 재요청 — 44도 여전히 높다). 총높이 = 상단인셋(OS 강제) + 36dp 툴바.
+        //   상태바 위 영역은 못 줄이므로 툴바 밴드만 44→36으로 표준 이하 타이트. 루트 Stack과 동일값(탭↔스택 일치).
+        headerStyle: { backgroundColor: theme.bg, height: insets.top + 36 },
         headerTintColor: theme.text,
         headerTitleStyle: { fontWeight: '700', fontSize: 18 },
         // 설정 = 전 탭 공통 헤더 우측 톱니(2026-06-28) — 구단 대시보드 본문에 있던 "설정" 버튼을 옮김(유틸리티 분리)

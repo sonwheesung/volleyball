@@ -79,7 +79,7 @@ function CompactStackHeader({ navigation, options, back }: NativeStackHeaderProp
   const insets = useSafeAreaInsets();
   const title = typeof options.headerTitle === 'string' ? options.headerTitle : (options.title ?? '');
   return (
-    <View style={[hdrStyles.bar, { backgroundColor: theme.bg, paddingTop: insets.top, height: insets.top + 44 }]}>
+    <View style={[hdrStyles.bar, { backgroundColor: theme.bg, paddingTop: insets.top, height: insets.top + 36 }]}>
       {back ? (
         <Pressable onPress={navigation.goBack} hitSlop={12} style={hdrStyles.back} accessibilityRole="button" accessibilityLabel="뒤로">
           <Ionicons name="arrow-back" size={24} color={theme.text} />

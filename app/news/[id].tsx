@@ -441,7 +441,10 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
       const list = awardsForPlayer(a.awards, n.ref);
       if (list.length) {
         cardTitle = '수상 내역'; cardIcon = 'medal-outline'; cardColor = theme.gold;
-        for (const w of list) rows.push({ label: w.label, value: w.value ?? '수상', accent: !w.value });
+        // 수상 이력 원장처럼 각 상에 시즌 연도를 붙인다(2026-07-12 사용자 — "몇 년도인지 나오면 좋겠다").
+        //   byline에도 연도가 있지만 상 줄 자체에 붙어야 "2025-26 챔프전 MVP"로 한눈에 읽힌다.
+        const yr = seasonYear(n.season);
+        for (const w of list) rows.push({ label: `${yr} ${w.label}`, value: w.value ?? '수상', accent: !w.value });
       }
     }
   } else if (n.kind === 'milestone') {
