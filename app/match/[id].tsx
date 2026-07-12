@@ -8,12 +8,18 @@ import { emblemFor } from '../../data/emblems';
 import { MatchCourt } from '../../components/MatchCourt';
 import { LiveBoxModal } from '../../components/LiveBoxModal';
 import { Popup } from '../../components/Popup';
+import { useToastQueue, ToastHost } from '../../components/Toast';
+import { POS_COLOR } from '../../components/posTokens';
 import { BroadcastBanner } from '../../components/BroadcastBanner';
 import { buildMatchBanners, type Banner } from '../../data/broadcast';
-import { reconstructRallies, buildLiveBanners } from '../../components/courtDirector';
+import { reconstructRallies, buildLiveBanners, applySubsToSix } from '../../components/courtDirector';
 import { getFixture, getTeam, shortTeamName } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
+import { buildLineup } from '../../engine/lineup';
+import { overallRaw, displayOvr } from '../../engine/overall';
+import type { MatchIntervention } from '../../engine/simMatch';
+import type { Side } from '../../types';
 import { buildPlayoffs, poSeedBase, finalSeedBase } from '../../data/playoffs';
 import { buildPlayoffBox, type PoRound } from '../../data/postseason';
 import { PO_SLOTS, FINAL_SLOTS } from '../../engine/calendar';
@@ -35,7 +41,10 @@ export default function MatchBoard() {
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
   const recordResult = useGameStore((s) => s.recordResult);
+  const recordIntervention = useGameStore((s) => s.recordIntervention);
   const setDay = useGameStore((s) => s.setDay);
+  // 이 경기의 개입 로그 구독 — 바뀌면 data(sim) 재계산 → 프리픽스 불변으로 현재 지점부터 이어재생(§2·§4)
+  const myIv = useGameStore((s) => s.interventions[id && sandbox !== '1' ? id : '']);
   // ── 포스트시즌 보드(달력 편입 §5.1) — po=round(po|final)·g=게임인덱스·season. 있으면 플옵 재생 모드. ──
   //   결과를 results에 안 씀(신규 영속 0) — 종료 시 setDay(슬롯day)로 currentDay 전진 = "치른 경기" 파생.
   const isPlayoff = (poParam === 'po' || poParam === 'final') && gParam != null && seasonParam != null;
@@ -56,6 +65,12 @@ export default function MatchBoard() {
   const [finished, setFinished] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false); // 관전 중 나가기 확인
   const [statsOpen, setStatsOpen] = useState(false); // 스코어박스 팝업 — 열리면 경기 일시정지(paused), 닫으면 재개
+  // ── 경기 개입(MATCH_INTERVENTION_SYSTEM §3·§4) — 내 팀 경기 opt-in. 열리면 재생 일시정지(paused에 OR). ──
+  const [interveneOpen, setInterveneOpen] = useState(false);
+  const [ivStep, setIvStep] = useState<'menu' | 'pickOut' | 'pickIn'>('menu'); // 개입 시트 단계
+  const [pendingOut, setPendingOut] = useState<string | null>(null);            // 뺄 선수(교체 out) 선택 보관
+  const [ivError, setIvError] = useState<string | null>(null);                  // 적용 불가 안내(드라이런 실패)
+  const { toasts, push: pushToast } = useToastQueue();                          // 성공 피드백(비모달, 관전형)
   // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거). ptIdx=현재 점수가 반영된 득점 인덱스(타임라인 조회용)
   const [score, setScore] = useState({ h: 0, a: 0, homeSets: 0, awaySets: 0, setNo: 1, ptIdx: -1 });
   const handleScore = useCallback((s: { h: number; a: number; homeSets: number; awaySets: number; setNo: number; ptIdx: number }) => setScore(s), []);
@@ -98,7 +113,7 @@ export default function MatchBoard() {
     return {
       home, away, homeSquad, awaySquad, seed, sim, boxTimeline,
     };
-  }, [fixture, isSandbox, isPlayoff, poSeason, poRound, poG, homeParam, awayParam, seedParam, currentDay, selectedTeamId]);
+  }, [fixture, isSandbox, isPlayoff, poSeason, poRound, poG, homeParam, awayParam, seedParam, currentDay, selectedTeamId, myIv]);
 
   const onFinished = useCallback(() => {
     setFinished(true); // 관전 종료 — 이제부터 결과 공개
@@ -192,6 +207,79 @@ export default function MatchBoard() {
 
   const mineSide = selectedTeamId === data.home.id ? 'home' : selectedTeamId === data.away.id ? 'away' : null;
 
+  // ── 경기 개입(§3·§4) — 내 팀 정규시즌 경기에서만 노출(플옵·샌드박스·상대팀·종료 후 숨김) ──
+  const canIntervene = mineSide != null && !isSandbox && !isPlayoff && !finished && fixture != null;
+
+  // 전 선수 조회 맵(교체 대상·투입 후보 이름/포지션/OVR)
+  const byIdAll = useMemo(() => {
+    const m = new Map<string, typeof data.homeSquad[number]>();
+    for (const p of data.homeSquad) m.set(p.id, p);
+    for (const p of data.awaySquad) m.set(p.id, p);
+    return m;
+  }, [data.homeSquad, data.awaySquad]);
+
+  const mySquad = mineSide === 'home' ? data.homeSquad : mineSide === 'away' ? data.awaySquad : [];
+  // 선발 6인(고정) — 빈 로스터 방어
+  const myBaseSix = useMemo(() => (mySquad.length ? buildLineup(mySquad).six : []), [mySquad]);
+  // 현재(다음 랠리 = 개입 적용 지점 ptIdx+1)의 코트 6인 — 교체 로그를 그 지점까지 재생(MatchCourt와 같은 헬퍼)
+  const curSix = useMemo(() => {
+    if (!mineSide || !myBaseSix.length) return [];
+    return applySubsToSix(myBaseSix, mineSide, data.sim.subEvents, score.ptIdx + 1, byIdAll);
+  }, [mineSide, myBaseSix, data.sim, score.ptIdx, byIdAll]);
+  // 벤치 후보 = 내 로스터 − 현재코트 − 리베로 − 부상(경기 내) − 이번 세트 이미 투입(usedSubIn)
+  const benchCands = useMemo(() => {
+    if (!mineSide || !mySquad.length) return [];
+    const onCourt = new Set(curSix.map((p) => p.id));
+    const usedIn = new Set((data.sim.subEvents ?? []).filter((e) => e.enter && e.side === mineSide && e.setNo === score.setNo).map((e) => e.inId));
+    const injuredIn = new Set((data.sim.subEvents ?? []).filter((e) => e.kind === 'injury' && e.side === mineSide).map((e) => e.outId));
+    return mySquad.filter((p) => p.position !== 'L' && !onCourt.has(p.id) && !usedIn.has(p.id) && !injuredIn.has(p.id));
+  }, [mineSide, mySquad, curSix, data.sim, score.setNo]);
+  // 코트 선수 체력(가능하면) — 현재 지점 직전 마지막 타임아웃 스냅샷에서 id→잔량(0..1)
+  const stamMap = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!mineSide) return m;
+    const evs = (data.sim.timeouts ?? []).filter((t) => t.point <= score.ptIdx);
+    const last = evs[evs.length - 1];
+    if (last) for (const s of mineSide === 'home' ? last.stamHome : last.stamAway) m.set(s.id, s.stam);
+    return m;
+  }, [data.sim, score.ptIdx, mineSide]);
+
+  const closeIntervene = useCallback(() => {
+    setInterveneOpen(false); setIvStep('menu'); setPendingOut(null); setIvError(null);
+  }, []);
+
+  // 확정 = 드라이런 검증(§3) → 적용됐으면 커밋. 재시뮬 프리픽스 불변이라 개입 좌표(현재 점수)의 이벤트만 델타.
+  const commitIntervention = useCallback((iv: MatchIntervention): boolean => {
+    if (!fixture) return false;
+    const tentative = [...interventionsFor(fixture.id), iv];
+    const dry = buildMatchBox(data.home.id, data.away.id, fixture.dayIndex, data.seed, tentative).sim;
+    let applied = false;
+    if (iv.kind === 'sub') {
+      const has = (sim: typeof dry) => (sim.subEvents ?? []).filter((e) => e.enter && e.kind === 'manual' && e.inId === iv.inId && e.setNo === iv.at.setNo).length;
+      applied = has(dry) > has(data.sim); // 개입 좌표에 manual 투입 엔트리가 새로 생겼나
+    } else {
+      const has = (sim: typeof dry) => (sim.timeouts ?? []).filter((t) => t.side === iv.side && t.setNo === iv.at.setNo && t.home === iv.at.h && t.away === iv.at.a).length;
+      applied = has(dry) > has(data.sim);
+    }
+    if (!applied) return false;
+    recordIntervention(fixture.id, iv); // 영속 + 캐시 bump(§2.3) → data 재계산 → 이어재생
+    return true;
+  }, [fixture, data.home.id, data.away.id, data.seed, data.sim, recordIntervention]);
+
+  const onTimeout = useCallback(() => {
+    if (!mineSide) return;
+    const ok = commitIntervention({ at: { setNo: score.setNo, h: score.h, a: score.a }, side: mineSide as Side, kind: 'timeout' });
+    if (ok) { pushToast('작전 타임아웃을 요청했어요'); closeIntervene(); }
+    else setIvError('지금은 타임아웃을 쓸 수 없어요. 이번 세트 타임아웃을 이미 다 썼어요.');
+  }, [mineSide, commitIntervention, score, pushToast, closeIntervene]);
+
+  const onConfirmSub = useCallback((inId: string) => {
+    if (!mineSide || !pendingOut) return;
+    const ok = commitIntervention({ at: { setNo: score.setNo, h: score.h, a: score.a }, side: mineSide as Side, kind: 'sub', outId: pendingOut, inId });
+    if (ok) { pushToast(`${byIdAll.get(inId)?.name ?? '선수'} 선수를 투입했어요`); closeIntervene(); }
+    else setIvError('지금은 교체할 수 없어요. 이번 세트 교체 한도가 찼거나 규칙상 불가한 교체예요.');
+  }, [mineSide, pendingOut, commitIntervention, score, byIdAll, pushToast, closeIntervene]);
+
   // 중계 현수막 — 관전 종료 후에만 빌드(스포일러 정책: 결과-결정 사건 누출 0). 샌드박스 제외.
   const banners = useMemo(
     () => (finished && !isSandbox && fixture ? buildMatchBanners(data.home.id, data.away.id, fixture.dayIndex, mineSide) : []),
@@ -257,7 +345,7 @@ export default function MatchBoard() {
           onProgress={onProgress}
           onFinished={onFinished}
           onScore={handleScore}
-          paused={statsOpen || showTip}
+          paused={statsOpen || showTip || interveneOpen}
           homeName={data.home.name}
           awayName={data.away.name}
         />
@@ -281,6 +369,11 @@ export default function MatchBoard() {
         <View style={{ flex: 1 }}>
           <Button label="📊 스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
         </View>
+        {canIntervene ? (
+          <View style={{ flex: 1 }}>
+            <Button label="⚙ 개입" variant="ghost" onPress={() => { setIvStep('menu'); setIvError(null); setInterveneOpen(true); }} />
+          </View>
+        ) : null}
         <View style={{ flex: 1 }}>
           <Button label="나가기" onPress={requestExit} />
         </View>
@@ -335,7 +428,79 @@ export default function MatchBoard() {
         }
         mineSide={mineSide}
       />
+
+      {/* 경기 개입 시트(§3·§4) — 데드볼(현재 점수)에서 작전 타임아웃·선수 교체. 현재 점수까지만 표시(미래 스포일러 금지). */}
+      <Popup visible={interveneOpen} onRequestClose={closeIntervene}>
+        <Text style={styles.modalTitle}>경기 개입</Text>
+        <Text style={styles.ivScore}>{score.setNo}세트 · {score.h} : {score.a}</Text>
+
+        {ivStep === 'menu' ? (
+          <>
+            <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={onTimeout}>
+              <Text style={styles.mPrimaryText}>⏱ 작전 타임아웃</Text>
+            </Pressable>
+            <Pressable style={styles.ivPickBtn} onPress={() => { setIvError(null); setIvStep('pickOut'); }}>
+              <Text style={styles.ivPickBtnTxt}>🔄 선수 교체</Text>
+            </Pressable>
+            {ivError ? <Text style={styles.ivError}>{ivError}</Text> : null}
+            <Pressable style={styles.mTextBtn} onPress={closeIntervene}>
+              <Text style={styles.mTextBtnTxt}>닫기</Text>
+            </Pressable>
+          </>
+        ) : ivStep === 'pickOut' ? (
+          <>
+            <Text style={styles.ivHint}>코트에서 뺄 선수를 선택하세요</Text>
+            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+              {curSix.map((p) => (
+                <IvPlayerRow key={p.id} name={p.name} pos={p.position} ovr={displayOvr(overallRaw(p))} stam={stamMap.get(p.id)}
+                  onPress={() => { setPendingOut(p.id); setIvError(null); setIvStep('pickIn'); }} />
+              ))}
+            </ScrollView>
+            <Pressable style={styles.mTextBtn} onPress={() => { setIvStep('menu'); setIvError(null); }}>
+              <Text style={styles.mTextBtnTxt}>뒤로</Text>
+            </Pressable>
+          </>
+        ) : (
+          <>
+            <Text style={styles.ivHint}>
+              {byIdAll.get(pendingOut ?? '')?.name ?? '선수'} 대신 넣을 선수를 선택하세요
+            </Text>
+            {benchCands.length === 0 ? (
+              <Text style={styles.ivError}>투입할 수 있는 벤치 선수가 없어요.</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                {benchCands.map((p) => (
+                  <IvPlayerRow key={p.id} name={p.name} pos={p.position} ovr={displayOvr(overallRaw(p))} stam={stamMap.get(p.id)}
+                    onPress={() => onConfirmSub(p.id)} />
+                ))}
+              </ScrollView>
+            )}
+            {ivError ? <Text style={styles.ivError}>{ivError}</Text> : null}
+            <Pressable style={styles.mTextBtn} onPress={() => { setIvStep('pickOut'); setIvError(null); }}>
+              <Text style={styles.mTextBtnTxt}>뒤로</Text>
+            </Pressable>
+          </>
+        )}
+      </Popup>
+
+      <ToastHost toasts={toasts} />
     </>
+  );
+}
+
+// 개입 시트 선수 행 — 포지션 색 점 + 이름 + OVR + (있으면)체력. 교체 판단 근거.
+function IvPlayerRow({ name, pos, ovr, stam, onPress }: { name: string; pos: string; ovr: number; stam?: number; onPress: () => void }) {
+  const stamPct = stam != null ? Math.round(stam * 100) : null;
+  const stamColor = stamPct == null ? theme.muted : stamPct >= 60 ? '#2BAE66' : stamPct >= 35 ? '#E0922B' : '#E1574C';
+  return (
+    <Pressable style={({ pressed }) => [styles.ivRow, pressed && { opacity: 0.7 }]} onPress={onPress}>
+      <View style={[styles.ivPosDot, { backgroundColor: POS_COLOR[pos as keyof typeof POS_COLOR] ?? theme.muted }]}>
+        <Text style={styles.ivPosTxt}>{pos}</Text>
+      </View>
+      <Text style={styles.ivName} numberOfLines={1}>{name}</Text>
+      {stamPct != null ? <Text style={[styles.ivStam, { color: stamColor }]}>{stamPct}%</Text> : null}
+      <Text style={styles.ivOvr}>OVR {ovr}</Text>
+    </Pressable>
   );
 }
 
@@ -373,4 +538,16 @@ const styles = themedStyles(() => StyleSheet.create({
   mPrimaryText: { color: '#FFFFFF', fontSize: 15, fontWeight: '800' },
   mTextBtn: { alignItems: 'center', paddingVertical: 6, marginTop: 2 },
   mTextBtnTxt: { color: theme.muted, fontSize: 14, fontWeight: '700' },
+  // 경기 개입 시트
+  ivScore: { color: theme.accent, fontSize: 15, fontWeight: '900', textAlign: 'center', marginTop: -4 },
+  ivPickBtn: { borderRadius: 12, paddingVertical: 14, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.cardAlt, borderWidth: 1, borderColor: theme.border },
+  ivPickBtnTxt: { color: theme.text, fontSize: 15, fontWeight: '800' },
+  ivHint: { color: theme.muted, fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  ivError: { color: theme.bad, fontSize: 13, fontWeight: '700', textAlign: 'center', lineHeight: 19 },
+  ivRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: theme.border },
+  ivPosDot: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
+  ivPosTxt: { color: '#FFFFFF', fontSize: 10, fontWeight: '900' },
+  ivName: { color: theme.text, fontSize: 14, fontWeight: '800', flex: 1 },
+  ivStam: { fontSize: 13, fontWeight: '800', width: 44, textAlign: 'right' },
+  ivOvr: { color: theme.muted, fontSize: 12, fontWeight: '800', width: 58, textAlign: 'right' },
 }));

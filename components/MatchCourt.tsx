@@ -180,6 +180,19 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   const [confirmEnd, setConfirmEnd] = useState(false); // ⏭ 결과(경기 종료) 확인 — 즉시 종료 방지
   const ackTO = useRef<Set<number>>(new Set()); // 이미 본 타임아웃(랠리 인덱스) — 재진입 시 재팝업 방지
 
+  // ── 개입 재계산 이어재생(MATCH_INTERVENTION_SYSTEM §4) ──
+  // 개입(교체·타임아웃) 확정 시 부모가 sim을 **새 객체로 재계산**해 내려준다. 프리픽스가 바이트 동일하므로
+  // 처음부터가 아니라 **현재 점수 지점**(마지막 반영 점수 shown 다음 랠리)부터 이어 재생한다.
+  // 최초 마운트(startIdx 재개)는 제외 — sim 교체(개입)에만 반응. shownRef로 최신 shown을 읽는다(효과 재실행 없이).
+  const shownRef = useRef(shown);
+  shownRef.current = shown;
+  const firstSimRef = useRef(true);
+  useEffect(() => {
+    if (firstSimRef.current) { firstSimRef.current = false; return; }
+    setIdx(Math.max(0, shownRef.current + 1)); // 마지막 반영 점수 다음 랠리 = 개입 주입 지점
+    setSegIdx(0);
+  }, [sim]);
+
   // 효과음(휘슬·스파이크·서브) — 보드 진입 시 1회 프리로드, 설정 토글 동기화(audio/sfx.ts, UI 전용)
   const sfxOn = useGameStore((s) => s.sfxEnabled);
   useEffect(() => { initSfx(); }, []);
