@@ -222,8 +222,8 @@ function DraftLiveInner() {
   return (
     <Screen title={`${season + 2}시즌 드래프트`}>
       <View style={styles.bar}>
-        <Muted>{revealed} / {total}픽 · 내 지명 {confirmedMyCount}/{slots}{passRemaining > 0 ? ` · PASS 예정 ${passRemaining}회` : ''}</Muted>
-        <Text style={{ color: atMyPick ? theme.accent : theme.text, fontWeight: '800' }}>{roundLabel}</Text>
+        <Muted style={{ flexShrink: 1 }} numberOfLines={1}>{revealed} / {total}픽 · 내 지명 {confirmedMyCount}/{slots}{passRemaining > 0 ? ` · PASS 예정 ${passRemaining}회` : ''}</Muted>
+        <Text numberOfLines={1} style={{ color: atMyPick ? theme.accent : theme.text, fontWeight: '800', flexShrink: 0, marginLeft: 8 }}>{roundLabel}</Text>
       </View>
 
       {total === 0 ? (
@@ -313,7 +313,11 @@ function DraftLiveInner() {
         <View>
           {myCount === 0 ? (
             <Card accent={theme.muted} flat>
-              <Muted style={{ fontSize: 13 }}>이번 드래프트는 지명권이 없습니다. 참관합니다.</Muted>
+              <Muted style={{ fontSize: 13 }}>
+                {slots === 0
+                  ? '이번 드래프트는 지명권이 없습니다. 참관합니다.'
+                  : '선수단이 가득 차 이번 드래프트는 지명을 넘길 예정입니다. 참관합니다.'}
+              </Muted>
             </Card>
           ) : null}
           <View style={styles.ctrl}>

@@ -152,7 +152,7 @@ function DraftCenterInner() {
         <View style={styles.planGrid}>
           <View style={styles.planRow}>
             <Text style={styles.planLabel}>보유 지명권</Text>
-            <Text style={styles.planVal}>{plan.slotNos.join('·') || '-'}순위</Text>
+            <Text style={styles.planVal}>{plan.slots}장{plan.slotNos.length ? ` (${plan.slotNos.join('·')}순번)` : ''}</Text>
           </View>
           <View style={styles.planRow}>
             <Text style={styles.planLabel}>예상 지명</Text>
@@ -176,7 +176,8 @@ function DraftCenterInner() {
         </Text>
         <Muted style={{ fontSize: 12, marginTop: 2 }}>
           라운드마다 지명하거나 패스하며 미래의 어린 선수를 뽑습니다. 찜해둔 신인은 라이브 드래프트에서 위에 떠,
-          내 차례에 직접 지명합니다. 선수를 누르면 아마추어 성적·스카우트 리포트를 볼 수 있어요.
+          내 차례에 직접 지명합니다. 담은 순서가 라이브 드래프트에서 지명 우선순위가 됩니다. 선수를 누르면
+          아마추어 성적·스카우트 리포트를 볼 수 있어요.
         </Muted>
         <Muted style={{ fontSize: 12, marginTop: 4, color: reveal >= 0.6 ? theme.good : theme.warn }}>
           스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= REVEAL_PRECISE ? '(정밀)' : '(스카우터를 영입하면 잠재력이 더 많이·선명하게 보입니다)'}
@@ -190,9 +191,9 @@ function DraftCenterInner() {
         ))}
       </Card>
 
-      <Button label="라이브 드래프트 보기 ▶" onPress={() => router.push('/draft-live')} />
+      <Button label="라이브 드래프트 진행 →" onPress={() => router.push('/draft-live')} />
       <Pressable onPress={onFinish} disabled={starting} style={{ paddingVertical: 8, alignItems: 'center', opacity: starting ? 0.5 : 1 }}>
-        <Text style={{ color: theme.muted, fontSize: 13, fontWeight: '700' }}>{starting ? '시즌 준비 중…' : '건너뛰면 찜 순서대로 자동 지명합니다'}</Text>
+        <Text style={{ color: starting ? theme.muted : theme.sky, fontSize: 13, fontWeight: '700' }}>{starting ? '시즌 준비 중…' : '› 건너뛰고 찜 순서대로 자동 지명'}</Text>
       </Pressable>
 
       <Title>드래프트 클래스 ({classSorted.length}명)</Title>
@@ -210,7 +211,7 @@ function DraftCenterInner() {
             onAction={() => busy.run('지명 결과를 정리하는 중…', () => toggleDraftPick(p.id))}
             action={
               <Text style={{ color: picked ? theme.accent : theme.muted, fontWeight: '800', fontSize: 13 }}>
-                {picked ? `담음${wi + 1}` : '담기'}
+                {picked ? `담음 ${wi + 1}` : '담기'}
               </Text>
             }
             detail={open ? <ProspectDetail p={p} reveal={reveal} /> : null}

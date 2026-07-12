@@ -248,8 +248,8 @@ export function Card({ children, onPress, accent, flat }: { children: ReactNode;
   return <View style={[styles.card, accentStyle]}>{children}</View>;
 }
 
-export function Muted({ children, style }: { children: ReactNode; style?: object }) {
-  return <Text style={[styles.muted, style]}>{children}</Text>;
+export function Muted({ children, style, numberOfLines }: { children: ReactNode; style?: object; numberOfLines?: number }) {
+  return <Text style={[styles.muted, style]} numberOfLines={numberOfLines}>{children}</Text>;
 }
 
 export function Title({ children }: { children: ReactNode }) {
