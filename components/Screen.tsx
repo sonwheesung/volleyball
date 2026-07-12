@@ -476,7 +476,7 @@ const styles = themedStyles(() => StyleSheet.create({
   posTextCompact: { fontSize: 9.5, fontWeight: '700' },
   statRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   statLabel: { color: theme.muted, fontSize: 13, width: 64 },
-  statVal: { color: theme.text, fontSize: 13, fontWeight: '700', width: 58, textAlign: 'right' },
+  statVal: { color: theme.text, fontSize: 13, fontWeight: '700', width: 28, textAlign: 'right' }, // 58→28(2026-07-12): 최대 텍스트 "~100"(~26dp)만 담으면 됨 — 넓은 폭(58)이 우측정렬 빈공간으로 바-숫자 간 큰 여백 유발(테스터). 좁은 종합스탯 컬럼에서 특히 도드라짐
   potTxt: { color: theme.good, fontSize: 12, fontWeight: '700' },
   barTrack: { flex: 1, height: 8, backgroundColor: theme.cardAlt, borderRadius: 4, overflow: 'hidden' },
   barFill: { height: 8, borderRadius: 4 },
