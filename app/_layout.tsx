@@ -22,7 +22,7 @@ import { installErrorSink, installCrashHandler } from '../lib/deviceLog';
 import { installImmersive } from '../lib/immersive';
 import { installKoreanKeepAll } from '../lib/koreanLineBreak';
 import { track } from '../lib/analytics';
-import { computeStandings } from '../data/standings';
+import { computeStandings, displayCutoff } from '../data/standings';
 import { leagueProduction } from '../data/production';
 import { availableTeamPlayers } from '../data/injury';
 
@@ -33,8 +33,11 @@ function warmCachesForIntro(): void {
   const s = useGameStore.getState();
   if (!s.selectedTeamId) return; // 신규(구단 미선택)는 워밍 불필요(선택 화면은 가벼움)
   try {
-    computeStandings(Number.MAX_SAFE_INTEGER);
-    leagueProduction(Number.MAX_SAFE_INTEGER);
+    // 표시 컷오프(§7.7 cap)까지만 데운다 — 대시보드가 실제로 쓰는 범위. 시즌초(day0=경기0)·엔진범프 후 첫 콜드에
+    // 전 시즌(미래 포함)을 시뮬하던 낭비 제거. 시즌말/오프시즌은 컷오프≈SEASON_DAYS라 사실상 풀 워밍과 동일.
+    const cutoff = displayCutoff(s.currentDay, s.results, s.selectedTeamId);
+    computeStandings(cutoff);
+    leagueProduction(cutoff);
     availableTeamPlayers(s.selectedTeamId, s.currentDay);
   } catch { /* 워밍 실패해도 진입은 진행(해당 화면이 폴백 재계산) */ }
 }

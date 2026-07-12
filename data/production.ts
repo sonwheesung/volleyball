@@ -31,30 +31,38 @@ export interface MatchProd {
   starters: Set<string>;
 }
 
-let cache: { key: string; rows: ProdRow[]; seq: number } | null = null;
+// computedUpto(§7.7 cap): dayIndex ≤ computedUpto 인 전 경기를 담고 있음을 나타내는 인메모리 워터마크(영속 안 함).
+let cache: { key: string; rows: ProdRow[]; seq: number; computedUpto: number } | null = null;
+
+const maxDayOf = (rows: ProdRow[]): number => rows.reduce((m, r) => (r.dayIndex > m ? r.dayIndex : m), -1);
 
 // 캐시 영속(REALTIME_SIM Phase1) — 생산 결과를 세이브에 저장→복원해 재로드 시 재계산 제거(standings와 동일 패턴).
 // seq(§7 스플라이스): 인메모리 계산시점 시퀀스(영속 안 함 — 복원 시 현재 seq 주입).
-export const getProductionCacheRaw = (): { key: string; rows: ProdRow[]; seq: number } | null => cache;
-export const setProductionCacheRaw = (c: { key: string; rows: ProdRow[]; seq?: number } | null): void => {
-  cache = c ? { key: c.key, rows: c.rows, seq: c.seq ?? spliceSeq() } : null;
+// computedUpto(§7.7 cap): 영속 안 함 — 복원 시 행의 max dayIndex로 유도(안전 하한).
+export const getProductionCacheRaw = (): { key: string; rows: ProdRow[]; seq: number; computedUpto: number } | null => cache;
+export const setProductionCacheRaw = (c: { key: string; rows: ProdRow[]; seq?: number; computedUpto?: number } | null): void => {
+  cache = c ? { key: c.key, rows: c.rows, seq: c.seq ?? spliceSeq(), computedUpto: c.computedUpto ?? maxDayOf(c.rows) } : null;
 };
 
 /** 전 경기 선수별 생산(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영.
- *  스플라이스(REALTIME_SIM §7): dayIndex<minAffectedDay 행은 재사용, 이후만 재시뮬. 생산은 러닝 상태를
- *  자체로 안 나르고 restedOnDay(→순위 캐시)에 의존하므로 순위 스플라이스가 byte-동일하면 재시뮬 구간도 올바른 휴식을 본다. */
-function allProdRows(): ProdRow[] {
+ *  스플라이스(후방 무효화, §7.1) + cap(전방 확장, §7.7)을 standings와 동일하게 합성. 생산은 러닝 상태를 자체로
+ *  안 나르고 restedOnDay(→순위 캐시)에 의존하므로 순위 스플라이스/cap이 byte-동일하면 재시뮬 구간도 올바른 휴식을 본다. */
+function allProdRows(uptoDay?: number): ProdRow[] {
   const key = `${baseVersion()}:${currentTxVersion()}`;
-  if (cache && cache.key === key) return cache.rows;
+  const cap = uptoDay ?? Number.MAX_SAFE_INTEGER;
+  if (cache && cache.key === key && cache.computedUpto >= cap) return cache.rows;
 
   const prev = cache;
   const minDay = prev ? minAffectedDaySince(prev.seq) : Infinity;
-  const splice = !!prev && minDay > 0 && Number.isFinite(minDay);
-  const reuse: ProdRow[] = splice ? prev!.rows.filter((r) => r.dayIndex < minDay) : [];
+  const sameKey = !!prev && prev.key === key;
+  const canReuse = !!prev && minDay > 0 && (sameKey || Number.isFinite(minDay));
+  const reuseThreshold = canReuse ? Math.min(minDay, prev!.computedUpto + 1) : 0; // 두 축 min 합성 + computedUpto+1 clamp
+  const reuse: ProdRow[] = reuseThreshold > 0 ? prev!.rows.filter((r) => r.dayIndex < reuseThreshold && r.dayIndex <= cap) : [];
 
   const byDay = new Map<number, Fixture[]>();
   for (const f of SEASON) {
-    if (splice && f.dayIndex < minDay) continue; // 재사용 구간 — 시뮬 생략
+    if (f.dayIndex < reuseThreshold) continue; // 재사용 구간 — 시뮬 생략
+    if (f.dayIndex > cap) continue;            // cap 초과 — 전방 확장 시 미계산
     const arr = byDay.get(f.dayIndex) ?? [];
     arr.push(f);
     byDay.set(f.dayIndex, arr);
@@ -85,7 +93,7 @@ function allProdRows(): ProdRow[] {
       rows.push({ dayIndex: f.dayIndex, homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId, homeIds, lines, starters });
     }
   }
-  cache = { key, rows, seq: spliceSeq() };
+  cache = { key, rows, seq: spliceSeq(), computedUpto: cap };
   return rows;
 }
 
@@ -104,7 +112,8 @@ export function leagueProductionRange(fromDay: number, toDay: number): Map<strin
   let hasFixture = false;
   for (const f of SEASON) { if (f.dayIndex >= fromDay && f.dayIndex <= toDay) { hasFixture = true; break; } }
   if (!hasFixture) return out;
-  for (const r of allProdRows()) {
+  // cap=toDay(§7.7): 구간 상한까지만 계산(전방 확장). leagueProduction(0,uptoDay)는 uptoDay가 cap.
+  for (const r of allProdRows(toDay)) {
     if (r.dayIndex < fromDay || r.dayIndex > toDay) continue;
     for (const [id, l] of r.lines) out.set(id, mergeProd(out.get(id), l));
   }
@@ -120,7 +129,7 @@ export function seasonMatchProds(uptoDay: number): MatchProd[] {
   // 부르면 옛 코드는 allProdRows()(전 시즌 시드 재생, 콜드 265~544ms)를 돌려 **빈 결과**를 냈다.
   // 경기일(dayIndex)은 항상 ≥0이라 uptoDay<0이면 치른 경기 0 → 시뮬 없이 즉시 빈 배열.
   if (uptoDay < 0) return [];
-  return allProdRows()
+  return allProdRows(uptoDay) // cap=uptoDay(§7.7) — 초과 행이 캐시에 있어도 필터로 잘림
     .filter((r) => r.dayIndex <= uptoDay)
     .map((r) => ({ dayIndex: r.dayIndex, homeTeamId: r.homeTeamId, awayTeamId: r.awayTeamId, homeIds: r.homeIds, lines: r.lines, starters: r.starters }));
 }

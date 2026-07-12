@@ -43,32 +43,48 @@ export interface Standing {
 const ratio = (won: number, lost: number): number => (lost > 0 ? won / lost : won > 0 ? Infinity : 0);
 const winRate = (s: Standing): number => (s.played > 0 ? s.wins / s.played : 0);
 
-let cache: { key: string; rows: ResultRow[]; seq: number } | null = null;
+// computedUpto(§7.7 cap): 이 캐시가 dayIndex ≤ computedUpto 인 전 경기를 계산해 담고 있음을 나타내는 인메모리
+// 워터마크. 전방 확장(cap) 축 — 인과적 day 루프라 cap 이하 행은 풀 시즌 계산과 byte-동일. 영속 안 함(복원 시 행에서 유도).
+let cache: { key: string; rows: ResultRow[]; seq: number; computedUpto: number } | null = null;
+
+const maxDayOf = (rows: ResultRow[]): number => rows.reduce((m, r) => (r.dayIndex > m ? r.dayIndex : m), -1);
 
 // 캐시 영속(REALTIME_SIM Phase1) — 계산된 시즌 결과를 세이브에 저장→복원해 재로드 시 재계산(로딩) 제거.
 // 결정론 보장(Phase0 수정)이라 같은 키면 행이 동일 → 저장값을 안전히 재사용. 키 불일치(상태 변경)면 재계산(폴백).
 // seq(§7 스플라이스): 인메모리 스플라이스용 계산시점 시퀀스 — 영속 안 함(복원 시 현재 seq 주입).
-export const getStandingsCacheRaw = (): { key: string; rows: ResultRow[]; seq: number } | null => cache;
-export const setStandingsCacheRaw = (c: { key: string; rows: ResultRow[]; seq?: number } | null): void => {
-  cache = c ? { key: c.key, rows: c.rows, seq: c.seq ?? spliceSeq() } : null;
+// computedUpto(§7.7 cap): 영속 안 함 — 복원 시 행의 max dayIndex로 유도(안전 하한. 경기 없는 gap은 재요청 시 재시도, 무해).
+export const getStandingsCacheRaw = (): { key: string; rows: ResultRow[]; seq: number; computedUpto: number } | null => cache;
+export const setStandingsCacheRaw = (c: { key: string; rows: ResultRow[]; seq?: number; computedUpto?: number } | null): void => {
+  cache = c ? { key: c.key, rows: c.rows, seq: c.seq ?? spliceSeq(), computedUpto: c.computedUpto ?? maxDayOf(c.rows) } : null;
 };
 
 /** 전 경기 결과(결정론). baseVersion + 거래버전 단위 캐시 — 시즌 중 방출/영입 즉시 반영.
- *  스플라이스(REALTIME_SIM §7): 이전 세대 캐시가 있고 minAffectedDay가 접미(0<minDay<∞)면 dayIndex<minDay 행을
- *  그대로 재사용하고 minDay 이후만 재시뮬 — 결과는 전체 재계산과 byte-동일(_dv_splice 오라클). */
-function allResults(): ResultRow[] {
+ *  두 축의 캐시 재사용을 **합성**한다(REALTIME_SIM §7.1·§7.7):
+ *   - **스플라이스(후방 무효화)**: minAffectedDay(0<minDay<∞) 이전 행 재사용, minDay 이후만 재시뮬.
+ *   - **cap(전방 확장)**: uptoDay 까지만 시뮬하고 computedUpto 워터마크에 기록. 더 높은 cap 요청 시 (computedUpto, cap] 접미 확장.
+ *  재계산 시작일 reuseThreshold = min(minDay, prev.computedUpto+1) 로 두 축을 min 합성 — 결과는 풀 계산과 byte-동일. */
+function allResults(uptoDay?: number): ResultRow[] {
   const key = `${baseVersion()}:${currentTxVersion()}`;
-  if (cache && cache.key === key) return cache.rows;
+  const cap = uptoDay ?? Number.MAX_SAFE_INTEGER; // 미지정 = 전 시즌(하위호환). 초과 행은 seasonResults가 필터.
+  // 조기반환(cap 일반화): 키 일치 **및** 이미 cap 이상까지 계산됐을 때만 저장 행 재사용(낮으면 확장 계산으로 진행).
+  if (cache && cache.key === key && cache.computedUpto >= cap) return cache.rows;
 
   const prev = cache;
   const minDay = prev ? minAffectedDaySince(prev.seq) : Infinity;
-  const splice = !!prev && minDay > 0 && Number.isFinite(minDay);
-  const reuse: ResultRow[] = splice ? prev!.rows.filter((r) => r.dayIndex < minDay) : [];
+  const sameKey = !!prev && prev.key === key;
+  // 재사용 가능: sameKey(base 불변, 대개 minDay=∞로 전방 확장) 또는 splice(키 변경, minDay 유한&>0). minDay=0(소급)=재사용 불가.
+  const canReuse = !!prev && minDay > 0 && (sameKey || Number.isFinite(minDay));
+  // 재계산 시작일 = 두 축의 min. **prev.computedUpto+1 로 clamp**(이전 캐시가 실제 가진 범위 초과 재사용 금지 —
+  // 안 하면 gap [computedUpto, minDay) 이 재사용도 재시뮬도 안 돼 누락된다).
+  const reuseThreshold = canReuse ? Math.min(minDay, prev!.computedUpto + 1) : 0;
+  // 재사용 = [0, reuseThreshold) ∩ [0, cap] (cap 초과 행은 버림 → computedUpto=cap 불변식 유지, 필요 시 나중에 재확장).
+  const reuse: ResultRow[] = reuseThreshold > 0 ? prev!.rows.filter((r) => r.dayIndex < reuseThreshold && r.dayIndex <= cap) : [];
 
-  // 경기일별로 묶어 그 날 OVR 한 번만 계산 (스플라이스 시 minDay 이후 날만)
+  // 경기일별로 묶어 그 날 OVR 한 번만 계산 (재사용 구간 [0,reuseThreshold) 제외 + cap 초과 제외)
   const byDay = new Map<number, Fixture[]>();
   for (const f of SEASON) {
-    if (splice && f.dayIndex < minDay) continue; // 재사용 구간 — 시뮬 생략
+    if (f.dayIndex < reuseThreshold) continue; // 재사용 구간 — 시뮬 생략
+    if (f.dayIndex > cap) continue;            // cap 초과 — 전방 확장 시 미계산(요청 시 확장)
     const arr = byDay.get(f.dayIndex) ?? [];
     arr.push(f);
     byDay.set(f.dayIndex, arr);
@@ -79,8 +95,8 @@ function allResults(): ResultRow[] {
   for (const f of SEASON) { totalGames[f.homeTeamId] = (totalGames[f.homeTeamId] ?? 0) + 1; totalGames[f.awayTeamId] = (totalGames[f.awayTeamId] ?? 0) + 1; }
   const running: Record<string, { wins: number; played: number }> = {};
   for (const t of LEAGUE.teams) running[t.id] = { wins: 0, played: 0 };
-  // 러닝 상태 재구성(§7.1): 재사용 행(dayIndex<minDay)에서 minDay 진입 시점 순위를 다시 쌓는다(재시뮬 아님 —
-  // 합산이라 순서 무관, 전체 경로가 minDay 진입 시 가지는 running과 동일).
+  // 러닝 상태 재구성(§7.1): 재사용 행(dayIndex<reuseThreshold)에서 reuseThreshold 진입 시점 순위를 다시 쌓는다
+  // (재시뮬 아님 — 합산이라 순서 무관, 전체 경로가 reuseThreshold 진입 시 가지는 running과 동일).
   for (const r of reuse) {
     running[r.homeTeamId].played++; running[r.awayTeamId].played++;
     if (r.homeSets > r.awaySets) running[r.homeTeamId].wins++; else running[r.awayTeamId].wins++;
@@ -118,7 +134,7 @@ function allResults(): ResultRow[] {
     }
   }
   rows.sort((a, b) => a.dayIndex - b.dayIndex);
-  cache = { key, rows, seq: spliceSeq() };
+  cache = { key, rows, seq: spliceSeq(), computedUpto: cap };
   return rows;
 }
 
@@ -128,7 +144,8 @@ export function seasonResults(uptoDay: number): ResultRow[] {
   // seasonResults(-1)를 부르면 옛 코드는 allResults()(전 시즌 시드 재생, 콜드 265~544ms)를 돌려 **빈 결과**를 냈다.
   // 경기일(dayIndex)은 항상 ≥0이라 uptoDay<0이면 치른 경기 0 → 시뮬 없이 즉시 빈 배열.
   if (uptoDay < 0) return [];
-  return allResults().filter((r) => r.dayIndex <= uptoDay);
+  // cap=uptoDay 전달(§7.7): allResults가 uptoDay 까지만 계산(전방 확장). 초과 행이 캐시에 있어도 필터로 잘림.
+  return allResults(uptoDay).filter((r) => r.dayIndex <= uptoDay);
 }
 
 /**

@@ -8,7 +8,7 @@ import { Button, Card, IconLabel, Muted, Screen, theme } from '../components/Scr
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { showAlert } from '../components/AppDialog';
 import { getTeamCoach } from '../data/league';
-import { computeStandings } from '../data/standings';
+import { computeStandings, displayCutoff } from '../data/standings';
 import { leagueProduction } from '../data/production';
 import { availableTeamPlayers } from '../data/injury';
 import { TRAINING_NAME } from '../engine/training';
@@ -21,9 +21,11 @@ import type { TrainingFocus } from '../types';
 // → 저장 오버레이 안에서 무효화된 캐시를 미리 데운다(warmCachesForIntro 패턴): 도착 화면은 캐시히트로 즉시.
 function warmAfterPolicyChange(teamId: string): void {
   try {
-    computeStandings(Number.MAX_SAFE_INTEGER);
-    leagueProduction(Number.MAX_SAFE_INTEGER);
     const st = useGameStore.getState();
+    // 표시 컷오프(§7.7 cap)까지만 워밍 — 방침 변경은 시즌 중이라 컷오프≈currentDay(도착 화면이 쓰는 범위와 일치).
+    const cutoff = displayCutoff(st.currentDay, st.results, teamId);
+    computeStandings(cutoff);
+    leagueProduction(cutoff);
     availableTeamPlayers(teamId, st.currentDay); // dyn 워밍 — transactions rosterIdsOnDay/availableFAsOnDay가 캐시히트
   } catch { /* 워밍 실패해도 저장은 완료 — 도착 화면이 폴백 재계산 */ }
 }

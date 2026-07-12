@@ -301,6 +301,14 @@ SAVE_VERSION 하드 범프 불요(재생성 가능 — Phase3 정책).
 **구현 순서**: (1) cap 파라미터+워터마크 코어 → (2) 새 가드 작성 후 현행 GREEN(오라클 신뢰) → (3) 조기반환/reuse 합성 일반화 →
 (4) 가드로 cap∘splice byte-동일 A/B → (5) 워밍 3곳 전환 → (6) 콜드 벤치 절감 실측 + 풀 배터리 0건 → 커밋.
 
+**구현 완료(2026-07-13)**: `data/standings.ts allResults(uptoDay?)`·`data/production.ts allProdRows(uptoDay?)`에 cap 파라미터 +
+`computedUpto` 인메모리 워터마크. 조기반환을 `key 일치 && computedUpto≥cap`으로 일반화, 재계산 시작일
+`reuseThreshold = min(minDay, prev.computedUpto+1)`로 **splice(후방)∩cap(전방)을 한 경로에서 합성**(clamp가 gap 누락 방지).
+`seasonResults`/`leagueProductionRange`/`seasonMatchProds`가 자기 cutoff를 cap으로 전달. 워밍 3곳(`_layout.tsx`·`team/[id].tsx`·
+`training-policy.tsx`)을 MAX→`displayCutoff`로 전환(시즌말/오프시즌 MAX 콜러는 무변경 — currentDay≈SEASON_DAYS라 무해).
+computedUpto는 비영속 — `set*CacheRaw`가 복원 시 행의 max dayIndex로 유도(안전 하한). 가드 `tools/_dv_cap.ts`(①확장등가 ②cap∘splice
+합성 ③day0/시즌경계, 16/16 PASS) + `_dv_splice`·`_dv_intervention_consistency`·`_dv_displaycutoff` 무회귀. 측정 `tools/_ms_cap.ts`.
+
 ### 7.4 검증
 - `tools/_dv_splice.ts`: ①byte-상등 프로퍼티(≥40 랜덤열, 매 액션 후 splice==force-full deep-equal, 순위+생산)
   ②결정론 ×2 ③타이밍(늦은 시즌 벤치 add에서 splice ms ≤ ~20% full) ④off-by-one minDay 변이 → FAIL(민감도)
@@ -309,6 +317,8 @@ SAVE_VERSION 하드 범프 불요(재생성 가능 — Phase3 정책).
     forward-only 불변식(부임 이전 경기 byte 불변) + A/B(소급 day0은 과거 변화 → day-aware 실효).
 - `tools/_dv_evosig.ts`(신설, 축1): (a)시그니처 캐시 재사용 == clean 재계산 byte-동일 (b)팀 분할 변이(한 팀만 바꾸면 그 팀만 변함)
   (c)감독 forward-only 재로드 보존 + 각 A/B 민감도(4/4). `tools/_ms_axis13.ts`(측정, 축1+축3 A/B 콜드 ms).
+- `tools/_dv_cap.ts`(신설, §7.7 cap): ①부분(K)→확장(K') byte-등가 ②cap∘splice 합성(minDay<K bump→K'') == fresh
+  ③day0/시즌경계(-1=∅·0→SEASON_DAYS·SEASON_DAYS==MAX). computedUpto 워터마크 진행 진단 포함(16/16 PASS). `tools/_ms_cap.ts`(측정, 콜드 워밍 절감 A/B).
 - 풀 배터리(run-all-tests): tsc·유닛·auditBoard·`_dv_batch_*`·`_dv_bench(2)`·`_dv_displaycutoff`·`_dv_focus`·
   `_ev_suggest_defer`·checkSubs·`_dv_campoutbox`·`_dv_migrate_e2e`·simNews·`_dv_drift_kovo`·`_gt_determinism`·
   `_dv_splice`(§G)·`_dv_evosig` 무회귀. **정상게임 byte 불변 증명**: 30시즌 sim + 프레시시즌 순위·생산 sha256 before==after.

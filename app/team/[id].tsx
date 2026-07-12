@@ -9,7 +9,7 @@ import { showAlert } from '../../components/AppDialog';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList, type RosterSort } from '../../components/RosterList';
 import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal, LEAGUE } from '../../data/league';
-import { computeStandings } from '../../data/standings';
+import { computeStandings, displayCutoff } from '../../data/standings';
 import { leagueProduction } from '../../data/production';
 import { clubIdentity, clubAgeYears } from '../../data/clubIdentity';
 import { teamOverallRaw } from '../../engine/overall';
@@ -111,8 +111,11 @@ export default function TeamDetail() {
     const raf1 = requestAnimationFrame(() => {
       raf2 = requestAnimationFrame(() => {
         selectTeam(team.id);
-        computeStandings(Number.MAX_SAFE_INTEGER);
-        leagueProduction(Number.MAX_SAFE_INTEGER);
+        // 워밍은 표시 컷오프(§7.7 cap)까지만 — 새 게임(currentDay=0)은 컷오프=-1이라 워밍이 즉시 no-op(시즌초 콜드 지연 제거).
+        const s = useGameStore.getState();
+        const cutoff = displayCutoff(s.currentDay, s.results, team.id);
+        computeStandings(cutoff);
+        leagueProduction(cutoff);
         // 스택 전체 비우고(첫 실행 잔재 [select-team] 등) 대시보드로 확정 — 뒤로가기로 구단선택 재노출/재선택(세이브 초기화) 차단(E).
         router.dismissAll();
         router.replace('/(tabs)/schedule');
