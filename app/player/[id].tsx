@@ -632,11 +632,15 @@ function PlayerDetailInner() {
       <IconLabel icon="stats-chart-outline" color={theme.elite}>종합 스탯</IconLabel>
       <Card accent={theme.elite} flat>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          <RadarChart
-            values={[r.spike, r.block, r.dig, r.receive, r.set, r.serve]}
-            labels={['스파이크', '블로킹', '디그', '리시브', '세팅', '서브']}
-            size={124}
-          />
+          {/* 레이더를 고정폭 View로 감싼다 — <Svg>는 flex 행에서 명확한 width basis를 안 줘서, 이게 없으면 레이더가
+              124보다 넓게 잡히고 옆 바 컬럼(flex:1)이 그만큼 덜 채워져 바-숫자 사이 여백이 커진다(2026-07-12 테스터). */}
+          <View style={{ width: 108 }}>
+            <RadarChart
+              values={[r.spike, r.block, r.dig, r.receive, r.set, r.serve]}
+              labels={['스파이크', '블로킹', '디그', '리시브', '세팅', '서브']}
+              size={108}
+            />
+          </View>
           <View style={{ flex: 1, gap: 2 }}>
             <StatBar label="스파이크" value={r.spike} reveal={reveal} />
             <StatBar label="블로킹" value={r.block} reveal={reveal} />
