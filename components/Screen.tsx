@@ -330,7 +330,7 @@ export function Button({
         styles.btn,
         tone ? null : (variant === 'primary' ? styles.btnPrimary : styles.btnGhost),
         small && styles.btnSmall, // 리스트 액션 규격(pad 8/14·radius 10·minWidth 0)
-        compact && { paddingVertical: 13.5 },
+        compact && { paddingVertical: 13.5, paddingHorizontal: 12 }, // 좁은 3버튼 행(경기 보드 스코어박스/개입/나가기)에서 5자 라벨이 잘리지 않게 가로 패딩 축소
         compact && variant === 'primary' && { backgroundColor: theme.accent + '38' }, // accentGlass(0.16)보다 밝은 ~0.22 틴트
         tone ? {
           borderColor: toneMuted ? theme.border : theme[tone],

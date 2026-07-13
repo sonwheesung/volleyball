@@ -407,15 +407,15 @@ export default function MatchBoard() {
 
       <View style={styles.btnRow}>
         <View style={{ flex: 1 }}>
-          <Button label="스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
+          <Button compact label="스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
         </View>
         {canIntervene ? (
           <View style={{ flex: 1 }}>
-            <Button label="⚙ 개입" variant="ghost" onPress={() => { setIvStep('menu'); setIvError(null); setInterveneOpen(true); }} />
+            <Button compact label="⚙ 개입" variant="ghost" onPress={() => { setIvStep('menu'); setIvError(null); setInterveneOpen(true); }} />
           </View>
         ) : null}
         <View style={{ flex: 1 }}>
-          <Button label="나가기" onPress={requestExit} />
+          <Button compact label="나가기" onPress={requestExit} />
         </View>
       </View>
       </ScrollView>
