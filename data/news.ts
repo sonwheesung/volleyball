@@ -220,14 +220,15 @@ export function buildNewsFeed(
   // 명시 ref를 주면 그걸 우선(엔티티 앵커). 기사 SET/push 순서는 사실로 결정 → 버전 내 결정론.
   const kindOrd = new Map<string, number>();
   // 조사 병기("코메츠이(가)") 일괄 교정 — 헤드라인·본문 전체에 받침 기준 적용(NEWS_SYSTEM §4.5).
-  const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string, body?: string, ref?: string, day?: number) => {
+  const push = (season: number, kind: NewsItem['kind'], headline: string, big: boolean, teamId?: string, body?: string, ref?: string, day?: number, moves?: NewsItem['moves']) => {
     // kord = (season:kind)당 결정론 순번 → 읽음키(newsKey) 기반. ref(엔티티 앵커, 이적 게이트용)와 분리해
     // 한 선수가 시즌에 여러 기사(밀스톤 2개·트리플+폭발 등)를 받아도 읽음키가 충돌하지 않는다(§4.4 Step0).
     // day = 발생 전역일(현재 시즌 인게임만) → 최신순 정렬·2주 만료(§9). 시즌요약(과거)은 undefined.
+    // moves = 오프시즌 결산 전용 구조화 이동 목록(상세가 표/섹션으로 렌더 — 산문 대신, §11.3 B). josa 무대상(라벨).
     const ok = `${season}:${kind}`;
     const ord = kindOrd.get(ok) ?? 0;
     kindOrd.set(ok, ord + 1);
-    items.push({ season, kind, headline: resolveJosa(headline), big, teamId, body: body ? resolveJosa(body) : body, ref, kord: String(ord), day });
+    items.push({ season, kind, headline: resolveJosa(headline), big, teamId, body: body ? resolveJosa(body) : body, ref, kord: String(ord), day, moves });
   };
 
   // ── Step1 fact-hook 파생층(§4.4) — archive 스캔으로 "사실"을 만든다(문구 아님). Step2 core가 전제조건으로 골라 씀.
@@ -704,18 +705,16 @@ export function buildNewsFeed(
       ];
       const S = currentSeason + 1;
       const quiet = inNames.length === 0 && outNames.length === 0 && resignKept.length === 0;
-      const detail = [
-        inNames.length ? `영입·입단 — ${inNames.join(', ')}.` : '',
-        resignKept.length ? `재계약 유지 — ${resignKept.map((t) => t.name).join(', ')}.` : '', // 수락 도장(FA §2.5c-격상)
-        outNames.length ? `방출·이적 — ${outNames.join(', ')}.` : '',
-      ].filter(Boolean).join(' ');
+      // 이동 목록은 이제 산문(detail)에 몰아넣지 않고 구조화 필드(moves)로 넘겨 상세가 표/섹션 카드로 렌더한다(가독성, §11.3 B).
+      //   본문(core)은 리드·마무리 산문만(변주 opener/closer는 body3가 유지) — "영입·입단 — X, Y." 나열을 카드로 이관.
       const core = quiet
         ? `${teamName(myTeamId)}은(는) 이렇다 할 영입도 유출도 없이 기존 전력으로 ${S}시즌을 맞는다.`
-        : `${teamName(myTeamId)}의 ${S}시즌 진용이 확정됐다. ${detail}`;
+        : `${teamName(myTeamId)}의 ${S}시즌 진용이 확정됐다.`;
+      const moves = quiet ? undefined : { in: inNames, kept: resignKept.map((t) => t.name), out: outNames };
       push(currentSeason, 'offseason', quiet
         ? `${teamName(myTeamId)}, ${S}시즌 전력 유지 — 조용한 오프시즌`
         : `${teamName(myTeamId)}, ${S}시즌 진용 확정 (영입 ${inNames.length}·유출 ${outNames.length}${resignKept.length ? `·재계약 ${resignKept.length}` : ''})`,
-        true, myTeamId, body3(quiet ? 'quietOff' : 'offseason', `${offSeason}:recap:${myTeamId}`, core), myTeamId, 0);
+        true, myTeamId, body3(quiet ? 'quietOff' : 'offseason', `${offSeason}:recap:${myTeamId}`, core), myTeamId, 0, moves);
     }
 
     // ── ② 드래프트 입단 개별(내 팀 전 픽 + 타팀 1R). 안개: 포지션·순번만, 정확 OVR 없음 ──

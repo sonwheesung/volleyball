@@ -516,6 +516,10 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 **B. 팀 주인공** (선수 카드 대신 팀/성적 카드)
 - `champion`: 구단 카드 + 시즌 여정(정규→PO) + 기자 총평(감독 인터뷰 아님)
 - `clinch`·`standing`: 순위표 카드 · `streak`: 흐름 카드 · `sponsor`: 재정 전망 카드
+- `offseason`(오프시즌 결산): **선수 이동 카드** — 영입·입단/재계약 유지/방출·이적을 **색 구분 칩 목록**(§3.7 결산 종합).
+  구조화 필드 `NewsItem.moves={in,kept,out}`(비영속·파생, `data/news.ts` 결산 종합이 채움)를 상세가 표/섹션으로 렌더 —
+  **산문 한 문단에 "영입·입단 — X, Y." 나열하던 걸 카드로 이관**(테스터 가독성 피드백 2026-07-13). 본문(body)은 리드·마무리
+  산문만 유지(변주 opener/closer 보존). 빈 섹션 생략, 조용한 오프시즌(변동 0)은 moves 없이 산문만. 가드 `_dv_resignfeedback`(도장 이름 검사 위치 body→moves.kept).
 
 ### 11.4 원칙·제약
 - 데이터 없는 사실·인과·인용 **금지**(§0). 이름·팀·수치는 전부 실데이터. 안개 원칙(내 팀 아닌 선수 fog 등급) 준수. 테마/세이프에어리어 대응.

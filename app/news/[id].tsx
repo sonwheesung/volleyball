@@ -101,6 +101,37 @@ const RELATED_KINDS: Record<NewsItem['kind'], NewsItem['kind'][]> = {
   foreign: ['foreign', 'transfer', 'offseason'], playoff: ['playoff', 'champion', 'clinch'], clinch: ['clinch', 'standing', 'playoff'],
 };
 
+// 오프시즌 결산(offseason) 구조화 섹션 — 산문 한 문단에 몰아넣던 영입/재계약/방출을 라벨+칩 목록 카드로(§11.3 B·§3.7).
+//   값은 news.ts가 만든 실데이터 라벨(예 "발디아(외인)", "현한정(→김천 코메츠)"). 빈 섹션은 렌더 안 함.
+const MOVE_SECTIONS: { key: 'in' | 'kept' | 'out'; label: string; icon: ComponentProps<typeof Ionicons>['name']; color: string }[] = [
+  { key: 'in', label: '영입·입단', icon: 'log-in-outline', color: theme.good },
+  { key: 'kept', label: '재계약 유지', icon: 'refresh-outline', color: theme.sky },
+  { key: 'out', label: '방출·이적', icon: 'log-out-outline', color: theme.warn },
+];
+
+/** 오프시즌 이동 칩 목록 카드(구조화) — 각 섹션(영입/재계약/방출)을 색 구분 칩으로. 빈 섹션 생략. */
+function MovesCard({ moves }: { moves: NonNullable<NewsItem['moves']> }) {
+  const sections = MOVE_SECTIONS.filter((s) => moves[s.key].length > 0);
+  if (sections.length === 0) return null;
+  return (
+    <Card flat accent={theme.sky}>
+      <IconLabel icon="swap-horizontal-outline" color={theme.sky}>선수 이동</IconLabel>
+      {sections.map((s) => (
+        <View key={s.key} style={styles.moveSection}>
+          <IconLabel icon={s.icon} color={s.color}>{s.label} · {moves[s.key].length}</IconLabel>
+          <View style={styles.chipRow}>
+            {moves[s.key].map((name, i) => (
+              <View key={i} style={[styles.chip, { borderColor: s.color }]}>
+                <Text style={styles.chipText} numberOfLines={1}>{name}</Text>
+              </View>
+            ))}
+          </View>
+        </View>
+      ))}
+    </Card>
+  );
+}
+
 // kind별 헤더 아이콘(카테고리 시각 구분). Ionicons 글리프 — 오타는 tsc가 잡음.
 const KIND_ICON: Record<NewsItem['kind'], ComponentProps<typeof Ionicons>['name']> = {
   champion: 'trophy-outline', award: 'medal-outline', milestone: 'flag-outline', hof: 'ribbon-outline',
@@ -393,6 +424,8 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
   const accent = KIND_ACCENT()[n.kind];
   const subtitle = dpick(SUBTITLE_BY_KIND[n.kind], nk, 0);
 
+  // 오프시즌 결산은 이동 목록을 구조화 카드(MovesCard)로 렌더한다(산문 몰아넣기 해소, §11.3 B). body는 이미 리드·마무리 산문만.
+  const offMoves = n.kind === 'offseason' && n.moves && (n.moves.in.length + n.moves.kept.length + n.moves.out.length) > 0 ? n.moves : null;
   // 본문 — n.body(사실 조립본) 또는 분류 리드 + 선수 주인공이면 신체·역할 사실 한 줄(실값, 감정 금지).
   const paras: string[] = [n.body ?? LEAD[n.kind]];
   if (p) paras.push(`신장 ${p.height}cm · ${p.age}세 ${POS_LABEL[p.position]}.`);
@@ -552,6 +585,9 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
         ))}
       </Card>
 
+      {/* 2b) 오프시즌 결산 — 영입/재계약/방출 구조화 칩 카드(산문 대신) */}
+      {offMoves ? <MovesCard moves={offMoves} /> : null}
+
       {/* 3) 선수 정보 카드(안개 준수) — ref가 실제 선수일 때만 */}
       {p ? (
         <Card flat accent={theme.sky}>
@@ -616,4 +652,8 @@ const styles = themedStyles(() => StyleSheet.create({
   fogNote: { fontSize: 12, marginTop: 8 },
   comment: { color: theme.text, fontSize: 15, lineHeight: 23, marginTop: 2 },
   relLink: { color: theme.accent, fontSize: 14, lineHeight: 21, fontWeight: '600', marginTop: 6 },
+  moveSection: { marginTop: 12 },
+  chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
+  chip: { backgroundColor: theme.cardAlt, borderWidth: 1, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 11, maxWidth: '100%' },
+  chipText: { color: theme.text, fontSize: 13, fontWeight: '600' },
 }));

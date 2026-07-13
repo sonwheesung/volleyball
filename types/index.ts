@@ -228,6 +228,7 @@ export interface NewsItem {
   ref?: string;                                              // 엔티티 앵커(playerId 등) — 이적 렌더 게이트·연표 식별용(NEWS_SYSTEM §4.4)
   kord?: string;                                             // (season:kind)당 결정론 순번 — 읽음키(newsKey) 기반. 문구 무관 안정(§4.4 Step0)
   day?: number;                                              // 발생 전역일(dayIndex) — 현재 시즌 인게임 뉴스만. 최신순 정렬·2주 만료 기준(NEWS_SYSTEM §9). 시즌요약(과거)은 undefined
+  moves?: { in: string[]; kept: string[]; out: string[] };   // 오프시즌 결산(offseason) 전용 구조화 이동 목록 — 상세가 표/섹션으로 렌더(산문 대신). body는 폴백/티커용 유지(NEWS_SYSTEM §11.3 B·§3.7). 표시 계층·파생(비영속)
 }
 
 /** 영구제명 영속 기록 — 승부조작·학폭 등으로 리그에서 영구 퇴출된 선수(불명예, 뉴스·연표용) */

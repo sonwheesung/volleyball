@@ -341,7 +341,7 @@ export function Button({
         pressed && !disabled && { opacity: 0.8 },
       ]}
     >
-      <Text style={[
+      <Text numberOfLines={1} style={[
         styles.btnText,
         small && styles.btnTextSmall,
         tone ? { color: toneMuted ? theme.muted : theme[tone], fontWeight: '800' as const, letterSpacing: 0 } : null,

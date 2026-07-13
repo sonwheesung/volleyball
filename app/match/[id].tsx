@@ -407,7 +407,7 @@ export default function MatchBoard() {
 
       <View style={styles.btnRow}>
         <View style={{ flex: 1 }}>
-          <Button label="📊 스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
+          <Button label="스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
         </View>
         {canIntervene ? (
           <View style={{ flex: 1 }}>
