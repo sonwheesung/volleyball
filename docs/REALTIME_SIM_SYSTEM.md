@@ -309,6 +309,70 @@ SAVE_VERSION 하드 범프 불요(재생성 가능 — Phase3 정책).
 computedUpto는 비영속 — `set*CacheRaw`가 복원 시 행의 max dayIndex로 유도(안전 하한). 가드 `tools/_dv_cap.ts`(①확장등가 ②cap∘splice
 합성 ③day0/시즌경계, 16/16 PASS) + `_dv_splice`·`_dv_intervention_consistency`·`_dv_displaycutoff` 무회귀. 측정 `tools/_ms_cap.ts`.
 
+### 7.8 endSeason 자기-무효화 제거 — 시즌 전환 로딩 117초 수정 (설계 2026-07-13, #111)
+
+**문제(온디바이스 실측 — 에뮬 시즌3→4, [ESPERF] 블록 계측)**: 시즌 시작 로딩(`app/season-start.tsx`의 `endSeason()`)이
+**117.5초**, 그중 **A블록(정산+끝난시즌 리플레이)이 111.5초(95%)**. B `buildDraftContext` 5.7s · C 드래프트+생산 0.2s · D 뉴스/HOF 0.05s.
+(개막 브리지 ~20s는 **별도 조사** — 본 절 범위 밖.)
+
+**원인(트레이스 확정)**: endSeason이 **끝난 시즌 리플레이 캐시를 스스로 무효화한 뒤 다시 읽는다**.
+```
+974  currentSeasonAwards(season)        ← 읽기(캐시 warm이면 저렴)
+986  commitRosters(finalR)              ← _baseVersion++ + recordBump(0) = 소급 전체 무효화 ★자기-무효화
+1004 buildPlayoffs → computeStandings(MAX)   ← COLD 풀 재시뮬 #1 (126경기)
+1022 leagueProduction(MAX)              ← COLD 풀 재시뮬 #2 (별도 캐시, 또 126경기)
+1038/1041/1096 동일 호출               ← #1·#2 뒤라 warm(무해)
+```
+standings·production은 **각자 simulateMatch 전 시즌 루프를 도는 독립 캐시**라 무효화 1회 = 풀시뮬 **2회**.
+진입 시점에 이미 cold면(결산 화면 워밍이 안 살아있으면) awards에서 +2회 → **최대 4회**. 에뮬 JS(Hermes)에서 풀시뮬
+1회 ≈ 수십 초(데스크탑 ~3.6s의 8~15배) → 111s와 정합.
+
+~~**핵심 계약(수정의 전제, 검증 대상)**: `commitRosters(finalR)`는 **끝난 시즌의 리플레이 결과를 바꾸지 않는다**~~
+→ **정정(2026-07-13, 독립 리뷰 — 실측으로 거짓 판정)**: 리뷰 세션이 실제 스토어를 구동해 검증한 결과(CASE0 tx0건
+=byte-동일 sanity PASS · CASE1/2 시즌 중 방출/영입 주입 = **day4 첫 매치데이부터 불일치**), `commitRosters(finalR)` 후
+`dynamics.compute()`가 `currentRosters()=finalR`에서 시작해 **시즌 중 이동이 day0부터 소급 반영**되고 기존 tx는
+applyTx 소속 가드에 no-op이 된다(+`rebuildFocus()`가 이적자 훈련방침을 새 팀 day0부터 적용 → 진화까지 상이).
+즉 커밋 뒤 리플레이는 "방출자가 첫날부터 없는 **다른 우주**"다.
+
+**재프레임 — 이것은 성능 이슈이기 전에 잠복 정합 버그다(기둥2 직격)**: 현행 endSeason은 같은 archEntry 안에서
+awards(974, 커밋 전=관전 우주)와 standings/record/streaks/playoffs(1004~, 커밋 후=재작성 우주)를 **섞는다**.
+tx 시즌엔 **유저가 본 챔피언 세리머니 ≠ archive championId** 가능, `seasonInjuryDays`(1003)도 커밋 후라 유저가
+본 시즌에 없던 부상으로 점프력 영구 하락 가능. 따라서 이 수정은 "byte-동일 성능 리팩터"가 아니라
+**"관전 우주 복원(버그 수정) + 성능"**이다 — tx 시즌에선 산출물이 (옳게) 달라진다.
+
+**리뷰 추가 발견 — 최소 재정렬은 성능 목표 미달**: bump는 986뿐이 맞지만, `upcomingStanceOf`(1076)와
+**B블록 `buildDraftContext` 내부**(`importPerfCtx`→leagueProduction(MAX)·`teamPrestige`→computeStandings+buildPlayoffs·
+`upcomingStances`·`standingsWorstFirst`)가 전부 **커밋 뒤에 끝난 시즌을 읽는다**. B가 5.7s였던 건 A블록(1004/1022)이
+커밋-후 캐시를 데워놨기 때문 — 읽기만 앞으로 올리면 **콜드 풀시뮬 1쌍이 B블록으로 이사**해 순 이득 ≈ 0.
+부수: B가 재작성 우주를 읽는 것 자체가 "미리보기(커밋 전)=결과" 약속의 tx 시즌 잠복 위반.
+
+**수정안(리뷰 채택 — 2단계)**:
+- **1단계 (a′) 커밋 한 줄 이동**: 읽기를 올리는 대신 **`commitRosters(986)`를 `buildDraftContext` 직전(~1080)으로
+  내린다**. 974~1076의 상대 순서가 전부 자동 보존(순서 함정 원천 차단), A블록 풀시뮬 0회, 정합 버그(챔피언·부상·archive
+  혼합 우주) 수정. 단 하나 얽히는 읽기 **1023 `currentRosters()[my]` → `finalR[my]`로 명시 치환**(현행 의미 보존.
+  1065 myPayroll은 이미 finalR[my] ✓). 988~998 외인 캡처 getPlayer는 playerMap 읽기라 무관 ✓.
+- **2단계 (a″) B블록 입력 주입**: endSeason 로컬(생산 map·최종 순위·championId·stances)을
+  `buildOffseasonBase`/`resolveFAMarket`에 **옵션 파라미터(ctx 객체)**로 전달(기본값=현행 라이브 읽기 → FA/드래프트
+  프리뷰 호출부 무변경). **풀시뮬 0회 달성 + 전 구간 관전 우주로 기준 통일 + "미리보기=결과"가 tx 시즌에도 성립.**
+- 기대 효과: warm 진입 endSeason 풀시뮬 **0회**(1단계만으론 B에 1쌍 잔존 — 2단계까지 해야 목표). 1096 seasonProd는
+  캡처 const 재사용. 111s → 수 초(실측 확정). 캐시 프리미티브(§7.1·7.7)·세이브 스키마 무변경.
+
+**비채택 대안(리뷰 판정)**: ①산출물 세이브 영속 — (a″) 후 콜드 진입도 simCache 영속 복원으로 warm이라 필요성 급감,
+Phase2 보류 유지. ②endSeason 청크화 — 낭비 자체를 안 없앰(§5.5 D와 별개). ③**recordBump 조건부 완화(기각)** —
+"재계산하면 다른 값이 나올 캐시를 정답으로 선언"이라 §7.1 스플라이스의 byte-동일 계약을 의도적으로 깨는 선례.
+
+**신규 가드(리뷰 재설계안 채택, 커밋 전 0건)**: `_dv_endseason_order.ts` —
+(a) **tx 0건 시즌**: 수정 전/후 산출물 byte-동일(무해성) (b) **tx 주입 시즌**: 산출물 == **커밋 전 캡처값(관전 오라클)**
++ 구 경로와 **다름 확인**(수정의 teeth — 리뷰 도구 CASE1/2 골격 이식) (c) 변이: 읽기 하나를 커밋 뒤로 되돌리면 FAIL
+(d) **simulateMatch 호출 카운터** — warm 진입 endSeason 내 풀시뮬 0회 단언(byte 가드가 못 잡는 "느리지만 맞는" 회귀용)
+(e) tx 시즌 **챔피언 세리머니 id == archive championId**(유저 가시 불변식) (f) tx 시즌 **FA 프리뷰 ctx == endSeason ctx**
+(미리보기=결과). ~~finalR 가짜 이동 주입 변이~~(불필요 — 진짜 이동이 이미 차이를 만든다, 리뷰 판정).
+기존 배터리(`_gt_determinism`·`_dv_splice`·`_dv_cap`·`_dv_intervention_consistency`·`_ev_endseason_guard`) 무회귀.
+
+**구현 순서**: (1) 가드 작성 — tx0건 GREEN + tx 시즌은 **현행이 관전 오라클과 다름을 먼저 기록**(버그 재현 고정) →
+(2) 1단계 커밋 이동+1023 치환 → 가드 (a)(b)(c)(e) GREEN → (3) 2단계 ctx 주입 → (d)(f) GREEN + 풀 배터리 0건 →
+(4) 온디바이스 [ESPERF] 재계측(117s → 목표 <10s) → 커밋. **검증 없인 커밋 금지**(STATS_PROTOCOL 0장).
+
 ### 7.4 검증
 - `tools/_dv_splice.ts`: ①byte-상등 프로퍼티(≥40 랜덤열, 매 액션 후 splice==force-full deep-equal, 순위+생산)
   ②결정론 ×2 ③타이밍(늦은 시즌 벤치 add에서 splice ms ≤ ~20% full) ④off-by-one minDay 변이 → FAIL(민감도)
