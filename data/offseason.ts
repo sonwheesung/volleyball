@@ -28,16 +28,16 @@ import { leagueProduction } from './production';
 import type { PerfCtx } from './tryout';
 import { overall, teamOverall } from '../engine/overall';
 import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
-import { seasonScandals } from './dynamics';
+import { seasonScandals, type ScandalSpan } from './dynamics';
 import { domesticPayroll } from './roster';
 import { upcomingStances } from './leagueHistory';
 import type { SponsorStance } from '../engine/sponsorStance';
 
 /** 직전 시즌 사고 선수 → 다음 재계약·FA 평판 계수(playerId→≤1). 사안 클수록 더 깎인다.
  *  export: fa.tsx 요구연봉 표시가 엔진 asking 산식(`askingPrice×rep`, :150)과 동일하게 할인하도록 공유(EC-FA-09). */
-export function scandalRepMap(): Map<string, number> {
+export function scandalRepMap(spans?: ScandalSpan[]): Map<string, number> {
   const m = new Map<string, number>();
-  for (const sc of seasonScandals()) m.set(sc.playerId, scandalRepMul(sc.missMatches));
+  for (const sc of (spans ?? seasonScandals())) m.set(sc.playerId, scandalRepMul(sc.missMatches));
   return m;
 }
 const round100 = (x: number) => Math.round(x / 100) * 100;
@@ -62,14 +62,29 @@ function cashAfterImports(
 }
 import { runTryout, runAsianQuota, type TryoutOutcome } from './tryout';
 import { FOREIGN_SALARY, ASIAN_SALARY, importAgesOut } from '../engine/foreign';
-import { computeStandings } from './standings';
+import { computeStandings, type Standing } from './standings';
 import { buildPlayoffs } from './playoffs';
+import type { ProdLine } from '../engine/production';
+
+/**
+ * 시즌 마감 컨텍스트(§7.8 2단계) — endSeason이 **commitRosters 전(관전 우주)** 에 캡처한 끝난 시즌 산출물.
+ * buildDraftContext 계열에 옵션으로 주입하면, 커밋 뒤에 끝난 시즌을 다시 읽어(COLD 풀시뮬 + 재작성 우주) 계산하던
+ * 4개 지점(importPerfCtx·teamPrestige·upcomingStances·standingsWorstFirst)이 라이브 재계산 대신 이 캡처값을 쓴다.
+ * → 풀시뮬 0회 + 미리보기(관전)=결과 통일. **미제공(undefined)=현행 라이브 읽기**(FA/드래프트 프리뷰 호출부 무변경).
+ */
+export interface SeasonCloseCtx {
+  prod: Map<string, ProdLine>;             // leagueProduction(MAX) — 끝난 시즌 선수별 생산(importPerfCtx)
+  standings: Standing[];                    // computeStandings(MAX) — 끝난 시즌 최종 순위(teamPrestige·standingsWorstFirst)
+  championId: string | null;                // buildPlayoffs(season).championId — 끝난 시즌 챔피언(teamPrestige)
+  stances: Record<string, SponsorStance>;   // upcomingStances(teams, season) — 전 구단 모기업 기조(resolveFAMarket)
+  scandals: ScandalSpan[];                  // seasonScandals() — 끝난 시즌 사고 정지(§7.8 커밋 후 dyn COLD 재계산·관측우주 정합)
+}
 
 /** 수입선수 재계약 활약도 컨텍스트(#77) — 직전 시즌 선수별 생산(leagueProduction 캐시) + 통산 수상(awardScoreOf).
  *  무저장 재계산(결정론): 오프시즌 resolve 시점 leagueProduction(MAX)=직전 시즌 전 경기 생산. setAwardScores는
  *  store.endSeason이 buildDraftContext 앞에 주입(직전 시즌 수상 반영). 미리보기·결과가 같은 소스라 일관. */
-function importPerfCtx(): PerfCtx {
-  const prod = leagueProduction(Number.MAX_SAFE_INTEGER);
+function importPerfCtx(close?: SeasonCloseCtx): PerfCtx {
+  const prod = close?.prod ?? leagueProduction(Number.MAX_SAFE_INTEGER); // §7.8 — 주입 시 캡처 생산(COLD 재시뮬 회피)
   return { prodOf: (id) => prod.get(id), awardOf: awardScoreOf };
 }
 
@@ -77,10 +92,11 @@ function importPerfCtx(): PerfCtx {
  * 팀별 "우승권" 신호(0..1) — 직전 시즌 정규 순위 + 우승 여부.
  * 우승팀=1, 그 외는 순위 비례(1위≈0.85 … 꼴찌 0). offerScore 의 win 항에 주입.
  */
-function teamPrestige(prevSeason: number): Record<string, number> {
-  const standings = computeStandings(Number.MAX_SAFE_INTEGER);
+function teamPrestige(prevSeason: number, close?: SeasonCloseCtx): Record<string, number> {
+  // §7.8 — 주입 시 캡처 순위·챔피언 사용(computeStandings·buildPlayoffs COLD 재시뮬 회피). 미제공=라이브.
+  const standings = close?.standings ?? computeStandings(Number.MAX_SAFE_INTEGER);
   const N = standings.length;
-  const champ = buildPlayoffs(Math.max(0, prevSeason)).championId;
+  const champ = close ? close.championId : buildPlayoffs(Math.max(0, prevSeason)).championId;
   const out: Record<string, number> = {};
   standings.forEach((s, i) => {
     const base = N <= 1 ? 1 : 1 - i / (N - 1);
@@ -158,6 +174,7 @@ export function resolveFAMarket(
   // FA 오퍼 다레버(FA_SYSTEM §2.8 Phase1) — 내 팀 지명별 오퍼(연봉/연수/주전보장/약속). 미제공(undefined)이면
   //   레거시 경로: faSignings 전원 기본 오퍼(salary='auto'×(aggressive?1.2:1)·years=RENEW_FA_YEARS) = 구 동작 bit-동일(0드리프트).
   faOffers?: Record<string, FAOffer>,
+  close?: SeasonCloseCtx, // §7.8 2단계 — 끝난 시즌 모기업 기조 캡처(주입 시 upcomingStances COLD 재계산 회피)
 ): FAMarketResult {
   const moneyOnly = new Set(moneyOnlyIds);
   const snapshot = off.snapshot;
@@ -176,12 +193,12 @@ export function resolveFAMarket(
 
   // AI FA 예약 상한(FA_SYSTEM §1.5·§1.7, Phase 1.5) = 목표−RESERVE — 재계약과 동일 상한. AI는 여기까지만 FA 수혈하고
   //   나머지 ~RESERVE칸은 드래프트(발굴)에 양보한다. 내 팀은 하드 상한(20). 직전 순위+정체성(평균회귀).
-  const aiReserve = aiReserveTargets();
+  const aiReserve = aiReserveTargets(close?.standings); // §7.8 주입 시 캡처 순위(COLD 재시뮬 회피)
   const rng = createRng(80000 + season * 131);
   // 모기업 기조(FINANCE 2.0 Stage3) — 막 끝난 시즌(season-1) 기준, 전 구단 stance.
   //   **upcomingStances = 라이브 병합**(막 끝난 시즌을 computeStandings로 덧댐) → FA 프리뷰(archive에 S 미포함)와
   //   endSeason(S 포함)이 동일 stance = preview=result(EC-FN-01 수정). 별도 RNG(sponsorStanceOf 자체 시드)라 rng 스트림 미소비(결정#4).
-  const stanceOf: Record<string, SponsorStance> = upcomingStances(teams, season - 1);
+  const stanceOf: Record<string, SponsorStance> = close?.stances ?? upcomingStances(teams, season - 1); // §7.8 — 주입 시 캡처 기조
   const bondsCtx = relationBonds(); // 인간관계 우정(스토어 컨텍스트) — preview=result
   let cashLeft = myCash ?? Number.POSITIVE_INFINITY; // 다중 영입은 잔고를 차감하며 순차 판정
   const signedByMe: string[] = [];
@@ -200,7 +217,8 @@ export function resolveFAMarket(
   const wanted = new Set(faSignings);
 
   // 좋은 FA부터 계약 결정. 직전 시즌 사고 선수는 평판 할인(요구연봉↓ — 다음 FA에 반영)
-  const repMap = scandalRepMap();
+  // §7.8: 커밋 후 dyn 콜드 재계산 회피 + 관측 우주 스캔들 정합(buildOffseason과 동일 캡처 주입). close 미제공(프리뷰)=라이브 폴백.
+  const repMap = scandalRepMap(close?.scandals);
   const faIds = [...off.pool].sort((a, b) => overall(snapshot[b]!) - overall(snapshot[a]!));
   for (const id of faIds) {
     const p = snapshot[id];
@@ -400,11 +418,17 @@ export function buildOffseason(
   contractOverrides: Record<string, Contract>,
   nextSeason: number,
   ownerFx?: OwnerFx, // 불만 선수의 재계약 거부(OWNER_SYSTEM) — 단장이 잡아도 선수가 떠날 수 있다
+  close?: SeasonCloseCtx, // §7.8 2단계 — 끝난 시즌 순위 캡처(aiDomesticCaps COLD 재시뮬 회피). 미제공=라이브.
 ): Offseason {
   // 출장정지 결장일 → 그 시즌 훈련 생략(성장 정체·노장 하락, OWNER_SYSTEM 4.6). 정지 기간(to−from) 일수.
+  // §7.8 패턴 — 캡처 주입으로 커밋 후 dyn 콜드 재계산(온디바이스 107s) 회피 + 관측 우주 스캔들 정합.
+  //   커밋(commitRosters) 후 seasonScandals()→dyn.compute를 재호출하면 finalR(시즌 중 이적 반영) day-0 기준으로
+  //   사고 롤을 다시 굴려 유저가 본 우주와 다른 스캔들이 나온다(FA 영입자 day-0 사고 등). close.scandals=커밋 전 캡처가 진실.
+  //   close 미제공=라이브 폴백(프리뷰 화면 경로 byte-동일 유지).
+  const scandalSpans = close?.scandals ?? seasonScandals();
   const lostDays = new Map<string, number>();
-  for (const sc of seasonScandals()) lostDays.set(sc.playerId, Math.max(0, sc.to - sc.from));
-  const repMap = scandalRepMap(); // 사고 선수 다음 재계약/FA 평판 할인
+  for (const sc of scandalSpans) lostDays.set(sc.playerId, Math.max(0, sc.to - sc.from));
+  const repMap = scandalRepMap(close?.scandals); // 사고 선수 다음 재계약/FA 평판 할인
   // 시대 앵커(FA_SYSTEM 4·SALARY 2장, 2026-07-02): 리그 국내 OVR 중앙값 — 이번 오프시즌의 단일 시대값.
   //   AI 잔류 확률·재계약/자동연장 연봉·FA 요구액이 전부 이 값으로 시대 보정 → 성장 곡선 개편으로
   //   분포가 이동해도 순잔류율(~58%)·연봉 스케일(캡 압박)이 유지된다(과이탈·재정 긴장 사멸 방지).
@@ -412,7 +436,7 @@ export function buildOffseason(
   setSalaryEra(leagueMedOvr); // marketVal(주입 컨텍스트) 사용처(FA 요구액·AI 수혈 등)와 동기화
   // AI 국내 재계약/방출 상한(FA_SYSTEM §1.7, Phase 1.5) = 목표−RESERVE−IMPORTS(국내만) — 매 오프시즌 신인+수입에게 자리를 비운다.
   //   트라이아웃(외인·아시아)이 뒤에서 IMPORTS칸을 채우므로 국내는 그만큼 낮게 잡는다. 내 팀은 무제한(단장 결정).
-  const aiRetainCap = aiDomesticCaps();
+  const aiRetainCap = aiDomesticCaps(close?.standings); // §7.8 주입 시 캡처 순위(COLD 재시뮬 회피)
   const basePlayers = currentBasePlayers();
   const snapshot = rolloverLeague(basePlayers, focusOf, leagueMedOvr, contractOverrides, effectsOf, (p) => lostDays.get(p.id) ?? 0);
   // ── 인시즌 재계약(override) 우회 봉인(FA_SYSTEM §2.5c·D안, 2026-07-10) ──
@@ -582,11 +606,12 @@ export function buildOffseasonBase(
   overrides: Record<string, Contract>,
   nextSeason: number,
   ownerFx?: OwnerFx,
+  close?: SeasonCloseCtx, // §7.8 2단계 — 끝난 시즌 순위·챔피언 캡처(teamPrestige COLD 재시뮬 회피). 미제공=라이브.
 ): OffseasonBase {
   const committed = currentRosters();
   const prevTeamOf: Record<string, string> = {};
   for (const t of Object.keys(committed)) for (const id of committed[t]) prevTeamOf[id] = t;
-  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
+  const off = buildOffseason(myTeam, resignDecisions, overrides, nextSeason, ownerFx, close);
   const prevForeignOf: Record<string, string> = {};
   for (const t of Object.keys(committed)) {
     const f = committed[t].find((id) => off.snapshot[id]?.isForeign && !off.snapshot[id]?.isAsianQuota);
@@ -597,7 +622,7 @@ export function buildOffseasonBase(
     const a = committed[t].find((id) => off.snapshot[id]?.isAsianQuota);
     if (a) prevAsianOf[t] = a;
   }
-  const prestige = teamPrestige(nextSeason - 1);
+  const prestige = teamPrestige(nextSeason - 1, close);
   return { off, prevTeamOf, prevForeignOf, prevAsianOf, prestige };
 }
 
@@ -632,10 +657,11 @@ export function resolvePreDraftFrom(
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
   faOffers?: Record<string, FAOffer>, // FA 오퍼 다레버(§2.8 Phase1) — 미제공이면 레거시(faSignings 기본 오퍼)
+  close?: SeasonCloseCtx, // §7.8 2단계 — 끝난 시즌 생산·기조 캡처(importPerfCtx·resolveFAMarket COLD 재계산 회피)
 ): PreDraft {
   const { prevTeamOf, prevForeignOf, prevAsianOf, prestige } = base;
   const off = cloneOffForResolve(base);
-  const perf = importPerfCtx(); // 직전 시즌 활약도(생산·수상) — 외인/아시아쿼터 재계약 곱수(#77)
+  const perf = importPerfCtx(close); // 직전 시즌 활약도(생산·수상) — 외인/아시아쿼터 재계약 곱수(#77). §7.8 주입 시 캡처 생산.
   // 외국인 트라이아웃 — FA 시장 앞(외인이 OP를 채워야 AI가 FA로 중복 영입하지 않는다)
   const tryout = runTryout(off.snapshot, off.rosters, off.returningForeign, nextSeason, myTeam, tryoutWish, prevForeignOf, myKeepForeign, myCash ?? Number.POSITIVE_INFINITY, perf);
   // 아시아쿼터 게이트: 외인 신규 영입 비용 차감 후 남은 자금으로만(외인 우선). 자금 부족 → 아시아쿼터 공석(안티과금)
@@ -644,7 +670,7 @@ export function resolvePreDraftFrom(
   const asianCash = myCash === undefined ? Number.POSITIVE_INFINITY : Math.max(0, myCash - foreignCostMine);
   const asianTryout = runAsianQuota(off.snapshot, off.rosters, off.returningAsian, nextSeason, myTeam, asianWish, prevAsianOf, myKeepAsian, asianCash, perf);
   const faCash = cashAfterImports(myCash, off.rosters, off.snapshot, myTeam, prevTeamOf); // 수입(외인+아시아쿼터) 비용 차감 후 국내 FA 지갑
-  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds, faOffers);
+  const fa = resolveFAMarket(off, myTeam, faSignings, aggressive, protectedIds, prevTeamOf, nextSeason, prestige, ownerFx, faCash, moneyOnlyIds, faOffers, close);
   return { snapshot: fa.snapshot, rosters: fa.rosters, prevTeamOf, retired: off.retired, expelled: off.expelled, tryout, asianTryout, compCash: fa.compCash, counterFired: fa.counterFired, faSatOut: fa.faSatOut };
 }
 

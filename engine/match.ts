@@ -81,6 +81,12 @@ const DEFAULT_COACH: CoachInfo = { style: 'balanced', charisma: 50 };
 // 박스 스냅샷용 얕은 클론(BoxLine은 number 필드만) — 타임라인이 시점별 누적을 독립 보존
 const cloneBox = (b: BoxSink): BoxSink => { const m: BoxSink = new Map(); for (const [k, v] of b) m.set(k, { ...v }); return m; };
 
+// 디버그 카운터(가드 전용, §7.8 (d)) — simulateMatch 호출 수 관측. 풀시즌 리플레이(standings/production/playoffs)가
+//   전부 이 함수를 통과하므로, endSeason의 "풀시뮬 0회"를 여기서 센다. simMatch.ts의 simulateMatchSimple은 시즌
+//   리플레이 경로가 아니라(레거시) 여기 둔다 — 그쪽에 두면 항상 0이 되는 허위 오라클. 로직·RNG 무영향(순수 관측).
+let _simCalls = 0;
+export const debugSimCalls = { count: (): number => _simCalls, reset: (): void => { _simCalls = 0; } };
+
 /**
  * 풀 랠리 체인 경기 시뮬 — 양 팀 로스터(코트 선발 자동 구성) + 시드 → SimResult.
  * 결정론: 같은 (seed, 선수 스탯, 감독) = 같은 경기.
@@ -91,6 +97,7 @@ export function simulateMatch(
   awayPlayers: Player[],
   opts: MatchOpts = {},
 ): SimResult {
+  _simCalls++; // §7.8 (d) 가드 관측 — 로직/RNG 무영향
   const rng = createRng(seed >>> 0);
   // 박스 누적 대상: 호출자가 준 box, 없고 타임라인만 원하면 내부 box.
   const accBox: BoxSink | undefined = opts.box ?? (opts.boxTimeline ? new Map() : undefined);

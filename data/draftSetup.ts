@@ -7,7 +7,7 @@ import { positionGap } from '../engine/aiGM';
 import { buildDraftOrder, lotteryRound1, setDraftValuer, DRAFT_ROUNDS } from '../engine/draft';
 import { aiProspectValue, AI_SUPER_PV } from './draftAI';
 import { generateDraftClass } from './draftClass';
-import { resolvePreDraftFrom, buildOffseasonBase, type ExpelEvent, type OffseasonBase } from './offseason';
+import { resolvePreDraftFrom, buildOffseasonBase, type ExpelEvent, type OffseasonBase, type SeasonCloseCtx } from './offseason';
 import { standingsWorstFirst } from './standings';
 
 /** 드래프트 클래스 규모 = ~40명/년(KOVO 지원 규모, FA_SYSTEM §3.0). 4라운드×7팀=28슬롯 + 미지명 여유. */
@@ -57,10 +57,11 @@ export function buildDraftContextFrom(
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
   faOffers?: Record<string, import('../types').FAOffer>, // FA 오퍼 다레버(§2.8 Phase1)
+  close?: SeasonCloseCtx, // §7.8 2단계 — 끝난 시즌 캡처(resolvePreDraftFrom·standingsWorstFirst COLD 재계산 회피). 미제공=라이브.
 ): DraftContext {
-  const pre = resolvePreDraftFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian, faOffers);
+  const pre = resolvePreDraftFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian, faOffers, close);
   // KOVO 4라운드제(FA_SYSTEM §3.0): 순번 = 1R 가중추첨 × 4라운드. 팀별 지명 수는 resolveDraft가 슬롯마다 지명/패스 판정.
-  const r1 = lotteryRound1(standingsWorstFirst(), createRng(60000 + nextSeason * 331));
+  const r1 = lotteryRound1(standingsWorstFirst(close?.standings), createRng(60000 + nextSeason * 331)); // §7.8 주입 시 캡처 순위
   const order = buildDraftOrder(r1, DRAFT_ROUNDS);
   // 드래프트 클래스 ~40명(KOVO 지원 규모) — 리그 현 국내 선수 이름을 taken으로 줘 동명이인 방지(FOREIGN_SYSTEM §8)
   const takenKorean = Object.values(pre.snapshot)
@@ -112,7 +113,8 @@ export function buildDraftContext(
   asianWish: string[] = [],
   myKeepAsian: boolean | null = null,
   faOffers?: Record<string, import('../types').FAOffer>, // FA 오퍼 다레버(§2.8 Phase1)
+  close?: SeasonCloseCtx, // §7.8 2단계 — 끝난 시즌 캡처 주입(endSeason 커밋 전 관전 우주). 미제공=라이브(프리뷰 무변경).
 ): DraftContext {
-  const base = buildOffseasonBase(myTeam, resignDecisions, overrides, nextSeason, ownerFx);
-  return buildDraftContextFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian, faOffers);
+  const base = buildOffseasonBase(myTeam, resignDecisions, overrides, nextSeason, ownerFx, close);
+  return buildDraftContextFrom(base, myTeam, faSignings, aggressive, protectedIds, nextSeason, ownerFx, myCash, tryoutWish, myKeepForeign, moneyOnlyIds, asianWish, myKeepAsian, faOffers, close);
 }

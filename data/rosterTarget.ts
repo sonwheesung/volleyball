@@ -6,7 +6,7 @@
 //     └ 국내 재계약/방출 상한 = T − RESERVE − IMPORTS(국내만): buildOffseason — 트라이아웃이 채울 외인/아시아 자리까지 비워둠
 //   → 커밋 로스터 ≈ T = 국내(재계약/방출 후) + 외인·아시아(트라이아웃) + 드래프트 신인 + fillRosters(floor 복원).
 
-import { computeStandings } from './standings';
+import { computeStandings, type Standing } from './standings';
 import { aiRosterTarget } from '../engine/aiGM';
 
 // 구단 정체성(명문/신생 등)은 **로스터 목표에 직접(영구) 반영하지 않는다** — 기둥6 "정체성 = 시작 조건이라 수 시즌 뒤
@@ -28,9 +28,14 @@ export const IMPORT_SLOTS = 2;
  *  이 값이 높으면 예약이 안 생겨 드래프트가 굶는다. 커밋 로스터는 항상 floor(12) 이상(fillRosters 보장). */
 export const DOMESTIC_FLOOR = 7;
 
+// §7.8(#111) — pre 주입: endSeason이 commitRosters **후** buildDraftContext/resolveDraft에서 이 목표를 계산하는데,
+//   commit이 순위 캐시를 무효화해 여기서 computeStandings(MAX)가 COLD 풀시뮬(126)로 돈다(A블록 풀시뮬을 B로 옮긴 잔여
+//   비용 — §7.8 4-지점 목록이 놓친 5번째 사이트). endSeason은 커밋 전 캡처 순위(seasonClose.standings)를 pre로 주입해
+//   관전 우주 + COLD 재시뮬 0회로 통일한다. 미제공(프리뷰/시뮬/감사)=현행 라이브 읽기(무변경).
+
 /** 팀별 AI 목표 로스터 크기(최종·드래프트 상한 T) — 직전 시즌 최종 순위(평균회귀)만. 순수(결정론). */
-export function aiRosterTargets(): Record<string, number> {
-  const standings = computeStandings(Number.MAX_SAFE_INTEGER);
+export function aiRosterTargets(pre?: Standing[]): Record<string, number> {
+  const standings = pre ?? computeStandings(Number.MAX_SAFE_INTEGER); // §7.8 주입 시 캡처 순위
   const n = standings.length;
   const out: Record<string, number> = {};
   standings.forEach((st, i) => { out[st.teamId] = aiRosterTarget(i + 1, n); });
@@ -38,8 +43,8 @@ export function aiRosterTargets(): Record<string, number> {
 }
 
 /** 팀별 AI FA 상한(총원) = 목표 − RESERVE(RESERVE 하한 없이, 드래프트 자리 확보). resolveFAMarket rosterCeil. */
-export function aiReserveTargets(): Record<string, number> {
-  const t = aiRosterTargets();
+export function aiReserveTargets(pre?: Standing[]): Record<string, number> {
+  const t = aiRosterTargets(pre);
   const out: Record<string, number> = {};
   for (const id of Object.keys(t)) out[id] = Math.max(DOMESTIC_FLOOR + IMPORT_SLOTS, t[id] - DRAFT_RESERVE);
   return out;
@@ -47,15 +52,15 @@ export function aiReserveTargets(): Record<string, number> {
 
 /** 팀별 국내 재계약/방출 상한 = 목표 − DRAFT − FA − IMPORTS(국내만). buildOffseason이 재계약·능동방출을 여기서 끊는다.
  *  드래프트·AI FA·트라이아웃이 뒤에서 채울 자리를 국내로 메우지 않게 미리 비워둔다 → 커밋 총원 ≈ 목표. floor(12)보다 낮을 수 있음(의도). */
-export function aiDomesticCaps(): Record<string, number> {
-  const t = aiRosterTargets();
+export function aiDomesticCaps(pre?: Standing[]): Record<string, number> {
+  const t = aiRosterTargets(pre);
   const out: Record<string, number> = {};
   for (const id of Object.keys(t)) out[id] = Math.max(DOMESTIC_FLOOR, t[id] - DRAFT_RESERVE - FA_RESERVE - IMPORT_SLOTS);
   return out;
 }
 
 /** resolveDraft(targetOf) 주입용 — 팀별 총원 목표 조회 함수(미상 팀은 중앙값 14). */
-export function aiTargetOf(): (teamId: string) => number {
-  const t = aiRosterTargets();
+export function aiTargetOf(pre?: Standing[]): (teamId: string) => number {
+  const t = aiRosterTargets(pre);
   return (id) => t[id] ?? 14;
 }

@@ -240,7 +240,7 @@ export function computeStandings(uptoDay: number): Standing[] {
     || ratio(y.pointsWon, y.pointsLost) - ratio(x.pointsWon, x.pointsLost));
 }
 
-/** 드래프트 순번용 — 시즌 전체 기준 하위 팀부터 */
-export function standingsWorstFirst(): string[] {
-  return computeStandings(Number.MAX_SAFE_INTEGER).slice().reverse().map((s) => s.teamId);
+/** 드래프트 순번용 — 시즌 전체 기준 하위 팀부터. §7.8: pre 주입(끝난 시즌 캡처 순위) 시 COLD 재시뮬 회피(미제공=라이브). */
+export function standingsWorstFirst(pre?: Standing[]): string[] {
+  return (pre ?? computeStandings(Number.MAX_SAFE_INTEGER)).slice().reverse().map((s) => s.teamId);
 }

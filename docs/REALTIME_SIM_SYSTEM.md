@@ -373,6 +373,31 @@ Phase2 보류 유지. ②endSeason 청크화 — 낭비 자체를 안 없앰(§5
 (2) 1단계 커밋 이동+1023 치환 → 가드 (a)(b)(c)(e) GREEN → (3) 2단계 ctx 주입 → (d)(f) GREEN + 풀 배터리 0건 →
 (4) 온디바이스 [ESPERF] 재계측(117s → 목표 <10s) → 커밋. **검증 없인 커밋 금지**(STATS_PROTOCOL 0장).
 
+**B블록 재계측(온디바이스 시즌5→6, 2026-07-13, [ESPERF-B]/[ESPERF-B2] 세부 계측)**: 2단계 ctx 주입 후에도
+`buildOffseason` 초입이 **106,972ms / buildOffseason 107,080ms(≈99.9%)** — 원인 = 커밋 후 `seasonScandals()`→`dyn.compute()`
+**콜드**(전 시즌 매치데이 전진 패스, 데스크톱 1,466ms / buildOffseason 1,586ms = 92%). 커밋(commitRosters)이 baseVersion을
+범프해 dyn 캐시(`${baseVersion}:${txVersion}`)를 무효화한 직후 buildOffseason이 lostDays/repMap용으로 dyn을 처음
+건드려 재시뮬을 튕긴다. 정합 관점에서도 버그: 커밋 후 dyn은 finalR(시즌 중 이적 반영) day-0 기준으로 사고 롤을 다시
+굴려 유저가 본 스캔들과 다른 우주가 된다(FA 영입자가 관측 우주에 없던 day-0 사고를 받을 수 있음).
+**수정 = `SeasonCloseCtx.scandals`(커밋 전 `seasonScandals()` 캡처) 주입**(기존 prod·standings·championId·stances와 동일
+§7.8 패턴) — 커밋 후 dyn 콜드 재계산 회피 + 관측 우주 스캔들 정합. 미제공=라이브 폴백(프리뷰 화면 경로 byte-동일).
+커밋 후 `scandalRepMap()`/`seasonScandals()`(=dyn 셀렉터) 호출자 전수조사(측정 확인 — [ESPERF-B2] 콜드 로그 관찰): **두 곳**
+`buildOffseason`(초입 lostDays/repMap)과 `resolveFAMarket`(:220 repMap) 뿐 — **양쪽 다 `scandalRepMap(close?.scandals)`로 주입**해야
+콜드가 사라진다(`buildOffseason`만 고치면 커밋 후 첫 dyn 트리거가 `resolveFAMarket`으로 **이주**해 1,422ms 콜드가 그대로
+재발 — 실측 확인). tryout·draftClass·rosterTarget·endSeason D블록은 dyn(스캔들) 무호출. 수정 후 `_dv_endseason_order` 재실행:
+buildOffseason 이후 `dyn.compute COLD(baseVersion+1:*)` 0회(이전엔 1,422ms 1회) + 15/15 가드 PASS(결정론·관측우주 정합 불변).
+
+**최종 온디바이스 확증(동일 에뮬 Hermes, 2026-07-14, [ESPERF] 블록 계측 — 이후 임시 계측 전면 제거)**:
+- **수정 전(시즌 5→6)**: endSeason 총 **110,882ms** — A(정산+시즌 리플레이) 3,630 / B(buildDraftContext) 107,080
+  {그중 buildOffseason 106,972 = `seasonScandals()`→`dyn.compute()` **콜드** 재계산} / D(드래프트·HOF·감독·뉴스) 171.
+- **수정 후(시즌 6→7, 동일 기기)**: 총 **13,014ms (8.5배 개선)** — A 5,593 / B 6,939{scandals **0ms**·rolloverLeague 6,427·
+  트라이아웃 192·FA 97·드래프트 클래스 113} / D 451. dyn 콜드 재계산 **소멸**.
+- 잔여 비용은 `rolloverLeague`(전 선수 풀시즌 진화 — 캐시 불가한 고유 연산)와 A블록(정산 리플레이)이며, §7.8이 겨눈
+  **자기-무효화 콜드 풀시뮬(A블록 표준시뮬 2~4회 + dyn 콜드)은 전부 제거**됐다.
+- 검증: §7.8 가드 `_dv_endseason_order` **15/15** · 풀 배터리 6종 PASS · tsc 클린(기존 3건 `_dv_focus`×2·`keyFaces` sharp 외 무증가) ·
+  데스크톱 `buildDraftContext`(주입) **1,599→99ms**. 이 확증 후 `[ESPERF]`/`[ESPERF-B]`/`[ESPERF-B2]` 임시 계측은
+  전 소스에서 제거(영구 검증 훅 `engine/match.ts debugSimCalls`는 가드 `_dv_endseason_order`가 쓰므로 존치).
+
 ### 7.4 검증
 - `tools/_dv_splice.ts`: ①byte-상등 프로퍼티(≥40 랜덤열, 매 액션 후 splice==force-full deep-equal, 순위+생산)
   ②결정론 ×2 ③타이밍(늦은 시즌 벤치 add에서 splice ms ≤ ~20% full) ④off-by-one minDay 변이 → FAIL(민감도)

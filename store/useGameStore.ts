@@ -47,7 +47,7 @@ import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
 import { planNextAction } from '../engine/advance';
 import { marketVal, setAwardScores, setSalaryEra } from '../data/awardSalary';
-import { setSeasonHistory, upcomingStanceOf } from '../data/leagueHistory';
+import { setSeasonHistory, upcomingStances } from '../data/leagueHistory';
 import { LEAGUE_CAP, maxSalaryFor, isFranchise } from '../engine/cap';
 import { capPayroll } from '../data/roster';
 import { ROSTER_MAX, canReleasePosition, inSeasonCost, severanceFee } from '../engine/transactions';
@@ -972,8 +972,13 @@ export const useGameStore = create<GameState>()(
 
         // 0) 시상식·마일스톤 — 롤오버 전(끝난 시즌의 base·생산이 살아있을 때) 계산해 영구 보존
         const seasonAwards = currentSeasonAwards(season);
-        // 0.4) 시즌 중 이동(방출/영입, 플레이어+AI)을 명단에 영구 반영 — 오프시즌(롤오버) 전.
+        // 0.4) 시즌 중 이동(방출/영입, 플레이어+AI)을 반영한 **이번 시즌 최종 명단**(finalR) 산출 — 오프시즌(롤오버) 전.
         //   seasonTxLog는 반드시 commitRosters 전에 읽는다(commit이 dynamics 재계산을 유발).
+        //   ★ §7.8(#111): commitRosters(finalR) 호출은 **buildDraftContext 직전으로 내렸다**(아래). commit은 _baseVersion++
+        //     + recordBump(0)으로 끝난 시즌 리플레이 캐시를 소급 무효화하므로, 여기서 커밋하면 974~1076의 모든 끝난 시즌
+        //     읽기(awards·standings·playoffs·production·injuryDays·streaks·ownerFx·finance·stance)가 커밋-후 COLD 재시뮬
+        //     + "방출자가 첫날부터 없는 재작성 우주"가 된다(정합 버그 — 유저가 본 챔피언≠archive 가능). commit을 내리면
+        //     이 읽기들이 전부 **커밋 전 = 유저가 관전한 우주**로 고정되고 A블록 풀시뮬도 0회가 된다(순서 함정 원천 차단).
         const txLog = seasonTxLog();
         const finalR: Record<string, string[]> = {};
         const cur = currentRosters();
@@ -983,7 +988,6 @@ export const useGameStore = create<GameState>()(
           if (tx.kind === 'release') finalR[tx.teamId] = arr.filter((id) => id !== tx.playerId);
           else if (!arr.includes(tx.playerId)) finalR[tx.teamId] = [...arr, tx.playerId];
         }
-        commitRosters(finalR);
         // 오프시즌 결산 뉴스(§3.7) — 외인/아시아쿼터 교체 OUT 이름은 트라이아웃 해소(runTryout cleanup) 전에 캡처.
         //   여기서 getPlayer는 아직 오프시즌 전 base(외인 잔존)를 읽는다(commitPlayerBase는 롤오버 말미). finalR = 이번 시즌 최종 명단.
         type SwapSide = { id: string; name: string };
@@ -1016,11 +1020,13 @@ export const useGameStore = create<GameState>()(
         setAwardScores(nextArchive); // 수상 프리미엄 컨텍스트 갱신 — 이번 오프시즌 FA/재계약(buildDraftContext)부터 반영
         setSeasonHistory(nextArchive); // 모기업 기조(FINANCE 2.0 Stage3) — 이번 오프시즌 AI FA 입찰부터 반영(championId/standings)
 
+        // §7.8: 끝난 시즌 생산을 **커밋 전에 한 번 캡처**(관전 우주·warm) → myProd/prodAll/성장 XP(구 1096) 전부 이 const
+        //   재사용. 커밋 후 재호출하면 COLD 풀시뮬 + 재작성 우주가 되므로 단일 캡처로 통일한다.
+        const seasonProd = leagueProduction(Number.MAX_SAFE_INTEGER);
         // 통산 경기 기록 누적(업적용) — 이번 시즌 내 팀 득점·에이스·세트·경기 승패
         const myRowRec = record[my] ?? [0, 0];
         let seasonPts = 0, seasonAces = 0, setsW = 0, setsL = 0;
-        const myProd = leagueProduction(Number.MAX_SAFE_INTEGER);
-        for (const id of currentRosters()[my] ?? []) { const pr = myProd.get(id); if (pr) { seasonPts += pr.points; seasonAces += pr.aces; } }
+        for (const id of finalR[my] ?? []) { const pr = seasonProd.get(id); if (pr) { seasonPts += pr.points; seasonAces += pr.aces; } } // §7.8: currentRosters()[my]=finalR[my](최종 명단 보존)
         for (const r of seasonResults(Number.MAX_SAFE_INTEGER)) {
           if (r.homeTeamId === my) { setsW += r.homeSets; setsL += r.awaySets; }
           else if (r.awayTeamId === my) { setsW += r.awaySets; setsL += r.homeSets; }
@@ -1038,19 +1044,21 @@ export const useGameStore = create<GameState>()(
         const finalStandings = computeStandings(Number.MAX_SAFE_INTEGER);
         const myRow = finalStandings.find((r) => r.teamId === my);
         const winRate = myRow ? myRow.wins / Math.max(1, myRow.wins + myRow.losses) : 0.5;
-        const prodAll = leagueProduction(Number.MAX_SAFE_INTEGER);
         let angerSum = 0;
         for (const b of benchDirectives) {
           const bp = evolveOnDay(b.playerId, SEASON_END_DAY);
           if (!bp) continue;
-          const pop = popularityOf(bp.career.points, awardHistoryOf(archive, b.playerId).length, bp.clubTenure, prodAll.get(b.playerId)?.points ?? 0);
+          const pop = popularityOf(bp.career.points, awardHistoryOf(archive, b.playerId).length, bp.clubTenure, seasonProd.get(b.playerId)?.points ?? 0); // §7.8: prodAll=seasonProd(단일 캡처)
           // 벤치 연속 결장 분노는 지시가 유효했던 구간만(A3) — 철회(toDay)됐으면 그날까지, 아니면 시즌말까지.
           const benchEnd = b.toDay ?? SEASON_END_DAY;
           const missed = Math.round((benchEnd - b.fromDay) / GAME_EVERY);
           if (pop >= 60 && missed > 0) angerSum += benchAngerPenalty(missed);
         }
         // 내 팀 선수의 사건·사고 — 팬들이 등을 돌린다(사안이 클수록 = 정지 경기 많을수록 더 떠난다)
-        for (const sc of seasonScandals()) if (sc.teamId === my) angerSum += Math.min(28, 6 + sc.missMatches);
+        // §7.8: 커밋 전(관전 우주) seasonScandals() 한 번 캡처 → 여기 anger 루프 + seasonClose.scandals 주입 재사용
+        //   (커밋 후 buildOffseason이 dyn을 finalR day-0로 COLD 재계산하는 것 회피 + 관측 우주 스캔들 정합).
+        const seasonScandalSpans = seasonScandals();
+        for (const sc of seasonScandalSpans) if (sc.teamId === my) angerSum += Math.min(28, 6 + sc.missMatches);
         // 스타 방출 분노(TRANSACTION_SYSTEM 0.5③ — OWNER §3.2). 방출 *시점*에 적립한 값을 합산
         // (release가 그때의 인기로 계산 — 방출 후 production 제외로 시즌 활약이 사라지는 역설 회피).
         angerSum += get().releaseAnger;
@@ -1058,8 +1066,8 @@ export const useGameStore = create<GameState>()(
 
         // 0.7) 재정 정산(FINANCE) — 모기업(베이스+성적 보너스) + 직관(성적 민감) + 굿즈(선수팬).
         //   롤오버 전, 끝난 시즌의 성적·팬덤으로 정산 → 새 잔고가 이번 오프시즌 FA 지갑이 된다.
-        const po = buildPlayoffs(season);
-        const runnerUpId = po.final ? (po.final.hiId === po.championId ? po.final.loId : po.final.hiId) : null;
+        //   §7.8: 준우승 판정은 위 playoffs(1008) 재사용(buildPlayoffs 중복 playSeries 제거) — 둘 다 커밋 전 관전 우주.
+        const runnerUpId = playoffs.final ? (playoffs.final.hiId === playoffs.championId ? playoffs.final.loId : playoffs.final.hiId) : null;
         const myRankFinal = Math.max(1, finalStandings.findIndex((r) => r.teamId === my) + 1);
         const fb = teamFanbaseNow(my, SEASON_END_DAY, fanScore, archive);
         const myPayroll = (finalR[my] ?? []).reduce((sum, id) => sum + (evolveOnDay(id, SEASON_END_DAY)?.contract.salary ?? 0), 0);
@@ -1073,17 +1081,26 @@ export const useGameStore = create<GameState>()(
         const nextFinance: SeasonFinance = { ...finance, bailout: settled.bailout };
         // 모기업 aggressive 1회성 현금 보너스(FINANCE 2.0 Stage4) — 다가오는 오프시즌 FA 지갑에 가산.
         //   upcomingStanceOf = projectSettledCash(FA 프리뷰)와 동일 도출 → 미리보기=결과. thrifty/normal=0(권한표).
-        const walletCash = settled.cash + stanceCashBonus(upcomingStanceOf(my, season));
+        // §7.8: 전 구단 기조를 커밋 전에 한 번 캡처(stances[my] === upcomingStanceOf(my,season)) → 지갑 보너스 + buildDraftContext 주입에 재사용.
+        const stances = upcomingStances(LEAGUE.teams.map((t) => t.id), season);
+        const walletCash = settled.cash + stanceCashBonus(stances[my]);
+
+        // §7.8(#111): 모든 끝난 시즌 읽기(위 974~)가 관전 우주로 완료된 뒤, buildDraftContext(오프시즌 롤오버) **직전**에
+        //   명단을 커밋한다. commit이 리플레이 캐시를 소급 무효화하지만 이후로는 끝난 시즌을 다시 읽지 않는다 — 대신
+        //   커밋 전에 캡처한 seasonClose(생산·순위·챔피언·기조)를 buildDraftContext에 주입해 COLD 풀시뮬 0회 +
+        //   B블록도 관전 우주로 계산(미리보기=결과가 tx 시즌에도 성립). 주입 미제공이면 buildDraftContext는 현행 라이브 읽기.
+        const seasonClose = { prod: seasonProd, standings: finalTable, championId: playoffs.championId, stances, scandals: seasonScandalSpans };
+        commitRosters(finalR);
 
         // 1) 롤오버·은퇴·경쟁FA(영입/보상)·순번·클래스 (드래프트 센터와 동일 소스)
         //    FA 입찰은 캡 AND 새 잔고(지갑) — 캡이 남아도 돈이 없으면 못 뽑는다
         // FA 오퍼 다레버(§2.8 Phase1) — faSignings=지명 keys·aggressive=false(전역은 per-오퍼 aggressive로 이관), faOffers=레버 전달.
-        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, Object.keys(faOffers), false, protectedIds, nextSeason, ownerFx, walletCash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian, faOffers);
+        const ctx = buildDraftContext(my, resignDecisions, contractOverrides, Object.keys(faOffers), false, protectedIds, nextSeason, ownerFx, walletCash, tryoutWish, keepForeign, moneyOnlyIds, asianWish, keepAsian, faOffers, seasonClose);
         const snapshot = ctx.snapshot;
 
         // 2) 드래프트 해석(라이브 확정 픽 mySelections 우선 → 찜 위시폴백 → AI 자동, 순번 존중. FA_SYSTEM §3.2.1)
         const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf, teamScoutReveal, draftSelections, aiTargetOf());
+        const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf, teamScoutReveal, draftSelections, aiTargetOf(seasonClose.standings)); // §7.8: 커밋 후 aiTargetOf가 COLD 순위 재시뮬하지 않게 캡처 순위 주입
         for (const p of drafted.picked) snapshot[p.id] = p;
         const myDrafted = drafted.picked.filter((p) => (drafted.rosters[my] ?? []).includes(p.id)); // 내 지명만(§13.20 ④)
         if (myDrafted.length) diag(season, 'draft', `드래프트 지명 ${myDrafted.map((p) => p.name).join(', ')}`); // 진단 로그
@@ -1092,8 +1109,8 @@ export const useGameStore = create<GameState>()(
         const filled = fillRosters(drafted.rosters, (id) => snapshot[id], nextSeason);
         for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
 
-        // 3.5) 이번 시즌 경기 출전·생산 → 성장 경험치 적립
-        const seasonProd = leagueProduction(Number.MAX_SAFE_INTEGER);
+        // 3.5) 이번 시즌 경기 출전·생산 → 성장 경험치 적립. §7.8: 위에서 커밋 전 캡처한 seasonProd(관전 우주) 재사용 —
+        //   여기서 leagueProduction(MAX)를 다시 부르면 커밋 후라 COLD 풀시뮬 + 재작성 우주(성장이 다른 우주로 적립됨).
         for (const tid of Object.keys(filled.rosters)) {
           for (const id of filled.rosters[tid]) {
             const pr = seasonProd.get(id);
