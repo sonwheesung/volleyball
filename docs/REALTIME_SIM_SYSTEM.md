@@ -398,6 +398,50 @@ buildOffseason 이후 `dyn.compute COLD(baseVersion+1:*)` 0회(이전엔 1,422ms
   데스크톱 `buildDraftContext`(주입) **1,599→99ms**. 이 확증 후 `[ESPERF]`/`[ESPERF-B]`/`[ESPERF-B2]` 임시 계측은
   전 소스에서 제거(영구 검증 훅 `engine/match.ts debugSimCalls`는 가드 `_dv_endseason_order`가 쓰므로 존치).
 
+### 7.9 진화 점진 캐시(c1) — evolveOnDay 콜드 준이차 제거 (설계 2026-07-14, #113, 독립 리뷰 채택)
+
+**문제(§7.8 후속 실측)**: §7.8로 endSeason 내 자기-무효화 콜드 풀시뮬·dyn 콜드는 제거됐으나, **시즌 전환 로딩 잔여
+79.8초**는 endSeason `set()` 이후 **새 시즌 첫 렌더의 `data/dynamics.ts compute()` 콜드**다. compute()는 전 매치데이를
+전진 패스하며 매일·매팀 가용선수마다 `evolveOnDay(id, d)`를 부르는데(§dynamics 216행), 각 콜드 호출이 **base(day0)부터
+재계산 O(day)** 라 시즌 합계가 **준이차(≈O(day²))**. 데스크톱 §7.8 dyn 콜드 1,466ms의 **92%가 이 진화 전진 패스**.
+
+**은닉 상태 분석(수정의 결정론 전제, 리뷰가 코드로 검증)**: `engine/progression.ts evolvePlayer`는 일 단위 폴드다 —
+per-player RNG 스트림(`createRng(playerSeed(id))`)을 소비하며 day 0..days를 진행. 은닉 상태는 **정확히 2개**뿐:
+(1) `Player`(p.xp 성장/노쇠 바 포함 — 스냅샷에 다 있음), (2) **RNG 스트림 위치**(uint32). `engine/rng.ts`의 mulberry32는
+상태가 단일 uint32 `s`라 `rng.state()`로 직렬화·`createRng(state)`로 **byte-동일 재개** 가능. 이 둘을 체크포인트에
+저장하면 임의 지점에서 이어달릴 수 있고 base-콜드와 byte-동일이 보장된다. (age는 일 루프 중 불변 — `ageOneSeason`은
+시즌 경계에서만 적용되므로 span 내 aging rate 상수. training은 매일 rng 소비, aging은 peakAge 이후에만 소비 —
+소비량은 선수 포지션·나이로 결정론.)
+
+**채택 설계(2요소)**:
+1. **`engine/progression.ts evolveSpan(p, rngState, focus, effects, skip, fromDay, toDay) → { player, rngState }`**:
+   기존 evolvePlayer 일 루프를 **절대일(fromDay..toDay−1)** 기준으로 분리. `focusAt(d)`에 **절대일 전달**(상대 오프셋 금지 —
+   시즌 중 방침/감독 변경 타임라인 desync 방지, 리뷰 R3). `skip`(출장정지 프런트로드 경계)도 절대일 `d >= skip`로 판정 →
+   체크포인트가 skip 구간 안에 걸쳐도 정확(리뷰 R5). `evolvePlayer(base, focus, days, effects, lostDays)` 공개 시그니처
+   **불변** = 얇은 래퍼(`evolveSpan(base, initialEvoRngState(base.id), …, skip, 0, days).player`) → 기존 호출부·회귀 byte-동일.
+2. **`data/league.ts evolveOnDay` 체크포인트 재개**: per-id 체크포인트 `{ day, player, rngState, base, fsig, esig }`
+   (가장 먼 day 하나만 유지 — 리뷰 R4). 요청 `day ≥ checkpoint.day` **&** base 참조동일 **&** fsig/esig 동일 →
+   `evolveSpan(checkpoint→day)`로 O(Δday) 재개 후 체크포인트 전진. `day < checkpoint.day` 또는 서명 불일치 →
+   기존처럼 base-콜드(폴백, 리뷰 R2), 서명 일치 시 체크포인트는 max-day 유지. 기존 `evoOneCache((id,day)→Player)`는
+   **정확일치 fast-path로 병존**(반환값 byte-동일), `clearEvoOne()`(시즌 경계)에서 체크포인트도 함께 클리어. `evolveOnDay`
+   경로는 `skip=0`(출장정지 프런트로드 없음)이라 R5 비대상 — evolveSpan에 skip=0 전달(주석 명시). A/B 레버
+   `NO_EVORESUME` env → 재개 무력화(콜드 폴백, 측정·회귀 방어).
+
+**기각 대안(리뷰 판정)**: ①**게이트 플래그(콜드만 캐시)** — 준이차 자체를 안 없앰(여전히 매 콜 O(day)). ②**호출 스택
+정리(compute 내 evolveOnDay 병합)** — 리팩터 위험 크고 dyn 외 호출부(FA 프리뷰·화면)엔 무효. ③**청킹(레그 단위
+분할)** — 경계마다 여전히 base 재계산, O(day²) 상수만 낮춤.
+
+**결정론 논거**: 은닉 변수는 Player+RNG 위치뿐이며 mulberry32 상태는 단일 uint32라 완전 직렬화. `evolveSpan(0→d1)`
+→`(d1→d2)` 합성이 `evolvePlayer(0→d2)`와 전 스탯·xp·rngState까지 byte-동일(가드 오라클). 서명(fsig/esig)은 축1(§7.2.1)의
+콘텐츠 서명 재사용 — focus/effects 입력이 바뀌면 재개 무효화. 캐시 프리미티브(§7.1·7.7·7.8)·세이브 스키마 무변경.
+
+**신규 가드**: `tools/_dv_evoresume.ts`(이빨 필수) — (1) **합성 오라클**(N≥10,000, 선수×d1<d2): 어린 선수(peakAge 이전,
+노쇠 롤 0회)·노장(4+회)·시즌 중 방침 세그먼트 경계·스태프 효과·FA 센티넬·skip>0 전부에서
+`evolveSpan∘evolveSpan == 풀 evolveSpan == evolvePlayer`(player+xp+rngState deep-equal). (2) **이빨 A/B**: "순진 재시드"
+(재개 시 rng 새 시작)와 "상대일 focus"(R3) 변이가 오라클을 **FAIL시킴**을 증명(허위 오라클 차단). (3) **evolveOnDay
+시퀀스**: 오름차순+중간 내림차순 섞인 day 질의가 전부 base-콜드와 byte-동일(체크포인트 재개·역행 폴백 실증).
+측정: `tools/_ms_evoresume.ts`(dyn 콜드 A/B, NO_EVORESUME 토글).
+
 ### 7.4 검증
 - `tools/_dv_splice.ts`: ①byte-상등 프로퍼티(≥40 랜덤열, 매 액션 후 splice==force-full deep-equal, 순위+생산)
   ②결정론 ×2 ③타이밍(늦은 시즌 벤치 add에서 splice ms ≤ ~20% full) ④off-by-one minDay 변이 → FAIL(민감도)

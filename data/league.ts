@@ -8,7 +8,7 @@ import type { CoachInfo } from '../engine/match';
 import { generateLeague } from './seed';
 import { genForeignName, genAsianIdentity } from './names';
 import { generateSeason } from '../engine/season';
-import { evolvePlayer, type FocusResolver } from '../engine/progression';
+import { evolvePlayer, evolveSpan, initialEvoRngState, type FocusResolver } from '../engine/progression';
 import { SEASON_DAYS } from '../engine/calendar';
 import { rollTraits } from '../engine/traits';
 import { createRng, strSeed } from '../engine/rng';
@@ -647,7 +647,15 @@ export const getEvolvedPlayer = (id: string, day: number): Player | undefined =>
 // 메모리 바운드: 시즌 경계(commitPlayerBase/commitRosters/reset/reseed/restore)에서 clearEvoOne()로 비운다 —
 //   시즌 중 액션(영입·훈련·거래·벤치)은 안 비워 재사용 유지(축1 이득), 크기 ≈ 선수수 × 조회날짜(1시즌분) bounded.
 const evoOneCache = new Map<string, { base: Player; fsig: string; esig: string; player: Player }>();
-function clearEvoOne(): void { evoOneCache.clear(); }
+// §7.9 진화 점진 캐시(c1) — evolveOnDay forward-sweep 재개용 체크포인트. evolvePlayer의 은닉상태는 정확히
+//   Player(xp 포함) + per-player RNG 스트림 위치(rngState=rng.state())뿐 — 둘을 저장하면 byte-동일 재개 가능(리뷰 검증).
+//   per-id **최원거리 day 하나만** 유지(R4). 콜드 O(day)를 O(Δday)로 → dynamics.compute 전진 패스의 준이차 제거.
+//   clearEvoOne(시즌 경계)에서 evoOneCache와 함께 비운다(메모리 바운드·서명 정확성은 참조/서명 검사가 보장).
+type EvoCkpt = { day: number; player: Player; rngState: number; base: Player; fsig: string; esig: string };
+const evoCheckpoint = new Map<string, EvoCkpt>();
+function clearEvoOne(): void { evoOneCache.clear(); evoCheckpoint.clear(); }
+// A/B 측정·회귀 방어 레버(§7.9) — 셋되면 재개 폴백(항상 base 콜드). NO_FITPICK 등과 동일 패턴.
+const noEvoResume = (): boolean => typeof process !== 'undefined' && !!process.env && !!process.env.NO_EVORESUME;
 export function evolveOnDay(id: string, day: number): Player | undefined {
   day = Math.min(day, SEASON_DAYS); // 포스트시즌 동결(§5) — evolvedPlayers와 동일 클램프
   const base = playerMap.get(id);
@@ -656,9 +664,23 @@ export function evolveOnDay(id: string, day: number): Player | undefined {
   const esig = playerEffectsSig.get(id) ?? SENT_EFFECTS_SIG;
   const k = `${id}:${day}`;
   const hit = evoOneCache.get(k);
-  if (hit && hit.base === base && hit.fsig === fsig && hit.esig === esig) return hit.player; // 입력 불변 → 재사용
-  const ev = evolvePlayer(base, focusOf(base), day, effectsOf(base));
+  if (hit && hit.base === base && hit.fsig === fsig && hit.esig === esig) return hit.player; // 정확일치 fast-path → 재사용
+
+  // §7.9 점진 재개: 체크포인트가 현재 서명과 일치하고 요청일 ≥ 체크포인트일이면 그 지점부터 evolveSpan(Δday).
+  //   evolveOnDay는 skip=0(출장정지 프런트로드 없음)이라 evolveSpan(skip=0). 서명 불일치/역행이면 base 콜드 폴백(R2).
+  const cp = evoCheckpoint.get(id);
+  const sameSig = !!cp && cp.base === base && cp.fsig === fsig && cp.esig === esig;
+  let ev: Player, endRng: number;
+  if (sameSig && !noEvoResume() && day >= cp!.day) {
+    const r = evolveSpan(cp!.player, cp!.rngState, focusOf(base), effectsOf(base), 0, cp!.day, day);
+    ev = r.player; endRng = r.rngState;
+  } else {
+    const r = evolveSpan(base, initialEvoRngState(id), focusOf(base), effectsOf(base), 0, 0, day); // == evolvePlayer(base, …, day)
+    ev = r.player; endRng = r.rngState;
+  }
   evoOneCache.set(k, { base, fsig, esig, player: ev });
+  // 체크포인트는 최원거리 day만 유지(R4) — 서명이 같고 이번 day가 더 과거면 그대로, 아니면(전진/서명변경) 현재 값으로 교체.
+  if (!(sameSig && day < cp!.day)) evoCheckpoint.set(id, { day, player: ev, rngState: endRng, base, fsig, esig });
   return ev;
 }
 
