@@ -207,6 +207,7 @@ export function simulateMatch(
   while (homeSets < SETS_TO_WIN && awaySets < SETS_TO_WIN) {
     let h = 0;
     let a = 0;
+    const setBaseIdx = points.length; // 이 세트 첫 랠리가 들어갈 전역 인덱스 — 개입 타임아웃 point 클램프용(세트 경계 역참조 방지)
 
     // 세트 시작: 기세 리셋 + 흐름 carryover — 완전 독립 세트 금지(3-0이 늘고 3-2가 줄어 현실 분포로)
     const carry = lastSetWinner === null ? 0 : SET_CARRY * (lastSetWinner === 'home' ? 1 : -1);
@@ -295,7 +296,9 @@ export function simulateMatch(
             const courtStam = (st: typeof home, m: Map<string, number>): TimeoutCourtStam[] =>
               [...st.six, ...(st.libero ? [st.libero] : [])].map((p) => ({ id: p.id, stam: m.get(p.id) ?? 1 }));
             timeoutEvents.push({
-              point: points.length > 0 ? points.length - 1 : 0, setNo, side: iv.side, home: h, away: a, streak,
+              // 개입은 랠리 루프 상단(현재 랠리 push 전)에서 호출 — 세트 개막 0:0이면 points.length-1이 직전 세트 마지막을
+              //   가리켜 보드가 뒤로 seek(감사 발견). 이 세트 첫 랠리 인덱스(setBaseIdx)로 클램프(자동/TTO는 push 후라 무영향).
+              point: Math.max(setBaseIdx, points.length - 1), setNo, side: iv.side, home: h, away: a, streak,
               stamHome: courtStam(home, homeStam), stamAway: courtStam(away, awayStam),
               momHome: home.momentum, momAway: away.momentum,
             });

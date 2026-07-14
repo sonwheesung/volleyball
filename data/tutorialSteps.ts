@@ -25,7 +25,7 @@ export const TIPS: Tip[] = [
   { id: 'team.coach', screen: 'team-detail', order: 1, anchor: 'team-coach',
     title: '감독', body: '감독을 누르면 성향·카리스마를 자세히 봅니다. 감독 성향이 자동 경기 운영(선발·작전·타임아웃)을 좌우합니다.' },
   { id: 'team.roster', screen: 'team-detail', order: 2, anchor: 'team-roster',
-    title: '선수단', body: '선수 이름을 누르면 2층 스탯·특성을 자세히 봅니다. 선수는 성장하고 또 노쇠합니다.' },
+    title: '선수단', body: '선수 이름을 누르면 2층 스탯·특성을 자세히 봅니다. 선수는 성장하고, 전성기가 지나면 기량이 하락합니다.' },
   { id: 'team.start', screen: 'team-detail', order: 3, anchor: 'team-operate',
     title: '이 구단으로 시작', body: '선수단을 둘러본 뒤, 맨 아래 "운영하기" 버튼을 누르면 당신이 이 구단의 구단주가 됩니다. (탭해서 닫고 자유롭게 살펴보세요.)' },
 
