@@ -1008,7 +1008,7 @@ export const useGameStore = create<GameState>()(
             else if (p.isAsianQuota) prevAsian[tid] = { id, name: p.name };
           }
         }
-        // 마일스톤: big(역대·구단·레전드)은 영구 보존, 일반 통산 임계는 최근 300건만(방치형 장기 저장 바운딩)
+        // 마일스톤: 티어드 롤링 캡(§1.2 아래) — big도 kind별 상한(league500·club1000·career2000), 비-big 300. 장기 저장 유계.
         // 방어: (season|playerId|text) 정확중복 제거 — 첫 등장 유지(과거 시즌 보존, 신규 중복만 제거). 결정론·내용 무변경(고유키는 통과).
         const rawMs = [...milestones, ...detectSeasonMilestones(season, hallOfFame)];
         const seenMs = new Set<string>();
@@ -1018,8 +1018,16 @@ export const useGameStore = create<GameState>()(
           seenMs.add(k);
           return true;
         });
-        const nextMilestones = [...allMs.filter((m) => m.big), ...allMs.filter((m) => !m.big).slice(-300)]
-          .sort((a, b) => a.season - b.season);
+        // 티어드 롤링 캡(MILESTONE_SYSTEM §1.2) — big 무한증가(초선형) 봉인, 전 시대 헤드라인 보존.
+        //   T3 league(레전드 추월): 시즌² 폭증 주범 → 최근 500. T1 career-big(헤드라인 개인+롱런): 선형 → 2000.
+        //   T2 club(구단1위): 로그 자기제한 → 1000(안전망). 비-big: 300 유지. 총 상한 ~3800(수평선 무관 유계).
+        const bigMs = allMs.filter((m) => m.big);
+        const nextMilestones = [
+          ...bigMs.filter((m) => m.kind === 'league').slice(-500),
+          ...bigMs.filter((m) => m.kind === 'club').slice(-1000),
+          ...bigMs.filter((m) => m.kind !== 'league' && m.kind !== 'club').slice(-2000),
+          ...allMs.filter((m) => !m.big).slice(-300),
+        ].sort((a, b) => a.season - b.season);
         const injuryDays = seasonInjuryDays(); // 만성 노쇠가속(약) — 큰 부상 선수 영구 소폭 하락
         const playoffs = buildPlayoffs(season);
         const championId = playoffs.championId ?? '';
