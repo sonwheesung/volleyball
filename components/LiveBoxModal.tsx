@@ -19,9 +19,10 @@ interface Props {
   awayName: string;
   box: BoxSink | undefined;
   mineSide: 'home' | 'away' | null;
+  finished?: boolean; // 경기 종료 후 열람 — 재개할 경기가 없으므로 버튼 문구를 상태에 맞춘다(#112)
 }
 
-export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName, box, mineSide }: Props) {
+export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName, box, mineSide, finished }: Props) {
   const [tab, setTab] = useState<'home' | 'away'>(mineSide ?? 'home');
 
   return (
@@ -46,7 +47,7 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
 
       <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 리시브=효율((정확−실패)/시도)</Text>
       <Pressable style={styles.resume} onPress={onClose}>
-        <Text style={styles.resumeTxt}>경기 계속 보기 ▶</Text>
+        <Text style={styles.resumeTxt}>{finished ? '기록 닫기' : '경기 계속 보기 ▶'}</Text>
       </Pressable>
     </Popup>
   );

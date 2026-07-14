@@ -467,6 +467,7 @@ export default function MatchBoard() {
                 : undefined
         }
         mineSide={mineSide}
+        finished={finished}
       />
 
       {/* 경기 개입 시트(§3·§4) — 데드볼(현재 점수)에서 작전 타임아웃·선수 교체. 현재 점수까지만 표시(미래 스포일러 금지). */}
