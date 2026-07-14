@@ -1009,7 +1009,15 @@ export const useGameStore = create<GameState>()(
           }
         }
         // 마일스톤: big(역대·구단·레전드)은 영구 보존, 일반 통산 임계는 최근 300건만(방치형 장기 저장 바운딩)
-        const allMs = [...milestones, ...detectSeasonMilestones(season, hallOfFame)];
+        // 방어: (season|playerId|text) 정확중복 제거 — 첫 등장 유지(과거 시즌 보존, 신규 중복만 제거). 결정론·내용 무변경(고유키는 통과).
+        const rawMs = [...milestones, ...detectSeasonMilestones(season, hallOfFame)];
+        const seenMs = new Set<string>();
+        const allMs = rawMs.filter((m) => {
+          const k = `${m.season}|${m.playerId}|${m.text}`;
+          if (seenMs.has(k)) return false;
+          seenMs.add(k);
+          return true;
+        });
         const nextMilestones = [...allMs.filter((m) => m.big), ...allMs.filter((m) => !m.big).slice(-300)]
           .sort((a, b) => a.season - b.season);
         const injuryDays = seasonInjuryDays(); // 만성 노쇠가속(약) — 큰 부상 선수 영구 소폭 하락

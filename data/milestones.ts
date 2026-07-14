@@ -69,7 +69,9 @@ export function detectSeasonMilestones(season: number, hof: HofEntry[]): Milesto
 
     // 2) 리그 — 명예의전당 레전드(영구결번급) 통산 추월
     for (const stat of CLUB_STATS) {
-      const marks = legends.map((h) => cv(h, stat)).filter((v) => v > 0);
+      // 동점 레전드(같은 stat 동일값)가 marks에 중복 → passedValues가 같은 값을 2회 반환 →
+      // legends.find 이 매번 첫 레전드를 골라 동일 push 정확중복. 값 dedup으로 봉인(삽입순서 보존=결정론).
+      const marks = [...new Set(legends.map((h) => cv(h, stat)).filter((v) => v > 0))];
       for (const v of passedValues(cv(bef, stat), cv(aft, stat), marks)) {
         const legend = legends.find((h) => cv(h, stat) === v);
         if (legend) push('league', `${name}, 명예의전당 ${legend.name}의 ${STAT_KO[stat]} 기록 추월`, true);
