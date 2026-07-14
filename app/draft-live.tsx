@@ -10,6 +10,7 @@ import { resolveDraftContextFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, shortTeamName, teamScoutReveal, SEASON } from '../data/league';
 import { resolveDraft, neededPositions, type PickReason } from '../engine/draft';
+import { ROSTER_CONTRACT_CAP } from '../engine/transactions';
 import { aiTargetOf } from '../data/rosterTarget';
 import { planNextAction } from '../engine/advance';
 import { overall } from '../engine/overall';
@@ -197,6 +198,7 @@ function DraftLiveInner() {
     needs: Position[];
     sorted: Player[];
     reveal: number;
+    rosterCount: number; // 현 로스터 인원(base + 지금까지 내 픽) — 계약 상한 대비 지명/패스 판단 근거(DL-2)
   } = null;
   if (atMyPick) {
     const pending = seq[stopAt];                                   // 위시폴백/AI가 뽑을 추천 픽
@@ -214,7 +216,7 @@ function DraftLiveInner() {
     const myRosterNow = [...(ctx.rosters[my] ?? []), ...seq.slice(0, stopAt).filter((s) => s.mine).map((s) => s.playerId)];
     const getP = (id: string) => ctx.snapshot[id] ?? clsById.get(id);
     const needs = Array.from(new Set(neededPositions(myRosterNow, getP)));
-    panel = { recommended: pending, needs, sorted, reveal: teamScoutReveal(my) };
+    panel = { recommended: pending, needs, sorted, reveal: teamScoutReveal(my), rosterCount: myRosterNow.length };
   }
   const needSet = new Set(panel?.needs ?? []);
   const roundLabel = done ? '지명 종료' : atMyPick ? '내 지명 순번!' : `${seq[revealed]?.round ?? '-'}R 진행 중`;
@@ -268,6 +270,7 @@ function DraftLiveInner() {
         // ── 내 픽 하드정지: 직접 지명 패널 ──
         <Card accent={theme.accent} flat>
           <IconLabel icon="hand-left-outline" color={theme.accent}>내 지명 순번, 직접 선택 ({confirmedMyCount + 1}/{myCount})</IconLabel>
+          <Muted style={{ fontSize: 12, marginTop: 2 }}>현재 로스터 {panel.rosterCount}/{ROSTER_CONTRACT_CAP}명 (계약 상한) — 상한을 넘겨 지명하면 다음 오프시즌에 자연 정리됩니다.</Muted>
           {panel.needs.length ? (
             <Muted style={{ fontSize: 12, marginTop: 4 }}>필요 포지션: {panel.needs.map((p) => POS_KO[p]).join(' · ')}</Muted>
           ) : (
