@@ -3,7 +3,6 @@ import { useMemo, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { ExpandableRow } from '../components/ExpandableRow';
-import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { buildOffseasonBase } from '../data/draftSetup';
 import { resolveDraftContextFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
@@ -93,7 +92,6 @@ function DraftCenterInner() {
   const cash = useGameStore((s) => s.cash);
   const [openId, setOpenId] = useState<string | null>(null);
   // 찜 담기/빼기는 가벼운 토글(더 이상 resolveDraft 재실행 없음 — 미리보기 삭제, 조정 A). 짧은 마스킹만.
-  const busy = useBusyRun();
   // endSeason과 동일한 인자 전체(면담 거부·자금·트라이아웃/아시아 토글·돈만 보상)로 컨텍스트를 만들어
   //   지명 순번·클래스가 결과와 동일하게(EC-FA-09 — 누락 인자로 라이브 확정픽 유실/발산 차단). 공용 조립 함수 경유.
   const ownerFx = useMemo(() => buildOwnerFx(interviews, season, my, fanScore, contractOverrides), [interviews, season, my, fanScore, contractOverrides]);
@@ -208,7 +206,7 @@ function DraftCenterInner() {
             selectedStyle={{ borderColor: theme.accent, borderWidth: 1, backgroundColor: theme.accent + '12' }}
             actionMinWidth={64}
             onToggle={() => setOpenId(open ? null : p.id)}
-            onAction={() => busy.run('지명 결과를 정리하는 중…', () => toggleDraftPick(p.id))}
+            onAction={() => toggleDraftPick(p.id)}
             action={
               <Text style={{ color: picked ? theme.accent : theme.muted, fontWeight: '800', fontSize: 13 }}>
                 {picked ? `담음 ${wi + 1}` : '담기'}
@@ -231,7 +229,6 @@ function DraftCenterInner() {
           </ExpandableRow>
         );
       })}
-      <BusyOverlay visible={busy.busy} message={busy.message} />
     </Screen>
   );
 }
