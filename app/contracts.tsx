@@ -216,7 +216,7 @@ function ContractsInner() {
 
       {foreigners.length > 0 ? (
         <>
-          <Title>외국인 선수</Title>
+          <Title>수입 선수 (외국인·아시아쿼터)</Title>
           <Muted style={{ fontSize: 12 }}>
             외인·아시아쿼터는 1년 계약이라 방출·재계약 대상이 아닙니다. 재지명·교체는 외인 트라이아웃·시즌 중 교체에서 합니다.
           </Muted>

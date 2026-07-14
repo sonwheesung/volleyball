@@ -89,7 +89,7 @@ function AsianTryoutInner() {
           { label: '내 예상 영입', value: myPickId && snap[myPickId] ? snap[myPickId].name : '-', color: theme.accent },
         ]} />
         <Muted style={{ fontSize: 12 }}>
-          외국인과 별개. 팀당 1명(AVC 국가) · **자유계약**(2026-27~) · 연차 상한 1년 {formatMoney(ASIAN_SALARY_Y1)}·2년 {formatMoney(ASIAN_SALARY_Y2)}(샐러리캡 제외).
+          외국인과 별개. 팀당 1명(AVC 국가) · <Text style={{ fontWeight: '800', color: theme.text }}>자유계약</Text>(2026-27~) · 연차 상한 1년 {formatMoney(ASIAN_SALARY_Y1)}·2년 {formatMoney(ASIAN_SALARY_Y2)}(샐러리캡 제외).
           추첨 아닌 직접 협상. 노리는 선수를 ★로 정하면, 선수가 팀 전력·출전 기회를 보고 고릅니다(강팀·자리 있는 팀이 유리).
         </Muted>
       </Card>

@@ -61,7 +61,8 @@ function TryoutInner() {
     [base, my, faOffers, protectedIds, season, ownerFx, cash, tryoutWish, keepForeign],
   );
   const myForeign = useMemo(
-    () => getEvolvedTeamPlayers(my, currentDay).find((p) => p.isForeign),
+    // OP 외국인만 — 아시아쿼터도 isForeign:true라 !isAsianQuota로 분리(§7.1 라이프사이클 분리, replaceForeign과 동일 패턴)
+    () => getEvolvedTeamPlayers(my, currentDay).find((p) => p.isForeign && !p.isAsianQuota),
     [my, currentDay, season],
   );
   const tryout = ctx.tryout;
