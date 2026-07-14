@@ -10,9 +10,19 @@ type Json = Record<string, unknown>;
 type Tab = 'overview' | 'users' | 'retention' | 'play' | 'offseason' | 'payments' | 'ads' | 'match' | 'players' | 'achv' | 'errors' | 'coupons' | 'anns' | 'settings' | 'tickets';
 
 async function apiCall(path: string, token: string, init?: RequestInit): Promise<{ status: number; body: Json }> {
-  const res = await fetch(path, { ...init, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(init?.headers || {}) } });
+  // 네트워크 자체 실패(서버 다운·타임아웃·오프라인)면 fetch가 throw — 이걸 안 잡으면 호출부의
+  //   setBusy(false)·에러표시가 안 돌아 버튼이 영구 로딩에 갇히고 관리자가 무피드백(#46 무피드백 형제).
+  //   → { status:0, ok:false, reason:'network' }로 정규화해 호출부 else 경로(errMsg)가 자연히 탄다.
+  let res: Response;
+  try {
+    res = await fetch(path, { ...init, headers: { 'content-type': 'application/json', authorization: `Bearer ${token}`, ...(init?.headers || {}) } });
+  } catch {
+    return { status: 0, body: { ok: false, reason: 'network' } };
+  }
   let body: Json = {};
   try { body = await res.json(); } catch {}
+  // 응답 바디에 ok가 없어도(빈 200/비JSON) HTTP 상태로 성공 여부 판정 — 침묵 실패 방지
+  if (body.ok === undefined) body.ok = res.ok;
   return { status: res.status, body };
 }
 
@@ -26,6 +36,7 @@ const REASON_KO: Record<string, string> = {
   'not-found': '대상을 찾을 수 없습니다 (이미 삭제되었을 수 있음)',
   'wallet:no-user': '해당 사용자의 지갑을 찾을 수 없습니다',
   error: '서버 오류가 발생했습니다',
+  network: '서버에 연결하지 못했습니다 — 네트워크·서버 상태를 확인하세요',
 };
 // 실패 응답을 사용자에게 노출할 문구로. 서버가 준 reason/error/message를 읽어 사유 + HTTP status를 함께 보여준다(침묵 실패 금지).
 function errMsg(r: { status: number; body: Json }, fallback = '요청을 처리하지 못했습니다'): string {
