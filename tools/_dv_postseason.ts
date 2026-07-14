@@ -104,7 +104,9 @@ check(finalsMvpLeak === 0, '시상 게이트: 결승 확정 전 currentSeasonAwa
 //   A/B: 시드 관점으로 되뒤집는 뮤턴트가 하위 시드 승리 경기에서 a<1(=0)을 내며 실패 → 검사기 이빨 증명.
 {
   const parseSeries = (body: string): [number, number] | null => {
-    const mm = /시리즈 스코어 (\d+)-(\d+)\./.exec(body);
+    // 일반 경기 "시리즈 스코어 a-b." + 우승 확정전 축하 문형 "시리즈 a-b로 …정상에 올랐다"(승자 관점 동일) 둘 다 수용
+    //   — 확정전 변형을 못 읽던 정규식 드리프트 정정(2026-07-14 전체 테스트, 숫자 대조는 동일하게 수행).
+    const mm = /시리즈 스코어 (\d+)-(\d+)\./.exec(body) ?? /시리즈 (\d+)-(\d+)로/.exec(body);
     return mm ? [Number(mm[1]), Number(mm[2])] : null;
   };
   let perspBad = 0, checked = 0, mutantWouldFail = 0, lowerSeedWins = 0;

@@ -9,7 +9,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { showAlert } from '../../components/AppDialog';
 import { Popup } from '../../components/Popup';
 import { Card, Muted, Screen, theme, themedStyles } from '../../components/Screen';
-import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
+import { SpotlightOverlay } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd, unclaimedReward } from '../../engine/diamonds';
@@ -181,17 +181,14 @@ export default function MyPage() {
           sub={WORLDCUP_ENABLED ? '다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원' : '다이아 구매 · 광고 제거 · 구매 복원'}
           onPress={() => router.push('/shop')} />
 
-        <SpotlightTarget id="history-top">
-          <LinkCard icon="trophy-outline" tint={theme.gold} title="기록"
-            sub="시즌 · 통산 리더보드 · 명예의전당 · 연표"
-            onPress={() => router.push('/records-archive')} />
-        </SpotlightTarget>
+        {/* 옛 '기록' 탭 투어 앵커(history-top·history-ach)는 마이페이지 통합 때 투어 스텝이 사라져 고아 — 제거(_dv_tips, 2026-07-14) */}
+        <LinkCard icon="trophy-outline" tint={theme.gold} title="기록"
+          sub="시즌 · 통산 리더보드 · 명예의전당 · 연표"
+          onPress={() => router.push('/records-archive')} />
 
-        <SpotlightTarget id="history-ach">
-          <LinkCard icon="ribbon-outline" tint={theme.warn} title="업적"
-            sub="구단주의 발자취. 우승 · 시상 · 레전드 · 기록 · 운영"
-            onPress={() => router.push('/achievements')} />
-        </SpotlightTarget>
+        <LinkCard icon="ribbon-outline" tint={theme.warn} title="업적"
+          sub="구단주의 발자취. 우승 · 시상 · 레전드 · 기록 · 운영"
+          onPress={() => router.push('/achievements')} />
       </View>
 
       {/* ── 재화 · 가이드 ── */}

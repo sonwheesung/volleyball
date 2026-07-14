@@ -25,7 +25,7 @@ function allowedStems(): Set<string> {
   ]);
   for (const pos of Object.keys(POS_KO) as Position[]) {
     const k = POS_KO[pos];
-    s.add(`주전 ${k}의 노쇠를 대비한 지명`);
+    s.add(`주전 ${k}의 세대교체를 대비한 지명`); // "노쇠" 사용자 노출 금지 정정(CLAUDE 5.1 라벨) — 제품 카피 추종(2026-07-14)
     s.add(`${iGa(k)} 얇다 — 즉시 채운다`); // 조사 받침 분기(EC-DR-05)
     s.add(`${k} 백업(뎁스) 확보`);
     s.add(`${k} 자원 보강`);
@@ -63,13 +63,13 @@ ok(stemOf(prose(mk({ id: 'd', position: 'MB' }), 'best', []), mk({ id: 'd', posi
 {
   const drafted = mk({ id: 'd', position: 'OH' });
   const roster = [mk({ id: 's1', position: 'OH', age: 31 })];
-  ok(stemOf(prose(drafted, 'need', roster), drafted, 1) === '주전 아웃사이드의 노쇠를 대비한 지명', 'need+주전노쇠 → 노쇠 대비 문장');
+  ok(stemOf(prose(drafted, 'need', roster), drafted, 1) === '주전 아웃사이드의 세대교체를 대비한 지명', 'need+주전노쇠 → 세대교체 대비 문장');
 }
 // MB 노쇠 임계 28
 {
   const drafted = mk({ id: 'd', position: 'MB' });
   const rosterOld = [mk({ id: 's1', position: 'MB', age: 28 })];
-  ok(stemOf(prose(drafted, 'need', rosterOld), drafted, 1) === '주전 미들의 노쇠를 대비한 지명', 'MB 주전 28세 → 노쇠(임계 28)');
+  ok(stemOf(prose(drafted, 'need', rosterOld), drafted, 1) === '주전 미들의 세대교체를 대비한 지명', 'MB 주전 28세 → 세대교체(임계 28)');
 }
 // 얇다(OH 1명 → gap 4)
 {

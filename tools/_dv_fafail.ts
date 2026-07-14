@@ -29,6 +29,7 @@ import { accrueCareer } from '../engine/production';
 import { overall } from '../engine/overall';
 import { LEAGUE_CAP } from '../engine/cap';
 import { ROSTER_TOTAL } from '../engine/aiGM';
+import { ROSTER_CONTRACT_CAP } from '../engine/transactions'; // #73 가변 로스터 — 내 팀 FA 정원 게이트는 계약 상한(20)
 import type { Player } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
@@ -93,14 +94,20 @@ log('═══ (A) 합성 직접호출 — 게이트별 코드 대조 ═══'
   else fail(`CAP 게이트인데 코드='${code}' (기대 CAP)`);
 }
 
-// ROSTER — 로스터 정원(16) 참. 캡·자금 여유(저연봉 필러).
+// ROSTER — ~~정원(16)~~ → 계약 상한(ROSTER_CONTRACT_CAP=20, #73 가변 로스터) 참. 캡·자금 여유(저연봉 필러).
+//   정정(2026-07-14 전체 테스트): 내 팀 FA 게이트는 rosterCeil=ROSTER_CONTRACT_CAP(data/offseason.ts:240) — 16이면 미발화(픽스처 드리프트).
 {
-  const myRoster = Array.from({ length: ROSTER_TOTAL }, (_, i) => clonePlayer(`A_F${i}`, 'OH', 1000));
+  const myRoster = Array.from({ length: ROSTER_CONTRACT_CAP }, (_, i) => clonePlayer(`A_F${i}`, 'OH', 1000));
   const target = clonePlayer('FA_ROST', 'OP', 40000);
   const bFill = [clonePlayer('B_S3', 'S', 5000)];
   const { code } = runSynthetic({ myRoster, bRoster: bFill, target, myCash: 99_999_999 });
-  if (code === 'ROSTER') ok(`ROSTER 게이트 → '${code}' (로스터 ${ROSTER_TOTAL}/${ROSTER_TOTAL} 참)`);
+  if (code === 'ROSTER') ok(`ROSTER 게이트 → '${code}' (로스터 ${ROSTER_CONTRACT_CAP}/${ROSTER_CONTRACT_CAP} 참)`);
   else fail(`ROSTER 게이트인데 코드='${code}' (기대 ROSTER)`);
+  // A/B 이빨: 상한-1이면 ROSTER 미발화 — 픽스처가 게이트 경계에 실제 반응함을 증명
+  const under = Array.from({ length: ROSTER_CONTRACT_CAP - 1 }, (_, i) => clonePlayer(`A_U${i}`, 'OH', 1000));
+  const { code: underCode } = runSynthetic({ myRoster: under, bRoster: [clonePlayer('B_S4', 'S', 5000)], target: clonePlayer('FA_ROST2', 'OP', 40000), myCash: 99_999_999 });
+  if (underCode !== 'ROSTER') ok(`A/B: 상한-1(${ROSTER_CONTRACT_CAP - 1})은 ROSTER 미발화(코드='${underCode}') — 경계 민감`);
+  else fail(`A/B: 상한-1인데 ROSTER 발화(경계 무감)`);
 }
 
 // A/B 민감도 — 같은 CASH 시나리오를 자금 충분으로 뒤집으면 코드가 사라져야(게이트에 반응하는 오라클 증명)

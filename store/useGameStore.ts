@@ -399,7 +399,7 @@ export const useGameStore = create<GameState>()(
         // 배치 적립 — N개 업적을 **1왕복 1트랜잭션**으로(순차 earn N회의 ~40s 병목 제거, BACKEND §4). achId별 dedup·평생합 캡·금액 서버권위는 서버가 보존.
         const items = ids.map((id) => ({ amount: achReward(id), idempotencyKey: achKey(userId, id), ref: id }));
         const r = await earnDiamondsBatch(items);
-        if (!r.ok) { // 오프라인/에러 → 아무것도 확정 안 함(원자적). 재수령은 서버가 멱등 dedup.
+        if (!r.ok || !Array.isArray(r.results)) { // 오프라인/에러/비정형 응답(results 누락) → 아무것도 확정 안 함(원자적, fail-closed). 재수령은 서버가 멱등 dedup.
           set({ walletBusy: false });
           void get().syncWallet();
           return { granted: 0, reason: 'offline' };
