@@ -93,6 +93,11 @@ select.oc-input option{background:var(--card);color:var(--tx);}
 .oc-badge.gd{background:rgba(43,209,126,.16);color:var(--gd);} .oc-badge.mut{background:var(--bd2);color:var(--mut);}
 .oc-badge.dg{background:rgba(255,107,90,.16);color:var(--dg);} .oc-badge.wn{background:rgba(242,169,59,.16);color:var(--wn);} .oc-badge.ac{background:rgba(91,155,255,.16);color:var(--ac2);}
 .oc-empty{color:var(--mut);font-size:13px;padding:22px 0;text-align:center;}
+.oc-spin{width:32px;height:32px;border:3px solid var(--bd);border-top-color:var(--ac);border-radius:50%;animation:ocspin .7s linear infinite;}
+@keyframes ocspin{to{transform:rotate(360deg);}}
+.oc-loading{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:14px;padding:72px 0;color:var(--mut);font-size:13px;}
+.oc-emptyrow{display:flex;align-items:center;justify-content:center;gap:10px;}
+.oc-spin.sm{width:16px;height:16px;border-width:2px;}
 .oc-tick{border:1px solid var(--bd);border-radius:12px;padding:15px;margin-bottom:12px;background:var(--card2);}
 .oc-tick.refund{border-color:rgba(255,107,90,.4);} .oc-tick.done{border-color:rgba(43,209,126,.4);}
 .oc-mut{color:var(--mut);font-size:12px;} .oc-pre{margin-top:10px;max-height:280px;overflow:auto;background:#070b12;border:1px solid var(--bd);color:#c8d2e0;padding:12px;border-radius:10px;font-size:11px;line-height:1.5;}
@@ -260,17 +265,20 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [tickets, setTickets] = useState<Json[]>([]);
   const [stats, setStats] = useState<Json | null>(null);
   const [toast, setToast] = useState('');
+  const [booting, setBooting] = useState(true); // 최초 대시보드 로드 — 완료 전 콘텐츠 영역에 로딩 화면(빈 대시보드 깜빡임 방지)
 
   const api = useCallback((p: string, init?: RequestInit) => apiCall(p, token, init), [token]);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2600); };
 
   const load = useCallback(async () => {
+    // 새로고침(reload)은 booting을 다시 true로 안 만들어 기존 데이터 유지하며 조용히 갱신(깜빡임 방지) — 최초 1회만 로딩 화면.
     const [c, a, s, tk, st] = await Promise.all([api('/api/admin/coupon'), api('/api/admin/announcement'), api('/api/admin/setting'), api('/api/admin/ticket'), api('/api/admin/stats')]);
     setCoupons((c.body.coupons as Json[]) ?? []);
     setAnns((a.body.announcements as Json[]) ?? []);
     setSetting((s.body.setting as Json) ?? null);
     setTickets((tk.body.tickets as Json[]) ?? []);
     setStats(st.body.ok ? st.body : null);
+    setBooting(false);
   }, [api]);
 
   useEffect(() => { load(); }, [load]);
@@ -305,6 +313,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
           <button className="oc-btn ghost sm" onClick={() => { load(); flash('새로고침됨'); }}>↻ 새로고침</button>
         </div>
 
+        {booting ? <Loading label="운영 데이터를 불러오는 중…" /> : <>
         {tab === 'overview' && <Overview stats={stats} setting={setting} openTickets={openTickets} />}
         {tab === 'users' && <Users stats={stats} api={api} />}
         {tab === 'retention' && <RetentionPH />}
@@ -320,6 +329,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === 'anns' && <Anns anns={anns} api={api} reload={load} flash={flash} />}
         {tab === 'settings' && <Settings setting={setting} api={api} reload={load} flash={flash} />}
         {tab === 'tickets' && <Tickets tickets={tickets} api={api} reload={load} flash={flash} />}
+        </>}
       </main>
       {toast ? <div className="oc-toast">{toast}</div> : null}
     </div>
@@ -356,6 +366,10 @@ function Btn({ variant = 'primary', onClick, disabled, children, style }: { vari
 }
 // 모달 푸터 인라인 메시지(실패 사유 노출 — 좌측). 성공은 상단 토스트, 실패는 모달 유지 + 여기 표기.
 function FooterMsg({ msg }: { msg: string }) { return msg ? <span className="oc-modal-msg err">{msg}</span> : null; }
+// 탭/화면 단위 로딩 표시(스피너). 리스트 내부 인라인 로딩은 LoadingRow.
+function Loading({ label = '불러오는 중…' }: { label?: string }) { return <div className="oc-loading"><div className="oc-spin" /><div>{label}</div></div>; }
+// 테이블/리스트 자리의 인라인 로딩(작은 스피너 + 텍스트) — oc-empty 자리에 그대로 대체.
+function LoadingRow({ label = '불러오는 중…' }: { label?: string }) { return <div className="oc-empty oc-emptyrow"><div className="oc-spin sm" />{label}</div>; }
 
 const nnum = (v: unknown): number => (typeof v === 'number' ? v : 0);
 const narr = (v: unknown): number[] => (Array.isArray(v) ? (v as number[]) : []);
@@ -605,7 +619,7 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
       </div>
       <div className="oc-card">
         <div className="oc-cardhead"><h3>사용자 목록 <span className="oc-mut">({total.toLocaleString()})</span></h3><div className="oc-row" style={{ gap: 8 }}><GranTabs gran={status} set={pick} opts={FILT} /><CsvBtn onClick={exportUsers} /></div></div>
-        {loading ? <div className="oc-empty">불러오는 중…</div> : rows.length === 0 ? <div className="oc-empty">해당 조건의 사용자가 없습니다.</div> : (
+        {loading ? <LoadingRow /> : rows.length === 0 ? <div className="oc-empty">해당 조건의 사용자가 없습니다.</div> : (
           <table className="oc-table">
             <thead><tr><th>가입일</th><th>최근 접속</th><th>상태</th><th>로그인</th><th>버전</th><th style={{ textAlign: 'right' }}>다이아</th></tr></thead>
             <tbody>{rows.map((u) => { const st = userStatus(u); return (
@@ -699,7 +713,7 @@ function Payments({ stats, api }: { stats: Json | null; api: Api }) {
       </div>
       <div className="oc-card">
         <div className="oc-cardhead"><h3>결제 · 환불 내역 <span className="oc-mut">({pTotal.toLocaleString()})</span></h3><div className="oc-row" style={{ gap: 8 }}><GranTabs gran={kind} set={pickKind} opts={KIND_F} /><CsvBtn onClick={() => downloadCsv(`payments-${kind}.csv`, ['시각', '유저', '종류', '상품', '다이아', '잔액'], pRows.map((p) => [fmtDT(p.createdAt), String(p.userId), p.reason === 'purchase' ? '구매' : '환불', String(p.ref ?? ''), nnum(p.delta), nnum(p.balanceAfter)]))} /></div></div>
-        {pLoading ? <div className="oc-empty">불러오는 중…</div> : pRows.length === 0 ? <div className="oc-empty">해당 내역이 없습니다. (결제 원장 이벤트 · #43 연동 후 KRW 금액 표시)</div> : (
+        {pLoading ? <LoadingRow /> : pRows.length === 0 ? <div className="oc-empty">해당 내역이 없습니다. (결제 원장 이벤트 · #43 연동 후 KRW 금액 표시)</div> : (
           <table className="oc-table">
             <thead><tr><th>시각</th><th>유저</th><th>종류</th><th>상품</th><th style={{ textAlign: 'right' }}>다이아</th><th style={{ textAlign: 'right' }}>잔액</th></tr></thead>
             <tbody>{pRows.map((p) => { const buy = p.reason === 'purchase'; const dv = nnum(p.delta); return (
@@ -729,7 +743,9 @@ function Payments({ stats, api }: { stats: Json | null; api: Api }) {
 function Ads({ api }: { api: Api }) {
   const [gran, setGran] = useState('day');
   const [d, setD] = useState<Json | null>(null);
-  useEffect(() => { let live = true; api(`/api/admin/series?metric=ad&granularity=${gran}`).then((r) => { if (live) setD(r.body.ok ? r.body : null); }); return () => { live = false; }; }, [api, gran]);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { let live = true; setLoading(true); api(`/api/admin/series?metric=ad&granularity=${gran}`).then((r) => { if (live) { setD(r.body.ok ? r.body : null); setLoading(false); } }); return () => { live = false; }; }, [api, gran]);
+  if (loading) return <Loading />;
   const labels = (d?.labels as string[]) ?? [], count = narr(d?.count), usersA = narr(d?.users);
   const cTotal = count.reduce((a, b) => a + b, 0), last = count[count.length - 1] ?? 0, lastU = usersA[usersA.length - 1] ?? 0;
   const GR = [{ v: 'day', l: '일별' }, { v: 'week', l: '주별' }, { v: 'month', l: '월별' }, { v: 'year', l: '연별' }];
@@ -781,7 +797,7 @@ function Achievements({ api }: { api: Api }) {
         <Stat ic="👥" k="집계 대상" v={total.toLocaleString()} s="현재 사용자(달성율 분모)" />
         <Stat ic="✅" k="1명+ 달성 업적" v={`${unlockedAny} / ${ACH_CAT.length}`} s="누구든 달성한 업적" />
       </div>
-      {loading ? <div className="oc-card"><div className="oc-empty">불러오는 중…</div></div> : cats.map((cat) => (
+      {loading ? <div className="oc-card"><LoadingRow /></div> : cats.map((cat) => (
         <div className="oc-card" key={cat}>
           <div className="oc-cardhead"><h3>{cat}</h3></div>
           {ACH_CAT.filter((a) => a.c === cat).map((a) => {
@@ -822,7 +838,7 @@ function Errors({ api }: { api: Api }) {
         <div className="oc-cardhead"><h3>결제 오류 사유별 <span className="oc-tag2">자체-롤업(서버 로그)</span></h3>
           <CsvBtn onClick={() => downloadCsv('errors-byreason.csv', ['사유(reasonCode)', '건수'], byReason.map((b) => [String(b.reasonCode), nnum(b.n)]))} />
         </div>
-        {loading ? <div className="oc-empty">불러오는 중…</div> : byReason.length === 0 ? <div className="oc-empty">최근 14일 결제 오류가 없습니다. (결제 실패/거부/에러 시 여기 집계)</div> : (
+        {loading ? <LoadingRow /> : byReason.length === 0 ? <div className="oc-empty">최근 14일 결제 오류가 없습니다. (결제 실패/거부/에러 시 여기 집계)</div> : (
           <table className="oc-table">
             <thead><tr><th>사유 (reasonCode)</th><th style={{ textAlign: 'right' }}>건수</th></tr></thead>
             <tbody>{byReason.map((b, i) => <tr key={i}><td>{String(b.reasonCode)}</td><td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--dg)' }}>{nnum(b.n).toLocaleString()}</td></tr>)}</tbody>
@@ -831,7 +847,7 @@ function Errors({ api }: { api: Api }) {
       </div>
       <div className="oc-card">
         <div className="oc-cardhead"><h3>최근 오류 로그 <span className="oc-mut">(최근 14일 · {recent.length})</span></h3></div>
-        {loading ? <div className="oc-empty">불러오는 중…</div> : recent.length === 0 ? <div className="oc-empty">최근 오류 로그가 없습니다.</div> : (
+        {loading ? <LoadingRow /> : recent.length === 0 ? <div className="oc-empty">최근 오류 로그가 없습니다.</div> : (
           <table className="oc-table">
             <thead><tr><th>시각</th><th>단계</th><th>사유</th><th>상품</th><th>유저</th></tr></thead>
             <tbody>{recent.map((r, i) => (
