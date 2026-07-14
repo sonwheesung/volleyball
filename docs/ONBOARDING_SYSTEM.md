@@ -43,7 +43,7 @@ export const tipsForScreen = (screen: string): Tip[] =>
 ```
 
 - **screen 키**(현재): `select-team` · `team-detail` · `tab-schedule` · `tab-dashboard` ·
-  `tab-squad` · `tab-office` · `tab-mypage`. (확장 시 새 키 추가.)
+  `tab-squad` · `tab-office` · `tab-mypage` · `match`(경기 보드 — 2026-07-14 신설). (확장 시 새 키 추가.)
   - 2026-06-30 네비 개편: 구 `tab-history`(기록 탭) → `tab-mypage`(마이페이지 탭). `history.intro`/`history.ach`
     **id는 보존**하고 screen 키만 옮김(둘 다 마이페이지 허브에서 발화 — 기록·업적 카드 앵커 그대로 history-top·history-ach).
 - **id 불변 규칙**: 출시된 id는 고정. 문구만 고치는 건 자유(추적과 무관). 대상이 바뀌면 **새 id**.
@@ -145,9 +145,29 @@ resetTips: () => void;              // 전체 리셋(설정 "튜토리얼 다시
 | tab-squad | `squad.coach` → `squad.intro` | 감독 카드 · 선수단 목록 |
 | tab-office | `office.intro` → `office.staff` → `office.tx` | 계약 관리 · 스태프 계약 · 시즌 중 FA |
 | tab-mypage | `history.intro` → `history.ach` | 마이페이지 허브 — 기록 카드(→/records-archive: 시즌/통산/명전/연표) · 업적 카드(→/achievements) |
+| match | `match-spectate` → `match.controls` | 경기 보드(첫 관전) — 관전 모드 안내(가운데 카드) · 하단 컨트롤(스코어박스·⚙개입·나가기) |
 
 > 새 화면/기능이 생기면 그 화면 키 + 새 id를 한 행 추가하면 자동으로 신규 유저 전체·기존 유저 신규분에
 > 스포트라이트가 잡힌다. 한 화면에 상호작용 요소를 추가하면 그 화면에 새 order의 팁을 끼우면 된다(앵커 래핑 + 한 줄).
+
+### 5.1 경기 보드 스포트라이트(2026-07-14 신설 — 구 수동 관전 팝업 승계)
+
+경기 보드(`app/match/[id].tsx`)에 스포트라이트 2스텝을 신설했다. 독립 리뷰가 **C1(스포트라이트 코어에 "가운데 카드 전용
+스텝" 신 개념 추가)을 폐기**하고 **C2(조건부 문구 — 기존 anchor-없음=가운데 카드 폴백을 그대로 사용)를 채택**했다.
+따라서 `Spotlight.tsx`는 **`screenFromPathname`에 `/match/` 매핑 한 줄만** 더하고 측정·큐·폴백 로직은 무수정
+(measure 타이밍 버그 5회 수정 이력 보호). 경로는 `startsWith('/match/')` — `/matchresult/`는 6번째 문자에서 갈라져 오매치 없음.
+
+- **기존 팝업 승계**: 기존의 수동 "📺 관전 모드" 1회 팝업(`showTip` state + `markTip('match-spectate')`)을 **완전 삭제**하고,
+  스텝① id를 그 **`match-spectate`를 그대로 승계**했다 → 이미 팝업을 본 기존 유저는 seenTips에 이미 있어 자동 skip(재노출 없음).
+  ⚠ 팝업을 안 지우면 신규 유저에게 팝업이 먼저 `markTip('match-spectate')`을 호출해 스포트라이트가 영영 안 뜨는 사일런트 버그가
+  된다(리뷰가 지목한 치명 함정) — 그래서 삭제가 필수.
+- **일시정지 배선**: 구 `showTip` 항을 `tutorialActive`(= `match` 화면에 미본 스텝이 하나라도 남았나)로 교체해
+  `paused = statsOpen || tutorialActive || interveneOpen`. 결정론 무영향 — 재생 프레임만 멈추고 엔진 시뮬은 불변.
+  `tutorialActive`는 `sandbox !== '1'` 가드를 포함(구 `showTip`의 sandbox 예외 승계) — 안 그러면 오버레이를 안 그리는
+  샌드박스에서 탭해 넘길 대상이 없는데 paused가 영영 true가 된다.
+- **샌드박스 가드**: 오버레이는 `{!isSandbox && <SpotlightOverlay screen="match" />}`로 감싼다 — board-lab·DEV 테스트
+  경기(구 팝업의 `sandbox!=='1'` 예외)에는 튜토리얼을 띄우지 않는다.
+- ⚠ **스포일러 금지**: 두 스텝 body에 스코어·승패·세트 결과를 절대 넣지 않는다(결정론 결과 누출 방지 — "다시 봐도 같은 경기").
 
 ---
 

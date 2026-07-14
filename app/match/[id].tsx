@@ -25,6 +25,8 @@ import { buildPlayoffs, poSeedBase, finalSeedBase } from '../../data/playoffs';
 import { buildPlayoffBox, type PoRound } from '../../data/postseason';
 import { PO_SLOTS, FINAL_SLOTS } from '../../engine/calendar';
 import { DEV_TOOLS } from '../../data/flags';
+import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
+import { tipsForScreen } from '../../data/tutorialSteps';
 import { useGameStore } from '../../store/useGameStore';
 
 // 주기적 이어보기 체크포인트 — 크래시/강제종료(백그라운드 이벤트 없이 죽는 경우)까지 커버.
@@ -56,9 +58,10 @@ export default function MatchBoard() {
   const watchProgress = useGameStore((s) => s.watchProgress);
   const saveWatchProgress = useGameStore((s) => s.saveWatchProgress);
   const clearWatchProgress = useGameStore((s) => s.clearWatchProgress);
-  const markTip = useGameStore((s) => s.markTip);
-  // 첫 관전 1회 안내(관전형·결정론 — "다시 봐도 같다"). seenTips로 영구 1회. 샌드박스 제외.
-  const [showTip, setShowTip] = useState(() => sandbox !== '1' && !(useGameStore.getState().seenTips?.['match-spectate']));
+  // 경기 보드 스포트라이트가 아직 미완(미본 스텝 존재)인가 — 있으면 재생 일시정지(구 showTip 팝업 대체, 2026-07-14).
+  //   결정론 무영향: 재생 프레임만 멈추고 엔진 시뮬은 불변. 샌드박스는 오버레이를 안 그리므로(아래 !isSandbox) 여기서도
+  //   제외 — 안 그러면 탭해 넘길 오버레이가 없는데 paused가 영영 true(구 showTip의 sandbox!=='1' 예외 승계).
+  const tutorialActive = useGameStore((s) => sandbox !== '1' && tipsForScreen('match').some((t) => !(s.seenTips?.[t.id])));
   const recorded = useRef(false);
   const progressRef = useRef(0); // MatchCourt가 보고하는 현재 랠리 인덱스(이어보기 저장용)
   const lastSavedRef = useRef(0); // 마지막으로 저장한 인덱스 — 위치 미변화 시 중복 풀세이브 쓰기 스킵
@@ -385,7 +388,7 @@ export default function MatchBoard() {
           onFinished={onFinished}
           onScore={handleScore}
           timeoutSignal={toSignal}
-          paused={statsOpen || showTip || interveneOpen}
+          paused={statsOpen || tutorialActive || interveneOpen}
           homeName={data.home.name}
           awayName={data.away.name}
         />
@@ -405,19 +408,21 @@ export default function MatchBoard() {
         </View>
       ) : null}
 
-      <View style={styles.btnRow}>
-        <View style={{ flex: 1 }}>
-          <Button compact label="스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
-        </View>
-        {canIntervene ? (
+      <SpotlightTarget id="match-controls">
+        <View style={styles.btnRow}>
           <View style={{ flex: 1 }}>
-            <Button compact label="⚙ 개입" variant="ghost" onPress={() => { setIvStep('menu'); setIvError(null); setInterveneOpen(true); }} />
+            <Button compact label="스코어박스" variant="ghost" onPress={() => setStatsOpen(true)} />
           </View>
-        ) : null}
-        <View style={{ flex: 1 }}>
-          <Button compact label="나가기" onPress={requestExit} />
+          {canIntervene ? (
+            <View style={{ flex: 1 }}>
+              <Button compact label="⚙ 개입" variant="ghost" onPress={() => { setIvStep('menu'); setIvError(null); setInterveneOpen(true); }} />
+            </View>
+          ) : null}
+          <View style={{ flex: 1 }}>
+            <Button compact label="나가기" onPress={requestExit} />
+          </View>
         </View>
-      </View>
+      </SpotlightTarget>
       </ScrollView>
 
       {/* 관전 중 나가기 확인 — 나가면 결정론 결과가 바로 확정된다. 밖 영역 탭으로 안 닫힘(Popup) */}
@@ -434,18 +439,6 @@ export default function MatchBoard() {
         </Pressable>
         <Pressable style={styles.mTextBtn} onPress={() => setConfirmExit(false)}>
           <Text style={styles.mTextBtnTxt}>계속 관전</Text>
-        </Pressable>
-      </Popup>
-
-      {/* 첫 관전 1회 안내 — 관전형·결정론(결과는 전력으로 정해짐). seenTips로 영구 1회 */}
-      <Popup visible={showTip} onRequestClose={() => { markTip('match-spectate'); setShowTip(false); }}>
-        <Text style={styles.modalTitle}>📺 관전 모드</Text>
-        <Text style={styles.modalBody}>
-          경기는 감독과 선수가 치릅니다.{'\n'}
-          영입·훈련·선발 기용으로 다음 경기를 준비하세요.
-        </Text>
-        <Pressable style={[styles.mBtnWide, styles.mPrimary]} onPress={() => { markTip('match-spectate'); setShowTip(false); }}>
-          <Text style={styles.mPrimaryText}>관전 시작 ▶</Text>
         </Pressable>
       </Popup>
 
@@ -565,6 +558,9 @@ export default function MatchBoard() {
           })()
         )}
       </Popup>
+
+      {/* 경기 보드 스포트라이트(관전 안내 → 컨트롤) — 첫 관전 1회. 샌드박스(board-lab·DEV 테스트 경기) 제외(구 팝업 예외 승계). */}
+      {!isSandbox && <SpotlightOverlay screen="match" />}
 
       <ToastHost toasts={toasts} />
     </>

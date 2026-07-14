@@ -17,6 +17,8 @@ import { ScrollCtrlCtx } from './spotlightCtx';
 function screenFromPathname(p: string | null | undefined): string | null {
   if (!p) return null; // 초기 빈 경로 — 아무 것도 활성 아님(잘못된 플래시 방지)
   if (p.startsWith('/team/')) return 'team-detail';
+  if (p.startsWith('/match/')) return 'match'; // 경기 보드(/match/[id])만 — '/matchresult/'는 6번째 문자에서 갈라져 미매치
+
   if (p === '/select-team') return 'select-team';
   if (p.endsWith('/schedule')) return 'tab-schedule';
   if (p.endsWith('/squad')) return 'tab-squad';
