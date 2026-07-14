@@ -1043,6 +1043,11 @@ function Settings({ setting, api, reload, flash }: { setting: Json | null; api: 
     setMaint(!!setting.maintenance); setMaintT((setting.maintenanceTitle as string) ?? ''); setMaintB((setting.maintenanceBody as string) ?? '');
   }, [setting]);
   const save = async () => {
+    // 전역 차단 작업(점검 on·강제최소버전 상향)은 오조작 시 전체 서비스 중단 → 확인 게이트(쿠폰/공지 삭제와 동일 결, #46 감사)
+    const wasMaint = !!setting?.maintenance;
+    if (maint && !wasMaint && !window.confirm('점검 모드를 켜면 모든 유저의 진입이 차단됩니다. 저장할까요?')) return;
+    const prevMin = (setting?.minVersion as string) ?? '';
+    if (minV && minV !== prevMin && !window.confirm(`강제 최소버전을 "${minV}"로 올립니다. 미만 버전 유저는 강제 업데이트 벽에 갇힙니다. 저장할까요?`)) return;
     setBusy(true); setErr('');
     const r = await api('/api/admin/setting', { method: 'POST', body: JSON.stringify({ minVersion: minV || null, latestVersion: latV || null, androidStoreUrl: androidUrl || null, iosStoreUrl: iosUrl || null, maintenance: maint, maintenanceTitle: maintT || null, maintenanceBody: maintB || null }) });
     setBusy(false);
@@ -1152,7 +1157,10 @@ function TicketModal({ t, api, reload, flash, onClose }: { t: Json; api: Api; re
     setBusy(true); setMsg('');
     const r = await api('/api/admin/refund', { method: 'POST', body: JSON.stringify({ userId: t.userId, amount: amt, note, ticketId: t.id, key: `refund:ticket:${t.id}` }) });
     setBusy(false);
-    if (r.body.ok) { flash(`환불이 반영되었습니다 · 잔액 ${r.body.balance}💎${r.body.applied ? '' : ' (이미 처리됨)'}`); reload(); onClose(); }
+    // applied:false = 이 티켓은 이미 환불됨(멱등키 티켓당 고정) — 금액을 바꿔 다시 눌러도 추가 차감 안 됨.
+    //   초록 성공 토스트로 뭉개면 "정정 반영됐다"고 오인(#46 감사) → 경고로 분기.
+    if (r.body.ok && r.body.applied) { flash(`환불이 반영되었습니다 · 잔액 ${r.body.balance}💎`); reload(); onClose(); }
+    else if (r.body.ok) { setMsg(`이 티켓은 이미 환불되었습니다(추가 환불 불가). 현재 잔액 ${r.body.balance}💎`); reload(); }
     else setMsg(`환불 실패 — ${errMsg(r)}`);
   };
   const viewSnap = async () => { const r = await api(`/api/admin/ticket/snapshot?ticketId=${t.id}`); setSnap(r.body.snapshot ? JSON.stringify(r.body.snapshot, null, 2) : '(진단 스냅샷 없음)'); };
