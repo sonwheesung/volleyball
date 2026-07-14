@@ -31,7 +31,7 @@ export const TIPS: Tip[] = [
 
   // ── 일정 탭(첫 진입 화면) ──
   { id: 'sched.next', screen: 'tab-schedule', order: 0, anchor: 'sched-next',
-    title: '여기서 시즌을 진행', body: '오프시즌엔 전지훈련으로 선수를 키우고, 개막하면 경기를 치릅니다. ⭐ 빅매치는 직접 관전을 권해요 — 현장 운영(교체·작전)은 감독 몫, 당신은 보는 게임입니다.' },
+    title: '여기서 시즌을 진행', body: '오프시즌엔 전지훈련으로 선수를 키우고, 개막하면 경기를 치릅니다. 기본은 감독이 자동 운영하는 관전이고, ⭐ 빅매치는 직접 관전하며 교체·타임아웃으로 개입할 수도 있어요.' },
   { id: 'sched.calendar', screen: 'tab-schedule', order: 1, anchor: 'sched-calendar',
     title: '우리 팀 일정', body: '우리 팀 시즌 일정을 날짜·요일·홈/원정·상대로 봅니다. 치른 경기는 결과, 앞으로는 예정으로 표시돼요.' },
   { id: 'sched.results', screen: 'tab-schedule', order: 2, anchor: 'sched-results',
@@ -43,7 +43,7 @@ export const TIPS: Tip[] = [
   { id: 'dash.finance', screen: 'tab-dashboard', order: 1, anchor: 'dash-finance',
     title: '재정', body: '총연봉·샐러리캡·운영 자금·팬심입니다. 캡을 넘기면 영입이 막히고, 자금이 마르면 운영이 빠듯해집니다.' },
   { id: 'dash.standings', screen: 'tab-dashboard', order: 2, anchor: 'dash-standings',
-    title: '리그 순위', body: '누르면 전체 순위표를 봅니다. 🩹 표시는 부상자 수 — 출전 명단에 영향을 줍니다.' },
+    title: '리그 순위', body: '누르면 전체 순위표를 봅니다. 승점·세트 득실로 순위가 갈리고, 상위권이 포스트시즌에 오릅니다.' },
   { id: 'dash.news', screen: 'tab-dashboard', order: 3, anchor: 'dash-news',
     title: '리그 뉴스', body: '누르면 리그의 소식·기록·사건을 연대기로 읽습니다. 세월이 쌓일수록 읽을거리가 풍성해집니다.' },
 
