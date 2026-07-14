@@ -1,6 +1,6 @@
 // EC-TX-05 재현 + 가드 A/B — reSign 개인상한 우회. 결정론.
 //   A) 수정 검증: 개인상한 초과 reSign → 거부(override 비어있음), 정상 reSign → 적용.
-//   B) 가드 A/B: reSign을 우회해 over-cap override를 강제 주입 → 롤오버 후 불변식(_gt_invariants 개인상한)이 잡는가.
+//   B) 가드 A/B(이빨): 불변식이 읽는 커밋 계약에 over-cap을 직접 주입 → 불변식(_gt_invariants 개인상한)이 잡는가(즉시 원복).
 //   둘 다 참이어야 신뢰(허위 오라클 아님). Usage: npx tsx tools/_gt_repro_resigncap.ts
 import './_gt_mock';
 import { checkCommittedRosters } from './_gt_invariants';
@@ -25,13 +25,19 @@ import { checkCommittedRosters } from './_gt_invariants';
   G().reSign(id, { salary: v, years: 2, remaining: 2, signedAtAge: 25 });
   const applied = G().contractOverrides[id]?.salary === v;
 
-  // C) 가드 A/B: reSign 우회로 over-cap override 강제 주입 → 롤오버(endSeason) → 불변식이 잡는가
-  useGameStore.setState({ contractOverrides: { ...G().contractOverrides, [id]: { salary: cap + 100000, years: 3, remaining: 3, signedAtAge: 25 } } });
-  G().setDay(164); G().endSeason();
+  // C) 가드 A/B(이빨 증명): 개인상한 초과 계약이 **커밋 로스터에 실제로 들어가면** 불변식이 잡는가.
+  //   [브리틀 수리 2026-07-14] 기존 경로(contractOverrides 강제 주입 → endSeason 롤오버)는 비만료 선수의
+  //   override를 롤오버가 커밋 계약(playerMap)에 반영하지 않아 getPlayer(id).contract.salary가 그대로라
+  //   불변식이 읽을 over-cap이 애초에 안 생김(허위 FAIL·이빨 상실). → 불변식이 실제로 읽는 지점
+  //   (committed contract)에 직접 over-cap을 주입해 검출을 증명하고 즉시 원복(변이 박제 금지·결정론 유지).
+  const target = getPlayer(id)!;
+  const origContract = target.contract;
+  (target as any).contract = { ...(origContract ?? {}), salary: cap + 100000 };
   const guardCatches = checkCommittedRosters('ab').some((x) => x.check === 'num' && x.msg.includes('개인상한'));
+  (target as any).contract = origContract; // 변이 원복
 
   console.log(`[EC-TX-05] 개인상한(${cap}) 초과 reSign 거부=${rejected} · 정상 reSign 적용=${applied}`);
-  console.log(`[가드 A/B] reSign 우회 over-cap 주입 → 롤오버 후 불변식 검출=${guardCatches} (true여야 신뢰)`);
+  console.log(`[가드 A/B] 커밋 계약에 over-cap 직접 주입 → 불변식 검출=${guardCatches} (true여야 신뢰)`);
   const ok = rejected && applied && guardCatches;
   console.log(`\nRESIGNCAP OK = ${ok}`);
   process.exit(ok ? 0 : 2);

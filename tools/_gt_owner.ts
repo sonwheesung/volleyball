@@ -47,12 +47,20 @@ import './_gt_mock';
     } catch (e: any) { crashes++; if (crashes <= 3) violations.push(`step${i} CRASH ${e?.message}`); }
   }
 
-  // 쿨다운 enforce — 같은 선수 같은 날 연속 면담: 2번째는 met:false여야
-  G().setDay(50);
-  const target = (currentRosters()[my] ?? [])[0];
-  const first = G().requestInterview(target, 'reinforce');
-  const second = G().requestInterview(target, 'reinforce');
-  const cdOk = first.met && !second.met;
+  // 쿨다운 enforce — 같은 선수 같은 날 연속 면담: 2번째는 met:false여야.
+  //   [브리틀 수리 2026-07-14] 위 3000-step fuzz가 talkCooldown[target]을 50 넘게 밀어 first.met=false로
+  //   문이 안 열리면 이빨을 못 증명(허위 FAIL). → fresh 상태로 격리하고, '문이 열리며 무불만(topic null)'인
+  //   선수를 골라 검사한다. 만족 선수는 2번째 면담의 meetAccept seed가 1번째와 동일(nThisSeason 0, 미로그)이라
+  //   **차단 요인이 오직 쿨다운 게이트 하나** → 쿨다운이 깨지면 2번째 문이 다시 열려(met true) 반드시 FAIL(이빨 명확).
+  let cdOk = false;
+  for (const cand of currentRosters()[my] ?? []) {
+    G().resetSave(); G().selectTeam(my); G().setDay(50);
+    const first = G().requestInterview(cand, 'reinforce');
+    if (!(first.met && first.topic === null)) continue; // 문 열림 + 무불만 선수만(재면담 seed 동일 → 쿨다운만이 변수)
+    const second = G().requestInterview(cand, 'reinforce');
+    cdOk = !second.met; // 같은 날 재면담은 쿨다운으로 차단돼야 true
+    break;
+  }
 
   console.log(`=== OWNER FUZZ (3000 steps) ===`);
   console.log(`crashes=${crashes} · 불변식 위반=${violations.length}`);
