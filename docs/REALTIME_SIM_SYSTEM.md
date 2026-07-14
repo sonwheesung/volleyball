@@ -442,6 +442,63 @@ per-player RNG 스트림(`createRng(playerSeed(id))`)을 소비하며 day 0..day
 시퀀스**: 오름차순+중간 내림차순 섞인 day 질의가 전부 base-콜드와 byte-동일(체크포인트 재개·역행 폴백 실증).
 측정: `tools/_ms_evoresume.ts`(dyn 콜드 A/B, NO_EVORESUME 토글).
 
+### 7.10 시즌 전환 X(잔여 지연) — 오프시즌 스택 동기 재렌더 (설계·구현 2026-07-14, #113, 독립 리뷰 채택)
+
+**증상**: §7.8·§7.9로 endSeason 내부(A블록 자기-무효화 콜드·B블록 dyn 콜드·§7.9 진화 준이차)를 전부 제거한 뒤에도,
+시즌 전환(드래프트 "시즌 시작하기" 광고 모달 → `router.replace('/season-start')` → 로딩 → 동기 `endSeason()` →
+`router.replace('/enshrine')`)에서 **endSeason 반환 후 enshrine 마운트 사이에 X = 43~103초의 단일 동기 렌더 패스**가
+남았다. endSeason 자체(§7.8·§7.9 적용 후 13초)와 enshrine 화면(21ms, 무혐의)은 이미 저렴한데, 그 사이가 통째로 멈춘다.
+
+**브래킷 방법(임시 계측 — 측정 후 제거)**: `season-start.tsx`에 `[ESB2]` 경계 로그를 심어 X를 좁혔다 —
+(1) **하트비트**(`setInterval` 500ms tick): 틱 공백 구간 = 동기 블록 위치. (2) **마이크로태스크·timeout0·immediate·
+setImmediate 센티널**: `replace('/enshrine')` 직후 `queueMicrotask`가 **45.8초 뒤** 발화 = X가 **단일 동기 태스크**임을
+증명(이벤트 루프가 그 태스크가 끝나야 마이크로태스크 큐를 비운다). (3) **화면 title 판별 프로브**: 스택의 각 화면에
+inner 계측을 걸어 어느 화면의 재계산이 무거운지 배분. `[ESB2]`/하트비트/센티널/title 프로브는 전부 **임시 계측**이며
+측정 확증 후 메인 세션이 일괄 제거한다(§7.8 `[ESPERF]` 제거와 같은 결).
+
+**원인 메커니즘**: 오프시즌 체인이 전부 **push**로 쌓인다(schedule→season-recap→tryout→asian-tryout→fa→draft,
+draft만 season-start를 replace). 따라서 endSeason 시점의 네비 스택 = `(tabs)`, season-recap, tryout, asian-tryout, fa,
+season-start. endSeason의 스토어 변이(`commitRosters`가 baseVersion 범프 → 전 캐시 무효화)로 이 **뒤에 남아있는
+오프시즌 화면들의 스토어 구독 자식 컴포넌트가 전부 더티**가 되고, `/enshrine` replace의 **단일 동기 렌더 패스**에서
+**무효화된 캐시 위 콜드 셀렉터 재계산**을 스택 전 화면에 대해 수행한다. 즉 화면들은 화면 전이로는 안 보이지만
+언마운트되지 않은 채(스택에 살아있음) 스토어 변이에 반응해 콜드 재계산 비용을 그 자리에서 다 치른다.
+
+**실측 수치(브래킷 3회 + 판별 프로브, dev Expo Go/Hermes)**:
+- 10→11: 총 **127.5s** 중 77.5s는 dev Metro 콜드 청크(번들 지연, 릴리즈 무관) — 나머지가 X.
+- 11→12: **50.0s** · 12→13: **43.3s** · 14→15: **102.8s**.
+- 14→15 배분(inner 프로브): **inner-tryout 71.9s** · inner-fa 5.2s · inner-asian 3.8s · inner-recap 0.4s · 일정탭 앞 17.6s.
+  enshrine 자신 21ms(무혐의). → X의 대부분은 **스택에 남은 tryout 화면의 콜드 셀렉터** 재계산.
+- 판별 로그 원본: `tasks/bw9sh16jh.output`(브래킷 14→15).
+
+> dev 수치는 판단 기준이 아니다(§5 원칙 — Metro 미압축·Hermes 미최적화 혼입). 여기서는 **X가 어디서 발생하는지**(스택
+> 잔존 화면의 동기 재렌더)를 브래킷으로 특정하는 데 쓰였고, 릴리즈 절대치는 #84 연계로 재측정한다(아래 검증 계획).
+
+**기각된 용의(브래킷으로 배제)**: persist 직렬화(33~175ms) · 화면 리렌더 프로브(개별 화면 렌더 자체는 저렴) ·
+루트 레이아웃 · enshrine 마운트(21ms). 남는 건 **스택 누적 × 스토어 구독 자식 더티 × 콜드 셀렉터** 조합뿐이다.
+
+**수정 A안(키 보존 reset — 독립 리뷰 채택)**: `season-start.tsx` 마운트 시(endSeason 타이머 발화 전에) 네비 스택에서
+오프시즌 화면들을 드롭한다. `navigation.getState()`에서 `(tabs)`와 `season-start`의 **기존 route 객체(키)를 그대로**
+꺼내 `reset({ ...st, routes: [tabs, self], index: 1 })` — 새 객체 `{name:'season-start'}`로 넘기면 새 키로 리마운트되므로
+**금지**, 기존 키 보존으로 `(tabs)`·season-start 리마운트를 막는 게 핵심. 드롭 대상 오프시즌 화면은 beforeRemove
+blocker가 없고, season-start의 blocker는 GO_BACK/POP만 preventDefault라 RESET은 통과한다. reset은 마운트 effect에
+두어 endSeason(PAINT_DELAY 500ms+2×RAF 뒤)보다 **먼저 커밋**되게 하고, 기존 effect(백 차단·타이머)와 **별도 effect**로
+둔다. 스택은 어차피 `season-opening`의 `dismissAll`(멱등, 유지)로 소멸하므로 이 정리는 그 소멸을 endSeason **앞으로**
+당기는 것뿐 — 사용자 흐름·최종 화면은 불변.
+
+**기각 대안(리뷰 판정)**: ①**B안 `enableFreeze` 전역**(react-native-screens로 비활성 화면 렌더 동결) — 스택 전체
+동작을 바꿔 리스크 표면 과다로 반려. ②**D2 enshrine `useDeferredReady`**(enshrine 마운트를 지연) — enshrine 자신이
+21ms 무혐의라 판별로 기각(X는 enshrine 이전 스택에서 발생).
+
+**검증 계획**: (1) 수정 후 15→16 전환을 동일 브래킷으로 재측정해 X 붕괴(마이크로태스크 지연·inner-tryout 소멸) 확인.
+(2) 릴리즈 절대치 재측정은 §5 6항목 계측과 #84에 연계(dev 수치는 병목 특정용, 목표치는 릴리즈 분포로 정함).
+
+**✅ 검증 완료(2026-07-14, 온디바이스 15→16 재측정 — `tasks/b2mubauuz.output`)**: A안 적용 후 **X 102.8s → 23.2s
+(4.4배)**. 오프시즌 inner 프로브(recap/tryout/asian/fa) **전부 소멸** = reset이 렌더 패스에서 그 화면들을 제거했음을
+프로브 부재로 증명. 잔여 23.2s 배분 = **일정 탭 서브트리 17.4s**(탭은 스택 루트라 잔존 — 새 시즌 순위/생산 콜드를
+여기서 워밍하는 성격, 홈 복귀 시 어차피 치를 비용) + enshrine까지 패스 5.8s. 전환 총합(dev) endSeason 22.3s + X 23.2s
+≈ 45.5s(직전 125s). 체인 UX 불변 확인(enshrine→전훈→개막→홈 정상, 다이아 불변). 잔여(일정 탭 콜드·endSeason 자체)는
+릴리즈 재측정(#84) 후 필요 시 별건.
+
 ### 7.4 검증
 - `tools/_dv_splice.ts`: ①byte-상등 프로퍼티(≥40 랜덤열, 매 액션 후 splice==force-full deep-equal, 순위+생산)
   ②결정론 ×2 ③타이밍(늦은 시즌 벤치 add에서 splice ms ≤ ~20% full) ④off-by-one minDay 변이 → FAIL(민감도)

@@ -42,6 +42,19 @@ export default function SeasonStart() {
     return () => { sub.remove(); unsub(); };
   }, [navigation]);
 
+  // 오프시즌 스택 정리를 endSeason 전에 — 커밋 후 동기 렌더 패스가 스택(schedule→recap→tryout→asian→fa)의
+  //   콜드 셀렉터 재계산을 전부 하던 43~103s를 제거(#113, 스택은 어차피 season-opening dismissAll로 소멸).
+  //   기존 route 객체(키) 보존으로 (tabs)·season-start 리마운트 방지. endSeason(스토어 변이)보다 먼저
+  //   커밋돼야 하며, endSeason은 PAINT_DELAY+2×RAF 뒤라 이 마운트 effect가 선행된다.
+  useEffect(() => {
+    const st = (navigation as any).getState?.();
+    const tabs = st?.routes?.find((r: any) => r.name === '(tabs)');
+    const self = st?.routes?.find((r: any) => r.name === 'season-start');
+    if (tabs && self && st.routes.length > 2) {
+      (navigation as any).reset({ ...st, routes: [tabs, self], index: 1 });
+    }
+  }, [navigation]);
+
   useEffect(() => {
     let i = 0;
     let raf1 = 0;
