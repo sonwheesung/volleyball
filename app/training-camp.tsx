@@ -181,8 +181,8 @@ export default function TrainingCamp() {
           <IconLabel icon="airplane-outline" color={theme.good}>오프시즌 해외 캠프</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
             선수 한 명을 코스 하나로 보내면, 관련 능력치 3개에 두 가지가 함께 붙습니다.{'\n'}
-            ① <Text style={{ color: theme.good, fontWeight: '800' }}>지금 실력 +{CAMP_CUR_GAIN}</Text>. 아래 카드의 82→85처럼 바로 오릅니다.{'\n'}
-            ② <Text style={{ color: theme.good, fontWeight: '800' }}>앞으로 클 수 있는 천장(포텐) +{CAMP_POT_GAIN}</Text>. 카드의 포텐 87→90(최대 99). 천장은 당장 오르는 게 아니라 <Text style={{ color: theme.text, fontWeight: '700' }}>다음 시즌부터 훈련·경기로 천천히 채워집니다.</Text>{'\n'}
+            ① <Text style={{ color: theme.good, fontWeight: '800' }}>지금 실력 +{CAMP_CUR_GAIN}</Text>. 아래 카드의 82→{82 + CAMP_CUR_GAIN}처럼 바로 오릅니다.{'\n'}
+            ② <Text style={{ color: theme.good, fontWeight: '800' }}>앞으로 클 수 있는 천장(포텐) +{CAMP_POT_GAIN}</Text>. 카드의 포텐 87→{87 + CAMP_POT_GAIN}(최대 99). 천장은 당장 오르는 게 아니라 <Text style={{ color: theme.text, fontWeight: '700' }}>다음 시즌부터 훈련·경기로 천천히 채워집니다.</Text>{'\n'}
             • 비용 <Text style={{ color: theme.good, fontWeight: '800' }}>{CAMP_COURSE_COST}💎</Text> · 선수 1명당 오프시즌 1회 · 어릴수록 천장 채울 시간이 많아 이득 · 효과는 영구(환불 불가)
           </Muted>
         </Card>
@@ -334,7 +334,6 @@ const styles = themedStyles(() => StyleSheet.create({
   csname: { color: theme.muted, fontSize: 11, fontWeight: '700' },
   csval: { color: theme.text, fontSize: 13, fontWeight: '800' },
   cspot: { color: theme.muted, fontSize: 11 },
-  mismatch: { color: theme.warn, fontSize: 11.5, marginTop: 7, marginLeft: 32, fontWeight: '600' },
   footer: { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10, gap: 6 },
   costTxt: { color: theme.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
 }));
