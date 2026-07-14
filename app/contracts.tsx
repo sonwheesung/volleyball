@@ -77,6 +77,9 @@ function ContractsInner() {
   // 계약 관리는 국내 전용 — 외인/아시아쿼터는 1년 트라이아웃 계약이라 방출·재계약·FA 비대상(FOREIGN_SYSTEM 3장).
   const roster = active.filter((p) => !p.isForeign).sort((a, b) => b.contract.salary - a.contract.salary);
   const foreigners = active.filter((p) => p.isForeign).sort((a, b) => overallRaw(b) - overallRaw(a));
+  // 수입 슬롯 공석 판정(FOREIGN_SYSTEM §2 — 자금 부족 시 미영입 = 공석으로 시즌 시작). 팀은 외인 OP 1 + 아시아쿼터 1이 정상.
+  const hasForeignOP = foreigners.some((p) => !p.isAsianQuota);
+  const hasAsian = foreigners.some((p) => p.isAsianQuota);
   const total = payroll(roster);
   const releasedPlayers = released.map((id) => getPlayer(id)).filter((p): p is Player => !!p);
   const faList = roster.filter(willBeFA);
@@ -214,23 +217,31 @@ function ContractsInner() {
         );
       })}
 
-      {foreigners.length > 0 ? (
-        <>
-          <Title>수입 선수 (외국인·아시아쿼터)</Title>
-          <Muted style={{ fontSize: 12 }}>
-            외인·아시아쿼터는 1년 계약이라 방출·재계약 대상이 아닙니다. 재지명·교체는 외인 트라이아웃·시즌 중 교체에서 합니다.
-          </Muted>
-          {foreigners.map((p) => (
-            <PlayerRow
-              key={p.id}
-              onPress={() => router.push(`/player/${p.id}`)}
-              leading={<PosTag pos={p.position} />}
-              title={<>{p.name} <Text style={{ color: theme.accent }}>{p.isAsianQuota ? '아시아쿼터' : '외국인'}</Text></>}
-              sub={`${p.age}세 · ${formatMoney(p.contract.salary)} · 잔여 ${p.contract.remaining}년`}
-              trailing={<OvrBadge value={overallRaw(p)} />}
-            />
-          ))}
-        </>
+      <Title>수입 선수 (외국인·아시아쿼터)</Title>
+      <Muted style={{ fontSize: 12 }}>
+        외인·아시아쿼터는 1년 계약이라 방출·재계약 대상이 아닙니다. 재지명·교체는 외인 트라이아웃·시즌 중 교체에서 합니다.
+      </Muted>
+      {foreigners.map((p) => (
+        <PlayerRow
+          key={p.id}
+          onPress={() => router.push(`/player/${p.id}`)}
+          leading={<PosTag pos={p.position} />}
+          title={<>{p.name} <Text style={{ color: theme.accent }}>{p.isAsianQuota ? '아시아쿼터' : '외국인'}</Text></>}
+          sub={`${p.age}세 · ${formatMoney(p.contract.salary)} · 잔여 ${p.contract.remaining}년`}
+          trailing={<OvrBadge value={overallRaw(p)} />}
+        />
+      ))}
+      {!hasForeignOP ? (
+        <View style={styles.vacancy}>
+          <Text style={styles.vacancyTitle}>외국인 OP 공석</Text>
+          <Muted style={{ fontSize: 12 }}>운영 자금 부족 등으로 미영입 상태입니다. 다음 오프시즌 외국인 트라이아웃에서 영입하세요.</Muted>
+        </View>
+      ) : null}
+      {!hasAsian ? (
+        <View style={styles.vacancy}>
+          <Text style={styles.vacancyTitle}>아시아쿼터 공석</Text>
+          <Muted style={{ fontSize: 12 }}>운영 자금 부족 등으로 미영입 상태입니다. 다음 오프시즌 아시아쿼터 FA에서 영입하세요.</Muted>
+        </View>
       ) : null}
 
       {faList.length > 0 ? (
@@ -464,6 +475,9 @@ const styles = themedStyles(() => StyleSheet.create({
   resignNudge: { borderWidth: 1, borderColor: theme.bad + '55', backgroundColor: theme.bad + '14', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, gap: 2 },
   resignNudgeWarn: { color: theme.bad, fontSize: 12, fontWeight: '700' },
   resignNudgeCta: { color: theme.accent, fontSize: 13, fontWeight: '800' },
+  // 수입 슬롯 공석 배너(FOREIGN_SYSTEM §2 — 자금 부족 미영입) — 비클릭 정보(flat: 얇은 보더 + 옅은 warn tint, 그림자 없음).
+  vacancy: { borderWidth: 1, borderColor: theme.warn + '55', backgroundColor: theme.warn + '14', borderRadius: 10, paddingVertical: 8, paddingHorizontal: 10, gap: 2, marginTop: 6 },
+  vacancyTitle: { color: theme.warn, fontSize: 13, fontWeight: '800' },
   // ── 재계약 오퍼 빌더(FA §2.5c-격상) ──
   builderTitle: { color: theme.text, fontSize: 19, fontWeight: '900' },
   builderSub: { color: theme.muted, fontSize: 13, lineHeight: 19, marginTop: -4 },
