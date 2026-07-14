@@ -34,7 +34,7 @@ export async function applyWalletTx(
   // 1) 멱등 — 같은 (proj, 키)가 이미 있으면 재적용 안 함. 단 잔액은 원장의 그때 balanceAfter(스냅샷)가
   //    아니라 **현재 지갑 잔액**을 반환한다. balanceAfter는 그 거래 시점 값이라 이후 다른 거래(지출·적립)가
   //    있으면 stale → 클라가 옛 잔액으로 되돌아가 split-brain 표시(에뮬 재현 2026-07-06: 환영 +1000 후
-  //    캠프 −900으로 100인데, 화면 재진입 시 환영 멱등재시도가 옛 1000을 반환해 100을 덮어씀). 현재값으로 수렴.
+  //    캠프 −300(구 −900)으로 잔액이 줄었는데, 화면 재진입 시 환영 멱등재시도가 옛 1000을 반환해 100을 덮어씀). 현재값으로 수렴.
   const dup = await tx
     .select({ id: walletLedger.id })
     .from(walletLedger)

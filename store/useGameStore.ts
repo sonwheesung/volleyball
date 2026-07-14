@@ -308,13 +308,15 @@ function releaseAngerOf(playerId: string, archive: SeasonArchive[], day: number)
  *  이미 적용된 선수(campTrainedThisOffseason)면 no-op(pending·캐시만 정리) — 아웃박스 재확인 시 이중적용 차단(P0-1). */
 function applyCampLocal(playerId: string, course: CampCourse, balance: number, season: number): void {
   const st = useGameStore.getState();
-  if (st.campTrainedThisOffseason.includes(playerId)) { useGameStore.setState({ diamonds: balance, pendingCamp: null }); return; }
+  // balance 누락 비정형 응답(ok:true인데 필드 없음)이면 캐시 불변 — 서버는 이미 차감 확정이라 스탯 적용은 진행, 잔액은 syncWallet 수렴
+  const balPatch = Number.isFinite(balance) ? { diamonds: balance } : {};
+  if (st.campTrainedThisOffseason.includes(playerId)) { useGameStore.setState({ ...balPatch, pendingCamp: null }); return; }
   const p = getPlayer(playerId);
-  if (!p) { useGameStore.setState({ diamonds: balance, pendingCamp: null }); return; }
+  if (!p) { useGameStore.setState({ ...balPatch, pendingCamp: null }); return; }
   const camped = applyCampCourse(p, course); // 3스탯 현재+3·포텐+3(§11.2 코스형, 2026-07-08 대칭)
   commitPlayerBase({ [playerId]: camped }); // 레지스트리 즉시 반영(evoCache 무효화 → 화면 즉시)
   useGameStore.setState({
-    diamonds: balance, // 표시 캐시 = 서버 확정 잔액
+    ...balPatch, // 표시 캐시 = 서버 확정 잔액
     // 구매 시점 수치를 임베드(cur/pot) → 이후 상수 리밸런스가 이 캠프를 소급으로 바꾸지 않음(H3)
     campLog: [...st.campLog, { season, playerId, course, cur: CAMP_CUR_GAIN, pot: CAMP_POT_GAIN }],
     campTrainedThisOffseason: [...st.campTrainedThisOffseason, playerId],
@@ -379,7 +381,9 @@ export const useGameStore = create<GameState>()(
         const r = await earnDiamonds(reward, 'ad', adKey(userId, adState.dayIdx, adState.count));
         set({ walletBusy: false });
         if (!r.ok) { void get().syncWallet(); return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'cap' ? 'cap' : 'error' }; }
-        set({ diamonds: r.balance, adState }); // 서버 확정 후에만 슬롯·캐시 커밋
+        // ok:true인데 balance 누락(비정형 응답 — ea6b4d9 results 누락의 형제)이면 캐시 불변+sync 수렴. 슬롯은 서버 지급 확정이라 커밋.
+        set({ ...(Number.isFinite(r.balance) ? { diamonds: r.balance } : {}), adState }); // 서버 확정 후에만 슬롯·캐시 커밋
+        if (!Number.isFinite(r.balance)) void get().syncWallet();
         track('watch_ad');
         if (r.applied) track('diamond_earned', { source: 'ad', amount: reward });
         return { ok: true, reward: r.applied ? reward : 0 };
@@ -411,7 +415,8 @@ export const useGameStore = create<GameState>()(
           if (res.applied) granted += achReward(ids[i]); // 부분지급도 applied — 현 단건 의미 보존(정당 유저는 캡 경계 미도달)
           else if (res.capped) capped = true; // 평생합 캡 도달(치터 전용) — 확정 처리해 영구 재시도 차단
         });
-        set({ walletBusy: false, ...(confirmed.length ? { claimedAch: [...get().claimedAch, ...confirmed] } : {}), diamonds: r.balance });
+        set({ walletBusy: false, ...(confirmed.length ? { claimedAch: [...get().claimedAch, ...confirmed] } : {}), ...(Number.isFinite(r.balance) ? { diamonds: r.balance } : {}) }); // balance 누락 응답이면 캐시 불변(sync 수렴)
+        if (!Number.isFinite(r.balance)) void get().syncWallet();
         if (granted > 0) track('diamond_earned', { source: 'achievement', amount: granted });
         if (capped) return { granted, reason: 'cap' };
         // 전부 멱등 재시도(applied·capped 둘 다 아님) = 이전 시도가 응답 유실로 이미 지급된 케이스(운영 사고 2026-07-11).
@@ -432,9 +437,12 @@ export const useGameStore = create<GameState>()(
           track('diamond_earned', { source: 'welcome', amount: WELCOME_DIAMONDS });
           return { applied: true };
         }
+        if (get().walletBusy) return { applied: false }; // 다른 지갑 왕복과 응답 교차 방지(표시 레이스) — 서버 멱등이라 다음 진입에서 재시도
+        set({ walletBusy: true });
         const r = await earnDiamonds(WELCOME_DIAMONDS, 'welcome', `welcome:${userId}`);
-        if (!r.ok) { void get().syncWallet(); return { applied: false }; }
-        set({ diamonds: r.balance }); // 서버 확정 후에만 캐시
+        if (!r.ok) { set({ walletBusy: false }); void get().syncWallet(); return { applied: false }; }
+        set({ walletBusy: false, ...(Number.isFinite(r.balance) ? { diamonds: r.balance } : {}) }); // 서버 확정 후에만 캐시(balance 누락이면 불변)
+        if (!Number.isFinite(r.balance)) void get().syncWallet();
         if (r.applied) track('diamond_earned', { source: 'welcome', amount: WELCOME_DIAMONDS });
         return { applied: r.applied };
       },
@@ -488,7 +496,7 @@ export const useGameStore = create<GameState>()(
         if (!userId) return;
         const r = await getWallet();
         if (r.ok) {
-          const patch: Partial<GameState> = { diamonds: r.balance }; // 서버 잔액으로 캐시 리싱크(P0-3)
+          const patch: Partial<GameState> = Number.isFinite(r.balance) ? { diamonds: r.balance } : {}; // 서버 잔액으로 캐시 리싱크(P0-3, balance 누락이면 캐시 유지)
           // 광고 쿨다운/캡을 서버 원장에서 복원(§13.19) — 구단 초기화·재설치로 못 우회(서버 진실). today=UTC일 정합.
           if (r.adToday) {
             const today = Math.floor(Date.now() / 86_400_000);
