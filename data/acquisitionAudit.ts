@@ -260,7 +260,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
 
       for (const tid of Object.keys(f.rosters)) for (const id of f.rosters[tid]) {
         const pr = prod.get(id);
-        if (pr && snapshot[id]) snapshot[id] = accrueCareer(applyMatchXp(snapshot[id], pr), pr);
+        if (pr && snapshot[id]) snapshot[id] = accrueCareer(applyMatchXp(snapshot[id], pr, snapshot[id].age - 1), pr); // ageMul=뛴 나이(snapshot은 롤오버 age+1, rollover.ts:59) — TRAINING_SYSTEM §1.7(2026-07-15)
       }
       commitPlayerBase(snapshot); commitRosters(f.rosters);
     }

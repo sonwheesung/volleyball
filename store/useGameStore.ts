@@ -1140,7 +1140,8 @@ export const useGameStore = create<GameState>()(
           for (const id of filled.rosters[tid]) {
             const pr = seasonProd.get(id);
             // 시즌 라인의 소속은 "이번 시즌을 뛴 팀"(prevTeamOf) — filled.rosters(tid)는 다음 시즌 명단이라 FA 이적자가 새 팀으로 잘못 적힘
-            if (pr && snapshot[id]) snapshot[id] = appendSeasonLine(accrueCareer(applyMatchXp(snapshot[id], pr), pr), season, ctx.prevTeamOf[id] ?? tid, pr); // 성장 XP + 통산 누적 + 시즌별 기록 라인
+            // ageMul은 **뛴 시즌 나이**(snapshot은 롤오버로 age+1 된 base — rollover.ts:59 무조건 +1 → −1이 pre-roll 나이). TRAINING_SYSTEM §1.7(2026-07-15).
+            if (pr && snapshot[id]) snapshot[id] = appendSeasonLine(accrueCareer(applyMatchXp(snapshot[id], pr, snapshot[id].age - 1), pr), season, ctx.prevTeamOf[id] ?? tid, pr); // 성장 XP + 통산 누적 + 시즌별 기록 라인
           }
         }
 
