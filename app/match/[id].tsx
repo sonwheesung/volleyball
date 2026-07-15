@@ -17,6 +17,7 @@ import { getFixture, getTeam, shortTeamName } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
 import { buildLineup } from '../../engine/lineup';
+import { SUBS_PER_SET, TIMEOUTS_PER_SET } from '../../engine/match';
 import { overallRaw, displayOvr } from '../../engine/overall';
 import { deriveRatings } from '../../engine/ratings';
 import type { MatchIntervention } from '../../engine/simMatch';
@@ -240,11 +241,43 @@ export default function MatchBoard() {
     if (!mineSide || !mySquad.length) return [];
     const outPos = pendingOut ? (curSix.find((p) => p.id === pendingOut)?.position ?? byIdAll.get(pendingOut)?.position) : null;
     const onCourt = new Set(curSix.map((p) => p.id));
-    const usedIn = new Set((data.sim.subEvents ?? []).filter((e) => e.enter && e.side === mineSide && e.setNo === score.setNo).map((e) => e.inId));
-    const injuredIn = new Set((data.sim.subEvents ?? []).filter((e) => e.kind === 'injury' && e.side === mineSide).map((e) => e.outId));
+    // 개입 주입 지점 = 랠리 루프 최상단, 다음 랠리(iteration ptIdx+1). 엔진 usedSubIn/st.injured는 그 지점 '이전'
+    //   커밋된 접두(point ≤ ptIdx)만 반영하고, 이후(point ≥ ptIdx+1) 이벤트는 내 개입 후 재시뮬로 무효(미확정 미래).
+    //   curSix(applySubsToSix, uptoRally=ptIdx+1)가 이미 주입 좌표의 코트를 반영하므로 onCourt와 상보 — 주입 좌표에
+    //   진입한 선수는 onCourt가 걸러 여기서 이중 배제 불필요. (엔진 match.ts:255 subIn point=points.length==ptIdx+1)
+    const evs = data.sim.subEvents ?? [];
+    const priorInSet = (e: (typeof evs)[number]) => e.side === mineSide && e.setNo === score.setNo && e.point <= score.ptIdx;
+    // 이번 세트 이미 진입한 교체선수(재진입 금지, 엔진 usedSubIn) — injury는 usedSubIn에 안 들어가므로 tactical만.
+    const usedIn = new Set(evs.filter((e) => e.enter && e.kind !== 'injury' && priorInSet(e)).map((e) => e.inId));
+    // 이번 경기 부상 이력(st.injured는 경기 전체 지속·세트 무관)이되, 미래(주입 지점 이후) 부상은 미확정 → point 컷오프.
+    const injuredIn = new Set(evs.filter((e) => e.kind === 'injury' && e.side === mineSide && e.point <= score.ptIdx).map((e) => e.outId));
     return mySquad.filter((p) => p.position !== 'L' && !onCourt.has(p.id) && !usedIn.has(p.id) && !injuredIn.has(p.id)
       && (!outPos || p.position === outPos));
-  }, [mineSide, mySquad, curSix, data.sim, score.setNo, pendingOut, byIdAll]);
+  }, [mineSide, mySquad, curSix, data.sim, score.setNo, score.ptIdx, pendingOut, byIdAll]);
+  // 뺄 선수 후보(pickOut) — 엔진 subIn이 반드시 거부하는 슬롯을 사전 제외해 "먹통 버튼"(UV-7 ⑥) 방지:
+  //   (a) 부상 교체로 들어온 선수(injuryReplaced 슬롯 잠금, match.ts:241) — injury enter의 inId, 코트 유지
+  //   (b) 이미 1왕복 마친 복귀 선발(usedStarterOut, match.ts:248) — tactical enter의 outId(나갔던 선발), 복귀 시 재이탈 금지
+  //   (c) 아직 코트에 있는 교체 투입 선수(activeSubs 슬롯, match.ts:242 슬롯 재교체 금지) — tactical enter의 inId가 curSix에 있으면
+  //   셋 다 point ≤ ptIdx(주입 지점 이전 커밋 접두)만. 남는 후보 = 손대지 않은 원선발.
+  const outCands = useMemo(() => {
+    if (!mineSide) return curSix;
+    const evs = data.sim.subEvents ?? [];
+    const priorInSet = (e: (typeof evs)[number]) => e.side === mineSide && e.setNo === score.setNo && e.point <= score.ptIdx;
+    const injuryIn = new Set(evs.filter((e) => e.kind === 'injury' && priorInSet(e)).map((e) => e.inId));      // (a)
+    const roundTripStarters = new Set(evs.filter((e) => e.enter && e.kind !== 'injury' && priorInSet(e)).map((e) => e.outId)); // (b)
+    const activeSubIn = new Set(evs.filter((e) => e.enter && e.kind !== 'injury' && priorInSet(e)).map((e) => e.inId));        // (c)
+    return curSix.filter((p) => !injuryIn.has(p.id) && !roundTripStarters.has(p.id) && !activeSubIn.has(p.id));
+  }, [mineSide, curSix, data.sim, score.setNo, score.ptIdx]);
+  // 이번 세트 잔여 개입 예산(UV-7 ④ · 문서 §4) — 엔진 subBudget/timeouts와 동일 산식으로 산출.
+  //   subBudget: 세트당 SUBS_PER_SET 유닛, subIn(IN)·subOut(OUT) 각 1 차감(match.ts:254·264). injury는 예산 밖(match.ts:436 무차감),
+  //     세트말 원복도 subOut 미경유 직접 push라 무차감(match.ts:525) — 따라서 사용량 = 이 세트 tactical(비-injury) subEvent 수(enter+exit 각 1).
+  //   timeouts: 세트당 TIMEOUTS_PER_SET, 내 사이드 작전 타임아웃만(테크니컬 TTO는 예산 무차감·technical=true, match.ts:488). 둘 다 point ≤ ptIdx 접두.
+  const ivBudget = useMemo(() => {
+    if (!mineSide) return { subLeft: 0, toLeft: 0 };
+    const subUsed = (data.sim.subEvents ?? []).filter((e) => e.side === mineSide && e.setNo === score.setNo && e.kind !== 'injury' && e.point <= score.ptIdx).length;
+    const toUsed = (data.sim.timeouts ?? []).filter((t) => t.side === mineSide && t.setNo === score.setNo && !t.technical && t.point <= score.ptIdx).length;
+    return { subLeft: Math.max(0, SUBS_PER_SET - subUsed), toLeft: Math.max(0, TIMEOUTS_PER_SET - toUsed) };
+  }, [mineSide, data.sim, score.setNo, score.ptIdx]);
   // 후보 정렬 — 서브 교체(핀치)는 서브 스탯 내림차순(잘 넣는 선수 먼저, 사용자 요청), 일반 교체는 OVR 내림차순.
   const sortedBench = useMemo(() =>
     ivSubKind === 'pinch'
@@ -282,16 +315,20 @@ export default function MatchBoard() {
     let applied = false;
     if (iv.kind === 'sub') {
       const wantKind = iv.subKind === 'pinch' ? 'pinch' : 'manual';
-      const has = (sim: typeof dry) => (sim.subEvents ?? []).filter((e) => e.enter && e.kind === wantKind && e.inId === iv.inId && e.setNo === iv.at.setNo).length;
-      applied = has(dry) > has(data.sim); // 개입 좌표에 그 종류(manual/pinch) 투입 엔트리가 새로 생겼나
+      // 개입 sub은 랠리 루프 최상단에서 주입 → SubEvent.point = points.length = score.ptIdx+1 (엔진 match.ts:255;
+      //   주입 시점 points.length==ptIdx+1 — 현재 점수 points[ptIdx] 직후 iteration). 개수 비교 대신 **좌표 정밀 매칭**:
+      //   base에 같은 선수 AI 핀치가 있으면 내 개입이 그 좌표를 선점(AI 소멸)해 count 동수 → 오거부되던 버그(UV-7 ③).
+      //   kind='manual'은 개입 전용, 'pinch'는 내가 먼저 코트에 올려 같은 좌표·같은 inId AI 핀치가 생길 수 없어 유일.
+      applied = (dry.subEvents ?? []).some((e) => e.enter && e.point === score.ptIdx + 1 && e.kind === wantKind && e.inId === iv.inId);
     } else {
+      // 타임아웃은 좌표 count 비교 유지(§4). 미적용 사유(한도 소진 vs 이미 타임아웃 존재)는 호출부 onTimeout에서 분기.
       const has = (sim: typeof dry) => (sim.timeouts ?? []).filter((t) => t.side === iv.side && t.setNo === iv.at.setNo && t.home === iv.at.h && t.away === iv.at.a).length;
       applied = has(dry) > has(data.sim);
     }
     if (!applied) return false;
     recordIntervention(fixture.id, iv); // 영속 + 캐시 bump(§2.3) → data 재계산 → 이어재생
     return true;
-  }, [fixture, data.home.id, data.away.id, data.seed, data.sim, recordIntervention]);
+  }, [fixture, data.home.id, data.away.id, data.seed, data.sim, score.ptIdx, recordIntervention]);
 
   const onTimeout = useCallback(() => {
     if (!mineSide) return;
@@ -301,8 +338,15 @@ export default function MatchBoard() {
       setToSignal((prev) => ({ seq: (prev?.seq ?? 0) + 1, setNo: score.setNo, h: score.h, a: score.a }));
       pushToast('작전 타임아웃을 요청했어요');
       closeIntervene();
-    } else setIvError('지금은 타임아웃을 쓸 수 없어요. 이번 세트 타임아웃을 이미 다 썼어요.');
-  }, [mineSide, commitIntervention, score, pushToast, closeIntervene]);
+    } else {
+      // 미적용 분기(UV-7 ③): 좌표 count가 안 늘어난 게 '한도 소진'이 아니라 '이 좌표에 이미 타임아웃 존재'일 수 있다
+      //   (AI가 같은 순간 부른 타임아웃을 내 강제 호출이 대체 → count 동수). 한도 문구 오출력 방지로 사유 분기.
+      const dup = (data.sim.timeouts ?? []).some((t) => t.side === mineSide && t.setNo === score.setNo && t.home === score.h && t.away === score.a);
+      setIvError(dup
+        ? '이 시점엔 이미 작전 타임아웃이 있어요.'
+        : '지금은 타임아웃을 쓸 수 없어요. 이번 세트 타임아웃을 이미 다 썼어요.');
+    }
+  }, [mineSide, commitIntervention, score, data.sim, pushToast, closeIntervene]);
 
   const onConfirmSub = useCallback((inId: string) => {
     if (!mineSide) return;
@@ -470,24 +514,39 @@ export default function MatchBoard() {
 
         {ivStep === 'menu' ? (
           <>
-            {/* 세 메뉴 카드는 동일 구조(제목+부제)·동일 높이(#1). 타임아웃만 강조색(배경)이 다르다. */}
-            <Pressable style={[styles.ivPickBtn, styles.ivPickBtnPrimary]} onPress={onTimeout}>
+            {/* 세 메뉴 카드는 동일 구조(제목+부제)·동일 높이(#1). 타임아웃만 강조색(배경)이 다르다.
+                남은 예산 표시 + 소진 시 비활성(UV-7 ④·§4) — 엔진 no-op을 '먹통'으로 오인 방지. 교체는 엔진 게이트(subBudget<2)와
+                동일하게 잔여 <2면 비활성(왕복 2유닛 확보), 타임아웃은 0이면 비활성. */}
+            <Pressable
+              style={[styles.ivPickBtn, styles.ivPickBtnPrimary, ivBudget.toLeft <= 0 && { opacity: 0.45 }]}
+              disabled={ivBudget.toLeft <= 0}
+              onPress={onTimeout}>
               <Text style={[styles.ivPickBtnTxt, styles.ivPickBtnTxtOn]}>⏱ 작전 타임아웃</Text>
-              <Text style={[styles.ivPickSub, styles.ivPickSubOn]}>기세를 끊고 체력 회복</Text>
-            </Pressable>
-            <Pressable style={styles.ivPickBtn} onPress={() => { setIvSubKind('manual'); setIvError(null); setIvStep('pickOut'); }}>
-              <Text style={styles.ivPickBtnTxt}>🔄 선수 교체</Text>
-              <Text style={styles.ivPickSub}>이번 세트 끝까지 유지</Text>
+              <Text style={[styles.ivPickSub, styles.ivPickSubOn]}>
+                {ivBudget.toLeft > 0 ? `기세를 끊고 체력 회복 · 남은 ${ivBudget.toLeft}/${TIMEOUTS_PER_SET}` : '이번 세트 타임아웃을 다 썼어요'}
+              </Text>
             </Pressable>
             <Pressable
-              style={[styles.ivPickBtn, !iAmServing && { opacity: 0.45 }]}
+              style={[styles.ivPickBtn, ivBudget.subLeft < 2 && { opacity: 0.45 }]}
+              disabled={ivBudget.subLeft < 2}
+              onPress={() => { setIvSubKind('manual'); setIvError(null); setIvStep('pickOut'); }}>
+              <Text style={styles.ivPickBtnTxt}>🔄 선수 교체</Text>
+              <Text style={styles.ivPickSub}>
+                {ivBudget.subLeft >= 2 ? `이번 세트 끝까지 유지 · 남은 ${ivBudget.subLeft}/${SUBS_PER_SET}` : '이번 세트 교체 한도를 다 썼어요'}
+              </Text>
+            </Pressable>
+            <Pressable
+              style={[styles.ivPickBtn, (!iAmServing || ivBudget.subLeft < 2) && { opacity: 0.45 }]}
+              disabled={ivBudget.subLeft < 2}
               onPress={() => {
                 if (!iAmServing) { setIvError('서브 교체는 우리 팀 서브권일 때 쓸 수 있어요.'); return; }
                 // 서브 교체는 서버가 자동 대상(§4 #4) → 뺄 선수 고르는 단계(pickOut) 건너뛰고 바로 넣을 서버 선택.
                 setIvSubKind('pinch'); setPendingOut(null); setIvError(null); setIvStep('pickIn');
               }}>
               <Text style={styles.ivPickBtnTxt}>🎯 서브 교체</Text>
-              <Text style={styles.ivPickSub}>{iAmServing ? '서브권 넘어가면 자동 복귀' : '지금은 서브권이 없어요'}</Text>
+              <Text style={styles.ivPickSub}>
+                {ivBudget.subLeft < 2 ? '이번 세트 교체 한도를 다 썼어요' : iAmServing ? `서브권 넘어가면 자동 복귀 · 남은 ${ivBudget.subLeft}/${SUBS_PER_SET}` : '지금은 서브권이 없어요'}
+              </Text>
             </Pressable>
             {ivError ? <Text style={styles.ivError}>{ivError}</Text> : null}
             <Pressable style={styles.mTextBtn} onPress={closeIntervene}>
@@ -497,12 +556,18 @@ export default function MatchBoard() {
         ) : ivStep === 'pickOut' ? (
           <>
             <Text style={styles.ivHint}>코트에서 뺄 선수를 선택하세요</Text>
-            <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
-              {curSix.map((p) => (
-                <IvPlayerRow key={p.id} name={p.name} pos={p.position} ovr={displayOvr(overallRaw(p))} stam={stamMap.get(p.id)} stats={subStatChips(p, false)}
-                  onPress={() => { setPendingOut(p.id); setIvError(null); setIvStep('pickIn'); }} />
-              ))}
-            </ScrollView>
+            {/* 체력 %는 마지막 타임아웃 스냅샷 기준(stamMap) — 실시간 아님. 스냅샷 없으면 미표시(캡션도 숨김, UV-7 ⑤). */}
+            {stamMap.size > 0 ? <Text style={styles.ivStamNote}>체력 %는 직전 작전 타임아웃 시점 기준이에요</Text> : null}
+            {outCands.length === 0 ? (
+              <Text style={styles.ivError}>지금은 뺄 수 있는 선수가 없어요. (이번 세트 교체·부상 규칙상 코트 선수 전원이 고정)</Text>
+            ) : (
+              <ScrollView style={{ maxHeight: 300 }} showsVerticalScrollIndicator={false}>
+                {outCands.map((p) => (
+                  <IvPlayerRow key={p.id} name={p.name} pos={p.position} ovr={displayOvr(overallRaw(p))} stam={stamMap.get(p.id)} stats={subStatChips(p, false)}
+                    onPress={() => { setPendingOut(p.id); setIvError(null); setIvStep('pickIn'); }} />
+                ))}
+              </ScrollView>
+            )}
             <Pressable style={styles.mTextBtn} onPress={() => { setIvStep('menu'); setIvError(null); }}>
               <Text style={styles.mTextBtnTxt}>뒤로</Text>
             </Pressable>
@@ -514,6 +579,7 @@ export default function MatchBoard() {
                 ? '서브에 투입할 선수를 선택하세요'
                 : `${byIdAll.get(pendingOut ?? '')?.name ?? '선수'} 대신 넣을 선수를 선택하세요`}
             </Text>
+            {stamMap.size > 0 ? <Text style={styles.ivStamNote}>체력 %는 직전 작전 타임아웃 시점 기준이에요</Text> : null}
             {benchCands.length === 0 ? (
               <Text style={styles.ivError}>
                 {ivSubKind === 'pinch' ? '투입할 수 있는 벤치 선수가 없어요.' : '같은 포지션에 투입할 수 있는 벤치 선수가 없어요.'}
@@ -650,6 +716,7 @@ const styles = themedStyles(() => StyleSheet.create({
   ivConfirmTitle: { color: theme.text, fontSize: 16, fontWeight: '900', textAlign: 'center' },
   ivConfirmBody: { color: theme.muted, fontSize: 14, fontWeight: '700', textAlign: 'center', lineHeight: 21 },
   ivHint: { color: theme.muted, fontSize: 13, fontWeight: '700', textAlign: 'center' },
+  ivStamNote: { color: theme.muted, fontSize: 11, fontWeight: '600', textAlign: 'center', marginTop: -4, opacity: 0.85 },
   ivError: { color: theme.bad, fontSize: 13, fontWeight: '700', textAlign: 'center', lineHeight: 19 },
   ivRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 8, paddingHorizontal: 4, borderBottomWidth: 1, borderBottomColor: theme.border },
   ivPosDot: { width: 30, height: 30, borderRadius: 15, alignItems: 'center', justifyContent: 'center' },
