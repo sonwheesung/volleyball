@@ -114,7 +114,7 @@ function withBounce(wp: WP[], W: number, H: number): WP[] {
 }
 
 /** 한 랠리의 공 이동 경로 — 스위칭(전문 포지션) 기반. prevLast: 직전 낙구점(공 순간이동 방지) */
-export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[], coverSink?: { atk: Atk; atkIdx: number; front: number[]; cover: number[] }[]): WP[] {
+export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[], coverSink?: { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number }[]): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
   const rotOf = (s: Side) => (s === 'home' ? r.homeRot : r.awayRot);
@@ -486,10 +486,35 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     let coverPool = [0, 1, 2, 3, 4, 5].filter((i) => !options.has(i) && i !== tosserIdx && i !== firstTouch);
     // 안전망: 풀이 비면(옵션·세터·퍼스트터치가 다 먹음) 옵션 아닌 최소 1명이라도 — 무방비 금지.
     if (coverPool.length === 0) coverPool = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch);
-    const coverCand = coverPool
-      .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
-      .sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
-    coverSink?.push({ atk, atkIdx, front: attFront, cover: coverCand }); // 측정(룰 62 — 커버 옵션 제외)
+    // 백어택(룰 62ⓑ·룰 68): 근접 커버 2슬롯=전위(collapse), 깊은 슬롯=후위 — 행 인지 배정.
+    //  x거리만으로 뽑으면 후위 깊은 선수(후위 MB=리베로 표시)가 네트 앞 근접 슬롯으로 질주하는 버그
+    //  (2026-07-16 사용자 보고) → 전위 우선 배정으로 봉인. rng 미소비(결정론·프리픽스 불변).
+    let coverCand: number[];
+    if (atk === 'back') {
+      const byX = (a: number, b: number) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx);
+      const isF = (i: number) => attFront.includes(i);
+      const fPool = coverPool.filter(isF).sort(byX);            // 전위(근접 슬롯 후보)
+      const bPool = coverPool.filter((i) => !isF(i)).sort(byX); // 후위(깊은 슬롯 후보)
+      const used = new Set<number>();
+      const near: number[] = [];
+      for (const i of fPool) { if (near.length >= 2) break; near.push(i); used.add(i); }   // 근접=전위 우선 2인
+      let deep: number | undefined;
+      for (const i of bPool) if (!used.has(i)) { deep = i; used.add(i); break; }            // 깊은=후위 1인
+      if (near.length < 2) for (const i of bPool) { if (near.length >= 2) break; if (!used.has(i)) { near.push(i); used.add(i); } } // 전위 부족분만 후위 폴백
+      if (deep === undefined) for (const i of fPool) if (!used.has(i)) { deep = i; used.add(i); break; }              // 후위 0이면 깊은 슬롯 남은 전위 폴백
+      near.sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
+      // [near-left, deep, near-right] 순서 → 아래 length===3 매핑(0→spot0·2→spot1·1→spot2)과 정합
+      coverCand = near.length >= 2 && deep !== undefined ? [near[0], deep, near[1]]
+        : deep !== undefined ? [...near, deep] : [...near];
+    } else {
+      coverCand = coverPool
+        .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
+        .sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
+    }
+    // 근접 슬롯 점유자(y=0.62H) — 길이 3이면 깊은 슬롯(coverCand[1]) 제외, 그 외는 전원 근접(측정용).
+    const nearMembers = coverCand.length === 3 ? [coverCand[0], coverCand[2]] : [...coverCand];
+    coverSink?.push({ atk, atkIdx, front: attFront, cover: coverCand, near: nearMembers,
+      pool: coverPool.map((i) => ({ i, x: sw[att].pos[i].x })), ahx }); // 측정(룰 62 옵션 제외 + 룰 68 근접 슬롯 행 + 구로직 A/B용 pool·ahx)
     const cSpots = coverSpots(att, ahx, coverCand.length, W, H, atk === 'back');
     const coverMovers: Mover[] = coverCand.length === 3
       ? [

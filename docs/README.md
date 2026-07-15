@@ -118,6 +118,7 @@ npm test                                  # node --test (현재 205 통과)
 npx tsx tools/auditBoard.ts 6              # 보드 안무 프레임 감사(기하 원리 룰 A~Q + 사용자보고 18~37 + ASCII 덤프)
 npx tsx tools/checkBoardFixes.ts           # 보드 타깃 측정(패서 깊이·터치아웃·서브전환 — "의도대로 바뀌었나")
 npx tsx tools/checkBlockerCross.ts         # 블로커 좌우 교차(프레임 정확 — 실제 애니메이션 위치)
+npx tsx tools/_dv_cover.ts 40              # 토스 커버 안무(BOARD_RULES 룰 62·68, 발견·검증=Fable 5/수정=Opus) — 룰62 제외방향(옵션→커버 누출 0·공격수 자기커버 0) + 룰68 포함방향(백어택 근접 슬롯=전위 행 정합, 후위 침입 0·전위<2 폴백 별도) + 구 x-only 로직 A/B(침입 44.9% 재현=민감도). 2026-07-16 "비세터 후위→전위 질주" 봉인. exit 0/1
 npx tsx tools/checkRecords.ts              # 통산 리더보드 셀렉터(병합·정렬·팀필터)
 npx tsx tools/checkClubRanks.ts            # 구단 정체성 recentRanks 열별 순위=유효 순열(중복/결손 0)·strengthBias 합=0(2026-06-24 중복 버그 가드)
 npx tsx tools/checkSubs.ts                 # 작전 교체 로그(재생 불변식·세트말 net-zero — 부상 교체는 kind:'injury' 영구스왑 예외) + FIVB 규칙(재진입·1왕복·**타슬롯 재진입 EC-SUB-02**) + 개입 주입 묶음(위반 개입 no-op)
