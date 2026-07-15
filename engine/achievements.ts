@@ -199,7 +199,7 @@ function longestAwardStreak(archive: Arch, my: string, pick: (a: SeasonAwards) =
 const countAwards = (archive: Arch, my: string, pick: (a: SeasonAwards) => { teamId: string } | null): number =>
   archive.reduce((s, a) => s + (a.awards && pick(a.awards)?.teamId === my ? 1 : 0), 0);
 
-const TITLE_KEYS: (keyof SeasonAwards['titles'])[] = ['scoring', 'spike', 'block', 'serve', 'dig', 'set'];
+const TITLE_KEYS: (keyof SeasonAwards['titles'])[] = ['scoring', 'spike', 'block', 'serve', 'dig', 'set', 'receive'];
 
 /** 부문 기록왕 내 팀 누적 횟수 */
 function titleKingCount(archive: Arch, my: string): number {

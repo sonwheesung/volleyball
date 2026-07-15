@@ -251,7 +251,10 @@ export function buildNewsFeed(
 
     // ── 우승(+ 플옵 시리즈 명장면) ──
     if (a.championId) {
-      const champSeries = a.series?.[a.championId]?.find((s) => s.length >= 3);
+      // 우승 방식은 **결승 시리즈**로 판정 — seriesByTeam은 PO 먼저·결승 나중 push라 챔피언의 마지막 시리즈가 결승.
+      //   구 `.find(len>=3)`은 비-1시드 챔피언의 PO(3전2선승) 2-1(길이3)을 먼저 잡아 결승 스윕/리버스 스윕 태그를 놓쳤다(UV-9).
+      const champSeriesArr = a.series?.[a.championId];
+      const champSeries = champSeriesArr && champSeriesArr.length ? champSeriesArr[champSeriesArr.length - 1] : undefined;
       const sweep = champSeries && champSeries.length === 3 && champSeries.every((g) => g === 'W');
       const reverse = champSeries && champSeries.length === 5 && champSeries[0] === 'L' && champSeries[1] === 'L' && champSeries.slice(2).every((g) => g === 'W');
       const run = dynastyRun(a.championId, a.season); // 관측된 연속 우승 시즌 수(왕조)

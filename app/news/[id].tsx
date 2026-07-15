@@ -460,7 +460,9 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
       cardTitle = '우승 여정'; cardIcon = 'trophy-outline'; cardColor = theme.gold;
       const rank = a.standings ? a.standings.indexOf(a.championId) + 1 : 0;
       if (rank > 0) rows.push({ label: '정규리그 순위', value: `${rank}위` });
-      const series = a.series?.[a.championId]?.find((sq) => sq.length >= 3);
+      // 우승 방식은 챔피언의 **마지막 시리즈**(=결승, seriesByTeam PO 먼저·결승 나중)로 판정 — 비-1시드 PO 2-1 오매칭 방지(UV-9).
+      const seriesArr = a.series?.[a.championId];
+      const series = seriesArr && seriesArr.length ? seriesArr[seriesArr.length - 1] : undefined;
       const sweep = series && series.length === 3 && series.every((g) => g === 'W');
       const reverse = series && series.length === 5 && series[0] === 'L' && series[1] === 'L' && series.slice(2).every((g) => g === 'W');
       rows.push({ label: '우승 방식', value: reverse ? '리버스 스윕 대역전' : sweep ? '챔프전 3-0 스윕' : '챔프전 제패', accent: true });

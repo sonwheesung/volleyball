@@ -21,7 +21,25 @@ const AnimView = Animated.View;
 
 export default function AwardsCeremony() {
   const ready = useDeferredReady(); // currentSeasonAwards(leagueProduction 풀시즌)이 무거움 — 로딩부터(결산과 동일)
+  const router = useRouter();
+  const season = useGameStore((s) => s.season);
+  const archive = useGameStore((s) => s.archive);
+  // 스포일러 이중 가드(UV-10): 이번 시즌 챔피언 미공개(archive[season].championId 미기록) 상태의 딥링크는 풀시즌 시상(MAX) 차단.
+  //   정상 플로우(champion-ceremony→awards)에선 recordChampion이 이미 championId를 박아 통과 — schedule championRevealed 게이트·recap-detail 독립 라우트 가드와 동결.
+  const championRevealed = archive.some((a) => a.season === season && !!a.championId);
   if (!ready) return <Loading title="시상식" variant="brand" message="시상식 준비 중…" />;
+  if (!championRevealed) {
+    return (
+      <Screen title="시상식">
+        <Card flat>
+          <Muted style={{ textAlign: 'center', marginTop: 20 }}>
+            아직 이번 시즌 챔피언이 가려지지 않았습니다.{'\n'}포스트시즌이 끝난 뒤 시상식이 열립니다.
+          </Muted>
+        </Card>
+        <Button label="나가기" onPress={() => router.back()} />
+      </Screen>
+    );
+  }
   return <CeremonyInner />;
 }
 
