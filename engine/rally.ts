@@ -34,6 +34,14 @@ const CAP = 8; // 랠리 hop 상한(7.3)
 const STAM_FLOOR = 0.70;
 const HOP_COST = 0.024;
 export const STAM_REGEN_BASE = 0.005; // 랠리 사이 회복(2026-06-28 튜닝)
+// 리베로 후위 수비 참여 소모(7.1, 2026-07-15) — 리베로는 공격 1.2·서브 1.0 같은 큰 소모가 구조적으로 없고(리시브 0.2·디그 0.4만),
+//   체력/체젠 스탯이 높은 포지션이라 랠리간 회복이 소모를 거의 항상 이겨 타임아웃 체력이 상시 ~100%였다(실측 L 3세트+ 98.5%·≥99% 55.7%).
+//   → 서브 리시브 프레임 밖에서도 **매 랠리 전 코트를 커버하는 후위 수비 참여**를 균일 소모로 모델(mult=0.16, drain 경유 = HOP_COST·체력스탯
+//   정규화 상속). 균일 채널이라 분포를 좁혀 상시100%↓(≥99% 55.7%→21.6%)·최저 과하락 방지(3세트+ 89.8%·p5 73%). **리베로 표적**
+//   (다른 포지션·HOP_COST·회복 상수 불변 → 타 밴드 Δ≤0.2%p 실측). 0 = 무보정(옛 동작 = A/B 가드 mutant). ENGINE_VERSION 10.
+//   ⚙ 값은 프로덕션 고정 리터럴 0.16. `DV_LIBDEF` 환경변수는 **가드 전용 A/B 시임**(프로덕션 미설정 → 0.16, 결정론 무영향 —
+//   simFinance FIN_OLD_UNIVERSE와 동일 패턴). `_dv_liberostam.ts`가 자식 프로세스에 `DV_LIBDEF=0`(=옛 무보정 mutant)을 줘 밴드 FAIL 민감도를 증명.
+const LIBERO_DEFENSE_COST = process.env.DV_LIBDEF != null ? Number(process.env.DV_LIBDEF) : 0.16;
 const INJ_EFF = 0.5; // 부상 시 효율 배수(9.3)
 // 부상 발동 중 실제 코트 교체(중상)로 승격되는 비율 — placeholder(측정으로 튜닝, 1.3d). 대부분은 참고 뛴다(×0.5).
 const SEVERE_INJURY_FRAC = 0.12;
@@ -352,6 +360,12 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   const serv = teamOf(serving);
   const recvSide = other(serving);
   const recv = teamOf(recvSide);
+
+  // 리베로 후위 수비 참여 소모(7.1) — 서브 리시브 프레임 밖에서도 매 랠리 전 코트를 커버하며 움직인다(균일).
+  //   서브/공격/블록의 큰 소모가 없는 리베로가 회복만 쌓여 상시 100%로 남던 현상 교정. 균일 채널이라 분포를 좁혀
+  //   (calm 경기 리베로도 후반엔 100% 아래로) 상시100%↓·최저 과하락 방지. 양 팀 리베로에 대칭 적용.
+  if (serv.libero) drain(serv, serv.libero, LIBERO_DEFENSE_COST);
+  if (recv.libero) drain(recv, recv.libero, LIBERO_DEFENSE_COST);
 
   // ── 서브 (2장) ── 타입별 (에이스·범실·난이도) 트레이드오프
   const sp = server(serv);

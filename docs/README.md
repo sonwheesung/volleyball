@@ -123,6 +123,8 @@ npx tsx tools/checkClubRanks.ts            # 구단 정체성 recentRanks 열별
 npx tsx tools/checkSubs.ts                 # 작전 교체 로그(재생 불변식·세트말 net-zero — 부상 교체는 kind:'injury' 영구스왑 예외) + FIVB 규칙(재진입·1왕복·**타슬롯 재진입 EC-SUB-02**) + 개입 주입 묶음(위반 개입 no-op)
 npx tsx tools/_dv_manual_side.ts           # 완전 수동 사이드(MATCH_INTERVENTION §4.1): 미지정 바이트불변·감독 자동TO/교체 억제(TTO·부상 유지)·개입 병행 발화·forward-only·3경로 정합. exit 0/1
 npx tsx tools/_dv_rotation_replay.ts       # 개입 서브교체 서버 슬롯 도출용 로테이션 재생(reconstructRallies) ↔ 엔진 트레이스 전랠리 대조 + 오프바이원 변이 민감도(app/match/[id].tsx pinchBlock 변경 시 재실행). exit 0/1
+npx tsx tools/_gt_coachmode.ts             # "경기 지휘" 설정 토글(MATCH_INTERVENTION §4.1) 스토어: 기본[]·forward-only·같은날덮어쓰기·false복귀·캐시bump. exit 0/1
+npx tsx tools/_dv_liberostam.ts 500        # 리베로 체력 튜닝(MATCH §7.1, 검증=Fable 5/구현=Opus) — 밴드(L 3세트+∈[88,93]%·최저<80%·타포지션 드리프트|Δ|<3%p) + A/B(DV_LIBDEF=0 시임=무보정 mutant→98.5%>93 밴드이탈). LIBERO_DEFENSE_COST=0.16(매 랠리 균일 후위수비 소모). exit 0/1
 # (_ab_manual_side.ts = 완전 수동 승률 A/B 실측 참고도구, 항상 exit 0 판정 아님 — on-demand)
 npx tsx tools/_dv_injurysub.ts             # 경기 내 부상 교체(MATCH §1.3d, 발견·검증=Fable 5/구현·문서=Opus) — (a)결정론 400시드×2=0 (b)부상아웃 코트 재등장0 (c)FIVB 예외교체=예산·재진입(usedSubIn/usedStarterOut) 미소모+작전 net-zero 불변 (d)심각도 게이트 severe/injuries≈SEVERE_INJURY_FRAC(0.12·실측13.4%) (e)경기당 부상교체율 0.029 출력 + A/B(FRAC→1.0 mutant→게이트 FAIL 증명). exit 0/1
 npx tsx tools/_gt_facontract.ts            # 재계약·FA 영입 시나리오 15케이스(reSign 게이트·캡·프랜차이즈·외인면제·FA 등급/endSeason 불변식, exit 0/1)
