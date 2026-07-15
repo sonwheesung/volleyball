@@ -13,6 +13,7 @@ import { SpotlightOverlay } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { readDevnotesCache, refreshDevnotes } from '../devnotes';
+import { useIsFocused } from '@react-navigation/native';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd, unclaimedReward } from '../../engine/diamonds';
 import { evalAchievements } from '../../engine/achievements';
 import { achTotals } from '../../data/careerTotals';
@@ -112,9 +113,18 @@ export default function MyPage() {
   };
 
   // 광고 쿨다운 실시간 표시(MONETIZATION §11.1) — 1초 틱으로 남은 시간 카운트다운. Date.now()는 UI 런타임(엔진/시드 무관).
+  // 발열 검수(2026-07-15): 탭 화면은 방문 후 계속 마운트라 무게이트 [] 틱은 **다른 탭에 있어도 매초 전체 리렌더**를
+  // 영구 구동(상시 JS 웨이크업 = 대기 발열 기여). 포커스 중 + 실제 카운트다운 중일 때만 틱.
+  const isFocused = useIsFocused();
   const [now, setNow] = useState(() => Date.now());
-  useEffect(() => { const t = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(t); }, []);
+  useEffect(() => { if (isFocused) setNow(Date.now()); }, [isFocused]); // 복귀 시 즉시 갱신(틱 없이도 최신)
   const adAvail = canWatchAd(adState, now);
+  const counting = isFocused && !adAvail.ok && adAvail.reason === 'cooldown'; // 쿨다운 표시 중일 때만 초침 필요
+  useEffect(() => {
+    if (!counting) return;
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [counting]);
   const fmtLeft = (ms: number) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, '0')}초`; };
 
   // 광고 보고 다이아(MONETIZATION §11.1) — 서버 확정 후 캐시 갱신(BACKEND §13.12). AdMob SSV는 EAS 후.
