@@ -22,7 +22,7 @@ import { displayCutoff } from '../../data/standings';
 import { awardHistoryOf } from '../../data/awards';
 import { effectiveContract } from '../../data/roster';
 import { isFranchise } from '../../engine/cap';
-import { overall, overallRaw, displayOvr, fogOvr, REVEAL_PRECISE } from '../../engine/overall';
+import { overall, overallRaw, displayOvr, fogOvr, fogStat, REVEAL_PRECISE } from '../../engine/overall';
 import { TRAITS } from '../../engine/traits';
 import { deriveRatings } from '../../engine/ratings';
 import { growthOutlook } from '../../data/growthOutlook';
@@ -41,18 +41,21 @@ const polar = (cx: number, cy: number, r: number, i: number, n: number): [number
 };
 
 /** 종합 스탯 육각 레이더 — 6축 0~100 + 꼭짓점 스탯 라벨(어느 축인지 표시). 좁은 폭(옆 배치)에서 라벨이
- *  안 잘리게 라벨은 가운데 정렬, 폴리곤은 작게 잡아 가장자리에 라벨 여백을 둔다. */
-function RadarChart({ values, labels, size = 158 }: { values: number[]; labels?: string[]; size?: number }) {
+ *  안 잘리게 라벨은 가운데 정렬, 폴리곤은 작게 잡아 가장자리에 라벨 여백을 둔다.
+ *  fog: 옆 StatBar와 동일한 스카우팅 안개 — 'coarse'=대략치(양자화값·회색), 'hidden'=값 불명(폴리곤 대신 "?"). */
+function RadarChart({ values, labels, size = 158, fog }: { values: number[]; labels?: string[]; size?: number; fog?: 'coarse' | 'hidden' }) {
   const cx = size / 2, cy = size / 2, R = size / 2 - 36, n = values.length;
   const labelR = size / 2 - 13;
+  const dataColor = fog === 'coarse' ? theme.muted : theme.accent;
   const ring = (f: number) => values.map((_, i) => polar(cx, cy, R * f, i, n).join(',')).join(' ');
   const poly = values.map((v, i) => polar(cx, cy, R * Math.max(0.06, Math.min(1, v / 100)), i, n).join(',')).join(' ');
   return (
     <Svg width={size} height={size}>
       {[0.4, 0.7, 1].map((f, k) => <Polygon key={k} points={ring(f)} fill="none" stroke={theme.border} strokeWidth={1} />)}
       {values.map((_, i) => { const [x, y] = polar(cx, cy, R, i, n); return <Line key={i} x1={cx} y1={cy} x2={x} y2={y} stroke={theme.border} strokeWidth={1} />; })}
-      <Polygon points={poly} fill={theme.accent + '40'} stroke={theme.accent} strokeWidth={2} />
-      {values.map((v, i) => { const [x, y] = polar(cx, cy, R * Math.max(0.06, Math.min(1, v / 100)), i, n); return <Circle key={`d${i}`} cx={x} cy={y} r={2.5} fill={theme.accent} />; })}
+      {fog !== 'hidden' ? <Polygon points={poly} fill={dataColor + '40'} stroke={dataColor} strokeWidth={2} /> : null}
+      {fog !== 'hidden' ? values.map((v, i) => { const [x, y] = polar(cx, cy, R * Math.max(0.06, Math.min(1, v / 100)), i, n); return <Circle key={`d${i}`} cx={x} cy={y} r={2.5} fill={dataColor} />; }) : null}
+      {fog === 'hidden' ? <SvgText x={cx} y={cy + 6} fontSize={20} fontWeight="900" fill={theme.muted} textAnchor="middle">?</SvgText> : null}
       {labels?.map((lb, i) => {
         const [x, y] = polar(cx, cy, labelR, i, n);
         return (
@@ -218,7 +221,9 @@ function PlayerDetailInner() {
   const contract = effectiveContract(p, overrides);
   const market = marketVal(p, prod);
   const status = contractStatus(contract.salary, market);
-  const pop = popularityNow(p, currentDay, archive);  // 인기(시작 전 day≤0이면 통산만, 한 번만 계산)
+  // 표시용 인기 — **결과 인지 컷오프(displayDay)** 로. 뉴스 상세(news/[id].tsx: leagueDay=cutoff)와 동일 기준이라
+  // 미관전 당일 생산이 새지 않는다. ※ discontentNow 등 store 판정과 짝을 이루는 경로는 currentDay 유지(UI-43 UV-12 WAI).
+  const pop = popularityNow(p, displayDay, archive);  // 인기(시작 전 day≤0이면 통산만, 한 번만 계산)
 
   // ── 구단주 레이어 (내 팀 선수만) ──
   const isMine = !!myTeamId && rosterIdsOnDay(myTeamId, currentDay).includes(p.id);
@@ -229,6 +234,13 @@ function PlayerDetailInner() {
   // 스카우팅 공개도 — 내 팀 선수는 전부(포텐까지) 보이고, 타 구단 선수는 스카우터 공개도만큼만(흐림). STAFF_SYSTEM
   const reveal = isMine ? 1 : (myTeamId ? teamScoutReveal(myTeamId) : 1);
   const pot = (s: keyof NonNullable<typeof p.potential>): number | undefined => (isMine ? p.potential?.[s] : undefined);
+  // 종합 스탯 레이더 안개 — 옆 StatBar/OVR 뱃지와 동일 정책(UV-12 ①): 정밀(reveal≥PRECISE)이면 정확값,
+  // 그 미만은 StatBar가 노출하는 fogStat 양자화값(round 10, 'coarse')만 먹여 정밀도 누수를 막고,
+  // fill이 불명(reveal<MID)이면 폴리곤 대신 안개 플레이스홀더('hidden', 이적 성향 ??? 패턴)로 대체한다.
+  const radarStats = [r.spike, r.block, r.dig, r.receive, r.set, r.serve];
+  const radarFog = reveal < REVEAL_PRECISE ? radarStats.map((v) => fogStat(v, reveal)) : null;
+  const radarValues = radarFog ? radarFog.map((f) => f.fill ?? 0) : radarStats;
+  const radarMode: 'coarse' | 'hidden' | undefined = !radarFog ? undefined : radarFog.every((f) => f.fill != null) ? 'coarse' : 'hidden';
   const moodInfo = isMine && myTeamId ? discontentNow(p, myTeamId, currentDay, overrides) : null;
   const topic = moodInfo?.topic ?? null;
   // 연고 향수(hometown)면 어느 팀을 그리는지 이름으로(사용자 요청 2026-06-30) — "연고 팀에서 뛰고 싶다"(막연)가
@@ -243,7 +255,9 @@ function PlayerDetailInner() {
 
   // 주전/후보 — 그 팀의 실제 출전 라인업(부상·정지·벤치 제외 = 경기 엔진과 동일)에서 선발 6인+리베로 여부.
   // 구단주가 선발/벤치 건의 여부를 판단하는 핵심 정보(사용자 보고). 결장 사유가 있으면 그걸 우선 표시.
-  const teamOfP = (() => { const rs = currentRosters(); for (const t of Object.keys(rs)) if (rs[t].includes(p.id)) return t; return null; })();
+  // 소속 판정 = **날짜 인지 명단**(rosterIdsOnDay, UI-43a) — base 순회는 시즌 중 영입을 몰라 role=null 오안내(UV-1).
+  // 같은 화면 isMine이 이미 이 정본을 쓰므로 화면 내 이원화 해소. 방출 선수는 어느 팀에도 없어 무소속(null).
+  const teamOfP = (() => { for (const t of Object.keys(currentRosters())) if (rosterIdsOnDay(t, currentDay).includes(p.id)) return t; return null; })();
   const role: { text: string; color: string } | null = (() => {
     if (!teamOfP) return null;
     const avail = availableTeamPlayers(teamOfP, currentDay); // 현재 출전 가능(선수단·대시보드와 동일 기준)
@@ -333,7 +347,7 @@ function PlayerDetailInner() {
         ) : null}
         {suspendedOnDay(currentDay).has(p.id) ? ( // 출전 상태는 현재(currentDay) 기준 — role 배지·선수단과 동일(2026-07-04)
           <Text style={{ color: theme.bad, fontWeight: '800', fontSize: 13, marginTop: 6 }}>
-            🚫 출장 정지 중 ({SCANDAL_KO[seasonScandals().find((s) => s.playerId === p.id)!.kind]})
+            🚫 출장 정지 중 ({SCANDAL_KO[(seasonScandals().find((s) => s.playerId === p.id && s.from <= currentDay && currentDay <= s.to) ?? seasonScandals().find((s) => s.playerId === p.id)!).kind]})
           </Text>
         ) : null}
         <View style={styles.divider} />
@@ -638,9 +652,10 @@ function PlayerDetailInner() {
               124보다 넓게 잡히고 옆 바 컬럼(flex:1)이 그만큼 덜 채워져 바-숫자 사이 여백이 커진다(2026-07-12 테스터). */}
           <View style={{ width: 108 }}>
             <RadarChart
-              values={[r.spike, r.block, r.dig, r.receive, r.set, r.serve]}
+              values={radarValues}
               labels={['스파이크', '블로킹', '디그', '리시브', '세팅', '서브']}
               size={108}
+              fog={radarMode}
             />
           </View>
           <View style={{ flex: 1, gap: 2 }}>
