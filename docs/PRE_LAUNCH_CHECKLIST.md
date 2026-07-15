@@ -34,6 +34,7 @@
 - 🔴 ⬜ **AdMob SSV 광고** — 보상형 광고 + 서버 서명검증 콜백(`POST /api/ad/ssv`). 광고 멱등키 `ad:<userId>:<day>:<count>`(스텁) → `ssv:<userId>:<ssvTxId>`(실물). `lib/ads.ts`. (BACKEND §4·§13.12)
 - 🟡 ⬜ **기기 모델명 수집** — `expo-device`(네이티브)로 `deviceModel` 추가(현재 `Platform.OS`로 android/iOS만). `lib/device.ts`·`users.deviceModel` 컬럼. (BACKEND §13.17 §A)
 - 🟡 ⬜ EAS 빌드 후 **실기기 렌더/터치 확인** — `emulator-test` 스킬 + [EMULATOR_E2E](./EMULATOR_E2E.md) 대본.
+- 🟡 ⬜ **발열/CPU 릴리즈 재측정**(#84 연계) — 에뮬 dev 실측(2026-07-15, 상대 비교): 경기 관전 **95%**(방치 10.1%의 9.4배 — 코트 연출 ~78%p·오디오 ~13%p)·BGM 상시 +6.6%p·일시정지/백그라운드 깨끗. 릴리즈 실기기에서 재측정 후 뜨거우면 보드 프레임/리렌더·BGM 디코딩 최적화(태스크 #122).
 - 🟡 ⬜ **분석/운영 SDK 계측** — Firebase(Analytics·Crashlytics)·GameAnalytics·Install Referrer(안드) + `track()` 래퍼. 서버측(Vercel Observability·Discord webhook·UptimeRobot)은 EAS 전에도 구축 가능. 정본 [ANALYTICS_PLAN](./ANALYTICS_PLAN.md).
 
 ---
