@@ -24,7 +24,7 @@ import { currentSeasonAwards } from '../data/awards';
 import { detectSeasonMilestones } from '../data/milestones';
 import { seasonInjuryDays, availableTeamPlayers } from '../data/injury';
 import { buildLineup } from '../engine/lineup';
-import { setTxContext, setOwnerContext, setInterventionContext, seasonTxLog, seasonScandals, availableFAsOnDay, rosterIdsOnDay, type Tx } from '../data/dynamics';
+import { setTxContext, setOwnerContext, setInterventionContext, setCoachModeLog, seasonTxLog, seasonScandals, availableFAsOnDay, rosterIdsOnDay, type Tx, type CoachModeChange } from '../data/dynamics';
 import type { MatchIntervention } from '../engine/simMatch';
 import { captureSimCache, restoreSimCache } from '../data/simCache';
 import {
@@ -154,6 +154,7 @@ interface GameState {
   interviews: InterviewLog[];                  // 구단주 면담 로그(OWNER_SYSTEM) — FA 판정 입력
   benchDirectives: BenchDirective[];           // 감독 수락된 벤치 지시 — dynamics 주입
   interventions: Record<string, MatchIntervention[]>; // 경기 개입 로그(MATCH_INTERVENTION_SYSTEM §2) — fixtureId→개입[]. dynamics 주입
+  coachModeLog: CoachModeChange[];             // "경기 지휘" 설정 forward-only 체인지로그(MATCH_INTERVENTION §4.1) — {day,manual}. dynamics 주입
   talkCooldown: Record<string, number>;        // playerId → 재면담 가능 day(쿨다운, OWNER_SYSTEM)
   benchCooldown: Record<string, number>;       // playerId → 재건의(주전/벤치) 가능 day
   fanScore: number;                            // 내 팀 팬심(직전 시즌 결과, 0~100)
@@ -176,6 +177,7 @@ interface GameState {
   finishCamp: () => void; // 전지훈련 마치기 → 이번 시즌 오프시즌 종료(개막전 노출). currentDay는 그대로(경기 시작이 진행).
   recordResult: (r: MatchResult) => void;
   recordIntervention: (fixtureId: string, iv: MatchIntervention) => void; // 경기 개입 1건 append(MATCH_INTERVENTION §2) — 4단계 UI가 호출, 2단계는 배선만
+  setCoachMode: (manual: boolean) => void; // "경기 지휘" 설정 토글(MATCH_INTERVENTION §4.1) — currentDay로 forward-only append(같은 날 덮어쓰기)
   saveWatchProgress: (fixtureId: string, idx: number) => void; // 이어보기 위치 저장
   clearWatchProgress: (fixtureId: string) => void;             // 종료·결과 확정 시 삭제
   // 반환값(ok/reason) — 조용한 거부를 남기지 않음(호출부는 무시해도 무방, 배선은 제안). 캡 예외는 프랜차이즈만.
@@ -273,6 +275,7 @@ const freshSave = {
   interviews: [] as InterviewLog[],
   benchDirectives: [] as BenchDirective[],
   interventions: {} as Record<string, MatchIntervention[]>, // 경기 개입 로그(MATCH_INTERVENTION §2) — fixtureId→개입[]
+  coachModeLog: [] as CoachModeChange[], // "경기 지휘" 설정 체인지로그(MATCH_INTERVENTION §4.1) — 기본 []=감독 자동
   talkCooldown: {} as Record<string, number>,
   benchCooldown: {} as Record<string, number>,
   fanScore: 50,
@@ -531,6 +534,7 @@ export const useGameStore = create<GameState>()(
         set({ staffHead: staff.head, staffAssistants: staff.asst, staffScouts: staff.scout });
         setOwnerContext([]);
         setInterventionContext({}); // 새 세이브 — 개입 로그 없음(MATCH_INTERVENTION §2)
+        setCoachModeLog([]); // 새 세이브 — "경기 지휘" 설정 기본(감독 자동, MATCH_INTERVENTION §4.1)
         setAwardScores([]); // 새 세이브 — 수상 이력 없음
         setSeasonHistory([]); // 모기업 기조(FINANCE 2.0) 컨텍스트 — 이력 없음
         setSalaryEra(medianOvr(currentBasePlayers().filter((p) => !p.isForeign))); // 시대 앵커(SALARY 2장) — 시드 시대 ≈ MED_REF
@@ -549,6 +553,16 @@ export const useGameStore = create<GameState>()(
         set({ interventions });
         const dayIndex = getFixture(fixtureId)?.dayIndex ?? 0; // 좌표 불명 fixture는 0(전체 재계산, 안전 폴백)
         setInterventionContext(interventions, dayIndex);
+      },
+      // "경기 지휘" 설정 토글(MATCH_INTERVENTION §4.1) — forward-only 체인지로그.
+      //   현재 currentDay로 (day, manual) 항목을 append하되 **같은 날 기존 항목은 덮어쓰기**(로그 무한 증가 방지).
+      //   토글은 이후 경기부터 적용(과거 소급 재계산 방지) → setCoachModeLog(log, currentDay)로 forward-only 접미 bump.
+      setCoachMode: (manual) => {
+        const s = get();
+        const day = s.currentDay;
+        const coachModeLog = [...s.coachModeLog.filter((c) => c.day !== day), { day, manual }].sort((a, b) => a.day - b.day);
+        set({ coachModeLog });
+        setCoachModeLog(coachModeLog, day); // 파생 캐시 무효화(§2.3 동형) — 설정 변경일 이후만 재계산
       },
       saveWatchProgress: (fixtureId, idx) => set((s) => ({ watchProgress: { ...s.watchProgress, [fixtureId]: idx } })),
       clearWatchProgress: (fixtureId) => set((s) => {
@@ -1310,6 +1324,10 @@ export const useGameStore = create<GameState>()(
         setTxContext([], nextFaPool, my); // 새 시즌: 거래 초기화 + FA 풀 주입
         setOwnerContext([]);              // 벤치 지시는 시즌 단위 — 새 시즌 전원 복귀
         setInterventionContext({});       // 개입 로그도 시즌 단위(fixtureId는 시즌마다 재생성) — 새 시즌 초기화(MATCH_INTERVENTION §2)
+        // "경기 지휘" 설정은 시즌 넘어 유지(게임 설정) — 단 day 공간은 리셋되므로 **현 유효값을 day0 baseline으로 접음**(focusLog 동형, §4.1).
+        const coachModeEff = get().coachModeLog.reduce((acc, c) => (c.day >= acc.day ? c : acc), { day: -1, manual: false }).manual;
+        const nextCoachModeLog: CoachModeChange[] = coachModeEff ? [{ day: 0, manual: true }] : [];
+        setCoachModeLog(nextCoachModeLog);
         // 훈련 방침 타임라인 접기(A4) — 새 시즌 currentDay=0 리셋에 맞춰 **현재 방침을 day0 baseline**으로 붕괴.
         //   (롤오버는 위 buildDraftContext에서 이번 시즌 타임라인으로 이미 진화 완료. 다음 시즌은 현재 방침이 처음부터.)
         const nextFocusLog: FocusSeg[] = get().trainingFocus ? [{ fromDay: 0, focus: get().trainingFocus }] : [];
@@ -1325,6 +1343,7 @@ export const useGameStore = create<GameState>()(
           interviews: interviews.filter((l) => l.season >= season - 1).slice(-200), // 직전 시즌까지만(실패 이력 참조용)
           benchDirectives: [],
           interventions: {}, // 개입 로그 — 새 시즌 초기화(fixtureId 재생성, MATCH_INTERVENTION §2)
+          coachModeLog: nextCoachModeLog, // "경기 지휘" 설정 — 현 유효값을 day0 baseline으로 접음(설정은 시즌 유지, §4.1)
           focusLog: nextFocusLog, // 훈련 방침 타임라인 — 새 시즌 day0 baseline으로 접음(A4)
           talkCooldown: {},   // 시즌말 currentDay 0 리셋과 함께 쿨다운 초기화
           benchCooldown: {},
@@ -1377,6 +1396,7 @@ export const useGameStore = create<GameState>()(
         setTxContext([], [], '');
         setOwnerContext([]);
         setInterventionContext({}); // 새 게임 — 개입 로그 없음(MATCH_INTERVENTION §2)
+        setCoachModeLog([]); // 새 게임 — "경기 지휘" 설정 기본(감독 자동, MATCH_INTERVENTION §4.1)
         setAwardScores([]);
         setSeasonHistory([]); // 모기업 기조(FINANCE 2.0) 컨텍스트 리셋
         setSalaryEra(MED_REF); // 시대 앵커 리셋(시대 0)
@@ -1464,6 +1484,7 @@ export const useGameStore = create<GameState>()(
         interviews: s.interviews,
         benchDirectives: s.benchDirectives,
         interventions: s.interventions, // 경기 개입 로그(MATCH_INTERVENTION §2)
+        coachModeLog: s.coachModeLog, // "경기 지휘" 설정 체인지로그(MATCH_INTERVENTION §4.1)
         talkCooldown: s.talkCooldown,
         benchCooldown: s.benchCooldown,
         fanScore: s.fanScore,
@@ -1506,6 +1527,7 @@ export const useGameStore = create<GameState>()(
           setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)
           setOwnerContext(state?.benchDirectives ?? []);
           setInterventionContext(state?.interventions ?? {}); // 개입 로그 컨텍스트 복원(MATCH_INTERVENTION §2) — sim 호출부가 조회
+          setCoachModeLog(state?.coachModeLog ?? []); // "경기 지휘" 설정 컨텍스트 복원(MATCH_INTERVENTION §4.1) — manualSideFor가 조회
           setAwardScores(state?.archive ?? []); // 수상 프리미엄 컨텍스트 복원
           setSeasonHistory(state?.archive ?? []); // 모기업 기조(FINANCE 2.0) 컨텍스트 복원 — FA 화면 진입 전 stance 일관
           setSalaryEra(medianOvr(currentBasePlayers().filter((p) => !p.isForeign))); // 시대 앵커 복원(SALARY 2장) — base 커밋 후

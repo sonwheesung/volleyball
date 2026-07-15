@@ -36,6 +36,19 @@ function Row({ icon, tint, label, sub, onPress, danger }: { icon: IoniconName; t
   );
 }
 
+// 라디오 선택 행(2택) — "경기 지휘" 설정처럼 여러 선택지 중 하나를 고르는 UI. 기존 row 스타일 재사용.
+function ChoiceRow({ selected, label, sub, onPress }: { selected: boolean; label: string; sub: string; onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} style={({ pressed }) => [styles.row, pressed ? { opacity: 0.7 } : null]}>
+      <Ionicons name={selected ? 'radio-button-on' : 'radio-button-off'} size={20} color={selected ? theme.accent : theme.muted} />
+      <View style={{ flex: 1 }}>
+        <Text style={[styles.rowLabel, selected && { color: theme.accent }]}>{label}</Text>
+        <Muted style={{ fontSize: 12, marginTop: 2, lineHeight: 17 }}>{sub}</Muted>
+      </View>
+    </Pressable>
+  );
+}
+
 export default function Settings() {
   const router = useRouter();
   const resetSave = useGameStore((s) => s.resetSave);
@@ -50,6 +63,10 @@ export default function Settings() {
   const session = useAuthStore((s) => s.session);
   const deleteAccount = useAuthStore((s) => s.deleteAccount);
   const diamonds = useGameStore((s) => s.diamonds);
+  // "경기 지휘" 설정(MATCH_INTERVENTION §4.1) — 현 유효값 = 로그에서 가장 늦은 날의 값(없으면 false=감독 자동).
+  const coachModeLog = useGameStore((s) => s.coachModeLog);
+  const setCoachMode = useGameStore((s) => s.setCoachMode);
+  const coachManual = coachModeLog.reduce((acc, c) => (c.day >= acc.day ? c : acc), { day: -1, manual: false }).manual;
   const [confirmReset, setConfirmReset] = useState(false);
   const [deleting, setDeleting] = useState(false);
 
@@ -148,6 +165,23 @@ export default function Settings() {
           <Switch value={mode === 'light'} onValueChange={(v) => setThemeMode(v ? 'light' : 'dark')} trackColor={{ true: theme.accent, false: theme.cardAlt }} />
         </View>
       </View>
+
+      <Text style={styles.section}>경기 지휘</Text>
+      <View style={styles.group}>
+        <ChoiceRow
+          selected={!coachManual}
+          label="감독 자동"
+          sub="타임아웃과 선수 교체를 감독이 알아서 해요 (기존 방식)"
+          onPress={() => { if (coachManual) setCoachMode(false); }}
+        />
+        <ChoiceRow
+          selected={coachManual}
+          label="구단주 직접"
+          sub="내 팀 경기의 타임아웃·교체를 관전 중 직접 해요. 관전하지 않는 경기에서는 타임아웃·교체 없이 진행돼 불리할 수 있어요."
+          onPress={() => { if (!coachManual) setCoachMode(true); }}
+        />
+      </View>
+      <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>변경은 다음 경기부터 적용돼요.</Muted>
 
       <Text style={styles.section}>데이터</Text>
       <View style={styles.group}>

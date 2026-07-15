@@ -8,7 +8,7 @@
 export const SAVE_VERSION = 3;
 const POSTSEASON_LAST_DAY = 183; // engine/calendar.POSTSEASON_LAST_DAY 손복제 회피용 로컬(saveMigration은 leaf 유지 — engine import 시 순환 위험). _dv_postseason이 일치 가드.
 
-// 영속 68필드 기본값(수는 참고용 — 정본은 이 키 집합 자체) — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
+// 영속 69필드 기본값(수는 참고용 — 정본은 이 키 집합 자체) — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
 // (drift 가드: _dv_migrate가 이 키 집합 == partialize 키 집합을 단언한다.)
 export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 설정(새 게임에도 유지)
@@ -28,7 +28,7 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 감독·스태프·훈련
   coachPool: null, staffHead: {}, staffHeadTimeline: {}, staffAssistants: {}, staffScouts: {}, trainingFocus: null, focusLog: [],
   // 구단주·재정
-  interviews: [], benchDirectives: [], interventions: {}, talkCooldown: {}, benchCooldown: {},
+  interviews: [], benchDirectives: [], interventions: {}, coachModeLog: [], talkCooldown: {}, benchCooldown: {},
   fanScore: 50, releaseAnger: 0, cash: 50000, lastFinance: null,
   // 외국인·아시아쿼터
   tryoutWish: [], foreignAltPool: [], foreignSubUsed: false, keepForeign: null,
@@ -63,7 +63,7 @@ const KIND: Record<string, Kind> = {
   asianWish: 'arr', asianAltPool: 'arr', asianSubUsed: 'bool', keepAsian: 'nbool',
   bonds: 'rec',
   diamonds: 'num', saveId: 'nstr', campLog: 'arr', campTrainedThisOffseason: 'arr', campDoneSeason: 'num', claimedAch: 'arr', lastGrowthDay: 'num',
-  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, focusLog, staffHeadTimeline, lastFinance, adState, pendingCamp, faOffers
+  // 특수(default 분기): careerLog, careerTotals, coachPool, trainingFocus, focusLog, coachModeLog, staffHeadTimeline, lastFinance, adState, pendingCamp, faOffers
 };
 
 const isObj = (v: unknown): v is Record<string, unknown> =>
@@ -105,6 +105,12 @@ function sanitizeField(key: string, v: unknown): unknown {
       if (!Array.isArray(v)) return [];
       const okFocus = (f: unknown) => f === null || (isObj(f) && Array.isArray((f as Record<string, unknown>).primary) && Array.isArray((f as Record<string, unknown>).secondary));
       return v.filter((seg) => isObj(seg) && typeof seg.fromDay === 'number' && Number.isFinite(seg.fromDay) && okFocus(seg.focus));
+    }
+    case 'coachModeLog': {
+      // "경기 지휘" 설정 체인지로그(MATCH_INTERVENTION §4.1) — [{day:number, manual:boolean}]. 손상 세그먼트 제거(focusLog 동형 방어).
+      //   day 유한수·manual 불리언만 통과 → manualSideFor의 forward-only 루프가 안전하게 소비(NaN 비교/비불리언 유입 차단).
+      if (!Array.isArray(v)) return [];
+      return v.filter((c) => isObj(c) && typeof c.day === 'number' && Number.isFinite(c.day) && typeof c.manual === 'boolean');
     }
     case 'lastFinance':
       return v === null || isObj(v) ? v : null;

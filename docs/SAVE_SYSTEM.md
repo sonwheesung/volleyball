@@ -95,6 +95,7 @@
 | `interviews` | InterviewLog[]{playerId,season,day,topic,card,ok} | [] (최근 200) |
 | `benchDirectives` | BenchDirective[]{playerId,fromDay,toDay?} | [] (A3: `toDay`=철회 종결일, 옵셔널 — 없으면 활성) |
 | `interventions` (2단계, 구현) | Record<fixtureId, MatchIntervention[]{at,side,kind,outId?,inId?}> | {} (경기 개입 로그 — 타임아웃·교체 좌표. `KIND='rec'` 정규화. §2① 자동 처리) |
+| `coachModeLog` (#128, 구현) | CoachModeChange[]{day,manual} | [] ("경기 지휘" 설정 forward-only 체인지로그 — MATCH_INTERVENTION §4.1. 손상 세그먼트 제거 정규화. §2① 자동 처리) |
 | `talkCooldown` · `benchCooldown` | Record<playerId, number> | {} |
 | `fanScore` | scalar(number) | 50 |
 | `releaseAnger` | scalar(number) | 0 |
@@ -105,6 +106,11 @@
 > §1 필드 수 67 → **68**(개입 1필드 추가). `benchDirectives`와 동형 패턴이라 §2① 자동 처리(누락=기본값 `{}`, `SAVE_DEFAULTS`+`KIND='rec'`).
 > - `interventions`: `Record<fixtureId, MatchIntervention[]>` — 내 팀 경기 개입 로그(타임아웃·교체 좌표), forward-only, bounded(시즌 ~36경기). 기본 `{}`. 재관전 재생 입력(§3 프리픽스 불변).
 > - **스냅샷 필드 없음**(§2.2 조정): 개입 경기 결과·박스를 동결하는 대신, **모든 sim 호출부**(관전 `matchBox`·순위 `standings`·생산 `production`)가 `interventionsFor(id)`로 로그를 실어 재시뮬 → split-brain 원천 소멸. `_dv_intervention_consistency` 가드가 전 호출부 바이트 동일을 증명.
+
+> **구현 완료(2026-07-15, "경기 지휘" 설정 토글 #128)**: `coachModeLog` 필드 추가. 정본 `docs/MATCH_INTERVENTION_SYSTEM.md` §4.1.
+> §1 필드 수 68 → **69**(`coachModeLog` 1필드 추가). 추가는 §2① 자동 처리(누락=기본값 `[]`) — **구세이브 로드 시 항상 감독 자동(=바이트 동일)**. `SAVE_VERSION` 범프 불필요(순수 가산 필드).
+> - `coachModeLog`: `CoachModeChange[]{day:number, manual:boolean}` — 설정 "경기 지휘"(감독 자동/구단주 직접) 변경 이력. forward-only: 토글 변경 시 `(currentDay, manual)`을 append(동일 날은 그 날 항목 덮어쓰기 → 로그 무한 증가 방지). 시즌 경계에서 **현 유효값을 day0 baseline으로 접음**(focusLog와 동형 — 설정은 시즌 넘어 유지되나 day 공간은 리셋). 기본 `[]`=감독 자동.
+> - **정규화(§3)**: `KIND` 미등록(특수 분기) — `sanitizeField` `case 'coachModeLog'`가 `day`(유한수)·`manual`(불리언) 유효 세그먼트만 통과시켜 손상 항목 제거(focusLog와 동형 방어). 로드 후 `manualSideFor`가 안전하게 소비.
 
 ### 외국인·아시아쿼터
 | 필드 | 자료구조 | 기본 |

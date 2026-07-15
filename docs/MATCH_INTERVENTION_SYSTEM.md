@@ -164,6 +164,12 @@ P부터 새 전개로 매끄럽게 이어진다. 경기 1회 시뮬은 밀리초
 정규시즌 sim 호출부(standings·production·matchBox)가 `interventionsFor`와 나란히 주입. 설정 로그가 비면 항상 undefined = 현행 바이트 동일.
 저장 순위/생산이 새 로직으로 재계산되도록 `ENGINE_VERSION` 범프. 가드 `_dv_manual_side`·승률 A/B `_ab_manual_side`.
 
+**✅ 구현(2026-07-15, #128) — 설정 토글 + 스토어 배선:** 엔진 축(`opts.manualSide`)·라우팅(`manualSideFor`)·설정 체인지로그(`setCoachModeLog`/`coachManualAt`)는 이미 완료(가드 `_dv_manual_side`). 이 커밋은 **플레이어가 실제로 설정할 수 있는 UI + 세이브 영속**을 붙인다:
+- **스토어(`store/useGameStore.ts`)**: 영속 필드 `coachModeLog: CoachModeChange[]`(기본 `[]`) + 액션 `setCoachMode(manual)` — `currentDay`로 append하되 **같은 날 항목은 덮어쓰기**(forward-only, 로그 무한증가 방지), `setCoachModeLog(log, currentDay)` 호출로 파생 캐시 무효화(접미 bump). 재주입 배선은 `interventions`와 나란히: `selectTeam`(→[])·`resetSave`(→[])·`onRehydrateStorage`(→저장값 복원)·`endSeason`(→현 유효값을 day0 baseline으로 접음, focusLog 동형).
+- **세이브(`store/saveMigration.ts`)**: `SAVE_DEFAULTS.coachModeLog=[]` + `partialize`에 추가(`_dv_migrate` 동치 유지). 특수 정규화 `case 'coachModeLog'`(day 유한수·manual 불리언 세그먼트만 통과). `SAVE_VERSION` 불변(가산 필드, 구세이브=[]=바이트 동일).
+- **설정 UI(`app/settings.tsx`)**: "게임" 섹션에 "경기 지휘" 2택(감독 자동/구단주 직접) + 정직한 트레이드오프 고지("관전하지 않는 경기에서는 타임아웃·교체 없이 진행돼 불리할 수 있어요"·"변경은 다음 경기부터 적용돼요").
+- **가드 `tools/_gt_coachmode.ts`(신설)**: 스토어 레벨 시나리오(기본 []=전 경기 undefined·setCoachMode(true) 후 forward-only·같은 날 재토글=항목 1개·false 복귀·캐시 bump). 기존 `_dv_manual_side`(엔진 축)와 상보.
+
 ### 4.2 FIVB 15.6.1 — 나간 선발의 타슬롯 재진입 차단(2026-07-15, F2 봉인)
 
 `subIn()`은 IN 후보가 "이번 세트 이미 아웃된 선발"(`usedStarterOut`)인지 검사하지 않아, 나갔던 선발 X가 같은 세트
