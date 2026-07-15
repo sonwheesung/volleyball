@@ -47,11 +47,14 @@ export function LoginScreen() {
   const signIn = useAuthStore((s) => s.signIn);
   const [busy, setBusy] = useState<Provider | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // 만 14세 연령 게이트(AUTH §8) — 최초 가입 경로 확인. 미확인 시 로그인 진행 차단(방침 4조 정합).
+  const [ageOk, setAgeOk] = useState(false);
 
   const doSignIn = async (provider: Provider) => {
+    if (!ageOk) { setErr('만 14세 미만은 이용할 수 없습니다. 만 14세 이상임을 확인해 주세요.'); return; }
     setBusy(provider);
     setErr(null);
-    const r = await signIn(provider);
+    const r = await signIn(provider, true); // 체크박스로 게이팅 — 여기 도달하면 항상 확인됨(신규 가입만 서버가 요구)
     setBusy(null);
     if (!r.ok) {
       if (r.reason === 'cancelled') return; // 유저가 계정 선택 취소 — 조용히
@@ -72,7 +75,13 @@ export function LoginScreen() {
           <Text style={styles.tagline}>명문 구단의 역사가 시작됩니다</Text>
         </View>
 
-        <View style={styles.btnGroup}>
+        {/* 만 14세 연령 확인 — 체크해야 로그인 버튼 활성(AUTH §8). */}
+        <Pressable onPress={() => { setAgeOk((v) => !v); setErr(null); }} style={styles.ageRow} hitSlop={8}>
+          <Ionicons name={ageOk ? 'checkbox' : 'square-outline'} size={22} color={ageOk ? theme.accent : theme.muted} />
+          <Text style={styles.ageLabel}>만 14세 이상입니다</Text>
+        </Pressable>
+
+        <View style={[styles.btnGroup, !ageOk && styles.btnGroupDim]}>
           <GoogleButton onPress={() => doSignIn('google')} busy={busy === 'google'} />
           {Platform.OS === 'ios' ? (
             <ProviderButton icon="logo-apple" label="Apple로 로그인" onPress={() => doSignIn('apple')} busy={busy === 'apple'} />
@@ -101,6 +110,9 @@ const styles = themedStyles(() =>
     mark: { color: theme.text, fontSize: 32, fontWeight: '900', letterSpacing: 1 },
     tagline: { color: theme.muted, fontSize: 14.5 },
     btnGroup: { gap: 11 },
+    btnGroupDim: { opacity: 0.45 }, // 연령 미확인 — 로그인 버튼 흐리게(진행 차단, AUTH §8)
+    ageRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 9, marginBottom: -14 },
+    ageLabel: { color: theme.text, fontSize: 14.5, fontWeight: '700' },
     // 구글 브랜드 버튼 — 흰 배경·다크 텍스트(가이드 준수, 어느 테마에서도 동일)
     googleBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 12, backgroundColor: '#FFFFFF', borderRadius: 14, paddingVertical: 15, borderWidth: 1, borderColor: '#DADCE0' },
     googleLabel: { color: '#1F1F1F', fontSize: 15.5, fontWeight: '700' },

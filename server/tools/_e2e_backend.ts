@@ -40,7 +40,7 @@ const now = new Date().toISOString();
     ok(!(Array.isArray(goneList) && goneList.some((a: any) => a.id === annId)), '삭제 후 bootstrap에서 사라짐');
 
     console.log('\n=== 2. 세션 발급(문의/수령용) ===');
-    const login = await jpost('/api/auth/login', { provider: 'test', providerId: 'e2e-backend' });
+    const login = await jpost('/api/auth/login', { provider: 'test', providerId: 'e2e-backend', ageConfirmed: true }); // 신규 생성 시 연령 확인 필요(AUTH §8)
     ok(login.s === 200 && login.j.token && login.j.userId, `세션 발급 (userId=${login.j.userId})`);
     const USERH = { authorization: `Bearer ${login.j.token}` };
     uid = login.j.userId;

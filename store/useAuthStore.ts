@@ -4,7 +4,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { login as serverLogin, setServerToken } from '../lib/server';
+import { login as serverLogin, deleteAccount as serverDeleteAccount, setServerToken } from '../lib/server';
 import { identifyUser, logoutUser } from '../lib/iap';
 import { signInGoogle, signOutGoogle } from '../lib/googleAuth';
 import { getDeviceInfo } from '../lib/device';
@@ -17,6 +17,7 @@ export interface Session {
   token: string; // 자체 Bearer(HS256). 서버가 발급, 여기 캐시.
 }
 export type SignInResult = { ok: true } | { ok: false; reason: 'offline' | 'error' | 'cancelled' | 'unavailable' };
+export type DeleteAccountResult = { ok: true } | { ok: false; reason: 'offline' | 'error' };
 
 interface AuthState {
   session: Session | null;
@@ -25,8 +26,9 @@ interface AuthState {
   readDevnotes: string[]; // 읽은 개발자 노트/패치노트 id(기기 로컬 — DEVNOTES §3.3, 공지와 동일 논리). 안읽음 배지·재노출 방지.
   dismissedUpdateVersion: string | null; // 닫은 소프트 업데이트 latest(§13.16) — 새 latest 발행 시 재노출
   hydrated: boolean;
-  signIn: (provider: 'google' | 'apple' | 'dev') => Promise<SignInResult>;
+  signIn: (provider: 'google' | 'apple' | 'dev', ageConfirmed?: boolean) => Promise<SignInResult>;
   signOut: () => void;
+  deleteAccount: () => Promise<DeleteAccountResult>; // 탈퇴(AUTH §7) — 서버 확정 후 로컬 세션 정리
   markAnnouncementsRead: (ids: string[]) => void; // 모달/재열람에서 본 공지 기록
   pruneReadAnnouncements: (activeIds: string[]) => void; // 활성 id와 교집합만 유지(무한증가 차단)
   markDevnoteRead: (id: string) => void; // 노트 상세 진입 시 그 id 읽음 처리(DEVNOTES §3.3)
@@ -51,7 +53,7 @@ export const useAuthStore = create<AuthState>()(
       markDevnoteRead: (id) => set((s) => (s.readDevnotes.includes(id) ? s : { readDevnotes: [...s.readDevnotes, id] })),
       pruneReadDevnotes: (activeIds) => set((s) => { const a = new Set(activeIds); return { readDevnotes: s.readDevnotes.filter((id) => a.has(id)) }; }),
       dismissUpdate: (latest) => set({ dismissedUpdateVersion: latest }),
-      signIn: async (provider) => {
+      signIn: async (provider, ageConfirmed) => {
         const device = getDeviceInfo(); // 진단 기기정보 동봉(§13.17)
         // google=네이티브 계정선택 → idToken(서버가 검증해 sub만 저장). dev/apple=기기ID 스텁.
         let cred: { providerId?: string; idToken?: string };
@@ -64,7 +66,7 @@ export const useAuthStore = create<AuthState>()(
           if (!deviceId) { deviceId = genDeviceId(); set({ deviceId }); }
           cred = { providerId: deviceId };
         }
-        const r = await serverLogin(provider, cred, device);
+        const r = await serverLogin(provider, cred, device, ageConfirmed); // 만14세 확인(AUTH §8, 신규 가입만 서버가 요구)
         if (!r.ok) {
           // dev 로컬 폴백(__DEV__ 전용): 운영 서버는 계정 탈취 백도어를 막으려 dev provider를 401로 차단한다
           // (SECURITY_AUDIT #2(b), server .../auth/login: prod && provider!=='google' → 401). 그 차단은 유지돼야 한다.
@@ -94,6 +96,22 @@ export const useAuthStore = create<AuthState>()(
         void logoutUser();     // RC도 익명으로(다음 로그인 계정 재귀속)
         setServerToken(null);
         set({ session: null });
+      },
+      deleteAccount: async () => {
+        // 서버 확정 후에만 로컬 세션 정리(server-authoritative). 탈퇴는 서버가 진실 — 오프라인이면 재시도 유도.
+        const token = get().session?.token;
+        if (!token) {
+          // dev-local 합성 세션(서버 Bearer 없음) 또는 세션 없음 — 서버에 지울 계정이 없으니 로컬만 정리.
+          get().signOut(); // track('logout') 발화 포함
+          return { ok: true };
+        }
+        const r = await serverDeleteAccount();
+        if (!r.ok) {
+          // 오프라인/오류 — 세션 보존(삭제는 서버 확정 필요). 사용자에게 재시도 안내.
+          return { ok: false, reason: r.reason === 'offline' ? 'offline' : 'error' };
+        }
+        get().signOut(); // 성공(멱등 alreadyDeleted 포함) → 세션 clear·RC/구글 정리(track('logout')) → BootGate가 로그인 벽으로 복귀
+        return { ok: true };
       },
     }),
     {

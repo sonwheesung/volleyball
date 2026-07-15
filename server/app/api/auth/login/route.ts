@@ -7,7 +7,7 @@ import { reportError } from '../../../../lib/observability';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { users } from '../../../../db/schema';
-import { ensureUser } from '../../../../lib/wallet';
+import { findUserRow, createUser } from '../../../../lib/wallet';
 import { signToken } from '../../../../lib/auth';
 import { verifyGoogleIdToken } from '../../../../lib/googleVerify';
 import { checkLimit, clientIp } from '../../../../lib/ratelimit';
@@ -23,7 +23,7 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, reason: 'rate-limited' }, { status: 429 });
   }
   try {
-    const body = (await req.json()) as { provider?: string; providerId?: string; idToken?: string; device?: Device };
+    const body = (await req.json()) as { provider?: string; providerId?: string; idToken?: string; ageConfirmed?: boolean; device?: Device };
     const provider = body.provider === 'google' || body.provider === 'apple' ? body.provider : 'dev';
     // #2(b)(2026-07-07): 프로덕션에선 실 idToken을 검증하는 google만 허용. dev(무검증 백도어)·apple(토큰검증 미구현)은 401.
     // TODO(Apple 로그인 출시 전 필수): Apple JWKS(appleid.apple.com) 서명·audience(bundle id)·iss/exp 검증 구현 후
@@ -39,7 +39,18 @@ export async function POST(req: Request) {
     } else {
       providerId = typeof body.providerId === 'string' && body.providerId ? body.providerId : 'dev-user-1';
     }
-    const userId = await ensureUser(providerId, provider); // displayName 미저장(최소수집)
+    // 연령 게이트(만14세, AUTH §8) — **신규 생성만** 확인 요구. 기존 라이브 계정은 소급 강제 안 함.
+    // 탈퇴 계정은 providerId가 토움스톤이라 findUserRow가 못 찾음 → 재로그인=새 계정(연령 재확인, AUTH §7.3).
+    const found = await findUserRow(providerId, provider);
+    let userId: string;
+    if (found && !found.deletedAt) {
+      userId = found.id; // 기존 계정 — displayName 미저장(최소수집), ageConfirmedAt 재기록 안 함
+    } else {
+      if (body.ageConfirmed !== true) {
+        return NextResponse.json({ ok: false, reason: 'age-required' }, { status: 400 });
+      }
+      userId = await createUser(providerId, provider, new Date()); // 연령 확인 시점 기록(AUTH §8.2)
+    }
     // 진단 기기정보 갱신(§13.17 §A) — 마지막 로그인 기기. lastSeenAt은 DB now()(클럭 일관)
     const d = body.device;
     await db

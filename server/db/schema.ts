@@ -38,7 +38,8 @@ export const users = pgTable(
     appVersion: text('app_version'),
     lastSeenAt: timestamp('last_seen_at', { withTimezone: true }),
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
-    deletedAt: timestamp('deleted_at', { withTimezone: true }), // 소프트삭제 — 결제 원장 5년 보존 위해 하드삭제 대신(§13.9)
+    deletedAt: timestamp('deleted_at', { withTimezone: true }), // 소프트삭제 — 결제 원장 5년 보존 위해 하드삭제 대신(§13.9). 탈퇴 시 providerId 가명화(AUTH §7)
+    ageConfirmedAt: timestamp('age_confirmed_at', { withTimezone: true }), // 만14세 확인 시점(신규 소셜 가입 시 필수·1회 기록, AUTH §8). null=미확인(익명/가드)
   },
   // 게임별로 계정 격리 — 같은 구글계정이 배구/농구에서 별도 유저
   (t) => [uniqueIndex('users_proj_provider_uniq').on(t.projCode, t.provider, t.providerId)],

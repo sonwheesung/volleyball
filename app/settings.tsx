@@ -1,15 +1,17 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import type { ComponentProps } from 'react';
 import { Muted, Screen, theme, themedStyles, useThemeMode, setThemeMode } from '../components/Screen';
+import { showAlert } from '../components/AppDialog';
 import { DEV_TOOLS } from '../data/flags';
 import { seasonYear } from '../data/seasonLabel';
 import { setBgmVolume as applyBgmVolume } from '../audio/bgm';
 import { useGameStore } from '../store/useGameStore';
+import { useAuthStore } from '../store/useAuthStore';
 
 const ROSE = '#FF5C8D';
 
@@ -45,7 +47,43 @@ export default function Settings() {
   const bgmVolume = useGameStore((s) => s.bgmVolume);
   const setBgmVolumeStore = useGameStore((s) => s.setBgmVolume);
   const mode = useThemeMode();
+  const session = useAuthStore((s) => s.session);
+  const deleteAccount = useAuthStore((s) => s.deleteAccount);
+  const diamonds = useGameStore((s) => s.diamonds);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+
+  // 계정 삭제(탈퇴, AUTH §7) — showAlert 2단 확인. 1차: 잔액·소멸 경고 / 2차: 최종 확인(destructive).
+  const performDeleteAccount = async () => {
+    setDeleting(true);
+    const r = await deleteAccount();
+    setDeleting(false);
+    if (!r.ok) {
+      showAlert(
+        r.reason === 'offline' ? '온라인 연결 필요' : '삭제 실패',
+        r.reason === 'offline'
+          ? '계정 삭제는 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.'
+          : '계정 삭제에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      );
+    }
+    // 성공 시 별도 네비 없음 — signOut으로 세션이 비면 BootGate가 로그인 화면으로 자동 전환
+  };
+  const askDeleteFinal = () => {
+    showAlert('정말 삭제하시겠어요?', '이 작업은 되돌릴 수 없습니다. 계정과 개인정보가 삭제되고 로그인 화면으로 돌아갑니다.', [
+      { text: '취소', style: 'cancel' },
+      { text: '계정 삭제', style: 'destructive', onPress: () => { void performDeleteAccount(); } },
+    ]);
+  };
+  const confirmDeleteAccount = () => {
+    showAlert(
+      '계정을 삭제할까요?',
+      `보유 다이아 ${diamonds.toLocaleString()}개와 게임 진행이 이 계정에서 사라집니다. 같은 소셜 계정으로 다시 로그인해도 새 계정으로 시작되며, 구매한 다이아·구매 내역은 복구되지 않습니다. 환불이 필요하면 삭제 전에 문의해 주세요.`,
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '계속', style: 'destructive', onPress: askDeleteFinal },
+      ],
+    );
+  };
   // 슬라이더 라이브 값(드래그 중 즉시 청음 반영 — 렌더 churn과 스토어 커밋 분리, SOUND_SYSTEM §3)
   const [bgmLive, setBgmLive] = useState(bgmVolume);
 
@@ -115,6 +153,10 @@ export default function Settings() {
       <View style={styles.group}>
         <Row icon="refresh-outline" tint={theme.bad} label="세이브 초기화" sub={`현재 ${seasonYear(season)}. 구단 변경(진행 기록 삭제)`} danger
           onPress={() => setConfirmReset(true)} />
+        {session ? (
+          <Row icon="person-remove-outline" tint={theme.bad} label="계정 삭제" sub="탈퇴 · 개인정보 삭제. 되돌릴 수 없습니다" danger
+            onPress={confirmDeleteAccount} />
+        ) : null}
       </View>
 
       <Text style={styles.section}>정보</Text>
@@ -160,6 +202,17 @@ export default function Settings() {
             </View>
           </Pressable>
         </Pressable>
+      </Modal>
+
+      {/* 계정 삭제 진행 중 블로킹 오버레이 — 서버 왕복 동안 재입력 차단(UI_RULES: 무거운 작업 로딩). */}
+      <Modal visible={deleting} transparent statusBarTranslucent animationType="fade">
+        <View style={styles.backdrop}>
+          <View style={[styles.modal, { alignItems: 'center', gap: 14 }]}>
+            <ActivityIndicator size="large" color={theme.accent} />
+            <Text style={styles.modalTitle}>계정을 삭제하는 중…</Text>
+            <Text style={styles.modalBody}>잠시만 기다려 주세요.</Text>
+          </View>
+        </View>
       </Modal>
     </Screen>
   );

@@ -6,7 +6,7 @@
 //  · 토큰 만료: verifyToken이 iat 기준 TTL(180일) 초과 토큰 거부(관대 — 캐시 세션 갑작스런 로그아웃 회피).
 // env는 **호출 시점**에 읽는다(모듈 로드 시 캐시 금지) — 프로덕션 게이트가 배포 env에 정확히 반응하도록.
 import crypto from 'node:crypto';
-import { ensureUser } from './wallet';
+import { ensureUser, findUserRow } from './wallet';
 
 const DEFAULT_SECRET = 'dev-only-change-me';
 const MIN_SECRET_LEN = 32;
@@ -68,29 +68,39 @@ export function verifyToken(token: string): string | null {
   }
 }
 
-/** 요청의 Bearer → userId. 없거나 무효면 익명 dev 유저 폴백(하위호환 — online-first). */
-export async function resolveUserId(req: Request): Promise<string> {
+/** 요청의 Bearer를 서명 검증해 sub 반환. 없음/위조/만료면 null. 계정삭제 라우트·리졸버 공용(AUTH §7.2·§7.4). */
+export function subFromRequest(req: Request): string | null {
   const auth = req.headers.get('authorization');
   const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
-  const sub = token ? verifyToken(token) : null;
+  return token ? verifyToken(token) : null;
+}
+
+/** "provider:providerId" 분해(구분자 없으면 dev). */
+export function splitSub(sub: string): { provider: string; providerId: string } {
+  const idx = sub.indexOf(':');
+  return idx >= 0 ? { provider: sub.slice(0, idx), providerId: sub.slice(idx + 1) } : { provider: 'dev', providerId: sub };
+}
+
+/** 요청의 Bearer → **라이브 유저** userId(생성 안 함). 없거나 무효/탈퇴면 익명 dev 유저 폴백(하위호환 — online-first).
+ *  탈퇴 계정(providerId 토움스톤)은 옛 sub와 매칭 안 됨 → 유령 계정 부활 없이 익명으로 폴백(AUTH §7.2). */
+export async function resolveUserId(req: Request): Promise<string> {
+  const sub = subFromRequest(req);
   if (sub) {
-    const idx = sub.indexOf(':');
-    const provider = idx >= 0 ? sub.slice(0, idx) : 'dev';
-    const providerId = idx >= 0 ? sub.slice(idx + 1) : sub;
-    return ensureUser(providerId, provider);
+    const { provider, providerId } = splitSub(sub);
+    const row = await findUserRow(providerId, provider);
+    if (row && !row.deletedAt) return row.id;
+    // 유효 토큰이지만 라이브 행 없음(탈퇴/미생성) → 옛 sub로 부활시키지 않고 익명 폴백
   }
   return ensureUser('dev-user-1', 'dev'); // 익명(비로그인)
 }
 
-/** 요청의 **유효한 Bearer**가 있을 때만 userId, 없으면 null(→401). 익명 폴백 금지(§13.17 P0-5).
- *  티켓·환불·스냅샷·지갑 등 "특정 사용자에 귀속돼야 하는" 라우트용 — 비로그인이 dev-user-1 한 버킷에 붕괴되는 것 차단. */
+/** 요청의 **유효한 Bearer + 라이브(비탈퇴) 유저**일 때만 userId, 없으면 null(→401). 익명 폴백 금지(§13.17 P0-5).
+ *  티켓·환불·스냅샷·지갑·계정 등 "특정 사용자에 귀속돼야 하는" 라우트용 — 비로그인이 dev-user-1 한 버킷에 붕괴되는 것 차단.
+ *  **생성 안 함**: login이 이미 행을 만들고 토큰을 발급하므로 유효 토큰=행 존재. 탈퇴로 행이 토움스톤화되면 매칭 실패 → 401(AUTH §7.2). */
 export async function requireUserId(req: Request): Promise<string | null> {
-  const auth = req.headers.get('authorization');
-  const token = auth?.startsWith('Bearer ') ? auth.slice(7) : null;
-  const sub = token ? verifyToken(token) : null;
+  const sub = subFromRequest(req);
   if (!sub) return null;
-  const idx = sub.indexOf(':');
-  const provider = idx >= 0 ? sub.slice(0, idx) : 'dev';
-  const providerId = idx >= 0 ? sub.slice(idx + 1) : sub;
-  return ensureUser(providerId, provider);
+  const { provider, providerId } = splitSub(sub);
+  const row = await findUserRow(providerId, provider);
+  return row && !row.deletedAt ? row.id : null;
 }

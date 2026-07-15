@@ -2,7 +2,7 @@
 // 불변식: balance == sum(ledger.delta) 항상. 절대 음수 안 됨(spend는 balance 게이트).
 // 동시성(H2): 서로 다른 동시 spend 2건이 각자 잔액 읽고 통과하는 초과지출을 막으려면 멱등키만으론 부족 —
 //   트랜잭션 안에서 users 행을 FOR UPDATE로 잠가 직렬화한다. 멱등키는 "같은 키 재시도"를 dedupe.
-import { and, eq, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { users, walletLedger, projInfo } from '../db/schema';
 import { PROJ_CODE } from './proj';
@@ -160,4 +160,44 @@ export async function ensureUser(providerId: string, provider = 'dev', displayNa
 /** 개발용 고정 유저 보장(익명 폴백 — Bearer 없을 때). provider=dev. */
 export async function ensureDevUser(providerId = 'dev-user-1'): Promise<string> {
   return ensureUser(providerId, 'dev');
+}
+
+/** (proj, provider, providerId) 라이브 조회 — **생성 안 함**. 없으면 null. deletedAt은 호출부가 판정(AUTH §7.2·§8.1).
+ *  requireUserId/resolveUserId(토큰→라이브 유저)·login(신규 여부 판정)·계정삭제(멱등)에서 공용. */
+export async function findUserRow(providerId: string, provider = 'dev'): Promise<{ id: string; deletedAt: Date | null } | null> {
+  const rows = await db
+    .select({ id: users.id, deletedAt: users.deletedAt })
+    .from(users)
+    .where(and(eq(users.projCode, PROJ_CODE), eq(users.provider, provider), eq(users.providerId, providerId)))
+    .limit(1);
+  return rows.length ? rows[0] : null;
+}
+
+/** 신규 소셜 유저 생성 — 연령 확인(ageConfirmedAt) 기록(AUTH §8). login 라우트 전용(연령 게이트 통과 후).
+ *  ensureUser(저수준 upsert)와 분리: 게이트가 걸린 "진짜 가입"만 이 경로로 ageConfirmedAt을 박는다. */
+export async function createUser(providerId: string, provider: string, ageConfirmedAt: Date, displayName?: string): Promise<string> {
+  await ensureProj(); // FK 부모 보장
+  const inserted = await db
+    .insert(users)
+    .values({ projCode: PROJ_CODE, provider, providerId, displayName, ageConfirmedAt })
+    .returning({ id: users.id });
+  return inserted[0].id;
+}
+
+/** 탈퇴 — 가명처리 소프트삭제(AUTH §7.1). providerId 비복원 파기(재로그인 매칭 불가+UNIQUE 슬롯 해제)·비필수 PII null·
+ *  deletedAt 마킹. **잔액·원장은 보존**(법정 5년). 멱등: 이미 삭제면 false, 이번에 삭제하면 true. */
+export async function pseudonymizeUser(userId: string): Promise<boolean> {
+  const res = await db
+    .update(users)
+    .set({
+      deletedAt: sql`now()`,
+      providerId: `deleted:${userId}`, // 토움스톤 — 원본 sub 비복원 파기(재로그인=새 계정)
+      displayName: null,
+      platform: null,
+      osVersion: null,
+      appVersion: null,
+    })
+    .where(and(eq(users.id, userId), isNull(users.deletedAt))) // 멱등 — 이미 삭제된 행은 재처리 안 함
+    .returning({ id: users.id });
+  return res.length > 0;
 }

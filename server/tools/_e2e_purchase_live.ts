@@ -38,7 +38,7 @@ const webhook = (event: any, auth: string | null) => jpost(WH, { event }, auth ?
     if (h.s !== 200) throw new Error('서버(:3000) 미기동 — dev 서버 먼저 띄울 것');
 
     console.log('\n=== ① dev 로그인 → userId(=RC app_user_id) ===');
-    const login = await jpost('/api/auth/login', { provider: 'dev', providerId: `_e2e_purchase_${Date.now()}` });
+    const login = await jpost('/api/auth/login', { provider: 'dev', providerId: `_e2e_purchase_${Date.now()}`, ageConfirmed: true }); // 신규 생성이라 연령 확인 필요(AUTH §8)
     ok(login.s === 200 && login.j.token && login.j.userId, `dev 로그인 → userId=${login.j.userId}`);
     uid = login.j.userId; token = login.j.token;
     grantEv.app_user_id = uid;

@@ -64,3 +64,94 @@
 - ⏳ EAS 실물(구글/애플 SDK·SecureStore·ID토큰 JWKS 검증) — EAS 빌드 단계. 실기기 렌더/터치 확인은 emulator-test.
 
 > 관련: 결제·지갑은 [BACKEND_SYSTEM] §13, 다이아 SKU·상점은 [MONETIZATION_SYSTEM] §4, 오프라인 우선 계약은 BACKEND §13.6.
+
+---
+
+## 7. 계정 삭제(탈퇴) — 가명처리 소프트삭제 (#119, 2026-07-15, 출시 필수)
+
+> **왜 필수**: 구글 플레이 데이터 삭제 정책(앱 안·밖에서 삭제 요청 가능) + 개인정보보호법 §22의2(동의 철회·삭제권).
+> **정본 스펙 앵커**: `data/legalText.ts` PRIVACY 3·4·8조 + BACKEND_SYSTEM §13.9(법정 5년 보존·소프트삭제). 이 절은 그 방침의
+> 서술 동작("즉시 접근 차단→비필수 우선 파기→법정 보존분 만료 후 파기")을 **코드 스펙**으로 확정한다.
+
+### 7.1 결정 — 하드삭제가 아니라 **가명처리(pseudonymize)**
+결제·재화 원장(`wallet_ledger` reason=purchase/refund)은 전자상거래법상 **5년 법정 보존**이라 행 삭제 불가(BACKEND §13.9).
+그래서 탈퇴는 계정 행을 지우지 않고 **개인 식별성을 비복원 파기**한다 — 원장은 내부 `userId`(uuid, 그 자체로는 비식별)만
+남아 **가명화**된다.
+
+탈퇴 시 `users` 행 처리(멱등):
+1. `deletedAt = now()` — 소프트삭제 마킹(이미 스키마에 존재).
+2. **소셜 식별자 비복원 파기**: `providerId`(구글/애플 sub — 실명 확인 매칭 키)를 `deleted:<row-uuid>` 토움스톤으로 덮어씀.
+   원본 sub는 사라져 **재로그인 매칭 불가**(=탈퇴 효력) + `(proj, provider, providerId)` UNIQUE 슬롯이 비어 **재가입이 새 행으로**.
+3. **비필수 개인정보 즉시 파기**: `displayName=null`, 진단 기기정보(`platform/osVersion/appVersion`)=null.
+4. **잔액·원장은 보존**(`balance`·`wallet_ledger` 유지 — 법정 5년·수입 무결). 내부 userId로만 가명 존속.
+
+### 7.2 세션 무효 — 탈퇴 계정 토큰 거부
+`verifyToken`(순수 crypto, DB 없음)은 그대로. **DB 라이브니스 게이트는 미들웨어 층**(`resolveUserId`/`requireUserId`)에 둔다:
+- `requireUserId`: 토큰 sub → `(provider, providerId)` **라이브 조회**(생성 안 함). 행이 없거나 `deletedAt`이면 `null` → 라우트 401.
+  탈퇴로 providerId가 토움스톤이 되면 옛 토큰의 sub는 **어떤 라이브 행에도 안 맞아** 지갑·문의 등 후속 호출이 401.
+- `resolveUserId`(익명 폴백 허용 라우트): 라이브 조회 실패 시 옛 sub로 **유령 계정을 되살리지 않고** 익명 dev로 폴백.
+
+### 7.3 재가입 = 새 계정
+같은 소셜로 재로그인하면 구글/애플 sub는 동일하지만, 옛 행의 providerId가 토움스톤이라 **매칭되는 라이브 행이 없어
+새 행 생성**(새 userId). **유상 다이아·세이브 연동은 소멸**(옛 userId 원장과 단절). → 앱 확인 단계에서 **잔액 표시 + 경고**
+("환불이 필요하면 탈퇴 전 문의")를 반드시 노출.
+
+> **엣지(재가입 후 옛 토큰 재활성, 가드 검증)**: 세션 토큰 sub는 `provider:providerId`라, 재가입으로 같은 providerId가
+> 새 라이브 행으로 부활하면 **탈퇴 전 발급된 옛 토큰이 새 계정을 가리키게 된다**(같은 소셜=같은 기기 사용자 본인이라
+> 보안 문제 아님). 그래서 "탈퇴 토큰 거부(§7.2)"·"이중 탈퇴 멱등(§7.4)"은 **재가입 이전** 시점의 계약이다 —
+> `_dv_account_live` 가드도 멱등(④)을 재로그인(②) **이전에** 검증한다.
+
+### 7.4 API — `DELETE /api/account`
+- **Bearer 필수(본인만)**. 라우트가 직접 sub를 검증: 토큰 없음/위조/만료(`verifyToken` null) → **401**.
+- 멱등: 유효 서명이지만 라이브 행 없음(이미 토움스톤) 또는 이미 `deletedAt` → **200(동일 응답, alreadyDeleted)**.
+  → "탈퇴 후 옛 토큰 후속 호출 401"(§7.2, 지갑 등)과 "이중 탈퇴 200"(계정 라우트 자기 자신)은 모순 아님:
+  전자는 라이브 조회 실패=거부, 후자는 계정 라우트가 "유효서명+행없음=이미 탈퇴"로 해석해 200.
+- `reportError` 관측, 레이트리밋은 기존 미들웨어 계열(필요 시). 응답 후 클라가 로컬 세션 정리.
+
+### 7.5 파기 크론과의 관계 (실태 — 범위 밖)
+BACKEND §13.10 `purgeExpired`(`server/lib/retention.ts`)는 `wallet_ledger`(비결제 2년)·`diagnostic_snapshots`(90일)·
+`tickets`(3년)만 경과분 파기하고 **`users` 행은 건드리지 않는다**. 본 설계는 탈퇴 **시점에** 즉시 가명화(providerId 파기·
+displayName null)하므로 `users` 행에 **잔존 PII가 없어** 후속 크론 파기가 불필요하다(행은 5년 원장 FK 앵커로 존속).
+완전한 행 하드삭제(원장 만료 후)를 원하면 크론에 `users where deletedAt < now()-1825d` 티어를 추가하는 **별도 작업** — 이번 범위 아님.
+
+### 7.6 앱 진입점
+`app/settings.tsx` 데이터 섹션의 "세이브 초기화" 인근에 **"계정 삭제"**(위험 톤). `showAlert` **2단 확인**:
+1차(잔액·소멸 경고 — 유상 다이아/세이브 연동 소멸, 환불은 탈퇴 전 문의), 2차(최종 확인, destructive).
+성공 시 `useAuthStore.deleteAccount()` → 서버 확정 후 `signOut()`(세션 clear) → BootGate가 로그인 벽으로 복귀.
+로컬 게임 세이브는 로그아웃 관례대로 유지(기기 로컬·비PII·결정론 — 재로그인 시 새 서버 계정과 무관하게 존속).
+> ※로그아웃 버튼 자체는 `app/(tabs)/mypage.tsx` 최하단(§4). 계정 삭제는 파괴적 프런트 작업이라 설정(데이터)에 배치.
+
+---
+
+## 8. 연령 게이트 — 만 14세 (#110, 2026-07-15, 출시 필수)
+
+> **왜 필수**: 개인정보보호법상 만 14세 미만 아동은 법정대리인 동의가 필요 — 본 서비스는 수집 자체를 제한한다.
+> **스펙 앵커**: `data/legalText.ts` PRIVACY 4조("가입 시 연령 확인 절차로 만 14세 미만 가입 제한").
+
+### 8.1 결정 — **신규 생성만** 게이트
+- **로그인 벽**(`components/LoginScreen.tsx`)에서 "만 14세 이상입니다" **체크박스**로 로그인 버튼을 게이팅(미확인 시 진행 차단·안내).
+  구글/애플/dev 버튼 공통 — 최초 가입 경로의 확인.
+- 서버 `POST /api/auth/login`에 `ageConfirmed: boolean` 전달. **행을 새로 생성할 때만** `ageConfirmed===true` 요구 —
+  없거나 false면 **400(age-required)**. 생성 성공 시 `users.ageConfirmedAt = now()` 기록.
+- **기존 계정(라이브 행 존재)은 소급 강제하지 않음** — 다음 로그인에서 `ageConfirmed` 없이도 통과(신규 생성만 게이트).
+  **근거**: 이미 가입한 사용자에게 재확인을 서버에서 강제하면 캐시 세션·기존 유저에 불필요한 마찰. 게이트의 목적은
+  "미성년 신규 유입 차단"이므로 생성 시점 1회로 충분하고, 확인 사실(`ageConfirmedAt`)은 그 행에 영구 기록된다.
+- **Expo Go dev 경로**: dev 버튼도 체크박스 게이트를 거쳐 `ageConfirmed=true`를 보내 통과. dev-local 합성 세션(서버 미연결
+  폴백, token='')은 서버 계정 생성이 없어 게이트 무관.
+
+### 8.2 스키마
+`users.ageConfirmedAt timestamptz`(nullable, additive). null=미확인(익명 폴백/구버전/게스트 생성). 신규 소셜 가입은 non-null.
+
+### 8.3 미확정/드리프트 메모
+- `ensureUser`(저수준 upsert·익명 폴백·가드용)는 `ageConfirmedAt`을 세팅하지 않는다 — 연령 게이트는 **login 라우트 층**에서만
+  강제(진짜 소셜 가입 경로). 익명 dev-user·가드 생성 유저는 `ageConfirmedAt=null`이어도 무방(실사용자 아님).
+
+---
+
+## 9. 구현 현황 (계정삭제·연령 — #119·#110, 2026-07-15)
+
+- 📋 문서(§7·§8) 확정 → 스키마(`ageConfirmedAt` additive)·마이그레이션(`0001` 멱등 ADD COLUMN)·`lib/auth.ts` 라이브니스 게이트·
+  `lib/wallet.ts`(`findUserRow`/`createUser`)·`login` 라우트(연령 게이트)·`DELETE /api/account`(가명화·멱등)·정적 삭제 안내
+  `server/app/delete-account/page.tsx`·상설 가드 `server/tools/_dv_account_live.ts`·클라(`LoginScreen` 체크박스·`settings` 계정삭제·
+  `useAuthStore.deleteAccount`·`lib/server.deleteAccount`) 구현.
+- 검증: app tsc 0 · server tsc 0 · npm test · copylint · 라이브 가드(임시 Postgres) — 6항목(토큰거부·sub파기·원장보존·멱등·무토큰401·연령400/200) + A/B.

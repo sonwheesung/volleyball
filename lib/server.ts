@@ -74,11 +74,18 @@ async function call<T>(path: string, init?: RequestInit, timeoutMs: number = REQ
 // ── 인증(AUTH_SYSTEM) ──
 /** 신원 → 자체 Bearer 세션. google=idToken(서버가 검증해 sub 도출) · dev=providerId(기기ID). 개인정보 최소화(이메일·이름 미전송).
  *  성공 시 setServerToken은 호출부(useAuthStore)가. */
-export function login(provider: string, cred: { providerId?: string; idToken?: string }, device?: DeviceInfo) {
+export function login(provider: string, cred: { providerId?: string; idToken?: string }, device?: DeviceInfo, ageConfirmed?: boolean) {
+  // ageConfirmed(만14세): 신규 소셜 가입 시 서버가 필수로 요구(AUTH §8). 기존 계정은 무시(소급 강제 없음).
   return call<{ token: string; userId: string; provider: string; displayName: string | null }>('/api/auth/login', {
     method: 'POST',
-    body: JSON.stringify({ provider, providerId: cred.providerId, idToken: cred.idToken, device }),
+    body: JSON.stringify({ provider, providerId: cred.providerId, idToken: cred.idToken, ageConfirmed, device }),
   });
+}
+
+// ── 계정 삭제(탈퇴, AUTH §7) ──
+/** 계정 삭제 — 서버가 가명처리 소프트삭제. Bearer 필수·멱등(이미 탈퇴면 alreadyDeleted). 성공 후 클라가 로컬 세션 정리. */
+export function deleteAccount() {
+  return call<{ alreadyDeleted?: boolean }>('/api/account', { method: 'DELETE' });
 }
 
 // ── 부팅 게이트(점검·버전·공지) ──
