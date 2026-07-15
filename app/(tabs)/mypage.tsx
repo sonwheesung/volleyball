@@ -261,7 +261,8 @@ export default function MyPage() {
       {/* ── 계정 · 로그아웃 (최하단) ── */}
       {session ? (
         <View style={{ marginTop: 18, gap: 8 }}>
-          <Muted style={{ fontSize: 12, textAlign: 'center' }}>{accountLabel}(으)로 로그인됨</Muted>
+          {/* 조사 병기 "(으)로" 회피(에뮬 E2E 발견 2026-07-15 — "개발자(로컬)(으)로" 이중 괄호 어색): 받침 고정 명사 "계정"에 조사를 붙인다 */}
+          <Muted style={{ fontSize: 12, textAlign: 'center' }}>{accountLabel} 계정으로 로그인됨</Muted>
           <Pressable onPress={confirmLogout} style={({ pressed }) => [styles.logoutBtn, pressed && { opacity: 0.7 }]}>
             <Ionicons name="log-out-outline" size={18} color={theme.bad} />
             <Text style={styles.logoutTxt}>로그아웃</Text>
