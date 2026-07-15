@@ -2,7 +2,7 @@
 // 매치데이 순서로: (a) 플레이어 거래 적용 (b) 레그 경계 AI 영입 (c) 그날 라인업으로 부상 판정.
 // 경기 결과 무의존 → simMatch와 무순환. 과거 경기는 그때 명단으로 고정(리플레이 안전).
 
-import type { Player, Position, Contract } from '../types';
+import type { Player, Position, Contract, Side } from '../types';
 import { createRng, strSeed } from '../engine/rng';
 import { injuryRisk, rollSeverity, CONCURRENT_CAP, type Severity } from '../engine/injury';
 import { buildLineup } from '../engine/lineup';
@@ -65,6 +65,34 @@ export function setInterventionContext(iv: Record<string, MatchIntervention[]>, 
 /** fixtureId의 개입 로그(순수 조회, 재시뮬 결정론) — 없으면 []. 모든 sim 호출부가 이걸로 로그를 싣는다(§2.2). */
 export function interventionsFor(fixtureId: string): MatchIntervention[] {
   return interventions[fixtureId] ?? [];
+}
+
+// ── 경기 지휘 설정(MATCH_INTERVENTION_SYSTEM §4.1) — "감독 자동(기본)/구단주 직접" 토글의 forward-only 체인지로그.
+//   setOwnerContext/interventions와 동형: (day, manual) 변경 이력만 주입받고(스토어·설정 UI·세이브 영속은 메인),
+//   그 경기 날짜(dayIndex) 시점의 설정값을 재생해 내 팀 경기의 manualSide를 파생. 로그가 비면 항상 감독 자동(=undefined
+//   → 엔진 바이트 동일). save-stable 결정론 플래그라 관전 여부와 무관(§3 함정1 무관 — 근거 §4.1). ──
+export interface CoachModeChange { day: number; manual: boolean } // manual=true → 구단주 직접(감독 자동 끔)
+let coachModeLog: CoachModeChange[] = [];
+// minAffectedDay(§4.1 forward-only): 설정 변경일 = 그 시점 currentDay(토글은 이후 경기부터). 기본 0=전체 재계산(로드/리셋 등).
+export function setCoachModeLog(log: CoachModeChange[], minAffectedDay = 0): void {
+  coachModeLog = [...log].sort((a, b) => a.day - b.day); txVersion++; // 파생 캐시(순위·생산·dyn) 일괄 무효화 — setOwnerContext 동형
+  recordBump(minAffectedDay);
+}
+export function getCoachModeLog(): CoachModeChange[] { return [...coachModeLog]; }
+/** day 시점 유효 설정 — 그 날짜 이하 마지막 변경값(없으면 false=감독 자동 기본). forward-only. */
+function coachManualAt(day: number): boolean {
+  let manual = false;
+  for (const c of coachModeLog) { if (c.day <= day) manual = c.manual; else break; }
+  return manual;
+}
+/** 이 경기(homeId vs awayId, dayIndex)에서 완전 수동인 내 팀 사이드 — 아니면 undefined.
+ *  "내 팀 경기 × 그 날짜 시점 '구단주 직접' 설정"일 때만 사이드 반환. 정규시즌 sim 호출부가 opts.manualSide로 주입(§4.1).
+ *  로그 비면 항상 undefined = 현행 바이트 동일(새 기본 = 감독 자동). 플옵 경로는 호출 안 함(개입 보류 §1). */
+export function manualSideFor(homeId: string, awayId: string, dayIndex: number): Side | undefined {
+  if (!myTeamId || !coachManualAt(dayIndex)) return undefined;
+  if (homeId === myTeamId) return 'home';
+  if (awayId === myTeamId) return 'away';
+  return undefined;
 }
 
 // 종결일(toDay) 인지(A3, 2026-07-08) — 철회된 지시는 삭제 대신 toDay가 박혀 [fromDay, toDay] 구간에만 유효.

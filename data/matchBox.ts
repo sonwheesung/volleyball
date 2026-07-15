@@ -1,5 +1,6 @@
 import { coachInfoOf } from './league';
 import { availableTeamPlayers } from './injury';
+import { manualSideFor } from './dynamics';
 import { restedOnDay } from './rotation';
 import { simulateMatch } from '../engine/match';
 import type { BoxSink } from '../engine/rally';
@@ -20,6 +21,8 @@ export interface MatchBox {
 
 // interventions(§2.2): fixtureId를 아는 호출부(관전 보드·상세)는 interventionsFor(id)를 넘긴다. 모르는 호출부(샌드박스·도구)는
 // 기본 [] → 바이트 동일. buildPlayoffBox(data/postseason)는 이 함수를 안 쓴다(별 경로 — 2단계 범위 밖).
+// manualSide(§4.1): homeId/awayId/dayIndex로 내부 파생(standings·production 호출부와 동일 소스 = 정합) — 내 팀 정규시즌 경기 +
+//   그날 "구단주 직접" 설정일 때만 사이드 반환. 샌드박스·도구는 myTeamId 미설정/설정로그 빈값이라 undefined = 미주입(바이트 동일).
 export function buildMatchBox(homeId: string, awayId: string, dayIndex: number, seed: number, interventions: MatchIntervention[] = []): MatchBox {
   const homeRest = restedOnDay(homeId, dayIndex);
   const awayRest = restedOnDay(awayId, dayIndex);
@@ -30,6 +33,7 @@ export function buildMatchBox(homeId: string, awayId: string, dayIndex: number, 
   const sim = simulateMatch(seed, homeSquad, awaySquad, {
     home: coachInfoOf(homeId), away: coachInfoOf(awayId), box, boxTimeline, touches: true, // touches: 보드가 디그 마커를 박스 귀속자로 재생(2b)
     interventions,
+    manualSide: manualSideFor(homeId, awayId, dayIndex), // 완전 수동 사이드(§4.1) — 정규시즌 내 팀+구단주 직접 설정만, 그 외 undefined = 바이트 동일
   });
   return { homeSquad, awaySquad, sim, box, boxTimeline };
 }

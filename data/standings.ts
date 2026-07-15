@@ -5,7 +5,7 @@
 import type { Fixture, MatchResult } from '../types';
 import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, getFixture, LEAGUE, SEASON } from './league';
 import { availableTeamPlayers } from './injury';
-import { currentTxVersion, interventionsFor } from './dynamics';
+import { currentTxVersion, interventionsFor, manualSideFor } from './dynamics';
 import { simulateMatch } from '../engine/match';
 import { pickRest } from '../engine/lineup';
 import { clinchStatus } from '../engine/clinch';
@@ -117,6 +117,7 @@ function allResults(uptoDay?: number): ResultRow[] {
       const sim = simulateMatch(f.seed, squad[f.homeTeamId], squad[f.awayTeamId], {
         home: coachInfoOf(f.homeTeamId, f.dayIndex), away: coachInfoOf(f.awayTeamId, f.dayIndex), // 축3: 그날의 감독(부임 이전 경기는 이전 감독)
         interventions: interventionsFor(f.id), // 개입 로그 주입(MATCH_INTERVENTION §2.2) — 비면 [] = 바이트 동일
+        manualSide: manualSideFor(f.homeTeamId, f.awayTeamId, f.dayIndex), // 완전 수동 사이드(§4.1) — 로그 비면 undefined = 바이트 동일
       });
       rows.push({
         fixtureId: f.id,

@@ -17,7 +17,7 @@ import { rotate, serverIndex, frontRow, backRow } from './rotation';
 // (dyn 재생을 바꾸는 시즌 계층 규칙 변경도 포함 — 캐시가 dyn을 함께 영속하므로, v3.)
 // REALTIME_SIM Phase2(G3): simCache는 이 버전을 태깅·게이트해, 엔진 재튜닝(앱 업데이트) 후 저장된 옛-엔진
 // 순위를 폐기하고 새 엔진으로 재계산한다 → 저장 순위 ↔ 과거경기 보드 재생 일관성 보장.
-export const ENGINE_VERSION = 8; // 8(2026-07-07): ① 피로 교체(1.3e) — 지친 주전(비세터·비접전, 체력<0.35)을 같은 포지션 벤치로 잠시 교체(합리 코치 게이트·히스테리시스·예산≥4, 결정론·rng 미소비) → six[] 변동 → 결과 변동. ② TTO 회복 재튜닝 TIMEOUT_REST(0.04)→TTO_REST(0.03, 테크니컬 타임아웃만 — 스윕으로 0.03만이 체력밴드·피로교체밴드 둘 다 통과) — TTO 세트당 2회 자동 발화로 회복 과다(피로 곡선 붕괴) 교정 → 체력·경기 결과 변동. 둘 다 저장 캐시 무효화. 7(2026-07-07): ① 포지션 폴트 받는 팀만 판정(FIVB 2025-2028 7.4·KOVO 25-26, rally.ts) — rng 소비 2→1회/서브 → 랠리 스트림 이동 → 결과 변동. ② KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식 — recover+기세수렴, rng 미소비) → 체력·기세 변동 → 경기 결과 변동. 둘 다 저장 캐시 무효화. 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
+export const ENGINE_VERSION = 9; // 9(2026-07-15): ① manualSide(내 팀 정규시즌 "구단주 직접" 설정) — 지정 사이드는 감독 자동 타임아웃·작전 4종 결정 스킵(복원·TTO·부상·세트말원복 유지) → 그 사이드 결과 변동(미지정=바이트 동일). ② F2 FIVB 15.6.1 — subIn이 IN 후보의 usedStarterOut(이미 아웃된 선발) 신분 거부(나간 선발 타슬롯 재진입 차단) → 드문 경우 six[] 변동. 둘 다 저장 캐시 무효화. 8(2026-07-07): ① 피로 교체(1.3e) — 지친 주전(비세터·비접전, 체력<0.35)을 같은 포지션 벤치로 잠시 교체(합리 코치 게이트·히스테리시스·예산≥4, 결정론·rng 미소비) → six[] 변동 → 결과 변동. ② TTO 회복 재튜닝 TIMEOUT_REST(0.04)→TTO_REST(0.03, 테크니컬 타임아웃만 — 스윕으로 0.03만이 체력밴드·피로교체밴드 둘 다 통과) — TTO 세트당 2회 자동 발화로 회복 과다(피로 곡선 붕괴) 교정 → 체력·경기 결과 변동. 둘 다 저장 캐시 무효화. 7(2026-07-07): ① 포지션 폴트 받는 팀만 판정(FIVB 2025-2028 7.4·KOVO 25-26, rally.ts) — rng 소비 2→1회/서브 → 랠리 스트림 이동 → 결과 변동. ② KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식 — recover+기세수렴, rng 미소비) → 체력·기세 변동 → 경기 결과 변동. 둘 다 저장 캐시 무효화. 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
 // 4(2026-07-06): 서브 에이스 개인기장 공식화 — 리시브범실 실점을 서버 box.srvAce에도 기장(FIVB indirect ace) → production aces/points·서브왕·skServe XP 변동 → 저장 캐시 무효화. 유형 분포·밸런스·서브 확률·승패 불변(box는 메인 rng 무관)
 // 3(2026-07-02): AI 자기방출 재영입 금지(TRANSACTION 0장 ⑥) — dyn(시즌 중 거래) 재생 변동 → 저장 캐시 무효화
 // 2(2026-06-28): 체력 튜닝(회복 0.009→0.005·세트사이 0.12→0.035) — 경기 결과 변동 → 저장 캐시 무효화
@@ -75,6 +75,10 @@ export interface MatchOpts {
   stamProbe?: (setNo: number, stam: Record<Side, Map<string, number>>, courtIds: Record<Side, string[]>) => void;
   // 플레이어 개입 로그(비면 완전 무동작=바이트 동일). 루프 최상단에서 좌표 매칭 적용. MATCH_INTERVENTION_SYSTEM.
   interventions?: MatchIntervention[];
+  // 완전 수동 사이드(내 팀 정규시즌 "구단주 직접" 설정 파생) — 이 사이드는 감독 자동 타임아웃(연속실점 임계)·자동 작전교체
+  //   4종(rest/pinch/block/def) **결정**을 내리지 않는다(구단주 완전 수동). TTO(리그 자동)·부상 교체·복원 루프·세트말
+  //   원복·개입 적용(§3)은 그대로 유지. 미지정(undefined)이면 스킵 판정이 전부 거짓 → 바이트 동일. MATCH_INTERVENTION_SYSTEM §4.1.
+  manualSide?: Side;
 }
 
 const DEFAULT_COACH: CoachInfo = { style: 'balanced', charisma: 50 };
@@ -244,6 +248,7 @@ export function simulateMatch(
       if (st.six.some((p) => p.id === player.id)) return;
       if (st.injured.has(player.id)) return; // 부상 선수는 어떤 교체로도 코트 복귀 불가(1.3d) — benchSpecialists가 경기 시작 고정이라 이중부상 벤치교체 선수를 재투입하던 잠복버그 차단(subIn·injuryReplaced 이중 차단)
       if (usedSubIn[side].has(player.id)) return; // FIVB: 교체선수는 세트당 1회만 진입(재진입 금지)
+      if (usedStarterOut[side].has(player.id)) return; // FIVB 15.6.1(F2, 2026-07-15): 이번 세트 이미 아웃된 선발은 subIn으로 재진입 불가 — 합법 복귀는 subOut(자기 슬롯·자기 교체선수와의 교대) 복원 경로뿐. 나간 선발을 타슬롯 IN으로 넣는 시도(rest 스캔·유저 개입) 차단. EC-SUB-02.
       const outP = st.six[slot];
       if (usedStarterOut[side].has(outP.id)) return; // FIVB: 선발은 세트당 1왕복만(돌아온 선발 재이탈 금지)
       usedSubIn[side].add(player.id);
@@ -335,6 +340,7 @@ export function simulateMatch(
         return st.injured.has(p.id) ? s * 0.5 : s;
       };
       for (const side of ['home', 'away'] as Side[]) {
+        if (side === opts.manualSide) continue; // 완전 수동 사이드 — 감독 자동 피로 교체 결정 안 함(§4.1)
         if (!policyOf(side).restSub) continue;
         if (subBudget[side] < REST_MIN_BUDGET) continue; // 핀치 예산 보존(≥4)
         if (crunch) continue;                            // 접전 종반엔 지친 에이스도 코트에 둔다(관전 신뢰성)
@@ -371,7 +377,7 @@ export function simulateMatch(
       {
         const sv = serving; const st = teamOf(sv); const slot = serverIndex(st.rotation);
         // 세터는 핀치 서버로 빼지 않는다(코트에 세터 유지 → 공격 운영 보존). 현실 코치 행동.
-        if (policyOf(sv).pinchServer && bench[sv].server && !activeSubs[sv].has(slot)
+        if (sv !== opts.manualSide && policyOf(sv).pinchServer && bench[sv].server && !activeSubs[sv].has(slot)
           && st.six[slot].position !== 'S'
           && R(bench[sv].server!).serve - R(st.six[slot]).serve >= PINCH_SERVE_GAP) {
           subIn(sv, slot, bench[sv].server, 'pinch');
@@ -379,6 +385,7 @@ export function simulateMatch(
       }
       // 2b) 블로킹 강화 — 막판 접전, 전위 약한 블로커 (crunch는 위에서 산출)
       if (crunch) for (const side of ['home', 'away'] as Side[]) {
+        if (side === opts.manualSide) continue; // 완전 수동 사이드 — 감독 자동 블로킹 강화 결정 안 함(§4.1)
         const st = teamOf(side);
         if (!policyOf(side).blockSub || !bench[side].blocker) continue;
         let weakSlot = -1, weakBlk = Infinity;
@@ -388,7 +395,7 @@ export function simulateMatch(
       // 2c) 수비 강화 — 받는 측 후위 약한 리시버(MB 제외, MB는 리베로가 커버)
       {
         const rs = other(serving); const st = teamOf(rs);
-        if (policyOf(rs).defSub && bench[rs].defender) {
+        if (rs !== opts.manualSide && policyOf(rs).defSub && bench[rs].defender) { // 완전 수동 사이드 제외(§4.1)
           let weakSlot = -1, weakRcv = Infinity;
           for (const slot of backRow(st.rotation)) { const p = st.six[slot]; if (p.position === 'MB' || p.position === 'S') continue; const rc = R(p).receive; if (rc < weakRcv) { weakRcv = rc; weakSlot = slot; } }
           if (weakSlot >= 0 && R(bench[rs].defender!).receive - weakRcv >= DEF_SUB_GAP) subIn(rs, weakSlot, bench[rs].defender, 'def');
@@ -461,7 +468,8 @@ export function simulateMatch(
         const minStam = courtPs.reduce((sm, p) => Math.min(sm, stamMap.get(p.id) ?? 1), 1);
         const tired = minStam < TIRED_STAM; // 주포가 퍼졌다 — 평균은 세터·리베로가 가려서 못 본다
         const th = Math.max(2, TO_THRESHOLD[lt.style] - (tired ? 1 : 0));
-        if (!isSetOver(h, a, setNo) && streak >= th && timeouts[loserSide] > 0) {
+        // 완전 수동 사이드(§4.1)는 감독 자동 타임아웃을 부르지 않는다 — 세트당 2회는 구단주 개입 몫(개입 블록은 별도 유지).
+        if (!isSetOver(h, a, setNo) && streak >= th && timeouts[loserSide] > 0 && loserSide !== opts.manualSide) {
           timeouts[loserSide]--;
           // 보드 연출 로그(순수 가산) — 회복·기세 수렴 전 스냅샷(지친 코트가 타임아웃을 부른 이유)
           const courtStam = (st: typeof home, m: Map<string, number>): TimeoutCourtStam[] =>

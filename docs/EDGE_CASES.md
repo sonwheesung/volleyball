@@ -190,6 +190,14 @@
 |---|---|---|---|
 | EC-RM-01 | **오프시즌 신인 충원이 정원 초과 → 19명**. 시즌 중 FA 영입으로 명단이 차오른 팀이 은퇴 구멍을 메울 때(순수 endSeason은 정상=대조군, churn 시 시즌5에 발생) | `fillRosters`가 포지션별 `ROSTER_IDEAL`까지 채우는데 **전역 정원 상한 없음** → `if(ids.length>=ROSTER_MAX)break` (`data/rookies.ts:38`, 2026-06-20) | _gt_repro_oversize·_gt_monkey(clean)·audit `roster` |
 
+### 경기 엔진·교체(FIVB)
+| ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
+|---|---|---|---|
+| EC-SUB-01 | **같은 벤치 스페셜리스트가 세트당 무한 핑퐁 투입**(재진입/재이탈) — 예산(6) 남는 한 in-out-in 반복 | `subIn`/`subOut`이 세트당 횟수만 세고 FIVB "교체선수 세트당 1회 진입·선발 1왕복" 미구현 → `usedSubIn`(교체선수 id)·`usedStarterOut`(outP 선발 id) 세트 단위 Set 게이트 (2026-07-01). 200경기 재진입 1316건 검출 | `checkSubs`(FIVB: 교체선수 세트당 1회 진입·선발 1왕복) |
+| EC-SUB-02 | **나간 선발이 같은 세트 다른 슬롯 IN으로 재진입**(FIVB 15.6.1 위반) — 개입 iv1이 선발 X를 뺀 뒤 iv2가 다른 선발 C 자리에 X를 IN 지정하면 적용됨. AI 자연발생 ~2,000경기 0건이나 피로 교체(rest, 전 로스터 스캔)는 이론상 노출·**유저 개입은 UI가 후보로 보여줘 실노출** | `subIn`이 IN 후보의 `usedStarterOut` 신분을 검사 안 함(EC-SUB-01은 outP=나가는 선발만 봄, 들어오는 X가 이미 아웃된 선발인지는 사각) → 나간 선발의 합법 복귀는 `subOut` 복원(자기 슬롯·자기 교체선수와의 교대)뿐 → `subIn`에 `if (usedStarterOut[side].has(player.id)) return;`(개입도 subIn 경유라 no-op 상속) (`engine/match.ts subIn`, 2026-07-15) | `checkSubs`(타슬롯 재진입 + 개입 주입 묶음 N≥200, A/B: 수정 전 FAIL 재현) |
+
+> EC-SUB-02 발견 방법(왜 EC-SUB-01 가드가 못 잡았나 — **도메인 규칙 '누가' 미검사**): 기존 `checkSubs` FIVB 검사는 세트·사이드·id별 **enter/exit 횟수**(`enterCnt`/`outCnt`)만 셌다. 나간 선발 X의 최초 아웃은 벤치 Y의 **enter 이벤트**(key=inId=Y)라 X를 "나간 선발"로 기록하지 않고, X의 재진입도 enter(key=inId=X, 카운트 1)라 ≤1 → 규칙검사가 **횟수만 세고 슬롯/신분 귀속을 안 봐** 통째 사각. 닫는 법: enter 이벤트의 **outId(=코트에서 빠진 선발) 집합**을 세트·사이드별로 모으고, 이후 enter의 **inId가 그 집합에 있으면** FAIL(슬롯 무관 — subIn 경유 재진입 자체가 위반). subOut 복원(enter:false)은 합법 복귀라 검사 제외.
+
 ### 화면·표시(UI)
 | ID | 증상 | 근본 원인 → 수정 | 잡는 도구 |
 |---|---|---|---|
