@@ -12,6 +12,7 @@ import { computeStandings } from '../data/standings';
 import { buildPlayoffs } from '../data/playoffs';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget';
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
@@ -105,7 +106,11 @@ function runUniverse(): UniStat {
     const ctx = buildDraftContext(MY, {}, {}, faSignings, false, [], s + 1, undefined, cash);
     const snapshot = ctx.snapshot;
     const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-    const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], MY, [], styleOf, teamScoutReveal);
+    // 프로덕션 우주 정합(#116/#117 ①, 2026-07-15): store endSeason과 동일하게 aiTargetOf(그 시즌 순위) 주입 —
+    //   미주입(기본=CAP 20)은 폐기된 "상한까지 지명" 우주라 로스터·페이롤이 부풀어 재정 측정이 어긋난다.
+    //   구 우주 A/B는 환경변수 FIN_OLD_UNIVERSE=1 로 재현(인공물 지분 분리용).
+    const targetOf = process.env.FIN_OLD_UNIVERSE ? undefined : aiTargetOf(standings);
+    const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], MY, [], styleOf, teamScoutReveal, undefined, targetOf);
     for (const p of drafted.picked) snapshot[p.id] = p;
     const filled = fillRosters(drafted.rosters, (id) => snapshot[id], s + 1);
     for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
