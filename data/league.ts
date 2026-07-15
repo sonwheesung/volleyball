@@ -336,6 +336,9 @@ function invalidateStaff(affectsTraining: boolean, minAffectedDay = 0): void {
 
 /** 감독 영입(시드 감독 대체). 예산 초과면 거부(false).
  *  hireDay(축3, 기본 0): 부임일. 0이면 소급(day0부터 = 구경로·도구 byte 불변), >0이면 forward-only(부임 이전 경기는 이전 감독). */
+/** 감독 계약(신규 영입·재계약) 연수 — UI 표시("N년 계약")와 엔진 배정이 같은 상수(UI_RULES UV-11). */
+export const STAFF_CONTRACT_YEARS = 3;
+
 export function hireHeadCoach(teamId: string, coachId: string, hireDay = 0): boolean {
   const c = coachMap.get(coachId);
   if (!c || (c.teamId !== null) || isCoachHired(coachId)) return false;
@@ -352,7 +355,7 @@ export function hireHeadCoach(teamId: string, coachId: string, hireDay = 0): boo
   else if (prev) { const pc = coachMap.get(prev); if (pc) { pc.teamId = null; pc.contractYears = undefined; } } // 기존 감독 FA로
   else { const seed = teamHeadCoach(teamId); if (seed && seed.id !== coachId) { seed.teamId = null; seed.contractYears = undefined; } } // 오버라이드 없던(시드 감독) 교체 — 떠나는 시드 감독을 FA로(teamId 고아 점유 방지)
   headCoachOverride[teamId] = coachId;
-  c.teamId = teamId; c.contractYears = 3; // 단일 진실 + 3년 계약
+  c.teamId = teamId; c.contractYears = STAFF_CONTRACT_YEARS; // 단일 진실 + 계약 연수
   invalidateStaff(true, hireDay); // 성향·훈련선호 바뀜 — 부임일 접미만(forward-only)
   return true;
 }
@@ -395,7 +398,7 @@ export function fireCoach(teamId: string): { acting: string | null } {
 export function resignTeamCoach(teamId: string): boolean {
   const c = teamHeadCoach(teamId);
   if (!c) return false;
-  c.contractYears = 3;
+  c.contractYears = STAFF_CONTRACT_YEARS;
   invalidateStaff(false); // 효과 불변(계약만)
   return true;
 }

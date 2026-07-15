@@ -18,10 +18,13 @@ export function compensationMoney(grade: FAGrade, salary: number): number {
   return Math.round((salary * mult) / 100) * 100;
 }
 
-/** '돈만' 보상(보상선수 면제) — 선수단 보호 대가로 더 큰 보상금. A 3.0× · B 2.0×.
- *  (보상선수 동반 A 2.0×/B 1.0×보다 1배 더. 캡 외 운영 자금에서만 지불 — 부자 구단의 레버) */
+/** '돈만' 보상(보상선수 면제) 배수 — 선수단 보호 대가로 더 큰 보상금. A 3.0× · B 2.0×.
+ *  (보상선수 동반 A 2.0×/B 1.0×보다 1배 더. 캡 외 운영 자금에서만 지불 — 부자 구단의 레버)
+ *  UI 표시(%)는 이 상수에서 파생(Math.round(x*100)) — 리터럴 하드코딩 금지(UI_RULES UV-11). */
+export const MONEY_ONLY_MULT: Record<'A' | 'B', number> = { A: 3.0, B: 2.0 };
+
 export function compensationMoneyOnly(grade: FAGrade, salary: number): number {
-  const mult = grade === 'A' ? 3.0 : grade === 'B' ? 2.0 : 0;
+  const mult = grade === 'A' ? MONEY_ONLY_MULT.A : grade === 'B' ? MONEY_ONLY_MULT.B : 0;
   return Math.round((salary * mult) / 100) * 100;
 }
 

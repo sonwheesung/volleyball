@@ -16,7 +16,7 @@ import { resolveFAPreviewFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
 import { projectSettledCash } from '../data/financeProjection';
 import { LEAGUE_CAP } from '../engine/cap';
-import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT } from '../engine/compensation';
+import { needsCompensationPlayer, pickCompensation, PROTECT_COUNT, MONEY_ONLY_MULT } from '../engine/compensation';
 import { assignFAGrades, askingPrice, DEFAULT_FA_OFFER, prefWeightsOf } from '../engine/faMarket';
 import { buildLineup } from '../engine/lineup';
 import { ALL_POSITIONS, overall, overallRaw, REVEAL_PRECISE } from '../engine/overall';
@@ -431,12 +431,12 @@ function FACenterInner() {
                     small
                     tone="good"
                     off={!moneyOnlyIds.includes(p.id)}
-                    label={moneyOnlyIds.includes(p.id) ? `✓ 돈만 보상 (${grade === 'A' ? '300' : '200'}%)` : '보상선수 보호 (돈만)'}
+                    label={moneyOnlyIds.includes(p.id) ? `✓ 돈만 보상 (${Math.round((grade === 'A' ? MONEY_ONLY_MULT.A : MONEY_ONLY_MULT.B) * 100)}%)` : '보상선수 보호 (돈만)'}
                     onPress={() => busy.run('협상 테이블을 차리는 중…', () => toggleMoneyOnly(p.id))}
                   />
                   {/* '돈만' 인라인 설명(§2.8.8 ② — §2.2~2.3·§253 '돈만'(선수단 보호) 용어 일치) */}
                   <Text style={styles.moneyOnlyHint}>
-                    비보호 선수 1명을 내주는 대신 보상금을 더 내고(A 300%·B 200%) 선수단을 지킵니다.
+                    비보호 선수 1명을 내주는 대신 보상금을 더 내고(A {Math.round(MONEY_ONLY_MULT.A * 100)}%·B {Math.round(MONEY_ONLY_MULT.B * 100)}%) 선수단을 지킵니다.
                   </Text>
                 </>
               ) : null}
@@ -453,7 +453,9 @@ function FACenterInner() {
                   talkBias: ownerFx.offerBias[p.id], bonds: bondsCtx,
                 });
                 const bounds = offerSalaryBounds(ask, p, myPayroll);
-                const curSalary = typeof draft.salary === 'number' ? draft.salary : ask; // 'auto' → 요구연봉 표시
+                // UV-4: 스테퍼 표시값을 실제 제시액(resolveMyOfferSalary — 'auto'+공격적이면 ask×1.2)으로 통일.
+                // 같은 화면 "현재 제안 요약"(:391)과 항상 일치. ± 스텝은 이 값 기준으로 명시 연봉을 설정(bounds 클램프 유지).
+                const curSalary = resolveMyOfferSalary(draft, ask);
                 const maxYears = capContractYears(p.age, 5);
                 const setDraft = (patch: Partial<FAOffer>) =>
                   setDrafts((d) => ({ ...d, [p.id]: { ...draft, ...patch } }));
@@ -656,12 +658,12 @@ function FACenterInner() {
               좋은 선수를 얻는 대신 우리 선수 하나를 내주는 거예요.
             </Text>
             <Text style={styles.modalBody}>
-              <Text style={styles.modalStrong}>보호선수 명단(6명)</Text>에 넣은 선수는 안전합니다.
+              <Text style={styles.modalStrong}>보호선수 명단({PROTECT_COUNT}명)</Text>에 넣은 선수는 안전합니다.
               명단 밖에서 <Text style={styles.modalStrong}>OVR이 가장 높은 선수부터</Text> 넘어가니 주전을 지키세요.
             </Text>
             <Text style={styles.modalBody}>
               <Text style={{ color: theme.good, fontWeight: '800' }}>'돈만' 보상</Text>을 켜면 보상선수 없이
-              돈을 더 내고(A 300%·B 200%) 우리 선수단을 <Text style={styles.modalStrong}>그대로 지킵니다</Text>.
+              돈을 더 내고(A {Math.round(MONEY_ONLY_MULT.A * 100)}%·B {Math.round(MONEY_ONLY_MULT.B * 100)}%) 우리 선수단을 <Text style={styles.modalStrong}>그대로 지킵니다</Text>.
               부자 구단이 핵심 선수를 지킬 때 쓰는 옵션이에요.
             </Text>
             <Text style={styles.modalBody}>

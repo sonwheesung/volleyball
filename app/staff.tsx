@@ -7,7 +7,7 @@ import { MeterBar } from '../components/MeterBar';
 import {
   getTeamCoach, teamAssistants, teamScouts, teamScoutReveal,
   availableCoaches, availableAssistants, availableScouts,
-  staffSpend, staffBudget, staffBudgetLeft,
+  staffSpend, staffBudget, staffBudgetLeft, STAFF_CONTRACT_YEARS,
 } from '../data/league';
 import { computeStandings, displayCutoff } from '../data/standings';
 import { SPECIALTY_KO, SPECIALTY_DESC, TYPE_KO, TYPE_DESC } from '../engine/staff';
@@ -89,7 +89,7 @@ export default function Staff() {
       showAlert('먼저 감독을 경질하세요', `${head!.name} 감독이 재직 중입니다.\n새 감독을 영입하려면 위에서 현재 감독을 먼저 경질해 주세요.`);
       return;
     }
-    showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)} · 3년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
+    showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)} · ${STAFF_CONTRACT_YEARS}년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
       { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다. 새 감독의 성향으로 팀이 움직입니다.`); }, `${name} 감독이 부임해\n선수들에게 전술을 설명하는 중…`) },
     ]);
@@ -155,7 +155,7 @@ export default function Staff() {
                     계약 {yrs <= 0 ? '만료, 재계약 필요' : `잔여 ${yrs}년`}
                   </Muted>
                   {expiring ? (
-                    <Button small label="재계약(3년)" onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 3년 재계약했습니다.`); else showAlert('재계약 불가', '현재 감독이 없습니다. 먼저 감독을 영입하세요.'); }} />
+                    <Button small label={`재계약(${STAFF_CONTRACT_YEARS}년)`} onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 ${STAFF_CONTRACT_YEARS}년 재계약했습니다.`); else showAlert('재계약 불가', '현재 감독이 없습니다. 먼저 감독을 영입하세요.'); }} />
                   ) : null}
                 </Row>
                 <Button label="감독 경질" onPress={() => showAlert('감독 경질', `${head.name} 감독을 경질하시겠습니까? 전문 코치가 대행을 맡고, 그 감독은 우리 팀에 다시 오지 않습니다.`, [
