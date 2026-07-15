@@ -3,10 +3,9 @@ import { Text } from 'react-native';
 import { Card, Loading, Muted, Row, Screen, SCREEN_LOADING_MIN_MS, STYLE_LABEL, Title, theme, useDeferredReady } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList } from '../../components/RosterList';
-import { getEvolvedTeamPlayers, getTeamCoach } from '../../data/league';
-import { activeRoster } from '../../data/roster';
+import { getTeamCoach } from '../../data/league';
 import { availableTeamPlayers } from '../../data/injury';
-import { injuredOnDay, suspendedOnDay } from '../../data/dynamics';
+import { activeRosterOnDay, injuredOnDay, suspendedOnDay } from '../../data/dynamics';
 import { buildLineup } from '../../engine/lineup';
 import { conditionOf } from '../../data/owner';
 import { useGameStore } from '../../store/useGameStore';
@@ -23,8 +22,8 @@ function SquadInner() {
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
   const overrides = useGameStore((s) => s.contractOverrides);
-  const released = useGameStore((s) => s.released);
-  const players = activeRoster(getEvolvedTeamPlayers(teamId, currentDay), overrides, released);
+  // 날짜 인지 명단(UI-43a) — 시즌 중 FA 영입 선수 포함·방출 제외(rosterIdsOnDay가 txLog로 처리, released 배열 불필요).
+  const players = activeRosterOnDay(teamId, currentDay, overrides);
   const coach = getTeamCoach(teamId);
   const benchDirectives = useGameStore((s) => s.benchDirectives);
   // 주전(그날 실제 출전 라인업 6인+리베로) — 선수단 정렬을 "주전 먼저, 그 안에서 포지션순"으로(사용자 요청).

@@ -2,7 +2,7 @@
 // 매치데이 순서로: (a) 플레이어 거래 적용 (b) 레그 경계 AI 영입 (c) 그날 라인업으로 부상 판정.
 // 경기 결과 무의존 → simMatch와 무순환. 과거 경기는 그때 명단으로 고정(리플레이 안전).
 
-import type { Player, Position } from '../types';
+import type { Player, Position, Contract } from '../types';
 import { createRng, strSeed } from '../engine/rng';
 import { injuryRisk, rollSeverity, CONCURRENT_CAP, type Severity } from '../engine/injury';
 import { buildLineup } from '../engine/lineup';
@@ -271,6 +271,18 @@ export function rosterIdsOnDay(teamId: string, day: number): string[] {
   }
   // 순서 보존 + 신규 영입 뒤에
   return [...ids.filter((id) => set.has(id)), ...[...set].filter((id) => !ids.includes(id))];
+}
+
+/** day 시점 팀 활성 로스터(진화됨) + 재계약 override 합성 — **화면 표시 정본**(UI-43a).
+ *  `rosterIdsOnDay`(시즌초 ± 거래, 방출 제외·시즌 중 영입 포함) → `evolveOnDay`로 그날 스탯 → override 계약 합성
+ *  (`activeRoster`와 동일 합성 규칙). base 명단 직독(`getEvolvedTeamPlayers`+`activeRoster`)은 시즌 중 영입을 놓친다(SEASON §7).
+ *  · 방출은 `rosterIdsOnDay`가 txLog로 이미 제외 → 별도 `released` 배열 불필요.
+ *  · day<0(시즌 전) = base 명단·base 스탯(rosterIdsOnDay·evolveOnDay 둘 다 무거래·무진화로 수렴). */
+export function activeRosterOnDay(teamId: string, day: number, overrides: Record<string, Contract> = {}): Player[] {
+  return rosterIdsOnDay(teamId, day)
+    .map((id) => evolveOnDay(id, day))
+    .filter((p): p is Player => !!p)
+    .map((p) => (overrides[p.id] ? { ...p, contract: overrides[p.id] } : p));
 }
 
 /** day 시점 출전 가능 선수(날짜 명단 − 부상자) — production·standings·playoffs 공용 */

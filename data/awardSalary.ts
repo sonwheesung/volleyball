@@ -54,3 +54,11 @@ export const salaryEraNow = (): number => salaryEra;
 export function marketVal(p: Player, prod?: ProdLine): number {
   return marketValue(p, salaryEra, prod, awardScoreOf(p.id));
 }
+
+/** 잔류(자동연장·재계약) 확정 연봉 미러(UI-43b) — `engine/rollover.ts renewedContract`의 salary 산식과 동일:
+ *  `marketValue(p, 현재 시대 앵커, prod 미포함, awardScore 0)`. FA 등급 프리미엄(타 구단 영입가)·시즌 실적 보정(perfFactor)을
+ *  빼 실제 잔류 확정가와 정합한다(marketVal은 prod·award를 실어 MVP급을 체계적으로 과대 표시했다).
+ *  ※ 미래 진화·나이+1 오차는 표시측에서 "(예상)" 캡션으로 수용(renewedContract는 롤오버된 age+1 기준). */
+export function renewalVal(p: Player): number {
+  return marketValue(p, salaryEra, undefined, 0);
+}

@@ -3,23 +3,29 @@ import { useRouter } from 'expo-router';
 import { Card, Muted, Row, Screen, Title, theme } from '../../components/Screen';
 import { SummaryCard } from '../../components/SummaryCard';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
-import { getEvolvedTeamPlayers } from '../../data/league';
-import { activeRoster, payroll } from '../../data/roster';
+import { evolveOnDay } from '../../data/league';
+import { rosterIdsOnDay } from '../../data/dynamics';
+import { capPayroll } from '../../data/roster';
 import { LEAGUE_CAP } from '../../engine/cap';
 import { formatMoney } from '../../engine/salary';
 import { DEV_TOOLS } from '../../data/flags';
 import { useGameStore } from '../../store/useGameStore';
+import type { Player } from '../../types';
 
 export default function Office() {
   const router = useRouter();
   const teamId = useGameStore((s) => s.selectedTeamId)!;
   const currentDay = useGameStore((s) => s.currentDay);
   const overrides = useGameStore((s) => s.contractOverrides);
-  const released = useGameStore((s) => s.released);
+  const inSeasonTx = useGameStore((s) => s.inSeasonTx);
 
-  const roster = activeRoster(getEvolvedTeamPlayers(teamId, currentDay), overrides, released);
-  // 캡은 국내 선수만(외인=별개 지갑, FOREIGN_SYSTEM 2장). 외인 포함 비교는 허위 초과(빨강) — EC-CAP-01.
-  const total = payroll(roster.filter((p) => !p.isForeign));
+  // 날짜 인지 명단(UI-43a) + store 게이트와 동일한 캡 산식(UI-43b, capPayroll §7): 그날 유효 명단(시즌 중 영입 포함·방출 제외)에
+  // 재계약 override·시즌 영입비(inSeasonCost)·배신 웃돈을 반영. 캡은 국내만(외인=별개 지갑, FOREIGN_SYSTEM 2장) — capPayroll 내부에서 외인 제외.
+  const myIds = rosterIdsOnDay(teamId, currentDay);
+  const isBetrayed = (id: string) => inSeasonTx.some((t) => t.kind === 'release' && t.teamId === teamId && t.playerId === id);
+  const inSeasonSigned = new Set(inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === teamId).map((t) => t.playerId));
+  const capPlayers = myIds.map((id) => evolveOnDay(id, currentDay)).filter((p): p is Player => !!p);
+  const total = capPayroll(capPlayers, overrides, inSeasonSigned, isBetrayed);
 
   return (
     <Screen scroll={false}>
@@ -29,7 +35,7 @@ export default function Office() {
         label="팀 총연봉 / 예산"
         value={`${formatMoney(total)} / ${formatMoney(LEAGUE_CAP)}`}
         valueStyle={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '700' }}
-        caption={`잔여 ${formatMoney(Math.max(0, LEAGUE_CAP - total))} · 선수 ${roster.length}명`}
+        caption={`잔여 ${formatMoney(Math.max(0, LEAGUE_CAP - total))} · 선수 ${myIds.length}명`}
       />
 
       <SpotlightTarget id="office-top">

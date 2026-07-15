@@ -9,19 +9,19 @@ import { PlayerRow } from '../components/PlayerRow';
 import { SummaryCard } from '../components/SummaryCard';
 import { ActionSheet, Popup } from '../components/Popup';
 import { Stepper } from '../components/Stepper';
-import { getEvolvedTeamPlayers, getPlayer, evolveOnDay, LEAGUE } from '../data/league';
-import { rosterIdsOnDay } from '../data/dynamics';
+import { getPlayer, evolveOnDay, LEAGUE } from '../data/league';
+import { rosterIdsOnDay, activeRosterOnDay } from '../data/dynamics';
 import { teamRelations } from '../data/relationships';
 import { getPlayerProduction } from '../data/production';
 import { displayCutoff } from '../data/standings';
-import { activeRoster, capPayroll, payroll } from '../data/roster';
+import { capPayroll } from '../data/roster';
 import { overallRaw } from '../engine/overall';
 import { isFranchise, maxSalaryFor, LEAGUE_CAP } from '../engine/cap';
-import { ROSTER_MIN, severanceFee } from '../engine/transactions';
+import { ROSTER_MIN, severanceFee, inSeasonCost } from '../engine/transactions';
 import { assignFAGrades, willBeFA } from '../engine/faMarket';
 import { contractStatus, formatMoney, resignSalaryBounds } from '../engine/salary';
 import { capContractYears } from '../engine/retire';
-import { marketVal } from '../data/awardSalary';
+import { marketVal, renewalVal } from '../data/awardSalary';
 import { resignOutlookNow, resignCaptionOf, resignReactionCopy, type ResignBand } from '../data/owner';
 import { useGameStore } from '../store/useGameStore';
 import type { ReSignReject } from '../store/useGameStore';
@@ -72,28 +72,39 @@ function ContractsInner() {
   const interviews = useGameStore((s) => s.interviews);
   const season = useGameStore((s) => s.season);
 
-  const evolved = getEvolvedTeamPlayers(teamId, currentDay);
-  const active = activeRoster(evolved, overrides, released);
+  // 날짜 인지 명단(UI-43a) — 시즌 중 FA 영입 선수 포함·방출 제외(rosterIdsOnDay가 txLog로 처리). base 직독은 시즌 중 영입을 놓쳤다.
+  const active = activeRosterOnDay(teamId, currentDay, overrides);
+  // store 캡 게이트와 동일한 재료(capPayroll §7): 배신 판정·시즌 중 영입 집합. 표시 연봉도 이 집합으로 inSeasonCost 산입(UI-43b).
+  const isBetrayed = (id: string) => inSeasonTx.some((t) => t.kind === 'release' && t.teamId === teamId && t.playerId === id);
+  const inSeasonSigned = new Set(inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === teamId).map((t) => t.playerId));
+  // 표시 연봉 = 캡 산입액(UI-43b): 시즌 중 영입 선수는 취득가 inSeasonCost(marketVal, betrayed), 그 외는 (override 반영) 계약 연봉.
+  const salaryOf = (p: Player) => (inSeasonSigned.has(p.id) ? inSeasonCost(marketVal(p), isBetrayed(p.id)) : p.contract.salary);
   // 계약 관리는 국내 전용 — 외인/아시아쿼터는 1년 트라이아웃 계약이라 방출·재계약·FA 비대상(FOREIGN_SYSTEM 3장).
-  const roster = active.filter((p) => !p.isForeign).sort((a, b) => b.contract.salary - a.contract.salary);
+  const roster = active.filter((p) => !p.isForeign).sort((a, b) => salaryOf(b) - salaryOf(a));
   const foreigners = active.filter((p) => p.isForeign).sort((a, b) => overallRaw(b) - overallRaw(a));
   // 수입 슬롯 공석 판정(FOREIGN_SYSTEM §2 — 자금 부족 시 미영입 = 공석으로 시즌 시작). 팀은 외인 OP 1 + 아시아쿼터 1이 정상.
   const hasForeignOP = foreigners.some((p) => !p.isAsianQuota);
   const hasAsian = foreigners.some((p) => p.isAsianQuota);
-  const total = payroll(roster);
+  // 헤더 총연봉 = store 게이트와 동일 산식(UI-43b, capPayroll §7): 그날 유효 명단(rosterIdsOnDay — 시즌 중 영입 포함·방출 제외)에
+  // 재계약 override·시즌 영입비(inSeasonCost)·배신 웃돈 반영. 국내만(capPayroll 내부에서 외인 제외). pickOffer 사전체크와 재료 공유.
+  const myIds = rosterIdsOnDay(teamId, currentDay);
+  const capPlayers = myIds.map((id) => evolveOnDay(id, currentDay)).filter((p): p is Player => !!p);
+  const total = capPayroll(capPlayers, overrides, inSeasonSigned, isBetrayed);
   const releasedPlayers = released.map((id) => getPlayer(id)).filter((p): p is Player => !!p);
   const faList = roster.filter(willBeFA);
   // FA 등급은 **리그 전체 FA 예정 풀** 순위로 매긴다(assignFAGrades는 상대 순위 — 내 팀 부분집합으로 매기면
   //   1명일 때 무조건 A로 오표시). 오프시즌 풀 근사: 전 구단 현재 명단에서 willBeFA 국내 선수 수집(EC-FA-09 형제).
+  //   풀도 날짜 인지 명단(UI-43a)으로 — faList(위 active 파생)와 같은 소스여야 내 시즌 중 영입 FA 예정자가
+  //   풀에서 빠져 faGrades.get(...)!가 undefined("undefined등급")가 되는 어긋남이 없다(2026-07-15 형제 발견).
   const leagueFaGrades = useMemo(() => {
     const pool: Player[] = [];
     for (const t of LEAGUE.teams) {
-      for (const p of getEvolvedTeamPlayers(t.id, currentDay)) {
+      for (const p of activeRosterOnDay(t.id, currentDay, overrides)) {
         if (!p.isForeign && willBeFA(p)) pool.push(p);
       }
     }
     return assignFAGrades(pool);
-  }, [currentDay]);
+  }, [currentDay, overrides, inSeasonTx]);
   const faGrades = leagueFaGrades;
   // 잔류 전망(FA §2.5c-보완 3단계) — resignOutlookNow(엔진 refuseResignProb+가산항 위임, currentDay 파생·미래 미시뮬).
   //   대기 override(인시즌 재계약) 연봉이 money 불만을 재평가하도록 overrides 전달. 위험(잔류 거부 확률 높음) 선수 먼저 정렬(만료 임박 강조).
@@ -124,11 +135,8 @@ function ContractsInner() {
       return;
     }
     // ② 팀 캡 — 프랜차이즈 재계약은 팀캡 예외(store cd3d99a와 일치). 비프랜차이즈만 capPayroll로 하드 체크.
+    //   재료(capPlayers·inSeasonSigned·isBetrayed)는 헤더 총연봉과 공유(§7 6번째 사이트 = store reSign 게이트와 동일 경로).
     if (!isFranchise(p)) {
-      const myIds = rosterIdsOnDay(teamId, currentDay);
-      const isBetrayed = (id: string) => inSeasonTx.some((t) => t.kind === 'release' && t.teamId === teamId && t.playerId === id);
-      const inSeasonSigned = new Set(inSeasonTx.filter((t) => t.kind === 'sign' && t.teamId === teamId).map((t) => t.playerId));
-      const capPlayers = myIds.map((id) => evolveOnDay(id, currentDay)).filter((pl): pl is Player => !!pl);
       const nextOverrides = { ...overrides, [p.id]: contract };
       if (capPayroll(capPlayers, nextOverrides, inSeasonSigned, isBetrayed) > LEAGUE_CAP) {
         showAlert('샐러리캡 초과', `${p.name} ${label}(${formatMoney(contract.salary)})이 캡(${formatMoney(LEAGUE_CAP)})을 넘습니다. 방출/정리 후 시도하세요.`);
@@ -140,7 +148,10 @@ function ContractsInner() {
   };
 
   const doRelease = (p: Player) => {
-    const fee = severanceFee(p.contract.salary, p.contract.remaining);
+    // 위약금·절감 연봉은 store release와 동일하게 **base 계약**(getPlayer.contract) 기준(UI-43b/UV-2) — 화면이 override(대기 재계약)
+    //   계약을 얹어 보여줘도 store useGameStore.release는 getPlayer(id).contract로 차감한다. 표시≠차감(재화 split-brain의 UI판)을 막는다.
+    const bc = getPlayer(p.id)?.contract;
+    const fee = bc ? severanceFee(bc.salary, bc.remaining) : 0;
     // 위약금 지불 못 하면 방출 자체가 불가(재정 무게 — TRANSACTION_SYSTEM 0.5①)
     if (fee > cash) {
       showAlert('위약금 부족', `${p.name} 방출에는 위약금 ${formatMoney(fee)}가 듭니다.\n현재 운영 자금 ${formatMoney(cash)}. 지불할 수 없습니다.`);
@@ -166,7 +177,7 @@ function ContractsInner() {
       : '';
     showAlert(
       `${p.name} 방출`,
-      `${retro}${friendWarn}\n\n위약금 ${formatMoney(fee)} 지불 · 연봉 ${formatMoney(p.contract.salary)} 절감\n(당일 철회 가능)${tone}`,
+      `${retro}${friendWarn}\n\n위약금 ${formatMoney(fee)} 지불 · 연봉 ${formatMoney(bc?.salary ?? 0)} 절감\n(당일 철회 가능)${tone}`,
       [
         { text: '취소', style: 'cancel' },
         {
@@ -198,7 +209,8 @@ function ContractsInner() {
       <Title>선수 계약</Title>
       {roster.map((p) => {
         const market = marketVal(p, getPlayerProduction(p.id, displayDay));
-        const status = contractStatus(p.contract.salary, market);
+        const status = contractStatus(salaryOf(p), market);
+        const signed = inSeasonSigned.has(p.id);
         return (
           <PlayerRow
             key={p.id}
@@ -207,8 +219,9 @@ function ContractsInner() {
             title={p.name}
             sub={
               <>
-                {p.age}세 · {formatMoney(p.contract.salary)} · 잔여 {p.contract.remaining}년 ·{' '}
+                {p.age}세 · {formatMoney(salaryOf(p))} · 잔여 {p.contract.remaining}년 ·{' '}
                 <Text style={{ color: STATUS_COLOR[status] }}>{status}</Text>
+                {signed ? <Text style={{ color: theme.sky }}> · 시즌 중 영입</Text> : null}
                 {isFranchise(p) ? <Text style={{ color: theme.warn }}> · 프랜차이즈</Text> : null}
               </>
             }
@@ -265,7 +278,10 @@ function ContractsInner() {
           </Pressable>
           {faSorted.map(({ p, outlook }) => {
             const grade = faGrades.get(p.id)!;
-            const reSalary = marketVal(p, getPlayerProduction(p.id, displayDay)); // 잔류 연봉 = 시장가(renewedContract, rollover.ts:49). ask(×프리미엄)는 타팀 영입가
+            // 잔류 연봉 = 실제 잔류 확정 산식 미러(renewalVal = renewedContract salary: 현재 시대 앵커·prod/award 미포함, UI-43b/UV-3).
+            //   marketVal(prod·수상 프리미엄 포함)로 표시하면 MVP급이 체계적 과대 표시됐다. 나이+1·미래 진화 오차는 "(예상)" 캡션으로 수용.
+            //   ask(등급 ×프리미엄)는 타 구단 영입가로 별개.
+            const reSalary = renewalVal(p);
             const bm = BAND_META[outlook.band];
             const keep = resignDecisions[p.id] !== false;
             return (
@@ -274,7 +290,7 @@ function ContractsInner() {
                   bare
                   leading={<PosTag pos={p.position} />}
                   title={<>{p.name} <Text style={{ color: theme.accent }}>{grade}등급</Text></>}
-                  sub={`${p.age}세 · 잔류 연봉 ${formatMoney(reSalary)} (시장가)`}
+                  sub={`${p.age}세 · 잔류 연봉 ${formatMoney(reSalary)} (예상)`}
                   trailing={<OvrBadge value={overallRaw(p)} />}
                 />
                 {/* 잔류 전망 밴드 + 사유 칩 — resignOutlookNow(엔진 위임). "시즌 종료 시 확정" 캡션은 상단 안내에. */}
@@ -339,7 +355,7 @@ function ContractsInner() {
       <ActionSheet
         visible={!!manage}
         title={manage?.name ?? ''}
-        message={manage ? `${manage.age}세 · ${formatMoney(manage.contract.salary)} · 잔여 ${manage.contract.remaining}년` : undefined}
+        message={manage ? `${manage.age}세 · ${formatMoney(salaryOf(manage))} · 잔여 ${manage.contract.remaining}년` : undefined}
         onClose={() => setManage(null)}
         actions={manage ? [
           { label: '재계약', tone: 'primary', onPress: () => doResign(manage) },

@@ -8,7 +8,8 @@ import { Button, Card, IconLabel, Loading, Muted, OvrBadge, Screen, STYLE_LABEL,
 import { showAlert } from '../../components/AppDialog';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList, type RosterSort } from '../../components/RosterList';
-import { getEvolvedTeamPlayers, getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal, LEAGUE } from '../../data/league';
+import { getTeam, getTeamCoach, teamAssistants, teamScouts, teamScoutReveal, LEAGUE } from '../../data/league';
+import { activeRosterOnDay } from '../../data/dynamics';
 import { computeStandings, displayCutoff } from '../../data/standings';
 import { leagueProduction } from '../../data/production';
 import { clubIdentity, clubAgeYears } from '../../data/clubIdentity';
@@ -99,6 +100,7 @@ export default function TeamDetail() {
   const selectTeam = useGameStore((s) => s.selectTeam);
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const currentDay = useGameStore((s) => s.currentDay);
+  const overrides = useGameStore((s) => s.contractOverrides);
   const [starting, setStarting] = useState(false);
   const [sort, setSort] = useState<RosterSort>('salary');
 
@@ -132,7 +134,9 @@ export default function TeamDetail() {
     );
   }
 
-  const players = getEvolvedTeamPlayers(team.id, currentDay);
+  // 날짜 인지 명단(UI-43a) — 전 구단 거래 반영(rosterIdsOnDay): AI 팀 시즌 중 영입 포함·방출 제외.
+  // override는 내 팀 재계약분만 매칭(타 팀 id는 no-op). 팀 종합 전력·"선수단 N명"이 같은 명단에서 파생.
+  const players = activeRosterOnDay(team.id, currentDay, overrides);
   const identity = clubIdentity(team.id);
   const coach = getTeamCoach(team.id);
   const ovr = teamOverallRaw(players);
