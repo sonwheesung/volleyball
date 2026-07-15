@@ -1,7 +1,8 @@
 // 업적 적립 라이브 가드 (BACKEND_SYSTEM §13.12 P0-2·H3) — earn 라우트 핸들러 직접 import·호출, 라이브 dev DB.
 // 검증: 정상 earn(applied·잔액+)·멱등 재호출(applied:false)·호출당 클램프(per-claim 1000)·
 //       평생합 경계(remaining 클램프 부분지급)·평생합 초과(409 cap·잔액 불변)·A/B 자가검증(백스톱 없으면 통과했을 것).
-// earn 라우트는 resolveUserId(익명 dev-user-1 폴백)라 **반드시 실 토큰(Bearer)**으로 호출 — dev-user-1 원장 오염 방지.
+// earn 라우트는 requireUserId(무토큰=401 — 구 resolveUserId 폴백 서술은 2026-07-07 통일로 stale, 2026-07-15 정정)라
+// **반드시 실 토큰(Bearer)**으로 호출.
 // Usage: cd server && npx tsx tools/_dv_achearn.ts (dev는 .env.development.local 우선, 없으면 .env.local — 운영 겨냥 시 DATABASE_URL 오버라이드)
 import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — 첫 import)
 process.env.SESSION_JWT_SECRET = 'test-session-secret-abcdef0123456789'; // signToken↔verifyToken 일관 — import 전 주입

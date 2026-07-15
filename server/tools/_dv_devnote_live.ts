@@ -64,6 +64,14 @@ process.env.ADMIN_TOKEN = 'test-admin-token-abcdef0123456789'; // ≥16자(fail-
     // PATCH로 note→patch 전환 시 appVersion 없으면 거부(교차 검증)
     const rNote = await create({ kind: 'note', title: PFX + 'n2p', body: '본문' });
     ok((await patch({ id: rNote.id, kind: 'patch' })).status === 400, '④ note→patch 전환인데 appVersion 없음 → 400 거부(교차)');
+    // PATCH 대칭(Q-6, backend-verify D1 2026-07-15): note에 appVersion을 실어 PATCH해도 null 저장,
+    // patch→note 전환 시 옛 버전 소거 — POST만 강제하고 PATCH가 빠졌던 사각 봉인.
+    ok((await patch({ id: rNote.id, appVersion: '9.9.9' })).status === 200, '④b note에 appVersion PATCH → 200(무시)');
+    const nrow1 = (await db.select({ appVersion: devnotes.appVersion }).from(devnotes).where(eq(devnotes.id, rNote.id)))[0];
+    ok(nrow1?.appVersion === null, '④b note appVersion = null 저장(무시 확인)');
+    ok((await patch({ id: rPatch.id, kind: 'note' })).status === 200, '④b patch→note 전환 → 200');
+    const nrow2 = (await db.select({ appVersion: devnotes.appVersion }).from(devnotes).where(eq(devnotes.id, rPatch.id)))[0];
+    ok(nrow2?.appVersion === null, '④b patch→note 전환 시 옛 appVersion 소거');
 
     console.log('── ⑤ 검증 실패(빈 title/body·잘못된 kind) → 400 ──');
     ok((await create({ kind: 'note', title: '   ', body: '본문' })).ok === false, '⑤ 빈 title → 거부');

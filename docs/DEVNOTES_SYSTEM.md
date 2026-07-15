@@ -149,7 +149,9 @@ export type Devnote = typeof devnotes.$inferSelect;
 
 - `GET /api/devnotes` — **published만**, projCode 스코프, `publishedAt`(없으면 `createdAt`) 내림차순,
   `.limit(N)` 방어(공지 bootstrap의 `.limit(50)` 교훈). 반환: `{ ok, devnotes: [{ id, kind, title, body, appVersion, publishedAt }] }`.
-  - **인증**: 공개 읽기 — Bearer 불필요(공지 bootstrap과 동급 공개 콘텐츠). 단 rate limit은 기존 미들웨어 적용.
+  - **인증**: 공개 읽기 — Bearer 불필요(공지 bootstrap과 동급 공개 콘텐츠). ~~단 rate limit은 기존 미들웨어 적용~~
+    → 정정(2026-07-15, backend-verify D5): 전역 미들웨어는 없고 `checkLimit`은 라우트별(login·coupon·ticket·snapshot)이라
+    devnotes 공개 GET엔 **레이트리밋 없음** — `.limit(100)` 페이로드 방어만. 공개 읽기 전용이라 수용(필요 시 checkLimit 추가 후보).
   - **bootstrap 합류 여부는 OPEN Q-2**. 기본 권고: **별도 라우트**(부팅 페이로드를 안 키움 — 노트는 진입 게이트가 아니라
     마이페이지 진입 시 fetch면 충분). 안읽음 배지도 마이페이지에서 이 라우트로 계산.
 

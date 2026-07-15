@@ -31,12 +31,12 @@
    → {token, userId, displayName}
 [클라] useAuthStore 세션 저장(persist) + setServerToken(token)
    → 이후 모든 서버콜 Authorization: Bearer <token>
-   → [서버] resolveUserId(req): Bearer 검증 → user (없거나 무효면 익명 dev 유저 폴백 — 하위호환)
+   → [서버] ~~resolveUserId(req): Bearer 검증 → user (없거나 무효면 익명 dev 유저 폴백 — 하위호환)~~ → 정정(2026-07-15, backend-verify D2): 소비 라우트는 전부 `requireUserId`(무효/탈퇴 토큰=401, §13.17 P0-5 — 2026-07-07 SECURITY #6에서 통일 완료). resolveUserId(익명 폴백)는 **현재 호출부 0**(§7.2 참조 — 폴백 허용 라우트가 생기면 사용)
 ```
 
 - **세션 토큰**: 서버가 `SESSION_JWT_SECRET`으로 HMAC 서명한 미니 JWT(`sub=provider:providerId`, `iat`). 외부 의존성 0(node:crypto).
   EAS에서 ID토큰 검증(jose+JWKS)만 붙이면 되고 세션 메커니즘은 그대로. 정본 서버 코드 `server/lib/auth.ts`.
-- **지갑 귀속**: `resolveUserId`가 Bearer→userId를 풀어, 지갑 GET/spend/earn·결제가 **로그인 계정에 귀속**(익명 폴백 유지 — 토큰 없으면 dev 유저).
+- **지갑 귀속**: ~~`resolveUserId`가 … (익명 폴백 유지 — 토큰 없으면 dev 유저)~~ → 정정(2026-07-15): `requireUserId`가 Bearer→**라이브 유저**로 풀어, 지갑 GET/spend/earn·결제가 로그인 계정에 귀속(무토큰/무효/탈퇴=401 — 익명 폴백 없음, §13.17 P0-5).
 - **클라 세션 스토어**: `store/useAuthStore.ts`(zustand persist+AsyncStorage) — 게임 스토어와 **분리**(SOLID 단일책임). `session|null`, `hydrated`.
   - `signIn(provider)`: 서버 로그인 → 세션 저장 + setServerToken. throw 없음(typed 결과 — `ok | offline | error`).
   - `signOut()`: 세션 clear + setServerToken(null) + persist. → 루트가 로그인 벽으로 복귀.
@@ -90,6 +90,8 @@
 - `requireUserId`: 토큰 sub → `(provider, providerId)` **라이브 조회**(생성 안 함). 행이 없거나 `deletedAt`이면 `null` → 라우트 401.
   탈퇴로 providerId가 토움스톤이 되면 옛 토큰의 sub는 **어떤 라이브 행에도 안 맞아** 지갑·문의 등 후속 호출이 401.
 - `resolveUserId`(익명 폴백 허용 라우트): 라이브 조회 실패 시 옛 sub로 **유령 계정을 되살리지 않고** 익명 dev로 폴백.
+  ※ 현재 이 함수를 쓰는 라우트는 **0개**(backend-verify 2026-07-15 — 소비 라우트 전부 requireUserId로 통일된 상태).
+  폴백 허용 공개 라우트가 생길 때를 위한 대기 함수로 존치(제거보다 의미 보존 — 삭제 시 이 절 후반부도 함께 정리할 것).
 
 ### 7.3 재가입 = 새 계정
 같은 소셜로 재로그인하면 구글/애플 sub는 동일하지만, 옛 행의 providerId가 토움스톤이라 **매칭되는 라이브 행이 없어

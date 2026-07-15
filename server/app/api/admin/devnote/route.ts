@@ -73,6 +73,9 @@ export async function PATCH(req: Request) {
     const finalKind = (upd.kind as string) ?? cur.kind;
     const finalAppVer = upd.appVersion !== undefined ? (upd.appVersion as string | null) : cur.appVersion;
     if (finalKind === 'patch' && !finalAppVer) return bad();
+    // note는 appVersion 무시=null 저장(DEVNOTES §8 Q-6 — POST와 PATCH 대칭). patch→note 전환 시 옛 버전 잔존도 여기서 소거
+    // (backend-verify D1, 2026-07-15: PATCH만 이 강제가 빠져 note에 버전이 저장·잔존됐다).
+    if (finalKind === 'note' && finalAppVer != null) upd.appVersion = null;
 
     // 게시 토글: published로 전환되는데 publishedAt이 아직 비어 있으면 그 순간으로 세팅(재게시 bump 없음 — OPEN Q-5 최초값 유지).
     const finalStatus = (upd.status as string) ?? cur.status;

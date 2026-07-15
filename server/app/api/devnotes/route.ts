@@ -1,5 +1,6 @@
 // GET /api/devnotes — 앱 마이페이지 진입 시 조회(DEVNOTES_SYSTEM §4.2). 공개 콘텐츠 — Bearer 불필요(공지 bootstrap 동급).
-// **published만** 반환(초안 유출 0), projCode 스코프, publishedAt(없으면 createdAt) 내림차순, limit 방어. rate limit은 기존 미들웨어 적용.
+// **published만** 반환(초안 유출 0), projCode 스코프, publishedAt(없으면 createdAt) 내림차순, limit 방어.
+// 레이트리밋 없음(전역 미들웨어 부재·checkLimit은 라우트별 — DEVNOTES §4.2 정정 2026-07-15): 공개 읽기 전용 + limit 100 방어만.
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../lib/observability';
 import { and, desc, eq, sql } from 'drizzle-orm';

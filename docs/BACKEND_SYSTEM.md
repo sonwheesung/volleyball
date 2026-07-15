@@ -328,7 +328,7 @@
   - **C2(MED-LOW) — endsAt date-only KST 함정(공지 F5 형제)**: ~~`new Date(b.endsAt)`(‘YYYY-MM-DD’=UTC 자정=KST 오전 9시라 9시간 일찍 만료)~~ → 공지 라우트의 `normalizeEndsAt`를 **공용 `server/lib/dates.ts`로 추출**(date-only→해당일 `T14:59:59.999Z`=KST 23:59:59.999), 공지·쿠폰 POST·PATCH가 **동일 헬퍼 공유**(startsAt은 무변경).
   - **C3(LOW) — POST 오류 뭉뚱그림**: ~~존재하지 않는 `targetUserId`(FK 위반)도 insert catch에서 전부 409 'duplicate'로 위장~~ → insert **전에** `users`에서 존재 확인(잘못된 uuid 형식은 select 자체가 throw할 수 있어 try로 감싸 실패도 동일 처리), 없으면 **400 `no-such-user`**. insert catch의 'duplicate' 409는 이제 실제 UNIQUE 충돌만. ops 콘솔은 `reason`을 그대로 표시(flash) → 무수정.
   - **C4(LOW) — 기간 판정 클럭 통일**: ~~`redeemCoupon`이 `Date.now()`(JS 클럭)로 기간 비교~~ → 트랜잭션 안에서 **DB `now()` 1회 조회** 후 그 값으로 startsAt/endsAt 비교. 발행측(admin POST)이 startsAt 미지정 시 DB `defaultNow()`를 쓰므로(스큐 회피) **판정도 같은 DB 클럭으로 통일**.
-  - **보류(의식적)**: `wallet earn/spend/get` 3종 라우트도 `resolveUserId`(익명 폴백)를 쓰나 — **하드 로그인 벽**(토큰 없이는 호출 경로 자체가 없음)이라 실위험 낮아 이번엔 보류. `requireUserId` 통일은 후속 과제.
+  - ~~**보류(의식적)**: `wallet earn/spend/get` 3종 라우트도 `resolveUserId`(익명 폴백)를 쓰나 … `requireUserId` 통일은 후속 과제.~~ → **완료(2026-07-07 SECURITY #6 — backend-verify 2026-07-15 D3에서 미정정 발견·정리)**: wallet 3종 포함 소비 라우트 전부 `requireUserId`(401) 통일. resolveUserId 호출부 0(AUTH §7.2).
 
 ### 13.15 관리자 대시보드 (#58 발급·#57 발행·#56 게이트, 2026-07-03 · **2026-07-04 UI 개편 + #46 통계**)
 > 운영 콘솔(1인 운영). Next.js 페이지 + ADMIN_TOKEN 보호 API. 인라인 스타일 + 내장 `<style>`만(외부 스크립트 0, XSS 표면 최소), `noindex`.
