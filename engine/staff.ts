@@ -81,7 +81,7 @@ export interface StaffEffects {
   trainBoost: Partial<Record<TrainingId, number>>;              // 성장 속도(1.x)
   boostBias?: Partial<Record<TrainingId, 'young' | 'prime'>>;   // 육성/즉전 나이 타깃(applyTrainingDay가 p.age·peakAge로 해석)
   potBonus: Partial<Record<TrainableStat, number>>;             // 포텐 상한 +
-  ageSlow: number;                                             // 노쇠 지연 0~0.45
+  ageSlow: number;                                             // 노쇠 지연. flat 최대 0.45(rating100), antiaging ×1.4→이론상 0.63이나 aging.ts:39가 Math.min(0.6)로 캡(rating≥96에서만 절단, 현 rating상한 95라 실효 ≈0.5985). STAFF_SYSTEM §1·§8.1.
 }
 export const NO_EFFECTS: StaffEffects = { trainBoost: {}, boostBias: {}, potBonus: {}, ageSlow: 0 };
 
@@ -133,7 +133,8 @@ export function scoutReveal(scouts: Scout[]): number {
   return Math.min(1, (top / 100) * 0.85 + depth);
 }
 
-// 연봉(만원) — 역량에 비례(100원 단위 반올림). 감독 13.5k~18.5k·코치 9.5k~13.1k·스카우터 8k~11.2k 대.
+// 연봉(만원) — 역량에 비례(100원 단위 반올림). 실생성 스탯 범위 기준: 감독 13.0k~18.6k·코치 9.7k~13.6k(playerToCoach 95)·
+// 스카우터 7.6k~11.4k (구 "13.5k~18.5k…" 표기는 스테일 — 발견 모드 2차 정정 2026-07-15, STAFF §2 정본).
 export const headCoachSalary = (charisma: number): number => 8000 + Math.round((charisma * 1.1)) * 100;
 export const assistantSalary = (rating: number): number => 5000 + Math.round(rating * 0.9) * 100;
 export const scoutSalary = (scouting: number): number => 4000 + Math.round(scouting * 0.8) * 100;

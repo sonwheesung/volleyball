@@ -30,7 +30,7 @@ const GAME_EVERY = 4.6;
 const SEASON_END_DAY = SEASON_DAYS;
 
 /** 선수가 코트에 못/안 나오는 사유 판정 (ROTATION_MORALE B) — 부상·징계·구단주벤치·실력밀림·주전.
- *  'rested'(#3 휴식)는 restedOnDay 구현 후 추가. 실제 경기 라인업(availableTeamPlayers→buildLineup)과 일치. */
+ *  'rested'(#3 휴식)는 restedOnDay로 구현·활성(아래 반영). 실제 경기 라인업(availableTeamPlayers→buildLineup)과 일치. */
 export function benchCauseOf(p: Player, myTeamId: string, day: number): SitCause {
   const d = day > 0 ? day : 0;
   if (injuredOnDay(d).has(p.id)) return 'injured';

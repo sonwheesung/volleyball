@@ -114,7 +114,7 @@ export function firedMidSeason(wins: number, losses: number): boolean {
 }
 
 // ── 6.6 계약·재계약(감독 FA) ──
-export const NEW_CONTRACT_YEARS = 3;        // 영입/재계약 기본 계약 연수
+// (미사용 상수 NEW_CONTRACT_YEARS 제거 2026-07-15 — 실제 계약 연수는 아래 contractTerm(2~4년 시드)이 부여. 어디서도 참조 안 됨.)
 /** 영입/재계약 시 부여할 계약 연수 — id·시즌 시드로 2~4년 변동(결정론). */
 export function contractTerm(id: string, season: number): number {
   return 2 + Math.floor(createRng(strSeed(`contract:${id}:${season}`)).next() * 3); // 2~4
