@@ -87,7 +87,7 @@ export default function Shop() {
 
       <Text style={styles.section}>아이템</Text>
       <ShopCard icon="remove-circle-outline" tint={theme.rose} title="광고 제거"
-        sub="게임 내 모든 광고를 없앱니다"
+        sub="시즌 시작 때 뜨는 광고를 없애요 · 다이아 보상형 광고는 원할 때만 시청"
         busy={busySku === SKU_REMOVE_ADS}
         onPress={() => buy(SKU_REMOVE_ADS)} />
       {WORLDCUP_ENABLED ? (
@@ -102,7 +102,7 @@ export default function Shop() {
       </Pressable>
 
       <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 6 }}>
-        결제·다이아 잔액은 서버(온라인)에서 확인됩니다. 광고·업적으로도 다이아를 모을 수 있어요.
+        결제·다이아 잔액은 서버(온라인)에서 확인됩니다. 광고·업적·쿠폰으로도 다이아를 모을 수 있어요.
       </Muted>
     </Screen>
   );
