@@ -94,6 +94,7 @@ const GAME_EVERY = 4.6;     // 평균 경기 간격(일)
 
 interface GameState {
   hydrated: boolean;
+  saveScopeUserId: string | null;              // 비영속 — 현재 로드된 세이브 슬롯의 계정(SAVE_SYSTEM §7.3). switchSaveScope가 로드 완료 후 세팅. BootGate 스코프 게이트가 session.userId와 대조(함정 a).
   onboarded: boolean;                          // 온보딩(첫 안내) 완료 — 세이브와 별개(초기화해도 유지)
   supporter: boolean;                          // 서포터 팩(비소모성 IAP) 보유 — 구매 자산이라 초기화해도 유지
   sfxEnabled: boolean;                         // 경기 효과음(휘슬·스파이크·서브) 켬 — 사용자 환경설정(초기화해도 유지)
@@ -345,6 +346,7 @@ export const useGameStore = create<GameState>()(
   persist(
     (set, get) => ({
       hydrated: false,
+      saveScopeUserId: null, // 비영속 — 로드된 슬롯의 계정(SAVE_SYSTEM §7.3). skipHydration이라 switchSaveScope 전까진 null
       walletBusy: false, // 비영속 — 다이아 서버 왕복 in-flight 래치(P0-1, 버튼 연타 이중적용 차단)
       onboarded: false,
       supporter: false,
@@ -1393,7 +1395,10 @@ export const useGameStore = create<GameState>()(
       setBgmVolume: (v) => set({ bgmVolume: Math.max(0, Math.min(1, Number.isFinite(v) ? v : 0.8)) }), // BGM 볼륨 0..1 클램프 — 영속
     }),
     {
-      name: SAVE_KEY,
+      name: SAVE_KEY, // 초기값(레거시/폴백 키) — 실제 로드는 계정 확정 후 switchSaveScope가 `baeknyeon-save:<userId>`로 설정(SAVE_SYSTEM §7.1)
+      // 계정 확정 전 자동 로드 금지(§7.1) — 세션이 정해지기 전엔 아무 슬롯도 안 읽는다. switchSaveScope가 키 세팅 후 명시적 rehydrate.
+      //   (Node 가드는 default 키 SAVE_KEY로 직접 rehydrate — skipHydration은 auto만 끄고 명시 rehydrate엔 무영향.)
+      skipHydration: true,
       storage: debouncedAsyncStorage(), // 매 set마다 직렬화+쓰기 폭주 → 디바운스로 합침(A6 성능, 저장 내용 불변)
       version: SAVE_VERSION,
       // 구버전/손상 세이브 → 정규화(컨테이너 모양 강제) + 향후 breaking 변경 단계 변환. SAVE_SYSTEM.md.

@@ -117,8 +117,8 @@ displayName null)하므로 `users` 행에 **잔존 PII가 없어** 후속 크론
 ### 7.6 앱 진입점
 `app/settings.tsx` 데이터 섹션의 "세이브 초기화" 인근에 **"계정 삭제"**(위험 톤). `showAlert` **2단 확인**:
 1차(잔액·소멸 경고 — 유상 다이아/세이브 연동 소멸, 환불은 탈퇴 전 문의), 2차(최종 확인, destructive).
-성공 시 `useAuthStore.deleteAccount()` → 서버 확정 후 `signOut()`(세션 clear) → BootGate가 로그인 벽으로 복귀.
-로컬 게임 세이브는 로그아웃 관례대로 유지(기기 로컬·비PII·결정론 — 재로그인 시 새 서버 계정과 무관하게 존속).
+성공 시 `useAuthStore.deleteAccount()` → **그 계정 슬롯 로컬 파기(`deleteSaveSlot`, SAVE_SYSTEM §7.7)** → 서버 확정 후 `signOut()`(세션 clear) → BootGate가 로그인 벽으로 복귀.
+> **계정별 세이브 슬롯(SAVE_SYSTEM §7)**: 세이브 키는 `baeknyeon-save:<userId>`라 로그인 계정마다 슬롯이 분리된다 — 다른 계정 로그인=처음부터, 원래 계정 복귀=원래 구단 복원. 로그인 성공/콜드 부팅 캐시 세션 시 `switchSaveScope(userId)`가 슬롯을 로드하고, 계정 삭제는 그 슬롯을 파기한다. 세션 없으면(로그인 벽) 게임 스토어는 로드하지 않고 대기(`skipHydration`).
 > ※로그아웃 버튼 자체는 `app/(tabs)/mypage.tsx` 최하단(§4). 계정 삭제는 파괴적 프런트 작업이라 설정(데이터)에 배치.
 
 ---

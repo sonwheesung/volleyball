@@ -8,7 +8,7 @@
 
 ## 0. 저장 아키텍처 (현재)
 
-- **저장소**: `zustand persist` + `AsyncStorage`, 키 `baeknyeon-save`. 각 기기 로컬 JSON 1개.
+- **저장소**: `zustand persist` + `AsyncStorage`. **키는 계정별**(`baeknyeon-save:<userId>` — §7). 한 기기에 여러 계정 슬롯이 공존하고, 로그인한 계정의 슬롯만 로드된다. (구 고정 키 `baeknyeon-save`는 §7.2 레거시 이관 후 소멸.)
 - **얇은 리플레이 세이브**: 진화된 스탯·순위·생산을 저장하지 않는다. **base 스냅샷(`playerBase`/`rosters`) +
   `currentDay` + `results` + 누적 기록(archive/통산/명전/마일스톤…)** 만 저장하고, 화면·순위·생산은 시드로 **재계산**.
 - **부호화**: `partialize`(저장 필드 화이트리스트, §1) → 직렬화. 복원은 `onRehydrateStorage`가 base를
@@ -200,13 +200,18 @@
 
 ## 5. 코드 맵
 - `store/saveMigration.ts` — `SAVE_VERSION`·`SAVE_DEFAULTS`·`sanitizeSave`·`migrateSave`(신규).
-- `store/useGameStore.ts` — `persist` 옵션에 `version`·`migrate`·**`merge`(§3.2.1 상시 정규화)** 추가, `onRehydrateStorage` try/catch.
+- `store/useGameStore.ts` — `persist` 옵션에 `version`·`migrate`·**`merge`(§3.2.1 상시 정규화)**·**`skipHydration:true`(§7 — 계정 확정 전 자동 로드 금지)** 추가, `onRehydrateStorage` try/catch. 비영속 런타임 필드 **`saveScopeUserId`**(현재 로드된 계정, §7.3).
+- `store/saveScope.ts` (§7 신규) — `saveKeyFor(userId)`·`switchSaveScope(userId)`(전환 시퀀스)·`deleteSaveSlot(userId)`. 계정↔슬롯 전환의 단일 진실.
+- `store/persistStorage.ts` — 디바운스 영속 + **`flushGameSave()`**(§7 전환 전 대기 쓰기 즉시 flush). 키를 **엔트리 시점에 고정**(flush 시점 아님) — 키 전환 오염(§7.4 함정 b) 원천 차단.
+- `store/useAuthStore.ts` — `signIn`(성공 후 `switchSaveScope`)·`deleteAccount`(`deleteSaveSlot` 후 signOut). saveScope는 **동적 import**(순환 의존 회피).
+- `app/_layout.tsx` — 콜드 부팅 시 캐시 세션→`switchSaveScope` 트리거 + 인트로 ready 게이트(§7.5). `components/BootGate.tsx` — 로그인 벽 뒤 **스코프 게이트**(`saveScopeUserId===session.userId` 아니면 Loading — 함정 a).
 - `data/league.ts`·`data/dynamics.ts`·`data/awardSalary.ts` — 복원 커밋(`commitPlayerBase` 등). 정규화 후 입력이라 안전.
 - `tools/_dv_migrate.ts` — 마이그레이션 가드(아래).
 
 ## 6. 검증
 - `npx tsc --noEmit`(+ test config) · `npm test`.
 - `npx tsx tools/_gt_determinism.ts` — 실제 persist `partialize`/`onRehydrate` 충실도(베낀 복사본 아님).
+- **`npx tsx tools/_dv_savescope.ts`** — 계정별 슬롯 격리(§7): 모킹 AsyncStorage 위 실 store로 ①A 진행→로그아웃→B 로그인=freshSave(A 노출 0) ②A 복귀=바이트 복원 ③레거시 1회 이관 ④B 진행해도 A 슬롯 불변(함정 b) ⑤계정 삭제=슬롯 제거 ⑥같은 계정 재로그인 no-op + **A/B**(고정 키 대조 store는 ①에서 A 데이터 노출=FAIL로 민감도 증명). exit 0/1.
 - **`npx tsx tools/_dv_migrate.ts`** — 마이그레이션·정규화 가드:
   - **손상 입력 무크래시**: 모든 필드에 잘못된 타입(배열→`{}`·record→`[]`·scalar→객체·null·NaN·문자열) 주입 →
     `migrateSave`가 throw 없이 **유효 스키마**(§1) 산출. 정규화 후 `onRehydrate`의 모든 spread/Object.keys 안전.
@@ -223,3 +228,54 @@
   넣으면 정규화 못 해 손상값이 그대로 누출됨을 단언(가드가 실제 결함을 잡는다는 민감도 증명 — 허위 오라클 차단).
 
 > 검증 루틴(README)에 `_dv_migrate`(순수)·`_dv_migrate_e2e`(실 store) 등록. 세이브 필드 추가·구조 변경 시 갱신·재실행.
+
+---
+
+## 7. 계정별 세이브 슬롯 (2026-07-15, 사용자 결정)
+
+> **결정**: "다른 계정으로 로그인하면 구단을 처음부터, 원래 계정으로 돌아오면 원래 구단이 복원." 온라인 전환(AUTH_SYSTEM)으로
+> 계정이 재화·결제의 소유 주체가 됐으니, **세이브도 계정 단위**여야 한다. 기존엔 고정 키 하나(`baeknyeon-save`)라 기기를 공유하면
+> 계정을 바꿔도 같은 세이브가 로드됐다. 이 절이 그걸 계정별 슬롯으로 분리한다.
+>
+> **불변식(핵심)**: 이 변경은 **키만** 바꾼다 — payload 스키마·`SAVE_VERSION`·`migrate`·`sanitizeSave`·`partialize`는 **불변**.
+> 결정론(리플레이)도 불변(슬롯 내부는 §0 얇은 리플레이 그대로). 그래서 **`SAVE_VERSION` 범프 불요**(§4 "필드 모양 변경"이 아님).
+
+### 7.1 키 스킴
+- `saveKeyFor(userId) = \`${SAVE_KEY}:${userId}\`` (`baeknyeon-save:google:…` / `baeknyeon-save:dev-local:…`). userId=세션 userId(`store/useAuthStore` Session).
+- 하드 로그인 벽(AUTH §1)이라 **게임 진입 시 세션은 항상 존재** → 로드할 슬롯이 항상 확정된다. 세션이 없으면(로그인 벽) 게임 스토어는
+  **자동 로드하지 않고 대기**한다(`persist` 옵션 **`skipHydration:true`** — 계정 확정 전 아무 슬롯도 안 읽음).
+
+### 7.2 레거시 이관 (1회, 개발 세이브 연속성)
+- 기존 고정 키 `baeknyeon-save`(=`SAVE_KEY`) 세이브가 있으면 **최초로 스코프되는(빈 슬롯) 계정의 슬롯으로 1회 이관**(복사 후 원본 삭제 = rename).
+- 이후 그 계정은 이관된 세이브로 이어가고, 레거시 키는 사라진다(다음 계정은 빈 슬롯 = 신규). 미출시라 실사용자 부채 없음 — 개발 세이브 연속성용.
+
+### 7.3 전환 시퀀스 — `switchSaveScope(userId)` (`store/saveScope.ts`)
+계정이 확정되는 순간(로그인 성공 / 콜드 부팅 캐시 세션) 다음을 **직렬**로 수행한다:
+1. **`flushGameSave()`** — 현 스토어의 디바운스 대기 쓰기를 **현재(이전 계정) 키로** 즉시 flush. 쓰다 만 저장 유실·지연 쓰기 오염 방지(함정 b).
+2. **레거시 이관**(§7.2) — 새 슬롯이 비었고 레거시 키가 있으면 rename.
+3. **`persist.setOptions({ name: 새 키 })`** + `resetLeagueBase()`(이전 계정의 리그 레지스트리 비움).
+4. **슬롯 유무 분기**:
+   - **빈 슬롯(신규 계정)**: `resetSave()` + 계정 캐시 0화(`diamonds:0`·`claimedAch:[]`·`adState` fresh) → **freshSave**(온보딩/구단선택부터). 서버 잔액은 로그인 후 `syncWallet`이 수렴.
+   - **기존 슬롯(복귀 계정)**: `persist.rehydrate()` — `merge`가 `sanitizeSave`로 **전 필드를 그 슬롯 값으로 덮어써** 이전 계정 데이터가 새지 않는다(sanitize=SAVE_DEFAULTS 전 키 산출).
+5. 완료 후 비영속 런타임 필드 **`saveScopeUserId = userId`** 세팅(로드 완료 계정 표식 — §7.5 게이트가 읽음).
+- **직렬화·멱등**: 전환은 프라미스 체인으로 직렬. **같은 계정 재로그인은 no-op**(`activeScope===userId`이면 즉시 반환). 로그아웃은 flush만(스토어 리셋 안 함 — 로그인 벽 뒤라 화면 미노출, 다음 로그인 전환이 덮음).
+
+### 7.4 함정 (문서에 명기 + 가드로 봉인)
+- **(a) 스코프 완료 반영 타이밍** — 로그인으로 `session`이 B로 바뀌는 즉시 `BootGate`가 게임을 렌더하면, `switchSaveScope`가 끝나기 전
+  **이전 계정(A) 메모리 상태가 한 프레임 노출**될 수 있다. → `BootGate`가 로그인 벽 통과 후 **`saveScopeUserId===session.userId`가 아니면
+  Loading**을 렌더(§7.5). 콜드 부팅은 인트로 ready 게이트가 스코프 완료까지 대기해 게임 화면 자체가 안 뜬다.
+- **(b) 디바운스 미flush 상태 키 전환 오염** — 대기 쓰기가 새 키로 새면 A의 늦은 쓰기가 B 슬롯을 오염. → (1) `persistStorage`가 **키를
+  엔트리(setItem 호출) 시점에 고정**해 flush가 늦게 돌아도 항상 원래(A) 키로 쓴다 + (2) 전환 1단계에서 **명시적 flush**로 이중 방어.
+
+### 7.5 게이트 배선
+- **콜드 부팅**(`app/_layout.tsx`): `authHydrated && session`이면 `switchSaveScope(session.userId)`. 인트로 스플래시 `ready = fontsLoaded && authHydrated && (세션 없음 || (게임 hydrated && saveScopeUserId===session.userId))` — 캐시 세션이면 그 계정 슬롯 로드+캐시 워밍까지 대기.
+- **로그인 중 전환**(`store/useAuthStore.signIn`): 세션 저장 후 `switchSaveScope`. `BootGate`의 스코프 게이트가 로드 완료 전까지 Loading으로 막음(함정 a).
+
+### 7.6 계정 단위 필드 — 슬롯 분리로 자연히 계정별
+`diamonds`(표시 캐시)·`claimedAch`·`adState`·`saveId`·`supporter` 등은 세이브 payload 안에 있으므로 **슬롯이 분리되면 계정별로 자연 분리**된다.
+서버 진실(다이아 잔액·업적 지급·광고 캡)은 로그인 후 `syncWallet`이 어차피 수렴하므로 로컬 캐시는 슬롯 값→서버 값으로 정정된다.
+`resetSave`/`selectTeam`의 계정필드 보존(`_dv_reset_preserve`)은 **슬롯 내부 동작**이라 이 변경과 무관·불변.
+
+### 7.7 계정 삭제
+`useAuthStore.deleteAccount` 성공 시 그 계정 슬롯을 **`deleteSaveSlot(userId)`로 AsyncStorage에서 제거**(로컬 파기 — AUTH §7 방침 정합) 후 `signOut`.
+슬롯 삭제는 `activeScope`도 리셋해 재로그인(같은 userId여도) 시 재스코프되게 한다(삭제된 슬롯 = 빈 슬롯 = freshSave).

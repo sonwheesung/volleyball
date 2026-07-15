@@ -39,6 +39,17 @@ interface AuthState {
 // 스텁용 기기 id(엔진 무관 — UI 런타임이라 Math.random 허용). 최초 로그인 때 1회 생성·영속.
 const genDeviceId = (): string => 'dev-' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
 
+// 계정 슬롯 전환/파기(SAVE_SYSTEM §7)를 **동적 import**로 호출 — useGameStore가 useAuthStore를 import하므로
+//   정적 import는 순환(useAuthStore→saveScope→useGameStore→useAuthStore)이 된다. 동적 import가 그 사이클을 끊는다.
+async function scopeSaveTo(userId: string): Promise<void> {
+  const { switchSaveScope } = await import('./saveScope');
+  await switchSaveScope(userId);
+}
+async function dropSaveSlot(userId: string): Promise<void> {
+  const { deleteSaveSlot } = await import('./saveScope');
+  await deleteSaveSlot(userId);
+}
+
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
@@ -78,6 +89,7 @@ export const useAuthStore = create<AuthState>()(
             const session: Session = { userId: 'dev-local:' + deviceId, provider: 'dev', displayName: '개발자(로컬)', token: '' };
             setServerToken(null); // 유효한 서버 Bearer 없음 — 온라인 기능은 조용히 실패(관전/시뮬은 로컬이라 정상)
             set({ session });
+            await scopeSaveTo(session.userId); // 계정 슬롯 로드(SAVE_SYSTEM §7.3) — BootGate 스코프 게이트가 완료 전까지 Loading(함정 a)
             track('login', { provider });
             return { ok: true };
           }
@@ -86,6 +98,7 @@ export const useAuthStore = create<AuthState>()(
         const session: Session = { userId: r.userId, provider: r.provider, displayName: r.displayName, token: r.token };
         setServerToken(session.token); // 이후 서버콜에 Bearer
         set({ session });
+        await scopeSaveTo(session.userId); // 계정 슬롯 로드(SAVE_SYSTEM §7.3)
         void identifyUser(session.userId); // RC app_user_id=우리 userId 고정(§13.18 최대 함정) — 비동기, 결제 전 완료
         track('login', { provider });
         return { ok: true };
@@ -99,9 +112,11 @@ export const useAuthStore = create<AuthState>()(
       },
       deleteAccount: async () => {
         // 서버 확정 후에만 로컬 세션 정리(server-authoritative). 탈퇴는 서버가 진실 — 오프라인이면 재시도 유도.
+        const userId = get().session?.userId;
         const token = get().session?.token;
         if (!token) {
           // dev-local 합성 세션(서버 Bearer 없음) 또는 세션 없음 — 서버에 지울 계정이 없으니 로컬만 정리.
+          if (userId) await dropSaveSlot(userId); // 그 계정 세이브 슬롯 로컬 파기(SAVE_SYSTEM §7.7)
           get().signOut(); // track('logout') 발화 포함
           return { ok: true };
         }
@@ -110,6 +125,7 @@ export const useAuthStore = create<AuthState>()(
           // 오프라인/오류 — 세션 보존(삭제는 서버 확정 필요). 사용자에게 재시도 안내.
           return { ok: false, reason: r.reason === 'offline' ? 'offline' : 'error' };
         }
+        if (userId) await dropSaveSlot(userId); // 서버 확정 후 그 계정 세이브 슬롯 로컬 파기(SAVE_SYSTEM §7.7)
         get().signOut(); // 성공(멱등 alreadyDeleted 포함) → 세션 clear·RC/구글 정리(track('logout')) → BootGate가 로그인 벽으로 복귀
         return { ok: true };
       },

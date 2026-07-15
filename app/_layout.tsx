@@ -15,6 +15,8 @@ import { BootGate } from '../components/BootGate';
 import { DialogHost } from '../components/AppDialog';
 import { MockAdHost } from '../components/MockAdHost';
 import { useGameStore } from '../store/useGameStore';
+import { useAuthStore } from '../store/useAuthStore';
+import { switchSaveScope } from '../store/saveScope';
 import { initIap } from '../lib/iap';
 import { initAds, IS_MOCK_AD_ENV } from '../lib/ads';
 import { initBgm, startBgm, setBgmVolume } from '../audio/bgm';
@@ -106,6 +108,17 @@ export default function RootLayout() {
   // 인트로 게이트(2026-06-28): 스파이크 일러스트 + 로딩 게이지. 실제 준비(폰트 로드 + 세이브 복원=hydrated)에
   // 연동해 100% 차오르면 진입. 이후엔 (tabs) 복원 로딩이 이미 끝나 있어 중복 로딩 없음.
   const hydrated = useGameStore((s) => s.hydrated);
+  // 계정별 세이브 슬롯(SAVE_SYSTEM §7): 게임 스토어는 skipHydration이라 계정이 확정돼야 로드된다.
+  const authHydrated = useAuthStore((s) => s.hydrated);
+  const session = useAuthStore((s) => s.session);
+  const scopeUser = useGameStore((s) => s.saveScopeUserId);
+  const sessionUserId = session?.userId ?? null;
+  // 콜드 부팅 캐시 세션 → 그 계정 슬롯 로드 트리거(§7.5). 세션 없으면(로그인 벽) 트리거 안 함(게임 로드 대기).
+  useEffect(() => {
+    if (authHydrated && sessionUserId) void switchSaveScope(sessionUserId);
+  }, [authHydrated, sessionUserId]);
+  // 인트로 ready — auth 수화 완료 + (세션 없으면 그대로 로그인 벽으로 / 세션 있으면 그 계정 슬롯 로드 완료까지 대기).
+  const gameReadyForSession = !sessionUserId || (hydrated && scopeUser === sessionUserId);
   const [introDone, setIntroDone] = useState(false);
   const mode = useThemeMode(); // 테마 토글 시 리렌더 → key로 전 화면 리마운트(새 스타일 반영)
   // 전역 기본 텍스트 색을 현재 모드로(다크=밝은잉크 / 라이트=검정). 색 미지정 Text 폴백이 안 묻히게(리마운트 전에 갱신).
@@ -128,7 +141,7 @@ export default function RootLayout() {
     return (
       <>
         <StatusBar style="light" />
-        <IntroSplash ready={fontsLoaded && hydrated} onWarm={warmCachesForIntro} onDone={() => setIntroDone(true)} />
+        <IntroSplash ready={fontsLoaded && authHydrated && gameReadyForSession} onWarm={warmCachesForIntro} onDone={() => setIntroDone(true)} />
       </>
     );
   }

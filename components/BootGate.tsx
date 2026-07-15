@@ -31,6 +31,7 @@ function GateScreen({ icon, title, body, actionLabel, onAction }: { icon: React.
 export function BootGate({ children }: { children: ReactNode }) {
   const session = useAuthStore((s) => s.session);
   const authHydrated = useAuthStore((s) => s.hydrated);
+  const scopeUser = useGameStore((s) => s.saveScopeUserId); // 현재 로드된 세이브 슬롯의 계정(§7.4 함정 a 게이트)
   const readAnnouncements = useAuthStore((s) => s.readAnnouncements);
   const markAnnouncementsRead = useAuthStore((s) => s.markAnnouncementsRead);
   const pruneReadAnnouncements = useAuthStore((s) => s.pruneReadAnnouncements);
@@ -84,6 +85,10 @@ export function BootGate({ children }: { children: ReactNode }) {
   }
   // ③ 로그인 벽 — 세션 없으면 진입 불가(캐시 세션이면 오프라인도 통과)
   if (!session) return <LoginScreen />;
+
+  // ③.5 계정 슬롯 스코프 게이트(SAVE_SYSTEM §7.4 함정 a) — 세션이 바뀐 직후 switchSaveScope가 끝나기 전엔
+  //   이전 계정 메모리 상태가 노출될 수 있다. 현재 로드된 슬롯이 이 세션 계정이 될 때까지 Loading으로 막는다.
+  if (scopeUser !== session.userId) return <Loading variant="brand" />;
 
   // 통과 → 게임 + 안 본 활성 공지 모달(무푸시 — 진입 시에만, §13.13). 닫으면 표시분 읽음 처리.
   const unread = activeAnns.filter((a) => !readAnnouncements.includes(a.id));
