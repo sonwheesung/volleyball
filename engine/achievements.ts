@@ -39,7 +39,7 @@ export interface AchStatus {
 const A = (id: string, title: string, desc: string, category: AchCategory, target = 1): Achievement =>
   ({ id, title, desc, category, target });
 
-/** 업적 카탈로그 (v2). 순서 = 화면 표시 순서(카테고리별). */
+/** 업적 카탈로그 (v5 — 총 86개, 정본 docs/ACHIEVEMENT_SYSTEM.md §카탈로그). 순서 = 화면 표시 순서(카테고리별). */
 export const ACHIEVEMENTS: Achievement[] = [
   // ── 우승 ──
   A('first_title', '첫 우승', '우리 구단의 첫 챔피언 등극', '우승'),

@@ -6,9 +6,11 @@
 ## 0. 확정 결정 (2026-06-10)
 - **AI 영입 트리거**: 포지션 구멍날 때만(부상/방출로 healthy 가용 < 필요). 시장 안정.
 - **FA 풀**: 이번 시즌 방출자 + 오프시즌 미계약 FA 잔류분.
-- **샐러리캡**: 시즌 중 영입도 `LEAGUE_CAP` 적용. 로스터 크기 ≤ 18 버퍼(AI 방출 불필요).
-- **정원 하한(2026-06-11)**: `ROSTER_MIN = 10`(선발 7 + 동시부상 상한 3 여유) 밑으로 방출 불가 —
-  스토어 `release()` 게이트가 차단(UI 알림). 이중 방어: 게이트를 우회한 비정상 세이브라도
+- **샐러리캡**: 시즌 중 영입도 `LEAGUE_CAP` 적용. 로스터 크기 ≤ ~~18~~ **20**(`ROSTER_CONTRACT_CAP`, FA §1.5 정본 — 발견 모드 감사 2026-07-15) 버퍼(AI 방출 불필요).
+- **방출 하한(2026-06-11 · 정정 발견 모드 감사 2026-07-15)**: ~~`ROSTER_MIN = 10`(선발 7 + 동시부상 상한 3 여유) 밑으로 방출 불가~~
+  → 현행 방출 게이트는 **총원 10이 아니라 포지션 인지 `canReleasePosition`**(포지션 floor **S2·OH3·OP2·MB3·L2** 미만이 되는 방출 차단, `engine/transactions.ts`)이다.
+  스토어 `release()`가 `canReleasePosition`으로 차단(`store/useGameStore.ts:612`, UI 알림). **`ROSTER_MIN(10)`·`canRelease(총원)`은 미사용 잔재**(호출부 0 —
+  transactions.ts에 상수/하위호환 별칭으로만 남음, store는 canReleasePosition만 호출; store:593 주석의 "(ROSTER_MIN) 게이트" 표현도 스테일). 이중 방어: 게이트를 우회한 비정상 세이브라도
   `buildLineup`이 빈 로스터를 명시적 거부, dynamics 전진 패스는 빈 명단 팀의 부상 굴림만 생략(크래시 없음).
 - **포스트시즌 동결 게이트(2026-07-08 · SEASON_SYSTEM §5.0)**: `currentDay > SEASON_DAYS`(플옵 165~183)이면
   시즌 중 이동 액션 **전부 차단**(`release`·`signInSeason`·`replaceForeign`·`replaceAsian` → 모두 `false`).
@@ -35,8 +37,10 @@
 > 이미 명시**했는데 엔진 `fanScore`엔 그 항이 빠져 있었다(설계-코드 드리프트). 4겹의 무게를 더한다.
 
 ### ① 금전 위약금 (구현 — 재정 무게)
-- 방출 시 **잔여 보장액의 일부를 정산금으로 즉시 지불** → 운영 자금(`cash`) 차감. `severanceFee(contract) =
-  round(salary × remaining × SEVERANCE_RATE)`(`engine/transactions.ts`, `SEVERANCE_RATE=0.4` placeholder).
+- 방출 시 **잔여 보장액의 일부를 정산금으로 즉시 지불** → 운영 자금(`cash`) 차감. `severanceFee(salary, remaining) =
+  max(0, round(salary × max(1, remaining) × SEVERANCE_RATE))`(`engine/transactions.ts:50`, `SEVERANCE_RATE=0.4` placeholder).
+  **`remaining` 플로어 `max(1, …)` 명기(발견 모드 감사 2026-07-15)**: 잔여 0(만료 임박·계약 마지막 시즌)이어도 **최소 1년치 × 0.4**를 정산금으로 문다 —
+  "0원 방출"을 막아 만료 임박 선수도 방출에 재정 무게를 준다(§0.5① 취지).
 - 게이트: `cash < severance`면 방출 불가(스토어 `release()`가 false, UI가 사유 표시). 정원 하한과 별개의 둘째 관문.
 - 결정론: `cash`는 저장 지갑(FA 영입비와 동일 패턴, 즉시 차감). 리플레이 재계산 대상 아님 — 안전.
 
@@ -86,12 +90,12 @@
 
 ## 3. AI 규칙 (레그 경계 6회/시즌, 결정론)
 - 팀 순서 고정. 포지션 p의 healthy 가용 < `ON_COURT[p]` 이면 구멍.
-- FA 풀(포지션 p)에서 OVR 최고 + (payroll+salary ≤ CAP) + (로스터 < 18) → 영입.
+- FA 풀(포지션 p)에서 OVR 최고 + (payroll+salary ≤ CAP) + (로스터 < ~~18~~ **20** `ROSTER_CONTRACT_CAP`) → 영입.
 - 영입가 = `marketValue`. 동시 여러 구멍이면 OVR 높은 자리부터.
 
 ## 4. 플레이어
 - 방출: `release(playerId)` → 즉시 FA 풀(현 시점 이후), payroll 차감, rosters 즉시 갱신.
-- 영입: in-season FA 시장에서 sign(faId) → 현 시점 이후 합류(CAP·18 제약).
+- 영입: in-season FA 시장에서 sign(faId) → 현 시점 이후 합류(CAP·~~18~~ **20**(`ROSTER_CONTRACT_CAP`) 제약).
 - 둘 다 거래 로그에 day=currentDay로 기록.
 
 ## 5. 코드 맵 (예정)
@@ -105,12 +109,12 @@
 - 오프시즌 FA 시장이 거의 청산(구멍≈FA)되어 **잔류 FA는 대개 0**. → 시즌 중 풀은 **방출이 만든다**(웨이버).
 - 방출자는 그 시즌 풀에 즉시 등록(타팀·AI 영입 가능). **미영입 방출자는 시즌말 정리(cut)**.
 - AI 트리거가 보수적(healthy<선발필요)이라 단순 방출만으론 잘 안 뜨고, **방출+부상이 겹쳐 진짜 구멍**일 때 영입.
-- 검증: `tools/simTxSeason.ts`(방출 주입 30시즌) — AI 영입 발생·로스터 ≤18·결정론 ✅.
+- 검증: `tools/simTxSeason.ts`(방출 주입 30시즌) — AI 영입 발생·로스터 ≤~~18~~ **20**(`ROSTER_CONTRACT_CAP`)·결정론 ✅.
 
 ## 6. 검증
 - 결정론: 같은 세이브·거래 = 같은 시즌(골든 테스트 보존, 합성 무영향).
 - sim-league parity 회귀(전 구단 AI 영입 후 균형 유지).
-- 무결성: 로스터 ≤ 18·캡 준수·과거 결과 고정.
+- 무결성: 로스터 ≤ ~~18~~ **20**(`ROSTER_CONTRACT_CAP`)·캡 준수·과거 결과 고정.
 
 ## 7. 캡 계산 단일화 — `capPayroll` (2026-07-07, ~~5~~ **6**-사이트 정합)
 > **문제**: "캡에 잡히는 국내 연봉 합"을 다섯 곳이 **서로 다르게** 셈했다 — ① `reSign` 게이트(override 반영·시즌중

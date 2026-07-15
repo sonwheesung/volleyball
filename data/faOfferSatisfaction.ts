@@ -19,7 +19,8 @@ import { teamAffinityFor } from './offseason';
 /** 결정론 표시용 rand(중앙값) — offerScore의 0.05·rand 항을 중앙(0.5)으로 고정해 만족도가 흔들리지 않게. */
 export const DISPLAY_RAND = 0.5;
 
-// 아래 두 상수는 `data/offseason.ts`의 내 팀 오퍼 산식(:92~93·:229~232)과 동일값(단일 소스 미러).
+// 아래 상수는 `data/offseason.ts`의 내 팀 오퍼 산식(`AGGRESSIVE_MULT` + `resolveFAMarket`의 asking/auto-offer 산식)과 동일값(단일 소스 미러).
+//   (스테일 라인번호 :92~93·:229~232 → 심볼 참조로 정정, 발견 모드 감사 2026-07-15.)
 //   'auto' 오퍼 연봉을 표시할 때만 쓰인다(폼에서 명시 연봉을 넣으면 그 숫자를 사용). 값이 어긋나면 안 됨.
 const AGGRESSIVE_MULT = 1.2; // 내 팀 'auto' 공격적 배수 (offseason.ts AGGRESSIVE_MULT)
 const round100 = (x: number) => Math.round(x / 100) * 100;
@@ -39,12 +40,12 @@ export interface MyOfferInputs {
   bonds: Record<string, number>;       // relationBonds()
 }
 
-/** 요구 연봉(엔진 resolveFAMarket :190과 동일: askingPrice×평판할인 → round100) */
+/** 요구 연봉(엔진 `resolveFAMarket`의 asking 산식과 동일: `round100(askingPrice(marketVal, grade) × 평판할인)`) */
 export function askingFor(inp: Pick<MyOfferInputs, 'player' | 'grade' | 'repMult'>): number {
   return round100(askingPrice(marketVal(inp.player), inp.grade) * inp.repMult);
 }
 
-/** 내 오퍼 제시 연봉 — 엔진 resolveFAMarket :229~232 산식 미러('auto'=asking×(공격적?1.2:1), 숫자=round100(max0)). */
+/** 내 오퍼 제시 연봉 — 엔진 `resolveFAMarket`의 내 팀 offer 산식 미러('auto'=asking×(공격적?1.2:1), 숫자=round100(max0)). */
 export function resolveMyOfferSalary(offer: FAOffer, asking: number): number {
   if (typeof offer.salary === 'number') return round100(Math.max(0, offer.salary));
   return round100(asking * (offer.aggressive ? AGGRESSIVE_MULT : 1));

@@ -142,8 +142,9 @@
 - `components/LegendIllustration.tsx` — `react-native-svg` 유니폼(팀색 `lib/teamColor` primary/light) + 중앙
   등번호. **자릿수별 폰트(1자리 84 / 2자리 56 + `textLength=74` 폭 클램프)** — 2자리 오버플로 교정(웹 스크린샷
   검증 7·10·23·99). 이미지 파일 0·전 해상도 선명.
-- **기록 탭 명예의전당(`app/(tabs)/history.tsx` HofView)**: 레전드는 유니폼 일러스트 + "헌액 번호 N번" +
+- **기록 탭 명예의전당(`app/records-archive.tsx` HofView)**: 레전드는 유니폼 일러스트 + "헌액 번호 N번" +
   번호 계보 한 줄. 비-레전드 HOF는 기존 행 유지.
+  > **코드맵 정정(발견 모드 감사 2026-07-15)**: ~~`app/(tabs)/history.tsx`~~ → `app/records-archive.tsx`(HofView). 2026-06-30 기록 탭 → 마이페이지 허브 개편으로 이관(AWARDS §5 공통 뿌리).
 - **뉴스(`data/news.ts`)**: HOF 헌액/은퇴 세리머니 본문의 "영구결번" 문구를 "헌액 번호 N번"으로 교체 +
   번호 계보가 있으면 사실 문장 추가("이 번호를 단 과거 레전드: …").
 - **헌액 화면(`app/enshrine.tsx`, 2026-06-26 구현)**: 오프시즌 진행 중 — **season-start(`endSeason`) 직후** 진입(체인 첫 상호작용 단계).

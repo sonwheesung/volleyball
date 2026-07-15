@@ -9,7 +9,7 @@ import { jerseyNumber } from '../engine/jersey';
  * @param teamId 헌액 구단(마지막 소속)
  * @param number 헌액 번호
  * @param excludeId 본인(이 헌액의 주인)
- * @param beforeSeason 이 시즌보다 먼저 은퇴한 레전드만(있으면). 없으면 전체 과거.
+ * @param beforeSeason 이 시즌보다 먼저 은퇴한 레전드만(전달 시). 미전달 시 전체 HOF(미래 은퇴자 포함) — 실호출 3곳(enshrine·records-archive·news)이 전부 `h.retiredSeason`을 전달하므로 무해(발견 모드 감사 2026-07-15).
  * @returns 통산점 내림차순 레전드들
  */
 export function numberLineage(

@@ -590,7 +590,8 @@ export const useGameStore = create<GameState>()(
         return { ok: true };
       },
       // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용.
-      // 정원 하한(ROSTER_MIN) 게이트 — 명단이 비어 경기 불가가 되는 상태를 원천 차단.
+      // ~~정원 하한(ROSTER_MIN) 게이트~~ → 포지션 인지 floor 게이트(canReleasePosition, FA §1.6)가 정본(2026-07-15 주석 정정) —
+      // 그 포지션이 최소 보유 수 미만이 되는 방출을 차단해 명단 붕괴(경기 불가)를 원천 차단.
       release: (playerId) => {
         const s = get();
         if (s.currentDay > SEASON_DAYS) return false; // 플옵 엔트리 동결(SEASON §5.0) — 지갑·명단 변경 차단(딥링크/UI 우회 방어)

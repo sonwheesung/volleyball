@@ -22,9 +22,15 @@
 | `milestones: Milestone[]` | 기록 경신 감지 | 리그·구단 기록 |
 | `cash` / `fanScore` | 재정·팬심 | 운영 |
 | `careerLog{faSigns,coachHires,staffHires,interviews}` | 스토어가 액션마다 누적 | 단장(GM 액션) |
-| `careerTotals{points,aces,sets,matches}` | 스토어가 매 시즌말 누적(production+standings) + **평가 시 이번 시즌 진행분 실시간 가산** | 통산(첫 사건·누적 득점) |
+| `careerTotals{points,aces,setsWon,setsLost,matchWins,matchLosses}` | 스토어가 매 시즌말 누적(production+standings) + **평가 시 이번 시즌 진행분 실시간 가산** | 통산(첫 사건·누적 득점) |
 | `selectedTeamId` | 내 팀 | 전부(귀속 판정) |
 
+> **스키마 정정(발견 모드 감사 2026-07-15)**: `CareerTotals`(engine/achievements.ts:12) 실제 필드는 ~~`{points, aces, sets, matches}`~~ →
+> **`{points, aces, setsWon, setsLost, matchWins, matchLosses}`** — 세트/경기는 승·패로 분리돼 있고 합산 `sets`·`matches` 필드는 없다.
+> `first_set_win/loss`는 `setsWon/setsLost≥1`, `first_match_win/loss`는 `matchWins/matchLosses≥1`로 판정.
+> **"첫 실점"(`first_concede`) 근사 주의**: 실점 카운터 필드가 스키마에 없어 `first_concede = (matchWins + matchLosses ≥ 1)`,
+> 즉 **첫 경기 소화 프록시**로 판정한다(engine/achievements.ts:357). 실제 첫 실점 시점이 아니라 "첫 경기를 뛰면 열림" — 사실상 첫 득점과 동시.
+>
 > **통산 업적 시즌중 반영(2026-07-04 버그수정, 문의 12e03390)**: `careerTotals`는 `endSeason`에서만 누적돼 **시즌 중엔 0**
 > → 첫 득점·첫 승·백점 등 통산 업적이 시즌 끝까지 안 열리던 버그(진단 스냅샷: 4경기 진행·careerTotals 전부 0). **평가 시**
 > `data/careerTotals.achTotals(저장 + 이번 시즌 진행분)`을 쓴다(진행분=endSeason과 동일 leagueProduction/seasonResults/

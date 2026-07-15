@@ -26,7 +26,7 @@
 
 ## 2. 캘린더 (lib/calendar.ts)
 
-- 시즌 시작 `2025-10-18`(`SEASON_START`). `dateForDay(dayIndex)` → 실제 날짜.
+- 시즌 시작 `2025-10-18`(`SEASON_START`). `dateForDay(dayIndex, season)` → 실제 날짜(시즌마다 개막 연도 +1 전진, `lib/calendar.ts` UV-6 · 발견 모드 감사 2026-07-15: 구 `dateForDay(dayIndex)` 단일 인자 서명 정정).
 - `monthGrid` 6주(42칸) 그리드. UI 캘린더가 현재일(`currentDay`)을 추적.
 
 ### 2.1 시즌 연도 라벨 — "N시즌" → V리그식 연도 (2026-07-04 사용자 결정, EC-REC-01 후속)
@@ -395,8 +395,9 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
 
 ## 6. 오프시즌 오케스트레이션 (store.endSeason)
 
-> **진행 게이트(2026-06-27 cache-persist 전환)**: `endSeason`은 정규시즌이 **실제로 끝났을 때만**(전 경기 results
-> 완비 = `planNextAction(...).kind === 'seasonOver'`) 진행하고, 아니면 **즉시 return**(no-op). 확정 버튼 연타로 인한
+> **진행 게이트(2026-06-27 cache-persist 전환 · 정정 발견 모드 감사 2026-07-15)**: `endSeason`은 정규시즌이 **실제로 끝났을 때만**
+> (~~전 경기 results 완비~~ → **내 팀 전 경기 완료** = `planNextAction(...).kind === 'seasonOver'`) 진행하고, 아니면 **즉시 return**(no-op).
+> `planNextAction(schedule, teamId, …)`은 **내 팀 픽스처만 필터**(`homeTeamId===teamId || awayTeamId===teamId`, `engine/advance.ts:17`)하므로 게이트는 "리그 전체"가 아니라 "내 팀 잔여 경기 0". 확정 버튼 연타로 인한
 > 시즌 2전진(더블탭)도 이 게이트가 차단(롤오버 후 results가 비워져 planNextAction이 다시 'match'를 돌려줌).
 > → `setDay(164)`만으론 진행 안 됨(results를 채워야). 테스트 하네스도 전 경기 `recordResult` 후 endSeason해야(`_gt_derived` 2026-06-29 교정).
 
@@ -404,7 +405,7 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
 
 ```
 0)   시상식·마일스톤: currentSeasonAwards → archive에 영구 보존(AWARDS_SYSTEM),
-     detectSeasonMilestones → milestones 적립(big 영구+일반 300건, MILESTONE_SYSTEM),
+     detectSeasonMilestones → milestones 적립(~~big 영구+일반 300건~~ → **티어드 롤링 캡**: league 500·club 1000·career-big 2000·비-big 최근 300건, 총 ~3800건 유계 — MILESTONE_SYSTEM §1.2, 발견 모드 감사 2026-07-15: big 영구보존이 시즌² 초선형 폭증을 유발해 2026-07-14 봉인됨),
      seasonInjuryDays 채집(만성용, INJURY_SYSTEM)
 0.4) 시즌 중 이동 반영: seasonTxLog(방출/영입, 플레이어+AI)를 commitRosters로 영구 반영(TRANSACTION_SYSTEM)
 1)   buildDraftContext: 롤오버(evolve 164일+나이+1+경력+1) · 은퇴 · 경쟁 FA(영입/보상) · 순번 · 신인 클래스

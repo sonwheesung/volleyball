@@ -50,5 +50,5 @@ staminaMax는 건드리지 않음 — 부상위험 피드백 스파이럴 차단
 - `data/injury.ts` — dynamics 재노출(기존 import 경로 호환용 셸).
 - `data/production.ts`·`standings.ts`·`playoffs.ts` — 출전 가능 명단으로 전환.
 - `store` — 만성 노쇠가속.
-- `app/(tabs)/index.tsx` — 부상자 명단 카드.
+- ~~`app/(tabs)/index.tsx` — 부상자 명단 카드.~~ → **정정(발견 모드 감사 2026-07-15)**: §5(2026-07-04 "대시보드엔 표시 안 함")와 모순이고 코드도 미표시 — `app/(tabs)/index.tsx:143` 주석 "부상은 여기 표시하지 않는다(순위와 무관)"가 정본. 부상 surface는 **선수단 탭 `부상` 마커 + 리그 뉴스 단신**(§5).
 - `engine/injury.test.ts` + `tools/simInjuries.ts`.

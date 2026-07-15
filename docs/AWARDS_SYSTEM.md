@@ -17,14 +17,16 @@
 | 경기 | **경기 MVP**(매치 단위, 2026-06-25 게이머 리뷰) | **이긴 팀** 최고 생산자(`points + 0.3·digs` — 득점 위주, 수비 가산). 결과 화면 커튼콜 + 한 줄 서사 리캡(완승/풀세트/주요 스탯). `data/matchAward.matchMvp`(box 단일 소스 파생, 새 저장 0) |
 | 미래 | 신인상 | 데뷔 시즌(career.seasons===0) 최고 생산 |
 | 미래 | **기량발전상** | 비-신인 중 시즌 OVR 델타 최대 (코치·훈련의 성적표) |
-| 기록왕 | 득점·공격·블로킹·서브·디그·어시스트(세트)왕 | **순수 1위, 팀 성적 무관**(약체팀의 빛). 용병 독식=현실 그대로 |
+| 기록왕 | 득점왕·**공격상**·블로킹왕·서브왕·디그왕·리시브왕·어시스트/세트왕 | **순수 1위, 팀 성적 무관**(약체팀의 빛). 용병 독식=현실 그대로. ※spike 부문은 코드 4표면 전부 `'공격상'`(왕 아님) — 아래 OPEN Q |
 | 베스트7 | S·OH·OH·OP·MB·MB·L | 포지션별 최고(어시/득점/디그 기준) |
 | 시즌 중 | **라운드 MVP** | 6라운드(leg)별 최고 생산자. 조용히 갱신, 알림 없음 |
 
-> **OPEN Q — 세트/어시스트 부문 라벨 삼분화(2026-07-08 전수조사 발견, 문서 기록만)**: `awards.titles.set`(세터 부문)이 화면마다
-> 다른 이름으로 뜬다 — 시즌 결산 **'세트왕'**(`app/season-recap.tsx:27`) · 선수 수상 이력 **'어시스트왕'**(`data/awards.ts:87`) ·
-> 기록 아카이브 탭 **'어시스트'**(`app/records-archive.tsx:202`). 같은 상인데 표기가 갈려 일관성이 없다. **권고**: KOVO 공식 명칭
+> **OPEN Q — 세트/어시스트 부문 라벨 사분화(2026-07-08 전수조사 발견, 2026-07-15 발견 모드 감사로 4번째 표면 추가, 문서 기록만)**: `awards.titles.set`(세터 부문)이 화면마다
+> 다른 이름으로 뜬다 — 시즌 결산 **'세트왕'**(`app/season-recap.tsx:30`) · 선수 수상 이력 **'어시스트왕'**(`data/awards.ts:87`) ·
+> 기록 아카이브 탭 **'어시스트'**(`app/records-archive.tsx:203`) · 뉴스 상세 **'세트왕'**(`app/news/[id].tsx:394` — 4번째 표면, 발견 모드 감사 2026-07-15). 같은 상인데 표기가 갈려 일관성이 없다. **권고**: KOVO 공식 명칭
 > (여자부 부문상 정식 표기)을 출처로 확인한 뒤 단일 라벨로 통일. **코드 통일은 별도 웨이브** — 지금은 현상+권고만 기록(도메인 정의 확인 후 착수).
+>
+> **형제 항목 — spike 부문 라벨 '공격상' 결정 대기(발견 모드 감사 2026-07-15)**: set 부문과 달리 spike는 4표면(`data/awards.ts:86`·`app/season-recap.tsx:29`·`app/news/[id].tsx:394`·`app/records-archive.tsx`)이 **전부 `'공격상'`으로 일치**하나, 다른 부문(득점왕·블로킹왕·서브왕·디그왕·리시브왕·세트왕)이 전부 "…왕"이라 spike만 "상"인 것이 의도인지 표기 통일(공격왕) 대상인지 사용자 결정 대기. set 라벨 통일 웨이브와 함께 처리.
 
 ## 2. 선정 철학 (수치는 튜닝 placeholder)
 - `impactScore(l) = points + 0.25·assists + 0.18·digs` (`engine/awards.ts`) — 득점 위주, 세터·리베로도 경합 가능.
@@ -54,7 +56,8 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 - `engine/awards.ts` — 순수 `computeSeasonAwards(input)`. 리그/스토어 의존 0.
 - `data/awards.ts` — production·standings·playoffs·rookie·OVR델타를 모아 엔진 호출. `currentSeasonAwards()` / `seasonLegRanges()`.
 - `store` — `endSeason`에서 계산 → archive 적립.
-- `app/(tabs)/history.tsx` — 시즌별 시상식 표시.
+- `app/records-archive.tsx` — 시즌별 시상식 표시(`AwardIllustration`).
+  > **코드맵 정정(발견 모드 감사 2026-07-15)**: ~~`app/(tabs)/history.tsx`~~ → `app/records-archive.tsx`. 2026-06-30 **기록 탭 → 마이페이지 허브** 개편으로 history 탭이 사라지고 기록/시상/HOF/마일스톤이 `records-archive.tsx`(스택 라우트)로 이관됐으나 본 문서 코드맵이 미반영이었다(§6·MILESTONE §4·BROADCAST §8.4 공통 뿌리).
 
 ## 6. 시상식 일러스트 — MVP 트로피 (2026-06-26, 사용자 선택)
 > 시상식(MVP 발표)을 글자 행 대신 **장면**으로 — "시즌 마감의 음미하는 순간"(0장). **MVP 소속 구단 색**은
@@ -63,7 +66,7 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 > **트로피만**(블롭 제거, 2026-06-26 확정). 우승 화면(블롭 3인+큰 컵)과 자연히 구분된다.
 - **컴포넌트**: `components/AwardIllustration.tsx` — `react-native-svg` **금 트로피 + 반짝이**만(블롭 없음).
   컴팩트(viewBox 200×116, width 기본 120). props `{width}`. 트로피는 보편 금색 — 팀색은 감싸는 카드가 담당.
-- **배치**: `app/(tabs)/history.tsx` **시상식 카드** 상단 중앙. 카드 배경/텍스트 색은 **정규 MVP 소속 구단**
+- **배치**: `app/records-archive.tsx`(~~`app/(tabs)/history.tsx`~~ — §5 정정, 2026-06-30 마이페이지 허브 개편) **시상식 카드** 상단 중앙. 카드 배경/텍스트 색은 **정규 MVP 소속 구단**
   (`aw.mvp.teamId → teamColors`). 시상식 카드는 시즌별로 뜨므로(잠정 포함) 매 시즌 그 시즌 MVP 팀색으로. 잠정도 동일.
 - **확인 절차**: 우승 화면과 동일 — sim-web '🏆 우승 화면' 탭에 메달 목업 추가 → 룩 합의 → 앱 통합.
 - 표시 전용·엔진 무파급. 검증: 앱/sim-web tsc·`react-native-svg` 링크 확인(기존 사용처와 동일).

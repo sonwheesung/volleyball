@@ -10,6 +10,13 @@
 | **구단** | 프랜차이즈 통산 1위 등극(득점/블로킹/디그, floor 이상) | 항상 |
 | **리그** | 명예의전당 레전드(영구결번급) 통산 추월 | 항상 |
 
+> **big 임계 정합 사실(발견 모드 감사 2026-07-15)**: 개인 통산 big은 `m.threshold ≥ HEADLINE[stat]`로 판정하는데(`data/milestones.ts:65`),
+> `HEADLINE.matches = 800`이 `CAREER_THRESHOLDS.matches = [400, 700, 1000]`(`engine/milestones.ts:12`)에 **없는 값**이다 → 출전 통산 big은
+> 700 교차에선 안 뜨고 **1000 교차에서만 발동**(700<800≤1000). 다른 stat은 HEADLINE 값이 임계 배열의 최상위와 정확히 일치(points 10000·blocks 2000·digs 7000·aces 1000). **OPEN(의도 확인)**: 출전 big 컷을 700으로 낮출지(HEADLINE.matches→700) 1000 유지가 의도인지 사용자 결정 대기. 현재는 1000-only로 동작(사실 등재만).
+>
+> **club 폴백 자기오염 봉인(발견 모드 감사 2026-07-15, 코드 수정 완료)**: 구단 1위 판정의 `clubMaxOther` 집계에서 옛 폴백 `after.get(id) ?? bef`(자기 자신의 before)가
+> 타 선수 아닌 **자기 스탯으로 clubMaxOther를 인위 상승**시켜 1위 등극 감지를 억제할 수 있었다 → `data/milestones.ts:86-90`에서 **맵 미수록 id는 스킵**(`after.get(otherId) ?? before.get(otherId)`, 자기 참조 제거)으로 수정. 정상 경로 미발동이었으나 근본 봉인.
+
 ## 1. 작동 (결정론)
 - `endSeason` 에서 **before(시즌 시작 base.career) vs after(이번 시즌 생산 누적, seasons+1)** 비교.
 - 개인: `personalMilestones` — `CAREER_THRESHOLDS` 임계 교차.
@@ -57,7 +64,8 @@ big도 **kind별 티어드 롤링 캡**(§1.2: league 500·club 1000·career-big
 - `engine/milestones.ts` — 순수 임계 감지(`crossedThresholds`/`personalMilestones`/`passedValues`).
 - `data/milestones.ts` — `detectSeasonMilestones(season, hof)` 로 Milestone[] (개인+구단+리그, 한국어 문구).
 - `store` — endSeason 적립 + 바운딩.
-- `app/(tabs)/history.tsx` — 마일스톤 타임라인(최근 40, big 강조).
+- `app/records-archive.tsx` — 마일스톤 타임라인(`milestones.slice(-40)`, big 강조).
+  > **코드맵 정정(발견 모드 감사 2026-07-15)**: ~~`app/(tabs)/history.tsx`~~ → `app/records-archive.tsx`. 2026-06-30 기록 탭 → 마이페이지 허브 개편으로 이관(AWARDS §5 공통 뿌리).
 - `tools/simMilestones.ts` — 통산 누적 포함 N시즌 sanity.
 
 ---

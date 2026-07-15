@@ -25,11 +25,13 @@ export const ROSTER_TOTAL = Object.values(ROSTER_IDEAL).reduce((a, b) => a + b, 
 // ── AI 로스터 크기 자율 관리(FA_SYSTEM §1.5~1.7, Phase 1.5 2026-07-09) ──
 //   로스터가 상한(20)으로 팽창하지 않고 **팀 상황별 목표(12~18)** 에 앉게 — 우승권/명문=두껍게, 하위/리빌딩/신생=얇게.
 //   목표는 **직전 순위(성적) 기반 = 평균회귀**(우승권이 곧 상위팀 → 두꺼움; 몰락하면 얇아짐)라 permanent 서열고착이 없다.
-//   정체성은 소폭 nudge(±1, bench 1명 = 코트 무영향)로만 색을 입힌다 — parity A/B로 무회귀 확인(엔진 무파급 기둥6 유지).
+//   ⚠ 정체성 nudge(±1)는 **폐기됨**(FA_SYSTEM §1.7) — parity A/B에서 순위 지속성(서열 고착)을 0.13→0.68로 악화시켜 제거.
+//     정체성은 CLUB_IDENTITY 초기 전력·나이로 초반 성적을 갈라 **간접**으로만 로스터 두께에 이어진다(엔진 무파급 기둥6).
 export const AI_TARGET_MIN = 12; // = 포지션 floor 총합(경기 성립 하한). 어떤 팀도 이 밑을 목표하지 않음.
 export const AI_TARGET_MAX = 18; // 우승권·명문 상한(두꺼운 선수층). 계약 상한 20보다 낮춰 여유(부상 수혈 버퍼).
-/** AI 목표 로스터 크기 — 직전 순위(1=최고) 기반 평균회귀 + 정체성 bias(±1). rank 1-based, n=팀수.
- *  s: 최고순위 1 … 꼴찌 0. base 12 + 5·s → 12(꼴찌)~17(1위), bias로 ±1(명문/신흥 +1·약체/신생/리빌딩 −1). [12,18] 클램프. */
+/** AI 목표 로스터 크기 — 직전 순위(1=최고) 기반 평균회귀. rank 1-based, n=팀수.
+ *  s: 최고순위 1 … 꼴찌 0. base 12 + 5·s → 12(꼴찌)~17(1위). [12,18] 클램프.
+ *  @param bias **폐기된 정체성 nudge 파라미터** — 호출부 0(전부 0/미전달, 정체성 nudge 폐기로 사문화). 제거는 백로그(시그니처 변경 파급 회피). */
 export function aiRosterTarget(rank: number, n: number, bias = 0): number {
   const s = n <= 1 ? 0.5 : Math.max(0, Math.min(1, 1 - (rank - 1) / (n - 1)));
   return Math.max(AI_TARGET_MIN, Math.min(AI_TARGET_MAX, Math.round(AI_TARGET_MIN + 5 * s + bias)));

@@ -46,11 +46,24 @@
 플레이어 결정을 per-fixture 작은 로그로 세이브에 영속. 내 팀 경기만이라 bounded(시즌 ~36경기).
 선발건의 `benchDirectives`(data/dynamics.ts)와 동형 패턴.
 
+~~초안(설계 시점)~~ — 실제 구현 타입과 다름, 취소선 보존(발견 모드 감사 2026-07-15):
 ```ts
+// ~~초안~~
 interface MatchIntervention {
-  at: { setNo: number; h: number; a: number };  // 직전 기록 점수 = 주입 좌표(§3 프리픽스 불변)
+  at: { setNo: number; h: number; a: number };
   kind: 'timeout' | 'sub';
   subOut?: string; subIn?: string;               // kind==='sub'
+}
+```
+**실제 구현 (`engine/simMatch.ts` `MatchIntervention`, 발견 모드 감사 2026-07-15 정합):**
+```ts
+interface MatchIntervention {
+  at: { setNo: number; h: number; a: number };   // 직전 기록 점수 = 주입 좌표(§3 프리픽스 불변)
+  side: Side;                                     // 내 팀 사이드(home|away) — 초안에 없던 필드
+  kind: 'sub' | 'timeout';
+  outId?: string;   // kind==='sub': 코트에서 뺄 선수 id  (초안 subOut)
+  inId?: string;    // kind==='sub': 벤치에서 넣을 선수 id (초안 subIn)
+  subKind?: 'manual' | 'pinch';  // 'manual'=세트 끝까지 / 'pinch'=서브 교체(서브권 잃으면 자동 복귀). 미지정=manual
 }
 // 세이브: interventions: Record<fixtureId, MatchIntervention[]>   (내 팀 경기만)
 ```
@@ -113,7 +126,7 @@ P부터 새 전개로 매끄럽게 이어진다. 경기 1회 시뮬은 밀리초
   예산을 표시하고 소진 시 버튼 비활성(엔진 no-op을 "먹통"으로 오인 방지).
 - **교체 시점**: 데드볼(랠리 사이)만. 랠리 중 금지.
 - **서브 교체(핀치, 2026-07-12 사용자 요청)**: 교체 시 "서브 교체" 선택 가능 — 엔진 기존 `kind='pinch'`로 적용돼
-  **서브권을 잃으면(공격권이 상대로 넘어가면) 자동복원 루프가 원선발로 되돌린다**(match.ts 261행 `pinch && side !== serving`).
+  **서브권을 잃으면(공격권이 상대로 넘어가면) 자동복원 루프가 원선발로 되돌린다**(~~match.ts 261행~~ → `match.ts` 작전 교체 복원 루프의 `rec.kind === 'pinch' && side !== serving → subOut` — 발견 모드 감사 2026-07-15 정정. 행번호 대신 심볼 참조: 실제 위치는 랠리 루프 상단 "복원" 블록. 리팩터 드리프트 방지).
   AI 감독이 이미 자동으로 쓰던 메커니즘을 플레이어 개입 옵션으로 노출. **서브권이 있을 때만** 노출/활성(없으면 즉시
   복원돼 실효 없음 → UI가 서브권 판정(직전 득점 팀=다음 서브)으로 게이팅). `MatchIntervention.subKind: 'manual'|'pinch'`.
 - **타임아웃**: 세트당 한도 엔진 기존값, 세트 중 호출 가능.
@@ -181,6 +194,12 @@ P부터 새 전개로 매끄럽게 이어진다. 경기 1회 시뮬은 밀리초
   form 안 흔듦(격리라 안전).
 - 시상 matches>0 필터 — subUse 크레딧으로 이미 충족.
 - 중계 현수막·마일스톤·업적·시즌결산 — points[]/box 타임라인 재생성으로 자동 흡수.
+
+> **[OPEN] 개입 타임아웃의 계측 훅 미호출 (발견 모드 감사 2026-07-15)**: 감독 자동 타임아웃·테크니컬 타임아웃(TTO)은
+> `opts.stamProbe(setNo, stam, courtIds)`와 `opts.trace` 라인을 호출하지만, **플레이어 개입 타임아웃 블록(`match.ts` 개입 적용부)은
+> 둘 다 호출하지 않는다** — `TimeoutEvent`(보드 계약)는 정상 push하되 계측·trace만 빠짐. `stamProbe`는 rng-중립 계측 전용
+> (`simStamCurve` 체력 곡선 관측용, 기본 off)이라 결과·결정론엔 무영향이지만, 개입 타임아웃이 잦은 세이브에서 체력 곡선 표본에
+> 그 타임아웃 시점이 누락된다. 계측 대칭을 맞출지(개입 TO에도 stamProbe/trace 추가) 결정 대기 — 순수 관측이라 저위험.
 
 ---
 
