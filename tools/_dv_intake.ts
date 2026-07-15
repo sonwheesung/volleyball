@@ -5,6 +5,7 @@ import { LEAGUE, getTeam, resetLeagueBase, commitPlayerBase, commitRosters, team
 import { computeStandings } from '../data/standings';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget'; // #116 프로덕션 우주 정합(2026-07-15)
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
@@ -33,7 +34,7 @@ for (let s = 0; s < seasons; s++) {
   const ctx = buildDraftContext(MY, {}, {}, [], false, [], s + 1);
   const snapshot = ctx.snapshot;
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], MY, [], styleOf, teamScoutReveal);
+  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], MY, [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const p of drafted.picked) snapshot[p.id] = p;
 
   // ── 검증 1: 모든 지명 선수가 지명팀 로스터에 들어갔는가 ──

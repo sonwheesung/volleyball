@@ -20,6 +20,7 @@ import {
 import { buildDraftContext } from '../data/draftSetup';
 import { faMarketPreview } from '../data/offseason';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget'; // #116 프로덕션 우주 정합(2026-07-15)
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
@@ -93,7 +94,7 @@ for (let s = 1; s <= N; s++) {
 
   // 다음 시즌으로 리그 진행(HI 기준 — 우회 검증과 무관, 표본 다양화)
   const snapshot = hi.snapshot;
-  const d = resolveDraft(hi.order, hi.cls, hi.rosters, (id) => snapshot[id], myTeam, [], styleOf, teamScoutReveal);
+  const d = resolveDraft(hi.order, hi.cls, hi.rosters, (id) => snapshot[id], myTeam, [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const p of d.picked) snapshot[p.id] = p;
   const f = fillRosters(d.rosters, (id) => snapshot[id], s);
   for (const p of f.newPlayers) snapshot[p.id] = p;

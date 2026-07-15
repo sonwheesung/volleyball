@@ -6,6 +6,7 @@
 import { LEAGUE, getTeam, getPlayer, resetLeagueBase, commitPlayerBase, commitRosters, teamScoutReveal, evolveOnDay, currentRosters } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget'; // #116 프로덕션 우주 정합(2026-07-15)
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
@@ -51,7 +52,7 @@ for (let s = 0; s < seasons; s++) {
     byExpel[e.kind] = (byExpel[e.kind] ?? 0) + 1;
   }
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], '', [], styleOf, teamScoutReveal);
+  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], '', [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const p of drafted.picked) snapshot[p.id] = p;
   const filled = fillRosters(drafted.rosters, (id) => snapshot[id], s + 1);
   for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;

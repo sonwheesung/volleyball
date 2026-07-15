@@ -8,6 +8,7 @@ import {
 } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget'; // #116 프로덕션 우주 정합(2026-07-15)
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
@@ -66,7 +67,7 @@ for (let s = 0; s < N; s++) {
 
   // 다음 시즌 진행(드래프트+신인+누적)
   const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';
-  const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], '', [], styleOf, teamScoutReveal);
+  const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], '', [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const p of d.picked) snapshot[p.id] = p;
   const f = fillRosters(d.rosters, (id) => snapshot[id], s + 1);
   for (const r of f.newPlayers) snapshot[r.id] = r;

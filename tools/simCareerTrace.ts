@@ -15,6 +15,7 @@ import { computeStandings } from '../data/standings';
 import { leagueProduction } from '../data/production';
 import { advanceCoaches } from '../data/staffLifecycle';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget'; // #116 프로덕션 우주 정합(2026-07-15)
 import { fillRosters } from '../data/rookies';
 import { applyMatchXp } from '../engine/experience';
 import { accrueCareer } from '../engine/production';
@@ -103,7 +104,7 @@ for (let s = 1; s <= N; s++) {
   if (rnd() < 0.25) { const m = teamAssistants(myTeam); if (m.length) releaseAssistant(myTeam, m[0].id); }
 
   const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';
-  const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], myTeam, [], styleOf, teamScoutReveal);
+  const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], myTeam, [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const p of d.picked) snapshot[p.id] = p;
   const f = fillRosters(d.rosters, (id) => snapshot[id], s);
   for (const p of f.newPlayers) snapshot[p.id] = p;

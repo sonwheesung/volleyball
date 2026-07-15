@@ -71,7 +71,7 @@ C. **본문 풍부화 + 변주 엔진** → 같은 종류라도 최대한 다른
 | **업셋** | match | 하위팀이 상위팀을 꺾음(순위차/OVR차 임계 이상) | 큰격차=★ | 경기 결과 + 그 시점 순위 |
 | **선두 등극·순위 변동** | standing | 라운드 경계에서 1위 등극/추락 등 변동 | 1위등극=★ | 라운드별 순위 |
 | **순위 확정(clinch)** (2026-07-11) | clinch | PO진출 확정 / 정규 1위(직행) 확정 / PO 탈락 확정 이 **막 수학적으로 확정된 경기일**(전이 검출). **결과-중립 아님**(확정 사건) · **본인 팀 포함 전 구단** · **치른 경기 기준**(잔여 일정 수학만 → 미래 결과 누출 0, 스포일러 안전). day=확정 경기일 → 확정일 이후에만 노출·2주 만료 | 정규1위=★, PO진출=내 팀=★, 탈락=담담(단신) | `data/clinch.seasonClinchTransitions(leagueDay)` (cutoff3=PO진출/탈락 · cutoff1=1위직행, 단조성으로 경기일만 스캔) |
-| 부상(전 심각도 — 경미 포함, 2026-07-04) | injury | seasonInjuryReport (기존) | 시즌아웃=★ | seasonInjuryReport |
+| 부상(전 심각도 — 경미 포함, 2026-07-04) | injury | seasonInjuryReport (기존). **재부상 구분(2026-07-15)**: 같은 선수 시즌 내 2번째+ 부상은 헤드라인 "재부상·" + 본문 "이번 시즌 N번째 부상"(실데이터) + 변주 키에 발생일 포함 — 옛 코드는 주석만 "선수당 1건 dedup"이라 주장하고 dedup이 없어 **동일 기사 2건**(simNews 내용중복, #116 우주 정합이 표면화한 잠복 — 가드는 정상 작동, 궤적이 가려왔을 뿐) | 시즌아웃=★ | seasonInjuryReport |
 | 사건·사고/영구제명 | scandal | seasonScandals/expelled (기존) | ★ | dynamics/expel |
 | 간판선수 벤치 술렁 | owner | benchDirectives, pop≥60 (기존) | pop≥78=★ | benchDirectives |
 

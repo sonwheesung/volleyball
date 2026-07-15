@@ -9,6 +9,8 @@ import { computeStandings } from '../data/standings';
 import { buildPlayoffs } from '../data/playoffs';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget'; // #116 프로덕션 우주 정합(2026-07-15)
+import { ROSTER_CONTRACT_CAP, ROSTER_FLOOR_TOTAL } from '../engine/transactions';
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
@@ -168,7 +170,7 @@ for (let s = 0; s < seasons; s++) {
   const ctx = buildDraftContext(MY, {}, {}, [], false, [], s + 1, ownerFx);
   const snapshot = ctx.snapshot;
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], MY, [], styleOf, teamScoutReveal);
+  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], MY, [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const p of drafted.picked) snapshot[p.id] = p;
   const filled = fillRosters(drafted.rosters, (id) => snapshot[id], s + 1);
   for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;
@@ -208,6 +210,9 @@ log(`▸ 내 팀 평균 순위: ${(myRankSum / seasons).toFixed(1)}위 (구단�
 const tArr = ids.map((id) => titles[id]);
 const won = tArr.filter((t) => t > 0).length;
 log(`▸ 리그 건강: 우승경험 ${won}/${ids.length} · 최다 ${Math.max(...tArr)}회 · 로스터 ${stat.rosterMin}~${stat.rosterMax}명`);
-const fail = stat.rosterMin < 10 || stat.rosterMax > 18 || won < ids.length - 1 || stat.fanMin < 0 || stat.fanMax > 100;
+// 로스터 밴드 = 현행 가변 로스터 불변식(FA §1.5~1.6): floor 총합 12 ~ 계약 상한 20.
+//   구 [10,18]은 폐기된 고정 로스터(16~18) 시절 상수 — #116 우주 정합 후 19명(특급 BPA 목표 초과 지명, 정당)이
+//   허위 FAIL로 걸려 교정(2026-07-15). 상한 완화가 아니라 문서 불변식으로의 정렬(하한은 10→12로 오히려 조임).
+const fail = stat.rosterMin < ROSTER_FLOOR_TOTAL || stat.rosterMax > ROSTER_CONTRACT_CAP || won < ids.length - 1 || stat.fanMin < 0 || stat.fanMax > 100;
 log(fail ? '\n❌ 건강 기준 위반' : '\n✅ 구단주 레이어 장기 건강 — 무결·이탈 드라마 발생·데스 스파이럴 없음');
 process.exit(fail ? 1 : 0);

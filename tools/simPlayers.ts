@@ -12,6 +12,7 @@ import {
 } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget'; // #116 프로덕션 우주 정합(2026-07-15)
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { accrueCareer } from '../engine/production';
@@ -26,7 +27,7 @@ function advanceOffseason(season: number): { name: string; points: number; seaso
   const ctx = buildDraftContext(my, {}, {}, [], false, [], nextSeason);
   const snapshot = ctx.snapshot;
   const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
-  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf, teamScoutReveal);
+  const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const p of drafted.picked) snapshot[p.id] = p;
   const filled = fillRosters(drafted.rosters, (id) => snapshot[id], nextSeason);
   for (const rookie of filled.newPlayers) snapshot[rookie.id] = rookie;

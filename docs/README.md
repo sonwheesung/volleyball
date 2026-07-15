@@ -106,6 +106,10 @@
 > `_dv_prefix_smoke`(개입 P 이전 프리픽스 바이트 불변 + 효과)·`_dv_intervention_empty`(interventions=[] vs 미지정 바이트 동일)·
 > `_dv_intervention_consistency`(순수 로그: 관전=순위=생산 정합). ~~`_dv_snapshot_board`~~는 스냅샷 폐기(순수 로그)로 대체.
 
+> **✅ 가드 우주 정합 전수화(2026-07-15, #116)**: `resolveDraft`를 오프시즌 진행에 쓰는 상비 가드 25개(`sim*`·`_dv_facompete/facounter/fafail/intake/lineage/resignrefuse/staffscarcity`·`_ev_bodylen`·`_ms_resignfeedback`)가
+> 프로덕션 `endSeason`과 동일하게 `aiTargetOf()`(팀 목표 12~18)를 주입한다 — 이전엔 미주입 기본값(=CAP 20, 폐기된 "상한까지 지명" 우주)에서 측정해 로스터·페이롤이 부풀었다(simFinance 허위 FAIL의 뿌리, TEST_METHODOLOGY §4 "가드 우주 드리프트").
+> 합성 풀·픽사유/결정론 기계 가드(`_ev_draftpick`·`_dv_pickreason`·`_dv_draftsummary`·`_dv_draftlive`·`engine/draft.test`)는 우주 독립이라 기본값 유지. 구 우주 A/B가 필요하면 `simFinance`처럼 env 플래그(`FIN_OLD_UNIVERSE`)로 재현.
+
 ```
 npx tsc --noEmit                          # 앱 타입체크
 npx tsc --noEmit -p tsconfig.test.json    # 테스트 타입체크
@@ -144,7 +148,7 @@ npx tsx tools/_dv_foreign_fa_leak.ts        # 외인 FA 풀 오염 가드 — re
 npx tsx tools/_dv_foreign_contract.ts       # 계약관리 외인 차단 — release/reSign(외인·아시아) 거부·국내 대조군·willBeFA 외인 false + A/B(가드 제거 시 release(외인)=true). EDGE_CASES §3.9, exit 0/1
 npx tsx tools/_dv_tryout_pool.ts            # 트라이아웃 풀 생성 종료 가드(EDGE_CASES §3.14 — edge-swarm 클러스터A) — 정상 domesticAvg 바닥충족·고/극단 domesticAvg 종료(옛 무캡 while은 hang=A/B 이빨). exit 0/1
 npx tsx tools/_dv_lottery.ts                # 추첨/드래프트 순번 분포(FA §3·FOREIGN §1, 검증·실측=Fable 5/가드=Opus) — 두 순번모델 POSITION 분포 N=20000: ①드래프트 1R lotteryRound1 **가중**(꼴찌 1픽률 25.0%≫1위 3.6%·평균 픽위치 1.88→4.79 단조) ②외인 tryoutOrder **균등**(성적무관 전 팀 평균 ≈3.00·1픽률 ≈14.3%=1/7·스프레드 0.063) + A/B 교차(균등→가중검사 FAIL·가중→균등검사 FAIL). exit 0/1
-npx tsx tools/_dv_intake.ts                 # 입단 무결성(#73/#68, FA §3 — 검증=Fable 5/가드=Opus) — store.endSeason 파이프라인(buildDraftContext→resolveDraft→fillRosters) 200시즌 재생: 드래프트 지명(4152명)·외국인·아시아쿼터가 ①지명팀 로스터 반영 0누락 ②fillRosters 후 유실 0 ③중복 소속 0 ④외국인 전 팀 보유(공석 0/1400) ⑤floor 12 위반 0 ⑥댕글링 참조 0. A/B 자가검증: 옛 오라클(시즌초→시즌말 이탈을 붕뜸 오분류)은 FAIL, 올바른 불변식(댕글링)은 PASS — 이탈(정년·방출)은 정상. exit 0/1
+npx tsx tools/_dv_intake.ts                 # 입단 무결성(#73/#68, FA §3 — 검증=Fable 5/가드=Opus) — store.endSeason 파이프라인(buildDraftContext→resolveDraft→fillRosters, **aiTargetOf() 우주 #116 2026-07-15** — 프로덕션 endSeason과 동일한 팀목표 12~18 주입) 200시즌 재생: 드래프트 지명(4152명)·외국인·아시아쿼터가 ①지명팀 로스터 반영 0누락 ②fillRosters 후 유실 0 ③중복 소속 0 ④외국인 전 팀 보유(공석 0/1400) ⑤floor 12 위반 0 ⑥댕글링 참조 0. A/B 자가검증: 옛 오라클(시즌초→시즌말 이탈을 붕뜸 오분류)은 FAIL, 올바른 불변식(댕글링)은 PASS — 이탈(정년·방출)은 정상. exit 0/1
 npx tsx tools/_dv_roster.ts                 # 가변 로스터(#73, FA §1.5~1.7·2.9 — 검증=Fable 5/구현=Opus) — 12/12: ①계약상한 20(재계약·FA·영입 게이트, 드래프트 예외) ②포지션 인지 floor 12(S2·OH3·OP2·MB3·L2) 하회 0·canReleasePosition ③드래프트 지명 2~4(빈자리 아닌 유망주 발굴)·라운드 패스 단조 ④AI 로스터 크기 12~18 편차(rank/n 소프트 목표) ⑤우승권 상관 A/B(부자 depth 독점 없음). 독립 parity(simLeague 50×4·80×6): 왕조 8.2·꼴찌→우승 100%·우승 7/7·topShare 24~38%. exit 0/1
 npx tsx tools/_dv_starve.ts                 # 로스터 고갈 엣지(FA §1.6, 2026-07-14 — 사용자 질문 "막 방출+은퇴로 선수 고갈?") — 내 팀 매 시즌 공격방출(floor까지)+시즌완주+endSeason(은퇴→드래프트→fillRosters) 80시즌 반복, 매 롤오버 후 전 팀 포지션 floor(S2·OH3·OP2·MB3·L2) 이상+buildLineup 성립 검사. 위반 0(방출128·도달80)+A/B(세터축소 floorBreach 검출). 사각봉인: _gt_monkey는 seasonOver 게이트로 endSeason no-op(season=0, 은퇴 미발동), _dv_roster는 은퇴 미구동 — 방출+은퇴+충원 조합을 정면. exit 0/2
 npx tsx tools/_dv_name_dedupe.ts            # 동명이인 방지(FOREIGN_SYSTEM §8, 2026-06-30) — 초기 리그·트라이아웃 풀·드래프트 클래스 부류별 표시 중복 0 + taken 회피 + A/B(충돌 배치 dedup 전>0→후 0=오라클 민감) + 결정론. exit 0/1

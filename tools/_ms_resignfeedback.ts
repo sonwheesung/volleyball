@@ -12,6 +12,7 @@ import {
 } from '../data/league';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget'; // #116 프로덕션 우주 정합(2026-07-15)
 import { fillRosters } from '../data/rookies';
 import { leagueProduction, getPlayerProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
@@ -139,7 +140,7 @@ for (let s = 1; s <= SEASONS; s++) {
 
   const ctx = buildDraftContext(myTeam, {}, {}, [], false, [], s, undefined, 9_999_999);
   const snapshot = ctx.snapshot;
-  const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], myTeam, [], styleOf, teamScoutReveal);
+  const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], myTeam, [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const pk of d.picked) snapshot[pk.id] = pk;
   const f = fillRosters(d.rosters, (id) => snapshot[id], s);
   for (const np of f.newPlayers) snapshot[np.id] = np;

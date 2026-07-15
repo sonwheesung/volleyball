@@ -22,6 +22,7 @@ import {
 import { resolveFAMarket, faMarketPreview } from '../data/offseason';
 import { buildDraftContext } from '../data/draftSetup';
 import { resolveDraft } from '../engine/draft';
+import { aiTargetOf } from '../data/rosterTarget'; // #116 프로덕션 우주 정합(2026-07-15)
 import { fillRosters } from '../data/rookies';
 import { leagueProduction } from '../data/production';
 import { applyMatchXp } from '../engine/experience';
@@ -139,7 +140,7 @@ for (let s = 1; s <= N; s++) {
   // 최종(드래프트+충원) 로스터 — 관측 오라클의 근거
   const snapshot = ctx.snapshot;
   const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';
-  const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], '', [], styleOf, teamScoutReveal);
+  const d = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], '', [], styleOf, teamScoutReveal, [], aiTargetOf());
   for (const p of d.picked) snapshot[p.id] = p;
   const f = fillRosters(d.rosters, (id) => snapshot[id], s);
   for (const p of f.newPlayers) snapshot[p.id] = p;

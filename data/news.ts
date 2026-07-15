@@ -455,13 +455,21 @@ export function buildNewsFeed(
   }
 
   // 4) 이번 시즌 부상 — 경미 포함 전 심각도 단신(2026-07-04 사용자 결정: 부상 소식을 뉴스 한 곳에서 다 보게).
-  //    시즌아웃만 big(★). 선수당 시즌 1건(key dedup)이라 도배 방지. 미래 부상은 리그 진행 컷오프로 제외.
+  //    시즌아웃만 big(★). 미래 부상은 리그 진행 컷오프로 제외.
+  //    ~~선수당 시즌 1건(key dedup)~~ → 정정(2026-07-15, #116 우주 정합이 표면화): dedup 코드는 애초에 없었고
+  //    같은 선수 재부상 시 같은 키 → 같은 변주 → **완전 동일 기사 2건**(simNews 내용중복). 재부상은 실제 사건이므로
+  //    지우지 않고 **구분**한다 — 키에 발생일 포함(변주 분리) + N번째 부상 사실 표기(실데이터 — 가짜드라마 아님).
+  const injNth = new Map<string, number>(); // 선수별 시즌 내 부상 순번(보고 순서 = seasonInjuryReport 결정론 순서)
   for (const s of seasonInjuryReport()) {
     if (s.from > leagueDay) continue; // 아직 안 일어난 미래 부상 제외 — 리그 진행 컷오프(NEWS_SYSTEM §3.5)
+    const nth = injNth.get(s.playerId) ?? 0;
+    injNth.set(s.playerId, nth + 1);
     const out = s.severity === 'season' ? '시즌아웃' : `약 ${s.missMatches}경기 결장`;
-    const key = `${currentSeason}:inj:${s.playerId}`;
-    push(currentSeason, 'injury', `${pName(s.playerId)} ${SEVERITY_KO[s.severity]} — ${out}`, s.severity === 'season', s.teamId,
-      body3('injury', key, `${pName(s.playerId)}(${teamName(s.teamId)})이(가) ${SEVERITY_KO[s.severity]} 판정을 받아 ${out}이(가) 예상된다. ${teamName(s.teamId)}은(는) 당분간 ${posKoOf(s.playerId)} 자리를 메워야 한다.`), s.playerId, s.from);
+    const key = `${currentSeason}:inj:${s.playerId}:${s.from}`;
+    const again = nth > 0 ? '재부상·' : '';
+    const againBody = nth > 0 ? ` 이번 시즌 ${nth + 1}번째 부상이다.` : '';
+    push(currentSeason, 'injury', `${pName(s.playerId)} ${again}${SEVERITY_KO[s.severity]} — ${out}`, s.severity === 'season', s.teamId,
+      body3('injury', key, `${pName(s.playerId)}(${teamName(s.teamId)})이(가) ${SEVERITY_KO[s.severity]} 판정을 받아 ${out}이(가) 예상된다.${againBody} ${teamName(s.teamId)}은(는) 당분간 ${posKoOf(s.playerId)} 자리를 메워야 한다.`), s.playerId, s.from);
   }
 
   // 5) 사건·사고 — 아주 가끔, 리그를 뒤흔드는 헤드라인
