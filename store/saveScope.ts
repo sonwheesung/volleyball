@@ -24,7 +24,13 @@ let scopeChain: Promise<void> = Promise.resolve();
 export function switchSaveScope(userId: string): Promise<void> {
   if (activeScope === userId) return scopeChain; // 이미 그 계정으로 스코프됨/진행 중 — 재실행 안 함
   activeScope = userId;
-  scopeChain = scopeChain.then(() => doSwitch(userId)).catch((e) => { console.warn('[saveScope] switch failed', e); });
+  scopeChain = scopeChain.then(() => doSwitch(userId)).catch((e) => {
+    // 전환 실패(스토리지 오류 등 희귀) 시 activeScope를 되돌린다 — 안 되돌리면 같은 계정 재시도가 no-op이라
+    // BootGate가 앱 재시작 전까지 로딩에 고착(소프트락 엣지, 직접 검수 2026-07-15). 되돌리면 재로그인·다음
+    // 트리거가 전환을 재시도할 수 있다(saveScopeUserId 미세팅이라 게이트는 계속 안전하게 Loading).
+    if (activeScope === userId) activeScope = null;
+    console.warn('[saveScope] switch failed', e);
+  });
   return scopeChain;
 }
 
