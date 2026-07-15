@@ -79,6 +79,24 @@ export const announcements = pgTable(
   (t) => [index('ann_proj_idx').on(t.projCode)],
 );
 
+// ── 개발자 노트/패치노트(DEVNOTES_SYSTEM) — 공개 GET은 status='published'만. 무푸시 관전형 읽을거리(공지=차단성 안내와 역할 구분).
+export const devnotes = pgTable(
+  'devnotes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode),
+    kind: text('kind').notNull(),              // 'patch' | 'note' (앱·admin에서 검증, DB는 text)
+    title: text('title').notNull(),
+    body: text('body').notNull(),              // 마크다운 원문
+    appVersion: text('app_version'),           // 패치노트만 채움(예 '0.4.0'), 노트는 null
+    status: text('status').notNull().default('draft'), // 'draft' | 'published'
+    publishedAt: timestamp('published_at', { withTimezone: true }), // 게시 순간 세팅(정렬·표시용)
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [index('devnotes_proj_idx').on(t.projCode), index('devnotes_proj_status_idx').on(t.projCode, t.status)],
+);
+
 // ── 쿠폰(§13.14) — 전체용(targetUserId null)·개인용(set), 둘 다 기간제. 보상=다이아. 관리자 발급, 유저 코드입력 사용.
 export const coupons = pgTable(
   'coupons',
@@ -213,6 +231,7 @@ export type User = typeof users.$inferSelect;
 export type WalletLedgerRow = typeof walletLedger.$inferSelect;
 export type StatsDailyRow = typeof statsDaily.$inferSelect;
 export type Announcement = typeof announcements.$inferSelect;
+export type Devnote = typeof devnotes.$inferSelect;
 export type Coupon = typeof coupons.$inferSelect;
 export type CouponRedemption = typeof couponRedemptions.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;

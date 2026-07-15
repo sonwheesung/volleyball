@@ -143,6 +143,23 @@ export async function redeemCoupon(code: string): Promise<CouponRedeemResult> {
   return r as CouponRedeemResult; // 서버 reason(invalid/expired/used/not-eligible)이 call()의 body.reason으로 전달됨
 }
 
+// ── 개발자 노트/패치노트(DEVNOTES_SYSTEM §4.2) ──
+// 공개 GET(published만·publishedAt desc). 공개 콘텐츠라 Bearer 불필요(공지 bootstrap 동급). 무푸시 관전형 읽을거리.
+// 본문(마크다운)까지 목록 응답에 포함 → 상세도 오프라인으로 열림(§3.4 — 목록에 본문 포함 권고).
+export type DevnoteKind = 'patch' | 'note';
+export interface DevnoteItem {
+  id: string;
+  kind: DevnoteKind;
+  title: string;
+  body: string; // 마크다운 원문
+  appVersion: string | null; // 패치노트만 채워짐(노트는 null)
+  publishedAt: string | null; // 게시 순간 timestamptz(정렬·표시). null 방어.
+}
+/** 개발자 노트/패치노트 목록 — 서버가 published만 최신순으로 반환(§4.2). 실패 시 typed offline/error(throw 없음). */
+export function getDevnotes(): Promise<ServerResult<{ devnotes: DevnoteItem[] }>> {
+  return call('/api/devnotes');
+}
+
 // ── 로그(기기 롤링 버퍼 업로드) ──
 export function uploadLogs(entries: unknown[]) {
   return call<{ received: number }>('/api/log', { method: 'POST', body: JSON.stringify({ entries }) });

@@ -12,6 +12,7 @@ import { Card, Muted, Screen, theme, themedStyles } from '../../components/Scree
 import { SpotlightOverlay } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
 import { useAuthStore } from '../../store/useAuthStore';
+import { readDevnotesCache, refreshDevnotes } from '../devnotes';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd, unclaimedReward } from '../../engine/diamonds';
 import { evalAchievements } from '../../engine/achievements';
 import { achTotals } from '../../data/careerTotals';
@@ -20,7 +21,7 @@ import { logError } from '../../lib/log';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-function LinkCard({ icon, tint, title, sub, onPress }: { icon: IoniconName; tint: string; title: string; sub: string; onPress: () => void }) {
+function LinkCard({ icon, tint, title, sub, onPress, badge }: { icon: IoniconName; tint: string; title: string; sub: string; onPress: () => void; badge?: number }) {
   return (
     <Card accent={tint} onPress={onPress}>
       <View style={styles.row}>
@@ -31,6 +32,9 @@ function LinkCard({ icon, tint, title, sub, onPress }: { icon: IoniconName; tint
           <Text style={styles.title}>{title}</Text>
           <Muted style={{ fontSize: 12.5, marginTop: 1 }}>{sub}</Muted>
         </View>
+        {badge && badge > 0 ? (
+          <View style={styles.badge}><Text style={styles.badgeTxt}>{badge > 99 ? '99+' : badge}</Text></View>
+        ) : null}
         <Text style={styles.arrow}>›</Text>
       </View>
     </Card>
@@ -65,6 +69,24 @@ export default function MyPage() {
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
+
+  // 개발자 노트 안읽음 배지(DEVNOTES §3.1) — 캐시 먼저(즉시) → 온라인 갱신(진입 시). 게시글 id 중 readDevnotes에 없는 개수.
+  const readDevnotes = useAuthStore((s) => s.readDevnotes);
+  const [devnoteIds, setDevnoteIds] = useState<string[]>([]);
+  useEffect(() => {
+    let alive = true;
+    (async () => {
+      const cached = await readDevnotesCache();
+      if (alive && cached) setDevnoteIds(cached.map((d) => d.id));
+      const fresh = await refreshDevnotes();
+      if (alive && fresh) setDevnoteIds(fresh.map((d) => d.id));
+    })();
+    return () => { alive = false; };
+  }, []);
+  const devnoteUnread = useMemo(() => {
+    const read = new Set(readDevnotes);
+    return devnoteIds.filter((id) => !read.has(id)).length;
+  }, [devnoteIds, readDevnotes]);
 
   const accountLabel = session
     ? session.displayName || (session.provider === 'dev' ? '개발자 계정' : session.provider === 'google' ? 'Google 계정' : session.provider === 'apple' ? 'Apple 계정' : '계정')
@@ -177,6 +199,11 @@ export default function MyPage() {
           sub="업데이트 · 이벤트 · 안내"
           onPress={() => router.push('/announcements')} />
 
+        <LinkCard icon="sparkles-outline" tint={theme.violet} title="개발자 노트"
+          sub="패치노트 · 개발 이야기"
+          badge={devnoteUnread}
+          onPress={() => router.push('/devnotes')} />
+
         <LinkCard icon="bag-handle-outline" tint={theme.sky} title="상점"
           sub={WORLDCUP_ENABLED ? '다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원' : '다이아 구매 · 광고 제거 · 구매 복원'}
           onPress={() => router.push('/shop')} />
@@ -253,6 +280,8 @@ const styles = themedStyles(() => StyleSheet.create({
   title: { color: theme.text, fontSize: 16, fontWeight: '700' },
   balance: { color: theme.text, fontSize: 26, fontWeight: '900', marginTop: 1 },
   arrow: { color: theme.muted, fontSize: 24, fontWeight: '400' }, // 화살표 = 장식 → 민트 대신 회색으로(민트 희소성, item 9)
+  badge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, backgroundColor: theme.bad, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
+  badgeTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },
   diaBtnOff: { backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.border, opacity: 0.6 }, // 수령 불가 — 회색 비활성

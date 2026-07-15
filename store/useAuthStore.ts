@@ -22,12 +22,15 @@ interface AuthState {
   session: Session | null;
   deviceId: string | null; // 스텁 providerId(기기 안정). EAS에선 실제 소셜 sub로 대체.
   readAnnouncements: string[]; // 본 공지 id(기기 로컬 — BACKEND §13.13). 재노출 방지, 매 부팅 활성분과 교집합 prune.
+  readDevnotes: string[]; // 읽은 개발자 노트/패치노트 id(기기 로컬 — DEVNOTES §3.3, 공지와 동일 논리). 안읽음 배지·재노출 방지.
   dismissedUpdateVersion: string | null; // 닫은 소프트 업데이트 latest(§13.16) — 새 latest 발행 시 재노출
   hydrated: boolean;
   signIn: (provider: 'google' | 'apple' | 'dev') => Promise<SignInResult>;
   signOut: () => void;
   markAnnouncementsRead: (ids: string[]) => void; // 모달/재열람에서 본 공지 기록
   pruneReadAnnouncements: (activeIds: string[]) => void; // 활성 id와 교집합만 유지(무한증가 차단)
+  markDevnoteRead: (id: string) => void; // 노트 상세 진입 시 그 id 읽음 처리(DEVNOTES §3.3)
+  pruneReadDevnotes: (activeIds: string[]) => void; // 게시글 id와 교집합만 유지 — **온라인 응답 시에만** 호출(§3.3 F 함정: 응답 없이 prune하면 유효 글 재노출)
   dismissUpdate: (latest: string) => void; // 소프트 업데이트 배너 닫음(그 latest는 재노출 안 함)
 }
 
@@ -40,10 +43,13 @@ export const useAuthStore = create<AuthState>()(
       session: null,
       deviceId: null,
       readAnnouncements: [],
+      readDevnotes: [],
       dismissedUpdateVersion: null,
       hydrated: false,
       markAnnouncementsRead: (ids) => set((s) => ({ readAnnouncements: Array.from(new Set([...s.readAnnouncements, ...ids])) })),
       pruneReadAnnouncements: (activeIds) => set((s) => { const a = new Set(activeIds); return { readAnnouncements: s.readAnnouncements.filter((id) => a.has(id)) }; }),
+      markDevnoteRead: (id) => set((s) => (s.readDevnotes.includes(id) ? s : { readDevnotes: [...s.readDevnotes, id] })),
+      pruneReadDevnotes: (activeIds) => set((s) => { const a = new Set(activeIds); return { readDevnotes: s.readDevnotes.filter((id) => a.has(id)) }; }),
       dismissUpdate: (latest) => set({ dismissedUpdateVersion: latest }),
       signIn: async (provider) => {
         const device = getDeviceInfo(); // 진단 기기정보 동봉(§13.17)
@@ -93,7 +99,7 @@ export const useAuthStore = create<AuthState>()(
     {
       name: 'auth.v1',
       storage: createJSONStorage(() => AsyncStorage),
-      partialize: (s) => ({ session: s.session, deviceId: s.deviceId, readAnnouncements: s.readAnnouncements, dismissedUpdateVersion: s.dismissedUpdateVersion }),
+      partialize: (s) => ({ session: s.session, deviceId: s.deviceId, readAnnouncements: s.readAnnouncements, readDevnotes: s.readDevnotes, dismissedUpdateVersion: s.dismissedUpdateVersion }),
       onRehydrateStorage: () => (state) => {
         if (state?.session?.token) setServerToken(state.session.token); // 캐시 세션 → 오프라인 진입
         // 재시작 복원 경로에서도 RC app_user_id를 우리 userId로 고정(§13.18 최대 함정) — 안 하면 앱 재시작 후
