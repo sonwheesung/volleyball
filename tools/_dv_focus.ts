@@ -37,7 +37,8 @@ const ATK = ARCHETYPES.find((a) => a.name === '공격파')!.focus;   // primary 
 const DEF = ARCHETYPES.find((a) => a.name === '수비파')!.focus;   // primary [6 리시브, 7 디그]
 const BASIC = ARCHETYPES.find((a) => a.name === '기본기파')!.focus; // primary [4 스파이크, 6 리시브]
 const STAM = ARCHETYPES.find((a) => a.name === '체력파')!.focus;   // primary [1 웨이트, 2 컨디셔닝]
-const EMPTY: TrainingFocus = { primary: [], secondary: [] };        // ← coachShare≡0.02 상수 mutant
+// 빈 방침 mutant — 튜플 길이(primary 2·secondary 3)를 고의로 위반하는 무효 입력이라 타입만 우회(런타임 동작 불변)
+const EMPTY = { primary: [], secondary: [] } as unknown as TrainingFocus; // ← coachShare≡0.02 상수 mutant
 
 const results: { name: string; pass: boolean; detail: string }[] = [];
 const record = (name: string, pass: boolean, detail: string) => { results.push({ name, pass, detail }); };

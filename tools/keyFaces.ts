@@ -6,6 +6,7 @@
 //   - green: 배경만 제거(g가 크고 r·b가 확실히 작을 때) → 틸 유니폼(g-b 작음)·검은머리·피부 보존.
 //   - white: 순백 반사/여백 제거.
 //   - despill: 머리·피부 가장자리의 초록 스필을 눌러 후광 제거.
+// @ts-ignore — sharp는 오프라인 전처리 전용(`npm install --no-save sharp`)이라 평소 미설치가 기본(런타임/앱 무관, tsc 경고 억제)
 import sharp from 'sharp';
 
 // 튜닝 대상이 아니라 "재현" 대상 — 바꾸면 기존 faces*.png와 톤이 어긋난다. 변경 시 전량 재처리.
