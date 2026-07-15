@@ -11,7 +11,7 @@ import { SEASON_DAYS } from './calendar';
 
 export type DiscontentTopic = 'win' | 'minutes' | 'money' | 'hometown';
 
-/** 선수가 코트에 못/안 나오는 사유 (ROTATION_MORALE B). 'rested'는 #3 구현 전까지 휴면. */
+/** 선수가 코트에 못/안 나오는 사유 (ROTATION_MORALE B). 'rested'(#3 로드매니지먼트)는 구현·활성(data/rotation.ts restedOnDay). */
 export type SitCause = 'starter' | 'injured' | 'suspended' | 'rested' | 'ownerBenched' | 'outclassed';
 /** 선수 기분 (ROTATION_MORALE C) — 불만 / 무감정 / 긍정 */
 export type Mood = 'discontent' | 'neutral' | 'positive';
@@ -22,9 +22,9 @@ export const SIT_CAUSE_KO: Record<SitCause, string> = {
 };
 
 export interface DiscontentCtx {
-  recentRankAvg: number;   // 팀 최근 2시즌 평균 순위(1=1위)
+  recentRankAvg: number;   // 팀 현 시즌 현재 순위(1=1위). ※호출처(data/owner.discontentNow)는 computeStandings(refDay)의 당해 순위를 넣는다 — "최근 2시즌 평균"은 미구현(F3 발견 2026-07-15)
   teamCount: number;
-  playRatio: number;       // 최근 10경기 출전 비율 0..1
+  playRatio: number;       // 시즌 누적 출전율 0..1(=출전경기/기대경기, C.4 정합). ※"최근 10경기"가 아님 — 창 슬라이딩 미구현(F13 발견 2026-07-15)
   salaryRatio: number;     // 연봉 / 시장가치
   myTeamId: string;
   sitCause?: SitCause;     // 왜 벤치/출전인지 — 출전 불만을 사유로 분기(없으면 구버전 playRatio 폴백)
