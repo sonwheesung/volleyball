@@ -76,14 +76,32 @@ function playerAt(L: Lineups, side: Side, rot: number, zone: number): Player {
 type Rally = RallyState;
 
 // 구간별 포물선 높이(px) / 공 크기 피크 — 토스가 가장 크게 휘고 커진다
-const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06, bounce: COURT_H * 0.05 };
-const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1, bounce: 1.06 };
+const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serveToss: COURT_H * 0.12, serve: COURT_H * 0.10, pass: COURT_H * 0.05, toss: COURT_H * 0.17, spike: COURT_H * 0.03, fault: COURT_H * 0.06, bounce: COURT_H * 0.05 };
+const BALL_SCALE: Record<Move, number> = { start: 1, return: 1, walk: 1, serveToss: 1.3, serve: 1.2, pass: 1.05, toss: 1.55, spike: 1.15, fault: 1.1, bounce: 1.06 };
 const JUMP = 1.45; // 점프 시 마커 확대
 const SETTLE_SEGMENTS = 2; // 블록/스파이크 점프 후 착지 정지 구간 수(점프 직후 즉시 이동 방지)
 const SPEED = 2; // 전체 경기 속도 배수(클수록 느림). 2 = 2배 느리게
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
 const COURT_PAD = SERVE_OUT + 4; // 코트 밖 서브 공간(버퍼 10→4로 축소, 2026-06-28 — 코트 유지하며 한 화면 맞춤)
 const serveOutY = (side: Side) => (side === 'home' ? COURT_H + SERVE_OUT : -SERVE_OUT);
+
+// ── 공 스핀(룰 64) ── 세그먼트 회전각(deg) = 이동거리 × SPIN_K × 타입배수. prog(네이티브 드라이버)에 rotate로 부여
+//  (리렌더 0·JS스레드 부하 0 — #122 발열 회피). 스크린 각속도 = deg/dur ∝ 거리/시간 = 속도 비례.
+const SPIN_K = 2.6;            // deg/px — 서브(~250px)에서 ~1.8회전, 스파이크 서브는 ×배수로 고속 탑스핀
+const SPIN_SERVE_SPIKE = 1.5;
+// 세그먼트 회전 배수: 서브=타입별(스파이크 고속·플로터 0=무회전 → 룰66 흔들림이 대신), 전달구간=저속, 그 외 랠리=1
+function spinMulOf(to: WP): number {
+  if (to.kind === 'serve') return to.stype === 'spike' ? SPIN_SERVE_SPIKE : to.stype === 'floater' ? 0 : 1;
+  if (to.kind === 'start' || to.kind === 'return' || to.kind === 'walk' || to.kind === 'serveToss') return 0.4;
+  return 1;
+}
+// 결정론 해시(서브 궤적 변조 부호·진폭 — 매프레임 랜덤 아님, 룰 66). 32비트 믹서 → [0,1)
+const hash01 = (n: number): number => {
+  let x = (n ^ 0x9e3779b9) >>> 0;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0;
+  x = Math.imul(x ^ (x >>> 16), 0x45d9f3b) >>> 0;
+  return ((x ^ (x >>> 16)) >>> 0) / 4294967296;
+};
 
 /** 한 랠리의 공 이동 경로 — courtPath(순수 모듈, 헤드리스 검증 가능)에 위임 */
 const ballPath = (r: Rally, seed: number, L: Lineups, prevLast?: { x: number; y: number }): WP[] =>
@@ -115,11 +133,13 @@ function VolleyBall() {
 }
 
 const easingFor = (k: Move) =>
-  k === 'toss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : k === 'bounce' ? Easing.out(Easing.quad) : Easing.linear;
+  k === 'toss' || k === 'serveToss' ? Easing.inOut(Easing.quad) : k === 'spike' || k === 'fault' ? Easing.in(Easing.quad) : k === 'bounce' ? Easing.out(Easing.quad) : Easing.linear;
 
 /** 이 구간에 점프하는 마커들 — 서브(서버)·토스(세터)·스파이크(공격수+벽에 선 블로커만) */
 function jumpersFor(from: WP, to: WP, homeRot: number, awayRot: number, L: Lineups): { side: Side; idx: number }[] {
-  if (to.kind === 'serve' || to.kind === 'toss') return [{ side: from.side, idx: from.idx }];
+  // 서브 점프(룰 67): 스파이크 서브만 서버가 점프 타격, 플로터는 무점프(가벼운 타격 — 간결).
+  if (to.kind === 'serve') return to.stype === 'spike' ? [{ side: from.side, idx: from.idx }] : [];
+  if (to.kind === 'toss') return [{ side: from.side, idx: from.idx }];
   if (to.kind === 'spike') {
     const opp = other(from.side);
     const rot = opp === 'home' ? homeRot : awayRot;
@@ -238,6 +258,16 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   }, [finished, rallies, idx, seed, prevLineups]);
   const path = useMemo(() => (finished ? [] : ballPath(rallies[idx], seed, lineups, prevLast)), [finished, rallies, idx, seed, lineups, prevLast]);
   const segCount = Math.max(0, path.length - 1);
+  // 공 스핀 누적 회전각(deg) — 세그먼트 경계서 이음매 스냅 없이 이어지도록 base[i]→base[i+1]. path 바뀔 때만.
+  const spinBases = useMemo(() => {
+    const bases: number[] = [0];
+    for (let i = 0; i + 1 < path.length; i++) {
+      const a = path[i], b = path[i + 1];
+      const d = Math.hypot(b.x - a.x, b.y - a.y);
+      bases.push(bases[bases.length - 1] + d * SPIN_K * spinMulOf(b));
+    }
+    return bases;
+  }, [path]);
 
   // ── 작전 교체 연출 ── 이 랠리의 교체(투입 enter + **같은 세트 내 원위치 복귀**) → 골드 강조 + 이름표 + 팝인 + 배지.
   // 버그수정(2026-06-28): 기존엔 투입(enter)만 표시해 **핀치서버가 서브 끝나고 빠지는 역교체가 코트에 안 떴다**
@@ -461,9 +491,26 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   // 공 transform — 포물선(translateY에 아치 가산) + 크기(떴다 떨어지는 원근감)
   const last = path.length ? path[path.length - 1] : zonePx('home', 1);
   const arcH = seg ? (seg.to.arc ?? ARC[seg.to.kind]) : 0;
+  // 서브 궤적 변조(룰 66) — 렌더 전용 측면(translateX) 오프셋. 양 끝 0 → 낙구점(seg.to.x) 불변 = 결정론·auditBoard 무영향.
+  //  스파이크=탑스핀 커브(단일 보우, 부호 시드), 플로터=너클 흔들림(진폭 시드 해시 — 매프레임 랜덤 아님).
+  const serveXOffset = (() => {
+    if (!seg || seg.to.kind !== 'serve') return null;
+    if (seg.to.stype === 'spike') {
+      const sgn = hash01((seed ^ Math.imul(idx + 1, 2654435761)) >>> 0) < 0.5 ? -1 : 1;
+      const amp = 0.055 * COURT_W;
+      return prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [0, sgn * amp, 0] });
+    }
+    if (seg.to.stype === 'floater') {
+      const A = 0.032 * COURT_W;
+      const a = (k: number) => (hash01((seed ^ Math.imul(idx + 1, 40503) ^ Math.imul(k, 2246822519)) >>> 0) * 2 - 1) * A;
+      return prog.interpolate({ inputRange: [0, 0.2, 0.4, 0.6, 0.8, 1], outputRange: [0, a(1), a(2), a(3), a(4), 0] });
+    }
+    return null;
+  })();
+  const baseTX = seg ? prog.interpolate({ inputRange: [0, 1], outputRange: [seg.from.x, seg.to.x] }) : null;
   const ballTransform = seg
     ? [
-        { translateX: prog.interpolate({ inputRange: [0, 1], outputRange: [seg.from.x, seg.to.x] }) },
+        { translateX: serveXOffset && baseTX ? Animated.add(baseTX, serveXOffset) : baseTX! },
         {
           translateY: Animated.add(
             prog.interpolate({ inputRange: [0, 1], outputRange: [seg.from.y, seg.to.y] }),
@@ -471,6 +518,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
           ),
         },
         { scale: prog.interpolate({ inputRange: [0, 0.5, 1], outputRange: [1, seg.to.scale ?? BALL_SCALE[seg.to.kind], 1] }) },
+        // 스핀(룰 64) — 세그먼트 누적 회전각(deg). 네이티브 드라이버 rotate 인터폴레이트.
+        { rotate: prog.interpolate({ inputRange: [0, 1], outputRange: [`${spinBases[segIdx] ?? 0}deg`, `${spinBases[segIdx + 1] ?? spinBases[segIdx] ?? 0}deg`] }) },
       ]
     : [{ translateX: last.x }, { translateY: last.y }];
 

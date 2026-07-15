@@ -120,7 +120,9 @@ export function segmentTargets(
     // 으로 그린다. 기존엔 walk가 !inPlay라 양 팀 다 리시브 대형 → 서브팀 전위가 깊게 보였음(2026-06-20 사용자
     // 보고: "서브팀 전위가 네트에 붙어 블로킹 준비해야"). 받는 팀은 walk에도 리시브 유지. 세터 침투(릴리즈)는
     // walk엔 안 함 — 서브 컨택 후에만(컨택 전 릴리즈 = 오버랩 위반, 룰 45). serveWalk는 서브 대형만 켠다.
-    const serveWalk = segKind === 'walk';
+    // serveToss(서브 전 토스, 룰 67)도 walk처럼 컨택 전 국면 — 서브팀=서브 대형, 받는 팀=리시브 유지,
+    //  세터 침투(릴리즈) 없음(컨택 전 오버랩 위반 방지, 룰 45/46). servePhase(컨택)만 세터를 릴리즈한다.
+    const serveWalk = segKind === 'walk' || segKind === 'serveToss';
     const servePrep = servePhase || serveWalk;
     const holdReceive = serveWalk ? side !== stage.serving : !inPlay || (servePhase && side !== stage.serving);
     // 서브 팀은 **서브 컨택 순간에만** 오버랩 베이스(serveFormation)를 유지한다(룰 Q 합법성).
@@ -146,8 +148,16 @@ export function segmentTargets(
       const isServer = stage.serving === side && zone === 1;
       const b = posMap[i] ?? zonePx(side, zone, W, H);
       let t: Px = { x: b.x, y: b.y };
-      if (isServer && (segKind === 'walk' || segKind === 'serve')) t = { x: zonePx(side, 1, W, H).x, y: serveOutY(side) };
-      else { const mv = moveMap[`${side}-${i}`]; if (mv) t = mv; }
+      if (isServer && (segKind === 'walk' || segKind === 'serveToss' || segKind === 'serve')) {
+        // 서버 도움닫기(룰 67): walk(뒤로 물러섬) → serveToss(달려들기 시작) → serve(앞으로 드라이브/컨택)로 단조 전진.
+        //  스파이크 서브 = 더 물러섰다 달려듦(+점프는 렌더 jumpersFor), 플로터 = 가벼운 스텝. 서버는 룰 Q 면제 대상.
+        //  코트 이탈 여백: home 최대 y = H + serveOut + 16(=walk 스파이크) ≤ H + serveOut + 24(감사 C 한계).
+        const spike = seg?.to.stype === 'spike';
+        const backPx = segKind === 'walk' ? (spike ? serveOut + 16 : serveOut)
+          : segKind === 'serveToss' ? (spike ? serveOut + 2 : serveOut)
+          : (spike ? 4 : serveOut - 6); // serve 컨택
+        t = { x: zonePx(side, 1, W, H).x, y: side === 'home' ? H + backPx : -backPx };
+      } else { const mv = moveMap[`${side}-${i}`]; if (mv) t = mv; }
       out[`${side}-${i}`] = t;
     }
   }

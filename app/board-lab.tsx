@@ -33,7 +33,7 @@ const SERVE_OUT = 22;
 const R = 14; // 마커 반지름
 
 const KIND_KO: Record<Move, string> = {
-  start: '시작', return: '복귀', walk: '서브대기', serve: '서브', pass: '리시브',
+  start: '시작', return: '복귀', walk: '서브대기', serveToss: '서브토스', serve: '서브', pass: '리시브',
   toss: '토스(세트)', spike: '스파이크', fault: '범실', bounce: '바운드',
 };
 

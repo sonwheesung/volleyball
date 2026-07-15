@@ -18,7 +18,7 @@ const W = 400, H = 560, SERVE_OUT = 22, R = 15, RW = R + 5;
 const DAY = 0; // 프리시즌 기준(부상 없음·풀 로스터)
 const SERVE_RING = '#F2722C', FRONT_RING = '#F2A93B';
 const KIND_KO: Record<Move, string> = {
-  start: '시작', return: '복귀', walk: '서브대기', serve: '서브', pass: '리시브',
+  start: '시작', return: '복귀', walk: '서브대기', serveToss: '서브토스', serve: '서브', pass: '리시브',
   toss: '토스(세트)', spike: '스파이크', fault: '범실', bounce: '바운드',
 };
 const r3 = (n: number) => Math.round(n * 1000) / 1000;
@@ -27,7 +27,7 @@ const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v
 const isBackZone = (z: number) => z === 1 || z === 5 || z === 6;
 const NS = 'http://www.w3.org/2000/svg';
 // 재생 애니메이션 — 공 포물선 높이(H 비율, MatchCourt와 동일 결)·마커 슬라이드 이징
-const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serve: 0.10, pass: 0.05, toss: 0.17, spike: 0.03, fault: 0.06, bounce: 0.05 };
+const ARC: Record<Move, number> = { start: 0, return: 0, walk: 0, serveToss: 0.12, serve: 0.10, pass: 0.05, toss: 0.17, spike: 0.03, fault: 0.06, bounce: 0.05 };
 const easeOut = (t: number) => 1 - (1 - t) * (1 - t);
 
 interface LabMarker {

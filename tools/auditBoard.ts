@@ -51,6 +51,7 @@ const flag = (kind: string, detail: string, frame?: Record<Key, Pt>, ball?: Pt) 
 let maxSpeed = 0; let maxSpeedCtx = '';
 const holeSamples: number[] = [];
 const endings: Record<string, number> = {}; // 보드가 그리는 랠리 종결 유형 분포
+const serveTypes: Record<string, number> = { spike: 0, floater: 0, '미지정': 0 }; // 서브 타입 분포(룰 65 — stype 집계)
 
 // Q) 서브 오버랩 합법성 — 서브 컨택 순간 6명이 로테이션 순서를 지키는가(BOARD_RULES 18).
 //    같은 행 좌<중<우(전위 4·3·2 / 후위 5·6·1), 같은 열 전위가 후위보다 네트에 가깝다(4·5/3·6/2·1).
@@ -163,6 +164,7 @@ for (let m = 0; m < nMatches; m++) {
     for (let k = 0; k + 1 < path.length; k++) {
       const seg = { from: path[k], to: path[k + 1] };
       const to: WP = seg.to;
+      if (to.kind === 'serve') serveTypes[to.stype ?? '미지정'] = (serveTypes[to.stype ?? '미지정'] ?? 0) + 1; // 서브 타입 집계(룰 65)
       if (commentLine(seg, r.how, L, stage)) commentCount++;
       const segDur = (to.dur ?? SEG_DUR[to.kind]) * SPEED;
       const targets = segmentTargets(seg, stage, L, W, H, SERVE_OUT, lastTargets);
@@ -398,6 +400,11 @@ if (holeSamples.length) {
   log(`수비 빈 공간: 중앙값 ${sorted[Math.floor(sorted.length / 2)].toFixed(1)}m · p95 ${sorted[Math.floor(sorted.length * 0.95)].toFixed(1)}m · 최대 ${sorted[sorted.length - 1].toFixed(1)}m`);
 }
 log(`중계 텍스트: 랠리당 평균 ${(commentTotal / Math.max(1, totalRallies)).toFixed(1)}줄`);
+{
+  const st = serveTypes.spike + serveTypes.floater + serveTypes['미지정'];
+  const pct = (n: number) => ((n / Math.max(1, st)) * 100).toFixed(1);
+  log(`서브 타입 분포(룰 65): 스파이크 ${pct(serveTypes.spike)}%(${serveTypes.spike}) · 플로터 ${pct(serveTypes.floater)}%(${serveTypes.floater})` + (serveTypes['미지정'] ? ` · 미지정 ${pct(serveTypes['미지정'])}%` : ''));
+}
 const total = Object.values(counts).reduce((a, b) => a + b, 0);
 if (total === 0) {
   log(`\n✅ 이상 장면 0건 — 워프·네트침범·코트이탈·지속겹침·리바운드홀·수비홀·디그부적합·아웃볼무추격·유령터치·토서점유·퍼스트터치배회·죽은공점유·스터프상승·공전달·서브오버랩·서브대기오버랩 모두 통과 (기준: docs/BOARD_RULES.md)`);
