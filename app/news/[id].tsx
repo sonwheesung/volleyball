@@ -18,6 +18,7 @@ import { seasonYear } from '../../data/seasonLabel';
 import { displayCutoff } from '../../data/standings';
 import { KIND_KO } from '../news';
 import { getPlayer, getTeam, teamScoutReveal, reconstructForeignName } from '../../data/league';
+import { TITLE_LABELS } from '../../data/awards'; // 부문 기록상 라벨 단일 출처(사용자 결정 2026-07-15 — KOVO "~상")
 import { fogOvr, potentialEstimate, revealedCount } from '../../data/prospectScout';
 import { overallRaw, displayOvr, REVEAL_PRECISE } from '../../engine/overall';
 import { seasonInjuryReport } from '../../data/injury';
@@ -390,12 +391,10 @@ function awardsForPlayer(aw: SeasonAwards, playerId: string): { label: string; v
   if (aw.finalsMvp?.playerId === playerId) out.push({ label: '챔프전 MVP' });
   if (aw.rookie?.playerId === playerId) out.push({ label: '신인상' });
   if (aw.mostImproved?.playerId === playerId) out.push({ label: '기량발전상' });
-  const TK: Record<string, [string, string]> = { // titles 키 → [라벨, 단위]
-    scoring: ['득점왕', '점'], spike: ['공격상', '개'], block: ['블로킹왕', '개'], serve: ['서브왕', '개'], dig: ['디그왕', '개'], set: ['세트왕', '개'], receive: ['리시브왕', '개'],
-  };
-  for (const [k, [label, unit]] of Object.entries(TK)) {
+  const TITLE_UNIT: Record<string, string> = { scoring: '점', spike: '개', block: '개', serve: '개', dig: '개', set: '개', receive: '개' };
+  for (const [k, label] of Object.entries(TITLE_LABELS)) { // 라벨=단일 출처(data/awards.ts), 단위만 화면 로컬
     const w = aw.titles[k as keyof SeasonAwards['titles']];
-    if (w?.playerId === playerId) out.push({ label, value: `${w.value.toLocaleString()}${unit}` });
+    if (w?.playerId === playerId) out.push({ label, value: `${w.value.toLocaleString()}${TITLE_UNIT[k]}` });
   }
   for (const s of aw.best7 ?? []) if (s.winner?.playerId === playerId) out.push({ label: `베스트7 (${POS_LABEL[s.pos]})` });
   (aw.roundMvps ?? []).forEach((w, i) => { if (w?.playerId === playerId) out.push({ label: `${i + 1}라운드 MVP` }); });

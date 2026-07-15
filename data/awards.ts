@@ -82,9 +82,15 @@ export function currentSeasonAwards(season: number, uptoDay: number = Number.MAX
 
 export interface AwardHistoryItem { season: number; label: string }
 
-const TITLE_KO: Record<string, string> = {
-  scoring: '득점왕', spike: '공격상', block: '블로킹왕',
-  serve: '서브왕', dig: '디그왕', set: '어시스트왕', receive: '리시브왕',
+/**
+ * 부문 기록상 7종: 부문 키 → 사용자 노출 라벨. **전 화면 단일 출처**(복붙 드리프트 방지 — UI-3).
+ * 라벨 = KOVO 기준 "~상" 계열(사용자 결정 2026-07-15 — "~왕"은 언론 표현, 정식 부문상은 "~상"). AWARDS_SYSTEM §1.
+ * ⚠ 표시 전용 파생 — archive에 저장되는 건 `AwardWinner`(playerId/teamId/value)뿐, 이 라벨 문자열은 저장 안 됨.
+ *   따라서 라벨을 바꿔도 과거 세이브와 갈라지지 않는다(마이그레이션 불필요).
+ */
+export const TITLE_LABELS: Record<string, string> = {
+  scoring: '득점상', spike: '공격상', block: '블로킹상',
+  serve: '서브상', dig: '디그상', set: '세트상', receive: '리시브상',
 };
 
 /** archive(영구 보존된 시즌별 시상)를 선수 기준으로 훑어 수상 연표를 만든다. 순수 함수(store 무의존). */
@@ -101,7 +107,7 @@ export function awardHistoryOf(
     if (w.rookie?.playerId === playerId) out.push({ season: a.season, label: '신인상' });
     if (w.mostImproved?.playerId === playerId) out.push({ season: a.season, label: '기량발전상' });
     for (const [k, t] of Object.entries(w.titles)) {
-      if (t?.playerId === playerId) out.push({ season: a.season, label: TITLE_KO[k] ?? k });
+      if (t?.playerId === playerId) out.push({ season: a.season, label: TITLE_LABELS[k] ?? k });
     }
     if (w.best7.some((b) => b.winner?.playerId === playerId)) out.push({ season: a.season, label: '베스트7' });
     const rounds = w.roundMvps.filter((m) => m?.playerId === playerId).length;

@@ -14,6 +14,7 @@ import { numberLineage } from '../data/legends';
 import { seasonYear } from '../data/seasonLabel';
 import { getPlayer, getTeam, teamPlayerIds, shortTeamName as short, reconstructForeignName } from '../data/league';
 import { leagueProduction } from '../data/production';
+import { TITLE_LABELS } from '../data/awards'; // 부문 기록상 라벨 단일 출처(사용자 결정 2026-07-15 — KOVO "~상")
 import { computeStandings, displayCutoff, seasonComplete } from '../data/standings';
 import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, seasonSnapshot, type RecordCat } from '../data/records';
 import { useGameStore } from '../store/useGameStore';
@@ -196,15 +197,15 @@ function SeasonView({
           </Card>
 
           <Card accent={theme.gold} flat>
-            <Text style={styles.cardHead}>부문 기록왕</Text>
+            <Text style={styles.cardHead}>부문 기록상</Text>
             {([
-              { label: '득점', w: aw.titles.scoring }, { label: '공격', w: aw.titles.spike },
-              { label: '블로킹', w: aw.titles.block }, { label: '서브', w: aw.titles.serve },
-              { label: '디그', w: aw.titles.dig }, { label: '어시스트', w: aw.titles.set },
-              { label: '리시브', w: aw.titles.receive },
+              { label: TITLE_LABELS.scoring, w: aw.titles.scoring }, { label: TITLE_LABELS.spike, w: aw.titles.spike },
+              { label: TITLE_LABELS.block, w: aw.titles.block }, { label: TITLE_LABELS.serve, w: aw.titles.serve },
+              { label: TITLE_LABELS.dig, w: aw.titles.dig }, { label: TITLE_LABELS.set, w: aw.titles.set },
+              { label: TITLE_LABELS.receive, w: aw.titles.receive },
             ]).map((a) => (
               <View key={a.label} style={styles.awRow}>
-                <Text style={styles.awLabel}>{a.label}왕</Text>
+                <Text style={styles.awLabel}>{a.label}</Text>
                 <Text style={[styles.awName, a.w && isMine(a.w.playerId) && styles.mine]} numberOfLines={1}>{awName(a.w)}</Text>
                 <Text style={styles.lbTeam} numberOfLines={1}>{a.w ? short(a.w.teamId) : ''}</Text>
                 <Text style={styles.lbVal}>{a.w?.value ?? ''}</Text>
@@ -222,7 +223,7 @@ function SeasonView({
           <Text style={styles.cardHead}>시상식</Text>
           <Muted style={{ fontSize: 12.5 }}>
             아직 시즌 초반입니다 ({gamesPlayed}경기). 정규리그가 1/3({AWARD_MIN_GAMES}경기) 넘게 진행되면
-            잠정 MVP·기록왕 윤곽이 잡힙니다. 지금은 아래 순위·리더보드로 흐름을 보세요.
+            잠정 MVP·부문 기록상 윤곽이 잡힙니다. 지금은 아래 순위·리더보드로 흐름을 보세요.
           </Muted>
         </Card>
       ) : (

@@ -23,12 +23,8 @@ import { formatMoneyShort } from '../data/money';
 import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
 import type { AwardWinner } from '../types';
-
-// 부문 기록왕 라벨(awards.titles 키 → 한국어) — data/awards.ts TITLE_KO의 사본(표시 전용). ⚠ set 키만 다름: 여기 '세트왕' vs awards.ts '어시스트왕'(라벨 통일 OPEN Q — AWARDS_SYSTEM §1).
-const TITLE_KO: Record<string, string> = {
-  scoring: '득점왕', spike: '공격상', block: '블로킹왕',
-  serve: '서브왕', dig: '디그왕', set: '세트왕', receive: '리시브왕',
-};
+// 부문 기록상 라벨 = 단일 출처(data/awards.ts TITLE_LABELS). 화면별 사본 금지 — 사용자 결정 2026-07-15(KOVO "~상") 통일.
+import { TITLE_LABELS } from '../data/awards';
 
 /** 메뉴형 내비 카드(마이페이지식, 2026-07-12 테스터) — 미리보기 내용 대신 **상세 화면 설명**만. "상세 보기" 텍스트 제거, 화살표만. */
 function NavCard({ accent, icon, label, desc, onPress }: {
@@ -107,7 +103,7 @@ function RecapInner() {
     if (isMine(aw.rookie)) awardLines.push(`신인상: ${pName(aw.rookie!.playerId)}`);
     if (isMine(aw.mostImproved)) awardLines.push(`기량발전상: ${pName(aw.mostImproved!.playerId)}`);
     for (const [k, w] of Object.entries(aw.titles)) {
-      if (isMine(w)) awardLines.push(`${TITLE_KO[k] ?? k}: ${pName(w!.playerId)}`);
+      if (isMine(w)) awardLines.push(`${TITLE_LABELS[k] ?? k}: ${pName(w!.playerId)}`);
     }
     const b7 = aw.best7.filter((s) => isMine(s.winner)).length;
     if (b7 > 0) awardLines.push(`베스트7 선정: ${b7}명`);

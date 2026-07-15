@@ -13,6 +13,7 @@ import { seasonSnapshot } from '../../data/records';
 import { computeStandings, displayCutoff, seasonStreaks } from '../../data/standings';
 import { leagueProduction } from '../../data/production';
 import { getPlayer, getTeam, shortTeamName as short, reconstructForeignName } from '../../data/league';
+import { TITLE_LABELS } from '../../data/awards'; // 부문 기록상 라벨 단일 출처(사용자 결정 2026-07-15 — KOVO "~상")
 import { rosterIdsOnDay } from '../../data/dynamics';
 import { recapBriefing } from '../../data/recapBriefing';
 import { seasonYear } from '../../data/seasonLabel';
@@ -131,12 +132,12 @@ function AwardsDetail({
       </Card>
 
       <Card accent={theme.gold} flat>
-        <Text style={styles.cardHead}>부문 기록왕</Text>
+        <Text style={styles.cardHead}>부문 기록상</Text>
         {([
-          { label: '득점왕', w: aw.titles.scoring }, { label: '공격상', w: aw.titles.spike },
-          { label: '블로킹왕', w: aw.titles.block }, { label: '서브왕', w: aw.titles.serve },
-          { label: '디그왕', w: aw.titles.dig }, { label: '세트왕', w: aw.titles.set },
-          { label: '리시브왕', w: aw.titles.receive },
+          { label: TITLE_LABELS.scoring, w: aw.titles.scoring }, { label: TITLE_LABELS.spike, w: aw.titles.spike },
+          { label: TITLE_LABELS.block, w: aw.titles.block }, { label: TITLE_LABELS.serve, w: aw.titles.serve },
+          { label: TITLE_LABELS.dig, w: aw.titles.dig }, { label: TITLE_LABELS.set, w: aw.titles.set },
+          { label: TITLE_LABELS.receive, w: aw.titles.receive },
         ]).map((a) => a.w ? (
           <View key={a.label} style={styles.awRow}>
             <Text style={styles.awLabel}>{a.label}</Text>
