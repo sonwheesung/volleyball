@@ -117,6 +117,24 @@
 > **✅ UV-1~UV-12 전건 수정 완료(2026-07-15)** — 검증: `tsc`(app+test) 0 · `npm test` 214 · 신규 가드 `_dv_rosterui`(A/B: 구 base 셀렉터는 시즌 중 영입 누락 실증) · `_dv_severance`·`_dv_capprecheck`·개입 3종(`_dv_intervention_empty/consistency`·`_dv_prefix_smoke`)·`checkSubs`·뉴스 3종·업적 가드·`_dv_copylint`·`_dv_fa_relations`·`_dv_faofferui` 전부 PASS.
 > 메인 재검증서 형제 1건 추가 발견·수정: **UV-1c** — `contracts.tsx` FA 등급 풀(`leagueFaGrades`)만 base 명단 잔존 → 시즌 중 영입 FA 예정자가 풀에서 빠져 `faGrades.get(...)!` undefined("undefined등급") 가능. 풀도 `activeRosterOnDay`로 통일(+overrides·inSeasonTx deps).
 
+> **✅ UV-7 후속 — 개입 교체 FIVB 대칭 사전차단(2026-07-15, F1·F2)**: UV-7 ⑥은 *pickOut*(뺄 선수)에서 엔진이 반드시
+> 거부하는 슬롯(부상 교체 슬롯·1왕복 복귀 선발)을 사전 제외했다. 이번엔 **IN 후보와 서브 교체(핀치)** 두 대칭 구멍을 마저 막는다.
+> 원칙: **표시 후보·활성 버튼 = 엔진 subIn이 실제로 허용하는 것만**(엔진 거부를 확정 후 부정확 문구로만 처리 금지). 서버 슬롯
+> 도출은 **로테이션 재생(`reconstructRallies`, engine/match 규칙과 동일)** → `serverIndex(rot)`, 신규 가드 `tools/_dv_rotation_replay`가
+> 엔진 트레이스 `[h:a] 서브권 X (로테이션 Hn/An)`와 **전 랠리 대조(N≥300, 100% 일치 + 오프바이원 변이 민감도)** 로 박제(추정 금지).
+>
+> | 엔진 거부 사유 (`engine/match.ts subIn`) | UI 차단 지점 | 문구/동작 |
+> |---|---|---|
+> | **F2** IN 후보가 이번 세트 교체로 나간 선발(`usedStarterOut.has(inP.id)`) | `benchCands` 필터에서 제외(`outThisSet` = tactical enter `outId`, point ≤ ptIdx) — 일반·서브 교체 공유 | 후보 목록에서 미노출(나갔던 선발을 다른 자리 IN으로 안 보임) |
+> | **F1 ①** 현재 서버 슬롯이 세터(`six[slot].position==='S'`) | 메뉴 "서브 교체" 버튼 `disabled`(`pinchBlock`) | "지금 서브 차례가 세터예요 — 세터는 빼지 않아요" |
+> | **F1 ③** 서버 슬롯이 부상 교체 슬롯(`injuryReplaced.has(slot)`) | 동 | "부상 교체가 들어간 자리예요" |
+> | **F1 ②** 서버 슬롯이 활성 교체 슬롯(`activeSubs.has(slot)`) | 동 | "이미 교체가 들어간 자리예요" |
+> | **F1 ④** 서버가 1왕복 복귀 선발(`usedStarterOut.has(occupant.id)`) | 동 | "한 번 나갔다 돌아온 선수 자리라 다시 못 빼요" |
+>
+> 사유 우선순위(버튼 부제)=한도 소진 → 서브권 없음 → 서버 슬롯 거부(위 4사유, 엔진 subIn 순서 ①→③→②→④) → 정상. **최종 진실은
+> `commitIntervention` 드라이런** — 사전차단이 못 잡은 잔여 케이스는 `onConfirmSub` 폴백이 같은 사유(`pinchBlock.reason`)로 처리.
+> 검증: `tsc` 0 · `_dv_rotation_replay` PASS(400경기 68,803랠리 100% 일치·변이 400/400 검출).
+
 **보고만 (WAI/설계 문서화/저가치 — 수정 안 함, 근거)**: 개막 전 순위표=전팀 0승 동률의 시드 순서(설계 여지, 저가치) · 순위표 "세트±" 컬럼 vs 실제 타이브레이크=세트득실률(standings.ts에 의도 문서화) · clinch=playedThroughDay(BROADCAST 스포일러 정책의 문서화된 예외) · 정규종료~첫 PO 사이 playoffs/calendar "대기"(스포일러-보수 방향, 누수 없음) · 대시보드 자금 경고 임계 2억(순수 UI 판단값, 대응 엔진 상수 없음) · "3전2선승" 라벨(현재 정합, PO_TARGET 변경 시 보간 후보) · 부문 기록왕 라벨 3표기(공격왕/공격상·세트왕/어시스트왕 — 정본 표기 사용자 결정 대기, season-recap.tsx OPEN Q) · HOF 헤더 "은퇴 레전드 N"이 일반 헌액 포함(라벨 해석 여지) · first_concede=첫 경기 프록시(무실점 경기 사실상 불가) · 광고 일일 리셋=UTC 자정(클라·서버 일치, 문구만 "오늘/내일" — 동작 버그 아님) · supporter IAP 스텁(#43 트랙) · 구단 정체성 "최근 5시즌"·창단 연차 고정(백스토리=시작 조건 설계, 100년 후 워딩 이슈만) · recordChampion 부분 archive로 시상식~오프시즌 창에서 시즌 카운트류 업적 +1 선표시(과도기 창) · season-recap 미사용 구독(maxWinStreak 스캔 낭비 — 성능 소소, 표시 무영향).
 
 ## UI-27 세계관 사유 문구 예시 (BusyOverlay message — 2026-07-08 사용자 결정)

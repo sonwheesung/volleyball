@@ -18,9 +18,10 @@ import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
 import { buildLineup } from '../../engine/lineup';
 import { SUBS_PER_SET, TIMEOUTS_PER_SET } from '../../engine/match';
+import { serverIndex } from '../../engine/rotation';
 import { overallRaw, displayOvr } from '../../engine/overall';
 import { deriveRatings } from '../../engine/ratings';
-import type { MatchIntervention } from '../../engine/simMatch';
+import type { MatchIntervention, SubEvent } from '../../engine/simMatch';
 import type { Side, Player } from '../../types';
 import { buildPlayoffs, poSeedBase, finalSeedBase } from '../../data/playoffs';
 import { buildPlayoffBox, type PoRound } from '../../data/postseason';
@@ -249,9 +250,14 @@ export default function MatchBoard() {
     const priorInSet = (e: (typeof evs)[number]) => e.side === mineSide && e.setNo === score.setNo && e.point <= score.ptIdx;
     // 이번 세트 이미 진입한 교체선수(재진입 금지, 엔진 usedSubIn) — injury는 usedSubIn에 안 들어가므로 tactical만.
     const usedIn = new Set(evs.filter((e) => e.enter && e.kind !== 'injury' && priorInSet(e)).map((e) => e.inId));
+    // 이번 세트 교체로 코트를 나간 선발(usedStarterOut) — 다른 슬롯 IN 후보로도 제외(F2 UI 대칭). FIVB 15.6.1: 나갔던
+    //   선발은 재진입 불가(자기 슬롯 1왕복 외). 엔진 대칭: match.ts subIn `usedStarterOut.has(inP.id)→거부`.
+    //   outCands가 만드는 roundTripStarters와 동일 집합(그건 '복귀한 선발 재이탈 금지', 이건 '나간 선발을 다른 자리
+    //   IN 후보로 안 보임'). 복귀해 코트에 있는 선발은 onCourt가 이미 거르므로, 여기 걸리는 건 아직 벤치에 있는 아웃 선발.
+    const outThisSet = new Set(evs.filter((e) => e.enter && e.kind !== 'injury' && priorInSet(e)).map((e) => e.outId));
     // 이번 경기 부상 이력(st.injured는 경기 전체 지속·세트 무관)이되, 미래(주입 지점 이후) 부상은 미확정 → point 컷오프.
     const injuredIn = new Set(evs.filter((e) => e.kind === 'injury' && e.side === mineSide && e.point <= score.ptIdx).map((e) => e.outId));
-    return mySquad.filter((p) => p.position !== 'L' && !onCourt.has(p.id) && !usedIn.has(p.id) && !injuredIn.has(p.id)
+    return mySquad.filter((p) => p.position !== 'L' && !onCourt.has(p.id) && !usedIn.has(p.id) && !outThisSet.has(p.id) && !injuredIn.has(p.id)
       && (!outPos || p.position === outPos));
   }, [mineSide, mySquad, curSix, data.sim, score.setNo, score.ptIdx, pendingOut, byIdAll]);
   // 뺄 선수 후보(pickOut) — 엔진 subIn이 반드시 거부하는 슬롯을 사전 제외해 "먹통 버튼"(UV-7 ⑥) 방지:
@@ -293,6 +299,38 @@ export default function MatchBoard() {
     if (i >= 0 && pts[i] && pts[i].setNo === score.setNo) return pts[i].scorer === mineSide;
     return (data.sim.setFirstServers?.[score.setNo - 1]) === mineSide;
   }, [mineSide, data.sim, score.ptIdx, score.setNo]);
+  // 서브 교체(핀치) 사전차단(F1) — 서브 교체는 뺄 선수를 안 고르고 **현재 서버 슬롯**을 자동 타겟(§4 #4)한다.
+  //   그 슬롯 선수가 엔진 subIn이 반드시 거부하는 상태(①세터 ③부상교체슬롯 ②활성교체슬롯 ④복귀선발)면 메뉴에서
+  //   미리 차단 + 정확한 사유를 보여준다(확정 후 부정확 문구 방지). 서버 슬롯 = 로테이션 재생(reconstructRallies,
+  //   엔진 match.ts 규칙과 동일 — tools/_dv_rotation_replay 가드가 트레이스 대조로 박제) → serverIndex(rot).
+  //   최종 진실은 commitIntervention 드라이런: 여기서 못 잡은 잔여 케이스는 onConfirmSub 폴백이 같은 사유로 처리.
+  const pinchBlock = useMemo<{ blocked: boolean; reason: string | null }>(() => {
+    if (!mineSide || !iAmServing || !curSix.length) return { blocked: false, reason: null };
+    const at = reconstructRallies(data.sim)[score.ptIdx + 1]; // 주입 지점 = 다음 랠리(진입 상태)의 로테이션
+    if (!at || at.setNo !== score.setNo) return { blocked: false, reason: null }; // 세트 경계 등 — 드라이런에 위임
+    const slot = serverIndex(mineSide === 'home' ? at.homeRot : at.awayRot);
+    const server = curSix[slot];
+    if (!server) return { blocked: false, reason: null };
+    // ① 세터는 서브차례여도 안 뺀다(5-1 무결성 — 엔진도 세터면 no-op). 엔진 subIn 거부 순서: ③부상 → ②활성 → ④복귀.
+    if (server.position === 'S') return { blocked: true, reason: '지금 서브 차례가 세터예요 — 세터는 빼지 않아요' };
+    // 슬롯 상태 재생(현 세트, point ≤ ptIdx 접두): injury enter=부상교체 슬롯(영구 잠금)·tactical enter/exit=활성 교체
+    //   슬롯(순증감)·usedStarterOut=나갔던 선발 id(복귀 시 재이탈 금지 occupant). 엔진 match.ts subIn 가드와 대칭.
+    const evs = data.sim.subEvents ?? [];
+    const inSet = (e: SubEvent) => e.side === mineSide && e.setNo === score.setNo && e.point <= score.ptIdx;
+    const injurySlots = new Set<number>();
+    const activeSlots = new Set<number>();
+    const roundTrip = new Set<string>();
+    for (const e of evs) {
+      if (!inSet(e)) continue;
+      if (e.kind === 'injury') { if (e.enter) injurySlots.add(e.slot); continue; }
+      if (e.enter) { activeSlots.add(e.slot); roundTrip.add(e.outId); }
+      else activeSlots.delete(e.slot);
+    }
+    if (injurySlots.has(slot)) return { blocked: true, reason: '부상 교체가 들어간 자리예요' };
+    if (activeSlots.has(slot)) return { blocked: true, reason: '이미 교체가 들어간 자리예요' };
+    if (roundTrip.has(server.id)) return { blocked: true, reason: '한 번 나갔다 돌아온 선수 자리라 다시 못 빼요' };
+    return { blocked: false, reason: null };
+  }, [mineSide, iAmServing, curSix, data.sim, score.ptIdx, score.setNo]);
   // 코트 선수 체력(가능하면) — 현재 지점 직전 마지막 타임아웃 스냅샷에서 id→잔량(0..1)
   const stamMap = useMemo(() => {
     const m = new Map<string, number>();
@@ -362,9 +400,10 @@ export default function MatchBoard() {
         : `${byIdAll.get(inId)?.name ?? '선수'} 선수를 투입했어요`);
       closeIntervene();
     } else setIvError(ivSubKind === 'pinch'
-      ? '지금은 서브 교체가 어려워요. 서브 차례 선수가 세터이거나 이번 세트 교체 한도가 찼어요.'
+      // 사전차단(pinchBlock)이 못 잡은 잔여 케이스 대비 — 가능하면 정확한 사유를, 없으면 일반 문구.
+      ? (pinchBlock.reason ?? '지금은 서브 교체가 어려워요. 서브 차례 선수가 세터이거나 이번 세트 교체 한도가 찼어요.')
       : '지금은 교체할 수 없어요. 이번 세트 교체 한도가 찼거나 규칙상 불가한 교체예요.');
-  }, [mineSide, pendingOut, ivSubKind, commitIntervention, score, byIdAll, pushToast, closeIntervene]);
+  }, [mineSide, pendingOut, ivSubKind, commitIntervention, score, byIdAll, pushToast, closeIntervene, pinchBlock]);
 
   // 중계 현수막 — 관전 종료 후에만 빌드(스포일러 정책: 결과-결정 사건 누출 0). 샌드박스 제외.
   const banners = useMemo(
@@ -536,8 +575,8 @@ export default function MatchBoard() {
               </Text>
             </Pressable>
             <Pressable
-              style={[styles.ivPickBtn, (!iAmServing || ivBudget.subLeft < 2) && { opacity: 0.45 }]}
-              disabled={ivBudget.subLeft < 2}
+              style={[styles.ivPickBtn, (!iAmServing || ivBudget.subLeft < 2 || pinchBlock.blocked) && { opacity: 0.45 }]}
+              disabled={ivBudget.subLeft < 2 || pinchBlock.blocked}
               onPress={() => {
                 if (!iAmServing) { setIvError('서브 교체는 우리 팀 서브권일 때 쓸 수 있어요.'); return; }
                 // 서브 교체는 서버가 자동 대상(§4 #4) → 뺄 선수 고르는 단계(pickOut) 건너뛰고 바로 넣을 서버 선택.
@@ -545,7 +584,14 @@ export default function MatchBoard() {
               }}>
               <Text style={styles.ivPickBtnTxt}>🎯 서브 교체</Text>
               <Text style={styles.ivPickSub}>
-                {ivBudget.subLeft < 2 ? '이번 세트 교체 한도를 다 썼어요' : iAmServing ? `서브권 넘어가면 자동 복귀 · 남은 ${ivBudget.subLeft}/${SUBS_PER_SET}` : '지금은 서브권이 없어요'}
+                {/* 사유 우선순위: 한도 소진 → 서브권 없음 → 서버 슬롯 거부(F1: 세터/부상·활성 교체 슬롯/복귀 선발) → 정상 */}
+                {ivBudget.subLeft < 2
+                  ? '이번 세트 교체 한도를 다 썼어요'
+                  : !iAmServing
+                    ? '지금은 서브권이 없어요'
+                    : pinchBlock.blocked
+                      ? pinchBlock.reason
+                      : `서브권 넘어가면 자동 복귀 · 남은 ${ivBudget.subLeft}/${SUBS_PER_SET}`}
               </Text>
             </Pressable>
             {ivError ? <Text style={styles.ivError}>{ivError}</Text> : null}
