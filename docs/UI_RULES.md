@@ -87,6 +87,38 @@
 > | `components/SummaryCard.tsx`(신규) | 현황 요약 헤더 |
 > **주의**: 고빈도 Pressable 직접 구현(Stepper의 −/＋ 등)은 Button 네비 래치(UI-33)와 무관 — Button을 안 쓰므로 무영향(UI-33과 동일 확인).
 
+## UI-43 — 화면 수치·날짜 정합 검수 레지스트리 (2026-07-15, 6그룹 스웜 — 사용자 요청 "수치가 정확하게 나오는지, 날짜가 맞는지")
+
+**일반 규칙 2개 (신규 원칙 — 새 화면·새 표시에 항상 적용)**:
+- **UI-43a 명단 표시 정본 = 날짜 인지 명단**: 화면이 "현재 소속 선수"(목록·인원수·총연봉·소속 판정)를 그릴 땐
+  base 명단(`teamPlayerIds`/`currentRosters`/`getEvolvedTeamPlayers` 직독)이 아니라 **날짜 인지 명단**
+  (`rosterIdsOnDay` 기반 공용 셀렉터 `activeRosterOnDay`)을 쓴다 — base는 시즌 중 영입을 모른다(SEASON §7).
+  `displayCutoff`가 시간축을 통일했듯 멤버십축도 통일(TEST_METHODOLOGY §4 "표시 명단 정본 미상속").
+- **UI-43b 표시 금액 = 차감 산식**: UI가 보여주는 돈(위약금·잔류 연봉·오퍼 제시액·총연봉/캡 잔여)은 store/엔진이
+  실제 차감·게이트에 쓰는 **동일 함수·동일 입력**으로 계산한다. 표시≠차감은 재화 split-brain의 UI판.
+
+**발견 레지스트리** (UV-N · 수정 대상 → 완료 시 ✅ 날짜):
+
+| # | 심각도 | 화면/파일 | 문제 | 수정 방침 |
+|---|---|---|---|---|
+| UV-1 | 중 | squad·office·contracts·team/[id]·player/[id](role) | **시즌 중 FA 영입 선수 누락 패밀리** — base 명단 직독이라 목록·인원·총연봉에서 빠지고 방출 진입점 없음. team/[id]는 방출 잔존+override 미반영+AI 영입 미반영. player/[id] `teamOfP`가 base 순회라 영입 선수 role=null→"부상·정지·명단 외" 오안내 | UI-43a 공용 셀렉터 `activeRosterOnDay(teamId, day)`(rosterIdsOnDay+evolve+override 합성) 도입·5화면 재배선. 총연봉 헤더는 store 게이트와 동일한 `capPayroll`(시즌 영입=inSeasonCost). 가드 `_dv_rosterui`(시즌중 영입 포함 A/B) |
+| UV-2 | 중 | contracts.tsx doRelease | 위약금 표시·사전 게이트가 **override(대기 재계약) 계약** 기준인데 store `release`는 **base 계약**으로 차감 — 표시≠차감 | UI-43b: 표시·게이트를 base 계약(`getPlayer(p.id).contract`)으로(store와 동일) |
+| UV-3 | 중 | contracts.tsx FA 예정 카드 | "잔류 연봉 (시장가)"이 `marketVal(p, prod)`(perfFactor 0.8~1.3+수상 프리미엄 ≤+25%)인데 실제 잔류 확정은 `renewedContract`=`marketValue(p, medOvr)`(prod·award 미포함) — MVP급은 체계적 과대 표시. 코드 주석의 rollover.ts:49 자기 인용도 산식 불일치 | UI-43b: 표시를 renewal 산식 미러(`marketValue(p, era, undefined, 0)` 헬퍼)로. 미래 진화·나이+1 오차는 "예상" 캡션으로 수용 |
+| UV-4 | 중 | fa.tsx 오퍼 스테퍼 | salary `'auto'`+공격적 ON이면 실제 제시액=ask×1.2(`resolveMyOfferSalary`)인데 스테퍼 표시만 ask×1.0 — 같은 화면 "현재 제안 요약"과 숫자 불일치 | 스테퍼 표시값을 `resolveMyOfferSalary(draft, ask)`로 통일 |
+| UV-5 | **높** | guide.tsx·onboarding.tsx(+shop·mypage) | **구단주 권한 서술이 2026-07-12 MATCH_INTERVENTION 격상 이전**에 멈춤("선발은 건의만·타임아웃/교체 직접 못 함·카리스마가 수락 좌우") — 현행은 선발/벤치 직접 확정+내 팀 경기 opt-in 직접 개입. 가이드 "외국인 팀당 1명"(아시아쿼터 누락), 다이아 "두 가지 방법"(쿠폰·환영 누락), shop "모든 광고 제거"(보상형 유지), mypage 광고 cap 다이얼로그 제목/본문 불일치 | CLAUDE.md 권한표·MATCH_INTERVENTION §5 기준으로 카피 현행화. 광고 제거는 "시즌 시작 전면광고 제거(보상형 광고는 선택 시청)"로 정확화 |
+| UV-6 | 중 | lib/calendar.ts(+results·calendar·schedule) | **경기 날짜·요일이 전 시즌 2025-10-18 고정** — 시즌 라벨(2030-31…)은 전진하는데 달력은 매 시즌 반복(요일 불일치) | `dateForDay(dayIndex, season)`로 시즌 반영(`SEASON_START_Y+season` — seasonYear idx0=2025와 정합). 호출 3화면 season 전달 |
+| UV-7 | 중 | match/[id].tsx 개입 시트 | ①`usedIn`이 세트 **미래** 투입까지 제외(엔진은 개입 좌표 이전만 누적) ②`injuredIn`이 전 세트·미래 부상까지 제외 ③드라이런 applied 판정이 개수 비교라 AI 이벤트와 충돌 시 오판(같은 선수 AI 핀치 소멸 시 커밋 거부) ④문서 §4 요구 "잔여 예산(교체 6·타임아웃 2) 표시+소진 시 비활성" 미구현 ⑤체력 %가 마지막 타임아웃 스냅샷인데 시점 단서 없음 ⑥pickOut에 엔진이 반드시 거부하는 슬롯(부상 교체 슬롯·1왕복 마친 복귀 선발) 노출 | ①② point 컷오프(개입 좌표 이전 이벤트만) ③ applied를 좌표 정밀 매칭(SubEvent.point==ptIdx+1)으로 ④ 잔여 예산 카운트 표시+비활성(SUBS_PER_SET·TIMEOUTS_PER_SET 상수 보간) ⑤ "타임아웃 시점 기준" 캡션 ⑥ 사전 제외 |
+| UV-8 | 중 | engine/achievements.ts·app/achievements.tsx | ①`TITLE_KEYS`에 `receive` 누락(2026-06-18 리시브왕 추가 미추종) — 타이틀 컬렉터류 진행도 과소 ②자금 업적 포맷이 `cash_200k`만 금액 포맷, 500k/1m은 원시 숫자 | ① receive 추가(파생 재계산이라 세이브 무영향) ② 자금 업적 3종 공통 분기 |
+| UV-9 | 중 | data/news.ts·news/[id].tsx | 우승 방식(3-0 스윕/리버스 스윕) 판정 `series.find(len>=3)`이 비-1시드 챔피언의 PO(3전2선승) 2-1 시리즈를 먼저 매칭 — 실제 챔프전 스윕/리버스 스윕 태그 누락(허위 양성은 없음) | 챔피언의 **마지막 시리즈**(=결승, seriesByTeam push 순서)로 매칭. 목록+상세 2곳 |
+| UV-10 | 낮 | awards-ceremony.tsx | 시즌 중 딥링크 진입 시 풀시즌 시상(MAX) 노출 — 자체 스포일러 게이트 없음(recap-detail은 이중 가드 보유) | recap-detail과 같은 결의 게이트(챔피언 공개 전 차단) |
+| UV-11 | 낮 | fa.tsx·staff.tsx | 리터럴 하드코딩: "보호선수 명단(6명)"(PROTECT_COUNT)·"A 300%·B 200%"×3(compensationMoneyOnly)·"3년 계약"(contractYears) | 상수 보간 |
+| UV-12 | 중 | player/[id].tsx | ①타 구단 선수 **레이더 차트가 스카우팅 안개 우회**(옆 StatBar·OVR은 흐림) ②인기(popularityNow)가 raw `currentDay`라 미관전 당일 생산 반영+뉴스 상세(displayCutoff)와 불일치 ③출장 정지 사유가 시즌 첫 스캔들 first-match(활성 건 아닐 수 있음) | ① 레이더에 fog 적용(reveal<정밀이면 흐림/범위) ② 표시용 인기만 displayCutoff(면담·store 판정 경로는 currentDay 유지 — WAI) ③ 활성 span(from≤day≤to) 매칭 |
+
+> **✅ UV-1~UV-12 전건 수정 완료(2026-07-15)** — 검증: `tsc`(app+test) 0 · `npm test` 214 · 신규 가드 `_dv_rosterui`(A/B: 구 base 셀렉터는 시즌 중 영입 누락 실증) · `_dv_severance`·`_dv_capprecheck`·개입 3종(`_dv_intervention_empty/consistency`·`_dv_prefix_smoke`)·`checkSubs`·뉴스 3종·업적 가드·`_dv_copylint`·`_dv_fa_relations`·`_dv_faofferui` 전부 PASS.
+> 메인 재검증서 형제 1건 추가 발견·수정: **UV-1c** — `contracts.tsx` FA 등급 풀(`leagueFaGrades`)만 base 명단 잔존 → 시즌 중 영입 FA 예정자가 풀에서 빠져 `faGrades.get(...)!` undefined("undefined등급") 가능. 풀도 `activeRosterOnDay`로 통일(+overrides·inSeasonTx deps).
+
+**보고만 (WAI/설계 문서화/저가치 — 수정 안 함, 근거)**: 개막 전 순위표=전팀 0승 동률의 시드 순서(설계 여지, 저가치) · 순위표 "세트±" 컬럼 vs 실제 타이브레이크=세트득실률(standings.ts에 의도 문서화) · clinch=playedThroughDay(BROADCAST 스포일러 정책의 문서화된 예외) · 정규종료~첫 PO 사이 playoffs/calendar "대기"(스포일러-보수 방향, 누수 없음) · 대시보드 자금 경고 임계 2억(순수 UI 판단값, 대응 엔진 상수 없음) · "3전2선승" 라벨(현재 정합, PO_TARGET 변경 시 보간 후보) · 부문 기록왕 라벨 3표기(공격왕/공격상·세트왕/어시스트왕 — 정본 표기 사용자 결정 대기, season-recap.tsx OPEN Q) · HOF 헤더 "은퇴 레전드 N"이 일반 헌액 포함(라벨 해석 여지) · first_concede=첫 경기 프록시(무실점 경기 사실상 불가) · 광고 일일 리셋=UTC 자정(클라·서버 일치, 문구만 "오늘/내일" — 동작 버그 아님) · supporter IAP 스텁(#43 트랙) · 구단 정체성 "최근 5시즌"·창단 연차 고정(백스토리=시작 조건 설계, 100년 후 워딩 이슈만) · recordChampion 부분 archive로 시상식~오프시즌 창에서 시즌 카운트류 업적 +1 선표시(과도기 창) · season-recap 미사용 구독(maxWinStreak 스캔 낭비 — 성능 소소, 표시 무영향).
+
 ## UI-27 세계관 사유 문구 예시 (BusyOverlay message — 2026-07-08 사용자 결정)
 
 > 문구는 **그 작업이 실제 하는 일**을 게임 언어로 옮긴다(가짜 사유 금지). 코치·감독·스카우트·프런트가
