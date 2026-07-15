@@ -2,8 +2,9 @@
 // 엔진(engine/relationships)은 순수, 여기서 리그 로스터·bond를 엮는다. bond는 Phase 1b에서 store가 주입(없으면 0).
 import { affinity, pairKey, BOND_GROW, BOND_MAX, BOND_DECAY } from '../engine/relationships';
 import { getPlayer, getTeamPlayers, currentRosters } from './league';
+import type { Player } from '../types';
 
-const REL_SCALE = 2.5;        // 친구 2~3명이면 포화
+const REL_SCALE_FA = 6;       // 친구 다수라야 포화(RELATIONSHIP §2 — 장기 parity 보호: 친구 연쇄 집중 완화, 30×8 측정)
 const SHOW_THRESHOLD = 0.3;   // 표시할 관계 최소 강도
 
 // ── bond 컨텍스트(setTxContext 패턴) — 스토어가 주입, FA 해석(offseason)이 읽어 preview=result 유지 ──
@@ -46,15 +47,20 @@ const teamOfMap = (): Record<string, string> => {
   return m;
 };
 
-/** 선수 ↔ 팀 affinity ∈ [-1,+1] — 그 팀 국내 선수들과의 합 정규화(양=끌림·음=기피) */
-export function teamAffinity(playerId: string, teamId: string, bonds: Bonds = {}): number {
-  const p = getPlayer(playerId);
-  if (!p || p.isForeign) return 0;
-  const mates = getTeamPlayers(teamId).filter((m) => m.id !== playerId && !m.isForeign);
-  if (!mates.length) return 0;
-  let sum = 0;
-  for (const m of mates) sum += affinity(p, m, bonds[pairKey(playerId, m.id)] ?? 0, true);
-  return Math.max(-1, Math.min(1, sum / REL_SCALE));
+/** 선수 ↔ 팀(로컬 rosters 기준) affinity ∈ [-1,+1] — FA 해석(resolveFAMarket)의 **실경로** relT(친구 +·라이벌/앙숙 −).
+ *  진행 중 영입 반영(친구 연쇄) — 등록부 셀렉터 대신 로컬 rosterIds/get을 받아 그 시점 로스터로 계산.
+ *  data/offseason(resolveFAMarket)·data/faOfferSatisfaction(오퍼 만족도 UI)가 **같은 산식**(REL_SCALE_FA=6·affinity)으로
+ *  공유 — 중복 상수 드리프트 차단(FA §2.8.4). 순수·id시드(메인 rng 불간섭). */
+export function teamAffinityFor(p: Player, rosterIds: string[], get: (id: string) => Player | undefined, bonds: Record<string, number>): number {
+  if (p.isForeign) return 0;
+  let sum = 0, n = 0;
+  for (const mid of rosterIds) {
+    if (mid === p.id) continue;
+    const m = get(mid);
+    if (!m || m.isForeign) continue;
+    sum += affinity(p, m, bonds[pairKey(p.id, mid)] ?? 0, true); n++;
+  }
+  return n ? Math.max(-1, Math.min(1, sum / REL_SCALE_FA)) : 0;
 }
 
 export interface Relation { id: string; name: string; v: number }

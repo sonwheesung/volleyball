@@ -1,14 +1,21 @@
 // 인간관계망 모델 가드 (RELATIONSHIP_SYSTEM §8) — Phase 1a 순수 모델.
 //   npx tsx tools/_dv_relations.ts
-// 검증: 결정론·대칭(A,B==B,A)·innate 분포(중립 다수)·외인 제외·포지션 라이벌(−)·bond 단조(+·라이벌 완화)·teamAffinity 범위.
-import { resetLeagueBase, LEAGUE, getTeamPlayers } from '../data/league';
+// 검증: 결정론·대칭(A,B==B,A)·innate 분포(중립 다수)·외인 제외·포지션 라이벌(−)·bond 단조(+·라이벌 완화)·teamAffinityFor(실경로 scale6) 범위·단조.
+import { resetLeagueBase, LEAGUE, getTeamPlayers, getPlayer } from '../data/league';
 import { affinity, innateAffinity, pairKey, BOND_MAX } from '../engine/relationships';
-import { teamAffinity, relationsOf, accrueBonds } from '../data/relationships';
+import { teamAffinityFor, relationsOf, accrueBonds } from '../data/relationships';
 import type { Player } from '../types';
 
 resetLeagueBase();
 let fail = 0;
 const check = (n: string, c: boolean) => { process.stdout.write(`${c ? '✅' : '❌'} ${n}\n`); if (!c) fail++; };
+
+// FA 해석 실경로 relT(teamAffinityFor, REL_SCALE_FA=6) 대조 — 등록부 대신 로컬 rosterIds/get(resolveFAMarket과 동일 산식).
+//   (구 teamAffinity[REL_SCALE 2.5]는 프로덕션 미소비라 삭제 — 가드가 실경로를 검증하도록 재배선, 2026-07-15 F1.)
+const teamAffinity = (playerId: string, teamId: string, bonds: Record<string, number> = {}): number => {
+  const p = getPlayer(playerId);
+  return p ? teamAffinityFor(p, getTeamPlayers(teamId).map((m) => m.id), getPlayer, bonds) : 0;
+};
 
 // 전 구단 국내 선수 수집
 const domestic: Player[] = [];
@@ -86,6 +93,20 @@ for (const p of domestic.slice(0, 30)) for (const t of LEAGUE.teams) {
 }
 check('teamAffinity ∈ [-1,1]', rangeOk);
 check('teamAffinity 양·음 둘 다 발생(±)', vals.some((v) => v > 0.02) && vals.some((v) => v < -0.02));
+
+// ── 실경로(teamAffinityFor, REL_SCALE_FA=6) 단조·포화 — bond↑(전 쌍 +) → relT 비감소, 상한 1 ──
+{
+  const t0 = LEAGUE.teams[0];
+  const p0 = getTeamPlayers(t0.id).find((p) => !p.isForeign)!;
+  const ids0 = getTeamPlayers(t0.id).map((m) => m.id);
+  const maxBonds: Record<string, number> = {};
+  for (const m of getTeamPlayers(t0.id)) if (m.id !== p0.id) maxBonds[pairKey(p0.id, m.id)] = BOND_MAX;
+  const rLo = teamAffinityFor(p0, ids0, getPlayer, {});
+  const rHi = teamAffinityFor(p0, ids0, getPlayer, maxBonds);
+  check('실경로 relT 단조(bond↑→비감소)', rHi >= rLo - 1e-9);
+  check('실경로 relT 포화 ∈[-1,1]', rHi <= 1 + 1e-9 && rLo >= -1 - 1e-9);
+  check('실경로 빈 로스터 relT=0(n=0)', teamAffinityFor(p0, [], getPlayer, {}) === 0);
+}
 
 // ── bond 누적(Phase 1b) ──
 const rostersAll: Record<string, string[]> = {};

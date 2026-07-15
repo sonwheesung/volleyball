@@ -42,8 +42,12 @@
   | 라이벌/앙숙 | −0.65 | ~8% |
   > 불편/라이벌이 친함보다 약간 많게(드라마). 같은 포지션 경쟁자는 라이벌 가중(선택 — §10).
 - **bond(누적 우정·영속 — 과거 기억)**: **함께 뛴 시즌이 쌓일수록** 우정이 자란다. **헤어져도 기억**(사용자 결정 ③).
-  - 저장: `store.bonds: Record<pairKey, number>`(영속 1필드, 0~상한). endSeason에서 **같은 팀 국내 선수 쌍마다
-    `+BOND_GROW`**(상한 `BOND_MAX`), 떨어져 있으면 아주 천천히 감쇠(`×BOND_DECAY`, 완전 소멸 안 함 — "옛정").
+  - 저장: `store.bonds: Record<pairKey, number>`(영속 1필드, 0~상한). endSeason(`accrueBonds`)에서
+    **① 전 쌍 감쇠(`×BOND_DECAY=0.92` — 같은 팀 쌍 포함) → ② 같은 팀 국내 선수 쌍마다 `+BOND_GROW=0.06`**(상한 `BOND_MAX=0.3`).
+    - **정정(2026-07-15, 코드 대조 F6)**: ~~"떨어져 있으면 아주 천천히 감쇠(완전 소멸 안 함)"~~ → 실제는 **감쇠가 전 쌍에 적용**(같은 팀도 먼저
+      ×0.92 후 +0.06). 같은 팀 쌍 실효 순증 = `0.06 − 0.08×현재값`(상한 0.3 근처면 pre-cap ≈ +0.036, 이후 0.3에서 포화 — 지속 팀메이트는 상한 근접).
+    - **정정(2026-07-15, 코드 대조 F6)**: ~~"완전 소멸 안 함 — 옛정"~~ → 실제는 `BOND_PRUNE=0.02` **미만이면 삭제**(맵에서 제거) →
+      떨어진 쌍은 몇 시즌이면 **완전 소멸**한다(옛정은 감쇠 상한 아래로 내려가면 사라짐). 이는 저장 폭주 차단(cap 4000)과 한 쌍.
   - bond는 affinity에 **양(+)으로만** 더함(함께한 세월은 우정 — 앙숙도 누그러뜨리되 완전 상쇄는 안 함).
   - **바운딩(필수)**: 약한 bond(<임계)·장기 미접촉은 가지치기, 맵 크기 상한(예: 최근/강한 순 4000쌍)으로
     100시즌+ 저장 폭주 차단(milestones/transfers 바운딩과 같은 패턴, SAVE_SYSTEM §1).
@@ -57,19 +61,27 @@
 - **외인/아시아쿼터**: `isForeign`이면 affinity = 0(관계망 비대상). 셀렉터에서 제외.
 
 ### 1.3 선수별 "관계 민감도" — faPref에 차원 추가
-사람마다 관계를 얼마나 중시하나가 다르다(돈/우승처럼). `rollFAPref`(faMarket.ts:32)의 가중치 프로필에
-**`rel` 항 추가**(기본 소폭 + 가끔 "관계 중시형" 높게). 정규화 합은 유지(money/win/loyal/play/home/**rel**).
-- 대부분 `rel≈0.05~0.12`(은은하게), 일부 `rel≈0.3+`("절친 따라가는" 의리파). 분포는 측정으로 튜닝.
+사람마다 관계를 얼마나 중시하나가 다르다(돈/우승처럼). `rollFAPref`(faMarket.ts)의 가중치 프로필에
+**`rel` 항 추가**(기본 소폭). 정규화 합은 유지(money/win/loyalty/play/home/**rel**).
+- **정정(2026-07-15, 코드 대조 F2)**: ~~일부 `rel≈0.3+`("절친 따라가는" 의리파)~~ → 실제 `ARCH_BASE.rel`은 **전 아키타입 0.02~0.04**
+  (충성·연고형만 0.04), `rollFAPref` 잡음 `±0.05`·정규화 후에도 **rel은 최대 ~0.09**에 그친다 — **"관계 중시형" 아키타입은 없다**.
+  이는 **의도된 parity 보호 튜닝**(친구 연쇄가 컨텐더에 몰리는 집중 완화, 2026-06-26 측정 — faMarket.ts `ARCH_BASE` 주석). 관계는 순수 타이브레이커.
 
 ---
 
 ## 2. 팀 affinity 셀렉터 (player ↔ 그 팀)
 
-`data/relationships.ts`(신규): `teamAffinity(playerId, teamId, day) → relT ∈ [−1, +1]`
-- 그 팀 로스터(`getTeamPlayers(teamId)`/`currentRosters` — 외인 제외)의 각 선수와 `affinity` 합산 후 정규화:
-  `relT = clamp(Σ affinity(player, mate) / REL_SCALE, −1, 1)` (REL_SCALE≈2~3 — 친구 2~3명이면 포화).
-- **양수**: 친한 동료 다수 → 끌림. **음수**: 앙숙 존재 → 기피(한 명만 강한 −여도 끌어내림).
-- `getTeamPlayers` 등 기존 셀렉터(league.ts:134-139) 재사용.
+> **정정(2026-07-15, 코드 대조 F1·F7)**: ~~`teamAffinity(playerId, teamId, day) → relT`, `REL_SCALE≈2~3`~~ → FA/재계약 *결정*이 실제로
+> 소비하는 실경로는 **`teamAffinityFor(p, rosterIds, get, bonds) → relT ∈ [−1,+1]`**(`data/relationships.ts`, **`REL_SCALE_FA=6`**).
+> 세 번째 인자는 ~~`day`~~가 아니라 **로컬 `rosterIds`+`get` 접근자**(진행 중 영입을 반영하는 *그 시점 로스터* = 친구 연쇄, `resolveFAMarket`가 그렇게 호출).
+> ~~등록부 기반 `teamAffinity`(REL_SCALE 2.5)~~는 **프로덕션 소비 0(가드만 호출)** 이라 **삭제**하고, 실경로 함수로 단일화했다(가드 `_dv_relations` 재배선 — 실경로 대조).
+
+`data/relationships.ts`: `teamAffinityFor(p, rosterIds, get, bonds) → relT ∈ [−1, +1]`
+- 넘겨받은 로컬 로스터(`rosterIds`, 외인·본인 제외)의 각 선수와 `affinity` 합산 후 정규화:
+  `relT = clamp(Σ affinity(p, mate, bond, sameTeam=true) / REL_SCALE_FA, −1, 1)` (**`REL_SCALE_FA=6`** — 친구 다수라야 포화, 장기 parity 보호 튜닝).
+- **양수**: 친한 동료 다수 → 끌림. **음수**: 앙숙 존재 → 기피(한 명만 강한 −여도 끌어내림). 빈 로스터(n=0)면 0.
+- FA 오퍼 만족도 UI(`data/faOfferSatisfaction.ts`)도 **같은 함수**를 호출(단일 소스 — 중복 상수 드리프트 차단, FA §2.8.4).
+- **표시용 셀렉터**(별도): `relationsOf`(리그 전체 친구/라이벌)·`teamRelations`(특정 팀 친구/라이벌)·`topFriendOnTeam`(뉴스용 최고 절친) — `SHOW_THRESHOLD=0.3` 게이팅.
 
 ---
 
@@ -78,16 +90,18 @@
 ### 3.1 FA 영입 — 점수(100)→확률 모델 (FA_SYSTEM §2.7, 2026-06-26 사용자 재설계)
 > 단순 "관계 항 추가"를 넘어, FA 수락을 **argmax → 점수(가산/감점 0~100)→확률(완만 S곡선)→정렬·롤·fallback·SIT**로
 > 재설계했다(사용자 결정). 관계(relT)는 그 점수의 **±항**(친구 +·싫은 선수 −). 상세·엣지·동시성은 **FA_SYSTEM §2.7**.
-- 관계 입력: `teamAffinity(playerId, teamId, bonds)`(§2) → score의 `w.rel·relT·100` 항.
+- 관계 입력: `teamAffinityFor(p, 로컬 rosterIds, get, bonds)`(§2, REL_SCALE_FA=6) → score의 `w.rel·relT·100` 항.
 - 효과: 사용자 시나리오 1·2·3·4가 점수 가산/감점 + 확률로 자연 발생(§4). 여러 팀 오퍼·동시성·시즌아웃 처리는 FA §2.7.3~4.
 
-### 3.2 재계약 거부 — buildOwnerFx (data/owner.ts:106-126)
-현재 refuseProb 합산: `refuseResignProb + sinkingShipBias + sustainedBenchRefuse + breach + releaseUnrestBias`.
-- **추가 ① 친구 잔류 → 거부↓**(잔류 유인): 내 로스터에 친한 동료가 남아 있으면 `− REL_STAY_K × posRelT`
-  (relT 양수면 거부 확률 감소, 상한 −0.12). "밴드를 유지하고 싶다."
-- **추가 ② 친한 동료 방출/이탈 → 거부↑**: `releaseUnrestBias`(engine/owner.ts:241-245)를 **affinity 가중**으로
-  정밀화 — 현재 방출자 명성을 만료자 *전원*에 동일 적용 → **그 방출자와 친한 선수만** 더 흔들리게
-  (`+ affinity(만료자, 방출자) × stature`). "내 절친을 방출했으니 나도 못 믿겠다."
+### 3.2 재계약 거부 — buildOwnerFx (data/owner.ts)
+실제 refuseProb 합산(코드 정본): `refuseResignProb + sinkingShipBias + accum(sustainedBenchRefuse) + breach + unrest(releaseUnrestBias 균일) + relTerm + lowRefuse`.
+- **① 친구 잔류 → 거부↓** — **미구현(2026-07-15 코드 대조 F3)**. ~~내 로스터에 친한 동료가 남아 있으면 `− REL_STAY_K × posRelT`(상한 −0.12)~~
+  → 별도 항(`REL_STAY_K`) **없음**. **간접 경로로만 처리**: 만료자가 FA로 풀리면 Phase 2 FA 시장의 relT(내 팀 친구)가 재계약 확률을 올린다
+  (data/owner.ts 주석·§7 Phase 3 행과 정합). "친구 잔류→거부↓"의 직접 인센티브는 넣지 않았다.
+- **② 친한 동료 방출/이탈 → 거부↑**(구현) — **정정(2026-07-15 코드 대조 F4)**: 실제는 `releaseUnrestBias`를 affinity로 대체하지 않고,
+  **균일 `unrest`(releaseUnrestBias, 방출자 명성 기반)를 그대로 두고 그 위에 `relTerm`을 가산**한다:
+  `relTerm = REL_LEAVE_K(0.15) × Σ max(0, affinity(만료자, 방출자, bond, sameTeam=false))`
+  — ~~`× stature` 곱은 없다~~(stature는 균일 unrest 쪽 계수). 절친(affinity 0.7) 방출 1명당 ≈ +0.105. "내 절친을 방출했으니 나도 못 믿겠다."
 - buildOwnerFx 내부 계산이라 **6개 호출처(endSeason+미리보기 5) 자동 적용 → 미리보기=결과 유지**(검증된 구조).
 
 ### 3.3 방출 여파 — releaseAnger/팬심 (TRANSACTION_SYSTEM 0.5)
@@ -125,9 +139,9 @@
 | 사용자 시나리오 | 수학 |
 |---|---|
 | 우승팀 + A·B와 뛰고 싶다 | winT↑ **AND** relT↑(친구) → 두 항 동반 상승 = 강하게 끌림 |
-| 우승팀이지만 싫은 선수 있어 기피 | winT↑ but relT<0. **관계 중시형**(w.rel 큼)이면 `w.rel·\|relT\| > w.win·winT` → 다른 팀 선택 |
-| 싫지만 우승 위해 간다 | **우승 중시형**(w.win 큼, w.rel 작음)이면 winT가 음의 relT를 압도 → 그래도 감 |
-| 연봉 양보하고 우승팀+친구 팀 | 낮은 offerSalary로 moneyT↓지만 winT+relT가 보전 → 더 주는 팀보다 이 팀 택 |
+| 우승팀이지만 싫은 선수 있어 기피 | winT↑ but relT<0. ~~**관계 중시형**(w.rel 큼)이면 `w.rel·\|relT\| > w.win·winT` → 다른 팀 선택~~ → **정정(2026-07-15 F2): 현 계수(w.rel≤~0.09)로는 사실상 미발생** — 관계 단독으로 우승 항을 뒤집을 만큼 "관계 중시형" 아키타입이 없다(의도된 parity 보호). relT는 타이브레이커로만 작용 |
+| 싫지만 우승 위해 간다 | **우승 중시형**(w.win 큼, w.rel 작음)이면 winT가 음의 relT를 압도 → 그래도 감 (현 계수의 기본 동작) |
+| 연봉 양보하고 우승팀+친구 팀 | 낮은 offerSalary로 moneyT↓지만 winT+relT가 보전 → 더 주는 팀보다 이 팀 택(단, relT 기여는 은은) |
 
 → **같은 상황도 선수 성향(w)에 따라 다른 선택** = 살아있는 FA. 새 분기 로직 없이 가중합이 처리.
 
@@ -135,8 +149,10 @@
 
 ## 5. 결정론·SOLID·밸런스
 
-- **결정론**: affinity는 pair 시드 + 현재 clubTenure(파생). 메인 RNG 불간섭 → 경기 결과·시드 재현 불변.
-- **무저장**: 새 영속 필드 0(SAVE_SYSTEM 마이그레이션 무관). 관계는 매번 파생(리플레이 척추).
+- **결정론**: affinity는 **정정(2026-07-15 코드 대조 F5)** ~~pair 시드 + 현재 clubTenure(파생)~~ → **`innate`(pair id 시드·무저장) + `bond`(영속 저장값) + `posRivalry`**
+  (같은 포지션·`overallRaw` 근접·`sameTeam` 파생 — **clubTenure 아님**). 전부 메인 RNG 불간섭 → 경기 결과·시드 재현 불변.
+- **저장**: **정정(2026-07-15 코드 대조 F5)** ~~새 영속 필드 0~~ → **`store.bonds` 1필드는 실제 영속**(§0·§1.1과 일치 — SAVE_DEFAULTS+partialize,
+  `_dv_migrate` drift 가드가 키 검증). innate·posRivalry는 무저장 파생, bond만 저장. 관계는 매 파생(리플레이 척추 유지).
 - **SOLID**: `engine/relationships.ts`(순수) → `data/relationships.ts`(셀렉터) → faMarket/owner가 *출력*만 소비.
 - **밸런스 리스크(핵심)**: 친구가 **우승권 팀에 몰리면 super-team → parity↓**(FOREIGN/FA에서 겪은 prestige
   자기강화와 같은 클래스). **w.rel을 modest로 두고 `simLeague` 다중 유니버스로 parity 측정**, 깨지면 w.rel/REL_SCALE
@@ -148,7 +164,7 @@
 ## 6. 서사 surfacing (보는 맛 — 관전형 1순위)
 
 - **선수 상세**(`app/player/[id].tsx`): "친한/라이벌" 카드(`relationsOf`) ✅ + **이번 시즌 각별한 동료 방출 시 "💔 동요 중 — 재계약 거부 위험↑"**(Phase 3 friendLeave를 화면으로, 2026-06-26).
-  - **[?] 도움말(2026-07-11)**: 인간관계 카드 헤더에 [?] 아이콘(공용 `IconLabel help`) → `showAlert('인간관계란?', REL_HELP)`. 카피는 **엔진 진실**만 담는다 — 친한=FA 끌림(offerScore relT ↑)·친구 잔류 시 재계약 수용·각별한 동료 방출 시 거부↑(§3.1·§3.2), 라이벌=같은 포지션 경쟁으로 그 팀 기피(§1.1 posRivalry), **경기력 무파급**(KOVO 불변, §5). "은은한 타이브레이커" 톤(§10-2).
+  - **[?] 도움말(2026-07-11)**: 인간관계 카드 헤더에 [?] 아이콘(공용 `IconLabel help`) → `showAlert('인간관계란?', REL_HELP)`. 카피는 **엔진 진실**만 담는다 — 친한=FA 끌림(offerScore relT ↑)·각별한 동료 방출 시 남은 선수 거부↑(§3.1·§3.2②), 라이벌=같은 포지션 경쟁으로 그 팀 기피(§1.1 posRivalry), **경기력 무파급**(KOVO 불변, §5). ~~"친구 잔류 시 재계약 수용"~~ 제거(2026-07-15 F8 — REL_STAY_K 미구현, 직접 항 없음). "은은한 타이브레이커" 톤(§10-2). "은은한 타이브레이커" 톤(§10-2).
 - **FA 센터**(`app/fa.tsx`): FA 풀 선수마다 **우리 팀 친구/라이벌 표시**(`teamRelations`, 2026-06-26) — "이 선수 영입하면 우리 팀 OO와 친하다" = 영입 확률 판단 정보. 결정엔 이미 작동(relT), 이제 화면에도.
 - **FA 뉴스**(NEWS_SYSTEM): 이적 기사에 **"새 팀에는 각별한 동료 XX가 있다"**(`topFriendOnTeam`, 현재 사실) ✅ +
   **방출 기사에 "각별한 동료 XX를 남기고 떠난다"**(이적의 정서적 대칭, 2026-06-27) ✅ — 둘 다 *현 로스터 사실*만
@@ -187,14 +203,15 @@
 
 ---
 
-## 9. 코드 맵 (예정)
-- `engine/relationships.ts` — `affinity(idA, idB, sharedTenure)`·상수(분포·BOND_K). 순수·id 시드.
-- `data/relationships.ts` — `teamAffinity(playerId, teamId, day)`·`friendsOf`/`rivalsOf`(표시용 셀렉터).
-- `engine/faMarket.ts` — `OfferCtx.relationAffinity` + offerScore 합산 항 + rollFAPref `rel` 가중.
-- `data/offseason.ts` — resolveFAMarket 입찰 루프에서 teamAffinity 주입.
-- `engine/owner.ts`·`data/owner.ts` — buildOwnerFx 친구잔류/친구방출(affinity 가중 releaseUnrestBias).
+## 9. 코드 맵 (실제 — 2026-07-15 코드 대조 F7 정정)
+- `engine/relationships.ts` — `affinity(a: Player, b: Player, bond=0, sameTeam=false)`·`innateAffinity(a,b)`·`pairKey`·상수(`BOND_MAX/GROW/DECAY`·`POS_RIVAL_K`). 순수·id 시드.
+- `data/relationships.ts` — **`teamAffinityFor(p, rosterIds, get, bonds)`**(FA 실경로 relT, `REL_SCALE_FA=6`)·`relationsOf`·`teamRelations`·`topFriendOnTeam`(표시용)·`accrueBonds`·`setRelationContext`/`relationBonds`. ~~`teamAffinity`(REL_SCALE 2.5)·`friendsOf`/`rivalsOf`~~ 삭제/부재.
+- `engine/faMarket.ts` — `OfferCtx.relT` + offerScore 합산 항(`w.rel·relT`) + `rollFAPref`/`ARCH_BASE.rel`(0.02~0.04) 가중.
+- `data/offseason.ts` — `resolveFAMarket` 입찰 루프에서 `teamAffinityFor`(relationships에서 import) 주입.
+- `data/owner.ts`·`engine/owner.ts` — `buildOwnerFx`의 `relTerm = REL_LEAVE_K × Σ max(0,affinity)`(친구 방출 거부↑) + 균일 `releaseUnrestBias`(별개 항).
+- `data/faOfferSatisfaction.ts` — `buildMyOfferCtx`가 같은 `teamAffinityFor` 재사용(오퍼 만족도 UI, 단일 소스).
 - `app/player/[id].tsx`·`data/news.ts` — 표시·뉴스.
-- `tools/_dv_relations.ts`·시나리오/parity 가드.
+- `tools/_dv_relations.ts`(실경로 `teamAffinityFor` 대조)·`_dv_fa_relations.ts`(시나리오)·`simLeague`(parity 가드).
 
 ---
 

@@ -14,7 +14,7 @@ import { isFranchise, maxSalaryFor, LEAGUE_CAP } from '../engine/cap';
 import { positionGap } from '../engine/aiGM';
 import { teamOverall } from '../engine/overall';
 import { marketVal } from './awardSalary';
-import { teamAffinityFor } from './offseason';
+import { teamAffinityFor } from './relationships';
 
 /** 결정론 표시용 rand(중앙값) — offerScore의 0.05·rand 항을 중앙(0.5)으로 고정해 만족도가 흔들리지 않게. */
 export const DISPLAY_RAND = 0.5;

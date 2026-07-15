@@ -17,8 +17,7 @@ import { aiReserveTargets, aiDomesticCaps } from './rosterTarget';
  *  이 확률 감쇠는 "목표 미달팀에서도 노장이 가끔 빠지는" 생동 역할로 축소(0.6→0.85, 과이탈 완화). */
 const AI_RETAIN_ATTRITION = 0.85;
 import { assignFAGrades, askingPrice, offerScore, offerScoreFactors, prefWeightsOf, acceptProb, SIT_OUT, CERTAIN, willBeFA, type OfferCtx } from '../engine/faMarket';
-import { affinity, pairKey } from '../engine/relationships';
-import { relationBonds } from './relationships';
+import { relationBonds, teamAffinityFor } from './relationships';
 import { needsCompensationPlayer, pickCompensation, compensationMoney, compensationMoneyOnly } from '../engine/compensation';
 import { canAfford, clampSalary, isFranchise, maxSalaryFor, LEAGUE_CAP } from '../engine/cap';
 import { strSeed } from '../engine/rng';
@@ -144,21 +143,8 @@ export interface FAMarketResult {
  * 경쟁 FA 시장(결정론). 풀의 각 FA에 대해 관심 구단(나=지명, AI=포지션 필요)이
  * 오퍼를 내고, 선수가 offerScore 로 최선을 선택. 내가 찍어도 질 수 있다.
  */
-const REL_SCALE_FA = 6; // 친구 다수라야 포화(RELATIONSHIP §2 — 장기 parity 보호: 친구 연쇄 집중 완화, 30×8 측정)
-/** 선수 ↔ 팀(로컬 rosters 기준) affinity −1..1 — 진행 중 영입 반영(친구 연쇄). 등록부 셀렉터 대신 로컬 사용.
- *  export: FA 오퍼 만족도 UI(`data/faOfferSatisfaction.ts`)가 relT 재료를 같은 산식(REL_SCALE_FA·affinity)으로 재사용 — 중복 상수 드리프트 차단(FA §2.8.4). */
-export function teamAffinityFor(p: Player, rosterIds: string[], get: (id: string) => Player | undefined, bonds: Record<string, number>): number {
-  if (p.isForeign) return 0;
-  let sum = 0, n = 0;
-  for (const mid of rosterIds) {
-    if (mid === p.id) continue;
-    const m = get(mid);
-    if (!m || m.isForeign) continue;
-    sum += affinity(p, m, bonds[pairKey(p.id, mid)] ?? 0, true); n++;
-  }
-  return n ? Math.max(-1, Math.min(1, sum / REL_SCALE_FA)) : 0;
-}
-
+// relT(친구 연쇄) 실경로 = `teamAffinityFor`(REL_SCALE_FA=6) — data/relationships로 단일화(2026-07-15 발견 모드 감사 F1).
+//   여기서 정의하던 로컬 함수를 relationships로 이동(수학·인자·rng 소비 불변 = FA 산식 byte-동일). 가드(_dv_relations)가 이 실경로를 대조.
 export function resolveFAMarket(
   off: { snapshot: Record<string, Player>; rosters: Record<string, string[]>; pool: string[] },
   myTeam: string,
