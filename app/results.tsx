@@ -43,7 +43,7 @@ export default function Results() {
       {days.map((g) => (
           <View key={g.dayIndex} style={styles.daySection}>
             <View style={styles.dayHeader}>
-              <IconLabel icon="calendar-outline" color={theme.sky}>{formatDate(dateForDay(g.dayIndex))}</IconLabel>
+              <IconLabel icon="calendar-outline" color={theme.sky}>{formatDate(dateForDay(g.dayIndex, season))}</IconLabel>
             </View>
             <View style={styles.dayCard}>
               {g.rows.map((r, i) => {

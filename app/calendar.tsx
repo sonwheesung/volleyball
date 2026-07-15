@@ -45,7 +45,7 @@ export default function CalendarScreen() {
             <Pressable key={e.fixture.id}
               onPress={() => { if (res) router.push(`/matchresult/${e.fixture.id}`); }}
               style={({ pressed }) => [styles.row, i > 0 && styles.divider, isNext && styles.nextRow, pressed && res ? { opacity: 0.6 } : null]}>
-              <Text style={styles.date} numberOfLines={1}>{formatDate(dateForDay(e.dayIndex))}</Text>
+              <Text style={styles.date} numberOfLines={1}>{formatDate(dateForDay(e.dayIndex, season))}</Text>
               <View style={[styles.ha, { backgroundColor: (e.isHome ? theme.sky : theme.warn) + '22' }]}>
                 <Text style={[styles.haTxt, { color: e.isHome ? theme.sky : theme.warn }]}>{e.isHome ? '홈' : '원정'}</Text>
               </View>
@@ -71,7 +71,7 @@ export default function CalendarScreen() {
             <Pressable key={`po:${r.round}:${r.g}`}
               onPress={() => router.push(`/match/playoff?po=${r.round}&g=${r.g}&season=${season}`)}
               style={({ pressed }) => [styles.row, styles.divider, r.isNext && styles.nextRow, pressed ? { opacity: 0.6 } : null]}>
-              <Text style={styles.date} numberOfLines={1}>{formatDate(dateForDay(r.day))}</Text>
+              <Text style={styles.date} numberOfLines={1}>{formatDate(dateForDay(r.day, season))}</Text>
               <View style={[styles.ha, { backgroundColor: (r.isHome ? theme.sky : theme.warn) + '22' }]}>
                 <Text style={[styles.haTxt, { color: r.isHome ? theme.sky : theme.warn }]}>{r.isHome ? '홈' : '원정'}</Text>
               </View>

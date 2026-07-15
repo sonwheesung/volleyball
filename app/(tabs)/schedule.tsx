@@ -182,7 +182,7 @@ function ScheduleInner() {
       {offseason ? null : nextFixture && preview ? (
         <SpotlightTarget id="sched-next">
         <Card accent={theme.sky} flat>
-          <IconLabel icon="calendar-outline" color={theme.sky}>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex))}</IconLabel>
+          <IconLabel icon="calendar-outline" color={theme.sky}>다음 경기 · {formatDate(dateForDay(nextFixture.dayIndex, season))}</IconLabel>
           {preview.important ? (
             // 긴 빅매치 배지는 날짜와 한 줄에 두면 카드 폭을 넘어 잘린다(UI-20) → 자기 줄로 내리고 좌측 정렬
             <View style={[styles.bigMatch, { alignSelf: 'flex-start', marginTop: 6 }]}>
@@ -250,7 +250,7 @@ function ScheduleInner() {
               {next ? (
                 <Card accent={theme.sky} flat>
                   <IconLabel icon="calendar-outline" color={theme.sky}>
-                    {next.round === 'po' ? '플레이오프' : '챔피언결정전'} {next.g + 1}차전 · {formatDate(dateForDay(next.day))}
+                    {next.round === 'po' ? '플레이오프' : '챔피언결정전'} {next.g + 1}차전 · {formatDate(dateForDay(next.day, season))}
                   </IconLabel>
                   <Row><Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>{name(next.hiId)} vs {name(next.loId)}</Text></Row>
                   {next.mine ? (
