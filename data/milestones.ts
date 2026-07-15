@@ -83,7 +83,11 @@ export function detectSeasonMilestones(season: number, hof: HofEntry[]): Milesto
       let clubMaxOther = 0;
       for (const otherId of rs[tid] ?? []) {
         if (otherId === id) continue;
-        clubMaxOther = Math.max(clubMaxOther, cv(after.get(otherId) ?? before.get(otherId) ?? bef, stat));
+        // base 없는 id(맵 미수록)는 스킵 — 옛 폴백 `?? bef`(자기 자신 before)는 타인 아닌 자기 스탯으로
+        // clubMaxOther를 인위 상승시켜 1위 등극 감지를 억제할 수 있었다(발견 모드 감사 2026-07-15, 정상 경로 미발동).
+        const other = after.get(otherId) ?? before.get(otherId);
+        if (!other) continue;
+        clubMaxOther = Math.max(clubMaxOther, cv(other, stat));
       }
       for (const h of hof) if (h.teamId === tid) clubMaxOther = Math.max(clubMaxOther, cv(h, stat));
       const b = cv(bef, stat), a = cv(aft, stat), floor = CLUB_FLOOR[stat];

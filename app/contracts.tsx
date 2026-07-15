@@ -17,7 +17,7 @@ import { displayCutoff } from '../data/standings';
 import { capPayroll } from '../data/roster';
 import { overallRaw } from '../engine/overall';
 import { isFranchise, maxSalaryFor, LEAGUE_CAP } from '../engine/cap';
-import { ROSTER_MIN, severanceFee, inSeasonCost } from '../engine/transactions';
+import { severanceFee, inSeasonCost } from '../engine/transactions';
 import { assignFAGrades, willBeFA } from '../engine/faMarket';
 import { contractStatus, formatMoney, resignSalaryBounds } from '../engine/salary';
 import { capContractYears } from '../engine/retire';
@@ -182,7 +182,9 @@ function ContractsInner() {
         { text: '취소', style: 'cancel' },
         {
           text: '방출', style: 'destructive',
-          onPress: () => { if (!release(p.id)) showAlert('방출 불가', `로스터 하한(${ROSTER_MIN}명) 또는 위약금(${formatMoney(fee)}) 문제로 방출할 수 없습니다.`); },
+          // 실제 store 거부 사유와 일치하는 안내(발견 모드 감사 2026-07-15) — 구 문구 "로스터 하한(10명)"은
+          // 폐기된 총원 게이트라 오도. 현행 게이트 = 포지션 최소 인원(floor)·위약금·플옵 엔트리 동결.
+          onPress: () => { if (!release(p.id)) showAlert('방출 불가', `방출할 수 없습니다.\n가능한 사유 — 그 포지션 최소 인원 미달(포지션마다 최소 보유 수 유지) · 위약금(${formatMoney(fee)}) 부족 · 포스트시즌 기간(명단 동결)`); },
         },
       ],
     );

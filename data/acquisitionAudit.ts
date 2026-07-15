@@ -24,7 +24,7 @@ import { accrueCareer } from '../engine/production';
 import { bottomStreak } from '../engine/staffLifecycle';
 import { overall } from '../engine/overall';
 import { LEAGUE_CAP } from '../engine/cap';
-import { ROSTER_MIN, ROSTER_MAX } from '../engine/transactions';
+import { ROSTER_MAX, ROSTER_FLOOR_TOTAL } from '../engine/transactions';
 import { domesticPayroll } from './roster';
 
 export interface AuditCheck {
@@ -58,7 +58,7 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
     faLeak: { key: 'faLeak', name: '내 영입 FA 유지 (이중배정 없음)', violations: 0, samples: [] as string[] },
     head: { key: 'head', name: '감독 1인 1팀 · 경질팀 복귀 금지', violations: 0, samples: [] as string[] },
     staff: { key: 'staff', name: '코치/스카우터 1인 1팀 · 슬롯', violations: 0, samples: [] as string[] },
-    roster: { key: 'roster', name: `정원 한도 (${ROSTER_MIN}~${ROSTER_MAX}명)`, violations: 0, samples: [] as string[] },
+    roster: { key: 'roster', name: `정원 한도 (${ROSTER_FLOOR_TOTAL}~${ROSTER_MAX}명)`, violations: 0, samples: [] as string[] },
     cap: { key: 'cap', name: `샐러리캡 (국내 연봉 ≤ ${LEAGUE_CAP})`, violations: 0, samples: [] as string[] },
     salary: { key: 'salary', name: '연봉·계약 정상치 (NaN·음수·0 없음)', violations: 0, samples: [] as string[] },
     supply: { key: 'supply', name: 'AI 팀 감독 공백 없음 (공급 고갈)', violations: 0, samples: [] as string[] },
@@ -170,8 +170,10 @@ export function runAcquisitionAudit(seasons: number): AuditReport {
         const dom = domesticPayroll(ids, (id) => snapshot[id]);
         const capLimit = final ? LEAGUE_CAP * 1.1 : LEAGUE_CAP * 1.05;
         if (dom > capLimit) hit(C.cap, `S${sNo} ${where}: ${tname(t)} 국내연봉 ${dom} > ${final ? '캡×1.1(신인수급)' : '캡×1.05(자기선수 유지)'} ${Math.round(capLimit)}`);
-        // 정원 한도 — 최종(드래프트 후) 명단만 하한 검사(중간 단계는 구멍이 정상)
-        if (final && (ids.length < ROSTER_MIN || ids.length > ROSTER_MAX)) hit(C.roster, `S${sNo} ${where}: ${tname(t)} 정원 ${ids.length} (허용 ${ROSTER_MIN}~${ROSTER_MAX})`);
+        // 정원 한도 — 최종(드래프트 후) 명단만 하한 검사(중간 단계는 구멍이 정상).
+        //   하한 = 포지션 floor 총합 12(FA §1.6 — fillRosters가 커밋 명단에 보장). 구 ROSTER_MIN(10)은 문서
+        //   불변식보다 느슨해 11명 커밋을 통과시켰다(발견 모드 감사 2026-07-15, 가드 조임).
+        if (final && (ids.length < ROSTER_FLOOR_TOTAL || ids.length > ROSTER_MAX)) hit(C.roster, `S${sNo} ${where}: ${tname(t)} 정원 ${ids.length} (허용 ${ROSTER_FLOOR_TOTAL}~${ROSTER_MAX})`);
         else if (!final && ids.length > ROSTER_MAX) hit(C.roster, `S${sNo} ${where}: ${tname(t)} 정원 ${ids.length} > ${ROSTER_MAX}`);
       }
       for (const rid of retired) if (ownBy.has(rid)) hit(C.player, `S${sNo} ${where}: 은퇴자 ${rid} 가 ${tname(ownBy.get(rid)!)} 로스터에`);
