@@ -12,7 +12,8 @@ process.env.RC_REST_API_KEY = 'test-rc-key-abcdef0123456789'; // confirm 폴백 
   const { walletLedger, users, statsDaily, purchaseEvent } = await import('../db/schema');
   const { eq, and, sql } = await import('drizzle-orm');
   const { PROJ_CODE } = await import('../lib/proj');
-  const { ensureProj } = await import('../lib/wallet');
+  const { ensureProj, applyWallet } = await import('../lib/wallet');
+  const { allowsNegativeBalance } = await import('../lib/econ');
   const { signToken } = await import('../lib/auth');
 
   let fail = 0; const ok = (c: boolean, m: string) => { if (!c) { console.error('  ✗ FAIL:', m); fail++; } else console.log('  ✓', m); };
@@ -155,6 +156,35 @@ process.env.RC_REST_API_KEY = 'test-rc-key-abcdef0123456789'; // confirm 폴백 
   // 멱등: 웹훅 재시도(같은 txn) → KRW 이중집계 없음
   await post({ app_user_id: uid, transaction_id: A1_TXN, environment: 'PRODUCTION', type: 'NON_RENEWING_PURCHASE', product_id: 'dia_1000', currency: 'KRW', price_in_purchased_currency: A1_PRICE }, SEC);
   ok((await readStats()).rev - revBefore === A1_PRICE, '  웹훅 재시도 → KRW 그대로(revenue.krw 마커로 멱등, 이중집계 0)');
+
+  console.log('── 부채 상환: 음수 잔액 탈출(게이트 차감 전용 §13.17 P0-1, 결제표면 감사 P1) ──');
+  // 머니크리티컬: 게이트가 delta 부호를 미구분해 적립까지 거부하던 음수 탈출 불가 트랩을 A/B로 봉인.
+  // 시나리오: 환불로 −700 → 광고/업적 적립은 통과(부채 감소) · 전지훈련(차감)은 여전히 거부 · 충전 후 spend 재개.
+  const b0 = await bal();
+  const rNeg = await applyWallet(uid!, -700 - b0, 'refund', '_DEBT_REFUND', 'force-negative'); // refund=음수 허용
+  ok(rNeg.ok && await bal() === -700, `환불로 잔액 −700 진입(refund 음수 허용) — 실측 ${await bal()}`);
+  // ① 음수에서 적립(+50) 통과 → 부채 감소(−700 → −650). **이게 P1 핵심**(구게이트는 여기서 거부했음).
+  const rEarn1 = await applyWallet(uid!, 50, 'ad', '_DEBT_AD1', 'debt-repay');
+  ok(rEarn1.ok && rEarn1.applied === true && rEarn1.balance === -650, `① 음수서 광고 +50 통과 → −650(부채 감소) — 실측 ${rEarn1.ok ? rEarn1.balance : rEarn1.reason}`);
+  const rEarn2 = await applyWallet(uid!, 50, 'achievement', '_DEBT_ACH1', 'debt-repay'); // 다른 적립 reason도 동일(업적)
+  ok(rEarn2.ok && rEarn2.balance === -600, `  업적 +50도 통과 → −600(적립 reason 공통) — 실측 ${rEarn2.ok ? rEarn2.balance : rEarn2.reason}`);
+  // ② 같은 음수 상태에서 차감(camp −300)은 여전히 거부(spend 게이트 불변 — 절대 약화 안 됨).
+  const rSpendNeg = await applyWallet(uid!, -300, 'camp', '_DEBT_CAMP1', 'still-blocked');
+  ok(rSpendNeg.ok === false && (rSpendNeg as { reason: string }).reason === 'insufficient' && await bal() === -600, '② 음수서 전지훈련(−300) 차감은 여전히 insufficient(잔액 불변 −600)');
+  // ③ 적립 반복(쿠폰 등)으로 상환·충전 → 잔액 ≥300 되면 차감(spend) 재개.
+  const rAdj = await applyWallet(uid!, 900, 'coupon', '_DEBT_COUP1', 'top-up'); // 쿠폰 적립도 음수서 통과 → −600+900=300
+  ok(rAdj.ok && rAdj.balance === 300, `③ 쿠폰 +900 통과 → 300(0 넘어 충전) — 실측 ${rAdj.ok ? rAdj.balance : rAdj.reason}`);
+  const rSpendOk = await applyWallet(uid!, -300, 'camp', '_DEBT_CAMP2', 'resumed');
+  ok(rSpendOk.ok && rSpendOk.balance === 0, `③ 충전 후 전지훈련(−300) 차감 재개 → 0(spend 정상 복귀) — 실측 ${rSpendOk.ok ? rSpendOk.balance : rSpendOk.reason}`);
+  // 재확인: 잔액 0에서 차감은 다시 거부(spend 게이트 방향 불변).
+  const rSpendZero = await applyWallet(uid!, -300, 'camp', '_DEBT_CAMP3', 'blocked-at-0');
+  ok(rSpendZero.ok === false && (rSpendZero as { reason: string }).reason === 'insufficient', '  잔액 0서 −300 차감 재거부(차감 게이트 방향 불변)');
+  // ④ A/B — 구게이트(`!allowsNegativeBalance(reason) && next<0`, delta 부호 미검사)를 재현: ①의 적립(+50 at −700)을 거부했음을 증명.
+  const oldGateRejects = (reason: string, cur: number, delta: number) => !allowsNegativeBalance(reason) && (cur + delta) < 0; // 구로직(방향 미구분)
+  const newGateRejects = (reason: string, cur: number, delta: number) => delta < 0 && (cur + delta) < 0 && !allowsNegativeBalance(reason); // 신로직(차감 전용)
+  ok(oldGateRejects('ad', -700, 50) === true, '  [A/B] 구게이트 → 음수서 광고 적립(+50)을 거부(=음수 탈출 불가 트랩 재현)');
+  ok(newGateRejects('ad', -700, 50) === false, '  [A/B] 신게이트 → 같은 적립 통과(부채 상환 경로 — 트랩 해소)');
+  ok(oldGateRejects('camp', -600, -300) === true && newGateRejects('camp', -600, -300) === true, '  [A/B] 차감(camp)은 구·신 게이트 모두 거부(spend 방어 동일 유지 — 약화 0)');
 
   // 정리 — 테스트 원장·유저·감사행 삭제 + stats_daily 스냅샷 원복(공유 DB 오염 방지).
   await db.delete(walletLedger).where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, uid!)));

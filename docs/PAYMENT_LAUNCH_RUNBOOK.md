@@ -182,11 +182,12 @@
 | D5 | **미등록 SKU** 웹훅 | 무시(지급 0) | `payment-events` `webhook.ignored`(reason=미등록) |
 
 ### E. 관리자 화면 확인란 (운영 콘솔 `/ops-9f3a2c`, ADMIN_TOKEN 로그인)
-- [ ] **결제 단계 감사 로그** — `GET /api/admin/payment-events?txn=<storeTxnId>` 로 한 결제의 `received→type.decided→grant.applied` 단계 추적("돈 내고 0개" = 성공행 있는데 `grant.applied` 없음)
+- [ ] **결제 단계 감사 로그** — ⑤ **BM·수익화** 탭 "결제 이벤트" 표(최근 N건, `source`[client/webhook/confirm/admin]·`fail` 필터) 또는 `GET /api/admin/payment-events?txn=<storeTxnId>` 로 한 결제의 `received→type.decided→grant.applied` 단계 추적("돈 내고 0개" = 성공행 있는데 `grant.applied` 없음). **2026-07-16(P2-d)**: 이 퍼널이 이제 콘솔 표로도 보임(API 전용이었음)
 - [ ] **매출 롤업** — ⑤ **BM·수익화** 탭: 총 매출(₩)·결제 건수·결제 전환율·환불 건수(`stats_daily.revenueKrw`·`purchaseCount`·`diamondsPurchased`, applied 웹훅만 집계)
 - [ ] **상품별 다이아 지급** — ⑤ 탭 하단 표(productId별 지급 건수·다이아 합·결제자, 원장 파생)
-- [ ] **해당 유저 원장 조회** — ⑤ 탭 "결제·환불 내역"(kind 필터: 구매/환불, 유저·상품·다이아·잔액)
-- [ ] **환불 반영** — ✉ **문의·환불** 탭: 환불 티켓 처리(관리자 다이아 회수, 멱등키 **티켓당 고정** → 금액 바꿔 재클릭해도 추가 차감 0)
+- [ ] **유저 원장 조회(전 reason·기간)** — ⑤ 탭 "유저 원장 조회"(userId + reason 필터[구매/환불/전지훈련(camp)/조정(adjust)/광고/업적/쿠폰/환영]·`since` 기간·**합계 표시**). **2026-07-16(P2-c)**: 이전 "결제·환불 내역"은 purchase/refund만이라 §13.26 백업 보상(camp 차감 합)을 콘솔로 못 냈음 → 전 reason 필터로 완결
+- [ ] **환불 반영(티켓)** — ✉ **문의·환불** 탭: 환불 티켓 처리(관리자 다이아 회수, 멱등키 **티켓당 고정** → 금액 바꿔 재클릭해도 추가 차감 0)
+- [ ] **수동 지갑 조정(티켓 없는 케이스)** — ⑤ 탭 "수동 지갑 조정" 폼: userId·금액(**음수=회수/양수=지급**)·사유 메모 → 회수는 `admin/refund`, 지급은 `admin/grant`(멱등키 폼당 1회 생성). **2026-07-16(P2-b)**: 디스코드 `refund.anonymous.dropped` 등 **티켓 없는** dropped 알림을 콘솔로 처리(curl 의존 제거). 실행 후 잔액 표시 + 멱등 재클릭 경고
 
 ### F. 컴플라이언스 스팟 (payment-security-compliance 스킬 참조)
 - [ ] **가격 표시 = 콘솔 등록가** — 앱 상점 표시가가 스토어 청구가와 일치(₩ 오차 0)
@@ -209,7 +210,7 @@
 ### 롤백 / 문제 대응
 - [ ] **상품 비활성화** — 지급/가격 사고 시 Play Console에서 해당 상품 **비활성화**(초안 전환) + RC 오퍼링에서 제외 → 신규 구매 차단. 이미 지급된 원장은 불변(감사 보존)
 - [ ] **웹훅 실패 관측** — 디스코드 결제 채널(`DISCORD_WEBHOOK_URL`) 알림 + `payment-events?fail=1` + Sentry(`SENTRY_DSN`)로 실패 사유 확인. "돈 내고 0개"는 `payment-events`에서 성공행+`grant.applied` 부재로 특정
-- [ ] **익명 환불 유실 대응(B1, 2026-07-16)** — 디스코드 "⚠️ 익명 환불 유실" 알림 또는 `payment-events?fail=1`에 `refund.anonymous.dropped`(stage)가 뜨면: 그 `storeTxnId`로 `payment-events?txn=<storeTxnId>`를 조회해 원구매(confirm 지급)의 유저를 찾고, **관리자 수동 환불(§13.17, ✉ 문의·환불 탭)로 다이아 회수**. 익명(비-UUID app_user_id) 환불 웹훅은 유저 귀속 불가라 자동 클로백이 안 되므로 이 이벤트가 곧 수동 처리 신호(RC 미구성/`logIn` 누락 시 발생 — 정상 배선이면 창이 좁음)
+- [ ] **익명 환불 유실 대응(B1, 2026-07-16)** — 디스코드 "⚠️ 익명 환불 유실" 알림 또는 ⑤ 탭 결제 이벤트 표(`fail` 필터)/`payment-events?fail=1`에 `refund.anonymous.dropped`(stage)가 뜨면: 그 `storeTxnId`로 `payment-events?txn=<storeTxnId>`(또는 콘솔 표 검색)를 조회해 원구매(confirm 지급)의 유저를 찾고, **⑤ 탭 "수동 지갑 조정" 폼에 그 userId·음수 금액·사유로 회수**(P2-b — 티켓 없는 dropped라 문의·환불 탭 대신 이 폼이 정규 경로). 익명(비-UUID app_user_id) 환불 웹훅은 유저 귀속 불가라 자동 클로백이 안 되므로 이 이벤트가 곧 수동 처리 신호(RC 미구성/`logIn` 누락 시 발생 — 정상 배선이면 창이 좁음)
 - [ ] **RC 웹훅 재전송** — RC 대시보드에서 실패 이벤트 수동 재전송(멱등이라 안전)
 - [ ] **긴급 시크릿 회전** — `RC_WEBHOOK_SECRET` 유출 의심 시 RC·Vercel 양쪽 동시 교체 후 Redeploy
 

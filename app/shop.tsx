@@ -7,6 +7,7 @@ import { type ComponentProps, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
+import { NegativeBalanceNote } from '../components/NegativeBalanceNote';
 import { useGameStore } from '../store/useGameStore';
 import { purchase, restorePurchases, skuLabel, SKU_REMOVE_ADS, SKU_DLC_WORLDCUP, type Sku } from '../lib/iap';
 import { WORLDCUP_ENABLED } from '../data/flags';
@@ -78,6 +79,7 @@ export default function Shop() {
             <Text style={styles.balance}>{diamonds.toLocaleString()}</Text>
           </View>
         </View>
+        <NegativeBalanceNote balance={diamonds} />
       </Card>
 
       <Text style={styles.section}>다이아</Text>

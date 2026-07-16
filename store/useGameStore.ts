@@ -386,6 +386,8 @@ export const useGameStore = create<GameState>()(
         }
         const r = await earnDiamonds(reward, 'ad', adKey(userId, adState.dayIdx, adState.count));
         set({ walletBusy: false });
+        // 적립 실패 사유: offline·cap·unauthorized·error. **'insufficient'는 적립에선 안 옴**(BACKEND §13.17 P0-1 정정
+        //   2026-07-16 — 게이트는 차감 전용이라 음수 잔액에서도 적립은 통과 = 부채 상환). 그래서 여기 insufficient 분기 불요.
         if (!r.ok) { void get().syncWallet(); return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'cap' ? 'cap' : 'error' }; }
         // ok:true인데 balance 누락(비정형 응답 — ea6b4d9 results 누락의 형제)이면 캐시 불변+sync 수렴. 슬롯은 서버 지급 확정이라 커밋.
         set({ ...(Number.isFinite(r.balance) ? { diamonds: r.balance } : {}), adState }); // 서버 확정 후에만 슬롯·캐시 커밋

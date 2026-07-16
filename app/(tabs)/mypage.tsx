@@ -9,6 +9,7 @@ import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-nati
 import { showAlert } from '../../components/AppDialog';
 import { Popup } from '../../components/Popup';
 import { Card, Muted, Screen, theme, themedStyles } from '../../components/Screen';
+import { NegativeBalanceNote } from '../../components/NegativeBalanceNote';
 import { SpotlightOverlay } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
 import { useAuthStore } from '../../store/useAuthStore';
@@ -169,6 +170,7 @@ export default function MyPage() {
             <Text style={styles.balance}>{diamonds.toLocaleString()}</Text>
           </View>
         </View>
+        <NegativeBalanceNote balance={diamonds} />
         <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
           <Pressable onPress={watchAd} disabled={!adAvail.ok || walletBusy} style={[styles.diaBtn, (!adAvail.ok || walletBusy) && styles.diaBtnOff]}>
             <Text style={[styles.diaBtnTxt, (!adAvail.ok || walletBusy) && styles.diaBtnTxtOff]}>

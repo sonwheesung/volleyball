@@ -15,14 +15,14 @@ export async function GET(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   try {
     const url = new URL(req.url);
-    const source = url.searchParams.get('source'); // client|webhook|confirm
+    const source = url.searchParams.get('source'); // client|webhook|confirm|admin
     const txn = url.searchParams.get('txn');       // storeTxnId(한 결제 추적)
     const onlyFail = url.searchParams.get('fail') === '1';
     const limit = Math.min(200, Math.max(1, Number(url.searchParams.get('limit')) || 50));
     const offset = Math.max(0, Number(url.searchParams.get('offset')) || 0);
 
     const conds = [eq(purchaseEvent.projCode, PROJ_CODE)];
-    if (source === 'client' || source === 'webhook' || source === 'confirm') conds.push(eq(purchaseEvent.source, source));
+    if (source === 'client' || source === 'webhook' || source === 'confirm' || source === 'admin') conds.push(eq(purchaseEvent.source, source));
     if (txn) conds.push(eq(purchaseEvent.storeTxnId, txn));
     if (onlyFail) conds.push(eq(purchaseEvent.ok, false));
     const where = and(...conds);

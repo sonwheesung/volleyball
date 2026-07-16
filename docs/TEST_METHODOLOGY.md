@@ -21,6 +21,7 @@
 | EC-TX-03 팬텀 방출 | simTxDup이 valid Tx만, store 게이트 우회 | **악질/원숭이 퍼징**(store 구동) |
 | EC-RM-01 정원 19 | acquisitionAudit가 오프시즌만, churn 미결합 | **악질/원숭이 퍼징**(장기·교차국면) |
 | P1 walk 오버랩 사각 | 룰 Q가 serve를 재계산 좌표로만 검사 | **독립 문서기반 검증**(A/B) |
+| **머니 게이트 delta 부호 미구분**(음수 잔액 탈출 불가 트랩 — 환불로 −700된 유저의 광고 적립까지 'insufficient' 거부) | 지갑 게이트가 `!allowsNegative && next<0`으로 **차감/적립을 안 가려** '잔액<0 거부'를 적립에도 적용. 결제 가드들(`_dv_purchase`·`_dv_walletauth`)이 **spend 방향(초과지출·이중지급)만** 검사 — "적립이 음수에서 통과하나"를 본 렌즈가 없었다(**방향 편향 사각** — 게이트를 한 방향으로만 상상). tsc·분포·멱등 다 초록 | **페르소나 워크스루(유저 시점 라이브 재현)** — 테스트 유저 잔액을 −700으로 만들어 `/api/wallet/earn` 실호출 → `{ok:false,insufficient}` 실증. 봉인 `_dv_purchase §부채상환`(음수서 earn +50 통과·같은 상태 spend 거부·0 도달 후 spend 재개 + 구게이트 A/B 검출). 교훈: 방향성 게이트(차감 vs 적립)는 **양방향 다 케이스화**하고, 잔액 불변식은 "못 쓰게"뿐 아니라 "갚을 수 있나"도 본다 |
 | coachShare malformed focus 크래시 | 손상 세이브 trainingFocus를 가드 안 함(정상값만 테스트) | **세이브/리로드 퍼징**(구동 중 크래시) |
 | _gt_determinism 허위 오라클 | 테스트가 partialize/rehydrate를 베껴서 검사 | **테스트 코드 리뷰**(재구현 오라클 인지) |
 | EC-FA-08 simMoneyOnly 등급 오라클 오판(엔진 WAI) | 가드가 FA **등급을 스스로 재도출**하면서 **엔진과 다른 스냅샷**(`faMarketPreview`=시장 해석 후·신규 계약 연봉)을 씀 → 직전연봉 순위로 C인 선수를 A로 오분류 → 정상 `compCash=0`(C 무보상)을 위반으로 오판. 오라클이 엔진 로직을 **다른 입력**으로 재구현한 사각(재구현 오라클의 변종 — 데이터 소스 불일치) | **문제 케이스 pre-FA vs post-FA 스냅샷 실측 대조**(신재은 salary 21600(post)↔11800(pre)=rank flip A→C 확인) → 가드가 `buildOffseason(pre-FA)` 스냅샷으로 등급 산정(엔진 입력과 동일). A/B 민감도(가중 무력화 변이=8위반) 유지 |

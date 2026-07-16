@@ -8,6 +8,7 @@ import { showAlert } from '../components/AppDialog';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { Button, Card, IconLabel, Muted, PosTag, Screen, theme, themedStyles } from '../components/Screen';
 import { RoleBadge } from '../components/RoleBadge';
+import { NegativeBalanceNote } from '../components/NegativeBalanceNote';
 import { useGameStore } from '../store/useGameStore';
 import { getPlayer, teamPlayerIds } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
@@ -138,12 +139,15 @@ export default function TrainingCamp() {
   const showGroups = firstBenchIdx > 0; // 주전·벤치가 둘 다 있을 때만 구분 라벨
 
   const balance = (
-    <View style={styles.bal}>
-      <Text style={styles.gem}>💎</Text><Text style={styles.balN}>{diamonds.toLocaleString()}</Text>
-      <Pressable onPress={() => router.push('/buy-diamonds')} hitSlop={8}
-        style={({ pressed }) => [styles.buyChip, pressed && { opacity: 0.7 }]}>
-        <Text style={styles.buyChipText}>+ 구매</Text>
-      </Pressable>
+    <View>
+      <View style={styles.bal}>
+        <Text style={styles.gem}>💎</Text><Text style={styles.balN}>{diamonds.toLocaleString()}</Text>
+        <Pressable onPress={() => router.push('/buy-diamonds')} hitSlop={8}
+          style={({ pressed }) => [styles.buyChip, pressed && { opacity: 0.7 }]}>
+          <Text style={styles.buyChipText}>+ 구매</Text>
+        </Pressable>
+      </View>
+      <NegativeBalanceNote balance={diamonds} />
     </View>
   );
   // 무거운 작업 오버레이(UI-27) — 어느 오프시즌 화면(선수목록=finish / 코스=send)에서 눌러도 뜨도록 각 return에 배치.

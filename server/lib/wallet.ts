@@ -51,9 +51,13 @@ export async function applyWalletTx(
 
   const cur = locked[0].balance;
   const next = cur + delta;
-  // 환불만 음수 balance 허용(§13.17 P0-1) — reason에서 파생(자유 플래그 아님 → spend에 실수로 켜질 사고 차단).
-  // 다 써버린 고래 환불 → 음수 → spend는 balance 게이트라 더는 못 씀(§13.4 H1). balance==Σledger 불변식 유지.
-  if (!allowsNegativeBalance(reason) && next < 0) return { ok: false as const, reason: 'insufficient' as const, balance: cur };
+  // 잔액게이트 = **차감 전용**(§13.17 P0-1 정정 2026-07-16 — delta 부호 미구분 트랩). delta<0(차감)이 음수로 떨어질 때만 거부.
+  //   · 차감(delta<0, camp): next<0이면 'insufficient' — spend 게이트는 절대 약화 안 됨(다 써버린 고래는 더 못 씀 §13.4 H1).
+  //   · 환불(delta<0, refund): allowsNegativeBalance로 게이트 우회 — 음수 허용(클로백).
+  //   · 적립(delta>0, ad/achievement/coupon/welcome/adjust): **잔액이 음수여도 항상 통과**(부채 상환 경로). 환불로 음수가 된
+  //     유저가 광고/업적/쿠폰으로 빚을 갚아 0으로 복귀 가능 — 이걸 막던 게 음수 탈출 불가 트랩(적립까지 거부)이었음.
+  // balance==Σledger 불변식은 방향 무관 유지(적립은 잔액을 0쪽으로 올릴 뿐 불변식 안 깸).
+  if (delta < 0 && next < 0 && !allowsNegativeBalance(reason)) return { ok: false as const, reason: 'insufficient' as const, balance: cur };
 
   // 3) 잔액 갱신 + 원장 기록(같은 트랜잭션 = 원자적)
   await tx.update(users).set({ balance: next }).where(eq(users.id, userId));

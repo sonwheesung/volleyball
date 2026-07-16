@@ -5,6 +5,7 @@ import { type ComponentProps, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Muted, Screen, theme, themedStyles } from '../components/Screen';
+import { NegativeBalanceNote } from '../components/NegativeBalanceNote';
 import { useGameStore } from '../store/useGameStore';
 import { purchaseDiamonds } from '../lib/iap';
 import { DIAMOND_TIERS, tierDiscountPct, formatKrw, type DiamondTier } from '../data/diamondTiers';
@@ -80,6 +81,7 @@ export default function BuyDiamonds() {
         <Ionicons name={'diamond' as IoniconName} size={18} color={theme.sky} />
         <Text style={styles.balanceTxt}>보유 <Text style={{ fontWeight: '900', color: theme.text }}>{diamonds.toLocaleString()}</Text></Text>
       </View>
+      <NegativeBalanceNote balance={diamonds} />
 
       {DIAMOND_TIERS.map((t) => (
         <TierCard key={t.id} tier={t} busy={walletBusy || buyingTier !== null} active={buyingTier === t.id} onBuy={() => buy(t)} />

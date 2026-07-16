@@ -329,7 +329,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === 'retention' && <RetentionPH />}
         {tab === 'play' && <PlayPH />}
         {tab === 'offseason' && <OffseasonPH />}
-        {tab === 'payments' && <Payments stats={stats} api={api} />}
+        {tab === 'payments' && <Payments stats={stats} api={api} flash={flash} />}
         {tab === 'ads' && <Ads api={api} />}
         {tab === 'match' && <MatchPH />}
         {tab === 'players' && <PlayersPH />}
@@ -657,7 +657,7 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
 }
 
 // ── 결제: 일/주/월 매출·결제건수·환불 ──
-function Payments({ stats, api }: { stats: Json | null; api: Api }) {
+function Payments({ stats, api, flash }: { stats: Json | null; api: Api; flash: (m: string) => void }) {
   const kpi = (stats?.kpi as Json) ?? {};
   const [gran, setGran] = useState('day');
   const [rev, setRev] = useState<Json | null>(null);
@@ -746,7 +746,163 @@ function Payments({ stats, api }: { stats: Json | null; api: Api }) {
           </div>
         ) : null}
       </div>
+      <UserLedger api={api} />
+      <ManualAdjust api={api} flash={flash} />
+      <PaymentEventsTable api={api} />
     </>
+  );
+}
+
+// ── 유저 원장 조회 (P2-c §13.26) — userId·reason·기간 필터 + 합계. 백업 보상(camp 차감 합) 콘솔 완결 ──
+const LEDGER_REASONS = [
+  { v: 'all', l: '전체' }, { v: 'purchase', l: '구매' }, { v: 'refund', l: '환불' }, { v: 'camp', l: '전지훈련' },
+  { v: 'adjust', l: '수동조정' }, { v: 'ad', l: '광고' }, { v: 'achievement', l: '업적' }, { v: 'coupon', l: '쿠폰' }, { v: 'welcome', l: '환영' },
+];
+const REASON_KO_LEDGER: Record<string, string> = { purchase: '구매', refund: '환불', camp: '전지훈련', adjust: '수동조정', ad: '광고', achievement: '업적', coupon: '쿠폰', welcome: '환영' };
+function UserLedger({ api }: { api: Api }) {
+  const [uid, setUid] = useState('');
+  const [reason, setReason] = useState('all');
+  const [since, setSince] = useState(''); // YYYY-MM-DD
+  const [rows, setRows] = useState<Json[] | null>(null);
+  const [sum, setSum] = useState(0);
+  const [total, setTotal] = useState(0);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const lookup = async () => {
+    if (!uid.trim()) { setMsg('userId를 입력하세요'); return; }
+    setBusy(true); setMsg('');
+    const qs = new URLSearchParams({ reason, userId: uid.trim(), limit: '100' });
+    if (since.trim()) qs.set('since', since.trim());
+    const r = await api(`/api/admin/payments?${qs.toString()}`);
+    setBusy(false);
+    if (r.body.ok) { setRows((r.body.payments as Json[]) ?? []); setSum(nnum(r.body.sum)); setTotal(nnum(r.body.total)); }
+    else { setRows(null); setMsg(`조회 실패 — ${errMsg(r)}`); }
+  };
+  return (
+    <div className="oc-card">
+      <div className="oc-cardhead"><h3>유저 원장 조회 <span className="oc-tag2">§13.26 백업 보상</span></h3></div>
+      <div className="oc-mut" style={{ fontSize: 12.5, marginBottom: 10, lineHeight: 1.6 }}>userId·사유·기간(이후)으로 원장을 조회하고 <b>합계</b>를 냅니다. 세이브 백업 복원 보상 = 백업 시점 <b>이후 전지훈련(camp) 차감 합</b>을 개인 쿠폰으로 동액 재지급(§13.14).</div>
+      <div className="oc-row" style={{ gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="oc-fld" style={{ flex: 1, minWidth: 220 }}><label className="oc-label">userId</label><input className="oc-input" placeholder="uuid" value={uid} onChange={(e) => setUid(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && lookup()} /></div>
+        <div className="oc-fld" style={{ width: 130 }}><label className="oc-label">사유</label><select className="oc-input" value={reason} onChange={(e) => setReason(e.target.value)}>{LEDGER_REASONS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</select></div>
+        <div className="oc-fld" style={{ width: 150 }}><label className="oc-label">이후(since)</label><input className="oc-input" type="date" value={since} onChange={(e) => setSince(e.target.value)} /></div>
+        <button className="oc-btn" onClick={lookup} disabled={busy}>{busy ? '조회 중…' : '조회'}</button>
+      </div>
+      {msg ? <div style={{ fontSize: 12.5, color: 'var(--dg)', fontWeight: 700, marginTop: 8 }}>{msg}</div> : null}
+      {rows ? (
+        <>
+          <div className="oc-row" style={{ gap: 16, margin: '12px 0', flexWrap: 'wrap' }}>
+            <span className="oc-mut">건수 <b style={{ color: 'var(--tx)' }}>{total.toLocaleString()}</b></span>
+            <span className="oc-mut">합계 <b style={{ color: sum >= 0 ? 'var(--ac)' : '#ff8f8f' }}>{sum >= 0 ? '+' : ''}{sum.toLocaleString()} 💎</b></span>
+            {reason === 'camp' ? <span className="oc-mut" style={{ fontSize: 12 }}>(camp 차감 합 = 보상 쿠폰 금액 = {Math.abs(sum).toLocaleString()}💎)</span> : null}
+          </div>
+          {rows.length === 0 ? <div className="oc-empty">해당 조건의 원장이 없습니다.</div> : (
+            <table className="oc-table">
+              <thead><tr><th>시각</th><th>사유</th><th>메모/상품</th><th style={{ textAlign: 'right' }}>다이아</th><th style={{ textAlign: 'right' }}>잔액</th></tr></thead>
+              <tbody>{rows.map((p) => { const dv = nnum(p.delta); return (
+                <tr key={p.id as string}>
+                  <td>{fmtDT(p.createdAt)}</td>
+                  <td>{REASON_KO_LEDGER[String(p.reason)] ?? String(p.reason)}</td>
+                  <td className="oc-mut">{(p.ref as string) || '—'}</td>
+                  <td style={{ textAlign: 'right', fontWeight: 700, color: dv >= 0 ? 'var(--ac)' : '#ff8f8f' }}>{dv >= 0 ? '+' : ''}{dv.toLocaleString()}</td>
+                  <td style={{ textAlign: 'right' }} className="oc-mut">{nnum(p.balanceAfter).toLocaleString()}</td>
+                </tr>); })}</tbody>
+            </table>
+          )}
+        </>
+      ) : null}
+    </div>
+  );
+}
+
+// ── 수동 지갑 조정 (P2-b §13.17) — 티켓 없는 회수/지급. 음수=회수(admin/refund)·양수=지급(admin/grant) ──
+function ManualAdjust({ api, flash }: { api: Api; flash: (m: string) => void }) {
+  const [uid, setUid] = useState('');
+  const [amount, setAmount] = useState('');
+  const [note, setNote] = useState('');
+  const [key, setKey] = useState(() => `manual:${(globalThis.crypto?.randomUUID?.() ?? String(Date.now()))}`); // 폼당 1회 생성(더블클릭 이중적용 차단)
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const submit = async () => {
+    const amt = Math.floor(Number(amount));
+    if (!uid.trim()) { setMsg('userId를 입력하세요'); return; }
+    if (!Number.isFinite(amt) || amt === 0) { setMsg('금액을 입력하세요 (음수=회수 / 양수=지급)'); return; }
+    if (!note.trim()) { setMsg('사유 메모는 필수입니다(감사기록)'); return; }
+    setBusy(true); setMsg('');
+    // 부호 분기: 음수→회수(admin/refund, amount>0으로 절대값), 양수→지급(admin/grant).
+    const path = amt < 0 ? '/api/admin/refund' : '/api/admin/grant';
+    const body = JSON.stringify({ userId: uid.trim(), amount: Math.abs(amt), note: note.trim(), key });
+    const r = await api(path, { method: 'POST', body });
+    setBusy(false);
+    if (r.body.ok && r.body.applied) {
+      flash(`${amt < 0 ? '회수' : '지급'} 반영됨 · 잔액 ${nnum(r.body.balance).toLocaleString()}💎`);
+      setKey(`manual:${(globalThis.crypto?.randomUUID?.() ?? String(Date.now()))}`); // 다음 조정용 새 키
+      setAmount(''); setNote('');
+    } else if (r.body.ok) {
+      // applied:false = 같은 멱등키가 이미 처리됨(더블클릭). 초록으로 뭉개지 말고 경고.
+      setMsg(`이미 처리된 조정입니다(같은 요청 재클릭). 현재 잔액 ${nnum(r.body.balance).toLocaleString()}💎`);
+    } else setMsg(`실패 — ${errMsg(r)}`);
+  };
+  const amtNum = Math.floor(Number(amount));
+  const dir = Number.isFinite(amtNum) && amtNum !== 0 ? (amtNum < 0 ? '회수(−)' : '지급(+)') : '';
+  return (
+    <div className="oc-card">
+      <div className="oc-cardhead"><h3>수동 지갑 조정 <span className="oc-tag2">티켓 없는 회수/지급</span></h3></div>
+      <div className="oc-mut" style={{ fontSize: 12.5, marginBottom: 10, lineHeight: 1.6 }}>디스코드 <b>익명 환불 유실</b>(refund.anonymous.dropped §13.18 B1)처럼 티켓이 없는 케이스용. <b>음수=회수</b>(스토어 환불 확정분) · <b>양수=지급</b>(굿윌·보상). 사유는 원장 5년 보존.</div>
+      <div className="oc-row" style={{ gap: 8, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+        <div className="oc-fld" style={{ flex: 1, minWidth: 200 }}><label className="oc-label">userId</label><input className="oc-input" placeholder="uuid" value={uid} onChange={(e) => setUid(e.target.value)} /></div>
+        <div className="oc-fld" style={{ width: 130 }}><label className="oc-label">금액 {dir ? <span style={{ color: amtNum < 0 ? '#ff8f8f' : 'var(--ac)' }}>{dir}</span> : '(±)'}</label><input className="oc-input" type="number" placeholder="예: -700" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+      </div>
+      <div className="oc-fld" style={{ marginTop: 8 }}><label className="oc-label">사유 메모 (감사기록)</label><input className="oc-input" placeholder="예: 익명환불 dropped txn GPA.xxx 회수" value={note} onChange={(e) => setNote(e.target.value)} /></div>
+      <div className="oc-row" style={{ gap: 10, marginTop: 10, alignItems: 'center' }}>
+        <button className={`oc-btn${amtNum < 0 ? ' red' : ''}`} onClick={submit} disabled={busy}>{busy ? '처리 중…' : amtNum < 0 ? '회수 실행' : '지급 실행'}</button>
+        {msg ? <span style={{ fontSize: 12.5, color: 'var(--dg)', fontWeight: 700 }}>{msg}</span> : null}
+      </div>
+    </div>
+  );
+}
+
+// ── 결제 이벤트 퍼널 표 (P2-d §13.22) — 최근 N건, source/fail 필터. 진단용 표 하나(과한 대시보드 금지) ──
+const EV_SOURCES = [{ v: '', l: '전체' }, { v: 'webhook', l: '웹훅' }, { v: 'confirm', l: 'confirm' }, { v: 'client', l: '클라' }, { v: 'admin', l: '수동' }];
+function PaymentEventsTable({ api }: { api: Api }) {
+  const [source, setSource] = useState('');
+  const [onlyFail, setOnlyFail] = useState(false);
+  const [rows, setRows] = useState<Json[]>([]);
+  const [total, setTotal] = useState(0);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => {
+    let live = true; setLoading(true);
+    const qs = new URLSearchParams({ limit: '50' });
+    if (source) qs.set('source', source);
+    if (onlyFail) qs.set('fail', '1');
+    api(`/api/admin/payment-events?${qs.toString()}`).then((r) => { if (!live) return; setRows((r.body.events as Json[]) ?? []); setTotal(nnum(r.body.total)); setLoading(false); });
+    return () => { live = false; };
+  }, [api, source, onlyFail]);
+  return (
+    <div className="oc-card">
+      <div className="oc-cardhead">
+        <h3>결제 이벤트 <span className="oc-mut">({total.toLocaleString()})</span></h3>
+        <div className="oc-row" style={{ gap: 8 }}>
+          <GranTabs gran={source} set={setSource} opts={EV_SOURCES} />
+          <button className={`oc-btn ghost sm${onlyFail ? ' on' : ''}`} onClick={() => setOnlyFail((f) => !f)} style={onlyFail ? { borderColor: 'var(--dg)', color: 'var(--dg)' } : undefined}>실패만</button>
+        </div>
+      </div>
+      <div className="oc-mut" style={{ fontSize: 12.5, marginBottom: 10 }}>결제 생애주기 진단(§13.22). "돈 내고 0개"·dropped·수동조정을 단계로 추적. 한 결제 상세는 API <code>?txn=&lt;storeTxnId&gt;</code>.</div>
+      {loading ? <LoadingRow /> : rows.length === 0 ? <div className="oc-empty">해당 조건의 이벤트가 없습니다.</div> : (
+        <table className="oc-table">
+          <thead><tr><th>시각</th><th>소스</th><th>단계</th><th>결과</th><th>유저</th><th style={{ textAlign: 'right' }}>다이아</th></tr></thead>
+          <tbody>{rows.map((e) => { const ok = e.ok !== false; const dv = e.diamondsDelta == null ? null : nnum(e.diamondsDelta); return (
+            <tr key={e.id as string}>
+              <td>{fmtDT(e.createdAt)}</td>
+              <td className="oc-mut">{String(e.source)}</td>
+              <td style={{ fontWeight: 600 }}>{String(e.stage)}</td>
+              <td><span className={`oc-pill ${ok ? 'g' : 'r'}`}>{String(e.outcome ?? (ok ? 'ok' : 'fail'))}</span>{e.reasonCode ? <span className="oc-mut" style={{ fontSize: 11, marginLeft: 6 }}>{String(e.reasonCode)}</span> : null}</td>
+              <td className="oc-mut" title={String(e.userId ?? '')}>{e.userId ? String(e.userId).slice(0, 8) + '…' : '—'}</td>
+              <td style={{ textAlign: 'right', fontWeight: 700, color: dv == null ? 'var(--mut)' : dv >= 0 ? 'var(--ac)' : '#ff8f8f' }}>{dv == null ? '—' : (dv >= 0 ? '+' : '') + dv.toLocaleString()}</td>
+            </tr>); })}</tbody>
+        </table>
+      )}
+    </div>
   );
 }
 

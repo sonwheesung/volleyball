@@ -12,6 +12,7 @@ import { db } from '../../../../db';
 import { tickets } from '../../../../db/schema';
 import { applyWalletTx } from '../../../../lib/wallet';
 import { isAdmin } from '../../../../lib/admin';
+import { logPaymentEventAfter } from '../../../../lib/paymentLog';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +37,8 @@ export async function POST(req: Request) {
       }
       return w;
     });
+    // 감사행(§13.22 · P2-d 퍼널) — 커밋 뒤 fire-and-forget. 티켓 환불·수동 회수 모두 source='admin'으로 관측.
+    logPaymentEventAfter({ source: 'admin', stage: 'admin.refund.applied', ok: true, outcome: r.applied ? 'applied' : 'deduped', userId, idempotencyKey: key, diamondsDelta: -amount, balanceAfter: r.balance, detail: { note: note.slice(0, 200), ticketId: ticketId ?? null } });
     return NextResponse.json({ ok: true, balance: r.balance, applied: r.applied });
   } catch (e) { reportError(e, 'admin/refund');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
