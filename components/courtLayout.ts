@@ -196,44 +196,96 @@ const RF_BACK_X = [0.13, 0.55, 0.87];
 const SV_FRONT_X = [0.36, 0.50, 0.64];
 const SV_BACK_X = [0.15, 0.53, 0.85];
 
+// ── 패서 레인 3등분(레인 재분배, COURT_POSITIONING A-1 · BOARD_RULES 룰 69) ──
+// 존 컬럼 고정(RF_*_X)은 4/6 로테이션에서 세 패서가 한쪽에 뭉쳐 반대편이 무패서로 빈다(rot2/5 좌측 절반 공백).
+// 서브 코스를 좌·중·우로 3등분하려면 패서를 목표 레인에 재배치하되, 같은 행 인접 존 점유자(비패서·세터) x를
+// 넘지 않는 합법 구간으로 클램프해 오버랩(룰 Q)을 유지한다. 패서 3인의 **x만** 바꾼다(깊이 y·비패서·세터·jit 무변경).
+const RECV_LANES = [0.18, 0.5, 0.82];
+const LANE_EPS = 0.03;                 // 이웃 존 점유자와 최소 간격(룰 Q strict>0.5px 여유)
+const LANE_MARGIN_L = 0.08, LANE_MARGIN_R = 0.92; // 끝 존(4·5 좌끝 / 2·1 우끝)·패서 이웃일 때 코트 여백
+const LANE_ORDER_MARGIN = 0.01;        // 같은 행 패서끼리 최소 x 간격(오버랩 좌우 순서 여유)
+const RECV_PERMS = [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+const rowOrderZones = (front: boolean): number[] => (front ? [4, 3, 2] : [5, 6, 1]);
+
+/** 패서 3인의 x(home 프랙션)를 좌·중·우 레인으로 재분배. xf 배열을 제자리 수정. */
+function redistributePasserLanes(xf: number[], zoneOf: number[], recv: number[], rot: number): void {
+  const passers = recv.slice(0, 3);
+  if (passers.length !== 3) return; // 항상 3인(안전용 가드)
+  const lo: number[] = [], hi: number[] = [], jitT: number[] = [];
+  for (let k = 0; k < 3; k++) {
+    const z = zoneOf[passers[k]];
+    const order = rowOrderZones(!isBackZone(z));
+    const j = order.indexOf(z);
+    let L = LANE_MARGIN_L, Hh = LANE_MARGIN_R;
+    if (j > 0) { const nb = lineupIdxAt(rot, order[j - 1]); if (!recv.includes(nb)) L = xf[nb] + LANE_EPS; }
+    if (j < order.length - 1) { const nb = lineupIdxAt(rot, order[j + 1]); if (!recv.includes(nb)) Hh = xf[nb] - LANE_EPS; }
+    if (L > Hh) { const mid = (L + Hh) / 2; L = Hh = mid; } // 구간 반전 방지(사실상 미발생)
+    lo.push(L); hi.push(Hh);
+    jitT.push(jit(z * 31 + rot * 7 + 3, 0.015)); // 레인 목표 결정론 흔들기(패서 존 시드)
+  }
+  let best: number[] | null = null, bestScore = Infinity;
+  for (const perm of RECV_PERMS) {
+    const assigned = [0, 1, 2].map((k) => clampN(RECV_LANES[perm[k]] + jitT[k], lo[k], hi[k]));
+    // 같은 행 패서 좌우 순서(존 순 x 증가) 검증 — 위반 순열은 불가
+    let feasible = true;
+    for (const front of [true, false]) {
+      const order = rowOrderZones(front);
+      const inRow = [0, 1, 2].map((k) => ({ k, oi: order.indexOf(zoneOf[passers[k]]) })).filter((e) => e.oi >= 0).sort((a, b) => a.oi - b.oi);
+      for (let t = 1; t < inRow.length; t++) if (assigned[inRow[t].k] <= assigned[inRow[t - 1].k] + LANE_ORDER_MARGIN) { feasible = false; break; }
+      if (!feasible) break;
+    }
+    if (!feasible) continue;
+    let score = 0;
+    for (let k = 0; k < 3; k++) score += Math.abs(assigned[k] - (RECV_LANES[perm[k]] + jitT[k]));
+    if (score < bestScore) { bestScore = score; best = assigned; } // 동점=순열 인덱스↓(strict <)
+  }
+  if (best) for (let k = 0; k < 3; k++) xf[passers[k]] = best[k];
+}
+
 /** 서브 받기 전 대형 — **오버랩 합법**(행 좌<중<우, 열 전위<후위)을 지키되 **등간격 격자가 아니라
  *  자유분방하게**(레인 어긋남 + 결정론 흔들기 + 후위 패서 W 아크). 전위 공격수 네트 대기·후위 패서
- *  깊게·세터 코너 은신. x 흔들기는 레인 간격(≥0.29)보다 작아(±0.04) 좌우 순서 불변, y는 전위(≤0.68)·
- *  후위(≥0.72) 밴드가 분리돼 열 전후 보장. 세터는 컨택과 동시 침투(릴리즈) — 디렉터가 별도 처리. */
+ *  깊게·세터 코너 은신. y는 전위(≤0.68)·후위(≥0.72) 밴드가 분리돼 열 전후 보장. 패서 3인의 x는
+ *  좌·중·우 레인으로 재분배(redistributePasserLanes — 존 컬럼 뭉침 해소, 룰 69). 세터는 컨택과 동시 침투
+ *  (릴리즈) — 디렉터가 별도 처리. 원정은 홈 프랙션에서 계산 후 mx() 미러. */
 export function receiveFormation(side: Side, lu: Lineup, rot: number, W: number, H: number): Record<number, Px> {
   const mx = (f: number) => (side === 'home' ? f : 1 - f) * W;
   const my = (f: number) => (side === 'home' ? f : 1 - f) * H;
   const setterIdx = lu.six.findIndex((p) => p.position === 'S');
   const recv = receiveLine(lu, rot);
-  const pos: Record<number, Px> = {};
+  const xfs: number[] = new Array(6);
+  const yfs: number[] = new Array(6);
+  const zoneOf: number[] = new Array(6);
   for (let i = 0; i < 6; i++) {
     const zone = zoneOfIdx(rot, i);
+    zoneOf[i] = zone;
     const r = lateralRank(zone);
     const front = !isBackZone(zone);
     const seed = zone * 31 + rot * 7;
-    let xf: number, yf: number;
     if (i === setterIdx) {
-      xf = r === 2 ? 0.87 : r === 0 ? 0.13 : 0.5;          // 자기 사이드 코너에 은신
+      xfs[i] = r === 2 ? 0.87 : r === 0 ? 0.13 : 0.5;          // 자기 사이드 코너에 은신
       // 전위 세터는 네트(0.57). 후위 세터는 **가장 깊게**(0.86) — 같은 열 전위 패서(0.79)가 패스 깊이로
       // 내려와도 그 뒤를 받쳐 오버랩 합법(전위<후위, 룰 Q) 유지. 세터는 안 받으니(릴리즈) 깊어도 무방.
       // 침투는 디렉터가 컨택 직후 릴리즈(switchedSpots offense). (2026-06-24: 평평한 3인 라인 채택, COURT_POSITIONING A-1)
-      yf = front ? 0.57 : 0.86;
+      yfs[i] = front ? 0.57 : 0.86;
     } else if (front) {
-      xf = RF_FRONT_X[r] + jit(seed + 1, 0.04);
+      xfs[i] = RF_FRONT_X[r] + jit(seed + 1, 0.04); // 패서면 아래 redistribute가 덮어씀
       // 전위 패서(주로 OH)는 **후위 패서와 같은 패스 깊이(0.79)** 로 내려와 3인 **평평한 라인**을 이룬다
       // (리베로·백OH 0.80~0.82와 한 줄). 2026-06-24 채택(COURT_POSITIONING A-1 "패서 3명 3~5m 한 라인"): 구 W(0.665)는
       // 전위 패서를 3m 라인에 얕게 둬 그 뒤(자기 열 짝=세터/OP가 비우는 깊은 쪽)가 빈 채로 에이스 허용 — 사용자 보고.
       // 오버랩(룰 Q): "후위밴드 침범(≥0.72)"은 룰이 아니다. 전위 패서는 **자기 열 후위 짝보다만** 네트쪽이면 합법
       // (FIVB 7.4 인접 쌍). 짝(세터 0.86·비패서 0.85)을 더 깊이 빼 0.79가 합법 — _dv_overlap 위반 0 측정으로 확인.
-      yf = recv.includes(i) ? 0.79 + jit(seed + 2, 0.012) : 0.575 + jit(seed + 2, 0.02);
+      yfs[i] = recv.includes(i) ? 0.79 + jit(seed + 2, 0.012) : 0.575 + jit(seed + 2, 0.02);
     } else {
-      xf = RF_BACK_X[r] + jit(seed + 1, 0.04);
+      xfs[i] = RF_BACK_X[r] + jit(seed + 1, 0.04); // 패서면 아래 redistribute가 덮어씀
       // 후위 패서 라인 — 리베로(중앙 zone6, 서브 집중 구역) 가장 깊게(0.82), 윙 0.80. 비패서(백어택
       // 대기 OP)는 **가장 깊게(0.85)** 로 빼 같은 열 전위 패서(0.79)와 오버랩 여유 확보(전위<후위 합법).
-      yf = recv.includes(i) ? (r === 1 ? 0.82 : 0.80) + jit(seed + 2, 0.015) : 0.85 + jit(seed + 2, 0.015);
+      yfs[i] = recv.includes(i) ? (r === 1 ? 0.82 : 0.80) + jit(seed + 2, 0.015) : 0.85 + jit(seed + 2, 0.015);
     }
-    pos[i] = { x: mx(xf), y: my(yf) };
   }
+  // 패서 3인의 x만 좌·중·우 레인으로 재분배(존 컬럼 뭉침 해소). 비패서·세터 x·전원 y는 위에서 확정된 값 유지.
+  redistributePasserLanes(xfs, zoneOf, recv, rot);
+  const pos: Record<number, Px> = {};
+  for (let i = 0; i < 6; i++) pos[i] = { x: mx(xfs[i]), y: my(yfs[i]) };
   return pos;
 }
 
