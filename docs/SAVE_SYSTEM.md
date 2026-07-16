@@ -386,3 +386,62 @@
 
 ### 9.7 검증 (§8.4 연장)
 - **`npx tsx tools/_dv_save_transfer.ts`** — 왕복 동일성·미래버전/쓰레기 거부·드라이런 게이트·실 store E2E·A/B 민감도(exit 0/1).
+
+---
+
+## 10. 시즌 종료 서버 백업 — 클라우드 안전망 (2026-07-16, 사용자 결정)
+
+> **목적**: §9(수동 파일 export/import)이 "사용자가 손으로 백업"이라면, 이 절은 **시즌이 끝날 때마다 조용히 자동으로 서버에 백업**한다.
+> 폰 분실·세이브 꼬임·기기 교체 시 **설정에서 서버 백업을 골라 복원**한다. §9와 같은 payload(봉투)를 쓰되 전송 매체가 파일이 아니라 서버다.
+>
+> **불변식(§7·§8·§9와 동일)**: 이 기능은 **payload 스키마·`SAVE_VERSION`·`migrate`·`sanitizeSave`·`partialize`를 건드리지 않는다**.
+> 업로드 원천은 §9와 **동일한** `captureReplaySave()` → `buildExportPayload`+`serializeExport`(새 포맷 금지). 복원도 §9.3의 **가져오기 파이프라인 그대로**(`parseImportPayload`→`dryRunImport`→확인→적용). 이 절은 그 파이프라인의 **서버 전송 래퍼**일 뿐이다.
+>
+> **세이브 스키마 불변(핵심)**: "마지막 성공 백업 시즌"은 세이브 payload(§1의 69필드)에 **넣지 않는다** — `partialize`에 필드를 추가하면 코퍼스 박제 규율(§8.2)을 발동시키고 스키마 드리프트를 낳는다. 대신 **AsyncStorage 별도 키**(`baeknyeon-backup-last:<userId>`, 계정별)에 비영속으로 기억한다.
+
+### 10.1 API 계약 (서버와 공유 — 고정)
+- `POST /api/save-backup` (Bearer) body `{ season:number, payload:string }` → `{ ok:true, id, keptCount }`. payload = §9.1 봉투 문자열 그대로. 서버는 계정당 **최근 5개** 유지(초과 삭제 = `keptCount`).
+- `GET /api/save-backup` (Bearer) → `{ ok:true, backups:[{ id, season, createdAt, sizeBytes, saveVersion }] }` 최신순.
+- `GET /api/save-backup/<id>` (Bearer) → `{ ok:true, payload:string }`.
+- 서버 통신은 `lib/server.ts` 패턴 미러(**Bearer 주입·타임아웃·throw 없음**). Bearer는 `useAuthStore.session.token`, base는 `EXPO_PUBLIC_SERVER_URL`. 미설정/네트워크 실패는 `offline`로 조용히 흡수 — 관전/시뮬은 이 계층을 안 탄다(로컬 결정론).
+
+### 10.2 자동 업로드 (`store/useGameStore.ts endSeason` + `lib/saveBackup.ts`)
+- **트리거**: `endSeason`이 모든 상태를 `set(...)`으로 커밋한 **직후**(오프시즌 롤오버 완료 = `season=nextSeason`, `currentDay=0`) **fire-and-forget** 1줄:
+  `void import('../lib/saveBackup').then((m) => m.triggerSeasonBackup()).catch(() => {})`. 동적 import로 순환 의존(saveBackup→store) 차단.
+- **조용한 실패**: 업로드 실패(오프라인·서버 오류)해도 **게임 진행 무영향·무알림**. `triggerSeasonBackup`은 절대 throw 안 하고 store를 **건드리지 않는다**(결정론·바이트 불변).
+- **태그 시즌**: `body.season = 캡처된 세이브의 season`(= 커밋 후 새 시즌 번호). 성공 시 `baeknyeon-backup-last:<userId>`에 그 season을 기록.
+- **진행 중 구단 없으면 스킵**(`selectedTeamId==null` → 백업 안 함).
+
+### 10.3 재시도 (부팅·로그인 후 1회)
+- **판정(순수)**: `shouldRetryBackup(lastBackupSeason, currentSeason, online)`:
+  - `!online` → **false**(오프라인이면 통과 — 재시도 안 함).
+  - else → `currentSeason > (lastBackupSeason ?? -1)`(마지막 성공 백업이 현재 시즌보다 뒤처졌으면 = 시즌 종료 백업이 유실됐으면 재시도).
+- **배선**: `onRehydrateStorage`(§0 — 계정 확정 후 슬롯 로드 완료 지점 = "부팅/로그인 후"의 owned 훅. SAVE_SYSTEM §7.5 `switchSaveScope`가 콜드부팅·로그인 양쪽에서 rehydrate를 부른다) 끝에 `void import('../lib/saveBackup').then((m) => m.retryBackupOnBoot())`. `retryBackupOnBoot`은 **세션당 1회**(모듈 플래그)만 실제 시도하고, 나머지는 즉시 반환. `shouldRetryBackup`이 false면 통과.
+  > 대안(향후): boot 트리거를 `app/_layout.tsx`/`switchSaveScope`로 옮길 수 있으나, 이번 구현은 owned 파일(store) 안에서 완결하기 위해 `onRehydrateStorage`에 뒀다. 둘 다 "슬롯 로드 완료 = 로그인 후" 시점이라 의미 동일.
+
+### 10.4 복원 UI (`app/settings.tsx`)
+- "세이브 관리" 섹션에 **"서버 백업에서 복원"** 행 추가(내보내기·가져오기 아래).
+- 흐름(신규 Modal 금지 — #129, 기존 `showAlert`/블로킹 오버레이 재사용):
+  1. 탭 → `listBackups()`(busy 오버레이) → 실패면 사유 다이얼로그(오프라인/로그인/오류), 빈 목록이면 안내.
+  2. 목록을 **`showAlert` 세로 버튼 스택**(ActionSheet 대용 — 최대 5행 + 취소)으로: 각 행 `N시즌 · 날짜 · 크기`.
+  3. 선택 → `fetchBackup(id)`(busy) → **기존 가져오기 파이프라인 그대로**: `parseImportPayload`→`dryRunImport`→확인 다이얼로그(§9.3 재화 안전 카피)→`applyImport`(§9.3-5). 드라이런 게이트를 서버 복원도 동일하게 통과.
+  4. 진행 중 표시는 §9.5의 `importing`/`busy` 블로킹 오버레이 재사용(Modal 수 불변).
+- **카피**: "시즌이 끝날 때마다 자동으로 서버에 백업돼요(최근 5개). 다이아·결제 재화는 계정에 항상 안전해요."
+
+### 10.5 재화 안전 — §9.4와 동일
+서버 백업 payload도 `partialize` 산출이라 `diamonds`·`claimedAch`·`adState`가 물리적으로 포함되지만 **표시 캐시**일 뿐. 복원 후 로그인 슬롯의 `syncWallet`이 서버 잔액·업적·광고캡으로 수렴(서버 진실). 소비·적립·결제는 서버 확인 후에만 반영 → 백업/복원은 재화 인플레 벡터가 아니다.
+
+### 10.6 코드 맵
+- `lib/saveBackup.ts`(신규) — 순수 판정(`shouldRetryBackup`)·바디 빌더(`buildBackupBody` = saveTransfer 재사용)·서버 클라(`uploadBackup`/`listBackups`/`fetchBackup`, lib/server 패턴 미러)·오케스트레이션(`triggerSeasonBackup`/`retryBackupOnBoot`)·마지막 백업 시즌 별도 키 I/O. React 무의존(순수부 헤드리스 가드).
+- `store/useGameStore.ts` — `endSeason` 커밋 직후 자동 업로드 훅 1줄 + `onRehydrateStorage` 끝 재시도 훅 1줄(둘 다 동적 import fire-and-forget). **시뮬/결정론 경로 무접촉**.
+- `app/settings.tsx` — "서버 백업에서 복원" 행 + `listBackups`/`fetchBackup` → 기존 import 파이프라인 재사용.
+
+### 10.7 가드 `tools/_dv_save_backup.ts` (순수부 — 서버 없이)
+라이브 왕복은 **서버측 가드(`_dv_backup_live`)** 가 커버 — 여기선 순수부만(중복 금지). exit 0/1.
+- **① 페이로드 포맷 동일**: `buildBackupBody(cap, season).payload === serializeExport(buildExportPayload(cap))` + 파싱 시 봉투(`app`/`kind`/`version`/`state`) 복원 + `season` 패스스루.
+- **② 재시도 판정 표**: `shouldRetryBackup`을 (마지막 백업 시즌 × 현재 시즌 × 온라인) 조합 표로 검증(오프라인=false, null 이력=현재>−1, 뒤처짐=true, 동일/앞섬=false).
+- **③ endSeason 결정론 무영향**: 실 store로 `resetSave→selectTeam→completeSeason→endSeason`을 **업로드 성공/실패/미호출 3케이스**(fetch 모킹·세션 토글)로 구동 → 커밋된 세이브(`captureReplaySave().state`)가 **3케이스 바이트 동일** + 성공·실패 케이스는 fetch 호출됨·미호출 케이스는 미호출(케이스가 실제로 다름을 증명). 훅이 fire-and-forget임을 코드 레벨로 봉인.
+- **④ A/B 민감도**: ②의 표를 **교란된 판정 변이**(예: `>=`·온라인 게이트 제거)에 돌리면 최소 1행 불일치(표에 이빨이 있음 = 회귀를 잡는다) — 허위 오라클 차단.
+
+### 10.8 검증 (§9.7 연장)
+- **`npx tsx tools/_dv_save_backup.ts`** — 페이로드 포맷·재시도 표·endSeason 무영향·A/B 민감도(exit 0/1).

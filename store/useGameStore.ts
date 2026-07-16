@@ -1387,6 +1387,9 @@ export const useGameStore = create<GameState>()(
           archive: nextArchive,
           milestones: nextMilestones,
         });
+        // 시즌 종료 서버 백업(SAVE_SYSTEM §10) — 커밋 직후 fire-and-forget·조용한 실패(결정론·게임 진행 무영향).
+        //   동적 import로 순환 의존(saveBackup→store) 차단. 절대 await·store 무접촉.
+        void import('../lib/saveBackup').then((m) => m.triggerSeasonBackup()).catch(() => {});
       },
 
       resetSave: () => {
@@ -1539,6 +1542,9 @@ export const useGameStore = create<GameState>()(
             useGameStore.setState({ claimedAch: st.filter((x) => x.unlocked).map((x) => x.ach.id) });
           }
           useGameStore.setState({ hydrated: true });
+          // 시즌 종료 백업 재시도(SAVE_SYSTEM §10.3) — 슬롯 로드 완료 = "부팅/로그인 후" 시점.
+          //   세션당 1회, 현재 세이브가 마지막 백업보다 앞서고 온라인일 때만. fire-and-forget·조용(동적 import로 순환 차단).
+          void import('../lib/saveBackup').then((m) => m.retryBackupOnBoot()).catch(() => {});
         } catch (e) {
           console.warn('[save] 복원 실패 — fresh로 리셋:', e);
           resetLeagueBase();

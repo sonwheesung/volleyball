@@ -567,3 +567,33 @@
 **G. 검증(구현 시)**: 롤업 순수 집계는 `_dv_*`(DB 무의존 A/B 자가검증) · sync 커넥터는 폴백/throw-none 라이브 가드 · CSV escape/UTC 버킷 가드 · 이상징후 임계 판정 A/B. §13.15 라이브 E2E(requireAdmin 401·proj 스코프) 계승.
 
 **H. 파일(구현 시 예상)**: `server/db/schema.ts`(statsDaily 확장·externalDaily·gameRollupDaily·cohortRetention)·`server/lib/rollup.ts`(게임 도메인 집계)·`server/lib/externalSync/{revenuecat,ga4,bigquery,admob,sentry}.ts`(커넥터)·`server/app/api/admin/{dashboard,section/*,export,sync/*}/route.ts`·`server/app/ops-9f3a2c/page.tsx`(11섹션 탭)·`.env.example`(외부 API 키). track 이벤트 taxonomy 개정은 앱 `lib/analytics`(ANALYTICS_PLAN §6.3).
+
+### 13.26 시즌 종료 세이브 백업 (서버측 스냅샷 보관) — ✅ 서버측 구현(2026-07-16)
+> **상태**: 서버측(스키마·업로드/목록/다운로드 라우트·라이브 가드) 구현 완료(2026-07-16). 클라이언트(시즌 종료 시 자동 업로드·복원 UI)는 병렬 작업.
+> 이 절은 **API 계약이 인터페이스** — 아래 계약은 클라와 공유된 고정 계약이므로 서버는 이대로 응답한다.
+
+- **배경/문제**: 게임 세이브는 **기기 로컬**(결정론 격리 — 서버는 재화·계정·결제·로그·문의·통계만, 시드/리플레이엔 안 들어감 §1·§8).
+  §13.23(세이브 복구 채널)이 "관리자가 고쳐 되돌리는" **손상 복구**를 다룬다면, 이 절은 그 앞단 — **평시 자동 백업**이다:
+  **앱 업데이트 중 크래시·기기 분실·마이그레이션 사고로 세이브가 통째로 날아가는 전손(全損)** 을 막는다. 세이브는 base 스냅샷+currentDay+results 리플레이라 작아(§8),
+  **시즌 종료 순간의 내보내기 JSON을 통째로 서버 blob으로 보관**하면 최근 몇 시즌은 언제든 되돌릴 수 있다.
+- **결정론 격리 유지(핵심 제약)**: 서버는 payload를 **불투명 blob으로 보관만** 한다 — **게임플레이에 일절 개입 안 함**(파싱해서 시드/리플레이/재화에 쓰지 않음).
+  서버가 payload를 여는 건 **봉투 검증(app/kind)과 목록용 메타(version) 추출**까지뿐, **내용(state)은 신뢰하지 않는다**(진단 스냅샷 §13.20·개인 쿠폰 §13.14와 같은 "계정별 서버 관리 blob" 결).
+- **API 계약(클라와 공유 — 고정)**:
+  - `POST /api/save-backup` (Bearer 필수) — body `{ season:number, payload:string }`. payload는 클라 내보내기 JSON 문자열(`{app:'baeknyeon',kind:'save-export',version,state}` 직렬화본).
+    응답 `{ ok:true, id, keptCount }`. 서버 검증: **크기 상한 3MB**(payload 바이트 초과 시 **413** 거부) · payload가 JSON 파싱되고 **app==='baeknyeon' && kind==='save-export'** (봉투만 확인, 내용 불신 — 불일치 시 **400**) · **season 정수**(아니면 400).
+    `saveVersion`은 봉투 `version`에서 추출해 컬럼 저장(목록 표시용).
+  - `GET /api/save-backup` (Bearer) → `{ ok:true, backups:[{ id, season, createdAt, sizeBytes, saveVersion }] }` — **payload 미포함**(목록은 가볍게), 최신순.
+  - `GET /api/save-backup/<id>` (Bearer) → `{ ok:true, payload:string }` — **본인 것만**(타 유저 id 조회 = **404**, 존재 여부도 노출 안 함).
+  - 인증은 `requireUserId`(fail-closed·익명 폴백 금지 §13.17 P0-5) — 무토큰/위조 = 401. proj 스코프(§13.2) 모든 쿼리에 적용.
+- **보관 정책(롤링)**:
+  - **유저당 최근 5개**만 보관. 삽입 후 그 유저 백업이 5개 초과면 **가장 오래된 것(created_at 오름차순)부터 삭제**.
+  - **같은 season 재업로드 = 교체**(중복 행 방지) — 삽입 전에 같은 (projCode,userId,season) 행을 삭제하고 새로 넣는다(재업로드는 "새 백업"으로 최신화 → created_at 갱신, 슬롯 1개 유지). 하드 가드로 `(proj_code,user_id,season)` UNIQUE 인덱스.
+  - **3MB 캡**: 세이브는 리플레이 기반이라 정상 크기는 수십~수백 KB. 3MB는 넉넉한 상한이자 남용/오류 방어(초과 413).
+- **보상 정책(운영 — 복원 시 재화 정합)**:
+  복원으로 유저가 잃는 것 = **백업 시점 이후의 진행**뿐. 그 구간에서 쓴 **전지훈련 다이아 차감**은 `wallet_ledger`에 `reason='camp'`·`created_at > 백업 시점`으로 **원장에 그대로 남아 식별 가능** →
+  해당 구간 camp 차감 합을 **개인 쿠폰(targetUserId §13.14)으로 동액 재지급**한다(운영 수동). **원장 기준이라 분쟁 여지 없음**(재화 진실은 서버 §6, 세이브엔 재화 없음 — 세이브를 되돌려도 다이아는 서버에 그대로).
+  즉 세이브 백업은 **게임 진행만** 되돌리고, **재화는 원장이 정본**이라 별도 정합(쿠폰 보상)으로 맞춘다.
+- **스키마**: `save_backups`(id·proj_code FK·user_id FK·season·payload text·size_bytes·save_version·created_at). 인덱스: `(proj_code,user_id)` 조회/롤링 + `(proj_code,user_id,season)` UNIQUE(교체 하드가드).
+- **검증**: 라이브 가드 `server/tools/_dv_backup_live.ts` — ① 업로드→목록 등장(sizeBytes·saveVersion 정확) ② 6개→5개 유지(최고령 삭제) ③ 同시즌 재업로드=교체(행 수 불변) ④ 다운로드 payload 바이트 왕복 동일 ⑤ 무토큰 401·타유저 id 404 ⑥ 3MB 초과 413 ⑦ 쓰레기 payload(봉투 불일치) 400 + A/B(상한·봉투 검증 제거 모사 시 통과됐을 입력이 실제로 거부됨을 증명). 서버 가드 배터리에 추가(README 검증 루틴 등재는 메인 세션).
+- **파일**: `server/db/schema.ts`(save_backups)·`server/app/api/save-backup/route.ts`(POST 업로드+GET 목록)·`server/app/api/save-backup/[id]/route.ts`(GET 다운로드)·`server/tools/_dv_backup_live.ts`(가드).
+- **인프라 순서**: 세이브 백업은 **재화 진실과 무관한 순수 blob 보관**(§8 결정론 격리) — 온라인 백엔드(#43) 위에 얹히지만 결제/시드/리플레이엔 안 들어간다. 클라 자동 업로드(시즌 종료 훅)·복원 UI(부팅 시 백업 목록 노출)는 후속.

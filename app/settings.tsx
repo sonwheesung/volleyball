@@ -10,7 +10,7 @@ import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
 import type { ComponentProps } from 'react';
 import { Muted, Screen, theme, themedStyles, useThemeMode, setThemeMode } from '../components/Screen';
-import { showAlert } from '../components/AppDialog';
+import { showAlert, type DialogButton } from '../components/AppDialog';
 import { ToastHost, useToastQueue } from '../components/Toast';
 import { DEV_TOOLS } from '../data/flags';
 import { seasonYear } from '../data/seasonLabel';
@@ -18,6 +18,7 @@ import { setBgmVolume as applyBgmVolume } from '../audio/bgm';
 import { useGameStore, SAVE_KEY, captureReplaySave } from '../store/useGameStore';
 import { flushGameSave } from '../store/persistStorage';
 import { buildExportPayload, serializeExport, exportFileName, parseImportPayload, dryRunImport } from '../lib/saveTransfer';
+import { listBackups, fetchBackup } from '../lib/saveBackup';
 import { useAuthStore } from '../store/useAuthStore';
 
 const ROSE = '#FF5C8D';
@@ -187,6 +188,61 @@ export default function Settings() {
     );
   };
 
+  // ── 서버 백업에서 복원(SAVE_SYSTEM §10.4) — 목록→선택→다운로드→기존 가져오기 파이프라인 재사용 ──
+  const fmtBackupSize = (bytes: number) => (bytes >= 1024 ? `${Math.round(bytes / 1024)}KB` : `${Math.max(1, Math.round(bytes))}B`);
+  const fmtBackupDate = (iso: string) => {
+    const d = new Date(iso);
+    return Number.isNaN(d.getTime()) ? '' : `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, '0')}.${String(d.getDate()).padStart(2, '0')}`;
+  };
+  // 선택한 서버 백업 다운로드 → §9.3 가져오기 게이트(parse→dryRun→확인→적용) 그대로.
+  const onPickServerBackup = async (id: string) => {
+    setImporting(true);
+    const r = await fetchBackup(id);
+    if (!r.ok) {
+      setImporting(false);
+      showAlert('불러올 수 없어요', r.reason === 'offline' ? '온라인 연결이 필요해요. 네트워크 확인 후 다시 시도해 주세요.' : '백업을 내려받는 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.');
+      return;
+    }
+    setImporting(false);
+    const parsed = parseImportPayload(r.payload);
+    if (!parsed.ok) { showAlert('복원할 수 없어요', parsed.reason); return; }
+    const dry = dryRunImport(parsed.state, parsed.version);
+    if (!dry.ok) { showAlert('복원할 수 없어요', dry.reason); return; }
+    showAlert(
+      '이 백업으로 복원할까요?',
+      '현재 구단 진행이 선택한 서버 백업으로 대체됩니다. 되돌릴 수 없어요.\n\n다이아·결제 재화는 이 백업이 아니라 계정에 안전하게 보관돼요.',
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '복원', style: 'destructive', onPress: () => { void applyImport(parsed.state, parsed.version); } },
+      ],
+    );
+  };
+  const onServerRestore = async () => {
+    setImporting(true);
+    const r = await listBackups();
+    setImporting(false);
+    if (!r.ok) {
+      showAlert(
+        r.reason === 'unauthorized' ? '로그인이 필요해요' : '불러올 수 없어요',
+        r.reason === 'offline' ? '온라인 연결이 필요해요. 네트워크 확인 후 다시 시도해 주세요.'
+          : r.reason === 'unauthorized' ? '서버 백업은 로그인 후 이용할 수 있어요.'
+          : '서버 백업 목록을 불러오는 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.',
+      );
+      return;
+    }
+    if (r.backups.length === 0) {
+      showAlert('서버 백업이 없어요', '시즌이 끝날 때마다 자동으로 서버에 백업돼요. 한 시즌을 마치면 여기서 복원할 수 있어요.');
+      return;
+    }
+    // 최대 5개(서버 유지분) 행 + 취소 — 기존 showAlert 세로 버튼 스택(신규 Modal 금지 #129).
+    const buttons: DialogButton[] = r.backups.map((b) => ({
+      text: `${seasonYear(b.season)} · ${fmtBackupDate(b.createdAt)} · ${fmtBackupSize(b.sizeBytes)}`,
+      onPress: () => { void onPickServerBackup(b.id); },
+    }));
+    buttons.push({ text: '취소', style: 'cancel' });
+    showAlert('서버 백업에서 복원', '복원할 백업을 선택하세요. 현재 구단 진행이 대체돼요.', buttons);
+  };
+
   // 슬라이더 라이브 값(드래그 중 즉시 청음 반영 — 렌더 churn과 스토어 커밋 분리, SOUND_SYSTEM §3)
   const [bgmLive, setBgmLive] = useState(bgmVolume);
 
@@ -277,8 +333,11 @@ export default function Settings() {
         <Row icon="cloud-upload-outline" tint={theme.accent} label="세이브 가져오기"
           sub="파일에서 불러오기 · 현재 진행을 대체해요"
           onPress={() => { void onImport(); }} />
+        <Row icon="cloud-download-outline" tint={theme.accent} label="서버 백업에서 복원"
+          sub="시즌마다 자동 백업된 목록에서 복원 · 현재 진행을 대체해요"
+          onPress={() => { void onServerRestore(); }} />
       </View>
-      <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>다이아·결제 재화는 계정에 안전하게 보관돼요. 세이브 파일은 구단 진행(시즌·선수·기록)만 담아요.</Muted>
+      <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>시즌이 끝날 때마다 자동으로 서버에 백업돼요(최근 5개). 다이아·결제 재화는 계정에 항상 안전해요.</Muted>
 
       <Text style={styles.section}>데이터</Text>
       <View style={styles.group}>

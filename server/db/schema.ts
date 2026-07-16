@@ -226,6 +226,27 @@ export const purchaseEvent = pgTable(
   ],
 );
 
+// ── 시즌 종료 세이브 백업(§13.26) — 서버는 payload를 **불투명 blob으로 보관만**(게임플레이 불개입·결정론 격리 §1·§8).
+// 유저당 최근 5개 롤링 · 같은 season 재업로드=교체(UNIQUE 하드가드) · payload 3MB 캡(라우트에서 검증).
+// save_version은 봉투(app/kind/version)에서 추출한 목록 표시용 메타 — 내용(state)은 신뢰 안 함(봉투만 검증).
+export const saveBackups = pgTable(
+  'save_backups',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode), // 게임 격리 FK(§13.2)
+    userId: uuid('user_id').notNull().references(() => users.id),
+    season: integer('season').notNull(), // 백업된 시즌(같은 season 재업로드=교체)
+    payload: text('payload').notNull(), // 클라 내보내기 JSON 문자열 원문(불투명 — 서버는 봉투만 검증)
+    sizeBytes: integer('size_bytes').notNull(), // payload 바이트 길이(목록 표시·3MB 캡 감사)
+    saveVersion: text('save_version'), // 봉투 version 추출값(목록 표시용, 없으면 null)
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    index('save_backups_proj_user_idx').on(t.projCode, t.userId), // 목록/롤링 조회
+    uniqueIndex('save_backups_proj_user_season_uniq').on(t.projCode, t.userId, t.season), // 同시즌 교체 하드가드
+  ],
+);
+
 export type ProjInfo = typeof projInfo.$inferSelect;
 export type ServerSetting = typeof serverSetting.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -238,3 +259,4 @@ export type CouponRedemption = typeof couponRedemptions.$inferSelect;
 export type Ticket = typeof tickets.$inferSelect;
 export type DiagnosticSnapshot = typeof diagnosticSnapshots.$inferSelect;
 export type PurchaseEvent = typeof purchaseEvent.$inferSelect;
+export type SaveBackup = typeof saveBackups.$inferSelect;
