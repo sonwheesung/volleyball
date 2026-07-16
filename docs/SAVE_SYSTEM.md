@@ -324,3 +324,65 @@
 ### 8.4 검증 (§6 연장)
 - **`npx tsx tools/_dv_save_corpus.ts`** — 코퍼스 전체가 현재 코드에서 로드·유효(exit 0/1).
 - **`npx tsx tools/_dv_save_corpus.ts --selftest`** — 절단 입력을 가드가 로드 실패로 검출(팬텀 A/B, 허위 오라클 차단).
+
+---
+
+## 9. 세이브 내보내기/가져오기 — ZenGM 리그 파일 관행 (2026-07-16, 사용자 결정)
+
+> **목적**: 출시 후 지원(support)의 **마지막 안전망**. §3(손상 입력 방어)·§7(계정 슬롯)·§8(코퍼스 회귀)이 세이브를
+> "안 깨지게" 지킨다면, 이 절은 사용자가 자기 세이브를 **파일로 손에 쥐게** 한다 — 버그 재현(사용자→개발자 첨부),
+> **기기 이전**(폰 교체), **복구**(세이브 꼬임 시 백업본 복원). ZenGM(웹 스포츠 시뮬)의 "리그 파일 export/import" 관행 차용.
+>
+> **불변식**: §7과 같이 이 기능은 **payload 스키마·`SAVE_VERSION`·`migrate`·`sanitizeSave`·`partialize`를 건드리지 않는다**.
+> 내보내기 원천은 `store/useGameStore.ts`의 `captureReplaySave()`(persist가 저장하는 것과 **바이트 동일한** `{state, version}` — 가드 `_dv_snapshot_replay`가 보증)를 그대로 쓴다.
+> 가져오기 검증·정규화는 §3의 `migrateSave`/`sanitizeSave`를 재사용한다 — 새 로직 없음, 기존 파이프라인의 **파일 입출력 래퍼**일 뿐.
+
+### 9.1 파일 포맷
+- 봉투: `{ app: 'baeknyeon', kind: 'save-export', version: SAVE_VERSION, state: <captureReplaySave().state> }` (2-space pretty JSON).
+  - `app`/`kind`는 **오식별 방지 태그** — 아무 JSON이나 세이브로 오인해 덮어쓰는 사고를 막는다(가져오기 1차 게이트).
+  - `version`은 캡처 시점 `SAVE_VERSION`. `state`는 `partialize` 산출(§1 영속 필드 전체) — 손 선별 금지(로더 계약 "영속 객체 통째").
+- 파일명: **`baeknyeon-save-s<season+1>-d<currentDay>.json`**(예: `baeknyeon-save-s1-d80.json`). season은 0-based라 표시용 +1.
+- 순수 빌더/파서는 **`lib/saveTransfer.ts`**(React 무의존 — 헤드리스 가드로 왕복 검증). UI(`app/settings.tsx`)는 파일 I/O·다이얼로그만.
+
+### 9.2 내보내기 흐름 (`app/settings.tsx`)
+1. `captureReplaySave()` → null이면(세이브 없음) 버튼 자체가 비활성(선택 구단 없음).
+2. `buildExportPayload(cap)` → `serializeExport()`(pretty JSON) → `exportFileName(cap.state)`.
+3. **cache 디렉터리에 기록**: `expo-file-system`(SDK54 신 API — `File`/`Paths` 클래스) `new File(Paths.cache, name)` → `create({overwrite:true})` → `write(text)`.
+4. **공유**: `expo-sharing.isAvailableAsync()`면 `shareAsync(file.uri, { mimeType:'application/json', UTI:'public.json' })`. 공유 불가 기기 폴백은 RN 코어 `Share.share({ message: text })`(문자열 직접).
+
+### 9.3 가져오기 흐름 — 안전 게이트가 핵심 (`app/settings.tsx`)
+1. **선택·읽기**: `expo-document-picker.getDocumentAsync({ type:'application/json', copyToCacheDirectory:true })` → `new File(asset.uri).text()`.
+2. **`parseImportPayload(text)`**(순수) — 봉투 검증, 실패 시 **사유와 함께 거부**(현재 세이브 무접촉):
+   - JSON 파싱 실패 / `app!=='baeknyeon'` / `kind!=='save-export'` / `state` 비객체(배열·누락 포함) → 거부.
+   - `version > SAVE_VERSION` → "앱을 최신으로 업데이트한 뒤 가져올 수 있어요"(미래 스키마 — 손실 위험 차단).
+   - `version ≤ SAVE_VERSION` → 통과(구버전은 §3 `migrate`가 로드 시 흡수).
+3. **드라이런 게이트(중요) — `dryRunImport(state, version)`**(순수, 스토리지 **쓰기 전**):
+   - `sanitizeSave(migrateSave(state, version))`를 실행(§3 그대로) + **최소 유효성** 확인:
+     - `selectedTeamId`가 유효 문자열(진행 중 구단 진입점) — null이면 "진행 중 구단 없음" 거부.
+     - `playerBase`가 비-null이면 **모든 엔트리가 객체**여야 함(엔트리 null/비객체는 `commitPlayerBase`의 `p.traits` 접근에서 throw → §3.3 안전망이 **fresh 리셋** → 현재 세이브 전손. `_dv_migrate_e2e ③`이 이 크래시 벡터를 문서화). 이 확인이 **쓰기 전에** 그 상태를 걸러 낸다.
+   - 실패 시 **현재 세이브 무접촉**으로 거부. 검증 없이 슬롯을 덮어쓰면, commit-throw 세이브가 §3.3 fresh 리셋을 유발해 **유저의 기존 세이브를 날린다** — 드라이런은 그 전손을 원천 차단한다.
+4. **확인 다이얼로그**: 기존 `showAlert`/`AppDialog` **재사용**(settings에 신규 Modal 금지 — #129 모달 레이스 예방). 문안: "현재 구단 진행이 선택한 세이브로 대체됩니다. 되돌릴 수 없어요 — 먼저 '내보내기'로 백업해 두는 걸 권장해요." + 재화 안전 카피(§9.4).
+5. **적용**: `flushGameSave()`(대기 쓰기 정리) → **현재 로그인 슬롯 키**(`persist.getOptions().name`, §7.1 `baeknyeon-save:<userId>`)에 `{state, version}` 기록 → `persist.rehydrate()`(migrate→merge→onRehydrate→commit) → 성공 토스트. 진행 중엔 **기존 `deleting` 블로킹 오버레이 패턴 재사용**(`busy` 오버레이로 일반화 — Modal 수 불변)으로 재입력 차단.
+
+### 9.4 재화 안전 — 가져오기는 치트 벡터가 아니다 (서버 진실 원칙)
+- 표시 카피: **"다이아·결제 재화는 이 파일이 아니라 계정(서버)에 안전하게 보관돼요. 이 파일은 구단 진행(시즌·선수·기록)만 담아요."**
+- 구조적 근거(§7.6·MEMORY 서버 진실): `state`는 `partialize` 산출이라 `diamonds`·`claimedAch`·`adState` 필드가 **물리적으로는 포함**되지만,
+  이들은 **표시 캐시**일 뿐 진실이 아니다. 가져오기 후 로그인 슬롯의 `syncWallet`이 **서버 잔액·업적·광고캡으로 수렴**시켜 조작값을 덮는다.
+  **소비(전지훈련)·적립·결제는 무조건 서버 확인 후 반영**(CLAUDE §8)이므로, 파일의 `diamonds`를 손으로 부풀려 가져와도 **쓸 수 있는 재화가 생기지 않는다**.
+  즉 이 기능이 재화 인플레 벡터가 되지 않는 것은 "파일에서 재화를 뺐기 때문"이 아니라 **재화 진실이 애초에 서버에 있기 때문**이다.
+
+### 9.5 UI 위치 (`app/settings.tsx`)
+- "세이브 관리" 섹션(데이터 섹션 = 세이브 초기화 근처). 2행: **내보내기**(구단 진행을 파일로 저장·공유)·**가져오기**(파일에서 불러오기).
+- UI_RULES 준수: 무거운 작업(파일 I/O·rehydrate)은 블로킹 오버레이(재사용)로 재입력 차단, 결과는 토스트/다이얼로그로 알림. 세이브 없으면 내보내기 비활성.
+
+### 9.6 가드 `tools/_dv_save_transfer.ts`
+`lib/saveTransfer.ts` 순수 함수 + 실 store 왕복(§6·§8 패턴). exit 0/1.
+- **(a) 왕복 동일성**: 코퍼스 세이브 state로 `buildExportPayload`→`serializeExport`→`parseImportPayload`가 원 state와 **딥 동등**.
+- **(b) 미래 버전 거부**: `version = SAVE_VERSION+1` 봉투 → 거부 + 사유("최신 업데이트").
+- **(c) 쓰레기 입력 거부**: 비-JSON·`app` 불일치·`state` 배열/누락 → 각각 사유와 함께 거부.
+- **(d) 드라이런 게이트 증명**: commit-throw 손상 state(`playerBase:{p:null}`)를 가져오기 시도 → **거부**되고 모킹 스토리지의 기존 세이브 **바이트 불변**(현재 세이브 보호).
+- **(e) 실 store E2E**: `corpus/saves/v3_260716_progressed.json`의 state를 export→import→모킹 스토리지 기록→`persist.rehydrate()` 완주(**day 80 복원** 확인).
+- **(f) A/B 민감도**: 게이트를 우회한 경로(파서에 시임 두지 않고 가드 안에서 "게이트 없었다면 바로 write+rehydrate" 재현)로 (d)의 손상 state를 적용하면 **§3.3 fresh 리셋(현재 세이브 전손)** 이 실제로 일어남을 단언 → 드라이런이 막는 결함이 실재함을 증명(허위 오라클 차단).
+
+### 9.7 검증 (§8.4 연장)
+- **`npx tsx tools/_dv_save_transfer.ts`** — 왕복 동일성·미래버전/쓰레기 거부·드라이런 게이트·실 store E2E·A/B 민감도(exit 0/1).

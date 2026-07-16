@@ -1,16 +1,23 @@
 import { useRouter } from 'expo-router';
 import { useState } from 'react';
-import { ActivityIndicator, Modal, Pressable, StyleSheet, Switch, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Pressable, Share, StyleSheet, Switch, Text, View } from 'react-native';
 import Slider from '@react-native-community/slider';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
+import AsyncStorage from '@react-native-async-storage/async-storage';
+import { File, Paths } from 'expo-file-system';
+import * as Sharing from 'expo-sharing';
+import * as DocumentPicker from 'expo-document-picker';
 import type { ComponentProps } from 'react';
 import { Muted, Screen, theme, themedStyles, useThemeMode, setThemeMode } from '../components/Screen';
 import { showAlert } from '../components/AppDialog';
+import { ToastHost, useToastQueue } from '../components/Toast';
 import { DEV_TOOLS } from '../data/flags';
 import { seasonYear } from '../data/seasonLabel';
 import { setBgmVolume as applyBgmVolume } from '../audio/bgm';
-import { useGameStore } from '../store/useGameStore';
+import { useGameStore, SAVE_KEY, captureReplaySave } from '../store/useGameStore';
+import { flushGameSave } from '../store/persistStorage';
+import { buildExportPayload, serializeExport, exportFileName, parseImportPayload, dryRunImport } from '../lib/saveTransfer';
 import { useAuthStore } from '../store/useAuthStore';
 
 const ROSE = '#FF5C8D';
@@ -67,8 +74,16 @@ export default function Settings() {
   const coachModeLog = useGameStore((s) => s.coachModeLog);
   const setCoachMode = useGameStore((s) => s.setCoachMode);
   const coachManual = coachModeLog.reduce((acc, c) => (c.day >= acc.day ? c : acc), { day: -1, manual: false }).manual;
+  const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const [confirmReset, setConfirmReset] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // 세이브 가져오기 진행 중 블로킹(파일 I/O·rehydrate) — deleting과 같은 오버레이를 공유(신규 Modal 금지, #129).
+  const [importing, setImporting] = useState(false);
+  const toast = useToastQueue();
+  // 블로킹 오버레이 문안(계정 삭제 / 세이브 가져오기 공용 — Modal 하나 재사용)
+  const busy = deleting || importing;
+  const busyTitle = deleting ? '계정을 삭제하는 중…' : '세이브를 불러오는 중…';
+  const busyBody = deleting ? '잠시만 기다려 주세요.' : '파일에서 구단 진행을 복원하고 있어요.';
 
   // 계정 삭제(탈퇴, AUTH §7) — showAlert 2단 확인. 1차: 잔액·소멸 경고 / 2차: 최종 확인(destructive).
   const performDeleteAccount = async () => {
@@ -101,13 +116,84 @@ export default function Settings() {
       ],
     );
   };
+  // ── 세이브 내보내기(SAVE_SYSTEM §9.2) — captureReplaySave → 파일 → 공유 ──
+  const onExport = async () => {
+    const cap = captureReplaySave();
+    if (!cap) { showAlert('내보낼 세이브가 없어요', '구단을 선택하고 진행한 뒤 내보낼 수 있어요.'); return; }
+    try {
+      const text = serializeExport(buildExportPayload(cap));
+      const file = new File(Paths.cache, exportFileName(cap.state));
+      file.create({ overwrite: true });
+      file.write(text);
+      if (await Sharing.isAvailableAsync()) {
+        await Sharing.shareAsync(file.uri, { mimeType: 'application/json', UTI: 'public.json', dialogTitle: '세이브 내보내기' });
+      } else {
+        await Share.share({ message: text }); // 공유 시트 불가 기기 폴백(RN 코어) — 문자열 직접
+      }
+    } catch {
+      showAlert('내보내기 실패', '세이브를 파일로 만드는 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+
+  // ── 세이브 가져오기(SAVE_SYSTEM §9.3) — 선택→파싱→드라이런 게이트→확인→적용 ──
+  const applyImport = async (state: Record<string, unknown>, version: number) => {
+    setImporting(true);
+    try {
+      await flushGameSave(); // 현재 슬롯 대기 쓰기 정리
+      const key = useGameStore.persist.getOptions().name ?? SAVE_KEY; // 현재 로그인 슬롯 키(§7.1)
+      await AsyncStorage.setItem(key, JSON.stringify({ state, version }));
+      await useGameStore.persist.rehydrate(); // migrate→merge→onRehydrate→commit
+      setImporting(false);
+      if (useGameStore.getState().selectedTeamId) {
+        toast.push('세이브를 불러왔어요.');
+        router.replace('/(tabs)');
+      } else {
+        // rehydrate가 안전망 fresh 리셋으로 떨어진 극단(드라이런이 걸렀어야 하나 이중 방어)
+        showAlert('가져오기 실패', '세이브를 복원하지 못했어요. 파일이 손상됐을 수 있어요.');
+      }
+    } catch {
+      setImporting(false);
+      showAlert('가져오기 실패', '세이브를 불러오는 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.');
+    }
+  };
+  const onImport = async () => {
+    let res: DocumentPicker.DocumentPickerResult;
+    try {
+      res = await DocumentPicker.getDocumentAsync({ type: 'application/json', copyToCacheDirectory: true, multiple: false });
+    } catch {
+      showAlert('파일을 열 수 없어요', '파일 선택 중 문제가 발생했어요. 다시 시도해 주세요.');
+      return;
+    }
+    if (res.canceled || !res.assets?.length) return;
+    let text: string;
+    try {
+      text = await new File(res.assets[0].uri).text();
+    } catch {
+      showAlert('파일을 읽을 수 없어요', '선택한 파일을 읽지 못했어요. 다른 파일로 시도해 주세요.');
+      return;
+    }
+    const parsed = parseImportPayload(text);
+    if (!parsed.ok) { showAlert('가져올 수 없어요', parsed.reason); return; }
+    // 드라이런 게이트 — 스토리지 쓰기 전 순수 검증(실패 시 현재 세이브 무접촉)
+    const dry = dryRunImport(parsed.state, parsed.version);
+    if (!dry.ok) { showAlert('가져올 수 없어요', dry.reason); return; }
+    showAlert(
+      '이 세이브로 대체할까요?',
+      "현재 구단 진행이 선택한 세이브로 대체됩니다. 되돌릴 수 없어요 — 먼저 '내보내기'로 백업해 두는 걸 권장해요.\n\n다이아·결제 재화는 이 파일이 아니라 계정에 안전하게 보관돼요(이 파일은 구단 진행만 담아요).",
+      [
+        { text: '취소', style: 'cancel' },
+        { text: '가져오기', style: 'destructive', onPress: () => { void applyImport(parsed.state, parsed.version); } },
+      ],
+    );
+  };
+
   // 슬라이더 라이브 값(드래그 중 즉시 청음 반영 — 렌더 churn과 스토어 커밋 분리, SOUND_SYSTEM §3)
   const [bgmLive, setBgmLive] = useState(bgmVolume);
 
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
 
   return (
-    <Screen title="설정">
+    <Screen title="설정" overlay={<ToastHost toasts={toast.toasts} />}>
       <Muted>게임 · 데이터 · 정보를 관리합니다.</Muted>
 
       {/* 응원 섹션(서포터 팩·크레딧) — 출시 전 임시 숨김(2026-06-28, 사용자 요청). IAP 연결 시 복원.
@@ -183,6 +269,17 @@ export default function Settings() {
       </View>
       <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>변경은 다음 경기부터 적용돼요.</Muted>
 
+      <Text style={styles.section}>세이브 관리</Text>
+      <View style={styles.group}>
+        <Row icon="download-outline" tint={theme.accent} label="세이브 내보내기"
+          sub={selectedTeamId ? '구단 진행을 파일로 저장 · 공유 (백업 · 기기 이전)' : '진행 중인 구단이 없어요'}
+          onPress={selectedTeamId ? () => { void onExport(); } : undefined} />
+        <Row icon="cloud-upload-outline" tint={theme.accent} label="세이브 가져오기"
+          sub="파일에서 불러오기 · 현재 진행을 대체해요"
+          onPress={() => { void onImport(); }} />
+      </View>
+      <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>다이아·결제 재화는 계정에 안전하게 보관돼요. 세이브 파일은 구단 진행(시즌·선수·기록)만 담아요.</Muted>
+
       <Text style={styles.section}>데이터</Text>
       <View style={styles.group}>
         <Row icon="refresh-outline" tint={theme.bad} label="세이브 초기화" sub={`현재 ${seasonYear(season)}. 구단 변경(진행 기록 삭제)`} danger
@@ -238,13 +335,13 @@ export default function Settings() {
         </Pressable>
       </Modal>
 
-      {/* 계정 삭제 진행 중 블로킹 오버레이 — 서버 왕복 동안 재입력 차단(UI_RULES: 무거운 작업 로딩). */}
-      <Modal visible={deleting} transparent statusBarTranslucent animationType="fade">
+      {/* 블로킹 오버레이(계정 삭제 / 세이브 가져오기 공용) — 무거운 작업 동안 재입력 차단(UI_RULES). 신규 Modal 금지(#129)로 하나를 공유. */}
+      <Modal visible={busy} transparent statusBarTranslucent animationType="fade">
         <View style={styles.backdrop}>
           <View style={[styles.modal, { alignItems: 'center', gap: 14 }]}>
             <ActivityIndicator size="large" color={theme.accent} />
-            <Text style={styles.modalTitle}>계정을 삭제하는 중…</Text>
-            <Text style={styles.modalBody}>잠시만 기다려 주세요.</Text>
+            <Text style={styles.modalTitle}>{busyTitle}</Text>
+            <Text style={styles.modalBody}>{busyBody}</Text>
           </View>
         </View>
       </Modal>
