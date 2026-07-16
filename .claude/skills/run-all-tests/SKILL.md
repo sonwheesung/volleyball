@@ -21,6 +21,7 @@ description: Run the project's FULL documented verification suite (docs/README.m
 - **셀렉터/교체**: `checkRecords` · `checkSubs`
 - **시즌/심리/휴식**: `simStarters` · `simMood` · `_ev_rest`
 - **교차 계층 귀속 가드(스코어박스 충실도)**: `_ev_box` · `_ev_box_audit` · `_ev_scorer` · `_ev_recvmatch` · `_ev_setmatch` · `_ev_blockcomment`
+- **메타(가드의 가드)**: `npx tsx tools/_meta_orphan.ts` — tools/·server/tools/ 가드 전수가 README에 등재됐는지(고아 가드 0). **새 가드를 만든 세션이면 반드시 포함** — 미등재 가드는 배터리 밖에서 조용히 썩는다(_dv_purchase 이틀 잠복·_dv_cover 재발, 2026-07-16 기계화)
 - (옵션) `npx expo export --platform android` 번들 확인 · `npm run sim:web`(수동 콘솔, 상시 실행은 생략)
 
 > 무거운 도구가 많다 → **백그라운드 병렬**로 띄우고(run_in_background) 결과 파일을 모아 표로 정리한다.

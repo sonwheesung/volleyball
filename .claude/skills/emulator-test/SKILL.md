@@ -100,6 +100,25 @@ MSYS_NO_PATHCONV=1 "$ADB" shell cat /sdcard/ui.xml > ui.xml
 - **관찰 고유가치(눈으로만)**: placeholder 날것(`{name}`)·조사 깨짐(`달리기(으)로`)·포지션 라벨 영/한 혼용·외인 연고 성격 같은 **표시 텍스트 버그**(엔진 sim은 key로만 해소해 못 봄). UI-12 카테고리 색·카드 보더·로딩/비활성.
 - **dev 화면**: 감사·실험실·테스트경기는 `DEV_TOOLS`(`__DEV__`&&SHOW_DEV_TOOLS) 게이트 — dev 빌드면 보인다([[audit-screen-dev-only]]).
 
+## 3.5 태블릿 프로파일 (반응형/폼팩터 검수 — 2026-07-16 신설)
+
+태블릿 반응형·Android 16 회전 검증(#130)용. 폰 AVD와 별개로 **`volleyball_tab`**(pixel_tablet, 2560×1600 @320dpi = sw800dp)을 쓴다 — **전용 포트 5558**(폰 5556·사도전 5554와 분리).
+
+```bash
+# AVD 없으면: echo no | avdmanager.bat create avd -n volleyball_tab -k "system-images;android-35;google_apis;x86_64" -d pixel_tablet
+#   (#130 API36 검증 때는 android-36 이미지로 별도 생성)
+"$EMU" -avd volleyball_tab -no-snapshot -no-boot-anim -gpu auto -port 5558 &   # run_in_background
+S=emulator-5558   # 이후 모든 adb를 -s $S 로
+# Expo Go 설치(새 AVD엔 없음): "$ADB" -s $S install -r ~/.expo/android-apk-cache/Expo-Go-*.apk
+# 실행 중 Metro(8082)에 딥링크(에뮬은 LAN IP 대신 10.0.2.2):
+MSYS_NO_PATHCONV=1 "$ADB" -s $S shell am start -a android.intent.action.VIEW -d "exp://10.0.2.2:8082"
+```
+
+- **레터박스가 정상이다**: 세로 고정 앱이라 가로 태블릿에선 중앙 세로 창(~600×800dp, 양옆 검정)으로 뜬다(API 35까지 실측 — 전 화면 렌더 정상 2026-07-16). 이걸 버그로 오인하지 말 것. API 36에선 회전 강제 가능성(#130) — 그게 이 프로파일의 검증 대상.
+- **시스템 팁 다이얼로그**("See and do more" — 태블릿 첫 실행 멀티태스킹 안내)가 앱 위에 뜬다 → "Got it" 닫고 진행. Expo dev 메뉴도 첫 로드에 뜸 → X 닫기.
+- 창이 좁아졌으므로 탭 좌표는 폰 대본과 다르다 — 매 스텝 screencap→Read→배율 곱 원칙 그대로.
+- 끝나면 `"$ADB" -s emulator-5558 emu kill` (5554·5556 금지).
+
 ## 4. 끝나면
 
 - **결과 기록**: 사이클·날짜·사전조건·PASS/오류·애매(질문대기). 핵심 스크린샷만 보관(scratchpad).
