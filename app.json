@@ -16,6 +16,7 @@
       "package": "com.son0925.volleyball",
       "versionCode": 12,
       "backgroundColor": "#0B1018",
+      "allowBackup": false,
       "adaptiveIcon": {
         "foregroundImage": "./assets/icon/adaptive-fg.png",
         "backgroundImage": "./assets/icon/adaptive-bg.png",
@@ -23,12 +24,9 @@
       },
       "permissions": [
         "android.permission.MODIFY_AUDIO_SETTINGS",
-        "android.permission.RECORD_AUDIO",
-        "android.permission.MODIFY_AUDIO_SETTINGS",
         "android.permission.RECORD_AUDIO"
       ],
       "blockedPermissions": [
-        "android.permission.RECORD_AUDIO",
         "android.permission.RECORD_AUDIO"
       ]
     },

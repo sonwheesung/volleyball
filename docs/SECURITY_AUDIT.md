@@ -239,6 +239,50 @@
 
 ---
 
+## 클라이언트·디바이스 하드닝 (2026-07-16 디바이스 감사)
+
+> 위 §1~§8은 **서버(`server/`)** 감사. 아래는 **앱 클라이언트·안드로이드 디바이스 설정**을 OWASP MAS/RN 표준
+> 대비 점검한 별도 감사(2026-07-16). 발견 3건 — 정적 설정 4종 수정으로 처리했고, 상설 가드 `_dv_appconfig`(순수,
+> `--selftest` A/B 8뮤턴트)가 되돌림을 감시한다. 소유 파일: `app.json`·`AndroidManifest.xml`·`app/_layout.tsx`·`babel.config.js`.
+
+| 심각도 | # | 항목 | 상태 |
+|---|---|---|---|
+| 🟠 HIGH | D1 | 구글 자동백업으로 앱 데이터 유출·부활(`allowBackup=true`) | ✅ 수정+검증(2026-07-16) |
+| 🟡 MEDIUM | D2 | 평문 세션 토큰의 OS 백업 복제 벡터 | 🔶 부분 완화(2026-07-16) — SecureStore 이행은 EAS 시점 |
+| 🟡 MEDIUM | D3 | 릴리즈 빌드 콘솔 로그 정보 노출 | ✅ 수정+검증(2026-07-16) |
+
+### 🟠 D1 — 구글 자동백업 앱 데이터 유출·부활 (allowBackup=true)
+
+- **상태:** ✅ 수정+검증(2026-07-16, 가드 `_dv_appconfig` ⓐⓑ PASS·selftest 8/8·tsc exit0·expo export exit0)
+  - **수정 내용:** `app.json` expo.android.`allowBackup: false` 추가(expo 지원 필드) + prebuild 산출물
+    `android/app/src/main/AndroidManifest.xml`의 `android:allowBackup="true"` → `"false"` 직접 동기화(android/는 gitignore라
+    git diff엔 안 잡히나 디스크 반영·가드 ⓑ가 디스크 직독 검증).
+- **익스플로잇/근거:** `allowBackup=true`(안드로이드 기본)면 앱의 AsyncStorage(평문 세션 토큰·세이브)가 **Google Drive
+  자동백업(Auto Backup for Apps)** 으로 복제되고, 기기 재설정·기기 이전 시 자동 복원된다. 이는
+  ① 계정 슬롯(BACKEND #121) ② 서버 백업(§13.26) ③ 탈퇴 시 서버 데이터 파기(#119)와 충돌한다 —
+  서버에서 지운 세션/세이브가 OS 백업에서 **부활**할 수 있고, 자체 서버 백업이 진실의 원천이므로 OS 백업은 불필요·유해.
+- **수정 후 검증:** 출시 최종 빌드의 매니페스트에 `allowBackup="false"` 확인(PRE_LAUNCH §7). 가드가 json·manifest 양쪽 상시 단언.
+
+### 🟡 D2 — 평문 세션 토큰의 OS 백업 복제 벡터 (부분 완화)
+
+- **상태:** 🔶 부분 완화(2026-07-16) — D1의 `allowBackup=false`로 **자동백업 복제 경로 자체를 차단**(주 벡터 제거).
+  단 토큰이 여전히 AsyncStorage **평문**으로 저장되는 근본 문제는 남아 있고, 완전 완화(민감 토큰 SecureStore 이행)는
+  **EAS 개발빌드 시점**에 처리한다 — Expo Go에선 SecureStore가 제약. 기존 계획: [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) §2
+  "소셜 로그인 실물 — …SecureStore"(EAS 전환 항목)와 [AUTH_SYSTEM](./AUTH_SYSTEM.md) §6에 링크.
+- **근거:** 세션 Bearer 토큰이 평문 저장이라 루팅/백업/디바이스 포렌식 시 노출 가능. `allowBackup=false`는 클라우드
+  복제·부활을 막지만 온-디바이스 평문 저장은 SecureStore(Keychain/Keystore) 이행 전까지 잔존 리스크(MEDIUM).
+
+### 🟡 D3 — 릴리즈 빌드 콘솔 로그 정보 노출
+
+- **상태:** ✅ 수정+검증(2026-07-16, 가드 `_dv_appconfig` ⓓ PASS·selftest·expo export(production 모드=플러그인 실적용) exit0)
+  - **수정 내용:** `babel-plugin-transform-remove-console` devDependency 추가 + `babel.config.js`
+    `env.production.plugins`에 `['transform-remove-console', { exclude: ['error', 'warn'] }]` — 릴리즈 번들에서
+    `console.log/info/debug` 제거, `error`·`warn`은 유지(런타임 문제 신호 보존). dev/test 번들은 무영향(env.production 하위).
+- **근거:** 개발 중 `console.log`가 내부 상태·시드·토큰 흔적·서버 응답을 안드로이드 logcat에 남기면 정보 노출(OWASP MASVS).
+  릴리즈에서 정보성 로그를 컴파일 타임에 제거해 노출면을 줄인다.
+
+---
+
 ## 처리 이력
 
 - 2026-07-07 — 감사 수행·본 문서 작성(READ-ONLY 발견 기록, 코드 미변경). 8개 발견 전부 `⬜ 미착수`.
@@ -249,3 +293,5 @@
 - 2026-07-07 — #3 레이트리밋 수정(Q2 확정: Upstash Redis): `server/lib/ratelimit.ts`(@upstash/ratelimit 슬라이딩 윈도, 두 겹 fail-open — 미설정 no-op·Redis 오류 허용) +
   login·coupon/redeem·ticket·snapshot 4라우트 429 게이트. 한도 login 10/분·IP·coupon 8/분·user+20/10분·IP·ticket 5/10분·user·snapshot 10/5분·user(튜너블).
   순수 가드 `_dv_ratelimit`(17/17 PASS·변이 자가검증). 서버 tsc exit0. **활성화는 Vercel Storage→Upstash Redis 인테그레이션 추가 필요**(그 전까지 fail-open). 구현=Opus/검증·커밋=Fable 5.
+- 2026-07-16 — 클라이언트·디바이스 하드닝 감사(D1~D3): allowBackup=false(json+manifest)·릴리즈 콘솔 로그 제거(transform-remove-console)·시스템 폰트 확대 상한(maxFontSizeMultiplier=1.3)·권한 중복 정리.
+  상설 가드 `_dv_appconfig`(순수, ⓐ~ⓔ 5검사·`--selftest` A/B 8뮤턴트 전탐지). tsc exit0·npm test 214/214·expo export(android, production) exit0. 구현=Opus 에이전트/검증·커밋=Fable 5.

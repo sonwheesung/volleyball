@@ -1,7 +1,7 @@
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, TextInput, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useFonts } from 'expo-font';
 import { SafeAreaProvider, initialWindowMetrics, useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -66,9 +66,19 @@ function makeNavTheme(mode: 'light' | 'dark') {
 // (RN Text.defaultProps — 전 화면 Text를 건드리지 않고 한 번에 적용)
 // **색 기본값 중요(2026-06-28)**: RN Text는 색 미지정 시 검정 → 다크 배경에서 안 보인다. 기본을 밝은색으로
 // 박아 "색 빠뜨린 텍스트"가 묻히는 걸 전역 차단(명시 색은 그대로 우선 — 코트 등 라이트 표면은 자체 색 보유).
-const TextDefaults = Text as unknown as { defaultProps?: { style?: unknown; textBreakStrategy?: string } };
+const TextDefaults = Text as unknown as { defaultProps?: { style?: unknown; textBreakStrategy?: string; maxFontSizeMultiplier?: number } };
 TextDefaults.defaultProps = TextDefaults.defaultProps ?? {};
 TextDefaults.defaultProps.style = { fontFamily: 'Pretendard', color: theme.text };
+// 시스템 폰트 확대(접근성 글꼴 크기·display size) 전역 상한 = 1.3배(2026-07-16 디바이스 감사).
+// RN Text/TextInput은 기본적으로 OS 글꼴배율을 무제한 반영 → XL/최대 배율에서 촘촘한 그리드(스탯표·점수판·현수막)가
+// 잘리거나 겹친다. 접근성 확대는 존중하되(1.0~1.3), 상한을 둬 레이아웃을 보전하는 절충 — 모바일 게임 표준 관행.
+// Text.defaultProps 경로는 이 파일이 style/textBreakStrategy에 이미 쓰는 것과 동일(RN0.81에서 유효, 각 <Text>가 상속).
+// 개별 컴포넌트가 더 낮은 상한을 명시하면 그 값이 우선(defaultProps라 오버라이드 가능).
+TextDefaults.defaultProps.maxFontSizeMultiplier = 1.3;
+// TextInput도 동일 상한(입력 필드 확대 시 한 줄 폼이 깨지지 않게) — 쿠폰·문의·검색 입력에 적용.
+const TextInputDefaults = TextInput as unknown as { defaultProps?: { maxFontSizeMultiplier?: number } };
+TextInputDefaults.defaultProps = TextInputDefaults.defaultProps ?? {};
+TextInputDefaults.defaultProps.maxFontSizeMultiplier = 1.3;
 // 줄바꿈을 **어절(단어) 단위**로(2026-06-30 사용자 요청).
 // ⚠️ 구 방식 `textBreakStrategy='simple'`은 **실기기(RN0.81/Android/React19)에서 효과 없음** 확인(2026-07-04 에뮬 검증):
 //   Android 라인브레이커는 breakStrategy와 무관하게 한글 음절 사이를 항상 끊을 수 있어 `구단주입|니다`처럼 쪼개졌다.
