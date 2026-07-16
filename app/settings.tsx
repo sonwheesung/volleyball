@@ -4,7 +4,6 @@ import { ActivityIndicator, Modal, Pressable, Share, StyleSheet, Switch, Text, V
 import Slider from '@react-native-community/slider';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
-import AsyncStorage from '@react-native-async-storage/async-storage';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import * as DocumentPicker from 'expo-document-picker';
@@ -15,8 +14,7 @@ import { ToastHost, useToastQueue } from '../components/Toast';
 import { DEV_TOOLS } from '../data/flags';
 import { seasonYear } from '../data/seasonLabel';
 import { setBgmVolume as applyBgmVolume } from '../audio/bgm';
-import { useGameStore, SAVE_KEY, captureReplaySave } from '../store/useGameStore';
-import { flushGameSave } from '../store/persistStorage';
+import { useGameStore, captureReplaySave, restoreSaveAtomic } from '../store/useGameStore';
 import { buildExportPayload, serializeExport, exportFileName, parseImportPayload, dryRunImport } from '../lib/saveTransfer';
 import { listBackups, fetchBackup } from '../lib/saveBackup';
 import { useAuthStore } from '../store/useAuthStore';
@@ -137,20 +135,19 @@ export default function Settings() {
   };
 
   // ── 세이브 가져오기(SAVE_SYSTEM §9.3) — 선택→파싱→드라이런 게이트→확인→적용 ──
-  const applyImport = async (state: Record<string, unknown>, version: number) => {
+  //   적용은 restoreSaveAtomic(쓰기 억제 래치, §9.3) — 동시 setState가 백업을 덮어쓰는 클로버 차단.
+  //   expectedTeamId(백업의 selectedTeamId)와 로드 결과를 대조해 **조용한 오적용**(엉뚱한 구단 로드)을 실패로 잡는다.
+  const applyImport = async (state: Record<string, unknown>, version: number, expectedTeamId: string) => {
     setImporting(true);
     try {
-      await flushGameSave(); // 현재 슬롯 대기 쓰기 정리
-      const key = useGameStore.persist.getOptions().name ?? SAVE_KEY; // 현재 로그인 슬롯 키(§7.1)
-      await AsyncStorage.setItem(key, JSON.stringify({ state, version }));
-      await useGameStore.persist.rehydrate(); // migrate→merge→onRehydrate→commit
+      const loaded = await restoreSaveAtomic(state, version); // migrate→merge→onRehydrate→commit (원자 구간)
       setImporting(false);
-      if (useGameStore.getState().selectedTeamId) {
+      if (loaded && loaded === expectedTeamId) {
         toast.push('세이브를 불러왔어요.');
         router.replace('/(tabs)');
       } else {
-        // rehydrate가 안전망 fresh 리셋으로 떨어진 극단(드라이런이 걸렀어야 하나 이중 방어)
-        showAlert('가져오기 실패', '세이브를 복원하지 못했어요. 파일이 손상됐을 수 있어요.');
+        // 로드된 구단이 백업과 불일치(클로버 잔여) 또는 안전망 fresh 리셋 — 조용한 오적용 대신 명시 실패.
+        showAlert('가져오기 실패', '세이브를 복원하지 못했어요. 잠시 후 다시 시도해 주세요.');
       }
     } catch {
       setImporting(false);
@@ -178,12 +175,13 @@ export default function Settings() {
     // 드라이런 게이트 — 스토리지 쓰기 전 순수 검증(실패 시 현재 세이브 무접촉)
     const dry = dryRunImport(parsed.state, parsed.version);
     if (!dry.ok) { showAlert('가져올 수 없어요', dry.reason); return; }
+    const expectedTeam = String(dry.sanitized.selectedTeamId); // 정규화된 백업 구단 — 로드 결과 대조용
     showAlert(
       '이 세이브로 대체할까요?',
       "현재 구단 진행이 선택한 세이브로 대체됩니다. 되돌릴 수 없어요 — 먼저 '내보내기'로 백업해 두는 걸 권장해요.\n\n다이아·결제 재화는 이 파일이 아니라 계정에 안전하게 보관돼요(이 파일은 구단 진행만 담아요).",
       [
         { text: '취소', style: 'cancel' },
-        { text: '가져오기', style: 'destructive', onPress: () => { void applyImport(parsed.state, parsed.version); } },
+        { text: '가져오기', style: 'destructive', onPress: () => { void applyImport(parsed.state, parsed.version, expectedTeam); } },
       ],
     );
   };
@@ -208,12 +206,13 @@ export default function Settings() {
     if (!parsed.ok) { showAlert('복원할 수 없어요', parsed.reason); return; }
     const dry = dryRunImport(parsed.state, parsed.version);
     if (!dry.ok) { showAlert('복원할 수 없어요', dry.reason); return; }
+    const expectedTeam = String(dry.sanitized.selectedTeamId); // 정규화된 백업 구단 — 로드 결과 대조용
     showAlert(
       '이 백업으로 복원할까요?',
       '현재 구단 진행이 선택한 서버 백업으로 대체됩니다. 되돌릴 수 없어요.\n\n다이아·결제 재화는 이 백업이 아니라 계정에 안전하게 보관돼요.',
       [
         { text: '취소', style: 'cancel' },
-        { text: '복원', style: 'destructive', onPress: () => { void applyImport(parsed.state, parsed.version); } },
+        { text: '복원', style: 'destructive', onPress: () => { void applyImport(parsed.state, parsed.version, expectedTeam); } },
       ],
     );
   };

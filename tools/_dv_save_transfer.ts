@@ -8,11 +8,11 @@ import { readFileSync } from 'fs';
 import { join } from 'path';
 
 let fail = 0;
-const check = (n: string, c: boolean) => { process.stdout.write(`${c ? '✅' : '❌'} ${n}\n`); if (!c) fail++; };
+const check = (n: string, c: boolean, detail?: string) => { process.stdout.write(`${c ? '✅' : '❌'} ${n}${detail ? ' — ' + detail : ''}\n`); if (!c) fail++; };
 const SENTINEL = '__XFER_SENTINEL__';
 
 async function main() {
-  const { useGameStore, SAVE_KEY: KEY } = await import('../store/useGameStore');
+  const { useGameStore, SAVE_KEY: KEY, captureReplaySave, restoreSaveAtomic } = await import('../store/useGameStore');
   const { resetLeagueBase } = await import('../data/league');
   const { flushGameSave } = await import('../store/persistStorage');
   const { SAVE_VERSION } = await import('../store/saveMigration');
@@ -133,6 +133,52 @@ async function main() {
   check('게이트 우회 → fresh 리셋: season=0', uSt.season === 0);
   check('게이트 우회 → fresh 리셋: currentDay=0(day80 소멸)', uSt.currentDay === 0);
   check('A/B 격차 — (d) 게이트는 같은 손상 state를 거부해 이 전손을 막았다', dres.applied === false && uSt.selectedTeamId === null);
+
+  // ── (g) 쓰기 경합(write-contention) — 복원 원자성: 동시 stale write가 백업을 못 덮는다 ──
+  // 실기기 버그(2026-07-16): 순진한 적용 경로(flush→setItem(backup)→rehydrate)는 영속에 원자적이 아니라,
+  //   백업 write와 rehydrate 읽기 **사이**에 동시 setState의 stale flush가 끼어들면 백업을 덮어써 옛 세이브가 로드됨.
+  //   모킹 E2E가 동기라 동시 쓰기 0 → 마스킹됐다(§4 write-contention 사각). restoreSaveAtomic(쓰기 억제 래치)이 닫는다.
+  process.stdout.write('\n[(g) 쓰기 경합 — 복원 중 동시 setState의 stale flush가 백업을 덮지 못한다(원자 래치 A/B)]\n');
+  const teamA = 't0', teamB = 't1';
+  // 두 계절0 백업 캡처(playerBase null — 단순·유효). B를 A 위로 복원하는 게 목표.
+  G().resetSave(); G().selectTeam(teamB); const capB = captureReplaySave()!;
+  G().resetSave(); G().selectTeam(teamA); const capA = captureReplaySave()!;
+  const slotTeam = () => { const r = __asyncStorageMem.get(KEY); return r ? JSON.parse(r).state.selectedTeamId : '(none)'; };
+
+  // A/B 대조군 — 구(래치 없음) 적용 경로 + 동시 stale write를 in-window로 주입 → 클로버 재현.
+  const establishA = async () => {
+    resetLeagueBase();
+    G().resetSave(); G().selectTeam(teamA);
+    await flushGameSave(); // A 대기분 정리(storage=A)
+  };
+  await establishA();
+  await flushGameSave();
+  __asyncStorageMem.set(KEY, JSON.stringify({ state: capB.state, version: capB.version })); // 백업(B) write(모킹 스토리지 직접)
+  useGameStore.setState({ diamonds: (G().diamonds ?? 0) + 1 }); // 동시 setState(store는 아직 A) → gameStorage에 stale(A) pending
+  await flushGameSave(); // AppState/디바운스 flush가 in-window로 stale(A)를 storage에 씀 → 백업 덮음
+  await useGameStore.persist.rehydrate(); // storage(=A) 읽음
+  const oldLoaded = G().selectedTeamId;
+  check('(A/B) 래치 없는 구 경로: 동시 stale write가 백업을 덮어 옛 구단(A) 로드 = 버그 재현', oldLoaded === teamA, `loaded=${oldLoaded} (기대 클로버 t0)`);
+
+  // 수정 경로 — restoreSaveAtomic: 같은 동시 stale write 주입에도 백업(B)이 로드돼야(래치가 억제).
+  //   **결정론적 in-window 주입**: 모킹 스토리지의 백업 write 순간(mem.set)을 후킹해, 그 자리에서 동시 setState + flush를
+  //   발화한다(원자 구간 정확히 안). 억제 스토리지면 setState는 no-op → 클로버 없음, 래치 무력화(mutant)면 stale가 실려 클로버.
+  await establishA();
+  const origSet = __asyncStorageMem.set.bind(__asyncStorageMem);
+  let injected = false;
+  (__asyncStorageMem as unknown as { set: (k: string, v: string) => Map<string, string> }).set = (k: string, v: string) => {
+    const r = origSet(k, v);
+    // 백업(B) write 순간에 1회 주입 — 동시 setState(store는 아직 A)가 persist 미들웨어(현재=억제/mutant)를 타고, flush로 stale 착지 시도.
+    if (!injected && k === KEY) { try { if (JSON.parse(v).state.selectedTeamId === teamB) { injected = true; useGameStore.setState({ diamonds: (G().diamonds ?? 0) + 1 }); void flushGameSave(); } } catch { /* ignore */ } }
+    return r;
+  };
+  let newLoaded: string | null;
+  try { newLoaded = await restoreSaveAtomic(capB.state, capB.version); }
+  finally { (__asyncStorageMem as unknown as { set: (k: string, v: string) => Map<string, string> }).set = origSet; }
+  check('(수정) restoreSaveAtomic: 동시 stale write in-window 주입에도 백업(B) 정상 로드(래치 held)', newLoaded === teamB && G().selectedTeamId === teamB, `loaded=${newLoaded} (기대 t1)`);
+  check('(수정) 복원 후 슬롯 스토리지도 백업(B)', slotTeam() === teamB, `slot=${slotTeam()}`);
+  check('(A/B 격차) 같은 동시 쓰기가 구 경로는 클로버(A)·수정 경로는 정상(B) — 래치가 결함을 실제로 막음', oldLoaded === teamA && newLoaded === teamB);
+  void capA;
 
   process.stdout.write(fail === 0 ? '\n✅ ALL PASS — 세이브 내보내기/가져오기 안전\n' : `\n❌ ${fail} FAIL\n`);
   process.exit(fail === 0 ? 0 : 1);

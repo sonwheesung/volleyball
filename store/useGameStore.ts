@@ -2,9 +2,10 @@
 // 시즌 내 진화는 결정론 리플레이(currentDay), 시즌 경계에서 base 스냅샷을 커밋한다.
 // 세이브: 선택 팀 / 시즌 / 현재 일자 / 결과 / 단장 거래 / 선수 base 스냅샷.
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { debouncedAsyncStorage } from './persistStorage';
+import { debouncedAsyncStorage, flushGameSave } from './persistStorage';
 import { SAVE_VERSION, migrateSave, sanitizeSave, consumePendingClaimSeed } from './saveMigration';
 import { accrueBonds, setRelationContext } from '../data/relationships';
 import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusTimeline,
@@ -1562,4 +1563,47 @@ export function captureReplaySave(): { state: Record<string, unknown>; version: 
   const opts = useGameStore.persist.getOptions();
   if (!opts.partialize) return null;
   return { state: opts.partialize(useGameStore.getState()) as Record<string, unknown>, version: opts.version ?? 0 };
+}
+
+/**
+ * 세이브 복원 원자 적용(SAVE_SYSTEM §9.3·§10.4) — 파일 가져오기·서버 백업 복원 공용 적용 경로.
+ *
+ * **왜 필요한가(2026-07-16, 에뮬 E2E 발견 버그)**: 순진한 경로(`flushGameSave → slot에 {state,version} 직접 write →
+ *   rehydrate`)는 **영속에 대해 원자적이지 않다**. 백업 write와 rehydrate의 storage 읽기 **사이**에, 동시 `setState`
+ *   (React 이펙트·syncWallet·AppState 백그라운드 flush)가 **이전(현재) 상태 값**으로 persist 디바운스 쓰기를 걸어
+ *   백업을 덮어쓰면, rehydrate가 **옛 세이브를 읽어** 복원이 조용히 실패한다(엉뚱한 구단 로드). 가드 `_dv_save_transfer (g)`가 재현.
+ *
+ * **해결(쓰기 억제 래치)**: 적용 구간 동안 persist 스토리지를 **쓰기 no-op 래퍼**(getItem은 통과)로 바꿔 백업 write와
+ *   rehydrate 사이에 어떤 디바운스 쓰기도 storage에 못 닿게 한다 — 원자 구간. 구간 진입 전 `flushGameSave()`로 대기분을
+ *   비우므로 억제 중엔 새 pending도 안 쌓이고(AppState flush=no-op), 끝나면 원래 스토리지로 복구해 정상 영속 재개.
+ *   저장 내용·스키마·결정론 불변(키만도 아니고 쓰기 타이밍만 격리).
+ *
+ * @returns 로드된 `selectedTeamId`(호출부가 기대 구단과 대조해 성공/실패 판정 — 조용한 오적용 차단).
+ */
+export async function restoreSaveAtomic(state: Record<string, unknown>, version: number): Promise<string | null> {
+  const opts = useGameStore.persist.getOptions();
+  const key = opts.name ?? SAVE_KEY;
+  const original = opts.storage; // 현재 디바운스 스토리지 인스턴스(flushGameSave/AppState가 참조하는 것과 동일)
+  if (!original) { // 스토리지 미설정(비정상) — 폴백으로 직접 write 후 rehydrate
+    await AsyncStorage.setItem(key, JSON.stringify({ state, version }));
+    await useGameStore.persist.rehydrate();
+    return useGameStore.getState().selectedTeamId ?? null;
+  }
+  // 쓰기 억제 래퍼 — getItem은 실제 스토리지로 통과(rehydrate가 백업을 읽어야 함), setItem/removeItem은 no-op.
+  const suppress: typeof original = {
+    getItem: (name) => original.getItem(name),
+    setItem: () => { /* 원자 구간: 어떤 디바운스 쓰기도 백업을 못 덮게 차단 */ },
+    removeItem: () => { /* 원자 구간: no-op */ },
+  };
+  // 순서 중요: **억제를 먼저** 걸어야, 이후 flush-await 동안의 동시 setState가 실제 스토리지에 stale pending을 못 건다
+  //   (억제 후엔 persist가 suppress.setItem=no-op을 타므로 새 pending이 안 쌓임). 그 다음 기존 대기분만 flush로 비운다.
+  useGameStore.persist.setOptions({ storage: suppress });
+  try {
+    await flushGameSave(); // 억제 진입 전에 이미 쌓인 대기분만 현재 키로 비움(이후엔 새로 안 쌓임)
+    await AsyncStorage.setItem(key, JSON.stringify({ state, version })); // 백업 직접 기록
+    await useGameStore.persist.rehydrate(); // 백업 로드(이 구간 setItem 차단 → 동시 쓰기 클로버 불가)
+  } finally {
+    useGameStore.persist.setOptions({ storage: original }); // 정상 영속 재개(원래 디바운스 인스턴스 복구)
+  }
+  return useGameStore.getState().selectedTeamId ?? null;
 }

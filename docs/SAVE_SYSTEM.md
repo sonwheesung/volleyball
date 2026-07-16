@@ -362,7 +362,17 @@
      - `playerBase`가 비-null이면 **모든 엔트리가 객체**여야 함(엔트리 null/비객체는 `commitPlayerBase`의 `p.traits` 접근에서 throw → §3.3 안전망이 **fresh 리셋** → 현재 세이브 전손. `_dv_migrate_e2e ③`이 이 크래시 벡터를 문서화). 이 확인이 **쓰기 전에** 그 상태를 걸러 낸다.
    - 실패 시 **현재 세이브 무접촉**으로 거부. 검증 없이 슬롯을 덮어쓰면, commit-throw 세이브가 §3.3 fresh 리셋을 유발해 **유저의 기존 세이브를 날린다** — 드라이런은 그 전손을 원천 차단한다.
 4. **확인 다이얼로그**: 기존 `showAlert`/`AppDialog` **재사용**(settings에 신규 Modal 금지 — #129 모달 레이스 예방). 문안: "현재 구단 진행이 선택한 세이브로 대체됩니다. 되돌릴 수 없어요 — 먼저 '내보내기'로 백업해 두는 걸 권장해요." + 재화 안전 카피(§9.4).
-5. **적용**: `flushGameSave()`(대기 쓰기 정리) → **현재 로그인 슬롯 키**(`persist.getOptions().name`, §7.1 `baeknyeon-save:<userId>`)에 `{state, version}` 기록 → `persist.rehydrate()`(migrate→merge→onRehydrate→commit) → 성공 토스트. 진행 중엔 **기존 `deleting` 블로킹 오버레이 패턴 재사용**(`busy` 오버레이로 일반화 — Modal 수 불변)으로 재입력 차단.
+5. **적용 — 원자 래치(정정 2026-07-16, 에뮬 E2E 발견 버그)**:
+   > ~~`flushGameSave()`(대기 쓰기 정리) → 현재 로그인 슬롯 키에 `{state, version}` 기록 → `persist.rehydrate()` → 성공 토스트.~~
+   **버그였다**: 이 순진한 경로는 **영속에 원자적이 아니다**. 백업 write와 `rehydrate`의 storage 읽기 **사이**에, 동시 `setState`
+   (React 이펙트·`syncWallet`·`AppState` 백그라운드 flush)가 **이전(현재) 상태 값**으로 persist 디바운스 쓰기를 걸어 백업을 덮으면,
+   `rehydrate`가 **옛 세이브를 읽어** 복원이 조용히 실패한다(엉뚱한 구단 로드). 실기기에서 "인천 복원했는데 홈은 여전히 대전"으로 재현.
+   - **수정**: 적용은 **`restoreSaveAtomic(state, version)`**(`store/useGameStore.ts`) — **쓰기 억제 래치**. 적용 구간 동안 persist 스토리지를
+     **쓰기 no-op 래퍼**(getItem은 통과)로 바꿔 백업 write와 rehydrate 사이 어떤 디바운스 쓰기도 storage에 못 닿게 한다(원자 구간).
+     순서: **억제 먼저 → `flushGameSave()`(기존 대기분만 비움) → 백업 직접 write → `rehydrate` → 원래 스토리지 복구**. 저장 내용·스키마·결정론 불변(쓰기 타이밍만 격리).
+   - **로드 결과 검증(조용한 오적용 차단)**: `rehydrate` 후 로드된 `selectedTeamId`가 **백업의 구단과 일치**할 때만 성공(토스트+홈 이동), 불일치면 **실패 알림**.
+     구 판정(`selectedTeamId` truthy)은 클로버로 옛 구단이 로드돼도 truthy라 통과해 **조용한 오적용**을 놓쳤다.
+   - 진행 중엔 **기존 `busy` 블로킹 오버레이 재사용**(Modal 수 불변). 가드 `_dv_save_transfer (g)`가 클로버 재현 + 래치 A/B로 봉인.
 
 ### 9.4 재화 안전 — 가져오기는 치트 벡터가 아니다 (서버 진실 원칙)
 - 표시 카피: **"다이아·결제 재화는 이 파일이 아니라 계정(서버)에 안전하게 보관돼요. 이 파일은 구단 진행(시즌·선수·기록)만 담아요."**
@@ -383,9 +393,10 @@
 - **(d) 드라이런 게이트 증명**: commit-throw 손상 state(`playerBase:{p:null}`)를 가져오기 시도 → **거부**되고 모킹 스토리지의 기존 세이브 **바이트 불변**(현재 세이브 보호).
 - **(e) 실 store E2E**: `corpus/saves/v3_260716_progressed.json`의 state를 export→import→모킹 스토리지 기록→`persist.rehydrate()` 완주(**day 80 복원** 확인).
 - **(f) A/B 민감도**: 게이트를 우회한 경로(파서에 시임 두지 않고 가드 안에서 "게이트 없었다면 바로 write+rehydrate" 재현)로 (d)의 손상 state를 적용하면 **§3.3 fresh 리셋(현재 세이브 전손)** 이 실제로 일어남을 단언 → 드라이런이 막는 결함이 실재함을 증명(허위 오라클 차단).
+- **(g) 쓰기 경합 원자성**(2026-07-16 신설): 팀 A 확립 후 팀 B 백업 복원 중 **동시 setState의 stale flush를 in-window 주입** → ⓐ 래치 없는 구 경로는 백업이 덮여 **옛 구단(A) 로드**(버그 재현) ⓑ **`restoreSaveAtomic`** 은 같은 주입에도 **백업(B) 정상 로드**(래치 held)·슬롯 스토리지도 B. A/B 격차로 래치가 실제 결함을 막음을 증명. 동시 쓰기가 실기기 클로버 벡터임을 헤드리스로 재현(모킹 E2E의 write-contention 사각 봉인).
 
 ### 9.7 검증 (§8.4 연장)
-- **`npx tsx tools/_dv_save_transfer.ts`** — 왕복 동일성·미래버전/쓰레기 거부·드라이런 게이트·실 store E2E·A/B 민감도(exit 0/1).
+- **`npx tsx tools/_dv_save_transfer.ts`** — 왕복 동일성·미래버전/쓰레기 거부·드라이런 게이트·실 store E2E·A/B 민감도·**(g) 쓰기 경합 원자성**(exit 0/1).
 
 ---
 
@@ -416,15 +427,21 @@
 - **판정(순수)**: `shouldRetryBackup(lastBackupSeason, currentSeason, online)`:
   - `!online` → **false**(오프라인이면 통과 — 재시도 안 함).
   - else → `currentSeason > (lastBackupSeason ?? -1)`(마지막 성공 백업이 현재 시즌보다 뒤처졌으면 = 시즌 종료 백업이 유실됐으면 재시도).
-- **배선**: `onRehydrateStorage`(§0 — 계정 확정 후 슬롯 로드 완료 지점 = "부팅/로그인 후"의 owned 훅. SAVE_SYSTEM §7.5 `switchSaveScope`가 콜드부팅·로그인 양쪽에서 rehydrate를 부른다) 끝에 `void import('../lib/saveBackup').then((m) => m.retryBackupOnBoot())`. `retryBackupOnBoot`은 **세션당 1회**(모듈 플래그)만 실제 시도하고, 나머지는 즉시 반환. `shouldRetryBackup`이 false면 통과.
+- **배선**: `onRehydrateStorage`(§0 — 계정 확정 후 슬롯 로드 완료 지점 = "부팅/로그인 후"의 owned 훅. SAVE_SYSTEM §7.5 `switchSaveScope`가 콜드부팅·로그인 양쪽에서 rehydrate를 부른다) 끝에 `void import('../lib/saveBackup').then((m) => m.retryBackupOnBoot())`.
   > 대안(향후): boot 트리거를 `app/_layout.tsx`/`switchSaveScope`로 옮길 수 있으나, 이번 구현은 owned 파일(store) 안에서 완결하기 위해 `onRehydrateStorage`에 뒀다. 둘 다 "슬롯 로드 완료 = 로그인 후" 시점이라 의미 동일.
+- **1회 소진 시점 — 이중 rehydrate 시퀀스 (정정 2026-07-16, 에뮬 실기기 E2E 발견)**:
+  > ~~`retryBackupOnBoot`은 **세션당 1회**(모듈 boolean 플래그)만 실제 시도하고, 나머지는 즉시 반환.~~ **버그였다**: 진입 즉시 플래그를 소진했다.
+  실제 부팅은 **rehydrate가 2회**다 — ① 콜드부팅 auto-rehydrate(이 시점 `useAuthStore` 미하이드레이션 → `session?.userId` **undefined** → 조기 반환), ② 인증 완료 후 `switchSaveScope`의 계정 슬롯 rehydrate(세션 있음 = 진짜 재시도 지점). 구 로직은 ①에서 플래그를 태워 ②가 **영원히 스킵** → 부팅 재시도가 실전에서 죽어 있었다(서버 POST 0건).
+  - **수정**: 플래그 소진을 **"자격 있는 시도"(= `userId` + 유효 세이브 `selectedTeamId` 통과) 뒤로** 옮긴다. 세션/세이브가 없어 조기 반환한 호출(①)은 **소진하지 않는다** → ②가 살아난다.
+  - **`retriedFor: Set<userId>`**(모듈 비영속): boolean 대신 **계정별** 1회. 같은 세션에서 A 로그아웃→B 로그인 시 B도 1회 재시도를 받는다(계정 전환 대응). 같은 계정 재-rehydrate(설정 import 등)는 Set 히트로 스킵.
+  - 가드 `tools/_dv_save_backup.ts` ⑤가 이 **이중 rehydrate 시퀀스를 모킹으로 재현**(세션X 호출→세션O 호출→업로드 1회 발화)해 회귀를 봉인 + A/B로 구 로직(진입 즉시 소진)이 죽음을 증명. 순수 가드(②③)는 함수를 격리 검증해 이 **시퀀스 사각**을 못 봤다(TEST_METHODOLOGY §4).
 
 ### 10.4 복원 UI (`app/settings.tsx`)
 - "세이브 관리" 섹션에 **"서버 백업에서 복원"** 행 추가(내보내기·가져오기 아래).
 - 흐름(신규 Modal 금지 — #129, 기존 `showAlert`/블로킹 오버레이 재사용):
   1. 탭 → `listBackups()`(busy 오버레이) → 실패면 사유 다이얼로그(오프라인/로그인/오류), 빈 목록이면 안내.
   2. 목록을 **`showAlert` 세로 버튼 스택**(ActionSheet 대용 — 최대 5행 + 취소)으로: 각 행 `N시즌 · 날짜 · 크기`.
-  3. 선택 → `fetchBackup(id)`(busy) → **기존 가져오기 파이프라인 그대로**: `parseImportPayload`→`dryRunImport`→확인 다이얼로그(§9.3 재화 안전 카피)→`applyImport`(§9.3-5). 드라이런 게이트를 서버 복원도 동일하게 통과.
+  3. 선택 → `fetchBackup(id)`(busy) → **기존 가져오기 파이프라인 그대로**: `parseImportPayload`→`dryRunImport`→확인 다이얼로그(§9.3 재화 안전 카피)→`applyImport`(§9.3-5 **`restoreSaveAtomic` 원자 래치 + 로드 구단 일치 검증**). 드라이런 게이트·쓰기 억제 래치를 서버 복원도 파일 가져오기와 동일하게 통과(같은 적용 경로라 §9.3-5의 클로버 버그·수정을 공유).
   4. 진행 중 표시는 §9.5의 `importing`/`busy` 블로킹 오버레이 재사용(Modal 수 불변).
 - **카피**: "시즌이 끝날 때마다 자동으로 서버에 백업돼요(최근 5개). 다이아·결제 재화는 계정에 항상 안전해요."
 
@@ -442,6 +459,7 @@
 - **② 재시도 판정 표**: `shouldRetryBackup`을 (마지막 백업 시즌 × 현재 시즌 × 온라인) 조합 표로 검증(오프라인=false, null 이력=현재>−1, 뒤처짐=true, 동일/앞섬=false).
 - **③ endSeason 결정론 무영향**: 실 store로 `resetSave→selectTeam→completeSeason→endSeason`을 **업로드 성공/실패/미호출 3케이스**(fetch 모킹·세션 토글)로 구동 → 커밋된 세이브(`captureReplaySave().state`)가 **3케이스 바이트 동일** + 성공·실패 케이스는 fetch 호출됨·미호출 케이스는 미호출(케이스가 실제로 다름을 증명). 훅이 fire-and-forget임을 코드 레벨로 봉인.
 - **④ A/B 민감도**: ②의 표를 **교란된 판정 변이**(예: `>=`·온라인 게이트 제거)에 돌리면 최소 1행 불일치(표에 이빨이 있음 = 회귀를 잡는다) — 허위 오라클 차단.
+- **⑤ 부팅 시퀀스 재현**(2026-07-16 신설): 이중 rehydrate(인증 전 세션X → 인증 후 세션O)를 모킹으로 재현 → **실제 `retryBackupOnBoot`** 을 순서대로 구동해 세션X는 업로드 0·플래그 미소진, 세션O는 업로드 1회 발화, 같은 계정 재호출은 0, 계정 전환은 1회를 검증 + A/B(구 "진입 즉시 소진" 로직 재현이 인증 후 업로드 0 = 재시도 죽음)로 시퀀스 사각을 봉인.
 
 ### 10.8 검증 (§9.7 연장)
 - **`npx tsx tools/_dv_save_backup.ts`** — 페이로드 포맷·재시도 표·endSeason 무영향·A/B 민감도(exit 0/1).

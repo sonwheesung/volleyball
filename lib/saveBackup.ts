@@ -112,16 +112,21 @@ export async function triggerSeasonBackup(): Promise<void> {
 }
 
 // ── 부팅(로그인 후) 1회 재시도 ──────────────────────────────────────────────
-let bootRetryDone = false; // 세션당 1회(모듈 플래그, 비영속) — "1회 재시도"
-/** 슬롯 로드 완료 시점(onRehydrateStorage) 호출. 현재 세이브가 마지막 백업보다 앞서면 1회 업로드. */
+// **계정별** 세션당 1회(비영속 Set — userId 키). 부팅 시퀀스는 rehydrate가 2회다:
+//   ① 콜드부팅 auto-rehydrate — auth 미하이드레이션 → session 없음 → **자격 미달**(플래그 소진 안 함).
+//   ② switchSaveScope의 계정 슬롯 rehydrate — session 있음 → 여기서 실제 재시도.
+// 소진 시점을 "자격 있는 시도"(userId + 유효 세이브 통과) 뒤로 둬야 ①이 ②를 죽이지 않는다.
+// Set<userId>라 같은 세션 A 로그아웃→B 로그인 시 B도 1회 받는다(2026-07-16 정정, 에뮬 E2E 발견).
+const retriedFor = new Set<string>();
+/** 슬롯 로드 완료 시점(onRehydrateStorage) 호출. 현재 세이브가 마지막 백업보다 앞서면 계정당 1회 업로드. */
 export async function retryBackupOnBoot(): Promise<void> {
-  if (bootRetryDone) return;
-  bootRetryDone = true;
   try {
     const userId = useAuthStore.getState().session?.userId;
-    if (!userId) return;
+    if (!userId) return;                 // 세션 없음(인증 전 rehydrate) → 플래그 소진 안 함
+    if (retriedFor.has(userId)) return;  // 이 계정은 이번 세션에서 이미 시도함
     const cap = captureReplaySave();
-    if (!cap || !cap.state.selectedTeamId) return;
+    if (!cap || !cap.state.selectedTeamId) return; // 진행 중 구단 없음 → 소진 안 함
+    retriedFor.add(userId);              // ★ 자격 있는 시도만 소진(userId+유효 세이브 통과 뒤)
     const season = typeof cap.state.season === 'number' && Number.isFinite(cap.state.season) ? cap.state.season : 0;
     const last = await readLastBackupSeason(userId);
     if (!shouldRetryBackup(last, season, isBackupConfigured())) return;

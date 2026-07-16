@@ -15,7 +15,7 @@ async function main() {
   const { useGameStore, captureReplaySave } = await import('../store/useGameStore');
   const { useAuthStore } = await import('../store/useAuthStore');
   const { buildExportPayload, serializeExport, parseImportPayload, EXPORT_APP, EXPORT_KIND } = await import('../lib/saveTransfer');
-  const { shouldRetryBackup, buildBackupBody } = await import('../lib/saveBackup');
+  const { shouldRetryBackup, buildBackupBody, retryBackupOnBoot } = await import('../lib/saveBackup');
   const league = await import('../data/league');
   const dyn = await import('../data/dynamics');
   const mb = await import('../data/matchBox');
@@ -133,6 +133,85 @@ async function main() {
   check('변이 A(온라인 게이트 제거) 표 불일치(잡힘)', tableFailsFor(mutA));
   check('변이 B(> → >=) 표 불일치(잡힘)', tableFailsFor(mutB));
   check('대조: 실제 shouldRetryBackup은 표 전체 통과(위 ② PASS)', tableOk);
+
+  // ── ⑤ 부팅 시퀀스 재현 — 이중 rehydrate(인증 전→후)에서 재시도가 실제로 발화하는가 ────────────
+  //   에뮬 E2E 발견 버그: 진입 즉시 플래그 소진 시, 인증 전 rehydrate(세션 없음)가 플래그를 태워
+  //   인증 후 rehydrate(세션 있음)가 영원히 스킵된다. 함수 격리 가드(②③)의 시퀀스 사각을 닫는다.
+  process.stdout.write('\n[⑤ 부팅 시퀀스 — 인증 전(세션X) rehydrate → 인증 후(세션O) rehydrate 2회 발화]\n');
+  {
+    // 유효 세이브 확립(selectedTeamId 세팅) — retryBackupOnBoot의 cap 통과 조건.
+    G().resetSave();
+    G().selectTeam(my);
+    process.env.EXPO_PUBLIC_SERVER_URL = 'http://guard.local';
+    let uploads = 0;
+    (global as { fetch: unknown }).fetch = async () => {
+      uploads++;
+      return { ok: true, status: 200, json: async () => ({ ok: true, id: 'x', keptCount: 5 }) } as unknown as Response;
+    };
+    const drain = async () => { await new Promise((r) => setTimeout(r, 0)); await new Promise((r) => setTimeout(r, 0)); };
+
+    // ① 인증 전 rehydrate — auth 미하이드레이션(세션 없음). 업로드 0 + 플래그 소진 안 됨이어야.
+    useAuthStore.setState({ session: null });
+    await retryBackupOnBoot();
+    await drain();
+    const afterStep1 = uploads;
+    check('① 인증 전(세션 없음): 업로드 0회', afterStep1 === 0, `uploads=${afterStep1}`);
+
+    // ② 인증 후 rehydrate — switchSaveScope 계정 슬롯 로드(세션 있음). 재시도가 살아 있어 업로드 1회.
+    useAuthStore.setState({ session: { userId: 'dev-local:boot', provider: 'dev', displayName: null, token: 'TESTTOKEN' } } as never);
+    await retryBackupOnBoot();
+    await drain();
+    check('② 인증 후(세션 있음): 업로드 1회 발화(재시도 살아 있음)', uploads === 1, `uploads=${uploads}`);
+
+    // ③ 같은 계정 재-rehydrate(설정 import 등): 계정당 1회 → 추가 업로드 없음.
+    await retryBackupOnBoot();
+    await drain();
+    check('③ 같은 계정 재호출: 추가 업로드 없음(계정당 1회)', uploads === 1, `uploads=${uploads}`);
+
+    // ④ 계정 전환(B 로그인): Set<userId>라 B도 1회 받는다.
+    useAuthStore.setState({ session: { userId: 'dev-local:boot2', provider: 'dev', displayName: null, token: 'TESTTOKEN' } } as never);
+    await retryBackupOnBoot();
+    await drain();
+    check('④ 계정 전환(다른 userId): 그 계정도 1회 재시도(총 2회)', uploads === 2, `uploads=${uploads}`);
+
+    (global as { fetch: unknown }).fetch = realFetch;
+    delete process.env.EXPO_PUBLIC_SERVER_URL;
+
+    // ── A/B: 구버전 로직(진입 즉시 소진) 재현 — 같은 시퀀스에서 인증 후 업로드가 죽음을 증명 ──
+    // 실제 코드가 아니라 "수정 전 소비 시점"을 로컬 모델로 재현(변이). 시퀀스 사각의 teeth.
+    const buggyModel = () => {
+      let done = false; // 구버전: boolean 플래그, 진입 즉시 소진
+      let up = 0;
+      const call = (hasSession: boolean, hasSave: boolean) => {
+        if (done) return;
+        done = true;                 // ★ 버그: 자격 확인 전에 소진
+        if (!hasSession) return;     // 인증 전 rehydrate — 하지만 이미 소진됨
+        if (!hasSave) return;
+        up++;                        // (도달 시) 업로드
+      };
+      call(false, true);            // ① 인증 전(세션 없음)
+      call(true, true);             // ② 인증 후(세션 있음) — done=true라 스킵됨
+      return up;
+    };
+    const fixedModel = () => {
+      const set = new Set<string>(); let up = 0;
+      const call = (userId: string | null, hasSave: boolean) => {
+        if (!userId) return;              // 세션 없음 → 소진 안 함
+        if (set.has(userId)) return;
+        if (!hasSave) return;
+        set.add(userId);                  // 자격 있는 시도만 소진
+        up++;
+      };
+      call(null, true);                   // ① 인증 전
+      call('dev-local:boot', true);       // ② 인증 후 — 발화
+      return up;
+    };
+    const buggyUploads = buggyModel();
+    const fixedUploads = fixedModel();
+    check('A/B 구버전(진입 즉시 소진): 인증 후 업로드 0회(재시도 죽음)', buggyUploads === 0, `uploads=${buggyUploads}`);
+    check('A/B 수정본(자격 뒤 소진): 인증 후 업로드 1회', fixedUploads === 1, `uploads=${fixedUploads}`);
+    check('A/B 격차 존재 — 시퀀스 사각을 가드가 잡는다', buggyUploads !== fixedUploads && uploads === 2);
+  }
 
   process.stdout.write(fail === 0 ? '\n✅ ALL PASS — 시즌 종료 서버 백업(순수부) 안전\n' : `\n❌ ${fail} FAIL\n`);
   process.exit(fail === 0 ? 0 : 1);
