@@ -1,5 +1,13 @@
 # 결제 상품 런칭 런북 (#43)
 
+> **진행 기록 (2026-07-17 새벽, 사용자+Fable 5 공동 실행)**
+> - ✅ §1 완료 — 일회성 제품 7종 등록·활성(dia_100~dia_10000 소비성, remove_ads 비소비성), 결제 SDK 포함 AAB(versionCode 13) 내부 테스트 게시
+> - ✅ §2 완료 — RC 서비스계정 연결(credentials 2/3 초록, 구독검증 1건은 재무권한 전파 대기 — 구독 미판매라 무영향), 상품 7종 임포트(Consumable/Non-consumable 지정), 엔타이틀먼트 remove_ads, default offering 패키지 7개, 웹훅 등록(Both env·All events)
+> - ✅ §3 완료 — prod 스키마 push(devnotes·save_backups 신설, DROP 0 확인), RC_WEBHOOK_SECRET·RC_REST_API_KEY 교체 주입(11일 전 구값 대체), redeploy, 스모크 3종(devnotes ok / 무인증 401 / 정시크릿 TEST 200 ignored = **RC↔Vercel 시크릿 일치 실증**)
+> - ✅ §4 일부 — react-native-purchases 10.4.3 설치·runtimeVersion 1.1.0·EXPO_PUBLIC_REVENUECAT_API_KEY .env 반영(미추적 로컬)
+> - ⏳ 남은 것: **키 포함 재빌드(versionCode 14)+내부 테스트 업로드** → §5-B 샌드박스 실결제 매트릭스 · §0 라이선스 테스터 등록 확인 · RC credentials 초록 전환 확인
+> - ⚠ 발견: GitHub push가 Vercel **자동 배포**됨(커밋=배포 인지) · `vercel link`가 .env.local 덮어씀(백업으로 복원 — 함정 재확인)
+
 > **성격**: 이 문서는 **실행 절차서**다. 집에 와서 위에서 아래로 체크박스를 따라가면 결제가 켜지도록 만든 순서표 + 테스트 범위.
 > **설계 정본이 아니다** — 결제 구조·수익화·재화 진실 소유는 아래 정본이 결정하고, 이 런북은 그 결정을 "어떻게 실행하나"만 적는다.
 > 절차와 설계가 어긋나 보이면 **정본이 이긴다**(이 문서를 고쳐 맞춘다).
