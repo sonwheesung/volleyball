@@ -1,0 +1,97 @@
+{
+  "state": {
+    "onboarded": false,
+    "supporter": false,
+    "sfxEnabled": true,
+    "bgmVolume": 0.8,
+    "seenTips": {},
+    "selectedTeamId": "t0",
+    "season": 0,
+    "currentDay": 0,
+    "lastGrowthDay": -1,
+    "results": {},
+    "watchProgress": {},
+    "contractOverrides": {},
+    "released": [],
+    "inSeasonTx": [],
+    "faPool": [],
+    "playerBase": null,
+    "rosters": null,
+    "resignDecisions": {},
+    "faOffers": {},
+    "protectedIds": [],
+    "moneyOnlyIds": [],
+    "draftPicks": [],
+    "draftSelections": [],
+    "archive": [],
+    "careerLog": {
+      "faSigns": 0,
+      "coachHires": 0,
+      "staffHires": 0,
+      "interviews": 0
+    },
+    "careerTotals": {
+      "points": 0,
+      "aces": 0,
+      "setsWon": 0,
+      "setsLost": 0,
+      "matchWins": 0,
+      "matchLosses": 0
+    },
+    "diamonds": 0,
+    "saveId": "s_mrmy5g12_u86lu718mdsuo",
+    "campLog": [],
+    "campTrainedThisOffseason": [],
+    "campDoneSeason": -1,
+    "pendingCamp": null,
+    "claimedAch": [],
+    "adState": {
+      "dayIdx": 0,
+      "count": 0,
+      "lastAdAt": 0
+    },
+    "bonds": {},
+    "coachPool": null,
+    "hallOfFame": [],
+    "expelledLog": [],
+    "transfers": [],
+    "retirements": [],
+    "seasonDraftLog": [],
+    "seasonForeignLog": [],
+    "milestones": [],
+    "readNews": [],
+    "trainingFocus": null,
+    "focusLog": [],
+    "staffHead": {},
+    "staffHeadTimeline": {},
+    "staffAssistants": {
+      "t0": [
+        "ac18"
+      ]
+    },
+    "staffScouts": {
+      "t0": [
+        "sc7"
+      ]
+    },
+    "interviews": [],
+    "benchDirectives": [],
+    "interventions": {},
+    "coachModeLog": [],
+    "talkCooldown": {},
+    "benchCooldown": {},
+    "fanScore": 50,
+    "releaseAnger": 0,
+    "cash": 50000,
+    "lastFinance": null,
+    "tryoutWish": [],
+    "foreignAltPool": [],
+    "foreignSubUsed": false,
+    "keepForeign": null,
+    "asianWish": [],
+    "asianAltPool": [],
+    "asianSubUsed": false,
+    "keepAsian": null
+  },
+  "version": 3
+}

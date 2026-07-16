@@ -285,3 +285,42 @@
 ### 7.7 계정 삭제
 `useAuthStore.deleteAccount` 성공 시 그 계정 슬롯을 **`deleteSaveSlot(userId)`로 AsyncStorage에서 제거**(로컬 파기 — AUTH §7 방침 정합) 후 `signOut`.
 슬롯 삭제는 `activeScope`도 리셋해 재로그인(같은 userId여도) 시 재스코프되게 한다(삭제된 슬롯 = 빈 슬롯 = freshSave).
+
+---
+
+## 8. 세이브 코퍼스(골든 마스터) — OpenTTD 관행 차용 (2026-07-16)
+
+> **목적**: 출시 후 세이브 파손은 이 게임 최악의 사고다 — 수십 시즌 누적 서사가 상품이므로,
+> 사용자 세이브가 새 버전에서 안 열리면 곧 그 이야기의 소멸이다. §3의 마이그레이션·정규화가 "손상 입력을
+> 안 깨지게" 지킨다면, 이 절은 **"실제 진행으로 만든 과거 세이브가 새 코드에서 계속 열리는가"**를 회귀로 지킨다.
+> OpenTTD가 실 세이브 파일을 저장소에 박제해 로드 회귀를 막는 관행을 차용했다.
+
+`_dv_migrate`/`_dv_migrate_e2e`(§6)는 **합성 입력**(손상 타입 등)을 검사한다. 코퍼스는 대조적으로 **실제 게임
+진행으로 만든 세이브를 박제**해, 스키마가 진화해도 그 실물이 계속 로드됨을 증명한다.
+
+### 8.1 위치·포맷
+- 코퍼스: **`corpus/saves/*.json`**. 파일명 규약 `vN_YYMMDD_<라벨>.json`(예: `v3_260716_fresh.json`).
+- 포맷: persist가 AsyncStorage에 쓰는 그대로 **`{"state": <partialize 산출>, "version": <SAVE_VERSION>}`**.
+  모킹 AsyncStorage(`tools/_gt_mock`) 위 **실 store**를 `selectTeam`/경기 진행으로 구동해
+  `persist.getOptions().partialize`로 캡처한 실물(합성 아님). 생성 스크립트는 **일회성 — 커밋하지 않고 산출 JSON만 커밋**.
+- 각 파일의 생성 조건(스키마 버전·시점·구단·시즌 상태·필드 수·용량)은 **`corpus/saves/README.md` 표**에 기록.
+- 초기 박제(2026-07-16): `v3_260716_fresh`(구단 선택 직후·day0)·`v3_260716_progressed`(정규 중반·day80·내 팀 18경기).
+  > **주의**: 시즌0 세이브의 `playerBase`/`rosters`는 `null`이 정상(시드 재구성) — 유효성은 로드 후 라이브 레지스트리로 판정(§8.3).
+
+### 8.2 박제 규율 (스키마 변경의 선행 조건)
+1. **`SAVE_VERSION` 범프 또는 partialize 영속 필드의 모양 변경** 커밋에는, 변경 **전** 스키마의 실 세이브를
+   `corpus/saves/vN_YYMMDD_*.json`으로 박제하는 것이 **선행**된다(변경 후엔 그 시점 스키마를 못 만든다).
+2. **스토어 릴리즈**(스토어 업로드·주요 OTA)마다 그 시점 세이브 1개를 박제한다(릴리즈된 세이브 = 반드시 열려야 할 세이브).
+3. **`_dv_save_corpus` 그린이 스키마 변경 커밋의 통과 조건**이다(코퍼스 로드 회귀가 하나라도 깨지면 머지 불가).
+
+### 8.3 가드 `tools/_dv_save_corpus.ts`
+- `corpus/saves/*.json` 전체를 순회: 각 파일을 모킹 AsyncStorage에 넣고 `persist.rehydrate()`를 완주시켜
+  ① throw 없음 ② **리셋 아님**(로드 후 `selectedTeamId`가 파일 값과 일치 — 로드 전 센티넬 주입으로 "무변화 false-pass" 차단)
+  ③ **마이그레이션 후 유효**(내 팀 `availableTeamPlayers`→`buildLineup` 성립, 선발 6인 충족)를 검사.
+- **비공허 증명 2종**(무의미 그린·팬텀 차단): ⓐ 코퍼스 디렉터리가 비면 FAIL, ⓑ `--selftest`는 코퍼스 파일 하나를
+  메모리에서 **절단(truncate)**해 주입하고 가드가 "로드 실패"로 검출함을 단언(원본 OK · 절단본 FAIL의 A/B 격차 = 민감도).
+- 코퍼스 파일이 늘어도 **코드 수정 없이 전부 순회**(파일 추가만). exit 0/1.
+
+### 8.4 검증 (§6 연장)
+- **`npx tsx tools/_dv_save_corpus.ts`** — 코퍼스 전체가 현재 코드에서 로드·유효(exit 0/1).
+- **`npx tsx tools/_dv_save_corpus.ts --selftest`** — 절단 입력을 가드가 로드 실패로 검출(팬텀 A/B, 허위 오라클 차단).
