@@ -4,9 +4,9 @@
 // **감사 로깅(§13.22)**: 단계마다 purchase_event 1행(received/auth/decided/grant.applied|deduped/refund/ignored/error) — 관찰 전용(fire-and-forget).
 import { NextResponse } from 'next/server';
 import { applyWallet } from '../../../../../lib/wallet';
-import { verifyWebhookAuth, decidePurchaseEvent, purchaseKey, refundKey, recordPurchaseRevenue, priceKrwOf } from '../../../../../lib/revenuecat';
+import { verifyWebhookAuth, decidePurchaseEvent, purchaseKey, refundKey, recordPurchaseRevenue, recordRevenueKrwOnce, priceKrwOf } from '../../../../../lib/revenuecat';
 import { logPaymentEventAfter } from '../../../../../lib/paymentLog';
-import { notifyPurchase } from '../../../../../lib/notify';
+import { notifyPurchase, notifyRefundDropped } from '../../../../../lib/notify';
 import { reportError } from '../../../../../lib/observability';
 import { afterSafe } from '../../../../../lib/afterSafe';
 
@@ -42,8 +42,12 @@ export async function POST(req: Request) {
     const d = decidePurchaseEvent(body?.event);
     if (d.action === 'ignore') {
       // 무시도 기록(샌드박스·익명유저·미지원타입·미등록상품) — "지급 왜 안 됐나" 감사. 샌드박스는 별도 stage로.
-      const stage = d.reason === 'sandbox' ? 'webhook.sandbox.filtered' : 'webhook.ignored';
-      logPaymentEventAfter({ source: 'webhook', stage, ok: true, outcome: 'ignored', reasonCode: d.reason, ...m });
+      // **익명 환불(anonymous-refund)은 조용한 유실 금지**(§13.18 B1): fail 코드(ok:false)로 txn·상품·금액을 남기고
+      //   관측 채널(디스코드)로 알려 관리자가 수동 환불(§13.17) 여부를 판단하게 한다(지급 익명은 현행 무시 — confirm이 메꿈).
+      const dropped = d.reason === 'anonymous-refund';
+      const stage = dropped ? 'refund.anonymous.dropped' : d.reason === 'sandbox' ? 'webhook.sandbox.filtered' : 'webhook.ignored';
+      logPaymentEventAfter({ source: 'webhook', stage, ok: !dropped, outcome: 'ignored', reasonCode: d.reason, ...m });
+      if (dropped) afterSafe(() => notifyRefundDropped({ productId: m!.productId, storeTxnId: m!.storeTxnId, priceKrw: m!.price, rcAppUserId: m!.rcAppUserId, eventType: m!.eventType }));
       return NextResponse.json({ ok: true, ignored: d.reason });
     }
 
@@ -65,8 +69,18 @@ export async function POST(req: Request) {
       ok: true, outcome: r.applied ? 'applied' : 'deduped', idempotencyKey: key,
       ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: delta, balanceAfter: r.balance, price: d.priceKrw,
     });
-    // 매출 롤업은 **실제 적용된 지급**만(멱등 — 웹훅 재시도/폴백 중복 시 이중집계 방지).
-    if (grant && r.applied) await recordPurchaseRevenue(d.priceKrw, d.diamonds);
+    // 매출 롤업은 **실제 적용된 지급**만 건수·다이아 1회(멱등 — 웹훅 재시도/폴백 중복 시 이중집계 방지).
+    if (grant && r.applied) {
+      await recordPurchaseRevenue(d.priceKrw, d.diamonds, d.storeTxnId);
+    } else if (grant && !r.applied) {
+      // confirm 폴백이 먼저 지급(KRW null)하고 웹훅이 뒤늦게 dedup된 경우 — 건수·다이아는 confirm이 이미 집계했고 KRW만
+      // 미기록(그대로 두면 관리자 매출 영구 ₩0, DoD "매출 1건 조회" 위반 §13.18 A1). 이 txn의 KRW를 **보충**(멱등 마커로
+      // 이중집계 차단, 다이아 재지급·건수 증가 없음). 웹훅 재시도로 다시 와도 마커가 있어 skipped.
+      const krw = await recordRevenueKrwOnce(d.storeTxnId, d.priceKrw);
+      if (krw === 'recorded') {
+        logPaymentEventAfter({ source: 'webhook', stage: 'webhook.revenue.krw.backfilled', ok: true, outcome: 'applied', idempotencyKey: key, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, price: d.priceKrw });
+      }
+    }
     // 디스코드 알림은 실제 반영(applied)만 — 응답 후(after) 전송, 정확히 1건(dedup된 재시도/폴백은 알림 없음).
     if (r.applied) afterSafe(() => notifyPurchase({ kind: grant ? 'purchase' : 'refund', productId: d.productId, diamonds: d.diamonds, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
     return NextResponse.json({ ok: true, applied: r.applied, balance: r.balance });

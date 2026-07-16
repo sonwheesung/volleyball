@@ -146,8 +146,8 @@
 |---|---|---|
 | `_dv_walletauth` | `npx tsx tools/_dv_walletauth.ts` | SKU 카탈로그 6팩 id·수량 정합 + 엔타이틀먼트 클라↔서버 + econ 미러. **콘솔 SKU도 이것과 1:1** |
 | `_dv_refund` | `npx tsx tools/_dv_refund.ts` | 음수잔액 허용 = `refund`만(다른 reason 새면 무한소비) |
-| `_dv_purchase` | `(cd server && node_modules/.bin/tsx tools/_dv_purchase.ts)` | 웹훅 인증 fail-closed·샌드박스/엔타이틀먼트/미등록 무시·grant/refund·멱등 dedup·afterSafe 오염차단 (DATABASE_URL 필요) |
-| `_e2e_purchase_live` | `(cd server && node_modules/.bin/tsx tools/_e2e_purchase_live.ts)` | 실행 중 서버(:3000) 실 HTTP 왕복: 웹훅+1000·재전송 dedup·confirm 401/503·SANDBOX 무시·CANCELLATION −1000·이중환불 dedup |
+| `_dv_purchase` | `(cd server && node_modules/.bin/tsx tools/_dv_purchase.ts)` | 웹훅 인증 fail-closed·샌드박스/엔타이틀먼트/미등록 무시·grant/refund·멱등 dedup·afterSafe 오염차단 + **D1** confirm×SANDBOX 필터·**B1** 익명환불 `refund.anonymous.dropped` 관측·**A1** confirm선착→웹훅후착 KRW 보충 (DATABASE_URL 필요) |
+| `_e2e_purchase_live` | `(cd server && node_modules/.bin/tsx tools/_e2e_purchase_live.ts)` | 실행 중 서버(:3000) 실 HTTP 왕복: 웹훅+1000·재전송 dedup·confirm 401/503·SANDBOX 무시·CANCELLATION −1000·이중환불 dedup·**⑧ 익명환불 dropped 감사행** |
 
 - 라이브 2종 사전조건: **dev 서버 기동** + `.env.development.local`에 로컬 전용 `RC_WEBHOOK_SECRET`(≥16자) 넣고 **서버 재시작**.
 - ⚠ 임시 Docker PG(55432) 체제면 라이브 가드에 `DATABASE_URL=...55432...` 오버라이드 필수(안 붙이면 스플릿브레인 허위 FAIL — README 서버 가드 배터리 주석).
@@ -201,12 +201,13 @@
 - [ ] §5 B 6팩 실결제 → 원장 +N → 앱 잔액 반영(B1) + 지급 정확히 1회(B2)
 - [ ] §5 C1 멱등(이중지급 0)·C2 환불 클로백·C4 복원·C5 재구매 통과
 - [ ] §5 D3~D5 이상경로 fail-closed 확인
-- [ ] **관리자에서 매출 1건 조회**(⑤ 탭 총 매출 ≥ 1건, `stats_daily` 반영) = 머니패스 end-to-end 증명
+- [ ] **관리자에서 매출 1건 조회**(⑤ 탭 총 매출 ≥ 1건, `stats_daily.revenueKrw` 반영) = 머니패스 end-to-end 증명. **A1(2026-07-16) 이후**: confirm이 먼저 지급해도 뒤늦은 웹훅이 KRW를 `recordRevenueKrwOnce`로 보충하므로 매출 KRW가 영구 ₩0으로 남지 않음(경로 순서 무관 매출 집계). KRW는 웹훅이 `currency:KRW`로 실어와야 잡힘(비-KRW·미제공은 여전히 null → RC 대시보드가 재무 진실)
 - [ ] §5 F 컴플라이언스 스팟 통과
 
 ### 롤백 / 문제 대응
 - [ ] **상품 비활성화** — 지급/가격 사고 시 Play Console에서 해당 상품 **비활성화**(초안 전환) + RC 오퍼링에서 제외 → 신규 구매 차단. 이미 지급된 원장은 불변(감사 보존)
 - [ ] **웹훅 실패 관측** — 디스코드 결제 채널(`DISCORD_WEBHOOK_URL`) 알림 + `payment-events?fail=1` + Sentry(`SENTRY_DSN`)로 실패 사유 확인. "돈 내고 0개"는 `payment-events`에서 성공행+`grant.applied` 부재로 특정
+- [ ] **익명 환불 유실 대응(B1, 2026-07-16)** — 디스코드 "⚠️ 익명 환불 유실" 알림 또는 `payment-events?fail=1`에 `refund.anonymous.dropped`(stage)가 뜨면: 그 `storeTxnId`로 `payment-events?txn=<storeTxnId>`를 조회해 원구매(confirm 지급)의 유저를 찾고, **관리자 수동 환불(§13.17, ✉ 문의·환불 탭)로 다이아 회수**. 익명(비-UUID app_user_id) 환불 웹훅은 유저 귀속 불가라 자동 클로백이 안 되므로 이 이벤트가 곧 수동 처리 신호(RC 미구성/`logIn` 누락 시 발생 — 정상 배선이면 창이 좁음)
 - [ ] **RC 웹훅 재전송** — RC 대시보드에서 실패 이벤트 수동 재전송(멱등이라 안전)
 - [ ] **긴급 시크릿 회전** — `RC_WEBHOOK_SECRET` 유출 의심 시 RC·Vercel 양쪽 동시 교체 후 Redeploy
 

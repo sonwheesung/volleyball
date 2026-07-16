@@ -54,6 +54,33 @@ export async function notifyPurchase(n: PurchaseNotice): Promise<void> {
   });
 }
 
+export interface RefundDroppedNotice {
+  productId: string | null;
+  storeTxnId: string | null;   // 원장·감사 앵커(관리자가 payment-events?txn=…로 원구매 유저 추적)
+  priceKrw: number | null;
+  rcAppUserId: string | null;  // RC 익명 id($RCAnonymousID…) — 우리 유저 PII 아님(RC 생성값)
+  eventType: string | null;    // CANCELLATION | REFUND
+}
+
+/** 익명(비-UUID) 환불 웹훅 유실 통지 — 유저 귀속 불가로 원장 미반영(§13.18 B1). 관리자 수동 환불(§13.17) 판단용
+ *  관측 채널(머니패스 밖·throw-none). storeTxnId로 원구매(confirm 지급)를 역추적해 클로백 여부 결정. no-op·throw-none. */
+export async function notifyRefundDropped(n: RefundDroppedNotice): Promise<void> {
+  const url = process.env.DISCORD_WEBHOOK_URL ?? '';
+  await postDiscord(url, '배구명가 결제', {
+    title: '⚠️ 익명 환불 유실 — 수동 확인 필요',
+    color: 0xf1c40f,
+    description: '익명(비-UUID) app_user_id 환불 웹훅 — 유저 귀속 불가로 자동 클로백 안 됨. storeTxnId로 원구매 유저를 찾아 관리자 수동 환불(§13.17) 여부 확인.',
+    fields: [
+      { name: '유형', value: n.eventType ?? '—', inline: true },
+      { name: '상품', value: n.productId || '-', inline: true },
+      { name: '금액', value: n.priceKrw != null ? `₩${n.priceKrw.toLocaleString()}` : '—', inline: true },
+      { name: '거래(txn)', value: n.storeTxnId ? '…' + n.storeTxnId.slice(-12) : '—', inline: false },
+      { name: 'RC id', value: n.rcAppUserId ? n.rcAppUserId.slice(0, 32) : '—', inline: false },
+    ],
+    timestamp: new Date().toISOString(),
+  });
+}
+
 const TICKET_CAT_KO: Record<string, string> = { bug: '🐞 버그', suggestion: '💡 건의', question: '❓ 질문', refund: '↩️ 환불', etc: '🗂 기타' };
 
 export interface TicketNotice {

@@ -77,6 +77,15 @@ const webhook = (event: any, auth: string | null) => jpost(WH, { event }, auth ?
     const rRef2 = await webhook({ ...grantEv, type: 'REFUND' }, SEC);
     ok(rRef2.s === 200 && rRef2.j.applied === false && await bal(uid) === 0, '  이중 환불(같은 txn) → dedup(잔액 0 유지)');
 
+    console.log('\n=== ⑧ 익명(비-UUID) 환불 웹훅 → 조용한 유실 금지: 200 ignored + refund.anonymous.dropped 감사행(§13.18 B1) ===');
+    const ANON_TXN = `${TXN}_ANON`;
+    const rAnon = await webhook({ app_user_id: '$RCAnonymousID:e2e', transaction_id: ANON_TXN, environment: 'PRODUCTION', type: 'CANCELLATION', product_id: 'dia_1000', currency: 'KRW', price_in_purchased_currency: 9300 }, SEC);
+    ok(rAnon.s === 200 && rAnon.j.ignored === 'anonymous-refund', `익명 CANCELLATION → ignored=${rAnon.j.ignored}(anonymous-refund 기대·회수 0)`);
+    // 감사행 존재 확인 — logPaymentEventAfter는 응답 후(after) insert라 서버 측 완료를 폴로 기다림(라이브 HTTP엔 flush 훅 없음).
+    let dropped = 0;
+    for (let i = 0; i < 40; i++) { const r = await sql`select count(*)::int n from purchase_event where store_txn_id=${ANON_TXN} and stage='refund.anonymous.dropped'`; if ((dropped = r[0].n) > 0) break; await new Promise((res) => setTimeout(res, 50)); }
+    ok(dropped > 0, `  refund.anonymous.dropped 감사행 ${dropped}(조용한 유실 아님 — txn·상품·금액 관측)`);
+
     console.log(fail === 0
       ? '\n✅ PASS 결제 LIVE E2E — 실 HTTP 라우트 왕복: 인증·지급·dedup·환불·샌드박스·confirm(rc-unconfigured) 전부 확인'
       : `\n❌ FAIL ${fail}건`);
@@ -90,6 +99,7 @@ const webhook = (event: any, auth: string | null) => jpost(WH, { event }, auth ?
       await sql`delete from wallet_ledger where user_id in (select id from users where provider='dev' and provider_id like '_e2e_purchase_%')`;
       await sql`delete from purchase_event where user_id in (select id::text from users where provider='dev' and provider_id like '_e2e_purchase_%')`;
       await sql`delete from purchase_event where rc_app_user_id in (select id::text from users where provider='dev' and provider_id like '_e2e_purchase_%')`;
+      await sql`delete from purchase_event where store_txn_id like ${TXN + '%'}`; // 익명 환불(user_id null·rc_app_user_id=$RCAnonymousID) 감사행 — txn 접두로 정리
       await sql`delete from users where provider='dev' and provider_id like '_e2e_purchase_%'`;
       const left = await sql`select count(*)::int n from users where provider='dev' and provider_id like '_e2e_purchase_%'`;
       console.log(`  잔여 _e2e_purchase 유저 ${left[0].n} (0이어야 정상)`);

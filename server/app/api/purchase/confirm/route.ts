@@ -43,6 +43,12 @@ export async function POST(req: Request) {
 
     const v = await rcVerifyPurchase(userId, storeTxnId, productId); // 서버 권위 재검증
     if (!v.ok) {
+      if (v.reason === 'sandbox') {
+        // 웹훅 environment:SANDBOX 필터와 **대칭**(§13.18 D1) — confirm 폴백도 샌드박스는 지급 0(prod 원장 유령 다이아 방지).
+        // 무시(200 ignored)로 기록(웹훅 webhook.sandbox.filtered와 짝). 정상 prod 유저는 실제로 여기 도달 안 함(샌드박스 테스터만).
+        logPaymentEventAfter({ source: 'confirm', stage: 'confirm.sandbox.filtered', ok: true, outcome: 'ignored', reasonCode: 'sandbox', userId, storeTxnId, productId, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
+        return NextResponse.json({ ok: true, ignored: 'sandbox' });
+      }
       logPaymentEventAfter({ source: 'confirm', stage: 'confirm.reverify.rejected', ok: false, outcome: 'rejected', reasonCode: reasonCodeOf(v.reason), userId, storeTxnId, productId, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion, detail: { rcReason: v.reason } });
       return NextResponse.json({ ok: false, reason: v.reason }, { status: v.reason === 'rc-unconfigured' ? 503 : 402 });
     }
@@ -56,7 +62,7 @@ export async function POST(req: Request) {
     // applied=이 폴백이 지급(웹훅보다 먼저 도착) · deduped=웹훅이 이미 지급(정상). 어느 경로가 이겼는지 감사(§F6·폴백 유효성 지표).
     logPaymentEventAfter({ source: 'confirm', stage: r.applied ? 'confirm.grant.applied' : 'confirm.grant.deduped', ok: true, outcome: r.applied ? 'applied' : 'deduped', userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, balanceAfter: r.balance, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
     if (r.applied) {
-      await recordPurchaseRevenue(null, v.diamonds); // 매출(KRW)는 웹훅이 채움 — confirm은 다이아만(이중집계 방지 위해 KRW null)
+      await recordPurchaseRevenue(null, v.diamonds, storeTxnId); // 매출(KRW)는 웹훅이 채움/보충 — confirm은 다이아만(KRW null → 웹훅 dedup 시 recordRevenueKrwOnce가 보충 §13.18 A1)
       afterSafe(() => notifyPurchase({ kind: 'purchase', productId, diamonds: v.diamonds, priceKrw: null, source: 'confirm', userId })); // 폴백이 이겼을 때만(웹훅이 먼저면 여기 deduped→알림 없음)
     }
     return NextResponse.json({ ok: true, applied: r.applied, balance: r.balance });
