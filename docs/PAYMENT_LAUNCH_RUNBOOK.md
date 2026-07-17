@@ -186,6 +186,7 @@
 |---|---|---|---|
 | C1 | **멱등**: RC 웹훅 재전송(같은 storeTxnId) | 이중지급 0 — 둘째 `applied:false` | `payment-events`에 `grant.deduped` 1행, 원장 +N 1회뿐 |
 | C2 | **환불**: Play 콘솔 환불 → RC CANCELLATION/REFUND 웹훅 | 원장 −N 클로백. 잔액 **음수 허용은 refund만**(환불된 고래가 계속 못 씀) | 서버DB 원장(reason=refund, −N) / 관리자 ⑤ 환불 건수·회수 다이아 |
+| C2⚠ | **운영 규칙(2026-07-17 실측)**: 콘솔 환불은 반드시 **"권한 삭제" 체크와 함께** — 환불 버튼→팝업 안 체크박스. 체크 없이 환불하면 구글이 구매를 무효화(void)하지 않아 RC 웹훅이 **영영 안 오고** 유저는 돈 돌려받고 다이아도 유지(dia_1000 실사고 — 신호 부재 확인). 전파는 체크해도 수분~수시간 | RC subscriber에서 해당 구매 소멸 → CANCELLATION 웹훅 → 원장 −N |
 | C3 | **환불 이중차감 방지** | RC 자동환불 ↔ 관리자 수동환불이 storeTxnId 공유키로 둘째 dedupe | `refund:<userId>:<storeTxnId>` 키 1회만 반영 |
 | C4 | **서포터/엔타이틀먼트 복원**: remove_ads 구매 후 재설치·기기 이전 → **구매 복원** | 엔타이틀먼트 재활성(광고 다시 제거) | 앱 "구매 복원" 버튼 → `restorePurchases` → RC customerInfo 복원 |
 | C5 | **소모성 consume 라이프사이클(#43)**: 다이아 팩 재구매 가능 여부 | consume/acknowledge 완료돼 **재구매 됨**(미consume면 구글이 ~3일 뒤 자동환불 + 재구매 불가 재현). RC가 consume을 스토어측 흡수(§13.18 H1) | 같은 팩 2회 연속 구매 성공 / 원장 +N 2행 |
