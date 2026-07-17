@@ -11,7 +11,8 @@
 > - ⚠ 발견(2026-07-17): **vc13·14 OTA 채널 헤더 누락** — 로컬 그래들 AAB의 AndroidManifest에 expo-updates 채널 메타데이터가 없어(app.json `updates.requestHeaders` 미설정 → prebuild 산출물 누락) 기기가 `eas update --channel production` 게시분을 못 받음("게시 성공≠전달", 실기기 문구 불변으로 발각). 수정: app.json `requestHeaders["expo-channel-name"]="production"` + 매니페스트 `UPDATES_CONFIGURATION_REQUEST_HEADERS_KEY` 메타데이터 → **vc15 재빌드(채널 헤더 포함) 재업로드 필요**. 정합은 `_dv_appconfig` ⓕⓖ가 상시 대조(TEST_METHODOLOGY §4 publish-verified-not-delivery)
 > - ⚠ 발견: GitHub push가 Vercel **자동 배포**됨(커밋=배포 인지) · `vercel link`가 .env.local 덮어씀(백업으로 복원 — 함정 재확인)
 > - ✅ §5-B~C 실측 완주(2026-07-17 저녁) — 6팩 지급·가격 6종 정합(dia_500 콘솔 오등록 4,800 정정)·멱등 dedup(레이스 수정 후 error 0)·**C2 환불 클로백 실증**(RTDN 연결 후 분 단위: Play 환불(권한삭제)→RC CANCELLATION→원장 −2,500(:sandbox)→디스코드 알림→앱 잔액 반영). RTDN 셋업 = Pub/Sub API enable + SA에 게시/구독 관리자 + RC Connect + Play 수익창출설정 주제 등록(알림 콘텐츠="모든 일회성 제품")
-> - 잔여: OTA 전달 마커 확인(💎 +50 받기 버튼)·C4 구매 복원·관리자 화면 대조·(관찰) RTDN 이전 dia_5000 환불 지연 도착
+> - ✅ 2026-07-17 밤 추가 — OTA 전달 실증(vc15 채널 헤더·2h 쿨다운 작동)·remove_ads 환불→소유회수→재구매 생애주기·엔타이틀먼트 attach 실사고·캐시 무효화·vc16 AAB(오늘 전체 내장) 준비·**#107 정책 페이지 /privacy·/terms prod 게시**·행정 3종 종결(#109)
+> - 잔여(내일): vc16 업로드 → 스토어 등록정보(개인정보 URL=배포 도메인/privacy)+IARC(#108) → C4 구매복원·관리자 매출 ₩0 확인 → #43 completed → 심사 제출(직전 RC_SANDBOX_GRANT 결정) · (관찰) RTDN 이전 dia_5000 환불 지연 도착
 
 > **성격**: 이 문서는 **실행 절차서**다. 집에 와서 위에서 아래로 체크박스를 따라가면 결제가 켜지도록 만든 순서표 + 테스트 범위.
 > **설계 정본이 아니다** — 결제 구조·수익화·재화 진실 소유는 아래 정본이 결정하고, 이 런북은 그 결정을 "어떻게 실행하나"만 적는다.
