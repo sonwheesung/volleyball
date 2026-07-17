@@ -113,6 +113,9 @@ export async function loadEntitlements(): Promise<void> {
   try {
     const Purchases = rc();
     if (!Purchases) return;                     // 미설치 — 전부 미소유로 안전 동작
+    // 캐시 무효화 후 조회(2026-07-17 실측): 환불로 RC 서버가 소유를 회수해도 SDK 기기 캐시가 수분간 "소유"를
+    //   반환해 광고 제거가 잠깐 공짜 유지되는 창이 있었다 — 부팅/로그인마다 서버 실조회로 닫는다. 실패 시 캐시 폴백(graceful).
+    try { await Purchases.invalidateCustomerInfoCache(); } catch { /* 오프라인 등 — 캐시로 진행 */ }
     const info = await Purchases.getCustomerInfo();
     apply(fromCustomerInfo(info));
   } catch (e) {
