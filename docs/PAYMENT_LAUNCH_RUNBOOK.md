@@ -102,7 +102,8 @@
 - [ ] **Android 앱 연결** — 패키지명 `com.son0925.volleyball`(app.json `android.package`)
 - [ ] **Play 서비스 계정 JSON 발급·연결** — Google Cloud/Play Console에서 서비스 계정 생성 → **최소 권한**(재무·주문 조회/구독 관리에 필요한 것만) → JSON을 RC에 업로드. (스토어 크레덴셜은 **RC가 보관**, 우리 서버 미보관 — PRE_LAUNCH §3)
 - [ ] **상품 임포트** — RC Products에 §1의 6팩 + `remove_ads` 임포트(id 동일)
-- [ ] **엔타이틀먼트 매핑** — RC 엔타이틀먼트 `remove_ads`에 상품 `remove_ads` 연결. (월드컵은 출시 보류 — RC 엔타이틀먼트 `worldcup`은 기능 노출 시)
+- [x] **엔타이틀먼트 매핑** — RC 엔타이틀먼트 `remove_ads`에 상품 `remove_ads` 연결. (월드컵은 출시 보류 — RC 엔타이틀먼트 `worldcup`은 기능 노출 시)
+  - ⚠ **연결(attach)까지 실측 확인(2026-07-17 실사고)**: 엔타이틀먼트·상품이 각각 존재해도 **Associated products 연결이 비어 있으면** 결제는 기록되고 엔타이틀먼트만 조용히 빈다(광고 제거 구매했는데 광고 나옴). 확인법 = 구매 후 RC REST `GET /v1/subscribers/<userId>`의 `entitlements`가 비어 있지 않아야 한다. 연결은 기존 구매에 **소급 적용**됨(재구매 불요). `dlc_worldcup` 출시 때 엔타이틀먼트 `worldcup` ↔ 상품 `dlc_worldcup` 연결을 같은 방법으로 검증할 것
 - [ ] **오퍼링 매핑** — 다이아 6팩 + remove_ads를 current offering의 패키지로. (`lib/iap.ts`는 `offerings.current.availablePackages`에서 `product.identifier === productId`로 찾음 — 패키지가 current offering에 없으면 "상품을 찾을 수 없음")
 - [ ] **웹훅 등록** — RC > Integrations > Webhooks:
   - URL = `<prod 도메인>/api/purchase/webhook/revenuecat`
