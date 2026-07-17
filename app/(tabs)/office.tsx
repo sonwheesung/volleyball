@@ -28,7 +28,7 @@ export default function Office() {
   const total = capPayroll(capPlayers, overrides, inSeasonSigned, isBetrayed);
 
   return (
-    <Screen scroll={false}>
+    <Screen scroll={false} insetBottom={false}>
       <SummaryCard
         icon="wallet-outline"
         color={theme.warn}

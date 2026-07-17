@@ -57,7 +57,7 @@ function SquadInner() {
   };
 
   return (
-    <Screen>
+    <Screen insetBottom={false}>
       {coach ? (
         <SpotlightTarget id="squad-coach">
           <Card accent={theme.violet} onPress={() => router.push(`/coach/${coach.id}`)}>

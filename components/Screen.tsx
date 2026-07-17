@@ -26,6 +26,9 @@ interface ScreenProps {
   headerRight?: ReactNode; // 제목 행 우측 액션(예: 뉴스 "모두 읽기"). 없으면 미표시 — 무파급 옵션.
   overlay?: ReactNode;     // 뷰포트 고정 오버레이 슬롯(ScrollView 밖) — 하단 토스트 등. 없으면 미표시 — 무파급 옵션.
   keyboard?: boolean;      // 텍스트 입력 화면(문의·쿠폰 등) — KeyboardAvoidingView로 입력창이 키보드에 가리지 않게(UI-38). 기본 false — 입력 없는 화면 무영향.
+  insetBottom?: boolean;   // 하단 safe-area 인셋 적용 여부(기본 true). false면 SafeAreaView edges에서 'bottom' 제외 —
+                           //   탭 안 화면 전용(UI-44): 탭바(_layout.tsx)가 이미 하단 인셋을 소비하므로 여기서 또 넣으면 이중 적용
+                           //   → 3버튼 내비 기기(인셋 큼)에서 탭바 위 죽은 공백. 탭 밖 스택/세리머니는 기본값(탭바 없어 하단 인셋 필요).
 }
 
 /** 기본 화면 래퍼 — SafeArea를 한 곳에서 중앙 관리(상단 상태바·하단 홈인디케이터·좌우 라운드/노치).
@@ -36,11 +39,16 @@ interface ScreenProps {
  *  **HeaderShownContext로 명시 처리**: 헤더 있는 화면(전 Tabs/대부분 Stack)은 top 엣지를 빼고(헤더가 상태바 담당),
  *  headerShown:false 세리머니(enshrine·season-opening·champion)만 top 유지(제목이 상태바 밑으로 내려오게).
  *  ⚠ `useSafeAreaInsets().top`(raw) 직접 패딩 금지 — 헤더 화면에서 이중 패딩. 반드시 이 conditional edges 경유. */
-export function Screen({ title, children, scroll = true, headerRight, overlay, keyboard = false }: ScreenProps) {
+export function Screen({ title, children, scroll = true, headerRight, overlay, keyboard = false, insetBottom = true }: ScreenProps) {
   useThemeMode(); // 테마 토글 시 리렌더(배경·스크림 갱신)
   // 헤더 유무를 컨텍스트로 판정 — 헤더 있으면(=true) 상태바를 헤더가 이미 먹었으니 top 엣지 제외(이중 여백 방지).
   const headerShown = useContext(HeaderShownContext);
-  const edges: Edge[] = headerShown ? ['bottom', 'left', 'right'] : ['top', 'bottom', 'left', 'right'];
+  // edges 조립: top은 헤더 유무(위 UI-41), bottom은 insetBottom(UI-44 — 탭 화면은 탭바가 소비하므로 false).
+  const edges: Edge[] = [
+    ...(headerShown ? [] : ['top' as Edge]),
+    ...(insetBottom ? ['bottom' as Edge] : []),
+    'left', 'right',
+  ];
   // 튜토리얼 스포트라이트 대상이 화면 밖이면 이 화면의 ScrollView가 대상을 위로 끌어온다.
   // 오프셋은 "콘텐츠 최상단 센티넬 View"와 대상을 각각 measureInWindow로 재 계산(Fabric 안전 — measureLayout 회피).
   const scrollRef = useRef<ScrollView>(null);

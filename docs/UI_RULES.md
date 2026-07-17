@@ -87,6 +87,8 @@
 > | `components/SummaryCard.tsx`(신규) | 현황 요약 헤더 |
 > **주의**: 고빈도 Pressable 직접 구현(Stepper의 −/＋ 등)은 Button 네비 래치(UI-33)와 무관 — Button을 안 쓰므로 무영향(UI-33과 동일 확인).
 
+> **UI-44 (2026-07-17 — SafeArea 이중 bottom-인셋 제거: 탭 내 화면은 하단 인셋 미적용)**: UI-41(top 이중 인셋)의 **하단 형제**. **탭 안의 화면(전 Tabs 콘텐츠)은 하단 safe-area 인셋을 적용하지 않는다 — 탭바가 이미 소비**한다. `app/(tabs)/_layout.tsx` `tabBarStyle`이 `height: 60 + Math.max(insets.bottom,16)`·`paddingBottom: Math.max(insets.bottom,16)+6`으로 시스템 내비바 인셋을 **탭바 안에서 소비**하는데, 탭 콘텐츠의 `components/Screen.tsx` SafeAreaView가 `edges`에 `'bottom'`을 또 넣으면 **같은 인셋이 이중 적용** → 리스트 뷰포트가 탭바 한참 위에서 끝나고 사이에 **죽은 공백**이 생긴다(3버튼 내비 실기기 인셋 ~48dp에서 실증, 2026-07-17 스크린샷). **제스처 내비 기기/에뮬은 인셋이 소형이라 잠복**(기기 다양성 사각 — TEST_METHODOLOGY §4). **해결**: `Screen`에 `insetBottom` prop(기본 `true`) 추가 — `false`면 SafeAreaView `edges`에서 `'bottom'`을 제외. 탭 5화면(`index`·`schedule`·`squad`·`office`·`mypage`)만 `insetBottom={false}`로 opt-out(탭바가 하단 담당). **탭 밖 스택 화면·세리머니는 기본값 유지**(탭바가 없어 하단 인셋이 필요). `contentScroll`의 고정 `paddingBottom: 32`는 시각 여유라 유지(인셋과 무관). top 이중 인셋(UI-41, HeaderShownContext)과 정확히 대칭 — top=헤더가 소비 / bottom=탭바가 소비.
+
 ## UI-43 — 화면 수치·날짜 정합 검수 레지스트리 (2026-07-15, 6그룹 스웜 — 사용자 요청 "수치가 정확하게 나오는지, 날짜가 맞는지")
 
 **일반 규칙 2개 (신규 원칙 — 새 화면·새 표시에 항상 적용)**:

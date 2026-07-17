@@ -162,7 +162,7 @@ export default function MyPage() {
   };
 
   return (
-    <Screen>
+    <Screen insetBottom={false}>
       {/* ── 다이아 (MONETIZATION §11) — 전지훈련 재화 ── */}
       <Card accent={theme.sky} flat>
         <View style={styles.row}>

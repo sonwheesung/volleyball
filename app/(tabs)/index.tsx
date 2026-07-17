@@ -91,7 +91,7 @@ function DashboardInner() {
   if (!team) return null;
 
   return (
-    <Screen title={team.name} scroll={false}>
+    <Screen title={team.name} scroll={false} insetBottom={false}>
       <SoftUpdateBanner />
       {/* ~~"일정 보기 / 경기 진행" CTA 최상단 승격(UI polish)~~ → 제거(2026-07-07, 사용자 결정) —
           경기 진입은 하단 탭 "일정"이 담당(중복 CTA 정리, 홈=현황 요약 집중). 스포트라이트 앵커(dash-top

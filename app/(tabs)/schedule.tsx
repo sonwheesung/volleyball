@@ -143,7 +143,7 @@ function ScheduleInner() {
   const offseason = currentDay === 0 && campDoneSeason !== season;
 
   return (
-    <Screen title={`${seasonYear(season)} 일정 · ${season + 1}번째 시즌`}>
+    <Screen title={`${seasonYear(season)} 일정 · ${season + 1}번째 시즌`} insetBottom={false}>
       {/* 포스트시즌 구간(§5.1.2)엔 스테일 정규 정보(진행 164/164·clinch)를 숨겨 브라켓/다음경기를 최상단으로. */}
       {postseason ? null : (
         <Card accent={theme.sky} flat>
