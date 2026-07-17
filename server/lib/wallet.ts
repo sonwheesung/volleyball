@@ -119,6 +119,17 @@ export async function countReasonToday(userId: string, reason: WalletReason): Pr
   return rows[0]?.n ?? 0;
 }
 
+/** 특정 reason **가장 최근** 원장 행의 시각(ms) — 광고 쿨다운 서버 백스톱의 진실(§13.12, 2026-07-17). 없으면 null.
+ *  countReasonToday(하루 건수)와 짝: 그건 하루 상한, 이건 최근 1건 시각(**날짜 무관** — 자정 넘는 쿨다운도 정확). ledger_user_idx 활용. */
+export async function lastReasonAt(userId: string, reason: WalletReason): Promise<number | null> {
+  const rows = await db
+    .select({ lastMs: sql<string | null>`(extract(epoch from max(${walletLedger.createdAt})) * 1000)::bigint` })
+    .from(walletLedger)
+    .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, userId), eq(walletLedger.reason, reason)));
+  const r = rows[0];
+  return r?.lastMs != null ? Number(r.lastMs) : null;
+}
+
 /** 특정 reason 원장 delta 합계(평생·프로젝트/유저 스코프) — 업적 평생합 백스톱의 **서버 진실**(§13.12 H3).
  *  countReasonToday(건수)와 짝: 그건 광고 하루 상한, 이건 업적 평생합. 원장이 진실이라 세이브 리셋으로 못 우회. */
 export async function sumReason(userId: string, reason: WalletReason): Promise<number> {

@@ -20,6 +20,7 @@ import { evalAchievements } from '../../engine/achievements';
 import { achTotals } from '../../data/careerTotals';
 import { DEV_TOOLS, WORLDCUP_ENABLED } from '../../data/flags';
 import { logError } from '../../lib/log';
+import { hasRemoveAds } from '../../lib/ads';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
@@ -131,7 +132,8 @@ export default function MyPage() {
   // 광고 보고 다이아(MONETIZATION §11.1) — 서버 확정 후 캐시 갱신(BACKEND §13.12). AdMob SSV는 EAS 후.
   const watchAd = async () => {
     const r = await watchAdForDiamonds();
-    if (r.ok) showAlert('광고 시청 완료', `+${r.reward} 💎 적립되었습니다.`);
+    // remove_ads 구매자는 광고 없이 즉시 수령(§3.2) — 성공 문구도 "시청 완료" 대신 중립적으로.
+    if (r.ok) showAlert(hasRemoveAds() ? '다이아 수령 완료' : '광고 시청 완료', `+${r.reward} 💎 적립되었습니다.`);
     else showAlert(
       r.reason === 'offline' ? '온라인 연결 필요' : r.reason === 'no-ad' ? '광고 준비 안 됨' : r.reason === 'cap' ? '오늘 광고 끝' : '잠시 후 다시',
       r.reason === 'cap' ? `오늘 광고 보상은 모두 받았어요(하루 ${AD_DAILY_CAP}회). 내일 다시 와주세요.`
@@ -139,7 +141,7 @@ export default function MyPage() {
         : r.reason === 'no-ad' ? '지금은 광고를 불러오지 못했어요. 잠시 후 다시 시도해 주세요(끝까지 봐야 적립됩니다).'
         : r.reason === 'busy' ? '처리 중입니다. 잠시만 기다려 주세요.'
         : r.reason === 'error' ? '적립에 실패했습니다. 잠시 후 다시 시도해 주세요.'
-        : '다음 광고까지 잠시 기다려 주세요(30분 간격).');
+        : '다음 광고까지 잠시 기다려 주세요(2시간 간격).'); // cooldown
   };
   // 업적 수령 중 로딩 오버레이 게이트 — walletBusy(광고·전지훈련과 공유)와 분리한 로컬 상태(이 수령만 스코프).
   // 다건 배치라도 서버 왕복은 수초 걸릴 수 있어 사용자에게 명확한 "받는 중" 로딩을 보여준다(사용자 요청, UI-1).
@@ -175,7 +177,7 @@ export default function MyPage() {
           <Pressable onPress={watchAd} disabled={!adAvail.ok || walletBusy} style={[styles.diaBtn, (!adAvail.ok || walletBusy) && styles.diaBtnOff]}>
             <Text style={[styles.diaBtnTxt, (!adAvail.ok || walletBusy) && styles.diaBtnTxtOff]}>
               {walletBusy ? '적립 중…'
-                : adAvail.ok ? `📺 광고 보고 +${AD_REWARD} 💎`
+                : adAvail.ok ? (hasRemoveAds() ? `💎 +${AD_REWARD} 받기 (광고 제거됨)` : `📺 광고 보고 +${AD_REWARD} 💎`)
                 : adAvail.reason === 'cap' ? `오늘 광고 끝 (하루 ${AD_DAILY_CAP}회)`
                 : `⏳ ${fmtLeft(adAvail.msLeft)} 후`}
             </Text>

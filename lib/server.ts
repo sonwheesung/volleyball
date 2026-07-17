@@ -30,7 +30,7 @@ export interface LedgerRow {
 export type TicketCategory = 'bug' | 'suggestion' | 'question' | 'etc' | 'refund';
 export interface DeviceInfo { platform: string; osVersion: string; appVersion: string } // 진단 기기정보(§13.17)
 
-type Fail = { ok: false; reason: 'offline' | 'unauthorized' | 'insufficient' | 'bad-request' | 'cap' | 'error'; status?: number };
+type Fail = { ok: false; reason: 'offline' | 'unauthorized' | 'insufficient' | 'bad-request' | 'cap' | 'cooldown' | 'error'; status?: number };
 export type ServerResult<T> = ({ ok: true } & T) | Fail;
 
 const REQ_TIMEOUT_MS = 8000; // 대화형 호출 기본(지갑·로그인 등 — 빠른 응답 기대)

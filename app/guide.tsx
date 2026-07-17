@@ -113,7 +113,7 @@ export default function Guide() {
       <Card flat>
         <Accordion icon="diamond-outline" title="다이아: 어떻게 얻나요">
           <P>다이아는 돈을 내고 사는 유료 재화예요. 결제 말고도 여러 방법으로 모을 수 있어요.</P>
-          <Line k="📺 광고 시청" v={`광고를 끝까지 보면 +${AD_REWARD} 다이아를 받아요 (30분 간격, 하루 ${AD_DAILY_CAP}회까지).`} />
+          <Line k="📺 광고 시청" v={`광고를 끝까지 보면 +${AD_REWARD} 다이아를 받아요 (2시간 간격, 하루 ${AD_DAILY_CAP}회까지). '광고 제거'를 사면 시청 없이 바로 받아요.`} />
           <Line k="🏅 업적 달성" v="구단 운영 목표(우승·기록 등)를 이루면 다이아를 줘요." />
           <Line k="🎟️ 쿠폰 입력" v="이벤트로 받은 쿠폰 코드를 넣으면 다이아를 받아요." />
           <Line k="🎁 환영 선물" v={`처음 전지훈련을 열어보면 환영 다이아 ${WELCOME_DIAMONDS.toLocaleString()}개를 드려요 (계정당 한 번).`} />

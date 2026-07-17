@@ -4,8 +4,8 @@
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/observability';
 import { applyWallet } from '../../../../lib/wallet';
-import { countReasonToday, sumReason } from '../../../../lib/wallet';
-import { earnAmount, isEarnReason, AD_DAILY_CAP, ACH_LIFETIME_CAP } from '../../../../lib/econ';
+import { countReasonToday, sumReason, lastReasonAt } from '../../../../lib/wallet';
+import { earnAmount, isEarnReason, AD_DAILY_CAP, AD_COOLDOWN_MS, ACH_LIFETIME_CAP } from '../../../../lib/econ';
 import { requireUserId } from '../../../../lib/auth';
 import { earnClientKeyPart, walletIdemKey } from '../../../../lib/walletKey';
 
@@ -26,8 +26,16 @@ export async function POST(req: Request) {
     const userId = await requireUserId(req);
     if (!userId) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
     // 광고 하루 상한 서버 백스톱(스텁 멱등키 무한증가 방지 — 멱등은 슬롯 재시도만 막지 rate는 안 막음)
-    if (reason === 'ad' && (await countReasonToday(userId, 'ad')) >= AD_DAILY_CAP) {
-      return NextResponse.json({ ok: false, reason: 'cap' }, { status: 409 });
+    if (reason === 'ad') {
+      if ((await countReasonToday(userId, 'ad')) >= AD_DAILY_CAP) {
+        return NextResponse.json({ ok: false, reason: 'cap' }, { status: 409 });
+      }
+      // 쿨다운 서버 백스톱(2026-07-17) — 최근 'ad' 원장 시각이 2시간 이내면 거부(폰 로컬 canWatchAd만 믿지 않음 — 조작 클라 방어).
+      // 'cap'과 별도 사유('cooldown')로 반환해 클라가 "다음 광고까지 기다려" vs "오늘 광고 끝"을 구분 안내.
+      const lastAt = await lastReasonAt(userId, 'ad');
+      if (lastAt !== null && Date.now() - lastAt < AD_COOLDOWN_MS) {
+        return NextResponse.json({ ok: false, reason: 'cooldown' }, { status: 409 });
+      }
     }
     // 업적 평생합 백스톱(H3) — 원장 sum(진실)으로 강제. 정당 유저는 카탈로그 총합 16,220 < 20,000이라 안 닿음(치터 전용).
     // remaining<=0 이면 409 cap(ad와 동일 채널), 아니면 남은 만큼 잘라 지급(경계에서 부분 지급).

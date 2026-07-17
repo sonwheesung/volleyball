@@ -5,11 +5,11 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
-import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, AD_DAILY_CAP, WELCOME_DIAMONDS, ACH_MAX_PER_CLAIM, ACH_LIFETIME_CAP } from '../server/lib/econ';
+import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, AD_DAILY_CAP, AD_COOLDOWN_MS, WELCOME_DIAMONDS, ACH_MAX_PER_CLAIM, ACH_LIFETIME_CAP } from '../server/lib/econ';
 import { ACHIEVEMENTS, achReward } from '../engine/achievements';
 // E2 크로스가드 — engine/diamonds(앱)와 server/lib/econ(서버 손복제) 값 일치 대조. 둘 다 import-free 상수모듈이라
 //   tsx가 repo 루트에서 직접 import 가능(서버 전용 deps 없음 → 정규식 추출 불필요). 미러가 어긋나면 여기서 FAIL.
-import { AD_REWARD as ENG_AD_REWARD, CAMP_COURSE_COST as ENG_CAMP_COST, AD_DAILY_CAP as ENG_AD_DAILY_CAP, WELCOME_DIAMONDS as ENG_WELCOME } from '../engine/diamonds';
+import { AD_REWARD as ENG_AD_REWARD, CAMP_COURSE_COST as ENG_CAMP_COST, AD_DAILY_CAP as ENG_AD_DAILY_CAP, AD_COOLDOWN_MS as ENG_AD_COOLDOWN_MS, WELCOME_DIAMONDS as ENG_WELCOME } from '../engine/diamonds';
 // E3/E4 — server/lib/products·data/diamondTiers 둘 다 import-free 상수모듈 → 직접 import. iap.ts는 react-native를
 //   transitive import(Alert 등)라 tsx로 import 불가 → SKU 상수만 소스 정규식 추출(아래 §9).
 import { DIAMOND_PRODUCTS, ENTITLEMENT_PRODUCTS } from '../server/lib/products';
@@ -69,10 +69,11 @@ console.log('── 5. reason 화이트리스트 ──');
 ok(isEarnReason('ad') && isEarnReason('achievement') && isEarnReason('welcome') && !isEarnReason('purchase') && !isEarnReason('camp'), 'earn = {ad, achievement, welcome}만');
 ok(isSpendReason('camp') && !isSpendReason('ad') && !isSpendReason('purchase'), 'spend = {camp}만');
 
-console.log('── 6. engine↔server econ 미러 크로스가드 (E2 — 손복제 드리프트 차단, 4값 전부) ──');
+console.log('── 6. engine↔server econ 미러 크로스가드 (E2 — 손복제 드리프트 차단, 5값 전부) ──');
 ok(ENG_AD_REWARD === AD_REWARD, `AD_REWARD engine(${ENG_AD_REWARD}) = server(${AD_REWARD})`);
 ok(ENG_CAMP_COST === CAMP_COST, `전지훈련 비용 engine CAMP_COURSE_COST(${ENG_CAMP_COST}) = server CAMP_COST(${CAMP_COST})`);
 ok(ENG_AD_DAILY_CAP === AD_DAILY_CAP, `AD_DAILY_CAP engine(${ENG_AD_DAILY_CAP}) = server(${AD_DAILY_CAP})`);
+ok(ENG_AD_COOLDOWN_MS === AD_COOLDOWN_MS && AD_COOLDOWN_MS === 2 * 60 * 60 * 1000, `AD_COOLDOWN_MS engine(${ENG_AD_COOLDOWN_MS}) = server(${AD_COOLDOWN_MS}) = 2시간(2026-07-17)`);
 ok(ENG_WELCOME === WELCOME_DIAMONDS, `WELCOME_DIAMONDS engine(${ENG_WELCOME}) = server(${WELCOME_DIAMONDS})`);
 
 console.log('── 7. 다이아 팩 카탈로그 정합 (E3 — server products ↔ data diamondTiers, id+amount) ──');

@@ -64,7 +64,7 @@ import { DEFAULT_FA_OFFER } from '../engine/faMarket';
 import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
 import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, CAMP_LEGACY_CUR_GAIN, CAMP_LEGACY_POT_GAIN, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
-import { showRewardedForDiamonds } from '../lib/ads';
+import { showRewardedForDiamonds, hasRemoveAds } from '../lib/ads';
 import { earnDiamonds, earnDiamondsBatch, spendDiamonds, getWallet } from '../lib/server';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
 import { useAuthStore } from './useAuthStore';
@@ -371,9 +371,13 @@ export const useGameStore = create<GameState>()(
         const userId = useAuthStore.getState().session?.userId;
         if (!userId) return { ok: false, reason: 'offline' }; // 로그인 안 됨 → 서버 귀속 불가
         // 실제 보상형 광고를 재생하고 **완주(earned)해야만** 지급(free-faucet 차단 §3.2). 미완주/노필/취소면 지급·쿨다운 소모 없음.
+        // remove_ads 구매자(2026-07-17 사용자 결정 — MONETIZATION §3.2)는 **광고 표시 단계를 건너뛰고** 즉시 수령.
+        //   쿨다운·상한(canWatchAd 위·grantAd 아래)은 비구매자와 동일하게 태워 획득 총량 불변 — 시청 시간만 제거.
         set({ walletBusy: true });
-        const adRes = await showRewardedForDiamonds();
-        if (!adRes.earned) { set({ walletBusy: false }); return { ok: false, reason: 'no-ad' }; } // 광고 못 봄 → 슬롯 미소모(adState 불변)
+        if (!hasRemoveAds()) {
+          const adRes = await showRewardedForDiamonds();
+          if (!adRes.earned) { set({ walletBusy: false }); return { ok: false, reason: 'no-ad' }; } // 광고 못 봄 → 슬롯 미소모(adState 불변)
+        }
         const now2 = Date.now(); // 광고 시청(수초~수십초) 후 시점으로 쿨다운 시작
         const { adState, reward } = grantAd(s.adState, now2); // 새 슬롯(count↑) — 실패 시 미커밋이라 재시도 동일키(멱등)
         // dev-local(오프라인 개발 세션)엔 서버가 없어 다이아를 로컬로 처리 — __DEV__ 전용, 운영 무영향.
@@ -388,7 +392,8 @@ export const useGameStore = create<GameState>()(
         set({ walletBusy: false });
         // 적립 실패 사유: offline·cap·unauthorized·error. **'insufficient'는 적립에선 안 옴**(BACKEND §13.17 P0-1 정정
         //   2026-07-16 — 게이트는 차감 전용이라 음수 잔액에서도 적립은 통과 = 부채 상환). 그래서 여기 insufficient 분기 불요.
-        if (!r.ok) { void get().syncWallet(); return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'cap' ? 'cap' : 'error' }; }
+        // 서버 'cooldown'(§13.12 백스톱 — 조작 클라 방어)은 로컬 canWatchAd가 이미 걸러 정상 흐름에선 안 옴. 방어적으로 구분 전달.
+        if (!r.ok) { void get().syncWallet(); return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'cap' ? 'cap' : r.reason === 'cooldown' ? 'cooldown' : 'error' }; }
         // ok:true인데 balance 누락(비정형 응답 — ea6b4d9 results 누락의 형제)이면 캐시 불변+sync 수렴. 슬롯은 서버 지급 확정이라 커밋.
         set({ ...(Number.isFinite(r.balance) ? { diamonds: r.balance } : {}), adState }); // 서버 확정 후에만 슬롯·캐시 커밋
         if (!Number.isFinite(r.balance)) void get().syncWallet();

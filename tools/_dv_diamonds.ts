@@ -8,16 +8,16 @@ import type { AchStatus } from '../engine/achievements';
 
 const log = (m: string) => process.stdout.write(m + '\n');
 let ok = true;
-const T0 = 19675 * 86_400_000; // 고정 기준시각 = UTC 자정 정렬(상한 테스트가 하루 안에 머물게 — 8×30분=4h<24h)
+const T0 = 19675 * 86_400_000; // 고정 기준시각 = UTC 자정 정렬(상한 테스트가 하루 안에 머물게 — 8×2시간=16h<24h)
 
 // ── (1) 광고 쿨다운 ──
 {
   const fresh = canWatchAd(FRESH_AD_STATE, T0);
   const g = grantAd(FRESH_AD_STATE, T0);
   const right_after = canWatchAd(g.adState, T0 + 1000);          // 1초 뒤 = 쿨다운
-  const after_cd = canWatchAd(g.adState, T0 + AD_COOLDOWN_MS);   // 30분 뒤 = 가능
+  const after_cd = canWatchAd(g.adState, T0 + AD_COOLDOWN_MS);   // 쿨다운 만료 뒤(2시간) = 가능
   const pass = fresh.ok && g.reward === AD_REWARD && !right_after.ok && right_after.reason === 'cooldown' && after_cd.ok;
-  log(`[광고 쿨다운] 첫시청 가능·보상 ${g.reward} · 직후 차단(cooldown ${Math.round(right_after.msLeft / 60000)}분) · 30분뒤 가능: ${pass ? '✅' : '❌'}`);
+  log(`[광고 쿨다운] 첫시청 가능·보상 ${g.reward} · 직후 차단(cooldown ${Math.round(right_after.msLeft / 60000)}분) · 쿨다운(2시간)뒤 가능: ${pass ? '✅' : '❌'}`);
   ok = ok && pass;
 }
 // ── (2) 하루 상한 8회 ──

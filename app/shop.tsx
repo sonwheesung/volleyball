@@ -89,7 +89,7 @@ export default function Shop() {
 
       <Text style={styles.section}>아이템</Text>
       <ShopCard icon="remove-circle-outline" tint={theme.rose} title="광고 제거"
-        sub="시즌 시작 때 뜨는 광고를 없애요 · 다이아 보상형 광고는 원할 때만 시청"
+        sub="시즌 시작 때 뜨는 광고를 없애요 · 다이아 보상은 광고 없이 바로 수령"
         busy={busySku === SKU_REMOVE_ADS}
         onPress={() => buy(SKU_REMOVE_ADS)} />
       {WORLDCUP_ENABLED ? (

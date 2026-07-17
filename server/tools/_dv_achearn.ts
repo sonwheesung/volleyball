@@ -1,6 +1,7 @@
-// 업적 적립 라이브 가드 (BACKEND_SYSTEM §13.12 P0-2·H3) — earn 라우트 핸들러 직접 import·호출, 라이브 dev DB.
+// 업적/광고 적립 라이브 가드 (BACKEND_SYSTEM §13.12 P0-2·H3) — earn 라우트 핸들러 직접 import·호출, 라이브 dev DB.
 // 검증: 정상 earn(applied·잔액+)·멱등 재호출(applied:false)·호출당 클램프(per-claim 1000)·
 //       평생합 경계(remaining 클램프 부분지급)·평생합 초과(409 cap·잔액 불변)·A/B 자가검증(백스톱 없으면 통과했을 것).
+//       + 광고 쿨다운 서버 백스톱(2026-07-17): 1회 성공→즉시 2회째 409 cooldown · 원장 created_at 2h전 조작→통과(경계) · A/B(쿨다운 게이트 없는 applyWallet 직접은 지급).
 // earn 라우트는 requireUserId(무토큰=401 — 구 resolveUserId 폴백 서술은 2026-07-07 통일로 stale, 2026-07-15 정정)라
 // **반드시 실 토큰(Bearer)**으로 호출.
 // Usage: cd server && npx tsx tools/_dv_achearn.ts (dev는 .env.development.local 우선, 없으면 .env.local — 운영 겨냥 시 DATABASE_URL 오버라이드)
@@ -10,11 +11,11 @@ process.env.SESSION_JWT_SECRET = 'test-session-secret-abcdef0123456789'; // sign
 (async () => {
   const earnRoute = await import('../app/api/wallet/earn/route');
   const { signToken } = await import('../lib/auth');
-  const { ensureUser, ensureProj, applyWallet, sumReason } = await import('../lib/wallet');
-  const { earnAmount, ACH_LIFETIME_CAP, ACH_MAX_PER_CLAIM } = await import('../lib/econ');
+  const { ensureUser, ensureProj, applyWallet, sumReason, countReasonToday, lastReasonAt } = await import('../lib/wallet');
+  const { earnAmount, ACH_LIFETIME_CAP, ACH_MAX_PER_CLAIM, AD_REWARD, AD_DAILY_CAP, AD_COOLDOWN_MS } = await import('../lib/econ');
   const { db } = await import('../db');
   const { walletLedger, users } = await import('../db/schema');
-  const { and, eq } = await import('drizzle-orm');
+  const { and, eq, sql } = await import('drizzle-orm');
   const { PROJ_CODE } = await import('../lib/proj');
 
   let fail = 0;
@@ -81,6 +82,42 @@ process.env.SESSION_JWT_SECRET = 'test-session-secret-abcdef0123456789'; // sign
     const wouldGrant = earnAmount('achievement', 50); // 50 — 호출당 클램프만으론 양수 통과
     ok(wouldGrant === 50, '⑥-AB[A] 백스톱 없으면(per-claim만) 50 지급됐을 것(대조군 — 버그 재현 경로)');
     ok(r5.status === 409 && r5b.reason === 'cap', '⑥-AB[B] 실제 라우트는 평생합 백스톱으로 409 cap(=오라클 민감·허위 아님)');
+
+    // ── 광고 쿨다운 서버 백스톱(§13.12, 2026-07-17) — 이 유저는 아직 'ad' 원장 0건이라 첫 광고는 통과 ──
+    const adKey = (n: number) => `ad:${uid}:test:${n}`;
+    console.log('── ⑦ 광고 1회 성공 → 즉시 2회째 409 cooldown(하루상한 미도달인데도 차단) ──');
+    const a0 = await bal(uid);
+    const ra1 = await earn({ reason: 'ad', amount: 50, idempotencyKey: adKey(1), ref: 'ad1' }, token);
+    const ra1b = await ra1.json();
+    ok(ra1.status === 200 && ra1b.ok === true && ra1b.applied === true, '⑦ 첫 광고 earn 200·applied true');
+    ok((await bal(uid)) === a0 + AD_REWARD, `⑦ 잔액 +${AD_REWARD} [${a0}→${await bal(uid)}]`);
+    const ra2 = await earn({ reason: 'ad', amount: 50, idempotencyKey: adKey(2), ref: 'ad2' }, token);
+    const ra2b = await ra2.json();
+    ok(ra2.status === 409 && ra2b.ok === false && ra2b.reason === 'cooldown', '⑦ 즉시 2회째 → 409 cooldown(cap 아님)');
+    ok((await bal(uid)) === a0 + AD_REWARD, '⑦ 쿨다운 거부 → 잔액 불변(미지급)');
+
+    console.log('── ⑧ A/B 자가검증: 쿨다운 게이트 없는 경로(applyWallet 직접)는 같은 순간에도 지급 ──');
+    // 대조군 = 라우트의 쿨다운 게이트를 통째로 뺀 경로. applyWallet은 쿨다운 무검사 → 새 키면 즉시 지급.
+    // ⑦ 2회째는 하루 상한(count<8)·금액(>0) 모두 통과 상태였으므로 유일한 차단자가 쿨다운임을 실측으로 못박음.
+    const cntBefore = await countReasonToday(uid, 'ad');
+    ok(cntBefore < AD_DAILY_CAP, `⑧-AB[A0] 하루 상한 미도달(count ${cntBefore}<${AD_DAILY_CAP}) — cap이 차단자 아님`);
+    const a1 = await bal(uid);
+    const direct = await applyWallet(uid, AD_REWARD, 'ad', adKey(90), 'ab-nocooldown');
+    ok(direct.ok && direct.applied === true, '⑧-AB[A] 쿨다운 게이트 없으면(applyWallet 직접) 즉시 지급됨(대조군)');
+    ok((await bal(uid)) === a1 + AD_REWARD, `⑧-AB[A] 대조군 잔액 +${AD_REWARD} [${a1}→${await bal(uid)}]`);
+    ok(ra2.status === 409 && ra2b.reason === 'cooldown', '⑧-AB[B] 실제 라우트는 쿨다운 백스톱으로 409 cooldown(=오라클 민감·허위 아님)');
+
+    console.log('── ⑨ 경계: 최근 ad 원장 created_at을 3시간 전으로 조작 → lastReasonAt>2h → 재시도 성공 ──');
+    await db.update(walletLedger)
+      .set({ createdAt: sql`now() - interval '3 hours'` })
+      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, uid), eq(walletLedger.reason, 'ad')));
+    const lastAt = await lastReasonAt(uid, 'ad');
+    ok(lastAt !== null && Date.now() - lastAt >= AD_COOLDOWN_MS, `⑨ lastReasonAt 쿨다운 초과(경계) [${lastAt !== null ? Math.round((Date.now() - lastAt) / 60000) : 'null'}분 전 ≥ ${AD_COOLDOWN_MS / 60000}분]`);
+    const a2 = await bal(uid);
+    const ra3 = await earn({ reason: 'ad', amount: 50, idempotencyKey: adKey(3), ref: 'ad3' }, token);
+    const ra3b = await ra3.json();
+    ok(ra3.status === 200 && ra3b.ok === true && ra3b.applied === true, '⑨ 쿨다운 만료 후 재시도 → 200 applied');
+    ok((await bal(uid)) === a2 + AD_REWARD, `⑨ 잔액 +${AD_REWARD}(경계 통과) [${a2}→${await bal(uid)}]`);
   } finally {
     // 정리 — 테스트 유저 원장·유저 삭제(공유 DB 오염 방지, FK 순서: ledger→user)
     if (uid) await db.delete(walletLedger).where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, uid)));
@@ -88,6 +125,6 @@ process.env.SESSION_JWT_SECRET = 'test-session-secret-abcdef0123456789'; // sign
     console.log('  ✓ 정리 완료(_DVACH_ 테스트 유저·원장 삭제)');
   }
 
-  console.log(fail === 0 ? '\n✅ 업적 적립 라이브 가드 — 정상·멱등·per-claim·평생합 경계·409 cap·A/B 전부 통과' : `\n❌ ${fail} FAIL`);
+  console.log(fail === 0 ? '\n✅ 업적/광고 적립 라이브 가드 — 정상·멱등·per-claim·평생합 경계·409 cap·광고 쿨다운(409 cooldown·경계·A/B) 전부 통과' : `\n❌ ${fail} FAIL`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => { console.error('CRASH', e); process.exit(1); });

@@ -12,6 +12,7 @@ export const CAMP_COST = 300; // 전지훈련 코스 (engine/diamonds CAMP_COURS
 export const ACH_MAX_PER_CLAIM = 1000; // 업적 1회 적립 상한(카탈로그 최대 단건)
 export const ACH_LIFETIME_CAP = 20000; // 업적 평생합 상한(카탈로그 16,220 + 헤드룸)
 export const AD_DAILY_CAP = 8; // 광고 하루 상한 서버 백스톱 (engine/diamonds AD_DAILY_CAP)
+export const AD_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 광고 쿨다운 서버 백스톱 2시간 (engine/diamonds AD_COOLDOWN_MS 손복제 — 2026-07-17 구 30분. earn 라우트가 최근 'ad' 원장 시각으로 강제, 드리프트는 클라 가드 대조)
 export const WELCOME_DIAMONDS = 1000; // 첫 전지훈련 진입 환영 선물(계정당 1회, 멱등키 welcome:<userId>) — 온보딩·다이아 훅
 
 export type EarnReason = 'ad' | 'achievement' | 'welcome';

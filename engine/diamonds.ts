@@ -1,12 +1,12 @@
 // 다이아 이코노미 순수 로직 (MONETIZATION §11) — 광고 게이트 · 업적 수령 · 전지훈련 적용.
-// 락된 수치(2026-06-30): 전지훈련 300/부위 · 광고 50/30분쿨다운/하루8 · 업적 10~1000(ACH_REWARD).
+// 락된 수치: 전지훈련 300/부위 · 광고 50/2시간쿨다운(2026-07-17 사용자 결정, 구 30분)/하루8 · 업적 10~1000(ACH_REWARD).
 // adState는 메타(시드/결정론 무관) — Date.now()는 호출부(store/UI)가 nowMs로 넘겨 순수 유지.
 import type { Player, TrainableStat } from '../types';
 import { achReward, type AchStatus } from './achievements';
 
 export const CAMP_PER_STAT = 300;             // 전지훈련 부위당 다이아
 export const AD_REWARD = 50;                   // 광고 1회 다이아
-export const AD_COOLDOWN_MS = 30 * 60 * 1000;  // 30분 쿨다운
+export const AD_COOLDOWN_MS = 2 * 60 * 60 * 1000;  // 2시간 쿨다운(2026-07-17 사용자 결정 — 구 30분. 서버 백스톱 server/lib/econ AD_COOLDOWN_MS와 일치)
 export const AD_DAILY_CAP = 8;                 // 하루 상한
 export const WELCOME_DIAMONDS = 1000;          // 첫 전지훈련 진입 환영 선물(계정당 1회 — 서버 econ WELCOME_DIAMONDS와 일치)
 
@@ -15,7 +15,7 @@ export const FRESH_AD_STATE: AdState = { dayIdx: 0, count: 0, lastAdAt: 0 };
 
 const dayOf = (ms: number): number => Math.floor(ms / 86_400_000);
 
-/** 지금 광고를 볼 수 있나 — 30분 쿨다운 + 하루 8회 상한. msLeft=다음 광고까지 남은 ms. */
+/** 지금 광고를 볼 수 있나 — 2시간 쿨다운 + 하루 8회 상한. msLeft=다음 광고까지 남은 ms. */
 export function canWatchAd(s: AdState, nowMs: number): { ok: boolean; reason?: 'cooldown' | 'cap'; msLeft: number; todayCount: number } {
   const today = dayOf(nowMs);
   const todayCount = s.dayIdx === today ? s.count : 0; // 날짜 바뀌면 카운트 리셋
