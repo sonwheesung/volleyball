@@ -36,7 +36,10 @@ export default function TrainingCamp() {
   // 체인 완료(전지훈련은 체인의 마지막 상호작용 단계) = 전지훈련을 "마친" 시점 → finishCamp()로 campDoneSeason=season 세팅.
   //   이 세팅이 없으면 홈 도착 후 schedule 오프시즌 게이트(currentDay===0 && campDoneSeason!==season)가 살아 전지훈련이 2차로 재노출된다(버그).
   //   비-chain "마치고 개막전으로"(finishToOpener)와 동일하게 캠프 화면 종료가 finishCamp를 부른다 — 게이트의 개막전 숨김(MONETIZATION §11.2)은 그대로 유지.
-  const goNext = () => { finishCamp(); router.replace('/season-opening'); }; // 개막 브리지("새 시즌이 시작됩니다") → 홈
+  const goNext = () => { // 개막 브리지("새 시즌이 시작됩니다") → 홈. 특별훈련 0회+살수있음이면 건너뜀 확인 먼저(2026-07-17).
+    const go = () => { finishCamp(); router.replace('/season-opening'); };
+    if (skipConditionActive()) confirmSkipSpecialTraining(go); else go();
+  };
   // 무거운 작업 마스킹(UI-27): finishCamp+귀환(base 재계산)=동기 → useBusyRun, 전지훈련 보내기(서버 차감)=비동기 → sending 로컬 state.
   const busy = useBusyRun();
   const [sending, setSending] = useState<string | null>(null);
@@ -44,13 +47,16 @@ export default function TrainingCamp() {
   // 귀환은 router.back() 대신 결정론적으로(2026-07-11): back()은 스택 모양에 의존해, 캠프 인스턴스가 여러 장
   // 쌓였거나(중복 진입) 캠프가 스택 루트(프로세스 복원 딥링크)면 "마쳤는데 전지훈련이 또 나오는" 반복 노출이 된다(사용자 제보).
   // dismissAll이 캠프를 전부 걷어 탭으로, 걷을 게 없으면(루트) 일정 탭으로 replace — 어느 스택 모양이든 한 번에 일정으로 귀환.
+  const doFinishToOpener = () => busy.run('선수들이 전지훈련에서 구슬땀을 흘리고 있습니다…', () => {
+    finishCamp();
+    if (router.canDismiss()) router.dismissAll(); else router.replace('/(tabs)/schedule');
+  });
   const finishToOpener = () => {
+    // 특별훈련 0회+살수있음 → 건너뜀 확인(기존 "마치기" 확인 대신 — 이중 프롬프트 방지). 아니면 기존 마치기 확인.
+    if (skipConditionActive()) { confirmSkipSpecialTraining(doFinishToOpener); return; }
     showAlert('전지훈련 마치기', '전지훈련을 마치고 개막전을 시작할까요?\n이후에는 이번 시즌 전지훈련을 보낼 수 없어요.', [
       { text: '더 훈련하기', style: 'cancel' },
-      { text: '마치고 개막전으로', onPress: () => busy.run('선수들이 전지훈련에서 구슬땀을 흘리고 있습니다…', () => {
-        finishCamp();
-        if (router.canDismiss()) router.dismissAll(); else router.replace('/(tabs)/schedule');
-      }) },
+      { text: '마치고 개막전으로', onPress: doFinishToOpener },
     ]);
   };
   const my = useGameStore((s) => s.selectedTeamId);
@@ -64,6 +70,16 @@ export default function TrainingCamp() {
   const [picked, setPicked] = useState<string | null>(null);
   const [course, setCourse] = useState<CampCourse | null>(null);
   const [, force] = useState(0); // 적용 후 리렌더
+
+  // 특별훈련 0회 확인(2026-07-17 사용자 결정): 이번 오프시즌에 다이아 특별훈련(코스)을 한 번도 안 했고(campTrainedThisOffseason 비어있음)
+  //   잔액이 코스 1회분(CAMP_COURSE_COST) 이상일 때만, 다음 시즌 시작 전 "건너뛸까요?"를 묻는다. 잔액<비용이면 할 수 있는 게 없어 묻지 않음(소음 방지).
+  //   횟수는 스토어의 이번-오프시즌 스코프 상태(camped)에서 파생 — 새 영속 필드 없음. 기존 showAlert 패턴 재사용(새 Modal 금지 — iOS 모달 레이스 #129).
+  const skipConditionActive = () => currentDay === 0 && camped.length === 0 && diamonds >= CAMP_COURSE_COST;
+  const confirmSkipSpecialTraining = (onProceed: () => void) =>
+    showAlert('특별 훈련을 건너뛸까요?', '다이아 특별 훈련을 한 번도 진행하지 않았어요. 이대로 다음 시즌을 시작할까요?', [
+      { text: '훈련 보러 가기', style: 'cancel' },
+      { text: '이대로 시작', onPress: onProceed },
+    ]);
 
   // 2단계 뒤로가기(2026-07-07 버그수정): 코스 화면(picked!==null)에서 ← / 안드로이드 하드웨어백 / iOS 제스처백은
   //   화면을 pop(일정으로 이탈)하지 말고 선수 목록으로 돌아가야 한다. beforeRemove로 뒤로가기 액션만 가로챈다.

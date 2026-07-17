@@ -65,7 +65,7 @@ export const upgradableStats = (p: Player, stats: TrainableStat[]): TrainableSta
 // H1: reaction은 스파이크/서브 레이팅 0기여(죽은 스탯) → 공격·서브 코스는 consistency로 교체.
 //     블로킹 코스의 reaction은 블록 레이팅 0.18 기여라 유지.
 export type CampCourse = 'attack' | 'defense' | 'block' | 'setter' | 'serve';
-export const CAMP_COURSE_COST = 300;   // 코스 정액 300(2026-07-06 사용자 결정 — 구 900=3스탯×300에서 정액 인하). CAMP_PER_STAT(구 모델)와 분리
+export const CAMP_COURSE_COST = 200;   // 코스 정액 200(2026-07-17 사용자 결정 — 구 300; 앞서 2026-07-06 900→300). CAMP_PER_STAT(구 부위모델 300, 레거시 재적용 전용)와 분리. 서버 미러 server/lib/econ.CAMP_COST
 export const CAMP_CUR_GAIN = 3;        // 현재 +3 (사용자 결정 2026-07-08 — 구 +2. 포텐과 대칭, 즉효 체감 우선)
 export const CAMP_POT_GAIN = 3;        // 포텐 +3 (사용자 결정 2026-07-08 — 구 +7이 오버밸런스라 현재와 동일 +3. 성장 후 실현 폭은 축소, 대신 3스탯 즉시 +3 체감을 선택)
 // 소급 보존(H3): 이미 구매된 구 코스 엔트리(cur/pot 미임베드)는 구 산식으로 재적용해야 결정론이 깨지지 않는다.

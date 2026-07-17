@@ -7,7 +7,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, IconLabel, Muted, Screen, Title, theme, themedStyles } from '../components/Screen';
 import { TRAITS } from '../engine/traits';
-import { AD_REWARD, AD_DAILY_CAP, WELCOME_DIAMONDS } from '../engine/diamonds';
+import { AD_REWARD, AD_DAILY_CAP, WELCOME_DIAMONDS, CAMP_COURSE_COST } from '../engine/diamonds';
 import { ARCHETYPE_KO } from '../data/owner';
 
 function Accordion({ icon, title, children }: { icon: ComponentIcon; title: string; children: ReactNode }) {
@@ -120,7 +120,7 @@ export default function Guide() {
           <P>모은 다이아는 선수를 강하게 키우는 '전지훈련'에 써요.</P>
         </Accordion>
         <Accordion icon="airplane-outline" title="전지훈련: 능력치를 지금 올리고, 성장 한계도 함께 열어요">
-          <P>전지훈련은 오프시즌에만 할 수 있어요. 선수 한 명을 해외 캠프로 보내는 거예요. 다이아 300이 들어요.</P>
+          <P>전지훈련은 오프시즌에만 할 수 있어요. 선수 한 명을 해외 캠프로 보내는 거예요. 다이아 {CAMP_COURSE_COST}이 들어요.</P>
           <P>코스(공격·수비·블로킹·세터·서브) 하나를 고르면, 그와 관련된 3가지 능력치가 바로 +3 오르고, 그 능력치들의 성장 한계(잠재력)도 +3 올라가요(최고 99까지). 선수 한 명은 오프시즌에 딱 한 번만 보낼 수 있고, 효과는 영원히 남아요(되돌리거나 환불할 수 없어요).</P>
           <P>바로 오르는 +3은 다음 시즌부터 곧장 체감돼요. 여기에 성장 한계도 +3 열리기 때문에, 앞으로 뛸 시즌이 많이 남은 어린 선수는 그 열린 한계까지 경기·훈련으로 더 자라나 이득이 조금 더 커요. 나이 많은 선수도 지금 실력 +3은 그대로 챙기니까 손해는 아니에요.</P>
         </Accordion>

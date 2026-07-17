@@ -1,9 +1,9 @@
 // 다이아 금액 권위 (BACKEND_SYSTEM §13.12 P0-2) — 고정값 거래는 **서버가 금액을 계산**(클라 amount 무시).
-// 클라가 amount=1을 보내도 전지훈련은 서버가 −300을 강제한다. 스텁 단계에서도 닫아야 할 구멍(리뷰 지적).
-// 상수는 engine/diamonds.ts 락값(AD_REWARD=50·CAMP_COURSE_COST=300·AD_DAILY_CAP=8)의 손복제 —
+// 클라가 amount=1을 보내도 전지훈련은 서버가 −200을 강제한다. 스텁 단계에서도 닫아야 할 구멍(리뷰 지적).
+// 상수는 engine/diamonds.ts 락값(AD_REWARD=50·CAMP_COURSE_COST=200·AD_DAILY_CAP=8)의 손복제 —
 // 서버는 앱 engine을 import 못 하므로(별 tsconfig) 복제하고, 드리프트는 클라측 가드 `_dv_walletauth`가 대조.
 export const AD_REWARD = 50; // 광고 1회 (engine/diamonds AD_REWARD)
-export const CAMP_COST = 300; // 전지훈련 코스 (engine/diamonds CAMP_COURSE_COST) — 2026-07-06 900→300 정액 인하(사용자 결정)
+export const CAMP_COST = 200; // 전지훈련 코스 (engine/diamonds CAMP_COURSE_COST 손복제) — 2026-07-17 300→200 인하(사용자 결정; 앞서 2026-07-06 900→300)
 // 업적 적립 백스톱(H3) — 서버는 시즌 리플레이를 안 하므로 클라가 보낸 achievement 금액을 사전 검증만 한다.
 //   · ACH_MAX_PER_CLAIM: 카탈로그 최대 단건(1000 — titles_20·hof_10·perfect_season·points_1m·seasons_100).
 //     한 호출이 그 이상 뜯지 못하게 클램프. (engine/achievements ACH_REWARD 실측 2026-07-06)
