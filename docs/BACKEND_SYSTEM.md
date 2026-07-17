@@ -52,6 +52,13 @@
   −900 = 100인데, 전지훈련 화면 재진입이 `claimWelcomeDiamonds`(계정당 멱등)를 재호출 → 서버가 옛 1000을 반환 → 화면이 100을
   1000으로 되돌림(서버 spend 게이트는 안전해 무료강화는 아니나, 표시가 실제보다 많아 "다이아 부족" 혼란). 가드 `server/tools/_dv_walletreplay.ts`
   (라이브 dev DB, A/B로 원장 balanceAfter=1000 vs 수정본 100 대조 — 오라클 민감도 증명).
+- **동시 same-key 충돌은 error 아닌 dedup으로 수렴(2026-07-17, prod 샌드박스 실결제 실측 — 사실상 매 결제 발생)** — 순차 재시도(선지급→후시도)는
+  `applyWalletTx` dup 선조회가 걸러 주지만, **동시**에 같은 키 2건이 들어오면 둘 다 dup 선조회를 통과한 뒤 insert 단계에서 `ledger_proj_idem_uniq`
+  유니크 충돌로 진 쪽 트랜잭션이 throw한다(RC 웹훅↔confirm 폴백이 ~100ms 내 동시 도착). 구현은 `applyWallet` catch가 무조건 `{ok:false, reason:'error'}`를
+  반환해 (a)confirm이 지면 앱이 500(결제 실패 UX)·(b)웹훅이 지면 RC 불필요 재시도였다(돈은 정확 — 이중지급 0). **수정: catch가 `(proj, 키)` 원장 행을 재조회해
+  존재하면**(=경쟁자가 이미 지급 완료) **`{ok:true, applied:false, balance:현재 잔액}`으로 수렴**(dup 경로와 동형 — balanceAfter 스냅샷 아닌 현재값,
+  split-brain 방지). 유니크 충돌이 아닌 진짜 오류(DB 다운·FK — 키 행 없음)나 재조회 자체 실패는 현행대로 error(오류를 성공으로 위장 금지). 가드 `server/tools/walletConcurrency.ts`
+  H2b(동시 2건: applied 1·dedup 1)·H2c(3방향: applied 1·dedup 2), 변이(구로직 catch)로 A/B 민감도 증명(진 쪽 error → bothOk=false FAIL).
 - **멱등키**(이중지급/이중차감 차단) — 서버 UNIQUE는 `(proj_code, idempotency_key)`라 **키에 `userId`를 넣어 전역 유일**하게 만든다(안 넣으면 다른 유저가 같은 achId 수령 시 충돌):
   | 거래 | 멱등키(구현 2026-07-03) | 재설정 대칭 |
   |---|---|---|

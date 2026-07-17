@@ -79,7 +79,26 @@ export async function applyWallet(
   try {
     return await db.transaction((tx) => applyWalletTx(tx, userId, delta, reason, idempotencyKey, ref));
   } catch {
-    // idempotencyKey unique 충돌(동시에 같은 키 2건)도 여기로 — 재조회로 수렴시킬 수 있으나 P1은 error 반환.
+    // 동시 same-key 경쟁 dedup 수렴(2026-07-17, prod 샌드박스 실결제 실측 — RC 웹훅↔confirm 폴백이 ~100ms 내 동시 도착해
+    //   진 쪽 트랜잭션이 ledger_proj_idem_uniq 유니크 충돌로 throw → 매 결제 발생). 무조건 error로 끝내지 않고 **재조회로 dedup 판정**:
+    //   진 쪽이 진 이유가 "경쟁자가 이미 같은 키를 커밋"이면 그건 오류가 아니라 멱등 재시도와 동형 → applyWalletTx의 dup 경로와
+    //   같은 형태로 수렴시킨다(confirm이 지면 500 대신 200 성공 UX / 웹훅이 지면 RC 불필요 재시도 제거). 돈은 이미 정확(이중지급 0).
+    try {
+      const dup = await db
+        .select({ id: walletLedger.id })
+        .from(walletLedger)
+        .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, idempotencyKey)))
+        .limit(1);
+      if (dup.length) {
+        // 경쟁자가 이미 지급 완료 → 현재 잔액 반환(balanceAfter 스냅샷 아님 — split-brain 방지, applyWalletTx dup 경로와 동일 규칙).
+        const u = await db.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).limit(1);
+        return { ok: true as const, balance: u.length ? u[0].balance : 0, applied: false };
+      }
+    } catch {
+      // 재조회 자체 실패(DB 다운 등) → 유니크 충돌이 아닌 오류를 성공으로 위장하지 않는다.
+      return { ok: false as const, reason: 'error' as const };
+    }
+    // 유니크 충돌이 아닌 진짜 오류(DB 다운·FK 등 — 키 행이 없음) → 현행대로 error.
     return { ok: false as const, reason: 'error' as const };
   }
 }

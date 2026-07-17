@@ -6,7 +6,8 @@
 > - ✅ §3 완료 — prod 스키마 push(devnotes·save_backups 신설, DROP 0 확인), RC_WEBHOOK_SECRET·RC_REST_API_KEY 교체 주입(11일 전 구값 대체), redeploy, 스모크 3종(devnotes ok / 무인증 401 / 정시크릿 TEST 200 ignored = **RC↔Vercel 시크릿 일치 실증**)
 > - ✅ §4 일부 — react-native-purchases 10.4.3 설치·runtimeVersion 1.1.0·EXPO_PUBLIC_REVENUECAT_API_KEY .env 반영(미추적 로컬)
 > - ✅ §4 재빌드 완료(2026-07-17 낮) — **키 포함 AAB versionCode 14** 빌드(gradlew bundleRelease 2m32s). 검증: AAB 매니페스트 versionCode="14" bundletool 대조 + RC 공개키 번들 내 1회 검출(실증). 산출물 `android/app/build/outputs/bundle/release/app-release.aab`(121.7MB). 커밋 223e44d
-> - ⏳ 남은 것: **vc14 AAB 내부 테스트 업로드(사용자)** → §5-B 샌드박스 실결제 매트릭스 · §0 라이선스 테스터 등록 확인 · RC credentials 초록 전환 확인
+> - ✅ §5-B 1차(2026-07-17, `RC_SANDBOX_GRANT=all`) — `dia_100`·`dia_500` 라이선스 테스터 실결제 지급 성공(원장 +1000·+4800, `ref :sandbox` 마커·매출 KRW 0 집계 격리 확인). **레이스 발견→수정**: RC 웹훅↔confirm 폴백이 ~100ms 내 동시 도착해 진 쪽 트랜잭션이 유니크 충돌로 `grant.error`(ok=false)·confirm 500 — 매건 발생. `applyWallet` catch를 error 대신 **재조회 dedup 수렴**으로 교정(§13.18·§4, 가드 `walletConcurrency H2b/H2c`). 돈은 처음부터 정확(이중지급 0)했고 UX/재시도만 문제였음
+> - ⏳ 남은 것: **vc14 AAB 내부 테스트 업로드(사용자)** → §5-B 잔여 6팩 실결제 매트릭스 · §0 라이선스 테스터 등록 확인 · RC credentials 초록 전환 확인
 > - ⚠ 발견: GitHub push가 Vercel **자동 배포**됨(커밋=배포 인지) · `vercel link`가 .env.local 덮어씀(백업으로 복원 — 함정 재확인)
 
 > **성격**: 이 문서는 **실행 절차서**다. 집에 와서 위에서 아래로 체크박스를 따라가면 결제가 켜지도록 만든 순서표 + 테스트 범위.
