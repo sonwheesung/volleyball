@@ -157,7 +157,7 @@
 |---|---|---|
 | `_dv_walletauth` | `npx tsx tools/_dv_walletauth.ts` | SKU 카탈로그 6팩 id·수량 정합 + 엔타이틀먼트 클라↔서버 + econ 미러. **콘솔 SKU도 이것과 1:1** |
 | `_dv_refund` | `npx tsx tools/_dv_refund.ts` | 음수잔액 허용 = `refund`만(다른 reason 새면 무한소비) |
-| `_dv_purchase` | `(cd server && node_modules/.bin/tsx tools/_dv_purchase.ts)` | 웹훅 인증 fail-closed·샌드박스/엔타이틀먼트/미등록 무시·grant/refund·멱등 dedup·afterSafe 오염차단 + **D1** confirm×SANDBOX 필터·**B1** 익명환불 `refund.anonymous.dropped` 관측·**A1** confirm선착→웹훅후착 KRW 보충 (DATABASE_URL 필요) |
+| `_dv_purchase` | `(cd server && node_modules/.bin/tsx tools/_dv_purchase.ts)` | 웹훅 인증 fail-closed·샌드박스/엔타이틀먼트/미등록 무시·grant/refund·멱등 dedup·afterSafe 오염차단 + **D1** confirm×SANDBOX 필터·**B1** 익명환불 `refund.anonymous.dropped` 관측·**A1** confirm선착→웹훅후착 KRW 보충·**S1** `RC_SANDBOX_GRANT` 스위치(on=SANDBOX 지급+ref `:sandbox`·매출 무증가·환불 클로백·off 재필터) (DATABASE_URL 필요) |
 | `_e2e_purchase_live` | `(cd server && node_modules/.bin/tsx tools/_e2e_purchase_live.ts)` | 실행 중 서버(:3000) 실 HTTP 왕복: 웹훅+1000·재전송 dedup·confirm 401/503·SANDBOX 무시·CANCELLATION −1000·이중환불 dedup·**⑧ 익명환불 dropped 감사행** |
 
 - 라이브 2종 사전조건: **dev 서버 기동** + `.env.development.local`에 로컬 전용 `RC_WEBHOOK_SECRET`(≥16자) 넣고 **서버 재시작**.
@@ -170,7 +170,13 @@
 | B2 | 지급 경로 | — | 웹훅이 먼저면 confirm은 `deduped`, confirm이 먼저면 웹훅 `deduped` — **어느 쪽이든 최종 +N 1회** | `payment-events?txn=<txn>`에 `*.grant.applied` 정확히 1행 |
 | B3 | remove_ads 구매 | 실기기 | 엔타이틀먼트 활성 → 전면광고 제거(보상형 버튼은 유지) | 앱 광고 사라짐 / RC customerInfo |
 
-> ⚠ **에뮬레이터 Play 결제 제약**: 에뮬레이터는 Play 결제 흐름이 제한적 → **실기기**로. **샌드박스(SANDBOX) 결제는 서버가 무시**(테스터가 prod 원장에 유령 다이아 발행 방지)하므로, **원장 지급까지 검증하려면 내부 테스트 트랙(프로덕션 빌드 서명)** 로 라이선스 테스터 결제해야 environment가 지급 대상이 된다. "실결제인데 원장 0"이면 environment가 SANDBOX로 필터됐는지 `payment-events`에서 `webhook.sandbox.filtered` 확인.
+> ⚠ **에뮬레이터 Play 결제 제약**: 에뮬레이터는 Play 결제 흐름이 제한적 → **실기기**로.
+>
+> ⚠ **샌드박스 지급 스위치 `RC_SANDBOX_GRANT`(정정 2026-07-17 — 실측, §13.18 D1)**: ~~내부 테스트 트랙(프로덕션 빌드 서명)로 라이선스 테스터 결제해야 environment가 지급 대상(PRODUCTION)이 된다~~ 는 가정은 **틀림**. **실측**: 라이선스 테스터가 **내부 테스트 트랙에서 실제 결제해도 RevenueCat이 `environment=SANDBOX`로 웹훅을 보냄** → 기존 SANDBOX 필터가 지급을 막아 **GPA 거래 2건이 `webhook.sandbox.filtered`로 지급 0** 됐음. 테스터 전원이 결제 테스트를 하려면 **샌드박스 지급 모드**를 켠다:
+> - **켜기**: Vercel(server) 환경변수 **`RC_SANDBOX_GRANT=all`** 주입 → **재배포**(env는 요청 시점 read라 재배포 즉시 반영). 이후 SANDBOX 웹훅/confirm이 정상 지급(환불 클로백도 검증됨).
+> - **격리**: 이 모드 지급은 `stats_daily` 매출(KRW)·건수·다이아 집계에 **잡히지 않고**(실매출 아님), 원장(`wallet_ledger`)엔 `ref=<productId>:sandbox` 마커로 남아 감사 구분됨(잔액·멱등은 정상). 보안 근거: 샌드박스 결제는 **Play 콘솔 라이선스 테스터 목록(오너 통제)** 계정만 발생.
+> - **끄기(출시 전)**: Vercel에서 `RC_SANDBOX_GRANT`를 제거(또는 `all` 이외 값) → 재배포하면 SANDBOX 필터 복귀(fail-closed). **출시 DoD에서 off 여부를 결정**(§6).
+> - "실결제인데 원장 0"이면 environment가 SANDBOX로 필터됐는지 `payment-events`에서 `webhook.sandbox.filtered`(off 상태) 또는 `webhook.grant.applied`(on 상태) 확인.
 
 ### C. 멱등 / 환불 / 복원 / 소모 라이프사이클
 | # | 시나리오 | 기대 | 확인 |
@@ -213,7 +219,8 @@
 - [ ] §5 B 6팩 실결제 → 원장 +N → 앱 잔액 반영(B1) + 지급 정확히 1회(B2)
 - [ ] §5 C1 멱등(이중지급 0)·C2 환불 클로백·C4 복원·C5 재구매 통과
 - [ ] §5 D3~D5 이상경로 fail-closed 확인
-- [ ] **관리자에서 매출 1건 조회**(⑤ 탭 총 매출 ≥ 1건, `stats_daily.revenueKrw` 반영) = 머니패스 end-to-end 증명. **A1(2026-07-16) 이후**: confirm이 먼저 지급해도 뒤늦은 웹훅이 KRW를 `recordRevenueKrwOnce`로 보충하므로 매출 KRW가 영구 ₩0으로 남지 않음(경로 순서 무관 매출 집계). KRW는 웹훅이 `currency:KRW`로 실어와야 잡힘(비-KRW·미제공은 여전히 null → RC 대시보드가 재무 진실)
+- [ ] **관리자에서 매출 1건 조회**(⑤ 탭 총 매출 ≥ 1건, `stats_daily.revenueKrw` 반영) = 머니패스 end-to-end 증명. **A1(2026-07-16) 이후**: confirm이 먼저 지급해도 뒤늦은 웹훅이 KRW를 `recordRevenueKrwOnce`로 보충하므로 매출 KRW가 영구 ₩0으로 남지 않음(경로 순서 무관 매출 집계). KRW는 웹훅이 `currency:KRW`로 실어와야 잡힘(비-KRW·미제공은 여전히 null → RC 대시보드가 재무 진실). **주의(2026-07-17)**: 샌드박스 지급 모드(`RC_SANDBOX_GRANT=all`)로 넣은 테스트 결제는 매출에 **안 잡힘**(집계 제외·`ref :sandbox`) → 이 DoD의 "매출 1건"은 **프로덕션 트랙 실결제(또는 스위치 off)** 로 증명해야 함
+- [ ] **출시 전 `RC_SANDBOX_GRANT` 처리 결정(2026-07-17)** — 샌드박스 실결제 테스트를 위해 켰던 `RC_SANDBOX_GRANT=all`을 **출시 전 off 처리(권장 — Vercel env 제거 후 재배포, 필터 복귀)** 하거나, 유지할 경우 **유지 사유를 기록**(§13.18 D1 — 라이선스 테스터 목록 오너 통제라 유지해도 임의 유저 발행 불가, 단 샌드박스 지급은 매출 미집계). 스위치 상태를 `payment-events`로 확인(SANDBOX 결제가 `grant.applied`면 on·`sandbox.filtered`면 off)
 - [ ] §5 F 컴플라이언스 스팟 통과
 
 ### 롤백 / 문제 대응

@@ -10,6 +10,14 @@ import { productDiamonds } from './products';
 export const RC_WEBHOOK_SECRET = process.env.RC_WEBHOOK_SECRET ?? '';
 export const RC_REST_API_KEY = process.env.RC_REST_API_KEY ?? '';
 
+/** 샌드박스 지급 스위치(§13.18 D1 정정 2026-07-17) — env `RC_SANDBOX_GRANT==='all'`이면 샌드박스(라이선스 테스터
+ *  내부테스트 트랙) 결제를 지급 대상으로 통과시킨다. **요청 시점 read**(모듈 const 캐시 금지 — 테스트 A/B로 process.env
+ *  조작 즉시 반영·Vercel env 주입 재배포 즉시 반영). 미설정/기타값=off(fail-closed 기본 — 샌드박스 필터 유지).
+ *  보안 근거: 샌드박스 결제는 Play 콘솔 **라이선스 테스터 목록(오너 통제)** 계정만 발생. 매출 집계는 제외(호출부 스킵·ref :sandbox 마커). */
+export function sandboxGrantEnabled(): boolean {
+  return process.env.RC_SANDBOX_GRANT === 'all';
+}
+
 // RC 웹훅 이벤트 타입 → 지급/환불/무시. **소모성 다이아 팩 전용**(구독 없음)이라 일회성 이벤트만 처리:
 //   지급=INITIAL_PURCHASE·NON_RENEWING_PURCHASE / 회수=CANCELLATION·REFUND. RENEWAL/UNCANCELLATION/EXPIRATION(구독용)은
 //   무시 — UNCANCELLATION을 지급으로 두면 원구매와 같은 purchaseKey라 dedup되며 환불 되돌림이 어긋남(엣지). 소모성엔 애초에 안 옴.
@@ -17,7 +25,7 @@ const GRANT_TYPES = new Set(['INITIAL_PURCHASE', 'NON_RENEWING_PURCHASE']);
 const REFUND_TYPES = new Set(['CANCELLATION', 'REFUND']);
 
 export type PurchaseDecision =
-  | { action: 'grant' | 'refund'; userId: string; diamonds: number; storeTxnId: string; productId: string; priceKrw: number | null }
+  | { action: 'grant' | 'refund'; userId: string; diamonds: number; storeTxnId: string; productId: string; priceKrw: number | null; sandbox: boolean }
   | { action: 'ignore'; reason: string };
 
 /** RC 웹훅 Authorization 검증 — fail-closed(시크릿 미설정/<16자면 전부 거부, requireAdmin 패턴). RC 대시보드가 보낸 커스텀 헤더값과 비교. */
@@ -39,7 +47,9 @@ export function priceKrwOf(ev: { currency?: string; price_in_purchased_currency?
 export function decidePurchaseEvent(ev: unknown): PurchaseDecision {
   if (!ev || typeof ev !== 'object') return { action: 'ignore', reason: 'no-event' };
   const e = ev as Record<string, unknown>;
-  if (e.environment === 'SANDBOX') return { action: 'ignore', reason: 'sandbox' }; // 테스터가 prod 원장에 유령 다이아 발행 방지
+  // 샌드박스 1차 필터 — 기본 무시(테스터가 prod 원장에 유령 다이아 발행 방지). **스위치 on(RC_SANDBOX_GRANT=all)이면
+  //   무시하지 않고 정상 진행**(grant/refund 모두 — 라이선스 테스터 결제 테스트 기간용, §13.18 D1 정정 2026-07-17).
+  if (e.environment === 'SANDBOX' && !sandboxGrantEnabled()) return { action: 'ignore', reason: 'sandbox' };
   const userId = String(e.app_user_id ?? '');
   const productId = String(e.product_id ?? '');
   const storeTxnId = String(e.transaction_id ?? e.id ?? '');
@@ -58,12 +68,14 @@ export function decidePurchaseEvent(ev: unknown): PurchaseDecision {
   if (!isGrant && !isRefund) return { action: 'ignore', reason: `type:${type}` };
   const diamonds = productDiamonds(productId);
   if (diamonds == null) return { action: 'ignore', reason: 'entitlement-or-unknown-product' }; // 엔타이틀먼트=RC customerInfo 소유
-  return { action: isGrant ? 'grant' : 'refund', userId, diamonds, storeTxnId, productId, priceKrw: priceKrwOf(e as any) };
+  // sandbox 플래그를 결정에 실어 호출부가 매출 집계 스킵 + 원장 ref에 :sandbox 마커를 붙이게 한다(멱등키는 불변 — store txn 기반).
+  const sandbox = e.environment === 'SANDBOX';
+  return { action: isGrant ? 'grant' : 'refund', userId, diamonds, storeTxnId, productId, priceKrw: priceKrwOf(e as any), sandbox };
 }
 
 /** confirm 폴백 재검증 — RC REST subscriber 조회로 storeTxnId 실재 확인(웹훅 지연·유실 시 "돈 내고 0개" 방지).
  *  RC_REST_API_KEY 미설정이면 검증 불가 → fail-closed(클라값 신뢰 금지 §13.12). 웹훅과 같은 키로 지급→dedup 수렴. */
-export async function rcVerifyPurchase(userId: string, storeTxnId: string, productId: string): Promise<{ ok: true; diamonds: number } | { ok: false; reason: string }> {
+export async function rcVerifyPurchase(userId: string, storeTxnId: string, productId: string): Promise<{ ok: true; diamonds: number; sandbox: boolean } | { ok: false; reason: string }> {
   const diamonds = productDiamonds(productId);
   if (diamonds == null) return { ok: false, reason: 'unknown-product' };
   if (!RC_REST_API_KEY) return { ok: false, reason: 'rc-unconfigured' };
@@ -80,8 +92,10 @@ export async function rcVerifyPurchase(userId: string, storeTxnId: string, produ
     // `===true`일 때만 필터한다. **부재/비불리언(스키마 이상, 실거래엔 사실상 없음)은 prod로 간주(grant)** — 이유: 샌드박스 1차
     // 필터는 권위 있는 최상위 `environment`를 읽는 웹훅이고 confirm은 그 폴백이므로, 모호할 때 지급 편향이 정상 결제의
     // "돈 내고 0개"를 막는다(실 샌드박스는 확정적으로 true라 위협 자체는 확실히 잡힘).
-    if (match.is_sandbox === true) return { ok: false, reason: 'sandbox' };
-    return { ok: true, diamonds };
+    // 스위치 on이면 샌드박스 항목도 지급 통과(웹훅 environment 필터와 대칭 §13.18 D1 정정 2026-07-17). sandbox 플래그를 실어
+    //   confirm 라우트가 매출 집계 스킵 + 원장 ref :sandbox 마커를 붙이게 한다. off면 현행대로 거절.
+    if (match.is_sandbox === true && !sandboxGrantEnabled()) return { ok: false, reason: 'sandbox' };
+    return { ok: true, diamonds, sandbox: match.is_sandbox === true };
   } catch { return { ok: false, reason: 'rc-network' }; }
 }
 

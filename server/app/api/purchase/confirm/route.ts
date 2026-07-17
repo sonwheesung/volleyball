@@ -54,7 +54,9 @@ export async function POST(req: Request) {
     }
 
     const key = purchaseKey(userId, storeTxnId);
-    const r = await applyWallet(userId, v.diamonds, 'purchase', key, productId);
+    // 샌드박스 지급(스위치 on)이면 원장 ref에 :sandbox 마커(감사 구분). 멱등키는 store txn 기반 그대로.
+    const ref = v.sandbox ? `${productId}:sandbox` : productId;
+    const r = await applyWallet(userId, v.diamonds, 'purchase', key, ref);
     if (!r.ok) {
       logPaymentEventAfter({ source: 'confirm', stage: 'confirm.grant.error', ok: false, outcome: 'error', reasonCode: r.reason, userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, requestId: ctx.requestId });
       return NextResponse.json({ ok: false, reason: r.reason }, { status: 500 });
@@ -62,7 +64,8 @@ export async function POST(req: Request) {
     // applied=이 폴백이 지급(웹훅보다 먼저 도착) · deduped=웹훅이 이미 지급(정상). 어느 경로가 이겼는지 감사(§F6·폴백 유효성 지표).
     logPaymentEventAfter({ source: 'confirm', stage: r.applied ? 'confirm.grant.applied' : 'confirm.grant.deduped', ok: true, outcome: r.applied ? 'applied' : 'deduped', userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, balanceAfter: r.balance, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
     if (r.applied) {
-      await recordPurchaseRevenue(null, v.diamonds, storeTxnId); // 매출(KRW)는 웹훅이 채움/보충 — confirm은 다이아만(KRW null → 웹훅 dedup 시 recordRevenueKrwOnce가 보충 §13.18 A1)
+      // 샌드박스 지급은 매출·건수·다이아 집계 전면 제외(§13.18 D1 정정 2026-07-17 — statsDaily는 실매출 전용).
+      if (!v.sandbox) await recordPurchaseRevenue(null, v.diamonds, storeTxnId); // 매출(KRW)는 웹훅이 채움/보충 — confirm은 다이아만(KRW null → 웹훅 dedup 시 recordRevenueKrwOnce가 보충 §13.18 A1)
       afterSafe(() => notifyPurchase({ kind: 'purchase', productId, diamonds: v.diamonds, priceKrw: null, source: 'confirm', userId })); // 폴백이 이겼을 때만(웹훅이 먼저면 여기 deduped→알림 없음)
     }
     return NextResponse.json({ ok: true, applied: r.applied, balance: r.balance });

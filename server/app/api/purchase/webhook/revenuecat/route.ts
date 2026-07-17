@@ -56,7 +56,9 @@ export async function POST(req: Request) {
     const grant = d.action === 'grant';
     const key = grant ? purchaseKey(d.userId, d.storeTxnId) : refundKey(d.userId, d.storeTxnId);
     const delta = grant ? d.diamonds : -d.diamonds; // 환불은 음수(applyWalletTx가 refund만 음수잔액 허용)
-    const r = await applyWallet(d.userId, delta, grant ? 'purchase' : 'refund', key, d.productId);
+    // 샌드박스 지급(스위치 on)이면 원장 ref에 :sandbox 마커를 덧붙여 감사 구분(멱등키는 store txn 기반 그대로 — 환불 dedup 동일키).
+    const ref = d.sandbox ? `${d.productId}:sandbox` : d.productId;
+    const r = await applyWallet(d.userId, delta, grant ? 'purchase' : 'refund', key, ref);
     if (!r.ok) {
       // 유저 미존재(FK)·DB 오류 등 → 500으로 RC 재시도 유도(confirm 폴백도 별도 수렴). 위조 아님.
       logPaymentEventAfter({ source: 'webhook', stage: grant ? 'webhook.grant.error' : 'webhook.refund.error', ok: false, outcome: 'error', reasonCode: r.reason, idempotencyKey: key, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: delta });
@@ -70,9 +72,10 @@ export async function POST(req: Request) {
       ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: delta, balanceAfter: r.balance, price: d.priceKrw,
     });
     // 매출 롤업은 **실제 적용된 지급**만 건수·다이아 1회(멱등 — 웹훅 재시도/폴백 중복 시 이중집계 방지).
-    if (grant && r.applied) {
+    // **샌드박스 지급은 매출·건수·다이아 집계 전면 제외**(§13.18 D1 정정 2026-07-17 — statsDaily는 실매출 전용, 원장 지급은 정상 수행).
+    if (grant && r.applied && !d.sandbox) {
       await recordPurchaseRevenue(d.priceKrw, d.diamonds, d.storeTxnId);
-    } else if (grant && !r.applied) {
+    } else if (grant && !r.applied && !d.sandbox) {
       // confirm 폴백이 먼저 지급(KRW null)하고 웹훅이 뒤늦게 dedup된 경우 — 건수·다이아는 confirm이 이미 집계했고 KRW만
       // 미기록(그대로 두면 관리자 매출 영구 ₩0, DoD "매출 1건 조회" 위반 §13.18 A1). 이 txn의 KRW를 **보충**(멱등 마커로
       // 이중집계 차단, 다이아 재지급·건수 증가 없음). 웹훅 재시도로 다시 와도 마커가 있어 skipped.

@@ -127,6 +127,59 @@ process.env.RC_REST_API_KEY = 'test-rc-key-abcdef0123456789'; // confirm 폴백 
   ok(await waitEvent(SBX_TXN, 'confirm.sandbox.filtered'), '  confirm.sandbox.filtered 감사 1행 기록(웹훅 필터와 대칭 관측)');
   restoreFetch();
 
+  console.log('── S1: RC_SANDBOX_GRANT 스위치 — 샌드박스 지급 모드(라이선스 테스터 내부테스트 §13.18 D1 정정 2026-07-17) ──');
+  const { sandboxGrantEnabled } = await import('../lib/revenuecat');
+  const SG_TXN = '_TEST_TXN_SBXGRANT', SG_PID = 'dia_1000';
+  const sgEv = { app_user_id: uid, transaction_id: SG_TXN, environment: 'SANDBOX', type: 'NON_RENEWING_PURCHASE', product_id: SG_PID, currency: 'KRW', price_in_purchased_currency: 3300 };
+  // off(미설정) — 스위치 없으면 SANDBOX는 현행대로 필터(fail-closed 기본). read는 요청시점이라 여기서 delete가 즉시 반영.
+  delete process.env.RC_SANDBOX_GRANT;
+  ok(sandboxGrantEnabled() === false, 'off: RC_SANDBOX_GRANT 미설정 → sandboxGrantEnabled false(fail-closed 기본)');
+  ok(decidePurchaseEvent(sgEv).action === 'ignore', 'off: SANDBOX decide → ignore(현행 필터 유지 — 기존 D1 케이스 불변)');
+  const balBeforeSG = await bal();
+  const sgOff = await (await post(sgEv, SEC)).json();
+  ok(sgOff.ok === true && sgOff.ignored === 'sandbox', '  off: 웹훅 SANDBOX → 200 ignored:sandbox(지급 안 함)');
+  ok(await bal() === balBeforeSG, '  off: 원장 무변(prod 유령 다이아 0)');
+  // on — 스위치 켜면 SANDBOX 지급 통과. 모듈 캐시 아닌 요청시점 read라 여기서 켠 게 즉시 반영(멱등키·잔액 A/B 가능).
+  process.env.RC_SANDBOX_GRANT = 'all';
+  ok(sandboxGrantEnabled() === true, 'on: RC_SANDBOX_GRANT=all → sandboxGrantEnabled true(요청시점 read — 모듈캐시 아님)');
+  const dOn = decidePurchaseEvent(sgEv);
+  ok(dOn.action === 'grant' && (dOn as any).sandbox === true, '(a) on: SANDBOX decide → grant(sandbox:true 표시)');
+  const revBeforeSG = (await readStats()).rev, cntBeforeSG = (await readStats()).cnt, diaBeforeSG = (await readStats()).dia;
+  const sgOn = await (await post(sgEv, SEC)).json();
+  ok(sgOn.ok === true && sgOn.applied === true, '(a) on: 웹훅 SANDBOX grant → applied true(테스터 결제 지급)');
+  ok(await bal() === balBeforeSG + 1000, `  (a) 원장 +1000 지급됨 — 실측 ${await bal() - balBeforeSG}`);
+  // (a) 원장 ref = productId:sandbox 마커(감사 구분) · 멱등키는 store txn 기반(마커 없음 — 환불 dedup 동일키).
+  const sgRow = await db.select({ ref: walletLedger.ref, key: walletLedger.idempotencyKey }).from(walletLedger).where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, purchaseKey(uid!, SG_TXN)))).limit(1);
+  ok(sgRow.length === 1 && sgRow[0].ref === `${SG_PID}:sandbox`, `  (a) 원장 ref=dia_1000:sandbox 마커(감사 구분) — 실측 ${sgRow[0]?.ref}`);
+  ok(sgRow[0]?.key === `purchase:${uid}:${SG_TXN}`, '  (a) 멱등키는 store txn 기반(마커 없음 — 환불이 같은 키 봐야 함)');
+  // (c) 매출 오염 방지 — statsDaily 매출 KRW·건수·다이아 무증가(샌드박스는 실매출 아님, 집계 전면 제외).
+  ok((await readStats()).rev - revBeforeSG === 0, `(c) statsDaily 매출 KRW 무증가(샌드박스 매출 집계 제외) — 실측 Δ${(await readStats()).rev - revBeforeSG}`);
+  ok((await readStats()).cnt - cntBeforeSG === 0, '  (c) 구매 건수 무증가(집계 제외)');
+  ok((await readStats()).dia - diaBeforeSG === 0, '  (c) 다이아 집계 무증가(실매출 전용)');
+  // (b) 같은 모드 SANDBOX 환불 → 클로백 적용(원장 −1000, 순 0 — 샌드박스 환불도 검증돼야 함).
+  const sgRef = await (await post({ ...sgEv, type: 'CANCELLATION' }, SEC)).json();
+  ok(sgRef.ok === true && await bal() === balBeforeSG, `(b) on: SANDBOX 환불 → 클로백 −1000(순 0) — 실측 잔액 ${await bal() - balBeforeSG}`);
+  const sgRefRow = await db.select({ ref: walletLedger.ref }).from(walletLedger).where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, refundKey(uid!, SG_TXN)))).limit(1);
+  ok(sgRefRow.length === 1 && sgRefRow[0].ref === `${SG_PID}:sandbox`, '  (b) 환불 원장도 :sandbox 마커(감사 구분)');
+  ok((await readStats()).rev - revBeforeSG === 0, '  (b) 환불 후에도 매출 KRW 무증가(샌드박스 격리 유지)');
+  // (d) A/B — 스위치 되돌림(delete) → 다시 필터(fail-closed 복귀). 웹훅·confirm 폴백 대칭 확인.
+  delete process.env.RC_SANDBOX_GRANT;
+  ok(sandboxGrantEnabled() === false && decidePurchaseEvent(sgEv).action === 'ignore', '(d) A/B: 스위치 delete → SANDBOX decide 다시 ignore(fail-closed 복귀)');
+  const balBeforeSGd = await bal();
+  const sgOffAgain = await (await post({ ...sgEv, transaction_id: '_TEST_TXN_SBXGRANT_D' }, SEC)).json();
+  ok(sgOffAgain.ignored === 'sandbox' && await bal() === balBeforeSGd, '  (d) 되돌린 뒤 웹훅 SANDBOX → 다시 ignored:sandbox·원장 무변(스위치 없으면 필터)');
+  // confirm 폴백 대칭 — on: is_sandbox 통과(sandbox:true) / off: 다시 sandbox 거절.
+  const SG_CONF = '_TEST_TXN_SBXCONF';
+  process.env.RC_SANDBOX_GRANT = 'all';
+  stubRc(SG_CONF, SG_PID, true);
+  const vSgOn = await rcVerifyPurchase(uid!, SG_CONF, SG_PID);
+  ok(vSgOn.ok === true && (vSgOn as any).sandbox === true, '(a) confirm 폴백: on → is_sandbox 통과(sandbox:true — 웹훅과 대칭)');
+  delete process.env.RC_SANDBOX_GRANT;
+  const vSgOff = await rcVerifyPurchase(uid!, SG_CONF, SG_PID);
+  ok(vSgOff.ok === false && (vSgOff as { ok: false; reason: string }).reason === 'sandbox', '(d) confirm 폴백: off → 다시 sandbox 거절(대칭 복귀)');
+  restoreFetch();
+  delete process.env.RC_SANDBOX_GRANT; // 이후 섹션(B1·A1·부채)은 스위치 off로 — 최종 상태 보장
+
   console.log('── B1: 익명 환불 웹훅 조용한 유실 방지(관측 있는 무시 §13.18) ──');
   const ANON_TXN = '_TEST_TXN_ANONREF';
   const balBeforeAnon = await bal();
