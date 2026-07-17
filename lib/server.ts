@@ -92,7 +92,8 @@ export function deleteAccount() {
 export interface BootstrapData {
   maintenance: { active: boolean; title?: string; body?: string };
   version: { min: string | null; latest: string | null; androidUrl: string | null; iosUrl: string | null };
-  announcements: Array<{ id: string; title: string; body: string; pinned: boolean }>;
+  // startsAt = 노출 시작일(=게시된 시점) ISO 문자열, 재열람 목록의 "등록일" 표시용. 구서버(필드 없음) 대비 optional.
+  announcements: Array<{ id: string; title: string; body: string; pinned: boolean; startsAt?: string | null }>;
 }
 export function getBootstrap(): Promise<ServerResult<BootstrapData>> {
   return call('/api/bootstrap');

@@ -1,5 +1,5 @@
 // 개발자 노트/패치노트 목록 (DEVNOTES_SYSTEM §3.2) — 마이페이지에서 진입.
-//   상단 세그먼트 탭(패치노트 | 개발자 노트, 기본=패치노트) · 탭별 최신순 카드(제목 + 버전 태그 + 게시일 + 미리보기 + 안읽음 점).
+//   상단 세그먼트 탭(패치노트 | 개발자 노트, 기본=패치노트) · 탭별 최신순 카드(제목 + 버전 태그 + 게시일 + 안읽음 점). 본문 미리보기는 없앰(2026-07-17) — 본문은 상세 전용, 3화면(공지·패치·노트) 목록↔상세 구조 통일.
 //   오프라인 캐시(§3.4): 캐시 먼저 렌더 → 온라인이면 백그라운드 fetch 갱신(SWR). 무푸시 — 배지로만 알림.
 //   결정론 격리: 세이브·시드와 완전 무관(별도 AsyncStorage 키). 공지(차단성)와 달리 읽을거리라 오프라인에서도 보여준다.
 import { useEffect, useMemo, useState } from 'react';
@@ -50,17 +50,6 @@ export function fmtDevnoteDate(iso: string | null): string {
   if (isNaN(d.getTime())) return '';
   const p = (n: number) => String(n).padStart(2, '0');
   return `${d.getFullYear()}.${p(d.getMonth() + 1)}.${p(d.getDate())}`;
-}
-
-// 마크다운 → 미리보기 평문(1~2줄). 서식 기호 제거만(렌더 아님).
-export function devnotePreview(body: string): string {
-  return body
-    .replace(/\r\n/g, '\n')
-    .split('\n')
-    .map((l) => l.replace(/^#{1,3}\s+/, '').replace(/^[-*]\s+/, '').replace(/\*\*([^*]+)\*\*/g, '$1').replace(/`([^`]+)`/g, '$1').replace(/\[([^\]]+)\]\([^)]+\)/g, '$1').trim())
-    .filter((l) => l.length > 0)
-    .join(' ')
-    .slice(0, 120);
 }
 
 const TABS: { kind: DevnoteKind; label: string }[] = [
@@ -149,7 +138,6 @@ export default function Devnotes() {
                   <Text style={[styles.title, !unread && { color: theme.mutedBright }]} numberOfLines={2}>{d.title}</Text>
                 </View>
                 {fmtDevnoteDate(d.publishedAt) ? <Text style={styles.date}>{fmtDevnoteDate(d.publishedAt)}</Text> : null}
-                <Text style={styles.preview} numberOfLines={2}>{devnotePreview(d.body)}</Text>
               </Card>
             );
           })}
@@ -172,5 +160,4 @@ const styles = themedStyles(() => StyleSheet.create({
   verTxt: { color: theme.sky, fontSize: 11, fontWeight: '800' },
   title: { color: theme.text, fontSize: 16, fontWeight: '800', flex: 1 },
   date: { color: theme.muted, fontSize: 12, marginTop: 2 },
-  preview: { color: theme.muted, fontSize: 13.5, lineHeight: 20, marginTop: 2 },
 }));

@@ -25,6 +25,7 @@ process.env.ADMIN_TOKEN = 'test-admin-token-abcdef0123456789'; // ≥16자(fail-
   const patch = (body: unknown, auth: string | null = TOKEN) => annRoute.PATCH(new Request('http://x/api/admin/announcement', { method: 'PATCH', headers: hdr(auth), body: JSON.stringify(body) }));
   const del = (id: string, auth: string | null = TOKEN) => annRoute.DELETE(new Request(`http://x/api/admin/announcement?id=${encodeURIComponent(id)}`, { method: 'DELETE', headers: hdr(auth) }));
   const bootIds = async () => { const r = await (await bootstrap.GET()).json(); return new Set<string>((r.announcements ?? []).map((a: { id: string }) => a.id)); };
+  const bootAnns = async () => { const r = await (await bootstrap.GET()).json(); return (r.announcements ?? []) as { id: string; startsAt?: string | null }[]; };
   const bootOrder = async () => { const r = await (await bootstrap.GET()).json(); return ((r.announcements ?? []) as { id: string }[]).map((a) => a.id); };
   const create = async (body: Record<string, unknown>) => (await post(body)).json();
 
@@ -35,6 +36,11 @@ process.env.ADMIN_TOKEN = 'test-admin-token-abcdef0123456789'; // ≥16자(fail-
     const r1 = await create({ title: PFX + 'active', body: '본문', pinned: false });
     ok(r1.ok === true && typeof r1.id === 'string', '① 발행(POST) → ok+id');
     ok((await bootIds()).has(r1.id), '① 활성 공지가 bootstrap에 노출');
+    // startsAt 노출(재열람 목록 "등록일" 표시용, 2026-07-17) — 파싱 가능한 timestamptz 문자열이어야 함.
+    const a1 = (await bootAnns()).find((a) => a.id === r1.id);
+    ok(!!a1 && typeof a1.startsAt === 'string' && !isNaN(new Date(a1.startsAt).getTime()), `① bootstrap 공지에 startsAt(등록일) 포함·파싱 가능 [got=${a1?.startsAt}]`);
+    // A/B 자가검증: startsAt 필드가 실제 매핑돼야만 통과 — 필드 제거/오타 시 위 줄이 FAIL(허위통과 아님).
+    ok((await bootAnns()).every((a) => 'startsAt' in a), '①-AB 모든 활성 공지 응답에 startsAt 키 존재(매핑 누락 검출)');
 
     console.log('── ② endsAt 과거(만료) → 미노출 + A/B 자가검증 ──');
     const past = new Date(Date.now() - 86_400_000).toISOString();

@@ -190,6 +190,7 @@ export default function RootLayout() {
         <Stack.Screen name="guide" options={{ title: '게임 가이드' }} />
         <Stack.Screen name="support" options={{ title: '문의하기' }} />
         <Stack.Screen name="announcements" options={{ title: '공지사항' }} />
+        <Stack.Screen name="announcements/[id]" options={{ title: '공지사항' }} />
         <Stack.Screen name="devnotes" options={{ title: '개발자 노트' }} />
         <Stack.Screen name="devnotes/[id]" options={{ title: '개발자 노트' }} />
         <Stack.Screen name="coupon" options={{ title: '쿠폰 입력' }} />

@@ -37,7 +37,8 @@ export async function GET() {
         androidUrl: s?.androidStoreUrl ?? null,
         iosUrl: s?.iosStoreUrl ?? null,
       },
-      announcements: anns.map((a) => ({ id: a.id, title: a.title, body: a.body, pinned: a.pinned })),
+      // startsAt = 노출 시작일(=유저에게 게시된 시점) → 재열람 목록의 "등록일" 표시(app/announcements). additive, 기존 클라 무해.
+      announcements: anns.map((a) => ({ id: a.id, title: a.title, body: a.body, pinned: a.pinned, startsAt: a.startsAt })),
     });
   } catch (e) { reportError(e, 'bootstrap');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
