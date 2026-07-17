@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.son0925.volleyball",
-      "versionCode": 14,
+      "versionCode": 15,
       "backgroundColor": "#0B1018",
       "allowBackup": false,
       "adaptiveIcon": {
@@ -66,7 +66,10 @@
     "owner": "shs00925",
     "runtimeVersion": "1.1.0",
     "updates": {
-      "url": "https://u.expo.dev/09515027-a8b3-4ace-902b-ee759e446c63"
+      "url": "https://u.expo.dev/09515027-a8b3-4ace-902b-ee759e446c63",
+      "requestHeaders": {
+        "expo-channel-name": "production"
+      }
     }
   }
 }
