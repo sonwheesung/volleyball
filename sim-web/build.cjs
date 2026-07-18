@@ -24,7 +24,9 @@ const opts = {
     'react-native-url-polyfill/auto': path.join(stubs, 'empty.ts'),
   },
   tsconfig: path.join(root, 'tsconfig.json'),
-  define: { __DEV__: 'false' },
+  // process.env: 엔진 가드 훅(예: rally.ts DV_LIBDEF)이 process.env를 읽음 — 브라우저엔 process가 없어
+  // ReferenceError로 번들 초기화가 죽는다(2026-07-18 실측: board-lab 팀 목록 공백). 빈 객체로 define해 무력화.
+  define: { __DEV__: 'false', 'process.env': '{}' },
   logLevel: 'info',
 };
 
