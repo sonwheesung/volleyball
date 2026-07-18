@@ -6,6 +6,7 @@ import type { buildLineup } from '../engine/lineup';
 import {
   BLOCK_READY_Y_HOME, BUNCH_X_HOME, PERIM_WING_X, PERIM_WING_Y_HOME, PERIM_CENTER_Y_HOME, PERIM_SHADE, PERIM_WING_SHADE,
   COVER_NEAR_Y_HOME, COVER_DEEP_Y_HOME, COVER_LINE_DX, COVER_INSIDE_DX, COVER_DEEP_DX,
+  COVER_SECOND_Y_HOME, COVER_SECOND_DX, COVER_NEAR1_DX,
 } from './formationParams';
 
 export type Lineup = ReturnType<typeof buildLineup>;
@@ -171,7 +172,10 @@ export function blockerWall(side: Side, attackX: number, count: number, W: numbe
  *  라인 쪽 근접은 사이드라인 방향으로 넓게(+COVER_LINE_DX), 안쪽 근접은 중앙 방향 좁게(−COVER_INSIDE_DX),
  *  후방은 정후방 아니라 중앙 쪽 살짝(−COVER_DEEP_DX). 방향은 attackX가 코트 어느 쪽이든 대칭 일반화.
  *  백어택(타점=3m 라인): 리바운드가 히터 앞(네트 쪽)에 떨어짐 → 측면 커버 앞(0.62), 깊은 커버 뒤(0.78) **무변경**
- *  (낙하 구역이 히터 앞이라 전면 절대계수와 기하가 달라 전용 값 유지 — R4 형제 판단, 보고 명시). */
+ *  (낙하 구역이 히터 앞이라 전면 절대계수와 기하가 달라 전용 값 유지 — R4 형제 판단, 보고 명시).
+ *  **n=2 층 규칙(2026-07-18 R5, #131)**: 전면 n=2는 둘 다 근접에 넣으면 커버+세터+전위가 한 밴드에 몰려 "전위 6명"(전술
+ *  비현실). → 근접 1(y=NEAR, 안쪽) + **2선 1(y=COVER_SECOND_Y≈0.71, 라인 쪽 — 백어택/파이프 준비 겸)** 로 층 분리.
+ *  반환 순서 [근접, 2선] — 어느 선수를 어디에 둘지(리베로=근접·후위공격수=2선) 배정은 호출부(courtPath). n=1·n=3·백어택은 무변경. */
 export function coverSpots(side: Side, attackX: number, n: number, W: number, H: number, backAtk = false): Px[] {
   const yNearF = backAtk ? 0.62 : COVER_NEAR_Y_HOME;
   const yDeepF = backAtk ? 0.78 : COVER_DEEP_Y_HOME;
@@ -179,17 +183,23 @@ export function coverSpots(side: Side, attackX: number, n: number, W: number, H:
   const yDeep = (side === 'home' ? yDeepF : 1 - yDeepF) * H;
   const cx = (dx: number) => clampN(attackX + dx, 24, W - 24);
   if (n <= 1) return [{ x: cx(0), y: yNear }];
-  // 백어택: 낙하 구역 기하가 달라 기존 대칭 유지(전면 절대계수 미적용 — 형제 판단).
+  // 백어택: 낙하 구역 기하가 달라 기존 대칭 유지(전면 절대계수·2선층 미적용 — 형제 판단, 보고 명시).
   if (backAtk) {
     if (n === 2) return [{ x: cx(-30), y: yNear }, { x: cx(30), y: yNear }];
     return [{ x: cx(-34), y: yNear }, { x: cx(34), y: yNear }, { x: cx(0), y: yDeep }];
   }
-  // 전면 공격: 라인/안쪽 비대칭(히터 쪽 사이드라인=라인 넓게, 코트 중앙=안쪽 좁게). 반환 [좌슬롯, 우슬롯, 후방].
+  // 전면 공격: 라인/안쪽 비대칭(히터 쪽 사이드라인=라인 넓게, 코트 중앙=안쪽 좁게).
   const lineDir = attackX >= 0.5 * W ? 1 : -1;                          // 히터 쪽 사이드라인 방향(+우 / −좌)
+  if (n === 2) {
+    // R5 층: [근접(안쪽·y NEAR), 2선(라인 쪽·y SECOND ≈3m)]. 배정(리베로/후위공격수)은 호출부.
+    const nearX = cx(-lineDir * COVER_NEAR1_DX * W);                    // 근접=중앙(안쪽) 방향
+    const secondX = cx(lineDir * COVER_SECOND_DX * W);                  // 2선=사이드라인(라인) 방향
+    const ySecond = (side === 'home' ? COVER_SECOND_Y_HOME : 1 - COVER_SECOND_Y_HOME) * H;
+    return [{ x: nearX, y: yNear }, { x: secondX, y: ySecond }];
+  }
   const leftDx = (lineDir > 0 ? -COVER_INSIDE_DX : -COVER_LINE_DX) * W; // 우측공격: 좌=안쪽 / 좌측공격: 좌=라인
   const rightDx = (lineDir > 0 ? COVER_LINE_DX : COVER_INSIDE_DX) * W;  // 우측공격: 우=라인 / 좌측공격: 우=안쪽
-  const deepDx = -lineDir * COVER_DEEP_DX * W;                          // 후방=코트 중앙 쪽으로 살짝
-  if (n === 2) return [{ x: cx(leftDx), y: yNear }, { x: cx(rightDx), y: yNear }];
+  const deepDx = -lineDir * COVER_DEEP_DX * W;                          // 후방=코트 중앙 쪽으로 살짝. 반환 [좌슬롯, 우슬롯, 후방].
   return [{ x: cx(leftDx), y: yNear }, { x: cx(rightDx), y: yNear }, { x: cx(deepDx), y: yDeep }];
 }
 

@@ -114,7 +114,7 @@ function withBounce(wp: WP[], W: number, H: number): WP[] {
 }
 
 /** 한 랠리의 공 이동 경로 — 스위칭(전문 포지션) 기반. prevLast: 직전 낙구점(공 순간이동 방지) */
-export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[], coverSink?: { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number; libero?: number; liberoWasFirst?: boolean }[]): WP[] {
+export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[], coverSink?: { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number; libero?: number; liberoWasFirst?: boolean; second?: number; deep?: number }[]): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
   const rotOf = (s: Side) => (s === 'home' ? r.homeRot : r.awayRot);
@@ -517,19 +517,46 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
         .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
         .sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
     }
-    // 근접 슬롯 점유자(y=0.62H) — 길이 3이면 깊은 슬롯(coverCand[1]) 제외, 그 외는 전원 근접(측정용).
-    const nearMembers = coverCand.length === 3 ? [coverCand[0], coverCand[2]] : [...coverCand];
+    // R5(#131): 커버 슬롯 배정 — 후위 공격수(OH/OP)를 2선/후방(파이프·백어택 위협 서사), 리베로를 근접(수비 전문).
+    //  rng 미소비·결정론(정렬=슬롯 x·|x−ahx|·존/포지션). 좌표는 coverSpots, 슬롯↔선수 매핑만 여기.
+    const attBack = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z));
+    const isBackAtkCover = (i: number) => attBack.includes(i) && (lu.six[i].position === 'OH' || lu.six[i].position === 'OP');
+    const cSpots = coverSpots(att, ahx, coverCand.length, W, H, atk === 'back');
+    let coverMovers: Mover[];
+    let nearMembers: number[];
+    let secondPick: number | undefined;
+    let deepPick: number | undefined;
+    if (coverCand.length === 3) {
+      // 후방 슬롯(cSpots[2]) = 후위 공격수 우선(파이프 위협). 없으면 비리베로 우선(리베로는 근접 유지 — 수비 전문).
+      //  둘 다 없으면 coverCand[1](중앙). 백어택은 기존대로 coverCand[1]=깊은 후위 유지(룰 68 정합). 정렬=|x−ahx| 근접(중앙성).
+      const byCenter = (a: number, b: number) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx);
+      const deepCands = atk === 'back' ? [] : coverCand.filter(isBackAtkCover);
+      const nonLib = atk === 'back' ? [] : coverCand.filter((i) => i !== attLibIdx);
+      deepPick = deepCands.length ? deepCands.slice().sort(byCenter)[0]
+        : nonLib.length ? nonLib.slice().sort(byCenter)[0]
+        : coverCand[1];
+      const nearTwo = coverCand.filter((i) => i !== deepPick).sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
+      coverMovers = [
+        { side: att, idx: nearTwo[0], ...cSpots[0] },
+        { side: att, idx: nearTwo[1], ...cSpots[1] },
+        { side: att, idx: deepPick, ...cSpots[2] },
+      ];
+      nearMembers = nearTwo;
+    } else if (coverCand.length === 2 && atk !== 'back') {
+      // R5 층: 근접(cSpots[0])=리베로 우선(수비 전문), 2선(cSpots[1])=후위 공격수 우선(백어택/파이프 준비).
+      const nearScore = (i: number) => (i === attLibIdx ? 2 : isBackAtkCover(i) ? 0 : 1); // 리베로>일반>후위공격수
+      const [c0, c1] = coverCand;
+      const nearIdx = nearScore(c0) >= nearScore(c1) ? c0 : c1; // 동점=coverCand 좌→우 첫째(결정론)
+      secondPick = nearIdx === c0 ? c1 : c0;
+      coverMovers = [{ side: att, idx: nearIdx, ...cSpots[0] }, { side: att, idx: secondPick, ...cSpots[1] }];
+      nearMembers = [nearIdx];
+    } else {
+      coverMovers = coverCand.map((i, k) => ({ side: att, idx: i, ...cSpots[k] }));
+      nearMembers = [...coverCand];
+    }
     coverSink?.push({ atk, atkIdx, front: attFront, cover: coverCand, near: nearMembers,
       pool: coverPool.map((i) => ({ i, x: sw[att].pos[i].x })), ahx,
-      libero: attLibIdx, liberoWasFirst: firstTouch === attLibIdx }); // 측정(룰 62·68 + 구로직 A/B + R3 리베로 방치)
-    const cSpots = coverSpots(att, ahx, coverCand.length, W, H, atk === 'back');
-    const coverMovers: Mover[] = coverCand.length === 3
-      ? [
-          { side: att, idx: coverCand[0], ...cSpots[0] },
-          { side: att, idx: coverCand[2], ...cSpots[1] },
-          { side: att, idx: coverCand[1], ...cSpots[2] },
-        ]
-      : coverCand.map((i, k) => ({ side: att, idx: i, ...cSpots[k] }));
+      libero: attLibIdx, liberoWasFirst: firstTouch === attLibIdx, second: secondPick, deep: deepPick }); // 측정(룰 62·68 + R3 리베로 + R5 층)
     // 커버 슬롯이 토스 지점과 우연히 포개지면(타점≈토스 지점) 토서에서 24px 밖으로 — 토서 점유 금지
     for (const mv of coverMovers) {
       const cdx = mv.x - passSpot.x, cdy = mv.y - passSpot.y;

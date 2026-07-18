@@ -45,3 +45,11 @@ export const COVER_DEEP_Y_HOME = 0.63;   // 후방 1슬롯 깊이(홈 프랙션 
 export const COVER_LINE_DX = 0.114;      // 라인 쪽 근접 = attackX + 사이드라인 방향 이만큼(W 분수). 실측 0.914−0.800.
 export const COVER_INSIDE_DX = 0.124;    // 안쪽 근접 = attackX − 중앙 방향 이만큼(W 분수). 실측 0.800−0.676.
 export const COVER_DEEP_DX = 0.071;      // 후방 = attackX 중앙 쪽 이만큼(정후방 아님, W 분수). 실측 0.800−0.729.
+
+// ── 커버 2인 시 층(근접1+2선1) — 태스크 #131 R5 ──
+// R4의 형제 부작용 교정: n=2 분기가 둘 다 근접(y0.56)이라 커버+세터+전위가 네트 밴드에 몰림(전위 6명 — 전술 비현실).
+// 커버는 인원 무관 **층(근접+2선)** 유지 — 근접 1(리베로 우선·수비 전문), 2선 1(후위 공격수 우선 = 백어택/파이프 준비 겸).
+// 근거: R5 사용자 board-lab 실측(홈 open x0.200): 차니 후위OH 2선[0.104,0.710]·현한정L 근접[0.304,0.572]. 배정은 호출부(courtPath).
+export const COVER_SECOND_Y_HOME = 0.71;  // 2선 슬롯 깊이(홈 프랙션 — 3m 뒤, 백어택 발사 라인 겸). 실측 차니 0.710.
+export const COVER_SECOND_DX = 0.096;     // 2선 x = attackX + 라인(사이드라인) 방향 이만큼(W 분수). 실측 0.200−0.104.
+export const COVER_NEAR1_DX = 0.104;      // n=2 단독 근접 x = attackX + 안쪽(중앙) 방향 이만큼(W 분수). 실측 0.304−0.200.
