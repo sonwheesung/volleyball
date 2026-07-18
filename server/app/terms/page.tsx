@@ -1,7 +1,7 @@
 // 운영·환불 정책(공개 정적 페이지 · 인증 없음 공개 GET). 스토어 심사·앱 링크 URL(/terms).
 // 정합 기준: 앱 내 정본 data/legalText.ts(약관 제5·9·12조·운영정책)  + 종료 정책 MONETIZATION_SYSTEM §14.2
 //   + 환불 산정 규칙 docs/SHUTDOWN_POLICY.md(무상 우선 소진). 이 페이지는 이용자 대면 요약(경량 약관 성격).
-// ⚠ 출시 전 사용자 기입: {사업자 상호}. 문의 이메일은 확정값(bjpio113@gmail.com).
+// 사업자 기입 완료(2026-07-18, 사업자등록증·통신판매업신고증 대조): 판매자 정보 블록(상호·대표자·사업자등록번호·통신판매업 신고번호·소재지).
 
 export const metadata = {
   title: '배구명가 — 운영·환불 정책',
@@ -95,6 +95,18 @@ export default function Terms() {
         <p style={muted}>
           연락처: <strong>{SUPPORT_EMAIL}</strong>
         </p>
+      </section>
+
+      <section style={card}>
+        <h2 style={h2}>5. 판매자 정보</h2>
+        <ul style={li}>
+          <li>상호: <strong>휘성게임즈</strong></li>
+          <li>대표자: 손휘성</li>
+          <li>사업자등록번호: 749-25-02260</li>
+          <li>통신판매업 신고번호: 제2026-울산중구-0170호</li>
+          <li>사업장 소재지: 울산광역시 중구 성안5길 22, 2층 204호(성안동)</li>
+          <li>연락처: <strong>{SUPPORT_EMAIL}</strong> (또는 앱 내 &quot;문의하기&quot;)</li>
+        </ul>
       </section>
 
       <p style={{ ...muted, marginTop: 24, fontSize: 13 }}>
