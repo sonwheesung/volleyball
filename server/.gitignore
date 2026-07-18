@@ -13,3 +13,6 @@ next-env.d.ts
 
 # DB 로컬 볼륨
 pgdata/
+
+.vercel
+.env*

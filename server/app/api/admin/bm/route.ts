@@ -3,7 +3,7 @@
 //   ※ ARPU/ARPPU/상품별 매출액(KRW)은 RevenueCat 연동(#43) 후 [외부-sync] — 여기 없음(ANALYTICS_PLAN §6.2 ⑤). KRW 매출은 statsDaily(=0)·series metric=revenue.
 //   결정론 격리(§8): 순수 메타 집계 — 시드/리플레이 무관.
 import { NextResponse } from 'next/server';
-import { and, eq, gte, isNull, count } from 'drizzle-orm';
+import { and, eq, gte, isNull, notLike, or, count } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { users, walletLedger } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
@@ -24,9 +24,11 @@ export async function GET(req: Request) {
     const from = new Date(Date.now() - winDays * 86400000);
 
     // 상품별 다이아 지급(reason='purchase', ref=productId) — 건수·다이아 합·고유 결제자
+    // §13.18 D1 — 샌드박스 집계 제외(웹훅·크론·관리자 3경로 대칭): 샌드박스 지급(ref='<productId>:sandbox')은 실매출 아님 →
+    //   상품별 건수/다이아·고유 결제자에서 제외(안 하면 유령 상품 'dia_500:sandbox' 행으로 그룹핑되고 전환율 payer가 부풀음).
     const rows = await db.select({ ref: walletLedger.ref, delta: walletLedger.delta, userId: walletLedger.userId, createdAt: walletLedger.createdAt })
       .from(walletLedger)
-      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'purchase'), gte(walletLedger.createdAt, from)));
+      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'purchase'), or(isNull(walletLedger.ref), notLike(walletLedger.ref, '%:sandbox')), gte(walletLedger.createdAt, from)));
     const byRef = new Map<string, { grants: number; diamonds: number; payers: Set<string> }>();
     const allPayers = new Set<string>();
     for (const r of rows) {
@@ -39,8 +41,9 @@ export async function GET(req: Request) {
       .sort((a, b) => b.grants - a.grants);
 
     // 결제전환(윈도우 무관 전체) — 고유 결제자 / 총가입(비삭제)
+    // §13.18 D1 — 샌드박스 집계 제외(웹훅·크론·관리자 3경로 대칭): 샌드박스 결제자는 실 결제자 아님 → 전환율 분자에서 제외.
     const payerAll = await db.selectDistinct({ u: walletLedger.userId }).from(walletLedger)
-      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'purchase')));
+      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'purchase'), or(isNull(walletLedger.ref), notLike(walletLedger.ref, '%:sandbox'))));
     const [tot] = await db.select({ n: count() }).from(users).where(and(eq(users.projCode, PROJ_CODE), isNull(users.deletedAt)));
     const totalUsers = tot?.n ?? 0;
     const payers = payerAll.length;

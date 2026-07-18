@@ -65,8 +65,8 @@ process.env.RC_REST_API_KEY = 'test-rc-key-abcdef0123456789'; // confirm 폴백 
   const bal = async () => { const rows = await db.select({ d: walletLedger.delta }).from(walletLedger).where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, uid!))); return rows.reduce((a, r) => a + r.d, 0); };
   // 잔액 by txn(A1 이중지급 검사용) — 특정 storeTxnId 관련 원장 합(purchase 키 ref는 productId라 txn은 idempotencyKey로 매칭).
   const TODAY = new Date().toISOString().slice(0, 10);
-  const readStats = async () => { const r = await db.select({ rev: statsDaily.revenueKrw, cnt: statsDaily.purchaseCount, dia: statsDaily.diamondsPurchased }).from(statsDaily).where(and(eq(statsDaily.projCode, PROJ_CODE), eq(statsDaily.day, TODAY))); return r.length ? r[0] : { rev: 0, cnt: 0, dia: 0 }; };
-  const statsSnap = await readStats(); // 스냅샷 — 이 가드가 stats_daily에 더한 매출/건수/다이아를 정리 때 원복(공유 DB 오염 방지)
+  const readStats = async () => { const r = await db.select({ rev: statsDaily.revenueKrw, cnt: statsDaily.purchaseCount, dia: statsDaily.diamondsPurchased, nu: statsDaily.newUsers }).from(statsDaily).where(and(eq(statsDaily.projCode, PROJ_CODE), eq(statsDaily.day, TODAY))); return r.length ? r[0] : { rev: 0, cnt: 0, dia: 0, nu: 0 }; };
+  const statsSnap = await readStats(); // 스냅샷 — 이 가드가 stats_daily에 더한 매출/건수/다이아/신규가입(S1-e rollupRecent가 덮음)을 정리 때 원복(공유 DB 오염 방지)
   // purchase_event 감사행 존재 폴링 — logPaymentEventAfter는 fire-and-forget(afterSafe→void task)이라 insert 완료를 폴로 기다림.
   const waitEvent = async (txn: string, stage: string): Promise<boolean> => {
     for (let i = 0; i < 40; i++) {
@@ -180,6 +180,44 @@ process.env.RC_REST_API_KEY = 'test-rc-key-abcdef0123456789'; // confirm 폴백 
   restoreFetch();
   delete process.env.RC_SANDBOX_GRANT; // 이후 섹션(B1·A1·부채)은 스위치 off로 — 최종 상태 보장
 
+  console.log('── S1-e: 크론 롤업 경로 샌드박스 제외(다중 라이터 대칭 §13.18 D1 정정 2026-07-18) ──');
+  // statsDaily는 두 라이터가 같은 행을 쓴다: (1)이벤트 시 증분 recordPurchaseRevenue, (2)매일 크론 rollupRecent 재집계.
+  // D1(2026-07-17)은 (1)만 샌드박스 제외했고 (2)가 :sandbox ref 무관하게 재집계해 **덮어써** 필터를 무효화했음(prod 실측 count=6·dia=19100).
+  // 검증: 실 원장행 + 샌드박스 원장행을 넣고 rollupRecent가 **실 건만** 집계하는지(크론 경로 대칭 제외).
+  const { rollupRecent } = await import('../lib/retention');
+  const ROLLUP_REAL_KEY = `purchase:${uid}:_ROLLUP_REAL`, ROLLUP_SBX_KEY = `purchase:${uid}:_ROLLUP_SBX`;
+  const insLedger = (key: string, ref: string) => db.insert(walletLedger).values({ projCode: PROJ_CODE, userId: uid!, delta: 1000, reason: 'purchase', ref, idempotencyKey: key, balanceAfter: 0 });
+  // 베이스라인 롤업(기존 원장 반영) — 앞 섹션이 남긴 실 purchase 행이 있어 절대값 아닌 **델타**로 검증.
+  await rollupRecent();
+  const rlBase = await readStats();
+  // (1) 샌드박스 행만 삽입 → rollup → 건수·다이아 무증가여야(크론 재집계도 :sandbox 대칭 제외).
+  await insLedger(ROLLUP_SBX_KEY, 'dia_1000:sandbox');
+  await rollupRecent();
+  const rlSbx = await readStats();
+  ok(rlSbx.cnt - rlBase.cnt === 0 && rlSbx.dia - rlBase.dia === 0, `S1-e(1) 샌드박스 원장행 후 rollup → Δ건수 0·Δ다이아 0(크론 재집계도 :sandbox 제외) — 실측 Δcnt ${rlSbx.cnt - rlBase.cnt}·Δdia ${rlSbx.dia - rlBase.dia}`);
+  // (2) 실 결제 행 추가 → rollup → 정확히 +1건·+1000(실 건만 반영).
+  await insLedger(ROLLUP_REAL_KEY, 'dia_1000');
+  await rollupRecent();
+  const rlReal = await readStats();
+  ok(rlReal.cnt - rlBase.cnt === 1 && rlReal.dia - rlBase.dia === 1000, `S1-e(2) 실 원장행 추가 후 rollup → Δ건수 1·Δ다이아 1000(샌드박스 격리, 실 건만) — 실측 Δcnt ${rlReal.cnt - rlBase.cnt}·Δdia ${rlReal.dia - rlBase.dia}`);
+  // A/B: 같은 2행을 구 롤업 쿼리(제외 없음) vs 신 롤업 쿼리(:sandbox 제외)로 집계 — 프로덕션 코드 무변, 가드 안에서 별도 실행(뮤턴트 박제 금지).
+  const abOldRows = (await db.execute(sql`
+    SELECT count(*)::int AS cnt, coalesce(sum(delta), 0)::int AS dia
+    FROM wallet_ledger
+    WHERE proj_code = ${PROJ_CODE} AND reason = 'purchase'
+      AND idempotency_key IN (${ROLLUP_REAL_KEY}, ${ROLLUP_SBX_KEY})`)) as unknown as Array<{ cnt: number; dia: number }>;
+  const abNewRows = (await db.execute(sql`
+    SELECT count(*)::int AS cnt, coalesce(sum(delta), 0)::int AS dia
+    FROM wallet_ledger
+    WHERE proj_code = ${PROJ_CODE} AND reason = 'purchase'
+      AND (ref IS NULL OR ref NOT LIKE '%:sandbox')
+      AND idempotency_key IN (${ROLLUP_REAL_KEY}, ${ROLLUP_SBX_KEY})`)) as unknown as Array<{ cnt: number; dia: number }>;
+  const abOld = abOldRows[0], abNew = abNewRows[0];
+  ok(abOld.cnt === 2 && abOld.dia === 2000, `  [A/B] 구 롤업 쿼리(제외 없음) → 같은 2행 count=2·dia=2000(샌드박스 오염 = 덮어쓰기로 D1 필터 무효화 재현) — 실측 ${abOld.cnt}·${abOld.dia}`);
+  ok(abNew.cnt === 1 && abNew.dia === 1000, `  [A/B] 신 롤업 쿼리(:sandbox 제외) → 같은 2행 count=1·dia=1000(민감도 증명) — 실측 ${abNew.cnt}·${abNew.dia}`);
+  // 정리: 삽입 2행 선삭제(최종 cleanup의 uid 전체 삭제 전, statsDaily 스냅 원복 정확성 확보 — newUsers 포함 원복은 최종 cleanup).
+  await db.delete(walletLedger).where(and(eq(walletLedger.projCode, PROJ_CODE), sql`${walletLedger.idempotencyKey} in (${ROLLUP_REAL_KEY}, ${ROLLUP_SBX_KEY})`));
+
   console.log('── B1: 익명 환불 웹훅 조용한 유실 방지(관측 있는 무시 §13.18) ──');
   const ANON_TXN = '_TEST_TXN_ANONREF';
   const balBeforeAnon = await bal();
@@ -242,10 +280,10 @@ process.env.RC_REST_API_KEY = 'test-rc-key-abcdef0123456789'; // confirm 폴백 
   // 정리 — 테스트 원장·유저·감사행 삭제 + stats_daily 스냅샷 원복(공유 DB 오염 방지).
   await db.delete(walletLedger).where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, uid!)));
   await db.delete(purchaseEvent).where(and(eq(purchaseEvent.projCode, PROJ_CODE), sql`${purchaseEvent.storeTxnId} like '_TEST\\_%'`));
-  await db.update(statsDaily).set({ revenueKrw: statsSnap.rev, purchaseCount: statsSnap.cnt, diamondsPurchased: statsSnap.dia }).where(and(eq(statsDaily.projCode, PROJ_CODE), eq(statsDaily.day, TODAY)));
+  await db.update(statsDaily).set({ revenueKrw: statsSnap.rev, purchaseCount: statsSnap.cnt, diamondsPurchased: statsSnap.dia, newUsers: statsSnap.nu }).where(and(eq(statsDaily.projCode, PROJ_CODE), eq(statsDaily.day, TODAY)));
   await db.delete(users).where(eq(users.id, uid!));
   console.log('  ✓ 정리 완료(테스트 유저·원장·감사행 삭제 + stats_daily 원복)');
 
-  console.log(fail === 0 ? '\n✅ 결제 검증 머니패스 — 인증·샌드박스(웹훅+confirm 대칭)·매핑·멱등·환불·익명환불 관측·KRW 보충 전부 통과' : `\n❌ ${fail} FAIL`);
+  console.log(fail === 0 ? '\n✅ 결제 검증 머니패스 — 인증·샌드박스(웹훅+confirm+크론롤업 3경로 대칭)·매핑·멱등·환불·익명환불 관측·KRW 보충 전부 통과' : `\n❌ ${fail} FAIL`);
   process.exit(fail === 0 ? 0 : 1);
 })().catch((e) => { console.error('CRASH', e); process.exit(1); });

@@ -18,12 +18,16 @@ export const RETENTION_DAYS = {
 export async function rollupRecent(): Promise<number> {
   // TODO(#43): 실 결제환불 웹훅 붙으면 reason='refund'를 순매출에서 차감해야 함(현재는 다이아 회수라 매출 무관 — 과대계상 주의).
   // 결제 원장 일별 집계(현재: 다이아 지급 카운트/합. KRW 매출은 Purchase 테이블 #43 연결 시 채움)
+  // §13.18 D1 — 샌드박스 집계 제외(웹훅·크론·관리자 3경로 대칭): statsDaily의 두 라이터(이벤트 시 증분 recordPurchaseRevenue +
+  //   여기 크론 재집계)가 같은 행을 쓰므로, 웹훅이 제외한 샌드박스 지급(ref='<productId>:sandbox')을 이 재집계도 대칭 제외해야
+  //   덮어쓰기로 필터가 무효화되지 않는다. reason='purchase' 행의 ref는 실제로 non-null이나 NULL-안전하게 처리.
   const pRows = (await db.execute(sql`
     SELECT (created_at AT TIME ZONE 'UTC')::date::text AS day,
            count(*)::int AS purchase_count,
            coalesce(sum(delta), 0)::int AS diamonds_purchased
     FROM wallet_ledger
     WHERE proj_code = ${PROJ_CODE} AND reason = 'purchase'
+      AND (ref IS NULL OR ref NOT LIKE '%:sandbox')
       AND created_at >= now() - make_interval(days => 2)
     GROUP BY 1`)) as unknown as Array<{ day: string; purchase_count: number; diamonds_purchased: number }>;
   const uRows = (await db.execute(sql`

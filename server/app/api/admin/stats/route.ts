@@ -4,7 +4,7 @@
 //   ※ 업적 달성율은 클라이언트 계산(결정론 격리 — 서버 미보유). 별도 텔레메트리 필요.
 //   ※ 유저/원장을 fetch해 JS 버킷팅 — 대규모 시 SQL group by로 전환(TODO). 관리자 전용·저빈도라 허용.
 import { NextResponse } from 'next/server';
-import { and, eq, isNull, isNotNull, gte, count } from 'drizzle-orm';
+import { and, eq, isNull, isNotNull, notLike, or, gte, count } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { users, statsDaily, walletLedger, purchaseEvent } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
@@ -65,8 +65,9 @@ export async function GET(req: Request) {
     for (const r of adRows) { const i = idx.get(YMD(new Date(r.c))); if (i !== undefined) adSeries[i]++; if (r.c.getTime() >= dayStart.getTime()) { adToday++; adUsersToday.add(r.u); } }
 
     // 결제 전환율(원장 reason='purchase' 고유 결제자 / 총가입) — 결제 #43 전엔 0
+    // §13.18 D1 — 샌드박스 집계 제외(웹훅·크론·관리자 3경로 대칭): 샌드박스 결제자(ref='<productId>:sandbox')는 실 결제자 아님 → 분자 제외.
     const payerRows = await db.selectDistinct({ u: walletLedger.userId }).from(walletLedger)
-      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'purchase')));
+      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'purchase'), or(isNull(walletLedger.ref), notLike(walletLedger.ref, '%:sandbox'))));
     const payers = payerRows.length;
     const conversion = totalUsers > 0 ? Math.round((payers / totalUsers) * 1000) / 10 : 0; // %
 
