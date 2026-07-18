@@ -5,6 +5,7 @@ import type { Player, Position, Side } from '../types';
 import type { buildLineup } from '../engine/lineup';
 import {
   BLOCK_READY_Y_HOME, BUNCH_X_HOME, PERIM_WING_X, PERIM_WING_Y_HOME, PERIM_CENTER_Y_HOME, PERIM_SHADE, PERIM_WING_SHADE,
+  COVER_NEAR_Y_HOME, COVER_DEEP_Y_HOME, COVER_LINE_DX, COVER_INSIDE_DX, COVER_DEEP_DX,
 } from './formationParams';
 
 export type Lineup = ReturnType<typeof buildLineup>;
@@ -162,16 +163,34 @@ export function blockerWall(side: Side, attackX: number, count: number, W: numbe
 }
 
 /** 공격 커버 — 블록 리바운드 낙하 구역을 감싸는 반원(가까운 2 측면 + 1 깊은 중앙).
- *  전위 공격(타점=네트): 블록에 막힌 공은 히터 바로 뒤(네트 쪽)에 뚝 떨어진다 → 커버가 히터를 바짝
- *  감싼다(2026-06-18 보정: 0.68/0.78은 ~3m로 너무 깊어 리바운드 구역 뒤였음 → 0.645/0.70로 타이트).
- *  백어택(타점=3m 라인): 리바운드가 히터 앞(네트 쪽)에 떨어짐 → 측면 커버가 앞(0.62), 깊은 커버는 뒤(0.78). */
+ *  전위 공격(타점=네트): 블록에 막힌 공은 히터 바로 뒤(네트 쪽)에 뚝 떨어진다 → 커버가 히터를 바짝 감싼다.
+ *  ~~2026-06-18 보정: 0.68/0.78은 ~3m로 너무 깊어 리바운드 구역 뒤였음 → 0.645/0.70로 타이트.~~
+ *  → **재타이트닝(2026-07-18 R4, #131)**: 0.645/0.70도 여전히 덜 당겨졌음(사용자 board-lab 재반려). **오답 분석**: 6/18은
+ *  "이전보다 안쪽"이란 상대 기준이라 낙하 구역(네트 뒤 ~1.5m) 절대 기준까지 못 갔다. → 실측 절대 계수화(formationParams):
+ *  근접 y 0.645→**COVER_NEAR_Y(0.56)**(전위 존 진입)·후방 y 0.70→**COVER_DEEP_Y(0.63)**(3m 라인). x 비대칭 —
+ *  라인 쪽 근접은 사이드라인 방향으로 넓게(+COVER_LINE_DX), 안쪽 근접은 중앙 방향 좁게(−COVER_INSIDE_DX),
+ *  후방은 정후방 아니라 중앙 쪽 살짝(−COVER_DEEP_DX). 방향은 attackX가 코트 어느 쪽이든 대칭 일반화.
+ *  백어택(타점=3m 라인): 리바운드가 히터 앞(네트 쪽)에 떨어짐 → 측면 커버 앞(0.62), 깊은 커버 뒤(0.78) **무변경**
+ *  (낙하 구역이 히터 앞이라 전면 절대계수와 기하가 달라 전용 값 유지 — R4 형제 판단, 보고 명시). */
 export function coverSpots(side: Side, attackX: number, n: number, W: number, H: number, backAtk = false): Px[] {
-  const yNear = (side === 'home' ? (backAtk ? 0.62 : 0.645) : (backAtk ? 0.38 : 0.355)) * H;
-  const yDeep = (side === 'home' ? (backAtk ? 0.78 : 0.70) : (backAtk ? 0.22 : 0.30)) * H;
+  const yNearF = backAtk ? 0.62 : COVER_NEAR_Y_HOME;
+  const yDeepF = backAtk ? 0.78 : COVER_DEEP_Y_HOME;
+  const yNear = (side === 'home' ? yNearF : 1 - yNearF) * H;
+  const yDeep = (side === 'home' ? yDeepF : 1 - yDeepF) * H;
   const cx = (dx: number) => clampN(attackX + dx, 24, W - 24);
   if (n <= 1) return [{ x: cx(0), y: yNear }];
-  if (n === 2) return [{ x: cx(-30), y: yNear }, { x: cx(30), y: yNear }];
-  return [{ x: cx(-34), y: yNear }, { x: cx(34), y: yNear }, { x: cx(0), y: yDeep }];
+  // 백어택: 낙하 구역 기하가 달라 기존 대칭 유지(전면 절대계수 미적용 — 형제 판단).
+  if (backAtk) {
+    if (n === 2) return [{ x: cx(-30), y: yNear }, { x: cx(30), y: yNear }];
+    return [{ x: cx(-34), y: yNear }, { x: cx(34), y: yNear }, { x: cx(0), y: yDeep }];
+  }
+  // 전면 공격: 라인/안쪽 비대칭(히터 쪽 사이드라인=라인 넓게, 코트 중앙=안쪽 좁게). 반환 [좌슬롯, 우슬롯, 후방].
+  const lineDir = attackX >= 0.5 * W ? 1 : -1;                          // 히터 쪽 사이드라인 방향(+우 / −좌)
+  const leftDx = (lineDir > 0 ? -COVER_INSIDE_DX : -COVER_LINE_DX) * W; // 우측공격: 좌=안쪽 / 좌측공격: 좌=라인
+  const rightDx = (lineDir > 0 ? COVER_LINE_DX : COVER_INSIDE_DX) * W;  // 우측공격: 우=라인 / 좌측공격: 우=안쪽
+  const deepDx = -lineDir * COVER_DEEP_DX * W;                          // 후방=코트 중앙 쪽으로 살짝
+  if (n === 2) return [{ x: cx(leftDx), y: yNear }, { x: cx(rightDx), y: yNear }];
+  return [{ x: cx(leftDx), y: yNear }, { x: cx(rightDx), y: yNear }, { x: cx(deepDx), y: yDeep }];
 }
 
 /** 같은 팀 마커 최소 간격(px) — 마커 지름 30px의 2/3, 어깨 맞댐(블록 벽 22px)은 보존 */
