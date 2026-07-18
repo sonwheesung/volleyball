@@ -3,6 +3,9 @@
 
 import type { Player, Position, Side } from '../types';
 import type { buildLineup } from '../engine/lineup';
+import {
+  BLOCK_READY_Y_HOME, BUNCH_X_HOME, PERIM_WING_X, PERIM_WING_Y_HOME, PERIM_CENTER_Y_HOME, PERIM_SHADE, PERIM_WING_SHADE,
+} from './formationParams';
 
 export type Lineup = ReturnType<typeof buildLineup>;
 export interface Px { x: number; y: number }
@@ -95,6 +98,40 @@ export function switchedSpots(side: Side, lu: Lineup, rot: number, offense: bool
   const setterIdx = lu.six.findIndex((p) => p.position === 'S');
   if (offense && setterIdx >= 0) pos[setterIdx] = { x: (side === 'home' ? 0.63 : 0.37) * W, y: (side === 'home' ? 0.57 : 0.43) * H }; // 공격 시에만 네트 침투
   return { pos, setterIdx, frontHitters: front.filter((i) => i !== setterIdx), backers: back.filter((i) => i !== setterIdx) };
+}
+
+/** 랠리 중 전환 대형(수비팀) — 공이 상대 코트로 넘어간 뒤(시나리오 C, 태스크 #131).
+ *  전위 3인 = **네트 블록 레디 번치**(중앙 모음, serveFormation과 같은 결) → toss에서 blockerWall/팁 풀오프로 분기.
+ *  후위 3인 = **페리미터**(라인딥/크로스딥/리베로 셰이드) — 구석 리셋 제거, 코트를 넓게 덮음.
+ *  anchorXpx = 공 **현재 위치**(px, seg.to.x) 또는 중립(0.5W). **미래 토스 x 미사용**(앵커 인과성, 통과조건 2).
+ *  rng 미소비(jit 시드 해시만) — 렌더=감사 단일 소스, 결정론. 원정은 홈 프랙션에서 계산 후 mx/my 미러. */
+export function defTransition(side: Side, lu: Lineup, rot: number, anchorXpx: number, W: number, H: number): Record<number, Px> {
+  const front = [2, 3, 4].map((z) => lineupIdxAt(rot, z));
+  const back = [1, 5, 6].map((z) => lineupIdxAt(rot, z));
+  const posOf = (i: number) => lu.six[i].position;
+  const mx = (f: number) => (side === 'home' ? f : 1 - f) * W;
+  const my = (f: number) => (side === 'home' ? f : 1 - f) * H;
+  // 앵커(공 현재 위치)를 홈 프랙션으로 환산(mx 역) — 셰이드 계수(PERIM_SHADE/_WING_SHADE)가 0이면 중립 컵(진동 회피).
+  //  계수는 배수: sh = shade × 계수. 현재 스펙 결정 = 중립 컵(계수 0)이라 앵커는 사실상 미참조(미래 토스 x 절대 미사용, 통과조건 2).
+  const anchorF = side === 'home' ? anchorXpx / W : 1 - anchorXpx / W;
+  const shade = clampN(anchorF - 0.5, -0.35, 0.35);
+  const pos: Record<number, Px> = {};
+  // 전위 블록 레디 번치 — 스페셜리스트 레인 순 좌→우 x(BUNCH_X), 깊이 레인 고정(BLOCK_READY_Y). 순서 보존.
+  [...front].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => {
+    const seed = zoneOfIdx(rot, i) * 31 + rot * 7 + 131;
+    pos[i] = { x: mx(BUNCH_X_HOME[k] + jit(seed + 1, 0.01)), y: my(BLOCK_READY_Y_HOME[k] + jit(seed + 2, 0.008)) };
+  });
+  // 후위 페리미터 — 좌윙·중앙(리베로 최심)·우윙. 셰이드 계수 0이면 중립(컵을 공 x로 안 흔듦 → pass↔toss 진동 없음).
+  [...back].sort((a, b) => LANE[posOf(a)] - LANE[posOf(b)]).forEach((i, k) => {
+    const seed = zoneOfIdx(rot, i) * 31 + rot * 7 + 137;
+    const isCenter = k === 1;
+    const baseX = isCenter ? 0.5 : (k === 0 ? PERIM_WING_X : 1 - PERIM_WING_X);
+    const sh = shade * (isCenter ? PERIM_SHADE : PERIM_WING_SHADE); // 계수 0 = 중립 컵
+    const bx = clampN(baseX + sh, 0.1, 0.9);
+    const y = isCenter ? PERIM_CENTER_Y_HOME : PERIM_WING_Y_HOME;
+    pos[i] = { x: mx(bx + jit(seed + 1, 0.01)), y: my(y + jit(seed + 2, 0.01)) };
+  });
+  return pos;
 }
 
 // ─── 랠리 중 동적 위치 (수비 부채꼴 / 블로커 벽 / 공격 커버) ───

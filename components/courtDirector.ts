@@ -6,7 +6,7 @@ import type { Player, Side } from '../types';
 import type { SimResult, SubEvent, TimeoutEvent } from '../engine/simMatch';
 import { isSetOver } from '../engine/match';
 import {
-  lineupIdxAt, zonePx, switchedSpots, receiveFormation, serveFormation, fanSlots, blockerWall, separateTargets,
+  lineupIdxAt, zonePx, switchedSpots, receiveFormation, serveFormation, fanSlots, blockerWall, separateTargets, defTransition,
   type Lineup, type Px,
 } from './courtLayout';
 import type { WP, Move, Lineups } from './courtPath';
@@ -86,19 +86,22 @@ export function segmentTargets(
     const count = seg.to.blk ?? (seg.from.idx === attSetterIdx ? 2 : 3);
     const dRot = dSide === 'home' ? stage.homeRot : stage.awayRot;
     const dLu = dSide === 'home' ? L.home : L.away;
-    const dSw = switchedSpots(dSide, dLu, dRot, false, W, H);
     const front = [2, 3, 4].map((z) => lineupIdxAt(dRot, z));
     const ax = seg.to.x;
+    // 벽 선정·정렬 기준 = **실제 사전 위치(블록 레디 라인)** — 구 switchedSpots 베이스가 아니라 시나리오 C
+    // 전위 번치(defTransition 전위)에서 벽이 형성돼 출발↔도착 좌우 순서 뒤집힘 없음(checkBlockerCross 0%, 통과조건 3).
+    const dReady = defTransition(dSide, dLu, dRot, ax, W, H);
+    const readyX = (i: number) => dReady[i]?.x ?? zonePx(dSide, ((i - dRot) % 6 + 6) % 6 + 1, W, H).x;
     const yOff = (dSide === 'home' ? 0.66 : 0.34) * H;
-    const chosen = front.slice().sort((a, b) => Math.abs(dSw.pos[a].x - ax) - Math.abs(dSw.pos[b].x - ax)).slice(0, count)
-      .sort((a, b) => dSw.pos[a].x - dSw.pos[b].x);
+    const chosen = front.slice().sort((a, b) => Math.abs(readyX(a) - ax) - Math.abs(readyX(b) - ax)).slice(0, count)
+      .sort((a, b) => readyX(a) - readyX(b));
     const wall = blockerWall(dSide, ax, chosen.length, W, H);
     chosen.forEach((bi, k) => { moveMap[`${dSide}-${bi}`] = wall[k]; });
     // 오프블로커(블록 안 뛰는 전위): 네트서 풀오프(yOff≈3m선)하며 **시임/팁 쪽으로 시프트**해 팁·연타를
     // 디그할 위치로 — 페리미터의 약점(가운데 팁 무방비)을 오프블로커 팁 커버로 보강(USAV IMPACT·AoC,
     // 2026-06-20 사용자 보고). 공격 x 쪽으로 0.35 당겨 시임을 덮되, 자기 사이드 각(크로스)도 일부 유지.
     front.filter((i) => !chosen.includes(i)).forEach((ri) => {
-      const baseX = dSw.pos[ri].x;
+      const baseX = readyX(ri); // 블록 레디 번치에서 팁 쪽으로 시프트(구 switchedSpots 베이스 대신)
       const tipX = baseX + (ax - baseX) * 0.35;
       moveMap[`${dSide}-${ri}`] = { x: Math.max(24, Math.min(W - 24, tipX)), y: yOff };
     });
@@ -122,7 +125,9 @@ export function segmentTargets(
     // walk엔 안 함 — 서브 컨택 후에만(컨택 전 릴리즈 = 오버랩 위반, 룰 45). serveWalk는 서브 대형만 켠다.
     // serveToss(서브 전 토스, 룰 67)도 walk처럼 컨택 전 국면 — 서브팀=서브 대형, 받는 팀=리시브 유지,
     //  세터 침투(릴리즈) 없음(컨택 전 오버랩 위반 방지, 룰 45/46). servePhase(컨택)만 세터를 릴리즈한다.
-    const serveWalk = segKind === 'walk' || segKind === 'serveToss';
+    // 형제 ⓐ(멀티볼 지그재그 봉인): return(죽은 공 회수·서버가 베이스라인으로)도 서브 준비 국면 — 서브 팀은 여기서부터
+    //  serveFormation(walk에서 꺾이던 지그재그 제거), 받는 팀은 receiveFormation 유지. serveToss/walk와 같은 결.
+    const serveWalk = segKind === 'walk' || segKind === 'serveToss' || segKind === 'return';
     const servePrep = servePhase || serveWalk;
     const holdReceive = serveWalk ? side !== stage.serving : !inPlay || (servePhase && side !== stage.serving);
     // 서브 팀은 **서브 컨택 순간에만** 오버랩 베이스(serveFormation)를 유지한다(룰 Q 합법성).
@@ -133,11 +138,17 @@ export function segmentTargets(
     const servingDefBase = side === stage.serving && side !== offSide && servePrep;
     // 서브 컨택 순간: 받는 팀=리시브 대형, 서브 팀=오버랩 합법 베이스(상대 리시브까지 유지).
     // 둘 다 로테이션 순서를 지킨다(BOARD_RULES 18). 그 외 인플레이는 스위칭(전문 포지션).
+    // 시나리오 C(#131): 인플레이 non-serve 국면의 **수비팀**(공격 전개 중이 아닌 측)은 switchedSpots 구석
+    //  베이스가 아니라 defTransition(전위 블록 레디 번치 + 후위 페리미터)으로. 앵커=공 현재 위치(seg.to.x, 미래
+    //  토스 x 미사용 — 통과조건 2). toss/spike의 벽·fanSlots는 아래 moveMap이 덮어쓴다(전위 벽·후위 공격x 컵 수렴).
+    const isDefTransition = inPlay && !servePrep && !holdReceive && offSide != null && side !== offSide;
     const posMap = holdReceive
       ? receiveFormation(side, lu, rot, W, H)
       : (servePrep && side === stage.serving) || servingDefBase
         ? serveFormation(side, lu, rot, W, H)
-        : switchedSpots(side, lu, rot, side === offSide, W, H).pos;
+        : isDefTransition
+          ? defTransition(side, lu, rot, seg ? seg.to.x : 0.5 * W, W, H)
+          : switchedSpots(side, lu, rot, side === offSide, W, H).pos;
     // 단, 받는 팀 세터는 서브 컨택과 동시에 침투 출발(실제 배구) — 패스 도착 전에 세팅 자리 도달
     if (servePhase && side !== stage.serving) {
       const sIdx = lu.six.findIndex((p) => p.position === 'S');

@@ -1,0 +1,28 @@
+// 태스크 #131 시나리오 C — 랠리 중 전환 수비 대형(defTransition) 전용 파라미터.
+// 값마다 근거 주석 의무(정본: docs/COURT_POSITIONING.md §4.9 · POSITIONING_TUNING_LOG.md R1·R2 실측 좌표 출처).
+// **통과조건 6**: 기존 검증 좌표(receiveFormation·serveFormation·switchedSpots·fanSlots 상수)는 여기로 이동하지 않는다.
+//   여기 있는 건 전부 시나리오 C에서 새로 도입된 값뿐이다.
+
+// ── 전위 블록 레디 라인 (상대 세트 전 네트에 붙어 3인 블록 준비) ──
+// 깊이(홈 프랙션, 네트=0.5) — laneRank 0(좌윙)·1(센터)·2(우윙). serveFormation 전위 깊이(frontDepthFrac 0.555~0.605)와
+// 같은 결(네트 밴드 ≤1.3m), 센터가 네트 최밀착. NET_SAFE(26px)와 정합: 홈 0.55*H=308이 네트 280 위 28px(코트 H=560 기준).
+// 근거: COURT_POSITIONING B-1/시나리오 C(세터 후위 → 전위 3 블록 라인), R2 관찰(블록 레디 국면 부재).
+export const BLOCK_READY_Y_HOME = [0.575, 0.55, 0.60];
+
+// 번치 x(홈 프랙션) — 중앙 3분의 1로 모음. serveFormation SV_FRONT_X([0.36,0.5,0.64])와 **같은 결**(courtLayout 주석:
+// GMS·USAV 번치 리드 — 넓게 안 펴고 중앙 뭉쳐 상대 세터 읽고 핀으로 릴리즈). 좌우 순서(스페셜리스트 레인) 보존.
+// 별도 상수로 둠 — SV_FRONT_X는 serveFormation 검증 좌표라 이동 금지(통과조건 6).
+export const BUNCH_X_HOME = [0.36, 0.5, 0.64];
+
+// ── 후위 페리미터 (코트를 넓게 덮는 딥 베이스 — 라인딥/크로스딥/리베로 셰이드) ──
+// **중립 컵 채택(통과조건 2 "중립 컵만" 허용)**: pass 국면엔 아직 공격 코스를 모르므로(미래 토스 x 미참조)
+//   컵을 공격 x로 흔들지 않는다 — 세그먼트마다 앵커(공 x)로 셰이드하면 pass↔toss 진동이 새로 생겨(왕복 급증) 역효과.
+//   toss 구간부터 기존 fanSlots(공격 x)로 수렴하며 "읽고(딥) → 커밋(컵 전진)"이 자연스럽게 나온다.
+// 깊이는 fanSlots(윙 0.72·중앙 0.85)에 **근접**시켜(윙 0.76·중앙 0.87) pass↔toss 전환을 임계 이하로 매끄럽게 —
+//   R1의 "윙도 딥"(0.805) 지향은 살리되(fanSlots보다 깊게), fanSlots는 스펙상 무변경(통과조건 6)이라 그 프레임보다
+//   과하게 깊으면 진동이 커진다. 근거: R1 실측(원정 수비 z1[.204,.194]·z5[.784,.196]·L[.526,.142]) + fanSlots 정합.
+export const PERIM_WING_X = 0.21;        // 양 윙 사이드라인 안쪽 프랙션(좌윙=0.21 · 우윙=0.79 — fanSlots 0.22 정합)
+export const PERIM_WING_Y_HOME = 0.76;   // 양 윙 깊이(홈 프랙션 — fanSlots 0.72보다 딥, 진동 임계 이하)
+export const PERIM_CENTER_Y_HOME = 0.87; // 리베로/중앙 최심(홈 프랙션 — 코트 최후방, R1 L 최심 나드)
+export const PERIM_SHADE = 0.0;          // 앵커 셰이드 미사용(중립 컵) — 진동 회피. 값 0으로 봉인(구조 보존).
+export const PERIM_WING_SHADE = 0.0;     // 동상
