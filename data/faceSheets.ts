@@ -34,6 +34,8 @@ export const FACE_SHEETS: FaceSheet[] = [
   { src: require('../assets/players/faces24.png'), cols: 3, rows: 3, count: 9 },
   { src: require('../assets/players/faces25.png'), cols: 3, rows: 3, count: 9 },
   { src: require('../assets/players/faces26.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces27.png'), cols: 3, rows: 3, count: 9 },
+  { src: require('../assets/players/faces28.png'), cols: 3, rows: 3, count: 9 },
 ];
 const TOTAL_FACES = FACE_SHEETS.reduce((n, s) => n + s.count, 0);
 
