@@ -8,6 +8,7 @@ import { createRng, strSeed } from '../engine/rng';
 import {
   lineupIdxAt, zonePx, switchedSpots, coverSpots, fanSlots, receiveFormation, receiveLine, NET_SAFE, type Lineup, type Switched,
 } from './courtLayout';
+import { COVER_SECOND_SNAP } from './formationParams';
 
 export type Move = 'start' | 'return' | 'walk' | 'serveToss' | 'serve' | 'pass' | 'toss' | 'spike' | 'fault' | 'bounce';
 export type Atk = 'quick' | 'tempo' | 'open' | 'back';
@@ -114,7 +115,7 @@ function withBounce(wp: WP[], W: number, H: number): WP[] {
 }
 
 /** 한 랠리의 공 이동 경로 — 스위칭(전문 포지션) 기반. prevLast: 직전 낙구점(공 순간이동 방지) */
-export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[], coverSink?: { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number; libero?: number; liberoWasFirst?: boolean; second?: number; deep?: number }[]): WP[] {
+export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[], coverSink?: { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number; libero?: number; liberoWasFirst?: boolean; second?: number; deep?: number; coverX?: { i: number; x: number }[] }[]): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
   const rotOf = (s: Side) => (s === 'home' ? r.homeRot : r.awayRot);
@@ -517,46 +518,65 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
         .sort((a, b) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx)).slice(0, 3)
         .sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
     }
-    // R5(#131): 커버 슬롯 배정 — 후위 공격수(OH/OP)를 2선/후방(파이프·백어택 위협 서사), 리베로를 근접(수비 전문).
-    //  rng 미소비·결정론(정렬=슬롯 x·|x−ahx|·존/포지션). 좌표는 coverSpots, 슬롯↔선수 매핑만 여기.
+    // R6(#131): 커버 슬롯↔선수 배정 = **총 이동 비용 최소**(어프로치+복귀). 커버는 배치~복귀 한 사이클 —
+    //  선수 존(스위칭 베이스) 반대편 슬롯이면 커버→전환 복귀가 코트 횡단(X자). 비용=2·dist(존, 슬롯)+역할 바이어스.
+    //  리베로는 근접 강제(수비 전문, 큰 페널티), 후위 공격수는 2선/deep 선호(파이프 — 작은 바이어스). rng 미소비·결정론(첫 최소 순열).
     const attBack = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z));
     const isBackAtkCover = (i: number) => attBack.includes(i) && (lu.six[i].position === 'OH' || lu.six[i].position === 'OP');
+    const zoneOf = (i: number) => sw[att].pos[i]; // 선수 존(스위칭 베이스) — 어프로치 출발 ≈ 복귀 목표
     const cSpots = coverSpots(att, ahx, coverCand.length, W, H, atk === 'back');
+    // 슬롯 역할(근접 여부) — n=2:[근접,2선] · n=3:[근접,근접,deep] · n≤1/기타는 아래 폴백.
+    const slotNear = (k: number, len: number) => (len === 3 ? k < 2 : len === 2 ? k === 0 : true);
+    // 백어택은 룰 68 구조(near=전위 collapse, deep=후위)라 좌표·구조 유지 — 비용 배정은 전면 공격만(형제 판단).
+    const useCost = atk !== 'back' && (coverCand.length === 2 || coverCand.length === 3);
     let coverMovers: Mover[];
     let nearMembers: number[];
     let secondPick: number | undefined;
     let deepPick: number | undefined;
-    if (coverCand.length === 3) {
-      // 후방 슬롯(cSpots[2]) = 후위 공격수 우선(파이프 위협). 없으면 비리베로 우선(리베로는 근접 유지 — 수비 전문).
-      //  둘 다 없으면 coverCand[1](중앙). 백어택은 기존대로 coverCand[1]=깊은 후위 유지(룰 68 정합). 정렬=|x−ahx| 근접(중앙성).
-      const byCenter = (a: number, b: number) => Math.abs(sw[att].pos[a].x - ahx) - Math.abs(sw[att].pos[b].x - ahx);
-      const deepCands = atk === 'back' ? [] : coverCand.filter(isBackAtkCover);
-      const nonLib = atk === 'back' ? [] : coverCand.filter((i) => i !== attLibIdx);
-      deepPick = deepCands.length ? deepCands.slice().sort(byCenter)[0]
-        : nonLib.length ? nonLib.slice().sort(byCenter)[0]
-        : coverCand[1];
-      const nearTwo = coverCand.filter((i) => i !== deepPick).sort((a, b) => sw[att].pos[a].x - sw[att].pos[b].x); // 좌→우
-      coverMovers = [
-        { side: att, idx: nearTwo[0], ...cSpots[0] },
-        { side: att, idx: nearTwo[1], ...cSpots[1] },
-        { side: att, idx: deepPick, ...cSpots[2] },
-      ];
-      nearMembers = nearTwo;
-    } else if (coverCand.length === 2 && atk !== 'back') {
-      // R5 층: 근접(cSpots[0])=리베로 우선(수비 전문), 2선(cSpots[1])=후위 공격수 우선(백어택/파이프 준비).
-      const nearScore = (i: number) => (i === attLibIdx ? 2 : isBackAtkCover(i) ? 0 : 1); // 리베로>일반>후위공격수
-      const [c0, c1] = coverCand;
-      const nearIdx = nearScore(c0) >= nearScore(c1) ? c0 : c1; // 동점=coverCand 좌→우 첫째(결정론)
-      secondPick = nearIdx === c0 ? c1 : c0;
-      coverMovers = [{ side: att, idx: nearIdx, ...cSpots[0] }, { side: att, idx: secondPick, ...cSpots[1] }];
-      nearMembers = [nearIdx];
+    if (useCost) {
+      const n = coverCand.length;
+      const cost = (i: number, k: number): number => {
+        const z = zoneOf(i), sp = cSpots[k];
+        const d = Math.hypot(z.x - sp.x, z.y - sp.y);
+        let bias = 0;
+        if (i === attLibIdx && !slotNear(k, n)) bias += 1e6;        // 리베로 deep/2선 금지 — 근접 유지(①)
+        if (isBackAtkCover(i) && slotNear(k, n)) bias += 30;        // 후위 공격수 2선/deep 선호(파이프 위협)
+        return 2 * d + bias;                                        // 어프로치+복귀 ≈ 2·dist(존,슬롯)
+      };
+      const perms = n === 2 ? [[0, 1], [1, 0]] : [[0, 1, 2], [0, 2, 1], [1, 0, 2], [1, 2, 0], [2, 0, 1], [2, 1, 0]];
+      let best = perms[0], bestC = Infinity;
+      for (const p of perms) {                                     // p[k]=coverCand 인덱스 → 슬롯 k
+        let c = 0; for (let k = 0; k < n; k++) c += cost(coverCand[p[k]], k);
+        if (c < bestC - 1e-6) { bestC = c; best = p; }             // strict < → 동률 시 첫(사전식) 순열(결정론)
+      }
+      const slotPlayer = best.map((pi) => coverCand[pi]);          // slotPlayer[k] = 슬롯 k 담당 선수
+      coverMovers = slotPlayer.map((i, k) => {
+        if (n === 2 && k === 1) {
+          // ① 2선 x = 히터 뒤 중앙(cSpots[1].x=ahx)에서 담당 선수 존 쪽으로 스냅 → 복귀 횡단 최소.
+          const snapX = clampN(cSpots[1].x + COVER_SECOND_SNAP * (zoneOf(i).x - cSpots[1].x), 24, W - 24);
+          return { side: att, idx: i, x: snapX, y: cSpots[1].y };
+        }
+        return { side: att, idx: i, ...cSpots[k] };
+      });
+      nearMembers = slotPlayer.filter((_, k) => slotNear(k, n));
+      if (n === 2) secondPick = slotPlayer[1];
+      if (n === 3) deepPick = slotPlayer[2];
     } else {
-      coverMovers = coverCand.map((i, k) => ({ side: att, idx: i, ...cSpots[k] }));
-      nearMembers = [...coverCand];
+      // 백어택(룰 68 구조 유지) · n≤1: 기존 위치 순 매핑. n=3 백어택은 [near-left, near-right, deep]↔coverCand.
+      coverMovers = coverCand.length === 3
+        ? [
+            { side: att, idx: coverCand[0], ...cSpots[0] },
+            { side: att, idx: coverCand[2], ...cSpots[1] },
+            { side: att, idx: coverCand[1], ...cSpots[2] },
+          ]
+        : coverCand.map((i, k) => ({ side: att, idx: i, ...cSpots[k] }));
+      nearMembers = coverCand.length === 3 ? [coverCand[0], coverCand[2]] : [...coverCand];
+      if (coverCand.length === 3) deepPick = coverCand[1];
     }
     coverSink?.push({ atk, atkIdx, front: attFront, cover: coverCand, near: nearMembers,
       pool: coverPool.map((i) => ({ i, x: sw[att].pos[i].x })), ahx,
-      libero: attLibIdx, liberoWasFirst: firstTouch === attLibIdx, second: secondPick, deep: deepPick }); // 측정(룰 62·68 + R3 리베로 + R5 층)
+      libero: attLibIdx, liberoWasFirst: firstTouch === attLibIdx, second: secondPick, deep: deepPick,
+      coverX: coverMovers.map((mv) => ({ i: mv.idx, x: mv.x })) }); // 측정(룰 62·68 + R3 + R5 층 + R6 복귀 횡단)
     // 커버 슬롯이 토스 지점과 우연히 포개지면(타점≈토스 지점) 토서에서 24px 밖으로 — 토서 점유 금지
     for (const mv of coverMovers) {
       const cdx = mv.x - passSpot.x, cdy = mv.y - passSpot.y;

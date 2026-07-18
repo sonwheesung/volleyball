@@ -6,7 +6,7 @@ import type { buildLineup } from '../engine/lineup';
 import {
   BLOCK_READY_Y_HOME, BUNCH_X_HOME, PERIM_WING_X, PERIM_WING_Y_HOME, PERIM_CENTER_Y_HOME, PERIM_SHADE, PERIM_WING_SHADE,
   COVER_NEAR_Y_HOME, COVER_DEEP_Y_HOME, COVER_LINE_DX, COVER_INSIDE_DX, COVER_DEEP_DX,
-  COVER_SECOND_Y_HOME, COVER_SECOND_DX, COVER_NEAR1_DX,
+  COVER_SECOND_Y_HOME, COVER_NEAR1_DX,
 } from './formationParams';
 
 export type Lineup = ReturnType<typeof buildLineup>;
@@ -174,8 +174,11 @@ export function blockerWall(side: Side, attackX: number, count: number, W: numbe
  *  백어택(타점=3m 라인): 리바운드가 히터 앞(네트 쪽)에 떨어짐 → 측면 커버 앞(0.62), 깊은 커버 뒤(0.78) **무변경**
  *  (낙하 구역이 히터 앞이라 전면 절대계수와 기하가 달라 전용 값 유지 — R4 형제 판단, 보고 명시).
  *  **n=2 층 규칙(2026-07-18 R5, #131)**: 전면 n=2는 둘 다 근접에 넣으면 커버+세터+전위가 한 밴드에 몰려 "전위 6명"(전술
- *  비현실). → 근접 1(y=NEAR, 안쪽) + **2선 1(y=COVER_SECOND_Y≈0.71, 라인 쪽 — 백어택/파이프 준비 겸)** 로 층 분리.
- *  반환 순서 [근접, 2선] — 어느 선수를 어디에 둘지(리베로=근접·후위공격수=2선) 배정은 호출부(courtPath). n=1·n=3·백어택은 무변경. */
+ *  비현실). → 근접 1(y=NEAR, 안쪽) + **2선 1(y=COVER_SECOND_Y≈0.71)** 로 층 분리. 반환 순서 [근접, 2선].
+ *  ~~2선 x=라인 쪽 고정~~ → **R6 정정(#131)**: 2선 x는 여기선 히터 뒤 **중앙(attackX) 기준**만 주고, **맡는 선수의 존 쪽 스냅**은
+ *  호출부(courtPath, `COVER_SECOND_SNAP`)가 한다. R5 오답: 실측 한 장면(차니 존≈라인 쪽)을 "라인 고정"으로 오일반화 →
+ *  선수 존 반대편이면 커버→전환 복귀가 코트 횡단(X자)이었다(사이클 비용 무시). 어느 선수를 어디에(리베로=근접·후위공격수=2선/deep)
+ *  둘지 배정도 호출부가 **총 이동 비용 최소**로. n=1·n=3·백어택 좌표는 무변경(배정만 비용화). */
 export function coverSpots(side: Side, attackX: number, n: number, W: number, H: number, backAtk = false): Px[] {
   const yNearF = backAtk ? 0.62 : COVER_NEAR_Y_HOME;
   const yDeepF = backAtk ? 0.78 : COVER_DEEP_Y_HOME;
@@ -191,11 +194,10 @@ export function coverSpots(side: Side, attackX: number, n: number, W: number, H:
   // 전면 공격: 라인/안쪽 비대칭(히터 쪽 사이드라인=라인 넓게, 코트 중앙=안쪽 좁게).
   const lineDir = attackX >= 0.5 * W ? 1 : -1;                          // 히터 쪽 사이드라인 방향(+우 / −좌)
   if (n === 2) {
-    // R5 층: [근접(안쪽·y NEAR), 2선(라인 쪽·y SECOND ≈3m)]. 배정(리베로/후위공격수)은 호출부.
+    // R5 층 + R6 사이클: [근접(안쪽·y NEAR), 2선(y SECOND ≈3m)]. 2선 x는 중앙(attackX) 기준만 — 호출부가 선수 존 쪽 스냅.
     const nearX = cx(-lineDir * COVER_NEAR1_DX * W);                    // 근접=중앙(안쪽) 방향
-    const secondX = cx(lineDir * COVER_SECOND_DX * W);                  // 2선=사이드라인(라인) 방향
     const ySecond = (side === 'home' ? COVER_SECOND_Y_HOME : 1 - COVER_SECOND_Y_HOME) * H;
-    return [{ x: nearX, y: yNear }, { x: secondX, y: ySecond }];
+    return [{ x: nearX, y: yNear }, { x: cx(0), y: ySecond }];          // 2선 x=중앙(base) — courtPath가 COVER_SECOND_SNAP로 스냅
   }
   const leftDx = (lineDir > 0 ? -COVER_INSIDE_DX : -COVER_LINE_DX) * W; // 우측공격: 좌=안쪽 / 좌측공격: 좌=라인
   const rightDx = (lineDir > 0 ? COVER_LINE_DX : COVER_INSIDE_DX) * W;  // 우측공격: 우=라인 / 좌측공격: 우=안쪽

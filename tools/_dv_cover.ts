@@ -57,7 +57,7 @@ function coverPin(): boolean {
 resetLeagueBase();
 const teams = LEAGUE.teams.map((t) => t.id);
 
-type Rec = { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number; libero?: number; liberoWasFirst?: boolean; second?: number; deep?: number };
+type Rec = { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number; libero?: number; liberoWasFirst?: boolean; second?: number; deep?: number; coverX?: { i: number; x: number }[] };
 const recs: Rec[] = [];
 
 for (let m = 0; m < nMatches; m++) {
@@ -128,6 +128,20 @@ const n2LibNotNear = n2LibInCover.filter((r) => !(r.near.length === 1 && r.near[
 const isBackRowIdx = (r: Rec, i: number) => !r.front.includes(i); // front(2/3/4)가 아니면 후위
 const n2SecondBackAtk = n2front.filter((r) => r.second !== undefined && isBackRowIdx(r, r.second)).length; // 2선이 후위 슬롯(공격수)
 
+// ── R6(#131): 커버→전환 복귀 횡단(X자) 검출 — 2선 슬롯이 담당 선수 존의 **반대편**(히터 기준 부호 반전)이면 복귀가 코트 횡단 ──
+// 신(존 쪽 스냅): 2선은 히터~존 사이(같은 부호)라 부호 반전 0. A/B: 구 라인 고정(ahx+lineDir·0.096W)이면 존 반대편 다수(횡단>0).
+const WW = 360; // _dv_cover 좌표계 W (아래 시뮬과 동일)
+const n2cov = recs.filter((r) => r.atk !== 'back' && r.cover.length === 2 && r.second !== undefined && r.coverX);
+const zoneOfRec = (r: Rec, i: number) => r.pool.find((p) => p.i === i)?.x ?? r.ahx;
+const slotOfRec = (r: Rec, i: number) => r.coverX!.find((c) => c.i === i)?.x ?? r.ahx;
+const flip = (slotX: number, zoneX: number, ahx: number) => Math.sign(slotX - ahx) !== Math.sign(zoneX - ahx) && Math.abs(zoneX - ahx) > 10 && Math.abs(slotX - ahx) > 10;
+const n2CrossNew = n2cov.filter((r) => flip(slotOfRec(r, r.second!), zoneOfRec(r, r.second!), r.ahx)).length; // 신: 기대 0
+const n2CrossOld = n2cov.filter((r) => { // A/B: 구 라인 고정
+  const lineDir = r.ahx >= 0.5 * WW ? 1 : -1;
+  const oldX = Math.max(24, Math.min(WW - 24, r.ahx + lineDir * 0.096 * WW));
+  return flip(oldX, zoneOfRec(r, r.second!), r.ahx);
+}).length;
+
 const pct = (n: number, d: number) => d ? (100 * n / d).toFixed(1) : '—';
 log('\n═══ 커버 안무 검증 (룰 62 제외방향 + 룰 68 포함/행방향) ═══');
 log(`표본: ${recs.length} 커버 국면 (${nMatches}경기) — open/tempo ${disguise.length} · back ${back.length} · quick ${quick.length}`);
@@ -153,6 +167,11 @@ log(`   2선 슬롯이 후위(공격수) 배정: ${n2SecondBackAtk}/${n2front.le
 log(`   [A/B] 구 로직(n=2 둘 다 근접·층 없음)이면 리베로/후위공격수 모두 네트 밴드 → 층 붕괴(coverPin 층핀이 A/B 담당)`);
 
 log('');
+log('── R6 커버→전환 복귀 횡단(X자) 검출 (2선이 담당 선수 존 반대편이면 복귀 횡단) ──');
+log(`n=2 2선 ${n2cov.length}건 · 존 반대편(부호 반전=횡단): 신 ${n2CrossNew} (${pct(n2CrossNew, n2cov.length)}%) — 기대 0`);
+log(`   [A/B] 구 라인 고정(ahx+lineDir·0.096W)이면 같은 표본 횡단: ${n2CrossOld} (${pct(n2CrossOld, n2cov.length)}%) — >0 이어야 오라클 유효`);
+
+log('');
 log('── R3 리베로 커버 합류 (firstTouch여도 방치 금지) ──');
 log(`③'' [방치 봉인] 리베로 firstTouch·비공격수 국면 ${libEligible.length}건 중 커버 누락(방치): ${libAbandoned} (${pct(libAbandoned, libEligible.length)}%) — 기대 0`);
 log(`   유형별 방치: open ${libAbandonByType('open')} · tempo ${libAbandonByType('tempo')} · back ${libAbandonByType('back')} · quick ${libAbandonByType('quick')}`);
@@ -163,9 +182,10 @@ const pass =
   nearBackIntrusion === 0 && oldNearBackIntrusion > 0 &&                  // 룰 68 (위반 0 + A/B 민감)
   libAbandoned === 0 && libEligible.length > 0 &&                        // R3 (리베로 방치 0 + A/B 시나리오 존재)
   covPinOK &&                                                            // R4 (커버 반원 타이트닝 핀 + A/B) + R5 n=2 층 핀
-  n2LibNotNear === 0 && n2LibInCover.length > 0;                        // R5 (n=2 리베로=근접 단독 배정 + 표본 존재)
+  n2LibNotNear === 0 && n2LibInCover.length > 0 &&                      // R5 (n=2 리베로=근접 단독 배정 + 표본 존재)
+  n2CrossNew === 0 && n2CrossOld > 0;                                   // R6 (2선 복귀 횡단 0 + 구 로직 A/B >0)
 log('');
 log(pass
-  ? '✅ PASS — 룰62 + 룰68(A/B >0) + R3(리베로 방치 0) + R4(타이트닝 핀) + R5(n=2 층: 리베로=근접 0위반·층핀 ✅)'
-  : '❌ FAIL — 위 지표 확인(②\'>0 룰68 / ③\'\'>0 리베로 방치 / 커버·층핀 위반 / R5 리베로≠근접 / A/B==0)');
+  ? '✅ PASS — 룰62 + 룰68(A/B >0) + R3(리베로 방치 0) + R4(타이트닝) + R5(n=2 층·리베로=근접 0) + R6(복귀 횡단 0·구 A/B >0)'
+  : '❌ FAIL — 위 지표 확인(②\'>0 룰68 / ③\'\'>0 리베로 방치 / 커버·층핀 / R5 리베로≠근접 / R6 횡단>0 or A/B==0)');
 process.exit(pass ? 0 : 1);
