@@ -23,7 +23,7 @@ export const TIPS: Tip[] = [
   { id: 'team.ovr', screen: 'team-detail', order: 0, anchor: 'team-ovr',
     title: '팀 종합 전력', body: '선수단 전체의 평균 전력입니다. 숫자가 높을수록 강팀 — 하지만 이야기는 지금부터 쌓입니다.' },
   { id: 'team.coach', screen: 'team-detail', order: 1, anchor: 'team-coach',
-    title: '감독', body: '감독을 누르면 성향·카리스마를 자세히 봅니다. 감독 성향이 자동 경기 운영(선발·작전·타임아웃)을 좌우합니다.' },
+    title: '감독', body: '감독을 누르면 성향·카리스마를 자세히 봅니다. 감독 성향이 자동 경기 운영(작전·교체·타임아웃)을 좌우합니다.' },
   { id: 'team.roster', screen: 'team-detail', order: 2, anchor: 'team-roster',
     title: '선수단', body: '선수 이름을 누르면 2층 스탯·특성을 자세히 봅니다. 선수는 성장하고, 전성기가 지나면 기량이 하락합니다.' },
   { id: 'team.start', screen: 'team-detail', order: 3, anchor: 'team-operate',
@@ -31,7 +31,7 @@ export const TIPS: Tip[] = [
 
   // ── 일정 탭(첫 진입 화면) ──
   { id: 'sched.next', screen: 'tab-schedule', order: 0, anchor: 'sched-next',
-    title: '여기서 시즌을 진행', body: '오프시즌엔 전지훈련으로 선수를 키우고, 개막하면 경기를 치릅니다. 기본은 감독이 자동 운영하는 관전이고, ⭐ 빅매치는 직접 관전하며 교체·타임아웃으로 개입할 수도 있어요.' },
+    title: '여기서 시즌을 진행', body: '오프시즌엔 전지훈련으로 선수를 키우고, 개막하면 경기를 치릅니다. 기본은 감독이 자동 운영하는 관전이고, 내 팀 경기는 직접 관전하며 교체·타임아웃으로 개입할 수도 있어요. ⭐ 빅매치는 놓치지 마세요.' },
   { id: 'sched.calendar', screen: 'tab-schedule', order: 1, anchor: 'sched-calendar',
     title: '우리 팀 일정', body: '우리 팀 시즌 일정을 날짜·요일·홈/원정·상대로 봅니다. 치른 경기는 결과, 앞으로는 예정으로 표시돼요.' },
   { id: 'sched.results', screen: 'tab-schedule', order: 2, anchor: 'sched-results',
