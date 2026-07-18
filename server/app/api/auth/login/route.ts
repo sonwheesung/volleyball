@@ -1,7 +1,7 @@
 // POST /api/auth/login — 신원 → 자체 Bearer 세션 발급(AUTH_SYSTEM §3).
 // body: { provider: 'google'|'apple'|'dev', idToken?(google), providerId?(dev), device? }
 // google: idToken을 구글 서명·audience 검증 후 sub 도출(server/lib/googleVerify). dev/apple: providerId(기기ID) 스텁.
-// 개인정보 최소화: 이메일·이름 미저장(sub만). ⚠ TODO(보안): prod에서 provider='dev' 백도어 차단(구글 미검증 우회).
+// 개인정보 최소화: 이메일·이름 미저장(sub만). prod에서 provider='dev' 백도어 차단은 아래 POST 핸들러(VERCEL_ENV 게이트)에서 구현.
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/observability';
 import { eq, sql } from 'drizzle-orm';

@@ -15,6 +15,15 @@
 > - 잔여(내일): vc16 업로드 → 스토어 등록정보(개인정보 URL=배포 도메인/privacy)+IARC(#108) → C4 구매복원·관리자 매출 ₩0 확인 → #43 completed → 심사 제출(직전 RC_SANDBOX_GRANT 결정) · (관찰) RTDN 이전 dia_5000 환불 지연 도착
 > - ✅ 2026-07-18 — **관찰 완료**: RTDN 이전 `dia_5000` 환불 지연 회수 도착(밤 03:00 KST경, 원장 −5000·`ref :sandbox` 정상 클로백). **버그 발견·수정(샌드박스 집계 제외 다중 라이터 사각)**: prod `stats_daily` 7/17 행이 `KRW=0·count=6·dia=19100`으로 관측 — D1 샌드박스 제외가 지급 경로(웹훅·confirm)에만 걸려 있고 **매일 크론 롤업**(`/api/cron/purge`→`lib/retention.ts rollupRecent`)이 `:sandbox` 무관하게 재집계해 덮어썼음(형제로 관리자 BM·전환율 2경로도 미제외). 수정 = **집계 3경로 대칭 제외**(retention.ts pRows + admin/bm + admin/stats, `ref NOT LIKE '%:sandbox'` NULL-안전). 원장 열람 뷰(`admin/payments`)는 전 행 노출 유지(제외 안 함). 가드 `_dv_purchase` **S1-e** 신설(크론 롤업 실 건만 집계 + 구/신 쿼리 A/B count 2↔1) — 정본 BACKEND §13.18 D1(2026-07-18 정정)·사각 분류 TEST_METHODOLOGY §4(다중 라이터 사각).
 >   - ✅ **7/17 stats_daily 행 일회성 수동 UPDATE 완료(2026-07-18, 메인 세션 prod 직접 수행)**: 크론은 지난 데이터를 못 고칠 수 있음(그날 실구매 0이면 `pRows` 2일 윈도우에 그 날짜가 안 잡혀 upsert 스킵) → 오염된 7/17 행을 `update stats_daily set purchase_count=0, diamonds_purchased=0 where day='2026-07-17'`로 정정(7/17 실결제 전부 샌드박스 — purchase_event environment 실측). 결과 실측 `KRW=0·count=0·dia=0`.
+> - ✅ **2026-07-18 — 리젝 리서치 + 컴플라이언스 감사(제출 전) 수행**. 발견:
+>   - 개인 개발자 계정은 **폐쇄형 테스트 12명×14일 연속** 참여 요건 대상일 수 있음(제출 전 테스터 모집·기간 확인 필요 — 별도 확인).
+>   - `server/app/delete-account/page.tsx` 문의 이메일이 placeholder(`[문의 이메일 기재]`)로 남아 있어 **구글 데이터 보안 양식 계정삭제 URL 제출 차단** — 수정.
+>   - 앱 내 정본 `data/legalText.ts` PRIVACY 11조 보호책임자·연락처가 placeholder — 수정.
+>   - **로그인 전 정책(약관·개인정보처리방침) 고지·링크 부재**(스토어 심사 요건) — LoginScreen에 고지문+웹 게시본 링크 추가.
+>   - **앱 내 상호(사업자 정보) 미명기** — 약관(legalText TERMS)에 판매자 정보 조항(제22조) 추가, 웹 terms §5와 6항목 동일.
+>   - → 위 컴플라이언스 수정 7건 반영(delete-account 이메일 · legalText 보호책임자/상호/운영자명/시행일통일/표시광고보존 · LoginScreen 정책링크 · buy-diamonds 청약철회 안내). 낡은 로그인 route dev 백도어 TODO 주석 정리.
+>   - 📝 **데이터 보안 양식**: AdMob 자동수집 항목(**대략적 위치·앱 상호작용·진단 정보**) 신고 필요 — 제출 시 반영.
+>   - 📝 **전면광고 "시즌 시작" 타이밍 = Google Better Ads 경계 사례**(콘텐츠 시작 시점 인터스티셜) — 유지/이동 여부 **사용자 결정 대기**.
 
 > **성격**: 이 문서는 **실행 절차서**다. 집에 와서 위에서 아래로 체크박스를 따라가면 결제가 켜지도록 만든 순서표 + 테스트 범위.
 > **설계 정본이 아니다** — 결제 구조·수익화·재화 진실 소유는 아래 정본이 결정하고, 이 런북은 그 결정을 "어떻게 실행하나"만 적는다.

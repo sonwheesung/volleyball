@@ -3,7 +3,7 @@
 //       개발자 로그인(dev)은 __DEV__ 빌드에만 노출(Expo Go/네이티브 미탑재 폴백). 애플은 iOS 정식 빌드 예정.
 //       구글 버튼은 브랜드 가이드(흰 배경·4색 G 로고)로 — 타 게임과 동일한 익숙한 룩(2026-07-05).
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import Svg, { Path } from 'react-native-svg';
 import { Screen, theme, themedStyles } from './Screen';
@@ -93,6 +93,15 @@ export function LoginScreen() {
 
         {err ? <Text style={styles.err}>{err}</Text> : null}
 
+        {/* 로그인 전 정책 고지 + 링크(스토어 심사 요건) — 웹 게시본으로 연결. */}
+        <Text style={styles.policyNote}>
+          로그인 시{' '}
+          <Text style={styles.policyLink} onPress={() => Linking.openURL('https://volleyball-jet-nine.vercel.app/terms')}>이용약관</Text>
+          {' '}및{' '}
+          <Text style={styles.policyLink} onPress={() => Linking.openURL('https://volleyball-jet-nine.vercel.app/privacy')}>개인정보처리방침</Text>
+          에 동의하게 됩니다.
+        </Text>
+
         {__DEV__ ? (
           <Text style={styles.notice}>* 개발 빌드입니다. 정식 빌드에서는 Google 로그인만 노출됩니다.</Text>
         ) : null}
@@ -119,6 +128,8 @@ const styles = themedStyles(() =>
     btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.card, borderRadius: 14, paddingVertical: 15, borderWidth: 1, borderColor: theme.border },
     btnLabel: { color: theme.text, fontSize: 15.5, fontWeight: '800' },
     err: { color: theme.bad, fontSize: 13.5, textAlign: 'center', fontWeight: '700', marginTop: -20 },
+    policyNote: { color: theme.muted, fontSize: 11.5, lineHeight: 18, textAlign: 'center', marginTop: -18 },
+    policyLink: { color: theme.accent, textDecorationLine: 'underline', fontWeight: '700' },
     notice: { color: theme.muted, fontSize: 11.5, lineHeight: 18, textAlign: 'center' },
   }),
 );

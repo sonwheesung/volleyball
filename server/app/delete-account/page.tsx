@@ -1,14 +1,14 @@
 // 계정·데이터 삭제 안내(공개 정적 페이지) — 구글 플레이 데이터 삭제 정책 필수 URL(AUTH_SYSTEM §7).
 // 앱 밖에서도 삭제를 요청할 수 있어야 한다: 앱 내 경로 안내 + 앱 접근 불가 시 문의 이메일 절차.
 // 개인정보처리방침(data/legalText.ts PRIVACY 3·4·8조)과 정합 — 즉시 접근 차단 → 비필수 우선 파기 → 법정 보존분 만료 후 파기.
-// ⚠ 출시 전 [문의 이메일] 확정(개인정보 보호책임자 연락처, PRIVACY 11조와 동일 값).
+// 문의 이메일 기입 완료(2026-07-18): 개인정보 보호책임자 연락처, PRIVACY 11조와 동일 값.
 
 export const metadata = {
   title: '배구명가 — 계정 및 데이터 삭제',
   description: '배구명가 계정 삭제(탈퇴) 및 개인정보 삭제 요청 안내',
 };
 
-const SUPPORT_EMAIL = '[문의 이메일 기재]'; // 출시 전 확정(PRIVACY 11조 보호책임자 연락처와 동일)
+const SUPPORT_EMAIL = 'bjpio113@gmail.com'; // 기입 완료(2026-07-18, PRIVACY 11조 보호책임자 연락처와 동일)
 
 const card: React.CSSProperties = {
   background: '#111C2B',
