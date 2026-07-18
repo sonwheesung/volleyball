@@ -251,10 +251,16 @@ for (let m = 0; m < nMatches; m++) {
       }
 
       // M) 퍼스트터치 배회 금지: 리시브/디그한 선수는 그 공격이 끝날 때까지 터치 지점에 정지
-      //    (자세 회복) — 패스/토스 중 대형 복귀·커버 합류로 어슬렁거리면 위반
+      //    (자세 회복) — 패스/토스 중 대형 복귀·커버 합류로 어슬렁거리면 위반.
+      //    **예외(R3, #131)**: 공격팀 **리베로**(후위 MB 슬롯, 수비 스페셜리스트)는 firstTouch여도 **토스에서 커버 collapse**
+      //    허용(자기 본연의 디그/커버 역할) — 패스 국면(즉시 회복 한 박자)엔 여전히 홀드. 다른 firstTouch는 룰 M 유지.
       if (ft && (to.kind === 'pass' || to.kind === 'toss') && to.side === ft.side && `${to.side}-${to.idx}` !== ft.key) {
+        const ftRot = ft.side === 'home' ? r.homeRot : r.awayRot;
+        const ftLu = ft.side === 'home' ? L.home : L.away;
+        const ftLibIdx = [1, 5, 6].map((z) => lineupIdxAt(ftRot, z)).find((i) => ftLu.six[i]?.position === 'MB');
+        const liberoTossCover = to.kind === 'toss' && ftLibIdx !== undefined && ft.key === `${ft.side}-${ftLibIdx}`;
         const tgt = targets[ft.key];
-        if (tgt && dist(tgt, ft.pos) > 18) flag('M.퍼스트터치 배회', ctx(`${ft.key} 목표가 터치 지점에서 ${dist(tgt, ft.pos).toFixed(0)}px 이탈(${to.kind})`));
+        if (tgt && dist(tgt, ft.pos) > 18 && !liberoTossCover) flag('M.퍼스트터치 배회', ctx(`${ft.key} 목표가 터치 지점에서 ${dist(tgt, ft.pos).toFixed(0)}px 이탈(${to.kind})`));
       }
 
       // N) 죽은 공 점유 금지: 추격자는 공 가까이 가되(룰 H) 공 13px 안에 서면 안 된다 —

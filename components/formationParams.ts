@@ -26,3 +26,11 @@ export const PERIM_WING_Y_HOME = 0.76;   // 양 윙 깊이(홈 프랙션 — fan
 export const PERIM_CENTER_Y_HOME = 0.87; // 리베로/중앙 최심(홈 프랙션 — 코트 최후방, R1 L 최심 나드)
 export const PERIM_SHADE = 0.0;          // 앵커 셰이드 미사용(중립 컵) — 진동 회피. 값 0으로 봉인(구조 보존).
 export const PERIM_WING_SHADE = 0.0;     // 동상
+
+// ── 오프블로커(벽 미참여 전위) 자기 사이드 유지 (룰 48 방향 반전 — 태스크 #131 R3) ──
+// 근거(POSITIONING_TUNING_LOG R3, 사용자 board-lab 실측): 구 동작(공격 x쪽 0.35 시프트 → 중앙으로 끌림)은 다른 수비
+//   커버 구역과 **중복**이라 무의미하고, **자기 사이드 예각 크로스/라인 스파이크**를 무방비로 열었다. 팁(페인트) 커버는
+//   후위 담당 유지(오프블로커 재배정 금지). 새 목표 = 자기 스위칭 레인(전위 존) 근처·네트밴드 하단.
+//   실측 목표 예: 홈 우측 레인 OP [0.694, 0.570] — switchedSpots 전위 우측 0.8W서 안쪽 0.10 인셋 → 0.7W, y0.575H.
+export const OFFBLOCKER_Y_HOME = 0.575;  // 오프블로커 깊이(홈 프랙션 — 네트밴드 하단, 구 0.66=3m선보다 네트 쪽)
+export const OFFBLOCKER_INSET = 0.10;    // 자기 스위칭 레인서 코트 중앙 쪽으로 소폭 안쪽(프랙션) — 라인 여백 확보

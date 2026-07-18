@@ -20,7 +20,7 @@ const log = (m: string) => process.stdout.write(m + '\n');
 resetLeagueBase();
 const teams = LEAGUE.teams.map((t) => t.id);
 
-type Rec = { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number };
+type Rec = { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number; libero?: number; liberoWasFirst?: boolean };
 const recs: Rec[] = [];
 
 for (let m = 0; m < nMatches; m++) {
@@ -75,6 +75,14 @@ const fallbackBackInNear = backFallback.filter((r) => backInNear(r.near, r.front
 // A/B: 구 로직이었으면 같은 국면(전위 가용≥2)에서 근접 슬롯 후위 침입이 몇 건이었나 (>0 이어야 민감)
 const oldNearBackIntrusion = backReady.filter((r) => backInNear(oldNear(r), r.front) > 0).length;
 
+// ── R3(#131): 공격팀 리베로(수비 스페셜리스트) 커버 합류 — firstTouch(서브리시브/디그)여도 방치 금지 ──
+// 구 로직은 firstTouch면 리베로를 커버 풀에서 제외 → 반대 구석 베이스에 방치(사용자 실측). 신 로직은 리베로를 합류.
+//  eligible = 리베로가 firstTouch였고(구 로직이 방치했을 국면) 자기가 공격수가 아닌 경우(= 커버 대상).
+//  방치(위반) = eligible인데 cover에 없음 → 신 로직 기대 0. A/B = eligible 국면 수(>0 이어야 "구 로직이 방치할 시나리오 존재" 증명).
+const libEligible = recs.filter((r) => r.liberoWasFirst === true && r.libero !== undefined && r.libero !== r.atkIdx);
+const libAbandoned = libEligible.filter((r) => !r.cover.includes(r.libero!)).length; // 신 로직 위반(기대 0)
+const libAbandonByType = (t: Atk) => { const g = libEligible.filter((r) => r.atk === t); return `${g.filter((r) => !r.cover.includes(r.libero!)).length}/${g.length}`; };
+
 const pct = (n: number, d: number) => d ? (100 * n / d).toFixed(1) : '—';
 log('\n═══ 커버 안무 검증 (룰 62 제외방향 + 룰 68 포함/행방향) ═══');
 log(`표본: ${recs.length} 커버 국면 (${nMatches}경기) — open/tempo ${disguise.length} · back ${back.length} · quick ${quick.length}`);
@@ -89,11 +97,18 @@ log(`②' [행 정합] 백어택 전위가용≥2 국면 ${backReady.length}건 
 log(`   [폴백] 전위가용<2 국면 ${backFallback.length}건 중 후위가 근접 채움: ${fallbackBackInNear} — 위반 아님(무방비 금지 폴백)`);
 log(`   [A/B 민감도] 구 x-only 선정이었으면 같은 ${backReady.length}건 중 근접 후위 침입: ${oldNearBackIntrusion} (${pct(oldNearBackIntrusion, backReady.length)}%) — >0 이어야 검사 유효`);
 
+log('');
+log('── R3 리베로 커버 합류 (firstTouch여도 방치 금지) ──');
+log(`③'' [방치 봉인] 리베로 firstTouch·비공격수 국면 ${libEligible.length}건 중 커버 누락(방치): ${libAbandoned} (${pct(libAbandoned, libEligible.length)}%) — 기대 0`);
+log(`   유형별 방치: open ${libAbandonByType('open')} · tempo ${libAbandonByType('tempo')} · back ${libAbandonByType('back')} · quick ${libAbandonByType('quick')}`);
+log(`   [A/B 민감도] 구 로직(firstTouch 리베로 제외)이면 이 ${libEligible.length}건 전부 방치 → ${libEligible.length > 0 ? '✅ 시나리오 존재(>0)' : '⚠ 표본 없음'}`);
+
 const pass =
   disguiseFrontLeak === 0 && anyAtkInCover === 0 && backFrontCover > 0 && // 룰 62
-  nearBackIntrusion === 0 && oldNearBackIntrusion > 0;                    // 룰 68 (위반 0 + A/B 민감)
+  nearBackIntrusion === 0 && oldNearBackIntrusion > 0 &&                  // 룰 68 (위반 0 + A/B 민감)
+  libAbandoned === 0 && libEligible.length > 0;                          // R3 (리베로 방치 0 + A/B 시나리오 존재)
 log('');
 log(pass
-  ? '✅ PASS — 룰62(옵션누출 0·공격수 0·백어택대조 유효) + 룰68(근접 후위침입 0 · 구로직 A/B >0 증명)'
-  : '❌ FAIL — 위 지표 확인(②\'>0 이면 룰68 미봉인, A/B==0 이면 검사 공허)');
+  ? '✅ PASS — 룰62(옵션누출 0·공격수 0·백어택대조 유효) + 룰68(근접 후위침입 0 · 구로직 A/B >0) + R3(리베로 방치 0 · A/B >0)'
+  : '❌ FAIL — 위 지표 확인(②\'>0 룰68 미봉인 / ③\'\'>0 리베로 방치 / A/B==0 검사 공허)');
 process.exit(pass ? 0 : 1);

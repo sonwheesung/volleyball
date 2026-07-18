@@ -12,6 +12,7 @@ import {
 import type { WP, Move, Lineups } from './courtPath';
 import type { PointHow, TouchEvent } from '../engine/rally';
 import type { Banner } from '../data/broadcast';
+import { OFFBLOCKER_Y_HOME, OFFBLOCKER_INSET } from './formationParams';
 
 export interface StageInfo { serving: Side; homeRot: number; awayRot: number }
 export interface Seg { from: WP; to: WP }
@@ -92,18 +93,20 @@ export function segmentTargets(
     // 전위 번치(defTransition 전위)에서 벽이 형성돼 출발↔도착 좌우 순서 뒤집힘 없음(checkBlockerCross 0%, 통과조건 3).
     const dReady = defTransition(dSide, dLu, dRot, ax, W, H);
     const readyX = (i: number) => dReady[i]?.x ?? zonePx(dSide, ((i - dRot) % 6 + 6) % 6 + 1, W, H).x;
-    const yOff = (dSide === 'home' ? 0.66 : 0.34) * H;
     const chosen = front.slice().sort((a, b) => Math.abs(readyX(a) - ax) - Math.abs(readyX(b) - ax)).slice(0, count)
       .sort((a, b) => readyX(a) - readyX(b));
     const wall = blockerWall(dSide, ax, chosen.length, W, H);
     chosen.forEach((bi, k) => { moveMap[`${dSide}-${bi}`] = wall[k]; });
-    // 오프블로커(블록 안 뛰는 전위): 네트서 풀오프(yOff≈3m선)하며 **시임/팁 쪽으로 시프트**해 팁·연타를
-    // 디그할 위치로 — 페리미터의 약점(가운데 팁 무방비)을 오프블로커 팁 커버로 보강(USAV IMPACT·AoC,
-    // 2026-06-20 사용자 보고). 공격 x 쪽으로 0.35 당겨 시임을 덮되, 자기 사이드 각(크로스)도 일부 유지.
+    // 오프블로커(블록 안 뛰는 전위): **자기 스위칭 레인(자기 사이드 전위 존) 유지** — 자기 사이드 예각 크로스/라인
+    //  스파이크 방어(룰 48 방향 반전, R3). 구 동작(공격 x쪽 0.35 시프트)은 중앙으로 끌려 다른 수비 커버와 중복이라
+    //  무의미했고 자기 사이드를 비웠다(사용자 board-lab 실측). 팁(페인트) 커버는 후위 담당 — 오프블로커 재배정 안 함.
+    //  x = 자기 switchedSpots 전위 레인서 코트 중앙 쪽 OFFBLOCKER_INSET 인셋(라인 여백), y = 네트밴드 하단(OFFBLOCKER_Y).
+    const dSw = switchedSpots(dSide, dLu, dRot, false, W, H).pos;
+    const obY = OFFBLOCKER_Y_HOME * H; const obYs = dSide === 'home' ? obY : H - obY;
     front.filter((i) => !chosen.includes(i)).forEach((ri) => {
-      const baseX = readyX(ri); // 블록 레디 번치에서 팁 쪽으로 시프트(구 switchedSpots 베이스 대신)
-      const tipX = baseX + (ax - baseX) * 0.35;
-      moveMap[`${dSide}-${ri}`] = { x: Math.max(24, Math.min(W - 24, tipX)), y: yOff };
+      const laneX = dSw[ri]?.x ?? readyX(ri); // 자기 스페셜리스트 레인(스프레드) x
+      const insetX = laneX + Math.sign(0.5 * W - laneX) * OFFBLOCKER_INSET * W; // 코트 중앙 쪽 소폭 인셋
+      moveMap[`${dSide}-${ri}`] = { x: Math.max(24, Math.min(W - 24, insetX)), y: obYs };
     });
     moveMap[`${attSide}-${seg.from.idx}`] = { x: seg.from.x, y: seg.from.y };
   }

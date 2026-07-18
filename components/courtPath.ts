@@ -114,7 +114,7 @@ function withBounce(wp: WP[], W: number, H: number): WP[] {
 }
 
 /** 한 랠리의 공 이동 경로 — 스위칭(전문 포지션) 기반. prevLast: 직전 낙구점(공 순간이동 방지) */
-export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[], coverSink?: { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number }[]): WP[] {
+export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: number, serveOut: number, prevLast?: { x: number; y: number }, digSink?: { side: Side; idx: number }[], coverSink?: { atk: Atk; atkIdx: number; front: number[]; cover: number[]; near: number[]; pool: { i: number; x: number }[]; ahx: number; libero?: number; liberoWasFirst?: boolean }[]): WP[] {
   const rng = createRng((seed ^ ((r.home << 8) | r.away) ^ (r.setNo * 7919)) >>> 0);
   const pick = <T,>(a: T[]): T => a[Math.floor(rng.next() * a.length)];
   const rotOf = (s: Side) => (s === 'home' ? r.homeRot : r.awayRot);
@@ -483,9 +483,15 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       : atk === 'quick' ? new Set([atkIdx])              // 속공: 이미 MB 확정·초고속 → 위장 무관, 기존처럼 커버
       : new Set(attFront);                               // open/tempo: 전위 히터 전원 옵션(위장) → 커버 금지
     // 커버 = 옵션·세터·퍼스트터치 제외. open/tempo면 후위 비공격+리베로, 백어택이면 전위가 네트 앞.
-    let coverPool = [0, 1, 2, 3, 4, 5].filter((i) => !options.has(i) && i !== tosserIdx && i !== firstTouch);
+    // R3(#131): **리베로(후위 MB 슬롯, 수비 스페셜리스트)는 firstTouch(서브 리시브/디그)여도 커버 합류** — 패스 직후
+    //  한 박자(패스 WP) 자세 회복 후 토스에서 히터 뒤로 collapse(자기 본연의 디그/커버 역할). 다른 firstTouch(공격수·세터·
+    //  OH 리시버)는 룰 M 홀드 유지(자기 자리 정지). 근거: R3 사용자 실측(리베로가 반대 구석 방치 = firstTouch 홀드가 원인,
+    //  coverCand 선정 버그 아님 — probe inPool_notCover 0/3250). rng 미소비(선정 로직만, 결정론·프리픽스 불변).
+    const attLibIdx = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z)).find((i) => lu.six[i]?.position === 'MB');
+    const liberoCover = (i: number) => i === attLibIdx && i !== atkIdx; // 리베로는 firstTouch 제외에서 면제(단 자기가 공격수면 아님)
+    let coverPool = [0, 1, 2, 3, 4, 5].filter((i) => !options.has(i) && i !== tosserIdx && (i !== firstTouch || liberoCover(i)));
     // 안전망: 풀이 비면(옵션·세터·퍼스트터치가 다 먹음) 옵션 아닌 최소 1명이라도 — 무방비 금지.
-    if (coverPool.length === 0) coverPool = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && i !== firstTouch);
+    if (coverPool.length === 0) coverPool = [0, 1, 2, 3, 4, 5].filter((i) => i !== atkIdx && i !== tosserIdx && (i !== firstTouch || liberoCover(i)));
     // 백어택(룰 62ⓑ·룰 68): 근접 커버 2슬롯=전위(collapse), 깊은 슬롯=후위 — 행 인지 배정.
     //  x거리만으로 뽑으면 후위 깊은 선수(후위 MB=리베로 표시)가 네트 앞 근접 슬롯으로 질주하는 버그
     //  (2026-07-16 사용자 보고) → 전위 우선 배정으로 봉인. rng 미소비(결정론·프리픽스 불변).
@@ -514,7 +520,8 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     // 근접 슬롯 점유자(y=0.62H) — 길이 3이면 깊은 슬롯(coverCand[1]) 제외, 그 외는 전원 근접(측정용).
     const nearMembers = coverCand.length === 3 ? [coverCand[0], coverCand[2]] : [...coverCand];
     coverSink?.push({ atk, atkIdx, front: attFront, cover: coverCand, near: nearMembers,
-      pool: coverPool.map((i) => ({ i, x: sw[att].pos[i].x })), ahx }); // 측정(룰 62 옵션 제외 + 룰 68 근접 슬롯 행 + 구로직 A/B용 pool·ahx)
+      pool: coverPool.map((i) => ({ i, x: sw[att].pos[i].x })), ahx,
+      libero: attLibIdx, liberoWasFirst: firstTouch === attLibIdx }); // 측정(룰 62·68 + 구로직 A/B + R3 리베로 방치)
     const cSpots = coverSpots(att, ahx, coverCand.length, W, H, atk === 'back');
     const coverMovers: Mover[] = coverCand.length === 3
       ? [
@@ -546,8 +553,10 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       movers: [
         ...coverMovers,
         { side: att, idx: atkIdx, x: hit.x, y: hit.y }, // 공격수가 타점으로 이동
-        // 첫 터치한 선수는 패스 지점에 한 박자 머문다(자세 회복) — 다음 구간부터 합류
-        ...(firstTouch !== atkIdx && firstTouch !== tosserIdx
+        // 첫 터치한 선수는 패스 지점에 한 박자 머문다(자세 회복) — 다음 구간부터 합류.
+        //  단 R3: 리베로가 firstTouch이고 커버에 합류하면 홀드 스킵(커버 무버가 이미 히터 뒤로 보냄) — 이중 무버로 홀드가
+        //  덮어써 리베로가 방치되던 것 봉인. 다른 firstTouch(공격수·세터·OH)는 룰 M 홀드 유지.
+        ...(firstTouch !== atkIdx && firstTouch !== tosserIdx && !(firstTouch === attLibIdx && coverCand.includes(attLibIdx))
           ? [{ side: att, idx: firstTouch, x: touchPos.x, y: touchPos.y }]
           : []),
       ],
