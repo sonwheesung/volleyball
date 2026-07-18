@@ -1,7 +1,7 @@
 // 개인정보처리방침(공개 정적 페이지 · 인증 없음 공개 GET). 스토어 심사·앱 링크의 필수 URL(/privacy).
 // 정합 기준: 실서비스 수집 실태(server/db/schema.ts users — providerId(sub)만, 이메일·이름 미저장 / auth/login 최소수집)
 //   + 앱 내 정본 data/legalText.ts PRIVACY + 보존기간 BACKEND_SYSTEM §13.9. 두 곳과 어긋나면 안 됨(드리프트 금지).
-// ⚠ 출시 전 사용자 기입: {사업자 상호}·{사업자등록번호}(개인/법인 확정 시). 연락처 이메일은 확정값(bjpio113@gmail.com).
+// 사업자 기입 완료(2026-07-18, 사업자등록증 대조): 상호 휘성게임즈. 연락처 이메일은 확정값(bjpio113@gmail.com).
 
 export const metadata = {
   title: '배구명가 — 개인정보처리방침',
@@ -27,7 +27,7 @@ export default function Privacy() {
     <main style={{ maxWidth: 760, margin: '0 auto', padding: 32 }}>
       <h1 style={{ fontSize: 26, fontWeight: 900 }}>개인정보처리방침</h1>
       <p style={muted}>
-        {'{사업자 상호}'}(이하 &quot;운영자&quot;)는 「개인정보 보호법」 등 관련 법령을 준수하며, &quot;배구명가&quot;(이하
+        휘성게임즈(이하 &quot;운영자&quot;)는 「개인정보 보호법」 등 관련 법령을 준수하며, &quot;배구명가&quot;(이하
         &quot;서비스&quot;) 이용자의 개인정보를 아래와 같이 처리합니다. 본 방침은 최소한의 개인정보만 수집하는 것을
         원칙으로 합니다.
       </p>
