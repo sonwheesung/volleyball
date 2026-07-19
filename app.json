@@ -14,7 +14,7 @@
     },
     "android": {
       "package": "com.son0925.volleyball",
-      "versionCode": 19,
+      "versionCode": 20,
       "backgroundColor": "#0B1018",
       "allowBackup": false,
       "adaptiveIcon": {
