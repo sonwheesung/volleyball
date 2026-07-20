@@ -16,9 +16,9 @@ import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusTime
 import { medianOvr, MED_REF } from '../engine/overall';
 import { advanceCoaches } from '../data/staffLifecycle';
 import { bottomStreak } from '../engine/staffLifecycle';
-import { predictRanks, reputationOf, type CoachCareerRow, type MediaPredictionEntry, type MidFire, type PlayoffResult } from '../engine/reputation';
+import { predictRanks, reputationOf, interestedClubs, counterOfferOutcome, type CoachCareerRow, type MediaPredictionEntry, type MidFire, type PlayoffResult, type TeamContext } from '../engine/reputation';
 import { headOvr, headCoachSalary } from '../engine/staff';
-import { getTeamPlayers } from '../data/league';
+import { getTeamPlayers, shortTeamName } from '../data/league';
 import { SEASON_DAYS } from '../engine/calendar';
 import type { Coach, AssistantCoach } from '../types';
 import { buildDraftContext } from '../data/draftSetup';
@@ -145,6 +145,7 @@ interface GameState {
   coachCareerLog: CoachCareerRow[]; // 감독 경력 로그(명성의 진실 — STAFF §9.6-B). 시즌 종료 시 팀별 1행 append. 롤링 캡 1000.
   mediaPredictionLog: MediaPredictionEntry[]; // 언론 예상 순위(시즌별) — 개막 뉴스·경력 로그 기준선. 캡 12.
   midFires: MidFire[]; // 시즌 중 경질 캡처(내 팀 fireCoach) — endSeason이 midSeasonFired 행으로 소비 후 리셋.
+  counterOfferedCoachId: string | null; // 이번 오프시즌 카운터오퍼 소진한 감독(1회성 재클릭 차단 — 비영속 세션, endSeason 리셋 §9.6-C)
   hallOfFame: HofEntry[];                      // 명예의전당(은퇴 레전드 통산 기록)
   expelledLog: ExpelRecord[];                  // 영구제명 연표(승부조작·학폭 — 불명예 퇴출, 뉴스/서사용)
   transfers: Transfer[];                       // FA 이적 연표(오프시즌 팀 이동, 뉴스 슬라이스3)
@@ -208,6 +209,8 @@ interface GameState {
   hireCoach: (coachId: string) => boolean;
   resignCoach: () => boolean;
   releaseCoach: () => boolean;
+  counterOfferCoach: (offered: number) => { done: boolean; accept?: boolean; prob?: number; rivals?: number; already?: boolean };
+  interestedClubNamesForCoach: (coach: { id: string; matchOps: number; dvPhilosophy: number; leadership: number; firedFrom?: string[] }) => string[];
   fireCoach: () => { acting: string | null };
   hireAssistant: (id: string) => boolean;
   releaseAssistant: (id: string) => void;
@@ -270,6 +273,7 @@ const freshSave = {
   coachCareerLog: [] as CoachCareerRow[],
   mediaPredictionLog: [] as MediaPredictionEntry[],
   midFires: [] as MidFire[],
+  counterOfferedCoachId: null as string | null,
   hallOfFame: [] as HofEntry[],
   expelledLog: [] as ExpelRecord[],
   transfers: [] as Transfer[],
@@ -308,6 +312,16 @@ const freshSave = {
  *  selectTeam(season0)·endSeason(롤오버 커밋 직후 next season) 두 시점에서 같은 함수로 산출(프리뷰=결과). */
 function mediaPredictionNow(): string[] {
   return predictRanks(LEAGUE.teams.map((t) => ({ teamId: t.id, players: getTeamPlayers(t.id) })));
+}
+/** 라이브 팀 상황(감독 선호·관심 구단 입력, 결정론) — 현재 로스터 평균연령 + 언론 예상순위. STAFF §9.6-C. */
+function teamContextsNow(): TeamContext[] {
+  const pred = mediaPredictionNow();
+  return LEAGUE.teams.map((t) => {
+    const ps = getTeamPlayers(t.id);
+    const avgAge = ps.length ? ps.reduce((a, p) => a + p.age, 0) / ps.length : 28;
+    const i = pred.indexOf(t.id);
+    return { teamId: t.id, avgAge, predictedRank: i < 0 ? LEAGUE.teams.length : i + 1 };
+  });
 }
 
 function myRosterDelta(my: string, inSeasonTx: Tx[], rosterIds: string[]) {
@@ -815,6 +829,31 @@ export const useGameStore = create<GameState>()(
         if (ok) { set({ coachPool: currentCoachPool(), staffHead: getStaffState().head }); diag(get().season, 'staff', '감독 놓아주기'); }
         return ok;
       },
+      // 카운터오퍼(1회, STAFF §9.6-C) — 요구 연봉 대비 낮춘 금액 제시. 성공=그 금액 재계약, 결렬=FA 방출.
+      //   결정론(시드=coachId+season, 재시도 무이득) + counterOfferedCoachId 플래그로 1회성 이중 보장.
+      counterOfferCoach: (offered) => {
+        const s = get();
+        const tid = s.selectedTeamId;
+        if (!tid) return { done: false };
+        const c = getTeamCoach(tid);
+        if (!c || c.id.startsWith('acting_')) return { done: false };
+        if (s.counterOfferedCoachId === c.id) return { done: false, already: true }; // 이번 오프시즌 이미 카운터오퍼 소진
+        const rep = reputationOf(s.coachCareerLog, c);
+        const demand = headCoachSalary(headOvr(c), rep);
+        const rivals = interestedClubs(c, rep, teamContextsNow(), LEAGUE.teams.length, tid).length;
+        const { accept, prob } = counterOfferOutcome(demand, offered, rep, rivals, `counter:${c.id}:${s.season}`);
+        set({ counterOfferedCoachId: c.id });
+        if (accept) resignTeamCoach(tid, offered); else releaseTeamCoach(tid);
+        set({ coachPool: currentCoachPool(), staffHead: getStaffState().head });
+        diag(s.season, 'staff', `카운터오퍼 ${accept ? '성공' : '결렬'} (제시 ${offered}·확률 ${Math.round(prob * 100)}%·관심 ${rivals})`);
+        return { done: true, accept, prob, rivals };
+      },
+      // 감독 관심 구단명(놓아주기 경고·시장 표시, STAFF §9.6-C) — 현재 로스터·예상순위 파생(결정론).
+      interestedClubNamesForCoach: (coach) => {
+        const s = get();
+        const rep = reputationOf(s.coachCareerLog, coach);
+        return interestedClubs(coach, rep, teamContextsNow(), LEAGUE.teams.length, s.selectedTeamId ?? undefined).map((id) => shortTeamName(id));
+      },
       // 감독 경질 — 시즌 중 해촉. 전문 코치가 대행, 없으면 공석. 새 감독은 직접 영입.
       fireCoach: () => {
         const s0 = get();
@@ -1262,7 +1301,15 @@ export const useGameStore = create<GameState>()(
         const recentOrders = [...nextArchive.slice(-4).map((a) => a.standings).filter((s): s is string[] => !!s)];
         const bottomYears: Record<string, number> = {};
         for (const t of LEAGUE.teams) bottomYears[t.id] = bottomStreak(recentOrders, t.id);
-        const lifecycle = advanceCoaches(nextSeason, currentCoachPool(), assignedHead, retiredPlayers, legendSet, rankOrder, bottomYears, my);
+        // Phase C: AI 영입 경쟁·감독 선호 입력 — 팀 상황(다음 시즌 로스터 평균연령 + 이번 시즌 언론 예상순위).
+        //   avgAge=filled.rosters(다음 시즌 명단)+snapshot 파생, predictedRank=predOrder(이번 시즌 예상, 결정론 이미 확보).
+        const teamContext: Record<string, { teamId: string; avgAge: number; predictedRank: number }> = {};
+        for (const t of LEAGUE.teams) {
+          const ages = (filled.rosters[t.id] ?? []).map((id) => snapshot[id]?.age).filter((a): a is number => typeof a === 'number');
+          const avgAge = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 28;
+          teamContext[t.id] = { teamId: t.id, avgAge, predictedRank: predRankOf(t.id) };
+        }
+        const lifecycle = advanceCoaches(nextSeason, currentCoachPool(), assignedHead, retiredPlayers, legendSet, rankOrder, bottomYears, my, nextCoachCareerLog, teamContext);
         commitCoachPool(lifecycle.coaches, lifecycle.assistants);
         // 재배정 적용: AI 팀은 새 감독, 내 팀은 감독이 떠났으면 배정 해제(기본 감독 복귀 — 직접 다시 영입)
         for (const r of lifecycle.reassign) assignCoach(r.teamId, r.coachId);
@@ -1406,6 +1453,7 @@ export const useGameStore = create<GameState>()(
           coachCareerLog: nextCoachCareerLog, // 감독 경력 로그 append(명성 진실, §9.6-B)
           mediaPredictionLog: nextMediaPredictionLog, // 다음 시즌 언론 예상 순위(개막 뉴스·명성 기준선)
           midFires: [],                      // 시즌 중 경질 캡처 소비 완료 — 새 시즌 리셋
+          counterOfferedCoachId: null,       // 카운터오퍼 1회성 — 새 오프시즌 리셋(§9.6-C)
           staffHead: nextStaffHead,          // AI 재배정 + 죽은 계약 정리 반영
           staffAssistants: nextStaffAssistants, // 은퇴한 코치 슬롯 정리
           careerLog: { ...careerLog, faSigns: careerLog.faSigns + offseasonSigns }, // 오프시즌 영입 누적(업적)

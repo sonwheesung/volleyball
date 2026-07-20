@@ -12,11 +12,14 @@ import {
 import { computeStandings, displayCutoff } from '../data/standings';
 import { SPECIALTY_KO, SPECIALTY_DESC, TYPE_KO, TYPE_DESC, headOvr, headType3, HEAD_TYPE3_KO, headCoachSalary } from '../engine/staff';
 import { firedMidSeason } from '../engine/staffLifecycle';
-import { reputationOf, reputationTier, repStars, raiseReasons } from '../engine/reputation';
+import { reputationOf, reputationTier, repStars, raiseReasons, coachPreference, type CoachPref } from '../engine/reputation';
 import { coachSlots } from '../data/league';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 
+
+// 감독 선호 힌트(시장 카드 — 명장·거장만 표시, 하위 티어=무선호는 빈칸)
+const PREF_HINT: Record<CoachPref, string> = { young: '젊은 팀 선호', contender: '우승권 선호', none: '' };
 
 export default function Staff() {
   const teamId = useGameStore((s) => s.selectedTeamId);
@@ -28,9 +31,12 @@ export default function Staff() {
   const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
   const coachCareerLog = useGameStore((s) => s.coachCareerLog); // 감독 명성 파생(STAFF §9.6-B)
+  const counterOfferedCoachId = useGameStore((s) => s.counterOfferedCoachId); // 카운터오퍼 1회성(재클릭 차단)
   const hireCoach = useGameStore((s) => s.hireCoach);
   const resignCoach = useGameStore((s) => s.resignCoach);
   const releaseCoach = useGameStore((s) => s.releaseCoach);
+  const counterOfferCoach = useGameStore((s) => s.counterOfferCoach);
+  const interestedClubNamesForCoach = useGameStore((s) => s.interestedClubNamesForCoach);
   const fireCoach = useGameStore((s) => s.fireCoach);
   const hireAssistant = useGameStore((s) => s.hireAssistant);
   const releaseAssistant = useGameStore((s) => s.releaseAssistant);
@@ -76,6 +82,8 @@ export default function Staff() {
   const headRep = head && !acting ? reputationOf(coachCareerLog, head) : 0; // 명성(경력 로그 파생)
   const headDemand = head && !acting ? headCoachSalary(headOvr(head), headRep) : 0; // 재계약 요구 연봉(명성 반영)
   const headReasons = head && !acting ? raiseReasons(coachCareerLog, head.id) : []; // 요구 상승 이유(로그 사실만)
+  const headInterest = head && !acting ? interestedClubNamesForCoach(head) : []; // 관심 구단(놓아주기 경고·카운터오퍼 경쟁강도, §9.6-C)
+  const counteredThis = !!head && counterOfferedCoachId === head.id; // 이번 오프시즌 카운터오퍼 소진
   // 정식 감독이 이미 있으면 새 감독을 바로 영입할 수 없다 — 먼저 경질해야(2026-07-11 테스터: 자동 교체가 실수 유발).
   //   대행/공석(acting || !head)은 정식 감독을 세우는 절차라 영입 허용.
   const hasHeadCoach = !!head && !acting;
@@ -98,6 +106,23 @@ export default function Staff() {
     showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)} · ${STAFF_CONTRACT_YEARS}년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
       { text: '취소', style: 'cancel' },
       { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다. 새 감독의 성향으로 팀이 움직입니다.`); }, `${name} 감독이 부임해\n선수들에게 전술을 설명하는 중…`) },
+    ]);
+  };
+  // 카운터오퍼(1회, §9.6-C) — 요구 연봉보다 낮춘 두 제안 중 선택. 결렬 시 감독 FA(무거움 → heavyAction).
+  const runCounter = (offered: number) => {
+    const r = counterOfferCoach(offered);
+    if (!r.done) { showAlert('카운터오퍼 불가', r.already ? '이번 오프시즌엔 이미 카운터오퍼를 제시했습니다.' : '현재 감독이 없습니다.'); return; }
+    if (r.accept) showAlert('카운터오퍼 수락', `${head!.name} 감독이 ${formatMoney(offered)}에 재계약했습니다.\n수락 확률 ${Math.round((r.prob ?? 0) * 100)}%였습니다.`);
+    else showAlert('카운터오퍼 결렬', `${head!.name} 감독이 제안을 거절하고 FA로 떠났습니다.\n수락 확률 ${Math.round((r.prob ?? 0) * 100)}%${r.rivals ? ` · 관심 구단 ${r.rivals}곳` : ''}. 새 감독을 영입하세요.`);
+  };
+  const tryCounterOffer = () => {
+    if (!head) return;
+    const offerA = Math.round((headDemand * 0.94) / 100) * 100; // -6%(적정)
+    const offerB = Math.round((headDemand * 0.88) / 100) * 100; // -12%(강하게)
+    showAlert('카운터오퍼 (1회)', `${head.name} 감독에게 요구 연봉 ${formatMoney(headDemand)}보다 낮춘 금액을 제시합니다.\n제안이 낮을수록·명성이 높을수록·관심 구단이 많을수록 결렬 위험이 커집니다.${headInterest.length ? `\n현재 관심 구단 ${headInterest.length}곳.` : ''}\n\n한 번만 제시할 수 있고, 결렬되면 감독은 FA로 떠납니다.`, [
+      { text: '취소', style: 'cancel' },
+      { text: `${formatMoney(offerA)} 제시`, onPress: () => heavyAction(() => runCounter(offerA), `${head.name} 감독이 제안을\n검토하는 중…`) },
+      { text: `${formatMoney(offerB)} 제시`, style: 'destructive', onPress: () => heavyAction(() => runCounter(offerB), `${head.name} 감독이 제안을\n검토하는 중…`) },
     ]);
   };
   const tryHireAsst = (id: string, name: string, salary: number) =>
@@ -168,13 +193,17 @@ export default function Staff() {
                 {expiring ? (
                   <>
                     <Muted>요구 연봉 {formatMoney(headDemand)}{headDemand > head.salary ? ` (+${formatMoney(headDemand - head.salary)})` : ''}{headReasons.length ? ` — ${headReasons.join('·')}` : ''}</Muted>
+                    {headInterest.length ? (
+                      <Muted style={{ color: theme.warn }}>관심 구단 {headInterest.length}곳: {headInterest.join('·')}</Muted>
+                    ) : null}
                     <Row>
                       <Button small label={`재계약(${STAFF_CONTRACT_YEARS}년)`} onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 ${STAFF_CONTRACT_YEARS}년 재계약했습니다.\n연봉 ${formatMoney(headDemand)}.`); else showAlert('재계약 불가', '현재 감독이 없습니다. 먼저 감독을 영입하세요.'); }} />
-                      <Button small variant="ghost" label="놓아주기" onPress={() => showAlert('감독 놓아주기', `${head.name} 감독을 놓아주시겠습니까?\n감독이 FA로 풀려 다른 구단으로 갈 수 있습니다.`, [
-                        { text: '취소', style: 'cancel' },
-                        { text: '놓아주기', style: 'destructive', onPress: () => heavyAction(() => { if (releaseCoach()) showAlert('작별', `${head.name} 감독이 팀을 떠났습니다. 새 감독을 영입하세요.`); }, `${head!.name} 감독이 팀을 떠날\n준비를 하는 중…`) },
-                      ])} />
+                      <Button small variant="ghost" label={counteredThis ? '카운터오퍼 소진' : '카운터오퍼'} disabled={counteredThis} onPress={tryCounterOffer} />
                     </Row>
+                    <Button small variant="ghost" label="놓아주기" onPress={() => showAlert('감독 놓아주기', `${head.name} 감독을 놓아주시겠습니까?\n감독이 FA로 풀려 다른 구단으로 갈 수 있습니다.${headInterest.length ? `\n\n${headInterest.join('·')}이(가) 노리고 있습니다.` : ''}`, [
+                      { text: '취소', style: 'cancel' },
+                      { text: '놓아주기', style: 'destructive', onPress: () => heavyAction(() => { if (releaseCoach()) showAlert('작별', `${head.name} 감독이 팀을 떠났습니다. 새 감독을 영입하세요.`); }, `${head!.name} 감독이 팀을 떠날\n준비를 하는 중…`) },
+                    ])} />
                   </>
                 ) : null}
                 <Button label="감독 경질" onPress={() => showAlert('감독 경질', `${head.name} 감독을 경질하시겠습니까? 전문 코치가 대행을 맡고, 그 감독은 우리 팀에 다시 오지 않습니다.`, [
@@ -199,7 +228,16 @@ export default function Staff() {
               <Title>{c.name}</Title>
               <Muted style={{ marginTop: 2 }}>{STYLE_LABEL[c.style]} · {HEAD_TYPE3_KO[headType3(c)]} · 종합 {headOvr(c)} · {c.archetype} · 연봉 {formatMoney(c.salary)}</Muted>
               <Muted style={{ marginTop: 2 }}>경기 운영 {c.matchOps} · 육성 철학 {c.dvPhilosophy} · 리더십 {c.leadership}</Muted>
-              <Muted style={{ marginTop: 2, color: theme.violet }}>{repStars(reputationOf(coachCareerLog, c))} {reputationTier(reputationOf(coachCareerLog, c)).label} · 명성 {reputationOf(coachCareerLog, c)}</Muted>
+              {(() => {
+                const rep = reputationOf(coachCareerLog, c);
+                const pref = coachPreference(c, rep);
+                const interest = interestedClubNamesForCoach(c).length;
+                return (
+                  <Muted style={{ marginTop: 2, color: theme.violet }}>
+                    {repStars(rep)} {reputationTier(rep).label} · 명성 {rep}{PREF_HINT[pref] ? ` · ${PREF_HINT[pref]}` : ''}{interest ? ` · 관심 ${interest}구단` : ''}
+                  </Muted>
+                );
+              })()}
             </View>
             <Button small label="영입" onPress={() => tryHireCoach(c.id, c.name, c.salary)} disabled={hasHeadCoach} />
           </Row>

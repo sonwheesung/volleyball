@@ -9,7 +9,10 @@ import {
 } from '../engine/staffLifecycle';
 import { createRng, strSeed } from '../engine/rng';
 import { headCoachSalary, assistantSalary, coachTypeFor, deriveHeadAxes, headOvr } from '../engine/staff';
-import { interimRenown } from '../engine/reputation';
+import {
+  interimRenown, reputationOf, coachPreference, resolveCoachMarket,
+  type CoachCareerRow, type TeamContext, type MarketCoach,
+} from '../engine/reputation';
 import { COACH_NAMES } from './names';
 import type { CoachSpecialty } from '../types';
 
@@ -67,6 +70,8 @@ const DEFAULT_FOCUS: TrainingFocus = { primary: [4, 6], secondary: [1, 10, 12] }
  * @param rankOrder 정규리그 최종 순위(teamId, 1위→꼴찌)
  * @param bottomYears teamId → 최근 연속 하위(경질 판정용)
  * @param myTeamId 플레이어 팀(강제 경질·자동배정 제외)
+ * @param careerLog 감독 경력 로그(명성 파생 — AI 영입 경쟁·선호. Phase C, 생략 시 renown 기준선)
+ * @param teamContext teamId → {avgAge, predictedRank}(선호·경쟁 판정 입력 — 생략 시 무선호 폴백)
  */
 export function advanceCoaches(
   season: number,
@@ -77,6 +82,8 @@ export function advanceCoaches(
   rankOrder: string[],
   bottomYears: Record<string, number>,
   myTeamId: string,
+  careerLog: CoachCareerRow[] = [],
+  teamContext: Record<string, TeamContext> = {},
 ): LifecycleResult {
   const teamCount = rankOrder.length || 7;
   const retiredCoaches: string[] = [];
@@ -179,24 +186,41 @@ export function advanceCoaches(
   // 방금 떠난(경질·은퇴 후 살아있는) 감독은 이번 오프시즌 재배정 제외 — 경질당한 팀에 도로 가거나
   //   같은 시즌 다른 팀에 바로 취직하지 않는다(현실: 경질된 감독은 한 시즌 쉰다).
   const justLeft = new Set(leftHeadByTeam.values());
-  // 6) 빈 팀 재배정 — AI는 풀에서 최고 카리스마 자동 선임. 프리 감독이 없으면
-  //    최고 역량 전문 코치를 즉시 감독 승격(공급 안전장치 — 팀은 항상 감독을 갖는다).
-  for (const [teamId] of leftHeadByTeam) {
-    if (teamId === myTeamId) { reassign.push({ teamId, coachId: null }); continue; }
-    // 프리 감독 중: 이번에 떠난 사람 제외(한 시즌 휴식) + 이 팀에서 경질된 적 없는 사람만(영구 배제)
-    let free = coaches.filter((c) => c.teamId === null && !justLeft.has(c.id) && !(c.firedFrom ?? []).includes(teamId))
-      .sort((x, y) => y.matchOps - x.matchOps)[0];
+  // 6) 빈 팀 재배정 — Phase C: 명성 기반 AI 영입 경쟁(resolveCoachMarket) + 감독 선호 반영.
+  //    myTeam은 직접 영입(coachId:null). 폴백(승격·신임)은 선호 무시로 반드시 채운다 → 공석 데드락 0(게이트 ④).
+  const openAiTeamIds = [...leftHeadByTeam.keys()].filter((t) => t !== myTeamId);
+  for (const teamId of leftHeadByTeam.keys()) if (teamId === myTeamId) reassign.push({ teamId, coachId: null });
+
+  const teamCtxOf = (teamId: string): TeamContext =>
+    teamContext[teamId] ?? { teamId, avgAge: 28, predictedRank: Math.ceil(teamCount / 2) }; // 컨텍스트 결측=중립(선호 무영향)
+  const openTeams: TeamContext[] = openAiTeamIds.map(teamCtxOf);
+
+  // 프리 감독 매물: 이번에 떠난 사람 제외(한 시즌 휴식). firedFrom·선호는 시장 판정 내부에서 처리.
+  const freeCoaches = coaches.filter((c) => c.teamId === null && !justLeft.has(c.id));
+  const marketCoaches: MarketCoach[] = freeCoaches.map((c) => {
+    const rep = reputationOf(careerLog, c);
+    return { id: c.id, matchOps: c.matchOps, reputation: rep, pref: coachPreference(c, rep), firedFrom: c.firedFrom ?? [] };
+  });
+  const market = resolveCoachMarket(openTeams, marketCoaches, teamCount); // teamId → coachId(선호·경쟁 반영)
+
+  for (const teamId of openAiTeamIds) {
+    let free = market[teamId] ? coaches.find((c) => c.id === market[teamId]) : undefined;
     if (!free) {
-      const best = assistants.filter((a) => a.teamId === null).sort((x, y) => y.rating - x.rating)[0];
-      if (best) {
-        const fromLegend = best.id.startsWith('coach_') && legendIds.has(best.id.slice('coach_'.length));
-        const style = best.specialty === 'attack' ? 'attack' : best.specialty === 'defense' ? 'defense' : 'balanced';
-        free = coachToHead(best, fromLegend ? 80 : 40, DEFAULT_FOCUS, style);
-        coaches.push(free); assistants = assistants.filter((a) => a.id !== best.id); promoted.push(best.name);
-      } else {
-        // 프리 감독·승격 코치 모두 고갈 → 신임 감독을 신규 영입(공급 안전장치 — 팀은 절대 무감독이 되지 않는다)
-        free = makeInterimCoach(teamId, season);
-        coaches.push(free); newCoaches.push(free.name);
+      // 폴백 사슬(선호 무시 — 공석 절대 금지): 프리 감독 최고 matchOps(firedFrom 배제) → 승격 코치 → 신임 감독.
+      free = coaches.filter((c) => c.teamId === null && !justLeft.has(c.id) && !(c.firedFrom ?? []).includes(teamId))
+        .sort((x, y) => y.matchOps - x.matchOps)[0];
+      if (!free) {
+        const best = assistants.filter((a) => a.teamId === null).sort((x, y) => y.rating - x.rating)[0];
+        if (best) {
+          const fromLegend = best.id.startsWith('coach_') && legendIds.has(best.id.slice('coach_'.length));
+          const style = best.specialty === 'attack' ? 'attack' : best.specialty === 'defense' ? 'defense' : 'balanced';
+          free = coachToHead(best, fromLegend ? 80 : 40, DEFAULT_FOCUS, style);
+          coaches.push(free); assistants = assistants.filter((a) => a.id !== best.id); promoted.push(best.name);
+        } else {
+          // 프리 감독·승격 코치 모두 고갈 → 신임 감독 신규 영입(팀은 절대 무감독이 되지 않는다)
+          free = makeInterimCoach(teamId, season);
+          coaches.push(free); newCoaches.push(free.name);
+        }
       }
     }
     if (free) { free.teamId = teamId; free.contractYears = contractTerm(free.id, season); reassign.push({ teamId, coachId: free.id }); }

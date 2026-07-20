@@ -4,7 +4,8 @@
 
 import type { Player, Position } from '../types';
 import { overallRaw } from './overall';
-import { strSeed } from './rng';
+import { createRng, strSeed } from './rng';
+import { headType3, type HeadType3 } from './staff';
 
 // ── 경력 로그 스키마(영속 — 명성의 유일한 진실) ──
 export type PlayoffResult = 'none' | 'po' | 'final' | 'champion';
@@ -132,4 +133,108 @@ export function raiseReasons(log: CoachCareerRow[], coachId: string): string[] {
     if (reasons.length >= 2) break;
   }
   return reasons;
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 시장(감독 영입 경쟁·선호·관심 구단·카운터오퍼) — 스태프 3.0 Phase C(§9.4·§9.6-C).
+//   ★ 전부 시드 순수 함수(id/시즌 시드 — 메인 rng 불간섭, 게이트 ⑥). React·store 무의존.
+//   선호는 **새 랜덤 속성이 아니라 명성 티어 + 유형(3축 argmax) 파생**(§9.4). 공석 폴백은 호출측(advanceCoaches)이
+//   선호를 무시하고 반드시 채워 데드락 0(게이트 ④) — 여기 순수 함수는 "누가 우선권을 갖나"만 정한다.
+
+/** 감독 선호 — young(젊은 로스터)·contender(컨텐더)·none(무선호). */
+export type CoachPref = 'young' | 'contender' | 'none';
+/** 팀 상황(선호 판정 입력) — 결측·전력·나이는 호출측이 로스터에서 산출. */
+export interface TeamContext { teamId: string; avgAge: number; predictedRank: number }
+/** 감독 시장 매물(프리 감독) — reputation·선호·firedFrom은 호출측이 산출해 주입. */
+export interface MarketCoach { id: string; matchOps: number; reputation: number; pref: CoachPref; firedFrom: string[] }
+
+export const YOUNG_AGE = 26.5;   // 육성형 명장이 선호하는 "젊은 로스터" 평균연령 상한
+const PREF_TIER_STARS = 4;       // 이 티어(명장★4) 이상만 선호가 까다로움. 하위=무선호(아무 팀 OK)
+
+/** 선호 파생(명성 티어 + 유형) — §9.4 선호 파생표. 명장·거장만 까다롭다. */
+export function coachPreference(coach: { matchOps: number; dvPhilosophy: number; leadership: number }, reputation: number): CoachPref {
+  if (reputationTier(reputation).stars < PREF_TIER_STARS) return 'none';
+  const t: HeadType3 = headType3(coach);
+  if (t === 'developmental') return 'young';
+  if (t === 'competitive') return 'contender';
+  return 'none'; // organizational = 무선호
+}
+
+/** 팀이 감독 선호에 맞는가 — 무선호는 항상 true(폴백 감독이 어떤 팀도 수락하는 근거). */
+export function coachSuits(pref: CoachPref, ctx: TeamContext, teamCount: number): boolean {
+  if (pref === 'young') return ctx.avgAge <= YOUNG_AGE;
+  if (pref === 'contender') return ctx.predictedRank <= Math.ceil(teamCount / 2);
+  return true; // none
+}
+
+/** 선호별 감독의 최적 행선지(경쟁 중인 팀들 중 하나를 고름) — contender=예상순위 최상, young=최연소, none=예상순위 최상. */
+function pickTeamFor(pref: CoachPref, cand: TeamContext[]): TeamContext {
+  const cmp = pref === 'young'
+    ? (a: TeamContext, b: TeamContext) => a.avgAge - b.avgAge || (a.teamId < b.teamId ? -1 : 1)
+    : (a: TeamContext, b: TeamContext) => a.predictedRank - b.predictedRank || (a.teamId < b.teamId ? -1 : 1);
+  return [...cand].sort(cmp)[0];
+}
+
+/** AI 영입 경쟁 판정(결정론) — 공석 AI 팀 × 프리 감독 매칭. 반환 teamId→coachId(매칭된 것만; 나머지는 폴백).
+ *  감독 매력 내림차순으로 우선권(reputation→matchOps→id), 각 감독은 선호 맞는 공석 팀 중 최적을 고른다(=경쟁 행선지). */
+export function resolveCoachMarket(openTeams: TeamContext[], coaches: MarketCoach[], teamCount: number): Record<string, string> {
+  const assigned: Record<string, string> = {};
+  const order = [...coaches].sort((a, b) => b.reputation - a.reputation || b.matchOps - a.matchOps || (a.id < b.id ? -1 : 1));
+  for (const c of order) {
+    const cand = openTeams.filter((t) => !(t.teamId in assigned) && !c.firedFrom.includes(t.teamId) && coachSuits(c.pref, t, teamCount));
+    if (!cand.length) continue; // 선호 맞는 공석 없음 → FA 잔류(다음 팀/시즌 대기)
+    assigned[pickTeamFor(c.pref, cand).teamId] = c.id;
+  }
+  return assigned;
+}
+
+// ── 관심 구단(명성 티어별 상한 + 선호 적합) ──
+/** 명성 티어(별 1~5)별 관심 구단 상한 — 단조↑, 무명=0·거장=다수(§9.4). */
+export function interestCapForTier(stars: number): number {
+  return [0, 0, 1, 2, 3, 5][Math.max(1, Math.min(5, stars))]; // stars 1→0 · 2→1 · 3→2 · 4→3 · 5→5
+}
+
+/** 감독을 노리는 관심 구단(teamId[], 결정론) — 티어 상한 + 선호 적합(+100) + id 시드 지터(0~49) 정렬. */
+export function interestedClubs(
+  coach: { id: string; matchOps: number; dvPhilosophy: number; leadership: number; firedFrom?: string[] },
+  reputation: number,
+  allTeams: TeamContext[],
+  teamCount: number,
+  excludeTeamId?: string,
+): string[] {
+  const cap = interestCapForTier(reputationTier(reputation).stars);
+  if (cap <= 0) return [];
+  const pref = coachPreference(coach, reputation);
+  const fired = coach.firedFrom ?? [];
+  const scored = allTeams
+    .filter((t) => t.teamId !== excludeTeamId && !fired.includes(t.teamId))
+    .map((t) => ({ teamId: t.teamId, score: (coachSuits(pref, t, teamCount) ? 100 : 0) + (strSeed(`interest:${coach.id}:${t.teamId}`) % 50) }))
+    .sort((a, b) => b.score - a.score || (a.teamId < b.teamId ? -1 : 1));
+  return scored.slice(0, cap).map((s) => s.teamId);
+}
+
+// ── 카운터오퍼(1회 판정, §9.4) ──
+const CO_BASE = 0.95;    // 무할인·무명·무관심 기준 수락 확률
+const CO_GAP_W = 1.1;    // 할인폭(gap) 계수 — 많이 깎을수록 결렬↑
+const CO_REP_W = 0.4;    // 명성 계수 — 명장일수록 결렬↑
+const CO_RIVAL_W = 0.06; // 관심 구단 계수 — 노리는 팀 많을수록 결렬↑
+const CO_RIVAL_CAP = 5;
+const CO_FLOOR = 0.05;
+const CO_CAP = 0.95;
+
+/** 카운터오퍼 수락 확률(0~1, 결정론 입력) — 명성↑·관심↑·할인폭↑ → 낮아짐(결렬↑). */
+export function counterOfferAcceptProb(demand: number, offered: number, reputation: number, rivalCount: number): number {
+  if (offered >= demand) return 1; // 할인 아님 → 무조건 수락
+  const gap = demand > 0 ? (demand - offered) / demand : 0;
+  const p = CO_BASE - CO_GAP_W * gap - CO_REP_W * (clampRep(reputation) / 100) - CO_RIVAL_W * Math.min(Math.max(0, rivalCount), CO_RIVAL_CAP);
+  return p < CO_FLOOR ? CO_FLOOR : p > CO_CAP ? CO_CAP : p;
+}
+
+/** 카운터오퍼 1회 판정(결정론 시드 — 재시도해도 동일 = 흥정 루프 봉인). */
+export function counterOfferOutcome(
+  demand: number, offered: number, reputation: number, rivalCount: number, seed: string,
+): { accept: boolean; prob: number } {
+  const prob = counterOfferAcceptProb(demand, offered, reputation, rivalCount);
+  const roll = createRng(strSeed(seed)).next();
+  return { accept: roll < prob, prob };
 }

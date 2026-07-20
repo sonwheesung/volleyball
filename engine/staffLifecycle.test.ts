@@ -86,7 +86,9 @@ test('엣지: firedFrom 팀엔 영구 배제, 다른 팀엔 부임 가능', () =
   const ex = () => mkCoach('ex', 95, null, ['t_bot']);
   const sameTeam = advanceCoaches(2, { coaches: [ex(), mkCoach('low', 50, null)], assistants: [] }, { t_bot: 'gone' }, [], new Set(), ['a', 'b', 'c', 'd', 'e', 'f', 't_bot'], {}, 'P');
   assert.notEqual(sameTeam.reassign.find((x) => x.teamId === 't_bot')?.coachId, 'ex', 'firedFrom 팀 배제');
-  const otherTeam = advanceCoaches(3, { coaches: [ex(), mkCoach('low', 50, null)], assistants: [] }, { t_oth: 'gone' }, [], new Set(), ['a', 'b', 'c', 'd', 'e', 'f', 't_oth'], {}, 'P');
+  // Phase C(§9.6-C): AI 픽 우선순위가 matchOps→명성(reputation) 우선으로 바뀜 — ex를 유일 매물로 두어
+  //   "firedFrom 아닌 팀엔 부임 가능"(영구 배제 아님) 의도만 검증(픽 순위와 무관하게 ex가 선택됨).
+  const otherTeam = advanceCoaches(3, { coaches: [ex()], assistants: [] }, { t_oth: 'gone' }, [], new Set(), ['a', 'b', 'c', 'd', 'e', 'f', 't_oth'], {}, 'P');
   assert.equal(otherTeam.reassign.find((x) => x.teamId === 't_oth')?.coachId, 'ex', '다른 팀엔 부임 가능');
 });
 
