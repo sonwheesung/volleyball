@@ -8,7 +8,8 @@ import {
   coachToHead, firedEndSeason, aiResigns, contractTerm, coachSeasonGrowth,
 } from '../engine/staffLifecycle';
 import { createRng, strSeed } from '../engine/rng';
-import { headCoachSalary, assistantSalary, coachTypeFor, deriveHeadAxes } from '../engine/staff';
+import { headCoachSalary, assistantSalary, coachTypeFor, deriveHeadAxes, headOvr } from '../engine/staff';
+import { interimRenown } from '../engine/reputation';
 import { COACH_NAMES } from './names';
 import type { CoachSpecialty } from '../types';
 
@@ -30,11 +31,13 @@ function makeInterimCoach(teamId: string, season: number): Coach {
   const matchOps = 38 + rng.int(0, 18); // 구 charisma 생성식 그대로
   const styles: CoachStyle[] = ['attack', 'defense', 'balanced'];
   const id = `coach-int-${teamId}-s${season}`;
+  const axes = deriveHeadAxes(id);
+  const renown = interimRenown(id); // 신임=무명(8~17)
   return {
     id,
     name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)],
-    age: 44 + rng.int(0, 16), matchOps, ...deriveHeadAxes(id), style: styles[rng.int(0, 2)],
-    archetype: '신임', trainingFocus: DEFAULT_FOCUS, salary: headCoachSalary(matchOps),
+    age: 44 + rng.int(0, 16), matchOps, ...axes, renown, style: styles[rng.int(0, 2)],
+    archetype: '신임', trainingFocus: DEFAULT_FOCUS, salary: headCoachSalary(headOvr({ matchOps, ...axes }), renown),
     teamId: null, contractYears: undefined,
   };
 }

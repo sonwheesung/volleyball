@@ -10,8 +10,9 @@ import {
   staffSpend, staffBudget, staffBudgetLeft, STAFF_CONTRACT_YEARS,
 } from '../data/league';
 import { computeStandings, displayCutoff } from '../data/standings';
-import { SPECIALTY_KO, SPECIALTY_DESC, TYPE_KO, TYPE_DESC, headOvr, headType3, HEAD_TYPE3_KO } from '../engine/staff';
+import { SPECIALTY_KO, SPECIALTY_DESC, TYPE_KO, TYPE_DESC, headOvr, headType3, HEAD_TYPE3_KO, headCoachSalary } from '../engine/staff';
 import { firedMidSeason } from '../engine/staffLifecycle';
+import { reputationOf, reputationTier, repStars, raiseReasons } from '../engine/reputation';
 import { coachSlots } from '../data/league';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
@@ -26,8 +27,10 @@ export default function Staff() {
   useGameStore((s) => s.coachPool); // 계약 변화 시 재렌더
   const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
+  const coachCareerLog = useGameStore((s) => s.coachCareerLog); // 감독 명성 파생(STAFF §9.6-B)
   const hireCoach = useGameStore((s) => s.hireCoach);
   const resignCoach = useGameStore((s) => s.resignCoach);
+  const releaseCoach = useGameStore((s) => s.releaseCoach);
   const fireCoach = useGameStore((s) => s.fireCoach);
   const hireAssistant = useGameStore((s) => s.hireAssistant);
   const releaseAssistant = useGameStore((s) => s.releaseAssistant);
@@ -70,6 +73,9 @@ export default function Staff() {
 
   const head = getTeamCoach(teamId);
   const acting = !!head?.id.startsWith('acting_');
+  const headRep = head && !acting ? reputationOf(coachCareerLog, head) : 0; // 명성(경력 로그 파생)
+  const headDemand = head && !acting ? headCoachSalary(headOvr(head), headRep) : 0; // 재계약 요구 연봉(명성 반영)
+  const headReasons = head && !acting ? raiseReasons(coachCareerLog, head.id) : []; // 요구 상승 이유(로그 사실만)
   // 정식 감독이 이미 있으면 새 감독을 바로 영입할 수 없다 — 먼저 경질해야(2026-07-11 테스터: 자동 교체가 실수 유발).
   //   대행/공석(acting || !head)은 정식 감독을 세우는 절차라 영입 허용.
   const hasHeadCoach = !!head && !acting;
@@ -144,6 +150,9 @@ export default function Staff() {
           </Row>
           <Muted style={{ marginTop: 4 }}>성향 {STYLE_LABEL[head.style]} · {HEAD_TYPE3_KO[headType3(head)]} · 종합 {headOvr(head)} · {head.archetype}</Muted>
           <Muted style={{ marginTop: 2 }}>경기 운영 {head.matchOps} · 육성 철학 {head.dvPhilosophy} · 리더십 {head.leadership}</Muted>
+          {!acting ? (
+            <Muted style={{ marginTop: 2, color: theme.violet }}>{repStars(headRep)} {reputationTier(headRep).label} · 명성 {headRep}</Muted>
+          ) : null}
           {acting ? (
             <Muted style={{ color: theme.warn, marginTop: 4 }}>감독 대행 체제. 정식 감독을 영입하세요(아래 시장).</Muted>
           ) : (() => {
@@ -153,12 +162,21 @@ export default function Staff() {
               <View style={{ gap: 6, marginTop: 4 }}>
                 <Row>
                   <Muted style={{ color: expiring ? theme.warn : theme.muted }}>
-                    계약 {yrs <= 0 ? '만료, 재계약 필요' : `잔여 ${yrs}년`}
+                    계약 {yrs <= 0 ? '만료, 재계약 필요' : `잔여 ${yrs}년`} · 현재 연봉 {formatMoney(head.salary)}
                   </Muted>
-                  {expiring ? (
-                    <Button small label={`재계약(${STAFF_CONTRACT_YEARS}년)`} onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 ${STAFF_CONTRACT_YEARS}년 재계약했습니다.`); else showAlert('재계약 불가', '현재 감독이 없습니다. 먼저 감독을 영입하세요.'); }} />
-                  ) : null}
                 </Row>
+                {expiring ? (
+                  <>
+                    <Muted>요구 연봉 {formatMoney(headDemand)}{headDemand > head.salary ? ` (+${formatMoney(headDemand - head.salary)})` : ''}{headReasons.length ? ` — ${headReasons.join('·')}` : ''}</Muted>
+                    <Row>
+                      <Button small label={`재계약(${STAFF_CONTRACT_YEARS}년)`} onPress={() => { if (resignCoach()) showAlert('재계약 완료', `${head.name} 감독과 ${STAFF_CONTRACT_YEARS}년 재계약했습니다.\n연봉 ${formatMoney(headDemand)}.`); else showAlert('재계약 불가', '현재 감독이 없습니다. 먼저 감독을 영입하세요.'); }} />
+                      <Button small variant="ghost" label="놓아주기" onPress={() => showAlert('감독 놓아주기', `${head.name} 감독을 놓아주시겠습니까?\n감독이 FA로 풀려 다른 구단으로 갈 수 있습니다.`, [
+                        { text: '취소', style: 'cancel' },
+                        { text: '놓아주기', style: 'destructive', onPress: () => heavyAction(() => { if (releaseCoach()) showAlert('작별', `${head.name} 감독이 팀을 떠났습니다. 새 감독을 영입하세요.`); }, `${head!.name} 감독이 팀을 떠날\n준비를 하는 중…`) },
+                      ])} />
+                    </Row>
+                  </>
+                ) : null}
                 <Button label="감독 경질" onPress={() => showAlert('감독 경질', `${head.name} 감독을 경질하시겠습니까? 전문 코치가 대행을 맡고, 그 감독은 우리 팀에 다시 오지 않습니다.`, [
                   { text: '취소', style: 'cancel' },
                   { text: '경질', style: 'destructive', onPress: () => heavyAction(() => { const r = fireCoach(); showAlert('경질 완료', r.acting ? `${r.acting} 코치가 감독 대행을 맡습니다.` : '대행할 코치가 없어 공석입니다. 감독을 영입하세요.'); }, `${head!.name} 감독이 짐을 정리하고\n경기장을 떠나는 중…`) },
@@ -181,6 +199,7 @@ export default function Staff() {
               <Title>{c.name}</Title>
               <Muted style={{ marginTop: 2 }}>{STYLE_LABEL[c.style]} · {HEAD_TYPE3_KO[headType3(c)]} · 종합 {headOvr(c)} · {c.archetype} · 연봉 {formatMoney(c.salary)}</Muted>
               <Muted style={{ marginTop: 2 }}>경기 운영 {c.matchOps} · 육성 철학 {c.dvPhilosophy} · 리더십 {c.leadership}</Muted>
+              <Muted style={{ marginTop: 2, color: theme.violet }}>{repStars(reputationOf(coachCareerLog, c))} {reputationTier(reputationOf(coachCareerLog, c)).label} · 명성 {reputationOf(coachCareerLog, c)}</Muted>
             </View>
             <Button small label="영입" onPress={() => tryHireCoach(c.id, c.name, c.salary)} disabled={hasHeadCoach} />
           </Row>

@@ -83,8 +83,10 @@ test('scoutReveal: 스카우터 없으면 0, 많을수록 증가, 0~1 범위', (
 });
 
 test('연봉: 역량 비례 단조 + 합리적 범위', () => {
-  assert.ok(headCoachSalary(95) > headCoachSalary(45));
+  assert.ok(headCoachSalary(95) > headCoachSalary(45), 'OVR 단조'); // reputation 기본 0 → base만
+  assert.ok(headCoachSalary(80, 100) > headCoachSalary(80, 0), '명성 프리미엄 가산(base+premium §9.4)');
+  assert.strictEqual(headCoachSalary(80, 0), headCoachSalary(80), '명성 0 = base 보존(대체 아님)');
   assert.ok(assistantSalary(90) > assistantSalary(50));
   assert.ok(scoutSalary(90) > scoutSalary(45));
-  assert.ok(headCoachSalary(95) + assistantSalary(90) * 2 + scoutSalary(90) * 2 > STAFF_BUDGET, '최고급 풀세트는 예산 초과(트레이드오프 존재)');
+  assert.ok(headCoachSalary(95, 100) + assistantSalary(90) * 2 + scoutSalary(90) * 2 > STAFF_BUDGET, '최고급 풀세트는 예산 초과(트레이드오프 존재)');
 });

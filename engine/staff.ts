@@ -176,6 +176,9 @@ export function scoutReveal(scouts: Scout[]): number {
 
 // 연봉(만원) — 역량에 비례(100원 단위 반올림). 실생성 스탯 범위 기준: 감독 13.0k~18.6k·코치 9.7k~13.6k(playerToCoach 95)·
 // 스카우터 7.6k~11.4k (구 "13.5k~18.5k…" 표기는 스테일 — 발견 모드 2차 정정 2026-07-15, STAFF §2 정본).
-export const headCoachSalary = (matchOps: number): number => 8000 + Math.round((matchOps * 1.1)) * 100;
+/** 감독 연봉 = 능력(3축 OVR) 기반 base + 명성 프리미엄(상한 캡, 대체 금지 §9.4). reputation 0이면 base만.
+ *  base는 구 matchOps 단일 → **3축 OVR**로 승격(Phase B) — ovr≈matchOps 대역(3축 평균)이라 범위 대체로 보존. */
+export const headCoachSalary = (ovr: number, reputation = 0): number =>
+  8000 + Math.round(ovr * 1.1) * 100 + Math.round(0.4 * (reputation < 0 ? 0 : reputation > 100 ? 100 : reputation)) * 100;
 export const assistantSalary = (rating: number): number => 5000 + Math.round(rating * 0.9) * 100;
 export const scoutSalary = (scouting: number): number => 4000 + Math.round(scouting * 0.8) * 100;

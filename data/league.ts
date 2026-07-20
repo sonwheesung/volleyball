@@ -13,6 +13,7 @@ import { SEASON_DAYS } from '../engine/calendar';
 import { rollTraits } from '../engine/traits';
 import { createRng, strSeed } from '../engine/rng';
 import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, coachTypeFor, deriveHeadAxes, type StaffEffects, NO_EFFECTS } from '../engine/staff';
+import { interimRenown } from '../engine/reputation';
 import { recordBump } from './spliceLog';
 
 const LEAGUE_SEED = 20251018;
@@ -381,7 +382,7 @@ export function fireCoach(teamId: string): { acting: string | null } {
     const style: CoachStyle = best.specialty === 'attack' ? 'attack' : best.specialty === 'defense' ? 'defense' : 'balanced';
     const acting: Coach = {
       id: `acting_${teamId}`, name: `${best.name} (대행)`, age: best.age,
-      matchOps: Math.round(best.rating * 0.7), ...deriveHeadAxes(`acting_${teamId}`), style, archetype: '감독 대행', // 대행 페널티 ×0.7(§6.4·§9.4) — 경기 운영에 승계
+      matchOps: Math.round(best.rating * 0.7), ...deriveHeadAxes(`acting_${teamId}`), renown: interimRenown(`acting_${teamId}`), style, archetype: '감독 대행', // 대행 페널티 ×0.7(§6.4·§9.4) — 경기 운영에 승계
       trainingFocus: DEFAULT_FOCUS, salary: 0, teamId, contractYears: 0,
     };
     coachPool = [...coachPool.filter((c) => c.id !== acting.id), acting];
@@ -395,11 +396,24 @@ export function fireCoach(teamId: string): { acting: string | null } {
 }
 
 /** 내 팀 감독 재계약 — 현 감독 계약을 3년 연장. 만료 임박/만료 시 플레이어가 호출(STAFF_SYSTEM 6). */
-export function resignTeamCoach(teamId: string): boolean {
+export function resignTeamCoach(teamId: string, newSalary?: number): boolean {
   const c = teamHeadCoach(teamId);
   if (!c) return false;
   c.contractYears = STAFF_CONTRACT_YEARS;
+  if (typeof newSalary === 'number' && Number.isFinite(newSalary)) c.salary = newSalary; // 명성 반영 요구 연봉으로 갱신(STAFF §9.4 — 계약 시점 재산정)
   invalidateStaff(false); // 효과 불변(계약만)
+  return true;
+}
+
+/** 감독 방출(놓아주기, STAFF §9.4) — 계약 만료 감독을 FA 풀로 내보낸다(경질과 달리 firedFrom 없음 = 재영입 가능).
+ *  경질(fireCoach)은 시즌 중 대행 전환이지만, 놓아주기는 만료 시 명시 방출(관심 구단으로 이동 가능 — Phase C). */
+export function releaseTeamCoach(teamId: string): boolean {
+  const c = teamHeadCoach(teamId);
+  if (!c || c.id.startsWith('acting_')) return false;
+  c.teamId = null; c.contractYears = undefined; // FA 풀로(firedFrom 미기록 — 방출은 경질 아님)
+  delete headCoachOverride[teamId];
+  delete headCoachTimeline[teamId];
+  invalidateStaff(true);
   return true;
 }
 

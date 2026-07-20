@@ -4,6 +4,7 @@
 //   본문은 조립식(opener+사실+closer) + 안정 시드 변주 → 같은 종류라도 표현이 다르다(NEWS_SYSTEM §4).
 
 import type { DraftPickRecord, ExpelRecord, ForeignSwapRecord, HofEntry, Milestone, NewsItem, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
+import type { MediaPredictionEntry } from '../engine/reputation';
 import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam, reconstructForeignName } from './league';
 import { jerseyNumber } from '../engine/jersey';
@@ -103,6 +104,10 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
   standing: {
     open: ['시즌의 성적표가 최종 순위로 정리됐다.', '최종 순위가 모든 것을 말해준다.', '한 시즌의 성과가 최종 순위로 확정됐다.', '정규리그 레이스의 결말이 나왔다.'],
     close: ['다음 시즌의 출발선이 여기서 정해졌다.', '순위는 곧 다음 도전의 무게가 됐다.', '성적은 팬심과 구단 살림으로 이어진다.', '한 시즌의 평가가 이 한 줄에 담겼다.'],
+  },
+  preseason: { // 언론 예상 순위(개막 프리뷰, STAFF §9.3) — 결과가 아닌 전망 톤(가짜 드라마 금지: 사실 절은 core, 여기선 프레이밍만)
+    open: ['개막을 앞두고 전력 분석이 쏟아졌다.', '새 시즌의 판도를 가늠하는 전망이 나왔다.', '겨우내 재편된 전력으로 순위를 점쳐본다.', '개막 전, 전문가들이 매긴 예상 순위가 공개됐다.'],
+    close: ['예상은 예상일 뿐, 답은 코트에서 가려진다.', '전망이 맞을지는 한 시즌이 증명할 것이다.', '순위표의 실제 주인은 개막 후에 정해진다.', '기대와 물음표를 안고 개막을 맞는다.'],
   },
   milestone: {
     open: ['세월이 쌓여 만들어진 기록이다.', '꾸준함이 끝내 임계를 넘어선 순간이었다.', '한 선수의 시간이 숫자로 새겨졌다.', '오랜 누적이 마침내 한 고비를 넘었다.'],
@@ -213,6 +218,7 @@ export function buildNewsFeed(
   seasonForeignLog: ForeignSwapRecord[] = [], // 외인·아시아쿼터 교체 연표(슬라이스6, §3.7)
   poDay = leagueDay, // 포스트시즌 컷오프 트랙(§5.2 달력 편입) = raw currentDay. 치른(공개) 플옵 경기까지만 기사화 —
                      //   leagueDay(displayCutoff)는 시즌완료 시 164로 클램프돼 플옵 진행을 못 보므로 별도 트랙. 기본=leagueDay(구 호출 무변).
+  mediaPredictionLog: MediaPredictionEntry[] = [], // 언론 예상 순위(STAFF §9.3) — 개막 프리뷰 기사(슬라이스 10-④). 기본 [] → 미주입 시 기사 생략(기존 호출 무변).
 ): NewsItem[] {
   const items: NewsItem[] = [];
   // 뉴스 안정 키(Step0, §4.4): ref = (season:kind)당 결정론 순번(ordinal). 문구 무관 → Step1~3에서
@@ -751,6 +757,23 @@ export function buildNewsFeed(
         : f.inName ? `${teamName(f.teamId)}이(가) 새 ${ko} ${f.inName}을(를) 영입했다.`
         : `${teamName(f.teamId)}이(가) ${ko} ${f.outName}와(과) 결별하며 그 자리가 비었다.`;
       push(currentSeason, 'foreign', headline, f.teamId === myTeamId, f.teamId, body3('foreign', fkey, core), f.inId ?? f.outId, 0);
+    }
+  }
+
+  // 10b) 언론 예상 순위(개막 프리뷰, STAFF §9.3) — 슬라이스10과 독립(season0=직전 오프시즌 없음이라 offSeason>=0 게이트 밖).
+  //   전 팀 예상 순위 나열·내 팀 강조. 결과-중립(즉시 노출·컷오프 무관) → day=0·season=currentSeason 개막 최상단. kind=standing 재사용.
+  {
+    const pred = mediaPredictionLog.find((e) => e.season === currentSeason)?.order ?? [];
+    if (pred.length >= 2) {
+      const S = currentSeason + 1; // 표시 연도(offseason 슬라이스와 동형 표기)
+      const listed = pred.map((tid, i) => `${i + 1}위 ${teamName(tid)}`).join(' · ');
+      const myIdx = myTeamId ? pred.indexOf(myTeamId) : -1;
+      const myLine = myIdx >= 0 ? `${teamName(myTeamId)}은(는) ${myIdx + 1}위로 꼽혔다.` : '';
+      const headline = myIdx >= 0
+        ? `${S}시즌 언론 예상 순위 — ${teamName(myTeamId)} ${myIdx + 1}위 전망`
+        : `${S}시즌 언론 예상 순위 발표`;
+      const core = `${S}시즌 예상 순위는 ${listed}. ${myLine}`.trim();
+      push(currentSeason, 'standing', headline, myIdx >= 0, myTeamId || undefined, body3('preseason', `${currentSeason}:preseason`, core), `preseason:${currentSeason}`, 0);
     }
   }
 

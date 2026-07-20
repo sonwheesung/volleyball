@@ -8,7 +8,8 @@ import { rollTraits } from '../engine/traits';
 import { computeSalary } from '../engine/salary';
 import { MED_REF, overallRaw, displayOvr } from '../engine/overall';
 import { ASIAN_SALARY } from '../engine/foreign';
-import { headCoachSalary, assistantSalary, scoutSalary, coachTypeFor, deriveHeadAxes } from '../engine/staff';
+import { headCoachSalary, assistantSalary, scoutSalary, coachTypeFor, deriveHeadAxes, headOvr } from '../engine/staff';
+import { seedRenown } from '../engine/reputation';
 import type {
   AssistantCoach,
   CareerStats,
@@ -388,16 +389,19 @@ export function generateLeague(seed: number): League {
     const arch = ARCHETYPES[ti % ARCHETYPES.length];
     const coachId = `${teamId}c`;
     const matchOps = rng.int(45, 95); // 구 charisma 생성식 그대로(메인 rng 소비 불변 — 결정론 등가)
+    const axes = deriveHeadAxes(coachId); // 신규 2축(육성 철학·리더십) — id 시드 파생(메인 rng 불간섭)
+    const renown = seedRenown(coachId);   // 초기 명성(§9.6-B) — id 시드 12~45
     coaches.push({
       id: coachId,
       name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)],
       age: rng.int(45, 64),
       matchOps,
-      ...deriveHeadAxes(coachId), // 신규 2축(육성 철학·리더십) — id 시드 파생(메인 rng 불간섭)
+      ...axes,
+      renown,
       style: arch.style,
       archetype: arch.name,
       trainingFocus: arch.focus,
-      salary: headCoachSalary(matchOps),
+      salary: headCoachSalary(headOvr({ matchOps, ...axes }), renown), // base(3축 OVR)+명성 프리미엄(§9.4)
       teamId,
       contractYears: rng.int(1, 4), // 초기 계약 잔여 — 팀마다 만료 시점이 달라 FA 시장이 매년 돈다
     });
@@ -427,10 +431,12 @@ export function generateLeague(seed: number): League {
     const arch = ARCHETYPES[rng.int(0, ARCHETYPES.length - 1)];
     const ch = rng.int(48, 96); // 구 charisma 생성식 그대로(메인 rng 소비 불변)
     const fcId = `fc${i}`;
+    const fcAxes = deriveHeadAxes(fcId);
+    const fcRenown = seedRenown(fcId);
     coaches.push({
       id: fcId, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(44, 65),
-      matchOps: ch, ...deriveHeadAxes(fcId), style: STYLES[rng.int(0, STYLES.length - 1)], archetype: arch.name,
-      trainingFocus: arch.focus, salary: headCoachSalary(ch), teamId: null,
+      matchOps: ch, ...fcAxes, renown: fcRenown, style: STYLES[rng.int(0, STYLES.length - 1)], archetype: arch.name,
+      trainingFocus: arch.focus, salary: headCoachSalary(headOvr({ matchOps: ch, ...fcAxes }), fcRenown), teamId: null,
     });
   }
   // 전문 코치 — 분야별 4명(=20)

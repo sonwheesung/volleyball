@@ -4,7 +4,8 @@
 import type { Coach, AssistantCoach, CoachSpecialty, CoachStyle, Player, Position } from '../types';
 import { createRng, strSeed } from './rng';
 import { overall } from './overall';
-import { headCoachSalary, assistantSalary, coachTypeFor, deriveHeadAxes } from './staff';
+import { headCoachSalary, assistantSalary, coachTypeFor, deriveHeadAxes, headOvr } from './staff';
+import { LEGEND_RENOWN, PROMO_RENOWN } from './reputation';
 
 // ── 6.1 노쇠·은퇴 ──
 /** 감독 은퇴 확률 — 현장직은 선수보다 늦게(60대까지). 나이만의 함수. */
@@ -80,9 +81,11 @@ export function coachToHead(c: AssistantCoach, starRep: number, focus: Coach['tr
   const rng = createRng(strSeed(`head:${c.id}`));
   const matchOps = clamp(Math.round(c.rating * 0.6 + starRep * 0.3 + rng.range(-5, 5)), 45, 95); // 구 charisma 산출 그대로(rng.range 소비 위치 불변)
   const headId = `head_${c.id}`;
+  const axes = deriveHeadAxes(headId);
+  const renown = starRep >= 80 ? LEGEND_RENOWN : PROMO_RENOWN; // 레전드 출신=명장(72)·일반=주목(38) 초기 명성(§9.6-B)
   return {
-    id: headId, name: c.name, age: c.age, matchOps, ...deriveHeadAxes(headId), style,
-    archetype: '선수 출신', trainingFocus: focus, salary: headCoachSalary(matchOps), teamId: null,
+    id: headId, name: c.name, age: c.age, matchOps, ...axes, renown, style,
+    archetype: '선수 출신', trainingFocus: focus, salary: headCoachSalary(headOvr({ matchOps, ...axes }), renown), teamId: null,
   };
 }
 

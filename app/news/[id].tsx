@@ -199,13 +199,14 @@ function NewsArticleInner() {
   const retirements = useGameStore((s) => s.retirements);
   const seasonDraftLog = useGameStore((s) => s.seasonDraftLog);
   const seasonForeignLog = useGameStore((s) => s.seasonForeignLog);
+  const mediaPredictionLog = useGameStore((s) => s.mediaPredictionLog);
   const teamId = useGameStore((s) => s.selectedTeamId);
 
   // 목록(news.tsx)과 **완전히 동일한 파생**(displayCutoff §3.3 + freshNews) — 안정 키로 같은 기사를 집어야 어긋나지 않는다(F1).
   const cutoff = displayCutoff(currentDay, results, teamId ?? undefined);
   const feed = useMemo(
-    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements, seasonDraftLog, seasonForeignLog, currentDay), cutoff),
-    [archive, milestones, hallOfFame, season, cutoff, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements, seasonDraftLog, seasonForeignLog, currentDay, mediaPredictionLog), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, mediaPredictionLog],
   );
   const key = id ? decodeURIComponent(id) : '';
   const n = feed.find((x) => newsKey(x) === key);

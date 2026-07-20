@@ -3,6 +3,7 @@
 // version+migrate로 향후 breaking 구조 변경(필드 이름변경·재편)도 단계 변환으로 흡수.
 
 import { deriveHeadAxes } from '../engine/staff'; // 감독 3축 마이그레이션(v4) — id 시드 파생(랜덤 없음·결정론). engine/staff는 leaf(rng+types)라 순환 없음.
+import { fallbackRenown } from '../engine/reputation'; // 감독 renown 마이그레이션(Phase B) — 누락 시 id 시드 파생(결정론). reputation은 leaf(overall+rng+types).
 
 // v3(2026-07-08): 포스트시즌 달력 편입(SEASON_SYSTEM §5). 구세이브가 이미 포스트시즌을 소비(archive[season].championId 존재)
 //   했는데 currentDay가 정규 범위(≤164)에 멈춰 있으면, 새 일정 화면이 이를 "플옵 미진행"으로 오인해 재관전을 강요한다.
@@ -12,7 +13,7 @@ import { deriveHeadAxes } from '../engine/staff'; // 감독 3축 마이그레이
 export const SAVE_VERSION = 4;
 const POSTSEASON_LAST_DAY = 183; // engine/calendar.POSTSEASON_LAST_DAY 손복제 회피용 로컬(saveMigration은 leaf 유지 — engine import 시 순환 위험). _dv_postseason이 일치 가드.
 
-// 영속 69필드 기본값(수는 참고용 — 정본은 이 키 집합 자체) — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
+// 영속 72필드 기본값(수는 참고용 — 정본은 이 키 집합 자체) — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
 // (drift 가드: _dv_migrate가 이 키 집합 == partialize 키 집합을 단언한다.)
 export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 설정(새 게임에도 유지)
@@ -31,6 +32,8 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   hallOfFame: [], expelledLog: [], transfers: [], retirements: [], seasonDraftLog: [], seasonForeignLog: [], milestones: [], readNews: [],
   // 감독·스태프·훈련
   coachPool: null, staffHead: {}, staffHeadTimeline: {}, staffAssistants: {}, staffScouts: {}, trainingFocus: null, focusLog: [],
+  // 감독 명성(STAFF §9.6-B) — 경력 로그(명성의 진실)·언론 예상 순위·시즌중 경질 캡처. 전부 additive(누락=[] — 무마이그레이션).
+  coachCareerLog: [], mediaPredictionLog: [], midFires: [],
   // 구단주·재정
   interviews: [], benchDirectives: [], interventions: {}, coachModeLog: [], talkCooldown: {}, benchCooldown: {},
   fanScore: 50, releaseAnger: 0, cash: 50000, lastFinance: null,
@@ -61,6 +64,8 @@ const KIND: Record<string, Kind> = {
   seasonDraftLog: 'arr', seasonForeignLog: 'arr',
   milestones: 'arr', readNews: 'arr',
   staffHead: 'rec', staffAssistants: 'rec', staffScouts: 'rec',
+  coachCareerLog: 'arr', mediaPredictionLog: 'arr', midFires: 'arr', // 감독 명성(§9.6-B) — 배열 강제(손상=[]). 엔트리 세부는 reputationOf/뉴스가 방어적 소비
+
   interviews: 'arr', benchDirectives: 'arr', interventions: 'rec', talkCooldown: 'rec', benchCooldown: 'rec',
   fanScore: 'num', releaseAnger: 'num', cash: 'num',
   tryoutWish: 'arr', foreignAltPool: 'arr', foreignSubUsed: 'bool', keepForeign: 'nbool',
@@ -90,7 +95,8 @@ function normalizeCoach(c: unknown): unknown {
   const axes = deriveHeadAxes(id);
   const dvPhilosophy = num(c.dvPhilosophy, axes.dvPhilosophy);
   const leadership = num(c.leadership, axes.leadership);
-  const out: Record<string, unknown> = { ...c, matchOps, dvPhilosophy, leadership };
+  const renown = num(c.renown, fallbackRenown(id)); // 초기 명성(Phase B) — 누락(구세이브)=id 시드 파생(결정론). 레전드 출신 정보는 구세이브서 복원 불가 → 모두 시드 밴드(경력 로그 없어 명성=renown부터 재축적).
+  const out: Record<string, unknown> = { ...c, matchOps, dvPhilosophy, leadership, renown };
   delete out.charisma; // 구 필드 제거(모양 변경 — v4)
   return out;
 }
