@@ -106,14 +106,21 @@ export function meetAccept(playerId: string, season: number, nThisSeason: number
   return rng.next() >= refuse;
 }
 
-/** 설득 판정 — 카드 매칭 + 구단 성적 보정 − 누적 실패 */
+/** 감독 리더십 면담 성공률 보정 상한(STAFF §9.6-D) — 리더십 100이면 설득 확률 +0.06(소폭). leadership 50→0. */
+export const LEADERSHIP_PERSUADE = 0.06;
+export function leadershipPersuadeBonus(leadership: number): number {
+  return LEADERSHIP_PERSUADE * Math.max(0, (leadership - 50) / 50);
+}
+
+/** 설득 판정 — 카드 매칭 + 구단 성적 보정 − 누적 실패 + 감독 리더십 소폭 보정(§9.6-D) */
 export function persuade(
   playerId: string, season: number, nThisSeason: number,
   match: number,          // cardMatch 0..1
   perfT: number,          // 구단 성적 보정 0..1 (상위권일수록 말에 힘이 실림)
   failsBefore: number,    // 이 선수와의 누적 실패 횟수(시즌 무관)
+  leadership = 50,        // 감독 리더십(0~100, STAFF §9.6-D) — 소폭 성공률 가산. 기본 50=무보정(byte-동일).
 ): boolean {
-  const p = Math.max(0.1, Math.min(0.9, 0.35 + 0.4 * match + 0.1 * perfT - 0.15 * failsBefore));
+  const p = Math.max(0.1, Math.min(0.9, 0.35 + 0.4 * match + 0.1 * perfT - 0.15 * failsBefore + leadershipPersuadeBonus(leadership)));
   const rng = createRng(strSeed(`talk:${playerId}:${season}:${nThisSeason}`));
   return rng.next() < p;
 }
@@ -153,10 +160,17 @@ export function refuseResignProb(topic: DiscontentTopic | null, weight: number, 
   return Math.max(0, Math.min(0.9, 0.25 + 0.5 * weight + refuseBias));
 }
 
+/** 감독 리더십 불만 축적 완화 상한(STAFF §9.6-D) — 리더십 100이면 누적 출전 불만을 20% 완화(소폭). leadership 50→0. */
+export const LEADERSHIP_UNREST_RELIEF = 0.20;
+export function leadershipUnrestFactor(leadership: number): number {
+  return 1 - LEADERSHIP_UNREST_RELIEF * Math.max(0, (leadership - 50) / 50); // 50→1.0, 100→0.8
+}
+
 /** 누적 출전 불만 → 재계약 거부 가산 (ROTATION_MORALE C.4) — 시즌 내내 앉아있을수록(낮은 출전율) 정 떨어진다.
- *  출전 불만(topic==='minutes', 사유·성격·기대치 게이트를 통과한 진짜 불만)일 때만 가산. 부상 결장(불만 아님)은 무관. */
-export function sustainedBenchRefuse(playRatio: number, weight: number): number {
-  return Math.min(0.35, Math.max(0, 1 - playRatio) * 0.45 * weight);
+ *  출전 불만(topic==='minutes', 사유·성격·기대치 게이트를 통과한 진짜 불만)일 때만 가산. 부상 결장(불만 아님)은 무관.
+ *  @param leadership 감독 리더십(0~100, STAFF §9.6-D) — 소폭 완화. 기본 50=무완화(byte-동일). */
+export function sustainedBenchRefuse(playRatio: number, weight: number, leadership = 50): number {
+  return Math.min(0.35, Math.max(0, 1 - playRatio) * 0.45 * weight * leadershipUnrestFactor(leadership));
 }
 
 // ── 재계약 오퍼 레버(FA §2.5c-격상, 2026-07-11) — 저연봉 오퍼 거부 가산 + 주전보장 완화. 공유 primitive. ──
@@ -204,50 +218,52 @@ export interface BenchDirective { playerId: string; fromDay: number; toDay?: num
 export const BENCH_MAX = 2;
 
 /**
- * 감독의 수락 판정 — 합리(대체자 격차)와 소신(카리스마·에이스 보호) 사이.
+ * 감독의 수락 판정 — 합리(대체자 격차)와 소신(리더십·에이스 보호) 사이.
  * @param ovrGapT   0..1 — 벤치 대상 vs 대체자 OVR 격차가 작을수록 1(수긍 쉬움)
  * @param aceRank   팀 내 OVR 순위(0=에이스)
+ * ★ 감독 계수 = **leadership**(선수단 관리·건의 반응, STAFF §9.6-B/§9.6-D). Phase A~B는 matchOps(구 charisma 이관값)를
+ *   임시 사용했으나 Phase D에서 leadership으로 이관 — 벤치/선발 건의는 "경기 운영"이 아니라 "선수단 장악"의 영역.
  */
 const clampP = (v: number): number => Math.max(0.05, Math.min(0.95, v));
 
-/** 벤치 건의 수락 확률(RNG 전, 결정론 입력만) — 수락 판정·거절 사유의 단일 출처(중복 수식 금지). */
-export function benchP(charisma: number, ovrGapT: number, aceRank: number, reason: BenchReason): number {
+/** 벤치 건의 수락 확률(RNG 전, 결정론 입력만) — 수락 판정·거절 사유의 단일 출처(중복 수식 금지). @param leadership 감독 리더십(구 charisma→leadership 이관, §9.6-D). */
+export function benchP(leadership: number, ovrGapT: number, aceRank: number, reason: BenchReason): number {
   const aceGuard = aceRank === 0 ? 0.4 : aceRank === 1 ? 0.2 : 0;
   const reasonT = reason === 'noResign' ? 0.2 : reason === 'form' ? 0.1 : 0.05;
-  return clampP(0.5 + 0.3 * ovrGapT - aceGuard - 0.2 * ((charisma - 50) / 50) + reasonT);
+  return clampP(0.5 + 0.3 * ovrGapT - aceGuard - 0.2 * ((leadership - 50) / 50) + reasonT);
 }
 export function benchAccept(
   playerId: string, season: number, day: number,
-  charisma: number, ovrGapT: number, aceRank: number, reason: BenchReason,
+  leadership: number, ovrGapT: number, aceRank: number, reason: BenchReason,
 ): boolean {
-  return createRng(strSeed(`bench:${playerId}:${season}:${day}`)).next() < benchP(charisma, ovrGapT, aceRank, reason);
+  return createRng(strSeed(`bench:${playerId}:${season}:${day}`)).next() < benchP(leadership, ovrGapT, aceRank, reason);
 }
 
-/** 선발 기용 건의 수락 확률(RNG 전). @param gapT 건의 선수가 현 주전과 비등/우위일수록 1. */
-export function startP(charisma: number, gapT: number): number {
-  return clampP(0.35 + 0.5 * gapT - 0.3 * ((charisma - 50) / 50));
+/** 선발 기용 건의 수락 확률(RNG 전). @param gapT 건의 선수가 현 주전과 비등/우위일수록 1. @param leadership 감독 리더십(구 charisma→leadership 이관, §9.6-D). */
+export function startP(leadership: number, gapT: number): number {
+  return clampP(0.35 + 0.5 * gapT - 0.3 * ((leadership - 50) / 50));
 }
-export function startSuggestAccept(playerId: string, season: number, day: number, charisma: number, gapT: number): boolean {
-  return createRng(strSeed(`start:${playerId}:${season}:${day}`)).next() < startP(charisma, gapT);
+export function startSuggestAccept(playerId: string, season: number, day: number, leadership: number, gapT: number): boolean {
+  return createRng(strSeed(`start:${playerId}:${season}:${day}`)).next() < startP(leadership, gapT);
 }
 
 // ── 거절 사유 (OWNER §2.2 ★) — 고정 우선순위 금지. **실제 감점량이 가장 큰 요인** + p 게이팅. UI 반환용 ephemeral. ──
 export type OwnerRejectReason = 'ace' | 'ability' | 'conviction' | 'coachCall' | 'postseason'; // postseason: 플옵 엔트리 동결(SEASON §5.0) — 성향 무관 무조건 거절
 const GATE_P = 0.55;        // 이 이상이었는데 거절 = 시드 운 → 구조적 원인 없음 → coachCall
 const MIN_SHORTFALL = 0.03; // 최대 감점이 이보다 작으면 "원인"이라 하기 미미 → coachCall
-export function benchRejectReason(charisma: number, ovrGapT: number, aceRank: number, reason: BenchReason): OwnerRejectReason {
-  if (benchP(charisma, ovrGapT, aceRank, reason) >= GATE_P) return 'coachCall';
+export function benchRejectReason(leadership: number, ovrGapT: number, aceRank: number, reason: BenchReason): OwnerRejectReason {
+  if (benchP(leadership, ovrGapT, aceRank, reason) >= GATE_P) return 'coachCall';
   const ace = aceRank === 0 ? 0.4 : aceRank === 1 ? 0.2 : 0;   // 에이스 보호 감점
   const ability = 0.3 * (1 - ovrGapT);                          // 실력차(대체자와 벌어질수록↑) 감점
-  const conviction = Math.max(0, 0.2 * ((charisma - 50) / 50)); // 감독 소신 감점(카리스마>50만)
+  const conviction = Math.max(0, 0.2 * ((leadership - 50) / 50)); // 감독 소신 감점(리더십>50만)
   const m = Math.max(ace, ability, conviction);
   if (m < MIN_SHORTFALL) return 'coachCall';
   return m === ace ? 'ace' : m === ability ? 'ability' : 'conviction';
 }
-export function startRejectReason(charisma: number, gapT: number): OwnerRejectReason {
-  if (startP(charisma, gapT) >= GATE_P) return 'coachCall';
+export function startRejectReason(leadership: number, gapT: number): OwnerRejectReason {
+  if (startP(leadership, gapT) >= GATE_P) return 'coachCall';
   const ability = 0.5 * (1 - gapT);
-  const conviction = Math.max(0, 0.3 * ((charisma - 50) / 50));
+  const conviction = Math.max(0, 0.3 * ((leadership - 50) / 50));
   if (Math.max(ability, conviction) < MIN_SHORTFALL) return 'coachCall';
   return ability >= conviction ? 'ability' : 'conviction';
 }

@@ -42,9 +42,13 @@ export function sponsorBonus(base: number, rank: number, teamCount: number, cham
   return Math.round(base * (0.2 * rankT + (champion ? 0.15 : runnerUp ? 0.08 : 0)));
 }
 
-/** 직관율 — 성적이 지배하고 팬심이 거든다. 팬은 남아도 발길이 끊긴다 */
-export function turnoutRate(winRate: number, fan: number): number {
-  return Math.max(0.04, Math.min(0.16, 0.05 + 0.07 * winRate + 0.03 * (fan / 100)));
+/** 감독 명성 관중 가산 계수(STAFF §9.6-D) — 명장 밑에서 보는 재미. 팬심 가산(0.03)보다 작게(소폭, 상한 캡은 동일 0.16). */
+export const COACH_REP_TURNOUT = 0.02;
+/** 직관율 — 성적이 지배하고 팬심이 거든다. 팬은 남아도 발길이 끊긴다.
+ *  @param coachRep 감독 명성(0~100, STAFF §9.6-D) — 소폭 가산(0=무가산 → base와 byte-동일). */
+export function turnoutRate(winRate: number, fan: number, coachRep = 0): number {
+  const rep = coachRep < 0 ? 0 : coachRep > 100 ? 100 : coachRep;
+  return Math.max(0.04, Math.min(0.16, 0.05 + 0.07 * winRate + 0.03 * (fan / 100) + COACH_REP_TURNOUT * (rep / 100)));
 }
 
 /** 관중 수입(만원) — 평균 관중 × 홈경기 × 객단가 */
@@ -66,11 +70,12 @@ export function settleSeason(input: {
   teamId: string; rank: number; teamCount: number; champion: boolean; runnerUp: boolean;
   winRate: number; fan: number; fanTotal: number; playerFansTotal: number;
   payroll: number; staff: number; cashBefore: number;
+  coachRep?: number; // 감독 명성(STAFF §9.6-D 관중 소폭 가산) — 생략=0(base와 byte-동일)
 }): SeasonFinance {
   const base = sponsorBase(input.teamId);
   const sponsor = Math.round(base * sponsorThrift(input.cashBefore));
   const bonus = sponsorBonus(base, input.rank, input.teamCount, input.champion, input.runnerUp);
-  const attendance = Math.round(input.fanTotal * turnoutRate(input.winRate, input.fan));
+  const attendance = Math.round(input.fanTotal * turnoutRate(input.winRate, input.fan, input.coachRep ?? 0));
   const gate = gateRevenue(attendance);
   const merch = merchRevenue(input.playerFansTotal);
   const income = sponsor + bonus + gate + merch;

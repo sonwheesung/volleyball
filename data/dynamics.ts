@@ -7,14 +7,14 @@ import { createRng, strSeed } from '../engine/rng';
 import { injuryRisk, rollSeverity, CONCURRENT_CAP, type Severity } from '../engine/injury';
 import { buildLineup } from '../engine/lineup';
 import { healthyByPos, shortagePositions, pickSigning } from '../engine/transactions';
-import { formFactor, applyForm, FORM_WINDOW } from '../engine/form';
+import { formFactor, applyForm, FORM_WINDOW, leadershipRelief } from '../engine/form';
 import { rollScandal, SCANDAL_MISS, type ScandalKind } from '../engine/scandal';
 import type { BenchDirective } from '../engine/owner';
 import type { MatchIntervention } from '../engine/simMatch';
 import { marketVal } from './awardSalary';
 import { LEAGUE_CAP } from '../engine/cap';
 import { SEASON_DAYS } from '../engine/calendar';
-import { baseVersion, currentRosters, getPlayer, evolveOnDay, LEAGUE, SEASON } from './league';
+import { baseVersion, currentRosters, getPlayer, evolveOnDay, LEAGUE, SEASON, coachLeadershipOf, coachDvPhilosophyOf } from './league';
 import { domesticPayroll } from './roster';
 import { legRanges } from '../engine/season';
 import { recordBump } from './spliceLog';
@@ -176,7 +176,7 @@ function compute(): Dyn {
     if (!days.length) return 1;
     const pl = played.get(playerId);
     const cnt = pl ? days.filter((x) => pl.includes(x)).length : 0;
-    return formFactor(cnt, days.length);
+    return formFactor(cnt, days.length, leadershipRelief(coachLeadershipOf(teamId, d))); // 리더십 경기감각 완화(§9.6-D)
   };
   const pendingPlayerTx = [...playerTx].sort((a, b) => a.day - b.day);
   let pi = 0;
@@ -245,7 +245,7 @@ function compute(): Dyn {
           .map((id) => evolveOnDay(id, d)).filter((p): p is Player => !!p)
           .map((p) => applyForm(p, formOf(teamId, p.id, d))); // 경기감각 — 결장 누적자는 무뎌진 채 평가
         if (!avail.length) continue; // 빈 명단(가드 우회 주입 등 비정상) — 부상 굴림 생략, 전진 패스는 계속
-        const lu = buildLineup(avail);
+        const lu = buildLineup(avail, coachDvPhilosophyOf(teamId, d)); // 육성 철학 U23 에지(§9.6-D) — match.ts 라인업과 일치(부상/출전 추적 정합)
         const onCourt = lu.libero ? [...lu.six, lu.libero] : lu.six;
         teamDays.set(teamId, [...(teamDays.get(teamId) ?? []), d]);
         for (const p of onCourt) played.set(p.id, [...(played.get(p.id) ?? []), d]);
@@ -322,7 +322,7 @@ export function formFactorOnDay(teamId: string, playerId: string, day: number): 
   if (!days.length) return 1;
   const pl = dn.played.get(playerId);
   const cnt = pl ? days.filter((x) => pl.includes(x)).length : 0;
-  return formFactor(cnt, days.length);
+  return formFactor(cnt, days.length, leadershipRelief(coachLeadershipOf(teamId, day))); // 리더십 경기감각 완화(§9.6-D)
 }
 
 /** 이번 시즌 사건·사고(출장 정지) 전체 — 뉴스·팬심·표시용 */

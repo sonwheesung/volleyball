@@ -28,7 +28,21 @@ const clamp01 = (v: number) => Math.max(0, Math.min(1, v));
  *   endSeason 3.5단계는 이미 롤오버(나이+1)된 snapshot에 적립하므로 **뛴 시즌 나이 A**(=`snapshot.age - 1`)를
  *   명시 전달해야 ageMul 버킷 경계(18/21/24/27)에서 저평가되지 않는다(TRAINING_SYSTEM §1.7, 사용자 결정 2026-07-15).
  */
-export function applyMatchXp(p: Player, prod: ProdLine | undefined, ageForMul?: number): Player {
+/** 육성형 감독 U23 경기경험 승수 상한(STAFF §9.6-D) — dvPhilosophy 100·U23이면 경기경험 XP +15%(훈련 효율은 코치 영역, 불개입). */
+export const U23_EXP_BONUS = 0.15;
+/** 감독 육성 철학 → U23 경기경험 승수(1~1+U23_EXP_BONUS). 비-U23·dvPhilosophy≤50이면 1(무보정). */
+export function u23ExpMul(age: number, dvPhilosophy: number): number {
+  if (age > 23) return 1;
+  const t = Math.max(0, (dvPhilosophy - 50) / 50); // 50→0, 100→1
+  return 1 + U23_EXP_BONUS * t;
+}
+
+/**
+ * 한 선수의 시즌 생산을 경험치로 적립한 새 선수(불변).
+ * @param ageForMul ageMul 나이 배수. (기존 §1.7 주석 유지)
+ * @param expMul 경기경험 승수(STAFF §9.6-D 육성 철학 U23 보정) — XP gain 전체에 곱. 기본 1=무보정(byte-동일). 훈련 효율 아님(경기경험 채널만).
+ */
+export function applyMatchXp(p: Player, prod: ProdLine | undefined, ageForMul?: number, expMul = 1): Player {
   if (!prod || prod.matches <= 0) return p;
   const ageM = ageForMul ?? p.age;
   const next = { ...p } as Player;
@@ -42,7 +56,7 @@ export function applyMatchXp(p: Player, prod: ProdLine | undefined, ageForMul?: 
     if (cur >= pot) return;
     const head = clamp01((pot - cur) / 12);
     if (head <= 0) return;
-    const gain = effort * head * talentFor(p, stat) * ageMul(ageM, stat);
+    const gain = effort * head * talentFor(p, stat) * ageMul(ageM, stat) * expMul;
     let bar = (xp[stat] ?? 0) + gain;
     let value = cur;
     while (bar >= 1 && value < pot) {

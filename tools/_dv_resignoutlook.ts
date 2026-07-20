@@ -7,7 +7,7 @@
 //   (3) override money 반영: money 성향 선수에 stingy(0.3×) override → prob↑, generous(1.2×) → prob↓ (Stage 2 UI 반영).
 import './_gt_mock';
 
-import { resetLeagueBase, setMyTeamStaff, LEAGUE, getEvolvedTeamPlayers } from '../data/league';
+import { resetLeagueBase, setMyTeamStaff, LEAGUE, getEvolvedTeamPlayers, coachLeadershipOf } from '../data/league';
 import { resignOutlookNow, discontentNow } from '../data/owner';
 import { refuseResignProb, sustainedBenchRefuse, PROMISE_BREACH_REFUSE, starterPromised, interviewEffects } from '../engine/owner';
 import { prefWeightsOf } from '../engine/faMarket';
@@ -32,7 +32,7 @@ for (const p of players) {
   const o = resignOutlookNow(p, my, DAY, interviews, season);
   const { topic, weight, playRatio } = discontentNow(p, my, DAY);
   const fx = interviewEffects(interviews, season);
-  const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight) : 0;
+  const accum = topic === 'minutes' ? sustainedBenchRefuse(playRatio, weight, coachLeadershipOf(my, DAY)) : 0; // 리더십 완화(§9.6-D) — 엔진과 동일 계수
   const promised = starterPromised(interviews, season, p.id) || !!p.contract.starterGuarantee;
   const breach = topic === 'minutes' && promised ? PROMISE_BREACH_REFUSE : 0;
   const expected = Math.min(0.95, refuseResignProb(topic, weight, fx.refuseBias[p.id] ?? 0) + accum + breach);

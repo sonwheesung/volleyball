@@ -13,7 +13,7 @@ import { SEASON_DAYS } from '../engine/calendar';
 import { rollTraits } from '../engine/traits';
 import { createRng, strSeed } from '../engine/rng';
 import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, coachTypeFor, deriveHeadAxes, type StaffEffects, NO_EFFECTS } from '../engine/staff';
-import { interimRenown } from '../engine/reputation';
+import { interimRenown, reputationOf, type CoachCareerRow } from '../engine/reputation';
 import { recordBump } from './spliceLog';
 
 const LEAGUE_SEED = 20251018;
@@ -283,7 +283,29 @@ export const getTeamCoach = (teamId: string): Coach | undefined => teamHeadCoach
  *  day 주면 **그날의 감독**(축3 forward-only, 부임 이전 경기는 이전 감독). 생략하면 현재 감독(포스트시즌·표시·도구용). */
 export const coachInfoOf = (teamId: string, day?: number): CoachInfo | undefined => {
   const c = day === undefined ? teamHeadCoach(teamId) : teamHeadCoachOn(teamId, day);
-  return c ? { style: c.style, matchOps: c.matchOps } : undefined;
+  return c ? { style: c.style, matchOps: c.matchOps, dvPhilosophy: c.dvPhilosophy } : undefined; // dvPhilosophy = 육성 철학 U23 라인업 에지(§9.6-D)
+};
+
+/** 감독 리더십(0~100, STAFF §9.6-D) — 그날의 감독. 경기감각(FORM) 완화·건의 계수. 무감독=50(neutral, 완화 없음). */
+export const coachLeadershipOf = (teamId: string, day?: number): number => {
+  const c = day === undefined ? teamHeadCoach(teamId) : teamHeadCoachOn(teamId, day);
+  return c ? c.leadership : 50;
+};
+/** 감독 육성 철학(0~100, STAFF §9.6-D) — 그날의 감독. U23 라인업 에지·경기경험 승수. 무감독=0(neutral). */
+export const coachDvPhilosophyOf = (teamId: string, day?: number): number => {
+  const c = day === undefined ? teamHeadCoach(teamId) : teamHeadCoachOn(teamId, day);
+  return c ? c.dvPhilosophy : 0;
+};
+
+// ── 감독 명성 컨텍스트(STAFF §9.6-D FA 유인) — 스토어가 coachCareerLog 주입(relationBonds·setOwnerContext 동형).
+//   resolveFAMarket이 teamCoachRepOf로 각 팀 감독 명성을 읽어 offerScore coachRep에 소폭 가산 → 미리보기=결과(둘 다 같은 컨텍스트).
+let coachCareerLogCtx: CoachCareerRow[] = [];
+export function setCoachRepContext(log: CoachCareerRow[]): void { coachCareerLogCtx = [...log]; }
+/** 팀 현재 감독의 명성(0~100, 로그+renown 파생). 무감독·대행=0(FA 유인 무). day 주면 그날의 감독. */
+export const teamCoachRepOf = (teamId: string, day?: number): number => {
+  const c = day === undefined ? teamHeadCoach(teamId) : teamHeadCoachOn(teamId, day);
+  if (!c || c.id.startsWith('acting_')) return 0;
+  return reputationOf(coachCareerLogCtx, c);
 };
 
 // ─── 스태프 시장·계약(STAFF_SYSTEM) ───

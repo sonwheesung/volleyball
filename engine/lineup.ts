@@ -13,26 +13,40 @@ export interface Lineup {
   libero: Player | null;  // 후위 수비 전문(서브·전위 공격 불가)
 }
 
-function bestByPos(players: Player[], pos: Position, n: number, used: Set<string>): Player[] {
+// ── 육성 철학(dvPhilosophy) U23 기용 에지 (STAFF_SYSTEM §9.6-D) ──
+//   육성형 감독(dvPhilosophy 높음)은 **실력이 근접한** U23에게 코트를 더 준다. **역전 금지**: OVR 큰 격차는
+//   못 뒤집는다 — 에지 상한(U23_LINEUP_EDGE) 이내의 근소 차만 우선. dvPhilosophy≤50이면 에지 0(승부형=주전 위주).
+//   기본값 0(=neutral) → 기존 호출부 전부 byte-동일(에지 미가산). 감독 자동 라인업 경로만 실제 dvPhilosophy 주입.
+export const U23_AGE = 23;
+export const U23_LINEUP_EDGE = 2; // dvPhilosophy 100에서 U23이 얻는 최대 OVR 우선권(정수 OVR 기준 ≤2점 격차만 역전)
+/** U23 기용 에지(OVR 가산). 비-U23·dvPhilosophy≤50이면 0. dvPhilosophy 100→최대 U23_LINEUP_EDGE. */
+export function u23Edge(p: Player, dvPhilosophy: number): number {
+  if (p.age > U23_AGE) return 0;
+  const t = Math.max(0, (dvPhilosophy - 50) / 50); // 50→0, 100→1
+  return U23_LINEUP_EDGE * t;
+}
+
+function bestByPos(players: Player[], pos: Position, n: number, used: Set<string>, dvPhilosophy: number): Player[] {
   const picked = players
     .filter((p) => p.position === pos && !used.has(p.id))
-    .sort((a, b) => overall(b) - overall(a))
+    .sort((a, b) => (overall(b) + u23Edge(b, dvPhilosophy)) - (overall(a) + u23Edge(a, dvPhilosophy)))
     .slice(0, n);
   picked.forEach((p) => used.add(p.id));
   return picked;
 }
 
 /** 로스터 → 주전 6인 로테이션 배열 + 리베로. 결손 포지션은 잔여 선수로 방어 충원.
- *  빈 로스터는 명시적 거부 — 시즌 계층(부상 상한 3·방출 하한 ROSTER_MIN)이 원천 차단해야 하는 상태. */
-export function buildLineup(players: Player[]): Lineup {
+ *  빈 로스터는 명시적 거부 — 시즌 계층(부상 상한 3·방출 하한 ROSTER_MIN)이 원천 차단해야 하는 상태.
+ *  @param dvPhilosophy 감독 육성 철학(0~100, STAFF §9.6-D) — U23 근소차 우선권. 기본 0=neutral(에지 미가산, byte-동일). */
+export function buildLineup(players: Player[], dvPhilosophy = 0): Lineup {
   if (players.length === 0) throw new Error('빈 로스터 — 라인업을 구성할 수 없습니다(시즌 계층 가드 위반)');
   // 선발 구성 인원은 STARTER_NEED(engine/transactions) 단일 출처. 픽 순서는 유지(각 pos 배타 필터라 결과 불변).
   const used = new Set<string>();
-  const S = bestByPos(players, 'S', STARTER_NEED.S, used);
-  const OH = bestByPos(players, 'OH', STARTER_NEED.OH, used);
-  const MB = bestByPos(players, 'MB', STARTER_NEED.MB, used);
-  const OP = bestByPos(players, 'OP', STARTER_NEED.OP, used);
-  const libero = bestByPos(players, 'L', STARTER_NEED.L, used)[0] ?? null;
+  const S = bestByPos(players, 'S', STARTER_NEED.S, used, dvPhilosophy);
+  const OH = bestByPos(players, 'OH', STARTER_NEED.OH, used, dvPhilosophy);
+  const MB = bestByPos(players, 'MB', STARTER_NEED.MB, used, dvPhilosophy);
+  const OP = bestByPos(players, 'OP', STARTER_NEED.OP, used, dvPhilosophy);
+  const libero = bestByPos(players, 'L', STARTER_NEED.L, used, dvPhilosophy)[0] ?? null;
 
   // 대각 배치: 세터(0)↔아포짓(3), OH(1)↔OH(4), MB(2)↔MB(5)
   const slots: (Player | undefined)[] = [S[0], OH[0], MB[0], OP[0], OH[1], MB[1]];

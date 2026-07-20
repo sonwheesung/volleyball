@@ -339,8 +339,8 @@ export interface Coach {
   age: number;
   // 감독 능력 3축 (STAFF_SYSTEM §9.1, 스태프 3.0 Phase A) — 구 단일 `charisma` 대체.
   matchOps: number;          // ① 경기 운영 — 타임아웃 기세 수렴 폭(구 charisma 값 그대로 이관). 엔진에 물림.
-  dvPhilosophy: number;      // ② 육성 철학(기용 성향) — id 시드 파생. Phase A는 표시·영속만(엔진 훅 Phase D).
-  leadership: number;        // ③ 리더십(선수단 관리) — id 시드 파생. Phase A는 표시·영속만(엔진 훅 Phase D).
+  dvPhilosophy: number;      // ② 육성 철학(기용 성향) — id 시드 파생. 엔진 훅 §9.6-D ✅: U23 라인업 에지(buildLineup)·경기경험 승수(applyMatchXp).
+  leadership: number;        // ③ 리더십(선수단 관리) — id 시드 파생. 엔진 훅 §9.6-D ✅: FORM 완화·불만 완화·면담 보정·벤치/선발 건의 계수(구 matchOps 이관).
   renown: number;            // 초기 명성(0~100, birth 속성 — STAFF §9.6-B). reputationOf의 빈-로그 기준선. 파생 명성 누적치 아님(구 starRep 흡수). 레전드승격 72·일반승격 38·시드 12~45·신임/대행 8~17.
   style: CoachStyle;         // 자동 운영 성향 (경기 스타일 분포)
   archetype: string;         // 훈련 아키타입 명칭 (표시용)

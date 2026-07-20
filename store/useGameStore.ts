@@ -16,7 +16,7 @@ import { commitPlayerBase, commitRosters, getTeam, resetLeagueBase, setFocusTime
 import { medianOvr, MED_REF } from '../engine/overall';
 import { advanceCoaches } from '../data/staffLifecycle';
 import { bottomStreak } from '../engine/staffLifecycle';
-import { predictRanks, reputationOf, interestedClubs, counterOfferOutcome, type CoachCareerRow, type MediaPredictionEntry, type MidFire, type PlayoffResult, type TeamContext } from '../engine/reputation';
+import { predictRanks, reputationOf, interestedClubs, counterOfferOutcome, type CoachCareerRow, type CoachAsstCareerRow, type MediaPredictionEntry, type MidFire, type PlayoffResult, type TeamContext } from '../engine/reputation';
 import { headOvr, headCoachSalary } from '../engine/staff';
 import { getTeamPlayers, shortTeamName } from '../data/league';
 import { SEASON_DAYS } from '../engine/calendar';
@@ -46,7 +46,7 @@ import { staffSpend, setMyTeamStaff } from '../data/league';
 import { overall } from '../engine/overall';
 import { awardHistoryOf } from '../data/awards';
 import { computeStandings, displayCutoff, seasonStreaks, seasonResults, playedThroughDay } from '../data/standings';
-import { coachInfoOf } from '../data/league';
+import { coachInfoOf, coachLeadershipOf, setCoachRepContext, coachDvPhilosophyOf } from '../data/league';
 import { buildPlayoffs, seriesByTeam } from '../data/playoffs';
 import { currentRosters, evolveOnDay, getPlayer, SEASON } from '../data/league';
 import { planNextAction } from '../engine/advance';
@@ -59,7 +59,7 @@ import { accrueCareer, appendSeasonLine } from '../engine/production';
 import { diag } from '../lib/deviceLog';
 import { fillRosters } from '../data/rookies';
 import { resolveDraft } from '../engine/draft';
-import { applyMatchXp } from '../engine/experience';
+import { applyMatchXp, u23ExpMul } from '../engine/experience';
 import { PROTECT_COUNT } from '../engine/compensation';
 import { RETIRE_AGE } from '../engine/retire';
 import type { Contract, DraftPickRecord, ExpelRecord, FAOffer, FocusSeg, ForeignSwapRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
@@ -143,6 +143,7 @@ interface GameState {
   bonds: Record<string, number>; // 인간관계 우정(pairKey→0~0.3, 함께한 세월 누적, RELATIONSHIP_SYSTEM)
   coachPool: { coaches: Coach[]; assistants: AssistantCoach[] } | null; // 감독 생애주기 풀(null=시드, STAFF_SYSTEM 6)
   coachCareerLog: CoachCareerRow[]; // 감독 경력 로그(명성의 진실 — STAFF §9.6-B). 시즌 종료 시 팀별 1행 append. 롤링 캡 1000.
+  coachAsstCareerLog: CoachAsstCareerRow[]; // 전문 코치 경량 경력(§6.3 coachRep 실경력 파생 — §9.6-D). 시즌 종료 시 배정 코치 1행. 캡 1000.
   mediaPredictionLog: MediaPredictionEntry[]; // 언론 예상 순위(시즌별) — 개막 뉴스·경력 로그 기준선. 캡 12.
   midFires: MidFire[]; // 시즌 중 경질 캡처(내 팀 fireCoach) — endSeason이 midSeasonFired 행으로 소비 후 리셋.
   counterOfferedCoachId: string | null; // 이번 오프시즌 카운터오퍼 소진한 감독(1회성 재클릭 차단 — 비영속 세션, endSeason 리셋 §9.6-C)
@@ -271,6 +272,7 @@ const freshSave = {
   bonds: {} as Record<string, number>,
   coachPool: null as { coaches: Coach[]; assistants: AssistantCoach[] } | null,
   coachCareerLog: [] as CoachCareerRow[],
+  coachAsstCareerLog: [] as CoachAsstCareerRow[],
   mediaPredictionLog: [] as MediaPredictionEntry[],
   midFires: [] as MidFire[],
   counterOfferedCoachId: null as string | null,
@@ -571,6 +573,7 @@ export const useGameStore = create<GameState>()(
         const staff = grantStartingStaff(teamId);
         set({ staffHead: staff.head, staffAssistants: staff.asst, staffScouts: staff.scout });
         setOwnerContext([]);
+        setCoachRepContext([]); // 새 세이브 — 감독 명성 로그 없음(FA 유인 §9.6-D, renown 기준선)
         setInterventionContext({}); // 새 세이브 — 개입 로그 없음(MATCH_INTERVENTION §2)
         setCoachModeLog([]); // 새 세이브 — "경기 지휘" 설정 기본(감독 자동, MATCH_INTERVENTION §4.1)
         setAwardScores([]); // 새 세이브 — 수상 이력 없음
@@ -920,7 +923,7 @@ export const useGameStore = create<GameState>()(
         const rank = Math.max(1, order.indexOf(my) + 1);
         const perfT = order.length <= 1 ? 1 : 1 - (rank - 1) / (order.length - 1);
         const fails = s.interviews.filter((l) => l.playerId === playerId && !l.ok).length;
-        const ok = persuade(playerId, s.season, seasonLogs.length, cardMatch(card, topic, p), perfT, fails);
+        const ok = persuade(playerId, s.season, seasonLogs.length, cardMatch(card, topic, p), perfT, fails, coachLeadershipOf(my, s.currentDay)); // 감독 리더십 면담 보정(§9.6-D)
         set({
           interviews: [...s.interviews, { playerId, season: s.season, day: s.currentDay, topic, card, ok }].slice(-200),
           careerLog: { ...s.careerLog, interviews: s.careerLog.interviews + 1 },
@@ -953,9 +956,9 @@ export const useGameStore = create<GameState>()(
         const altOvr = alt ? overall(applyForm(alt, formFactorOnDay(my, alt.id, s.currentDay))) : null;
         const gap = altOvr != null ? overall(target) - altOvr : 10;
         const ovrGapT = Math.max(0, Math.min(1, 1 - gap / 10)); // 대체자가 비등할수록 1
-        const matchOps = coachInfoOf(my)?.matchOps ?? 50; // 구 charisma 이관값(엔진 등가). leadership 이관은 Phase D.
+        const leadership = coachLeadershipOf(my, s.currentDay); // 벤치/선발 건의 반응 계수 = 리더십(구 matchOps 이관, §9.6-B/D)
         // 감독 수락 롤은 플레이버 표시용으로만 계산(coachAgrees) — 기계 효과 0. 확정은 항상 실행(감독 거부 없음).
-        const coachAgrees = benchAccept(playerId, s.season, s.currentDay, matchOps, ovrGapT, aceRank, reason);
+        const coachAgrees = benchAccept(playerId, s.season, s.currentDay, leadership, ovrGapT, aceRank, reason);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 확정했으면 잠금(쿨다운 — 남용 방지)
         // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). watchProgress 비어있지 않음 == 현재 경기 관전 중.
         // 소급 방어(A2, 2026-07-08): 오늘 경기를 기록(watchProgress 비움·setDay 전)한 직후엔 currentDay가 아직 그
@@ -987,7 +990,7 @@ export const useGameStore = create<GameState>()(
         if (!target) return { ok: false };
         // 동포지션 '최약 주전'을 벤치 — 건의 선수가 그 자리를 잇는다(주석대로). 과거 최강(에이스)을 벤치하던 버그 수정(EC-LU-02).
         //   주전 판정은 실제 경기 라인업(availableTeamPlayers→buildLineup)으로 — 벤치된 비주전을 골라 무의미해지는 것 방지.
-        const lu = buildLineup(availableTeamPlayers(my, s.currentDay));
+        const lu = buildLineup(availableTeamPlayers(my, s.currentDay), coachInfoOf(my, s.currentDay)?.dvPhilosophy ?? 0); // 육성 철학 U23 에지(§9.6-D) — 실제 경기 라인업과 일치
         const starterIds = new Set<string>([...lu.six.map((p) => p.id), ...(lu.libero ? [lu.libero.id] : [])]);
         const incumbent = squad
           .filter((q) => q.position === target.position && q.id !== playerId && starterIds.has(q.id))
@@ -1000,9 +1003,9 @@ export const useGameStore = create<GameState>()(
         // Form 비대칭(OWNER §2.2 ★): 선발 건의는 건의선수의 폼을 보지 않는다(순수 OVR = 원래 능력) — 뛰게 해서 폼 회복시키려는 것,
         //   자기 러스트로 자기 승격을 막는 자충수 방지. incumbent(현 주전)는 폼≈1.0이라 어차피 순수 OVR.
         const gapT = Math.max(0, Math.min(1, 1 - (overall(incumbent) - overall(target)) / 10));
-        const matchOps = coachInfoOf(my)?.matchOps ?? 50; // 구 charisma 이관값(엔진 등가). leadership 이관은 Phase D.
+        const leadership = coachLeadershipOf(my, s.currentDay); // 선발 건의 반응 계수 = 리더십(구 matchOps 이관, §9.6-B/D)
         // 감독 수락 롤은 플레이버 표시용으로만 계산(coachAgrees) — 기계 효과 0. 확정은 항상 실행(감독 거부 없음).
-        const coachAgrees = startSuggestAccept(playerId, s.season, s.currentDay, matchOps, gapT);
+        const coachAgrees = startSuggestAccept(playerId, s.season, s.currentDay, leadership, gapT);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 확정했으면 잠금(쿨다운 — 남용 방지)
         // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). 소급 방어(A2) — suggestBench와 동일.
         const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);
@@ -1067,7 +1070,7 @@ export const useGameStore = create<GameState>()(
       },
 
       endSeason: () => {
-        const { season, contractOverrides, selectedTeamId, resignDecisions, faOffers, protectedIds, moneyOnlyIds, draftPicks, draftSelections, hallOfFame, expelledLog, transfers, retirements, seasonDraftLog, seasonForeignLog, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian, coachCareerLog, mediaPredictionLog, midFires } = get();
+        const { season, contractOverrides, selectedTeamId, resignDecisions, faOffers, protectedIds, moneyOnlyIds, draftPicks, draftSelections, hallOfFame, expelledLog, transfers, retirements, seasonDraftLog, seasonForeignLog, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian, coachCareerLog, coachAsstCareerLog, mediaPredictionLog, midFires } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
         diag(season, 'season', `시즌 종료 ${season + 1}→${nextSeason + 1} (오프시즌 진입)`); // 진단 로그(#44)
@@ -1193,11 +1196,14 @@ export const useGameStore = create<GameState>()(
         const myRankFinal = Math.max(1, finalStandings.findIndex((r) => r.teamId === my) + 1);
         const fb = teamFanbaseNow(my, SEASON_END_DAY, fanScore, archive);
         const myPayroll = (finalR[my] ?? []).reduce((sum, id) => sum + (evolveOnDay(id, SEASON_END_DAY)?.contract.salary ?? 0), 0);
+        // 감독 명성 관중 소폭 가산(§9.6-D) — 끝난 시즌 진입 명성(this-season 로그 append 전 = 그 시즌 위상). 대행은 0.
+        const myCoachNow = getTeamCoach(my);
+        const myCoachRep = myCoachNow && !myCoachNow.id.startsWith('acting_') ? reputationOf(coachCareerLog, myCoachNow) : 0;
         const finance = settleSeason({
           teamId: my, rank: myRankFinal, teamCount: finalStandings.length,
           champion: championId === my, runnerUp: runnerUpId === my,
           winRate, fan: fanScore, fanTotal: fb.total, playerFansTotal: fb.playerFansTotal,
-          payroll: myPayroll, staff: staffSpend(my), cashBefore: cash,
+          payroll: myPayroll, staff: staffSpend(my), cashBefore: cash, coachRep: myCoachRep,
         });
         const settled = applyNet(cash, finance.net);
         const nextFinance: SeasonFinance = { ...finance, bailout: settled.bailout };
@@ -1238,7 +1244,13 @@ export const useGameStore = create<GameState>()(
             const pr = seasonProd.get(id);
             // 시즌 라인의 소속은 "이번 시즌을 뛴 팀"(prevTeamOf) — filled.rosters(tid)는 다음 시즌 명단이라 FA 이적자가 새 팀으로 잘못 적힘
             // ageMul은 **뛴 시즌 나이**(snapshot은 롤오버로 age+1 된 base — rollover.ts:59 무조건 +1 → −1이 pre-roll 나이). TRAINING_SYSTEM §1.7(2026-07-15).
-            if (pr && snapshot[id]) snapshot[id] = appendSeasonLine(accrueCareer(applyMatchXp(snapshot[id], pr, snapshot[id].age - 1), pr), season, ctx.prevTeamOf[id] ?? tid, pr); // 성장 XP + 통산 누적 + 시즌별 기록 라인
+            // 육성 철학 U23 경기경험 승수(§9.6-D) — 뛴 팀 감독 dvPhilosophy·뛴 나이(snapshot.age-1) 기준. dvPhilosophy≤50·비-U23=1(무보정).
+            if (pr && snapshot[id]) {
+              const playedTeam = ctx.prevTeamOf[id] ?? tid;
+              const playedAge = snapshot[id].age - 1;
+              const expMul = u23ExpMul(playedAge, coachDvPhilosophyOf(playedTeam, SEASON_END_DAY));
+              snapshot[id] = appendSeasonLine(accrueCareer(applyMatchXp(snapshot[id], pr, playedAge, expMul), pr), season, playedTeam, pr); // 성장 XP + 통산 누적 + 시즌별 기록 라인
+            }
           }
         }
 
@@ -1282,12 +1294,31 @@ export const useGameStore = create<GameState>()(
           : playoffs.final && (playoffs.final.hiId === tid || playoffs.final.loId === tid) ? 'final'
           : playoffs.po && (playoffs.po.hiId === tid || playoffs.po.loId === tid) ? 'po'
           : 'none';
+        // 유망주 육성 사실(§9.6-D 보조축) — 팀별 U23 주전 안착 수 + 신인상 배출(명성 소폭 가산·additive).
+        //   U23 주전 안착 = 이 시즌 그 팀 소속 U23(뛴 나이≤23) 중 출전(matches)이 팀 최다 출전자의 절반 이상.
+        const u23StartersByTeam: Record<string, number> = {};
+        for (const tid of Object.keys(finalR)) {
+          const teamMatches = finalR[tid].map((id) => seasonProd.get(id)?.matches ?? 0);
+          const maxMatches = teamMatches.length ? Math.max(...teamMatches) : 0;
+          const half = maxMatches * 0.5;
+          let cnt = 0;
+          for (const id of finalR[tid]) {
+            const playedAge = (evolveOnDay(id, SEASON_END_DAY)?.age ?? 99);
+            const m = seasonProd.get(id)?.matches ?? 0;
+            if (playedAge <= 23 && maxMatches > 0 && m >= half) cnt++;
+          }
+          u23StartersByTeam[tid] = cnt;
+        }
+        // 신인상 배출 팀 — 수상자의 이 시즌 소속(finalR 멤버십).
+        const rookieId = seasonAwards.rookie?.playerId;
+        const rookieTeam = rookieId ? Object.keys(finalR).find((tid) => finalR[tid].includes(rookieId)) : undefined;
+
         const endedRows: CoachCareerRow[] = [];
         for (let i = 0; i < rankOrder.length; i++) {
           const tid = rankOrder[i];
           const headId = assignedHead[tid];
           if (!headId || headId.startsWith('acting_')) continue; // 대행 체제 팀의 정식 감독 크레딧은 midFires 행이 담당(중복 방지)
-          endedRows.push({ season, coachId: headId, teamId: tid, predictedRank: predRankOf(tid), actualRank: i + 1, playoff: playoffOf(tid), champion: championId === tid, midSeasonFired: false });
+          endedRows.push({ season, coachId: headId, teamId: tid, predictedRank: predRankOf(tid), actualRank: i + 1, playoff: playoffOf(tid), champion: championId === tid, midSeasonFired: false, u23Starters: u23StartersByTeam[tid] ?? 0, rookieAward: rookieTeam === tid });
         }
         // 시즌 중 경질(내 팀) — 경질 감독 1행(하락 트리거). actualRank=팀 최종 순위(참고용, 산식은 경질 페널티만 사용).
         for (const mf of midFires.filter((m) => m.season === season)) {
@@ -1309,7 +1340,14 @@ export const useGameStore = create<GameState>()(
           const avgAge = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 28;
           teamContext[t.id] = { teamId: t.id, avgAge, predictedRank: predRankOf(t.id) };
         }
-        const lifecycle = advanceCoaches(nextSeason, currentCoachPool(), assignedHead, retiredPlayers, legendSet, rankOrder, bottomYears, my, nextCoachCareerLog, teamContext);
+        // 전문 코치 경량 경력 append(§6.3·§9.6-D) — 이 시즌 팀 배정된 코치 1행(재직·소속팀 성적). 승격 시 coachRep·초기 명성 파생.
+        const rankIdx = (tid: string) => { const i = rankOrder.indexOf(tid); return i < 0 ? rankOrder.length : i + 1; };
+        const asstRows: CoachAsstCareerRow[] = [];
+        for (const a of currentCoachPool().assistants) {
+          if (a.teamId) asstRows.push({ season, coachId: a.id, teamId: a.teamId, teamRank: rankIdx(a.teamId) });
+        }
+        const nextCoachAsstCareerLog = [...coachAsstCareerLog, ...asstRows].slice(-1000);
+        const lifecycle = advanceCoaches(nextSeason, currentCoachPool(), assignedHead, retiredPlayers, legendSet, rankOrder, bottomYears, my, nextCoachCareerLog, teamContext, nextCoachAsstCareerLog);
         commitCoachPool(lifecycle.coaches, lifecycle.assistants);
         // 재배정 적용: AI 팀은 새 감독, 내 팀은 감독이 떠났으면 배정 해제(기본 감독 복귀 — 직접 다시 영입)
         for (const r of lifecycle.reassign) assignCoach(r.teamId, r.coachId);
@@ -1431,6 +1469,7 @@ export const useGameStore = create<GameState>()(
 
         const nextBonds = accrueBonds(bonds, filled.rosters); // 인간관계 우정 누적(같은 팀 +·옛정 감쇠)
         setRelationContext(nextBonds);    // 새 시즌 관계 컨텍스트(FA preview=result)
+        setCoachRepContext(nextCoachCareerLog); // 감독 명성 컨텍스트(FA 유인 §9.6-D) — 다음 오프시즌 FA 해석에 append된 로그 사용(preview=result)
         commitPlayerBase(snapshot);
         commitRosters(filled.rosters);
         // 다음 시즌 언론 예상 순위(개막 직전 = 롤오버 커밋 직후 새 base 로스터). 개막 뉴스·다음 명성 평가 기준선(STAFF §9.3).
@@ -1451,6 +1490,7 @@ export const useGameStore = create<GameState>()(
         set({
           coachPool: nextCoachPool,          // 감독 생애주기 풀 영속(STAFF_SYSTEM 6)
           coachCareerLog: nextCoachCareerLog, // 감독 경력 로그 append(명성 진실, §9.6-B)
+          coachAsstCareerLog: nextCoachAsstCareerLog, // 전문 코치 경량 경력 append(§6.3 coachRep 파생, §9.6-D)
           mediaPredictionLog: nextMediaPredictionLog, // 다음 시즌 언론 예상 순위(개막 뉴스·명성 기준선)
           midFires: [],                      // 시즌 중 경질 캡처 소비 완료 — 새 시즌 리셋
           counterOfferedCoachId: null,       // 카운터오퍼 1회성 — 새 오프시즌 리셋(§9.6-C)
@@ -1590,6 +1630,7 @@ export const useGameStore = create<GameState>()(
         simCache: captureSimCache(), // 계산된 시즌 결과(REALTIME_SIM Phase1) — 워밍됐을 때만, 재로드 재계산 제거
         coachPool: s.coachPool,
         coachCareerLog: s.coachCareerLog, // 감독 경력 로그(명성 진실, §9.6-B)
+        coachAsstCareerLog: s.coachAsstCareerLog, // 전문 코치 경량 경력(§6.3 coachRep 파생, §9.6-D)
         mediaPredictionLog: s.mediaPredictionLog, // 언론 예상 순위(개막 뉴스·명성 기준선)
         midFires: s.midFires, // 시즌 중 경질 캡처(엔드시즌 소비·리셋)
         hallOfFame: s.hallOfFame,
@@ -1649,6 +1690,7 @@ export const useGameStore = create<GameState>()(
           if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {}, (state as { staffHeadTimeline?: Record<string, { fromDay: number; coachId: string | null }[]> })?.staffHeadTimeline); // 축3: 타임라인 복원(구세이브=undefined→소급=byte 불변)
           setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
           setRelationContext(state?.bonds ?? {}); // 인간관계 우정 컨텍스트(FA 해석)
+          setCoachRepContext(state?.coachCareerLog ?? []); // 감독 명성 컨텍스트 복원(FA 유인 §9.6-D)
           setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)
           setOwnerContext(state?.benchDirectives ?? []);
           setInterventionContext(state?.interventions ?? {}); // 개입 로그 컨텍스트 복원(MATCH_INTERVENTION §2) — sim 호출부가 조회

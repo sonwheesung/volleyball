@@ -26,7 +26,7 @@ import { marketVal, setSalaryEra, awardScoreOf } from './awardSalary';
 import { leagueProduction } from './production';
 import type { PerfCtx } from './tryout';
 import { overall, teamOverall } from '../engine/overall';
-import { currentBasePlayers, currentRosters, focusOf, effectsOf } from './league';
+import { currentBasePlayers, currentRosters, focusOf, effectsOf, teamCoachRepOf } from './league';
 import { seasonScandals, type ScandalSpan } from './dynamics';
 import { domesticPayroll } from './roster';
 import { upcomingStances } from './leagueHistory';
@@ -285,6 +285,7 @@ export function resolveFAMarket(
         years: isMe ? cfg?.years : (aiYears !== RENEW_FA_YEARS ? aiYears : undefined),
         starterGuarantee: isMe ? cfg?.starterGuarantee : (aiGuarantee || undefined),
         promises: cfg?.promises,
+        coachRep: teamCoachRepOf(t), // 감독 명성 FA 유인(§9.6-D) — 컨텍스트(setCoachRepContext) 미주입/무감독=0(0드리프트)
       });
       const scoreOf = (offerSalary: number) => offerScore(mkCtx(offerSalary));
       let bidOffer = offer;

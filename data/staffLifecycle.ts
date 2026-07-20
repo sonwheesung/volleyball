@@ -10,8 +10,8 @@ import {
 import { createRng, strSeed } from '../engine/rng';
 import { headCoachSalary, assistantSalary, coachTypeFor, deriveHeadAxes, headOvr } from '../engine/staff';
 import {
-  interimRenown, reputationOf, coachPreference, resolveCoachMarket,
-  type CoachCareerRow, type TeamContext, type MarketCoach,
+  interimRenown, reputationOf, coachPreference, resolveCoachMarket, assistantCoachRep,
+  type CoachCareerRow, type CoachAsstCareerRow, type TeamContext, type MarketCoach,
 } from '../engine/reputation';
 import { COACH_NAMES } from './names';
 import type { CoachSpecialty } from '../types';
@@ -84,6 +84,7 @@ export function advanceCoaches(
   myTeamId: string,
   careerLog: CoachCareerRow[] = [],
   teamContext: Record<string, TeamContext> = {},
+  asstCareerLog: CoachAsstCareerRow[] = [], // 전문 코치 경량 경력(§6.3 coachRep 실경력 파생 — Phase D). 생략=무경력(구 상수 50 등가).
 ): LifecycleResult {
   const teamCount = rankOrder.length || 7;
   const retiredCoaches: string[] = [];
@@ -174,10 +175,11 @@ export function advanceCoaches(
   for (const a of assistants) {
     const fromLegend = a.id.startsWith('coach_') && legendIds.has(a.id.slice('coach_'.length));
     const starRep = fromLegend ? 80 : 40;
-    const worth = headWorthiness(a.rating, 50, starRep); // coachRep 50 기본(성과 추적은 후속)
+    const coachRep = assistantCoachRep(asstCareerLog, a.id, teamCount); // §6.3 상수 50 청산 — 실경력(재직·팀성적) 파생. 무경력=50(구 동작)
+    const worth = headWorthiness(a.rating, coachRep, starRep);
     if (a.teamId === null && promotesToHead(a.id, worth, season)) {
       const style = a.specialty === 'attack' ? 'attack' : a.specialty === 'defense' ? 'defense' : 'balanced';
-      coaches.push(coachToHead(a, starRep, DEFAULT_FOCUS, style));
+      coaches.push(coachToHead(a, starRep, DEFAULT_FOCUS, style, coachRep)); // 초기 명성에도 코치 경력 반영(§9.6-D)
       promoted.push(a.name);
     } else stillAsst.push(a);
   }
@@ -214,7 +216,7 @@ export function advanceCoaches(
         if (best) {
           const fromLegend = best.id.startsWith('coach_') && legendIds.has(best.id.slice('coach_'.length));
           const style = best.specialty === 'attack' ? 'attack' : best.specialty === 'defense' ? 'defense' : 'balanced';
-          free = coachToHead(best, fromLegend ? 80 : 40, DEFAULT_FOCUS, style);
+          free = coachToHead(best, fromLegend ? 80 : 40, DEFAULT_FOCUS, style, assistantCoachRep(asstCareerLog, best.id, teamCount)); // §6.3 실경력 파생
           coaches.push(free); assistants = assistants.filter((a) => a.id !== best.id); promoted.push(best.name);
         } else {
           // 프리 감독·승격 코치 모두 고갈 → 신임 감독 신규 영입(팀은 절대 무감독이 되지 않는다)

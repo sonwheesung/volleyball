@@ -33,7 +33,7 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 감독·스태프·훈련
   coachPool: null, staffHead: {}, staffHeadTimeline: {}, staffAssistants: {}, staffScouts: {}, trainingFocus: null, focusLog: [],
   // 감독 명성(STAFF §9.6-B) — 경력 로그(명성의 진실)·언론 예상 순위·시즌중 경질 캡처. 전부 additive(누락=[] — 무마이그레이션).
-  coachCareerLog: [], mediaPredictionLog: [], midFires: [],
+  coachCareerLog: [], coachAsstCareerLog: [], mediaPredictionLog: [], midFires: [],
   // 구단주·재정
   interviews: [], benchDirectives: [], interventions: {}, coachModeLog: [], talkCooldown: {}, benchCooldown: {},
   fanScore: 50, releaseAnger: 0, cash: 50000, lastFinance: null,
@@ -64,7 +64,7 @@ const KIND: Record<string, Kind> = {
   seasonDraftLog: 'arr', seasonForeignLog: 'arr',
   milestones: 'arr', readNews: 'arr',
   staffHead: 'rec', staffAssistants: 'rec', staffScouts: 'rec',
-  coachCareerLog: 'arr', mediaPredictionLog: 'arr', midFires: 'arr', // 감독 명성(§9.6-B) — 배열 강제(손상=[]). 엔트리 세부는 reputationOf/뉴스가 방어적 소비
+  coachCareerLog: 'arr', coachAsstCareerLog: 'arr', mediaPredictionLog: 'arr', midFires: 'arr', // 감독 명성(§9.6-B/D) — 배열 강제(손상=[]). 엔트리 세부는 reputationOf/뉴스가 방어적 소비
 
   interviews: 'arr', benchDirectives: 'arr', interventions: 'rec', talkCooldown: 'rec', benchCooldown: 'rec',
   fanScore: 'num', releaseAnger: 'num', cash: 'num',

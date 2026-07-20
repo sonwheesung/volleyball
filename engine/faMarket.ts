@@ -110,7 +110,12 @@ export interface OfferCtx {
   years?: number;      // 계약 연수(기본 2). 2 초과분 = 안정감(출전·잔류 지속) → playT 소폭 상향. 2 이하는 무보정.
   starterGuarantee?: boolean; // 주전 보장 → playT 확정 상향(출전 기회 항). 대가(벤치 시 공약파기·불만·팬심·폼)=Phase2 구현(data/owner + contract.starterGuarantee).
   promises?: { captain?: boolean; number?: boolean }; // 주장/등번호 약속 — §2.8.1 v1·Phase2 여전히 v2 보류(엔진 훅+대가 부재 → PROMISE_SAT=0). SOFT_SAT_CAP 클램프만 선반영
+  coachRep?: number;   // 영입 구단 감독 명성(0~100, STAFF §9.6-D) — "명장 밑에서 뛰고 싶다" 소폭 유인. 미제공(AI 기본/무감독)=0드리프트.
 }
+
+/** 감독 명성 FA 유인 계수(STAFF §9.6-D) — 기존 오퍼 레버(연봉·전력)보다 작게. rand 지터(0.05)와 같은 급, softSat 밖(동기 아님).
+ *  부익부(명장→강팀→FA 독식) 방지 위해 소폭 유지 — 밸런스 A/B(_dv_staff3_hooks·sim-league)로 고정. */
+export const COACH_REP_APPEAL = 0.05;
 
 // FA 수락 = 점수→확률 (FA_SYSTEM 2.7). offerScore는 [0,~1] 가중합 → acceptProb가 완만 S곡선으로.
 const SIT_FLOOR = 0.22;   // 이하 거의 거절(확률 0 부근)
@@ -155,7 +160,9 @@ export function offerScore(c: OfferCtx): number {
   //   v2에서 PROMISE_SAT>0으로 promiseT가 붙어도 talkBias와의 합이 0.20을 넘지 못해 레버 스택 폭주를 원천 차단.
   const SOFT_SAT_CAP = 0.20;
   const softSat = Math.min(SOFT_SAT_CAP, (c.talkBias ?? 0) + promiseT);
-  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + relTerm + 0.05 * c.rand + softSat;
+  // 감독 명성 유인(§9.6-D) — 소폭 flat 가산(동기 가중치 밖, softSat 밖). coachRep 0(AI 기본·무감독)이면 정확히 0 = 0드리프트.
+  const coachAppeal = COACH_REP_APPEAL * (Math.max(0, Math.min(100, c.coachRep ?? 0)) / 100);
+  return w.money * moneyT + w.win * winT + w.loyalty * loyT + w.play * playT + w.home * homeT + relTerm + 0.05 * c.rand + softSat + coachAppeal;
 }
 
 /** offerScore 요소별 기여(표시용 — FA 센터 '우세 이유' #7). **offerScore 본문은 불변** — 여기서 동일 산식을

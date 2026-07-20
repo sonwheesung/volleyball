@@ -6,6 +6,7 @@ import type { Player, Position, SeasonLine } from '../types';
 import { createRng } from './rng';
 import { overall } from './overall';
 import { STARTER_NEED } from './transactions';
+import { u23Edge } from './lineup';
 import type { SimResult } from './simMatch';
 import type { BoxSink } from './rally';
 
@@ -80,14 +81,15 @@ const ATK_FOCUS = 2.0; // 공격 집중도 — 좋은 공격수에게 세트 몰
 const BACK_ATK_RATE = 0.24; // OH/OP 킬 중 후위공격(백어택) 비율 — 엔진 백어택 18%/공격을 OH/OP 킬 기준 환산(측정 calibration)
 const BLK_FOCUS = 2.5; // 블록 집중도 — 좋은 블로커(센터)가 팀 블록 점유↑ → 스킬→블록 기울기 확보
 
-/** 선발(코트 위 7) / 벤치 분리 — 포지션별 OVR 상위가 선발 */
-export function splitLineup(players: Player[]): { starters: Player[]; bench: Player[] } {
+/** 선발(코트 위 7) / 벤치 분리 — 포지션별 OVR 상위가 선발.
+ *  @param dvPhilosophy 감독 육성 철학(STAFF §9.6-D) — U23 근소차 우선(buildLineup과 동일 에지). 기본 0=neutral(byte-동일). */
+export function splitLineup(players: Player[], dvPhilosophy = 0): { starters: Player[]; bench: Player[] } {
   const byPos: Record<Position, Player[]> = { S: [], OH: [], OP: [], MB: [], L: [] };
   for (const p of players) byPos[p.position].push(p);
   const starters: Player[] = [];
   const bench: Player[] = [];
   (Object.keys(byPos) as Position[]).forEach((pos) => {
-    const sorted = byPos[pos].sort((a, b) => overall(b) - overall(a));
+    const sorted = byPos[pos].sort((a, b) => (overall(b) + u23Edge(b, dvPhilosophy)) - (overall(a) + u23Edge(a, dvPhilosophy)));
     starters.push(...sorted.slice(0, ON_COURT[pos]));
     bench.push(...sorted.slice(ON_COURT[pos]));
   });
@@ -129,9 +131,11 @@ function productionFromBox(
   away: Player[],
   seed: number,
   box: BoxSink,
+  homeDv = 0,
+  awayDv = 0,
 ): Map<string, ProdLine> {
-  const H = splitLineup(home);
-  const A = splitLineup(away);
+  const H = splitLineup(home, homeDv);
+  const A = splitLineup(away, awayDv);
   const gp = Math.round(sim.points.length * garbageFrac(sim));
   const tally = new Map<string, ProdLine>();
   const bump = (id: string, f: (l: ProdLine) => void) => {
@@ -174,13 +178,15 @@ export function attributeProduction(
   away: Player[],
   seed: number,
   box?: BoxSink, // 주면 스코어박스를 **단일 진실**로 집계(보드=박스=통산 일치, SALARY_SYSTEM 1.3). 없으면 레거시 자체 귀속.
+  homeDv = 0,    // 홈 감독 육성 철학(STAFF §9.6-D) — splitLineup U23 에지. 기본 0=neutral(byte-동일).
+  awayDv = 0,
 ): Map<string, ProdLine> {
-  if (box) return productionFromBox(sim, home, away, seed, box);
+  if (box) return productionFromBox(sim, home, away, seed, box, homeDv, awayDv);
   const rng = createRng((seed ^ 0x9e3779b9) >>> 0);
   // 후위공격 판정용 독립 rng — 기존 귀속 스트림(rng) 불간섭 → spike/block/ace/assist/dig 귀속 불변, backSpikes만 가산
   const backRng = createRng((seed ^ 0x517cc1b7) >>> 0);
-  const H = splitLineup(home);
-  const A = splitLineup(away);
+  const H = splitLineup(home, homeDv);
+  const A = splitLineup(away, awayDv);
   const total = sim.points.length;
   const gp = Math.round(total * garbageFrac(sim));
 

@@ -16,6 +16,7 @@
 - 경기감각이 생기면: 부상 복귀 선수가 바로 펄펄 날지 않고, 벤치에 묻힌 베테랑이 녹슬고,
   감독 건의로 빼놓은 선수(OWNER_SYSTEM)를 다시 쓸 때 **복귀 비용**이 생긴다.
 - 로테이션 운영(가비지타임에 유망주 출전)이 "성장 + 감각 유지"라는 이중 보상을 갖게 된다.
+- **감독 리더십 완화(STAFF §9.6-D)**: `formFactor(playedCount, windowSize, relief)`의 `relief` — 리더십 높은 감독은 벤치 선수의 경기감각 하락을 소폭 완화한다(`LEADERSHIP_FORM_RELIEF=0.30` → 리더십 100에서 −7% 바닥이 −4.9%로, `leadershipRelief(leadership)`). leadership≤50=완화 없음(byte-동일). `data/dynamics`의 `formOf`/`formFactorOnDay`가 그날의 팀 감독 리더십(`coachLeadershipOf`)으로 주입 → 경기 결과에도 반영(ENGINE_VERSION 11).
 
 ## 1. 정의 — 파생 스탯, 저장하지 않는다
 

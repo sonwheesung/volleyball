@@ -10,6 +10,7 @@
 > 즉 §1 면담은 **✅ 구현·⏸ UI 숨김(운영 재활성 대기)** 상태다. **재활성 전 점검 목록**: ① **F1 시드 재설계**(§1.2 — 문전박대
 > 결정론이 같은 시즌 영구 동일결과) ② 면담 결과 뉴스 2종(§1.4, F4 미구현) ③ 공약 파기→다음 시즌 첫 면담 거절(§5, F10 미구현).
 > 벤치/선발 건의·팬심 UI는 노출 상태(면담만 숨김).
+> **감독 리더십 훅(STAFF §9.6-D, ✅ 2026-07-20)**: ① 면담 성공률 소폭↑(`persuade`의 `leadership` 인자, `LEADERSHIP_PERSUADE=0.06`) ② 벤치 불만 축적 소폭↓(`sustainedBenchRefuse`의 `leadership`, `LEADERSHIP_UNREST_RELIEF=0.20` — `buildOwnerFx`/`resignOutlookNow`가 `coachLeadershipOf`로 주입) ③ **벤치/선발 건의 반응 감독 계수 = 구 matchOps → leadership 이관**(§9.6-B 명기: `benchP`/`startP`/`benchAccept`/`startSuggestAccept` — "선수단 장악"의 영역). 전부 leadership 50=무보정(byte-동일).
 > 뉴스 연동(팬 분노 기사) ✅ 구현(2026-06-18): `data/news.ts buildNewsFeed` 에 benchDirectives 주입 —
 > 인기(popularityNow≥60) 간판 선수를 벤치로 보낸 건의가 수락되면 "팬들 술렁" 기사(kind: owner). 검증: `tools/simOwner.ts` 120시즌 —
 > (simOwner 120시즌 · 엔진 3c8ecde · 2026-06-11 측정 — 면담·건의 판정식은 경기 엔진 무관, 팬심·시즌 파생치는 약결합)

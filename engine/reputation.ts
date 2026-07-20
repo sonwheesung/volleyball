@@ -19,10 +19,17 @@ export interface CoachCareerRow {
   playoff: PlayoffResult;  // 플옵 성과
   champion: boolean;       // 우승 여부
   midSeasonFired: boolean; // 시즌 중 경질 여부(하락 트리거 §9.2)
+  // 유망주 육성 보조축(§9.2·§9.6-D, additive — 구 로그는 undefined=0). 로그 기록 가능한 사실만.
+  u23Starters?: number;    // 그 시즌 U23 주전 안착 수(경기 절반 이상 출전한 U23)
+  rookieAward?: boolean;   // 그 팀 소속 선수가 신인상 수상
 }
 
 /** 언론 예상 순위 영속 엔트리(시즌별) — 개막 뉴스·경력 로그 예상순위의 공통 기준선. */
 export interface MediaPredictionEntry { season: number; order: string[] } // order[0] = 예상 1위(teamId)
+
+/** 전문 코치 경량 경력 1행(§9.2·§9.6-D B이월, additive 영속) — 승격 시 coachRep(§6.3 상수 50 청산)·초기 명성 환산 입력.
+ *  감독 경력 로그와 별도(코치는 순위 대비 성과가 아니라 재직·소속팀 성적만 — 코치는 기용/운영 주체가 아님). */
+export interface CoachAsstCareerRow { season: number; coachId: string; teamId: string; teamRank: number } // teamRank 1-based
 /** 시즌 중 경질 캡처(내 팀 fireCoach) — endSeason이 경력 로그 midSeasonFired 행으로 소비 후 리셋. */
 export interface MidFire { season: number; coachId: string; teamId: string }
 
@@ -70,6 +77,25 @@ export const interimRenown = (id: string): number => 8 + (strSeed(`renown:${id}`
 /** renown 누락(구세이브·손상) 폴백 — seedRenown과 동일 밴드(결정론). */
 export const fallbackRenown = (id: string): number => seedRenown(id);
 
+// ── 전문 코치 명성(coachRep, §6.3 상수 50 청산 — §9.6-D) : 경력 로그(재직 시즌·소속팀 성적) → 0~100 순수 파생 ──
+//   headWorthiness(rating, coachRep, starRep)의 coachRep에 주입 + 승격 초기 명성(renown) 환산에도 반영.
+//   재직 시즌이 없으면 CoachRep 기준선(=구 상수 50과 동일)을 반환해 무경력 코치는 기존 승격률 보존(회귀 방어).
+export const COACH_REP_BASE = 50;      // 무경력 기준선(구 headWorthiness 상수 50 등가)
+const COACH_REP_TENURE = 3;            // 재직 1시즌당 가산(오래 지도할수록 인정)
+const COACH_REP_TOPHALF = 2;           // 상위 절반 팀 시즌당 추가 가산(성과)
+const COACH_REP_CAP = 90;              // 코치 명성 상한(감독 명성과 달리 신중)
+/** 전문 코치 명성(0~COACH_REP_CAP) — 재직 시즌 + 소속팀 성적(상위 절반) 파생. 무경력=COACH_REP_BASE(구 상수 등가). */
+export function assistantCoachRep(log: CoachAsstCareerRow[], coachId: string, teamCount = 7): number {
+  const rows = log.filter((r) => r.coachId === coachId);
+  if (!rows.length) return COACH_REP_BASE;
+  let rep = COACH_REP_BASE;
+  for (const r of rows) {
+    rep += COACH_REP_TENURE;
+    if (r.teamRank <= Math.ceil(teamCount / 2)) rep += COACH_REP_TOPHALF;
+  }
+  return Math.round(clampRep(Math.min(COACH_REP_CAP, rep)));
+}
+
 // ── 명성 산식(로그 → 0~100 순수 fold) ──
 const EXP_GAIN = 3;      // 기대(예상−실제 순위) 계수(주축). 7팀 기준 최대 ±6칸 → ±18/시즌
 // 보조 축은 소폭(§9.2) — 주축(기대) 대비 작게 유지해 "매년 우승=자동 거장"으로 축이 뒤바뀌지 않게(dist ②로 실측 튜닝).
@@ -78,10 +104,14 @@ const FINAL_BONUS = 3;   // 준우승
 const PO_BONUS = 1;      // 봄배구 진출
 const REG1_BONUS = 4;    // 정규리그 1위(특별 업적, 보조)
 const FIRE_PENALTY = 18; // 시즌 중 경질(하락 트리거)
+// 유망주 육성 보조축(§9.2·§9.6-D) — 기대(주축) 대비 소폭. 육성 서사가 명성에 "약간" 반영(축 뒤집기 금지).
+const U23_STARTER_BONUS = 0.5;   // U23 주전 안착 1명당(상한 U23_STARTER_CAP개)
+const U23_STARTER_CAP = 3;       // 한 시즌 최대 3명분(＝최대 +1.5)
+const ROOKIE_AWARD_BONUS = 1.5;  // 신인상 배출(육성 성과 상징)
 
 const clampRep = (n: number): number => (n < 0 ? 0 : n > 100 ? 100 : n);
 
-/** 한 경력 행의 명성 변화량(예상 대비 + 보조 − 경질). 절대 순위는 미사용(§9.2). */
+/** 한 경력 행의 명성 변화량(예상 대비 + 보조 − 경질 + 유망주 육성 소폭). 절대 순위는 미사용(§9.2). */
 export function rowDelta(r: CoachCareerRow): number {
   let d = (r.predictedRank - r.actualRank) * EXP_GAIN; // + = 기대 이상, − = 기대 미달
   if (r.champion) d += CHAMP_BONUS;
@@ -89,6 +119,9 @@ export function rowDelta(r: CoachCareerRow): number {
   else if (r.playoff === 'po') d += PO_BONUS;
   if (r.actualRank === 1) d += REG1_BONUS;
   if (r.midSeasonFired) d -= FIRE_PENALTY;
+  // 유망주 육성 보조축(소폭, §9.6-D B이월) — U23 주전 안착·신인상 배출.
+  if (r.u23Starters) d += U23_STARTER_BONUS * Math.min(U23_STARTER_CAP, Math.max(0, r.u23Starters));
+  if (r.rookieAward) d += ROOKIE_AWARD_BONUS;
   return d;
 }
 

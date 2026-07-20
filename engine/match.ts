@@ -17,7 +17,7 @@ import { rotate, serverIndex, frontRow, backRow } from './rotation';
 // (dyn 재생을 바꾸는 시즌 계층 규칙 변경도 포함 — 캐시가 dyn을 함께 영속하므로, v3.)
 // REALTIME_SIM Phase2(G3): simCache는 이 버전을 태깅·게이트해, 엔진 재튜닝(앱 업데이트) 후 저장된 옛-엔진
 // 순위를 폐기하고 새 엔진으로 재계산한다 → 저장 순위 ↔ 과거경기 보드 재생 일관성 보장.
-export const ENGINE_VERSION = 10; // 10(2026-07-15): 리베로 후위 수비 참여 소모(MATCH §7.1, rally.ts LIBERO_DEFENSE_COST=0.16) — 리베로가 큰 소모(공격/서브/블록) 없이 회복만 쌓여 타임아웃 체력 상시 ~100%(실측 L 3세트+ 98.5%·≥99% 55.7%)이던 것을 매 랠리 균일 소모로 교정(→ 3세트+ 89.8%·≥99% 21.6%). 양 팀 리베로 stam 변동 → 랠리 eff·경기 결과 변동 → 저장 캐시 무효화(타 포지션 Δ≤0.2%p·KOVO 분포 불변). 9(2026-07-15): ① manualSide(내 팀 정규시즌 "구단주 직접" 설정) — 지정 사이드는 감독 자동 타임아웃·작전 4종 결정 스킵(복원·TTO·부상·세트말원복 유지) → 그 사이드 결과 변동(미지정=바이트 동일). ② F2 FIVB 15.6.1 — subIn이 IN 후보의 usedStarterOut(이미 아웃된 선발) 신분 거부(나간 선발 타슬롯 재진입 차단) → 드문 경우 six[] 변동. 둘 다 저장 캐시 무효화. 8(2026-07-07): ① 피로 교체(1.3e) — 지친 주전(비세터·비접전, 체력<0.35)을 같은 포지션 벤치로 잠시 교체(합리 코치 게이트·히스테리시스·예산≥4, 결정론·rng 미소비) → six[] 변동 → 결과 변동. ② TTO 회복 재튜닝 TIMEOUT_REST(0.04)→TTO_REST(0.03, 테크니컬 타임아웃만 — 스윕으로 0.03만이 체력밴드·피로교체밴드 둘 다 통과) — TTO 세트당 2회 자동 발화로 회복 과다(피로 곡선 붕괴) 교정 → 체력·경기 결과 변동. 둘 다 저장 캐시 무효화. 7(2026-07-07): ① 포지션 폴트 받는 팀만 판정(FIVB 2025-2028 7.4·KOVO 25-26, rally.ts) — rng 소비 2→1회/서브 → 랠리 스트림 이동 → 결과 변동. ② KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식 — recover+기세수렴, rng 미소비) → 체력·기세 변동 → 경기 결과 변동. 둘 다 저장 캐시 무효화. 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
+export const ENGINE_VERSION = 11; // 11(2026-07-20, STAFF §9.6-D 스태프3.0 Phase D): 감독 능력 3축 실효과 훅 2종이 경기 결과를 바꾼다 — ① 육성 철학(dvPhilosophy) U23 라인업 에지(engine/lineup buildLineup — 근소차 U23 우선권, 역전 금지) → 감독 자동 라인업 six[] 변동. ② 리더십(leadership) 경기감각 하락 완화(data/dynamics formOf — FORM_MAX_PENALTY 축소) → 벤치 복귀자 sk* 평가 변동. 둘 다 team별 coachInfoOf 파생(결정론·rng 미소비), dvPhilosophy≤50·leadership 무주입이면 에지 0(byte-동일). 양 팀 라인업·폼 변동 → 랠리 결과 변동 → 저장 캐시 무효화(KOVO 분포·parity 불변 실측). 10(2026-07-15): 리베로 후위 수비 참여 소모(MATCH §7.1, rally.ts LIBERO_DEFENSE_COST=0.16) — 리베로가 큰 소모(공격/서브/블록) 없이 회복만 쌓여 타임아웃 체력 상시 ~100%(실측 L 3세트+ 98.5%·≥99% 55.7%)이던 것을 매 랠리 균일 소모로 교정(→ 3세트+ 89.8%·≥99% 21.6%). 양 팀 리베로 stam 변동 → 랠리 eff·경기 결과 변동 → 저장 캐시 무효화(타 포지션 Δ≤0.2%p·KOVO 분포 불변). 9(2026-07-15): ① manualSide(내 팀 정규시즌 "구단주 직접" 설정) — 지정 사이드는 감독 자동 타임아웃·작전 4종 결정 스킵(복원·TTO·부상·세트말원복 유지) → 그 사이드 결과 변동(미지정=바이트 동일). ② F2 FIVB 15.6.1 — subIn이 IN 후보의 usedStarterOut(이미 아웃된 선발) 신분 거부(나간 선발 타슬롯 재진입 차단) → 드문 경우 six[] 변동. 둘 다 저장 캐시 무효화. 8(2026-07-07): ① 피로 교체(1.3e) — 지친 주전(비세터·비접전, 체력<0.35)을 같은 포지션 벤치로 잠시 교체(합리 코치 게이트·히스테리시스·예산≥4, 결정론·rng 미소비) → six[] 변동 → 결과 변동. ② TTO 회복 재튜닝 TIMEOUT_REST(0.04)→TTO_REST(0.03, 테크니컬 타임아웃만 — 스윕으로 0.03만이 체력밴드·피로교체밴드 둘 다 통과) — TTO 세트당 2회 자동 발화로 회복 과다(피로 곡선 붕괴) 교정 → 체력·경기 결과 변동. 둘 다 저장 캐시 무효화. 7(2026-07-07): ① 포지션 폴트 받는 팀만 판정(FIVB 2025-2028 7.4·KOVO 25-26, rally.ts) — rng 소비 2→1회/서브 → 랠리 스트림 이동 → 결과 변동. ② KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식 — recover+기세수렴, rng 미소비) → 체력·기세 변동 → 경기 결과 변동. 둘 다 저장 캐시 무효화. 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
 // 4(2026-07-06): 서브 에이스 개인기장 공식화 — 리시브범실 실점을 서버 box.srvAce에도 기장(FIVB indirect ace) → production aces/points·서브왕·skServe XP 변동 → 저장 캐시 무효화. 유형 분포·밸런스·서브 확률·승패 불변(box는 메인 rng 무관)
 // 3(2026-07-02): AI 자기방출 재영입 금지(TRANSACTION 0장 ⑥) — dyn(시즌 중 거래) 재생 변동 → 저장 캐시 무효화
 // 2(2026-06-28): 체력 튜닝(회복 0.009→0.005·세트사이 0.12→0.035) — 경기 결과 변동 → 저장 캐시 무효화
@@ -62,7 +62,7 @@ const TTO_REST = 0.03;
 const SET_REST = 0.035;    // 세트 사이 회복(2026-06-28 튜닝 — 세트 누적 피로)
 const TIRED_STAM = 0.5;    // 코트에 이 미만으로 퍼진 선수가 있으면 감독이 타임아웃을 한 박자 일찍 부른다
 
-export interface CoachInfo { style: CoachStyle; matchOps: number } // matchOps = 경기 운영(구 charisma 이관, STAFF §9.1 ①)
+export interface CoachInfo { style: CoachStyle; matchOps: number; dvPhilosophy?: number } // matchOps = 경기 운영(구 charisma 이관, STAFF §9.1 ①). dvPhilosophy = 육성 철학(§9.6-D U23 라인업 에지, 생략=neutral)
 export interface MatchOpts {
   edge?: Edge; home?: CoachInfo; away?: CoachInfo; stats?: RallyStats; trace?: string[]; pos?: PosStats;
   homePolicy?: SubPolicy; awayPolicy?: SubPolicy; // 작전 교체 방침(미지정 시 기본)
@@ -119,8 +119,8 @@ export function simulateMatch(
   const hc = opts.home ?? DEFAULT_COACH;
   const ac = opts.away ?? DEFAULT_COACH;
 
-  const homeLineup = buildLineup(homePlayers);
-  const awayLineup = buildLineup(awayPlayers);
+  const homeLineup = buildLineup(homePlayers, hc.dvPhilosophy ?? 0); // 육성 철학 U23 에지(§9.6-D) — 생략=0(neutral)
+  const awayLineup = buildLineup(awayPlayers, ac.dvPhilosophy ?? 0);
 
   // 능력치 캐시 (경기당 1회 산출)
   const cache = new Map<string, Ratings>();

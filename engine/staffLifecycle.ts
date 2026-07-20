@@ -5,7 +5,7 @@ import type { Coach, AssistantCoach, CoachSpecialty, CoachStyle, Player, Positio
 import { createRng, strSeed } from './rng';
 import { overall } from './overall';
 import { headCoachSalary, assistantSalary, coachTypeFor, deriveHeadAxes, headOvr } from './staff';
-import { LEGEND_RENOWN, PROMO_RENOWN } from './reputation';
+import { LEGEND_RENOWN, PROMO_RENOWN, COACH_REP_BASE } from './reputation';
 
 // ── 6.1 노쇠·은퇴 ──
 /** 감독 은퇴 확률 — 현장직은 선수보다 늦게(60대까지). 나이만의 함수. */
@@ -76,13 +76,16 @@ export function promotesToHead(coachId: string, worthiness: number, season: numb
   return createRng(strSeed(`promote:${coachId}:${season}`)).next() < p;
 }
 
-/** 전문 코치 → 감독(head) 객체. 스타성으로 카리스마, 분야로 성향 편향. */
-export function coachToHead(c: AssistantCoach, starRep: number, focus: Coach['trainingFocus'], style: CoachStyle): Coach {
+/** 전문 코치 → 감독(head) 객체. 스타성으로 카리스마, 분야로 성향 편향.
+ *  @param coachRep 전문 코치 명성(§6.3 실경력 파생 assistantCoachRep, §9.6-D) — 초기 명성(renown) 환산에 소폭 반영. 기본 COACH_REP_BASE=구 동작(무영향). */
+export function coachToHead(c: AssistantCoach, starRep: number, focus: Coach['trainingFocus'], style: CoachStyle, coachRep: number = COACH_REP_BASE): Coach {
   const rng = createRng(strSeed(`head:${c.id}`));
   const matchOps = clamp(Math.round(c.rating * 0.6 + starRep * 0.3 + rng.range(-5, 5)), 45, 95); // 구 charisma 산출 그대로(rng.range 소비 위치 불변)
   const headId = `head_${c.id}`;
   const axes = deriveHeadAxes(headId);
-  const renown = starRep >= 80 ? LEGEND_RENOWN : PROMO_RENOWN; // 레전드 출신=명장(72)·일반=주목(38) 초기 명성(§9.6-B)
+  // 초기 명성 = 스타성 기준선(레전드 72·일반 38) + 코치 실경력 반영(§6.3·§9.6-D). coachRep=base(50)면 기준선 그대로(구 동작).
+  const renownBase = starRep >= 80 ? LEGEND_RENOWN : PROMO_RENOWN;
+  const renown = clamp(Math.round(renownBase + (coachRep - COACH_REP_BASE) * 0.4), 0, 100); // coachRep 90→+16(장수 명코치 프리미엄)
   return {
     id: headId, name: c.name, age: c.age, matchOps, ...axes, renown, style,
     archetype: '선수 출신', trainingFocus: focus, salary: headCoachSalary(headOvr({ matchOps, ...axes }), renown), teamId: null,

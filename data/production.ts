@@ -85,10 +85,12 @@ function allProdRows(uptoDay?: number): ProdRow[] {
         interventions: interventionsFor(f.id), // 개입 로그 주입(MATCH_INTERVENTION §2.2) — 비면 [] = 바이트 동일
         manualSide: manualSideFor(f.homeTeamId, f.awayTeamId, f.dayIndex), // 완전 수동 사이드(§4.1) — 로그 비면 undefined = 바이트 동일
       });
-      const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed, box);
+      const homeDv = coachInfoOf(f.homeTeamId, f.dayIndex)?.dvPhilosophy ?? 0; // 육성 철학 U23 에지(§9.6-D) — 라인업/생산 일치
+      const awayDv = coachInfoOf(f.awayTeamId, f.dayIndex)?.dvPhilosophy ?? 0;
+      const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed, box, homeDv, awayDv);
       const starters = new Set<string>([
-        ...splitLineup(roster[f.homeTeamId]).starters.map((p) => p.id),
-        ...splitLineup(roster[f.awayTeamId]).starters.map((p) => p.id),
+        ...splitLineup(roster[f.homeTeamId], homeDv).starters.map((p) => p.id),
+        ...splitLineup(roster[f.awayTeamId], awayDv).starters.map((p) => p.id),
       ]);
       const homeIds = new Set<string>(roster[f.homeTeamId].map((p) => p.id));
       rows.push({ dayIndex: f.dayIndex, homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId, homeIds, lines, starters });
