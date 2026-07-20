@@ -8,7 +8,7 @@ import { rollTraits } from '../engine/traits';
 import { computeSalary } from '../engine/salary';
 import { MED_REF, overallRaw, displayOvr } from '../engine/overall';
 import { ASIAN_SALARY } from '../engine/foreign';
-import { headCoachSalary, assistantSalary, scoutSalary, coachTypeFor } from '../engine/staff';
+import { headCoachSalary, assistantSalary, scoutSalary, coachTypeFor, deriveHeadAxes } from '../engine/staff';
 import type {
   AssistantCoach,
   CareerStats,
@@ -387,16 +387,17 @@ export function generateLeague(seed: number): League {
     // 아키타입을 팀마다 다르게 배정 (분화 보장)
     const arch = ARCHETYPES[ti % ARCHETYPES.length];
     const coachId = `${teamId}c`;
-    const charisma = rng.int(45, 95);
+    const matchOps = rng.int(45, 95); // 구 charisma 생성식 그대로(메인 rng 소비 불변 — 결정론 등가)
     coaches.push({
       id: coachId,
       name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)],
       age: rng.int(45, 64),
-      charisma,
+      matchOps,
+      ...deriveHeadAxes(coachId), // 신규 2축(육성 철학·리더십) — id 시드 파생(메인 rng 불간섭)
       style: arch.style,
       archetype: arch.name,
       trainingFocus: arch.focus,
-      salary: headCoachSalary(charisma),
+      salary: headCoachSalary(matchOps),
       teamId,
       contractYears: rng.int(1, 4), // 초기 계약 잔여 — 팀마다 만료 시점이 달라 FA 시장이 매년 돈다
     });
@@ -424,10 +425,11 @@ export function generateLeague(seed: number): League {
   // 프리 감독 6명(아키타입·성향 다양)
   for (let i = 0; i < 6; i++) {
     const arch = ARCHETYPES[rng.int(0, ARCHETYPES.length - 1)];
-    const ch = rng.int(48, 96);
+    const ch = rng.int(48, 96); // 구 charisma 생성식 그대로(메인 rng 소비 불변)
+    const fcId = `fc${i}`;
     coaches.push({
-      id: `fc${i}`, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(44, 65),
-      charisma: ch, style: STYLES[rng.int(0, STYLES.length - 1)], archetype: arch.name,
+      id: fcId, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(44, 65),
+      matchOps: ch, ...deriveHeadAxes(fcId), style: STYLES[rng.int(0, STYLES.length - 1)], archetype: arch.name,
       trainingFocus: arch.focus, salary: headCoachSalary(ch), teamId: null,
     });
   }

@@ -1,6 +1,7 @@
 import { useRouter } from 'expo-router';
 import { Text } from 'react-native';
 import { Card, Loading, Muted, Row, Screen, SCREEN_LOADING_MIN_MS, STYLE_LABEL, Title, theme, useDeferredReady } from '../../components/Screen';
+import { headOvr, headType3, HEAD_TYPE3_KO } from '../../engine/staff';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { RosterList } from '../../components/RosterList';
 import { getTeamCoach } from '../../data/league';
@@ -63,7 +64,7 @@ function SquadInner() {
           <Card accent={theme.violet} onPress={() => router.push(`/coach/${coach.id}`)}>
             <Row>
               <Text style={{ color: theme.text, fontWeight: '700' }}>
-                감독 {coach.name} · {STYLE_LABEL[coach.style]} · 카리스마 {coach.charisma}
+                감독 {coach.name} · {STYLE_LABEL[coach.style]} · {HEAD_TYPE3_KO[headType3(coach)]} · 종합 {headOvr(coach)}
               </Text>
               <Text style={{ color: theme.muted }}>›</Text>
             </Row>

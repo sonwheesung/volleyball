@@ -12,7 +12,7 @@ import { evolvePlayer, evolveSpan, initialEvoRngState, type FocusResolver } from
 import { SEASON_DAYS } from '../engine/calendar';
 import { rollTraits } from '../engine/traits';
 import { createRng, strSeed } from '../engine/rng';
-import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, coachTypeFor, type StaffEffects, NO_EFFECTS } from '../engine/staff';
+import { STAFF_BUDGET, COACH_SLOTS, staffEffects, scoutReveal, assistantSalary, scoutSalary, coachTypeFor, deriveHeadAxes, type StaffEffects, NO_EFFECTS } from '../engine/staff';
 import { recordBump } from './spliceLog';
 
 const LEAGUE_SEED = 20251018;
@@ -282,7 +282,7 @@ export const getTeamCoach = (teamId: string): Coach | undefined => teamHeadCoach
  *  day 주면 **그날의 감독**(축3 forward-only, 부임 이전 경기는 이전 감독). 생략하면 현재 감독(포스트시즌·표시·도구용). */
 export const coachInfoOf = (teamId: string, day?: number): CoachInfo | undefined => {
   const c = day === undefined ? teamHeadCoach(teamId) : teamHeadCoachOn(teamId, day);
-  return c ? { style: c.style, charisma: c.charisma } : undefined;
+  return c ? { style: c.style, matchOps: c.matchOps } : undefined;
 };
 
 // ─── 스태프 시장·계약(STAFF_SYSTEM) ───
@@ -381,7 +381,7 @@ export function fireCoach(teamId: string): { acting: string | null } {
     const style: CoachStyle = best.specialty === 'attack' ? 'attack' : best.specialty === 'defense' ? 'defense' : 'balanced';
     const acting: Coach = {
       id: `acting_${teamId}`, name: `${best.name} (대행)`, age: best.age,
-      charisma: Math.round(best.rating * 0.7), style, archetype: '감독 대행',
+      matchOps: Math.round(best.rating * 0.7), ...deriveHeadAxes(`acting_${teamId}`), style, archetype: '감독 대행', // 대행 페널티 ×0.7(§6.4·§9.4) — 경기 운영에 승계
       trainingFocus: DEFAULT_FOCUS, salary: 0, teamId, contractYears: 0,
     };
     coachPool = [...coachPool.filter((c) => c.id !== acting.id), acting];

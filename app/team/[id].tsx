@@ -14,7 +14,7 @@ import { computeStandings, displayCutoff } from '../../data/standings';
 import { leagueProduction } from '../../data/production';
 import { clubIdentity, clubAgeYears } from '../../data/clubIdentity';
 import { teamOverallRaw } from '../../engine/overall';
-import { SPECIALTY_KO } from '../../engine/staff';
+import { SPECIALTY_KO, headOvr, headType3, HEAD_TYPE3_KO } from '../../engine/staff';
 import { useGameStore } from '../../store/useGameStore';
 
 // 구단 엠블럼 — select-team과 동일(LEAGUE.teams 순서로 매핑)
@@ -223,7 +223,7 @@ export default function TeamDetail() {
               <View style={{ flex: 1 }}>
                 <Text style={styles.coachName}>감독 · {coach.name}</Text>
                 <Muted style={{ marginTop: 2, fontSize: 13 }}>
-                  {coach.age}세 · {STYLE_LABEL[coach.style]} · 카리스마 {coach.charisma}
+                  {coach.age}세 · {STYLE_LABEL[coach.style]} · {HEAD_TYPE3_KO[headType3(coach)]} · 종합 {headOvr(coach)}
                 </Muted>
               </View>
               <Text style={{ color: theme.accent, fontWeight: '700' }}>상세 ›</Text>

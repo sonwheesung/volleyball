@@ -44,7 +44,7 @@ const stat = (p: any, s: string) => (p as Record<string, number>)[s];
   const teamAvgOvr = (tid: string) => { const ps = getTeamPlayers(tid); return ps.reduce((s, p) => s + overall(p), 0) / (ps.length || 1); };
   const aiTeams = LEAGUE.teams.slice(1).map((t) => t.id);
   const aiAvg = () => aiTeams.reduce((s, t) => s + teamAvgOvr(t), 0) / aiTeams.length;
-  const coachTier = (tid: string) => { const c = getTeamCoach(tid); return c ? c.charisma : 0; };
+  const coachTier = (tid: string) => { const c = getTeamCoach(tid); return c ? c.matchOps : 0; };
 
   console.log('=== A. 첫 진입(온보딩) ===');
   G().selectTeam(my);

@@ -87,8 +87,8 @@ log(`종료 시점 — 감독 ${fin.coaches.length}명(프리 ${fin.coaches.filt
 // ── 질(tier) 검사 — 사각 교정(TEST_METHODOLOGY §4 "스태프 2.0 전제 반전"): 크기·연령만 보던 '건강' 정의에 상위 tier 생존을 추가.
 //    상위 코치가 멸종하면(전원 C) 풀 크기·연령은 정상이라 위 지표는 통과하지만 스태프가 무의미해진다.
 const tierS = (v: number) => v >= 90; const tierA = (v: number) => v >= 80;
-const headTop = fin.coaches.filter((c) => tierA(c.charisma)).length;
-const headElite = fin.coaches.filter((c) => tierS(c.charisma)).length;
+const headTop = fin.coaches.filter((c) => tierA(c.matchOps)).length;
+const headElite = fin.coaches.filter((c) => tierS(c.matchOps)).length;
 const asstTop = fin.assistants.filter((a) => tierA(a.rating)).length;
 log(`종료 시점 상위 tier — 감독 A+ ${headTop}(S ${headElite}) · 전문코치 A+ ${asstTop}  (수요: 감독 7·코치 21)`);
 const qualityCollapsed = headTop < 3 && asstTop < 3; // 상위 코치 사실상 멸종

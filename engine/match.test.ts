@@ -69,7 +69,7 @@ test('전력 우위 팀이 과반 이상 승리', () => {
 });
 
 test('감독 옵션: 결정론 + 유효 스코어 유지', () => {
-  const opts = { home: { style: 'attack' as const, charisma: 80 }, away: { style: 'defense' as const, charisma: 40 } };
+  const opts = { home: { style: 'attack' as const, matchOps: 80 }, away: { style: 'defense' as const, matchOps: 40 } };
   const r1 = simulateMatch(555, team('H', 72), team('A', 72), opts);
   const r2 = simulateMatch(555, team('H', 72), team('A', 72), opts);
   assert.deepEqual(r1, r2, '같은 시드·옵션 = 동일');

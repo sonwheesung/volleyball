@@ -10,7 +10,7 @@ import {
   staffSpend, staffBudget, staffBudgetLeft, STAFF_CONTRACT_YEARS,
 } from '../data/league';
 import { computeStandings, displayCutoff } from '../data/standings';
-import { SPECIALTY_KO, SPECIALTY_DESC, TYPE_KO, TYPE_DESC } from '../engine/staff';
+import { SPECIALTY_KO, SPECIALTY_DESC, TYPE_KO, TYPE_DESC, headOvr, headType3, HEAD_TYPE3_KO } from '../engine/staff';
 import { firedMidSeason } from '../engine/staffLifecycle';
 import { coachSlots } from '../data/league';
 import { formatMoney } from '../engine/salary';
@@ -142,7 +142,8 @@ export default function Staff() {
             <Title>{head.name}</Title>
             <Muted>{head.age}세 · {head.salary > 0 ? `연봉 ${formatMoney(head.salary)}` : '대행'}</Muted>
           </Row>
-          <Muted style={{ marginTop: 4 }}>성향 {STYLE_LABEL[head.style]} · 카리스마 {head.charisma} · {head.archetype}</Muted>
+          <Muted style={{ marginTop: 4 }}>성향 {STYLE_LABEL[head.style]} · {HEAD_TYPE3_KO[headType3(head)]} · 종합 {headOvr(head)} · {head.archetype}</Muted>
+          <Muted style={{ marginTop: 2 }}>경기 운영 {head.matchOps} · 육성 철학 {head.dvPhilosophy} · 리더십 {head.leadership}</Muted>
           {acting ? (
             <Muted style={{ color: theme.warn, marginTop: 4 }}>감독 대행 체제. 정식 감독을 영입하세요(아래 시장).</Muted>
           ) : (() => {
@@ -178,7 +179,8 @@ export default function Staff() {
           <Row>
             <View style={{ flex: 1 }}>
               <Title>{c.name}</Title>
-              <Muted style={{ marginTop: 2 }}>{STYLE_LABEL[c.style]} · 카리스마 {c.charisma} · {c.archetype} · 연봉 {formatMoney(c.salary)}</Muted>
+              <Muted style={{ marginTop: 2 }}>{STYLE_LABEL[c.style]} · {HEAD_TYPE3_KO[headType3(c)]} · 종합 {headOvr(c)} · {c.archetype} · 연봉 {formatMoney(c.salary)}</Muted>
+              <Muted style={{ marginTop: 2 }}>경기 운영 {c.matchOps} · 육성 철학 {c.dvPhilosophy} · 리더십 {c.leadership}</Muted>
             </View>
             <Button small label="영입" onPress={() => tryHireCoach(c.id, c.name, c.salary)} disabled={hasHeadCoach} />
           </Row>

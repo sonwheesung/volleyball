@@ -84,7 +84,7 @@ for (let s = 0; s < seasons; s++) {
       const aceRank = squad.findIndex((q) => q.id === target.id);
       const alt = squad.find((q) => q.id !== target.id && q.position === target.position);
       const gapT = Math.max(0, Math.min(1, 1 - (alt ? overall(target) - overall(alt) : 10) / 10));
-      if (benchAccept(target.id, s, 30, coachInfoOf(MY)?.charisma ?? 50, gapT, aceRank, 'noResign')) {
+      if (benchAccept(target.id, s, 30, coachInfoOf(MY)?.matchOps ?? 50, gapT, aceRank, 'noResign')) {
         stat.benchAccepted++;
         bench = [{ playerId: target.id, fromDay: 30 }];
         setOwnerContext(bench);

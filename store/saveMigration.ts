@@ -2,10 +2,14 @@
 // 핵심: 컨테이너 모양(array/record/scalar)을 강제해 복원 경로의 [...arr]·Object.keys·destructure 크래시를 닫는다.
 // version+migrate로 향후 breaking 구조 변경(필드 이름변경·재편)도 단계 변환으로 흡수.
 
+import { deriveHeadAxes } from '../engine/staff'; // 감독 3축 마이그레이션(v4) — id 시드 파생(랜덤 없음·결정론). engine/staff는 leaf(rng+types)라 순환 없음.
+
 // v3(2026-07-08): 포스트시즌 달력 편입(SEASON_SYSTEM §5). 구세이브가 이미 포스트시즌을 소비(archive[season].championId 존재)
 //   했는데 currentDay가 정규 범위(≤164)에 멈춰 있으면, 새 일정 화면이 이를 "플옵 미진행"으로 오인해 재관전을 강요한다.
 //   → A안: 그런 세이브는 currentDay를 포스트시즌 종료일(POSTSEASON_LAST_DAY=183)로 승격해 오프시즌 체인으로 직행(재관전 금지).
-export const SAVE_VERSION = 3;
+// v4(2026-07-20, STAFF §9.6-A): 감독 능력 단일 `charisma` → 3축(matchOps·dvPhilosophy·leadership).
+//   coachPool.coaches의 각 감독: charisma→matchOps 값 이관(엔진 등가) + 신규 2축은 감독 id 시드 파생으로 충전(마이그레이션에서 랜덤 금지 — 결정론).
+export const SAVE_VERSION = 4;
 const POSTSEASON_LAST_DAY = 183; // engine/calendar.POSTSEASON_LAST_DAY 손복제 회피용 로컬(saveMigration은 leaf 유지 — engine import 시 순환 위험). _dv_postseason이 일치 가드.
 
 // 영속 69필드 기본값(수는 참고용 — 정본은 이 키 집합 자체) — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
@@ -76,6 +80,21 @@ const numRec = (v: unknown, keys: string[]): Record<string, number> => {
   return out;
 };
 
+/** 감독 3축 정규화(STAFF §9.6-A, save v4) — 구세이브(charisma)·신세이브(matchOps) 모두 안전·멱등.
+ *  charisma→matchOps 값 이관(엔진 등가) + 신규 2축(dvPhilosophy·leadership) 누락 시 감독 id 시드 파생으로 충전(랜덤 없음).
+ *  감독이 아닌 값/부분손상도 크래시 없이 통과(other 필드는 원형 보존). */
+function normalizeCoach(c: unknown): unknown {
+  if (!isObj(c)) return c;
+  const id = typeof c.id === 'string' ? c.id : '';
+  const matchOps = num(c.matchOps, num(c.charisma, 50)); // 신세이브=matchOps 우선, 구세이브=charisma 이관, 둘 다 없으면 중립 50
+  const axes = deriveHeadAxes(id);
+  const dvPhilosophy = num(c.dvPhilosophy, axes.dvPhilosophy);
+  const leadership = num(c.leadership, axes.leadership);
+  const out: Record<string, unknown> = { ...c, matchOps, dvPhilosophy, leadership };
+  delete out.charisma; // 구 필드 제거(모양 변경 — v4)
+  return out;
+}
+
 /** 한 필드를 기대 자료구조로 코어스(잘못된 타입 → 기본값). throw 없음. */
 function sanitizeField(key: string, v: unknown): unknown {
   const def = SAVE_DEFAULTS[key];
@@ -95,7 +114,10 @@ function sanitizeField(key: string, v: unknown): unknown {
     case 'coachPool':
       if (v === null) return null;
       if (!isObj(v)) return null;
-      return { coaches: Array.isArray(v.coaches) ? v.coaches : [], assistants: Array.isArray(v.assistants) ? v.assistants : [] };
+      return {
+        coaches: Array.isArray(v.coaches) ? v.coaches.map(normalizeCoach) : [],
+        assistants: Array.isArray(v.assistants) ? v.assistants : [],
+      };
     case 'trainingFocus':
       // malformed → null: 리그가 감독 기본 trainingFocus로 재유도(안전)
       if (v === null) return null;

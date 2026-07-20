@@ -138,7 +138,7 @@
 ## 3. 마이그레이션 정책 (구현 — `store/saveMigration.ts`)
 
 ### 3.1 버전 + migrate
-- `persist`에 **`version: SAVE_VERSION`**(현재 **3**)을 둔다. 기존 무버전 세이브 = version 0 → 로드 시 `migrate` 호출.
+- `persist`에 **`version: SAVE_VERSION`**(현재 **4**)을 둔다. 기존 무버전 세이브 = version 0 → 로드 시 `migrate` 호출.
 - **`migrate(persisted, fromVersion)`** = `migrateSave`:
   1. (향후) `fromVersion`이 낮으면 그 버전→다음 버전 **변환 단계**를 순서대로 적용(필드 이름변경·구조재편).
   2. 마지막에 **`sanitizeSave`**(컨테이너 모양 정규화)로 모든 필드를 기대 자료구조로 강제.
@@ -151,6 +151,9 @@
     (=이미 포스트시즌을 소비)인데 `currentDay`가 정규 범위(<`POSTSEASON_LAST_DAY=183`)에 멈춰 있으면, 새 일정 화면이 이를
     "플옵 미진행"으로 오인해 **재관전을 강요**한다 → `currentDay`를 `183`으로 승격해 오프시즌 체인 직행. 진화 조회는
     `min(day, SEASON_DAYS)` 클램프라 currentDay 승격이 스탯·순위·생산에 **무영향**(동결 규칙). 가드: `tools/_dv_postseason.ts` ④.
+  - **v3→v4(2026-07-20, STAFF §9.6-A 감독 능력 3축)**: 감독 단일 `charisma` → 3축(`matchOps`·`dvPhilosophy`·`leadership`). §4 ③경로(필드 모양/의미 변경)라 버전 범프.
+    영속 `coachPool.coaches`의 각 감독을 `normalizeCoach`가 정규화 — **`charisma`→`matchOps` 값 이관**(엔진 등가: 구 charisma가 그대로 경기 운영치가 됨 → 타임아웃 `pull`·연봉 불변) + 신규 2축은 값이 없으면 **감독 id 시드 파생**(`deriveHeadAxes(id)`, `engine/staff`)으로 충전한다. **마이그레이션에 랜덤 없음**(id 시드 순수 함수 — 리플레이·재로드 결정론). 구 `charisma` 필드는 제거.
+    `normalizeCoach`는 `sanitizeField('coachPool')` 안에 있어 **버전 무관 상시 경유**(§3.2.1) → 구세이브(charisma)·신세이브(matchOps) 모두 안전·**멱등**(matchOps 있으면 우선, 재적용해도 불변). 가드: `tools/_dv_coach3axis.ts` (d) v3→v4 왕복(크래시 0·matchOps 값 보존·2축 id파생 충전·멱등).
 
 ### 3.2 정규화기(`sanitizeSave`) — 컨테이너 모양 강제
 필드별 자료구조(§1)대로 코어스(coerce):
@@ -158,7 +161,7 @@
 - **array**: `Array.isArray`면 유지, 아니면 `[]` → 모든 `[...arr]`·`.map`·`.filter`·`.slice` 안전.
 - **record**: 평범한 객체(`typeof==='object' && !Array.isArray`)면 유지, 아니면 `{}` → `Object.keys`·spread 안전.
 - **nested**: `careerLog`(4 num)·`careerTotals`(6 num)는 각 숫자 필드 기본 0으로 보강. `coachPool`은 null이거나
-  `{coaches:array, assistants:array}`. `trainingFocus`는 null이거나 `{primary:array, secondary:array}`(malformed→null,
+  `{coaches:array, assistants:array}` — 추가로 각 감독은 `normalizeCoach`로 3축 정규화(charisma→matchOps·2축 id파생 충전, §3.1 v4). `trainingFocus`는 null이거나 `{primary:array, secondary:array}`(malformed→null,
   리그가 감독 기본값으로 재유도). `lastFinance`는 null이거나 객체.
 - 기준 기본값은 `SAVE_DEFAULTS`(= `freshSave` + 설정 4필드) **단일 소스**.
 

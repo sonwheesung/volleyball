@@ -76,6 +76,47 @@ export function coachTypeFor(id: string, specialty: CoachSpecialty): CoachType |
   return types[strSeed(`ctype:${id}`) % types.length];
 }
 
+// ── 감독 능력 3축 (스태프 3.0 §9.1) — 기존 단일 charisma를 세 축으로 분해 ──
+//   ① matchOps(경기 운영) = 구 charisma 값 이관(엔진 등가, 생성식이 별도 주입).
+//   ② dvPhilosophy(육성 철학) · ③ leadership(리더십) = **id 시드 파생**(메인 rng 불간섭 — coachTypeFor 패턴 §8.1 ①b).
+//   Phase A는 엔진 훅 없이 생성·표시·영속만(훅은 Phase D). 유형 라벨은 **저장 안 함** — 3축 프로필에서 파생(§9.1).
+export type HeadType3 = 'competitive' | 'developmental' | 'organizational'; // 승부형/육성형/조직관리형
+export const HEAD_TYPE3_KO: Record<HeadType3, string> = {
+  competitive: '승부형', developmental: '육성형', organizational: '조직관리형',
+};
+const clamp01 = (n: number): number => (n < 0 ? 0 : n > 100 ? 100 : n);
+
+/** 감독 유형 아키타입 — id 시드 파생(생성 시 신규 2축의 **범위 방향만** 결정, 저장 안 함 §9.1). */
+export function headArchetypeOf(id: string): HeadType3 {
+  const arr: HeadType3[] = ['competitive', 'developmental', 'organizational'];
+  return arr[strSeed(`harch3:${id}`) % arr.length];
+}
+
+/** 신규 2축(육성 철학·리더십) 생성 — id 시드 파생(메인 rng 불간섭·결정론·랜덤 없음).
+ *  matchOps(=구 charisma)는 생성식이 별도 주입. 아키타입이 편향 방향만 정한다(같은 유형도 전 수치 상이). */
+export function deriveHeadAxes(id: string): { dvPhilosophy: number; leadership: number } {
+  const arch = headArchetypeOf(id);
+  const base = (salt: string) => 45 + (strSeed(`${salt}:${id}`) % 46); // 45~90
+  let dv = base('dvphil');
+  let ld = base('lead');
+  if (arch === 'competitive') { dv = clamp01(dv - 10); ld = clamp01(ld - 10); }       // 경기 운영 편향(신규 2축 낮춰 matchOps가 상대적 우위)
+  else if (arch === 'developmental') dv = clamp01(dv + 15);                            // 육성 철학 편향
+  else ld = clamp01(ld + 15);                                                          // 리더십 편향
+  return { dvPhilosophy: dv, leadership: ld };
+}
+
+/** 감독 OVR — 3축 종합(명성 불포함 §9.1, 표시용). */
+export function headOvr(c: { matchOps: number; dvPhilosophy: number; leadership: number }): number {
+  return Math.round((c.matchOps + c.dvPhilosophy + c.leadership) / 3);
+}
+
+/** 파생 유형 라벨 — 3축 프로필의 최고 축(저장 안 함 §9.1). 동점은 matchOps>dvPhilosophy>leadership 순. */
+export function headType3(c: { matchOps: number; dvPhilosophy: number; leadership: number }): HeadType3 {
+  if (c.matchOps >= c.dvPhilosophy && c.matchOps >= c.leadership) return 'competitive';
+  if (c.dvPhilosophy >= c.leadership) return 'developmental';
+  return 'organizational';
+}
+
 /** 스태프 종합 효과(승패·성장 결정론 입력) */
 export interface StaffEffects {
   trainBoost: Partial<Record<TrainingId, number>>;              // 성장 속도(1.x)
@@ -135,6 +176,6 @@ export function scoutReveal(scouts: Scout[]): number {
 
 // 연봉(만원) — 역량에 비례(100원 단위 반올림). 실생성 스탯 범위 기준: 감독 13.0k~18.6k·코치 9.7k~13.6k(playerToCoach 95)·
 // 스카우터 7.6k~11.4k (구 "13.5k~18.5k…" 표기는 스테일 — 발견 모드 2차 정정 2026-07-15, STAFF §2 정본).
-export const headCoachSalary = (charisma: number): number => 8000 + Math.round((charisma * 1.1)) * 100;
+export const headCoachSalary = (matchOps: number): number => 8000 + Math.round((matchOps * 1.1)) * 100;
 export const assistantSalary = (rating: number): number => 5000 + Math.round(rating * 0.9) * 100;
 export const scoutSalary = (scouting: number): number => 4000 + Math.round(scouting * 0.8) * 100;

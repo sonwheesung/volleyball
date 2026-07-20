@@ -2,6 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { Text } from 'react-native';
 import { Card, IconLabel, Muted, Row, Screen, StatBar, STYLE_LABEL, theme } from '../../components/Screen';
 import { getCoach, getTeam } from '../../data/league';
+import { headOvr, headType3, HEAD_TYPE3_KO } from '../../engine/staff';
 import { TRAINING_NAME } from '../../engine/training';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -41,11 +42,14 @@ export default function CoachDetail() {
         <Muted>{STYLE_DESC[c.style]}</Muted>
       </Card>
 
-      <IconLabel icon="barbell-outline" color={theme.elite}>능력</IconLabel>
+      <IconLabel icon="barbell-outline" color={theme.elite}>능력 · {HEAD_TYPE3_KO[headType3(c)]} · 종합 {headOvr(c)}</IconLabel>
       <Card accent={theme.elite} flat>
-        <StatBar label="카리스마" value={c.charisma} />
+        <StatBar label="경기 운영" value={c.matchOps} />
+        <StatBar label="육성 철학" value={c.dvPhilosophy} />
+        <StatBar label="리더십" value={c.leadership} />
         <Muted style={{ marginTop: 4 }}>
-          카리스마가 높을수록 타임아웃 때 경기 흐름(기세)을 강하게 끌어온다.
+          경기 운영이 높을수록 타임아웃 때 경기 흐름(기세)을 강하게 끌어온다. 육성 철학은 어린 선수 기용,
+          리더십은 선수단 관리에 관여한다.
         </Muted>
       </Card>
 

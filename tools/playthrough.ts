@@ -33,8 +33,8 @@ function main(): void {
   log(`\n💼 [스태프 계약] 예산 ${formatMoney(staffBudgetLeft(my) + staffSpend(my))} · 현재 감독 ${getTeamCoach(my)?.name}(연봉 ${formatMoney(getTeamCoach(my)?.salary ?? 0)})`);
 
   // 1) 카리스마 좋은 프리 감독으로 교체(예산 되면)
-  const fc = availableCoaches().filter((c) => c.charisma >= 80).sort((a, b) => a.salary - b.salary)[0];
-  if (fc && hireHeadCoach(my, fc.id)) log(`   ✔ 감독 영입: ${fc.name}(카리스마 ${fc.charisma}, ${fc.archetype}, ${formatMoney(fc.salary)})`);
+  const fc = availableCoaches().filter((c) => c.matchOps >= 80).sort((a, b) => a.salary - b.salary)[0];
+  if (fc && hireHeadCoach(my, fc.id)) log(`   ✔ 감독 영입: ${fc.name}(카리스마 ${fc.matchOps}, ${fc.archetype}, ${formatMoney(fc.salary)})`);
 
   // 2) 전문 코치 3슬롯 — 기량(포텐↑) 위주로: 공격·수비·세터
   for (const sp of ['attack', 'defense', 'setter'] as const) {

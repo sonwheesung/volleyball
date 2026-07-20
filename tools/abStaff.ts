@@ -21,7 +21,7 @@ function run(seasons: number, my: string, withStaff: boolean) {
   resetLeagueBase();
   const startOvr = teamOverall(getEvolvedTeamPlayers(my, 164));
   if (withStaff) {
-    const fc = availableCoaches().sort((a, b) => b.charisma - a.charisma)[0];
+    const fc = availableCoaches().sort((a, b) => b.matchOps - a.matchOps)[0];
     if (fc) hireHeadCoach(my, fc.id);
     for (const sp of ['attack', 'defense', 'setter'] as const) {
       const a = availableAssistants().filter((x) => x.specialty === sp).sort((x, y) => y.rating - x.rating)[0];

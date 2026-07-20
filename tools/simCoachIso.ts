@@ -23,7 +23,7 @@ function pearson(xs: number[], ys: number[]): number {
 }
 
 const FIXED_FOCUS: TrainingFocus = { primary: [4, 6], secondary: [1, 10, 12] }; // 전 팀 동일 감독 훈련방향
-const FIXED_COACH: CoachInfo = { style: 'balanced', charisma: 70 };              // 전 팀 동일 감독(경기)
+const FIXED_COACH: CoachInfo = { style: 'balanced', matchOps: 70 };              // 전 팀 동일 감독(경기)
 const SEASON_LEN = 164;
 const RETIRE_AGE = 36;        // 나이 기준 은퇴(코치 무관 → 전 팀 동기화)
 const ROSTER: Position[] = ['S', 'S', 'S', 'OH', 'OH', 'OH', 'OH', 'OH', 'OP', 'OP', 'MB', 'MB', 'MB', 'MB', 'L', 'L'];

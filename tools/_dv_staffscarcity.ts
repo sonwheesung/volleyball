@@ -31,7 +31,7 @@ const fmt = (c: { S: number; A: number; B: number; C: number }) => `S ${c.S} · 
 // 초기 스냅샷
 const p0 = currentCoachPool();
 log('── 초기 풀 스냅샷 ──');
-log(`  감독(charisma):   ${fmt(tierCounts(p0.coaches.map((c) => c.charisma)))}  (총 ${p0.coaches.length})`);
+log(`  감독(matchOps):   ${fmt(tierCounts(p0.coaches.map((c) => c.matchOps)))}  (총 ${p0.coaches.length})`);
 log(`  전문코치(rating): ${fmt(tierCounts(p0.assistants.map((a) => a.rating)))}  (총 ${p0.assistants.length})`);
 log(`  스카우터(scouting): ${fmt(tierCounts(LEAGUE.scouts.map((s) => s.scouting)))}  (총 ${LEAGUE.scouts.length})`);
 
@@ -64,10 +64,10 @@ for (let s = 0; s < N; s++) {
   for (const r of res.reassign) assignCoach(r.teamId, r.coachId);
   reconcileStaff();
 
-  const hc = tierCounts(res.coaches.map((c) => c.charisma));
+  const hc = tierCounts(res.coaches.map((c) => c.matchOps));
   const ac = tierCounts(res.assistants.map((a) => a.rating));
   (['S', 'A', 'B', 'C'] as const).forEach((t) => { headTiers[t].push(hc[t]); asstTiers[t].push(ac[t]); });
-  for (const c of res.coaches) if (!seenHead.has(c.id)) { seenHead.add(c.id); if (c.charisma >= 90) newSHeads++; else if (c.charisma >= 80) newAHeads++; }
+  for (const c of res.coaches) if (!seenHead.has(c.id)) { seenHead.add(c.id); if (c.matchOps >= 90) newSHeads++; else if (c.matchOps >= 80) newAHeads++; }
   for (const a of res.assistants) if (!seenAsst.has(a.id)) { seenAsst.add(a.id); if (a.rating >= 90) newSAsst++; else if (a.rating >= 80) newAAsst++; }
 
   const styleOf = (tid: string) => getTeam(tid)?.coachStyle ?? 'balanced';

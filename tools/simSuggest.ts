@@ -41,10 +41,10 @@ for (const id of ids) {
   if (!c) continue;
   let okS = 0, okB = 0;
   for (let i = 0; i < 10000; i++) {
-    if (startSuggestAccept(`q${i}`, 2, 60, c.charisma, 0.7)) okS++;
-    if (benchAccept(`q${i}`, 2, 60, c.charisma, 0.7, 4, 'noResign')) okB++;
+    if (startSuggestAccept(`q${i}`, 2, 60, c.matchOps, 0.7)) okS++;
+    if (benchAccept(`q${i}`, 2, 60, c.matchOps, 0.7, 4, 'noResign')) okB++;
   }
-  log(`  ${c.name.padEnd(8)} 카리스마 ${String(c.charisma).padStart(2)} · 선발 건의 ${(okS / 10000 * 100).toFixed(0)}% · 벤치 건의 ${(okB / 10000 * 100).toFixed(0)}%`);
+  log(`  ${c.name.padEnd(8)} 카리스마 ${String(c.matchOps).padStart(2)} · 선발 건의 ${(okS / 10000 * 100).toFixed(0)}% · 벤치 건의 ${(okB / 10000 * 100).toFixed(0)}%`);
 }
 
 // ── 3) 빅매치 판정 ──

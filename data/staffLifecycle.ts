@@ -8,7 +8,7 @@ import {
   coachToHead, firedEndSeason, aiResigns, contractTerm, coachSeasonGrowth,
 } from '../engine/staffLifecycle';
 import { createRng, strSeed } from '../engine/rng';
-import { headCoachSalary, assistantSalary, coachTypeFor } from '../engine/staff';
+import { headCoachSalary, assistantSalary, coachTypeFor, deriveHeadAxes } from '../engine/staff';
 import { COACH_NAMES } from './names';
 import type { CoachSpecialty } from '../types';
 
@@ -27,13 +27,14 @@ function makeExternalCoach(season: number): AssistantCoach {
  *  결정론(teamId·season 시드). 풀에 영구 합류해 공급을 보충(다음부터 이 감독도 순환). */
 function makeInterimCoach(teamId: string, season: number): Coach {
   const rng = createRng(strSeed(`interim-coach:${teamId}:${season}`));
-  const charisma = 38 + rng.int(0, 18);
+  const matchOps = 38 + rng.int(0, 18); // 구 charisma 생성식 그대로
   const styles: CoachStyle[] = ['attack', 'defense', 'balanced'];
+  const id = `coach-int-${teamId}-s${season}`;
   return {
-    id: `coach-int-${teamId}-s${season}`,
+    id,
     name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)],
-    age: 44 + rng.int(0, 16), charisma, style: styles[rng.int(0, 2)],
-    archetype: '신임', trainingFocus: DEFAULT_FOCUS, salary: headCoachSalary(charisma),
+    age: 44 + rng.int(0, 16), matchOps, ...deriveHeadAxes(id), style: styles[rng.int(0, 2)],
+    archetype: '신임', trainingFocus: DEFAULT_FOCUS, salary: headCoachSalary(matchOps),
     teamId: null, contractYears: undefined,
   };
 }
@@ -104,7 +105,7 @@ export function advanceCoaches(
   //   상위코치 멸종(실측) 처방: 오래 잘 지도한 코치가 A/S로 올라와 풀 tier를 유지시킨다.
   //   정수 저장(표시 정합) — 성장분<0.5 구간은 자연 정체(성과별 성장 상한: 상위팀 ~A·하위팀 ~B, S는 재생성/엘리트만).
   const rankPos = (teamId: string) => { const i = rankOrder.indexOf(teamId); return i < 0 ? teamCount : i + 1; };
-  for (const c of coaches) if (c.teamId) c.charisma = Math.round(coachSeasonGrowth(c.charisma, rankPos(c.teamId), teamCount));
+  for (const c of coaches) if (c.teamId) c.matchOps = Math.round(coachSeasonGrowth(c.matchOps, rankPos(c.teamId), teamCount));
   for (const a of assistants) if (a.teamId) a.rating = Math.round(coachSeasonGrowth(a.rating, rankPos(a.teamId), teamCount));
 
   // 2) 시즌 후 경질 — 하위 팀 감독 해촉(플레이어 팀 제외)
@@ -181,7 +182,7 @@ export function advanceCoaches(
     if (teamId === myTeamId) { reassign.push({ teamId, coachId: null }); continue; }
     // 프리 감독 중: 이번에 떠난 사람 제외(한 시즌 휴식) + 이 팀에서 경질된 적 없는 사람만(영구 배제)
     let free = coaches.filter((c) => c.teamId === null && !justLeft.has(c.id) && !(c.firedFrom ?? []).includes(teamId))
-      .sort((x, y) => y.charisma - x.charisma)[0];
+      .sort((x, y) => y.matchOps - x.matchOps)[0];
     if (!free) {
       const best = assistants.filter((a) => a.teamId === null).sort((x, y) => y.rating - x.rating)[0];
       if (best) {

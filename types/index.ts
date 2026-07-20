@@ -337,8 +337,11 @@ export interface Coach {
   id: string;
   name: string;
   age: number;
-  charisma: number;          // 타임아웃 기세 수렴 폭 (경기 운영)
-  style: CoachStyle;         // 자동 운영 성향 (경기 운영)
+  // 감독 능력 3축 (STAFF_SYSTEM §9.1, 스태프 3.0 Phase A) — 구 단일 `charisma` 대체.
+  matchOps: number;          // ① 경기 운영 — 타임아웃 기세 수렴 폭(구 charisma 값 그대로 이관). 엔진에 물림.
+  dvPhilosophy: number;      // ② 육성 철학(기용 성향) — id 시드 파생. Phase A는 표시·영속만(엔진 훅 Phase D).
+  leadership: number;        // ③ 리더십(선수단 관리) — id 시드 파생. Phase A는 표시·영속만(엔진 훅 Phase D).
+  style: CoachStyle;         // 자동 운영 성향 (경기 스타일 분포)
   archetype: string;         // 훈련 아키타입 명칭 (표시용)
   trainingFocus: TrainingFocus; // 훈련 선호 (핵심2+보조3)
   salary: number;            // 연봉(만원) — 스태프 예산 차감

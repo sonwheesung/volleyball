@@ -880,9 +880,9 @@ export const useGameStore = create<GameState>()(
         const altOvr = alt ? overall(applyForm(alt, formFactorOnDay(my, alt.id, s.currentDay))) : null;
         const gap = altOvr != null ? overall(target) - altOvr : 10;
         const ovrGapT = Math.max(0, Math.min(1, 1 - gap / 10)); // 대체자가 비등할수록 1
-        const charisma = coachInfoOf(my)?.charisma ?? 50;
+        const matchOps = coachInfoOf(my)?.matchOps ?? 50; // 구 charisma 이관값(엔진 등가). leadership 이관은 Phase D.
         // 감독 수락 롤은 플레이버 표시용으로만 계산(coachAgrees) — 기계 효과 0. 확정은 항상 실행(감독 거부 없음).
-        const coachAgrees = benchAccept(playerId, s.season, s.currentDay, charisma, ovrGapT, aceRank, reason);
+        const coachAgrees = benchAccept(playerId, s.season, s.currentDay, matchOps, ovrGapT, aceRank, reason);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 확정했으면 잠금(쿨다운 — 남용 방지)
         // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). watchProgress 비어있지 않음 == 현재 경기 관전 중.
         // 소급 방어(A2, 2026-07-08): 오늘 경기를 기록(watchProgress 비움·setDay 전)한 직후엔 currentDay가 아직 그
@@ -927,9 +927,9 @@ export const useGameStore = create<GameState>()(
         // Form 비대칭(OWNER §2.2 ★): 선발 건의는 건의선수의 폼을 보지 않는다(순수 OVR = 원래 능력) — 뛰게 해서 폼 회복시키려는 것,
         //   자기 러스트로 자기 승격을 막는 자충수 방지. incumbent(현 주전)는 폼≈1.0이라 어차피 순수 OVR.
         const gapT = Math.max(0, Math.min(1, 1 - (overall(incumbent) - overall(target)) / 10));
-        const charisma = coachInfoOf(my)?.charisma ?? 50;
+        const matchOps = coachInfoOf(my)?.matchOps ?? 50; // 구 charisma 이관값(엔진 등가). leadership 이관은 Phase D.
         // 감독 수락 롤은 플레이버 표시용으로만 계산(coachAgrees) — 기계 효과 0. 확정은 항상 실행(감독 거부 없음).
-        const coachAgrees = startSuggestAccept(playerId, s.season, s.currentDay, charisma, gapT);
+        const coachAgrees = startSuggestAccept(playerId, s.season, s.currentDay, matchOps, gapT);
         const benchCd = { ...s.benchCooldown, [playerId]: s.currentDay + BENCH_COOLDOWN_DAYS }; // 확정했으면 잠금(쿨다운 — 남용 방지)
         // 관전 중(이어보기 대기) 경기엔 미적용 → 다음 경기부터(OWNER_SYSTEM 2.3, 옵션 A). 소급 방어(A2) — suggestBench와 동일.
         const fromDay = Math.max(s.currentDay + (Object.keys(s.watchProgress).length > 0 ? 1 : 0), playedThroughDay(s.results) + 1);

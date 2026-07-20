@@ -31,7 +31,7 @@ const STRATS: Strat[] = [
 
 function run(seasons: number, my: string, st: Strat) {
   resetLeagueBase();
-  const head = availableCoaches().sort((a, b) => b.charisma - a.charisma)[0];
+  const head = availableCoaches().sort((a, b) => b.matchOps - a.matchOps)[0];
   if (head) hireHeadCoach(my, head.id);
   for (const sp of st.coaches) {
     const a = availableAssistants().filter((x) => x.specialty === sp).sort((x, y) => y.rating - x.rating)[0];
