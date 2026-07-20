@@ -14,7 +14,7 @@ import type { NewsItem } from '../types';
 export const KIND_KO: Record<NewsItem['kind'], string> = {
   champion: '우승', award: '시상', milestone: '기록 경신', hof: '명예의전당', injury: '부상', scandal: '사건·사고', owner: '구단',
   streak: '연승·연패', standing: '순위', match: '경기', debut: '데뷔', transfer: '이적', release: '방출', retire: '은퇴', sponsor: '모기업',
-  offseason: '오프시즌', draft: '드래프트', foreign: '외국인', playoff: '포스트시즌', clinch: '순위 확정',
+  offseason: '오프시즌', draft: '드래프트', foreign: '외국인', playoff: '포스트시즌', clinch: '순위 확정', coach: '감독',
 };
 
 export default function NewsList() {
@@ -42,12 +42,14 @@ function NewsListInner() {
   const seasonDraftLog = useGameStore((s) => s.seasonDraftLog);
   const seasonForeignLog = useGameStore((s) => s.seasonForeignLog);
   const mediaPredictionLog = useGameStore((s) => s.mediaPredictionLog);
+  const coachCareerLog = useGameStore((s) => s.coachCareerLog);
+  const coachPool = useGameStore((s) => s.coachPool);
 
   // 결과 인지 표시 컷오프(§3.3) — 상세(news/[id])와 **완전히 동일한 인자**로 피드를 파생해야 목록↔상세가 일치(F1, NEWS §3.6).
   const cutoff = displayCutoff(currentDay, results, teamId ?? undefined);
   const feed = useMemo(
-    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements, seasonDraftLog, seasonForeignLog, currentDay, mediaPredictionLog), cutoff),
-    [archive, milestones, hallOfFame, season, cutoff, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, mediaPredictionLog],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements, seasonDraftLog, seasonForeignLog, currentDay, mediaPredictionLog, coachCareerLog, coachPool?.coaches ?? []), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, mediaPredictionLog, coachCareerLog, coachPool],
   );
 
   // readNews를 live로 구독(상세를 열면 그 기사만 markNewsRead → 목록 즉시 갱신 = 즉시성, 6b 정정). **목록 진입만으론

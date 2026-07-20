@@ -4,15 +4,16 @@ import { View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Button, Card, IconLabel, Loading, Muted, Row, Screen, STYLE_LABEL, Title, theme } from '../components/Screen';
 import { MeterBar } from '../components/MeterBar';
+import { CoachAvatar } from '../components/CoachAvatar';
 import {
   getTeamCoach, teamAssistants, teamScouts, teamScoutReveal,
   availableCoaches, availableAssistants, availableScouts,
-  staffSpend, staffBudget, staffBudgetLeft, STAFF_CONTRACT_YEARS,
+  staffSpend, staffBudget, staffBudgetLeft, STAFF_CONTRACT_YEARS, getTeamPlayers,
 } from '../data/league';
 import { computeStandings, displayCutoff } from '../data/standings';
 import { SPECIALTY_KO, SPECIALTY_DESC, TYPE_KO, TYPE_DESC, headOvr, headType3, HEAD_TYPE3_KO, headCoachSalary } from '../engine/staff';
 import { firedMidSeason } from '../engine/staffLifecycle';
-import { reputationOf, reputationTier, repStars, raiseReasons, coachPreference, type CoachPref } from '../engine/reputation';
+import { reputationOf, reputationTier, repStars, raiseReasons, coachPreference, coachComment, type CoachPref } from '../engine/reputation';
 import { coachSlots } from '../data/league';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
@@ -30,6 +31,7 @@ export default function Staff() {
   useGameStore((s) => s.coachPool); // 계약 변화 시 재렌더
   const currentDay = useGameStore((s) => s.currentDay);
   const results = useGameStore((s) => s.results);
+  const season = useGameStore((s) => s.season); // 감독 코멘트 시드(§9.6-E)
   const coachCareerLog = useGameStore((s) => s.coachCareerLog); // 감독 명성 파생(STAFF §9.6-B)
   const counterOfferedCoachId = useGameStore((s) => s.counterOfferedCoachId); // 카운터오퍼 1회성(재클릭 차단)
   const hireCoach = useGameStore((s) => s.hireCoach);
@@ -84,6 +86,21 @@ export default function Staff() {
   const headReasons = head && !acting ? raiseReasons(coachCareerLog, head.id) : []; // 요구 상승 이유(로그 사실만)
   const headInterest = head && !acting ? interestedClubNamesForCoach(head) : []; // 관심 구단(놓아주기 경고·카운터오퍼 경쟁강도, §9.6-C)
   const counteredThis = !!head && counterOfferedCoachId === head.id; // 이번 오프시즌 카운터오퍼 소진
+  // 감독 코멘트(데이터 파생 플레이버, §9.6-E) — 성적(직전 로그)·계약·팀 평균연령·명성 티어·관심 구단 조합. 없는 인과 금지(상태 서술만).
+  const headComment = (() => {
+    if (!head || acting) return '';
+    const last = coachCareerLog.filter((r) => r.coachId === head.id).sort((a, b) => b.season - a.season)[0];
+    const ages = getTeamPlayers(teamId).map((p) => p.age);
+    const avgAge = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 27;
+    return coachComment({
+      expectDelta: last ? last.predictedRank - last.actualRank : 0,
+      champion: !!last?.champion,
+      contractYears: head.contractYears ?? 0,
+      avgAge,
+      tierStars: reputationTier(headRep).stars,
+      interest: headInterest.length,
+    }, `${head.id}:${season}`);
+  })();
   // 정식 감독이 이미 있으면 새 감독을 바로 영입할 수 없다 — 먼저 경질해야(2026-07-11 테스터: 자동 교체가 실수 유발).
   //   대행/공석(acting || !head)은 정식 감독을 세우는 절차라 영입 허용.
   const hasHeadCoach = !!head && !acting;
@@ -170,13 +187,19 @@ export default function Staff() {
       {head ? (
         <Card accent={theme.violet} flat>
           <Row>
-            <Title>{head.name}</Title>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+              {!acting ? <CoachAvatar id={head.teamId ?? head.id} name={head.name} size={44} /> : null}
+              <Title>{head.name}</Title>
+            </View>
             <Muted>{head.age}세 · {head.salary > 0 ? `연봉 ${formatMoney(head.salary)}` : '대행'}</Muted>
           </Row>
           <Muted style={{ marginTop: 4 }}>성향 {STYLE_LABEL[head.style]} · {HEAD_TYPE3_KO[headType3(head)]} · 종합 {headOvr(head)} · {head.archetype}</Muted>
           <Muted style={{ marginTop: 2 }}>경기 운영 {head.matchOps} · 육성 철학 {head.dvPhilosophy} · 리더십 {head.leadership}</Muted>
           {!acting ? (
             <Muted style={{ marginTop: 2, color: theme.violet }}>{repStars(headRep)} {reputationTier(headRep).label} · 명성 {headRep}</Muted>
+          ) : null}
+          {!acting && headComment ? (
+            <Muted style={{ marginTop: 4, fontStyle: 'italic', color: theme.text }}>“{headComment}”</Muted>
           ) : null}
           {acting ? (
             <Muted style={{ color: theme.warn, marginTop: 4 }}>감독 대행 체제. 정식 감독을 영입하세요(아래 시장).</Muted>

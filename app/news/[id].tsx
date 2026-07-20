@@ -55,6 +55,7 @@ const LEAD: Record<NewsItem['kind'], string> = {
   foreign: '외국인 선수 자리의 주인이 바뀌었다. 외국인 선수 영입은 한 시즌의 성패를 가르는 가장 큰 도박이다.',
   playoff: '봄배구의 무대에서 한 경기가 끝났다. 단기전은 한 경기 한 경기가 시즌의 운명을 가른다.',
   clinch: '치른 경기만으로 순위가 확정된 순간이다. 남은 경기 결과와 무관하게 봄배구 진출·정규 1위·탈락의 향방이 굳어졌다.',
+  coach: '벤치의 사령탑을 둘러싼 소식이다. 감독의 이름도 세월이 쌓이며 리그의 기록으로 남는다.',
 };
 
 // ── 결정론 변주(§4.2와 동일 계열: FNV-1a + murmur3 fmix). id 해시 픽 — 같은 기사=같은 표현(리플레이 일치). Date.now/random 금지. ──
@@ -89,6 +90,7 @@ const SUBTITLE_BY_KIND: Record<NewsItem['kind'], string[]> = {
   foreign: ['외국인 자리의 주인이 바뀌었다', '팀 공격의 핵을 다시 짰다', '외인 결정은 늘 시즌 최대의 도박이다'],
   playoff: ['봄배구, 한 경기가 시즌의 운명을 가른다', '단기전엔 내일이 없다', '가을부터 달려온 여정의 끝자락이다'],
   clinch: ['치른 경기만으로 굳어진 순위의 향방', '남은 결과와 무관하게 방향이 정해졌다', '수학이 순위를 먼저 확정했다'],
+  coach: ['벤치의 선택이 팀의 한 시즌을 좌우한다', '사령탑의 여정도 리그의 이야기다', '감독의 이름도 기록으로 남는다'],
 };
 
 // 관련 기사(§11 골격 6) — 같은 kind + 연관 kind. 실제 피드 링크만(없으면 생략).
@@ -100,6 +102,7 @@ const RELATED_KINDS: Record<NewsItem['kind'], NewsItem['kind'][]> = {
   release: ['release', 'transfer', 'foreign'], retire: ['retire', 'hof'], sponsor: ['sponsor', 'transfer', 'offseason'],
   offseason: ['offseason', 'transfer', 'foreign', 'draft'], draft: ['draft', 'foreign', 'offseason'],
   foreign: ['foreign', 'transfer', 'offseason'], playoff: ['playoff', 'champion', 'clinch'], clinch: ['clinch', 'standing', 'playoff'],
+  coach: ['coach', 'offseason', 'standing'],
 };
 
 // 오프시즌 결산(offseason) 구조화 섹션 — 산문 한 문단에 몰아넣던 영입/재계약/방출을 라벨+칩 목록 카드로(§11.3 B·§3.7).
@@ -140,6 +143,7 @@ const KIND_ICON: Record<NewsItem['kind'], ComponentProps<typeof Ionicons>['name'
   standing: 'podium-outline', match: 'flame-outline', debut: 'sparkles-outline', transfer: 'swap-horizontal-outline',
   release: 'exit-outline', retire: 'flower-outline', sponsor: 'business-outline', offseason: 'construct-outline',
   draft: 'sparkles-outline', foreign: 'globe-outline', playoff: 'flash-outline', clinch: 'checkmark-circle-outline',
+  coach: 'clipboard-outline',
 };
 
 // 선수 포지션별 대표 통산 스탯 한 줄(실값만) — 밀스톤/커리어 카드 보강. 값 0은 생략(가짜 드라마 방지).
@@ -200,13 +204,15 @@ function NewsArticleInner() {
   const seasonDraftLog = useGameStore((s) => s.seasonDraftLog);
   const seasonForeignLog = useGameStore((s) => s.seasonForeignLog);
   const mediaPredictionLog = useGameStore((s) => s.mediaPredictionLog);
+  const coachCareerLog = useGameStore((s) => s.coachCareerLog);
+  const coachPool = useGameStore((s) => s.coachPool);
   const teamId = useGameStore((s) => s.selectedTeamId);
 
   // 목록(news.tsx)과 **완전히 동일한 파생**(displayCutoff §3.3 + freshNews) — 안정 키로 같은 기사를 집어야 어긋나지 않는다(F1).
   const cutoff = displayCutoff(currentDay, results, teamId ?? undefined);
   const feed = useMemo(
-    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements, seasonDraftLog, seasonForeignLog, currentDay, mediaPredictionLog), cutoff),
-    [archive, milestones, hallOfFame, season, cutoff, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, mediaPredictionLog],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId ?? '', transfers, retirements, seasonDraftLog, seasonForeignLog, currentDay, mediaPredictionLog, coachCareerLog, coachPool?.coaches ?? []), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, mediaPredictionLog, coachCareerLog, coachPool],
   );
   const key = id ? decodeURIComponent(id) : '';
   const n = feed.find((x) => newsKey(x) === key);
@@ -638,6 +644,7 @@ function KIND_ACCENT(): Record<NewsItem['kind'], string> {
     standing: theme.sky, match: theme.bad, debut: theme.accent, transfer: theme.sky,
     release: theme.warn, retire: theme.violet, sponsor: theme.gold, offseason: theme.sky,
     draft: theme.accent, foreign: theme.elite, playoff: theme.rose, clinch: theme.good,
+    coach: theme.violet,
   };
 }
 

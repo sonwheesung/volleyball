@@ -4,7 +4,8 @@
 //   본문은 조립식(opener+사실+closer) + 안정 시드 변주 → 같은 종류라도 표현이 다르다(NEWS_SYSTEM §4).
 
 import type { DraftPickRecord, ExpelRecord, ForeignSwapRecord, HofEntry, Milestone, NewsItem, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../types';
-import type { MediaPredictionEntry } from '../engine/reputation';
+import type { MediaPredictionEntry, CoachCareerRow, HeadCoachRef } from '../engine/reputation';
+import { coachNewsEvents } from '../engine/reputation';
 import type { BenchDirective } from '../engine/owner';
 import { getPlayer, getTeam, reconstructForeignName } from './league';
 import { jerseyNumber } from '../engine/jersey';
@@ -193,6 +194,10 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
     open: ['봄배구의 문이 닫혔다.', '포스트시즌 경쟁에서 한발 물러섰다.', '다음 가을을 기약하게 됐다.'],
     close: ['남은 일정은 다음 시즌을 위한 실험대가 된다.', '아쉬움을 뒤로하고 긴 겨울을 준비한다.', '반등의 청사진이 필요한 겨울이 왔다.'],
   },
+  coach: { // 감독 뉴스(STAFF §9.6-E, §3.8) — 벤치 밖 사령탑 서사. 사실(경력 로그) 기반, 프레이밍만.
+    open: ['벤치의 사령탑이 화제다.', '감독석에 시선이 모였다.', '리그 지도자 시장이 움직였다.', '코트 밖 결정이 주목받았다.'],
+    close: ['감독의 선택이 팀의 한 시즌을 좌우한다.', '벤치의 무게가 다시 확인됐다.', '지도자의 이름도 기록으로 남는다.', '사령탑의 여정도 리그의 이야기다.'],
+  },
 };
 
 const TITLE_KO: Record<string, string> = {
@@ -219,6 +224,8 @@ export function buildNewsFeed(
   poDay = leagueDay, // 포스트시즌 컷오프 트랙(§5.2 달력 편입) = raw currentDay. 치른(공개) 플옵 경기까지만 기사화 —
                      //   leagueDay(displayCutoff)는 시즌완료 시 164로 클램프돼 플옵 진행을 못 보므로 별도 트랙. 기본=leagueDay(구 호출 무변).
   mediaPredictionLog: MediaPredictionEntry[] = [], // 언론 예상 순위(STAFF §9.3) — 개막 프리뷰 기사(슬라이스 10-④). 기본 [] → 미주입 시 기사 생략(기존 호출 무변).
+  coachCareerLog: CoachCareerRow[] = [], // 감독 경력 로그(STAFF §9.6-E) — 감독 뉴스(슬라이스 12) 파생. 기본 [] → 미주입 시 감독 뉴스 생략(기존 호출 무변).
+  headCoaches: HeadCoachRef[] = [], // 현 감독 풀(신선 데뷔/이적/만료임박 판정) — 기본 [].
 ): NewsItem[] {
   const items: NewsItem[] = [];
   // 뉴스 안정 키(Step0, §4.4): ref = (season:kind)당 결정론 순번(ordinal). 문구 무관 → Step1~3에서
@@ -774,6 +781,37 @@ export function buildNewsFeed(
         : `${S}시즌 언론 예상 순위 발표`;
       const core = `${S}시즌 예상 순위는 ${listed}. ${myLine}`.trim();
       push(currentSeason, 'standing', headline, myIdx >= 0, myTeamId || undefined, body3('preseason', `${currentSeason}:preseason`, core), `preseason:${currentSeason}`, 0);
+    }
+  }
+
+  // 12) 감독 뉴스(STAFF §9.6-E·§3.8) — 데뷔/이적/만료임박(신선 오프시즌, day=0) + 경질/헌액(과거 요약).
+  //   명성 티어 게이트는 coachNewsEvents가 이미 적용(무명 이동은 이벤트 자체가 없음). 문구는 로그 사실 기반(가짜 드라마 0).
+  if (coachCareerLog.length && (headCoaches.length || coachCareerLog.some((r) => r.midSeasonFired || r.coachName))) {
+    for (const ev of coachNewsEvents(coachCareerLog, headCoaches, currentSeason)) {
+      const cName = ev.coachName;
+      const tName = teamName(ev.teamId);
+      const tierKo = ev.tier.label; // 명장/거장 등(헌액=최고 명성 티어, 그 외=현 명성 티어)
+      const day = ev.day0 ? 0 : undefined;
+      const ckey = `coach:${ev.kind}:${ev.coachId}`;
+      const mine = ev.teamId === myTeamId || ev.fromTeamId === myTeamId;
+      if (ev.kind === 'debut') {
+        push(ev.season, 'coach', `코치 출신 ${cName}, ${tName} 감독 데뷔`, false, ev.teamId,
+          body3('coach', ckey, `${cName}이(가) ${tName} 감독으로 첫 시즌을 시작한다. 선수 시절의 이름값을 벤치에서 잇는다.`), ckey, day);
+      } else if (ev.kind === 'move') {
+        const from = ev.fromTeamId ? teamName(ev.fromTeamId) : '';
+        push(ev.season, 'coach', `${tName}, ${tierKo} ${cName} 감독 영입`, mine, ev.teamId,
+          body3('coach', ckey, `${tierKo} ${cName} 감독이 ${from ? `${from}을(를) 떠나 ` : ''}${tName} 지휘봉을 잡는다. 명성 ${ev.reputation}의 사령탑이 새 팀에 부임한다.`), ckey, day);
+      } else if (ev.kind === 'expiring') {
+        push(ev.season, 'coach', `${tName} ${cName} 감독, FA 시장 등장 임박`, mine, ev.teamId,
+          body3('coach', ckey, `${tName} ${cName} 감독의 계약이 한 시즌 안에 끝난다. ${tierKo}급 사령탑이라 시장의 관심이 예상된다.`), ckey, day);
+      } else if (ev.kind === 'fired') {
+        push(ev.season, 'coach', `${tName}, ${cName} 감독 시즌 중 경질`, mine, ev.teamId,
+          body3('coach', ckey, `${tName}이(가) 시즌 도중 ${cName} 감독을 경질했다. 전문 코치가 대행으로 벤치를 맡는다.`), ckey, day);
+      } else { // enshrine
+        const champTxt = ev.champions ? ` 우승 ${ev.champions}회,` : '';
+        push(ev.season, 'coach', `${tierKo} ${cName}, 명장 열전 헌액`, true, ev.teamId,
+          body3('coach', ckey, `${cName} 감독이 ${ev.seasons ?? 0}시즌 재직,${champTxt} 최고 명성 ${tierKo}의 커리어로 명장 열전에 이름을 올렸다.`), ckey, day);
+      }
     }
   }
 

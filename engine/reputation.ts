@@ -22,6 +22,11 @@ export interface CoachCareerRow {
   // 유망주 육성 보조축(§9.2·§9.6-D, additive — 구 로그는 undefined=0). 로그 기록 가능한 사실만.
   u23Starters?: number;    // 그 시즌 U23 주전 안착 수(경기 절반 이상 출전한 U23)
   rookieAward?: boolean;   // 그 팀 소속 선수가 신인상 수상
+  // 명장 열전 표시 사실(§9.6-E Phase E, additive — 구 로그는 undefined → 열전 우아 강등). 은퇴로 풀에서 사라진 감독을 로그만으로 조회 가능하게.
+  coachName?: string;      // 감독 이름(풀 제거 후 표시용 — 결측 시 열전 제외)
+  renown?: number;         // 초기 명성(birth 속성 — 은퇴 감독 명성 정확 재계산용. 결측 시 fallbackRenown(id))
+  wins?: number;           // 그 시즌 정규 승(통산 승률용)
+  losses?: number;         // 그 시즌 정규 패
 }
 
 /** 언론 예상 순위 영속 엔트리(시즌별) — 개막 뉴스·경력 로그 예상순위의 공통 기준선. */
@@ -270,4 +275,196 @@ export function counterOfferOutcome(
   const prob = counterOfferAcceptProb(demand, offered, reputation, rivalCount);
   const roll = createRng(strSeed(seed)).next();
   return { accept: roll < prob, prob };
+}
+
+// ════════════════════════════════════════════════════════════════════
+// 명장 열전(감독 명예의전당) + 감독 코멘트 + 감독 뉴스 — 스태프 3.0 Phase E(§9.6-E).
+//   ★ 전부 경력 로그(+renown)의 순수 파생. 무저장 재계산(ACHIEVEMENT 철학) — 명성 저장 안 함과 동일 척추.
+
+/** 감독 1인의 경력 로그를 시즌 오름차순으로 fold하며 [최종 명성, 최고 명성] 반환. renown 없으면 fallbackRenown(id). */
+function foldReputation(rows: CoachCareerRow[], coachId: string, renown?: number): { final: number; peak: number } {
+  const ordered = rows.filter((r) => r.coachId === coachId).sort((a, b) => a.season - b.season);
+  const base = clampRep(typeof renown === 'number' && Number.isFinite(renown) ? renown : fallbackRenown(coachId));
+  let rep = base, peak = base;
+  for (const r of ordered) { rep = clampRep(rep + rowDelta(r)); if (rep > peak) peak = rep; }
+  return { final: Math.round(rep), peak: Math.round(peak) };
+}
+
+// ── 명장 열전(입성 판정식 — 경력 로그 파생) ──
+export const HALL_MIN_SEASONS = 5;   // 최소 재직 시즌(단명 감독 배제 — 하한 게이트)
+export const HALL_CHAMP_W = 8;       // 우승 1회 가중
+export const HALL_WINRATE_W = 30;    // (승률−0.5) 가중 — 통산 승률 반영
+export const HALL_SCORE_MIN = 68;    // 입성 점수 하한(명장급 최고 명성 ± 우승/승률)
+
+/** 명장 열전 입성 점수 — peakRep·우승·통산 승률 전부 단조↑(더 나은 커리어 ≥ 입성, 게이트 b). */
+export function coachHallScore(peakRep: number, champions: number, winRate: number): number {
+  return peakRep + champions * HALL_CHAMP_W + (winRate - 0.5) * HALL_WINRATE_W;
+}
+
+export interface CoachHallEntry {
+  coachId: string;
+  name: string;
+  seasons: number;         // 재직 시즌 수(로그 행 수)
+  champions: number;       // 우승 횟수
+  peakRep: number;         // 최고 명성(progressive fold max)
+  peakTier: RepTier;
+  finalRep: number;        // 은퇴 시점 명성
+  wins: number; losses: number; winRate: number;
+  teamIds: string[];       // 재직 팀(시즌 등장순 고유)
+  lastTeamId: string;      // 마지막 재직 팀
+  lastSeason: number;      // 마지막 재직 시즌(헌액 뉴스 타이밍)
+  best?: { season: number; teamId: string; predictedRank: number; actualRank: number; champion: boolean }; // 대표 시즌
+  score: number;
+}
+
+/** 명장 열전 — 은퇴 감독(로그엔 있으나 현 풀 activeIds엔 없음) 중 입성 판정식 통과자. 무저장 재계산·결정론.
+ *  이름(coachName) 캡처가 없는 감독은 표시 불가 → 우아 강등(제외, 크래시 0). 점수 내림차순 정렬. */
+export function hallOfCoaches(log: CoachCareerRow[], activeIds: Set<string>): CoachHallEntry[] {
+  const byId = new Map<string, CoachCareerRow[]>();
+  for (const r of log) { const a = byId.get(r.coachId); if (a) a.push(r); else byId.set(r.coachId, [r]); }
+  const out: CoachHallEntry[] = [];
+  for (const [coachId, rowsRaw] of byId) {
+    if (activeIds.has(coachId)) continue; // 활동 중(풀 내)·FA 감독은 은퇴 아님
+    const rows = [...rowsRaw].sort((a, b) => a.season - b.season);
+    const named = rows.find((r) => r.coachName && r.coachName.trim());
+    if (!named) continue; // 이름 결측(구세이브) → 우아 강등(제외)
+    const renown = rows.map((r) => r.renown).find((v) => typeof v === 'number' && Number.isFinite(v));
+    const { final, peak } = foldReputation(rows, coachId, renown);
+    const champions = rows.filter((r) => r.champion).length;
+    let wins = 0, losses = 0, haveWL = false;
+    for (const r of rows) { if (typeof r.wins === 'number' && typeof r.losses === 'number') { wins += r.wins; losses += r.losses; haveWL = true; } }
+    const winRate = haveWL && wins + losses > 0 ? wins / (wins + losses) : 0.5;
+    const seasons = rows.length;
+    const score = coachHallScore(peak, champions, winRate);
+    if (seasons < HALL_MIN_SEASONS || score < HALL_SCORE_MIN) continue;
+    const teamIds: string[] = [];
+    for (const r of rows) if (!teamIds.includes(r.teamId)) teamIds.push(r.teamId);
+    // 대표 시즌 = 챔피언 + 최대 기대 상승(예상−실제), 동점 시 최신
+    let best = rows[0];
+    let bestScore = -Infinity;
+    for (const r of rows) {
+      const rs = (r.champion ? 100 : 0) + (r.predictedRank - r.actualRank);
+      if (rs > bestScore || (rs === bestScore && r.season > best.season)) { bestScore = rs; best = r; }
+    }
+    const last = rows[rows.length - 1];
+    out.push({
+      coachId, name: named.coachName!, seasons, champions, peakRep: peak, peakTier: reputationTier(peak),
+      finalRep: final, wins, losses, winRate, teamIds, lastTeamId: last.teamId, lastSeason: last.season,
+      best: { season: best.season, teamId: best.teamId, predictedRank: best.predictedRank, actualRank: best.actualRank, champion: best.champion },
+      score,
+    });
+  }
+  return out.sort((a, b) => b.score - a.score || b.peakRep - a.peakRep || (a.coachId < b.coachId ? -1 : 1));
+}
+
+// ── 감독 코멘트(데이터 파생 플레이버 — 없는 인과 금지, 상태 서술만) ──
+export interface CoachCommentState {
+  expectDelta: number;   // 직전 시즌 예상−실제(>0=기대 이상)
+  champion: boolean;     // 직전 시즌 우승
+  contractYears: number; // 잔여 계약 연수
+  avgAge: number;        // 팀 평균 연령
+  tierStars: number;     // 명성 티어 별(1~5)
+  interest: number;      // 관심 구단 수
+}
+const COMMENT_YOUNG_AGE = 25.5;
+const COMMENT_VET_AGE = 29;
+// 성적 리드(상태로 결정) — champion > 기대이상(δ≥2) > 기대미달(δ≤−2) > 기대대로. 상태 서술만(없는 인과 금지).
+const LEAD_CHAMP = '지난 시즌 정상에 오른 팀을 이끈다.';
+const LEAD_OVER = '예상을 웃도는 성적을 낸 시즌이었다.';
+const LEAD_UNDER = '기대에 못 미친 시즌이었다.';
+const LEAD_EVEN = '예상만큼의 시즌을 보냈다.';
+// 문맥 꼬리(적합 상태에서만 후보) — seed로 하나 선택.
+const TAIL_EXPIRE = '계약이 끝나 거취를 정해야 할 시점이다.';
+const TAIL_LASTYEAR = '계약은 한 시즌 남았다.';
+const TAIL_YOUNG = '어린 선수가 많은 팀이라 함께 자랄 시간이 필요하다.';
+const TAIL_VET = '베테랑이 중심인 팀이라 지금이 승부처다.';
+const TAIL_INTEREST = '다른 구단의 관심도 들려온다.';
+const TAIL_MASTER = '오랜 시간 쌓아온 이름값이 있는 자리다.';
+const TAIL_UNKNOWN = '아직 증명할 것이 많은 감독이다.';
+
+/** 감독 한 줄 심경(결정론) — 성적 리드(상태 결정) + 문맥 꼬리(적합 후보 중 seed 선택). 각 문구는 대응 상태에서만 출현. */
+export function coachComment(state: CoachCommentState, seed: string): string {
+  const lead = state.champion ? LEAD_CHAMP
+    : state.expectDelta >= 2 ? LEAD_OVER
+    : state.expectDelta <= -2 ? LEAD_UNDER
+    : LEAD_EVEN;
+  const tails: string[] = [];
+  if (state.contractYears <= 0) tails.push(TAIL_EXPIRE);
+  else if (state.contractYears === 1) tails.push(TAIL_LASTYEAR);
+  if (state.avgAge <= COMMENT_YOUNG_AGE) tails.push(TAIL_YOUNG);
+  else if (state.avgAge >= COMMENT_VET_AGE) tails.push(TAIL_VET);
+  if (state.interest >= 1) tails.push(TAIL_INTEREST);
+  if (state.tierStars >= 5) tails.push(TAIL_MASTER);
+  else if (state.tierStars <= 1) tails.push(TAIL_UNKNOWN);
+  if (!tails.length) return lead;
+  const tail = tails[strSeed(`comment:${seed}`) % tails.length];
+  return `${lead} ${tail}`;
+}
+
+// ── 감독 뉴스 이벤트(경력 로그 + 현 풀 파생 — 명성 티어 게이트) ──
+export const COACH_NEWS_TIER_STARS = 4; // 명장(★4)+ 만 뉴스 대상(무명 이동은 뉴스 안 됨 — 빈도 게이트)
+export type CoachNewsKind = 'debut' | 'move' | 'expiring' | 'fired' | 'enshrine';
+export interface CoachNewsEvent {
+  kind: CoachNewsKind;
+  season: number;        // 발생/표시 시즌
+  day0: boolean;         // true=현재 오프시즌 개막(day=0), false=과거 요약(day 없음)
+  coachId: string;
+  coachName: string;
+  teamId: string;        // 관련 팀(도착팀/현팀/경질팀/마지막팀)
+  fromTeamId?: string;   // move: 떠난 팀
+  reputation: number;
+  tier: RepTier;
+  seasons?: number;      // enshrine 요약
+  champions?: number;    // enshrine 요약
+}
+/** 감독 뉴스 산출측 입력(현 감독 풀의 최소 형태 — Coach 구조 부분집합). */
+export interface HeadCoachRef {
+  id: string; name: string; renown?: number; teamId: string | null; contractYears?: number;
+}
+
+/** 감독 뉴스 이벤트(결정론·순수) — 데뷔/이적/만료임박(신선, 풀 vs 직전 로그) + 경질/헌액(로그 파생). 명성 티어 게이트. */
+export function coachNewsEvents(log: CoachCareerRow[], activeCoaches: HeadCoachRef[], currentSeason: number): CoachNewsEvent[] {
+  const events: CoachNewsEvent[] = [];
+  const activeIds = new Set(activeCoaches.map((c) => c.id));
+  const byId = new Map<string, CoachCareerRow[]>();
+  for (const r of log) { const a = byId.get(r.coachId); if (a) a.push(r); else byId.set(r.coachId, [r]); }
+  const sortedRows = (id: string) => (byId.get(id) ?? []).slice().sort((a, b) => a.season - b.season);
+  const nameFromLog = (id: string) => { const rows = byId.get(id) ?? []; return rows.map((r) => r.coachName).find((n) => n && n.trim()); };
+
+  // A) 신선 오프시즌 사건(현 감독 풀 vs 직전 로그 행) — day=0·season=currentSeason.
+  for (const c of activeCoaches) {
+    if (c.teamId == null) continue; // FA/미배정
+    const rows = sortedRows(c.id);
+    const rep = foldReputation(log, c.id, c.renown).final;
+    const tier = reputationTier(rep);
+    const gated = tier.stars >= COACH_NEWS_TIER_STARS;
+    if (rows.length === 0) { // 승격 데뷔(첫 부임 — 로그 없음). 데뷔 명성=renown.
+      if (gated) events.push({ kind: 'debut', season: currentSeason, day0: true, coachId: c.id, coachName: c.name, teamId: c.teamId, reputation: rep, tier });
+      continue;
+    }
+    const last = rows[rows.length - 1];
+    if (last.season === currentSeason - 1 && last.teamId !== c.teamId && gated) { // 신선 이적(직전 시즌 팀과 다른 현 팀)
+      events.push({ kind: 'move', season: currentSeason, day0: true, coachId: c.id, coachName: c.name, teamId: c.teamId, fromTeamId: last.teamId, reputation: rep, tier });
+    }
+    if ((c.contractYears ?? 99) <= 1 && gated) { // 계약 만료 임박(전망)
+      events.push({ kind: 'expiring', season: currentSeason, day0: true, coachId: c.id, coachName: c.name, teamId: c.teamId, reputation: rep, tier });
+    }
+  }
+
+  // B) 시즌 중 경질(로그 midSeasonFired 파생 — 플레이어 팀만 발생 §6.4, 희소). 발생 시점 명성.
+  for (const r of log) {
+    if (!r.midSeasonFired) continue;
+    const upto = (byId.get(r.coachId) ?? []).filter((x) => x.season <= r.season);
+    const rep = foldReputation(upto, r.coachId, r.renown).final;
+    const name = r.coachName || nameFromLog(r.coachId);
+    if (!name) continue; // 이름 결측 → 우아 강등
+    events.push({ kind: 'fired', season: r.season, day0: false, coachId: r.coachId, coachName: name, teamId: r.teamId, reputation: rep, tier: reputationTier(rep) });
+  }
+
+  // C) 명장 열전 헌액(은퇴 감독 입성) — 마지막 재직 시즌 요약.
+  for (const h of hallOfCoaches(log, activeIds)) {
+    events.push({ kind: 'enshrine', season: h.lastSeason, day0: false, coachId: h.coachId, coachName: h.name, teamId: h.lastTeamId, reputation: h.finalRep, tier: h.peakTier, seasons: h.seasons, champions: h.champions });
+  }
+
+  return events;
 }

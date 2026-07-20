@@ -210,6 +210,18 @@ day 경계 자체가 없어 **시즌 전체 미래 사건**을 노출했다(`dyn
 기본 `[]`=하위호환)을 받는다. 실제 앱 노출은 3 호출부(`index`·`news`·`news/[id]`)가 store의 두 로그를 넘기고 `app/news.tsx`
 `KIND_KO`에 `offseason·draft·foreign` 한글 라벨을 추가해야 완성(엔진/가드는 인자 직접 주입으로 검증 가능 — 앱 배선과 독립).
 
+### 3.8 감독 뉴스 (스태프 3.0 Phase E, 2026-07-20, `kind='coach'`)
+
+감독 서사를 뉴스로. **명성 티어가 높을수록 뉴스 대상**(무명 감독의 이동·데뷔는 뉴스 안 됨 — 빈도 게이트 `COACH_NEWS_TIER_STARS=4`, 명장★4 이상). 전부 순수 파생(경력 로그 `coachCareerLog` + 현 감독 풀) — 새 사건 생성 0·결정론. 산출은 엔진 순수 함수 `engine/reputation.coachNewsEvents(log, activeCoaches, currentSeason)`(테스트 가능), `data/news.ts`가 문구로 조립(`kind='coach'`, channel `coach`).
+
+- **승격 데뷔**(`debut`): 현 감독 풀에 있으나 경력 로그가 없는(첫 부임) 감독 — "코치 ○○, 감독 데뷔". 데뷔 시점 명성=renown이라 게이트상 **레전드 출신 승격**(renown 72=명장)만 노출(스타 출신 데뷔).
+- **명장 이적**(`move`): 현 팀이 직전 시즌 로그 팀과 다른 감독(오프시즌 이동) — "○○, 명장 ○○ 영입". 도착 팀 관점.
+- **계약 만료 임박**(`expiring`): 현 감독 중 `contractYears ≤ 1` + 명장 티어 — "○○ 감독 FA 시장 등장 임박"(전망·결과-중립).
+- **시즌 중 경질**(`fired`): 로그 `midSeasonFired` 행 파생 — "○○ 감독 시즌 중 경질"(플레이어 팀만 발생 §6.4).
+- **명장 열전 헌액**(`enshrine`): `hallOfCoaches` 입성 감독(은퇴) — "명장 ○○, 명장 열전 헌액"(재직 시즌·우승 요약).
+
+**표시 타이밍**: 데뷔/이적/만료임박=신선 오프시즌 사건이라 `day=0`·`season=currentSeason`(개막 최상단, freshNews 2주 만료). 경질/헌액=과거 시즌 요약(day 없음). **리그 진행 컷오프(§3.5) 무저촉**(오프시즌·결과-중립). 은퇴로 풀에서 사라진 감독 이름은 로그 행 additive `coachName`에서(STAFF §9.6-E). 배선: `buildNewsFeed` 새 인자 2종(`coachCareerLog`·`headCoaches`, 기본 `[]`=하위호환) — 3 호출부(index·news·news/[id])가 store에서 주입, `KIND_KO`/`KIND_ICON`/`KIND_ACCENT` 등 `coach` 라벨 추가. 검증 `tools/_dv_hall_of_coaches.ts`(빈도 게이트·결정론).
+
 ---
 
 ## 4. ★ 본문 풍부화 + 변주 엔진 (핵심)

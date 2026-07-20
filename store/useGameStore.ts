@@ -18,7 +18,7 @@ import { advanceCoaches } from '../data/staffLifecycle';
 import { bottomStreak } from '../engine/staffLifecycle';
 import { predictRanks, reputationOf, interestedClubs, counterOfferOutcome, type CoachCareerRow, type CoachAsstCareerRow, type MediaPredictionEntry, type MidFire, type PlayoffResult, type TeamContext } from '../engine/reputation';
 import { headOvr, headCoachSalary } from '../engine/staff';
-import { getTeamPlayers, shortTeamName } from '../data/league';
+import { getTeamPlayers, shortTeamName, getCoach } from '../data/league';
 import { SEASON_DAYS } from '../engine/calendar';
 import type { Coach, AssistantCoach } from '../types';
 import { buildDraftContext } from '../data/draftSetup';
@@ -1318,12 +1318,16 @@ export const useGameStore = create<GameState>()(
           const tid = rankOrder[i];
           const headId = assignedHead[tid];
           if (!headId || headId.startsWith('acting_')) continue; // 대행 체제 팀의 정식 감독 크레딧은 midFires 행이 담당(중복 방지)
-          endedRows.push({ season, coachId: headId, teamId: tid, predictedRank: predRankOf(tid), actualRank: i + 1, playoff: playoffOf(tid), champion: championId === tid, midSeasonFired: false, u23Starters: u23StartersByTeam[tid] ?? 0, rookieAward: rookieTeam === tid });
+          const hc = getCoach(headId); // 명장 열전 표시 사실(§9.6-E additive) — 은퇴로 풀에서 사라져도 로그로 조회 가능하게
+          const rec = record[tid];
+          endedRows.push({ season, coachId: headId, teamId: tid, predictedRank: predRankOf(tid), actualRank: i + 1, playoff: playoffOf(tid), champion: championId === tid, midSeasonFired: false, u23Starters: u23StartersByTeam[tid] ?? 0, rookieAward: rookieTeam === tid, coachName: hc?.name, renown: hc?.renown, wins: rec?.[0], losses: rec?.[1] });
         }
         // 시즌 중 경질(내 팀) — 경질 감독 1행(하락 트리거). actualRank=팀 최종 순위(참고용, 산식은 경질 페널티만 사용).
         for (const mf of midFires.filter((m) => m.season === season)) {
           const idx = rankOrder.indexOf(mf.teamId);
-          endedRows.push({ season, coachId: mf.coachId, teamId: mf.teamId, predictedRank: predRankOf(mf.teamId), actualRank: idx < 0 ? rankOrder.length : idx + 1, playoff: 'none', champion: false, midSeasonFired: true });
+          const fc = getCoach(mf.coachId);
+          const rec = record[mf.teamId];
+          endedRows.push({ season, coachId: mf.coachId, teamId: mf.teamId, predictedRank: predRankOf(mf.teamId), actualRank: idx < 0 ? rankOrder.length : idx + 1, playoff: 'none', champion: false, midSeasonFired: true, coachName: fc?.name, renown: fc?.renown, wins: rec?.[0], losses: rec?.[1] });
         }
         const nextCoachCareerLog = [...coachCareerLog, ...endedRows].slice(-1000); // 롤링 캡(활동 감독 전 경력이 창 안)
         const retiredPlayers = ctx.retired.map((id) => snapshot[id]).filter((p): p is Player => !!p);

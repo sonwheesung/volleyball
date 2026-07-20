@@ -279,7 +279,7 @@ export const getTeamPlayers = (teamId: string): Player[] =>
 
 export const getTeamCoach = (teamId: string): Coach | undefined => teamHeadCoach(teamId);
 
-/** 경기 엔진용 감독 정보(성향·카리스마) — MATCH_SYSTEM 8장. 영입 감독 반영.
+/** 경기 엔진용 감독 정보(성향·경기 운영·육성 철학) — MATCH_SYSTEM 8장. 영입 감독 반영.
  *  day 주면 **그날의 감독**(축3 forward-only, 부임 이전 경기는 이전 감독). 생략하면 현재 감독(포스트시즌·표시·도구용). */
 export const coachInfoOf = (teamId: string, day?: number): CoachInfo | undefined => {
   const c = day === undefined ? teamHeadCoach(teamId) : teamHeadCoachOn(teamId, day);

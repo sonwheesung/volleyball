@@ -1,8 +1,10 @@
 import { useLocalSearchParams } from 'expo-router';
-import { Text } from 'react-native';
+import { Text, View } from 'react-native';
 import { Card, IconLabel, Muted, Row, Screen, StatBar, STYLE_LABEL, theme } from '../../components/Screen';
-import { getCoach, getTeam } from '../../data/league';
+import { CoachAvatar } from '../../components/CoachAvatar';
+import { getCoach, getTeam, getTeamPlayers } from '../../data/league';
 import { headOvr, headType3, HEAD_TYPE3_KO } from '../../engine/staff';
+import { reputationOf, reputationTier, repStars, coachComment } from '../../engine/reputation';
 import { TRAINING_NAME } from '../../engine/training';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -16,6 +18,8 @@ export default function CoachDetail() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const c = id ? getCoach(id) : undefined;
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
+  const coachCareerLog = useGameStore((s) => s.coachCareerLog);
+  const season = useGameStore((s) => s.season);
 
   if (!c) {
     return (
@@ -27,14 +31,40 @@ export default function CoachDetail() {
 
   const team = c.teamId ? getTeam(c.teamId) : undefined;
   const isMine = !!selectedTeamId && c.teamId === selectedTeamId;
+  const acting = c.id.startsWith('acting_');
+  const rep = acting ? 0 : reputationOf(coachCareerLog, c);
+  // 감독 코멘트(데이터 파생 플레이버, §9.6-E) — 상태 서술만(없는 인과 금지).
+  const comment = (() => {
+    if (acting) return '';
+    const last = coachCareerLog.filter((r) => r.coachId === c.id).sort((a, b) => b.season - a.season)[0];
+    const ages = c.teamId ? getTeamPlayers(c.teamId).map((p) => p.age) : [];
+    const avgAge = ages.length ? ages.reduce((a, b) => a + b, 0) / ages.length : 27;
+    return coachComment({
+      expectDelta: last ? last.predictedRank - last.actualRank : 0,
+      champion: !!last?.champion,
+      contractYears: c.contractYears ?? 0,
+      avgAge,
+      tierStars: reputationTier(rep).stars,
+      interest: 0,
+    }, `${c.id}:${season}`);
+  })();
 
   return (
     <Screen title={c.name}>
       <Card accent={theme.violet} flat>
         <Row>
-          <IconLabel icon="person-outline" color={theme.violet}>{team?.name ?? ''} 감독</IconLabel>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, flex: 1 }}>
+            <CoachAvatar id={c.teamId ?? c.id} name={c.name} size={44} />
+            <View style={{ flex: 1 }}>
+              <IconLabel icon="person-outline" color={theme.violet}>{team?.name ?? '프리에이전트'} 감독</IconLabel>
+              {!acting ? <Muted style={{ marginTop: 2, color: theme.violet }}>{repStars(rep)} {reputationTier(rep).label} · 명성 {rep}</Muted> : null}
+            </View>
+          </View>
           <Muted>{c.age}세</Muted>
         </Row>
+        {!acting && comment ? (
+          <Muted style={{ marginTop: 6, fontStyle: 'italic', color: theme.text }}>“{comment}”</Muted>
+        ) : null}
       </Card>
 
       <IconLabel icon="clipboard-outline" color={theme.violet}>성향 · {STYLE_LABEL[c.style]}</IconLabel>

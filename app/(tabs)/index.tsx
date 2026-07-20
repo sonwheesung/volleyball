@@ -80,9 +80,11 @@ function DashboardInner() {
   const seasonDraftLog = useGameStore((s) => s.seasonDraftLog);
   const seasonForeignLog = useGameStore((s) => s.seasonForeignLog);
   const mediaPredictionLog = useGameStore((s) => s.mediaPredictionLog);
+  const coachCareerLog = useGameStore((s) => s.coachCareerLog);
+  const coachPool = useGameStore((s) => s.coachPool);
   const allNews = useMemo(
-    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, currentDay, mediaPredictionLog), cutoff),
-    [archive, milestones, hallOfFame, season, cutoff, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, mediaPredictionLog],
+    () => freshNews(buildNewsFeed(archive, milestones, hallOfFame, season, expelledLog, benchDirectives, cutoff, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, currentDay, mediaPredictionLog, coachCareerLog, coachPool?.coaches ?? []), cutoff),
+    [archive, milestones, hallOfFame, season, cutoff, currentDay, expelledLog, benchDirectives, teamId, transfers, retirements, seasonDraftLog, seasonForeignLog, mediaPredictionLog, coachCareerLog, coachPool],
   );
   const unreadNews = useMemo(() => {
     const read = new Set(readNews);

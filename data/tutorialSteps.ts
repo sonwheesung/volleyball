@@ -23,7 +23,7 @@ export const TIPS: Tip[] = [
   { id: 'team.ovr', screen: 'team-detail', order: 0, anchor: 'team-ovr',
     title: '팀 종합 전력', body: '선수단 전체의 평균 전력입니다. 숫자가 높을수록 강팀 — 하지만 이야기는 지금부터 쌓입니다.' },
   { id: 'team.coach', screen: 'team-detail', order: 1, anchor: 'team-coach',
-    title: '감독', body: '감독을 누르면 성향·카리스마를 자세히 봅니다. 감독 성향이 자동 경기 운영(작전·교체·타임아웃)을 좌우합니다.' },
+    title: '감독', body: '감독을 누르면 성향·능력(경기 운영·육성 철학·리더십)·명성을 자세히 봅니다. 감독 성향이 자동 경기 운영(작전·교체·타임아웃)을 좌우합니다.' },
   { id: 'team.roster', screen: 'team-detail', order: 2, anchor: 'team-roster',
     title: '선수단', body: '선수 이름을 누르면 2층 스탯·특성을 자세히 봅니다. 선수는 성장하고, 전성기가 지나면 기량이 하락합니다.' },
   { id: 'team.start', screen: 'team-detail', order: 3, anchor: 'team-operate',

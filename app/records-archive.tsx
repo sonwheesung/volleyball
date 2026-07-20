@@ -7,6 +7,8 @@ import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Loading, Muted, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { AwardIllustration } from '../components/AwardIllustration';
 import { LegendIllustration } from '../components/LegendIllustration';
+import { CoachAvatar } from '../components/CoachAvatar';
+import { hallOfCoaches, repStars, type CoachHallEntry } from '../engine/reputation';
 import { Best7Court } from '../components/Best7Court';
 import { teamColors } from '../lib/teamColor';
 import { jerseyNumber, SUPER_LEGEND_POINTS } from '../engine/jersey';
@@ -53,6 +55,13 @@ function RecordsInner() {
   const archive = useGameStore((s) => s.archive);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const milestones = useGameStore((s) => s.milestones);
+  const coachCareerLog = useGameStore((s) => s.coachCareerLog);
+  const coachPool = useGameStore((s) => s.coachPool);
+  // 명장 열전(감독 명예의전당, STAFF §9.6-E) — 은퇴 감독(로그엔 있으나 현 풀엔 없음) 입성 판정 재계산(무저장).
+  const coachHall = useMemo(() => {
+    const activeIds = new Set((coachPool?.coaches ?? []).map((c) => c.id));
+    return hallOfCoaches(coachCareerLog, activeIds);
+  }, [coachCareerLog, coachPool]);
 
   const [tab, setTab] = useState(0);          // 0 시즌 · 1 통산 · 2 명예의전당 · 3 연표
   const [viewSeason, setViewSeason] = useState(season);
@@ -112,7 +121,7 @@ function RecordsInner() {
       ) : null}
 
       {tab === 2 ? (
-        <HofView hallOfFame={hallOfFame} teamId={teamId} />
+        <HofView hallOfFame={hallOfFame} teamId={teamId} coachHall={coachHall} />
       ) : null}
 
       {tab === 3 ? (
@@ -331,12 +340,14 @@ function CareerView({
 }
 
 // ─── 탭 2 · 명예의전당 ─────────────────────────────────────────
-function HofView({ hallOfFame, teamId }: { hallOfFame: ReturnType<typeof useGameStore.getState>['hallOfFame']; teamId: string | null }) {
+function HofView({ hallOfFame, teamId, coachHall }: { hallOfFame: ReturnType<typeof useGameStore.getState>['hallOfFame']; teamId: string | null; coachHall: CoachHallEntry[] }) {
   const sorted = [...hallOfFame].sort((a, b) => Number(b.legend) - Number(a.legend) || b.points - a.points);
-  if (sorted.length === 0) {
+  if (sorted.length === 0 && coachHall.length === 0) {
     return <Card flat><Muted>아직 은퇴한 레전드가 없습니다. 세월이 쌓이면 이곳에 명예가 새겨집니다.</Muted></Card>;
   }
   return (
+    <>
+    {sorted.length === 0 ? null : (
     <Card accent={theme.gold} flat>
       <Text style={styles.cardHead}>은퇴 레전드 · {sorted.length}명</Text>
       {sorted.map((h) => {
@@ -378,6 +389,32 @@ function HofView({ hallOfFame, teamId }: { hallOfFame: ReturnType<typeof useGame
         );
       })}
     </Card>
+    )}
+
+    {coachHall.length === 0 ? null : (
+      <Card accent={theme.violet} flat>
+        <Text style={styles.cardHead}>명장 열전 · 감독 {coachHall.length}명</Text>
+        <Muted style={{ fontSize: 11, marginBottom: 4 }}>은퇴한 명장 감독의 자리. 헌액 번호는 선수 고유라 감독은 명성으로 기린다.</Muted>
+        {coachHall.map((h) => {
+          const best = h.best;
+          const rep = best ? `${seasonYear(best.season)} 예상 ${best.predictedRank}위 → ${best.champion ? '우승' : `${best.actualRank}위`}` : '';
+          return (
+            <View key={h.coachId} style={styles.hofLegendRow}>
+              <CoachAvatar id={h.lastTeamId} name={h.name} size={46} />
+              <View style={{ flex: 1, gap: 1 }}>
+                <Text style={[styles.team, h.lastTeamId === teamId && styles.mine]} numberOfLines={1}>
+                  🧑‍🏫 {h.name}
+                  <Text style={{ color: theme.violet, fontSize: 11, fontWeight: '800' }}>  {repStars(h.peakRep)} {h.peakTier.label}</Text>
+                </Text>
+                <Muted style={{ fontSize: 11 }}>{short(h.lastTeamId)} · {h.seasons}시즌{h.champions > 0 ? ` · 우승 ${h.champions}회` : ''} · 통산 {h.wins}승 {h.losses}패</Muted>
+                {rep ? <Text style={{ fontSize: 10.5, color: theme.muted }} numberOfLines={1}>대표 시즌 · {rep}</Text> : null}
+              </View>
+            </View>
+          );
+        })}
+      </Card>
+    )}
+    </>
   );
 }
 
