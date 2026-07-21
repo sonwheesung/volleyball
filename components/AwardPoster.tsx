@@ -5,7 +5,8 @@
 //
 // 오버레이 좌표 규약(퍼센트 = 포스터 높이 기준, 자산 1080×1440 실측):
 //   · 상단 시즌 라벨    : top 3.2% ~ 8.5%(타이틀 y≈12% 위 빈 공간)
-//   · 하단 정보 패널    : top 79% ~ 95.5%(그려진 라운드 아웃라인 82~96%보다 살짝 위에서 시작 — 시안 y≈79~94%)
+//   · 하단 정보 패널    : top 80.5% ~ 94.2%(그림 패널 아웃라인 실측 79.9~95.1%의 안쪽 — sharp 민트 라인 스캔 2026-07-21)
+//     ⚠ 내용물 합계가 컨테이너보다 크면 아래로 흘러넘쳐 패널 밖으로 샌다(실기기 보고) — 폰트·마진은 반드시 이 높이(13.7%) 안에 들어오게
 // 폰트 크기는 퍼센트가 안 되므로 렌더 폭(w)에서 파생 → 어떤 기기 폭에서도 비율 유지.
 // 색은 배경(고정 다크 네온 이미지) 위라 앱 라이트/다크 테마와 무관 — 고정 민트 네온·흰색(자산 톤).
 import { Image, ImageBackground, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
@@ -46,9 +47,9 @@ export function AwardPoster({
   // 폭 파생 폰트 — 좁은 기기에서도 비율 유지
   const f = {
     kicker: w * 0.030, season: w * 0.052,
-    posEn: w * 0.030, name: w * 0.076,
-    ovrTag: w * 0.026, ovrNum: w * 0.058,
-    statVal: w * 0.044, statLab: w * 0.026,
+    posEn: w * 0.024, name: w * 0.060,
+    ovrTag: w * 0.021, ovrNum: w * 0.048,
+    statVal: w * 0.036, statLab: w * 0.022,
     foot: w * 0.026,
   };
   const cells = stats.slice(0, 5);
@@ -66,7 +67,7 @@ export function AwardPoster({
         <View style={styles.panel}>
           {/* 상단행: [엠블럼] [포지션/이름] [OVR] */}
           <View style={styles.headRow}>
-            {emblem ? <Image source={emblem} style={[styles.emblem, { width: h * 0.058, height: h * 0.058 }]} /> : null}
+            {emblem ? <Image source={emblem} style={[styles.emblem, { width: h * 0.048, height: h * 0.048 }]} /> : null}
             <View style={styles.nameCol}>
               <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, color: MINT_BRIGHT }]} numberOfLines={1}>{posEn}</Text>
               <Text allowFontScaling={false} style={[styles.name, { fontSize: f.name, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
@@ -101,17 +102,17 @@ const styles = StyleSheet.create({
   season: { fontWeight: '900', letterSpacing: 2, marginTop: 2, textShadowColor: 'rgba(95,234,216,0.5)', textShadowRadius: 8 },
 
   // 하단 정보 패널 — top 79%~95.5% (시안 y≈79~94%, 아웃라인 82~96% 살짝 위에서 시작)
-  panel: { position: 'absolute', top: '79%', bottom: '4.5%', left: '7%', right: '7%', justifyContent: 'center' },
+  panel: { position: 'absolute', top: '80.5%', bottom: '5.8%', left: '8.5%', right: '8.5%', justifyContent: 'center' },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   emblem: { resizeMode: 'contain' },
   nameCol: { flex: 1, minWidth: 0 },
   posEn: { fontWeight: '800', letterSpacing: 2 },
   name: { fontWeight: '900', marginTop: 1 },
-  ovrChip: { alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 10, paddingVertical: 3, backgroundColor: 'rgba(5,20,20,0.45)' },
+  ovrChip: { alignItems: 'center', justifyContent: 'center', borderWidth: 1.5, borderRadius: 12, paddingHorizontal: 8, paddingVertical: 2, backgroundColor: 'rgba(5,20,20,0.45)' },
   ovrTag: { fontWeight: '800', letterSpacing: 1.5, marginBottom: -2 },
   ovrNum: { fontWeight: '900' },
 
-  statRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: '4%' },
+  statRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: '2.2%' },
   statCell: { flex: 1, alignItems: 'center', paddingHorizontal: 2 },
   statVal: { fontWeight: '900' },
   statLab: { fontWeight: '700', marginTop: 2 },
