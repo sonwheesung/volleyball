@@ -120,17 +120,40 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 
 ## 8. MVP 포스터 연출 (2026-07-21, 사용자 시안)
 > §7의 정규 MVP 클라이맥스를 텍스트 카드(§7 A1) 대신 **한 장의 포스터**로 격상. "시즌 마감의 음미하는 순간"(0장)의
-> 정점을 시각적으로 못박는다. 관전형 1순위(보는 경험) 투자처. 이번 웨이브는 **정규리그 MVP만** 교체하고, 다른
-> 1인 개인상(신인상·기량발전상·챔프전 MVP)은 현행 카드 유지 — 단 자산만 추가하면 같은 컴포넌트로 갈아끼운다.
+> 정점을 시각적으로 못박는다. 관전형 1순위(보는 경험) 투자처. ~~이번 웨이브는 **정규리그 MVP만** 교체하고, 다른
+> 1인 개인상(신인상·기량발전상·챔프전 MVP)은 현행 카드 유지 — 단 자산만 추가하면 같은 컴포넌트로 갈아끼운다.~~
+> → **확장(2026-07-22)**: 챔프전 MVP(finalsMvp, §8 하단)·**신인상·기량발전상**도 포스터로 승격(각 자산 등록). 상마다 **색 톤이 다르다**
+> (신인=블루·기량발전=퍼플·기록왕=레드, 아래 톤 표). 기록왕(statLeader)은 템플릿·프리뷰만 등록하고 **수여 화면 배선은 후속**(부문 다수 — 수여 UX 설계 필요).
 
 **템플릿 전략(상별 자산 추가 = 매핑 한 줄)**:
 - 배경 자산 `assets/awards/mvp_stage.webp`(1080×1440, 3:4). 상 타이틀("MVP / MOST VALUABLE PLAYER")은 그림에 박혀
   있고, **상단(타이틀 위)·하단(라운드 패널)** 만 비어 있어 그 빈칸에만 텍스트를 얹는다.
-- `app/awards-ceremony.tsx`의 `AWARD_TEMPLATE`(award key → require 자산) 매핑 테이블. **지금은 `mvp`만 채워짐.**
-  finalsMvp/rookie/mostImproved 자산이 준비되면 그 줄만 추가 → `buildAwardPosterData` 빌드만으로 동일 포스터 연출.
+- ~~`app/awards-ceremony.tsx`의 `AWARD_TEMPLATE`(award key → require 자산) 매핑 테이블. **지금은 `mvp`만 채워짐.**~~
+  → **정정(2026-07-22)**: 매핑은 `data/awardPoster.ts`의 **`AWARD_TEMPLATES`**(award key → `{ src, tone }`)로 이전(화면 3곳 공용 import,
+  중복 require 방지). 화면은 `AWARD_TEMPLATES.<key>.src`(자산)·`.tone`(색 계열)을 꺼내 쓴다. 아래 톤 표의 5종 등록 완료.
 - 컴포넌트 `components/AwardPoster.tsx`는 상에 무관한 **순수 재사용 포스터**(props: template·seasonLabel·name·posEn·
-  ovr·stats[4~5]·emblem·accent·footnote·width). 엔진/store 무의존, 결정론 무관(표시 전용).
+  ovr·stats[4~5]·emblem·accent·**tone**·seasonKicker·footnote·width). 엔진/store 무의존, 결정론 무관(표시 전용).
+  `tone` 미지정 시 **민트 기본**(`DEFAULT_TONE` = `data/awardPoster.ts TONE_MINT`와 값 동기) → 기존 호출 무회귀.
 - 베스트7은 **제외**(후속) — 7인 코트 배치라 1인 포스터 템플릿과 형식이 다르다. 기존 `Best7Court` 유지.
+
+**상별 톤 시스템(2026-07-22) — 상마다 색 계열**: 이름·수치·시즌값은 흰색 유지, OVR 칩 테두리/숫자는 `accent`(구단색). 톤은
+"구조 색"만 담당 — `bright`(시즌 키커·포지션 영문 라벨·시즌 글로우), `dim`(스탯 라벨·OVR 태그·풋노트), `line`(스탯 칸 구분선),
+`glow`(시즌 라벨 섀도). 톤 값은 각 자산의 네온을 `sharp`로 상위 2% 밝은-채도 픽셀 평균 샘플링해 조화롭게 확정(근거=아래 표 샘플 hex).
+
+| award key | 자산(assets/awards/) | 톤(계열) | bright | 네온 샘플 | 수여 화면 | 패널 좌표 실측 |
+|---|---|---|---|---|---|---|
+| `mvp` | `mvp_stage.webp` | 민트(기본) | `#5FEAD8` | `#24A096` | awards-ceremony(정규 MVP 클라이맥스) | 79.9~95.1% |
+| `finalsMvp` | `finals_mvp_stage.webp` | 민트(유지) | `#5FEAD8` | `#289F9A` | champion-ceremony(챔프전 MVP, §5.3 유일 수여) | 79.9~95.1% |
+| `rookie` | `rookie_stage.webp` | **블루** | `#5FB8EA` | `#19B8E2` | awards-ceremony(신인상) | 80.0~95.1% |
+| `mostImproved` | `mip_stage.webp` | **퍼플** | `#C77FF2` | `#AC2CE2` | awards-ceremony(기량발전상, footnote `OVR ▲N`) | 80.0~95.1% |
+| `statLeader` | `statleader_stage.webp` | **레드** | `#F2707F` | `#CB6D59`(웜레드) | **후속 배선**(부문 다수 — 수여 UX 설계 필요). 현재는 프리뷰만 | 80.0~95.1% |
+
+- **finalsMvp 톤 주석(교체 예정)**: 현재 민트 자산이라 톤도 민트 유지. **골드 자산으로 교체 예정** — 교체 시 `TONE_GOLD` 신설 후 그 줄만 톤 교체
+  (자산·톤이 같은 위치에 있어 한 줄 수정). `data/awardPoster.ts` 주석에 명기.
+- **기록왕(statLeader) 배선 후속 메모**: 정규리그 MVP·신인상·기량발전상·챔프전 MVP는 시즌당 **1명 1상**이라 포스터 1장으로 끝난다. 그러나
+  기록왕은 **부문(득점·공격·블로킹·서브·디그·세트·리시브 등)이 다수**라 "누구를 어느 부문으로 몇 장" 보여줄지 수여 UX가 먼저 정해져야 한다
+  (부문별 1장씩이면 시상식 비트가 과다 → 관전형 피로). 따라서 이번 웨이브는 **레드 톤 템플릿 + 프리뷰 샘플만** 등록하고 수여 화면(awards-ceremony 비트)
+  배선은 후속 결정으로 남긴다. `AWARD_TEMPLATES.statLeader`는 등록돼 있으므로, 수여 UX가 정해지면 매핑 재사용만으로 배선 가능.
 
 **오버레이 좌표 규약(퍼센트 = 포스터 *높이* 기준, 자산 실측)**:
 - 상단 시즌 라벨: `top 3.2%~8.5%`(타이틀 상단 y≈12% 위 빈 공간). 소형 키커("SEASON") + 시즌값(`seasonYear`, 예 "2025-26").
@@ -153,11 +176,15 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 - OVR = 수상자 `overall(getPlayer)`(시즌 시작 base, 표시 스케일 `displayOvr`) — 표시 플러리시. 우리 구단 MVP는 포스터 아래
   "우리 구단의 MVP" 태그(포스터 자체는 민트 자산 톤 유지, 팀색 오염 안 함).
 
-**배선 지점**: `app/awards-ceremony.tsx` MVP 비트(클라이맥스, 마지막) — `AWARD_TEMPLATE.mvp` + `mvpPoster`(=`buildAwardPosterData(aw.mvp, …, leagueProduction(MAX))`,
-aw.mvp와 동일 집계로 스탯 귀속 일치)가 있으면 `AwardPoster`, 없으면 기존 `winnerCard` 폴백(자산 누락·미출전 안전).
+**배선 지점**: `app/awards-ceremony.tsx` — 신인상·기량발전상·MVP(클라이맥스) 비트가 각각 `buildAwardPosterData(aw.<award>, …, prod)`로
+포스터 데이터를 만들면 `AwardPoster`(상별 `AWARD_TEMPLATES.<key>.src`·`.tone`) 연출, `null`(미출전 등)이면 기존 `winnerCard` 폴백.
+풀시즌 생산 `prod = leagueProduction(MAX)`는 **한 번만** 계산해 세 상이 공유(무거움 — aw.*와 동일 집계로 스탯 귀속 일치).
+기량발전상은 `footnote={`OVR ▲${aw.mostImproved.value}`}`로 성장 화살표 의미 보존(기존 카드 ▲N 대체). 챔프전 MVP는 `champion-ceremony`(§5.3 유일 수여).
 
 **개발 미리보기**: `app/awards-poster-preview.tsx`(DEV_TOOLS 게이트 — 운영 빌드 진입 차단, `office` 탭 개발용 카드에서 진입).
-현재 시즌 실 MVP + 레이아웃 스트레스 샘플(긴 이름 OH·세터)로 시안 반복 확인. 샘플은 이 화면 전용 목업(운영 미노출).
+현재 시즌 실 MVP + 챔프전 MVP + **상별 톤 샘플(신인=블루·기량발전=퍼플 footnote ▲6·기록왕=레드 "배선 후속")** + 레이아웃 스트레스 샘플(긴 이름 OH·세터).
+샘플은 이 화면 전용 목업(운영 미노출).
 
-- **검증**: tsc 0 · npm test 무회귀(연출 전용 — 엔진·store 무접촉) · `posterStats` A/B 민감도(각 필드 변이 → 정확히 해당 칸만
-  변화, 오귀속 0) · 실기기 육안(오버레이 좌표·좁은 기기 폭·엠블럼).
+- **검증**: tsc 0 · npm test 무회귀(연출 전용 — 엔진·store 무접촉) · 가드 `tools/_dv_award_poster.ts`(A/B 자가검증):
+  ① `posterStats` 라벨→필드 시맨틱 오라클(오귀속 0) ② 상별 톤 형식·색 구분 무결 — 변이(공격↔디그 스왑·깨진 bright) 주입 시 검출됨을 증명.
+  · 실기기 육안(오버레이 좌표·좁은 기기 폭·엠블럼·톤 색)은 메인(에뮬).

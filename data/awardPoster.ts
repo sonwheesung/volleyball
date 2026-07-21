@@ -19,13 +19,29 @@ import { emblemFor } from './emblems';
 import { teamColors } from '../lib/teamColor';
 import { SEASON_DAYS } from '../engine/calendar';
 
-/** 포지션 영문 라벨(포스터 상단 소제목) */
-// 상별 포스터 배경 자산(AWARDS_SYSTEM §8) — 자산이 준비된 상만 등록. 화면들이 공용으로 import(중복 require 방지).
+/**
+ * 포스터 톤(상별 색 계열) — AWARDS_SYSTEM §8. 배경 자산의 네온 색을 sharp로 샘플링해 조화롭게 확정(근거는 §8 표).
+ *   bright = 시즌 키커·포지션 영문 라벨·시즌 글로우   dim = 스탯 라벨·OVR 태그·풋노트   line = 스탯 칸 구분선   glow = 시즌 라벨 섀도
+ * 이름·수치·시즌값은 흰색 유지, OVR 칩 테두리/숫자는 accent(구단색) — 톤은 "구조 색"만 담당.
+ */
+export interface PosterTone { bright: string; dim: string; line: string; glow: string }
+
+// 상별 톤(sharp 상위 2% 네온 평균 샘플 근거는 주석의 #hex). 민트 기본은 AwardPoster.DEFAULT_TONE과 값 동기(무회귀).
+const TONE_MINT: PosterTone   = { bright: '#5FEAD8', dim: 'rgba(150,238,224,0.72)', line: 'rgba(120,230,215,0.28)', glow: 'rgba(95,234,216,0.5)' };  // 샘플 #24A096 (mvp/finals)
+const TONE_BLUE: PosterTone   = { bright: '#5FB8EA', dim: 'rgba(158,206,240,0.74)', line: 'rgba(120,188,235,0.30)', glow: 'rgba(95,184,234,0.5)' };  // 샘플 #19B8E2 (rookie)
+const TONE_PURPLE: PosterTone = { bright: '#C77FF2', dim: 'rgba(214,176,244,0.74)', line: 'rgba(190,135,240,0.30)', glow: 'rgba(199,127,242,0.5)' }; // 샘플 #AC2CE2 (mip)
+const TONE_RED: PosterTone    = { bright: '#F2707F', dim: 'rgba(244,168,178,0.74)', line: 'rgba(240,112,127,0.30)', glow: 'rgba(242,112,127,0.5)' };  // 샘플 #CB6D59 웜레드 (statleader)
+
+/** 상별 포스터 배경 자산 + 톤(AWARDS_SYSTEM §8) — 화면들이 공용 import(중복 require 방지). */
 // 신규 자산 추가 절차: kling/GPT로 레퍼런스 첨부 생성 → 1080×1440 webp 변환 → 민트 라인 스캔으로 패널 좌표가
-// 기준(top 79.9%·bottom 95.1%)과 일치하는지 확인(불일치면 AwardPoster 좌표 확장 필요) → 여기 등록.
+// 기준(top 79.9%·bottom 95.1%)과 일치하는지 확인(불일치면 AwardPoster 좌표 확장 필요) → 톤 샘플링 → 여기 등록.
+export interface AwardTemplate { src: number; tone: PosterTone }
 export const AWARD_TEMPLATES = {
-  mvp: require('../assets/awards/mvp_stage.webp'),
-  finalsMvp: require('../assets/awards/finals_mvp_stage.webp'), // 2026-07-21 kling 생성 — 패널 좌표 실측 79.9~95.1%(기준과 동일)
+  mvp:          { src: require('../assets/awards/mvp_stage.webp'),        tone: TONE_MINT },
+  finalsMvp:    { src: require('../assets/awards/finals_mvp_stage.webp'), tone: TONE_MINT },   // 골드 자산 교체 예정 → 교체 시 TONE_GOLD로 (2026-07-21 kling 생성, 패널 79.9~95.1%)
+  rookie:       { src: require('../assets/awards/rookie_stage.webp'),     tone: TONE_BLUE },   // 신인상
+  mostImproved: { src: require('../assets/awards/mip_stage.webp'),        tone: TONE_PURPLE }, // 기량발전상
+  statLeader:   { src: require('../assets/awards/statleader_stage.webp'), tone: TONE_RED },    // 기록왕 — 화면 배선은 후속(부문 다수, §8), 템플릿·프리뷰만
 } as const;
 
 export const POS_EN: Record<Position, string> = {

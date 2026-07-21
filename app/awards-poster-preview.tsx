@@ -7,7 +7,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Screen, Muted, theme } from '../components/Screen';
 import { AwardPoster, type AwardPosterProps } from '../components/AwardPoster';
 import { DEV_TOOLS } from '../data/flags';
-import { mvpPosterData, POS_EN } from '../data/awardPoster';
+import { mvpPosterData, POS_EN, AWARD_TEMPLATES } from '../data/awardPoster';
 import { emblemFor } from '../data/emblems';
 import { useGameStore } from '../store/useGameStore';
 
@@ -72,6 +72,46 @@ export default function AwardsPosterPreview() {
             { label: '서브', value: '24' }, { label: '디그', value: '356' },
           ]}
           emblem={emblemFor('t1')}
+        />
+      </View>
+
+      {/* 상별 톤 샘플(AWARDS_SYSTEM §8) — 자산 네온에 맞춘 색 계열 확인 */}
+      <View style={styles.block}>
+        <Text style={styles.cap}>샘플 · 신인상 (블루 톤)</Text>
+        <AwardPoster
+          template={AWARD_TEMPLATES.rookie.src} tone={AWARD_TEMPLATES.rookie.tone}
+          seasonLabel="2025-26" name="정유진" posEn={POS_EN.OH} ovr={79}
+          stats={[
+            { label: '득점', value: '388' }, { label: '공격', value: '312' }, { label: '서브', value: '19' },
+            { label: '리시브', value: '274' }, { label: '디그', value: '198' },
+          ]}
+          emblem={emblemFor('t2')}
+        />
+      </View>
+
+      <View style={styles.block}>
+        <Text style={styles.cap}>샘플 · 기량발전상 (퍼플 톤 · footnote ▲6)</Text>
+        <AwardPoster
+          template={AWARD_TEMPLATES.mostImproved.src} tone={AWARD_TEMPLATES.mostImproved.tone}
+          seasonLabel="2025-26" name="한소희" posEn={POS_EN.MB} ovr={82}
+          stats={[
+            { label: '득점', value: '421' }, { label: '공격', value: '298' }, { label: '블로킹', value: '78' },
+            { label: '서브', value: '26' }, { label: '디그', value: '112' },
+          ]}
+          emblem={emblemFor('t4')} footnote="OVR ▲6"
+        />
+      </View>
+
+      <View style={styles.block}>
+        <Text style={styles.cap}>샘플 · 기록왕 (레드 톤 · 화면 배선 후속)</Text>
+        <AwardPoster
+          template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
+          seasonLabel="2025-26" name="마리아 산토스" posEn={POS_EN.OP} ovr={90} seasonKicker="LEAGUE LEADER"
+          stats={[
+            { label: '득점', value: '842' }, { label: '공격', value: '712' }, { label: '블로킹', value: '48' },
+            { label: '서브', value: '38' }, { label: '디그', value: '301' },
+          ]}
+          emblem={emblemFor('t5')}
         />
       </View>
 

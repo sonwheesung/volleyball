@@ -79,7 +79,8 @@ function Inner() {
       {finalsPoster ? (
         <View style={{ alignItems: 'center', marginTop: 14, gap: 8 }}>
           <AwardPoster
-            template={AWARD_TEMPLATES.finalsMvp}
+            template={AWARD_TEMPLATES.finalsMvp.src}
+            tone={AWARD_TEMPLATES.finalsMvp.tone}
             seasonLabel={finalsPoster.seasonLabel}
             name={finalsPoster.name}
             posEn={finalsPoster.posEn}

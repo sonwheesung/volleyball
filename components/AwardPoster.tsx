@@ -8,17 +8,24 @@
 //   · 하단 정보 패널    : top 80.5% ~ 94.2%(그림 패널 아웃라인 실측 79.9~95.1%의 안쪽 — sharp 민트 라인 스캔 2026-07-21)
 //     ⚠ 내용물 합계가 컨테이너보다 크면 아래로 흘러넘쳐 패널 밖으로 샌다(실기기 보고) — 폰트·마진은 반드시 이 높이(13.7%) 안에 들어오게
 // 폰트 크기는 퍼센트가 안 되므로 렌더 폭(w)에서 파생 → 어떤 기기 폭에서도 비율 유지.
-// 색은 배경(고정 다크 네온 이미지) 위라 앱 라이트/다크 테마와 무관 — 고정 민트 네온·흰색(자산 톤).
+// 색은 배경(고정 다크 네온 이미지) 위라 앱 라이트/다크 테마와 무관 — 자산 네온 톤·흰색.
+// 톤(상별 색 계열)은 tone prop으로 주입(신인상=블루·기량발전=퍼플·기록왕=레드 …). 미지정=민트(기존 무회귀).
 import { Image, ImageBackground, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import { displayOvr } from '../engine/overall';
+import type { PosterTone } from '../data/awardPoster';
 import { theme } from './Screen';
 
 // 배경(다크 네온 이미지) 위 고정 색 — 앱 테마 무관(이미지가 항상 어둡다). theme.accent(민트)와 동계열.
-const MINT = theme.accent;            // #19C2AE — 구조 민트(칸 구분·라벨)
-const MINT_BRIGHT = '#5FEAD8';        // 시즌 라벨·포지션 글로우(자산 네온 톤)
-const MINT_DIM = 'rgba(150,238,224,0.72)'; // 스탯 라벨(가라앉힌 민트)
+const MINT = theme.accent;            // #19C2AE — accent(OVR 칩) 기본값
 const WHITE = '#FFFFFF';
+// 톤 기본값(민트) — tone 미지정 시 기존과 픽셀 동일(무회귀). data/awardPoster.ts TONE_MINT와 값 동기(자산 mvp/finals).
+const DEFAULT_TONE: PosterTone = {
+  bright: '#5FEAD8',                    // 시즌 키커·포지션 라벨 글로우
+  dim: 'rgba(150,238,224,0.72)',        // 스탯 라벨·OVR 태그·풋노트
+  line: 'rgba(120,230,215,0.28)',       // 스탯 칸 구분선
+  glow: 'rgba(95,234,216,0.5)',         // 시즌 라벨 텍스트 섀도
+};
 
 export interface AwardPosterStat { label: string; value: string }
 
@@ -30,7 +37,8 @@ export interface AwardPosterProps {
   ovr: number;                     // raw 연속 OVR(내부에서 displayOvr 적용)
   stats: AwardPosterStat[];        // 4~5칸(라벨 한글·수치 강조)
   emblem?: ImageSourcePropType;    // 구단 엠블럼 배지(좌측)
-  accent?: string;                 // 강조색(우리 구단 등) — 기본 민트
+  accent?: string;                 // 강조색(우리 구단 등) — 기본 민트. OVR 칩 테두리/숫자(구단색)
+  tone?: PosterTone;               // 상별 색 계열(bright/dim/line/glow). 미지정=민트(무회귀)
   seasonKicker?: string;           // 시즌 라벨 위 소형 키커(기본 "SEASON")
   footnote?: string;               // 하단 문구(선택)
   width?: number;                  // 렌더 폭(기본 = 화면폭−32, Screen 패딩)
@@ -39,7 +47,7 @@ export interface AwardPosterProps {
 /** 3:4 배경 위에 시즌·수상자·OVR·스탯을 퍼센트 절대 배치. 세로 = 폭×4/3. */
 export function AwardPoster({
   template, seasonLabel, name, posEn, ovr, stats,
-  emblem, accent = MINT, seasonKicker = 'SEASON', footnote, width,
+  emblem, accent = MINT, tone = DEFAULT_TONE, seasonKicker = 'SEASON', footnote, width,
 }: AwardPosterProps) {
   const win = useWindowDimensions();
   const w = width ?? Math.min(win.width - 32, 460); // 태블릿 과대 방지 상한
@@ -59,8 +67,8 @@ export function AwardPoster({
       <ImageBackground source={template} style={{ width: w, height: h }} resizeMode="cover">
         {/* ── 상단: 시즌 라벨 (타이틀 위 빈 공간) ── */}
         <View style={styles.topZone}>
-          <Text allowFontScaling={false} style={[styles.kicker, { fontSize: f.kicker, color: MINT_BRIGHT }]}>{seasonKicker}</Text>
-          <Text allowFontScaling={false} style={[styles.season, { fontSize: f.season, color: WHITE }]} numberOfLines={1}>{seasonLabel}</Text>
+          <Text allowFontScaling={false} style={[styles.kicker, { fontSize: f.kicker, color: tone.bright }]}>{seasonKicker}</Text>
+          <Text allowFontScaling={false} style={[styles.season, { fontSize: f.season, color: WHITE, textShadowColor: tone.glow }]} numberOfLines={1}>{seasonLabel}</Text>
         </View>
 
         {/* ── 하단: 정보 패널 (수상자·OVR·스탯) ── */}
@@ -69,11 +77,11 @@ export function AwardPoster({
           <View style={styles.headRow}>
             {emblem ? <Image source={emblem} style={[styles.emblem, { width: h * 0.048, height: h * 0.048 }]} /> : null}
             <View style={styles.nameCol}>
-              <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, lineHeight: f.posEn * 1.15, includeFontPadding: false, color: MINT_BRIGHT }]} numberOfLines={1}>{posEn}</Text>
+              <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, lineHeight: f.posEn * 1.15, includeFontPadding: false, color: tone.bright }]} numberOfLines={1}>{posEn}</Text>
               <Text allowFontScaling={false} style={[styles.name, { fontSize: f.name, lineHeight: f.name * 1.12, includeFontPadding: false, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
             </View>
             <View style={[styles.ovrChip, { borderColor: accent }]}>
-              <Text allowFontScaling={false} style={[styles.ovrTag, { fontSize: f.ovrTag, lineHeight: f.ovrTag * 1.15, includeFontPadding: false, color: MINT_DIM }]}>OVR</Text>
+              <Text allowFontScaling={false} style={[styles.ovrTag, { fontSize: f.ovrTag, lineHeight: f.ovrTag * 1.15, includeFontPadding: false, color: tone.dim }]}>OVR</Text>
               <Text allowFontScaling={false} style={[styles.ovrNum, { fontSize: f.ovrNum, lineHeight: f.ovrNum * 1.1, includeFontPadding: false, color: accent }]}>{displayOvr(ovr)}</Text>
             </View>
           </View>
@@ -81,14 +89,14 @@ export function AwardPoster({
           {/* 하단행: 스탯 5칸 */}
           <View style={styles.statRow}>
             {cells.map((c, i) => (
-              <View key={c.label + i} style={[styles.statCell, i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: 'rgba(120,230,215,0.28)' }]}>
+              <View key={c.label + i} style={[styles.statCell, i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: tone.line }]}>
                 <Text allowFontScaling={false} style={[styles.statVal, { fontSize: f.statVal, lineHeight: f.statVal * 1.12, includeFontPadding: false, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{c.value}</Text>
-                <Text allowFontScaling={false} style={[styles.statLab, { fontSize: f.statLab, lineHeight: f.statLab * 1.15, includeFontPadding: false, color: MINT_DIM }]} numberOfLines={1}>{c.label}</Text>
+                <Text allowFontScaling={false} style={[styles.statLab, { fontSize: f.statLab, lineHeight: f.statLab * 1.15, includeFontPadding: false, color: tone.dim }]} numberOfLines={1}>{c.label}</Text>
               </View>
             ))}
           </View>
 
-          {footnote ? <Text allowFontScaling={false} style={[styles.foot, { fontSize: f.foot, color: MINT_DIM }]} numberOfLines={1}>{footnote}</Text> : null}
+          {footnote ? <Text allowFontScaling={false} style={[styles.foot, { fontSize: f.foot, color: tone.dim }]} numberOfLines={1}>{footnote}</Text> : null}
         </View>
       </ImageBackground>
     </View>
