@@ -65,12 +65,22 @@ function main(): void {
   const baseProd = serProd(leagueProduction(SEASON_DAYS) as Map<string, unknown>);
 
   // 첫 휴식일(clinch 기반) — control 회귀 판정용. 이 날 이전 fixture는 결과 무의존(부상/벤치만) → 버터플라이 면역.
-  let firstRestDay = Infinity;
-  for (const f of fixtures) {
-    if (restedOnDay(f.homeTeamId, f.dayIndex).size || restedOnDay(f.awayTeamId, f.dayIndex).size) {
-      firstRestDay = Math.min(firstRestDay, f.dayIndex);
+  //   ⚠ 휴식(restedOnDay)은 clinch(확정/탈락)에 걸리고 clinch는 **순위=결과 파생**이라 그 자체가 버터플라이 채널이다.
+  //   개입을 심으면 순위가 흔들려 **개입 세계에서 확정/탈락이 더 일찍** 올 수 있다(실측 2026-07-21 f101: baseline
+  //   firstRestDay=140인데 개입 세계에선 t5가 day131에 탈락→day132 휴식→명단 변동→control fixture 결과 변화).
+  //   따라서 면역 창은 **baseline 세계 첫 휴식일만 보면 안 되고** 개입 세계 첫 휴식일도 합쳐 **둘 중 더 이른 날**
+  //   이전이어야 진짜 무의존(양 세계 모두 휴식 0 → 양쪽 squad=순수 availableTeamPlayers=동일). 여기선 baseline만 스캔하고
+  //   개입 세계 스캔은 주입 후(setInterventionContext(ivMap)) 합친다.
+  const firstRestDayIn = (): number => {
+    let d = Infinity;
+    for (const f of fixtures) {
+      if (restedOnDay(f.homeTeamId, f.dayIndex).size || restedOnDay(f.awayTeamId, f.dayIndex).size) {
+        d = Math.min(d, f.dayIndex);
+      }
     }
-  }
+    return d;
+  };
+  const firstRestDayBase = firstRestDayIn();
 
   // ── 합성 개입 생성(짝수 index만 주입, 홀수 = control) ──
   const ivMap: Record<string, MatchIntervention[]> = {};
@@ -96,6 +106,8 @@ function main(): void {
 
   // ── 개입 주입 ──
   setInterventionContext(ivMap, 0);
+  // 개입 세계 첫 휴식일 — clinch 버터플라이가 baseline보다 이른 확정/탈락→휴식을 만들 수 있으므로 합쳐서 더 이른 날을 면역 경계로.
+  const firstRestDay = Math.min(firstRestDayBase, firstRestDayIn());
   const ivResults = resultMap(seasonResults(SEASON_DAYS));
   const ivBox = new Map<string, { homeSets: number; awaySets: number }>();
   for (const f of fixtures) ivBox.set(f.id, boxScore(f));
@@ -117,7 +129,7 @@ function main(): void {
   const changed = injected.filter((id) => !eqScore(ivBox.get(id)!, baseBox.get(id)!)).length;
   if (changed === 0) fails.push(`(B) 개입 ${injected.length}건 주입했으나 결과 변화 0 — 개입 미발화(허위 오라클/좌표 불일치 의심)`);
 
-  // (C) 회귀 — control 이른 fixture(첫 휴식일 이전)는 baseline과 불변.
+  // (C) 회귀 — control 이른 fixture(양 세계 첫 휴식일 이전)는 baseline과 불변(양쪽 squad 동일 → 결과 무의존).
   let regr = 0;
   const controlEarly = control.filter((f) => f.dayIndex < firstRestDay);
   for (const f of controlEarly) {
@@ -166,7 +178,7 @@ function main(): void {
   if (resetProd !== baseProd) fails.push('(E) 로그 리셋 후 생산이 baseline과 다름 — 빈 로그가 무동작 아님');
 
   log(`\n═══ 개입 정합 가드 — 순수 로그(§2.2) ═══`);
-  log(`  fixture ${fixtures.length} · 개입주입 ${injected.length} · control이른 ${controlEarly.length} · 첫휴식일 ${Number.isFinite(firstRestDay) ? firstRestDay : '없음'} · 발화 ${changed}`);
+  log(`  fixture ${fixtures.length} · 개입주입 ${injected.length} · control이른 ${controlEarly.length} · 첫휴식일 base=${Number.isFinite(firstRestDayBase) ? firstRestDayBase : '없음'}/합쳐=${Number.isFinite(firstRestDay) ? firstRestDay : '없음'} · 발화 ${changed}`);
   if (fails.length === 0) {
     log(`  ✓ PASS — (A)정합 (B)발화 (C)회귀 (D)생산정합 (E)무동작 전부 통과`);
     process.exit(0);

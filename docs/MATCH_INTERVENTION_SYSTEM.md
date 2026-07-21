@@ -297,6 +297,15 @@ dv를 생략해, **육성철학 높은 감독(실측 dv97) 팀**에서 근소차
 - ✅ `_dv_intervention_empty` — interventions=[] vs 미지정 바이트 동일(1단계 회귀, N=12000).
 - ✅ `_dv_intervention_consistency` — 순수 로그(§2.2): 관전(matchBox)=순위(standings)=생산(production) 바이트 정합 + 발화·회귀·무동작.
   (~~`_dv_snapshot_board`~~ — 스냅샷 폐기(§2.2 순수 로그)로 이 가드로 대체.)
+  - **정정(2026-07-21, 스테일 휴식창 수정)**: (C) 회귀 서브검사가 "control 이른 fixture(첫 휴식일 이전)는 baseline 불변"을 확인할 때
+    면역 창 `firstRestDay`를 ~~baseline 세계에서만~~ 산출했다. 그러나 **휴식(`restedOnDay`)은 clinch(확정/탈락)에 걸리고
+    clinch는 순위=결과 파생이라 그 자체가 버터플라이 채널**이다 — 개입을 심으면 순위가 흔들려 **개입 세계에서 확정/탈락이 더
+    일찍** 올 수 있다. Phase D(`bc1d0fe`, ENGINE_VERSION 10→11: dvPhilosophy U23 라인업·FORM 리더십 완화)가 baseline 균형을
+    옮겨 baseline `firstRestDay` 132→140로 밀리자, 개입 세계에서 여전히 day131에 탈락→day132 휴식하는 control fixture(f101: t6vs t5,
+    box 1-3→3-2)가 창 안(132<140)에 들어와 **FALSE FAIL**. **판정=스테일 가드 휴식창(실버그 아님)** — (A) 정합(관전=순위=생산)은
+    개입 유무와 무관하게 통과(개입 배관 건전). **수정**: 면역 창을 baseline+개입 **양 세계 첫 휴식일의 더 이른 날**로 산출(둘 다
+    휴식 0 → 양쪽 squad=순수 availableTeamPlayers=동일 → 결과 무의존 보장). 실측 후 `합쳐=120`, controlEarly 45건(비공허),
+    A/B(면역 fixture ivBox 왜곡 주입→(C) FAIL exit 1)로 teeth 유지 증명.
 - ✅ `_dv_ivbudget` — 개입 시트 표시 산출(§4.3 스테일 카운트) 순수 셀렉터(`data/matchInterventionView`)를 **실제 엔진 오라클**로 구동:
   같은 데드볼 N연속 교체 → 잔여 −1 감소 · subLeft≥2 ⇔ 엔진 실제 수락 · 후보 즉시 배제 = 엔진 실거절(재진입/활성슬롯 no-op) ·
   재생 진행 후 이중카운트 0 · 개입 없는 경기 구 산식과 바이트 동일(무회귀) · 타임아웃 감소. A/B 민감도: 구 `point≤ptIdx` 산식 재주입 시 전건 FAIL(220/220).
