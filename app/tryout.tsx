@@ -14,6 +14,7 @@ import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
 import { ForeignResumeDetail } from '../components/ForeignResumeDetail';
 import { PlayerAvatar } from '../components/PlayerAvatar';
+import { FaceSheetWarmup } from '../components/FaceSheetWarmup';
 import { overall, overallRaw, displayOvr } from '../engine/overall';
 import { fogOvr as fogOvrShared } from '../data/prospectScout';
 import { FOREIGN_SALARY } from '../engine/foreign';
@@ -86,6 +87,9 @@ function TryoutInner() {
 
   return (
     <Screen title="외국인 트라이아웃">
+      {/* 후보 아바타 시트 첫 디코드 지연(플레이스홀더 잔존) 방지 — 목록보다 먼저 필요한 시트만 워밍(UI-45).
+          같은 화면 워밍은 디코드 시작을 못 앞당기므로, 다음 화면(아시아쿼터) 풀 시트까지 여기서 선행 워밍(한 화면 앞 워밍). */}
+      <FaceSheetWarmup ids={[...pool.map((p) => p.id), ...ctx.asianTryout.poolIds]} size={60} />
       <SpotlightTarget id="tryout-pick">
       <Card accent={theme.bad} flat>
         <IconLabel icon="globe-outline" color={theme.bad}>트라이아웃 현황</IconLabel>

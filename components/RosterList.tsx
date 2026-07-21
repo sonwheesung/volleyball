@@ -5,6 +5,7 @@ import { overall, overallRaw, displayOvr, fogOvr, REVEAL_PRECISE } from '../engi
 import { formatMoney } from '../engine/salary';
 import { OvrBadge, PosTag, theme } from './Screen';
 import { PlayerAvatar } from './PlayerAvatar';
+import { FaceSheetWarmup } from './FaceSheetWarmup';
 import { themedStyles } from './theme';
 import { POS_COLOR, POS_ORDER } from './posTokens';
 
@@ -29,6 +30,8 @@ export function RosterList({ players, decor, starterIds, sort = 'position', reve
 
   return (
     <View style={{ gap: 6 }}>
+      {/* 명단 아바타 시트 첫 디코드 지연(플레이스홀더 잔존) 방지 — 행 렌더보다 먼저 필요한 시트만 워밍(UI-45) */}
+      <FaceSheetWarmup ids={sorted.map((p) => p.id)} size={40} />
       {sorted.map((p, i) => {
         const d = decor?.(p);
         return (

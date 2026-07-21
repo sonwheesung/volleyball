@@ -19,8 +19,11 @@
 
 ## 구조
 
-- `data/playerFace.ts` — `faceCell(id)`: 실제 얼굴 시트 칸 배정(없으면 null=폴백). `FACE_SHEETS`(시트 목록·격자·count). + `faceFeatures(id)`: 파스텔 배경 + 절차적 폴백용 피처(피부5·헤어7·배경6·스타일5·눈3·입3, 저장 X).
+- `data/faceSheetMeta.ts` — **Node-safe**(require 없음) 격자·수용 메타(`FACE_SHEET_META`·`FACE_TOTAL`) + 순수 배정 산식(`faceSheetSlot(id)`: id→시트 인덱스·칸 좌표) + `uniqueFaceSheetIndices(ids)`(표시 대상이 쓸 시트만). **단일 소스** — `faceCell`과 프리워밍이 같은 산식을 공유하고, Node 가드가 임포트할 수 있다(구: faceSheets.ts 인라인이라 Node 임포트 불가였음, 2026-07-21 분리).
+- `data/faceSheets.ts` — **Metro 전용**(src `require('*.png')`). `FACE_SRC`(시트 순서대로 src) + `FACE_SHEET_META`를 zip해 `FACE_SHEETS` 구성(src/meta 길이 불일치 시 즉시 throw). `faceCell(id)`: `faceSheetSlot`으로 슬롯 뽑고 src만 붙임(배정 불변). `uniqueFaceSheets(ids)`: 표시 대상이 쓸 시트만(프리워밍용, 전체 부트 프리로드 금지).
+- `data/playerFace.ts` — `faceFeatures(id)`: 파스텔 배경 + 절차적 폴백용 피처(피부5·헤어7·배경6·스타일5·눈3·입3, 저장 X) + `faceHash`.
 - `components/PlayerAvatar.tsx` — `<PlayerAvatar id size />`: `faceCell` 있으면 파스텔 원 + 시트 칸 크롭 렌더, 없으면 SVG 레이어.
+- `components/FaceSheetWarmup.tsx` — `<FaceSheetWarmup ids size/>`: 목록 화면 진입 시 **첫 디코드 지연으로 아바타 자리에 플레이스홀더(배경 틴트)만 2~7초 잔존**하는 문제를, 이 화면에 뜨는 선수들의 시트만 오프스크린으로 크롭과 동일 크기(캐시 히트)로 미리 디코드해 없앤다(UI_RULES **UI-45**). 결정론·데이터 무관(순수 연출). 적용: asian-tryout·tryout(size60)·RosterList(size40)·GrowthReportModal(size40).
 - `assets/players/facesN.png` — 초록 제거된 투명 얼굴 시트(3×3=9명). 슬라이싱은 오프라인 전처리(`tools/keyFaces.ts`, sharp `--no-save`), 앱은 require+오프셋만. 파라미터 고정 = 모든 배치 동일 투명도(재현성).
   순서: 배경 → 뒷머리 → 목 → 유니폼(어깨)+브이넥 → 머리+귀 → 앞머리(뱅) → 눈썹·볼터치 → 눈 → 입.
   헤어스타일 0 롱·1 포니테일·2 단발·3 올림(번)·4 숏. 유니폼색은 `jersey`/`trim` prop(기본 틸, 팀색 주입 가능).
@@ -33,6 +36,7 @@
 ## 검증
 
 - `tools/_dv_face.ts` — 결정론(같은 id 동일 피처) + 변형(5스타일·5피부·7헤어·6배경 전부 등장·편중<40%). tsc 0.
+- `tools/_dv_facewarm.ts` — 시트 배정·워밍 수집(UI-45). ① `faceSheetSlot`이 구 `faceCell` 인라인 공식과 20000 id 완전 동일(리팩터 결정론 보존) ② `uniqueFaceSheetIndices`가 대상이 쓸 시트 전부이자 그것뿐(완전+최소) — A/B: 드리프트 슬롯·누락/전체34 수집기가 검사에 걸림(민감도 증명). tsc 0.
 - 렌더는 react-native-svg 프리미티브(Path/Circle/Ellipse/Rect)만 사용 — 앱 곳곳(Legend/Champion/Award 일러스트·레이더)에서 이미 검증된 경로.
 
 ## 원칙 합치

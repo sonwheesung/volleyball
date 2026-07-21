@@ -10,6 +10,7 @@ import { ExpandableRow } from '../components/ExpandableRow';
 import { StatTriad } from '../components/StatTriad';
 import { ForeignResumeDetail } from '../components/ForeignResumeDetail';
 import { PlayerAvatar } from '../components/PlayerAvatar';
+import { FaceSheetWarmup } from '../components/FaceSheetWarmup';
 import { buildDraftContextFrom, buildOffseasonBase } from '../data/draftSetup';
 import { buildOwnerFx } from '../data/owner';
 import { getTeam, teamScoutReveal, getEvolvedTeamPlayers } from '../data/league';
@@ -81,6 +82,8 @@ function AsianTryoutInner() {
 
   return (
     <Screen title="아시아쿼터 FA">
+      {/* 후보 아바타 시트 첫 디코드 지연(플레이스홀더 잔존) 방지 — 목록보다 먼저 필요한 시트만 워밍(UI-45) */}
+      <FaceSheetWarmup ids={pool.map((p) => p.id)} size={60} />
       <Card accent={theme.bad} flat>
         <IconLabel icon="airplane-outline" color={theme.bad}>아시아쿼터 현황</IconLabel>
         <StatTriad cells={[

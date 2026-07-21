@@ -7,6 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Popup } from './Popup';
 import { Button, PosTag, theme } from './Screen';
 import { PlayerAvatar } from './PlayerAvatar';
+import { FaceSheetWarmup } from './FaceSheetWarmup';
 import { themedStyles } from './theme';
 import type { PlayerGrowth, StatDelta } from '../data/growthReport';
 
@@ -54,6 +55,8 @@ export function GrowthReportModal({ visible, report, onClose }: { visible: boole
 
   return (
     <Popup visible={visible} onRequestClose={onClose}>
+      {/* 성장 카드 아바타(상위 10명) 시트 첫 디코드 지연(플레이스홀더 잔존) 방지 — 카드보다 먼저 필요한 시트만 워밍(UI-45) */}
+      <FaceSheetWarmup ids={shown.map((p) => p.id)} size={40} />
       <View style={styles.titleRow}>
         <Ionicons name="trending-up" size={19} color={theme.good} />
         <Text style={styles.title}>선수단 성장 리포트</Text>

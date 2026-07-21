@@ -69,7 +69,7 @@ test('승격 — 명성 임계 + 결정론', () => {
 });
 
 const mkCoach = (id: string, cha: number, teamId: string | null, firedFrom?: string[]): Coach => ({
-  id, name: id, age: 50, matchOps: cha, dvPhilosophy: 50, leadership: 50, style: 'balanced',
+  id, name: id, age: 50, matchOps: cha, dvPhilosophy: 50, leadership: 50, renown: 30, style: 'balanced',
   archetype: 'x', trainingFocus: { primary: [4, 6], secondary: [1, 10, 12] }, salary: 8000, teamId, firedFrom,
 });
 
