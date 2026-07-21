@@ -31,6 +31,7 @@ const TONE_MINT: PosterTone   = { bright: '#5FEAD8', dim: 'rgba(150,238,224,0.72
 const TONE_BLUE: PosterTone   = { bright: '#5FB8EA', dim: 'rgba(158,206,240,0.74)', line: 'rgba(120,188,235,0.30)', glow: 'rgba(95,184,234,0.5)' };  // 샘플 #19B8E2 (rookie)
 const TONE_PURPLE: PosterTone = { bright: '#C77FF2', dim: 'rgba(214,176,244,0.74)', line: 'rgba(190,135,240,0.30)', glow: 'rgba(199,127,242,0.5)' }; // 샘플 #AC2CE2 (mip)
 const TONE_RED: PosterTone    = { bright: '#F2707F', dim: 'rgba(244,168,178,0.74)', line: 'rgba(240,112,127,0.30)', glow: 'rgba(242,112,127,0.5)' };  // 샘플 #CB6D59 웜레드 (statleader)
+const TONE_GOLD: PosterTone   = { bright: '#F2C24A', dim: 'rgba(244,214,150,0.74)', line: 'rgba(240,194,74,0.30)', glow: 'rgba(242,194,74,0.5)' };   // 샘플 #D59823 골드 (finalsMvp) — bright는 샘플 hue를 밝게 보정
 
 /** 상별 포스터 배경 자산 + 톤(AWARDS_SYSTEM §8) — 화면들이 공용 import(중복 require 방지). */
 // 신규 자산 추가 절차: kling/GPT로 레퍼런스 첨부 생성 → 1080×1440 webp 변환 → 민트 라인 스캔으로 패널 좌표가
@@ -38,7 +39,7 @@ const TONE_RED: PosterTone    = { bright: '#F2707F', dim: 'rgba(244,168,178,0.74
 export interface AwardTemplate { src: number; tone: PosterTone }
 export const AWARD_TEMPLATES = {
   mvp:          { src: require('../assets/awards/mvp_stage.webp'),        tone: TONE_MINT },
-  finalsMvp:    { src: require('../assets/awards/finals_mvp_stage.webp'), tone: TONE_MINT },   // 골드 자산 교체 예정 → 교체 시 TONE_GOLD로 (2026-07-21 kling 생성, 패널 79.9~95.1%)
+  finalsMvp:    { src: require('../assets/awards/finals_mvp_stage.webp'), tone: TONE_GOLD },   // 골드 자산 교체 완료 (2026-07-22 kling 5586_1, 패널 79.9~95.1%)
   rookie:       { src: require('../assets/awards/rookie_stage.webp'),     tone: TONE_BLUE },   // 신인상
   mostImproved: { src: require('../assets/awards/mip_stage.webp'),        tone: TONE_PURPLE }, // 기량발전상
   statLeader:   { src: require('../assets/awards/statleader_stage.webp'), tone: TONE_RED },    // 기록왕 — 화면 배선은 후속(부문 다수, §8), 템플릿·프리뷰만
