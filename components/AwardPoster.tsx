@@ -47,9 +47,9 @@ export function AwardPoster({
   // 폭 파생 폰트 — 좁은 기기에서도 비율 유지
   const f = {
     kicker: w * 0.030, season: w * 0.052,
-    posEn: w * 0.024, name: w * 0.060,
-    ovrTag: w * 0.021, ovrNum: w * 0.048,
-    statVal: w * 0.036, statLab: w * 0.022,
+    posEn: w * 0.022, name: w * 0.056,
+    ovrTag: w * 0.020, ovrNum: w * 0.044,
+    statVal: w * 0.034, statLab: w * 0.021,
     foot: w * 0.026,
   };
   const cells = stats.slice(0, 5);
@@ -69,12 +69,12 @@ export function AwardPoster({
           <View style={styles.headRow}>
             {emblem ? <Image source={emblem} style={[styles.emblem, { width: h * 0.048, height: h * 0.048 }]} /> : null}
             <View style={styles.nameCol}>
-              <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, color: MINT_BRIGHT }]} numberOfLines={1}>{posEn}</Text>
-              <Text allowFontScaling={false} style={[styles.name, { fontSize: f.name, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
+              <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, lineHeight: f.posEn * 1.15, includeFontPadding: false, color: MINT_BRIGHT }]} numberOfLines={1}>{posEn}</Text>
+              <Text allowFontScaling={false} style={[styles.name, { fontSize: f.name, lineHeight: f.name * 1.12, includeFontPadding: false, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
             </View>
             <View style={[styles.ovrChip, { borderColor: accent }]}>
-              <Text allowFontScaling={false} style={[styles.ovrTag, { fontSize: f.ovrTag, color: MINT_DIM }]}>OVR</Text>
-              <Text allowFontScaling={false} style={[styles.ovrNum, { fontSize: f.ovrNum, color: accent }]}>{displayOvr(ovr)}</Text>
+              <Text allowFontScaling={false} style={[styles.ovrTag, { fontSize: f.ovrTag, lineHeight: f.ovrTag * 1.15, includeFontPadding: false, color: MINT_DIM }]}>OVR</Text>
+              <Text allowFontScaling={false} style={[styles.ovrNum, { fontSize: f.ovrNum, lineHeight: f.ovrNum * 1.1, includeFontPadding: false, color: accent }]}>{displayOvr(ovr)}</Text>
             </View>
           </View>
 
@@ -82,8 +82,8 @@ export function AwardPoster({
           <View style={styles.statRow}>
             {cells.map((c, i) => (
               <View key={c.label + i} style={[styles.statCell, i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: 'rgba(120,230,215,0.28)' }]}>
-                <Text allowFontScaling={false} style={[styles.statVal, { fontSize: f.statVal, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{c.value}</Text>
-                <Text allowFontScaling={false} style={[styles.statLab, { fontSize: f.statLab, color: MINT_DIM }]} numberOfLines={1}>{c.label}</Text>
+                <Text allowFontScaling={false} style={[styles.statVal, { fontSize: f.statVal, lineHeight: f.statVal * 1.12, includeFontPadding: false, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{c.value}</Text>
+                <Text allowFontScaling={false} style={[styles.statLab, { fontSize: f.statLab, lineHeight: f.statLab * 1.15, includeFontPadding: false, color: MINT_DIM }]} numberOfLines={1}>{c.label}</Text>
               </View>
             ))}
           </View>
@@ -112,10 +112,10 @@ const styles = StyleSheet.create({
   ovrTag: { fontWeight: '800', letterSpacing: 1.5, marginBottom: -2 },
   ovrNum: { fontWeight: '900' },
 
-  statRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: '2.2%' },
+  statRow: { flexDirection: 'row', alignItems: 'flex-end', marginTop: '1.8%' },
   statCell: { flex: 1, alignItems: 'center', paddingHorizontal: 2 },
   statVal: { fontWeight: '900' },
-  statLab: { fontWeight: '700', marginTop: 2 },
+  statLab: { fontWeight: '700', marginTop: 1 },
 
   foot: { textAlign: 'center', marginTop: 6, letterSpacing: 1, opacity: 0.85 },
 });
