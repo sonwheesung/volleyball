@@ -8,6 +8,7 @@ import { BusyOverlay, useBusyRun } from '../../components/BusyOverlay';
 import { showAlert } from '../../components/AppDialog';
 import { PlayerAvatar } from '../../components/PlayerAvatar';
 import { seasonYear, seasonYearRange } from '../../data/seasonLabel';
+import { fmtMatches } from '../../data/recordLine';
 import { discontentNow, TOPIC_SPEECH, TOPIC_BADGE, ARCHETYPE_KO, effectiveArchetypeOf, conditionOf, popularityNow } from '../../data/owner';
 import { playerFans } from '../../engine/owner';
 import { SEASON_DAYS } from '../../engine/calendar';
@@ -541,7 +542,7 @@ function PlayerDetailInner() {
           <Card accent={theme.elite} flat>
             <Row>
               <Muted>경기</Muted>
-              <Text style={{ color: theme.text, fontWeight: '700' }}>{prod.matches}경기</Text>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>{fmtMatches(prod.matches)}경기</Text>
             </Row>
             <Row>
               <Muted>득점</Muted>
@@ -574,7 +575,7 @@ function PlayerDetailInner() {
           <Card accent={theme.gold} flat>
             <Row>
               <Muted>경기</Muted>
-              <Text style={{ color: theme.text, fontWeight: '700' }}>{p.career.matches}경기</Text>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>{fmtMatches(p.career.matches)}경기</Text>
             </Row>
             <Row>
               <Muted>득점</Muted>
@@ -607,7 +608,7 @@ function PlayerDetailInner() {
                 <Text style={{ color: theme.muted, fontSize: 12, width: 72 }}>{seasonYear(l.season)}</Text>
                 <Text style={{ color: theme.muted, fontSize: 12, width: 52 }} numberOfLines={1}>{teamShort(l.teamId)}</Text>
                 <Text style={{ color: theme.text, fontSize: 13, fontWeight: '700', flex: 1 }}>
-                  {l.matches}경기 · {l.points}점
+                  {fmtMatches(l.matches)}경기 · {l.points}점
                   {l.assists > 0 ? ` · 세트${l.assists}` : ''}
                   {l.digs > 0 ? ` · 디그${l.digs}` : ''}
                 </Text>

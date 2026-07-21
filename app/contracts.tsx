@@ -10,6 +10,7 @@ import { SummaryCard } from '../components/SummaryCard';
 import { ActionSheet, Popup } from '../components/Popup';
 import { Stepper } from '../components/Stepper';
 import { getPlayer, evolveOnDay, LEAGUE } from '../data/league';
+import { fmtMatches } from '../data/recordLine';
 import { rosterIdsOnDay, activeRosterOnDay } from '../data/dynamics';
 import { teamRelations } from '../data/relationships';
 import { getPlayerProduction } from '../data/production';
@@ -164,7 +165,7 @@ function ContractsInner() {
       : `통산 ${c.points.toLocaleString()}점`;
     const retro = [
       p.clubTenure > 0 ? `우리 팀과 ${p.clubTenure}시즌` : '갓 합류한 선수',
-      c.matches > 0 ? `${c.matches}경기 · ${stat}` : '아직 기록 없음',
+      c.matches > 0 ? `${fmtMatches(c.matches)}경기 · ${stat}` : '아직 기록 없음',
       isFranchise(p) ? '프랜차이즈 스타' : null,
     ].filter(Boolean).join('\n');
     const heavy = isFranchise(p) || p.clubTenure >= 6;

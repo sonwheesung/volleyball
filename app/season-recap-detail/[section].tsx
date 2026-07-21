@@ -10,6 +10,7 @@ import { Best7Court } from '../../components/Best7Court';
 import { AwardIllustration } from '../../components/AwardIllustration';
 import { teamColors } from '../../lib/teamColor';
 import { seasonSnapshot } from '../../data/records';
+import { fmtMatches } from '../../data/recordLine';
 import { computeStandings, displayCutoff, seasonStreaks } from '../../data/standings';
 import { leagueProduction } from '../../data/production';
 import { getPlayer, getTeam, shortTeamName as short, reconstructForeignName } from '../../data/league';
@@ -322,7 +323,7 @@ function TasksDetail({
   );
 }
 
-const prodLine = (l: ProdLine) => `${l.matches}경기 · 스${l.spikes}·블${l.blocks}·서${l.aces}`
+const prodLine = (l: ProdLine) => `${fmtMatches(l.matches)}경기 · 스${l.spikes}·블${l.blocks}·서${l.aces}`
   + (l.assists > 0 ? ` · 세${l.assists}` : '') + (l.digs > 0 ? ` · 디${l.digs}` : '');
 
 const styles = themedStyles(() => StyleSheet.create({
