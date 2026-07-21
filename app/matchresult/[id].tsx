@@ -2,7 +2,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Card, Muted, PosTag, Screen, Title, theme, themedStyles } from '../../components/Screen';
 import { BoxScoreTable } from '../../components/BoxScoreTable';
-import { getFixture, getTeam } from '../../data/league';
+import { getFixture, getTeam, coachInfoOf } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
 import { matchMvp } from '../../data/matchAward';
@@ -63,9 +63,9 @@ export default function MatchResult() {
       ) : null}
 
       <Title>{homeName}</Title>
-      <Card accent={theme.elite} flat><BoxScoreTable squad={home} box={box} /></Card>
+      <Card accent={theme.elite} flat><BoxScoreTable squad={home} box={box} dvPhilosophy={coachInfoOf(fixture.homeTeamId)?.dvPhilosophy ?? 0} /></Card>
       <Title>{awayName}</Title>
-      <Card accent={theme.elite} flat><BoxScoreTable squad={away} box={box} /></Card>
+      <Card accent={theme.elite} flat><BoxScoreTable squad={away} box={box} dvPhilosophy={coachInfoOf(fixture.awayTeamId)?.dvPhilosophy ?? 0} /></Card>
       <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 리시브=효율((정확−실패)/시도)</Text>
     </Screen>
   );

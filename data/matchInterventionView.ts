@@ -43,17 +43,55 @@ export function pendingSubEntries(sim: SimResult, mineSide: Side, cur: IvCoord, 
     e.enter && e.kind !== 'injury' && e.side === mineSide && e.setNo === cur.setNo && e.point === cur.ptIdx + 1 && inIds.has(e.inId));
 }
 
-/** 이번 세트 잔여 개입 예산(§4) — 엔진 subBudget/timeouts와 동일 산식.
- *  subLeft = SUBS_PER_SET − [재생 완료 tactical subEvent(enter+exit 각 1, injury 제외, point<=ptIdx)] − [pending enter 수].
- *  toLeft  = TIMEOUTS_PER_SET − [내 작전 타임아웃(technical 제외, point<=ptIdx)]. (유저 타임아웃 point=ptIdx라 pending 항 불필요.) */
+/** 현 좌표에서 mineSide에 **활성인 복원형(pinch/block/def) 교체 수** — 엔진이 각자 나중에 subOut(무조건 예산 −1)로
+ *  예산을 1씩 더 쓴다(engine/match subIn 예산 예약 회계, P0 감사A). 유저가 지금 더 쓸 수 있는 교체 수(headroom)는
+ *  subBudget − 이 값이므로 subLeft에서 뺀다(표시=엔진). 재생 완료(point≤ptIdx) net(enter add / mid-out delete) +
+ *  방금 커밋한 유저 pinch(pending, point=ptIdx+1). rest/manual은 세트말 무예산 원복이라 예약 제외. manualSide(구단주 직접)
+ *  경기는 감독 자동 복원형이 없어 항상 0 → 격리 시나리오 무영향(구 산식 바이트 동일). */
+export function activeRestorableCount(sim: SimResult, mineSide: Side, cur: IvCoord, directives: MatchIntervention[]): number {
+  const restKind = (k: SubEvent['kind']) => k === 'pinch' || k === 'block' || k === 'def';
+  const slots = new Set<number>();
+  for (const e of sim.subEvents ?? []) {
+    if (e.side !== mineSide || e.setNo !== cur.setNo || e.kind === 'injury') continue;
+    if (e.point > cur.ptIdx) break; // subEvents는 point 오름차순 — 재생 완료분만
+    if (restKind(e.kind)) { if (e.enter) slots.add(e.slot); else slots.delete(e.slot); }
+  }
+  for (const e of pendingSubEntries(sim, mineSide, cur, directives)) if (restKind(e.kind)) slots.add(e.slot);
+  return slots.size;
+}
+
+/** 현 좌표에 유저가 지시한 작전 타임아웃이 있나(적용/미적용 무관 — 지시 자체). */
+function userTimeoutAt(directives: MatchIntervention[], cur: IvCoord): boolean {
+  return directives.some((d) => d.kind === 'timeout' && d.at.setNo === cur.setNo && d.at.h === cur.h && d.at.a === cur.a);
+}
+
+/** 이번 세트 사용한 내 작전 타임아웃 수(technical 제외) — 재생 완료(point≤ptIdx) + 세트 개막(0:0) 클램프 pending.
+ *  ── 세트 개막 오프바이원(감사 P1) ── 엔진은 개입 TO를 `Math.max(setBaseIdx, points.length−1)`로 클램프한다(match.ts).
+ *  세트 개막 0:0에서 커밋하면 point=setBaseIdx=ptIdx+1(직전 세트 마지막 ptIdx보다 1 큼)에 기록돼 `point≤ptIdx`가 못 세고
+ *  스테일(toLeft가 안 줆 → 같은 좌표 재커밋 이중 소진). 교체 pending과 대칭으로 유저 TO의 클램프 좌표(ptIdx+1·같은 h/a)를 더한다. */
+export function timeoutsUsed(sim: SimResult, mineSide: Side, cur: IvCoord, directives: MatchIntervention[]): number {
+  const tos = sim.timeouts ?? [];
+  const prefix = tos.filter((t) => t.side === mineSide && t.setNo === cur.setNo && !t.technical && t.point <= cur.ptIdx).length;
+  let pending = 0;
+  if (userTimeoutAt(directives, cur)) {
+    pending = tos.filter((t) => t.side === mineSide && t.setNo === cur.setNo && !t.technical
+      && t.point === cur.ptIdx + 1 && t.home === cur.h && t.away === cur.a).length;
+  }
+  return prefix + pending;
+}
+
+/** 이번 세트 잔여 개입 예산(§4) — 엔진 subBudget/timeouts와 동일 산식(예산 예약 회계 포함, P0 감사A).
+ *  subLeft = SUBS_PER_SET − [재생 완료 tactical subEvent(enter+exit 각 1, injury 제외, point<=ptIdx)] − [pending enter 수]
+ *            − [활성 복원형 수](각자 미래 subOut 예약분 — 엔진이 이만큼 반드시 더 쓰므로 유저 headroom에서 뺌).
+ *  toLeft  = TIMEOUTS_PER_SET − [내 작전 타임아웃(technical 제외, point<=ptIdx OR pending 클램프 좌표 ptIdx+1)]. */
 export function ivBudget(sim: SimResult, mineSide: Side, cur: IvCoord, directives: MatchIntervention[]): { subLeft: number; toLeft: number } {
   const prefixSub = (sim.subEvents ?? []).filter((e) =>
     e.side === mineSide && e.setNo === cur.setNo && e.kind !== 'injury' && e.point <= cur.ptIdx).length;
   const pending = pendingSubEntries(sim, mineSide, cur, directives).length;
-  const toUsed = (sim.timeouts ?? []).filter((t) =>
-    t.side === mineSide && t.setNo === cur.setNo && !t.technical && t.point <= cur.ptIdx).length;
+  const reserve = activeRestorableCount(sim, mineSide, cur, directives);
+  const toUsed = timeoutsUsed(sim, mineSide, cur, directives);
   return {
-    subLeft: Math.max(0, SUBS_PER_SET - prefixSub - pending),
+    subLeft: Math.max(0, SUBS_PER_SET - prefixSub - pending - reserve),
     toLeft: Math.max(0, TIMEOUTS_PER_SET - toUsed),
   };
 }

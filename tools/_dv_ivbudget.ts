@@ -9,7 +9,7 @@
 import { simulateMatch } from '../engine/match';
 import { buildLineup } from '../engine/lineup';
 import { applySubsToSix } from '../components/courtDirector';
-import { ivBudget as selIvBudget, ivExclusions, benchCandidates, outCandidates } from '../data/matchInterventionView';
+import { ivBudget as selIvBudget, ivExclusions, benchCandidates, outCandidates, activeRestorableCount, timeoutsUsed } from '../data/matchInterventionView';
 import type { IvCoord } from '../data/matchInterventionView';
 import type { MatchIntervention, SimResult, SubEvent } from '../engine/simMatch';
 import type { Player, Side } from '../types';
@@ -18,6 +18,7 @@ import { LEAGUE, getEvolvedTeamPlayers, coachInfoOf, resetLeagueBase } from '../
 resetLeagueBase();
 const teams = LEAGUE.teams;
 const SUBS = 6;
+const TO_PER_SET = 2;
 
 let fail = 0;
 const failMsgs: string[] = [];
@@ -171,18 +172,27 @@ for (let i = 0; i < 220; i++) {
   }
 }
 
-// (e) 무회귀 — 개입 없는 감독 자동 경기에서 selIvBudget == 구 산식(pending=0이라 바이트 동일). 여러 데드볼 대조.
+// (e) 무회귀 + 예산 예약(P0) — 개입 없는 감독 자동 경기에서 selIvBudget.subLeft == SUBS − usedPrefix − activeRestorable.
+//   ① 활성 복원형 없는(reserve=0) 좌표: 구 산식(6−usedPrefix)과 바이트 동일(pending·reserve 둘 다 0).
+//   ② 활성 복원형 있는(reserve>0) 좌표: 예약분만큼 subLeft가 줄어야(표시=엔진 예산 예약). reserve>0을 실제로 구동(비-공허)해
+//      A/B — 셀렉터에서 예약 subtraction을 되돌리면 이 좌표들이 FAIL(overstate 재현). reserveNonZero>0로 커버리지 보장.
+let reserveNonZero = 0;
 for (let i = 300; i < 420; i++) {
-  const s = buildScenario(i); // manualSide 없음(감독 자동)
+  const s = buildScenario(i); // manualSide 없음(감독 자동) — 복원형이 실제 발생
   if (!s) continue;
   for (const p of s.base.points) {
-    if (p.setNo > 2) break;
+    if (p.setNo > 3) break;
     const idx = s.base.points.findIndex((q) => q.setNo === p.setNo && q.home === p.home && q.away === p.away);
     const cur: IvCoord = { setNo: p.setNo, h: p.home, a: p.away, ptIdx: idx };
     for (const side of ['home', 'away'] as Side[]) {
+      const usedPrefix = SUBS - buggySubLeft(s.base, side, cur); // buggySubLeft=max(0,6−usedPrefix) → usedPrefix 복원(6 이하 구간)
+      const reserve = activeRestorableCount(s.base, side, cur, []);
+      if (reserve > 0) reserveNonZero++;
+      const expected = Math.max(0, SUBS - usedPrefix - reserve);
       const sel = selIvBudget(s.base, side, cur, []).subLeft;
-      const old = buggySubLeft(s.base, side, cur);
-      check(sel === old, `[e] seed=${s.seed} ${side} ${p.setNo}세트 ${p.home}:${p.away} 무회귀 불일치 sel=${sel} old=${old}`);
+      check(sel === expected, `[e] seed=${s.seed} ${side} ${p.setNo}세트 ${p.home}:${p.away} 예약회계 불일치 sel=${sel} expected=${expected} reserve=${reserve}`);
+      // reserve=0이면 구 산식(6−usedPrefix)과도 동일해야(무회귀)
+      if (reserve === 0) check(sel === buggySubLeft(s.base, side, cur), `[e] seed=${s.seed} ${side} ${p.setNo}세트 reserve0 무회귀 불일치`);
       regressionChecked++;
     }
   }
@@ -203,11 +213,58 @@ for (let i = 500; i < 560; i++) {
   toChecked++;
 }
 
+// ── 세트 개막(0:0) 개입 타임아웃 오프바이원(감사 P1) — 기존 시나리오는 세트 중반 좌표만 생성한 사각 ──
+//   엔진은 세트 개막 TO를 point=setBaseIdx(=ptIdx+1)로 클램프한다. 구 toUsed(point≤ptIdx)는 이를 못 세 스테일
+//   (toLeft 안 줆) + 같은 좌표 재커밋 이중 소진. 검증: ① 새 timeoutsUsed(pending 클램프 항)가 catch → toLeft 감소.
+//   ② 구 산식은 여전히 스테일(A/B). ③ 같은 좌표 2회 커밋 방어(엔진 userToCoords) — TO 이벤트 1건·toLeft=1(이중 소진 없음).
+let setOpenChecked = 0, setOpenAbStale = 0;
+for (let i = 600; i < 720; i++) {
+  const seed = ((i * 2654435761) >>> 0) ^ 0xabc;
+  const hId = teams[i % teams.length].id, aId = teams[(i + 2) % teams.length].id;
+  if (hId === aId) continue;
+  const H = getEvolvedTeamPlayers(hId, 0), A = getEvolvedTeamPlayers(aId, 0);
+  const opts: any = { home: coachInfoOf(hId), away: coachInfoOf(aId), manualSide: 'home' as Side }; // home 격리(AI TO 배제)
+  const base = simulateMatch(seed, H, A, opts);
+  if (base.setScores.length < 2) continue;
+  let lastSet1 = -1;
+  for (let k = 0; k < base.points.length; k++) if (base.points[k].setNo === 1) lastSet1 = k;
+  if (lastSet1 < 0) continue;
+  const cur: IvCoord = { setNo: 2, h: 0, a: 0, ptIdx: lastSet1 }; // 세트2 개막 0:0 — 직전 세트 마지막이 현재 표시 point
+  const iv: MatchIntervention = { at: { setNo: 2, h: 0, a: 0 }, side: 'home', kind: 'timeout' };
+  const sim1 = simulateMatch(seed, H, A, { ...opts, interventions: [iv] });
+  // fire 확인(허위 오라클 방지): 세트2 0:0 유저 TO가 클램프 좌표(ptIdx+1)에 실제 기록됐나
+  const clampEv = (sim1.timeouts ?? []).filter((t) => t.side === 'home' && t.setNo === 2 && !t.technical && t.point === cur.ptIdx + 1 && t.home === 0 && t.away === 0);
+  if (clampEv.length !== 1) continue; // 미발화(드묾) — 스킵
+  setOpenChecked++;
+  // ① 새 selector: toLeft 1 감소(pending 클램프 항 catch)
+  const before = selIvBudget(base, 'home', cur, []).toLeft;   // 2(신규 세트)
+  const after = selIvBudget(sim1, 'home', cur, [iv]).toLeft;  // 1
+  check(before === TO_PER_SET, `[so] seed=${seed} 세트개막 before toLeft=${before} (기대 ${TO_PER_SET})`);
+  check(after === before - 1, `[so] seed=${seed} 세트개막 TO 후 toLeft 미감소 before=${before} after=${after} (구버그: 클램프 좌표 스테일)`);
+  // ② A/B — 구 toUsed(point≤ptIdx only)는 클램프 좌표를 못 세 스테일(after와 다름). 이 차이가 곧 버그.
+  const oldToUsed = (sim1.timeouts ?? []).filter((t) => t.side === 'home' && t.setNo === 2 && !t.technical && t.point <= cur.ptIdx).length;
+  const oldAfter = Math.max(0, TO_PER_SET - oldToUsed);
+  if (oldAfter !== after) setOpenAbStale++; // 구 산식이 스테일(=올바른 after와 불일치) — A/B 민감
+  // ③ 같은 좌표 2회 커밋 방어 — 엔진 userToCoords로 1건만 소진
+  const sim2 = simulateMatch(seed, H, A, { ...opts, interventions: [iv, iv] });
+  const evCount = (sim2.timeouts ?? []).filter((t) => t.side === 'home' && t.setNo === 2 && !t.technical && t.home === 0 && t.away === 0).length;
+  check(evCount === 1, `[so] seed=${seed} 같은좌표 2회 커밋인데 TO 이벤트 ${evCount}건(기대 1 — 이중 소진 방어)`);
+  const afterDup = selIvBudget(sim2, 'home', cur, [iv, iv]).toLeft;
+  check(afterDup === 1, `[so] seed=${seed} 중복 커밋 후 toLeft=${afterDup} (기대 1 — 세트 예산 이중 소진 없음)`);
+  // timeoutsUsed 직접 검증(셀렉터 내부 산식) — 세트 개막 pending 포함
+  check(timeoutsUsed(sim1, 'home', cur, [iv]) === 1, `[so] seed=${seed} timeoutsUsed 세트개막 pending 미포함`);
+}
+
+console.log(`세트개막(0:0) TO: checked=${setOpenChecked} · A/B 구산식 스테일 검출 ${setOpenAbStale}/${setOpenChecked}`);
+console.log(`(e) 예약회계: reserveNonZero 좌표 ${reserveNonZero}`);
 console.log(`scenarios: decrement=${scDecrement} multiSub=${scMultiSub} regressionChecks=${regressionChecked} toChecks=${toChecked}`);
 console.log(`A/B sensitivity: buggy-detected ${abBuggyDetected}/${abTotal} (버그 재주입 시 감소 검사 실패 = 오라클 민감)`);
 
 if (scMultiSub < 10) { console.log(`FAIL: 다중 교체 시나리오 부족(${scMultiSub}) — 표본 무효(허위 통과 방지)`); process.exit(1); }
 if (abTotal < 5 || abBuggyDetected !== abTotal) { console.log(`FAIL: A/B 민감도 미달 — buggy가 ${abBuggyDetected}/${abTotal}만 검출(전건 검출이어야)`); process.exit(1); }
 if (toChecked < 5) { console.log(`FAIL: 타임아웃 검사 표본 부족(${toChecked})`); process.exit(1); }
+if (setOpenChecked < 5) { console.log(`FAIL: 세트개막 TO 시나리오 표본 부족(${setOpenChecked})`); process.exit(1); }
+if (setOpenAbStale !== setOpenChecked) { console.log(`FAIL: 세트개막 A/B 미달 — 구 산식 스테일이 ${setOpenAbStale}/${setOpenChecked}만 검출(전건이어야)`); process.exit(1); }
+if (reserveNonZero < 1) { console.log(`FAIL: (e) 예약회계 커버리지 0 — reserve>0 좌표 미구동(A/B 공허)`); process.exit(1); }
 if (fail) { console.log(`FAIL ${fail}건:`); for (const m of failMsgs.slice(0, 20)) console.log('  ' + m); process.exit(1); }
-console.log(`PASS — 결정론 감소·게이트 오라클·이중카운트·후보배제(엔진 오라클)·무회귀·타임아웃 전건 정상, A/B 민감도 ${abBuggyDetected}/${abTotal}`);
+console.log(`PASS — 결정론 감소·게이트 오라클·이중카운트·후보배제(엔진 오라클)·무회귀+예약회계·타임아웃·세트개막(0:0) 전건 정상, A/B 민감도 ${abBuggyDetected}/${abTotal}·세트개막 ${setOpenAbStale}/${setOpenChecked}`);

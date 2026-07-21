@@ -193,7 +193,8 @@ P부터 새 전개로 매끄럽게 이어진다. 경기 1회 시뮬은 밀리초
 **수정(순수 로그 방식과 동형)**: 표시 산출을 순수 셀렉터 `data/matchInterventionView.ts`로 추출하고, 컷오프를
 **재생 완료(point≤ptIdx) + 아직 재생 안 된 내 지시(pending)** 이중 항으로 바꿨다. pending = 현재 좌표 유저 sub 지시가 실제 적용된
 enter(point===ptIdx+1 & inId이 유저 지시 inId) — 자동 교체는 `usedSubIn` 때문에 유저 inId를 재사용 못 하므로 자연 분리된다.
-타임아웃은 `TimeoutEvent.point = points.length−1 = ptIdx`(개입 sub와 달리 −1)라 `point≤ptIdx`가 이미 포함 → pending 항 불필요(이중카운트 방지).
+~~타임아웃은 `TimeoutEvent.point = points.length−1 = ptIdx`(개입 sub와 달리 −1)라 `point≤ptIdx`가 이미 포함 → pending 항 불필요(이중카운트 방지).~~
+→ **정정(2026-07-21 감사A/B, §4.4)**: 이 가정은 **세트 중반에만 참**이다. 세트 개막(0:0) TO는 엔진 클램프(`Math.max(setBaseIdx, points.length−1)`)로 `point=ptIdx+1`에 기록돼 `point≤ptIdx`가 못 세는 스테일 — TO도 개막 국면 pending 항이 필요하다(§4.4).
 injury 축은 유저 개입 무관이라 기존 컷오프 보존.
 
 **동반 발견·수정(코트 모델 dvPhilosophy 불일치)**: `buildMatchBox` 시뮬은 `buildLineup(squad, dvPhilosophy)`인데 보드 `myBaseSix`는
@@ -201,6 +202,40 @@ dv를 생략해, **육성철학 높은 감독(실측 dv97) 팀**에서 근소차
 불일치했다(개입 후보·표시 코트 오염). 보드가 **시뮬과 동일 인자(dvPhilosophy)로 라인업**을 구성하도록 수정.
 
 정본 산식·좌표 규약은 `data/matchInterventionView.ts` 헤더 주석. 사각 분류는 `docs/TEST_METHODOLOGY.md §4`("주입 좌표 ↔ 표시 컷오프 오프바이원").
+
+### 4.4 감사A/B 통합 수정 — 예산 예약·세트 개막 TO·curSix·표시층 dv 형제(2026-07-21)
+
+스펙 감사 A·B가 §4.3 근처에서 5개 잔여 결함을 더 발견했다. 사각 분류(각 "왜 못 잡았나")는 `docs/TEST_METHODOLOGY.md §4`.
+
+**(P0) 세트당 교체 7회 = FIVB 15.2.1 위반(엔진).** `subIn` 게이트 `subBudget<2`는 **이 IN 자신의 복원분 1건만** 예약한다.
+복원형(pinch/block/def)이 2+개 활성인 창에 (개입) 수동 IN이 끼면, 이후 자동 복원 `subOut`(무조건 예산 −1)들이 예산을
+음수(−1)로 몰아 세트 7교체(감사A 실측 재현). AI-only는 건전(2,000경기·13,676세트 max 6). **수정**: 게이트가 **현재 활성 복원 예정
+전건**을 예약 — `subBudget ≥ pendingRestores + (복원형?2:1)`(불변식 `subBudget ≥ 활성 복원형 수` 상시 유지 → 음수 불가).
+`rest`는 호출 전 `REST_MIN_BUDGET(≥4)`·`manual`은 개입 경로로만 진입 → **무개입(AI) 경기는 바이트 동일**(N=2571 subEvents 지문·골든
+3해시 불변 실측). 개입 경기만 결과 변동 → 저장 순위 재계산 일관성 위해 **ENGINE_VERSION 11→12**(standings 재생이
+`interventionsFor` 주입하므로 개입 결과가 캐시에 실림). 표시 정합: `ivBudget.subLeft`도 `activeRestorableCount`를 빼 예약분을 반영
+(표시=엔진 — 헤드룸 overstate/먹통 버튼 방지). 가드 `_dv_setsubs`(consumed≤6 총량 오라클, 겹침창 재현으로 A/B).
+
+**(P1) 세트 개막(0:0) 개입 타임아웃 오프바이원.** §4.3의 "TO는 pending 불필요" 가정이 개막 국면에서 깨진다(위 §4.3 정정).
+`timeoutsUsed`에 개막 클램프 pending 항(교체 pending과 대칭 — 유저 TO 지시 좌표의 `point=ptIdx+1` TimeoutEvent 가산) 추가.
+**중복 커밋 방어**: 스테일 표시로 같은 좌표 TO가 2번 커밋돼도 세트 예산이 이중 소진되던 것을 **엔진 `userToCoords`**(`side:h:a` Set)로
+1회만 소진(같은 데드볼 타임아웃 2번은 현실에 없음). `stamMap`도 현재 세트 클램프 좌표를 포함(개막 유저 TO 체력 정확 표시).
+
+**(P1~P2) `curSix` 미래 자동 교체 혼입.** 개입 시트 코트 6인이 `applySubsToSix(..., ptIdx+1)` raw 컷오프라 같은 iteration의
+감독 자동 교체(point=ptIdx+1)까지 미리 떴다(데드볼의 7.82%). **재생 완료(≤ptIdx) + 내 pending(`pendingSubEntries`)** 으로 대칭 복원
+(잔여 예산·후보와 같은 축).
+
+**(P1·P2④) 표시층 라인업 dv 형제 4곳.** §4.3의 코트 모델(myBaseSix) 수정이 **표시 형제**(`MatchCourt`·`BoxScoreTable`·
+`board-lab.tsx`·`sim-web/board-lab.ts`)를 안 스윕했다 — 이들이 `buildLineup`을 dv 없이 불러 dv 높은 팀(7팀 dv 48~99)의 근소차
+슬롯이 어긋나 마커·박스 선발 그룹핑이 시뮬과 불일치(매치업×사이드 29%·day0 2/7팀). 전 표시층이 감독 dvPhilosophy를 전달하도록
+수정. 가드 `_dv_boardlineup`(보드=엔진 라인업 동일성, dv 상이 팀 표본 명시).
+
+**(P2) 잔여 UX.** ① 개입 커밋 시 실시간 현수막 중복 큐잉(`liveBanners` 재계산 identity → effect 재발화) → `at:kind:title` dedup.
+② `stamMap` 캡션 "직전 작전 타임아웃" ↔ 실제(TTO 포함·세트 미필터) 불일치 → 현재 세트 한정 + 캡션 "직전 타임아웃"으로 정정.
+③ 세트말(세트 종료 표시 창) 개입 커밋은 **영구 no-op**(엔진이 세트 탈출)인데 "한도 소진"으로 오표기 → `isSetOver` 분기로
+"이 세트는 끝났어요" 정확 사유.
+
+정본 산식은 `data/matchInterventionView.ts`(`activeRestorableCount`·`timeoutsUsed`)·`engine/match.ts`(subIn 예약 회계·`userToCoords`).
 
 ---
 

@@ -70,7 +70,8 @@ function recompute(): void {
   sim = simulateMatch(state.seed, hs, as, { home: coachInfoOf(state.homeId), away: coachInfoOf(state.awayId) });
   rallies = reconstructRallies(sim);
   total = rallies.length;
-  baseLineups = { home: buildLineup(hs), away: buildLineup(as) };
+  // 엔진 six와 동일 인자(육성철학 U23 에지)로 base 라인업 — dv 미전달 시 근소차 슬롯이 어긋나 subEvents 재생 코트 불일치(감사 P1)
+  baseLineups = { home: buildLineup(hs, coachInfoOf(state.homeId)?.dvPhilosophy ?? 0), away: buildLineup(as, coachInfoOf(state.awayId)?.dvPhilosophy ?? 0) };
   byId = new Map<string, Player>();
   for (const p of hs) byId.set(p.id, p);
   for (const p of as) byId.set(p.id, p);

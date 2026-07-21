@@ -168,11 +168,13 @@ interface Props {
   timeoutSignal?: { seq: number; setNo: number; h: number; a: number } | null; // 플레이어 타임아웃 커밋 좌표 신호(§3 #3) — 좌표의 타임아웃 이벤트를 찾아 체력 모달 표시
   homeName?: string;                    // 코인토스 오버레이 등 팀명 표기용(없으면 홈/원정 폴백)
   awayName?: string;
+  homeDv?: number;                      // 감독 육성 철학(dvPhilosophy) — 엔진(match.ts buildLineup)과 **동일 인자**로 base 라인업 구성해야
+  awayDv?: number;                      //   subEvents(실제 코트 슬롯) 재생 시 마커·중계·박스 그룹핑이 실제 시뮬과 일치(감사 P1). 생략=0(neutral).
 }
 
-export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgress, onFinished, onScore, paused, timeoutSignal, homeName, awayName }: Props) {
-  // 선발 라인업(고정) + 전 선수 id 맵(교체 선수 조회용)
-  const baseLineups: Lineups = useMemo(() => ({ home: buildLineup(home), away: buildLineup(away) }), [home, away]);
+export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgress, onFinished, onScore, paused, timeoutSignal, homeName, awayName, homeDv = 0, awayDv = 0 }: Props) {
+  // 선발 라인업(고정) + 전 선수 id 맵(교체 선수 조회용) — 엔진 six와 동일 인자(육성철학 U23 에지)로 구성(dv 미전달 시 근소차 슬롯 어긋남, 감사 P1)
+  const baseLineups: Lineups = useMemo(() => ({ home: buildLineup(home, homeDv), away: buildLineup(away, awayDv) }), [home, away, homeDv, awayDv]);
   const byId = useMemo(() => {
     const m = new Map<string, Player>();
     for (const p of home) m.set(p.id, p);

@@ -20,9 +20,11 @@ interface Props {
   box: BoxSink | undefined;
   mineSide: 'home' | 'away' | null;
   finished?: boolean; // 경기 종료 후 열람 — 재개할 경기가 없으므로 버튼 문구를 상태에 맞춘다(#112)
+  homeDv?: number; // 감독 육성 철학 — 엔진 six와 동일 인자로 선발 그룹핑(BoxScoreTable, 감사 P1). 생략=0.
+  awayDv?: number;
 }
 
-export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName, box, mineSide, finished }: Props) {
+export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName, box, mineSide, finished, homeDv = 0, awayDv = 0 }: Props) {
   const [tab, setTab] = useState<'home' | 'away'>(mineSide ?? 'home');
 
   return (
@@ -43,7 +45,7 @@ export function LiveBoxModal({ visible, onClose, home, away, homeName, awayName,
         ))}
       </View>
 
-      <BoxScoreTable squad={tab === 'home' ? home : away} box={box} />
+      <BoxScoreTable squad={tab === 'home' ? home : away} box={box} dvPhilosophy={tab === 'home' ? homeDv : awayDv} />
 
       <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 리시브=효율((정확−실패)/시도)</Text>
       <Pressable style={styles.resume} onPress={onClose}>

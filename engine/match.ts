@@ -17,7 +17,7 @@ import { rotate, serverIndex, frontRow, backRow } from './rotation';
 // (dyn 재생을 바꾸는 시즌 계층 규칙 변경도 포함 — 캐시가 dyn을 함께 영속하므로, v3.)
 // REALTIME_SIM Phase2(G3): simCache는 이 버전을 태깅·게이트해, 엔진 재튜닝(앱 업데이트) 후 저장된 옛-엔진
 // 순위를 폐기하고 새 엔진으로 재계산한다 → 저장 순위 ↔ 과거경기 보드 재생 일관성 보장.
-export const ENGINE_VERSION = 11; // 11(2026-07-20, STAFF §9.6-D 스태프3.0 Phase D): 감독 능력 3축 실효과 훅 2종이 경기 결과를 바꾼다 — ① 육성 철학(dvPhilosophy) U23 라인업 에지(engine/lineup buildLineup — 근소차 U23 우선권, 역전 금지) → 감독 자동 라인업 six[] 변동. ② 리더십(leadership) 경기감각 하락 완화(data/dynamics formOf — FORM_MAX_PENALTY 축소) → 벤치 복귀자 sk* 평가 변동. 둘 다 team별 coachInfoOf 파생(결정론·rng 미소비), dvPhilosophy≤50·leadership 무주입이면 에지 0(byte-동일). 양 팀 라인업·폼 변동 → 랠리 결과 변동 → 저장 캐시 무효화(KOVO 분포·parity 불변 실측). 10(2026-07-15): 리베로 후위 수비 참여 소모(MATCH §7.1, rally.ts LIBERO_DEFENSE_COST=0.16) — 리베로가 큰 소모(공격/서브/블록) 없이 회복만 쌓여 타임아웃 체력 상시 ~100%(실측 L 3세트+ 98.5%·≥99% 55.7%)이던 것을 매 랠리 균일 소모로 교정(→ 3세트+ 89.8%·≥99% 21.6%). 양 팀 리베로 stam 변동 → 랠리 eff·경기 결과 변동 → 저장 캐시 무효화(타 포지션 Δ≤0.2%p·KOVO 분포 불변). 9(2026-07-15): ① manualSide(내 팀 정규시즌 "구단주 직접" 설정) — 지정 사이드는 감독 자동 타임아웃·작전 4종 결정 스킵(복원·TTO·부상·세트말원복 유지) → 그 사이드 결과 변동(미지정=바이트 동일). ② F2 FIVB 15.6.1 — subIn이 IN 후보의 usedStarterOut(이미 아웃된 선발) 신분 거부(나간 선발 타슬롯 재진입 차단) → 드문 경우 six[] 변동. 둘 다 저장 캐시 무효화. 8(2026-07-07): ① 피로 교체(1.3e) — 지친 주전(비세터·비접전, 체력<0.35)을 같은 포지션 벤치로 잠시 교체(합리 코치 게이트·히스테리시스·예산≥4, 결정론·rng 미소비) → six[] 변동 → 결과 변동. ② TTO 회복 재튜닝 TIMEOUT_REST(0.04)→TTO_REST(0.03, 테크니컬 타임아웃만 — 스윕으로 0.03만이 체력밴드·피로교체밴드 둘 다 통과) — TTO 세트당 2회 자동 발화로 회복 과다(피로 곡선 붕괴) 교정 → 체력·경기 결과 변동. 둘 다 저장 캐시 무효화. 7(2026-07-07): ① 포지션 폴트 받는 팀만 판정(FIVB 2025-2028 7.4·KOVO 25-26, rally.ts) — rng 소비 2→1회/서브 → 랠리 스트림 이동 → 결과 변동. ② KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식 — recover+기세수렴, rng 미소비) → 체력·기세 변동 → 경기 결과 변동. 둘 다 저장 캐시 무효화. 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
+export const ENGINE_VERSION = 12; // 12(2026-07-21, 감사A P0 FIVB 세트당 6교체): subIn 예산 예약 회계 교정 — 활성 복원형(pinch/block/def)의 미래 subOut(무조건 −1)까지 예약(subBudget ≥ pendingRestores + (복원형?2:1))해 세트당 총 교체 ≤6 보장. **무개입(AI) 경기는 바이트 동일**(pendingRestores 계수가 구 `<2`와 동일값인 구간에서만 AI가 subIn — N=2571 subEvents 지문 불변 실측, KOVO 분포·parity·승패 불변). 개입(구단주 수동 IN이 복원형 2+ 활성 창에 낀 드문 경우)만 결과 변동 → 그런 세이브의 저장 순위 재계산 일관성 위해 범프(standings 재생이 interventionsFor 주입). 11(2026-07-20, STAFF §9.6-D 스태프3.0 Phase D): 감독 능력 3축 실효과 훅 2종이 경기 결과를 바꾼다 — ① 육성 철학(dvPhilosophy) U23 라인업 에지(engine/lineup buildLineup — 근소차 U23 우선권, 역전 금지) → 감독 자동 라인업 six[] 변동. ② 리더십(leadership) 경기감각 하락 완화(data/dynamics formOf — FORM_MAX_PENALTY 축소) → 벤치 복귀자 sk* 평가 변동. 둘 다 team별 coachInfoOf 파생(결정론·rng 미소비), dvPhilosophy≤50·leadership 무주입이면 에지 0(byte-동일). 양 팀 라인업·폼 변동 → 랠리 결과 변동 → 저장 캐시 무효화(KOVO 분포·parity 불변 실측). 10(2026-07-15): 리베로 후위 수비 참여 소모(MATCH §7.1, rally.ts LIBERO_DEFENSE_COST=0.16) — 리베로가 큰 소모(공격/서브/블록) 없이 회복만 쌓여 타임아웃 체력 상시 ~100%(실측 L 3세트+ 98.5%·≥99% 55.7%)이던 것을 매 랠리 균일 소모로 교정(→ 3세트+ 89.8%·≥99% 21.6%). 양 팀 리베로 stam 변동 → 랠리 eff·경기 결과 변동 → 저장 캐시 무효화(타 포지션 Δ≤0.2%p·KOVO 분포 불변). 9(2026-07-15): ① manualSide(내 팀 정규시즌 "구단주 직접" 설정) — 지정 사이드는 감독 자동 타임아웃·작전 4종 결정 스킵(복원·TTO·부상·세트말원복 유지) → 그 사이드 결과 변동(미지정=바이트 동일). ② F2 FIVB 15.6.1 — subIn이 IN 후보의 usedStarterOut(이미 아웃된 선발) 신분 거부(나간 선발 타슬롯 재진입 차단) → 드문 경우 six[] 변동. 둘 다 저장 캐시 무효화. 8(2026-07-07): ① 피로 교체(1.3e) — 지친 주전(비세터·비접전, 체력<0.35)을 같은 포지션 벤치로 잠시 교체(합리 코치 게이트·히스테리시스·예산≥4, 결정론·rng 미소비) → six[] 변동 → 결과 변동. ② TTO 회복 재튜닝 TIMEOUT_REST(0.04)→TTO_REST(0.03, 테크니컬 타임아웃만 — 스윕으로 0.03만이 체력밴드·피로교체밴드 둘 다 통과) — TTO 세트당 2회 자동 발화로 회복 과다(피로 곡선 붕괴) 교정 → 체력·경기 결과 변동. 둘 다 저장 캐시 무효화. 7(2026-07-07): ① 포지션 폴트 받는 팀만 판정(FIVB 2025-2028 7.4·KOVO 25-26, rally.ts) — rng 소비 2→1회/서브 → 랠리 스트림 이동 → 결과 변동. ② KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식 — recover+기세수렴, rng 미소비) → 체력·기세 변동 → 경기 결과 변동. 둘 다 저장 캐시 무효화. 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
 // 4(2026-07-06): 서브 에이스 개인기장 공식화 — 리시브범실 실점을 서버 box.srvAce에도 기장(FIVB indirect ace) → production aces/points·서브왕·skServe XP 변동 → 저장 캐시 무효화. 유형 분포·밸런스·서브 확률·승패 불변(box는 메인 rng 무관)
 // 3(2026-07-02): AI 자기방출 재영입 금지(TRANSACTION 0장 ⑥) — dyn(시즌 중 거래) 재생 변동 → 저장 캐시 무효화
 // 2(2026-06-28): 체력 튜닝(회복 0.009→0.005·세트사이 0.12→0.035) — 경기 결과 변동 → 저장 캐시 무효화
@@ -229,6 +229,9 @@ export function simulateMatch(
     let lastScorer: Side | null = null;
     let streak = 0;
     const ttoFired = new Set<number>(); // 이 세트에 이미 발화한 테크니컬 타임아웃 임계(8·16) — 세트당 임계별 1회(7.4b)
+    // 이 세트에 이미 적용된 유저(개입) 타임아웃 좌표(`side:h:a`) — 같은 데드볼 중복 커밋 방어(감사 P1). 표시 스테일로
+    //   같은 좌표 TO가 2번 커밋돼도 세트 예산(timeouts[])을 1회만 소진한다. 같은 데드볼에 타임아웃 2번은 현실에 없음.
+    const userToCoords = new Set<string>();
 
     // 작전 교체 상태(세트 단위): 예산 + 활성 교체(slotIdx → 원선발·종류)
     const subBudget = { home: SUBS_PER_SET, away: SUBS_PER_SET };
@@ -239,11 +242,21 @@ export function simulateMatch(
     //   구현 누락으로 같은 스페셜리스트가 예산(6) 남는 한 핑퐁 투입되던 버그 수정(2026-07-01). checkSubs 규칙검사로 박제.
     const usedSubIn: Record<Side, Set<string>> = { home: new Set(), away: new Set() };       // 이 세트에 이미 투입된 교체선수 id
     const usedStarterOut: Record<Side, Set<string>> = { home: new Set(), away: new Set() };  // 이 세트에 이미 교체 아웃된 선발 id
+    // 복원형 = 세트 중 자동 복원(subOut, 무조건 예산 −1)이 예약된 교체 종류. rest/manual은 세트말 무예산 원복이라 제외.
+    const isRestorable = (k: TacticalSubKind): boolean => k === 'pinch' || k === 'block' || k === 'def';
     const subIn = (side: Side, slot: number, player: Player | null, kind: TacticalSubKind): void => {
       if (!player) return;
       const st = teamOf(side);
       if (injuryReplaced[side].has(slot)) return; // 부상 교체 슬롯은 작전 교체 대상 제외 — 부상 교체 선수를 영구 유지(1.3d)
-      if (activeSubs[side].has(slot) || subBudget[side] < 2) return;
+      // ── 예산 예약 회계(P0, 2026-07-21 감사A) — FIVB 세트당 6교체 초과 방지 ──
+      //   현재 활성 복원형(pinch/block/def)은 각자 나중에 subOut으로 예산을 1씩 더 쓴다(복원 루프, 무조건 차감). 단순 `<2`는
+      //   이 IN 자신의 복원분 1건만 예약 → 복원형 2+ 활성 창에 (개입) 수동 IN이 끼면, 이후 자동 복원 OUT들이 예산을 음수로
+      //   몰아 세트 7교체(감사A 실측). 잔여 예산이 [활성 복원 예정 건수 + 이 IN의 복원분(복원형이면 1, 아니면 0) + 1]을
+      //   덮을 때만 수락 → 불변식 subBudget ≥ (활성 복원형 수)를 항상 유지(음수 불가). rest는 호출 전 REST_MIN_BUDGET(≥4)로,
+      //   manual은 개입 경로로만 진입 → 무개입(AI) 경기는 복원형 R=0 구간 외엔 이 식이 구 `<2`와 동일값(바이트 불변 실측).
+      const pendingRestores = [...activeSubs[side].values()].filter((r) => isRestorable(r.kind)).length;
+      const reserve = pendingRestores + (isRestorable(kind) ? 2 : 1);
+      if (activeSubs[side].has(slot) || subBudget[side] < reserve) return;
       // 이미 코트에 있으면 불가 — 같은 벤치 스페셜리스트가 두 슬롯에 중복 투입되는 것 방지
       if (st.six.some((p) => p.id === player.id)) return;
       if (st.injured.has(player.id)) return; // 부상 선수는 어떤 교체로도 코트 복귀 불가(1.3d) — benchSpecialists가 경기 시작 고정이라 이중부상 벤치교체 선수를 재투입하던 잠복버그 차단(subIn·injuryReplaced 이중 차단)
@@ -297,6 +310,9 @@ export function simulateMatch(
           } else {
             // 타임아웃 — 감독 자동 경로와 별개(임계·streak 무시 강제). 기존 타임아웃 블록의 효과를 그대로 복제.
             if (timeouts[iv.side] <= 0) continue; // 세트 한도 소진 시 no-op
+            const toKey = `${iv.side}:${h}:${a}`; // 같은 데드볼 좌표 중복 커밋 방어(감사 P1) — 세트 예산 이중 소진 차단
+            if (userToCoords.has(toKey)) continue;
+            userToCoords.add(toKey);
             timeouts[iv.side]--;
             const courtStam = (st: typeof home, m: Map<string, number>): TimeoutCourtStam[] =>
               [...st.six, ...(st.libero ? [st.libero] : [])].map((p) => ({ id: p.id, stam: m.get(p.id) ?? 1 }));

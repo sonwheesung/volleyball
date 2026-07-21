@@ -16,9 +16,9 @@ import { reconstructRallies, buildLiveBanners, applySubsToSix } from '../../comp
 import { getFixture, getTeam, shortTeamName, coachInfoOf } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
-import { ivBudget as selIvBudget, ivExclusions, benchCandidates, outCandidates, type IvExclusions } from '../../data/matchInterventionView';
+import { ivBudget as selIvBudget, ivExclusions, benchCandidates, outCandidates, pendingSubEntries, type IvExclusions, type IvCoord } from '../../data/matchInterventionView';
 import { buildLineup } from '../../engine/lineup';
-import { SUBS_PER_SET, TIMEOUTS_PER_SET } from '../../engine/match';
+import { SUBS_PER_SET, TIMEOUTS_PER_SET, isSetOver } from '../../engine/match';
 import { serverIndex } from '../../engine/rotation';
 import { overallRaw, displayOvr } from '../../engine/overall';
 import { deriveRatings } from '../../engine/ratings';
@@ -235,18 +235,27 @@ export default function MatchBoard() {
   //   OP 등 근소차 슬롯이 어긋나(예: dv97 → OP가 원선발과 다른 U23) 개입 후보·코트 표시가 실제 시뮬과 불일치(2026-07-21 발견).
   const myDvPhilosophy = mineSide ? (coachInfoOf(mineSide === 'home' ? data.home.id : data.away.id)?.dvPhilosophy ?? 0) : 0;
   const myBaseSix = useMemo(() => (mySquad.length ? buildLineup(mySquad, myDvPhilosophy).six : []), [mySquad, myDvPhilosophy]);
-  // 현재(다음 랠리 = 개입 적용 지점 ptIdx+1)의 코트 6인 — 교체 로그를 그 지점까지 재생(MatchCourt와 같은 헬퍼)
-  const curSix = useMemo(() => {
-    if (!mineSide || !myBaseSix.length) return [];
-    return applySubsToSix(myBaseSix, mineSide, data.sim.subEvents, score.ptIdx + 1, byIdAll);
-  }, [mineSide, myBaseSix, data.sim, score.ptIdx, byIdAll]);
   // 이 경기 유저 개입 지시 목록 — 스테일 카운트 수정(§4)의 pending 항 소스. myIv 변화 시 재구독(재시뮬 트리거와 동일).
   const myDirectives = useMemo(() => (fixture && !isSandbox ? interventionsFor(fixture.id) : []), [fixture, isSandbox, myIv]);
+  // 개입 좌표(현재 데드볼) — 셀렉터 공용. score 변화 시만 재생성.
+  const cur = useMemo<IvCoord>(() => ({ setNo: score.setNo, h: score.h, a: score.a, ptIdx: score.ptIdx }), [score.setNo, score.h, score.a, score.ptIdx]);
+  // 현재(다음 랠리 = 개입 적용 지점 ptIdx+1)의 코트 6인 — **재생 완료(point≤ptIdx)까지만 재생 + 내 pending 개입만** 얹는다.
+  //   raw ptIdx+1 컷오프는 같은 iteration의 **감독 자동 교체(rest/pinch/block/def, point=ptIdx+1)까지 미리 혼입**(데드볼의 7.82%,
+  //   감사 P1~P2)해 아직 화면에 안 나온 미래 교체가 코트에 뜨던 것 — pendingSubEntries(유저 inId 매칭)만 적용해 대칭 복원.
+  const curSix = useMemo(() => {
+    if (!mineSide || !myBaseSix.length) return [];
+    const replayed = applySubsToSix(myBaseSix, mineSide, data.sim.subEvents, score.ptIdx, byIdAll); // ≤ptIdx만(미래 자동교체 배제)
+    const pend = pendingSubEntries(data.sim, mineSide, cur, myDirectives);
+    if (!pend.length) return replayed;
+    const six = replayed.slice();
+    for (const e of pend) { const p = byIdAll.get(e.inId); if (p) six[e.slot] = p; } // 내 개입 enter만 얹음
+    return six;
+  }, [mineSide, myBaseSix, data.sim, score.ptIdx, byIdAll, cur, myDirectives]);
   // 개입 후보/예산 배제 집합(순수 셀렉터 data/matchInterventionView) — **재생 완료(point<=ptIdx) + 방금 커밋한 내 개입(pending,
   //   point=ptIdx+1)** 이중 항. 감독 자동 교체(같은 point지만 유저 inId 미재사용)는 배제 → 미래 자동 교체 오산 방지.
   const ivEx = useMemo<IvExclusions>(() =>
-    ivExclusions(data.sim, (mineSide ?? 'home'), { setNo: score.setNo, h: score.h, a: score.a, ptIdx: score.ptIdx }, myDirectives),
-  [data.sim, mineSide, score.setNo, score.h, score.a, score.ptIdx, myDirectives]);
+    ivExclusions(data.sim, (mineSide ?? 'home'), cur, myDirectives),
+  [data.sim, mineSide, cur, myDirectives]);
   // 벤치 투입 후보(benchCands) — 같은 포지션 제한(2026-07-12 사용자 결정): OH 자리에 세터 방지. 같은 포지션 벤치 없으면 후보 0(안내).
   //   방금 투입한 선수는 curSix(uptoRally=ptIdx+1)에 반영돼 onCourt가 배제, 방금 나간 선수는 ivEx.enterOutIds가 배제(스테일 수정).
   const benchCands = useMemo(() =>
@@ -257,8 +266,8 @@ export default function MatchBoard() {
   const outCands = useMemo(() => (mineSide ? outCandidates(curSix, ivEx) : curSix), [mineSide, curSix, ivEx]);
   // 이번 세트 잔여 개입 예산(UV-7 ④ · 문서 §4) — 순수 셀렉터(엔진 subBudget/timeouts와 동일 산식 + pending 항).
   const ivBudget = useMemo(() =>
-    mineSide ? selIvBudget(data.sim, mineSide, { setNo: score.setNo, h: score.h, a: score.a, ptIdx: score.ptIdx }, myDirectives) : { subLeft: 0, toLeft: 0 },
-  [mineSide, data.sim, score.setNo, score.h, score.a, score.ptIdx, myDirectives]);
+    mineSide ? selIvBudget(data.sim, mineSide, cur, myDirectives) : { subLeft: 0, toLeft: 0 },
+  [mineSide, data.sim, cur, myDirectives]);
   // 후보 정렬 — 서브 교체(핀치)는 서브 스탯 내림차순(잘 넣는 선수 먼저, 사용자 요청), 일반 교체는 OVR 내림차순.
   const sortedBench = useMemo(() =>
     ivSubKind === 'pinch'
@@ -295,15 +304,20 @@ export default function MatchBoard() {
     if (ivEx.enterOutIds.has(server.id)) return { blocked: true, reason: '한 번 나갔다 돌아온 선수 자리라 다시 못 빼요' };
     return { blocked: false, reason: null };
   }, [mineSide, iAmServing, curSix, data.sim, score.ptIdx, score.setNo, ivEx]);
-  // 코트 선수 체력(가능하면) — 현재 지점 직전 마지막 타임아웃 스냅샷에서 id→잔량(0..1)
+  // 코트 선수 체력(가능하면) — **현재 세트**의 마지막 타임아웃 스냅샷에서 id→잔량(0..1). 감사 P2 ②:
+  //   ① 이전 산식은 setNo 미필터라 직전 세트 스냅샷을 집어 세트 간 회복(SET_REST)이 반영 안 된 낡은 체력을 보였다 →
+  //      현재 세트로 한정(세트 개막 직후엔 스냅샷 없음 → 미표시가 오해보다 안전). ② 코치 TO뿐 아니라 테크니컬 TO(TTO)도
+  //      유효 스냅샷이라 포함(가장 최근 것) → 캡션은 "작전 타임아웃"이 아니라 "직전 타임아웃"으로 정정(사실 일치).
+  //   세트 개막(0:0) 유저 TO는 엔진 클램프로 point=ptIdx+1에 기록(match.ts) → 현재 좌표(같은 h·a) 클램프 TO도 포함(감사 P1 ③).
   const stamMap = useMemo(() => {
     const m = new Map<string, number>();
     if (!mineSide) return m;
-    const evs = (data.sim.timeouts ?? []).filter((t) => t.point <= score.ptIdx);
+    const evs = (data.sim.timeouts ?? []).filter((t) => t.setNo === score.setNo
+      && (t.point <= score.ptIdx || (t.point === score.ptIdx + 1 && t.home === score.h && t.away === score.a)));
     const last = evs[evs.length - 1];
     if (last) for (const s of mineSide === 'home' ? last.stamHome : last.stamAway) m.set(s.id, s.stam);
     return m;
-  }, [data.sim, score.ptIdx, mineSide]);
+  }, [data.sim, score.ptIdx, score.setNo, score.h, score.a, mineSide]);
 
   const closeIntervene = useCallback(() => {
     setInterveneOpen(false); setIvStep('menu'); setPendingOut(null); setPendingIn(null); setIvError(null);
@@ -340,6 +354,9 @@ export default function MatchBoard() {
       setToSignal((prev) => ({ seq: (prev?.seq ?? 0) + 1, setNo: score.setNo, h: score.h, a: score.a }));
       pushToast('작전 타임아웃을 요청했어요');
       closeIntervene();
+    } else if (isSetOver(score.h, score.a, score.setNo)) {
+      // 세트말(세트 종료 점수 표시 창)에서의 커밋은 엔진이 그 세트를 이미 빠져나가 **영구 no-op** — '한도 소진'이 아님(감사 P2 ③).
+      setIvError('이 세트는 끝났어요. 다음 세트가 시작되면 타임아웃을 쓸 수 있어요.');
     } else {
       // 미적용 분기(UV-7 ③): 좌표 count가 안 늘어난 게 '한도 소진'이 아니라 '이 좌표에 이미 타임아웃 존재'일 수 있다
       //   (AI가 같은 순간 부른 타임아웃을 내 강제 호출이 대체 → count 동수). 한도 문구 오출력 방지로 사유 분기.
@@ -363,6 +380,9 @@ export default function MatchBoard() {
         ? `${byIdAll.get(inId)?.name ?? '선수'} 선수를 서브 교체했어요 (서브권 넘어가면 자동 복귀)`
         : `${byIdAll.get(inId)?.name ?? '선수'} 선수를 투입했어요`);
       closeIntervene();
+    } else if (isSetOver(score.h, score.a, score.setNo)) {
+      // 세트말 커밋은 영구 no-op(엔진이 세트를 이미 빠져나감) — '한도 소진'이 아님(감사 P2 ③).
+      setIvError('이 세트는 끝났어요. 다음 세트가 시작되면 교체할 수 있어요.');
     } else setIvError(ivSubKind === 'pinch'
       // 사전차단(pinchBlock)이 못 잡은 잔여 케이스 대비 — 가능하면 정확한 사유를, 없으면 일반 문구.
       ? (pinchBlock.reason ?? '지금은 서브 교체가 어려워요. 서브 차례 선수가 세터이거나 이번 세트 교체 한도가 찼어요.')
@@ -387,10 +407,17 @@ export default function MatchBoard() {
   // 이어보기 재개 시 재생 위치(shown)는 resumeAt-1에서 시작한다 → 그 지점 배너는 지난 세션에서 이미 봤다.
   // 마운트 시점의 시작 위치를 기억해 at <= 시작위치인 배너를 다시 큐에 넣지 않는다(4.6% 재개에서 배너 재생 수정 2026-07-07).
   const initialPtIdx = useRef(fixture ? (watchProgress[fixture.id] ?? 0) - 1 : -1);
+  // 이미 큐에 넣은 배너 식별키(at+kind+title) — 개입 커밋 시 data.sim 재계산으로 liveBanners **참조가 바뀌어** effect가 재실행되면
+  //   같은 ptIdx 배너가 재push되던 중복(감사 P2 ①)을 막는다. 프리픽스 바이트 동일이라 at≤ptIdx 배너는 키가 같아 자연 dedup.
+  const pushedBanners = useRef<Set<string>>(new Set());
   useEffect(() => {
     if (finished) return;
-    const hits = liveBanners.filter((b) => b.at === score.ptIdx && b.at > initialPtIdx.current).map((b) => b.banner);
-    if (hits.length) setLiveQueue((q) => [...q, ...hits]);
+    const keyOf = (b: { at: number; banner: Banner }) => `${b.at}:${b.banner.kind}:${b.banner.title}`;
+    const fresh = liveBanners.filter((b) => b.at === score.ptIdx && b.at > initialPtIdx.current && !pushedBanners.current.has(keyOf(b)));
+    if (fresh.length) {
+      for (const b of fresh) pushedBanners.current.add(keyOf(b));
+      setLiveQueue((q) => [...q, ...fresh.map((b) => b.banner)]);
+    }
   }, [score.ptIdx, liveBanners, finished]);
 
   return (
@@ -438,6 +465,8 @@ export default function MatchBoard() {
           paused={statsOpen || tutorialActive || interveneOpen}
           homeName={data.home.name}
           awayName={data.away.name}
+          homeDv={coachInfoOf(data.home.id)?.dvPhilosophy ?? 0}
+          awayDv={coachInfoOf(data.away.id)?.dvPhilosophy ?? 0}
         />
         {!finished && liveQueue.length > 0 ? <BroadcastBanner key="live" banners={liveQueue} /> : null}
         {finished && banners.length > 0 ? <BroadcastBanner key="fin" banners={banners} /> : null}
@@ -508,6 +537,8 @@ export default function MatchBoard() {
         }
         mineSide={mineSide}
         finished={finished}
+        homeDv={coachInfoOf(data.home.id)?.dvPhilosophy ?? 0}
+        awayDv={coachInfoOf(data.away.id)?.dvPhilosophy ?? 0}
       />
 
       {/* 경기 개입 시트(§3·§4) — 데드볼(현재 점수)에서 작전 타임아웃·선수 교체. 현재 점수까지만 표시(미래 스포일러 금지). */}
@@ -567,7 +598,7 @@ export default function MatchBoard() {
           <>
             <Text style={styles.ivHint}>코트에서 뺄 선수를 선택하세요</Text>
             {/* 체력 %는 마지막 타임아웃 스냅샷 기준(stamMap) — 실시간 아님. 스냅샷 없으면 미표시(캡션도 숨김, UV-7 ⑤). */}
-            {stamMap.size > 0 ? <Text style={styles.ivStamNote}>체력 %는 직전 작전 타임아웃 시점 기준이에요</Text> : null}
+            {stamMap.size > 0 ? <Text style={styles.ivStamNote}>체력 %는 직전 타임아웃 시점 기준이에요</Text> : null}
             {outCands.length === 0 ? (
               <Text style={styles.ivError}>지금은 뺄 수 있는 선수가 없어요. (이번 세트 교체·부상 규칙상 코트 선수 전원이 고정)</Text>
             ) : (
@@ -589,7 +620,7 @@ export default function MatchBoard() {
                 ? '서브에 투입할 선수를 선택하세요'
                 : `${byIdAll.get(pendingOut ?? '')?.name ?? '선수'} 대신 넣을 선수를 선택하세요`}
             </Text>
-            {stamMap.size > 0 ? <Text style={styles.ivStamNote}>체력 %는 직전 작전 타임아웃 시점 기준이에요</Text> : null}
+            {stamMap.size > 0 ? <Text style={styles.ivStamNote}>체력 %는 직전 타임아웃 시점 기준이에요</Text> : null}
             {benchCands.length === 0 ? (
               <Text style={styles.ivError}>
                 {ivSubKind === 'pinch' ? '투입할 수 있는 벤치 선수가 없어요.' : '같은 포지션에 투입할 수 있는 벤치 선수가 없어요.'}

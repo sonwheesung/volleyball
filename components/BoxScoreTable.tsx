@@ -21,15 +21,17 @@ const ATK_W = C.ak + C.aa + C.ap;
 const REST_W = C.bl + C.sv + C.dg + C.st + C.rc + C.er;
 const TABLE_W = NAME_W + C.sc + ATK_W + REST_W;
 
-export function BoxScoreTable({ squad, box }: { squad: Player[]; box: BoxSink | undefined }) {
+// dvPhilosophy: 감독 육성 철학 — 엔진(match.ts buildLineup)과 **동일 인자**로 선발 7인을 도출해야 선발/교체 그룹핑이
+//   실제 시뮬 코트와 일치(dv 미전달 시 근소차 슬롯이 어긋나 U23이 선발/비선발로 오분류, 감사 P1·P2 ④). 생략=0(neutral).
+export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[]; box: BoxSink | undefined; dvPhilosophy?: number }) {
   // 선발 7인(코트 6 + 리베로) 항상 + 교체 투입돼 기록 생긴 비선발. 득점순(동점=선발 순서).
   const order = useMemo(() => {
-    const lu = buildLineup(squad);
+    const lu = buildLineup(squad, dvPhilosophy);
     const starters = [...lu.six, lu.libero].filter((p): p is Player => !!p);
     const ids = new Set(starters.map((p) => p.id));
     const subs = squad.filter((p) => !ids.has(p.id) && !!box?.get(p.id));
     return [...starters, ...subs];
-  }, [squad, box]);
+  }, [squad, box, dvPhilosophy]);
   const rows = order
     .map((p, i) => ({ p, l: box?.get(p.id) ?? emptyBox(), i }))
     .sort((x, y) => pts(y.l) - pts(x.l) || y.l.atkAtt - x.l.atkAtt || x.i - y.i);
