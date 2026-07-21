@@ -73,3 +73,5 @@ cd /c/project/volleyball && npm run sim:web   # run_in_background
 | 백그라운드 태스크 exit 1인데 로그 무에러 | 외부 종료(재부팅·세션 정리) | 같은 명령 재기동만 — 원인 사냥 불요 |
 | 폰에서 "연결 필요" | 앱이 PROD 지향(재포인트 안 됨) | Expo를 EXPO_PUBLIC_SERVER_URL로 재기동 + 앱 리로드 |
 | 에뮬에서 접속 | 에뮬은 LAN IP 대신 10.0.2.2 사용 | `exp://10.0.2.2:8082` 딥링크 |
+| server/app 라우트 전부 404(HTML) | **Next 16 Turbopack이 락파일 2개로 워크스페이스 루트를 바깥 리포로 오인** | `server/next.config.mjs` `turbopack.root` 고정(2026-07-21 커밋) — 로그의 "inferred your workspace root" 경고가 신호 |
+| 셸 DATABASE_URL 오버라이드를 줬는데도 라우트가 54322로 행(500 40s+) | Next 16 Turbopack dev에서 셸 env가 라우트 핸들러에 안 먹는 회귀(plain node에선 셸이 이김) | `server/.env.development.local`의 DATABASE_URL을 직접 55432로(gitignored — 수정 전 scratchpad 백업). 재기동은 고아 next 프로세스 전부 kill+`.next` 삭제 후(고아가 물려 있으면 새 인스턴스가 0바이트 행) |
