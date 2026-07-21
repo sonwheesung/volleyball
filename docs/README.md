@@ -118,12 +118,12 @@
 npx tsc --noEmit                          # 앱 타입체크
 npx tsc --noEmit -p tsconfig.test.json    # 테스트 타입체크
 npm test                                  # node --test (현재 205 통과)
-npx tsx tools/auditBoard.ts 6              # 보드 안무 프레임 감사(기하 원리 룰 A~Q + 사용자보고 18~37 + ASCII 덤프)
-npx tsx tools/checkBoardFixes.ts           # 보드 타깃 측정(패서 깊이·터치아웃·서브전환 — "의도대로 바뀌었나")
-npx tsx tools/checkBlockerCross.ts         # 블로커 좌우 교차(프레임 정확 — 실제 애니메이션 위치)
+npx tsx tools/auditBoard.ts 6              # 보드 안무 프레임 감사(기하 원리 룰 A~Q + 사용자보고 18~37 + ASCII 덤프). 이상 장면 >0이면 exit 1(이빨 배선 2026-07-21). exit 0/1
+npx tsx tools/checkBoardFixes.ts           # 보드 타깃 측정(패서 깊이·터치아웃·서브전환 — "의도대로 바뀌었나") — 목표치를 BOARD_RULES 불변식 어서션+exit로 승격(2026-07-21): ③패서 3m라인뒤100%[룰32/57]·⑦터치아웃 이탈>40px·추격>60px[룰33]·⑧서브전환100%[룰34]·②BA교차0[룰35/39]. exit 0/1
+npx tsx tools/checkBlockerCross.ts         # 블로커 좌우 교차(프레임 정확 — 실제 애니메이션 위치). BA 교차 0 불변식[룰35/39] 어서션+exit(2026-07-21). exit 0/1
 npx tsx tools/_dv_cover.ts 40              # 토스 커버 안무(BOARD_RULES 룰 62·68, 발견·검증=Fable 5/수정=Opus) — 룰62 제외방향(옵션→커버 누출 0·공격수 자기커버 0) + 룰68 포함방향(백어택 근접 슬롯=전위 행 정합, 후위 침입 0·전위<2 폴백 별도) + 구 x-only 로직 A/B(침입 44.9% 재현=민감도). 2026-07-16 "비세터 후위→전위 질주" 봉인. exit 0/1
 npx tsx tools/_dv_receive_lanes.ts         # 리시브 패서 레인 3등분(COURT_POSITIONING A-1·룰 69, 발견·검증=Fable 5/수정=Opus) — 전 로테이션×양 사이드×7팀: 최대 무패서 구간 ≤0.55W(수정 후 0.36~0.38W)·오버랩 룰Q 위반 0·결정론 + 구 존컬럼 로직 A/B(4/6 로테이션 0.66~1.00W 붕괴 재현). 2026-07-16 포지셔닝 전면 검수 산출. exit 0/1
-npx tsx tools/_dv_detour.ts                # 왕복(detour) 검출(시나리오 C·TUNING_LOG R2, 검증=Fable 5/수정=Opus) — 수비 후위가 "나갔다 제자리"로 도는 왕복 건수(구 switchedSpots 구석 리셋 1683건 → defTransition 24건, 잔존=정당한 read→commit) + A/B(코너 튕김 주입 100% 검출). 2026-07-18 #131. exit 0/1
+npx tsx tools/_dv_detour.ts                # 왕복(detour) 검출(시나리오 C·TUNING_LOG R2, 검증=Fable 5/수정=Opus) — 수비 후위가 "나갔다 제자리"로 도는 왕복 건수(구 switchedSpots 구석 리셋 1683건 → defTransition 24건 → **재베이스라인 34건@40경기·5c3307d**, 잔존=정당한 read→commit) + A/B(코너 튕김 주입 100% 검출). **exit 이빨 실배선(2026-07-21)**: 상한 = 경기수×1.5/경기(≈76% 마진, R2형 재발 ~42/경기는 잡음) + 오라클 ≥90%. 2026-07-18 #131. exit 0/1
 npx tsx tools/checkRecords.ts              # 통산 리더보드 셀렉터(병합·정렬·팀필터)
 npx tsx tools/checkClubRanks.ts            # 구단 정체성 recentRanks 열별 순위=유효 순열(중복/결손 0)·strengthBias 합=0(2026-06-24 중복 버그 가드)
 npx tsx tools/checkSubs.ts                 # 작전 교체 로그(재생 불변식·세트말 net-zero — 부상 교체는 kind:'injury' 영구스왑 예외) + FIVB 규칙(재진입·1왕복·**타슬롯 재진입 EC-SUB-02**) + 개입 주입 묶음(위반 개입 no-op)
@@ -144,7 +144,7 @@ npx tsx tools/_dv_facewarm.ts              # 아바타 시트 워밍 인덱서(f
 # (_dv_preseason_pred.ts·_dv_reputation_dist.ts = 다시즌 통계 게이트(예측 Spearman·명성 분포/경로) — 무거움, 스태프 밸런스 변경 시 on-demand)
 npx tsx tools/_dv_liberostam.ts 500        # 리베로 체력 튜닝(MATCH §7.1, 검증=Fable 5/구현=Opus) — 밴드(L 3세트+∈[88,93]%·최저<80%·타포지션 드리프트|Δ|<3%p) + A/B(DV_LIBDEF=0 시임=무보정 mutant→98.5%>93 밴드이탈). LIBERO_DEFENSE_COST=0.16(매 랠리 균일 후위수비 소모). exit 0/1
 # (_ab_manual_side.ts = 완전 수동 승률 A/B 실측 참고도구, 항상 exit 0 판정 아님 — on-demand)
-npx tsx tools/_dv_injurysub.ts             # 경기 내 부상 교체(MATCH §1.3d, 발견·검증=Fable 5/구현·문서=Opus) — (a)결정론 400시드×2=0 (b)부상아웃 코트 재등장0 (c)FIVB 예외교체=예산·재진입(usedSubIn/usedStarterOut) 미소모+작전 net-zero 불변 (d)심각도 게이트 severe/injuries≈SEVERE_INJURY_FRAC(0.12·실측13.4%) (e)경기당 부상교체율 0.029 출력 + A/B(FRAC→1.0 mutant→게이트 FAIL 증명). exit 0/1
+npx tsx tools/_dv_injurysub.ts             # 경기 내 부상 교체(MATCH §1.3d, 발견·검증=Fable 5/구현·문서=Opus) — (a)결정론 400시드×2=0 (b)부상아웃 코트 재등장0 (c)FIVB 예외교체=예산·재진입(usedSubIn/usedStarterOut) 미소모+작전 net-zero 불변(base six는 엔진과 동일 dvPhilosophy 인자로 재구성 — v11 우주 정합, 2026-07-21) (d)심각도 게이트 severe/injuries≈SEVERE_INJURY_FRAC(0.12·실측12.2%) (e)경기당 부상교체율 0.024 출력 + **A/B 실행형**(자식 spawn에 env `DV_SEVFRAC=1.0` 시임→중상/발동 base 15.6%→mutant 100%로 (d)게이트 붕괴 실증, rally.ts 프로덕션은 리터럴 0.12·DV_LIBDEF 패턴). exit 0/1
 npx tsx tools/_gt_facontract.ts            # 재계약·FA 영입 시나리오 15케이스(reSign 게이트·캡·프랜차이즈·외인면제·FA 등급/endSeason 불변식, exit 0/1)
 npx tsx tools/_gt_bench.ts                  # 주전·벤치 시나리오 9케이스(라인업·마지막리베로·7인가드·건의게이트·suggestStart 최약주전 EC-LU-02, exit 0/1)
 npx tsx tools/_dv_bench2.ts                 # 독립검증 — EC-LU-02 옛버그(최강벤치) 재주입 A/B 88/88 검출·사유 우선순위 (독립 세션 산출)

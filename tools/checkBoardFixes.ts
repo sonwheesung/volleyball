@@ -138,4 +138,20 @@ log(`\n⑧ 서브팀 수비 전환 타이밍 (pass 구간 N=${passSegs})`);
 log(`  상대 리시브(pass) 중 이미 수비 쪽으로 전환 중: ${(100 * transitioningSegs / Math.max(1, passSegs)).toFixed(0)}%  (목표: 높음 — 공격 전 전환)`);
 log(`\n② 블로커 좌우 교차 (블록 벽 ${tossWalls}건)`);
 log(`  출발↔도착 순서 뒤집힘(BA 교차): ${crossingWalls}건 (${(100 * crossingWalls / Math.max(1, tossWalls)).toFixed(1)}%)  (목표: 0)`);
-log('완료.');
+
+// ── 이빨: 측정만 하던 목표치를 어서션+exit로 승격(정본 근거 docs/BOARD_RULES.md) ──
+//   임계는 "커밋 시점 측정치"가 아니라 문서화된 설계 불변식:
+//   ③ 룰 32/57 — 패서는 3m 라인(0.66H) 뒤 평평 라인(0.79)이라 100% 구조적. ⑦ 룰 33 — 이탈 중앙값 >40px·추격 >60px(shortPx=70).
+//   ⑧ 룰 34 — 상대 리시브 중 수비 전환 100%. ② 룰 35/39 — BA 교차 0.
+log('\n검증(임계=BOARD_RULES 불변식):');
+const outMed = med(outBeyond), chaseMed = med(outChaserGap);
+const passerPct = passerN ? passerBehindLine / passerN : 0, transPct = passSegs ? transitioningSegs / passSegs : 0;
+const fails: string[] = [];
+const check = (ok: boolean, label: string) => { log(`  ${ok ? 'PASS' : 'FAIL ❌'} — ${label}`); if (!ok) fails.push(label); };
+check(passerN > 0 && passerBehindLine === passerN, `③ 패서 3m 라인 뒤 100% (${(100 * passerPct).toFixed(1)}%, N=${passerN}) [룰 32/57]`);
+check(outBeyond.length > 0 && outMed > 40, `⑦ 터치아웃 경계 이탈 중앙값 >40px (${outMed.toFixed(0)}px, N=${outBeyond.length}) [룰 33]`);
+check(outChaserGap.length > 0 && chaseMed > 60, `⑦ 터치아웃 추격 최근접 중앙값 >60px (${chaseMed.toFixed(0)}px, N=${outChaserGap.length}) [룰 33 shortPx=70]`);
+check(passSegs > 0 && transitioningSegs === passSegs, `⑧ 서브팀 수비 전환 100% (${(100 * transPct).toFixed(1)}%, N=${passSegs}) [룰 34]`);
+check(crossingWalls === 0, `② BA 교차 0 (${crossingWalls}/${tossWalls}건) [룰 35/39]`);
+log(fails.length ? `\n❌ 실패 ${fails.length}건 — ${fails.join(' / ')}` : '\n✅ 전부 통과.');
+process.exit(fails.length ? 1 : 0);

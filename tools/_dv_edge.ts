@@ -29,7 +29,7 @@ let backAtkChecked = 0, backAtkInFront = 0;
 for (let m = 0; m < nMatches; m++) {
   const hId = teams[m % teams.length], aId = teams[(m + 1) % teams.length];
   const hPs = getEvolvedTeamPlayers(hId, 0), aPs = getEvolvedTeamPlayers(aId, 0);
-  const L: Lineups = { home: buildLineup(hPs), away: buildLineup(aPs) };
+  const L: Lineups = { home: buildLineup(hPs, coachInfoOf(hId)?.dvPhilosophy ?? 0), away: buildLineup(aPs, coachInfoOf(aId)?.dvPhilosophy ?? 0) }; // 엔진 six와 동일 인자(육성철학) — subEvents 재생 슬롯 정합
   const byId = new Map<string, Player>();
   for (const p of [...hPs, ...aPs]) byId.set(p.id, p);
   const seed = 565656 + m * 8087;

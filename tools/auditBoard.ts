@@ -431,3 +431,5 @@ if (total === 0) {
     }
   }
 }
+// 이빨: 이상 장면이 하나라도 있으면 배터리가 빨강이 되도록 exit 1 (기준 docs/BOARD_RULES.md).
+process.exit(total === 0 ? 0 : 1);

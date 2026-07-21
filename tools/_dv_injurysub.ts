@@ -15,6 +15,7 @@ import { newRallyStats } from '../engine/rally';
 import { applySubsToSix } from '../components/courtDirector';
 import type { SimResult } from '../engine/simMatch';
 import type { Player, Side } from '../types';
+import { execFileSync } from 'node:child_process';
 
 const log = (m: string) => process.stdout.write(m + '\n');
 
@@ -23,7 +24,7 @@ const ids = LEAGUE.teams.map((t) => t.id);
 const sq: Record<string, Player[]> = {};
 for (const id of ids) sq[id] = getEvolvedTeamPlayers(id, 0);
 
-const N = Math.max(1, Number(process.argv[2]) || 3000);
+const N = Math.max(1, Number(process.argv.find((x) => /^\d+$/.test(x))) || 3000);
 const DET_N = 400;
 
 // SimResult 요약(결정론 비교용) — 랠리 결과 + 교체 로그.
@@ -37,6 +38,27 @@ const pair = (m: number): [string, string] => {
   const hi = ids[m % ids.length], ai = ids[(m * 3 + 1) % ids.length];
   return [hi, ai];
 };
+
+// (f·A/B 실행형) SEVERE_INJURY_FRAC load-bearing 증명용 경량 측정 — 중상/발동 비율만 산출.
+//   프로덕션(env 미설정)=리터럴 0.12. 자식은 DV_SEVFRAC=1.0(전건 중상 mutant) 하에서 돌아 게이트 붕괴를 실증.
+function measureSevere(n: number): { injFired: number; injSevere: number; injSubEvents: number } {
+  let f = 0, sev = 0, subs = 0, s2 = 800000;
+  for (let m = 0; m < n; m++) {
+    const [hi, ai] = pair(m); if (hi === ai) continue; s2 += 7;
+    const st = newRallyStats();
+    const sim2 = simulateMatch(s2, sq[hi], sq[ai], { home: coachInfoOf(hi), away: coachInfoOf(ai), stats: st });
+    f += st.injuries; sev += st.injurySevere;
+    subs += (sim2.subEvents ?? []).filter((e) => e.kind === 'injury').length;
+  }
+  return { injFired: f, injSevere: sev, injSubEvents: subs };
+}
+
+// 자식 모드: DV_SEVFRAC 시임 하에서 중상/발동만 JSON으로 뱉고 종료(직접 호출 불필요).
+if (process.argv.includes('--child')) {
+  process.stdout.write(JSON.stringify(measureSevere(N)));
+  process.exit(0);
+}
+if (process.env.DV_SEVFRAC != null) { log('⚠ DV_SEVFRAC가 부모 env에 설정됨 — 베이스라인 오염. unset 후 재실행.'); process.exit(2); }
 
 // ── (a) 결정론 ──
 let detFail = 0;
@@ -75,7 +97,12 @@ for (let m = 0; m < N; m++) {
   const byId = new Map<string, Player>();
   for (const p of home) byId.set(p.id, p);
   for (const p of away) byId.set(p.id, p);
-  const baseSix: Record<Side, Player[]> = { home: buildLineup(home).six, away: buildLineup(away).six };
+  // base six는 엔진(match.ts:122 `buildLineup(players, hc.dvPhilosophy ?? 0)`)과 **동일 인자**로 재구성 — 육성철학
+  //   U23 에지가 어긋나면 subEvents 슬롯 매핑이 틀어져 net-zero(c3) 재생이 허위 위반을 낸다(TEST_METHODOLOGY §4).
+  const baseSix: Record<Side, Player[]> = {
+    home: buildLineup(home, coachInfoOf(hi)?.dvPhilosophy ?? 0).six,
+    away: buildLineup(away, coachInfoOf(ai)?.dvPhilosophy ?? 0).six,
+  };
 
   // (b) 부상 아웃 선수 재등장 0 — 부상 이후 모든 랠리 시점의 코트 6인에 outId 없음.
   for (const e of injEvs) {
@@ -139,9 +166,22 @@ assert(severeRatio < 0.30, '(d) 심각도 게이트 — 중상 ≪ 발동(참고
 assert(severeRatio > 0.04 && severeRatio < 0.25, '(d) 중상/발동 ≈ SEVERE_INJURY_FRAC(0.12)', ` (${(severeRatio * 100).toFixed(1)}%)`);
 assert(injSubEvents > 0, '(e) 실제 부상 교체 발생(연출 켜짐)');
 
+// ── (f·A/B 실행형) SEVERE_INJURY_FRAC load-bearing 실증 — 자식에 DV_SEVFRAC=1.0 시임을 줘 (d) 게이트가 실제로 무너지는지 확인.
+//   프로덕션(env 미설정)은 리터럴 0.12 그대로(DV_LIBDEF와 동일 패턴·결정론 무영향). mutant=1.0이면 모든 발동이 중상 → severeRatio→~100%.
+const AB_N = 800; // A/B 전용 표본(자식 1회 spawn)
+const baseAB = measureSevere(AB_N);
+const childOut = execFileSync('npx', ['tsx', process.argv[1], '--child', String(AB_N)], {
+  env: { ...process.env, DV_SEVFRAC: '1.0' }, encoding: 'utf8', shell: process.platform === 'win32', maxBuffer: 1 << 20,
+});
+const mutAB = JSON.parse(childOut.trim()) as { injFired: number; injSevere: number; injSubEvents: number };
+const baseR = baseAB.injFired ? baseAB.injSevere / baseAB.injFired : 0;
+const mutR = mutAB.injFired ? mutAB.injSevere / mutAB.injFired : 0;
+log(`\n(f·A/B) DV_SEVFRAC 시임(N=${AB_N}): base 중상/발동 ${(100 * baseR).toFixed(1)}% → mutant(1.0) ${(100 * mutR).toFixed(1)}% · 부상교체 ${baseAB.injSubEvents}→${mutAB.injSubEvents}`);
+const abPass = mutR > 0.30 && baseR < 0.25; // mutant은 (d) 게이트(severeRatio<0.30)를 무너뜨려야 = 상수 load-bearing(허위 오라클 차단)
+assert(abPass, '(f·A/B) mutant(DV_SEVFRAC=1.0) 중상/발동 >30%(게이트 붕괴) & base <25% — 상수 load-bearing 실증', ` (base ${(100 * baseR).toFixed(1)}% / mutant ${(100 * mutR).toFixed(1)}%)`);
+
 const pass = detFail === 0 && failReappear === 0 && failRecycle === 0 && failTacticalOnSlot === 0
   && failTacticalNetZero === 0 && tacticalEnters > 0 && injFired > 0 && injSevere > 0
-  && severeRatio < 0.30 && injSubEvents > 0;
-log('\n(f) 변이 노트: SEVERE_INJURY_FRAC(rally.ts)을 1.0으로 바꾸면 (d) 게이트가 무너져 severe≈injuries·교체율 급등 → 이 가드가 즉시 FAIL해야 정상(민감도).');
+  && severeRatio < 0.30 && injSubEvents > 0 && abPass;
 log(pass ? '\n완료 — 전부 PASS.' : '\n완료 — 실패 있음.');
 process.exit(pass ? 0 : 1);

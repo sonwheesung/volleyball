@@ -40,7 +40,7 @@ for (let m = 0; m < N; m++) {
   const seed = 1000 + m * 31;
   const sim = simulateMatch(seed, hs, as, { home: coachInfoOf(hId), away: coachInfoOf(aId), touches: true });
   const rallies = reconstructRallies(sim);
-  const base = { home: buildLineup(hs), away: buildLineup(as) };
+  const base = { home: buildLineup(hs, coachInfoOf(hId)?.dvPhilosophy ?? 0), away: buildLineup(as, coachInfoOf(aId)?.dvPhilosophy ?? 0) }; // 엔진 six와 동일 인자(육성철학) — subEvents 재생 슬롯 정합
   const byId = new Map<string, any>(); for (const p of hs) byId.set(p.id, p); for (const p of as) byId.set(p.id, p);
   const eff = (i: number): Lineups => ({
     home: { ...base.home, six: applySubsToSix(base.home.six, 'home', sim.subEvents, i, byId) },
@@ -113,3 +113,16 @@ for (const e of examples) log('  · ' + e);
 const abRate = abInjected ? abCaught / abInjected : 0;
 log(`\nA/B 자가검증(중간 목표를 코너로 튕겨 인위 왕복 주입): ${abCaught}/${abInjected} (${(100 * abRate).toFixed(0)}%) → ${abRate >= 0.9 ? '✅ 오라클 유효(왕복이면 잡힘)' : '⚠ 오라클 둔감'}`);
 log(detours === 0 ? '\n결론: ✅ 왕복 0건' : `\n결론: ⚠ 왕복 ${detours}건 (베이스라인이면 정상 — 도구 민감도 증명 / 수정 후면 잔존)`);
+
+// ── 이빨: 왕복은 "0 불변식"이 아니라 잔존형(정당한 read→commit 포함)이라 상한+오라클 게이트로 배선. ──
+//   재베이스라인(5c3307d·2026-07-21): 왕복 34건@40경기 = 0.85/경기(종전 24 — Phase D 라인업 변동 여파, 육성철학
+//   base six 정합 수정 후에도 34로 불변 = 잔존 특성이지 base 드리프트 아님). 상한 1.5/경기(≈76% 마진)로 정당 잔존은
+//   흘리되, 구 R2 버그(switchedSpots 구석 리셋 1683건@40 ≈ 42/경기)형 부채꼴↔구석 진동 재발은 즉시 잡는다.
+//   오라클(A/B 코너 튕김 검출률)이 90% 미만이면 detour 수치가 무의미하므로 함께 FAIL.
+const CEIL = Math.ceil(N * 1.5);
+const oracleOk = abRate >= 0.9;
+const withinCeil = detours <= CEIL;
+log(`\n검증: 상한 ${CEIL}건(=${N}경기×1.5/경기, 베이스라인 34@40경기+마진) · 오라클 ${(100 * abRate).toFixed(0)}%`);
+log(`  ${withinCeil ? 'PASS' : 'FAIL ❌'} — 왕복 ${detours} ≤ ${CEIL}`);
+log(`  ${oracleOk ? 'PASS' : 'FAIL ❌'} — A/B 오라클 유효(${(100 * abRate).toFixed(0)}% ≥ 90%)`);
+process.exit(withinCeil && oracleOk ? 0 : 1);

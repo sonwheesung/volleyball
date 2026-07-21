@@ -31,7 +31,7 @@ for (let m = 0; m < nM; m++) {
   const hs = getEvolvedTeamPlayers(hId, 0), as = getEvolvedTeamPlayers(aId, 0);
   const sim = simulateMatch(1000 + m * 31, hs, as, { home: coachInfoOf(hId), away: coachInfoOf(aId) });
   const rallies = reconstructRallies(sim);
-  const base = { home: buildLineup(hs), away: buildLineup(as) };
+  const base = { home: buildLineup(hs, coachInfoOf(hId)?.dvPhilosophy ?? 0), away: buildLineup(as, coachInfoOf(aId)?.dvPhilosophy ?? 0) }; // 엔진 six와 동일 인자(육성철학) — subEvents 재생 슬롯 정합
   const byId = new Map<string, any>(); for (const p of hs) byId.set(p.id, p); for (const p of as) byId.set(p.id, p);
   const eff = (i: number) => ({ home: { ...base.home, six: applySubsToSix(base.home.six, 'home', sim.subEvents, i, byId) }, away: { ...base.away, six: applySubsToSix(base.away.six, 'away', sim.subEvents, i, byId) } });
   for (let ri = 0; ri < rallies.length; ri++) {

@@ -44,7 +44,9 @@ export const STAM_REGEN_BASE = 0.005; // 랠리 사이 회복(2026-06-28 튜닝)
 const LIBERO_DEFENSE_COST = process.env.DV_LIBDEF != null ? Number(process.env.DV_LIBDEF) : 0.16;
 const INJ_EFF = 0.5; // 부상 시 효율 배수(9.3)
 // 부상 발동 중 실제 코트 교체(중상)로 승격되는 비율 — placeholder(측정으로 튜닝, 1.3d). 대부분은 참고 뛴다(×0.5).
-const SEVERE_INJURY_FRAC = 0.12;
+//   ⚙ 값은 프로덕션 고정 리터럴 0.12. `DV_SEVFRAC` 환경변수는 **가드 전용 A/B 시임**(프로덕션 미설정 → 0.12, 결정론 무영향 —
+//   DV_LIBDEF·FIN_OLD_UNIVERSE와 동일 패턴). `_dv_injurysub.ts`가 자식 프로세스에 `DV_SEVFRAC=1.0`(=전건 중상 mutant)을 줘 (d) 게이트 FAIL 민감도를 증명.
+const SEVERE_INJURY_FRAC = process.env.DV_SEVFRAC != null ? Number(process.env.DV_SEVFRAC) : 0.12;
 
 // ── 서브 타입 (2장) ── [에이스 기저, 범실 기저]
 type ServeT = 'safe' | 'float' | 'jumpfloat' | 'spike';

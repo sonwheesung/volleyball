@@ -18,7 +18,7 @@ const t0 = LEAGUE.teams[0].id, t1 = LEAGUE.teams[1].id;
 const A = availableTeamPlayers(t0, 0), B = availableTeamPlayers(t1, 0);
 // 실앱(MatchCourt)과 동일하게 **작전 교체 반영 라인업(applySubsToSix)** 으로 보드 재생 —
 // 정적 six로 재생하면 교체 투입 리시버(recvId)가 six에 없어 근접 폴백→불일치로 잘못 계측(2026-07-06 진단).
-const baseL: Lineups = { home: buildLineup(A), away: buildLineup(B) };
+const baseL: Lineups = { home: buildLineup(A, coachInfoOf(t0)?.dvPhilosophy ?? 0), away: buildLineup(B, coachInfoOf(t1)?.dvPhilosophy ?? 0) }; // 엔진 six와 동일 인자(육성철학) — subEvents 재생 슬롯 정합
 const byIdMap = new Map<string, Player>();
 for (const p of [...A, ...B]) byIdMap.set(p.id, p);
 const effAt = (sim: any, i: number): Lineups => ({

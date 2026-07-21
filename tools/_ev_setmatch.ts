@@ -17,7 +17,7 @@ const N = parseInt(process.argv[2] || '300', 10);
 const SHUFFLE = process.argv[3] === 'shuffle';
 const t0 = LEAGUE.teams[0].id, t1 = LEAGUE.teams[1].id;
 const A = availableTeamPlayers(t0, 0), B = availableTeamPlayers(t1, 0);
-const baseL = { home: buildLineup(A), away: buildLineup(B) };
+const baseL = { home: buildLineup(A, coachInfoOf(t0)?.dvPhilosophy ?? 0), away: buildLineup(B, coachInfoOf(t1)?.dvPhilosophy ?? 0) }; // 엔진 six와 동일 인자(육성철학) — subEvents 재생 슬롯 정합
 const byIdMap = new Map<string, Player>();
 for (const p of [...A, ...B]) byIdMap.set(p.id, p);
 const base = { home: coachInfoOf(t0), away: coachInfoOf(t1), touches: true } as any; // touches: 보드가 실제 게임처럼 엔진 디그/세트 재생

@@ -56,7 +56,12 @@ for (let m = 0; m < N; m++) {
   const byId = new Map<string, Player>();
   for (const p of home) byId.set(p.id, p);
   for (const p of away) byId.set(p.id, p);
-  const baseSix: Record<Side, Player[]> = { home: buildLineup(home).six, away: buildLineup(away).six };
+  // base six는 엔진(match.ts:122 `buildLineup(players, hc.dvPhilosophy ?? 0)`)과 **동일 인자**로 재구성해야
+  //   subEvents 슬롯 매핑이 어긋나지 않는다(육성철학 U23 에지). 엔진과 어긋나면 net-zero 재생이 허위 위반을 낸다(TEST_METHODOLOGY §4).
+  const baseSix: Record<Side, Player[]> = {
+    home: buildLineup(home, coachInfoOf(hi)?.dvPhilosophy ?? 0).six,
+    away: buildLineup(away, coachInfoOf(ai)?.dvPhilosophy ?? 0).six,
+  };
   const idsOf = (ps: Player[]) => new Set(ps.map((p) => p.id));
   const squadIds: Record<Side, Set<string>> = { home: idsOf(home), away: idsOf(away) };
 
@@ -118,7 +123,7 @@ let injBundle = 0, injFired = 0, injReenter = 0, injXEntered = 0;
     const hi = ids[m % ids.length], ai = ids[(m * 7 + 3) % ids.length];
     if (hi === ai) continue;
     const home = sq[hi], away = sq[ai];
-    const lu = buildLineup(home);
+    const lu = buildLineup(home, coachInfoOf(hi)?.dvPhilosophy ?? 0); // 엔진 six와 동일 인자 — 개입 outId가 실제 선발과 일치해야 iv1 발화
     const sixIds = new Set(lu.six.map((p) => p.id));
     const liberoId = lu.libero?.id;
     const starters = lu.six.filter((p) => p.position !== 'S' && p.position !== 'L');

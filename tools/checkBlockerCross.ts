@@ -89,4 +89,9 @@ for (let m = 0; m < N; m++) {
 log(`\n② 블로커 좌우 교차 (프레임 정확, 블록 벽 ${walls}건)`);
 log(`  실제 위치 출발↔도착 순서 뒤집힘(BA 교차): ${crossings}건 (${(100 * crossings / Math.max(1, walls)).toFixed(2)}%)  목표 0`);
 for (const e of examples) log('  · ' + e);
-log('완료.');
+
+// ── 이빨: 프레임 정확 BA 교차는 0이 불변식(룰 35/39 — 서브 직후 수비 베이스 전환이 출발 순서를 벽 순서와 일치). ──
+const ok = walls > 0 && crossings === 0;
+log('\n검증(임계=BOARD_RULES 룰 35/39):');
+log(`  ${ok ? 'PASS' : 'FAIL ❌'} — ② 블로커 BA 교차 0 (프레임 정확) (${crossings}/${walls}건)`);
+process.exit(ok ? 0 : 1);
