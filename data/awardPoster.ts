@@ -20,6 +20,14 @@ import { teamColors } from '../lib/teamColor';
 import { SEASON_DAYS } from '../engine/calendar';
 
 /** 포지션 영문 라벨(포스터 상단 소제목) */
+// 상별 포스터 배경 자산(AWARDS_SYSTEM §8) — 자산이 준비된 상만 등록. 화면들이 공용으로 import(중복 require 방지).
+// 신규 자산 추가 절차: kling/GPT로 레퍼런스 첨부 생성 → 1080×1440 webp 변환 → 민트 라인 스캔으로 패널 좌표가
+// 기준(top 79.9%·bottom 95.1%)과 일치하는지 확인(불일치면 AwardPoster 좌표 확장 필요) → 여기 등록.
+export const AWARD_TEMPLATES = {
+  mvp: require('../assets/awards/mvp_stage.webp'),
+  finalsMvp: require('../assets/awards/finals_mvp_stage.webp'), // 2026-07-21 kling 생성 — 패널 좌표 실측 79.9~95.1%(기준과 동일)
+} as const;
+
 export const POS_EN: Record<Position, string> = {
   S: 'SETTER', OH: 'OUTSIDE HITTER', OP: 'OPPOSITE', MB: 'MIDDLE BLOCKER', L: 'LIBERO',
 };

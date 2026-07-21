@@ -12,6 +12,7 @@ import { emblemFor } from '../data/emblems';
 import { useGameStore } from '../store/useGameStore';
 
 const MVP_TEMPLATE = require('../assets/awards/mvp_stage.webp');
+const FINALS_TEMPLATE = require('../assets/awards/finals_mvp_stage.webp');
 
 // 레이아웃 스트레스 샘플(목업) — 긴 이름·세터(포지션별 5칸)·리베로 케이스로 시안 점검.
 const SAMPLES: { title: string; props: Omit<AwardPosterProps, 'template'> }[] = [
@@ -59,6 +60,19 @@ export default function AwardsPosterPreview() {
             ovr={real.ovr} stats={real.stats} emblem={real.emblem}
           />
         ) : null}
+      </View>
+
+      <View style={styles.block}>
+        <Text style={styles.cap}>샘플 · 챔프전 MVP 템플릿 (FINALS MVP)</Text>
+        <AwardPoster
+          template={FINALS_TEMPLATE}
+          seasonLabel="2025-26" name="여미정" posEn={POS_EN.OP} ovr={88}
+          stats={[
+            { label: '득점', value: '736' }, { label: '공격', value: '660' }, { label: '블로킹', value: '52' },
+            { label: '서브', value: '24' }, { label: '디그', value: '356' },
+          ]}
+          emblem={emblemFor('t1')}
+        />
       </View>
 
       {SAMPLES.map((s) => (

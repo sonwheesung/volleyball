@@ -10,6 +10,9 @@ import { Button, Card, IconLabel, Loading, Muted, Screen, theme, themedStyles, u
 import { ChampionCelebration } from '../components/ChampionCelebration';
 import { getTeam, getPlayer, reconstructForeignName } from '../data/league';
 import { currentSeasonAwards } from '../data/awards';
+import { AwardPoster } from '../components/AwardPoster';
+import { AWARD_TEMPLATES, buildAwardPosterData } from '../data/awardPoster';
+import { leagueProduction } from '../data/production';
 import { buildPlayoffs } from '../data/playoffs';
 import { revealedChampionId } from '../data/postseason';
 import { seasonYear } from '../data/seasonLabel';
@@ -47,6 +50,14 @@ function Inner() {
     return id ? (getPlayer(id)?.name ?? reconstructForeignName(id) ?? undefined) : undefined;
   }, [championId, season]);
   const champName = championId ? (getTeam(championId)?.name ?? championId) : '-';
+  // 챔프전 MVP 포스터(AWARDS_SYSTEM §8) — 자산·수상자 있을 때만. 리그 시상식과 중복 수여 아님(여기가 유일 수여처 §5.3).
+  const finalsPoster = useMemo(() => {
+    if (!championId) return null;
+    const w = currentSeasonAwards(season).finalsMvp;
+    if (!w) return null;
+    return buildAwardPosterData(w, season, my ?? null, leagueProduction(Number.MAX_SAFE_INTEGER));
+  }, [championId, season, my]);
+
 
   const goAwards = () => router.push('/awards-ceremony');
 
@@ -65,6 +76,20 @@ function Inner() {
           </View>
         </Card>
       )}
+      {finalsPoster ? (
+        <View style={{ alignItems: 'center', marginTop: 14, gap: 8 }}>
+          <AwardPoster
+            template={AWARD_TEMPLATES.finalsMvp}
+            seasonLabel={finalsPoster.seasonLabel}
+            name={finalsPoster.name}
+            posEn={finalsPoster.posEn}
+            ovr={finalsPoster.ovr}
+            stats={finalsPoster.stats}
+            emblem={finalsPoster.emblem}
+          />
+          {finalsPoster.isMine ? <Muted style={{ color: theme.accent, fontWeight: '800' }}>우리 구단의 챔프전 MVP</Muted> : null}
+        </View>
+      ) : null}
     </Screen>
   );
 }

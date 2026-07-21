@@ -11,7 +11,7 @@ import { AwardIllustration } from '../components/AwardIllustration';
 import { AwardPoster } from '../components/AwardPoster';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { currentSeasonAwards } from '../data/awards';
-import { buildAwardPosterData } from '../data/awardPoster';
+import { buildAwardPosterData, AWARD_TEMPLATES } from '../data/awardPoster';
 import { leagueProduction } from '../data/production';
 import { getPlayer, shortTeamName, reconstructForeignName } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
@@ -25,10 +25,7 @@ const AnimView = Animated.View;
 
 // 상별 포스터 배경 자산 매핑 (AWARDS_SYSTEM §8). template이 있는 상만 포스터 연출로 렌더하고,
 // 없는 상은 기존 카드(winnerCard) 유지 — 자산을 추가하면 같은 AwardPoster로 갈아끼워진다.
-const AWARD_TEMPLATE: Partial<Record<'mvp' | 'finalsMvp' | 'rookie' | 'mostImproved', ImageSourcePropType>> = {
-  mvp: require('../assets/awards/mvp_stage.webp'),
-  // finalsMvp/rookie/mostImproved: 자산 준비되면 여기에 추가 → posterData 빌드만으로 동일 연출.
-};
+const AWARD_TEMPLATE: Partial<Record<'mvp' | 'finalsMvp' | 'rookie' | 'mostImproved', ImageSourcePropType>> = AWARD_TEMPLATES;
 
 export default function AwardsCeremony() {
   const ready = useDeferredReady(); // currentSeasonAwards(leagueProduction 풀시즌)이 무거움 — 로딩부터(결산과 동일)
