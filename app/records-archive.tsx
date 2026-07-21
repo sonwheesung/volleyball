@@ -1,7 +1,7 @@
 // 기록 보관소 — 마이페이지(마이페이지 탭) → "기록"에서 진입하는 스택 화면(2026-06-30 네비 개편).
 // 구 `app/(tabs)/history.tsx`(기록 탭)의 본문을 그대로 옮긴 것. 시즌·통산·명예의전당·연표 4탭.
 // 업적 링크와 스포트라이트(history.*)는 마이페이지 허브로 이동 — 여기선 순수 기록 열람만.
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Card, Loading, Muted, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
@@ -46,8 +46,13 @@ export default function RecordsArchive() {
   return <RecordsInner />;
 }
 
+// 진입 시 초기 탭 파라미터(홈 "리그 기록" 카드가 ?tab=season으로 진입 — 2026-07-21). 미전달·미지원 값은 시즌(0).
+const TAB_PARAM: Record<string, number> = { season: 0, career: 1, hof: 2, chronicle: 3 };
+
 function RecordsInner() {
   const router = useRouter();
+  const params = useLocalSearchParams<{ tab?: string }>();
+  const initialTab = TAB_PARAM[params.tab ?? ''] ?? 0;
   const teamId = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
@@ -63,7 +68,7 @@ function RecordsInner() {
     return hallOfCoaches(coachCareerLog, activeIds);
   }, [coachCareerLog, coachPool]);
 
-  const [tab, setTab] = useState(0);          // 0 시즌 · 1 통산 · 2 명예의전당 · 3 연표
+  const [tab, setTab] = useState(initialTab); // 0 시즌 · 1 통산 · 2 명예의전당 · 3 연표 (초기값=?tab 파라미터)
   const [viewSeason, setViewSeason] = useState(season);
   const [scope, setScope] = useState<'league' | 'team'>('league'); // 통산 범위
 

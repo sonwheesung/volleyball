@@ -118,7 +118,7 @@ function DashboardInner() {
         </Card>
       </SpotlightTarget>
 
-      {/* 재정 — 한 장 요약(상세 기록은 마이페이지 → 기록) */}
+      {/* 재정 — 한 장 요약(상세 기록은 아래 "리그 기록") */}
       <SpotlightTarget id="dash-finance">
         <Card accent={theme.warn} flat>
           <Row>
@@ -155,6 +155,16 @@ function DashboardInner() {
           </Row>
         </Card>
       </SpotlightTarget>
+
+      {/* 리그 기록 — 마이페이지에서 홈으로 이동(2026-07-21 사용자 지시: 접근성, 마이페이지 깊이가 불편).
+          탭하면 기록 아카이브의 '시즌' 탭(현재 시즌 기록)으로 바로 진입(?tab=season). tint=gold·trophy는 구 마이페이지 카드와 동일. */}
+      <Card accent={theme.gold} onPress={() => router.push('/records-archive?tab=season')}>
+        <Row>
+          <IconLabel icon="trophy-outline" color={theme.gold}>리그 기록</IconLabel>
+          <Text style={{ color: theme.muted, fontWeight: '700' }}>{'›'}</Text>
+        </Row>
+        <Muted style={{ fontSize: 12.5, marginTop: 2 }}>이번 시즌 기록 · 통산 · 명예의전당 · 연표</Muted>
+      </Card>
 
       {/* 리그 뉴스 — 진입점만(내용은 뉴스 화면에서). 안읽음 수만 표시.
           카드+앵커는 **항상** 렌더한다: 온보딩(day 0)엔 뉴스가 없어도 dash.news 스포트라이트가 가리킬 대상이 있어야 한다.

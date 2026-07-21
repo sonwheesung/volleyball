@@ -1,6 +1,6 @@
 // 마이페이지 — 구단주의 개인 허브(2026-06-30 네비 개편, 구 "기록" 탭 대체).
-// 핵심 게임플레이(구단·일정·선수단·단장실)와 별개인 "애매한 항목"을 한곳에: 기록·업적·설정·튜토리얼.
-// 기록 본문은 무거워 스택 화면(/records-archive)으로 분리 — 여기선 진입점만(허브는 가볍게).
+// 핵심 게임플레이(구단·일정·선수단·단장실)와 별개인 "애매한 항목"을 한곳에: 공지·상점·업적·설정·튜토리얼.
+// 기록(records-archive)은 홈 탭 "리그 기록" 카드로 이동(2026-07-21 — 접근성). 스택 화면 /records-archive는 그대로, 진입점만 홈.
 import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
@@ -207,7 +207,9 @@ export default function MyPage() {
       </Card>
       {/* 그룹 사이 여백만 넓혀 자연스럽게 구분(UI polish, item 6 — 구분선 없음, 그룹 내부 간격 12 유지).
           각 group 래퍼 marginTop 10 + 스크롤 gap 12 = 그룹 사이 ~22, 그룹 내부는 12. */}
-      {/* ── 자주 보는 것 (공지·상점·기록·업적) ── */}
+      {/* ── 자주 보는 것 (공지·상점·업적) ──
+          '기록' 카드는 홈 탭(리그 순위 아래)으로 이동(2026-07-21 사용자 지시: 접근성, 마이페이지 깊이가 불편).
+          이 카드엔 스포트라이트 앵커·튜토리얼 스텝이 없어(tab-mypage 스포트라이트 2026-07-05 제거) 고아 앵커 생성 없음. */}
       <View style={styles.group}>
         <LinkCard icon="megaphone-outline" tint={theme.accent} title="공지사항"
           sub="업데이트 · 이벤트 · 안내"
@@ -221,11 +223,6 @@ export default function MyPage() {
         <LinkCard icon="bag-handle-outline" tint={theme.sky} title="상점"
           sub={WORLDCUP_ENABLED ? '다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원' : '다이아 구매 · 광고 제거 · 구매 복원'}
           onPress={() => router.push('/shop')} />
-
-        {/* 옛 '기록' 탭 투어 앵커(history-top·history-ach)는 마이페이지 통합 때 투어 스텝이 사라져 고아 — 제거(_dv_tips, 2026-07-14) */}
-        <LinkCard icon="trophy-outline" tint={theme.gold} title="기록"
-          sub="시즌 · 통산 리더보드 · 명예의전당 · 연표"
-          onPress={() => router.push('/records-archive')} />
 
         <LinkCard icon="ribbon-outline" tint={theme.warn} title="업적"
           sub="구단주의 발자취. 우승 · 시상 · 레전드 · 기록 · 운영"

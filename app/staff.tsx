@@ -120,7 +120,7 @@ export default function Staff() {
       showAlert('먼저 감독을 경질하세요', `${head!.name} 감독이 재직 중입니다.\n새 감독을 영입하려면 위에서 현재 감독을 먼저 경질해 주세요.`);
       return;
     }
-    showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)} · ${STAFF_CONTRACT_YEARS}년 계약\n\n새 감독을 반영해 시즌 전력을 다시 계산합니다.`, [
+    showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)} · ${STAFF_CONTRACT_YEARS}년 계약`, [
       { text: '취소', style: 'cancel' },
       { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다. 새 감독의 성향으로 팀이 움직입니다.`); }, `${name} 감독이 부임해\n선수들에게 전술을 설명하는 중…`) },
     ]);
@@ -143,7 +143,7 @@ export default function Staff() {
     ]);
   };
   const tryHireAsst = (id: string, name: string, salary: number) =>
-    showAlert('코치 영입', `${name} 코치를 영입하시겠습니까?\n연봉 ${formatMoney(salary)}\n\n새 코치를 반영해 시즌 전력을 다시 계산합니다.`, [
+    showAlert('코치 영입', `${name} 코치를 영입하시겠습니까?\n연봉 ${formatMoney(salary)}`, [
       { text: '취소', style: 'cancel' },
       { text: '영입', onPress: () => heavyAction(() => { if (!hireAssistant(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 코치가 합류했습니다.`); }, `${name} 코치가 합류해\n훈련 계획을 짜는 중…`) },
     ]);
