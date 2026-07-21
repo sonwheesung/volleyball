@@ -13,32 +13,35 @@ import {
   interimRenown, reputationOf, coachPreference, resolveCoachMarket, assistantCoachRep,
   type CoachCareerRow, type CoachAsstCareerRow, type TeamContext, type MarketCoach,
 } from '../engine/reputation';
-import { COACH_NAMES } from './names';
+import { genStaffName } from './names';
 import type { CoachSpecialty } from '../types';
 
 const EXT_SPECIALTIES: CoachSpecialty[] = ['attack', 'defense', 'stamina', 'setter', 'mental'];
 /** 외부 명장 A급 유입 (STAFF §8.1 phase③ 재생성) — 은퇴자 유입만으론 상위코치 멸종을 못 막아, 매 시즌 소수 A급을
  *  풀에 결정론적으로 투입한다("해외/타 리그 출신 명장"). 빈도는 밸런스로 조정(과다=글럿 회귀). */
-function makeExternalCoach(season: number): AssistantCoach {
+function makeExternalCoach(season: number, taken: Set<string>): AssistantCoach {
   const rng = createRng(strSeed(`extcoach:${season}`));
   const sp = EXT_SPECIALTIES[strSeed(`extsp:${season}`) % EXT_SPECIALTIES.length];
   const rating = 80 + rng.int(0, 8); // 80~88 A급 입구
   const id = `coach-ext-s${season}`;
-  return { id, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: 42 + rng.int(0, 12), specialty: sp, type: coachTypeFor(id, sp), rating, salary: assistantSalary(rating), teamId: null };
+  rng.int(0, 11); // 구 COACH_NAMES 추첨 소비 위치 보존(이 rng는 시즌 격리 스트림) — 이름은 genStaffName(현 풀과 중복 회피)
+  return { id, name: genStaffName(id, taken), age: 42 + rng.int(0, 12), specialty: sp, type: coachTypeFor(id, sp), rating, salary: assistantSalary(rating), teamId: null };
 }
 
 /** 신임(대체급) 감독 생성 — 프리 감독·승격 가능 코치가 모두 고갈됐을 때의 공급 안전장치.
  *  결정론(teamId·season 시드). 풀에 영구 합류해 공급을 보충(다음부터 이 감독도 순환). */
-function makeInterimCoach(teamId: string, season: number): Coach {
+function makeInterimCoach(teamId: string, season: number, taken: Set<string>): Coach {
   const rng = createRng(strSeed(`interim-coach:${teamId}:${season}`));
   const matchOps = 38 + rng.int(0, 18); // 구 charisma 생성식 그대로
   const styles: CoachStyle[] = ['attack', 'defense', 'balanced'];
   const id = `coach-int-${teamId}-s${season}`;
   const axes = deriveHeadAxes(id);
   const renown = interimRenown(id); // 신임=무명(8~17)
+  rng.int(0, 11); // 구 COACH_NAMES 추첨 소비 위치 보존(시즌·팀 격리 스트림) — 이름은 genStaffName(현 풀과 중복 회피)
+  const name = genStaffName(id, taken);
   return {
     id,
-    name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)],
+    name,
     age: 44 + rng.int(0, 16), matchOps, ...axes, renown, style: styles[rng.int(0, 2)],
     archetype: '신임', trainingFocus: DEFAULT_FOCUS, salary: headCoachSalary(headOvr({ matchOps, ...axes }), renown),
     teamId: null, contractYears: undefined,
@@ -166,7 +169,8 @@ export function advanceCoaches(
   }
   // 4.5) 외부 명장 A급 유입(phase③ 재생성) — 2시즌마다 1명("소수" — 빈도가 상위 공급 튜닝 손잡이, 과다=글럿 회귀).
   if (season % 2 === 0) {
-    const ext = makeExternalCoach(season);
+    const takenNames = new Set<string>([...coaches, ...assistants].map((c) => c.name)); // 현 풀 지도자 이름 — 동명이인 회피
+    const ext = makeExternalCoach(season, takenNames);
     if (!assistants.some((a) => a.id === ext.id)) { assistants.push(ext); newCoaches.push(ext.name); }
   }
 
@@ -220,7 +224,8 @@ export function advanceCoaches(
           coaches.push(free); assistants = assistants.filter((a) => a.id !== best.id); promoted.push(best.name);
         } else {
           // 프리 감독·승격 코치 모두 고갈 → 신임 감독 신규 영입(팀은 절대 무감독이 되지 않는다)
-          free = makeInterimCoach(teamId, season);
+          const takenNames = new Set<string>([...coaches, ...assistants].map((c) => c.name)); // 현 풀 지도자 이름 — 동명이인 회피
+          free = makeInterimCoach(teamId, season, takenNames);
           coaches.push(free); newCoaches.push(free.name);
         }
       }

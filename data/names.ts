@@ -135,6 +135,18 @@ export function genForeignName(seedKey: string): string {
   return '노바';
 }
 
+/** 지도자(감독·전문 코치·스카우터) 이름 — 선수와 **같은 절차적 음절 생성기**(genKoreanName)를 공유한다.
+ *  (출시 원칙 2026-07-21: 실존 V리그 감독 실명 금지 → 고정 12개 리스트 COACH_NAMES 폐기. UI_RULES 참조.)
+ *  id 시드 결정론(같은 seedKey·같은 taken 순서 → 같은 이름). taken(같은 리그의 이미 쓰인 지도자 이름)과 충돌하면
+ *  salt(#k)를 올려 재추첨 → 한 화면(코치 시장)에 동명이인 동시 노출이 사실상 사라진다(구조적 중복 해소, dedupeNames와 동형).
+ *  taken을 갱신(부수효과) — 호출부는 한 리그당 하나의 Set을 순서대로 넘긴다. 메인 rng 불간섭(id 서브스트림). */
+export function genStaffName(seedKey: string, taken: Set<string>): string {
+  let nm = genKoreanName(seedKey);
+  for (let k = 1; k < 500 && taken.has(nm); k++) nm = genKoreanName(`${seedKey}#${k}`);
+  taken.add(nm);
+  return nm;
+}
+
 export interface AsianIdentity { name: string; nat: string }
 /** 아시아쿼터 이름+국적 — 국적별 음절 풀 조합. id 시드 결정론. */
 export function genAsianIdentity(seedKey: string): AsianIdentity {
@@ -148,10 +160,8 @@ export function genAsianIdentity(seedKey: string): AsianIdentity {
   return { name: '아이', nat };
 }
 
-export const COACH_NAMES = [
-  '차상우', '문병호', '서남원', '강성형', '고희진', '권순찬',
-  '이영택', '마우리시오', '아본단자', '필립', '한상길', '오세진',
-];
+// COACH_NAMES(고정 12개 리스트) 제거(2026-07-21) — 실존 V리그 감독 실명이라 퍼블리시티권 리스크(출시 원칙, UI_RULES).
+//   감독·전문 코치·스카우터 이름은 이제 genStaffName(선수와 동일한 절차적 음절 생성기)으로 뽑는다 — 중복 억제 포함.
 
 // 한국 여자배구(KOVO V리그) 기준 7개 구단 — 가상 명칭
 export const TEAM_NAMES = [

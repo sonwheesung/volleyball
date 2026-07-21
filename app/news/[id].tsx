@@ -13,7 +13,7 @@ import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, IconLabel, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../../components/Screen';
 import { POS_LABEL } from '../../components/posTokens';
-import { buildNewsFeed, freshNews, newsKey } from '../../data/news';
+import { buildNewsFeed, freshNews, newsKey, newsSubtitle, isPreseasonRankNews, PRESEASON_LEAD } from '../../data/news';
 import { seasonYear } from '../../data/seasonLabel';
 import { displayCutoff } from '../../data/standings';
 import { KIND_KO } from '../news';
@@ -67,31 +67,8 @@ const dhash = (s: string): number => {
 };
 const dpick = <T,>(arr: T[], key: string, salt = 0): T => arr[dhash(`${key}|${salt}`) % arr.length];
 
-// ── 부제(teal 한 줄) — kind별 톤(§11.3): 우승=축하 / 부상·징계=담담 / 이적·외인·모기업=시장 / 데뷔=기대 /
-//    은퇴·HOF=회고 / 수상·기록·순위=객관. 변형은 뉴스키 해시(결정론). 억지 사실 금지 — 톤 프레이밍만(실사실은 카드가 전달). ──
-const SUBTITLE_BY_KIND: Record<NewsItem['kind'], string[]> = {
-  champion: ['긴 시즌의 마지막 정상, 그 무게를 증명했다', '정규리그부터 봄배구까지, 모든 길의 끝에 섰다', '한 시즌을 관통한 저력이 왕좌에서 확인됐다'],
-  award: ['코트 위 생산이 만든 한 시즌의 훈장', '기록이 증명한 그해의 이름', '한 시즌의 꾸준함이 상으로 이어졌다'],
-  milestone: ['세월이 쌓여 새겨진 통산의 이정표', '오랜 누적이 마침내 한 고비를 넘었다', '커리어에 굵은 이정표가 하나 세워졌다'],
-  hof: ['코트를 떠나 전당에 이름을 새기다', '긴 여정의 끝, 기록은 역사로 남는다', '한 시대를 마감하고 전당으로 향한다'],
-  injury: ['전력 공백, 로테이션에 변수가 생겼다', '반갑지 않은 소식, 복귀 시점이 관건이다', '팀은 당분간 빈자리를 메워야 한다'],
-  scandal: ['코트 밖에서 불거진 사건, 후폭풍이 남았다', '팀은 핵심 자원을 잃은 채 일정을 소화한다', '징계의 무게가 시즌에 그림자를 드리웠다'],
-  owner: ['성적과 정서 사이, 팬심이 출렁였다', '간판의 기용을 두고 여론이 움직였다', '구단 운영은 성적만큼 정서도 살펴야 한다'],
-  streak: ['분위기가 곧 순위로 이어진 흐름', '한 시즌의 물길을 가른 연속 기록', '흐름을 탄 순간이 시즌을 흔들었다'],
-  standing: ['한 시즌의 성적표가 순위로 정리됐다', '다음 시즌의 출발선이 여기서 정해졌다', '성적은 팬심과 구단 살림으로 이어진다'],
-  match: ['한 경기에 새겨진 인상적인 기록', '코트 위 활약이 숫자로 남았다', '시즌을 통틀어 손꼽을 한 장면이다'],
-  debut: ['미래의 자원이 코트에 첫발을 디뎠다', '데뷔 무대의 기록이 커리어의 출발점이 된다', '다음 세대의 성장 곡선이 여기서 시작된다'],
-  transfer: ['시장이 움직였다, 새 유니폼의 도전', 'FA 시장에 또 하나의 계약이 성사됐다', '익숙한 코트를 떠나 새 도전을 시작한다'],
-  release: ['재계약 불발, 새 둥지를 찾아야 하는 처지', 'FA 시장에 새 이름이 나왔다', '한 시즌의 마침표이자 새 출발선이다'],
-  retire: ['긴 여정의 마침표, 남는 것은 기록', '오랜 시간 코트를 지킨 이름이 떠난다', '한 시대를 함께한 선수가 유니폼을 벗는다'],
-  sponsor: ['다가오는 FA 시장, 구단 안팎의 기류', '어디까지나 소문, 시장이 열려봐야 안다', '오프시즌을 앞둔 모기업의 온도차'],
-  offseason: ['겨울의 전력 재편, 개막 진용이 섰다', '누가 오고 누가 떠났는지, 스쿼드가 정리됐다', '새 시즌의 밑그림이 그려졌다'],
-  draft: ['잠재력 높은 신인 자원, 미래를 위한 투자', '즉시 전력보다 성장 여지에 무게를 실었다', '미래의 씨앗이 새 유니폼을 입는다'],
-  foreign: ['외국인 자리의 주인이 바뀌었다', '팀 공격의 핵을 다시 짰다', '외인 결정은 늘 시즌 최대의 도박이다'],
-  playoff: ['봄배구, 한 경기가 시즌의 운명을 가른다', '단기전엔 내일이 없다', '가을부터 달려온 여정의 끝자락이다'],
-  clinch: ['치른 경기만으로 굳어진 순위의 향방', '남은 결과와 무관하게 방향이 정해졌다', '수학이 순위를 먼저 확정했다'],
-  coach: ['벤치의 선택이 팀의 한 시즌을 좌우한다', '사령탑의 여정도 리그의 이야기다', '감독의 이름도 기록으로 남는다'],
-};
+// 부제(teal 한 줄) 풀·선택기는 순수 계층(data/news.ts SUBTITLE_BY_KIND·newsSubtitle)으로 이관 — 가드가 표시 로직을 직접 대조.
+//   프리시즌 예상순위(kind=standing 재사용)는 newsSubtitle이 전용 전망 풀로 분기(결산 톤 유출 차단, §3.7·§10b).
 
 // 관련 기사(§11 골격 6) — 같은 kind + 연관 kind. 실제 피드 링크만(없으면 생략).
 const RELATED_KINDS: Record<NewsItem['kind'], NewsItem['kind'][]> = {
@@ -428,12 +405,13 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
   const p = n.ref ? getPlayer(n.ref) : undefined; // ref가 실제 선수일 때만(champion/clinch/sponsor 등 팀 ref·플옵 게임키는 undefined)
   const isMyTeam = !!n.teamId && n.teamId === myTeamId;
   const accent = KIND_ACCENT()[n.kind];
-  const subtitle = dpick(SUBTITLE_BY_KIND[n.kind], nk, 0);
+  const subtitle = newsSubtitle(n, nk); // 프리시즌 예상순위는 전용 전망 풀로 분기(결산 톤 유출 차단, §3.7)
 
   // 오프시즌 결산은 이동 목록을 구조화 카드(MovesCard)로 렌더한다(산문 몰아넣기 해소, §11.3 B). body는 이미 리드·마무리 산문만.
   const offMoves = n.kind === 'offseason' && n.moves && (n.moves.in.length + n.moves.kept.length + n.moves.out.length) > 0 ? n.moves : null;
   // 본문 — n.body(사실 조립본) 또는 분류 리드 + 선수 주인공이면 신체·역할 사실 한 줄(실값, 감정 금지).
-  const paras: string[] = [n.body ?? LEAD[n.kind]];
+  //   프리시즌 예상순위는 body가 항상 있으나(preseason 풀 조립본), 폴백도 전망 톤 전용 리드로(결산 톤 유출 방지, §3.7).
+  const paras: string[] = [n.body ?? (isPreseasonRankNews(n) ? PRESEASON_LEAD : LEAD[n.kind])];
   if (p) paras.push(`신장 ${p.height}cm · ${p.age}세 ${POS_LABEL[p.position]}.`);
 
   // 선수 정보 카드(안개 준수 — 내 팀=정확 OVR / 타팀=스카우터 등급만큼 범위). draft 기사와 동일 처리.

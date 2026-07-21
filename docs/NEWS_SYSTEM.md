@@ -190,6 +190,12 @@ day 경계 자체가 없어 **시즌 전체 미래 사건**을 노출했다(`dyn
    명성 평가(§9.2 기대 대비)·감독 서사의 **공통 기준선**이라 반드시 공개(숨은 수치=가짜 드라마). **결과-중립**(예측일 뿐 결과 아님) →
    스포일러 무저촉, `day=0`·`season=currentSeason`로 개막 최상단. 예상 순위 원본은 영속 `mediaPredictionLog`(STAFF §9.6-B) —
    `buildNewsFeed` 15번째 인자로 주입(기본 [] → 미주입 시 기사 생략, 기존 호출 무변).
+   - **부제/리드 전용 풀(2026-07-21, 톤 유출 수정)**: `kind='standing'`을 재사용하지만 톤은 **개막 전망**이라야 한다. 본문(`body3('preseason',…)`)은
+     이미 전망 풀이었으나, 상세 화면(`app/news/[id].tsx`) 부제는 `SUBTITLE_BY_KIND['standing']`(시즌 **결산** 톤 — "다음 시즌의 출발선이
+     여기서 정해졌다")에서 뽑혀 결산 문구가 프리시즌 기사에 출력됐다. → **수정**: 부제·리드 선택을 순수 계층(`data/news.newsSubtitle`·
+     `PRESEASON_SUBTITLES`/`PRESEASON_LEAD`)으로 끌어오고, `isPreseasonRankNews`(=`kind==='standing' && ref` 가 `preseason:`로 시작)로
+     **전용 전망 풀**로 분기. 두 풀은 문구가 한 개도 겹치지 않는다(전망 vs 결산 disjoint). 결정론(뉴스키 해시 변주) 유지. 가드 `_dv_preseasonnews`
+     (전용 풀만·결산 톤 유출 0·풀 disjoint + A/B: ref 마커 제거 시 결산 문구 유출 재현).
 
 **표시 타이밍(§9 정합)**: 세 종류 모두 **`day=0`·`season=currentSeason`**(개막 당일)로 부여 → 최신순 정렬 **최상단**(개막 피드
 맨 위) + `freshNews` 2주 만료로 시즌 진행 시 자연 소멸(관전형 — 개막 소식은 개막 무렵만). **리그 진행 컷오프(§3.5)를 타지 않는다**

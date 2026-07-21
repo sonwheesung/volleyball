@@ -23,7 +23,7 @@ import type {
   TrainableStat,
   TrainingFocus,
 } from '../types';
-import { COACH_NAMES, TEAM_NAMES, genKoreanName, genForeignName, genAsianIdentity } from './names';
+import { TEAM_NAMES, genKoreanName, genForeignName, genAsianIdentity, genStaffName } from './names';
 import { clubIdentityByIndex } from './clubIdentity';
 
 export interface League {
@@ -362,6 +362,9 @@ export function generateLeague(seed: number): League {
   const teams: Team[] = [];
   const players: Player[] = [];
   const coaches: Coach[] = [];
+  // 지도자(감독·전문 코치·스카우터) 이름 중복 억제용 — 이 리그의 이미 쓰인 지도자 이름(생성 순서대로 누적).
+  //   genStaffName이 충돌 시 salt를 올려 재추첨 → 코치 시장 한 화면 동명이인 동시 노출 제거(구조적 중복 해소).
+  const staffNames = new Set<string>();
 
   TEAM_NAMES.forEach((teamName, ti) => {
     const teamId = `t${ti}`;
@@ -391,9 +394,11 @@ export function generateLeague(seed: number): League {
     const matchOps = rng.int(45, 95); // 구 charisma 생성식 그대로(메인 rng 소비 불변 — 결정론 등가)
     const axes = deriveHeadAxes(coachId); // 신규 2축(육성 철학·리더십) — id 시드 파생(메인 rng 불간섭)
     const renown = seedRenown(coachId);   // 초기 명성(§9.6-B) — id 시드 12~45
+    rng.int(0, 11); // 구 COACH_NAMES[rng.int(0,11)] 추첨 소비 위치 보존 — 이름은 id 시드(genStaffName)로 전환(메인 rng 스트림 불변 = GOLDEN 등가)
+    const coachName = genStaffName(coachId, staffNames);
     coaches.push({
       id: coachId,
-      name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)],
+      name: coachName,
       age: rng.int(45, 64),
       matchOps,
       ...axes,
@@ -433,8 +438,9 @@ export function generateLeague(seed: number): League {
     const fcId = `fc${i}`;
     const fcAxes = deriveHeadAxes(fcId);
     const fcRenown = seedRenown(fcId);
+    rng.int(0, 11); // 구 COACH_NAMES 추첨 소비 위치 보존(메인 rng 불변) — 이름은 genStaffName
     coaches.push({
-      id: fcId, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(44, 65),
+      id: fcId, name: genStaffName(fcId, staffNames), age: rng.int(44, 65),
       matchOps: ch, ...fcAxes, renown: fcRenown, style: STYLES[rng.int(0, STYLES.length - 1)], archetype: arch.name,
       trainingFocus: arch.focus, salary: headCoachSalary(headOvr({ matchOps: ch, ...fcAxes }), fcRenown), teamId: null,
     });
@@ -444,16 +450,18 @@ export function generateLeague(seed: number): League {
   for (const sp of SPECIALTIES) for (let k = 0; k < 4; k++) {
     const rating = rng.int(52, 92);
     const id = `ac${ai++}`;
+    rng.int(0, 11); // 구 COACH_NAMES 추첨 소비 위치 보존(메인 rng 불변) — 이름은 genStaffName
     assistants.push({
-      id, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(38, 62),
+      id, name: genStaffName(id, staffNames), age: rng.int(38, 62),
       specialty: sp, type: coachTypeFor(id, sp), rating, salary: assistantSalary(rating), teamId: null,
     });
   }
   // 스카우터 12명
   for (let i = 0; i < 12; i++) {
     const sc = rng.int(45, 93);
+    rng.int(0, 11); // 구 COACH_NAMES 추첨 소비 위치 보존(메인 rng 불변) — 이름은 genStaffName
     scouts.push({
-      id: `sc${i}`, name: COACH_NAMES[rng.int(0, COACH_NAMES.length - 1)], age: rng.int(40, 66),
+      id: `sc${i}`, name: genStaffName(`sc${i}`, staffNames), age: rng.int(40, 66),
       scouting: sc, salary: scoutSalary(sc), teamId: null,
     });
   }

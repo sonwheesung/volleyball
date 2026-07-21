@@ -3,6 +3,8 @@
 //   (b) 신규 2축(육성 철학·리더십) 범위 0~100 + id 시드 결정론(두 번 생성 동일)
 //   (c) 파생 유형 라벨 분포 — 세 유형(승부형/육성형/조직관리형) 모두 등장
 //   (d) 세이브 마이그레이션 v3→v4 왕복 — 구 세이브(charisma) 로드 시 크래시 0·값 보존·멱등
+//   (e) 이름 위생(2026-07-21, COACH_NAMES 폐기 — genStaffName 전환) — 시드 리그 지도자(감독·전문코치·스카우터)
+//       이름에 ① 실존 V리그 감독 실명 12종 포함 0건 ② 리그 내 지도자 이름 중복 0건 ③ 결정론(재생성 동일).
 //   실행: npx tsx tools/_dv_coach3axis.ts        (정상 = PASS)
 //         npx tsx tools/_dv_coach3axis.ts --ab   (A/B 자가검증 — 각 체크에 결함 주입 → 검출 증명)
 import { LEAGUE, resetLeagueBase, getTeamCoach, availableCoaches } from '../data/league';
@@ -119,12 +121,41 @@ function checkD(breakIt = false): { pass: boolean; msg: string } {
   return { pass: bad.length === 0, msg: bad.length ? bad.join(' / ') : `v3→v4 왕복 크래시 0·matchOps 값 보존·2축 id파생 충전·멱등(SAVE_VERSION=${SAVE_VERSION})` };
 }
 
+// (e) 이름 위생 — 실명 미포함 + 리그 내 지도자 이름 무중복 + 결정론
+//   실존 V리그 감독 실명(구 COACH_NAMES) — 출시 버전에서 사용 금지(퍼블리시티권, UI_RULES). 생성 이름에 이 부분문자열이
+//   들어가면 실명 유출로 간주(FAIL). genStaffName은 절차적 음절 조합이라 이 12종을 낼 확률 사실상 0.
+const REAL_COACH_NAMES = ['차상우', '문병호', '서남원', '강성형', '고희진', '권순찬', '이영택', '마우리시오', '아본단자', '필립', '한상길', '오세진'];
+/** 시드 리그 지도자 이름 수집(감독 전체=팀+프리 / 전문코치 / 스카우터). resetLeagueBase로 재생성. */
+function collectStaffNames(): { heads: string[]; all: string[] } {
+  resetLeagueBase();
+  const heads = LEAGUE.coaches.map((c) => c.name);
+  const all = [...heads, ...LEAGUE.assistants.map((a) => a.name), ...LEAGUE.scouts.map((s) => s.name)];
+  return { heads, all };
+}
+function checkE(injectReal = false, injectDup = false): { pass: boolean; msg: string } {
+  const { heads, all } = collectStaffNames();
+  const names = [...all];
+  if (injectReal) names.push('서남원');    // A/B: 실명 주입 → 위생 위반 검출돼야
+  if (injectDup) names.push(names[0]);     // A/B: 중복 주입 → 무중복 위반 검출돼야
+  const realHits = names.filter((nm) => REAL_COACH_NAMES.some((r) => nm.includes(r)));
+  const seen = new Set<string>(); const dups: string[] = [];
+  for (const nm of names) { if (seen.has(nm)) dups.push(nm); else seen.add(nm); }
+  const second = collectStaffNames().all; // 재생성 결정론 대조
+  const detOk = second.length === all.length && second.every((nm, i) => nm === all[i]);
+  const pass = realHits.length === 0 && dups.length === 0 && detOk;
+  const msg = pass
+    ? `지도자 ${all.length}명(감독 ${heads.length}·코치+스카우터 ${all.length - heads.length}) 실명 0·중복 0·결정론 OK`
+    : `실명 ${realHits.length}건(${realHits.slice(0, 3).join(',')}) · 중복 ${dups.length}건(${dups.slice(0, 3).join(',')}) · 결정론 ${detOk ? 'OK' : '깨짐'}`;
+  return { pass, msg };
+}
+
 log('=== _dv_coach3axis — 감독 3축 개편(Phase A) 가드 ===');
 const checks: Array<[string, { pass: boolean; msg: string }]> = [
   ['(a) matchOps==구charisma', checkA()],
   ['(b) 2축 범위·결정론', checkB()],
   ['(c) 유형 분포 3종', checkC()],
   ['(d) 세이브 v3→v4 왕복', checkD()],
+  ['(e) 이름 위생(실명0·중복0·결정론)', checkE()],
 ];
 let allPass = true;
 for (const [name, r] of checks) { if (!r.pass) allPass = false; log(`${r.pass ? 'PASS' : 'FAIL'} ${name} — ${r.msg}`); }
@@ -136,6 +167,8 @@ if (AB) {
     ['(b) 2축 범위 위반 주입', checkB(true).pass],
     ['(c) 한 유형만 강제', checkC('competitive').pass],
     ['(d) 마이그레이션 값 오염', checkD(true).pass],
+    ['(e) 실명 주입', checkE(true, false).pass],
+    ['(e) 중복 주입', checkE(false, true).pass],
   ];
   let sensOk = true;
   for (const [name, passUnderMutation] of ab) {
@@ -143,7 +176,7 @@ if (AB) {
     if (!detected) sensOk = false;
     log(`${detected ? 'SENS-OK' : 'SENS-FAIL'} ${name} — 주입 후 ${passUnderMutation ? 'PASS(둔감!)' : 'FAIL(검출됨)'}`);
   }
-  log(sensOk ? 'A/B 민감도: 4/4 결함 전부 검출(허위 오라클 아님)' : 'A/B 민감도: 일부 결함 미검출 — 가드 무효');
+  log(sensOk ? `A/B 민감도: ${ab.length}/${ab.length} 결함 전부 검출(허위 오라클 아님)` : 'A/B 민감도: 일부 결함 미검출 — 가드 무효');
   if (!sensOk) allPass = false;
 }
 
