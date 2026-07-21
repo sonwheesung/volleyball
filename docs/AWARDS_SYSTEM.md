@@ -117,3 +117,45 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
   행 간 27%(≈92px)로 확보. 팀명 `numberOfLines=1`. 정적 명예 배치(로테이션 아님).
 - **검증**: tsc · 빈 상 시즌(무챔프/무신인) 무크래시(비트 생략) · 결산서 시상 카드 제거 확인 · 실기기 육안(실루엣·엠블럼·포지션 렌더).
 - **추후 확장**: 같은 블롭으로 기록 경신(기록판)·HOF(꽃다발)까지 — MILESTONE/NEWS 썸네일 통일감(BROADCAST §7 재활용 항).
+
+## 8. MVP 포스터 연출 (2026-07-21, 사용자 시안)
+> §7의 정규 MVP 클라이맥스를 텍스트 카드(§7 A1) 대신 **한 장의 포스터**로 격상. "시즌 마감의 음미하는 순간"(0장)의
+> 정점을 시각적으로 못박는다. 관전형 1순위(보는 경험) 투자처. 이번 웨이브는 **정규리그 MVP만** 교체하고, 다른
+> 1인 개인상(신인상·기량발전상·챔프전 MVP)은 현행 카드 유지 — 단 자산만 추가하면 같은 컴포넌트로 갈아끼운다.
+
+**템플릿 전략(상별 자산 추가 = 매핑 한 줄)**:
+- 배경 자산 `assets/awards/mvp_stage.webp`(1080×1440, 3:4). 상 타이틀("MVP / MOST VALUABLE PLAYER")은 그림에 박혀
+  있고, **상단(타이틀 위)·하단(라운드 패널)** 만 비어 있어 그 빈칸에만 텍스트를 얹는다.
+- `app/awards-ceremony.tsx`의 `AWARD_TEMPLATE`(award key → require 자산) 매핑 테이블. **지금은 `mvp`만 채워짐.**
+  finalsMvp/rookie/mostImproved 자산이 준비되면 그 줄만 추가 → `buildAwardPosterData` 빌드만으로 동일 포스터 연출.
+- 컴포넌트 `components/AwardPoster.tsx`는 상에 무관한 **순수 재사용 포스터**(props: template·seasonLabel·name·posEn·
+  ovr·stats[4~5]·emblem·accent·footnote·width). 엔진/store 무의존, 결정론 무관(표시 전용).
+- 베스트7은 **제외**(후속) — 7인 코트 배치라 1인 포스터 템플릿과 형식이 다르다. 기존 `Best7Court` 유지.
+
+**오버레이 좌표 규약(퍼센트 = 포스터 *높이* 기준, 자산 실측)**:
+- 상단 시즌 라벨: `top 3.2%~8.5%`(타이틀 상단 y≈12% 위 빈 공간). 소형 키커("SEASON") + 시즌값(`seasonYear`, 예 "2025-26").
+- 하단 정보 패널: `top 79% → bottom 4.5%`(≈95.5%). 그려진 라운드 아웃라인(82~96%)보다 살짝 위에서 시작(시안 y≈79~94%).
+  내부 = 상단행 `[엠블럼 | 포지션영문/이름(큰 한글) | OVR 칩]` + 하단행 `스탯 5칸`.
+- 폰트는 퍼센트 불가 → **렌더 폭(w)에서 파생**(name=w·0.076 등)해 어느 기기 폭에서도 비율 유지. 폭 기본 = 화면폭−32(Screen
+  패딩), 태블릿 과대 방지 상한 460. 색은 배경(고정 다크 네온 이미지) 위라 **앱 라이트/다크 테마 무관** — 고정 민트 네온
+  (`theme.accent` 동계열)·흰색.
+
+**스탯 5칸 데이터 소스(`data/awardPoster.ts posterStats`)**:
+- 시안 5칸은 득점·**공격 성공률**·서브 에이스·**리시브 효율**·수비(디그)였으나, **성공률·효율(비율 지표)은 시즌 집계에
+  존재하지 않는다** — `leagueProduction→ProdLine`은 성공/시도 분모(`atkAtt`·`recvGood/recvErr`)를 보존하지 않고
+  경기 박스(`BoxLine`)는 롤오버로 소멸한다. 지어내지 않고(추정 금지) **실존 카운트로 대체**:
+  - 공격 성공률 → **공격**(킬 `spikes`)
+  - 리시브 효율 → **리시브**(`receives` = `recvAtt` 카운트)
+- 포지션 대표 우선(`repRecordLine` 철학): OH/OP=득점·공격·서브·리시브·디그(시안 그대로) · S=득점·**세트**·서브·디그·블로킹 ·
+  MB=득점·공격·**블로킹**·서브·디그 · L=**디그·리시브**·세트·서브·블로킹(득점 무의미 포지션은 대표 기록 앞세움).
+- OVR = 수상자 `overall(getPlayer)`(시즌 시작 base, 표시 스케일 `displayOvr`) — 표시 플러리시. 우리 구단 MVP는 포스터 아래
+  "우리 구단의 MVP" 태그(포스터 자체는 민트 자산 톤 유지, 팀색 오염 안 함).
+
+**배선 지점**: `app/awards-ceremony.tsx` MVP 비트(클라이맥스, 마지막) — `AWARD_TEMPLATE.mvp` + `mvpPoster`(=`buildAwardPosterData(aw.mvp, …, leagueProduction(MAX))`,
+aw.mvp와 동일 집계로 스탯 귀속 일치)가 있으면 `AwardPoster`, 없으면 기존 `winnerCard` 폴백(자산 누락·미출전 안전).
+
+**개발 미리보기**: `app/awards-poster-preview.tsx`(DEV_TOOLS 게이트 — 운영 빌드 진입 차단, `office` 탭 개발용 카드에서 진입).
+현재 시즌 실 MVP + 레이아웃 스트레스 샘플(긴 이름 OH·세터)로 시안 반복 확인. 샘플은 이 화면 전용 목업(운영 미노출).
+
+- **검증**: tsc 0 · npm test 무회귀(연출 전용 — 엔진·store 무접촉) · `posterStats` A/B 민감도(각 필드 변이 → 정확히 해당 칸만
+  변화, 오귀속 0) · 실기기 육안(오버레이 좌표·좁은 기기 폭·엠블럼).

@@ -87,6 +87,14 @@ export default function Office() {
           </Row>
         </Card>
       ) : null}
+      {DEV_TOOLS ? (
+        <Card onPress={() => router.push('/awards-poster-preview')}>
+          <Row>
+            <Title>시상식 포스터 미리보기</Title>
+            <Muted>MVP 포스터 시안 확인 →</Muted>
+          </Row>
+        </Card>
+      ) : null}
       <SpotlightOverlay screen="tab-office" />
     </Screen>
   );

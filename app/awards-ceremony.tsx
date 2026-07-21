@@ -4,11 +4,15 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useRouter } from 'expo-router';
 import { Animated, Image, Pressable, StyleSheet, Text, View } from 'react-native';
+import type { ImageSourcePropType } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { Best7Court } from '../components/Best7Court';
 import { AwardIllustration } from '../components/AwardIllustration';
+import { AwardPoster } from '../components/AwardPoster';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { currentSeasonAwards } from '../data/awards';
+import { buildAwardPosterData } from '../data/awardPoster';
+import { leagueProduction } from '../data/production';
 import { getPlayer, shortTeamName, reconstructForeignName } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { emblemFor } from '../data/emblems';
@@ -18,6 +22,13 @@ import { useGameStore } from '../store/useGameStore';
 import type { AwardWinner } from '../types';
 
 const AnimView = Animated.View;
+
+// 상별 포스터 배경 자산 매핑 (AWARDS_SYSTEM §8). template이 있는 상만 포스터 연출로 렌더하고,
+// 없는 상은 기존 카드(winnerCard) 유지 — 자산을 추가하면 같은 AwardPoster로 갈아끼워진다.
+const AWARD_TEMPLATE: Partial<Record<'mvp' | 'finalsMvp' | 'rookie' | 'mostImproved', ImageSourcePropType>> = {
+  mvp: require('../assets/awards/mvp_stage.webp'),
+  // finalsMvp/rookie/mostImproved: 자산 준비되면 여기에 추가 → posterData 빌드만으로 동일 연출.
+};
 
 export default function AwardsCeremony() {
   const ready = useDeferredReady(); // currentSeasonAwards(leagueProduction 풀시즌)이 무거움 — 로딩부터(결산과 동일)
@@ -51,6 +62,12 @@ function CeremonyInner() {
 
   const pName = (id: string) => getPlayer(id)?.name ?? reconstructForeignName(id) ?? id;
   const isMine = (w?: AwardWinner | null) => !!w && !!my && w.teamId === my;
+
+  // MVP 포스터 데이터 — aw.mvp와 동일 집계(leagueProduction MAX = currentSeasonAwards 기본 uptoDay)로 스탯 귀속 일치.
+  const mvpPoster = useMemo(
+    () => (aw.mvp && AWARD_TEMPLATE.mvp ? buildAwardPosterData(aw.mvp, season, my ?? null, leagueProduction(Number.MAX_SAFE_INTEGER)) : null),
+    [aw.mvp, season, my],
+  );
 
   // 공개 비트(빈 상 생략) — 신인 → 기량발전 → 베스트7 → 챔프MVP → 정규MVP(클라이맥스)
   const beats = useMemo(() => {
@@ -95,9 +112,26 @@ function CeremonyInner() {
       ) });
     }
     // 챔프전 MVP는 champion-ceremony(우승팀 시상식)에서만 수여(중복 금지, §5.3). 여기선 제외.
-    if (aw.mvp) out.push({ key: 'mvp', el: winnerCard('ribbon-outline', '정규리그 MVP', aw.mvp, '', true) });
+    // 정규 MVP(클라이맥스): 포스터 자산이 있으면 AwardPoster 연출, 없으면 기존 카드 폴백.
+    if (aw.mvp) {
+      const el = (AWARD_TEMPLATE.mvp && mvpPoster) ? (
+        <View style={{ alignItems: 'center', gap: 8 }}>
+          <AwardPoster
+            template={AWARD_TEMPLATE.mvp}
+            seasonLabel={mvpPoster.seasonLabel}
+            name={mvpPoster.name}
+            posEn={mvpPoster.posEn}
+            ovr={mvpPoster.ovr}
+            stats={mvpPoster.stats}
+            emblem={mvpPoster.emblem}
+          />
+          {mvpPoster.isMine ? <Text style={styles.mineTag}>우리 구단의 MVP</Text> : null}
+        </View>
+      ) : winnerCard('ribbon-outline', '정규리그 MVP', aw.mvp, '', true);
+      out.push({ key: 'mvp', el });
+    }
     return out;
-  }, [aw, my]);
+  }, [aw, my, mvpPoster]);
 
   const [idx, setIdx] = useState(0);
   const t = useRef(new Animated.Value(0)).current; // 0=숨김 1=표시
