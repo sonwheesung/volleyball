@@ -12,6 +12,8 @@ import { useGameStore } from '../store/useGameStore';
 import { useServerConfig } from '../store/useServerConfig';
 import { LoginScreen } from './LoginScreen';
 import { AnnouncementModal } from './AnnouncementModal';
+import { useSpotlightActive } from './Spotlight';
+import { usePathname } from 'expo-router';
 
 function GateScreen({ icon, title, body, actionLabel, onAction }: { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; body: string; actionLabel: string; onAction: () => void }) {
   return (
@@ -38,6 +40,12 @@ export function BootGate({ children }: { children: ReactNode }) {
   const [boot, setBoot] = useState<BootstrapData | null | undefined>(undefined); // undefined=조회중, null=오프라인/실패(게이트 스킵)
   const [reloadKey, setReloadKey] = useState(0);
   const [annDismissed, setAnnDismissed] = useState(false); // 이번 실행에 공지 모달 닫음(다음 실행에 안 본 것만 재계산)
+  // 공지 모달 보류 게이트(2026-07-21 사용자 보고 — 첫 실행 스포트라이트 온보딩 위에 공지가 겹쳐 깨짐):
+  // 온보딩 경로(인트로·구단 선택)와 스포트라이트 팁 표시 중엔 모달을 띄우지 않는다. 읽음 처리 전이라
+  // 보류일 뿐 유실 없음 — 튜토리얼이 끝나는 즉시 같은 실행 안에서 뜬다(§13.13 "진입 시" 정신 유지).
+  const spotlightBusy = useSpotlightActive();
+  const pathname = usePathname();
+  const onboardingRoute = pathname.startsWith('/onboarding') || pathname.startsWith('/select-team');
 
   useEffect(() => {
     let settled = false;
@@ -95,7 +103,7 @@ export function BootGate({ children }: { children: ReactNode }) {
   return (
     <>
       {children}
-      {!annDismissed && unread.length ? (
+      {!annDismissed && unread.length && !spotlightBusy && !onboardingRoute ? (
         <AnnouncementModal items={unread} onClose={() => { markAnnouncementsRead(unread.map((a) => a.id)); setAnnDismissed(true); }} />
       ) : null}
     </>

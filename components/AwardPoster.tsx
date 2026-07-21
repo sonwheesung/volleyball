@@ -58,8 +58,8 @@ export function AwardPoster({
       <ImageBackground source={template} style={{ width: w, height: h }} resizeMode="cover">
         {/* ── 상단: 시즌 라벨 (타이틀 위 빈 공간) ── */}
         <View style={styles.topZone}>
-          <Text style={[styles.kicker, { fontSize: f.kicker, color: MINT_BRIGHT }]}>{seasonKicker}</Text>
-          <Text style={[styles.season, { fontSize: f.season, color: WHITE }]} numberOfLines={1}>{seasonLabel}</Text>
+          <Text allowFontScaling={false} style={[styles.kicker, { fontSize: f.kicker, color: MINT_BRIGHT }]}>{seasonKicker}</Text>
+          <Text allowFontScaling={false} style={[styles.season, { fontSize: f.season, color: WHITE }]} numberOfLines={1}>{seasonLabel}</Text>
         </View>
 
         {/* ── 하단: 정보 패널 (수상자·OVR·스탯) ── */}
@@ -68,12 +68,12 @@ export function AwardPoster({
           <View style={styles.headRow}>
             {emblem ? <Image source={emblem} style={[styles.emblem, { width: h * 0.058, height: h * 0.058 }]} /> : null}
             <View style={styles.nameCol}>
-              <Text style={[styles.posEn, { fontSize: f.posEn, color: MINT_BRIGHT }]} numberOfLines={1}>{posEn}</Text>
-              <Text style={[styles.name, { fontSize: f.name, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
+              <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, color: MINT_BRIGHT }]} numberOfLines={1}>{posEn}</Text>
+              <Text allowFontScaling={false} style={[styles.name, { fontSize: f.name, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
             </View>
             <View style={[styles.ovrChip, { borderColor: accent }]}>
-              <Text style={[styles.ovrTag, { fontSize: f.ovrTag, color: MINT_DIM }]}>OVR</Text>
-              <Text style={[styles.ovrNum, { fontSize: f.ovrNum, color: accent }]}>{displayOvr(ovr)}</Text>
+              <Text allowFontScaling={false} style={[styles.ovrTag, { fontSize: f.ovrTag, color: MINT_DIM }]}>OVR</Text>
+              <Text allowFontScaling={false} style={[styles.ovrNum, { fontSize: f.ovrNum, color: accent }]}>{displayOvr(ovr)}</Text>
             </View>
           </View>
 
@@ -81,13 +81,13 @@ export function AwardPoster({
           <View style={styles.statRow}>
             {cells.map((c, i) => (
               <View key={c.label + i} style={[styles.statCell, i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: 'rgba(120,230,215,0.28)' }]}>
-                <Text style={[styles.statVal, { fontSize: f.statVal, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{c.value}</Text>
-                <Text style={[styles.statLab, { fontSize: f.statLab, color: MINT_DIM }]} numberOfLines={1}>{c.label}</Text>
+                <Text allowFontScaling={false} style={[styles.statVal, { fontSize: f.statVal, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{c.value}</Text>
+                <Text allowFontScaling={false} style={[styles.statLab, { fontSize: f.statLab, color: MINT_DIM }]} numberOfLines={1}>{c.label}</Text>
               </View>
             ))}
           </View>
 
-          {footnote ? <Text style={[styles.foot, { fontSize: f.foot, color: MINT_DIM }]} numberOfLines={1}>{footnote}</Text> : null}
+          {footnote ? <Text allowFontScaling={false} style={[styles.foot, { fontSize: f.foot, color: MINT_DIM }]} numberOfLines={1}>{footnote}</Text> : null}
         </View>
       </ImageBackground>
     </View>

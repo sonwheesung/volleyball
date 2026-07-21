@@ -73,6 +73,12 @@ export function SpotlightProvider({ children }: { children: ReactNode }) {
   );
 }
 
+/** 현재 화면에 안 본 스포트라이트 팁이 떠 있는가(=오버레이 진행 중) — 공지 모달 등 전역 오버레이가
+ *  튜토리얼과 겹치지 않게 보류할 때 쓴다(2026-07-21 사용자 보고: 공지 모달이 스포트라이트를 깨뜨림). */
+export function useSpotlightActive(): boolean {
+  return useContext(ActiveAnchorCtx) != null;
+}
+
 /** 밝게 띄울 요소를 감싼다 — onLayout + 마운트 직후 여러 번 윈도우 절대좌표를 측정해 등록(언마운트 시만 해제). */
 export function SpotlightTarget({ id, children, style }: { id: string; children: ReactNode; style?: StyleProp<ViewStyle> }) {
   const setTarget = useContext(SetTargetCtx); // 고정 참조 — 아래 effect가 한 번만 돌게 한다
