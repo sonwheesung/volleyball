@@ -178,6 +178,30 @@ P부터 새 전개로 매끄럽게 이어진다. 경기 1회 시뮬은 밀리초
 후보로 보여줘 실제 노출**(iv1이 X를 뺀 뒤 iv2가 X를 타슬롯 IN으로 지정). 수정: `subIn`에 `if (usedStarterOut[side].has(player.id)) return;`
 (개입도 subIn 경유라 자동 no-op 상속). 확장 `checkSubs`(타슬롯 재진입 + 개입 주입 묶음)·`docs/EDGE_CASES.md` EC-SUB-02.
 
+### 4.3 표시 스테일 카운트 봉인 — 주입 좌표 오프바이원(2026-07-21, 테스터 실보고)
+
+**버그**: 개입 시트의 잔여 교체 예산·교체 후보·핀치 차단 판정이 **같은 데드볼에 방금 커밋한 내 개입을 절대 못 셌다**
+(테스터: "남은 5/6에서 3명 교체해도 5/6 그대로"). 원인 = **주입 좌표와 표시 컷오프의 오프바이원**:
+- 유저 sub 개입의 `SubEvent.point`는 랠리 루프 최상단 주입이라 `points.length = ptIdx+1`(직전 기록 점수 `points[ptIdx]` 직후 iteration).
+- 그런데 표시 산출(`ivBudget`·`benchCands`·`outCands`·`pinchBlock`)의 필터가 `point <= ptIdx`(재생 완료 접두)라 **주입 좌표(ptIdx+1)를 1 차이로 배제**.
+- 개입 패널이 열리면 보드 pause로 `ptIdx`가 안 올라 → 연속 교체가 **전부** 미반영. 형제 3곳도 같은 컷오프라 이미 나간 선발이 후보에 잔존·활성 슬롯 재교체 "먹통".
+
+**단순 완화가 금물인 이유(실측)**: 감독 자동 교체(rest/pinch/block/def)도 **같은 iteration에 point=ptIdx+1**로 기록된다(`_tmp_probe` 400/400).
+그래서 `point<=ptIdx+1`로 넓히면 **아직 화면에 안 나온 미래 자동 교체까지 미리 세는** 부작용이 있다. 자동 교체는 개입 블록보다 **뒤**에
+실행돼(match.ts) 유저 다음 개입의 실예산을 깎지 않으므로, **가산하면 안 된다.**
+
+**수정(순수 로그 방식과 동형)**: 표시 산출을 순수 셀렉터 `data/matchInterventionView.ts`로 추출하고, 컷오프를
+**재생 완료(point≤ptIdx) + 아직 재생 안 된 내 지시(pending)** 이중 항으로 바꿨다. pending = 현재 좌표 유저 sub 지시가 실제 적용된
+enter(point===ptIdx+1 & inId이 유저 지시 inId) — 자동 교체는 `usedSubIn` 때문에 유저 inId를 재사용 못 하므로 자연 분리된다.
+타임아웃은 `TimeoutEvent.point = points.length−1 = ptIdx`(개입 sub와 달리 −1)라 `point≤ptIdx`가 이미 포함 → pending 항 불필요(이중카운트 방지).
+injury 축은 유저 개입 무관이라 기존 컷오프 보존.
+
+**동반 발견·수정(코트 모델 dvPhilosophy 불일치)**: `buildMatchBox` 시뮬은 `buildLineup(squad, dvPhilosophy)`인데 보드 `myBaseSix`는
+dv를 생략해, **육성철학 높은 감독(실측 dv97) 팀**에서 근소차 슬롯(OP U23)이 어긋나 `applySubsToSix`가 재생하는 코트가 시뮬과 통째로
+불일치했다(개입 후보·표시 코트 오염). 보드가 **시뮬과 동일 인자(dvPhilosophy)로 라인업**을 구성하도록 수정.
+
+정본 산식·좌표 규약은 `data/matchInterventionView.ts` 헤더 주석. 사각 분류는 `docs/TEST_METHODOLOGY.md §4`("주입 좌표 ↔ 표시 컷오프 오프바이원").
+
 ---
 
 ## 5. 선발/벤치 직접 확정 (#2)
@@ -273,6 +297,9 @@ P부터 새 전개로 매끄럽게 이어진다. 경기 1회 시뮬은 밀리초
 - ✅ `_dv_intervention_empty` — interventions=[] vs 미지정 바이트 동일(1단계 회귀, N=12000).
 - ✅ `_dv_intervention_consistency` — 순수 로그(§2.2): 관전(matchBox)=순위(standings)=생산(production) 바이트 정합 + 발화·회귀·무동작.
   (~~`_dv_snapshot_board`~~ — 스냅샷 폐기(§2.2 순수 로그)로 이 가드로 대체.)
+- ✅ `_dv_ivbudget` — 개입 시트 표시 산출(§4.3 스테일 카운트) 순수 셀렉터(`data/matchInterventionView`)를 **실제 엔진 오라클**로 구동:
+  같은 데드볼 N연속 교체 → 잔여 −1 감소 · subLeft≥2 ⇔ 엔진 실제 수락 · 후보 즉시 배제 = 엔진 실거절(재진입/활성슬롯 no-op) ·
+  재생 진행 후 이중카운트 0 · 개입 없는 경기 구 산식과 바이트 동일(무회귀) · 타임아웃 감소. A/B 민감도: 구 `point≤ptIdx` 산식 재주입 시 전건 FAIL(220/220).
 - 기존 `_dv_playoffs`(바이트공유)·`checkSubs`(net-zero 교체회계)·`_dv_migrate`(세이브 드리프트)·splice/evosig 가드 — 개입 축 반영 후 재통과 확인.
 
 관련: `docs/MATCH_SYSTEM.md`(엔진·§7.4·§8.3) · `docs/OWNER_SYSTEM.md`(건의→직접) · `docs/REALTIME_SIM_SYSTEM.md`(스냅샷·splice) · `docs/SAVE_SYSTEM.md`(신규 필드) · `docs/BOARD_RULES.md`(보드 개입 룰) · `CLAUDE.md`(3장 권한표·기둥 #1).

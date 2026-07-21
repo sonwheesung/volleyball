@@ -13,15 +13,16 @@ import { POS_COLOR } from '../../components/posTokens';
 import { BroadcastBanner } from '../../components/BroadcastBanner';
 import { buildMatchBanners, type Banner } from '../../data/broadcast';
 import { reconstructRallies, buildLiveBanners, applySubsToSix } from '../../components/courtDirector';
-import { getFixture, getTeam, shortTeamName } from '../../data/league';
+import { getFixture, getTeam, shortTeamName, coachInfoOf } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
+import { ivBudget as selIvBudget, ivExclusions, benchCandidates, outCandidates, type IvExclusions } from '../../data/matchInterventionView';
 import { buildLineup } from '../../engine/lineup';
 import { SUBS_PER_SET, TIMEOUTS_PER_SET } from '../../engine/match';
 import { serverIndex } from '../../engine/rotation';
 import { overallRaw, displayOvr } from '../../engine/overall';
 import { deriveRatings } from '../../engine/ratings';
-import type { MatchIntervention, SubEvent } from '../../engine/simMatch';
+import type { MatchIntervention } from '../../engine/simMatch';
 import type { Side, Player } from '../../types';
 import { buildPlayoffs, poSeedBase, finalSeedBase } from '../../data/playoffs';
 import { buildPlayoffBox, type PoRound } from '../../data/postseason';
@@ -229,61 +230,35 @@ export default function MatchBoard() {
   }, [data.homeSquad, data.awaySquad]);
 
   const mySquad = mineSide === 'home' ? data.homeSquad : mineSide === 'away' ? data.awaySquad : [];
-  // 선발 6인(고정) — 빈 로스터 방어
-  const myBaseSix = useMemo(() => (mySquad.length ? buildLineup(mySquad).six : []), [mySquad]);
+  // 선발 6인(고정) — 빈 로스터 방어. **buildMatchBox 시뮬과 동일한 육성철학(dvPhilosophy)으로 라인업을 구성해야**
+  //   시뮬 subEvents(실제 코트 슬롯 기준)를 이 base에 재생했을 때 코트가 일치한다. dv를 빼면 감독 육성철학이 높은 팀에서
+  //   OP 등 근소차 슬롯이 어긋나(예: dv97 → OP가 원선발과 다른 U23) 개입 후보·코트 표시가 실제 시뮬과 불일치(2026-07-21 발견).
+  const myDvPhilosophy = mineSide ? (coachInfoOf(mineSide === 'home' ? data.home.id : data.away.id)?.dvPhilosophy ?? 0) : 0;
+  const myBaseSix = useMemo(() => (mySquad.length ? buildLineup(mySquad, myDvPhilosophy).six : []), [mySquad, myDvPhilosophy]);
   // 현재(다음 랠리 = 개입 적용 지점 ptIdx+1)의 코트 6인 — 교체 로그를 그 지점까지 재생(MatchCourt와 같은 헬퍼)
   const curSix = useMemo(() => {
     if (!mineSide || !myBaseSix.length) return [];
     return applySubsToSix(myBaseSix, mineSide, data.sim.subEvents, score.ptIdx + 1, byIdAll);
   }, [mineSide, myBaseSix, data.sim, score.ptIdx, byIdAll]);
-  // 벤치 후보 = 내 로스터 − 현재코트 − 리베로 − 부상(경기 내) − 이번 세트 이미 투입(usedSubIn) − 뺄 선수와 다른 포지션
-  //   같은 포지션 제한(2026-07-12 사용자 결정): OH 자리에 세터가 들어가는 비현실 라인업 방지. 같은 포지션 벤치가 없으면 후보 0(안내).
-  const benchCands = useMemo(() => {
-    if (!mineSide || !mySquad.length) return [];
-    const outPos = pendingOut ? (curSix.find((p) => p.id === pendingOut)?.position ?? byIdAll.get(pendingOut)?.position) : null;
-    const onCourt = new Set(curSix.map((p) => p.id));
-    // 개입 주입 지점 = 랠리 루프 최상단, 다음 랠리(iteration ptIdx+1). 엔진 usedSubIn/st.injured는 그 지점 '이전'
-    //   커밋된 접두(point ≤ ptIdx)만 반영하고, 이후(point ≥ ptIdx+1) 이벤트는 내 개입 후 재시뮬로 무효(미확정 미래).
-    //   curSix(applySubsToSix, uptoRally=ptIdx+1)가 이미 주입 좌표의 코트를 반영하므로 onCourt와 상보 — 주입 좌표에
-    //   진입한 선수는 onCourt가 걸러 여기서 이중 배제 불필요. (엔진 match.ts:255 subIn point=points.length==ptIdx+1)
-    const evs = data.sim.subEvents ?? [];
-    const priorInSet = (e: (typeof evs)[number]) => e.side === mineSide && e.setNo === score.setNo && e.point <= score.ptIdx;
-    // 이번 세트 이미 진입한 교체선수(재진입 금지, 엔진 usedSubIn) — injury는 usedSubIn에 안 들어가므로 tactical만.
-    const usedIn = new Set(evs.filter((e) => e.enter && e.kind !== 'injury' && priorInSet(e)).map((e) => e.inId));
-    // 이번 세트 교체로 코트를 나간 선발(usedStarterOut) — 다른 슬롯 IN 후보로도 제외(F2 UI 대칭). FIVB 15.6.1: 나갔던
-    //   선발은 재진입 불가(자기 슬롯 1왕복 외). 엔진 대칭: match.ts subIn `usedStarterOut.has(inP.id)→거부`.
-    //   outCands가 만드는 roundTripStarters와 동일 집합(그건 '복귀한 선발 재이탈 금지', 이건 '나간 선발을 다른 자리
-    //   IN 후보로 안 보임'). 복귀해 코트에 있는 선발은 onCourt가 이미 거르므로, 여기 걸리는 건 아직 벤치에 있는 아웃 선발.
-    const outThisSet = new Set(evs.filter((e) => e.enter && e.kind !== 'injury' && priorInSet(e)).map((e) => e.outId));
-    // 이번 경기 부상 이력(st.injured는 경기 전체 지속·세트 무관)이되, 미래(주입 지점 이후) 부상은 미확정 → point 컷오프.
-    const injuredIn = new Set(evs.filter((e) => e.kind === 'injury' && e.side === mineSide && e.point <= score.ptIdx).map((e) => e.outId));
-    return mySquad.filter((p) => p.position !== 'L' && !onCourt.has(p.id) && !usedIn.has(p.id) && !outThisSet.has(p.id) && !injuredIn.has(p.id)
-      && (!outPos || p.position === outPos));
-  }, [mineSide, mySquad, curSix, data.sim, score.setNo, score.ptIdx, pendingOut, byIdAll]);
-  // 뺄 선수 후보(pickOut) — 엔진 subIn이 반드시 거부하는 슬롯을 사전 제외해 "먹통 버튼"(UV-7 ⑥) 방지:
-  //   (a) 부상 교체로 들어온 선수(injuryReplaced 슬롯 잠금, match.ts:241) — injury enter의 inId, 코트 유지
-  //   (b) 이미 1왕복 마친 복귀 선발(usedStarterOut, match.ts:248) — tactical enter의 outId(나갔던 선발), 복귀 시 재이탈 금지
-  //   (c) 아직 코트에 있는 교체 투입 선수(activeSubs 슬롯, match.ts:242 슬롯 재교체 금지) — tactical enter의 inId가 curSix에 있으면
-  //   셋 다 point ≤ ptIdx(주입 지점 이전 커밋 접두)만. 남는 후보 = 손대지 않은 원선발.
-  const outCands = useMemo(() => {
-    if (!mineSide) return curSix;
-    const evs = data.sim.subEvents ?? [];
-    const priorInSet = (e: (typeof evs)[number]) => e.side === mineSide && e.setNo === score.setNo && e.point <= score.ptIdx;
-    const injuryIn = new Set(evs.filter((e) => e.kind === 'injury' && priorInSet(e)).map((e) => e.inId));      // (a)
-    const roundTripStarters = new Set(evs.filter((e) => e.enter && e.kind !== 'injury' && priorInSet(e)).map((e) => e.outId)); // (b)
-    const activeSubIn = new Set(evs.filter((e) => e.enter && e.kind !== 'injury' && priorInSet(e)).map((e) => e.inId));        // (c)
-    return curSix.filter((p) => !injuryIn.has(p.id) && !roundTripStarters.has(p.id) && !activeSubIn.has(p.id));
-  }, [mineSide, curSix, data.sim, score.setNo, score.ptIdx]);
-  // 이번 세트 잔여 개입 예산(UV-7 ④ · 문서 §4) — 엔진 subBudget/timeouts와 동일 산식으로 산출.
-  //   subBudget: 세트당 SUBS_PER_SET 유닛, subIn(IN)·subOut(OUT) 각 1 차감(match.ts:254·264). injury는 예산 밖(match.ts:436 무차감),
-  //     세트말 원복도 subOut 미경유 직접 push라 무차감(match.ts:525) — 따라서 사용량 = 이 세트 tactical(비-injury) subEvent 수(enter+exit 각 1).
-  //   timeouts: 세트당 TIMEOUTS_PER_SET, 내 사이드 작전 타임아웃만(테크니컬 TTO는 예산 무차감·technical=true, match.ts:488). 둘 다 point ≤ ptIdx 접두.
-  const ivBudget = useMemo(() => {
-    if (!mineSide) return { subLeft: 0, toLeft: 0 };
-    const subUsed = (data.sim.subEvents ?? []).filter((e) => e.side === mineSide && e.setNo === score.setNo && e.kind !== 'injury' && e.point <= score.ptIdx).length;
-    const toUsed = (data.sim.timeouts ?? []).filter((t) => t.side === mineSide && t.setNo === score.setNo && !t.technical && t.point <= score.ptIdx).length;
-    return { subLeft: Math.max(0, SUBS_PER_SET - subUsed), toLeft: Math.max(0, TIMEOUTS_PER_SET - toUsed) };
-  }, [mineSide, data.sim, score.setNo, score.ptIdx]);
+  // 이 경기 유저 개입 지시 목록 — 스테일 카운트 수정(§4)의 pending 항 소스. myIv 변화 시 재구독(재시뮬 트리거와 동일).
+  const myDirectives = useMemo(() => (fixture && !isSandbox ? interventionsFor(fixture.id) : []), [fixture, isSandbox, myIv]);
+  // 개입 후보/예산 배제 집합(순수 셀렉터 data/matchInterventionView) — **재생 완료(point<=ptIdx) + 방금 커밋한 내 개입(pending,
+  //   point=ptIdx+1)** 이중 항. 감독 자동 교체(같은 point지만 유저 inId 미재사용)는 배제 → 미래 자동 교체 오산 방지.
+  const ivEx = useMemo<IvExclusions>(() =>
+    ivExclusions(data.sim, (mineSide ?? 'home'), { setNo: score.setNo, h: score.h, a: score.a, ptIdx: score.ptIdx }, myDirectives),
+  [data.sim, mineSide, score.setNo, score.h, score.a, score.ptIdx, myDirectives]);
+  // 벤치 투입 후보(benchCands) — 같은 포지션 제한(2026-07-12 사용자 결정): OH 자리에 세터 방지. 같은 포지션 벤치 없으면 후보 0(안내).
+  //   방금 투입한 선수는 curSix(uptoRally=ptIdx+1)에 반영돼 onCourt가 배제, 방금 나간 선수는 ivEx.enterOutIds가 배제(스테일 수정).
+  const benchCands = useMemo(() =>
+    (mineSide && mySquad.length) ? benchCandidates(mySquad, curSix, byIdAll, pendingOut, ivEx) : [],
+  [mineSide, mySquad, curSix, byIdAll, pendingOut, ivEx]);
+  // 코트에서 뺄 후보(pickOut) — 엔진 subIn이 반드시 거부하는 슬롯(부상교체 투입자·복귀선발·활성 교체 투입자)을 사전 제외해
+  //   "먹통 버튼"(UV-7 ⑥) 방지. ivEx가 pending을 포함하므로 같은 데드볼 연속 교체 시 이미 투입/아웃된 선수가 즉시 반영된다.
+  const outCands = useMemo(() => (mineSide ? outCandidates(curSix, ivEx) : curSix), [mineSide, curSix, ivEx]);
+  // 이번 세트 잔여 개입 예산(UV-7 ④ · 문서 §4) — 순수 셀렉터(엔진 subBudget/timeouts와 동일 산식 + pending 항).
+  const ivBudget = useMemo(() =>
+    mineSide ? selIvBudget(data.sim, mineSide, { setNo: score.setNo, h: score.h, a: score.a, ptIdx: score.ptIdx }, myDirectives) : { subLeft: 0, toLeft: 0 },
+  [mineSide, data.sim, score.setNo, score.h, score.a, score.ptIdx, myDirectives]);
   // 후보 정렬 — 서브 교체(핀치)는 서브 스탯 내림차순(잘 넣는 선수 먼저, 사용자 요청), 일반 교체는 OVR 내림차순.
   const sortedBench = useMemo(() =>
     ivSubKind === 'pinch'
@@ -313,24 +288,13 @@ export default function MatchBoard() {
     if (!server) return { blocked: false, reason: null };
     // ① 세터는 서브차례여도 안 뺀다(5-1 무결성 — 엔진도 세터면 no-op). 엔진 subIn 거부 순서: ③부상 → ②활성 → ④복귀.
     if (server.position === 'S') return { blocked: true, reason: '지금 서브 차례가 세터예요 — 세터는 빼지 않아요' };
-    // 슬롯 상태 재생(현 세트, point ≤ ptIdx 접두): injury enter=부상교체 슬롯(영구 잠금)·tactical enter/exit=활성 교체
-    //   슬롯(순증감)·usedStarterOut=나갔던 선발 id(복귀 시 재이탈 금지 occupant). 엔진 match.ts subIn 가드와 대칭.
-    const evs = data.sim.subEvents ?? [];
-    const inSet = (e: SubEvent) => e.side === mineSide && e.setNo === score.setNo && e.point <= score.ptIdx;
-    const injurySlots = new Set<number>();
-    const activeSlots = new Set<number>();
-    const roundTrip = new Set<string>();
-    for (const e of evs) {
-      if (!inSet(e)) continue;
-      if (e.kind === 'injury') { if (e.enter) injurySlots.add(e.slot); continue; }
-      if (e.enter) { activeSlots.add(e.slot); roundTrip.add(e.outId); }
-      else activeSlots.delete(e.slot);
-    }
-    if (injurySlots.has(slot)) return { blocked: true, reason: '부상 교체가 들어간 자리예요' };
-    if (activeSlots.has(slot)) return { blocked: true, reason: '이미 교체가 들어간 자리예요' };
-    if (roundTrip.has(server.id)) return { blocked: true, reason: '한 번 나갔다 돌아온 선수 자리라 다시 못 빼요' };
+    // 슬롯 상태(현 세트) = 재생 완료(point<=ptIdx) + pending(방금 커밋한 내 개입, point=ptIdx+1) — ivEx 공유(스테일 수정).
+    //   injurySlots=부상교체 슬롯(영구 잠금)·activeSlots=활성 교체 슬롯(net)·enterOutIds=나갔던 선발 id(복귀 시 재이탈 금지). 엔진 subIn 가드와 대칭.
+    if (ivEx.injurySlots.has(slot)) return { blocked: true, reason: '부상 교체가 들어간 자리예요' };
+    if (ivEx.activeSlots.has(slot)) return { blocked: true, reason: '이미 교체가 들어간 자리예요' };
+    if (ivEx.enterOutIds.has(server.id)) return { blocked: true, reason: '한 번 나갔다 돌아온 선수 자리라 다시 못 빼요' };
     return { blocked: false, reason: null };
-  }, [mineSide, iAmServing, curSix, data.sim, score.ptIdx, score.setNo]);
+  }, [mineSide, iAmServing, curSix, data.sim, score.ptIdx, score.setNo, ivEx]);
   // 코트 선수 체력(가능하면) — 현재 지점 직전 마지막 타임아웃 스냅샷에서 id→잔량(0..1)
   const stamMap = useMemo(() => {
     const m = new Map<string, number>();
