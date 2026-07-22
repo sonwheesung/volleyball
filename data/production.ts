@@ -9,7 +9,7 @@ import type { BoxSink } from '../engine/rally';
 import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, LEAGUE, SEASON } from './league';
 import { availableTeamPlayers } from './injury';
 import { currentTxVersion, interventionsFor, manualSideFor } from './dynamics';
-import { restedOnDay } from './rotation';
+import { restedOnDay, promotedOnDay } from './rotation';
 import { minAffectedDaySince, spliceSeq } from './spliceLog';
 
 export interface ProdRow {
@@ -71,26 +71,30 @@ function allProdRows(uptoDay?: number): ProdRow[] {
   const rows: ProdRow[] = [...reuse]; // 재사용 행(dayIndex<minDay, day-정렬) 뒤에 재시뮬 행을 이어 붙임 → 전체 경로와 동일 순서
   for (const day of [...byDay.keys()].sort((a, b) => a - b)) {
     const roster: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
+    const force: Record<string, Set<string>> = {}; // 신인 등용(F) — 선발 승격 force 셋(탈락 팀만 비어있지 않음)
     for (const t of LEAGUE.teams) {
       const avail = availableTeamPlayers(t.id, day); // 부상자 제외 명단(백업 출전)
       const rest = restedOnDay(t.id, day); // 로드매니지먼트(#3) — 순위 굳으면 주전 휴식(순위 재시뮬과 동일 집합)
       roster[t.id] = rest.size ? avail.filter((p) => !rest.has(p.id)) : avail;
+      force[t.id] = promotedOnDay(t.id, day); // 신인 등용(F) — 탈락 확정 팀만 비어있지 않음(순위 재시뮬과 동일 집합)
     }
     for (const f of byDay.get(day)!) {
       // 통계 단일화(2026-06-24): 스코어박스(box)를 통산 생산의 단일 진실로 — 관전 보드가 그린 기록이
       // 그대로 통산/시즌/시상/연봉에 쌓인다(SALARY_SYSTEM 1.3). box는 승패 불변(클론 누적만).
       const box: BoxSink = new Map();
+      const hf = force[f.homeTeamId], af = force[f.awayTeamId]; // 신인 등용 force(F) — 빈 셋이면 byte-동일
       const sim = simulateMatch(f.seed, roster[f.homeTeamId], roster[f.awayTeamId], {
         home: coachInfoOf(f.homeTeamId, f.dayIndex), away: coachInfoOf(f.awayTeamId, f.dayIndex), box, // 축3: 그날의 감독
         interventions: interventionsFor(f.id), // 개입 로그 주입(MATCH_INTERVENTION §2.2) — 비면 [] = 바이트 동일
         manualSide: manualSideFor(f.homeTeamId, f.awayTeamId, f.dayIndex), // 완전 수동 사이드(§4.1) — 로그 비면 undefined = 바이트 동일
+        homeForce: hf, awayForce: af, // 신인 등용(F) — 선발 승격. 빈 셋이면 buildLineup byte-동일
       });
       const homeDv = coachInfoOf(f.homeTeamId, f.dayIndex)?.dvPhilosophy ?? 0; // 육성 철학 U23 에지(§9.6-D) — 라인업/생산 일치
       const awayDv = coachInfoOf(f.awayTeamId, f.dayIndex)?.dvPhilosophy ?? 0;
-      const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed, box, homeDv, awayDv);
+      const lines = attributeProduction(sim, roster[f.homeTeamId], roster[f.awayTeamId], f.seed, box, homeDv, awayDv, hf, af);
       const starters = new Set<string>([
-        ...splitLineup(roster[f.homeTeamId], homeDv).starters.map((p) => p.id),
-        ...splitLineup(roster[f.awayTeamId], awayDv).starters.map((p) => p.id),
+        ...splitLineup(roster[f.homeTeamId], homeDv, hf).starters.map((p) => p.id),
+        ...splitLineup(roster[f.awayTeamId], awayDv, af).starters.map((p) => p.id),
       ]);
       const homeIds = new Set<string>(roster[f.homeTeamId].map((p) => p.id));
       rows.push({ dayIndex: f.dayIndex, homeTeamId: f.homeTeamId, awayTeamId: f.awayTeamId, homeIds, lines, starters });

@@ -4,6 +4,7 @@
 > 사용자 요구 3종을 한 시스템으로: ①순위 굳으면 주전 휴식(로드 매니지먼트, 검증 #3) ②벤치 *사유*를
 > 선수가 정확히 인지 ③사유 + **선수 성격**에 따라 불만/무감정/긍정 상태가 변경·유지.
 > 검증: `simStarters`(선발 9/9)·`simMood`(심리 6/6)·`_ev_rest`(#3 휴식·관전==순위 일치). 버그 가드: EC-LU-01·02.
+> **+ 신인 등용(F, 2026-07-22)**: PO 탈락 확정 팀이 잔여 경기에 신인(`career.seasons===0`)을 선발 승격(휴식과 대칭·같은 라인업 레이어). 검증 `_dv_promote`(3경로 일치·six 포함·바이트동일·상한·A/B·결정론).
 
 ---
 
@@ -155,6 +156,68 @@
 - #5 재해석: "구단주가 벤치 건의 거절당한 선수가, 순위 굳어 휴식 대상이 되며 오히려 안 나올 수도" = rested가 directive와 독립.
 
 ---
+
+## F. 신인 등용 (PO 탈락 확정 팀 신인 선발 승격) — Phase 1 (2026-07-22 사용자 결정 · ✅ 구현)
+
+> 요구: "PO 탈락이 확정된 팀은 남은 경기에서 유망 신인을 선발로 올려 경험을 준다"(관전형 서사 —
+> 탈락팀의 '내년 농사' 장면). A(로드매니지먼트 휴식)와 같은 레이어(라인업)·같은 결정론 골격의 **대칭 기능**이다.
+
+### F.1 발동 조건 (팀 단위 — 휴식보다 **좁다**)
+`teamClinch(teamId, day−1).state === 'eliminated'` 인 팀의 잔여 정규 경기만.
+- `eliminated`(PO 탈락) → 신인 등용 ON.
+- `clinched`(PO 확정) → **무발동**(주전 경기감각 유지 — PO가 정규 막판 form을 씀). 휴식(A)은 clinched도 ON이지만 **등용은 아니다**(사용자 확정). clinched 팀은 주전을 쉬게는 해도(휴식) 신인을 선발로 올리진 않는다.
+- `contention`(경합) → 무발동(전력).
+- **바이트 동일 보장**: clinched·contention 팀 경기는 승격 로직이 빈 집합 → `buildLineup` force 인자 빈 셋 → 기존과 byte-동일.
+
+### F.2 어느 경기 (일부) · 누가 (신인 1~2명)
+- 경기별 결정론: `dev:{teamId}:{day}` 시드로 `PROMOTE_GAME_RATE=0.5`(≈50%) 경기에서 발동(`engine/lineup.ts pickPromote`). 휴식의 `rest:{}:{}` 0.45와 **독립 스트림**(같은 경기에 휴식·등용이 각각 독립 굴림).
+- **신인 정의 = `career.seasons === 0`**(데뷔 전 = 진짜 신인 = **신인상(ROY) 풀과 동일 정의**, `data/awards.ts:63`과 일치). ~~`≤1`~~ → **확정: `===0`**(2026-07-22). 실측 근거(season0 fresh seed): `===0`도 eliminated 팀-경기 13건에서 비선발 신인 보유·잠재 승격 연인원 20(≈50% 발동 후 ~10/시즌)로 풀이 충분하고, `≤1`은 +5(25)에 불과하며 2년차(비신인)까지 섞여 "신인 등용"의 의미가 흐려진다. `owner.ts`의 `≤1`(기대치 게이트)와는 용도가 달라 별개.
+- **비선발 신인만 후보**: 이미 선발(default `splitLineup`)인 신인은 승격 대상 아님(올려도 no-op). 실력으로 이미 뛰는 신인은 제외 → 승격은 "벤치 신인에게 코트를".
+- 인원: 1~2명(`PROMOTE_SECOND_RATE=0.4`로 2명째 추가 — 휴식 `REST_SECOND_RATE`와 대칭).
+- 후보 정렬: **OVR 내림차순**(가장 준비된 유망주에게 먼저 무대), tiebreak=id(결정론). 포지션 슬롯(S1·OH2·MB2·OP1·L1) 초과 강제 방지(같은 단일 슬롯 포지션에 2명 강제 금지 — 유효 승격만 카운트).
+
+### F.3 승격 메커니즘 (제외-해킹 금지 — 리뷰 블로커 2)
+- ~~빼기(default 주전 제외)로 신인을 끌어올린다~~ → **금지**. `buildLineup`은 OVR순이라 default 주전을 빼면 신인이 아니라 *차선 백업*이 올라온다(승격 실패). → **정공법**: `buildLineup(players, dvPhilosophy, forceStarters?: Set<string>)` 신설.
+  - 기본값 = 빈 셋 → 기존 호출부(엔진·forward-pass·도구) **전부 byte-동일**(force 없으면 OVR 정렬 그대로).
+  - 지정 id는 `bestByPos`에서 **force-first 정렬**(force 우선, 그다음 OVR)로 해당 포지션 슬롯 상위 점유 → six[]에 실제 진입.
+  - `splitLineup`(생산 귀속의 선발/벤치 분리)도 동일 force 인자 수용 → six[]와 선발 집합이 일치(승격 신인 matches++·데뷔 판정 정합).
+- **가드 단언**: 승격 신인이 `six[]`(및 splitLineup starters)에 실제 포함됨을 `_dv_promote` ②가 단언.
+
+### F.4 상한 · 최소 라인업 보전 (리뷰 ⚠)
+- **휴식(A)과 중첩 상한**: 팀 총 이탈 주전(휴식으로 안 뛰는 주전 + 승격에 밀려난 default 주전) ≤ **3**. 우선순위 = **휴식 먼저**, 승격은 남은 상한 안에서 `maxPromote = min(2, 3 − restCount)`.
+- **최소 라인업 보전**: 승격은 선수를 *빼지 않고* 우선순위만 바꾸므로(force) 풀 크기 불변 → `buildLineup` 폴백 오염·throw 없음(휴식이 이미 통과시킨 avail이면 승격 후에도 성립). 리베로 슬롯은 그대로(L 신인 승격 시에만 L 슬롯 교체 — F.6).
+
+### F.5 3경로 정합 (리뷰 필수 — 휴식과 동형)
+순수 코어 `pickPromote(avail, teamId, day, restCount)`(`engine/lineup.ts`, 순수) + 자격 주입형 래퍼 `promotedOnDay(teamId, day)`(`data/rotation.ts`, clinch는 day−1·eliminated만). 세 경로가 **동일 승격 집합**:
+- **순위 재시뮬**(`data/standings.ts allResults`): 러닝 순위의 `eliminated` 집합에서 `pickRest`→post-rest squad→`pickPromote`를 **직접 호출**(`computeStandings` 재호출 금지 = 순환 회피, `pickRest`/`restedOnDay` split과 동형). force를 `simulateMatch` opts(`homeForce`/`awayForce`)로 주입.
+- **생산**(`data/production.ts allProdRows`): `restedOnDay`+`promotedOnDay`로 동일 집합, `attributeProduction`에 force 전달(선발 귀속 일치).
+- **보드**(`data/matchBox.ts buildMatchBox`): `restedOnDay`+`promotedOnDay`로 동일 집합, `simulateMatch` opts에 force 주입.
+- 순환: A와 동일(0.1·§7.9). 승격 자격 = clinch(day−1) = day−1까지 results 파생(인과적·비순환). standings는 러닝 순위로 clinch를 인라인 재구성.
+
+### F.6 결정론 근사 (휴식과 동일 사유 — FORM·부상 forward-pass 미반영)
+- 부상+FORM `forward-pass`(`data/dynamics.ts compute`)는 **results-독립**이라 clinch(=results 파생)에 걸리는 승격을 넣을 수 없다(넣으면 결과→라인업→부상/폼→결과 순환). → **승격도 휴식과 똑같이 forward-pass 미반영**:
+  - 승격 신인의 출전은 `played`/`teamDays`(경기감각 소스)에 **미기록** → 그 신인은 승격 경기를 뛰어도 form 페널티가 남는다(벤치 상태 form 유지). 휴식이 백업의 form을 안 올려주는 것과 대칭.
+  - **보드-생산 드리프트 없음**: 세 소비 경로(보드·생산·순위)가 전부 같은 `availableTeamPlayers→applyForm(formFactorOnDay)`(동일 forward-pass)를 써서 승격 신인에게 **같은 form**을 적용 → 결과 일치(`_dv_promote` ①이 실측 단언). 근사이지만 자기일관적. 부상 노출도 미반영(승격 신인은 forward-pass 부상 굴림 대상 아님 — 휴식·부상 ~0.4건/경기라 영향 미미, §0).
+- 리베로 신인(L) 특수성: L 슬롯은 1. L 신인 승격 시 default 리베로를 교체(그 신인에게 리베로 경험). 리베로 유지 가드(EC-LU-01)는 "리베로가 코트에 **있는가**"라 승격(리베로↔리베로 교체)은 위반 아님.
+
+### F.7 AWARDS 정합
+- **신인상(ROY, `career.seasons===0`)**: 승격은 ROY 풀에 직접 볼륨을 더한다 → 탈락팀 가비지 볼륨 신인이 ROY를 독식하지 않는지 A/B 검증(`_dv_promote`/다시즌 배터리 — 풀시즌 주전 신인의 30+경기 대비 승격 ~5경기는 열세라 왜곡 미미 실측).
+- **기량발전상(MIP) 시너지**: MIP 자격 = **전시즌 seasonLine 존재**(`data/awards.ts priorImpactMap`). 벤치만 지키던 신인은 seasonLine이 없어 차기 MIP 후보에서 배제되는데, 승격이 이번 시즌 실출전(`matches>0`)→seasonLine을 만들어 **차기 시즌 MIP 자격을 열어준다**(등용→기량발전 서사 연결).
+
+### F.8 파라미터 (실측 확정)
+| 파라미터 | 값 | 근거 |
+|---|---|---|
+| 신인 정의 | `career.seasons === 0` | ROY 정의 일치·풀 충분(season0 eliminated 13경기)·2년차 배제 |
+| 발동 자격 | `eliminated`만 | 사용자 확정(clinched는 PO 대비 주전 유지) |
+| `PROMOTE_GAME_RATE` | 0.5 | ~50% 발동(관전형 — 매 경기 아님) |
+| `PROMOTE_SECOND_RATE` | 0.4 | 2명째 추가 확률(휴식 대칭) |
+| 인원 상한 | `min(2, 3−restCount)` | 휴식+승격 총 이탈 주전 ≤3 |
+| 시드 | `dev:{teamId}:{day}` | 휴식 `rest:` 스트림과 독립 |
+
+### F.9 미구현/후속 (범위 밖 — 제안만)
+- UI 표면화(선수 상세 "탈락팀 승격 출전 — 기회" 사유·뉴스 "○○ 프로 데뷔") — 별건.
+- `owner.ts benchCauseOf`: 승격에 밀려난 default 주전은 현재 `outclassed`로 귀속(정확히는 "신인에게 자리 양보"). 감정 스케일 0.7이라 무해, 후속 세분 여지.
+- `app/exhibition.tsx`·`sim-web/main.ts` 프리뷰: 승격 미반영(전력 표시 = 휴식만 제외). 프리뷰 정합은 후속.
 
 ## 미해결(검토 시 결정)
 1. 휴식 발동 비율(40~50%?)·1경기 휴식 인원(1~2명?)·OVR 급락 상한(−4?).

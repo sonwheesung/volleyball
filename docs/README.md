@@ -144,6 +144,7 @@ npx tsx tools/_dv_hall_of_coaches.ts       # 명장 열전 판정 단조·우아
 npx tsx tools/_dv_preseasonnews.ts         # 프리시즌 예상 순위 기사 부제 전용 풀(결산 톤 유출 0·구버그 A/B 재현)
 npx tsx tools/_dv_facewarm.ts              # 아바타 시트 워밍 인덱서(faceCell 등가·수집 완전+최소, UI-45)
 npx tsx tools/_dv_mip.ts                   # 기량발전상 개편(AWARDS §9): 생산Δ 오라클(수상자 100% 생산>0·matches≥10·전시즌라인·비신인·Δ>0) + A/B 4종(프린지 구/신 대조·돌파·신규 외국인·프리뷰 게이트 — 2026-07-22 0생산 수상 실사례 봉인)
+npx tsx tools/_dv_promote.ts               # 신인 등용(ROTATION_MORALE §F, 2026-07-22 ENGINE v13): PO 탈락 확정 팀 신인(seasons===0) 선발 승격 — ①3경로 동일 ②six[] 포함 ③비발동 바이트 동일 ④상한 rest+promote≤3 ⑤eliminated 게이트+force teeth ⑥결정론. exit 0/2
 npx tsx tools/_dv_award_poster.ts          # 시상 포스터(AWARDS §8): posterStats 5×5 라벨→필드 오귀속 0 + AWARD_TEMPLATES 5종 톤 무결 + 시즌 라벨↔배경 타이틀 충돌(titleTopPct 실측 대비 폰트 산식 미러링) + 패널 세로 예산(풋노트 有/無 총높이 ≤13.2%h — 실기기 풋노트 걸침 사후 봉인) + 변이 A/B 4종(스탯 스왑·깨진 hex·mip full 겹침·구 풋노트 구성 16.03% 초과 재현 — 2026-07-22)
 # (_dv_preseason_pred.ts·_dv_reputation_dist.ts = 다시즌 통계 게이트(예측 Spearman·명성 분포/경로) — 무거움, 스태프 밸런스 변경 시 on-demand)
 npx tsx tools/_dv_liberostam.ts 500        # 리베로 체력 튜닝(MATCH §7.1, 검증=Fable 5/구현=Opus) — 밴드(L 3세트+∈[88,93]%·최저<80%·타포지션 드리프트|Δ|<3%p) + A/B(DV_LIBDEF=0 시임=무보정 mutant→98.5%>93 밴드이탈). LIBERO_DEFENSE_COST=0.16(매 랠리 균일 후위수비 소모). exit 0/1

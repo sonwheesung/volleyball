@@ -2,7 +2,7 @@
 //   결정론: 휴식은 "그 경기일 직전(day−1)까지의 실제 순위"로 판정(인과적 — 자기 결과 안 봄, 순환 없음).
 //   생산(allProdRows)·관전 보드가 restedOnDay()를, 순위 재시뮬(allResults)은 같은 pickRest를 러닝 순위로 호출 →
 //   세 경로가 동일 휴식 집합 → 관전==순위==생산 일치 유지. pickRest는 engine/lineup(순수).
-import { pickRest } from '../engine/lineup';
+import { pickRest, pickPromote } from '../engine/lineup';
 import { availableTeamPlayers } from './injury';
 import { teamClinch } from './clinch';
 
@@ -12,4 +12,16 @@ export function restedOnDay(teamId: string, day: number): Set<string> {
   const c = teamClinch(teamId, day - 1);
   if (!c || (c.state !== 'clinched' && c.state !== 'eliminated')) return new Set();
   return pickRest(availableTeamPlayers(teamId, day), teamId, day);
+}
+
+/** day일 teamId가 선발로 올릴 신인(force 셋) — **PO 탈락 확정(eliminated)** 때만(휴식보다 좁음, ROTATION_MORALE F).
+ *  day−1까지의 순위 기준(인과적·비순환). 휴식(rest)을 먼저 적용한 post-rest 명단에서 비선발 신인을 승격,
+ *  휴식+승격 총 이탈 주전 ≤3 상한. 생산(allProdRows)·관전 보드가 사용(순위 재시뮬 allResults는 러닝 순위로 pickPromote 직접 호출). */
+export function promotedOnDay(teamId: string, day: number): Set<string> {
+  const c = teamClinch(teamId, day - 1);
+  if (!c || c.state !== 'eliminated') return new Set();
+  const avail = availableTeamPlayers(teamId, day);
+  const rest = pickRest(avail, teamId, day); // 휴식 우선(restedOnDay와 동일 — eliminated면 clinched/eliminated 게이트 통과)
+  const post = rest.size ? avail.filter((p) => !rest.has(p.id)) : avail;
+  return pickPromote(post, teamId, day, rest.size);
 }

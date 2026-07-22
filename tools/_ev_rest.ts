@@ -4,7 +4,7 @@
 //   Usage: npx tsx tools/_ev_rest.ts
 import { resetLeagueBase, SEASON, LEAGUE, getTeam, coachInfoOf } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
-import { restedOnDay } from '../data/rotation';
+import { restedOnDay, promotedOnDay } from '../data/rotation';
 import { seasonResults } from '../data/standings';
 import { teamClinch } from '../data/clinch';
 import { buildLineup } from '../engine/lineup';
@@ -42,7 +42,9 @@ for (const f of SEASON) {
   restedFixtures++;
   const hs = availableTeamPlayers(f.homeTeamId, f.dayIndex).filter((p) => !hr.has(p.id));
   const as = availableTeamPlayers(f.awayTeamId, f.dayIndex).filter((p) => !ar.has(p.id));
-  const sim = simulateMatch(f.seed, hs, as, { home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId) });
+  // 신인 등용(ROTATION_MORALE F) — 보드/순위가 탈락 팀 경기에 승격 force를 주입하므로 재구성도 동일하게(안 하면 승격 경기서 오탐).
+  const hf = promotedOnDay(f.homeTeamId, f.dayIndex), af = promotedOnDay(f.awayTeamId, f.dayIndex);
+  const sim = simulateMatch(f.seed, hs, as, { home: coachInfoOf(f.homeTeamId), away: coachInfoOf(f.awayTeamId), homeForce: hf, awayForce: af });
   const row = allRows.find((r) => r.fixtureId === f.id);
   if (!row || sim.homeSets !== row.homeSets || sim.awaySets !== row.awaySets) mismatch++;
 }

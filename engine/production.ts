@@ -82,19 +82,26 @@ const BACK_ATK_RATE = 0.24; // OH/OP 킬 중 후위공격(백어택) 비율 — 
 const BLK_FOCUS = 2.5; // 블록 집중도 — 좋은 블로커(센터)가 팀 블록 점유↑ → 스킬→블록 기울기 확보
 
 /** 선발(코트 위 7) / 벤치 분리 — 포지션별 OVR 상위가 선발.
- *  @param dvPhilosophy 감독 육성 철학(STAFF §9.6-D) — U23 근소차 우선(buildLineup과 동일 에지). 기본 0=neutral(byte-동일). */
-export function splitLineup(players: Player[], dvPhilosophy = 0): { starters: Player[]; bench: Player[] } {
+ *  @param dvPhilosophy 감독 육성 철학(STAFF §9.6-D) — U23 근소차 우선(buildLineup과 동일 에지). 기본 0=neutral(byte-동일).
+ *  @param force 강제 선발 id(ROTATION_MORALE F 신인 등용) — buildLineup과 동일 force-first 정렬. 기본 빈 셋 = byte-동일. */
+export function splitLineup(players: Player[], dvPhilosophy = 0, force: ReadonlySet<string> = EMPTY_FORCE): { starters: Player[]; bench: Player[] } {
   const byPos: Record<Position, Player[]> = { S: [], OH: [], OP: [], MB: [], L: [] };
   for (const p of players) byPos[p.position].push(p);
   const starters: Player[] = [];
   const bench: Player[] = [];
   (Object.keys(byPos) as Position[]).forEach((pos) => {
-    const sorted = byPos[pos].sort((a, b) => (overall(b) + u23Edge(b, dvPhilosophy)) - (overall(a) + u23Edge(a, dvPhilosophy)));
+    // force-first(신인 등용) → OVR — buildLineup bestByPos와 동일 순서라 six[]와 선발 집합이 일치.
+    const sorted = byPos[pos].sort((a, b) => {
+      const fa = force.has(a.id) ? 1 : 0, fb = force.has(b.id) ? 1 : 0;
+      if (fa !== fb) return fb - fa;
+      return (overall(b) + u23Edge(b, dvPhilosophy)) - (overall(a) + u23Edge(a, dvPhilosophy));
+    });
     starters.push(...sorted.slice(0, ON_COURT[pos]));
     bench.push(...sorted.slice(ON_COURT[pos]));
   });
   return { starters, bench };
 }
+const EMPTY_FORCE: ReadonlySet<string> = new Set<string>();
 
 /** 큰 점수차일수록 가비지타임 비중↑ (벤치 출전) */
 function garbageFrac(sim: SimResult): number {
@@ -133,9 +140,11 @@ function productionFromBox(
   box: BoxSink,
   homeDv = 0,
   awayDv = 0,
+  homeForce: ReadonlySet<string> = EMPTY_FORCE,
+  awayForce: ReadonlySet<string> = EMPTY_FORCE,
 ): Map<string, ProdLine> {
-  const H = splitLineup(home, homeDv);
-  const A = splitLineup(away, awayDv);
+  const H = splitLineup(home, homeDv, homeForce);
+  const A = splitLineup(away, awayDv, awayForce);
   const gp = Math.round(sim.points.length * garbageFrac(sim));
   const tally = new Map<string, ProdLine>();
   const bump = (id: string, f: (l: ProdLine) => void) => {
@@ -180,13 +189,15 @@ export function attributeProduction(
   box?: BoxSink, // 주면 스코어박스를 **단일 진실**로 집계(보드=박스=통산 일치, SALARY_SYSTEM 1.3). 없으면 레거시 자체 귀속.
   homeDv = 0,    // 홈 감독 육성 철학(STAFF §9.6-D) — splitLineup U23 에지. 기본 0=neutral(byte-동일).
   awayDv = 0,
+  homeForce: ReadonlySet<string> = EMPTY_FORCE, // 강제 선발(신인 등용 F) — splitLineup force. 기본 빈 셋=byte-동일.
+  awayForce: ReadonlySet<string> = EMPTY_FORCE,
 ): Map<string, ProdLine> {
-  if (box) return productionFromBox(sim, home, away, seed, box, homeDv, awayDv);
+  if (box) return productionFromBox(sim, home, away, seed, box, homeDv, awayDv, homeForce, awayForce);
   const rng = createRng((seed ^ 0x9e3779b9) >>> 0);
   // 후위공격 판정용 독립 rng — 기존 귀속 스트림(rng) 불간섭 → spike/block/ace/assist/dig 귀속 불변, backSpikes만 가산
   const backRng = createRng((seed ^ 0x517cc1b7) >>> 0);
-  const H = splitLineup(home, homeDv);
-  const A = splitLineup(away, awayDv);
+  const H = splitLineup(home, homeDv, homeForce);
+  const A = splitLineup(away, awayDv, awayForce);
   const total = sim.points.length;
   const gp = Math.round(total * garbageFrac(sim));
 

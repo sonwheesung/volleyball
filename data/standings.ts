@@ -7,7 +7,7 @@ import { baseVersion, coachInfoOf, getEvolvedTeamPlayers, getFixture, LEAGUE, SE
 import { availableTeamPlayers } from './injury';
 import { currentTxVersion, interventionsFor, manualSideFor } from './dynamics';
 import { simulateMatch } from '../engine/match';
-import { pickRest } from '../engine/lineup';
+import { pickRest, pickPromote } from '../engine/lineup';
 import { clinchStatus } from '../engine/clinch';
 import { SEASON_DAYS } from '../engine/calendar';
 import { minAffectedDaySince, spliceSeq } from './spliceLog';
@@ -107,17 +107,22 @@ function allResults(uptoDay?: number): ResultRow[] {
     // 그 시점(day−1까지) 순위가 굳은(확정/탈락) 팀만 휴식 자격
     const clinch = clinchStatus(LEAGUE.teams.map((t) => ({ teamId: t.id, wins: running[t.id].wins, remaining: Math.max(0, (totalGames[t.id] ?? 0) - running[t.id].played) })), PLAYOFF_CUTOFF);
     const eligible = new Set(clinch.filter((c) => c.state === 'clinched' || c.state === 'eliminated').map((c) => c.teamId));
+    const eliminated = new Set(clinch.filter((c) => c.state === 'eliminated').map((c) => c.teamId)); // 신인 등용(F) — 탈락 확정만
     const squad: Record<string, ReturnType<typeof getEvolvedTeamPlayers>> = {};
+    const force: Record<string, Set<string>> = {}; // 신인 등용(F) — 선발 승격 force(promotedOnDay와 동일 집합)
     for (const t of LEAGUE.teams) {
       const avail = availableTeamPlayers(t.id, day); // 부상자 제외 명단
       const rest = eligible.has(t.id) ? pickRest(avail, t.id, day) : new Set<string>();
-      squad[t.id] = rest.size ? avail.filter((p) => !rest.has(p.id)) : avail; // 굳은 순위면 주전 1~2명 휴식(백업 출전)
+      const post = rest.size ? avail.filter((p) => !rest.has(p.id)) : avail; // 휴식 제외
+      squad[t.id] = post; // 굳은 순위면 주전 1~2명 휴식(백업 출전)
+      force[t.id] = eliminated.has(t.id) ? pickPromote(post, t.id, day, rest.size) : new Set<string>(); // 탈락 팀만 신인 승격
     }
     for (const f of byDay.get(day)!) {
       const sim = simulateMatch(f.seed, squad[f.homeTeamId], squad[f.awayTeamId], {
         home: coachInfoOf(f.homeTeamId, f.dayIndex), away: coachInfoOf(f.awayTeamId, f.dayIndex), // 축3: 그날의 감독(부임 이전 경기는 이전 감독)
         interventions: interventionsFor(f.id), // 개입 로그 주입(MATCH_INTERVENTION §2.2) — 비면 [] = 바이트 동일
         manualSide: manualSideFor(f.homeTeamId, f.awayTeamId, f.dayIndex), // 완전 수동 사이드(§4.1) — 로그 비면 undefined = 바이트 동일
+        homeForce: force[f.homeTeamId], awayForce: force[f.awayTeamId], // 신인 등용(F) — 빈 셋이면 byte-동일
       });
       rows.push({
         fixtureId: f.id,

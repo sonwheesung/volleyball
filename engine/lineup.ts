@@ -26,10 +26,16 @@ export function u23Edge(p: Player, dvPhilosophy: number): number {
   return U23_LINEUP_EDGE * t;
 }
 
-function bestByPos(players: Player[], pos: Position, n: number, used: Set<string>, dvPhilosophy: number): Player[] {
+function bestByPos(players: Player[], pos: Position, n: number, used: Set<string>, dvPhilosophy: number, force: ReadonlySet<string>): Player[] {
   const picked = players
     .filter((p) => p.position === pos && !used.has(p.id))
-    .sort((a, b) => (overall(b) + u23Edge(b, dvPhilosophy)) - (overall(a) + u23Edge(a, dvPhilosophy)))
+    // 강제 선발(force, ROTATION_MORALE F 신인 등용)은 OVR과 무관히 슬롯 상위 점유 — force-first, 그다음 OVR.
+    // force 빈 셋이면 fa===fb===0 → 순수 OVR 정렬 = 기존과 byte-동일(전 호출부 불변 보장).
+    .sort((a, b) => {
+      const fa = force.has(a.id) ? 1 : 0, fb = force.has(b.id) ? 1 : 0;
+      if (fa !== fb) return fb - fa;
+      return (overall(b) + u23Edge(b, dvPhilosophy)) - (overall(a) + u23Edge(a, dvPhilosophy));
+    })
     .slice(0, n);
   picked.forEach((p) => used.add(p.id));
   return picked;
@@ -37,16 +43,17 @@ function bestByPos(players: Player[], pos: Position, n: number, used: Set<string
 
 /** 로스터 → 주전 6인 로테이션 배열 + 리베로. 결손 포지션은 잔여 선수로 방어 충원.
  *  빈 로스터는 명시적 거부 — 시즌 계층(부상 상한 3·방출 하한 ROSTER_MIN)이 원천 차단해야 하는 상태.
- *  @param dvPhilosophy 감독 육성 철학(0~100, STAFF §9.6-D) — U23 근소차 우선권. 기본 0=neutral(에지 미가산, byte-동일). */
-export function buildLineup(players: Player[], dvPhilosophy = 0): Lineup {
+ *  @param dvPhilosophy 감독 육성 철학(0~100, STAFF §9.6-D) — U23 근소차 우선권. 기본 0=neutral(에지 미가산, byte-동일).
+ *  @param force 강제 선발 id(ROTATION_MORALE F 신인 등용) — 지정 id는 OVR 무관 해당 포지션 슬롯 우선 진입. 기본 빈 셋 = byte-동일. */
+export function buildLineup(players: Player[], dvPhilosophy = 0, force: ReadonlySet<string> = EMPTY_FORCE): Lineup {
   if (players.length === 0) throw new Error('빈 로스터 — 라인업을 구성할 수 없습니다(시즌 계층 가드 위반)');
   // 선발 구성 인원은 STARTER_NEED(engine/transactions) 단일 출처. 픽 순서는 유지(각 pos 배타 필터라 결과 불변).
   const used = new Set<string>();
-  const S = bestByPos(players, 'S', STARTER_NEED.S, used, dvPhilosophy);
-  const OH = bestByPos(players, 'OH', STARTER_NEED.OH, used, dvPhilosophy);
-  const MB = bestByPos(players, 'MB', STARTER_NEED.MB, used, dvPhilosophy);
-  const OP = bestByPos(players, 'OP', STARTER_NEED.OP, used, dvPhilosophy);
-  const libero = bestByPos(players, 'L', STARTER_NEED.L, used, dvPhilosophy)[0] ?? null;
+  const S = bestByPos(players, 'S', STARTER_NEED.S, used, dvPhilosophy, force);
+  const OH = bestByPos(players, 'OH', STARTER_NEED.OH, used, dvPhilosophy, force);
+  const MB = bestByPos(players, 'MB', STARTER_NEED.MB, used, dvPhilosophy, force);
+  const OP = bestByPos(players, 'OP', STARTER_NEED.OP, used, dvPhilosophy, force);
+  const libero = bestByPos(players, 'L', STARTER_NEED.L, used, dvPhilosophy, force)[0] ?? null;
 
   // 대각 배치: 세터(0)↔아포짓(3), OH(1)↔OH(4), MB(2)↔MB(5)
   const slots: (Player | undefined)[] = [S[0], OH[0], MB[0], OP[0], OH[1], MB[1]];
@@ -59,6 +66,9 @@ export function buildLineup(players: Player[], dvPhilosophy = 0): Lineup {
   }
   return { six: slots as Player[], libero };
 }
+
+// 공용 빈 force 셋(공유 참조 — 매 호출 재할당 회피, 절대 mutate 금지: buildLineup은 읽기만).
+const EMPTY_FORCE: ReadonlySet<string> = new Set<string>();
 
 const REST_GAME_RATE = 0.45;   // 굳은 순위에서 잔여 경기 중 휴식 발동 비율(ROTATION_MORALE #3)
 const REST_SECOND_RATE = 0.4;  // 1명 휴식 시 2명째 추가 확률(라인업 붕괴 방지 — 최대 2명)
@@ -76,4 +86,41 @@ export function pickRest(avail: Player[], teamId: string, day: number): Set<stri
   const sorted = [...restable].sort((a, b) => b.age - a.age || a.id.localeCompare(b.id)); // 고령 우선(결정론 tiebreak)
   const n = 1 + (sorted.length >= 2 && rng.next() < REST_SECOND_RATE ? 1 : 0);
   return new Set(sorted.slice(0, n).map((s) => s.id));
+}
+
+// ── 신인 등용(ROTATION_MORALE F) — PO 탈락 확정 팀이 잔여 경기에 신인을 선발 승격 ──
+const PROMOTE_GAME_RATE = 0.5;    // 탈락 확정 후 잔여 경기 중 등용 발동 비율(휴식 rest: 스트림과 독립)
+const PROMOTE_SECOND_RATE = 0.4;  // 1명 승격 시 2명째 추가 확률(휴식 REST_SECOND_RATE 대칭)
+export const PROMOTE_MAX_SEASONS = 0; // 신인 정의: career.seasons ≤ 이 값(=0, 데뷔 전=신인상 풀 일치). F.8 실측 확정
+const SIX_SLOTS: Record<Position, number> = { S: 1, OH: 2, MB: 2, OP: 1, L: 1 }; // 슬롯 수(같은 단일슬롯에 2명 강제 방지)
+
+/** 로드매니지먼트 대칭 — 그 경기 선발로 올릴 신인 집합(force 셋). 순수: 같은 (avail·teamId·day·restCount)면 항상 동일.
+ *  @param avail  **휴식(rest) 제외 후**의 출전 가능 명단(승격은 여기서 비선발 신인을 끌어올림).
+ *  @param restCount 같은 날 휴식으로 빠진 주전 수 — 승격+휴식 총 이탈 주전 ≤3 상한(maxPromote=min(2,3−restCount)).
+ *  발동 자격(eliminated·clinch day−1)은 호출측이 이미 게이트. 미발동 경기는 빈 셋 → buildLineup byte-동일. */
+export function pickPromote(avail: Player[], teamId: string, day: number, restCount = 0): Set<string> {
+  const rng = createRng(strSeed(`dev:${teamId}:${day}`));
+  if (rng.next() >= PROMOTE_GAME_RATE) return new Set(); // 이 경기는 등용 없음(주전 그대로)
+  const maxPromote = Math.min(2, 3 - restCount);
+  if (maxPromote <= 0) return new Set();
+  // 현 default 선발(dv=0 neutral — pickRest와 동일 기준, 3경로 동일 집합 보장). 이미 선발인 신인은 승격 대상 아님(no-op 방지).
+  const lu0 = buildLineup(avail);
+  const starters = new Set(lu0.six.map((p) => p.id));
+  if (lu0.libero) starters.add(lu0.libero.id);
+  const rookies = avail
+    .filter((p) => p.career.seasons <= PROMOTE_MAX_SEASONS && !starters.has(p.id))
+    .sort((a, b) => (overall(b) - overall(a)) || a.id.localeCompare(b.id)); // 준비된 유망주 우선(결정론 tiebreak)
+  if (!rookies.length) return new Set();
+  // 슬롯 용량 내에서만 강제(같은 단일슬롯 포지션에 2명 넣어 무효화되는 것 방지 = 유효 승격만 카운트)
+  const usedSlot: Record<string, number> = {};
+  const roll2 = rng.next(); // 2명째 여부(선발 순서 무관 결정)
+  const cap = maxPromote >= 2 && roll2 < PROMOTE_SECOND_RATE ? 2 : 1;
+  const out = new Set<string>();
+  for (const p of rookies) {
+    if (out.size >= cap) break;
+    if ((usedSlot[p.position] ?? 0) >= SIX_SLOTS[p.position]) continue;
+    usedSlot[p.position] = (usedSlot[p.position] ?? 0) + 1;
+    out.add(p.id);
+  }
+  return out;
 }
