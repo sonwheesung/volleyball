@@ -65,8 +65,10 @@ function Inner() {
     <Screen title={`${seasonYear(season)} 시상식`}>
       {iWon ? (
         <ChampionCelebration teamName={champName} teamId={my!} season={season} mvpName={mvpName} onDone={goAwards} />
-      ) : (
-        // 미우승 — 짧은 결과 통지(타 구단 대관식 풀 연출 강제 금지).
+      ) : !finalsPoster ? (
+        // 미우승 폴백 — 챔프MVP 미확정(finalsPoster null, 엣지)일 때만 기존 챔피언 통지 카드를 남겨 화면이 비지 않게 한다.
+        // 포스터가 있는 정상 경로는 상단 카드를 제거하고(2026-07-22 사용자 지시) 포스터가 화면의 주인공이 된다(아래 블록).
+        // 챔피언 팀명은 일정(시상식 마커)·시즌 결산에서 확인 가능 — 2026-07-22 사용자 지시.
         <Card accent={theme.gold} flat>
           <IconLabel icon="trophy-outline" color={theme.gold}>{seasonYear(season)} 챔피언</IconLabel>
           <Text style={styles.champ}>🏆 {champName}</Text>
@@ -75,7 +77,7 @@ function Inner() {
             <Button label="리그 시상식 →" onPress={goAwards} />
           </View>
         </Card>
-      )}
+      ) : null}
       {finalsPoster ? (
         <View style={{ alignItems: 'center', marginTop: 14, gap: 8 }}>
           <AwardPoster
@@ -89,6 +91,13 @@ function Inner() {
             emblem={finalsPoster.emblem}
           />
           {finalsPoster.isMine ? <Muted style={{ color: theme.accent, fontWeight: '800' }}>우리 구단의 챔프전 MVP</Muted> : null}
+          {/* 미우승 정상 경로 — 상단 챔피언 카드를 제거했으므로 리그 시상식 진입을 포스터 아래로(2026-07-22 사용자 지시).
+              iWon 분기는 ChampionCelebration onDone이 시상식으로 이어가므로 여기 버튼 없음(무변경). */}
+          {!iWon ? (
+            <View style={{ marginTop: 6 }}>
+              <Button label="리그 시상식 →" onPress={goAwards} />
+            </View>
+          ) : null}
         </View>
       ) : null}
     </Screen>
