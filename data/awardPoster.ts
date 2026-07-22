@@ -8,10 +8,11 @@
 // 시즌 단위 비율을 낼 수 없다 → 지어내지 않고 **실존 카운트로 대체**: 공격 성공률→공격(킬 spikes), 리시브 효율→리시브(recvAtt receives).
 // 포지션 특성(세터=득점 무의미 등)은 repRecordLine 철학으로 대표 스탯을 앞세운다(posterStats).
 
-import type { AwardWinner, Position } from '../types';
+import type { AwardWinner, Player, Position } from '../types';
 import type { ProdLine } from '../engine/production';
 import { getPlayer, reconstructForeignName } from './league';
 import { overall } from '../engine/overall';
+import { deriveRatings, type Ratings } from '../engine/ratings';
 import { leagueProduction } from './production';
 import { currentSeasonAwards } from './awards';
 import { seasonYear } from './seasonLabel';
@@ -87,6 +88,32 @@ export function posterStats(pos: Position, l: ProdLine): PosterStat[] {
     case 'L':  return [s('디그', l.digs), s('리시브', l.receives), s('세트', l.assists), s('서브', l.aces), s('블로킹', l.blocks)];
     default:   return [s('득점', l.points), s('공격', l.spikes), s('서브', l.aces), s('리시브', l.receives), s('디그', l.digs)]; // OH·OP
   }
+}
+
+// ── 종합 능력치(윗단) 대표 5스탯 — 내 팀 지명 포스터(UI_RULES DL-9) 전용. 시즌 생산이 아닌 **능력치**(deriveRatings 윗단). ──
+// 라벨·표시값은 **선수 상세 화면(app/player/[id].tsx)과 동일 규약**: 라벨은 그 화면의 StatBar 라벨(스파이크·블로킹·…),
+// 값은 deriveRatings 원시치(0~100, 스트레치 없음 — displayOvr는 OVR 단일값에만 적용). 새 산식 발명 없음(deriveRatings 재사용).
+const ABILITY_LABEL: Record<keyof Ratings, string> = { spike: '스파이크', block: '블로킹', dig: '디그', receive: '리시브', set: '세팅', serve: '서브' };
+
+// 포지션 대표 5능력 — posterStats(시즌 생산)의 포지션 철학을 **능력치로 매핑**(득점→스파이크, 세트→세팅으로 개념 치환).
+// 생산엔 있으나 능력엔 대응 없는 항목(득점=스파이크 결과)을 병합하면 5번째 칸이 비므로 CLAUDE 5.3 가중치로 보강(주석 근거).
+//   S : 세팅·서브·디그·블로킹·스파이크  ← posterStats S(得점→스파이크 후미로, 세트→세팅 선두). 세터 대표=세팅. 리시브(가중1) 제외
+//   OH: 스파이크·서브·리시브·디그·블로킹 ← posterStats 기본(得점+공격→스파이크 병합) + 5번째 블로킹(전위 가중2)
+//   OP: 스파이크·블로킹·서브·디그·리시브 ← posterStats OP(得점+공격→스파이크 병합) + 5번째 리시브(세팅 가중0보다 대표성↑)
+//   MB: 블로킹·스파이크·서브·디그·리시브 ← posterStats MB(병합). 미들 대표=블로킹 선두 + 5번째 리시브
+//   L : 디그·리시브·세팅·서브·블로킹    ← posterStats L(세트→세팅). 리베로는 스파이크 무의미 제외
+const ABILITY_KEYS: Record<Position, (keyof Ratings)[]> = {
+  S:  ['set', 'serve', 'dig', 'block', 'spike'],
+  OH: ['spike', 'serve', 'receive', 'dig', 'block'],
+  OP: ['spike', 'block', 'serve', 'dig', 'receive'],
+  MB: ['block', 'spike', 'serve', 'dig', 'receive'],
+  L:  ['dig', 'receive', 'set', 'serve', 'block'],
+};
+
+/** 지명 선수의 포지션 대표 5능력치(윗단, 원시 0~100) — DraftPoster 스탯 5칸. 내 팀 지명 = 풀공개(UI-16)라 안개 없음. */
+export function posterAbilityStats(p: Player): PosterStat[] {
+  const r = deriveRatings(p);
+  return ABILITY_KEYS[p.position].map((k) => ({ label: ABILITY_LABEL[k], value: String(r[k]) }));
 }
 
 /** AwardWinner + 시즌 생산맵 → 포스터 데이터. 생산 라인이 없으면 null(미출전 등). */

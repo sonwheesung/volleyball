@@ -30,35 +30,44 @@ interface PanelCfg {
   kickerScale: number; kickerLH: number;
   nameScale: number; nameLH: number; nameMT: number;   // name marginTop(px)
   emblem: number;                                       // Image = h×0.052 ⇒ 5.2%h
-  posTextScale: number; posTextLH: number;
-  gradeScale: number; gradeLH: number; gradeChipPadV: number; gradeChipBorder: number; // 칩 padV/border(px)
-  posRowMT: number;                                     // posRow marginTop(패널폭 %)
+  // OVR 칩(headRow 우측, AwardPoster ovrChip 동형) — tag/num 폰트 + padV/border(px) + tag marginBottom(px)
+  ovrTagScale: number; ovrTagLH: number; ovrNumScale: number; ovrNumLH: number;
+  ovrChipPadV: number; ovrChipBorder: number; ovrTagMB: number;
+  posEnScale: number; posEnLH: number; posEnRowMT: number;   // posEn 줄 + marginTop(패널폭 %)
+  // 스탯 5칸(statRow) — statVal/statLab 폰트 + statLab marginTop(px) + statRow marginTop(패널폭 %)
+  statValScale: number; statValLH: number; statLabScale: number; statLabLH: number;
+  statLabMT: number; statRowMT: number;
 }
-/** 하단 패널 콘텐츠 총높이(%h) — 컴포넌트 렌더 구조(headRow[emblem|kicker+name] + posRow[posText|gradeChip]) 미러링. */
+/** 하단 패널 콘텐츠 총높이(%h) — 컴포넌트 렌더 구조(headRow[emblem|kicker+name|ovrChip] + posEn줄 + statRow[5칸]) 미러링. */
 function panelContentPct(c: PanelCfg): number {
   const nameCol = bfh(c.kickerScale, c.kickerLH) + bpx(c.nameMT) + bfh(c.nameScale, c.nameLH);
-  const headRow = Math.max(nameCol, c.emblem);
-  const gradeChip = bpx(c.gradeChipPadV * 2) + bpx(c.gradeChipBorder * 2) + bfh(c.gradeScale, c.gradeLH);
-  const posRow = bmpc(c.posRowMT) + Math.max(bfh(c.posTextScale, c.posTextLH), gradeChip);
-  return headRow + posRow;
+  const ovrChip = bpx(c.ovrChipPadV * 2) + bpx(c.ovrChipBorder * 2) + bfh(c.ovrTagScale, c.ovrTagLH) + bfh(c.ovrNumScale, c.ovrNumLH) + bpx(c.ovrTagMB);
+  const headRow = Math.max(nameCol, ovrChip, c.emblem);
+  const posEnRow = bmpc(c.posEnRowMT) + bfh(c.posEnScale, c.posEnLH);
+  const statRow = bmpc(c.statRowMT) + bfh(c.statValScale, c.statValLH) + bpx(c.statLabMT) + bfh(c.statLabScale, c.statLabLH);
+  return headRow + posEnRow + statRow;
 }
 // 프로덕션 값(components/DraftPoster.tsx와 동기)
 const CFG_PROD: PanelCfg = {
   kickerScale: 0.028, kickerLH: 1.15,
   nameScale: 0.060, nameLH: 1.12, nameMT: 2,
   emblem: 5.2,
-  posTextScale: 0.026, posTextLH: 1.15,
-  gradeScale: 0.024, gradeLH: 1.1, gradeChipPadV: 3, gradeChipBorder: 1,
-  posRowMT: 2.2,
+  ovrTagScale: 0.020, ovrTagLH: 1.15, ovrNumScale: 0.044, ovrNumLH: 1.1,
+  ovrChipPadV: 2, ovrChipBorder: 1.5, ovrTagMB: -2,
+  posEnScale: 0.024, posEnLH: 1.15, posEnRowMT: 2.0,
+  statValScale: 0.034, statValLH: 1.12, statLabScale: 0.021, statLabLH: 1.15,
+  statLabMT: 1, statRowMT: 1.8,
 };
-// A/B 예산 민감도용 — 폭 파생 폰트를 미압축 과대(AwardPoster 구 name 0.076류)로 부풀린 구성(넘침 재현). 예산 초과여야 검사가 유효.
+// A/B 예산 민감도용 — 폭 파생 폰트를 미압축 과대(넘침 재현)로 부풀린 구성. 예산 초과여야 검사가 유효.
 const CFG_BLOATED: PanelCfg = {
   kickerScale: 0.040, kickerLH: 1.2,
   nameScale: 0.076, nameLH: 1.2, nameMT: 2,
   emblem: 5.2,
-  posTextScale: 0.040, posTextLH: 1.2,
-  gradeScale: 0.036, gradeLH: 1.2, gradeChipPadV: 8, gradeChipBorder: 1,
-  posRowMT: 6,
+  ovrTagScale: 0.030, ovrTagLH: 1.2, ovrNumScale: 0.060, ovrNumLH: 1.2,
+  ovrChipPadV: 8, ovrChipBorder: 2, ovrTagMB: 0,
+  posEnScale: 0.040, posEnLH: 1.2, posEnRowMT: 6,
+  statValScale: 0.050, statValLH: 1.2, statLabScale: 0.032, statLabLH: 1.2,
+  statLabMT: 3, statRowMT: 6,
 };
 
 /** 패널 컨테이너[top%, bottomPct%]가 아웃라인 안쪽으로 INSET_MIN 이상 들어있는지 — 위반 목록. */

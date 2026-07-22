@@ -339,17 +339,27 @@
   - **하단 패널 아웃라인 실측**: top **74.0%** / bottom **94.4%**(내부 채움색 `#1c1f35`) — 시상 포스터(79.9~95.1%)와 좌표가 **다르다**(전용 좌표 필수, 눈대중 3연전 교훈).
 - **상단 오버레이 없음**: 배경 "DRAFT DAY" 타이틀이 이미 9.03%에서 시작하므로 상단에 시즌 라벨을 얹으면 **충돌**한다 → 시즌 정보는 **하단 패널의 키커 문구에 포함**(상단 zone 미렌더). AWARDS_SYSTEM §8은 상단에 시즌 라벨을 얹지만 본 절은 얹지 않는다(자산 차이).
 - **하단 패널 오버레이 좌표**: `top 74.5% ~ bottom 6.1%`(= 93.9%) — 아웃라인 74.0~94.4%의 안쪽 **0.5% 인셋**. 컨테이너 높이 = 100 − 74.5 − 6.1 = **19.4%h**. `left/right 8.5%`(패널 내부폭 = w×0.83).
-- **패널 내용**(위→아래):
-  - 상단행: `[구단 엠블럼(emblemFor(myTeam))]` + `[키커 + 이름]`
+- **패널 내용**(위→아래) — **개편(2026-07-22 사용자 피드백)**: ~~등급 칩~~ → **능력치 스탯**(아래 정정):
+  - 상단행: `[구단 엠블럼(emblemFor(myTeam))]` + `[키커 + 이름]` + **`[OVR 칩]`**(AwardPoster headRow와 동일 배치)
     - 키커(옅은 블루-화이트 dim): `"{seasonYear(season+1)} 신인 드래프트 · {round}R {전체순번}순번"` — 예 "2026-27 신인 드래프트 · 1R 3순번". 시즌연도는 **입단 시즌**(드래프트 클래스가 합류하는 `season+1`, `buildOffseasonBase(…, season+1)`과 동일 기준).
     - 이름(큰 흰색 `#FFFFFF`): 지명 선수명.
-  - 하단행: 포지션 `한글 · 영문`(예 "세터 · SETTER", 옅은 블루-화이트) + **직관 등급 라벨 칩** `prospectGradeLabel(p, 1)` — 입단 확정이라 **풀공개(reveal=1)**(UI-16 내 팀=전부, DL-8 종료 요약과 동일 규약).
-- **톤(로컬 상수, 화이트/네이비)**: 이름·수치는 흰색, **키커/포지션/등급은 옅은 블루-화이트 dim 계열**(bright #FFFFFF는 이름과 충돌하므로 회피). AWARDS_SYSTEM §8의 `PosterTone`(자산 네온 샘플링)과 달리 드래프트 자산은 네이비 단색이라 **컴포넌트 로컬 상수**로 고정(상별 톤 주입 불필요 — 자산 1종).
+    - **OVR 칩(구단 accent = `teamColors(myTeam).light`)**: `displayOvr(overallRaw(p))` — `OvrBadge`/AwardPoster와 **동일 표시 규약**(raw 연속 OVR을 넘기면 칩이 `displayOvr` 스트레치 적용). 내 지명 선수 = 풀공개(UI-16)라 안개 없음.
+  - 하단: 포지션 **영문만**(예 "SETTER", 옅은 블루-화이트) — ~~`한글 · 영문` + **직관 등급 라벨 칩** `prospectGradeLabel(p, 1)`~~ **정정(2026-07-22)**: 포지션은 영문만, **등급 칩 제거**(사용자 피드백 — 직관 등급 대신 실제 능력치를 보여준다).
+  - **대표 5능력(윗단 종합 능력치, AwardPoster statRow 문법)**: 시즌 생산이 아니라 **능력치**(`deriveRatings` 윗단, 원시 0~100). **표시값·라벨은 선수 상세 화면(`app/player/[id].tsx` StatBar)과 동일 규약**(displayOvr 스트레치는 OVR 단일값에만, 5능력은 원시치 그대로). 포지션별 5칸은 `data/awardPoster.ts` `posterAbilityStats(p)`가 조립 — `posterStats`(시즌 생산)의 포지션 철학을 능력치로 매핑(득점→스파이크, 세트→세팅):
+
+    | 포지션 | 대표 5능력 | 근거(posterStats 매핑) |
+    |---|---|---|
+    | S 세터 | 세팅·서브·디그·블로킹·스파이크 | posterStats S(得점→스파이크 후미, 세트→세팅 선두), 리시브(가중1) 제외 |
+    | OH 아웃사이드 | 스파이크·서브·리시브·디그·블로킹 | posterStats 기본(得점+공격→스파이크 병합) + 5번째 블로킹(전위 가중2) |
+    | OP 아포짓 | 스파이크·블로킹·서브·디그·리시브 | posterStats OP(得점+공격→스파이크 병합) + 5번째 리시브 |
+    | MB 미들 | 블로킹·스파이크·서브·디그·리시브 | posterStats MB(병합), 미들 대표=블로킹 선두 + 5번째 리시브 |
+    | L 리베로 | 디그·리시브·세팅·서브·블로킹 | posterStats L(세트→세팅), 리베로는 스파이크 무의미 제외 |
+- **톤(로컬 상수, 화이트/네이비)**: 이름·수치는 흰색, **키커/포지션/스탯 라벨은 옅은 블루-화이트 dim 계열**(bright #FFFFFF는 이름과 충돌하므로 회피), OVR 칩만 구단 accent. AWARDS_SYSTEM §8의 `PosterTone`(자산 네온 샘플링)과 달리 드래프트 자산은 네이비 단색이라 **컴포넌트 로컬 상수**로 고정(상별 톤 주입 불필요 — 자산 1종).
 - **포스터 규약 공유(AWARDS_SYSTEM §8)**: 3:4 · 폭 = `min(win.width−32, 460)` · **폭 파생 폰트**(퍼센트 불가) · `allowFontScaling={false}`(OS 글꼴 배율 잠금 UI-48) · 모든 Text `lineHeight` 명시 + `includeFontPadding:false`(폰트 패딩 넘침 제거) · 배경 위 **픽셀 고정색**(앱 라이트/다크 테마 무관) · **세로 예산 산식으로 넘침 봉인**(넘침 3연전 교훈).
-  - **세로 예산 증명**(%h; 폭 파생 폰트 s→%h=s×75, px p→75p/428, 패널폭 %마진 m→0.6225m): headRow(kicker 0.028·name 0.060) = **7.81%h** + posRow(marginTop 2.2% + 등급 칩) = **4.75%h** → 콘텐츠 총높이 **≈12.56%h** ≤ 예산(19.4 − 안전 0.5 = **18.9%h**), 여유 6.34%h. 산식은 `components/DraftPoster.tsx` `styles.panel` 주석 + 가드 `tools/_dv_draft_poster.ts`와 값 동기.
+  - **세로 예산 증명**(%h; 폭 파생 폰트 s→%h=s×lh×75, px p→75p/428, 패널폭 %마진 m→0.6225m) — **개편 갱신(2026-07-22, 스탯 행 추가)**: ~~headRow(kicker·name) 7.81%h + posRow(등급 칩) 4.75%h ≈ 12.56%h~~ → headRow(max[nameCol 7.81, **ovrChip 6.23**, emblem 5.2]) = **7.81%h** + posEnRow(mt 2.0% + posEn 0.024) = **3.32%h** + statRow(mt 1.8% + statVal 0.034 + statLab 0.021) = **5.96%h** → 콘텐츠 총높이 **≈17.08%h** ≤ 예산(19.4 − 안전 0.5 = **18.9%h**), 여유 1.82%h. 산식은 `components/DraftPoster.tsx` `styles.panel` 주석 + 가드 `tools/_dv_draft_poster.ts`와 값 동기.
 - **노출 시점**: 내가 지명을 **확정한 직후**(`mySelections`에 추가되는 순간) 그 픽을 **한 박자 비트**로 표시 — `Screen`의 `overlay` 슬롯(뷰포트 고정, ScrollView 밖)에 스크림 + 포스터. **탭하면 닫히고 라이브 계속**(시상식 비트 패턴). 표시 중 **자동진행 일시정지**(기존 하드스톱 패턴 재사용 — `posterPick != null`을 자동진행 정지 조건에 추가), 탭으로 재개.
 - **미노출 케이스**: **지명 0시즌(참관)**·**타팀 픽**은 포스터 없음(내 확정 픽만). 마지막 내 픽 확정 시엔 포스터 → 탭 → 기존 "나머지 자동 진행 ▶" 게이트로 이어진다.
-- **배선**: `app/draft-live.tsx` `confirm(playerId)`에서 `{ player, round: seq[stopAt].round, overallNo: stopAt+1 }`를 캡처해 `posterPick` state 설정(자동진행 정지 조건에 포함). 컴포넌트 `components/DraftPoster.tsx`(순수 표시). 가드 `tools/_dv_draft_poster.ts`(세로 예산 산식 미러링 + 패널 좌표 아웃라인 내포 어서션 + A/B 민감도).
+- **배선**: `app/draft-live.tsx` `confirm(playerId)`에서 `{ player, round: seq[stopAt].round, overallNo: stopAt+1 }`를 캡처해 `posterPick` state 설정(자동진행 정지 조건에 포함). 포스터 props는 `ovr={overallRaw(p)}`·`stats={posterAbilityStats(p)}`·`accent={teamColors(my).light}`(개편 2026-07-22). 컴포넌트 `components/DraftPoster.tsx`(순수 표시). 가드 `tools/_dv_draft_poster.ts`(세로 예산 산식 미러링 + 패널 좌표 아웃라인 내포 어서션 + A/B 민감도).
 
 ### Phase 2 구현 인계 노트 (데이터 계층 배치 — UI→data 셀렉터→engine)
 > **의존 방향(CLAUDE §11 SOLID)**: UI(`app/draft*.tsx`)는 **data 셀렉터**만 호출. 아래 파생은 전부 **`data/`의 순수·결정론·reveal-gated·무저장** 함수(FA_SYSTEM §3.3 §7 "엔진 격리·무저장"과 동일 패턴 — 시드/리플레이/세이브 불침투). engine(`engine/draft.ts`)은 Phase 1 에이전트 소관이라 **읽기만**(reason·sequence·positionGap·prospectValue 소비).

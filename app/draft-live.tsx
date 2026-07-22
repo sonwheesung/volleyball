@@ -7,7 +7,8 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { DraftPoster } from '../components/DraftPoster';
 import { emblemFor } from '../data/emblems';
-import { POS_EN } from '../data/awardPoster';
+import { POS_EN, posterAbilityStats } from '../data/awardPoster';
+import { teamColors } from '../lib/teamColor';
 import { seasonYear } from '../data/seasonLabel';
 import { buildOffseasonBase } from '../data/draftSetup';
 import { resolveDraftContextFor } from '../data/offseasonArgs';
@@ -17,9 +18,8 @@ import { resolveDraft, neededPositions, type PickReason } from '../engine/draft'
 import { ROSTER_CONTRACT_CAP } from '../engine/transactions';
 import { aiTargetOf } from '../data/rosterTarget';
 import { planNextAction } from '../engine/advance';
-import { overall } from '../engine/overall';
+import { overall, overallRaw } from '../engine/overall';
 import { fogOvr } from '../data/prospectScout';
-import { prospectGradeLabel } from '../data/prospectGrade';
 import { consensusOrder, projectionBand, pickTimingBadge } from '../data/draftProjection';
 import { pickReasonProse } from '../data/draftPickReason';
 import { myDraftSummary } from '../data/draftSummary';
@@ -246,9 +246,10 @@ function DraftLiveInner() {
         emblem={emblemFor(my)}
         kicker={`${seasonYear(season + 1)} 신인 드래프트 · ${posterPick.round}R ${posterPick.overallNo}순번`}
         name={posterPick.player.name}
-        posKo={POS_KO[posterPick.player.position]}
         posEn={POS_EN[posterPick.player.position]}
-        grade={prospectGradeLabel(posterPick.player, 1)}
+        ovr={overallRaw(posterPick.player)}
+        stats={posterAbilityStats(posterPick.player)}
+        accent={teamColors(my).light}
       />
       <Text style={styles.posterTag}>우리 구단의 지명</Text>
     </Pressable>
