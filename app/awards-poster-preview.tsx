@@ -11,9 +11,6 @@ import { mvpPosterData, POS_EN, AWARD_TEMPLATES } from '../data/awardPoster';
 import { emblemFor } from '../data/emblems';
 import { useGameStore } from '../store/useGameStore';
 
-const MVP_TEMPLATE = require('../assets/awards/mvp_stage.webp');
-const FINALS_TEMPLATE = require('../assets/awards/finals_mvp_stage.webp');
-
 // 레이아웃 스트레스 샘플(목업) — 긴 이름·세터(포지션별 5칸)·리베로 케이스로 시안 점검.
 const SAMPLES: { title: string; props: Omit<AwardPosterProps, 'template'> }[] = [
   {
@@ -55,7 +52,7 @@ export default function AwardsPosterPreview() {
         <Text style={styles.cap}>{real ? `현재 시즌 실 MVP · ${real.posEn}` : '현재 시즌 MVP 없음(경기 미진행) — 아래는 샘플'}</Text>
         {real ? (
           <AwardPoster
-            template={MVP_TEMPLATE}
+            template={AWARD_TEMPLATES.mvp.src} tone={AWARD_TEMPLATES.mvp.tone}
             seasonLabel={real.seasonLabel} name={real.name} posEn={real.posEn}
             ovr={real.ovr} stats={real.stats} emblem={real.emblem}
           />
@@ -65,7 +62,7 @@ export default function AwardsPosterPreview() {
       <View style={styles.block}>
         <Text style={styles.cap}>샘플 · 챔프전 MVP 템플릿 (FINALS MVP)</Text>
         <AwardPoster
-          template={FINALS_TEMPLATE}
+          template={AWARD_TEMPLATES.finalsMvp.src} tone={AWARD_TEMPLATES.finalsMvp.tone}
           seasonLabel="2025-26" name="여미정" posEn={POS_EN.OP} ovr={88}
           stats={[
             { label: '득점', value: '736' }, { label: '공격', value: '660' }, { label: '블로킹', value: '52' },
@@ -118,7 +115,7 @@ export default function AwardsPosterPreview() {
       {SAMPLES.map((s) => (
         <View key={s.title} style={styles.block}>
           <Text style={styles.cap}>{s.title}</Text>
-          <AwardPoster template={MVP_TEMPLATE} {...s.props} />
+          <AwardPoster template={AWARD_TEMPLATES.mvp.src} tone={AWARD_TEMPLATES.mvp.tone} {...s.props} />
         </View>
       ))}
     </Screen>
