@@ -29,8 +29,8 @@ export interface PosterTone { bright: string; dim: string; line: string; glow: s
 // 상별 톤(sharp 상위 2% 네온 평균 샘플 근거는 주석의 #hex). 민트 기본은 AwardPoster.DEFAULT_TONE과 값 동기(무회귀).
 const TONE_MINT: PosterTone   = { bright: '#5FEAD8', dim: 'rgba(150,238,224,0.72)', line: 'rgba(120,230,215,0.28)', glow: 'rgba(95,234,216,0.5)' };  // 샘플 #24A096 (mvp/finals)
 const TONE_BLUE: PosterTone   = { bright: '#5FB8EA', dim: 'rgba(158,206,240,0.74)', line: 'rgba(120,188,235,0.30)', glow: 'rgba(95,184,234,0.5)' };  // 샘플 #19B8E2 (rookie)
-const TONE_PURPLE: PosterTone = { bright: '#C77FF2', dim: 'rgba(214,176,244,0.74)', line: 'rgba(190,135,240,0.30)', glow: 'rgba(199,127,242,0.5)' }; // 샘플 #AC2CE2 (mip)
-const TONE_RED: PosterTone    = { bright: '#F2707F', dim: 'rgba(244,168,178,0.74)', line: 'rgba(240,112,127,0.30)', glow: 'rgba(242,112,127,0.5)' };  // 샘플 #CB6D59 웜레드 (statleader)
+const TONE_ORANGE: PosterTone = { bright: '#FF9A3D', dim: 'rgba(255,190,150,0.74)', line: 'rgba(250,150,60,0.30)', glow: 'rgba(255,154,61,0.5)' };  // 샘플 #FCB32A (상위2% 밝은·채도 평균, 오렌지 네온) — bright는 finalsMvp 골드와 구분되게 선라이즈 오렌지로 보정 (mip, 2026-07-22 kling 2462_1)
+const TONE_SILVER: PosterTone = { bright: '#D8DEEA', dim: 'rgba(206,214,228,0.74)', line: 'rgba(176,186,205,0.30)', glow: 'rgba(216,222,234,0.5)' };  // 샘플 #FEFEFE 순백 네온 → 순백과 구분되게 쿨 플래티넘 실버로 보정 (statleader, 2026-07-22 kling Remove 2724_0)
 const TONE_GOLD: PosterTone   = { bright: '#F2C24A', dim: 'rgba(244,214,150,0.74)', line: 'rgba(240,194,74,0.30)', glow: 'rgba(242,194,74,0.5)' };   // 샘플 #D59823 골드 (finalsMvp) — bright는 샘플 hue를 밝게 보정
 
 /** 시즌 라벨 표시 모드 — 'full'(키커 "SEASON" + 연도 2줄, 기본) / 'yearOnly'(연도 1줄만). AwardPoster·가드와 값 동기. */
@@ -47,8 +47,8 @@ export const AWARD_TEMPLATES: Record<'mvp' | 'finalsMvp' | 'rookie' | 'mostImpro
   mvp:          { src: require('../assets/awards/mvp_stage.webp'),        tone: TONE_MINT,   titleTopPct: 12.3 },  // 타이틀 "MOST VALUABLE PLAYER" 상단 실측 12.36%
   finalsMvp:    { src: require('../assets/awards/finals_mvp_stage.webp'), tone: TONE_GOLD,   titleTopPct: 12.2 },  // 골드 자산 (2026-07-22 kling 5586_1) 타이틀 상단 실측 12.29%
   rookie:       { src: require('../assets/awards/rookie_stage.webp'),     tone: TONE_BLUE,   titleTopPct: 12.0 },  // 신인상 타이틀 상단 실측 12.08%
-  mostImproved: { src: require('../assets/awards/mip_stage.webp'),        tone: TONE_PURPLE, titleTopPct: 8.7, seasonMode: 'yearOnly' }, // 기량발전상 타이틀 "MOST" 상단 실측 8.75%(높음) → yearOnly로 시즌 라벨 축약, §8 겹침 정정
-  statLeader:   { src: require('../assets/awards/statleader_stage.webp'), tone: TONE_RED,    titleTopPct: 12.4 },  // 기록왕(흰 "STAT LEADER") 타이틀 상단 실측 12.43% — 화면 배선은 후속(부문 다수, §8), 템플릿·프리뷰만
+  mostImproved: { src: require('../assets/awards/mip_stage.webp'),        tone: TONE_ORANGE, titleTopPct: 9.0, seasonMode: 'yearOnly' }, // 기량발전상 오렌지 자산(2026-07-22 kling 2462_1) 타이틀 "MOST" 상단 실측 9.10%(높음) → yearOnly로 시즌 라벨 축약, §8 겹침 정정
+  statLeader:   { src: require('../assets/awards/statleader_stage.webp'), tone: TONE_SILVER, titleTopPct: 12.3 },  // 기록왕 실버 자산(2026-07-22 kling Remove 2724_0, 흰 "STAT LEADER") 타이틀 상단 실측 12.36% → full — 화면 배선은 후속(부문 다수, §8), 템플릿·프리뷰만
 };
 
 export const POS_EN: Record<Position, string> = {
