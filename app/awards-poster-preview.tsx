@@ -89,7 +89,7 @@ export default function AwardsPosterPreview() {
       <View style={styles.block}>
         <Text style={styles.cap}>샘플 · 기량발전상 (퍼플 톤 · footnote ▲6)</Text>
         <AwardPoster
-          template={AWARD_TEMPLATES.mostImproved.src} tone={AWARD_TEMPLATES.mostImproved.tone}
+          template={AWARD_TEMPLATES.mostImproved.src} tone={AWARD_TEMPLATES.mostImproved.tone} seasonMode={AWARD_TEMPLATES.mostImproved.seasonMode}
           seasonLabel="2025-26" name="한소희" posEn={POS_EN.MB} ovr={82}
           stats={[
             { label: '득점', value: '421' }, { label: '공격', value: '298' }, { label: '블로킹', value: '78' },

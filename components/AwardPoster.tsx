@@ -4,7 +4,10 @@
 // (상단 시즌 라벨·하단 정보 패널)에만 텍스트를 얹는다. 순수 표시(엔진·store 무의존, 결정론 무관).
 //
 // 오버레이 좌표 규약(퍼센트 = 포스터 높이 기준, 자산 1080×1440 실측):
-//   · 상단 시즌 라벨    : top 3.2% ~ 8.5%(타이틀 y≈12% 위 빈 공간)
+//   · 상단 시즌 라벨    : top 3.2% ~ (렌더 실측) full ≈11.0%(키커+연도 2줄) / yearOnly ≈7.9%(연도 1줄)
+//     ↳ 정정(2026-07-22): 구 주석 "~8.5%"는 눈대중 오류 — 실제 렌더 하단은 full ~11%(연도 글리프 8.1~11.0% 실측).
+//       타이틀이 낮은 자산(mvp/finals/rookie/statleader ≈12%)은 클리어하나, mip 타이틀 "MOST"(8.7%)와는 겹쳐 seasonMode='yearOnly' 필요.
+//       가드 tools/_dv_award_poster.ts 충돌 검사가 이 산식을 미러링해 titleTopPct와 대조(값 동기).
 //   · 하단 정보 패널    : top 80.5% ~ 94.2%(그림 패널 아웃라인 실측 79.9~95.1%의 안쪽 — sharp 민트 라인 스캔 2026-07-21)
 //     ⚠ 내용물 합계가 컨테이너보다 크면 아래로 흘러넘쳐 패널 밖으로 샌다(실기기 보고) — 폰트·마진은 반드시 이 높이(13.7%) 안에 들어오게
 // 폰트 크기는 퍼센트가 안 되므로 렌더 폭(w)에서 파생 → 어떤 기기 폭에서도 비율 유지.
@@ -13,7 +16,7 @@
 import { Image, ImageBackground, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import { displayOvr } from '../engine/overall';
-import type { PosterTone } from '../data/awardPoster';
+import type { PosterTone, PosterSeasonMode } from '../data/awardPoster';
 import { theme } from './Screen';
 
 // 배경(다크 네온 이미지) 위 고정 색 — 앱 테마 무관(이미지가 항상 어둡다). theme.accent(민트)와 동계열.
@@ -40,6 +43,7 @@ export interface AwardPosterProps {
   accent?: string;                 // 강조색(우리 구단 등) — 기본 민트. OVR 칩 테두리/숫자(구단색)
   tone?: PosterTone;               // 상별 색 계열(bright/dim/line/glow). 미지정=민트(무회귀)
   seasonKicker?: string;           // 시즌 라벨 위 소형 키커(기본 "SEASON")
+  seasonMode?: PosterSeasonMode;   // 'full'(키커+연도, 기본) / 'yearOnly'(연도만 — 타이틀이 높은 자산의 겹침 회피, §8)
   footnote?: string;               // 하단 문구(선택)
   width?: number;                  // 렌더 폭(기본 = 화면폭−32, Screen 패딩)
 }
@@ -47,8 +51,10 @@ export interface AwardPosterProps {
 /** 3:4 배경 위에 시즌·수상자·OVR·스탯을 퍼센트 절대 배치. 세로 = 폭×4/3. */
 export function AwardPoster({
   template, seasonLabel, name, posEn, ovr, stats,
-  emblem, accent = MINT, tone = DEFAULT_TONE, seasonKicker = 'SEASON', footnote, width,
+  emblem, accent = MINT, tone = DEFAULT_TONE, seasonKicker = 'SEASON', seasonMode = 'full', footnote, width,
 }: AwardPosterProps) {
+  // yearOnly = 키커 미렌더 → 연도가 topZone(3.2%) 최상단에서 시작(하단 ~7.9%). 키커 위 여백(marginTop:2)도 이때만 제거(연도가 3.2%에 붙게).
+  const showKicker = seasonMode !== 'yearOnly';
   const win = useWindowDimensions();
   const w = width ?? Math.min(win.width - 32, 460); // 태블릿 과대 방지 상한
   const h = w * (4 / 3);
@@ -67,8 +73,8 @@ export function AwardPoster({
       <ImageBackground source={template} style={{ width: w, height: h }} resizeMode="cover">
         {/* ── 상단: 시즌 라벨 (타이틀 위 빈 공간) ── */}
         <View style={styles.topZone}>
-          <Text allowFontScaling={false} style={[styles.kicker, { fontSize: f.kicker, color: tone.bright }]}>{seasonKicker}</Text>
-          <Text allowFontScaling={false} style={[styles.season, { fontSize: f.season, color: WHITE, textShadowColor: tone.glow }]} numberOfLines={1}>{seasonLabel}</Text>
+          {showKicker ? <Text allowFontScaling={false} style={[styles.kicker, { fontSize: f.kicker, color: tone.bright }]}>{seasonKicker}</Text> : null}
+          <Text allowFontScaling={false} style={[styles.season, { fontSize: f.season, color: WHITE, textShadowColor: tone.glow, marginTop: showKicker ? 2 : 0 }]} numberOfLines={1}>{seasonLabel}</Text>
         </View>
 
         {/* ── 하단: 정보 패널 (수상자·OVR·스탯) ── */}
@@ -104,7 +110,7 @@ export function AwardPoster({
 }
 
 const styles = StyleSheet.create({
-  // 상단 시즌 라벨 — top 3.2%~8.5%
+  // 상단 시즌 라벨 — top 3.2% 시작, 렌더 하단 full ≈11.0% / yearOnly ≈7.9%(구 주석 "8.5%"는 눈대중 오류, §8 정정)
   topZone: { position: 'absolute', top: '3.2%', left: 0, right: 0, alignItems: 'center' },
   kicker: { fontWeight: '800', letterSpacing: 4, opacity: 0.9 },
   season: { fontWeight: '900', letterSpacing: 2, marginTop: 2, textShadowColor: 'rgba(95,234,216,0.5)', textShadowRadius: 8 },

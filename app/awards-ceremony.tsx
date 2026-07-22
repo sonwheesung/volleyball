@@ -101,7 +101,7 @@ function CeremonyInner() {
     const posterBeat = (poster: ReturnType<typeof buildAwardPosterData>, tpl: AwardTemplate, mineTag: string, footnote?: string) => (
       <View style={{ alignItems: 'center', gap: 8 }}>
         <AwardPoster
-          template={tpl.src} tone={tpl.tone}
+          template={tpl.src} tone={tpl.tone} seasonMode={tpl.seasonMode}
           seasonLabel={poster!.seasonLabel} name={poster!.name} posEn={poster!.posEn}
           ovr={poster!.ovr} stats={poster!.stats} emblem={poster!.emblem} footnote={footnote}
         />
