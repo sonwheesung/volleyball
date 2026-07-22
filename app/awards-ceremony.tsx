@@ -13,7 +13,6 @@ import { currentSeasonAwards } from '../data/awards';
 import { buildAwardPosterData, AWARD_TEMPLATES, type AwardTemplate } from '../data/awardPoster';
 import { leagueProduction } from '../data/production';
 import { getPlayer, shortTeamName, reconstructForeignName } from '../data/league';
-import { seasonYear } from '../data/seasonLabel';
 import { emblemFor } from '../data/emblems';
 import { teamColors } from '../lib/teamColor';
 import { jerseyNumber } from '../engine/jersey';
@@ -36,7 +35,7 @@ export default function AwardsCeremony() {
   if (!ready) return <Loading title="시상식" variant="brand" message="시상식 준비 중…" />;
   if (!championRevealed) {
     return (
-      <Screen title="시상식">
+      <Screen>
         <Card flat>
           <Muted style={{ textAlign: 'center', marginTop: 20 }}>
             아직 이번 시즌 챔피언이 가려지지 않았습니다.{'\n'}포스트시즌이 끝난 뒤 시상식이 열립니다.
@@ -153,7 +152,7 @@ function CeremonyInner() {
 
   if (beats.length === 0) {
     return (
-      <Screen title={`${seasonYear(season)} 시상식`}>
+      <Screen>
         <Muted style={{ textAlign: 'center', marginTop: 40 }}>이번 시즌 시상 내역이 없습니다.</Muted>
         <Button label="일정으로 돌아가기 →" onPress={goRecap} />
       </Screen>
@@ -161,7 +160,7 @@ function CeremonyInner() {
   }
 
   return (
-    <Screen title={`${seasonYear(season)} 시상식`}>
+    <Screen>
       {/* 진행 표시 + 건너뛰기 */}
       <View style={styles.topRow}>
         <View style={styles.dots}>

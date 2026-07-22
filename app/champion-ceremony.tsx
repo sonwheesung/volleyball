@@ -62,7 +62,7 @@ function Inner() {
   const goAwards = () => router.push('/awards-ceremony');
 
   return (
-    <Screen title={`${seasonYear(season)} 시상식`}>
+    <Screen>
       {iWon ? (
         <ChampionCelebration teamName={champName} teamId={my!} season={season} mvpName={mvpName} onDone={goAwards} />
       ) : !finalsPoster ? (
