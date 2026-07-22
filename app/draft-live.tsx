@@ -5,6 +5,10 @@ import { Redirect, useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { DraftPoster } from '../components/DraftPoster';
+import { emblemFor } from '../data/emblems';
+import { POS_EN } from '../data/awardPoster';
+import { seasonYear } from '../data/seasonLabel';
 import { buildOffseasonBase } from '../data/draftSetup';
 import { resolveDraftContextFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
@@ -33,6 +37,9 @@ const REASON: Record<PickReason, { ko: string; color: string }> = {
 };
 
 const POS_KO: Record<Position, string> = { S: '세터', OH: '아웃사이드', OP: '아포짓', MB: '미들', L: '리베로' };
+
+// 지명 포스터 배경 자산(DL-9) — 화면당 1종(딥 네이비 "DRAFT DAY"). 컴포넌트는 template prop으로 받는다(AwardPoster 규약).
+const DRAFT_STAGE = require('../assets/awards/draft_stage.webp');
 
 export default function DraftLive() {
   const ready = useDeferredReady();
@@ -86,6 +93,8 @@ function DraftLiveInner() {
   const [paused, setPaused] = useState(false);
   const [speed, setSpeed] = useState(600); // 600(보통)/300(빠르게)
   const [openId, setOpenId] = useState<string | null>(null); // 선택 패널 상세 펼침
+  // DL-9 지명 포스터 비트 — 내 확정 픽 직후 한 박자(탭하면 닫히고 라이브 재개). null이면 미표시(타팀 픽·참관은 항상 null).
+  const [posterPick, setPosterPick] = useState<{ player: Player; round: number; overallNo: number } | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 픽 시퀀스 — [ctx, mySelections]에만 의존(값싼 재계산, 조정 C). 내 슬롯은 mySelections 우선 → 찜 폴백 → AI.
@@ -124,22 +133,29 @@ function DraftLiveInner() {
     }
   }, [confirmedMyCount, myPickPositions]);
 
-  // 자동진행(조정 F) — 정지/내픽대기/종료가 아니면 speed 간격으로 stopAt까지 한 픽씩.
+  // 자동진행(조정 F) — 정지/내픽대기/종료/지명 포스터 표시 중이 아니면 speed 간격으로 stopAt까지 한 픽씩.
+  //   posterPick(DL-9)은 하드스톱과 같은 결로 정지 조건에 포함 — 포스터 표시 중 진행 멈춤, 탭으로 해제 시 재개.
   useEffect(() => {
-    if (paused || atMyPick || done) { if (timer.current) { clearInterval(timer.current); timer.current = null; } return; }
+    if (paused || atMyPick || done || posterPick) { if (timer.current) { clearInterval(timer.current); timer.current = null; } return; }
     timer.current = setInterval(() => setRevealed((r) => Math.min(stopAt, r + 1)), speed);
     return () => { if (timer.current) clearInterval(timer.current); };
-  }, [paused, atMyPick, done, stopAt, speed]);
+  }, [paused, atMyPick, done, stopAt, speed, posterPick]);
   useEffect(() => () => { if (timer.current) clearInterval(timer.current); }, []);
 
   // 확정 — 내 슬롯 픽 선택. append + 즉시 영속 + 그 픽 공개. 마지막 픽이면 "나머지 자동 진행" 게이트로 정지.
   const confirm = (playerId: string) => {
+    // DL-9 포스터 데이터는 append 전 현재 클로저에서 캡처 — round·overallNo는 order 고정(mySelections 무관 안정),
+    //   player는 내가 고른 선수. seq[stopAt]는 이 슬롯의 추천 픽(round=내 팀 이 픽의 라운드, overallNo=전체 순번=stopAt+1).
+    const round = seq[stopAt]?.round ?? 1;
+    const overallNo = stopAt + 1;
+    const picked = clsById.get(playerId) ?? ctx.snapshot[playerId];
     const next = [...mySelections, playerId];
     setMySelections(next);
     setDraftSelections(next);       // 즉시 영속(조정 D — 재개 대비)
     setRevealed((r) => r + 1);      // 방금 확정한 내 픽 공개(현재 revealed==stopAt)
     setOpenId(null);
-    if (next.length >= myCount) setPaused(true); // 내 마지막 픽 뒤 → 버튼 게이트
+    if (next.length >= myCount) setPaused(true); // 내 마지막 픽 뒤 → 버튼 게이트(포스터 탭 후 노출)
+    if (picked) setPosterPick({ player: picked, round, overallNo }); // 한 박자 연출(자동진행 정지 조건에 포함)
   };
 
   // 시즌 시작 — 오늘과 동일 출구(광고 후 /season-start replace → endSeason 체인). draft-live:78 관계 유지.
@@ -221,8 +237,25 @@ function DraftLiveInner() {
   const needSet = new Set(panel?.needs ?? []);
   const roundLabel = done ? '지명 종료' : atMyPick ? '내 지명 순번!' : `${seq[revealed]?.round ?? '-'}R 진행 중`;
 
+  // DL-9 지명 포스터 비트 — Screen overlay 슬롯(뷰포트 고정, ScrollView 밖). 스크림이 라이브 피드 터치를 가로채고, 탭하면 닫혀 재개.
+  const posterOverlay = posterPick ? (
+    <Pressable style={styles.posterScrim} onPress={() => setPosterPick(null)}>
+      <Muted style={styles.posterHint}>화면을 탭해 계속 →</Muted>
+      <DraftPoster
+        template={DRAFT_STAGE}
+        emblem={emblemFor(my)}
+        kicker={`${seasonYear(season + 1)} 신인 드래프트 · ${posterPick.round}R ${posterPick.overallNo}순번`}
+        name={posterPick.player.name}
+        posKo={POS_KO[posterPick.player.position]}
+        posEn={POS_EN[posterPick.player.position]}
+        grade={prospectGradeLabel(posterPick.player, 1)}
+      />
+      <Text style={styles.posterTag}>우리 구단의 지명</Text>
+    </Pressable>
+  ) : null;
+
   return (
-    <Screen title={`${season + 2}시즌 드래프트`}>
+    <Screen title={`${season + 2}시즌 드래프트`} overlay={posterOverlay}>
       <View style={styles.bar}>
         {/* P3(2026-07-12): 헤더 분모를 예상 지명(myCount)으로 — 패널 "직접 선택 (n/myCount)"과 일치시켜 "보유 4 vs 예상 2" 혼동 제거.
             보유 지명권(slots)은 준비 화면 표기, 여기선 실제 지명 수 + PASS로 완결(지명 2 + 패스 2 = 권리 4). */}
@@ -422,4 +455,8 @@ const styles = themedStyles(() => StyleSheet.create({
   sumGrade: { color: theme.sky, fontSize: 12, fontWeight: '800' },
   sumPass: { color: theme.muted, fontSize: 13, fontWeight: '800' },
   sumReason: { color: theme.muted, fontSize: 12, fontWeight: '600', marginTop: 3, lineHeight: 16 },
+  // DL-9 지명 포스터 오버레이 — 뷰포트 고정 스크림(딥 네이비 베일) + 중앙 포스터 + 탭 힌트/태그. 색은 배경 자산 톤(테마 무관).
+  posterScrim: { ...StyleSheet.absoluteFillObject, backgroundColor: 'rgba(4,7,20,0.86)', alignItems: 'center', justifyContent: 'center', paddingHorizontal: 16, gap: 12, zIndex: 20 },
+  posterHint: { fontSize: 12, letterSpacing: 1 },
+  posterTag: { color: '#CFE0FF', fontSize: 13, fontWeight: '800', letterSpacing: 1 },
 }));
