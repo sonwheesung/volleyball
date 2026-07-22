@@ -102,6 +102,44 @@ function collisionErrors(templates: TemplateMap, modeOf: (key: string, tpl: Temp
   return errs;
 }
 
+// ── 패널 세로 예산 검사(AWARDS_SYSTEM §8 풋노트 넘침 근본수정 2026-07-22) ──
+// components/AwardPoster.tsx 하단 패널의 폰트·마진 산식을 미러링해 콘텐츠 총높이(%h)를 계산하고,
+// 패널 컨테이너 높이(13.7%h = top 80.5%~bottom 5.8%) - 안전마진 0.5% = 13.2%h 이하인지 어서션한다.
+// panel은 justifyContent:'center'라 콘텐츠>컨테이너면 위·아래로 균등 넘침 → 풋노트가 하단 네온 레일에 걸침(실기기 버그).
+// 값 동기[컴포넌트]: 폰트 스케일 posEn .022·name .056·ovrTag .020·ovrNum .044·statVal .034·statLab .021·foot .022,
+//   명시 lineHeight 배수(무/유 구성), statRow marginTop %(1.8/0.3), name·statLab marginTop px(1/0), foot marginTop px, h=w×4/3.
+//   %h 환산: 폭 파생 폰트 L=scale×w → %h=scale×75(∵ (w/h)×100=75). px p → %h=75p/REF. 패널폭 % 마진 m → %h=0.6225×m(패널 내부폭 0.83w).
+const PANEL_H = 13.7;                          // 패널 컨테이너 높이 %h (top 80.5%~bottom 5.8%)
+const BUDGET_SAFETY = 0.5;                     // 안전마진
+const PANEL_BUDGET = PANEL_H - BUDGET_SAFETY;  // 13.2%h
+const REF_W_BUDGET = 428;                      // px→%h 환산 기준 폭(대표 폰)
+const PANEL_W_FRAC = 0.83;                     // 패널 내부폭 = w×(1 - 0.085×2)
+const bpx = (p: number) => (75 * p) / REF_W_BUDGET;        // px → %h
+const bfh = (scale: number, lh: number) => scale * lh * 75; // 폭 파생 폰트 라인박스 → %h
+const bmpc = (m: number) => 0.01 * m * PANEL_W_FRAC * 75;  // 패널폭 % 마진 → %h (=0.6225×m)
+
+interface PanelCfg {
+  posEnLH: number; nameLH: number; nameMT: number;      // headRow(nameCol)
+  statValLH: number; statLabLH: number; statLabMT: number; statRowMT: number; // statRow(%)
+  hasFoot: boolean; footScale: number; footLH: number; footMT: number;        // foot
+}
+/** 하단 패널 콘텐츠 총높이(%h) — 컴포넌트 렌더 구조(headRow + statRow + foot?) 미러링. */
+function panelContentPct(c: PanelCfg): number {
+  const nameCol = bfh(0.022, c.posEnLH) + bpx(c.nameMT) + bfh(0.056, c.nameLH);
+  // ovrChip: paddingVertical 2(×2) + border 1.5(×2) + ovrTag(lh1.15) + ovrTag marginBottom -2 + ovrNum(lh1.1)
+  const ovrChip = bpx(4) + bpx(3) + bfh(0.020, 1.15) + bpx(-2) + bfh(0.044, 1.1);
+  const emblem = 4.8;   // Image width/height = h×0.048 ⇒ 4.8%h
+  const headRow = Math.max(nameCol, ovrChip, emblem);
+  const statRow = bmpc(c.statRowMT) + bfh(0.034, c.statValLH) + bpx(c.statLabMT) + bfh(0.021, c.statLabLH);
+  const foot = c.hasFoot ? bpx(c.footMT) + bfh(c.footScale, c.footLH) : 0;
+  return headRow + statRow + foot;
+}
+// 프로덕션 값(컴포넌트 AwardPoster.tsx와 동기) — 풋노트 無(무회귀 4장) / 有(압축)
+const CFG_NOFOOT: PanelCfg = { posEnLH: 1.15, nameLH: 1.12, nameMT: 1, statValLH: 1.12, statLabLH: 1.15, statLabMT: 1, statRowMT: 1.8, hasFoot: false, footScale: 0.022, footLH: 1.08, footMT: 0 };
+const CFG_FOOT: PanelCfg   = { posEnLH: 1.10, nameLH: 1.10, nameMT: 0, statValLH: 1.08, statLabLH: 1.10, statLabMT: 0, statRowMT: 0.3, hasFoot: true,  footScale: 0.022, footLH: 1.08, footMT: 0 };
+// A/B 버그 재현용 — 압축 前(구) 풋노트 구성: statRow 1.8%·foot marginTop 6·f.foot .026 lh1.15·라인하이트/마진 미압축
+const CFG_FOOT_LEGACY: PanelCfg = { posEnLH: 1.15, nameLH: 1.12, nameMT: 1, statValLH: 1.12, statLabLH: 1.15, statLabMT: 1, statRowMT: 1.8, hasFoot: true, footScale: 0.026, footLH: 1.15, footMT: 6 };
+
 (async () => {
   const { posterStats, AWARD_TEMPLATES } = await import('../data/awardPoster');
   const templates = AWARD_TEMPLATES as unknown as TemplateMap;
@@ -149,6 +187,20 @@ function collisionErrors(templates: TemplateMap, modeOf: (key: string, tpl: Temp
   if (mipFull.length > 0) console.log(`PASS collision-sensitivity :: mip 'full' 가정 시 겹침 검출 — 검사 유효\n    (재현: ${mipFull[0]})`);
   else { fail++; console.log("FAIL collision-sensitivity :: mip을 'full'로 강제해도 겹침 미검출 — 오라클이 허위(무의미)"); }
 
-  console.log(fail === 0 ? '\nALL PASS — award poster 오귀속·톤·오버레이 충돌 무결' : `\n${fail} FAIL`);
+  // (A) 패널 세로 예산 — 풋노트 無/有 두 구성 모두 예산(13.2%h) 이내여야 PASS(넘침 없음)
+  const noFootPct = panelContentPct(CFG_NOFOOT);
+  const footPct = panelContentPct(CFG_FOOT);
+  console.log(`  · 패널 세로 예산: 컨테이너 ${PANEL_H}% - 안전 ${BUDGET_SAFETY}% = ${PANEL_BUDGET}% | 풋노트無 ${noFootPct.toFixed(2)}% · 풋노트有 ${footPct.toFixed(2)}%`);
+  if (noFootPct <= PANEL_BUDGET && footPct <= PANEL_BUDGET) {
+    console.log(`PASS budget :: 패널 콘텐츠 총높이 풋노트無 ${noFootPct.toFixed(2)}%·有 ${footPct.toFixed(2)}% ≤ ${PANEL_BUDGET}% — 넘침 없음`);
+  } else { fail++; console.log(`FAIL budget :: 초과 (無 ${noFootPct.toFixed(2)} / 有 ${footPct.toFixed(2)} vs 예산 ${PANEL_BUDGET})`); }
+
+  // (B) 세로 예산 민감도 A/B — 압축 前(구) 풋노트 구성을 주입하면 예산 초과가 검출돼야(현 버그 재현) 검사가 유효
+  const legacyPct = panelContentPct(CFG_FOOT_LEGACY);
+  if (legacyPct > PANEL_BUDGET) {
+    console.log(`PASS budget-sensitivity :: 구 풋노트 구성 ${legacyPct.toFixed(2)}% > 예산 ${PANEL_BUDGET}% 초과 검출 — 검사 유효 (패널 ${PANEL_H}% 넘침 ${(legacyPct - PANEL_H).toFixed(2)}%p)`);
+  } else { fail++; console.log(`FAIL budget-sensitivity :: 구 풋노트 구성 ${legacyPct.toFixed(2)}%도 예산 이내로 계산 — 오라클 허위(무의미)`); }
+
+  console.log(fail === 0 ? '\nALL PASS — award poster 오귀속·톤·오버레이 충돌·세로 예산 무결' : `\n${fail} FAIL`);
   process.exit(fail === 0 ? 0 : 1);
 })();

@@ -9,7 +9,8 @@
 //       타이틀이 낮은 자산(mvp/finals/rookie/statleader ≈12%)은 클리어하나, mip 타이틀 "MOST"(8.7%)와는 겹쳐 seasonMode='yearOnly' 필요.
 //       가드 tools/_dv_award_poster.ts 충돌 검사가 이 산식을 미러링해 titleTopPct와 대조(값 동기).
 //   · 하단 정보 패널    : top 80.5% ~ 94.2%(그림 패널 아웃라인 실측 79.9~95.1%의 안쪽 — sharp 민트 라인 스캔 2026-07-21)
-//     ⚠ 내용물 합계가 컨테이너보다 크면 아래로 흘러넘쳐 패널 밖으로 샌다(실기기 보고) — 폰트·마진은 반드시 이 높이(13.7%) 안에 들어오게
+//     ⚠ 내용물 합계가 컨테이너(13.7%h)보다 크면 아래로 흘러넘쳐 패널 밖으로 샌다(실기기 보고). 풋노트 有는 5번째 줄이 붙어
+//       총높이 15.51%h로 초과 → 풋노트 有 구성만 라인하이트·마진 압축(총 12.89%h). 세로 예산 산식은 styles.panel 주석 참조.
 // 폰트 크기는 퍼센트가 안 되므로 렌더 폭(w)에서 파생 → 어떤 기기 폭에서도 비율 유지.
 // 색은 배경(고정 다크 네온 이미지) 위라 앱 라이트/다크 테마와 무관 — 자산 네온 톤·흰색.
 // 톤(상별 색 계열)은 tone prop으로 주입(신인상=블루·기량발전=오렌지·기록왕=실버 …). 미지정=민트(기존 무회귀).
@@ -64,9 +65,13 @@ export function AwardPoster({
     posEn: w * 0.022, name: w * 0.056,
     ovrTag: w * 0.020, ovrNum: w * 0.044,
     statVal: w * 0.034, statLab: w * 0.021,
-    foot: w * 0.026,
+    foot: w * 0.022,        // 풋노트(있을 때만 렌더) — 0.026→0.022 축소(패널 세로 예산, styles.panel 주석 산식)
   };
   const cells = stats.slice(0, 5);
+  // 풋노트가 있으면 하단 패널에 5번째 줄이 붙어 콘텐츠 총높이가 컨테이너(13.7%h)를 넘어 아래로 샌다(실기기 버그, §8).
+  // → 풋노트 有일 때만 라인하이트·마진을 압축해 총높이 ≤13.0%h(패널 13.7 - 안전 0.7)로 맞춘다. 풋노트 無(4장)는 픽셀 무회귀.
+  // 조정 전후 총높이(15.51→12.89%h)·산식은 styles.panel 주석 + 가드 tools/_dv_award_poster.ts(패널 세로 예산 검사)와 값 동기.
+  const hasFoot = !!footnote;
 
   return (
     <View style={{ width: w, height: h, borderRadius: 16, overflow: 'hidden' }}>
@@ -83,8 +88,8 @@ export function AwardPoster({
           <View style={styles.headRow}>
             {emblem ? <Image source={emblem} style={[styles.emblem, { width: h * 0.048, height: h * 0.048 }]} /> : null}
             <View style={styles.nameCol}>
-              <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, lineHeight: f.posEn * 1.15, includeFontPadding: false, color: tone.bright }]} numberOfLines={1}>{posEn}</Text>
-              <Text allowFontScaling={false} style={[styles.name, { fontSize: f.name, lineHeight: f.name * 1.12, includeFontPadding: false, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
+              <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, lineHeight: f.posEn * (hasFoot ? 1.10 : 1.15), includeFontPadding: false, color: tone.bright }]} numberOfLines={1}>{posEn}</Text>
+              <Text allowFontScaling={false} style={[styles.name, { fontSize: f.name, lineHeight: f.name * (hasFoot ? 1.10 : 1.12), includeFontPadding: false, color: WHITE, marginTop: hasFoot ? 0 : 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
             </View>
             <View style={[styles.ovrChip, { borderColor: accent }]}>
               <Text allowFontScaling={false} style={[styles.ovrTag, { fontSize: f.ovrTag, lineHeight: f.ovrTag * 1.15, includeFontPadding: false, color: tone.dim }]}>OVR</Text>
@@ -93,16 +98,16 @@ export function AwardPoster({
           </View>
 
           {/* 하단행: 스탯 5칸 */}
-          <View style={styles.statRow}>
+          <View style={[styles.statRow, hasFoot && { marginTop: '0.3%' }]}>
             {cells.map((c, i) => (
               <View key={c.label + i} style={[styles.statCell, i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: tone.line }]}>
-                <Text allowFontScaling={false} style={[styles.statVal, { fontSize: f.statVal, lineHeight: f.statVal * 1.12, includeFontPadding: false, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{c.value}</Text>
-                <Text allowFontScaling={false} style={[styles.statLab, { fontSize: f.statLab, lineHeight: f.statLab * 1.15, includeFontPadding: false, color: tone.dim }]} numberOfLines={1}>{c.label}</Text>
+                <Text allowFontScaling={false} style={[styles.statVal, { fontSize: f.statVal, lineHeight: f.statVal * (hasFoot ? 1.08 : 1.12), includeFontPadding: false, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{c.value}</Text>
+                <Text allowFontScaling={false} style={[styles.statLab, { fontSize: f.statLab, lineHeight: f.statLab * (hasFoot ? 1.10 : 1.15), includeFontPadding: false, color: tone.dim, marginTop: hasFoot ? 0 : 1 }]} numberOfLines={1}>{c.label}</Text>
               </View>
             ))}
           </View>
 
-          {footnote ? <Text allowFontScaling={false} style={[styles.foot, { fontSize: f.foot, lineHeight: f.foot * 1.15, includeFontPadding: false, color: tone.dim }]} numberOfLines={1}>{footnote}</Text> : null}
+          {footnote ? <Text allowFontScaling={false} style={[styles.foot, { fontSize: f.foot, lineHeight: f.foot * 1.08, includeFontPadding: false, color: tone.dim }]} numberOfLines={1}>{footnote}</Text> : null}
         </View>
       </ImageBackground>
     </View>
@@ -115,7 +120,15 @@ const styles = StyleSheet.create({
   kicker: { fontWeight: '800', letterSpacing: 4, opacity: 0.9 },
   season: { fontWeight: '900', letterSpacing: 2, marginTop: 2, textShadowColor: 'rgba(95,234,216,0.5)', textShadowRadius: 8 },
 
-  // 하단 정보 패널 — top 79%~95.5% (시안 y≈79~94%, 아웃라인 82~96% 살짝 위에서 시작)
+  // 하단 정보 패널 — top 80.5%~bottom 5.8% ⇒ 컨테이너 높이 13.7%h. justifyContent:'center'라 콘텐츠 총높이가
+  // 13.7%를 넘으면 위·아래로 균등 넘침 → 풋노트가 패널 하단 네온 레일에 걸침(실기기 버그, §8 세로 예산 근본수정 2026-07-22).
+  // ── 세로 예산 산식(%h; 폭 파생 폰트 s → %h=s×75 ∵ w/h=3/4, px p → 75p/428, 패널폭 % 마진 m → 0.6225m) ──
+  //   headRow=max(nameCol, ovrChip 6.23, emblem 4.8);  nameCol=posEn(.022×lh)·name(.056×lh)+name mt
+  //   statRow=statRow_mt + statVal(.034×lh)+statLab(.021×lh)+statLab mt;  foot=foot_mt + foot(.022×1.08)
+  //   · 풋노트 無(4장, 현행 무회귀): 6.777 + 5.963            = 12.74%h  (lh posEn1.15·name1.12·statVal1.12·statLab1.15, mt 1.8%/1px)
+  //   · 풋노트 有(구, 버그):        6.777 + 5.963 + 2.768     = 15.51%h  (13.7 초과 1.81 → 하단 0.9%h 넘침)
+  //   · 풋노트 有(신, 압축):        6.435 + 4.673 + 1.782     = 12.89%h  (lh posEn1.10·name1.10·statVal1.08·statLab1.10, statRow mt 0.3%·name/statLab mt 0·foot mt 0·f.foot .022×1.08)
+  //   ⇒ 신 풋노트 총높이 ≤13.0%h(패널 13.7 - 안전 0.7). 가드 tools/_dv_award_poster.ts '패널 세로 예산' 검사가 이 산식을 미러링(값 동기).
   panel: { position: 'absolute', top: '80.5%', bottom: '5.8%', left: '8.5%', right: '8.5%', justifyContent: 'center' },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
   emblem: { resizeMode: 'contain' },
@@ -131,7 +144,8 @@ const styles = StyleSheet.create({
   statVal: { fontWeight: '900' },
   statLab: { fontWeight: '700', marginTop: 1 },
 
-  // marginTop 3(구 6에서 축소, 패널 세로 예산 회수). lineHeight·includeFontPadding는 인라인(다른 Text와 동일 패턴) —
-  // c815b45(라인하이트 명시+폰트 패딩 제거)의 누락 형제였다(당시 풋노트 사용처 부재로 화면 검증서 빠짐, 안드로이드 폰트 슬롭이 세로를 부풀려 오렌지 패널 하단 접촉).
-  foot: { textAlign: 'center', marginTop: 3, letterSpacing: 1, opacity: 0.85 },
+  // marginTop 0(구 6→3→0, 패널 세로 예산 근본수정 2026-07-22 §8). lineHeight는 인라인 f.foot×1.08(includeFontPadding:false).
+  // foot Text는 footnote 有일 때만 렌더되므로 여기 값은 항상 '풋노트 압축 구성'(무회귀 대상 아님).
+  // ed9f2ff(mt 6→3·lh1.15)는 3px만 회수해 여전히 넘침(실기기 재보고) → styles.panel 세로 예산식 기반 압축으로 봉인.
+  foot: { textAlign: 'center', marginTop: 0, letterSpacing: 1, opacity: 0.85 },
 });
