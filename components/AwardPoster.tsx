@@ -12,7 +12,7 @@
 //     ⚠ 내용물 합계가 컨테이너보다 크면 아래로 흘러넘쳐 패널 밖으로 샌다(실기기 보고) — 폰트·마진은 반드시 이 높이(13.7%) 안에 들어오게
 // 폰트 크기는 퍼센트가 안 되므로 렌더 폭(w)에서 파생 → 어떤 기기 폭에서도 비율 유지.
 // 색은 배경(고정 다크 네온 이미지) 위라 앱 라이트/다크 테마와 무관 — 자산 네온 톤·흰색.
-// 톤(상별 색 계열)은 tone prop으로 주입(신인상=블루·기량발전=퍼플·기록왕=레드 …). 미지정=민트(기존 무회귀).
+// 톤(상별 색 계열)은 tone prop으로 주입(신인상=블루·기량발전=오렌지·기록왕=실버 …). 미지정=민트(기존 무회귀).
 import { Image, ImageBackground, StyleSheet, Text, View, useWindowDimensions } from 'react-native';
 import type { ImageSourcePropType } from 'react-native';
 import { displayOvr } from '../engine/overall';
@@ -22,7 +22,7 @@ import { theme } from './Screen';
 // 배경(다크 네온 이미지) 위 고정 색 — 앱 테마 무관(이미지가 항상 어둡다). theme.accent(민트)와 동계열.
 const MINT = theme.accent;            // #19C2AE — accent(OVR 칩) 기본값
 const WHITE = '#FFFFFF';
-// 톤 기본값(민트) — tone 미지정 시 기존과 픽셀 동일(무회귀). data/awardPoster.ts TONE_MINT와 값 동기(자산 mvp/finals).
+// 톤 기본값(민트) — tone 미지정 시 기존과 픽셀 동일(무회귀). data/awardPoster.ts TONE_MINT와 값 동기(자산 mvp — finals는 골드로 분리).
 const DEFAULT_TONE: PosterTone = {
   bright: '#5FEAD8',                    // 시즌 키커·포지션 라벨 글로우
   dim: 'rgba(150,238,224,0.72)',        // 스탯 라벨·OVR 태그·풋노트
@@ -102,7 +102,7 @@ export function AwardPoster({
             ))}
           </View>
 
-          {footnote ? <Text allowFontScaling={false} style={[styles.foot, { fontSize: f.foot, color: tone.dim }]} numberOfLines={1}>{footnote}</Text> : null}
+          {footnote ? <Text allowFontScaling={false} style={[styles.foot, { fontSize: f.foot, lineHeight: f.foot * 1.15, includeFontPadding: false, color: tone.dim }]} numberOfLines={1}>{footnote}</Text> : null}
         </View>
       </ImageBackground>
     </View>
@@ -131,5 +131,7 @@ const styles = StyleSheet.create({
   statVal: { fontWeight: '900' },
   statLab: { fontWeight: '700', marginTop: 1 },
 
-  foot: { textAlign: 'center', marginTop: 6, letterSpacing: 1, opacity: 0.85 },
+  // marginTop 3(구 6에서 축소, 패널 세로 예산 회수). lineHeight·includeFontPadding는 인라인(다른 Text와 동일 패턴) —
+  // c815b45(라인하이트 명시+폰트 패딩 제거)의 누락 형제였다(당시 풋노트 사용처 부재로 화면 검증서 빠짐, 안드로이드 폰트 슬롭이 세로를 부풀려 오렌지 패널 하단 접촉).
+  foot: { textAlign: 'center', marginTop: 3, letterSpacing: 1, opacity: 0.85 },
 });

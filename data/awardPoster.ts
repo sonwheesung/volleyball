@@ -27,7 +27,7 @@ import { SEASON_DAYS } from '../engine/calendar';
 export interface PosterTone { bright: string; dim: string; line: string; glow: string }
 
 // 상별 톤(sharp 상위 2% 네온 평균 샘플 근거는 주석의 #hex). 민트 기본은 AwardPoster.DEFAULT_TONE과 값 동기(무회귀).
-const TONE_MINT: PosterTone   = { bright: '#5FEAD8', dim: 'rgba(150,238,224,0.72)', line: 'rgba(120,230,215,0.28)', glow: 'rgba(95,234,216,0.5)' };  // 샘플 #24A096 (mvp/finals)
+const TONE_MINT: PosterTone   = { bright: '#5FEAD8', dim: 'rgba(150,238,224,0.72)', line: 'rgba(120,230,215,0.28)', glow: 'rgba(95,234,216,0.5)' };  // 샘플 #24A096 (mvp — finals는 골드로 분리, TONE_GOLD)
 const TONE_BLUE: PosterTone   = { bright: '#5FB8EA', dim: 'rgba(158,206,240,0.74)', line: 'rgba(120,188,235,0.30)', glow: 'rgba(95,184,234,0.5)' };  // 샘플 #19B8E2 (rookie)
 const TONE_ORANGE: PosterTone = { bright: '#FF9A3D', dim: 'rgba(255,190,150,0.74)', line: 'rgba(250,150,60,0.30)', glow: 'rgba(255,154,61,0.5)' };  // 샘플 #FCB32A (상위2% 밝은·채도 평균, 오렌지 네온) — bright는 finalsMvp 골드와 구분되게 선라이즈 오렌지로 보정 (mip, 2026-07-22 kling 2462_1)
 const TONE_SILVER: PosterTone = { bright: '#D8DEEA', dim: 'rgba(206,214,228,0.74)', line: 'rgba(176,186,205,0.30)', glow: 'rgba(216,222,234,0.5)' };  // 샘플 #FEFEFE 순백 네온 → 순백과 구분되게 쿨 플래티넘 실버로 보정 (statleader, 2026-07-22 kling Remove 2724_0)

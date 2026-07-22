@@ -22,7 +22,7 @@ import type { AwardWinner } from '../types';
 
 const AnimView = Animated.View;
 
-// 상별 포스터 배경 자산+톤 매핑은 data/awardPoster.ts AWARD_TEMPLATES(src·tone) — 상별 색 계열(신인=블루·기량발전=퍼플 …).
+// 상별 포스터 배경 자산+톤 매핑은 data/awardPoster.ts AWARD_TEMPLATES(src·tone) — 상별 색 계열(신인=블루·기량발전=오렌지·기록왕=실버 …).
 // 포스터 데이터가 조립되면 AwardPoster 연출, 미출전 등으로 null이면 기존 카드(winnerCard) 폴백.
 
 export default function AwardsCeremony() {

@@ -87,7 +87,7 @@ export default function AwardsPosterPreview() {
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.cap}>샘플 · 기량발전상 (퍼플 톤 · footnote ▲6)</Text>
+        <Text style={styles.cap}>샘플 · 기량발전상 (오렌지 톤 · footnote ▲6)</Text>
         <AwardPoster
           template={AWARD_TEMPLATES.mostImproved.src} tone={AWARD_TEMPLATES.mostImproved.tone} seasonMode={AWARD_TEMPLATES.mostImproved.seasonMode}
           seasonLabel="2025-26" name="한소희" posEn={POS_EN.MB} ovr={82}
@@ -100,7 +100,7 @@ export default function AwardsPosterPreview() {
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.cap}>샘플 · 기록왕 (레드 톤 · 화면 배선 후속)</Text>
+        <Text style={styles.cap}>샘플 · 기록왕 (실버 톤 · 화면 배선 후속)</Text>
         <AwardPoster
           template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
           seasonLabel="2025-26" name="마리아 산토스" posEn={POS_EN.OP} ovr={90} seasonKicker="LEAGUE LEADER"

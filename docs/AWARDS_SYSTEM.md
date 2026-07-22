@@ -123,7 +123,7 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 > 정점을 시각적으로 못박는다. 관전형 1순위(보는 경험) 투자처. ~~이번 웨이브는 **정규리그 MVP만** 교체하고, 다른
 > 1인 개인상(신인상·기량발전상·챔프전 MVP)은 현행 카드 유지 — 단 자산만 추가하면 같은 컴포넌트로 갈아끼운다.~~
 > → **확장(2026-07-22)**: 챔프전 MVP(finalsMvp, §8 하단)·**신인상·기량발전상**도 포스터로 승격(각 자산 등록). 상마다 **색 톤이 다르다**
-> (신인=블루·기량발전=퍼플·기록왕=레드, 아래 톤 표). 기록왕(statLeader)은 템플릿·프리뷰만 등록하고 **수여 화면 배선은 후속**(부문 다수 — 수여 UX 설계 필요).
+> (신인=블루·기량발전=~~퍼플~~ **오렌지**·기록왕=~~레드~~ **실버**, 아래 톤 표 — 사용자 평가 2026-07-22: 퍼플·레드 부조화). 기록왕(statLeader)은 템플릿·프리뷰만 등록하고 **수여 화면 배선은 후속**(부문 다수 — 수여 UX 설계 필요).
 
 **템플릿 전략(상별 자산 추가 = 매핑 한 줄)**:
 - 배경 자산 `assets/awards/mvp_stage.webp`(1080×1440, 3:4). 상 타이틀("MVP / MOST VALUABLE PLAYER")은 그림에 박혀
@@ -145,14 +145,14 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 | `mvp` | `mvp_stage.webp` | 민트(기본) | `#5FEAD8` | `#24A096` | awards-ceremony(정규 MVP 클라이맥스) | 79.9~95.1% |
 | `finalsMvp` | `finals_mvp_stage.webp` | 민트(유지) | `#5FEAD8` | `#289F9A` | champion-ceremony(챔프전 MVP, §5.3 유일 수여) | 79.9~95.1% |
 | `rookie` | `rookie_stage.webp` | **블루** | `#5FB8EA` | `#19B8E2` | awards-ceremony(신인상) | 80.0~95.1% |
-| `mostImproved` | `mip_stage.webp` | **퍼플** | `#C77FF2` | `#AC2CE2` | awards-ceremony(기량발전상, footnote `OVR ▲N`, **`seasonMode:'yearOnly'`** — 타이틀 8.7% 겹침 회피) | 80.0~95.1% |
-| `statLeader` | `statleader_stage.webp` | **레드** | `#F2707F` | `#CB6D59`(웜레드) | **후속 배선**(부문 다수 — 수여 UX 설계 필요). 현재는 프리뷰만 | 80.0~95.1% |
+| `mostImproved` | `mip_stage.webp` | ~~퍼플~~ **오렌지**(TONE_ORANGE) | ~~`#C77FF2`~~ `#FF9A3D` | ~~`#AC2CE2`~~ `#FCB32A`(선라이즈) | awards-ceremony(기량발전상, footnote `OVR ▲N`, **`seasonMode:'yearOnly'`** — 타이틀 ~~8.7%~~ 9.0% 겹침 회피) | 80.0~95.1% |
+| `statLeader` | `statleader_stage.webp` | ~~레드~~ **실버**(TONE_SILVER) | ~~`#F2707F`~~ `#D8DEEA`(플래티넘) | ~~`#CB6D59`(웜레드)~~ `#FEFEFE`(순백→쿨실버 보정) | **후속 배선**(부문 다수 — 수여 UX 설계 필요). 현재는 프리뷰만 | 80.0~95.1% |
 
 - **finalsMvp 톤 주석(교체 예정)**: 현재 민트 자산이라 톤도 민트 유지. **골드 자산으로 교체 예정** — 교체 시 `TONE_GOLD` 신설 후 그 줄만 톤 교체
   (자산·톤이 같은 위치에 있어 한 줄 수정). `data/awardPoster.ts` 주석에 명기.
 - **기록왕(statLeader) 배선 후속 메모**: 정규리그 MVP·신인상·기량발전상·챔프전 MVP는 시즌당 **1명 1상**이라 포스터 1장으로 끝난다. 그러나
   기록왕은 **부문(득점·공격·블로킹·서브·디그·세트·리시브 등)이 다수**라 "누구를 어느 부문으로 몇 장" 보여줄지 수여 UX가 먼저 정해져야 한다
-  (부문별 1장씩이면 시상식 비트가 과다 → 관전형 피로). 따라서 이번 웨이브는 **레드 톤 템플릿 + 프리뷰 샘플만** 등록하고 수여 화면(awards-ceremony 비트)
+  (부문별 1장씩이면 시상식 비트가 과다 → 관전형 피로). 따라서 이번 웨이브는 **~~레드~~ 실버 톤 템플릿 + 프리뷰 샘플만** 등록하고 수여 화면(awards-ceremony 비트)
   배선은 후속 결정으로 남긴다. `AWARD_TEMPLATES.statLeader`는 등록돼 있으므로, 수여 UX가 정해지면 매핑 재사용만으로 배선 가능.
 
 **오버레이 좌표 규약(퍼센트 = 포스터 *높이* 기준, 자산 실측)**:
@@ -163,7 +163,7 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
   타이틀을 **~2.3%p 뚫었다**(나머지 4장은 타이틀이 ≈12%로 낮아 우연히 안 겹침). ~~"top 3.2%~8.5%"면 안전~~ — **문서 좌표(8.5%)가 실측(11%)과
   달라 안전 판정이 허위였다.** 해법: 컴포넌트에 `seasonMode: 'full'|'yearOnly'` prop 신설(기본 'full' = 기존 무회귀). `'yearOnly'`면 키커 Text와
   그 아래 여백을 렌더하지 않아 연도가 top 3.2%에서 시작 → 하단 ≈7.9%로 올라가 mip 타이틀(8.8%)을 클리어. mip 템플릿에 `seasonMode: 'yearOnly'` 지정.
-  각 자산의 타이틀 상단%는 `AwardTemplate.titleTopPct`(sharp 행 스캔 white≥0.03 실측)로 등재: mvp 12.3 · finalsMvp 12.2 · rookie 12.0 · **mostImproved 8.7** · statLeader 12.4.
+  각 자산의 타이틀 상단%는 `AwardTemplate.titleTopPct`(sharp 행 스캔 white≥0.03 실측)로 등재: mvp 12.3 · finalsMvp 12.2 · rookie 12.0 · **mostImproved ~~8.7~~ 9.0**(오렌지 재생성 자산 실측 9.10%, seasonMode `'yearOnly'` 유지) · statLeader ~~12.4~~ 12.3(실버 자산 실측 12.36%, `'full'`).
 - **왜 늦게 잡았나**: 눈대중으로 적은 좌표 문서값(8.5%)을 **렌더 실측 없이 신뢰**해 "타이틀 위 여백 안"이라 오판했다 — 포스터 넘침 3연전
   (b006bab·d2edb63·c815b45, 패널 좌표 눈대중 82~96%가 실측 79.9~95.1%와 어긋나 오버레이가 패널을 뚫은 것)과 **같은 계열**. 교훈: 오버레이 좌표는
   주석 수치가 아니라 **sharp 픽셀 스캔으로 실측**하고 가드로 박제(TEST_METHODOLOGY의 "픽셀 스캔 승격"). 신설 가드 `tools/_dv_award_poster.ts`
@@ -175,6 +175,9 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 - 폰트는 퍼센트 불가 → **렌더 폭(w)에서 파생**(name=w·0.076 등)해 어느 기기 폭에서도 비율 유지. 폭 기본 = 화면폭−32(Screen
   패딩), 태블릿 과대 방지 상한 460. 색은 배경(고정 다크 네온 이미지) 위라 **앱 라이트/다크 테마 무관** — 고정 민트 네온
   (`theme.accent` 동계열)·흰색.
+- **풋노트 라인하이트 정정(2026-07-22, c815b45 형제)**: 하단 footnote(`OVR ▲N`) Text에 `lineHeight`·`includeFontPadding:false`가 누락돼
+  있었다(다른 포스터 Text는 c815b45에서 명시 완료 — 이 한 줄만 누락). 다른 Text와 동일 패턴(`lineHeight: f.foot*1.15, includeFontPadding:false`)으로 맞춰
+  폰트 패딩에 의한 미세 넘침 여지를 제거(`components/AwardPoster.tsx` footnote 행).
 
 **스탯 5칸 데이터 소스(`data/awardPoster.ts posterStats`)**:
 - 시안 5칸은 득점·**공격 성공률**·서브 에이스·**리시브 효율**·수비(디그)였으나, **성공률·효율(비율 지표)은 시즌 집계에
@@ -193,7 +196,7 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 기량발전상은 `footnote={`OVR ▲${aw.mostImproved.value}`}`로 성장 화살표 의미 보존(기존 카드 ▲N 대체). 챔프전 MVP는 `champion-ceremony`(§5.3 유일 수여).
 
 **개발 미리보기**: `app/awards-poster-preview.tsx`(DEV_TOOLS 게이트 — 운영 빌드 진입 차단, `office` 탭 개발용 카드에서 진입).
-현재 시즌 실 MVP + 챔프전 MVP + **상별 톤 샘플(신인=블루·기량발전=퍼플 footnote ▲6·기록왕=레드 "배선 후속")** + 레이아웃 스트레스 샘플(긴 이름 OH·세터).
+현재 시즌 실 MVP + 챔프전 MVP + **상별 톤 샘플(신인=블루·기량발전=~~퍼플~~ 오렌지 footnote ▲6·기록왕=~~레드~~ 실버 "배선 후속")** + 레이아웃 스트레스 샘플(긴 이름 OH·세터).
 샘플은 이 화면 전용 목업(운영 미노출).
 
 - **검증**: tsc 0 · npm test 무회귀(연출 전용 — 엔진·store 무접촉) · 가드 `tools/_dv_award_poster.ts`(A/B 자가검증):
