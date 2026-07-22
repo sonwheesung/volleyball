@@ -115,7 +115,13 @@ function Inner() {
 
 const styles = themedStyles(() => StyleSheet.create({
   champ: { color: theme.text, fontSize: 24, fontWeight: '900', marginTop: 6 },
-  // awards-ceremony 진행 크롬과 시각 정합(마진 포함) — stage/hint 동일 값.
-  stage: { marginTop: 40, minHeight: 360 },
+  // 리그 시상식 topRow 높이 보정 — 탭 전환 시 포스터 위치 점프 방지(2026-07-22 사용자 보고: 두 화면 포스터 높이 달라 보임).
+  // awards-ceremony는 stage(marginTop 40) 위에 topRow(진행 점+건너뛰기)가 있어 포스터가 그만큼 더 아래에서 시작하지만,
+  // champion 미우승 분기엔 topRow가 없다. topRow 실효 높이 = 내용물 최대 높이 + marginBottom(8).
+  //   코드 도출: max(dotOn 9, 건너뛰기 fontSize 13 line box ≈18)+8 = 26dp → marginTop 40+26=66 으로 추정.
+  //   에뮬 픽셀 실측(2026-07-22, emulator-5556 · 1080px@2.625): marginTop 66에서 두 포스터 상단 y = champ 549 / awards 586
+  //   → 37px(≈14.1dp) 차이(champ가 더 위). 실측 topRow 실효 높이 ≈32dp(코드의 18dp 과소평가). 보정 40+40=80dp로 재설정 → 잔차 ~0px.
+  // hint(marginBottom 14) 등 stage 내부 값은 awards와 동일 유지.
+  stage: { marginTop: 80, minHeight: 360 },
   hint: { fontSize: 12, textAlign: 'center', marginBottom: 14 },
 }));
