@@ -107,7 +107,7 @@ function AwardsDetail({
       <PosTag pos={pPos(w.playerId)} />
       <Text style={[styles.awName, isMineW(w) && styles.mine]} numberOfLines={1}>{pName(w.playerId)}</Text>
       <Text style={styles.awTeam} numberOfLines={1}>{short(w.teamId)}</Text>
-      {/* 기량발전상=OVR 상승폭 → ▲N 초록(2026-07-11 사용자 선택). 나머지는 값+접미사 */}
+      {/* 기량발전상=시즌 생산 증가폭(Δ, AWARDS_SYSTEM §9) → ▲N 초록. 나머지는 값+접미사 */}
       <Text style={[styles.awVal, opts?.growth && { color: theme.good }]}>{opts?.growth ? `▲${w.value}` : `${w.value}${opts?.suffix ?? ''}`}</Text>
     </View>
   ) : null;

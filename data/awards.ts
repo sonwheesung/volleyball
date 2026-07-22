@@ -2,9 +2,8 @@
 // "프리뷰 = 결과": store.endSeason 이 롤오버 직전 이 함수를 호출해 archive 에 박는다.
 
 import type { SeasonAwards } from '../types';
-import { computeSeasonAwards } from '../engine/awards';
-import { overall } from '../engine/overall';
-import { LEAGUE, SEASON, getPlayer, getEvolvedTeamPlayers, currentRosters } from './league';
+import { computeSeasonAwards, impactScore } from '../engine/awards';
+import { SEASON, getPlayer, currentRosters } from './league';
 import { leagueProduction, leagueProductionRange } from './production';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
@@ -27,14 +26,19 @@ function rosterTeamMap(): Map<string, string> {
   return m;
 }
 
-/** 시즌 OVR 델타(시즌 시작 base → day 시점 진화) — 기량발전상용 */
-function improvementMap(day: number): Map<string, number> {
+/**
+ * 전시즌(season−1) seasonLine 임팩트 맵 — 기량발전상 Δ의 기준선(AWARDS_SYSTEM §9).
+ * **엔트리 존재 = 전시즌 리그 기록 존재**(신규 외국인/데뷔직후는 없음 → 후보 배제, prior=0 폴백 금지).
+ * `impactScore`를 SeasonLine(전시즌)·ProdLine(올시즌)에 공용으로 적용 — 같은 자로 성장폭을 잰다.
+ * store.endSeason은 이 시상 계산 **뒤에** appendSeasonLine(당시즌 적립)을 하므로, 계산 시점 seasonLines엔
+ * 전시즌(season−1)까지만 담겨 있다(순서 보장). 후보 풀은 rookies와 동일하게 현재 로스터(ids) 기준.
+ */
+function priorImpactMap(season: number, ids: Iterable<string>): Map<string, number> {
   const out = new Map<string, number>();
-  for (const t of LEAGUE.teams) {
-    for (const p of getEvolvedTeamPlayers(t.id, day)) {
-      const base = getPlayer(p.id);
-      if (base) out.set(p.id, overall(p) - overall(base));
-    }
+  if (season <= 0) return out; // 0시즌은 전시즌이 없음 → 기량발전상 없음
+  for (const id of ids) {
+    const line = getPlayer(id)?.seasonLines?.find((l) => l.season === season - 1);
+    if (line) out.set(id, impactScore(line));
   }
   return out;
 }
@@ -71,7 +75,9 @@ export function currentSeasonAwards(season: number, uptoDay: number = Number.MAX
     teamRank,
     teamCount: standings.length,
     rookies,
-    improvement: improvementMap(Math.min(uptoDay, REF_DAY)),
+    // 기량발전상(§9): 전시즌 라인 기준선 + 프리뷰 게이트(집계 완료 시에만). ids = 현재 로스터(rookies와 동일 풀).
+    priorImpact: priorImpactMap(season, teamMap.keys()),
+    mostImprovedReady: seasonDone,
     // 우승/챔프MVP 스포일러 게이트(§5) — 결승 전 게임 공개(poDay가 결승 마지막 슬롯 도달) 후에만. 그 전엔 null.
     championId: seasonDone ? revealedChampionId(buildPlayoffs(season), poDay) : null,
     legProd,

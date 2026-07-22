@@ -16,7 +16,7 @@
 | 영예 | 챔피언결정전 MVP | 우승팀 최고 생산자 (우승 필수) |
 | 경기 | **경기 MVP**(매치 단위, 2026-06-25 게이머 리뷰) | **이긴 팀** 최고 생산자(`points + 0.3·digs` — 득점 위주, 수비 가산). 결과 화면 커튼콜 + 한 줄 서사 리캡(완승/풀세트/주요 스탯). `data/matchAward.matchMvp`(box 단일 소스 파생, 새 저장 0) |
 | 미래 | 신인상 | 데뷔 시즌(career.seasons===0) 최고 생산 |
-| 미래 | **기량발전상** | 비-신인 중 시즌 OVR 델타 최대 (코치·훈련의 성적표) |
+| 미래 | **기량발전상** | ~~비-신인 중 시즌 OVR 델타 최대 (코치·훈련의 성적표)~~ → **비-신인 중 시즌 생산 임팩트 Δ 최대**(올시즌 `impactScore` − 전시즌 `impactScore`). 자격: 전시즌 seasonLine 존재 + 올시즌 ≥`MIN_IMPROVE_MATCHES`(10)경기 + Δ>0. **개편 2026-07-22 정본 §9** |
 | 부문 기록상 | 득점상·공격상·블로킹상·서브상·디그상·리시브상·세트상 | **순수 1위, 팀 성적 무관**(약체팀의 빛). 용병 독식=현실 그대로. **라벨 통일 완료(사용자 결정 2026-07-15 — KOVO 기준 "~상")** — 단일 출처 `data/awards.ts TITLE_LABELS`, 전 화면 소비(아래 OPEN Q 해소) |
 | 베스트7 | S·OH·OH·OP·MB·MB·L | 포지션별 최고(어시/득점/디그 기준) |
 | 시즌 중 | **라운드 MVP** | 6라운드(leg)별 최고 생산자. 조용히 갱신, 알림 없음 |
@@ -145,7 +145,7 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 | `mvp` | `mvp_stage.webp` | 민트(기본) | `#5FEAD8` | `#24A096` | awards-ceremony(정규 MVP 클라이맥스) | 79.9~95.1% |
 | `finalsMvp` | `finals_mvp_stage.webp` | 민트(유지) | `#5FEAD8` | `#289F9A` | champion-ceremony(챔프전 MVP, §5.3 유일 수여) | 79.9~95.1% |
 | `rookie` | `rookie_stage.webp` | **블루** | `#5FB8EA` | `#19B8E2` | awards-ceremony(신인상) | 80.0~95.1% |
-| `mostImproved` | `mip_stage.webp` | ~~퍼플~~ **오렌지**(TONE_ORANGE) | ~~`#C77FF2`~~ `#FF9A3D` | ~~`#AC2CE2`~~ `#FCB32A`(선라이즈) | awards-ceremony(기량발전상, footnote `OVR ▲N`, **`seasonMode:'yearOnly'`** — 타이틀 ~~8.7%~~ 9.0% 겹침 회피) | 80.0~95.1% |
+| `mostImproved` | `mip_stage.webp` | ~~퍼플~~ **오렌지**(TONE_ORANGE) | ~~`#C77FF2`~~ `#FF9A3D` | ~~`#AC2CE2`~~ `#FCB32A`(선라이즈) | awards-ceremony(기량발전상, footnote ~~`OVR ▲N`~~ → **`시즌 생산 ▲N`**(§9 개편 — value가 OVR델타→생산Δ), **`seasonMode:'yearOnly'`** — 타이틀 ~~8.7%~~ 9.0% 겹침 회피) | 80.0~95.1% |
 | `statLeader` | `statleader_stage.webp` | ~~레드~~ **실버**(TONE_SILVER) | ~~`#F2707F`~~ `#D8DEEA`(플래티넘) | ~~`#CB6D59`(웜레드)~~ `#FEFEFE`(순백→쿨실버 보정) | **후속 배선**(부문 다수 — 수여 UX 설계 필요). 현재는 프리뷰만 | 80.0~95.1% |
 
 - **finalsMvp 톤 주석(교체 예정)**: 현재 민트 자산이라 톤도 민트 유지. **골드 자산으로 교체 예정** — 교체 시 `TONE_GOLD` 신설 후 그 줄만 톤 교체
@@ -203,10 +203,10 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 **배선 지점**: `app/awards-ceremony.tsx` — 신인상·기량발전상·MVP(클라이맥스) 비트가 각각 `buildAwardPosterData(aw.<award>, …, prod)`로
 포스터 데이터를 만들면 `AwardPoster`(상별 `AWARD_TEMPLATES.<key>.src`·`.tone`) 연출, `null`(미출전 등)이면 기존 `winnerCard` 폴백.
 풀시즌 생산 `prod = leagueProduction(MAX)`는 **한 번만** 계산해 세 상이 공유(무거움 — aw.*와 동일 집계로 스탯 귀속 일치).
-기량발전상은 `footnote={`OVR ▲${aw.mostImproved.value}`}`로 성장 화살표 의미 보존(기존 카드 ▲N 대체). 챔프전 MVP는 `champion-ceremony`(§5.3 유일 수여).
+기량발전상은 `footnote={`시즌 생산 ▲${aw.mostImproved.value}`}`로 성장 화살표 의미 보존(§9 개편 — value가 OVR델타→생산Δ로 바뀌어 라벨을 `OVR ▲N`에서 `시즌 생산 ▲N`으로 교체). 챔프전 MVP는 `champion-ceremony`(§5.3 유일 수여).
 
 **개발 미리보기**: `app/awards-poster-preview.tsx`(DEV_TOOLS 게이트 — 운영 빌드 진입 차단, `office` 탭 개발용 카드에서 진입).
-현재 시즌 실 MVP + 챔프전 MVP + **상별 톤 샘플(신인=블루·기량발전=~~퍼플~~ 오렌지 footnote ▲6·기록왕=~~레드~~ 실버 "배선 후속")** + 레이아웃 스트레스 샘플(긴 이름 OH·세터).
+현재 시즌 실 MVP + 챔프전 MVP + **상별 톤 샘플(신인=블루·기량발전=~~퍼플~~ 오렌지 footnote `시즌 생산 ▲N`·기록왕=~~레드~~ 실버 "배선 후속")** + 레이아웃 스트레스 샘플(긴 이름 OH·세터).
 샘플은 이 화면 전용 목업(운영 미노출).
 
 - **검증**: tsc 0 · npm test 무회귀(연출 전용 — 엔진·store 무접촉) · 가드 `tools/_dv_award_poster.ts`(A/B 자가검증):
@@ -214,3 +214,50 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
   ④ **패널 세로 예산**(하단 패널 콘텐츠 총높이 풋노트 無/有 두 구성 모두 ≤ 13.7 - 0.5 = 13.2%h)
   — 변이(공격↔디그 스왑·깨진 bright·mip 'full' 강제·구 풋노트 구성 주입) 주입 시 각각 검출됨을 증명(허위 오라클 방지).
   · 실기기 육안(오버레이 좌표·좁은 기기 폭·엠블럼·톤 색)은 메인(에뮬).
+
+## 9. 기량발전상 선정 기준 개편 — OVR델타 → 생산 임팩트 Δ (2026-07-22)
+
+> **배경(왜 바꿨나)**: 2026-07-22 실기기에서 **0생산 선수가 기량발전상을 수상**하는 사례 발견 — 핀치서브로 `matches≈0.05`
+> (작전교체 `subUse/40`)만 적립한 선수가, 선정 기준이 **시즌 OVR 델타**라 코트 생산이 0인데도 OVR이 오르면 수상했다.
+> "상은 OVR이 아니라 실제 코트 생산에 준다"(§0)는 대원칙을 기량발전상만 위반하고 있었다.
+>
+> **왜 늦게 잡혔나(사각)**: 후보 게이트가 `computeSeasonAwards`의 `ids = prod.keys().filter(matches>0)`뿐이라, **소수 적립
+> (핀치서브 0.05경기)도 `matches>0`을 통과**했다. 선정 점수(OVR델타)가 생산과 독립이라 게이트를 통과한 0생산 선수가 그대로 수상.
+> = "출전 문턱(matches)"과 "선정 지표(생산)"가 어긋나 있던 이중 사각.
+
+**정정(취소선 보존, DOC_DISCIPLINE)**:
+- ~~점수 = 시즌 OVR 델타(`overall(진화선수) − overall(base)`, `data/awards.ts improvementMap`)~~
+  → **점수 = `impactScore(올시즌 ProdLine) − impactScore(전시즌 SeasonLine)`**. `impactScore`(§2, `points+0.25·assists+0.18·digs`)를
+  ProdLine·SeasonLine 공용 형상(`{points,assists,digs}`)으로 확장해 재사용 — 전시즌 라인도 같은 자로 잰다.
+- **자격 4조건**(모두 충족해야 후보):
+  1. **비신인** — 기존 `rookies` 배타 유지(신인상과 상호배타).
+  2. **전시즌(N−1) seasonLine 존재 필수**(독립 리뷰 필수수정1) — `priorImpact` 맵에 엔트리가 있어야 함. `prior=0` 폴백 **금지**.
+     → 신규 외국인/영입/데뷔 직후처럼 전시즌 리그 기록이 없는 선수는 "지난 시즌 대비 성장"을 잴 수 없으므로 오수상 봉인.
+  3. **올시즌 `matches ≥ MIN_IMPROVE_MATCHES`(=10)** — 아래 산정.
+  4. **Δ>0** — `pickTop`의 `v<=0` 배제로 집행(하락/정체는 후보 아님).
+- **value 의미 변경**: `AwardWinner.value` = ~~반올림 OVR 델타(≈6~20)~~ → **반올림 생산 임팩트 Δ**(전형적으로 수백 — MVP value와 동일 스케일).
+  표시 라벨을 전 소비처에서 교체(아래).
+
+**MIN_IMPROVE_MATCHES=10 산정 근거(실측, N=31,114 선수-시즌 = 300시즌×7팀, 순수 AI, `engine` 현행)**:
+- 팀당 정규 **36경기**. 전 선수-시즌 matches 분포: p1=20 · p50=32 · **최소 1.0**, `matches<1`(0.05 프린지) **0건**(순수 AI는 실기기 프린지를 잘 안 만든다 — 이 게이트는 그 드문 실사례 대비 안전 바닥).
+- 저꼬리(matches<15)는 ~30건(전체의 0.1%)뿐이고 대부분 impact>0. impact≤0 선수(8,733명)는 **전부 matches 10+**(고매치 로테이션) — Δ>0 게이트로 **0생산 수상 0건**.
+- 신규 규칙 raw 수상자(300시즌) matches: **전부 30~36**(최소 30), Δ min 214. → MIN을 1~15 어느 값으로 둬도 **실제 수상자를 컷하지 않는다**(안전마진 ≥3배).
+- 선택 **10**: 36경기의 ≈28%, 99.9% 선수-시즌이 초과, 실수상자 전원 ≥30(3배 여유로 정상 결과엔 절대 안 걸림), 반면 핀치서브 프린지(실사례 0.05)와 무의미한 <10경기 marginal 꼬리는 배제.
+- ⚠ **팀 경기수 균등(36) 가정** — 확장/단축 시즌 도입 시 이 절대 문턱을 재검토(비율 문턱으로 전환 검토).
+
+**프리뷰 게이트(독립 리뷰 필수수정2-A)**: 시즌 집계 중(`uptoDay < REF_DAY`=SEASON_DAYS)에는 `mostImproved=null`(집계 미완).
+엔진 입력 `mostImprovedReady`(=selector의 `seasonDone`)가 false면 엔진이 즉시 null. 다른 상(MVP·기록왕 등)은 현행 프리뷰 유지.
+근거: 부분 시즌 생산으로 잰 Δ는 전시즌 풀시즌 Δ와 스케일이 안 맞아 무의미(반시즌 시점의 잠정 수상자가 왜곡).
+
+**표시 소비처(value 의미 OVR델타→생산Δ, 라벨 교체)**:
+- `app/awards-ceremony.tsx` 포스터 footnote: ~~`OVR ▲N`~~ → **`시즌 생산 ▲N`**(§8). winnerCard 폴백의 `▲N`(라벨 없는 성장 화살표)은 유지(주석만 정정).
+- `app/records-archive.tsx` · `app/season-recap-detail/[section].tsx`: `▲N` 성장 화살표 유지(주석 "OVR 상승폭"→"시즌 생산 증가폭"). MVP value도 수백 스케일이라 자릿수 이질감 없음.
+- `app/awards-poster-preview.tsx`(DEV 목업): 샘플 footnote `OVR ▲6` → `시즌 생산 ▲N`.
+- `data/news.ts` 기량발전상 기사("지난 시즌 대비 가장 크게 성장했다")는 새 의미와 오히려 정합 — 무변경. `tools/simAwards.ts` 단위 라벨 `OVR`→`생산Δ`.
+
+**신인상 대칭 확인**: 신인상은 이미 생산 기준(`impactScore(prod)` 최고)이라 무변경 — 개편으로 두 미래상이 같은 자(생산)로 정렬.
+
+**검증**: 신규 가드 `tools/_dv_mip.ts`(A/B 자가검증, docs/README 검증 루틴 등재):
+- 오라클(다시즌): 수상자 100%가 (올시즌 생산>0 ∧ matches≥10 ∧ 전시즌 라인 존재 ∧ 비신인 ∧ Δ>0).
+- A/B 민감도 4종: ①합성 프린지(matches 0.1·OVR▲8·생산0) 구 규칙 수상/신 규칙 미수상 ②합성 돌파(작년 소량→올해 급증) 신 규칙 수상 ③합성 신규 외국인 OP(전시즌 라인 없음·리그 최고 생산) 미수상 ④uptoDay<REF_DAY(시즌 중) 호출 시 null.
+- 신인상 상호배타·무후보 시즌 무크래시·수상자 포지션 분포 붕괴 없음(참고 기재). 기존 `npm test`·`_dv_docs_awards`·`_dv_award_poster` 무회귀.

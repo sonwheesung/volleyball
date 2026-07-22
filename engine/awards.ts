@@ -5,10 +5,16 @@
 import type { AwardWinner, Best7Slot, Player, Position, SeasonAwards } from '../types';
 import type { ProdLine } from './production';
 
-/** MVP/신인상/베스트7 종합 임팩트 — 득점 위주, 세터(어시)·리베로(디그)도 경합 */
-export function impactScore(l: ProdLine): number {
+/** MVP/신인상/베스트7 종합 임팩트 — 득점 위주, 세터(어시)·리베로(디그)도 경합.
+ *  입력은 `{points,assists,digs}` 최소 형상 — ProdLine(올시즌)·SeasonLine(전시즌)을 **같은 자**로 잰다(기량발전상 Δ, AWARDS_SYSTEM §9). */
+export function impactScore(l: { points: number; assists: number; digs: number }): number {
   return l.points + 0.25 * l.assists + 0.18 * l.digs;
 }
+
+/** 기량발전상 자격 — 올시즌 최소 출전 경기수(AWARDS_SYSTEM §9). 팀 정규 36경기의 ≈28%.
+ *  실측(N=31,114 선수-시즌): 실제 수상자 전원 matches≥30이라 정상 결과엔 안 걸리는 안전 바닥 —
+ *  핀치서브 프린지(실사례 matches≈0.05) 오수상 봉인용. ⚠ 팀 경기수 균등(36) 가정 — 확장/단축 시즌 도입 시 재검토. */
+export const MIN_IMPROVE_MATCHES = 10;
 
 /** 팀 성적 가중 — 1위 ×1.0 … 꼴찌 ×0.5. "성적 없는 MVP 없다" */
 function teamWeight(rank: number, teamCount: number): number {
@@ -23,7 +29,10 @@ export interface AwardsInput {
   teamRank: Map<string, number>;           // teamId → 0-based 정규시즌 순위
   teamCount: number;
   rookies: Set<string>;                    // 데뷔 시즌 선수
-  improvement: Map<string, number>;        // playerId → 시즌 OVR 델타(비-신인)
+  // 기량발전상(AWARDS_SYSTEM §9) — priorImpact = playerId → 전시즌 seasonLine impactScore.
+  //   **맵에 엔트리가 있어야만 후보**(전시즌 라인 존재 필수 — prior=0 폴백 금지, 신규 외국인/데뷔직후 오수상 봉인).
+  priorImpact: Map<string, number>;
+  mostImprovedReady: boolean;              // 프리뷰 게이트 — 시즌 집계 완료(uptoDay≥REF_DAY) 시에만 true. false면 mostImproved=null.
   championId: string | null;
   legProd: Map<string, ProdLine>[];        // 라운드(leg)별 생산 — 라운드 MVP용
 }
@@ -54,7 +63,7 @@ const BEST7_KEY: Record<Position, keyof ProdLine> = {
 };
 
 export function computeSeasonAwards(input: AwardsInput): SeasonAwards {
-  const { prod, player, teamOf, teamRank, teamCount, rookies, improvement, championId, legProd } = input;
+  const { prod, player, teamOf, teamRank, teamCount, rookies, priorImpact, mostImprovedReady, championId, legProd } = input;
   const ids = [...prod.keys()].filter((id) => (prod.get(id)?.matches ?? 0) > 0);
   const stat = (id: string, k: keyof ProdLine): number => (prod.get(id)?.[k] as number) ?? 0;
   const posOf = (id: string): Position | undefined => player(id)?.position;
@@ -73,11 +82,18 @@ export function computeSeasonAwards(input: AwardsInput): SeasonAwards {
 
   // ── 신인상 / 기량발전상 ──
   const rookie = pickTop([...rookies].filter((id) => ids.includes(id)), (id) => impactScore(prod.get(id)!), teamOf);
-  const mostImproved = pickTop(
-    ids.filter((id) => !rookies.has(id) && (improvement.get(id) ?? 0) > 0),
-    (id) => improvement.get(id) ?? 0,
-    teamOf,
-  );
+  // 기량발전상(AWARDS_SYSTEM §9): 점수 = 올시즌 생산 임팩트 − 전시즌 생산 임팩트(Δ). 자격 = 비신인 ∧ 전시즌 라인 존재
+  //   ∧ 올시즌 matches≥MIN_IMPROVE_MATCHES. Δ>0은 pickTop의 v<=0 배제로 집행. 프리뷰(집계 중)엔 null(mostImprovedReady=false).
+  const mostImproved = mostImprovedReady
+    ? pickTop(
+        ids.filter((id) =>
+          !rookies.has(id) &&
+          priorImpact.has(id) &&
+          (prod.get(id)?.matches ?? 0) >= MIN_IMPROVE_MATCHES),
+        (id) => impactScore(prod.get(id)!) - priorImpact.get(id)!,
+        teamOf,
+      )
+    : null;
 
   // ── 부문 기록왕(순수 1위, 팀 성적 무관) ──
   const title = (k: keyof ProdLine) => pickTop(ids, (id) => stat(id, k), teamOf);

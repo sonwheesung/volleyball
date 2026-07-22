@@ -31,7 +31,8 @@ function build(
     teamRank: opts.teamRank ?? new Map([['T1', 0], ['T2', 1]]),
     teamCount: opts.teamCount ?? 2,
     rookies: opts.rookies ?? new Set(),
-    improvement: opts.improvement ?? new Map(),
+    priorImpact: opts.priorImpact ?? new Map(),
+    mostImprovedReady: opts.mostImprovedReady ?? true,
     championId: opts.championId ?? null,
     legProd: opts.legProd ?? [],
   };
@@ -61,16 +62,51 @@ test('부문 기록왕: 순수 1위(팀 무관)', () => {
   assert.equal(a.titles.serve?.playerId, 'srv');
 });
 
-test('신인상/기량발전상: 신인 풀·델타 기준', () => {
+test('신인상/기량발전상: 신인 풀·생산 Δ 기준(비신인·전시즌 라인 필수)', () => {
   const a = computeSeasonAwards(build(
     [
-      { id: 'rook', pos: 'OH', team: 'T1', line: L({ points: 200 }) },
-      { id: 'vet', pos: 'OP', team: 'T1', line: L({ points: 400 }) },
+      { id: 'rook', pos: 'OH', team: 'T1', line: L({ matches: 30, points: 200 }) },
+      { id: 'vet', pos: 'OP', team: 'T1', line: L({ matches: 30, points: 400 }) },
     ],
-    { rookies: new Set(['rook']), improvement: new Map([['vet', 8], ['rook', 20]]) },
+    {
+      rookies: new Set(['rook']),
+      priorImpact: new Map([['vet', 100], ['rook', 50]]), // vet 전시즌 임팩트 100 → Δ=300
+      mostImprovedReady: true,
+    },
   ));
   assert.equal(a.rookie?.playerId, 'rook', '신인상=신인 중 최고');
   assert.equal(a.mostImproved?.playerId, 'vet', '기량발전상은 신인 제외 → vet');
+  assert.equal(a.mostImproved?.value, 300, 'value = 올시즌 생산 임팩트 − 전시즌 임팩트(Δ)');
+});
+
+test('기량발전상 자격 게이트(AWARDS_SYSTEM §9)', () => {
+  // 전시즌 라인 없음(priorImpact 엔트리 없음) → 후보 배제(신규 외국인/데뷔직후 오수상 봉인)
+  const noPrior = computeSeasonAwards(build(
+    [{ id: 'imp', pos: 'OP', team: 'T1', line: L({ matches: 30, points: 500 }) }],
+    { priorImpact: new Map(), mostImprovedReady: true },
+  ));
+  assert.equal(noPrior.mostImproved, null, '전시즌 라인 없으면 미수상');
+
+  // matches < MIN_IMPROVE_MATCHES(10) → 후보 배제(핀치서브 프린지)
+  const fewMatches = computeSeasonAwards(build(
+    [{ id: 'imp', pos: 'OP', team: 'T1', line: L({ matches: 5, points: 500 }) }],
+    { priorImpact: new Map([['imp', 0]]), mostImprovedReady: true },
+  ));
+  assert.equal(fewMatches.mostImproved, null, '최소 출전 미달이면 미수상');
+
+  // Δ<=0(하락/정체) → 후보 배제
+  const declined = computeSeasonAwards(build(
+    [{ id: 'imp', pos: 'OP', team: 'T1', line: L({ matches: 30, points: 100 }) }],
+    { priorImpact: new Map([['imp', 200]]), mostImprovedReady: true },
+  ));
+  assert.equal(declined.mostImproved, null, 'Δ≤0이면 미수상');
+
+  // 프리뷰 게이트: mostImprovedReady=false(시즌 집계 중) → null
+  const preview = computeSeasonAwards(build(
+    [{ id: 'imp', pos: 'OP', team: 'T1', line: L({ matches: 30, points: 500 }) }],
+    { priorImpact: new Map([['imp', 100]]), mostImprovedReady: false },
+  ));
+  assert.equal(preview.mostImproved, null, '집계 중(ready=false)엔 null');
 });
 
 test('베스트7: 슬롯별 최고, 중복 없음, OH/MB 2명', () => {

@@ -197,7 +197,7 @@ function SeasonView({
               { label: '정규 MVP', w: aw.mvp, hi: true, suffix: '', growth: false },
               { label: '챔프전 MVP', w: aw.finalsMvp, hi: true, suffix: '', growth: false },
               { label: '신인상', w: aw.rookie, hi: false, suffix: '', growth: false },
-              // 기량발전상 = OVR 상승폭 → 'OVR' 단어 대신 성장 화살표(▲N·초록)로(2026-07-11 사용자 선택)
+              // 기량발전상 = 시즌 생산 증가폭(Δ, AWARDS_SYSTEM §9) → 성장 화살표(▲N·초록). value=생산 임팩트 Δ(MVP value와 동일 스케일)
               { label: '기량발전상', w: aw.mostImproved, hi: false, suffix: '', growth: true },
             ]).map((a) => a.w ? (
               <View key={a.label} style={styles.awRow}>

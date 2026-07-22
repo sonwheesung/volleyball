@@ -16,7 +16,7 @@ log('\n═══ 0시즌 시상식 ═══');
 log(`정규 MVP    : ${nm(a.mvp)}`);
 log(`챔프전 MVP  : ${nm(a.finalsMvp)}`);
 log(`신인상      : ${nm(a.rookie)}`);
-log(`기량발전상  : ${nm(a.mostImproved, ' OVR')}`);
+log(`기량발전상  : ${nm(a.mostImproved, ' 생산Δ')}`);
 log('\n── 부문 기록왕 ──');
 log(`득점왕  ${nm(a.titles.scoring)}`);
 log(`공격상  ${nm(a.titles.spike)}`);

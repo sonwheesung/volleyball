@@ -89,7 +89,7 @@ function CeremonyInner() {
             <Text style={styles.team}>{shortTeamName(w.teamId)}</Text>
             {isMine(w) ? <Text style={styles.mineTag}>우리 구단</Text> : null}
           </View>
-          {/* 기량발전상은 OVR 상승폭 → 'OVR' 대신 성장 화살표 ▲N(초록). 나머지는 기록값+접미사 */}
+          {/* 기량발전상은 시즌 생산 증가폭(Δ, §9) → 성장 화살표 ▲N(초록). 나머지는 기록값+접미사 */}
           {growth
             ? <Text style={{ fontSize: 13, textAlign: 'center', marginTop: 4, color: theme.good, fontWeight: '800' }}>▲{w.value}</Text>
             : <Muted style={{ fontSize: 13, textAlign: 'center', marginTop: 4 }}>{w.value}{suffix}</Muted>}
@@ -111,7 +111,7 @@ function CeremonyInner() {
       ? posterBeat(rookiePoster, AWARD_TEMPLATES.rookie, '우리 구단의 신인상')
       : winnerCard('sparkles-outline', '신인상', aw.rookie) });
     if (aw.mostImproved) out.push({ key: 'improved', el: improvedPoster
-      ? posterBeat(improvedPoster, AWARD_TEMPLATES.mostImproved, '우리 구단의 기량발전상', `OVR ▲${aw.mostImproved.value}`)
+      ? posterBeat(improvedPoster, AWARD_TEMPLATES.mostImproved, '우리 구단의 기량발전상', `시즌 생산 ▲${aw.mostImproved.value}`)
       : winnerCard('trending-up-outline', '기량발전상', aw.mostImproved, '', false, true) });
     if (aw.best7.some((s) => s.winner)) {
       out.push({ key: 'best7', el: (
