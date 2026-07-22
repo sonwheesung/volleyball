@@ -5,7 +5,7 @@
 //     일정 화면이 "시상식 보러가기"→"시즌 결산"으로 전환한다. endSeason 전이라 시상은 재계산. 다음 → 리그 시상식(awards-ceremony).
 import { useEffect, useMemo } from 'react';
 import { useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { ChampionCelebration } from '../components/ChampionCelebration';
 import { getTeam, getPlayer, reconstructForeignName } from '../data/league';
@@ -61,6 +61,23 @@ function Inner() {
 
   const goAwards = () => router.push('/awards-ceremony');
 
+  // 포스터 본문(자산+우리 구단 태그) — 미우승/우승 분기가 공유(중복 렌더 방지).
+  const posterBody = finalsPoster ? (
+    <>
+      <AwardPoster
+        template={AWARD_TEMPLATES.finalsMvp.src}
+        tone={AWARD_TEMPLATES.finalsMvp.tone}
+        seasonLabel={finalsPoster.seasonLabel}
+        name={finalsPoster.name}
+        posEn={finalsPoster.posEn}
+        ovr={finalsPoster.ovr}
+        stats={finalsPoster.stats}
+        emblem={finalsPoster.emblem}
+      />
+      {finalsPoster.isMine ? <Muted style={{ color: theme.accent, fontWeight: '800' }}>우리 구단의 챔프전 MVP</Muted> : null}
+    </>
+  ) : null;
+
   return (
     <Screen>
       {iWon ? (
@@ -68,6 +85,7 @@ function Inner() {
       ) : !finalsPoster ? (
         // 미우승 폴백 — 챔프MVP 미확정(finalsPoster null, 엣지)일 때만 기존 챔피언 통지 카드를 남겨 화면이 비지 않게 한다.
         // 포스터가 있는 정상 경로는 상단 카드를 제거하고(2026-07-22 사용자 지시) 포스터가 화면의 주인공이 된다(아래 블록).
+        // 이 카드는 엣지 폴백이라 진입 버튼을 그대로 둔다(탭 통일 대상 아님 — 2026-07-22 사용자 지시).
         // 챔피언 팀명은 일정(시상식 마커)·시즌 결산에서 확인 가능 — 2026-07-22 사용자 지시.
         <Card accent={theme.gold} flat>
           <IconLabel icon="trophy-outline" color={theme.gold}>{seasonYear(season)} 챔피언</IconLabel>
@@ -79,26 +97,17 @@ function Inner() {
         </Card>
       ) : null}
       {finalsPoster ? (
-        <View style={{ alignItems: 'center', marginTop: 14, gap: 8 }}>
-          <AwardPoster
-            template={AWARD_TEMPLATES.finalsMvp.src}
-            tone={AWARD_TEMPLATES.finalsMvp.tone}
-            seasonLabel={finalsPoster.seasonLabel}
-            name={finalsPoster.name}
-            posEn={finalsPoster.posEn}
-            ovr={finalsPoster.ovr}
-            stats={finalsPoster.stats}
-            emblem={finalsPoster.emblem}
-          />
-          {finalsPoster.isMine ? <Muted style={{ color: theme.accent, fontWeight: '800' }}>우리 구단의 챔프전 MVP</Muted> : null}
-          {/* 미우승 정상 경로 — 상단 챔피언 카드를 제거했으므로 리그 시상식 진입을 포스터 아래로(2026-07-22 사용자 지시).
-              iWon 분기는 ChampionCelebration onDone이 시상식으로 이어가므로 여기 버튼 없음(무변경). */}
-          {!iWon ? (
-            <View style={{ marginTop: 6 }}>
-              <Button label="리그 시상식 →" onPress={goAwards} />
-            </View>
-          ) : null}
-        </View>
+        !iWon ? (
+          // 미우승 정상 경로 — awards-ceremony 진행 크롬과 동일 문법: 포스터 영역 전체를 Pressable로 감싸 탭하면 리그 시상식으로.
+          // "리그 시상식 →" 버튼 제거하고 탭 방식으로 통일(2026-07-22 사용자 지시). 힌트·stage 스타일은 awards-ceremony와 정합.
+          <Pressable onPress={goAwards} style={styles.stage}>
+            <Muted style={styles.hint}>화면을 탭해 다음 시상 →</Muted>
+            <View style={{ alignItems: 'center', gap: 8 }}>{posterBody}</View>
+          </Pressable>
+        ) : (
+          // iWon 분기 — ChampionCelebration onDone이 시상식으로 이어가므로 탭/힌트 없음(무변경).
+          <View style={{ alignItems: 'center', marginTop: 14, gap: 8 }}>{posterBody}</View>
+        )
       ) : null}
     </Screen>
   );
@@ -106,4 +115,7 @@ function Inner() {
 
 const styles = themedStyles(() => StyleSheet.create({
   champ: { color: theme.text, fontSize: 24, fontWeight: '900', marginTop: 6 },
+  // awards-ceremony 진행 크롬과 시각 정합(마진 포함) — stage/hint 동일 값.
+  stage: { marginTop: 40, minHeight: 360 },
+  hint: { fontSize: 12, textAlign: 'center', marginBottom: 14 },
 }));
