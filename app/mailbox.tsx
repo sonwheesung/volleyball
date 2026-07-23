@@ -16,8 +16,8 @@ const MAIL_CACHE: Partial<Record<MailStatus, MailItem[]>> = {};
 
 // 표시 순서 = 전체 / 안받음 / 받음(사용자 피드백 2026-07-23, MAILBOX §6.1). 기본 선택 탭은 여전히 '안받음'(useState 초기값) — 순서만 변경.
 const TABS: Array<{ key: MailStatus; label: string }> = [
-  { key: 'all', label: '전체' },
-  { key: 'unclaimed', label: '안받음' }, // 기본 선택 — 열자마자 수령할 우편(사용자 정정 2026-07-23 확정)
+  { key: 'all', label: '전체' }, // 기본 선택 — 전체 우편 한눈에(사용자 재정정 2026-07-23 확정)
+  { key: 'unclaimed', label: '안받음' },
   { key: 'claimed', label: '받음' },
 ];
 
@@ -37,8 +37,8 @@ function attachBadge(m: MailItem): string {
 }
 
 export default function Mailbox() {
-  const [tab, setTab] = useState<MailStatus>('unclaimed');
-  const [items, setItems] = useState<MailItem[]>(() => MAIL_CACHE['unclaimed'] ?? []);
+  const [tab, setTab] = useState<MailStatus>('all');
+  const [items, setItems] = useState<MailItem[]>(() => MAIL_CACHE['all'] ?? []);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
@@ -66,7 +66,7 @@ export default function Mailbox() {
 
   // 진입 1회 — 목록 로드 + read(빨간 점 소등, §6.3). read 응답 카운트를 캐시에 반영(폴링 아님).
   useEffect(() => {
-    void fetchList('unclaimed');
+    void fetchList('all');
     (async () => {
       const r = await readMail();
       if (r.ok) setMailCounts(r.unreadMailCount, r.unclaimedMailCount);
