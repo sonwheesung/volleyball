@@ -18,9 +18,7 @@ import { useIsFocused } from '@react-navigation/native';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd, unclaimedReward } from '../../engine/diamonds';
 import { evalAchievements } from '../../engine/achievements';
 import { achTotals } from '../../data/careerTotals';
-import { DEV_TOOLS, WORLDCUP_ENABLED, ATTENDANCE_PASS_ENABLED } from '../../data/flags';
-import { PASS_DURATION_DAYS, passView } from '../../engine/diamonds';
-import { todayKstReset } from '../../lib/passClient';
+import { DEV_TOOLS, WORLDCUP_ENABLED } from '../../data/flags';
 import { logError } from '../../lib/log';
 import { hasRemoveAds } from '../../lib/ads';
 
@@ -51,7 +49,6 @@ function LinkCard({ icon, tint, title, sub, onPress, badge, dot }: { icon: Ionic
 export default function MyPage() {
   const router = useRouter();
   const diamonds = useGameStore((s) => s.diamonds);
-  const passStatus = useGameStore((s) => s.passStatus);
   const unreadMailCount = useGameStore((s) => s.unreadMailCount);
   const unclaimedMailCount = useGameStore((s) => s.unclaimedMailCount);
   const watchAdForDiamonds = useGameStore((s) => s.watchAdForDiamonds);
@@ -212,25 +209,7 @@ export default function MyPage() {
           </View>
         ) : null}
       </Card>
-      {/* ── 다이아 패스 현황(DIAMOND_PASS_SYSTEM Q2 — 상시 확인처) — 활성 시에만 최소 표시. 상세·재구매는 상점, 수령은 우편함. ── */}
-      {ATTENDANCE_PASS_ENABLED && passStatus?.active && passStatus.endDate ? (() => {
-        const v = passView(passStatus.endDate, todayKstReset());
-        return (
-          <Card accent={theme.gold} flat onPress={() => router.push('/buy-diamonds')}>
-            <View style={styles.row}>
-              <View style={[styles.iconChip, { backgroundColor: theme.gold + '22' }]}><Text style={{ fontSize: 18 }}>🗓️</Text></View>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.title}>다이아 패스 · 이용 중</Text>
-                <Muted style={{ fontSize: 12.5, marginTop: 1 }}>
-                  D-{v.daysRemaining} · {v.dayNumber}/{PASS_DURATION_DAYS}일차 · {passStatus.claimedToday ? '오늘 우편 수령 완료' : '오늘 우편 도착'}
-                  {passStatus.queued ? ` · 예약 +${PASS_DURATION_DAYS}일` : ''}
-                </Muted>
-              </View>
-              <Text style={styles.arrow}>›</Text>
-            </View>
-          </Card>
-        );
-      })() : null}
+      {/* 다이아 패스 현황 카드는 상점(buy-diamonds)으로 일원화(2026-07-23 사용자 결정) — 마이페이지에선 제거. */}
       {/* 그룹 사이 여백만 넓혀 자연스럽게 구분(UI polish, item 6 — 구분선 없음, 그룹 내부 간격 12 유지).
           각 group 래퍼 marginTop 10 + 스크롤 gap 12 = 그룹 사이 ~22, 그룹 내부는 12. */}
       {/* ── 자주 보는 것 (공지·상점·업적) ──

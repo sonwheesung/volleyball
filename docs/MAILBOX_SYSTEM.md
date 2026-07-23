@@ -1,7 +1,7 @@
 # 우편함(메일박스) 시스템 (MAILBOX_SYSTEM)
 
 > **신설 2026-07-23** (사용자 확정: "우편함으로 보상 받을 수 있게 + 관리자 화면에서 우편함으로 바로 다이아 지급").
-> ~~**상태: 설계 문서 단계 · 코드 미착수**~~ → **상태(2026-07-23): 서버 ✅ 구현(Phase 1 스키마·라우트·가드 + Phase 3 관리자 "우편" 탭 — §13 표) · 앱 화면(Phase 2 우편함 UI·배지)은 앱 에이전트 몫으로 잔존.** 다이아 패스 일일 우편(sender `system:pass`) 수령 = 이 문서 `claimMail`이 `pass_daily` reason으로 분기(DIAMOND_PASS §2.3 정합). 이 문서가 우편함의 정본.
+> ~~**상태: 설계 문서 단계 · 코드 미착수**~~ → **상태(2026-07-23): ✅ 구현 완료 — 서버 `d2ca142`(Phase 1 스키마·라우트·가드 + Phase 3 관리자 "우편" 탭) · 앱 `3fc0987`(Phase 2 우편함 UI·빨간 점 2곳·lib/server 우편 클라이언트).** 다이아 패스 일일 우편(sender `system:pass`) 수령 = 이 문서 `claimMail`이 `pass_daily` reason으로 분기(DIAMOND_PASS §2.3 정합). 이 문서가 우편함의 정본.
 >
 > **정합 정본(이 문서가 종속·정합해야 할 상위)**
 > - `docs/BACKEND_SYSTEM.md` §13.12(다이아 서버 진실·earn/spend·멱등·금액권위·reason 화이트리스트)·§13.13(공지 in-app — 유사 전달 인프라)·§13.14(쿠폰 — 지급 멱등·단일 트랜잭션 패턴)·§13.15(관리자 콘솔 ops-9f3a2c·requireAdmin fail-closed)·§13.17(음수 balance 부채상환·admin grant source='admin')·§13.19(어뷰징 방어).
@@ -20,7 +20,7 @@
 | 용도 | **운영 보상·개별 지급(CS)·이벤트 채널** | 공지/쿠폰/패스와 역할 분리(§1) |
 | 진입 | **마이페이지 허브 "우편함" 카드** | 기존 기록/업적/설정 카드와 같은 스타일(1차 추가) |
 | 미확인 배지 | **빨간 점 — ①마이페이지 탭 아이콘 ②마이페이지 내 우편함 카드** | 미확인 수 = **서버 판정**(bootstrap/지갑 동기화 응답 편입, 별도 폴링 금지) |
-| 상태 필터 | **전체 / 받음 / 안받음** 3탭, **서버 재조회**(status 쿼리 파라미터) | 기본 탭 = ~~받음~~ → **안받음**(사용자 정정 2026-07-23 — 열자마자 수령할 우편이 보이는 통상 UX. 확정값) |
+| 상태 필터 | ~~**전체 / 받음 / 안받음**~~ → **전체 / 안받음 / 받음** 3탭(표시 순서 정정 2026-07-23 사용자 피드백), **서버 재조회**(status 쿼리 파라미터) | 기본 탭 = ~~받음~~ → **안받음**(사용자 정정 2026-07-23 — 열자마자 수령할 우편이 보이는 통상 UX. 확정값. 순서만 변경, 기본 선택 불변) |
 | 보존 기간 | **30일**(`MAIL_RETENTION_DAYS=30`) | 발송 후 30일 경과 = 만료(수령 불가) |
 | 첨부 타입 | **다이아(amount) · 다이아 패스(28일 1개)** | 확장 가능 스키마(type+payload). 패스=`grantPassTx(source='admin')` 재사용 |
 | 관리자 발송 | ops-9f3a2c "우편" 탭 — 유저 검색 → 제목/본문/첨부 입력 → 발송 | 금액 상한 캡·감사·발송 이력·미수령 회수 |
@@ -208,9 +208,9 @@ MAIL_PURGE_GRACE_DAYS    = 30   // 만료·회수 후 크론 물리삭제 유예
 
 ### 6.1 우편함 화면 (`app/mailbox.tsx`)
 
-- **상태 필터 3탭**: `전체 / 받음 / 안받음` — 탭 전환 시 **서버 재조회**(`GET /api/mail?status=`). **기본 선택 = "안받음"**(사용자 정정 2026-07-23, 확정 — ~~"받음" 기본은 취소~~). 열자마자 수령할 우편이 먼저 보이는 통상 UX(수령 유도).
+- **상태 필터 3탭**: ~~`전체 / 받음 / 안받음`~~ → `전체 / 안받음 / 받음`(표시 순서 정정 2026-07-23 사용자 피드백) — 탭 전환 시 **서버 재조회**(`GET /api/mail?status=`). **기본 선택 = "안받음"**(사용자 정정 2026-07-23, 확정 — ~~"받음" 기본은 취소~~. 순서만 변경, 기본 선택 불변). 열자마자 수령할 우편이 먼저 보이는 통상 UX(수령 유도).
 - **목록 행**: 제목 + 첨부 뱃지(💎 N / 🎫 다이아 패스) + 등록일 + 상태(미수령=강조·수령됨=흐림·만료=회색 "만료됨"). 행 클릭 → 본문 펼침(또는 상세) + **"받기" 버튼**(미수령·미만료만 활성). 다이아 패스 일일 우편(sender `system:pass`)도 같은 목록에 최신순 합성(💎 100 뱃지).
-- **빈 상태 카피(S5, 소견 채택)**: "안받음" 탭이 비면 **"받을 우편이 없어요 · 전체 탭에서 지난 우편을 확인하세요"**(단순 "없음"이 아니라 전체 탭으로 유도 — 기본 탭이 안받음이라 첫 진입 빈 화면 대비). "받음"·"전체" 탭 빈 상태는 "우편이 없어요".
+- **빈 상태 카피(S5, 소견 채택)**: "안받음" 탭이 비면 ~~**"받을 우편이 없어요 · 전체 탭에서 지난 우편을 확인하세요"**~~ → **"받을 우편이 없어요.\n전체 탭에서 지난 우편을 확인해 보세요."**(문장 경계 명시 줄바꿈 정정 2026-07-23 사용자 피드백 — 폭에 따른 문장 중간 꺾임 방지). 단순 "없음"이 아니라 전체 탭으로 유도 — 기본 탭이 안받음이라 첫 진입 빈 화면 대비. "받음"·"전체" 탭 빈 상태는 "우편이 없어요"(1문장이라 줄바꿈 불필요).
 - **"모두 받기"**: 미수령·미만료 우편을 순회 claim. 서버는 각 건 멱등이라 재시도 안전.
 - **부분 실패 = 집계 토스트 1회(S7, 소견 채택)**: 다이아·패스 혼재에서 일부만 성공(예 패스 큐 만석 보류)해도 **건별 토스트 난사 금지** → **끝나고 한 번**: "3건 수령 · 1건은 패스 예약이 가득해 보류"(성공 수 + 보류 사유 집계). 관전형 비차단·nag 방지.
 - **수령 성공**: 비차단 토스트("+N💎 받았습니다" / "다이아 패스를 받았습니다") + **서버 응답 후 잔액 갱신**(`syncWallet`). 모달 강제 금지(관전형 비차단 UI-30).
@@ -295,6 +295,7 @@ MAIL_PURGE_GRACE_DAYS    = 30   // 만료·회수 후 크론 물리삭제 유예
 | E9 | **매출·payer 오염** | `reason='mail'`은 purchase/revenue 집계 제외(§4). R2 함정 예방 — `_dv_mail_live` 대조. |
 | E10 | **음수 잔액 유저 수령** | 적립(delta>0)이라 항상 통과(부채 상쇄 §13.17 P0-1). 회수와 방향 다름. |
 | E11 | **만료 우편 청소** | **확정(Q2)**: 만료분은 목록에서 "만료됨" 표시(즉시 삭제 안 함, 유저 투명성) + **청소 크론이 만료 후 +30일 경과분 물리 삭제**(`retention.ts` 편입·기존 크론 인프라 재사용 — 원장은 보존, 우편 메타만). |
+| E12 | **구 자동수령 경로 잔재(dev 아티팩트 · 운영엔 부재)** | 재개정 전 자동 claim 경로로 `pass_daily:<userId>:<passId>:<dayIndex>` 원장 키가 **이미 소진된 dev 계정**에서, 같은 슬롯의 `system:pass` 우편을 나중에 수령하면 — **우편은 `claimed_at` 처리되나 원장은 멱등 dedup(잔액 무변)**. 이 크로스 경로 중복은 **운영엔 존재하지 않는다**(구 자동수령·`claimPass`·`POST /api/pass/claim` 삭제 — 우편 발송이 유일 지급 경로). dev DB에만 남는 마이그레이션 잔재. 클린 시나리오(발송→우편 수령→원장 확정)는 `_dv_mail_live`가 실증. **후속 후보(유저 노출 개선)**: 멱등 dedup으로 잔액 무변인 수령에 "이미 지급된 보상이라 잔액에 반영돼 있습니다" 안내(업적 배치 `already` 문구 §BACKEND 4 패턴 재사용) — 운영 부재 케이스라 우선순위 낮음. |
 
 ---
 
@@ -320,7 +321,7 @@ MAIL_PURGE_GRACE_DAYS    = 30   // 만료·회수 후 크론 물리삭제 유예
 
 - **`server/tools/_dv_mail.ts`(순수 — DB 무의존)**: 멱등키 빌더 유일성(`mail:<mailId>` vs `mail_bc:<bc>:<user>` 비충돌)·만료 판정 경계(now vs expires_at)·캡 클램프(`amount>MAIL_MAX_GRANT` 거부)·상태 필터 분류 로직·**만료일 파생**(diamonds 30 / pass 60, R3). **A/B**: 캡 미적용·경계 오프바이원·pass 만료 30일 오설정 변이 주입 → 검출.
 - **`server/tools/_dv_mail_live.ts`(라이브 dev DB)**: admin 발송 → 유저 수령(+amount·balance 갱신) → **이중수령 0**(applied:false) → **만료 우편 수령 거부** → **패스 첨부 수령**(attendance_passes 행·store_txn_id='mail:<id>' UNIQUE 이중생성 0·**큐 만석 시 rejectOnQueueFull 롤백+claimed_at NULL 유지**) → **grantPassTx 원자성**(claim 롤백 강제 시 패스 미잔존·재수령 이중지급 0, B1) → **발송 idem_key 더블클릭 dedup**(R1) → **회수 recalled_at 소프트마킹**(수령분 회수 거부, R2) → **requireAdmin 토큰 없이 401**(fail-closed) → **감사행**(mails·wallet_ledger reason='mail'·purchase_event admin.mail.sent/claim.applied/recalled, R2) → **매출·payer 불변**(R2 함정). **A/B**: fail-closed 우회·만료 게이트 제거·이중수령 가드 제거·rejectOnQueueFull false(구매동작) 변이로 민감도 증명.
-- **`server/tools/_dv_walletauth.ts` 확장**: reason 화이트리스트에 `mail`이 `/earn` 밖임을 대조(클라 mail 사칭 401) + `MAIL_MAX_GRANT`·`MAIL_RETENTION_DAYS`·`MAIL_PASS_EXPIRE_DAYS` 드리프트 대조.
+- **`server/tools/_dv_walletauth.ts` 확장 ✅(앱 `3fc0987`)**: reason 화이트리스트에 `mail`이 `/earn` 밖임을 대조(클라 mail 사칭 401) + `MAIL_MAX_GRANT`·`MAIL_RETENTION_DAYS`·`MAIL_PASS_EXPIRE_DAYS` 드리프트 대조. **재개정 반영: PASS 미러 `PASS_RESET_HOUR_KST=0`(A/B 뮤턴트 4)·`PASS_GRACE_DAYS` 미러 제거**(engine/diamonds ↔ server econ 정합, 유예 폐기·리셋 자정).
 - **grantPass 회귀 무손상(B1)**: `grantPassTx` 추출 후 기존 구매 경로(웹훅/confirm) 동작 불변 — DIAMOND_PASS 라이브 가드(`_dv_pass`류)로 재검증(래퍼가 자체 tx로 동일 결과).
 - **S1 — syncWallet 쿼리 수 관측**: `getWallet` 우편 카운트 추가 후 왕복당 쿼리 수를 측정·등재(콜드 측정, 워밍 금지 — [[cold-measure-perf-fixes]]).
 - **결정론 격리 확인**: 우편 수령 전후 시드/리플레이/세이브 불변(엔진 가드 배터리 무회귀).
@@ -334,7 +335,7 @@ MAIL_PURGE_GRACE_DAYS    = 30   // 만료·회수 후 크론 물리삭제 유예
 | Phase | 범위 | 산출물 |
 |---|---|---|
 | **1. 서버(개별+브로드캐스트) + 가드 ✅ 구현(2026-07-23)** | `mails`·`mail_broadcasts`·`mail_broadcast_receipts` 스키마(idem_key·recalled_at)·econ 상수(RETENTION·PASS_EXPIRE·MAX_GRANT·PURGE_GRACE)·`reason 'mail'`·유저 라우트(claim/list/read)·admin 라우트(발송/이력/회수 + 브로드캐스트 발송)·`getWallet` unread+unclaimed 편입·**`grantPassTx(tx,…,opts)` 추출**(B1, `pass.ts` — 기존 grantPass는 래퍼로)·`rejectOnQueueFull` 옵션(B2)·store_txn_id 합성키(B3)·purge 크론 편입(retention.ts)·purchase_event 관측(R2) | `server/db/schema.ts`(mails·mail_broadcasts·receipts)·`server/db/migrations/0003_mailbox.sql`·`server/lib/econ.ts`·`server/lib/wallet.ts`(WalletReason 'mail'·getWallet 카운트)·`server/lib/pass.ts`(**grantPassTx 추출**)·`server/lib/mail.ts`(신)·`server/lib/retention.ts`(purge)·`server/app/api/mail/{route,claim,read}/route.ts`·`server/app/api/admin/mail/route.ts` · 가드 `_dv_mail`·`_dv_mail_live` |
-| **2. 앱 화면 + 배지** | 우편함 화면(상태 필터·받기·모두받기·오프라인)·마이페이지 카드·빨간 점 2곳·lib/server 메서드 | `app/mailbox.tsx`(신)·`app/(tabs)/mypage.tsx`(카드+배지)·`app/(tabs)/_layout.tsx`(탭 red dot)·`lib/server.ts`(getMail/claimMail/readMail·unreadMailCount 캐시)·`app/_layout.tsx`(라우트) |
+| **2. 앱 화면 + 배지 ✅ 구현(2026-07-23, 앱 커밋 `3fc0987`)** | 우편함 화면(상태 필터 3탭·받기·모두받기·오프라인)·마이페이지 카드·**빨간 점 2곳**(탭 아이콘·우편함 카드, `unreadMailCount`)·미수령 텍스트(`unclaimedMailCount`)·lib/server 우편 클라이언트 | `app/mailbox.tsx`(신)·`app/(tabs)/mypage.tsx`(카드+배지)·`app/(tabs)/_layout.tsx`(탭 red dot)·`lib/server.ts`(getMail/claimMail/readMail·unread/unclaimed 캐시)·`app/_layout.tsx`(라우트) |
 | **3. 관리자 우편 탭 ✅ 구현(2026-07-23, DIAMOND_PASS 스케줄러 전환과 함께)** | ops-9f3a2c "우편" 탭(개별/브로드캐스트 발송 폼·첨부 종류 선택[다이아/패스]·만료 기본 연동·폼-오픈 `crypto.randomUUID` idemKey·발송 이력·상태 뱃지·미수령 회수) — admin/mail API 배선. 일일 패스 우편(sender `system:pass`)은 폼·이력 제외(`listAdminMail`이 `sender != 'system:pass'`) | `server/app/ops-9f3a2c/page.tsx`(NAV·TITLES·`MailPanel`·`MailModal`)·`server/lib/mail.ts`(`listAdminMail` system:pass 제외) |
 | ~~**4. 전체 우편(브로드캐스트)**~~ → **Phase① 서버로 앞당김(2026-07-23 구현 지시)** | ~~`mail_broadcasts`+`receipts`·lazy 수령·cutoff·admin 전체 발송·목록 합성~~ → **서버(스키마·lazy 수령·cutoff·합성 목록·admin 브로드캐스트 발송·다이아 전용 Q4)는 Phase①에 편입.** 잔여 = **앱 화면의 브로드캐스트 발송 폼**(관리자 UI)만 후속 | `server/app/api/admin/mail/route.ts`(target='broadcast' 분기) + `server/lib/mail.ts` |
 

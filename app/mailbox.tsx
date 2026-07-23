@@ -14,10 +14,11 @@ type IoniconName = ComponentProps<typeof Ionicons>['name'];
 // 탭 전환·재진입 사이 마지막 성공 목록 캐시(오프라인 표시용, §6.1) — 모듈 스코프(스크린 언마운트에도 유지).
 const MAIL_CACHE: Partial<Record<MailStatus, MailItem[]>> = {};
 
+// 표시 순서 = 전체 / 안받음 / 받음(사용자 피드백 2026-07-23, MAILBOX §6.1). 기본 선택 탭은 여전히 '안받음'(useState 초기값) — 순서만 변경.
 const TABS: Array<{ key: MailStatus; label: string }> = [
-  { key: 'unclaimed', label: '안받음' }, // 기본 — 열자마자 수령할 우편(사용자 정정 2026-07-23 확정)
-  { key: 'claimed', label: '받음' },
   { key: 'all', label: '전체' },
+  { key: 'unclaimed', label: '안받음' }, // 기본 선택 — 열자마자 수령할 우편(사용자 정정 2026-07-23 확정)
+  { key: 'claimed', label: '받음' },
 ];
 
 function fmtDate(iso: string): string {
@@ -159,7 +160,8 @@ export default function Mailbox() {
         <View style={styles.center}>
           <Ionicons name={'mail-open-outline' as IoniconName} size={40} color={theme.muted} />
           <Muted style={styles.emptyTxt}>
-            {tab === 'unclaimed' ? '받을 우편이 없어요 · 전체 탭에서 지난 우편을 확인하세요' : '우편이 없어요'}
+            {/* 문장(마침표) 경계 명시 줄바꿈 — 폭에 따른 문장 중간 꺾임 방지(사용자 피드백 2026-07-23, MAILBOX §6.1) */}
+            {tab === 'unclaimed' ? '받을 우편이 없어요.\n전체 탭에서 지난 우편을 확인해 보세요.' : '우편이 없어요'}
           </Muted>
         </View>
       ) : (

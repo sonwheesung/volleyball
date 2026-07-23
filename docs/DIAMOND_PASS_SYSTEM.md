@@ -1,7 +1,7 @@
 # 다이아 패스 + 월 1+1 프로모션 (DIAMOND_PASS_SYSTEM)
 
 > **구명: 출석 패스(~2026-07-23)** — 우편함 스케줄러 지급 구조로 바뀌며 "출석" 명칭이 실동작과 불일치해 **"다이아 패스"로 개명**(SKU `diamond_pass`와도 정합). 코드 식별자(`diamond_pass`·`attendance_passes`·`PASS_*`)는 중립적이라 무변경, 표시 문자열만 교체.
-> 신규 수익화 프로모션 **2종**의 설계 정본. **설계 확정 2026-07-23**(사용자 기획 락 — 아래 §0). **상태: 설계 문서 단계 · 코드 미착수**(사용자 지시로 문서 먼저).
+> 신규 수익화 프로모션 **2종**의 설계 정본. **설계 확정 2026-07-23**(사용자 기획 락 — 아래 §0). **상태: 구현 완료(2026-07-23) — 서버 `d2ca142` · 앱 `3fc0987`**(재개정 스케줄러 우편·개명 포함, 가드 전건 PASS). 출시 노출은 §9 Phase ③(#43/EAS 뒤).
 > **★ 재개정 2026-07-23 (스케줄러 우편 전환 + 개명 + Q6=00:00)**: ~~일일 지급 = 접속 시 자동 claim~~ → **서버 스케줄러가 우편함으로 발송**(§2.3, MAILBOX_SYSTEM 정본과 상호 링크). ~~유예 G=3일~~ → **우편 보관 30일 대체**(§2.3.1 Q5). ~~리셋 KST 04:00~~ → **KST 00:00(자정)**(§2.1 Q6, 사용자 번복). 명칭 ~~출석 패스~~ → **다이아 패스**. 구 claim 설계로 커밋된 코드 재작업 목록 §9 상단 배너.
 > ~~**개정 2026-07-23 (UX 리서치 반영)**: 수령 방식 = 탭 → 자동 지급 + 비차단 토스트(§2.3), 리셋 KST 04:00·구매당일 즉시 지급(§2.1), 미수령 유예 Q5·리셋시각 Q6 신설~~(위 재개정으로 자동 claim·유예·04:00 폐기 — 환불 (A) 호요 선례·UI 흐름·엣지·출처는 유효). 리서치 원본 `scratchpad/pass-ux-research.md`.
 > **최종 개정 2026-07-23 (독립 리뷰 반영)**: 블로커 4건 명문화 — **B1 환불 순서역전 tombstone**(§4.3.1)·**B2 클로백 트랜잭션 순서**(§4.3.2)·~~B3 만료 후 유예 정의~~(유예 폐기로 무효 §2.3.1)·**B4 day-0 grant 시점 지급→우편 발송**(§2.1). Q1~Q6 판정(§11, Q5·Q6 재확정). 권고 R2(payer 집계 §2.5)·R3/R4(샌드박스·월귀속 §3.1)·R5(자동갱신 없음 고지)·R6(계정삭제 §2.4/§8)·~~R7(리셋경계 재시도 UI.2)~~(claim 폐기로 무효)·R8(관측 플래그 §11) 반영. 별도 발견: BACKEND §13.12 `camp=−300`→−200 드리프트 정정.
@@ -307,19 +307,19 @@
 
 > 표준 작업 순서: 이 문서(설계) → 코드. 각 Phase 착수 전 이 문서에 단계 계획 존재 확인.
 
-> **★★ 재개정 갱신 필요 목록(2026-07-23, 스케줄러 우편 전환 + Q6=00:00 + 유예 폐기)** — 아래 ✅ 완료 항목은 **구 claim 기반 설계**로 커밋된 코드다. 본 재개정이 그 일부를 뒤집으므로 **구현 단계에서 재작업 필요**(문서는 최종 설계 기준, 코드 갱신은 다음 단계):
-> **★ 서버 몫 재작업 ✅ 완료(2026-07-23, 별도 세션 — `server/**`)**: 아래 1·2·3(econ)·4(서버)·5·7 서버 부분 구현·가드 재검증 완료. 앱 몫(BootGate·store·Toast·스탬프·고지 문구·engine 미러·`_dv_walletauth`)은 **앱 에이전트 몫으로 잔존**.
-> 1. **일일 지급 = claim → 스케줄러 우편 발송**: ✅(서버) `POST /api/pass/claim`·`claimPassDaily`·`claimableDayIndexes`·`isWithinClaimWindow` **제거**. 신설: `dispatchDailyPassMails`(스케줄러 코어, 캐치업 멱등 `catchupDayIndexes`) + 크론 라우트 `GET /api/cron/pass-daily`(vercel.json `0 15 * * *`=UTC15시=KST00시) + MAILBOX `claimMail`이 `sender='system:pass'` 우편을 `pass_daily` reason으로 분기. ~~store `claimPass`·BootGate 포그라운드 자동 claim·Toast·R7~~=앱 몫.
-> 2. **day-0**: ✅(서버) `grantPassTx`가 slot 0 **우편 발송**(`insertPassSlotMailTx`, idem `pass_daily:<passId>:0`) — 직접 원장 지급 폐기. 스케줄러와 dedupe(이중발송 0). `activateDueQueued`도 활성화 시 day-0 우편.
-> 3. **리셋 시각 `PASS_RESET_HOUR_KST` 4 → 0**: ✅(서버 econ). `_dv_pass` 리셋 경계 케이스 4→0(A/B 뮤턴트는 4). ~~`engine/diamonds.ts` 미러·`_dv_walletauth` 4→0~~=앱 몫.
-> 4. **유예 폐기**: ✅(서버) `PASS_GRACE_DAYS` 상수·claim 창 `end+G`·`claimableDayIndexes` 유예 로직 제거. `isPassActiveOn`(off∈[0..27])로 교체. 미수령 보존은 우편 30일이 담당. ~~`passView` 유예 표시~~=앱 몫.
-> 5. **환불 클로백**: ✅(서버) Σ 앵커 `ref=storeTxnId` → **passId 멱등키 프리픽스**(`passDailyLedgerPrefix` LIKE) + **미수령 우편 recall**(`passMailPrefix` LIKE, `recalled_at` 마킹) 단계 추가(§4.3.2).
-> 6. **UI**: (앱 몫) 스탬프 = 발송·수령 현황, 알림 = 우편함 빨간 점(자동수령 토스트 아님). 고지 문구 자정·우편 30일로. → **서버 `passStatus`는 `dayIndex` 추가 + `claimedToday`를 우편 수령(원장 pass_daily 키) 기준으로 재정의**(스탬프 데이터 소스).
-> 7. **가드**: ✅(서버) `_dv_pass`(순수 창·리셋 00:00·유예 삭제·캐치업 dayIndex·클로백 Σ 프리픽스)·`_dv_pass_live`(day-0=우편 도착·우편수령 pass_daily·스케줄러 캐치업 멱등·이중발송0·recall+클로백 passId 앵커·레이스Σ) 재작성. `_dv_mail`·`_dv_mail_live`에 `system:pass`→`pass_daily` 분기·admin 이력 제외·환불 recall 추가. 전부 A/B 자가검증 PASS.
+> **★★ 재개정 구현 완료 요약(2026-07-23 — 스케줄러 우편 전환 + Q6=00:00 + 유예 폐기 + 개명)** — 서버(`server/**` d2ca142) + 앱(`3fc0987`) **전 항목 ✅ 완료**. 구 claim 기반 설계 코드를 아래대로 교체하고 가드 재검증 통과. 배너는 완료 이력으로 보존(재작업 필요 목록 → 해소 요약).
+> 1. **일일 지급 = claim → 스케줄러 우편 발송** ✅: (서버) `POST /api/pass/claim`·`claimPassDaily`·`claimableDayIndexes`·`isWithinClaimWindow` **제거** → `dispatchDailyPassMails`(캐치업 멱등 `catchupDayIndexes`) + 크론 `GET /api/cron/pass-daily`(vercel.json `0 15 * * *`=UTC15=KST00) + MAILBOX `claimMail`이 `sender='system:pass'`를 `pass_daily` reason으로 분기. **(앱)** store `claimPass`·BootGate 포그라운드 자동 claim·Toast 자동수령·R7 타이머 **제거**.
+> 2. **day-0** ✅: (서버) `grantPassTx`가 slot 0 **우편 발송**(`insertPassSlotMailTx`, idem `pass_daily:<passId>:0`) — 직접 원장 지급 폐기·스케줄러와 dedupe(이중발송 0)·`activateDueQueued`도 활성화 시 day-0 우편.
+> 3. **리셋 `PASS_RESET_HOUR_KST` 4 → 0** ✅: (서버 econ) + **(앱)** `engine/diamonds.ts` 미러 0·`_dv_walletauth` RESET 0 반영(A/B 뮤턴트는 4). `_dv_pass` 리셋 경계 4→0.
+> 4. **유예 폐기** ✅: (서버) `PASS_GRACE_DAYS`·claim 창 `end+G`·`claimableDayIndexes` 제거 → `isPassActiveOn`(off∈[0..27]). 미수령 보존=우편 30일. **(앱)** `passView` 유예 표시 제거·`_dv_walletauth` GRACE 미러 제거.
+> 5. **환불 클로백** ✅: (서버) Σ 앵커 `ref=storeTxnId` → **passId 멱등키 프리픽스**(`passDailyLedgerPrefix` LIKE) + **미수령 우편 recall**(`passMailPrefix` LIKE, `recalled_at`) 단계 추가(§4.3.2).
+> 6. **UI** ✅: **(앱)** 스탬프 = 발송·수령 현황·알림 = 우편함 빨간 점(자동수령 토스트 아님)·고지 문구 자정·우편 30일. (서버) `passStatus`에 `dayIndex` + `claimedToday`를 우편 수령(원장 pass_daily 키) 기준으로 재정의(스탬프 데이터 소스).
+> 7. **개명 출석 패스 → 다이아 패스** ✅: **(앱)** 표시 문자열·상점 카드·토스트 카피 교체(코드 식별자 `diamond_pass`·`attendance_passes`·`PASS_*` 무변경).
+> 8. **가드** ✅: `_dv_pass`(순수 창·리셋 00:00·유예 삭제·캐치업·클로백 Σ 프리픽스)·`_dv_pass_live`(day-0=우편·우편수령 pass_daily·캐치업 멱등·이중발송0·recall+클로백 passId 앵커·레이스Σ)·`_dv_mail`/`_dv_mail_live`(`system:pass`→`pass_daily` 분기·admin 이력 제외·환불 recall)·`_dv_walletauth`(RESET 0·GRACE 제거 미러) 전부 A/B 자가검증 PASS.
 >
 > **관리자 우편 발송 폼**(§UI 별도) ✅(2026-07-23): `server/app/ops-9f3a2c/page.tsx` "우편" 탭 신설(개별/브로드캐스트 발송·이력·회수, admin/mail API 배선). 일일 패스 우편(sender `system:pass`)은 스케줄러 전용이라 폼·이력에서 제외(`listAdminMail`이 `sender != 'system:pass'`).
 
-- **Phase ① 서버 스키마·API (결정론 밖, 먼저 — 테스트 쉬움)** — **✅ 구현 완료(2026-07-23, 구 claim 설계 — 위 갱신 목록대로 재작업 필요)**. dev DB(로컬 Supabase :54322) drizzle generate+push 적용. prod는 배포 절차(`deploy-prod`)에서 마이그레이션 `0002_attendance_passes.sql` 적용. 가드 `_dv_pass`·`_dv_1p1`(순수)·`_dv_pass_live`(라이브) 전건 PASS(A/B 자가검증 포함).
+- **Phase ① 서버 스키마·API (결정론 밖, 먼저 — 테스트 쉬움)** — **✅ 구현 완료(2026-07-23, 재개정 스케줄러 우편 반영 — 서버 커밋 `d2ca142`)**. dev DB(로컬 Supabase :54322) drizzle generate+push 적용. prod는 배포 절차(`deploy-prod`)에서 마이그레이션 적용. 가드 `_dv_pass`·`_dv_1p1`(순수)·`_dv_pass_live`·`_dv_mail`·`_dv_mail_live`(라이브) 전건 PASS(A/B 자가검증 포함).
   1. ✅ `server/db/schema.ts` — `attendance_passes` 테이블(+status 'queued'·queued_after 보강, 위 §2.4 정정). WalletReason 유니온(`server/lib/wallet.ts`)에 `pass_daily`·`iap_bonus_1p1` 추가.
   2. ✅ `server/lib/econ.ts` — `PASS_DAILY_REWARD=100`·`PASS_DURATION_DAYS=28`·`PASS_MAX_TOTAL=2800`(파생)·`PASS_PRICE_KRW=9900`(표시)·~~`PASS_RESET_HOUR_KST=4`~~ **→ 0**(Q6 재확정)·~~`PASS_GRACE_DAYS=3`~~ **폐기**(Q5 재확정 — 우편 30일 대체). `server/lib/dates.ts` — `todayKstResetAdjusted(resetHour)`·`kstYearMonth()`·`addDays`·`diffDays`·`maxDateStr`.
   3. ✅ `server/lib/products.ts` — `PASS_PRODUCTS`(`diamond_pass`)·`isPassProduct` + `decidePurchaseEvent`/`rcVerifyPurchase` pass-grant 분기(+`kind`·`purchasedAt` 필드).
@@ -330,12 +330,12 @@
     - **1+1 보너스는 웹훅 경로 전담(confirm 미지급)** — confirm 폴백은 RC `purchased_at` 미상이라, 월경계 근처에서 confirm(now)·웹훅(purchased_at)이 서로 다른 월키를 써 **이중 보너스**가 날 위험. 안전을 위해 보너스는 purchased_at 권위를 가진 웹훅만 지급(`applyPurchaseGrant(withBonus:false)` for confirm). 패스 grant/base 팩 지급은 두 경로 공유(멱등 dedupe).
     - **패스 클로백 링크 = `pass_daily` 멱등키 프리픽스(passId) · pass_daily ref=`mail:<mailId>`(재개정 2026-07-23)** — ~~ref=storeTxnId 유지~~ 에서 정정: 일일 지급이 우편 경유로 바뀌며 pass_daily 원장 ref가 **슬롯 우편 id `mail:<mailId>`**가 됐다. §4.3 클로백은 `Σ(pass_daily where idem_key LIKE 'pass_daily:<userId>:<passId>:%')`(passId 앵커)로 집계 — ref가 아닌 멱등키로 묶으므로 앵커 무손상. R3 :sandbox 스코프는 **1+1 월키(iap_bonus_1p1)에만** 적용(그쪽이 실 영향 — 프로덕션 월키 소진 방지). 패스 샌드박스 격리는 매출/건수 recordPurchaseRevenue의 샌드박스 스킵으로 충족.
     - **R2(패스 payer/건수 편입)는 statsDaily 레벨까지** — 패스 grant(activated/queued) 시 `recordPurchaseRevenue(priceKrw, 0, txn)`으로 purchaseCount+1·매출 KRW 적재(다이아는 0 — 지급은 pass_daily). 관리자 대시보드의 payer-set 심층 집계(§13.18 admin)는 statsDaily 건수로 반영되나, purchase_event 기준 payer 판정 확장은 admin/stats 라우트 후속(§13.18 D1 동형).
-- **Phase ② 앱 UI + 시뮬 경로 (dev 스텁)** — **✅ 구현 완료(2026-07-23)**. tsc(루트) 0 · `tools/_dv_walletauth`(PASS 미러+카탈로그 확장) 0 · 서버 순수 가드(`_dv_pass`·`_dv_1p1`) 회귀 0.
-  1. ✅ `engine/diamonds.ts` PASS 미러 상수(daily·duration·max·price·reset·grace) + 순수 표시 헬퍼 `passView(endDate, today)`(며칠차·D-N·유예·만료임박). `data/flags.ts` `ATTENDANCE_PASS_ENABLED`·`PROMO_1P1_ENABLED`(기본 `__DEV__`). `lib/passClient.ts`(신) `todayKstReset()`(리셋보정 오늘, 표시용).
-  2. ✅ `app/buy-diamonds.tsx` 패스 카드 4상태(UI.1 — 미보유 고지6항/활성 D-N·수령✓·28스탬프/활성+예약/만료임박 인앱 배너) + 중첩 게이트(활성=예약구매 큐잉, 큐 만석=비활성). **포그라운드 자동 수령 + 비차단 토스트**(UI.2): `components/BootGate.tsx` 합류점(syncWallet+`claimPass`) + R7 리셋경계 타이머 1개. 토스트는 `lib/toastBus.ts`(신 pub/sub) → `components/Toast.tsx GlobalToastHost`(`app/_layout.tsx` 마운트). store `passStatus`+`claimPass` 액션(낙관 금지 — 서버 확정 후 잔액·토스트).
+- **Phase ② 앱 UI + 시뮬 경로 (dev 스텁)** — **✅ 구현 완료(2026-07-23, 재개정 스케줄러 우편·개명 반영 — 앱 커밋 `3fc0987`)**. tsc(루트) 0 · `tools/_dv_walletauth`(PASS 미러 RESET 0·GRACE 제거+카탈로그 확장) 0 · 서버 순수 가드(`_dv_pass`·`_dv_1p1`) 회귀 0.
+  1. ✅ `engine/diamonds.ts` PASS 미러 상수(daily·duration·max·price·**reset 0** — ~~grace~~ 제거) + 순수 표시 헬퍼 `passView(endDate, today)`(며칠차·D-N·만료임박 — ~~유예~~ 제거). `data/flags.ts` `ATTENDANCE_PASS_ENABLED`·`PROMO_1P1_ENABLED`. `lib/passClient.ts` `todayKstReset()`(리셋보정 오늘, 표시용).
+  2. ✅ `app/buy-diamonds.tsx` 패스 카드 4상태(UI.1 — 미보유 고지6항/활성 D-N·발송·수령 28스탬프/활성+예약/만료임박 인앱 배너) + 중첩 게이트. **재개정: ~~포그라운드 자동 수령+토스트~~ 제거** → 일일 지급은 우편함(스케줄러). ~~`BootGate` 자동 claim·store `claimPass`·`toastBus`/`GlobalToastHost` 자동수령·R7 타이머~~ 제거, **우편함 진입·수령이 담당**(MAILBOX). 표시 카피 "다이아 패스"로 개명.
   3. ✅ 팩 카드 "이번 달 1+1" 뱃지(`passStatus.bonus1p1Available` 서버 파생, `PROMO_1P1_ENABLED`+서버 데이터 이중 게이트) + 소진 시 정가(뱃지 미노출) + 다음 초기화 날짜("다음 달 M월 1일", UI.3).
   4. ✅ 구매 화면 표시의무 **고지 6항**(§8·UI.1 — 재개정: 28일·**매일 우편함 지급**·**우편 보관 30일**·최대 2,800·온라인 수령·리셋 **00:00**·자동갱신 없음) + 청약철회·스토어 환불 정합 카피 확장. ~~자동지급·3일 유예·리셋 04:00~~ 은 재개정 전 카피(§9 배너).
-  5. ✅ `lib/iap.purchasePass`(SKU `diamond_pass` — dev 시뮬 알림 / prod `purchasePackage`→confirm 폴백, 팩과 동형) + `lib/server` `getWallet` 응답 `pass` 편입·`claimPass()`(typed). `app/(tabs)/mypage.tsx` 수령 현황 최소 카드(Q2 상시 확인처 — D-N·n/28·유예 잔여, 기존 카드 스타일).
+  5. ✅ `lib/iap.purchasePass`(SKU `diamond_pass` — dev 시뮬 알림 / prod `purchasePackage`→confirm 폴백, 팩과 동형) + `lib/server` `getWallet` 응답 `pass` 편입(`dayIndex`·`claimedToday`=우편수령 기준). `app/(tabs)/mypage.tsx` 수령 현황 최소 카드(Q2 상시 확인처 — D-N·n/28 발송·수령, ~~유예 잔여~~ 제거). ~~`claimPass()`~~ 제거(수령은 MAILBOX `claimMail`).
   - **판단 보고(문서와 다르게 정한/보강한 지점)**:
     - **UI.1 표 "활성 → 구매 비활성 이용 중"을 큐잉 활성으로 정정** — §2.2(Q1 큐잉)·§2.2 UI 메모("구매 버튼은 큐 만석이면 비활성")와 어긋나, 활성(예약 없음)일 때 구매 버튼을 **활성("예약 구매 +28일")**으로, 큐 만석(예약 보유)일 때만 **비활성("예약됨")**으로 구현. UI.1 표에 취소선 정정 반영.
     - **dev 시뮬은 서버 grant 미도달(스텁)** — §7("dev=lib/iap 시뮬 스텁, 서버 로직은 라이브 가드로 검증")대로 dev 패스 sim 구매는 카드 활성화를 서버로 만들지 않는다(RC 미검증). 에뮬 활성/수령 장면은 dev DB에 `grantPass` 시드 후 검증(라이브 경로 = 실 passStatus·claim·토스트).
