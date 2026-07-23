@@ -71,10 +71,76 @@ export type GrantPassResult =
   | { ok: true; outcome: 'activated' | 'queued' | 'queued-overflow' | 'dup' | 'tombstoned-skip'; passId?: string }
   | { ok: false; reason: string };
 
+/** grantPassTx 옵션(MAILBOX §5.1 B2). rejectOnQueueFull: 큐 만석(활성+예약 이미 참) 시 삽입 대신 throw(롤백) — 우편 경로 true(무상 지급이라 롤백·재수령이 옳음),
+ *  구매 경로 false(돈 이미 받음 → queued-overflow 삽입 유지). 판정은 아래 user FOR UPDATE 잠금 이후(멀티기기 동시 수령 레이스 방지). */
+export interface GrantPassOpts { rejectOnQueueFull?: boolean }
+
+/** 큐 만석 거부 센티널(B2) — grantPassTx가 throw, 호출 tx 롤백. 우편 claim 라우트가 message로 잡아 `pass-queue-full` typed 반환. */
+export const PASS_QUEUE_FULL = 'pass-queue-full';
+
 /**
- * 패스 grant(단일 트랜잭션) — 웹훅/confirm 공유. storeTxnId UNIQUE로 두 경로 dedupe.
+ * 패스 grant — **주어진 트랜잭션 안에서**(B1, 우편 claim 등과 원자 합성용). storeTxnId UNIQUE로 웹훅/confirm/우편 dedupe.
  * · 기존 행 refunded(B1) → 활성화 금지(tombstoned-skip). · 기존 행 존재 → dup(멱등).
- * · 활성 패스 있음(Q1) → 큐잉(예약, 깊이 1). 초과 → queued-overflow(ops 수동). · 없음 → 즉시 활성 + slot 0 지급(B4).
+ * · 활성 패스 있음(Q1) → 큐잉(예약, 깊이 1). 초과 → queued-overflow(구매) 또는 rejectOnQueueFull이면 throw(우편, B2). · 없음 → 즉시 활성 + slot 0 지급(B4).
+ * 호출부가 tx 소유·커밋/롤백. throw(PASS_QUEUE_FULL·day0-grant-failed)는 tx 롤백을 의도.
+ * purchasedAt: 구매=RC 이벤트 시각 / 우편=서버 new Date()(월귀속·리셋보정 기준, B1).
+ */
+export async function grantPassTx(
+  tx: WalletTx,
+  userId: string,
+  storeTxnId: string,
+  purchasedAt: Date,
+  source: 'purchase' | 'admin' = 'purchase',
+  opts: GrantPassOpts = {},
+): Promise<GrantPassResult> {
+  const today = todayKstResetAdjusted(PASS_RESET_HOUR_KST, purchasedAt);
+  // 0) 기존 행(멱등 + B1 tombstone)
+  const existing = await tx.select().from(attendancePasses)
+    .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.storeTxnId, storeTxnId))).for('update').limit(1);
+  if (existing.length) {
+    if (existing[0].status === 'refunded') return { ok: true as const, outcome: 'tombstoned-skip' as const }; // B1: 환불 선착 → 활성화 금지
+    return { ok: true as const, outcome: 'dup' as const, passId: existing[0].id }; // 이미 grant(웹훅/confirm/우편 재시도)
+  }
+  // user 행 잠금 — 중첩 판정 직렬화(동시 두 수령이 각자 "활성 없음"으로 둘 다 활성화되는 레이스 차단). B2 만석 판정도 이 잠금 안에서.
+  const locked = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update').limit(1);
+  if (!locked.length) return { ok: false as const, reason: 'no-user' };
+
+  // 1) 유저의 active/queued 패스
+  const rows = await tx.select().from(attendancePasses)
+    .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.userId, userId), inArray(attendancePasses.status, ['active', 'queued']))).for('update');
+  const liveActive = rows.filter((p) => p.status === 'active' && isWithinClaimWindow(p.startDate, today));
+  const queued = rows.filter((p) => p.status === 'queued');
+
+  if (liveActive.length) {
+    const overflow = queued.length >= 1; // 큐 상한 1(활성1+예약1). 초과 상황
+    // B2 — 우편(rejectOnQueueFull)은 만석이면 삽입 않고 throw(롤백 → claim이 pass-queue-full·claimed_at 미설정 재수령). 구매는 queued-overflow 삽입(돈 이미 받음).
+    if (overflow && opts.rejectOnQueueFull) throw new Error(PASS_QUEUE_FULL);
+    // 중첩(Q1) → 큐잉. 앵커 = 활성/예약 중 가장 늦게 끝나는 것(체인 끝)
+    const chainEnd = [...liveActive, ...queued].reduce((m, p) => (diffDays(m.endDate, p.endDate) > 0 ? p : m));
+    const provStart = addDays(chainEnd.endDate, 1);
+    const { endDate } = passWindow(provStart);
+    const [ins] = await tx.insert(attendancePasses).values({
+      projCode: PROJ_CODE, userId, storeTxnId, startDate: provStart, endDate, source,
+      status: 'queued', queuedAfter: chainEnd.id, purchasedAt,
+    }).onConflictDoNothing().returning({ id: attendancePasses.id });
+    if (!ins) return { ok: true as const, outcome: 'dup' as const }; // 동시 삽입 레이스
+    return { ok: true as const, outcome: overflow ? 'queued-overflow' as const : 'queued' as const, passId: ins.id };
+  }
+
+  // 2) 활성 없음 → 즉시 활성 + slot 0 지급(B4, 같은 트랜잭션). ref=storeTxnId(우편은 'mail:<id>' → day-0 원장 ref 자연 정합).
+  const { startDate, endDate } = passWindow(today);
+  const [ins] = await tx.insert(attendancePasses).values({
+    projCode: PROJ_CODE, userId, storeTxnId, startDate, endDate, source, status: 'active', purchasedAt,
+  }).onConflictDoNothing().returning({ id: attendancePasses.id });
+  if (!ins) return { ok: true as const, outcome: 'dup' as const }; // 동시 삽입 레이스(다른 tx가 같은 txn 삽입)
+  const r = await applyWalletTx(tx, userId, PASS_DAILY_REWARD, 'pass_daily', passDailyKey(userId, ins.id, 0), storeTxnId);
+  if (!r.ok) throw new Error(`day0-grant-failed:${r.reason}`); // 롤백(패스 행+지급 원자)
+  return { ok: true as const, outcome: 'activated' as const, passId: ins.id };
+}
+
+/**
+ * 패스 grant(자체 트랜잭션) — 웹훅/confirm 공유 래퍼. grantPassTx를 db.transaction으로 감싸 재사용(B1 추출 후 무변경).
+ * 구매 경로라 rejectOnQueueFull=false(큐 만석=queued-overflow 삽입 유지, 돈 이미 받음). productId/sandbox는 호출부 API 대칭용(본문 미사용).
  */
 export async function grantPass(
   userId: string,
@@ -85,50 +151,8 @@ export async function grantPass(
   source: 'purchase' | 'admin' = 'purchase',
 ): Promise<GrantPassResult> {
   await ensureProj();
-  const today = todayKstResetAdjusted(PASS_RESET_HOUR_KST, purchasedAt);
   try {
-    return await db.transaction(async (tx) => {
-      // 0) 기존 행(멱등 + B1 tombstone)
-      const existing = await tx.select().from(attendancePasses)
-        .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.storeTxnId, storeTxnId))).for('update').limit(1);
-      if (existing.length) {
-        if (existing[0].status === 'refunded') return { ok: true as const, outcome: 'tombstoned-skip' as const }; // B1: 환불 선착 → 활성화 금지
-        return { ok: true as const, outcome: 'dup' as const, passId: existing[0].id }; // 이미 grant(웹훅/confirm 재시도)
-      }
-      // user 행 잠금 — 중첩 판정 직렬화(동시 두 구매가 각자 "활성 없음"으로 둘 다 활성화되는 레이스 차단)
-      const locked = await tx.select({ id: users.id }).from(users).where(eq(users.id, userId)).for('update').limit(1);
-      if (!locked.length) return { ok: false as const, reason: 'no-user' };
-
-      // 1) 유저의 active/queued 패스
-      const rows = await tx.select().from(attendancePasses)
-        .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.userId, userId), inArray(attendancePasses.status, ['active', 'queued']))).for('update');
-      const liveActive = rows.filter((p) => p.status === 'active' && isWithinClaimWindow(p.startDate, today));
-      const queued = rows.filter((p) => p.status === 'queued');
-
-      if (liveActive.length) {
-        // 중첩(Q1) → 큐잉. 앵커 = 활성/예약 중 가장 늦게 끝나는 것(체인 끝)
-        const chainEnd = [...liveActive, ...queued].reduce((m, p) => (diffDays(m.endDate, p.endDate) > 0 ? p : m));
-        const provStart = addDays(chainEnd.endDate, 1);
-        const { endDate } = passWindow(provStart);
-        const overflow = queued.length >= 1; // 큐 상한 1(활성1+예약1). 초과=지급 보류(ops 수동)
-        const [ins] = await tx.insert(attendancePasses).values({
-          projCode: PROJ_CODE, userId, storeTxnId, startDate: provStart, endDate, source,
-          status: 'queued', queuedAfter: chainEnd.id, purchasedAt,
-        }).onConflictDoNothing().returning({ id: attendancePasses.id });
-        if (!ins) return { ok: true as const, outcome: 'dup' as const }; // 동시 삽입 레이스
-        return { ok: true as const, outcome: overflow ? 'queued-overflow' as const : 'queued' as const, passId: ins.id };
-      }
-
-      // 2) 활성 없음 → 즉시 활성 + slot 0 지급(B4, 같은 트랜잭션)
-      const { startDate, endDate } = passWindow(today);
-      const [ins] = await tx.insert(attendancePasses).values({
-        projCode: PROJ_CODE, userId, storeTxnId, startDate, endDate, source, status: 'active', purchasedAt,
-      }).onConflictDoNothing().returning({ id: attendancePasses.id });
-      if (!ins) return { ok: true as const, outcome: 'dup' as const }; // 동시 삽입 레이스(다른 tx가 같은 txn 삽입)
-      const r = await applyWalletTx(tx, userId, PASS_DAILY_REWARD, 'pass_daily', passDailyKey(userId, ins.id, 0), storeTxnId);
-      if (!r.ok) throw new Error(`day0-grant-failed:${r.reason}`); // 롤백(패스 행+지급 원자)
-      return { ok: true as const, outcome: 'activated' as const, passId: ins.id };
-    });
+    return await db.transaction((tx) => grantPassTx(tx, userId, storeTxnId, purchasedAt, source, { rejectOnQueueFull: false }));
   } catch (e) {
     // 동시 same-txn UNIQUE 충돌 등 → 재조회로 dup 판정(applyWallet 패턴). 행이 생겼으면 멱등 dup.
     try {

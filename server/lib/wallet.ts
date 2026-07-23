@@ -10,7 +10,8 @@ import { allowsNegativeBalance } from './econ';
 
 // pass_daily = 출석 패스 일일 수령 · iap_bonus_1p1 = 월1회 1+1 보너스(ATTENDANCE_PASS_SYSTEM §2.5·§3.4).
 // 둘 다 적립(delta>0). 환불 회수는 기존 'refund' 재사용(멱등키/ref로 종류 구분 — §4.4 판단 보고). pass_daily는 /earn 화이트리스트 제외(전용 라우트).
-export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon' | 'welcome' | 'pass_daily' | 'iap_bonus_1p1';
+// mail = 우편함 다이아 수령(MAILBOX_SYSTEM §4). 적립(delta>0), 멱등키 mail:<mailId> / mail_bc:<bcId>:<userId>. /earn 화이트리스트 제외(전용 claim 라우트).
+export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon' | 'welcome' | 'pass_daily' | 'iap_bonus_1p1' | 'mail';
 
 export type WalletResult =
   | { ok: true; balance: number; applied: boolean } // applied=false → 멱등 재시도(이미 처리됨, 재적용 안 함)
@@ -169,7 +170,10 @@ export async function getWallet(userId: string, recent = 20) {
   const adToday = await adStatusToday(userId);
   const { passStatus } = await import('./pass'); // 지연 import(순환 회피)
   const pass = await passStatus(userId);
-  return { balance: u[0].balance, ledger, adToday, pass };
+  // 우편함 미확인·미수령 카운트 편입(MAILBOX §5.2 R4·S1 — syncWallet 합류점 재사용, 별 라운드트립 0). 지연 import(순환 회피).
+  const { mailCounts } = await import('./mail');
+  const { unreadMailCount, unclaimedMailCount } = await mailCounts(userId);
+  return { balance: u[0].balance, ledger, adToday, pass, unreadMailCount, unclaimedMailCount };
 }
 
 /** 이 게임(PROJ_CODE)의 proj_info 행 보장 — FK 대상. 최초 1회만 실제 insert. */

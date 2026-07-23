@@ -276,6 +276,77 @@ export const attendancePasses = pgTable(
   ],
 );
 
+// ── 우편함(MAILBOX_SYSTEM §3.1) — 개별 우편. 서버 재화·전달 레이어(시드/리플레이/세이브 무접촉).
+//   행 자체가 발송 감사(sender·created_at·user_id·attach_type/amount·title/body). 수령 원장 = wallet_ledger(reason='mail', ref=idempotencyKey='mail:<id>').
+//   · read_at ≠ claimed_at 분리: 배지 소등=read(확인), 재화 유입=claim(수령) — "봤지만 안 받은 우편" 표현(§6.3).
+//   · recalled_at = 관리자 회수 소프트마킹(§5.3 R2, 물리삭제는 purge 크론 유예 후). set=목록·카운트 제외.
+//   · UNIQUE(proj, idem_key) = 발송 멱등(R1, 폼-오픈 UUID로 더블클릭 이중발송 봉인).
+export const mails = pgTable(
+  'mails',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode), // 게임 격리 FK(§13.2)
+    userId: uuid('user_id').notNull().references(() => users.id),              // 대상 유저(개별 지급)
+    idemKey: text('idem_key').notNull(),                                       // 발송 멱등(R1) — admin UI 폼-오픈 시 클라 UUID 1회
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    attachType: text('attach_type').notNull().default('diamonds'),            // 'diamonds' | 'pass' (앱·admin 검증, DB는 text)
+    attachAmount: integer('attach_amount'),                                    // diamonds: 지급량(>0, 캡 이내) · pass: null
+    sender: text('sender').notNull().default('admin'),                         // 'admin' | 'system'
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),      // diamonds=created+30 · pass=created+60(R3). 이후 수령 불가
+    readAt: timestamp('read_at', { withTimezone: true }),                      // 우편함 화면 확인 시각(배지 소등, §6.3)
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),               // 수령(받기) 시각. null=미수령
+    recalledAt: timestamp('recalled_at', { withTimezone: true }),             // 관리자 회수(R2 소프트마킹). set=목록·카운트 제외
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('mails_proj_idem_uniq').on(t.projCode, t.idemKey),            // 발송 멱등 하드가드(R1)
+    index('mails_proj_user_idx').on(t.projCode, t.userId),                    // 목록/미확인 카운트
+    index('mails_proj_user_claimed_idx').on(t.projCode, t.userId, t.claimedAt), // 상태 필터(받음/안받음)
+  ],
+);
+
+// ── 전체 우편 브로드캐스트(MAILBOX_SYSTEM §3.2·§9) — 본문·첨부 1벌. 대상 자격 = users.created_at ≤ created_at(cutoff, §9).
+//   첨부는 다이아만(Q4 — 전 유저 패스 큐잉 파급 방지). idem_key는 §9 R1(§3.2 초안 누락분 정정 편입).
+export const mailBroadcasts = pgTable(
+  'mail_broadcasts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode),
+    idemKey: text('idem_key').notNull(),                                       // 발송 멱등(R1·§9) — 개별 mails와 대칭
+    title: text('title').notNull(),
+    body: text('body').notNull(),
+    attachType: text('attach_type').notNull().default('diamonds'),            // Q4 — 브로드캐스트는 diamonds만
+    attachAmount: integer('attach_amount'),
+    sender: text('sender').notNull().default('admin'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }).notNull(),      // created + 30일
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(), // ★ audience cutoff(§9)
+  },
+  (t) => [
+    uniqueIndex('mail_bc_proj_idem_uniq').on(t.projCode, t.idemKey),
+    index('mail_bc_proj_idx').on(t.projCode),
+  ],
+);
+
+// ── 브로드캐스트 유저별 상태(MAILBOX_SYSTEM §3.2) — lazy per-user 행(첫 확인/수령 시 생성). 공지 읽음추적·쿠폰 redemption과 동형.
+//   UNIQUE(proj, broadcast, user) = 유저당 1행(이중수령 하드가드). 멱등키 mail_bc:<bcId>:<userId>(broadcastId 전유저 공유라 userId 필수).
+export const mailBroadcastReceipts = pgTable(
+  'mail_broadcast_receipts',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode),
+    broadcastId: uuid('broadcast_id').notNull().references(() => mailBroadcasts.id),
+    userId: uuid('user_id').notNull().references(() => users.id),
+    readAt: timestamp('read_at', { withTimezone: true }),
+    claimedAt: timestamp('claimed_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('mail_bc_receipt_uniq').on(t.projCode, t.broadcastId, t.userId), // 유저당 1행(lazy) = 이중수령 하드가드
+    index('mail_bc_receipt_user_idx').on(t.projCode, t.userId),
+  ],
+);
+
 export type ProjInfo = typeof projInfo.$inferSelect;
 export type ServerSetting = typeof serverSetting.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -290,3 +361,6 @@ export type DiagnosticSnapshot = typeof diagnosticSnapshots.$inferSelect;
 export type PurchaseEvent = typeof purchaseEvent.$inferSelect;
 export type SaveBackup = typeof saveBackups.$inferSelect;
 export type AttendancePass = typeof attendancePasses.$inferSelect;
+export type Mail = typeof mails.$inferSelect;
+export type MailBroadcast = typeof mailBroadcasts.$inferSelect;
+export type MailBroadcastReceipt = typeof mailBroadcastReceipts.$inferSelect;

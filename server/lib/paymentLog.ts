@@ -11,7 +11,7 @@ import { PROJ_CODE } from './proj';
 import { reportError } from './observability';
 import { afterSafe } from './afterSafe';
 
-export type PaymentSource = 'client' | 'webhook' | 'confirm' | 'admin'; // admin=관리자 수동 조정(grant/refund, §13.17 P2)
+export type PaymentSource = 'client' | 'webhook' | 'confirm' | 'admin' | 'mail'; // admin=관리자 수동 조정(grant/refund, §13.17 P2) · mail=우편 수령(MAILBOX §5.3 R2)
 export type PaymentOutcome = 'applied' | 'deduped' | 'rejected' | 'pending' | 'cancelled' | 'ignored' | 'error';
 
 export interface PaymentEventInput {

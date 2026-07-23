@@ -1,9 +1,10 @@
 // 데이터 수명주기 (BACKEND_SYSTEM §13.10) — 필요없는 로그는 파기, 수입 집계는 영구.
 // 크론(/api/cron/purge)이 매일: ① 롤업(결제→stats_daily) → ② 티어별 파기. throw 없이 count 반환.
-import { and, eq, lt, notInArray, sql } from 'drizzle-orm';
+import { and, eq, inArray, isNotNull, lt, notInArray, or, sql } from 'drizzle-orm';
 import { db } from '../db';
-import { walletLedger, statsDaily, diagnosticSnapshots, tickets } from '../db/schema';
+import { walletLedger, statsDaily, diagnosticSnapshots, tickets, mails, mailBroadcasts, mailBroadcastReceipts } from '../db/schema';
 import { PROJ_CODE } from './proj';
+import { MAIL_PURGE_GRACE_DAYS } from './econ';
 
 // 보관 티어(일). 결제/환불=법정 5년(수입), 게임경제=2년(재무 아님). 로그/텔레메트리는 미래 테이블(각 90일).
 export const RETENTION_DAYS = {
@@ -77,5 +78,29 @@ export async function purgeExpired(): Promise<{ economyLedger: number; snapshots
     .delete(tickets)
     .where(and(eq(tickets.projCode, PROJ_CODE), lt(tickets.createdAt, sql`now() - make_interval(days => ${RETENTION_DAYS.tickets})`)))
     .returning({ id: tickets.id });
-  return { economyLedger: eco.length, snapshots: snaps.length, tickets: tix.length };
+  const mail = await purgeExpiredMail();
+  return { economyLedger: eco.length, snapshots: snaps.length, tickets: tix.length, ...mail };
+}
+
+/** 우편함 만료·회수 + 유예(MAIL_PURGE_GRACE_DAYS) 물리삭제(MAILBOX §13.3 E11 Q2) — **원장(reason='mail')은 보존, 우편 메타만**.
+ *  개별 mails: 만료+grace 경과 OR 회수+grace 경과분. 브로드캐스트: 만료+grace 경과분 — **receipts 선삭 → broadcasts 후삭**(FK 자식 먼저, R6). */
+export async function purgeExpiredMail(): Promise<{ mails: number; mailBroadcastReceipts: number; mailBroadcasts: number }> {
+  const cut = sql`now() - make_interval(days => ${MAIL_PURGE_GRACE_DAYS})`;
+  const m = await db
+    .delete(mails)
+    .where(and(eq(mails.projCode, PROJ_CODE), or(lt(mails.expiresAt, cut), and(isNotNull(mails.recalledAt), lt(mails.recalledAt, cut)))))
+    .returning({ id: mails.id });
+  // 만료+유예 지난 브로드캐스트 id → receipts 먼저 파기(FK), 그 다음 broadcasts.
+  const expiredBc = await db
+    .select({ id: mailBroadcasts.id })
+    .from(mailBroadcasts)
+    .where(and(eq(mailBroadcasts.projCode, PROJ_CODE), lt(mailBroadcasts.expiresAt, cut)));
+  const bcIds = expiredBc.map((b) => b.id);
+  let receiptsPurged = 0, bcPurged = 0;
+  if (bcIds.length) {
+    const r = await db.delete(mailBroadcastReceipts).where(and(eq(mailBroadcastReceipts.projCode, PROJ_CODE), inArray(mailBroadcastReceipts.broadcastId, bcIds))).returning({ id: mailBroadcastReceipts.id });
+    const bc = await db.delete(mailBroadcasts).where(and(eq(mailBroadcasts.projCode, PROJ_CODE), inArray(mailBroadcasts.id, bcIds))).returning({ id: mailBroadcasts.id });
+    receiptsPurged = r.length; bcPurged = bc.length;
+  }
+  return { mails: m.length, mailBroadcastReceipts: receiptsPurged, mailBroadcasts: bcPurged };
 }
