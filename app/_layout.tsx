@@ -195,6 +195,7 @@ export default function RootLayout() {
         <Stack.Screen name="devnotes" options={{ title: '개발자 노트' }} />
         <Stack.Screen name="devnotes/[id]" options={{ title: '개발자 노트' }} />
         <Stack.Screen name="coupon" options={{ title: '쿠폰 입력' }} />
+        <Stack.Screen name="mailbox" options={{ title: '우편함' }} />
         <Stack.Screen name="terms" options={{ title: '이용약관' }} />
         <Stack.Screen name="policy" options={{ title: '운영정책' }} />
         <Stack.Screen name="privacy" options={{ title: '개인정보처리방침' }} />
@@ -231,7 +232,7 @@ export default function RootLayout() {
       </Stack>
       </BootGate>
       <DialogHost />{/* 전역 커스텀 다이얼로그(UI-21) — showAlert가 여기로 렌더. BootGate 밖: 로그인/점검 화면에서도 동작 */}
-      <GlobalToastHost />{/* 전역 비차단 토스트(UI-30) — 출석 패스 자동 수령(§2.3·UI.2) 등 화면 밖 발행분. BootGate 밖 = 전 화면 표시 */}
+      <GlobalToastHost />{/* 전역 비차단 토스트(UI-30) — 우편 수령(MAILBOX §6.1) 등 화면 밖/모달 발행분. BootGate 밖 = 전 화면 표시 */}
       {IS_MOCK_AD_ENV && <MockAdHost />}{/* 테스트 전용 목 전면광고(MONETIZATION §3.2). 개발/Expo Go만 마운트 → 운영 릴리스엔 없음 */}
       </SpotlightProvider>
       </ThemeProvider>

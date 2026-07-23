@@ -5,11 +5,11 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
-import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, AD_DAILY_CAP, AD_COOLDOWN_MS, WELCOME_DIAMONDS, ACH_MAX_PER_CLAIM, ACH_LIFETIME_CAP, PASS_DAILY_REWARD, PASS_DURATION_DAYS, PASS_MAX_TOTAL, PASS_PRICE_KRW, PASS_RESET_HOUR_KST, PASS_GRACE_DAYS } from '../server/lib/econ';
+import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, AD_DAILY_CAP, AD_COOLDOWN_MS, WELCOME_DIAMONDS, ACH_MAX_PER_CLAIM, ACH_LIFETIME_CAP, PASS_DAILY_REWARD, PASS_DURATION_DAYS, PASS_MAX_TOTAL, PASS_PRICE_KRW, PASS_RESET_HOUR_KST } from '../server/lib/econ';
 import { ACHIEVEMENTS, achReward } from '../engine/achievements';
 // E2 크로스가드 — engine/diamonds(앱)와 server/lib/econ(서버 손복제) 값 일치 대조. 둘 다 import-free 상수모듈이라
 //   tsx가 repo 루트에서 직접 import 가능(서버 전용 deps 없음 → 정규식 추출 불필요). 미러가 어긋나면 여기서 FAIL.
-import { AD_REWARD as ENG_AD_REWARD, CAMP_COURSE_COST as ENG_CAMP_COST, AD_DAILY_CAP as ENG_AD_DAILY_CAP, AD_COOLDOWN_MS as ENG_AD_COOLDOWN_MS, WELCOME_DIAMONDS as ENG_WELCOME, PASS_DAILY_REWARD as ENG_PASS_DAILY, PASS_DURATION_DAYS as ENG_PASS_DURATION, PASS_MAX_TOTAL as ENG_PASS_MAX, PASS_PRICE_KRW as ENG_PASS_PRICE, PASS_RESET_HOUR_KST as ENG_PASS_RESET, PASS_GRACE_DAYS as ENG_PASS_GRACE } from '../engine/diamonds';
+import { AD_REWARD as ENG_AD_REWARD, CAMP_COURSE_COST as ENG_CAMP_COST, AD_DAILY_CAP as ENG_AD_DAILY_CAP, AD_COOLDOWN_MS as ENG_AD_COOLDOWN_MS, WELCOME_DIAMONDS as ENG_WELCOME, PASS_DAILY_REWARD as ENG_PASS_DAILY, PASS_DURATION_DAYS as ENG_PASS_DURATION, PASS_MAX_TOTAL as ENG_PASS_MAX, PASS_PRICE_KRW as ENG_PASS_PRICE, PASS_RESET_HOUR_KST as ENG_PASS_RESET } from '../engine/diamonds';
 // E3/E4 — server/lib/products·data/diamondTiers 둘 다 import-free 상수모듈 → 직접 import. iap.ts는 react-native를
 //   transitive import(Alert 등)라 tsx로 import 불가 → SKU 상수만 소스 정규식 추출(아래 §9).
 import { DIAMOND_PRODUCTS, ENTITLEMENT_PRODUCTS, PASS_PRODUCTS } from '../server/lib/products';
@@ -95,11 +95,11 @@ ok(ENG_PASS_DAILY === PASS_DAILY_REWARD && PASS_DAILY_REWARD === 100, `PASS_DAIL
 ok(ENG_PASS_DURATION === PASS_DURATION_DAYS && PASS_DURATION_DAYS === 28, `PASS_DURATION engine(${ENG_PASS_DURATION}) = server(${PASS_DURATION_DAYS}) = 28`);
 ok(ENG_PASS_MAX === PASS_MAX_TOTAL && PASS_MAX_TOTAL === PASS_DAILY_REWARD * PASS_DURATION_DAYS && PASS_MAX_TOTAL === 2800, `PASS_MAX engine(${ENG_PASS_MAX}) = server(${PASS_MAX_TOTAL}) = daily×duration = 2800`);
 ok(ENG_PASS_PRICE === PASS_PRICE_KRW && PASS_PRICE_KRW === 9900, `PASS_PRICE engine(${ENG_PASS_PRICE}) = server(${PASS_PRICE_KRW}) = 9900`);
-ok(ENG_PASS_RESET === PASS_RESET_HOUR_KST && PASS_RESET_HOUR_KST === 4, `PASS_RESET_HOUR_KST engine(${ENG_PASS_RESET}) = server(${PASS_RESET_HOUR_KST}) = 4(Q6)`);
-ok(ENG_PASS_GRACE === PASS_GRACE_DAYS && PASS_GRACE_DAYS === 3, `PASS_GRACE_DAYS engine(${ENG_PASS_GRACE}) = server(${PASS_GRACE_DAYS}) = 3(Q5=B)`);
+// PASS_RESET_HOUR_KST — Q6 재확정(2026-07-23): KST 00:00(자정). 유예(GRACE)는 폐기 — 우편 30일 보존이 대체(스케줄러 우편 전환).
+ok(ENG_PASS_RESET === PASS_RESET_HOUR_KST && PASS_RESET_HOUR_KST === 0, `PASS_RESET_HOUR_KST engine(${ENG_PASS_RESET}) = server(${PASS_RESET_HOUR_KST}) = 0(Q6 자정)`);
 // A/B 대조군: 미러가 어긋난 값(옛 손복제)이면 == 검사가 FAIL로 드리프트를 잡는다(오라클 이빨 증명)
-const driftedDaily: number = 150, driftedReset: number = 0; // 옛 손복제 가정값(daily 구값·reset 자정)
-ok(driftedDaily !== PASS_DAILY_REWARD && driftedReset !== PASS_RESET_HOUR_KST, 'A/B 대조군: 미러가 daily=150(구값)·reset=0(자정)이었다면 위 == 검사가 FAIL — 드리프트 검출됨');
+const driftedDaily: number = 150, driftedReset: number = 4; // 옛 손복제 가정값(daily 구값·reset 04시)
+ok(driftedDaily !== PASS_DAILY_REWARD && driftedReset !== PASS_RESET_HOUR_KST, 'A/B 대조군: 미러가 daily=150(구값)·reset=4(04시)였다면 위 == 검사가 FAIL — 드리프트 검출됨');
 
 console.log('── 10. 출석 패스 SKU 카탈로그 정합 (ATTENDANCE_PASS §2.1 — PASS_PRODUCTS 등록·비겹침) ──');
 ok(PASS_PRODUCTS.has('diamond_pass'), 'diamond_pass ∈ PASS_PRODUCTS(미등록→무시 방지)');

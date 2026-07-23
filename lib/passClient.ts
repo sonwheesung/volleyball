@@ -3,7 +3,7 @@
 //   engine/diamonds.passView(endDate, today)에 넘길 today를 UI 런타임 시각으로 계산(엔진은 순수 유지 — new Date는 여기서만).
 import { PASS_RESET_HOUR_KST } from '../engine/diamonds';
 
-/** 리셋보정 오늘(KST) 'YYYY-MM-DD' — 서버 todayKstResetAdjusted 미러. [00:00, resetHour) 는 전날 귀속(자정 넘겨 플레이 보호). */
+/** 리셋보정 오늘(KST) 'YYYY-MM-DD' — 서버 todayKstResetAdjusted 미러. 리셋 KST 00:00(자정)이라 순수 KST 캘린더 날짜와 동일(2026-07-23 Q6 재확정 — 유예/04시 보호는 우편 30일 보존이 대체). resetHour>0이면 [00:00, resetHour) 는 전날 귀속. */
 export function todayKstReset(nowMs: number = Date.now()): string {
   const shifted = new Date(nowMs + (9 * 60 - PASS_RESET_HOUR_KST * 60) * 60_000);
   return shifted.toISOString().slice(0, 10);

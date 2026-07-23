@@ -110,24 +110,46 @@ export interface PassStatus {
 }
 
 // ── 지갑 ──
-export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[]; adToday?: { count: number; lastAtMs: number | null }; pass?: PassStatus }>> {
+// unread/unclaimedMailCount = 우편함 배지·카드 데이터 소스(MAILBOX_SYSTEM §5.2 — getWallet 편입, 별도 폴링 금지). 구서버(필드 없음)면 optional.
+export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[]; adToday?: { count: number; lastAtMs: number | null }; pass?: PassStatus; unreadMailCount?: number; unclaimedMailCount?: number }>> {
   return call('/api/wallet');
 }
 
-// ── 출석 패스 일일 수령(§2.3) ──
-export type PassClaimReason = 'claimed' | 'already' | 'no-pass';
-export type PassClaimResult =
-  | { ok: true; reason: PassClaimReason; granted: number; slots: number; balance: number; endDate?: string; dayIndex?: number }
-  | { ok: false; reason: 'offline' | 'unauthorized' | 'error' };
-/** 출석 패스 일일 수령 — 서버가 리셋보정 오늘 KST 날짜·활성 패스 슬롯 멱등 지급(§2.3). 성공 시 잔액은 서버 확정값(낙관 금지).
- *  claimed=신규 지급(granted>0) · already=오늘분 이미 수령 · no-pass=활성 패스 없음. 오프라인/미보유는 조용히(토스트 없음). */
-export async function claimPass(): Promise<PassClaimResult> {
-  const r = await call<{ reason: PassClaimReason; granted: number; slots: number; balance: number; endDate?: string; dayIndex?: number }>(
-    '/api/pass/claim',
-    { method: 'POST', body: '{}' },
-  );
-  if (r.ok) return { ok: true, reason: r.reason, granted: r.granted, slots: r.slots, balance: r.balance, endDate: r.endDate, dayIndex: r.dayIndex };
-  return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'unauthorized' ? 'unauthorized' : 'error' };
+// ── 우편함(MAILBOX_SYSTEM §5.1) — 목록/수령/읽음. 재화는 서버 진실, 수령 성공 응답 후 syncWallet로만 잔액 갱신(낙관 금지). ──
+export type MailKind = 'mail' | 'bc';
+export type MailStatus = 'all' | 'claimed' | 'unclaimed';
+export interface MailItem {
+  id: string; kind: MailKind;
+  title: string; body: string;
+  attachType: string; attachAmount: number | null;   // 'diamonds'(amount>0) | 'pass'(amount null)
+  claimedAt: string | null; readAt: string | null;
+  expiresAt: string; createdAt: string;
+}
+/** 우편함 목록 — 서버 재조회 필터(status). 개별 + 대상 브로드캐스트 합성 최신순. cursor=offset(30/페이지). */
+export function listMail(status: MailStatus, cursor = 0): Promise<ServerResult<{ items: MailItem[]; nextCursor: number | null }>> {
+  return call(`/api/mail?status=${status}&cursor=${cursor}`);
+}
+export type MailClaimResult =
+  | { ok: true; applied: boolean; attachType: 'diamonds'; balance: number }
+  | { ok: true; applied: boolean; attachType: 'pass'; pass: string | null }
+  | { ok: false; reason: 'not-found' | 'expired' | 'pass-queue-full' | 'bad-request' | 'offline' | 'unauthorized' | 'error' };
+/** 우편 수령(§5.1 claim) — 단일 트랜잭션(서버). 성공 후 호출부는 syncWallet로 잔액·카운트 수렴(낙관 금지).
+ *  pass-queue-full = 패스 첨부인데 예약 큐 만석(재수령 가능, claimed_at 미설정). applied:false = 이미 수령(멱등 dedup). */
+export async function claimMail(id: string, kind: MailKind): Promise<MailClaimResult> {
+  const r = await call<{ applied: boolean; balance?: number; pass?: string | null }>('/api/mail/claim', {
+    method: 'POST',
+    body: JSON.stringify({ id, kind }),
+  });
+  if (r.ok) {
+    if (typeof r.balance === 'number') return { ok: true, applied: !!r.applied, attachType: 'diamonds', balance: r.balance };
+    return { ok: true, applied: !!r.applied, attachType: 'pass', pass: r.pass ?? null };
+  }
+  // call()이 Fail 타입으로 좁히지만 런타임 reason엔 서버 body의 실제 문자열(not-found/expired/pass-queue-full)이 담긴다 → 그대로 통과.
+  return { ok: false, reason: r.reason as unknown as ('not-found' | 'expired' | 'pass-queue-full' | 'bad-request' | 'offline' | 'unauthorized' | 'error') };
+}
+/** 우편함 화면 진입 읽음(§5.1 read) — 미확인 일괄 read_at(빨간 점 소등). typed 카운트 반환(R4). */
+export function readMail(): Promise<ServerResult<{ unreadMailCount: number; unclaimedMailCount: number }>> {
+  return call('/api/mail/read', { method: 'POST', body: '{}' });
 }
 /** 다이아 차감(전지훈련). 서버 확정 후에만 앱이 반영. **금액은 서버 권위**(camp=−300 강제(2026-07-06 인하), §13.12) — amount는 표시/호환용.
  *  idempotencyKey = camp:<userId>:<saveId>:<season>:<playerId>. ref = 감사용 상세(playerId:course). */

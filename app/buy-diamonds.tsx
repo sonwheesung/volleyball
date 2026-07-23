@@ -3,6 +3,7 @@
 // + 출석 패스 카드(ATTENDANCE_PASS_SYSTEM §UI.1, 4상태) + 월 1+1 뱃지(§UI.3). 노출은 플래그(§7) 뒤 — false면 기존 상점과 바이트 동일.
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { type ComponentProps, useEffect, useState } from 'react';
+import { useRouter } from 'expo-router';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { Muted, Screen, theme, themedStyles } from '../components/Screen';
@@ -11,7 +12,7 @@ import { useGameStore } from '../store/useGameStore';
 import { purchaseDiamonds, purchasePass } from '../lib/iap';
 import { DIAMOND_TIERS, tierDiscountPct, formatKrw, type DiamondTier } from '../data/diamondTiers';
 import { ATTENDANCE_PASS_ENABLED, PROMO_1P1_ENABLED } from '../data/flags';
-import { PASS_PRICE_KRW, PASS_DAILY_REWARD, PASS_DURATION_DAYS, PASS_MAX_TOTAL, PASS_GRACE_DAYS, passView } from '../engine/diamonds';
+import { PASS_PRICE_KRW, PASS_DAILY_REWARD, PASS_DURATION_DAYS, PASS_MAX_TOTAL, passView } from '../engine/diamonds';
 import { todayKstReset } from '../lib/passClient';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
@@ -44,32 +45,33 @@ function TierCard({ tier, busy, active, onePlusOne, onBuy }: { tier: DiamondTier
   );
 }
 
-// 출석 패스 카드(§UI.1) — 4상태: 미보유 / 활성 / 활성+예약 / 만료임박(활성의 하위 강조).
+// 다이아 패스 카드(§UI.1) — 4상태: 미보유 / 활성 / 활성+예약 / 만료임박(활성의 하위 강조).
 function PassCard({ busy, onBuy }: { busy: boolean; onBuy: () => void }) {
+  const router = useRouter();
   const passStatus = useGameStore((s) => s.passStatus);
   const active = !!passStatus?.active && !!passStatus.endDate;
   const view = active ? passView(passStatus!.endDate!, todayKstReset()) : null;
   const queued = !!passStatus?.queued;
 
-  // ── 미보유: 가격 + 고지 6항(§8·UI.1) + 즉시 1일차 안내 ──
+  // ── 미보유: 가격 + 고지 6항(§8·UI.1 재개정 2026-07-23 — 우편함 지급·30일 보관·자정 리셋) + 즉시 1일차 우편 안내 ──
   if (!active) {
     return (
       <View style={[styles.passCard, busy && { opacity: 0.6 }]}>
         <View style={styles.passHead}>
           <View style={styles.passIcon}><Ionicons name={'calendar' as IoniconName} size={20} color={theme.gold} /></View>
           <View style={{ flex: 1 }}>
-            <Text style={styles.passTitle}>다이아 출석 패스</Text>
+            <Text style={styles.passTitle}>다이아 패스</Text>
             <Text style={styles.passSub}>{PASS_DURATION_DAYS}일 · 매일 {PASS_DAILY_REWARD}💎 · 최대 {PASS_MAX_TOTAL.toLocaleString()}💎</Text>
           </View>
           <Text style={styles.price}>{formatKrw(PASS_PRICE_KRW)}</Text>
         </View>
         <View style={styles.noticeBox}>
           {[
-            `${PASS_DURATION_DAYS}일간 매일 접속 시 ${PASS_DAILY_REWARD}💎 자동 지급 (구매 즉시 1일차 지급)`,
-            `미접속일 보상은 ${PASS_GRACE_DAYS}일 내 접속 시 수령, 경과분은 소멸됩니다`,
+            `${PASS_DURATION_DAYS}일간 매일 ${PASS_DAILY_REWARD}💎가 우편함으로 지급돼요 (구매 즉시 1일차 우편 도착)`,
+            '우편은 도착 후 30일간 보관돼요 (경과 시 만료)',
             `28일 모두 수령 시 최대 ${PASS_MAX_TOTAL.toLocaleString()}💎`,
-            '오프라인에서는 수령할 수 없어요 (온라인 접속 시 지급)',
-            '일일 수령 기준 시각은 매일 오전 4시(KST)예요',
+            '우편 수령은 온라인 연결이 필요해요',
+            '일일 지급 기준 시각은 매일 자정(오전 0시, KST)이에요',
             '자동 갱신은 없어요 — 만료 후 다시 구매해야 합니다',
           ].map((t) => (
             <View key={t} style={styles.noticeRow}>
@@ -93,8 +95,8 @@ function PassCard({ busy, onBuy }: { busy: boolean; onBuy: () => void }) {
       <View style={styles.passHead}>
         <View style={styles.passIcon}><Ionicons name={'calendar' as IoniconName} size={20} color={theme.gold} /></View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.passTitle}>다이아 출석 패스 · 이용 중</Text>
-          <Text style={styles.passSub}>D-{view!.daysRemaining} · {claimedToday ? '오늘 수령 ✓' : '오늘 수령 대기'}</Text>
+          <Text style={styles.passTitle}>다이아 패스 · 이용 중</Text>
+          <Text style={styles.passSub}>D-{view!.daysRemaining} · {claimedToday ? '오늘 우편 수령 완료' : '오늘 우편 도착'}</Text>
         </View>
       </View>
       {/* 만료 임박 인앱 배너(D-3~, §UI.1 만료임박) — 푸시 없음, 재구매 유도 */}
@@ -128,7 +130,13 @@ function PassCard({ busy, onBuy }: { busy: boolean; onBuy: () => void }) {
           );
         })}
       </View>
-      <Text style={styles.stampLabel}>출석 {dayNumber}/{PASS_DURATION_DAYS}일</Text>
+      <Text style={styles.stampLabel}>우편 {dayNumber}/{PASS_DURATION_DAYS}일차 · 발송/수령 현황</Text>
+      {/* 수령은 우편함으로(§5·UI.2) — 카드에서 우편함 이동 링크 */}
+      <Pressable onPress={() => router.push('/mailbox')} style={styles.mailLink}>
+        <Ionicons name={'mail-outline' as IoniconName} size={15} color={theme.gold} />
+        <Text style={styles.mailLinkTxt}>우편함에서 오늘 우편 받기</Text>
+        <Text style={styles.mailLinkArrow}>›</Text>
+      </Pressable>
       {/* 활성 중 구매 = 예약 큐잉(§2.2 Q1). 큐 만석(예약 보유)이면 비활성. */}
       <Pressable onPress={onBuy} disabled={busy || queued} style={[styles.passBtn, (busy || queued) && styles.passBtnOff]}>
         <Text style={[styles.passBtnTxt, (busy || queued) && styles.passBtnTxtOff]}>
@@ -211,13 +219,13 @@ export default function BuyDiamonds() {
         await syncWallet();
         showAlert('구매 흐름 확인 (개발)', wasActive
           ? '이미 이용 중이라 운영 빌드에선 만료 후 이어지는 예약(+28일)으로 큐잉됩니다.'
-          : `운영 빌드에선 결제·서버 검증 후 ${PASS_DURATION_DAYS}일 패스가 시작되고 1일차 ${PASS_DAILY_REWARD}💎가 즉시 지급됩니다.`);
+          : `운영 빌드에선 결제·서버 검증 후 ${PASS_DURATION_DAYS}일 패스가 시작되고 1일차 ${PASS_DAILY_REWARD}💎 우편이 우편함에 즉시 도착합니다.`);
         return;
       }
       await syncWallet(); // 웹훅/confirm이 서버에 패스 창 생성 → passStatus 반영
       const st = useGameStore.getState().passStatus;
       if (st?.queued && wasActive) showAlert('예약 완료', '현재 패스가 만료되면 새 패스가 이어서 시작됩니다.');
-      else if (st?.active) showAlert('구매 완료', `출석 패스가 시작됐어요. 1일차 ${PASS_DAILY_REWARD}💎가 지급됩니다. 매일 접속해 받아가세요!`);
+      else if (st?.active) showAlert('구매 완료', `다이아 패스가 시작됐어요. 1일차 ${PASS_DAILY_REWARD}💎 우편이 우편함에 도착했어요. 우편함에서 받아가세요!`);
       else showAlert('결제 확인됨', '결제가 확인되면 패스가 잠시 후 활성화됩니다. 반영이 늦으면 잔액·패스 상태를 다시 확인해 주세요.');
     } finally {
       setBuyingPass(false);
@@ -305,4 +313,7 @@ const styles = themedStyles(() => StyleSheet.create({
   stampClaimed: { backgroundColor: theme.gold, borderColor: theme.gold },
   stampPending: { backgroundColor: theme.bg, borderColor: theme.gold, borderWidth: 2 },
   stampLabel: { marginTop: 8, color: theme.muted, fontSize: 12, fontWeight: '800' },
+  mailLink: { flexDirection: 'row', alignItems: 'center', gap: 7, marginTop: 12, backgroundColor: theme.gold + '18', borderRadius: 10, paddingVertical: 10, paddingHorizontal: 12 },
+  mailLinkTxt: { flex: 1, color: theme.text, fontSize: 13, fontWeight: '800' },
+  mailLinkArrow: { color: theme.muted, fontSize: 20, fontWeight: '400' },
 }));

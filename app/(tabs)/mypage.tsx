@@ -26,7 +26,7 @@ import { hasRemoveAds } from '../../lib/ads';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
-function LinkCard({ icon, tint, title, sub, onPress, badge }: { icon: IoniconName; tint: string; title: string; sub: string; onPress: () => void; badge?: number }) {
+function LinkCard({ icon, tint, title, sub, onPress, badge, dot }: { icon: IoniconName; tint: string; title: string; sub: string; onPress: () => void; badge?: number; dot?: boolean }) {
   return (
     <Card accent={tint} onPress={onPress}>
       <View style={styles.row}>
@@ -39,6 +39,8 @@ function LinkCard({ icon, tint, title, sub, onPress, badge }: { icon: IoniconNam
         </View>
         {badge && badge > 0 ? (
           <View style={styles.badge}><Text style={styles.badgeTxt}>{badge > 99 ? '99+' : badge}</Text></View>
+        ) : dot ? (
+          <View style={styles.redDot} />
         ) : null}
         <Text style={styles.arrow}>›</Text>
       </View>
@@ -50,6 +52,8 @@ export default function MyPage() {
   const router = useRouter();
   const diamonds = useGameStore((s) => s.diamonds);
   const passStatus = useGameStore((s) => s.passStatus);
+  const unreadMailCount = useGameStore((s) => s.unreadMailCount);
+  const unclaimedMailCount = useGameStore((s) => s.unclaimedMailCount);
   const watchAdForDiamonds = useGameStore((s) => s.watchAdForDiamonds);
   const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
   const walletBusy = useGameStore((s) => s.walletBusy);
@@ -208,7 +212,7 @@ export default function MyPage() {
           </View>
         ) : null}
       </Card>
-      {/* ── 출석 패스 수령 현황(ATTENDANCE_PASS_SYSTEM Q2 — 상시 확인처) — 활성 시에만 최소 표시. 상세·재구매는 상점. ── */}
+      {/* ── 다이아 패스 현황(DIAMOND_PASS_SYSTEM Q2 — 상시 확인처) — 활성 시에만 최소 표시. 상세·재구매는 상점, 수령은 우편함. ── */}
       {ATTENDANCE_PASS_ENABLED && passStatus?.active && passStatus.endDate ? (() => {
         const v = passView(passStatus.endDate, todayKstReset());
         return (
@@ -216,10 +220,9 @@ export default function MyPage() {
             <View style={styles.row}>
               <View style={[styles.iconChip, { backgroundColor: theme.gold + '22' }]}><Text style={{ fontSize: 18 }}>🗓️</Text></View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.title}>출석 패스 · 이용 중</Text>
+                <Text style={styles.title}>다이아 패스 · 이용 중</Text>
                 <Muted style={{ fontSize: 12.5, marginTop: 1 }}>
-                  D-{v.daysRemaining} · 출석 {v.dayNumber}/{PASS_DURATION_DAYS}일 · {passStatus.claimedToday ? '오늘 수령 완료' : '오늘 수령 대기'}
-                  {v.expired ? ` · 유예 ${v.graceLeft}일` : ''}
+                  D-{v.daysRemaining} · {v.dayNumber}/{PASS_DURATION_DAYS}일차 · {passStatus.claimedToday ? '오늘 우편 수령 완료' : '오늘 우편 도착'}
                   {passStatus.queued ? ` · 예약 +${PASS_DURATION_DAYS}일` : ''}
                 </Muted>
               </View>
@@ -234,6 +237,11 @@ export default function MyPage() {
           '기록' 카드는 홈 탭(리그 순위 아래)으로 이동(2026-07-21 사용자 지시: 접근성, 마이페이지 깊이가 불편).
           이 카드엔 스포트라이트 앵커·튜토리얼 스텝이 없어(tab-mypage 스포트라이트 2026-07-05 제거) 고아 앵커 생성 없음. */}
       <View style={styles.group}>
+        <LinkCard icon="mail-outline" tint={theme.gold} title="우편함"
+          sub={unclaimedMailCount > 0 ? `받을 우편 ${unclaimedMailCount}건` : '운영 보상·이벤트 우편을 확인하세요'}
+          dot={unreadMailCount > 0}
+          onPress={() => router.push('/mailbox')} />
+
         <LinkCard icon="megaphone-outline" tint={theme.accent} title="공지사항"
           sub="업데이트 · 이벤트 · 안내"
           onPress={() => router.push('/announcements')} />
@@ -317,6 +325,7 @@ const styles = themedStyles(() => StyleSheet.create({
   arrow: { color: theme.muted, fontSize: 24, fontWeight: '400' }, // 화살표 = 장식 → 민트 대신 회색으로(민트 희소성, item 9)
   badge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, backgroundColor: theme.bad, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
   badgeTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
+  redDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: theme.bad, marginRight: 6 }, // 미확인 우편 빨간 점(MAILBOX §6.3)
   diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },
   diaBtnOff: { backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.border, opacity: 0.6 }, // 수령 불가 — 회색 비활성

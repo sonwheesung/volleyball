@@ -17,8 +17,8 @@ export const PASS_DAILY_REWARD = 100;                                 // 하루 
 export const PASS_DURATION_DAYS = 28;                                 // 창 길이(dayIndex 0~27 = 28슬롯)
 export const PASS_MAX_TOTAL = PASS_DAILY_REWARD * PASS_DURATION_DAYS; // 2800 — 28일 완주 파생(표시 상한)
 export const PASS_PRICE_KRW = 9900;                                   // 표시가(스토어 등록값이 실청구 정본)
-export const PASS_RESET_HOUR_KST = 4;                                 // Q6 — 일일 리셋 KST 04:00
-export const PASS_GRACE_DAYS = 3;                                     // Q5=(B) — 미수령 유예 3일
+export const PASS_RESET_HOUR_KST = 0;                                 // Q6 재확정(2026-07-23) — 일일 리셋 KST 00:00(자정). 우편 30일 보존이 04시 보호를 대체
+// PASS_GRACE_DAYS 폐기(Q5 재확정 2026-07-23) — 일일 지급이 스케줄러 우편 발송으로 바뀌며 미수령 유예 개념 소멸(우편 30일 보관이 대체).
 
 /** 'YYYY-MM-DD' 사이 정수 일수(표시용 순수 산술 — UTC 자정 앵커라 타임존 무관, 서버 dates.diffDays 미러). */
 export function passDaysBetween(fromStr: string, toStr: string): number {
@@ -30,13 +30,13 @@ export function passDaysBetween(fromStr: string, toStr: string): number {
 export interface PassView {
   dayNumber: number;     // 현재 며칠차(1~28, 클램프)
   daysRemaining: number; // 창 종료까지 남은 일수(D-N 표시, 만료 후 0)
-  graceLeft: number;     // 만료 후 유예 잔여일(창 내면 GRACE, 만료 후 감소, 0 미만 없음)
   expired: boolean;      // 오늘 > endDate(창 종료 후)
   expiringSoon: boolean; // 만료 임박(D-3부터 — 인앱 배너 유도, §UI.1)
 }
 
-/** 활성 패스 표시 뷰(순수) — endDate(서버 진실)와 today(리셋보정, UI가 계산해 주입)로 며칠차·남은일·유예를 파생.
- *  start = endDate − (DURATION−1). 결정이 아니라 표시(캡션·스탬프·배너 게이트)만. today는 lib/passClient.todayKstReset()이 준다. */
+/** 활성 패스 표시 뷰(순수) — endDate(서버 진실)와 today(리셋보정, UI가 계산해 주입)로 며칠차·남은일을 파생.
+ *  start = endDate − (DURATION−1). 결정이 아니라 표시(캡션·스탬프·배너 게이트)만. today는 lib/passClient.todayKstReset()이 준다.
+ *  유예(graceLeft) 폐기(2026-07-23) — 미수령분은 우편함 30일 보존이 담당(스케줄러 우편 전환). */
 export function passView(endDate: string, today: string): PassView {
   const start = addDaysStr(endDate, -(PASS_DURATION_DAYS - 1));
   const off = passDaysBetween(start, today);          // 시작 이후 경과 오프셋(만료 후 27 초과 가능)
@@ -44,9 +44,8 @@ export function passView(endDate: string, today: string): PassView {
   const toEnd = passDaysBetween(today, endDate);      // 종료까지(음수면 만료)
   const daysRemaining = Math.max(0, toEnd + 1);        // 오늘 포함 남은일(오늘=endDate면 1)
   const expired = toEnd < 0;
-  const graceLeft = expired ? Math.max(0, PASS_GRACE_DAYS + toEnd + 1) : PASS_GRACE_DAYS;
   const expiringSoon = !expired && daysRemaining <= 3;
-  return { dayNumber, daysRemaining, graceLeft, expired, expiringSoon };
+  return { dayNumber, daysRemaining, expired, expiringSoon };
 }
 
 /** 'YYYY-MM-DD'에 n일(표시용 순수 — 서버 dates.addDays 미러). */

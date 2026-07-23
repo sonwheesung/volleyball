@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { useEffect } from 'react';
 import { Redirect, Tabs, useRouter } from 'expo-router';
-import { BackHandler, Pressable } from 'react-native';
+import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Loading, theme } from '../../components/Screen';
@@ -14,12 +14,25 @@ const tabIcon = (outline: IoniconName, filled: IoniconName) =>
   ({ color, size, focused }: { color: string; size: number; focused: boolean }) =>
     <Ionicons name={focused ? filled : outline} size={size} color={color} />;
 
+// 미확인 우편 빨간 점 오버레이(MAILBOX_SYSTEM §6.3) — 마이페이지 탭 아이콘 우상단. dot 값은 서버 판정 unreadMailCount>0.
+const tabIconDot = (outline: IoniconName, filled: IoniconName, dot: boolean) =>
+  ({ color, size, focused }: { color: string; size: number; focused: boolean }) => (
+    <View>
+      <Ionicons name={focused ? filled : outline} size={size} color={color} />
+      {dot ? <View style={dotStyles.dot} /> : null}
+    </View>
+  );
+const dotStyles = StyleSheet.create({
+  dot: { position: 'absolute', top: -2, right: -3, width: 9, height: 9, borderRadius: 5, backgroundColor: '#E5484D', borderWidth: 1.5, borderColor: theme.tabBar },
+});
+
 export default function TabsLayout() {
   const router = useRouter();
   const insets = useSafeAreaInsets();
   const hydrated = useGameStore((s) => s.hydrated);
   const onboarded = useGameStore((s) => s.onboarded);
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
+  const unreadMailCount = useGameStore((s) => s.unreadMailCount); // 마이페이지 탭 빨간 점(MAILBOX §6.3)
 
   // 뒤로가기 앱 종료 확인(UI-35, Android 전용) — 탭 루트에서 더 갈 곳이 없을 때만 종료 다이얼로그.
   //   스택 화면(선수·계약 등)이 위에 있으면 canGoBack()=true → 기본 pop을 그대로 둔다(정상 뒤로가기 유지).
@@ -82,7 +95,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="schedule" options={{ title: '일정', tabBarLabel: '일정', tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
       <Tabs.Screen name="squad" options={{ title: '선수단', tabBarLabel: '선수단', tabBarIcon: tabIcon('people-outline', 'people') }} />
       <Tabs.Screen name="office" options={{ title: '단장실', tabBarLabel: '단장실', tabBarIcon: tabIcon('briefcase-outline', 'briefcase') }} />
-      <Tabs.Screen name="mypage" options={{ title: '마이페이지', tabBarLabel: '마이페이지', tabBarIcon: tabIcon('person-circle-outline', 'person-circle') }} />
+      <Tabs.Screen name="mypage" options={{ title: '마이페이지', tabBarLabel: '마이페이지', tabBarIcon: tabIconDot('person-circle-outline', 'person-circle', unreadMailCount > 0) }} />
     </Tabs>
   );
 }
