@@ -106,7 +106,7 @@ function CeremonyInner() {
       <View style={{ alignItems: 'center', gap: 8 }}>
         <AwardPoster
           template={tpl.src} tone={tpl.tone} seasonMode={tpl.seasonMode}
-          seasonLabel={poster!.seasonLabel} name={poster!.name} posEn={poster!.posEn} teamName={poster!.teamName}
+          seasonLabel={poster!.seasonLabel} name={poster!.name} posEn={poster!.posEn} teamName={poster!.teamName} isMyTeam={poster!.isMine}
           ovr={poster!.ovr} stats={poster!.stats} emblem={poster!.emblem} footnote={footnote}
         />
         {poster!.isMine ? <Text style={styles.mineTag}>{mineTag}</Text> : null}
@@ -118,7 +118,7 @@ function CeremonyInner() {
         <AwardPoster
           template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
           seasonLabel={poster.seasonLabel} seasonKicker={poster.seasonKicker}
-          name={poster.name} posEn={poster.posEn} teamName={poster.teamName} ovr={poster.ovr}
+          name={poster.name} posEn={poster.posEn} teamName={poster.teamName} isMyTeam={poster.isMine} ovr={poster.ovr}
           stats={poster.stats} highlightLabels={poster.highlightLabels} emblem={poster.emblem} footnote={poster.footnote}
         />
         {poster.isMine ? <Text style={styles.mineTag}>우리 구단의 기록왕</Text> : null}

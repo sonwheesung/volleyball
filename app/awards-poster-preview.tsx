@@ -90,7 +90,7 @@ export default function AwardsPosterPreview() {
         {real ? (
           <AwardPoster
             template={AWARD_TEMPLATES.mvp.src} tone={AWARD_TEMPLATES.mvp.tone}
-            seasonLabel={real.seasonLabel} name={real.name} posEn={real.posEn} teamName={real.teamName}
+            seasonLabel={real.seasonLabel} name={real.name} posEn={real.posEn} teamName={real.teamName} isMyTeam={real.isMine}
             ovr={real.ovr} stats={real.stats} emblem={real.emblem}
           />
         ) : null}
@@ -146,6 +146,20 @@ export default function AwardsPosterPreview() {
             { label: '서브', value: '38' }, { label: '디그', value: '301' },
           ]}
           emblem={emblemFor('t5')}
+        />
+      </View>
+
+      {/* 내 팀 수상자 시각 구분 샘플(§8, 2026-07-23) — 팀명 볼드 강조 + "MY TEAM" 칩. 긴 조합(OP + 긴 팀명)으로 칩 폭 스트레스 겸. */}
+      <View style={styles.block}>
+        <Text style={styles.cap}>샘플 · 내 팀 수상자 (isMyTeam · MY TEAM 칩 + 팀명 강조 · 칩 폭 스트레스)</Text>
+        <AwardPoster
+          template={AWARD_TEMPLATES.mvp.src} tone={AWARD_TEMPLATES.mvp.tone}
+          seasonLabel="2025-26" name="알레산드라 페레이라" posEn={POS_EN.OP} teamName="수원 스카이라인즈" isMyTeam ovr={92}
+          stats={[
+            { label: '득점', value: '812' }, { label: '공격', value: '690' }, { label: '블로킹', value: '58' },
+            { label: '서브', value: '44' }, { label: '디그', value: '301' },
+          ]}
+          emblem={emblemFor('t1')}
         />
       </View>
 

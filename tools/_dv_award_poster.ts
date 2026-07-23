@@ -142,6 +142,22 @@ const CFG_FOOT: PanelCfg   = { posEnLH: 1.10, nameLH: 1.10, nameMT: 0, statValLH
 // A/B 버그 재현용 — 압축 前(구) 풋노트 구성: statRow 1.8%·foot marginTop 6·f.foot .026 lh1.15·라인하이트/마진 미압축
 const CFG_FOOT_LEGACY: PanelCfg = { posEnLH: 1.15, nameLH: 1.12, nameMT: 1, statValLH: 1.12, statLabLH: 1.15, statLabMT: 1, statRowMT: 1.8, hasFoot: true, footScale: 0.026, footLH: 1.15, footMT: 6 };
 
+// ── "MY TEAM" 칩 높이 검사(AWARDS_SYSTEM §8 내 팀 수상자 구분, 2026-07-23) ──
+// components/AwardPoster.tsx 내 팀 수상자 posRow의 칩 박스 높이(전부 폭 파생 → 폭 무관 스케일)가 posEn 라인박스 스케일을
+// 넘지 않아야 행 높이=max(posEn, 칩)=posEn으로 유지되고 줄 높이·세로 예산이 불변이다. 값 동기[컴포넌트]:
+//   f.chip = w×0.013 · chip lineHeight = f.chip×1.0 · chipPadV = w×0.001 · chipBorder = w×0.003 · posEn = w×0.022(lh 1.10 有/1.15 無).
+const CHIP_FONT_SCALE = 0.013;   // AwardPoster f.chip
+const CHIP_LH = 1.0;             // 칩 Text lineHeight = f.chip×1.0
+const CHIP_PADV_SCALE = 0.001;   // chipPadV = w×0.001
+const CHIP_BORDER_SCALE = 0.003; // chipBorder = w×0.003
+const POSEN_SCALE = 0.022;       // AwardPoster f.posEn (posEn 라인 폰트)
+/** 칩 박스 높이 스케일(per w) = 폰트(lh) + padV×2 + border×2. */
+function chipHeightScale(padV: number, border: number): number {
+  return CHIP_FONT_SCALE * CHIP_LH + 2 * padV + 2 * border;
+}
+/** posEn 라인박스 스케일(per w) = f.posEn × lineHeight. */
+function posEnLineScale(lh: number): number { return POSEN_SCALE * lh; }
+
 // ── 모아보기(3안 StatLeadersPoster) 세로 예산 + 프레임 내포 검사 (AWARDS_SYSTEM §8.1, 2026-07-23) ──
 // components/StatLeadersPoster.tsx 리스트 존(top 80.9%~bottom 5.3% = 13.8%h)에 7부문 리더를 한 줄씩 얹는다.
 // 각 행 높이 = max(자식 라인박스) = name/value 폰트(scale 0.0235w·lh 1.05) 라인박스가 지배(부문 라벨·팀 0.021w보다 큼).
@@ -189,7 +205,7 @@ function readListZoneFromSource(): { top: number; bottom: number } | null {
 }
 
 (async () => {
-  const { posterStats, AWARD_TEMPLATES, statLeaderPosterData, statsWithCategory, STAT_LEADER_META, STAT_LEADER_ORDER } = await import('../data/awardPoster');
+  const { posterStats, AWARD_TEMPLATES, statLeaderPosterData, statsWithCategory, STAT_LEADER_META, STAT_LEADER_ORDER, buildAwardPosterData } = await import('../data/awardPoster');
   const { getPlayer, currentRosters } = await import('../data/league');
   const templates = AWARD_TEMPLATES as unknown as TemplateMap;
   let fail = 0;
@@ -361,6 +377,34 @@ function readListZoneFromSource(): { top: number; bottom: number } | null {
   if (d1 === d2) console.log('PASS sl-determinism :: statLeaderPosterData 동일 입력 → 동일 출력');
   else { fail++; console.log('FAIL sl-determinism :: 출력 불일치'); }
 
-  console.log(fail === 0 ? '\nALL PASS — award poster 오귀속·톤·오버레이 충돌·세로 예산·모아보기(3안)·기록왕 셀렉터(교체·조립·null·결정론) 무결' : `\n${fail} FAIL`);
+  // ── 내 팀 수상자 구분 (AWARDS_SYSTEM §8, 2026-07-23) ──────────────────────────────────
+  // (A) isMine 귀속 — 내 팀→true·타 팀→false·myTeamId null→false (buildAwardPosterData·statLeaderPosterData 양쪽).
+  const wMine: AwardWinner = { playerId: anyId, teamId: 't0', value: 1 };
+  const pMine = new Map<string, ProdLine>([[anyId, distinctLine()]]);
+  const mineSelf = buildAwardPosterData(wMine, 3, 't0', pMine)?.isMine;   // 수상자 소속=내 팀
+  const mineOther = buildAwardPosterData(wMine, 3, 't9', pMine)?.isMine;  // 타 팀
+  const mineNoTeam = buildAwardPosterData(wMine, 3, null, pMine)?.isMine; // myTeamId 미지정
+  const slSelf = statLeaderPosterData(wMine, 3, 'scoring', 't0', pMine)?.isMine;
+  const slOther = statLeaderPosterData(wMine, 3, 'scoring', 't9', pMine)?.isMine;
+  const slNoTeam = statLeaderPosterData(wMine, 3, 'scoring', null, pMine)?.isMine;
+  if (mineSelf === true && mineOther === false && mineNoTeam === false && slSelf === true && slOther === false && slNoTeam === false) {
+    console.log('PASS mine-attr :: isMine 귀속 정확 — 내 팀→true · 타 팀→false · myTeamId null→false (build·statLeader 양쪽)');
+  } else { fail++; console.log(`FAIL mine-attr :: build(self=${mineSelf}·other=${mineOther}·null=${mineNoTeam}) sl(self=${slSelf}·other=${slOther}·null=${slNoTeam})`); }
+
+  // (A) "MY TEAM" 칩 높이 — 칩 박스 스케일 ≤ posEn 라인박스 스케일(풋노트 有 lh1.10 최소·無 lh1.15 둘 다) → 행 높이=posEn 유지(줄 높이 불변).
+  const chipScale = chipHeightScale(CHIP_PADV_SCALE, CHIP_BORDER_SCALE);
+  const posEnFoot = posEnLineScale(1.10);   // 풋노트 有(더 작음 — 최악)
+  const posEnNoFoot = posEnLineScale(1.15); // 풋노트 無
+  console.log(`  · 칩 높이 스케일 ${chipScale.toFixed(4)}w vs posEn 라인박스 有 ${posEnFoot.toFixed(4)}w·無 ${posEnNoFoot.toFixed(4)}w (여유 ${(posEnFoot - chipScale).toFixed(4)}w)`);
+  if (chipScale <= posEnFoot && chipScale <= posEnNoFoot) {
+    console.log(`PASS chip-height :: MY TEAM 칩 박스 ${chipScale.toFixed(4)}w ≤ posEn 라인박스(${posEnFoot.toFixed(4)}w) — 행 높이=posEn 유지(줄 높이·세로 예산 불변)`);
+  } else { fail++; console.log(`FAIL chip-height :: 칩 ${chipScale.toFixed(4)}w > posEn 라인박스 ${posEnFoot.toFixed(4)}w — 칩이 행을 키워 줄 높이/세로 예산 위반`); }
+
+  // (B) 칩 높이 민감도 A/B — 과대 칩 패딩(padV 0.001→0.02) 주입 시 posEn 라인박스를 초과해 검출돼야 검사 유효(허위 오라클 방지).
+  const chipMutScale = chipHeightScale(0.02, CHIP_BORDER_SCALE);
+  if (chipMutScale > posEnFoot) console.log(`PASS chip-height-sensitivity :: 과대 칩 패딩(padV 0.02) ${chipMutScale.toFixed(4)}w > posEn 라인박스 ${posEnFoot.toFixed(4)}w 초과 검출 — 검사 유효`);
+  else { fail++; console.log(`FAIL chip-height-sensitivity :: 과대 칩 패딩도 라인박스 이내로 계산 — 오라클 허위(무의미)`); }
+
+  console.log(fail === 0 ? '\nALL PASS — award poster 오귀속·톤·오버레이 충돌·세로 예산·모아보기(3안)·기록왕 셀렉터(교체·조립·null·결정론)·내 팀 구분(isMine·칩 높이) 무결' : `\n${fail} FAIL`);
   process.exit(fail === 0 ? 0 : 1);
 })();

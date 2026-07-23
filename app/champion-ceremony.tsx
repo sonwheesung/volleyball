@@ -71,6 +71,7 @@ function Inner() {
         name={finalsPoster.name}
         posEn={finalsPoster.posEn}
         teamName={finalsPoster.teamName}
+        isMyTeam={finalsPoster.isMine}
         ovr={finalsPoster.ovr}
         stats={finalsPoster.stats}
         emblem={finalsPoster.emblem}
