@@ -65,7 +65,7 @@ export function AwardPoster({
   // 폭 파생 폰트 — 좁은 기기에서도 비율 유지
   const f = {
     kicker: w * 0.030, season: w * 0.052,
-    posEn: w * 0.022, name: w * 0.056,
+    posEn: w * 0.022, name: w * 0.050,   // 0.056→0.050 축소(~10.7%, 갤럭시 실기기 이름 과대 — 2026-07-23). lineHeight 배수(1.10/1.12) 유지, 세로 여유는 마진으로 흡수(다른 요소 무변경). §8
     ovrTag: w * 0.020, ovrNum: w * 0.044,
     statVal: w * 0.034, statLab: w * 0.021,
     foot: w * 0.022,        // 풋노트(있을 때만 렌더) — 0.026→0.022 축소(패널 세로 예산, styles.panel 주석 산식)
@@ -149,11 +149,11 @@ const styles = StyleSheet.create({
   // 하단 정보 패널 — top 80.5%~bottom 5.8% ⇒ 컨테이너 높이 13.7%h. justifyContent:'center'라 콘텐츠 총높이가
   // 13.7%를 넘으면 위·아래로 균등 넘침 → 풋노트가 패널 하단 네온 레일에 걸침(실기기 버그, §8 세로 예산 근본수정 2026-07-22).
   // ── 세로 예산 산식(%h; 폭 파생 폰트 s → %h=s×75 ∵ w/h=3/4, px p → 75p/428, 패널폭 % 마진 m → 0.6225m) ──
-  //   headRow=max(nameCol, ovrChip 6.23, emblem 4.8);  nameCol=posEn(.022×lh)·name(.056×lh)+name mt
+  //   headRow=max(nameCol, ovrChip 6.23, emblem 4.8);  nameCol=posEn(.022×lh)·name(.050×lh)+name mt
   //   statRow=statRow_mt + statVal(.034×lh)+statLab(.021×lh)+statLab mt;  foot=foot_mt + foot(.022×1.08)
-  //   · 풋노트 無(4장, 현행 무회귀): 6.777 + 5.963            = 12.74%h  (lh posEn1.15·name1.12·statVal1.12·statLab1.15, mt 1.8%/1px)
-  //   · 풋노트 有(구, 버그):        6.777 + 5.963 + 2.768     = 15.51%h  (13.7 초과 1.81 → 하단 0.9%h 넘침)
-  //   · 풋노트 有(신, 압축):        6.435 + 4.673 + 1.782     = 12.89%h  (lh posEn1.10·name1.10·statVal1.08·statLab1.10, statRow mt 0.3%·name/statLab mt 0·foot mt 0·f.foot .022×1.08)
+  //   · 풋노트 無(4장, 현행 무회귀): 6.273 + 5.963            = 12.24%h  (headRow=nameCol; lh posEn1.15·name1.12·statVal1.12·statLab1.15, mt 1.8%/1px) — name .056→.050 후 −0.50%h
+  //   · 풋노트 有(구, 버그):        6.777 + 5.963 + 2.768     = 15.51%h  (name .056 시절 — 13.7 초과 1.81 → 하단 0.9%h 넘침, 역사 보존)
+  //   · 풋노트 有(신, 압축):        6.231 + 4.673 + 1.782     = 12.69%h  (name .050 축소로 nameCol 5.94<ovrChip → headRow=ovrChip 6.231; lh posEn1.10·name1.10·statVal1.08·statLab1.10, statRow mt 0.3%·name/statLab mt 0·foot mt 0·f.foot .022×1.08)
   //   ⇒ 신 풋노트 총높이 ≤13.0%h(패널 13.7 - 안전 0.7). 가드 tools/_dv_award_poster.ts '패널 세로 예산' 검사가 이 산식을 미러링(값 동기).
   panel: { position: 'absolute', top: '80.5%', bottom: '5.8%', left: '8.5%', right: '8.5%', justifyContent: 'center' },
   headRow: { flexDirection: 'row', alignItems: 'center', gap: 10 },
