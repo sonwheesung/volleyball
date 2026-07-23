@@ -58,6 +58,8 @@
 | [DEVNOTES_SYSTEM](./DEVNOTES_SYSTEM.md) | **개발자 노트/패치노트**(관리자 에디터→서버 원격 콘텐츠, 앱 업데이트 없이 게시) — 구분 탭(패치노트|개발자 노트, 2026-07-08 사용자 결정)·안읽음 배지(로컬)·오프라인 캐시·무푸시. 공지(차단성)와 역할 구분. 🖥 Phase1·2 구현(서버 CRUD+관리자 에디터, 2026-07-15 · dev DB 적용·라이브 가드는 DB 기동 후 보류) / 앱 화면(Phase3) 미착수 | `server/db/schema.ts`(devnotes)·`server/app/api/{devnotes,admin/devnote}/route.ts`·`server/app/ops-9f3a2c/page.tsx`(노트 탭)·`server/tools/_dv_devnote_live.ts`(가드)·`app/devnotes.tsx`·`lib/server.ts`·`store/useAuthStore.ts`(앱 예정) |
 | [SOUND_SYSTEM](./SOUND_SYSTEM.md) | **오디오 레이어 정본** — 효과음(휘슬·스파이크·서브) + **배경음악(BGM 10곡 순환·경기 중 정지·볼륨 슬라이더)**. 상태모델(started/suppressed/backgrounded/volume→applyState)·오디오모드 단일화 | `audio/sfx.ts`·`audio/bgm.ts`·`app/_layout.tsx`·`app/match/[id].tsx`·`app/settings.tsx` |
 | [ONBOARDING_SYSTEM](./ONBOARDING_SYSTEM.md) | 스포트라이트 튜토리얼(구단 선택부터 화면별 안내, **스텝 단위 영구 추적** → 신규 기능만 재안내)·플레이어 시작 기본 스태프 | `components/Spotlight.tsx`, `data/tutorialSteps.ts`, `store/useGameStore.ts`(seenTips), `data/league.ts`(grantStartingStaff) |
+| [MATCH_3D_VISION](./MATCH_3D_VISION.md) | 📋 **출시 후 별도 과제**: 경기 보드 3D(또는 제한3D/2.5D) 비전 — 조사(생성AI 3강·MCP·RN 실현성)·엔진 애니대본 준비도(RallyEvent opt-in 배선+높이/타이밍/이동/애셋 결정론 합성)·모션소스 정책·파이프라인 단계표. 지금 착수 아님·출시 무간섭 | `engine/events.ts`·`court.ts`·`spatial.ts`(대본), 렌더러 미구현 |
+| [MOCAP_TEST_GUIDE](./MOCAP_TEST_GUIDE.md) | 비디오 모캡 실현성 테스트(사용자 직접 실행) — 무료툴 비교·영상 기준·절차·판정 체크리스트. 톱픽 DeepMotion/Rokoko Vision | (문서 전용, 코드 무관) |
 | [SHUTDOWN_POLICY](./SHUTDOWN_POLICY.md) | **서비스 종료 런북(2026-07-17 신설, #107)** — D-30 공지(공지 인프라 재사용)·스토어 상품 비활성=신규결제 차단·종료 후 최소 30일 환불 접수·미사용 유상 다이아 산정 리포트. 공개 정책 페이지 `/privacy`·`/terms`(Vercel)와 한 몸 | `server/app/privacy/page.tsx`·`server/app/terms/page.tsx`·`server/tools/shutdownRefundReport.ts` |
 
 ---
