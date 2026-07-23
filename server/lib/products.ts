@@ -16,7 +16,16 @@ export const DIAMOND_PRODUCTS: Record<string, number> = {
 /** 엔타이틀먼트(비소모) 상품 — RC customerInfo가 진실. 원장 미지급(§13.18). 참고용 집합. */
 export const ENTITLEMENT_PRODUCTS = new Set<string>(['remove_ads', 'dlc_worldcup']);
 
-/** 소모성 다이아 팩이면 지급 다이아, 아니면 null(엔타이틀먼트/미등록). */
+/** 출석 패스 소비성 SKU(ATTENDANCE_PASS_SYSTEM §2.1). 구매 = attendance_passes 행 1개 생성(다이아는 일일 수령으로만).
+ *  DIAMOND_PRODUCTS·ENTITLEMENT_PRODUCTS 어디에도 없어 "미등록 → 무시"로 떨어지던 것을 pass-grant로 분기(§2.1). 1+1 비대상(§3.1). */
+export const PASS_PRODUCTS = new Set<string>(['diamond_pass']);
+
+/** 소모성 다이아 팩이면 지급 다이아, 아니면 null(엔타이틀먼트/패스/미등록). */
 export function productDiamonds(productId: string): number | null {
   return Object.prototype.hasOwnProperty.call(DIAMOND_PRODUCTS, productId) ? DIAMOND_PRODUCTS[productId] : null;
+}
+
+/** 출석 패스 SKU인가(pass-grant 분기). */
+export function isPassProduct(productId: string): boolean {
+  return PASS_PRODUCTS.has(productId);
 }

@@ -8,7 +8,9 @@ import { users, walletLedger, projInfo } from '../db/schema';
 import { PROJ_CODE } from './proj';
 import { allowsNegativeBalance } from './econ';
 
-export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon' | 'welcome';
+// pass_daily = 출석 패스 일일 수령 · iap_bonus_1p1 = 월1회 1+1 보너스(ATTENDANCE_PASS_SYSTEM §2.5·§3.4).
+// 둘 다 적립(delta>0). 환불 회수는 기존 'refund' 재사용(멱등키/ref로 종류 구분 — §4.4 판단 보고). pass_daily는 /earn 화이트리스트 제외(전용 라우트).
+export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon' | 'welcome' | 'pass_daily' | 'iap_bonus_1p1';
 
 export type WalletResult =
   | { ok: true; balance: number; applied: boolean } // applied=false → 멱등 재시도(이미 처리됨, 재적용 안 함)
@@ -153,7 +155,8 @@ export async function adStatusToday(userId: string): Promise<{ count: number; la
   return { count: r?.n ?? 0, lastAtMs: r?.lastMs != null ? Number(r.lastMs) : null };
 }
 
-/** 현재 잔액 + 최근 원장 N건 + 오늘 광고 상태(쿨다운/캡 서버 진실). */
+/** 현재 잔액 + 최근 원장 N건 + 오늘 광고 상태(쿨다운/캡 서버 진실) + 출석 패스 상태(Q2 §2.4).
+ *  pass는 순환 import 방지 위해 지연 import(lib/pass → lib/wallet 역참조 회피). */
 export async function getWallet(userId: string, recent = 20) {
   const u = await db.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).limit(1);
   if (!u.length) return null;
@@ -164,7 +167,9 @@ export async function getWallet(userId: string, recent = 20) {
     .orderBy(walletLedger.createdAt)
     .limit(recent);
   const adToday = await adStatusToday(userId);
-  return { balance: u[0].balance, ledger, adToday };
+  const { passStatus } = await import('./pass'); // 지연 import(순환 회피)
+  const pass = await passStatus(userId);
+  return { balance: u[0].balance, ledger, adToday, pass };
 }
 
 /** 이 게임(PROJ_CODE)의 proj_info 행 보장 — FK 대상. 최초 1회만 실제 insert. */

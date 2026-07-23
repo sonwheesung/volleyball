@@ -89,10 +89,11 @@
 
 ## 2.4 스키마 · API
 
-- **신규 테이블 `attendance_passes`**(Expand-only, [[prod-schema-migration-caution]] generate+migrate):
-  `id`, `proj_code` FK, `user_id` FK, `store_txn_id` text, `start_date` date(KST), `end_date` date(KST), `source`('purchase'|'admin'), `status`('active'|'refunded'), `purchased_at` timestamptz, `created_at` default now().
-  - `UNIQUE(proj_code, store_txn_id)` = **구매 멱등**(웹훅·confirm 공유 자연키, onConflictDoNothing).
+- **신규 테이블 `attendance_passes`**(Expand-only, [[prod-schema-migration-caution]] generate+migrate) — **✅ 구현(2026-07-23, `server/db/schema.ts`)**:
+  `id`, `proj_code` FK, `user_id` FK, `store_txn_id` text(nullable — admin=null), `start_date` date(KST), `end_date` date(KST), `source`('purchase'|'admin'), `status`(~~'active'|'refunded'~~ → **'active'|'refunded'|'queued'**), **`queued_after` uuid(nullable)**, `purchased_at` timestamptz, `created_at` default now().
+  - `UNIQUE(proj_code, store_txn_id)` = **구매 멱등**(웹훅·confirm 공유 자연키, onConflictDoNothing). store_txn_id nullable → admin 발급(NULL)은 Postgres에서 서로 distinct라 충돌 없음. B1 tombstone 선삽입도 이 UNIQUE 활용.
   - `index(proj_code, user_id)` = 활성 패스 조회.
+  - **정정(2026-07-23 구현)**: ~~status는 active|refunded만~~ → Q1 큐잉(§2.2 "예약 pending 플래그 + 앵커")을 담으려면 **`status='queued'` 상태 + `queued_after`(직전 passId 앵커) 컬럼이 필수**다. 예약 패스의 실 start는 활성화 때 `max(오늘, 앵커 end+1)`로 파생(§2.2a·R1a), queued 행엔 프로비저널 start/end 저장(활성화 때 확정). 스키마 §2.4 원안(active|refunded)을 이 2필드로 보강.
 - **API**:
   - `POST /api/pass/claim`(Bearer) — 위 §2.3. typed 결과(`ok`·`no-pass`·`already`(멱등)·`offline`·`unauthorized`).
   - **패스 상태 = `getWallet` 확장 확정(Q2 판정 채택)** — 활성 여부·`end_date`·오늘 수령 여부·예약 패스·팩별 1+1 가용을 `getWallet` 응답에 편입. 근거: **claim 자동 트리거와 합류점(syncWallet)이 동일**해 별 라운드트립 0(마이페이지·포그라운드 복귀가 이미 syncWallet 호출). 신 `GET /api/pass/status` 불필요. **메모**: 1+1 가용 여부는 원장 월-키 존재 파생이라 **캐시 신선도 고려**(구매 직후 서버 확정 후 syncWallet로 갱신 — 낙관 표시 금지).
@@ -294,12 +295,17 @@
 
 > 표준 작업 순서: 이 문서(설계) → 코드. 각 Phase 착수 전 이 문서에 단계 계획 존재 확인.
 
-- **Phase ① 서버 스키마·API (결정론 밖, 먼저 — 테스트 쉬움)**
-  1. `server/db/schema.ts` — `attendance_passes` 테이블(Expand-only, generate+migrate). WalletReason 유니온에 `pass_daily`·`iap_bonus_1p1` 추가.
-  2. `server/lib/econ.ts` — `PASS_DAILY_REWARD=100`·`PASS_DURATION_DAYS=28`·`PASS_MAX_TOTAL=2800`(파생, 표시/가드)·`PASS_PRICE_KRW=9900`(표시)·**`PASS_RESET_HOUR_KST=4`(Q6)**·**`PASS_GRACE_DAYS`(Q5 — (A)=0 / (B)=3)**. `server/lib/dates.ts` — `todayKstResetAdjusted(resetHour)`·`kstYearMonth()`.
-  3. `server/lib/products.ts` — `PASS_PRODUCTS`(`diamond_pass`) + `decidePurchaseEvent` 분기(pass-grant).
-  4. `server/lib/pass.ts`(신) — `grantPass`·`claimPassDaily`·`clawbackPass`. `applyPurchaseGrant`(웹훅/confirm 공유)에 1+1 보너스 grant + 패스 grant 합성.
-  5. 라우트 — `POST /api/pass/claim`, 패스 상태(`getWallet` 확장 or `GET /api/pass/status`). 환불 웹훅(§13.18)에 패스 clawback·1+1 보너스 reversal 배선.
+- **Phase ① 서버 스키마·API (결정론 밖, 먼저 — 테스트 쉬움)** — **✅ 구현 완료(2026-07-23)**. dev DB(로컬 Supabase :54322) drizzle generate+push 적용. prod는 배포 절차(`deploy-prod`)에서 마이그레이션 `0002_attendance_passes.sql` 적용. 가드 `_dv_pass`·`_dv_1p1`(순수)·`_dv_pass_live`(라이브) 전건 PASS(A/B 자가검증 포함).
+  1. ✅ `server/db/schema.ts` — `attendance_passes` 테이블(+status 'queued'·queued_after 보강, 위 §2.4 정정). WalletReason 유니온(`server/lib/wallet.ts`)에 `pass_daily`·`iap_bonus_1p1` 추가.
+  2. ✅ `server/lib/econ.ts` — `PASS_DAILY_REWARD=100`·`PASS_DURATION_DAYS=28`·`PASS_MAX_TOTAL=2800`(파생)·`PASS_PRICE_KRW=9900`(표시)·`PASS_RESET_HOUR_KST=4`(Q6)·`PASS_GRACE_DAYS=3`(Q5=B). `server/lib/dates.ts` — `todayKstResetAdjusted(resetHour)`·`kstYearMonth()`·`addDays`·`diffDays`·`maxDateStr`.
+  3. ✅ `server/lib/products.ts` — `PASS_PRODUCTS`(`diamond_pass`)·`isPassProduct` + `decidePurchaseEvent`/`rcVerifyPurchase` pass-grant 분기(+`kind`·`purchasedAt` 필드).
+  4. ✅ `server/lib/pass.ts`(신) — `grantPass`(B4·B1·Q1)·`claimPassDaily`(B3)·`clawbackPass`(B2·R1a)·`activateDueQueued`·순수 창 함수(`passWindow`·`claimableDayIndexes`·키 빌더). `applyPurchaseGrant`(웹훅/confirm 공유)에 1+1 보너스 grant + 패스 grant 합성. `reversePackBonus`(환불 보너스 회수).
+  5. ✅ 라우트 — `POST /api/pass/claim`(신), 패스 상태 = `getWallet` 확장(`passStatus`). 환불 웹훅(§13.18)에 패스 clawback·1+1 보너스 reversal 배선(confirm 라우트도 패스 grant 분기).
+  - **판단 보고(구현 중 스펙과 다르게 정한 지점)**:
+    - **1+1 프로모 서버 게이트 신설 `PROMO_1P1_ENABLED`**(env, 요청시점 read, 기본 off) — §7 출시 게이팅을 서버에도 적용(앱 뱃지 플래그와 동기화·미출시 시 보너스 silent 발생 방지). 기존 `_dv_purchase` 팩 경로도 off라 무변(회귀 0).
+    - **1+1 보너스는 웹훅 경로 전담(confirm 미지급)** — confirm 폴백은 RC `purchased_at` 미상이라, 월경계 근처에서 confirm(now)·웹훅(purchased_at)이 서로 다른 월키를 써 **이중 보너스**가 날 위험. 안전을 위해 보너스는 purchased_at 권위를 가진 웹훅만 지급(`applyPurchaseGrant(withBonus:false)` for confirm). 패스 grant/base 팩 지급은 두 경로 공유(멱등 dedupe).
+    - **패스 클로백 링크 = `pass_daily.ref=storeTxnId`(유지) · pass_daily에 R3 :sandbox 마커 미부착** — §4.3 클로백은 `Σ(pass_daily where ref=txn)`을 그대로 씀. pass_daily는 매출 롤업(reason='purchase'만) 대상이 아니라 :sandbox 마커가 불필요하고, ref에 붙이면 클로백 앵커(ref=txn)가 깨진다 → pass_daily ref는 순수 storeTxnId 유지. R3 :sandbox 스코프는 **1+1 월키(iap_bonus_1p1)에만** 적용(그쪽이 실 영향 — 프로덕션 월키 소진 방지). 패스 샌드박스 격리는 매출/건수 recordPurchaseRevenue의 샌드박스 스킵으로 충족.
+    - **R2(패스 payer/건수 편입)는 statsDaily 레벨까지** — 패스 grant(activated/queued) 시 `recordPurchaseRevenue(priceKrw, 0, txn)`으로 purchaseCount+1·매출 KRW 적재(다이아는 0 — 지급은 pass_daily). 관리자 대시보드의 payer-set 심층 집계(§13.18 admin)는 statsDaily 건수로 반영되나, purchase_event 기준 payer 판정 확장은 admin/stats 라우트 후속(§13.18 D1 동형).
 - **Phase ② 앱 UI + 시뮬 경로 (dev 스텁)**
   1. `engine/diamonds.ts` 미러 상수(표시용). `data/flags.ts` 플래그 2종.
   2. 패스 상품 카드 4상태(UI.1 — 미보유/활성/활성+예약/만료임박) + **포그라운드 자동 수령 + 비차단 토스트**(UI.2, 탭 수령 아님) + 수령 이력 스탬프 + 남은일수·중첩 게이트.
@@ -325,6 +331,14 @@
 | `_gt_determinism`(기존) | tsx | 패스/보너스/환불이 campLog 리플레이 불변(재확인) | — |
 
 > 신규 가드는 프로덕션 코드에 테스트 시임 남기지 않음(제어형 스텁·dev DB만). 통계 주장 없음(멱등·산수 검증이라 N 무관 — 라이브는 실 왕복 결정론).
+
+- **✅ 구현·통과(2026-07-23)**:
+  - `server/tools/_dv_pass.ts`(순수) — 창 28슬롯·2800·B3 유예(만료+1 지급/만료+4 미지급)·리셋 KST04 경계·멱등키 유일성·상수 미러, 전부 A/B PASS.
+  - `server/tools/_dv_1p1.ts`(순수) — 월×팩 멱등·R4 purchased_at 귀속·R3 샌드박스 스코프·환불 월키 미복구, A/B PASS.
+  - `server/tools/_dv_pass_live.ts`(라이브, dev DB) — B4 day-0·confirm dedup·일일수령 멱등/멀티기기·B3 유예·no-pass·B1 tombstone·B2 클로백·claim↔환불 레이스 Σ정합·1+1(2배/2번째0/다음달부활/환불회수/월키미복구)·Q1 큐잉·활성화·R2 건수편입, 전부 PASS.
+  - `_dv_purchase`(기존) — 팩 경로 회귀 0 확인(프로모 off 기본 → 보너스 없음, 기존 assertion 불변).
+- **후속(Phase②·별 세션)**: `_dv_walletauth`(클라이언트 `tools/`, 엔진 미러 대조)는 `engine/diamonds.ts` PASS 상수 미러(Phase②)가 생긴 뒤 확장 — Phase① 서버 무접촉이라 이번 범위 밖. `_e2e_purchase_live`(실행 서버 :3000 필요)는 dev 체인 기동 시 패스 케이스 추가.
+- **가드 실행(dev DB)**: 로컬 Supabase :54322(`.env.development.local`은 임시 PG :55432 가리키므로) — `DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" npx tsx tools/_dv_pass_live.ts`. 순수 가드는 DB 불요.
 
 ---
 

@@ -247,6 +247,35 @@ export const saveBackups = pgTable(
   ],
 );
 
+// ── 다이아 출석 패스(ATTENDANCE_PASS_SYSTEM §2.4) — ₩9,900·28일·매일 100💎. 구매 시 이 테이블에 "패스 엔타이틀먼트" 1행 생성
+//   (다이아는 매일 pass_daily 원장 수령으로만 들어옴 — 이 행은 창(start~end)·상태 진실). RC customerInfo 엔타이틀먼트 아님(소비성·재구매).
+//   · UNIQUE(proj, store_txn_id) = 구매 멱등(웹훅·confirm 공유 자연키, onConflictDoNothing). store_txn_id nullable → admin 발급(txn 없음)은
+//     NULL(Postgres UNIQUE는 NULL 서로 distinct라 충돌 없음). B1 환불 선착 tombstone도 이 UNIQUE로 선삽입.
+//   · status: 'active'(수령 중) | 'refunded'(환불 종료 tombstone, B1/§4.3) | 'queued'(중첩 구매 예약 — Q1 큐잉, §2.2).
+//   · queued_after: Q1 큐 앵커(직전 passId) — status='queued'일 때 실 start를 활성화 시점에 max(오늘, 앵커 end+1)로 파생(공백 방지·R1a 환불 재계산).
+//   ※ 스키마 §2.4는 status(active|refunded)만 명시했으나 Q1 큐잉(§2.2 "예약 pending 플래그+앵커")을 담으려면 'queued' 상태 + queued_after 앵커가 필수 —
+//     문서 §2.4를 취소선 정정으로 보강(구현 정합).
+export const attendancePasses = pgTable(
+  'attendance_passes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode), // 게임 격리 FK
+    userId: uuid('user_id').notNull().references(() => users.id),
+    storeTxnId: text('store_txn_id'), // 스토어 거래 id(구매 멱등 앵커). admin 발급=null(ref='admin:<passId>' 별도, §2.4)
+    startDate: date('start_date').notNull(), // KST 리셋보정 시작일(dayIndex 0). queued면 앵커 파생 프로비저널(활성화 때 확정)
+    endDate: date('end_date').notNull(),     // start + (PASS_DURATION_DAYS-1) = start+27(포함, 28슬롯). refunded면 어제로 종료
+    source: text('source').notNull(),        // 'purchase' | 'admin'
+    status: text('status').notNull().default('active'), // 'active' | 'refunded' | 'queued'
+    queuedAfter: uuid('queued_after'),       // Q1 큐 앵커(직전 passId) — queued에서 활성화 때 start 파생
+    purchasedAt: timestamp('purchased_at', { withTimezone: true }), // RC 이벤트 purchased_at(월귀속·start 리셋보정 기준, R4)
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('passes_proj_txn_uniq').on(t.projCode, t.storeTxnId), // 구매 멱등(웹훅·confirm 공유). NULL(admin)은 서로 distinct
+    index('passes_proj_user_idx').on(t.projCode, t.userId),           // 활성 패스 조회
+  ],
+);
+
 export type ProjInfo = typeof projInfo.$inferSelect;
 export type ServerSetting = typeof serverSetting.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -260,3 +289,4 @@ export type Ticket = typeof tickets.$inferSelect;
 export type DiagnosticSnapshot = typeof diagnosticSnapshots.$inferSelect;
 export type PurchaseEvent = typeof purchaseEvent.$inferSelect;
 export type SaveBackup = typeof saveBackups.$inferSelect;
+export type AttendancePass = typeof attendancePasses.$inferSelect;

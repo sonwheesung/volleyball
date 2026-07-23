@@ -3,8 +3,8 @@
 // **감사 로깅(§13.22)**: received/reverify.result/grant.applied|deduped/rejected/error 단계 기록(상관 requestId — 클라 브레드크럼과 이음).
 import { NextResponse } from 'next/server';
 import { requireUserId } from '../../../../lib/auth';
-import { applyWallet } from '../../../../lib/wallet';
-import { rcVerifyPurchase, purchaseKey, recordPurchaseRevenue } from '../../../../lib/revenuecat';
+import { rcVerifyPurchase, recordPurchaseRevenue } from '../../../../lib/revenuecat';
+import { applyPurchaseGrant } from '../../../../lib/pass';
 import { logPaymentEventAfter } from '../../../../lib/paymentLog';
 import { notifyPurchase } from '../../../../lib/notify';
 import { reportError } from '../../../../lib/observability';
@@ -53,16 +53,29 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, reason: v.reason }, { status: v.reason === 'rc-unconfigured' ? 503 : 402 });
     }
 
-    const key = purchaseKey(userId, storeTxnId);
-    // 샌드박스 지급(스위치 on)이면 원장 ref에 :sandbox 마커(감사 구분). 멱등키는 store txn 기반 그대로.
-    const ref = v.sandbox ? `${productId}:sandbox` : productId;
-    const r = await applyWallet(userId, v.diamonds, 'purchase', key, ref);
+    // 지급 합성 — 팩=base 지급(1+1 보너스는 웹훅 전담: confirm은 purchased_at 미상이라 월키 분기 오지급 방지, withBonus:false).
+    // 패스=grantPass(창 생성 + slot 0, B4). 웹훅과 storeTxnId/passId 멱등키 공유 → dedup 수렴.
+    const g = await applyPurchaseGrant({ userId, storeTxnId, productId, sandbox: v.sandbox, purchasedAt: new Date(), withBonus: false });
+    if (g.kind === 'pass') {
+      const pass = g.pass;
+      if (!pass.ok) {
+        logPaymentEventAfter({ source: 'confirm', stage: 'confirm.pass.error', ok: false, outcome: 'error', reasonCode: pass.reason, userId, storeTxnId, productId, requestId: ctx.requestId });
+        return NextResponse.json({ ok: false, reason: pass.reason }, { status: 500 });
+      }
+      const created = pass.outcome === 'activated' || pass.outcome === 'queued' || pass.outcome === 'queued-overflow';
+      logPaymentEventAfter({ source: 'confirm', stage: created ? 'confirm.pass.applied' : 'confirm.pass.deduped', ok: true, outcome: created ? 'applied' : (pass.outcome === 'tombstoned-skip' ? 'cancelled' : 'deduped'), reasonCode: pass.outcome, userId, storeTxnId, productId, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
+      if (created && !v.sandbox) await recordPurchaseRevenue(null, 0, storeTxnId); // KRW는 웹훅 보충(§13.18 A1) — 패스도 R2 건수 편입
+      if (pass.outcome === 'activated' || pass.outcome === 'queued') afterSafe(() => notifyPurchase({ kind: 'purchase', productId, diamonds: 0, priceKrw: null, source: 'confirm', userId }));
+      return NextResponse.json({ ok: true, applied: created, outcome: pass.outcome });
+    }
+    if (g.kind !== 'pack') return NextResponse.json({ ok: false, reason: 'unknown-product' }, { status: 402 });
+    const r = g.base;
     if (!r.ok) {
-      logPaymentEventAfter({ source: 'confirm', stage: 'confirm.grant.error', ok: false, outcome: 'error', reasonCode: r.reason, userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, requestId: ctx.requestId });
+      logPaymentEventAfter({ source: 'confirm', stage: 'confirm.grant.error', ok: false, outcome: 'error', reasonCode: r.reason, userId, storeTxnId, productId, diamondsDelta: v.diamonds, requestId: ctx.requestId });
       return NextResponse.json({ ok: false, reason: r.reason }, { status: 500 });
     }
     // applied=이 폴백이 지급(웹훅보다 먼저 도착) · deduped=웹훅이 이미 지급(정상). 어느 경로가 이겼는지 감사(§F6·폴백 유효성 지표).
-    logPaymentEventAfter({ source: 'confirm', stage: r.applied ? 'confirm.grant.applied' : 'confirm.grant.deduped', ok: true, outcome: r.applied ? 'applied' : 'deduped', userId, storeTxnId, productId, idempotencyKey: key, diamondsDelta: v.diamonds, balanceAfter: r.balance, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
+    logPaymentEventAfter({ source: 'confirm', stage: r.applied ? 'confirm.grant.applied' : 'confirm.grant.deduped', ok: true, outcome: r.applied ? 'applied' : 'deduped', userId, storeTxnId, productId, diamondsDelta: v.diamonds, balanceAfter: r.balance, requestId: ctx.requestId, platform: ctx.platform, appVersion: ctx.appVersion });
     if (r.applied) {
       // 샌드박스 지급은 매출·건수·다이아 집계 전면 제외(§13.18 D1 정정 2026-07-17 — statsDaily는 실매출 전용).
       if (!v.sandbox) await recordPurchaseRevenue(null, v.diamonds, storeTxnId); // 매출(KRW)는 웹훅이 채움/보충 — confirm은 다이아만(KRW null → 웹훅 dedup 시 recordRevenueKrwOnce가 보충 §13.18 A1)

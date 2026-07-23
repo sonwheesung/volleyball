@@ -1,10 +1,11 @@
-// POST /api/purchase/webhook/revenuecat — RC 결제 웹훅(BACKEND_SYSTEM §13.18). Authorization 시크릿 검증(fail-closed).
-// RC → 이 웹훅 → decidePurchaseEvent(순수) → applyWallet(+/−다이아, 멱등키=스토어거래id) → (지급 적용 시) 매출 롤업.
-// 소모성 다이아만 원장 지급. 엔타이틀먼트(광고제거·DLC)는 RC customerInfo 소유라 무시. 샌드박스 무시.
-// **감사 로깅(§13.22)**: 단계마다 purchase_event 1행(received/auth/decided/grant.applied|deduped/refund/ignored/error) — 관찰 전용(fire-and-forget).
+// POST /api/purchase/webhook/revenuecat — RC 결제 웹훅(BACKEND_SYSTEM §13.18 · ATTENDANCE_PASS_SYSTEM §A·§B·§C). Authorization 시크릿 검증(fail-closed).
+// RC → 이 웹훅 → decidePurchaseEvent(순수) → applyPurchaseGrant(팩 base+1+1 / 패스 grant) 또는 환불(패스 클로백 / 팩 base+보너스 회수).
+// 소모성 다이아 팩·출석 패스만 원장/패스 지급. 엔타이틀먼트(광고제거·DLC)는 RC customerInfo 소유라 무시. 샌드박스 필터.
+// **감사 로깅(§13.22)**: 단계마다 purchase_event 1행 — 관찰 전용(fire-and-forget).
 import { NextResponse } from 'next/server';
 import { applyWallet } from '../../../../../lib/wallet';
-import { verifyWebhookAuth, decidePurchaseEvent, purchaseKey, refundKey, recordPurchaseRevenue, recordRevenueKrwOnce, priceKrwOf } from '../../../../../lib/revenuecat';
+import { verifyWebhookAuth, decidePurchaseEvent, refundKey, recordPurchaseRevenue, recordRevenueKrwOnce, priceKrwOf } from '../../../../../lib/revenuecat';
+import { applyPurchaseGrant, clawbackPass, reversePackBonus } from '../../../../../lib/pass';
 import { logPaymentEventAfter } from '../../../../../lib/paymentLog';
 import { notifyPurchase, notifyRefundDropped } from '../../../../../lib/notify';
 import { reportError } from '../../../../../lib/observability';
@@ -42,8 +43,6 @@ export async function POST(req: Request) {
     const d = decidePurchaseEvent(body?.event);
     if (d.action === 'ignore') {
       // 무시도 기록(샌드박스·익명유저·미지원타입·미등록상품) — "지급 왜 안 됐나" 감사. 샌드박스는 별도 stage로.
-      // **익명 환불(anonymous-refund)은 조용한 유실 금지**(§13.18 B1): fail 코드(ok:false)로 txn·상품·금액을 남기고
-      //   관측 채널(디스코드)로 알려 관리자가 수동 환불(§13.17) 여부를 판단하게 한다(지급 익명은 현행 무시 — confirm이 메꿈).
       const dropped = d.reason === 'anonymous-refund';
       const stage = dropped ? 'refund.anonymous.dropped' : d.reason === 'sandbox' ? 'webhook.sandbox.filtered' : 'webhook.ignored';
       logPaymentEventAfter({ source: 'webhook', stage, ok: !dropped, outcome: 'ignored', reasonCode: d.reason, ...m });
@@ -51,41 +50,76 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, ignored: d.reason });
     }
 
-    logPaymentEventAfter({ source: 'webhook', stage: 'webhook.type.decided', ok: true, ...m, productId: d.productId, storeTxnId: d.storeTxnId, rcAppUserId: d.userId, diamondsDelta: d.action === 'grant' ? d.diamonds : -d.diamonds, price: d.priceKrw });
-
     const grant = d.action === 'grant';
-    const key = grant ? purchaseKey(d.userId, d.storeTxnId) : refundKey(d.userId, d.storeTxnId);
-    const delta = grant ? d.diamonds : -d.diamonds; // 환불은 음수(applyWalletTx가 refund만 음수잔액 허용)
-    // 샌드박스 지급(스위치 on)이면 원장 ref에 :sandbox 마커를 덧붙여 감사 구분(멱등키는 store txn 기반 그대로 — 환불 dedup 동일키).
+    logPaymentEventAfter({ source: 'webhook', stage: 'webhook.type.decided', ok: true, ...m, productId: d.productId, storeTxnId: d.storeTxnId, rcAppUserId: d.userId, diamondsDelta: grant ? d.diamonds : -d.diamonds, price: d.priceKrw });
+
+    // ── 출석 패스(diamond_pass) 경로 — 원장 팩 지급과 분리(창은 attendance_passes, 지급은 pass_daily로만) ──
+    if (d.kind === 'pass') {
+      if (grant) {
+        const g = await applyPurchaseGrant({ userId: d.userId, storeTxnId: d.storeTxnId, productId: d.productId, sandbox: d.sandbox, purchasedAt: d.purchasedAt, withBonus: true });
+        const pass = g.kind === 'pass' ? g.pass : { ok: false as const, reason: 'not-pass' };
+        if (!pass.ok) {
+          logPaymentEventAfter({ source: 'webhook', stage: 'webhook.pass.error', ok: false, outcome: 'error', reasonCode: pass.reason, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId });
+          return NextResponse.json({ ok: false, reason: pass.reason }, { status: 500 });
+        }
+        const created = pass.outcome === 'activated' || pass.outcome === 'queued' || pass.outcome === 'queued-overflow';
+        logPaymentEventAfter({ source: 'webhook', stage: created ? 'webhook.pass.applied' : 'webhook.pass.deduped', ok: true, outcome: created ? 'applied' : (pass.outcome === 'tombstoned-skip' ? 'cancelled' : 'deduped'), reasonCode: pass.outcome, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, price: d.priceKrw });
+        // 매출·건수 롤업(R2 — 패스 구매도 payer/전환/건수에 편입). 다이아는 0(지급은 pass_daily). 샌드박스 제외.
+        if (created && !d.sandbox) await recordPurchaseRevenue(d.priceKrw, 0, d.storeTxnId);
+        if (pass.outcome === 'queued-overflow') afterSafe(() => notifyRefundDropped({ productId: d.productId, storeTxnId: d.storeTxnId, priceKrw: d.priceKrw, rcAppUserId: m!.rcAppUserId, eventType: 'PASS_QUEUE_OVERFLOW' }));
+        if (pass.outcome === 'activated' || pass.outcome === 'queued') afterSafe(() => notifyPurchase({ kind: 'purchase', productId: d.productId, diamonds: 0, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
+        return NextResponse.json({ ok: true, applied: created, outcome: pass.outcome });
+      }
+      // 패스 환불 — 클로백(B2) + tombstone(B1)
+      const cb = await clawbackPass(d.userId, d.storeTxnId, d.productId);
+      if (!cb.ok) {
+        logPaymentEventAfter({ source: 'webhook', stage: 'webhook.pass.refund.error', ok: false, outcome: 'error', reasonCode: cb.reason, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId });
+        return NextResponse.json({ ok: false, reason: cb.reason }, { status: 500 });
+      }
+      logPaymentEventAfter({ source: 'webhook', stage: 'webhook.pass.refund.applied', ok: true, outcome: cb.outcome === 'clawed' ? 'applied' : 'deduped', reasonCode: cb.outcome, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: -cb.clawback });
+      if (cb.outcome === 'clawed') afterSafe(() => notifyPurchase({ kind: 'refund', productId: d.productId, diamonds: cb.clawback, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
+      return NextResponse.json({ ok: true, applied: cb.outcome === 'clawed', clawback: cb.clawback });
+    }
+
+    // ── 다이아 팩 경로(기존 §13.18 + 1+1 §3.1) ──
+    if (grant) {
+      const g = await applyPurchaseGrant({ userId: d.userId, storeTxnId: d.storeTxnId, productId: d.productId, sandbox: d.sandbox, purchasedAt: d.purchasedAt, withBonus: true });
+      const base = g.kind === 'pack' ? g.base : { ok: false as const, reason: 'not-pack' as const };
+      if (!base.ok) {
+        logPaymentEventAfter({ source: 'webhook', stage: 'webhook.grant.error', ok: false, outcome: 'error', reasonCode: base.reason, idempotencyKey: undefined, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: d.diamonds });
+        return NextResponse.json({ ok: false, reason: base.reason }, { status: 500 });
+      }
+      const bonusApplied = g.kind === 'pack' && g.bonus?.ok === true && g.bonus.applied === true;
+      logPaymentEventAfter({
+        source: 'webhook', stage: base.applied ? 'webhook.grant.applied' : 'webhook.grant.deduped',
+        ok: true, outcome: base.applied ? 'applied' : 'deduped',
+        ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: d.diamonds + (bonusApplied ? d.diamonds : 0), balanceAfter: base.balance, price: d.priceKrw,
+      });
+      // 매출 롤업 — 실제 적용된 지급만 1회(멱등). 샌드박스 제외. 1+1 보너스는 매출/다이아 집계에서 자동 제외(reason='purchase'만 집계 §3.1).
+      if (base.applied && !d.sandbox) {
+        await recordPurchaseRevenue(d.priceKrw, d.diamonds, d.storeTxnId);
+      } else if (!base.applied && !d.sandbox) {
+        const krw = await recordRevenueKrwOnce(d.storeTxnId, d.priceKrw);
+        if (krw === 'recorded') logPaymentEventAfter({ source: 'webhook', stage: 'webhook.revenue.krw.backfilled', ok: true, outcome: 'applied', ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, price: d.priceKrw });
+      }
+      if (base.applied) afterSafe(() => notifyPurchase({ kind: 'purchase', productId: d.productId, diamonds: d.diamonds, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
+      return NextResponse.json({ ok: true, applied: base.applied, balance: base.balance });
+    }
+
+    // 팩 환불 — 기본 회수(기존 refund 키) + 1+1 보너스 회수(있으면). 월-멱등키는 미복구(§4.2 파밍 차단).
     const ref = d.sandbox ? `${d.productId}:sandbox` : d.productId;
-    const r = await applyWallet(d.userId, delta, grant ? 'purchase' : 'refund', key, ref);
+    const r = await applyWallet(d.userId, -d.diamonds, 'refund', refundKey(d.userId, d.storeTxnId), ref);
     if (!r.ok) {
-      // 유저 미존재(FK)·DB 오류 등 → 500으로 RC 재시도 유도(confirm 폴백도 별도 수렴). 위조 아님.
-      logPaymentEventAfter({ source: 'webhook', stage: grant ? 'webhook.grant.error' : 'webhook.refund.error', ok: false, outcome: 'error', reasonCode: r.reason, idempotencyKey: key, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: delta });
+      logPaymentEventAfter({ source: 'webhook', stage: 'webhook.refund.error', ok: false, outcome: 'error', reasonCode: r.reason, idempotencyKey: refundKey(d.userId, d.storeTxnId), ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: -d.diamonds });
       return NextResponse.json({ ok: false, reason: r.reason }, { status: 500 });
     }
-    // applied=지급/회수 실제 반영 · applied=false=멱등 dedup(웹훅 재시도/폴백 경쟁에서 짐 — 정상). 둘을 구분 로깅(§F6 경쟁 감사).
+    const bonusRev = r.applied ? await reversePackBonus(d.userId, d.storeTxnId, d.productId) : { reversed: 0 };
     logPaymentEventAfter({
-      source: 'webhook',
-      stage: grant ? (r.applied ? 'webhook.grant.applied' : 'webhook.grant.deduped') : (r.applied ? 'webhook.refund.applied' : 'webhook.refund.deduped'),
-      ok: true, outcome: r.applied ? 'applied' : 'deduped', idempotencyKey: key,
-      ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: delta, balanceAfter: r.balance, price: d.priceKrw,
+      source: 'webhook', stage: r.applied ? 'webhook.refund.applied' : 'webhook.refund.deduped',
+      ok: true, outcome: r.applied ? 'applied' : 'deduped',
+      ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: -(d.diamonds + bonusRev.reversed), balanceAfter: r.balance, price: d.priceKrw,
     });
-    // 매출 롤업은 **실제 적용된 지급**만 건수·다이아 1회(멱등 — 웹훅 재시도/폴백 중복 시 이중집계 방지).
-    // **샌드박스 지급은 매출·건수·다이아 집계 전면 제외**(§13.18 D1 정정 2026-07-17 — statsDaily는 실매출 전용, 원장 지급은 정상 수행).
-    if (grant && r.applied && !d.sandbox) {
-      await recordPurchaseRevenue(d.priceKrw, d.diamonds, d.storeTxnId);
-    } else if (grant && !r.applied && !d.sandbox) {
-      // confirm 폴백이 먼저 지급(KRW null)하고 웹훅이 뒤늦게 dedup된 경우 — 건수·다이아는 confirm이 이미 집계했고 KRW만
-      // 미기록(그대로 두면 관리자 매출 영구 ₩0, DoD "매출 1건 조회" 위반 §13.18 A1). 이 txn의 KRW를 **보충**(멱등 마커로
-      // 이중집계 차단, 다이아 재지급·건수 증가 없음). 웹훅 재시도로 다시 와도 마커가 있어 skipped.
-      const krw = await recordRevenueKrwOnce(d.storeTxnId, d.priceKrw);
-      if (krw === 'recorded') {
-        logPaymentEventAfter({ source: 'webhook', stage: 'webhook.revenue.krw.backfilled', ok: true, outcome: 'applied', idempotencyKey: key, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, price: d.priceKrw });
-      }
-    }
-    // 디스코드 알림은 실제 반영(applied)만 — 응답 후(after) 전송, 정확히 1건(dedup된 재시도/폴백은 알림 없음).
-    if (r.applied) afterSafe(() => notifyPurchase({ kind: grant ? 'purchase' : 'refund', productId: d.productId, diamonds: d.diamonds, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
+    if (r.applied) afterSafe(() => notifyPurchase({ kind: 'refund', productId: d.productId, diamonds: d.diamonds + bonusRev.reversed, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
     return NextResponse.json({ ok: true, applied: r.applied, balance: r.balance });
   } catch (e) {
     reportError(e, 'purchase/webhook/revenuecat');

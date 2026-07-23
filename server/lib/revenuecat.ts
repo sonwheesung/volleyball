@@ -5,7 +5,7 @@ import { db } from '../db';
 import { statsDaily, purchaseEvent } from '../db/schema';
 import { PROJ_CODE } from './proj';
 import { ensureProj } from './wallet';
-import { productDiamonds } from './products';
+import { productDiamonds, isPassProduct } from './products';
 
 export const RC_WEBHOOK_SECRET = process.env.RC_WEBHOOK_SECRET ?? '';
 export const RC_REST_API_KEY = process.env.RC_REST_API_KEY ?? '';
@@ -25,8 +25,14 @@ const GRANT_TYPES = new Set(['INITIAL_PURCHASE', 'NON_RENEWING_PURCHASE']);
 const REFUND_TYPES = new Set(['CANCELLATION', 'REFUND']);
 
 export type PurchaseDecision =
-  | { action: 'grant' | 'refund'; userId: string; diamonds: number; storeTxnId: string; productId: string; priceKrw: number | null; sandbox: boolean }
+  | { action: 'grant' | 'refund'; userId: string; diamonds: number; storeTxnId: string; productId: string; priceKrw: number | null; sandbox: boolean; kind: 'pack' | 'pass'; purchasedAt: Date }
   | { action: 'ignore'; reason: string };
+
+/** RC 이벤트 거래 발생 시각(purchased_at_ms 우선, 없으면 event_timestamp_ms, 그도 없으면 now). R4 — 1+1 월귀속·패스 start 리셋보정 기준. */
+export function eventPurchasedAt(ev: Record<string, unknown>): Date {
+  const ms = ev.purchased_at_ms ?? ev.event_timestamp_ms;
+  return typeof ms === 'number' && Number.isFinite(ms) ? new Date(ms) : new Date();
+}
 
 /** RC 웹훅 Authorization 검증 — fail-closed(시크릿 미설정/<16자면 전부 거부, requireAdmin 패턴). RC 대시보드가 보낸 커스텀 헤더값과 비교. */
 export function verifyWebhookAuth(authHeader: string | null): boolean {
@@ -66,18 +72,21 @@ export function decidePurchaseEvent(ev: unknown): PurchaseDecision {
   const type = String(e.type ?? '');
   const isGrant = GRANT_TYPES.has(type), isRefund = REFUND_TYPES.has(type);
   if (!isGrant && !isRefund) return { action: 'ignore', reason: `type:${type}` };
-  const diamonds = productDiamonds(productId);
-  if (diamonds == null) return { action: 'ignore', reason: 'entitlement-or-unknown-product' }; // 엔타이틀먼트=RC customerInfo 소유
+  // 패스 SKU(diamond_pass)는 pass-grant로 분기(§2.1) — 소비성 팩과 달리 다이아 0(창은 attendance_passes, 지급은 pass_daily로만).
+  const pass = isPassProduct(productId);
+  const diamonds = pass ? 0 : productDiamonds(productId);
+  if (!pass && diamonds == null) return { action: 'ignore', reason: 'entitlement-or-unknown-product' }; // 엔타이틀먼트=RC customerInfo 소유
   // sandbox 플래그를 결정에 실어 호출부가 매출 집계 스킵 + 원장 ref에 :sandbox 마커를 붙이게 한다(멱등키는 불변 — store txn 기반).
   const sandbox = e.environment === 'SANDBOX';
-  return { action: isGrant ? 'grant' : 'refund', userId, diamonds, storeTxnId, productId, priceKrw: priceKrwOf(e as any), sandbox };
+  return { action: isGrant ? 'grant' : 'refund', userId, diamonds: diamonds ?? 0, storeTxnId, productId, priceKrw: priceKrwOf(e as any), sandbox, kind: pass ? 'pass' : 'pack', purchasedAt: eventPurchasedAt(e) };
 }
 
 /** confirm 폴백 재검증 — RC REST subscriber 조회로 storeTxnId 실재 확인(웹훅 지연·유실 시 "돈 내고 0개" 방지).
  *  RC_REST_API_KEY 미설정이면 검증 불가 → fail-closed(클라값 신뢰 금지 §13.12). 웹훅과 같은 키로 지급→dedup 수렴. */
-export async function rcVerifyPurchase(userId: string, storeTxnId: string, productId: string): Promise<{ ok: true; diamonds: number; sandbox: boolean } | { ok: false; reason: string }> {
-  const diamonds = productDiamonds(productId);
-  if (diamonds == null) return { ok: false, reason: 'unknown-product' };
+export async function rcVerifyPurchase(userId: string, storeTxnId: string, productId: string): Promise<{ ok: true; diamonds: number; sandbox: boolean; kind: 'pack' | 'pass' } | { ok: false; reason: string }> {
+  const pass = isPassProduct(productId);
+  const diamonds = pass ? 0 : productDiamonds(productId); // 패스는 즉시 다이아 0(창 생성만) — confirm도 grantPass로 분기
+  if (!pass && diamonds == null) return { ok: false, reason: 'unknown-product' };
   if (!RC_REST_API_KEY) return { ok: false, reason: 'rc-unconfigured' };
   try {
     const res = await fetch(`https://api.revenuecat.com/v1/subscribers/${encodeURIComponent(userId)}`, { headers: { Authorization: `Bearer ${RC_REST_API_KEY}` } });
@@ -95,7 +104,7 @@ export async function rcVerifyPurchase(userId: string, storeTxnId: string, produ
     // 스위치 on이면 샌드박스 항목도 지급 통과(웹훅 environment 필터와 대칭 §13.18 D1 정정 2026-07-17). sandbox 플래그를 실어
     //   confirm 라우트가 매출 집계 스킵 + 원장 ref :sandbox 마커를 붙이게 한다. off면 현행대로 거절.
     if (match.is_sandbox === true && !sandboxGrantEnabled()) return { ok: false, reason: 'sandbox' };
-    return { ok: true, diamonds, sandbox: match.is_sandbox === true };
+    return { ok: true, diamonds: diamonds ?? 0, sandbox: match.is_sandbox === true, kind: pass ? 'pass' : 'pack' };
   } catch { return { ok: false, reason: 'rc-network' }; }
 }
 

@@ -15,6 +15,16 @@ export const AD_DAILY_CAP = 8; // 광고 하루 상한 서버 백스톱 (engine/
 export const AD_COOLDOWN_MS = 2 * 60 * 60 * 1000; // 광고 쿨다운 서버 백스톱 2시간 (engine/diamonds AD_COOLDOWN_MS 손복제 — 2026-07-17 구 30분. earn 라우트가 최근 'ad' 원장 시각으로 강제, 드리프트는 클라 가드 대조)
 export const WELCOME_DIAMONDS = 1000; // 첫 전지훈련 진입 환영 선물(계정당 1회, 멱등키 welcome:<userId>) — 온보딩·다이아 훅
 
+// ── 다이아 출석 패스(ATTENDANCE_PASS_SYSTEM §2.1·§9 Phase① · 서버 지급량 권위) ──
+// 스토어 표시가 ₩9,900은 스토어 등록값이 정본(PASS_PRICE_KRW는 표시/가드용). 서버는 지급량·창·리셋·유예만 권위.
+// 클라 표시 미러는 engine/diamonds.ts(Phase②) — 드리프트는 클라 가드 _dv_walletauth가 대조(엔진 미러 도입 후).
+export const PASS_DAILY_REWARD = 100;     // 하루 수령 💎(dayIndex 슬롯당)
+export const PASS_DURATION_DAYS = 28;     // 창 길이(dayIndex 0~27 = 28슬롯)
+export const PASS_MAX_TOTAL = PASS_DAILY_REWARD * PASS_DURATION_DAYS; // 2800 — 28일 완주 파생(표시/가드 상한)
+export const PASS_PRICE_KRW = 9900;       // 표시가(스토어 등록값이 실청구 정본 — 서버는 표시/가드용만)
+export const PASS_RESET_HOUR_KST = 4;     // Q6 — 일일 리셋 KST 04:00(자정 넘겨 플레이 보호, 게임 관행). dayIndex·start·수령 전부 리셋보정
+export const PASS_GRACE_DAYS = 3;         // Q5=(B) — 미수령 유예 3일(0이면 (A) 당일 소멸). claim 창 = start ≤ 오늘 ≤ end+GRACE(B3)
+
 export type EarnReason = 'ad' | 'achievement' | 'welcome';
 export type SpendReason = 'camp';
 
