@@ -57,18 +57,18 @@
 - productId 권위 = `server/lib/products.ts` `DIAMOND_PRODUCTS`. 지급 다이아는 **서버 권위**(클라 amount 무시).
 - 표시가격 = `data/diamondTiers.ts priceKrw`(설계·표시용). **실제 청구가는 스토어 등록값이 정본** — 등록 시 위 ₩와 맞출 것(누진 할인은 가격에만, 보너스 다이아 아님).
 
-### 소모성 출석 패스 (Play Console: 인앱 상품 / 소비성) — 신규(설계 2026-07-23, `docs/ATTENDANCE_PASS_SYSTEM.md`)
+### 소모성 다이아 패스 (Play Console: 인앱 상품 / 소비성) — 신규(설계 2026-07-23, `docs/DIAMOND_PASS_SYSTEM.md`. 구명 "출석 패스")
 | productId | 내용 | 표시가격(₩, 설계) | 지급 방식 |
 |---|---|---|---|
-| `diamond_pass` | 다이아 출석 패스(28일·매일 100💎·최대 2,800) | 9,900 | **구매=원장 미지급** → 서버가 `attendance_passes` 28일 창 생성 + 구매당일 1일차 즉시 지급. 다이아는 포그라운드 자동 `POST /api/pass/claim`(reason `pass_daily`, 멱등 user×pass×dayIndex, 리셋 KST 04:00) |
+| `diamond_pass` | 다이아 패스(28일·매일 100💎·최대 2,800) | 9,900 | **구매=원장 미지급** → 서버가 `attendance_passes` 28일 창 생성 + 구매당일 1일차 우편 즉시 발송. 다이아는 **일일 스케줄러가 우편함 발송**(KST 00:00) → 유저가 우편함에서 수령(reason `pass_daily`, 멱등 user×pass×dayIndex) |
 
 - 소비성인 이유 = **28일 만료 후 재구매**(비소모 엔타이틀먼트로 등록 금지). RC 엔타이틀먼트 매핑 **불필요**(비소모 아님) — 6팩과 동일하게 Product/Offering만.
 - 지급 경로는 6팩과 동일 §13.18 이중경로(웹훅+confirm, `purchase:<userId>:<storeTxnId>`)지만 grant 동작이 `applyWalletTx(+다이아)`가 아니라 `grantPass(...)` → `server/lib/products.ts`에 **`PASS_PRODUCTS` 신설**(`diamond_pass`), `decidePurchaseEvent`가 인식(현재 미등록이라 "무시"로 떨어짐 — 반드시 등록).
-- **출시 등록 여부**: ❌ **§9 Phase ③(#43/EAS 뒤)** — `data/flags.ts ATTENDANCE_PASS_ENABLED=false`로 앱 노출 게이팅. 스토어/RC 등록·샌드박스 실결제(패스 구매→행 생성→일일 수령→환불 클로백) 완주 전 판매 안 함.
+- **출시 등록 여부**: ❌ **§9 Phase ③(#43/EAS 뒤)** — `data/flags.ts ATTENDANCE_PASS_ENABLED=false`(코드 식별자 유지)로 앱 노출 게이팅. 스토어/RC 등록·샌드박스 실결제(패스 구매→행 생성→일일 우편 발송→우편 수령→환불 클로백+우편 recall) 완주 전 판매 안 함.
 
 ### 월 1회 1+1 (스토어 SKU 신설 없음 — 서버 로직)
 - **신규 상품 등록 없음.** 기존 6팩 지급 시 서버가 "그 달(KST) 그 팩 첫 구매"면 보너스 `applyWalletTx(+N, 'iap_bonus_1p1', key=iap_bonus_1p1:<userId>:<productId>:<KST연월>)` 1회 추가. **멱등키가 곧 월-플래그**(월×팩 1회). 매출 KRW·"구매 다이아" 집계는 `reason='purchase'`만이라 보너스 자동 제외.
-- 환불 = 기본분 `refund:` + 보너스분 `refund_bonus:` 둘 다 음수 원장(§13.18 환불 패턴 확장). **월 소진 플래그 미복구**(환불→재구매 파밍 차단). 정본 `ATTENDANCE_PASS_SYSTEM.md` §4.
+- 환불 = 기본분 `refund:` + 보너스분 `refund_bonus:` 둘 다 음수 원장(§13.18 환불 패턴 확장). **월 소진 플래그 미복구**(환불→재구매 파밍 차단). 정본 `DIAMOND_PASS_SYSTEM.md` §4.
 - 카탈로그 정합 가드 `_dv_walletauth`는 6팩 그대로(새 SKU 0). 신규 가드 `_dv_1p1`·`_dv_pass`·`_dv_pass_live`가 멱등·환불·창 산수 봉인(그 문서 §10).
 
 ### 비소모 엔타이틀먼트 (Play Console: 인앱 상품 / 비소비성)
