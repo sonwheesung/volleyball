@@ -44,6 +44,25 @@
 
 콘솔·RC·서버가 **전부 이 id와 글자 단위로 일치**해야 한다. 오타 = 지급 0(fail-closed).
 
+### ★ 최종 카탈로그 (한 표 — 등록·매핑의 단일 기준, 2026-07-23 코드 대조)
+
+> id·가격·지급은 **코드 실값 대조**(`server/lib/products.ts`·`data/diamondTiers.ts`·`server/lib/econ.ts PASS_PRICE_KRW`·MONETIZATION §11). 아래 sub-표는 이 표의 세부 근거.
+
+| SKU id | 콘솔 상품유형 | 표시명(ko, 예시) | 가격(₩) | 서버 지급(products.ts) | RC product / entitlement | 비고 |
+|---|---|---|---|---|---|---|
+| `dia_100`   | 관리형·**소비성** | 다이아 100    | 1,000  | `DIAMOND_PRODUCTS` +100    | `dia_100` / — | 1+1 월 첫구매 2배(서버) |
+| `dia_500`   | 관리형·**소비성** | 다이아 500    | 4,800  | +500    | `dia_500` / — | 〃 |
+| `dia_1000`  | 관리형·**소비성** | 다이아 1,000  | 9,300  | +1000   | `dia_1000` / — | 〃 |
+| `dia_2500`  | 관리형·**소비성** | 다이아 2,500  | 22,500 | +2500   | `dia_2500` / — | 〃 |
+| `dia_5000`  | 관리형·**소비성** | 다이아 5,000  | 43,500 | +5000   | `dia_5000` / — | 〃 |
+| `dia_10000` | 관리형·**소비성** | 다이아 10,000 | 84,000 | +10000  | `dia_10000` / — | 〃 |
+| `diamond_pass` | 관리형·**소비성** | 다이아 패스(28일) | 9,900 | `PASS_PRODUCTS`(**원장 미지급** — `attendance_passes` 행 + 일일 우편) | `diamond_pass` / **매핑 없음** | 구독 아님·28일 후 재구매·일일 100💎 우편(최대 2,800). `DIAMOND_PASS_SYSTEM` 정본 |
+| `remove_ads` | 관리형·**비소비성** | 광고 제거 | 5,000 | `ENTITLEMENT_PRODUCTS`(원장 미지급) | `remove_ads` / entitlement **`remove_ads`**(동일) | 소유=RC customerInfo 진실 |
+| `dlc_worldcup` | 관리형·**비소비성** | 월드컵 시즌 | (별도·미정) | `ENTITLEMENT_PRODUCTS` | `dlc_worldcup` / entitlement **`worldcup`**(다른 문자열) | ❌ **출시 보류**(WORLDCUP_ENABLED=false) — 등록 안 함 |
+| **월 1회 1+1** | **SKU 아님 — 등록 불요** | (팩 카드 뱃지) | — | 서버 `iap_bonus_1p1` 보너스 원장 | — | 6팩 그 달 KST 첫 구매 시 +N. **서버 월-멱등키가 판정** → 콘솔/RC 신규 상품 **없음**(§B). 게이트 `PROMO_1P1_ENABLED`(서버 env) |
+
+**코드↔문서 id 정합 대조 결과(2026-07-23)**: `DIAMOND_PRODUCTS`(6팩)·`PASS_PRODUCTS`(`diamond_pass`)·`ENTITLEMENT_PRODUCTS`(`remove_ads`·`dlc_worldcup`) 실값이 위 표와 **전부 일치**. 가격은 `data/diamondTiers.ts priceKrw`(6팩)·`econ.ts PASS_PRICE_KRW=9900`(패스)·MONETIZATION §11(`remove_ads` ₩5,000)과 **일치**. **불일치 0**.
+
 ### 소모성 다이아 팩 6종 (Play Console: 인앱 상품 / 관리형 상품, 소비성)
 | productId (스토어 = 서버 키) | 지급 다이아 | 표시가격(₩, 설계) | 개당 |
 |---|---|---|---|
@@ -115,8 +134,12 @@
   - [ ] `dia_2500` · ₩22,500
   - [ ] `dia_5000` · ₩43,500
   - [ ] `dia_10000` · ₩84,000
+- [ ] **`diamond_pass`(다이아 패스) · ₩9,900** — 상품 유형 = **소비성**(관리형 인앱 상품). 상품 ID를 `diamond_pass`와 **정확히 일치**:
+  - [ ] **⚠ 반드시 인앱 상품(소비성)로 등록 — 구독(Subscription) 아님.** 콘솔에 "구독"과 "인앱 상품(관리형)"이 나뉘어 있으니 **인앱 상품** 탭에서 만든다. 근거: 패스는 **28일 만료 후 유저가 다시 사야** 하는 구조(자동 갱신 없음). 구독으로 등록하면 ①구글이 자동 갱신·유예·재청구 라이프사이클을 붙여 우리 `attendance_passes` 28일 창과 이중 관리가 되고 ②RC가 구독 엔타이틀먼트로 취급해 `isPassProduct` pass-grant 분기(소비성 경로)와 어긋나며 ③"자동 결제" 오해로 심사·환불 분쟁을 부른다. **소비성 = 재구매 가능 + 우리 서버가 창 관리**(정본 `DIAMOND_PASS_SYSTEM` §2.1).
+  - [ ] 표시명·설명 한국어(예: "다이아 패스 · 28일간 매일 100💎"). **고지 6항**(28일·매일 우편함 지급·우편 보관 30일·최대 2,800💎·온라인 수령·자동 갱신 없음)은 앱 구매화면에도 노출(§5 F, `DIAMOND_PASS_SYSTEM` §8)
 - [ ] **`remove_ads`(광고 제거) · ₩5,000** — 상품 유형 = 비소비성
 - [ ] **`dlc_worldcup` 등록 보류** — 출시 카탈로그에 넣지 않는다(WORLDCUP_ENABLED=false). 나중에 기능 노출 시 등록
+- [ ] **월 1회 1+1 → 신규 상품 등록 없음** — 스토어 SKU를 만들지 않는다(§B). 기존 6팩 구매 지급 시 서버가 그 달 첫 구매면 보너스를 얹는다. 콘솔에서 할 일 **0**
 - [ ] 각 상품 **활성화**(초안→활성). 상품 설명·이름은 한국어로(스토어 노출)
 - [ ] **라이선스 테스터 등록** — Play Console > 설정 > **라이선스 테스트**에 테스트 계정 Gmail 추가(테스트 결제 시 실제 청구 없음). 응답=`LICENSED`. 실기기의 Play 로그인 계정과 동일해야 함
 - [ ] (등록 후) **스토어 SKU ↔ 서버 카탈로그 1:1 재확인** — `npx tsx tools/_dv_walletauth.ts`가 그린이면 서버↔클라 6팩이 정합. 콘솔 등록 id를 이 표와 눈으로 대조(가드는 콘솔을 못 봄)
@@ -130,10 +153,12 @@
 - [ ] RevenueCat 대시보드에서 **프로젝트 생성**
 - [ ] **Android 앱 연결** — 패키지명 `com.son0925.volleyball`(app.json `android.package`)
 - [ ] **Play 서비스 계정 JSON 발급·연결** — Google Cloud/Play Console에서 서비스 계정 생성 → **최소 권한**(재무·주문 조회/구독 관리에 필요한 것만) → JSON을 RC에 업로드. (스토어 크레덴셜은 **RC가 보관**, 우리 서버 미보관 — PRE_LAUNCH §3)
-- [ ] **상품 임포트** — RC Products에 §1의 6팩 + `remove_ads` 임포트(id 동일)
+- [ ] **상품 임포트** — RC Products에 §1의 6팩 + `diamond_pass` + `remove_ads` 임포트(id 동일)
+  - [ ] `diamond_pass` = **Consumable로 지정**(6팩과 동일 취급 — 소비성). **엔타이틀먼트 연결 안 함**(비소모 아님). RC는 패스에 대해 **검증·웹훅 게이트웨이 역할만** 하고, 지급 트리거(`grantPass`→pass 행+우편)는 우리 서버가 함. remove_ads(비소모 entitlement 게이트)와 **역할이 다름**을 혼동 말 것
 - [x] **엔타이틀먼트 매핑** — RC 엔타이틀먼트 `remove_ads`에 상품 `remove_ads` 연결. (월드컵은 출시 보류 — RC 엔타이틀먼트 `worldcup`은 기능 노출 시)
   - ⚠ **연결(attach)까지 실측 확인(2026-07-17 실사고)**: 엔타이틀먼트·상품이 각각 존재해도 **Associated products 연결이 비어 있으면** 결제는 기록되고 엔타이틀먼트만 조용히 빈다(광고 제거 구매했는데 광고 나옴). 확인법 = 구매 후 RC REST `GET /v1/subscribers/<userId>`의 `entitlements`가 비어 있지 않아야 한다. 연결은 기존 구매에 **소급 적용**됨(재구매 불요). `dlc_worldcup` 출시 때 엔타이틀먼트 `worldcup` ↔ 상품 `dlc_worldcup` 연결을 같은 방법으로 검증할 것
-- [ ] **오퍼링 매핑** — 다이아 6팩 + remove_ads를 current offering의 패키지로. (`lib/iap.ts`는 `offerings.current.availablePackages`에서 `product.identifier === productId`로 찾음 — 패키지가 current offering에 없으면 "상품을 찾을 수 없음")
+- [ ] **오퍼링 매핑** — 다이아 6팩 + `diamond_pass` + remove_ads를 current offering의 패키지로. (`lib/iap.ts`는 `offerings.current.availablePackages`에서 `product.identifier === productId`로 찾음 — 패키지가 current offering에 없으면 "상품을 찾을 수 없음". 패스도 `lib/iap.purchasePass`가 같은 방식으로 `diamond_pass` 패키지를 찾으므로 **offering에 반드시 포함**)
+- [ ] **웹훅 `purchased_at` 전달 확인(1+1 월귀속용)** — RC 웹훅 payload의 `purchased_at`(거래 발생 시각)이 서버에 도달해야 1+1 월-키가 **거래 시각 KST 연월**로 계산된다(웹훅 처리 시각 아님, R4). RC 웹훅은 기본 `event.purchased_at_ms`를 실어 보냄 — 커스텀 페이로드로 이 필드를 끄지 말 것. 패스 grant도 `purchasedAt`으로 창 시작(§2.4)
 - [ ] **웹훅 등록** — RC > Integrations > Webhooks:
   - URL = `<prod 도메인>/api/purchase/webhook/revenuecat`
   - Authorization 커스텀 헤더 값 = **강한 시크릿**(≥16자). **dev와 다른 값**(dev는 `.env.development.local`의 로컬 전용). 이 값을 §3에서 Vercel `RC_WEBHOOK_SECRET`에 그대로 주입
@@ -148,13 +173,19 @@
 
 > 절차 정본 = `.claude/skills/deploy-prod/SKILL.md`. 여기선 결제 특화 항목만 추가.
 
-- [ ] **prod 마이그레이션 잔여분 적용** — devnotes·account·save_backups 등 미적용 마이그레이션을 `deploy-prod` §1(**:5432 직결 `drizzle-kit migrate`**, push 아님)로. 파괴적 변경 없는지 스키마 diff 분류 먼저(SKILL 사전체크). 결제 테이블(`purchase_event`·`stats_daily`·`wallet_ledger`)은 이미 스키마에 존재
+- [ ] **prod 마이그레이션 잔여분 적용** — devnotes·account·save_backups 등 미적용 마이그레이션 + **패스/우편 신규 2건**을 `deploy-prod` §1(**:5432 직결 `drizzle-kit migrate`**, push 아님)로. 파괴적 변경 없는지 스키마 diff 분류 먼저(SKILL 사전체크). 결제 테이블(`purchase_event`·`stats_daily`·`wallet_ledger`)은 이미 스키마에 존재. **패스/1+1/우편 신규 객체**:
+  - [ ] `0002_attendance_passes.sql` — `attendance_passes` 테이블(+`UNIQUE(proj_code, store_txn_id)` 구매 멱등 · `index(proj_code, user_id)`). **Expand-only(신규 CREATE, DROP 0)** — 기존 데이터 무영향
+  - [ ] `0003_mailbox.sql` — `mails`(+`recalled_at`·`UNIQUE(proj_code, idem_key)`)·`mail_broadcasts`·`mail_broadcast_receipts`. 일일 패스 우편·환불 recall·관리자 발송의 저장소. **Expand-only**
+  - [ ] 적용 후 `\dt`로 두 마이그레이션 객체 생성 확인. `wallet_ledger`는 스키마 변경 없음(`pass_daily`·`iap_bonus_1p1` reason은 문자열이라 컬럼 추가 불요)
 - [ ] **env 백업** — `cp server/.env.local server/.env.local.bak-$(date +%y%m%d%H%M)` (vercel CLI 덮어쓰기 사고 방지)
 - [ ] **Vercel 환경변수 주입**(대시보드 또는 CLI — 값 노출 금지):
   - [ ] `RC_WEBHOOK_SECRET` = §2 웹훅 Authorization 값(≥16자, 미설정=웹훅 전거부 fail-closed)
   - [ ] `RC_REST_API_KEY` = RC REST 키(미설정=confirm 폴백 503 `rc-unconfigured`)
   - [ ] `DISCORD_WEBHOOK_URL`(결제·환불 알림) / `DISCORD_TICKET_WEBHOOK_URL`(문의 — 없으면 결제 채널 폴백) — 있으면
+  - [ ] **`CRON_SECRET`** = 강한 시크릿 — **패스 일일 우편 크론(`/api/cron/pass-daily`)의 Bearer 인증**(fail-closed: 미설정이면 크론 거부 = 일일 우편 발송 0). Vercel이 크론 호출에 `Authorization: Bearer ${CRON_SECRET}` 자동 첨부. 기존 `purge` 크론과 **동일 시크릿 공유**(둘 다 같은 패턴)
+  - [ ] **`PROMO_1P1_ENABLED`** = 1+1 서버 게이트(요청시점 read, 기본 off). **출시 시점 값 결정** — 앱 뱃지 플래그(`PROMO_1P1_ENABLED` in `data/flags.ts`)와 **동기화**해야 함(서버만 켜지면 뱃지 없이 조용히 보너스 지급, 앱만 켜지면 뱃지 뜨는데 서버 미지급). **둘 다 true**로 동시 전환하거나 **둘 다 미설정(off)** 로 판매 보류. 패스 앱 노출은 `ATTENDANCE_PASS_ENABLED`(앱 플래그, 서버 env 아님 — 스토어/RC/샌드박스 완주 후 true)
   - [ ] (이미 있어야) `SESSION_SECRET`·`ADMIN_TOKEN`·`DATABASE_URL`(prod)·`SENTRY_DSN`(선택)
+- [ ] **Vercel 크론 등록 확인** — `server/vercel.json`에 `/api/cron/purge`(`0 18 * * *`=UTC18=KST03, 삭제·롤업)·**`/api/cron/pass-daily`(`0 15 * * *`=UTC15=KST00, 패스 일일 우편)** **2개** 정의됨. `vercel --prod` 배포로 크론이 등록됐는지 **Vercel 대시보드 > Cron Jobs**에서 2건 확인(등록 안 되면 패스 우편이 안 나감 → 유저는 우편함 빈 채 다음날). 캐치업 멱등이라 하루 누락돼도 다음 실행이 몰아 발송(`DIAMOND_PASS_SYSTEM` §2.3.2)
 - [ ] **`vercel --prod` 배포** — env 추가 후 **Redeploy 필수**(env는 재배포에 반영)
 - [ ] **스모크**(읽기 전용, prod 원장 오염 금지):
   - [ ] `curl -s <prod>/api/devnotes` → `{"ok":true,...}`
@@ -187,8 +218,12 @@
 ### A. 상설 가드 그린 유지 (코드/서버 변경 때마다 — 실결제 전에 항상)
 | 가드 | 실행 | 검증 |
 |---|---|---|
-| `_dv_walletauth` | `npx tsx tools/_dv_walletauth.ts` | SKU 카탈로그 6팩 id·수량 정합 + 엔타이틀먼트 클라↔서버 + econ 미러. **콘솔 SKU도 이것과 1:1** |
+| `_dv_walletauth` | `npx tsx tools/_dv_walletauth.ts` | SKU 카탈로그 6팩 id·수량 정합 + `PASS_PRODUCTS`(`diamond_pass`) 정합 + 엔타이틀먼트 클라↔서버 + PASS 상수(daily·duration·max·price·reset 0) engine↔server 미러. **콘솔 SKU도 이것과 1:1** |
 | `_dv_refund` | `npx tsx tools/_dv_refund.ts` | 음수잔액 허용 = `refund`만(다른 reason 새면 무한소비) |
+| `_dv_pass`(신, 순수) | `(cd server && node_modules/.bin/tsx tools/_dv_pass.ts)` | 패스 창 산수(28슬롯 dayIndex 0~27·최대 2,800)·리셋 KST 00:00 경계·`catchupDayIndexes`·슬롯 멱등키(user×pass×dayIndex)·`PASS_DAILY_REWARD` 미러 |
+| `_dv_1p1`(신, 순수) | `(cd server && node_modules/.bin/tsx tools/_dv_1p1.ts)` | 월×팩 1회 멱등·R4 월귀속=`purchased_at` KST연월·R3 샌드박스 월키 별도 스코프·환불 시 월키 미복구 |
+| `_dv_pass_live`(신, 라이브) | `(cd server && DATABASE_URL=... node_modules/.bin/tsx tools/_dv_pass_live.ts)` | 실 DB: 패스 구매 웹훅→행 생성·B4 day-0 우편·confirm dedup / 일일 우편 수령 +100 1회·이중발송0 / B1 환불선착 tombstone→구매후착 no-pass / B2 클로백(패스잠금→Σ passId앵커→−Σ)+미수령 우편 recall / claim↔환불 레이스 Σ정합 / 1+1 첫구매+N·2회째0·다음달부활·환불−N·플래그미복구 (DATABASE_URL 필요) |
+| `_dv_mail`·`_dv_mail_live`(신) | `(cd server && ... tools/_dv_mail.ts / _dv_mail_live.ts)` | `system:pass`→`pass_daily` reason 분기·admin 이력 제외·환불 recall(라이브는 DATABASE_URL) |
 | `_dv_purchase` | `(cd server && node_modules/.bin/tsx tools/_dv_purchase.ts)` | 웹훅 인증 fail-closed·샌드박스/엔타이틀먼트/미등록 무시·grant/refund·멱등 dedup·afterSafe 오염차단 + **D1** confirm×SANDBOX 필터·**B1** 익명환불 `refund.anonymous.dropped` 관측·**A1** confirm선착→웹훅후착 KRW 보충·**S1** `RC_SANDBOX_GRANT` 스위치(on=SANDBOX 지급+ref `:sandbox`·매출 무증가·환불 클로백·off 재필터) (DATABASE_URL 필요) |
 | `_e2e_purchase_live` | `(cd server && node_modules/.bin/tsx tools/_e2e_purchase_live.ts)` | 실행 중 서버(:3000) 실 HTTP 왕복: 웹훅+1000·재전송 dedup·confirm 401/503·SANDBOX 무시·CANCELLATION −1000·이중환불 dedup·**⑧ 익명환불 dropped 감사행** |
 
@@ -242,6 +277,25 @@
 - [ ] **미성년자 결제 게이트** — 기존 고지·플로우 확인(국내 앱 결제 요건, PRE_LAUNCH §3)
 - [ ] **환불 정책 화면(운영정책) 노출** — "환불 신청 = 접수(티켓)일 뿐, 실제 환불은 스토어 정책 경유. **이미 쓴 전지훈련 효과는 취소 안 됨**(재화만 회수)"(§13.17). 앱에 카피 노출
 - [ ] **사업자·통신판매업 정보 노출** — 앱 내 사업자 정보 화면에 상호·통신판매업 신고번호 표시(§0)
+- [ ] **패스 표시의무 6항 노출** — 구매화면에 28일·매일 우편함 지급·우편 보관 30일·최대 2,800💎·온라인 수령·리셋 KST 00:00·**자동 갱신 없음/만료 후 수동 재구매**(구독 오해 방지) 고지(`DIAMOND_PASS_SYSTEM` §8·UI.1)
+- [ ] **1+1 과장광고 금지** — 그 달 보너스 소진 시 뱃지 제거 + 정가 표시(표시광고법, §3.3). "1+1 받는 중" 오인 방지
+
+### G. 다이아 패스 · 월 1+1 · 우편 (신규 결제표면 — 샌드박스 실기기, `ATTENDANCE_PASS_ENABLED`/`PROMO_1P1_ENABLED` on 상태)
+> 확인 위치: **앱**(상점 카드·우편함·마이페이지) / **서버DB**(`attendance_passes`·`mails`·`wallet_ledger`) / **관리자**(⑤ BM·우편 탭).
+
+| # | 시나리오 | 기대 | 확인 · 담당가드 |
+|---|---|---|---|
+| G1 | **패스 구매** → 즉시 1일차 우편 | RC 웹훅/confirm → `attendance_passes` 행 1개(28일 창·status active) + **dayIndex 0 우편 즉시 발송**(스케줄러 대기 없음, B4). 원장 다이아 **미지급**(구매 자체는 0) | 서버DB `attendance_passes`(store_txn_id·start/end) + `mails`(idem `pass_daily:<passId>:0`) / 앱 우편함 "1일차" / `_dv_pass_live` B4 |
+| G2 | **자정 크론** → 다음날 우편 | KST 00:00 크론이 dayIndex 1 우편 발송(캐치업 = 미발송 슬롯 몰아 발송). 이중발송 0(멱등키 dedupe) | `mails` idem `pass_daily:<passId>:1` 1통 / Vercel Cron Jobs 실행 로그 / `_dv_pass_live` 캐치업·이중발송0 |
+| G3 | **우편 수령** | 우편함 "받기" → `applyWalletTx(+100, 'pass_daily')` 원장 확정 + 비차단 토스트. 같은 슬롯 2회째 no-op(멀티기기 이중수령 0) | 앱 잔액 +100 / 원장 reason=`pass_daily` +100 1행 / `_dv_pass_live` 이중수령0·`_dv_mail_live` reason 분기 |
+| G4 | **패스 환불** (48h 자동 or 개발자 재량) | 웹훅 CANCELLATION → **패스 종료**(status refunded) + **수령분 −Σ 클로백**(A 전액회수, passId 앵커) + **미수령 우편 recall**(`recalled_at` 마킹 → 우편함서 즉시 소멸) | 원장 `refund_pass:<userId>:<storeTxnId>` −Σ / `mails.recalled_at` set / `_dv_pass_live` B2 클로백+recall |
+| G5 | **환불 선착(순서역전)** | 환불 웹훅이 grant보다 먼저 도착 시 tombstone(`status=refunded` 선삽입) → 후착 grant는 활성화 금지 → claim 전부 `no-pass`(유령 활성 0) | `payment-events` / `_dv_pass_live` B1 tombstone |
+| G6 | **1+1 월 첫 구매** (6팩 각) | 기본 +N + **보너스 +N**(그 달 첫 구매). 앱 팩 카드 "이번 달 1+1" 뱃지 | 원장 `purchase`+N & `iap_bonus_1p1:<user>:<pack>:<KST연월>`+N / `_dv_1p1` |
+| G7 | **1+1 2번째 구매·월 경계** | 같은 달 재구매 = 보너스 0(월키 점유). 다음 KST 월 1일 부활. 환불해도 월키 미복구(파밍 차단) | 원장 보너스 0(2회째)·다음달 +N / `_dv_1p1`·`_dv_pass_live` 1+1 |
+| G8 | **1+1 매출 격리** | 보너스(`iap_bonus_1p1`)는 매출 KRW·"구매 다이아"·전환 집계에서 **제외**(추가 돈 아님). 단 **패스 구매는 payer/건수/매출에 편입**(R2 — `recordPurchaseRevenue`) | 관리자 ⑤ 매출=기본분만·건수에 패스 포함 / `_dv_purchase` R2·보너스 제외 A/B |
+| G9 | **관리자 우편 발송·회수** | ⑤ **우편** 탭에서 개별/브로드캐스트 발송·수령·회수. **일일 패스 우편(sender `system:pass`)은 폼·이력에서 제외**(스케줄러 전용) | `/ops-9f3a2c` 우편 탭 / `_dv_mail_live` admin 이력 제외 |
+
+> ⚠ 샌드박스 지급 모드(`RC_SANDBOX_GRANT=all`) 시 패스·1+1 원장 ref에 `:sandbox` 마커, 1+1 월키는 별도 스코프(프로덕션 월키 소진 방지, R3). 매출 3경로(웹훅·크론 롤업·관리자) 대칭 제외.
 
 ---
 
@@ -252,12 +306,19 @@
 - [ ] §5 B 6팩 실결제 → 원장 +N → 앱 잔액 반영(B1) + 지급 정확히 1회(B2)
 - [ ] §5 C1 멱등(이중지급 0)·C2 환불 클로백·C4 복원·C5 재구매 통과
 - [ ] §5 D3~D5 이상경로 fail-closed 확인
+- [ ] **§5 G 패스/1+1/우편 통과**(패스 노출 시) — G1 구매→즉시 1일차 우편·G2 자정 크론 다음 우편·G3 수령·G4 환불 클로백+recall·G5 환불선착·G6~G8 1+1(첫구매 2배·재구매0·매출격리)·G9 관리자 우편. **prod 크론 2건 등록 확인**(§3). `_dv_pass`·`_dv_1p1`·`_dv_pass_live`·`_dv_mail(_live)` 그린
+- [ ] **플래그 동기 전환** — `ATTENDANCE_PASS_ENABLED`(앱)·`PROMO_1P1_ENABLED`(앱+서버 env) 동시 true. 앱 플래그 변경은 OTA/AAB, 서버 env는 재배포. 미완주 시 **둘 다 off 유지**(판매 보류)
 - [ ] **관리자에서 매출 1건 조회**(⑤ 탭 총 매출 ≥ 1건, `stats_daily.revenueKrw` 반영) = 머니패스 end-to-end 증명. **A1(2026-07-16) 이후**: confirm이 먼저 지급해도 뒤늦은 웹훅이 KRW를 `recordRevenueKrwOnce`로 보충하므로 매출 KRW가 영구 ₩0으로 남지 않음(경로 순서 무관 매출 집계). KRW는 웹훅이 `currency:KRW`로 실어와야 잡힘(비-KRW·미제공은 여전히 null → RC 대시보드가 재무 진실). **주의(2026-07-17)**: 샌드박스 지급 모드(`RC_SANDBOX_GRANT=all`)로 넣은 테스트 결제는 매출에 **안 잡힘**(집계 제외·`ref :sandbox`) → 이 DoD의 "매출 1건"은 **프로덕션 트랙 실결제(또는 스위치 off)** 로 증명해야 함
 - [ ] **출시 전 `RC_SANDBOX_GRANT` 처리 결정(2026-07-17)** — 샌드박스 실결제 테스트를 위해 켰던 `RC_SANDBOX_GRANT=all`을 **출시 전 off 처리(권장 — Vercel env 제거 후 재배포, 필터 복귀)** 하거나, 유지할 경우 **유지 사유를 기록**(§13.18 D1 — 라이선스 테스터 목록 오너 통제라 유지해도 임의 유저 발행 불가, 단 샌드박스 지급은 매출 미집계). 스위치 상태를 `payment-events`로 확인(SANDBOX 결제가 `grant.applied`면 on·`sandbox.filtered`면 off)
 - [ ] §5 F 컴플라이언스 스팟 통과
 
 ### 롤백 / 문제 대응
 - [ ] **상품 비활성화** — 지급/가격 사고 시 Play Console에서 해당 상품 **비활성화**(초안 전환) + RC 오퍼링에서 제외 → 신규 구매 차단. 이미 지급된 원장은 불변(감사 보존)
+- [ ] **패스/1+1 플래그 즉시 off 롤백** — 패스·1+1 사고 시 **앱/서버 코드 롤백 없이 플래그로 차단**:
+  - [ ] `ATTENDANCE_PASS_ENABLED=false`(앱 플래그, `data/flags.ts` — OTA 배포로 즉시) → 패스 카드·수령 UI 숨김. 스토어 `diamond_pass`도 콘솔 비활성화 병행(신규 구매 차단)
+  - [ ] `PROMO_1P1_ENABLED` 서버 env 제거·재배포(요청시점 read라 재배포 즉시 반영) → 서버 보너스 지급 중단. 앱 뱃지도 `PROMO_1P1_ENABLED`(앱) off로 동기 숨김
+  - [ ] **패스 일일 우편 중단**이 필요하면 `CRON_SECRET` 회전(크론 인증 실패 = 발송 중단) 또는 크론 잡 비활성 — 단 이미 발송된 우편·원장은 불변. 재개 시 캐치업이 미발송 슬롯 몰아 발송(손실 없음)
+  - [ ] 이미 생성된 `attendance_passes`·발송 우편은 감사 보존(플래그 off는 신규 노출만 차단, 기존 창은 만료까지 유효)
 - [ ] **웹훅 실패 관측** — 디스코드 결제 채널(`DISCORD_WEBHOOK_URL`) 알림 + `payment-events?fail=1` + Sentry(`SENTRY_DSN`)로 실패 사유 확인. "돈 내고 0개"는 `payment-events`에서 성공행+`grant.applied` 부재로 특정
 - [ ] **익명 환불 유실 대응(B1, 2026-07-16)** — 디스코드 "⚠️ 익명 환불 유실" 알림 또는 ⑤ 탭 결제 이벤트 표(`fail` 필터)/`payment-events?fail=1`에 `refund.anonymous.dropped`(stage)가 뜨면: 그 `storeTxnId`로 `payment-events?txn=<storeTxnId>`(또는 콘솔 표 검색)를 조회해 원구매(confirm 지급)의 유저를 찾고, **⑤ 탭 "수동 지갑 조정" 폼에 그 userId·음수 금액·사유로 회수**(P2-b — 티켓 없는 dropped라 문의·환불 탭 대신 이 폼이 정규 경로). 익명(비-UUID app_user_id) 환불 웹훅은 유저 귀속 불가라 자동 클로백이 안 되므로 이 이벤트가 곧 수동 처리 신호(RC 미구성/`logIn` 누락 시 발생 — 정상 배선이면 창이 좁음)
 - [ ] **RC 웹훅 재전송** — RC 대시보드에서 실패 이벤트 수동 재전송(멱등이라 안전)
@@ -265,8 +326,31 @@
 
 ---
 
+## §7 사용자 직접 몫 vs 자동 완료 몫 (다이아 패스·1+1 편입, 2026-07-23)
+
+> 코드·서버·가드는 **완료됨**(서버 `d2ca142` · 앱 `3fc0987` — `DIAMOND_PASS_SYSTEM` §9 구현 완료 요약). #43 착수 시 **사람이 콘솔·env·실기기에서 해야 하는 것만** 남는다. 아래로 갈린다.
+
+### 사용자(=오너) 직접 몫 — 코드로 못 하는 것
+- [ ] **Play Console 상품 등록·가격·활성화** — `diamond_pass`(소비성 ₩9,900, **구독 아님**)·6팩·`remove_ads`. 상품 ID 글자 단위 일치·한국어 표시명(§1)
+- [ ] **RC 상품 임포트·오퍼링·웹훅**(§2) — `diamond_pass` Consumable 지정(엔타이틀먼트 매핑 안 함)·offering 포함·`purchased_at` 전달
+- [ ] **prod env·크론·마이그레이션 트리거**(§3) — `CRON_SECRET`·`PROMO_1P1_ENABLED`·`RC_WEBHOOK_SECRET` 주입, 0002/0003 마이그레이션 실행, 크론 2건 등록 확인, 재배포
+- [ ] **사업자·판매자 정보 기입**(콘솔 계정 세부정보·표시의무, §0)
+- [ ] **실기기 샌드박스 결제 매트릭스**(§5 B·G) — 라이선스 테스터로 패스 구매→우편→환불 클로백 실측
+- [ ] **출시 플래그 전환 결정**(§6) — `ATTENDANCE_PASS_ENABLED`·`PROMO_1P1_ENABLED` on 시점·`RC_SANDBOX_GRANT` off
+
+### 자동(=코드) 완료 몫 — 이미 구현·검증됨(재작업 불필요)
+- ✅ **서버 로직**: `PASS_PRODUCTS`·`isPassProduct`·`grantPass`/`grantPassTx`(B4·B1·Q1)·`clawbackPass`(B2·recall)·`dispatchDailyPassMails`(캐치업)·크론 라우트·1+1 `applyPurchaseGrant` 보너스·환불 reversal (서버 `d2ca142`)
+- ✅ **스키마·마이그레이션 파일**: `attendance_passes`(0002)·`mails`/`mail_broadcasts`(0003) 생성 SQL 준비됨(prod 적용만 사람이 트리거)
+- ✅ **앱 UI**: 패스 카드 4상태·팩 1+1 뱃지·고지 6항·우편함 수령·마이페이지 현황·`lib/iap.purchasePass` (앱 `3fc0987`)
+- ✅ **가드**: `_dv_pass`·`_dv_1p1`(순수)·`_dv_pass_live`·`_dv_mail(_live)`(라이브)·`_dv_walletauth`/`_dv_purchase` 확장 — 전건 A/B 자가검증 PASS
+- ✅ **관리자**: ⑤ BM·수익화 + 우편 탭(개별/브로드캐스트 발송·회수, 일일 패스 우편 제외)
+
+> 즉 #43의 신규 결제표면(패스·1+1·우편)은 **코드가 대기 상태**로 완성돼 있고, 남은 건 §1~§6의 **콘솔·RC·env·실기기 절차**뿐이다. 절차 중 코드 결함이 나오면 정본(`DIAMOND_PASS_SYSTEM`)을 고쳐 맞춘다(런북은 실행만).
+
+---
+
 ## 부록 — 실측·검증 기록
-- 카탈로그 정합(6팩 `dia_100`~`dia_10000` · 엔타이틀먼트 `remove_ads`/`dlc_worldcup` · RC 엔타이틀먼트 id `worldcup`): `_dv_walletauth` PASS (2026-07-16).
+- 카탈로그 정합(6팩 `dia_100`~`dia_10000` · `diamond_pass` · 엔타이틀먼트 `remove_ads`/`dlc_worldcup` · RC 엔타이틀먼트 id `worldcup`): `_dv_walletauth` PASS (6팩·패스 상수 미러 2026-07-23 확장).
 - 환불 음수 게이트(refund만 허용): `_dv_refund` PASS (2026-07-16).
 - 서버 머니패스(웹훅·confirm·멱등·환불): `_dv_purchase`·`_e2e_purchase_live`(dev 서버 라이브, §13.18 #43) — 상설 서버 가드 배터리.
 - 실결제 단계 로깅은 RC 콘솔·EAS 실기기 결제 시 라이브 확인(구조상 서버 밖, §13.22 "미검증").
