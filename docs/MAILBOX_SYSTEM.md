@@ -1,7 +1,7 @@
 # 우편함(메일박스) 시스템 (MAILBOX_SYSTEM)
 
 > **신설 2026-07-23** (사용자 확정: "우편함으로 보상 받을 수 있게 + 관리자 화면에서 우편함으로 바로 다이아 지급").
-> **상태: 설계 문서 단계 · 코드 미착수**(문서 먼저 — 표준 작업 순서 2단계). 이 문서가 우편함의 정본.
+> ~~**상태: 설계 문서 단계 · 코드 미착수**~~ → **상태(2026-07-23): 서버 ✅ 구현(Phase 1 스키마·라우트·가드 + Phase 3 관리자 "우편" 탭 — §13 표) · 앱 화면(Phase 2 우편함 UI·배지)은 앱 에이전트 몫으로 잔존.** 다이아 패스 일일 우편(sender `system:pass`) 수령 = 이 문서 `claimMail`이 `pass_daily` reason으로 분기(DIAMOND_PASS §2.3 정합). 이 문서가 우편함의 정본.
 >
 > **정합 정본(이 문서가 종속·정합해야 할 상위)**
 > - `docs/BACKEND_SYSTEM.md` §13.12(다이아 서버 진실·earn/spend·멱등·금액권위·reason 화이트리스트)·§13.13(공지 in-app — 유사 전달 인프라)·§13.14(쿠폰 — 지급 멱등·단일 트랜잭션 패턴)·§13.15(관리자 콘솔 ops-9f3a2c·requireAdmin fail-closed)·§13.17(음수 balance 부채상환·admin grant source='admin')·§13.19(어뷰징 방어).
@@ -335,7 +335,7 @@ MAIL_PURGE_GRACE_DAYS    = 30   // 만료·회수 후 크론 물리삭제 유예
 |---|---|---|
 | **1. 서버(개별+브로드캐스트) + 가드 ✅ 구현(2026-07-23)** | `mails`·`mail_broadcasts`·`mail_broadcast_receipts` 스키마(idem_key·recalled_at)·econ 상수(RETENTION·PASS_EXPIRE·MAX_GRANT·PURGE_GRACE)·`reason 'mail'`·유저 라우트(claim/list/read)·admin 라우트(발송/이력/회수 + 브로드캐스트 발송)·`getWallet` unread+unclaimed 편입·**`grantPassTx(tx,…,opts)` 추출**(B1, `pass.ts` — 기존 grantPass는 래퍼로)·`rejectOnQueueFull` 옵션(B2)·store_txn_id 합성키(B3)·purge 크론 편입(retention.ts)·purchase_event 관측(R2) | `server/db/schema.ts`(mails·mail_broadcasts·receipts)·`server/db/migrations/0003_mailbox.sql`·`server/lib/econ.ts`·`server/lib/wallet.ts`(WalletReason 'mail'·getWallet 카운트)·`server/lib/pass.ts`(**grantPassTx 추출**)·`server/lib/mail.ts`(신)·`server/lib/retention.ts`(purge)·`server/app/api/mail/{route,claim,read}/route.ts`·`server/app/api/admin/mail/route.ts` · 가드 `_dv_mail`·`_dv_mail_live` |
 | **2. 앱 화면 + 배지** | 우편함 화면(상태 필터·받기·모두받기·오프라인)·마이페이지 카드·빨간 점 2곳·lib/server 메서드 | `app/mailbox.tsx`(신)·`app/(tabs)/mypage.tsx`(카드+배지)·`app/(tabs)/_layout.tsx`(탭 red dot)·`lib/server.ts`(getMail/claimMail/readMail·unreadMailCount 캐시)·`app/_layout.tsx`(라우트) |
-| **3. 관리자 우편 탭** | ops-9f3a2c "우편" 탭(발송 폼·첨부 종류 선택·만료 기본 연동·폼-오픈 idemKey·이력·회수) | `server/app/ops-9f3a2c/page.tsx`(NAV·TITLES·MailSection) |
+| **3. 관리자 우편 탭 ✅ 구현(2026-07-23, DIAMOND_PASS 스케줄러 전환과 함께)** | ops-9f3a2c "우편" 탭(개별/브로드캐스트 발송 폼·첨부 종류 선택[다이아/패스]·만료 기본 연동·폼-오픈 `crypto.randomUUID` idemKey·발송 이력·상태 뱃지·미수령 회수) — admin/mail API 배선. 일일 패스 우편(sender `system:pass`)은 폼·이력 제외(`listAdminMail`이 `sender != 'system:pass'`) | `server/app/ops-9f3a2c/page.tsx`(NAV·TITLES·`MailPanel`·`MailModal`)·`server/lib/mail.ts`(`listAdminMail` system:pass 제외) |
 | ~~**4. 전체 우편(브로드캐스트)**~~ → **Phase① 서버로 앞당김(2026-07-23 구현 지시)** | ~~`mail_broadcasts`+`receipts`·lazy 수령·cutoff·admin 전체 발송·목록 합성~~ → **서버(스키마·lazy 수령·cutoff·합성 목록·admin 브로드캐스트 발송·다이아 전용 Q4)는 Phase①에 편입.** 잔여 = **앱 화면의 브로드캐스트 발송 폼**(관리자 UI)만 후속 | `server/app/api/admin/mail/route.ts`(target='broadcast' 분기) + `server/lib/mail.ts` |
 
 > ~~Phase 1~3이 "개별 우편으로 보상 받기 + 관리자 화면에서 우편 발송"(사용자 확정 핵심)을 완성. Phase 4(브로드캐스트)는 이벤트 대량 지급 필요 시 착수.~~

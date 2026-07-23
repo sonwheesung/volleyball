@@ -8,11 +8,11 @@ process.env.ADMIN_TOKEN = 'test-admin-token-abcdef0123456789'; // ≥16자(fail-
 (async () => {
   const { db } = await import('../db');
   const { users, walletLedger, attendancePasses, mails, mailBroadcasts, mailBroadcastReceipts, purchaseEvent } = await import('../db/schema');
-  const { eq, and, sql, inArray } = await import('drizzle-orm');
+  const { eq, and, sql, inArray, isNull } = await import('drizzle-orm');
   const { PROJ_CODE } = await import('../lib/proj');
   const { ensureProj, getWallet } = await import('../lib/wallet');
   const { signToken } = await import('../lib/auth');
-  const { grantPassTx, PASS_QUEUE_FULL } = await import('../lib/pass');
+  const { grantPassTx, PASS_QUEUE_FULL, grantPass, clawbackPass, dispatchDailyPassMails, passDailyKey, passMailKey } = await import('../lib/pass');
   const { mailLedgerKey, mailBroadcastKey } = await import('../lib/mail');
   const { GET: listGET } = await import('../app/api/mail/route');
   const { POST: claimPOST } = await import('../app/api/mail/claim/route');
@@ -117,17 +117,23 @@ process.env.ADMIN_TOKEN = 'test-admin-token-abcdef0123456789'; // ≥16자(fail-
   const cg = await (await claim(uG.token, gm.mailId)).json();
   ok(cg.ok === true && cg.applied === true && cg.balance === -100, `음수(-300) 유저 우편 +200 수령 → applied·잔액 -100(부채 상쇄, 게이트 우회) — 실측 ${cg.balance}`);
 
-  console.log('── H. 패스 첨부 수령(원자·store_txn_id UNIQUE·day0) ──');
+  console.log('── H. 패스 첨부(attachType=pass) 수령(원자·store_txn_id UNIQUE·day-0 우편) ──');
+  // 재개정(2026-07-23): 패스 첨부 우편 수령 → grantPassTx가 패스 생성 + day-0 **슬롯 우편 발송**(즉시 원장 아님). 유저는 그 슬롯 우편을 또 받아야 +100.
   const uH = await makeUser('H');
   const hm = await sendPass(uH.id);
   const ch = await (await claim(uH.token, hm.mailId)).json();
   ok(ch.ok === true && ch.applied === true && ch.pass === 'activated', `패스 우편 수령 → applied·pass activated — 실측 ${ch.pass}`);
   const hPass = await db.select().from(attendancePasses).where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.storeTxnId, mailLedgerKey(hm.mailId))));
   ok(hPass.length === 1 && hPass[0].status === 'active' && hPass[0].source === 'admin', `attendance_passes 1행·store_txn_id='mail:<id>'·source=admin — 실측 ${hPass.length}행`);
-  ok(await bal(uH.id) === 100, `  day-0 즉시 +100(grantPassTx B4, 같은 tx) — 실측 ${await bal(uH.id)}`);
+  ok(await bal(uH.id) === 0, `  패스 수령 즉시 지급 0(day-0는 슬롯 우편으로, B4 재개정) — 실측 ${await bal(uH.id)}`);
+  const hDay0 = (await db.select().from(mails).where(and(eq(mails.projCode, PROJ_CODE), eq(mails.idemKey, passMailKey(hPass[0].id, 0)))).limit(1))[0];
+  ok(!!hDay0 && hDay0.sender === 'system:pass', `  day-0 슬롯 우편(system:pass) 발송됨(idem pass_daily:<pass>:0) — 실측 ${hDay0?.sender}`);
+  const chDay0 = await (await claim(uH.token, hDay0.id)).json();
+  ok(chDay0.ok === true && chDay0.applied === true && await bal(uH.id) === 100, `  day-0 슬롯 우편 수령 → +100 잔액 100 — 실측 ${await bal(uH.id)}`);
   const chb = await (await claim(uH.token, hm.mailId)).json();
   const hPass2 = await db.select({ n: sql<number>`count(*)::int` }).from(attendancePasses).where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.storeTxnId, mailLedgerKey(hm.mailId))));
-  ok(chb.applied === false && hPass2[0].n === 1 && await bal(uH.id) === 100, `재수령 → applied:false·패스 행 여전히 1(store_txn_id UNIQUE 이중생성 0)·day0 이중 0 — 실측 ${hPass2[0].n}행·잔액 ${await bal(uH.id)}`);
+  const hDay0Cnt = await db.select({ n: sql<number>`count(*)::int` }).from(mails).where(and(eq(mails.projCode, PROJ_CODE), eq(mails.idemKey, passMailKey(hPass[0].id, 0))));
+  ok(chb.applied === false && hPass2[0].n === 1 && hDay0Cnt[0].n === 1 && await bal(uH.id) === 100, `패스 우편 재수령 → applied:false·패스 행 1(UNIQUE)·day-0 우편 1통(이중발송 0)·잔액 100 — 실측 패스 ${hPass2[0].n}행·우편 ${hDay0Cnt[0].n}통`);
 
   console.log('── I. 패스 큐 만석 → rejectOnQueueFull 롤백(claimed_at NULL 재수령) → 해소 후 성공(B2·E2b) ──');
   const uI = await makeUser('I');
@@ -214,6 +220,30 @@ process.env.ADMIN_TOKEN = 'test-admin-token-abcdef0123456789'; // ≥16자(fail-
   const m1 = await applyWallet(uN.id, 50, 'mail', `${TAG}_nonce_a`, 'x');
   const m2 = await applyWallet(uN.id, 50, 'mail', `${TAG}_nonce_b`, 'x'); // nonce 뮤턴트(키가 매번 다름)
   ok(m1.ok && m1.applied && m2.ok && m2.applied && await bal(uN.id) === balN1 + 100, '  [A/B] nonce 뮤턴트 키(매번 다름) → 둘 다 지급(이중지급 재현 = 멱등키 load-bearing 증명)');
+
+  console.log('── O. 다이아 패스 일일 우편(sender system:pass) — 수령 reason=pass_daily·admin 이력 제외·환불 recall ──');
+  const uO = await makeUser('O');
+  const oTxn = `${TAG}_o_txn`;
+  // 어제 구매 → grantPass가 day-0 우편(system:pass) 발송. 스케줄러가 오늘 dayIndex 1 추가.
+  await grantPass(uO.id, oTxn, new Date(Date.now() - 86_400_000), 'diamond_pass', false);
+  const oPass = (await db.select().from(attendancePasses).where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.storeTxnId, oTxn))).limit(1))[0];
+  const oDay0 = (await db.select().from(mails).where(and(eq(mails.projCode, PROJ_CODE), eq(mails.userId, uO.id), eq(mails.sender, 'system:pass'))).limit(1))[0];
+  ok(!!oDay0 && oDay0.attachType === 'diamonds' && oDay0.attachAmount === 100, `day-0 우편(system:pass·💎100) 발송 — 실측 ${oDay0?.attachType}·${oDay0?.attachAmount}`);
+  const co = await (await claim(uO.token, oDay0.id)).json();
+  ok(co.ok === true && co.applied === true && await bal(uO.id) === 100, `system:pass 우편 수령 → +100 — 실측 ${await bal(uO.id)}`);
+  const oLed = await db.select({ reason: walletLedger.reason, ref: walletLedger.ref }).from(walletLedger).where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, passDailyKey(uO.id, oPass.id, 0)))).limit(1);
+  ok(oLed.length === 1 && oLed[0].reason === 'pass_daily' && oLed[0].ref === `mail:${oDay0.id}`, `원장 reason='pass_daily'·키=pass_daily:<u>:<p>:0·ref=mail:<id>(일반 우편 reason='mail'과 구분) — 실측 reason ${oLed[0]?.reason}`);
+  // admin 발송 이력 GET → system:pass 우편 제외(관리자 발송분 아님, MAILBOX §7)
+  const oHist = await (await adminGET(new Request(`http://x/api/admin/mail?userId=${uO.id}`, { headers: { authorization: `Bearer ${ADMIN}` } }))).json();
+  ok(oHist.ok === true && (oHist.mails as any[]).every((m) => m.sender !== 'system:pass'), `admin 이력에서 system:pass 우편 제외 — 실측 ${(oHist.mails as any[]).length}건(모두 비 system:pass)`);
+  // 스케줄러로 dayIndex 1 우편 추가(미수령) → 환불 clawback이 recall
+  await dispatchDailyPassMails(new Date());
+  const oUnclaimedBefore = await db.select({ n: sql<number>`count(*)::int` }).from(mails).where(and(eq(mails.projCode, PROJ_CODE), eq(mails.userId, uO.id), eq(mails.sender, 'system:pass'), isNull(mails.claimedAt), isNull(mails.recalledAt)));
+  ok(oUnclaimedBefore[0].n >= 1, `  스케줄러 → 미수령 일일 우편 ≥1통 — 실측 ${oUnclaimedBefore[0].n}통`);
+  const cbO = await clawbackPass(uO.id, oTxn, 'diamond_pass', new Date());
+  ok(cbO.ok === true && cbO.clawback === 100 && cbO.recalled >= 1 && await bal(uO.id) === 0, `환불 → 수령분 −100 클로백·미수령 ${cbO.ok ? cbO.recalled : 0}통 recall·잔액 0 — 실측 clawback ${cbO.ok ? cbO.clawback : 0}`);
+  const oRecalled = await db.select({ n: sql<number>`count(*)::int` }).from(mails).where(and(eq(mails.projCode, PROJ_CODE), eq(mails.userId, uO.id), eq(mails.sender, 'system:pass'), sql`${mails.recalledAt} is not null`));
+  ok(oRecalled[0].n >= 1, `  미수령 우편 recalled_at set(환불 후 수령 봉인) — 실측 ${oRecalled[0].n}통`);
 
   // ── 정리 — 테스트 유저·우편·패스·원장·관측·브로드캐스트 삭제(FK 순서: receipts→broadcasts) ──
   const testUserIds = (await db.select({ id: users.id }).from(users).where(and(eq(users.projCode, PROJ_CODE), sql`${users.providerId} like ${TAG + '%'}`))).map((r) => r.id);

@@ -7,12 +7,12 @@
 //  · E2(§10): 이중수령 = UPDATE ... claimed_at IS NULL rowcount 가드(rowcount 0=dedup) + 원장 멱등키 mail:<id> + 패스 store_txn_id UNIQUE 3중.
 //  · E2b(§10): 패스 지급 원자성 = grantPassTx가 우편 claim과 한 tx(B1). 만석+rejectOnQueueFull → throw → claim 롤백(claimed_at 미설정 재수령).
 //  · E10(§10): 적립(delta>0)이라 음수 잔액에서도 수령 통과(부채 상쇄).
-import { and, desc, eq, gte, isNull, isNotNull, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, isNull, isNotNull, ne, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { mails, mailBroadcasts, mailBroadcastReceipts, users } from '../db/schema';
 import { PROJ_CODE } from './proj';
 import { applyWalletTx } from './wallet';
-import { grantPassTx, PASS_QUEUE_FULL } from './pass';
+import { grantPassTx, PASS_QUEUE_FULL, passDailyKey, parsePassMailKey } from './pass';
 import { MAIL_RETENTION_DAYS, MAIL_PASS_EXPIRE_DAYS, MAIL_MAX_GRANT } from './econ';
 
 export type MailStatus = 'all' | 'claimed' | 'unclaimed';
@@ -211,6 +211,17 @@ export async function claimMail(userId: string, id: string, kind: MailKind): Pro
         const [cur] = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).limit(1);
         return { ok: true as const, applied: false, attachType: 'diamonds' as const, balance: cur?.balance ?? 0, amount };
       }
+      // sender='system:pass'(다이아 패스 일일 슬롯 우편, DIAMOND_PASS §2.3·§2.5) → 원장 reason='pass_daily'(클로백 Σ 추적)·
+      //   멱등키 pass_daily:<user>:<pass>:<idx>·ref=mail:<id>. idem_key(pass_daily:<pass>:<idx>)에서 pass/idx 파싱. 일반 우편은 reason='mail'.
+      if (m.sender === 'system:pass') {
+        const parsed = parsePassMailKey(m.idemKey);
+        if (parsed) {
+          const w = await applyWalletTx(tx, userId, amount, 'pass_daily', passDailyKey(userId, parsed.passId, parsed.dayIndex), mailLedgerKey(id));
+          if (!w.ok) throw new Error('wallet-fail:' + w.reason);
+          return { ok: true as const, applied: true, attachType: 'diamonds' as const, balance: w.balance, amount };
+        }
+        // 파싱 실패(형식 이탈) → 일반 mail로 폴백(지급 유실 방지, 감사에서 sender로 구분 가능)
+      }
       const w = await applyWalletTx(tx, userId, amount, 'mail', mailLedgerKey(id), mailLedgerKey(id));
       if (!w.ok) throw new Error('wallet-fail:' + w.reason);
       return { ok: true as const, applied: true, attachType: 'diamonds' as const, balance: w.balance, amount };
@@ -289,9 +300,10 @@ export async function recallMail(id: string): Promise<RecallMailResult> {
   return upd.length ? { ok: true } : { ok: false, reason: 'already-claimed' };
 }
 
-/** 관리자 발송 이력(§5.3) — 유저별 필터·상태 표시. */
+/** 관리자 발송 이력(§5.3·MAILBOX §7) — 유저별 필터·상태 표시. **관리자 발송분만**(sender != 'system:pass') —
+ *  다이아 패스 일일 스케줄러 우편(system:pass)은 관리자 발송 이력이 아니라 제외(패스 현황은 DIAMOND_PASS 스탬프에서). */
 export async function listAdminMail(userId?: string, limit = 200) {
-  const conds = [eq(mails.projCode, PROJ_CODE)];
+  const conds = [eq(mails.projCode, PROJ_CODE), ne(mails.sender, 'system:pass')];
   if (userId) conds.push(eq(mails.userId, userId));
   return db.select().from(mails).where(and(...conds)).orderBy(desc(mails.createdAt)).limit(limit);
 }

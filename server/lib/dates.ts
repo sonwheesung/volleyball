@@ -7,13 +7,13 @@ export function normalizeEndsAt(raw: string): Date {
   return new Date(raw);
 }
 
-// ── 출석 패스 KST 리셋보정 날짜·월귀속(ATTENDANCE_PASS_SYSTEM §2.1·§3.1) ──
+// ── 다이아 패스 KST 리셋보정 날짜·월귀속(DIAMOND_PASS_SYSTEM §2.1·§3.1) ──
 // 서버 시각만 사용(클라 시계 절대 미사용 — §13.12 "재화는 서버 진실"). 엔진/시드 무접근(서버 라우트 런타임 한정).
 const KST_OFFSET_MIN = 9 * 60; // KST = UTC+9
 
-/** 리셋보정 오늘(KST) 날짜 'YYYY-MM-DD' — dayIndex·start·수령 판정 기준(Q6 리셋 KST 04:00).
- *  KST 벽시계에서 resetHour를 뺀 날짜 = [00:00, resetHour) 시간대는 전날에 귀속(자정 넘겨 플레이 보호).
- *  구현: now(UTC) + (9 - resetHour)h 의 UTC 날짜(오프셋을 타임스탬프에 접어넣음). resetHour=4 → now+5h의 날짜. */
+/** 리셋보정 오늘(KST) 날짜 'YYYY-MM-DD' — dayIndex·start·발송 판정 기준(Q6 리셋 KST 00:00 자정, 재확정 2026-07-23).
+ *  KST 벽시계에서 resetHour를 뺀 날짜 = [00:00, resetHour) 시간대는 전날에 귀속. resetHour=0(현행)이면 곧 KST 캘린더 날짜.
+ *  구현: now(UTC) + (9 - resetHour)h 의 UTC 날짜(오프셋을 타임스탬프에 접어넣음). resetHour=0 → now+9h(=KST)의 날짜. */
 export function todayKstResetAdjusted(resetHour: number, now: Date = new Date()): string {
   const shifted = new Date(now.getTime() + (KST_OFFSET_MIN - resetHour * 60) * 60_000);
   return shifted.toISOString().slice(0, 10);

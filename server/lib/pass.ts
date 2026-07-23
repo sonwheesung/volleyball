@@ -1,32 +1,46 @@
-// 출석 패스 + 월 1+1 (ATTENDANCE_PASS_SYSTEM §A·§B·§C) — 서버 재화 레이어. 시드/리플레이/세이브 무접근(§6).
+// 다이아 패스 + 월 1+1 (DIAMOND_PASS_SYSTEM §A·§B·§C) — 서버 재화 레이어. 시드/리플레이/세이브 무접근(§6).
 // 패스 소유·창 진실 = attendance_passes. 다이아 이동(일일 수령·1+1 보너스·환불 회수) = wallet_ledger(append-only, applyWalletTx 멱등).
 //
+// ★ 재개정(2026-07-23, 스케줄러 우편 전환): 일일 지급 = 유저 claim 아님 → **서버 스케줄러(일일 크론)가 활성 패스마다 그날 몫 100💎 첨부 우편 발송**(§2.3).
+//   유저 수령은 우편함(MAILBOX claim → reason 'pass_daily'). 유예(claim 창) 폐기 — 우편 보존 30일이 대체(§2.3.1). 리셋 KST 00:00(Q6).
+//
 // 핵심 불변식·블로커:
-//  · B4(§2.1): grantPass가 패스 행 생성과 **같은 트랜잭션**에서 slot 0(첫 100💎)을 직접 지급(claim 경유 아님) → 웹훅/confirm 선후 무관 28회 보장.
+//  · B4(§2.1): grantPassTx가 패스 행 생성과 **같은 트랜잭션**에서 slot 0 **우편을 발송**(직접 원장 지급 아님) → 구매 직후 1일차 우편이 우편함에 즉시. 스케줄러와 mail idem_key(pass_daily:<passId>:0)로 dedupe(이중발송 0).
 //  · B1(§4.3.1): 환불이 구매보다 먼저 도착 → refunded tombstone 선삽입(UNIQUE(proj,txn)) → 뒤늦은 grantPass는 활성화 금지(유령 활성 0).
-//  · B2(§4.3.2): 클로백 = 단일 트랜잭션(패스 행 FOR UPDATE 잠금 → status=refunded → Σ(pass_daily where ref=txn) → −Σ 삽입). claim과 잠금으로 상호배제(Σ 정합).
-//  · B3(§2.3.1): claim 창 = start ≤ 오늘(리셋보정) ≤ end+GRACE. 지급 dayIndex = [max(0, off−G+1) … min(27, off)](만료 후 27 클램프).
+//  · B2(§4.3.2): 클로백 = 단일 트랜잭션(패스 행 FOR UPDATE 잠금 → status=refunded → 미수령 우편 recall → Σ(pass_daily where idem_key LIKE 'pass_daily:<user>:<pass>:%') → −Σ 삽입). claim과 잠금으로 상호배제(Σ 정합).
 //  · Q1(§2.2): 중첩 구매 = 큐잉(활성 1 + 예약 1, 깊이 상한 1). 예약 start는 활성화 때 max(오늘, 앵커 end+1) 파생(공백 방지). 초과 = ops 알림·수동.
 //  · R1a(§2.2a): 앞 패스 조기 종료(환불) 시 뒤 큐 패스 start 재계산(공백 방지).
-import { and, eq, inArray, sql } from 'drizzle-orm';
+import { and, eq, gte, inArray, lte, sql, isNull } from 'drizzle-orm';
 import { db } from '../db';
-import { users, walletLedger, attendancePasses } from '../db/schema';
+import { users, walletLedger, attendancePasses, mails } from '../db/schema';
 import { PROJ_CODE } from './proj';
 import { applyWalletTx, applyWallet, ensureProj, type WalletResult, type WalletTx } from './wallet';
 import { productDiamonds, isPassProduct, DIAMOND_PRODUCTS } from './products';
 import { purchaseKey } from './revenuecat';
-import {
-  PASS_DAILY_REWARD, PASS_DURATION_DAYS, PASS_GRACE_DAYS, PASS_RESET_HOUR_KST,
-} from './econ';
+import { PASS_DAILY_REWARD, PASS_DURATION_DAYS, PASS_RESET_HOUR_KST, MAIL_RETENTION_DAYS } from './econ';
 import { todayKstResetAdjusted, kstYearMonth, addDays, diffDays, maxDateStr } from './dates';
 
 // ── 멱등키·ref 빌더(§2.5·§3.4) ──
+/** 일일 수령 원장 멱등키(우편 claim 시 walletLedger) — user×pass×dayIndex 유일. 클로백 Σ 앵커 프리픽스 기준(§4.3.2). */
 export const passDailyKey = (userId: string, passId: string, dayIndex: number) => `pass_daily:${userId}:${passId}:${dayIndex}`;
+/** 일일 발송 우편 멱등키(mails.idem_key) — pass×dayIndex(userId 없음, 우편이 유저 귀속 행). 스케줄러·day-0·캐치업 dedupe(§2.3). */
+export const passMailKey = (passId: string, dayIndex: number) => `pass_daily:${passId}:${dayIndex}`;
+/** 클로백 Σ 앵커 프리픽스 — 그 패스의 수령된 pass_daily 원장 전부(idem_key LIKE `${prefix}%`). ref가 mail:<mailId>로 바뀌어 passId 멱등키로 묶음(§4.3.2). */
+export const passDailyLedgerPrefix = (userId: string, passId: string) => `pass_daily:${userId}:${passId}:`;
+/** 발송 우편 idem_key 프리픽스(recall 대상 — 그 패스의 미수령 슬롯 우편, §4.3.2). */
+export const passMailPrefix = (passId: string) => `pass_daily:${passId}:`;
 export const passRefundKey = (userId: string, storeTxnId: string) => `refund_pass:${userId}:${storeTxnId}`;
 /** 1+1 월-멱등키 = 월×팩(그 달 첫 구매 grant만 성공). R3: 샌드박스는 별도 스코프(:sandbox 접미)로 prod 월키 미소진. */
 export const bonus1p1Key = (userId: string, productId: string, yearMonth: string, sandbox: boolean) =>
   `iap_bonus_1p1:${userId}:${productId}:${yearMonth}${sandbox ? ':sandbox' : ''}`;
 export const bonusRefundKey = (userId: string, storeTxnId: string) => `refund_bonus:${userId}:${storeTxnId}`;
+
+/** system:pass 우편 idem_key(pass_daily:<passId>:<dayIndex>)에서 passId·dayIndex 파싱(claim 시 원장 키·reason 분기용). 형식 불일치면 null. */
+export function parsePassMailKey(idemKey: string): { passId: string; dayIndex: number } | null {
+  const m = /^pass_daily:([0-9a-fA-F-]{36}):(\d+)$/.exec(idemKey);
+  if (!m) return null;
+  return { passId: m[1], dayIndex: Number(m[2]) };
+}
 
 /** 1+1 프로모 서버 게이트(§7 출시 게이팅) — env PROMO_1P1_ENABLED==='1'|'true'일 때만 보너스 지급. **요청 시점 read**(모듈 캐시 금지).
  *  기본 off(fail-closed·미출시): 서버 배포가 앱 뱃지(PROMO_1P1_ENABLED 클라 플래그)와 동기화될 때 켠다. 판단 보고 항목(§7 서버 대응 신설). */
@@ -35,35 +49,49 @@ export function promo1p1Enabled(): boolean {
   return v === '1' || v === 'true' || v === 'all';
 }
 
-// ── 순수 창 산술(§2.1·§2.3.1 · 가드 _dv_pass가 직접 테스트, DB 무의존) ──
+// ── 순수 창 산술(§2.1 · 가드 _dv_pass가 직접 테스트, DB 무의존) ──
 
 /** 패스 창: start(구매일 리셋보정) → end = start + (DURATION-1) = start+27(포함, 28슬롯 = 최대 2,800💎). */
 export function passWindow(startDate: string): { startDate: string; endDate: string } {
   return { startDate, endDate: addDays(startDate, PASS_DURATION_DAYS - 1) };
 }
 
-/** claim 대상 dayIndex 후보(B3) — start≤today≤end+GRACE 밖이면 []. 지급 범위 [max(0, off−G+1) … min(27, off)].
- *  · 정상: off=k → k만(당일). · 유예: 만료+1일(off=28,G=3) → [26,27]. · 만료+G+1일(off>27+G) → [](미지급).
- *  실제 지급은 멱등키(user×pass×dayIndex)가 이미 받은 슬롯을 dedupe → 후보 전부 시도해도 이중지급 0. */
-export function claimableDayIndexes(startDate: string, today: string): number[] {
+/** 패스가 오늘(리셋보정) 기준 창 안(발송/활성 대상)인가 — start≤today≤end(유예 폐기, off ∈ [0..27]). 만료(off>27)·시작 전(off<0) 제외(§2.3.2 대상). */
+export function isPassActiveOn(startDate: string, today: string): boolean {
   const off = diffDays(startDate, today);
-  const last = PASS_DURATION_DAYS - 1; // 27
-  if (off < 0) return [];                    // 아직 시작 전
-  if (off > last + PASS_GRACE_DAYS) return []; // 유예 초과(gate)
-  const lo = Math.max(0, off - PASS_GRACE_DAYS + 1);
-  const hi = Math.min(last, off);
+  return off >= 0 && off <= PASS_DURATION_DAYS - 1;
+}
+
+/** 오늘(리셋보정) 기준 dayIndex(0~27 클램프). start 이후 경과일. 시작 전이면 음수 반환(호출부가 가드). */
+export function passDayIndex(startDate: string, today: string): number {
+  return diffDays(startDate, today);
+}
+
+/** 캐치업 발송 대상 dayIndex 목록(§2.3.2 순수 코어 — 가드 _dv_pass가 직접 테스트) — 창 안이면 [0..min(off,27)], 밖(시작 전·만료)이면 [].
+ *  스케줄러가 이 목록 전부 발송 시도 → mail idem_key가 이미 발송분 dedupe → 크론 미실행일 몰아 발송(손실 0, 리스크 1). */
+export function catchupDayIndexes(startDate: string, today: string): number[] {
+  if (!isPassActiveOn(startDate, today)) return [];
+  const hi = Math.min(PASS_DURATION_DAYS - 1, passDayIndex(startDate, today));
   const out: number[] = [];
-  for (let i = lo; i <= hi; i++) out.push(i);
+  for (let i = 0; i <= hi; i++) out.push(i);
   return out;
 }
 
-/** 활성 패스가 오늘(리셋보정) 기준 claim 창(start≤today≤end+GRACE) 안인가 — 만료 후 유예 포함(B3). */
-export function isWithinClaimWindow(startDate: string, today: string): boolean {
-  const off = diffDays(startDate, today);
-  return off >= 0 && off <= (PASS_DURATION_DAYS - 1) + PASS_GRACE_DAYS;
-}
-
 type PassRow = typeof attendancePasses.$inferSelect;
+
+// ── 일일 슬롯 우편 발송(§2.3 · day-0/스케줄러/큐활성화 공용) ──
+
+/** 그 패스의 dayIndex 슬롯 우편(💎100, sender=system:pass, 보존 30일) 1통을 **주어진 tx 안에서** 발송.
+ *  mail idem_key(pass_daily:<passId>:<dayIndex>) UNIQUE → day-0·스케줄러·캐치업·크론 중복 실행이 전부 onConflictDoNothing dedupe(이중발송 0). 반환=새로 발송했나. */
+export async function insertPassSlotMailTx(tx: WalletTx, userId: string, passId: string, dayIndex: number, now: Date): Promise<boolean> {
+  const expiresAt = new Date(now.getTime() + MAIL_RETENTION_DAYS * 86_400_000);
+  const ins = await tx.insert(mails).values({
+    projCode: PROJ_CODE, userId, idemKey: passMailKey(passId, dayIndex),
+    title: '다이아 패스', body: `다이아 패스 · ${dayIndex + 1}일차 보상 100💎`,
+    attachType: 'diamonds', attachAmount: PASS_DAILY_REWARD, sender: 'system:pass', expiresAt,
+  }).onConflictDoNothing({ target: [mails.projCode, mails.idemKey] }).returning({ id: mails.id });
+  return ins.length > 0;
+}
 
 // ── grant(구매 지급) ──
 
@@ -81,9 +109,9 @@ export const PASS_QUEUE_FULL = 'pass-queue-full';
 /**
  * 패스 grant — **주어진 트랜잭션 안에서**(B1, 우편 claim 등과 원자 합성용). storeTxnId UNIQUE로 웹훅/confirm/우편 dedupe.
  * · 기존 행 refunded(B1) → 활성화 금지(tombstoned-skip). · 기존 행 존재 → dup(멱등).
- * · 활성 패스 있음(Q1) → 큐잉(예약, 깊이 1). 초과 → queued-overflow(구매) 또는 rejectOnQueueFull이면 throw(우편, B2). · 없음 → 즉시 활성 + slot 0 지급(B4).
- * 호출부가 tx 소유·커밋/롤백. throw(PASS_QUEUE_FULL·day0-grant-failed)는 tx 롤백을 의도.
- * purchasedAt: 구매=RC 이벤트 시각 / 우편=서버 new Date()(월귀속·리셋보정 기준, B1).
+ * · 활성 패스 있음(Q1) → 큐잉(예약, 깊이 1). 초과 → queued-overflow(구매) 또는 rejectOnQueueFull이면 throw(우편, B2). · 없음 → 즉시 활성 + slot 0 **우편 발송**(B4).
+ * 호출부가 tx 소유·커밋/롤백. throw(PASS_QUEUE_FULL·day0-mail-failed)는 tx 롤백을 의도.
+ * purchasedAt: 구매=RC 이벤트 시각 / 우편=서버 new Date()(월귀속·리셋보정·우편 만료 기준, B1). day-0 우편 만료도 purchasedAt 기준.
  */
 export async function grantPassTx(
   tx: WalletTx,
@@ -108,7 +136,7 @@ export async function grantPassTx(
   // 1) 유저의 active/queued 패스
   const rows = await tx.select().from(attendancePasses)
     .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.userId, userId), inArray(attendancePasses.status, ['active', 'queued']))).for('update');
-  const liveActive = rows.filter((p) => p.status === 'active' && isWithinClaimWindow(p.startDate, today));
+  const liveActive = rows.filter((p) => p.status === 'active' && isPassActiveOn(p.startDate, today));
   const queued = rows.filter((p) => p.status === 'queued');
 
   if (liveActive.length) {
@@ -127,14 +155,13 @@ export async function grantPassTx(
     return { ok: true as const, outcome: overflow ? 'queued-overflow' as const : 'queued' as const, passId: ins.id };
   }
 
-  // 2) 활성 없음 → 즉시 활성 + slot 0 지급(B4, 같은 트랜잭션). ref=storeTxnId(우편은 'mail:<id>' → day-0 원장 ref 자연 정합).
+  // 2) 활성 없음 → 즉시 활성 + slot 0 **우편 발송**(B4, 같은 트랜잭션). 스케줄러가 다음 자정까지 안 돌아도 첫날 보상이 우편함에.
   const { startDate, endDate } = passWindow(today);
   const [ins] = await tx.insert(attendancePasses).values({
     projCode: PROJ_CODE, userId, storeTxnId, startDate, endDate, source, status: 'active', purchasedAt,
   }).onConflictDoNothing().returning({ id: attendancePasses.id });
   if (!ins) return { ok: true as const, outcome: 'dup' as const }; // 동시 삽입 레이스(다른 tx가 같은 txn 삽입)
-  const r = await applyWalletTx(tx, userId, PASS_DAILY_REWARD, 'pass_daily', passDailyKey(userId, ins.id, 0), storeTxnId);
-  if (!r.ok) throw new Error(`day0-grant-failed:${r.reason}`); // 롤백(패스 행+지급 원자)
+  await insertPassSlotMailTx(tx, userId, ins.id, 0, purchasedAt); // idem pass_daily:<passId>:0 → 스케줄러 dedupe
   return { ok: true as const, outcome: 'activated' as const, passId: ins.id };
 }
 
@@ -164,9 +191,9 @@ export async function grantPass(
   }
 }
 
-/** 큐 패스 지연 활성화(claim·grant·refund 진입 시) — 프로비저널 start ≤ 오늘이면 flip. **주어진 tx 안**(호출부 잠금 소유).
- *  start = max(오늘, 앵커 end+1)(공백 방지·R1a). 활성화 시 slot 0 지급(B4와 동일 — 활성화가 곧 day-0). */
-export async function activateDueQueued(tx: WalletTx, userId: string, today: string): Promise<void> {
+/** 큐 패스 지연 활성화(스케줄러·환불 진입 시) — 프로비저널 start ≤ 오늘이면 flip. **주어진 tx 안**(호출부 잠금 소유).
+ *  start = max(오늘, 앵커 end+1)(공백 방지·R1a). 활성화 시 slot 0 **우편 발송**(B4와 동일 — 활성화가 곧 day-0). */
+export async function activateDueQueued(tx: WalletTx, userId: string, today: string, now: Date): Promise<void> {
   const queued = await tx.select().from(attendancePasses)
     .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.userId, userId), eq(attendancePasses.status, 'queued'))).for('update');
   for (const q of queued) {
@@ -178,59 +205,56 @@ export async function activateDueQueued(tx: WalletTx, userId: string, today: str
     const start = maxDateStr(today, addDays(anchorEnd, 1)); // §2.2a·R1a
     const { endDate } = passWindow(start);
     await tx.update(attendancePasses).set({ status: 'active', startDate: start, endDate }).where(eq(attendancePasses.id, q.id));
-    const r = await applyWalletTx(tx, userId, PASS_DAILY_REWARD, 'pass_daily', passDailyKey(userId, q.id, 0), q.storeTxnId ?? q.id);
-    if (!r.ok) throw new Error(`queued-day0-failed:${r.reason}`);
+    await insertPassSlotMailTx(tx, userId, q.id, 0, now); // day-0 우편(활성화 시점)
   }
 }
 
-// ── 일일 수령(§2.3) ──
+// ── 일일 발송 스케줄러 코어(§2.3.2 · 크론이 호출, 가드가 직접 호출) ──
 
-export type ClaimResult =
-  | { ok: true; reason: 'claimed' | 'already' | 'no-pass'; granted: number; slots: number; balance: number; endDate?: string; dayIndex?: number }
-  | { ok: false; reason: 'no-user' | 'error' };
+export type DispatchResult = { activated: number; passes: number; mailsSent: number };
 
 /**
- * 일일 수령 — 활성 패스(claim 창 내)의 미수령 dayIndex 슬롯을 멱등 지급(§2.3). 앱 포그라운드 자동 호출.
- * 단일 트랜잭션 + user 행 잠금 → 환불 클로백(B2)·멀티기기(UI.4)와 상호배제. 슬롯 멱등키(user×pass×dayIndex)로 이중수령 0.
+ * 일일 패스 우편 발송(§2.3.2) — 매일 KST 00:00 직후 크론(§13.10)이 호출. now 주입(가드 제어)·DB 직접.
+ * ① 프로비저널 start ≤ 오늘인 큐 패스 지연 활성화(활성화가 곧 day-0 우편). ② 활성 패스마다 **오늘까지 미발송 dayIndex 전부** 우편 발송(캐치업 멱등).
+ * 캐치업: dayIndex 0…min(off,27) 전부 시도 → mail idem_key로 이미 발송분 dedupe → 크론 미실행일이 있어도 다음 실행이 빠진 슬롯 몰아 생성(손실 0, 문서 리스크 1).
+ * 대상: status='active' AND start≤오늘≤end(만료 패스 제외 — off>27은 슬롯 없음). queued는 ①에서 활성 전환된 뒤부터.
  */
-export async function claimPassDaily(userId: string, now: Date = new Date()): Promise<ClaimResult> {
+export async function dispatchDailyPassMails(now: Date = new Date()): Promise<DispatchResult> {
+  await ensureProj();
   const today = todayKstResetAdjusted(PASS_RESET_HOUR_KST, now);
-  try {
-    return await db.transaction(async (tx) => {
-      const u = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).for('update').limit(1);
-      if (!u.length) return { ok: false as const, reason: 'no-user' as const };
-      await activateDueQueued(tx, userId, today); // 큐 패스 지연 활성화
-      const actives = await tx.select().from(attendancePasses)
-        .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.userId, userId), eq(attendancePasses.status, 'active'))).for('update');
-      const live = actives.filter((p) => isWithinClaimWindow(p.startDate, today));
-      if (!live.length) {
-        const nb = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).limit(1);
-        return { ok: true as const, reason: 'no-pass' as const, granted: 0, slots: 0, balance: nb[0]?.balance ?? 0 };
-      }
-      let granted = 0, slots = 0, lastIdx = 0, lastEnd = '';
-      for (const p of live) {
-        for (const idx of claimableDayIndexes(p.startDate, today)) {
-          const r = await applyWalletTx(tx, userId, PASS_DAILY_REWARD, 'pass_daily', passDailyKey(userId, p.id, idx), p.storeTxnId ?? p.id);
-          if (r.ok && r.applied) { granted += PASS_DAILY_REWARD; slots++; }
-          lastIdx = idx; lastEnd = p.endDate;
-        }
-      }
-      const nb = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).limit(1);
-      return { ok: true as const, reason: (slots > 0 ? 'claimed' : 'already') as 'claimed' | 'already', granted, slots, balance: nb[0]?.balance ?? 0, endDate: lastEnd, dayIndex: lastIdx };
+  // ① 큐 패스 지연 활성화(프로비저널 start ≤ 오늘) — 유저별 tx. claim 경로 폐기라 활성화 트리거는 이 스케줄러(+환불)뿐.
+  const dueQueued = await db.select({ userId: attendancePasses.userId }).from(attendancePasses)
+    .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.status, 'queued'), lte(attendancePasses.startDate, today)));
+  const dueUsers = [...new Set(dueQueued.map((r) => r.userId))];
+  for (const uid of dueUsers) {
+    await db.transaction(async (tx) => {
+      await tx.select({ id: users.id }).from(users).where(eq(users.id, uid)).for('update').limit(1); // claim/grant와 직렬화
+      await activateDueQueued(tx, uid, today, now);
     });
-  } catch (e) {
-    return { ok: false, reason: 'error' };
   }
+  // ② 활성 패스 일일 우편(캐치업)
+  const actives = await db.select().from(attendancePasses)
+    .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.status, 'active'),
+      lte(attendancePasses.startDate, today), gte(attendancePasses.endDate, today)));
+  let mailsSent = 0;
+  for (const p of actives) {
+    const slots = catchupDayIndexes(p.startDate, today); // [0..min(off,27)] — 미발송분은 mail idem_key로 dedupe
+    if (!slots.length) continue;
+    await db.transaction(async (tx) => {
+      for (const idx of slots) if (await insertPassSlotMailTx(tx, p.userId, p.id, idx, now)) mailsSent++;
+    });
+  }
+  return { activated: dueUsers.length, passes: actives.length, mailsSent };
 }
 
 // ── 환불 클로백(§4.3 · B1·B2·R1a) ──
 
 export type ClawbackResult =
-  | { ok: true; outcome: 'clawed' | 'tombstoned' | 'already'; clawback: number; passId?: string }
+  | { ok: true; outcome: 'clawed' | 'tombstoned' | 'already'; clawback: number; recalled: number; passId?: string }
   | { ok: false; reason: string };
 
 /**
- * 패스 환불 클로백(B2 단일 트랜잭션) — 패스 행 잠금 → refunded(+end 어제) → Σ(pass_daily where ref=txn) → −Σ(refund_pass 키).
+ * 패스 환불 클로백(B2 단일 트랜잭션) — 패스 행 잠금 → refunded(+end 어제) → **미수령 우편 recall** → Σ(pass_daily where idem_key LIKE prefix) → −Σ(refund_pass 키).
  * B1: 행 없으면(환불 선착) refunded tombstone 선삽입(뒤 grantPass 활성화 금지). R1a: 앵커 큐 패스 start 재계산 + 활성화.
  */
 export async function clawbackPass(userId: string, storeTxnId: string, productId: string, now: Date = new Date()): Promise<ClawbackResult> {
@@ -248,16 +272,22 @@ export async function clawbackPass(userId: string, storeTxnId: string, productId
         await tx.insert(attendancePasses).values({
           projCode: PROJ_CODE, userId, storeTxnId, startDate: today, endDate: yesterday, source: 'purchase', status: 'refunded', purchasedAt: null,
         }).onConflictDoNothing();
-        return { ok: true as const, outcome: 'tombstoned' as const, clawback: 0 };
+        return { ok: true as const, outcome: 'tombstoned' as const, clawback: 0, recalled: 0 };
       }
       const row = rows[0];
       const alreadyRefunded = row.status === 'refunded';
       if (!alreadyRefunded) {
         await tx.update(attendancePasses).set({ status: 'refunded', endDate: yesterday }).where(eq(attendancePasses.id, row.id));
       }
-      // Σ(pass_daily where ref=storeTxnId) — 잠금 하 집계(claim 끼어들기 차단, B2)
+      // ★ 미수령 pass_daily 우편 recall(§4.3.2 재개정) — 안 하면 환불 후에도 우편함에서 계속 수령 가능(구멍). recalled_at 마킹 → 목록·카운트 즉시 제외.
+      const recalledRows = await tx.update(mails).set({ recalledAt: sql`now()` })
+        .where(and(eq(mails.projCode, PROJ_CODE), eq(mails.userId, userId),
+          sql`${mails.idemKey} LIKE ${passMailPrefix(row.id) + '%'}`, isNull(mails.claimedAt), isNull(mails.recalledAt)))
+        .returning({ id: mails.id });
+      // Σ(pass_daily where idem_key LIKE 'pass_daily:<user>:<pass>:%') — 잠금 하 집계(claim 끼어들기 차단, B2). passId 앵커(ref=mail:<id>라 storeTxnId로 못 묶음).
       const sumRows = await tx.select({ s: sql<number>`coalesce(sum(${walletLedger.delta}), 0)::int` }).from(walletLedger)
-        .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'pass_daily'), eq(walletLedger.ref, storeTxnId)));
+        .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'pass_daily'),
+          sql`${walletLedger.idempotencyKey} LIKE ${passDailyLedgerPrefix(userId, row.id) + '%'}`));
       const total = sumRows[0]?.s ?? 0;
       let clawed = 0;
       if (total > 0) {
@@ -272,8 +302,8 @@ export async function clawbackPass(userId: string, storeTxnId: string, productId
         const { startDate, endDate } = passWindow(today);
         await tx.update(attendancePasses).set({ startDate, endDate }).where(eq(attendancePasses.id, q.id));
       }
-      await activateDueQueued(tx, userId, today); // 재계산된 큐 패스 즉시 활성화
-      return { ok: true as const, outcome: alreadyRefunded ? 'already' as const : 'clawed' as const, clawback: clawed, passId: row.id };
+      await activateDueQueued(tx, userId, today, now); // 재계산된 큐 패스 즉시 활성화(day-0 우편)
+      return { ok: true as const, outcome: alreadyRefunded ? 'already' as const : 'clawed' as const, clawback: clawed, recalled: recalledRows.length, passId: row.id };
     });
   } catch (e) {
     return { ok: false, reason: e instanceof Error ? e.message : 'error' };
@@ -336,23 +366,26 @@ export async function reversePackBonus(userId: string, storeTxnId: string, produ
 export interface PassStatus {
   active: boolean;
   endDate: string | null;      // 활성 패스 종료일(D-N 표시)
-  claimedToday: boolean;       // 오늘 dayIndex 이미 수령?
+  dayIndex: number | null;     // 오늘 dayIndex(0~27, 스탬프 표시)
+  claimedToday: boolean;       // 오늘 dayIndex 슬롯 우편 이미 수령(원장 pass_daily 키 존재)?
   queued: boolean;             // 예약 패스 보유?
   bonus1p1Available: Record<string, boolean>; // 팩별 이번 달 1+1 가용(서버 파생)
 }
 
-/** 패스·1+1 상태 — getWallet 응답 편입(§2.4 Q2). 1+1 가용은 원장 월-키 존재 파생(낙관 표시 금지). */
+/** 패스·1+1 상태 — getWallet 응답 편입(§2.4 Q2). 수령 현황은 **우편 수령 기준**(원장 pass_daily 키 존재)으로 재정의(§UI, 재개정 2026-07-23). 1+1 가용은 원장 월-키 존재 파생(낙관 표시 금지). */
 export async function passStatus(userId: string, now: Date = new Date()): Promise<PassStatus> {
   const today = todayKstResetAdjusted(PASS_RESET_HOUR_KST, now);
   const rows = await db.select().from(attendancePasses)
     .where(and(eq(attendancePasses.projCode, PROJ_CODE), eq(attendancePasses.userId, userId), inArray(attendancePasses.status, ['active', 'queued'])));
-  const actives = rows.filter((p: PassRow) => p.status === 'active' && isWithinClaimWindow(p.startDate, today));
+  const actives = rows.filter((p: PassRow) => p.status === 'active' && isPassActiveOn(p.startDate, today));
   const queued = rows.some((p: PassRow) => p.status === 'queued');
   const active = actives[0];
   let claimedToday = false;
+  let dayIndex: number | null = null;
   if (active) {
-    const off = diffDays(active.startDate, today);
-    const idx = Math.min(PASS_DURATION_DAYS - 1, Math.max(0, off));
+    const idx = Math.min(PASS_DURATION_DAYS - 1, Math.max(0, passDayIndex(active.startDate, today)));
+    dayIndex = idx;
+    // 오늘 슬롯 우편이 이미 수령됐나 = 그 슬롯 pass_daily 원장 키 존재(우편함 claim이 쓰는 키).
     const dup = await db.select({ id: walletLedger.id }).from(walletLedger)
       .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, passDailyKey(userId, active.id, idx)))).limit(1);
     claimedToday = dup.length > 0;
@@ -367,5 +400,5 @@ export async function passStatus(userId: string, now: Date = new Date()): Promis
       bonus1p1Available[pid] = dup.length === 0;
     }
   }
-  return { active: !!active, endDate: active?.endDate ?? null, claimedToday, queued, bonus1p1Available };
+  return { active: !!active, endDate: active?.endDate ?? null, dayIndex, claimedToday, queued, bonus1p1Available };
 }

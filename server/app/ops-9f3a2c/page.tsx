@@ -7,7 +7,7 @@ import { AD_REWARD, AD_DAILY_CAP } from '../../lib/econ'; // 다이아 econ 권�
 
 type Json = Record<string, unknown>;
 // 11섹션 IA(BACKEND_SYSTEM §13.25-D). ①~⑧=분석 그룹 · ⑨=운영 · ⑩⑪=대시보드(overview) 상단.
-type Tab = 'overview' | 'users' | 'retention' | 'play' | 'offseason' | 'payments' | 'ads' | 'match' | 'players' | 'achv' | 'errors' | 'coupons' | 'anns' | 'devnotes' | 'settings' | 'tickets';
+type Tab = 'overview' | 'users' | 'retention' | 'play' | 'offseason' | 'payments' | 'ads' | 'match' | 'players' | 'achv' | 'errors' | 'coupons' | 'anns' | 'devnotes' | 'mail' | 'settings' | 'tickets';
 
 async function apiCall(path: string, token: string, init?: RequestInit): Promise<{ status: number; body: Json }> {
   // 네트워크 자체 실패(서버 다운·타임아웃·오프라인)면 fetch가 throw — 이걸 안 잡으면 호출부의
@@ -260,10 +260,11 @@ const NAV: { id: Tab; ic: string; label: string; grp?: string }[] = [
   { id: 'coupons', ic: '🎟', label: '쿠폰', grp: '운영' },
   { id: 'anns', ic: '📢', label: '공지', grp: '운영' },
   { id: 'devnotes', ic: '📝', label: '노트', grp: '운영' },
+  { id: 'mail', ic: '📬', label: '우편', grp: '운영' },
   { id: 'tickets', ic: '✉', label: '문의 · 환불', grp: '운영' },
   { id: 'settings', ic: '⚙', label: '운영 설정', grp: '운영' },
 ];
-const TITLES: Record<Tab, string> = { overview: '대시보드', users: '① 사용자 현황', retention: '② 리텐션 코호트', play: '③ 플레이', offseason: '④ 오프시즌 funnel', payments: '⑤ BM · 수익화', ads: '⑥ 광고', match: '⑦ 경기 데이터', players: '⑧ 선수 데이터', achv: '업적', errors: '⑨ 오류 모니터링', coupons: '쿠폰 관리', anns: '공지 관리', devnotes: '노트 · 패치노트', settings: '운영 설정', tickets: '문의 · 환불' };
+const TITLES: Record<Tab, string> = { overview: '대시보드', users: '① 사용자 현황', retention: '② 리텐션 코호트', play: '③ 플레이', offseason: '④ 오프시즌 funnel', payments: '⑤ BM · 수익화', ads: '⑥ 광고', match: '⑦ 경기 데이터', players: '⑧ 선수 데이터', achv: '업적', errors: '⑨ 오류 모니터링', coupons: '쿠폰 관리', anns: '공지 관리', devnotes: '노트 · 패치노트', mail: '우편 관리', settings: '운영 설정', tickets: '문의 · 환불' };
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
@@ -338,6 +339,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === 'coupons' && <Coupons coupons={coupons} api={api} reload={load} flash={flash} />}
         {tab === 'anns' && <Anns anns={anns} api={api} reload={load} flash={flash} />}
         {tab === 'devnotes' && <Devnotes devnotes={devnotes} api={api} reload={load} flash={flash} />}
+        {tab === 'mail' && <MailPanel api={api} flash={flash} />}
         {tab === 'settings' && <Settings setting={setting} api={api} reload={load} flash={flash} />}
         {tab === 'tickets' && <Tickets tickets={tickets} api={api} reload={load} flash={flash} />}
         </>}
@@ -1329,6 +1331,143 @@ function DevnoteModal({ note, api, reload, flash, onClose }: { note: Json | null
           <div style={{ flex: 1, overflowY: 'auto', height: 320, border: '1px solid var(--bd)', borderRadius: 10, padding: '11px 15px', background: 'var(--card2)' }}><Markdown src={body} /></div>
         </div>
       </div>
+    </Modal>
+  );
+}
+
+// ── 우편(MAILBOX_SYSTEM §7 · DIAMOND_PASS §2.4 admin) — 개별/브로드캐스트 발송·이력·회수. admin/mail API 배선.
+//   일일 패스 우편(sender system:pass)은 스케줄러 전용이라 이 폼·이력에 없음(listAdminMail이 제외).
+function mailStatusBadge(m: Json) {
+  if (m.recalledAt) return <span className="oc-badge dg">회수됨</span>;
+  if (m.claimedAt) return <span className="oc-badge gd">수령됨</span>;
+  if (m.expiresAt && new Date(m.expiresAt as string).getTime() < Date.now()) return <span className="oc-badge mut">만료</span>;
+  if (m.readAt) return <span className="oc-badge ac">읽음</span>;
+  return <span className="oc-badge wn">미수령</span>;
+}
+
+function MailPanel({ api, flash }: { api: Api; flash: (m: string) => void }) {
+  const [rows, setRows] = useState<Json[] | null>(null);
+  const [userFilter, setUserFilter] = useState('');
+  const [modal, setModal] = useState(false);
+  const [busyId, setBusyId] = useState('');
+  const load = useCallback(async (uid?: string) => {
+    setRows(null);
+    const q = uid && uid.trim() ? `?userId=${encodeURIComponent(uid.trim())}` : '';
+    const r = await api(`/api/admin/mail${q}`);
+    setRows((r.body.mails as Json[]) ?? []);
+  }, [api]);
+  useEffect(() => { load(); }, [load]);
+
+  const recall = async (m: Json) => {
+    if (!window.confirm(`우편 "${String(m.title)}"을(를) 회수할까요? (수령 전 우편만 회수됩니다)`)) return;
+    setBusyId(String(m.id));
+    const r = await api(`/api/admin/mail?id=${encodeURIComponent(String(m.id))}`, { method: 'DELETE' });
+    setBusyId('');
+    if (r.body.ok) { flash('우편을 회수했습니다'); load(userFilter); }
+    else flash(`회수 실패 — ${errMsg(r)}`);
+  };
+
+  return (
+    <div className="oc-card">
+      <div className="oc-cardhead"><h3>우편 발송 이력 <span className="oc-mut">({rows?.length ?? 0})</span></h3>
+        <button className="oc-btn sm" onClick={() => setModal(true)}>＋ 우편 발송</button>
+      </div>
+      <div className="oc-row" style={{ marginBottom: 14 }}>
+        <input className="oc-input" style={{ maxWidth: 340 }} placeholder="user id로 필터 (빈칸=전체 발송분)" value={userFilter} onChange={(e) => setUserFilter(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter') load(userFilter); }} />
+        <button className="oc-btn ghost sm" onClick={() => load(userFilter)}>조회</button>
+        {userFilter ? <button className="oc-btn ghost sm" onClick={() => { setUserFilter(''); load(); }}>초기화</button> : null}
+      </div>
+      {rows == null ? <LoadingRow /> : rows.length === 0 ? <div className="oc-empty">발송한 우편이 없습니다. 우측 상단 “＋ 우편 발송”으로 보내세요. (다이아 패스 일일 우편은 스케줄러 전용이라 여기 없음)</div> : (
+        <table className="oc-table">
+          <thead><tr><th>시각</th><th>대상</th><th>제목</th><th>첨부</th><th>상태</th><th></th></tr></thead>
+          <tbody>
+            {rows.map((m) => {
+              const canRecall = !m.claimedAt && !m.recalledAt;
+              return (
+                <tr key={String(m.id)}>
+                  <td className="oc-mut">{fmtDT(m.createdAt)}</td>
+                  <td className="oc-mut" title={String(m.userId)}>{String(m.userId).slice(0, 8)}…</td>
+                  <td style={{ fontWeight: 700 }}>{String(m.title)}</td>
+                  <td>{m.attachType === 'pass' ? <span className="oc-badge ac">🎫 패스</span> : <span className="oc-badge gd">💎 {String(m.attachAmount ?? 0)}</span>}</td>
+                  <td>{mailStatusBadge(m)}</td>
+                  <td style={{ textAlign: 'right' }}>{canRecall ? <button className="oc-btn ghost sm" style={{ borderColor: 'var(--dg)', color: 'var(--dg)' }} disabled={busyId === String(m.id)} onClick={() => recall(m)}>{busyId === String(m.id) ? '…' : '회수'}</button> : null}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {modal ? <MailModal api={api} flash={flash} onClose={() => setModal(false)} onSent={() => { setModal(false); load(userFilter); }} /> : null}
+    </div>
+  );
+}
+
+function MailModal({ api, flash, onClose, onSent }: { api: Api; flash: (m: string) => void; onClose: () => void; onSent: () => void }) {
+  const [target, setTarget] = useState<'user' | 'broadcast'>('user');
+  const [userId, setUserId] = useState('');
+  const [title, setTitle] = useState('');
+  const [body, setBody] = useState('');
+  const [attachType, setAttachType] = useState<'diamonds' | 'pass'>('diamonds');
+  const [amount, setAmount] = useState('500');
+  const [expires, setExpires] = useState(''); // 빈칸=기본(다이아 30 / 패스 60)
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState('');
+  // 발송 멱등키 — 폼-오픈 시 1회 생성(더블클릭 이중발송 봉인, MAILBOX R1). 서버가 아니라 클라가 생성해야 재시도 dedup.
+  const [idemKey] = useState(() => (typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `ops-${Date.now()}-${Math.random().toString(36).slice(2)}`));
+
+  const isBroadcast = target === 'broadcast';
+  const attachPass = !isBroadcast && attachType === 'pass'; // 브로드캐스트는 다이아만(Q4)
+  const invalid = !title.trim() || !body.trim() || (target === 'user' && !userId.trim()) || (!attachPass && (!(Number(amount) > 0)));
+
+  const submit = async () => {
+    setBusy(true); setErr('');
+    const payload: Record<string, unknown> = {
+      title: title.trim(), body: body.trim(), idemKey,
+      attachType: isBroadcast ? 'diamonds' : attachType,
+      expiresInDays: expires.trim() ? Number(expires) : null,
+    };
+    if (isBroadcast) { payload.target = 'broadcast'; payload.attachAmount = Number(amount); }
+    else { payload.userId = userId.trim(); payload.attachAmount = attachType === 'pass' ? null : Number(amount); }
+    const r = await api('/api/admin/mail', { method: 'POST', body: JSON.stringify(payload) });
+    setBusy(false);
+    if (r.body.ok) {
+      flash(r.body.deduped ? '이미 보낸 우편입니다(중복 방지)' : isBroadcast ? '전체 우편을 발송했습니다' : '우편을 발송했습니다');
+      onSent();
+    } else setErr(`발송 실패 — ${errMsg(r)}`);
+  };
+
+  return (
+    <Modal title="우편 발송" sub="개별 유저 또는 전체(브로드캐스트)" onClose={onClose}
+      footer={<><FooterMsg msg={err} /><Btn variant="ghost" onClick={onClose} disabled={busy}>취소</Btn><Btn onClick={submit} disabled={invalid || busy}>{busy ? '발송 중…' : '발송'}</Btn></>}>
+      <div className="oc-frow">
+        <div className="oc-fld"><label className="oc-label">대상</label>
+          <select className="oc-input" value={target} onChange={(e) => setTarget(e.target.value as 'user' | 'broadcast')}>
+            <option value="user">개별 유저</option>
+            <option value="broadcast">전체(브로드캐스트)</option>
+          </select>
+        </div>
+        {!isBroadcast ? (
+          <div className="oc-fld"><label className="oc-label">첨부 종류</label>
+            <select className="oc-input" value={attachType} onChange={(e) => setAttachType(e.target.value as 'diamonds' | 'pass')}>
+              <option value="diamonds">다이아</option>
+              <option value="pass">다이아 패스(28일 1개)</option>
+            </select>
+          </div>
+        ) : null}
+      </div>
+      {!isBroadcast ? <div className="oc-fld"><label className="oc-label">대상 user id</label><input className="oc-input" placeholder="userId" value={userId} onChange={(e) => setUserId(e.target.value)} /></div> : null}
+      {isBroadcast ? <div className="oc-mut" style={{ fontSize: 12, marginTop: -2 }}>전체 발송은 다이아만 가능합니다(Q4). 대상 = 발송 시점 이전 가입자(cutoff).</div> : null}
+      {!attachPass ? (
+        <div className="oc-frow">
+          <div className="oc-fld"><label className="oc-label">다이아 수량</label><input className="oc-input" type="number" value={amount} onChange={(e) => setAmount(e.target.value)} /></div>
+          <div className="oc-fld"><label className="oc-label">보관일 (빈칸=기본 30일)</label><input className="oc-input" type="number" placeholder="30" value={expires} onChange={(e) => setExpires(e.target.value)} /></div>
+        </div>
+      ) : (
+        <div className="oc-fld"><label className="oc-label">보관일 (빈칸=패스 기본 60일)</label><input className="oc-input" type="number" placeholder="60" value={expires} onChange={(e) => setExpires(e.target.value)} /></div>
+      )}
+      <div className="oc-fld"><label className="oc-label">제목</label><input className="oc-input" placeholder="운영 보상 안내" value={title} onChange={(e) => setTitle(e.target.value)} /></div>
+      <div className="oc-fld"><label className="oc-label">본문</label><textarea className="oc-input" rows={4} placeholder="내용을 입력하세요" value={body} onChange={(e) => setBody(e.target.value)} /></div>
+      {attachPass ? <div className="oc-mut" style={{ fontSize: 12 }}>다이아 패스 첨부: 수령 시 28일 패스 1개가 지급되고 1일차 우편이 즉시 도착합니다.</div> : null}
     </Modal>
   );
 }

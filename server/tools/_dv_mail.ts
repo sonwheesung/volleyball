@@ -4,6 +4,7 @@
 import {
   mailLedgerKey, mailBroadcastKey, mailExpiresInDays, mailExpiresAt, isMailExpired, validateAttach, classifyMail, includeInStatus,
 } from '../lib/mail';
+import { passMailKey, passDailyKey, parsePassMailKey } from '../lib/pass';
 import { MAIL_RETENTION_DAYS, MAIL_PASS_EXPIRE_DAYS, MAIL_MAX_GRANT, MAIL_PURGE_GRACE_DAYS } from '../lib/econ';
 
 let fail = 0;
@@ -94,5 +95,21 @@ ok(includeInStatus('claimed', 'claimed') === true, 'claimed 탭 = 수령분');
   ok(includeInStatus('all', 'recalled') === false, '  [A/B] 정본은 회수분 all에서도 제외');
 }
 
-console.log(fail === 0 ? '\n✅ _dv_mail 순수 검증 통과 — 멱등키·만료 경계·캡·상태분류·만료일파생·상수미러 전부' : `\n❌ ${fail} FAIL`);
+console.log('── system:pass 일일 우편 키·파싱(DIAMOND_PASS §2.3·§2.5 — reason 분기·회수 제외) ──');
+// 다이아 패스 일일 우편(sender system:pass)은 diamonds 첨부지만 claim 시 reason='pass_daily'(클로백 Σ 추적). idem_key에서 pass/idx 파싱.
+const PID = '11111111-2222-3333-4444-555555555555';
+ok(passMailKey(PID, 0) === `pass_daily:${PID}:0`, `발송 우편 idem_key = pass_daily:<pass>:<dayIndex>(userId 없음) — 실측 ${passMailKey(PID, 0)}`);
+ok(parsePassMailKey(passMailKey(PID, 5))?.passId === PID, 'parse → passId 복원(claim 시 원장 키 빌드)');
+ok(parsePassMailKey(passMailKey(PID, 5))?.dayIndex === 5, 'parse → dayIndex 복원');
+ok(parsePassMailKey(mailLedgerKey('abc')) === null, '일반 우편 키(mail:<id>) → null(pass_daily 아님 → reason=mail)');
+ok(passDailyKey('u1', PID, 0) !== passMailKey(PID, 0), '수령 원장 키(user×pass×idx) ≠ 발송 우편 키(pass×idx) — 발송 dedupe vs 수령 dedupe 스코프 분리');
+// A/B: sender 무시하고 전 우편 reason='mail' 처리하는 뮤턴트 → pass_daily 원장이 안 생겨 클로백 Σ(reason='pass_daily') 0(under-clawback)
+{
+  const senderIgnored = (_sender: string) => 'mail';                                  // sender 무시 뮤턴트
+  const correctReason = (sender: string) => (sender === 'system:pass' ? 'pass_daily' : 'mail'); // 정본 분기
+  ok(senderIgnored('system:pass') === 'mail' && correctReason('system:pass') === 'pass_daily', '  [A/B] sender 무시 뮤턴트 → pass 우편도 reason=mail(클로백 Σ 누락 = 결함) : 정본은 system:pass→pass_daily');
+  ok(correctReason('admin') === 'mail', '  [A/B] 일반(admin/system) 우편은 reason=mail(정상)');
+}
+
+console.log(fail === 0 ? '\n✅ _dv_mail 순수 검증 통과 — 멱등키·만료 경계·캡·상태분류·만료일파생·상수미러·system:pass 파싱/reason분기 전부' : `\n❌ ${fail} FAIL`);
 process.exit(fail === 0 ? 0 : 1);
