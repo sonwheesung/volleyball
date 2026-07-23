@@ -5,6 +5,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
 import { theme } from './Screen';
 import { themedStyles } from './theme';
+import { subscribeToast } from '../lib/toastBus';
 
 export interface ToastItemData { id: number; text: string }
 
@@ -24,6 +25,14 @@ export function useToastQueue() {
     timers.current.push(t);
   }, []);
   return { toasts, push };
+}
+
+/** 앱 전역 토스트 표시기 — _layout에 1개 마운트(DialogHost 옆). lib/toastBus 구독 → useToastQueue로 하단 표시(비차단·자동소멸).
+ *  출석 패스 자동 수령 토스트(ATTENDANCE_PASS_SYSTEM §2.3·UI.2)가 화면 소유 없이 surface하는 경로. */
+export function GlobalToastHost() {
+  const { toasts, push } = useToastQueue();
+  useEffect(() => subscribeToast(push), [push]);
+  return <ToastHost toasts={toasts} />;
 }
 
 /** 화면 하단 고정 토스트 표시기 — Screen의 overlay 슬롯에 배치(ScrollView 밖 = 뷰포트 고정). */

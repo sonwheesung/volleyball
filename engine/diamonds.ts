@@ -10,6 +10,52 @@ export const AD_COOLDOWN_MS = 2 * 60 * 60 * 1000;  // 2시간 쿨다운(2026-07-
 export const AD_DAILY_CAP = 8;                 // 하루 상한
 export const WELCOME_DIAMONDS = 1000;          // 첫 전지훈련 진입 환영 선물(계정당 1회 — 서버 econ WELCOME_DIAMONDS와 일치)
 
+// ── 다이아 출석 패스 클라 표시 미러(ATTENDANCE_PASS_SYSTEM §2.1·§10 — 서버 server/lib/econ 손복제) ──
+// 지급량·창·리셋·유예의 **진실은 서버**(§13.12). 여기 값은 표시/게이팅용 미러이며, 드리프트는 가드 `tools/_dv_walletauth`가
+//   engine↔server 대조로 못 박는다(광고·CAMP 미러 패턴과 동일). 결정(수령·창 판정)은 절대 이 값으로 하지 않는다(서버 라우트 권위).
+export const PASS_DAILY_REWARD = 100;                                 // 하루 수령 💎(dayIndex 슬롯당)
+export const PASS_DURATION_DAYS = 28;                                 // 창 길이(dayIndex 0~27 = 28슬롯)
+export const PASS_MAX_TOTAL = PASS_DAILY_REWARD * PASS_DURATION_DAYS; // 2800 — 28일 완주 파생(표시 상한)
+export const PASS_PRICE_KRW = 9900;                                   // 표시가(스토어 등록값이 실청구 정본)
+export const PASS_RESET_HOUR_KST = 4;                                 // Q6 — 일일 리셋 KST 04:00
+export const PASS_GRACE_DAYS = 3;                                     // Q5=(B) — 미수령 유예 3일
+
+/** 'YYYY-MM-DD' 사이 정수 일수(표시용 순수 산술 — UTC 자정 앵커라 타임존 무관, 서버 dates.diffDays 미러). */
+export function passDaysBetween(fromStr: string, toStr: string): number {
+  const a = Date.parse(`${fromStr}T00:00:00Z`);
+  const b = Date.parse(`${toStr}T00:00:00Z`);
+  return Math.round((b - a) / 86_400_000);
+}
+
+export interface PassView {
+  dayNumber: number;     // 현재 며칠차(1~28, 클램프)
+  daysRemaining: number; // 창 종료까지 남은 일수(D-N 표시, 만료 후 0)
+  graceLeft: number;     // 만료 후 유예 잔여일(창 내면 GRACE, 만료 후 감소, 0 미만 없음)
+  expired: boolean;      // 오늘 > endDate(창 종료 후)
+  expiringSoon: boolean; // 만료 임박(D-3부터 — 인앱 배너 유도, §UI.1)
+}
+
+/** 활성 패스 표시 뷰(순수) — endDate(서버 진실)와 today(리셋보정, UI가 계산해 주입)로 며칠차·남은일·유예를 파생.
+ *  start = endDate − (DURATION−1). 결정이 아니라 표시(캡션·스탬프·배너 게이트)만. today는 lib/passClient.todayKstReset()이 준다. */
+export function passView(endDate: string, today: string): PassView {
+  const start = addDaysStr(endDate, -(PASS_DURATION_DAYS - 1));
+  const off = passDaysBetween(start, today);          // 시작 이후 경과 오프셋(만료 후 27 초과 가능)
+  const dayNumber = Math.min(PASS_DURATION_DAYS, Math.max(1, off + 1));
+  const toEnd = passDaysBetween(today, endDate);      // 종료까지(음수면 만료)
+  const daysRemaining = Math.max(0, toEnd + 1);        // 오늘 포함 남은일(오늘=endDate면 1)
+  const expired = toEnd < 0;
+  const graceLeft = expired ? Math.max(0, PASS_GRACE_DAYS + toEnd + 1) : PASS_GRACE_DAYS;
+  const expiringSoon = !expired && daysRemaining <= 3;
+  return { dayNumber, daysRemaining, graceLeft, expired, expiringSoon };
+}
+
+/** 'YYYY-MM-DD'에 n일(표시용 순수 — 서버 dates.addDays 미러). */
+function addDaysStr(dateStr: string, n: number): string {
+  const d = new Date(`${dateStr}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + n);
+  return d.toISOString().slice(0, 10);
+}
+
 export interface AdState { dayIdx: number; count: number; lastAdAt: number }
 export const FRESH_AD_STATE: AdState = { dayIdx: 0, count: 0, lastAdAt: 0 };
 

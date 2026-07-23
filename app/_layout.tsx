@@ -13,6 +13,7 @@ import { SpotlightProvider } from '../components/Spotlight';
 import { IntroSplash } from '../components/IntroSplash';
 import { BootGate } from '../components/BootGate';
 import { DialogHost } from '../components/AppDialog';
+import { GlobalToastHost } from '../components/Toast';
 import { MockAdHost } from '../components/MockAdHost';
 import { useGameStore } from '../store/useGameStore';
 import { useAuthStore } from '../store/useAuthStore';
@@ -230,6 +231,7 @@ export default function RootLayout() {
       </Stack>
       </BootGate>
       <DialogHost />{/* 전역 커스텀 다이얼로그(UI-21) — showAlert가 여기로 렌더. BootGate 밖: 로그인/점검 화면에서도 동작 */}
+      <GlobalToastHost />{/* 전역 비차단 토스트(UI-30) — 출석 패스 자동 수령(§2.3·UI.2) 등 화면 밖 발행분. BootGate 밖 = 전 화면 표시 */}
       {IS_MOCK_AD_ENV && <MockAdHost />}{/* 테스트 전용 목 전면광고(MONETIZATION §3.2). 개발/Expo Go만 마운트 → 운영 릴리스엔 없음 */}
       </SpotlightProvider>
       </ThemeProvider>

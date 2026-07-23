@@ -66,9 +66,10 @@ import type { Contract, DraftPickRecord, ExpelRecord, FAOffer, FocusSeg, Foreign
 import { DEFAULT_FA_OFFER } from '../engine/faMarket';
 import { evalAchievements, achReward } from '../engine/achievements';
 import { achTotals } from '../data/careerTotals';
-import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, CAMP_LEGACY_CUR_GAIN, CAMP_LEGACY_POT_GAIN, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
+import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, CAMP_LEGACY_CUR_GAIN, CAMP_LEGACY_POT_GAIN, WELCOME_DIAMONDS, PASS_DURATION_DAYS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
 import { showRewardedForDiamonds, hasRemoveAds } from '../lib/ads';
-import { earnDiamonds, earnDiamondsBatch, spendDiamonds, getWallet } from '../lib/server';
+import { earnDiamonds, earnDiamondsBatch, spendDiamonds, getWallet, claimPass as apiClaimPass, type PassStatus } from '../lib/server';
+import { emitGlobalToast } from '../lib/toastBus';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
 import { useAuthStore } from './useAuthStore';
 import { track } from '../lib/analytics';
@@ -139,6 +140,8 @@ interface GameState {
   claimWelcomeDiamonds: () => Promise<{ applied: boolean }>; // 첫 전지훈련 진입 환영 선물(계정당 1회, 서버 멱등)
   trainingCamp: (playerId: string, course: CampCourse) => Promise<{ ok: boolean; reason?: string }>; // 오프시즌 전지훈련(서버 차감 후, §11.2)
   syncWallet: () => Promise<void>;             // 서버 잔액으로 캐시 리싱크(로그인/포그라운드/실패후 — §13.12 P0-3) + 아웃박스 정산
+  passStatus: PassStatus | null;               // 출석 패스 상태(ATTENDANCE_PASS_SYSTEM §2.4 Q2 — getWallet 편입) — 표시 캐시(비영속, 서버 진실)
+  claimPass: () => Promise<void>;              // 출석 패스 일일 자동 수령(포그라운드/리셋경계) — 서버 확정 후 잔액·토스트(§2.3·UI.2)
   reconcilePendingCamp: () => Promise<void>;   // 아웃박스 정산(재기동 복구)
   bonds: Record<string, number>; // 인간관계 우정(pairKey→0~0.3, 함께한 세월 누적, RELATIONSHIP_SYSTEM)
   coachPool: { coaches: Coach[]; assistants: AssistantCoach[] } | null; // 감독 생애주기 풀(null=시드, STAFF_SYSTEM 6)
@@ -267,6 +270,7 @@ const freshSave = {
   campTrainedThisOffseason: [] as string[],
   campDoneSeason: -1,
   pendingCamp: null as PendingCamp | null,
+  passStatus: null as PassStatus | null, // 비영속 — 서버 파생(getWallet 편입), 로그인/포그라운드마다 syncWallet가 채움
   claimedAch: [] as string[],
   adState: { ...FRESH_AD_STATE } as AdState,
   bonds: {} as Record<string, number>,
@@ -547,9 +551,32 @@ export const useGameStore = create<GameState>()(
             const today = Math.floor(Date.now() / 86_400_000);
             patch.adState = { dayIdx: today, count: r.adToday.count, lastAdAt: r.adToday.lastAtMs ?? 0 };
           }
+          if ('pass' in r) patch.passStatus = r.pass ?? null; // 출석 패스 상태 편입(§2.4 Q2) — 구서버(필드 없음)면 미변경
           set(patch);
         }
         await get().reconcilePendingCamp();      // 아웃박스 정산(재기동/포그라운드 복구)
+      },
+      // 출석 패스 일일 자동 수령(§2.3·UI.2) — 앱 포그라운드/리셋경계에서 호출. **낙관 금지**: 서버 확정 응답 후에만 잔액 갱신.
+      //   claimed(granted>0)면 비차단 토스트(UI-30) "출석 패스 +N💎 · d/28일" + 잔액·passStatus 캐시 갱신. already/no-pass/오프라인은 조용히.
+      //   멱등(user×pass×dayIndex)이라 멀티기기·재진입 이중수령 0(진 쪽 already). 전지훈련 등 지갑 왕복 중(walletBusy)이면 스킵(다음 기회 재시도).
+      claimPass: async () => {
+        if (!useAuthStore.getState().session?.userId) return; // 비로그인/오프라인 → no-op(다음 포그라운드 재시도)
+        if (get().walletBusy) return;                          // 다른 지갑 왕복과 잔액 클로버 방지 — 멱등이라 스킵해도 손실 0
+        const r = await apiClaimPass();
+        if (!r.ok) return;                                     // offline/unauthorized/error → 조용히(UI.2 배지가 유도)
+        if (r.reason === 'claimed' && r.granted > 0) {
+          const cur = get().passStatus;
+          const day = Math.min(PASS_DURATION_DAYS, (r.dayIndex ?? 0) + 1);
+          set({
+            ...(Number.isFinite(r.balance) ? { diamonds: r.balance } : {}), // 서버 확정 잔액만 반영(낙관 금지)
+            passStatus: cur ? { ...cur, claimedToday: true, endDate: r.endDate ?? cur.endDate } : cur,
+          });
+          emitGlobalToast(`출석 패스 +${r.granted.toLocaleString()}💎 · ${day}/${PASS_DURATION_DAYS}일`);
+        } else if (r.reason === 'already') {
+          // 오늘분 이미 수령 — passStatus.claimedToday만 참으로 맞춰 카드 상태 정합(잔액 무변경, 토스트 없음).
+          const cur = get().passStatus;
+          if (cur && !cur.claimedToday) set({ passStatus: { ...cur, claimedToday: true } });
+        }
       },
       reconcilePendingCamp: async () => {
         const s = get();

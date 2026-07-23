@@ -13,3 +13,11 @@ export const DEV_TOOLS = __DEV__ && SHOW_DEV_TOOLS;
 // 기능 노출 플래그 — 아직 안 만든 기능을 상점/메뉴에서 숨긴다(팔지 않는다).
 //   월드컵 DLC(WORLDCUP_SYSTEM)는 설계만 있고 미구현(P0~P1 계획) → 구현 완료 시 true로.
 export const WORLDCUP_ENABLED = false;
+
+// 출석 패스·월 1+1 노출 플래그(ATTENDANCE_PASS_SYSTEM §7 출시 게이팅 — WORLDCUP_ENABLED 패턴).
+//   · ATTENDANCE_PASS_ENABLED: 상점 패스 카드·마이페이지 수령 현황·포그라운드 자동 수령 배선을 노출.
+//   · PROMO_1P1_ENABLED: 팩 카드 "이번 달 1+1" 뱃지를 노출(실 가용 여부는 서버 파생 bonus1p1Available가 최종 게이트).
+// 기본 **__DEV__만 true** — diamond_pass 스토어/RC 등록·샌드박스 실결제 완료(Phase ③ #43) 전엔 운영에서 false.
+//   false면 패스 카드·뱃지를 렌더하지 않아 기존 상점과 **바이트 동일 동작**(추가 노출 0).
+export const ATTENDANCE_PASS_ENABLED = __DEV__;
+export const PROMO_1P1_ENABLED = __DEV__;

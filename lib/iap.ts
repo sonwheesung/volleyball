@@ -22,6 +22,7 @@ import { DIAMOND_TIERS } from '../data/diamondTiers';
 export const SKU_REMOVE_ADS = 'remove_ads';
 export const SKU_DLC_WORLDCUP = 'dlc_worldcup';        // 구매 상품 id(스토어 등록 = 서버 ENTITLEMENT_PRODUCTS)
 export const RC_ENTITLEMENT_WORLDCUP = 'worldcup';     // RC 엔타이틀먼트 id — 구매 상품 id('dlc_worldcup')와 **다른 한 개념의 두 문자열**
+export const SKU_DIAMOND_PASS = 'diamond_pass';        // 출석 패스 소비성 SKU(ATTENDANCE_PASS_SYSTEM §2.1) — 서버 PASS_PRODUCTS와 일치. 다이아 팩과 동형 소비성(재구매 가능)
 
 export type Sku = typeof SKU_REMOVE_ADS | typeof SKU_DLC_WORLDCUP;
 export type PurchaseResult =
@@ -222,6 +223,53 @@ export async function purchaseDiamonds(productId: string): Promise<DiamondResult
   } catch (e: any) {
     if (e?.userCancelled) { logEvent('iap:diamonds:cancelled', { productId, requestId }); return { ok: false, reason: 'cancelled' }; }
     logError('iap.purchaseDiamonds', `${e?.readableErrorCode ?? e?.code ?? ''} ${e?.message ?? e} rq=${requestId}`);
+    const net = /network|offline|connection/i.test(String(e?.message ?? ''));
+    return { ok: false, reason: net ? 'network' : 'error', message: String(e?.message ?? e) };
+  }
+}
+
+export type PassPurchaseResult =
+  | { ok: true; productId: string }
+  | { ok: false; reason: 'cancelled' | 'network' | 'unavailable' | 'error'; message?: string };
+
+/** 출석 패스(소비성) 구매 — 다이아 팩과 **동형**(throw 없음, 실지급은 서버 권위). 구매는 다이아 0(창 생성만) — 다이아는 일일 수령으로만(§2.1).
+ *  dev=시뮬 알림(미지급 — 서버 grantPass는 실 RC 검증 필요). prod=RC 소모품 결제 → 웹훅/confirm 폴백이 서버에 패스 창 생성(§13.18 이중경로)
+ *  → 호출부가 `syncWallet()`으로 passStatus 반영. 멱등키 `purchase:<userId>:<storeTxnId>` 공유(웹훅·confirm dedup). */
+export async function purchasePass(): Promise<PassPurchaseResult> {
+  const productId = SKU_DIAMOND_PASS;
+  logEvent('iap:pass:start', { productId });
+  if (__DEV__) {
+    return await new Promise<PassPurchaseResult>((resolve) => {
+      Alert.alert('출석 패스 구매 (개발)', '출석 패스 구매 시뮬레이션\n운영 빌드에선 실제 결제(RevenueCat) → 서버 검증 후 28일 창이 생성됩니다.', [
+        { text: '취소', style: 'cancel', onPress: () => resolve({ ok: false, reason: 'cancelled' }) },
+        { text: '구매(시뮬)', onPress: () => resolve({ ok: true, productId }) },
+      ], { onDismiss: () => resolve({ ok: false, reason: 'cancelled' }) });
+    });
+  }
+  const requestId = 'rq_' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+  const dev = getDeviceInfo();
+  try {
+    const Purchases = rc();
+    if (!Purchases || !REVENUECAT_API_KEY) return { ok: false, reason: 'unavailable', message: 'IAP 미설정' };
+    logEvent('iap:pass:offerings', { productId, requestId });
+    const offerings = await Purchases.getOfferings();
+    const pkgs: any[] = offerings?.current?.availablePackages ?? [];
+    const pkg = pkgs.find((p) => p?.product?.identifier === productId || p?.identifier === productId);
+    if (!pkg) { logError('iap.purchasePass', `상품 없음(offerings) ${productId} rq=${requestId}`); return { ok: false, reason: 'unavailable', message: '상품을 찾을 수 없음' }; }
+    logEvent('iap:pass:purchase', { productId, requestId });
+    const res: any = await Purchases.purchasePackage(pkg); // 결제 완료(취소면 throw). 패스 창 생성은 서버(웹훅+confirm 폴백)
+    const storeTxnId = String(res?.transaction?.transactionIdentifier ?? res?.transaction?.storeTransactionId ?? '');
+    if (storeTxnId) {
+      const c = await confirmPurchase(storeTxnId, productId, { requestId, platform: dev.platform, appVersion: dev.appVersion });
+      if (!c.ok) logError('iap.purchasePass.confirm', `${c.reason} rq=${requestId} txn=${storeTxnId}`); // 폴백 실패해도 웹훅이 메꿈 → syncWallet 수렴
+    } else {
+      logError('iap.purchasePass', `storeTxnId 없음 — 웹훅 단독 의존 rq=${requestId}`);
+    }
+    logEvent('iap:pass:ok', { productId, requestId, storeTxnId });
+    return { ok: true, productId };
+  } catch (e: any) {
+    if (e?.userCancelled) { logEvent('iap:pass:cancelled', { productId, requestId }); return { ok: false, reason: 'cancelled' }; }
+    logError('iap.purchasePass', `${e?.readableErrorCode ?? e?.code ?? ''} ${e?.message ?? e} rq=${requestId}`);
     const net = /network|offline|connection/i.test(String(e?.message ?? ''));
     return { ok: false, reason: net ? 'network' : 'error', message: String(e?.message ?? e) };
   }

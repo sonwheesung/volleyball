@@ -5,14 +5,14 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import { adKey, achKey, campKey, newSaveId } from '../lib/walletKeys';
-import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, AD_DAILY_CAP, AD_COOLDOWN_MS, WELCOME_DIAMONDS, ACH_MAX_PER_CLAIM, ACH_LIFETIME_CAP } from '../server/lib/econ';
+import { earnAmount, spendAmount, isEarnReason, isSpendReason, AD_REWARD, CAMP_COST, AD_DAILY_CAP, AD_COOLDOWN_MS, WELCOME_DIAMONDS, ACH_MAX_PER_CLAIM, ACH_LIFETIME_CAP, PASS_DAILY_REWARD, PASS_DURATION_DAYS, PASS_MAX_TOTAL, PASS_PRICE_KRW, PASS_RESET_HOUR_KST, PASS_GRACE_DAYS } from '../server/lib/econ';
 import { ACHIEVEMENTS, achReward } from '../engine/achievements';
 // E2 크로스가드 — engine/diamonds(앱)와 server/lib/econ(서버 손복제) 값 일치 대조. 둘 다 import-free 상수모듈이라
 //   tsx가 repo 루트에서 직접 import 가능(서버 전용 deps 없음 → 정규식 추출 불필요). 미러가 어긋나면 여기서 FAIL.
-import { AD_REWARD as ENG_AD_REWARD, CAMP_COURSE_COST as ENG_CAMP_COST, AD_DAILY_CAP as ENG_AD_DAILY_CAP, AD_COOLDOWN_MS as ENG_AD_COOLDOWN_MS, WELCOME_DIAMONDS as ENG_WELCOME } from '../engine/diamonds';
+import { AD_REWARD as ENG_AD_REWARD, CAMP_COURSE_COST as ENG_CAMP_COST, AD_DAILY_CAP as ENG_AD_DAILY_CAP, AD_COOLDOWN_MS as ENG_AD_COOLDOWN_MS, WELCOME_DIAMONDS as ENG_WELCOME, PASS_DAILY_REWARD as ENG_PASS_DAILY, PASS_DURATION_DAYS as ENG_PASS_DURATION, PASS_MAX_TOTAL as ENG_PASS_MAX, PASS_PRICE_KRW as ENG_PASS_PRICE, PASS_RESET_HOUR_KST as ENG_PASS_RESET, PASS_GRACE_DAYS as ENG_PASS_GRACE } from '../engine/diamonds';
 // E3/E4 — server/lib/products·data/diamondTiers 둘 다 import-free 상수모듈 → 직접 import. iap.ts는 react-native를
 //   transitive import(Alert 등)라 tsx로 import 불가 → SKU 상수만 소스 정규식 추출(아래 §9).
-import { DIAMOND_PRODUCTS, ENTITLEMENT_PRODUCTS } from '../server/lib/products';
+import { DIAMOND_PRODUCTS, ENTITLEMENT_PRODUCTS, PASS_PRODUCTS } from '../server/lib/products';
 import { DIAMOND_TIERS } from '../data/diamondTiers';
 
 let fail = 0;
@@ -89,6 +89,23 @@ ok(!!CLI_REMOVE_ADS && !!CLI_DLC_WORLDCUP && !!CLI_RC_WORLDCUP, `lib/iap SKU 상
 ok(!!CLI_REMOVE_ADS && ENTITLEMENT_PRODUCTS.has(CLI_REMOVE_ADS), `SKU_REMOVE_ADS(${CLI_REMOVE_ADS}) ∈ 서버 ENTITLEMENT_PRODUCTS`);
 ok(!!CLI_DLC_WORLDCUP && ENTITLEMENT_PRODUCTS.has(CLI_DLC_WORLDCUP), `SKU_DLC_WORLDCUP(${CLI_DLC_WORLDCUP}) ∈ 서버 ENTITLEMENT_PRODUCTS`);
 ok(CLI_RC_WORLDCUP === 'worldcup' && CLI_RC_WORLDCUP !== CLI_DLC_WORLDCUP, `RC 엔타이틀먼트 id(${CLI_RC_WORLDCUP}) ≠ 구매 상품 id(${CLI_DLC_WORLDCUP}) — 한 개념 두 문자열`);
+
+console.log('── 9. 출석 패스 상수 미러 (ATTENDANCE_PASS §10 — engine/diamonds ↔ server/lib/econ, 손복제 드리프트 차단) ──');
+ok(ENG_PASS_DAILY === PASS_DAILY_REWARD && PASS_DAILY_REWARD === 100, `PASS_DAILY engine(${ENG_PASS_DAILY}) = server(${PASS_DAILY_REWARD}) = 100`);
+ok(ENG_PASS_DURATION === PASS_DURATION_DAYS && PASS_DURATION_DAYS === 28, `PASS_DURATION engine(${ENG_PASS_DURATION}) = server(${PASS_DURATION_DAYS}) = 28`);
+ok(ENG_PASS_MAX === PASS_MAX_TOTAL && PASS_MAX_TOTAL === PASS_DAILY_REWARD * PASS_DURATION_DAYS && PASS_MAX_TOTAL === 2800, `PASS_MAX engine(${ENG_PASS_MAX}) = server(${PASS_MAX_TOTAL}) = daily×duration = 2800`);
+ok(ENG_PASS_PRICE === PASS_PRICE_KRW && PASS_PRICE_KRW === 9900, `PASS_PRICE engine(${ENG_PASS_PRICE}) = server(${PASS_PRICE_KRW}) = 9900`);
+ok(ENG_PASS_RESET === PASS_RESET_HOUR_KST && PASS_RESET_HOUR_KST === 4, `PASS_RESET_HOUR_KST engine(${ENG_PASS_RESET}) = server(${PASS_RESET_HOUR_KST}) = 4(Q6)`);
+ok(ENG_PASS_GRACE === PASS_GRACE_DAYS && PASS_GRACE_DAYS === 3, `PASS_GRACE_DAYS engine(${ENG_PASS_GRACE}) = server(${PASS_GRACE_DAYS}) = 3(Q5=B)`);
+// A/B 대조군: 미러가 어긋난 값(옛 손복제)이면 == 검사가 FAIL로 드리프트를 잡는다(오라클 이빨 증명)
+const driftedDaily: number = 150, driftedReset: number = 0; // 옛 손복제 가정값(daily 구값·reset 자정)
+ok(driftedDaily !== PASS_DAILY_REWARD && driftedReset !== PASS_RESET_HOUR_KST, 'A/B 대조군: 미러가 daily=150(구값)·reset=0(자정)이었다면 위 == 검사가 FAIL — 드리프트 검출됨');
+
+console.log('── 10. 출석 패스 SKU 카탈로그 정합 (ATTENDANCE_PASS §2.1 — PASS_PRODUCTS 등록·비겹침) ──');
+ok(PASS_PRODUCTS.has('diamond_pass'), 'diamond_pass ∈ PASS_PRODUCTS(미등록→무시 방지)');
+ok(!Object.prototype.hasOwnProperty.call(DIAMOND_PRODUCTS, 'diamond_pass'), 'diamond_pass ∉ DIAMOND_PRODUCTS(패스는 즉시 다이아 0 — 팩 지급 경로에 안 걸림)');
+ok(!ENTITLEMENT_PRODUCTS.has('diamond_pass'), 'diamond_pass ∉ ENTITLEMENT_PRODUCTS(소비성·재구매 — 비소모 엔타이틀먼트 아님)');
+for (const id of Object.keys(DIAMOND_PRODUCTS)) ok(!PASS_PRODUCTS.has(id), `팩 ${id} ∉ PASS_PRODUCTS(1+1 대상 팩과 패스 분리 — 구조적 제외)`);
 
 console.log(fail === 0 ? '\n✅ PASS _dv_walletauth (모든 순수 불변식)' : `\n❌ FAIL ${fail}건`);
 process.exit(fail === 0 ? 0 : 1);

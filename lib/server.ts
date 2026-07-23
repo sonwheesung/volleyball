@@ -99,9 +99,35 @@ export function getBootstrap(): Promise<ServerResult<BootstrapData>> {
   return call('/api/bootstrap');
 }
 
+// ── 출석 패스(ATTENDANCE_PASS_SYSTEM §2.4 Q2 — getWallet 확장) ──
+// 서버 passStatus 응답 미러(server/lib/pass.ts PassStatus). 진실=서버, 앱은 표시 캐시(낙관 표시 금지 — §2.4 메모).
+export interface PassStatus {
+  active: boolean;
+  endDate: string | null;                       // 활성 패스 종료일(D-N 표시)
+  claimedToday: boolean;                         // 오늘 dayIndex 이미 수령?
+  queued: boolean;                               // 예약(큐잉) 패스 보유?(§2.2 Q1)
+  bonus1p1Available: Record<string, boolean>;    // 팩별 이번 달 1+1 가용(서버 파생 — 프로모 on일 때만 채워짐)
+}
+
 // ── 지갑 ──
-export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[]; adToday?: { count: number; lastAtMs: number | null } }>> {
+export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[]; adToday?: { count: number; lastAtMs: number | null }; pass?: PassStatus }>> {
   return call('/api/wallet');
+}
+
+// ── 출석 패스 일일 수령(§2.3) ──
+export type PassClaimReason = 'claimed' | 'already' | 'no-pass';
+export type PassClaimResult =
+  | { ok: true; reason: PassClaimReason; granted: number; slots: number; balance: number; endDate?: string; dayIndex?: number }
+  | { ok: false; reason: 'offline' | 'unauthorized' | 'error' };
+/** 출석 패스 일일 수령 — 서버가 리셋보정 오늘 KST 날짜·활성 패스 슬롯 멱등 지급(§2.3). 성공 시 잔액은 서버 확정값(낙관 금지).
+ *  claimed=신규 지급(granted>0) · already=오늘분 이미 수령 · no-pass=활성 패스 없음. 오프라인/미보유는 조용히(토스트 없음). */
+export async function claimPass(): Promise<PassClaimResult> {
+  const r = await call<{ reason: PassClaimReason; granted: number; slots: number; balance: number; endDate?: string; dayIndex?: number }>(
+    '/api/pass/claim',
+    { method: 'POST', body: '{}' },
+  );
+  if (r.ok) return { ok: true, reason: r.reason, granted: r.granted, slots: r.slots, balance: r.balance, endDate: r.endDate, dayIndex: r.dayIndex };
+  return { ok: false, reason: r.reason === 'offline' ? 'offline' : r.reason === 'unauthorized' ? 'unauthorized' : 'error' };
 }
 /** 다이아 차감(전지훈련). 서버 확정 후에만 앱이 반영. **금액은 서버 권위**(camp=−300 강제(2026-07-06 인하), §13.12) — amount는 표시/호환용.
  *  idempotencyKey = camp:<userId>:<saveId>:<season>:<playerId>. ref = 감사용 상세(playerId:course). */

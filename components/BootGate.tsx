@@ -7,6 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Loading, Screen, theme, themedStyles } from './Screen';
 import { getBootstrap, type BootstrapData } from '../lib/server';
 import { belowVersion } from '../lib/bootstrap';
+import { PASS_RESET_HOUR_KST } from '../engine/diamonds';
 import { useAuthStore } from '../store/useAuthStore';
 import { useGameStore } from '../store/useGameStore';
 import { useServerConfig } from '../store/useServerConfig';
@@ -65,10 +66,31 @@ export function BootGate({ children }: { children: ReactNode }) {
   const userId = session?.userId;
   useEffect(() => {
     if (!userId) return;
-    const sync = () => { void useGameStore.getState().syncWallet(); };
-    sync();
+    // 지갑 리싱크 + 출석 패스 자동 수령(ATTENDANCE_PASS_SYSTEM §2.3·UI.2) — 로그인·포그라운드 복귀마다.
+    //   **순차 await 필수**: syncWallet를 먼저 끝내고(passStatus·잔액 채움) claimPass를 뒤에 실행한다. 동시(비대기) 실행 시
+    //   syncWallet의 getWallet이 claim 커밋 **전** 잔액을 읽고 claim(+N) 뒤에 늦게 resolve되면 그 신선한 잔액을 **덮어써**
+    //   당일 첫 수령이 화면에 안 반영되는 레이스가 생긴다(에뮬 실측 2026-07-23). 순차면 claim이 마지막 권위.
+    const sync = async () => {
+      const st = useGameStore.getState();
+      await st.syncWallet();
+      await st.claimPass();
+    };
+    void sync();
     const sub = AppState.addEventListener('change', (st) => { if (st === 'active') sync(); });
-    return () => sub.remove();
+    // R7 — 장기 세션 리셋 경계(KST 04:00) 재시도: 앱을 켠 채 경계를 넘기면 그 시점 claim 1회(다음 dayIndex). **타이머 1개**(무거운 폴링 금지).
+    //   1차 흡수는 (B) 유예 3일이라 이 타이머가 실패/지연돼도 손실 0(다음 포그라운드 진입·유예창이 놓친 날을 메움).
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const armResetRetry = () => {
+      const now = Date.now();
+      const shift = (9 - PASS_RESET_HOUR_KST) * 3_600_000;                 // KST(+9)−리셋시각 → 리셋보정 타임스탬프 오프셋
+      const nextBoundary = (Math.floor((now + shift) / 86_400_000) + 1) * 86_400_000 - shift; // 다음 리셋 04:00(KST)의 UTC ms
+      timer = setTimeout(() => {
+        if (AppState.currentState === 'active') void useGameStore.getState().claimPass();
+        armResetRetry();                                                    // 다음 경계로 재무장(타이머 1개 유지)
+      }, Math.max(60_000, nextBoundary - now));
+    };
+    armResetRetry();
+    return () => { sub.remove(); if (timer) clearTimeout(timer); };
   }, [userId]);
 
   // 읽음 목록 prune — 활성 공지 id와 교집합만 유지(만료 공지 id 무한증가 차단, §13.13).

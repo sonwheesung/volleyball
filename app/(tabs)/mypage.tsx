@@ -18,7 +18,9 @@ import { useIsFocused } from '@react-navigation/native';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd, unclaimedReward } from '../../engine/diamonds';
 import { evalAchievements } from '../../engine/achievements';
 import { achTotals } from '../../data/careerTotals';
-import { DEV_TOOLS, WORLDCUP_ENABLED } from '../../data/flags';
+import { DEV_TOOLS, WORLDCUP_ENABLED, ATTENDANCE_PASS_ENABLED } from '../../data/flags';
+import { PASS_DURATION_DAYS, passView } from '../../engine/diamonds';
+import { todayKstReset } from '../../lib/passClient';
 import { logError } from '../../lib/log';
 import { hasRemoveAds } from '../../lib/ads';
 
@@ -47,6 +49,7 @@ function LinkCard({ icon, tint, title, sub, onPress, badge }: { icon: IoniconNam
 export default function MyPage() {
   const router = useRouter();
   const diamonds = useGameStore((s) => s.diamonds);
+  const passStatus = useGameStore((s) => s.passStatus);
   const watchAdForDiamonds = useGameStore((s) => s.watchAdForDiamonds);
   const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
   const walletBusy = useGameStore((s) => s.walletBusy);
@@ -205,6 +208,26 @@ export default function MyPage() {
           </View>
         ) : null}
       </Card>
+      {/* ── 출석 패스 수령 현황(ATTENDANCE_PASS_SYSTEM Q2 — 상시 확인처) — 활성 시에만 최소 표시. 상세·재구매는 상점. ── */}
+      {ATTENDANCE_PASS_ENABLED && passStatus?.active && passStatus.endDate ? (() => {
+        const v = passView(passStatus.endDate, todayKstReset());
+        return (
+          <Card accent={theme.gold} flat onPress={() => router.push('/buy-diamonds')}>
+            <View style={styles.row}>
+              <View style={[styles.iconChip, { backgroundColor: theme.gold + '22' }]}><Text style={{ fontSize: 18 }}>🗓️</Text></View>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.title}>출석 패스 · 이용 중</Text>
+                <Muted style={{ fontSize: 12.5, marginTop: 1 }}>
+                  D-{v.daysRemaining} · 출석 {v.dayNumber}/{PASS_DURATION_DAYS}일 · {passStatus.claimedToday ? '오늘 수령 완료' : '오늘 수령 대기'}
+                  {v.expired ? ` · 유예 ${v.graceLeft}일` : ''}
+                  {passStatus.queued ? ` · 예약 +${PASS_DURATION_DAYS}일` : ''}
+                </Muted>
+              </View>
+              <Text style={styles.arrow}>›</Text>
+            </View>
+          </Card>
+        );
+      })() : null}
       {/* 그룹 사이 여백만 넓혀 자연스럽게 구분(UI polish, item 6 — 구분선 없음, 그룹 내부 간격 12 유지).
           각 group 래퍼 marginTop 10 + 스크롤 gap 12 = 그룹 사이 ~22, 그룹 내부는 12. */}
       {/* ── 자주 보는 것 (공지·상점·업적) ──
