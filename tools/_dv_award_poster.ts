@@ -4,6 +4,8 @@
 //
 // data/awardPoster는 emblems·teamColor를 통해 PNG/webp를 require한다 — node/tsx는 이미지 파싱 불가라
 // 이미지 확장자 require를 더미(1)로 스텁한 뒤 동적 import한다(표시 색·귀속 로직만 필요, 실제 자산 불필요).
+import { readFileSync } from 'fs';
+import { join } from 'path';
 import type { PosterTone, PosterStat, PosterSeasonMode } from '../data/awardPoster';
 import type { Position } from '../types';
 import type { ProdLine } from '../engine/production';
@@ -140,6 +142,52 @@ const CFG_FOOT: PanelCfg   = { posEnLH: 1.10, nameLH: 1.10, nameMT: 0, statValLH
 // A/B 버그 재현용 — 압축 前(구) 풋노트 구성: statRow 1.8%·foot marginTop 6·f.foot .026 lh1.15·라인하이트/마진 미압축
 const CFG_FOOT_LEGACY: PanelCfg = { posEnLH: 1.15, nameLH: 1.12, nameMT: 1, statValLH: 1.12, statLabLH: 1.15, statLabMT: 1, statRowMT: 1.8, hasFoot: true, footScale: 0.026, footLH: 1.15, footMT: 6 };
 
+// ── 모아보기(3안 StatLeadersPoster) 세로 예산 + 프레임 내포 검사 (AWARDS_SYSTEM §8.1, 2026-07-23) ──
+// components/StatLeadersPoster.tsx 리스트 존(top 80.9%~bottom 5.3% = 13.8%h)에 7부문 리더를 한 줄씩 얹는다.
+// 각 행 높이 = max(자식 라인박스) = name/value 폰트(scale 0.0235w·lh 1.05) 라인박스가 지배(부문 라벨·팀 0.021w보다 큼).
+// 7행 총높이가 (존 13.8 − 안전 0.5) = 13.3%h 이하여야 넘침 없음. justifyContent:'space-between'라 총높이>존이면 균등 넘침.
+// 값 동기[컴포넌트]: f.row=w×0.0235 · LH=1.05 · 리스트 존 top80.9%/bottom5.3% · 7행. %h 환산: bfh(scale,lh)=scale×lh×75.
+const SL_ZONE_TOP = 80.9;                          // 컴포넌트 값 동기(StyleSheet.list top)
+const SL_ZONE_BOTTOM = 5.3;                        // 컴포넌트 값 동기(StyleSheet.list bottom)
+const SL_ZONE_H = (100 - SL_ZONE_BOTTOM) - SL_ZONE_TOP;  // 13.8%h (엣지 94.7% − top 80.9%)
+const SL_SAFETY = 0.5;                             // 안전마진(미모델 hairline border ~0.53%h·paddingTop 흡수)
+const SL_BUDGET = SL_ZONE_H - SL_SAFETY;           // 13.3%h
+const SL_ROWS = 7;                                 // 기록왕 부문 수(engine/awards.ts titles = scoring/spike/block/serve/dig/set/receive)
+const SL_ROW_SCALE = 0.0235;                       // StatLeadersPoster f.row (name/value 지배 폰트)
+const SL_ROW_LH = 1.05;                            // StatLeadersPoster LH
+/** 모아보기 7행 리스트 총높이(%h) — 행 높이(name/value 라인박스)×행수. bfh = scale×lh×75. */
+function statLeadersListPct(rowScale: number, rowLH: number, rows: number): number {
+  return rows * bfh(rowScale, rowLH);
+}
+
+// ── 리스트 존 ⊆ 네온 프레임 내부 검사 (sl-frame, 2026-07-23 에뮬 실사 결함 근본수정) ──
+// statleader_stage.webp 네온 프레임 내부를 sharp 행/열 스캔으로 실측(scratchpad frame_scan): 상단 네온 테두리 79.93~80.56% ·
+// 하단 네온 테두리 95.07% · 좌·우 5.2%/95.4%. 순-다크 내부 = [80.56%, 95.07%]. 구 존(top 78.5%)은 프레임 상단 테두리(79.93%)
+// 위 포디움 반사 밴드에 1행이 얹혀 값 가독성 붕괴 → sl-budget(자체 선언 존 15.5%h 내 7행 수용만 검사)은 이 결함을 못 잡았다
+// (자산 프레임과의 정합 미검사 — MIP 시즌라벨 겹침과 동형). sl-frame이 그 사각을 봉인(draft 가드 coord/drift와 같은 소스-좌표 검출).
+const SL_FRAME_INNER_TOP = 80.56;     // 프레임 상단 네온 테두리 밴드 하단(내부 시작) — sharp 실측(내부 열 79.93·80.00·80.56%)
+const SL_FRAME_INNER_BOTTOM = 95.07;  // 프레임 하단 네온 테두리(내부 끝) — sharp 실측(3열 일치)
+const SL_FRAME_INSET = 0.3;           // 리스트 존이 프레임 내부로 이 이상 들어와야(넘침 방지)
+/** 리스트 존[top%, bottomPct%]이 프레임 내부로 인셋 이상 들어있는지 — 위반 목록. */
+function slFrameErrors(zoneTop: number, zoneBottomPct: number): string[] {
+  const errs: string[] = [];
+  const topInset = zoneTop - SL_FRAME_INNER_TOP;            // 존 상단이 프레임 내부 top보다 아래(안쪽)
+  const bottomEdge = 100 - zoneBottomPct;                   // 존 하단 엣지 y%
+  const bottomInset = SL_FRAME_INNER_BOTTOM - bottomEdge;   // 존 하단이 프레임 내부 bottom보다 위(안쪽)
+  if (topInset < SL_FRAME_INSET) errs.push(`리스트 존 상단 ${zoneTop}% 인셋 ${topInset.toFixed(2)}% < 최소 ${SL_FRAME_INSET}% (프레임 내부 top ${SL_FRAME_INNER_TOP}% 이탈 — 포디움 반사 밴드 위)`);
+  if (bottomInset < SL_FRAME_INSET) errs.push(`리스트 존 하단 엣지 ${bottomEdge.toFixed(1)}% 인셋 ${bottomInset.toFixed(2)}% < 최소 ${SL_FRAME_INSET}% (프레임 내부 bottom ${SL_FRAME_INNER_BOTTOM}% 이탈)`);
+  return errs;
+}
+/** 컴포넌트 소스에서 실제 list 존 top/bottom% 추출(드리프트 검출; draft 가드 readPanelCoords와 동형). */
+function readListZoneFromSource(): { top: number; bottom: number } | null {
+  try {
+    const src = readFileSync(join(__dirname, '..', 'components', 'StatLeadersPoster.tsx'), 'utf8');
+    const m = src.match(/list:\s*\{[^}]*top:\s*'([\d.]+)%'[^}]*bottom:\s*'([\d.]+)%'/);
+    if (!m) return null;
+    return { top: parseFloat(m[1]), bottom: parseFloat(m[2]) };
+  } catch { return null; }
+}
+
 (async () => {
   const { posterStats, AWARD_TEMPLATES } = await import('../data/awardPoster');
   const templates = AWARD_TEMPLATES as unknown as TemplateMap;
@@ -201,6 +249,42 @@ const CFG_FOOT_LEGACY: PanelCfg = { posEnLH: 1.15, nameLH: 1.12, nameMT: 1, stat
     console.log(`PASS budget-sensitivity :: 구 풋노트 구성 ${legacyPct.toFixed(2)}% > 예산 ${PANEL_BUDGET}% 초과 검출 — 검사 유효 (패널 ${PANEL_H}% 넘침 ${(legacyPct - PANEL_H).toFixed(2)}%p)`);
   } else { fail++; console.log(`FAIL budget-sensitivity :: 구 풋노트 구성 ${legacyPct.toFixed(2)}%도 예산 이내로 계산 — 오라클 허위(무의미)`); }
 
-  console.log(fail === 0 ? '\nALL PASS — award poster 오귀속·톤·오버레이 충돌·세로 예산 무결' : `\n${fail} FAIL`);
+  // ── 기록왕 수여 UX 3안 프로토타입 (AWARDS_SYSTEM §8.1) ──
+  // 1·2안(AwardPoster + footnote)은 위 'budget' 검사의 풋노트 有 구성(CFG_FOOT, footPct)이 그대로 커버(≤13.2%h) — 신규 검사 불요.
+  // 3안(StatLeadersPoster, 7행 리스트)만 별도 세로 예산이 필요해 아래 sl-budget 신설.
+  console.log(`  · [3안 프로토타입] 1·2안(AwardPoster+footnote)은 풋노트 有 budget(CFG_FOOT ${footPct.toFixed(2)}% ≤ ${PANEL_BUDGET}%)이 커버 — 3안만 sl-budget 신설`);
+
+  // (A) 모아보기 세로 예산 — 프로덕션 값(0.0235w·lh1.05·7행)이 예산 13.3%h 이내여야 PASS(넘침 없음)
+  const slPct = statLeadersListPct(SL_ROW_SCALE, SL_ROW_LH, SL_ROWS);
+  console.log(`  · 모아보기 리스트 예산: 존 ${SL_ZONE_H.toFixed(1)}% - 안전 ${SL_SAFETY}% = ${SL_BUDGET.toFixed(1)}% | 7행 ${slPct.toFixed(2)}% (행 ${bfh(SL_ROW_SCALE, SL_ROW_LH).toFixed(3)}%h)`);
+  if (slPct <= SL_BUDGET) console.log(`PASS sl-budget :: 모아보기 7행 총높이 ${slPct.toFixed(2)}% ≤ ${SL_BUDGET.toFixed(1)}% — 리스트 존 넘침 없음`);
+  else { fail++; console.log(`FAIL sl-budget :: 초과 (7행 ${slPct.toFixed(2)}% vs 예산 ${SL_BUDGET.toFixed(1)}%)`); }
+
+  // (B) 모아보기 예산 민감도 A/B — 행 폰트 과대 변이(0.033w) 주입 시 예산 초과가 검출돼야 검사 유효(허위 오라클 방지)
+  const slMutantScale = 0.033;
+  const slMutantPct = statLeadersListPct(slMutantScale, SL_ROW_LH, SL_ROWS);
+  if (slMutantPct > SL_BUDGET) console.log(`PASS sl-budget-sensitivity :: 과대 행 폰트(${slMutantScale}w) 7행 ${slMutantPct.toFixed(2)}% > 예산 ${SL_BUDGET.toFixed(1)}% 초과 검출 — 검사 유효 (존 ${SL_ZONE_H.toFixed(1)}% 넘침 ${(slMutantPct - SL_ZONE_H).toFixed(2)}%p)`);
+  else { fail++; console.log(`FAIL sl-budget-sensitivity :: 과대 행 폰트도 예산 이내로 계산 — 오라클 허위(무의미)`); }
+
+  // (A) 모아보기 프레임 내포 — 리스트 존이 네온 프레임 내부(80.56~95.07%)로 인셋 이상 들어있어야 PASS(자산 정합)
+  const slFrameE = slFrameErrors(SL_ZONE_TOP, SL_ZONE_BOTTOM);
+  const slBotEdge = 100 - SL_ZONE_BOTTOM;
+  console.log(`  · 모아보기 프레임 내포: 프레임 내부 ${SL_FRAME_INNER_TOP}~${SL_FRAME_INNER_BOTTOM}% | 존 top ${SL_ZONE_TOP}%~엣지 ${slBotEdge.toFixed(1)}% (인셋 상 ${(SL_ZONE_TOP - SL_FRAME_INNER_TOP).toFixed(2)}%·하 ${(SL_FRAME_INNER_BOTTOM - slBotEdge).toFixed(2)}%)`);
+  if (slFrameE.length === 0) console.log(`PASS sl-frame :: 모아보기 리스트 존이 네온 프레임 내부(${SL_FRAME_INNER_TOP}~${SL_FRAME_INNER_BOTTOM}%) 안쪽 인셋 이상 이격`);
+  else { fail++; console.log('FAIL sl-frame ::\n  ' + slFrameE.join('\n  ')); }
+
+  // (A) 모아보기 드리프트 — 컴포넌트 소스의 실제 list 존 좌표가 미러 상수와 일치(누군가 컴포넌트만 바꾸면 검출)
+  const slSrc = readListZoneFromSource();
+  if (!slSrc) { fail++; console.log('FAIL sl-drift :: StatLeadersPoster.tsx list 존 좌표 파싱 실패(구조 변경?)'); }
+  else if (slSrc.top !== SL_ZONE_TOP || slSrc.bottom !== SL_ZONE_BOTTOM) {
+    fail++; console.log(`FAIL sl-drift :: 소스 list(top ${slSrc.top}%·bottom ${slSrc.bottom}%) ≠ 가드 미러(${SL_ZONE_TOP}·${SL_ZONE_BOTTOM}) — 값 동기 깨짐`);
+  } else console.log(`PASS sl-drift :: 컴포넌트 소스 list 존 좌표(top ${slSrc.top}%·bottom ${slSrc.bottom}%) = 가드 미러(값 동기)`);
+
+  // (B) 모아보기 프레임 민감도 A/B — 구 존(top 78.5%·bottom 6.0%) 주입 시 프레임 상단 이탈이 검출돼야 검사 유효(이번 결함 재현)
+  const slLegacyFrame = slFrameErrors(78.5, 6.0);
+  if (slLegacyFrame.some((e) => e.includes('상단'))) console.log(`PASS sl-frame-sensitivity :: 구 존(top 78.5%) 주입 시 프레임 상단 이탈 검출 — 검사 유효 (재현: ${slLegacyFrame.find((e) => e.includes('상단'))})`);
+  else { fail++; console.log(`FAIL sl-frame-sensitivity :: 구 존(top 78.5%)도 프레임 내부로 계산 — 오라클 허위(결함 재현 실패)`); }
+
+  console.log(fail === 0 ? '\nALL PASS — award poster 오귀속·톤·오버레이 충돌·세로 예산·모아보기(3안 예산·프레임 내포·드리프트) 무결' : `\n${fail} FAIL`);
   process.exit(fail === 0 ? 0 : 1);
 })();

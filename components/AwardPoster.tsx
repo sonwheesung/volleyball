@@ -46,13 +46,14 @@ export interface AwardPosterProps {
   seasonKicker?: string;           // 시즌 라벨 위 소형 키커(기본 "SEASON")
   seasonMode?: PosterSeasonMode;   // 'full'(키커+연도, 기본) / 'yearOnly'(연도만 — 타이틀이 높은 자산의 겹침 회피, §8)
   footnote?: string;               // 하단 문구(선택)
+  highlightLabels?: string[];      // 강조할 스탯 칸 라벨(부문왕 해당 칸 — 값·라벨 tone.bright+볼드). 미지정=강조 없음(기존 렌더와 바이트 동일). §8.1
   width?: number;                  // 렌더 폭(기본 = 화면폭−32, Screen 패딩)
 }
 
 /** 3:4 배경 위에 시즌·수상자·OVR·스탯을 퍼센트 절대 배치. 세로 = 폭×4/3. */
 export function AwardPoster({
   template, seasonLabel, name, posEn, ovr, stats,
-  emblem, accent = MINT, tone = DEFAULT_TONE, seasonKicker = 'SEASON', seasonMode = 'full', footnote, width,
+  emblem, accent = MINT, tone = DEFAULT_TONE, seasonKicker = 'SEASON', seasonMode = 'full', footnote, highlightLabels, width,
 }: AwardPosterProps) {
   // yearOnly = 키커 미렌더 → 연도가 topZone(3.2%) 최상단에서 시작(하단 ~7.9%). 키커 위 여백(marginTop:2)도 이때만 제거(연도가 3.2%에 붙게).
   const showKicker = seasonMode !== 'yearOnly';
@@ -78,7 +79,7 @@ export function AwardPoster({
       <ImageBackground source={template} style={{ width: w, height: h }} resizeMode="cover">
         {/* ── 상단: 시즌 라벨 (타이틀 위 빈 공간) ── */}
         <View style={styles.topZone}>
-          {showKicker ? <Text allowFontScaling={false} style={[styles.kicker, { fontSize: f.kicker, color: tone.bright }]}>{seasonKicker}</Text> : null}
+          {showKicker ? <Text allowFontScaling={false} style={[styles.kicker, { fontSize: f.kicker, color: tone.bright }]} numberOfLines={1}>{seasonKicker}</Text> : null}
           <Text allowFontScaling={false} style={[styles.season, { fontSize: f.season, color: WHITE, textShadowColor: tone.glow, marginTop: showKicker ? 2 : 0 }]} numberOfLines={1}>{seasonLabel}</Text>
         </View>
 
@@ -99,12 +100,16 @@ export function AwardPoster({
 
           {/* 하단행: 스탯 5칸 */}
           <View style={[styles.statRow, hasFoot && { marginTop: '0.3%' }]}>
-            {cells.map((c, i) => (
+            {cells.map((c, i) => {
+              // 부문왕 해당 칸이면 값·라벨을 tone.bright + 볼드로 강조(한눈에 어느 부문인지 — §8.1). 미지정 시 hl=false → 기존 렌더 무변경.
+              const hl = highlightLabels?.includes(c.label) ?? false;
+              return (
               <View key={c.label + i} style={[styles.statCell, i > 0 && { borderLeftWidth: StyleSheet.hairlineWidth, borderLeftColor: tone.line }]}>
-                <Text allowFontScaling={false} style={[styles.statVal, { fontSize: f.statVal, lineHeight: f.statVal * (hasFoot ? 1.08 : 1.12), includeFontPadding: false, color: WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{c.value}</Text>
-                <Text allowFontScaling={false} style={[styles.statLab, { fontSize: f.statLab, lineHeight: f.statLab * (hasFoot ? 1.10 : 1.15), includeFontPadding: false, color: tone.dim, marginTop: hasFoot ? 0 : 1 }]} numberOfLines={1}>{c.label}</Text>
+                <Text allowFontScaling={false} style={[styles.statVal, { fontSize: f.statVal, lineHeight: f.statVal * (hasFoot ? 1.08 : 1.12), includeFontPadding: false, color: hl ? tone.bright : WHITE }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{c.value}</Text>
+                <Text allowFontScaling={false} style={[styles.statLab, { fontSize: f.statLab, lineHeight: f.statLab * (hasFoot ? 1.10 : 1.15), includeFontPadding: false, color: hl ? tone.bright : tone.dim, marginTop: hasFoot ? 0 : 1 }, hl && { fontWeight: '900' }]} numberOfLines={1}>{c.label}</Text>
               </View>
-            ))}
+              );
+            })}
           </View>
 
           {footnote ? <Text allowFontScaling={false} style={[styles.foot, { fontSize: f.foot, lineHeight: f.foot * 1.08, includeFontPadding: false, color: tone.dim }]} numberOfLines={1}>{footnote}</Text> : null}

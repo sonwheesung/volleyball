@@ -6,10 +6,13 @@ import { Redirect } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
 import { Screen, Muted, theme } from '../components/Screen';
 import { AwardPoster, type AwardPosterProps } from '../components/AwardPoster';
+import { StatLeadersPoster } from '../components/StatLeadersPoster';
 import { DEV_TOOLS } from '../data/flags';
-import { mvpPosterData, POS_EN, AWARD_TEMPLATES } from '../data/awardPoster';
+import { mvpPosterData, POS_EN, AWARD_TEMPLATES, posterStats } from '../data/awardPoster';
 import { emblemFor } from '../data/emblems';
 import { useGameStore } from '../store/useGameStore';
+import type { Position } from '../types';
+import type { ProdLine } from '../engine/production';
 
 // 레이아웃 스트레스 샘플(목업) — 긴 이름·세터(포지션별 5칸)·리베로 케이스로 시안 점검.
 const SAMPLES: { title: string; props: Omit<AwardPosterProps, 'template'> }[] = [
@@ -36,6 +39,31 @@ const SAMPLES: { title: string; props: Omit<AwardPosterProps, 'template'> }[] = 
     },
   },
 ];
+
+// ── 기록왕 수여 UX 3안 프로토타입 공통 샘플 (AWARDS_SYSTEM §8.1, 2026-07-23) — 이 화면 전용 목업(운영 미노출) ──
+// 다관왕 시연: 마리아 산토스(OP·t5)가 득점·공격·서브 3부문 석권(3관왕). 나머지 4부문은 각기 다른 선수·팀·엠블럼.
+const SL_PROD: Record<string, ProdLine> = {
+  maria:      { matches: 36, points: 842, spikes: 712, backSpikes: 120, blocks: 48, aces: 38, assists: 12,   digs: 90,  receives: 20 },
+  hanjiu:     { matches: 36, points: 520, spikes: 360, backSpikes: 0,   blocks: 96, aces: 22, assists: 8,    digs: 70,  receives: 15 },
+  osera:      { matches: 36, points: 5,   spikes: 0,   backSpikes: 0,   blocks: 2,  aces: 4,  assists: 40,   digs: 421, receives: 540 },
+  kimhaneul:  { matches: 36, points: 60,  spikes: 18,  backSpikes: 0,   blocks: 20, aces: 24, assists: 1288, digs: 190, receives: 55 },
+  munseoyeon: { matches: 36, points: 480, spikes: 400, backSpikes: 40,  blocks: 30, aces: 28, assists: 10,   digs: 240, receives: 612 },
+};
+
+interface SLLeader { catKo: string; catEn: string; field: keyof ProdLine; who: keyof typeof SL_PROD; name: string; pos: Position; team: string; teamName: string; ovr: number }
+// engine/awards.ts titles 7부문(scoring/spike/block/serve/dig/set/receive) → ProdLine 필드 매핑.
+const SL_LEADERS: SLLeader[] = [
+  { catKo: '득점',   catEn: 'SCORING LEADER', field: 'points',   who: 'maria',      name: '마리아 산토스', pos: 'OP', team: 't5', teamName: '천안', ovr: 90 },
+  { catKo: '공격',   catEn: 'SPIKE LEADER',   field: 'spikes',   who: 'maria',      name: '마리아 산토스', pos: 'OP', team: 't5', teamName: '천안', ovr: 90 },
+  { catKo: '블로킹', catEn: 'BLOCK LEADER',   field: 'blocks',   who: 'hanjiu',     name: '한지우',        pos: 'MB', team: 't2', teamName: '화성', ovr: 84 },
+  { catKo: '서브',   catEn: 'SERVE LEADER',   field: 'aces',     who: 'maria',      name: '마리아 산토스', pos: 'OP', team: 't5', teamName: '천안', ovr: 90 },
+  { catKo: '디그',   catEn: 'DIG LEADER',     field: 'digs',     who: 'osera',      name: '오세라',        pos: 'L',  team: 't4', teamName: '수원', ovr: 82 },
+  { catKo: '세트',   catEn: 'SET LEADER',     field: 'assists',  who: 'kimhaneul',  name: '김하늘',        pos: 'S',  team: 't3', teamName: '대전', ovr: 85 },
+  { catKo: '리시브', catEn: 'RECEIVE LEADER', field: 'receives', who: 'munseoyeon', name: '문서연',        pos: 'OH', team: 't1', teamName: '인천', ovr: 86 },
+];
+const SL_UNIT: Record<string, string> = { '득점': '점', '공격': '킬', '블로킹': '블록', '서브': '개', '디그': '개', '세트': '개', '리시브': '개' };
+// 부문왕 한국어 명칭(§8.1 사용자 피드백 "무슨 스탯의 리더인지 모르겠어" → 부문명을 큰 글씨 전면에).
+const SL_KING: Record<string, string> = { '득점': '득점왕', '공격': '공격왕', '블로킹': '블로킹왕', '서브': '서브왕', '디그': '디그왕', '세트': '세트왕', '리시브': '리시브왕' };
 
 export default function AwardsPosterPreview() {
   if (!DEV_TOOLS) return <Redirect href="/(tabs)/" />; // 개발용 — 실전 빌드 진입 차단
@@ -112,6 +140,66 @@ export default function AwardsPosterPreview() {
         />
       </View>
 
+      {/* ══ 기록왕 수여 UX 3안 프로토타입 (AWARDS_SYSTEM §8.1) — 실물 렌더 비교용, 1안 선택 후 후속 배선 ══ */}
+      <View style={{ marginTop: 20, borderTopWidth: StyleSheet.hairlineWidth, borderTopColor: theme.border, paddingTop: 12 }}>
+        <Text style={[styles.cap, { fontSize: 14, color: theme.text }]}>기록왕 수여 UX 3안 프로토타입 (§8.1)</Text>
+        <Muted style={{ marginTop: 2 }}>7부문 리더(마리아 산토스 3관왕) 샘플. 아래 3안 실물을 보고 1안 선택 → 실제 시상식 배선은 후속.</Muted>
+      </View>
+
+      {/* [1안] 부문별 7장 — AwardPoster 재사용(silver 톤), 부문 영문 키커 + 한글 부문·수치 footnote */}
+      <View style={styles.groupCap}>
+        <Text style={[styles.cap, { color: theme.accent }]}>[1안] 부문별 7장 (각 부문 1장 · 스크롤)</Text>
+      </View>
+      {SL_LEADERS.map((L) => {
+        const prod = SL_PROD[L.who];
+        const value = prod[L.field];
+        return (
+          <View key={'opt1-' + L.catEn} style={styles.block}>
+            <Text style={styles.cap}>{L.catEn} · {L.catKo}</Text>
+            <AwardPoster
+              template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
+              seasonLabel={SL_KING[L.catKo]} seasonKicker={`2025-26 · ${L.catEn}`}
+              name={L.name} posEn={POS_EN[L.pos]} ovr={L.ovr}
+              stats={posterStats(L.pos, prod)}
+              highlightLabels={[L.catKo]}
+              emblem={emblemFor(L.team)}
+              footnote={`시즌 ${value}${SL_UNIT[L.catKo]} · 리그 1위`}
+            />
+          </View>
+        );
+      })}
+
+      {/* [2안] 다관왕만 — 2부문+ 석권자만 1장. 단관왕은 포스터 없음(명단 유지) */}
+      <View style={styles.groupCap}>
+        <Text style={[styles.cap, { color: theme.accent }]}>[2안] 다관왕만 (2부문+ 석권자만 포스터)</Text>
+        <Muted style={{ marginTop: 2 }}>3관왕 마리아 산토스만 포스터 1장. 단관왕(블로킹·디그·세트·리시브)은 포스터 없이 현행 명단 유지.</Muted>
+      </View>
+      <View style={styles.block}>
+        <Text style={styles.cap}>TRIPLE CROWN · 득점·공격·서브 3관왕</Text>
+        <AwardPoster
+          template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
+          seasonLabel="3관왕" seasonKicker="2025-26 · TRIPLE CROWN"
+          name="마리아 산토스" posEn={POS_EN.OP} ovr={90}
+          stats={posterStats('OP', SL_PROD.maria)}
+          highlightLabels={['득점', '공격', '서브']}
+          emblem={emblemFor('t5')}
+          footnote="득점 · 공격 · 서브"
+        />
+      </View>
+
+      {/* [3안] 대표 1장(모아보기) — 신규 StatLeadersPoster: 7부문 리스트 한 장 */}
+      <View style={styles.groupCap}>
+        <Text style={[styles.cap, { color: theme.accent }]}>[3안] 대표 1장 (모아보기 · 7부문 리스트)</Text>
+      </View>
+      <View style={styles.block}>
+        <Text style={styles.cap}>STAT LEADERS · 7부문 모아보기</Text>
+        <StatLeadersPoster
+          template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
+          seasonLabel="2025-26"
+          rows={SL_LEADERS.map((L) => ({ catKo: L.catKo, name: L.name, team: L.teamName, value: `${SL_PROD[L.who][L.field]}${SL_UNIT[L.catKo]}` }))}
+        />
+      </View>
+
       {SAMPLES.map((s) => (
         <View key={s.title} style={styles.block}>
           <Text style={styles.cap}>{s.title}</Text>
@@ -125,4 +213,5 @@ export default function AwardsPosterPreview() {
 const styles = StyleSheet.create({
   block: { alignItems: 'center', gap: 8, marginTop: 8 },
   cap: { color: theme.muted, fontSize: 12, fontWeight: '700', alignSelf: 'flex-start' },
+  groupCap: { alignSelf: 'stretch', marginTop: 14 },
 });
