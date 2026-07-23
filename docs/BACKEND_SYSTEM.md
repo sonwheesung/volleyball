@@ -308,6 +308,7 @@
 - **검증(Opus 4.8)**: `tools/_dv_walletauth.ts`(순수 — 멱등키 빌더 유일성·세이브리셋 비충돌·applied 게이팅·econ 금액권위 A/B) + 라이브 E2E(실 Vercel 서버: camp amount=1 보내도 서버상수 강제[−900→−300 인하]·이중 spend 2번째 applied:false·insufficient 리싱크). 앱/서버 tsc 0.
 - **파일**: `server/lib/econ.ts`(신)·`server/lib/wallet.ts`(countReasonToday·'coupon' reason)·`server/app/api/wallet/{earn,spend}/route.ts`·`lib/walletKeys.ts`(신, 순수)·`lib/server.ts`(earn/spend ref·cap reason)·`store/useGameStore.ts`(async 3함수+syncWallet+reconcilePendingCamp+applyCampLocal+saveId/pendingCamp/walletBusy)·`store/saveMigration.ts`(saveId/pendingCamp 정규화, 58필드)·`components/BootGate.tsx`(userId 확보/포그라운드 syncWallet)·`app/(tabs)/mypage.tsx`·`app/training-camp.tsx`.
 - **EAS 승격 잔여**: 광고 금액/진위=AdMob SSV 서버검증, 업적=서버 재계산(현 캡만), 결제=영수증 검증(#43). 구조(서버확정·멱등·잔액게이트·applied게이팅·아웃박스)는 지금 실물과 동일.
+- **우편함 수령 reason `mail`(2026-07-23 설계)**: 운영 보상·CS 개별 지급·이벤트 채널. 수령=`applyWalletTx(+amount,'mail',key='mail:<mailId>')`(전용 claim 라우트 — `/earn` 화이트리스트 밖, fail-closed)·통당 캡 `MAIL_MAX_GRANT`·보존 30일·`reason='mail'`은 매출/payer 집계 제외. 첨부 다이아·출석 패스(grantPass 재사용). 미확인 수는 `getWallet` unreadMailCount 편입(별 폴링 금지). 정본 `docs/MAILBOX_SYSTEM.md`.
 
 ### 13.13 공지사항 in-app 노출 (#57, 2026-07-03)
 > **서버는 이미 완성**(§13.11 — `announcements` 테이블 + `/api/bootstrap`가 활성분 pinned·최신순 반환). 이번은 **앱 표시**만. 무푸시 관전형 유지 — 앱 진입 시에만 조용히 surface.

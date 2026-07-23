@@ -98,7 +98,8 @@
   - `POST /api/pass/claim`(Bearer) — 위 §2.3. typed 결과(`ok`·`no-pass`·`already`(멱등)·`offline`·`unauthorized`).
   - **패스 상태 = `getWallet` 확장 확정(Q2 판정 채택)** — 활성 여부·`end_date`·오늘 수령 여부·예약 패스·팩별 1+1 가용을 `getWallet` 응답에 편입. 근거: **claim 자동 트리거와 합류점(syncWallet)이 동일**해 별 라운드트립 0(마이페이지·포그라운드 복귀가 이미 syncWallet 호출). 신 `GET /api/pass/status` 불필요. **메모**: 1+1 가용 여부는 원장 월-키 존재 파생이라 **캐시 신선도 고려**(구매 직후 서버 확정 후 syncWallet로 갱신 — 낙관 표시 금지).
   - 패스 grant는 `server/lib/pass.ts`(신) `grantPass(userId, storeTxnId, purchasedAt)` — 웹훅/confirm이 공유 호출.
-- **admin 수동 패스(source='admin')**: 보상·CS용 수동 발급은 `store_txn_id` 대신 **`ref='admin:<passId>'`**(스토어 txn 없음). 환불 클로백 경로는 **admin 패스 무접촉**(RC 환불 웹훅은 store_txn_id 매칭이라 admin 패스에 안 닿음 — 수동 발급은 수동 회수).
+    - **★ 정정(2026-07-23, 우편함 리뷰 B1·B2)**: 트랜잭션 원자 합성(우편 claim 등 외부 tx와 한 트랜잭션)을 위해 **본문을 `grantPassTx(tx, userId, storeTxnId, today, source, opts)`로 추출**하고 `grantPass`는 이를 자체 `db.transaction`으로 감싸는 얇은 래퍼로 둔다(웹훅/confirm 호출부 무변경 — coupon.ts `applyWalletTx`/`applyWallet` 추출과 동형). **`opts.rejectOnQueueFull: boolean`**: 구매 경로=`false`(현행 — 큐 만석 시 queued-overflow 삽입, 돈 받았으니 유령화 부당), 외부 무상 지급 경로(우편)=`true`(만석 시 throw/롤백). 큐 만석 판정은 **`grantPassTx` 내부에서 대상 유저 행 `FOR UPDATE` 잠금 이후** 활성+예약 수를 세어 결정(외부 사전 카운트는 멀티기기 동시 수령 레이스). 우편함 정본 `docs/MAILBOX_SYSTEM.md` §5.1.
+- **admin 수동 패스(source='admin')**: 보상·CS용 수동 발급은 스토어 txn이 없다. ~~`store_txn_id` 대신 **`ref='admin:<passId>'`**~~ → **정정(2026-07-23, 우편함 리뷰 B3): `attendance_passes`에 `ref` 컬럼이 없다 — "ref='admin:…'"은 유령 필드**. 실제로는 **`store_txn_id`에 합성키를 저장**한다(admin CS 발급=`admin:<passId>`류, 우편 발급=`mail:<mailId>`/`mail_bc:<bcId>:<userId>`). 그러면 기존 `UNIQUE(proj_code, store_txn_id)`가 **이중생성 하드가드 + 역추적**을 공짜로 주고, RC 환불 웹훅은 **실 스토어 txn_id만 매칭**하므로 `admin:`·`mail:` 접두 합성키엔 **절대 안 닿는다**(무접촉 — 수동 발급은 수동 회수).
 - **환영 1000💎(§13.12 welcome)와 상호작용 없음** — 패스·1+1·welcome은 서로 다른 reason·멱등키라 간섭 0(welcome은 계정 1회, 패스는 slot 키). 별도 처리 불요.
 - **RC/스토어**: `diamond_pass`를 Play Console 소모성 상품 + RC Products/Offering에 등록(팩과 동일 절차 — RUNBOOK §1·§2). 엔타이틀먼트 매핑 **불필요**(비소모 아님).
 - **R6 — 계정 삭제 중 패스**: 소프트삭제(`pseudonymizeUser`, §13.17) 시 잔여 패스 보상은 **소멸**(삭제 계정은 claim 경로가 requireUserId에서 막힘), 환불은 **스토어 정책 경유**(우리가 선제 환불 안 함). 삭제 플로우 카피 + §8에 "삭제 시 잔여 패스·다이아 소멸, 환불은 스토어" 명시.
@@ -171,7 +172,7 @@
 | 상태 | 표시 | 구매 버튼 |
 |---|---|---|
 | **미보유** | 가격 ₩9,900 + **고지 6항**(§8: 28일·매일 접속 자동 지급·미접속 3일 유예(Q5=B)·완주 최대 2,800💎·오프라인 수령 불가·리셋 KST 04:00·**자동 갱신 없음/만료 후 수동 재구매**) + "즉시 1일차 100💎 지급" | 활성 "구매" |
-| **활성** | **남은 일수 D-N**(원신 상점 카드 패턴 = 사실상 유일한 인앱 리마인더) + **오늘 수령 ✓/대기** + 수령 이력(28칸 스탬프, 유예(B) 놓친 날 표시) | **비활성 "이용 중"**(중첩 방지 §2.2 클라 게이트) |
+| **활성** | **남은 일수 D-N**(원신 상점 카드 패턴 = 사실상 유일한 인앱 리마인더) + **오늘 수령 ✓/대기** + 수령 이력(28칸 스탬프, 유예(B) 놓친 날 표시) | ~~**비활성 "이용 중"**(중첩 방지 §2.2 클라 게이트)~~ → **정정(2026-07-23 구현)**: 예약 없으면 **활성 "예약 구매 (+28일)"**(중첩 구매 = §2.2 Q1 큐잉, 돈 받은 뒤 거부 부당). §2.2 UI 메모("구매 버튼은 큐 만석이면 비활성")와 정합 — "이용 중 비활성"은 큐잉 도입 전 컷. |
 | **활성 + 예약(Q1 큐잉)** | 위 + **"예약 +28일"**(만료 후 이어서 시작) — 큐 만석(깊이 1) | **비활성 "예약됨"**(큐 상한 도달) |
 | **만료 임박(D-3~)** | 카드 강조 **인앱 배너/뱃지**("패스 곧 만료 · 재구매") — **푸시 없음**(무푸시). 만료 후 재구매 유도 | (활성 유지 중엔 여전히 비활성, 만료 즉시 활성) |
 
@@ -306,12 +307,16 @@
     - **1+1 보너스는 웹훅 경로 전담(confirm 미지급)** — confirm 폴백은 RC `purchased_at` 미상이라, 월경계 근처에서 confirm(now)·웹훅(purchased_at)이 서로 다른 월키를 써 **이중 보너스**가 날 위험. 안전을 위해 보너스는 purchased_at 권위를 가진 웹훅만 지급(`applyPurchaseGrant(withBonus:false)` for confirm). 패스 grant/base 팩 지급은 두 경로 공유(멱등 dedupe).
     - **패스 클로백 링크 = `pass_daily.ref=storeTxnId`(유지) · pass_daily에 R3 :sandbox 마커 미부착** — §4.3 클로백은 `Σ(pass_daily where ref=txn)`을 그대로 씀. pass_daily는 매출 롤업(reason='purchase'만) 대상이 아니라 :sandbox 마커가 불필요하고, ref에 붙이면 클로백 앵커(ref=txn)가 깨진다 → pass_daily ref는 순수 storeTxnId 유지. R3 :sandbox 스코프는 **1+1 월키(iap_bonus_1p1)에만** 적용(그쪽이 실 영향 — 프로덕션 월키 소진 방지). 패스 샌드박스 격리는 매출/건수 recordPurchaseRevenue의 샌드박스 스킵으로 충족.
     - **R2(패스 payer/건수 편입)는 statsDaily 레벨까지** — 패스 grant(activated/queued) 시 `recordPurchaseRevenue(priceKrw, 0, txn)`으로 purchaseCount+1·매출 KRW 적재(다이아는 0 — 지급은 pass_daily). 관리자 대시보드의 payer-set 심층 집계(§13.18 admin)는 statsDaily 건수로 반영되나, purchase_event 기준 payer 판정 확장은 admin/stats 라우트 후속(§13.18 D1 동형).
-- **Phase ② 앱 UI + 시뮬 경로 (dev 스텁)**
-  1. `engine/diamonds.ts` 미러 상수(표시용). `data/flags.ts` 플래그 2종.
-  2. 패스 상품 카드 4상태(UI.1 — 미보유/활성/활성+예약/만료임박) + **포그라운드 자동 수령 + 비차단 토스트**(UI.2, 탭 수령 아님) + 수령 이력 스탬프 + 남은일수·중첩 게이트.
-  3. 팩 카드 "이번 달 1+1" 뱃지(서버 파생) + 소진 시 정가 + 다음 초기화 날짜(UI.3).
-  4. 구매 화면 표시의무 고지 5항(§8·UI.1) + 환불 안내 카피.
-  5. `lib/iap`·`lib/server` 배선(패스 구매=`purchasePackage(diamond_pass)`→confirm 폴백 / claim·status 호출). dev 스텁 no-op.
+- **Phase ② 앱 UI + 시뮬 경로 (dev 스텁)** — **✅ 구현 완료(2026-07-23)**. tsc(루트) 0 · `tools/_dv_walletauth`(PASS 미러+카탈로그 확장) 0 · 서버 순수 가드(`_dv_pass`·`_dv_1p1`) 회귀 0.
+  1. ✅ `engine/diamonds.ts` PASS 미러 상수(daily·duration·max·price·reset·grace) + 순수 표시 헬퍼 `passView(endDate, today)`(며칠차·D-N·유예·만료임박). `data/flags.ts` `ATTENDANCE_PASS_ENABLED`·`PROMO_1P1_ENABLED`(기본 `__DEV__`). `lib/passClient.ts`(신) `todayKstReset()`(리셋보정 오늘, 표시용).
+  2. ✅ `app/buy-diamonds.tsx` 패스 카드 4상태(UI.1 — 미보유 고지6항/활성 D-N·수령✓·28스탬프/활성+예약/만료임박 인앱 배너) + 중첩 게이트(활성=예약구매 큐잉, 큐 만석=비활성). **포그라운드 자동 수령 + 비차단 토스트**(UI.2): `components/BootGate.tsx` 합류점(syncWallet+`claimPass`) + R7 리셋경계 타이머 1개. 토스트는 `lib/toastBus.ts`(신 pub/sub) → `components/Toast.tsx GlobalToastHost`(`app/_layout.tsx` 마운트). store `passStatus`+`claimPass` 액션(낙관 금지 — 서버 확정 후 잔액·토스트).
+  3. ✅ 팩 카드 "이번 달 1+1" 뱃지(`passStatus.bonus1p1Available` 서버 파생, `PROMO_1P1_ENABLED`+서버 데이터 이중 게이트) + 소진 시 정가(뱃지 미노출) + 다음 초기화 날짜("다음 달 M월 1일", UI.3).
+  4. ✅ 구매 화면 표시의무 **고지 6항**(§8·UI.1: 28일·자동지급·3일 유예·최대 2,800·오프라인 불가·리셋 04:00·자동갱신 없음) + 청약철회·스토어 환불 정합 카피 확장.
+  5. ✅ `lib/iap.purchasePass`(SKU `diamond_pass` — dev 시뮬 알림 / prod `purchasePackage`→confirm 폴백, 팩과 동형) + `lib/server` `getWallet` 응답 `pass` 편입·`claimPass()`(typed). `app/(tabs)/mypage.tsx` 수령 현황 최소 카드(Q2 상시 확인처 — D-N·n/28·유예 잔여, 기존 카드 스타일).
+  - **판단 보고(문서와 다르게 정한/보강한 지점)**:
+    - **UI.1 표 "활성 → 구매 비활성 이용 중"을 큐잉 활성으로 정정** — §2.2(Q1 큐잉)·§2.2 UI 메모("구매 버튼은 큐 만석이면 비활성")와 어긋나, 활성(예약 없음)일 때 구매 버튼을 **활성("예약 구매 +28일")**으로, 큐 만석(예약 보유)일 때만 **비활성("예약됨")**으로 구현. UI.1 표에 취소선 정정 반영.
+    - **dev 시뮬은 서버 grant 미도달(스텁)** — §7("dev=lib/iap 시뮬 스텁, 서버 로직은 라이브 가드로 검증")대로 dev 패스 sim 구매는 카드 활성화를 서버로 만들지 않는다(RC 미검증). 에뮬 활성/수령 장면은 dev DB에 `grantPass` 시드 후 검증(라이브 경로 = 실 passStatus·claim·토스트).
+    - **토스트 버스 신설** — 화면 밖(store·BootGate) 비차단 토스트 발행 경로가 없어 `lib/toastBus.ts`(순수 pub/sub, UI 무의존 → 레이어 store→lib 유지) + `GlobalToastHost`를 신설(기존 `useToastQueue`/`ToastHost` 재사용).
 - **Phase ③ 실 SKU 연동 (#43 뒤)**
   1. Play Console `diamond_pass` 소모성 상품 등록(₩9,900) + RC Product/Offering.
   2. 샌드박스 실결제(패스 구매→pass 행→일일 수령→환불 클로백) 매트릭스(RUNBOOK §5 확장).
@@ -337,7 +342,8 @@
   - `server/tools/_dv_1p1.ts`(순수) — 월×팩 멱등·R4 purchased_at 귀속·R3 샌드박스 스코프·환불 월키 미복구, A/B PASS.
   - `server/tools/_dv_pass_live.ts`(라이브, dev DB) — B4 day-0·confirm dedup·일일수령 멱등/멀티기기·B3 유예·no-pass·B1 tombstone·B2 클로백·claim↔환불 레이스 Σ정합·1+1(2배/2번째0/다음달부활/환불회수/월키미복구)·Q1 큐잉·활성화·R2 건수편입, 전부 PASS.
   - `_dv_purchase`(기존) — 팩 경로 회귀 0 확인(프로모 off 기본 → 보너스 없음, 기존 assertion 불변).
-- **후속(Phase②·별 세션)**: `_dv_walletauth`(클라이언트 `tools/`, 엔진 미러 대조)는 `engine/diamonds.ts` PASS 상수 미러(Phase②)가 생긴 뒤 확장 — Phase① 서버 무접촉이라 이번 범위 밖. `_e2e_purchase_live`(실행 서버 :3000 필요)는 dev 체인 기동 시 패스 케이스 추가.
+- **✅ Phase② 확장(2026-07-23)**: `tools/_dv_walletauth.ts`(클라이언트) §9·§10 신설 — PASS 상수 engine↔server 미러(daily·duration·max·price·reset·grace, A/B 드리프트 대조) + `PASS_PRODUCTS`(`diamond_pass`) 카탈로그 정합(DIAMOND/ENTITLEMENT 비겹침·팩 분리). exit 0(전건 PASS, A/B 대조군 포함).
+- **후속**: `_e2e_purchase_live`(실행 서버 :3000 필요)는 dev 체인 기동 시 패스 케이스 추가.
 - **가드 실행(dev DB)**: 로컬 Supabase :54322(`.env.development.local`은 임시 PG :55432 가리키므로) — `DATABASE_URL="postgresql://postgres:postgres@127.0.0.1:54322/postgres" npx tsx tools/_dv_pass_live.ts`. 순수 가드는 DB 불요.
 
 ---
