@@ -8,7 +8,7 @@ import { Screen, Muted, theme } from '../components/Screen';
 import { AwardPoster, type AwardPosterProps } from '../components/AwardPoster';
 import { StatLeadersPoster } from '../components/StatLeadersPoster';
 import { DEV_TOOLS } from '../data/flags';
-import { mvpPosterData, POS_EN, AWARD_TEMPLATES, posterStats } from '../data/awardPoster';
+import { mvpPosterData, POS_EN, AWARD_TEMPLATES, posterStats, statsWithCategory, STAT_LEADER_META, type StatLeaderCategory } from '../data/awardPoster';
 import { emblemFor } from '../data/emblems';
 import { useGameStore } from '../store/useGameStore';
 import type { Position } from '../types';
@@ -19,7 +19,7 @@ const SAMPLES: { title: string; props: Omit<AwardPosterProps, 'template'> }[] = 
   {
     title: '샘플 · OH (긴 이름)',
     props: {
-      seasonLabel: '2025-26', name: '알레산드라 페레이라', posEn: POS_EN.OH, ovr: 91,
+      seasonLabel: '2025-26', name: '알레산드라 페레이라', posEn: POS_EN.OH, teamName: '천안 프리덤', ovr: 91,
       stats: [
         { label: '득점', value: '742' }, { label: '공격', value: '598' }, { label: '서브', value: '41' },
         { label: '리시브', value: '512' }, { label: '디그', value: '336' },
@@ -30,12 +30,24 @@ const SAMPLES: { title: string; props: Omit<AwardPosterProps, 'template'> }[] = 
   {
     title: '샘플 · S (세터 — 세트 대표)',
     props: {
-      seasonLabel: '2025-26', name: '김하늘', posEn: POS_EN.S, ovr: 84,
+      seasonLabel: '2025-26', name: '김하늘', posEn: POS_EN.S, teamName: '대전 스파크', ovr: 84,
       stats: [
         { label: '득점', value: '58' }, { label: '세트', value: '1204' }, { label: '서브', value: '22' },
         { label: '디그', value: '188' }, { label: '블로킹', value: '19' },
       ],
       emblem: emblemFor('t3'),
+    },
+  },
+  {
+    // 폭 스트레스(§8 팀명 병기): MIDDLE BLOCKER(가장 긴 포지션 영문) + 긴 팀명 조합에서 한 줄 축소(adjustsFontSizeToFit) 확인.
+    title: '샘플 · MB (긴 팀명 폭 스트레스 · MIDDLE BLOCKER + 긴 팀명)',
+    props: {
+      seasonLabel: '2025-26', name: '최정민', posEn: POS_EN.MB, teamName: '수원 스카이라인즈', ovr: 88,
+      stats: [
+        { label: '득점', value: '421' }, { label: '공격', value: '298' }, { label: '블로킹', value: '96' },
+        { label: '서브', value: '26' }, { label: '디그', value: '112' },
+      ],
+      emblem: emblemFor('t4'),
     },
   },
 ];
@@ -50,20 +62,17 @@ const SL_PROD: Record<string, ProdLine> = {
   munseoyeon: { matches: 36, points: 480, spikes: 400, backSpikes: 40,  blocks: 30, aces: 28, assists: 10,   digs: 240, receives: 612 },
 };
 
-interface SLLeader { catKo: string; catEn: string; field: keyof ProdLine; who: keyof typeof SL_PROD; name: string; pos: Position; team: string; teamName: string; ovr: number }
-// engine/awards.ts titles 7부문(scoring/spike/block/serve/dig/set/receive) → ProdLine 필드 매핑.
-const SL_LEADERS: SLLeader[] = [
-  { catKo: '득점',   catEn: 'SCORING LEADER', field: 'points',   who: 'maria',      name: '마리아 산토스', pos: 'OP', team: 't5', teamName: '천안', ovr: 90 },
-  { catKo: '공격',   catEn: 'SPIKE LEADER',   field: 'spikes',   who: 'maria',      name: '마리아 산토스', pos: 'OP', team: 't5', teamName: '천안', ovr: 90 },
-  { catKo: '블로킹', catEn: 'BLOCK LEADER',   field: 'blocks',   who: 'hanjiu',     name: '한지우',        pos: 'MB', team: 't2', teamName: '화성', ovr: 84 },
-  { catKo: '서브',   catEn: 'SERVE LEADER',   field: 'aces',     who: 'maria',      name: '마리아 산토스', pos: 'OP', team: 't5', teamName: '천안', ovr: 90 },
-  { catKo: '디그',   catEn: 'DIG LEADER',     field: 'digs',     who: 'osera',      name: '오세라',        pos: 'L',  team: 't4', teamName: '수원', ovr: 82 },
-  { catKo: '세트',   catEn: 'SET LEADER',     field: 'assists',  who: 'kimhaneul',  name: '김하늘',        pos: 'S',  team: 't3', teamName: '대전', ovr: 85 },
-  { catKo: '리시브', catEn: 'RECEIVE LEADER', field: 'receives', who: 'munseoyeon', name: '문서연',        pos: 'OH', team: 't1', teamName: '인천', ovr: 86 },
+// 부문별 목업 수상자 — 부문 메타(한글·영문·field·단위·부문왕)는 셀렉터 STAT_LEADER_META 단일 출처 사용(하드코딩 승격).
+interface SLSample { cat: StatLeaderCategory; who: keyof typeof SL_PROD; name: string; pos: Position; team: string; teamName: string; ovr: number }
+const SL_SAMPLES: SLSample[] = [
+  { cat: 'scoring', who: 'maria',      name: '마리아 산토스', pos: 'OP', team: 't5', teamName: '천안 프리덤',    ovr: 90 },
+  { cat: 'spike',   who: 'maria',      name: '마리아 산토스', pos: 'OP', team: 't5', teamName: '천안 프리덤',    ovr: 90 },
+  { cat: 'block',   who: 'hanjiu',     name: '한지우',        pos: 'MB', team: 't2', teamName: '화성 코메츠',    ovr: 84 },
+  { cat: 'serve',   who: 'maria',      name: '마리아 산토스', pos: 'OP', team: 't5', teamName: '천안 프리덤',    ovr: 90 },
+  { cat: 'dig',     who: 'osera',      name: '오세라',        pos: 'L',  team: 't4', teamName: '수원 스카이라인', ovr: 82 },
+  { cat: 'set',     who: 'kimhaneul',  name: '김하늘',        pos: 'S',  team: 't3', teamName: '대전 스파크',    ovr: 85 },
+  { cat: 'receive', who: 'munseoyeon', name: '문서연',        pos: 'OH', team: 't1', teamName: '인천 타이드',    ovr: 86 },
 ];
-const SL_UNIT: Record<string, string> = { '득점': '점', '공격': '킬', '블로킹': '블록', '서브': '개', '디그': '개', '세트': '개', '리시브': '개' };
-// 부문왕 한국어 명칭(§8.1 사용자 피드백 "무슨 스탯의 리더인지 모르겠어" → 부문명을 큰 글씨 전면에).
-const SL_KING: Record<string, string> = { '득점': '득점왕', '공격': '공격왕', '블로킹': '블로킹왕', '서브': '서브왕', '디그': '디그왕', '세트': '세트왕', '리시브': '리시브왕' };
 
 export default function AwardsPosterPreview() {
   if (!DEV_TOOLS) return <Redirect href="/(tabs)/" />; // 개발용 — 실전 빌드 진입 차단
@@ -81,7 +90,7 @@ export default function AwardsPosterPreview() {
         {real ? (
           <AwardPoster
             template={AWARD_TEMPLATES.mvp.src} tone={AWARD_TEMPLATES.mvp.tone}
-            seasonLabel={real.seasonLabel} name={real.name} posEn={real.posEn}
+            seasonLabel={real.seasonLabel} name={real.name} posEn={real.posEn} teamName={real.teamName}
             ovr={real.ovr} stats={real.stats} emblem={real.emblem}
           />
         ) : null}
@@ -91,7 +100,7 @@ export default function AwardsPosterPreview() {
         <Text style={styles.cap}>샘플 · 챔프전 MVP 템플릿 (FINALS MVP)</Text>
         <AwardPoster
           template={AWARD_TEMPLATES.finalsMvp.src} tone={AWARD_TEMPLATES.finalsMvp.tone}
-          seasonLabel="2025-26" name="여미정" posEn={POS_EN.OP} ovr={88}
+          seasonLabel="2025-26" name="여미정" posEn={POS_EN.OP} teamName="인천 타이드" ovr={88}
           stats={[
             { label: '득점', value: '736' }, { label: '공격', value: '660' }, { label: '블로킹', value: '52' },
             { label: '서브', value: '24' }, { label: '디그', value: '356' },
@@ -105,7 +114,7 @@ export default function AwardsPosterPreview() {
         <Text style={styles.cap}>샘플 · 신인상 (블루 톤)</Text>
         <AwardPoster
           template={AWARD_TEMPLATES.rookie.src} tone={AWARD_TEMPLATES.rookie.tone}
-          seasonLabel="2025-26" name="정유진" posEn={POS_EN.OH} ovr={79}
+          seasonLabel="2025-26" name="정유진" posEn={POS_EN.OH} teamName="화성 코메츠" ovr={79}
           stats={[
             { label: '득점', value: '388' }, { label: '공격', value: '312' }, { label: '서브', value: '19' },
             { label: '리시브', value: '274' }, { label: '디그', value: '198' },
@@ -118,7 +127,7 @@ export default function AwardsPosterPreview() {
         <Text style={styles.cap}>샘플 · 기량발전상 (오렌지 톤 · footnote 시즌 생산 ▲N)</Text>
         <AwardPoster
           template={AWARD_TEMPLATES.mostImproved.src} tone={AWARD_TEMPLATES.mostImproved.tone} seasonMode={AWARD_TEMPLATES.mostImproved.seasonMode}
-          seasonLabel="2025-26" name="한소희" posEn={POS_EN.MB} ovr={82}
+          seasonLabel="2025-26" name="한소희" posEn={POS_EN.MB} teamName="수원 스카이라인" ovr={82}
           stats={[
             { label: '득점', value: '421' }, { label: '공격', value: '298' }, { label: '블로킹', value: '78' },
             { label: '서브', value: '26' }, { label: '디그', value: '112' },
@@ -131,7 +140,7 @@ export default function AwardsPosterPreview() {
         <Text style={styles.cap}>샘플 · 기록왕 (실버 톤 · 화면 배선 후속)</Text>
         <AwardPoster
           template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
-          seasonLabel="2025-26" name="마리아 산토스" posEn={POS_EN.OP} ovr={90} seasonKicker="LEAGUE LEADER"
+          seasonLabel="2025-26" name="마리아 산토스" posEn={POS_EN.OP} teamName="천안 프리덤" ovr={90} seasonKicker="LEAGUE LEADER"
           stats={[
             { label: '득점', value: '842' }, { label: '공격', value: '712' }, { label: '블로킹', value: '48' },
             { label: '서브', value: '38' }, { label: '디그', value: '301' },
@@ -150,20 +159,21 @@ export default function AwardsPosterPreview() {
       <View style={styles.groupCap}>
         <Text style={[styles.cap, { color: theme.accent }]}>[1안] 부문별 7장 (각 부문 1장 · 스크롤)</Text>
       </View>
-      {SL_LEADERS.map((L) => {
+      {SL_SAMPLES.map((L) => {
+        const meta = STAT_LEADER_META[L.cat];
         const prod = SL_PROD[L.who];
-        const value = prod[L.field];
+        const value = prod[meta.field] as number;
         return (
-          <View key={'opt1-' + L.catEn} style={styles.block}>
-            <Text style={styles.cap}>{L.catEn} · {L.catKo}</Text>
+          <View key={'opt1-' + L.cat} style={styles.block}>
+            <Text style={styles.cap}>{meta.catEn} · {meta.catKo}</Text>
             <AwardPoster
               template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
-              seasonLabel={SL_KING[L.catKo]} seasonKicker={`2025-26 · ${L.catEn}`}
-              name={L.name} posEn={POS_EN[L.pos]} ovr={L.ovr}
-              stats={posterStats(L.pos, prod)}
-              highlightLabels={[L.catKo]}
+              seasonLabel={meta.king} seasonKicker={`2025-26 · ${meta.catEn}`}
+              name={L.name} posEn={POS_EN[L.pos]} teamName={L.teamName} ovr={L.ovr}
+              stats={statsWithCategory(L.pos, prod, meta.catKo, meta.field)}
+              highlightLabels={[meta.catKo]}
               emblem={emblemFor(L.team)}
-              footnote={`시즌 ${value}${SL_UNIT[L.catKo]} · 리그 1위`}
+              footnote={`시즌 ${value}${meta.unit} · 리그 1위`}
             />
           </View>
         );
@@ -179,7 +189,7 @@ export default function AwardsPosterPreview() {
         <AwardPoster
           template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
           seasonLabel="3관왕" seasonKicker="2025-26 · TRIPLE CROWN"
-          name="마리아 산토스" posEn={POS_EN.OP} ovr={90}
+          name="마리아 산토스" posEn={POS_EN.OP} teamName="천안 프리덤" ovr={90}
           stats={posterStats('OP', SL_PROD.maria)}
           highlightLabels={['득점', '공격', '서브']}
           emblem={emblemFor('t5')}
@@ -196,7 +206,7 @@ export default function AwardsPosterPreview() {
         <StatLeadersPoster
           template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
           seasonLabel="2025-26"
-          rows={SL_LEADERS.map((L) => ({ catKo: L.catKo, name: L.name, team: L.teamName, value: `${SL_PROD[L.who][L.field]}${SL_UNIT[L.catKo]}` }))}
+          rows={SL_SAMPLES.map((L) => { const m = STAT_LEADER_META[L.cat]; return { catKo: m.catKo, name: L.name, team: L.teamName, value: `${SL_PROD[L.who][m.field]}${m.unit}` }; })}
         />
       </View>
 

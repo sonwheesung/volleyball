@@ -100,10 +100,13 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
   챔프MVP 비트는 제거·중복 회피). **미우승 시즌**: champion-ceremony는 짧은 결과 통지(타 구단 대관식 풀 연출 강제 금지).
   ~~현 flow: playoffs → awards-ceremony → season-recap~~ 는 champion-ceremony 선행 + recap을 일정 버튼 경유로 정정.
 - **연출**: 한 상씩 단독 표시 + **탭하면 다음 상**(현재 상 슬라이드 아웃 → 다음 상 슬라이드 인, Animated
-  opacity/translate, `useNativeDriver`). 순서 = 신인상 → 기량발전상 → 베스트7(코트) → 챔프전 MVP →
-  **정규 MVP(클라이맥스, `AwardIllustration` 금 트로피 재사용)**. 내 팀 수상자는 구단 액센트 강조. 진행 표시(N/총)·
-  "건너뛰기"(→결산). 마지막(정규 MVP) 비트에서 "시즌 결산 →" 버튼. 부문 기록왕 7종·라운드MVP·박스스코어는
-  결산처럼 제외(기록 탭 소관) — 시상식은 마키 상 + 베스트7만.
+  opacity/translate, `useNativeDriver`). ~~순서 = 신인상 → 기량발전상 → 베스트7(코트) → 챔프전 MVP →
+  **정규 MVP(클라이맥스, `AwardIllustration` 금 트로피 재사용)**.~~ → **정정(2026-07-23, 기록왕 1안 배선 §8.1)**:
+  순서 = **부문 기록왕 7종(위상 오름차순 리시브왕→디그왕→세트왕→서브왕→블로킹왕→공격왕→득점왕)** → 신인상 →
+  기량발전상 → 베스트7(코트) → **정규 MVP(클라이맥스)**. 챔프전 MVP는 champion-ceremony 단독 수여(§5.3). 내 팀 수상자는 구단
+  액센트 강조. 진행 표시(N/총)· "건너뛰기"(→결산). 마지막(정규 MVP) 비트에서 "시즌 결산 →" 버튼. ~~부문 기록왕 7종·라운드MVP·박스스코어는
+  결산처럼 제외(기록 탭 소관) — 시상식은 마키 상 + 베스트7만.~~ → **정정(2026-07-23)**: 부문 기록왕 7종은 이제 시상식 포스터로 **수여**(§8.1 1안 채택, 위상
+  오름차순 7비트, 실버 톤). 라운드MVP·박스스코어만 결산·기록 탭 소관으로 제외. **결산 명단(season-recap-detail)은 유지** — 포스터는 수여 연출, 결산은 기록 열람.
 - **수상자 카드 비주얼(A1, 2026-07-01 — "너무 밋밋")**: 상명+이름+팀명 텍스트만이라 단조로웠다 → 각 수상자 카드에
   **선수 실루엣(유니폼 일러스트 `LegendIllustration`, 구단색 `teamColors` + 선수 번호 `jerseyNumber`) + 구단 엠블럼
   (`emblemFor`) + 포지션 태그(`PosTag`, `getPlayer().position`) + 팀명**(`shortTeamName`)을 함께 표시. 엠블럼은
@@ -123,7 +126,7 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 > 정점을 시각적으로 못박는다. 관전형 1순위(보는 경험) 투자처. ~~이번 웨이브는 **정규리그 MVP만** 교체하고, 다른
 > 1인 개인상(신인상·기량발전상·챔프전 MVP)은 현행 카드 유지 — 단 자산만 추가하면 같은 컴포넌트로 갈아끼운다.~~
 > → **확장(2026-07-22)**: 챔프전 MVP(finalsMvp, §8 하단)·**신인상·기량발전상**도 포스터로 승격(각 자산 등록). 상마다 **색 톤이 다르다**
-> (신인=블루·기량발전=~~퍼플~~ **오렌지**·기록왕=~~레드~~ **실버**, 아래 톤 표 — 사용자 평가 2026-07-22: 퍼플·레드 부조화). 기록왕(statLeader)은 템플릿·프리뷰만 등록하고 **수여 화면 배선은 후속**(부문 다수 — 수여 UX 설계 필요).
+> (신인=블루·기량발전=~~퍼플~~ **오렌지**·기록왕=~~레드~~ **실버**, 아래 톤 표 — 사용자 평가 2026-07-22: 퍼플·레드 부조화). ~~기록왕(statLeader)은 템플릿·프리뷰만 등록하고 **수여 화면 배선은 후속**(부문 다수 — 수여 UX 설계 필요).~~ → **배선 완료(2026-07-23, §8.1 1안 채택)**: 기록왕 7부문을 awards-ceremony에 위상 오름차순 7비트로 수여(실버 톤).
 
 **템플릿 전략(상별 자산 추가 = 매핑 한 줄)**:
 - 배경 자산 `assets/awards/mvp_stage.webp`(1080×1440, 3:4). 상 타이틀("MVP / MOST VALUABLE PLAYER")은 그림에 박혀
@@ -146,7 +149,7 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 | `finalsMvp` | `finals_mvp_stage.webp` | 민트(유지) | `#5FEAD8` | `#289F9A` | champion-ceremony(챔프전 MVP, §5.3 유일 수여) | 79.9~95.1% |
 | `rookie` | `rookie_stage.webp` | **블루** | `#5FB8EA` | `#19B8E2` | awards-ceremony(신인상) | 80.0~95.1% |
 | `mostImproved` | `mip_stage.webp` | ~~퍼플~~ **오렌지**(TONE_ORANGE) | ~~`#C77FF2`~~ `#FF9A3D` | ~~`#AC2CE2`~~ `#FCB32A`(선라이즈) | awards-ceremony(기량발전상, footnote ~~`OVR ▲N`~~ → **`시즌 생산 ▲N`**(§9 개편 — value가 OVR델타→생산Δ), **`seasonMode:'yearOnly'`** — 타이틀 ~~8.7%~~ 9.0% 겹침 회피) | 80.0~95.1% |
-| `statLeader` | `statleader_stage.webp` | ~~레드~~ **실버**(TONE_SILVER) | ~~`#F2707F`~~ `#D8DEEA`(플래티넘) | ~~`#CB6D59`(웜레드)~~ `#FEFEFE`(순백→쿨실버 보정) | **후속 배선**(부문 다수 — 수여 UX 설계 필요). 현재는 프리뷰만 | 80.0~95.1% |
+| `statLeader` | `statleader_stage.webp` | ~~레드~~ **실버**(TONE_SILVER) | ~~`#F2707F`~~ `#D8DEEA`(플래티넘) | ~~`#CB6D59`(웜레드)~~ `#FEFEFE`(순백→쿨실버 보정) | ~~**후속 배선**(부문 다수 — 수여 UX 설계 필요). 현재는 프리뷰만~~ → **awards-ceremony(부문 기록왕 7비트, §8.1 1안 배선 완료 2026-07-23)** | 80.0~95.1% |
 
 - **finalsMvp 톤 주석(교체 예정)**: 현재 민트 자산이라 톤도 민트 유지. **골드 자산으로 교체 예정** — 교체 시 `TONE_GOLD` 신설 후 그 줄만 톤 교체
   (자산·톤이 같은 위치에 있어 한 줄 수정). `data/awardPoster.ts` 주석에 명기.
@@ -155,6 +158,7 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
   (부문별 1장씩이면 시상식 비트가 과다 → 관전형 피로). 따라서 이번 웨이브는 **~~레드~~ 실버 톤 템플릿 + 프리뷰 샘플만** 등록하고 수여 화면(awards-ceremony 비트)
   배선은 ~~후속 결정으로 남긴다~~ → **3안 병행 프로토타입으로 진행(2026-07-23, §8.1)**. 개발 프리뷰에 3안(부문별 7장·다관왕만·대표 1장 모아보기)을 실물 렌더로 올려
   사용자가 육안 평가 후 1안을 고르고, 실제 시상식 배선은 그 뒤 후속(이번 웨이브 아님). `AWARD_TEMPLATES.statLeader`는 등록돼 있으므로, 수여 UX가 정해지면 매핑 재사용만으로 배선 가능.
+  → **후속 완료(2026-07-23, 사용자 결정): 1안(부문별 7장) 채택·배선 완료. §8.1.1 참조. 2·3안은 기각하되 프리뷰 프로토타입·`StatLeadersPoster`·sl-가드는 보존(재검토 대비).**
 
 ### 8.1 기록왕 수여 UX 3안 프로토타입 (2026-07-23)
 
@@ -201,6 +205,31 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
     draft 가드 동형, 누군가 컴포넌트만 바꾸면 검출). **왜 sl-budget이 결함을 못 잡았나**: 자체 선언 존(15.5%h) 안 7행 수용만 봤지 **그 존이 자산 프레임과 정합하는지**를
     안 봄(자산 정합 사각 — MIP 시즌라벨 겹침·패널 넘침 3연전과 동형). TEST_METHODOLOGY §4 등재.
 
+### 8.1.1 기록왕 수여 배선 — 1안 채택 (2026-07-23 사용자 결정)
+
+> **채택**: §8.1 3안 프로토타입을 육안 평가 후 **[1안] 부문별 7장** 채택(사용자 결정 2026-07-23). **2·3안 기각** —
+> 다만 프리뷰 프로토타입(`app/awards-poster-preview.tsx`)·신규 컴포넌트 `components/StatLeadersPoster.tsx`·sl-가드(sl-budget·sl-frame·sl-drift)는
+> **보존**한다(재검토 대비 — 삭제 시 재현 비용). 이번 웨이브는 프로토타입을 프로덕션 `app/awards-ceremony.tsx` 흐름에 실제 배선한다.
+
+**시상식 비트 순서(정본)**: 부문 기록왕 7종을 **개인상보다 먼저**, **위상 오름차순**으로 —
+`리시브왕 → 디그왕 → 세트왕 → 서브왕 → 블로킹왕 → 공격왕 → 득점왕` → (기존) `신인상 → 기량발전상 → 베스트7 → 정규 MVP`(피날레).
+챔프전 MVP는 champion-ceremony 단독(§5.3). **수상자 null인 부문은 비트 스킵**(경기 0 엣지). 같은 선수가 다부문이면 **부문마다 포스터**(1안 취지 — 다관왕도 부문별로 음미).
+
+**셀렉터 `statLeaderPosterData` (data/awardPoster.ts, 순수)**: `(winner, season, category, myTeamId, prod) → StatLeaderPosterData | null`.
+`buildAwardPosterData`와 동형 파라미터(화면이 `aw.titles[category]`·공유 `prod`를 주입 — 무거운 재계산 없음). `winner`가 null이거나 생산 라인이 없으면 null(스킵).
+조립: `이름·posEn·pos·teamId·ovr·stats(교체 적용)·emblem·accent·isMine` + 기록왕 전용 `seasonLabel(부문왕 한글 대제목 "득점왕")·seasonKicker("2025-26 · SCORING LEADER")·highlightLabels([부문 한글])·footnote·teamName`.
+부문 메타(catKo·catEn·king·ProdLine field·unit)는 **`STAT_LEADER_META`** 단일 출처, 순서는 **`STAT_LEADER_ORDER`**(위상 오름차순 7키) — 프리뷰·화면·가드 공용 import(프리뷰 하드코딩 SL_KING/키커/단위를 셀렉터로 승격).
+
+**highlightLabels 보장(교체 규칙)**: 수상 부문 스탯이 그 포지션의 `posterStats` 5칸에 **없으면**(예: MB의 리시브 — MB 대표 5칸=득점·공격·블로킹·서브·디그)
+**마지막 칸을 해당 부문 스탯으로 결정론 교체**(`statsWithCategory`)해 `highlightLabels`가 항상 stats 안에 존재하게 한다(강조가 빈 칸을 가리키지 않도록). 부문 스탯이 이미 있으면 무변경.
+
+**footnote 수치 단위**: `시즌 {value}{unit} · 리그 1위` — 득점=`점`·공격=`킬`·블로킹=`블록`·서브=`개`·디그=`개`·세트=`개`·리시브=`개`(프리뷰 목업 규약 유지).
+footnote 有 구성이라 패널 세로 예산 가드(풋노트 有 `CFG_FOOT` ≤ 13.2%h)가 그대로 커버 — 신규 예산 가드 불요.
+
+**결산 명단 유지**: 포스터는 **수여 연출**, `season-recap-detail`의 기록왕 명단은 **기록 열람**으로 병존(중복 아님 — MVP·신인상과 동일 패턴).
+
+**팀명 표기(2026-07-23 사용자 요청, §8 표기 규칙)**: 기록왕 포함 전 포스터가 수상자 소속팀명을 포지션 줄에 병기(`teamName`). 아래 §8 오버레이 규약 참조.
+
 **오버레이 좌표 규약(퍼센트 = 포스터 *높이* 기준, 자산 실측)**:
 - 상단 시즌 라벨: ~~`top 3.2%~8.5%`(타이틀 상단 y≈12% 위 빈 공간)~~ → **정정(2026-07-22, 겹침 근본수정)**: 시작 `top 3.2%`는 맞으나
   **렌더 하단은 눈대중 "8.5%"가 아니라 실측 ≈11.0%**(연도 글리프 y 8.1~11.0% — 에뮬 실측). 소형 키커("SEASON") + 시즌값(`seasonYear`, 예 "2025-26").
@@ -218,6 +247,11 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 
 - 하단 정보 패널: ~~`top 79% → bottom 4.5%`(≈95.5%). 그려진 라운드 아웃라인(82~96%)보다 살짝 위에서 시작~~ → **정정(2026-07-21 실기기 보고·에뮬 재검수)**: `top 80.5% → bottom 5.8%`(≈94.2%). 그림 패널 아웃라인 **실측 79.9~95.1%**(sharp 민트 라인 스캔 — 눈대중 82~96%가 틀려 오버레이가 패널을 뚫었음)의 안쪽. **원칙: 내용물(이름·스탯 행) 합계 높이가 컨테이너(13.7%)를 넘으면 아래로 흘러넘쳐 그림 밖으로 샌다** — 폰트는 폭 파생으로 name 0.060w·statVal 0.036w 이하 유지, OS 글꼴 배율은 잠금(UI-48).
   내부 = 상단행 `[엠블럼 | 포지션영문/이름(큰 한글) | OVR 칩]` + 하단행 `스탯 5칸`.
+- **소속팀명 표기(2026-07-23 사용자 요청, 전 포스터 공통)**: MVP·챔프전 MVP·신인상·기량발전상·기록왕 **전부** 수상자 소속팀명을 표기(엠블럼만으론 부족).
+  방식 = `components/AwardPoster.tsx`에 `teamName?: string` prop 추가, **새 줄을 만들지 말고** 포지션 줄(posEn)에 **병기** — `"OPPOSITE · 인천 타이드"`(포지션 먼저 유지).
+  한 줄 고정 `numberOfLines={1}` + `adjustsFontSizeToFit`(minimumFontScale 0.8)으로 긴 조합(MIDDLE BLOCKER + 긴 팀명)에서 폭 넘침 방지. **줄 수·폰트 기본 크기·명시 lineHeight가 불변**이라
+  패널 세로 예산(풋노트 有 12.89%h ≤ 13.2)·타이틀 충돌 마진 전부 **불변**(adjustsFontSizeToFit은 폭에 맞춰 글리프만 축소, lineHeight 고정 → 라인박스 높이 무변). `teamName` 미지정 시 현행 렌더와 동일(무회귀 기본값).
+  셀렉터(`buildAwardPosterData`·`mvpPosterData`·`statLeaderPosterData`)가 팀 표시명(`getTeam(teamId).name` — 전 화면 공용 소스)을 조립해 넘긴다. 3안 `StatLeadersPoster`는 행에 이미 팀이 있어 무접촉.
 - 폰트는 퍼센트 불가 → **렌더 폭(w)에서 파생**(name=w·0.076 등)해 어느 기기 폭에서도 비율 유지. 폭 기본 = 화면폭−32(Screen
   패딩), 태블릿 과대 방지 상한 460. 색은 배경(고정 다크 네온 이미지) 위라 **앱 라이트/다크 테마 무관** — 고정 민트 네온
   (`theme.accent` 동계열)·흰색.
@@ -246,20 +280,22 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 - OVR = 수상자 `overall(getPlayer)`(시즌 시작 base, 표시 스케일 `displayOvr`) — 표시 플러리시. 우리 구단 MVP는 포스터 아래
   "우리 구단의 MVP" 태그(포스터 자체는 민트 자산 톤 유지, 팀색 오염 안 함).
 
-**배선 지점**: `app/awards-ceremony.tsx` — 신인상·기량발전상·MVP(클라이맥스) 비트가 각각 `buildAwardPosterData(aw.<award>, …, prod)`로
-포스터 데이터를 만들면 `AwardPoster`(상별 `AWARD_TEMPLATES.<key>.src`·`.tone`) 연출, `null`(미출전 등)이면 기존 `winnerCard` 폴백.
-풀시즌 생산 `prod = leagueProduction(MAX)`는 **한 번만** 계산해 세 상이 공유(무거움 — aw.*와 동일 집계로 스탯 귀속 일치).
+**배선 지점**: `app/awards-ceremony.tsx` — **부문 기록왕 7비트(위상 오름차순, §8.1.1)** + 신인상·기량발전상·MVP(클라이맥스) 비트가 각각
+`buildAwardPosterData(aw.<award>, …, prod)`(기록왕은 `statLeaderPosterData(aw.titles[cat], …, prod)`)로 포스터 데이터를 만들면
+`AwardPoster`(상별 `AWARD_TEMPLATES.<key>.src`·`.tone`) 연출, `null`(미출전 등)이면 기록왕은 비트 스킵·나머지는 기존 `winnerCard` 폴백.
+풀시즌 생산 `prod = leagueProduction(MAX)`는 **한 번만** 계산해 전 상이 공유(무거움 — aw.*와 동일 집계로 스탯 귀속 일치).
 기량발전상은 `footnote={`시즌 생산 ▲${aw.mostImproved.value}`}`로 성장 화살표 의미 보존(§9 개편 — value가 OVR델타→생산Δ로 바뀌어 라벨을 `OVR ▲N`에서 `시즌 생산 ▲N`으로 교체). 챔프전 MVP는 `champion-ceremony`(§5.3 유일 수여).
 
 **개발 미리보기**: `app/awards-poster-preview.tsx`(DEV_TOOLS 게이트 — 운영 빌드 진입 차단, `office` 탭 개발용 카드에서 진입).
-현재 시즌 실 MVP + 챔프전 MVP + **상별 톤 샘플(신인=블루·기량발전=~~퍼플~~ 오렌지 footnote `시즌 생산 ▲N`·기록왕=~~레드~~ 실버 "배선 후속")** + 레이아웃 스트레스 샘플(긴 이름 OH·세터).
+현재 시즌 실 MVP + 챔프전 MVP + **상별 톤 샘플(신인=블루·기량발전=~~퍼플~~ 오렌지 footnote `시즌 생산 ▲N`·기록왕=~~레드~~ 실버)** + **기록왕 3안 프로토타입(1안 채택 §8.1.1)** + 레이아웃 스트레스 샘플(긴 이름 OH·세터·**MIDDLE BLOCKER + 긴 팀명 폭 스트레스**).
 샘플은 이 화면 전용 목업(운영 미노출).
 
 - **검증**: tsc 0 · npm test 무회귀(연출 전용 — 엔진·store 무접촉) · 가드 `tools/_dv_award_poster.ts`(A/B 자가검증):
   ① `posterStats` 라벨→필드 시맨틱 오라클(오귀속 0) ② 상별 톤 형식·색 구분 무결 ③ **오버레이-타이틀 충돌**(시즌 블록 하단 + 안전마진 0.5% < `titleTopPct`, 5종)
   ④ **패널 세로 예산**(하단 패널 콘텐츠 총높이 풋노트 無/有 두 구성 모두 ≤ 13.7 - 0.5 = 13.2%h)
-  — 변이(공격↔디그 스왑·깨진 bright·mip 'full' 강제·구 풋노트 구성 주입) 주입 시 각각 검출됨을 증명(허위 오라클 방지).
-  · 실기기 육안(오버레이 좌표·좁은 기기 폭·엠블럼·톤 색)은 메인(에뮬).
+  ⑤ **`statLeaderPosterData`(§8.1.1)**: 7부문 전부 조립 가능(합성 시즌) · footnote 형식·단위 정확 · `highlightLabels`가 stats 5칸에 항상 존재(교체 규칙 집행 — MB 리시브왕 미스매치 포함) · null 수상자→null · `teamName` 존재 · 결정론.
+  — 변이(공격↔디그 스왑·깨진 bright·mip 'full' 강제·구 풋노트 구성·**교체 규칙 제거**) 주입 시 각각 검출됨을 증명(허위 오라클 방지). teamName 표기는 줄 수 불변이라 세로 예산 검사 무변경.
+  · 실기기 육안(오버레이 좌표·좁은 기기 폭·엠블럼·톤 색·**팀명 표기 + MIDDLE BLOCKER×긴 팀명 폭**)은 메인(에뮬).
 
 ## 9. 기량발전상 선정 기준 개편 — OVR델타 → 생산 임팩트 Δ (2026-07-22)
 

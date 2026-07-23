@@ -7,7 +7,7 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 import type { PosterTone, PosterStat, PosterSeasonMode } from '../data/awardPoster';
-import type { Position } from '../types';
+import type { Position, AwardWinner } from '../types';
 import type { ProdLine } from '../engine/production';
 const Module = require('module');
 for (const ext of ['.png', '.jpg', '.jpeg', '.webp', '.m4a', '.ttf', '.otf']) {
@@ -189,7 +189,8 @@ function readListZoneFromSource(): { top: number; bottom: number } | null {
 }
 
 (async () => {
-  const { posterStats, AWARD_TEMPLATES } = await import('../data/awardPoster');
+  const { posterStats, AWARD_TEMPLATES, statLeaderPosterData, statsWithCategory, STAT_LEADER_META, STAT_LEADER_ORDER } = await import('../data/awardPoster');
+  const { getPlayer, currentRosters } = await import('../data/league');
   const templates = AWARD_TEMPLATES as unknown as TemplateMap;
   let fail = 0;
 
@@ -285,6 +286,81 @@ function readListZoneFromSource(): { top: number; bottom: number } | null {
   if (slLegacyFrame.some((e) => e.includes('상단'))) console.log(`PASS sl-frame-sensitivity :: 구 존(top 78.5%) 주입 시 프레임 상단 이탈 검출 — 검사 유효 (재현: ${slLegacyFrame.find((e) => e.includes('상단'))})`);
   else { fail++; console.log(`FAIL sl-frame-sensitivity :: 구 존(top 78.5%)도 프레임 내부로 계산 — 오라클 허위(결함 재현 실패)`); }
 
-  console.log(fail === 0 ? '\nALL PASS — award poster 오귀속·톤·오버레이 충돌·세로 예산·모아보기(3안 예산·프레임 내포·드리프트) 무결' : `\n${fail} FAIL`);
+  // ── 기록왕 셀렉터 statLeaderPosterData (AWARDS_SYSTEM §8.1.1, 1안 배선 2026-07-23) ──
+  // 표시 전용 순수 셀렉터라 시뮬 N 불요 — 합성 시즌 데이터 + 실선수(포지션별)로 조립·교체·null·결정론·teamName을 검사.
+  const line = distinctLine();
+
+  // (A) 교체 규칙 전수(pure statsWithCategory) — 모든 포지션 × 7부문에서 부문 라벨이 stats 5칸에 항상 존재해야(강조가 빈 칸 안 가리키게).
+  //   근거: posterStats 대표 5칸엔 각 포지션마다 없는 부문이 있다(예 MB=득점·공격·블로킹·서브·디그 → 세트·리시브 없음, OH → 블로킹·세트 없음).
+  type SwcFn = (pos: Position, l: ProdLine, catKo: string, field: keyof ProdLine) => PosterStat[];
+  function categoryCoverageErrors(fn: SwcFn): string[] {
+    const errs: string[] = [];
+    for (const pos of POSNS) for (const cat of STAT_LEADER_ORDER) {
+      const meta = STAT_LEADER_META[cat];
+      const cells = fn(pos, line, meta.catKo, meta.field);
+      if (cells.length !== 5) errs.push(`${pos}/${cat}: 칸 수 ${cells.length}≠5`);
+      const cell = cells.find((c) => c.label === meta.catKo);
+      if (!cell) { errs.push(`${pos}/${cat}: 부문 '${meta.catKo}' 미포함(교체 규칙 미집행)`); continue; }
+      if (cell.value !== String(line[meta.field])) errs.push(`${pos}/${cat}: '${meta.catKo}' 값 ${cell.value} ≠ ${line[meta.field]}`);
+    }
+    return errs;
+  }
+  const covErrs = categoryCoverageErrors(statsWithCategory);
+  if (covErrs.length === 0) console.log(`PASS sl-coverage :: statsWithCategory 5포지션×7부문 모두 부문 라벨이 stats 5칸에 존재(교체 규칙 집행)`);
+  else { fail++; console.log('FAIL sl-coverage ::\n  ' + covErrs.join('\n  ')); }
+
+  // (B) 교체 규칙 A/B — 교체 없이 posterStats만 쓰면(변이) 미스매치 부문(예 MB 리시브)에서 강조 라벨이 빠져 검출돼야 검사 유효.
+  const noReplace: SwcFn = (pos, l) => posterStats(pos, l);
+  const covMut = categoryCoverageErrors(noReplace);
+  const mbReceive = covMut.some((e) => e.startsWith('MB/receive'));
+  if (covMut.length > 0 && mbReceive) console.log(`PASS sl-coverage-sensitivity :: 교체 규칙 제거 변이 시 미스매치 ${covMut.length}건 검출(MB 리시브왕 포함) — 검사 유효`);
+  else { fail++; console.log(`FAIL sl-coverage-sensitivity :: 교체 제거 변이를 검출 못 함(MB/receive=${mbReceive}, 총 ${covMut.length}) — 오라클 허위`); }
+
+  // (A) 셀렉터 조립 — 7부문 전부 non-null, seasonLabel(부문왕)·kicker·footnote(단위)·highlightLabels·teamName·5칸 정확.
+  //   실선수(포지션별)를 winner로 써 pos 파생까지 실검사. MB 선수로 receive 부문 → 교체 규칙 end-to-end.
+  const rs = currentRosters();
+  const byPos: Partial<Record<Position, string>> = {};
+  for (const tid of Object.keys(rs)) for (const id of rs[tid]) {
+    const pos = getPlayer(id)?.position;
+    if (pos && !byPos[pos]) byPos[pos] = id;
+  }
+  const mbId = byPos['MB'];
+  const anyId = byPos['OP'] ?? byPos['OH'] ?? Object.values(byPos)[0]!;
+  const slErrs: string[] = [];
+  for (const cat of STAT_LEADER_ORDER) {
+    const meta = STAT_LEADER_META[cat];
+    // 미스매치 end-to-end 노출: 리시브 부문은 MB 선수(리시브 대표 아님)로 → 교체 규칙 실집행 확인.
+    const winnerId = (cat === 'receive' && mbId) ? mbId : anyId;
+    const winner: AwardWinner = { playerId: winnerId, teamId: 't0', value: line[meta.field] as number };
+    const prod = new Map<string, ProdLine>([[winnerId, line]]);
+    const d = statLeaderPosterData(winner, 3, cat, null, prod);
+    if (!d) { slErrs.push(`${cat}: null(조립 실패)`); continue; }
+    if (d.seasonLabel !== meta.king) slErrs.push(`${cat}: seasonLabel '${d.seasonLabel}' ≠ '${meta.king}'`);
+    if (!d.seasonKicker.includes(meta.catEn)) slErrs.push(`${cat}: kicker '${d.seasonKicker}'에 '${meta.catEn}' 없음`);
+    const expectFoot = `시즌 ${line[meta.field]}${meta.unit} · 리그 1위`;
+    if (d.footnote !== expectFoot) slErrs.push(`${cat}: footnote '${d.footnote}' ≠ '${expectFoot}'`);
+    if (!d.teamName) slErrs.push(`${cat}: teamName 비어있음`);
+    if (d.highlightLabels.length !== 1 || d.highlightLabels[0] !== meta.catKo) slErrs.push(`${cat}: highlightLabels ${JSON.stringify(d.highlightLabels)} ≠ ['${meta.catKo}']`);
+    if (d.stats.length !== 5) slErrs.push(`${cat}: stats 칸 ${d.stats.length}≠5`);
+    if (!d.stats.some((s) => s.label === meta.catKo)) slErrs.push(`${cat}: 강조 라벨 '${meta.catKo}'가 stats에 없음(교체 미집행)`);
+  }
+  if (slErrs.length === 0) console.log(`PASS sl-selector :: statLeaderPosterData 7부문 조립·부문왕 대제목·footnote 단위·highlightLabels·teamName·5칸 정확${mbId ? ' (리시브=MB 선수로 교체 규칙 end-to-end)' : ''}`);
+  else { fail++; console.log('FAIL sl-selector ::\n  ' + slErrs.join('\n  ')); }
+
+  // (A) null 수상자 / 생산 라인 없음 → null
+  const nullWinner = statLeaderPosterData(null, 3, 'scoring', null, new Map());
+  const noLine = statLeaderPosterData({ playerId: anyId, teamId: 't0', value: 1 }, 3, 'scoring', null, new Map());
+  if (nullWinner === null && noLine === null) console.log('PASS sl-null :: 수상자 null·생산 라인 없음 → null 반환(비트 스킵)');
+  else { fail++; console.log(`FAIL sl-null :: null 미반환 (winner null=${nullWinner === null}, no-line=${noLine === null})`); }
+
+  // (A) 결정론 — 같은 입력 두 번 → 동일 출력
+  const dw: AwardWinner = { playerId: anyId, teamId: 't0', value: 1 };
+  const dp = new Map<string, ProdLine>([[anyId, distinctLine()]]);
+  const d1 = JSON.stringify(statLeaderPosterData(dw, 3, 'scoring', null, dp));
+  const d2 = JSON.stringify(statLeaderPosterData(dw, 3, 'scoring', null, dp));
+  if (d1 === d2) console.log('PASS sl-determinism :: statLeaderPosterData 동일 입력 → 동일 출력');
+  else { fail++; console.log('FAIL sl-determinism :: 출력 불일치'); }
+
+  console.log(fail === 0 ? '\nALL PASS — award poster 오귀속·톤·오버레이 충돌·세로 예산·모아보기(3안)·기록왕 셀렉터(교체·조립·null·결정론) 무결' : `\n${fail} FAIL`);
   process.exit(fail === 0 ? 0 : 1);
 })();

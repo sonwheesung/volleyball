@@ -10,7 +10,7 @@
 
 import type { AwardWinner, Player, Position } from '../types';
 import type { ProdLine } from '../engine/production';
-import { getPlayer, reconstructForeignName } from './league';
+import { getPlayer, reconstructForeignName, getTeam } from './league';
 import { overall } from '../engine/overall';
 import { deriveRatings, type Ratings } from '../engine/ratings';
 import { leagueProduction } from './production';
@@ -64,12 +64,16 @@ export interface AwardPosterData {
   posEn: string;         // "OUTSIDE HITTER"
   pos: Position;
   teamId: string;
+  teamName: string;      // 소속팀 표시명("인천 타이드") — 포스터 포지션 줄에 병기(§8, 2026-07-23)
   ovr: number;           // raw 연속 OVR(AwardPoster가 displayOvr 적용)
   stats: PosterStat[];   // 5칸
   emblem: number;        // require 자산 id
   accent: string;        // 구단 강조색(teamColors.light)
   isMine: boolean;
 }
+
+/** 팀 표시명("도시 팀명") — getTeam 단일 소스(전 화면 공용). 미지 팀은 id 폴백. */
+const teamNameOf = (id: string): string => getTeam(id)?.name ?? id;
 
 /**
  * 포지션 대표 5스탯 — 시즌 실카운트만(비율 지표 미보존). repRecordLine 철학 재사용:
@@ -134,8 +138,103 @@ export function buildAwardPosterData(
     posEn: POS_EN[pos],
     pos,
     teamId: winner.teamId,
+    teamName: teamNameOf(winner.teamId),
     ovr: p ? overall(p) : 0,
     stats: posterStats(pos, l),
+    emblem: emblemFor(winner.teamId),
+    accent: teamColors(winner.teamId).light,
+    isMine: !!myTeamId && winner.teamId === myTeamId,
+  };
+}
+
+// ── 부문 기록왕 포스터 (AWARDS_SYSTEM §8.1.1, 2026-07-23 1안 채택) ──────────────────────
+// engine/awards.ts titles 7부문 = {scoring,spike,block,serve,dig,set,receive}. 각 부문의 한글 대제목·영문 키커·
+// ProdLine 필드·footnote 단위를 단일 출처로 모은다(프리뷰 하드코딩 SL_KING/키커/단위를 셀렉터로 승격 — 프리뷰·화면·가드 공용).
+export type StatLeaderCategory = 'scoring' | 'spike' | 'block' | 'serve' | 'dig' | 'set' | 'receive';
+
+export interface StatLeaderMeta {
+  catKo: string;        // 부문 한글 라벨(득점·공격·…) — posterStats 라벨·highlightLabels와 동일 표기
+  catEn: string;        // 영문 키커("SCORING LEADER")
+  king: string;         // 부문왕 한글 대제목("득점왕") — seasonLabel 자리에 전면 표시(§8.1)
+  field: keyof ProdLine; // 부문 수치 소스 필드
+  unit: string;         // footnote 단위(득점=점·공격=킬·블로킹=블록·나머지=개)
+}
+
+/** 부문 메타 단일 출처. field는 engine/awards.ts titles 매핑과 동일(scoring→points 등). */
+export const STAT_LEADER_META: Record<StatLeaderCategory, StatLeaderMeta> = {
+  scoring: { catKo: '득점',   catEn: 'SCORING LEADER', king: '득점왕',   field: 'points',   unit: '점' },
+  spike:   { catKo: '공격',   catEn: 'SPIKE LEADER',   king: '공격왕',   field: 'spikes',   unit: '킬' },
+  block:   { catKo: '블로킹', catEn: 'BLOCK LEADER',   king: '블로킹왕', field: 'blocks',   unit: '블록' },
+  serve:   { catKo: '서브',   catEn: 'SERVE LEADER',   king: '서브왕',   field: 'aces',     unit: '개' },
+  dig:     { catKo: '디그',   catEn: 'DIG LEADER',     king: '디그왕',   field: 'digs',     unit: '개' },
+  set:     { catKo: '세트',   catEn: 'SET LEADER',     king: '세트왕',   field: 'assists',  unit: '개' },
+  receive: { catKo: '리시브', catEn: 'RECEIVE LEADER', king: '리시브왕', field: 'receives', unit: '개' },
+};
+
+/** 시상식 비트 순서 — 위상 오름차순(리시브 → … → 득점). 개인상보다 먼저 수여(§8.1.1). */
+export const STAT_LEADER_ORDER: StatLeaderCategory[] = ['receive', 'dig', 'set', 'serve', 'block', 'spike', 'scoring'];
+
+/**
+ * 부문 스탯이 포지션 대표 5칸(posterStats)에 없으면 **마지막 칸을 결정론 교체**해 highlightLabels가 항상 존재하게 한다.
+ * 예: MB 대표 5칸=득점·공격·블로킹·서브·디그 → MB가 리시브왕이면 마지막 칸(디그)을 리시브로 교체. 이미 있으면 무변경.
+ * 순수 함수(getPlayer/시즌 상태 무의존) — 프리뷰·가드 A/B 공용.
+ */
+export function statsWithCategory(pos: Position, l: ProdLine, catKo: string, field: keyof ProdLine): PosterStat[] {
+  const base = posterStats(pos, l);
+  if (base.some((c) => c.label === catKo)) return base;
+  const replaced = base.slice();
+  replaced[replaced.length - 1] = { label: catKo, value: String(l[field] as number) };
+  return replaced;
+}
+
+export interface StatLeaderPosterData {
+  seasonLabel: string;       // 부문왕 한글 대제목("득점왕") — AwardPoster seasonLabel 자리에 전면
+  seasonKicker: string;      // "2025-26 · SCORING LEADER"
+  name: string;
+  posEn: string;
+  pos: Position;
+  teamId: string;
+  teamName: string;          // 소속팀 표시명(포지션 줄 병기)
+  ovr: number;
+  stats: PosterStat[];       // 5칸(교체 규칙 적용 — 부문 스탯 항상 포함)
+  highlightLabels: string[]; // [부문 한글] — 해당 칸 강조
+  footnote: string;          // "시즌 842점 · 리그 1위"
+  emblem: number;
+  accent: string;
+  isMine: boolean;
+}
+
+/**
+ * 부문 기록왕 포스터 데이터 — `buildAwardPosterData`와 동형 파라미터(화면이 aw.titles[category]·공유 prod 주입).
+ * winner가 null이거나 생산 라인이 없으면 null(비트 스킵). 순수 — getPlayer/getTeam만 조회(결정론).
+ */
+export function statLeaderPosterData(
+  winner: AwardWinner | null,
+  season: number,
+  category: StatLeaderCategory,
+  myTeamId: string | null,
+  prod: Map<string, ProdLine>,
+): StatLeaderPosterData | null {
+  if (!winner) return null;
+  const l = prod.get(winner.playerId);
+  if (!l) return null;
+  const meta = STAT_LEADER_META[category];
+  const p = getPlayer(winner.playerId);
+  const pos: Position = p?.position ?? 'OH';
+  const name = p?.name ?? reconstructForeignName(winner.playerId) ?? winner.playerId;
+  const value = l[meta.field] as number;
+  return {
+    seasonLabel: meta.king,
+    seasonKicker: `${seasonYear(season)} · ${meta.catEn}`,
+    name,
+    posEn: POS_EN[pos],
+    pos,
+    teamId: winner.teamId,
+    teamName: teamNameOf(winner.teamId),
+    ovr: p ? overall(p) : 0,
+    stats: statsWithCategory(pos, l, meta.catKo, meta.field),
+    highlightLabels: [meta.catKo],
+    footnote: `시즌 ${value}${meta.unit} · 리그 1위`,
     emblem: emblemFor(winner.teamId),
     accent: teamColors(winner.teamId).light,
     isMine: !!myTeamId && winner.teamId === myTeamId,

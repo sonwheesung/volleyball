@@ -70,6 +70,7 @@ function Inner() {
         seasonLabel={finalsPoster.seasonLabel}
         name={finalsPoster.name}
         posEn={finalsPoster.posEn}
+        teamName={finalsPoster.teamName}
         ovr={finalsPoster.ovr}
         stats={finalsPoster.stats}
         emblem={finalsPoster.emblem}

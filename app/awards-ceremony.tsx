@@ -10,7 +10,7 @@ import { AwardIllustration } from '../components/AwardIllustration';
 import { AwardPoster } from '../components/AwardPoster';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { currentSeasonAwards } from '../data/awards';
-import { buildAwardPosterData, AWARD_TEMPLATES, type AwardTemplate } from '../data/awardPoster';
+import { buildAwardPosterData, statLeaderPosterData, AWARD_TEMPLATES, STAT_LEADER_ORDER, type AwardTemplate, type StatLeaderPosterData } from '../data/awardPoster';
 import { leagueProduction } from '../data/production';
 import { getPlayer, shortTeamName, reconstructForeignName } from '../data/league';
 import { emblemFor } from '../data/emblems';
@@ -63,6 +63,11 @@ function CeremonyInner() {
   const mvpPoster = useMemo(() => (aw.mvp ? buildAwardPosterData(aw.mvp, season, my ?? null, prod) : null), [aw.mvp, season, my, prod]);
   const rookiePoster = useMemo(() => (aw.rookie ? buildAwardPosterData(aw.rookie, season, my ?? null, prod) : null), [aw.rookie, season, my, prod]);
   const improvedPoster = useMemo(() => (aw.mostImproved ? buildAwardPosterData(aw.mostImproved, season, my ?? null, prod) : null), [aw.mostImproved, season, my, prod]);
+  // 부문 기록왕 7종(§8.1.1) — 위상 오름차순(리시브→…→득점). 수상자 null 부문은 아래 비트에서 스킵.
+  const statLeaderPosters = useMemo(
+    () => STAT_LEADER_ORDER.map((cat) => ({ cat, poster: statLeaderPosterData(aw.titles[cat], season, cat, my ?? null, prod) })),
+    [aw.titles, season, my, prod],
+  );
 
   // 공개 비트(빈 상 생략) — 신인 → 기량발전 → 베스트7 → 챔프MVP → 정규MVP(클라이맥스)
   const beats = useMemo(() => {
@@ -101,12 +106,28 @@ function CeremonyInner() {
       <View style={{ alignItems: 'center', gap: 8 }}>
         <AwardPoster
           template={tpl.src} tone={tpl.tone} seasonMode={tpl.seasonMode}
-          seasonLabel={poster!.seasonLabel} name={poster!.name} posEn={poster!.posEn}
+          seasonLabel={poster!.seasonLabel} name={poster!.name} posEn={poster!.posEn} teamName={poster!.teamName}
           ovr={poster!.ovr} stats={poster!.stats} emblem={poster!.emblem} footnote={footnote}
         />
         {poster!.isMine ? <Text style={styles.mineTag}>{mineTag}</Text> : null}
       </View>
     );
+    // 부문 기록왕 포스터(§8.1.1) — 실버 톤, 부문왕 한글 대제목 + 영문 키커 + 해당 부문 칸 강조 + footnote 수치.
+    const statLeaderBeat = (poster: StatLeaderPosterData) => (
+      <View style={{ alignItems: 'center', gap: 8 }}>
+        <AwardPoster
+          template={AWARD_TEMPLATES.statLeader.src} tone={AWARD_TEMPLATES.statLeader.tone}
+          seasonLabel={poster.seasonLabel} seasonKicker={poster.seasonKicker}
+          name={poster.name} posEn={poster.posEn} teamName={poster.teamName} ovr={poster.ovr}
+          stats={poster.stats} highlightLabels={poster.highlightLabels} emblem={poster.emblem} footnote={poster.footnote}
+        />
+        {poster.isMine ? <Text style={styles.mineTag}>우리 구단의 기록왕</Text> : null}
+      </View>
+    );
+    // 기록왕 7종을 개인상보다 먼저(위상 오름차순). 수상자 null 부문은 스킵.
+    for (const { cat, poster } of statLeaderPosters) {
+      if (poster) out.push({ key: 'sl-' + cat, el: statLeaderBeat(poster) });
+    }
     if (aw.rookie) out.push({ key: 'rookie', el: rookiePoster
       ? posterBeat(rookiePoster, AWARD_TEMPLATES.rookie, '우리 구단의 신인상')
       : winnerCard('sparkles-outline', '신인상', aw.rookie) });
@@ -130,7 +151,7 @@ function CeremonyInner() {
       out.push({ key: 'mvp', el });
     }
     return out;
-  }, [aw, my, mvpPoster, rookiePoster, improvedPoster]);
+  }, [aw, my, mvpPoster, rookiePoster, improvedPoster, statLeaderPosters]);
 
   const [idx, setIdx] = useState(0);
   const t = useRef(new Animated.Value(0)).current; // 0=숨김 1=표시

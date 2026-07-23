@@ -38,6 +38,7 @@ export interface AwardPosterProps {
   seasonLabel: string;             // 시즌 식별(예: "2025-26")
   name: string;                    // 수상자 이름(큰 한글)
   posEn: string;                   // 포지션 영문(예: "OUTSIDE HITTER")
+  teamName?: string;               // 소속팀 표시명 — 포지션 줄에 병기("OPPOSITE · 인천 타이드"). 미지정=현행(무회귀). §8
   ovr: number;                     // raw 연속 OVR(내부에서 displayOvr 적용)
   stats: AwardPosterStat[];        // 4~5칸(라벨 한글·수치 강조)
   emblem?: ImageSourcePropType;    // 구단 엠블럼 배지(좌측)
@@ -52,7 +53,7 @@ export interface AwardPosterProps {
 
 /** 3:4 배경 위에 시즌·수상자·OVR·스탯을 퍼센트 절대 배치. 세로 = 폭×4/3. */
 export function AwardPoster({
-  template, seasonLabel, name, posEn, ovr, stats,
+  template, seasonLabel, name, posEn, teamName, ovr, stats,
   emblem, accent = MINT, tone = DEFAULT_TONE, seasonKicker = 'SEASON', seasonMode = 'full', footnote, highlightLabels, width,
 }: AwardPosterProps) {
   // yearOnly = 키커 미렌더 → 연도가 topZone(3.2%) 최상단에서 시작(하단 ~7.9%). 키커 위 여백(marginTop:2)도 이때만 제거(연도가 3.2%에 붙게).
@@ -89,7 +90,8 @@ export function AwardPoster({
           <View style={styles.headRow}>
             {emblem ? <Image source={emblem} style={[styles.emblem, { width: h * 0.048, height: h * 0.048 }]} /> : null}
             <View style={styles.nameCol}>
-              <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, lineHeight: f.posEn * (hasFoot ? 1.10 : 1.15), includeFontPadding: false, color: tone.bright }]} numberOfLines={1}>{posEn}</Text>
+              {/* 포지션 줄에 소속팀명 병기(§8) — 새 줄 없음(줄 수 불변 → 세로 예산·충돌 마진 무영향). adjustsFontSizeToFit로 긴 조합 폭 축소. */}
+              <Text allowFontScaling={false} style={[styles.posEn, { fontSize: f.posEn, lineHeight: f.posEn * (hasFoot ? 1.10 : 1.15), includeFontPadding: false, color: tone.bright }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.8}>{teamName ? `${posEn} · ${teamName}` : posEn}</Text>
               <Text allowFontScaling={false} style={[styles.name, { fontSize: f.name, lineHeight: f.name * (hasFoot ? 1.10 : 1.12), includeFontPadding: false, color: WHITE, marginTop: hasFoot ? 0 : 1 }]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.6}>{name}</Text>
             </View>
             <View style={[styles.ovrChip, { borderColor: accent }]}>
