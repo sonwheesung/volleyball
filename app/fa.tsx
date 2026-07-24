@@ -204,6 +204,9 @@ function FACenterInner() {
   const myPayroll = pv.myRoster.reduce((s, id) => { const pl = snap[id]; return s + (pl && !pl.isForeign ? pl.contract.salary : 0); }, 0);
   const signedCost = [...pv.signedByMe].reduce((s, id) => s + (snap[id]?.contract.salary ?? 0), 0);
   const projected = myPayroll + signedCost;
+  // FA 가용 자금 = 정산 후 예상 − 이번 영입비 − 보상금 (표시용 파생 — 산식 무변경, FINANCE_SYSTEM §3.1).
+  //   홈 "운영 자금"(현재 잔고)과 시점이 다르다: budgetCash는 기존 선수단 연봉이 이미 빠진 정산 후 예상.
+  const faAvailable = budgetCash - signedCost - pv.compCash;
 
   const projectedComp = pickCompensation(pv.myRoster, protectedIds, snap, []);
   const projectedCompName = projectedComp ? snap[projectedComp]?.name : null;
@@ -247,12 +250,38 @@ function FACenterInner() {
             {formatMoney(projected)} / {formatMoney(LEAGUE_CAP)}
           </Text>
         </Row>
-        <Row>
-          <Muted>운영 자금(정산 후 · 연봉+보상금 차감)</Muted>
-          <Text style={{ color: budgetCash - signedCost - pv.compCash < 0 ? theme.bad : theme.text, fontWeight: '800' }}>
-            {formatMoney(Math.max(0, budgetCash - signedCost - pv.compCash))} / {formatMoney(budgetCash)}
+        {/* FA 가용 자금 — 홈의 "운영 자금"(현재 잔고)과 다른 값이다(FINANCE_SYSTEM §3.1). 무엇이 빠져
+            가용이 되는지 항목으로 보여 "홈은 5억인데 FA는 0" 혼란을 해소. 값 자체는 미변경(표시만 분해). */}
+        <View style={styles.faCashBlock}>
+          <Row>
+            <IconLabel icon="wallet-outline" color={theme.warn}>FA 가용 자금</IconLabel>
+            <Text style={{ color: faAvailable < 0 ? theme.bad : theme.text, fontWeight: '900', fontSize: 15 }}>
+              {formatMoney(Math.max(0, faAvailable))}
+            </Text>
+          </Row>
+          <View style={styles.faCashBreak}>
+            <Row>
+              <Muted style={{ fontSize: 12 }}>시즌 정산 후 예상</Muted>
+              <Muted style={{ fontSize: 12 }}>{formatMoney(budgetCash)}</Muted>
+            </Row>
+            {signedCost > 0 ? (
+              <Row>
+                <Muted style={{ fontSize: 12 }}>− 이번 영입 연봉</Muted>
+                <Muted style={{ fontSize: 12 }}>−{formatMoney(signedCost)}</Muted>
+              </Row>
+            ) : null}
+            {pv.compCash > 0 ? (
+              <Row>
+                <Muted style={{ fontSize: 12 }}>− FA 보상금</Muted>
+                <Muted style={{ fontSize: 12 }}>−{formatMoney(pv.compCash)}</Muted>
+              </Row>
+            ) : null}
+          </View>
+          <Text style={styles.faCashNote}>
+            이번 시즌이 끝나면 기존 선수단 연봉이 빠진 뒤 FA에 쓸 수 있는 예상 금액이에요.
+            홈 화면의 '운영 자금'(현재 잔고)과는 시점이 달라요.
           </Text>
-        </Row>
+        </View>
         <Pressable
           onPress={() => confirmDraftPickReset(() => busy.run('협상 테이블을 차리는 중…', () => setAggressive(!faAggressive)))}
           style={[styles.toggle, faAggressive && { borderColor: theme.warn, backgroundColor: theme.warn + '20' }]}
@@ -721,6 +750,10 @@ const styles = themedStyles(() => StyleSheet.create({
   noticeTitle: { color: theme.text, fontSize: 13, fontWeight: '900', marginBottom: 2 },
   noticeText: { color: theme.muted, fontSize: 12, lineHeight: 17 },
   offerSummary: { color: theme.muted, fontSize: 11, fontWeight: '700', marginTop: 3 },
+  // FA 가용 자금 블록(§3.1) — 정산 후 예상에서 무엇이 빠져 가용이 되는지 분해 표시.
+  faCashBlock: { gap: 4 },
+  faCashBreak: { gap: 2, paddingLeft: 10 },
+  faCashNote: { color: theme.muted, fontSize: 11, lineHeight: 16, marginTop: 3 },
   compHeader: { flexDirection: 'row', alignItems: 'center', gap: 5, alignSelf: 'flex-start' },
   modalTitle: { color: theme.text, fontSize: 19, fontWeight: '900' },
   modalBody: { color: theme.muted, fontSize: 13, lineHeight: 20 },
