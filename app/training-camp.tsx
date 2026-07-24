@@ -271,6 +271,19 @@ export default function TrainingCamp() {
         : '전지훈련을 보낼 수 없습니다.');
     }
   };
+  // 차감 전 확인(2026-07-24 결제표면 감사): 200💎·영구·환불불가 차감 직전 showAlert 1장(새 Modal 금지 #129). MONETIZATION §11.2.
+  //   확인(보내기)을 눌러야만 기존 send(서버 차감) 실행 — 취소면 차감 0. 잔액부족은 확인창 없이 기존 no-diamonds 경로로 직행.
+  //   이중 차감 방지: 상위 Button UI-33 래치 + 이 진입 가드(대기/전송 중 확인창 중복 오픈 차단) + AppDialog blocking modal + 다이얼로그 탭 즉시 dismiss.
+  const confirmSend = () => {
+    if (!course || walletBusy || sending) return; // send()와 동일 가드 — 대기/전송 중 확인창 중복 오픈 방지
+    if (!canAfford) { void send(); return; }       // 잔액부족: 확인창 없이 기존 reason 게이트(no-diamonds)로 (차감 없음 = 확인할 것 없음)
+    const label = CAMP_COURSES[course].label;
+    showAlert('전지훈련 보내기',
+      `${player.name} 선수를 ‹${label}› 코스로 보냅니다.\n비용 ${CAMP_COURSE_COST.toLocaleString()}💎 · 효과는 영구(환불 불가)예요.`, [
+      { text: '취소', style: 'cancel' },
+      { text: '보내기', onPress: () => { void send(); } },
+    ]);
+  };
 
   return (
     <Screen title="전지훈련" scroll={false}>
@@ -321,7 +334,7 @@ export default function TrainingCamp() {
         <Text style={styles.costTxt}>
           {course ? CAMP_COURSES[course].label : '코스 미선택'} · <Text style={{ color: canAfford ? theme.good : theme.bad, fontWeight: '900' }}>{CAMP_COURSE_COST.toLocaleString()} 💎</Text>
         </Text>
-        <Button label={walletBusy ? '보내는 중…' : !course ? '코스를 선택하세요' : canAfford ? '전지훈련 보내기 ▶' : '다이아 부족'} onPress={send} disabled={walletBusy || !course} />
+        <Button label={walletBusy ? '보내는 중…' : !course ? '코스를 선택하세요' : canAfford ? '전지훈련 보내기 ▶' : '다이아 부족'} onPress={confirmSend} disabled={walletBusy || !course} />
       </View>
     </Screen>
   );
