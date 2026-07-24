@@ -124,7 +124,7 @@ curl https://volleyball-jet-nine.vercel.app/api/devnotes     # 새 라우트 200
 
 ### 3.4 운영 중 일상
 - **콘텐츠 운영(배포 불필요)**: 공지(차단성)·개발자 노트/패치노트(읽을거리)·쿠폰·min/latestVersion — 전부 관리자 페이지에서.
-- **관측**: 서버 오류는 `reportError` 경유(+Discord webhook — ANALYTICS_PLAN, 셋업 예정 항목은 그 문서), 문의는 관리자 티켓 큐.
+- **관측**: 서버 오류는 `reportError` 경유(환경 게이트 — 운영 DSN은 `VERCEL_ENV=production|preview`만, BACKEND §13.21-a). **Discord 알림 전환 절차는 [ANALYTICS_PLAN §7](./ANALYTICS_PLAN.md#7-운영-알림-셋업--discord-연동-사용자-직접-셋업-예정)**(방법 A=Sentry 통합 / B=서버 웹훅 직접 / 크래시는 Crashlytics 별도 / `req.json` 500 백로그). 문의는 관리자 티켓 큐.
 - **정기**: 파기 크론(purgeExpired — 보존기간 §13.9), 지갑 대사(라이브 가드 배터리를 운영 DB 겨냥으로 돌릴 땐 `DATABASE_URL=<prod>` 명시 — 테스트 데이터는 프리픽스 자동 정리지만 신중히).
 
 ---
