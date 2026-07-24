@@ -198,6 +198,9 @@ function ContractsInner() {
   // 제안 직후 결과 피드백(FA §2.5c-격상 step3) — 선수 반응·밴드 변화·"시즌 종료 시 확정" 리마인드
   const [resultSheet, setResultSheet] = useState<{ p: Player; reaction: ReturnType<typeof resignReactionCopy> } | null>(null);
 
+  // 요약 카드 인원 라벨은 "국내 N명"(BUG-03, 2026-07-24) — 이 화면의 계약 목록은 국내 전용(:84 !isForeign 필터)이라
+  //   단장실의 "선수 N명"(전체=국내+수입)과 수가 다르다. 같은 문구면 같은 수를 기대하게 되므로 무엇을 세는지 드러낸다.
+  //   같은 화면 아래에 "수입 선수" 카드가 따로 있어(수입 2명) 총원은 국내+수입으로 읽힌다.
   return (
     <Screen title="계약 관리">
       <SummaryCard
@@ -206,10 +209,11 @@ function ContractsInner() {
         label="팀 총연봉 / 캡"
         value={`${formatMoney(total)} / ${formatMoney(LEAGUE_CAP)}`}
         valueStyle={{ color: total > LEAGUE_CAP ? theme.bad : theme.text, fontSize: 16, fontWeight: '800' }}
-        caption={`잔여 ${formatMoney(Math.max(0, LEAGUE_CAP - total))} · 선수 ${roster.length}명 · 행을 누르면 재계약·방출`}
+        caption={`잔여 ${formatMoney(Math.max(0, LEAGUE_CAP - total))} · 국내 ${roster.length}명 · 행을 누르면 재계약·방출`}
       />
 
-      <Title>선수 계약</Title>
+      {/* 아래 "수입 선수" 섹션과 짝 — 이 목록이 국내 전용임을 제목에서 드러낸다(BUG-03) */}
+      <Title>국내 선수 계약</Title>
       {roster.map((p) => {
         const market = marketVal(p, getPlayerProduction(p.id, displayDay));
         const status = contractStatus(salaryOf(p), market);

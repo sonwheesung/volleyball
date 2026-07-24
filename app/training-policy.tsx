@@ -110,13 +110,17 @@ export default function TrainingPolicy() {
         <View style={{ gap: 6, marginTop: 8 }}>
           <FocusOption
             label={`감독 기본 · ${coach?.archetype ?? ''}`}
+            sub={coach ? focusSub(coach.trainingFocus) : undefined}
             selected={draft === null}
             onPress={() => setDraft(null)}
           />
           {ARCHETYPES.map((a) => (
             <FocusOption
               key={a.name}
-              label={`${a.name} · ${a.focus.primary.map((id) => TRAINING_NAME[id]).join('/')}`}
+              // 핵심만 보이면 "기본기파"와 "밸런스"가 글자까지 똑같아진다(둘 다 공격/리시브가 핵심, 보조만 다름 —
+              //   BUG-07 2026-07-24). 보조 훈련까지 함께 보여줘야 무엇이 다른지 보고 고를 수 있다.
+              label={`${a.name} · 핵심 ${a.focus.primary.map((id) => TRAINING_NAME[id]).join('/')}`}
+              sub={focusSub(a.focus)}
               selected={draft !== null && sameFocus(draft, a.focus)}
               onPress={() => setDraft(a.focus)}
             />
@@ -129,7 +133,10 @@ export default function TrainingPolicy() {
   );
 }
 
-function FocusOption({ label, selected, onPress }: { label: string; selected: boolean; onPress: () => void }) {
+/** 선택지 둘째 줄 — 보조 훈련 목록(핵심이 같은 방침끼리 구분되게, BUG-07) */
+const focusSub = (f: TrainingFocus): string => `보조 ${f.secondary.map((id) => TRAINING_NAME[id]).join(' · ')}`;
+
+function FocusOption({ label, sub, selected, onPress }: { label: string; sub?: string; selected: boolean; onPress: () => void }) {
   return (
     <Pressable
       onPress={onPress}
@@ -145,6 +152,9 @@ function FocusOption({ label, selected, onPress }: { label: string; selected: bo
       <Text style={{ color: selected ? theme.accent : theme.text, fontWeight: selected ? '800' : '600' }}>
         {selected ? '✓ ' : ''}{label}
       </Text>
+      {sub ? (
+        <Text style={{ color: theme.muted, fontSize: 12, fontWeight: '600', marginTop: 3, lineHeight: 17 }}>{sub}</Text>
+      ) : null}
     </Pressable>
   );
 }

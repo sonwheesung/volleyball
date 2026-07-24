@@ -157,7 +157,9 @@ function AwardsDetail({
         </Card>
       ) : null}
 
-      <Muted style={styles.footNote}>우리 구단 선수는 파란색으로 강조됩니다.</Muted>
+      {/* 강조색은 전역 액센트(theme.accent = 민트) — "파란색"은 실제 색과 달랐다(BUG-09, 2026-07-24).
+          같은 화면의 다른 초록 계열(부문 기록상)과 헷갈리지 않게 "굵은 글씨"까지 함께 짚는다. */}
+      <Muted style={styles.footNote}>우리 구단 선수는 민트색 굵은 글씨로 강조됩니다.</Muted>
     </>
   );
 }

@@ -8,10 +8,11 @@ import { Stepper } from '../components/Stepper';
 import { Popup } from '../components/Popup';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
 import { ToastHost, useToastQueue } from '../components/Toast';
-import { shortTeamName as shortTeam, getTeam, teamScoutReveal } from '../data/league';
+import { shortTeamName as shortTeam, teamScoutReveal } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
 import { repRecordLine } from '../data/recordLine';
 import { buildOffseasonBase, scandalRepMap } from '../data/offseason';
+import { faPreviewBadge, teamLabel, type FABadgeTone } from '../data/faBadge';
 import { resolveFAPreviewFor } from '../data/offseasonArgs';
 import { buildOwnerFx } from '../data/owner';
 import { projectSettledCash } from '../data/financeProjection';
@@ -34,6 +35,10 @@ import { useGameStore } from '../store/useGameStore';
 // 선수 역제안 카운터 한도(FA_SYSTEM §2.8.6) — +0 ~ +1.0억, step 0.1억(연봉 단위 만원). +0=미설정(counterTolerance undefined → 0드리프트).
 const COUNTER_STEP = 1000;  // 0.1억
 const COUNTER_MAX = 10000;  // +1.0억
+
+// 배지 톤 → 색. theme는 identity 고정+값 교체(테마 토글)라 **호출 시점에** 읽어야 한다(모듈 상수로 박제 금지).
+const badgeColor = (tone: FABadgeTone): string =>
+  tone === 'good' ? theme.good : tone === 'warn' ? theme.warn : tone === 'muted' ? theme.muted : theme.sky;
 
 /** 상태 배지 — 텍스트가 바뀔 때만 페이드+스케일로 전환 연출(FA_SYSTEM §2.8.7). 첫 렌더·무변경 시엔 무연출(안 바뀐 선수는 그대로). */
 function AnimatedBadge({ text, color }: { text: string; color: string }) {
@@ -328,21 +333,12 @@ function FACenterInner() {
           //   ("협상 N위")를 없애고 "현재 예상 — …" 톤으로. 게이트(CASH/CAP/ROSTER)는 사실이라 유지(어조만 완화).
           const comp = pv.faCompete[p.id];
           const winProb = comp?.winProb;                 // 예상 승자 수락 확률(이미 계산됨) — #5 계약 가능성 코스
-          const countered = pv.counterFired[p.id];       // 카운터 발동(§2.8.6) — 내 오퍼가 요구를 수용해 상향된 케이스
-          let badge: { t: string; c: string } | null = null;
-          if (won) badge = countered
-            ? { t: `현재 예상. 요구를 수용해 ${formatMoney(countered.to)}에 계약이 유력합니다`, c: theme.good }
-            : { t: '현재 예상. 우리 팀 계약이 유력합니다', c: theme.good };
-          else if (targeted) {
-            const code = pv.faFail[p.id];
-            const lostName = getTeam(lost)?.name ?? shortTeam(lost);
-            if (code === 'LOST') badge = { t: `현재 예상. ${lostName}와 계약 가능성이 가장 높습니다`, c: theme.warn };
-            else if (code === 'CASH') badge = { t: '운영 자금이 부족해 아직 제안하지 못했습니다', c: theme.warn };
-            else if (code === 'CAP') badge = { t: '샐러리캡이 부족해 아직 제안하지 못했습니다', c: theme.warn };
-            else if (code === 'ROSTER') badge = { t: '정원이 가득 차 아직 제안하지 못했습니다', c: theme.warn };
-            else if (code === 'SIT_OUT') badge = { t: '현재 예상. 어느 구단과도 계약하지 않을 것으로 보입니다', c: theme.muted };
-            else badge = { t: '제안 전달됨. 시즌 시작 때 결과가 확정됩니다', c: theme.sky };
-          }
+          // 배지 문자열은 셀렉터(data/faBadge)가 계산 — 화면은 톤→색만 매핑.
+          //   BUG-01(2026-07-24): 여기서 lostTo를 LOST 분기 **밖에서** 평가해 CASH/CAP/ROSTER/SIT_OUT 경로에서
+          //   렌더 중 throw(=앱 종료·오프시즌 소프트락)가 났다. 가드 tools/_dv_fabadge.ts가 전 코드 경로를 태운다.
+          const badge = faPreviewBadge({
+            won, targeted, code: pv.faFail[p.id], lostTo: lost, counteredTo: pv.counterFired[p.id]?.to,
+          });
           // #5 계약 가능성(코스) — 예상 승자 prob를 높음/보통/낮음으로(정확 % 대신 우세 정도). 지명+승자 있을 때만.
           const chance = (targeted && (won || pv.faFail[p.id] === 'LOST' || pv.faFail[p.id] === 'SIT_OUT') && winProb !== undefined)
             ? (winProb >= 0.7 ? { t: '높음', c: theme.good } : winProb >= 0.4 ? { t: '보통', c: theme.warn } : { t: '낮음', c: theme.bad })
@@ -377,7 +373,7 @@ function FACenterInner() {
                       </Text>
                     );
                   })()}
-                  {badge ? <AnimatedBadge text={badge.t} color={badge.c} /> : null}
+                  {badge ? <AnimatedBadge text={badge.t} color={badgeColor(badge.tone)} /> : null}
                   {/* #5 계약 가능성(코스) — 예상이 얼마나 우세한지. 정확 %는 숨기고 높음/보통/낮음만. */}
                   {chance ? (
                     <Text style={{ fontSize: 11, fontWeight: '800', marginTop: 2, color: chance.c }}>
@@ -579,14 +575,15 @@ function FACenterInner() {
                         : wp >= 0.7 ? { t: '높음', c: theme.good } : wp >= 0.4 ? { t: '보통', c: theme.warn } : { t: '낮음', c: theme.bad };
                       // #7 우세 이유 — 예상 승자가 우세한 실제 offerScore 상위 동기(엔진이 계산). 성향 정밀 게이트(스카우팅) 통과 시만.
                       const factors = comp?.winFactors;
-                      const winnerName = won ? '우리 팀' : (pv.faFail[p.id] === 'LOST' ? (getTeam(lost)?.name ?? shortTeam(lost)) : null);
+                      // teamLabel = 빈 id에도 throw하지 않는 표시명(BUG-01 형제 봉인). LOST 분기에서만 lost를 읽는다.
+                      const winnerName = won ? '우리 팀' : (pv.faFail[p.id] === 'LOST' ? teamLabel(lost) : null);
                       const showFactors = reveal >= REVEAL_PRECISE && !!factors?.length && !!winnerName;
                       return (
                         <View style={styles.competBox}>
                           <Text style={styles.detailHead}>경쟁 구단</Text>
                           {rivals.length ? (
                             <Text style={styles.competText}>
-                              관심 구단 {rivals.length}곳 ({rivals.map((t) => getTeam(t)?.name ?? shortTeam(t)).join(', ')})
+                              관심 구단 {rivals.length}곳 ({rivals.map((t) => teamLabel(t)).join(', ')})
                             </Text>
                           ) : (
                             <Muted style={{ fontSize: 12 }}>아직 관심을 보인 다른 구단이 없습니다.</Muted>

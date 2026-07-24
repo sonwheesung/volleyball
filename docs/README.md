@@ -332,7 +332,8 @@ npx tsx tools/_dv_debut.ts                  # 입단 스냅샷 커리어 누적(
 npx tsx tools/_dv_bgm.ts                    # BGM 자산·배선 정합(SOUND_SYSTEM §4) — assets/bgm .m4a 10개·명명(bgm_01..10)·bgm.ts TRACKS require 수 일치·bgmVolume 마이그레이션 키 3곳(SAVE_DEFAULTS/KIND/partialize). exit 0/1
 npx tsx tools/_dv_face.ts                   # 선수 아바타 피처(AVATAR_SYSTEM, 2026-07-04 유대감) — faceFeatures 결정론(같은 id 동일) + 변형 분포(5스타일·5피부·7헤어·6배경 전부·편중<40%). exit 0/1
 npx tsx tools/_dv_tips.ts                   # 스포트라이트 튜토리얼 커버리지(ONBOARDING §3, 2026-07-04) — 전 팁 anchor가 실제 SpotlightTarget id에 매칭(동적 team-card-0 포함)·오버레이 없는 화면 0·중복 id 0·고아 앵커 0 + A/B(가짜 anchor/화면/중복 주입 시 FAIL). exit 0/1
-npx tsx tools/_dv_copylint.ts              # 유저 문구 정합(2026-06-30, 에뮬 발견 회귀 분석) — data/engine/app/components 소스에 남성형(사나이·그의/그가 경계인식)·배구 오용어(라켓·홈런·골키퍼) 0건 + A/B(더러운 문장 ≥3 적발·깨끗한 문장 "리그가/리그의" 오탐 0). exit 0/2
+npx tsx tools/_dv_fabadge.ts               # FA 배지 렌더 무해성(EC-UI-04, 2026-07-24 P0 크래시 봉인) — 실게이트 재현(CASH/CAP/ROSTER)·자연런 40시즌 1,784카드·코드×lostTo×won/targeted 192조합·shortTeamName 하드닝(undefined/null/'' → throw 0, 정상 id 바이트 동일)·소스 회귀(fa.tsx가 분기 밖에서 lostTo를 팀 조회로 넘기지 않음). A/B 구로직 재주입 시 22 FAIL. exit 0/1
+npx tsx tools/_dv_copylint.ts              # 유저 문구 정합(2026-06-30, 에뮬 발견 회귀 분석) — data/engine/app/components 소스에 남성형(사나이·그의/그가 경계인식)·배구 오용어(라켓·홈런·골키퍼) 0건 **+ 문자열 리터럴 내 내부용어(노쇠·체젠) 0건**(2026-07-24 확장 — CLAUDE §6 표시 라벨 "하락세/기량 하락"·"체력재생". 주석·JSDoc의 설계 용어는 통과) + A/B(더러운 문장 ≥3 적발·깨끗한 문장 "리그가/리그의" 오탐 0·내부용어 리터럴 ≥2 적발/주석 오탐 0). exit 0/2
 npx tsx tools/simSuggest.ts                # 건의 시스템(감독 성향이 수락/거절 가른다). exit 0/1
 npx tsx tools/_ev_suggest_defer.ts         # 건의 반영 시점(OWNER 2.3, 2026-06-28) — 관전 중(이어보기 대기) 경기엔 미적용·다음 경기부터(fromDay=currentDay+1) + A/B(델타=1, 옛 미적용 검출). 시간차/stale-resume·리롤 차단. exit 0/1
 npx tsx tools/_dv_foreign_archetype.ts     # 외국인 연고 성격 가드(EC-FG-03, 2026-06-28) — 외인 hometown 아키타입/preferredTeamId 0·국내 도달가능 대조군 + effectiveArchetypeOf·discontentNow 외인 게이트(A/B). "외인이 고향팀 그리움" 회귀 차단. exit 0/1

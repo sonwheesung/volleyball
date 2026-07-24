@@ -251,9 +251,13 @@ export const getFocusOverride = (teamId: string): TrainingFocus | null => {
 };
 
 export const getTeam = (id: string): Team | undefined => teamMap.get(id);
-/** 팀명 짧은 표기 — "도시 팀명"에서 팀명(마지막 어절)만. 마커·좁은 칸용 */
+/** 팀명 짧은 표기 — "도시 팀명"에서 팀명(마지막 어절)만. 마커·좁은 칸용.
+ *  하드닝(BUG-01, 2026-07-24): id가 undefined/null/빈 값이어도 **절대 throw하지 않는다**. 이 함수는 렌더 트리
+ *  한복판에서 불리며(FA 센터·보드·연표), 렌더 중 throw는 화면이 아니라 **앱 프로세스를 죽인다**(재진입 시 재크래시).
+ *  타입상 불가능해도(호출부가 Record 조회값을 넘겨 undefined가 새어들어옴) 방어한다. 정상 id 경로는 반환값 불변. */
 export const shortTeamName = (id: string): string => {
   const n = getTeam(id)?.name ?? id;
+  if (typeof n !== 'string' || n === '') return '';
   return n.split(' ').slice(-1)[0] || n;
 };
 export const getPlayer = (id: string): Player | undefined => playerMap.get(id);

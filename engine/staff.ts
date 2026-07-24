@@ -38,7 +38,8 @@ export const SPECIALTY_KO: Record<CoachSpecialty, string> = {
 /** 분야별 효과 한 줄 설명(UI) */
 export const SPECIALTY_DESC: Record<CoachSpecialty, string> = {
   attack: '공격·서브 포텐 상한↑', defense: '리시브·디그·블록 포텐 상한↑', setter: '세팅·VQ 포텐 상한↑',
-  stamina: '노쇠 지연(전성기 연장)', mental: '집중·기복 포텐 상한↑',
+  // 사용자 노출 라벨은 "하락세/기량 하락"(CLAUDE §6 라벨 정정 2026-07-11 — 엔진 식별자·설계 용어 "노쇠"는 유지).
+  stamina: '기량 하락 지연(전성기 연장)', mental: '집중·기복 포텐 상한↑',
 };
 
 /** 전문 코치 성장속도 부스트 — rating 100이면 해당 분야 훈련 +40% */
@@ -58,11 +59,12 @@ export const SPECIALTY_TYPES: Record<CoachSpecialty, CoachType[]> = {
   mental: ['stable', 'clutch'],
 };
 export const TYPE_KO: Record<CoachType, string> = {
-  developer: '육성형', winnow: '즉전형', finisher: '완성형', antiaging: '노쇠억제형', recovery: '회복특화형', stable: '안정형', clutch: '클러치형',
+  // antiaging 표시명: ~~'노쇠억제형'~~ → '하락억제형'(CLAUDE §6 라벨 정정 — 식별자 antiaging은 그대로).
+  developer: '육성형', winnow: '즉전형', finisher: '완성형', antiaging: '하락억제형', recovery: '회복특화형', stable: '안정형', clutch: '클러치형',
 };
 export const TYPE_DESC: Record<CoachType, string> = {
   developer: '어린 선수 성장 가속(전성기 전)', winnow: '주전·베테랑 성장 가속(전성기 이후에도)', finisher: '포텐 상한 극대(완성도↑)',
-  antiaging: '노쇠 크게 지연(전성기 연장)', recovery: '체력 훈련 가속(노쇠 지연은 약함)', stable: '기복(consistency) 상한↑', clutch: '집중(clutch/focus) 상한↑',
+  antiaging: '기량 하락 크게 지연(전성기 연장)', recovery: '체력 훈련 가속(기량 하락 지연은 약함)', stable: '기복(consistency) 상한↑', clutch: '집중(clutch/focus) 상한↑',
 };
 /** 구세이브(type=undefined) 호환 — 분야 기본 성향(옛 flat 동작에 가장 가까운 것). */
 export const DEFAULT_TYPE: Record<CoachSpecialty, CoachType> = {

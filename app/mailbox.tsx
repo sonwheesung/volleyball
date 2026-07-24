@@ -1,5 +1,6 @@
 // 우편함 화면 (MAILBOX_SYSTEM §6.1) — 운영 보상·개별 지급(CS)·이벤트 + 다이아 패스 일일 우편의 수령처.
-// 상태 3탭(기본 안받음 / 받음 / 전체) 서버 재조회 · 받기/모두 받기(부분 실패 집계 토스트 1회) · 만료 표시 · 오프라인 캐시.
+// 상태 3탭(전체 / 안받음 / 받음) 서버 재조회 · 받기/모두 받기(부분 실패 집계 토스트 1회) · 만료 표시 · 오프라인 캐시.
+// 로드 실패는 **빈 목록으로 위장하지 않는다**(BUG-01 배치 EC-UI-05) — 오류/오프라인/진짜 빈 목록 3갈래 + 재시도(§6.1).
 // 재화는 서버 진실(§2) — 수령 성공 응답 후 syncWallet로만 잔액·카운트 수렴(낙관 금지). 화면 진입 시 read로 빨간 점 소등(§6.3).
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { type ComponentProps, useCallback, useEffect, useState } from 'react';
@@ -41,6 +42,9 @@ export default function Mailbox() {
   const [items, setItems] = useState<MailItem[]>(() => MAIL_CACHE['all'] ?? []);
   const [loading, setLoading] = useState(true);
   const [offline, setOffline] = useState(false);
+  // 서버가 실패(500·401 등)했는데 빈 목록으로 그리면 "우편이 없어요"로 읽혀 장애가 은폐된다(BUG-11, 2026-07-24 E2E).
+  //   실패는 실패로 — 오프라인(연결 없음)과 서버 오류를 나눠 안내하고 재시도를 준다(support.tsx offline 패턴 확장).
+  const [loadError, setLoadError] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [claimingId, setClaimingId] = useState<string | null>(null);
   const [claimingAll, setClaimingAll] = useState(false);
@@ -54,12 +58,16 @@ export default function Mailbox() {
       MAIL_CACHE[status] = r.items;
       setItems(r.items);
       setOffline(false);
+      setLoadError(false);
     } else if (r.reason === 'offline') {
       setItems(MAIL_CACHE[status] ?? []); // 오프라인 → 마지막 캐시 표시(§6.1)
       setOffline(true);
+      setLoadError(false);
     } else {
-      setItems([]);
+      // 서버 오류(500·401·bad-request…) — 빈 목록으로 위장하지 않는다. 캐시가 있으면 그대로 두되 "오류" 배너를 띄운다.
+      setItems(MAIL_CACHE[status] ?? []);
       setOffline(false);
+      setLoadError(true);
     }
     setLoading(false);
   }, []);
@@ -82,7 +90,7 @@ export default function Mailbox() {
   };
 
   const claimOne = async (m: MailItem) => {
-    if (claimingId || claimingAll || offline) return;
+    if (claimingId || claimingAll || offline || loadError) return;
     setClaimingId(m.id);
     const r = await claimMail(m.id, m.kind);
     if (r.ok) {
@@ -103,7 +111,7 @@ export default function Mailbox() {
   };
 
   const claimAll = async () => {
-    if (claimingAll || claimingId || offline) return;
+    if (claimingAll || claimingId || offline || loadError) return;
     const targets = items.filter((m) => !m.claimedAt && !expiryLabel(m.expiresAt).expired);
     if (!targets.length) return;
     setClaimingAll(true);
@@ -140,15 +148,26 @@ export default function Mailbox() {
         ))}
       </View>
 
-      {offline ? (
+      {offline || loadError ? (
         <View style={styles.offlineNote}>
-          <Ionicons name={'cloud-offline-outline' as IoniconName} size={15} color={theme.muted} />
-          <Text style={styles.offlineTxt}>오프라인 — 마지막에 본 우편만 표시돼요. 받으려면 연결이 필요합니다.</Text>
+          <Ionicons
+            name={(offline ? 'cloud-offline-outline' : 'alert-circle-outline') as IoniconName}
+            size={15}
+            color={offline ? theme.muted : theme.warn}
+          />
+          <Text style={[styles.offlineTxt, loadError && { color: theme.warn }]}>
+            {offline
+              ? '오프라인 — 마지막에 본 우편만 표시돼요. 받으려면 연결이 필요합니다.'
+              : '우편을 불러오지 못했어요. 잠시 후 다시 시도해 주세요.'}
+          </Text>
+          <Pressable onPress={() => void fetchList(tab)} hitSlop={8} disabled={loading}>
+            <Text style={styles.retryTxt}>{loading ? '확인 중…' : '다시 시도'}</Text>
+          </Pressable>
         </View>
       ) : null}
 
       {/* 모두 받기 — 미수령·미만료가 있고 온라인일 때 */}
-      {claimableCount > 0 && !offline ? (
+      {claimableCount > 0 && !offline && !loadError ? (
         <Pressable onPress={claimAll} disabled={claimingAll || !!claimingId} style={[styles.claimAllBtn, (claimingAll || !!claimingId) && styles.btnOff]}>
           <Text style={styles.claimAllTxt}>{claimingAll ? '받는 중…' : `모두 받기 (${claimableCount}건)`}</Text>
         </Pressable>
@@ -158,17 +177,25 @@ export default function Mailbox() {
         <View style={styles.center}><ActivityIndicator color={theme.accent} /></View>
       ) : items.length === 0 ? (
         <View style={styles.center}>
-          <Ionicons name={'mail-open-outline' as IoniconName} size={40} color={theme.muted} />
+          {/* 실패(오류/오프라인)를 "우편 없음"으로 위장하지 않는다(BUG-11) — 아이콘·문구가 원인을 말하게. */}
+          <Ionicons
+            name={(loadError ? 'alert-circle-outline' : offline ? 'cloud-offline-outline' : 'mail-open-outline') as IoniconName}
+            size={40}
+            color={loadError ? theme.warn : theme.muted}
+          />
           <Muted style={styles.emptyTxt}>
             {/* 문장(마침표) 경계 명시 줄바꿈 — 폭에 따른 문장 중간 꺾임 방지(사용자 피드백 2026-07-23, MAILBOX §6.1) */}
-            {tab === 'unclaimed' ? '받을 우편이 없어요.\n전체 탭에서 지난 우편을 확인해 보세요.' : '우편이 없어요'}
+            {loadError ? '우편을 불러오지 못했어요.\n잠시 후 다시 시도해 주세요.'
+              : offline ? '오프라인이라 우편을 불러오지 못했어요.\n연결 후 다시 시도해 주세요.'
+              : tab === 'unclaimed' ? '받을 우편이 없어요.\n전체 탭에서 지난 우편을 확인해 보세요.'
+              : '우편이 없어요'}
           </Muted>
         </View>
       ) : (
         items.map((m) => {
           const exp = expiryLabel(m.expiresAt);
           const claimed = !!m.claimedAt;
-          const canClaim = !claimed && !exp.expired && !offline;
+          const canClaim = !claimed && !exp.expired && !offline && !loadError;
           const expanded = expandedId === m.id;
           return (
             <Pressable key={`${m.kind}:${m.id}`} onPress={() => setExpandedId(expanded ? null : m.id)}
@@ -199,7 +226,8 @@ export default function Mailbox() {
                     </Pressable>
                   ) : (
                     <Text style={styles.claimNote}>
-                      {claimed ? '이미 받은 우편이에요' : exp.expired ? '만료돼 받을 수 없어요' : '받으려면 연결이 필요합니다'}
+                      {claimed ? '이미 받은 우편이에요' : exp.expired ? '만료돼 받을 수 없어요'
+                        : loadError ? '지금은 받을 수 없어요. 잠시 후 다시 시도해 주세요' : '받으려면 연결이 필요합니다'}
                     </Text>
                   )}
                 </View>
@@ -222,6 +250,7 @@ const styles = themedStyles(() => StyleSheet.create({
   tabTxtActive: { color: theme.accent },
   offlineNote: { flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 9, paddingHorizontal: 11, marginBottom: 12 },
   offlineTxt: { flex: 1, color: theme.muted, fontSize: 12.5, fontWeight: '700', lineHeight: 17 },
+  retryTxt: { color: theme.accent, fontSize: 12.5, fontWeight: '800' },
   claimAllBtn: { backgroundColor: theme.accent, borderRadius: 11, paddingVertical: 12, alignItems: 'center', marginBottom: 12 },
   claimAllTxt: { color: '#08131F', fontSize: 14.5, fontWeight: '900' },
   btnOff: { opacity: 0.5 },
