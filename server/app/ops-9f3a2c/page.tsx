@@ -34,7 +34,10 @@ const REASON_KO: Record<string, string> = {
   'no-such-user': '해당 user id의 사용자가 없습니다',
   'has-redemptions': '사용 기록이 있어 삭제할 수 없습니다 — 비활성화하세요',
   'not-found': '대상을 찾을 수 없습니다 (이미 삭제되었을 수 있음)',
-  'wallet:no-user': '해당 사용자의 지갑을 찾을 수 없습니다',
+  // 지갑 실패는 admin/refund·admin/grant가 **400 + 이 reason**으로 내려준다(§13.21 노이즈 정리 2026-07-24 —
+  // 그전엔 500 'error'로 뭉개져 "서버 오류"로 보이고 Sentry 알림까지 울렸다). userId 오타·타 게임 유저가 대부분.
+  'wallet:no-user': '해당 사용자의 지갑을 찾을 수 없습니다 — user id를 확인하세요(오타·다른 게임 사용자)',
+  'wallet:insufficient': '잔액이 부족해 차감할 수 없습니다',
   error: '서버 오류가 발생했습니다',
   network: '서버에 연결하지 못했습니다 — 네트워크·서버 상태를 확인하세요',
 };

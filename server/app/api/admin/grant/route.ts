@@ -14,6 +14,9 @@ import { logPaymentEventAfter } from '../../../../lib/paymentLog';
 export const dynamic = 'force-dynamic';
 
 const GRANT_CAP = 100000; // 1회 지급 상한(오타 방지 — refund와 대칭)
+// 지갑 실패 중 **운영자 입력 오류**(서버 장애 아님) — 400 + Sentry 보고 제외(§13.21 노이즈 정리 2026-07-24, refund와 대칭).
+//   no-user = 없는 userId·오타·타 게임(proj) 유저(§13.2 R2). 그 외 wallet 실패(DB 예외)는 500+Sentry로 남는다.
+const WALLET_CLIENT_FAULT = new Set(['wallet:no-user', 'wallet:insufficient']);
 
 export async function POST(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
@@ -33,7 +36,9 @@ export async function POST(req: Request) {
     // 감사행(§13.22) — 트랜잭션 커밋 뒤 fire-and-forget(로깅 실패가 지급 되돌리지 않음).
     logPaymentEventAfter({ source: 'admin', stage: 'admin.grant.applied', ok: true, outcome: r.applied ? 'applied' : 'deduped', userId, idempotencyKey: key, diamondsDelta: amount, balanceAfter: r.balance, detail: { note: note.slice(0, 200) } });
     return NextResponse.json({ ok: true, balance: r.balance, applied: r.applied });
-  } catch (e) { reportError(e, 'admin/grant');
+  } catch (e) {
+    if (e instanceof Error && WALLET_CLIENT_FAULT.has(e.message)) return NextResponse.json({ ok: false, reason: e.message }, { status: 400 });
+    reportError(e, 'admin/grant');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
 }

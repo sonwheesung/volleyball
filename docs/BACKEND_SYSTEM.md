@@ -492,6 +492,47 @@
 - **검증(Opus 4.8)**: 서버 tsc 0·build ✓ · 스윕 16파일/23catch import 경로 정확 · **부팅 안전 실증**(DSN 없이 reportError no-op, throw 0) · **로컬 라이브**(테스트 에러+메시지 2건 대시보드 도착, 스택·기기·브레드크럼 완비) · **운영 라이브**(Vercel DSN 주입+flush 수정 배포 후 깨진 JSON→`auth/login` catch→`environment:production` 이슈 도착).
 - **파일**: `server/instrumentation.ts`(신·register+onRequestError)·`server/lib/observability.ts`(신·reportError)·`server/app/api/**/route.ts`(16파일 catch 스윕)·`server/.env.example`·`.env.local`(SENTRY_DSN·SENTRY_TRACES_SAMPLE_RATE). Crashlytics는 EAS 빌드 마일스톤에서(앱 네이티브·JS·ANR·기기별).
 
+#### 13.21-a ★ 환경 게이트 — "운영 DSN은 배포 환경에서만" (사건 2026-07-24, 알림 폭주)
+
+> **원칙**: **운영 Sentry로 전송하는 건 배포된 서버뿐이다.** 로컬 dev·tsx 가드·CI는 DSN을 손에 쥐고 있어도 절대 보내지 않는다.
+> 관측 대상이 아닌 환경의 잡음이 운영 이슈 트래커에 섞이면, 알림이 울려도 아무도 안 보게 된다(알림의 신호 가치 파괴).
+
+- **사건**: 오늘 가드/뮤턴트 검수가 **의도적으로 500을 대량 생성**(뮤턴트 15 FAIL · `mails` 테이블 부재 500 · 지갑 `no-user` throw)했는데,
+  이게 전부 **운영 Sentry 프로젝트**에 `environment: development` 태그로 적재돼 사용자에게 알림 메일이 폭주했다.
+- **원인(실측)**: Next는 dev에서도 `.env.local`을 로드한다 — `loadEnvConfig(server, dev=true)` → `SENTRY_DSN` **YES**.
+  `.env.local`엔 운영 크리덴셜이 들어 있으므로 **DB는 로컬인데 관측만 운영으로 새는** 반쪽 격리 상태였다.
+  구 `instrumentation.ts`는 **DSN만 있으면 무조건 init**(환경 게이트 없음), `onRequestError`도 `SENTRY_DSN`만 보고 보고했다.
+- **1차 대증요법(로컬 한정)**: `server/.env.development.local`에 `SENTRY_DSN=`(빈 값) → dev 로딩값 무력화. 단 이 파일은 **gitignore라 로컬 전용**
+  → 다른 머신·CI·새 클론에선 그대로 샌다. **구조적 조치가 필요**했다.
+- **조치(코드 게이트)**: **`server/lib/sentryGate.ts` `sentryEnabled(env)`** 단일 판단 함수 신설 — 순수 함수(import·부작용 0).
+  1. `SENTRY_DSN` 없음/빈 문자열 → 비활성(기존 부팅 안전 계약 유지).
+  2. `SENTRY_FORCE_LOCAL === '1'` → 로컬에서도 활성(**탈출구** — 연동 검증 `tools/_dv_sentry_verify.ts` 전용. 정확히 `'1'`만 인정).
+  3. 그 외엔 **`VERCEL_ENV`가 `production` | `preview`일 때만** 활성. 로컬엔 이 변수가 없다.
+     `vercel dev`는 `VERCEL_ENV='development'`(로컬)이므로 **화이트리스트에서 제외** — "VERCEL_ENV 존재 여부"보다 정확한 판정.
+- **세 경로가 같은 판단을 공유한다**: `register()`(init) · `onRequestError()`(미처리 라우트 에러) · `reportError()`(catch 스윕).
+  **두 곳이 어긋나면 절반만 막혀 또 샌다** — 실제로 `onRequestError`가 DSN만 보던 게 구멍이었다(가드 뮤턴트 B로 재현·검출 확인).
+- **가드(재발 감지)**: **`server/tools/_dv_sentry_gate.ts`** — DB·네트워크·실 Sentry 전송 **0**의 순수 단위 가드(20 assert).
+  ① `sentryEnabled` 진리표(DSN × VERCEL_ENV 없음/production/preview/development × 탈출구 × 빈 DSN),
+  ② `register()`가 로컬에서 **실제로 init하지 않음**(`Sentry.getClient()` 미생성),
+  ③④ `onRequestError`/`reportError`를 **스텁 트랜스포트 클라이언트**에 물려 "전송 시도 0건"을 실측(로컬) → 배포 env로 바꾸면 1건(민감도),
+  ⑤ 탈출구 동작. **A/B 자가검증**: 게이트를 구 로직(`return !!env.SENTRY_DSN`)으로 되돌린 뮤턴트 A에서 **7 FAIL**,
+  `onRequestError`만 구 로직으로 되돌린 뮤턴트 B(절반만 막힘)에서 **1 FAIL** — 복원 후 20/20 PASS.
+- **운영 영향 0**: Vercel(production·preview)에선 `VERCEL_ENV`가 항상 있으므로 관측 범위가 그대로다. 줄어드는 건 **로컬발 잡음뿐**.
+- **적용 시점**: 게이트는 **서버 재기동 후** 적용된다(register는 부팅 1회).
+- **노이즈 자체 점검(같이 정리)**: 오늘 폭주의 절반은 "우리 코드가 500으로 처리하던 입력 오류"였다. **운영자 입력 실수는 4xx, 서버 장애만 5xx+Sentry**로 정리:
+  - `admin/refund`·`admin/grant`의 `throw new Error('wallet:' + reason)` → 구: 500 `reason:'error'` + Sentry. **신: `wallet:no-user`·`wallet:insufficient`는 400 + 그 reason 그대로**(Sentry 미보고).
+    `no-user`는 userId 오타·**타 게임(proj) 유저**(§13.2 R2)가 대부분이라 장애가 아니다 — 오늘 `TICKET_NOT_FOUND`→404와 **같은 결**.
+    그 외 wallet 실패(DB 예외 등)는 그대로 500+Sentry(진짜 장애만 알림).
+    콘솔은 이미 `REASON_KO['wallet:no-user']`를 갖고 있었으나 서버가 `'error'`로 뭉개 **사문화**돼 있었다 — 이번 변경으로 살아나고, `wallet:insufficient` 문구를 보강했다(`app/ops-9f3a2c/page.tsx`). 콘솔 분기는 `body.ok`만 보므로 status 변경 영향 없음.
+    **라이브 회귀 실측**: `_dv_admin_scope_live` — `④ 타 proj 유저 환불 → 실패 [status=400 reason=wallet:no-user]` / `⑤ … 지급 → 실패 [status=400 …]`, 전항 PASS.
+  - `admin/mail`의 `insert-failed` 500은 **진짜 서버 실패**(reportError도 안 탐) → 유지.
+  - **잔여(미조치·판단 대기)**: 라우트 19곳의 `await req.json()`이 try 안에 있어 **깨진 바디(봇·스캐너 포함)가 500+Sentry 이슈**가 된다
+    (§13.21 초기 검증에 나오는 "깨진 JSON→`auth/login` 이슈 도착"이 바로 이 경로 — 운영에서 반복될 소음).
+    제안: 공용 `parseJson(req)` 헬퍼가 실패 시 400 `bad-request`를 반환(Sentry 미보고)하도록 스윕. 19파일 표면이라 **별도 작업으로 분리**.
+- **파일**: `server/lib/sentryGate.ts`(신) · `server/instrumentation.ts`(게이트 적용) · `server/lib/observability.ts`(동일 게이트) ·
+  `server/tools/_dv_sentry_gate.ts`(신·가드) · `server/tools/_dv_sentry_verify.ts`(탈출구 `SENTRY_FORCE_LOCAL=1` 자동 설정) ·
+  `server/app/api/admin/refund/route.ts`·`grant/route.ts`(4xx 분기) · `server/app/ops-9f3a2c/page.tsx`(REASON_KO) · `server/.env.example`.
+
 ### 13.22 결제 이벤트 감사 로그 (#60, 2026-07-05 — 사용자 요청 "결제 로그 엄청 보강" + 리서치 에이전트 베스트프랙티스)
 > **왜**: Sentry(§13.21)는 서버 *예외*는 잡지만 **결제 생애주기의 정상 흐름·판정·dedup·실패사유**는 안 남긴다 —
 > "돈 내고 0개" 같은 결제 사건을 사후 재구성할 감사 로그가 없었다(웹훅/confirm이 catch에서 reportError만). 사용자 요청으로

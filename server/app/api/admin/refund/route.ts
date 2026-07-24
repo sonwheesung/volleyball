@@ -20,6 +20,10 @@ export const dynamic = 'force-dynamic';
 const REFUND_CAP = 100000; // 1회 회수 상한(오타 방지)
 // 티켓 매칭 0건 신호 — 트랜잭션 밖으로 던져 **전액 롤백**시키고 404로 번역(500 'error'와 구분).
 const TICKET_NOT_FOUND = 'ticket-not-found';
+// 지갑 실패 중 **운영자 입력 오류**(서버 장애 아님) — 400으로 번역하고 Sentry 보고 제외(§13.21 노이즈 정리 2026-07-24).
+//   no-user = 없는 userId·오타·타 게임(proj) 유저(§13.2 R2). insufficient = 잔액 부족(refund는 음수 허용이라 도달 불가하지만 방어).
+//   그 외 wallet 실패(DB 예외 등)는 여기 걸리지 않고 500+Sentry로 간다 — 진짜 장애만 알림이 울리게.
+const WALLET_CLIENT_FAULT = new Set(['wallet:no-user', 'wallet:insufficient']);
 
 export async function POST(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
@@ -52,6 +56,8 @@ export async function POST(req: Request) {
   } catch (e) {
     // 티켓 0건 롤백은 클라 오류(4xx)라 Sentry 보고 대상 아님 — 티켓 답변(reply)의 404와 대칭.
     if (e instanceof Error && e.message === TICKET_NOT_FOUND) return NextResponse.json({ ok: false, reason: 'not-found' }, { status: 404 });
+    // 지갑 no-user/insufficient도 같은 결(운영자 입력 오류) — 400 + 그대로 reason 노출(콘솔 REASON_KO가 한국어로 번역).
+    if (e instanceof Error && WALLET_CLIENT_FAULT.has(e.message)) return NextResponse.json({ ok: false, reason: e.message }, { status: 400 });
     reportError(e, 'admin/refund');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
   }
