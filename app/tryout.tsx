@@ -6,6 +6,8 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
+import { useOffseasonExit } from '../components/offseasonExit';
+import { confirmDraftPickReset } from '../components/draftPickGuard';
 import { ExpandableRow } from '../components/ExpandableRow';
 import { StatTriad } from '../components/StatTriad';
 import { SpotlightOverlay, SpotlightTarget } from '../components/Spotlight';
@@ -32,6 +34,7 @@ export default function Tryout() {
 
 function TryoutInner() {
   const router = useRouter();
+  const exit = useOffseasonExit(); // 오프시즌 허브 복귀(§5.6) — 다음 단계로 push하지 않는다
   const my = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
@@ -106,8 +109,13 @@ function TryoutInner() {
       </Card>
       </SpotlightTarget>
 
-      {/* 다음 단계 버튼 — FA 화면처럼 상단에(후보 목록이 길어 최하단이면 묻힘, 2026-07-13 테스터) */}
-      <Button label="아시아쿼터 트라이아웃 →" onPress={() => router.push('/asian-tryout')} />
+      {/* ~~다음 단계(아시아쿼터)로 push~~ → 정정(2026-07-24 §5.6): 체인 해체 — 일정 허브로 복귀한다.
+          상단 배치는 유지(후보 목록이 길어 최하단이면 묻힘, 2026-07-13 테스터). */}
+      <Button label="오프시즌 준비로 →" onPress={exit} />
+      {/* 미리보기 신뢰(§5.6.3 ⑥) — 외인 결정이 FA 예산(cashAfterImports)을 바꾼다. 무거운 프리뷰 대신 정적 안내. */}
+      <Muted style={{ fontSize: 11.5 }}>
+        외국인 재계약·지명 결정을 바꾸면 FA에 쓸 운영 자금이 달라집니다. 결정을 바꿨다면 FA 센터를 한 번 더 확인하세요.
+      </Muted>
 
       {myForeign ? (
         <>
@@ -128,7 +136,7 @@ function TryoutInner() {
                   {([['자동(추천)', null], ['재계약', true], ['풀로 보냄', false]] as const).map(([label, v]) => (
                     <Pressable
                       key={label}
-                      onPress={() => busy.run('스카우트 리포트를 정리하는 중…', () => setKeepForeign(v))}
+                      onPress={() => confirmDraftPickReset(() => busy.run('스카우트 리포트를 정리하는 중…', () => setKeepForeign(v)))}
                       style={[styles.chip, keepForeign === v && styles.chipOn]}
                     >
                       <Text style={[styles.chipTxt, keepForeign === v && { color: theme.bg }]}>{label}</Text>
@@ -157,7 +165,7 @@ function TryoutInner() {
               key={p.id}
               selected={wishIdx >= 0}
               onToggle={() => setOpenId(open ? null : p.id)}
-              onAction={() => busy.run('스카우트 리포트를 정리하는 중…', () => toggleTryoutWish(p.id))}
+              onAction={() => confirmDraftPickReset(() => busy.run('스카우트 리포트를 정리하는 중…', () => toggleTryoutWish(p.id)))}
               action={
                 <Text style={{ color: wishIdx >= 0 ? theme.warn : theme.muted, fontWeight: '900', fontSize: 13 }}>
                   {wishIdx >= 0 ? `★${wishIdx + 1}` : '위시'}
@@ -220,3 +228,6 @@ const styles = themedStyles(() => StyleSheet.create({
   resumeChipOn: { backgroundColor: theme.accent + '1A' },
   resumeChipTxt: { color: theme.accent, fontSize: 12, fontWeight: '800' },
 }));
+
+// 라우트 에러 폴백(UI-50 ⑦) — 이 화면이 render throw해도 앱이 죽지 않고 "일정으로 돌아가기" 폴백이 뜬다(소프트락 봉인).
+export { ErrorBoundary } from '../components/RouteErrorBoundary';

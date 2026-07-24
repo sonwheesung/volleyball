@@ -19,7 +19,8 @@ import { neededPositions } from '../engine/draft';
 import { overallRaw, REVEAL_PRECISE } from '../engine/overall';
 import type { Position } from '../types';
 import { useGameStore } from '../store/useGameStore';
-import { showSeasonStartAd } from '../lib/ads';
+import { useSeasonStartEntry } from '../lib/seasonStart';
+import { useOffseasonExit } from '../components/offseasonExit';
 import type { Player } from '../types';
 
 const POS_KO: Record<Position, string> = { S: '세터', OH: '아웃사이드', OP: '아포짓', MB: '미들', L: '리베로' };
@@ -73,6 +74,9 @@ export default function DraftCenter() {
 
 function DraftCenterInner() {
   const router = useRouter();
+  const exit = useOffseasonExit(); // 오프시즌 허브 복귀(§5.6)
+  // 새 시즌 시작 진입점 — 화면 로컬 ref가 아니라 **공용 훅**(모듈 래치)이라 일정 허브·라이브와 광고를 중복 노출하지 않는다(UI-50 ⑤).
+  const seasonStart = useSeasonStartEntry();
   const my = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
@@ -125,23 +129,10 @@ function DraftCenterInner() {
     [ctx, my],
   );
 
-  // 광고 뜨기 전 연타 재진입 가드(UI-31) — ref는 동기 차단(같은 프레임 두 번째 탭), state는 로딩 표시용.
-  const startingRef = useRef(false);
-  const [starting, setStarting] = useState(false);
-  const onFinish = async () => {
-    if (startingRef.current) return;
-    startingRef.current = true;
-    setStarting(true);
-    try {
-      // 시즌 시작하기 — 동영상 광고(첫 시즌 제외·MONETIZATION_SYSTEM §3) 후 시즌 시작 로딩으로.
-      // 광고는 항상 resolve(스킵/실패/오프라인이어도 진행 하드블록 없음). endSeason은 로딩 화면이 페인트 후 실행(SEASON §5.5 D).
-      await showSeasonStartAd();
-      router.replace('/season-start');
-    } finally {
-      startingRef.current = false; // 광고 실패·미로드·오프라인에도 잠금 해제(UI-31 finally 필수)
-      setStarting(false);
-    }
-  };
+  // 광고 뜨기 전 연타 재진입 가드(UI-31)는 useSeasonStartEntry가 **모듈 레벨 래치**로 수행 —
+  //   ~~화면 로컬 startingRef~~(진입점이 3개가 되며 화면 간 공유가 안 돼 광고 이중 노출 위험, UI-50 ⑤).
+  const starting = seasonStart.starting;
+  const onFinish = () => { void seasonStart.start(); };
 
   return (
     <Screen title={`${season + 2}시즌 신인 드래프트`}>
@@ -175,7 +166,8 @@ function DraftCenterInner() {
         <Muted style={{ fontSize: 12, marginTop: 2 }}>
           라운드마다 지명하거나 패스하며 미래의 어린 선수를 뽑습니다. 찜해둔 신인은 라이브 드래프트에서 위에 떠,
           내 차례에 직접 지명합니다. 담은 순서가 라이브 드래프트에서 지명 우선순위가 됩니다. 선수를 누르면
-          아마추어 성적·스카우트 리포트를 볼 수 있어요.
+          아마추어 성적·스카우트 리포트를 볼 수 있어요. 직접 지명하지 않으면 찜 순서대로, 찜도 없으면
+          감독·스카우트가 판단해 대신 지명합니다.
         </Muted>
         <Muted style={{ fontSize: 12, marginTop: 4, color: reveal >= 0.6 ? theme.good : theme.warn }}>
           스카우팅 공개도 {Math.round(reveal * 100)}% {reveal >= REVEAL_PRECISE ? '(정밀)' : '(스카우터를 영입하면 잠재력이 더 많이·선명하게 보입니다)'}
@@ -190,8 +182,11 @@ function DraftCenterInner() {
       </Card>
 
       <Button label="라이브 드래프트 진행 →" onPress={() => router.push('/draft-live')} />
+      <Button label="오프시즌 준비로 →" variant="ghost" onPress={exit} />
+      {/* ~~"건너뛰고 찜 순서대로 자동 지명"~~ → 정정(2026-07-24 §5.6): 허브에선 건너뛰기가 상시 가능해지므로 **대행 사실을 명시**한다.
+          실제 코드는 mySelections → draftPicks(찜) → **없으면 AI 로직 그대로** 폴백이라(engine/draft.ts), 찜이 없으면 감독·스카우트가 판단한다. */}
       <Pressable onPress={onFinish} disabled={starting} style={{ paddingVertical: 8, alignItems: 'center', opacity: starting ? 0.5 : 1 }}>
-        <Text style={{ color: starting ? theme.muted : theme.sky, fontSize: 13, fontWeight: '700' }}>{starting ? '시즌 준비 중…' : '› 건너뛰고 찜 순서대로 자동 지명'}</Text>
+        <Text style={{ color: starting ? theme.muted : theme.sky, fontSize: 13, fontWeight: '700' }}>{starting ? '시즌 준비 중…' : '› 지명하지 않고 새 시즌 시작 (감독·스카우트가 대신 지명)'}</Text>
       </Pressable>
 
       <Title>드래프트 클래스 ({classSorted.length}명)</Title>
@@ -256,3 +251,6 @@ const styles = themedStyles(() => StyleSheet.create({
   statUnit: { color: theme.muted, fontSize: 11, fontWeight: '600' },
   reportLine: { color: theme.text, fontSize: 13, lineHeight: 19, marginBottom: 1 },
 }));
+
+// 라우트 에러 폴백(UI-50 ⑦) — 이 화면이 render throw해도 앱이 죽지 않고 "일정으로 돌아가기" 폴백이 뜬다(소프트락 봉인).
+export { ErrorBoundary } from '../components/RouteErrorBoundary';

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
+import { confirmDraftPickReset } from '../components/draftPickGuard';
 import { Button, Loading, Muted, OvrBadge, PosTag, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { PlayerRow } from '../components/PlayerRow';
 import { SummaryCard } from '../components/SummaryCard';
@@ -318,8 +319,8 @@ function ContractsInner() {
                   </Pressable>
                 ) : null}
                 <View style={styles.actions}>
-                  <Button small fill tone="good" off={!keep} label="잔류" onPress={() => setResign(p.id, true)} />
-                  <Button small fill tone="bad" off={keep} label="포기" onPress={() => setResign(p.id, false)} />
+                  <Button small fill tone="good" off={!keep} label="잔류" onPress={() => confirmDraftPickReset(() => setResign(p.id, true))} />
+                  <Button small fill tone="bad" off={keep} label="포기" onPress={() => confirmDraftPickReset(() => setResign(p.id, false))} />
                 </View>
               </View>
             );
@@ -461,7 +462,8 @@ function ContractsInner() {
         actions={confirmSheet ? [
           {
             label: '제안', tone: 'primary',
-            onPress: () => {
+            // 재계약(contractOverrides)도 드래프트 확정 픽을 무효화한다 — 허브에선 "드래프트 후 계약 관리"가 상시 가능(§5.6.3 ④a).
+            onPress: () => confirmDraftPickReset(() => {
               const cs = confirmSheet;
               // 제안 전/후 잔류 전망 — 결과 피드백(step3). money 불만 해소면 밴드가 실제로 변한다.
               const before = resignOutlookNow(cs.p, teamId, currentDay, interviews, season, overrides);
@@ -469,7 +471,7 @@ function ContractsInner() {
               const res = reSign(cs.p.id, cs.contract);
               if (!res.ok) { showAlert('재계약 불가', resignRejectMessage(cs.p, res.reason)); return; }
               setResultSheet({ p: cs.p, reaction: resignReactionCopy(before.band, after.band) });
-            },
+            }),
           },
         ] : []}
       />

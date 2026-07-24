@@ -357,3 +357,6 @@ const styles = themedStyles(() => StyleSheet.create({
   footer: { borderTopWidth: 1, borderTopColor: theme.border, paddingTop: 10, gap: 6 },
   costTxt: { color: theme.text, fontSize: 14, fontWeight: '700', textAlign: 'center' },
 }));
+
+// 라우트 에러 폴백(UI-50 ⑦) — 이 화면이 render throw해도 앱이 죽지 않고 "일정으로 돌아가기" 폴백이 뜬다(소프트락 봉인).
+export { ErrorBoundary } from '../components/RouteErrorBoundary';

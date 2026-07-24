@@ -12,6 +12,7 @@ import { loadThemeMode } from '../components/theme';
 import { SpotlightProvider } from '../components/Spotlight';
 import { IntroSplash } from '../components/IntroSplash';
 import { BootGate } from '../components/BootGate';
+import { GlobalErrorBoundary } from '../components/RouteErrorBoundary';
 import { DialogHost } from '../components/AppDialog';
 import { GlobalToastHost } from '../components/Toast';
 import { MockAdHost } from '../components/MockAdHost';
@@ -163,6 +164,9 @@ export default function RootLayout() {
       <ThemeProvider value={makeNavTheme(mode)}>
       <SpotlightProvider>
       <BootGate>
+      {/* 전역 에러 경계(UI-50 ⑦) — 라우트별 ErrorBoundary가 없는 화면까지 덮는 안전망.
+          폴백은 "일정으로 돌아가기"를 제공하고 에러를 diag(#44)에 남긴다. 화면 throw = 앱 사망(EC-UI-04) 봉인. */}
+      <GlobalErrorBoundary>
       <Stack
         screenOptions={{
           // 헤더 컴팩트(2026-07-11 테스터 — 네이티브 스택 기본 툴바가 높음). native-stack은 headerStyle.height 미지원 →
@@ -230,6 +234,7 @@ export default function RootLayout() {
         <Stack.Screen name="news" options={{ title: '리그 뉴스' }} />
         <Stack.Screen name="news/[id]" options={{ title: '뉴스' }} />
       </Stack>
+      </GlobalErrorBoundary>
       </BootGate>
       <DialogHost />{/* 전역 커스텀 다이얼로그(UI-21) — showAlert가 여기로 렌더. BootGate 밖: 로그인/점검 화면에서도 동작 */}
       <GlobalToastHost />{/* 전역 비차단 토스트(UI-30) — 우편 수령(MAILBOX §6.1) 등 화면 밖/모달 발행분. BootGate 밖 = 전 화면 표시 */}

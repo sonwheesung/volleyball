@@ -9,6 +9,7 @@ import { useRouter } from 'expo-router';
 import { Text, View, StyleSheet } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Button, Card, IconLabel, Loading, Muted, PosTag, Row, Screen, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { useOffseasonExit } from '../components/offseasonExit';
 import { seasonSnapshot } from '../data/records';
 import { computeStandings, displayCutoff, seasonStreaks } from '../data/standings';
 import { leagueProduction } from '../data/production';
@@ -51,6 +52,7 @@ export default function SeasonRecap() {
 
 function RecapInner() {
   const router = useRouter();
+  const exit = useOffseasonExit(); // 오프시즌 허브 복귀(§5.6)
   const my = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
@@ -190,8 +192,9 @@ function RecapInner() {
 
       {/* 리그 시상·베스트7은 시상식 화면(champion/awards-ceremony)으로 이관(삼중 표시 방지, AWARDS_SYSTEM §7). 결산 상세(awards)는 그 요약본. */}
 
-      {/* 하단 안내 문구 제거(2026-07-08 검토) — 다른 메뉴 이동 유도 대신 시즌의 여운 유지. 버튼만. */}
-      <Button label="오프시즌 · 외국인 트라이아웃 →" onPress={() => router.push('/tryout')} />
+      {/* 하단 안내 문구 제거(2026-07-08 검토) — 다른 메뉴 이동 유도 대신 시즌의 여운 유지. 버튼만.
+          ~~다음 단계(트라이아웃)로 push~~ → 정정(2026-07-24 §5.6): 체인 해체 — **일정 허브로 복귀**한다. */}
+      <Button label="오프시즌 준비로 →" onPress={exit} />
     </Screen>
   );
 }
@@ -210,3 +213,6 @@ const styles = themedStyles(() => StyleSheet.create({
   moreRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'flex-end', gap: 3, marginTop: 6 },
   moreText: { color: theme.muted, fontSize: 12.5, fontWeight: '700' },
 }));
+
+// 라우트 에러 폴백(UI-50 ⑧) — 이 화면이 render throw해도 앱이 죽지 않고 "일정으로 돌아가기" 폴백이 뜬다(소프트락 봉인).
+export { ErrorBoundary } from '../components/RouteErrorBoundary';

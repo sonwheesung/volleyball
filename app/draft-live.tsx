@@ -25,7 +25,8 @@ import { pickReasonProse } from '../data/draftPickReason';
 import { myDraftSummary } from '../data/draftSummary';
 import { passReasonFor, PASS_REASON_COPY } from '../data/draftPlan';
 import { useGameStore } from '../store/useGameStore';
-import { showSeasonStartAd } from '../lib/ads';
+import { useSeasonStartEntry } from '../lib/seasonStart';
+import { useOffseasonExit } from '../components/offseasonExit';
 import { ProspectDetail } from './draft';
 import type { Player, Position } from '../types';
 
@@ -51,6 +52,9 @@ interface SeqItem { i: number; teamId: string; player: Player; playerId: string;
 
 function DraftLiveInner() {
   const router = useRouter();
+  const exit = useOffseasonExit(); // 오프시즌 허브 복귀(§5.6) — 첫 픽 전에 나가도 소프트락 없음
+  // 새 시즌 시작 진입점 = 공용 훅(모듈 래치) — 드래프트 센터·일정 허브와 광고 중복 노출 차단(UI-50 ⑤).
+  const seasonStart = useSeasonStartEntry();
   const my = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);
   const results = useGameStore((s) => s.results);
@@ -158,23 +162,9 @@ function DraftLiveInner() {
     if (picked) setPosterPick({ player: picked, round, overallNo }); // 한 박자 연출(자동진행 정지 조건에 포함)
   };
 
-  // 시즌 시작 — 오늘과 동일 출구(광고 후 /season-start replace → endSeason 체인). draft-live:78 관계 유지.
-  // 광고 뜨기 전 연타 재진입 가드(UI-31) — ref는 동기 차단, state는 로딩 표시용.
-  const startingRef = useRef(false);
-  const [starting, setStarting] = useState(false);
-  const onFinish = async () => {
-    if (startingRef.current) return;
-    startingRef.current = true;
-    setStarting(true);
-    setPaused(true);
-    try {
-      await showSeasonStartAd();
-      router.replace('/season-start');
-    } finally {
-      startingRef.current = false; // 광고 실패·미로드·오프라인에도 잠금 해제(UI-31 finally 필수)
-      setStarting(false);
-    }
-  };
+  // 시즌 시작 — 동일 출구(광고 후 /season-start replace → endSeason). 연타 가드(UI-31)는 공용 훅의 모듈 래치가 수행.
+  const starting = seasonStart.starting;
+  const onFinish = () => { setPaused(true); void seasonStart.start(); };
 
   // 오프시즌 게이트(조정 B) — 드래프트 창(seasonOver) 밖이면 리다이렉트(stale-input 주입 차단). ★ 모든 훅 뒤.
   if (planNextAction(SEASON, my, results).kind !== 'seasonOver') return <Redirect href="/(tabs)/schedule" />;
@@ -382,6 +372,14 @@ function DraftLiveInner() {
         </Muted>
       ) : null}
 
+      {/* 재개 선택(§5.6.3 ⑦) — 허브에선 라이브 중간 이탈이 흔하다. 확정 픽이 있으면 마운트 시 그 지점으로 fast-forward하는데,
+          "처음부터 다시 보고 싶다"는 선택지가 없었다. 확정 픽은 그대로 두고 공개만 0으로 되돌린다(결정론 무관 — 표시 상태). */}
+      {confirmedMyCount > 0 && revealed > 0 && !done ? (
+        <Button label="↺ 처음부터 다시 보기" variant="ghost" onPress={() => { setRevealed(0); setPaused(false); }} />
+      ) : null}
+      {/* 첫 픽 전 이탈도 막지 않는다 — 언제든 일정으로 나가고 다시 들어올 수 있다(소프트락 봉인). */}
+      <Button label="오프시즌 준비로 →" variant="ghost" onPress={exit} />
+
       <ScrollView style={{ marginTop: 10 }}>
         {shown.map((p) => {
           const r = REASON[p.reason];
@@ -461,3 +459,6 @@ const styles = themedStyles(() => StyleSheet.create({
   posterHint: { fontSize: 12, letterSpacing: 1 },
   posterTag: { color: '#CFE0FF', fontSize: 13, fontWeight: '800', letterSpacing: 1 },
 }));
+
+// 라우트 에러 폴백(UI-50 ⑦) — 이 화면이 render throw해도 앱이 죽지 않고 "일정으로 돌아가기" 폴백이 뜬다(소프트락 봉인).
+export { ErrorBoundary } from '../components/RouteErrorBoundary';

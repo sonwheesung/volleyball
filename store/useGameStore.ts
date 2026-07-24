@@ -1040,9 +1040,17 @@ export const useGameStore = create<GameState>()(
         set({ benchDirectives });
         setOwnerContext(benchDirectives, end + 1); // §7: 언벤치는 toDay+1부터 복귀 — 그 이전(≤toDay, 벤치 유지)은 재사용
       },
-      setKeepForeign: (keep) => set({ keepForeign: keep }),
+      // 외국인/아시아쿼터 결정도 **드래프트 확정 픽을 무효화**한다(2026-07-24 허브 전환, §5.6.3 ④b — 구현 비대칭 수정).
+      //   근거: 외인 영입은 전 구단 로스터 인원을 바꿔 AI의 지명/패스 판정(engine/draft.ts neededPositions·계약 상한)을
+      //   바꾼다 → 라이브에서 확정한 픽의 전제(순번·남은 후보)가 달라져 stale-pick이 된다. FA/재계약과 동일 취급.
+      //   체인 시절엔 트라이아웃→드래프트 단방향이라 도달 불가였고, 허브에선 상시 도달 가능해져 실버그가 된다.
+      //   UI 경고(confirmDraftPickReset)는 components/draftPickGuard.ts — 확정 픽 0건이면 조용히 통과.
+      setKeepForeign: (keep) => set({ keepForeign: keep, draftSelections: [] }),
       toggleTryoutWish: (playerId) =>
-        set((s) => ({ tryoutWish: s.tryoutWish.includes(playerId) ? s.tryoutWish.filter((id) => id !== playerId) : [...s.tryoutWish, playerId] })),
+        set((s) => ({
+          tryoutWish: s.tryoutWish.includes(playerId) ? s.tryoutWish.filter((id) => id !== playerId) : [...s.tryoutWish, playerId],
+          draftSelections: [],
+        })),
       // 시즌 중 외인 교체(시즌당 1회) — 퇴출 외인은 리그를 떠나고, 대체 외인 연봉은 지갑에서(이중 부담)
       replaceForeign: (altId) => {
         const s = get();
@@ -1061,9 +1069,13 @@ export const useGameStore = create<GameState>()(
         setTxContext(inSeasonTx, get().faPool, my, s.currentDay); // §7 스플라이스
         return true;
       },
-      setKeepAsian: (keep) => set({ keepAsian: keep }),
+      // 아시아쿼터도 동일(§5.6.3 ④b) — 로스터 인원 변화 → AI 지명/패스 판정 변화 → 확정 픽 전제 붕괴.
+      setKeepAsian: (keep) => set({ keepAsian: keep, draftSelections: [] }),
       toggleAsianWish: (playerId) =>
-        set((s) => ({ asianWish: s.asianWish.includes(playerId) ? s.asianWish.filter((id) => id !== playerId) : [...s.asianWish, playerId] })),
+        set((s) => ({
+          asianWish: s.asianWish.includes(playerId) ? s.asianWish.filter((id) => id !== playerId) : [...s.asianWish, playerId],
+          draftSelections: [],
+        })),
       // 시즌 중 아시아쿼터 교체(시즌당 1회) — 외인 교체와 동일 구조(ASIAN_SALARY)
       replaceAsian: (altId) => {
         const s = get();

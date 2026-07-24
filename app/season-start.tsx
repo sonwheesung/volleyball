@@ -46,6 +46,9 @@ export default function SeasonStart() {
   //   콜드 셀렉터 재계산을 전부 하던 43~103s를 제거(#113, 스택은 어차피 season-opening dismissAll로 소멸).
   //   기존 route 객체(키) 보존으로 (tabs)·season-start 리마운트 방지. endSeason(스토어 변이)보다 먼저
   //   커밋돼야 하며, endSeason은 PAINT_DELAY+2×RAF 뒤라 이 마운트 effect가 선행된다.
+  // ⚠ **허브 도입(2026-07-24, §5.6) 후에도 유지한다 — no-op처럼 보여도 지우지 마라.** 허브 경로에선 각 오프시즌
+  //   화면이 일정으로 복귀(dismissAll)해 스택이 이미 얕지만, ①결산→…→드래프트를 push로 훑고 바로 시작한 세션
+  //   ②구세이브·딥링크로 스택이 깊게 남은 경우엔 여전히 이 reset이 #113 병목(102.8→23.2s)을 제거한다.
   useEffect(() => {
     const st = (navigation as any).getState?.();
     const tabs = st?.routes?.find((r: any) => r.name === '(tabs)');

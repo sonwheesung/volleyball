@@ -371,3 +371,6 @@ const styles = themedStyles(() => StyleSheet.create({
   tAge: { color: theme.muted, fontSize: 13, fontWeight: '700', width: 44, textAlign: 'right' },
   tContract: { color: theme.muted, fontSize: 12.5, width: 66, textAlign: 'right' },
 }));
+
+// 라우트 에러 폴백(UI-50 ⑦) — 결산 상세도 오프시즌 표면이라 동일 봉인.
+export { ErrorBoundary } from '../../components/RouteErrorBoundary';

@@ -1,6 +1,7 @@
 import { useCallback, useMemo, useState } from 'react';
 import { useFocusEffect, useRouter } from 'expo-router';
-import { StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../components/AppDialog';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../../components/Screen';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
@@ -16,13 +17,34 @@ import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
 import { buildPlayoffs, type Matchup } from '../../data/playoffs';
 import { postseasonReveal, nextPoGame } from '../../data/postseason';
+import { offseasonHubSteps, offseasonUntouched, type HubStep } from '../../data/offseasonHub';
 import { SEASON_DAYS } from '../../engine/calendar';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
 import { teamOverallRaw } from '../../engine/overall';
 import { dateForDay, formatDate } from '../../lib/calendar';
+import { useSeasonStartEntry } from '../../lib/seasonStart';
 import { DEV_TOOLS } from '../../data/flags';
 import { useGameStore } from '../../store/useGameStore';
+
+/** 오프시즌 허브 목록(SEASON_SYSTEM §5.6 · UI-50) — 권장 순서 번호 + [보기]. 잠금·진입 차단 없음.
+ *  ✅는 **데이터로 진짜 판정되는 단계**(전지훈련 campDoneSeason)만 — 앞단은 전부 미리보기라 완료 개념이 없다. */
+function HubRow({ step, onPress }: { step: HubStep; onPress: () => void }) {
+  const tint = (theme as unknown as Record<string, string>)[step.accent] ?? theme.accent;
+  return (
+    <Pressable onPress={onPress} style={styles.hubRow} accessibilityRole="button" accessibilityLabel={`${step.n}. ${step.label}`}>
+      <Text style={[styles.hubNo, { color: tint }]}>{step.n}</Text>
+      <View style={{ flex: 1 }}>
+        <View style={styles.hubTitleRow}>
+          <Text style={styles.hubLabel} numberOfLines={1}>{step.label}</Text>
+          {step.done ? <Text style={styles.hubDone}>완료</Text> : null}
+        </View>
+        <Text style={styles.hubDesc} numberOfLines={2}>{step.desc}</Text>
+      </View>
+      <Ionicons name="chevron-forward" size={18} color={theme.muted} />
+    </Pressable>
+  );
+}
 
 export default function Schedule() {
   // 일정은 무겁다(순위·전력 프리뷰·클린치·라이벌 재계산). 한 틱 미뤄 로딩부터 그린다.
@@ -42,6 +64,9 @@ function ScheduleInner() {
   const watchProgress = useGameStore((s) => s.watchProgress);
   const setDay = useGameStore((s) => s.setDay);
   const recordResult = useGameStore((s) => s.recordResult);
+  const finishCamp = useGameStore((s) => s.finishCamp);
+  // 새 시즌 시작(endSeason) 진입점 — 드래프트·라이브와 **같은 훅**을 공유해 광고 이중 노출을 막는다(UI-50 ⑤).
+  const seasonStart = useSeasonStartEntry();
 
   // 성장 리포트(TRAINING §성장리포트) — 일정 화면에 포커스될 때(경기 관전 후 복귀 포함) 마지막으로 본 날부터
   // 지금까지 내 팀 스탯 변화를 diff로 모달. 변화 없으면 조용히 통과. 엔진 무변경(결정론 재계산 diff).
@@ -55,11 +80,13 @@ function ScheduleInner() {
     if (t.show) setGrowth(t.report);
   }, []));
 
-  const rival = rivalOf(teamId, archive, results, SEASON, LEAGUE.teams.map((t) => t.id));
-
   // "진행" 의사결정은 순수 오케스트레이터에 위임
   const action = planNextAction(SEASON, teamId, results);
   const nextFixture = action.kind === 'match' ? action.fixture : null;
+
+  // 라이벌은 **다음 경기 프리뷰에서만** 쓰인다 — 다음 경기가 없는 국면(오프시즌·포스트시즌)엔 계산하지 않는다.
+  //   (실측 2026-07-24: 오프시즌 rivalOf ≈0.3ms로 비용은 미미하지만, 안 쓰는 계산을 매 렌더 도는 건 제거.)
+  const rival = nextFixture ? rivalOf(teamId, archive, results, SEASON, LEAGUE.teams.map((t) => t.id)) : null;
 
   // ── 포스트시즌 달력 편입(§5) — 정규 완료(seasonOver)면 플옵 진행/브라켓을 일정 화면에서 소비. ──
   const postseason = useMemo(() => {
@@ -80,7 +107,8 @@ function ScheduleInner() {
 
   // 플레이오프 확정/탈락/경합 — 이미 치른 경기(currentDay)만 반영(스포일러 안전)
   // 시즌 초엔 숨긴다: 확정/탈락(정해진 사건)이거나, 시즌 60% 경과 후에만 표시(후반 레이스)
-  const clinch = teamClinch(teamId, playedThroughDay(results)); // 치른 경기만 — 미관전 경기로 PO 확정 스포일 방지
+  //   clinchView는 `!postseason`일 때만 렌더되므로, 포스트시즌(오프시즌 앞단 포함)엔 아예 계산하지 않는다(죽은 계산 제거).
+  const clinch = postseason ? undefined : teamClinch(teamId, playedThroughDay(results)); // 치른 경기만 — 미관전 경기로 PO 확정 스포일 방지
   const playedFrac = totalMatches > 0 ? playedCount / totalMatches : 0;
   const showPlayoff = !!clinch && (clinch.state !== 'contention' || playedFrac >= 0.6);
   const clinchView = showPlayoff && clinch
@@ -138,9 +166,40 @@ function ScheduleInner() {
       })()
     : null;
 
-  // 오프시즌 게이트(2026-07-04 사용자 요청): currentDay 0 + 이번 시즌 전지훈련 미완료 → **전지훈련만** 노출하고
-  // 다음 경기(개막전)는 숨긴다. **반드시 캠프를 거쳐** 그 화면의 "마치고 개막전으로"(finishCamp)를 눌러야 개막전이 나온다.
+  // 오프시즌 게이트(2026-07-04 사용자 요청): currentDay 0 + 이번 시즌 전지훈련 미완료 → **오프시즌 허브만** 노출하고
+  // 다음 경기(개막전)는 숨긴다. 개막은 허브의 "개막전으로"(finishCamp) 또는 캠프 화면의 "마치고 개막전으로"로 연다.
+  //   ~~반드시 캠프를 거쳐야~~ → 정정(2026-07-24, §5.6): 캠프를 강제로 거치게 하면 캠프 화면이 죽었을 때 개막이 막힌다
+  //   (완료 게이트 = 새 소프트락, UI-50 ②). 허브에서 바로 개막할 수 있고, 안 했으면 확인만 묻는다.
   const offseason = currentDay === 0 && campDoneSeason !== season;
+  const campDone = campDoneSeason === season;
+
+  // ── 오프시즌 허브(§5.6) ──
+  // 앞단 = endSeason 전(시상식까지 본 seasonOver 국면), 뒷단 = endSeason 후(day0). **목록도 최종 버튼도 다르다**.
+  const preSteps = useMemo(() => offseasonHubSteps('pre'), []);
+  const postSteps = useMemo(() => offseasonHubSteps('post', campDone), [campDone]);
+  const openStep = (route: string) => router.push(route as never);
+
+  // 앞단 최종 버튼 — 광고 → season-start → endSeason. **완료 게이트 없음**(항상 노출).
+  //   "아무 결정도 안 함"은 방문 마커가 아니라 **결정 데이터의 부재**로 판정(레버가 전부 비어 있음) → 그때만 확인.
+  const onStartNewSeason = () => {
+    const s = useGameStore.getState();
+    if (offseasonUntouched(s)) {
+      showAlert('이대로 새 시즌을 시작할까요?',
+        '외국인·아시아쿼터·FA·드래프트에서 아직 아무 결정도 하지 않았습니다.\n그대로 시작하면 감독·스카우트가 대신 결정합니다.',
+        [{ text: '더 둘러보기', style: 'cancel' }, { text: '이대로 시작', onPress: () => { void seasonStart.start(); } }]);
+      return;
+    }
+    void seasonStart.start();
+  };
+
+  // 뒷단 최종 버튼 — 전지훈련 미완료면 확인 후 개막(캠프 화면을 거치지 않아도 개막 가능 = 소프트락 봉인).
+  const onOpenSeason = () => {
+    if (campDone) { finishCamp(); return; }
+    showAlert('전지훈련 없이 개막할까요?',
+      '이번 오프시즌 전지훈련을 아직 마치지 않았습니다.\n개막하면 이번 시즌에는 전지훈련을 보낼 수 없어요.',
+      [{ text: '전지훈련 보러 가기', style: 'cancel', onPress: () => router.navigate('/training-camp') },
+       { text: '이대로 개막', onPress: () => finishCamp() }]);
+  };
 
   return (
     <Screen title={`${seasonYear(season)} 일정 · ${season + 1}번째 시즌`} insetBottom={false}>
@@ -156,16 +215,20 @@ function ScheduleInner() {
         </Card>
       )}
 
-      {/* 전지훈련 — 오프시즌(currentDay 0, 미완료)엔 이것만(다음경기 숨김). 반드시 전지훈련을 거쳐야 개막전이 열린다:
-          "하러 가기"로 캠프 진입 → 캠프 화면에서 "마치고 개막전으로" → campDone → 다음경기 노출(2026-07-04 사용자 요청). */}
+      {/* 오프시즌 허브 · 뒷단(§5.6.2) — 헌액 · 전지훈련 + [개막전으로]. 잠금 없음: 어느 항목이든 언제나 열린다.
+          스포트라이트 앵커 sched-next는 오프시즌엔 이 카드가 담당(2026-07-05 불일치 수정분 승계). */}
       {offseason ? (
-        // 오프시즌엔 이 카드가 sched-next 앵커 — 스포트라이트가 "다음 경기" 자리(전지훈련)를 정확히 가리키게(2026-07-05 불일치 수정)
         <SpotlightTarget id="sched-next">
           <Card accent={theme.good} flat>
-            <IconLabel icon="airplane-outline" color={theme.good}>전지훈련 (오프시즌)</IconLabel>
-            <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>다이아로 선수를 해외 캠프에 보내 능력을 키웁니다. 전지훈련을 마쳐야 개막전이 열립니다.</Muted>
-            {/* navigate(≠push): 스택에 이미 캠프가 있으면 재사용 — 중복 인스턴스가 쌓여 "마쳐도 또 나오는" 반복 노출 방지(2026-07-11) */}
-            <Button label="전지훈련 하러 가기 →" onPress={() => router.navigate('/training-camp')} />
+            <IconLabel icon="snow-outline" color={theme.good}>오프시즌 준비 · 개막까지</IconLabel>
+            <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>
+              권장 순서입니다. 순서와 관계없이 언제든 열 수 있고, 건너뛰어도 개막할 수 있어요.
+            </Muted>
+            {postSteps.map((s) => (
+              // navigate(≠push): 스택에 이미 그 화면이 있으면 재사용 — 중복 인스턴스가 쌓여 "마쳐도 또 나오는" 반복 노출 방지(2026-07-11)
+              <HubRow key={s.key} step={s} onPress={() => router.navigate(s.route as never)} />
+            ))}
+            <Button label="개막전으로 →" onPress={onOpenSeason} />
           </Card>
         </SpotlightTarget>
       ) : null}
@@ -268,21 +331,42 @@ function ScheduleInner() {
                   )}
                 </Card>
               ) : reveal.championRevealed ? (
-                // 세리머니 3단(§5.3): ①시상식(champion→awards, recordChampion은 시상식 진입 시) → 일정 복귀 → ②시즌 결산.
-                <Card accent={theme.gold} flat>
-                  <Title>🏆 우승, {name(p.championId ?? '')}</Title>
-                  {!ceremonyDone ? (
-                    <>
-                      <Muted>포스트시즌이 끝났습니다. 시상식을 관람한 뒤 오프시즌으로 넘어갑니다.</Muted>
-                      <Button label="시상식 보러가기 →" onPress={() => router.push('/champion-ceremony')} />
-                    </>
-                  ) : (
-                    <>
-                      <Muted>시상식이 끝났습니다. 시즌을 결산하고 오프시즌(외국인 트라이아웃 → 드래프트)으로 넘어갑니다.</Muted>
-                      <Button label="시즌 결산 →" onPress={() => router.push('/season-recap')} />
-                    </>
-                  )}
-                </Card>
+                // 세리머니 3단(§5.3): ①시상식(champion→awards, recordChampion은 시상식 진입 시) → 일정 복귀 → ②오프시즌 허브.
+                <>
+                  <Card accent={theme.gold} flat>
+                    <Title>🏆 우승, {name(p.championId ?? '')}</Title>
+                    {!ceremonyDone ? (
+                      <>
+                        <Muted>포스트시즌이 끝났습니다. 시상식을 관람한 뒤 오프시즌으로 넘어갑니다.</Muted>
+                        <Button label="시상식 보러가기 →" onPress={() => router.push('/champion-ceremony')} />
+                      </>
+                    ) : (
+                      <Muted>시상식이 끝났습니다. 아래에서 오프시즌 업무를 보고 새 시즌을 시작하세요.</Muted>
+                    )}
+                  </Card>
+                  {/* 오프시즌 허브 · 앞단(§5.6.2) — 결산·외국인·아시아쿼터·FA·드래프트 + [새 시즌 시작하기].
+                      ~~단일 체인(결산 → 트라이아웃 → … → 드래프트)~~ → 정정(2026-07-24): 한 화면이 죽으면 오프시즌에서
+                      못 빠져나오는 소프트락이 됐다(FA 렌더 크래시 a04c0bc). 전 단계를 허브에서 나란히 연다. */}
+                  {ceremonyDone ? (
+                    <Card accent={theme.accent} flat>
+                      <IconLabel icon="snow-outline" color={theme.accent}>오프시즌 업무 · 다음 시즌 준비</IconLabel>
+                      <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>
+                        권장 순서입니다. 순서와 관계없이 언제든 열 수 있고, 건너뛴 자리는 감독·스카우트가 대신 결정합니다.
+                        {season === 0 ? ' 처음이라면 1번부터 차례로 둘러보세요.' : ''}
+                      </Muted>
+                      {preSteps.map((s) => <HubRow key={s.key} step={s} onPress={() => openStep(s.route)} />)}
+                      {/* 미리보기 신뢰(§5.6.3 ⑥): 외국인·아시아쿼터 결정이 FA 예산을 바꾼다 — 정적 주의 문구로 안내(무거운 프리뷰 금지) */}
+                      <Muted style={{ fontSize: 11.5, marginTop: 6 }}>
+                        외국인·아시아쿼터 결정을 바꾸면 FA에 쓸 운영 자금이 달라집니다. 마지막에 FA 센터를 한 번 더 확인하세요.
+                      </Muted>
+                      <Button
+                        label={seasonStart.starting ? '시즌 준비 중…' : '새 시즌 시작하기 →'}
+                        disabled={seasonStart.starting}
+                        onPress={onStartNewSeason}
+                      />
+                    </Card>
+                  ) : null}
+                </>
               ) : null}
             </>
           );
@@ -315,4 +399,11 @@ function ScheduleInner() {
 const styles = themedStyles(() => StyleSheet.create({
   bigMatch: { backgroundColor: theme.warn + '26', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   bigMatchText: { color: theme.warn, fontSize: 12, fontWeight: '700' },
+  // 오프시즌 허브 목록(§5.6) — 번호 + 제목/설명 + 화살표. 잠금 아이콘 없음(진입 차단 0).
+  hubRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: theme.border },
+  hubNo: { width: 20, textAlign: 'center', fontSize: 15, fontWeight: '900' },
+  hubTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  hubLabel: { color: theme.text, fontSize: 15, fontWeight: '800', flexShrink: 1 },
+  hubDone: { color: theme.good, fontSize: 11, fontWeight: '800' },
+  hubDesc: { color: theme.muted, fontSize: 12, marginTop: 1 },
 }));

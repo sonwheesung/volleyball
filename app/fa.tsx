@@ -7,6 +7,8 @@ import { RoleBadge } from '../components/RoleBadge';
 import { Stepper } from '../components/Stepper';
 import { Popup } from '../components/Popup';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
+import { useOffseasonExit } from '../components/offseasonExit';
+import { confirmDraftPickReset } from '../components/draftPickGuard';
 import { ToastHost, useToastQueue } from '../components/Toast';
 import { shortTeamName as shortTeam, teamScoutReveal } from '../data/league';
 import { seasonYear } from '../data/seasonLabel';
@@ -73,6 +75,7 @@ export default function FACenter() {
 
 function FACenterInner() {
   const router = useRouter();
+  const exit = useOffseasonExit(); // 오프시즌 허브 복귀(§5.6) — 다음 단계로 push하지 않는다
   const my = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
@@ -251,7 +254,7 @@ function FACenterInner() {
           </Text>
         </Row>
         <Pressable
-          onPress={() => busy.run('협상 테이블을 차리는 중…', () => setAggressive(!faAggressive))}
+          onPress={() => confirmDraftPickReset(() => busy.run('협상 테이블을 차리는 중…', () => setAggressive(!faAggressive)))}
           style={[styles.toggle, faAggressive && { borderColor: theme.warn, backgroundColor: theme.warn + '20' }]}
         >
           <Text style={{ color: faAggressive ? theme.warn : theme.muted, fontWeight: '800' }}>
@@ -260,7 +263,8 @@ function FACenterInner() {
         </Pressable>
       </Card>
 
-      <Button label="신인 드래프트로 →" onPress={() => router.push('/draft')} />
+      {/* ~~다음 단계(드래프트)로 push~~ → 정정(2026-07-24 §5.6): 체인 해체 — 일정 허브로 복귀한다. */}
+      <Button label="오프시즌 준비로 →" onPress={exit} />
 
       {(compNeeded > 0 || moneyOnlyCount > 0) ? (
         <Card accent={theme.warn} flat>
@@ -295,7 +299,7 @@ function FACenterInner() {
         return (
           <Pressable
             key={p.id}
-            onPress={() => busy.run('협상 테이블을 차리는 중…', () => toggleProtect(p.id))}
+            onPress={() => confirmDraftPickReset(() => busy.run('협상 테이블을 차리는 중…', () => toggleProtect(p.id)))}
             style={[styles.protectRow, prot && { borderColor: theme.good, backgroundColor: theme.good + '18' }]}
           >
             <PosTag pos={p.position} />
@@ -412,7 +416,7 @@ function FACenterInner() {
                   onPress={() => {
                     // '영입 시도' 시 오퍼 만들기 아코디언 자동 펼침(§2.8.8 ① — 국내 FA만, 지명 취소엔 미적용)
                     if (!targeted && !p.isForeign) setOpenId(p.id);
-                    busy.run('협상 테이블을 차리는 중…', () => (targeted ? unsignFA(p.id) : signFA(p.id)));
+                    confirmDraftPickReset(() => busy.run('협상 테이블을 차리는 중…', () => (targeted ? unsignFA(p.id) : signFA(p.id))));
                   }}
                 />
               </View>
@@ -428,7 +432,7 @@ function FACenterInner() {
                     tone="good"
                     off={!moneyOnlyIds.includes(p.id)}
                     label={moneyOnlyIds.includes(p.id) ? `✓ 돈만 보상 (${Math.round((grade === 'A' ? MONEY_ONLY_MULT.A : MONEY_ONLY_MULT.B) * 100)}%)` : '보상선수 보호 (돈만)'}
-                    onPress={() => busy.run('협상 테이블을 차리는 중…', () => toggleMoneyOnly(p.id))}
+                    onPress={() => confirmDraftPickReset(() => busy.run('협상 테이블을 차리는 중…', () => toggleMoneyOnly(p.id)))}
                   />
                   {/* '돈만' 인라인 설명(§2.8.8 ② — §2.2~2.3·§253 '돈만'(선수단 보호) 용어 일치) */}
                   <Text style={styles.moneyOnlyHint}>
@@ -606,11 +610,11 @@ function FACenterInner() {
                     })()}
 
                     <Pressable
-                      onPress={() => busy.run('협상 테이블을 차리는 중…', () => {
+                      onPress={() => confirmDraftPickReset(() => busy.run('협상 테이블을 차리는 중…', () => {
                         setOffer(p.id, draft);
                         // 성공 피드백(2026-07-11 무피드백 스윕 #2) — 경쟁 뒤집힘 토스트(#81)는 변화 때만 떠서 단순 갱신이 조용했다
                         toast.push(`${p.name}, 오퍼를 ${targeted ? '갱신했습니다' : '냈습니다'}. 결과는 시즌 시작 때 확정됩니다.`);
-                      })}
+                      }))}
                       style={[styles.applyBtn, { borderColor: theme.accent, backgroundColor: theme.accent + '22' }]}
                     >
                       <Text style={{ color: theme.accent, fontWeight: '800', fontSize: 14 }}>
@@ -749,3 +753,7 @@ const styles = themedStyles(() => StyleSheet.create({
   competRank: { color: theme.accent, fontSize: 13, fontWeight: '900', marginTop: 6 },
   applyBtn: { borderWidth: 1, borderRadius: 10, paddingVertical: 10, alignItems: 'center', marginTop: 6 },
 }));
+
+// 라우트 에러 폴백(UI-50 ⑦) — 이 화면이 render throw해도 앱이 죽지 않고 "일정으로 돌아가기" 폴백이 뜬다(소프트락 봉인).
+// 2026-07-24 FA 렌더 크래시(P0 a04c0bc)가 오프시즌 소프트락으로 번진 그 화면 — 원인 봉인의 1순위 적용처.
+export { ErrorBoundary } from '../components/RouteErrorBoundary';

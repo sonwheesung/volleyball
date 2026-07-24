@@ -3,7 +3,7 @@
 // 순서(2026-07-08 사용자 결정): 헌액(지난 시즌 마무리) → 전지훈련(새 시즌 준비) → 개막 브리지 → 홈.
 // 새 레전드 0명이어도 자동 통과하지 않고 "헌액자 없음" 한 장을 조용히 보여준다(스킵 방지 — 사용자 결정).
 // docs/BROADCAST_SYSTEM §8.4. 번호 계보(사실)는 같은 구단·같은 번호 과거 레전드만 나열(가짜 인과 금지).
-import { useRouter, useNavigation } from 'expo-router';
+import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
 import { useEffect, useMemo } from 'react';
 import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../components/Screen';
@@ -15,9 +15,15 @@ import { prospectArcRetro } from '../data/seed';
 import { jerseyNumber, SUPER_LEGEND_POINTS } from '../engine/jersey';
 import { numberLineage } from '../data/legends';
 import { useGameStore } from '../store/useGameStore';
+import { useOffseasonExit } from '../components/offseasonExit';
 
 export default function Enshrine() {
   const router = useRouter();
+  // 허브 진입(§5.6.2 뒷단) — 일정 탭 오프시즌 카드에서 열면 `?hub=1`. 그때는 체인(전지훈련으로 replace)이 아니라
+  //   **일정으로 복귀**하고 뒤로가기도 막지 않는다(열람 화면이라 잠글 이유 없음). 체인 진입(season-start→enshrine)은 기존 그대로.
+  const { hub } = useLocalSearchParams<{ hub?: string }>();
+  const inHub = hub === '1';
+  const exit = useOffseasonExit();
   const season = useGameStore((s) => s.season);
   const my = useGameStore((s) => s.selectedTeamId);
   const hallOfFame = useGameStore((s) => s.hallOfFame);
@@ -32,11 +38,12 @@ export default function Enshrine() {
 
   // 헌액 완료 → 다음 단계(전지훈련, chain=1)로. 소비된 오프시즌 스택 정리는 체인 마지막(개막 브리지)이 dismissAll로 수행.
   //   replace(REPLACE)로 넘어가 헌액 화면은 스택에서 교체된다(뒤로가기로 재노출 안 됨 — beforeRemove가 GO_BACK/POP 차단, B).
-  const done = () => { router.replace('/training-camp?chain=1'); };
+  const done = () => { if (inHub) exit(); else router.replace('/training-camp?chain=1'); };
   // 0명 자동 통과 제거(2026-07-08 사용자 결정) — 아래 "헌액자 없음" 안내 한 장을 보여주고 탭 한 번으로 진행.
   // 헌액 흐름은 되돌릴 수 없다 — 하드웨어 백·제스처·POP 무력화(B). done()의 replace(REPLACE)만 통과.
   const navigation = useNavigation();
   useEffect(() => {
+    if (inHub) return; // 허브 진입은 자유 이탈(잠금은 체인 진입에만 — UI-28 범위 정정 2026-07-24)
     const onBack = () => true;
     const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
     const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
@@ -44,7 +51,7 @@ export default function Enshrine() {
       if (t === 'GO_BACK' || t === 'POP') e.preventDefault();
     });
     return () => { sub.remove(); unsub(); };
-  }, [navigation]);
+  }, [navigation, inHub]);
 
   // 헌액자 없음 — 조용한 한 장(강제 대기 없이 탭 한 번으로 다음). 스쳐 지나가듯 스킵되지 않게 명시(2026-07-08 사용자 결정).
   if (newLegends.length === 0) {
@@ -56,7 +63,7 @@ export default function Enshrine() {
           <Text style={styles.emptySub}>전당에 새겨질 은퇴 레전드가 나오지 않았습니다.</Text>
         </View>
         <Pressable style={styles.btn} onPress={done}>
-          <Text style={styles.btnTxt}>새 시즌 준비로 →</Text>
+          <Text style={styles.btnTxt}>{inHub ? '오프시즌 준비로 →' : '새 시즌 준비로 →'}</Text>
         </Pressable>
       </Screen>
     );
@@ -92,7 +99,7 @@ export default function Enshrine() {
         })}
       </View>
       <Pressable style={styles.btn} onPress={done}>
-        <Text style={styles.btnTxt}>새 시즌 준비로 →</Text>
+        <Text style={styles.btnTxt}>{inHub ? '오프시즌 준비로 →' : '새 시즌 준비로 →'}</Text>
       </Pressable>
     </Screen>
   );
@@ -113,3 +120,6 @@ const styles = StyleSheet.create({
   emptyLead: { color: '#FFD879', fontSize: 16, fontWeight: '800', textAlign: 'center' },
   emptySub: { color: '#9FB0C4', fontSize: 12.5, textAlign: 'center' },
 });
+
+// 라우트 에러 폴백(UI-50 ⑦) — 이 화면이 render throw해도 앱이 죽지 않고 "일정으로 돌아가기" 폴백이 뜬다(소프트락 봉인).
+export { ErrorBoundary } from '../components/RouteErrorBoundary';
