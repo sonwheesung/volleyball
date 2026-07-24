@@ -14,6 +14,16 @@ export const dynamic = 'force-dynamic';
 
 const REWARD_CAP = 100000; // 발급 상한(오타 999999 방지, §13.15)
 
+/** 개인 쿠폰 대상이 **이 게임(proj)의 유저**인가 — POST·PATCH 공용(R3). 잘못된 uuid 형식은 select가 throw할 수 있어
+ *  try로 감싸 실패도 '없음'과 동일 처리(no-such-user 400). 없으면 FK 위반이 catch에서 'duplicate'로 위장되던 것도 차단(C3). */
+async function targetInProj(targetUserId: string): Promise<boolean> {
+  try {
+    const u = await db.select({ id: users.id }).from(users)
+      .where(and(eq(users.projCode, PROJ_CODE), eq(users.id, targetUserId))).limit(1);
+    return u.length > 0;
+  } catch { return false; }
+}
+
 export async function POST(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   try {
@@ -32,13 +42,10 @@ export async function POST(req: Request) {
     await ensureProj(); // FK 부모 보장
     // 개인 쿠폰 targetUserId는 insert 전에 존재 확인 — 없으면 FK 위반이 catch에서 'duplicate'로 위장되던 것 차단(C3).
     // 잘못된 uuid 형식은 select 자체가 throw할 수 있어 try로 감싸 실패도 '없음'과 동일 처리(no-such-user 400).
-    if (b.targetUserId) {
-      let exists = false;
-      try {
-        const u = await db.select({ id: users.id }).from(users).where(eq(users.id, b.targetUserId)).limit(1);
-        exists = u.length > 0;
-      } catch { exists = false; }
-      if (!exists) return NextResponse.json({ ok: false, reason: 'no-such-user' }, { status: 400 });
+    // projCode 스코프 필수(§13.2 멀티게임 격리, R3 2026-07-24) — 타 게임 유저를 개인 쿠폰 대상으로 삼아 외래 참조 행이
+    //   생기던 결함(수신 GET은 proj 스코프라 열람 불가 = 죽은 행). 없으면 기존 실패 경로 그대로 400 no-such-user.
+    if (b.targetUserId && !(await targetInProj(b.targetUserId))) {
+      return NextResponse.json({ ok: false, reason: 'no-such-user' }, { status: 400 });
     }
     try {
       const ins = await db
@@ -74,7 +81,12 @@ export async function PATCH(req: Request) {
     if (b.rewardDiamonds !== undefined) { const r = Math.floor(Number(b.rewardDiamonds)); if (!Number.isFinite(r) || r <= 0 || r > REWARD_CAP) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.rewardDiamonds = r; }
     if (b.endsAt !== undefined) { const d = b.endsAt ? normalizeEndsAt(b.endsAt) : null; if (d && Number.isNaN(d.getTime())) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 }); upd.endsAt = d; } // date-only KST 정규화(C2)
     if (typeof b.disabled === 'boolean') upd.disabled = b.disabled;
-    if (b.targetUserId !== undefined) upd.targetUserId = b.targetUserId || null;
+    // 대상 변경도 POST와 같은 게이트(R3 형제 — PATCH엔 존재 검증 자체가 없어 타 게임 유저로 바꿔치기가 통과했다).
+    // null(전체 쿠폰으로 전환)은 검증 대상 아님.
+    if (b.targetUserId !== undefined) {
+      if (b.targetUserId && !(await targetInProj(b.targetUserId))) return NextResponse.json({ ok: false, reason: 'no-such-user' }, { status: 400 });
+      upd.targetUserId = b.targetUserId || null;
+    }
     if (Object.keys(upd).length === 0) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     const r = await db.update(coupons).set(upd).where(and(eq(coupons.projCode, PROJ_CODE), eq(coupons.id, b.id))).returning({ id: coupons.id });
     if (!r.length) return NextResponse.json({ ok: false, reason: 'not-found' }, { status: 404 });

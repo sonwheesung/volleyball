@@ -4,9 +4,10 @@ import { NextResponse } from 'next/server';
 import { reportError } from '../../../../lib/observability';
 import { db } from '../../../../db';
 import { users } from '../../../../db/schema';
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { isAdmin } from '../../../../lib/admin';
 import { ensureProj } from '../../../../lib/wallet';
+import { PROJ_CODE } from '../../../../lib/proj';
 import { sendMail, sendBroadcast, recallMail, listAdminMail, validateAttach } from '../../../../lib/mail';
 import { logPaymentEventAfter } from '../../../../lib/paymentLog';
 
@@ -37,11 +38,13 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: true, broadcastId: r.broadcastId, deduped: r.deduped });
     }
 
-    // 개별 — 대상 유저 존재·비탈퇴 검증(쿠폰 C3 패턴)
+    // 개별 — 대상 유저 존재·비탈퇴 검증(쿠폰 C3 패턴) + **projCode 스코프**(§13.2 멀티게임 격리, R3 2026-07-24 —
+    //   타 게임 유저 앞으로 우편이 발송돼 죽은 외래 참조 행이 생기던 결함). 없으면 기존 실패 경로 그대로 400 no-such-user.
     if (!b.userId) return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
     let target: { deletedAt: Date | null } | null = null;
     try {
-      const u = await db.select({ deletedAt: users.deletedAt }).from(users).where(eq(users.id, b.userId)).limit(1);
+      const u = await db.select({ deletedAt: users.deletedAt }).from(users)
+        .where(and(eq(users.projCode, PROJ_CODE), eq(users.id, b.userId))).limit(1);
       target = u.length ? u[0] : null;
     } catch { target = null; } // 잘못된 uuid 형식도 no-such-user로
     if (!target || target.deletedAt) return NextResponse.json({ ok: false, reason: 'no-such-user' }, { status: 400 });

@@ -43,13 +43,20 @@ export async function applyWalletTx(
     .from(walletLedger)
     .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.idempotencyKey, idempotencyKey)))
     .limit(1);
+  // ※ 유저 조회는 **proj 스코프 필수**(§13.2 멀티게임 격리, R2 2026-07-24). 없으면 admin/refund·admin/grant가
+  //    **타 게임 유저 지갑**을 차감/지급할 수 있었다(우리 proj 원장에 남 게임 유저 거래가 기록됨). userId는 uuid PK라
+  //    토큰 파생 경로(earn/spend/coupon/mail/pass)는 애초에 우리 proj 유저 → **정상 경로 동작 변화 0**, 관리자 입력만 막힌다.
+  //    실패 어휘는 기존 'no-user' 재사용(새 코드 발명 없음 — 타 proj 유저 = 이 게임엔 없는 유저).
   if (dup.length) {
-    const u = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).limit(1);
-    return { ok: true as const, balance: u.length ? u[0].balance : 0, applied: false };
+    const u = await tx.select({ balance: users.balance }).from(users).where(and(eq(users.projCode, PROJ_CODE), eq(users.id, userId))).limit(1);
+    // 이 proj에 없는 유저 = no-user(멱등 재시도라도 남 게임 유저 잔액을 0으로 위장 반환하지 않는다).
+    // 정상 경로에선 도달 불가 — 원장 행(FK)이 있으면 유저 행도 반드시 있고, 그 유저는 이 proj다.
+    if (!u.length) return { ok: false as const, reason: 'no-user' as const, balance: 0 };
+    return { ok: true as const, balance: u[0].balance, applied: false };
   }
 
   // 2) 행 잠금 — 동시 spend 직렬화(FOR UPDATE)
-  const locked = await tx.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).for('update').limit(1);
+  const locked = await tx.select({ balance: users.balance }).from(users).where(and(eq(users.projCode, PROJ_CODE), eq(users.id, userId))).for('update').limit(1);
   if (!locked.length) return { ok: false as const, reason: 'no-user' as const, balance: 0 };
 
   const cur = locked[0].balance;
@@ -94,7 +101,8 @@ export async function applyWallet(
         .limit(1);
       if (dup.length) {
         // 경쟁자가 이미 지급 완료 → 현재 잔액 반환(balanceAfter 스냅샷 아님 — split-brain 방지, applyWalletTx dup 경로와 동일 규칙).
-        const u = await db.select({ balance: users.balance }).from(users).where(eq(users.id, userId)).limit(1);
+        // proj 스코프(R2) — applyWalletTx의 dup 경로와 같은 규칙. 유니크 충돌 경쟁은 같은 proj 안에서만 나므로 동작 변화 0.
+        const u = await db.select({ balance: users.balance }).from(users).where(and(eq(users.projCode, PROJ_CODE), eq(users.id, userId))).limit(1);
         return { ok: true as const, balance: u.length ? u[0].balance : 0, applied: false };
       }
     } catch {
