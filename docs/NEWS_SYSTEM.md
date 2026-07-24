@@ -353,6 +353,12 @@ k = (seed / 53) % closer.length
 - **트리플 크라운·한 경기 폭발 — 선수당 1건 묶음**: 강한 선수가 한 시즌 트리플을 여러 번 치면 기사도 N건 쏟아졌다
   → `tc`/`bg` Map으로 **선수당 1건** 집계. 트리플은 `(시즌 N번째)` + "이번 시즌 N번째 대기록"으로 횟수를 한 줄에,
   폭발은 **시즌 최고 득점 경기**만. key를 `tc:${id}`/`bg:${id}`(경기일 제거)로 바꿔 중복 방지.
+  - **멀티 TC(count≥2) 헤드라인 스탯 정정(2026-07-24, 실사 버그)**: ~~헤드라인/본문 스탯은 **첫 경기**로 동결(`back/b/a`)~~
+    → **최근 TC 경기 스탯으로**(`e.day`와 함께 `e.back/e.b/e.a` 갱신). 이유: `newsMatchBox(n)`이 붙이는 스코어보드 박스는
+    `n.day`(=최근 TC 경기일)를 재생하는데, 헤드라인 스탯만 첫 경기에 동결돼 **헤드라인과 박스가 서로 다른 경기**가 되어 수치가
+    어긋났다(예 헤드라인 "서브6" vs 박스 "서브3"). `count≥2` 한정 버그(단일 TC는 정상). `seasonMatchProds`는 day 오름차순
+    (`allProdRows` sort)이라 마지막 쓰기 = 최근 경기 — `mp.dayIndex >= e.day` 명시 비교로 순서 의존을 봉인(한 선수 하루 1경기).
+    → 헤드라인·본문·스코어보드가 **모두 같은 경기(최근 TC)**. 회귀 가드 `_dv_newsscore.ts` (g)(A/B count≥2).
   - 교차검증(`simNews`) 갱신: 뉴스는 선수당 1건 ↔ 현수막(`buildMatchBanners`)은 경기당 → 일치 기준을 **distinct 선수 수**로
     (현수막 title에서 선수명 추출해 Set). 두 경로 독립 재구현 오라클 유지.
 - **이적 본문 풍부화**: `둥지를 옮겼다` 한 줄 → **OVR·포지션**(`getPlayer().position`+`POS_KO`)을 리드에, 받는 팀이
@@ -577,11 +583,13 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 - **정규↔플옵 경로 분리**: 플옵 경기는 `SEASON`에 없다 → `buildPlayoffBox` 별도 분기 필수(정규 경로로 플옵 ref를 넣으면 잘못된 경기를 그림).
 - **fog 무관**: 스코어보드·득점원은 관전 완료 경기의 공개 사실(matchresult·broadcast·results와 동일 정책) — 뉴스 상세의 "선수 OVR" fog 게이트와 별개.
 - `buildMatchBox`·`buildPlayoffBox`는 시드 순수 함수. box의 선수별 득점 == `seasonMatchProds`의 `mp.lines.points`(둘 다 box 단일 진실 파생) → byte 일치. 상세 1회당 경기 1건 리플레이(~수 ms), 목록에선 미실행. 신규 영속 0.
-- 가드 `tools/_dv_newsscore.ts`(A/B 자가검증 — 정규/플옵 경로 뒤섞기·시리즈 ref 허용 뮤턴트에서 FAIL).
+- **헤드라인↔박스 동일 경기(2026-07-24)**: `match` 뉴스는 `n.day`로 박스를 재생하므로, 헤드라인/본문 스탯도 반드시 `n.day`의 그 경기 값이어야 한다. 멀티 트리플크라운(count≥2)에서 헤드라인이 첫 경기에 동결돼 박스(최근 경기)와 어긋난 버그를 수정 — 헤드라인 스탯을 `e.day`와 함께 최근 TC 경기로 갱신(§3.6 트리플 크라운 항목). 가드 (g)가 헤드라인 파싱값 ↔ `mp.lines@n.day` + 박스 `blockPt·srvAce`를 대조.
+- 가드 `tools/_dv_newsscore.ts`(A/B 자가검증 — 정규/플옵 경로 뒤섞기·시리즈 ref 허용 뮤턴트 + (g) 멀티 TC 첫경기 동결 뮤턴트에서 FAIL).
 
 ---
 
 ## 변경 이력
+- 2026-07-24: **멀티 트리플크라운 헤드라인↔스코어보드 경기 불일치 수정** — 한 시즌 TC를 2회+ 한 선수(count≥2)의 헤드라인/본문 스탯이 **첫 경기**로 동결되는데 붙는 스코어보드 박스는 `n.day`(=최근 TC 경기)를 재생해 두 화면 수치가 어긋났다. 헤드라인 스탯(`e.back/e.b/e.a`)을 `e.day`와 함께 **최근 TC 경기**로 갱신(day 오름차순 → 마지막 쓰기, `mp.dayIndex >= e.day` 명시 비교). 단일 TC는 정상(무변). `data/news.ts` §3.6·§11.5 정정, 가드 `_dv_newsscore.ts` (g) 확장(count≥2 A/B). 표시 계층만 — 경기 결과·통계·결정론 무파급.
 - 2026-07-24: **§11.5 경기 뉴스 상세 = 세트 스코어보드 + 양팀 득점원 Top3** — 단일 경기로 환원되는 뉴스(`match`·`debut`·`playoff` 경기별)의 상세에 그 경기의 세트 스코어보드 + 팀당 득점 Top3를 배선. matchresult 스코어보드를 `components/SetScoreboard`로 추출(동작 불변 리팩터), `BoxScoreTable` 득점식 재사용(`ScorersTop3`). 순수 셀렉터 `data/newsMatchBox`(정규=`buildMatchBox`/플옵=`buildPlayoffBox` 분기, 단일 경기 아니면 null — `po:clinch`·`champion`·`clinch` 배제). 스포일러는 아이템 컷오프 상속, box↔`seasonMatchProds` byte 일치. 가드 `tools/_dv_newsscore.ts`(A/B). 신규 영속 0·엔진 무파급.
 - 2026-07-11: **§11 리치 기사 상세 설계** — 사건별 실데이터 카드 + **가짜 인터뷰 미도입 확정**(기자 총평/경기 후 코멘트로 대체, 성향 시스템 후 재검토). 사용자 결정.
 - 2026-06-21: 전면 재설계. 진단(초반 공백·미사용 데이터·템플릿1개) → 실시간 소재(트리플크라운·데뷔·연승·업셋·순위) +

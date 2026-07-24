@@ -653,10 +653,15 @@ export function buildNewsFeed(
       const p = getPlayer(id); if (!p) continue;
       const tid = teamOf(id);
       const opp = tid === mp.homeTeamId ? mp.awayTeamId : mp.homeTeamId; // 상대팀(본문 보강)
-      // 트리플 크라운(KOVO) — 후위공격·블로킹·서브 각 3+. 선수당 누적(첫 경기 스탯 + 시즌 횟수).
+      // 트리플 크라운(KOVO) — 후위공격·블로킹·서브 각 3+. 선수당 누적(~~첫 경기 스탯~~ 최근 TC 경기 스탯 + 시즌 횟수).
+      //   정정(2026-07-24): 헤드라인/본문 스탯을 day와 함께 최근 TC 경기로 갱신 → newsMatchBox(n)이 재생하는 스코어보드 박스와
+      //   같은 경기가 된다. 구로직은 back/b/a를 첫 경기에 동결하고 day만 최근으로 옮겨, 멀티 TC(count≥2)에서 헤드라인(첫 경기)과
+      //   박스(최근 경기, n.day)가 다른 경기가 돼 수치가 어긋났다(화면 간 모순). seasonMatchProds는 day 오름차순(allProdRows sort)이라
+      //   마지막 쓰기 = 최근 경기 — 명시적 >= 비교로 순서 의존을 봉인(같은 선수는 하루 1경기).
       if (l.backSpikes >= TRIPLE_MIN && l.blocks >= TRIPLE_MIN && l.aces >= TRIPLE_MIN) {
         const e = tc.get(id);
-        if (e) { e.count++; e.day = mp.dayIndex; } else tc.set(id, { count: 1, tid, name: p.name, back: l.backSpikes, b: l.blocks, a: l.aces, day: mp.dayIndex });
+        if (e) { e.count++; if (mp.dayIndex >= e.day) { e.day = mp.dayIndex; e.back = l.backSpikes; e.b = l.blocks; e.a = l.aces; } }
+        else tc.set(id, { count: 1, tid, name: p.name, back: l.backSpikes, b: l.blocks, a: l.aces, day: mp.dayIndex });
       }
       // 데뷔전 — 통산 출전 0(이번 시즌이 데뷔)인 선수의 첫 선발만. **유망주(잠재력 높은 신인)만**: 리그 전체
       // 신인 데뷔를 다 기사화하면 첫 경기에 ~50건 쏟아짐 → talentBase A급 이상(상위 15%)만, S급은 ★(2026-06-21 사용자 보고).

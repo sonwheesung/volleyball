@@ -15,7 +15,7 @@ export default function SeasonOpening() {
 
   // 소비된 오프시즌 스택(playoffs·시상식·트라이아웃·FA·드래프트·헌액·전지훈련)을 전부 비우고 대시보드로.
   //   dismissAll(POP_TO_TOP)로 루트((tabs))까지 pop → replace로 그 자리를 대시보드로 확정(잔재 0 — 뒤로가기/제스처로 앞 단계 재노출 차단).
-  const enter = () => { router.dismissAll(); router.replace('/(tabs)'); };
+  const enter = () => { if (router.canDismiss()) router.dismissAll(); router.replace('/(tabs)'); };
 
   // 개막 브리지는 되돌릴 수 없다 — 하드웨어 백·제스처·POP 무력화. enter()의 dismissAll/replace(POP_TO_TOP/REPLACE)만 통과.
   const navigation = useNavigation();
