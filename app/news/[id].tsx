@@ -12,6 +12,9 @@ import type { ComponentProps } from 'react';
 import { StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, IconLabel, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, theme, themedStyles, useDeferredReady } from '../../components/Screen';
+import { SetScoreboard } from '../../components/SetScoreboard';
+import { ScorersTop3 } from '../../components/ScorersTop3';
+import { newsMatchBox } from '../../data/newsMatchBox';
 import { POS_LABEL } from '../../components/posTokens';
 import { buildNewsFeed, freshNews, newsKey, newsSubtitle, isPreseasonRankNews, PRESEASON_LEAD } from '../../data/news';
 import { seasonYear } from '../../data/seasonLabel';
@@ -406,6 +409,9 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
   const accent = KIND_ACCENT()[n.kind];
   const subtitle = newsSubtitle(n, nk); // 프리시즌 예상순위는 전용 전망 풀로 분기(결산 톤 유출 차단, §3.7)
 
+  // 경기 뉴스(§11.5) — "한 경기"로 환원되는 kind(match·debut·playoff 경기별)면 세트 스코어보드 + 양팀 득점원 Top3.
+  //   그 외 kind·단일경기 아닌 ref(po:clinch 등)는 null → 미표시(있는 것만). 공개 사실(관전 완료)이라 fog 무관.
+  const matchBox = useMemo(() => newsMatchBox(n), [n]);
   // 오프시즌 결산은 이동 목록을 구조화 카드(MovesCard)로 렌더한다(산문 몰아넣기 해소, §11.3 B). body는 이미 리드·마무리 산문만.
   const offMoves = n.kind === 'offseason' && n.moves && (n.moves.in.length + n.moves.kept.length + n.moves.out.length) > 0 ? n.moves : null;
   // 본문 — n.body(사실 조립본) 또는 분류 리드 + 선수 주인공이면 신체·역할 사실 한 줄(실값, 감정 금지).
@@ -572,6 +578,21 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
 
       {/* 2b) 오프시즌 결산 — 영입/재계약/방출 구조화 칩 카드(산문 대신) */}
       {offMoves ? <MovesCard moves={offMoves} /> : null}
+
+      {/* 2c) 경기 뉴스(§11.5) — 세트 스코어보드 + 양팀 득점원 Top3(단일 경기 kind만, 공개 사실). */}
+      {matchBox ? (
+        <>
+          <Card accent={theme.sky} flat>
+            <SetScoreboard homeName={matchBox.homeName} awayName={matchBox.awayName} sim={matchBox.sim} />
+          </Card>
+          <Card flat accent={theme.elite}>
+            <ScorersTop3 teamName={matchBox.homeName} squad={matchBox.homeSquad} box={matchBox.box} />
+          </Card>
+          <Card flat accent={theme.elite}>
+            <ScorersTop3 teamName={matchBox.awayName} squad={matchBox.awaySquad} box={matchBox.box} />
+          </Card>
+        </>
+      ) : null}
 
       {/* 3) 선수 정보 카드(안개 준수) — ref가 실제 선수일 때만 */}
       {p ? (

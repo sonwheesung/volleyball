@@ -313,6 +313,7 @@ npx tsx tools/_dv_coachtype_dist.ts        # 코치 성향 배정(STAFF §8.1 ph
 npx tsx tools/simScandalEffect.ts          # 사건사고 정지출전 차단·영구퇴출 정합. exit 0/1
 npx tsx tools/simStatRecord.ts             # 개인 귀속 결정론·팀 누수0·개인합=팀박스. exit 0/1
 npx tsx tools/simNews.ts                   # 뉴스 무결성(빈헤드/본문·내용중복·매달린 teamId 0) + 변주 가드(§4.4 Step4: 고볼륨 kind 변주비율≥0.90·n-gram 최대겹침<0.90 — 해시 붕괴/셀렉터 축소 검출, A/B teeth) + 읽음키 유일성. exit 0/2
+npx tsx tools/_dv_newsscore.ts             # 경기 뉴스 상세 스코어보드·득점원 Top3(NEWS §11.5, 2026-07-24) — match/debut=day+teamId 유일 fixture→buildMatchBox·playoff 경기별=ref 숫자g→buildPlayoffBox / 세트칩 합=homeSets·awaySets·Top3 득점=box 정렬·byte 일치(box↔seasonMatchProds 304명 0불일치) / 배제(po:clinch·champion·clinch·기타 kind→null)·정규 유일성(2건↑ 생략) + A/B 뮤턴트 2종(정규↔플옵 경로 뒤섞기·시리즈 ref 허용). exit 0/1
 npx tsx tools/_dv_newsday0.ts              # 첫 경기 전 뉴스 스포일러 차단(EC-NEWS-01·NEWS §3.5, 2026-06-30) — leagueDay=-1 실시간 뉴스 0 + A/B(경계해제 시 재현=필터 민감). 미관전 데뷔·미래 부상/사건 노출 회귀 차단. exit 0/2
 npx tsx tools/_dv_newsorder.ts             # 뉴스 2주 만료(NEWS §9, 2026-07-05 최신순) — freshNews: 요약(day없음) 유지·14일 경계 유지·15일+ 만료 + A/B(표시일 급증 시 인게임 전부 만료=요약만 잔존, 필터가 진짜 day로 거름). exit 0/1
 npx tsx tools/_ev_offseasonnews.ts 32      # 오프시즌 결산 뉴스(NEWS §3.7 슬라이스6, 2026-07-08) — 32오프시즌: 내 팀 결산 종합 항상 1건(조용한 오프시즌 포함=리브니스)·드래프트 픽 전원 기사화·외인교체 로그정합(누락/날조0)·결정론·신인 OVR 누수0(안개) + A/B(팀없음→결산0·OVR정규식 teeth). exit 0/1

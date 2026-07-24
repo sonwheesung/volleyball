@@ -437,6 +437,7 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 - `data/production.ts` — `seasonMatchProds()`(신규 export, §6).
 - `app/(tabs)/index.tsx` — 뉴스 티커 + 라운드 MVP. `app/(tabs)/history.tsx` — 전체 아카이브. `app/news.tsx`.
 - `tools/simNews.ts` — N시즌 누적 후 피드 sanity + **무결성·변주 검사**(§9).
+- `data/newsMatchBox.ts` — 경기 뉴스 상세 셀렉터(§11.5). `components/SetScoreboard.tsx`·`components/ScorersTop3.tsx` — 스코어보드·득점원 Top3 공용 컴포넌트. 가드 `tools/_dv_newsscore.ts`.
 
 ---
 
@@ -549,9 +550,39 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 - **단계**: Phase1 드래프트 기사(목업 1:1로 품질 확정) → Phase2 부상·기록경신·트리플크라운 → Phase3 수상·은퇴·우승·순위. 각 Phase 후 실기기 확인.
 - 코드: `app/news/[id].tsx` 리치 레이아웃 + 사건별 카드 컴포넌트. 데이터는 `ref`(playerId)→`getPlayer`·`seasonDraftLog`·`seasonInjuryReport`·`milestones`·`prospectScout`(fog) 등 기존 파생. 총평/코멘트 문구는 §4 조립식 본문과 같은 결정론 변주.
 
+### 11.5 경기 뉴스 상세 = 세트 스코어보드 + 양팀 득점원 Top3 (2026-07-24 구현, 사용자 요청·독립 리뷰 완료)
+> **목표**: "한 경기"로 환원되는 뉴스(트리플크라운·한경기폭발·데뷔전·플옵 경기)의 상세에서 그 경기의 **세트 스코어보드**와
+> **양팀 득점원 Top3**를 보여준다. 새 시스템이 아니라 **matchresult(경기 상세)가 이미 쓰는 자산을 뉴스 상세에서 재사용하는 배선**이다.
+
+**대상 — 단일 경기로 환원 가능한 3종만** (그 외 kind·ref는 스코어보드 **미표시** — 있는 것만 원칙 §3.6):
+
+| kind | 식별 | 리플레이 경로 |
+|---|---|---|
+| `match`(트리플크라운·한경기폭발) | `n.day`(=dayIndex) + `n.teamId` | `SEASON.find(f => f.dayIndex===n.day && (home===n.teamId‖away===n.teamId))` → `buildMatchBox(home,away,dayIndex,seed,interventionsFor(id))` |
+| `debut`(데뷔전) | 동일 | 동일 |
+| `playoff` **경기별** | `n.ref`=`'po:g'`·`'final:g'`(숫자 g) → round+g 파싱 | `buildPlayoffBox(n.season, round, g)`(`data/postseason.ts`) |
+
+**반드시 배제**(단일 경기 아님 — 3-1 세트합이 한 경기가 아니거나 소재 데이터 없음):
+- `playoff` 시리즈 확정 `ref='po:clinch'` — ref 파싱에서 `g`가 숫자가 아니면(`clinch`) `null`.
+- `champion`(결승 시리즈 종합)·`clinch`(순위 확정)·그 외 전 kind → `null`.
+
+**재사용 자산 (신규 작성 최소)**:
+- `components/SetScoreboard.tsx` — matchresult의 스코어보드(팀명 + `3:1` + 세트칩)를 공용 컴포넌트로 추출. matchresult·뉴스 공유(동작 불변 리팩터).
+- `components/ScorersTop3.tsx` — `BoxScoreTable`의 득점식(`atkKill+blockPt+srvAce`) 재사용. 팀당 득점 상위 3인 + 내역(공격·블록·서브). **풀박스 아닌 Top3 축약**(관전형 가독성). 득점 0(세터·리베로)은 순수 득점 Top3라 자연 제외.
+- `data/newsMatchBox.ts` — 순수 셀렉터 `newsMatchBox(n): NewsMatchBox | null`. kind별 정규(`buildMatchBox`)/플옵(`buildPlayoffBox`) 분기, 단일 경기 아니면 `null`. UI→data→engine 의존 방향 준수.
+
+**스포일러·결정론**:
+- 뉴스 아이템 자체가 이미 `leagueDay`/`poDay` 컷오프로 게이트됨(피드에 존재 = 관전 완료). 셀렉터는 **`n.day`/`n.ref`가 가리키는 경기만** 리플레이(임의 미래 경기 조회 금지 — 그게 게이트).
+- **정규 fixture 유일성 가드**: (dayIndex, teamId) 일치 fixture가 2건 이상이면 스코어보드 생략(지어내기 금지). 현 라운드로빈에선 항상 1건.
+- **정규↔플옵 경로 분리**: 플옵 경기는 `SEASON`에 없다 → `buildPlayoffBox` 별도 분기 필수(정규 경로로 플옵 ref를 넣으면 잘못된 경기를 그림).
+- **fog 무관**: 스코어보드·득점원은 관전 완료 경기의 공개 사실(matchresult·broadcast·results와 동일 정책) — 뉴스 상세의 "선수 OVR" fog 게이트와 별개.
+- `buildMatchBox`·`buildPlayoffBox`는 시드 순수 함수. box의 선수별 득점 == `seasonMatchProds`의 `mp.lines.points`(둘 다 box 단일 진실 파생) → byte 일치. 상세 1회당 경기 1건 리플레이(~수 ms), 목록에선 미실행. 신규 영속 0.
+- 가드 `tools/_dv_newsscore.ts`(A/B 자가검증 — 정규/플옵 경로 뒤섞기·시리즈 ref 허용 뮤턴트에서 FAIL).
+
 ---
 
 ## 변경 이력
+- 2026-07-24: **§11.5 경기 뉴스 상세 = 세트 스코어보드 + 양팀 득점원 Top3** — 단일 경기로 환원되는 뉴스(`match`·`debut`·`playoff` 경기별)의 상세에 그 경기의 세트 스코어보드 + 팀당 득점 Top3를 배선. matchresult 스코어보드를 `components/SetScoreboard`로 추출(동작 불변 리팩터), `BoxScoreTable` 득점식 재사용(`ScorersTop3`). 순수 셀렉터 `data/newsMatchBox`(정규=`buildMatchBox`/플옵=`buildPlayoffBox` 분기, 단일 경기 아니면 null — `po:clinch`·`champion`·`clinch` 배제). 스포일러는 아이템 컷오프 상속, box↔`seasonMatchProds` byte 일치. 가드 `tools/_dv_newsscore.ts`(A/B). 신규 영속 0·엔진 무파급.
 - 2026-07-11: **§11 리치 기사 상세 설계** — 사건별 실데이터 카드 + **가짜 인터뷰 미도입 확정**(기자 총평/경기 후 코멘트로 대체, 성향 시스템 후 재검토). 사용자 결정.
 - 2026-06-21: 전면 재설계. 진단(초반 공백·미사용 데이터·템플릿1개) → 실시간 소재(트리플크라운·데뷔·연승·업셋·순위) +
   경계 종류 확대(기록왕6·베스트7·라운드MVP·시즌기록·순위서사) + **본문 조립/결정론 변주 엔진**. 트리플크라운 정의 출처 확인.
