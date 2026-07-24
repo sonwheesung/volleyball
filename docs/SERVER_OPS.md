@@ -128,5 +128,11 @@ curl https://volleyball-jet-nine.vercel.app/api/devnotes     # 새 라우트 200
 
 ## 4. 오늘 기준 상태 메모 (2026-07-15)
 
-- **운영 미배포 잔량**: devnotes·계정 삭제(account)·연령 게이트 — 코드는 main에 커밋됐으나 **Vercel 배포 + prod 마이그레이션(0000 devnotes·0001 account, 둘 다 additive 멱등) 미적용**. 배포 전까지 운영 지향 앱에서 해당 기능은 "연결 필요"/미동작이 정상.
+- ~~**운영 미배포 잔량**: devnotes·계정 삭제(account)·연령 게이트 — 코드는 main에 커밋됐으나 **Vercel 배포 + prod 마이그레이션(0000 devnotes·0001 account, 둘 다 additive 멱등) 미적용**.~~
+  → **정정(2026-07-24, 이 메모가 스테일 — `PAYMENT_LAUNCH_RUNBOOK`과 상충하던 건):** 위 잔량은 **2026-07-17에 해소**됐다.
+  근거(둘 다 이 메모보다 **나중 날짜의 실행 기록**이라 런북이 이긴다): ①`PAYMENT_LAUNCH_RUNBOOK` §3 진행기록(2026-07-17) —
+  "**prod 스키마 push(devnotes·save_backups 신설, DROP 0 확인)** … redeploy, **스모크 3종(devnotes ok** / 무인증 401 / 정시크릿 TEST 200)",
+  ②같은 문서 2026-07-18 컴플라이언스 감사에서 **prod 게시된 `delete-account` 페이지**(구글 데이터보안 계정삭제 URL 제출용)를 실물로 점검.
+  **현재의 prod 미적용 잔량은 0002(`attendance_passes`)·0003(`mails`/`mail_broadcasts`)** — 런북 §"prod env·크론·마이그레이션 트리거"(사람이 트리거)로 이관됨.
+  ※ 이 §4는 **날짜 박제 메모**라 시간이 지나면 반드시 스테일해진다 — 상태의 정본은 런북 진행기록 쪽으로 본다.
 - **로컬 Supabase 54322**: WinNAT 예약 대역(54250-54349)에 걸려 기동 불가 — 재부팅 or 관리자 winnat 재시작으로 해제. 그때까지 §2.1b 임시 PG로 대체 중.

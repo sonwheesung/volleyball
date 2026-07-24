@@ -229,7 +229,9 @@ export function createTicket(category: TicketCategory, content: string, device?:
   });
 }
 export function listTickets() {
-  return call<{ tickets: Array<{ id: string; category: TicketCategory; content: string; status?: string; reply?: string; createdAt: string }> }>(
+  // status 어휘(서버 정본): open | reviewing | answered | refunded (+레거시 replied|resolved 허용).
+  // repliedAt = 답변 시각(timestamptz, 미답변이면 null).
+  return call<{ tickets: Array<{ id: string; category: TicketCategory; content: string; status?: string; reply?: string; createdAt: string; repliedAt?: string | null }> }>(
     '/api/ticket',
   );
 }

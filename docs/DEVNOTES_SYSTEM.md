@@ -1,11 +1,16 @@
 # DEVNOTES_SYSTEM — 개발자 노트 + 패치노트
 
-> **상태: Phase 1·2 구현(2026-07-15).** 서버(테이블+공개 GET+관리자 CRUD)와 관리자 에디터(운영 그룹 "노트" 탭,
-> 마크다운 작성/미리보기/게시 토글)가 구현됐다. **앱 화면(Phase 3)은 미착수.** 이 문서가 설계 정본이며 §7 단계를 따른다.
+> ~~**상태: Phase 1·2 구현(2026-07-15).** … **앱 화면(Phase 3)은 미착수.**~~
+> → **정정(2026-07-24, 문서 스테일 — 코드 대조):** **Phase 1·2·3 전부 구현 완료.** 서버(테이블+공개 GET+관리자 CRUD)·
+> 관리자 에디터(운영 그룹 "노트" 탭, 마크다운 작성/미리보기/게시 토글)에 더해 **앱 화면도 이미 구현돼 있다** —
+> `app/devnotes.tsx`(목록·탭·SWR 캐시 `devnotes.cache.v1`)·`app/devnotes/[id].tsx`(상세)·
+> `app/(tabs)/mypage.tsx`(LinkCard + 안읽음 배지)·`store/useAuthStore.ts`(`readDevnotes`·`markDevnoteRead`·`pruneReadDevnotes`).
+> 이 문서가 설계 정본이며 §7 단계를 따른다.
 > — 구현 요점: `server/db/schema.ts`(devnotes) · `server/app/api/devnotes/route.ts`(공개 GET, published만) ·
 > `server/app/api/admin/devnote/route.ts`(CRUD) · `server/app/ops-9f3a2c/page.tsx`(노트 탭+에디터 모달) ·
 > `server/tools/_dv_devnote_live.ts`(상설 가드) · `server/db/migrations/0000_add_devnotes.sql`(additive).
-> **미검증 잔여**: 로컬 dev DB(Supabase :54322)가 꺼져 있어 마이그레이션 적용·라이브 가드 실행은 **DB 기동 후로 보류**(tsc 0·마이그레이션 파일 생성은 완료).
+> ~~**미검증 잔여**: 로컬 dev DB(Supabase :54322)가 꺼져 있어 마이그레이션 적용·라이브 가드 실행은 **DB 기동 후로 보류**~~
+> → **해소(2026-07-24)**: 로컬 dev DB에서 `_dv_devnote_live` **exit 0 실행 확인** — 보류 해제.
 >
 > 정본 관계: 서버·관리자 인프라는 `BACKEND_SYSTEM.md`(특히 §13.11 공지·§13.13 in-app·§13.15 관리자
 > 대시보드) 패턴을 그대로 상속한다. 이 문서는 **그 위에 얹는 "읽을거리 콘텐츠" 계층**만 정의한다.
@@ -230,7 +235,7 @@ devnote는 **재화·콘텐츠 계층**이다. 서버 DB의 다른 콘텐츠(공
 > 빌드 순서 = **서버 → 관리자 에디터 → 앱 화면**(BACKEND §13.5 "작은 러너블 먼저"). 각 단계 통과 전 다음 단계 착수 금지.
 > 검증은 **server 5 렌즈**(backend-verify: auth 귀속·proj 스코프·cap 단위·date-only KST·관측성 money-path)로 본다.
 
-### Phase 1 — 서버(테이블 + 공개 GET + 관리자 CRUD) — ✅ 구현(2026-07-15, DB 적용·라이브 가드는 dev DB 기동 후 보류)
+### Phase 1 — 서버(테이블 + 공개 GET + 관리자 CRUD) — ✅ 구현(2026-07-15) · ~~라이브 가드는 dev DB 기동 후 보류~~ → **가드 실행 확인·보류 해제(2026-07-24, `_dv_devnote_live` exit 0)**
 - **작업**: `devnotes` 스키마·마이그레이션, `GET /api/devnotes`(published만), `/api/admin/devnote` CRUD.
 - **통과 조건**:
   1. 마이그레이션 적용, `devnotes` 존재. projCode FK 걸림.
@@ -256,8 +261,11 @@ devnote는 **재화·콘텐츠 계층**이다. 서버 DB의 다른 콘텐츠(공
   4. kind=patch면 appVersion 입력칸 노출, note면 숨김.
 - **검증**: 라이브로 draft 작성→미공개 확인→게시→공개 GET 등장→수정→회수. tsc(server) 0. UI는 공지/쿠폰 모달과 동형이라 회귀 낮음.
 
-### Phase 3 — 앱 화면(목록/상세 + 배지 + 오프라인 캐시)
+### Phase 3 — 앱 화면(목록/상세 + 배지 + 오프라인 캐시) — ✅ 구현(확인 2026-07-24 · ~~미착수~~ 표기가 스테일이었음)
 - **작업**: `lib/server.getDevnotes`, `app/devnotes.tsx`(+상세), 마이페이지 진입 LinkCard+배지, `useAuthStore` 읽음 3종, 캐시(SWR).
+- **구현 위치(코드 대조 2026-07-24)**: `app/devnotes.tsx`(목록·세그먼트 탭·`readDevnotesCache`/`refreshDevnotes`·`fmtDevnoteDate`) ·
+  `app/devnotes/[id].tsx`(상세·읽음 처리) · `app/(tabs)/mypage.tsx:230`(LinkCard `badge={devnoteUnread}`) ·
+  `store/useAuthStore.ts`(`readDevnotes` persist + `markDevnoteRead` + `pruneReadDevnotes` — 온라인 응답 시만 prune).
 - **통과 조건**:
   1. 마이페이지에서 진입, 세그먼트 탭(패치노트|개발자 노트) 전환 동작, 탭별 최신순 목록 + 탭 라벨 안읽음 점.
   2. **안읽음 배지** = 게시글 중 미읽음 개수. 상세 진입 시 읽음 처리 → 배지 감소. prune는 온라인 응답 시만(오프라인 스킵).

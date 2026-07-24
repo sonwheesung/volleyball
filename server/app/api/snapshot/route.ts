@@ -28,8 +28,10 @@ export async function POST(req: Request) {
     // 크기 상한(#4) — 직렬화 길이가 256KB 초과면 413(스토리지 고갈 방어). 소유권 체크 전에 값싸게 컷.
     const size = JSON.stringify(b.snapshot).length;
     if (size > SNAPSHOT_MAX_BYTES) return NextResponse.json({ ok: false, reason: 'too-large' }, { status: 413 });
-    // 소유권 — 내 티켓에만 첨부
-    const own = await db.select({ id: tickets.id }).from(tickets).where(and(eq(tickets.id, b.ticketId), eq(tickets.userId, userId))).limit(1);
+    // 소유권 — 내 티켓에만 첨부. proj 스코프는 방어층(requireUserId가 이미 proj 스코프라 현재 경로 동작 변화 0,
+    // 타 게임 티켓 id를 알아내도 첨부 못 하도록 §13.2 격리를 여기서도 명시 — admin 라우트 정정과 같은 클래스).
+    const own = await db.select({ id: tickets.id }).from(tickets)
+      .where(and(eq(tickets.projCode, PROJ_CODE), eq(tickets.id, b.ticketId), eq(tickets.userId, userId))).limit(1);
     if (!own.length) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
     await db.insert(diagnosticSnapshots).values({ projCode: PROJ_CODE, ticketId: b.ticketId, snapshot: b.snapshot });
     return NextResponse.json({ ok: true });

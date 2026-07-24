@@ -16,6 +16,7 @@ import {
   type TicketCategory,
 } from '../lib/server';
 import { getDeviceInfo } from '../lib/device';
+import { fmtDevnoteDate } from './devnotes'; // 날짜 표기 공통 헬퍼(YYYY.MM.DD — 공지·개발자노트와 동일 포맷)
 
 const CATS: { key: TicketCategory; label: string; icon: React.ComponentProps<typeof Ionicons>['name'] }[] = [
   { key: 'bug', label: '오류', icon: 'bug-outline' },
@@ -26,9 +27,15 @@ const CATS: { key: TicketCategory; label: string; icon: React.ComponentProps<typ
 ];
 const SUPPORT_MAX = 2000; // 문의 내용 입력 상한(서버는 4000 slice — 그보다 넉넉히 아래, UI-23). 최소 5자(trim)는 submit에서 검사
 const CAT_KO: Record<TicketCategory, string> = { bug: '오류', suggestion: '건의', question: '질문', refund: '환불 신청', etc: '기타' };
-const STATUS_KO: Record<string, string> = { open: '답변 대기', replied: '답변 완료', resolved: '처리 완료', refunded: '환불 완료' };
+// 상태 어휘는 **서버가 정본**(open|reviewing|answered|refunded, +레거시 replied|resolved) — 관리자 콘솔 라벨(대기/확인 중/답변완료/환불완료)과 일치시킨다.
+// 2026-07-24: answered·reviewing이 빠져 있어 답변 완료 문의가 '답변 대기'로 표시되던 결함(BACKEND_SYSTEM §13.17 status 열거 드리프트가 뿌리) 수정.
+const STATUS_KO: Record<string, string> = {
+  open: '답변 대기', reviewing: '확인 중', answered: '답변 완료', refunded: '환불 완료',
+  replied: '답변 완료', resolved: '답변 완료', // 레거시(구 어휘) — 콘솔과 동일하게 답변완료 취급
+};
+const ANSWERED = new Set(['answered', 'replied', 'resolved']); // 답변완료 계열(색상 판정)
 
-type Ticket = { id: string; category: TicketCategory; content: string; status?: string; reply?: string; createdAt: string };
+type Ticket = { id: string; category: TicketCategory; content: string; status?: string; reply?: string; createdAt: string; repliedAt?: string | null };
 
 export default function Support() {
   const [mode, setMode] = useState<'list' | 'compose'>('list');
@@ -88,21 +95,32 @@ export default function Support() {
           <Muted style={{ fontSize: 12 }}>우측 상단 버튼으로 등록하세요.</Muted>
         </View>
       ) : (
-        tickets.map((t) => (
-          <Card key={t.id} accent={t.reply ? theme.good : theme.muted} flat>
+        tickets.map((t) => {
+          // 표시 상태 = 서버 status(없으면 답변 유무로 추정). 라벨·색 둘 다 같은 값에서 파생 —
+          // "본문은 답변인데 라벨은 답변 대기"(2026-07-24 결함) 같은 화면 내 모순 차단.
+          const st = t.status ?? (t.reply ? 'answered' : 'open');
+          const done = ANSWERED.has(st) || !!t.reply;
+          const stColor = st === 'refunded' ? theme.gold : done ? theme.good : theme.warn;
+          const repliedAt = fmtDevnoteDate(t.repliedAt ?? null); // 답변 시각(YYYY.MM.DD — 노트·공지와 동일 포맷)
+          return (
+          <Card key={t.id} accent={done ? theme.good : theme.muted} flat>
             <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
               <View style={styles.catChip}><Text style={styles.catChipTxt}>{CAT_KO[t.category]}</Text></View>
-              <Text style={{ color: t.status === 'refunded' ? theme.gold : t.reply ? theme.good : theme.warn, fontSize: 12, fontWeight: '800' }}>{STATUS_KO[t.status ?? (t.reply ? 'replied' : 'open')] ?? '답변 대기'}</Text>
+              <Text style={{ color: stColor, fontSize: 12, fontWeight: '800' }}>{STATUS_KO[st] ?? '답변 대기'}</Text>
             </View>
             <Text style={styles.tContent} numberOfLines={3}>{t.content}</Text>
             {t.reply ? (
               <View style={styles.reply}>
-                <Text style={styles.replyLabel}>운영자 답변</Text>
+                <View style={styles.replyHead}>
+                  <Text style={styles.replyLabel}>운영자 답변</Text>
+                  {repliedAt ? <Text style={styles.replyDate}>{repliedAt}</Text> : null}
+                </View>
                 <Text style={styles.replyTxt}>{t.reply}</Text>
               </View>
             ) : null}
           </Card>
-        ))
+          );
+        })
       )}
     </Screen>
   );
@@ -218,7 +236,9 @@ const styles = themedStyles(() => StyleSheet.create({
   catChipTxt: { color: theme.text, fontSize: 12, fontWeight: '800' },
   tContent: { color: theme.text, fontSize: 14, marginTop: 6, lineHeight: 20 },
   reply: { marginTop: 8, backgroundColor: theme.good + '14', borderRadius: 10, padding: 10 },
-  replyLabel: { color: theme.good, fontSize: 11, fontWeight: '800', marginBottom: 2 },
+  replyHead: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 2 },
+  replyLabel: { color: theme.good, fontSize: 11, fontWeight: '800' },
+  replyDate: { color: theme.muted, fontSize: 11, fontWeight: '700' }, // 답변 시각(공지·개발자노트와 같은 YYYY.MM.DD)
   replyTxt: { color: theme.text, fontSize: 13, lineHeight: 19 },
   refundNote: { backgroundColor: theme.warn + '14', borderWidth: 1, borderColor: theme.warn + '44', borderRadius: 10, padding: 11, marginBottom: 12 },
   refundNoteTxt: { color: theme.muted, fontSize: 12.5, lineHeight: 19 },

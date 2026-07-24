@@ -50,7 +50,8 @@ export async function GET(req: Request) {
   if (!userId) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   try {
     const rows = await db
-      .select({ id: tickets.id, category: tickets.category, content: tickets.content, status: tickets.status, reply: tickets.reply, createdAt: tickets.createdAt })
+      // repliedAt 포함 — 앱 답변 카드에 "언제 답변됐는지" 표시(관리자 API엔 이미 있었고 유저 API만 빠져 있었다).
+      .select({ id: tickets.id, category: tickets.category, content: tickets.content, status: tickets.status, reply: tickets.reply, createdAt: tickets.createdAt, repliedAt: tickets.repliedAt })
       .from(tickets)
       .where(and(eq(tickets.projCode, PROJ_CODE), eq(tickets.userId, userId)))
       .orderBy(desc(tickets.createdAt))

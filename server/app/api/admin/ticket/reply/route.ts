@@ -1,10 +1,11 @@
 // POST /api/admin/ticket/reply — 문의 답변/상태변경. body: { ticketId, reply, status? }. requireAdmin.
 import { NextResponse } from 'next/server';
 import { reportError } from '../../../../../lib/observability';
-import { eq, sql } from 'drizzle-orm';
+import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../../../../../db';
 import { tickets } from '../../../../../db/schema';
 import { isAdmin } from '../../../../../lib/admin';
+import { PROJ_CODE } from '../../../../../lib/proj';
 
 export const dynamic = 'force-dynamic';
 
@@ -21,7 +22,12 @@ export async function POST(req: Request) {
     const patch: Record<string, unknown> = { repliedAt: sql`now()` };
     if (reply !== undefined) patch.reply = reply;
     if (status) patch.status = status;
-    await db.update(tickets).set(patch).where(eq(tickets.id, b.ticketId));
+    // projCode 스코프 필수(§13.2 멀티게임 격리) — 타 게임 티켓에 답변이 박히는 것 차단(공지 F1과 동일 클래스).
+    // .returning()으로 rowcount 확인 → 0건이면 404(허위 ok 금지 — 운영자가 "답변 완료"로 오인하던 결함).
+    const r = await db.update(tickets).set(patch)
+      .where(and(eq(tickets.projCode, PROJ_CODE), eq(tickets.id, b.ticketId)))
+      .returning({ id: tickets.id });
+    if (!r.length) return NextResponse.json({ ok: false, reason: 'not-found' }, { status: 404 });
     return NextResponse.json({ ok: true });
   } catch (e) { reportError(e, 'admin/ticket/reply');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });
