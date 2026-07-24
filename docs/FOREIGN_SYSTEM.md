@@ -47,6 +47,24 @@
   `aiForeignChoice = overall(p) + rng(-3,3)`**(순수 OVR + 안개, 포지션 니즈 항 없음 — `engine/foreign.ts`, §9.1과 일치),
   나는 위시리스트(`tryoutWish[]` — 드래프트 픽과 같은 UX, 순번에서 뺏기면 차순위).
 - **계약**: 1년 고정, 연봉 `FOREIGN_SALARY = 41,000만`(상한 30만 달러 상당) 균일.
+  - **★ 시드 리그 정합(2026-07-24, 사용자 결정 "데이터를 1년으로")**: 트라이아웃으로 들어온 외인은 `data/tryout.ts`가
+    `{years:1, remaining:1}`로 계약을 만드는데, **게임 시작 시드 로스터**(`data/seed.ts makePlayer`)는 `rng.int(1,3)`을
+    국적 구분 없이 적용해 **수입선수도 2~3년 계약으로 태어났다**(실측 `generateLeague(12345)` 14명 분포 `{1:3, 2:4, 3:7}` —
+    11명이 다년). 문서(이 줄)·화면 안내("외인·아시아쿼터는 1년 계약이라 방출·재계약 대상이 아닙니다")·현실 V리그가
+    전부 1년인데 데이터만 어긋난 드리프트였다. → **수입선수(`isForeign` = 외인 OP + 아시아쿼터)는 시드 생성 시
+    `years=1, remaining=1` 고정**.
+  - **rng 스트림 보존**: `rng.int(1,3)` 추첨은 **그대로 소비**하고 값만 대체한다(소비 위치·횟수 불변 — 감독 이름 추첨
+    보존과 같은 패턴). 따라서 시드 리그의 이름·능력·연봉·포텐 등 **다른 모든 산출은 바이트 동일**하고, 바뀌는 것은
+    수입선수의 `contract.years/remaining` 뿐이다(가드 A/B로 증명).
+  - **`signedAtAge`(=`age − rng.int(0,3)`)는 무변경** — `computeSalary` 입력이라 손대면 시드 연봉·팀 페이롤·캡이 함께
+    움직인다(이번 결정 범위 밖). "1년 계약을 몇 해째 갱신해 온 용병"으로 읽으면 의미도 무모순.
+  - **파급 없음(실측)**: 수입선수는 계약 만료 흐름(FA·재계약·방출)을 아예 안 탄다 — 오프시즌 거취는 `buildOffseason`의
+    `returningForeign`/`returningAsian`(정년·keep·트라이아웃)이 단독 결정하고, `recapBriefing`(계약 만료 임박)·
+    `willBeFA`·`contracts.tsx`는 전부 `!isForeign` 필터를 이미 갖고 있다. 즉 `remaining`은 수입선수에겐 **표시값**이다.
+  - **세이브**: 시즌≥1 세이브는 `playerBase` 스냅샷을 읽으므로 완전 무영향. **시즌0 진행 중 세이브**(`playerBase=null`)만
+    시드를 재생성하는데, 바뀌는 값이 표시용 `remaining`뿐이라 진행에 영향이 없다(가드로 봉인).
+  - 가드: `tools/_dv_seedforeign.ts`(신규 — 여러 시드에서 수입선수 100% `years=remaining=1` + 국내 대조군 1~3 분포 유지
+    + 비계약 필드 바이트 동일). 기존 `_dv_foreign_contract`·`_gt_facontract`·`simForeign` 무회귀.
 - 미지명 외인은 리그를 떠난다(국내 FA 풀·드래프트에 절대 섞이지 않음).
 
 ### 1.6 수입선수 정년 (40세, 2026-07-08 이음매 수정)

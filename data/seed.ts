@@ -172,7 +172,12 @@ export function makePlayer(
   // 계약: 0~3시즌 전 서명 → 현재 능력과 자연 불일치
   const yearsAgo = rng.int(0, 3);
   const signedAtAge = Math.max(18, age - yearsAgo);
-  const remaining = rng.int(1, 3);
+  // **수입선수(외인 OP·아시아쿼터)는 1년 고정**(FOREIGN_SYSTEM §1 "계약: 1년 고정" — data/tryout.ts가 만드는 계약과 동형).
+  //   추첨(rng.int)은 국내와 똑같이 **소비하고 값만 대체** — 메인 rng 스트림 위치·횟수 불변(감독 이름 추첨 보존과 같은 패턴)이라
+  //   시드 리그의 다른 산출(이름·능력·연봉·포텐)은 전부 바이트 동일. signedAtAge는 무변경(computeSalary 입력 — 연봉·캡 불변).
+  const rolledRemaining = rng.int(1, 3);
+  const remaining = isForeign ? 1 : rolledRemaining;
+  const years = isForeign ? 1 : yearsAgo + remaining;
 
   const player: Player = {
     id,
@@ -185,7 +190,7 @@ export function makePlayer(
     potential,
     talentBase,
     catTalent,
-    contract: { salary: 0, years: yearsAgo + remaining, remaining, signedAtAge },
+    contract: { salary: 0, years, remaining, signedAtAge },
     clubTenure: Math.max(0, age - 19), // 시드는 자팀 육성(홈그로운) 가정
     peakAge: peakAgeFor(pos, rng),
     career: { ...emptyCareer(), seasons: Math.max(0, age - 19) }, // 데뷔 추정

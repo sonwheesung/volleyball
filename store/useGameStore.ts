@@ -110,6 +110,7 @@ interface GameState {
   lastGrowthDay: number;                        // 성장 리포트 모달 — 마지막으로 성장 diff를 본 날(-1=미초기화). TRAINING §성장리포트
   results: Record<string, MatchResult>;
   watchProgress: Record<string, number>;       // fixtureId → 관전한 랠리 인덱스(이어보기). 종료/확정 시 삭제
+  ceremonyProgress: number;                     // 시상식 관람 진행도(SEASON_SYSTEM §5.3.1). 0=미관람(champion-ceremony부터) · n≥1=awards-ceremony 비트 n에서 이어보기 · -1=끝까지 봄(완료). 새 시즌 리셋(campDoneSeason 패턴, 구세이브 기본 0)
   contractOverrides: Record<string, Contract>;
   released: string[];
   inSeasonTx: Tx[];                            // 시즌 중 이동(방출/영입) — dynamics 주입
@@ -193,6 +194,7 @@ interface GameState {
   setCoachMode: (manual: boolean) => void; // "경기 지휘" 설정 토글(MATCH_INTERVENTION §4.1) — currentDay로 forward-only append(같은 날 덮어쓰기)
   saveWatchProgress: (fixtureId: string, idx: number) => void; // 이어보기 위치 저장
   clearWatchProgress: (fixtureId: string) => void;             // 종료·결과 확정 시 삭제
+  setCeremonyProgress: (n: number) => void;                    // 시상식 관람 진행도(§5.3.1) — 완료(-1) 후엔 무시
   // 반환값(ok/reason) — 조용한 거부를 남기지 않음(호출부는 무시해도 무방, 배선은 제안). 캡 예외는 프랜차이즈만.
   reSign: (playerId: string, contract: Contract) => ReSignResult;
   release: (playerId: string) => boolean;
@@ -250,6 +252,7 @@ const freshSave = {
   lastGrowthDay: -1, // 성장 리포트 — 미초기화(-1). 첫 일정 포커스에서 currentDay로 세팅
   results: {} as Record<string, MatchResult>,
   watchProgress: {} as Record<string, number>,
+  ceremonyProgress: 0, // 시상식 관람 진행도(§5.3.1) — 0=미관람, 새 시즌 리셋
   contractOverrides: {} as Record<string, Contract>,
   released: [] as string[],
   inSeasonTx: [] as Tx[],
@@ -620,6 +623,9 @@ export const useGameStore = create<GameState>()(
         setCoachModeLog(coachModeLog, day); // 파생 캐시 무효화(§2.3 동형) — 설정 변경일 이후만 재계산
       },
       saveWatchProgress: (fixtureId, idx) => set((s) => ({ watchProgress: { ...s.watchProgress, [fixtureId]: idx } })),
+      // 시상식 관람 진행도(§5.3.1) — awards-ceremony/champion-ceremony가 비트를 넘길 때마다 기록, 완료 시 -1.
+      //   완료(-1)는 절대 되돌아가지 않는다(같은 시즌 재진입해도 done 유지). Number.isFinite 방어(NaN 무시).
+      setCeremonyProgress: (n: number) => set((s) => (Number.isFinite(n) && s.ceremonyProgress !== -1 ? { ceremonyProgress: n } : {})),
       clearWatchProgress: (fixtureId) => set((s) => {
         if (s.watchProgress[fixtureId] === undefined) return {};
         const next = { ...s.watchProgress }; delete next[fixtureId];
@@ -1553,6 +1559,7 @@ export const useGameStore = create<GameState>()(
           campTrainedThisOffseason: [], // 새 오프시즌 — 전지훈련 1회 제한 초기화(MONETIZATION §11.2)
           results: {},
           watchProgress: {}, // 새 시즌 — 이어보기 위치 초기화
+          ceremonyProgress: 0, // 새 시즌 — 시상식 관람 진행도 리셋(§5.3.1, campDoneSeason 패턴)
           contractOverrides: {},
           released: [],
           releaseAnger: 0, // 시즌 분노는 이번 endSeason에서 fanScore로 반영됐으니 리셋
@@ -1632,6 +1639,7 @@ export const useGameStore = create<GameState>()(
         lastGrowthDay: s.lastGrowthDay,
         results: s.results,
         watchProgress: s.watchProgress,
+        ceremonyProgress: s.ceremonyProgress, // 시상식 관람 진행도(§5.3.1) — 영속(앱 재시작 이어보기)
         contractOverrides: s.contractOverrides,
         released: s.released,
         inSeasonTx: s.inSeasonTx,

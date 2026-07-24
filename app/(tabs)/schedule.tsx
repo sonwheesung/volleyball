@@ -62,6 +62,7 @@ function ScheduleInner() {
   const results = useGameStore((s) => s.results);
   const archive = useGameStore((s) => s.archive);
   const watchProgress = useGameStore((s) => s.watchProgress);
+  const ceremonyProgress = useGameStore((s) => s.ceremonyProgress); // 시상식 관람 진행도(§5.3.1) — 이어보기 카드 문구/라우트
   const setDay = useGameStore((s) => s.setDay);
   const recordResult = useGameStore((s) => s.recordResult);
   const finishCamp = useGameStore((s) => s.finishCamp);
@@ -335,13 +336,22 @@ function ScheduleInner() {
                 <>
                   <Card accent={theme.gold} flat>
                     <Title>🏆 우승, {name(p.championId ?? '')}</Title>
-                    {!ceremonyDone ? (
-                      <>
-                        <Muted>포스트시즌이 끝났습니다. 시상식을 관람한 뒤 오프시즌으로 넘어갑니다.</Muted>
-                        <Button label="시상식 보러가기 →" onPress={() => router.push('/champion-ceremony')} />
-                      </>
-                    ) : (
+                    {/* 시상식 관람 진행도(§5.3.1) — 완료(-1)만 "끝났습니다", 그 외엔 이어보기 노출(중간 이탈 시 남은 상을 못 보던 버그 봉인).
+                        허브 게이트(ceremonyDone=archive championId)는 불변 — 이어보기는 차단이 아니라 조용한 잔여 안내(관전형). */}
+                    {ceremonyProgress === -1 ? (
                       <Muted>시상식이 끝났습니다. 아래에서 오프시즌 업무를 보고 새 시즌을 시작하세요.</Muted>
+                    ) : (
+                      <>
+                        <Muted>
+                          {ceremonyProgress === 0
+                            ? '포스트시즌이 끝났습니다. 시상식을 관람한 뒤 오프시즌을 준비하세요.'
+                            : '시상식을 보다 나오셨네요. 남은 시상을 이어서 볼 수 있습니다.'}
+                        </Muted>
+                        <Button
+                          label={ceremonyProgress === 0 ? '시상식 보러가기 →' : '시상식 이어보기 →'}
+                          onPress={() => router.push(ceremonyProgress === 0 ? '/champion-ceremony' : '/awards-ceremony')}
+                        />
+                      </>
                     )}
                   </Card>
                   {/* 오프시즌 허브 · 앞단(§5.6.2) — 결산·외국인·아시아쿼터·FA·드래프트 + [새 시즌 시작하기].

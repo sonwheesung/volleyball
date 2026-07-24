@@ -31,6 +31,8 @@ function Inner() {
   const archive = useGameStore((s) => s.archive);
   const currentDay = useGameStore((s) => s.currentDay);
   const recordChampion = useGameStore((s) => s.recordChampion);
+  const ceremonyProgress = useGameStore((s) => s.ceremonyProgress);
+  const setCeremonyProgress = useGameStore((s) => s.setCeremonyProgress);
 
   // 우승팀 — 이미 기록됐으면 archive(재진입·구세이브), 아니면 포스트시즌 컷오프 트랙(결승 확정 후에만 non-null, §5.2).
   const championId = useMemo(() => {
@@ -59,7 +61,9 @@ function Inner() {
   }, [championId, season, my]);
 
 
-  const goAwards = () => router.push('/awards-ceremony');
+  // 리그 시상식으로 진행 = 챔프전 MVP(이 화면)를 봤다는 뜻 → 관람 진행도를 최소 1(awards 첫 비트)로 올려
+  //   이후 이어보기가 champion부터 재생하지 않게 한다(§5.3.1). 완료(-1)면 스토어가 무시(재관람 중 done 유지).
+  const goAwards = () => { setCeremonyProgress(Math.max(1, ceremonyProgress)); router.push('/awards-ceremony'); };
 
   // 포스터 본문(자산+우리 구단 태그) — 미우승/우승 분기가 공유(중복 렌더 방지).
   const posterBody = finalsPoster ? (

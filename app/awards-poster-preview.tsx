@@ -124,7 +124,7 @@ export default function AwardsPosterPreview() {
       </View>
 
       <View style={styles.block}>
-        <Text style={styles.cap}>샘플 · 기량발전상 (오렌지 톤 · footnote 시즌 생산 ▲N)</Text>
+        <Text style={styles.cap}>샘플 · 기량발전상 (오렌지 톤 · footnote 공헌지수 ▲N)</Text>
         <AwardPoster
           template={AWARD_TEMPLATES.mostImproved.src} tone={AWARD_TEMPLATES.mostImproved.tone} seasonMode={AWARD_TEMPLATES.mostImproved.seasonMode}
           seasonLabel="2025-26" name="한소희" posEn={POS_EN.MB} teamName="수원 스카이라인" ovr={82}
@@ -132,7 +132,7 @@ export default function AwardsPosterPreview() {
             { label: '득점', value: '421' }, { label: '공격', value: '298' }, { label: '블로킹', value: '78' },
             { label: '서브', value: '26' }, { label: '디그', value: '112' },
           ]}
-          emblem={emblemFor('t4')} footnote="시즌 생산 ▲214"
+          emblem={emblemFor('t4')} footnote="공헌지수 ▲214"
         />
       </View>
 

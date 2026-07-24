@@ -14,7 +14,7 @@ import { getPlayer, reconstructForeignName, getTeam } from './league';
 import { overall } from '../engine/overall';
 import { deriveRatings, type Ratings } from '../engine/ratings';
 import { leagueProduction } from './production';
-import { currentSeasonAwards } from './awards';
+import { currentSeasonAwards, TITLE_UNITS } from './awards';
 import { seasonYear } from './seasonLabel';
 import { emblemFor } from './emblems';
 import { teamColors } from '../lib/teamColor';
@@ -160,15 +160,15 @@ export interface StatLeaderMeta {
   unit: string;         // footnote 단위(득점=점·공격=킬·블로킹=블록·나머지=개)
 }
 
-/** 부문 메타 단일 출처. field는 engine/awards.ts titles 매핑과 동일(scoring→points 등). */
+/** 부문 메타 단일 출처. field는 engine/awards.ts titles 매핑과 동일(scoring→points 등). unit은 `data/awards.ts TITLE_UNITS` 단일 출처(§10.3). */
 export const STAT_LEADER_META: Record<StatLeaderCategory, StatLeaderMeta> = {
-  scoring: { catKo: '득점',   catEn: 'SCORING LEADER', king: '득점왕',   field: 'points',   unit: '점' },
-  spike:   { catKo: '공격',   catEn: 'SPIKE LEADER',   king: '공격왕',   field: 'spikes',   unit: '킬' },
-  block:   { catKo: '블로킹', catEn: 'BLOCK LEADER',   king: '블로킹왕', field: 'blocks',   unit: '블록' },
-  serve:   { catKo: '서브',   catEn: 'SERVE LEADER',   king: '서브왕',   field: 'aces',     unit: '개' },
-  dig:     { catKo: '디그',   catEn: 'DIG LEADER',     king: '디그왕',   field: 'digs',     unit: '개' },
-  set:     { catKo: '세트',   catEn: 'SET LEADER',     king: '세트왕',   field: 'assists',  unit: '개' },
-  receive: { catKo: '리시브', catEn: 'RECEIVE LEADER', king: '리시브왕', field: 'receives', unit: '개' },
+  scoring: { catKo: '득점',   catEn: 'SCORING LEADER', king: '득점왕',   field: 'points',   unit: TITLE_UNITS.scoring },
+  spike:   { catKo: '공격',   catEn: 'SPIKE LEADER',   king: '공격왕',   field: 'spikes',   unit: TITLE_UNITS.spike },
+  block:   { catKo: '블로킹', catEn: 'BLOCK LEADER',   king: '블로킹왕', field: 'blocks',   unit: TITLE_UNITS.block },
+  serve:   { catKo: '서브',   catEn: 'SERVE LEADER',   king: '서브왕',   field: 'aces',     unit: TITLE_UNITS.serve },
+  dig:     { catKo: '디그',   catEn: 'DIG LEADER',     king: '디그왕',   field: 'digs',     unit: TITLE_UNITS.dig },
+  set:     { catKo: '세트',   catEn: 'SET LEADER',     king: '세트왕',   field: 'assists',  unit: TITLE_UNITS.set },
+  receive: { catKo: '리시브', catEn: 'RECEIVE LEADER', king: '리시브왕', field: 'receives', unit: TITLE_UNITS.receive },
 };
 
 /** 시상식 비트 순서 — 위상 오름차순(리시브 → … → 득점). 개인상보다 먼저 수여(§8.1.1). */

@@ -14,7 +14,7 @@ import { fmtMatches } from '../../data/recordLine';
 import { computeStandings, displayCutoff, seasonStreaks } from '../../data/standings';
 import { leagueProduction } from '../../data/production';
 import { getPlayer, getTeam, shortTeamName as short, reconstructForeignName } from '../../data/league';
-import { TITLE_LABELS } from '../../data/awards'; // 부문 기록상 라벨 단일 출처(사용자 결정 2026-07-15 — KOVO "~상")
+import { TITLE_LABELS, TITLE_UNITS, IMPACT_LABEL, IMPROVE_LABEL } from '../../data/awards'; // 부문 기록상 라벨·단위·개인상 기준 라벨 단일 출처(2026-07-15 · §10)
 import { rosterIdsOnDay } from '../../data/dynamics';
 import { recapBriefing } from '../../data/recapBriefing';
 import { seasonYear } from '../../data/seasonLabel';
@@ -101,14 +101,18 @@ function AwardsDetail({
   if (!aw || !aw.mvp) {
     return <Card flat><Muted>이 시즌의 시상 기록이 없습니다.</Muted></Card>;
   }
-  const awRow = (label: string, w: AwardWinner | null, opts?: { hi?: boolean; suffix?: string; growth?: boolean }) => w ? (
+  // 개인상 행(정규/챔프 MVP·신인·기량발전) — value는 "공헌지수"(§10.2). 값 셀을 2줄로: 굵은 숫자 + 작은 기준 라벨.
+  //   기량발전상은 그 증가폭이라 ▲N(초록) + "증가폭". 계산은 불변, 표시만 무엇의 수치인지 밝힌다.
+  const awRow = (label: string, w: AwardWinner | null, opts?: { hi?: boolean; growth?: boolean }) => w ? (
     <View key={label} style={styles.awRow}>
       <Text style={[styles.awLabel, opts?.hi && { color: theme.warn }]}>{label}</Text>
       <PosTag pos={pPos(w.playerId)} />
       <Text style={[styles.awName, isMineW(w) && styles.mine]} numberOfLines={1}>{pName(w.playerId)}</Text>
       <Text style={styles.awTeam} numberOfLines={1}>{short(w.teamId)}</Text>
-      {/* 기량발전상=시즌 생산 증가폭(Δ, AWARDS_SYSTEM §9) → ▲N 초록. 나머지는 값+접미사 */}
-      <Text style={[styles.awVal, opts?.growth && { color: theme.good }]}>{opts?.growth ? `▲${w.value}` : `${w.value}${opts?.suffix ?? ''}`}</Text>
+      <View style={styles.awValCell}>
+        <Text style={[styles.awVal, opts?.growth && { color: theme.good }]}>{opts?.growth ? `▲${w.value}` : `${w.value}`}</Text>
+        <Text style={styles.awValBase}>{opts?.growth ? IMPROVE_LABEL : IMPACT_LABEL}</Text>
+      </View>
     </View>
   ) : null;
 
@@ -130,22 +134,27 @@ function AwardsDetail({
         {championId ? awRow('챔프전 MVP', aw.finalsMvp, { hi: true }) : null}
         {awRow('신인상', aw.rookie)}
         {awRow('기량발전상', aw.mostImproved, { growth: true })}
+        {/* 값 기준 안내(§10.1) — 같은 선수의 정규/챔프 MVP 수치가 다른 이유(팀 순위 가중)를 한 줄로 해소 */}
+        <Muted style={styles.awFoot}>
+          공헌지수 = 득점에 세트·디그를 더해 환산한 시즌 기여도. 정규 MVP는 여기에 팀 순위를 반영해 뽑고, 기량발전상은 지난 시즌 대비 증가폭입니다.
+        </Muted>
       </Card>
 
       <Card accent={theme.gold} flat>
         <Text style={styles.cardHead}>부문 기록상</Text>
+        {/* 부문 기록상 value = 실제 기록(실적) → 단위 접미사(§10.1·§10.3). 개인상의 지수와 다른 자(尺)임을 단위로 구분. */}
         {([
-          { label: TITLE_LABELS.scoring, w: aw.titles.scoring }, { label: TITLE_LABELS.spike, w: aw.titles.spike },
-          { label: TITLE_LABELS.block, w: aw.titles.block }, { label: TITLE_LABELS.serve, w: aw.titles.serve },
-          { label: TITLE_LABELS.dig, w: aw.titles.dig }, { label: TITLE_LABELS.set, w: aw.titles.set },
-          { label: TITLE_LABELS.receive, w: aw.titles.receive },
+          { label: TITLE_LABELS.scoring, w: aw.titles.scoring, unit: TITLE_UNITS.scoring }, { label: TITLE_LABELS.spike, w: aw.titles.spike, unit: TITLE_UNITS.spike },
+          { label: TITLE_LABELS.block, w: aw.titles.block, unit: TITLE_UNITS.block }, { label: TITLE_LABELS.serve, w: aw.titles.serve, unit: TITLE_UNITS.serve },
+          { label: TITLE_LABELS.dig, w: aw.titles.dig, unit: TITLE_UNITS.dig }, { label: TITLE_LABELS.set, w: aw.titles.set, unit: TITLE_UNITS.set },
+          { label: TITLE_LABELS.receive, w: aw.titles.receive, unit: TITLE_UNITS.receive },
         ]).map((a) => a.w ? (
           <View key={a.label} style={styles.awRow}>
             <Text style={styles.awLabel}>{a.label}</Text>
             <PosTag pos={pPos(a.w.playerId)} />
             <Text style={[styles.awName, isMineW(a.w) && styles.mine]} numberOfLines={1}>{pName(a.w.playerId)}</Text>
             <Text style={styles.awTeam} numberOfLines={1}>{short(a.w.teamId)}</Text>
-            <Text style={styles.awVal}>{a.w.value}</Text>
+            <Text style={styles.awVal}>{a.w.value}<Text style={styles.awValUnit}>{a.unit}</Text></Text>
           </View>
         ) : null)}
       </Card>
@@ -342,6 +351,10 @@ const styles = themedStyles(() => StyleSheet.create({
   awName: { flex: 1, color: theme.text, fontSize: 14, fontWeight: '700' },
   awTeam: { color: theme.muted, fontSize: 12, width: 52, textAlign: 'right' },
   awVal: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 44, textAlign: 'right' },
+  awValCell: { minWidth: 52, alignItems: 'flex-end' },
+  awValUnit: { color: theme.muted, fontSize: 11, fontWeight: '700' },
+  awValBase: { color: theme.muted, fontSize: 10, fontWeight: '700', marginTop: -1 },
+  awFoot: { fontSize: 11.5, marginTop: 6, lineHeight: 16 },
 
   pRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 5 },
   rank: { width: 20, color: theme.muted, fontSize: 14, fontWeight: '800', textAlign: 'center' },

@@ -99,6 +99,20 @@ export const TITLE_LABELS: Record<string, string> = {
   serve: '서브상', dig: '디그상', set: '세트상', receive: '리시브상',
 };
 
+/**
+ * 부문 기록상 수치 단위 — **전 화면 단일 출처**(AWARDS_SYSTEM §10.3). 부문 기록상 value는 `ProdLine` 실카운트(실적)라
+ *   숫자 뒤 단위를 붙인다. 정본 = §8.1.1 세트: 득점=점·공격=킬·블로킹=블록·나머지=개.
+ * ⚠ 과거 두 벌로 갈라져 있었음(awardPoster STAT_LEADER_META vs news 로컬 TITLE_UNIT) → 여기로 통일.
+ *   `awardPoster.STAT_LEADER_META.unit`도 이 상수를 참조. **뉴스 기사 프로즈(data/news.ts)는 언론 보이스라 예외**(§1 잔여 결정).
+ */
+export const TITLE_UNITS: Record<string, string> = {
+  scoring: '점', spike: '킬', block: '블록', serve: '개', dig: '개', set: '개', receive: '개',
+};
+
+/** 개인상(정규 MVP·챔프전 MVP·신인상) value의 사용자 노출 기준 라벨 — "공헌지수"(§10.2). 기량발전상은 그 증가폭이라 "증가폭". */
+export const IMPACT_LABEL = '공헌지수';
+export const IMPROVE_LABEL = '증가폭';
+
 /** archive(영구 보존된 시즌별 시상)를 선수 기준으로 훑어 수상 연표를 만든다. 순수 함수(store 무의존). */
 export function awardHistoryOf(
   archive: { season: number; awards?: SeasonAwards }[],

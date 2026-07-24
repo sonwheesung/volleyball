@@ -52,6 +52,8 @@ function CeremonyInner() {
   const router = useRouter();
   const my = useGameStore((s) => s.selectedTeamId);
   const season = useGameStore((s) => s.season);
+  const ceremonyProgress = useGameStore((s) => s.ceremonyProgress);
+  const setCeremonyProgress = useGameStore((s) => s.setCeremonyProgress);
   const aw = useMemo(() => currentSeasonAwards(season), [season]);
 
   const pName = (id: string) => getPlayer(id)?.name ?? reconstructForeignName(id) ?? id;
@@ -132,7 +134,7 @@ function CeremonyInner() {
       ? posterBeat(rookiePoster, AWARD_TEMPLATES.rookie, '우리 구단의 신인상')
       : winnerCard('sparkles-outline', '신인상', aw.rookie) });
     if (aw.mostImproved) out.push({ key: 'improved', el: improvedPoster
-      ? posterBeat(improvedPoster, AWARD_TEMPLATES.mostImproved, '우리 구단의 기량발전상', `시즌 생산 ▲${aw.mostImproved.value}`)
+      ? posterBeat(improvedPoster, AWARD_TEMPLATES.mostImproved, '우리 구단의 기량발전상', `공헌지수 ▲${aw.mostImproved.value}`) // §10.2 — "생산"→"공헌지수"(전 화면 명칭 통일)
       : winnerCard('trending-up-outline', '기량발전상', aw.mostImproved, '', false, true) });
     if (aw.best7.some((s) => s.winner)) {
       out.push({ key: 'best7', el: (
@@ -153,19 +155,26 @@ function CeremonyInner() {
     return out;
   }, [aw, my, mvpPoster, rookiePoster, improvedPoster, statLeaderPosters]);
 
-  const [idx, setIdx] = useState(0);
+  // 이어보기 시작 비트(§5.3.1) — 진행도 n≥1이면 비트 n-1부터(비트 수는 시즌마다 달라 last로 클램프). -1(완료)/0은 처음부터.
+  const [idx, setIdx] = useState(() => {
+    const start = ceremonyProgress >= 1 ? Math.min(ceremonyProgress - 1, beats.length - 1) : 0;
+    return Math.max(0, start);
+  });
   const t = useRef(new Animated.Value(0)).current; // 0=숨김 1=표시
   const last = beats.length - 1;
   const onLast = idx >= last;
 
-  // 비트가 바뀔 때마다 슬라이드 인
+  // 비트가 바뀔 때마다 슬라이드 인 + **관람 진행도 기록**(§5.3.1) — 이탈해도 여기까지는 봤음(n=idx+1, 0은 champion용 예약).
   useEffect(() => {
     t.setValue(0);
     Animated.timing(t, { toValue: 1, duration: 380, useNativeDriver: true }).start();
-  }, [idx, t]);
+    setCeremonyProgress(idx + 1); // 완료(-1) 후엔 스토어가 무시(재관람 중 done 유지)
+  }, [idx, t, setCeremonyProgress]);
 
-  // §5.3 세리머니 체인(2026-07-08): 시상식이 끝나면 **일정 화면으로 복귀** — 일정이 "시즌 결산" 버튼을 노출(마커=archive.championId).
+  // §5.3 세리머니 체인(2026-07-08): 시상식이 끝나면 **일정 화면으로 복귀** — 일정이 오프시즌 허브를 노출(마커=archive.championId).
+  //   goRecap = 건너뛰기/중간 이탈(진행도 보존 → 이어보기). finishCeremony = 마지막까지 봄(진행도 -1 = 완료, §5.3.1).
   const goRecap = () => { router.dismissAll(); router.replace('/(tabs)/schedule'); };
+  const finishCeremony = () => { setCeremonyProgress(-1); goRecap(); };
   const next = () => {
     if (onLast) return; // 마지막은 버튼으로 진행(클라이맥스 음미)
     Animated.timing(t, { toValue: 0, duration: 170, useNativeDriver: true }).start(() => setIdx((i) => Math.min(i + 1, last)));
@@ -175,7 +184,7 @@ function CeremonyInner() {
     return (
       <Screen>
         <Muted style={{ textAlign: 'center', marginTop: 40 }}>이번 시즌 시상 내역이 없습니다.</Muted>
-        <Button label="일정으로 돌아가기 →" onPress={goRecap} />
+        <Button label="일정으로 돌아가기 →" onPress={finishCeremony} />
       </Screen>
     );
   }
@@ -202,7 +211,7 @@ function CeremonyInner() {
         </AnimView>
       </Pressable>
 
-      {onLast ? <Button label="일정으로 돌아가기 →" onPress={goRecap} /> : null}
+      {onLast ? <Button label="일정으로 돌아가기 →" onPress={finishCeremony} /> : null}
     </Screen>
   );
 }
