@@ -50,7 +50,7 @@ export const TRAITS: Record<Trait, TraitDef> = {
 const POOL: { t: Trait; w: number }[] = [
   { t: 'clutch', w: 10 }, { t: 'bigGame', w: 8 }, { t: 'lateBloomer', w: 7 },
   { t: 'iron', w: 8 }, { t: 'serveMachine', w: 8 }, { t: 'leader', w: 7 }, { t: 'diligent', w: 9 },
-  { t: 'choke', w: 5 }, { t: 'earlyDecline', w: 4 }, { t: 'glass', w: 5 },
+  { t: 'choke', w: 2 }, { t: 'earlyDecline', w: 2 }, { t: 'glass', w: 2 }, // 부정 가중 하향(2026-07-27) — 전원 1~3개 보장 후 부정 보유율 29%→14%(단점만 보유 5.8%)
 ];
 const TOTAL_W = POOL.reduce((s, x) => s + x.w, 0);
 
