@@ -56,6 +56,17 @@ const TOTAL_W = POOL.reduce((s, x) => s + x.w, 0);
 
 const frac = (s: string) => (strSeed(s) % 100000) / 100000; // 0..1 결정론
 
+// 상극(대립) 특성 — 한 선수에 같이 부여 금지(서로 상쇄돼 무의미)
+export const ANTAGONISTS: Partial<Record<Trait, readonly Trait[]>> = {
+  clutch: ['choke'],
+  bigGame: ['choke'],
+  choke: ['clutch', 'bigGame'],
+  lateBloomer: ['earlyDecline'],
+  earlyDecline: ['lateBloomer'],
+  iron: ['glass'],
+  glass: ['iron'],
+};
+
 function pickWeighted(s: string, exclude: Set<Trait>): Trait | null {
   const avail = POOL.filter((x) => !exclude.has(x.t));
   if (!avail.length) return null;
@@ -65,15 +76,18 @@ function pickWeighted(s: string, exclude: Set<Trait>): Trait | null {
   return avail[avail.length - 1].t;
 }
 
-/** id 결정론으로 특성 부여 — 대부분 0개, 가끔 1개, 드물게 2개(희소가 특별) */
+/** id 결정론으로 특성 부여 — 전원 1~3개(1개 흔함·3개 드묾), 중복·상극 없음 */
 export function rollTraits(id: string): Trait[] {
   const r = frac('trait:' + id);
-  const count = r < 0.55 ? 0 : r < 0.85 ? 1 : 2;
+  const count = r < 0.60 ? 1 : r < 0.90 ? 2 : 3;
   const out: Trait[] = [];
   const used = new Set<Trait>();
   for (let k = 0; k < count; k++) {
     const t = pickWeighted(`trait:${id}:${k}`, used);
-    if (t) { out.push(t); used.add(t); }
+    if (!t) break;
+    out.push(t);
+    used.add(t);
+    for (const a of ANTAGONISTS[t] ?? []) used.add(a); // 상극 동시부여 금지
   }
   return out;
 }

@@ -11,17 +11,20 @@ test('rollTraits: 같은 id = 같은 특성(결정론)', () => {
   }
 });
 
-test('rollTraits: 대부분 0개, 최대 2개, 중복 없음', () => {
-  let none = 0, one = 0, two = 0;
-  for (let i = 0; i < 2000; i++) {
+test('rollTraits: 전원 1~3개, 중복·상극 없음', () => {
+  let one = 0, two = 0, three = 0;
+  for (let i = 0; i < 3000; i++) {
     const ts = rollTraits('player' + i);
-    assert.ok(ts.length <= 2);
+    assert.ok(ts.length >= 1 && ts.length <= 3, `1~3개 (실제 ${ts.length})`);
     assert.equal(new Set(ts).size, ts.length, '중복 없음');
     for (const t of ts) assert.ok(TRAITS[t], '카탈로그에 존재');
-    if (ts.length === 0) none++; else if (ts.length === 1) one++; else two++;
+    if (ts.includes('clutch') || ts.includes('bigGame')) assert.ok(!ts.includes('choke'), '멘탈 상극 금지');
+    if (ts.includes('lateBloomer')) assert.ok(!ts.includes('earlyDecline'), '성장 상극 금지');
+    if (ts.includes('iron')) assert.ok(!ts.includes('glass'), '내구 상극 금지');
+    if (ts.length === 1) one++; else if (ts.length === 2) two++; else three++;
   }
-  assert.ok(none > one && one > two, `희소성: 무(${none}) > 1개(${one}) > 2개(${two})`);
-  assert.ok(none / 2000 > 0.4, '대부분 무특성');
+  assert.equal(one + two + three, 3000, '전원 특성 보유');
+  assert.ok(one > two && two > three, `희소성: 1개(${one}) > 2개(${two}) > 3개(${three})`);
 });
 
 test('rollTraits: 부정 특성도 등장(도박 성립)', () => {

@@ -2,7 +2,7 @@
 // measTraits(스크래치, N=1500~4000)의 **빠른 상비판** — 전체 러닝 2~3분 내. 엔진이 실제로 p.traits를
 // 읽어 방향이 맞는지(배선+효과) 동일 시드 A/B로 상시 감시한다. 추정 금지: 방향/배수를 실측으로 확정.
 //   npx tsx tools/_dv_traits.ts
-// 검사: ① 실전 객체 traits 보유율 25~55% ② 서브머신 에이스·범실 ON>OFF+liveness>0 ④ 노쇠 서열
+// 검사: ① 전 구단 실선수 전원 1개 이상 + 상극쌍 0건 + 검사기 A/B 자가검증 ② 서브머신 에이스·범실 ON>OFF+liveness>0 ④ 노쇠 서열
 //       ⑤ 노력형 전스탯합 서열(⚠기술합 함정 주석) ⑥ 부상 배수 1.70·0.55 ±0.01
 //   ③ 클러치/새가슴은 소폭·고분산(+0.5~0.9%p)이라 상비 배터리에서 제외 — 무거운 검증은
 //     measTraits 방식(N≥3000 승률 단조·접전상대)으로 별도. 여기선 배선만 간접 확인.
@@ -13,7 +13,7 @@ import { availableTeamPlayers } from '../data/injury';
 import { simulateMatch } from '../engine/match';
 import { evolvePlayer } from '../engine/progression';
 import { injuryRisk } from '../engine/injury';
-import { injuryTraitMult } from '../engine/traits';
+import { injuryTraitMult, ANTAGONISTS } from '../engine/traits';
 import type { BoxSink } from '../engine/rally';
 import type { Player, Trait, TrainingFocus } from '../types';
 
@@ -29,13 +29,24 @@ const base = { home: coachInfoOf(t0), away: coachInfoOf(t1) } as any;
 const setTraits = (p: Player, tr: Trait[]): Player => ({ ...p, traits: tr });
 const strip = (p: Player, rm: Trait[]): Trait[] => (p.traits ?? []).filter((t) => !rm.includes(t));
 
-// ── ① 실전 선수 객체 traits 보유율 (전 구단·경기 입장 시점) ──
+// ── ① 전원 1개 이상 + 상극쌍 0건 (전 구단·경기 입장 시점) + A/B 자가검증 ──
 {
-  let withTr = 0, tot = 0;
-  for (const tm of LEAGUE.teams) for (const p of availableTeamPlayers(tm.id, 0)) { tot++; if (p.traits?.length) withTr++; }
+  const hasAntagonist = (tr: Trait[]): boolean =>
+    tr.some((t) => (ANTAGONISTS[t] ?? []).some((a) => tr.includes(a)));
+  let withTr = 0, tot = 0, empty = 0, pairs = 0;
+  for (const tm of LEAGUE.teams) for (const p of availableTeamPlayers(tm.id, 0)) {
+    tot++; const tr = p.traits ?? [];
+    if (tr.length) withTr++; else empty++;
+    if (hasAntagonist(tr)) pairs++;
+  }
   const pct = 100 * withTr / tot;
-  log(`① traits 보유율: ${withTr}/${tot} (${pct.toFixed(1)}%)`);
-  check(pct >= 25 && pct <= 55, `보유율 25~55% 밴드(rollTraits 분포 정합) — 실측 ${pct.toFixed(1)}%`);
+  log(`① traits: ${withTr}/${tot} 보유(${pct.toFixed(1)}%) · 무특성 ${empty} · 상극쌍 ${pairs}`);
+  check(empty === 0, `전원 1개 이상 (무특성 0) — 실측 무특성 ${empty}`);
+  check(pairs === 0, `상극쌍 동시부여 0건 — 실측 ${pairs}`);
+  // A/B: 검사기가 상극을 실제로 잡는지(민감도) — 합성 위반 선수가 반드시 검출돼야
+  const mutantDetected = hasAntagonist(['clutch', 'choke'] as Trait[]);
+  log(`   A/B: 합성 {clutch,choke} 검출? ${mutantDetected}`);
+  check(mutantDetected, `상극 검사기 민감도 증명 (합성 위반 검출 — 허위 오라클 금지)`);
 }
 
 // ── ② 서브머신 — 팀A 전원 토글, 동일 시드 박스 A/B. 에이스·범실 방향 + liveness ──
@@ -130,5 +141,5 @@ const strip = (p: Player, rm: Trait[]): Trait[] => (p.traits ?? []).filter((t) =
 
 log('');
 if (fails.length) { log(`TRAITS FAIL — ${fails.length}건: ${fails.join(' / ')}`); process.exit(1); }
-log('TRAITS PASS (① 보유율 ② 서브머신 방향+liveness ④ 노쇠 서열 ⑤ 노력형 전스탯합 ⑥ 부상 배수 + mutant 자가검증)');
+log('TRAITS PASS (① 전원1개+상극0+검사기A/B ② 서브머신 방향+liveness ④ 노쇠 서열 ⑤ 노력형 전스탯합 ⑥ 부상 배수 + mutant 자가검증)');
 process.exit(0);
