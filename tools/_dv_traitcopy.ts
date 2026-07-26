@@ -11,7 +11,8 @@ const ok = (c: boolean, m: string) => { if (!c) { console.error('  ✗ FAIL:', m
 // 계수 → 기대 표시 정수(설명 문구에 반드시 포함돼야 하는 수). 배수는 1.0 기준 증감%(정수), 가감 보정은 ×100 %p.
 //  leader = null(효과 없음 — 숫자가 없고 "없음"이 있어야).
 const R = Math.round;
-const EXPECT: Record<string, number | null> = {
+const up = (m: number) => R((m - 1) * 100); // 상시형 배수 → +% 정수(upPct 대응)
+const EXPECT: Record<string, number | number[] | null> = {
   clutch: R(TRAIT_FX.clutchFocus * 100),
   bigGame: R(TRAIT_FX.bigGameFocus * 100),
   choke: R(TRAIT_FX.chokeFocus * 100),
@@ -22,6 +23,13 @@ const EXPECT: Record<string, number | null> = {
   iron: R((1 - TRAIT_FX.ironInjury) * 100),
   serveMachine: R(TRAIT_FX.serveMachineAggr * 100),
   leader: null,
+  // ── 상시형 신규 6종(2026-07-27) — desc가 TRAIT_FX 합성값을 병기해야. 폭격기는 두 값 모두. ──
+  bomber: [up(TRAIT_FX.bomberSpike), up(TRAIT_FX.bomberErr)],
+  digWall: up(TRAIT_FX.digWallDig),
+  smart: up(TRAIT_FX.smartVq),
+  endurance: up(TRAIT_FX.enduranceRegen),
+  tank: up(TRAIT_FX.tankStaminaMax),
+  maestro: up(TRAIT_FX.maestroSet),
 };
 
 console.log('── 특성 설명 수치 == 엔진 계수 대조 ──');
@@ -29,6 +37,8 @@ for (const [t, def] of Object.entries(TRAITS)) {
   const exp = EXPECT[t];
   if (exp === null) {
     ok(/없음/.test(def.desc) && !/\d/.test(def.desc), `${def.name}(${t}): 효과 없음 — 숫자 없고 "없음" 명시  [${def.desc}]`);
+  } else if (Array.isArray(exp)) {
+    ok(exp.every((e) => def.desc.includes(String(e))), `${def.name}(${t}): 설명에 [${exp.join(', ')}] 모두 포함(계수 대조)  [${def.desc}]`);
   } else {
     ok(def.desc.includes(String(exp)), `${def.name}(${t}): 설명에 ${exp} 포함(계수 대조)  [${def.desc}]`);
   }

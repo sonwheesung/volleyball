@@ -4,17 +4,22 @@
 //   npx tsx tools/_dv_traits.ts
 // 검사: ① 전 구단 실선수 전원 1개 이상 + 상극쌍 0건 + 검사기 A/B 자가검증 ② 서브머신 에이스·범실 ON>OFF+liveness>0 ④ 노쇠 서열
 //       ⑤ 노력형 전스탯합 서열(⚠기술합 함정 주석) ⑥ 부상 배수 1.70·0.55 ±0.01
+//   ── 상시형 신규 6종(2026-07-27, Phase 1) 동일 시드 A/B 방향 검증 ──
+//   ⑦ 폭격기: 킬%↑ + 공격범실%↑(양날) + liveness>0 + 무효과세계(OFF/OFF) 오라클 FAIL 자가검증
+//   ⑧ 수비벽: 디그 성공↑ + liveness>0   ⑨ 황금손: 팀 킬%↑ + liveness>0
+//   ⑩ 꾀돌이: vqTraitMult 보유>무·무==1   ⑪ 강철체력: 유효 최대체력 보유>무   ⑫ 지구력: recover 후 체력 보유>무
 //   ③ 클러치/새가슴은 소폭·고분산(+0.5~0.9%p)이라 상비 배터리에서 제외 — 무거운 검증은
 //     measTraits 방식(N≥3000 승률 단조·접전상대)으로 별도. 여기선 배선만 간접 확인.
-// A/B 자가검증(허위 오라클 금지): injuryTraitMult를 1로 뭉갠 mutant를 재현해 ⑥ 오라클이 FAIL함을 증명.
+// A/B 자가검증(허위 오라클 금지): injuryTraitMult를 1로 뭉갠 mutant를 재현해 ⑥ 오라클이 FAIL함을 증명 +
+//   ⑦ 폭격기는 "트레이트 무효과 세계(OFF vs OFF)"를 재현해 liveness=0·킬%동률로 ⑦ 오라클이 FAIL함을 증명.
 //   exit 0=PASS / 1=FAIL.
 import { resetLeagueBase, LEAGUE, coachInfoOf } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
 import { simulateMatch } from '../engine/match';
 import { evolvePlayer } from '../engine/progression';
 import { injuryRisk } from '../engine/injury';
-import { injuryTraitMult, ANTAGONISTS } from '../engine/traits';
-import type { BoxSink } from '../engine/rally';
+import { injuryTraitMult, ANTAGONISTS, vqTraitMult, staminaMaxTraitMult, staminaRegenTraitMult, TRAIT_FX } from '../engine/traits';
+import { STAM_REGEN_BASE, type BoxSink } from '../engine/rally';
 import type { Player, Trait, TrainingFocus } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
@@ -134,6 +139,94 @@ const strip = (p: Player, rm: Trait[]): Trait[] => (p.traits ?? []).filter((t) =
   check(flat === 1, `무특성 injuryTraitMult == 1 (mutant 기준값 정합)`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 상시형 신규 6종(2026-07-27, Phase 1) — 동일 시드 A/B 방향 검증. 미부여=1배(무영향)이므로
+//   토글 ON/OFF로 방향을 관측. 박스 관측 가능(⑦⑧⑨)은 박스로, 스탯층(⑩⑪⑫)은 접근자 직접.
+// ─────────────────────────────────────────────────────────────────────────────
+const n = (v: number) => v / 100;
+const idsA = new Set(A0.map((p) => p.id));
+// 팀A 전원에 good 특성 토글, 동일 시드 박스 A/B → 팀A 박스 집계(atkAtt/Kill/Err·digSucc)와 liveness.
+//   flagOn/flagOff = 각 arm에서 팀A가 특성 보유 여부. 정상=(true,false), 무효과세계(mutant)=(false,false).
+function boxToggle(trait: Trait, N: number, flagOn: boolean, flagOff: boolean) {
+  const mk = (on: boolean) => A0.map((p) => setTraits(p, on ? [...strip(p, [trait]), trait] : strip(p, [trait])));
+  const Aon = mk(flagOn), Aoff = mk(flagOff);
+  const zero = () => ({ atkAtt: 0, atkKill: 0, atkErr: 0, digSucc: 0 });
+  const on = zero(), off = zero();
+  let liveDiff = 0;
+  for (let i = 1; i <= N; i++) {
+    const bOn: BoxSink = new Map(), bOff: BoxSink = new Map();
+    const sOn = simulateMatch(i, Aon, B0, { ...base, box: bOn });
+    const sOff = simulateMatch(i, Aoff, B0, { ...base, box: bOff });
+    if (JSON.stringify(sOn.points) !== JSON.stringify(sOff.points)) liveDiff++;
+    for (const [id, l] of bOn) if (idsA.has(id)) { on.atkAtt += l.atkAtt; on.atkKill += l.atkKill; on.atkErr += l.atkErr; on.digSucc += l.digSucc; }
+    for (const [id, l] of bOff) if (idsA.has(id)) { off.atkAtt += l.atkAtt; off.atkKill += l.atkKill; off.atkErr += l.atkErr; off.digSucc += l.digSucc; }
+  }
+  return { on, off, liveDiff };
+}
+
+// ── ⑦ 폭격기 — 스파이크 화력↑(킬%↑) + 공격 범실↑(양날) + liveness + 무효과세계 오라클 FAIL 자가검증 ──
+{
+  const N = 300;
+  const { on, off, liveDiff } = boxToggle('bomber', N, true, false);
+  const killOn = on.atkKill / on.atkAtt, killOff = off.atkKill / off.atkAtt;
+  const errOn = on.atkErr / on.atkAtt, errOff = off.atkErr / off.atkAtt;
+  log(`⑦ 폭격기(N=${N}·동일시드): 킬 ${(100 * killOff).toFixed(2)}→${(100 * killOn).toFixed(2)}% · 공격범실 ${(100 * errOff).toFixed(2)}→${(100 * errOn).toFixed(2)}% · liveness ${liveDiff}/${N}`);
+  check(killOn > killOff, `킬% ON>OFF (스파이크 화력↑)`);
+  check(errOn > errOff, `공격범실% ON>OFF (양날 — 범실도↑)`);
+  check(liveDiff > 0, `liveness>0 (특성이 실제 경기 결과를 바꿈 — 배선 살아있음)`);
+  // A/B 자가검증: 트레이트 무효과 세계(양 arm 모두 OFF)면 입력 동일 → liveness=0·킬% 동률 → ⑦ 오라클이 FAIL해야
+  const mut = boxToggle('bomber', 60, false, false);
+  const mutKillEq = mut.on.atkKill / mut.on.atkAtt === mut.off.atkKill / mut.off.atkAtt;
+  log(`   A/B: 무효과세계(OFF/OFF) liveness ${mut.liveDiff}/60 · 킬% 동률 ${mutKillEq} → ⑦ 오라클 FAIL 재현`);
+  check(mut.liveDiff === 0 && mutKillEq, `mutant(무효과) → liveness0+킬%동률 → ⑦ 오라클 이빨 증명(허위 오라클 금지)`);
+}
+
+// ── ⑧ 수비벽 — 디그 성공↑(박스 digSucc) + liveness ──
+{
+  const N = 300;
+  const { on, off, liveDiff } = boxToggle('digWall', N, true, false);
+  log(`⑧ 수비벽(N=${N}·동일시드): 디그 성공 ${off.digSucc}→${on.digSucc} · liveness ${liveDiff}/${N}`);
+  check(on.digSucc > off.digSucc, `디그 성공 ON>OFF (수비 범위↑)`);
+  check(liveDiff > 0, `liveness>0 (배선 살아있음)`);
+}
+
+// ── ⑨ 황금손 — 세팅 승수↑ → 팀 킬%↑(박스) + liveness ──
+{
+  const N = 300;
+  const { on, off, liveDiff } = boxToggle('maestro', N, true, false);
+  const killOn = on.atkKill / on.atkAtt, killOff = off.atkKill / off.atkAtt;
+  log(`⑨ 황금손(N=${N}·동일시드): 팀 킬% ${(100 * killOff).toFixed(2)}→${(100 * killOn).toFixed(2)}% · liveness ${liveDiff}/${N}`);
+  check(killOn > killOff, `팀 킬% ON>OFF (세팅 승수↑ → 공격 화력↑)`);
+  check(liveDiff > 0, `liveness>0 (배선 살아있음)`);
+}
+
+// ── ⑩ 꾀돌이 — vqTraitMult 보유>무·무==1(배선 무영향 보장) ──
+{
+  const mReal = vqTraitMult(['smart']), mNone = vqTraitMult([]);
+  log(`⑩ 꾀돌이 vqTraitMult: 보유 ${mReal.toFixed(3)} vs 무 ${mNone.toFixed(3)} (문서 ${TRAIT_FX.smartVq})`);
+  check(mReal > mNone && mNone === 1, `vqTraitMult 보유>무·무==1 (미부여 무영향)`);
+  check(Math.abs(mReal - TRAIT_FX.smartVq) < 1e-9, `배수 == TRAIT_FX.smartVq(${TRAIT_FX.smartVq})`);
+}
+
+// ── ⑪ 강철체력 — 유효 최대체력(=n(staminaMax)×배수) 보유>무·무배수==1 ──
+{
+  const p = A0[0];
+  const effTank = n(p.staminaMax) * staminaMaxTraitMult(['tank']);
+  const effNone = n(p.staminaMax) * staminaMaxTraitMult([]);
+  log(`⑪ 강철체력 유효 최대체력: 보유 ${effTank.toFixed(3)} > 무 ${effNone.toFixed(3)} (배수 ${staminaMaxTraitMult(['tank']).toFixed(2)})`);
+  check(effTank > effNone && staminaMaxTraitMult([]) === 1, `유효 staminaMax 보유>무·무배수==1 (drain 분모↑ → 소모↓)`);
+}
+
+// ── ⑫ 지구력 — recover 후 체력(match.ts 회복식 재현) 보유>무·무배수==1 ──
+{
+  const p = A0[0];
+  const cur = 0.5, scale = STAM_REGEN_BASE;
+  const rec = (tr: Trait[]) => Math.min(1, cur + scale * (0.4 + p.staminaRegen / 100) * staminaRegenTraitMult(tr));
+  const recEnd = rec(['endurance']), recNone = rec([]);
+  log(`⑫ 지구력 recover 후 체력(cur=${cur}): 보유 ${recEnd.toFixed(4)} > 무 ${recNone.toFixed(4)}`);
+  check(recEnd > recNone && staminaRegenTraitMult([]) === 1, `recover 후 체력 보유>무·무배수==1 (체력재생↑)`);
+}
+
 // ── ③ 클러치/새가슴: crunch(듀스·세트포인트) 한정 focus 소폭 보정 — clutchFocusAdj +0.08/+0.05/−0.08.
 //    효과가 승률에 +0.5~0.9%p로 작고 고분산이라 여기선 상비 검사에서 제외한다. 무거운 단조 서열 검증은
 //    measTraits 방식(N≥3000·접전상대 필터)으로: 승률 clutch>neutral>choke가 2회 이상 단조여야 유효.
@@ -141,5 +234,5 @@ const strip = (p: Player, rm: Trait[]): Trait[] => (p.traits ?? []).filter((t) =
 
 log('');
 if (fails.length) { log(`TRAITS FAIL — ${fails.length}건: ${fails.join(' / ')}`); process.exit(1); }
-log('TRAITS PASS (① 전원1개+상극0+검사기A/B ② 서브머신 방향+liveness ④ 노쇠 서열 ⑤ 노력형 전스탯합 ⑥ 부상 배수 + mutant 자가검증)');
+log('TRAITS PASS (① 전원1개+상극0+검사기A/B ② 서브머신 방향+liveness ④ 노쇠 서열 ⑤ 노력형 전스탯합 ⑥ 부상 배수 + mutant 자가검증 · 상시형6종 ⑦폭격기(킬%↑+범실%↑+무효과세계FAIL) ⑧수비벽 ⑨황금손 ⑩꾀돌이 ⑪강철체력 ⑫지구력)');
 process.exit(0);

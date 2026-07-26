@@ -23,6 +23,14 @@ export const TRAIT_FX = {
   bigGameFocus: 0.05,       // 큰 고비 집중 보정(+)
   chokeFocus: 0.08,         // 큰 고비 집중 보정(− 로 적용)
   serveMachineAggr: 0.06,   // 서브 적극성 보정(+)
+  // ── 상시형(static) 신규 6종(2026-07-27, Phase 1) — 경기 내내 고정 배수. 접근자가 player.traits만 읽음(미부여=1배 무영향). ──
+  bomberSpike: 1.05,        // 폭격기 스파이크 화력 배수(↑)
+  bomberErr: 1.15,          // 폭격기 공격 범실 배수(↑ — 양날)
+  digWallDig: 1.06,         // 수비벽 디그 성공 배수(↑)
+  smartVq: 1.05,            // 꾀돌이 VQ 배수(↑)
+  enduranceRegen: 1.12,     // 지구력 체력재생 배수(↑)
+  tankStaminaMax: 1.08,     // 강철체력 최대 체력 배수(↑)
+  maestroSet: 1.05,         // 황금손 세팅 승수 배수(↑ — 세터에 유효)
 } as const;
 
 // 계수 → 표시 % 변환(문구용). 배수는 1.0 기준 증감%, 가감 보정은 ×100 %p. 반올림 정수라 문구=계수 대조가 명확.
@@ -44,13 +52,23 @@ export const TRAITS: Record<Trait, TraitDef> = {
   iron:         { name: '철강', desc: `좀처럼 다치지 않는다 — 부상 확률 ${cutPct(TRAIT_FX.ironInjury)}`, good: true, cat: '내구' },
   serveMachine: { name: '서브머신', desc: `공격적인 서브를 즐긴다 — 서브 적극성 ${addPP(TRAIT_FX.serveMachineAggr)}`, good: true, cat: '플레이' },
   leader:       { name: '리더', desc: '팀의 정신적 지주 (경기 효과는 없음)', good: true, cat: '플레이' },
+  // ── 상시형 신규 6종 — desc는 TRAIT_FX에서 문자열 합성(하드코딩 금지, 가드 _dv_traitcopy가 대조). 폭격기는 두 값 병기 ──
+  bomber:       { name: '폭격기', desc: `강타로 몰아붙인다 — 스파이크 ${upPct(TRAIT_FX.bomberSpike)}·공격 범실 ${upPct(TRAIT_FX.bomberErr)}`, good: true, cat: '플레이' },
+  digWall:      { name: '수비벽', desc: `코트 수비 범위가 넓다 — 디그 ${upPct(TRAIT_FX.digWallDig)}`, good: true, cat: '플레이' },
+  smart:        { name: '꾀돌이', desc: `코트를 읽는 배구 IQ — VQ ${upPct(TRAIT_FX.smartVq)}`, good: true, cat: '멘탈' },
+  endurance:    { name: '지구력', desc: `좀처럼 지치지 않는다 — 체력재생 ${upPct(TRAIT_FX.enduranceRegen)}`, good: true, cat: '내구' },
+  tank:         { name: '강철체력', desc: `버티는 최대 체력 — 최대 체력 ${upPct(TRAIT_FX.tankStaminaMax)}`, good: true, cat: '내구' },
+  maestro:      { name: '황금손', desc: `팀 공격을 살리는 토스 — 세팅 ${upPct(TRAIT_FX.maestroSet)}`, good: true, cat: '플레이' },
 };
 
 // 등장 가중치 — 좋은 특성이 흔하고 부정 특성은 드물게(도박은 성립하되 희소)
 const POOL: { t: Trait; w: number }[] = [
   { t: 'clutch', w: 10 }, { t: 'bigGame', w: 8 }, { t: 'lateBloomer', w: 7 },
   { t: 'iron', w: 8 }, { t: 'serveMachine', w: 8 }, { t: 'leader', w: 7 }, { t: 'diligent', w: 9 },
-  { t: 'choke', w: 2 }, { t: 'earlyDecline', w: 2 }, { t: 'glass', w: 2 }, // 부정 가중 하향(2026-07-27) — 전원 1~3개 보장 후 부정 보유율 29%→14%(단점만 보유 5.8%)
+  // 상시형 신규 6종(2026-07-27, Phase 1) — 전부 good, w=7(부정 가중은 불변 — 보유율은 메인이 재측정)
+  { t: 'bomber', w: 7 }, { t: 'digWall', w: 7 }, { t: 'smart', w: 7 },
+  { t: 'endurance', w: 7 }, { t: 'tank', w: 7 }, { t: 'maestro', w: 7 },
+  { t: 'choke', w: 4 }, { t: 'earlyDecline', w: 3 }, { t: 'glass', w: 4 }, // 부정 가중(2026-07-27) — 상시형 good 6종 추가로 희석된 부정 보유율을 재복원: 2/2/2→4/3/4로 14.7% 유지(단점만 6.1%, N=30,000)
 ];
 const TOTAL_W = POOL.reduce((s, x) => s + x.w, 0);
 
@@ -128,4 +146,34 @@ export function clutchFocusAdj(traits?: Trait[]): number {
 /** 서브 공격성 보정 — 서브머신 (rally chooseServe, 상시) */
 export function serveAggrAdj(traits?: Trait[]): number {
   return has(traits, 'serveMachine') ? TRAIT_FX.serveMachineAggr : 0;
+}
+
+// ─── 상시형(static) 신규 6종 접근자 — 미부여 시 전부 1배(무영향 → 결정론 골든 보존). injuryTraitMult 패턴 ───
+/** 스파이크 화력 배수 — 폭격기 (rally 공격 성공 판정) */
+export function spikeTraitMult(traits?: Trait[]): number {
+  return has(traits, 'bomber') ? TRAIT_FX.bomberSpike : 1;
+}
+/** 공격 범실 배수 — 폭격기(양날) (rally 공격 범실 판정) */
+export function attackErrTraitMult(traits?: Trait[]): number {
+  return has(traits, 'bomber') ? TRAIT_FX.bomberErr : 1;
+}
+/** 디그 성공 배수 — 수비벽 (rally 디그 성공 판정) */
+export function digTraitMult(traits?: Trait[]): number {
+  return has(traits, 'digWall') ? TRAIT_FX.digWallDig : 1;
+}
+/** VQ 배수 — 꾀돌이 (rally 포지션 폴트/판단) */
+export function vqTraitMult(traits?: Trait[]): number {
+  return has(traits, 'smart') ? TRAIT_FX.smartVq : 1;
+}
+/** 체력재생 배수 — 지구력 (match recover) */
+export function staminaRegenTraitMult(traits?: Trait[]): number {
+  return has(traits, 'endurance') ? TRAIT_FX.enduranceRegen : 1;
+}
+/** 최대 체력 배수 — 강철체력 (rally drain 분모 = 체력 소모율↓) */
+export function staminaMaxTraitMult(traits?: Trait[]): number {
+  return has(traits, 'tank') ? TRAIT_FX.tankStaminaMax : 1;
+}
+/** 세팅 승수 배수 — 황금손 (rally setMul, 세터 유효) */
+export function setTraitMult(traits?: Trait[]): number {
+  return has(traits, 'maestro') ? TRAIT_FX.maestroSet : 1;
 }

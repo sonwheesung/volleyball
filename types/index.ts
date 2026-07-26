@@ -8,7 +8,9 @@ export type Trait =
   | 'clutch' | 'choke' | 'bigGame'
   | 'lateBloomer' | 'earlyDecline'
   | 'glass' | 'iron'
-  | 'serveMachine' | 'leader' | 'diligent';
+  | 'serveMachine' | 'leader' | 'diligent'
+  // 상시형(static) 신규 6종(2026-07-27, Phase 1) — 경기 내내 고정 배수, player.traits만 읽는 접근자 패턴
+  | 'bomber' | 'digWall' | 'smart' | 'endurance' | 'tank' | 'maestro';
 
 export type CoachStyle = 'attack' | 'defense' | 'balanced';
 

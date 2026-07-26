@@ -13,7 +13,7 @@ import { frontRow, backRow, serverIndex } from './rotation';
 import { type Pt, zoneXY, playerXY, serveSpot, dist, jitter, COURT } from './court';
 import type { Tele, AtkResult, QuickKind } from './events';
 import { serveLanding, tossLanding, attackCourse } from './spatial';
-import { clutchFocusAdj, serveAggrAdj } from './traits';
+import { clutchFocusAdj, serveAggrAdj, spikeTraitMult, attackErrTraitMult, digTraitMult, vqTraitMult, staminaMaxTraitMult, setTraitMult } from './traits';
 
 const n = (v: number) => v / 100;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -152,7 +152,8 @@ const eff = (t: RallyTeam, p: Player) => {
 function drain(t: RallyTeam, p: Player, mult: number): void {
   const cur = t.stam.get(p.id);
   if (cur == null) return;
-  t.stam.set(p.id, Math.max(0, cur - (HOP_COST * mult) / (0.6 + n(p.staminaMax) * 0.8)));
+  // 강철체력(tank): 최대 체력이 높으면 소모율↓ — staminaMax 유효값을 배수로 키움(미부여=1배). 분모↑ → drain↓.
+  t.stam.set(p.id, Math.max(0, cur - (HOP_COST * mult) / (0.6 + n(p.staminaMax) * staminaMaxTraitMult(p.traits) * 0.8)));
 }
 
 /** 부상 판정(9.3·1.3d) — 노쇠·체력 고갈 시 ↑. 경기 한정(시즌 영향 없음 — 결정론 격리, INJURY 0.1장).
@@ -180,7 +181,8 @@ function strength(players: Player[], pick: (r: Ratings) => number, R: Rate, t: R
   return 0.5 * max + 0.5 * avg;
 }
 
-const teamVQ = (t: RallyTeam) => t.six.reduce((s, p) => s + p.vq, 0) / t.six.length / 100;
+// 꾀돌이(smart): VQ가 오른 것처럼 — 포지션 폴트 판정에 쓰는 팀 평균 VQ에 선수별 배수 적용(미부여=1배).
+const teamVQ = (t: RallyTeam) => t.six.reduce((s, p) => s + p.vq * vqTraitMult(p.traits), 0) / t.six.length / 100;
 
 /** 서브 타입 선택 (2장) — 서브 능력·집중력·감독 성향이 공격성을 정한다.
  *  큰 고비(clutch)엔 안전 서브로 — 에이스도 범실도 줄어 종반이 길어진다(듀스의 재료) */
@@ -543,11 +545,13 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
 
     const chem = (atk === 'quick' || atk === 'tempo') ? 0.12 * chemistry(setter, attacker) : 0; // 케미(9.2)
     const chanceBall = q < CHANCE_Q ? 0.85 : 1; // 찬스볼은 세트 품질 하락(6장)
-    const setMul = (0.85 + 0.3 * setQ + chem) * chanceBall;
+    // 황금손(maestro): 세팅 승수↑ — 팀 공격에 곱해지는 f(세팅) 지점에 세터 배수 적용(미부여=1배).
+    const setMul = (0.85 + 0.3 * setQ + chem) * chanceBall * setTraitMult(setter.traits);
     const qf = 0.6 + 0.5 * q;
     const atkStyleMul = at.style === 'attack' ? 1.05 : at.style === 'defense' ? 0.98 : 1; // 공격형 화력↑ / 수비형 화력↓(트레이드오프)
     const serveDisadv = att === serving ? 0.9 : 1; // 서브한 팀은 전환 공격 불리(서브 직후 out-of-system) → 사이드아웃↑
-    const attackPower = ATK_K * n(R(attacker).spike) * setMul * BLOCK_AVOID[atk] * qf * momFactor(at.momentum) * eg(att) * eff(at, attacker) * atkStyleMul * serveDisadv;
+    // 폭격기(bomber): 스파이크 화력↑ — 공격 성공 판정에 쓰는 attackPower에 공격수 배수(미부여=1배).
+    const attackPower = ATK_K * n(R(attacker).spike) * spikeTraitMult(attacker.traits) * setMul * BLOCK_AVOID[atk] * qf * momFactor(at.momentum) * eg(att) * eff(at, attacker) * atkStyleMul * serveDisadv;
     const blk = blockEval(df, atk, R, rng);
     const firstBall = hop === 0; // 리시브 후 첫 공격(인시스템) — 서브한 팀의 블록이 미완성
     const blkStr = blk.str * (firstBall ? 0.74 : 1);
@@ -560,7 +564,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const balancedDiscipline = at.style === 'balanced' ? 0.012 : 0; // 밸런스형: 기본기(범실↓)
     const clutchAtk = clutch ? clutchFocusAdj(attacker.traits) * 0.1 : 0; // 큰 고비 공격 안정(클러치↓err/새가슴↑err)
     const chaseAtk = chasing === att ? 0.04 : 0; // 쫓는 팀은 종반 범실을 아낀다(동점 도달 메커니즘)
-    const errP2 = clamp(0.16 - 0.09 * q + ATK_ERR[atk] - 0.05 * n(attacker.consistency) - 0.03 * n(attacker.vq) - balancedDiscipline - clutchAtk - chaseAtk, 0.04, 0.28);
+    // 폭격기(bomber): 공격 범실↑(양날) — 범실 확률에 공격수 배수(미부여=1배).
+    const errP2 = clamp((0.16 - 0.09 * q + ATK_ERR[atk] - 0.05 * n(attacker.consistency) - 0.03 * n(attacker.vq) - balancedDiscipline - clutchAtk - chaseAtk) * attackErrTraitMult(attacker.traits), 0.04, 0.28);
     const blockP = clamp(0.085 + 0.3 * (blkStr - attackPower), 0.02, 0.4); // 민감도 압축(parity)·기저로 평균 복원
     if (stats) stats.attacks++;
     bx?.(attacker.id, (l) => { l.atkAtt++; }); // 모든 스윙 = 시도(디그로 살아난 공격 포함 → 성공률 분모 현실화)
@@ -627,11 +632,13 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
       continue;
     }
 
-    // 기저 0.38 — KOVO 랠리 길이 정렬(공격시도 ~34/세트·디그 ~15/세트, 2026-06. 0.46은 랠리 과장)
-    const digP = clamp(0.40 + defStyleBonus + 0.45 * (digStr - attackPower), 0.05, 0.9); // 민감도 압축(parity)·기저로 평균 복원
-    // 디그는 시도 자체가 체력을 쓴다(성공/실패 무관 — 몸을 던진다). 디거 = 후위 최고 디그
+    // 디거 = 후위 최고 디그(dg0). 순수 계산(rng 무소비)이라 digP 앞으로 올려도 스트림 불변 — 수비벽(digWall) 배수 앵커로 쓴다.
     const dDef = defenders(df);
     const dg0 = dDef.length ? dDef.reduce((b, p) => (R(p).dig > R(b).dig ? p : b)) : attacker;
+    // 기저 0.38 — KOVO 랠리 길이 정렬(공격시도 ~34/세트·디그 ~15/세트, 2026-06. 0.46은 랠리 과장)
+    // 수비벽(digWall): 넓은 수비 범위 — 최고 디거가 수비벽이면 팀 디그 성공률↑(미부여=1배). rng 스트림 불변.
+    const digP = clamp((0.40 + defStyleBonus + 0.45 * (digStr - attackPower)) * digTraitMult(dg0.traits), 0.05, 0.9); // 민감도 압축(parity)·기저로 평균 복원
+    // 디그는 시도 자체가 체력을 쓴다(성공/실패 무관 — 몸을 던진다).
     drain(df, dg0, 0.4); // 체력 소모는 기존 best-dig(dg0)에 — 메인 rng·승패 바이트 불변(귀속만 분산, 2026-06-24 결정)
     if (rng.next() < digP) {
       if (stats) stats.digs++;

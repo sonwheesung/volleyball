@@ -12,6 +12,7 @@ import { buildLineup } from './lineup';
 import { playRally, momFactor, STAM_REGEN_BASE, type RallyTeam, type Edge, type RallyStats, type PosStats, type BoxSink } from './rally';
 import type { RallyEvent } from './events';
 import { rotate, serverIndex, frontRow, backRow } from './rotation';
+import { staminaRegenTraitMult } from './traits';
 
 // 경기 시뮬 결과 버전 — rally/match/simMatch/ratings 등 *경기 결과를 바꾸는* 엔진 변경 시 +1.
 // (dyn 재생을 바꾸는 시즌 계층 규칙 변경도 포함 — 캐시가 dyn을 함께 영속하므로, v3.)
@@ -173,7 +174,8 @@ export function simulateMatch(
   const tracked: Record<Side, Player[]> = { home: [...onCourt(homeLineup)], away: [...onCourt(awayLineup)] };
   const recover = (side: Side, m: Map<string, number>, scale: number) => {
     for (const p of tracked[side]) {
-      m.set(p.id, Math.min(1, (m.get(p.id) ?? 1) + scale * (0.4 + p.staminaRegen / 100)));
+      // 지구력(endurance): 체력재생↑ — 랠리/세트 사이 회복량에 선수별 배수(미부여=1배 → 결정론 골든 보존).
+      m.set(p.id, Math.min(1, (m.get(p.id) ?? 1) + scale * (0.4 + p.staminaRegen / 100) * staminaRegenTraitMult(p.traits)));
     }
   };
 
