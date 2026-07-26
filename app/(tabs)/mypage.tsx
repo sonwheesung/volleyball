@@ -287,7 +287,7 @@ export default function MyPage() {
         <View style={{ alignItems: 'center', gap: 14, paddingVertical: 6 }}>
           <ActivityIndicator size="large" color={theme.accent} />
           <Text style={styles.title}>업적 보상 받는 중…</Text>
-          <Muted style={{ fontSize: 12.5, textAlign: 'center' }}>서버에 안전하게 적립하고 있어요. 잠시만 기다려 주세요.</Muted>
+          <Muted style={{ fontSize: 12.5, textAlign: 'center' }}>온라인으로 안전하게 적립하고 있어요. 잠시만 기다려 주세요.</Muted>
         </View>
       </Popup>
       <SpotlightOverlay screen="tab-mypage" />

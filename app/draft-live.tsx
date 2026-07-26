@@ -250,7 +250,7 @@ function DraftLiveInner() {
       <View style={styles.bar}>
         {/* P3(2026-07-12): 헤더 분모를 예상 지명(myCount)으로 — 패널 "직접 선택 (n/myCount)"과 일치시켜 "보유 4 vs 예상 2" 혼동 제거.
             보유 지명권(slots)은 준비 화면 표기, 여기선 실제 지명 수 + PASS로 완결(지명 2 + 패스 2 = 권리 4). */}
-        <Muted style={{ flexShrink: 1 }} numberOfLines={1}>{revealed} / {total}픽 · {myCount > 0 ? `내 지명 ${confirmedMyCount}/${myCount}` : '내 지명 없음'}{passRemaining > 0 ? ` · PASS 예정 ${passRemaining}회` : ''}</Muted>
+        <Muted style={{ flexShrink: 1 }} numberOfLines={1}>{revealed} / {total}픽 · {myCount > 0 ? `내 지명 ${confirmedMyCount}/${myCount}` : '내 지명 없음'}{passRemaining > 0 ? ` · 넘김 예정 ${passRemaining}회` : ''}</Muted>
         <Text numberOfLines={1} style={{ color: atMyPick ? theme.accent : theme.text, fontWeight: '800', flexShrink: 0, marginLeft: 8 }}>{roundLabel}</Text>
       </View>
 
@@ -272,7 +272,7 @@ function DraftLiveInner() {
                   <Text style={styles.sumR}>{row.round}R</Text>
                   {row.pass ? (
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.sumPass}>PASS</Text>
+                      <Text style={styles.sumPass}>넘김</Text>
                       {row.round === firstPassRound ? (
                         <Text style={styles.sumReason}>{PASS_REASON_COPY[summaryPassReason]}</Text>
                       ) : null}
@@ -294,7 +294,7 @@ function DraftLiveInner() {
         // ── 내 픽 하드정지: 직접 지명 패널 ──
         <Card accent={theme.accent} flat>
           <IconLabel icon="hand-left-outline" color={theme.accent}>내 지명 순번, 직접 선택 ({confirmedMyCount + 1}/{myCount})</IconLabel>
-          <Muted style={{ fontSize: 12, marginTop: 2 }}>현재 로스터 {panel.rosterCount}/{ROSTER_CONTRACT_CAP}명 (계약 상한) — 상한을 넘겨 지명하면 다음 오프시즌에 자연 정리됩니다.</Muted>
+          <Muted style={{ fontSize: 12, marginTop: 2 }}>현재 로스터 {panel.rosterCount}/{ROSTER_CONTRACT_CAP}명 (계약 상한) — 상한을 넘겨 지명하면 다음 오프시즌에 자동으로 정리됩니다.</Muted>
           {panel.needs.length ? (
             <Muted style={{ fontSize: 12, marginTop: 4 }}>필요 포지션: {panel.needs.map((p) => POS_KO[p]).join(' · ')}</Muted>
           ) : (

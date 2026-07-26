@@ -209,7 +209,7 @@ export default function Settings() {
     const expectedTeam = String(dry.sanitized.selectedTeamId); // 정규화된 백업 구단 — 로드 결과 대조용
     showAlert(
       '이 백업으로 복원할까요?',
-      '현재 구단 진행이 선택한 서버 백업으로 대체됩니다. 되돌릴 수 없어요.\n\n다이아·결제 재화는 이 백업이 아니라 계정에 안전하게 보관돼요.',
+      '현재 구단 진행이 선택한 클라우드 백업으로 대체됩니다. 되돌릴 수 없어요.\n\n다이아·결제 재화는 이 백업이 아니라 계정에 안전하게 보관돼요.',
       [
         { text: '취소', style: 'cancel' },
         { text: '복원', style: 'destructive', onPress: () => { void applyImport(parsed.state, parsed.version, expectedTeam); } },
@@ -224,13 +224,13 @@ export default function Settings() {
       showAlert(
         r.reason === 'unauthorized' ? '로그인이 필요해요' : '불러올 수 없어요',
         r.reason === 'offline' ? '온라인 연결이 필요해요. 네트워크 확인 후 다시 시도해 주세요.'
-          : r.reason === 'unauthorized' ? '서버 백업은 로그인 후 이용할 수 있어요.'
-          : '서버 백업 목록을 불러오는 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.',
+          : r.reason === 'unauthorized' ? '클라우드 백업은 로그인 후 이용할 수 있어요.'
+          : '클라우드 백업 목록을 불러오는 중 문제가 발생했어요. 잠시 후 다시 시도해 주세요.',
       );
       return;
     }
     if (r.backups.length === 0) {
-      showAlert('서버 백업이 없어요', '시즌이 끝날 때마다 자동으로 서버에 백업돼요. 한 시즌을 마치면 여기서 복원할 수 있어요.');
+      showAlert('클라우드 백업이 없어요', '시즌이 끝날 때마다 자동으로 클라우드에 백업돼요. 한 시즌을 마치면 여기서 복원할 수 있어요.');
       return;
     }
     // 최대 5개(서버 유지분) 행 + 취소 — 기존 showAlert 세로 버튼 스택(신규 Modal 금지 #129).
@@ -239,7 +239,7 @@ export default function Settings() {
       onPress: () => { void onPickServerBackup(b.id); },
     }));
     buttons.push({ text: '취소', style: 'cancel' });
-    showAlert('서버 백업에서 복원', '복원할 백업을 선택하세요. 현재 구단 진행이 대체돼요.', buttons);
+    showAlert('클라우드 백업에서 복원', '복원할 백업을 선택하세요. 현재 구단 진행이 대체돼요.', buttons);
   };
 
   // 슬라이더 라이브 값(드래그 중 즉시 청음 반영 — 렌더 churn과 스토어 커밋 분리, SOUND_SYSTEM §3)
@@ -332,11 +332,11 @@ export default function Settings() {
         <Row icon="cloud-upload-outline" tint={theme.accent} label="세이브 가져오기"
           sub="파일에서 불러오기 · 현재 진행을 대체해요"
           onPress={() => { void onImport(); }} />
-        <Row icon="cloud-download-outline" tint={theme.accent} label="서버 백업에서 복원"
+        <Row icon="cloud-download-outline" tint={theme.accent} label="클라우드 백업에서 복원"
           sub="시즌마다 자동 백업된 목록에서 복원 · 현재 진행을 대체해요"
           onPress={() => { void onServerRestore(); }} />
       </View>
-      <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>시즌이 끝날 때마다 자동으로 서버에 백업돼요(최근 5개). 다이아·결제 재화는 계정에 항상 안전해요.</Muted>
+      <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>시즌이 끝날 때마다 자동으로 클라우드에 백업돼요(최근 5개). 다이아·결제 재화는 계정에 항상 안전해요.</Muted>
 
       <Text style={styles.section}>데이터</Text>
       <View style={styles.group}>

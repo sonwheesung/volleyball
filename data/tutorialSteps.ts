@@ -25,7 +25,7 @@ export const TIPS: Tip[] = [
   { id: 'team.coach', screen: 'team-detail', order: 1, anchor: 'team-coach',
     title: '감독', body: '감독을 누르면 성향·능력(경기 운영·육성 철학·리더십)·명성을 자세히 봅니다. 감독 성향이 자동 경기 운영(작전·교체·타임아웃)을 좌우합니다.' },
   { id: 'team.roster', screen: 'team-detail', order: 2, anchor: 'team-roster',
-    title: '선수단', body: '선수 이름을 누르면 2층 스탯·특성을 자세히 봅니다. 선수는 성장하고, 전성기가 지나면 기량이 하락합니다.' },
+    title: '선수단', body: '선수 이름을 누르면 선수의 세부 능력치·특성을 자세히 봅니다. 선수는 성장하고, 전성기가 지나면 기량이 하락합니다.' },
   { id: 'team.start', screen: 'team-detail', order: 3, anchor: 'team-operate',
     title: '이 구단으로 시작', body: '선수단을 둘러본 뒤, 맨 아래 "운영하기" 버튼을 누르면 당신이 이 구단의 구단주가 됩니다. (탭해서 닫고 자유롭게 살펴보세요.)' },
 
@@ -51,13 +51,13 @@ export const TIPS: Tip[] = [
   { id: 'squad.coach', screen: 'tab-squad', order: 0, anchor: 'squad-coach',
     title: '우리 감독', body: '감독을 누르면 성향·훈련 선호를 봅니다. 감독의 선호가 우리 팀이 어떤 스탯 위주로 성장할지를 가릅니다.' },
   { id: 'squad.intro', screen: 'tab-squad', order: 1, anchor: 'squad-top',
-    title: '선수단', body: '선수마다 2층 스탯(보이는 종합 + 밑단 세부)과 특성이 있습니다. 이름을 누르면 상세·면담을 볼 수 있어요.' },
+    title: '선수단', body: '선수마다 겉으로 보이는 종합 능력치와, 그 아래 세부 능력치·특성이 있습니다. 이름을 누르면 상세·면담을 볼 수 있어요.' },
 
   // ── 단장실 탭 ──
   { id: 'office.intro', screen: 'tab-office', order: 0, anchor: 'office-top',
     title: '계약 관리', body: '선수 재계약·방출, 시즌 종료 FA 잔류/포기를 결정합니다. 단장의 핵심 권한이에요.' },
   { id: 'office.staff', screen: 'tab-office', order: 1, anchor: 'office-staff',
-    title: '스태프 계약', body: '감독·전문 코치(훈련 부스트)·스카우터(드래프트 공개도)를 예산 안에서 영입합니다.' },
+    title: '스태프 계약', body: '감독·전문 코치(훈련 부스트)·스카우터(유망주 정보를 더 밝혀 줌)를 예산 안에서 영입합니다.' },
   { id: 'office.training', screen: 'tab-office', order: 2, anchor: 'office-training',
     title: '훈련 방침', body: '우리 팀이 어떤 스탯 위주로 성장할지 방향을 정합니다. 감독 기본값을 따를 수도, 단장이 직접(체력·공격·수비 등) 정할 수도 있어요.' },
   { id: 'office.tx', screen: 'tab-office', order: 3, anchor: 'office-tx',

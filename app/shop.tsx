@@ -104,7 +104,7 @@ export default function Shop() {
       </Pressable>
 
       <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 6 }}>
-        결제·다이아 잔액은 서버(온라인)에서 확인됩니다. 광고·업적·쿠폰으로도 다이아를 모을 수 있어요.
+        결제·다이아 잔액은 온라인에서 확인됩니다. 광고·업적·쿠폰으로도 다이아를 모을 수 있어요.
       </Muted>
     </Screen>
   );

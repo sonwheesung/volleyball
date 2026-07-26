@@ -148,13 +148,13 @@ function DraftCenterInner() {
             <Text style={styles.planVal}>{plan.expectedPicks}명</Text>
           </View>
           <View style={styles.planRow}>
-            <Text style={styles.planLabel}>예상 PASS</Text>
+            <Text style={styles.planLabel}>예상 넘김</Text>
             <Text style={[styles.planVal, { color: plan.expectedPasses ? theme.warn : theme.muted }]}>{plan.expectedPasses}회</Text>
           </View>
         </View>
         {plan.expectedPasses > 0 ? (
           <Muted style={{ fontSize: 12, marginTop: 6 }}>
-            현재 선수단 상황을 기준으로 {passRoundsLabel(plan.passRounds)}라운드는 자동 PASS가 예상됩니다. 필요 시
+            현재 선수단 상황을 기준으로 {passRoundsLabel(plan.passRounds)}라운드는 자동 넘김이 예상됩니다. 필요 시
             라이브 드래프트에서 직접 지명할 수 있습니다.
           </Muted>
         ) : (

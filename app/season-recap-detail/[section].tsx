@@ -329,7 +329,7 @@ function TasksDetail({
     <>
       {group('🔥', 'FA 자격 도래', theme.bad, b.faSoon, '다음 시즌 FA 자격을 얻습니다. 재계약을 서두르지 않으면 시장에 나갈 수 있습니다.')}
       {group('⚠', '계약 만료 임박', theme.warn, b.expiring, '계약이 곧 끝납니다. 재계약 여부를 결정하세요.')}
-      {group('ℹ', '정년 임박(39세)', theme.muted, b.retireSoon, '이번 롤오버에 40세가 되어 은퇴가 확정됩니다.')}
+      {group('ℹ', '정년 임박(39세)', theme.muted, b.retireSoon, '다음 시즌에 40세가 되어 은퇴합니다.')}
     </>
   );
 }

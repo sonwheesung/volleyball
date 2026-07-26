@@ -670,7 +670,7 @@ function PlayerDetailInner() {
         </View>
       </Card>
 
-      <IconLabel icon="barbell-outline" color={theme.elite}>세부 스탯 (밑단)</IconLabel>
+      <IconLabel icon="barbell-outline" color={theme.elite}>세부 능력치</IconLabel>
       <Card accent={theme.elite} flat>
         <Muted style={{ marginBottom: 2 }}>신체</Muted>
         <StatBar label="점프력" value={p.jump} reveal={reveal} potential={pot('jump')} />

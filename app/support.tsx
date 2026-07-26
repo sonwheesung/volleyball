@@ -160,7 +160,7 @@ function Compose({ cat, setCat, content, setContent, onCancel, onDone }: {
     setSending(false);
     if (!r.ok) {
       showAlert(r.reason === 'offline' ? '오프라인' : '전송 실패',
-        r.reason === 'offline' ? '지금은 서버에 연결할 수 없습니다. 온라인일 때 다시 시도해 주세요.' : '잠시 후 다시 시도해 주세요.');
+        r.reason === 'offline' ? '지금은 연결이 원활하지 않습니다. 온라인일 때 다시 시도해 주세요.' : '잠시 후 다시 시도해 주세요.');
       return;
     }
     // 진단 스냅샷 비동기 첨부(최근 10시즌 재계산) — 실패해도 문의 자체는 접수됨.
