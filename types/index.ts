@@ -10,7 +10,9 @@ export type Trait =
   | 'glass' | 'iron'
   | 'serveMachine' | 'leader' | 'diligent'
   // 상시형(static) 신규 6종(2026-07-27, Phase 1) — 경기 내내 고정 배수, player.traits만 읽는 접근자 패턴
-  | 'bomber' | 'digWall' | 'smart' | 'endurance' | 'tank' | 'maestro';
+  | 'bomber' | 'digWall' | 'smart' | 'endurance' | 'tank' | 'maestro'
+  // 반응형(reactive) 신규 3종(2026-07-27, Phase 2a) — 경기 중 사건→임시 버프(N랠리/타임아웃/세트끝 해제). engine/traits.ts ActiveBuff·reactive* 접근자
+  | 'joker' | 'fragile' | 'bounce';
 
 export type CoachStyle = 'attack' | 'defense' | 'balanced';
 

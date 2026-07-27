@@ -31,7 +31,21 @@ export const TRAIT_FX = {
   enduranceRegen: 1.12,     // 지구력 체력재생 배수(↑)
   tankStaminaMax: 1.08,     // 강철체력 최대 체력 배수(↑)
   maestroSet: 1.05,         // 황금손 세팅 승수 배수(↑ — 세터에 유효)
+  // ── 반응형(reactive) 신규 3종(2026-07-27, Phase 2a) — 경기 중 사건→임시 버프. 소폭 placeholder(방향만 확정, 크기는 메인 튜닝). ──
+  //   전부 ±10%/±0.10 하드캡 안(REACTIVE_SKILL_CAP·REACTIVE_FOCUS_CAP). reactiveSkillMult/reactiveFocusAdj가 참조.
+  reactiveJokerAll: 1.04,   // 조커: 교체 투입 순간 전 스킬 배수(↑ · buff)
+  reactiveFragileSpike: 0.97, // 유리멘탈: 블로킹 당한 뒤 스파이크 배수(↓ · debuff)
+  reactiveFragileFocus: 0.05, // 유리멘탈: 집중 보정(− 로 적용 · debuff)
+  reactiveBounceFocus: 0.05,  // 오뚝이: 막힘/범실 직후 집중 보정(+ · buff)
 } as const;
+
+// 반응형 유효 배수 하드캡(스노볼 방지 — 스택/중복 포함 절대 초과 금지). ±10% / ±0.10.
+export const REACTIVE_SKILL_CAP = 0.10; // reactiveSkillMult ∈ [0.90, 1.10]
+export const REACTIVE_FOCUS_CAP = 0.10; // reactiveFocusAdj ∈ [−0.10, +0.10]
+/** 스킬 배수 하드캡 clamp — 임의로 큰 계수도 [0.90, 1.10]로 봉인(가드 _dv_reactive (e)가 극단값 주입 검증). */
+export const reactiveClampSkill = (m: number): number => Math.max(1 - REACTIVE_SKILL_CAP, Math.min(1 + REACTIVE_SKILL_CAP, m));
+/** 집중 보정 하드캡 clamp — [−0.10, +0.10]로 봉인. */
+export const reactiveClampFocus = (a: number): number => Math.max(-REACTIVE_FOCUS_CAP, Math.min(REACTIVE_FOCUS_CAP, a));
 
 // 계수 → 표시 % 변환(문구용). 배수는 1.0 기준 증감%, 가감 보정은 ×100 %p. 반올림 정수라 문구=계수 대조가 명확.
 const upPct = (m: number) => `+${Math.round((m - 1) * 100)}%`;   // 1.12 → +12% · 1.7 → +70%
@@ -59,6 +73,10 @@ export const TRAITS: Record<Trait, TraitDef> = {
   endurance:    { name: '지구력', desc: `좀처럼 지치지 않는다 — 체력재생 ${upPct(TRAIT_FX.enduranceRegen)}`, good: true, cat: '내구' },
   tank:         { name: '강철체력', desc: `버티는 최대 체력 — 최대 체력 ${upPct(TRAIT_FX.tankStaminaMax)}`, good: true, cat: '내구' },
   maestro:      { name: '황금손', desc: `팀 공격을 살리는 토스 — 세팅 ${upPct(TRAIT_FX.maestroSet)}`, good: true, cat: '플레이' },
+  // ── 반응형 신규 3종(2026-07-27, Phase 2a) — desc는 TRAIT_FX에서 문자열 합성(가드 _dv_traitcopy 대조). 5랠리 지속·타임아웃/세트끝 해제. ──
+  joker:        { name: '조커', desc: `교체로 들어가면 잠깐 살아난다 — 투입 직후 전 능력 ${upPct(TRAIT_FX.reactiveJokerAll)} (5랠리)`, good: true, cat: '플레이' },
+  fragile:      { name: '유리멘탈', desc: `블로킹에 막히면 잠깐 흔들린다 — 스파이크 ${cutPct(TRAIT_FX.reactiveFragileSpike)}·집중 ${cutPP(TRAIT_FX.reactiveFragileFocus)} (5랠리)`, good: false, cat: '멘탈' },
+  bounce:       { name: '오뚝이', desc: `막히거나 실수해도 곧 다시 집중한다 — 집중 ${addPP(TRAIT_FX.reactiveBounceFocus)} (5랠리)`, good: true, cat: '멘탈' },
 };
 
 // 등장 가중치 — 좋은 특성이 흔하고 부정 특성은 드물게(도박은 성립하되 희소)
@@ -68,7 +86,9 @@ const POOL: { t: Trait; w: number }[] = [
   // 상시형 신규 6종(2026-07-27, Phase 1) — 전부 good, w=7(부정 가중은 불변 — 보유율은 메인이 재측정)
   { t: 'bomber', w: 7 }, { t: 'digWall', w: 7 }, { t: 'smart', w: 7 },
   { t: 'endurance', w: 7 }, { t: 'tank', w: 7 }, { t: 'maestro', w: 7 },
-  { t: 'choke', w: 4 }, { t: 'earlyDecline', w: 3 }, { t: 'glass', w: 4 }, // 부정 가중(2026-07-27) — 상시형 good 6종 추가로 희석된 부정 보유율을 재복원: 2/2/2→4/3/4로 14.7% 유지(단점만 6.1%, N=30,000)
+  // 반응형 신규 3종(2026-07-27, Phase 2a) — good(조커/오뚝이) w=5, bad(유리멘탈) w=2. 추가 후 부정 보유율은 메인이 재측정·튜닝(§6.3).
+  { t: 'joker', w: 5 }, { t: 'bounce', w: 5 },
+  { t: 'choke', w: 4 }, { t: 'earlyDecline', w: 3 }, { t: 'glass', w: 4 }, { t: 'fragile', w: 2 }, // 부정 가중(2026-07-27) — 상시형 good 6종 추가로 희석된 부정 보유율을 재복원: 2/2/2→4/3/4로 14.7% 유지(단점만 6.1%, N=30,000). fragile(유리멘탈)=반응형 부정 w=2
 ];
 const TOTAL_W = POOL.reduce((s, x) => s + x.w, 0);
 
@@ -83,6 +103,9 @@ export const ANTAGONISTS: Partial<Record<Trait, readonly Trait[]>> = {
   earlyDecline: ['lateBloomer'],
   iron: ['glass'],
   glass: ['iron'],
+  // 반응형 상극(2026-07-27, Phase 2a) — 유리멘탈(막히면 흔들림) ↔ 오뚝이(막혀도 다시 집중): 서로 상쇄돼 무의미
+  fragile: ['bounce'],
+  bounce: ['fragile'],
 };
 
 function pickWeighted(s: string, exclude: Set<Trait>): Trait | null {
@@ -176,4 +199,40 @@ export function staminaMaxTraitMult(traits?: Trait[]): number {
 /** 세팅 승수 배수 — 황금손 (rally setMul, 세터 유효) */
 export function setTraitMult(traits?: Trait[]): number {
   return has(traits, 'maestro') ? TRAIT_FX.maestroSet : 1;
+}
+
+// ─── 반응형(reactive) 신규 레이어(2026-07-27, Phase 2a, TRAIT_SYSTEM §6.3) ───
+//   경기 중 사건(교체 투입·블로킹 당함·범실)→임시 버프. 신규 엔진 임시상태(저장 안 함, 시드 재생으로 재계산).
+//   RallyTeam.activeBuffs: Map<playerId, ActiveBuff>(선수당 최대 1개 — Map 덮어쓰기로 강제). match.ts가 방아쇠 판정·지속/해제,
+//   rally.ts가 아래 두 접근자로 효과 적용. 미부여 선수는 activeBuffs에 엔트리 없음 → undefined → 1배/0(무영향, 결정론 골든 보존).
+export type ReactiveSkill = 'spike' | 'serve' | 'dig' | 'receive' | 'block' | 'set';
+export interface ActiveBuff { trait: Trait; kind: 'buff' | 'debuff'; left: number }
+
+/** 활성 버프의 스킬 배수 — 없으면 1배. **±10% 하드캡 clamp**(스노볼 방지). 조커=전스킬↑·유리멘탈=스파이크↓. */
+export function reactiveSkillMult(buff: ActiveBuff | undefined, skill: ReactiveSkill): number {
+  if (!buff) return 1;
+  let m = 1;
+  switch (buff.trait) {
+    case 'joker': m = TRAIT_FX.reactiveJokerAll; break;                 // 전 스킬 ↑
+    case 'fragile': if (skill === 'spike') m = TRAIT_FX.reactiveFragileSpike; break; // 스파이크만 ↓
+    // bounce: 스킬 배수 없음(집중 보정만) → reactiveFocusAdj에서 처리
+  }
+  return reactiveClampSkill(m);
+}
+
+/** 활성 버프의 집중(focus) 보정 ± — 없으면 0. **±0.10 하드캡 clamp**. clutchFocusAdj와 같은 층(서브 정확·공격 안정). */
+export function reactiveFocusAdj(buff: ActiveBuff | undefined): number {
+  if (!buff) return 0;
+  let a = 0;
+  if (buff.trait === 'fragile') a = -TRAIT_FX.reactiveFragileFocus;   // 집중 흔들림(−)
+  else if (buff.trait === 'bounce') a = TRAIT_FX.reactiveBounceFocus; // 다시 집중(+)
+  return reactiveClampFocus(a);
+}
+
+/** 반응형 버프 맵 지속 감소(랠리 1회 소비) — left−−, 0 이하 제거. 순수(입력 맵 변이). 만료된 수를 반환(관측용).
+ *  match.ts 랠리 루프가 매 랠리 후 호출 · 가드 _dv_reactive (c)가 5랠리 만료를 이 함수로 직접 검증(프로덕션 경로 동일). */
+export function tickReactiveBuffs(buffs: Map<string, ActiveBuff>): number {
+  let expired = 0;
+  for (const [id, b] of buffs) { b.left--; if (b.left <= 0) { buffs.delete(id); expired++; } }
+  return expired;
 }

@@ -150,14 +150,16 @@ const idsA = new Set(A0.map((p) => p.id));
 function boxToggle(trait: Trait, N: number, flagOn: boolean, flagOff: boolean) {
   const mk = (on: boolean) => A0.map((p) => setTraits(p, on ? [...strip(p, [trait]), trait] : strip(p, [trait])));
   const Aon = mk(flagOn), Aoff = mk(flagOff);
-  const zero = () => ({ atkAtt: 0, atkKill: 0, atkErr: 0, digSucc: 0 });
+  const zero = () => ({ atkAtt: 0, atkKill: 0, atkErr: 0, digSucc: 0, rallies: 0 });
   const on = zero(), off = zero();
   let liveDiff = 0;
+  const rallyOf = (s: ReturnType<typeof simulateMatch>) => (s.setScores ?? []).reduce((a, x) => a + x.home + x.away, 0);
   for (let i = 1; i <= N; i++) {
     const bOn: BoxSink = new Map(), bOff: BoxSink = new Map();
     const sOn = simulateMatch(i, Aon, B0, { ...base, box: bOn });
     const sOff = simulateMatch(i, Aoff, B0, { ...base, box: bOff });
     if (JSON.stringify(sOn.points) !== JSON.stringify(sOff.points)) liveDiff++;
+    on.rallies += rallyOf(sOn); off.rallies += rallyOf(sOff); // 경기 길이(총 랠리) — count 지표 정규화용
     for (const [id, l] of bOn) if (idsA.has(id)) { on.atkAtt += l.atkAtt; on.atkKill += l.atkKill; on.atkErr += l.atkErr; on.digSucc += l.digSucc; }
     for (const [id, l] of bOff) if (idsA.has(id)) { off.atkAtt += l.atkAtt; off.atkKill += l.atkKill; off.atkErr += l.atkErr; off.digSucc += l.digSucc; }
   }
@@ -181,12 +183,16 @@ function boxToggle(trait: Trait, N: number, flagOn: boolean, flagOff: boolean) {
   check(mut.liveDiff === 0 && mutKillEq, `mutant(무효과) → liveness0+킬%동률 → ⑦ 오라클 이빨 증명(허위 오라클 금지)`);
 }
 
-// ── ⑧ 수비벽 — 디그 성공↑(박스 digSucc) + liveness ──
+// ── ⑧ 수비벽 — 디그 성공률(랠리당)↑ + liveness ──
+//   ★ 지표: 원시 digSucc COUNT는 경기 길이에 오염된다(수비↑ → 승리 빨라짐 → 총 랠리↓ → 총 디그 COUNT↓,
+//     방향이 뒤집힘 — 2026-07-27 Phase 2a에서 리그 조합 변화로 실제 flip 관측). 랠리당 디그율로 정규화하면
+//     경기 길이 무관하게 방향이 안정(실측 rate 0.375>0.347·승률 500>446/600 — 검증=Fable 5).
 {
   const N = 300;
   const { on, off, liveDiff } = boxToggle('digWall', N, true, false);
-  log(`⑧ 수비벽(N=${N}·동일시드): 디그 성공 ${off.digSucc}→${on.digSucc} · liveness ${liveDiff}/${N}`);
-  check(on.digSucc > off.digSucc, `디그 성공 ON>OFF (수비 범위↑)`);
+  const rOn = on.digSucc / on.rallies, rOff = off.digSucc / off.rallies;
+  log(`⑧ 수비벽(N=${N}·동일시드): 디그성공/랠리 ${rOff.toFixed(4)}→${rOn.toFixed(4)} (원시 COUNT ${off.digSucc}→${on.digSucc} = 경기길이 오염 참고) · liveness ${liveDiff}/${N}`);
+  check(rOn > rOff, `디그 성공률(랠리당) ON>OFF (수비 범위↑ — 경기길이 무관 지표)`);
   check(liveDiff > 0, `liveness>0 (배선 살아있음)`);
 }
 

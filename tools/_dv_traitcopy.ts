@@ -30,6 +30,10 @@ const EXPECT: Record<string, number | number[] | null> = {
   endurance: up(TRAIT_FX.enduranceRegen),
   tank: up(TRAIT_FX.tankStaminaMax),
   maestro: up(TRAIT_FX.maestroSet),
+  // ── 반응형 신규 3종(2026-07-27, Phase 2a) — desc가 TRAIT_FX 합성값을 병기해야. 유리멘탈은 스파이크↓·집중↓ 두 값. ──
+  joker: up(TRAIT_FX.reactiveJokerAll),                                          // +4%
+  fragile: [R((1 - TRAIT_FX.reactiveFragileSpike) * 100), R(TRAIT_FX.reactiveFragileFocus * 100)], // [스파이크 3, 집중 5]
+  bounce: R(TRAIT_FX.reactiveBounceFocus * 100),                                 // +5%
 };
 
 console.log('── 특성 설명 수치 == 엔진 계수 대조 ──');
