@@ -26,6 +26,7 @@ import { ALL_POSITIONS, overall, overallRaw, REVEAL_PRECISE } from '../engine/ov
 import { capContractYears } from '../engine/retire';
 import { deriveRatings } from '../engine/ratings';
 import { formatMoney } from '../engine/salary';
+import { iGa, waGwa } from '../lib/josa';
 import { marketVal } from '../data/awardSalary';
 import { teamRelations, relationBonds } from '../data/relationships';
 import {
@@ -167,7 +168,7 @@ function FACenterInner() {
         if (!a) continue; // 새로 지명한 선수 — 첫 상태라 '변화'가 아님
         const nm = preSnap[id]?.name ?? '선수';
         if (a.s !== 'won' && b.s === 'won') toast.push(`FA 시장 변화. ${nm} 영입 가능성이 높아졌습니다.`);
-        else if (a.s === 'won' && b.s !== 'won') toast.push(`FA 시장 변화. ${nm}과의 계약 가능성이 낮아졌습니다.`);
+        else if (a.s === 'won' && b.s !== 'won') toast.push(`FA 시장 변화. ${waGwa(nm)}의 계약 가능성이 낮아졌습니다.`);
         else if (a.s === 'pending' && b.s === 'pending' && a.rank === 1 && (b.rank ?? 99) > 1)
           toast.push(`FA 시장 변화. ${nm} 계약에 다른 구단이 더 유력해졌습니다.`);
       }
@@ -631,7 +632,7 @@ function FACenterInner() {
                           ) : null}
                           {showFactors ? (
                             <Text style={styles.competText}>
-                              현재 {winnerName}가 우세한 이유 · {factors!.join(' · ')}
+                              현재 {iGa(winnerName)} 우세한 이유 · {factors!.join(' · ')}
                             </Text>
                           ) : null}
                         </View>

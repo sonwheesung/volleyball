@@ -1526,6 +1526,12 @@ export const useGameStore = create<GameState>()(
         const nextFocusLog: FocusSeg[] = get().trainingFocus ? [{ fromDay: 0, focus: get().trainingFocus }] : [];
         setFocusTimeline(my, nextFocusLog);
         setSalaryEra(medianOvr(currentBasePlayers().filter((p) => !p.isForeign))); // 시대 앵커 갱신(SALARY 2장) — 새 base 기준
+        // campLog 롤링 프룬(무한증가 봉인) — 형제 로그(foreign/media/interviews)와 달리 캡이 없어 매 전지훈련 append만 됐다.
+        //   리그에 잔류한 선수(snapshot=다음 base 레지스트리) 엔트리만 보존, 은퇴·리그이탈 선수 엔트리 제거.
+        //   ⚠ careerGrowthOf(현 로스터 선수의 전 시즌 cur-gain 누적 차감)는 slice cap이 아닌 **선수 단위 보존**이 필수 —
+        //   현 로스터 선수는 snapshot에 반드시 있으므로 그 선수의 모든 시즌 엔트리가 온전히 남는다(차감 정확 보존).
+        //   결정론 무영향: season≥1엔 campLog가 리플레이/재계산 미참조(부스트는 base에 이미 구워짐) — 표시전용(§11.2).
+        const nextCampLog = get().campLog.filter((e) => snapshot[e.playerId] != null);
         set({
           coachPool: nextCoachPool,          // 감독 생애주기 풀 영속(STAFF_SYSTEM 6)
           coachCareerLog: nextCoachCareerLog, // 감독 경력 로그 append(명성 진실, §9.6-B)
@@ -1561,6 +1567,8 @@ export const useGameStore = create<GameState>()(
           currentDay: 0,
           lastGrowthDay: -1, // 새 시즌 — 성장 리포트 재초기화(시즌 경계 diff는 로스터·나이 변동 얽혀 제외, TRAINING §성장리포트)
           campTrainedThisOffseason: [], // 새 오프시즌 — 전지훈련 1회 제한 초기화(MONETIZATION §11.2)
+          campLog: nextCampLog,         // 롤링 프룬 — 리그 잔류 선수만(위 계산). 현 로스터 선수 careerGrowthOf 차감 보존
+
           results: {},
           watchProgress: {}, // 새 시즌 — 이어보기 위치 초기화
           ceremonyProgress: 0, // 새 시즌 — 시상식 관람 진행도 리셋(§5.3.1, campDoneSeason 패턴)

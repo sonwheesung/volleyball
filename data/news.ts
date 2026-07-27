@@ -25,7 +25,7 @@ import { buildPlayoffs } from './playoffs';
 import { postseasonReveal } from './postseason';
 import { PO_SLOTS, FINAL_SLOTS, SEASON_DAYS } from '../engine/calendar';
 import { SCANDAL_KO, EXPEL_KO } from '../engine/scandal';
-import { resolveJosa, josa } from '../lib/josa';
+import { resolveJosa, josa, eunNeun } from '../lib/josa';
 import { sponsorStanceOf } from '../engine/sponsorStance';
 
 const teamName = (id: string) => getTeam(id)?.name ?? id;
@@ -582,7 +582,7 @@ export function buildNewsFeed(
           body3('release', rkey, more(
             `${t.name}이(가) 여러 구단의 제안을 받았지만 모두 거절해, 이번 시즌을 소속팀 없이 보내게 됐다.`,
             careerLine(t.playerId),
-            outMine ? `${teamName(myTeamId)}으로서는 익숙한 얼굴을 시장에서 지켜본 셈이다.` : '')), t.playerId);
+            outMine ? `${josa(teamName(myTeamId), '으로서는', '로서는')} 익숙한 얼굴을 시장에서 지켜본 셈이다.` : '')), t.playerId);
         continue;
       }
       // 재계약 불발 사유(FA §2.5c-격상 — 내 팀 만료FA에만 t.reason). 캡압박·뿌리침·미제안으로 헤드라인·리드 분기.
@@ -900,7 +900,7 @@ export function buildNewsFeed(
           const champBody = `${roundKo} ${g + 1}차전에서 ${teamName(wId)}이(가) ${teamName(lId)}을(를) 세트 ${wS}-${lS}로 꺾고 시리즈 ${wW}-${lW}로 ${currentSeason + 1}시즌 정상에 올랐다.`
             + (reverse ? ' 2패 뒤 3연승, 리버스 스윕의 대역전 우승이다.' : sweep ? ' 3-0 스윕으로 끝낸 완벽한 대관식이다.' : '');
           push(currentSeason, 'playoff', vh([
-            (w) => `${roundKo}는 ${w}의 것 (${wW}-${lW}) — 우승 확정${reverse ? ' · 대역전' : ''}`,
+            (w) => `${eunNeun(roundKo)} ${w}의 것 (${wW}-${lW}) — 우승 확정${reverse ? ' · 대역전' : ''}`,
             (w) => `${w}, ${roundKo} 제패 — ${wW}-${lW}로 정상${reverse ? ' (리버스 스윕)' : ''}`,
           ], gkey, teamName(wId)), true, wId, champBody, `${refBase}:${g}`, slots[g]);
           continue;

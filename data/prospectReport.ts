@@ -9,6 +9,7 @@ import { deriveRatings } from '../engine/ratings';
 import { strSeed } from '../engine/rng';
 import { amateurImpression } from './amateurRecord';
 import { revealedPotential } from './prospectScout';
+import { eunNeun } from '../lib/josa';
 
 // 성적 카테고리 key → 강점 표현(가시 성적 기반). label은 성적표와 동일.
 const STRENGTH: Record<string, string[]> = {
@@ -48,7 +49,7 @@ export function prospectReport(p: Player, reveal: number): string[] {
 
   // 3) 약점 — 가장 낮은 지표가 확실히 처지면 단서(가시).
   const worst = [...imp].sort((a, b) => a.norm - b.norm)[0];
-  if (worst && worst.norm < 0.35 && worst.key !== best?.key) lines.push(`다만 ${worst.label.replace('세트당 ', '')}은 아직 다듬을 여지가 있다.`);
+  if (worst && worst.norm < 0.35 && worst.key !== best?.key) lines.push(`다만 ${eunNeun(worst.label.replace('세트당 ', ''))} 아직 다듬을 여지가 있다.`);
 
   // 4) 잠재력 — 스카우터가 공개한 부분 포텐만 근거(숨은 포텐 미참조 = 스포일러 금지).
   const rev = revealedPotential(p, reveal);

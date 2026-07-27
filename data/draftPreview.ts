@@ -7,6 +7,7 @@ import type { Player, Position } from '../types';
 import { deriveRatings } from '../engine/ratings';
 import { amateurScore } from './amateurRecord';
 import { revealedPotential } from './prospectScout';
+import { eunNeun } from '../lib/josa';
 
 const POS_KO: Record<Position, string> = { S: '세터', OH: '아웃사이드', OP: '아포짓', MB: '미들', L: '리베로' };
 const STRONG = 0.6; // 성적상 상위(가시 amateurScore) 임계
@@ -47,7 +48,7 @@ export function draftClassPreview(cls: Player[], reveal: number): DraftPreview {
       const cur = deriveRatings(x.p);
       return rev.every((r) => r.value <= cur[r.key] + 3); // 공개된 천장이 현재와 큰 차이 없음 = 성장 여지 물음표
     });
-    if (split) notes.push(`${POS_KO[split.p.position]} ${split.p.name}는 성적은 좋지만 성장 여지를 두고 스카우트 평가가 엇갈린다.`);
+    if (split) notes.push(`${POS_KO[split.p.position]} ${eunNeun(split.p.name)} 성적은 좋지만 성장 여지를 두고 스카우트 평가가 엇갈린다.`);
   }
 
   // 클래스 깊이.

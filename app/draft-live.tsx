@@ -9,6 +9,7 @@ import { DraftPoster } from '../components/DraftPoster';
 import { emblemFor } from '../data/emblems';
 import { POS_EN, posterAbilityStats } from '../data/awardPoster';
 import { teamColors } from '../lib/teamColor';
+import { iGa } from '../lib/josa';
 import { seasonYear } from '../data/seasonLabel';
 import { buildOffseasonBase } from '../data/draftSetup';
 import { resolveDraftContextFor } from '../data/offseasonArgs';
@@ -413,7 +414,7 @@ function DraftLiveInner() {
                   ) : null}
                 </View>
               </View>
-              {steal ? <Text style={styles.stealLine}>💔 {p.player.name}가 {shortTeamName(p.teamId)}의 지명을 받았습니다</Text> : null}
+              {steal ? <Text style={styles.stealLine}>💔 {iGa(p.player.name)} {shortTeamName(p.teamId)}의 지명을 받았습니다</Text> : null}
               {prose ? <Text style={styles.proseLine}>{prose}</Text> : null}
             </View>
           );

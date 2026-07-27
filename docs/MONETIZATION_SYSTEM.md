@@ -252,6 +252,12 @@
 - **상설 가드 — 아웃박스·campLog 재적용(발견·검증=Fable 5 / 가드·문서=Opus 에이전트, 2026-07-07 · 2026-07-08 재보정)**: `tools/_dv_campoutbox.ts` —
   시즌0(base null) 재수화 시 `campLog` 시드 재적용(신 엔트리 +3/+3 정확히 1회 · **구 엔트리 소급 +2/+7 재현** ⑤C)·시즌≥1(playerBase 존재)은
   재적용 스킵(이중적용 0)을 실 `persist.rehydrate`로 검증. 아웃박스·게이트도 동봉. README 루틴 등록.
+- **롤링 프룬(무한증가 봉인, 2026-07-27)**: `campLog`는 형제 로그(`foreignLog`/`mediaPredictionLog`/`interviews`)와 달리 캡이 없어
+  매 전지훈련 append만 되고 영속돼 다수 시즌에 **무한증가**했다. `endSeason` set 블록에서 **다음 시즌 base 레지스트리(snapshot)에
+  잔류한 선수 엔트리만 보존**하고 은퇴·리그이탈 선수 엔트리를 제거한다(`campLog.filter((e) => snapshot[e.playerId] != null)`).
+  ⚠ 유일 상시 소비처 `growthReport.careerGrowthOf`(선수별 전 시즌 cur-gain 누적 차감)는 **선수 단위 보존**이 필수라
+  slice 캡 금지 — 현 로스터 선수는 snapshot에 반드시 있으므로 그 선수의 **모든 시즌 엔트리가 온전히 남아** 차감이 정확하다.
+  결정론 무영향(season≥1엔 campLog 리플레이/재계산 미참조, 부스트는 base에 이미 구워짐 — 표시전용). 가드 `tools/_dv_campprune.ts`.
 - **MED(부분 채택)**: 포지션-코스 미스매치 처리 ~~UI 경고만, 차단 안 함(유저 자유)~~ → **정정(2026-07-05 사용자 결정)**: 코스 목록을 `forPos` 필터로 짜 **미스매치 코스 자체를 미노출**(예: 세터에게 공격훈련 코스는 목록에서 숨김). 경고 표시가 아니라 애초에 안 보인다 — 모든 포지션이 ≥1개 적합 코스 보유(`engine/diamonds forPos`). 근거 `app/training-camp.tsx:252-254`.
   오프시즌 코스 인원 캡·"벤치는 sk* 실현 60~80%" 이중게이트 명시는 보류(§11.5 미해결로).
 - **상태**: ✅ **구현 완료(2026-07-02)** — 엔진(`CAMP_COURSES`·`applyCampCourse`)·store(course 액션+유니온 재적용)·

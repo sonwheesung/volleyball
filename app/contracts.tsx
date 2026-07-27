@@ -22,6 +22,7 @@ import { isFranchise, maxSalaryFor, LEAGUE_CAP } from '../engine/cap';
 import { severanceFee, inSeasonCost } from '../engine/transactions';
 import { assignFAGrades, willBeFA } from '../engine/faMarket';
 import { contractStatus, formatMoney, resignSalaryBounds } from '../engine/salary';
+import { iGa } from '../lib/josa';
 import { capContractYears } from '../engine/retire';
 import { marketVal, renewalVal } from '../data/awardSalary';
 import { resignOutlookNow, resignCaptionOf, resignReactionCopy, type ResignBand } from '../data/owner';
@@ -156,7 +157,7 @@ function ContractsInner() {
     const fee = bc ? severanceFee(bc.salary, bc.remaining) : 0;
     // 위약금 지불 못 하면 방출 자체가 불가(재정 무게 — TRANSACTION_SYSTEM 0.5①)
     if (fee > cash) {
-      showAlert('위약금 부족', `${p.name} 방출에는 위약금 ${formatMoney(fee)}가 듭니다.\n현재 운영 자금 ${formatMoney(cash)}. 지불할 수 없습니다.`);
+      showAlert('위약금 부족', `${p.name} 방출에는 위약금 ${iGa(formatMoney(fee))} 듭니다.\n현재 운영 자금 ${formatMoney(cash)}. 지불할 수 없습니다.`);
       return;
     }
     // 함께한 세월·통산을 회고로(감정 무게 — TRANSACTION_SYSTEM 0.5②). 포지션별 대표 스탯.
