@@ -590,11 +590,13 @@ export function buildNewsFeed(
         capSqueezed: (n: string) => `${teamName(myTeamId)}, ${n} 캡에 밀려 이별 — FA 시장으로`,
         refused: (n: string) => `${n}, ${teamName(myTeamId)} 제안 뿌리치고 FA행`,
         notOffered: (n: string) => `${teamName(myTeamId)}, ${n} 재계약 접고 결별`,
+        rosterExcess: (n: string) => `${teamName(myTeamId)}, 로스터 정원 초과 — ${n} 정리`,
       } as const)[t.reason] : null;
       const leadByReason = outMine && t.reason ? ({
         capSqueezed: `${t.name}이(가) 샐러리캡에 밀려 ${teamName(myTeamId)}과(와) 재계약하지 못하고 FA 시장에 나왔다.`,
         refused: `${t.name}이(가) ${teamName(myTeamId)}의 재계약 제안을 뿌리치고 FA 시장에 나왔다. 한 시즌을 건 약속은 성사되지 못했다.`,
         notOffered: `${teamName(myTeamId)}이(가) ${t.name}에게 재계약을 제안하지 않아, 선수는 FA 시장에 나왔다.`,
+        rosterExcess: `${teamName(myTeamId)}이(가) 로스터 정원(20명)을 넘겨, ${t.name}을(를) 정리해 FA 시장에 내보냈다.`,
       } as const)[t.reason] : `${t.name}이(가) ${teamName(t.fromTeam)}을(를) 떠나 FA 시장에 나왔다. 새 시즌 명단에 이름을 올리지 못했다.`;
       push(t.season, 'release', vh([
         headByReason ?? ((n) => `${teamName(t.fromTeam)}, ${n} 방출 — FA 시장으로`),

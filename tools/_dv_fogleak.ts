@@ -55,24 +55,29 @@ for (const p of prospects) {
 // ── (b) 형제 정적: 유망주 OVR 렌더 경로가 reveal 게이트/fogOvr를 쓰는지 ──
 //   한계(주석): 정규식 휴리스틱 — overallRaw( 렌더 라인 ±3줄에 `reveal >= REVEAL_PRECISE`(또는 옛 리터럴
 //   `reveal >= 0.92`, 공백 무시) 게이트나 같은 라인 fogOvr(가 있어야 통과. import 라인·비유망주(외인 트라이아웃 자체 fog)는 제외.
+//   면제(fog-exempt): ±3줄에 `fog-exempt` 마커가 있으면 "안개 대상 아님"(내 확정 지명 = 내 소유 선수의 전체 공개)으로
+//   위반이 아닌 **면제**로 분류해 별도 리포트(은닉 아님 — 리뷰어가 건수·근거를 본다). 마커는 근거 주석과 함께여야.
 const norm = (s: string) => s.replace(/\s+/g, '');
-function siblingViolations(rel: string): string[] {
+function siblingScan(rel: string): { violations: string[]; exempt: string[] } {
   const src = readFileSync(join(root, rel), 'utf8').split('\n');
-  const v: string[] = [];
+  const violations: string[] = [];
+  const exempt: string[] = [];
   src.forEach((line, i) => {
     if (!line.includes('overallRaw(')) return;
     if (/^\s*import\b/.test(line)) return;                 // import 라인 제외
     if (line.includes('fogOvr(')) return;                 // 같은 라인 안개 헬퍼 → 안전
     const win = norm(src.slice(Math.max(0, i - 3), i + 4).join('\n'));
+    if (win.includes('fog-exempt')) { exempt.push(`${rel}:${i + 1}  ${line.trim()}`); return; } // 명시 면제(내 확정 픽 등)
     const gated = win.includes('reveal>=REVEAL_PRECISE') || win.includes('reveal>=0.92') || win.includes('fogOvr(');
-    if (!gated) v.push(`${rel}:${i + 1}  ${line.trim()}`);
+    if (!gated) violations.push(`${rel}:${i + 1}  ${line.trim()}`);
   });
-  return v;
+  return { violations, exempt };
 }
-// 유망주 OVR을 그리는 파일(draft 클래스). draft-live는 fogOvr만 쓰고 overallRaw 미사용(검증 대상이나 위반 0 기대).
+// 유망주 OVR을 그리는 파일(draft 클래스). draft-live는 목록=fogOvr, 포스터=내 확정 픽(fog-exempt 면제).
 const PROSPECT_FILES = ['app/draft.tsx', 'app/draft-live.tsx'];
 const violations: string[] = [];
-for (const f of PROSPECT_FILES) violations.push(...siblingViolations(f));
+const exemptLines: string[] = [];
+for (const f of PROSPECT_FILES) { const r = siblingScan(f); violations.push(...r.violations); exemptLines.push(...r.exempt); }
 
 // 형제 확인(정보): 외인/아시아 트라이아웃은 유망주가 아니라 별개지만 자체 reveal-gated fog를 씀(누출 아님).
 const tryoutUsesFog = ['app/tryout.tsx', 'app/asian-tryout.tsx'].every((f) => {
@@ -85,8 +90,9 @@ log(`유망주 ${prospects.length}명 × (아래 ${BELOW.length} + 위 ${ABOVE.l
 log(`(a) 임계 아래 검사 ${belowChecks} — 정확치 누출 ${belowLeak} · 범위표기 아님 ${belowNotRange}`);
 log(`(a) 임계 위 검사 ${aboveChecks} — 정확치 아님/범위표기 ${aboveWrong}`);
 log(`(a-A/B) 누출 변종(항상 정확치) 아래서 정확치 노출 ${leakyBelowLeak}/${belowChecks}`);
-log(`(b) 형제 정적 — 유망주 파일 ${PROSPECT_FILES.join('·')} 게이트 없는 overallRaw 렌더 ${violations.length}건`);
+log(`(b) 형제 정적 — 유망주 파일 ${PROSPECT_FILES.join('·')} 게이트 없는 overallRaw 렌더 ${violations.length}건 · 명시 면제(fog-exempt) ${exemptLines.length}건`);
 if (violations.length) violations.forEach((x) => log('     ⚠ ' + x));
+if (exemptLines.length) exemptLines.forEach((x) => log('     ○ 면제(내 확정 픽 전체공개) ' + x));
 
 check(belowLeak === 0, '(a) 임계(0.92) 아래: fogOvr가 정확 OVR을 노출하지 않음(누출 0)');
 check(belowNotRange === 0, '(a) 임계 아래: 출력이 범위 문자열(안개 표기)');

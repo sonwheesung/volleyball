@@ -237,6 +237,7 @@ function DraftLiveInner() {
         kicker={`${seasonYear(season + 1)} 신인 드래프트 · ${posterPick.round}R ${posterPick.overallNo}순번`}
         name={posterPick.player.name}
         posEn={POS_EN[posterPick.player.position]}
+        // fog-exempt: posterPick은 내 확정 지명(= 내 소유 선수, line 101 타팀·참관은 항상 null) — 스카우팅 안개 대상 아님, 스쿼드 화면과 동일한 전체 OVR 공개(_dv_fogleak (b) 면제).
         ovr={overallRaw(posterPick.player)}
         stats={posterAbilityStats(posterPick.player)}
         accent={teamColors(my).light}

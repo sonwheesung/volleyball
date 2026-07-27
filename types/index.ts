@@ -268,7 +268,7 @@ export interface Transfer {
   // FA_SYSTEM §2.8.6 Phase6 — optional(구세이브 호환). 카운터 수락 이적이면 to연봉, SIT_OUT(bids>0) 잔류면 satOut.
   counteredTo?: number;                                      // 카운터(counterTolerance) 수락 계약의 최종 연봉 — 뉴스 ① 톤
   satOut?: boolean;                                          // 입찰이 있었는데도 잔류를 택함(SIT_OUT+bids>0) — 뉴스 ② 톤(release에만)
-  reason?: 'refused' | 'notOffered' | 'capSqueezed';         // 재계약 불발 사유(FA §2.5c-격상, release에만) — 캡압박/뿌리침/미제안. 옵셔널=구세이브 호환·마이그레이션 불요
+  reason?: 'refused' | 'notOffered' | 'capSqueezed' | 'rosterExcess'; // 재계약 불발/정리 사유(FA §2.5c-격상, release에만) — 캡압박/뿌리침/미제안/정원초과정리. 옵셔널=구세이브 호환·마이그레이션 불요
 }
 
 /** 은퇴 영속 기록 — 주목 은퇴자(career≥8시즌 또는 HOF)의 작별·회고(NEWS_SYSTEM 슬라이스5). */

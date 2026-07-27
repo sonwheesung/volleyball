@@ -40,6 +40,8 @@
 >
 > **← 범위 정정(2026-07-24, UI-50 허브 전환)**: 위 규칙은 **`endSeason` 이후 뒷단(post-rollover: `season-start`→`enshrine`→`training-camp?chain=1`→`season-opening`)에만** 적용된다. 뒷단은 롤오버가 이미 실행돼 리그 상태가 새 시즌으로 바뀐 뒤라, 앞단(소비된 결정 화면)으로의 복귀가 **다음 오프시즌으로의 상태 누수**를 만든다 — 잠금 유지가 여전히 정본.
 > **앞단(pre-rollover: `season-recap`·`tryout`·`asian-tryout`·`fa`·`draft`·`draft-live`)은 잠금 해제**(UI-50). 앞단 화면은 전부 **레버(스토어 필드)만 만지는 미리보기**이고 실제 반영은 `endSeason` 한 번에 일어나므로, 오가며 만져도 누수될 "소비된 상태"가 없다(레버는 언제든 덮어쓰기 가능한 입력값). 단 **하류 파생물(`draftSelections`)의 무효화**는 UI-50 ②가 책임진다.
+>
+> **UI-19 보강 — 첫 실행 기본 테마 = 라이트(2026-07-28, 사용자 요청)**: `components/theme.ts` 모듈 기본값을 ~~다크~~ → **라이트**로(`theme={...LIGHT}`·`themeMode='light'`·`themeAssets=ASSETS.light`). 신규 설치·`themeMode` 저장값 없는 첫 실행은 라이트로 뜬다. **명시 저장값(AsyncStorage `themeMode`)이 있으면 `loadThemeMode`가 그 값을 그대로 적용** — 다크를 골라둔 사용자는 유지(기본 변경이 되돌리지 않음). 세이브(zustand)·SAVE_VERSION 무관(테마는 AsyncStorage 별도 키). 콜드부팅 시 기본→저장값 적용 순간은 스플래시가 가림(UI-19 원안 그대로).
 
 > **UI-50 (2026-07-24 — 오프시즌은 체인이 아니라 허브)**: 오프시즌 앞단은 **일정 탭을 허브로 하는 방사형**이다. 각 단계 화면은 **다음 단계로 push하지 않고 일정으로 복귀**하고(시상식 `dismissAll`+`replace('/(tabs)/schedule')` 패턴 재사용 — 공용 `components/offseasonExit.ts` `useOffseasonExit()`), 일정 탭의 오프시즌 카드가 **권장 순서 번호 목록**으로 전 단계를 나란히 연다.
 > **왜**: 단일 사슬은 한 화면이 render throw하면 **오프시즌에서 영구히 빠져나갈 수 없는 소프트락**이 된다(2026-07-24 FA 센터 렌더 크래시 P0 `a04c0bc` — 에뮬 E2E 실사고). 우회로가 구조적으로 존재해야 한다.

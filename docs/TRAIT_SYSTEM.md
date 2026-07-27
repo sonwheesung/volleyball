@@ -178,7 +178,7 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
 | **fastStart** | 초반집중 | 현재 세트 최고 점수 ≤ 10 (세트 초반) | 전 스킬 ×1.03 | true | 멘탈 | closer |
 | **comeback** | 역전의명수 | 그 선수 팀이 현재 세트 뒤지는 중(내 점수 < 상대) | 전 스킬 ×1.03 | true | 멘탈 | thinIce |
 | **thinIce** | 살얼음 | 그 선수 팀이 뒤지는 중(내 점수 < 상대) | 전 스킬 ×0.97 | false(양날) | 멘탈 | comeback |
-| **tiebreaker** | 5세트의 사나이 | 현재 세트 == 5세트 | 전 스킬 ×1.03 | true | 멘탈 | — |
+| **tiebreaker** | 5세트의 여왕 (2026-07-28 순화, ~~사나이~~ — 여자부 남성어 제거, `_dv_copylint`) | 현재 세트 == 5세트 | 전 스킬 ×1.03 | true | 멘탈 | — |
 
 - **계수**: `TRAIT_FX.{closer,fastStart,comeback,thinIce,tiebreaker}Mul`(±3% placeholder — 방향만 확정, 크기 튜닝은 메인).
   desc는 이 상수에서 합성(조건 문구 명시, 가드 `_dv_traitcopy` 대조). 상극쌍 `ANTAGONISTS`(양방향): closer↔fastStart(반대 국면)·comeback↔thinIce(같은 국면 정반대).

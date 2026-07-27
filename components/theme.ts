@@ -2,7 +2,9 @@
 //   RN StyleSheet.create는 로드 시 색을 박제하므로, 테마 색을 쓰는 StyleSheet는 컴포넌트에서
 //   useThemedStyles(makeStyles)로 "렌더 시" 생성해야 토글·콜드부팅에서 올바르게 반영된다.
 //   theme 객체는 **동일 identity 유지 + 값만 Object.assign**(인라인 theme.x 사용처는 리렌더로 자동 반영).
-//   전환은 인스턴트(리로드 없음). 콜드부팅 시 기본(다크)→저장모드 적용 사이 순간은 스플래시가 가린다.
+//   전환은 인스턴트(리로드 없음). 콜드부팅 시 기본(라이트)→저장모드 적용 사이 순간은 스플래시가 가린다.
+//   ★ 첫 실행 기본 = 라이트(2026-07-28, 사용자 요청). 명시 저장값(themeMode 키)이 있으면 그 값 유지 —
+//     다크를 골라둔 사용자는 loadThemeMode가 저장값을 그대로 적용(기본 변경이 되돌리지 않음). AsyncStorage 키·세이브 무관.
 import { useMemo, useSyncExternalStore } from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
@@ -35,10 +37,10 @@ const ASSETS = {
   light: { bg: BG_LIGHT, scrim: 'rgba(236,241,247,0.72)' },
 };
 
-// 활성 theme — identity 고정, 값만 교체. 기본 다크.
-export const theme = { ...DARK };
-export let themeMode: ThemeMode = 'dark';
-export let themeAssets = ASSETS.dark;
+// 활성 theme — identity 고정, 값만 교체. 첫 실행 기본 라이트(2026-07-28) — 저장값 있으면 loadThemeMode가 덮음.
+export const theme = { ...LIGHT };
+export let themeMode: ThemeMode = 'light';
+export let themeAssets = ASSETS.light;
 
 // 버전 구독(useSyncExternalStore) — 토글 시 useThemedStyles/Screen이 리렌더
 let version = 0;
@@ -81,7 +83,7 @@ export function setThemeMode(m: ThemeMode): void {
 
 /** 앱 시작 시 저장 모드 로드·적용(_layout에서 1회 호출). */
 export async function loadThemeMode(): Promise<void> {
-  try { const m = await AsyncStorage.getItem(STORAGE_KEY); if (m === 'light' || m === 'dark') applyMode(m); } catch { /* 기본 다크 */ }
+  try { const m = await AsyncStorage.getItem(STORAGE_KEY); if (m === 'light' || m === 'dark') applyMode(m); } catch { /* 저장값 없거나 오류 → 첫 실행 기본 라이트 유지 */ }
 }
 
 /** 현재 모드 구독 훅 — 토글 시 리렌더. */

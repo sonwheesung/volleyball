@@ -391,8 +391,9 @@ export interface Offseason {
   myResigned: string[];                 // 내 팀 만료 FA 중 실제 재계약(keep 버킷 — refuse 롤 통과) = 수락 도장
 }
 
-/** 내 팀 만료 FA가 재계약 못 하고 FA 풀로 간 사유(FA §2.5c-격상) — 뉴스 카피 분기. */
-export type ReleaseReason = 'refused' | 'notOffered' | 'capSqueezed';
+/** 내 팀 선수가 FA 풀로 간 사유(FA §2.5c-격상) — 뉴스 카피 분기.
+ *  rosterExcess = 로스터 정원(계약 상한 20) 초과 자연 정리(드래프트 위시 임시 초과 되돌림, §1.7-내팀 2026-07-28). */
+export type ReleaseReason = 'refused' | 'notOffered' | 'capSqueezed' | 'rosterExcess';
 
 /**
  * 다음 시즌 오프시즌 상태 계산.
@@ -553,6 +554,32 @@ export function buildOffseason(
         payroll -= snapshot[worstId].contract.salary; // 방출 → 캡 여유 회복(음수 방어 불필요, 누적 payroll≥0)
         snapshot[worstId] = { ...snapshot[worstId], contract: { ...snapshot[worstId].contract, remaining: 0 } }; // FA화
         pool.push(worstId);
+      }
+    } else {
+      // 내 팀(구단주) 로스터 정원 초과 자연 정리(FA_SYSTEM §1.7-내팀, 2026-07-28) — 드래프트 위시 임시 초과(계약
+      //   상한 20 우회, engine/draft.ts 위시 분기는 캡 미검사)를 다음 오프시즌에 되돌린다. **캡(20) 초과분만** 트리밍
+      //   (20 이하로는 절대 안 건드림 — 그 아래 인원 정리는 단장이 직접). 방출 우선순위: 국내·포지션 floor 안전 선수 중
+      //   **다년계약 잔여(remaining≥2)를 후순위**로(단장이 약속한 다년계약 보호), 그 안에서 **최저가치(OVR↓) 우선**
+      //   — AI 능동배출(§1.7)과 같은 결(늙고 약한 순, floor 지킴). 방출자는 FA 풀로(remaining 0) → 타 팀이 주워갈 수 있음.
+      //   ★ 사용자 팀이므로 반드시 뉴스로 표면화(myReleaseReasons='rosterExcess') — 조용한 방출 금지(FA §2.5c 사유맵).
+      while (keep.length > ROSTER_CONTRACT_CAP) {
+        const posCount: Record<string, number> = {};
+        for (const id of keep) { const q = snapshot[id]; if (q) posCount[q.position] = (posCount[q.position] ?? 0) + 1; }
+        let worstId: string | null = null, worstMulti = 2, worstVal = Infinity; // 정렬키 [다년(0=최종연도/만료·1=다년), OVR] 오름차순
+        for (const id of keep) {
+          const q = snapshot[id];
+          if (!q || q.isForeign) continue; // 외인은 트라이아웃 별도 흐름 — 방출 대상 아님
+          if (posCount[q.position] <= ROSTER_FLOOR[q.position]) continue; // 포지션 floor 보호(경기 성립·'세터 0명' 방지)
+          const multi = q.contract.remaining >= 2 ? 1 : 0; // 다년계약 잔여는 후순위(최종연도/만료 선수부터 정리)
+          const v = overall(q);
+          if (multi < worstMulti || (multi === worstMulti && v < worstVal)) { worstMulti = multi; worstVal = v; worstId = id; }
+        }
+        if (!worstId) break; // 전부 floor 경계 — 더 못 자름(안전 우선: 20 밑으로 절대 안 감, 초과는 다음 오프시즌으로 이월)
+        keep.splice(keep.indexOf(worstId), 1);
+        payroll -= snapshot[worstId].contract.salary; // 방출 → 캡 여유 회복(AI 블록과 동일 회계)
+        snapshot[worstId] = { ...snapshot[worstId], contract: { ...snapshot[worstId].contract, remaining: 0 } }; // FA화
+        pool.push(worstId);
+        myReleaseReasons[worstId] = 'rosterExcess'; // 정원 초과 정리 — 뉴스 표면화
       }
     }
     rosters[teamId] = keep;

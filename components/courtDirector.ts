@@ -282,8 +282,10 @@ export function buildLiveBanners(
     // 연속 득점(전방 누적)
     if (r.scorer === runSide) run++; else { runSide = r.scorer; run = 1; }
     if (RUN_TH.has(run)) out.push({ at: i, banner: { kind: 'run', tint: LIVE_TINT.run, icon: 'flame', mine: mineSide === r.scorer, title: `${teamName(r.scorer)} ${run}연속 득점!` } });
-    // 서브 에이스 누적(화면상 에이스 = ace + recvErr). byId=서버
-    if ((r.how === 'ace' || r.how === 'recvErr') && r.byId) {
+    // 배너 에이스 = 직접(노터치) 에이스만(how==='ace', byId=서버). 리시브 범실(recvErr) 간접 에이스는 엔진이
+    //   byId를 안 실어(rally.ts recvErr는 recvId만 탑재) 배너에 안 잡힌다 — 옛 `|| recvErr` 분기는 사문(死文)이라 제거.
+    //   ※ 박스스코어 srvAce는 리시브범실 간접 에이스까지 포함(FIVB 공식) — 배너와 정의가 다름(BROADCAST §Phase3).
+    if (r.how === 'ace' && r.byId) {
       const n = (aces[r.byId] = (aces[r.byId] ?? 0) + 1);
       if (ACE_TH.has(n)) out.push({ at: i, banner: { kind: 'acemulti', tint: LIVE_TINT.ace, icon: 'flash', mine: mineSide === r.scorer, title: `${names.nameOf(r.byId)} 서브 에이스 ${n}개!` } });
     }

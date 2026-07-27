@@ -50,7 +50,7 @@ export const TRAIT_FX = {
   fastStartMul: 1.03,         // 초반집중: 세트 초반(양팀 최고 점수 ≤10) 전 스킬 배수(↑)
   comebackMul: 1.03,          // 역전의명수: 그 선수 팀이 뒤지는 동안 전 스킬 배수(↑)
   thinIceMul: 0.97,           // 살얼음: 그 선수 팀이 뒤지는 동안 전 스킬 배수(↓ — 양날 부정)
-  tiebreakerMul: 1.03,        // 5세트의사나이: 현재 세트가 5세트면 전 스킬 배수(↑)
+  tiebreakerMul: 1.03,        // 5세트의여왕: 현재 세트가 5세트면 전 스킬 배수(↑)
 } as const;
 
 // 반응형 유효 배수 하드캡(스노볼 방지 — 스택/중복 포함 절대 초과 금지). ±10% / ±0.10.
@@ -104,7 +104,7 @@ export const TRAITS: Record<Trait, TraitDef> = {
   fastStart:    { name: '초반집중', desc: `시작부터 몰아친다 — 세트 초반(10점 이하) 전 능력 ${upPct(TRAIT_FX.fastStartMul)}`, good: true, cat: '멘탈' },
   comeback:     { name: '역전의명수', desc: `뒤질수록 힘을 낸다 — 뒤지는 동안 전 능력 ${upPct(TRAIT_FX.comebackMul)}`, good: true, cat: '멘탈' },
   thinIce:      { name: '살얼음', desc: `끌려가면 흔들린다 — 뒤지는 동안 전 능력 ${cutPct(TRAIT_FX.thinIceMul)}`, good: false, cat: '멘탈' },
-  tiebreaker:   { name: '5세트의 사나이', desc: `마지막 세트에 강하다 — 5세트에 전 능력 ${upPct(TRAIT_FX.tiebreakerMul)}`, good: true, cat: '멘탈' },
+  tiebreaker:   { name: '5세트의 여왕', desc: `마지막 세트에 강하다 — 5세트에 전 능력 ${upPct(TRAIT_FX.tiebreakerMul)}`, good: true, cat: '멘탈' },
 };
 
 // 등장 가중치 — 좋은 특성이 흔하고 부정 특성은 드물게(도박은 성립하되 희소)
