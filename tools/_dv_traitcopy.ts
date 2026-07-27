@@ -34,6 +34,11 @@ const EXPECT: Record<string, number | number[] | null> = {
   joker: up(TRAIT_FX.reactiveJokerAll),                                          // +4%
   fragile: [R((1 - TRAIT_FX.reactiveFragileSpike) * 100), R(TRAIT_FX.reactiveFragileFocus * 100)], // [스파이크 3, 집중 5]
   bounce: R(TRAIT_FX.reactiveBounceFocus * 100),                                 // +5%
+  // ── 반응형 이벤트 발동형 4종(2026-07-27, Phase 2b) — desc가 TRAIT_FX 합성값을 병기해야. 낯가림은 하락 %(cutPct). ──
+  coldStart: R((1 - TRAIT_FX.reactiveColdStartAll) * 100),                       // −4%
+  pinchServer: up(TRAIT_FX.reactivePinchServe),                                  // +5%
+  clutchSub: up(TRAIT_FX.reactiveClutchSpike),                                   // +8%
+  aceStreak: up(TRAIT_FX.reactiveAceServe),                                      // +5%
 };
 
 console.log('── 특성 설명 수치 == 엔진 계수 대조 ──');

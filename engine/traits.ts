@@ -37,6 +37,11 @@ export const TRAIT_FX = {
   reactiveFragileSpike: 0.97, // 유리멘탈: 블로킹 당한 뒤 스파이크 배수(↓ · debuff)
   reactiveFragileFocus: 0.05, // 유리멘탈: 집중 보정(− 로 적용 · debuff)
   reactiveBounceFocus: 0.05,  // 오뚝이: 막힘/범실 직후 집중 보정(+ · buff)
+  // ── 반응형(reactive) 이벤트 발동형 4종(2026-07-27, Phase 2b) — 소폭 placeholder(방향만 확정, 크기는 메인 튜닝). 전부 ±10%/±0.10 캡 안. ──
+  reactiveColdStartAll: 0.96, // 낯가림: 교체 투입 직후 전 스킬 배수(↓ · debuff · joker 상극)
+  reactivePinchServe: 1.05,   // 핀치서버: 교체 서브 투입 후 서브 배수(↑ · buff)
+  reactiveClutchSpike: 1.08,  // 대타승부사: 교체 후 첫 공격 스파이크 배수(↑ · buff · 1랠리)
+  reactiveAceServe: 1.05,     // 에이스기세: 서브 에이스 성공 후 서브 배수(↑ · buff)
 } as const;
 
 // 반응형 유효 배수 하드캡(스노볼 방지 — 스택/중복 포함 절대 초과 금지). ±10% / ±0.10.
@@ -77,6 +82,11 @@ export const TRAITS: Record<Trait, TraitDef> = {
   joker:        { name: '조커', desc: `교체로 들어가면 잠깐 살아난다 — 투입 직후 전 능력 ${upPct(TRAIT_FX.reactiveJokerAll)} (5랠리)`, good: true, cat: '플레이' },
   fragile:      { name: '유리멘탈', desc: `블로킹에 막히면 잠깐 흔들린다 — 스파이크 ${cutPct(TRAIT_FX.reactiveFragileSpike)}·집중 ${cutPP(TRAIT_FX.reactiveFragileFocus)} (5랠리)`, good: false, cat: '멘탈' },
   bounce:       { name: '오뚝이', desc: `막히거나 실수해도 곧 다시 집중한다 — 집중 ${addPP(TRAIT_FX.reactiveBounceFocus)} (5랠리)`, good: true, cat: '멘탈' },
+  // ── 반응형 이벤트 발동형 4종(2026-07-27, Phase 2b) — desc는 TRAIT_FX에서 문자열 합성(가드 _dv_traitcopy 대조). ──
+  coldStart:    { name: '낯가림', desc: `교체로 들어가면 잠깐 적응이 안 된다 — 투입 직후 전 능력 ${cutPct(TRAIT_FX.reactiveColdStartAll)} (5랠리)`, good: false, cat: '플레이' },
+  pinchServer:  { name: '핀치서버', desc: `교체 서브로 들어가면 서브가 매섭다 — 서브 ${upPct(TRAIT_FX.reactivePinchServe)} (5랠리)`, good: true, cat: '플레이' },
+  clutchSub:    { name: '대타승부사', desc: `교체 투입 후 첫 공격에 힘이 실린다 — 스파이크 ${upPct(TRAIT_FX.reactiveClutchSpike)} (첫 공격)`, good: true, cat: '멘탈' },
+  aceStreak:    { name: '에이스기세', desc: `서브 에이스를 터뜨리면 기세가 오른다 — 서브 ${upPct(TRAIT_FX.reactiveAceServe)} (5랠리)`, good: true, cat: '멘탈' },
 };
 
 // 등장 가중치 — 좋은 특성이 흔하고 부정 특성은 드물게(도박은 성립하되 희소)
@@ -88,7 +98,9 @@ const POOL: { t: Trait; w: number }[] = [
   { t: 'endurance', w: 7 }, { t: 'tank', w: 7 }, { t: 'maestro', w: 7 },
   // 반응형 신규 3종(2026-07-27, Phase 2a) — good(조커/오뚝이) w=5, bad(유리멘탈) w=2. 추가 후 부정 보유율은 메인이 재측정·튜닝(§6.3).
   { t: 'joker', w: 5 }, { t: 'bounce', w: 5 },
-  { t: 'choke', w: 4 }, { t: 'earlyDecline', w: 3 }, { t: 'glass', w: 4 }, { t: 'fragile', w: 2 }, // 부정 가중(2026-07-27) — 상시형 good 6종 추가로 희석된 부정 보유율을 재복원: 2/2/2→4/3/4로 14.7% 유지(단점만 6.1%, N=30,000). fragile(유리멘탈)=반응형 부정 w=2
+  // 반응형 이벤트 발동형 4종(2026-07-27, Phase 2b) — good 3종(pinchServer/clutchSub/aceStreak) w=4, bad(coldStart) w=2. 부정 보유율은 메인이 재측정.
+  { t: 'pinchServer', w: 4 }, { t: 'clutchSub', w: 4 }, { t: 'aceStreak', w: 4 },
+  { t: 'choke', w: 4 }, { t: 'earlyDecline', w: 3 }, { t: 'glass', w: 4 }, { t: 'fragile', w: 2 }, { t: 'coldStart', w: 2 }, // 부정 가중 — fragile(유리멘탈)·coldStart(낯가림)=반응형 부정 각 w=2
 ];
 const TOTAL_W = POOL.reduce((s, x) => s + x.w, 0);
 
@@ -106,6 +118,9 @@ export const ANTAGONISTS: Partial<Record<Trait, readonly Trait[]>> = {
   // 반응형 상극(2026-07-27, Phase 2a) — 유리멘탈(막히면 흔들림) ↔ 오뚝이(막혀도 다시 집중): 서로 상쇄돼 무의미
   fragile: ['bounce'],
   bounce: ['fragile'],
+  // 반응형 상극(2026-07-27, Phase 2b) — 조커(교체 투입 시 살아남 buff) ↔ 낯가림(교체 투입 시 적응 못 함 debuff): 같은 트리거의 정반대 → 상쇄
+  joker: ['coldStart'],
+  coldStart: ['joker'],
 };
 
 function pickWeighted(s: string, exclude: Set<Trait>): Trait | null {
@@ -214,7 +229,11 @@ export function reactiveSkillMult(buff: ActiveBuff | undefined, skill: ReactiveS
   let m = 1;
   switch (buff.trait) {
     case 'joker': m = TRAIT_FX.reactiveJokerAll; break;                 // 전 스킬 ↑
+    case 'coldStart': m = TRAIT_FX.reactiveColdStartAll; break;         // 전 스킬 ↓(낯가림 · joker 반대)
     case 'fragile': if (skill === 'spike') m = TRAIT_FX.reactiveFragileSpike; break; // 스파이크만 ↓
+    case 'pinchServer': if (skill === 'serve') m = TRAIT_FX.reactivePinchServe; break; // 서브만 ↑
+    case 'aceStreak': if (skill === 'serve') m = TRAIT_FX.reactiveAceServe; break;     // 서브만 ↑
+    case 'clutchSub': if (skill === 'spike') m = TRAIT_FX.reactiveClutchSpike; break;  // 스파이크만 ↑(교체 후 첫 공격)
     // bounce: 스킬 배수 없음(집중 보정만) → reactiveFocusAdj에서 처리
   }
   return reactiveClampSkill(m);

@@ -7,15 +7,17 @@
 //   (a) 결정론/무해성: 반응형 미부여 리그 → activeBuffs 항상 빈 맵(activations=0·maxBuffs=0) + 동일시드 2회 바이트 동일 +
 //       reactive* 접근자가 undefined 버프에 1배/0 반환(무특성 무영향). + 민감도(반응형 부여 시 activations>0·결과 변동)로 비공허 증명.
 //   (b) 발동: 조커=교체 투입(강제 개입 sub)에서 activations 0→1(무조커 control=0) · 유리멘탈/오뚝이=블로킹 당함(stuff)/범실에서 activations>0(strip=0).
+//       Phase 2b: 낯가림=교체 투입(조커와 동일 트리거·control 0) · 핀치서버=서브 슬롯 교체 투입(control 0) · 대타승부사=교체 공격수 첫 공격(control 0) · 에이스기세=서브 에이스(strip 0).
 //   (c) 지속·해제: 5랠리 자동 만료(순수 tickReactiveBuffs 직접 검증 + Run A: expires=1·clears=0) · 타임아웃 즉시 clear(Run B: expires=0·clears=1) · 세트 종료 clear(late-set 발동 → clears로 해제, 누수 없음).
 //   (d) 선수당 1개: 같은 id에 서로 다른 트리거를 강제 주입(Map.set) → 단일 유지(size=1, 마지막 승).
 //   (e) 하드캡: reactiveClampSkill/reactiveClampFocus에 극단값(±5)을 주입해도 [0.90,1.10]/[−0.10,0.10] clamp.
 //   (f) 방향 A/B(직접 playRally 하네스 — 팀 박스는 브리프 버프에 희석되어 둔감하므로 버프를 전원 활성해 방향을 크게 관측):
-//       조커 홈팀 킬%↑ · 유리멘탈 홈팀 킬%↓ + **자가검증**(OFF/OFF = reactiveSkillMult≡1 세계면 킬% 동률 → 방향 오라클 FAIL 증명).
+//       조커·대타승부사 홈팀 킬%↑ · 유리멘탈·낯가림 홈팀 킬%↓ · 핀치서버·에이스기세 홈 서브 에이스%↑ + **자가검증**(OFF/OFF = reactiveSkillMult≡1 세계면 킬%·서브에이스% 동률 → 방향 오라클 FAIL 증명).
 import { resetLeagueBase, LEAGUE, coachInfoOf } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
 import { simulateMatch, debugReactive, REACTIVE_DURATION } from '../engine/match';
 import { buildLineup } from '../engine/lineup';
+import { serverIndex } from '../engine/rotation';
 import { playRally, type RallyTeam, type BoxSink } from '../engine/rally';
 import { deriveRatings } from '../engine/ratings';
 import { createRng } from '../engine/rng';
@@ -32,7 +34,7 @@ const check = (ok: boolean, msg: string) => { log(`  ${ok ? '✅' : '❌'} ${msg
 
 resetLeagueBase();
 const t0 = LEAGUE.teams[0].id, t1 = LEAGUE.teams[1].id;
-const REACT: Trait[] = ['joker', 'fragile', 'bounce'];
+const REACT: Trait[] = ['joker', 'fragile', 'bounce', 'coldStart', 'pinchServer', 'clutchSub', 'aceStreak']; // 반응형 7종 전부 제거(무영향 리그)
 const stripReact = (p: Player): Player => ({ ...p, traits: (p.traits ?? []).filter((t) => !REACT.includes(t)) });
 const A0 = availableTeamPlayers(t0, 0).map(stripReact); // 반응형 제거 리그(다른 특성은 유지 — 무관)
 const B0 = availableTeamPlayers(t1, 0).map(stripReact);
@@ -121,6 +123,53 @@ log('── (b) 트리거 발동 ──');
   const actBounce = debugReactive.activations();
   log(`   오뚝이: activations=${actBounce}`);
   check(actBounce > 0, '오뚝이 공격수 → 블로킹 당함/범실에서 발동');
+
+  // ── Phase 2b 이벤트 발동형 4종 ──
+  // 낯가림(coldStart): 조커와 동일 트리거(교체 투입) → debuff 발동. control(무coldStart 동일 sub)=actCtl(위, 0).
+  const csBench = A0.map((p) => (p.id === benchAtk.id ? { ...p, traits: ['coldStart' as Trait] } : p));
+  debugReactive.reset(); simulateMatch(7, csBench, B0, { ...base, interventions: subIv });
+  const actCold = debugReactive.activations();
+  log(`   낯가림: activations=${actCold} · control(무coldStart 동일 sub)=${actCtl}`);
+  check(actCold >= 1, '낯가림 보유 선수 교체 투입 → debuff 발동(activations≥1)');
+  check(actCtl === 0, 'control(무coldStart/조커 동일 sub) → 발동 0(교체 자체가 아니라 특성이 조건)');
+
+  // 핀치서버(pinchServer): 서브 로테이션 슬롯에 교체 투입(서브 차례) → 발동. set1 0:0 = 홈 서브(setNo%2==1).
+  const luP = buildLineup(A0, 0);              // rotation 0
+  const svSlot = serverIndex(0);
+  const svStarter = luP.six[svSlot];           // 이 슬롯이 곧 서브(server=six[serverIndex])
+  const benchPin = A0.find((p) => !new Set(luP.six.map((x) => x.id)).has(p.id) && isAtk(p))!; // 서브 가능 벤치 공격수
+  const pinIv: MatchIntervention[] = [{ at: { setNo: 1, h: 0, a: 0 }, side: 'home', kind: 'sub', outId: svStarter.id, inId: benchPin.id, subKind: 'pinch' }];
+  const pinBench = A0.map((p) => (p.id === benchPin.id ? { ...p, traits: ['pinchServer' as Trait] } : p));
+  debugReactive.reset(); simulateMatch(7, pinBench, B0, { ...base, interventions: pinIv });
+  const actPin = debugReactive.activations();
+  debugReactive.reset(); simulateMatch(7, A0, B0, { ...base, interventions: pinIv }); // control: 같은 서브슬롯 sub, 무pinchServer
+  const actPinCtl = debugReactive.activations();
+  log(`   핀치서버: activations=${actPin} · control(무pinchServer 동일 서브슬롯 sub)=${actPinCtl}`);
+  check(actPin >= 1, '핀치서버 서브 슬롯 교체 투입(서브 차례) → 발동(activations≥1)');
+  check(actPinCtl === 0, 'control(무pinchServer 동일 sub) → 발동 0(서브슬롯 교체 자체가 아니라 특성이 조건)');
+
+  // 대타승부사(clutchSub): 교체 투입된 공격수가 첫 공격 시 발동(manual sub=세트 끝까지 코트 → 반드시 공격).
+  const luC = buildLineup(A0, 0);
+  const benchClutch = A0.find((p) => !new Set(luC.six.map((x) => x.id)).has(p.id) && isAtk(p))!;
+  const outIdC = luC.six.find((p) => p.position === benchClutch.position)?.id ?? luC.six[0].id;
+  const cIv: MatchIntervention[] = [{ at: { setNo: 1, h: 0, a: 0 }, side: 'home', kind: 'sub', outId: outIdC, inId: benchClutch.id, subKind: 'manual' }];
+  const cBench = A0.map((p) => (p.id === benchClutch.id ? { ...p, traits: ['clutchSub' as Trait] } : p));
+  debugReactive.reset(); simulateMatch(7, cBench, B0, { ...base, interventions: cIv });
+  const actClutch = debugReactive.activations();
+  debugReactive.reset(); simulateMatch(7, A0, B0, { ...base, interventions: cIv }); // control: 같은 sub, 무clutchSub
+  const actClutchCtl = debugReactive.activations();
+  log(`   대타승부사: activations=${actClutch} · control(무clutchSub 동일 sub)=${actClutchCtl}`);
+  check(actClutch >= 1, '대타승부사 교체 공격수 → 첫 공격에 발동(activations≥1)');
+  check(actClutchCtl === 0, 'control(무clutchSub 동일 sub) → 발동 0(교체 자체가 아니라 특성이 조건)');
+
+  // 에이스기세(aceStreak): 홈 전원 aceStreak → 서브 에이스에서 발동. strip → 0.
+  const addAll = (ps: Player[], tr: Trait): Player[] => ps.map((p) => ({ ...p, traits: [...(p.traits ?? []), tr] }));
+  debugReactive.reset(); simulateMatch(9, addAll(A0, 'aceStreak'), B0, { ...base });
+  const actAce = debugReactive.activations();
+  debugReactive.reset(); simulateMatch(9, A0, B0, { ...base });
+  const actAceOff = debugReactive.activations();
+  log(`   에이스기세: activations=${actAce} · strip=${actAceOff}`);
+  check(actAce > 0 && actAceOff === 0, '에이스기세 → 서브 에이스에서 발동(strip=0)');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -207,7 +256,7 @@ log('── (f) 방향 A/B(직접 하네스) ──');
     const stam = new Map<string, number>(); for (const p of [...lu.six, ...(lu.libero ? [lu.libero] : [])]) stam.set(p.id, 1);
     const ab = new Map<string, ActiveBuff>();
     if (buff) for (const p of lu.six) ab.set(p.id, { ...buff }); // 방향 관측용: 홈 코트 전원 활성(브리프 버프 희석 제거)
-    return { six: lu.six, libero: lu.libero, rotation: 0, momentum: 50, stam, injured: new Set(), style: 'balanced', pendingSevere: [], activeBuffs: ab };
+    return { six: lu.six, libero: lu.libero, rotation: 0, momentum: 50, stam, injured: new Set(), style: 'balanced', pendingSevere: [], activeBuffs: ab, clutchArmed: new Set() };
   };
   const killPct = (homeBuff: ActiveBuff | null, N: number): number => {
     let att = 0, kill = 0;
@@ -220,19 +269,48 @@ log('── (f) 방향 A/B(직접 하네스) ──');
     }
     return att > 0 ? 100 * kill / att : 0;
   };
+  // 홈 서브 에이스% — 서브 버프(핀치서버·에이스기세) 방향 관측용(킬% 하네스는 서브를 못 봄). 홈이 서브한 랠리만 집계.
+  const homeAcePct = (homeBuff: ActiveBuff | null, N: number): number => {
+    let serves = 0, aces = 0;
+    for (let i = 1; i <= N; i++) {
+      const home = mkTeam(A0, homeBuff), away = mkTeam(B0, null);
+      const box: BoxSink = new Map();
+      const rng = createRng(i), boxRng = createRng((i ^ 0x6d2b79f5) >>> 0), digRng = createRng((i ^ 0x9e3779b9) >>> 0);
+      for (let r = 0; r < 20; r++) {
+        const serving = r % 2 === 0 ? 'home' : 'away';
+        const out = playRally(serving, home, away, R, rng, { home: 1, away: 1 }, undefined, undefined, undefined, undefined, false, null, box, boxRng, undefined, digRng);
+        if (serving === 'home') { serves++; if (out.how === 'ace') aces++; }
+      }
+    }
+    return serves > 0 ? 100 * aces / serves : 0;
+  };
   const N = 400;
   const kNone = killPct(null, N);
   const kJoker = killPct({ trait: 'joker', kind: 'buff', left: 999 }, N);
   const kFrag = killPct({ trait: 'fragile', kind: 'debuff', left: 999 }, N);
+  const kCold = killPct({ trait: 'coldStart', kind: 'debuff', left: 999 }, N);   // 전 스킬↓ → 킬%↓
+  const kClutch = killPct({ trait: 'clutchSub', kind: 'buff', left: 999 }, N);    // 스파이크↑(activeBuffs 경로) → 킬%↑
   const kNone2 = killPct(null, N); // 자가검증: OFF/OFF(= reactiveSkillMult≡1 세계) → 동률
-  log(`   홈 킬%(N=${N}): NONE ${kNone.toFixed(2)} | 조커 ${kJoker.toFixed(2)}(Δ${(kJoker - kNone).toFixed(2)}) | 유리멘탈 ${kFrag.toFixed(2)}(Δ${(kFrag - kNone).toFixed(2)})`);
+  log(`   홈 킬%(N=${N}): NONE ${kNone.toFixed(2)} | 조커 ${kJoker.toFixed(2)}(Δ${(kJoker - kNone).toFixed(2)}) | 유리멘탈 ${kFrag.toFixed(2)}(Δ${(kFrag - kNone).toFixed(2)}) | 낯가림 ${kCold.toFixed(2)}(Δ${(kCold - kNone).toFixed(2)}) | 대타승부사 ${kClutch.toFixed(2)}(Δ${(kClutch - kNone).toFixed(2)})`);
   check(kJoker > kNone, '조커 홈팀 킬% ↑(전스킬 버프 → 화력↑)');
   check(kFrag < kNone, '유리멘탈 홈팀 킬% ↓(스파이크↓·집중↓)');
+  check(kCold < kNone, '낯가림 홈팀 킬% ↓(전 스킬 debuff → 화력↓)');
+  check(kClutch > kNone, '대타승부사 홈팀 킬% ↑(첫 공격 스파이크↑ → 화력↑)');
+  // 서브 버프 방향(핀치서버·에이스기세) — 홈 서브 에이스%로 관측
+  const aNone = homeAcePct(null, N);
+  const aPinch = homeAcePct({ trait: 'pinchServer', kind: 'buff', left: 999 }, N);
+  const aAce = homeAcePct({ trait: 'aceStreak', kind: 'buff', left: 999 }, N);
+  const aNone2 = homeAcePct(null, N); // 자가검증: OFF/OFF 동률
+  log(`   홈 서브에이스%(N=${N}): NONE ${aNone.toFixed(2)} | 핀치서버 ${aPinch.toFixed(2)}(Δ${(aPinch - aNone).toFixed(2)}) | 에이스기세 ${aAce.toFixed(2)}(Δ${(aAce - aNone).toFixed(2)})`);
+  check(aPinch > aNone, '핀치서버 홈팀 서브 에이스% ↑(서브↑)');
+  check(aAce > aNone, '에이스기세 홈팀 서브 에이스% ↑(서브↑)');
   // 자가검증(허위 오라클 금지): OFF/OFF는 동률이어야 → 방향 오라클이 "동률이면 통과"하는 공허한 것이 아님을 증명
   const offOffEqual = Math.abs(kNone2 - kNone) < 1e-9;
-  log(`   자가검증: OFF/OFF 킬% ${kNone2.toFixed(2)} == NONE ${kNone.toFixed(2)} → ${offOffEqual}`);
+  const aceOffEqual = Math.abs(aNone2 - aNone) < 1e-9;
+  log(`   자가검증: OFF/OFF 킬% ${kNone2.toFixed(2)} == NONE ${kNone.toFixed(2)} → ${offOffEqual} · 서브에이스% ${aNone2.toFixed(2)} == ${aNone.toFixed(2)} → ${aceOffEqual}`);
   check(offOffEqual, 'OFF/OFF(reactiveSkillMult≡1 세계) 킬% 동률 → 만약 버프가 무효였다면 (f) 방향 오라클 FAIL(이빨 증명)');
-  check(kJoker > kNone2 && kFrag < kNone2, '조커>OFF/OFF & 유리멘탈<OFF/OFF (방향은 버프가 활성일 때만 성립)');
+  check(aceOffEqual, 'OFF/OFF 서브 에이스% 동률 → 서브 버프 오라클 이빨 증명');
+  check(kJoker > kNone2 && kFrag < kNone2 && kCold < kNone2 && kClutch > kNone2, '조커·대타승부사 > OFF/OFF & 유리멘탈·낯가림 < OFF/OFF (방향은 버프가 활성일 때만 성립)');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -301,5 +379,5 @@ log('── (g) reactiveEvents 연출 출력(§6.10) ──');
 
 log('');
 if (fails.length) { log(`REACTIVE FAIL — ${fails.length}건: ${fails.join(' / ')}`); process.exit(1); }
-log('REACTIVE PASS ((a)무해성+민감도 (b)조커/유리멘탈/오뚝이 발동 (c)5랠리만료·타임아웃clear·세트끝clear (d)선수당1개 (e)하드캡 (f)방향 조커↑·유리멘탈↓ + OFF/OFF 자가검증 (g)reactiveEvents 결정론·발동1:1·활성창 정합·미부여 빈배열)');
+log('REACTIVE PASS ((a)무해성+민감도 (b)조커/유리멘탈/오뚝이+낯가림/핀치서버/대타승부사/에이스기세 발동 (c)5랠리만료·타임아웃clear·세트끝clear (d)선수당1개 (e)하드캡 (f)방향 조커·대타승부사↑·유리멘탈·낯가림↓·핀치서버·에이스기세 서브↑ + OFF/OFF 자가검증 (g)reactiveEvents 결정론·발동1:1·활성창 정합·미부여 빈배열)');
 process.exit(0);

@@ -73,7 +73,7 @@ export interface TimeoutEvent {
 export interface ReactiveEvent {
   pointIndex: number;   // 트리거 게임사건 랠리 인덱스(보드 배너 1회 표출 키). 조커=투입 랠리(=startPoint)·유리멘탈/오뚝이=막힘/범실 랠리(=startPoint−1)
   playerId: string;
-  trait: Trait;         // 'joker' | 'fragile' | 'bounce'
+  trait: Trait;         // 반응형 7종: joker·fragile·bounce(P2a) · coldStart·pinchServer·clutchSub·aceStreak(P2b)
   kind: 'buff' | 'debuff';
   startPoint: number;   // 활성 창 시작 = 버프가 처음 영향 주는 랠리 인덱스(버프 set 시점 points.length)
   endPoint: number;     // 활성 창 끝 = 마지막 영향 랠리 인덱스(해제 시점 points.length−1). < startPoint 이면 즉시 해제(무영향 창 — 마커 미표시)

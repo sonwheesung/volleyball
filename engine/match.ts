@@ -18,7 +18,7 @@ import { staminaRegenTraitMult, tickReactiveBuffs } from './traits';
 // (dyn 재생을 바꾸는 시즌 계층 규칙 변경도 포함 — 캐시가 dyn을 함께 영속하므로, v3.)
 // REALTIME_SIM Phase2(G3): simCache는 이 버전을 태깅·게이트해, 엔진 재튜닝(앱 업데이트) 후 저장된 옛-엔진
 // 순위를 폐기하고 새 엔진으로 재계산한다 → 저장 순위 ↔ 과거경기 보드 재생 일관성 보장.
-export const ENGINE_VERSION = 14; // 14(2026-07-27, TRAIT_SYSTEM §6.3 반응형 Phase 2a): 반응형 특성 3종(조커/유리멘탈/오뚝이) 도입 — 경기 중 사건(교체 투입·블로킹 당함·범실)→임시 버프(RallyTeam.activeBuffs, 5랠리·타임아웃/세트끝 해제)가 rally.ts 스킬/집중 산출을 소폭 보정. **반응형 특성 미부여 선수는 완전 무영향(activeBuffs 빈 맵 → reactiveSkillMult 1배·reactiveFocusAdj 0 → 바이트 동일 — 가드 _dv_reactive (a))**. 단 POOL에 joker/bounce/fragile 추가로 시드 리그 선수의 rollTraits 분포가 바뀌어 seeded-league 골든이 변동 → 저장 순위/생산 재계산 일관성 위해 범프(골든 재생성은 메인). 13(2026-07-22, ROTATION_MORALE F 신인 등용): PO 탈락 확정 팀이 잔여 경기에 신인(career.seasons===0)을 선발 승격 — buildLineup에 force 인자(homeForce/awayForce) 추가로 six[] 구성 변동 → 랠리 결과 변동. **무등용(AI·미탈락) 경기는 바이트 동일**(force 미주입=빈 셋, buildLineup OVR 정렬 불변 — 골든 해시 드리프트 0 실측, 버전 태그만 갱신). v11 U23 라인업 에지와 동형(라인업 변동→결과 변동→캐시 무효화). 탈락 팀 경기만 결과 변동 → 그런 세이브의 저장 순위/생산 재계산 일관성 위해 범프(standings/production 재생이 promotedOnDay 주입). 12(2026-07-21, 감사A P0 FIVB 세트당 6교체): subIn 예산 예약 회계 교정 — 활성 복원형(pinch/block/def)의 미래 subOut(무조건 −1)까지 예약(subBudget ≥ pendingRestores + (복원형?2:1))해 세트당 총 교체 ≤6 보장. **무개입(AI) 경기는 바이트 동일**(pendingRestores 계수가 구 `<2`와 동일값인 구간에서만 AI가 subIn — N=2571 subEvents 지문 불변 실측, KOVO 분포·parity·승패 불변). 개입(구단주 수동 IN이 복원형 2+ 활성 창에 낀 드문 경우)만 결과 변동 → 그런 세이브의 저장 순위 재계산 일관성 위해 범프(standings 재생이 interventionsFor 주입). 11(2026-07-20, STAFF §9.6-D 스태프3.0 Phase D): 감독 능력 3축 실효과 훅 2종이 경기 결과를 바꾼다 — ① 육성 철학(dvPhilosophy) U23 라인업 에지(engine/lineup buildLineup — 근소차 U23 우선권, 역전 금지) → 감독 자동 라인업 six[] 변동. ② 리더십(leadership) 경기감각 하락 완화(data/dynamics formOf — FORM_MAX_PENALTY 축소) → 벤치 복귀자 sk* 평가 변동. 둘 다 team별 coachInfoOf 파생(결정론·rng 미소비), dvPhilosophy≤50·leadership 무주입이면 에지 0(byte-동일). 양 팀 라인업·폼 변동 → 랠리 결과 변동 → 저장 캐시 무효화(KOVO 분포·parity 불변 실측). 10(2026-07-15): 리베로 후위 수비 참여 소모(MATCH §7.1, rally.ts LIBERO_DEFENSE_COST=0.16) — 리베로가 큰 소모(공격/서브/블록) 없이 회복만 쌓여 타임아웃 체력 상시 ~100%(실측 L 3세트+ 98.5%·≥99% 55.7%)이던 것을 매 랠리 균일 소모로 교정(→ 3세트+ 89.8%·≥99% 21.6%). 양 팀 리베로 stam 변동 → 랠리 eff·경기 결과 변동 → 저장 캐시 무효화(타 포지션 Δ≤0.2%p·KOVO 분포 불변). 9(2026-07-15): ① manualSide(내 팀 정규시즌 "구단주 직접" 설정) — 지정 사이드는 감독 자동 타임아웃·작전 4종 결정 스킵(복원·TTO·부상·세트말원복 유지) → 그 사이드 결과 변동(미지정=바이트 동일). ② F2 FIVB 15.6.1 — subIn이 IN 후보의 usedStarterOut(이미 아웃된 선발) 신분 거부(나간 선발 타슬롯 재진입 차단) → 드문 경우 six[] 변동. 둘 다 저장 캐시 무효화. 8(2026-07-07): ① 피로 교체(1.3e) — 지친 주전(비세터·비접전, 체력<0.35)을 같은 포지션 벤치로 잠시 교체(합리 코치 게이트·히스테리시스·예산≥4, 결정론·rng 미소비) → six[] 변동 → 결과 변동. ② TTO 회복 재튜닝 TIMEOUT_REST(0.04)→TTO_REST(0.03, 테크니컬 타임아웃만 — 스윕으로 0.03만이 체력밴드·피로교체밴드 둘 다 통과) — TTO 세트당 2회 자동 발화로 회복 과다(피로 곡선 붕괴) 교정 → 체력·경기 결과 변동. 둘 다 저장 캐시 무효화. 7(2026-07-07): ① 포지션 폴트 받는 팀만 판정(FIVB 2025-2028 7.4·KOVO 25-26, rally.ts) — rng 소비 2→1회/서브 → 랠리 스트림 이동 → 결과 변동. ② KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식 — recover+기세수렴, rng 미소비) → 체력·기세 변동 → 경기 결과 변동. 둘 다 저장 캐시 무효화. 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
+export const ENGINE_VERSION = 15; // 15(2026-07-27, TRAIT_SYSTEM §6.3 반응형 Phase 2b): 이벤트 발동형 반응형 4종(낯가림/핀치서버/대타승부사/에이스기세) 추가 — 낯가림=교체 투입 시 전 스킬↓(조커 상극), 핀치서버=서브 슬롯 교체 투입 시 서브↑, 대타승부사=교체 후 첫 공격 스파이크↑(RallyTeam.clutchArmed 플래그, 1랠리), 에이스기세=서브 에이스 후 서브↑. 전부 reactiveSkillMult 곱셈 한 겹(미부여=1배)·rng 무소비. **미부여 선수는 완전 무영향(activeBuffs 빈 맵·clutchArmed 빈 집합 → 바이트 동일)**. 단 POOL에 4종 추가로 시드 리그 rollTraits 분포가 바뀌어 seeded-league 골든 변동 → 범프(골든 재생성은 메인). 14(2026-07-27, TRAIT_SYSTEM §6.3 반응형 Phase 2a): 반응형 특성 3종(조커/유리멘탈/오뚝이) 도입 — 경기 중 사건(교체 투입·블로킹 당함·범실)→임시 버프(RallyTeam.activeBuffs, 5랠리·타임아웃/세트끝 해제)가 rally.ts 스킬/집중 산출을 소폭 보정. **반응형 특성 미부여 선수는 완전 무영향(activeBuffs 빈 맵 → reactiveSkillMult 1배·reactiveFocusAdj 0 → 바이트 동일 — 가드 _dv_reactive (a))**. 단 POOL에 joker/bounce/fragile 추가로 시드 리그 선수의 rollTraits 분포가 바뀌어 seeded-league 골든이 변동 → 저장 순위/생산 재계산 일관성 위해 범프(골든 재생성은 메인). 13(2026-07-22, ROTATION_MORALE F 신인 등용): PO 탈락 확정 팀이 잔여 경기에 신인(career.seasons===0)을 선발 승격 — buildLineup에 force 인자(homeForce/awayForce) 추가로 six[] 구성 변동 → 랠리 결과 변동. **무등용(AI·미탈락) 경기는 바이트 동일**(force 미주입=빈 셋, buildLineup OVR 정렬 불변 — 골든 해시 드리프트 0 실측, 버전 태그만 갱신). v11 U23 라인업 에지와 동형(라인업 변동→결과 변동→캐시 무효화). 탈락 팀 경기만 결과 변동 → 그런 세이브의 저장 순위/생산 재계산 일관성 위해 범프(standings/production 재생이 promotedOnDay 주입). 12(2026-07-21, 감사A P0 FIVB 세트당 6교체): subIn 예산 예약 회계 교정 — 활성 복원형(pinch/block/def)의 미래 subOut(무조건 −1)까지 예약(subBudget ≥ pendingRestores + (복원형?2:1))해 세트당 총 교체 ≤6 보장. **무개입(AI) 경기는 바이트 동일**(pendingRestores 계수가 구 `<2`와 동일값인 구간에서만 AI가 subIn — N=2571 subEvents 지문 불변 실측, KOVO 분포·parity·승패 불변). 개입(구단주 수동 IN이 복원형 2+ 활성 창에 낀 드문 경우)만 결과 변동 → 그런 세이브의 저장 순위 재계산 일관성 위해 범프(standings 재생이 interventionsFor 주입). 11(2026-07-20, STAFF §9.6-D 스태프3.0 Phase D): 감독 능력 3축 실효과 훅 2종이 경기 결과를 바꾼다 — ① 육성 철학(dvPhilosophy) U23 라인업 에지(engine/lineup buildLineup — 근소차 U23 우선권, 역전 금지) → 감독 자동 라인업 six[] 변동. ② 리더십(leadership) 경기감각 하락 완화(data/dynamics formOf — FORM_MAX_PENALTY 축소) → 벤치 복귀자 sk* 평가 변동. 둘 다 team별 coachInfoOf 파생(결정론·rng 미소비), dvPhilosophy≤50·leadership 무주입이면 에지 0(byte-동일). 양 팀 라인업·폼 변동 → 랠리 결과 변동 → 저장 캐시 무효화(KOVO 분포·parity 불변 실측). 10(2026-07-15): 리베로 후위 수비 참여 소모(MATCH §7.1, rally.ts LIBERO_DEFENSE_COST=0.16) — 리베로가 큰 소모(공격/서브/블록) 없이 회복만 쌓여 타임아웃 체력 상시 ~100%(실측 L 3세트+ 98.5%·≥99% 55.7%)이던 것을 매 랠리 균일 소모로 교정(→ 3세트+ 89.8%·≥99% 21.6%). 양 팀 리베로 stam 변동 → 랠리 eff·경기 결과 변동 → 저장 캐시 무효화(타 포지션 Δ≤0.2%p·KOVO 분포 불변). 9(2026-07-15): ① manualSide(내 팀 정규시즌 "구단주 직접" 설정) — 지정 사이드는 감독 자동 타임아웃·작전 4종 결정 스킵(복원·TTO·부상·세트말원복 유지) → 그 사이드 결과 변동(미지정=바이트 동일). ② F2 FIVB 15.6.1 — subIn이 IN 후보의 usedStarterOut(이미 아웃된 선발) 신분 거부(나간 선발 타슬롯 재진입 차단) → 드문 경우 six[] 변동. 둘 다 저장 캐시 무효화. 8(2026-07-07): ① 피로 교체(1.3e) — 지친 주전(비세터·비접전, 체력<0.35)을 같은 포지션 벤치로 잠시 교체(합리 코치 게이트·히스테리시스·예산≥4, 결정론·rng 미소비) → six[] 변동 → 결과 변동. ② TTO 회복 재튜닝 TIMEOUT_REST(0.04)→TTO_REST(0.03, 테크니컬 타임아웃만 — 스윕으로 0.03만이 체력밴드·피로교체밴드 둘 다 통과) — TTO 세트당 2회 자동 발화로 회복 과다(피로 곡선 붕괴) 교정 → 체력·경기 결과 변동. 둘 다 저장 캐시 무효화. 7(2026-07-07): ① 포지션 폴트 받는 팀만 판정(FIVB 2025-2028 7.4·KOVO 25-26, rally.ts) — rng 소비 2→1회/서브 → 랠리 스트림 이동 → 결과 변동. ② KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식 — recover+기세수렴, rng 미소비) → 체력·기세 변동 → 경기 결과 변동. 둘 다 저장 캐시 무효화. 6(2026-07-07): subIn(전술 교체)이 injured Set을 배제 — 이중부상 벤치교체 선수를 전술 교체로 재투입하던 잠복버그 차단(1.3d) → 드문 경우 six[] 변동 → 결과 변동 → 저장 캐시 무효화. 5(2026-07-07): 경기 내 부상 교체(1.3d) — maybeInjure에 심각도 게이트(rng 1회 추가 소비) + 중상 시 코트 선수 실제 교체 → 랠리 스트림·경기 결과 변동 → 저장 캐시 무효화
 // 4(2026-07-06): 서브 에이스 개인기장 공식화 — 리시브범실 실점을 서버 box.srvAce에도 기장(FIVB indirect ace) → production aces/points·서브왕·skServe XP 변동 → 저장 캐시 무효화. 유형 분포·밸런스·서브 확률·승패 불변(box는 메인 rng 무관)
 // 3(2026-07-02): AI 자기방출 재영입 금지(TRANSACTION 0장 ⑥) — dyn(시즌 중 거래) 재생 변동 → 저장 캐시 무효화
 // 2(2026-06-28): 체력 튜닝(회복 0.009→0.005·세트사이 0.12→0.035) — 경기 결과 변동 → 저장 캐시 무효화
@@ -159,8 +159,8 @@ export function simulateMatch(
   for (const p of onCourt(homeLineup)) homeStam.set(p.id, 1);
   for (const p of onCourt(awayLineup)) awayStam.set(p.id, 1);
 
-  const home: RallyTeam = { six: homeLineup.six, libero: homeLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: homeStam, injured: new Set(), style: hc.style, pendingSevere: [], activeBuffs: new Map() };
-  const away: RallyTeam = { six: awayLineup.six, libero: awayLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: awayStam, injured: new Set(), style: ac.style, pendingSevere: [], activeBuffs: new Map() };
+  const home: RallyTeam = { six: homeLineup.six, libero: homeLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: homeStam, injured: new Set(), style: hc.style, pendingSevere: [], activeBuffs: new Map(), clutchArmed: new Set() };
+  const away: RallyTeam = { six: awayLineup.six, libero: awayLineup.libero, rotation: 0, momentum: START_MOMENTUM, stam: awayStam, injured: new Set(), style: ac.style, pendingSevere: [], activeBuffs: new Map(), clutchArmed: new Set() };
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const matchOpsOf = (s: Side) => (s === 'home' ? hc.matchOps : ac.matchOps);
   const policyOf = (s: Side) => (s === 'home' ? (opts.homePolicy ?? DEFAULT_POLICY) : (opts.awayPolicy ?? DEFAULT_POLICY));
@@ -220,14 +220,22 @@ export function simulateMatch(
     for (const id of home.activeBuffs.keys()) closeReactive('home', id, points.length - 1);
     for (const id of away.activeBuffs.keys()) closeReactive('away', id, points.length - 1);
     home.activeBuffs.clear(); away.activeBuffs.clear();
+    // 대타승부사(§6.3 P2b) 미발동 arming도 타임아웃/세트끝에 해제. 발동 전이라 이벤트/카운터 없음 → 조용히 clear(_reactiveClears 무가산).
+    home.clutchArmed.clear(); away.clutchArmed.clear();
   };
   const noteMaxBuffs = (): void => { const c = home.activeBuffs.size + away.activeBuffs.size; if (c > _reactiveMaxBuffs) _reactiveMaxBuffs = c; };
-  // 조커(joker) — 교체 투입 순간 buff 발동. subIn이 코트에 세운 직후 호출(작전 교체 in만). subIn은 랠리 루프 최상단(playRally 전)
-  //   호출이라 points.length = 다음(투입 후 첫) 랠리 인덱스 → startPoint=pointIndex=points.length(그 랠리부터 버프 활성).
-  const triggerJoker = (side: Side, player: Player): void => {
-    if (player.traits?.includes('joker')) {
+  // 교체 투입 순간 버프 — 조커(joker=buff, 전스킬↑) / 낯가림(coldStart=debuff, 전스킬↓). 둘은 상극(동시부여 없음)이라 상호배타.
+  //   subIn이 코트에 세운 직후 호출(작전 교체 in만). subIn은 랠리 루프 최상단(playRally 전) 호출이라 points.length = 다음(투입 후
+  //   첫) 랠리 인덱스 → startPoint=pointIndex=points.length(그 랠리부터 버프 활성). 미부여=no-op.
+  const triggerSubInBuff = (side: Side, player: Player): void => {
+    const tr = player.traits;
+    if (!tr) return;
+    if (tr.includes('joker')) {
       teamOf(side).activeBuffs.set(player.id, { trait: 'joker', kind: 'buff', left: REACTIVE_DURATION }); _reactiveActivations++; noteMaxBuffs();
       openReactive(side, player.id, 'joker', 'buff', points.length, points.length);
+    } else if (tr.includes('coldStart')) { // 낯가림(§6.3 P2b) — 조커와 같은 트리거의 정반대(디버프)
+      teamOf(side).activeBuffs.set(player.id, { trait: 'coldStart', kind: 'debuff', left: REACTIVE_DURATION }); _reactiveActivations++; noteMaxBuffs();
+      openReactive(side, player.id, 'coldStart', 'debuff', points.length, points.length);
     }
   };
 
@@ -339,7 +347,15 @@ export function simulateMatch(
       if (!st.stam.has(player.id)) { st.stam.set(player.id, 1); tracked[side].push(player); }
       subBudget[side] -= 1; // IN
       subEvents.push({ point: points.length, setNo, side, slot, inId: player.id, outId: outP.id, kind, enter: true });
-      triggerJoker(side, player); // 반응형(§6.3): 조커 보유 선수가 교체로 코트에 서면 buff 발동(미보유=no-op)
+      triggerSubInBuff(side, player); // 반응형(§6.3): 조커(buff)/낯가림(debuff) — 교체로 코트에 서면 발동(미보유=no-op)
+      // 핀치서버(§6.3 P2b): 교체가 서브 로테이션 슬롯에 서고 그 팀이 서브 차례 → 곧 서브부터 서브↑(5랠리). subIn은 랠리 루프
+      //   최상단(playRally 전) 호출 → 이 슬롯이 곧 서브(server=six[serverIndex]) → startPoint=pointIndex=points.length. rng 무소비.
+      if (player.traits?.includes('pinchServer') && side === serving && slot === serverIndex(st.rotation)) {
+        st.activeBuffs.set(player.id, { trait: 'pinchServer', kind: 'buff', left: REACTIVE_DURATION }); _reactiveActivations++; noteMaxBuffs();
+        openReactive(side, player.id, 'pinchServer', 'buff', points.length, points.length);
+      }
+      // 대타승부사(§6.3 P2b): 교체 투입 후 첫 공격에 스파이크↑(1랠리) — arming만(발동/이벤트는 rally.ts 첫 공격 스윙에서). rng 무소비.
+      if (player.traits?.includes('clutchSub')) st.clutchArmed.add(player.id);
     };
     const subOut = (side: Side, slot: number): void => {
       const st = teamOf(side);
@@ -504,6 +520,8 @@ export function simulateMatch(
         Math.max(h, a) >= targetPoints(setNo) - 4 && Math.abs(lead) >= 1 && Math.abs(lead) <= 2
           ? (lead > 0 ? 'away' : 'home') : null;
       const touches = opts.touches ? [] : undefined; // 켜면 이 점의 터치 순서를 엔진이 기록(가산·중립). 안 켜면 undefined → playRally가 no-op
+      // 대타승부사(§6.3 P2b): 이번 랠리에 clutchArmed에서 소비될(첫 공격) 선수 탐지용 스냅샷 — rally.ts가 첫 공격 스윙에 delete. 미부여 빈 집합=null.
+      const clutchBefore: Record<Side, string[] | null> = { home: home.clutchArmed.size ? [...home.clutchArmed] : null, away: away.clutchArmed.size ? [...away.clutchArmed] : null };
       const { winner, how, byId, recvId, setId, atkerId } = playRally(serving, home, away, R, rng, edge, opts.stats, opts.trace, opts.pos, tele, crunch, chasing, accBox, boxRng, touches, digRng);
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
@@ -522,6 +540,21 @@ export function simulateMatch(
           //   트리거 사건이 보인 랠리(막힘/범실)는 points.length−1이라 pointIndex(배너 키)=points.length−1.
           if (how === 'stuff' && ap.traits.includes('fragile')) { teamOf(aSide).activeBuffs.set(atkerId, { trait: 'fragile', kind: 'debuff', left: REACTIVE_DURATION }); _reactiveActivations++; openReactive(aSide, atkerId, 'fragile', 'debuff', points.length - 1, points.length); }
           if (ap.traits.includes('bounce')) { teamOf(aSide).activeBuffs.set(atkerId, { trait: 'bounce', kind: 'buff', left: REACTIVE_DURATION }); _reactiveActivations++; openReactive(aSide, atkerId, 'bounce', 'buff', points.length - 1, points.length); } // 블로킹 당함(stuff) or 내 범실(atkErr)
+        }
+      }
+      // 에이스기세(§6.3 P2b): 직접 서브 에이스(how='ace') → 서버(byId)에게 서브↑(5랠리). winner=서브팀(에이스 득점). fragile/bounce와 동일 층(push 직후).
+      if (how === 'ace' && byId) {
+        const sp = findPlayer(winner, byId);
+        if (sp?.traits?.includes('aceStreak')) { teamOf(winner).activeBuffs.set(byId, { trait: 'aceStreak', kind: 'buff', left: REACTIVE_DURATION }); _reactiveActivations++; openReactive(winner, byId, 'aceStreak', 'buff', points.length - 1, points.length); }
+      }
+      // 대타승부사(§6.3 P2b): 이번 랠리에 clutchArmed에서 빠진(첫 공격을 친) 선수 → 발동. 1랠리 창(startPoint=endPoint=pointIndex=이 랠리).
+      //   버프 적용(스파이크 ×1.08)은 rally.ts가 이미 처리 — 여기선 카운트/연출 이벤트만(활성 버프에 안 들어가 tick/clear 무관).
+      for (const cs of ['home', 'away'] as Side[]) {
+        const before = clutchBefore[cs];
+        if (before) for (const id of before) if (!teamOf(cs).clutchArmed.has(id)) {
+          _reactiveActivations++;
+          openReactive(cs, id, 'clutchSub', 'buff', points.length - 1, points.length - 1);
+          closeReactive(cs, id, points.length - 1);
         }
       }
       noteMaxBuffs();

@@ -12,7 +12,9 @@ export type Trait =
   // 상시형(static) 신규 6종(2026-07-27, Phase 1) — 경기 내내 고정 배수, player.traits만 읽는 접근자 패턴
   | 'bomber' | 'digWall' | 'smart' | 'endurance' | 'tank' | 'maestro'
   // 반응형(reactive) 신규 3종(2026-07-27, Phase 2a) — 경기 중 사건→임시 버프(N랠리/타임아웃/세트끝 해제). engine/traits.ts ActiveBuff·reactive* 접근자
-  | 'joker' | 'fragile' | 'bounce';
+  | 'joker' | 'fragile' | 'bounce'
+  // 반응형 이벤트 발동형 4종(2026-07-27, Phase 2b) — 교체 투입·서브 에이스 등 사건 발동. coldStart↔joker 상극(교체 시 버프냐 디버프냐)
+  | 'coldStart' | 'pinchServer' | 'clutchSub' | 'aceStreak';
 
 export type CoachStyle = 'attack' | 'defense' | 'balanced';
 

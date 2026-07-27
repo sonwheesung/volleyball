@@ -14,6 +14,8 @@
 > **부정 가중 하향(2026-07-27, 사용자 결정)**: 무특성 폐지로 부정 보유율이 오르는 걸 상쇄 — POOL 부정 가중치 `choke·earlyDecline·glass`를 각각 `5·4·5 → 2·2·2`로 낮춰 **부정 특성 보유율 29%→14%(단점만 보유 11.7%→5.8%)** (실측 N=30,000). 완전 제거가 아니라 "드물게"로 유지 — 단점만 가진 선수도 드물게 존재(도박·서사).
 > **부정 가중 재복원(2026-07-27, §6 상시형 6종 확장 직후)**: good 6종을 POOL에 추가(각 w=7·총 +42)하자 부정 보유율이 희석돼 ~~2·2·2 → 8.3%~~로 떨어짐 → 목표 유지 위해 `2·2·2 → 4·3·4`로 재상향, **부정 보유율 14.7%·단점만 6.1%** 복원(실측 N=30,000). good 특성 추가 시 부정 가중을 함께 재측정하는 것이 원칙(총가중 대비 부정 분율이 보유율을 결정).
 > **Phase 2a 재측정(2026-07-27)**: 반응형 3종 추가(joker/bounce good w=5, fragile bad w=2) 후 **부정 보유율 15.8%·단점만 6.5%**(실측 N=30,000, 목표 ~15%대 유지). 계수는 placeholder — 밸런스는 simKovo 전 항목 밴드 내·engine-regression 곡선 정상으로 확인.
+> **Phase 2b 재측정(2026-07-27)**: 반응형 4종 추가(pinchServer/clutchSub/aceStreak good w=4, coldStart bad w=2) 후 **부정 보유율 16.5%·단점만 6.7%**(실측 N=30,000, ~15~16%대). simKovo 전 항목 밴드 내(볼핸들링 범실 0.70은 baseline 0.71부터의 경계값 — 반응형 무관). 부정이 계속 누적 추세라 신규 부정 추가 시 재점검.
+> **Phase 2b(2026-07-27)**: 이벤트 발동형 4종 추가(pinchServer/clutchSub/aceStreak good w=4, coldStart bad w=2) → POOL 분포 변동. **부정 보유율·simKovo/parity 재측정은 메인**(good 3종·bad 1종 순증으로 부정율 희석 가능 → 필요 시 부정 가중 재상향). ENGINE_VERSION 14→15.
 
 | 분류 | 특성 | 효과(소폭) |
 |---|---|---|
@@ -127,33 +129,39 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
 - 계수는 **소폭 placeholder** — 방향만 확정, 크기는 메인이 sim 후 튜닝. `desc`는 `TRAIT_FX`에서 문자열 합성(§표기 원칙, 가드 `_dv_traitcopy`).
 - 미부여 선수 무영향(접근자 1배) → 기존 결정론 골든(unit 218/218)·rng 스트림 불변 실측.
 
-### 6.3 반응형 설계 (Phase 2a ✅ 구현 2026-07-27 — 조커/유리멘탈/오뚝이 · 나머지=2b · UI 연출=2c)
+### 6.3 반응형 설계 (Phase 2a ✅ 조커/유리멘탈/오뚝이 · Phase 2b ✅ 낯가림/핀치서버/대타승부사/에이스기세 · UI 연출=2c ✅ — 전부 2026-07-27 구현)
 
-순간형 반응형을 **신규 엔진 레이어**로 도입: 조커·유리멘탈·오뚝이(**Phase 2a 구현**) + 낯가림·핀치서버·대타승부사·에이스기세(**2b 예정**).
+순간형 반응형을 **신규 엔진 레이어**로 도입: 조커·유리멘탈·오뚝이(**Phase 2a 구현**) + 낯가림·핀치서버·대타승부사·에이스기세(**Phase 2b 구현 2026-07-27** — 2a 레이어[activeBuffs·reactiveSkillMult·±10%캡·트리거·reactiveEvents] 그대로 재사용, 연출[현수막·마커]은 2c가 reactiveEvents 기반이라 자동 적용).
 - 골격: `{ 방아쇠 · 효과(소폭±) · 지속(5랠리) · 해제(타임아웃/세트끝) · 현수막 · 마커 테두리색 }`.
 - **아키텍처(구현 확정)**:
   - `RallyTeam.activeBuffs: Map<playerId, ~~ActiveBuff[]~~ → **ActiveBuff**>` **필드**로 전달 — `playRally` 인자로 넘기지 않는다(이미 인자 ~18개). momentum/stam/injured 이웃의 경기중 임시상태. 정정(2026-07-27 구현): **선수당 최대 1개**라 배열이 아닌 **단일 ActiveBuff**(Map 덮어쓰기로 강제 — 배열이면 스택 회계가 필요없는데 복잡).
   - 방아쇠 판정 = `match.ts`(교체 투입=조커·`subIn`, 블로킹 당함=stuff/범실=atkErr → 유리멘탈/오뚝이·랠리 종료 후 `RallyOutcome.atkerId` 읽기), 효과 적용 = `rally.ts`가 필드 읽기, 지속/해제 = `match.ts` 랠리/타임아웃/세트 루프.
   - ~~**`effStat(t, p, skill)` 헬퍼 선도입** — 정적 배수 + 반응 버프 + 하드캡을 한 곳에서 합성(현재 흩어진 접근자 통합 리팩터가 선결).~~ → 정정(2026-07-27 구현): effStat 통합 리팩터는 **하지 않았다**(맥락 의존 안방호랑이/원정형이 없는 2a에선 불필요). 대신 기존 정적 접근자 배선(spikeTraitMult 등) 지점에 **`reactiveSkillMult(buff, skill)` 곱셈 한 겹**을 추가(spike/serve/dig/block/set/receive)하고, 집중 계열은 clutchFocusAdj 옆에 `reactiveFocusAdj(buff)` 가산. 맥락 의존 상시형(§6.5)을 붙일 때 effStat 재검토.
   - **선수당 반응형 동시 발동 1개 + 스킬 유효배수 하드캡 ±10%(reactiveSkillMult ∈ [0.90,1.10]) · 집중 보정 ±0.10**(스노볼 방지, `reactiveClampSkill`/`reactiveClampFocus`).
-- **구현 3종(effStat 없이 접근자 곱셈·미부여=1배/0 → 결정론 골든 보존)**:
+- **구현 7종(effStat 없이 접근자 곱셈·미부여=1배/0 → 결정론 골든 보존)**:
 
-| id | 한글명 | good | 방아쇠 | 효과(소폭 placeholder) | 지속 |
-|---|---|---|---|---|---|
-| joker | 조커 | ✅ | 교체로 코트 투입(작전 교체 in, `subIn`) | 전 스킬 ×1.04(reactiveSkillMult 전스킬) | 5랠리 |
-| fragile | 유리멘탈 | ✗ | 내 공격이 블로킹 당함(stuff) | 스파이크 ×0.97 + 집중 −0.05(공격/서브 정확도↓) | 5랠리 |
-| bounce | 오뚝이 | ✅ | 블로킹 당함(stuff) or 내 범실(atkErr) | 집중 +0.05 | 5랠리 |
+| id | 한글명 | good | 방아쇠 | 효과(소폭 placeholder) | 지속 | Phase |
+|---|---|---|---|---|---|---|
+| joker | 조커 | ✅ | 교체로 코트 투입(작전 교체 in, `subIn`) | 전 스킬 ×1.04(reactiveSkillMult 전스킬) | 5랠리 | 2a |
+| fragile | 유리멘탈 | ✗ | 내 공격이 블로킹 당함(stuff) | 스파이크 ×0.97 + 집중 −0.05(공격/서브 정확도↓) | 5랠리 | 2a |
+| bounce | 오뚝이 | ✅ | 블로킹 당함(stuff) or 내 범실(atkErr) | 집중 +0.05 | 5랠리 | 2a |
+| coldStart | 낯가림 | ✗ | 교체로 코트 투입(조커와 동일 트리거, `subIn`) | 전 스킬 ×0.96(reactiveSkillMult 전스킬 · debuff) | 5랠리 | 2b |
+| pinchServer | 핀치서버 | ✅ | 교체 IN이 서브 로테이션 슬롯에 서고 그 팀 서브 차례(`subIn`, `side===serving && slot===serverIndex`) | 서브 ×1.05 | 5랠리 | 2b |
+| clutchSub | 대타승부사 | ✅ | 교체 투입 후 **첫 공격**(`RallyTeam.clutchArmed` 플래그 → rally.ts 첫 스윙 소비) | 스파이크 ×1.08 | **1랠리(첫 공격)** | 2b |
+| aceStreak | 에이스기세 | ✅ | 서브 에이스 성공(`how==='ace'`, 서버=`byId`) | 서브 ×1.05 | 5랠리 | 2b |
 
   - 계수는 `TRAIT_FX.reactive*`(단일 소스, desc 합성·가드 `_dv_traitcopy` 대조). **소폭 placeholder** — 방향만 확정, 크기는 메인이 sim 후 튜닝.
-  - POOL 가중: joker/bounce w=5(good), fragile w=2(bad). 부정 보유율은 메인이 재측정(good 추가로 희석 → 재상향 필요할 수 있음). ANTAGONISTS: fragile↔bounce(막히면 흔들림 ↔ 막혀도 다시 집중 = 상쇄).
+  - POOL 가중: joker/bounce w=5·pinchServer/clutchSub/aceStreak w=4(good), fragile/coldStart w=2(bad). 부정 보유율은 메인이 재측정(good 다수 추가로 희석 → 재상향 필요할 수 있음).
+  - **ANTAGONISTS**: fragile↔bounce(막히면 흔들림 ↔ 막혀도 다시 집중 = 상쇄) · **joker↔coldStart**(교체 투입 시 살아남[buff] ↔ 적응 못 함[debuff] = 같은 트리거의 정반대라 상쇄).
+  - **대타승부사(clutchSub) 아키텍처(예외)**: 다른 6종은 `activeBuffs`(선수당 1개 Map·5랠리 tick)를 쓰지만, clutchSub는 "첫 공격 1랠리"라 `RallyTeam.clutchArmed: Set`(arming 플래그)로 분리. `subIn`이 arming만 하고(카운트/이벤트 없음), `rally.ts`가 그 선수의 첫 공격 스윙에서 1랠리 clutchSub 버프를 합성(스파이크 ×1.08)하고 즉시 `clutchArmed.delete`. `match.ts`가 랠리 전후 `clutchArmed` 스냅샷 비교로 발동을 감지해 카운트+reactiveEvents(1랠리 창)를 기록. 타임아웃/세트끝엔 미발동 arming도 조용히 clear(발동 전이라 이벤트/카운터 없음). 서브 버프 2종(핀치서버=`subIn`, 에이스기세=`how==='ace'` push 직후)은 표준 activeBuffs 경로.
 - **지속·해제 규칙(구현)**:
   - 각 랠리 종료 후 `tickReactiveBuffs`로 `left--`, 0이면 제거(발동 랠리 포함 5랠리 활성).
   - **타임아웃**(감독 자동·개입·테크니컬 TTO) 발생 시 양 팀 `activeBuffs` 전체 clear.
   - **세트 종료** 시 양 팀 clear(다음 세트 누수 0).
   - **선수당 1개**: 같은 id에 서로 다른 트리거가 와도 Map.set 덮어쓰기 → 단일 유지(마지막 트리거 승). fragile↔bounce는 ANTAGONISTS로 한 선수 동시부여 원천 차단 + 발동 시엔 Map 단일이라 이중 안전.
 - **연출 스펙(확정 — 아티팩트 사용자 승인, UI 배선=Phase 2c ✅ 구현 2026-07-27 — §6.10)**: 발동 시 **현수막 1회** + **마커 테두리 점등**(버프=금·에메랄드 / 디버프=적). **지속 텍스트/카운트다운 없음**(관전 소음 방지). 5랠리·타임아웃 해제·선수당 1개. 상태형(§6.4)은 여전히 연출 없이 조용히.
-- **결정론(구현 확정)**: 반응형 특성 미부여 선수는 `activeBuffs`에 엔트리 없음 → `reactiveSkillMult`=1·`reactiveFocusAdj`=0 → **완전 무영향**(무보유 리그 바이트 동일 — 가드 `_dv_reactive` (a) 실측 activations=0·maxBuffs=0·동일시드 재현). 단 **POOL에 joker/bounce/fragile 추가로 시드 리그 선수의 rollTraits 분포가 바뀌어 seeded-league 결과가 변동 → `ENGINE_VERSION` 13→14 범프**(REALTIME_SIM 결과캐시 게이트가 옛-엔진 저장 순위 폐기·재계산). **골든 재생성**(`_dv_golden --update`)·KOVO 분포/parity 재수렴·부정 보유율 재측정은 **메인**이 판단(반응형은 시드 결과를 바꾸므로 임의 골든 갱신 금지).
-- **상비 가드 `tools/_dv_reactive.ts`**: (a)무해성(미부여 activations 0·바이트 동일)+민감도(de-confounded 조커 sub 결과 변동) (b)조커/유리멘탈/오뚝이 발동 (c)5랠리 만료·타임아웃 clear·세트끝 clear(expires/clears 카운터로 격리) (d)선수당 1개(Map 단일) (e)하드캡 극단값 clamp (f)방향 A/B(직접 playRally 하네스 — 조커 킬%↑·유리멘탈 킬%↓ + OFF/OFF 자가검증). 관측은 `debugReactive`(debugSimCalls 패턴, rng 무영향). 실측: 조커 킬% 40.84→43.27·유리멘탈 40.84→40.26(N=400 직접 하네스, ENGINE_VERSION 14).
+- **결정론(구현 확정)**: 반응형 특성 미부여 선수는 `activeBuffs`에 엔트리 없음·`clutchArmed` 빈 집합 → `reactiveSkillMult`=1·`reactiveFocusAdj`=0 → **완전 무영향**(무보유 리그 바이트 동일 — 가드 `_dv_reactive` (a) 실측 activations=0·maxBuffs=0·동일시드 재현). 단 **POOL에 반응형 추가로 시드 리그 선수의 rollTraits 분포가 바뀌어 seeded-league 결과가 변동 → `ENGINE_VERSION` 범프**(2a: 13→14 · **2b: 14→15**, 이벤트 발동형 4종 POOL 추가). REALTIME_SIM 결과캐시 게이트가 옛-엔진 저장 순위 폐기·재계산. **골든 재생성**(`_dv_golden --update`)·KOVO 분포/parity 재수렴·부정 보유율 재측정은 **메인**이 판단(반응형은 시드 결과를 바꾸므로 임의 골든 갱신 금지).
+- **상비 가드 `tools/_dv_reactive.ts`**: (a)무해성(미부여 activations 0·바이트 동일)+민감도(de-confounded 조커 sub 결과 변동) (b)7종 발동(조커/유리멘탈/오뚝이 + 낯가림[교체 투입]/핀치서버[서브슬롯 교체]/대타승부사[첫 공격]/에이스기세[서브 에이스], 각 control/strip=0) (c)5랠리 만료·타임아웃 clear·세트끝 clear(expires/clears 카운터로 격리) (d)선수당 1개(Map 단일) (e)하드캡 극단값 clamp (f)방향 A/B(직접 playRally 하네스 — 조커·대타승부사 킬%↑·유리멘탈·낯가림 킬%↓·핀치서버·에이스기세 홈 서브에이스%↑ + OFF/OFF 자가검증 2종). 관측은 `debugReactive`(debugSimCalls 패턴, rng 무영향). 실측(N=400, ENGINE_VERSION 15): 킬% NONE 42.08 → 조커 44.08·대타승부사 44.26·유리멘탈 40.87·낯가림 40.40 · 서브에이스% NONE 4.15 → 핀치서버·에이스기세 각 4.58.
 
 ### 6.4 상태형 (Phase 2 후반) — 반응형이되 조용히
 **뒷심·역전·살얼음·초반집중·5세트** = 반응형이되 **clutch식 국면 플래그로 조용히 수치만 보정**(현수막·마커 **없음** — 관전 소음 방지).
@@ -176,13 +184,14 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
 |---|---|---|
 | **P1** | 상시형 6종(bomber/digWall/smart/endurance/tank/maestro) | ✅ 구현 완료(2026-07-27) |
 | **P2a** | 반응형 3종(조커/유리멘탈/오뚝이) + `RallyTeam.activeBuffs`(선수당 1개) + `reactiveSkillMult`/`reactiveFocusAdj`(±10%/±0.10 캡) + ENGINE_VERSION 13→14 범프 + 가드 `_dv_reactive` | ✅ 구현 완료(2026-07-27, 엔진 레이어. UI 연출=2c) |
-| **P2b** | 반응형 나머지 4종(낯가림/핀치서버/대타승부사/에이스기세) + 안방호랑이/원정형(맥락 의존 → `effStat` 재검토) | 설계 |
+| **P2b** | 반응형 이벤트 발동형 4종(낯가림/핀치서버/대타승부사/에이스기세) — 2a 레이어 재사용(activeBuffs·reactiveSkillMult·±10%캡·reactiveEvents 자동 연출) + `RallyTeam.clutchArmed`(대타승부사 첫 공격 플래그) + joker↔coldStart 상극 + ENGINE_VERSION 14→15 범프 | ✅ 구현 완료(2026-07-27). 안방호랑이/원정형(맥락 의존 → `effStat`)은 P2 후반으로 이월 |
 | **P2c** | 반응형 UI 연출(현수막 발동 1회 + 마커 테두리 점등, 지속 텍스트 없음 — §6.3 연출 스펙·§6.10) | ✅ 구현 완료(2026-07-27) |
 | **P3** | 상태형 5종(조용히) + 밸런스 튜닝 | 설계 |
 
 ### 6.10 반응형 연출 배선 (Phase 2c ✅ 구현 2026-07-27)
 
-엔진에서 이미 도는 반응형 3종(§6.3)을 **경기 보드에 노출**한다. 순수 표현 배선 — 경기 결과·rng 스트림 불변.
+엔진에서 이미 도는 반응형 특성(§6.3, 현재 7종)을 **경기 보드에 노출**한다. 순수 표현 배선 — 경기 결과·rng 스트림 불변.
+> **Phase 2b 4종 자동 연출(2026-07-27)**: 낯가림/핀치서버/대타승부사/에이스기세는 `reactiveEvents`에 실려 **추가 UI 작업 없이** 배너·마커가 붙는다 — 배너 라벨 `TRAITS[trait].name`(일반 파생), 마커 tint `reactiveTint` **폴백**(buff=금·debuff=적, 낯가림=적/나머지 3종=금), 배너 아이콘은 폴백 `alert-circle`(joker=flash·bounce=refresh 외). 전용 색/아이콘 세분은 필요 시 후속.
 
 - **엔진 출력 추가(결과 불변)**: `SimResult.reactiveEvents: ReactiveEvent[]`(정본 `engine/simMatch.ts`).
   `{ pointIndex, playerId, trait, kind:'buff'|'debuff', startPoint, endPoint }` — **발동 시점 + 활성 창**(point 인덱스 = 랠리 인덱스).

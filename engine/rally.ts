@@ -96,6 +96,10 @@ export interface RallyTeam {
   //   momentum/stam/injured와 같은 경기중 임시상태. match.ts가 방아쇠·지속/해제 관리, 아래 산출 지점이 reactive* 접근자로 읽는다.
   //   미부여 선수는 엔트리 없음 → get()=undefined → 배수 1/보정 0(무영향 → 결정론 골든 보존). playRally 인자로 넘기지 않는다(필드로 전달).
   activeBuffs: Map<string, ActiveBuff>;
+  // 대타승부사(clutchSub, §6.3 Phase 2b) — 교체 투입 후 **아직 첫 공격을 안 한** 선수 id 집합(arming 플래그).
+  //   activeBuffs와 분리(발동 전이라 카운트/이벤트 없음): 이 선수가 처음 공격자로 선택되는 스윙에 아래 attackPower 지점이
+  //   1랠리 clutchSub 버프를 합성(스파이크 ×1.08)하고 즉시 소비(delete). 미부여=빈 집합 → 무영향(결정론 골든 보존). rng 무소비.
+  clutchArmed: Set<string>;
 }
 
 export type Rate = (p: Player) => Ratings;
@@ -561,7 +565,10 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const serveDisadv = att === serving ? 0.9 : 1; // 서브한 팀은 전환 공격 불리(서브 직후 out-of-system) → 사이드아웃↑
     // 폭격기(bomber): 스파이크 화력↑ — 공격 성공 판정에 쓰는 attackPower에 공격수 배수(미부여=1배).
     //   반응형: 조커 공격수↑(전스킬)·유리멘탈 공격수↓(스파이크) — 활성 버프 배수(미부여=1배).
-    const reactiveAtkBuff = at.activeBuffs.get(attacker.id);
+    let reactiveAtkBuff = at.activeBuffs.get(attacker.id);
+    // 대타승부사(clutchSub, §6.3 Phase 2b): 교체 투입 후 첫 공격 스윙 — activeBuffs에 다른 버프가 없을 때만 발동(활성 버프 우선),
+    //   1랠리 버프를 합성해 이 스윙의 스파이크 ×1.08 → 즉시 소비(clutchArmed.delete). 미부여=빈 집합 → 무영향. rng 무소비.
+    if (!reactiveAtkBuff && at.clutchArmed.has(attacker.id)) { reactiveAtkBuff = { trait: 'clutchSub', kind: 'buff', left: 1 }; at.clutchArmed.delete(attacker.id); }
     const attackPower = ATK_K * n(R(attacker).spike) * spikeTraitMult(attacker.traits) * reactiveSkillMult(reactiveAtkBuff, 'spike') * setMul * BLOCK_AVOID[atk] * qf * momFactor(at.momentum) * eg(att) * eff(at, attacker) * atkStyleMul * serveDisadv;
     const blk = blockEval(df, atk, R, rng);
     const firstBall = hop === 0; // 리시브 후 첫 공격(인시스템) — 서브한 팀의 블록이 미완성
