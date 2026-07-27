@@ -583,11 +583,14 @@ export const currentBasePlayers = (): Player[] => {
   return out;
 };
 
-/** 선수 상태 스냅샷을 레지스트리에 반영(신규 id 포함). 구세이브 호환: 특성 없으면 id 시드로 보정 */
+/** 선수 상태 스냅샷을 레지스트리에 반영(신규 id 포함). 구세이브 호환: 특성 없거나 **빈 배열이면** id 시드로 보정.
+ *  ★ `p.traits?.length` (2026-07-27): 구 `p.traits ?`는 빈 배열 `[]`도 truthy라 무특성(0개)이 그대로 고착됐다
+ *  (옛 규칙 세이브의 mid-season playerBase에서 물림). 길이 0/undefined면 rollTraits(id)로 재부여 → 새 규칙(전원 1~3개)
+ *  으로 **로드 시 자동 정정**(id 시드 결정론·멱등). 비-빈 배열(옛 non-empty 특성)의 새 규칙 승격은 v4→v5 마이그레이션이 담당. */
 export function commitPlayerBase(snapshot: Record<string, Player>): void {
   for (const id of Object.keys(snapshot)) {
     const p = snapshot[id];
-    playerMap.set(id, p.traits ? p : { ...p, traits: rollTraits(id) });
+    playerMap.set(id, p.traits?.length ? p : { ...p, traits: rollTraits(id) });
   }
   evoCache = null;
   clearEvoOne(); // 축1: 시즌 경계 base 교체 → 메모 비움(메모리 바운드). 참조검사가 정확성은 보장하나 여기서 정리
