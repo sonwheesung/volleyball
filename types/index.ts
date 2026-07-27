@@ -112,6 +112,12 @@ export interface Player {
   // 없으면(구세이브·필드 도입 전 생성) 커리어 누적 표시를 생략(UI 폴백). NOTE: 리플레이/시뮬 입력에 절대 안 들어간다.
   debut?: DebutSnapshot;
 
+  // 드래프트 출신 — "20XX 드래프트 N라운드 M순위 · {팀명} 지명" 표시 전용(#76). debut과 동일 등급의
+  //   **리플레이 불가 예외 영속**: 과거 드래프트는 base 매 시즌 rebase·results 리셋으로 재생 불가라, 지명 시점(endSeason)에
+  //   set-once로 1회 박는다(이후 덮어쓰기 금지). **엔진 무간섭** — 경기/시즌 시드 리플레이·골든에 절대 안 들어간다(패시브 표시).
+  //   season = 클래스 생성 시즌(=지명 선수 id `d{season}_*` 인코딩과 정합). 구세이브·제네시스·유찰 선수는 undefined.
+  draftOrigin?: { season: number; round: number; overallPick: number; teamId: string };
+
   // FA 성향 (FA_SYSTEM 2.5) — 선수마다 이적 동기가 다르다. id 시드로 결정론 생성.
   faPref?: FAPref;
 }

@@ -104,10 +104,9 @@ function DraftLiveInner() {
   // 픽 시퀀스 — [ctx, mySelections]에만 의존(값싼 재계산, 조정 C). 내 슬롯은 mySelections 우선 → 찜 폴백 → AI.
   const seq = useMemo<SeqItem[]>(() => {
     const res = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => ctx.snapshot[id], my, draftPicks, styleOf, teamScoutReveal, mySelections, aiTargetOf());
-    const seen: Record<string, number> = {};
+    // round는 엔진 emit(s.round = 고정순서 팀 등장 회차 — 패스 슬롯 포함). 옛 seen[] 카운터는 실제 지명 수라 패스 낀 라운드 오라벨 → 제거(#76 근본 해소).
     return res.sequence.map((s, i) => {
-      seen[s.teamId] = (seen[s.teamId] ?? 0) + 1;
-      return { i, teamId: s.teamId, player: clsById.get(s.playerId)!, playerId: s.playerId, reason: s.reason, round: seen[s.teamId], mine: s.teamId === my };
+      return { i, teamId: s.teamId, player: clsById.get(s.playerId)!, playerId: s.playerId, reason: s.reason, round: s.round, mine: s.teamId === my };
     }).filter((x) => x.player);
   }, [ctx, mySelections, my, draftPicks, clsById]);
 

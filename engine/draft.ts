@@ -14,6 +14,11 @@ export const DRAFT_ROUNDS = 4;
 /** 한 AI 픽의 사유 — wish(인간 위시) / super(특급 BPA) / need(부족 포지션) / best(필요없음→OVR+성격) */
 export type PickReason = 'wish' | 'super' | 'need' | 'best';
 
+/** 드래프트 지명 시퀀스 한 건 — resolveDraft가 슬롯마다 emit(#76 draftOrigin 영속 소스, FA_SYSTEM §1025 해소).
+ *  round = 고정순서 드래프트에서 그 팀의 등장 회차(1-based, **패스해도 슬롯 소비로 증가** — 팀 등장 카운트 = roundOf).
+ *  overallPick = sequence 내 실제 지명 순번(1-based, 유찰/패스 제외). round/overallPick는 로스터 배정·picked에 무영향(additive). */
+export type DraftSeqEntry = { teamId: string; playerId: string; reason: PickReason; round: number; overallPick: number };
+
 type Lookup = (id: string) => Player | undefined;
 
 /** 스카우팅 평가 노이즈 — 공개도(reveal) 낮을수록 유망주 가치 오판↑. 결정론(id+팀 해시). */
@@ -195,7 +200,7 @@ export function resolveDraft(
   revealOf: (teamId: string) => number = () => 1, // 팀 스카우팅 공개도(기본 1=정밀)
   mySelections: string[] = [],                    // 내 슬롯 순서 확정 픽(라이브 인터랙티브, 조정 E). 슬롯 i가 소비
   targetOf: (teamId: string) => number = () => ROSTER_CONTRACT_CAP, // 팀 목표 로스터 크기(Phase 1.5) — 기본=하드 상한(옛 동작)
-): { rosters: Record<string, string[]>; picked: Player[]; sequence: { teamId: string; playerId: string; reason: PickReason }[] } {
+): { rosters: Record<string, string[]>; picked: Player[]; sequence: DraftSeqEntry[] } {
   const rosters: Record<string, string[]> = {};
   for (const k of Object.keys(rostersIn)) rosters[k] = [...rostersIn[k]];
   const clsById = new Map(cls.map((p) => [p.id, p]));
@@ -204,7 +209,7 @@ export function resolveDraft(
   const available = [...cls];
   const wl = [...wishlist];
   const picked: Player[] = [];
-  const sequence: { teamId: string; playerId: string; reason: PickReason }[] = [];
+  const sequence: DraftSeqEntry[] = [];
   let myPickIdx = 0; // 내 몇 번째 픽인가(내 슬롯마다 +1) — mySelections[myPickIdx] 매핑
   const roundOf: Record<string, number> = {}; // 팀별 등장 횟수 = 그 팀 현재 라운드(1..) — order 구조 무관 결정론
 
@@ -251,7 +256,9 @@ export function resolveDraft(
     available.splice(idx, 1);
     rosters[teamId] = [...(rosters[teamId] ?? []), chosen.id];
     picked.push(chosen);
-    sequence.push({ teamId, playerId: chosen.id, reason });
+    // round = 이 슬롯의 팀 등장 회차(roundOf, 위 212 — 패스도 슬롯 소비로 증가). overallPick = 실제 지명 순번(1-based, 패스/유찰 제외).
+    // 명시 emit → store가 휴리스틱으로 라운드 재구성(FA_SYSTEM §1025 오라벨 버그)할 필요 없음. additive: 로스터 배정·picked 불변.
+    sequence.push({ teamId, playerId: chosen.id, reason, round, overallPick: sequence.length + 1 });
   }
   return { rosters, picked, sequence };
 }

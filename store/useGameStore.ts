@@ -1261,6 +1261,16 @@ export const useGameStore = create<GameState>()(
         const styleOf = (teamId: string) => getTeam(teamId)?.coachStyle ?? 'balanced';
         const drafted = resolveDraft(ctx.order, ctx.cls, ctx.rosters, (id) => snapshot[id], my, draftPicks, styleOf, teamScoutReveal, draftSelections, aiTargetOf(seasonClose.standings)); // §7.8: 커밋 후 aiTargetOf가 COLD 순위 재시뮬하지 않게 캡처 순위 주입
         for (const p of drafted.picked) snapshot[p.id] = p;
+        // #76 드래프트 출신 영속(set-once) — 지명 시점에만 1회 박는다(과거 드래프트는 base rebase·results 리셋으로 리플레이 불가라
+        //   이 순간이 유일한 기회, debut과 동일 예외). 이미 있으면 덮어쓰지 않음(폴백 재계산이 값을 흔들지 않게 — 멱등).
+        //   season=nextSeason(클래스 생성 시즌 = 지명 선수 id `d{nextSeason}_*` 인코딩·draft-live 포스터 seasonYear(season+1)와 정합).
+        //   draftOrigin은 패시브 표시 전용(엔진 무간섭) — 이 snapshot이 commitPlayerBase(아래)로 base 영속됨.
+        for (const pk of drafted.sequence) {
+          const pl = snapshot[pk.playerId];
+          if (pl && !pl.draftOrigin) {
+            snapshot[pk.playerId] = { ...pl, draftOrigin: { season: nextSeason, round: pk.round, overallPick: pk.overallPick, teamId: pk.teamId } };
+          }
+        }
         const myDrafted = drafted.picked.filter((p) => (drafted.rosters[my] ?? []).includes(p.id)); // 내 지명만(§13.20 ④)
         if (myDrafted.length) diag(season, 'draft', `드래프트 지명 ${myDrafted.map((p) => p.name).join(', ')}`); // 진단 로그
 
@@ -1466,19 +1476,13 @@ export const useGameStore = create<GameState>()(
         const nextTransfers = [...transfers, ...seasonTransfers, ...seasonReleases, ...seasonResigns].slice(-200);
 
         // 오프시즌 결산 뉴스(§3.7) — ① 드래프트 입단 로그: 내 팀 전 픽 ∪ 타팀 1라운드.
-        //   round/overallPick은 drafted.sequence를 회차 재구성(한 라운드에 팀이 두 번 나오면 새 라운드 — buildDraftOrder 구조).
+        //   round/overallPick은 이제 resolveDraft가 명시 emit(#76) — ~~휴리스틱 회차 재구성~~(§1025 오라벨 버그, 패스 낀
+        //   케이스에서 라운드 오라벨)은 근본 해소. pk.round=팀 등장 회차(패스도 슬롯 소비로 증가), pk.overallPick=실제 지명 순번.
         const seasonDraft: DraftPickRecord[] = [];
-        {
-          let round = 1, overallPick = 0;
-          const seenThisRound = new Set<string>();
-          for (const pk of drafted.sequence) {
-            if (seenThisRound.has(pk.teamId)) { round++; seenThisRound.clear(); }
-            seenThisRound.add(pk.teamId);
-            overallPick++;
-            if (pk.teamId === my || round === 1) {
-              const p = snapshot[pk.playerId];
-              if (p) seasonDraft.push({ season, teamId: pk.teamId, playerId: pk.playerId, name: p.name, position: p.position, round, overallPick });
-            }
+        for (const pk of drafted.sequence) {
+          if (pk.teamId === my || pk.round === 1) {
+            const p = snapshot[pk.playerId];
+            if (p) seasonDraft.push({ season, teamId: pk.teamId, playerId: pk.playerId, name: p.name, position: p.position, round: pk.round, overallPick: pk.overallPick });
           }
         }
         const nextDraftLog = [...seasonDraftLog, ...seasonDraft].slice(-150);

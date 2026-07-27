@@ -331,6 +331,15 @@ function PlayerDetailInner() {
               })() : null}
             </View>
             <Muted style={{ fontSize: 13 }}>{p.age}세 · {p.height}cm</Muted>
+            {/* 드래프트 출신(#76) — 사실만. 형용사·인과·평가·자동서사 금지(가짜드라마 하드라인). 없으면 줄 생략.
+                구세이브 폴백: draftOrigin 없어도 id가 신인 클래스 포맷(d{시즌}_{n})이면 시즌만 약하게 표시. 유찰/제네시스(비매치)는 생략. */}
+            {(() => {
+              const o = p.draftOrigin;
+              if (o) return <Muted style={{ fontSize: 12 }}>{seasonYear(o.season)} 드래프트 {o.round}라운드 {o.overallPick}순위 · {teamShort(o.teamId)} 지명</Muted>;
+              const m = /^d(\d+)_\d+$/.exec(p.id);
+              if (m) return <Muted style={{ fontSize: 12 }}>{seasonYear(Number(m[1]))} 드래프트 지명</Muted>;
+              return null;
+            })()}
           </View>
           {isMine || reveal >= REVEAL_PRECISE ? (
             <OvrBadge value={overallRaw(p)} size={62} />
