@@ -14,7 +14,7 @@
 //       조커 홈팀 킬%↑ · 유리멘탈 홈팀 킬%↓ + **자가검증**(OFF/OFF = reactiveSkillMult≡1 세계면 킬% 동률 → 방향 오라클 FAIL 증명).
 import { resetLeagueBase, LEAGUE, coachInfoOf } from '../data/league';
 import { availableTeamPlayers } from '../data/injury';
-import { simulateMatch, debugReactive } from '../engine/match';
+import { simulateMatch, debugReactive, REACTIVE_DURATION } from '../engine/match';
 import { buildLineup } from '../engine/lineup';
 import { playRally, type RallyTeam, type BoxSink } from '../engine/rally';
 import { deriveRatings } from '../engine/ratings';
@@ -235,7 +235,71 @@ log('── (f) 방향 A/B(직접 하네스) ──');
   check(kJoker > kNone2 && kFrag < kNone2, '조커>OFF/OFF & 유리멘탈<OFF/OFF (방향은 버프가 활성일 때만 성립)');
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// (g) reactiveEvents 연출 출력(TRAIT_SYSTEM §6.10, Phase 2c) — 결정론·발동 1:1·활성 창 정합·미부여 빈 배열
+// ─────────────────────────────────────────────────────────────────────────────
+log('── (g) reactiveEvents 연출 출력(§6.10) ──');
+{
+  // (g1) 미부여 리그 → reactiveEvents 빈 배열(발동 0). 표현 출력이 무보유 리그에 안 뜬다.
+  const inert = simulateMatch(101, A0, B0, { ...base });
+  const inertN = (inert.reactiveEvents ?? []).length;
+  log(`   미부여 리그: reactiveEvents=${inertN}건`);
+  check(inertN === 0, '(g1) 반응형 미부여 리그 → reactiveEvents 빈 배열(순수 표현·무영향)');
+
+  // 반응형 부여 리그(양 팀 공격수 유리멘탈+오뚝이 아닌 fragile만 — 상극이라 한쪽만) → 다수 발동
+  const RA = addTraitTo(A0, isAtk, 'fragile');
+  const RB = addTraitTo(B0, isAtk, 'fragile');
+  const evSeeds = [7, 13, 21, 44, 88];
+
+  // (g2) 결정론 — 동일 시드 2회 재실행 = reactiveEvents 바이트 동일(파생이 비결정성 도입 안 함).
+  let evDet = true, totalEv = 0;
+  for (const s of evSeeds) {
+    const a = JSON.stringify(simulateMatch(s, RA, RB, { ...base }).reactiveEvents ?? []);
+    const b = JSON.stringify(simulateMatch(s, RA, RB, { ...base }).reactiveEvents ?? []);
+    if (a !== b) evDet = false;
+    totalEv += (simulateMatch(s, RA, RB, { ...base }).reactiveEvents ?? []).length;
+  }
+  log(`   부여 리그 ${evSeeds.length}경기: 총 이벤트 ${totalEv}건 · 동일시드 2회 바이트 동일=${evDet}`);
+  check(evDet, '(g2) 동일 시드 = 동일 reactiveEvents(결정론 — 파생이 rng/비결정성 도입 안 함)');
+  check(totalEv > 0, '(g2b) 부여 리그 → 이벤트 발생(공허 아님)');
+
+  // (g3) 발동 1:1 + 활성 창 경계 — reactiveEvents.length === activations, 각 창이 [0, points.length] 범위 & 지속 ≤ REACTIVE_DURATION.
+  let onePerAct = true, boundsOk = true;
+  for (const s of evSeeds) {
+    debugReactive.reset();
+    const sim = simulateMatch(s, RA, RB, { ...base });
+    const evs = sim.reactiveEvents ?? [];
+    const N = sim.points.length;
+    if (evs.length !== debugReactive.activations()) onePerAct = false;
+    for (const e of evs) {
+      // startPoint = 첫 영향 랠리(유효 인덱스), endPoint = 마지막 영향 랠리(해제 시점 points.length−1) — 즉시 해제면 startPoint−1(< startPoint).
+      if (!(e.startPoint >= 0 && e.startPoint <= N && e.endPoint <= N - 1 && e.endPoint >= e.startPoint - 1)) boundsOk = false;
+      if (e.endPoint - e.startPoint + 1 > REACTIVE_DURATION) boundsOk = false; // 활성 창은 절대 5랠리 초과 금지
+    }
+  }
+  check(onePerAct, '(g3) reactiveEvents.length === debugReactive.activations()(발동 1건당 이벤트 1건 — 누락/중복 없음)');
+  check(boundsOk, `(g3b) 모든 활성 창이 [0, points.length] 범위 & 지속 ≤ ${REACTIVE_DURATION}랠리(창이 버프 지속 초과 안 함)`);
+
+  // (g4) 활성 창 ↔ 버프 지속 정합 A/B(조커 sub 하네스 — (c)와 동일 설정, 그 lifecycle에 창 길이를 못박음):
+  //   Run A(무타임아웃): 자연 만료 → 창 길이 정확히 REACTIVE_DURATION. Run B(즉시 타임아웃): clear로 클리핑 → 창 길이 < REACTIVE_DURATION.
+  const luG = buildLineup(A0, 0);
+  const benchAtkG = A0.find((p) => !new Set(luG.six.map((x) => x.id)).has(p.id) && isAtk(p))!;
+  const outIdG = luG.six.find((p) => p.position === benchAtkG.position)?.id ?? luG.six[0].id;
+  const jokBenchG = A0.map((p) => (p.id === benchAtkG.id ? { ...p, traits: ['joker' as Trait] } : p));
+  const subIvG: MatchIntervention = { at: { setNo: 1, h: 0, a: 0 }, side: 'home', kind: 'sub', outId: outIdG, inId: benchAtkG.id, subKind: 'manual' };
+  const toIvG: MatchIntervention = { at: { setNo: 1, h: 1, a: 0 }, side: 'home', kind: 'timeout' };
+  const evsA = (simulateMatch(7, jokBenchG, B0, { ...base, interventions: [subIvG] }).reactiveEvents ?? []).filter((e) => e.trait === 'joker');
+  const evsB = (simulateMatch(7, jokBenchG, B0, { ...base, interventions: [subIvG, toIvG] }).reactiveEvents ?? []).filter((e) => e.trait === 'joker');
+  const lenA = evsA.length === 1 ? evsA[0].endPoint - evsA[0].startPoint + 1 : -1;
+  const lenB = evsB.length === 1 ? evsB[0].endPoint - evsB[0].startPoint + 1 : -1;
+  log(`   조커 하네스: Run A(무타임아웃) 이벤트 ${evsA.length}건·창 길이 ${lenA} | Run B(즉시 타임아웃) 이벤트 ${evsB.length}건·창 길이 ${lenB}`);
+  check(evsA.length === 1 && lenA === REACTIVE_DURATION, `(g4-A) 무타임아웃 조커 → 창 길이 == ${REACTIVE_DURATION}(자연 만료 = 버프 지속과 정합)`);
+  check(evsB.length === 1 && lenB < REACTIVE_DURATION, '(g4-B) 즉시 타임아웃 조커 → 창 길이 < 5(타임아웃 clear로 창이 정확히 클리핑 — (c) lifecycle과 일치)');
+  // (g4) pointIndex 위치 — 조커는 트리거(교체 투입)=활성 시작이라 pointIndex == startPoint.
+  check(evsA.length === 1 && evsA[0].pointIndex === evsA[0].startPoint, '(g4-C) 조커 pointIndex == startPoint(투입 랠리 = 활성 시작 — 배너 키가 코트 투입 순간)');
+}
+
 log('');
 if (fails.length) { log(`REACTIVE FAIL — ${fails.length}건: ${fails.join(' / ')}`); process.exit(1); }
-log('REACTIVE PASS ((a)무해성+민감도 (b)조커/유리멘탈/오뚝이 발동 (c)5랠리만료·타임아웃clear·세트끝clear (d)선수당1개 (e)하드캡 (f)방향 조커↑·유리멘탈↓ + OFF/OFF 자가검증)');
+log('REACTIVE PASS ((a)무해성+민감도 (b)조커/유리멘탈/오뚝이 발동 (c)5랠리만료·타임아웃clear·세트끝clear (d)선수당1개 (e)하드캡 (f)방향 조커↑·유리멘탈↓ + OFF/OFF 자가검증 (g)reactiveEvents 결정론·발동1:1·활성창 정합·미부여 빈배열)');
 process.exit(0);

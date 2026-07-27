@@ -7,7 +7,7 @@ import { createRng } from './rng';
 import { isSetOver, SETS_TO_WIN } from './match';
 
 import type { PointHow, TouchEvent } from './rally';
-import type { Side } from '../types';
+import type { Side, Trait } from '../types';
 
 export interface PointLog {
   setNo: number;
@@ -67,6 +67,18 @@ export interface TimeoutEvent {
   technical?: boolean; // true = KOVO 테크니컬 타임아웃(1~4세트 8·16점 자동 휴식, 감독 호출 아님·팀 예산 무차감). 없거나 false = 감독 작전 타임아웃. 보드가 라벨 분기(2026-07-07)
 }
 
+/** 반응형 특성 발동/활성 창 1건(TRAIT_SYSTEM §6.3·§6.10) — **순수 표현 출력**(보드 현수막 1회 + 마커 테두리).
+ *  이미 계산되는 activeBuffs 발동/만료에서 파생 — 새 rng 소비 0, 경기 결과 바이트 불변. **골든(serializeMatch)엔 안 실림**
+ *  (코어 결과 불변 유지 → ENGINE_VERSION 범프 불필요). 미부여 경기는 빈 배열. point 인덱스 = 랠리(득점) 인덱스. */
+export interface ReactiveEvent {
+  pointIndex: number;   // 트리거 게임사건 랠리 인덱스(보드 배너 1회 표출 키). 조커=투입 랠리(=startPoint)·유리멘탈/오뚝이=막힘/범실 랠리(=startPoint−1)
+  playerId: string;
+  trait: Trait;         // 'joker' | 'fragile' | 'bounce'
+  kind: 'buff' | 'debuff';
+  startPoint: number;   // 활성 창 시작 = 버프가 처음 영향 주는 랠리 인덱스(버프 set 시점 points.length)
+  endPoint: number;     // 활성 창 끝 = 마지막 영향 랠리 인덱스(해제 시점 points.length−1). < startPoint 이면 즉시 해제(무영향 창 — 마커 미표시)
+}
+
 export interface SimResult {
   homeSets: number;
   awaySets: number;
@@ -77,6 +89,7 @@ export interface SimResult {
   timeouts?: TimeoutEvent[];        // 작전 타임아웃 로그(보드가 멈추고 체력/기세를 보여주기 위함)
   setFirstServers?: Side[];         // 세트별(인덱스=세트-1) 첫 서브 팀. 5세트는 코인토스(MATCH_SYSTEM v2.1)라
                                     // 소비자(보드 복원·production)가 setNo%2로 재도출하면 어긋남 → 엔진이 진실을 실어 보낸다.
+  reactiveEvents?: ReactiveEvent[]; // 반응형 특성 발동/활성 창(TRAIT_SYSTEM §6.10, 순수 표현). 미부여=빈 배열. 골든 무영향.
 }
 
 export function simulateMatchSimple(seed: number, homeOvr: number, awayOvr: number): SimResult {

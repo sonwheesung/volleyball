@@ -300,3 +300,27 @@ export function buildLiveBanners(
   }
   return out;
 }
+
+// ─── 반응형 특성 연출(TRAIT_SYSTEM §6.10, Phase 2c) — reactiveEvents 순수 소비(보드가 독립 재계산 안 함) ───
+// 마커 테두리색: 버프=금[조커]/에메랄드[오뚝이] · 디버프=적[유리멘탈]. 트리거명 미지정이면 kind 기본색(금/적).
+export function reactiveTint(trait: string, kind: 'buff' | 'debuff'): string {
+  if (trait === 'joker') return '#F2C94C';   // 금(gold) — buff
+  if (trait === 'bounce') return '#34D399';  // 에메랄드 — buff
+  if (trait === 'fragile') return '#E1574C'; // 적색 — debuff
+  return kind === 'debuff' ? '#E1574C' : '#F2C94C';
+}
+
+export interface ReactiveMarkerState { playerId: string; trait: string; kind: 'buff' | 'debuff'; tint: string }
+
+/** 현재 재생 랠리(ptIdx)에서 활성 창[startPoint,endPoint] 안인 반응형 버프 → 마커 테두리 상태. 창 밖/빈 배열이면 미표시.
+ *  즉시 해제(endPoint < startPoint)는 자연히 미표시. 순수 파생 — 엔진 reactiveEvents만 읽음(개입/재생 3경로 정합). */
+export function reactiveActiveAt(sim: SimResult, ptIdx: number): ReactiveMarkerState[] {
+  const evs = sim.reactiveEvents ?? [];
+  const out: ReactiveMarkerState[] = [];
+  for (const e of evs) {
+    if (ptIdx >= e.startPoint && ptIdx <= e.endPoint) {
+      out.push({ playerId: e.playerId, trait: e.trait, kind: e.kind, tint: reactiveTint(e.trait, e.kind) });
+    }
+  }
+  return out;
+}

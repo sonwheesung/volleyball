@@ -151,7 +151,7 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
   - **타임아웃**(감독 자동·개입·테크니컬 TTO) 발생 시 양 팀 `activeBuffs` 전체 clear.
   - **세트 종료** 시 양 팀 clear(다음 세트 누수 0).
   - **선수당 1개**: 같은 id에 서로 다른 트리거가 와도 Map.set 덮어쓰기 → 단일 유지(마지막 트리거 승). fragile↔bounce는 ANTAGONISTS로 한 선수 동시부여 원천 차단 + 발동 시엔 Map 단일이라 이중 안전.
-- **연출 스펙(확정 — 아티팩트 사용자 승인, UI 배선=Phase 2c 미구현)**: 발동 시 **현수막 1회** + **마커 테두리 점등**(버프=금·에메랄드 회전링 / 디버프=적 펄스). **지속 텍스트/카운트다운 없음**(관전 소음 방지). 5랠리·타임아웃 해제·선수당 1개. 상태형(§6.4)은 여전히 연출 없이 조용히.
+- **연출 스펙(확정 — 아티팩트 사용자 승인, UI 배선=Phase 2c ✅ 구현 2026-07-27 — §6.10)**: 발동 시 **현수막 1회** + **마커 테두리 점등**(버프=금·에메랄드 / 디버프=적). **지속 텍스트/카운트다운 없음**(관전 소음 방지). 5랠리·타임아웃 해제·선수당 1개. 상태형(§6.4)은 여전히 연출 없이 조용히.
 - **결정론(구현 확정)**: 반응형 특성 미부여 선수는 `activeBuffs`에 엔트리 없음 → `reactiveSkillMult`=1·`reactiveFocusAdj`=0 → **완전 무영향**(무보유 리그 바이트 동일 — 가드 `_dv_reactive` (a) 실측 activations=0·maxBuffs=0·동일시드 재현). 단 **POOL에 joker/bounce/fragile 추가로 시드 리그 선수의 rollTraits 분포가 바뀌어 seeded-league 결과가 변동 → `ENGINE_VERSION` 13→14 범프**(REALTIME_SIM 결과캐시 게이트가 옛-엔진 저장 순위 폐기·재계산). **골든 재생성**(`_dv_golden --update`)·KOVO 분포/parity 재수렴·부정 보유율 재측정은 **메인**이 판단(반응형은 시드 결과를 바꾸므로 임의 골든 갱신 금지).
 - **상비 가드 `tools/_dv_reactive.ts`**: (a)무해성(미부여 activations 0·바이트 동일)+민감도(de-confounded 조커 sub 결과 변동) (b)조커/유리멘탈/오뚝이 발동 (c)5랠리 만료·타임아웃 clear·세트끝 clear(expires/clears 카운터로 격리) (d)선수당 1개(Map 단일) (e)하드캡 극단값 clamp (f)방향 A/B(직접 playRally 하네스 — 조커 킬%↑·유리멘탈 킬%↓ + OFF/OFF 자가검증). 관측은 `debugReactive`(debugSimCalls 패턴, rng 무영향). 실측: 조커 킬% 40.84→43.27·유리멘탈 40.84→40.26(N=400 직접 하네스, ENGINE_VERSION 14).
 
@@ -177,8 +177,26 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
 | **P1** | 상시형 6종(bomber/digWall/smart/endurance/tank/maestro) | ✅ 구현 완료(2026-07-27) |
 | **P2a** | 반응형 3종(조커/유리멘탈/오뚝이) + `RallyTeam.activeBuffs`(선수당 1개) + `reactiveSkillMult`/`reactiveFocusAdj`(±10%/±0.10 캡) + ENGINE_VERSION 13→14 범프 + 가드 `_dv_reactive` | ✅ 구현 완료(2026-07-27, 엔진 레이어. UI 연출=2c) |
 | **P2b** | 반응형 나머지 4종(낯가림/핀치서버/대타승부사/에이스기세) + 안방호랑이/원정형(맥락 의존 → `effStat` 재검토) | 설계 |
-| **P2c** | 반응형 UI 연출(현수막 발동 1회 + 마커 테두리 점등, 지속 텍스트 없음 — §6.3 연출 스펙) | 설계 확정·미구현 |
+| **P2c** | 반응형 UI 연출(현수막 발동 1회 + 마커 테두리 점등, 지속 텍스트 없음 — §6.3 연출 스펙·§6.10) | ✅ 구현 완료(2026-07-27) |
 | **P3** | 상태형 5종(조용히) + 밸런스 튜닝 | 설계 |
+
+### 6.10 반응형 연출 배선 (Phase 2c ✅ 구현 2026-07-27)
+
+엔진에서 이미 도는 반응형 3종(§6.3)을 **경기 보드에 노출**한다. 순수 표현 배선 — 경기 결과·rng 스트림 불변.
+
+- **엔진 출력 추가(결과 불변)**: `SimResult.reactiveEvents: ReactiveEvent[]`(정본 `engine/simMatch.ts`).
+  `{ pointIndex, playerId, trait, kind:'buff'|'debuff', startPoint, endPoint }` — **발동 시점 + 활성 창**(point 인덱스 = 랠리 인덱스).
+  이미 계산되는 `activeBuffs` 발동/만료/해제에서 **파생만**(새 rng 소비 0). `match.ts`가 버프 set 지점에서 `openReactive`,
+  tick 만료·타임아웃/세트끝 clear 지점에서 `closeReactive(endPoint = points.length−1)`로 창을 닫는다.
+  - `pointIndex` = 트리거 게임사건 랠리(조커=교체 투입 랠리 = startPoint · 유리멘탈/오뚝이=블로킹 당함/범실 랠리 = startPoint−1) — 보드 배너 1회 표출 키.
+  - `startPoint` = 버프가 처음 영향 주는 랠리(= 버프 set 시점 `points.length`) · `endPoint` = 마지막 영향 랠리(해제 시점 `points.length−1`, 즉시 해제면 < startPoint = 무영향 창).
+  - 미부여 경기는 **빈 배열**(활성 0). 반응형 미부여 리그면 바이트 동일.
+- **★ 골든 무영향(표현 출력)**: `_dv_golden serializeMatch`는 `reactiveEvents`를 **읽지 않는다**(코어 결과=세트/스코어/scorer/how/byId/recvId/box 집계만 해시). 따라서 이 필드 추가로 골든 해시 불변 → **골든 PASS 유지·ENGINE_VERSION 범프 불필요**(코어 결과 바이트 불변).
+- **보드 배선**(순수 표현, 재생 축 = 엔진 트레이스 소비):
+  - **현수막 1회**: `app/match/[id].tsx`가 `reactiveEvents`를 라이브 배너 소스에 합류 — 재생 위치(`score.ptIdx`)가 `pointIndex`에 도달하면 기존 라이브 배너 큐(`BroadcastBanner`)에 "○○○ · 조커 발동" 1회 push(스포일러 정책상 실시간 연출은 관전 중 노출 OK, 기존 `pushedBanners` dedup·`initialPtIdx` 재개 가드 공유).
+  - **마커 테두리**: `MatchCourt`가 현재 재생 랠리(`idx`)가 `[startPoint, endPoint]` 창 안이면 그 `playerId` 마커에 링 오버레이(버프=금[조커]/에메랄드[오뚝이] · 디버프=적[유리멘탈]). 창 밖이면 해제. **지속 텍스트/카운트다운 없음**. 기존 포지션색 실선 테두리는 불변(별도 오버레이 링).
+  - 색·활성창 판정은 순수 셀렉터 `courtDirector.reactiveActiveAt(sim, ptIdx)`·`reactiveTint(trait,kind)`(단일 소스 — 보드가 독립 재계산 안 함, 엔진 산출 그대로 소비 → 개입/재생 3경로 정합).
+- **상비 가드 `tools/_dv_reactive.ts` (g)**: reactiveEvents 결정론(동일 시드 = 동일 이벤트) + 활성 창이 실제 버프 지속과 정합(startPoint/endPoint가 `debugReactive` 발동/만료 카운트와 일치) + 미부여 리그 빈 배열 + 골든 무영향(serializeMatch 해시 불변) A/B.
 
 ### 6.9 독립 리뷰 결론 (2026-07-27)
 후보 17종을 리뷰해 **채택/축소**: 17종을 그대로 넣지 않고 → **순간형 반응형 소수(7종)만 신규 레이어**로,

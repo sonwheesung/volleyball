@@ -10,7 +10,8 @@ import { leagueProduction } from './production';
 import { teamClinch, teamTitleClinch } from './clinch';
 
 export type BannerKind = 'champion' | 'record' | 'clinch' | 'eliminated' | 'triple'
-  | 'setwon' | 'run' | 'acemulti' | 'blockmulti'; // 경기 중 실시간(Phase 3) — courtDirector.buildLiveBanners
+  | 'setwon' | 'run' | 'acemulti' | 'blockmulti' // 경기 중 실시간(Phase 3) — courtDirector.buildLiveBanners
+  | 'reactive'; // 반응형 특성 발동 1회(TRAIT_SYSTEM §6.10, Phase 2c) — app/match/[id]가 reactiveEvents에서 파생
 export interface Banner { kind: BannerKind; tint: string; icon: string; title: string; mine: boolean }
 
 const RECORD_TINT = '#3B82F6', CLINCH_TINT = '#16B07D', ELIM_TINT = '#FF6B5A', TRIPLE_TINT = '#8B5CF6', CHAMP_TINT = '#F2A93B';

@@ -81,6 +81,7 @@
 ## 5. 코드 맵
 - `data/broadcast.ts` — `buildMatchBanners(...)` 순수 집계(우승·기록·확정 → Banner[]) + `BannerKind` 실시간 4종(`setwon·run·acemulti·blockmulti`).
 - `components/courtDirector.ts` — `buildLiveBanners(rallies, mineSide, names)` 경기 중 실시간 현수막(Phase 3, 순수 파생). `app/match/[id].tsx`가 `score.ptIdx` 도달 시 큐 재생.
+  - **반응형 특성 발동 배너(TRAIT_SYSTEM §6.10, 2026-07-27)**: 반응형 3종(조커/유리멘탈/오뚝이) 발동 시 "○○○ · 조커 발동" 현수막 1회가 **라이브 배너 소스에 추가**된다 — `SimResult.reactiveEvents`의 `pointIndex`가 `score.ptIdx`에 도달하면 같은 큐(`BroadcastBanner`)에 push(BannerKind `reactive`). 결과-중립 실시간 사건이라 관전 중 노출 안전.
 - `tools/_dv_livebanner.ts` — 실시간 현수막 가드(prefix 스포일러·세트승자/세트수 정합·빈도·결정론).
 - `engine/clinch.ts` — `detectClinch(standings, remaining)` 매직넘버(Phase 2).
 - `data/milestones.ts` — `detectMatchMilestones()` 추가(경기단위).

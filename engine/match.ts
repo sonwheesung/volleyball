@@ -3,8 +3,8 @@
 // 매 세트 서브권 시작 팀 교대. 사이드아웃 시 회전(1.1) + 기세 갱신(7.2) + 타임아웃(7.4).
 // playRally를 돌려 SimResult(간이 시뮬과 동일 계약)를 출력 → 드롭인 교체 가능.
 
-import type { Player, Side, CoachStyle, SubPolicy, Position } from '../types';
-import type { SimResult, PointLog, SubEvent, TimeoutEvent, TimeoutCourtStam, SubKind, MatchIntervention } from './simMatch';
+import type { Player, Side, CoachStyle, SubPolicy, Position, Trait } from '../types';
+import type { SimResult, PointLog, SubEvent, TimeoutEvent, TimeoutCourtStam, SubKind, MatchIntervention, ReactiveEvent } from './simMatch';
 import type { Ratings } from './ratings';
 import { createRng, strSeed } from './rng';
 import { deriveRatings } from './ratings';
@@ -33,8 +33,8 @@ const REST_THRESHOLD = 0.35;     // 이 미만으로 지친 주전만 대상(0..
 const REST_MIN_BUDGET = 4;       // 피로 교체는 예산 ≥4일 때만(핀치 예산을 굶기지 않게 — 일반 교체 subIn 내부 ≥2보다 높은 문턱)
 const REST_HYST = 0.3;           // 히스테리시스: 벤치 체력 − 주전 체력 이 값 이상이어야(살짝 지친 걸로 반복 스와핑 방지)
 const DEFAULT_POLICY: SubPolicy = { pinchServer: true, blockSub: true, defSub: true, restSub: true };
-// 반응형 특성(TRAIT_SYSTEM §6.3, Phase 2a) — 발동 후 지속 랠리 수. 타임아웃/세트끝에도 해제.
-const REACTIVE_DURATION = 5;
+// 반응형 특성(TRAIT_SYSTEM §6.3, Phase 2a) — 발동 후 지속 랠리 수. 타임아웃/세트끝에도 해제. 가드 _dv_reactive (g)가 활성 창 길이 대조에 import.
+export const REACTIVE_DURATION = 5;
 
 export function targetPoints(setNo: number): number {
   return setNo >= 5 ? 15 : 25;
@@ -188,14 +188,47 @@ export function simulateMatch(
 
   // ── 반응형 특성(TRAIT_SYSTEM §6.3, Phase 2a) — 버프 지속/해제 관리. 무보유 리그면 전부 no-op(빈 맵 → 바이트 동일). rng 무소비. ──
   const findPlayer = (side: Side, id: string): Player | undefined => (side === 'home' ? homePlayers : awayPlayers).find((p) => p.id === id);
+  // ── 반응형 연출 출력(TRAIT_SYSTEM §6.10, Phase 2c) — **순수 표현 파생**(보드 현수막 1회 + 마커 테두리). rng/결과 무영향. ──
+  //   activeBuffs 발동/만료/해제에서만 파생. openReactive가 발동 시점 이벤트를 열고(startPoint=버프 set 시점 points.length),
+  //   tick 만료·타임아웃/세트끝 clear가 closeReactive(endPoint=points.length−1)로 활성 창을 닫는다. 미부여 리그면 이벤트 0건.
+  const reactiveEvents: ReactiveEvent[] = [];
+  const liveReactive: Record<Side, Map<string, ReactiveEvent>> = { home: new Map(), away: new Map() };
+  // 활성 창 닫기 — 해당 선수의 열린 이벤트에 endPoint 기입. 없으면 no-op(무보유 리그).
+  const closeReactive = (side: Side, id: string, endPoint: number): void => {
+    const ev = liveReactive[side].get(id);
+    if (ev) { ev.endPoint = endPoint; liveReactive[side].delete(id); }
+  };
+  // 활성 창 열기 — 새 이벤트 push + liveReactive 등록. 같은 선수의 기존 열린 이벤트(덮어쓰기 발동)는 startPoint−1로 먼저 닫음(무영향 창).
+  //   endPoint는 startPoint−1로 시작(즉시 해제·미갱신 시 무영향 창) → 이후 close에서 실제 값으로 갱신.
+  const openReactive = (side: Side, id: string, trait: Trait, kind: 'buff' | 'debuff', pointIndex: number, startPoint: number): void => {
+    closeReactive(side, id, startPoint - 1);
+    const ev: ReactiveEvent = { pointIndex, playerId: id, trait, kind, startPoint, endPoint: startPoint - 1 };
+    reactiveEvents.push(ev);
+    liveReactive[side].set(id, ev);
+  };
   // 랠리 1회 소비 후 지속 감소, 0이면 제거(발동 시점 left=5 → 이후 5랠리 활성). tickReactiveBuffs(순수)로 위임 — 가드가 동일 함수 검증.
-  const tickBuffs = (t: RallyTeam): void => { _reactiveExpires += tickReactiveBuffs(t.activeBuffs); };
-  // 타임아웃/세트끝 즉시 전체 해제(양 팀). 실제 해제된 버프 수만 카운트(빈 맵은 0 → 무보유 리그 무동작).
-  const clearBuffs = (): void => { _reactiveClears += home.activeBuffs.size + away.activeBuffs.size; home.activeBuffs.clear(); away.activeBuffs.clear(); };
+  //   만료된 선수의 열린 연출 이벤트도 함께 닫는다(endPoint = 직전 랠리 = points.length−1). tick은 push 직후 호출이라 방금 친 랠리가 마지막 활성.
+  const tickBuffs = (side: Side): void => {
+    const t = teamOf(side);
+    const before = t.activeBuffs.size ? [...t.activeBuffs.keys()] : null;
+    _reactiveExpires += tickReactiveBuffs(t.activeBuffs);
+    if (before) for (const id of before) if (!t.activeBuffs.has(id)) closeReactive(side, id, points.length - 1);
+  };
+  // 타임아웃/세트끝 즉시 전체 해제(양 팀). 실제 해제된 버프 수만 카운트(빈 맵은 0 → 무보유 리그 무동작). 열린 연출 이벤트도 닫는다(endPoint=points.length−1).
+  const clearBuffs = (): void => {
+    _reactiveClears += home.activeBuffs.size + away.activeBuffs.size;
+    for (const id of home.activeBuffs.keys()) closeReactive('home', id, points.length - 1);
+    for (const id of away.activeBuffs.keys()) closeReactive('away', id, points.length - 1);
+    home.activeBuffs.clear(); away.activeBuffs.clear();
+  };
   const noteMaxBuffs = (): void => { const c = home.activeBuffs.size + away.activeBuffs.size; if (c > _reactiveMaxBuffs) _reactiveMaxBuffs = c; };
-  // 조커(joker) — 교체 투입 순간 buff 발동. subIn이 코트에 세운 직후 호출(작전 교체 in만).
+  // 조커(joker) — 교체 투입 순간 buff 발동. subIn이 코트에 세운 직후 호출(작전 교체 in만). subIn은 랠리 루프 최상단(playRally 전)
+  //   호출이라 points.length = 다음(투입 후 첫) 랠리 인덱스 → startPoint=pointIndex=points.length(그 랠리부터 버프 활성).
   const triggerJoker = (side: Side, player: Player): void => {
-    if (player.traits?.includes('joker')) { teamOf(side).activeBuffs.set(player.id, { trait: 'joker', kind: 'buff', left: REACTIVE_DURATION }); _reactiveActivations++; noteMaxBuffs(); }
+    if (player.traits?.includes('joker')) {
+      teamOf(side).activeBuffs.set(player.id, { trait: 'joker', kind: 'buff', left: REACTIVE_DURATION }); _reactiveActivations++; noteMaxBuffs();
+      openReactive(side, player.id, 'joker', 'buff', points.length, points.length);
+    }
   };
 
   // 랠리 사이 회복 — 체젠(staminaRegen) 높을수록 빨리 회복.
@@ -480,13 +513,15 @@ export function simulateMatch(
       // ── 반응형 특성 지속/발동(TRAIT_SYSTEM §6.3, Phase 2a) — rng 무소비. 무보유 리그면 완전 no-op(빈 맵 → 바이트 동일). ──
       //   1) 이번 랠리 소비분 지속 감소(발동 랠리 포함 5랠리 후 만료).  2) 종결 사건 트리거: 유리멘탈(블로킹 당함=stuff)·오뚝이(막힘 or 범실).
       //   공격측 = other(winner)(stuff/atkErr는 winner=other(att)). 타임아웃이 이 랠리에 발화하면 아래 타임아웃 블록이 즉시 clear.
-      tickBuffs(home); tickBuffs(away);
+      tickBuffs('home'); tickBuffs('away');
       if ((how === 'stuff' || how === 'atkErr') && atkerId) {
         const aSide = other(winner);
         const ap = findPlayer(aSide, atkerId);
         if (ap?.traits) {
-          if (how === 'stuff' && ap.traits.includes('fragile')) { teamOf(aSide).activeBuffs.set(atkerId, { trait: 'fragile', kind: 'debuff', left: REACTIVE_DURATION }); _reactiveActivations++; }
-          if (ap.traits.includes('bounce')) { teamOf(aSide).activeBuffs.set(atkerId, { trait: 'bounce', kind: 'buff', left: REACTIVE_DURATION }); _reactiveActivations++; } // 블로킹 당함(stuff) or 내 범실(atkErr)
+          // 이 트리거는 push 직후(points.length = 방금 친 랠리+1) — 버프는 **다음** 랠리부터 활성 → startPoint=points.length,
+          //   트리거 사건이 보인 랠리(막힘/범실)는 points.length−1이라 pointIndex(배너 키)=points.length−1.
+          if (how === 'stuff' && ap.traits.includes('fragile')) { teamOf(aSide).activeBuffs.set(atkerId, { trait: 'fragile', kind: 'debuff', left: REACTIVE_DURATION }); _reactiveActivations++; openReactive(aSide, atkerId, 'fragile', 'debuff', points.length - 1, points.length); }
+          if (ap.traits.includes('bounce')) { teamOf(aSide).activeBuffs.set(atkerId, { trait: 'bounce', kind: 'buff', left: REACTIVE_DURATION }); _reactiveActivations++; openReactive(aSide, atkerId, 'bounce', 'buff', points.length - 1, points.length); } // 블로킹 당함(stuff) or 내 범실(atkErr)
         }
       }
       noteMaxBuffs();
@@ -611,7 +646,7 @@ export function simulateMatch(
     setNo++;
   }
 
-  return { homeSets, awaySets, setScores, points, subUse, subEvents, timeouts: timeoutEvents, setFirstServers };
+  return { homeSets, awaySets, setScores, points, subUse, subEvents, timeouts: timeoutEvents, setFirstServers, reactiveEvents };
 }
 
 // momFactor 재노출(테스트/튜닝용)

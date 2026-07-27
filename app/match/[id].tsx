@@ -12,7 +12,8 @@ import { useToastQueue, ToastHost } from '../../components/Toast';
 import { POS_COLOR } from '../../components/posTokens';
 import { BroadcastBanner } from '../../components/BroadcastBanner';
 import { buildMatchBanners, type Banner } from '../../data/broadcast';
-import { reconstructRallies, buildLiveBanners, applySubsToSix } from '../../components/courtDirector';
+import { reconstructRallies, buildLiveBanners, applySubsToSix, reactiveTint } from '../../components/courtDirector';
+import { TRAITS } from '../../engine/traits';
 import { getFixture, getTeam, shortTeamName, coachInfoOf } from '../../data/league';
 import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
@@ -398,10 +399,22 @@ export default function MatchBoard() {
   // 경기 중 실시간 현수막(Phase 3) — 재생 위치(ptIdx)가 배너 at에 도달하면 큐에 push. 결과-중립/관전동시 사건만(스포일러 안전).
   const liveBanners = useMemo(() => {
     const byId = new Map([...data.homeSquad, ...data.awaySquad].map((p) => [p.id, p] as const));
-    return buildLiveBanners(reconstructRallies(data.sim), mineSide, {
-      homeName: shortTeamName(data.home.id), awayName: shortTeamName(data.away.id),
-      nameOf: (pid) => byId.get(pid)?.name ?? '선수',
+    const nameOf = (pid: string) => byId.get(pid)?.name ?? '선수';
+    const base = buildLiveBanners(reconstructRallies(data.sim), mineSide, {
+      homeName: shortTeamName(data.home.id), awayName: shortTeamName(data.away.id), nameOf,
     });
+    // 반응형 특성 발동 배너(TRAIT_SYSTEM §6.10) — reactiveEvents.pointIndex에서 "○○○ · 조커 발동" 1회. 라이브 배너 소스에 합류(같은 큐·dedup·재개 가드 공유).
+    //   mine = 선수가 내 팀 소속인지(홈 스쿼드 포함 여부로 사이드 판정). 미부여 경기는 빈 배열.
+    const homeIds = new Set(data.homeSquad.map((p) => p.id));
+    const react = (data.sim.reactiveEvents ?? []).map((e) => {
+      const sideOfP: Side = homeIds.has(e.playerId) ? 'home' : 'away';
+      const icon = e.trait === 'joker' ? 'flash' : e.trait === 'bounce' ? 'refresh-circle' : 'alert-circle';
+      return {
+        at: e.pointIndex,
+        banner: { kind: 'reactive' as const, tint: reactiveTint(e.trait, e.kind), icon, mine: mineSide === sideOfP, title: `${nameOf(e.playerId)} · ${TRAITS[e.trait]?.name ?? '특성'} 발동` } satisfies Banner,
+      };
+    });
+    return [...base, ...react];
   }, [data, mineSide]);
   const [liveQueue, setLiveQueue] = useState<Banner[]>([]);
   // 이어보기 재개 시 재생 위치(shown)는 resumeAt-1에서 시작한다 → 그 지점 배너는 지난 세션에서 이미 봤다.

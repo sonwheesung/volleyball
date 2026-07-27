@@ -18,7 +18,7 @@ import {
 } from './courtLayout';
 import { ballPath as ballPathRaw, SEG_DUR as DUR, markerTravelMs, type Move, type WP } from './courtPath';
 import type { PointHow } from '../engine/rally';
-import { segmentTargets, reconstructRallies, isInPlay, applySubsToSix, timeoutsAt, type RallyState } from './courtDirector';
+import { segmentTargets, reconstructRallies, isInPlay, applySubsToSix, timeoutsAt, reactiveActiveAt, type RallyState, type ReactiveMarkerState } from './courtDirector';
 import { commentLine, situationFeed } from './courtCommentary';
 import { CoinTossOverlay } from './CoinTossOverlay';
 import { initSfx, playSfx, setSfxEnabled } from '../audio/sfx';
@@ -430,6 +430,15 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   // 마커 배치는 현재 진행 중 랠리(idx) 기준
   const stage = rallies[Math.min(idx, total - 1)];
 
+  // 반응형 특성 마커 테두리(TRAIT_SYSTEM §6.10) — 현재 재생 랠리(idx)가 활성 창 안인 선수 id → 테두리색. 순수 파생(엔진 reactiveEvents만).
+  //   창 밖/미부여면 빈 맵 → 오버레이 없음. 지속 텍스트·카운트다운 없음(테두리 링만).
+  const reactiveByPlayer = useMemo(() => {
+    const m = new Map<string, ReactiveMarkerState>();
+    if (finished) return m;
+    for (const s of reactiveActiveAt(sim, Math.min(idx, total - 1))) m.set(s.playerId, s);
+    return m;
+  }, [sim, idx, total, finished]);
+
   const segKind: Move | null = seg ? seg.to.kind : null;
   // 서브 이후(공 인플레이)엔 전 선수가 전문 포지션으로 스위칭
   const inPlay = isInPlay(segKind);
@@ -449,7 +458,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     return posRefs.current[key];
   };
 
-  type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean; braced: boolean; justSubbed: boolean };
+  type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean; braced: boolean; justSubbed: boolean; reactive?: ReactiveMarkerState };
   const buildMarkers = (side: Side): Mk[] => {
     const rot = side === 'home' ? stage.homeRot : stage.awayRot;
     const lu = side === 'home' ? lineups.home : lineups.away;
@@ -469,7 +478,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
       if (jumping || settling) { const lp = posLast.current[`${side}-${i}`]; if (lp) { tx = lp.x; ty = lp.y; } } // 점프 중·착지 직후엔 제자리
       const braced = reactingSide === side && !moving && !jumping && !isServer; // 굳어서 못 움직이는 선수
       const justSubbed = subbedKeys.has(`${side}-${i}`); // 이 랠리에 갓 투입된 선수
-      arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer, braced, justSubbed });
+      const reactive = p ? reactiveByPlayer.get(p.id) : undefined; // 반응형 특성 활성 창(§6.10) — 있으면 테두리 링
+      arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer, braced, justSubbed, reactive });
     }
     return arr;
   };
@@ -604,6 +614,10 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
               borderStyle: 'solid',
               transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.justSubbed ? subPop : m.jumping ? jumpScale : 1 }],
             }]}>
+              {/* 반응형 특성 테두리 링(§6.10) — 활성 창 동안만 점등. 버프=금/에메랄드·디버프=적. 지속 텍스트 없음(링만). 포지션색 실선 테두리는 불변. */}
+              {m.reactive ? (
+                <View pointerEvents="none" style={[styles.reactiveRing, { borderColor: m.reactive.tint, shadowColor: m.reactive.tint }]} />
+              ) : null}
               <Text style={styles.markerTxt}>{m.p ? jerseyNo(m.p.id) : ''}</Text>
               {m.justSubbed ? (
                 <View style={styles.subTag}>
@@ -802,6 +816,13 @@ const styles = themedStyles(() => StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
   },
   markerTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
+  // 반응형 특성 테두리 링(§6.10) — 마커 바깥을 감싸는 얇은 색 링 + 글로우(색은 인라인 tint). 마커보다 4px 크게.
+  reactiveRing: {
+    position: 'absolute', top: -4, left: -4,
+    width: MR * 2 + 8, height: MR * 2 + 8, borderRadius: MR + 4,
+    borderWidth: 2.5,
+    shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 7,
+  },
   // 마커 밑 상시 선수명 — 작고 옅은 칩(라이트 코트에서 읽히게 흰 배경)
   nameTag: { position: 'absolute', top: MR * 2 - 1, left: -27, width: 84, alignItems: 'center' },
   nameTagTxt: {
