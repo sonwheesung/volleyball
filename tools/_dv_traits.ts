@@ -18,8 +18,11 @@ import { availableTeamPlayers } from '../data/injury';
 import { simulateMatch } from '../engine/match';
 import { evolvePlayer } from '../engine/progression';
 import { injuryRisk } from '../engine/injury';
-import { injuryTraitMult, ANTAGONISTS, vqTraitMult, staminaMaxTraitMult, staminaRegenTraitMult, venueSkillMult, TRAIT_FX } from '../engine/traits';
-import { STAM_REGEN_BASE, type BoxSink } from '../engine/rally';
+import { injuryTraitMult, ANTAGONISTS, vqTraitMult, staminaMaxTraitMult, staminaRegenTraitMult, venueSkillMult, stateSkillMult, TRAIT_FX, type StateCtx } from '../engine/traits';
+import { STAM_REGEN_BASE, playRally, type BoxSink, type RallyTeam } from '../engine/rally';
+import { buildLineup } from '../engine/lineup';
+import { deriveRatings } from '../engine/ratings';
+import { createRng } from '../engine/rng';
 import type { Player, Trait, TrainingFocus } from '../types';
 
 const log = (m: string) => process.stdout.write(m + '\n');
@@ -288,6 +291,71 @@ function venueToggle(trait: Trait, N: number, asHome: boolean, flagOn: boolean, 
   check(A.liveDiff > 0 && H.liveDiff > 0, `liveness>0 양 코트 (venue 배선 살아있음)`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// ⑮ 상태형 5종(2026-07-27, Phase 3) — 경기 국면 조건부 상시 배수(stateSkillMult). 연출 없음(조용한 국면 보정).
+//   ⑮-1 단위: stateSkillMult 정확값(충족=계수·미충족/미부여=1·comeback/thinIce는 뒤지는 팀만 isHome 선택).
+//   ⑮-2 방향(직접 playRally 하네스·국면 ctx 고정): **조건 충족 국면 vs 미충족 국면 분리**. 충족에서만 방향(뒷심/초반집중/
+//      역전/5세트 킬%↑·살얼음↓), 미충족 국면에선 효과 0(무영향) → 조건 게이팅 증명. 자가검증: 미충족 국면에서 특성 보유 ==
+//      무보유(stateSkillMult≡1 세계) 바이트 동일 → 만약 배수가 항상 활성이었다면 이 등식이 깨져 방향 오라클 이빨(허위 오라클 금지).
+// ─────────────────────────────────────────────────────────────────────────────
+{
+  // ⑮-1 단위 검증(정확·즉시)
+  const late = { homeScore: 22, awayScore: 20, setNo: 3 };    // 최고 22≥20 (뒷심 활성·초반집중 비활성)
+  const early = { homeScore: 5, awayScore: 4, setNo: 3 };      // 최고 5≤10 (초반집중 활성·뒷심 비활성)
+  const behindH = { homeScore: 5, awayScore: 10, setNo: 3 };   // 홈 뒤짐 (역전/살얼음 홈 활성·원정 비활성)
+  const ahead = { homeScore: 10, awayScore: 5, setNo: 3 };     // 홈 앞섬 (역전/살얼음 비활성)
+  const set5 = { homeScore: 10, awayScore: 8, setNo: 5 };      // 5세트 (5세트의사나이 활성)
+  const eqf = (a: number, b: number) => Math.abs(a - b) < 1e-9;
+  check(stateSkillMult([], late, true) === 1 && stateSkillMult(undefined, late, true) === 1, '⑮-1 미부여/undefined stateSkillMult==1 (무영향)');
+  check(eqf(stateSkillMult(['closer'], late, true), TRAIT_FX.closerMul) && stateSkillMult(['closer'], early, true) === 1, `뒷심: 20점+ 활성=×${TRAIT_FX.closerMul}·미만=1`);
+  check(eqf(stateSkillMult(['fastStart'], early, true), TRAIT_FX.fastStartMul) && stateSkillMult(['fastStart'], late, true) === 1, `초반집중: 10점↓ 활성=×${TRAIT_FX.fastStartMul}·초과=1`);
+  check(eqf(stateSkillMult(['comeback'], behindH, true), TRAIT_FX.comebackMul) && stateSkillMult(['comeback'], behindH, false) === 1 && stateSkillMult(['comeback'], ahead, true) === 1, '역전의명수: 뒤지는 팀만(isHome 선택)·앞선 팀=1');
+  check(stateSkillMult(['thinIce'], behindH, true) < 1 && eqf(stateSkillMult(['thinIce'], behindH, true), TRAIT_FX.thinIceMul) && stateSkillMult(['thinIce'], behindH, false) === 1, `살얼음: 뒤지는 팀만 ×${TRAIT_FX.thinIceMul}(↓)·앞선/원정 팀=1`);
+  check(eqf(stateSkillMult(['tiebreaker'], set5, true), TRAIT_FX.tiebreakerMul) && stateSkillMult(['tiebreaker'], late, true) === 1, `5세트의사나이: 5세트 활성=×${TRAIT_FX.tiebreakerMul}·그 외=1`);
+
+  // ⑮-2 방향(직접 playRally 하네스) — 홈팀 킬%. 국면 ctx 고정으로 조건 충족/미충족 분리.
+  //   confound 방지: 상태형 5종을 A0/B0에서 먼저 제거(시드 리그가 이미 보유할 수 있음).
+  const STATE: Trait[] = ['closer', 'fastStart', 'comeback', 'thinIce', 'tiebreaker'];
+  const stripState = (p: Player): Player => ({ ...p, traits: (p.traits ?? []).filter((t) => !STATE.includes(t)) });
+  const AS = A0.map(stripState), BS = B0.map(stripState);
+  const R = (p: Player) => deriveRatings(p);
+  const homeIds6 = new Set(buildLineup(AS, 0).six.map((p) => p.id));
+  const mkTeam = (players: Player[], trait: Trait | null, isHome: boolean): RallyTeam => {
+    const lu = buildLineup(players, 0);
+    const stam = new Map<string, number>(); for (const p of [...lu.six, ...(lu.libero ? [lu.libero] : [])]) stam.set(p.id, 1);
+    const six = trait ? lu.six.map((p) => ({ ...p, traits: [...(p.traits ?? []), trait] })) : lu.six;
+    return { six, libero: lu.libero, rotation: 0, momentum: 50, stam, injured: new Set(), style: 'balanced', pendingSevere: [], activeBuffs: new Map(), clutchArmed: new Set(), isHome };
+  };
+  const killPct = (trait: Trait | null, ctx: StateCtx, N: number): number => {
+    let att = 0, kill = 0;
+    for (let i = 1; i <= N; i++) {
+      const home = mkTeam(AS, trait, true), away = mkTeam(BS, null, false);
+      const box: BoxSink = new Map();
+      const rng = createRng(i), boxRng = createRng((i ^ 0x6d2b79f5) >>> 0), digRng = createRng((i ^ 0x9e3779b9) >>> 0);
+      for (let r = 0; r < 20; r++) playRally(r % 2 === 0 ? 'home' : 'away', home, away, R, rng, { home: 1, away: 1 }, undefined, undefined, undefined, undefined, false, null, box, boxRng, undefined, digRng, ctx);
+      for (const [id, l] of box) if (homeIds6.has(id)) { att += l.atkAtt; kill += l.atkKill; }
+    }
+    return att > 0 ? 100 * kill / att : 0;
+  };
+  const N = 500;
+  const kOff = killPct(null, late, N); // 무특성 기저 — ctx 무관(상태형 없으면 stateSkillMult≡1 → 어떤 국면이든 동일)
+  // [특성, 라벨, 충족 ctx, 미충족 ctx, 방향(+1 킬%↑ / −1 ↓)]
+  const cases: [Trait, string, StateCtx, StateCtx, 1 | -1][] = [
+    ['closer', '뒷심', late, early, 1],
+    ['fastStart', '초반집중', early, late, 1],
+    ['comeback', '역전의명수', behindH, ahead, 1],
+    ['thinIce', '살얼음', behindH, ahead, -1],
+    ['tiebreaker', '5세트의사나이', set5, { homeScore: 10, awayScore: 8, setNo: 3 }, 1],
+  ];
+  for (const [trait, label, actCtx, inCtx, dir] of cases) {
+    const kOnAct = killPct(trait, actCtx, N);  // 충족 국면 + 특성
+    const kOnIn = killPct(trait, inCtx, N);     // 미충족 국면 + 특성(휴면)
+    log(`⑮ ${label}(N=${N}): 충족 킬% ${kOff.toFixed(2)}→${kOnAct.toFixed(2)}(Δ${(kOnAct - kOff).toFixed(2)}) · 미충족 ${kOnIn.toFixed(2)}(off ${kOff.toFixed(2)})`);
+    check(dir > 0 ? kOnAct > kOff : kOnAct < kOff, `${label}: 충족 국면 킬% 방향 정상(${dir > 0 ? '↑' : '↓'})`);
+    check(Math.abs(kOnIn - kOff) < 1e-9, `${label}: 미충족 국면 효과 0(조건 밖 무영향 — stateSkillMult≡1 세계 == 무보유 · 오라클 이빨)`);
+  }
+}
+
 // ── ③ 클러치/새가슴: crunch(듀스·세트포인트) 한정 focus 소폭 보정 — clutchFocusAdj +0.08/+0.05/−0.08.
 //    효과가 승률에 +0.5~0.9%p로 작고 고분산이라 여기선 상비 검사에서 제외한다. 무거운 단조 서열 검증은
 //    measTraits 방식(N≥3000·접전상대 필터)으로: 승률 clutch>neutral>choke가 2회 이상 단조여야 유효.
@@ -295,5 +363,5 @@ function venueToggle(trait: Trait, N: number, asHome: boolean, flagOn: boolean, 
 
 log('');
 if (fails.length) { log(`TRAITS FAIL — ${fails.length}건: ${fails.join(' / ')}`); process.exit(1); }
-log('TRAITS PASS (① 전원1개+상극0+검사기A/B ② 서브머신 방향+liveness ④ 노쇠 서열 ⑤ 노력형 전스탯합 ⑥ 부상 배수 + mutant 자가검증 · 상시형6종 ⑦폭격기(킬%↑+범실%↑+무효과세계FAIL) ⑧수비벽 ⑨황금손 ⑩꾀돌이 ⑪강철체력 ⑫지구력 · 경기맥락2종 ⑬안방호랑이(홈킬%↑·원정↓+무효과세계FAIL) ⑭원정형(원정↑·홈↓))');
+log('TRAITS PASS (① 전원1개+상극0+검사기A/B ② 서브머신 방향+liveness ④ 노쇠 서열 ⑤ 노력형 전스탯합 ⑥ 부상 배수 + mutant 자가검증 · 상시형6종 ⑦폭격기(킬%↑+범실%↑+무효과세계FAIL) ⑧수비벽 ⑨황금손 ⑩꾀돌이 ⑪강철체력 ⑫지구력 · 경기맥락2종 ⑬안방호랑이(홈킬%↑·원정↓+무효과세계FAIL) ⑭원정형(원정↑·홈↓) · 상태형5종 ⑮뒷심/초반집중/역전/살얼음/5세트(충족국면 방향+미충족 효과0 조건게이팅))');
 process.exit(0);

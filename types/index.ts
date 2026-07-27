@@ -16,7 +16,9 @@ export type Trait =
   // 반응형 이벤트 발동형 4종(2026-07-27, Phase 2b) — 교체 투입·서브 에이스 등 사건 발동. coldStart↔joker 상극(교체 시 버프냐 디버프냐)
   | 'coldStart' | 'pinchServer' | 'clutchSub' | 'aceStreak'
   // 경기 맥락 상시형 2종(2026-07-27, Phase 2d) — 홈/원정에 따라 경기 내내 고정 배수(venueSkillMult). homeTiger↔awayWarrior 상극
-  | 'homeTiger' | 'awayWarrior';
+  | 'homeTiger' | 'awayWarrior'
+  // 상태형(state-based) 5종(2026-07-27, Phase 3) — 경기 국면(현재 세트 점수·세트번호) 조건 충족 동안만 상시 배수(stateSkillMult). 연출 없음(조용한 국면 보정). closer↔fastStart·comeback↔thinIce 상극
+  | 'closer' | 'fastStart' | 'comeback' | 'thinIce' | 'tiebreaker';
 
 export type CoachStyle = 'attack' | 'defense' | 'balanced';
 

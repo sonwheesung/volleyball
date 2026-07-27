@@ -42,6 +42,12 @@ const EXPECT: Record<string, number | number[] | null> = {
   // ── 경기 맥락 상시형 2종(2026-07-27, Phase 2d) — desc가 유리 코트(+)·불리 코트(−) 두 값 모두 병기해야. ──
   homeTiger: [up(TRAIT_FX.venueBonus), R((1 - TRAIT_FX.venuePenalty) * 100)],    // [+3, 3]
   awayWarrior: [up(TRAIT_FX.venueBonus), R((1 - TRAIT_FX.venuePenalty) * 100)],  // [+3, 3]
+  // ── 상태형 5종(2026-07-27, Phase 3) — desc가 TRAIT_FX 합성값을 병기해야. 살얼음은 하락 %(cutPct). ──
+  closer: up(TRAIT_FX.closerMul),                                                // +3%
+  fastStart: up(TRAIT_FX.fastStartMul),                                          // +3%
+  comeback: up(TRAIT_FX.comebackMul),                                            // +3%
+  thinIce: R((1 - TRAIT_FX.thinIceMul) * 100),                                   // −3% (cutPct → 3)
+  tiebreaker: up(TRAIT_FX.tiebreakerMul),                                        // +3%
 };
 
 console.log('── 특성 설명 수치 == 엔진 계수 대조 ──');

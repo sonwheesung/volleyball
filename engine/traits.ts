@@ -45,6 +45,12 @@ export const TRAIT_FX = {
   // ── 경기 맥락 상시형(venue) 2종(2026-07-27, Phase 2d) — 홈/원정 고정 배수. 두 특성 공유(±3% placeholder). venueSkillMult 참조. ──
   venueBonus: 1.03,           // 유리한 코트(안방호랑이=홈·원정형=원정) 전 스킬 배수(↑)
   venuePenalty: 0.97,         // 불리한 코트(안방호랑이=원정·원정형=홈) 전 스킬 배수(↓)
+  // ── 상태형(state-based) 5종(2026-07-27, Phase 3) — 경기 국면(현재 세트 점수·세트번호) 조건 충족 동안만 상시 배수. **연출 없음**(clutch식 조용한 국면 보정, §6.4 — reactiveEvents 미발행). stateSkillMult 참조. ±3% placeholder. ──
+  closerMul: 1.03,            // 뒷심: 세트 후반(양팀 최고 점수 ≥20) 전 스킬 배수(↑)
+  fastStartMul: 1.03,         // 초반집중: 세트 초반(양팀 최고 점수 ≤10) 전 스킬 배수(↑)
+  comebackMul: 1.03,          // 역전의명수: 그 선수 팀이 뒤지는 동안 전 스킬 배수(↑)
+  thinIceMul: 0.97,           // 살얼음: 그 선수 팀이 뒤지는 동안 전 스킬 배수(↓ — 양날 부정)
+  tiebreakerMul: 1.03,        // 5세트의사나이: 현재 세트가 5세트면 전 스킬 배수(↑)
 } as const;
 
 // 반응형 유효 배수 하드캡(스노볼 방지 — 스택/중복 포함 절대 초과 금지). ±10% / ±0.10.
@@ -93,6 +99,12 @@ export const TRAITS: Record<Trait, TraitDef> = {
   // ── 경기 맥락 상시형 2종(2026-07-27, Phase 2d) — desc는 TRAIT_FX 합성(하드코딩 금지, 가드 _dv_traitcopy 대조). 홈/원정 양쪽 병기. ──
   homeTiger:    { name: '안방 호랑이', desc: `홈에서 강하다 — 홈 전 능력 ${upPct(TRAIT_FX.venueBonus)}·원정 ${cutPct(TRAIT_FX.venuePenalty)}`, good: true, cat: '멘탈' },
   awayWarrior:  { name: '원정형', desc: `원정에서 강하다 — 원정 전 능력 ${upPct(TRAIT_FX.venueBonus)}·홈 ${cutPct(TRAIT_FX.venuePenalty)}`, good: true, cat: '멘탈' },
+  // ── 상태형 5종(2026-07-27, Phase 3) — desc는 TRAIT_FX 합성(하드코딩 금지, 가드 _dv_traitcopy 대조). 조건을 문구에 명시. 연출 없음(조용한 국면 보정, §6.4). ──
+  closer:       { name: '뒷심', desc: `막판에 강해진다 — 세트 후반(양팀 20점+) 전 능력 ${upPct(TRAIT_FX.closerMul)}`, good: true, cat: '멘탈' },
+  fastStart:    { name: '초반집중', desc: `시작부터 몰아친다 — 세트 초반(10점 이하) 전 능력 ${upPct(TRAIT_FX.fastStartMul)}`, good: true, cat: '멘탈' },
+  comeback:     { name: '역전의명수', desc: `뒤질수록 힘을 낸다 — 뒤지는 동안 전 능력 ${upPct(TRAIT_FX.comebackMul)}`, good: true, cat: '멘탈' },
+  thinIce:      { name: '살얼음', desc: `끌려가면 흔들린다 — 뒤지는 동안 전 능력 ${cutPct(TRAIT_FX.thinIceMul)}`, good: false, cat: '멘탈' },
+  tiebreaker:   { name: '5세트의 사나이', desc: `마지막 세트에 강하다 — 5세트에 전 능력 ${upPct(TRAIT_FX.tiebreakerMul)}`, good: true, cat: '멘탈' },
 };
 
 // 등장 가중치 — 좋은 특성이 흔하고 부정 특성은 드물게(도박은 성립하되 희소)
@@ -108,7 +120,9 @@ const POOL: { t: Trait; w: number }[] = [
   { t: 'pinchServer', w: 4 }, { t: 'clutchSub', w: 4 }, { t: 'aceStreak', w: 4 },
   // 경기 맥락 상시형 2종(2026-07-27, Phase 2d) — 둘 다 good(양날), 각 w=5. 부정 보유율 영향 미미(재측정은 메인).
   { t: 'homeTiger', w: 5 }, { t: 'awayWarrior', w: 5 },
-  { t: 'choke', w: 4 }, { t: 'earlyDecline', w: 3 }, { t: 'glass', w: 4 }, { t: 'fragile', w: 2 }, { t: 'coldStart', w: 2 }, // 부정 가중 — fragile(유리멘탈)·coldStart(낯가림)=반응형 부정 각 w=2
+  // 상태형 5종(2026-07-27, Phase 3) — good 4종(closer/comeback/fastStart/tiebreaker) 각 w=4, bad(thinIce) w=2. 부정 보유율은 메인 재측정.
+  { t: 'closer', w: 4 }, { t: 'comeback', w: 4 }, { t: 'fastStart', w: 4 }, { t: 'tiebreaker', w: 4 },
+  { t: 'choke', w: 4 }, { t: 'earlyDecline', w: 3 }, { t: 'glass', w: 4 }, { t: 'fragile', w: 2 }, { t: 'coldStart', w: 2 }, { t: 'thinIce', w: 2 }, // 부정 가중 — fragile(유리멘탈)·coldStart(낯가림)=반응형 부정·thinIce(살얼음)=상태형 부정 각 w=2
 ];
 const TOTAL_W = POOL.reduce((s, x) => s + x.w, 0);
 
@@ -132,6 +146,11 @@ export const ANTAGONISTS: Partial<Record<Trait, readonly Trait[]>> = {
   // 경기 맥락 상극(2026-07-27, Phase 2d) — 안방호랑이(홈↑원정↓) ↔ 원정형(원정↑홈↓): 서로 정반대 → 같이 부여하면 상쇄돼 무의미
   homeTiger: ['awayWarrior'],
   awayWarrior: ['homeTiger'],
+  // 상태형 상극(2026-07-27, Phase 3) — 뒷심(세트 후반↑) ↔ 초반집중(세트 초반↑): 반대 국면 · 역전의명수(뒤지면↑) ↔ 살얼음(뒤지면↓): 같은 국면 정반대 → 상쇄
+  closer: ['fastStart'],
+  fastStart: ['closer'],
+  comeback: ['thinIce'],
+  thinIce: ['comeback'],
 };
 
 function pickWeighted(s: string, exclude: Set<Trait>): Trait | null {
@@ -235,6 +254,29 @@ export function venueSkillMult(traits: Trait[] | undefined, isHome: boolean): nu
   let m = 1;
   if (has(traits, 'homeTiger')) m *= isHome ? TRAIT_FX.venueBonus : TRAIT_FX.venuePenalty;
   if (has(traits, 'awayWarrior')) m *= isHome ? TRAIT_FX.venuePenalty : TRAIT_FX.venueBonus;
+  return m;
+}
+
+// ─── 상태형(state-based) 5종 접근자(2026-07-27, Phase 3, TRAIT_SYSTEM §6.4) ───
+//   반응형 activeBuffs를 쓰지 않고, clutch처럼 **현재 랠리의 경기 국면**(현재 세트 home/away 점수·setNo)을 산출에 넘겨
+//   조건 충족 동안만 상시 배수를 곱한다. **연출 없음**(reactiveEvents 미발행 — 보드 무변화, 조용한 국면 보정). match.ts가
+//   랠리 직전 점수(h,a,setNo)로 StateCtx를 만들어 playRally에 넘긴다(venue와 같은 층에 한 겹 곱). 미부여·조건 미충족=1배
+//   (무영향 → 결정론 골든 보존). ctx는 경기 입력(점수/세트) 파생 → rng 무소비. 스택: 선수당 최대 3특성(rollTraits)이라
+//   곱 레이어 ≤3(정적×venue×state 등) + 상극(closer↔fastStart·comeback↔thinIce)으로 같은 방향 이중 곱 차단.
+export interface StateCtx { homeScore: number; awayScore: number; setNo: number }
+/** 경기 국면 조건부 상시 배수 — isHome=이 선수 팀이 그 경기 홈이냐(comeback/thinIce의 "내 점수" 선택). 미부여·미충족=1배. */
+export function stateSkillMult(traits: Trait[] | undefined, ctx: StateCtx, isHome: boolean): number {
+  if (!traits) return 1;
+  let m = 1;
+  const top = Math.max(ctx.homeScore, ctx.awayScore);
+  const myScore = isHome ? ctx.homeScore : ctx.awayScore;
+  const oppScore = isHome ? ctx.awayScore : ctx.homeScore;
+  const behind = myScore < oppScore;
+  if (has(traits, 'closer') && top >= 20) m *= TRAIT_FX.closerMul;        // 세트 후반
+  if (has(traits, 'fastStart') && top <= 10) m *= TRAIT_FX.fastStartMul;  // 세트 초반
+  if (has(traits, 'comeback') && behind) m *= TRAIT_FX.comebackMul;       // 뒤지는 팀
+  if (has(traits, 'thinIce') && behind) m *= TRAIT_FX.thinIceMul;         // 뒤지는 팀(부정)
+  if (has(traits, 'tiebreaker') && ctx.setNo === 5) m *= TRAIT_FX.tiebreakerMul; // 5세트
   return m;
 }
 

@@ -13,7 +13,7 @@ import { frontRow, backRow, serverIndex } from './rotation';
 import { type Pt, zoneXY, playerXY, serveSpot, dist, jitter, COURT } from './court';
 import type { Tele, AtkResult, QuickKind } from './events';
 import { serveLanding, tossLanding, attackCourse } from './spatial';
-import { clutchFocusAdj, serveAggrAdj, spikeTraitMult, attackErrTraitMult, digTraitMult, vqTraitMult, staminaMaxTraitMult, setTraitMult, reactiveSkillMult, reactiveFocusAdj, venueSkillMult, type ActiveBuff, type ReactiveSkill } from './traits';
+import { clutchFocusAdj, serveAggrAdj, spikeTraitMult, attackErrTraitMult, digTraitMult, vqTraitMult, staminaMaxTraitMult, setTraitMult, reactiveSkillMult, reactiveFocusAdj, venueSkillMult, stateSkillMult, type ActiveBuff, type ReactiveSkill, type StateCtx } from './traits';
 
 const n = (v: number) => v / 100;
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
@@ -123,6 +123,9 @@ export interface TouchEvent { act: TouchAct; side: Side; id: string }
 
 export interface Edge { home: number; away: number }
 const NO_EDGE: Edge = { home: 1, away: 1 };
+// 상태형(§6.4) 중립 국면 — playRally state 인자 기본값. 어느 조건도 충족 안 함(최고 15점: 20↑도 10↓도 아님·동점=미뒤짐·1세트≠5)
+//   → stateSkillMult 항상 1. 직접 playRally 하네스(가드)가 state 미전달 시 상태형 완전 무영향(결정론). match.ts는 실제 국면을 넘긴다.
+const NEUTRAL_STATE: StateCtx = { homeScore: 15, awayScore: 15, setNo: 1 };
 
 const front = (t: RallyTeam) => frontRow(t.rotation).map((i) => t.six[i]).filter(Boolean) as Player[];
 const back = (t: RallyTeam) => backRow(t.rotation).map((i) => t.six[i]).filter(Boolean) as Player[];
@@ -186,9 +189,9 @@ function maybeInjure(t: RallyTeam, p: Player, rng: Rng, stats?: RallyStats): voi
 
 // skill 지정 시 각 선수 값에 반응형 배수(활성 버프)를 곱한다(미부여=1배 → 무영향). recvSkill(receive)에서만 사용 —
 //   dig/block은 최종 산출 지점(digP/blockEval)에 개별 접근자로 배선(정적 digWall과 동일 결). skill 생략 = 반응형 무관.
-function strength(players: Player[], pick: (r: Ratings) => number, R: Rate, t: RallyTeam, skill?: ReactiveSkill): number {
+function strength(players: Player[], pick: (r: Ratings) => number, R: Rate, t: RallyTeam, state: StateCtx, skill?: ReactiveSkill): number {
   if (players.length === 0) return 0.4;
-  const vals = players.map((p) => n(pick(R(p))) * eff(t, p) * (skill ? reactiveSkillMult(t.activeBuffs.get(p.id), skill) * venueSkillMult(p.traits, t.isHome) : 1)); // venue: receive에 홈/원정 배수(미부여=1배). dig 집계(skill 생략)엔 안 붙음 — dig venue는 digP 지점에서 개별 적용(이중계산 방지)
+  const vals = players.map((p) => n(pick(R(p))) * eff(t, p) * (skill ? reactiveSkillMult(t.activeBuffs.get(p.id), skill) * venueSkillMult(p.traits, t.isHome) * stateSkillMult(p.traits, state, t.isHome) : 1)); // venue/state: receive에 홈/원정·국면 배수(미부여=1배). dig 집계(skill 생략)엔 안 붙음 — dig venue/state는 digP 지점에서 개별 적용(이중계산 방지)
   const max = Math.max(...vals);
   const avg = vals.reduce((a, b) => a + b, 0) / vals.length;
   return 0.5 * max + 0.5 * avg;
@@ -254,7 +257,7 @@ function chemistry(setter: Player, attacker: Player): number {
 }
 
 /** 블로킹 3축 (5.2): 인원·타이밍(리드/커밋)·강도. 감독 성향이 스터프/소프트 선호를 가른다 */
-function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng): { str: number; count: number; blockers: Player[] } {
+function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng, state: StateCtx): { str: number; count: number; blockers: Player[] } {
   const fr = front(df);
   if (!fr.length) return { str: 0.4, count: 0, blockers: [] };
   const readiness = fr.reduce((s, p) => s + (n(p.reaction) + n(p.vq)) / 2, 0) / fr.length;
@@ -264,7 +267,7 @@ function blockEval(df: RallyTeam, atk: Atk, R: Rate, rng: Rng): { str: number; c
   count = Math.min(count, fr.length);
   const sorted = fr.slice().sort((a, b) => n(R(b).block) - n(R(a).block)).slice(0, count);
   // 반응형: 조커 블로커면 블록 강도↑ — 블로커 개별 산출 지점에 배수(미부여=1배).
-  const vals = sorted.map((p) => BLK_K * n(R(p).block) * eff(df, p) * reactiveSkillMult(df.activeBuffs.get(p.id), 'block') * venueSkillMult(p.traits, df.isHome)); // venue: 블록에 홈/원정 배수(미부여=1배)
+  const vals = sorted.map((p) => BLK_K * n(R(p).block) * eff(df, p) * reactiveSkillMult(df.activeBuffs.get(p.id), 'block') * venueSkillMult(p.traits, df.isHome) * stateSkillMult(p.traits, state, df.isHome)); // venue/state: 블록에 홈/원정·국면 배수(미부여=1배)
   for (const p of sorted) drain(df, p, 0.4);
   const skill = 0.5 * Math.max(...vals) + 0.5 * (vals.reduce((a, b) => a + b, 0) / vals.length);
   const fooled = FAKE[atk] && !isRead ? 0.7 : 1.0;
@@ -346,7 +349,7 @@ export const emptyBox = (): BoxLine => ({
  * @param edge 팀별 능력 배수(홈 어드밴티지 등)
  * @param stats 선택적 통계 싱크(있으면 이벤트 카운트, 없으면 무영향)
  */
-export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false, chasing: Side | null = null, box?: BoxSink, boxRng?: Rng, touchSink?: TouchEvent[], digRng?: Rng): RallyOutcome {
+export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Rate, rng: Rng, edge: Edge = NO_EDGE, stats?: RallyStats, trace?: string[], pos?: PosStats, tele?: Tele, clutch = false, chasing: Side | null = null, box?: BoxSink, boxRng?: Rng, touchSink?: TouchEvent[], digRng?: Rng, state: StateCtx = NEUTRAL_STATE): RallyOutcome {
   const teamOf = (s: Side) => (s === 'home' ? home : away);
   const tch = touchSink ? (act: TouchAct, side: Side, p: Player | null | undefined) => { if (p) touchSink.push({ act, side, id: p.id }); } : null; // 터치 기록(중립·rng 무관)
   const other = (s: Side): Side => (s === 'home' ? 'away' : 'home');
@@ -391,8 +394,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
   drain(serv, sp, 1);
   const st = chooseServe(sp, serv.style, rng, clutch);
   // 반응형: 조커(전스킬↑)면 서브 화력↑ — 서버 개별 서브 산출 지점에 배수(미부여=1배). recvSkill(receive)도 반응형 배수 통과(조커 리시버↑).
-  const svPow = n(R(sp).serve) * momFactor(serv.momentum) * eg(serving) * eff(serv, sp) * reactiveSkillMult(serv.activeBuffs.get(sp.id), 'serve') * venueSkillMult(sp.traits, serv.isHome); // venue: 서브에 홈/원정 배수(미부여=1배)
-  const recvSkill = strength(receivers(recv), (r) => r.receive, R, recv, 'receive') * momFactor(recv.momentum) * eg(recvSide);
+  const svPow = n(R(sp).serve) * momFactor(serv.momentum) * eg(serving) * eff(serv, sp) * reactiveSkillMult(serv.activeBuffs.get(sp.id), 'serve') * venueSkillMult(sp.traits, serv.isHome) * stateSkillMult(sp.traits, state, serv.isHome); // venue/state: 서브에 홈/원정·국면 배수(미부여=1배)
+  const recvSkill = strength(receivers(recv), (r) => r.receive, R, recv, state, 'receive') * momFactor(recv.momentum) * eg(recvSide);
   for (const p of receivers(recv)) drain(recv, p, 0.2); // 리시브 라인도 체력을 쓴다(7.1) — 수비 전담도 지친다
   // 실력차 민감도 0.09 — KOVO 정렬로 무작위성(랠리·기세)을 줄인 만큼 격차 전달을 압축(parity, 2026-06)
   const aceP = clamp(SERVE_ACE[st] * (0.5 + svPow) + 0.09 * (svPow - recvSkill), 0.003, 0.18);
@@ -562,7 +565,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     const chanceBall = q < CHANCE_Q ? 0.85 : 1; // 찬스볼은 세트 품질 하락(6장)
     // 황금손(maestro): 세팅 승수↑ — 팀 공격에 곱해지는 f(세팅) 지점에 세터 배수 적용(미부여=1배).
     //   반응형: 조커 세터면 세팅 승수↑(활성 버프, 미부여=1배).
-    const setMul = (0.85 + 0.3 * setQ + chem) * chanceBall * setTraitMult(setter.traits) * reactiveSkillMult(at.activeBuffs.get(setter.id), 'set') * venueSkillMult(setter.traits, at.isHome); // venue: 세팅 승수에 홈/원정 배수(미부여=1배)
+    const setMul = (0.85 + 0.3 * setQ + chem) * chanceBall * setTraitMult(setter.traits) * reactiveSkillMult(at.activeBuffs.get(setter.id), 'set') * venueSkillMult(setter.traits, at.isHome) * stateSkillMult(setter.traits, state, at.isHome); // venue/state: 세팅 승수에 홈/원정·국면 배수(미부여=1배)
     const qf = 0.6 + 0.5 * q;
     const atkStyleMul = at.style === 'attack' ? 1.05 : at.style === 'defense' ? 0.98 : 1; // 공격형 화력↑ / 수비형 화력↓(트레이드오프)
     const serveDisadv = att === serving ? 0.9 : 1; // 서브한 팀은 전환 공격 불리(서브 직후 out-of-system) → 사이드아웃↑
@@ -572,8 +575,8 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     // 대타승부사(clutchSub, §6.3 Phase 2b): 교체 투입 후 첫 공격 스윙 — activeBuffs에 다른 버프가 없을 때만 발동(활성 버프 우선),
     //   1랠리 버프를 합성해 이 스윙의 스파이크 ×1.08 → 즉시 소비(clutchArmed.delete). 미부여=빈 집합 → 무영향. rng 무소비.
     if (!reactiveAtkBuff && at.clutchArmed.has(attacker.id)) { reactiveAtkBuff = { trait: 'clutchSub', kind: 'buff', left: 1 }; at.clutchArmed.delete(attacker.id); }
-    const attackPower = ATK_K * n(R(attacker).spike) * spikeTraitMult(attacker.traits) * reactiveSkillMult(reactiveAtkBuff, 'spike') * venueSkillMult(attacker.traits, at.isHome) * setMul * BLOCK_AVOID[atk] * qf * momFactor(at.momentum) * eg(att) * eff(at, attacker) * atkStyleMul * serveDisadv; // venue: 스파이크에 홈/원정 배수(미부여=1배)
-    const blk = blockEval(df, atk, R, rng);
+    const attackPower = ATK_K * n(R(attacker).spike) * spikeTraitMult(attacker.traits) * reactiveSkillMult(reactiveAtkBuff, 'spike') * venueSkillMult(attacker.traits, at.isHome) * stateSkillMult(attacker.traits, state, at.isHome) * setMul * BLOCK_AVOID[atk] * qf * momFactor(at.momentum) * eg(att) * eff(at, attacker) * atkStyleMul * serveDisadv; // venue/state: 스파이크에 홈/원정·국면 배수(미부여=1배)
+    const blk = blockEval(df, atk, R, rng, state);
     const firstBall = hop === 0; // 리시브 후 첫 공격(인시스템) — 서브한 팀의 블록이 미완성
     const blkStr = blk.str * (firstBall ? 0.74 : 1);
     if (E && blk.count > 0) {
@@ -596,7 +599,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     // ── 페인트(팁/연타, 5.1) — 벽이 잘 섰고 영리한 공격수일수록 블록 너머 빈 공간에 살짝.
     //    블록 무력화(스터프/블록아웃 없음). 수비가 읽으면 쉬운 디그, 못 읽으면 톡 떨어져 득점.
     const defStyleBonus = df.style === 'defense' ? 0.02 : df.style === 'attack' ? -0.01 : 0; // 수비형 디그↑
-    const digStr = strength(defenders(df), (r) => r.dig, R, df) * momFactor(df.momentum);
+    const digStr = strength(defenders(df), (r) => r.dig, R, df, state) * momFactor(df.momentum);
     const tipP = clamp((0.06 + 0.28 * (blkStr - attackPower)) * (0.62 + 0.42 * n(attacker.vq)), 0.015, 0.14); // 민감도 압축(parity — 평균 빈도 유지)
     if (atk !== 'quick' && rng.next() < tipP) {
       if (stats) stats.tips++;
@@ -661,7 +664,7 @@ export function playRally(serving: Side, home: RallyTeam, away: RallyTeam, R: Ra
     // 기저 0.38 — KOVO 랠리 길이 정렬(공격시도 ~34/세트·디그 ~15/세트, 2026-06. 0.46은 랠리 과장)
     // 수비벽(digWall): 넓은 수비 범위 — 최고 디거가 수비벽이면 팀 디그 성공률↑(미부여=1배). rng 스트림 불변.
     //   반응형: 조커 디거(dg0)면 디그 성공률↑ — 정적 digWall과 같은 앵커(dg0)에 활성 버프 배수(미부여=1배).
-    const digP = clamp((0.40 + defStyleBonus + 0.45 * (digStr - attackPower)) * digTraitMult(dg0.traits) * reactiveSkillMult(df.activeBuffs.get(dg0.id), 'dig') * venueSkillMult(dg0.traits, df.isHome), 0.05, 0.9); // 민감도 압축(parity)·기저로 평균 복원 · venue: 디그에 홈/원정 배수(미부여=1배)
+    const digP = clamp((0.40 + defStyleBonus + 0.45 * (digStr - attackPower)) * digTraitMult(dg0.traits) * reactiveSkillMult(df.activeBuffs.get(dg0.id), 'dig') * venueSkillMult(dg0.traits, df.isHome) * stateSkillMult(dg0.traits, state, df.isHome), 0.05, 0.9); // 민감도 압축(parity)·기저로 평균 복원 · venue/state: 디그에 홈/원정·국면 배수(미부여=1배)
     // 디그는 시도 자체가 체력을 쓴다(성공/실패 무관 — 몸을 던진다).
     drain(df, dg0, 0.4); // 체력 소모는 기존 best-dig(dg0)에 — 메인 rng·승패 바이트 불변(귀속만 분산, 2026-06-24 결정)
     if (rng.next() < digP) {

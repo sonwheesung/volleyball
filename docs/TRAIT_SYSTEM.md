@@ -16,6 +16,7 @@
 > **Phase 2a 재측정(2026-07-27)**: 반응형 3종 추가(joker/bounce good w=5, fragile bad w=2) 후 **부정 보유율 15.8%·단점만 6.5%**(실측 N=30,000, 목표 ~15%대 유지). 계수는 placeholder — 밸런스는 simKovo 전 항목 밴드 내·engine-regression 곡선 정상으로 확인.
 > **Phase 2b 재측정(2026-07-27)**: 반응형 4종 추가(pinchServer/clutchSub/aceStreak good w=4, coldStart bad w=2) 후 **부정 보유율 16.5%·단점만 6.7%**(실측 N=30,000, ~15~16%대). simKovo 전 항목 밴드 내(볼핸들링 범실 0.70은 baseline 0.71부터의 경계값 — 반응형 무관). 부정이 계속 누적 추세라 신규 부정 추가 시 재점검.
 > **Phase 2d 재측정(2026-07-27)**: 경기 맥락 상시형 2종(homeTiger/awayWarrior — 둘 다 good w=5) 추가 후 **부정 보유율 15.3%·단점만 6.3%**(실측 N=30,000, good 순증으로 ~15%대 정착). simKovo 전 항목 밴드 내. ENGINE_VERSION 15→16.
+> **Phase 3 재측정(2026-07-27, 상태형 5종)**: 상태형 5종 추가(closer/comeback/fastStart/tiebreaker good 각 w=4·thinIce bad w=2) 후 **부정 보유율 15.6%·단점만 6.3%**(실측 N=30,000, ~15%대 유지). simKovo 전 항목 밴드 내. ENGINE_VERSION 16→17, 골든 v17 재생성.
 
 | 분류 | 특성 | 효과(소폭) |
 |---|---|---|
@@ -60,7 +61,8 @@
 
 ## 4. 코드 맵
 - `engine/traits.ts` — `rollTraits(id)`(결정론) + 효과 접근자. 기존: agingTraitMult/trainTraitMult/injuryTraitMult/clutchFocusAdj/serveAggrAdj.
-  상시형 6종(2026-07-27): **spikeTraitMult·attackErrTraitMult·digTraitMult·vqTraitMult·staminaRegenTraitMult·staminaMaxTraitMult·setTraitMult**(미부여=1배). `Trait` 타입은 `types`.
+  상시형 6종(2026-07-27): **spikeTraitMult·attackErrTraitMult·digTraitMult·vqTraitMult·staminaRegenTraitMult·staminaMaxTraitMult·setTraitMult**(미부여=1배).
+  경기 맥락 상시형(Phase 2d): **venueSkillMult(traits, isHome)**. 상태형(Phase 3): **stateSkillMult(traits, ctx, isHome)**·`StateCtx`(현재 세트 점수·setNo 조건부, 연출 없음). `Trait` 타입은 `types`.
 - `engine/aging.ts`·`training.ts`·`rally.ts`·`match.ts` — 접근자 소폭 배선(p.traits, 기본 무효과). 상시형 6종 배선점:
   - 폭격기: `rally.ts` attackPower(`spikeTraitMult(attacker)`) + errP2(`attackErrTraitMult(attacker)`)
   - 수비벽: `rally.ts` digP(`digTraitMult(dg0)` — 최고 디거 앵커, dg0를 digP 앞으로 이동·rng 스트림 불변)
@@ -163,9 +165,37 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
 - **결정론(구현 확정)**: 반응형 특성 미부여 선수는 `activeBuffs`에 엔트리 없음·`clutchArmed` 빈 집합 → `reactiveSkillMult`=1·`reactiveFocusAdj`=0 → **완전 무영향**(무보유 리그 바이트 동일 — 가드 `_dv_reactive` (a) 실측 activations=0·maxBuffs=0·동일시드 재현). 단 **POOL에 반응형 추가로 시드 리그 선수의 rollTraits 분포가 바뀌어 seeded-league 결과가 변동 → `ENGINE_VERSION` 범프**(2a: 13→14 · **2b: 14→15**, 이벤트 발동형 4종 POOL 추가). REALTIME_SIM 결과캐시 게이트가 옛-엔진 저장 순위 폐기·재계산. **골든 재생성**(`_dv_golden --update`)·KOVO 분포/parity 재수렴·부정 보유율 재측정은 **메인**이 판단(반응형은 시드 결과를 바꾸므로 임의 골든 갱신 금지).
 - **상비 가드 `tools/_dv_reactive.ts`**: (a)무해성(미부여 activations 0·바이트 동일)+민감도(de-confounded 조커 sub 결과 변동) (b)7종 발동(조커/유리멘탈/오뚝이 + 낯가림[교체 투입]/핀치서버[서브슬롯 교체]/대타승부사[첫 공격]/에이스기세[서브 에이스], 각 control/strip=0) (c)5랠리 만료·타임아웃 clear·세트끝 clear(expires/clears 카운터로 격리) (d)선수당 1개(Map 단일) (e)하드캡 극단값 clamp (f)방향 A/B(직접 playRally 하네스 — 조커·대타승부사 킬%↑·유리멘탈·낯가림 킬%↓·핀치서버·에이스기세 홈 서브에이스%↑ + OFF/OFF 자가검증 2종). 관측은 `debugReactive`(debugSimCalls 패턴, rng 무영향). 실측(N=400, ENGINE_VERSION 15): 킬% NONE 42.08 → 조커 44.08·대타승부사 44.26·유리멘탈 40.87·낯가림 40.40 · 서브에이스% NONE 4.15 → 핀치서버·에이스기세 각 4.58.
 
-### 6.4 상태형 (Phase 2 후반) — 반응형이되 조용히
-**뒷심·역전·살얼음·초반집중·5세트** = 반응형이되 **clutch식 국면 플래그로 조용히 수치만 보정**(현수막·마커 **없음** — 관전 소음 방지).
-기존 clutch(crunch 플래그)와 같은 결. 연출 없이 국면에서 수치만.
+### 6.4 상태형 (state-based) 5종 (Phase 3 ✅ 구현 2026-07-27) — 조건부 상시·연출 없음
+반응형(§6.3)과 달리 **사건→임시 버프가 아니라 clutch처럼 현재 랠리의 경기 국면**(현재 세트 home/away 점수·setNo)이
+조건을 만족하는 **동안만** 고정 배수를 곱한다. 상시형이지만 배수가 `player.traits`뿐 아니라 **경기 국면**에도 의존
+(venue가 홈/원정에 의존하는 것과 같은 결). **연출 없음**(현수막·마커 X·`reactiveEvents` 미발행 — 조용한 국면 보정,
+관전 소음 방지). 사용자 확정("조용히 수치만").
+
+| id | 한글명 | 조건(active while) | 효과 | good | cat | 상극 |
+|---|---|---|---|---|---|---|
+| **closer** | 뒷심 | 현재 세트 최고 점수 ≥ 20 (세트 후반) | 전 스킬 ×1.03 | true | 멘탈 | fastStart |
+| **fastStart** | 초반집중 | 현재 세트 최고 점수 ≤ 10 (세트 초반) | 전 스킬 ×1.03 | true | 멘탈 | closer |
+| **comeback** | 역전의명수 | 그 선수 팀이 현재 세트 뒤지는 중(내 점수 < 상대) | 전 스킬 ×1.03 | true | 멘탈 | thinIce |
+| **thinIce** | 살얼음 | 그 선수 팀이 뒤지는 중(내 점수 < 상대) | 전 스킬 ×0.97 | false(양날) | 멘탈 | comeback |
+| **tiebreaker** | 5세트의 사나이 | 현재 세트 == 5세트 | 전 스킬 ×1.03 | true | 멘탈 | — |
+
+- **계수**: `TRAIT_FX.{closer,fastStart,comeback,thinIce,tiebreaker}Mul`(±3% placeholder — 방향만 확정, 크기 튜닝은 메인).
+  desc는 이 상수에서 합성(조건 문구 명시, 가드 `_dv_traitcopy` 대조). 상극쌍 `ANTAGONISTS`(양방향): closer↔fastStart(반대 국면)·comeback↔thinIce(같은 국면 정반대).
+- **POOL 가중**: good 4종(closer/comeback/fastStart/tiebreaker) 각 `w=4`, bad(thinIce) `w=2`. 부정 보유율은 메인 재측정(§1).
+- **배선(rally.ts)**: `stateSkillMult(traits, ctx, isHome)`(ctx={homeScore, awayScore, setNo})를 venue·reactive와 **같은 층에
+  한 겹** 곱 — serve(svPow)·receive(strength)·set(setMul)·spike(attackPower)·block(blockEval)·dig(digP). `match.ts`가 랠리 직전
+  점수(h,a,setNo)로 StateCtx를 만들어 `playRally(..., state)`에 넘긴다. isHome=`RallyTeam.isHome`(comeback/thinIce의 "내 점수" 선택).
+  직접 playRally 하네스가 state 미전달 시 기본값 `NEUTRAL_STATE`(15:15·1세트 — 어느 조건도 미충족 → 완전 무영향).
+- **연출 없음**: `reactiveEvents`에 상태형이 안 실린다 — 상태형만 부여된 리그도 reactiveEvents는 반응형 7종만(보드 배너·마커 무변화). 뱃지 설명만.
+- **결정론**: ctx는 경기 입력(점수/세트) 파생 → **rng 무소비**(스트림 순서·횟수 불변). 미부여·조건 미충족 선수 완전 무영향
+  (stateSkillMult=1배 → 바이트 동일). 단 POOL에 5종 추가로 시드 리그 rollTraits 분포가 바뀌어 seeded-league 골든 변동 →
+  **ENGINE_VERSION 16→17 범프**(골든 재생성·KOVO 분포/parity 재수렴은 메인 — 임의 `--update` 금지).
+- **스택 상한**: 선수당 최대 3특성(rollTraits)이라 곱 레이어 ≤3(정적×venue×state 등) + 상극(closer↔fastStart·comeback↔thinIce)으로
+  같은 방향 이중 곱 차단. 계수 소폭(±3%) 유지.
+- **상비 가드 `tools/_dv_traits.ts` ⑮**: ⑮-1 stateSkillMult 단위(충족=계수·미충족/미부여=1·comeback/thinIce는 **뒤지는 팀만**
+  isHome 선택) + ⑮-2 방향(직접 playRally 하네스, N=500·국면 ctx 고정) — **충족 국면에서만** 뒷심/초반집중/역전/5세트 킬%↑·살얼음↓,
+  **미충족 국면 효과 0**(조건 게이팅) + 자가검증(미충족 국면 특성 보유 == 무보유 = stateSkillMult≡1 세계 바이트 동일 → 방향 오라클 이빨).
+  실측(N=500·동일시드): 충족 킬% 40.96→42.59(뒷심/초반집중/역전/5세트)·40.96→40.32(살얼음), 미충족 40.96=off(효과 0).
 
 ### 6.5 경기 맥락 상시형 (Phase 2d ✅ 구현 2026-07-27) — 홈/원정 조건부 고정 배수
 반응형(§6.3)과 달리 **사건 발동이 아니라 홈/원정에 따라 경기 내내 고정** 보정이다. 상시형이지만 배수가
@@ -207,7 +237,8 @@ per-player 정적 배수 헬퍼 `venueSkillMult(traits, isHome)`로 바로 구�
 | **P2b** | 반응형 이벤트 발동형 4종(낯가림/핀치서버/대타승부사/에이스기세) — 2a 레이어 재사용(activeBuffs·reactiveSkillMult·±10%캡·reactiveEvents 자동 연출) + `RallyTeam.clutchArmed`(대타승부사 첫 공격 플래그) + joker↔coldStart 상극 + ENGINE_VERSION 14→15 범프 | ✅ 구현 완료(2026-07-27). 안방호랑이/원정형(맥락 의존 → `effStat`)은 P2 후반으로 이월 |
 | **P2c** | 반응형 UI 연출(현수막 발동 1회 + 마커 테두리 점등, 지속 텍스트 없음 — §6.3 연출 스펙·§6.10) | ✅ 구현 완료(2026-07-27) |
 | **P2d** | 경기 맥락 상시형 2종(안방호랑이/원정형) — `venueSkillMult(traits, isHome)`(홈/원정 고정 ±3% per-player, `reactiveSkillMult`과 같은 층에 한 겹) + `RallyTeam.isHome`(fixture 홈=true) + homeTiger↔awayWarrior 상극 + ENGINE_VERSION 15→16 범프. 상시형이라 **연출 없음**(§6.5) | ✅ 구현 완료(2026-07-27) |
-| **P3** | 상태형 5종(조용히) + 밸런스 튜닝 | 설계 |
+| **P3** | 상태형 5종(closer/fastStart/comeback/thinIce/tiebreaker) — `stateSkillMult(traits, ctx, isHome)`(현재 세트 점수·setNo 조건부 상시 ±3%, venue와 같은 층에 한 겹) + StateCtx를 match.ts가 랠리 직전 점수로 만들어 playRally에 전달 + closer↔fastStart·comeback↔thinIce 상극 + ENGINE_VERSION 16→17 범프. **연출 없음**(§6.4·§6.7 — reactiveEvents 미발행) | ✅ 구현 완료(2026-07-27) |
+| **P4** | 밸런스 튜닝(부정 보유율 재측정·simKovo 밴드·계수 확정) | 설계 |
 
 ### 6.10 반응형 연출 배선 (Phase 2c ✅ 구현 2026-07-27)
 
