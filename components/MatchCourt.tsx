@@ -287,6 +287,24 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     subPop.setValue(0.45);
     Animated.spring(subPop, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }).start();
   }, [subEvsNow, subPop]);
+
+  // 반응형 특성 헤일로(§6.10) — 정적 포지션 링과 구분하려 **펄스 글로우**로 연출(#136). 성능(발열 #122):
+  //  컴포넌트에 **단일 공유 Animated.Value**를 두고 마운트 시 1회 loop만 돌린다(마커마다 별도 애니 금지 —
+  //  활성 버프 마커는 동시 1~2명뿐). scale+opacity만 구동해 useNativeDriver:true(네이티브 드라이버 호환).
+  const pulse = useRef(new Animated.Value(0)).current; // 0↔1 맥동(공유). 모든 활성 헤일로가 이 값 하나로 구동.
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+        Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
+      ]),
+    );
+    loop.start();
+    return () => loop.stop();
+  }, [pulse]);
+  // 은은한 진폭(reduced-motion 플래그 미도입 — 상시 소진폭). scale 1.0↔1.12 · opacity 0.55↔1.0.
+  const haloScale = useMemo(() => pulse.interpolate({ inputRange: [0, 1], outputRange: [1.0, 1.12] }), [pulse]);
+  const haloOpacity = useMemo(() => pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1.0] }), [pulse]);
   // 교체 발생 랠리 진입 시 중계 한 줄(투입 + 복귀 둘 다).
   useEffect(() => {
     if (finished || subEvsNow.length === 0) return;
@@ -614,9 +632,17 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
               borderStyle: 'solid',
               transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.justSubbed ? subPop : m.jumping ? jumpScale : 1 }],
             }]}>
-              {/* 반응형 특성 테두리 링(§6.10) — 활성 창 동안만 점등. 버프=금/에메랄드·디버프=적. 지속 텍스트 없음(링만). 포지션색 실선 테두리는 불변. */}
+              {/* 반응형 특성 펄스 글로우 헤일로(§6.10, #136) — 활성 창 동안만 점등. 정적 포지션 링과의 구분자는
+                  **애니(맥동)+글로우**다(포지션색과 겹쳐도 발동이 확실히 보인다). 버프=금/에메랄드·디버프=적(tint).
+                  마커 바깥 별도 레이어(포지션 실선보다 큰 반경) · 공유 pulse로 scale/opacity 왕복. 포지션 실선 테두리는 불변. */}
               {m.reactive ? (
-                <View pointerEvents="none" style={[styles.reactiveRing, { borderColor: m.reactive.tint, shadowColor: m.reactive.tint }]} />
+                <Animated.View pointerEvents="none" style={[styles.reactiveHalo, {
+                  borderColor: m.reactive.tint,
+                  backgroundColor: m.reactive.tint + '1F', // 옅은 글로우 채움(~12% alpha)
+                  shadowColor: m.reactive.tint,
+                  opacity: haloOpacity,
+                  transform: [{ scale: haloScale }],
+                }]} />
               ) : null}
               <Text style={styles.markerTxt}>{m.p ? jerseyNo(m.p.id) : ''}</Text>
               {m.justSubbed ? (
@@ -816,12 +842,13 @@ const styles = themedStyles(() => StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
   },
   markerTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
-  // 반응형 특성 테두리 링(§6.10) — 마커 바깥을 감싸는 얇은 색 링 + 글로우(색은 인라인 tint). 마커보다 4px 크게.
-  reactiveRing: {
-    position: 'absolute', top: -4, left: -4,
-    width: MR * 2 + 8, height: MR * 2 + 8, borderRadius: MR + 4,
+  // 반응형 특성 펄스 글로우 헤일로(§6.10, #136) — 마커 바깥을 감싸는 별도 레이어(포지션 실선보다 큰 반경).
+  //  색·글로우는 인라인 tint, 맥동(scale/opacity)은 공유 pulse가 구동. 마커보다 7px 크게 → 포지션 링과 확실히 분리.
+  reactiveHalo: {
+    position: 'absolute', top: -7, left: -7,
+    width: MR * 2 + 14, height: MR * 2 + 14, borderRadius: MR + 7,
     borderWidth: 2.5,
-    shadowOpacity: 0.9, shadowRadius: 6, shadowOffset: { width: 0, height: 0 }, elevation: 7,
+    shadowOpacity: 0.95, shadowRadius: 9, shadowOffset: { width: 0, height: 0 }, elevation: 8,
   },
   // 마커 밑 상시 선수명 — 작고 옅은 칩(라이트 코트에서 읽히게 흰 배경)
   nameTag: { position: 'absolute', top: MR * 2 - 1, left: -27, width: 84, alignItems: 'center' },
