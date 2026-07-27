@@ -18,7 +18,7 @@ import { availableTeamPlayers } from '../data/injury';
 import { simulateMatch } from '../engine/match';
 import { evolvePlayer } from '../engine/progression';
 import { injuryRisk } from '../engine/injury';
-import { injuryTraitMult, ANTAGONISTS, vqTraitMult, staminaMaxTraitMult, staminaRegenTraitMult, TRAIT_FX } from '../engine/traits';
+import { injuryTraitMult, ANTAGONISTS, vqTraitMult, staminaMaxTraitMult, staminaRegenTraitMult, venueSkillMult, TRAIT_FX } from '../engine/traits';
 import { STAM_REGEN_BASE, type BoxSink } from '../engine/rally';
 import type { Player, Trait, TrainingFocus } from '../types';
 
@@ -233,6 +233,61 @@ function boxToggle(trait: Trait, N: number, flagOn: boolean, flagOff: boolean) {
   check(recEnd > recNone && staminaRegenTraitMult([]) === 1, `recover 후 체력 보유>무·무배수==1 (체력재생↑)`);
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// 경기 맥락 상시형 2종(2026-07-27, Phase 2d) — 홈/원정 스왑 A/B. 팀A 전원에 venue 특성 토글, 같은 상대(B0)·동일 시드.
+//   asHome=팀A가 fixture 홈이냐. 팀A 박스 킬%(atkKill/atkAtt)를 측정 — venue는 스파이크·세팅에 곱해 킬%로 관측.
+//   안방호랑이 asHome: ON>OFF(홈 ×1.03) · asAway: ON<OFF(원정 ×0.97).  원정형은 정반대.
+//   미부여=1배 무영향. 무효과세계(OFF/OFF)면 입력 동일 → 킬% 동률·liveness0 → 오라클 FAIL 자가검증(허위 오라클 금지).
+// ─────────────────────────────────────────────────────────────────────────────
+function venueToggle(trait: Trait, N: number, asHome: boolean, flagOn: boolean, flagOff: boolean) {
+  const mk = (on: boolean) => A0.map((p) => setTraits(p, on ? [...strip(p, [trait]), trait] : strip(p, [trait])));
+  const Aon = mk(flagOn), Aoff = mk(flagOff);
+  // asHome=true → 팀A=홈(fixture home). asHome=false → 팀A=원정(B0가 홈). 코치도 팀과 함께 이동해 배선 대칭.
+  const homeC = asHome ? base : { home: base.away, away: base.home };
+  const sim = (Aset: Player[], seed: number, box: BoxSink) =>
+    asHome ? simulateMatch(seed, Aset, B0, { ...homeC, box }) : simulateMatch(seed, B0, Aset, { ...homeC, box });
+  const acc = { on: { att: 0, kill: 0 }, off: { att: 0, kill: 0 } };
+  let liveDiff = 0;
+  for (let i = 1; i <= N; i++) {
+    const bOn: BoxSink = new Map(), bOff: BoxSink = new Map();
+    const sOn = sim(Aon, i, bOn), sOff = sim(Aoff, i, bOff);
+    if (JSON.stringify(sOn.points) !== JSON.stringify(sOff.points)) liveDiff++;
+    for (const [id, l] of bOn) if (idsA.has(id)) { acc.on.att += l.atkAtt; acc.on.kill += l.atkKill; }
+    for (const [id, l] of bOff) if (idsA.has(id)) { acc.off.att += l.atkAtt; acc.off.kill += l.atkKill; }
+  }
+  return { killOn: acc.on.kill / acc.on.att, killOff: acc.off.kill / acc.off.att, liveDiff };
+}
+
+// ── ⑬ 안방호랑이(homeTiger) — 홈에서 킬%↑·원정에서 킬%↓ + 미부여 무영향 + 무효과세계 오라클 FAIL ──
+{
+  const N = 300;
+  const H = venueToggle('homeTiger', N, true, true, false);   // 팀A=홈, 안방호랑이 ON vs OFF
+  const A = venueToggle('homeTiger', N, false, true, false);  // 팀A=원정, 안방호랑이 ON vs OFF
+  log(`⑬ 안방호랑이(N=${N}·동일시드): 홈 킬% ${(100 * H.killOff).toFixed(2)}→${(100 * H.killOn).toFixed(2)}%(ON↑) · 원정 킬% ${(100 * A.killOff).toFixed(2)}→${(100 * A.killOn).toFixed(2)}%(ON↓) · liveness 홈${H.liveDiff}/원정${A.liveDiff}`);
+  check(H.killOn > H.killOff, `홈경기 킬% ON>OFF (안방호랑이 홈 ×${TRAIT_FX.venueBonus})`);
+  check(A.killOn < A.killOff, `원정경기 킬% ON<OFF (안방호랑이 원정 ×${TRAIT_FX.venuePenalty})`);
+  check(H.liveDiff > 0 && A.liveDiff > 0, `liveness>0 양 코트 (venue 배선 살아있음)`);
+  // 미부여=1배: venueSkillMult([], 홈/원정) 둘 다 1
+  const noneH = venueSkillMult([], true), noneA = venueSkillMult([], false);
+  check(noneH === 1 && noneA === 1, `미부여 venueSkillMult==1 (홈/원정 모두 무영향)`);
+  // A/B 자가검증: 무효과세계(OFF/OFF)면 입력 동일 → 킬% 동률·liveness0 → 오라클 FAIL 재현
+  const mut = venueToggle('homeTiger', 60, true, false, false);
+  const mutEq = mut.killOn === mut.killOff;
+  log(`   A/B: 무효과세계(OFF/OFF) liveness ${mut.liveDiff}/60 · 킬% 동률 ${mutEq} → ⑬ 오라클 FAIL 재현`);
+  check(mut.liveDiff === 0 && mutEq, `mutant(무효과) → liveness0+킬%동률 → ⑬ 오라클 이빨 증명(허위 오라클 금지)`);
+}
+
+// ── ⑭ 원정형(awayWarrior) — 원정에서 킬%↑·홈에서 킬%↓ (안방호랑이의 정반대) ──
+{
+  const N = 300;
+  const A = venueToggle('awayWarrior', N, false, true, false); // 팀A=원정, 원정형 ON vs OFF
+  const H = venueToggle('awayWarrior', N, true, true, false);  // 팀A=홈, 원정형 ON vs OFF
+  log(`⑭ 원정형(N=${N}·동일시드): 원정 킬% ${(100 * A.killOff).toFixed(2)}→${(100 * A.killOn).toFixed(2)}%(ON↑) · 홈 킬% ${(100 * H.killOff).toFixed(2)}→${(100 * H.killOn).toFixed(2)}%(ON↓) · liveness 원정${A.liveDiff}/홈${H.liveDiff}`);
+  check(A.killOn > A.killOff, `원정경기 킬% ON>OFF (원정형 원정 ×${TRAIT_FX.venueBonus})`);
+  check(H.killOn < H.killOff, `홈경기 킬% ON<OFF (원정형 홈 ×${TRAIT_FX.venuePenalty})`);
+  check(A.liveDiff > 0 && H.liveDiff > 0, `liveness>0 양 코트 (venue 배선 살아있음)`);
+}
+
 // ── ③ 클러치/새가슴: crunch(듀스·세트포인트) 한정 focus 소폭 보정 — clutchFocusAdj +0.08/+0.05/−0.08.
 //    효과가 승률에 +0.5~0.9%p로 작고 고분산이라 여기선 상비 검사에서 제외한다. 무거운 단조 서열 검증은
 //    measTraits 방식(N≥3000·접전상대 필터)으로: 승률 clutch>neutral>choke가 2회 이상 단조여야 유효.
@@ -240,5 +295,5 @@ function boxToggle(trait: Trait, N: number, flagOn: boolean, flagOff: boolean) {
 
 log('');
 if (fails.length) { log(`TRAITS FAIL — ${fails.length}건: ${fails.join(' / ')}`); process.exit(1); }
-log('TRAITS PASS (① 전원1개+상극0+검사기A/B ② 서브머신 방향+liveness ④ 노쇠 서열 ⑤ 노력형 전스탯합 ⑥ 부상 배수 + mutant 자가검증 · 상시형6종 ⑦폭격기(킬%↑+범실%↑+무효과세계FAIL) ⑧수비벽 ⑨황금손 ⑩꾀돌이 ⑪강철체력 ⑫지구력)');
+log('TRAITS PASS (① 전원1개+상극0+검사기A/B ② 서브머신 방향+liveness ④ 노쇠 서열 ⑤ 노력형 전스탯합 ⑥ 부상 배수 + mutant 자가검증 · 상시형6종 ⑦폭격기(킬%↑+범실%↑+무효과세계FAIL) ⑧수비벽 ⑨황금손 ⑩꾀돌이 ⑪강철체력 ⑫지구력 · 경기맥락2종 ⑬안방호랑이(홈킬%↑·원정↓+무효과세계FAIL) ⑭원정형(원정↑·홈↓))');
 process.exit(0);

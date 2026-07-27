@@ -14,7 +14,9 @@ export type Trait =
   // 반응형(reactive) 신규 3종(2026-07-27, Phase 2a) — 경기 중 사건→임시 버프(N랠리/타임아웃/세트끝 해제). engine/traits.ts ActiveBuff·reactive* 접근자
   | 'joker' | 'fragile' | 'bounce'
   // 반응형 이벤트 발동형 4종(2026-07-27, Phase 2b) — 교체 투입·서브 에이스 등 사건 발동. coldStart↔joker 상극(교체 시 버프냐 디버프냐)
-  | 'coldStart' | 'pinchServer' | 'clutchSub' | 'aceStreak';
+  | 'coldStart' | 'pinchServer' | 'clutchSub' | 'aceStreak'
+  // 경기 맥락 상시형 2종(2026-07-27, Phase 2d) — 홈/원정에 따라 경기 내내 고정 배수(venueSkillMult). homeTiger↔awayWarrior 상극
+  | 'homeTiger' | 'awayWarrior';
 
 export type CoachStyle = 'attack' | 'defense' | 'balanced';
 

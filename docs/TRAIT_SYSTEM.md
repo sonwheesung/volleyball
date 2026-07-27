@@ -15,7 +15,7 @@
 > **부정 가중 재복원(2026-07-27, §6 상시형 6종 확장 직후)**: good 6종을 POOL에 추가(각 w=7·총 +42)하자 부정 보유율이 희석돼 ~~2·2·2 → 8.3%~~로 떨어짐 → 목표 유지 위해 `2·2·2 → 4·3·4`로 재상향, **부정 보유율 14.7%·단점만 6.1%** 복원(실측 N=30,000). good 특성 추가 시 부정 가중을 함께 재측정하는 것이 원칙(총가중 대비 부정 분율이 보유율을 결정).
 > **Phase 2a 재측정(2026-07-27)**: 반응형 3종 추가(joker/bounce good w=5, fragile bad w=2) 후 **부정 보유율 15.8%·단점만 6.5%**(실측 N=30,000, 목표 ~15%대 유지). 계수는 placeholder — 밸런스는 simKovo 전 항목 밴드 내·engine-regression 곡선 정상으로 확인.
 > **Phase 2b 재측정(2026-07-27)**: 반응형 4종 추가(pinchServer/clutchSub/aceStreak good w=4, coldStart bad w=2) 후 **부정 보유율 16.5%·단점만 6.7%**(실측 N=30,000, ~15~16%대). simKovo 전 항목 밴드 내(볼핸들링 범실 0.70은 baseline 0.71부터의 경계값 — 반응형 무관). 부정이 계속 누적 추세라 신규 부정 추가 시 재점검.
-> **Phase 2b(2026-07-27)**: 이벤트 발동형 4종 추가(pinchServer/clutchSub/aceStreak good w=4, coldStart bad w=2) → POOL 분포 변동. **부정 보유율·simKovo/parity 재측정은 메인**(good 3종·bad 1종 순증으로 부정율 희석 가능 → 필요 시 부정 가중 재상향). ENGINE_VERSION 14→15.
+> **Phase 2d 재측정(2026-07-27)**: 경기 맥락 상시형 2종(homeTiger/awayWarrior — 둘 다 good w=5) 추가 후 **부정 보유율 15.3%·단점만 6.3%**(실측 N=30,000, good 순증으로 ~15%대 정착). simKovo 전 항목 밴드 내. ENGINE_VERSION 15→16.
 
 | 분류 | 특성 | 효과(소폭) |
 |---|---|---|
@@ -167,9 +167,29 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
 **뒷심·역전·살얼음·초반집중·5세트** = 반응형이되 **clutch식 국면 플래그로 조용히 수치만 보정**(현수막·마커 **없음** — 관전 소음 방지).
 기존 clutch(crunch 플래그)와 같은 결. 연출 없이 국면에서 수치만.
 
-### 6.5 맥락 의존 상시형 (Phase 2 — effStat 이후)
-- **안방호랑이(홈↑/원정↓)·원정형(원정↑/홈↓)** = 상시형이지만 **경기 맥락(side) context**가 필요 → `effStat` 도입 후 Phase 2에 함께.
-  기존 홈 어드밴티지 `edge`(rally NO_EDGE/edge)와 **이중계산 조율** 필수. 상극쌍(안방호랑이↔원정형).
+### 6.5 경기 맥락 상시형 (Phase 2d ✅ 구현 2026-07-27) — 홈/원정 조건부 고정 배수
+반응형(§6.3)과 달리 **사건 발동이 아니라 홈/원정에 따라 경기 내내 고정** 보정이다. 상시형이지만 배수가
+`player.traits`뿐 아니라 **경기 맥락(side)** 에도 의존한다(홈이냐 원정이냐). `effStat` 도입을 기다리지 않고
+per-player 정적 배수 헬퍼 `venueSkillMult(traits, isHome)`로 바로 구현(반응형 `reactiveSkillMult`과 같은 층에 한 겹 곱).
+
+| id | 한글명 | 효과 | good | cat | 상극 |
+|---|---|---|---|---|---|
+| **homeTiger** | 안방 호랑이 | 홈경기면 전 스킬 ×1.03 / 원정이면 ×0.97 | true(양날) | 멘탈 | awayWarrior |
+| **awayWarrior** | 원정형 | 원정이면 전 스킬 ×1.03 / 홈이면 ×0.97 | true(양날) | homeTiger |
+
+- **계수**: `TRAIT_FX.venueBonus=1.03`·`venuePenalty=0.97`(두 특성 공유, ±3% placeholder). desc는 이 상수에서 합성
+  ("홈에서 강하다 — 홈 전 능력 +3%·원정 −3%" 식 양쪽 병기, 가드 `_dv_traitcopy` 대조). 상극쌍 `ANTAGONISTS`(양방향).
+- **POOL 가중**: 각 `w=5`(둘 다 good). 추가 후 부정 보유율 영향은 미미(둘 다 good) — 재측정은 메인.
+- **배선점(rally.ts)**: `reactiveSkillMult`을 곱하는 그 지점들에 `× venueSkillMult(p.traits, isHome)` 한 겹 더 —
+  serve(svPow)·receive(strength 'receive')·set(setMul)·spike(attackPower)·block(blockEval)·dig(digP). `isHome`은 해당
+  `RallyTeam.isHome`(=fixture 홈팀이면 true). **미부여=1배(무영향 → 결정론 골든 보존)**.
+- **⚠ 배선 확인(리뷰 지적)**: `simulateMatch(seed, homePlayers, awayPlayers)`의 `homePlayers`가 항상 fixture 홈팀이고
+  match.ts가 그 팀으로 `home: RallyTeam{isHome:true}`을 만든다(grep 확인). playRally는 `home`을 늘 `home` 인자로 넘긴다 →
+  `home` RallyTeam은 항상 fixture 홈. 기존 홈 어드밴티지 `edge`(팀 전체 승수)와 **방향은 같으나 별개 레이어**다 —
+  `edge`는 팀 단위, `homeTiger`는 per-player 소폭(±3%). 크기가 소폭이라 **이중계산 겹침 허용**(설계상 명기).
+- **연출 없음**: 상시형이므로 현수막·마커 연출을 붙이지 않는다(반응형 §6.3만 연출). 뱃지 설명만.
+- **결정론**: home/away는 경기 입력에서 결정(rng 무소비). 미부여 선수 무영향 → 골든 변동은 POOL 추가로 인한 rollTraits
+  분포 이동분만(그래서 **ENGINE_VERSION 15→16 범프** — 골든 재생성은 메인).
 
 ### 6.6 보류
 - **맞수 본능 = 보류**. 엔진에 라이벌 데이터 모델이 없다 → 없는 인과를 지어내는 건 **가짜 드라마 금지** 위반.
@@ -186,6 +206,7 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
 | **P2a** | 반응형 3종(조커/유리멘탈/오뚝이) + `RallyTeam.activeBuffs`(선수당 1개) + `reactiveSkillMult`/`reactiveFocusAdj`(±10%/±0.10 캡) + ENGINE_VERSION 13→14 범프 + 가드 `_dv_reactive` | ✅ 구현 완료(2026-07-27, 엔진 레이어. UI 연출=2c) |
 | **P2b** | 반응형 이벤트 발동형 4종(낯가림/핀치서버/대타승부사/에이스기세) — 2a 레이어 재사용(activeBuffs·reactiveSkillMult·±10%캡·reactiveEvents 자동 연출) + `RallyTeam.clutchArmed`(대타승부사 첫 공격 플래그) + joker↔coldStart 상극 + ENGINE_VERSION 14→15 범프 | ✅ 구현 완료(2026-07-27). 안방호랑이/원정형(맥락 의존 → `effStat`)은 P2 후반으로 이월 |
 | **P2c** | 반응형 UI 연출(현수막 발동 1회 + 마커 테두리 점등, 지속 텍스트 없음 — §6.3 연출 스펙·§6.10) | ✅ 구현 완료(2026-07-27) |
+| **P2d** | 경기 맥락 상시형 2종(안방호랑이/원정형) — `venueSkillMult(traits, isHome)`(홈/원정 고정 ±3% per-player, `reactiveSkillMult`과 같은 층에 한 겹) + `RallyTeam.isHome`(fixture 홈=true) + homeTiger↔awayWarrior 상극 + ENGINE_VERSION 15→16 범프. 상시형이라 **연출 없음**(§6.5) | ✅ 구현 완료(2026-07-27) |
 | **P3** | 상태형 5종(조용히) + 밸런스 튜닝 | 설계 |
 
 ### 6.10 반응형 연출 배선 (Phase 2c ✅ 구현 2026-07-27)

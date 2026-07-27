@@ -251,17 +251,17 @@ log('── (f) 방향 A/B(직접 하네스) ──');
 {
   const R = (p: Player) => deriveRatings(p);
   const homeIds = new Set(buildLineup(A0, 0).six.map((p) => p.id));
-  const mkTeam = (players: Player[], buff: ActiveBuff | null): RallyTeam => {
+  const mkTeam = (players: Player[], buff: ActiveBuff | null, isHome: boolean): RallyTeam => {
     const lu = buildLineup(players, 0);
     const stam = new Map<string, number>(); for (const p of [...lu.six, ...(lu.libero ? [lu.libero] : [])]) stam.set(p.id, 1);
     const ab = new Map<string, ActiveBuff>();
     if (buff) for (const p of lu.six) ab.set(p.id, { ...buff }); // 방향 관측용: 홈 코트 전원 활성(브리프 버프 희석 제거)
-    return { six: lu.six, libero: lu.libero, rotation: 0, momentum: 50, stam, injured: new Set(), style: 'balanced', pendingSevere: [], activeBuffs: ab, clutchArmed: new Set() };
+    return { six: lu.six, libero: lu.libero, rotation: 0, momentum: 50, stam, injured: new Set(), style: 'balanced', pendingSevere: [], activeBuffs: ab, clutchArmed: new Set(), isHome };
   };
   const killPct = (homeBuff: ActiveBuff | null, N: number): number => {
     let att = 0, kill = 0;
     for (let i = 1; i <= N; i++) {
-      const home = mkTeam(A0, homeBuff), away = mkTeam(B0, null);
+      const home = mkTeam(A0, homeBuff, true), away = mkTeam(B0, null, false);
       const box: BoxSink = new Map();
       const rng = createRng(i), boxRng = createRng((i ^ 0x6d2b79f5) >>> 0), digRng = createRng((i ^ 0x9e3779b9) >>> 0);
       for (let r = 0; r < 20; r++) playRally(r % 2 === 0 ? 'home' : 'away', home, away, R, rng, { home: 1, away: 1 }, undefined, undefined, undefined, undefined, false, null, box, boxRng, undefined, digRng);
@@ -273,7 +273,7 @@ log('── (f) 방향 A/B(직접 하네스) ──');
   const homeAcePct = (homeBuff: ActiveBuff | null, N: number): number => {
     let serves = 0, aces = 0;
     for (let i = 1; i <= N; i++) {
-      const home = mkTeam(A0, homeBuff), away = mkTeam(B0, null);
+      const home = mkTeam(A0, homeBuff, true), away = mkTeam(B0, null, false);
       const box: BoxSink = new Map();
       const rng = createRng(i), boxRng = createRng((i ^ 0x6d2b79f5) >>> 0), digRng = createRng((i ^ 0x9e3779b9) >>> 0);
       for (let r = 0; r < 20; r++) {

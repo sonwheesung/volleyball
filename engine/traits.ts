@@ -42,6 +42,9 @@ export const TRAIT_FX = {
   reactivePinchServe: 1.05,   // 핀치서버: 교체 서브 투입 후 서브 배수(↑ · buff)
   reactiveClutchSpike: 1.08,  // 대타승부사: 교체 후 첫 공격 스파이크 배수(↑ · buff · 1랠리)
   reactiveAceServe: 1.05,     // 에이스기세: 서브 에이스 성공 후 서브 배수(↑ · buff)
+  // ── 경기 맥락 상시형(venue) 2종(2026-07-27, Phase 2d) — 홈/원정 고정 배수. 두 특성 공유(±3% placeholder). venueSkillMult 참조. ──
+  venueBonus: 1.03,           // 유리한 코트(안방호랑이=홈·원정형=원정) 전 스킬 배수(↑)
+  venuePenalty: 0.97,         // 불리한 코트(안방호랑이=원정·원정형=홈) 전 스킬 배수(↓)
 } as const;
 
 // 반응형 유효 배수 하드캡(스노볼 방지 — 스택/중복 포함 절대 초과 금지). ±10% / ±0.10.
@@ -87,6 +90,9 @@ export const TRAITS: Record<Trait, TraitDef> = {
   pinchServer:  { name: '핀치서버', desc: `교체 서브로 들어가면 서브가 매섭다 — 서브 ${upPct(TRAIT_FX.reactivePinchServe)} (5랠리)`, good: true, cat: '플레이' },
   clutchSub:    { name: '대타승부사', desc: `교체 투입 후 첫 공격에 힘이 실린다 — 스파이크 ${upPct(TRAIT_FX.reactiveClutchSpike)} (첫 공격)`, good: true, cat: '멘탈' },
   aceStreak:    { name: '에이스기세', desc: `서브 에이스를 터뜨리면 기세가 오른다 — 서브 ${upPct(TRAIT_FX.reactiveAceServe)} (5랠리)`, good: true, cat: '멘탈' },
+  // ── 경기 맥락 상시형 2종(2026-07-27, Phase 2d) — desc는 TRAIT_FX 합성(하드코딩 금지, 가드 _dv_traitcopy 대조). 홈/원정 양쪽 병기. ──
+  homeTiger:    { name: '안방 호랑이', desc: `홈에서 강하다 — 홈 전 능력 ${upPct(TRAIT_FX.venueBonus)}·원정 ${cutPct(TRAIT_FX.venuePenalty)}`, good: true, cat: '멘탈' },
+  awayWarrior:  { name: '원정형', desc: `원정에서 강하다 — 원정 전 능력 ${upPct(TRAIT_FX.venueBonus)}·홈 ${cutPct(TRAIT_FX.venuePenalty)}`, good: true, cat: '멘탈' },
 };
 
 // 등장 가중치 — 좋은 특성이 흔하고 부정 특성은 드물게(도박은 성립하되 희소)
@@ -100,6 +106,8 @@ const POOL: { t: Trait; w: number }[] = [
   { t: 'joker', w: 5 }, { t: 'bounce', w: 5 },
   // 반응형 이벤트 발동형 4종(2026-07-27, Phase 2b) — good 3종(pinchServer/clutchSub/aceStreak) w=4, bad(coldStart) w=2. 부정 보유율은 메인이 재측정.
   { t: 'pinchServer', w: 4 }, { t: 'clutchSub', w: 4 }, { t: 'aceStreak', w: 4 },
+  // 경기 맥락 상시형 2종(2026-07-27, Phase 2d) — 둘 다 good(양날), 각 w=5. 부정 보유율 영향 미미(재측정은 메인).
+  { t: 'homeTiger', w: 5 }, { t: 'awayWarrior', w: 5 },
   { t: 'choke', w: 4 }, { t: 'earlyDecline', w: 3 }, { t: 'glass', w: 4 }, { t: 'fragile', w: 2 }, { t: 'coldStart', w: 2 }, // 부정 가중 — fragile(유리멘탈)·coldStart(낯가림)=반응형 부정 각 w=2
 ];
 const TOTAL_W = POOL.reduce((s, x) => s + x.w, 0);
@@ -121,6 +129,9 @@ export const ANTAGONISTS: Partial<Record<Trait, readonly Trait[]>> = {
   // 반응형 상극(2026-07-27, Phase 2b) — 조커(교체 투입 시 살아남 buff) ↔ 낯가림(교체 투입 시 적응 못 함 debuff): 같은 트리거의 정반대 → 상쇄
   joker: ['coldStart'],
   coldStart: ['joker'],
+  // 경기 맥락 상극(2026-07-27, Phase 2d) — 안방호랑이(홈↑원정↓) ↔ 원정형(원정↑홈↓): 서로 정반대 → 같이 부여하면 상쇄돼 무의미
+  homeTiger: ['awayWarrior'],
+  awayWarrior: ['homeTiger'],
 };
 
 function pickWeighted(s: string, exclude: Set<Trait>): Trait | null {
@@ -214,6 +225,17 @@ export function staminaMaxTraitMult(traits?: Trait[]): number {
 /** 세팅 승수 배수 — 황금손 (rally setMul, 세터 유효) */
 export function setTraitMult(traits?: Trait[]): number {
   return has(traits, 'maestro') ? TRAIT_FX.maestroSet : 1;
+}
+
+// ─── 경기 맥락 상시형(venue) 2종 접근자(2026-07-27, Phase 2d, TRAIT_SYSTEM §6.5) ───
+//   상시형이지만 배수가 traits뿐 아니라 경기 맥락(홈/원정)에도 의존. reactiveSkillMult과 같은 층에 한 겹 곱.
+//   미부여=1배(무영향 → 결정론 골든 보존). home/away는 경기 입력에서 결정 → rng 무소비.
+/** 홈/원정 고정 배수 — 안방호랑이(홈↑원정↓)·원정형(원정↑홈↓). isHome=이 선수 팀이 그 경기 홈이냐. 미부여=1배. */
+export function venueSkillMult(traits: Trait[] | undefined, isHome: boolean): number {
+  let m = 1;
+  if (has(traits, 'homeTiger')) m *= isHome ? TRAIT_FX.venueBonus : TRAIT_FX.venuePenalty;
+  if (has(traits, 'awayWarrior')) m *= isHome ? TRAIT_FX.venuePenalty : TRAIT_FX.venueBonus;
+  return m;
 }
 
 // ─── 반응형(reactive) 신규 레이어(2026-07-27, Phase 2a, TRAIT_SYSTEM §6.3) ───

@@ -39,6 +39,9 @@ const EXPECT: Record<string, number | number[] | null> = {
   pinchServer: up(TRAIT_FX.reactivePinchServe),                                  // +5%
   clutchSub: up(TRAIT_FX.reactiveClutchSpike),                                   // +8%
   aceStreak: up(TRAIT_FX.reactiveAceServe),                                      // +5%
+  // ── 경기 맥락 상시형 2종(2026-07-27, Phase 2d) — desc가 유리 코트(+)·불리 코트(−) 두 값 모두 병기해야. ──
+  homeTiger: [up(TRAIT_FX.venueBonus), R((1 - TRAIT_FX.venuePenalty) * 100)],    // [+3, 3]
+  awayWarrior: [up(TRAIT_FX.venueBonus), R((1 - TRAIT_FX.venuePenalty) * 100)],  // [+3, 3]
 };
 
 console.log('── 특성 설명 수치 == 엔진 계수 대조 ──');
