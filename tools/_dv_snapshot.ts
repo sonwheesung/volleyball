@@ -31,7 +31,7 @@ import './_gt_mock';
     { t: 4, season: s.season + 5, cat: 'x', msg: 'future' }, // 미래(제외돼야)
   ];
   const input = () => ({
-    season: s.season, currentDay: s.currentDay, myTeamId: s.selectedTeamId ?? '', engineVersion: ENGINE_VERSION,
+    season: s.season, currentDay: s.currentDay, myTeamId: s.selectedTeamId ?? '', engineVersion: ENGINE_VERSION, saveVersion: 5, appVersion: '1.0.0',
     archive: s.archive, milestones: s.milestones, hallOfFame: s.hallOfFame, retirements: s.retirements,
     released: s.released, players, logs, now: 1_700_000_000_000,
   });

@@ -17,6 +17,8 @@ export interface SnapshotInput {
   currentDay: number;
   myTeamId: string;
   engineVersion: number;
+  saveVersion: number; // persist 세이브 스키마 버전(store/saveMigration SAVE_VERSION) — 마이그레이션 판단용
+  appVersion: string;  // 앱 표시 버전(Constants.expoConfig.version) — 어떤 빌드에서 생성됐나
   archive: SeasonArchive[];
   milestones: Milestone[];
   hallOfFame: HofEntry[];
@@ -63,7 +65,9 @@ export interface DiagnosticSnapshot {
   meta: {
     snapshotVersion: number; // §13.20 — 운영툴 버전 디스패치(2=replay 포함). undefined면 운영툴이 1로 해석
     generatedAt: number;
+    appVersion: string;   // 앱 버전(app/engine/save 3버전 한눈에)
     engineVersion: number;
+    saveVersion: number;  // persist 세이브 스키마 버전 — 마이그레이션 판단용
     myTeamId: string;
     currentSeason: number; // 0-based
     fromSeason: number; // 0-based, inclusive
@@ -147,7 +151,9 @@ export function buildDiagnosticSnapshot(input: SnapshotInput): DiagnosticSnapsho
     meta: {
       snapshotVersion: SNAPSHOT_VERSION,
       generatedAt: input.now,
+      appVersion: input.appVersion,
       engineVersion: input.engineVersion,
+      saveVersion: input.saveVersion,
       myTeamId: input.myTeamId,
       currentSeason: cur,
       fromSeason: from,

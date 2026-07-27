@@ -1,7 +1,8 @@
-// 세이브 내보내기/가져오기 — 순수 빌더/파서 (SAVE_SYSTEM §9). React 무의존 → 헤드리스 가드로 왕복 검증.
-//   내보내기 원천은 captureReplaySave()의 {state, version}(persist 저장본과 바이트 동일).
-//   가져오기 검증·정규화는 §3의 migrateSave/sanitizeSave를 재사용한다 — 새 로직 없음, 파일 입출력의 봉투 래퍼일 뿐.
-// UI(app/settings.tsx)는 이 모듈 + expo-file-system/sharing/document-picker로 파일 I/O·다이얼로그만 맡는다.
+// 세이브 봉투 빌더/파서 — 클라우드 백업·복원 파이프라인 (SAVE_SYSTEM §9·§10). React 무의존 → 헤드리스 가드로 왕복 검증.
+//   봉투 원천은 captureReplaySave()의 {state, version}(persist 저장본과 바이트 동일).
+//   복원 검증·정규화는 §3의 migrateSave/sanitizeSave를 재사용한다 — 새 로직 없음, 봉투 래퍼일 뿐.
+//   (2026-07-27) 파일 기반 내보내기/가져오기는 제거(조작·마이그레이션 리스크, §9.2·§9.3 취소선). buildExportPayload/serializeExport는
+//   클라우드 백업 업로드(lib/saveBackup.ts)가, parseImportPayload/dryRunImport는 클라우드 복원(app/settings.tsx)이 재사용한다.
 import { SAVE_VERSION, migrateSave, sanitizeSave, consumePendingClaimSeed } from '../store/saveMigration';
 
 /** 봉투 식별 태그 — 아무 JSON을 세이브로 오인해 덮어쓰는 사고 차단(가져오기 1차 게이트). */
@@ -18,19 +19,12 @@ export interface ExportPayload {
 const isObj = (v: unknown): v is Record<string, unknown> =>
   typeof v === 'object' && v !== null && !Array.isArray(v);
 
-/** captureReplaySave() 산출({state, version})을 파일 봉투로 감싼다(§9.1). state는 partialize 산출 통째(손 선별 금지). */
+/** captureReplaySave() 산출({state, version})을 봉투로 감싼다(§9.1). state는 partialize 산출 통째(손 선별 금지). */
 export function buildExportPayload(capture: { state: Record<string, unknown>; version: number }): ExportPayload {
   return { app: EXPORT_APP, kind: EXPORT_KIND, version: capture.version, state: capture.state };
 }
 
-/** 파일명 `baeknyeon-save-s<season+1>-d<currentDay>.json`(season 0-based → 표시 +1). 손상 필드는 안전 기본. */
-export function exportFileName(state: Record<string, unknown>): string {
-  const season = typeof state.season === 'number' && Number.isFinite(state.season) ? state.season : 0;
-  const day = typeof state.currentDay === 'number' && Number.isFinite(state.currentDay) ? state.currentDay : 0;
-  return `baeknyeon-save-s${season + 1}-d${day}.json`;
-}
-
-/** 봉투를 pretty JSON 문자열로(파일 기록·공유 폴백 공용). */
+/** 봉투를 pretty JSON 문자열로(클라우드 백업 업로드 바디 공용). */
 export function serializeExport(payload: ExportPayload): string {
   return JSON.stringify(payload, null, 2);
 }

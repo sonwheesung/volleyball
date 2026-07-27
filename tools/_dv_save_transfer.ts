@@ -17,7 +17,7 @@ async function main() {
   const { flushGameSave } = await import('../store/persistStorage');
   const { SAVE_VERSION } = await import('../store/saveMigration');
   const {
-    buildExportPayload, serializeExport, exportFileName,
+    buildExportPayload, serializeExport,
     parseImportPayload, dryRunImport, EXPORT_APP, EXPORT_KIND,
   } = await import('../lib/saveTransfer');
   const G = () => useGameStore.getState();
@@ -65,7 +65,6 @@ async function main() {
     check('state 딥 동등(왕복 무손실)', JSON.stringify(parsed.state) === JSON.stringify(corpus.state));
     check('version 보존', parsed.version === corpus.version);
   }
-  check('파일명 s<season+1>-d<day>', exportFileName(corpus.state) === 'baeknyeon-save-s1-d80.json');
 
   // ── (b) 미래 버전 거부 ──
   process.stdout.write('\n[(b) 미래 버전(version=SAVE_VERSION+1) 거부]\n');

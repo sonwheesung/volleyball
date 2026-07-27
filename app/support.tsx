@@ -8,6 +8,7 @@ import { showAlert } from '../components/AppDialog';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Card, Muted, Screen, theme, themedStyles } from '../components/Screen';
 import { useGameStore, captureReplaySave } from '../store/useGameStore';
+import { SAVE_VERSION } from '../store/saveMigration';
 import { ENGINE_VERSION } from '../engine/match';
 import { buildDiagnosticSnapshot } from '../data/diagnosticSnapshot';
 import { getSnapshotLogs } from '../lib/deviceLog';
@@ -156,7 +157,8 @@ function Compose({ cat, setCat, content, setContent, onCancel, onDone }: {
   const submit = async () => {
     if (content.trim().length < 5) { showAlert('내용을 입력하세요', '조금 더 자세히 적어주시면 도움이 됩니다(5자 이상).'); return; }
     setSending(true);
-    const r = await createTicket(cat, content.trim(), getDeviceInfo()); // 진단 기기정보 동봉(§13.17)
+    const device = getDeviceInfo(); // 진단 기기정보(§13.17) — appVersion을 스냅샷 메타에도 재사용(중복 계산 금지)
+    const r = await createTicket(cat, content.trim(), device);
     setSending(false);
     if (!r.ok) {
       showAlert(r.reason === 'offline' ? '오프라인' : '전송 실패',
@@ -168,14 +170,17 @@ function Compose({ cat, setCat, content, setContent, onCancel, onDone }: {
     void (async () => {
       try {
         const logs = await getSnapshotLogs(season);
+        const replay = captureReplaySave(); // 재현 키(§13.20 ①) — 전 문의 항상 첨부, 제출 시점 세이브 통째
         const snapshot = buildDiagnosticSnapshot({
           season, currentDay, myTeamId, archive, milestones, hallOfFame,
           retirements, released, engineVersion: ENGINE_VERSION,
+          saveVersion: replay?.version ?? SAVE_VERSION, // persist 세이브 스키마 버전(첨부 세이브 기준, 없으면 현재 앱 버전)
+          appVersion: device.appVersion,               // 앱 표시 버전(getDeviceInfo 재사용) — 메타에 app/engine/save 나란히
           players: Object.values(playerBase ?? {}),
           logs, now: Date.now(),
           diamonds, campLog, pendingCamp,
           transfers, seasonDraftLog, seasonForeignLog, // 선수 이동 연표(FA·드래프트·외국인) — 요약+movements 노출(2026-07-10)
-          replay: captureReplaySave(), // 재현 키(§13.20 ①) — 전 문의 항상 첨부, 제출 시점 세이브 통째
+          replay, // §13.20 ①
         });
         await uploadSnapshot(ticketId, snapshot);
       } catch { /* 스냅샷 실패는 문의 접수를 막지 않음 */ }

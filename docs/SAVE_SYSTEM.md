@@ -353,21 +353,28 @@
 > 내보내기 원천은 `store/useGameStore.ts`의 `captureReplaySave()`(persist가 저장하는 것과 **바이트 동일한** `{state, version}` — 가드 `_dv_snapshot_replay`가 보증)를 그대로 쓴다.
 > 가져오기 검증·정규화는 §3의 `migrateSave`/`sanitizeSave`를 재사용한다 — 새 로직 없음, 기존 파이프라인의 **파일 입출력 래퍼**일 뿐.
 
+> **정정(2026-07-27, 사용자 결정) — 파일 기반 내보내기/가져오기 UI 제거**: 설정 화면의 **"세이브 내보내기"·"세이브 가져오기(파일)"** 두 행과
+> 핸들러(`onExport`·`onImport`)를 **제거**한다. 사유 ① 사용자가 파일을 손으로 열어 **세이브를 조작(변조)** 하는 벡터 ② 앱 패치로 데이터 구조가 바뀐 뒤
+> 임의의 옛 파일을 가져오면 **마이그레이션이 곤란**. 파일 export 전용 함수 `exportFileName`도 제거(사용처 소멸).
+> **살아남는 것**: 공유 봉투 파이프라인 `buildExportPayload`·`serializeExport`(§10 클라우드 백업 업로드가 재사용)·`parseImportPayload`·`dryRunImport`·
+> `restoreSaveAtomic`·`applyImport`(§10.4 **클라우드 백업에서 복원**이 재사용). 즉 **우리 서버 자동 백업에서의 복원(§10)만 남는다** — 이건 서버 산출물이라 조작 벡터가 아니고,
+> 구조 변경 시엔 우리가 버전을 관리하므로 마이그레이션 리스크도 통제된다. §9.2·§9.3·§9.5는 아래 취소선으로 보존.
+
 ### 9.1 파일 포맷
 - 봉투: `{ app: 'baeknyeon', kind: 'save-export', version: SAVE_VERSION, state: <captureReplaySave().state> }` (2-space pretty JSON).
   - `app`/`kind`는 **오식별 방지 태그** — 아무 JSON이나 세이브로 오인해 덮어쓰는 사고를 막는다(가져오기 1차 게이트).
   - `version`은 캡처 시점 `SAVE_VERSION`. `state`는 `partialize` 산출(§1 영속 필드 전체) — 손 선별 금지(로더 계약 "영속 객체 통째").
-- 파일명: **`baeknyeon-save-s<season+1>-d<currentDay>.json`**(예: `baeknyeon-save-s1-d80.json`). season은 0-based라 표시용 +1.
-- 순수 빌더/파서는 **`lib/saveTransfer.ts`**(React 무의존 — 헤드리스 가드로 왕복 검증). UI(`app/settings.tsx`)는 파일 I/O·다이얼로그만.
+- ~~파일명: **`baeknyeon-save-s<season+1>-d<currentDay>.json`**(예: `baeknyeon-save-s1-d80.json`). season은 0-based라 표시용 +1.~~ → 제거(2026-07-27, 파일 export 폐지 — `exportFileName` 삭제). 봉투 format 자체는 클라우드 백업 payload로 존치.
+- 순수 빌더/파서는 **`lib/saveTransfer.ts`**(React 무의존 — 헤드리스 가드로 왕복 검증). 봉투는 이제 **클라우드 백업/복원(§10)** 전용.
 
-### 9.2 내보내기 흐름 (`app/settings.tsx`)
-1. `captureReplaySave()` → null이면(세이브 없음) 버튼 자체가 비활성(선택 구단 없음).
-2. `buildExportPayload(cap)` → `serializeExport()`(pretty JSON) → `exportFileName(cap.state)`.
-3. **cache 디렉터리에 기록**: `expo-file-system`(SDK54 신 API — `File`/`Paths` 클래스) `new File(Paths.cache, name)` → `create({overwrite:true})` → `write(text)`.
-4. **공유**: `expo-sharing.isAvailableAsync()`면 `shareAsync(file.uri, { mimeType:'application/json', UTI:'public.json' })`. 공유 불가 기기 폴백은 RN 코어 `Share.share({ message: text })`(문자열 직접).
+### ~~9.2 내보내기 흐름 (`app/settings.tsx`)~~ — 제거(2026-07-27, 위 정정: 조작·마이그레이션 리스크). 원 설계 보존:
+1. ~~`captureReplaySave()` → null이면(세이브 없음) 버튼 자체가 비활성(선택 구단 없음).~~
+2. ~~`buildExportPayload(cap)` → `serializeExport()`(pretty JSON) → `exportFileName(cap.state)`.~~
+3. ~~**cache 디렉터리에 기록**: `expo-file-system`(SDK54 신 API — `File`/`Paths` 클래스) `new File(Paths.cache, name)` → `create({overwrite:true})` → `write(text)`.~~
+4. ~~**공유**: `expo-sharing.isAvailableAsync()`면 `shareAsync(file.uri, { mimeType:'application/json', UTI:'public.json' })`. 공유 불가 기기 폴백은 RN 코어 `Share.share({ message: text })`(문자열 직접).~~
 
-### 9.3 가져오기 흐름 — 안전 게이트가 핵심 (`app/settings.tsx`)
-1. **선택·읽기**: `expo-document-picker.getDocumentAsync({ type:'application/json', copyToCacheDirectory:true })` → `new File(asset.uri).text()`.
+### ~~9.3 가져오기 흐름 — 안전 게이트가 핵심 (`app/settings.tsx`)~~ — 파일 선택 진입점(1)만 제거(2026-07-27). 2~5의 안전 게이트·적용 파이프라인은 §10.4 클라우드 복원이 그대로 재사용(존치). 원 설계 보존:
+1. ~~**선택·읽기**: `expo-document-picker.getDocumentAsync({ type:'application/json', copyToCacheDirectory:true })` → `new File(asset.uri).text()`.~~ → 제거(파일 가져오기 폐지). 이하 2~5는 클라우드 복원(§10.4)의 다운로드 payload에 그대로 적용된다.
 2. **`parseImportPayload(text)`**(순수) — 봉투 검증, 실패 시 **사유와 함께 거부**(현재 세이브 무접촉):
    - JSON 파싱 실패 / `app!=='baeknyeon'` / `kind!=='save-export'` / `state` 비객체(배열·누락 포함) → 거부.
    - `version > SAVE_VERSION` → "앱을 최신으로 업데이트한 뒤 가져올 수 있어요"(미래 스키마 — 손실 위험 차단).
@@ -398,8 +405,9 @@
   즉 이 기능이 재화 인플레 벡터가 되지 않는 것은 "파일에서 재화를 뺐기 때문"이 아니라 **재화 진실이 애초에 서버에 있기 때문**이다.
 
 ### 9.5 UI 위치 (`app/settings.tsx`)
-- "세이브 관리" 섹션(데이터 섹션 = 세이브 초기화 근처). 2행: **내보내기**(구단 진행을 파일로 저장·공유)·**가져오기**(파일에서 불러오기).
-- UI_RULES 준수: 무거운 작업(파일 I/O·rehydrate)은 블로킹 오버레이(재사용)로 재입력 차단, 결과는 토스트/다이얼로그로 알림. 세이브 없으면 내보내기 비활성.
+- ~~"세이브 관리" 섹션(데이터 섹션 = 세이브 초기화 근처). 2행: **내보내기**(구단 진행을 파일로 저장·공유)·**가져오기**(파일에서 불러오기).~~
+  → **정정(2026-07-27)**: 내보내기·가져오기(파일) 두 행 제거. "세이브 관리" 섹션에는 **"클라우드 백업에서 복원"(§10.4) 한 행만** 남는다.
+- UI_RULES 준수: 무거운 작업(다운로드·rehydrate)은 블로킹 오버레이(재사용)로 재입력 차단, 결과는 토스트/다이얼로그로 알림.
 
 ### 9.6 가드 `tools/_dv_save_transfer.ts`
 `lib/saveTransfer.ts` 순수 함수 + 실 store 왕복(§6·§8 패턴). exit 0/1.
@@ -453,7 +461,7 @@
   - 가드 `tools/_dv_save_backup.ts` ⑤가 이 **이중 rehydrate 시퀀스를 모킹으로 재현**(세션X 호출→세션O 호출→업로드 1회 발화)해 회귀를 봉인 + A/B로 구 로직(진입 즉시 소진)이 죽음을 증명. 순수 가드(②③)는 함수를 격리 검증해 이 **시퀀스 사각**을 못 봤다(TEST_METHODOLOGY §4).
 
 ### 10.4 복원 UI (`app/settings.tsx`)
-- "세이브 관리" 섹션에 **"서버 백업에서 복원"** 행 추가(내보내기·가져오기 아래).
+- "세이브 관리" 섹션의 **"클라우드 백업에서 복원"** 행(`onServerRestore`). **유지 명기(2026-07-27)**: §9의 파일 내보내기·가져오기가 제거된 뒤 이 섹션에 **남는 유일한 행**이다 — 서버 자동 백업(우리 산출물)의 복원이라 조작 벡터가 아니고, 이 행이 공유 파이프라인(`parseImportPayload`·`dryRunImport`·`applyImport`·`restoreSaveAtomic`)을 재사용하므로 그 함수들은 존치된다.
 - 흐름(신규 Modal 금지 — #129, 기존 `showAlert`/블로킹 오버레이 재사용):
   1. 탭 → `listBackups()`(busy 오버레이) → 실패면 사유 다이얼로그(오프라인/로그인/오류), 빈 목록이면 안내.
   2. 목록을 **`showAlert` 세로 버튼 스택**(ActionSheet 대용 — 최대 5행 + 취소)으로: 각 행 `N시즌 · 날짜 · 크기`.

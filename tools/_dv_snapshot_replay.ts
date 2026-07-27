@@ -71,7 +71,7 @@ const tick = () => new Promise((r) => setTimeout(r, 60)); // diag는 async 적�
   const snap = buildDiagnosticSnapshot({
     season: G().season, currentDay: G().currentDay, myTeamId: my,
     archive: G().archive, milestones: G().milestones, hallOfFame: G().hallOfFame,
-    retirements: G().retirements, released: G().released, engineVersion: ENGINE_VERSION,
+    retirements: G().retirements, released: G().released, engineVersion: ENGINE_VERSION, saveVersion: r1.version, appVersion: '1.0.0',
     players: Object.values(G().playerBase ?? {}), logs, now: 1,
     diamonds: G().diamonds, campLog: G().campLog, pendingCamp: G().pendingCamp,
     replay: r1,

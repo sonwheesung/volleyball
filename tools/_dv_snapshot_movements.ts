@@ -24,7 +24,7 @@ const foreign: ForeignSwapRecord[] = [
 ];
 
 const input: SnapshotInput = {
-  season: CUR, currentDay: 200, myTeamId: 'MYTEAM', engineVersion: 1,
+  season: CUR, currentDay: 200, myTeamId: 'MYTEAM', engineVersion: 1, saveVersion: 5, appVersion: '1.0.0',
   archive: [], milestones: [], hallOfFame: [], retirements: [], released: [],
   players: [], logs: [], now: 1_700_000_000_000,
   transfers, seasonDraftLog: draft, seasonForeignLog: foreign,
