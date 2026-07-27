@@ -544,12 +544,14 @@ function PlayerDetailInner() {
               <Muted>경기</Muted>
               <Text style={{ color: theme.text, fontWeight: '700' }}>{fmtMatches(prod.matches)}경기</Text>
             </Row>
-            <Row>
-              <Muted>득점</Muted>
-              <Text style={{ color: theme.text, fontWeight: '700' }}>
-                {prod.points}점 (스{prod.spikes}·블{prod.blocks}·서{prod.aces})
-              </Text>
-            </Row>
+            {p.position !== 'L' ? (
+              <Row>
+                <Muted>득점</Muted>
+                <Text style={{ color: theme.text, fontWeight: '700' }}>
+                  {prod.points}점 (스{prod.spikes}·블{prod.blocks}·서{prod.aces})
+                </Text>
+              </Row>
+            ) : null}
             {p.position === 'S' || prod.assists > 0 ? (
               <Row>
                 <Muted>세트</Muted>
@@ -577,12 +579,14 @@ function PlayerDetailInner() {
               <Muted>경기</Muted>
               <Text style={{ color: theme.text, fontWeight: '700' }}>{fmtMatches(p.career.matches)}경기</Text>
             </Row>
-            <Row>
-              <Muted>득점</Muted>
-              <Text style={{ color: theme.text, fontWeight: '700' }}>
-                {p.career.points}점 (스{p.career.spikes}·블{p.career.blocks}·서{p.career.aces})
-              </Text>
-            </Row>
+            {p.position !== 'L' ? (
+              <Row>
+                <Muted>득점</Muted>
+                <Text style={{ color: theme.text, fontWeight: '700' }}>
+                  {p.career.points}점 (스{p.career.spikes}·블{p.career.blocks}·서{p.career.aces})
+                </Text>
+              </Row>
+            ) : null}
             {(p.career.assists ?? 0) > 0 ? (
               <Row>
                 <Muted>세트</Muted>
