@@ -4,13 +4,17 @@
 
 import { deriveHeadAxes } from '../engine/staff'; // 감독 3축 마이그레이션(v4) — id 시드 파생(랜덤 없음·결정론). engine/staff는 leaf(rng+types)라 순환 없음.
 import { fallbackRenown } from '../engine/reputation'; // 감독 renown 마이그레이션(Phase B) — 누락 시 id 시드 파생(결정론). reputation은 leaf(overall+rng+types).
+import { rollTraits } from '../engine/traits'; // v4→v5 구세이브 특성 재부여 — id 시드 결정론(랜덤 없음). engine/traits는 leaf(rng+types)라 순환 없음.
 
 // v3(2026-07-08): 포스트시즌 달력 편입(SEASON_SYSTEM §5). 구세이브가 이미 포스트시즌을 소비(archive[season].championId 존재)
 //   했는데 currentDay가 정규 범위(≤164)에 멈춰 있으면, 새 일정 화면이 이를 "플옵 미진행"으로 오인해 재관전을 강요한다.
 //   → A안: 그런 세이브는 currentDay를 포스트시즌 종료일(POSTSEASON_LAST_DAY=183)로 승격해 오프시즌 체인으로 직행(재관전 금지).
 // v4(2026-07-20, STAFF §9.6-A): 감독 능력 단일 `charisma` → 3축(matchOps·dvPhilosophy·leadership).
 //   coachPool.coaches의 각 감독: charisma→matchOps 값 이관(엔진 등가) + 신규 2축은 감독 id 시드 파생으로 충전(마이그레이션에서 랜덤 금지 — 결정론).
-export const SAVE_VERSION = 4;
+// v5(2026-07-27, TRAIT_SYSTEM 특성 20종 확장): 구세이브(옛 규칙 — 무특성 허용·반응형 없음)의 base 선수 스냅샷 전원의
+//   `traits`를 rollTraits(id)로 재부여(새 규칙 — 전원 1~3개·상극 없음·반응형 포함). version<5 게이트로 일회성.
+//   traits 필드만 교체(다른 선수 필드 불변) + 아카이브(HOF/archive/careerTotals 등 별도 영속 필드)는 무접촉. rollTraits는 id 시드 결정론.
+export const SAVE_VERSION = 5;
 const POSTSEASON_LAST_DAY = 183; // engine/calendar.POSTSEASON_LAST_DAY 손복제 회피용 로컬(saveMigration은 leaf 유지 — engine import 시 순환 위험). _dv_postseason이 일치 가드.
 
 // 영속 72필드 기본값(수는 참고용 — 정본은 이 키 집합 자체) — freshSave(store/useGameStore.ts) + 설정 5필드와 1:1. 정규화 기준 단일 소스.
@@ -209,7 +213,7 @@ let _pendingClaimSeed = false;
 /** 다이아 기능 이전 세이브였는지(소급 폭탄 방지 시드 필요, §11.3) — rehydrate가 1회 소비. 출력 키 오염 없음. */
 export const consumePendingClaimSeed = (): boolean => { const v = _pendingClaimSeed; _pendingClaimSeed = false; return v; };
 
-export function migrateSave(persisted: unknown, _version: number): Record<string, unknown> {
+export function migrateSave(persisted: unknown, version: number): Record<string, unknown> {
   // 다이아 기능 이전 세이브(진행 중)는 claimedAch 키가 없다 → 현 달성분을 claimed로 시드(rehydrate에서).
   if (isObj(persisted) && persisted.claimedAch === undefined && !!persisted.selectedTeamId) _pendingClaimSeed = true;
   const out = sanitizeSave(persisted);
@@ -239,6 +243,22 @@ export function migrateSave(persisted: unknown, _version: number): Record<string
     const archive = out.archive as Array<{ season?: number; championId?: string }>;
     const done = Array.isArray(archive) && archive.some((a) => a && a.season === season && !!a.championId);
     if (done && (out.currentDay as number) < POSTSEASON_LAST_DAY) out.currentDay = POSTSEASON_LAST_DAY;
+  }
+  // v4→v5 마이그레이션(2026-07-27, TRAIT_SYSTEM 특성 20종 확장) — 구세이브(옛 규칙: 무특성 허용·반응형 없음)의
+  //   base 선수 스냅샷 전원의 traits를 rollTraits(id)로 재부여(새 규칙: 전원 1~3개·상극 없음·반응형 포함).
+  //   version<5 게이트로 일회성(v5 저장 후 재migrate 없음 — persist가 저장 version==현행이면 migrate 스킵).
+  //   ★ traits 필드만 교체 — career/계약/나이/스탯 등 다른 선수 필드는 스프레드로 원형 보존.
+  //   ★ 아카이브(HOF/archive/careerTotals/retirements 등)는 playerBase와 별개 영속 필드라 무접촉 → 과거 기록 완전 보존.
+  //   rollTraits(id)는 id 시드 결정론(랜덤 없음) → 동일 입력 = 동일 재부여(리플레이·검증 가능). key(=선수 id)를
+  //   시드로 씀 — commitPlayerBase(rollTraits(key))와 정확히 동일 규칙(재로드 시 base가 이 traits로 커밋됨).
+  if (version < 5 && isObj(out.playerBase)) {
+    const pb = out.playerBase as Record<string, unknown>;
+    const next: Record<string, unknown> = {};
+    for (const id of Object.keys(pb)) {
+      const p = pb[id];
+      next[id] = isObj(p) ? { ...p, traits: rollTraits(id) } : p; // 비객체(손상 엔트리)는 원형 보존
+    }
+    out.playerBase = next;
   }
   return out;
 }

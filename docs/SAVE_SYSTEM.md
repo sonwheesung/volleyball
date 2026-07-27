@@ -138,7 +138,7 @@
 ## 3. 마이그레이션 정책 (구현 — `store/saveMigration.ts`)
 
 ### 3.1 버전 + migrate
-- `persist`에 **`version: SAVE_VERSION`**(현재 **4**)을 둔다. 기존 무버전 세이브 = version 0 → 로드 시 `migrate` 호출.
+- `persist`에 **`version: SAVE_VERSION`**(현재 ~~4~~ **5**)을 둔다. 기존 무버전 세이브 = version 0 → 로드 시 `migrate` 호출.
 - **`migrate(persisted, fromVersion)`** = `migrateSave`:
   1. (향후) `fromVersion`이 낮으면 그 버전→다음 버전 **변환 단계**를 순서대로 적용(필드 이름변경·구조재편).
   2. 마지막에 **`sanitizeSave`**(컨테이너 모양 정규화)로 모든 필드를 기대 자료구조로 강제.
@@ -154,6 +154,15 @@
   - **v3→v4(2026-07-20, STAFF §9.6-A 감독 능력 3축)**: 감독 단일 `charisma` → 3축(`matchOps`·`dvPhilosophy`·`leadership`). §4 ③경로(필드 모양/의미 변경)라 버전 범프.
     영속 `coachPool.coaches`의 각 감독을 `normalizeCoach`가 정규화 — **`charisma`→`matchOps` 값 이관**(엔진 등가: 구 charisma가 그대로 경기 운영치가 됨 → 타임아웃 `pull`·연봉 불변) + 신규 2축은 값이 없으면 **감독 id 시드 파생**(`deriveHeadAxes(id)`, `engine/staff`)으로 충전한다. **마이그레이션에 랜덤 없음**(id 시드 순수 함수 — 리플레이·재로드 결정론). 구 `charisma` 필드는 제거.
     `normalizeCoach`는 `sanitizeField('coachPool')` 안에 있어 **버전 무관 상시 경유**(§3.2.1) → 구세이브(charisma)·신세이브(matchOps) 모두 안전·**멱등**(matchOps 있으면 우선, 재적용해도 불변). 가드: `tools/_dv_coach3axis.ts` (d) v3→v4 왕복(크래시 0·matchOps 값 보존·2축 id파생 충전·멱등).
+  - **v4→v5(2026-07-27, TRAIT_SYSTEM 특성 20종 확장)**: 특성 확장 **전** 만든 구세이브의 선수들은 옛 규칙 특성(무특성 0개 허용·반응형 없음)을
+    그대로 유지해 신규 특성 기능이 안 보인다(실기기 확인 — 특성 0개 선수 존재). → **base 선수 스냅샷(`playerBase`) 전원의 `traits`를
+    `rollTraits(id)`로 재부여**(새 규칙: 전원 1~3개·상극 없음·반응형 포함). §4 ③경로(필드 의미 변경)라 버전 범프. **`version < 5` 게이트로 일회성**
+    (v5 저장 후 persist가 `version==현행`이면 migrate 스킵 → 재부여 안 함). ★ **`traits` 필드만 교체** — `career`/계약/나이/스탯 등 다른 선수
+    필드는 스프레드로 원형 보존(가드 (d)). ★ **아카이브(HOF/`archive`/`careerTotals`/`retirements` 등)는 `playerBase`와 별개 영속 필드라
+    무접촉 → 과거 기록 완전 보존**(가드 (c) 바이트 불변). `rollTraits(id)`는 id 시드 결정론(랜덤 없음, key=선수 id를 시드 — `commitPlayerBase`의
+    `rollTraits(key)`와 동일 규칙) → 재부여도 리플레이·검증 가능. traits 변경 → 경기 결과 변동은 `commitPlayerBase`의 `recordBump(0)`+`ENGINE_VERSION(17)`이
+    이미 현재 시즌 순위/생산을 재계산하므로 별도 처리 불필요(미착수 시즌이면 재계산할 현재 결과 없음 — 특성만 갱신). 가드: `tools/_dv_trait_migrate.ts`
+    (a) 전원 1~3개·상극 0쌍·반응형 최소 1명 (b) 결정론 (c) 아카이브 바이트 불변 (d) traits 외 필드 불변 (e) version≥5 게이트 + A/B(재부여 스킵 뮤턴트면 (a) FAIL).
 
 ### 3.2 정규화기(`sanitizeSave`) — 컨테이너 모양 강제
 필드별 자료구조(§1)대로 코어스(coerce):
@@ -215,7 +224,7 @@
 - `store/useAuthStore.ts` — `signIn`(성공 후 `switchSaveScope`)·`deleteAccount`(`deleteSaveSlot` 후 signOut). saveScope는 **동적 import**(순환 의존 회피).
 - `app/_layout.tsx` — 콜드 부팅 시 캐시 세션→`switchSaveScope` 트리거 + 인트로 ready 게이트(§7.5). `components/BootGate.tsx` — 로그인 벽 뒤 **스코프 게이트**(`saveScopeUserId===session.userId` 아니면 Loading — 함정 a).
 - `data/league.ts`·`data/dynamics.ts`·`data/awardSalary.ts` — 복원 커밋(`commitPlayerBase` 등). 정규화 후 입력이라 안전.
-- `tools/_dv_migrate.ts` — 마이그레이션 가드(아래).
+- `tools/_dv_migrate.ts` — 마이그레이션 가드(아래). `tools/_dv_trait_migrate.ts` — v4→v5 구세이브 특성 재부여 가드(아래).
 
 ## 6. 검증
 - `npx tsc --noEmit`(+ test config) · `npm test`.
@@ -227,6 +236,10 @@
   - **정상 입력 멱등**: 유효 현 세이브 → `migrateSave`가 의미 보존(필드값 불변).
   - **A/B 자가검증**: 정규화 *없이* 손상 입력을 복원 경로에 넣으면 크래시(또는 위반)함을 확인 → 정규화가 실제로 막는지 증명(허위 오라클 차단).
   - **버전 누락=0 취급**: version undefined/0 입력에 migrate가 동작.
+- **`npx tsx tools/_dv_trait_migrate.ts`** — v4→v5 구세이브 특성 재부여 가드(§3.1 v4→v5): 무특성·옛특성 선수 혼재 v4 목을
+  `migrateSave(_, 4)` 통과 → (a) 전 선수 1~3개·상극 0쌍·**반응형 최소 1명** (b) 결정론(동일 입력 2회=동일) (c) **아카이브(HOF/archive/careerTotals
+  /retirements) 바이트 불변**(하드 요건 — 재부여가 과거 기록 훼손 안 함) (d) traits 외 선수 필드 불변 (e) version≥5 게이트(일회성) + **A/B**(재부여 스킵한
+  원본=옛 규칙이면 (a) FAIL로 민감도 증명). exit 0/1.
 - **`npx tsx tools/_dv_migrate_e2e.ts`** — **실제 persist 파이프라인 E2E**(순수 함수가 아니라 진짜 store):
   모킹 AsyncStorage(`_gt_mock`)에 세이브를 넣고 `useGameStore.persist.rehydrate()`로 migrate→merge→onRehydrate→commit을
   끝까지 태운다. ① 손상 타입 세이브 → 크래시 없이 live store에 sanitize 로드(+유효 필드 보존=리셋 아님 증명) ②
