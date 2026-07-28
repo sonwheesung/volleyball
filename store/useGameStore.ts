@@ -111,6 +111,7 @@ interface GameState {
   results: Record<string, MatchResult>;
   watchProgress: Record<string, number>;       // fixtureId → 관전한 랠리 인덱스(이어보기). 종료/확정 시 삭제
   ceremonyProgress: number;                     // 시상식 관람 진행도(SEASON_SYSTEM §5.3.1). 0=미관람(champion-ceremony부터) · n≥1=awards-ceremony 비트 n에서 이어보기 · -1=끝까지 봄(완료). 새 시즌 리셋(campDoneSeason 패턴, 구세이브 기본 0)
+  offseasonStep: number;                        // 비시즌 앞단 순차 업무 진행(SEASON_SYSTEM §5.6.4). 0=시즌결산 … 4=드래프트 · ≥5=전부 마침(새 시즌 시작). "다음 경기"식 단일 업무 버튼(2026-07-28). 새 시즌 리셋(ceremonyProgress 패턴, 구세이브 기본 0)
   contractOverrides: Record<string, Contract>;
   released: string[];
   inSeasonTx: Tx[];                            // 시즌 중 이동(방출/영입) — dynamics 주입
@@ -195,6 +196,7 @@ interface GameState {
   saveWatchProgress: (fixtureId: string, idx: number) => void; // 이어보기 위치 저장
   clearWatchProgress: (fixtureId: string) => void;             // 종료·결과 확정 시 삭제
   setCeremonyProgress: (n: number) => void;                    // 시상식 관람 진행도(§5.3.1) — 완료(-1) 후엔 무시
+  setOffseasonStep: (n: number) => void;                       // 비시즌 순차 업무 진행(§5.6.4) — forward-only(뒤로 안 감)
   // 반환값(ok/reason) — 조용한 거부를 남기지 않음(호출부는 무시해도 무방, 배선은 제안). 캡 예외는 프랜차이즈만.
   reSign: (playerId: string, contract: Contract) => ReSignResult;
   release: (playerId: string) => boolean;
@@ -253,6 +255,7 @@ const freshSave = {
   results: {} as Record<string, MatchResult>,
   watchProgress: {} as Record<string, number>,
   ceremonyProgress: 0, // 시상식 관람 진행도(§5.3.1) — 0=미관람, 새 시즌 리셋
+  offseasonStep: 0, // 비시즌 순차 업무 진행(§5.6.4) — 0=시즌결산부터, 새 시즌 리셋
   contractOverrides: {} as Record<string, Contract>,
   released: [] as string[],
   inSeasonTx: [] as Tx[],
@@ -626,6 +629,8 @@ export const useGameStore = create<GameState>()(
       // 시상식 관람 진행도(§5.3.1) — awards-ceremony/champion-ceremony가 비트를 넘길 때마다 기록, 완료 시 -1.
       //   완료(-1)는 절대 되돌아가지 않는다(같은 시즌 재진입해도 done 유지). Number.isFinite 방어(NaN 무시).
       setCeremonyProgress: (n: number) => set((s) => (Number.isFinite(n) && s.ceremonyProgress !== -1 ? { ceremonyProgress: n } : {})),
+      // 비시즌 순차 업무(§5.6.4) — forward-only: 뒤 단계로 재방문해도 진행도는 안 되돌린다(이미 지난 업무는 감독·스카우트가 대행/확정).
+      setOffseasonStep: (n: number) => set((s) => (Number.isFinite(n) && n > s.offseasonStep ? { offseasonStep: n } : {})),
       clearWatchProgress: (fixtureId) => set((s) => {
         if (s.watchProgress[fixtureId] === undefined) return {};
         const next = { ...s.watchProgress }; delete next[fixtureId];
@@ -1572,6 +1577,7 @@ export const useGameStore = create<GameState>()(
           results: {},
           watchProgress: {}, // 새 시즌 — 이어보기 위치 초기화
           ceremonyProgress: 0, // 새 시즌 — 시상식 관람 진행도 리셋(§5.3.1, campDoneSeason 패턴)
+          offseasonStep: 0, // 새 시즌 — 비시즌 순차 업무 진행 리셋(§5.6.4, ceremonyProgress 패턴)
           contractOverrides: {},
           released: [],
           releaseAnger: 0, // 시즌 분노는 이번 endSeason에서 fanScore로 반영됐으니 리셋
@@ -1652,6 +1658,7 @@ export const useGameStore = create<GameState>()(
         results: s.results,
         watchProgress: s.watchProgress,
         ceremonyProgress: s.ceremonyProgress, // 시상식 관람 진행도(§5.3.1) — 영속(앱 재시작 이어보기)
+        offseasonStep: s.offseasonStep, // 비시즌 순차 업무 진행(§5.6.4) — 영속(앱 재시작 후 이어서)
         contractOverrides: s.contractOverrides,
         released: s.released,
         inSeasonTx: s.inSeasonTx,

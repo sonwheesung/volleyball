@@ -23,7 +23,7 @@ export const SAVE_DEFAULTS: Record<string, unknown> = {
   // 설정(새 게임에도 유지)
   onboarded: false, supporter: false, sfxEnabled: true, bgmVolume: 0.8, seenTips: {},
   // 기본 진행
-  selectedTeamId: null, season: 0, currentDay: 0, results: {}, watchProgress: {}, ceremonyProgress: 0,
+  selectedTeamId: null, season: 0, currentDay: 0, results: {}, watchProgress: {}, ceremonyProgress: 0, offseasonStep: 0,
   // 계약·방출·거래
   contractOverrides: {}, released: [], inSeasonTx: [], faPool: [],
   resignDecisions: {}, faOffers: {}, // faOffers(FA_SYSTEM §2.8) — 구 faSignings[]+faAggressive 대체(migrate가 변환)
@@ -59,7 +59,7 @@ type Kind = 'bool' | 'nbool' | 'num' | 'nstr' | 'rec' | 'nrec' | 'arr';
 // 필드별 자료구조(SAVE_SYSTEM §1). 특수(중첩) 필드는 여기 없고 sanitizeSave switch default가 처리.
 const KIND: Record<string, Kind> = {
   onboarded: 'bool', supporter: 'bool', sfxEnabled: 'bool', bgmVolume: 'num', seenTips: 'rec',
-  selectedTeamId: 'nstr', season: 'num', currentDay: 'num', results: 'rec', watchProgress: 'rec', ceremonyProgress: 'num',
+  selectedTeamId: 'nstr', season: 'num', currentDay: 'num', results: 'rec', watchProgress: 'rec', ceremonyProgress: 'num', offseasonStep: 'num',
   contractOverrides: 'rec', released: 'arr', inSeasonTx: 'arr', faPool: 'arr',
   resignDecisions: 'rec', // faOffers는 특수(중첩) — default 분기가 처리
   protectedIds: 'arr', moneyOnlyIds: 'arr', draftPicks: 'arr', draftSelections: 'arr',

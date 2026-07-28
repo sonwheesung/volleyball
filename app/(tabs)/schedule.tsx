@@ -66,6 +66,8 @@ function ScheduleInner() {
   const archive = useGameStore((s) => s.archive);
   const watchProgress = useGameStore((s) => s.watchProgress);
   const ceremonyProgress = useGameStore((s) => s.ceremonyProgress); // 시상식 관람 진행도(§5.3.1) — 이어보기 카드 문구/라우트
+  const offseasonStep = useGameStore((s) => s.offseasonStep); // 비시즌 순차 업무 진행(§5.6.4) — "다음 경기"식 단일 업무 카드
+  const setOffseasonStep = useGameStore((s) => s.setOffseasonStep);
   const setDay = useGameStore((s) => s.setDay);
   const recordResult = useGameStore((s) => s.recordResult);
   const finishCamp = useGameStore((s) => s.finishCamp);
@@ -385,28 +387,42 @@ function ScheduleInner() {
                       </>
                     )}
                   </Card>
-                  {/* 오프시즌 허브 · 앞단(§5.6.2) — 결산·외국인·아시아쿼터·FA·드래프트 + [새 시즌 시작하기].
-                      ~~단일 체인(결산 → 트라이아웃 → … → 드래프트)~~ → 정정(2026-07-24): 한 화면이 죽으면 오프시즌에서
-                      못 빠져나오는 소프트락이 됐다(FA 렌더 크래시 a04c0bc). 전 단계를 허브에서 나란히 연다. */}
-                  {ceremonyDone ? (
-                    <Card accent={theme.accent} flat>
-                      <IconLabel icon="snow-outline" color={theme.accent}>오프시즌 업무 · 다음 시즌 준비</IconLabel>
-                      <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>
-                        권장 순서입니다. 순서와 관계없이 언제든 열 수 있고, 건너뛴 자리는 감독·스카우트가 대신 결정합니다.
-                        {season === 0 ? ' 처음이라면 1번부터 차례로 둘러보세요.' : ''}
-                      </Muted>
-                      {preSteps.map((s) => <HubRow key={s.key} step={s} onPress={() => openStep(s.route)} />)}
-                      {/* 미리보기 신뢰(§5.6.3 ⑥): 외국인·아시아쿼터 결정이 FA 예산을 바꾼다 — 정적 주의 문구로 안내(무거운 프리뷰 금지) */}
-                      <Muted style={{ fontSize: 11.5, marginTop: 6 }}>
-                        외국인·아시아쿼터 결정을 바꾸면 FA에 쓸 운영 자금이 달라집니다. 마지막에 FA 센터를 한 번 더 확인하세요.
-                      </Muted>
-                      <Button
-                        label={seasonStart.starting ? '시즌 준비 중…' : '새 시즌 시작하기 →'}
-                        disabled={seasonStart.starting}
-                        onPress={onStartNewSeason}
-                      />
-                    </Card>
-                  ) : null}
+                  {/* 오프시즌 앞단(§5.6.4) — "다음 경기"식 **단일 순차 업무 카드**. 현재 업무 하나만: 결산→외국인→아시아→FA→드래프트→새 시즌.
+                      "○○ 하러 가기"(그 화면 + 다음 스텝) / "건너뛰기 →"(다음 스텝, 감독·스카우트 대행). setOffseasonStep은 forward-only라
+                      건너뛰기가 항상 있어 어느 화면이 죽어도 통과 → 소프트락(a04c0bc) 재발 없음. 지난 업무 재방문은 단장실 탭.
+                      ~~나란히 5개 목록(2026-07-24)~~ → 정정(2026-07-28 사용자): 순차 단일로. UI-50·SEASON §5.6.4. */}
+                  {ceremonyDone ? (() => {
+                    const cur = offseasonStep < preSteps.length ? preSteps[offseasonStep] : null;
+                    const advance = () => setOffseasonStep(offseasonStep + 1);
+                    return (
+                      <Card accent={theme.accent} flat>
+                        <IconLabel icon="snow-outline" color={theme.accent}>
+                          오프시즌 업무 · {Math.min(offseasonStep + 1, preSteps.length)} / {preSteps.length}
+                        </IconLabel>
+                        {cur ? (
+                          <>
+                            <Text style={styles.osTitle} numberOfLines={1}>{cur.n}. {cur.label}</Text>
+                            <Muted style={{ fontSize: 13, marginTop: 2, marginBottom: 8 }}>{cur.desc}</Muted>
+                            <Button label={`${cur.label} 하러 가기 →`} onPress={() => { advance(); openStep(cur.route); }} />
+                            <Pressable onPress={advance} hitSlop={8} style={styles.osSkipWrap} accessibilityRole="button">
+                              <Text style={styles.osSkip}>이 업무 건너뛰기 →</Text>
+                            </Pressable>
+                          </>
+                        ) : (
+                          <>
+                            <Muted style={{ fontSize: 13, marginTop: 2, marginBottom: 8 }}>
+                              비시즌 업무를 모두 확인했습니다. 건너뛴 자리는 감독·스카우트가 대신 결정합니다.{'\n'}준비가 되면 새 시즌을 시작하세요.
+                            </Muted>
+                            <Button
+                              label={seasonStart.starting ? '시즌 준비 중…' : '새 시즌 시작하기 →'}
+                              disabled={seasonStart.starting}
+                              onPress={onStartNewSeason}
+                            />
+                          </>
+                        )}
+                      </Card>
+                    );
+                  })() : null}
                 </>
               ) : null}
             </>
@@ -473,6 +489,10 @@ const styles = themedStyles(() => StyleSheet.create({
   lineupName: { color: theme.text, fontSize: 14, fontWeight: '600', flex: 1 },
   lineupClose: { marginTop: 12, paddingVertical: 11, borderRadius: 10, backgroundColor: theme.cardAlt, alignItems: 'center' },
   lineupCloseTxt: { color: theme.text, fontSize: 14, fontWeight: '700' },
+  // 오프시즌 순차 업무 카드(§5.6.4)
+  osTitle: { color: theme.text, fontSize: 19, fontWeight: '800', marginTop: 8, letterSpacing: -0.3 },
+  osSkipWrap: { alignSelf: 'center', paddingVertical: 9, marginTop: 2 },
+  osSkip: { color: theme.muted, fontSize: 13, fontWeight: '700' },
   // 오프시즌 허브 목록(§5.6) — 번호 + 제목/설명 + 화살표. 잠금 아이콘 없음(진입 차단 0).
   hubRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: theme.border },
   hubNo: { width: 20, textAlign: 'center', fontSize: 15, fontWeight: '900' },
