@@ -13,7 +13,7 @@ import { setCoachModeLog, manualSideFor, setTxContext, setInterventionContext, i
 import { buildMatchBox } from '../data/matchBox';
 import { seasonResults, type ResultRow } from '../data/standings';
 import { leagueProduction } from '../data/production';
-import { simulateMatch, type MatchOpts } from '../engine/match';
+import { simulateMatch, TTO_ENABLED, type MatchOpts } from '../engine/match';
 import { buildLineup } from '../engine/lineup';
 import { SEASON_DAYS } from '../engine/calendar';
 import type { SimResult, MatchIntervention } from '../engine/simMatch';
@@ -66,7 +66,8 @@ const nT = ids.length;
   }
   check(homeAutoTO === 0, '(b) manualSide 사이드 비테크니컬 타임아웃 0', homeAutoTO ? ` — ${homeAutoTO}` : '');
   check(homeEnter === 0, '(b) manualSide 사이드 비부상 교체 enter 0', homeEnter ? ` — ${homeEnter}` : '');
-  check(homeTTO > 0, '(b) manualSide 사이드 테크니컬 타임아웃(TTO) 유지 >0', ` (TTO ${homeTTO})`);
+  if (TTO_ENABLED) check(homeTTO > 0, '(b) manualSide 사이드 테크니컬 타임아웃(TTO) 유지 >0', ` (TTO ${homeTTO})`);
+  else check(homeTTO === 0, '(b) TTO 비활성(TTO_ENABLED=false) — 테크니컬 타임아웃 미발화 0', ` (TTO ${homeTTO})`);
   check(awayAutoTO > 0 && awayEnter > 0, '(b) 상대 사이드 자동 타임아웃·교체 유지 >0', ` (TO ${awayAutoTO}·enter ${awayEnter})`);
   check(homeAutoTO_off > 0 && homeEnter_off > 0, '(b) A/B 민감도 — 미지정이면 그 사이드 자동활동 >0', ` (TO ${homeAutoTO_off}·enter ${homeEnter_off})`);
 }
