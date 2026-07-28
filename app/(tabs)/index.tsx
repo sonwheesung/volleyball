@@ -163,7 +163,6 @@ function DashboardInner() {
           <IconLabel icon="trophy-outline" color={theme.gold}>리그 기록</IconLabel>
           <Text style={{ color: theme.muted, fontWeight: '700' }}>{'›'}</Text>
         </Row>
-        <Muted style={{ fontSize: 12.5, marginTop: 2 }}>이번 시즌 기록 · 통산 · 명예의전당 · 연표</Muted>
       </Card>
 
       {/* 리그 뉴스 — 진입점만(내용은 뉴스 화면에서). 안읽음 수만 표시.
