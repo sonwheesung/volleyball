@@ -1,10 +1,10 @@
 // 선수 아바타 — id 시드 결정론 얼굴 레이어(여자 V리그 톤) + 유니폼을 react-native-svg로 직접 그린다(오프라인·저장 없음).
 // 온브랜드(B, 2026-07-04): LegendIllustration 스타일 재사용. 이미지 에셋 0. 유대감 1순위 — 전원 회색 아이콘 → 고유 얼굴.
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Image, View } from 'react-native';
 import Svg, { Rect, Path, Circle, Ellipse, G } from 'react-native-svg';
 import { faceFeatures } from '../data/playerFace';
-import { faceCell } from '../data/faceSheets';
+import { faceCell, type FaceCell } from '../data/faceSheets';
 
 const EYE = '#2B2320';
 
@@ -50,21 +50,39 @@ function Mouth({ style }: { style: number }) {
   return <Path d={d} stroke="#9C5B52" strokeWidth={1.7} fill="none" strokeLinecap="round" />;
 }
 
+// 얼굴 시트 크롭 — RN <Image>는 디코드 실패/메모리 경쟁에서 진 뒤 스스로 재시도하지 않아, 첫 진입에 시트 여럿이
+// 동시에 뜨면 일부가 blank로 박제된다("처음 10분 아이콘만" 증상, UI-46 2026-07-28). onLoad 전까지 백오프로 remount(key 범프)해
+// 재디코드를 유도하고, 로드되면 멈춘다. 최대 시도 상한으로 무한 churn 방지(그때쯤 다른 시트 디코드가 풀려 성공).
+const FACE_MAX_RETRY = 8;
+function FaceCrop({ cell, size, bg }: { cell: FaceCell; size: number; bg: string }) {
+  const [gen, setGen] = useState(0);
+  const [loaded, setLoaded] = useState(false);
+  useEffect(() => {
+    if (loaded || gen >= FACE_MAX_RETRY) return;
+    const t = setTimeout(() => setGen((g) => g + 1), 1000 + gen * 700); // 지수성 백오프: 재시도를 흩뿌려 디코드 풀 포화 완화
+    return () => clearTimeout(t);
+  }, [gen, loaded]);
+  return (
+    <View style={{ width: size, height: size, backgroundColor: bg, overflow: 'hidden' }}>
+      <Image
+        key={gen}
+        source={cell.src}
+        style={{ width: size * cell.cols, height: size * cell.rows, position: 'absolute', left: -cell.col * size, top: -cell.row * size }}
+        resizeMode="stretch"
+        fadeDuration={0}
+        onLoad={() => setLoaded(true)}
+        onError={() => setGen((g) => (g < FACE_MAX_RETRY ? g + 1 : g))}
+      />
+    </View>
+  );
+}
+
 export const PlayerAvatar = memo(function PlayerAvatar({ id, size = 84, jersey = '#2E6E8E', trim = '#8FD3E8' }: { id: string; size?: number; jersey?: string; trim?: string }) {
   const f = faceFeatures(id);
   // 실제 얼굴 시트가 있으면 그 칸을 잘라 렌더(id→칸 결정론). 투명 배경 뒤엔 id별 파스텔.
   const cell = faceCell(id);
   if (cell) {
-    return (
-      <View style={{ width: size, height: size, backgroundColor: f.bg, overflow: 'hidden' }}>
-        <Image
-          source={cell.src}
-          style={{ width: size * cell.cols, height: size * cell.rows, position: 'absolute', left: -cell.col * size, top: -cell.row * size }}
-          resizeMode="stretch"
-          fadeDuration={0}
-        />
-      </View>
-    );
+    return <FaceCrop cell={cell} size={size} bg={f.bg} />;
   }
   const hairDark = f.hair;
   return (

@@ -137,7 +137,7 @@ interface GameState {
   claimedAch: string[];                        // 다이아 수령한 업적 id(1회 지급)
   adState: AdState;                            // 광고 보상 쿨다운/하루상한 상태(메타 — 시드 무관)
   watchAdForDiamonds: () => Promise<{ ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' | 'offline' | 'busy' | 'error' | 'no-ad' }>;
-  claimAchDiamonds: () => Promise<{ granted: number; reason?: 'offline' | 'busy' | 'none' | 'cap' | 'already' }>; // 새로 달성한 업적 다이아 수령(서버 확정). already=이전 시도가 응답 유실로 이미 지급됨(멱등 재시도 확인)
+  claimAchDiamonds: (onlyIds?: string[]) => Promise<{ granted: number; reason?: 'offline' | 'busy' | 'none' | 'cap' | 'already' }>; // 새로 달성한 업적 다이아 수령(서버 확정). onlyIds=그 id만(업적 카드별 개별 수령), 미지정=미수령 전체 일괄. already=이전 시도가 응답 유실로 이미 지급됨(멱등 재시도 확인)
   claimWelcomeDiamonds: () => Promise<{ applied: boolean }>; // 첫 전지훈련 진입 환영 선물(계정당 1회, 서버 멱등)
   trainingCamp: (playerId: string, course: CampCourse) => Promise<{ ok: boolean; reason?: string }>; // 오프시즌 전지훈련(서버 차감 후, §11.2)
   syncWallet: () => Promise<void>;             // 서버 잔액으로 캐시 리싱크(로그인/포그라운드/실패후 — §13.12 P0-3) + 아웃박스 정산
@@ -446,7 +446,7 @@ export const useGameStore = create<GameState>()(
         if (r.applied) track('diamond_earned', { source: 'ad', amount: reward });
         return { ok: true, reward: r.applied ? reward : 0 };
       },
-      claimAchDiamonds: async () => {
+      claimAchDiamonds: async (onlyIds?: string[]) => {
         const s = get();
         if (s.walletBusy) return { granted: 0, reason: 'busy' };
         const my = s.selectedTeamId;
@@ -455,7 +455,9 @@ export const useGameStore = create<GameState>()(
         if (!userId) return { granted: 0, reason: 'offline' };
         // 통산 업적을 시즌 중에도 실시간 반영: 저장 careerTotals + 이번 시즌 진행분(achTotals). endSeason 누적과 이음매 없음.
         const statuses = evalAchievements({ myTeamId: my, archive: s.archive, hof: s.hallOfFame, milestones: s.milestones, cash: s.cash, fanScore: s.fanScore, careerLog: s.careerLog, careerTotals: achTotals(my, s.careerTotals, s.results) });
-        const { ids } = unclaimedReward(statuses, s.claimedAch);
+        const { ids: allUnclaimed } = unclaimedReward(statuses, s.claimedAch);
+        // onlyIds 지정 시 그 업적만 수령(카드별 개별 보상받기) — 미지정이면 미수령 전체 일괄. 미달성 id는 unclaimed에 없어 자동 배제(안전).
+        const ids = onlyIds ? allUnclaimed.filter((id) => onlyIds.includes(id)) : allUnclaimed;
         if (!ids.length) return { granted: 0, reason: 'none' };
         set({ walletBusy: true });
         // 배치 적립 — N개 업적을 **1왕복 1트랜잭션**으로(순차 earn N회의 ~40s 병목 제거, BACKEND §4). achId별 dedup·평생합 캡·금액 서버권위는 서버가 보존.

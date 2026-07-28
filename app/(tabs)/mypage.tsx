@@ -5,9 +5,8 @@ import { useRouter } from 'expo-router';
 import Constants from 'expo-constants';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useEffect, useMemo, useState, type ComponentProps } from 'react';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, InteractionManager, Pressable, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../../components/AppDialog';
-import { Popup } from '../../components/Popup';
 import { Card, Muted, Screen, theme, themedStyles } from '../../components/Screen';
 import { NegativeBalanceNote } from '../../components/NegativeBalanceNote';
 import { SpotlightOverlay } from '../../components/Spotlight';
@@ -52,7 +51,7 @@ export default function MyPage() {
   const unreadMailCount = useGameStore((s) => s.unreadMailCount);
   const unclaimedMailCount = useGameStore((s) => s.unclaimedMailCount);
   const watchAdForDiamonds = useGameStore((s) => s.watchAdForDiamonds);
-  const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
+  const syncWallet = useGameStore((s) => s.syncWallet); // 보유 다이아 수동 새로고침(쿠폰 등 갱신 안 될 때, Task4)
   const walletBusy = useGameStore((s) => s.walletBusy);
   const adState = useGameStore((s) => s.adState);
   // 수령 가능한 업적 보상 유무 — 없으면 버튼 비활성(색·무동작). achTotals로 시즌중 통산 업적도 반영.
@@ -68,10 +67,18 @@ export default function MyPage() {
   const claimedAch = useGameStore((s) => s.claimedAch);
   const resetSave = useGameStore((s) => s.resetSave);
   const replayOnboarding = useGameStore((s) => s.replayOnboarding);
-  const unclaimedCount = useMemo(() => {
-    if (!myTeamId) return 0;
-    const statuses = evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals: achTotals(myTeamId, careerTotals, results) });
-    return unclaimedReward(statuses, claimedAch).ids.length;
+  // 미수령 업적 수 — **비동기(페인트 후) 계산**(Task2 fix): achTotals는 콜드 시 production+standings 리플레이(폰 ~20~30s)라
+  //   렌더 동기 useMemo면 마이페이지 진입이 프리즈했다. InteractionManager로 상호작용 후 계산 → 빨간 점은 한 박자 뒤 뜬다(무해).
+  const [unclaimedCount, setUnclaimedCount] = useState(0);
+  useEffect(() => {
+    if (!myTeamId) { setUnclaimedCount(0); return; }
+    let cancelled = false;
+    const task = InteractionManager.runAfterInteractions(() => {
+      if (cancelled) return;
+      const statuses = evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals: achTotals(myTeamId, careerTotals, results) });
+      if (!cancelled) setUnclaimedCount(unclaimedReward(statuses, claimedAch).ids.length);
+    });
+    return () => { cancelled = true; task.cancel(); };
   }, [myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals, results, claimedAch]);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
@@ -147,22 +154,12 @@ export default function MyPage() {
         : r.reason === 'error' ? '적립에 실패했습니다. 잠시 후 다시 시도해 주세요.'
         : '다음 광고까지 잠시 기다려 주세요(2시간 간격).'); // cooldown
   };
-  // 업적 수령 중 로딩 오버레이 게이트 — walletBusy(광고·전지훈련과 공유)와 분리한 로컬 상태(이 수령만 스코프).
-  // 다건 배치라도 서버 왕복은 수초 걸릴 수 있어 사용자에게 명확한 "받는 중" 로딩을 보여준다(사용자 요청, UI-1).
-  const [claiming, setClaiming] = useState(false);
-  const claimAch = async () => {
-    setClaiming(true);
-    try {
-      const r = await claimAchDiamonds();
-      if (r.granted > 0) showAlert('업적 보상 수령', `달성 업적 보상 +${r.granted} 💎`);
-      else if (r.reason === 'cap') showAlert('수령 한도', '업적 보상 지급 한도에 도달했습니다.');
-      else if (r.reason === 'offline') showAlert('연결이 불안정합니다', '보상이 이미 지급됐을 수 있어요. 잔액을 확인해 주세요.\n다시 시도해도 중복 지급되지 않습니다.');
-      else if (r.reason === 'busy') showAlert('처리 중', '잠시만 기다려 주세요.');
-      else if (r.reason === 'already') showAlert('보상 반영 완료', '이 업적 보상은 이미 다이아로 지급되어 잔액에 반영돼 있습니다. 추가 지급이나 손해는 없어요.');
-      else showAlert('수령할 보상 없음', '새로 달성한 업적이 없습니다.');
-    } finally {
-      setClaiming(false);
-    }
+  // 보유 다이아 수동 새로고침(Task4) — 쿠폰/보상 후 캐시가 서버 잔액과 어긋날 때 사용자가 직접 재동기. 도는 동안 스피너.
+  const [syncing, setSyncing] = useState(false);
+  const refreshBalance = async () => {
+    if (syncing) return;
+    setSyncing(true);
+    try { await syncWallet(); } finally { setSyncing(false); }
   };
 
   return (
@@ -175,21 +172,21 @@ export default function MyPage() {
             <Muted style={{ fontSize: 12.5 }}>보유 다이아</Muted>
             <Text style={styles.balance}>{diamonds.toLocaleString()}</Text>
           </View>
+          {/* 새로고침(Task4) — 쿠폰/보상 후 잔액 갱신 안 될 때 서버 잔액 재동기 */}
+          <Pressable onPress={refreshBalance} disabled={syncing} hitSlop={10} style={styles.refreshBtn} accessibilityLabel="보유 다이아 새로고침">
+            {syncing ? <ActivityIndicator size="small" color={theme.sky} /> : <Ionicons name="refresh" size={20} color={theme.sky} />}
+          </Pressable>
         </View>
         <NegativeBalanceNote balance={diamonds} />
-        <View style={{ flexDirection: 'row', gap: 8, marginTop: 10 }}>
-          <Pressable onPress={watchAd} disabled={!adAvail.ok || walletBusy} style={[styles.diaBtn, (!adAvail.ok || walletBusy) && styles.diaBtnOff]}>
-            <Text style={[styles.diaBtnTxt, (!adAvail.ok || walletBusy) && styles.diaBtnTxtOff]}>
-              {walletBusy ? '적립 중…'
-                : adAvail.ok ? (hasRemoveAds() ? `💎 +${AD_REWARD} 받기 (광고 제거됨)` : `📺 광고 보고 +${AD_REWARD} 💎`)
-                : adAvail.reason === 'cap' ? `오늘 광고 끝 (하루 ${AD_DAILY_CAP}회)`
-                : `⏳ ${fmtLeft(adAvail.msLeft)} 후`}
-            </Text>
-          </Pressable>
-          <Pressable onPress={claimAch} disabled={walletBusy || unclaimedCount === 0} style={[styles.diaBtn, (walletBusy || unclaimedCount === 0) && styles.diaBtnOff]}>
-            <Text style={[styles.diaBtnTxt, unclaimedCount === 0 && styles.diaBtnTxtOff]}>{claiming ? '받는 중…' : unclaimedCount > 0 ? `🏅 업적 보상 받기 (${unclaimedCount})` : '🏅 받을 보상 없음'}</Text>
-          </Pressable>
-        </View>
+        {/* 업적 보상은 여기서 일괄로 받지 않는다 → 업적 화면(카드별 보상받기 + 상단 일괄). 미수령 있으면 아래 업적 카드에 빨간 점. */}
+        <Pressable onPress={watchAd} disabled={!adAvail.ok || walletBusy} style={[styles.diaBtn, { marginTop: 10 }, (!adAvail.ok || walletBusy) && styles.diaBtnOff]}>
+          <Text style={[styles.diaBtnTxt, (!adAvail.ok || walletBusy) && styles.diaBtnTxtOff]}>
+            {walletBusy ? '적립 중…'
+              : adAvail.ok ? (hasRemoveAds() ? `💎 +${AD_REWARD} 받기 (광고 제거됨)` : `📺 광고 보고 +${AD_REWARD} 💎`)
+              : adAvail.reason === 'cap' ? `오늘 광고 끝 (하루 ${AD_DAILY_CAP}회)`
+              : `⏳ ${fmtLeft(adAvail.msLeft)} 후`}
+          </Text>
+        </Pressable>
         {DEV_TOOLS ? (
           <View style={{ paddingTop: 8, gap: 6 }}>
             <Pressable onPress={() => useGameStore.setState({ diamonds: diamonds + 1000 })} style={{ alignItems: 'center' }}>
@@ -236,6 +233,7 @@ export default function MyPage() {
 
         <LinkCard icon="ribbon-outline" tint={theme.warn} title="업적"
           sub="구단주의 발자취. 우승 · 시상 · 레전드 · 기록 · 운영"
+          dot={unclaimedCount > 0}
           onPress={() => router.push('/achievements')} />
       </View>
 
@@ -282,14 +280,6 @@ export default function MyPage() {
       ) : null}
 
       <Muted style={{ fontSize: 11.5, textAlign: 'center', marginTop: 14 }}>배구명가 v{version}</Muted>
-      {/* 업적 보상 수령 중 블로킹 로딩 오버레이(사용자 요청 "로딩화면") — 공용 Popup(다크 글래스) + 스피너로 무거운 서버 왕복을 가림. */}
-      <Popup visible={claiming}>
-        <View style={{ alignItems: 'center', gap: 14, paddingVertical: 6 }}>
-          <ActivityIndicator size="large" color={theme.accent} />
-          <Text style={styles.title}>업적 보상 받는 중…</Text>
-          <Muted style={{ fontSize: 12.5, textAlign: 'center' }}>온라인으로 안전하게 적립하고 있어요. 잠시만 기다려 주세요.</Muted>
-        </View>
-      </Popup>
       <SpotlightOverlay screen="tab-mypage" />
     </Screen>
   );
@@ -306,6 +296,7 @@ const styles = themedStyles(() => StyleSheet.create({
   badgeTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   redDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: theme.bad, marginRight: 6 }, // 미확인 우편 빨간 점(MAILBOX §6.3)
   diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
+  refreshBtn: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.sky + '18' },
   diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },
   diaBtnOff: { backgroundColor: theme.bg, borderWidth: 1, borderColor: theme.border, opacity: 0.6 }, // 수령 불가 — 회색 비활성
   diaBtnTxtOff: { color: theme.muted },

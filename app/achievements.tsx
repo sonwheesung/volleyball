@@ -1,11 +1,14 @@
 // 업적 화면 (ACHIEVEMENT_SYSTEM) — 구단주의 장기 발자취를 트로피로.
 // 달성 여부는 저장 없이 세이브 상태(archive/hof/milestones/cash/fanScore)에서 재계산.
 import { useRouter } from 'expo-router';
-import { useMemo } from 'react';
-import { StyleSheet, Text, View } from 'react-native';
+import { useMemo, useState } from 'react';
+import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
+import { Popup } from '../components/Popup';
+import { showAlert } from '../components/AppDialog';
 import { MeterBar } from '../components/MeterBar';
 import { evalAchievements, achievementSummary, achReward, type AchCategory, type AchStatus } from '../engine/achievements';
+import { unclaimedReward } from '../engine/diamonds';
 import { achTotals } from '../data/careerTotals';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
@@ -55,6 +58,27 @@ function AchievementsInner() {
     return m;
   }, [statuses]);
 
+  // 업적 보상 수령(2026-07-28 재설계) — 카드별 개별(claim([id])) + 상단 일괄(claim()). statuses가 이미 웜이라 claim의 재평가는 1ms(느림은 마이페이지 렌더서 제거).
+  const claimedAch = useGameStore((s) => s.claimedAch);
+  const claimAchDiamonds = useGameStore((s) => s.claimAchDiamonds);
+  const walletBusy = useGameStore((s) => s.walletBusy);
+  const unclaimedIds = useMemo(() => unclaimedReward(statuses, claimedAch).ids, [statuses, claimedAch]);
+  const [claiming, setClaiming] = useState(false);
+  const claim = async (only?: string[]) => {
+    if (claiming || walletBusy) return;
+    setClaiming(true);
+    try {
+      const r = await claimAchDiamonds(only);
+      if (r.granted > 0) showAlert('업적 보상 수령', `보상 +${r.granted} 💎 받았습니다.`);
+      else if (r.reason === 'cap') showAlert('수령 한도', '업적 보상 지급 한도에 도달했습니다.');
+      else if (r.reason === 'offline') showAlert('연결이 불안정합니다', '보상이 이미 지급됐을 수 있어요. 잔액을 확인해 주세요.\n다시 시도해도 중복 지급되지 않습니다.');
+      else if (r.reason === 'already') showAlert('보상 반영 완료', '이 보상은 이미 다이아로 지급돼 잔액에 반영돼 있습니다.');
+      else if (r.reason !== 'busy') showAlert('수령할 보상 없음', '받을 업적 보상이 없습니다.');
+    } finally {
+      setClaiming(false);
+    }
+  };
+
   return (
     <Screen title="업적">
       <Card accent={theme.gold} flat>
@@ -64,6 +88,10 @@ function AchievementsInner() {
         </Row>
         <MeterBar pct={total ? (done / total) * 100 : 0} color={theme.accent} />
         <Muted style={{ fontSize: 12 }}>장기 목표를 눈앞에. 우승·시상·레전드·기록·운영의 발자취가 트로피로 남는다.</Muted>
+        {/* 상단 일괄 보상 받기(2026-07-28) — 미수령 있을 때만. 카드별로도 받을 수 있고, 여기서 한 번에. */}
+        {unclaimedIds.length > 0 ? (
+          <Button label={`🎁 안 받은 보상 일괄 받기 (${unclaimedIds.length})`} onPress={() => claim()} disabled={claiming || walletBusy} />
+        ) : null}
       </Card>
 
       {CATEGORY_ORDER.map((cat) => {
@@ -73,8 +101,12 @@ function AchievementsInner() {
         return (
           <View key={cat} style={{ gap: 6 }}>
             <Text style={styles.catHead}>{CATEGORY_ICON[cat]} {cat} <Text style={styles.catCount}>{catDone}/{items.length}</Text></Text>
-            {items.map((s) => (
-              <View key={s.ach.id} style={[styles.ach, s.unlocked && styles.achDone]}>
+            {items.map((s) => {
+              const claimed = claimedAch.includes(s.ach.id);   // 서버 확정 후 담긴 수령 id
+              const claimable = s.unlocked && !claimed;         // 달성했는데 아직 안 받음 → 빨간 점 + 보상받기 버튼
+              return (
+              <View key={s.ach.id} style={[styles.ach, s.unlocked && styles.achDone, claimable && styles.achClaimable]}>
+                {claimable ? <View style={styles.cardDot} /> : null}
                 {/* 달성 아이콘: 어두운 배경에 묻히던 체크(✓)→트로피(색 있는 이모지라 잘 보임, 테스터 제보 2026-07-11) */}
                 <Text style={[styles.icon, !s.unlocked && styles.iconLocked]}>{s.unlocked ? '🏆' : '🔒'}</Text>
                 <View style={{ flex: 1 }}>
@@ -88,14 +120,33 @@ function AchievementsInner() {
                     </View>
                   ) : null}
                 </View>
-                <Text style={[styles.prog, s.unlocked && { color: theme.good }]}>{progressLabel(s)}</Text>
+                {/* 우측: 달성·미수령 → 보상받기 버튼 / 달성·수령완료 → 받음 ✓ / 미달성 → 진행 */}
+                {claimable ? (
+                  <Pressable onPress={() => claim([s.ach.id])} disabled={claiming || walletBusy} style={[styles.claimBtn, (claiming || walletBusy) && styles.claimBtnOff]} accessibilityRole="button">
+                    <Text style={styles.claimBtnTxt}>보상받기</Text>
+                  </Pressable>
+                ) : claimed ? (
+                  <Text style={styles.claimedTxt}>받음 ✓</Text>
+                ) : (
+                  <Text style={styles.prog}>{progressLabel(s)}</Text>
+                )}
               </View>
-            ))}
+              );
+            })}
           </View>
         );
       })}
 
       <Button label="나가기" onPress={() => router.back()} />
+
+      {/* 보상 수령 중 블로킹 로딩 — 서버 왕복 수초를 가림(마이페이지서 이동). statuses는 웜이라 compute는 즉시, 대기는 네트워크. */}
+      <Popup visible={claiming}>
+        <View style={{ alignItems: 'center', gap: 14, paddingVertical: 6 }}>
+          <ActivityIndicator size="large" color={theme.accent} />
+          <Text style={styles.title}>보상 받는 중…</Text>
+          <Muted style={{ fontSize: 12.5, textAlign: 'center' }}>온라인으로 안전하게 적립하고 있어요. 잠시만 기다려 주세요.</Muted>
+        </View>
+      </Popup>
     </Screen>
   );
 }
@@ -115,6 +166,12 @@ const styles = themedStyles(() => StyleSheet.create({
     borderWidth: 1, borderColor: theme.border, opacity: 0.7,
   },
   achDone: { opacity: 1, borderColor: theme.good + '66' },
+  achClaimable: { borderColor: theme.accent + '88', backgroundColor: theme.accent + '0E' }, // 미수령 강조
+  cardDot: { position: 'absolute', top: -3, right: -3, width: 11, height: 11, borderRadius: 6, backgroundColor: theme.bad, borderWidth: 2, borderColor: theme.bg },
+  claimBtn: { backgroundColor: theme.accent, borderRadius: 9, paddingVertical: 7, paddingHorizontal: 12, alignItems: 'center', justifyContent: 'center' },
+  claimBtnOff: { opacity: 0.5 },
+  claimBtnTxt: { color: '#06231F', fontSize: 12.5, fontWeight: '900' },
+  claimedTxt: { color: theme.good, fontSize: 12, fontWeight: '800', textAlign: 'right' },
   icon: { fontSize: 18, width: 24, textAlign: 'center' },
   iconLocked: { opacity: 0.6 },
   title: { color: theme.muted, fontSize: 15, fontWeight: '800' },
