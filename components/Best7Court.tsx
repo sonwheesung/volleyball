@@ -11,10 +11,13 @@ import { theme } from './Screen';
 import { themedStyles } from './theme';
 import { teamColors } from '../lib/teamColor';
 import { shortTeamName } from '../data/league';
+import { PlayerAvatar } from './PlayerAvatar';
+import { FaceSheetWarmup } from './FaceSheetWarmup';
 import type { Best7Slot } from '../types';
 
 const GOLD = '#F2A93B';
 const GOLD_LT = '#FFE49B';
+const AV = 44; // 아바타(얼굴) 지름 — 겹침 규칙(행간 92px) 안에서 팀명(위)+얼굴+이름(아래) 블록 ≤ ~82px가 되도록
 
 // 코트 위 7슬롯 배치(%, 네트=상단). 명예 포메이션이라 실제 로테이션이 아니라 읽기 좋은 3단 분산.
 // ★ 겹침 방지 규칙(2026-07-11): 한 슬롯 블록 = 마커40 + 이름~15 + 팀~13 + 여백 ≈ 72px로,
@@ -122,25 +125,40 @@ export function Best7Court({
           const tc = w ? teamColors(w.teamId) : null;
           return (
             <View key={`${s.pos}-${i}`} style={[styles.slot, { left: `${spot.left}%`, top: `${spot.top}%` }]}>
-              <View style={[
-                styles.marker,
-                { backgroundColor: tc ? tc.primary : theme.cardAlt },
-                mine ? styles.markerMine : null,
-              ]}>
-                <Text style={styles.markerPos}>{s.pos}</Text>
+              {/* 소속팀 (얼굴 위) — 본인 팀이면 강조색 */}
+              <Text style={[styles.team, mine && styles.teamMine]} numberOfLines={1}>
+                {w ? shortTeamName(w.teamId) : ''}
+              </Text>
+              {/* 얼굴(아바타) + 포지션 배지 */}
+              <View style={styles.avatarWrap}>
+                <View style={[
+                  styles.avatarRing,
+                  { borderColor: mine ? theme.accent : (tc ? tc.primary : 'rgba(255,255,255,0.35)') },
+                  mine ? styles.avatarRingMine : null,
+                ]}>
+                  {w ? (
+                    <PlayerAvatar id={w.playerId} size={AV} jersey={tc!.primary} trim={tc!.light} />
+                  ) : (
+                    <View style={[styles.avatarEmpty, { width: AV, height: AV }]}><Text style={styles.dash}>—</Text></View>
+                  )}
+                </View>
+                <View style={[styles.posBadge, { backgroundColor: tc ? tc.primary : '#3A4658' }]}>
+                  <Text style={styles.posTxt}>{s.pos}</Text>
+                </View>
               </View>
+              {/* 이름 (얼굴 아래) — 본인 팀이면 강조색 */}
               {w ? (
-                <>
-                  <Text style={[styles.name, mine && styles.nameMine]} numberOfLines={1}>{nameOf(w.playerId)}</Text>
-                  <Text style={styles.team} numberOfLines={1}>{shortTeamName(w.teamId)}</Text>
-                </>
+                <Text style={[styles.name, mine && styles.nameMine]} numberOfLines={1}>{nameOf(w.playerId)}</Text>
               ) : (
-                <Text style={styles.team}>—</Text>
+                <Text style={styles.name}> </Text>
               )}
             </View>
           );
         })}
       </View>
+
+      {/* 얼굴 시트 오프스크린 프리워밍(UI-45) — 7명 얼굴이 늦게 뜨지 않게 디코드 선점 */}
+      <FaceSheetWarmup ids={best7.map((s) => s.winner?.playerId).filter((x): x is string => !!x)} size={AV} />
     </View>
   );
 }
@@ -158,15 +176,25 @@ const styles = themedStyles(() => StyleSheet.create({
     height: 340, borderRadius: 16, overflow: 'hidden', // 3행(전위/후위/리베로) 라벨 잘림 방지 위해 300→340(2026-07-11)
     borderWidth: 1.5, borderColor: 'rgba(242,169,59,0.45)', // 금 프레임(시상식 무게)
   },
-  slot: { position: 'absolute', width: 84, marginLeft: -42, marginTop: -22, alignItems: 'center' },
-  marker: {
-    width: 40, height: 40, borderRadius: 20, alignItems: 'center', justifyContent: 'center',
-    borderWidth: 2, borderColor: 'rgba(255,255,255,0.35)',
+  // 슬롯: 팀명(위) → 얼굴+포지션배지 → 이름(아래). marginTop으로 얼굴을 spot 근처에 두되 블록이 위아래로 균형.
+  //   블록 ≈ 팀13 + 링50 + 배지겹침 + 이름14 ≈ 82px < 행간 92px → 겹침 없음(2026-07-28 얼굴 전환, 겹침 규칙 유지).
+  slot: { position: 'absolute', width: 86, marginLeft: -43, marginTop: -38, alignItems: 'center' },
+  team: { color: 'rgba(255,255,255,0.78)', fontSize: 10, fontWeight: '700', textAlign: 'center', marginBottom: 2, maxWidth: 86 },
+  teamMine: { color: theme.accent },
+  avatarWrap: { alignItems: 'center' },
+  avatarRing: {
+    width: AV + 6, height: AV + 6, borderRadius: (AV + 6) / 2, borderWidth: 2, overflow: 'hidden',
+    alignItems: 'center', justifyContent: 'center', backgroundColor: 'rgba(10,16,24,0.35)',
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 3,
   },
-  markerMine: { borderWidth: 3, borderColor: theme.accent }, // 우리 팀 강조
-  markerPos: { color: '#FFFFFF', fontSize: 12, fontWeight: '900' },
-  name: { color: '#F2F5FA', fontSize: 11.5, fontWeight: '800', marginTop: 3, maxWidth: 84, textAlign: 'center' },
+  avatarRingMine: { borderWidth: 3 }, // 우리 팀 강조(색은 인라인 accent)
+  avatarEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.cardAlt },
+  dash: { color: 'rgba(255,255,255,0.6)', fontSize: 16, fontWeight: '800' },
+  posBadge: {
+    marginTop: -9, minWidth: 22, height: 16, paddingHorizontal: 5, borderRadius: 8,
+    alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)',
+  },
+  posTxt: { color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.2 },
+  name: { color: '#F2F5FA', fontSize: 11.5, fontWeight: '800', marginTop: 4, maxWidth: 86, textAlign: 'center' },
   nameMine: { color: theme.accent },
-  team: { color: 'rgba(255,255,255,0.75)', fontSize: 10, fontWeight: '600', textAlign: 'center' },
 }));
