@@ -1,6 +1,6 @@
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { StyleSheet, Text, View } from 'react-native';
-import { Card, Muted, PosTag, Screen, Title, theme, themedStyles } from '../../components/Screen';
+import { Button, Card, Muted, PosTag, Screen, Title, theme, themedStyles } from '../../components/Screen';
 import { BoxScoreTable } from '../../components/BoxScoreTable';
 import { SetScoreboard } from '../../components/SetScoreboard';
 import { getFixture, getTeam, coachInfoOf } from '../../data/league';
@@ -9,7 +9,9 @@ import { interventionsFor } from '../../data/dynamics';
 import { matchMvp } from '../../data/matchAward';
 
 export default function MatchResult() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, from } = useLocalSearchParams<{ id: string; from?: string }>();
+  const router = useRouter();
+  const fromWatch = from === 'watch'; // 관전 종료 후 경유 진입 — "홈으로"로 뉴스 확인(2026-07-28)
   const fixture = id ? getFixture(id) : undefined;
 
   if (!fixture) {
@@ -56,6 +58,13 @@ export default function MatchResult() {
       <Title>{awayName}</Title>
       <Card accent={theme.elite} flat><BoxScoreTable squad={away} box={box} dvPhilosophy={coachInfoOf(fixture.awayTeamId)?.dvPhilosophy ?? 0} /></Card>
       <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 리시브=효율((정확−실패)/시도)</Text>
+
+      {fromWatch ? (
+        // 관전 종료 후 나가기 경유 — 홈(대시보드)으로 보내 뉴스·기록을 보게 한다(사용자 요청).
+        <View style={styles.homeBtnWrap}>
+          <Button label="홈으로 (뉴스 보기)" onPress={() => router.replace('/(tabs)/')} />
+        </View>
+      ) : null}
     </Screen>
   );
 }
@@ -66,4 +75,5 @@ const styles = themedStyles(() => StyleSheet.create({
   mvpName: { color: theme.text, fontSize: 16, fontWeight: '800' },
   mvpStat: { color: theme.muted, fontSize: 12.5, marginTop: 1 },
   mvpLine: { color: theme.text, fontSize: 13, marginTop: 8, lineHeight: 18 },
+  homeBtnWrap: { marginTop: 14 },
 }));

@@ -3,11 +3,14 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { showAlert } from '../../components/AppDialog';
-import { Button, Card, IconLabel, Loading, Muted, OvrBadge, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../../components/Screen';
+import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Row, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../../components/Screen';
+import { Popup } from '../../components/Popup';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { GrowthReportModal } from '../../components/GrowthReportModal';
 import { growthTrigger, type PlayerGrowth } from '../../data/growthReport';
-import { SEASON, LEAGUE, getTeam } from '../../data/league';
+import { SEASON, LEAGUE, getTeam, coachInfoOf } from '../../data/league';
+import { restedOnDay, promotedOnDay } from '../../data/rotation';
+import { buildLineup } from '../../engine/lineup';
 import { computeStandings, playedThroughDay, displayCutoff } from '../../data/standings';
 import { rivalOf } from '../../data/rivalry';
 import { seasonYear } from '../../data/seasonLabel';
@@ -21,7 +24,7 @@ import { offseasonHubSteps, offseasonUntouched, type HubStep } from '../../data/
 import { SEASON_DAYS } from '../../engine/calendar';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
-import { teamOverallRaw } from '../../engine/overall';
+import { teamOverallRaw, overallRaw, displayOvr } from '../../engine/overall';
 import { dateForDay, formatDate } from '../../lib/calendar';
 import { useSeasonStartEntry } from '../../lib/seasonStart';
 import { DEV_TOOLS } from '../../data/flags';
@@ -167,6 +170,22 @@ function ScheduleInner() {
       })()
     : null;
 
+  // 상대 라인업 사전 열람(2026-07-28 사용자) — 경기 전 상대 예상 선발 6+리베로. buildLineup은 순수 결정론이라
+  //  실제 경기 선발과 동일(production splitLineup과 같은 소스). 시뮬 미실행 = 결과 스포일러 없음. 선수 탭 → 상세.
+  const [lineupOpen, setLineupOpen] = useState(false);
+  const oppLineup = useMemo(() => {
+    if (!nextFixture) return null;
+    const oppId = nextFixture.homeTeamId === teamId ? nextFixture.awayTeamId : nextFixture.homeTeamId;
+    const rest = restedOnDay(oppId, nextFixture.dayIndex);
+    const avail = availableTeamPlayers(oppId, nextFixture.dayIndex);
+    const squad = rest.size ? avail.filter((p) => !rest.has(p.id)) : avail;
+    if (!squad.length) return null;
+    const force = promotedOnDay(oppId, nextFixture.dayIndex);
+    const dv = coachInfoOf(oppId)?.dvPhilosophy ?? 0;
+    const { six, libero } = buildLineup(squad, dv, force);
+    return { oppName: getTeam(oppId)?.name ?? '', players: [...six, ...(libero ? [libero] : [])] };
+  }, [nextFixture, teamId]);
+
   // 오프시즌 게이트(2026-07-04 사용자 요청): currentDay 0 + 이번 시즌 전지훈련 미완료 → **오프시즌 허브만** 노출하고
   // 다음 경기(개막전)는 숨긴다. 개막은 허브의 "개막전으로"(finishCamp) 또는 캠프 화면의 "마치고 개막전으로"로 연다.
   //   ~~반드시 캠프를 거쳐야~~ → 정정(2026-07-24, §5.6): 캠프를 강제로 거치게 하면 캠프 화면이 죽었을 때 개막이 막힌다
@@ -269,6 +288,12 @@ function ScheduleInner() {
               <OvrBadge value={preview.oppOvr} />
             </View>
           </Row>
+          {oppLineup ? (
+            <Pressable onPress={() => setLineupOpen(true)} style={styles.scoutBtn} accessibilityRole="button" accessibilityLabel="상대 라인업 보기">
+              <Ionicons name="people-outline" size={15} color={theme.sky} />
+              <Text style={styles.scoutBtnTxt}>상대 라인업 보기</Text>
+            </Pressable>
+          ) : null}
           <Button
             compact
             label={nextFixture && watchProgress[nextFixture.id] !== undefined
@@ -402,6 +427,29 @@ function ScheduleInner() {
       ) : null}
       <SpotlightOverlay screen="tab-schedule" />
       <GrowthReportModal visible={growth.length > 0} report={growth} onClose={() => setGrowth([])} />
+
+      {/* 상대 라인업 모달(2026-07-28) — 예상 선발 6+리베로. 선수 탭 → 상세 정보(모달 닫고 이동) */}
+      <Popup visible={lineupOpen} onRequestClose={() => setLineupOpen(false)} dismissable>
+        <Text style={styles.lineupTitle}>{oppLineup?.oppName} 예상 선발</Text>
+        <Text style={styles.lineupHint}>선수를 누르면 상세 정보를 볼 수 있어요</Text>
+        {oppLineup?.players.map((p) => (
+          <Pressable
+            key={p.id}
+            style={styles.lineupRow}
+            onPress={() => { setLineupOpen(false); router.push(`/player/${p.id}` as never); }}
+            accessibilityRole="button"
+            accessibilityLabel={`${p.name} 상세 정보`}
+          >
+            <PosTag pos={p.position} />
+            <Text style={styles.lineupName} numberOfLines={1}>{p.name}</Text>
+            <OvrBadge value={displayOvr(overallRaw(p))} />
+            <Ionicons name="chevron-forward" size={16} color={theme.muted} />
+          </Pressable>
+        ))}
+        <Pressable style={styles.lineupClose} onPress={() => setLineupOpen(false)}>
+          <Text style={styles.lineupCloseTxt}>닫기</Text>
+        </Pressable>
+      </Popup>
     </Screen>
   );
 }
@@ -409,6 +457,16 @@ function ScheduleInner() {
 const styles = themedStyles(() => StyleSheet.create({
   bigMatch: { backgroundColor: theme.warn + '26', borderRadius: 8, paddingHorizontal: 8, paddingVertical: 3 },
   bigMatchText: { color: theme.warn, fontSize: 12, fontWeight: '700' },
+  // 상대 라인업(2026-07-28) — 스카우트 버튼(2차) + 모달 리스트
+  scoutBtn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, marginTop: 8,
+    borderRadius: 9, borderWidth: 1, borderColor: theme.sky + '55', backgroundColor: theme.sky + '14' },
+  scoutBtnTxt: { color: theme.sky, fontSize: 13, fontWeight: '700' },
+  lineupTitle: { color: theme.text, fontSize: 16, fontWeight: '800', textAlign: 'center' },
+  lineupHint: { color: theme.muted, fontSize: 12, textAlign: 'center', marginTop: 2, marginBottom: 8 },
+  lineupRow: { flexDirection: 'row', alignItems: 'center', gap: 9, paddingVertical: 9, borderTopWidth: 1, borderTopColor: theme.border },
+  lineupName: { color: theme.text, fontSize: 14, fontWeight: '600', flex: 1 },
+  lineupClose: { marginTop: 12, paddingVertical: 11, borderRadius: 10, backgroundColor: theme.cardAlt, alignItems: 'center' },
+  lineupCloseTxt: { color: theme.text, fontSize: 14, fontWeight: '700' },
   // 오프시즌 허브 목록(§5.6) — 번호 + 제목/설명 + 화살표. 잠금 아이콘 없음(진입 차단 0).
   hubRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: theme.border },
   hubNo: { width: 20, textAlign: 'center', fontSize: 15, fontWeight: '900' },

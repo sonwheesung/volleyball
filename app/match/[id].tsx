@@ -162,8 +162,14 @@ export default function MatchBoard() {
     }
     if (!isSandbox && fixture) clearWatchProgress(fixture.id);
     setConfirmExit(false);
-    router.back();
-  }, [isPlayoff, poSlotDay, setDay, isSandbox, data, fixture, recordResult, clearWatchProgress, router]);
+    // 경기를 끝까지 본 뒤 나가기 → 경기 상세결과(MVP+박스스코어) 경유(2026-07-28 사용자). 거기서 "홈으로"로 뉴스 확인.
+    // 관전 중 이탈(confirm-exit → finished=false)·샌드박스는 현행대로 이전 화면(일정) 복귀.
+    if (finished && !isSandbox && fixture) {
+      router.replace(`/matchresult/${fixture.id}?from=watch`);
+    } else {
+      router.back();
+    }
+  }, [isPlayoff, poSlotDay, setDay, isSandbox, data, fixture, finished, recordResult, clearWatchProgress, router]);
 
   // 나가기 요청 — 관전 중(미종료)이면 확인 모달(이어보기/확정 선택), 종료/샌드박스면 즉시 이탈
   const requestExit = useCallback(() => {

@@ -201,6 +201,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   const [timeoutModal, setTimeoutModal] = useState<TimeoutEvent[] | null>(null); // 같은 점수에 걸린 타임아웃 전부(작전+테크니컬 동시 발생) — 멈춤+체력
   const [toCount, setToCount] = useState(0); // 타임아웃 자동 진행 카운트다운(초) — 관전형: 안 눌러도 진행
   const [confirmEnd, setConfirmEnd] = useState(false); // ⏭ 결과(경기 종료) 확인 — 즉시 종료 방지
+  const [confirmEndSet, setConfirmEndSet] = useState(false); // ⏭ 세트(현재 세트만 건너뛰기) 확인 — 2026-07-28 사용자
   const ackTO = useRef<Set<number>>(new Set()); // 이미 본 타임아웃(랠리 인덱스) — 재진입 시 재팝업 방지
 
   // ── 개입 재계산 이어재생(MATCH_INTERVENTION_SYSTEM §4) ──
@@ -415,6 +416,21 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     setPlaying(false); setTimeoutModal(null); setShown(total - 1); setIdx(total); setSegIdx(0);
   }, [total]);
 
+  // ⏭ 세트 — 현재 세트만 끝까지 건너뛴다(경기 전체가 아니라). 현재 세트의 마지막 랠리에 도달해 그
+  //  세트 최종 점수를 보여주고 멈춘다. 다음 세트는 ▶로 이어본다(마지막 세트면 경기 종료와 동일).
+  const endSet = useCallback(() => {
+    setConfirmEndSet(false);
+    const start = Math.min(idx, total - 1);
+    const curSetNo = rallies[start]?.setNo;
+    if (curSetNo == null) return;
+    let last = start;
+    for (let i = start; i < total; i++) {
+      if (rallies[i].setNo === curSetNo) last = i; else break; // setNo는 연속 블록 — 바뀌면 세트 끝
+    }
+    setPlaying(false); setTimeoutModal(null);
+    setShown(last); setIdx(last + 1); setSegIdx(0);
+  }, [idx, total, rallies]);
+
   useEffect(() => {
     if (finished && !finishedOnce.current) {
       finishedOnce.current = true;
@@ -593,13 +609,17 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
   const capRally = capIdx >= 0 ? rallies[capIdx] : null;
   const caption = capRally?.how ? HOW_CAPTION[capRally.how] : null;
 
-  // 공 궤적(흰 점선) — 경기 중(인플레이)에만. 끝점은 의도(aim)가 있으면 그쪽으로(터치아웃: 점선=의도 코스)
+  // 공 궤적(점선) — 경기 중(인플레이)에만. 끝점은 의도(aim)가 있으면 그쪽으로(터치아웃: 점선=의도 코스)
+  // 강타 스파이크(제대로 때린 공)는 빨간 유성 꼬리로(2026-07-28 사용자 요청, #122 순수렌더 — 정적 View, 리렌더0).
+  const isHardSpike = !!(seg && inPlay && seg.to.kind === 'spike' && !seg.to.soft);
   const aimEnd = seg ? seg.to.aim ?? seg.to : null;
+  const TRAIL_N = isHardSpike ? 24 : 17; // 유성은 꼬리가 촘촘해야 매끈
   const trailDots = seg && inPlay && aimEnd
-    ? Array.from({ length: 17 }, (_, k) => {
-        const s = k / 16;
+    ? Array.from({ length: TRAIL_N }, (_, k) => {
+        const s = k / (TRAIL_N - 1); // 0=출발(꼬리) … 1=도착(유성 머리)
         return {
           key: k,
+          s,
           x: seg.from.x + (aimEnd.x - seg.from.x) * s,
           y: seg.from.y + (aimEnd.y - seg.from.y) * s - arcH * 4 * s * (1 - s),
         };
@@ -650,17 +670,34 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
                   <Text style={styles.subTagTxt} numberOfLines={1}>↑ {m.p?.name ?? '교체'}</Text>
                 </View>
               ) : m.p ? (
-                // 마커 밑 선수명(상시) — 포지션은 마커 안, 이름은 아래(사용자 요청). 내 팀은 강조.
+                // 마커 밑 선수명(상시) — 마커 안=등번호, 아래=포지션 약자+이름(2026-07-28 사용자 요청).
+                // 포지션은 이름 왼쪽에 POS_COLOR로 강조. 내 팀은 이름 강조.
                 <View style={styles.nameTag} pointerEvents="none">
-                  <Text style={[styles.nameTagTxt, mine && styles.nameTagMine]} numberOfLines={1}>{m.p.name}</Text>
+                  <Text style={[styles.nameTagTxt, mine && styles.nameTagMine]} numberOfLines={1}>
+                    <Text style={{ color, fontWeight: '800' }}>{m.p.position} </Text>{m.p.name}
+                  </Text>
                 </View>
               ) : null}
             </Animated.View>
           );
         })}
-        {trailDots.map((d) => (
-          <View key={d.key} style={[styles.trailDot, { left: d.x - 1.5, top: d.y - 1.5 }]} />
-        ))}
+        {trailDots.map((d) => {
+          if (isHardSpike) {
+            // 유성: 머리(s→1)로 갈수록 크고 밝고, 꼬리(s→0)로 갈수록 작고 흐림. 머리=백열(노랑)→주황→적색 꼬리.
+            const r = 1.2 + d.s * 3.6;                       // 반경 1.2~4.8px
+            const op = 0.12 + d.s * 0.78;                    // 흐림→진함
+            const col = d.s > 0.82 ? '#FFE7A0' : d.s > 0.5 ? '#FF7A2F' : '#FF3B2F';
+            return (
+              <View key={d.key} pointerEvents="none" style={{
+                position: 'absolute', left: d.x - r, top: d.y - r,
+                width: r * 2, height: r * 2, borderRadius: r,
+                backgroundColor: col, opacity: op,
+                shadowColor: '#FF4A2F', shadowOpacity: 0.9, shadowRadius: r, shadowOffset: { width: 0, height: 0 },
+              }} />
+            );
+          }
+          return <View key={d.key} style={[styles.trailDot, { left: d.x - 1.5, top: d.y - 1.5 }]} />;
+        })}
         <Animated.View style={[styles.ball, { transform: ballTransform }]}>
           <VolleyBall />
         </Animated.View>
@@ -740,6 +777,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
         <View style={styles.controls}>
           <Ctrl label={playing ? '⏸' : '▶'} onPress={() => setPlaying((p) => !p)} />
           <Ctrl label="2x" on={fast} onPress={() => setFast((f) => !f)} />
+          <Ctrl label="⏭ 세트" onPress={() => setConfirmEndSet(true)} />
           <Ctrl label="⏭ 결과" onPress={() => setConfirmEnd(true)} />
         </View>
       ) : null}
@@ -804,6 +842,18 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
           <Text style={styles.toBtnTxt}>결과 보기</Text>
         </Pressable>
         <Pressable style={styles.toCancel} onPress={() => setConfirmEnd(false)}>
+          <Text style={styles.toCancelTxt}>계속 관전</Text>
+        </Pressable>
+      </Popup>
+
+      {/* ⏭ 세트 — 현재 세트만 건너뛰기 확인. 다음 세트는 이어서 관전한다(2026-07-28 사용자) */}
+      <Popup visible={confirmEndSet} onRequestClose={() => setConfirmEndSet(false)}>
+        <Text style={styles.toTitle}>이 세트를 건너뛸까요?</Text>
+        <Text style={styles.toSub}>현재 세트의 남은 랠리를 건너뛰고 세트 최종 점수로 갑니다.{'\n'}다음 세트는 이어서 관전할 수 있어요.</Text>
+        <Pressable style={styles.toBtn} onPress={endSet}>
+          <Text style={styles.toBtnTxt}>세트 건너뛰기</Text>
+        </Pressable>
+        <Pressable style={styles.toCancel} onPress={() => setConfirmEndSet(false)}>
           <Text style={styles.toCancelTxt}>계속 관전</Text>
         </Pressable>
       </Popup>
