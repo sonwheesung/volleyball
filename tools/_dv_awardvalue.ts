@@ -145,7 +145,7 @@ const FIELD: Record<string, keyof import('../engine/production').ProdLine> = {
   //   teamWeight를 뺀 뮤턴트라면 value == round(raw) 가 되어 이 검사가 FAIL → 오라클이 비어있지 않음.
   const { computeSeasonAwards } = await import('../engine/awards');
   const synthL = (o: Partial<import('../engine/production').ProdLine>): import('../engine/production').ProdLine =>
-    ({ matches: 30, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0, ...o });
+    ({ matches: 30, gamesPlayed: 30, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0, ...o });
   const synthProd = new Map<string, import('../engine/production').ProdLine>([
     ['ace', synthL({ points: 800 })],  // 최고 생산자 — 꼴찌 팀
     ['mid', synthL({ points: 400 })],  // 1위 팀

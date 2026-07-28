@@ -176,6 +176,7 @@ npx tsx tools/_dv_jersey.ts                 # 헌액 번호(BROADCAST §8) — j
 npx tsx tools/_dv_lineage.ts 60             # 헌액 번호 계보 길이 실측(EDGE_CASES §3.12 감시①) — 실제 시즌 루프 N시즌 굴려 레전드(≥7500점) 누적, (팀·번호)별 최대 계보 길이 측정. 60→0·300→1(WAI 캡 불요). 측정 도구(판정 advisory)·무거움 on-demand
 npx tsx tools/_dv_migrate.ts                # 세이브 마이그레이션 순수함수(SAVE_SYSTEM §6) — 손상/구버전 입력 정규화 무크래시·정상 멱등·A/B(정규화 없이 크래시 실증)·drift(키 일치). exit 0/1
 npx tsx tools/_dv_migrate_e2e.ts            # 세이브 마이그레이션 E2E — 실 store에 손상/유효 세이브 넣고 persist.rehydrate() 끝까지(sanitize 로드·base 커밋·commit throw 시 fresh 리셋). exit 0/1
+npx tsx tools/_dv_gp.ts                     # 출전 경기수(ProdLine.gamesPlayed 정수 GP, UI-46 정정·SALARY §1) — gamesPlayed 정수·경기당 0/1·matches 존재 동치(7400+라인) + subUse 분수 matches vs 정수 gamesPlayed 독립 A/B(뮤턴트 gamesPlayed=matches면 정수검사 FAIL). exit 0/1
 npx tsx tools/_dv_savescope.ts              # 계정별 세이브 슬롯(SAVE_SYSTEM §7) — 모킹 AsyncStorage 위 실 store로 A진행→로그아웃→B로그인=fresh(A노출0)·A복귀 바이트복원·레거시 1회이관·B진행중 A슬롯불변(함정b)·계정삭제 슬롯제거·재로그인 no-op + A/B(고정키 대조=A노출 FAIL로 민감도). exit 0/1
 npx tsx tools/_dv_seasondays.ts             # 시즌 길이 단일상수(engine/calendar SEASON_DAYS) == 실제 일정 max dayIndex(164) — 상수 손복제 드리프트 차단. exit 0/1
 npx tsx tools/_dv_snapshot_replay.ts        # 진단 재현키+로그강화(BACKEND §13.20) — ①captureReplaySave==partialize+version ②JSON왕복무손실 ③snapshotVersion=2+replay포함 ④확정사건 diag발화(방출·건의) ⑤A/B민감도. exit 0/1

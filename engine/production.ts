@@ -11,7 +11,8 @@ import type { SimResult } from './simMatch';
 import type { BoxSink } from './rally';
 
 export interface ProdLine {
-  matches: number;  // 출전
+  matches: number;  // 출전 "참여량"(코트타임 가중, 분수) — XP·연봉·팬심·시상 자격에 물린 밸런스값. 표시용 아님(UI-46 정정).
+  gamesPlayed: number; // 출전 경기수(GP, 정수) — 어떤 출전이든 1, 중복 없음. 화면 표시 전용(코보식). matches와 독립.
   points: number;   // 득점(공격+블록+에이스)
   spikes: number;
   backSpikes: number; // 후위공격(백어택) 득점 — spikes의 부분집합. 트리플 크라운(후위공격 3+) 판정 전용
@@ -23,7 +24,7 @@ export interface ProdLine {
 }
 
 export const emptyProd = (): ProdLine => ({
-  matches: 0, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0,
+  matches: 0, gamesPlayed: 0, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0,
 });
 
 /** 시즌 생산을 선수 통산 기록(CareerStats)에 누적한 새 선수 — 백년 누적 서사의 토대.
@@ -35,7 +36,7 @@ export function accrueCareer(p: Player, prod: ProdLine | undefined): Player {
     ...p,
     career: {
       ...c,
-      matches: c.matches + Math.round(prod.matches),
+      matches: c.matches + prod.gamesPlayed, // 통산 경기수 = 진짜 GP(정수 출전, 교체선수 과소계상 없음). 구 Math.round(분수)에서 전환(UI-46 정정, 밸런스 무영향·기록용)
       points: c.points + prod.points,
       spikes: c.spikes + prod.spikes,
       blocks: c.blocks + prod.blocks,
@@ -51,7 +52,7 @@ export function accrueCareer(p: Player, prod: ProdLine | undefined): Player {
 export function appendSeasonLine(p: Player, season: number, teamId: string, prod: ProdLine | undefined): Player {
   if (!prod || prod.matches <= 0) return p;
   const line: SeasonLine = {
-    season, teamId, matches: Math.round(prod.matches),
+    season, teamId, matches: prod.gamesPlayed, // 시즌 경기수 = 진짜 GP(정수 출전). 구 Math.round(분수)에서 전환(UI-46 정정)
     points: prod.points, spikes: prod.spikes, blocks: prod.blocks,
     aces: prod.aces, assists: prod.assists, digs: prod.digs,
   };
@@ -61,7 +62,7 @@ export function appendSeasonLine(p: Player, season: number, teamId: string, prod
 export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {
   const x = a ?? emptyProd();
   return {
-    matches: x.matches + b.matches, points: x.points + b.points,
+    matches: x.matches + b.matches, gamesPlayed: x.gamesPlayed + b.gamesPlayed, points: x.points + b.points,
     spikes: x.spikes + b.spikes, backSpikes: x.backSpikes + b.backSpikes, blocks: x.blocks + b.blocks, aces: x.aces + b.aces,
     assists: x.assists + b.assists, digs: x.digs + b.digs, receives: x.receives + b.receives,
   };
@@ -174,10 +175,13 @@ function productionFromBox(
     const sp = tally.get(id)!.spikes;
     for (let k = 0; k < sp; k++) if (backRng.next() < BACK_ATK_RATE) bump(id, (l) => { l.backSpikes++; });
   }
-  // 출전(matches) — 통계가 아니라 참여 집계라 기존 로직 유지(선발 항상·벤치는 가비지·작전교체 코트타임)
-  for (const p of [...H.starters, ...A.starters]) bump(p.id, (l) => { l.matches++; });
-  if (gp > 0) for (const p of [...H.bench, ...A.bench]) bump(p.id, (l) => { l.matches++; });
-  if (sim.subUse) for (const id in sim.subUse) bump(id, (l) => { l.matches += Math.min(1, sim.subUse![id] / 40); });
+  // 출전(matches, 분수) — 통계가 아니라 참여 집계라 기존 로직 유지(선발 항상·벤치는 가비지·작전교체 코트타임). XP·연봉·팬심·시상에 물림.
+  // 출전 경기수(gamesPlayed, 정수 GP) — 어떤 출전이든 1(중복 없음). 표시 전용, matches와 독립(UI-46 정정).
+  const appeared = new Set<string>();
+  for (const p of [...H.starters, ...A.starters]) { bump(p.id, (l) => { l.matches++; }); appeared.add(p.id); }
+  if (gp > 0) for (const p of [...H.bench, ...A.bench]) { bump(p.id, (l) => { l.matches++; }); appeared.add(p.id); }
+  if (sim.subUse) for (const id in sim.subUse) { bump(id, (l) => { l.matches += Math.min(1, sim.subUse![id] / 40); }); appeared.add(id); }
+  for (const id of appeared) bump(id, (l) => { l.gamesPlayed = 1; }); // 이 경기 1회 출전(merge가 시즌 합산)
   return tally;
 }
 
@@ -259,14 +263,16 @@ export function attributeProduction(
     // else: 상대 범실 — 무귀속
   });
 
-  // 출전: 선발은 항상, 벤치는 가비지타임 있었을 때
-  for (const p of [...H.starters, ...A.starters]) bump(p.id, (l) => { l.matches++; });
-  if (gp > 0) for (const p of [...H.bench, ...A.bench]) bump(p.id, (l) => { l.matches++; });
+  // 출전(matches, 분수): 선발은 항상, 벤치는 가비지타임 있었을 때. gamesPlayed(정수 GP)는 어떤 출전이든 1(중복 없음, 표시 전용).
+  const appeared = new Set<string>();
+  for (const p of [...H.starters, ...A.starters]) { bump(p.id, (l) => { l.matches++; }); appeared.add(p.id); }
+  if (gp > 0) for (const p of [...H.bench, ...A.bench]) { bump(p.id, (l) => { l.matches++; }); appeared.add(p.id); }
 
   // 작전 교체 출전(핀치 서버·블로킹·수비 교체) → 코트타임 비례 경험 XP(1.3c). 풀세트≈한 경기.
   if (sim.subUse) {
-    for (const id in sim.subUse) bump(id, (l) => { l.matches += Math.min(1, sim.subUse![id] / 40); });
+    for (const id in sim.subUse) { bump(id, (l) => { l.matches += Math.min(1, sim.subUse![id] / 40); }); appeared.add(id); }
   }
+  for (const id of appeared) bump(id, (l) => { l.gamesPlayed = 1; }); // 이 경기 1회 출전(merge가 시즌 합산)
 
   return tally;
 }

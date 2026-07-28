@@ -55,11 +55,11 @@ const SAMPLES: { title: string; props: Omit<AwardPosterProps, 'template'> }[] = 
 // ── 기록왕 수여 UX 3안 프로토타입 공통 샘플 (AWARDS_SYSTEM §8.1, 2026-07-23) — 이 화면 전용 목업(운영 미노출) ──
 // 다관왕 시연: 마리아 산토스(OP·t5)가 득점·공격·서브 3부문 석권(3관왕). 나머지 4부문은 각기 다른 선수·팀·엠블럼.
 const SL_PROD: Record<string, ProdLine> = {
-  maria:      { matches: 36, points: 842, spikes: 712, backSpikes: 120, blocks: 48, aces: 38, assists: 12,   digs: 90,  receives: 20 },
-  hanjiu:     { matches: 36, points: 520, spikes: 360, backSpikes: 0,   blocks: 96, aces: 22, assists: 8,    digs: 70,  receives: 15 },
-  osera:      { matches: 36, points: 5,   spikes: 0,   backSpikes: 0,   blocks: 2,  aces: 4,  assists: 40,   digs: 421, receives: 540 },
-  kimhaneul:  { matches: 36, points: 60,  spikes: 18,  backSpikes: 0,   blocks: 20, aces: 24, assists: 1288, digs: 190, receives: 55 },
-  munseoyeon: { matches: 36, points: 480, spikes: 400, backSpikes: 40,  blocks: 30, aces: 28, assists: 10,   digs: 240, receives: 612 },
+  maria:      { matches: 36, gamesPlayed: 36, points: 842, spikes: 712, backSpikes: 120, blocks: 48, aces: 38, assists: 12,   digs: 90,  receives: 20 },
+  hanjiu:     { matches: 36, gamesPlayed: 36, points: 520, spikes: 360, backSpikes: 0,   blocks: 96, aces: 22, assists: 8,    digs: 70,  receives: 15 },
+  osera:      { matches: 36, gamesPlayed: 36, points: 5,   spikes: 0,   backSpikes: 0,   blocks: 2,  aces: 4,  assists: 40,   digs: 421, receives: 540 },
+  kimhaneul:  { matches: 36, gamesPlayed: 36, points: 60,  spikes: 18,  backSpikes: 0,   blocks: 20, aces: 24, assists: 1288, digs: 190, receives: 55 },
+  munseoyeon: { matches: 36, gamesPlayed: 36, points: 480, spikes: 400, backSpikes: 40,  blocks: 30, aces: 28, assists: 10,   digs: 240, receives: 612 },
 };
 
 // 부문별 목업 수상자 — 부문 메타(한글·영문·field·단위·부문왕)는 셀렉터 STAT_LEADER_META 단일 출처 사용(하드코딩 승격).

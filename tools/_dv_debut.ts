@@ -24,7 +24,7 @@ ok(rookie.debut != null && rookie.debut.ovr === Math.round(displayOvr(overallRaw
 ok(rookie.debut != null && TRAINABLE_STATS.every((k) => rookie.debut!.stats[k] === raw(rookie, k)), 'debut.stats = 생성 시점 15 원본 전부');
 
 console.log('── 2. 전 변환이 debut 보존(스프레드 통과) ──');
-const prod: ProdLine = { matches: 30, points: 300, spikes: 200, backSpikes: 30, blocks: 20, aces: 15, digs: 40, assists: 5, receives: 60 };
+const prod: ProdLine = { matches: 30, gamesPlayed: 30, points: 300, spikes: 200, backSpikes: 30, blocks: 20, aces: 15, digs: 40, assists: 5, receives: 60 };
 let grown = evolvePlayer(rookie, focus, 300); // 300일 성장+노쇠
 ok(JSON.stringify(grown.debut) === JSON.stringify(rookie.debut), 'evolvePlayer 후 debut 불변');
 grown = applyMatchXp(grown, prod);

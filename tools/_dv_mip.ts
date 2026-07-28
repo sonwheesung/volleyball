@@ -38,7 +38,7 @@ function oracleViolations(f: WinnerFacts): string[] {
 // 합성 입력 빌더 (engine/awards.test.ts build() 축약 재현)
 // ─────────────────────────────────────────────────────────────────────
 const L = (o: Partial<ProdLine>): ProdLine =>
-  ({ matches: 1, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0, ...o });
+  ({ matches: 1, gamesPlayed: 1, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0, ...o });
 const P = (pos: Position): Player => ({
   id: '', name: '', age: 25, position: pos, isForeign: false, height: 180,
   jump: 60, agility: 60, staminaMax: 60, staminaRegen: 60, reaction: 60, positioning: 60, focus: 60, consistency: 60, vq: 60,
