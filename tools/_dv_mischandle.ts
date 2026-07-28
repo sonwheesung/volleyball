@@ -1,7 +1,11 @@
-// INDEPENDENT — miscErr(볼핸들링 범실) 보드 연출이 spike를 그리는지 측정(사용자 보고 2026-06-21).
+// INDEPENDENT — miscErr(볼핸들링 범실) 보드 연출 검사(사용자 보고 2026-06-21·2026-07-28).
 //   핸들링 범실 = 세트 더블컨택·캐치·네트터치(세트 반칙) → 스파이크가 없어야 한다.
 //   ballPath 세그먼트에 'spike'가 끼면 버그(엔진은 공격 전에 종료, 보드만 spike 합성).
-//   A/B: kill 랠리는 spike가 *있어야* (검사 신뢰). Usage: npx tsx tools/_dv_mischandle.ts [경기=30]
+//   (2026-07-28 사각 봉인) 스파이크 없음만 봐선 **공이 세터에게 죽는(자기 토스처럼 보이는)** 재발을 못 잡았다
+//   (사용자 재보고). 그래서 두 번째 불변식 추가: **종결 fault 직전 WP는 `toss`여야** 한다 — 세터가 공격수에게
+//   올리려다(toss) 반칙낸 것으로 보여야지, 토스 없이(=자기 자리 passSpot) 그냥 죽으면 안 된다. 구 417경로(passSpot
+//   즉사 return)는 toss가 없어 이 검사에 걸린다(수정 전 A/B로 FAIL 재현).
+//   A/B: kill 랠리는 spike가 *있어야* + toss가 *있어야* (검사 신뢰). Usage: npx tsx tools/_dv_mischandle.ts [경기=30]
 import { resetLeagueBase, getEvolvedTeamPlayers, coachInfoOf, LEAGUE } from '../data/league';
 import { buildLineup } from '../engine/lineup';
 import { simulateMatch } from '../engine/match';
@@ -14,7 +18,7 @@ const N = Math.max(1, Number(process.argv[2]) || 30);
 resetLeagueBase();
 const teams = LEAGUE.teams.map((t) => t.id);
 
-let miscErr = 0, miscErrSpike = 0, kill = 0, killSpike = 0;
+let miscErr = 0, miscErrSpike = 0, miscErrNoToss = 0, kill = 0, killSpike = 0, killToss = 0;
 for (let m = 0; m < N; m++) {
   const hId = teams[m % teams.length], aId = teams[(m + 1) % teams.length];
   const hPs = getEvolvedTeamPlayers(hId, 0), aPs = getEvolvedTeamPlayers(aId, 0);
@@ -29,13 +33,19 @@ for (let m = 0; m < N; m++) {
     let termIdx = -1;
     for (let k = path.length - 1; k >= 0; k--) { if (path[k].kind === 'fault') { termIdx = k; break; } }
     const beforeTerm = termIdx > 0 ? path[termIdx - 1].kind : null;
-    if (r.how === 'miscErr') { miscErr++; if (beforeTerm === 'spike') miscErrSpike++; }
-    if (r.how === 'kill') { kill++; if (path.some((p) => p.kind === 'spike')) killSpike++; }
+    if (r.how === 'miscErr') {
+      miscErr++;
+      if (beforeTerm === 'spike') miscErrSpike++;
+      if (beforeTerm !== 'toss') miscErrNoToss++; // 종결 fault 직전이 toss가 아니면 = 세터가 안 올리고 죽음(자기토스처럼 보임)
+    }
+    if (r.how === 'kill') { kill++; if (path.some((p) => p.kind === 'spike')) killSpike++; if (path.some((p) => p.kind === 'toss')) killToss++; }
   }
 }
-log('═══ miscErr(핸들링 범실) 보드 연출 — spike 여부 ═══');
-log(`핸들링 범실 랠리 ${miscErr}건 중 spike 그린 것 **${miscErrSpike}건** (0이어야 — 세트 반칙엔 스파이크 없음)`);
-log(`[A/B] kill 랠리 ${kill}건 중 spike ${killSpike}건 (kill은 100% spike여야 = 검사 신뢰)`);
-const ok = miscErrSpike === 0 && kill > 0 && killSpike === kill;
+log('═══ miscErr(핸들링 범실) 보드 연출 검사 ═══');
+log(`핸들링 범실 랠리 ${miscErr}건`);
+log(`  · spike 그린 것 **${miscErrSpike}건** (0이어야 — 세트 반칙엔 스파이크 없음)`);
+log(`  · 종결 직전이 toss 아님 **${miscErrNoToss}건** (0이어야 — 세터가 공격수에게 올리려다 반칙, 자기 자리서 죽으면 안 됨)`);
+log(`[A/B] kill ${kill}건 중 spike ${killSpike}건·toss ${killToss}건 (둘 다 100%여야 = spike/toss 검출 신뢰)`);
+const ok = miscErrSpike === 0 && miscErrNoToss === 0 && kill > 0 && killSpike === kill && killToss === kill;
 log(`\nMISCHANDLE OK = ${ok}`);
 process.exit(ok ? 0 : 2);

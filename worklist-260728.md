@@ -47,7 +47,7 @@
 - ✅ **12+13** 종료 후 흐름 — `match/[id].tsx` finished 나가기 → `matchresult?from=watch`(MVP+박스) → "홈으로(뉴스 보기)"
 - ✅ **3** 상대 라인업 — 일정 카드 "상대 라인업 보기" → 예상 선발6+리베로 모달(buildLineup 순수, 시뮬 무실행=무스포일러) → 선수 탭 상세
 - 검증: tsc 0 · test tsc 0 · npm test 218 pass · 골든 v17 불변 · auditBoard 0건 · _dv_mischandle pass
-- ⏳ **10** 자기 토스 — courtPath miscErr 2경로 정독 후 재현/수정 (진행 예정)
+- ✅ **10** 자기 토스 재발 — 원인=417행 조기 return(passSpot 즉사)이 룰19 toss낙구(615행) 가림. 수정=417 제거+615 무조건발화. 가드 `_dv_mischandle`에 긍정불변식(종결 전 toss) 추가, **A/B 205/205 FAIL→0**. 골든 불변·auditBoard 0·checkBoardFixes·_dv_cover pass. 문서: BOARD_RULES 룰19b·TEST_METHODOLOGY 사각
 - ⏸ **8**(세터 성향)·💬 **5**(개발자노트)·📣 **1·2**(에셋/정보) — 아래 별도
 
 ### 실행 계획 (확정)

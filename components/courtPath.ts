@@ -411,20 +411,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     lastWasFree = false;
 
     // ── 볼핸들링 범실(세트 더블컨택·캐치·네트터치) — 세터가 토스를 처리하다 반칙 ──
-    // 이 hop의 공격팀이 종결 반칙팀(finalAtt)이면 **스파이크 없이** 토스(세트)에서 끝낸다.
-    // 공은 att 진영(세터 근처)에서 죽고 other(att)=r.scorer 득점. (구버전은 special-case가 없어
-    // 일반 공격 경로로 떨어져 핸들링 범실인데 스파이크를 그렸다 — 2026-06-21 사용자 보고.)
-    if (r.how === 'miscErr' && att === finalAtt) {
-      // 세터(tosserIdx)가 패스 처리 중 더블컨택/캐치 — 공이 손에서 짧게 튀어 그 자리(att 진영)에 죽는다.
-      // 명백한 반칙이라 즉시 휘슬 → 추격 없음(mover 없음, idx -1: 다른 fault들과 동일). 공은 passSpot 근처.
-      const dead = {
-        x: clampN(passSpot.x + rng.range(-0.05, 0.05) * W, 0.1 * W, 0.9 * W),
-        y: clampN(passSpot.y + rng.range(-0.03, 0.03) * H,
-          att === 'home' ? NETY + 14 : 0.06 * H, att === 'home' ? 0.94 * H : NETY - 14),
-      };
-      wp.push({ x: dead.x, y: dead.y, side: att, idx: -1, kind: 'fault', hold: true });
-      return withBounce(wp, W, H);
-    }
+    //   연출: **공은 공격수(히터) 쪽으로 올라가다(toss) 휘슬로 죽는다** — 아래 공격 경로로 진입해 toss WP까지 만든 뒤
+    //   스파이크 직전에 낙구시킨다(§615 miscErr 분기). 세터 자리(passSpot)에 그냥 죽이면 "토스도 안 하고 범실·자기
+    //   토스"로 보인다(2026-06-18 룰19 의도 → 구 417 즉사 return이 이를 가려 재발, 2026-07-28 사용자 재보고 봉인).
+    //   스파이크 미표시(엔진은 공격 전 종료)는 §615가 **무조건**(반칙팀 100%) 보장 — 구 확률게이트가 30% 스파이크
+    //   누수시킨 게 애초 417을 부른 원인이라, 게이트를 없애 스파이크 0 + toss 낙구를 동시 달성. 가드 `_dv_mischandle`.
 
     // ── 공격 종류 선택 (엔진 분포 근사: 속공 ~12%·시간차 ~7%·백어택 ~18%·오픈 나머지) ──
     const lu = att === 'home' ? L.home : L.away;
@@ -611,8 +602,9 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
 
     // 볼핸들링 범실(사실): 세터의 세트가 더블컨택/들어올림 — 휘슬. 공이 (자기에게가 아니라) 공격수
     // 쪽으로 올라가던 중 죽는다. 위 toss WP가 firstTouch·커버를 올바로 잡으므로(M 안전) 여기서 스파이크
-    // 대신 낙구만 — 공은 타점 부근에 뚝 떨어진다.
-    if (r.how === 'miscErr' && att === other(r.scorer) && (hop >= 2 || rng.next() < 0.7)) {
+    // 대신 낙구만 — 공은 타점 부근에 뚝 떨어진다. **반칙팀이면 무조건**(2026-07-28): 구 확률게이트(hop<2에서 30%)가
+    // 스파이크를 누수시켜 417 즉사 return을 부른 뿌리 — 게이트 제거로 스파이크 0 + toss 낙구를 100% 보장(가드 _dv_mischandle).
+    if (r.how === 'miscErr' && att === finalAtt) {
       wp.push({ x: clampN(hit.x + rng.range(-10, 10), 12, W - 12), y: hit.y + (att === 'home' ? 14 : -14), side: att, idx: -1, kind: 'fault', soft: true });
       return withBounce(wp, W, H);
     }
