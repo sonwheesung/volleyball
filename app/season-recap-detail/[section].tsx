@@ -270,6 +270,8 @@ function StoryDetail({
         <Row><Muted>굿즈 수입</Muted><Text style={styles.fin}>{formatMoney(fin.merch)}</Text></Row>
         <Row><Muted>인건비</Muted><Text style={[styles.fin, { color: theme.bad }]}>-{formatMoney(fin.payroll)}</Text></Row>
         <Row><Muted>스태프 급여</Muted><Text style={[styles.fin, { color: theme.bad }]}>-{formatMoney(fin.staff)}</Text></Row>
+        {/* 구단 운영비(OPERATING_COST) — expense = payroll+staff+운영비. 순익에 반영되므로 표시도 필수(fin에서 파생해 산식 변경에도 정합). */}
+        <Row><Muted>구단 운영비</Muted><Text style={[styles.fin, { color: theme.bad }]}>-{formatMoney(fin.expense - fin.payroll - fin.staff)}</Text></Row>
         {fin.bailout ? <Muted style={{ fontSize: 12, color: theme.warn, marginTop: 4 }}>⚠ 잔고 바닥. 모기업 적자 보전 발생</Muted> : null}
         <View style={styles.finDivider} />
         <Row><Text style={styles.finNetLabel}>순익</Text><Text style={[styles.finNet, { color: fin.net >= 0 ? theme.good : theme.bad }]}>{fin.net >= 0 ? '+' : ''}{formatMoneyShort(fin.net)}</Text></Row>
