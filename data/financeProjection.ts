@@ -5,7 +5,7 @@
 // endSeason 의 settleSeason 입력과 동일하게 계산(같은 셀렉터·같은 day 기준) → 미리보기=결과.
 
 import type { SeasonAwards } from '../types';
-import { settleSeason, applyNet, stanceCashBonus } from '../engine/finance';
+import { settleSeason, applyNet, stanceCashBonus, type SeasonFinance } from '../engine/finance';
 import { upcomingStanceOf } from './leagueHistory';
 import { computeStandings } from './standings';
 import { buildPlayoffs } from './playoffs';
@@ -16,14 +16,16 @@ import { SEASON_DAYS } from '../engine/calendar';
 
 const SEASON_END_DAY = SEASON_DAYS;
 
-/** 이번 시즌 정산 후 운영 자금(= cash + 이번 시즌 net, 모기업 보전 floor 0). FA 영입 지갑의 정확한 기준. */
-export function projectSettledCash(
+/** 이번(끝난) 시즌 전체 정산 내역 투영 — endSeason의 `nextFinance`와 동일 도출(preview=result).
+ *  시즌 결산 상세의 "시즌 정산" 표시용(store.lastFinance는 *직전* 시즌 값이라, 결산 화면엔 이 투영을 쓴다).
+ *  ※ coachRep 미포함 = FA `projectSettledCash`와 동일 근사(관중 소폭 가산만 제외, 표시 무영향 수준). */
+export function projectSeasonFinance(
   my: string,
   season: number,
   cash: number,
   fanScore: number,
   archive: { season: number; awards?: SeasonAwards }[],
-): number {
+): SeasonFinance {
   const standings = computeStandings(Number.MAX_SAFE_INTEGER);
   const myRow = standings.find((r) => r.teamId === my);
   const winRate = myRow ? myRow.wins / Math.max(1, myRow.wins + myRow.losses) : 0.5;
@@ -39,6 +41,18 @@ export function projectSettledCash(
     winRate, fan: fanScore, fanTotal: fb.total, playerFansTotal: fb.playerFansTotal,
     payroll, staff: staffSpend(my), cashBefore: cash,
   });
+  return { ...finance, bailout: applyNet(cash, finance.net).bailout }; // endSeason nextFinance와 동일(bailout은 applyNet 재도출)
+}
+
+/** 이번 시즌 정산 후 운영 자금(= cash + 이번 시즌 net, 모기업 보전 floor 0). FA 영입 지갑의 정확한 기준. */
+export function projectSettledCash(
+  my: string,
+  season: number,
+  cash: number,
+  fanScore: number,
+  archive: { season: number; awards?: SeasonAwards }[],
+): number {
+  const finance = projectSeasonFinance(my, season, cash, fanScore, archive);
   // 모기업 aggressive 1회성 현금 보너스(FINANCE 2.0 Stage4) — endSeason 지갑과 동일 도출(preview=result).
   return applyNet(cash, finance.net).cash + stanceCashBonus(upcomingStanceOf(my, season));
 }

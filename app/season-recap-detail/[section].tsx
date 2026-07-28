@@ -13,6 +13,7 @@ import { seasonSnapshot } from '../../data/records';
 import { fmtMatches } from '../../data/recordLine';
 import { computeStandings, displayCutoff, seasonStreaks } from '../../data/standings';
 import { leagueProduction } from '../../data/production';
+import { projectSeasonFinance } from '../../data/financeProjection';
 import { getPlayer, getTeam, shortTeamName as short, reconstructForeignName } from '../../data/league';
 import { TITLE_LABELS, TITLE_UNITS, IMPACT_LABEL, IMPROVE_LABEL } from '../../data/awards'; // 부문 기록상 라벨·단위·개인상 기준 라벨 단일 출처(2026-07-15 · §10)
 import { rosterIdsOnDay } from '../../data/dynamics';
@@ -58,7 +59,6 @@ function DetailInner({ section, title }: { section: Section; title: string }) {
   const archive = useGameStore((s) => s.archive);
   const fanScore = useGameStore((s) => s.fanScore);
   const cash = useGameStore((s) => s.cash);
-  const lastFinance = useGameStore((s) => s.lastFinance);
   const milestones = useGameStore((s) => s.milestones);
   const overrides = useGameStore((s) => s.contractOverrides);
   const released = useGameStore((s) => s.released);
@@ -82,7 +82,7 @@ function DetailInner({ section, title }: { section: Section; title: string }) {
       ) : section === 'story' ? (
         <StoryDetail
           my={my} day={day} championId={championId} fanScore={fanScore} cash={cash}
-          lastFinance={lastFinance} milestones={milestones} season={season} pName={pName}
+          archive={archive} milestones={milestones} season={season} pName={pName}
         />
       ) : (
         <TasksDetail my={my} day={day} overrides={overrides} released={released} pPos={pPos} />
@@ -210,14 +210,16 @@ function SquadDetail({
 
 // ─── story · 최종 순위·연승·재정·주요 사건 ─────────────────────────────────
 function StoryDetail({
-  my, day, championId, fanScore, cash, lastFinance, milestones, season, pName,
+  my, day, championId, fanScore, cash, archive, milestones, season, pName,
 }: {
   my: string; day: number; championId: string | null; fanScore: number; cash: number;
-  lastFinance: ReturnType<typeof useGameStore.getState>['lastFinance'];
+  archive: ReturnType<typeof useGameStore.getState>['archive'];
   milestones: ReturnType<typeof useGameStore.getState>['milestones']; season: number; pName: (id: string) => string;
 }) {
   const standings = useMemo(() => computeStandings(day), [day]);
   const streak = useMemo(() => seasonStreaks(day)[my] ?? [0, 0], [day, my]);
+  // 재정 결산 — store.lastFinance는 *직전* 시즌 값이라(정산은 롤오버=endSeason에서 일어남), 결산 화면엔 **이번(끝난) 시즌을 투영**해 쓴다(FA와 동일 경로).
+  const fin = useMemo(() => projectSeasonFinance(my, season, cash, fanScore, archive), [my, season, cash, fanScore, archive]);
   const events = useMemo(
     () => milestones.filter((m) => m.season === season && m.teamId === my),
     [milestones, season, my],
@@ -259,24 +261,19 @@ function StoryDetail({
         <Row><Muted>운영 자금</Muted><Text style={styles.fin}>{formatMoney(cash)}</Text></Row>
       </Card>
 
-      {/* 재정 상세(직전 정산) */}
-      {lastFinance ? (
-        <>
-          <IconLabel icon="cash-outline" color={theme.good}>전 시즌 정산</IconLabel>
-          <Card accent={theme.good} flat>
-            <Row><Muted>모기업 후원</Muted><Text style={styles.fin}>{formatMoney(lastFinance.sponsor)}</Text></Row>
-            {lastFinance.bonus > 0 ? <Row><Muted>성적 보너스</Muted><Text style={styles.fin}>{formatMoney(lastFinance.bonus)}</Text></Row> : null}
-            <Row><Muted>입장 수입</Muted><Text style={styles.fin}>{formatMoney(lastFinance.gate)}</Text></Row>
-            <Row><Muted>굿즈 수입</Muted><Text style={styles.fin}>{formatMoney(lastFinance.merch)}</Text></Row>
-            <Row><Muted>인건비</Muted><Text style={[styles.fin, { color: theme.bad }]}>-{formatMoney(lastFinance.payroll)}</Text></Row>
-            <Row><Muted>스태프 급여</Muted><Text style={[styles.fin, { color: theme.bad }]}>-{formatMoney(lastFinance.staff)}</Text></Row>
-            <View style={styles.finDivider} />
-            <Row><Text style={styles.finNetLabel}>순익</Text><Text style={[styles.finNet, { color: lastFinance.net >= 0 ? theme.good : theme.bad }]}>{lastFinance.net >= 0 ? '+' : ''}{formatMoneyShort(lastFinance.net)}</Text></Row>
-            <Row><Muted>평균 관중</Muted><Text style={styles.fin}>{lastFinance.attendance.toLocaleString()}명</Text></Row>
-            {lastFinance.bailout ? <Muted style={{ fontSize: 12, color: theme.warn, marginTop: 4 }}>⚠ 잔고 바닥. 모기업 적자 보전 발생</Muted> : null}
-          </Card>
-        </>
-      ) : null}
+      {/* 재정 상세(이번 시즌 정산 — projectSeasonFinance 투영, §7.8). 순익이 맨 아래(수입−지출의 결과) */}
+      <IconLabel icon="cash-outline" color={theme.good}>시즌 정산</IconLabel>
+      <Card accent={theme.good} flat>
+        <Row><Muted>모기업 후원</Muted><Text style={styles.fin}>{formatMoney(fin.sponsor)}</Text></Row>
+        {fin.bonus > 0 ? <Row><Muted>성적 보너스</Muted><Text style={styles.fin}>{formatMoney(fin.bonus)}</Text></Row> : null}
+        <Row><Muted>입장 수입 <Text style={styles.finSub}>(평균 {fin.attendance.toLocaleString()}명)</Text></Muted><Text style={styles.fin}>{formatMoney(fin.gate)}</Text></Row>
+        <Row><Muted>굿즈 수입</Muted><Text style={styles.fin}>{formatMoney(fin.merch)}</Text></Row>
+        <Row><Muted>인건비</Muted><Text style={[styles.fin, { color: theme.bad }]}>-{formatMoney(fin.payroll)}</Text></Row>
+        <Row><Muted>스태프 급여</Muted><Text style={[styles.fin, { color: theme.bad }]}>-{formatMoney(fin.staff)}</Text></Row>
+        {fin.bailout ? <Muted style={{ fontSize: 12, color: theme.warn, marginTop: 4 }}>⚠ 잔고 바닥. 모기업 적자 보전 발생</Muted> : null}
+        <View style={styles.finDivider} />
+        <Row><Text style={styles.finNetLabel}>순익</Text><Text style={[styles.finNet, { color: fin.net >= 0 ? theme.good : theme.bad }]}>{fin.net >= 0 ? '+' : ''}{formatMoneyShort(fin.net)}</Text></Row>
+      </Card>
 
       {/* 주요 사건 — 이번 시즌 우리 팀 마일스톤(실데이터, 없으면 생략) */}
       {events.length > 0 ? (
@@ -372,6 +369,7 @@ const styles = themedStyles(() => StyleSheet.create({
   stWin: { color: theme.good, fontWeight: '800' },
 
   fin: { color: theme.text, fontWeight: '800', fontSize: 15 },
+  finSub: { color: theme.muted, fontWeight: '600', fontSize: 12 },
   finDivider: { height: StyleSheet.hairlineWidth, backgroundColor: theme.border, marginVertical: 6 },
   finNetLabel: { color: theme.text, fontWeight: '800', fontSize: 15 },
   finNet: { fontWeight: '900', fontSize: 16 },

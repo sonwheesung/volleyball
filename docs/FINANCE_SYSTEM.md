@@ -126,6 +126,8 @@
   그리고 **홈과 시점이 다름을 상시 짧은 문구로 명시**("이번 시즌이 끝나면 기존 선수단 연봉이 빠진 뒤 FA에 쓸 수 있는 예상 금액…홈의 '운영 자금'(현재 잔고)과는 시점이 달라요"). 모달 금지(iOS 레이스 #129) — 펼침/툴팁 아닌 상시 노출.
 - **불변**: `projectSettledCash`·`settleSeason`·게이트 산식·`budgetCash − signedCost − compCash` 계산은 그대로. **오직 JSX 표시·문구**로 "왜 0인지"를 드러낸다.
 
+- **시즌 결산 "시즌 정산" 표시(`app/season-recap-detail` story, 2026-07-28 테스터)**: 결산은 롤오버(`endSeason`)에서 일어나므로, 결산 화면을 볼 때 `store.lastFinance`는 **직전(전전) 시즌** 값이다 → 결산에 "전 시즌 정산"으로 다른 시즌 숫자가 떴다. **수정**: 결산 상세는 `store.lastFinance` 대신 **`projectSeasonFinance(...)`(`data/financeProjection.ts` 신설)로 *이번(끝난) 시즌*을 투영**해 표시하고 라벨을 **"시즌 정산"**으로. `projectSeasonFinance`는 `projectSettledCash`가 내부에서 쓰던 `settleSeason` 계산을 추출한 것(= endSeason `nextFinance`와 동일 도출, preview=result). `projectSettledCash`는 이제 이 함수를 재호출(출력 불변 — 스텐스/캡압박 가드 불변). **표시 순서**: 수입(모기업·성적보너스·**입장 수입=평균 관중 X명 병기**·굿즈) → 지출(인건비·스태프) → 구분선 → **순익(맨 아래, 수입−지출 결과)**. ~~평균 관중이 순익 아래~~ → 입장 수입에 병기(관중이 곧 입장 수입임을 명시). ※ coachRep 미포함 근사(FA와 동일, 관중 소폭 가산만 제외).
+
 ## 4. 루프 (의도된 드라마)
 
 성적↓ → 직관↓·보너스↓ → 잔고↓ → 캡이 남아도 영입 불가 → 리빌딩은 드래프트(공짜)로
