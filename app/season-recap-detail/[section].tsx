@@ -180,7 +180,7 @@ function SquadDetail({
   const rows = useMemo(() => {
     const prod = leagueProduction(day);
     const ids = rosterIdsOnDay(my, day);
-    const zero: ProdLine = { matches: 0, gamesPlayed: 0, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0 };
+    const zero: ProdLine = { matches: 0, gamesPlayed: 0, sets: 0, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0 };
     return ids.map((id) => ({ id, l: prod.get(id) ?? zero }))
       // 생산 많은 순 → 무기록(0점)은 뒤로. 동점은 경기수.
       .sort((a, b) => b.l.points - a.l.points || b.l.matches - a.l.matches);
@@ -334,7 +334,7 @@ function TasksDetail({
   );
 }
 
-const prodLine = (l: ProdLine) => `${fmtMatches(l.gamesPlayed)}경기 · 스${l.spikes}·블${l.blocks}·서${l.aces}`
+const prodLine = (l: ProdLine) => `${fmtMatches(l.gamesPlayed)}경기${l.sets > 0 ? ` · ${l.sets}세트` : ''} · 스${l.spikes}·블${l.blocks}·서${l.aces}`
   + (l.assists > 0 ? ` · 세${l.assists}` : '') + (l.digs > 0 ? ` · 디${l.digs}` : '');
 
 const styles = themedStyles(() => StyleSheet.create({

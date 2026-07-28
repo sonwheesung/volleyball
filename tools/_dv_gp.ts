@@ -14,9 +14,10 @@
 // 실행: npx tsx tools/_dv_gp.ts ; echo $?
 
 import { simulateMatchSimple, type SimResult, type PointLog } from '../engine/simMatch';
+import { simulateMatch } from '../engine/match';
 import { attributeProduction, splitLineup } from '../engine/production';
 import { teamOverall } from '../engine/overall';
-import { LEAGUE } from '../data/league';
+import { LEAGUE, getEvolvedTeamPlayers, coachInfoOf, resetLeagueBase } from '../data/league';
 import type { Player } from '../types';
 
 let fail = 0;
@@ -66,6 +67,52 @@ else {
     else console.log(`  ✅ 독립 확인: gamesPlayed=${l.gamesPlayed}(정수) · matches=${l.matches}(분수) — 뮤턴트(gamesPlayed=matches)면 정수검사 FAIL`);
   }
 }
+
+// ── D. 출전 세트수(SimResult.setUse → ProdLine.sets) 불변식 (full simulateMatch, seed 1..400) ──
+//   진실 원천은 실제 코트 출전(setUse)이지 splitLineup이 아니다(둘은 리베로 선정 등에서 발산 — 이 코드 발견 2026-07-28).
+//   D1. setUse 정수·1≤s≤nSets. D2(A/B 핵심): 클린 경기서 **전세트 출전자(sets==nSets) ≥6/팀**(코트 6인) +
+//   **리베로 포지션 중 전세트 출전 ≥1**(리베로는 매 세트 코트). 뮤턴트(libero capture 누락→0 / 이중집계→>nSets)면 FAIL.
+//   D3. attributeProduction: sets==setUse & gamesPlayed==(setUse>0?1:0) — 배선·단일진실 정합.
+console.log('── D. 출전 세트수 setUse 불변식 · 전세트 출전 ≥6/팀+리베로 A/B (seed 1..400) ──');
+resetLeagueBase();
+const ids = LEAGUE.teams.map((t) => t.id);
+const sq: Record<string, Player[]> = {};
+for (const id of ids) sq[id] = getEvolvedTeamPlayers(id, 0) as Player[];
+let dChecked = 0, cleanTeams = 0, subPartial = 0;
+for (let seed = 1; seed <= 400; seed++) {
+  const a = ids[seed % ids.length], b = ids[(seed * 3 + 1) % ids.length];
+  if (a === b) continue;
+  const sim = simulateMatch(seed, sq[a], sq[b], { home: coachInfoOf(a), away: coachInfoOf(b) });
+  const nSets = sim.homeSets + sim.awaySets;
+  const setUse = sim.setUse ?? {};
+  // D1: 정수·범위
+  for (const id in setUse) {
+    dChecked++;
+    const s = setUse[id];
+    if (!Number.isInteger(s)) bad(`D1 sets 비정수 ${id} seed ${seed}: ${s}`);
+    if (s < 1 || s > nSets) bad(`D1 sets 범위(1..${nSets}) 위반 ${id} seed ${seed}: ${s}`);
+    if (s > 0 && s < nSets) subPartial++; // 부분 출전(교체) 관측
+  }
+  // D2: 클린 경기(부상 교체 없음) → 팀별 전세트 출전자 ≥6(코트 6인) + 리베로 전세트 출전 ≥1
+  const hasInjury = sim.subEvents?.some((e) => e.kind === 'injury');
+  if (!hasInjury) {
+    for (const team of [a, b]) {
+      cleanTeams++;
+      const roster = sq[team];
+      const allSets = roster.filter((p) => (setUse[p.id] ?? 0) === nSets).length;
+      if (allSets < 6) bad(`D2 팀 ${team} 전세트 출전자 ${allSets}<6 (six 코트 capture 누락 의심) seed ${seed} nSets=${nSets}`);
+      if (!roster.some((p) => p.position === 'L' && (setUse[p.id] ?? 0) === nSets)) bad(`D2 팀 ${team} 리베로 전세트 출전 0 (libero capture 누락) seed ${seed}`);
+    }
+  }
+  // D3: 배선 — attributeProduction의 sets==setUse & gamesPlayed==1(setUse 존재 선수)
+  const prod = attributeProduction(sim, sq[a], sq[b], seed);
+  for (const id in setUse) {
+    if ((prod.get(id)?.sets ?? -1) !== setUse[id]) bad(`D3 prod.sets≠setUse ${id} seed ${seed}: ${prod.get(id)?.sets} vs ${setUse[id]}`);
+    if ((prod.get(id)?.gamesPlayed ?? -1) !== 1) bad(`D3 setUse 존재 선수 gamesPlayed≠1 ${id} seed ${seed}: ${prod.get(id)?.gamesPlayed}`);
+  }
+}
+console.log(`  세트수 검사 ${dChecked}개 · 클린 팀 대조 ${cleanTeams}개 · 부분출전(교체) 관측 ${subPartial}개`);
+if (subPartial === 0) bad('D: 부분 출전(1≤sets<nSets) 관측 0 — 교체 경로가 세트수에 안 잡히는 의심(A/B 민감도 부족)');
 
 console.log(fail === 0 ? '\n✅ _dv_gp PASS — 위반 0건' : `\n❌ _dv_gp FAIL — ${fail}건`);
 process.exit(fail === 0 ? 0 : 1);

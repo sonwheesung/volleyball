@@ -124,7 +124,7 @@ marketValue = BASE × abilityMul × serviceFactor(age) × POSITION_MUL × foreig
 - `ProdLine = { matches, gamesPlayed, points, spikes, blocks, aces, assists, digs, … }`
   - **`matches`(분수) = 코트타임 가중 "참여량"** — 작전/피로 교체를 `subUse/40`로 분수 적립. **밸런스 결합값**: XP(`experience.ts` VQ·위치선정)·연봉(`salary.ts`)·팬심(`owner.ts` playRatio)·시상 자격(`awards.ts`)이 이걸 읽는다. **화면 표시 금지**(소수 노출 — UI-46 정정).
   - **`gamesPlayed`(정수 GP) = 출전 경기수** — 어떤 출전이든 1(선발·가비지벤치·교체, 중복 없음). **화면 표시 전용**(코보식 정수), `matches`와 독립. `career.matches`·`SeasonLine.matches`도 이 값 합(구 `Math.round(분수)`는 교체선수 과소계상이라 폐기 — 밸런스 무영향·기록용). 가드 `tools/_dv_gp.ts`.
-  - 세트수(sets)는 미도입 — `SimResult`에 선수별 세트 출전 데이터 부재(subUse=랠리 수), `match.ts` 세트 출전 추적 신설이 선행돼야 정직 집계 가능(추정 금지).
+  - **`sets`(정수 세트수) = 출전 세트수** — `SimResult.setUse`(엔진이 세트마다 코트에 선 id 누적, MATCH_SYSTEM §1.3c-2)에서 배선. 화면 "N경기 · N세트"(sets=0인 순수 가비지 벤치는 세트 칩 미표시). 밸런스 무영향(관측만·골든 불변). 가드 `tools/_dv_gp.ts`.
 - 명예의 전당·통산 기록(6장)의 토대도 된다.
 
 ### 1.3 통계 단일화 — 스코어박스 = 생산 = 통산 (2026-06-24 ✅ 구현)

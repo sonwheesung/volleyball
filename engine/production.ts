@@ -13,6 +13,7 @@ import type { BoxSink } from './rally';
 export interface ProdLine {
   matches: number;  // 출전 "참여량"(코트타임 가중, 분수) — XP·연봉·팬심·시상 자격에 물린 밸런스값. 표시용 아님(UI-46 정정).
   gamesPlayed: number; // 출전 경기수(GP, 정수) — 어떤 출전이든 1, 중복 없음. 화면 표시 전용(코보식). matches와 독립.
+  sets: number;     // 출전 세트수(정수) — 코트에 선 세트 카운트(SimResult.setUse). 화면 표시 전용, 밸런스 무영향(MATCH_SYSTEM §1.3c-2).
   points: number;   // 득점(공격+블록+에이스)
   spikes: number;
   backSpikes: number; // 후위공격(백어택) 득점 — spikes의 부분집합. 트리플 크라운(후위공격 3+) 판정 전용
@@ -24,7 +25,7 @@ export interface ProdLine {
 }
 
 export const emptyProd = (): ProdLine => ({
-  matches: 0, gamesPlayed: 0, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0,
+  matches: 0, gamesPlayed: 0, sets: 0, points: 0, spikes: 0, backSpikes: 0, blocks: 0, aces: 0, assists: 0, digs: 0, receives: 0,
 });
 
 /** 시즌 생산을 선수 통산 기록(CareerStats)에 누적한 새 선수 — 백년 누적 서사의 토대.
@@ -62,7 +63,7 @@ export function appendSeasonLine(p: Player, season: number, teamId: string, prod
 export function mergeProd(a: ProdLine | undefined, b: ProdLine): ProdLine {
   const x = a ?? emptyProd();
   return {
-    matches: x.matches + b.matches, gamesPlayed: x.gamesPlayed + b.gamesPlayed, points: x.points + b.points,
+    matches: x.matches + b.matches, gamesPlayed: x.gamesPlayed + b.gamesPlayed, sets: x.sets + b.sets, points: x.points + b.points,
     spikes: x.spikes + b.spikes, backSpikes: x.backSpikes + b.backSpikes, blocks: x.blocks + b.blocks, aces: x.aces + b.aces,
     assists: x.assists + b.assists, digs: x.digs + b.digs, receives: x.receives + b.receives,
   };
@@ -181,7 +182,11 @@ function productionFromBox(
   for (const p of [...H.starters, ...A.starters]) { bump(p.id, (l) => { l.matches++; }); appeared.add(p.id); }
   if (gp > 0) for (const p of [...H.bench, ...A.bench]) { bump(p.id, (l) => { l.matches++; }); appeared.add(p.id); }
   if (sim.subUse) for (const id in sim.subUse) { bump(id, (l) => { l.matches += Math.min(1, sim.subUse![id] / 40); }); appeared.add(id); }
-  for (const id of appeared) bump(id, (l) => { l.gamesPlayed = 1; }); // 이 경기 1회 출전(merge가 시즌 합산)
+  // 출전 경기수(gamesPlayed) + 세트수(sets) = **실제 코트 출전(setUse) 단일 진실**. splitLineup(production)이 buildLineup(match.ts)과
+  //   발산(특히 리베로 — overall 정렬 vs 수비 기준)해도 setUse는 실제 코트를 그대로 반영 → phantom 선발 GP 방지·gamesPlayed↔sets 정합(§1.3c-2).
+  //   setUse 없으면(레거시 simpleSim) splitLineup appeared 폴백. matches(분수 밸런스값)는 splitLineup 기반 그대로 유지.
+  if (sim.setUse) for (const id in sim.setUse) bump(id, (l) => { l.sets = sim.setUse![id]; l.gamesPlayed = 1; });
+  else for (const id of appeared) bump(id, (l) => { l.gamesPlayed = 1; });
   return tally;
 }
 
@@ -272,7 +277,9 @@ export function attributeProduction(
   if (sim.subUse) {
     for (const id in sim.subUse) { bump(id, (l) => { l.matches += Math.min(1, sim.subUse![id] / 40); }); appeared.add(id); }
   }
-  for (const id of appeared) bump(id, (l) => { l.gamesPlayed = 1; }); // 이 경기 1회 출전(merge가 시즌 합산)
+  // gamesPlayed + sets = 실제 코트 출전(setUse) 단일 진실(phantom 선발 GP 방지, §1.3c-2). setUse 없으면 splitLineup 폴백. matches는 불변.
+  if (sim.setUse) for (const id in sim.setUse) bump(id, (l) => { l.sets = sim.setUse![id]; l.gamesPlayed = 1; });
+  else for (const id of appeared) bump(id, (l) => { l.gamesPlayed = 1; });
 
   return tally;
 }

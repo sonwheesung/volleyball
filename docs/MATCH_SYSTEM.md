@@ -276,6 +276,23 @@
 검증(`simPlayers` 60시즌): 신인 주전(72+) 도달 **17.7%→20.0%**, 리그 평균 OVR 63.4(더 안정),
 parity std 4.61·r 0.05(무손상), 70/70 테스트. 교체로 출전 기회를 받은 벤치 신인이 더 큰다.
 
+#### 1.3c-2 출전 세트수 → 화면 표시(`SimResult.setUse`) ✅ 구현(2026-07-28, UI-46 후속)
+`subUse`(랠리 수, 분수 XP·**밸런스**용)와 별개로, **선수별 출전 세트수**를 코보식 정수로 화면에 보여주기 위해
+`simulateMatch`가 **세트마다 코트에 선 선수 id를 누적**(매 랠리 `st.six`+`libero`를 `courtThisSet`에 add → 세트 종료 시
+`setUse[id]++` 플러시)해 `SimResult.setUse: Record<string, number>`(선수→출전 세트수)로 내보낸다.
+- **`subUse`보다 완전**: 매 랠리 `st.six`를 훑으므로 선발·작전 교체·**부상 교체 투입 선수**(injuryReplaced, 아래 [OPEN]이
+  `subUse`에서 누락하던 케이스)·리베로를 전부 포착 → 세트수는 부상 교체 데뷔 선수도 정확히 잡는다.
+- **결과·밸런스 무영향(순수 관측)**: rng 미소비, `st.six` 읽기만. 골든 카나리아는 `setUse`를 해싱하지 않아(serializeMatch는
+  scorers·hows·byIds·recvIds·세트·points만) **바이트 불변**. `attributeProduction`이 `ProdLine.sets = setUse[id]`로 배선,
+  화면은 "N경기 · N세트"로 표시(sets=0인 순수 가비지 벤치는 세트 칩 미표시 — 정직). 가드 `tools/_dv_gp.ts`.
+- **gamesPlayed·sets는 setUse 단일 진실**(2026-07-28): `_dv_gp` 개발 중 발견 — `splitLineup`(production 귀속 라인업)이 `buildLineup`(match.ts 실제 코트)과
+  **리베로 선정에서 발산**(splitLineup=overall 정렬 vs buildLineup=수비 기준)해, 실제로 안 뛴 리베로에게 GP가 붙던 phantom 문제. → **경기수(gamesPlayed)·세트수(sets)를
+  둘 다 setUse(실제 코트)로 산출**해 정합. `matches`(분수, XP/연봉/시상/팬심 밸런스값)는 여전히 splitLineup 기반이라 무변(골든 불변).
+
+> **[OPEN] 리베로 XP 귀속 발산 (2026-07-28 발견, 저위험·미결)**: 위 발산으로 `matches`(→ `experience.ts` VQ·위치선정 XP)가 splitLineup이 고른
+> phantom 리베로에게 붙고 실제 코트 리베로(buildLineup)는 subUse만 받는다. **표시(gamesPlayed/sets)는 setUse로 교정됐지만 XP는 미교정** —
+> `splitLineup`을 `buildLineup`의 리베로 기준(수비 스탯)과 일치시키면 XP 재분배(밸런스 파급)라 별건. 리베로는 성장 스탯이 좁아 실효 영향 작음(감시).
+
 ### 1.3d 부상 교체 — 경기 내 부상 → FIVB 예외적 교체 ★ (설계·구현 2026-07-07, 이번 패스)
 
 > **문제**: 지금까지 `maybeInjure`(rally.ts, 공격수 대상)가 발동하면 선수를 `injured` Set에 넣어

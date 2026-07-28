@@ -258,6 +258,7 @@ export function simulateMatch(
   const setScores: { home: number; away: number }[] = [];
   const setFirstServers: Side[] = []; // 세트별 첫 서브 팀(보드·production이 재도출 않게 진실을 실어 보냄) — 5세트 코인토스 포함
   const subUse: Record<string, number> = {}; // 교체 출전 선수 id → 출전 랠리 수(출전 성장 XP용)
+  const setUse: Record<string, number> = {}; // 선수 id → 출전 세트수(코트에 선 세트 카운트) — 화면 "N세트"용, 순수 관측(rng 미소비·결과 불변, MATCH_SYSTEM §1.3c-2)
   const subEvents: SubEvent[] = [];           // 교체 연출 로그(보드용, 순수 가산 — 승패 무영향)
   const timeoutEvents: TimeoutEvent[] = [];   // 타임아웃 로그(보드용, 순수 가산 — 승패 무영향)
   // 경기 내 부상 교체(1.3d) — 세트 넘어 지속(작전 교체 activeSubs와 달리 세트 단위 리셋 없음). slot→{out:부상선수, in:교체선수}.
@@ -319,6 +320,7 @@ export function simulateMatch(
     // 작전/피로 교체만 activeSubs에 들어간다(injury는 injuryReplaced로 분리 — 세트말 원복 안 함). = 정본 SubKind − 'injury'.
     type TacticalSubKind = Exclude<SubKind, 'injury'>;
     const activeSubs: Record<Side, Map<number, { orig: Player; kind: TacticalSubKind }>> = { home: new Map(), away: new Map() };
+    const courtThisSet = new Set<string>(); // 이 세트에 코트에 선 선수 id(매 랠리 six+libero 누적) → 세트말 setUse 플러시. 순수 관측(§1.3c-2)
     // FIVB 교체 규칙(세트 단위 리셋) — ① 교체선수는 세트당 1회만 진입(재진입 금지) ② 선발은 세트당 1왕복만(나갔다 돌아온 뒤 재이탈 금지).
     //   구현 누락으로 같은 스페셜리스트가 예산(6) 남는 한 핑퐁 투입되던 버그 수정(2026-07-01). checkSubs 규칙검사로 박제.
     const usedSubIn: Record<Side, Set<string>> = { home: new Set(), away: new Set() };       // 이 세트에 이미 투입된 교체선수 id
@@ -672,7 +674,18 @@ export function simulateMatch(
       // 랠리 사이 체력 회복(7.1) — 교체 투입 선수 포함(tracked)
       recover('home', homeStam, STAM_REGEN_BASE);
       recover('away', awayStam, STAM_REGEN_BASE);
+
+      // 출전 세트 집계(§1.3c-2) — 이 랠리에 코트에 선 선수(선발+작전/부상 교체+리베로)를 courtThisSet에 누적.
+      //   랠리 말이라 이 랠리의 부상 교체(위 1.3d)까지 반영된 st.six. 순수 관측(rng 미소비·결과 불변).
+      for (const side of ['home', 'away'] as Side[]) {
+        const st = teamOf(side);
+        for (const p of st.six) courtThisSet.add(p.id);
+        if (st.libero) courtThisSet.add(st.libero.id);
+      }
     }
+
+    // 세트 종료: 출전 세트수 플러시 — 이 세트에 코트에 선 전원 setUse[id]++ (원복 전, 실제 출전 기준)
+    for (const id of courtThisSet) setUse[id] = (setUse[id] ?? 0) + 1;
 
     // 세트 종료: 활성 교체 전부 원복(다음 세트 라인업 초기화) — 보드도 다음 세트 시작 랠리에서 원복
     for (const side of ['home', 'away'] as Side[]) {
@@ -691,7 +704,7 @@ export function simulateMatch(
     setNo++;
   }
 
-  return { homeSets, awaySets, setScores, points, subUse, subEvents, timeouts: timeoutEvents, setFirstServers, reactiveEvents };
+  return { homeSets, awaySets, setScores, points, subUse, setUse, subEvents, timeouts: timeoutEvents, setFirstServers, reactiveEvents };
 }
 
 // momFactor 재노출(테스트/튜닝용)

@@ -85,6 +85,7 @@ export interface SimResult {
   setScores: { home: number; away: number }[];
   points: PointLog[];
   subUse?: Record<string, number>; // 작전 교체로 코트에 선 선수 id → 출전 랠리 수(출전 성장 XP용)
+  setUse?: Record<string, number>; // 선수 id → 출전 세트수(코트에 선 세트 카운트, 선발+교체+부상교체+리베로). 화면 "N세트"용 — 표시 전용, 결과·밸런스 무영향(MATCH_SYSTEM §1.3c-2)
   subEvents?: SubEvent[];           // 작전 교체 연출 로그(보드가 코트 위 실제 교체를 보여주기 위함)
   timeouts?: TimeoutEvent[];        // 작전 타임아웃 로그(보드가 멈추고 체력/기세를 보여주기 위함)
   setFirstServers?: Side[];         // 세트별(인덱스=세트-1) 첫 서브 팀. 5세트는 코인토스(MATCH_SYSTEM v2.1)라

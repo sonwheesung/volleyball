@@ -551,7 +551,9 @@ function PlayerDetailInner() {
           <Card accent={theme.elite} flat>
             <Row>
               <Muted>경기</Muted>
-              <Text style={{ color: theme.text, fontWeight: '700' }}>{fmtMatches(prod.gamesPlayed)}경기</Text>
+              <Text style={{ color: theme.text, fontWeight: '700' }}>
+                {fmtMatches(prod.gamesPlayed)}경기{prod.sets > 0 ? ` · ${prod.sets}세트` : ''}
+              </Text>
             </Row>
             {p.position !== 'L' ? (
               <Row>

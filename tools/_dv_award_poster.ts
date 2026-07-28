@@ -23,7 +23,7 @@ const POSNS: Position[] = ['S', 'OH', 'OP', 'MB', 'L'];
 
 // 각 필드에 유일 값 — 라벨이 가리키는 필드값과 셀값이 일치해야 정상(오귀속 시 값이 겹치지 않음).
 function distinctLine(): ProdLine {
-  return { matches: 82, gamesPlayed: 82, points: 101, spikes: 203, backSpikes: 51, blocks: 307, aces: 409, assists: 503, digs: 607, receives: 709 };
+  return { matches: 82, gamesPlayed: 82, sets: 811, points: 101, spikes: 203, backSpikes: 51, blocks: 307, aces: 409, assists: 503, digs: 607, receives: 709 };
 }
 
 type StatsFn = (pos: Position, l: ProdLine) => PosterStat[];

@@ -68,7 +68,7 @@ test('후위공격(backSpikes): spikes 부분집합 + OH/OP만(트리플 크라�
 });
 
 test('mergeProd 합산이 올바르다', () => {
-  const a: ProdLine = { matches: 1, gamesPlayed: 1, points: 10, spikes: 8, backSpikes: 2, blocks: 1, aces: 1, assists: 5, digs: 3, receives: 0 };
+  const a: ProdLine = { matches: 1, gamesPlayed: 1, sets: 3, points: 10, spikes: 8, backSpikes: 2, blocks: 1, aces: 1, assists: 5, digs: 3, receives: 0 };
   const merged = mergeProd(mergeProd(emptyProd(), a), a);
   assert.equal(merged.points, 20);
   assert.equal(merged.matches, 2);
@@ -76,7 +76,7 @@ test('mergeProd 합산이 올바르다', () => {
 });
 
 test('accrueCareer + appendSeasonLine: 통산·시즌 라인 적립(구세이브 assists 미존재 허용)', () => {
-  const pr: ProdLine = { matches: 30, gamesPlayed: 30, points: 400, spikes: 350, backSpikes: 60, blocks: 30, aces: 20, assists: 120, digs: 80, receives: 0 };
+  const pr: ProdLine = { matches: 30, gamesPlayed: 30, sets: 106, points: 400, spikes: 350, backSpikes: 60, blocks: 30, aces: 20, assists: 120, digs: 80, receives: 0 };
   const base = { ...home[0], career: { ...home[0].career } };
   delete (base.career as Partial<typeof base.career>).assists; // 구세이브 모사
   const after = appendSeasonLine(accrueCareer(base, pr), 3, 't1', pr);
