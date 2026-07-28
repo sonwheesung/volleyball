@@ -362,6 +362,30 @@ export function applyAsianIdentity(p: Player): Player {
   return { ...p, name, nationality: nat };
 }
 
+// ── 초기 FA 풀(TRANSACTION_SYSTEM §5c) ─────────────────────────────────────────────
+// 게임 시작 시 시즌 중 영입 화면(availableFAsOnDay)에 노출할 잉여 국내 FA(팀 미배정). 시즌0 초반 무영입(단장 결정 기둥#4 사문화) 해소.
+// 시드 고정(strSeed('initfa')): LEAGUE_SEED가 고정이라 모든 플레이가 같은 리그 → 초기 FA도 그 리그의 일부(CLUB_IDENTITY와 같은 "시작 조건", 리뷰 택일).
+// 포지션 스프레드(S·OH·OP·MB·L 전부 + OH/MB 가중). 표시 OVR 70~80대(=원시 ~60~69) 즉시전력 로테이션~약팀 주전급(스타 아님).
+const INITIAL_FA_POS: Position[] = ['OH', 'MB', 'OP', 'S', 'L', 'OH', 'MB', 'OP', 'OH', 'MB'];
+export const INITIAL_FA_IDS: string[] = INITIAL_FA_POS.map((_, i) => `faInit${i}`);
+
+/** 초기 FA 선수 객체 생성(결정론·팀 미배정·별도 rng라 메인 스트림/GOLDEN 불변). 표시 OVR [70,80] 밴드로 필터(가드가 밴드 실측). */
+export function generateInitialFAs(): Player[] {
+  const rng = createRng(strSeed('initfa'));
+  const out: Player[] = [];
+  INITIAL_FA_POS.forEach((pos, i) => {
+    const id = `faInit${i}`;
+    let pick = makePlayer(rng, id, pos, false, rng.int(26, 32)); // 미계약 베테랑 나이대
+    for (let t = 0; t < 500; t++) {
+      const d = displayOvr(overallRaw(pick));
+      if (d >= 70 && d <= 80) break; // 밴드 명중 시 확정
+      pick = makePlayer(rng, id, pos, false, rng.int(26, 32)); // 아니면 재생성(결정론 — rng 전진)
+    }
+    out.push(pick);
+  });
+  return out;
+}
+
 export function generateLeague(seed: number): League {
   const rng = createRng(seed);
   const teams: Team[] = [];
@@ -426,6 +450,10 @@ export function generateLeague(seed: number): League {
       budget: Math.round((teamSalary * 1.12) / 1000) * 1000, // 총연봉 + 12% 여유
     });
   });
+
+  // ── 초기 FA 풀(TRANSACTION_SYSTEM §5c) — 팀 미배정 국내 FA를 append. 별도 rng라 위 메인 스트림·GOLDEN 불변.
+  //   dedupeNames **이전**에 붙여(배열 끝) 기존 선수 이름은 taken 우선으로 불변·FA 동명이인만 재롤(FA 화면 동명이인 방지).
+  for (const fa of generateInitialFAs()) players.push(fa);
 
   // 동명이인 방지 — 초기 리그 전체를 1배치로 dedup(외인/아시아/국내 각 부류 내 무중복). FOREIGN_SYSTEM §8
   dedupeNames(players, `league:${seed}`);

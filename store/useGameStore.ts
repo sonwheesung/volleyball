@@ -54,6 +54,7 @@ import { marketVal, setAwardScores, setSalaryEra } from '../data/awardSalary';
 import { setSeasonHistory, upcomingStances } from '../data/leagueHistory';
 import { LEAGUE_CAP, maxSalaryFor, isFranchise } from '../engine/cap';
 import { capPayroll } from '../data/roster';
+import { INITIAL_FA_IDS } from '../data/seed'; // 초기 FA 풀(TRANSACTION_SYSTEM §5c) — 게임 시작 시드
 import { ROSTER_MAX, canReleasePosition, inSeasonCost, severanceFee } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
 import { diag } from '../lib/deviceLog';
@@ -587,8 +588,9 @@ export const useGameStore = create<GameState>()(
         const prev = get();
         resetLeagueBase();
         // 계정 소유 재화·업적수령·광고상태는 **구단 초기화해도 유지**(§13.19 — 다이아/업적은 서버 진실·계정 평생). saveId만 새로(camp 재과금=정당).
-        set({ ...freshSave, selectedTeamId: teamId, saveId: newSaveId(), diamonds: prev.diamonds, claimedAch: prev.claimedAch, adState: prev.adState });
-        setTxContext([], [], teamId);
+        // 초기 FA 풀(TRANSACTION_SYSTEM §5c) — 게임 시작 시 잉여 국내 FA를 시즌 중 영입 화면에 노출(시즌0 무영입 해소). 미영입분은 첫 롤오버서 자연 소멸.
+        set({ ...freshSave, selectedTeamId: teamId, saveId: newSaveId(), diamonds: prev.diamonds, claimedAch: prev.claimedAch, adState: prev.adState, faPool: [...INITIAL_FA_IDS] });
+        setTxContext([], [...INITIAL_FA_IDS], teamId);
         setMyTeamStaff(teamId); // 내 팀만 영입 스태프, 나머지는 AI 기본 스태프(STAFF_SYSTEM 7)
         // 시작 기본 스태프(ONBOARDING 6) — 플레이어 팀을 0이 아니라 코치1+스카우터1로 출발시킨다(AI와 대칭).
         const staff = grantStartingStaff(teamId);
