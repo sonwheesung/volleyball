@@ -285,13 +285,14 @@ parity std 4.61·r 0.05(무손상), 70/70 테스트. 교체로 출전 기회를 
 - **결과·밸런스 무영향(순수 관측)**: rng 미소비, `st.six` 읽기만. 골든 카나리아는 `setUse`를 해싱하지 않아(serializeMatch는
   scorers·hows·byIds·recvIds·세트·points만) **바이트 불변**. `attributeProduction`이 `ProdLine.sets = setUse[id]`로 배선,
   화면은 "N경기 · N세트"로 표시(sets=0인 순수 가비지 벤치는 세트 칩 미표시 — 정직). 가드 `tools/_dv_gp.ts`.
-- **gamesPlayed·sets는 setUse 단일 진실**(2026-07-28): `_dv_gp` 개발 중 발견 — `splitLineup`(production 귀속 라인업)이 `buildLineup`(match.ts 실제 코트)과
-  **리베로 선정에서 발산**(splitLineup=overall 정렬 vs buildLineup=수비 기준)해, 실제로 안 뛴 리베로에게 GP가 붙던 phantom 문제. → **경기수(gamesPlayed)·세트수(sets)를
-  둘 다 setUse(실제 코트)로 산출**해 정합. `matches`(분수, XP/연봉/시상/팬심 밸런스값)는 여전히 splitLineup 기반이라 무변(골든 불변).
-
-> **[OPEN] 리베로 XP 귀속 발산 (2026-07-28 발견, 저위험·미결)**: 위 발산으로 `matches`(→ `experience.ts` VQ·위치선정 XP)가 splitLineup이 고른
-> phantom 리베로에게 붙고 실제 코트 리베로(buildLineup)는 subUse만 받는다. **표시(gamesPlayed/sets)는 setUse로 교정됐지만 XP는 미교정** —
-> `splitLineup`을 `buildLineup`의 리베로 기준(수비 스탯)과 일치시키면 XP 재분배(밸런스 파급)라 별건. 리베로는 성장 스탯이 좁아 실효 영향 작음(감시).
+- **gamesPlayed·sets는 setUse(실제 코트) 단일 진실로 산출**(2026-07-28): 두 값을 같은 원천에서 뽑아 **항상 정합**(GP는 있는데 세트 0 같은 어긋남 원천 차단) +
+  코보식 정직(GP = 실제로 코트에 섰다). `matches`(분수 밸런스값)는 splitLineup 기반 그대로(무변·골든 불변).
+  > **정정(2026-07-28, 사각 분석 — "phantom GP 발산"은 오진이었음)**: 처음엔 `splitLineup`(production 라인업)이 `buildLineup`(match.ts)과
+  > **리베로 선정에서 발산**해 phantom GP가 붙는다고 판단했으나, **재검증 결과 프로덕션엔 발산이 없다.** 두 함수는 정렬 기준이 **동일**(`overall+u23Edge`,
+  > `bestByPos`↔splitLineup)해, **같은 `dvPhilosophy`·`force`를 주면 같은 라인업**을 낸다. 실제 발산은 **가드(`_dv_gp`)가 `splitLineup`을 `dv=0`으로
+  > 부른 반면 경기는 `coachInfoOf().dvPhilosophy`(예: 99)를 쓴 데서 생긴 인공물**(7팀 중 dv 일치 시 리베로 불일치 0건 실측). 프로덕션 경로(`data/production.ts`
+  > `splitLineup(roster, homeDv, hf)`·상대 미리보기 `buildLineup(squad, dv, force)`)는 전부 실제 dv/force를 넘겨 정합 → **리베로 XP 귀속도 정상**(구 [OPEN] 철회).
+  > setUse 기반은 phantom 교정이 아니라 **gamesPlayed↔sets 정합·정직**을 위한 선택으로 유지. 사각 원인·재발 방지는 `TEST_METHODOLOGY §4`(가드 dv/force 미복제).
 
 ### 1.3d 부상 교체 — 경기 내 부상 → FIVB 예외적 교체 ★ (설계·구현 2026-07-07, 이번 패스)
 

@@ -15,6 +15,7 @@
 
 import { simulateMatchSimple, type SimResult, type PointLog } from '../engine/simMatch';
 import { simulateMatch } from '../engine/match';
+import { buildLineup } from '../engine/lineup';
 import { attributeProduction, splitLineup } from '../engine/production';
 import { teamOverall } from '../engine/overall';
 import { LEAGUE, getEvolvedTeamPlayers, coachInfoOf, resetLeagueBase } from '../data/league';
@@ -69,7 +70,8 @@ else {
 }
 
 // ── D. 출전 세트수(SimResult.setUse → ProdLine.sets) 불변식 (full simulateMatch, seed 1..400) ──
-//   진실 원천은 실제 코트 출전(setUse)이지 splitLineup이 아니다(둘은 리베로 선정 등에서 발산 — 이 코드 발견 2026-07-28).
+//   gamesPlayed·sets의 진실 원천은 실제 코트 출전(setUse). splitLineup은 **dv·force만 맞추면 buildLineup과 동일**(Part E 참조)이라
+//   발산이 아니지만, 가드는 실측 진실(setUse)을 직접 대조해 splitLineup 재구성 자체를 피한다(dv 미복제 인공 발산 예방 — TEST_METHODOLOGY §4).
 //   D1. setUse 정수·1≤s≤nSets. D2(A/B 핵심): 클린 경기서 **전세트 출전자(sets==nSets) ≥6/팀**(코트 6인) +
 //   **리베로 포지션 중 전세트 출전 ≥1**(리베로는 매 세트 코트). 뮤턴트(libero capture 누락→0 / 이중집계→>nSets)면 FAIL.
 //   D3. attributeProduction: sets==setUse & gamesPlayed==(setUse>0?1:0) — 배선·단일진실 정합.
@@ -113,6 +115,25 @@ for (let seed = 1; seed <= 400; seed++) {
 }
 console.log(`  세트수 검사 ${dChecked}개 · 클린 팀 대조 ${cleanTeams}개 · 부분출전(교체) 관측 ${subPartial}개`);
 if (subPartial === 0) bad('D: 부분 출전(1≤sets<nSets) 관측 0 — 교체 경로가 세트수에 안 잡히는 의심(A/B 민감도 부족)');
+
+// ── E. splitLineup(귀속) ≡ buildLineup(실제 코트) — **dv·force 일치 시** 동일 라인업 (프로덕션 정합 회귀 가드) ──
+//   TEST_METHODOLOGY §4: 가드가 dv 없이 splitLineup을 부르면 인공 발산이 생겨 phantom GP로 오진했던 사건의 회귀 봉인.
+//   프로덕션은 항상 실제 dv/force를 넘기므로(data/production.ts·상대 미리보기) 여기서도 넘겨 six+libero 완전 일치를 확인.
+//   두 함수 정렬식이 드리프트(한쪽만 기준 변경)하면 이 검사가 FAIL → 진짜 발산을 잡는다.
+console.log('── E. splitLineup ≡ buildLineup (dv·force 일치) — 프로덕션 라인업 정합 회귀 ──');
+let eTeams = 0;
+for (const team of ids) {
+  const dv = coachInfoOf(team)?.dvPhilosophy ?? 0;
+  const bl = buildLineup(sq[team], dv);
+  const sl = splitLineup(sq[team], dv);
+  const blSet = new Set([...bl.six.map((p) => p.id), ...(bl.libero ? [bl.libero.id] : [])]);
+  const slSet = new Set(sl.starters.map((p) => p.id));
+  eTeams++;
+  // 대칭차 = 두 라인업이 지목한 코트 7인의 불일치. dv 일치면 0이어야(정렬식 동일).
+  const diff = [...blSet].filter((id) => !slSet.has(id)).concat([...slSet].filter((id) => !blSet.has(id)));
+  if (diff.length) bad(`E 팀 ${team}(dv=${dv}) splitLineup≠buildLineup 코트 불일치: ${diff.join(',')} — 정렬식 드리프트 의심`);
+}
+console.log(`  라인업 정합 ${eTeams}팀 대조 (dv 일치 시 대칭차 0)`);
 
 console.log(fail === 0 ? '\n✅ _dv_gp PASS — 위반 0건' : `\n❌ _dv_gp FAIL — ${fail}건`);
 process.exit(fail === 0 ? 0 : 1);
