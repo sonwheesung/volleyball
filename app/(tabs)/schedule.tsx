@@ -388,9 +388,10 @@ function ScheduleInner() {
                     )}
                   </Card>
                   {/* 오프시즌 앞단(§5.6.4) — "다음 경기"식 **단일 순차 업무 카드**. 현재 업무 하나만: 결산→외국인→아시아→FA→드래프트→새 시즌.
-                      "○○ 하러 가기"(그 화면 + 다음 스텝) / "건너뛰기 →"(다음 스텝, 감독·스카우트 대행). setOffseasonStep은 forward-only라
-                      건너뛰기가 항상 있어 어느 화면이 죽어도 통과 → 소프트락(a04c0bc) 재발 없음. 지난 업무 재방문은 단장실 탭.
-                      ~~나란히 5개 목록(2026-07-24)~~ → 정정(2026-07-28 사용자): 순차 단일로. UI-50·SEASON §5.6.4. */}
+                      "○○ 하러 가기"만 있고 **건너뛰기 버튼 없음**(2026-07-28 사용자: "무조건 다 하게"). 각 화면을 눌러 거쳐야 다음이 뜬다.
+                      소프트락 안전판: "하러 가기"가 advance()를 openStep()보다 **먼저** 호출(forward-only 영속) → 대상 화면이 render throw해도
+                      커서는 이미 다음으로 전진, ErrorBoundary(§5.6.3-5)가 일정으로 탈출 → 소프트락(a04c0bc) 재발 없음(건너뛰기 버튼 없이도 보장).
+                      ~~나란히 5개 목록(2026-07-24)~~ → 순차 단일(2026-07-28) → ~~건너뛰기 링크~~ 제거(2026-07-28). UI-50·SEASON §5.6.4. */}
                   {ceremonyDone ? (() => {
                     const cur = offseasonStep < preSteps.length ? preSteps[offseasonStep] : null;
                     const advance = () => setOffseasonStep(offseasonStep + 1);
@@ -404,14 +405,11 @@ function ScheduleInner() {
                             <Text style={styles.osTitle} numberOfLines={1}>{cur.n}. {cur.label}</Text>
                             <Muted style={{ fontSize: 13, marginTop: 2, marginBottom: 8 }}>{cur.desc}</Muted>
                             <Button label={`${cur.label} 하러 가기 →`} onPress={() => { advance(); openStep(cur.route); }} />
-                            <Pressable onPress={advance} hitSlop={8} style={styles.osSkipWrap} accessibilityRole="button">
-                              <Text style={styles.osSkip}>이 업무 건너뛰기 →</Text>
-                            </Pressable>
                           </>
                         ) : (
                           <>
                             <Muted style={{ fontSize: 13, marginTop: 2, marginBottom: 8 }}>
-                              비시즌 업무를 모두 확인했습니다. 건너뛴 자리는 감독·스카우트가 대신 결정합니다.{'\n'}준비가 되면 새 시즌을 시작하세요.
+                              비시즌 업무를 모두 확인했습니다.{'\n'}준비가 되면 새 시즌을 시작하세요.
                             </Muted>
                             <Button
                               label={seasonStart.starting ? '시즌 준비 중…' : '새 시즌 시작하기 →'}
@@ -491,8 +489,6 @@ const styles = themedStyles(() => StyleSheet.create({
   lineupCloseTxt: { color: theme.text, fontSize: 14, fontWeight: '700' },
   // 오프시즌 순차 업무 카드(§5.6.4)
   osTitle: { color: theme.text, fontSize: 19, fontWeight: '800', marginTop: 8, letterSpacing: -0.3 },
-  osSkipWrap: { alignSelf: 'center', paddingVertical: 9, marginTop: 2 },
-  osSkip: { color: theme.muted, fontSize: 13, fontWeight: '700' },
   // 오프시즌 허브 목록(§5.6) — 번호 + 제목/설명 + 화살표. 잠금 아이콘 없음(진입 차단 0).
   hubRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: theme.border },
   hubNo: { width: 20, textAlign: 'center', fontSize: 15, fontWeight: '900' },
