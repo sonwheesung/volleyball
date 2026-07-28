@@ -790,4 +790,4 @@ const styles = themedStyles(() => StyleSheet.create({
 
 // 라우트 에러 폴백(UI-50 ⑦) — 이 화면이 render throw해도 앱이 죽지 않고 "일정으로 돌아가기" 폴백이 뜬다(소프트락 봉인).
 // 2026-07-24 FA 렌더 크래시(P0 a04c0bc)가 오프시즌 소프트락으로 번진 그 화면 — 원인 봉인의 1순위 적용처.
-export { ErrorBoundary } from '../components/RouteErrorBoundary';
+export { OffseasonRouteErrorBoundary as ErrorBoundary } from '../components/RouteErrorBoundary';

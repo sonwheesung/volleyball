@@ -34,8 +34,18 @@ function goSchedule(): void {
   try { router.replace('/(tabs)/schedule'); } catch (e) { logError('errorBoundary.goSchedule', e); }
 }
 
-/** expo-router가 라우트에 주입하는 폴백. `export const ErrorBoundary = RouteErrorBoundary` 로 각 라우트에서 재노출. */
-export function RouteErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }): ReactNode {
+// 앞단 오프시즌 스텝(§5.6.4)의 크래시 폴백 — 일정 복귀 시 순차 커서를 **한 칸 전진**시켜 깨진 스텝을 통과(소프트락 봉인 a04c0bc).
+//   진입 시 offseasonStep==그 스텝 인덱스라 +1=skip. 정상 뒤로가기(전진 없음, 같은 업무 재시도)와 구분되는 유일한 통과 경로.
+function goScheduleAndAdvance(): void {
+  try {
+    const mod = require('../store/useGameStore') as { useGameStore: { getState: () => { offseasonStep: number; setOffseasonStep: (n: number) => void } } };
+    const st = mod.useGameStore.getState();
+    st.setOffseasonStep(st.offseasonStep + 1); // forward-only — 깨진 앞단 스텝 통과
+  } catch (e) { logError('errorBoundary.advanceOffseason', e); }
+  goSchedule();
+}
+
+function Fallback({ error, retry, onExit }: { error: Error; retry: () => Promise<void>; onExit: () => void }): ReactNode {
   // 렌더 중 로깅 — 폴백은 오류당 한 번만 마운트되므로 중복 적재 위험이 낮고, effect보다 이르게 남는다.
   logError('screen.render', error);
   diag(seasonTag(), 'crash', `화면 렌더 실패: ${error?.message ?? String(error)}`, { stack: String(error?.stack ?? '').slice(0, 1200) });
@@ -49,7 +59,7 @@ export function RouteErrorBoundary({ error, retry }: { error: Error; retry: () =
           일정으로 돌아가면 게임은 그대로 이어집니다. 다른 오프시즌 화면도 계속 열 수 있어요.
         </Text>
         <Text style={styles.detail} numberOfLines={4}>{error?.message ?? '알 수 없는 오류'}</Text>
-        <Pressable style={styles.btn} onPress={goSchedule} accessibilityRole="button">
+        <Pressable style={styles.btn} onPress={onExit} accessibilityRole="button">
           <Text style={styles.btnTxt}>일정으로 돌아가기</Text>
         </Pressable>
         <Pressable style={styles.ghost} onPress={() => { void retry(); }} accessibilityRole="button">
@@ -59,6 +69,17 @@ export function RouteErrorBoundary({ error, retry }: { error: Error; retry: () =
       </ScrollView>
     </View>
   );
+}
+
+/** expo-router가 라우트에 주입하는 폴백. `export const ErrorBoundary = RouteErrorBoundary` 로 각 라우트에서 재노출. */
+export function RouteErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }): ReactNode {
+  return <Fallback error={error} retry={retry} onExit={goSchedule} />;
+}
+
+/** 앞단 오프시즌 스텝(§5.6.4) 전용 폴백 — 일정 복귀 시 순차 커서를 한 칸 전진(깨진 스텝 통과, 소프트락 봉인).
+ *  앞단 5화면 + draft-live만 이걸 재노출. 그 외 화면은 위 `RouteErrorBoundary`(전진 없음)를 쓴다. */
+export function OffseasonRouteErrorBoundary({ error, retry }: { error: Error; retry: () => Promise<void> }): ReactNode {
+  return <Fallback error={error} retry={retry} onExit={goScheduleAndAdvance} />;
 }
 
 /** 라우트 파일에서 `export { ErrorBoundary }` 로 재노출하는 이름. */

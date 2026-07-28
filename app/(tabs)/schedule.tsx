@@ -66,8 +66,7 @@ function ScheduleInner() {
   const archive = useGameStore((s) => s.archive);
   const watchProgress = useGameStore((s) => s.watchProgress);
   const ceremonyProgress = useGameStore((s) => s.ceremonyProgress); // 시상식 관람 진행도(§5.3.1) — 이어보기 카드 문구/라우트
-  const offseasonStep = useGameStore((s) => s.offseasonStep); // 비시즌 순차 업무 진행(§5.6.4) — "다음 경기"식 단일 업무 카드
-  const setOffseasonStep = useGameStore((s) => s.setOffseasonStep);
+  const offseasonStep = useGameStore((s) => s.offseasonStep); // 비시즌 순차 업무 진행(§5.6.4) — "다음 경기"식 단일 업무 카드. 전진은 useOffseasonExit(완료 시)에서만
   const setDay = useGameStore((s) => s.setDay);
   const recordResult = useGameStore((s) => s.recordResult);
   const finishCamp = useGameStore((s) => s.finishCamp);
@@ -389,12 +388,11 @@ function ScheduleInner() {
                   </Card>
                   {/* 오프시즌 앞단(§5.6.4) — "다음 경기"식 **단일 순차 업무 카드**. 현재 업무 하나만: 결산→외국인→아시아→FA→드래프트→새 시즌.
                       "○○ 하러 가기"만 있고 **건너뛰기 버튼 없음**(2026-07-28 사용자: "무조건 다 하게"). 각 화면을 눌러 거쳐야 다음이 뜬다.
-                      소프트락 안전판: "하러 가기"가 advance()를 openStep()보다 **먼저** 호출(forward-only 영속) → 대상 화면이 render throw해도
-                      커서는 이미 다음으로 전진, ErrorBoundary(§5.6.3-5)가 일정으로 탈출 → 소프트락(a04c0bc) 재발 없음(건너뛰기 버튼 없이도 보장).
-                      ~~나란히 5개 목록(2026-07-24)~~ → 순차 단일(2026-07-28) → ~~건너뛰기 링크~~ 제거(2026-07-28). UI-50·SEASON §5.6.4. */}
+                      커서 전진은 **버튼이 아니라 그 화면의 명시 완료(useOffseasonExit)** 에서만 → **뒤로가기(router.back)는 커서 미전진, 같은 업무 유지**
+                      (2026-07-28 테스터: 뒤로가기가 "끝난 걸로" 처리되던 것 수정). 소프트락(크래시 통과)은 앞단 화면의 OffseasonRouteErrorBoundary가 담당.
+                      ~~나란히 5개 목록(2026-07-24)~~ → 순차 단일(2026-07-28) → ~~건너뛰기 링크~~ 제거 → ~~advance-on-press~~ → 완료-시 전진(2026-07-28). UI-50·SEASON §5.6.4. */}
                   {ceremonyDone ? (() => {
                     const cur = offseasonStep < preSteps.length ? preSteps[offseasonStep] : null;
-                    const advance = () => setOffseasonStep(offseasonStep + 1);
                     return (
                       <Card accent={theme.accent} flat>
                         <IconLabel icon="snow-outline" color={theme.accent}>
@@ -404,7 +402,7 @@ function ScheduleInner() {
                           <>
                             <Text style={styles.osTitle} numberOfLines={1}>{cur.n}. {cur.label}</Text>
                             <Muted style={{ fontSize: 13, marginTop: 2, marginBottom: 8 }}>{cur.desc}</Muted>
-                            <Button label={`${cur.label} 하러 가기 →`} onPress={() => { advance(); openStep(cur.route); }} />
+                            <Button label={`${cur.label} 하러 가기 →`} onPress={() => openStep(cur.route)} />
                           </>
                         ) : (
                           <>

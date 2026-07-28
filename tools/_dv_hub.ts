@@ -92,15 +92,29 @@ const CHAIN_EDGES: Array<[string, string]> = [
   const exitSrc = read('components/offseasonExit.ts');
   ok(/dismissAll\(\)/.test(exitSrc) && /\/\(tabs\)\/schedule/.test(exitSrc), 'A2 출구 구현', 'dismissAll + 일정 탭 폴백');
 
-  // A3 — ErrorBoundary
+  // A2c — 커서 전진은 **완료(useOffseasonExit)에서만** (§5.6.4 재재정정): useOffseasonExit이 setOffseasonStep을 호출하고,
+  //   일정 탭 "하러 가기" 버튼은 전진하지 않아야(그래야 뒤로가기=같은 업무 유지, "뒤로가기가 끝난 걸로" 재발 차단).
+  ok(/setOffseasonStep/.test(exitSrc), 'A2c 완료 전진 없음', 'offseasonExit.ts가 offseasonStep을 전진 안 함(useOffseasonExit)');
+  const schedSrc = read('app/(tabs)/schedule.tsx');
+  ok(!/setOffseasonStep/.test(schedSrc), 'A2c 하러가기 전진 잔재', 'schedule이 setOffseasonStep 호출(advance-on-press 재발 → 뒤로가기가 건너뛰기)');
+
+  // A3 — ErrorBoundary (alias export 허용: `export { X as ErrorBoundary }`)
   for (const f of OFFSEASON_ROUTES) {
     const src = read(f);
-    ok(/export\s*\{\s*ErrorBoundary\s*\}/.test(src), 'A3 ErrorBoundary 없음', f);
+    ok(/export\s*\{\s*(?:\w+\s+as\s+)?ErrorBoundary\s*\}/.test(src), 'A3 ErrorBoundary 없음', f);
   }
   const layout = read('app/_layout.tsx');
   ok(/GlobalErrorBoundary/.test(layout), 'A3 루트 전역 경계 없음', 'app/_layout.tsx');
   const boundary = read('components/RouteErrorBoundary.tsx');
   ok(/\(tabs\)\/schedule/.test(boundary), 'A3 폴백 출구 없음', '폴백에서 일정으로 나갈 수 없다');
+
+  // A3b — 앞단 스텝은 **전진형** OffseasonRouteErrorBoundary를 써야 한다(§5.6.4 재재정정 2026-07-28):
+  //   커서 전진이 "완료(useOffseasonExit)"에서만 일어나므로, 크래시 시 커서를 전진시킬 유일한 경로가 이 폴백이다(없으면 깨진 스텝서 소프트락).
+  for (const f of PRE_SCREENS) {
+    const src = read(f);
+    ok(/OffseasonRouteErrorBoundary\s+as\s+ErrorBoundary/.test(src), 'A3b 앞단 전진형 EB 아님', `${f} (크래시 시 커서 전진 = 소프트락 통과)`);
+  }
+  ok(/setOffseasonStep\(.*offseasonStep\s*\+\s*1/.test(boundary) || /goScheduleAndAdvance/.test(boundary), 'A3b 전진 폴백 미구현', 'OffseasonRouteErrorBoundary가 커서 전진 안 함');
   ok(/diag\(/.test(boundary), 'A3 폴백 진단 로그 없음', '에러를 삼키면 안 된다(#44)');
 
   // A4 — 일정 탭 두 위상 + 게이트 없는 최종 버튼

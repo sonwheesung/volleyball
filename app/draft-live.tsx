@@ -462,4 +462,4 @@ const styles = themedStyles(() => StyleSheet.create({
 }));
 
 // 라우트 에러 폴백(UI-50 ⑦) — 이 화면이 render throw해도 앱이 죽지 않고 "일정으로 돌아가기" 폴백이 뜬다(소프트락 봉인).
-export { ErrorBoundary } from '../components/RouteErrorBoundary';
+export { OffseasonRouteErrorBoundary as ErrorBoundary } from '../components/RouteErrorBoundary';
