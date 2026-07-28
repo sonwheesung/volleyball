@@ -326,16 +326,22 @@ function ScheduleInner() {
           };
           return (
             <>
-              <Card accent={theme.accent} flat>
-                <IconLabel icon="podium-outline" color={theme.accent}>포스트시즌 · 진출 3팀</IconLabel>
-                {p.seeds.map((id, i) => (
-                  <Text key={id} style={[{ color: theme.text, fontSize: 15, fontWeight: '600', marginTop: 2 }, id === teamId && { color: theme.accent }]}>
-                    {i + 1}위 {name(id)}{i === 0 ? ' (챔프전 직행)' : ''}
-                  </Text>
-                ))}
-              </Card>
-              {seriesCard('플레이오프 (2위 vs 3위 · 3전2선승)', p.po, reveal.poRevealed)}
-              {seriesCard('챔피언결정전 (5전3선승)', p.final, reveal.finalRevealed)}
+              {/* 이전 대회(진출3팀·플옵·챔프 결과)는 포스트시즌 진행 중에만 — 챔피언 확정(=오프시즌 진입) 후엔 숨겨
+                  비시즌 관리에 집중(2026-07-28 테스터). 지난 대회 상세는 기록/결과 화면에서 다시 볼 수 있음. */}
+              {!reveal.championRevealed ? (
+                <>
+                  <Card accent={theme.accent} flat>
+                    <IconLabel icon="podium-outline" color={theme.accent}>포스트시즌 · 진출 3팀</IconLabel>
+                    {p.seeds.map((id, i) => (
+                      <Text key={id} style={[{ color: theme.text, fontSize: 15, fontWeight: '600', marginTop: 2 }, id === teamId && { color: theme.accent }]}>
+                        {i + 1}위 {name(id)}{i === 0 ? ' (챔프전 직행)' : ''}
+                      </Text>
+                    ))}
+                  </Card>
+                  {seriesCard('플레이오프 (2위 vs 3위 · 3전2선승)', p.po, reveal.poRevealed)}
+                  {seriesCard('챔피언결정전 (5전3선승)', p.final, reveal.finalRevealed)}
+                </>
+              ) : null}
               {next ? (
                 <Card accent={theme.sky} flat>
                   <IconLabel icon="calendar-outline" color={theme.sky}>

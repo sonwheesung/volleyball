@@ -32,20 +32,31 @@ export default function AwardsCeremony() {
   // 스포일러 이중 가드(UV-10): 이번 시즌 챔피언 미공개(archive[season].championId 미기록) 상태의 딥링크는 풀시즌 시상(MAX) 차단.
   //   정상 플로우(champion-ceremony→awards)에선 recordChampion이 이미 championId를 박아 통과 — schedule championRevealed 게이트·recap-detail 독립 라우트 가드와 동결.
   const championRevealed = archive.some((a) => a.season === season && !!a.championId);
-  if (!ready) return <Loading title="시상식" variant="brand" message="시상식 준비 중…" />;
-  if (!championRevealed) {
-    return (
-      <Screen>
-        <Card flat>
-          <Muted style={{ textAlign: 'center', marginTop: 20 }}>
-            아직 이번 시즌 챔피언이 가려지지 않았습니다.{'\n'}포스트시즌이 끝난 뒤 시상식이 열립니다.
-          </Muted>
-        </Card>
-        <Button label="나가기" onPress={() => router.back()} />
-      </Screen>
-    );
-  }
-  return <CeremonyInner />;
+  return (
+    <>
+      {/* 포스터 배경(webp) 오프스크린 프리워밍(UI-45, FaceSheetWarmup 패턴) — 로딩·준비 중에 미리 디코드해
+          비트 전환 시 "텍스트 먼저 → 이미지 나중"으로 뜨던 잰크 제거(2026-07-28 테스터 보고). 번들 자산이라 디코드만 선행. */}
+      <View style={styles.prewarm} pointerEvents="none" accessibilityElementsHidden importantForAccessibility="no-hide-descendants">
+        {Object.values(AWARD_TEMPLATES).map((tpl, i) => (
+          <Image key={i} source={tpl.src} style={styles.prewarmImg} />
+        ))}
+      </View>
+      {!ready ? (
+        <Loading title="시상식" variant="brand" message="시상식 준비 중…" />
+      ) : !championRevealed ? (
+        <Screen>
+          <Card flat>
+            <Muted style={{ textAlign: 'center', marginTop: 20 }}>
+              아직 이번 시즌 챔피언이 가려지지 않았습니다.{'\n'}포스트시즌이 끝난 뒤 시상식이 열립니다.
+            </Muted>
+          </Card>
+          <Button label="나가기" onPress={() => router.back()} />
+        </Screen>
+      ) : (
+        <CeremonyInner />
+      )}
+    </>
+  );
 }
 
 function CeremonyInner() {
@@ -172,9 +183,11 @@ function CeremonyInner() {
   }, [idx, t, setCeremonyProgress]);
 
   // §5.3 세리머니 체인(2026-07-08): 시상식이 끝나면 **일정 화면으로 복귀** — 일정이 오프시즌 허브를 노출(마커=archive.championId).
-  //   goRecap = 건너뛰기/중간 이탈(진행도 보존 → 이어보기). finishCeremony = 마지막까지 봄(진행도 -1 = 완료, §5.3.1).
-  const goRecap = () => { router.dismissAll(); router.replace('/(tabs)/schedule'); };
-  const finishCeremony = () => { setCeremonyProgress(-1); goRecap(); };
+  //   goBack = 중간 이탈(진행도 보존 → 이어보기, OS 뒤로가기용). finishCeremony = 끝까지 봄 **또는 건너뛰기**(진행도 -1 = 완료, §5.3.1).
+  //   정정(2026-07-28 테스터): 건너뛰기가 goBack(진행도 보존)이라 일정 복귀 후 시상식이 다시 떠 "건너뛰기"라는 단어와 어긋났다
+  //   → 건너뛰기도 finishCeremony(완료 처리)로. "건너뛰기=남은 시상 스킵하고 끝냄"으로 단어·동작 일치. 이어보기는 OS 뒤로가기(진행도는 매 비트 저장)로 보존.
+  const goBack = () => { router.dismissAll(); router.replace('/(tabs)/schedule'); };
+  const finishCeremony = () => { setCeremonyProgress(-1); goBack(); };
   const next = () => {
     if (onLast) return; // 마지막은 버튼으로 진행(클라이맥스 음미)
     Animated.timing(t, { toValue: 0, duration: 170, useNativeDriver: true }).start(() => setIdx((i) => Math.min(i + 1, last)));
@@ -199,7 +212,7 @@ function CeremonyInner() {
           ))}
         </View>
         {!onLast ? (
-          <Pressable onPress={goRecap} hitSlop={10}><Text style={styles.skip}>건너뛰기 →</Text></Pressable>
+          <Pressable onPress={finishCeremony} hitSlop={10}><Text style={styles.skip}>건너뛰기 →</Text></Pressable>
         ) : <View />}
       </View>
 
@@ -217,6 +230,9 @@ function CeremonyInner() {
 }
 
 const styles = themedStyles(() => StyleSheet.create({
+  // 오프스크린 프리워밍 컨테이너 — 화면 밖(투명·0크기)이지만 마운트돼 이미지 디코드는 수행(#2, 2026-07-28)
+  prewarm: { position: 'absolute', width: 1, height: 1, opacity: 0, overflow: 'hidden' },
+  prewarmImg: { width: 1, height: 1 },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 8 },
   dots: { flexDirection: 'row', gap: 7, alignItems: 'center' },
   dot: { width: 7, height: 7, borderRadius: 4, backgroundColor: theme.border },
