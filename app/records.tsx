@@ -105,7 +105,7 @@ function RecordsInner() {
                         : r.retired ? <Text style={styles.retired}>은퇴</Text> : null}
                     </View>
                     <Text style={styles.metaTxt} numberOfLines={1}>
-                      {short(r.teamId)} · {r.seasons}시즌
+                      {getTeam(r.teamId)?.name ?? short(r.teamId)} · {r.seasons}시즌
                     </Text>
                   </View>
                   <View style={styles.valWrap}>

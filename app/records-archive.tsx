@@ -342,7 +342,7 @@ function CareerView({
                     <Text style={[styles.lbName, { flex: 0, flexShrink: 1 }, isMine(r.id) && styles.mine]} numberOfLines={1}>{r.name}</Text>
                     {r.legend ? <Text style={styles.lbLegend}>🎖️</Text> : r.retired ? <Text style={styles.lbRetired}>은퇴</Text> : null}
                   </View>
-                  <Text style={styles.lbTeam} numberOfLines={1}>{short(r.teamId)}</Text>
+                  <Text style={styles.lbTeam} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{getTeam(r.teamId)?.name ?? short(r.teamId)}</Text>
                   <Text style={styles.lbVal}>{r.value.toLocaleString()}</Text>
                 </Pressable>
               ))}
@@ -528,7 +528,7 @@ const styles = themedStyles(() => StyleSheet.create({
   lbNameCell: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 5 },
   lbLegend: { fontSize: 11 },
   lbRetired: { color: theme.muted, fontSize: 10, fontWeight: '800', backgroundColor: theme.cardAlt, paddingHorizontal: 5, paddingVertical: 1, borderRadius: 4, overflow: 'hidden' },
-  lbTeam: { color: theme.muted, fontSize: 12, width: 52, textAlign: 'right' },
+  lbTeam: { color: theme.muted, fontSize: 12, width: 88, textAlign: 'right' }, // 팀 풀네임(테스터 2026-07-29) — 약어→풀, adjustsFontSizeToFit로 최장명 수용
   lbVal: { color: theme.text, fontSize: 14, fontWeight: '800', minWidth: 44, textAlign: 'right' },
 
   hofRow: { flexDirection: 'row', alignItems: 'center', gap: 8, paddingVertical: 6 },
