@@ -49,8 +49,9 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
     { pt: 0, ak: 0, aa: 0, bl: 0, ac: 0, dg: 0, as: 0, er: 0 },
   );
 
+  // 0이면 빈칸(테스터 2026-07-29: "0은 안 나오게 — 안 한 건 언급 X"). 알림 없는 스탯을 지워 선수별 기여가 한눈에.
   const num = (v: number, w: number) => (
-    <Text style={[styles.cell, { width: w }, v === 0 ? styles.zero : undefined]}>{v}</Text>
+    <Text style={[styles.cell, { width: w }]}>{v === 0 ? '' : v}</Text>
   );
 
   if (rows.length === 0) return <Text style={styles.empty}>출전 명단이 없습니다.</Text>;
@@ -83,7 +84,7 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
                 <PosTag pos={p.position} solid compact />
                 <Text style={styles.nmTxt} numberOfLines={1} ellipsizeMode="tail">{p.name}</Text>
               </View>
-              <Text style={[styles.cell, styles.sc, { width: C.sc }]}>{pts(l)}</Text>
+              <Text style={[styles.cell, styles.sc, { width: C.sc }]}>{pts(l) === 0 ? '' : pts(l)}</Text>
               {num(l.atkKill, C.ak)}
               {num(l.atkAtt, C.aa)}
               <Text style={[styles.cell, { width: C.ap }, ap !== null && ap >= 45 ? styles.hi : ap === null ? styles.zero : undefined]}>{fmt(ap)}</Text>
@@ -91,7 +92,7 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
               {num(l.srvAce, C.sv)}
               {num(l.assist, C.st)}
               {num(l.digSucc, C.dg)}
-              <Text style={[styles.cell, { width: C.er }, err > 0 ? styles.err : styles.zero]}>{err}</Text>
+              <Text style={[styles.cell, { width: C.er }, err > 0 ? styles.err : undefined]}>{err > 0 ? err : ''}</Text>
             </View>
           );
         })}

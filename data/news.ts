@@ -704,7 +704,12 @@ export function buildNewsFeed(
     push(currentSeason, 'match', `${e.name}, 한 경기 ${e.points}점 폭발`, e.points >= 35, e.tid,
       body3('biggame', `${currentSeason}:bg:${id}`, more(
         `${e.name}(${teamName(e.tid)})이(가) 한 경기 ${e.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`,
-        `상대 ${teamName(e.opp)}을(를) 상대로 공격 성공 ${e.spikes}개·서브 에이스 ${e.aces}개·블로킹 ${e.blocks}개를 곁들였다.`)), id, e.day);
+        // 0인 스탯은 빼고 나열(공격수 "블로킹 0개" 박제 방지 — 위 480 라인과 동일 원칙, 테스터 2026-07-29)
+        `상대 ${teamName(e.opp)}을(를) 상대로 ${[
+          e.spikes > 0 ? `공격 성공 ${e.spikes}개` : '',
+          e.aces > 0 ? `서브 에이스 ${e.aces}개` : '',
+          e.blocks > 0 ? `블로킹 ${e.blocks}개` : '',
+        ].filter(Boolean).join('·')}를 곁들였다.`)), id, e.day);
   }
 
   // 8.5) 순위 확정(clinch, NEWS_SYSTEM §3.1) — PO진출/정규1위직행/PO탈락이 **막 수학적으로 확정된 경기일**을 연대기로.
