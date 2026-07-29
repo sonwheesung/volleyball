@@ -154,11 +154,12 @@ const KIND_ICON: Record<NewsItem['kind'], ComponentProps<typeof Ionicons>['name'
 function careerStatRow(p: Player): { label: string; value: string } | null {
   const c = p.career;
   if (!c || c.matches <= 0) return null;
-  const v = p.position === 'L' ? { label: '통산 디그', value: `${c.digs.toLocaleString()}개` }
-    : p.position === 'S' ? { label: '통산 세트', value: `${c.assists.toLocaleString()}개` }
-    : p.position === 'MB' ? { label: '통산 블로킹', value: `${c.blocks.toLocaleString()}개` }
-    : { label: '통산 득점', value: `${c.points.toLocaleString()}점` };
-  return v;
+  // 대표 스탯 0이면 노출 X → 득점 폴백 → 그것도 0이면 null(주석대로 "값 0 생략" 실제 구현, 테스터 2026-07-29)
+  const rep = p.position === 'L' ? (c.digs > 0 ? { label: '통산 디그', value: `${c.digs.toLocaleString()}개` } : null)
+    : p.position === 'S' ? (c.assists > 0 ? { label: '통산 세트', value: `${c.assists.toLocaleString()}개` } : null)
+    : p.position === 'MB' ? (c.blocks > 0 ? { label: '통산 블로킹', value: `${c.blocks.toLocaleString()}개` } : null)
+    : (c.points > 0 ? { label: '통산 득점', value: `${c.points.toLocaleString()}점` } : null);
+  return rep ?? (c.points > 0 ? { label: '통산 득점', value: `${c.points.toLocaleString()}점` } : null);
 }
 
 type PosGroup = 'attack' | 'set' | 'libero';

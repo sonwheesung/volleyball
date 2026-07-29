@@ -36,11 +36,15 @@ const posKoOf = (id: string) => POS_KO[getPlayer(id)?.position ?? ''] ?? '주전
 const careerLine = (playerId: string): string => {
   const p = getPlayer(playerId); const c = p?.career;
   if (!p || !c || c.matches <= 0) return '';
-  const stat = p.position === 'L' ? `디그 ${c.digs.toLocaleString()}개`
-    : p.position === 'S' ? `세트 어시스트 ${c.assists.toLocaleString()}개`
-    : p.position === 'MB' ? `블로킹 ${c.blocks.toLocaleString()}개`
-    : `${c.points.toLocaleString()}점`;
-  return `${POS_KO[p.position]} ${p.name}의 통산 성적은 ${c.seasons}시즌 ${c.matches}경기 ${stat}이다.`;
+  // 대표 스탯 0이면 노출 X → 득점 폴백 → 그것도 0이면 경기수만("블로킹 0개" 박제 방지, 테스터 2026-07-29)
+  const rep = p.position === 'L' ? (c.digs > 0 ? `디그 ${c.digs.toLocaleString()}개` : '')
+    : p.position === 'S' ? (c.assists > 0 ? `세트 어시스트 ${c.assists.toLocaleString()}개` : '')
+    : p.position === 'MB' ? (c.blocks > 0 ? `블로킹 ${c.blocks.toLocaleString()}개` : '')
+    : (c.points > 0 ? `${c.points.toLocaleString()}점` : '');
+  const stat = rep || (c.points > 0 ? `${c.points.toLocaleString()}점` : '');
+  return stat
+    ? `${POS_KO[p.position]} ${p.name}의 통산 성적은 ${c.seasons}시즌 ${c.matches}경기 ${stat}이다.`
+    : `${POS_KO[p.position]} ${p.name}은(는) ${c.seasons}시즌 ${c.matches}경기를 뛰었다.`;
 };
 /** core 뒤에 사실 절을 덧붙임(빈 문자열이면 그대로) — 본문 보강 공통. */
 const more = (core: string, ...facts: string[]): string => [core, ...facts.filter((f) => f && f.trim())].join(' ');
@@ -677,12 +681,17 @@ export function buildNewsFeed(
         const elite = p.talentBase >= ELITE_MIN;
         const tier = elite ? '특급 기대주' : '유망주';
         const posKo = POS_KO[p.position] ?? '';
-        const stat = p.position === 'L' ? `디그 ${l.digs}개·리시브 ${l.receives}개`
-          : p.position === 'S' ? `세트 ${l.assists}개`
-          : `${l.points}점`;
-        push(currentSeason, 'debut', `${tier} ${p.name} 데뷔전 — ${stat} (${posKo})`, elite, tid,
+        // 대표 스탯 0이면 노출 X("0점"·"디그 0개" 박제 방지). 리베로는 디그만(리시브는 스파이크 수비로 오해 — 박스스코어와 통일, 테스터 2026-07-29).
+        const stat = p.position === 'L' ? (l.digs > 0 ? `디그 ${l.digs}개` : '')
+          : p.position === 'S' ? (l.assists > 0 ? `세트 ${l.assists}개` : '')
+          : (l.points > 0 ? `${l.points}점` : '');
+        const dTitle = stat ? `${tier} ${p.name} 데뷔전 — ${stat} (${posKo})` : `${tier} ${p.name} 데뷔전 (${posKo})`;
+        const dLead = stat
+          ? `${teamName(tid)}의 ${tier} ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}을(를) 기록했다.`
+          : `${teamName(tid)}의 ${tier} ${posKo} ${p.name}이(가) 첫 선발 무대에 나섰다.`;
+        push(currentSeason, 'debut', dTitle, elite, tid,
           body3('debut', `${currentSeason}:db:${id}`, more(
-            `${teamName(tid)}의 ${tier} ${posKo} ${p.name}이(가) 첫 선발 무대에 나서 ${stat}을(를) 기록했다.`,
+            dLead,
             `상대 ${teamName(opp)}을(를) 맞은 데뷔전이었다.`,
             elite ? 'S급 재능으로 분류된 특급 유망주로, 팀의 미래를 책임질 재목으로 꼽힌다.' : '높은 잠재력을 인정받은 기대주로, 성장 곡선에 시선이 모인다.')), id, mp.dayIndex);
       }

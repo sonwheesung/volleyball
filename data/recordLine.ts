@@ -14,10 +14,11 @@ export const fmtMatches = (m: number): string => (Number.isInteger(m) ? String(m
  *  예) OH `36경기 · 624점` · MB `36경기 · 블로킹 91` · S `36경기 · 세트 812` · L `36경기 · 디그 488`. */
 export function repRecordLine(pos: Position, l: RecordLike): string {
   const g = `${fmtMatches(l.gamesPlayed ?? l.matches)}경기`;
-  switch (pos) {
-    case 'MB': return `${g} · 블로킹 ${l.blocks}`;
-    case 'S':  return `${g} · 세트 ${l.assists}`;
-    case 'L':  return `${g} · 디그 ${l.digs}`;
-    default:   return `${g} · ${l.points}점`; // OH · OP
-  }
+  // 대표 스탯이 0이면(부분출전·신인) 노출하지 않고 득점으로 폴백, 득점도 0이면 경기수만 — "블로킹 0" 박제 방지(테스터 2026-07-29).
+  const rep = pos === 'MB' ? (l.blocks > 0 ? `블로킹 ${l.blocks}` : '')
+    : pos === 'S' ? (l.assists > 0 ? `세트 ${l.assists}` : '')
+    : pos === 'L' ? (l.digs > 0 ? `디그 ${l.digs}` : '')
+    : (l.points > 0 ? `${l.points}점` : '');
+  const stat = rep || (l.points > 0 ? `${l.points}점` : '');
+  return stat ? `${g} · ${stat}` : g;
 }

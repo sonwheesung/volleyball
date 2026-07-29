@@ -162,12 +162,14 @@ function ContractsInner() {
     }
     // 함께한 세월·통산을 회고로(감정 무게 — TRANSACTION_SYSTEM 0.5②). 포지션별 대표 스탯.
     const c = p.career;
-    const stat = p.position === 'L' ? `통산 디그 ${c.digs.toLocaleString()}`
-      : p.position === 'S' ? `통산 세트 ${c.assists.toLocaleString()}`
-      : `통산 ${c.points.toLocaleString()}점`;
+    // 대표 스탯 0이면 노출 X → 득점 폴백("통산 디그 0"·"통산 0점" 박제 방지, 테스터 2026-07-29)
+    const rep = p.position === 'L' ? (c.digs > 0 ? `통산 디그 ${c.digs.toLocaleString()}` : '')
+      : p.position === 'S' ? (c.assists > 0 ? `통산 세트 ${c.assists.toLocaleString()}` : '')
+      : (c.points > 0 ? `통산 ${c.points.toLocaleString()}점` : '');
+    const stat = rep || (c.points > 0 ? `통산 ${c.points.toLocaleString()}점` : '');
     const retro = [
       p.clubTenure > 0 ? `우리 팀과 ${p.clubTenure}시즌` : '갓 합류한 선수',
-      c.matches > 0 ? `${fmtMatches(c.matches)}경기 · ${stat}` : '아직 기록 없음',
+      c.matches > 0 && stat ? `${fmtMatches(c.matches)}경기 · ${stat}` : c.matches > 0 ? `${fmtMatches(c.matches)}경기` : '아직 기록 없음',
       isFranchise(p) ? '프랜차이즈 스타' : null,
     ].filter(Boolean).join('\n');
     const heavy = isFranchise(p) || p.clubTenure >= 6;
