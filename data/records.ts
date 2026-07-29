@@ -3,6 +3,7 @@
 //        (awardHistoryOf 와 동일 패턴 — store 무의존). 시즌 스냅샷은 archive(과거)/라이브(현재)를 합성.
 
 import type { HofEntry, MatchResult, Position, SeasonArchive, SeasonAwards } from '../types';
+import type { ProdLine } from '../engine/production';
 import { currentRosters, getPlayer } from './league';
 import { currentSeasonAwards } from './awards';
 import { computeStandings, displayCutoff } from './standings';
@@ -39,8 +40,11 @@ function activePlayers(): { id: string; teamId: string }[] {
   return out;
 }
 
-/** 통산 리더보드 — 현역+은퇴 통합, 값>0, 내림차순(동률 시 시즌 수→이름). 호출부가 TOP N 슬라이스. */
-export function careerLeaderboard(cat: RecordCat, hof: HofEntry[]): CareerRow[] {
+/** 통산 리더보드 — 현역+은퇴 통합, 값>0, 내림차순(동률 시 시즌 수→이름). 호출부가 TOP N 슬라이스.
+ *  live(이번 시즌 진행분, 선수별 leagueProduction): 현역 값에 더한다 — career는 endSeason에서만 누적돼 시즌 중엔
+ *  진행분이 빠지기 때문(첫 시즌 "아직 기록 없음" 원인, 테스터 2026-07-29). achTotals(업적)와 동일 원칙 — endSeason 경계에서
+ *  stored += 시즌분·새 시즌 live 0 → 이중계산 없음. 은퇴(HOF)는 확정값이라 live 무가산. */
+export function careerLeaderboard(cat: RecordCat, hof: HofEntry[], live?: Map<string, ProdLine>): CareerRow[] {
   const rows: CareerRow[] = [];
   for (const { id, teamId } of activePlayers()) {
     const p = getPlayer(id);
@@ -48,7 +52,7 @@ export function careerLeaderboard(cat: RecordCat, hof: HofEntry[]): CareerRow[] 
     rows.push({
       // 현역 표시 시즌 수 = 인게임 시즌(seasonLines) — career.seasons는 시드 백스토리 포함이라 통산 값과 어긋남(EC-REC-01)
       id, name: p.name, position: p.position, teamId,
-      value: p.career[cat], seasons: p.seasonLines?.length || p.career.seasons, retired: false, legend: false,
+      value: p.career[cat] + (live?.get(id)?.[cat] ?? 0), seasons: p.seasonLines?.length || p.career.seasons, retired: false, legend: false,
     });
   }
   for (const h of hof) {
@@ -63,8 +67,8 @@ export function careerLeaderboard(cat: RecordCat, hof: HofEntry[]): CareerRow[] 
 }
 
 /** 구단별 통산 리더보드 — teamId(현 소속 또는 마지막 소속) 기준 필터 */
-export function teamCareerLeaderboard(cat: RecordCat, teamId: string, hof: HofEntry[]): CareerRow[] {
-  return careerLeaderboard(cat, hof).filter((r) => r.teamId === teamId);
+export function teamCareerLeaderboard(cat: RecordCat, teamId: string, hof: HofEntry[], live?: Map<string, ProdLine>): CareerRow[] {
+  return careerLeaderboard(cat, hof, live).filter((r) => r.teamId === teamId);
 }
 
 // ─── 시즌 스냅샷 (시즌별 이동) ─────────────────────────────────

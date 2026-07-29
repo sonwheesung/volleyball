@@ -5,6 +5,8 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { IconLabel, Loading, PosTag, theme, themeAssets, themedStyles, useDeferredReady } from '../components/Screen';
 import { getTeam, shortTeamName as short, teamPlayerIds } from '../data/league';
 import { careerLeaderboard, teamCareerLeaderboard, RECORD_CATS, type RecordCat } from '../data/records';
+import { leagueProduction } from '../data/production';
+import { displayCutoff } from '../data/standings';
 import { useGameStore } from '../store/useGameStore';
 
 const MEDAL = ['🥇', '🥈', '🥉'];
@@ -25,13 +27,21 @@ function RecordsInner() {
 
   const hallOfFame = useGameStore((s) => s.hallOfFame);
   const myTeam = useGameStore((s) => s.selectedTeamId);
+  const currentDay = useGameStore((s) => s.currentDay);
+  const results = useGameStore((s) => s.results);
   const myIds = useMemo(() => new Set(myTeam ? teamPlayerIds(myTeam) : []), [myTeam]);
+
+  // 이번 시즌 진행분(선수별) — career는 endSeason에서만 누적돼 시즌 중 통산이 비므로 여기서 더한다(records-archive와 동일, 테스터 2026-07-29).
+  const live = useMemo(() => {
+    const cutoff = displayCutoff(currentDay, results, myTeam ?? undefined);
+    return cutoff >= 0 ? leagueProduction(cutoff) : undefined;
+  }, [currentDay, results, myTeam]);
 
   const limit = scope === 'team' ? 50 : 100;
   const meta = RECORD_CATS.find((c) => c.key === cat)!;
   const rows = useMemo(
-    () => (scope === 'team' ? teamCareerLeaderboard(cat, teamId, hallOfFame) : careerLeaderboard(cat, hallOfFame)).slice(0, limit),
-    [cat, scope, teamId, hallOfFame, limit],
+    () => (scope === 'team' ? teamCareerLeaderboard(cat, teamId, hallOfFame, live) : careerLeaderboard(cat, hallOfFame, live)).slice(0, limit),
+    [cat, scope, teamId, hallOfFame, live, limit],
   );
 
   const titleScope = scope === 'team' ? `${getTeam(teamId)?.name ?? short(teamId)} · ` : '';

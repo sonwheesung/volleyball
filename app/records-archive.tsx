@@ -105,6 +105,10 @@ function RecordsInner() {
     ];
   }, [cutoff, season]);
 
+  // 통산 리더보드에 더할 이번 시즌 진행분(선수별) — career는 endSeason에서만 누적돼 시즌 중 통산이 비는 것 방지(테스터 2026-07-29).
+  //   leagueProduction은 cutoff 캐시라 위 leaders와 같은 키면 캐시 히트(재계산 X). endSeason 후엔 stored에 반영·새 시즌 live 0.
+  const careerLive = useMemo(() => (cutoff >= 0 ? leagueProduction(cutoff) : undefined), [cutoff, season]);
+
   return (
     <Screen title="기록">
       <Seg items={['시즌', '통산', '명예의전당', '연표']} value={tab} onChange={setTab} />
@@ -119,7 +123,7 @@ function RecordsInner() {
 
       {tab === 1 ? (
         <CareerView
-          scope={scope} setScope={setScope} teamId={teamId} hallOfFame={hallOfFame} isMine={isMine}
+          scope={scope} setScope={setScope} teamId={teamId} hallOfFame={hallOfFame} isMine={isMine} live={careerLive}
           onMore={(cat) => router.push(`/records?cat=${cat}&scope=${scope}&team=${teamId ?? ''}`)}
           onPlayer={(id) => router.push(`/player/${id}`)}
         />
@@ -304,10 +308,11 @@ function SeasonView({
 
 // ─── 탭 1 · 통산 ───────────────────────────────────────────────
 function CareerView({
-  scope, setScope, teamId, hallOfFame, isMine, onMore, onPlayer,
+  scope, setScope, teamId, hallOfFame, isMine, live, onMore, onPlayer,
 }: {
   scope: 'league' | 'team'; setScope: (s: 'league' | 'team') => void; teamId: string | null;
   hallOfFame: Parameters<typeof careerLeaderboard>[1]; isMine: (id: string) => boolean;
+  live?: Parameters<typeof careerLeaderboard>[2];
   onMore: (cat: RecordCat) => void; onPlayer: (id: string) => void;
 }) {
   const limit = scope === 'team' ? 50 : 100;
@@ -319,7 +324,7 @@ function CareerView({
         <Card flat><Muted>구단을 먼저 선택하세요.</Muted></Card>
       ) : (
         RECORD_CATS.map((c) => {
-          const rows = (scope === 'team' ? teamCareerLeaderboard(c.key, teamId ?? '', hallOfFame) : careerLeaderboard(c.key, hallOfFame));
+          const rows = (scope === 'team' ? teamCareerLeaderboard(c.key, teamId ?? '', hallOfFame, live) : careerLeaderboard(c.key, hallOfFame, live));
           const top = rows.slice(0, 5);
           return (
             <Card key={c.key} accent={theme.gold} flat>
