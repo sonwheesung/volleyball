@@ -66,9 +66,26 @@ export function careerLeaderboard(cat: RecordCat, hof: HofEntry[], live?: Map<st
     .sort((a, b) => b.value - a.value || b.seasons - a.seasons || a.name.localeCompare(b.name));
 }
 
-/** 구단별 통산 리더보드 — teamId(현 소속 또는 마지막 소속) 기준 필터 */
+/** 구단별 통산 리더보드 = **프랜차이즈 기록**(그 팀을 위해 쌓은 것만, 테스터 2026-07-29).
+ *  ~~현/마지막 소속 필터~~(현재 로스터 전체 커리어)에서 정정 — 이적자 기록 유실 + 영입자 이전팀 기록 부풀림 문제.
+ *  현역: seasonLines(시즌별 소속+스탯)에서 teamId 시즌만 합산(이적해 나가도 우리 팀 시즌 기록 보존, 영입자 이전 팀 제외)
+ *       + 현재 우리 팀이면 이번 시즌 진행분(live) 가산. 은퇴: HOF는 통산 총합만(팀별 분해 없음) → 마지막 소속=우리 팀일 때만 귀속. */
 export function teamCareerLeaderboard(cat: RecordCat, teamId: string, hof: HofEntry[], live?: Map<string, ProdLine>): CareerRow[] {
-  return careerLeaderboard(cat, hof, live).filter((r) => r.teamId === teamId);
+  const rows: CareerRow[] = [];
+  for (const { id, teamId: curTeam } of activePlayers()) {
+    const p = getPlayer(id);
+    if (!p) continue;
+    let value = 0, teamSeasons = 0;
+    for (const l of p.seasonLines ?? []) if (l.teamId === teamId) { value += l[cat]; teamSeasons++; }
+    if (curTeam === teamId) value += live?.get(id)?.[cat] ?? 0; // 진행 중 시즌은 seasonLines에 아직 없음 — 현재 우리 팀이면 live로
+    if (value > 0) rows.push({ id, name: p.name, position: p.position, teamId, value, seasons: teamSeasons || (curTeam === teamId ? 1 : 0), retired: false, legend: false });
+  }
+  for (const h of hof) {
+    if (h.teamId !== teamId) continue;   // 마지막 소속=우리 팀(HOF 한계 — 팀별 분해 불가라 총합을 마지막 팀에)
+    const value = h[cat] ?? 0;
+    if (value > 0) rows.push({ id: h.id, name: h.name, position: h.position, teamId, value, seasons: h.seasons, retired: true, legend: h.legend });
+  }
+  return rows.sort((a, b) => b.value - a.value || b.seasons - a.seasons || a.name.localeCompare(b.name));
 }
 
 // ─── 시즌 스냅샷 (시즌별 이동) ─────────────────────────────────
