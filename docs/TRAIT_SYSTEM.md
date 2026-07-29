@@ -162,7 +162,7 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
   - **타임아웃**(감독 자동·개입·테크니컬 TTO) 발생 시 양 팀 `activeBuffs` 전체 clear.
   - **세트 종료** 시 양 팀 clear(다음 세트 누수 0).
   - **선수당 1개**: 같은 id에 서로 다른 트리거가 와도 Map.set 덮어쓰기 → 단일 유지(마지막 트리거 승). fragile↔bounce는 ANTAGONISTS로 한 선수 동시부여 원천 차단 + 발동 시엔 Map 단일이라 이중 안전.
-- **연출 스펙(확정 — 아티팩트 사용자 승인, UI 배선=Phase 2c ✅ 구현 2026-07-27 — §6.10)**: 발동 시 **현수막 1회** + **마커 ~~테두리 점등~~ 펄스 글로우 헤일로**(정정 2026-07-27 #136 — 정적 링이 포지션색과 겹쳐 애니+글로우 헤일로로, §6.10)(버프=금·에메랄드 / 디버프=적). **지속 텍스트/카운트다운 없음**(관전 소음 방지). 5랠리·타임아웃 해제·선수당 1개. 상태형(§6.4)은 여전히 연출 없이 조용히.
+- **연출 스펙(확정 — 아티팩트 사용자 승인, UI 배선=Phase 2c ✅ 구현 2026-07-27 — §6.10)**: 발동 시 **현수막 1회** + **마커 테두리색 tint 변경**(~~테두리 점등~~ → ~~펄스 글로우 헤일로(#136)~~ → **마커 보더 tint**(재정정 2026-07-29 테스터, §6.10) — 별도 레이어 없이 마커 테두리색 자체를 tint로)(버프=금·에메랄드 / 디버프=적). **지속 텍스트/카운트다운 없음**(관전 소음 방지). 5랠리·타임아웃 해제·선수당 1개. 상태형(§6.4)은 여전히 연출 없이 조용히.
 - **결정론(구현 확정)**: 반응형 특성 미부여 선수는 `activeBuffs`에 엔트리 없음·`clutchArmed` 빈 집합 → `reactiveSkillMult`=1·`reactiveFocusAdj`=0 → **완전 무영향**(무보유 리그 바이트 동일 — 가드 `_dv_reactive` (a) 실측 activations=0·maxBuffs=0·동일시드 재현). 단 **POOL에 반응형 추가로 시드 리그 선수의 rollTraits 분포가 바뀌어 seeded-league 결과가 변동 → `ENGINE_VERSION` 범프**(2a: 13→14 · **2b: 14→15**, 이벤트 발동형 4종 POOL 추가). REALTIME_SIM 결과캐시 게이트가 옛-엔진 저장 순위 폐기·재계산. **골든 재생성**(`_dv_golden --update`)·KOVO 분포/parity 재수렴·부정 보유율 재측정은 **메인**이 판단(반응형은 시드 결과를 바꾸므로 임의 골든 갱신 금지).
 - **상비 가드 `tools/_dv_reactive.ts`**: (a)무해성(미부여 activations 0·바이트 동일)+민감도(de-confounded 조커 sub 결과 변동) (b)7종 발동(조커/유리멘탈/오뚝이 + 낯가림[교체 투입]/핀치서버[서브슬롯 교체]/대타승부사[첫 공격]/에이스기세[서브 에이스], 각 control/strip=0) (c)5랠리 만료·타임아웃 clear·세트끝 clear(expires/clears 카운터로 격리) (d)선수당 1개(Map 단일) (e)하드캡 극단값 clamp (f)방향 A/B(직접 playRally 하네스 — 조커·대타승부사 킬%↑·유리멘탈·낯가림 킬%↓·핀치서버·에이스기세 홈 서브에이스%↑ + OFF/OFF 자가검증 2종). 관측은 `debugReactive`(debugSimCalls 패턴, rng 무영향). 실측(N=400, ENGINE_VERSION 15): 킬% NONE 42.08 → 조커 44.08·대타승부사 44.26·유리멘탈 40.87·낯가림 40.40 · 서브에이스% NONE 4.15 → 핀치서버·에이스기세 각 4.58.
 
@@ -228,7 +228,7 @@ per-player 정적 배수 헬퍼 `venueSkillMult(traits, isHome)`로 바로 구�
 
 ### 6.7 명명·연출 정책
 - **지속 단위 = "N랠리"**(랠리포인트제 = 랠리 1번 = 1점). "N포인트" 아님.
-- **연출**: 순간형 반응형만 현수막·마커 ~~테두리색~~ 펄스 글로우 헤일로(#136, §6.10). **상태형은 조용히**(수치만). 상시형은 뱃지 설명만(연출 없음).
+- **연출**: 순간형 반응형만 현수막·마커 ~~테두리색~~ ~~펄스 글로우 헤일로(#136)~~ **테두리 tint**(재정정 2026-07-29 테스터, §6.10 — 별도 헤일로 폐기, 마커 보더색 자체 변경). **상태형은 조용히**(수치만). 상시형은 뱃지 설명만(연출 없음).
 
 ### 6.8 Phase 계획
 | Phase | 범위 | 상태 |
@@ -236,7 +236,7 @@ per-player 정적 배수 헬퍼 `venueSkillMult(traits, isHome)`로 바로 구�
 | **P1** | 상시형 6종(bomber/digWall/smart/endurance/tank/maestro) | ✅ 구현 완료(2026-07-27) |
 | **P2a** | 반응형 3종(조커/유리멘탈/오뚝이) + `RallyTeam.activeBuffs`(선수당 1개) + `reactiveSkillMult`/`reactiveFocusAdj`(±10%/±0.10 캡) + ENGINE_VERSION 13→14 범프 + 가드 `_dv_reactive` | ✅ 구현 완료(2026-07-27, 엔진 레이어. UI 연출=2c) |
 | **P2b** | 반응형 이벤트 발동형 4종(낯가림/핀치서버/대타승부사/에이스기세) — 2a 레이어 재사용(activeBuffs·reactiveSkillMult·±10%캡·reactiveEvents 자동 연출) + `RallyTeam.clutchArmed`(대타승부사 첫 공격 플래그) + joker↔coldStart 상극 + ENGINE_VERSION 14→15 범프 | ✅ 구현 완료(2026-07-27). 안방호랑이/원정형(맥락 의존 → `effStat`)은 P2 후반으로 이월 |
-| **P2c** | 반응형 UI 연출(현수막 발동 1회 + 마커 테두리 점등, 지속 텍스트 없음 — §6.3 연출 스펙·§6.10) | ✅ 구현 완료(2026-07-27) |
+| **P2c** | 반응형 UI 연출(현수막 발동 1회 + 마커 테두리색 tint, 지속 텍스트 없음 — §6.3 연출 스펙·§6.10). ~~정적 링~~→~~펄스 글로우 헤일로(#136)~~→**마커 보더 tint**(재정정 2026-07-29 테스터) | ✅ 구현 완료(2026-07-27, 연출 재정정 2026-07-29) |
 | **P2d** | 경기 맥락 상시형 2종(안방호랑이/원정형) — `venueSkillMult(traits, isHome)`(홈/원정 고정 ±3% per-player, `reactiveSkillMult`과 같은 층에 한 겹) + `RallyTeam.isHome`(fixture 홈=true) + homeTiger↔awayWarrior 상극 + ENGINE_VERSION 15→16 범프. 상시형이라 **연출 없음**(§6.5) | ✅ 구현 완료(2026-07-27) |
 | **P3** | 상태형 5종(closer/fastStart/comeback/thinIce/tiebreaker) — `stateSkillMult(traits, ctx, isHome)`(현재 세트 점수·setNo 조건부 상시 ±3%, venue와 같은 층에 한 겹) + StateCtx를 match.ts가 랠리 직전 점수로 만들어 playRally에 전달 + closer↔fastStart·comeback↔thinIce 상극 + ENGINE_VERSION 16→17 범프. **연출 없음**(§6.4·§6.7 — reactiveEvents 미발행) | ✅ 구현 완료(2026-07-27) |
 | **P4** | 밸런스 튜닝(부정 보유율 재측정·simKovo 밴드·계수 확정) | 설계 |
@@ -244,7 +244,7 @@ per-player 정적 배수 헬퍼 `venueSkillMult(traits, isHome)`로 바로 구�
 ### 6.10 반응형 연출 배선 (Phase 2c ✅ 구현 2026-07-27)
 
 엔진에서 이미 도는 반응형 특성(§6.3, 현재 7종)을 **경기 보드에 노출**한다. 순수 표현 배선 — 경기 결과·rng 스트림 불변.
-> **Phase 2b 4종 자동 연출(2026-07-27)**: 낯가림/핀치서버/대타승부사/에이스기세는 `reactiveEvents`에 실려 **추가 UI 작업 없이** 배너·마커가 붙는다 — 배너 라벨 `TRAITS[trait].name`(일반 파생), 마커 tint `reactiveTint` **폴백**(buff=금·debuff=적, 낯가림=적/나머지 3종=금), 배너 아이콘은 폴백 `alert-circle`(joker=flash·bounce=refresh 외). 전용 색/아이콘 세분은 필요 시 후속.
+> **Phase 2b 4종 자동 연출(2026-07-27)**: 낯가림/핀치서버/대타승부사/에이스기세는 `reactiveEvents`에 실려 **추가 UI 작업 없이** 배너·마커가 붙는다 — 배너 라벨 `TRAITS[trait].name`(일반 파생), 마커 보더 tint `reactiveTint` **폴백**(buff=금·debuff=적, 낯가림=적/나머지 3종=금), 배너 아이콘은 폴백 `alert-circle`(joker=flash·bounce=refresh 외). 전용 색/아이콘 세분은 필요 시 후속.
 
 - **엔진 출력 추가(결과 불변)**: `SimResult.reactiveEvents: ReactiveEvent[]`(정본 `engine/simMatch.ts`).
   `{ pointIndex, playerId, trait, kind:'buff'|'debuff', startPoint, endPoint }` — **발동 시점 + 활성 창**(point 인덱스 = 랠리 인덱스).
@@ -256,8 +256,9 @@ per-player 정적 배수 헬퍼 `venueSkillMult(traits, isHome)`로 바로 구�
 - **★ 골든 무영향(표현 출력)**: `_dv_golden serializeMatch`는 `reactiveEvents`를 **읽지 않는다**(코어 결과=세트/스코어/scorer/how/byId/recvId/box 집계만 해시). 따라서 이 필드 추가로 골든 해시 불변 → **골든 PASS 유지·ENGINE_VERSION 범프 불필요**(코어 결과 바이트 불변).
 - **보드 배선**(순수 표현, 재생 축 = 엔진 트레이스 소비):
   - **현수막 1회**: `app/match/[id].tsx`가 `reactiveEvents`를 라이브 배너 소스에 합류 — 재생 위치(`score.ptIdx`)가 `pointIndex`에 도달하면 기존 라이브 배너 큐(`BroadcastBanner`)에 "○○○ · 조커 발동" 1회 push(스포일러 정책상 실시간 연출은 관전 중 노출 OK, 기존 `pushedBanners` dedup·`initialPtIdx` 재개 가드 공유).
-  - **마커 헤일로**: `MatchCourt`가 현재 재생 랠리(`idx`)가 `[startPoint, endPoint]` 창 안이면 그 `playerId` 마커에 **펄스 글로우 헤일로**(버프=금[조커]/에메랄드[오뚝이] · 디버프=적[유리멘탈]). 창 밖이면 해제. **지속 텍스트/카운트다운 없음**. 기존 포지션색 실선 테두리는 불변.
-    - **정정(2026-07-27, #136 — 정적 링 → 펄스 글로우 헤일로)**: ~~마커 바깥 정적 색 링(`styles.reactiveRing`, borderColor/shadow=tint)~~ 은 **포지션 마커 링 색과 겹쳐**(금·적이 포지션색에도 쓰임) 반응형 발동이 시각적으로 안 구분됐다(에뮬 실기기 확인). → **펄스 글로우 헤일로**(`styles.reactiveHalo`)로 교체: 마커 바깥 별도 레이어(포지션 실선보다 큰 반경 +7px) + 옅은 글로우 채움 + **맥동 펄스**(scale 1.0↔1.12 · opacity 0.55↔1.0, ~1.8s 왕복 루프). 포지션 링이 절대 안 쓰는 표현(**애니+글로우**)이 구분자다. **성능(#122 발열)**: 컴포넌트에 **단일 공유 `Animated.Value`(pulse)** 하나만 두고 마운트 시 1회 `Animated.loop`, 모든 활성 헤일로가 그 값으로 scale/opacity 구동(마커마다 별도 애니 금지 — 동시 활성 1~2명). scale+opacity만 → `useNativeDriver:true`. 회전 conic 그라디언트 미사용(RN 무거움). reduced-motion 플래그는 미도입 → 상시 소진폭.
+  - **마커 테두리 tint**: `MatchCourt`가 현재 재생 랠리(`idx`)가 `[startPoint, endPoint]` 창 안이면 그 `playerId` 마커의 **테두리색 자체를 tint로 변경**(버프=금[조커]/에메랄드[오뚝이] · 디버프=적[유리멘탈]) + 발동 가시성용 테두리 굵기↑(2.5→3.2) + 옅은 tint 글로우 shadow. 창 밖이면 기존 POS_COLOR 실선으로 복귀. **지속 텍스트/카운트다운 없음**.
+    - ~~**정정(2026-07-27, #136 — 정적 링 → 펄스 글로우 헤일로)**: 마커 바깥 정적 색 링(`styles.reactiveRing`, borderColor/shadow=tint)은 포지션 마커 링 색과 겹쳐 반응형 발동이 시각적으로 안 구분됐다(에뮬 실기기 확인). → 펄스 글로우 헤일로(`styles.reactiveHalo`)로 교체: 마커 바깥 별도 레이어(포지션 실선보다 큰 반경 +7px) + 옅은 글로우 채움 + 맥동 펄스(scale 1.0↔1.12 · opacity 0.55↔1.0, ~1.8s 왕복 루프). 성능: 단일 공유 Animated.Value(pulse) 하나로 마운트 시 1회 Animated.loop.~~
+    - **재정정(2026-07-29, 테스터 — 별도 헤일로 레이어 → 마커 보더 tint)**: 테스터가 "별도 링 말고 **마커 자체 테두리 색**을 바꿔 달라"(오뚝이 등 버프 켜진 게 마커 테두리로 보이게) 요청. #136에서 "포지션색 겹침" 우려로 halo를 택했으나, **포지션 구분은 마커 밑 이름표(`{position} {name}`, POS_COLOR)에 이미 있어** 보더색을 tint로 바꿔도 포지션 식별이 유지된다(사용자 확인). → **별도 `reactiveHalo` 레이어(맥동 펄스 글로우) 제거**(styles.reactiveHalo·공유 `pulse` Animated.Value·loop·haloScale/haloOpacity 정리). 대신 `m.reactive`면 마커 `borderColor = m.reactive.tint`·`borderWidth 3.2`(미발동 2.5)·tint shadow 글로우(정적). **맥동 애니 제거**(관전형 무마찰 + 항상 도는 loop 제거로 발열 #122 완화 — 색+굵기+글로우로 발동 충분히 구분). 교체/서브/브레이스 등 다른 마커 상태는 보더 불변(reactive만 tint) — 기존 정책 유지.
   - 색·활성창 판정은 순수 셀렉터 `courtDirector.reactiveActiveAt(sim, ptIdx)`·`reactiveTint(trait,kind)`(단일 소스 — 보드가 독립 재계산 안 함, 엔진 산출 그대로 소비 → 개입/재생 3경로 정합).
 - **상비 가드 `tools/_dv_reactive.ts` (g)**: reactiveEvents 결정론(동일 시드 = 동일 이벤트) + 활성 창이 실제 버프 지속과 정합(startPoint/endPoint가 `debugReactive` 발동/만료 카운트와 일치) + 미부여 리그 빈 배열 + 골든 무영향(serializeMatch 해시 불변) A/B.
 

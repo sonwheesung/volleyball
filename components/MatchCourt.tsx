@@ -82,7 +82,13 @@ const JUMP = 1.45; // 점프 시 마커 확대
 const SETTLE_SEGMENTS = 2; // 블록/스파이크 점프 후 착지 정지 구간 수(점프 직후 즉시 이동 방지)
 const SPEED = 2; // 전체 경기 속도 배수(클수록 느림). 2 = 2배 느리게
 const SERVE_OUT = 22; // 엔드라인 뒤(코트 밖) 서브 거리(px)
-const COURT_PAD = SERVE_OUT + 4; // 코트 밖 서브 공간(버퍼 10→4로 축소, 2026-06-28 — 코트 유지하며 한 화면 맞춤)
+// 코트 밖 서브 공간(엔드라인 뒤 서버 도움닫기 여백). 서버 마커(원 반지름 MR=15)와 그 밑 이름표까지 courtWrap 안에
+//  담아야 코트 박스(overflow visible) 밖으로 나가 하단 컨트롤("⏭ 결과" 등)을 가리지 않는다(테스터 재보고 2026-07-29 ·
+//  BOARD_RULES 71 — 좌표(segmentTargets)는 불변, 프레임 여백 예산만 확장 → auditBoard C 무영향). courtDirector 최심
+//  서버 y = walk 스파이크 도움닫기 = SERVE_OUT+16. 상단=마커 원까지, 하단=마커+이름표/교체칩까지 담는다.
+const SERVE_DEEP = SERVE_OUT + 16;         // courtDirector segmentTargets 최심 서버 y(엔드라인 뒤)
+const COURT_PAD_TOP = SERVE_DEEP + 16;     // 원정(상단) 서버 마커 원(반지름 15 + 여유)
+const COURT_PAD_BOTTOM = SERVE_DEEP + 30;  // 홈(하단) 서버 마커 + 밑 이름표까지 → 하단 컨트롤 겹침 방지
 const serveOutY = (side: Side) => (side === 'home' ? COURT_H + SERVE_OUT : -SERVE_OUT);
 
 // ── 공 스핀(룰 64) ── 세그먼트 회전각(deg) = 이동거리 × SPIN_K × 타입배수. prog(네이티브 드라이버)에 rotate로 부여
@@ -289,23 +295,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     Animated.spring(subPop, { toValue: 1, friction: 5, tension: 90, useNativeDriver: true }).start();
   }, [subEvsNow, subPop]);
 
-  // 반응형 특성 헤일로(§6.10) — 정적 포지션 링과 구분하려 **펄스 글로우**로 연출(#136). 성능(발열 #122):
-  //  컴포넌트에 **단일 공유 Animated.Value**를 두고 마운트 시 1회 loop만 돌린다(마커마다 별도 애니 금지 —
-  //  활성 버프 마커는 동시 1~2명뿐). scale+opacity만 구동해 useNativeDriver:true(네이티브 드라이버 호환).
-  const pulse = useRef(new Animated.Value(0)).current; // 0↔1 맥동(공유). 모든 활성 헤일로가 이 값 하나로 구동.
-  useEffect(() => {
-    const loop = Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulse, { toValue: 1, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-        Animated.timing(pulse, { toValue: 0, duration: 900, easing: Easing.inOut(Easing.quad), useNativeDriver: true }),
-      ]),
-    );
-    loop.start();
-    return () => loop.stop();
-  }, [pulse]);
-  // 은은한 진폭(reduced-motion 플래그 미도입 — 상시 소진폭). scale 1.0↔1.12 · opacity 0.55↔1.0.
-  const haloScale = useMemo(() => pulse.interpolate({ inputRange: [0, 1], outputRange: [1.0, 1.12] }), [pulse]);
-  const haloOpacity = useMemo(() => pulse.interpolate({ inputRange: [0, 1], outputRange: [0.55, 1.0] }), [pulse]);
+  // 반응형 특성 발동 연출(§6.10) — 재정정(2026-07-29 테스터): 별도 헤일로 레이어·공유 pulse loop 제거.
+  //  마커 **자체 테두리색**을 tint로 바꾼다(아래 렌더). 항상 도는 loop가 없어 발열(#122)·관전 소음 무마찰.
   // 교체 발생 랠리 진입 시 중계 한 줄(투입 + 복귀 둘 다).
   useEffect(() => {
     if (finished || subEvsNow.length === 0) return;
@@ -416,8 +407,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     setPlaying(false); setTimeoutModal(null); setShown(total - 1); setIdx(total); setSegIdx(0);
   }, [total]);
 
-  // ⏭ 세트 — 현재 세트만 끝까지 건너뛴다(경기 전체가 아니라). 현재 세트의 마지막 랠리에 도달해 그
-  //  세트 최종 점수를 보여주고 멈춘다. 다음 세트는 ▶로 이어본다(마지막 세트면 경기 종료와 동일).
+  // ⏭ 세트 — 현재 세트만 끝까지 건너뛴다(경기 전체가 아니라). 현재 세트 마지막 랠리 다음(=다음 세트 첫 랠리)으로 점프.
+  //  ~~세트 최종 점수를 보여주고 멈춘다. 다음 세트는 ▶로 이어본다.~~ → 정정(2026-07-29 테스터): **다음 세트를 자동 재생**
+  //  (playing=true)으로 시작한다 — 스킵 후 paused로 멈춰 있어 매번 ▶를 다시 눌러야 하던 것(테스터 보고). 마지막 세트를
+  //  스킵하면 idx=total → finished=true(경기 종료 오버레이, 동일). 개입 시트/스코어박스로 인한 정당한 pause(부모 paused)와는
+  //  무관 — 세트 스킵만 재생 상태를 켠다(BOARD_RULES 72). 결정론·리플레이 무관(순수 재생 상태).
   const endSet = useCallback(() => {
     setConfirmEndSet(false);
     const start = Math.min(idx, total - 1);
@@ -427,8 +421,9 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     for (let i = start; i < total; i++) {
       if (rallies[i].setNo === curSetNo) last = i; else break; // setNo는 연속 블록 — 바뀌면 세트 끝
     }
-    setPlaying(false); setTimeoutModal(null);
+    setTimeoutModal(null);
     setShown(last); setIdx(last + 1); setSegIdx(0);
+    setPlaying(true); // 다음 세트 자동 재생(스킵 후 정지 방지, 2026-07-29 테스터)
   }, [idx, total, rallies]);
 
   useEffect(() => {
@@ -643,27 +638,17 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
           return (
             <Animated.View key={m.key} style={[styles.marker, {
               left: -MR, top: -MR,
-              // 다크 네온 코트(2026-06-28): 마커는 다크 채움 + 포지션색 링 + 번호(시안). 특수 상태(교체/서브/브레이스)는 링색 우선.
+              // 다크 네온 코트(2026-06-28): 마커는 다크 채움 + 포지션색 링 + 번호(시안).
               backgroundColor: mine ? 'rgba(14,27,43,0.96)' : 'rgba(12,19,31,0.94)',
-              // 테두리는 **항상 포지션 색·실선·동일 굵기** — 상태별 색/점선 변경은 전부 제거(2026-06-28 사용자 요청:
-              // "생각보다 별로"). 교체 표시는 ↑이름표·🔄 코트 배지·팝인이 담당(테두리는 정체성만).
-              borderColor: color,
-              borderWidth: 2.5,
+              // 테두리는 기본 **포지션 색·실선·2.5** (교체/서브/브레이스 등 상태는 테두리 안 건드림 — 이름표·배지·팝인 담당).
+              // **반응형 특성 발동(m.reactive)일 때만** 테두리색을 tint로 변경 + 굵기↑(3.2) + tint shadow 글로우(정적, §6.10,
+              //  재정정 2026-07-29 테스터: 별도 헤일로 레이어 대신 마커 보더 자체 tint). 포지션 식별은 마커 밑 이름표가 담당.
+              borderColor: m.reactive ? m.reactive.tint : color,
+              borderWidth: m.reactive ? 3.2 : 2.5,
               borderStyle: 'solid',
+              ...(m.reactive ? { shadowColor: m.reactive.tint, shadowOpacity: 0.95, shadowRadius: 7 } : null),
               transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.justSubbed ? subPop : m.jumping ? jumpScale : 1 }],
             }]}>
-              {/* 반응형 특성 펄스 글로우 헤일로(§6.10, #136) — 활성 창 동안만 점등. 정적 포지션 링과의 구분자는
-                  **애니(맥동)+글로우**다(포지션색과 겹쳐도 발동이 확실히 보인다). 버프=금/에메랄드·디버프=적(tint).
-                  마커 바깥 별도 레이어(포지션 실선보다 큰 반경) · 공유 pulse로 scale/opacity 왕복. 포지션 실선 테두리는 불변. */}
-              {m.reactive ? (
-                <Animated.View pointerEvents="none" style={[styles.reactiveHalo, {
-                  borderColor: m.reactive.tint,
-                  backgroundColor: m.reactive.tint + '1F', // 옅은 글로우 채움(~12% alpha)
-                  shadowColor: m.reactive.tint,
-                  opacity: haloOpacity,
-                  transform: [{ scale: haloScale }],
-                }]} />
-              ) : null}
               <Text style={styles.markerTxt}>{m.p ? jerseyNo(m.p.id) : ''}</Text>
               {m.justSubbed ? (
                 <View style={styles.subTag}>
@@ -874,7 +859,7 @@ const MR = 15; // 마커 반지름
 const jerseyNo = (id: string): number => { let h = 0; for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0; return (h % 99) + 1; };
 
 const styles = themedStyles(() => StyleSheet.create({
-  courtWrap: { paddingVertical: COURT_PAD, alignItems: 'center' },
+  courtWrap: { paddingTop: COURT_PAD_TOP, paddingBottom: COURT_PAD_BOTTOM, alignItems: 'center' },
   // 다크 네온 코트(2026-06-28 시안) — 어두운 바닥 + 네온 민트 라인/글로우. 라이트 코트(구)에서 전환.
   court: {
     width: COURT_W, height: COURT_H, alignSelf: 'center',
@@ -892,14 +877,7 @@ const styles = themedStyles(() => StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
   },
   markerTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
-  // 반응형 특성 펄스 글로우 헤일로(§6.10, #136) — 마커 바깥을 감싸는 별도 레이어(포지션 실선보다 큰 반경).
-  //  색·글로우는 인라인 tint, 맥동(scale/opacity)은 공유 pulse가 구동. 마커보다 7px 크게 → 포지션 링과 확실히 분리.
-  reactiveHalo: {
-    position: 'absolute', top: -7, left: -7,
-    width: MR * 2 + 14, height: MR * 2 + 14, borderRadius: MR + 7,
-    borderWidth: 2.5,
-    shadowOpacity: 0.95, shadowRadius: 9, shadowOffset: { width: 0, height: 0 }, elevation: 8,
-  },
+  // (반응형 특성 발동 연출은 마커 borderColor tint로 인라인 처리 — 별도 헤일로 레이어 제거, 재정정 2026-07-29 §6.10)
   // 마커 밑 상시 선수명 — 작고 옅은 칩(라이트 코트에서 읽히게 흰 배경)
   nameTag: { position: 'absolute', top: MR * 2 - 1, left: -27, width: 84, alignItems: 'center' },
   nameTagTxt: {

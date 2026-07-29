@@ -82,6 +82,9 @@ export default function MatchBoard() {
   const [ivError, setIvError] = useState<string | null>(null);                  // 적용 불가 안내(드라이런 실패)
   // 타임아웃 커밋을 좌표로 MatchCourt에 명시 신호 — seek 추론(index)이 어긋나 모달을 놓치던 것 대신 좌표 매칭으로 확실히 표시(§3 #3)
   const [toSignal, setToSignal] = useState<{ seq: number; setNo: number; h: number; a: number } | null>(null);
+  // 랠리 중(인플레이) 타임아웃 예약(§4.5, 2026-07-29 테스터) — 진행 중 랠리엔 즉시 커밋 대신 예약, 그 랠리가 끝나면(데드볼) 커밋.
+  //   reservedAtPtIdx = 예약 시점 score.ptIdx(shown). score.ptIdx가 이보다 커지면(랠리 종료=새 점수) 커밋 트리거.
+  const [pendingTO, setPendingTO] = useState<{ reservedAtPtIdx: number } | null>(null);
   const { toasts, push: pushToast } = useToastQueue();                          // 성공 피드백(비모달, 관전형)
   // 관전 점수(헤더 표시) — MatchCourt가 진행에 맞춰 올려준다(별도 스코어보드 영역 제거). ptIdx=현재 점수가 반영된 득점 인덱스(타임라인 조회용)
   const [score, setScore] = useState({ h: 0, a: 0, homeSets: 0, awaySets: 0, setNo: 1, ptIdx: -1 });
@@ -353,26 +356,60 @@ export default function MatchBoard() {
     return true;
   }, [fixture, data.home.id, data.away.id, data.seed, data.sim, score.ptIdx, recordIntervention]);
 
-  const onTimeout = useCallback(() => {
-    if (!mineSide) return;
+  // 타임아웃 커밋 코어(§4.5) — **현재 score 좌표**에 커밋 시도. 성공 시 체력 모달 신호(toSignal)+true, 실패 시 사유.
+  //   즉시 경로(onTimeout 데드볼)와 예약 경로(effect)가 공유 — score(현재)만 참조하므로 예약 경로는 랠리 종료 후 새 좌표로 커밋된다.
+  const tryCommitTimeout = useCallback((): { ok: boolean; reason: 'set-over' | 'dup' | 'exhausted' | null } => {
+    if (!mineSide) return { ok: false, reason: null };
     const ok = commitIntervention({ at: { setNo: score.setNo, h: score.h, a: score.a }, side: mineSide as Side, kind: 'timeout' });
     if (ok) {
       // 커밋된 타임아웃 좌표를 신호 → MatchCourt가 그 좌표의 타임아웃 이벤트를 찾아 체력 모달을 확실히 띄운다(10초 자동)
       setToSignal((prev) => ({ seq: (prev?.seq ?? 0) + 1, setNo: score.setNo, h: score.h, a: score.a }));
-      pushToast('작전 타임아웃을 요청했어요');
-      closeIntervene();
-    } else if (isSetOver(score.h, score.a, score.setNo)) {
-      // 세트말(세트 종료 점수 표시 창)에서의 커밋은 엔진이 그 세트를 이미 빠져나가 **영구 no-op** — '한도 소진'이 아님(감사 P2 ③).
-      setIvError('이 세트는 끝났어요. 다음 세트가 시작되면 타임아웃을 쓸 수 있어요.');
-    } else {
-      // 미적용 분기(UV-7 ③): 좌표 count가 안 늘어난 게 '한도 소진'이 아니라 '이 좌표에 이미 타임아웃 존재'일 수 있다
-      //   (AI가 같은 순간 부른 타임아웃을 내 강제 호출이 대체 → count 동수). 한도 문구 오출력 방지로 사유 분기.
-      const dup = (data.sim.timeouts ?? []).some((t) => t.side === mineSide && t.setNo === score.setNo && t.home === score.h && t.away === score.a);
-      setIvError(dup
-        ? '이 시점엔 이미 작전 타임아웃이 있어요.'
-        : '지금은 타임아웃을 쓸 수 없어요. 이번 세트 타임아웃을 이미 다 썼어요.');
+      return { ok: true, reason: null };
     }
-  }, [mineSide, commitIntervention, score, data.sim, pushToast, closeIntervene]);
+    // 세트말(세트 종료 점수 표시 창)에서의 커밋은 엔진이 그 세트를 이미 빠져나가 **영구 no-op** — '한도 소진'이 아님(감사 P2 ③).
+    if (isSetOver(score.h, score.a, score.setNo)) return { ok: false, reason: 'set-over' };
+    // 좌표 count가 안 늘어난 게 '한도 소진'이 아니라 '이 좌표에 이미 타임아웃 존재'일 수 있다(AI가 같은 순간 부른 타임아웃을
+    //   내 강제 호출이 대체 → count 동수, UV-7 ③). 한도 문구 오출력 방지로 사유 분기.
+    const dup = (data.sim.timeouts ?? []).some((t) => t.side === mineSide && t.setNo === score.setNo && t.home === score.h && t.away === score.a);
+    return { ok: false, reason: dup ? 'dup' : 'exhausted' };
+  }, [mineSide, commitIntervention, score, data.sim]);
+
+  const onTimeout = useCallback(() => {
+    if (!mineSide) return;
+    // 랠리 진행 중(인플레이)이면 즉시 커밋하지 않고 **예약**(§4.5) — 진행 중 랠리를 서브부터 재시작시키던 문제 방지.
+    //   인플레이 판정 = 현재 재생 랠리(progressRef=idx) > 점수 반영 랠리(score.ptIdx=shown). 데드볼 비트(idx===shown)면 즉시.
+    if (progressRef.current > score.ptIdx) {
+      setPendingTO({ reservedAtPtIdx: score.ptIdx });
+      pushToast('타임아웃 예약됨 · 이 랠리가 끝나면 적용돼요');
+      closeIntervene();
+      return;
+    }
+    const r = tryCommitTimeout();
+    if (r.ok) { pushToast('작전 타임아웃을 요청했어요'); closeIntervene(); }
+    else if (r.reason === 'set-over') setIvError('이 세트는 끝났어요. 다음 세트가 시작되면 타임아웃을 쓸 수 있어요.');
+    else setIvError(r.reason === 'dup'
+      ? '이 시점엔 이미 작전 타임아웃이 있어요.'
+      : '지금은 타임아웃을 쓸 수 없어요. 이번 세트 타임아웃을 이미 다 썼어요.');
+  }, [mineSide, score.ptIdx, tryCommitTimeout, pushToast, closeIntervene]);
+
+  // 예약 타임아웃 취소(§4.5) — 과하지 않은 UX. 시트/배지에서 호출.
+  const cancelPendingTO = useCallback(() => {
+    setPendingTO(null);
+    pushToast('타임아웃 예약을 취소했어요');
+    closeIntervene();
+  }, [pushToast, closeIntervene]);
+
+  // 예약된 타임아웃 커밋(§4.5) — 예약한 랠리가 끝나(score.ptIdx 증가 = 데드볼) **새 좌표**에 커밋. 세트말/경기종료는 소프트락 없이 취소.
+  useEffect(() => {
+    if (!pendingTO) return;
+    if (finished) { setPendingTO(null); return; }          // 경기 종료 — 조용히 취소
+    if (score.ptIdx <= pendingTO.reservedAtPtIdx) return;   // 예약한 랠리 아직 진행 중
+    const r = tryCommitTimeout();
+    setPendingTO(null);
+    if (r.ok) pushToast('작전 타임아웃 (예약 적용)');
+    else if (r.reason === 'set-over') pushToast('세트가 끝나 타임아웃 예약이 취소됐어요');
+    // dup/exhausted(예약 후 좌표 상황 변화)는 드묾 — 조용히 취소(다음 데드볼에 재요청 가능)
+  }, [pendingTO, score.ptIdx, finished, tryCommitTimeout, pushToast]);
 
   const onConfirmSub = useCallback((inId: string) => {
     if (!mineSide) return;
@@ -490,6 +527,12 @@ export default function MatchBoard() {
         {!finished && liveQueue.length > 0 ? <BroadcastBanner key="live" banners={liveQueue} /> : null}
         {finished && banners.length > 0 ? <BroadcastBanner key="fin" banners={banners} /> : null}
       </View>
+      {/* 타임아웃 예약 배지(§4.5) — 코트와 컨트롤 사이 독립 행(절대배치 bottom이 컨트롤을 가리던 것 수정, 2026-07-29 에뮬 확인). 탭하면 예약 취소. */}
+      {!finished && pendingTO ? (
+        <Pressable style={styles.pendingTOBadge} onPress={cancelPendingTO} hitSlop={6}>
+          <Text style={styles.pendingTOTxt}>⏱ 타임아웃 예약됨 · 이 랠리 후 적용  ·  탭하면 취소</Text>
+        </Pressable>
+      ) : null}
 
       {/* 세트 스코어 — 관전이 끝난 뒤에만 공개(스포일러 방지) */}
       {finished ? (
@@ -570,15 +613,23 @@ export default function MatchBoard() {
             {/* 세 메뉴 카드는 동일 구조(제목+부제)·동일 높이(#1). 타임아웃만 강조색(배경)이 다르다.
                 남은 예산 표시 + 소진 시 비활성(UV-7 ④·§4) — 엔진 no-op을 '먹통'으로 오인 방지. 교체는 엔진 게이트(subBudget<2)와
                 동일하게 잔여 <2면 비활성(왕복 2유닛 확보), 타임아웃은 0이면 비활성. */}
-            <Pressable
-              style={[styles.ivPickBtn, styles.ivPickBtnPrimary, ivBudget.toLeft <= 0 && { opacity: 0.45 }]}
-              disabled={ivBudget.toLeft <= 0}
-              onPress={onTimeout}>
-              <Text style={[styles.ivPickBtnTxt, styles.ivPickBtnTxtOn]}>⏱ 작전 타임아웃</Text>
-              <Text style={[styles.ivPickSub, styles.ivPickSubOn]}>
-                {ivBudget.toLeft > 0 ? `기세를 끊고 체력 회복 · 남은 ${ivBudget.toLeft}/${TIMEOUTS_PER_SET}` : '이번 세트 타임아웃을 다 썼어요'}
-              </Text>
-            </Pressable>
+            {/* 예약 중(§4.5)이면 같은 자리에 '예약 취소' — 랠리 중 요청은 예약되고, 이 랠리가 끝나면 적용된다. */}
+            {pendingTO ? (
+              <Pressable style={[styles.ivPickBtn, styles.ivPickBtnPrimary]} onPress={cancelPendingTO}>
+                <Text style={[styles.ivPickBtnTxt, styles.ivPickBtnTxtOn]}>⏱ 타임아웃 예약 취소</Text>
+                <Text style={[styles.ivPickSub, styles.ivPickSubOn]}>이 랠리가 끝나면 적용돼요 · 탭하면 예약을 취소해요</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={[styles.ivPickBtn, styles.ivPickBtnPrimary, ivBudget.toLeft <= 0 && { opacity: 0.45 }]}
+                disabled={ivBudget.toLeft <= 0}
+                onPress={onTimeout}>
+                <Text style={[styles.ivPickBtnTxt, styles.ivPickBtnTxtOn]}>⏱ 작전 타임아웃</Text>
+                <Text style={[styles.ivPickSub, styles.ivPickSubOn]}>
+                  {ivBudget.toLeft > 0 ? `기세를 끊고 체력 회복 · 남은 ${ivBudget.toLeft}/${TIMEOUTS_PER_SET}` : '이번 세트 타임아웃을 다 썼어요'}
+                </Text>
+              </Pressable>
+            )}
             <Pressable
               style={[styles.ivPickBtn, ivBudget.subLeft < 2 && { opacity: 0.45 }]}
               disabled={ivBudget.subLeft < 2}
@@ -734,6 +785,13 @@ function IvPlayerRow({ name, pos, ovr, stam, stats, onPress }: { name: string; p
 const styles = themedStyles(() => StyleSheet.create({
   root: { flex: 1, backgroundColor: theme.bg },
   content: { paddingHorizontal: 16, gap: 8 }, // 간격 축소(2026-06-28) — 한 화면 맞춤(스크롤 제거)
+  // 타임아웃 예약 배지(§4.5) — 코트 하단 중앙, 탭하면 취소. 관전형 무마찰(작고 조용히).
+  pendingTOBadge: {
+    alignSelf: 'center', marginTop: 6, marginBottom: 2,
+    backgroundColor: 'rgba(10,18,30,0.92)', borderWidth: 1, borderColor: theme.accent,
+    borderRadius: 14, paddingVertical: 5, paddingHorizontal: 12,
+  },
+  pendingTOTxt: { color: theme.accent, fontSize: 11.5, fontWeight: '800' },
   sandboxTag: { color: theme.warn, fontSize: 12, fontWeight: '800', textAlign: 'center' },
   // 코트 최우선 — 스코어보드 컴팩트화(2026-06-28): 엠블럼·패딩·점수 폰트 축소로 코트 공간 확보
   scoreboard: {
