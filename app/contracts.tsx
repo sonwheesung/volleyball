@@ -68,6 +68,7 @@ function ContractsInner() {
   const resignDecisions = useGameStore((s) => s.resignDecisions);
   const reSign = useGameStore((s) => s.reSign);
   const release = useGameStore((s) => s.release);
+  const releaseBlockReason = useGameStore((s) => s.releaseBlockReason);
   const unrelease = useGameStore((s) => s.unrelease);
   const setResign = useGameStore((s) => s.setResign);
   const cash = useGameStore((s) => s.cash);
@@ -187,9 +188,13 @@ function ContractsInner() {
         { text: '취소', style: 'cancel' },
         {
           text: '방출', style: 'destructive',
-          // 실제 store 거부 사유와 일치하는 안내(발견 모드 감사 2026-07-15) — 구 문구 "로스터 하한(10명)"은
-          // 폐기된 총원 게이트라 오도. 현행 게이트 = 포지션 최소 인원(floor)·위약금·플옵 엔트리 동결.
-          onPress: () => { if (!release(p.id)) showAlert('방출 불가', `방출할 수 없습니다.\n가능한 사유 — 그 포지션 최소 인원 미달(포지션마다 최소 보유 수 유지) · 위약금(${formatMoney(fee)}) 부족 · 포스트시즌 기간(명단 동결)`); },
+          // 이 선수의 **구체 방출 불가 사유**를 store 게이트(releaseBlockReason)에서 직접 받아 안내(테스터 2026-07-29:
+          //   "가능한 사유 나열 말고 왜 이 선수가 안 되는지 알려줘"). null이면 통과 → release 실행.
+          onPress: () => {
+            const reason = releaseBlockReason(p.id);
+            if (reason) { showAlert('방출 불가', reason); return; }
+            if (!release(p.id)) showAlert('방출 불가', '지금은 방출할 수 없습니다. 잠시 후 다시 시도해 주세요.');
+          },
         },
       ],
     );

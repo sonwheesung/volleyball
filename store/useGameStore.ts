@@ -20,6 +20,7 @@ import { predictRanks, reputationOf, interestedClubs, counterOfferOutcome, type 
 import { headOvr, headCoachSalary } from '../engine/staff';
 import { getTeamPlayers, shortTeamName, getCoach } from '../data/league';
 import { SEASON_DAYS } from '../engine/calendar';
+import { formatMoney } from '../engine/salary';
 import type { Coach, AssistantCoach } from '../types';
 import { buildDraftContext } from '../data/draftSetup';
 import { aiTargetOf } from '../data/rosterTarget';
@@ -97,6 +98,7 @@ const RETIRE_NEWS_MIN_SEASONS = 8; // 작별 뉴스 대상 — 8시즌+ 뛴 노�
 const LEGEND_POINTS = 7500; // 영구결번급 — 60시즌 통산 최고 ~8645라 9000은 도달 불가였음(레전드 0명).
                             //   7500 = 60시즌당 ~2명(top 8645·7723) → 영구결번 ~30시즌당 1명 + league 마일스톤(레전드 추월) 가능
 const SEASON_END_DAY = SEASON_DAYS; // 정규시즌 길이(일) — 출전비율·팬심 계산 기준. 단일 출처(engine/calendar)
+const POS_KO_RELEASE: Record<string, string> = { S: '세터', OH: '아웃사이드 히터', OP: '아포짓', MB: '미들 블로커', L: '리베로' }; // 방출 사유 문구용
 const GAME_EVERY = 4.6;     // 평균 경기 간격(일)
 
 interface GameState {
@@ -205,6 +207,7 @@ interface GameState {
   // 반환값(ok/reason) — 조용한 거부를 남기지 않음(호출부는 무시해도 무방, 배선은 제안). 캡 예외는 프랜차이즈만.
   reSign: (playerId: string, contract: Contract) => ReSignResult;
   release: (playerId: string) => boolean;
+  releaseBlockReason: (playerId: string) => string | null; // 방출 불가 시 **구체 사유**(가능하면 null) — 다이얼로그가 "이 선수가 왜 안 되는지" 정확히 안내(테스터 2026-07-29)
   unrelease: (playerId: string) => boolean;
   signInSeason: (faId: string) => boolean;
   setResign: (playerId: string, keep: boolean) => void;
@@ -684,29 +687,40 @@ export const useGameStore = create<GameState>()(
       // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용.
       // ~~정원 하한(ROSTER_MIN) 게이트~~ → 포지션 인지 floor 게이트(canReleasePosition, FA §1.6)가 정본(2026-07-15 주석 정정) —
       // 그 포지션이 최소 보유 수 미만이 되는 방출을 차단해 명단 붕괴(경기 불가)를 원천 차단.
-      release: (playerId) => {
+      // 방출 게이트 단일 소스 — 실패 시 **구체 사유**(어떤 검사에 걸렸는지), 가능하면 null. release()가 이걸 게이트로 씀(드리프트 0).
+      //   순서·검사는 구 release()와 동일: 플옵 동결→이미 방출→내 팀 아님→외인→포지션 floor→위약금.
+      releaseBlockReason: (playerId) => {
         const s = get();
-        if (s.currentDay > SEASON_DAYS) return false; // 플옵 엔트리 동결(SEASON §5.0) — 지갑·명단 변경 차단(딥링크/UI 우회 방어)
-        if (s.released.includes(playerId)) return false;
+        if (s.currentDay > SEASON_DAYS) return '포스트시즌 기간이라 선수 명단이 동결됐습니다. 시즌이 끝난 뒤(오프시즌) 방출할 수 있어요.'; // 플옵 엔트리 동결(SEASON §5.0)
+        if (s.released.includes(playerId)) return '이미 이번 시즌에 방출한 선수입니다.';
         const my = s.selectedTeamId ?? '';
         const rosterIds = currentRosters()[my] ?? [];
         const { myReleased, mySigned } = myRosterDelta(my, s.inSeasonTx, rosterIds);
-        // 내 유효 로스터(시즌초 명단 + 시즌 중 영입) 선수만 방출 가능 — 타 팀/존재 안 함 id 주입 차단.
-        // (없으면 팬텀 방출로 이중 소속·영입비 누수·자기 방출 DoS, 2026-06-20 전체게임 퍼저 발견)
-        if (!rosterIds.includes(playerId) && !mySigned.includes(playerId)) return false;
-        // 외인/아시아쿼터 방출 차단 — 외인은 FA 풀로 안 가므로(FOREIGN_SYSTEM 3장) 방출 시 시즌 1회 교체 외엔
-        // 못 메우는 공석이 된다. 외인은 시즌 중 교체(replaceForeign)·오프시즌 트라이아웃에서만 정리(리뷰 발견 2026-06-25).
-        if (getPlayer(playerId)?.isForeign) return false;
-        // 방출 하한 = 포지션 인지 floor(FA_SYSTEM §1.6) — 그 포지션이 floor 미만이 되는 방출 차단('세터 0명' 방지).
-        //   유효 명단(시즌초−방출+영입)의 포지션 카운트로 판정. buildLineup throw-guard와 같은 결(경기 성립 사전 보장).
+        if (!rosterIds.includes(playerId) && !mySigned.includes(playerId)) return '우리 팀 선수가 아니라 방출할 수 없습니다.'; // 팬텀 방출 차단(2026-06-20 퍼저)
+        const p0 = getPlayer(playerId);
+        // 외인/아시아쿼터: FA 풀로 안 가서(FOREIGN_SYSTEM 3장) 못 메우는 공석 — 시즌 중 용병 교체·오프시즌 트라이아웃에서만 정리.
+        if (p0?.isForeign) return '외국인 선수는 방출할 수 없습니다. 시즌 중 용병 교체나 오프시즌 트라이아웃에서 정리하세요.';
+        // 포지션 인지 floor(FA_SYSTEM §1.6) — 그 포지션이 최소 미만이 되는 방출 차단(경기 라인업 성립 사전 보장).
         const effPlayers = [...rosterIds.filter((id) => !myReleased.has(id)), ...mySigned]
           .map((id) => evolveOnDay(id, s.currentDay))
           .filter((p): p is Player => !!p);
-        if (!canReleasePosition(effPlayers, playerId)) return false;
-        // 위약금(TRANSACTION_SYSTEM 0.5①) — 잔여 보장액의 일부를 운영 자금에서 즉시 정산. 지갑이 모자라면 방출 불가.
+        if (!canReleasePosition(effPlayers, playerId)) {
+          const posKo = POS_KO_RELEASE[p0?.position ?? ''] ?? '이 포지션';
+          return `${posKo} 보유 인원이 최소 밑으로 내려갑니다. 이 선수를 방출하면 ${posKo}가 부족해 경기 라인업을 짤 수 없어요. 같은 포지션을 먼저 보강한 뒤 방출하세요.`;
+        }
+        // 위약금(TRANSACTION_SYSTEM 0.5①) — 잔여 보장액 일부를 운영 자금에서 즉시 정산. 지갑이 모자라면 방출 불가.
+        const c = p0?.contract;
+        const fee = c ? severanceFee(c.salary, c.remaining) : 0;
+        if (fee > s.cash) return `방출 위약금 ${formatMoney(fee)}가 필요한데 운영 자금(${formatMoney(s.cash)})이 모자랍니다.`;
+        return null;
+      },
+      // 시즌 중 방출 → FA 풀(dynamics가 영입 가능하게). released[]는 표시용, inSeasonTx는 시뮬용. 게이트는 releaseBlockReason 단일 소스.
+      release: (playerId) => {
+        const s = get();
+        if (get().releaseBlockReason(playerId) != null) return false; // 구체 사유는 releaseBlockReason이 판단 — 여기선 통과 여부만
+        const my = s.selectedTeamId ?? '';
         const c = getPlayer(playerId)?.contract;
         const fee = c ? severanceFee(c.salary, c.remaining) : 0;
-        if (fee > s.cash) return false;
         const inSeasonTx: Tx[] = [...s.inSeasonTx, { day: s.currentDay, teamId: my, playerId, kind: 'release' }];
         // 팬 분노 적립(방출 시점 인기 — TRANSACTION_SYSTEM 0.5③). endSeason서 fanScore에 반영.
         const anger = releaseAngerOf(playerId, s.archive, s.currentDay);
