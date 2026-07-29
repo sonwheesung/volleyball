@@ -662,10 +662,11 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
               transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.justSubbed ? subPop : m.jumping ? jumpScale : 1 }],
             }]}>
               <Text style={styles.markerTxt}>{m.p ? jerseyNo(m.p.id) : ''}</Text>
-              {mine && m.stamPct != null ? (
-                // 내 팀 코트 선수 체력 %(마커 위) — 테스터 요청(상단 스트립 대신). 신선=초록·지치면 주황→적(타임아웃 타이밍 판단).
-                <View style={styles.stamTag} pointerEvents="none">
-                  <Text style={[styles.stamTagTxt, { color: m.stamPct >= 60 ? '#2BAE66' : m.stamPct >= 35 ? '#E0922B' : '#E1574C' }]}>{m.stamPct}%</Text>
+              {m.p ? (
+                // 포지션 라벨 — 마커 위(등번호 위), POS_COLOR. 2026-07-29 사용자: 포지션은 위로, 체력은 이름 옆으로.
+                //  짧아서(≤2자) 세로 겹침에 덜 민감. 이름·체력은 마커 밑에.
+                <View style={styles.posTag} pointerEvents="none">
+                  <Text style={[styles.posTagTxt, { color }]} numberOfLines={1}>{m.p.position}</Text>
                 </View>
               ) : null}
               {m.justSubbed ? (
@@ -673,11 +674,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
                   <Text style={styles.subTagTxt} numberOfLines={1}>↑ {m.p?.name ?? '교체'}</Text>
                 </View>
               ) : m.p ? (
-                // 마커 밑 선수명(상시) — 마커 안=등번호, 아래=포지션 약자+이름(2026-07-28 사용자 요청).
-                // 포지션은 이름 왼쪽에 POS_COLOR로 강조. 내 팀은 이름 강조.
+                // 마커 밑: 이름 + (내 팀) 체력%(이름 오른쪽, 색은 체력 구간별). 내 팀은 이름 강조.
                 <View style={styles.nameTag} pointerEvents="none">
                   <Text style={[styles.nameTagTxt, mine && styles.nameTagMine]} numberOfLines={1}>
-                    <Text style={{ color, fontWeight: '800' }}>{m.p.position} </Text>{m.p.name}
+                    {m.p.name}{mine && m.stamPct != null ? (
+                      <Text style={{ color: m.stamPct >= 60 ? '#2BAE66' : m.stamPct >= 35 ? '#E0922B' : '#E1574C', fontWeight: '900' }}>  {m.stamPct}%</Text>
+                    ) : null}
                   </Text>
                 </View>
               ) : null}
@@ -895,10 +897,10 @@ const styles = themedStyles(() => StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
   },
   markerTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
-  // 마커 위 체력 % 칩(내 팀 전용) — 원 위쪽에 작게. 색은 인라인(체력 구간별).
-  stamTag: { position: 'absolute', top: -13, left: -11, width: 52, alignItems: 'center' },
-  stamTagTxt: {
-    fontSize: 9, fontWeight: '900', backgroundColor: 'rgba(8,14,24,0.9)',
+  // 마커 위 포지션 칩 — 원 위쪽에 작게. 색은 인라인(POS_COLOR). 짧아서 세로 겹침에 덜 민감(2026-07-29 사용자).
+  posTag: { position: 'absolute', top: -13, left: -13, width: 56, alignItems: 'center' },
+  posTagTxt: {
+    fontSize: 9.5, fontWeight: '900', backgroundColor: 'rgba(8,14,24,0.9)',
     paddingHorizontal: 4, paddingVertical: 0.5, borderRadius: 4, overflow: 'hidden',
   },
   // (반응형 특성 발동 연출은 마커 borderColor tint로 인라인 처리 — 별도 헤일로 레이어 제거, 재정정 2026-07-29 §6.10)
