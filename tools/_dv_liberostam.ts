@@ -5,10 +5,12 @@
 //   → rally.ts `LIBERO_DEFENSE_COST`(매 랠리 균일 후위 수비 참여 소모, 양 팀 리베로 대칭)로 리베로만 표적 교정.
 //
 // 가드(밴드 + A/B):
-//   (a) 리베로 3세트+ 평균 ∈ [88,93]% (사용자 합의 밴드)
+//   (a) 리베로 3세트+ 평균 ∈ [50,68]% ← ~~[88,93]%~~ **재밴드(2026-07-29 피로 곡선 극화 `ENGINE_VERSION 19`)**: 전 포지션
+//       회복을 낮춰(§7.1) 리베로도 함께 하락. 리베로는 후위 수비로 **매 랠리** 뛰어(교대 벤치 휴식 없음) MB(80%·전위 로테이션만
+//       코트, 후위선 리베로와 교대해 벤치 휴식)보다 낮고 OP 공격수(~50%)보다는 높은 게 물리적으로 맞다 → 실측 58.6%.
 //   (b) 리베로 전체 최저 < 80% (상시 100% 고정이 아님 — 실제로 지친다)
 //   (c) 타 포지션(S/OH/OP/MB) 3세트+ 평균 드리프트 |base−mutant| < 3%p (리베로 표적 — 다른 곡선 불변, ±3%p 여유밴드)
-//   (d·A/B) mutant `DV_LIBDEF=0`(=옛 무보정, 소모 상수 0) 하에서 리베로 3세트+ 평균 > 93%(밴드 이탈) —
+//   (d·A/B) mutant `DV_LIBDEF=0`(=옛 무보정, 소모 상수 0) 하에서 리베로 3세트+ 평균 > 72%(새 base 밴드 상단 이탈, 실측 88.1%) —
 //           조정 상수가 load-bearing임을 증명(허위 오라클 차단). cp 백업/복원 없이 **env 시임**으로 자식 프로세스 재현.
 //
 // 사용: npx tsx tools/_dv_liberostam.ts [경기수=500]   (내부에서 자식 1회 spawn → 총 2배 시간)
@@ -84,7 +86,7 @@ let ok = true;
 const check = (name: string, pass: boolean, detail: string) => { log(`${pass ? '✅' : '❌'} ${name}${detail ? ' — ' + detail : ''}`); if (!pass) ok = false; };
 log('');
 // (a) 리베로 3세트+ 평균 밴드
-check('(a) 리베로 3세트+ 평균 ∈ [88,93]%', base.L.lateAvg >= 88 && base.L.lateAvg <= 93, `${base.L.lateAvg.toFixed(1)}%`);
+check('(a) 리베로 3세트+ 평균 ∈ [50,68]%', base.L.lateAvg >= 50 && base.L.lateAvg <= 68, `${base.L.lateAvg.toFixed(1)}%`);
 // (b) 리베로 최저 < 80 (지친다)
 check('(b) 리베로 전체 최저 < 80%', base.L.min < 80, `${base.L.min.toFixed(1)}%`);
 // (c) 타 포지션 드리프트 < 3%p (리베로 표적)
@@ -93,7 +95,7 @@ for (const pos of ['S', 'OH', 'OP', 'MB'] as Pos[]) {
   check(`(c) ${pos} 드리프트 |Δ| < 3%p`, d < 3, `${d.toFixed(2)}%p`);
 }
 // (d·A/B) mutant 하에서 리베로 밴드 이탈(>93) — 조정 상수 load-bearing
-check('(d·A/B) mutant(DV_LIBDEF=0) 리베로 3세트+ > 93% (상수 무효화 → 밴드 FAIL 증명)', mut.L.lateAvg > 93, `mutant ${mut.L.lateAvg.toFixed(1)}% vs base ${base.L.lateAvg.toFixed(1)}%`);
+check('(d·A/B) mutant(DV_LIBDEF=0) 리베로 3세트+ > 72% (상수 무효화 → 새 base 밴드 상단 이탈 증명)', mut.L.lateAvg > 72, `mutant ${mut.L.lateAvg.toFixed(1)}% vs base ${base.L.lateAvg.toFixed(1)}%`);
 
 log('');
 log(ok ? '✅ PASS — 리베로 체력 튜닝 밴드 + A/B 민감도 통과' : '❌ FAIL — 밴드/드리프트/민감도 위반');

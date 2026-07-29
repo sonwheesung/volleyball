@@ -32,8 +32,10 @@ const CAP = 8; // 랠리 hop 상한(7.3)
 
 // ── 체력 (7.1) ──
 const STAM_FLOOR = 0.70;
-const HOP_COST = 0.024;
-export const STAM_REGEN_BASE = 0.005; // 랠리 사이 회복(2026-06-28 튜닝)
+// ⚙ HOP_COST·STAM_REGEN_BASE: 프로덕션 고정 리터럴 + 가드/튜닝 전용 env 시임(DV_LIBDEF 패턴 — 미설정 시 리터럴, 결정론 무영향).
+//   피로 곡선 재튜닝(2026-07-29, 사용자: "5세트 30%대까지")에 simStamCurve 스윕용. 최종 리터럴 확정 후에도 시임 유지(향후 튜닝·A/B).
+const HOP_COST = process.env.DV_HOPCOST != null ? Number(process.env.DV_HOPCOST) : 0.026;   // 2026-07-29 피로 극화(0.024→0.026)
+export const STAM_REGEN_BASE = process.env.DV_REGEN != null ? Number(process.env.DV_REGEN) : 0.0015; // 랠리 사이 회복(2026-07-29 피로 극화 0.005→0.0015 — 랠리별 순회복을 줄여 곡선을 가파르게)
 // 리베로 후위 수비 참여 소모(7.1, 2026-07-15) — 리베로는 공격 1.2·서브 1.0 같은 큰 소모가 구조적으로 없고(리시브 0.2·디그 0.4만),
 //   체력/체젠 스탯이 높은 포지션이라 랠리간 회복이 소모를 거의 항상 이겨 타임아웃 체력이 상시 ~100%였다(실측 L 3세트+ 98.5%·≥99% 55.7%).
 //   → 서브 리시브 프레임 밖에서도 **매 랠리 전 코트를 커버하는 후위 수비 참여**를 균일 소모로 모델(mult=0.16, drain 경유 = HOP_COST·체력스탯
