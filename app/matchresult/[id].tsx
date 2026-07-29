@@ -57,7 +57,7 @@ export default function MatchResult() {
       <Card accent={theme.elite} flat><BoxScoreTable squad={home} box={box} dvPhilosophy={coachInfoOf(fixture.homeTeamId)?.dvPhilosophy ?? 0} /></Card>
       <Title>{awayName}</Title>
       <Card accent={theme.elite} flat><BoxScoreTable squad={away} box={box} dvPhilosophy={coachInfoOf(fixture.awayTeamId)?.dvPhilosophy ?? 0} /></Card>
-      <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 리시브=효율((정확−실패)/시도)</Text>
+      <Text style={styles.hint}>득점=공격+블록+에이스 · 공격=성공/시도/성공률 · 디그=상대 스파이크 수비</Text>
 
       {fromWatch ? (
         // 관전 종료 후 나가기 경유 — 홈(대시보드)으로 보내 뉴스·기록을 보게 한다(사용자 요청).

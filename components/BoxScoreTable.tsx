@@ -16,9 +16,12 @@ const rateN = (n: number, d: number) => (d > 0 ? (n / d) * 100 : null);
 const fmt = (v: number | null) => (v === null ? '–' : `${Math.round(v)}%`);
 
 const NAME_W = 96;
-const C = { sc: 34, ak: 30, aa: 30, ap: 48, bl: 32, sv: 32, dg: 32, st: 32, rc: 46, er: 34 };
+// 리시브(서브 리시브) 칸 제거(2026-07-29 테스터: "리시브"가 스파이크 수비[디그]로 오해됨). 엔진의 서브 리시브 계산은
+//   그대로(밸런스·귀속 유지) — 표시만 뺀다. 서브 리시브는 리베로+OH만 담당(세터·OP·MB는 대형서 숨김)이라 칸이 대부분
+//   "–"라 오해를 키웠음. 수비는 디그 칸(전원)이 대표.
+const C = { sc: 34, ak: 30, aa: 30, ap: 48, bl: 32, sv: 32, dg: 32, st: 32, er: 34 };
 const ATK_W = C.ak + C.aa + C.ap;
-const REST_W = C.bl + C.sv + C.dg + C.st + C.rc + C.er;
+const REST_W = C.bl + C.sv + C.dg + C.st + C.er;
 const TABLE_W = NAME_W + C.sc + ATK_W + REST_W;
 
 // dvPhilosophy: 감독 육성 철학 — 엔진(match.ts buildLineup)과 **동일 인자**로 선발 7인을 도출해야 선발/교체 그룹핑이
@@ -39,11 +42,11 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
   const T = rows.reduce(
     (t, { l }) => {
       t.pt += pts(l); t.ak += l.atkKill; t.aa += l.atkAtt; t.bl += l.blockPt; t.ac += l.srvAce;
-      t.dg += l.digSucc; t.as += l.assist; t.rg += l.recvGood; t.re += l.recvErr; t.ra += l.recvAtt;
+      t.dg += l.digSucc; t.as += l.assist;
       t.er += l.atkErr + l.srvErr;
       return t;
     },
-    { pt: 0, ak: 0, aa: 0, bl: 0, ac: 0, dg: 0, as: 0, rg: 0, re: 0, ra: 0, er: 0 },
+    { pt: 0, ak: 0, aa: 0, bl: 0, ac: 0, dg: 0, as: 0, er: 0 },
   );
 
   const num = (v: number, w: number) => (
@@ -68,13 +71,11 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
           <Text style={[styles.hCell, { width: C.sv }]}>서브</Text>
           <Text style={[styles.hCell, { width: C.st }]}>세트</Text>
           <Text style={[styles.hCell, { width: C.dg }]}>디그</Text>
-          <Text style={[styles.hCell, { width: C.rc }]}>리시브</Text>
           <Text style={[styles.hCell, { width: C.er }]}>범실</Text>
         </View>
         {/* 선수 행 */}
         {rows.map(({ p, l }) => {
           const ap = rateN(l.atkKill, l.atkAtt);
-          const rc = l.recvAtt > 0 ? (l.recvGood - l.recvErr) / l.recvAtt * 100 : null;
           const err = l.atkErr + l.srvErr;
           return (
             <View key={p.id} style={styles.row}>
@@ -90,7 +91,6 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
               {num(l.srvAce, C.sv)}
               {num(l.assist, C.st)}
               {num(l.digSucc, C.dg)}
-              <Text style={[styles.cell, { width: C.rc }, rc !== null && rc >= 45 ? styles.hi : rc === null ? styles.zero : undefined]}>{fmt(rc)}</Text>
               <Text style={[styles.cell, { width: C.er }, err > 0 ? styles.err : styles.zero]}>{err}</Text>
             </View>
           );
@@ -106,7 +106,6 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
           <Text style={[styles.cell, styles.totTxt, { width: C.sv }]}>{T.ac}</Text>
           <Text style={[styles.cell, styles.totTxt, { width: C.st }]}>{T.as}</Text>
           <Text style={[styles.cell, styles.totTxt, { width: C.dg }]}>{T.dg}</Text>
-          <Text style={[styles.cell, styles.totTxt, { width: C.rc }]}>{fmt(rateN(T.rg - T.re, T.ra))}</Text>
           <Text style={[styles.cell, styles.totTxt, { width: C.er }]}>{T.er}</Text>
         </View>
       </View>
