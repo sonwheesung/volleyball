@@ -31,13 +31,15 @@ function LinkCard({ icon, tint, title, sub, onPress, badge, dot }: { icon: Ionic
           <Ionicons name={icon} size={20} color={tint} />
         </View>
         <View style={{ flex: 1 }}>
-          <Text style={styles.title}>{title}</Text>
+          {/* 빨간 점을 제목 오른쪽에(2026-07-29 테스터: 우측 끝이 아니라 텍스트 옆). 숫자 배지(우편·개발자노트)는 우측 유지. */}
+          <View style={styles.titleRow}>
+            <Text style={styles.title}>{title}</Text>
+            {dot ? <View style={styles.titleDot} /> : null}
+          </View>
           <Muted style={{ fontSize: 12.5, marginTop: 1 }}>{sub}</Muted>
         </View>
         {badge && badge > 0 ? (
           <View style={styles.badge}><Text style={styles.badgeTxt}>{badge > 99 ? '99+' : badge}</Text></View>
-        ) : dot ? (
-          <View style={styles.redDot} />
         ) : null}
         <Text style={styles.arrow}>›</Text>
       </View>
@@ -295,6 +297,8 @@ const styles = themedStyles(() => StyleSheet.create({
   badge: { minWidth: 20, height: 20, borderRadius: 10, paddingHorizontal: 6, backgroundColor: theme.bad, alignItems: 'center', justifyContent: 'center', marginRight: 4 },
   badgeTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '800' },
   redDot: { width: 9, height: 9, borderRadius: 5, backgroundColor: theme.bad, marginRight: 6 }, // 미확인 우편 빨간 점(MAILBOX §6.3)
+  titleRow: { flexDirection: 'row', alignItems: 'center' },
+  titleDot: { width: 8, height: 8, borderRadius: 4, backgroundColor: theme.bad, marginLeft: 6 }, // 제목 옆 빨간 점(업적·우편 미수령)
   diaBtn: { flex: 1, backgroundColor: theme.cardAlt, borderRadius: 10, paddingVertical: 10, alignItems: 'center' },
   refreshBtn: { width: 36, height: 36, borderRadius: 10, alignItems: 'center', justifyContent: 'center', backgroundColor: theme.sky + '18' },
   diaBtnTxt: { color: theme.text, fontSize: 13, fontWeight: '700' },

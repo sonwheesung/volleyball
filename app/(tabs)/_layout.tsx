@@ -1,5 +1,5 @@
 import type { ComponentProps } from 'react';
-import { useEffect } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Redirect, Tabs, useRouter } from 'expo-router';
 import { BackHandler, Pressable, StyleSheet, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -7,6 +7,8 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Loading, theme } from '../../components/Screen';
 import { showAlert } from '../../components/AppDialog';
 import { useGameStore } from '../../store/useGameStore';
+import { evalAchievements } from '../../engine/achievements';
+import { unclaimedReward } from '../../engine/diamonds';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 // 선택된 탭은 채워진 아이콘(filled), 나머지는 outline — 색만이 아니라 모양으로도 선택을 확실히 표시
@@ -33,6 +35,21 @@ export default function TabsLayout() {
   const onboarded = useGameStore((s) => s.onboarded);
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const unreadMailCount = useGameStore((s) => s.unreadMailCount); // 마이페이지 탭 빨간 점(MAILBOX §6.3)
+  // 마이페이지 탭 빨간 점에 **미수령 업적 보상**도 반영(2026-07-29 테스터). 탭은 상시 마운트라 콜드 재생(achTotals)은 금지 —
+  //   저장 careerTotals만으로 evalAchievements(순수 읽기, 리플레이 없음). 시즌중 통산업적은 다음 시즌결산에 반영(디스커버리 점만 한 박자 늦음, 무해).
+  const archive = useGameStore((s) => s.archive);
+  const hof = useGameStore((s) => s.hallOfFame);
+  const milestones = useGameStore((s) => s.milestones);
+  const cash = useGameStore((s) => s.cash);
+  const fanScore = useGameStore((s) => s.fanScore);
+  const careerLog = useGameStore((s) => s.careerLog);
+  const careerTotals = useGameStore((s) => s.careerTotals);
+  const claimedAch = useGameStore((s) => s.claimedAch);
+  const hasUnclaimedAch = useMemo(() => {
+    if (!selectedTeamId) return false;
+    const statuses = evalAchievements({ myTeamId: selectedTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals });
+    return unclaimedReward(statuses, claimedAch).ids.length > 0;
+  }, [selectedTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals, claimedAch]);
 
   // 뒤로가기 앱 종료 확인(UI-35, Android 전용) — 탭 루트에서 더 갈 곳이 없을 때만 종료 다이얼로그.
   //   스택 화면(선수·계약 등)이 위에 있으면 canGoBack()=true → 기본 pop을 그대로 둔다(정상 뒤로가기 유지).
@@ -95,7 +112,7 @@ export default function TabsLayout() {
       <Tabs.Screen name="schedule" options={{ title: '일정', tabBarLabel: '일정', tabBarIcon: tabIcon('calendar-outline', 'calendar') }} />
       <Tabs.Screen name="squad" options={{ title: '선수단', tabBarLabel: '선수단', tabBarIcon: tabIcon('people-outline', 'people') }} />
       <Tabs.Screen name="office" options={{ title: '단장실', tabBarLabel: '단장실', tabBarIcon: tabIcon('briefcase-outline', 'briefcase') }} />
-      <Tabs.Screen name="mypage" options={{ title: '마이페이지', tabBarLabel: '마이페이지', tabBarIcon: tabIconDot('person-circle-outline', 'person-circle', unreadMailCount > 0) }} />
+      <Tabs.Screen name="mypage" options={{ title: '마이페이지', tabBarLabel: '마이페이지', tabBarIcon: tabIconDot('person-circle-outline', 'person-circle', unreadMailCount > 0 || hasUnclaimedAch) }} />
     </Tabs>
   );
 }
