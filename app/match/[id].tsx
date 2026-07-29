@@ -329,6 +329,19 @@ export default function MatchBoard() {
     return m;
   }, [data.sim, score.ptIdx, score.setNo, score.h, score.a, mineSide]);
 
+  // 스코어보드 코트 체력 스트립 — 현재 포인트의 내 팀 코트(선발6+리베로) 체력을 stamByPoint에서 직독(순수 파생).
+  //   테스터 요청: "체력이 안 보여 타임아웃(체력 안배) 타이밍을 못 잡음". stamByPoint[ptIdx]=이 포인트 직후 체력(회복 전).
+  //   내 경기(mineSide) + 관전 중(!finished) + 스냅샷 존재 시에만 표시(상대팀·종료 후·구빌드 방어). score.ptIdx 바뀔 때만 재계산(#122 발열).
+  const courtStamStrip = useMemo(() => {
+    if (!mineSide || finished) return null;
+    const snap = data.sim.stamByPoint?.[score.ptIdx]?.[mineSide];
+    if (!snap || !snap.length) return null;
+    return snap.map((s) => {
+      const p = byIdAll.get(s.id);
+      return { id: s.id, pos: p?.position ?? '', name: p?.name ?? '선수', stam: s.stam };
+    });
+  }, [mineSide, finished, data.sim, score.ptIdx, byIdAll]);
+
   const closeIntervene = useCallback(() => {
     setInterveneOpen(false); setIvStep('menu'); setPendingOut(null); setPendingIn(null); setIvError(null);
   }, []);
@@ -505,6 +518,10 @@ export default function MatchBoard() {
           <Text style={styles.setPillTxt}>{finished ? '경기 종료' : `${score.setNo}세트 진행 중`}</Text>
         </View>
       </View>
+
+      {/* 코트 체력 스트립 — 내 팀 관전 시, 현재 포인트의 코트(선발6+리베로) 체력을 한 줄 컴팩트로(타임아웃 타이밍 판단용).
+          신선(100%)=초록 저채도로 조용히, 지칠수록 주황·적으로 눈에 띈다(관전형 무마찰). */}
+      {courtStamStrip ? <CourtStamStrip items={courtStamStrip} /> : null}
 
       <View style={{ position: 'relative' }}>
         <MatchCourt
@@ -759,6 +776,29 @@ function subStatChips(p: Player, pinch: boolean): { label: string; value: number
   return byPos[p.position] ?? [];
 }
 
+// 스코어보드 코트 체력 스트립 — 내 팀 코트 6~7명을 한 줄 컴팩트로. 포지션색 + 짧은 이름 + 미니 체력 바.
+//   색: 높음(≥60%)=초록·중간(≥35%)=주황·낮음(<35%)=적 — 앱 공통 체력 색어(IvPlayerRow와 동일 임계).
+//   가로 스크롤 없이 한 줄에 담기게(flex 1 균등). 텍스트 최소·바 위주 — 지칠수록 눈에 띄게.
+function CourtStamStrip({ items }: { items: { id: string; pos: string; name: string; stam: number }[] }) {
+  return (
+    <View style={styles.stamStrip}>
+      {items.map((it) => {
+        const pct = Math.max(0, Math.min(100, Math.round(it.stam * 100)));
+        const color = pct >= 60 ? '#2BAE66' : pct >= 35 ? '#E0922B' : '#E1574C';
+        return (
+          <View key={it.id} style={styles.stamCell}>
+            <Text style={[styles.stamPos, { color: POS_COLOR[it.pos as keyof typeof POS_COLOR] ?? theme.muted }]} numberOfLines={1}>{it.pos}</Text>
+            <Text style={styles.stamName} numberOfLines={1}>{it.name}</Text>
+            <View style={styles.stamTrack}>
+              <View style={[styles.stamFill, { width: `${pct}%`, backgroundColor: color }]} />
+            </View>
+          </View>
+        );
+      })}
+    </View>
+  );
+}
+
 // 개입 시트 선수 행 — 포지션 색 점 + 이름 + 핵심 스탯 + OVR + (있으면)체력. 교체 판단 근거.
 function IvPlayerRow({ name, pos, ovr, stam, stats, onPress }: { name: string; pos: string; ovr: number; stam?: number; stats?: { label: string; value: number }[]; onPress: () => void }) {
   const stamPct = stam != null ? Math.round(stam * 100) : null;
@@ -809,6 +849,13 @@ const styles = themedStyles(() => StyleSheet.create({
   setPillWrap: { alignItems: 'center', marginTop: -4 },
   setPill: { backgroundColor: theme.cardAlt, borderWidth: 1, borderColor: theme.border, borderRadius: 999, paddingHorizontal: 14, paddingVertical: 4 },
   setPillTxt: { color: theme.muted, fontSize: 12, fontWeight: '800' },
+  // 코트 체력 스트립 — 한 줄 균등(가로 스크롤 없음), 텍스트 최소·바 위주
+  stamStrip: { flexDirection: 'row', gap: 4, paddingHorizontal: 4, marginTop: 2 },
+  stamCell: { flex: 1, alignItems: 'center', gap: 1 },
+  stamPos: { fontSize: 9, fontWeight: '900' },
+  stamName: { color: theme.muted, fontSize: 9, fontWeight: '700', maxWidth: '100%' },
+  stamTrack: { width: '100%', height: 4, borderRadius: 2, backgroundColor: theme.cardAlt, overflow: 'hidden', marginTop: 1 },
+  stamFill: { height: '100%', borderRadius: 2 },
   setScores: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, justifyContent: 'center' },
   btnRow: { flexDirection: 'row', gap: 8 },
   setChip: { backgroundColor: theme.card, borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4, alignItems: 'center', borderWidth: 1, borderColor: theme.border },

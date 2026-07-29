@@ -91,6 +91,7 @@ export interface SimResult {
   setFirstServers?: Side[];         // 세트별(인덱스=세트-1) 첫 서브 팀. 5세트는 코인토스(MATCH_SYSTEM v2.1)라
                                     // 소비자(보드 복원·production)가 setNo%2로 재도출하면 어긋남 → 엔진이 진실을 실어 보낸다.
   reactiveEvents?: ReactiveEvent[]; // 반응형 특성 발동/활성 창(TRAIT_SYSTEM §6.10, 순수 표현). 미부여=빈 배열. 골든 무영향.
+  stamByPoint?: { home: TimeoutCourtStam[]; away: TimeoutCourtStam[] }[]; // 포인트별 코트(선발6+리베로) 체력 스냅샷 — 인덱스=points와 정렬(득점 확정 직후·회복 전, 타임아웃 스냅샷과 동일 의미). 보드 스코어보드 체력 표시용. **순수 관측·rng 무소비·골든 무영향**(serializeMatch 미해시, MATCH_SYSTEM §7.1). setUse/reactiveEvents와 동일 계층 — 미관측 경로 대비 optional.
 }
 
 export function simulateMatchSimple(seed: number, homeOvr: number, awayOvr: number): SimResult {

@@ -255,6 +255,9 @@ export function simulateMatch(
   };
 
   const points: PointLog[] = [];
+  // 포인트별 코트(선발6+리베로) 체력 스냅샷(보드 스코어보드 표시용) — points와 1:1 정렬, 득점 확정 직후·회복 전.
+  //   순수 관측(stam 맵을 읽기만, rng 미소비·결과 불변). setUse/timeoutEvents와 동일 계층 — 골든 무영향(serializeMatch 미해시).
+  const stamByPoint: { home: TimeoutCourtStam[]; away: TimeoutCourtStam[] }[] = [];
   const setScores: { home: number; away: number }[] = [];
   const setFirstServers: Side[] = []; // 세트별 첫 서브 팀(보드·production이 재도출 않게 진실을 실어 보냄) — 5세트 코인토스 포함
   const subUse: Record<string, number> = {}; // 교체 출전 선수 id → 출전 랠리 수(출전 성장 XP용)
@@ -535,6 +538,11 @@ export function simulateMatch(
       if (opts.stats && winner !== serving) opts.stats.sideouts++;
       if (winner === 'home') h++; else a++;
       points.push({ setNo, home: h, away: a, scorer: winner, how, byId, recvId, setId, touches });
+      // 포인트별 코트 체력 스냅샷(§7.1, 회복 전 = 타임아웃 스냅샷과 동일 의미) — points와 1:1. 순수 관측(stam 맵 읽기만·rng 미소비).
+      stamByPoint.push({
+        home: [...home.six, ...(home.libero ? [home.libero] : [])].map((p) => ({ id: p.id, stam: homeStam.get(p.id) ?? 1 })),
+        away: [...away.six, ...(away.libero ? [away.libero] : [])].map((p) => ({ id: p.id, stam: awayStam.get(p.id) ?? 1 })),
+      });
       if (opts.boxTimeline) opts.boxTimeline.push(cloneBox(accBox!)); // 이 득점까지의 누적 스냅샷(points와 1:1)
 
       // ── 반응형 특성 지속/발동(TRAIT_SYSTEM §6.3, Phase 2a) — rng 무소비. 무보유 리그면 완전 no-op(빈 맵 → 바이트 동일). ──
@@ -704,7 +712,7 @@ export function simulateMatch(
     setNo++;
   }
 
-  return { homeSets, awaySets, setScores, points, subUse, setUse, subEvents, timeouts: timeoutEvents, setFirstServers, reactiveEvents };
+  return { homeSets, awaySets, setScores, points, subUse, setUse, subEvents, timeouts: timeoutEvents, setFirstServers, reactiveEvents, stamByPoint };
 }
 
 // momFactor 재노출(테스트/튜닝용)

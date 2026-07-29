@@ -817,6 +817,14 @@ tossQuality = setterSkill × penalty(0.5~0.8)   // 정상 세트보다 하향
 - 밴드 유지: **세트5 60~82%**, 세트1→5 하락 **≥8%p**. 2차 단언: 경기당 피로 교체율 **[0.05, 0.5]**(기능 사멸/폭주 방지).
 - TTO의 회복 과다(court avg 83.1% > 82%)는 `TTO_REST`(§7.4b)로 교정 — 가드 지표를 먼저 재정의한 뒤 튜닝(움직이는 표적 방지).
 
+**포인트별 코트 체력 관측 `stamByPoint` (2026-07-29 — 보드 스코어보드 표시용)**
+테스터 "관전 중 체력이 안 보여 타임아웃(체력 안배) 타이밍을 못 잡는다" → 사용자 결정 "스코어보드에 표기". 엔진이
+`SimResult.stamByPoint`(포인트별 코트 선발6+리베로 체력 스냅샷, 인덱스=`points`와 1:1)를 실어 보낸다.
+- 스냅샷 시점 = **각 득점 확정 직후·회복 전**(랠리간 `recover` 이전) — `TimeoutEvent.stamHome/stamAway`·`stamProbe`와 **동일 의미**(그 랠리 직후 잔량). 값은 `homeStam/awayStam` 맵을 **읽기만**(rng 미소비).
+- **순수 관측·결과 불변** — `setUse`/`reactiveEvents`/`stamProbe`와 동일 계층. 골든(`serializeMatch`)에 **미해시** → ENGINE_VERSION 범프 불필요(`_dv_golden` 바이트 불변 확인).
+- 보드(`app/match/[id].tsx`)는 매번 재시뮬(`buildMatchBox`)로 SimResult를 얻으므로 **메모리 전용·세이브 무영향**. 스코어보드 아래 내 팀(mineSide) 코트 체력 스트립으로 표시(BOARD_RULES 룰 73).
+- 가드 `tools/_dv_stambypoint.ts`: ① 길이 정합 ② 6~7인·stam∈[0,1] ③ 결정론 ④ 골든 무영향(코어 직렬화 무감 A/B + `_dv_golden` PASS) ⑤ 생리 sanity(세트시작 0.94→종반 0.88 하락, 리베로 포함).
+
 **리베로 체력 재튜닝 (2026-07-15, ENGINE_VERSION 10 — 검증·실측=Fable 5/구현·문서=Opus)**
 
 증상(사용자 관찰 "타임아웃 모달에서 리베로가 항상 100%")을 실측 확정: 리베로는 공격(1.2)·서브(1.0)·블록(0.4)
