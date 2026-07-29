@@ -55,6 +55,8 @@ import { setSeasonHistory, upcomingStances } from '../data/leagueHistory';
 import { LEAGUE_CAP, maxSalaryFor, isFranchise } from '../engine/cap';
 import { capPayroll } from '../data/roster';
 import { INITIAL_FA_IDS } from '../data/seed'; // 초기 FA 풀(TRANSACTION_SYSTEM §5c) — 게임 시작 시드
+import { initFaBackfillPool } from './initFaBackfill'; // 소급 백필 판정(§5c) — 순수 모듈(가드가 동일 함수 테스트). 재-export
+export { initFaBackfillPool };
 import { ROSTER_MAX, canReleasePosition, inSeasonCost, severanceFee } from '../engine/transactions';
 import { accrueCareer, appendSeasonLine } from '../engine/production';
 import { diag } from '../lib/deviceLog';
@@ -1748,7 +1750,12 @@ export const useGameStore = create<GameState>()(
           // 훈련 방침 타임라인 복원(A4) — 마이그레이션이 구세이브의 단일 trainingFocus를 focusLog로 시드해 둠([{fromDay:0}]).
           if (state?.selectedTeamId) setFocusTimeline(state.selectedTeamId, state.focusLog ?? []);
           if (state?.staffHead || state?.staffAssistants || state?.staffScouts) commitStaff(state.staffHead ?? {}, state.staffAssistants ?? {}, state.staffScouts ?? {}, (state as { staffHeadTimeline?: Record<string, { fromDay: number; coachId: string | null }[]> })?.staffHeadTimeline); // 축3: 타임라인 복원(구세이브=undefined→소급=byte 불변)
-          setTxContext(state?.inSeasonTx ?? [], state?.faPool ?? [], state?.selectedTeamId ?? '');
+          // 초기 FA 풀 소급 백필(§5c) — pre-feature 시즌0 세이브면 빈 faPool을 INITIAL_FA_IDS로 대체(컨텍스트+스토어 필드).
+          //   대상 아님(영입 시작·시즌≥1·이미 풀 있음·팀 미선택)이면 기존 동작 그대로. 엔진 미파급(컨텍스트 복원 레이어 한정).
+          const _bf = initFaBackfillPool(state);
+          const _faPool = _bf ?? (state?.faPool ?? []);
+          setTxContext(state?.inSeasonTx ?? [], _faPool, state?.selectedTeamId ?? '');
+          if (_bf) useGameStore.setState({ faPool: _faPool });
           setRelationContext(state?.bonds ?? {}); // 인간관계 우정 컨텍스트(FA 해석)
           setCoachRepContext(state?.coachCareerLog ?? []); // 감독 명성 컨텍스트 복원(FA 유인 §9.6-D)
           setMyTeamStaff(state?.selectedTeamId ?? ''); // 내 팀 등록(AI 기본 스태프 분리)

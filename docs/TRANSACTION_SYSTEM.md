@@ -133,6 +133,21 @@
      **dedupeNames 이전 append(리뷰 품질건)**: 초기 FA를 배열 끝에 붙여 dedup에 참여시키면 기존 선수 이름은 불변(taken 우선)·FA 동명이인만 재롤 — FA 화면 동명이인 방지.
   2. **풀 id**: `store/useGameStore.ts selectTeam()`에서 `set({ faPool: INITIAL_FA_IDS })` + `setTxContext([], INITIAL_FA_IDS, teamId)`.
      `faPool`은 partialize·`saveMigration`(DEFAULT `[]`·KEY_TYPES `arr`)에 **이미 완비** — 새 스키마 불필요.
+- **소급 백필(2026-07-29 — pre-feature 세이브 구제)**: `selectTeam()`은 **새 게임 시작에만** `faPool`을 시드하므로,
+  이 기능(3bb8d3a) **이전에 시작한 시즌0 세이브**는 `faPool=[]`로 저장돼 OTA로 코드를 받아도 재로드 시 **여전히 빈 풀
+  (영입 가능 FA 0)**이 된다. → 재수화(rehydration) 경로에서 순수 판정 헬퍼 **`initFaBackfillPool(state)`
+  (`store/initFaBackfill.ts`, store가 재-export)** 로 대상을 판정해 빈 풀을 `INITIAL_FA_IDS`로 소급 주입한다.
+  - **조건**: 시즌0(막 시작) · `faPool` 빈 배열 · `inSeasonTx` 없음 · `selectedTeamId` 있음 — 넷 다 참일 때만.
+    이는 "막 시작한 pre-feature 세이브"(selectTeam 직후 상태)의 지문이다.
+  - **근거(재주입/역행 방지)**: 이미 영입을 시작했거나(`inSeasonTx` 존재) 시즌≥1(첫 롤오버 지남)이거나 이미 풀이 있으면
+    (post-feature 세이브) 불변(null) — 첫 롤오버서 자연 소멸했어야 할 초기 FA를 되살리거나(역행), 이미 시드된 풀을
+    덮어쓰는(중복) 사고를 막는다. 미영입분은 **기존과 동일하게** 첫 롤오버 스냅샷에서 소멸(범위=시즌0 한정 불변).
+  - **위치**: 컨텍스트 복원 레이어(`setTxContext` + `useGameStore.setState({ faPool })`)에서만 — 엔진 미파급, 시드/리플레이
+    불변, GOLDEN 픽스처 불변(초기 FA는 teamless라 이미 무영향). **`selectTeam` 경로(위 §5c 주입)와 상보적** — 새 게임은
+    `selectTeam`이, pre-feature 세이브는 이 백필이 같은 `INITIAL_FA_IDS`를 채운다(적용 범위 확장, 기존 결정 불변).
+  - **드리프트 방지**: `useGameStore`가 `react-native`(AsyncStorage)를 전이 import해 tsx 가드가 store를 직접 import 못 하므로,
+    순수 판정 로직만 `store/initFaBackfill.ts`로 분리(오직 `data/seed`→`engine`만 의존). 프로덕션(store 재수화)과 가드
+    (`_dv_initfa.ts` §D)가 **같은 함수**를 import — 인라인 복제 없음.
 - **시드 고정(리뷰 택일)**: `strSeed('initfa')` **고정 상수**(리그 시드 `LEAGUE_SEED` 미반영) — 모든 플레이스루가 **같은 초기 FA 10명**.
   이는 의도된 결정: `LEAGUE_SEED`가 고정이라 리그 자체가 전 플레이 공통이고 `CLUB_IDENTITY`도 고정 배정이므로, 초기 FA도 고정이 **기존 철학과 일치**(창단 리그의 일부). 플레이별 변주가 필요해지면 `strSeed('initfa:'+seed)`로 전환(여전히 결정론).
 - **OVR 타겟 = 표시 OVR 70~80**(사용자 프리뷰가 표시값): `displayOvr(overallRaw)∈[70,80]` ⇔ `overallRaw≈[60,69]`
@@ -147,6 +162,8 @@
   - **무결성 스윕(리뷰 필수)**: teamless FA 존재 상태로 시즌0 순위·생산·노쇠 전진 패스가 crash/NaN 없이 완주(전역 `LEAGUE.players` 순회 경로가 phantom을 안 건드림).
   - **밸런스 A/B(리뷰 필수·원칙 — N≥10,000)**: 미드티어 팀이 캡·정원·포지션 게이트 안에서 **초기 FA를 최대한 영입한 뒤/전** 승률 Δ 측정.
     예측은 "modest(원시 60~69는 약한 포지션만 메움 — 강팀 Δ≈0)"이나 **커밋 근거는 실측**(추정 금지). parity(타 구단 균형 불변) 회귀 동반.
+  - **소급 백필(D)**: 실제 헬퍼 `initFaBackfillPool`의 진리표 — D1 pre-feature→INITIAL_FA_IDS 동일 · D2 반환 id 재로드 해석 ·
+    D3 영입시작→null · D4 시즌≥1→null · D5 이미 풀 있음→null · D6 팀 미선택→null(재주입/역행 방지 증명).
 
 ## 6. 검증
 - 결정론: 같은 세이브·거래 = 같은 시즌(골든 테스트 보존, 합성 무영향).

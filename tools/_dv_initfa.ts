@@ -9,6 +9,7 @@ import {
   LEAGUE, getPlayer, evolveOnDay, getEvolvedTeamPlayers, coachInfoOf, resetLeagueBase,
 } from '../data/league';
 import { generateInitialFAs, INITIAL_FA_IDS } from '../data/seed';
+import { initFaBackfillPool } from '../store/initFaBackfill'; // 실제 프로덕션 판정 헬퍼(§5c 소급 백필) — 인라인 복제 금지
 import { overallRaw, displayOvr, teamOverallRaw } from '../engine/overall';
 import { computeStandings } from '../data/standings';
 import { simulateMatch } from '../engine/match';
@@ -136,6 +137,39 @@ check('C3 밸런스 sanity(Δ ≤ +20%p, 게임파괴 아님)', dWeak <= 0.20 &&
 // C4 강팀 Δ가 약팀 Δ 이하 — 원시 60~69는 약한 포지션만 메움(강팀 선발 못 뚫음)
 check('C4 강팀 Δ ≤ 약팀 Δ(뎁스 논리 — 강팀 이득 적음)', dStrong <= dWeak + 0.01, `strong ${(dStrong * 100).toFixed(1)} ≤ weak ${(dWeak * 100).toFixed(1)}`);
 
+// ── D. 소급 백필 (pre-feature 세이브) — 실제 프로덕션 판정 헬퍼 initFaBackfillPool의 진리표 검증 ──
+//   기능(3bb8d3a) 이전 시작한 시즌0 세이브는 faPool=[]로 저장돼 OTA 후에도 빈 풀 → 재수화 시 소급 주입.
+//   가드는 store/initFaBackfill.ts의 **실제 함수**를 import(store 재-export와 동일 소스, 인라인 복제 없음).
+log('D. 소급 백필 (pre-feature 세이브)');
+const realTeamId = LEAGUE.teams[0].id; // 하드코딩 금지 — 리그 시드의 실제 팀 id 재사용
+
+// D1 pre-feature 세이브 → INITIAL_FA_IDS와 동일(길이·원소·순서)
+const d1 = initFaBackfillPool({ season: 0, faPool: [], inSeasonTx: [], selectedTeamId: realTeamId });
+const d1Ok = !!d1 && d1.length === INITIAL_FA_IDS.length && d1.every((id, i) => id === INITIAL_FA_IDS[i]);
+check('D1 pre-feature(시즌0·빈풀·무거래·팀선택) → INITIAL_FA_IDS 동일', d1Ok,
+  `반환 ${d1?.length ?? 'null'}/${INITIAL_FA_IDS.length}`);
+
+// D2 반환 id 전원이 시즌0 resetLeagueBase 후 getPlayer/evolveOnDay(day0)로 해석(undefined 아님)
+resetLeagueBase();
+const d2Ok = !!d1 && d1.every((id) => getPlayer(id) !== undefined && evolveOnDay(id, 0) !== undefined);
+check('D2 반환 id 전원 시즌0 재로드 후 getPlayer·evolveOnDay(day0) 해석', d2Ok);
+
+// D3 이미 영입 시작(inSeasonTx 존재) → null(불변)
+const d3 = initFaBackfillPool({ season: 0, faPool: [], inSeasonTx: [{ /* tx-like */ }], selectedTeamId: realTeamId });
+check('D3 이미 영입 시작(inSeasonTx 존재) → null(불변)', d3 === null);
+
+// D4 시즌≥1 → null(불변)
+const d4 = initFaBackfillPool({ season: 1, faPool: [], inSeasonTx: [], selectedTeamId: realTeamId });
+check('D4 시즌≥1 → null(불변)', d4 === null);
+
+// D5 이미 풀 있음(post-feature) → null(재주입 안 함)
+const d5 = initFaBackfillPool({ season: 0, faPool: [...INITIAL_FA_IDS], inSeasonTx: [], selectedTeamId: realTeamId });
+check('D5 이미 풀 있음(post-feature) → null(재주입 없음)', d5 === null);
+
+// D6 팀 미선택 → null(불변)
+const d6 = initFaBackfillPool({ season: 0, faPool: [], inSeasonTx: [], selectedTeamId: undefined });
+check('D6 팀 미선택 → null(불변)', d6 === null);
+
 log('');
-log(fails === 0 ? '✅ PASS — 초기 FA 풀 구조·무결성·밸런스 전건 통과' : `❌ FAIL — ${fails}건`);
+log(fails === 0 ? '✅ PASS — 초기 FA 풀 구조·무결성·밸런스·소급백필 전건 통과' : `❌ FAIL — ${fails}건`);
 process.exit(fails === 0 ? 0 : 1);
