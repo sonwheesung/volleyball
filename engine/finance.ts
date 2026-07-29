@@ -15,7 +15,8 @@ export const HOME_GAMES = 18;   // 36경기의 절반
 export const TICKET = 1;        // 객단가(만원)
 export const MERCH_PER_FAN = 0.25; // 선수팬 1명당 연간 굿즈 매출(만원)
 /** 구단 운영 고정비(만원) — 시설·전지훈련·유소년·프런트. 이게 있어야 흉작 시즌에 적자가 난다 */
-export const OPERATING_COST = 80000;
+// ⚙ 프로덕션 고정 리터럴 + 튜닝/가드 env 시임(DV_ 패턴, 미설정 시 리터럴 — 결정론 무영향). 재정 "너그럽게" 재튜닝 스윕용(2026-07-29).
+export const OPERATING_COST = process.env.DV_OPEX != null ? Number(process.env.DV_OPEX) : 80000;
 
 /** 모기업 지원금 베이스(만원) — 팀별 차등 22.5~30.5억(모기업 크기가 다르다). 시드 결정론.
  *  2026-06-14 상향(20~28→22~30): 리그 성장으로 연봉↑ → 보전 62% → 베이스 +2억.
@@ -24,8 +25,13 @@ export const OPERATING_COST = 80000;
  *  2026-07-08 재조율(24.3~32.3→22.5~30.5, base 243000→225000, EC-FN-03): FA 첫해 몸값 이중과금 제거(faSpend salary 삭제)로 현금 드레인↓ + 260707 엔진튜닝 누적 드리프트로
  *  수정 전에도 이미 잔고 19.1억·좌절 5%로 밴드 이탈(장식화 임박) → 수정 후 25.7억·좌절 0%. **다중유니버스 평균화**로 재보정(단일 궤적은 cash→FA→성적 되먹임 카오스로 base 비단조):
  *  simFinance 100시즌×8유니버스 → 좌절 27%·보전 12%·잔고 17.5억·파산0·✅ 건강(설계 밴드 좌절 20-27%·보전 가끔 복원). */
+// 2026-07-29 "너그럽게" 재튜닝(테스터: 약소 구단이 아무것도 안 해도 구조적 적자) — 독립리뷰 반영:
+//   전역 완화(장식화)가 아니라 **약팀 타깃 재분배** = 하한 225000→240000(+1.5억, 광주 22.6→24.1억) + 스프레드 압축 80000→55000(부자팀 30.5→29.5억 억제).
+//   평균 base 거의 불변(재분배) → 총 좌절률(핵심 연출) 유지, 최저-스폰서 팀만 구조적 적자 완화. sponsorThrift(부자팀 자동 삭감)가 인플레·부익부 내장 억제.
+const SPONSOR_BASE0 = process.env.DV_SPONSORBASE != null ? Number(process.env.DV_SPONSORBASE) : 240000; // 하한(구 225000). ⚙ 튜닝 env 시임 유지.
+const SPONSOR_SPREAD = process.env.DV_SPONSORSPREAD != null ? Number(process.env.DV_SPONSORSPREAD) : 55000; // 스프레드(구 80000) — 압축. 범위 24.0~29.5억.
 export function sponsorBase(teamId: string): number {
-  return 225000 + Math.floor(createRng(strSeed(`sponsor:${teamId}`)).next() * 80000);
+  return SPONSOR_BASE0 + Math.floor(createRng(strSeed(`sponsor:${teamId}`)).next() * SPONSOR_SPREAD);
 }
 
 /** 모기업 긴축 계수 — 모기업은 메꿔주는 기관이지 쌓아주는 기관이 아니다.
