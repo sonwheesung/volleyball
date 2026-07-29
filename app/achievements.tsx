@@ -90,7 +90,7 @@ function AchievementsInner() {
         <Muted style={{ fontSize: 12 }}>장기 목표를 눈앞에. 우승·시상·레전드·기록·운영의 발자취가 트로피로 남는다.</Muted>
         {/* 상단 일괄 보상 받기(2026-07-28) — 미수령 있을 때만. 카드별로도 받을 수 있고, 여기서 한 번에. */}
         {unclaimedIds.length > 0 ? (
-          <Button label={`🎁 안 받은 보상 일괄 받기 (${unclaimedIds.length})`} onPress={() => claim()} disabled={claiming || walletBusy} />
+          <Button label={`🎁 보상 일괄 받기 (${unclaimedIds.length})`} onPress={() => claim()} disabled={claiming || walletBusy} />
         ) : null}
       </Card>
 

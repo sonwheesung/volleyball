@@ -55,11 +55,13 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator>
       <View style={{ width: TABLE_W }}>
-        {/* 그룹 헤더 — 공격 묶음 */}
+        {/* 그룹 헤더 — 공격·수비 묶음(2026-07-29 테스터: 수비도 라벨 대칭). 수비=디그+리시브(세트 앞으로 이동해 인접). */}
         <View style={[styles.row, styles.grpRow]}>
           <View style={{ width: NAME_W + C.sc }} />
           <Text style={[styles.grpTxt, { width: ATK_W }]}>공격</Text>
-          <View style={{ width: REST_W }} />
+          <View style={{ width: C.bl + C.sv + C.st }} />
+          <Text style={[styles.grpTxt, { width: C.dg + C.rc }]}>수비</Text>
+          <View style={{ width: C.er }} />
         </View>
         {/* 칸 헤더 */}
         <View style={[styles.row, styles.hRow]}>
@@ -70,8 +72,8 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
           <Text style={[styles.hCell, { width: C.ap }]}>성공률</Text>
           <Text style={[styles.hCell, { width: C.bl }]}>블록</Text>
           <Text style={[styles.hCell, { width: C.sv }]}>서브</Text>
-          <Text style={[styles.hCell, { width: C.dg }]}>디그</Text>
           <Text style={[styles.hCell, { width: C.st }]}>세트</Text>
+          <Text style={[styles.hCell, { width: C.dg }]}>디그</Text>
           <Text style={[styles.hCell, { width: C.rc }]}>리시브</Text>
           <Text style={[styles.hCell, { width: C.er }]}>범실</Text>
         </View>
@@ -92,8 +94,8 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
               <Text style={[styles.cell, { width: C.ap }, ap !== null && ap >= 45 ? styles.hi : ap === null ? styles.zero : undefined]}>{fmt(ap)}</Text>
               {num(l.blockPt, C.bl)}
               {num(l.srvAce, C.sv)}
-              {num(l.digSucc, C.dg)}
               {num(l.assist, C.st)}
+              {num(l.digSucc, C.dg)}
               <Text style={[styles.cell, { width: C.rc }, rc !== null && rc >= 45 ? styles.hi : rc === null ? styles.zero : undefined]}>{fmt(rc)}</Text>
               <Text style={[styles.cell, { width: C.er }, err > 0 ? styles.err : styles.zero]}>{err}</Text>
             </View>
@@ -108,8 +110,8 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
           <Text style={[styles.cell, styles.totTxt, { width: C.ap }]}>{fmt(rateN(T.ak, T.aa))}</Text>
           <Text style={[styles.cell, styles.totTxt, { width: C.bl }]}>{T.bl}</Text>
           <Text style={[styles.cell, styles.totTxt, { width: C.sv }]}>{T.ac}</Text>
-          <Text style={[styles.cell, styles.totTxt, { width: C.dg }]}>{T.dg}</Text>
           <Text style={[styles.cell, styles.totTxt, { width: C.st }]}>{T.as}</Text>
+          <Text style={[styles.cell, styles.totTxt, { width: C.dg }]}>{T.dg}</Text>
           <Text style={[styles.cell, styles.totTxt, { width: C.rc }]}>{fmt(rateN(T.rg - T.re, T.ra))}</Text>
           <Text style={[styles.cell, styles.totTxt, { width: C.er }]}>{T.er}</Text>
         </View>

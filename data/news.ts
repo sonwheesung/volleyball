@@ -645,6 +645,10 @@ export function buildNewsFeed(
   const TRIPLE_MIN = 3, BIG_GAME = 30;
   // 유망주 데뷔 게이트 — talentBase 등급(seed rollTalent): S 3%(≥1.25)·A 12%(≥1.12)·B 45%·C 30%·D 10%.
   const PROSPECT_MIN = 1.12, ELITE_MIN = 1.25; // A급 이상만 기사화, S급은 ★(특급 기대주)
+  // 나이 상한 — "유망주 데뷔전"은 어린 신인만(실 KOVO 데뷔 18~22, 늦어도 23). 게임 시작 첫 시즌엔 전원 career.matches=0이라
+  // 베테랑(26~32세)도 talentBase만 높으면 "유망주 데뷔전"으로 떠 버렸다(사용자 보고 2026-07-29: 26세 리베로를 "특급 기대주").
+  // 나이 상한으로 첫시즌 아티팩트만 차단 — 실 신인(makeProspect age 18~20)은 항상 통과(후속 시즌 진짜 데뷔 기사 유지).
+  const ROOKIE_DEBUT_MAX_AGE = 23;
   const debuted = new Set<string>(); // 이번 시즌 첫 선발 1회만
   // 트리플 크라운·한 경기 폭발은 선수당 1건으로 묶는다(한 시즌 8건 폭주 방지, 2026-06-25 에디터) — 시즌 N번째/최고 경기.
   const tc = new Map<string, { count: number; tid: string; name: string; back: number; b: number; a: number; day: number }>();
@@ -668,7 +672,7 @@ export function buildNewsFeed(
       // 데뷔전 — 통산 출전 0(이번 시즌이 데뷔)인 선수의 첫 선발만. **유망주(잠재력 높은 신인)만**: 리그 전체
       // 신인 데뷔를 다 기사화하면 첫 경기에 ~50건 쏟아짐 → talentBase A급 이상(상위 15%)만, S급은 ★(2026-06-21 사용자 보고).
       // 팀 무관(라이벌 1순위 유망주 데뷔도 리그 사건). **포지션별 대표 스탯**(리베로 득점 0 정상 → 디그·리시브, 세터 세트)
-      if (!debuted.has(id) && mp.starters.has(id) && (p.career?.matches ?? 0) === 0 && p.talentBase >= PROSPECT_MIN) {
+      if (!debuted.has(id) && mp.starters.has(id) && (p.career?.matches ?? 0) === 0 && p.age <= ROOKIE_DEBUT_MAX_AGE && p.talentBase >= PROSPECT_MIN) {
         debuted.add(id);
         const elite = p.talentBase >= ELITE_MIN;
         const tier = elite ? '특급 기대주' : '유망주';
@@ -839,7 +843,10 @@ export function buildNewsFeed(
       // 본문은 프레이밍 + 내 팀 전망만(순위 나열은 상세의 "예상 순위" 그리드 카드가 담당, §11.6). 산문 나열 제거(테스터 가독성).
       //   opener(preseason 풀)가 이미 "예상 순위 공개" 프레이밍을 주므로 core는 중복 없이 내 팀 전망 중심으로.
       const core = `${S}시즌 개막을 앞두고 언론의 전력 전망이 나왔다. ${myLine}`.trim();
-      push(currentSeason, 'standing', headline, myIdx >= 0, myTeamId || undefined, body3('preseason', `${currentSeason}:preseason`, core), `preseason:${currentSeason}`, 0);
+      // day=−1(개막 전 소식) — 최신순 정렬(day↓·big↓)에서 day=0인 개막일 경기·데뷔 뉴스보다 **아래로** 가라앉는다
+      //   (사용자 보고 2026-07-29: ★ big 프리시즌 예상순위가 경기·데뷔 뉴스 상단에 고정). big=true는 유지(★·강조색은 그대로),
+      //   순서만 day로 내린다. freshNews 2주 만료는 그대로(day=−1도 개막 무렵만 노출 후 소멸, §9). 이 뉴스만 이동 — 다른 순서 무회귀.
+      push(currentSeason, 'standing', headline, myIdx >= 0, myTeamId || undefined, body3('preseason', `${currentSeason}:preseason`, core), `preseason:${currentSeason}`, -1);
     }
   }
 

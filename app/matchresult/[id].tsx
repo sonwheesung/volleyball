@@ -62,7 +62,7 @@ export default function MatchResult() {
       {fromWatch ? (
         // 관전 종료 후 나가기 경유 — 홈(대시보드)으로 보내 뉴스·기록을 보게 한다(사용자 요청).
         <View style={styles.homeBtnWrap}>
-          <Button label="홈으로 (뉴스 보기)" onPress={() => router.replace('/(tabs)/')} />
+          <Button label="홈으로" onPress={() => router.replace('/(tabs)/')} />
         </View>
       ) : null}
     </Screen>

@@ -5,7 +5,7 @@ import { useRouter } from 'expo-router';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { EmptyState, IconLabel, Screen, theme, themedStyles } from '../components/Screen';
 import { seasonResults, displayCutoff, type ResultRow } from '../data/standings';
-import { shortTeamName as short } from '../data/league';
+import { getTeam } from '../data/league';
 import { dateForDay, formatDate } from '../lib/calendar';
 import { useGameStore } from '../store/useGameStore';
 
@@ -15,6 +15,8 @@ export default function Results() {
   const currentDay = useGameStore((s) => s.currentDay);
   const season = useGameStore((s) => s.season);
   const results = useGameStore((s) => s.results);
+  // 팀명은 풀네임 표시(사용자 보고 2026-07-29: 마지막 단어만 "페어리스"·"윙스" 축약 → "수원 페어리스" 풀네임). 최대 8자라 flex 컬럼에 담김.
+  const fullName = (id: string) => getTeam(id)?.name ?? id;
 
   // **결과 인지 표시 컷오프**(§3.3 — 순위·대시보드·시즌리더와 동일 `displayCutoff`): 리그가 친 경기를 전부
   // 표시(관전 안 한 것도 — 이미 지나간 경기) + 방금 관전한 경기·시즌말 최종일 포함. 현재 경기일 미관전 경기는 제외(스포일러 안전).
@@ -60,12 +62,12 @@ export default function Results() {
                       pressed && { opacity: 0.6 },
                     ]}
                   >
-                    <Text style={[styles.mTeam, { textAlign: 'right' }, homeWin && styles.win]} numberOfLines={1}>
-                      {short(r.homeTeamId)}
+                    <Text style={[styles.mTeam, { textAlign: 'right' }, homeWin && styles.win]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                      {fullName(r.homeTeamId)}
                     </Text>
                     <Text style={styles.score}>{r.homeSets} : {r.awaySets}</Text>
-                    <Text style={[styles.mTeam, !homeWin && styles.win]} numberOfLines={1}>
-                      {short(r.awayTeamId)}
+                    <Text style={[styles.mTeam, !homeWin && styles.win]} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+                      {fullName(r.awayTeamId)}
                     </Text>
                   </Pressable>
                 );

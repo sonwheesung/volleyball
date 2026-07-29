@@ -81,6 +81,16 @@ function TraitBadge({ good, color }: { good: boolean; color: string }) {
   );
 }
 
+/** 스탯 카테고리 헤더 옆 ⓘ 정보 버튼 — 탭하면 그 카테고리 스탯이 무엇을 좋게 하는지 설명 모달(showAlert).
+ *  표시 전용(엔진·스토어 무접촉). 헤더 텍스트 옆에 작게, theme.muted. */
+function StatInfo({ onPress }: { onPress: () => void }) {
+  return (
+    <Pressable onPress={onPress} hitSlop={{ top: 10, bottom: 10, left: 6, right: 12 }} style={{ marginLeft: 5 }}>
+      <Ionicons name="information-circle-outline" size={16} color={theme.muted} />
+    </Pressable>
+  );
+}
+
 
 // 구단주 면담 기능 노출 토글 — 지금은 숨김(테스트 범위 축소, 운영 단계서 재활성 예정). true면 면담 요청 버튼/이력/불만 대화 노출.
 const SHOW_OWNER_TALK = false;
@@ -97,6 +107,28 @@ const STATUS_HELP =
   '• 컨디션(경기감각). 최근 실전 출전에 따라 오르내립니다. 꾸준히 경기에 나서면 "좋음"을 유지하고, 오래 결장하면 감각이 무뎌져 기량이 최대 7%까지 떨어집니다(주전으로 계속 뛰면 변화 없음). 다시 코트에 서서 대여섯 경기를 뛰면 감각이 돌아옵니다.\n\n' +
   '• 성격. 이 선수가 무엇을 가장 중시하는지(연봉·우승·출전·연고·팀 충성)입니다. 벤치에 앉히거나 재계약을 논할 때 반응이 성격마다 다릅니다.\n\n' +
   '• 지금 마음. 순위·출전·연봉·연고를 지금 어떻게 받아들이는지입니다. 불만이 쌓이면 재계약을 거부하거나 이적을 원할 수 있습니다.';
+
+// ── 세부 능력치 카테고리 도움말 (테스터: "스탯이 뭘 올리는지 모르겠다") ──
+//   CLAUDE §5 스탯 2층 정의 정본에 맞춘 정성 설명. **수치·엔진 계수는 넣지 않는다**(사용자 지시) — "무엇이 좋아지는지"만.
+//   점프·민첩·체력·체젠은 노쇠 하락(aging DECAY_STATS), 반응·위치선정은 노쇠 없이 경험 성장 — 문구에 그대로 반영.
+const BODY_HELP =
+  '• 점프력 — 스파이크와 블로킹의 타점(높이)이 높아집니다. 나이가 들면 떨어져요.\n' +
+  '• 민첩성 — 빠른 반응과 코트 이동으로 수비 범위가 넓어집니다. 나이가 들면 떨어져요.\n' +
+  '• 체력 — 한 경기를 버티는 지구력. 높을수록 후반에도 기량이 덜 떨어집니다.\n' +
+  '• 체력재생 — 랠리·세트 사이 회복 속도. 높을수록 금방 체력을 되찾아 체력전에 강합니다.';
+const MENTAL_HELP =
+  '• 반응속도 — 블로킹·디그·리시브의 밑바탕. 공에 더 빠르게 반응합니다.\n' +
+  '• 위치선정 — 수비·리시브에서 좋은 자리를 잡아 공을 안정적으로 받습니다.\n' +
+  '• 집중력 — 접전(클러치) 순간에 서브·세팅이 덜 흔들립니다.\n' +
+  '• 기복 — 높을수록 경기마다 기복 없이 꾸준한 활약을 냅니다.\n' +
+  '• VQ — 배구 IQ. 공격 코스 선택·블로킹 타이밍·포지션 실수 방지 등 영리한 플레이.';
+const TECH_HELP =
+  '• 공격기술 — 스파이크 성공률이 올라갑니다.\n' +
+  '• 블로킹기술 — 상대 공격을 막는 블로킹이 강해집니다.\n' +
+  '• 디그기술 — 바닥에 떨어지는 공을 살리는 디그가 좋아집니다.\n' +
+  '• 리시브기술 — 상대 서브를 안정적으로 받아냅니다.\n' +
+  '• 세팅기술 — 팀 전체 공격을 살리는 토스. 세터의 핵심 능력입니다.\n' +
+  '• 서브기술 — 서브의 위력과 에이스가 늘어납니다.';
 
 // 건의 거절 사유 문구(OWNER §2.2 ★) — "가장 큰 감점 요인" 파생. coachCall은 결정론이라 "재도전하면 바뀔 것" 호도 금지 워딩.
 const BENCH_REJECT: Record<OwnerRejectReason, string> = {
@@ -687,13 +719,19 @@ function PlayerDetailInner() {
 
       <IconLabel icon="barbell-outline" color={theme.elite}>세부 능력치</IconLabel>
       <Card accent={theme.elite} flat>
-        <Muted style={{ marginBottom: 2 }}>신체</Muted>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+          <Muted>신체</Muted>
+          <StatInfo onPress={() => showAlert('신체', BODY_HELP)} />
+        </View>
         <StatBar label="점프력" value={p.jump} reveal={reveal} potential={pot('jump')} />
         <StatBar label="민첩성" value={p.agility} reveal={reveal} potential={pot('agility')} />
         <StatBar label="체력" value={p.staminaMax} reveal={reveal} potential={pot('staminaMax')} />
         <StatBar label="체력재생" value={p.staminaRegen} reveal={reveal} potential={pot('staminaRegen')} />
         <View style={{ height: 6 }} />
-        <Muted style={{ marginBottom: 2 }}>공통 / 멘탈</Muted>
+        <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 2 }}>
+          <Muted>공통 / 멘탈</Muted>
+          <StatInfo onPress={() => showAlert('공통 / 멘탈', MENTAL_HELP)} />
+        </View>
         <StatBar label="반응속도" value={p.reaction} reveal={reveal} potential={pot('reaction')} />
         <StatBar label="위치선정" value={p.positioning} reveal={reveal} potential={pot('positioning')} />
         <StatBar label="집중력" value={p.focus} reveal={reveal} potential={pot('focus')} />
@@ -701,7 +739,10 @@ function PlayerDetailInner() {
         <StatBar label="VQ" value={p.vq} reveal={reveal} potential={pot('vq')} />
       </Card>
 
-      <IconLabel icon="trending-up-outline" color={theme.good}>기술치</IconLabel>
+      <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+        <IconLabel icon="trending-up-outline" color={theme.good}>기술치</IconLabel>
+        <StatInfo onPress={() => showAlert('기술치', TECH_HELP)} />
+      </View>
       <Card accent={theme.good} flat>
         <StatBar label="공격기술" value={p.skSpike} reveal={reveal} potential={pot('skSpike')} />
         <StatBar label="블로킹기술" value={p.skBlock} reveal={reveal} potential={pot('skBlock')} />
