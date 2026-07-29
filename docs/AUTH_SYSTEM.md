@@ -50,6 +50,37 @@
   있으면 기존 Stack. 네트워크로 막지 않음(캐시 세션이면 통과) — online-first ≠ online-only.
 - **로그아웃 — 마이페이지 최하단**(`app/(tabs)/mypage.tsx`) 버튼. confirm 후 `signOut()`. 위험 톤(theme.bad)·계정 표시(현재 로그인 계정) 곁들임.
 
+### 4.1 OTA 자동 적용(부팅 전용) — "패치 로딩" (2026-07-29, 독립 리뷰 후 채택)
+
+요즘 게임처럼 **부팅 시 1회** OTA(expo-updates JS 번들)를 자동 감지·적용해 **한 세션에 반영**한다.
+구 동작(expo-updates 기본 `ON_LOAD`)은 백그라운드로 받아두고 **다음 실행**에 적용 → 테스터가 2번 재시작해야 반영됐다.
+
+- **트리거**: 부팅 1회(JS 생명주기당). `components/BootGate.tsx` 모듈 레벨 `otaAttempted` 가드 + `boot` 확정 후 effect.
+  reload 후엔 새 JS 인스턴스라 다시 시도하나 그땐 이미 최신 → `checkForUpdateAsync` isAvailable=false → no-op(무한 리로드 없음).
+- **흐름**: **pending-first**(ON_LOAD가 이미 받아둔 게 있으면 재fetch 없이 `reloadAsync` 즉시 적용) →
+  없으면 `checkForUpdateAsync` → `isAvailable`이면 `'업데이트 적용 중'` 스플래시 후 `fetchUpdateAsync` → `reloadAsync`.
+  스플래시는 **fetch 구간에만**(check는 대개 "최신"이라 매 부팅 패치로딩 남발 방지). dismiss 불가.
+- **타임아웃**: check 4s / fetch 9s(`lib/otaGate.ts OTA_CHECK_TIMEOUT_MS·OTA_FETCH_TIMEOUT_MS`, check<fetch). 순수 `withTimeout` 레이스.
+- **비차단**: 전 구간 try/catch — 타임아웃·오프라인·에러 시 `applyingOta=false` 후 **현행 버전으로 조용히 진입**. 게임 진입을 절대 막지 않음.
+- **dev 무동작**: `Updates.isEnabled`(dev/Expo Go/web=false)면 즉시 return — 정상(에뮬 Expo Go에선 아무 일도 안 일어남).
+- **킬스위치**: 서버 bootstrap `otaAutoApply:false`면 차단(`otaAutoApplyEnabled`, 기본 on — undefined/null/{}/true 모두 허용). 아직
+  `BootstrapData` 타입 계약엔 없는 **전방호환 훅**(BootGate에서 구조적 캐스트로 읽음). 서버가 실제로 내려줄 땐 타입 승격 검토.
+- **로깅**: `lib/deviceLog` `diag(season,'ota',…)` — pending적용/발견→fetch/fetch완료→reload/최신없음/스킵(에러·타임아웃) 각 1줄(문의 스냅샷에 포함).
+- **결정론**: `reloadAsync`는 **콜드부팅과 동치**이고 재수화(zustand persist·`initFaBackfillPool` 등)는 **멱등**이라 반복 리로드에 안전.
+  부팅 전용이라 관전 중 리로드 위험 없음(설계상).
+- **`isUpdatePending` 접근**: expo-updates 29엔 top-level `Updates.isUpdatePending`가 없어 **공식 훅 `Updates.useUpdates()`** 로 읽는다(문서 권장 패턴 — 스펙이 명명한 값과 동일 의미, 접근 경로만 정정).
+- **`app.json` `updates.checkAutomatically: "ON_ERROR_RECOVERY"`**: 수동 제어 일원화. 단 이 값은 **네이티브 빌드타임 설정이라 다음 AAB부터 반영**되고,
+  JS의 pending-first 로직은 **현행 빌드(ON_LOAD)에서도 협조 동작**한다(ON_LOAD가 받아둔 pending을 부팅 때 즉시 reload).
+- **네이티브 범프 ≠ OTA 규율**: OTA는 JS 번들만 교체한다. `runtimeVersion`("1.1.0") 불일치 업데이트는 expo가 **자동으로 거른다**(수신 안 됨) —
+  네이티브 변경(SDK·플러그인·권한)은 **새 AAB**가 필요하고 자동적용과 무관. OTA로 네이티브를 못 바꾼다.
+
+**검증 공백(중요)**: `reloadAsync`/`fetchUpdateAsync`/`checkForUpdateAsync`는 **node·에뮬 Expo Go(isEnabled=false)에서 무동작** →
+가드 `tools/_dv_ota.ts`는 **결정 로직만**(킬스위치 진리표·`withTimeout` 타임아웃 실증·상수 sanity, A/B 감도 포함) 검증한다.
+**실제 부팅 자동적용은 preview/실빌드 E2E로만** 확인 — 체크리스트:
+① preview/실빌드 설치 → ② 트리비얼 OTA 1건 push(`eas update -p android`) → ③ 앱 부팅 시 `'업데이트 적용 중'` 스플래시 1회 뜨고
+자동 reload 후 **한 세션 안에** 변경 반영(2회 재시작 불필요) → ④ 업데이트 없을 때 부팅은 스플래시 없이 즉시 진입(check는 조용) →
+⑤ 오프라인 부팅은 타임아웃 후 현행 버전 진입(막힘 없음) → ⑥ 킬스위치 on 시(서버 otaAutoApply:false) 자동적용 skip.
+
 ## 5. 예외·안전
 
 - 서버 미설정/오프라인 + **세션 없음** → 로그인 벽에서 "네트워크 필요(최초 로그인)" 안내. 게임 진입 불가(하드 벽 결정).

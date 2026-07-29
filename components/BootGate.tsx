@@ -2,11 +2,14 @@
 // 판정은 서버 /api/bootstrap 응답 기준(앱 로컬 신뢰 금지). 오프라인이면 게이트 스킵(캐시 세션 진입 — online-first ≠ online-only).
 import { useCallback, useEffect, useState, type ReactNode } from 'react';
 import Constants from 'expo-constants';
+import * as Updates from 'expo-updates';
 import { ActivityIndicator, AppState, Linking, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { Loading, Screen, theme, themedStyles } from './Screen';
 import { getBootstrap, type BootstrapData } from '../lib/server';
 import { belowVersion } from '../lib/bootstrap';
+import { diag } from '../lib/deviceLog';
+import { otaAutoApplyEnabled, withTimeout, OTA_CHECK_TIMEOUT_MS, OTA_FETCH_TIMEOUT_MS } from '../lib/otaGate';
 import { useAuthStore } from '../store/useAuthStore';
 import { useGameStore } from '../store/useGameStore';
 import { useServerConfig } from '../store/useServerConfig';
@@ -14,6 +17,10 @@ import { LoginScreen } from './LoginScreen';
 import { AnnouncementModal } from './AnnouncementModal';
 import { useSpotlightActive } from './Spotlight';
 import { usePathname } from 'expo-router';
+
+// 부팅 OTA 자동 적용 1회 가드(JS 생명주기당) — reloadAsync 후엔 새 JS 인스턴스라 다시 시도하나,
+//   그땐 이미 최신이라 checkForUpdateAsync가 isAvailable=false → no-op(무한 리로드 없음).
+let otaAttempted = false;
 
 function GateScreen({ icon, title, body, actionLabel, onAction }: { icon: React.ComponentProps<typeof Ionicons>['name']; title: string; body: string; actionLabel: string; onAction: () => void }) {
   return (
@@ -39,6 +46,11 @@ export function BootGate({ children }: { children: ReactNode }) {
   const pruneReadAnnouncements = useAuthStore((s) => s.pruneReadAnnouncements);
   const [boot, setBoot] = useState<BootstrapData | null | undefined>(undefined); // undefined=조회중, null=오프라인/실패(게이트 스킵)
   const [reloadKey, setReloadKey] = useState(0);
+  const [applyingOta, setApplyingOta] = useState(false); // 부팅 OTA fetch 중 '업데이트 적용 중' 스플래시(§4)
+  // isUpdatePending: ON_LOAD(현행 빌드 기본)가 백그라운드로 이미 받아둔 업데이트가 적용 대기 중인지.
+  //   expo-updates 29엔 top-level `Updates.isUpdatePending`가 없어 공식 훅 useUpdates()로 읽는다(문서 권장 패턴).
+  //   dev/Expo Go(isEnabled=false)·web에서도 안전(기본값 false 반환, 리스너 미발화).
+  const { isUpdatePending } = Updates.useUpdates();
   const [annDismissed, setAnnDismissed] = useState(false); // 이번 실행에 공지 모달 닫음(다음 실행에 안 본 것만 재계산)
   // 공지 모달 보류 게이트(2026-07-21 사용자 보고 — 첫 실행 스포트라이트 온보딩 위에 공지가 겹쳐 깨짐):
   // 온보딩 경로(인트로·구단 선택)와 스포트라이트 팁 표시 중엔 모달을 띄우지 않는다. 읽음 처리 전이라
@@ -56,6 +68,45 @@ export function BootGate({ children }: { children: ReactNode }) {
       .catch(() => settle(null));
     return () => { settled = true; clearTimeout(timer); };
   }, [reloadKey]);
+
+  // 부팅 OTA 자동 적용(AUTH_SYSTEM §4) — 요즘 게임식 "패치 로딩". JS 생명주기당 1회, boot 확정 후.
+  //   pending-first(ON_LOAD가 받아둔 것 즉시 적용) → 없으면 check→fetch→reload. 전 구간 비차단(try/catch)이라
+  //   타임아웃·오프라인·에러 시 현행 버전으로 조용히 진입 — 게임 진입을 절대 막지 않는다.
+  //   reload는 콜드부팅과 동치이고 재수화(zustand persist·initFaBackfillPool 등)는 멱등이라 반복 리로드에 안전.
+  const runBootOta = useCallback(async (b: BootstrapData | null) => {
+    if (!Updates.isEnabled || otaAttempted) return; // dev/Expo Go/web 무동작(정상)
+    // 원격 킬스위치: 서버 bootstrap이 otaAutoApply:false를 주면 차단(기본 on). 아직 BootstrapData 타입 계약엔
+    //   없는 전방호환 훅이라 구조적 캐스트로 읽는다(서버가 내려주면 잡히고, 없으면 undefined→기본 on).
+    if (!otaAutoApplyEnabled(b as { otaAutoApply?: boolean } | null)) return;
+    otaAttempted = true;
+    const season = useGameStore.getState().season ?? 0; // 진단 태그(부팅이라 세이브 시즌 그대로)
+    try {
+      if (isUpdatePending) {
+        // ON_LOAD가 이미 받아둔 업데이트 → 재fetch 생략, 즉시 적용(협조)
+        diag(season, 'ota', '부팅 OTA: pending 즉시 적용 → reload');
+        await Updates.reloadAsync();
+        return;
+      }
+      const r = await withTimeout(Updates.checkForUpdateAsync(), OTA_CHECK_TIMEOUT_MS);
+      if (r.isAvailable) {
+        setApplyingOta(true); // 여기서만 스플래시 — check(최신이면 다수)엔 안 띄워 매 부팅 "패치 로딩" 남발 방지
+        diag(season, 'ota', '부팅 OTA: 업데이트 발견 → fetch');
+        await withTimeout(Updates.fetchUpdateAsync(), OTA_FETCH_TIMEOUT_MS);
+        diag(season, 'ota', '부팅 OTA: fetch 완료 → reload');
+        await Updates.reloadAsync();
+      } else {
+        diag(season, 'ota', '부팅 OTA: 최신(업데이트 없음)');
+      }
+    } catch (e) {
+      setApplyingOta(false); // 비차단 — 조용히 통과(현행 버전 진입)
+      diag(season, 'ota', `부팅 OTA: 스킵(에러/타임아웃) ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }, [isUpdatePending]);
+
+  useEffect(() => {
+    if (boot === undefined) return; // boot 확정(성공 or 오프라인 null) 후 실행 — 하드게이트와 무관하게 이른 시점
+    void runBootOta(boot);
+  }, [boot, runBootOta]);
 
   const retry = useCallback(() => { setBoot(undefined); setReloadKey((k) => k + 1); }, []);
   const appVer = (Constants.expoConfig?.version as string) ?? '0.0.0';
@@ -82,6 +133,9 @@ export function BootGate({ children }: { children: ReactNode }) {
     if (boot) pruneReadAnnouncements((boot.announcements ?? []).map((a) => a.id));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [boot]);
+
+  // 부팅 OTA fetch 중 — 브랜드 스플래시에 "업데이트 적용 중"(reload 임박, dismiss 불가). §4.
+  if (applyingOta) return <Loading variant="brand" message="업데이트 적용 중" />;
 
   if (!authHydrated || boot === undefined) return <Loading variant="brand" />;
 
