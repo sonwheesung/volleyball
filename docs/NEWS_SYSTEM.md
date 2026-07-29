@@ -186,7 +186,8 @@ day 경계 자체가 없어 **시즌 전체 미래 사건**을 노출했다(`dyn
 3. **외인/아시아쿼터 교체 개별(`kind='foreign'`)**: **전 팀**(외인=리그 가시). in+out 있으면 "새 외인 {in} 영입 — {out} 결별",
    in만=신규 영입, out만=결별 후 공석. 아시아쿼터는 `asian=true`로 톤 구분.
 4. **언론 예상 순위(`kind='standing'` 재사용) — 개막 프리뷰 1건(STAFF §9.3, 2026-07-20)**: 전력 기반 결정론 예상 순위(`data/reputation`
-   `predictRanks`)를 전 팀 나열로 공개("언론이 꼽은 개막 예상 순위 — 1위 {팀}…"), **내 팀 강조**(내 팀 예상 위치를 헤드라인/본문에 명시).
+   `predictRanks`)를 공개(헤드라인 "언론 예상 순위 — {내 팀} N위 전망"), **내 팀 강조**(내 팀 예상 위치를 헤드라인/본문에 명시).
+   순위 전 팀 나열은 **상세의 순위 그리드 카드**가 담당(§11.6, 2026-07-29 — 본문은 프레이밍+내 팀 전망만으로 축약).
    명성 평가(§9.2 기대 대비)·감독 서사의 **공통 기준선**이라 반드시 공개(숨은 수치=가짜 드라마). **결과-중립**(예측일 뿐 결과 아님) →
    스포일러 무저촉, `day=0`·`season=currentSeason`로 개막 최상단. 예상 순위 원본은 영속 `mediaPredictionLog`(STAFF §9.6-B) —
    `buildNewsFeed` 15번째 인자로 주입(기본 [] → 미주입 시 기사 생략, 기존 호출 무변).
@@ -586,9 +587,23 @@ export function seasonMatchProds(uptoDay): { dayIndex, homeTeamId, awayTeamId, l
 - **헤드라인↔박스 동일 경기(2026-07-24)**: `match` 뉴스는 `n.day`로 박스를 재생하므로, 헤드라인/본문 스탯도 반드시 `n.day`의 그 경기 값이어야 한다. 멀티 트리플크라운(count≥2)에서 헤드라인이 첫 경기에 동결돼 박스(최근 경기)와 어긋난 버그를 수정 — 헤드라인 스탯을 `e.day`와 함께 최근 TC 경기로 갱신(§3.6 트리플 크라운 항목). 가드 (g)가 헤드라인 파싱값 ↔ `mp.lines@n.day` + 박스 `blockPt·srvAce`를 대조.
 - 가드 `tools/_dv_newsscore.ts`(A/B 자가검증 — 정규/플옵 경로 뒤섞기·시리즈 ref 허용 뮤턴트 + (g) 멀티 TC 첫경기 동결 뮤턴트에서 FAIL).
 
+### 11.6 프리시즌 예상 순위 = 순위 그리드 카드 (2026-07-29 구현, 테스터 요청)
+> **목표**: 개막 프리뷰 "언론 예상 순위"(`kind='standing'` 재사용, §10b·§3.7) 상세에서 순위를 **산문 나열 대신 순위|팀명 그리드 카드**로 보여준다.
+> 테스터 피드백("순위 쪽은 그리드로 나오면 좋겠다"). 오프시즌 결산 `MovesCard`(§11.3 B)와 동일 결 — 산문에 몰아넣던 나열을 구조화 카드로 이관.
+
+- **본문 축약(`data/news.ts` §10b)**: 구본문 `${S}시즌 예상 순위는 1위 A · 2위 B · … . ${myLine}`(전 팀 나열)에서 **`listed` 나열 제거** →
+  프레이밍 + 내 팀 전망만: `${S}시즌 개막을 앞두고 언론의 전력 전망이 나왔다. ${myLine}`. opener(preseason 풀)가 이미 "예상 순위 공개" 프레이밍을
+  주므로 core는 중복 없이 내 팀 전망 중심. `body3('preseason',…)`·`push` 호출·헤드라인·부제는 무변경. 순위 자체는 그리드 카드가 담당.
+- **그리드 카드(`app/news/[id].tsx` `PreseasonRankCard`)**: `isPreseasonRankNews(n)`일 때만 렌더. `order`(teamId[])는 영속 `mediaPredictionLog`에서
+  `find(e => e.season === n.season)?.order` 로 해석(이미 파생된 실데이터 — **신규 영속 0**). 위치는 본문 카드 다음(오프시즌 `MovesCard` 자리 근처).
+  순위 숫자 + 팀명 2열, **내 팀(`n.teamId`) 행 강조**(accent 색·볼드·"· 우리 팀" 접미). 빈 `order`(구세이브·만료 = season 불일치)면 미렌더(MovesCard와 동일 "있는 것만").
+- **의존 방향**: UI가 순수 셀렉터 데이터(`mediaPredictionLog`, 타입 `engine/reputation.MediaPredictionEntry`)를 읽어 표시만. 엔진·결정론 무파급, 가짜 드라마 0(순위 사실 나열).
+- 가드 `tools/_dv_preseasonnews.ts` (2.5) 확장 — 본문에 `"N위 "` 나열 토큰 0건(그리드 이관) + 프레이밍 문구 존재 검사. A/B: 구본문(순위 산문 재현) 시 `rankTokens ≥ 팀수−1` 검출.
+
 ---
 
 ## 변경 이력
+- 2026-07-29: **§11.6 프리시즌 예상 순위 = 순위 그리드 카드** — 개막 "언론 예상 순위" 상세를 산문 나열 대신 순위|팀명 그리드(`PreseasonRankCard`)로. 본문(`data/news.ts` §10b)에서 `listed` 나열 제거(프레이밍+내 팀 전망만), 그리드는 영속 `mediaPredictionLog.order` 파생(신규 영속 0). 내 팀 행 강조. 가드 `_dv_preseasonnews.ts` (2.5) 본문 나열 0·A/B 확장. 표시 계층만 — 엔진·결정론 무파급.
 - 2026-07-24: **멀티 트리플크라운 헤드라인↔스코어보드 경기 불일치 수정** — 한 시즌 TC를 2회+ 한 선수(count≥2)의 헤드라인/본문 스탯이 **첫 경기**로 동결되는데 붙는 스코어보드 박스는 `n.day`(=최근 TC 경기)를 재생해 두 화면 수치가 어긋났다. 헤드라인 스탯(`e.back/e.b/e.a`)을 `e.day`와 함께 **최근 TC 경기**로 갱신(day 오름차순 → 마지막 쓰기, `mp.dayIndex >= e.day` 명시 비교). 단일 TC는 정상(무변). `data/news.ts` §3.6·§11.5 정정, 가드 `_dv_newsscore.ts` (g) 확장(count≥2 A/B). 표시 계층만 — 경기 결과·통계·결정론 무파급.
 - 2026-07-24: **§11.5 경기 뉴스 상세 = 세트 스코어보드 + 양팀 득점원 Top3** — 단일 경기로 환원되는 뉴스(`match`·`debut`·`playoff` 경기별)의 상세에 그 경기의 세트 스코어보드 + 팀당 득점 Top3를 배선. matchresult 스코어보드를 `components/SetScoreboard`로 추출(동작 불변 리팩터), `BoxScoreTable` 득점식 재사용(`ScorersTop3`). 순수 셀렉터 `data/newsMatchBox`(정규=`buildMatchBox`/플옵=`buildPlayoffBox` 분기, 단일 경기 아니면 null — `po:clinch`·`champion`·`clinch` 배제). 스포일러는 아이템 컷오프 상속, box↔`seasonMatchProds` byte 일치. 가드 `tools/_dv_newsscore.ts`(A/B). 신규 영속 0·엔진 무파급.
 - 2026-07-11: **§11 리치 기사 상세 설계** — 사건별 실데이터 카드 + **가짜 인터뷰 미도입 확정**(기자 총평/경기 후 코멘트로 대체, 성향 시스템 후 재검토). 사용자 결정.

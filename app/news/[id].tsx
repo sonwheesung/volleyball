@@ -32,6 +32,7 @@ import { popularityNow } from '../../data/owner';
 import { sponsorStanceOf } from '../../engine/sponsorStance';
 import { formatMoney } from '../../engine/salary';
 import { jerseyNumber } from '../../engine/jersey';
+import type { MediaPredictionEntry } from '../../engine/reputation';
 import { resolveJosa } from '../../lib/josa';
 import { useGameStore } from '../../store/useGameStore';
 import type { DraftPickRecord, ForeignSwapRecord, HofEntry, Milestone, NewsItem, Player, RetireRecord, SeasonArchive, SeasonAwards, Transfer } from '../../types';
@@ -112,6 +113,29 @@ function MovesCard({ moves }: { moves: NonNullable<NewsItem['moves']> }) {
           </View>
         </View>
       ))}
+    </Card>
+  );
+}
+
+/** 프리시즌 언론 예상 순위 그리드 카드(§11.6) — 순위|팀명 2열, 내 팀 행 강조. order=파생 실데이터(mediaPredictionLog). 빈 order면 상위에서 미렌더. */
+function PreseasonRankCard({ order, myTeamId }: { order: string[]; myTeamId: string }) {
+  if (order.length === 0) return null;
+  return (
+    <Card flat accent={theme.sky}>
+      <IconLabel icon="podium-outline" color={theme.sky}>예상 순위</IconLabel>
+      <View style={styles.infoGrid}>
+        {order.map((tid, i) => {
+          const mine = !!myTeamId && tid === myTeamId;
+          return (
+            <View key={tid} style={styles.rankRow}>
+              <Text style={[styles.rankNum, mine ? { color: theme.accent } : null]}>{i + 1}위</Text>
+              <Text style={[styles.rankTeam, mine ? { color: theme.accent, fontWeight: '800' } : null]} numberOfLines={1}>
+                {teamNameOf(tid)}{mine ? ' · 우리 팀' : ''}
+              </Text>
+            </View>
+          );
+        })}
+      </View>
     </Card>
   );
 }
@@ -222,7 +246,7 @@ function NewsArticleInner() {
     <RichArticle
       n={n} feed={feed} myTeamId={teamId ?? ''} currentSeason={season} leagueDay={cutoff}
       archive={archive} milestones={milestones} hallOfFame={hallOfFame} retirements={retirements}
-      transfers={transfers} seasonForeignLog={seasonForeignLog} onOpen={onOpen}
+      transfers={transfers} seasonForeignLog={seasonForeignLog} mediaPredictionLog={mediaPredictionLog} onOpen={onOpen}
     />
   );
 }
@@ -397,10 +421,10 @@ function dynastyRunOf(archive: SeasonArchive[], teamId: string, season: number):
   return run;
 }
 
-function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, milestones, hallOfFame, retirements, transfers, seasonForeignLog, onOpen }: {
+function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, milestones, hallOfFame, retirements, transfers, seasonForeignLog, mediaPredictionLog, onOpen }: {
   n: NewsItem; feed: NewsItem[]; myTeamId: string; currentSeason: number; leagueDay: number;
   archive: SeasonArchive[]; milestones: Milestone[]; hallOfFame: HofEntry[]; retirements: RetireRecord[];
-  transfers: Transfer[]; seasonForeignLog: ForeignSwapRecord[]; onOpen: (key: string) => void;
+  transfers: Transfer[]; seasonForeignLog: ForeignSwapRecord[]; mediaPredictionLog: MediaPredictionEntry[]; onOpen: (key: string) => void;
 }) {
   const nk = newsKey(n);
   const team = n.teamId ? getTeam(n.teamId) : undefined;
@@ -414,6 +438,9 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
   const matchBox = useMemo(() => newsMatchBox(n), [n]);
   // 오프시즌 결산은 이동 목록을 구조화 카드(MovesCard)로 렌더한다(산문 몰아넣기 해소, §11.3 B). body는 이미 리드·마무리 산문만.
   const offMoves = n.kind === 'offseason' && n.moves && (n.moves.in.length + n.moves.kept.length + n.moves.out.length) > 0 ? n.moves : null;
+  // 프리시즌 예상 순위(§11.6) — 산문 나열 대신 순위 그리드 카드로. order는 영속 mediaPredictionLog의 이미 파생된 실데이터(신규 영속 0).
+  //   season 일치 항목이 없으면(구세이브·만료) 빈 배열 → 카드 미렌더(MovesCard와 동일 "있는 것만" 원칙).
+  const preOrder = isPreseasonRankNews(n) ? (mediaPredictionLog.find((e) => e.season === n.season)?.order ?? []) : [];
   // 본문 — n.body(사실 조립본) 또는 분류 리드 + 선수 주인공이면 신체·역할 사실 한 줄(실값, 감정 금지).
   //   프리시즌 예상순위는 body가 항상 있으나(preseason 풀 조립본), 폴백도 전망 톤 전용 리드로(결산 톤 유출 방지, §3.7).
   const paras: string[] = [n.body ?? (isPreseasonRankNews(n) ? PRESEASON_LEAD : LEAD[n.kind])];
@@ -579,6 +606,9 @@ function RichArticle({ n, feed, myTeamId, currentSeason, leagueDay, archive, mil
       {/* 2b) 오프시즌 결산 — 영입/재계약/방출 구조화 칩 카드(산문 대신) */}
       {offMoves ? <MovesCard moves={offMoves} /> : null}
 
+      {/* 2b') 프리시즌 예상 순위 — 순위 그리드 카드(산문 나열 대신, §11.6). 내 팀 행 강조. */}
+      {preOrder.length > 0 ? <PreseasonRankCard order={preOrder} myTeamId={myTeamId} /> : null}
+
       {/* 2c) 경기 뉴스(§11.5) — 세트 스코어보드 + 양팀 득점원 Top3(단일 경기 kind만, 공개 사실). */}
       {matchBox ? (
         <>
@@ -659,6 +689,9 @@ const styles = themedStyles(() => StyleSheet.create({
   fogNote: { fontSize: 12, marginTop: 8 },
   comment: { color: theme.text, fontSize: 15, lineHeight: 23, marginTop: 2 },
   relLink: { color: theme.accent, fontSize: 14, lineHeight: 21, fontWeight: '600', marginTop: 6 },
+  rankRow: { flexDirection: 'row', alignItems: 'center', paddingVertical: 7, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: theme.border },
+  rankNum: { color: theme.muted, fontSize: 14, fontWeight: '800', width: 48 },
+  rankTeam: { color: theme.text, fontSize: 14, fontWeight: '600', flexShrink: 1 },
   moveSection: { marginTop: 12 },
   chipRow: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 8 },
   chip: { backgroundColor: theme.cardAlt, borderWidth: 1, borderRadius: 999, paddingVertical: 5, paddingHorizontal: 11, maxWidth: '100%' },

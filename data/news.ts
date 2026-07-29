@@ -831,13 +831,14 @@ export function buildNewsFeed(
     const pred = mediaPredictionLog.find((e) => e.season === currentSeason)?.order ?? [];
     if (pred.length >= 2) {
       const S = currentSeason + 1; // 표시 연도(offseason 슬라이스와 동형 표기)
-      const listed = pred.map((tid, i) => `${i + 1}위 ${teamName(tid)}`).join(' · ');
       const myIdx = myTeamId ? pred.indexOf(myTeamId) : -1;
       const myLine = myIdx >= 0 ? `${teamName(myTeamId)}은(는) ${myIdx + 1}위로 꼽혔다.` : '';
       const headline = myIdx >= 0
         ? `${S}시즌 언론 예상 순위 — ${teamName(myTeamId)} ${myIdx + 1}위 전망`
         : `${S}시즌 언론 예상 순위 발표`;
-      const core = `${S}시즌 예상 순위는 ${listed}. ${myLine}`.trim();
+      // 본문은 프레이밍 + 내 팀 전망만(순위 나열은 상세의 "예상 순위" 그리드 카드가 담당, §11.6). 산문 나열 제거(테스터 가독성).
+      //   opener(preseason 풀)가 이미 "예상 순위 공개" 프레이밍을 주므로 core는 중복 없이 내 팀 전망 중심으로.
+      const core = `${S}시즌 개막을 앞두고 언론의 전력 전망이 나왔다. ${myLine}`.trim();
       push(currentSeason, 'standing', headline, myIdx >= 0, myTeamId || undefined, body3('preseason', `${currentSeason}:preseason`, core), `preseason:${currentSeason}`, 0);
     }
   }
