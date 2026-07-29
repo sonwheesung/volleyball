@@ -55,14 +55,8 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
   return (
     <ScrollView horizontal showsHorizontalScrollIndicator>
       <View style={{ width: TABLE_W }}>
-        {/* 그룹 헤더 — 공격·수비 묶음(2026-07-29 테스터: 수비도 라벨 대칭). 수비=디그+리시브(세트 앞으로 이동해 인접). */}
-        <View style={[styles.row, styles.grpRow]}>
-          <View style={{ width: NAME_W + C.sc }} />
-          <Text style={[styles.grpTxt, { width: ATK_W }]}>공격</Text>
-          <View style={{ width: C.bl + C.sv + C.st }} />
-          <Text style={[styles.grpTxt, { width: C.dg + C.rc }]}>수비</Text>
-          <View style={{ width: C.er }} />
-        </View>
+        {/* 공격/수비 그룹 라벨 제거(2026-07-29 테스터: 블록·서브·세트가 두 그룹 사이 라벨 없이 끼어 수비 범위가 어색 —
+            배구 스탯은 2분류로 안 떨어지는 7개 개별 항목. 칸 헤더만으로 충분). 세트는 서브·디그 사이 유지. */}
         {/* 칸 헤더 */}
         <View style={[styles.row, styles.hRow]}>
           <Text style={[styles.hCell, { width: NAME_W, textAlign: 'left' }]}>선수</Text>
@@ -122,8 +116,6 @@ export function BoxScoreTable({ squad, box, dvPhilosophy = 0 }: { squad: Player[
 
 const styles = themedStyles(() => StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center' },
-  grpRow: { paddingBottom: 2 },
-  grpTxt: { color: theme.accent, fontSize: 10.5, fontWeight: '800', textAlign: 'center', textTransform: 'uppercase', borderBottomWidth: 2, borderBottomColor: theme.accent, paddingBottom: 3 },
   hRow: { borderBottomWidth: 1, borderBottomColor: theme.border, paddingVertical: 5 },
   hCell: { color: theme.muted, fontSize: 11, fontWeight: '800', textAlign: 'center' },
   cell: { textAlign: 'center', color: theme.text, fontSize: 12.5, fontVariant: ['tabular-nums'], paddingVertical: 6, borderBottomWidth: 1, borderBottomColor: theme.border },
