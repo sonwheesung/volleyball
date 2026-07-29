@@ -468,6 +468,17 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     return m;
   }, [sim, idx, total, finished]);
 
+  // 코트 마커 체력 %(테스터 2026-07-29: 상단 스트립 대신 **마커 위** 표시) — 내 팀 관전 시 마지막 반영 점수(shown) 직후
+  //   스냅샷(stamByPoint = 회복 전 코트 체력)에서 직독. 상대팀·종료 후·스냅샷 없음(세트 개막 전)엔 빈 맵 → 마커에 % 없음.
+  //   shown 바뀔 때(점수당 1회)만 재계산(#122 발열 무마찰). 값은 마커 id 매칭이라 갓 교체된 선수도 자연 반영.
+  const stamPctByPlayer = useMemo(() => {
+    const m = new Map<string, number>();
+    if (!mineSide || finished || shown < 0) return m;
+    const snap = sim.stamByPoint?.[Math.min(shown, total - 1)]?.[mineSide];
+    if (snap) for (const s of snap) m.set(s.id, Math.round(s.stam * 100));
+    return m;
+  }, [sim, shown, total, mineSide, finished]);
+
   const segKind: Move | null = seg ? seg.to.kind : null;
   // 서브 이후(공 인플레이)엔 전 선수가 전문 포지션으로 스위칭
   const inPlay = isInPlay(segKind);
@@ -487,7 +498,7 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
     return posRefs.current[key];
   };
 
-  type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean; braced: boolean; justSubbed: boolean; reactive?: ReactiveMarkerState };
+  type Mk = { key: string; side: Side; p: Player | undefined; tx: number; ty: number; jumping: boolean; isServer: boolean; braced: boolean; justSubbed: boolean; reactive?: ReactiveMarkerState; stamPct?: number };
   const buildMarkers = (side: Side): Mk[] => {
     const rot = side === 'home' ? stage.homeRot : stage.awayRot;
     const lu = side === 'home' ? lineups.home : lineups.away;
@@ -508,7 +519,8 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
       const braced = reactingSide === side && !moving && !jumping && !isServer; // 굳어서 못 움직이는 선수
       const justSubbed = subbedKeys.has(`${side}-${i}`); // 이 랠리에 갓 투입된 선수
       const reactive = p ? reactiveByPlayer.get(p.id) : undefined; // 반응형 특성 활성 창(§6.10) — 있으면 테두리 링
-      arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer, braced, justSubbed, reactive });
+      const stamPct = p ? stamPctByPlayer.get(p.id) : undefined; // 내 팀 코트 체력 %(맵에 내 팀 id만 → 상대는 undefined)
+      arr.push({ key: `${side}-${i}`, side, p, tx, ty, jumping, isServer, braced, justSubbed, reactive, stamPct });
     }
     return arr;
   };
@@ -650,6 +662,12 @@ export function MatchCourt({ sim, home, away, seed, mineSide, startIdx, onProgre
               transform: [{ translateX: pos.x }, { translateY: pos.y }, { scale: m.justSubbed ? subPop : m.jumping ? jumpScale : 1 }],
             }]}>
               <Text style={styles.markerTxt}>{m.p ? jerseyNo(m.p.id) : ''}</Text>
+              {mine && m.stamPct != null ? (
+                // 내 팀 코트 선수 체력 %(마커 위) — 테스터 요청(상단 스트립 대신). 신선=초록·지치면 주황→적(타임아웃 타이밍 판단).
+                <View style={styles.stamTag} pointerEvents="none">
+                  <Text style={[styles.stamTagTxt, { color: m.stamPct >= 60 ? '#2BAE66' : m.stamPct >= 35 ? '#E0922B' : '#E1574C' }]}>{m.stamPct}%</Text>
+                </View>
+              ) : null}
               {m.justSubbed ? (
                 <View style={styles.subTag}>
                   <Text style={styles.subTagTxt} numberOfLines={1}>↑ {m.p?.name ?? '교체'}</Text>
@@ -877,6 +895,12 @@ const styles = themedStyles(() => StyleSheet.create({
     shadowColor: '#000', shadowOpacity: 0.4, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 4,
   },
   markerTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
+  // 마커 위 체력 % 칩(내 팀 전용) — 원 위쪽에 작게. 색은 인라인(체력 구간별).
+  stamTag: { position: 'absolute', top: -13, left: -11, width: 52, alignItems: 'center' },
+  stamTagTxt: {
+    fontSize: 9, fontWeight: '900', backgroundColor: 'rgba(8,14,24,0.9)',
+    paddingHorizontal: 4, paddingVertical: 0.5, borderRadius: 4, overflow: 'hidden',
+  },
   // (반응형 특성 발동 연출은 마커 borderColor tint로 인라인 처리 — 별도 헤일로 레이어 제거, 재정정 2026-07-29 §6.10)
   // 마커 밑 상시 선수명 — 작고 옅은 칩(라이트 코트에서 읽히게 흰 배경)
   nameTag: { position: 'absolute', top: MR * 2 - 1, left: -27, width: 84, alignItems: 'center' },
