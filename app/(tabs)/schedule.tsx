@@ -20,7 +20,7 @@ import { buildMatchBox } from '../../data/matchBox';
 import { interventionsFor } from '../../data/dynamics';
 import { buildPlayoffs, type Matchup } from '../../data/playoffs';
 import { postseasonReveal, nextPoGame } from '../../data/postseason';
-import { offseasonHubSteps, offseasonUntouched, type HubStep } from '../../data/offseasonHub';
+import { offseasonHubSteps, offseasonUntouched, postHubCurrentStep, hasEnshrineHonorees } from '../../data/offseasonHub';
 import { SEASON_DAYS } from '../../engine/calendar';
 import { isBigMatch } from '../../engine/owner';
 import { planNextAction } from '../../engine/advance';
@@ -29,25 +29,6 @@ import { dateForDay, formatDate } from '../../lib/calendar';
 import { useSeasonStartEntry } from '../../lib/seasonStart';
 import { DEV_TOOLS } from '../../data/flags';
 import { useGameStore } from '../../store/useGameStore';
-
-/** 오프시즌 허브 목록(SEASON_SYSTEM §5.6 · UI-50) — 권장 순서 번호 + [보기]. 잠금·진입 차단 없음.
- *  ✅는 **데이터로 진짜 판정되는 단계**(전지훈련 campDoneSeason)만 — 앞단은 전부 미리보기라 완료 개념이 없다. */
-function HubRow({ step, onPress }: { step: HubStep; onPress: () => void }) {
-  const tint = (theme as unknown as Record<string, string>)[step.accent] ?? theme.accent;
-  return (
-    <Pressable onPress={onPress} style={styles.hubRow} accessibilityRole="button" accessibilityLabel={`${step.n}. ${step.label}`}>
-      <Text style={[styles.hubNo, { color: tint }]}>{step.n}</Text>
-      <View style={{ flex: 1 }}>
-        <View style={styles.hubTitleRow}>
-          <Text style={styles.hubLabel} numberOfLines={1}>{step.label}</Text>
-          {step.done ? <Text style={styles.hubDone}>완료</Text> : null}
-        </View>
-        <Text style={styles.hubDesc} numberOfLines={2}>{step.desc}</Text>
-      </View>
-      <Ionicons name="chevron-forward" size={18} color={theme.muted} />
-    </Pressable>
-  );
-}
 
 export default function Schedule() {
   // 일정은 무겁다(순위·전력 프리뷰·클린치·라이벌 재계산). 한 틱 미뤄 로딩부터 그린다.
@@ -62,6 +43,8 @@ function ScheduleInner() {
   const season = useGameStore((s) => s.season);
   const currentDay = useGameStore((s) => s.currentDay);
   const campDoneSeason = useGameStore((s) => s.campDoneSeason);
+  const enshrineSeenSeason = useGameStore((s) => s.enshrineSeenSeason); // 뒷단 헌액 열람 마커(§5.6.5) — 순차 커서 판정
+  const hallOfFame = useGameStore((s) => s.hallOfFame); // 헌액 대상자 유무(§5.6.5) — 대상 없으면 헌액 스텝 숨김
   const results = useGameStore((s) => s.results);
   const archive = useGameStore((s) => s.archive);
   const watchProgress = useGameStore((s) => s.watchProgress);
@@ -197,7 +180,12 @@ function ScheduleInner() {
   // ── 오프시즌 허브(§5.6) ──
   // 앞단 = endSeason 전(시상식까지 본 seasonOver 국면), 뒷단 = endSeason 후(day0). **목록도 최종 버튼도 다르다**.
   const preSteps = useMemo(() => offseasonHubSteps('pre'), []);
-  const postSteps = useMemo(() => offseasonHubSteps('post', campDone), [campDone]);
+  // 뒷단(§5.6.5) — 앞단처럼 **순차 단일 카드**. 헌액자 없으면(첫 시즌 등) 헌액 스텝 자체를 숨기고, 현재 업무 하나만 표시.
+  const hasHonorees = useMemo(() => hasEnshrineHonorees(hallOfFame, season), [hallOfFame, season]);
+  const postCursor = useMemo(
+    () => postHubCurrentStep(campDone, hasHonorees, enshrineSeenSeason === season),
+    [campDone, hasHonorees, enshrineSeenSeason, season],
+  );
   const openStep = (route: string) => router.push(route as never);
 
   // 앞단 최종 버튼 — 광고 → season-start → endSeason. **완료 게이트 없음**(항상 노출).
@@ -236,20 +224,27 @@ function ScheduleInner() {
         </Card>
       )}
 
-      {/* 오프시즌 허브 · 뒷단(§5.6.2) — 헌액 · 전지훈련 + [개막전으로]. 잠금 없음: 어느 항목이든 언제나 열린다.
+      {/* 오프시즌 허브 · 뒷단(§5.6.5) — 앞단처럼 **순차 단일 카드**: 현재 업무 하나만 "○○ 하러 가기 →" + [개막전으로] 상시.
+          헌액자 없으면(첫 시즌 등) 헌액 스텝 자체가 없어 전지훈련부터. 잠금 없음: 개막은 언제든 가능(완료 게이트 금지).
           스포트라이트 앵커 sched-next는 오프시즌엔 이 카드가 담당(2026-07-05 불일치 수정분 승계). */}
       {offseason ? (
         <SpotlightTarget id="sched-next">
           <Card accent={theme.good} flat>
             <IconLabel icon="snow-outline" color={theme.good}>오프시즌 준비 · 개막까지</IconLabel>
-            <Muted style={{ fontSize: 12, marginTop: 2, marginBottom: 4 }}>
-              권장 순서입니다. 순서와 관계없이 언제든 열 수 있고, 건너뛰어도 개막할 수 있어요.
-            </Muted>
-            {postSteps.map((s) => (
-              // navigate(≠push): 스택에 이미 그 화면이 있으면 재사용 — 중복 인스턴스가 쌓여 "마쳐도 또 나오는" 반복 노출 방지(2026-07-11)
-              <HubRow key={s.key} step={s} onPress={() => router.navigate(s.route as never)} />
-            ))}
-            <Button label="개막전으로 →" onPress={onOpenSeason} />
+            {postCursor.done ? (
+              <Muted style={{ fontSize: 13, marginTop: 2, marginBottom: 8 }}>
+                개막 준비가 끝났습니다.{'\n'}준비가 되면 개막전으로 넘어가세요.
+              </Muted>
+            ) : (
+              <>
+                <Text style={styles.osTitle} numberOfLines={1}>{postCursor.step.label}</Text>
+                <Muted style={{ fontSize: 13, marginTop: 2, marginBottom: 8 }}>{postCursor.step.desc}</Muted>
+                {/* navigate(≠push): 스택에 이미 그 화면이 있으면 재사용 — 중복 인스턴스 누적 방지(2026-07-11) */}
+                <Button label={`${postCursor.step.label} 하러 가기 →`} onPress={() => router.navigate(postCursor.step.route as never)} />
+              </>
+            )}
+            {/* 개막전으로 — 항상 노출(개막 강제 아님). 진행 중 업무가 있으면 보조(ghost), 전부 마치면 주 액션. */}
+            <Button label="개막전으로 →" variant={postCursor.done ? undefined : 'ghost'} onPress={onOpenSeason} />
           </Card>
         </SpotlightTarget>
       ) : null}
@@ -485,13 +480,6 @@ const styles = themedStyles(() => StyleSheet.create({
   lineupName: { color: theme.text, fontSize: 14, fontWeight: '600', flex: 1 },
   lineupClose: { marginTop: 12, paddingVertical: 11, borderRadius: 10, backgroundColor: theme.cardAlt, alignItems: 'center' },
   lineupCloseTxt: { color: theme.text, fontSize: 14, fontWeight: '700' },
-  // 오프시즌 순차 업무 카드(§5.6.4)
+  // 오프시즌 순차 업무 카드(§5.6.4 앞단 · §5.6.5 뒷단)
   osTitle: { color: theme.text, fontSize: 19, fontWeight: '800', marginTop: 8, letterSpacing: -0.3 },
-  // 오프시즌 허브 목록(§5.6) — 번호 + 제목/설명 + 화살표. 잠금 아이콘 없음(진입 차단 0).
-  hubRow: { flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 9, borderTopWidth: 1, borderTopColor: theme.border },
-  hubNo: { width: 20, textAlign: 'center', fontSize: 15, fontWeight: '900' },
-  hubTitleRow: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  hubLabel: { color: theme.text, fontSize: 15, fontWeight: '800', flexShrink: 1 },
-  hubDone: { color: theme.good, fontSize: 11, fontWeight: '800' },
-  hubDesc: { color: theme.muted, fontSize: 12, marginTop: 1 },
 }));

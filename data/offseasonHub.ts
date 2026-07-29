@@ -30,16 +30,42 @@ export function preOffseasonSteps(): HubStep[] {
   ];
 }
 
-/** 뒷단(post-rollover) — 전지훈련만 데이터 완료 판정(campDoneSeason). 헌액은 열람 화면이라 판정 없음. */
-export function postOffseasonSteps(campDone: boolean): HubStep[] {
-  return [
-    { n: 1, key: 'enshrine', label: '명예의전당 헌액', desc: '지난 시즌 은퇴한 레전드를 기립니다', route: '/enshrine?hub=1', icon: 'trophy-outline', accent: 'gold' },
-    { n: 2, key: 'camp', label: '전지훈련', desc: '다이아로 선수를 해외 캠프에 보내 능력을 키웁니다', route: '/training-camp', icon: 'barbell-outline', accent: 'good', done: campDone },
-  ];
+/** 뒷단(post-rollover) — 전지훈련만 데이터 완료 판정(campDoneSeason). 헌액은 열람 화면이라 판정 없음.
+ *  헌액 스텝은 **대상자가 있을 때만** 포함(§5.6.5): 첫 시즌(season0)은 헌액 대상이 있을 수 없어(retiredSeason=season-1=-1)
+ *  목록에서 빼고 전지훈련을 n:1로 내린다(테스터: "첫 시즌인데 명전이 왜 뜨냐"). hasHonorees=true면 [헌액 n:1, 전지훈련 n:2]. */
+export function postOffseasonSteps(campDone: boolean, hasHonorees = false): HubStep[] {
+  const enshrine: HubStep = { n: 1, key: 'enshrine', label: '명예의전당 헌액', desc: '지난 시즌 은퇴한 레전드를 기립니다', route: '/enshrine?hub=1', icon: 'trophy-outline', accent: 'gold' };
+  const camp: HubStep = { n: 1, key: 'camp', label: '전지훈련', desc: '다이아로 선수를 해외 캠프에 보내 능력을 키웁니다', route: '/training-camp', icon: 'barbell-outline', accent: 'good', done: campDone };
+  return hasHonorees ? [enshrine, { ...camp, n: 2 }] : [camp];
 }
 
-export function offseasonHubSteps(phase: HubPhase, campDone = false): HubStep[] {
-  return phase === 'pre' ? preOffseasonSteps() : postOffseasonSteps(campDone);
+export function offseasonHubSteps(phase: HubPhase, campDone = false, hasHonorees = false): HubStep[] {
+  return phase === 'pre' ? preOffseasonSteps() : postOffseasonSteps(campDone, hasHonorees);
+}
+
+/** 이번 오프시즌 헌액 대상자가 있는가(§5.6.5) — 지난 시즌(season-1) 은퇴 레전드.
+ *  false면 허브에서 헌액 스텝 자체를 숨긴다(첫 시즌 season0은 항상 false: retiredSeason=season-1=-1). 순수 파생. */
+export function hasEnshrineHonorees(
+  hallOfFame: ReadonlyArray<{ legend: boolean; retiredSeason: number }>,
+  season: number,
+): boolean {
+  return hallOfFame.some((h) => h.legend && h.retiredSeason === season - 1);
+}
+
+/** 뒷단 순차 카드의 현재 스텝(§5.6.5) — "다음 경기"식 단일 업무. 앞단(offseasonStep 커서)의 뒷단 대응.
+ *  헌액(대상자 있고 미열람) → 전지훈련(미완료) → 전부완료(개막 준비). 데이터 파생·멱등(reload/뒤로가기 안정). */
+export type PostHubCursor = { done: false; step: HubStep } | { done: true };
+export function postHubCurrentStep(campDone: boolean, hasHonorees: boolean, enshrineSeen: boolean): PostHubCursor {
+  const steps = postOffseasonSteps(campDone, hasHonorees);
+  if (hasHonorees && !enshrineSeen) {
+    const s = steps.find((x) => x.key === 'enshrine');
+    if (s) return { done: false, step: s };
+  }
+  if (!campDone) {
+    const s = steps.find((x) => x.key === 'camp');
+    if (s) return { done: false, step: s };
+  }
+  return { done: true };
 }
 
 /** 앞단에서 "레버를 하나도 안 만졌다" — 방문 마커가 아니라 **결정 데이터**의 부재로 판정(UI-50 ②).

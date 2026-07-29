@@ -469,7 +469,7 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
 | 위상 | 판정 | 허브 카드 목록 | 최종 버튼 |
 |---|---|---|---|
 | **앞단** | `planNextAction(...).kind==='seasonOver'` (`currentDay≈183`, season=S) | 1 시즌 결산 · 2 외국인 트라이아웃 · 3 아시아쿼터 · 4 FA 센터 · 5 신인 드래프트 | **새 시즌 시작하기**(광고 → `/season-start` → `endSeason`) |
-| **뒷단** | `currentDay===0 && campDoneSeason!==season` (season=S+1) | 1 명예의전당 헌액 · 2 전지훈련 | **개막전으로**(`finishCamp` → 일정) |
+| **뒷단** | `currentDay===0 && campDoneSeason!==season` (season=S+1) | ~~1 명예의전당 헌액 · 2 전지훈련(나란히 목록)~~ → **순차 단일 카드**(§5.6.5): 헌액자 있으면 헌액→전지훈련, 없으면 전지훈련만 | **개막전으로**(`finishCamp` → 일정) |
 
 두 위상은 일정 탭에서 서로 다른 분기로 렌더된다(포스트시즌 브라켓 분기 vs `offseason` 게이트 분기) — **하나의 카드로 그리지 않는다**.
 
@@ -523,6 +523,36 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
   ③허브 카드 목록 = 위 표(위상별 라우트·순서) ④`draftSelections` 무효화 대칭(외인/아시아 레버 4종 포함 전 레버가 clear)
   ⑤ErrorBoundary가 오프시즌 라우트 전체 + 루트에 존재 ⑥경고 게이트가 확정 픽 0건일 땐 조용히 통과.
   **A/B 자가검증**: 구조를 되돌린 뮤턴트(체인 push 복원 / 최종 버튼 게이트 / 무효화 누락 / ErrorBoundary 제거)에서 전부 FAIL.
+
+### 5.6.5 뒷단(post) 순차 단일화 + 헌액 조건부 숨김 (2026-07-29, 테스터 피드백)
+
+테스터 제보 2건: **"첫 시즌인데 명예의전당이 왜 뜨냐 + 우리 일정 하나씩 하기로 했잖아"**. 앞단(§5.6.4)은 이미
+순차 단일 카드인데 **뒷단은 아직 목록형(`postSteps.map` → `HubRow`)** 이라 결이 어긋났고, 헌액은 **첫 시즌(season 0)엔
+헌액 대상이 있을 수 없는데도**(대상 = `retiredSeason === season-1` = −1 → 항상 0명) 목록에 떴다.
+
+**정정 ① 헌액 항목 — 대상자 없으면 숨김.** ~~허브에 헌액 항목을 항상 띄우고, 0명이면 헌액 화면 진입 후 "헌액자 없음"
+한 장(2026-07-08 결정)을 보여준다~~ → **허브 목록 자체에서 헌액 스텝을 뺀다.** 순수 헬퍼 `hasEnshrineHonorees(hallOfFame, season)`
+(= `hallOfFame.some(h => h.legend && h.retiredSeason === season-1)`)가 `false`면 `postOffseasonSteps(campDone, hasHonorees)`가
+**헌액 스텝을 제외**하고 전지훈련을 `n:1`로 내린다. `true`면 `[헌액 n:1, 전지훈련 n:2]`. 첫 시즌은 항상 `false` → 전지훈련만.
+- enshrine.tsx의 "헌액자 없음" 안내 한 장 로직은 **화면에 남긴다**(체인/직접 진입 안전판) — 단 **허브에서 항목이 안 뜨므로
+  정상 플레이에선 그 화면으로 가는 진입 경로가 사라진다**(=테스터가 본 "첫 시즌 명전"이 없어짐). WAI.
+
+**정정 ② 뒷단도 순차 단일 카드(앞단과 동일 패턴).** ~~`postSteps.map`으로 헌액·전지훈련을 나란히 목록~~ →
+**현재 스텝 하나만** 표시("○○ 하러 가기 →") + **"개막전으로 →"는 항상 표시**(개막 강제 아님, 규칙 2 — `onOpenSeason`
+확인 다이얼로그 유지). 현재 스텝은 **순수 함수 `postHubCurrentStep(campDone, hasHonorees, enshrineSeen)`** 로 판정:
+- `hasHonorees && !enshrineSeen` → **헌액**, 아니면 `!campDone` → **전지훈련**, 둘 다 지나면 → **전부완료**(개막 준비됨).
+
+**진행 마커 = 새 영속 필드 `enshrineSeenSeason`(store, 기본 −1, `campDoneSeason` 미러).** 헌액 화면 hub 완료
+(`useOffseasonExit` 경로)에서 `markEnshrineSeen()`(= `enshrineSeenSeason = season`, 멱등). `enshrineSeen = enshrineSeenSeason === season`.
+- **왜 새 필드인가**: 헌액은 열람 화면이라 `campDoneSeason` 같은 "완료 데이터"가 없다. 재진입해도 헌액→전지훈련으로
+  넘어가려면 "헌액 봤음" 신호가 필요. `useOffseasonExit`는 **앞단** 라우트만 `offseasonStep`을 전진시키고(enshrine은
+  STEP_INDEX에 없음) 헌액엔 신호를 안 남겼다 → `campDoneSeason` 선례를 따른 시즌-키 필드 하나 신설(리셋 불필요 — 시즌
+  번호라 새 시즌 자동 무효). `partialize`+`SAVE_DEFAULTS`(−1) 양쪽 등재.
+- **reload/재진입 멱등**: reload해도 마커로 같은 스텝 유지. 헌액 안 보고 뒤로가기 → 마커 미세팅 → 헌액 유지
+  (앞단의 "뒤로가기 미전진"과 동일 결 — 소프트락 아님, 개막은 "개막전으로"로 항상 가능).
+
+`_dv_hub` 확장(§5.6.4): `hasEnshrineHonorees` 진리표(첫시즌 false·대상자 true·A/B 감도) + `postOffseasonSteps` 조건부
+포함(hasHonorees false→헌액 없음·전지훈련 n:1 / true→2스텝) + `postHubCurrentStep` 판정(헌액→전지훈련→완료 전이).
 
 ## 6. 오프시즌 오케스트레이션 (store.endSeason)
 

@@ -38,7 +38,9 @@ export default function Enshrine() {
 
   // 헌액 완료 → 다음 단계(전지훈련, chain=1)로. 소비된 오프시즌 스택 정리는 체인 마지막(개막 브리지)이 dismissAll로 수행.
   //   replace(REPLACE)로 넘어가 헌액 화면은 스택에서 교체된다(뒤로가기로 재노출 안 됨 — beforeRemove가 GO_BACK/POP 차단, B).
-  const done = () => { if (inHub) exit(); else router.replace('/training-camp?chain=1'); };
+  //   허브 진입(§5.6.5): 헌액 열람 마커(markEnshrineSeen)를 찍어 뒷단 순차 커서가 헌액→전지훈련으로 전진하게 한다(뒤로가기=미열람=헌액 유지).
+  const markEnshrineSeen = useGameStore((s) => s.markEnshrineSeen);
+  const done = () => { if (inHub) { markEnshrineSeen(); exit(); } else router.replace('/training-camp?chain=1'); };
   // 0명 자동 통과 제거(2026-07-08 사용자 결정) — 아래 "헌액자 없음" 안내 한 장을 보여주고 탭 한 번으로 진행.
   // 헌액 흐름은 되돌릴 수 없다 — 하드웨어 백·제스처·POP 무력화(B). done()의 replace(REPLACE)만 통과.
   const navigation = useNavigation();

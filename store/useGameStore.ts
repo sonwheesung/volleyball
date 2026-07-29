@@ -135,6 +135,7 @@ interface GameState {
   campLog: CampEntry[];                        // 전지훈련 기록(시드 폴백 재적용·감사)
   campTrainedThisOffseason: string[];          // 이번 오프시즌 전지훈련한 선수(선수당 1회) — 새 시즌 시작 시 초기화
   campDoneSeason: number;                       // 전지훈련을 "마친" 시즌(=이 시즌엔 오프시즌 종료 → 개막전 노출). 시즌번호라 새 시즌 자동 리셋. 기본 -1
+  enshrineSeenSeason: number;                   // 뒷단 허브에서 명예의전당 헌액을 본 시즌(§5.6.5, campDoneSeason 미러). 시즌번호라 새 시즌 자동 리셋. 기본 -1. 헌액→전지훈련 순차 커서 판정용
   pendingCamp: PendingCamp | null;             // 전지훈련 아웃박스(§13.12 P0-4) — 서버차감↔로컬적용 사이 크래시 복구
   walletBusy: boolean;                         // 다이아 서버 왕복 in-flight 래치(비영속) — 버튼 연타 이중적용 차단(P0-1)
   claimedAch: string[];                        // 다이아 수령한 업적 id(1회 지급)
@@ -193,6 +194,7 @@ interface GameState {
   setLastGrowthDay: (day: number) => void; // 성장 리포트 모달이 구간을 소비한 뒤 bump
 
   finishCamp: () => void; // 전지훈련 마치기 → 이번 시즌 오프시즌 종료(개막전 노출). currentDay는 그대로(경기 시작이 진행).
+  markEnshrineSeen: () => void; // 뒷단 허브에서 헌액을 봤음 표시(§5.6.5, 멱등) — enshrineSeenSeason=season. 순차 커서가 헌액→전지훈련으로 전진.
   recordResult: (r: MatchResult) => void;
   recordIntervention: (fixtureId: string, iv: MatchIntervention) => void; // 경기 개입 1건 append(MATCH_INTERVENTION §2) — 4단계 UI가 호출, 2단계는 배선만
   setCoachMode: (manual: boolean) => void; // "경기 지휘" 설정 토글(MATCH_INTERVENTION §4.1) — currentDay로 forward-only append(같은 날 덮어쓰기)
@@ -279,6 +281,7 @@ const freshSave = {
   campLog: [] as CampEntry[],
   campTrainedThisOffseason: [] as string[],
   campDoneSeason: -1,
+  enshrineSeenSeason: -1, // 뒷단 헌액 열람 마커(§5.6.5, campDoneSeason 패턴) — 시즌번호라 새 시즌 자동 리셋
   pendingCamp: null as PendingCamp | null,
   passStatus: null as PassStatus | null, // 비영속 — 서버 파생(getWallet 편입), 로그인/포그라운드마다 syncWallet가 채움
   unreadMailCount: 0, // 비영속 — 서버 판정(getWallet 편입 + readMail 응답)
@@ -609,6 +612,7 @@ export const useGameStore = create<GameState>()(
       setDay: (day) => set((s) => (Number.isFinite(day) ? { currentDay: Math.max(s.currentDay, day) } : {})), // NaN/Infinity 거부(currentDay 오염 전파 차단)
       setLastGrowthDay: (day) => set(() => (Number.isFinite(day) ? { lastGrowthDay: day } : {})),
       finishCamp: () => set((s) => (s.campDoneSeason === s.season ? {} : { campDoneSeason: s.season })), // 이번 시즌 오프시즌 종료 표시(멱등). currentDay 불변 — 개막전은 "경기 시작"이 진행
+      markEnshrineSeen: () => set((s) => (s.enshrineSeenSeason === s.season ? {} : { enshrineSeenSeason: s.season })), // 뒷단 헌액 열람 표시(§5.6.5, 멱등). 시즌-키라 새 시즌 자동 무효
       recordResult: (r) => set((s) => ({ results: { ...s.results, [r.fixtureId]: r } })),
       // 경기 개입 1건 append(MATCH_INTERVENTION §2) — 4단계 보드 UI가 호출, 2단계는 배선만.
       //   해당 fixture 배열에 push → 상태 갱신 + setInterventionContext(파생 캐시 무효화, §2.3 접미 bump = 그 경기일).
@@ -1685,6 +1689,7 @@ export const useGameStore = create<GameState>()(
         campLog: s.campLog,
         campTrainedThisOffseason: s.campTrainedThisOffseason,
         campDoneSeason: s.campDoneSeason,
+        enshrineSeenSeason: s.enshrineSeenSeason, // 뒷단 헌액 열람 마커(§5.6.5) — 영속(앱 재시작 후 순차 커서 유지)
         pendingCamp: s.pendingCamp,
         claimedAch: s.claimedAch,
         adState: s.adState,

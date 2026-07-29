@@ -16,12 +16,18 @@
 //   B5 앞단 최종 경로 도달(endSeason 1회 진행 · 더블탭 2전진 없음)
 //   B6 성장 리포트 모달이 오프시즌 반복 포커스에서 재발화하지 않음(R-I)
 //   B7 확정 픽 경고 게이트: 0건이면 조용히 통과, 1건 이상이면 즉시 실행 안 함
+//   B8 뒷단 헌액 조건부 숨김(§5.6.5): hasEnshrineHonorees 진리표(첫 시즌 false·지난 시즌 레전드 true·season 감도) +
+//      postOffseasonSteps 조건부 포함(대상 없음→전지훈련만 / 있음→헌액+전지훈련) + postHubCurrentStep 순차 전이(헌액→전지훈련→완료)
+//   B8b 헌액 열람 마커 markEnshrineSeen(멱등·시즌-키)
 //
 // A/B 자가검증(허위 오라클 금지): 구조를 되돌린 뮤턴트에서 반드시 FAIL 해야 한다 —
 //   ① fa.tsx에 `router.push('/draft')` 복원 → A1 FAIL
 //   ② store.toggleTryoutWish의 `draftSelections: []` 제거 → B1 FAIL
 //   ③ fa.tsx의 ErrorBoundary export 제거 → A3 FAIL
 //   ④ schedule.tsx 개막 버튼을 `campDone ? ... : null`로 게이트 → A4 FAIL
+//   ⑤ hasEnshrineHonorees를 `season+1`로 오프바이원 → B8 season 감도 FAIL
+//   ⑥ postOffseasonSteps에서 hasHonorees 무시하고 항상 헌액 포함 → B2 뒷단(대상자 없음) FAIL
+//   ⑦ postHubCurrentStep에서 enshrineSeen 무시 → B8 커서=전지훈련(헌액 후) FAIL
 import './_gt_mock';
 import Module from 'module';
 import { readFileSync, existsSync } from 'fs';
@@ -120,12 +126,16 @@ const CHAIN_EDGES: Array<[string, string]> = [
   // A4 — 일정 탭 두 위상 + 게이트 없는 최종 버튼
   const sched = read('app/(tabs)/schedule.tsx');
   ok(/offseasonHubSteps\(\s*'pre'/.test(sched), 'A4 앞단 허브 미렌더');
-  ok(/offseasonHubSteps\(\s*'post'/.test(sched), 'A4 뒷단 허브 미렌더');
+  // 뒷단(§5.6.5) — 순차 단일 카드: postHubCurrentStep 커서 + hasEnshrineHonorees(대상자 없으면 헌액 숨김)
+  ok(/postHubCurrentStep\(/.test(sched), 'A4 뒷단 순차 커서 미사용', '뒷단이 postHubCurrentStep로 단일 카드를 그려야 한다');
+  ok(/hasEnshrineHonorees\(/.test(sched), 'A4 헌액 조건부 미판정', 'hasEnshrineHonorees로 대상자 없으면 헌액 숨김');
   ok(/label=\{?\s*['"`]?개막전으로/.test(sched), 'A4 개막 버튼 없음');
   ok(/새 시즌 시작하기/.test(sched), 'A4 새 시즌 시작 버튼 없음');
   // 최종 버튼이 완료 조건으로 게이트되면 새 소프트락 — campDone/ceremony 조건부 렌더 금지
   ok(!/campDone\s*\?[^\n]*개막전으로/.test(sched), 'A4 개막 버튼 완료 게이트', 'campDone 조건부 렌더 금지(UI-50 ②)');
   ok(!/campDone\s*&&[^\n]*개막전으로/.test(sched), 'A4 개막 버튼 완료 게이트', 'campDone && 렌더 금지');
+  // 뒷단 순차 커서로도 개막 버튼을 게이트하면 안 된다(§5.6.5 — 개막 상시 노출)
+  ok(!/\{\s*postCursor\.done\s*&&[^\n]*개막전으로/.test(sched), 'A4 개막 버튼 완료 게이트(커서)', 'postCursor.done && 개막전으로 조건부 렌더 금지');
 
   // A5 — endSeason 진입점 공용화
   for (const f of ['app/draft.tsx', 'app/draft-live.tsx', 'app/(tabs)/schedule.tsx']) {
@@ -144,20 +154,50 @@ const CHAIN_EDGES: Array<[string, string]> = [
   const { planNextAction } = await import('../engine/advance');
   const { POSTSEASON_LAST_DAY } = await import('../engine/calendar');
   const { growthTrigger } = await import('../data/growthReport');
-  const { offseasonHubSteps, offseasonUntouched } = await import('../data/offseasonHub');
+  const { offseasonHubSteps, offseasonUntouched, hasEnshrineHonorees, postHubCurrentStep } = await import('../data/offseasonHub');
   const G = () => useGameStore.getState();
   const my = LEAGUE.teams[0].id;
 
   // B2 — 허브 목록 정본
   const pre = offseasonHubSteps('pre');
-  const post = offseasonHubSteps('post', false);
+  // 뒷단(§5.6.5) — 헌액 스텝은 대상자 유무에 따라 조건부. 대상 없음 → 전지훈련만(n:1) / 있음 → [헌액 n:1, 전지훈련 n:2].
+  const postNo = offseasonHubSteps('post', false, false);
+  const postYes = offseasonHubSteps('post', false, true);
   ok(pre.map((s) => s.route).join(',') === '/season-recap,/tryout,/asian-tryout,/fa,/draft',
     'B2 앞단 목록', pre.map((s) => s.route).join(','));
-  ok(post.map((s) => s.route).join(',') === '/enshrine?hub=1,/training-camp', 'B2 뒷단 목록', post.map((s) => s.route).join(','));
-  ok(pre.every((s, i) => s.n === i + 1) && post.every((s, i) => s.n === i + 1), 'B2 번호 연속');
+  ok(postNo.map((s) => s.route).join(',') === '/training-camp', 'B2 뒷단 목록(대상자 없음)', postNo.map((s) => s.route).join(','));
+  ok(postYes.map((s) => s.route).join(',') === '/enshrine?hub=1,/training-camp', 'B2 뒷단 목록(대상자 있음)', postYes.map((s) => s.route).join(','));
+  ok(pre.every((s, i) => s.n === i + 1) && postNo.every((s, i) => s.n === i + 1) && postYes.every((s, i) => s.n === i + 1), 'B2 번호 연속');
   // 앞단은 완료 판정이 없어야 한다(전부 미리보기 — UI-50 ②)
   ok(pre.every((s) => s.done === undefined), 'B2 앞단 완료마커', '앞단엔 ✅/🔒 상태가 없어야 한다');
-  ok(offseasonHubSteps('post', true).find((s) => s.key === 'camp')?.done === true, 'B2 전지훈련 완료 판정');
+  ok(offseasonHubSteps('post', true, true).find((s) => s.key === 'camp')?.done === true, 'B2 전지훈련 완료 판정');
+  ok(offseasonHubSteps('post', true, false).find((s) => s.key === 'camp')?.done === true, 'B2 전지훈련 완료 판정(대상자 없음)');
+
+  // B8 — 헌액 조건부 숨김 진리표 + 순차 커서(§5.6.5)
+  //   대상 = legend && retiredSeason === season-1. 첫 시즌(season0)은 retiredSeason=-1 대상이 있을 수 없어 항상 false.
+  ok(hasEnshrineHonorees([], 0) === false, 'B8 빈 HOF false');
+  // 첫 시즌(season0): 실제 HOF 항목은 retiredSeason>=0이라 season-1=-1과 절대 일치 안 함 → 대상 0(테스터 "첫 시즌 명전").
+  ok(hasEnshrineHonorees([{ legend: true, retiredSeason: 0 }], 0) === false, 'B8 첫 시즌 false', 'season0엔 지난 시즌(=-1) 은퇴자 불가');
+  ok(hasEnshrineHonorees([{ legend: true, retiredSeason: 2 }], 3) === true, 'B8 지난 시즌 레전드 true');
+  ok(hasEnshrineHonorees([{ legend: false, retiredSeason: 2 }], 3) === false, 'B8 비레전드 제외');
+  ok(hasEnshrineHonorees([{ legend: true, retiredSeason: 1 }], 3) === false, 'B8 재작년 은퇴 제외', 'retiredSeason===season-1만');
+  // A/B 감도(허위 오라클 방지): 같은 HOF에서 season만 바꾸면 결과가 뒤집혀야
+  ok(hasEnshrineHonorees([{ legend: true, retiredSeason: 2 }], 3) !== hasEnshrineHonorees([{ legend: true, retiredSeason: 2 }], 4),
+    'B8 season 감도', '판정이 season-1에 실제로 반응해야 한다');
+  // 순차 커서 전이: 헌액(대상 있고 미열람) → 전지훈련(미완료) → 완료
+  const c1 = postHubCurrentStep(false, true, false);
+  ok(c1.done === false && !c1.done && c1.step.key === 'enshrine', 'B8 커서=헌액', JSON.stringify(c1));
+  const c2 = postHubCurrentStep(false, true, true);
+  ok(c2.done === false && !c2.done && c2.step.key === 'camp', 'B8 커서=전지훈련(헌액 후)', JSON.stringify(c2));
+  const c3 = postHubCurrentStep(false, false, false);
+  ok(c3.done === false && !c3.done && c3.step.key === 'camp', 'B8 커서=전지훈련(대상 없음)', JSON.stringify(c3));
+  const c4 = postHubCurrentStep(true, true, true);
+  ok(c4.done === true, 'B8 커서=완료', JSON.stringify(c4));
+  const c5 = postHubCurrentStep(true, false, false);
+  ok(c5.done === true, 'B8 커서=완료(대상 없음)', JSON.stringify(c5));
+  // 순서 보존: 헌액 미열람이면 캠프가 이미 끝났어도 헌액이 먼저(커서가 캠프로 건너뛰지 않음)
+  const c6 = postHubCurrentStep(true, true, false);
+  ok(c6.done === false && !c6.done && c6.step.key === 'enshrine', 'B8 커서 순서=헌액 우선', JSON.stringify(c6));
 
   // ── 세팅: 시즌 완주 → 앞단 오프시즌 ──
   G().resetSave(); G().selectTeam(my);
@@ -243,6 +283,14 @@ const CHAIN_EDGES: Array<[string, string]> = [
   shows = 0;
   for (let i = 0; i < 8; i++) if (focus()) shows++;
   ok(shows === 0, 'B6 뒷단 성장 모달', `${shows}회 (롤오버 직후 구간은 diff 대상 아님)`);
+
+  // B8b — 헌액 열람 마커(§5.6.5) 멱등·시즌-키. 롤오버 직후(뒷단)라 enshrineSeenSeason은 이번 시즌 미열람이어야.
+  const seasonNow = G().season;
+  ok(G().enshrineSeenSeason !== seasonNow, 'B8b 롤오버 후 미열람', `enshrineSeenSeason=${G().enshrineSeenSeason} season=${seasonNow}`);
+  G().markEnshrineSeen();
+  ok(G().enshrineSeenSeason === seasonNow, 'B8b 열람 마킹', String(G().enshrineSeenSeason));
+  G().markEnshrineSeen(); // 멱등(더블탭)
+  ok(G().enshrineSeenSeason === seasonNow, 'B8b 멱등', String(G().enshrineSeenSeason));
 
   console.log(`\n_dv_hub ${fails === 0 ? 'PASS' : 'FAIL'} — 위반 ${fails}건`);
   process.exit(fails ? 1 : 0);
