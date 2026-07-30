@@ -209,7 +209,7 @@ function SeasonView({
                 <Text style={[styles.awLabel, a.hi && { color: theme.warn }]}>{a.label}</Text>
                 <PosTag pos={pPos(a.w.playerId)} />
                 <Text style={[styles.awName, isMine(a.w.playerId) && styles.mine]} numberOfLines={1}>{awName(a.w)}</Text>
-                <Text style={styles.lbTeam} numberOfLines={1}>{short(a.w.teamId)}</Text>
+                <Text style={styles.lbTeam} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{getTeam(a.w.teamId)?.name ?? short(a.w.teamId)}</Text>
                 <View style={styles.awValCell}>
                   <Text style={[styles.lbVal, a.growth && { color: theme.good }]}>{a.growth ? `▲${a.w.value}` : `${a.w.value}`}</Text>
                   <Text style={styles.awValBase}>{a.growth ? IMPROVE_LABEL : IMPACT_LABEL}</Text>
@@ -233,7 +233,7 @@ function SeasonView({
               <View key={a.label} style={styles.awRow}>
                 <Text style={styles.awLabel}>{a.label}</Text>
                 <Text style={[styles.awName, a.w && isMine(a.w.playerId) && styles.mine]} numberOfLines={1}>{awName(a.w)}</Text>
-                <Text style={styles.lbTeam} numberOfLines={1}>{a.w ? short(a.w.teamId) : ''}</Text>
+                <Text style={styles.lbTeam} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.75}>{a.w ? (getTeam(a.w.teamId)?.name ?? short(a.w.teamId)) : ''}</Text>
                 <Text style={styles.lbVal}>{a.w ? <>{a.w.value}<Text style={styles.awValUnit}>{a.unit}</Text></> : ''}</Text>
               </View>
             ))}
