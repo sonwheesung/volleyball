@@ -94,26 +94,27 @@ export function Best7Court({
         <Svg width="100%" height="100%" viewBox="0 0 100 100" preserveAspectRatio="none" style={StyleSheet.absoluteFill}>
           <Defs>
             <LinearGradient id="floor" x1="0" y1="0" x2="0" y2="1">
-              <Stop offset="0" stopColor="hsl(28,34%,16%)" />
-              <Stop offset="1" stopColor="hsl(28,30%,27%)" />
+              <Stop offset="0" stopColor="hsl(43,72%,90%)" />
+              <Stop offset="1" stopColor="hsl(41,58%,82%)" />
             </LinearGradient>
+            {/* 밝은 바탕이라 밝은 하이라이트는 안 보임 → 살짝 어두운 온기 스포트로 중앙에 무게(중앙 짙게→가장자리 투명) */}
             <RadialGradient id="spot" cx="50%" cy="44%" r="60%">
-              <Stop offset="0" stopColor="rgba(255,227,155,0.17)" />
-              <Stop offset="0.7" stopColor="rgba(255,227,155,0.04)" />
-              <Stop offset="1" stopColor="rgba(255,227,155,0)" />
+              <Stop offset="0" stopColor="rgba(120,90,30,0.06)" />
+              <Stop offset="0.7" stopColor="rgba(120,90,30,0.02)" />
+              <Stop offset="1" stopColor="rgba(120,90,30,0)" />
             </RadialGradient>
           </Defs>
           <Rect x="0" y="0" width="100" height="100" fill="url(#floor)" />
           <Rect x="0" y="0" width="100" height="100" fill="url(#spot)" />
-          {/* 어택라인(전위/후위 3m) + 중앙선 */}
-          <Line x1="0" y1="35" x2="100" y2="35" stroke="rgba(255,255,255,0.10)" strokeWidth={0.5} />
-          <Line x1="0" y1="64" x2="100" y2="64" stroke="rgba(255,255,255,0.10)" strokeWidth={0.5} />
-          <Line x1="50" y1="13" x2="50" y2="100" stroke="rgba(255,255,255,0.09)" strokeWidth={0.4} />
-          {/* 네트: 밴드 + 상단 테이프 + 좌우 포스트 */}
-          <Rect x="0" y="11.4" width="100" height="3.2" fill="rgba(255,255,255,0.06)" />
-          <Line x1="0" y1="13" x2="100" y2="13" stroke="rgba(255,255,255,0.55)" strokeWidth={0.6} />
-          <Rect x="1.2" y="8.5" width="1.1" height="9.5" rx={0.4} fill="rgba(255,255,255,0.5)" />
-          <Rect x="97.7" y="8.5" width="1.1" height="9.5" rx={0.4} fill="rgba(255,255,255,0.5)" />
+          {/* 어택라인(전위/후위 3m) + 중앙선 — 밝은 코트에 맞춰 어두운 반투명 */}
+          <Line x1="0" y1="35" x2="100" y2="35" stroke="rgba(90,70,30,0.22)" strokeWidth={0.5} />
+          <Line x1="0" y1="64" x2="100" y2="64" stroke="rgba(90,70,30,0.22)" strokeWidth={0.5} />
+          <Line x1="50" y1="13" x2="50" y2="100" stroke="rgba(90,70,30,0.18)" strokeWidth={0.4} />
+          {/* 네트: 밴드 + 상단 테이프 + 좌우 포스트 — 어두운 반투명 */}
+          <Rect x="0" y="11.4" width="100" height="3.2" fill="rgba(90,70,30,0.18)" />
+          <Line x1="0" y1="13" x2="100" y2="13" stroke="rgba(90,70,30,0.28)" strokeWidth={0.6} />
+          <Rect x="1.2" y="8.5" width="1.1" height="9.5" rx={0.4} fill="rgba(90,70,30,0.28)" />
+          <Rect x="97.7" y="8.5" width="1.1" height="9.5" rx={0.4} fill="rgba(90,70,30,0.28)" />
           {/* 금 내부 프레임 */}
           <Rect x="0.6" y="0.6" width="98.8" height="98.8" rx={2} fill="none" stroke="rgba(242,169,59,0.30)" strokeWidth={0.7} />
         </Svg>
@@ -179,7 +180,7 @@ const styles = themedStyles(() => StyleSheet.create({
   // 슬롯: 팀명(위) → 얼굴+포지션배지 → 이름(아래). marginTop으로 얼굴을 spot 근처에 두되 블록이 위아래로 균형.
   //   블록 ≈ 팀13 + 링50 + 배지겹침 + 이름14 ≈ 82px < 행간 92px → 겹침 없음(2026-07-28 얼굴 전환, 겹침 규칙 유지).
   slot: { position: 'absolute', width: 86, marginLeft: -43, marginTop: -38, alignItems: 'center' },
-  team: { color: 'rgba(255,255,255,0.78)', fontSize: 10, fontWeight: '700', textAlign: 'center', marginBottom: 2, maxWidth: 86 },
+  team: { color: '#3A2E14', fontSize: 10, fontWeight: '700', textAlign: 'center', marginBottom: 2, maxWidth: 86 },
   teamMine: { color: theme.accent },
   avatarWrap: { alignItems: 'center' },
   avatarRing: {
@@ -189,12 +190,12 @@ const styles = themedStyles(() => StyleSheet.create({
   },
   avatarRingMine: { borderWidth: 3 }, // 우리 팀 강조(색은 인라인 accent)
   avatarEmpty: { alignItems: 'center', justifyContent: 'center', backgroundColor: theme.cardAlt },
-  dash: { color: 'rgba(255,255,255,0.6)', fontSize: 16, fontWeight: '800' },
+  dash: { color: 'rgba(60,46,20,0.55)', fontSize: 16, fontWeight: '800' },
   posBadge: {
     marginTop: -9, minWidth: 22, height: 16, paddingHorizontal: 5, borderRadius: 8,
     alignItems: 'center', justifyContent: 'center', borderWidth: 1, borderColor: 'rgba(255,255,255,0.55)',
   },
   posTxt: { color: '#FFFFFF', fontSize: 10, fontWeight: '900', letterSpacing: 0.2 },
-  name: { color: '#F2F5FA', fontSize: 11.5, fontWeight: '800', marginTop: 4, maxWidth: 86, textAlign: 'center' },
+  name: { color: '#2A2212', fontSize: 11.5, fontWeight: '800', marginTop: 4, maxWidth: 86, textAlign: 'center' },
   nameMine: { color: theme.accent },
 }));
