@@ -574,6 +574,12 @@ export const useGameStore = create<GameState>()(
           if ('pass' in r) patch.passStatus = r.pass ?? null; // 다이아 패스 상태 편입(§2.4 Q2) — 구서버(필드 없음)면 미변경
           if ('unreadMailCount' in r) patch.unreadMailCount = r.unreadMailCount ?? 0; // 우편 미확인/미수령 카운트 편입(MAILBOX §5.2)
           if ('unclaimedMailCount' in r) patch.unclaimedMailCount = r.unclaimedMailCount ?? 0;
+          // 지급 완료 업적 pre-mark(2026-07-30 테스터) — 서버 원장(reason='achievement' distinct ref)을 claimedAch에 합류(계정 진실).
+          //   재설치·기기변경으로 로컬 claimedAch가 비었을 때 이미 받은 업적이 "보상받기"로 다시 뜨는 것 방지 → "받음 ✓"로 표시.
+          //   합집합만(로컬 확정분 보존)·중복 제거. 서버가 진실이라 로컬 미스매치를 조용히 정합(구서버=필드 없음이면 미변경).
+          if (Array.isArray(r.earnedAch) && r.earnedAch.length) {
+            patch.claimedAch = Array.from(new Set([...get().claimedAch, ...r.earnedAch]));
+          }
           set(patch);
         }
         await get().reconcilePendingCamp();      // 아웃박스 정산(재기동/포그라운드 복구)

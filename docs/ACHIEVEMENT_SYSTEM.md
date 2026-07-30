@@ -41,6 +41,13 @@
 > `careerLog`는 경기 리플레이로 파생 불가(드래프트·영입·면담은 플레이어 액션) — cash·fanScore처럼
 > 스토어 영속 카운터. 드래프트 업적만 예외로 `archive.length`(완료 시즌수)에서 파생.
 
+> **수령 상태 서버 pre-mark(2026-07-30 테스터)**: 업적 보상 수령 여부(`claimedAch`)는 로컬 영속이지만 **다이아 지급 진실은
+> 서버 원장**(reason='achievement' ref=업적id, 계정 평생 멱등). 재설치·기기변경으로 로컬 `claimedAch`가 비면 **이미 받은 업적이
+> "보상받기"로 다시 떠서 눌러야 "이미 지급됨" 안내**가 나오던 것(테스터 스크린샷) → `syncWallet`(로그인/포그라운드)에서 서버
+> `getWallet().earnedAch`(지급 완료 업적 id 전체 distinct)를 **`claimedAch`에 합집합**으로 seed → 달성+지급완료 업적은 탭 없이
+> 바로 "받음 ✓". 합집합만(로컬 확정 보존)·서버 진실로 미스매치 조용히 정합(재화는 서버 진실). 구서버(earnedAch 필드 없음)면 무변경(하위호환).
+> 서버 쿼리는 원장 윈도우(recent 20)와 별개 전체 distinct — 오래된 지급 누락 방지. 정본 서버 파생: `docs/BACKEND_SYSTEM.md` §4.
+
 > `SeasonArchive`(types/index.ts)에 `standings`·`streaks`를 추가(2026-06-13) — 둘 다 optional이라
 > 구세이브 호환. 순위 업적은 정규리그 순위(standings), 우승 업적은 플옵 챔피언(championId)으로 구분.
 

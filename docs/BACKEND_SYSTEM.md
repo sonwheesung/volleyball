@@ -46,6 +46,10 @@
 ## 4. 다이아 지갑 (append-only 원장)
 
 - **balance = fold(ledger)** — 잔액을 직접 증감하지 않고 원장 합으로 계산(재시도 안전).
+- **`getWallet().earnedAch`(지급 완료 업적 pre-mark, 2026-07-30 테스터)** — 응답에 `earnedAch: string[]` = 원장에서
+  `reason='achievement'` **distinct `ref`(업적id) 전체**(원장 윈도우 recent 20과 별개 — 오래된 지급 누락 방지). 클라 `syncWallet`이
+  이걸 `claimedAch`에 **합집합** seed → 재설치·기기변경으로 로컬 수령상태가 비어도 **이미 받은 업적이 "보상받기"로 재출현하지 않고 "받음 ✓"**.
+  다이아 지급 진실은 서버 원장(계정 평생 멱등)이므로 수령 표시도 서버가 진실(로컬 미스매치 조용히 정합). 하위호환(구서버=필드 없음이면 클라 무변경). 정본 표시측: `docs/ACHIEVEMENT_SYSTEM.md`.
 - **멱등 재시도는 *현재* 잔액을 반환(2026-07-06 버그수정, 검증 Opus 4.8)** — `applyWalletTx`가 중복키를 만나면 재적용은 안 하되
   반환 잔액은 원장의 그 거래 시점 `balanceAfter`(스냅샷)가 **아니라 지금 `users.balance`**를 읽어 준다. 스냅샷을 반환하면 *원 거래
   이후의 다른 거래*(지출·적립)가 반영 안 된 stale 잔액으로 클라를 덮어써 split-brain 표시가 난다. **에뮬 재현**: 환영 +1000 → 캠프

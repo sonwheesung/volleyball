@@ -176,12 +176,20 @@ export async function getWallet(userId: string, recent = 20) {
     .orderBy(walletLedger.createdAt)
     .limit(recent);
   const adToday = await adStatusToday(userId);
+  // 지급 완료 업적 id 전체(reason='achievement' distinct ref) — 원장 윈도우(recent 20)로는 오래된 지급이 누락돼
+  //   재설치·기기변경 후 이미 받은 업적이 "보상받기"로 다시 뜨던 것(테스터 2026-07-30)을 서버 진실로 pre-mark.
+  //   전체 distinct라 작음(업적 수십 개 상한). ref null(구 데이터)은 배제.
+  const earnedAchRows = await db
+    .selectDistinct({ ref: walletLedger.ref })
+    .from(walletLedger)
+    .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.userId, userId), eq(walletLedger.reason, 'achievement')));
+  const earnedAch = earnedAchRows.map((r) => r.ref).filter((r): r is string => !!r);
   const { passStatus } = await import('./pass'); // 지연 import(순환 회피)
   const pass = await passStatus(userId);
   // 우편함 미확인·미수령 카운트 편입(MAILBOX §5.2 R4·S1 — syncWallet 합류점 재사용, 별 라운드트립 0). 지연 import(순환 회피).
   const { mailCounts } = await import('./mail');
   const { unreadMailCount, unclaimedMailCount } = await mailCounts(userId);
-  return { balance: u[0].balance, ledger, adToday, pass, unreadMailCount, unclaimedMailCount };
+  return { balance: u[0].balance, ledger, adToday, pass, unreadMailCount, unclaimedMailCount, earnedAch };
 }
 
 /** 이 게임(PROJ_CODE)의 proj_info 행 보장 — FK 대상. 최초 1회만 실제 insert. */

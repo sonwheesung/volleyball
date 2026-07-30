@@ -111,7 +111,7 @@ export interface PassStatus {
 
 // ── 지갑 ──
 // unread/unclaimedMailCount = 우편함 배지·카드 데이터 소스(MAILBOX_SYSTEM §5.2 — getWallet 편입, 별도 폴링 금지). 구서버(필드 없음)면 optional.
-export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[]; adToday?: { count: number; lastAtMs: number | null }; pass?: PassStatus; unreadMailCount?: number; unclaimedMailCount?: number }>> {
+export function getWallet(): Promise<ServerResult<{ balance: number; ledger: LedgerRow[]; adToday?: { count: number; lastAtMs: number | null }; pass?: PassStatus; unreadMailCount?: number; unclaimedMailCount?: number; earnedAch?: string[] }>> {
   return call('/api/wallet');
 }
 
