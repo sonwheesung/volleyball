@@ -129,6 +129,15 @@ const TECH_HELP =
   '• 리시브기술 — 상대 서브를 안정적으로 받아냅니다.\n' +
   '• 세팅기술 — 팀 전체 공격을 살리는 토스. 세터의 핵심 능력입니다.\n' +
   '• 서브기술 — 서브의 위력과 에이스가 늘어납니다.';
+const OVERALL_HELP =
+  '종합 스탯은 아래 세부 능력치(신체·공통·멘탈)와 기술치를 합쳐 계산됩니다 — 기술치 하나가 아니라 여러 스탯의 가중 평균이에요.\n\n' +
+  '• 스파이크 = 키·점프력 + 공격기술\n' +
+  '• 블로킹 = 키·점프력·반응속도 + 블로킹기술\n' +
+  '• 디그 = 민첩성·반응속도·위치선정 + 디그기술\n' +
+  '• 리시브 = 반응속도·위치선정 + 리시브기술\n' +
+  '• 세팅 = 집중력 + 세팅기술\n' +
+  '• 서브 = 집중력 + 서브기술\n\n' +
+  '그래서 기술치가 높아도 받쳐주는 신체·공통 스탯이 낮으면 종합은 그만큼 낮게 나옵니다(예: 디그기술이 좋아도 반응속도·위치선정이 평범하면 종합 디그는 중간).';
 
 // 건의 거절 사유 문구(OWNER §2.2 ★) — "가장 큰 감점 요인" 파생. coachCall은 결정론이라 "재도전하면 바뀔 것" 호도 금지 워딩.
 const BENCH_REJECT: Record<OwnerRejectReason, string> = {
@@ -693,7 +702,7 @@ function PlayerDetailInner() {
         </>
       ) : null}
 
-      <IconLabel icon="stats-chart-outline" color={theme.elite}>종합 스탯</IconLabel>
+      <IconLabel icon="stats-chart-outline" color={theme.elite} help={() => showAlert('종합 스탯', OVERALL_HELP)}>종합 스탯</IconLabel>
       <Card accent={theme.elite} flat>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           {/* 레이더를 고정폭 View로 감싼다 — <Svg>는 flex 행에서 명확한 width basis를 안 줘서, 이게 없으면 레이더가
