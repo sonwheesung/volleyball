@@ -359,10 +359,12 @@ export function Button({
 }
 
 /** OVR 진행호 링 배지 (값에 따라 색·채움) — 스타일타일의 원형 레이팅 링 */
-export function OvrBadge({ value, size = 46 }: { value: number; size?: number }) {
+export function OvrBadge({ value, size = 46, preScaled = false }: { value: number; size?: number; preScaled?: boolean }) {
   // value는 raw OVR(overall/teamOverall) — 표시 스케일로 스트레치해 색·링·숫자에 일괄 반영.
   // 호출부는 항상 raw를 넘긴다(이중 변환 금지). 색 임계값은 스트레치된 값 기준이라 의미가 또렷.
-  const v = displayOvr(value);
+  // preScaled=true면 value가 이미 표시 스케일(displayOvr 적용 완료)이라 재변환하지 않음(반올림만).
+  //   색 임계(88/80/74)·링은 표시 스케일 기준이라 그대로 유효.
+  const v = preScaled ? Math.round(value) : displayOvr(value);
   // 프로 스케일(신입~70·평균80·90+ 독보적)에 맞춘 색 구간
   const color = v >= 88 ? theme.elite : v >= 80 ? theme.accent : v >= 74 ? theme.warn : theme.muted;
   const stroke = size >= 56 ? 5 : 4;

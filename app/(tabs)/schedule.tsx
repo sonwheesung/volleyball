@@ -140,6 +140,7 @@ function ScheduleInner() {
     if (!squad.length) return 0;
     const { six, libero } = buildLineup(squad, coachInfoOf(tid)?.dvPhilosophy ?? 0, promotedOnDay(tid, dayIndex));
     const lineup = [...six, ...(libero ? [libero] : [])];
+    // 반환값은 이미 표시 스케일(per-player displayOvr 평균) → 렌더는 OvrBadge preScaled로(이중 스트레치 금지).
     return Math.round(lineup.reduce((s, p) => s + displayOvr(overallRaw(p)), 0) / lineup.length);
   };
   const preview = nextFixture
@@ -289,12 +290,12 @@ function ScheduleInner() {
           <Row>
             <View style={{ alignItems: 'center', gap: 2 }}>
               <Muted style={{ fontSize: 11 }}>우리</Muted>
-              <OvrBadge value={preview.myOvr} />
+              <OvrBadge value={preview.myOvr} preScaled />
             </View>
             <Text style={{ color: theme.muted, fontSize: 17, fontWeight: '700' }}>VS</Text>
             <View style={{ alignItems: 'center', gap: 2 }}>
               <Muted style={{ fontSize: 11 }}>상대</Muted>
-              <OvrBadge value={preview.oppOvr} />
+              <OvrBadge value={preview.oppOvr} preScaled />
             </View>
           </Row>
           {oppLineup ? (
@@ -468,7 +469,7 @@ function ScheduleInner() {
           >
             <PosTag pos={p.position} />
             <Text style={styles.lineupName} numberOfLines={1}>{p.name}</Text>
-            <OvrBadge value={displayOvr(overallRaw(p))} />
+            <OvrBadge value={overallRaw(p)} />
             <Ionicons name="chevron-forward" size={16} color={theme.muted} />
           </Pressable>
         ))}
