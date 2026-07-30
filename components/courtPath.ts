@@ -25,6 +25,7 @@ export type WP = {
   hold?: boolean; // 서브 국면 데드볼(에이스·서브/리시브 범실) — 대형 동결(공격 전환 금지)
   soft?: boolean; // 연타/팁 낙하 — 바운드 미약
   stype?: ServeType; // 서브 타입(walk·serveToss·serve WP에 스탬프) — 렌더가 스핀·궤적·모션을 타입별로(룰 64~67)
+  noJump?: boolean; // 토스 WP: 세터 마커 점프 억제(룰 70 — 리베로가 전위서 세트할 때 점프 세트 불가, 그라운드/언더 세트만)
 };
 
 export interface RallyLike {
@@ -355,6 +356,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
         : (att === 'home' ? L.home : L.away).six.findIndex((p) => p.id === r.setId);
       if (setByIdx >= 0 && setByIdx !== firstTouch && setByIdx !== byIdx) tosserIdx = setByIdx;
     }
+    // 리베로 점프 토스 금지(룰 70, 2026-07-30 사용자): 리베로(후위 MB 슬롯)가 전위(3m 라인 안, home<0.66H·away>0.34H)에서
+    //  세트하면 오버핸드 점프 세트 불가(수비 스페셜리스트 — 백존 점프 세트는 합법이라 허용). 세터는 passSpot에서 점프하므로
+    //  passSpot.y로 판정. 렌더(jumpersFor)가 toss WP의 noJump flag를 읽어 마커 점프만 끈다(공 궤적 불변 = 그라운드/언더 세트).
+    const attLibero = [1, 5, 6].map((z) => lineupIdxAt(rotOf(att), z)).find((i) => (att === 'home' ? L.home : L.away).six[i]?.position === 'MB');
+    const setterNoJump = tosserIdx === attLibero && (att === 'home' ? passSpot.y < 0.66 * H : passSpot.y > 0.34 * H);
     // 공은 패스 지점으로, 토스할 선수가 그 자리로 이동해 세트.
     // 퍼스트 터치한 선수는 패스 구간부터 그 자리에 멈춘다(자세 회복) — 대형 복귀로 어슬렁거리지 않게
     // 패스 구간 길이를 토서 이동거리에 맞춰 보장 — 멀리 흩어진 패스에서 토서가 공에 못 미치는
@@ -393,7 +399,7 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
       const setSpot = { x: clampN(sw[att].pos[sender].x, 0.12 * W, 0.88 * W), y: (att === 'home' ? 0.6 : 0.4) * H };
       // (2) 세트 — 토서가 sender에게 짧게 올린다(블록 없음). idx=sender(공 도착 처리자, 유령터치 방지),
       //     퍼스트터치(디그한 선수)는 자기 자리에 한 박자 고정(배회 방지 — 정상 토스 WP와 동일 패턴).
-      wp.push({ x: setSpot.x, y: setSpot.y, side: att, idx: sender, kind: 'toss', dur: 360, arc: 0.10 * H, scale: 1.3,
+      wp.push({ x: setSpot.x, y: setSpot.y, side: att, idx: sender, kind: 'toss', dur: 360, arc: 0.10 * H, scale: 1.3, noJump: setterNoJump,
         movers: [
           { side: att, idx: sender, x: setSpot.x, y: setSpot.y },
           ...(firstTouch !== sender ? [{ side: att, idx: firstTouch, x: touchPos.x, y: touchPos.y }] : []),
@@ -585,10 +591,20 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     const tossDur = atk === 'quick' ? 230 : atk === 'tempo' ? 380 : atk === 'back' ? 500 : 540;
     const tossArc = (atk === 'quick' ? 0.055 : atk === 'tempo' ? 0.10 : atk === 'back' ? 0.15 : 0.17) * H;
     const tossScale = atk === 'quick' ? 1.2 : 1.55;
+    // 볼핸들링 범실(룰 19c, 2026-07-30 재보고): 토스는 히터 쪽으로 뜨되(룰19 자기토스 방지 유지) **세트 컨택 즉시 휘슬**이라
+    //  공이 "살짝"(히터까지 0.3) 떴다가 바로 죽어야 한다 — 풀 토스(dur 540·히터 타점까지)가 완성돼 보이면 늦은 휘슬로 어색.
+    //  방향(히터)만 유지하고 길이(0.3)·시간(200)·포물선(0.06H)만 축소. rng 미소비(hit·passSpot 재사용) → 결정론 불변.
+    const isMisc = r.how === 'miscErr' && att === finalAtt;
+    const tossX = isMisc ? passSpot.x + (hit.x - passSpot.x) * 0.3 : hit.x;
+    const tossY = isMisc ? passSpot.y + (hit.y - passSpot.y) * 0.3 : hit.y;
     wp.push({
-      x: hit.x, y: hit.y, side: att, idx: atkIdx, kind: 'toss',
-      atk, blk: blkCount, dur: tossDur, arc: tossArc, scale: tossScale,
-      movers: [
+      // miscErr는 세트 컨택서 죽는 공 → 받는 선수 없음(idx -1) — 공격수 무버·커버 collapse 없이 짧은 토스 뒤 즉사(유령터치 룰 I 면제).
+      x: tossX, y: tossY, side: att, idx: isMisc ? -1 : atkIdx, kind: 'toss',
+      atk, blk: blkCount, dur: isMisc ? 200 : tossDur, arc: isMisc ? 0.06 * H : tossArc, scale: tossScale, noJump: setterNoJump,
+      movers: isMisc
+        // 범실: 즉시 휘슬이라 아무도 안 붙는다 — firstTouch만 자세 회복 홀드(배회 방지), 공격수·커버는 정지(데드볼 정신).
+        ? (firstTouch !== tosserIdx ? [{ side: att, idx: firstTouch, x: touchPos.x, y: touchPos.y }] : [])
+        : [
         ...coverMovers,
         { side: att, idx: atkIdx, x: hit.x, y: hit.y }, // 공격수가 타점으로 이동
         // 첫 터치한 선수는 패스 지점에 한 박자 머문다(자세 회복) — 다음 구간부터 합류.
@@ -601,11 +617,11 @@ export function ballPath(r: RallyLike, seed: number, L: Lineups, W: number, H: n
     });
 
     // 볼핸들링 범실(사실): 세터의 세트가 더블컨택/들어올림 — 휘슬. 공이 (자기에게가 아니라) 공격수
-    // 쪽으로 올라가던 중 죽는다. 위 toss WP가 firstTouch·커버를 올바로 잡으므로(M 안전) 여기서 스파이크
-    // 대신 낙구만 — 공은 타점 부근에 뚝 떨어진다. **반칙팀이면 무조건**(2026-07-28): 구 확률게이트(hop<2에서 30%)가
-    // 스파이크를 누수시켜 417 즉사 return을 부른 뿌리 — 게이트 제거로 스파이크 0 + toss 낙구를 100% 보장(가드 _dv_mischandle).
-    if (r.how === 'miscErr' && att === finalAtt) {
-      wp.push({ x: clampN(hit.x + rng.range(-10, 10), 12, W - 12), y: hit.y + (att === 'home' ? 14 : -14), side: att, idx: -1, kind: 'fault', soft: true });
+    // 쪽으로 올라가던 중(짧은 toss) 죽는다. 위 toss WP가 firstTouch·커버를 올바로 잡으므로(M 안전) 여기서 스파이크
+    // 대신 낙구만 — 공은 짧은 토스 낙점 부근(tossX/Y)에 뚝 떨어진다(세터 근처, 히터 타점 아님). **반칙팀이면 무조건**(2026-07-28):
+    // 구 확률게이트(hop<2에서 30%)가 스파이크를 누수시켜 417 즉사 return을 부른 뿌리 — 게이트 제거로 스파이크 0 + toss 낙구 100%(가드 _dv_mischandle).
+    if (isMisc) {
+      wp.push({ x: clampN(tossX + rng.range(-10, 10), 12, W - 12), y: tossY + (att === 'home' ? 14 : -14), side: att, idx: -1, kind: 'fault', soft: true });
       return withBounce(wp, W, H);
     }
 

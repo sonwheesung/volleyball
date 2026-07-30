@@ -145,7 +145,8 @@ const easingFor = (k: Move) =>
 function jumpersFor(from: WP, to: WP, homeRot: number, awayRot: number, L: Lineups): { side: Side; idx: number }[] {
   // 서브 점프(룰 67): 스파이크 서브만 서버가 점프 타격, 플로터는 무점프(가벼운 타격 — 간결).
   if (to.kind === 'serve') return to.stype === 'spike' ? [{ side: from.side, idx: from.idx }] : [];
-  if (to.kind === 'toss') return [{ side: from.side, idx: from.idx }];
+  // 토스 점프(룰 70): 세터가 점프 세트. 단 리베로가 전위서 세트할 땐 점프 불가(courtPath가 noJump 스탬프) → 그라운드 세트.
+  if (to.kind === 'toss') return to.noJump ? [] : [{ side: from.side, idx: from.idx }];
   if (to.kind === 'spike') {
     const opp = other(from.side);
     const rot = opp === 'home' ? homeRot : awayRot;
