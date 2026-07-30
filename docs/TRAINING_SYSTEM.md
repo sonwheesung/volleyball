@@ -218,6 +218,12 @@ read-only live binding이라 몽키패치 불가)에서 (b)(c)가 FAIL함을 증
 - **③ 셀렉터 분리(성능).** `data/growthReport.ts`: `growthReport`에서 **career 계산 제거**(모달이 안 쓰므로 구간 diff만 — 로스터 전체를 매번 debut 대조하던 비용 삭감). `PlayerGrowth.career` 필드 삭제. 누적은 **단일 선수** 셀렉터 `careerGrowthOf(evolvedPlayer, campLog)`(이미 진화된 선수 재사용) / `playerCareerGrowth(id, atDay, campLog)`(편의 래퍼)로만 계산. 전지훈련 구매분 차감 로직(07-11 ②)은 그대로.
 - **가드**: `_dv_growthcamp`를 새 셀렉터(`playerCareerGrowth`) 경로로 갱신해 캠프 차감 A/B 검증(기대 날조 금지 — 실제 출력 대조). `_dv_growthreport`(구간 diff)·`_dv_growthgate`(트리거)는 그대로 PASS.
 
+### 재정정 — "입단 후 성장"에 전지훈련 **포함**(총 성장) (2026-07-30, 사용자 결정 · ⚠ **에뮬 테스트 필요**)
+- **07-11 ②의 "구매분 차감 = 순수 성장"을 반전.** 선수 상세 "입단 후 성장" 섹션이 이제 **전지훈련 성장분을 포함한 총 성장**을 보여준다(사용자 "전지훈련도 포함시키자"). 근거: ① OVR 델타는 원래 캠프 포함(curOvr−debutOvr)이라 **스탯만 차감하면 OVR↔스탯 불일치**였다 — 포함이 일관. ② 사용자 관점에서 "입단 후 성장"은 캠프 포함 실제 변화가 자연스럽다.
+- **구현**: `data/growthReport.ts` `careerGrowthOf(after)` — `campLog` 인자·`campCurGains` 차감 제거, `delta = current − debut`(캠프가 현재 스탯에 이미 구워져 자동 포함). `playerCareerGrowth(id, atDay)`도 campLog 인자 제거. `app/player/[id].tsx` 라벨 **"입단 후 성장 (전지훈련 제외)" → "입단 후 성장"**, `campLog` 셀렉터 구독 제거.
+- **가드**: `_dv_growthcamp` 반전 — 캠프 적용 후 camp-course 스탯 career 델타가 정확히 **+CAMP_CUR_GAIN 포함**(A/B: baseline과 diff=+CUR_GAIN·무변화 스탯 미포함). `_dv_campprune` P2(프룬↔차감 결합) **제거**(campLog 무관해짐), P1 프룬(시즌0 시드 재적용·저장크기)은 유지. tsc0·양 가드 PASS.
+- **⚠ 테스트 필요**: 이 화면(선수 상세 하단 "입단 후 성장" ▲N 그리드)은 반전 후 **에뮬 실기기 미검증**. 전지훈련 보낸 선수의 해당 스탯이 캠프분만큼 커진 ▲로 표시되는지 눈으로 확인 필요.
+
 ### 성장 상태 배지 (GPT ③ — 2026-07-04 구현)
 - 선수 상세 히어로에 **숫자 없는 성장 상태**를 배지로: `⚡ 빠르게 성장 중`·`📈 성장 중`·`🌟 잠재력에 근접`·`정체`. 내 팀 선수만(포텐 공개).
 - 판정(`data/growthOutlook.ts`) = **평균 남은 여력**(포텐−현재, 15스탯)+나이. avgHead<1.2=근접 · ≥4&≤22세=빠르게 · ≤32세=성장 중 · 그 외=정체. 결정론(저장 없음).

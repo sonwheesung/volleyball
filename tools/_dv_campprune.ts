@@ -5,7 +5,6 @@
 // (P2) 유닛: careerGrowthOf(선수별 전 시즌 cur-gain 누적 차감)가 프룬 후에도 정확 — slice cap이면 오답(A/B).
 import './_gt_mock';
 import { CAMP_COURSES, CAMP_CUR_GAIN, CAMP_POT_GAIN } from '../engine/diamonds';
-import { careerGrowthOf } from '../data/growthReport';
 
 const fails: string[] = [];
 const fail = (m: string) => fails.push(m);
@@ -62,47 +61,14 @@ const log = (m: string) => process.stdout.write(m + '\n');
   const prunedDistinct = new Set(pruned.map((e: any) => e.playerId)).size;
   if (prunedDistinct > liveIds.size) fail(`(P1c) 프룬 distinct 선수(${prunedDistinct}) > 리그 base(${liveIds.size}) — 유계 위반`);
 
-  // ─────────────────────────── (P2) careerGrowthOf 선수단위 보존 ───────────────────────────
-  // 한 선수가 K시즌 연속 전지훈련(course 'attack') → campCurGains는 K×cur를 course 스탯에서 차감해야.
-  // 프룬(선수 단위 보존)은 그 K개 엔트리를 온전히 남긴다. slice cap이면 오래된 엔트리가 잘려 과소차감(오답).
-  const K = 5;
-  const stats = CAMP_COURSES.attack.stats;               // 예: [skSpike, jump, consistency]
-  const debutStats: Record<string, number> = {};
-  const curStats: Record<string, number> = {};
-  for (const st of ['skSpike', 'jump', 'consistency', 'skDig', 'skServe'] as const) { debutStats[st] = 40; curStats[st] = 40; }
-  // K시즌 캠프 구매분(course 3스탯 각 K×cur) + 유기적 성장(임의 +7)을 현재 스탯에 반영
-  for (const st of stats) curStats[st] = 40 + K * CAMP_CUR_GAIN + 7; // 구매 K*cur + 유기 7
-  const after: any = { id: 'p2', name: '보존검증', position: 'OH', debut: { ovr: 50, stats: { ...debutStats } }, ...curStats };
-
-  // 대상 선수 K엔트리 + 타 선수 노이즈 엔트리(프룬이 남길 것)
-  const fullLog = [
-    ...Array.from({ length: K }, (_, i) => ({ season: i, playerId: 'p2', course: 'attack' as const, cur: CAMP_CUR_GAIN, pot: CAMP_POT_GAIN })),
-    { season: 0, playerId: 'other', course: 'attack' as const, cur: CAMP_CUR_GAIN, pot: CAMP_POT_GAIN },
-  ];
-  // 프룬(선수 단위): p2가 snapshot에 있다고 가정 → p2 엔트리 전부 보존. 노이즈(other) 은퇴 → 제거
-  const prunedLog = fullLog.filter((e) => e.playerId === 'p2');
-  // A/B(잘못된 slice cap): 최근 1개만 남김 → p2의 과거 K-1 엔트리 손실
-  const sliceCapLog = fullLog.filter((e) => e.playerId === 'p2').slice(-1);
-
-  const gFull = careerGrowthOf(after, fullLog);
-  const gPruned = careerGrowthOf(after, prunedLog);
-  const gSlice = careerGrowthOf(after, sliceCapLog);
-
-  // full/pruned가 동일 statDeltas여야(선수 단위 보존) — 프룬이 대상 선수 엔트리를 온전히 남김
-  const sameFP = JSON.stringify(gFull?.statDeltas) === JSON.stringify(gPruned?.statDeltas);
-  if (!sameFP) fail('(P2) 프룬(선수단위 보존) 결과가 full과 불일치 — 현 로스터 차감 손상');
-  // 값 기반: full 결과의 course 스탯 organic delta가 7인 항목이 ≥1(구매분 K×cur 완전 차감 확인)
-  const hasSeven = (gFull?.statDeltas ?? []).some((d: any) => d.delta === 7);
-  if (!hasSeven) fail(`(P2) full campLog에서 구매분(K×${CAMP_CUR_GAIN}) 완전 차감 실패 — 유기 성장 7 미검출 (deltas=${JSON.stringify(gFull?.statDeltas)})`);
-  // A/B: slice cap은 과거 K-1 엔트리를 잃어 과대(잘못된) organic — full과 달라야 민감도 성립
-  const sliceDiffers = JSON.stringify(gSlice?.statDeltas) !== JSON.stringify(gFull?.statDeltas);
-  if (!sliceDiffers) fail('(P2) A/B: slice cap 결과가 full과 동일 — 선수단위 보존 필요성 미검출(민감도 실패)');
+  // (P2 제거, 2026-07-30) careerGrowthOf가 campLog를 안 받게 반전(전지훈련 포함=총 성장) → 프룬-성장 결합 검증 무의미.
+  //   careerGrowthOf "전지훈련 포함" 자체는 `_dv_growthcamp.ts`(실 선수 캠프 적용 A/B)가 검증. campLog 프룬(P1)은
+  //   여전히 시즌0 시드 재적용·저장 크기용이라 유효.
 
   log('=== _dv_campprune: campLog 롤링 프룬(무한증가 봉인) ===');
   log(`(P1) ${N}시즌 · 주입(프룬없음 기준) ${everInjected.length}건 → 프룬 후 ${pruned.length}건 (distinct ${prunedDistinct} ≤ 리그 ${liveIds.size})`);
   log(`     은퇴/이탈 선수 ${departed.length}명 · 이들 엔트리 프룬 후 잔존 ${departedStillInLog.length}건(0이어야) · 고아 ${orphan.length}건(0이어야)`);
   log(`     A/B 무한증가: 프룬없음 ${everInjected.length} ≫ 프룬 ${pruned.length}  [${(everInjected.length - pruned.length)}건 제거]`);
-  log(`(P2) careerGrowthOf: full==pruned ${sameFP} · 구매분완전차감(organic 7) ${hasSeven} · A/B slice cap≠full ${sliceDiffers}`);
 
   const pass = fails.length === 0;
   log(`\nRESULT: ${pass ? 'PASS' : 'FAIL'}${fails.length ? '\n  - ' + fails.join('\n  - ') : ''}`);

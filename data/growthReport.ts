@@ -5,7 +5,6 @@
 import { evolveOnDay, currentRosters } from './league';
 import { overallRaw, displayOvr } from '../engine/overall';
 import { planNextAction } from '../engine/advance';
-import { CAMP_COURSES, CAMP_LEGACY_CUR_GAIN, type CampCourse } from '../engine/diamonds';
 import type { Fixture, MatchResult } from '../types';
 
 export interface StatDelta { label: string; delta: number; from: number; to: number } // +면 성장(초록) / -면 노쇠(빨강). from→to 이전·이후 값
@@ -13,9 +12,6 @@ export interface StatDelta { label: string; delta: number; from: number; to: num
 export interface CareerGrowth { debutOvr: number; curOvr: number; deltaOvr: number; statDeltas: StatDelta[] }
 // 모달(구간 변화 전용)에는 career를 싣지 않는다(2026-07-11 재정정 — 누적은 선수 상세로 이동). 누적은 playerCareerGrowth로 단일 선수만.
 export interface PlayerGrowth { id: string; name: string; position: string; deltas: StatDelta[] }
-
-/** 전지훈련 로그 최소 형태(store CampEntry의 표시용 부분집합 — 레이어 격리 위해 로컬 정의). */
-export interface CampLogLike { playerId: string; course?: CampCourse; stats?: string[]; cur?: number }
 
 // 선수 상세(app/player/[id].tsx StatBar)와 동일 라벨·순서(신체→공통→멘탈→기술)
 const STAT_ROWS: [string, string][] = [
@@ -26,22 +22,6 @@ const STAT_ROWS: [string, string][] = [
   ['skReceive', '리시브기술'], ['skSet', '세팅기술'], ['skServe', '서브기술'],
 ];
 
-/** 선수별 전지훈련 현재치(cur) 상승 합(스탯키별) — 커리어 누적에서 "구매분"을 빼기 위함(TRAINING §성장리포트 정정, 2026-07-11).
- *  course형: 코스 3스탯에 cur(구매 임베드 or 레거시 2) 가산 · 구 stats[]형: 지정 스탯 +1(구 개별선택 모델). */
-function campCurGains(campLog: CampLogLike[], playerId: string): Record<string, number> {
-  const g: Record<string, number> = {};
-  for (const e of campLog) {
-    if (e.playerId !== playerId) continue;
-    if (e.course && CAMP_COURSES[e.course]) {
-      const gain = e.cur ?? CAMP_LEGACY_CUR_GAIN;
-      for (const s of CAMP_COURSES[e.course].stats) g[s] = (g[s] ?? 0) + gain;
-    } else if (e.stats) {
-      const gain = e.cur ?? 1; // 구 개별선택 모델(부위당 +1)
-      for (const s of e.stats) g[s] = (g[s] ?? 0) + gain;
-    }
-  }
-  return g;
-}
 
 /** teamId 로스터의 [fromDay, toDay] 구간 모든 스탯 변화. 변화 없는 선수는 제외.
  *  모달(구간 변화 전용) 데이터 — career(누적)는 여기서 계산하지 않는다(2026-07-11 재정정, 선수 상세로 이동). */
@@ -70,26 +50,26 @@ export function growthReport(teamId: string, fromDay: number, toDay: number): Pl
 /** 이미 진화된 선수(evolveOnDay/getEvolvedPlayer 결과) 1명의 입단 이후 누적 성장.
  *  debut 스냅샷이 있을 때만(도입 후 생성 선수). campLog로 전지훈련 구매분(cur)을 스탯별로 차감해 **순수(유기적) 성장**만.
  *  선수 상세 "입단 후 성장" 카드용 — 이미 진화된 p를 재사용해 evolveOnDay 재호출 비용을 없앤다. */
-export function careerGrowthOf(after: { debut?: { ovr: number; stats: Record<string, number> } } & Record<string, unknown>, campLog: CampLogLike[] = []): CareerGrowth | undefined {
+export function careerGrowthOf(after: { debut?: { ovr: number; stats: Record<string, number> } } & Record<string, unknown>): CareerGrowth | undefined {
   if (!after.debut) return undefined;
   const a = after as unknown as Record<string, number>;
   const curOvr = Math.round(displayOvr(overallRaw(after as any)));
-  const camp = campCurGains(campLog, String((after as any).id ?? ''));
   const statDeltas: StatDelta[] = [];
   for (const [k, label] of STAT_ROWS) {
     const from = after.debut.stats[k] ?? 0;
-    const raw = (a[k] ?? 0) - from;       // 입단→현재(전지훈련 구매분 포함)
-    const organic = raw - (camp[k] ?? 0); // 구매분 차감 = 순수 성장
-    if (organic !== 0) statDeltas.push({ label, delta: organic, from, to: from + organic });
+    // 입단→현재 **총 성장**(전지훈련 포함, 2026-07-30 사용자 — 07-11 "구매분 차감=순수 성장" 반전). 전지훈련 부스트가
+    //   현재 스탯(a[k])에 이미 구워져 있어 raw가 곧 총 성장 = OVR 델타(항상 캠프 포함)와 일관(종전 스탯만 제외해 불일치였음).
+    const delta = (a[k] ?? 0) - from;
+    if (delta !== 0) statDeltas.push({ label, delta, from, to: from + delta });
   }
   return { debutOvr: after.debut.ovr, curOvr, deltaOvr: curOvr - after.debut.ovr, statDeltas };
 }
 
 /** 선수 1명의 입단 이후 누적 성장(id·날짜로 진화 후 careerGrowthOf). 가드·비UI 호출용 편의 래퍼. */
-export function playerCareerGrowth(playerId: string, atDay: number, campLog: CampLogLike[] = []): CareerGrowth | undefined {
+export function playerCareerGrowth(playerId: string, atDay: number): CareerGrowth | undefined {
   const after = evolveOnDay(playerId, atDay);
   if (!after) return undefined;
-  return careerGrowthOf(after as any, campLog);
+  return careerGrowthOf(after as any);
 }
 
 // ── 성장 리포트 트리거 게이트 (TRAINING §성장리포트, 2026-07-08 버그수정) ──

@@ -185,7 +185,6 @@ function PlayerDetailInner() {
   const benchCooldown = useGameStore((s) => s.benchCooldown);
   const bonds = useGameStore((s) => s.bonds);
   const released = useGameStore((s) => s.released);
-  const campLog = useGameStore((s) => s.campLog); // "입단 후 성장" 누적에서 전지훈련 구매분 차감용
   const [talkAsk, setTalkAsk] = useState(false);
   const [talkResult, setTalkResult] = useState<{ title: string; color: string; msg: string } | null>(null);
   const [benchAsk, setBenchAsk] = useState(false); // 벤치 건의 명분 선택 시트(네이티브 Alert 대신 커스텀 — UI-21)
@@ -270,8 +269,8 @@ function PlayerDetailInner() {
   // ── 구단주 레이어 (내 팀 선수만) ──
   const isMine = !!myTeamId && rosterIdsOnDay(myTeamId, currentDay).includes(p.id);
   // "입단 후 성장"(누적) — 내 팀 선수만("내가 키웠다" 서사·타 구단 스카우팅 흐림과 충돌 회피). 이미 진화된 p 재사용(evolveOnDay 재호출 X).
-  // 전지훈련 구매분(campLog)은 차감 → 순수(유기적) 성장만. debut 없으면(구세이브·도입 전 선수) undefined. TRAINING §성장리포트 재정정(2026-07-11).
-  const careerGrowth = isMine ? careerGrowthOf(p as any, campLog) : undefined;
+  // **전지훈련 포함 총 성장**(2026-07-30 사용자 — 07-11 "구매분 차감" 반전). debut 없으면(구세이브·도입 전 선수) undefined.
+  const careerGrowth = isMine ? careerGrowthOf(p as any) : undefined;
   const careerUps = careerGrowth ? careerGrowth.statDeltas.filter((d) => d.delta > 0).sort((a, b) => b.delta - a.delta) : [];
   // 스카우팅 공개도 — 내 팀 선수는 전부(포텐까지) 보이고, 타 구단 선수는 스카우터 공개도만큼만(흐림). STAFF_SYSTEM
   const reveal = isMine ? 1 : (myTeamId ? teamScoutReveal(myTeamId) : 1);
@@ -761,10 +760,10 @@ function PlayerDetailInner() {
         <StatBar label="서브기술" value={p.skServe} reveal={reveal} potential={pot('skServe')} />
       </Card>
 
-      {/* 입단 후 성장 — 내 팀 선수만, 상승 스탯만 ▲N(전지훈련 제외 = 순수 성장). 상승 0이면 섹션 숨김. TRAINING §성장리포트(2026-07-11 재정정) */}
+      {/* 입단 후 성장 — 내 팀 선수만, 상승 스탯만 ▲N(전지훈련 포함 = 총 성장, 2026-07-30 사용자). 상승 0이면 섹션 숨김. TRAINING §성장리포트 */}
       {isMine && careerUps.length > 0 ? (
         <>
-          <IconLabel icon="trending-up-outline" color={theme.good}>입단 후 성장 (전지훈련 제외)</IconLabel>
+          <IconLabel icon="trending-up-outline" color={theme.good}>입단 후 성장</IconLabel>
           <Card accent={theme.good} flat>
             <View style={styles.growWrap}>
               {careerUps.map((d) => (

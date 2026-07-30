@@ -179,7 +179,10 @@ export default function Settings() {
       return;
     }
     // 최대 5개(서버 유지분) 행 + 취소 — 기존 showAlert 세로 버튼 스택(신규 Modal 금지 #129).
-    const buttons: DialogButton[] = r.backups.map((b) => ({
+    // 정렬: **시즌 내림차순**(2026-07-30 사용자 — 서버 createdAt 순은 재시작 세이브가 섞이면 시즌번호가 뒤죽박죽으로 보임).
+    //   같은 시즌은 UNIQUE(proj,user,season)로 1개뿐이라 안정. ⚠ 에뮬 미검증 — SAVE_SYSTEM §10.4 "테스트 필요".
+    const sorted = r.backups.slice().sort((a, b) => b.season - a.season);
+    const buttons: DialogButton[] = sorted.map((b) => ({
       text: `${seasonYear(b.season)} · ${fmtBackupDate(b.createdAt)} · ${fmtBackupSize(b.sizeBytes)}`,
       onPress: () => { void onPickServerBackup(b.id); },
     }));

@@ -437,6 +437,7 @@
 ### 10.1 API 계약 (서버와 공유 — 고정)
 - `POST /api/save-backup` (Bearer) body `{ season:number, payload:string }` → `{ ok:true, id, keptCount }`. payload = §9.1 봉투 문자열 그대로. 서버는 계정당 **최근 5개** 유지(초과 삭제 = `keptCount`).
 - `GET /api/save-backup` (Bearer) → `{ ok:true, backups:[{ id, season, createdAt, sizeBytes, saveVersion }] }` 최신순.
+  - **복원 목록 표시 정렬(2026-07-30, 사용자 · ⚠ 에뮬 테스트 필요)**: 서버 `최신순`(createdAt desc)은 **재시작 세이브가 섞이면 시즌 번호가 뒤죽박죽**으로 보인다(테스터: 2025-26이 맨 위, 그다음 2028→2027→2026). `app/settings.tsx`가 목록을 **시즌 내림차순**(`sort((a,b)=>b.season−a.season)`)으로 재정렬해 표시(같은 시즌은 서버 UNIQUE(proj,user,season)로 1개뿐이라 안정). 서버 응답·API 불변, 클라 표시 정렬만. **미검증**: 실기기에서 백업 목록이 시즌 내림차순으로 뜨는지 눈 확인 필요.
 - `GET /api/save-backup/<id>` (Bearer) → `{ ok:true, payload:string }`.
 - 서버 통신은 `lib/server.ts` 패턴 미러(**Bearer 주입·타임아웃·throw 없음**). Bearer는 `useAuthStore.session.token`, base는 `EXPO_PUBLIC_SERVER_URL`. 미설정/네트워크 실패는 `offline`로 조용히 흡수 — 관전/시뮬은 이 계층을 안 탄다(로컬 결정론).
 
