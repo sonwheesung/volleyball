@@ -118,7 +118,9 @@ export default function MyPage() {
     showAlert('게임 초기화 (개발용)', '게임을 초기화하고 온보딩부터 다시 시작합니다. 진행 상황이 사라집니다. (개발용)', [
       { text: '취소', style: 'cancel' },
       { text: '초기화', style: 'destructive', onPress: () => {
-        resetSave(); // 세이브 초기화(selectedTeamId=null, seenTips 비움 → 스포트라이트 재생). onboarded·claimedAch는 보존됨.
+        resetSave(); // 세이브 초기화(selectedTeamId=null). onboarded·claimedAch·seenTips는 보존(운영 세이브 초기화와 동일).
+        // dev 전용: 온보딩을 **완전 재현**하려고 스포트라이트(seenTips)도 초기화한다(운영 세이브 초기화는 보존, 2026-07-30).
+        useGameStore.getState().resetTips();
         // resetSave가 claimedAch를 보존하므로 그 뒤에 환영 다이아 센티넬을 제거 → 개발 환영 지급이 다시 트리거되게.
         useGameStore.setState((s) => ({ claimedAch: s.claimedAch.filter((id) => id !== '__welcome_local__') }));
         replayOnboarding(); // onboarded=false → (tabs) 게이트가 온보딩 인트로로. 첫 진입 완전 재현.

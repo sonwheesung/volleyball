@@ -1658,10 +1658,12 @@ export const useGameStore = create<GameState>()(
         setAwardScores([]);
         setSeasonHistory([]); // 모기업 기조(FINANCE 2.0) 컨텍스트 리셋
         setSalaryEra(MED_REF); // 시대 앵커 리셋(시대 0)
-        // 전체 데이터 초기화 = 새 출발 → 스포트라이트 본 기록도 리셋(튜토리얼 다시 봄). 인트로 슬라이드(onboarded)는
-        // 유지(다시보기는 replayOnboarding). seenTips는 freshSave 밖이라 명시적으로 비운다(ONBOARDING 4).
+        // 전체 데이터 초기화 = 새 출발. 단 **스포트라이트 튜토리얼(seenTips)은 보존**(2026-07-30 사용자 — 운영 세이브 초기화는
+        // 구단만 바꾸는데 이미 본 튜토리얼을 다시 보게 하지 않는다. line 111 "초기화해도 유지" 선언과도 정합). seenTips는
+        // freshSave 밖이라 여기서 명시하지 않으면 자동 보존. 인트로 슬라이드(onboarded)도 유지(다시보기는 replayOnboarding).
+        // dev "게임 초기화"(mypage)만 온보딩 완전 재현 위해 그 뒤 resetTips()를 별도 호출한다(ONBOARDING §4).
         // **계정 재화·업적수령·광고상태는 유지**(§13.19 — 서버 진실·계정 평생). saveId만 새로(camp 재과금 정당).
-        set({ ...freshSave, seenTips: {}, saveId: newSaveId(), diamonds: prev.diamonds, claimedAch: prev.claimedAch, adState: prev.adState });
+        set({ ...freshSave, saveId: newSaveId(), diamonds: prev.diamonds, claimedAch: prev.claimedAch, adState: prev.adState });
       },
       completeOnboarding: () => set({ onboarded: true }),
       replayOnboarding: () => set({ onboarded: false }),
