@@ -47,6 +47,7 @@ export function BootGate({ children }: { children: ReactNode }) {
   const [boot, setBoot] = useState<BootstrapData | null | undefined>(undefined); // undefined=조회중, null=오프라인/실패(게이트 스킵)
   const [reloadKey, setReloadKey] = useState(0);
   const [applyingOta, setApplyingOta] = useState(false); // 부팅 OTA fetch 중 '업데이트 적용 중' 스플래시(§4)
+  const [otaDone, setOtaDone] = useState(false); // OTA 점검·적용 해소 완료(홈 렌더 게이트 — 홈 도착 후 업데이트 팝업 방지, 2026-07-30 사용자)
   // isUpdatePending: ON_LOAD(현행 빌드 기본)가 백그라운드로 이미 받아둔 업데이트가 적용 대기 중인지.
   //   expo-updates 29엔 top-level `Updates.isUpdatePending`가 없어 공식 훅 useUpdates()로 읽는다(문서 권장 패턴).
   //   dev/Expo Go(isEnabled=false)·web에서도 안전(기본값 false 반환, 리스너 미발화).
@@ -70,14 +71,17 @@ export function BootGate({ children }: { children: ReactNode }) {
   }, [reloadKey]);
 
   // 부팅 OTA 자동 적용(AUTH_SYSTEM §4) — 요즘 게임식 "패치 로딩". JS 생명주기당 1회, boot 확정 후.
-  //   pending-first(ON_LOAD가 받아둔 것 즉시 적용) → 없으면 check→fetch→reload. 전 구간 비차단(try/catch)이라
-  //   타임아웃·오프라인·에러 시 현행 버전으로 조용히 진입 — 게임 진입을 절대 막지 않는다.
+  //   pending-first(ON_LOAD가 받아둔 것 즉시 적용) → 없으면 check→fetch→reload.
+  //   **차단(2026-07-30 사용자)**: 점검이 끝날 때까지 로딩 화면을 유지(홈 렌더 게이트 otaDone) — 종전엔 비차단이라 홈이 먼저 뜬 뒤
+  //   check가 뒤늦게 업데이트를 발견해 "업데이트 적용 중"이 홈 위로 튀어나왔다. 이제 로딩 중에 점검·적용을 끝낸다. 단 타임아웃(check
+  //   4s·fetch 9s)·오프라인·에러 시엔 즉시 통과(setOtaDone) — 게임 진입을 무한정 막지 않는다(업데이트 있을 때만 로딩이 길어짐).
   //   reload는 콜드부팅과 동치이고 재수화(zustand persist·initFaBackfillPool 등)는 멱등이라 반복 리로드에 안전.
   const runBootOta = useCallback(async (b: BootstrapData | null) => {
-    if (!Updates.isEnabled || otaAttempted) return; // dev/Expo Go/web 무동작(정상)
+    const proceed = () => setOtaDone(true); // OTA 해소 완료 → 홈 게이트 통과. reload 경로에선 호출 안 함(리로드가 화면 대체).
+    if (!Updates.isEnabled || otaAttempted) { proceed(); return; } // dev/Expo Go/web·재진입 → 즉시 통과(무동작 정상)
     // 원격 킬스위치: 서버 bootstrap이 otaAutoApply:false를 주면 차단(기본 on). 아직 BootstrapData 타입 계약엔
     //   없는 전방호환 훅이라 구조적 캐스트로 읽는다(서버가 내려주면 잡히고, 없으면 undefined→기본 on).
-    if (!otaAutoApplyEnabled(b as { otaAutoApply?: boolean } | null)) return;
+    if (!otaAutoApplyEnabled(b as { otaAutoApply?: boolean } | null)) { proceed(); return; }
     otaAttempted = true;
     const season = useGameStore.getState().season ?? 0; // 진단 태그(부팅이라 세이브 시즌 그대로)
     try {
@@ -85,21 +89,23 @@ export function BootGate({ children }: { children: ReactNode }) {
         // ON_LOAD가 이미 받아둔 업데이트 → 재fetch 생략, 즉시 적용(협조)
         diag(season, 'ota', '부팅 OTA: pending 즉시 적용 → reload');
         await Updates.reloadAsync();
-        return;
+        return; // reload — proceed 안 함(새 JS 생명주기가 화면 대체)
       }
       const r = await withTimeout(Updates.checkForUpdateAsync(), OTA_CHECK_TIMEOUT_MS);
       if (r.isAvailable) {
-        setApplyingOta(true); // 여기서만 스플래시 — check(최신이면 다수)엔 안 띄워 매 부팅 "패치 로딩" 남발 방지
+        setApplyingOta(true); // fetch 구간엔 '업데이트 적용 중' 스플래시(check만 하는 최신 부팅엔 안 띄워 남발 방지 — 그 경우 아래 proceed로 즉시 통과)
         diag(season, 'ota', '부팅 OTA: 업데이트 발견 → fetch');
         await withTimeout(Updates.fetchUpdateAsync(), OTA_FETCH_TIMEOUT_MS);
         diag(season, 'ota', '부팅 OTA: fetch 완료 → reload');
         await Updates.reloadAsync();
-      } else {
-        diag(season, 'ota', '부팅 OTA: 최신(업데이트 없음)');
+        return; // reload — proceed 안 함
       }
+      diag(season, 'ota', '부팅 OTA: 최신(업데이트 없음)');
+      proceed(); // 업데이트 없음 → 홈으로
     } catch (e) {
-      setApplyingOta(false); // 비차단 — 조용히 통과(현행 버전 진입)
+      setApplyingOta(false); // 타임아웃/오프라인/에러 → 현행 버전으로 조용히 통과(무한 대기 금지)
       diag(season, 'ota', `부팅 OTA: 스킵(에러/타임아웃) ${e instanceof Error ? e.message : String(e)}`);
+      proceed();
     }
   }, [isUpdatePending]);
 
@@ -138,6 +144,10 @@ export function BootGate({ children }: { children: ReactNode }) {
   if (applyingOta) return <Loading variant="brand" message="업데이트 적용 중" />;
 
   if (!authHydrated || boot === undefined) return <Loading variant="brand" />;
+
+  // OTA 점검이 끝날 때까지 홈 렌더 보류(2026-07-30 사용자) — 로딩 화면에서 업데이트를 마치고, 홈 도착 후 팝업이 안 뜨게.
+  //   업데이트 없음/타임아웃/오프라인/에러/dev면 runBootOta가 즉시 otaDone=true → 통과. 업데이트 있으면 위 applyingOta 스플래시 후 reload.
+  if (!otaDone) return <Loading variant="brand" />;
 
   // ① 서버 점검 — 진입 차단
   if (boot && boot.maintenance.active) {

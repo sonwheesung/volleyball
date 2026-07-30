@@ -61,7 +61,11 @@
   없으면 `checkForUpdateAsync` → `isAvailable`이면 `'업데이트 적용 중'` 스플래시 후 `fetchUpdateAsync` → `reloadAsync`.
   스플래시는 **fetch 구간에만**(check는 대개 "최신"이라 매 부팅 패치로딩 남발 방지). dismiss 불가.
 - **타임아웃**: check 4s / fetch 9s(`lib/otaGate.ts OTA_CHECK_TIMEOUT_MS·OTA_FETCH_TIMEOUT_MS`, check<fetch). 순수 `withTimeout` 레이스.
-- **비차단**: 전 구간 try/catch — 타임아웃·오프라인·에러 시 `applyingOta=false` 후 **현행 버전으로 조용히 진입**. 게임 진입을 절대 막지 않음.
+- **로딩 중 차단 해소(2026-07-30 사용자 정정, 구 "비차단"에서 전환)**: 종전엔 OTA 점검이 홈 렌더를 막지 않아(비차단), **홈이 먼저 뜬 뒤 check가 뒤늦게
+  업데이트를 발견해 "업데이트 적용 중"이 홈 위로 튀어나왔다**(테스터 보고). 이제 **점검이 끝날 때까지 로딩 화면 유지**(`otaDone` state 게이트 — `!otaDone`이면
+  브랜드 Loading, 홈 렌더 보류) → 로딩 중에 점검·적용을 끝낸다. **여전히 무한 대기는 금지**: 업데이트 없음/타임아웃(check 4s·fetch 9s)/오프라인/에러/dev면
+  `runBootOta`가 `setOtaDone(true)`로 즉시 통과(현행 버전 진입). 업데이트 있을 때만 로딩이 fetch 만큼 길어진다(그 구간은 '업데이트 적용 중' 스플래시).
+  reload 경로는 `otaDone`을 건드리지 않음(리로드가 화면을 대체). 게이트 순서: auth/boot 재수화 → **OTA 해소** → 점검/강제업뎃/로그인/슬롯 → 홈.
 - **dev 무동작**: `Updates.isEnabled`(dev/Expo Go/web=false)면 즉시 return — 정상(에뮬 Expo Go에선 아무 일도 안 일어남).
 - **킬스위치**: 서버 bootstrap `otaAutoApply:false`면 차단(`otaAutoApplyEnabled`, 기본 on — undefined/null/{}/true 모두 허용). 아직
   `BootstrapData` 타입 계약엔 없는 **전방호환 훅**(BootGate에서 구조적 캐스트로 읽음). 서버가 실제로 내려줄 땐 타입 승격 검토.
