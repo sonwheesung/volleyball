@@ -131,24 +131,37 @@ function ScheduleInner() {
     showAlert('시즌 즉시 완료 (개발)', '정규리그 전 경기를 결정론 결과로 기록했습니다. "포스트시즌 →"으로 진행하세요.');
   };
 
+  // 표시 OVR = **예상 선발 라인업 평균**(2026-07-30 사용자) — 모달 "상대 라인업 보기"와 동일 소스(buildLineup 6+리베로 ·
+  //   per-player displayOvr). 종전 teamOverallRaw(전체 top7 raw)는 스트레치 없어 모달 선발(94~99)과 어긋나 혼란(87 vs 라인업).
+  const lineupOvr = (tid: string, dayIndex: number): number => {
+    const rest = restedOnDay(tid, dayIndex);
+    const avail = availableTeamPlayers(tid, dayIndex);
+    const squad = rest.size ? avail.filter((p) => !rest.has(p.id)) : avail;
+    if (!squad.length) return 0;
+    const { six, libero } = buildLineup(squad, coachInfoOf(tid)?.dvPhilosophy ?? 0, promotedOnDay(tid, dayIndex));
+    const lineup = [...six, ...(libero ? [libero] : [])];
+    return Math.round(lineup.reduce((s, p) => s + displayOvr(overallRaw(p)), 0) / lineup.length);
+  };
   const preview = nextFixture
     ? (() => {
         const isHome = nextFixture.homeTeamId === teamId;
         const oppId = isHome ? nextFixture.awayTeamId : nextFixture.homeTeamId;
-        // 프리뷰 전력 = 그 경기에 실제로 나설 출전 가능 명단(부상·결장 반영) — 경기/리플레이와 동일 소스(EC-UI-01 동류)
-        const myOvr = teamOverallRaw(availableTeamPlayers(teamId, nextFixture.dayIndex));
-        const oppOvr = teamOverallRaw(availableTeamPlayers(oppId, nextFixture.dayIndex));
+        // 표시 OVR = 예상 선발 라인업 평균(모달과 동일). 프레이밍(접전·강팀 임계)은 raw 스케일 유지(teamOverallRaw, 임계 튜닝 보존).
+        const myOvr = lineupOvr(teamId, nextFixture.dayIndex);
+        const oppOvr = lineupOvr(oppId, nextFixture.dayIndex);
+        const myOvrRaw = teamOverallRaw(availableTeamPlayers(teamId, nextFixture.dayIndex));
+        const oppOvrRaw = teamOverallRaw(availableTeamPlayers(oppId, nextFixture.dayIndex));
         // 빅매치 판정(Phase 4): 순위 직결이 1순위 — 상위권 맞대결·종반 인접 순위전. 그 다음 접전/강팀
         const standings = computeStandings(displayCutoff(currentDay, results, teamId)); // 결과 인지 표시 컷오프(§3.3)
         const myRank = Math.max(1, standings.findIndex((r) => r.teamId === teamId) + 1);
         const oppRank = Math.max(1, standings.findIndex((r) => r.teamId === oppId) + 1);
         const big = isBigMatch(myRank, oppRank, nextFixture.dayIndex);
-        const margin = Math.abs(myOvr - oppOvr);
+        const margin = Math.abs(myOvrRaw - oppOvrRaw); // 접전 판정은 raw 스케일(임계 튜닝 보존)
         const late = totalMatches > 0 && playedCount / totalMatches >= 0.8;
         const isRival = rival?.teamId === oppId;
         // 라이벌전이 최우선 프레이밍(숙적은 순위 무관하게 기대됨)
         const reason = isRival ? `🔥 라이벌전, 숙적 ${getTeam(oppId)?.name ?? ''}`
-          : big ? `🔥 빅매치, ${myRank}위 vs ${oppRank}위` : margin <= 3 ? '접전 예상' : oppOvr >= 76 ? '강팀 상대' : late ? '시즌 막바지' : null;
+          : big ? `🔥 빅매치, ${myRank}위 vs ${oppRank}위` : margin <= 3 ? '접전 예상' : oppOvrRaw >= 76 ? '강팀 상대' : late ? '시즌 막바지' : null;
         const rivalNote = isRival && rival ? `최근 순위 경쟁 ${rival.adjacent}회 · 시즌 상대전적 ${rival.h2hW}승 ${rival.h2hL}패` : null;
         return { isHome, oppName: getTeam(oppId)?.name ?? '', myOvr, oppOvr, important: !!reason, reason, isRival, rivalNote };
       })()
