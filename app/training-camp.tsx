@@ -256,7 +256,7 @@ export default function TrainingCamp() {
       setSending(null);
     }
     if (r.ok) {
-      showAlert('전지훈련 완료', `${player.name} 선수가 ${CAMP_COURSES[course].label}을 마치고 왔습니다. 열린 성장 한계는 이후 시즌 성장으로 실현됩니다.`);
+      showAlert('전지훈련 완료', `${player.name} 선수가 ${CAMP_COURSES[course].label}을 마치고 왔습니다.`);
       setPicked(null); setCourse(null); force((n) => n + 1);
     } else {
       showAlert(r.reason === 'offline' ? '온라인 연결 필요' : '전지훈련 불가',

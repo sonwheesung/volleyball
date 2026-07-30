@@ -108,7 +108,7 @@ export default function MyPage() {
     ? session.displayName || (session.provider === 'dev' ? '개발자 계정' : session.provider === 'google' ? 'Google 계정' : session.provider === 'apple' ? 'Apple 계정' : '계정')
     : null;
   const confirmLogout = () => {
-    showAlert('로그아웃', '로그아웃하시겠어요? 다시 로그인하면 다이아·구매 내역이 그대로 복원됩니다.', [
+    showAlert('로그아웃', '로그아웃하시겠어요?', [
       { text: '취소', style: 'cancel' },
       { text: '로그아웃', style: 'destructive', onPress: () => signOut() }, // 세션 제거 → BootGate가 로그인 벽으로 전환
     ]);

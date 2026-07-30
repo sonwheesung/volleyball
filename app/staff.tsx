@@ -148,7 +148,7 @@ export default function Staff() {
       { text: '영입', onPress: () => heavyAction(() => { if (!hireAssistant(id)) overBudget(`${name} 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 코치가 합류했습니다.`); }, `${name} 코치가 합류해\n훈련 계획을 짜는 중…`) },
     ]);
   const tryReleaseAsst = (id: string, name: string) =>
-    showAlert('코치 방출', `${name} 코치를 방출하시겠습니까?\n\n전력 변화로 시즌을 다시 계산합니다.`, [
+    showAlert('코치 방출', `${name} 코치를 방출하시겠습니까?`, [
       { text: '취소', style: 'cancel' },
       { text: '방출', style: 'destructive', onPress: () => heavyAction(() => { releaseAssistant(id); showAlert('방출 완료', `${name} 코치가 팀을 떠났습니다.`); }, `${name} 코치가 짐을 정리하고\n팀을 떠날 준비를 하는 중…`) },
     ]);
