@@ -194,7 +194,7 @@ export default function BuyDiamonds() {
         showAlert('구매 완료', `${r.amount.toLocaleString()} 💎가 지급되었습니다. 감사합니다!`);
       } else {
         // 아직 반영 전 — "지급 완료"로 단정하지 않고 잠시 후 반영 안내(오지급 오인 방지).
-        showAlert('결제 확인됨', '결제가 확인되면 다이아가 잠시 후 반영됩니다. 반영이 늦으면 잔액을 다시 확인해 주세요.');
+        showAlert('결제 확인됨', '결제가 확인되면 다이아가 잠시 후 반영됩니다.');
       }
     } finally {
       setBuyingTier(null);
@@ -226,7 +226,7 @@ export default function BuyDiamonds() {
       const st = useGameStore.getState().passStatus;
       if (st?.queued && wasActive) showAlert('예약 완료', '현재 패스가 만료되면 새 패스가 이어서 시작됩니다.');
       else if (st?.active) showAlert('구매 완료', `다이아 패스가 시작됐어요. 1일차 ${PASS_DAILY_REWARD}💎 우편이 우편함에 도착했어요. 우편함에서 받아가세요!`);
-      else showAlert('결제 확인됨', '결제가 확인되면 패스가 잠시 후 활성화됩니다. 반영이 늦으면 잔액·패스 상태를 다시 확인해 주세요.');
+      else showAlert('결제 확인됨', '결제가 확인되면 패스가 잠시 후 활성화됩니다.');
     } finally {
       setBuyingPass(false);
     }

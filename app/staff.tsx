@@ -122,15 +122,15 @@ export default function Staff() {
     }
     showAlert('감독 영입', `${name} 감독을 영입하시겠습니까?\n연봉 ${formatMoney(salary)} · ${STAFF_CONTRACT_YEARS}년 계약`, [
       { text: '취소', style: 'cancel' },
-      { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다. 새 감독의 성향으로 팀이 움직입니다.`); }, `${name} 감독이 부임해\n선수들에게 전술을 설명하는 중…`) },
+      { text: '영입', onPress: () => heavyAction(() => { if (!hireCoach(id)) overBudget(`${name} 감독 영입(연봉 ${formatMoney(salary)}) 불가.`); else showAlert('영입 완료', `${name} 감독이 부임했습니다.`); }, `${name} 감독이 부임해\n선수들에게 전술을 설명하는 중…`) },
     ]);
   };
   // 카운터오퍼(1회, §9.6-C) — 요구 연봉보다 낮춘 두 제안 중 선택. 결렬 시 감독 FA(무거움 → heavyAction).
   const runCounter = (offered: number) => {
     const r = counterOfferCoach(offered);
     if (!r.done) { showAlert('카운터오퍼 불가', r.already ? '이번 오프시즌엔 이미 카운터오퍼를 제시했습니다.' : '현재 감독이 없습니다.'); return; }
-    if (r.accept) showAlert('카운터오퍼 수락', `${head!.name} 감독이 ${formatMoney(offered)}에 재계약했습니다.\n수락 확률 ${Math.round((r.prob ?? 0) * 100)}%였습니다.`);
-    else showAlert('카운터오퍼 결렬', `${head!.name} 감독이 제안을 거절하고 FA로 떠났습니다.\n수락 확률 ${Math.round((r.prob ?? 0) * 100)}%${r.rivals ? ` · 관심 구단 ${r.rivals}곳` : ''}. 새 감독을 영입하세요.`);
+    if (r.accept) showAlert('카운터오퍼 수락', `${head!.name} 감독이 ${formatMoney(offered)}에 재계약했습니다.`);
+    else showAlert('카운터오퍼 결렬', `${head!.name} 감독이 제안을 거절하고 FA로 떠났습니다.${r.rivals ? `\n관심 구단 ${r.rivals}곳.` : ''}\n새 감독을 영입하세요.`);
   };
   const tryCounterOffer = () => {
     if (!head) return;
