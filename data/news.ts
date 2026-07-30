@@ -18,6 +18,7 @@ import { topFriendOnTeam } from './relationships';
 import { popularityNow } from './owner';
 import { seasonInjuryReport } from './injury';
 import { seasonMatchProds } from './production';
+import { seasonResults } from './standings';
 import { SEVERITY_KO } from '../engine/injury';
 import { seasonScandals } from './dynamics';
 import { seasonClinchTransitions } from './clinch';
@@ -153,6 +154,10 @@ const POOLS: Record<string, { open: string[]; close: string[] }> = {
   biggame: {
     open: ['한 경기를 통째로 끌고 갔다.', '폭발적인 한 경기였다.', '코트의 중심에 선 하루였다.'],
     close: ['이런 경기가 팀의 순위 싸움을 떠받친다.', '에이스의 무게를 숫자로 증명했다.', '시즌 베스트 게임으로 손꼽힐 활약이었다.'],
+  },
+  biggameLoss: { // 패배 속 개인 폭발 — 승리 톤 오용 방지(2026-07-30 테스터: 2:3 패배인데 승리 톤). 사실 절 불변, 프레이밍만 패배 톤.
+    open: ['팀은 졌지만, 이 선수만은 멈추지 않았다.', '패배 속에서도 홀로 빛났다.', '결과는 아쉬웠지만 존재감만은 또렷했다.'],
+    close: ['값진 분전이었지만 승리로 잇지 못했다.', '패배가 더 아쉬운 대활약이었다.', '혼자 힘으로 승부를 뒤집기엔 부족했다.'],
   },
   transfer: {
     open: ['오프시즌 FA 시장이 움직였다.', '한 선수의 거취가 정해졌다.', 'FA 시장에 또 하나의 계약이 성사됐다.', 'FA 시장의 한 페이지가 넘어갔다.'],
@@ -656,7 +661,14 @@ export function buildNewsFeed(
   const debuted = new Set<string>(); // 이번 시즌 첫 선발 1회만
   // 트리플 크라운·한 경기 폭발은 선수당 1건으로 묶는다(한 시즌 8건 폭주 방지, 2026-06-25 에디터) — 시즌 N번째/최고 경기.
   const tc = new Map<string, { count: number; tid: string; name: string; back: number; b: number; a: number; day: number }>();
-  const bg = new Map<string, { tid: string; name: string; points: number; spikes: number; aces: number; blocks: number; opp: string; day: number }>();
+  const bg = new Map<string, { tid: string; name: string; points: number; spikes: number; aces: number; blocks: number; opp: string; day: number; won: boolean }>();
+  // 한 경기 폭발 기사의 승패 인지(2026-07-30) — biggame 카피가 승리 톤 전용이라 패배 속 개인 폭발이 이긴 것처럼 읽혔다(테스터 보고).
+  // seasonResults(leagueDay)는 seasonMatchProds와 같은 컷오프의 캐시된 시드 재생(결정론·저비용). day+team → 승리 여부 룩업 1회 구축.
+  const wonByDayTeam = new Map<string, boolean>();
+  for (const r of seasonResults(leagueDay)) {
+    wonByDayTeam.set(`${r.dayIndex}:${r.homeTeamId}`, r.homeSets > r.awaySets);
+    wonByDayTeam.set(`${r.dayIndex}:${r.awayTeamId}`, r.awaySets > r.homeSets);
+  }
   for (const mp of seasonMatchProds(leagueDay)) {
     const teamOf = (id: string) => (mp.homeIds.has(id) ? mp.homeTeamId : mp.awayTeamId);
     for (const [id, l] of mp.lines) {
@@ -698,7 +710,7 @@ export function buildNewsFeed(
       // 한 경기 폭발(커리어하이급) — 30점 이상(데뷔 기사로 이미 다룬 경기는 제외). 선수당 시즌 최고 경기만.
       else if (l.points >= BIG_GAME) {
         const e = bg.get(id);
-        if (!e || l.points > e.points) bg.set(id, { tid, name: p.name, points: l.points, spikes: l.spikes, aces: l.aces, blocks: l.blocks, opp, day: mp.dayIndex });
+        if (!e || l.points > e.points) bg.set(id, { tid, name: p.name, points: l.points, spikes: l.spikes, aces: l.aces, blocks: l.blocks, opp, day: mp.dayIndex, won: wonByDayTeam.get(`${mp.dayIndex}:${tid}`) ?? true });
       }
     }
   }
@@ -710,9 +722,10 @@ export function buildNewsFeed(
   }
   // 한 경기 폭발 — 선수당 시즌 최고 경기 1건
   for (const [id, e] of bg) {
+    const ch = e.won ? 'biggame' : 'biggameLoss';
     push(currentSeason, 'match', `${e.name}, 한 경기 ${e.points}점 폭발`, e.points >= 35, e.tid,
-      body3('biggame', `${currentSeason}:bg:${id}`, more(
-        `${e.name}(${teamName(e.tid)})이(가) 한 경기 ${e.points}점을 몰아쳤다. 팀 공격을 통째로 짊어진 하루였다.`,
+      body3(ch, `${currentSeason}:bg:${id}`, more(
+        `${e.name}(${teamName(e.tid)})이(가) 한 경기 ${e.points}점을 몰아쳤다. ${e.won ? '팀 공격을 통째로 짊어진 하루였다.' : '팀은 아쉽게 졌지만, 공격만은 오롯이 이 선수의 몫이었다.'}`,
         // 0인 스탯은 빼고 나열(공격수 "블로킹 0개" 박제 방지 — 위 480 라인과 동일 원칙, 테스터 2026-07-29)
         `상대 ${teamName(e.opp)}을(를) 상대로 ${[
           e.spikes > 0 ? `공격 성공 ${e.spikes}개` : '',
