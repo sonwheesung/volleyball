@@ -23,7 +23,6 @@ import { useGameStore } from '../store/useGameStore';
 import type { ProdLine } from '../engine/production';
 import type { AwardWinner, Position, SeasonAwards } from '../types';
 
-const AWARD_MIN_GAMES = 12; // 잠정 시상 노출 최소 경기수(팀당, 36경기 시즌의 1/3)
 const MEDAL = ['🥇', '🥈', '🥉'];
 
 // ─── 작은 세그먼트 컨트롤 ──────────────────────────────────────
@@ -153,11 +152,10 @@ function SeasonView({
   pName: (id: string) => string; pPos: (id: string) => Position; isMine: (id: string) => boolean;
 }) {
   const aw = snap.awards;
-  // 잠정 라벨: 진행 중 + 아직 시즌 미완료(§3.3 seasonComplete). 구 `currentDay < 164`는 시즌말 라벨을 하루 일찍 떼던 결함.
+  // 진행 중 판정: 현재 시즌 + 아직 시즌 미완료(§3.3 seasonComplete). 구 `currentDay < 164`는 시즌말 라벨을 하루 일찍 떼던 결함.
+  // 시상식류(MVP·신인상·베스트7·부문 기록상)는 진행 중엔 숨기고 시즌 종료 후에만 노출한다
+  // (2026-07-30 테스터: "시상은 시상식에 나와야 의미가 있다" — 잠정 노출 폐지, AWARDS_SYSTEM §6).
   const provisional = snap.isCurrent && !seasonOver;
-  // 잠정 시상은 시즌이 무르익은 뒤에만 — 2~3경기에 "MVP·득점왕"은 무의미(36경기 중 1/3=12 경과 기준).
-  const gamesPlayed = snap.standings.reduce((mx, s) => Math.max(mx, s.wins + s.losses), 0);
-  const awardsReady = !snap.isCurrent || gamesPlayed >= AWARD_MIN_GAMES;
 
   const awName = (w: AwardWinner | null) => (w ? pName(w.playerId) : '—');
 
@@ -172,7 +170,7 @@ function SeasonView({
         <View style={styles.stepCenter}>
           <Text style={styles.stepSeason}>{seasonYear(viewSeason)}</Text>
           {snap.isCurrent ? (
-            <Text style={[styles.stepTag, { color: theme.accent }]}>진행 중{provisional ? ' · 잠정' : ''}</Text>
+            <Text style={[styles.stepTag, { color: theme.accent }]}>진행 중</Text>
           ) : snap.championId ? (
             <Text style={[styles.stepTag, { color: theme.warn }]}>🏆 {getTeam(snap.championId)?.name ?? short(snap.championId)}</Text>
           ) : null}
@@ -183,8 +181,8 @@ function SeasonView({
         </Pressable>
       </View>
 
-      {/* 시상식 — 시즌이 충분히 진행된 뒤에만(잠정 포함) */}
-      {aw && aw.mvp && awardsReady ? (
+      {/* 시상식 — 시즌 종료 후에만(진행 중엔 숨김, 시상식에서 공개). AWARDS_SYSTEM §6 */}
+      {!provisional && aw && aw.mvp ? (
         <>
           <Card accent={theme.gold} flat>
             {/* 시즌 MVP 트로피 배너 — MVP 소속 구단 색(AWARDS_SYSTEM §6) */}
@@ -244,12 +242,12 @@ function SeasonView({
             <Best7Court best7={aw.best7} myTeamId={teamId} nameOf={pName} />
           </Card>
         </>
-      ) : snap.isCurrent && !awardsReady ? (
+      ) : provisional ? (
         <Card accent={theme.gold} flat>
           <Text style={styles.cardHead}>시상식</Text>
           <Muted style={{ fontSize: 12.5 }}>
-            아직 시즌 초반입니다 ({gamesPlayed}경기). 정규리그가 1/3({AWARD_MIN_GAMES}경기) 넘게 진행되면
-            잠정 MVP·부문 기록상 윤곽이 잡힙니다. 지금은 아래 순위·리더보드로 흐름을 보세요.
+            MVP·신인상·베스트7 등 시상 기록은 시즌이 끝난 뒤 시상식에서 공개됩니다.
+            지금은 아래 순위표와 개인 기록 리더보드로 시즌 흐름을 확인하세요.
           </Muted>
         </Card>
       ) : (

@@ -39,12 +39,18 @@ export function ensureAudioMode(): void {
 let player: Player | null = null;
 let idx = 0;              // 현재 트랙 인덱스(0..9)
 let started = false;      // startBgm 됐는가(루트 1회)
-let suppressed = false;   // 경기 화면인가(관전 중 = 정지)
+let suppressed = false;   // 경기 화면인가(관전 중 = 정지) — 2026-07-11부터 호출부 없음(SOUND_SYSTEM §2.4)
+let ducked = false;       // 경기 화면인가(감쇠 재생 — 정지 아님, SOUND_SYSTEM §2.4)
 let backgrounded = false; // 앱이 백그라운드인가(AppState)
-let volume = 0.8;         // 0..1
+let volume = 0.8;         // 0..1 (유저 볼륨)
 let advancing = false;    // didJustFinish 중복 전진 차단(in-flight)
 let ended = false;        // 백그라운드 중 곡 종료 감지(자가치유용)
 let rampTimer: ReturnType<typeof setInterval> | null = null;
+
+// 경기 화면 진입 시 BGM 목표 배율(ducking). "좀 줄여" = 절반 — 튜닝 여지(SOUND_SYSTEM §2.4).
+const DUCK_FACTOR = 0.5;
+// 실제 플레이어에 넣는 유효 볼륨 = 유저 볼륨 × (경기 화면이면 DUCK_FACTOR). 볼륨 대입은 전부 이걸 쓴다.
+const effVol = (): number => volume * (ducked ? DUCK_FACTOR : 1);
 
 const clamp01 = (v: number): number => (v < 0 ? 0 : v > 1 ? 1 : Number.isFinite(v) ? v : 0);
 
@@ -69,7 +75,7 @@ function advanceTrack(): void {
   idx = (idx + 1) % TRACKS.length;
   try {
     player.replace(TRACKS[idx]);
-    player.volume = volume;
+    player.volume = effVol();
   } catch { /* 무시 */ }
   applyState();
   advancing = false;
@@ -114,7 +120,7 @@ export function initBgm(): void {
     idx = 0;
     const p = createAudioPlayer(TRACKS[idx]);
     p.loop = false; // 필수: true면 didJustFinish 미발화 → 다음 곡 못 감
-    p.volume = volume;
+    p.volume = effVol();
     statusSub = p.addListener('playbackStatusUpdate', onStatus);
     appSub = AppState.addEventListener('change', onAppState);
     player = p;
@@ -130,9 +136,18 @@ export function startBgm(): void {
   fadeIn();
 }
 
-/** 경기 화면 진입/이탈(true=정지). */
+/** 경기 화면 진입/이탈(true=정지). ~~호출부 없음~~ → ducking으로 대체(setBgmDucked). 상태 모델엔 유지. */
 export function setBgmSuppressed(v: boolean): void {
   suppressed = v;
+  applyState();
+}
+
+/** 경기 화면 진입/이탈(true=감쇠). volume은 그대로 두고 유효 볼륨만 DUCK_FACTOR배(정지 아님, SOUND_SYSTEM §2.4). */
+export function setBgmDucked(v: boolean): void {
+  if (ducked === v) return;
+  ducked = v;
+  if (rampTimer) { clearInterval(rampTimer); rampTimer = null; } // 램프보다 수동 감쇠 우선(setBgmVolume 패턴)
+  if (player) { try { player.volume = effVol(); } catch { /* noop */ } }
   applyState();
 }
 
@@ -142,14 +157,14 @@ export function setBgmVolume(v: number): void {
   if (nv === volume) { applyState(); return; } // 동일값 — 램프/현 볼륨 미변경(부트 시 볼륨동기화가 페이드인을 죽이지 않게)
   volume = nv;
   if (rampTimer) { clearInterval(rampTimer); rampTimer = null; } // 실제 변경이면 램프보다 수동조정 우선
-  if (player) { try { player.volume = volume; } catch { /* noop */ } }
+  if (player) { try { player.volume = effVol(); } catch { /* noop */ } }
   applyState();
 }
 
 /** 시작 시 1.5초 볼륨 램프(0→목표). 저비용 setInterval. */
 function fadeIn(): void {
   if (!player || volume <= 0) return;
-  const target = volume;
+  const target = effVol(); // 램프 목표 = 감쇠 반영(경기 화면서 시작하면 감쇠 볼륨까지만 올림)
   const steps = 15;
   let i = 0;
   try { player.volume = 0; } catch { /* noop */ }

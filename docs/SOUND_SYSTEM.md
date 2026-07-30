@@ -35,8 +35,10 @@
 
 ## 2. 배경음악 (BGM)
 
-앱을 켜고 있는 동안(인트로·로그인 화면 포함) 조용히 흐르는 배경음악. **경기 관전 중에는 자동으로 멈춘다**(경기
-보드 자체 연출·SFX에 자리를 내준다). 10곡을 **고정 순서로 순환**(랜덤 아님 — 결정론·예측가능성).
+앱을 켜고 있는 동안(인트로·로그인 화면 포함) 조용히 흐르는 배경음악. ~~**경기 관전 중에는 자동으로 멈춘다**(경기
+보드 자체 연출·SFX에 자리를 내준다).~~ → **정정(2026-07-30, 사용자 요청)**: 경기 화면에선 정지도 full도 아닌
+**볼륨을 낮춰(ducking, `DUCK_FACTOR`=0.5) 계속 재생**하고 이탈 시 복원한다(보드 연출·SFX에 자리를 내주되 음악은
+끊기지 않는다). §2.4 참조. 10곡을 **고정 순서로 순환**(랜덤 아님 — 결정론·예측가능성).
 
 ### 2.1 트랙 (10곡, `assets/bgm/bgm_01.m4a`~`bgm_10.m4a`)
 
@@ -82,17 +84,25 @@
 ```
 started      : startBgm() 됐는가(루트 1회)
 suppressed   : 경기 화면인가(관전 중 = 음악 정지) — 2026-07-11부터 호출부 없음(아래 정정)
+ducked       : 경기 화면인가(감쇠 재생 = 유효 볼륨 ×DUCK_FACTOR, 정지 아님) — 2026-07-30 신설
 backgrounded : 앱이 백그라운드인가(AppState)
-volume       : 0..1 (0이면 정지 — 배터리)
+volume       : 0..1 (유저 볼륨, 0이면 정지 — 배터리)
 
-desired = started && !suppressed && !backgrounded && volume > 0
-applyState(): desired면 play(), 아니면 pause()  ← 유일한 재생/정지 진입점
+effVol() = volume × (ducked ? DUCK_FACTOR : 1)   ← 플레이어에 실제로 넣는 유효 볼륨(볼륨 대입은 전부 이걸 씀)
+desired  = started && !suppressed && !backgrounded && volume > 0
+applyState(): desired면 play(), 아니면 pause()  ← 유일한 재생/정지 진입점(재생 여부는 ducking과 무관 = 감쇠는 정지가 아님)
 ```
 
 > **정정(2026-07-11, 사용자 결정)**: ~~경기 관전 중엔 BGM 정지(보드 연출·SFX에 자리를 내준다)~~ →
 > **경기 화면에서도 BGM 계속 재생.** match/[id]의 `setBgmSuppressed(true/false)` useFocusEffect 호출을 제거.
 > `suppressed` 플래그·API는 상태 모델의 일부로 남겨둔다(호출부 0 — 재도입 시 이 플래그로).
 > 설정 화면 볼륨 설명의 "(경기 중엔 멈춤)" 카피도 함께 제거.
+
+> **후속 정정(2026-07-30, 사용자 요청 — "경기 들어가면 BGM이 좀 줄었으면")**: 경기 중 full 재생을 **감쇠(ducking) 재생**으로.
+> match/[id]가 마운트 시 `setBgmDucked(true)`, 언마운트 시 `setBgmDucked(false)`(cleanup 필수)를 호출한다.
+> `ducked=true`면 `effVol()`이 유저 `volume`의 `DUCK_FACTOR`(0.5)배가 되어 **음악은 정지 없이 절반 볼륨으로 계속** 흐르고,
+> 화면을 벗어나면 원래 볼륨으로 복원된다. **정지가 아니므로 `desired`(재생 여부)엔 `ducked`가 안 들어간다** —
+> `suppressed`(정지)와는 **별개 상태 모델**이라 `suppressed`/`setBgmSuppressed`는 그대로 둔다. `DUCK_FACTOR`는 튜닝 여지.
 
 - **모든** 상태 변화(startBgm·suppress·AppState·volume)는 플래그만 바꾸고 `applyState()`를 호출한다 →
   AppState × 경기화면 × 볼륨의 순서 경합이 원천 차단된다.
@@ -109,8 +119,9 @@ applyState(): desired면 play(), 아니면 pause()  ← 유일한 재생/정지 
 |---|---|
 | `initBgm()` | 부트 1회 — 오디오 모드 보장 + 단일 플레이어 생성 + 리스너 부착 + Fast Refresh 가드. 멱등 |
 | `startBgm()` | 재생 시작(멱등 — 이미 시작이면 no-op, 중복재생 금지) |
-| `setBgmSuppressed(v)` | ~~경기 화면 진입/이탈(true=정지)~~ 호출부 없음(2026-07-11 정정 — 경기 중에도 재생). `applyState` 경유 |
-| `setBgmVolume(v)` | 0..1 클램프 후 플레이어 즉시 반영. **v==0이면 pause(위치 보존)**, >0 복귀 시 재생 |
+| `setBgmSuppressed(v)` | ~~경기 화면 진입/이탈(true=정지)~~ 호출부 없음(2026-07-11 정정 — 경기 중에도 재생). ducking으로 대체(아래). `applyState` 경유 |
+| `setBgmDucked(v)` | 경기 화면 진입/이탈(true=감쇠). `volume`은 그대로 두고 유효 볼륨만 `DUCK_FACTOR`(0.5)배 — 정지 아님. 진행 중 램프 취소 후 `player.volume=effVol()` 즉시 반영·`applyState`. match/[id]가 마운트/언마운트로 on/off(2026-07-30) |
+| `setBgmVolume(v)` | 0..1 클램프 후 플레이어 즉시 반영(`effVol()` — ducking 반영). **v==0이면 pause(위치 보존)**, >0 복귀 시 재생 |
 
 ### 2.7 오디오 모드 단일화
 
@@ -147,14 +158,16 @@ applyState(): desired면 play(), 아니면 pause()  ← 유일한 재생/정지 
 
 ### 자동 가드
 - `tools/_dv_bgm.ts` — `assets/bgm` 파일 수==10·명명 규칙(`bgm_01`~`bgm_10`)·`bgm.ts` TRACKS require 수 일치·
-  `bgmVolume` 마이그레이션 키(SAVE_DEFAULTS·KIND·partialize 3곳) 존재. exit 0/1.
+  `bgmVolume` 마이그레이션 키(SAVE_DEFAULTS·KIND·partialize 3곳) 존재 + **ducking 배선**(§2.4 — `DUCK_FACTOR`·`ducked`·
+  `effVol()`·`setBgmDucked` 존재, 플레이어 볼륨 대입 전부 `effVol()` 경유(bare `.volume=volume` 0), match/[id]가
+  `setBgmDucked(true/false)` on/off). exit 0/1. A/B: advanceTrack을 bare `volume`으로 되돌리면 FAIL 검출.
 - 회귀 무결성: `npx tsc --noEmit` 0 · `npm test`(207) · `npx tsx tools/checkSubs.ts`.
 
 ### 에뮬 청음 체크리스트 (메인 Fable이 커밋 전 수행)
 | 케이스 | 확인 |
 |---|---|
 | 이어재생 | 곡이 끝나면 다음 곡으로 자연 전환(끊김·정지 없음), 10곡 후 01 복귀 |
-| 경기 경계 | 경기 보드 진입 시 BGM 정지 → 관전 종료(뒤로가기)로 이탈 시 재개(위치 보존) |
+| 경기 경계 | 경기 보드 진입 시 BGM 볼륨 감쇠(정지 아님, ~절반) → 관전 종료(뒤로가기)로 이탈 시 원래 볼륨 복원 |
 | 볼륨 즉시반영 | 설정 슬라이더 드래그 중 즉시 음량 변화, 0%면 완전 무음(정지) |
 | 백그라운드 복귀 | 홈 버튼 후 복귀 시 정지 없이 재생 이어짐(끝나 있었으면 다음 곡) |
 | 중복재생 없음 | Fast Refresh·재진입 후에도 트랙이 겹쳐 들리지 않음 |

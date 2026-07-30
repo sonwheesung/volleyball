@@ -29,6 +29,7 @@ import { buildPlayoffs, poSeedBase, finalSeedBase } from '../../data/playoffs';
 import { buildPlayoffBox, type PoRound } from '../../data/postseason';
 import { PO_SLOTS, FINAL_SLOTS } from '../../engine/calendar';
 import { DEV_TOOLS } from '../../data/flags';
+import { setBgmDucked } from '../../audio/bgm';
 import { SpotlightOverlay, SpotlightTarget } from '../../components/Spotlight';
 import { tipsForScreen } from '../../data/tutorialSteps';
 import { useGameStore } from '../../store/useGameStore';
@@ -205,6 +206,10 @@ export default function MatchBoard() {
     }, WATCH_SAVE_INTERVAL_MS);
     return () => clearInterval(timer);
   }, [isSandbox, fixture, finished, saveWatchProgress]);
+
+  // 경기 화면 진입 시 BGM 볼륨 감쇠(ducking) — 보드 연출·SFX에 자리를 내주되 정지는 안 함(SOUND_SYSTEM §2.4).
+  // 화면 이탈(언마운트) 시 반드시 복원(cleanup 필수).
+  useEffect(() => { setBgmDucked(true); return () => setBgmDucked(false); }, []);
 
   // Android 하드웨어 백 가로채기 — 관전 중엔 확인 모달을 띄운다(결과가 바로 확정되므로)
   useEffect(() => {
