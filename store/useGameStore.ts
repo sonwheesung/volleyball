@@ -1139,6 +1139,9 @@ export const useGameStore = create<GameState>()(
         const { season, contractOverrides, selectedTeamId, resignDecisions, faOffers, protectedIds, moneyOnlyIds, draftPicks, draftSelections, hallOfFame, expelledLog, transfers, retirements, seasonDraftLog, seasonForeignLog, archive, careerLog, careerTotals, bonds, milestones, interviews, benchDirectives, fanScore, cash, tryoutWish, keepForeign, asianWish, keepAsian, coachCareerLog, coachAsstCareerLog, mediaPredictionLog, midFires } = get();
         const nextSeason = season + 1;
         const my = selectedTeamId ?? '';
+        // 롤오버 전 상태 참조 — 아래 set() 후에도 옛 불변 객체가 유지되므로, 그 시즌의 개입/방출/전지훈련 로그가
+        //   리셋되기 전 값을 시즌 종료 텔레메트리(§13.27)가 순수 집계할 수 있게 캡처. (읽기만 — 결정론·바이트 불변)
+        const preTele = get();
         diag(season, 'season', `시즌 종료 ${season + 1}→${nextSeason + 1} (오프시즌 진입)`); // 진단 로그(#44)
 
         // 더블탭 방어 — 정규시즌이 실제로 끝났을 때만 진행한다. 한 번 롤오버하면 results가 비워져(아래 749)
@@ -1633,6 +1636,15 @@ export const useGameStore = create<GameState>()(
         // 시즌 종료 서버 백업(SAVE_SYSTEM §10) — 커밋 직후 fire-and-forget·조용한 실패(결정론·게임 진행 무영향).
         //   동적 import로 순환 의존(saveBackup→store) 차단. 절대 await·store 무접촉.
         void import('../lib/saveBackup').then((m) => m.triggerSeasonBackup()).catch(() => {});
+        // 시즌 종료 행동 텔레메트리(BACKEND_SYSTEM §13.27) — 백업과 같은 fire-and-forget(비차단·결정론 격리·store 무접촉).
+        //   preTele = 롤오버 전 상태(개입/방출/전지훈련 로그가 위 set으로 리셋되기 전 값). meta는 롤오버 후 archive/expelledLog에
+        //   편입될 스칼라라 여기서 계산해 주입(finalRank·champion·이번 시즌 내 팀 제명 수). 절대 await·store 무접촉.
+        void import('../lib/seasonTelemetry').then((m) => m.triggerSeasonTelemetry(preTele, {
+          season,
+          finalRank: rankOrder.indexOf(my) >= 0 ? rankOrder.indexOf(my) + 1 : null,
+          champion: championId === my,
+          expels: ctx.expelled.filter((e) => e.teamId === my).length,
+        })).catch(() => {});
       },
 
       resetSave: () => {

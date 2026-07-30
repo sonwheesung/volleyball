@@ -7,7 +7,7 @@ import { AD_REWARD, AD_DAILY_CAP } from '../../lib/econ'; // 다이아 econ 권�
 
 type Json = Record<string, unknown>;
 // 11섹션 IA(BACKEND_SYSTEM §13.25-D). ①~⑧=분석 그룹 · ⑨=운영 · ⑩⑪=대시보드(overview) 상단.
-type Tab = 'overview' | 'users' | 'retention' | 'play' | 'offseason' | 'payments' | 'ads' | 'match' | 'players' | 'achv' | 'errors' | 'coupons' | 'anns' | 'devnotes' | 'mail' | 'settings' | 'tickets';
+type Tab = 'overview' | 'users' | 'retention' | 'play' | 'offseason' | 'telemetry' | 'payments' | 'ads' | 'match' | 'players' | 'achv' | 'errors' | 'coupons' | 'anns' | 'devnotes' | 'mail' | 'settings' | 'tickets';
 
 async function apiCall(path: string, token: string, init?: RequestInit): Promise<{ status: number; body: Json }> {
   // 네트워크 자체 실패(서버 다운·타임아웃·오프라인)면 fetch가 throw — 이걸 안 잡으면 호출부의
@@ -254,6 +254,7 @@ const NAV: { id: Tab; ic: string; label: string; grp?: string }[] = [
   { id: 'retention', ic: '②', label: '리텐션', grp: '분석' },
   { id: 'play', ic: '③', label: '플레이', grp: '분석' },
   { id: 'offseason', ic: '④', label: '오프시즌', grp: '분석' },
+  { id: 'telemetry', ic: '🎛', label: '행동 텔레메트리', grp: '분석' },
   { id: 'payments', ic: '⑤', label: 'BM · 수익화', grp: '분석' },
   { id: 'ads', ic: '⑥', label: '광고', grp: '분석' },
   { id: 'match', ic: '⑦', label: '경기 데이터', grp: '분석' },
@@ -267,7 +268,7 @@ const NAV: { id: Tab; ic: string; label: string; grp?: string }[] = [
   { id: 'tickets', ic: '✉', label: '문의 · 환불', grp: '운영' },
   { id: 'settings', ic: '⚙', label: '운영 설정', grp: '운영' },
 ];
-const TITLES: Record<Tab, string> = { overview: '대시보드', users: '① 사용자 현황', retention: '② 리텐션 코호트', play: '③ 플레이', offseason: '④ 오프시즌 funnel', payments: '⑤ BM · 수익화', ads: '⑥ 광고', match: '⑦ 경기 데이터', players: '⑧ 선수 데이터', achv: '업적', errors: '⑨ 오류 모니터링', coupons: '쿠폰 관리', anns: '공지 관리', devnotes: '노트 · 패치노트', mail: '우편 관리', settings: '운영 설정', tickets: '문의 · 환불' };
+const TITLES: Record<Tab, string> = { overview: '대시보드', users: '① 사용자 현황', retention: '② 리텐션 코호트', play: '③ 플레이', offseason: '④ 오프시즌 funnel', telemetry: '행동 텔레메트리', payments: '⑤ BM · 수익화', ads: '⑥ 광고', match: '⑦ 경기 데이터', players: '⑧ 선수 데이터', achv: '업적', errors: '⑨ 오류 모니터링', coupons: '쿠폰 관리', anns: '공지 관리', devnotes: '노트 · 패치노트', mail: '우편 관리', settings: '운영 설정', tickets: '문의 · 환불' };
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
@@ -333,6 +334,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === 'retention' && <RetentionPH />}
         {tab === 'play' && <PlayPH />}
         {tab === 'offseason' && <OffseasonPH />}
+        {tab === 'telemetry' && <TelemetryPanel api={api} />}
         {tab === 'payments' && <Payments stats={stats} api={api} flash={flash} />}
         {tab === 'ads' && <Ads api={api} />}
         {tab === 'match' && <MatchPH />}
@@ -953,6 +955,105 @@ const ACH_CAT: { id: string; t: string; c: string }[] = [
   { id: 'first_point', t: '첫 득점', c: '통산' }, { id: 'first_concede', t: '첫 실점', c: '통산' }, { id: 'first_ace', t: '첫 서브 에이스', c: '통산' }, { id: 'first_set_win', t: '첫 세트 승리', c: '통산' }, { id: 'first_set_loss', t: '첫 세트 패배', c: '통산' }, { id: 'first_match_win', t: '첫 경기 승리', c: '통산' }, { id: 'first_match_loss', t: '첫 경기 패배', c: '통산' }, { id: 'points_100', t: '백 점 돌파', c: '통산' }, { id: 'points_1k', t: '천 점 클럽', c: '통산' }, { id: 'points_10k', t: '만 점의 탑', c: '통산' }, { id: 'points_100k', t: '십만 득점', c: '통산' }, { id: 'points_1m', t: '백만 득점', c: '통산' },
   { id: 'cash_200k', t: '흑자 경영', c: '운영' }, { id: 'cash_500k', t: '탄탄한 곳간', c: '운영' }, { id: 'cash_1m', t: '재벌 구단', c: '운영' }, { id: 'fan_70', t: '지역 명문', c: '운영' }, { id: 'fan_90', t: '국민 구단', c: '운영' }, { id: 'seasons_10', t: '한 세대', c: '운영' }, { id: 'seasons_50', t: '반세기 명가', c: '운영' }, { id: 'seasons_100', t: '백년 구단', c: '운영' },
 ];
+// ── 행동 텔레메트리(BACKEND_SYSTEM §13.27): 시즌 종료 구단주 운영 행동 — 전체 집계 + 사용자별 시즌 추이 ──
+//   원천: season_telemetry(비식별 카운트 jsonb). track() SDK 없이 세이브 파생([자체-롤업]). 결정론 격리 유지.
+type TeleSeason = { season: number; createdAt: string; payload: Record<string, unknown> };
+type TeleUser = { userId: string; name: string | null; provider: string | null; seasons: TeleSeason[] };
+function TelemetryPanel({ api }: { api: Api }) {
+  const [d, setD] = useState<Json | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [sel, setSel] = useState<string | null>(null); // 선택 유저 id
+  useEffect(() => { let live = true; setLoading(true); api('/api/admin/telemetry').then((r) => { if (live) { setD(r.body.ok ? r.body : null); setLoading(false); } }); return () => { live = false; }; }, [api]);
+  const agg = (d?.agg as Json) ?? {};
+  const users = useMemo(() => ((d?.users as TeleUser[]) ?? []), [d]);
+  const distinct = nnum(d?.distinctUsers);
+  const selUser = useMemo(() => users.find((u) => u.userId === sel) ?? null, [users, sel]);
+  const topFocus = (agg.topFocus as { code: string; n: number }[]) ?? [];
+
+  if (loading) return <Loading />;
+  if (!d) return <div className="oc-card"><div className="oc-empty">텔레메트리 데이터를 불러오지 못했습니다 (서버·권한 확인).</div></div>;
+
+  return (
+    <>
+      <div className="oc-card">
+        <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
+          시즌 종료 시 유저가 남긴 운영 행동 요약 <span className="oc-tag2">자체-롤업 · 비식별</span> — 개입·방출·전지훈련·지휘모드. 결정론 격리(시드/리플레이 무관).
+        </div>
+      </div>
+      <div className="oc-grid">
+        <Stat ic="📊" k="시즌 리포트 수" v={nnum(agg.reports).toLocaleString()} s={`고유 유저 ${distinct.toLocaleString()}명`} />
+        <Stat ic="🏆" k="우승률" v={`${nnum(agg.championRate)}%`} s={`평균 순위 ${nnum(agg.avgFinalRank)}위`} />
+        <Stat ic="🎮" k="지휘모드 사용률" v={`${nnum(agg.coachModeRate)}%`} s="경기 직접 지휘 on 비율" />
+        <Stat ic="🔁" k="평균 개입 수" v={String(nnum(agg.avgInterventions))} s={`타임아웃 ${nnum(agg.avgTimeouts)} · 교체 수동 ${nnum(agg.avgSubsManual)}·핀치 ${nnum(agg.avgSubsPinch)}`} />
+        <Stat ic="🚪" k="평균 방출 수" v={String(nnum(agg.avgReleases))} s={`선발/벤치 지시 ${nnum(agg.avgLineupChanges)} · 제명 ${nnum(agg.avgExpels)}`} />
+        <Stat ic="💎" k="평균 전지훈련 인원" v={String(nnum(agg.avgCamp))} s="오프시즌 전지훈련 사용" />
+      </div>
+      {topFocus.length > 0 && (
+        <div className="oc-card">
+          <div className="oc-cardhead"><h3>훈련 방향 분포 (상위)</h3><CsvBtn onClick={() => downloadCsv('telemetry-focus.csv', ['훈련방향코드', '시즌 수'], topFocus.map((f) => [f.code, f.n]))} /></div>
+          {topFocus.map((f) => { const max = Math.max(1, ...topFocus.map((x) => x.n)); const pct = Math.round((f.n / max) * 100); return (
+            <div className="oc-achrow" key={f.code}>
+              <div style={{ flex: 1 }}><div className="t">{f.code}</div><div className="d">primary|secondary 훈련id</div></div>
+              <div className="meta"><div className="oc-bar"><i style={{ width: `${pct}%` }} /></div></div>
+              <div className="pct">{f.n}<div className="cnt">시즌</div></div>
+            </div>
+          ); })}
+        </div>
+      )}
+
+      <div className="oc-card">
+        <div className="oc-cardhead">
+          <h3>사용자별 (리포트 많은 순 · {users.length}명)</h3>
+          <CsvBtn onClick={() => downloadCsv('telemetry-users.csv', ['userId', 'provider', '시즌 리포트 수', '최근 시즌'], users.map((u) => [u.userId, u.provider ?? '', u.seasons.length, u.seasons.length ? u.seasons[u.seasons.length - 1].season + 1 : 0]))} />
+        </div>
+        {users.length === 0 ? <div className="oc-empty">아직 수집된 텔레메트리가 없습니다 (시즌 종료 시 수집 · 서버 배포 후).</div> : (
+          <table className="oc-table">
+            <thead><tr><th>유저</th><th>provider</th><th>시즌 수</th><th>최근 시즌</th><th></th></tr></thead>
+            <tbody>
+              {users.map((u) => (
+                <tr key={u.userId} className="clk" onClick={() => setSel(u.userId)}>
+                  <td>{u.name || <span className="oc-mut">{u.userId.slice(0, 8)}…</span>}</td>
+                  <td><span className="oc-badge mut">{u.provider ?? '—'}</span></td>
+                  <td>{u.seasons.length}</td>
+                  <td>{u.seasons.length ? `${u.seasons[u.seasons.length - 1].season + 1}시즌` : '—'}</td>
+                  <td style={{ textAlign: 'right' }}><span className="oc-mut" style={{ fontSize: 12 }}>추이 보기 ›</span></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {selUser && (
+        <Modal title={selUser.name || `${selUser.userId.slice(0, 8)}…`} sub={`시즌별 운영 행동 추이 · ${selUser.seasons.length}개 시즌 · ${selUser.provider ?? ''}`} wide onClose={() => setSel(null)}
+          footer={<><CsvBtn onClick={() => downloadCsv(`telemetry-${selUser.userId.slice(0, 8)}.csv`, ['시즌', '순위', '우승', '개입', '타임아웃', '수동교체', '핀치교체', '선발벤치', '방출', '제명', '전지훈련', '지휘모드', '훈련방향'], selUser.seasons.map((s) => { const p = s.payload; const sub = (p.subs as Record<string, unknown>) ?? {}; return [s.season + 1, nnum(p.finalRank) || '', p.champion ? '우승' : '', nnum(p.interventions), nnum(p.timeouts), nnum(sub.manual), nnum(sub.pinch), nnum(p.lineupChanges), nnum(p.releases), nnum(p.expels), nnum(p.campCount), p.coachMode ? 'on' : 'off', String(p.trainingFocus ?? '')]; }))} /><Btn variant="ghost" onClick={() => setSel(null)}>닫기</Btn></>}>
+          <div style={{ overflowX: 'auto' }}>
+            <table className="oc-table" style={{ minWidth: 640 }}>
+              <thead><tr><th>시즌</th><th>순위</th><th>개입</th><th>TO</th><th>교체(수동/핀치)</th><th>선발벤치</th><th>방출</th><th>제명</th><th>전훈</th><th>지휘</th></tr></thead>
+              <tbody>
+                {selUser.seasons.map((s) => { const p = s.payload; const sub = (p.subs as Record<string, unknown>) ?? {}; return (
+                  <tr key={s.season}>
+                    <td>{s.season + 1}시즌 {p.champion ? <span className="oc-badge gd">우승</span> : null}</td>
+                    <td>{nnum(p.finalRank) ? `${nnum(p.finalRank)}위` : '—'}</td>
+                    <td>{nnum(p.interventions)}</td>
+                    <td>{nnum(p.timeouts)}</td>
+                    <td>{nnum(sub.manual)} / {nnum(sub.pinch)}</td>
+                    <td>{nnum(p.lineupChanges)}</td>
+                    <td>{nnum(p.releases)}</td>
+                    <td>{nnum(p.expels)}</td>
+                    <td>{nnum(p.campCount)}</td>
+                    <td>{p.coachMode ? <span className="oc-badge ac">직접</span> : <span className="oc-badge mut">자동</span>}</td>
+                  </tr>
+                ); })}
+              </tbody>
+            </table>
+          </div>
+        </Modal>
+      )}
+    </>
+  );
+}
+
 // ── 업적: 카탈로그 + 달성율(원장 ref 기반) ──
 function Achievements({ api }: { api: Api }) {
   const [d, setD] = useState<Json | null>(null);

@@ -683,3 +683,25 @@
 - **검증**: 라이브 가드 `server/tools/_dv_backup_live.ts` — ① 업로드→목록 등장(sizeBytes·saveVersion 정확) ② 6개→5개 유지(최고령 삭제) ③ 同시즌 재업로드=교체(행 수 불변) ④ 다운로드 payload 바이트 왕복 동일 ⑤ 무토큰 401·타유저 id 404 ⑥ 3MB 초과 413 ⑦ 쓰레기 payload(봉투 불일치) 400 + A/B(상한·봉투 검증 제거 모사 시 통과됐을 입력이 실제로 거부됨을 증명). 서버 가드 배터리에 추가(README 검증 루틴 등재는 메인 세션).
 - **파일**: `server/db/schema.ts`(save_backups)·`server/app/api/save-backup/route.ts`(POST 업로드+GET 목록)·`server/app/api/save-backup/[id]/route.ts`(GET 다운로드)·`server/tools/_dv_backup_live.ts`(가드).
 - **인프라 순서**: 세이브 백업은 **재화 진실과 무관한 순수 blob 보관**(§8 결정론 격리) — 온라인 백엔드(#43) 위에 얹히지만 결제/시드/리플레이엔 안 들어간다. 클라 자동 업로드(시즌 종료 훅)·복원 UI(부팅 시 백업 목록 노출)는 후속.
+
+### 13.27 시즌 종료 행동 텔레메트리 (구단주 운영 행동 → 관리자 사용자별 분석) — ✅ 구현(2026-07-30)
+> **상태**: 클라 집계·전송 + 서버 테이블·API·마이그레이션 + 관리자 화면 구현(2026-07-30). prod DB 마이그레이션 적용·서버 배포는 후속(메인/사용자).
+> 이 절은 §13.26(세이브 백업)과 **같은 계층 — 결정론과 무관한 "계정별 서버 관리 메타"**. 세이브 백업이 "게임 상태 blob"을 보관한다면, 이 절은 **"한 시즌 운영 행동의 요약 카운트"**를 보관해 **1인 운영자가 유저가 게임을 실제로 어떻게 운영하는지(개입·방출·전지훈련·지휘모드)를 사용자별/집계로 분석**하게 한다(밸런스·UX 결정 근거).
+
+- **배경/목적**: 관전형 장기 시뮬이라 "유저가 자동 관전만 하는지, 개입을 얼마나 하는지, 전지훈련·방출을 얼마나 쓰는지"는 세이브를 열어봐야만 알 수 있다.
+  시즌이 끝날 때 **그 시즌의 운영 행동을 비식별 카운트로 요약**해 서버에 1건 남기면, 관리자 콘솔이 사용자별 추이·전체 집계로 본다(§13.25 대시보드의 [자체-롤업] 결 — 단, EAS track() 없이 세이브에서 직접 파생).
+- **결정론 격리(핵심 제약, §1·§8)**: 텔레메트리는 **메타데이터** — 시드/리플레이/경기결과에 **절대 안 들어간다**. 서버는 payload를 통계 조회용 불투명 jsonb로 보관만 하고, 게임플레이에 일절 개입 안 한다(세이브 백업·진단 스냅샷과 동일 결).
+- **비차단(non-blocking, 절대 제약)**: 시즌 종료 흐름(`endSeason`)을 **절대 막지 않는다**. 세이브 백업 트리거(`triggerSeasonBackup`)와 **같은 지점·같은 fire-and-forget 패턴**(`void import(...).then(...).catch(()=>{})`, await·store 무접촉). 오프라인·에러·타임아웃·서버 미배포·구버전이면 **조용히 통과**(무알림).
+- **비PII**: **행동 카운트만** — 선수 이름·개인정보 전송 0. 순수 집계 정수/불리언/훈련방향 코드(문자열)뿐.
+- **payload(v1, 롤오버 전 상태에서 파생)**: `{ v:1, season, finalRank, champion, subs:{total,manual,pinch}, timeouts, interventions, lineupChanges, coachMode, releases, expels, trainingFocus, campCount }`.
+  - `finalRank`(내 팀 정규 최종 순위, `rankOrder.indexOf(my)+1`) · `champion`(우승 여부, `championId===my`).
+  - `subs`/`timeouts`/`interventions` = **내 팀 경기 개입 로그(`interventions` §2.1)에서 직접 집계**(값싼 O(개입수)) — `subs.manual`=세트 끝까지 교체(subKind 미지정/'manual'), `subs.pinch`=서브 교체(subKind='pinch'), `timeouts`=kind='timeout', `interventions`=전체 개입 엔트리 수.
+  - `lineupChanges` = 이번 시즌 `benchDirectives` 수(구단주 벤치/선발 직접 지시, 롤오버 시 리셋되므로 시즌 단위) · `coachMode` = `coachModeLog` 유효값("경기 지휘" 수동 on) · `releases` = 이번 시즌 내 팀 방출(inSeasonTx kind='release') · `expels` = 이번 시즌 내 팀 불명예 제명 · `trainingFocus` = 현재 훈련 방향 · `campCount` = 이번 오프시즌 전지훈련 인원(`campTrainedThisOffseason` 길이).
+  - **v1 의도적 제외(추정/억지매핑 금지)**: 엔진 **자동 교체**(SubKind `block`/`def`/`injury`/`rest`)는 (a) **구단주 행동이 아니라 엔진/감독 자동**이고 (b) subEvents 재구성이 필요한데 그 재구성은 **롤오버 전 엔진 컨텍스트에서만 정확**(롤오버 후엔 다음 시즌 로스터라 부정확) → **비차단 제약과 충돌**(재구성=블로킹). 따라서 v1은 **개입 로그로 확실히 구하는 사용자 행동만** 담고 엔진 자동분은 생략한다. payload가 jsonb라 후속 확장(예: 오프-크리티컬-패스 배치 재구성) 자유.
+- **API 계약**: `POST /api/telemetry` (Bearer 필수) — body `{ season:number, payload:object }`. 서버 검증: season 정수(아니면 400) · payload 객체(아니면 400) · payload 직렬화 **16KB 캡**(집계라 작음, 초과 413) · `requireUserId`(fail-closed·익명 폴백 금지 §13.17 P0-5, 무토큰 401) · proj 스코프(§13.2).
+  **업서트**: 같은 (projCode,userId,season) = **교체**(`onConflictDoUpdate` payload/createdAt) — 같은 시즌 재전송(재관전 등)은 1행 유지, 최신 payload로 갱신. 하드가드 `(proj_code,user_id,season)` UNIQUE.
+- **스키마**: `season_telemetry`(id·proj_code FK·user_id FK·season int·payload jsonb·created_at). 인덱스: `(proj_code,user_id,season)` UNIQUE(교체) + `(proj_code,user_id)` 조회.
+- **관리자 분석(§13.15 콘솔)**: `GET /api/admin/telemetry`(requireAdmin) — 전체 집계(평균 개입·타임아웃·방출·전지훈련·지휘모드 사용률·우승률·평균 순위) + **사용자별 롤업**(유저→시즌별 payload 추이). ops-9f3a2c에 "행동 텔레메트리" 섹션(분석 그룹).
+- **하위호환**: 클라는 서버 미배포/구버전이어도 `sendSeasonTelemetry`가 typed offline/error로 조용히 흡수(throw 없음, §13.1). 서버 라우트 없으면 404→offline.
+- **검증**: 라이브 가드 `server/tools/_dv_telemetry.ts` — ① POST→DB payload 저장 확인 ② 같은 시즌 재전송=업서트(1행 유지·payload 교체) ③ 다른 시즌=별 행 ④ 무토큰 401 + A/B(업서트 target 없이 삽입만 하면 시즌 재전송이 2행이 됨을 증명). 클라 순수성 가드는 앱측(`computeSeasonTelemetry` read-only·rng 미소비). 서버 가드 배터리·README 검증 루틴 등재는 메인 세션.
+- **파일**: `data/seasonTelemetry.ts`(순수 집계)·`lib/seasonTelemetry.ts`(트리거)·`lib/server.ts`(sendSeasonTelemetry)·`store/useGameStore.ts`(endSeason 훅)·`server/db/schema.ts`(season_telemetry)·`server/app/api/telemetry/route.ts`(POST)·`server/app/api/admin/telemetry/route.ts`(GET 집계)·`server/app/ops-9f3a2c/page.tsx`(화면)·`server/tools/_dv_telemetry.ts`(가드).

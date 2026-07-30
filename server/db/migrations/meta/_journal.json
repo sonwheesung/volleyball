@@ -29,6 +29,13 @@
       "when": 1785138000000,
       "tag": "0003_mailbox",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1785392687379,
+      "tag": "0004_season_telemetry",
+      "breakpoints": true
     }
   ]
 }

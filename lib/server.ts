@@ -241,7 +241,16 @@ export function uploadSnapshot(ticketId: string, snapshot: unknown) {
   return call<{ ok: true }>('/api/snapshot', { method: 'POST', body: JSON.stringify({ ticketId, snapshot }) }, 30000);
 }
 
+// ── 시즌 종료 행동 텔레메트리(BACKEND_SYSTEM §13.27) ──
+// 비식별 운영 행동 집계(개입·방출·전지훈련·지휘모드). 시즌 종료 시 1건 업서트. Bearer 필수. 실패는 typed(throw 없음 — 조용).
+// payload는 불투명 통계 메타(결정론 격리 §1·§8 — 시드/리플레이 무관). 서버가 (proj,user,season) 업서트로 교체 보관.
+export function sendSeasonTelemetry(season: number, payload: object): Promise<ServerResult<Record<string, never>>> {
+  return call('/api/telemetry', { method: 'POST', body: JSON.stringify({ season, payload }) });
+}
+
 // ── 텔레메트리(통계 — 세션/하트비트) ──
+// (미배선 스텁 — EAS track() 계측 후 세션/하트비트용. §13.27 시즌 텔레메트리와 같은 /api/telemetry 경로를 공유하나,
+//  현 라우트 계약은 {season,payload}(§13.27)이므로 이 스텁이 배선될 땐 kind 디스크리미네이터 또는 별 서브경로가 필요.)
 export function telemetry(kind: 'session' | 'heartbeat', payload?: Record<string, unknown>) {
   return call<{ ok: true }>('/api/telemetry', { method: 'POST', body: JSON.stringify({ kind, ...payload }) });
 }

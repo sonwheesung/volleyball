@@ -43,6 +43,7 @@
 1. **`track(event, params)` 래퍼 하나로** Firebase·GameAnalytics에 **동시 전송**(SDK 직접 호출 금지 — 이벤트를 두 번 심는 공수 방지). 한 번 호출로 두 곳에 도달.
 2. **리텐션(D1/D7/D30)은 커스텀 이벤트 아님** — `app_open`만 정확히 기록하면 Firebase/GameAnalytics가 **자동 산출**.
 3. **연대기 KPI(첫 우승 시즌·가장 오래 함께한 선수 등)는 raw 이벤트 축적 X** — 이 게임은 **결정론 시뮬**이라 세이브에서 재계산됨. **클라가 계산한 결과를 필요한 시점에 1건만** 전송(비용·정확도 유리).
+   → **선구현(EAS 무관, 2026-07-30)**: 이 "클라가 계산한 결과를 1건만" 패턴의 첫 구현체 = **시즌 종료 행동 텔레메트리**([BACKEND_SYSTEM §13.27](./BACKEND_SYSTEM.md#1327)). `endSeason`에서 그 시즌 운영 행동(개입·방출·전지훈련·지휘모드)을 비식별 카운트로 파생해 `POST /api/telemetry`로 1건 업서트 → 관리자 콘솔 사용자별/집계 분석. track() SDK 없이 세이브 직접 파생(③④⑧ 일부를 EAS 전에 서버 자체-롤업으로 앞당김). 비차단·결정론 격리.
 4. **재화 진실은 서버 원장**([[server-authoritative-currency]]) — `diamond_earned/spent`·`purchase`는 애널리틱스로 "관측"만. 실제 잔액/지급 진실은 `wallet_ledger`(§13.12). 애널리틱스 수치와 원장이 어긋나면 **원장이 진실**.
 5. **SDK는 네이티브 → EAS 빌드 필요**(Expo Go 불가). 서버측(Vercel Observability·Discord·UptimeRobot)은 **지금도 구축 가능**.
 6. **프라이버시 고지 동반**(SDK 도입 = 개인정보처리방침·Google Play Data Safety·Apple Privacy Nutrition Label 업데이트 — PRE_LAUNCH §5).

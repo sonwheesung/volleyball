@@ -347,6 +347,25 @@ export const mailBroadcastReceipts = pgTable(
   ],
 );
 
+// ── 시즌 종료 행동 텔레메트리(§13.27) — 서버는 payload를 **불투명 통계 메타 jsonb로 보관만**(게임플레이 불개입·결정론 격리 §1·§8).
+// 시즌 종료 시 구단주 운영 행동(개입·방출·전지훈련·지휘모드) 비식별 카운트를 1건 업서트. 같은 (proj,user,season) 재전송=교체(UNIQUE 하드가드).
+// 세이브 백업(save_backups)과 같은 계층 — 재화·시드·리플레이 무관. 관리자 콘솔이 사용자별/집계로 분석(§13.15).
+export const seasonTelemetry = pgTable(
+  'season_telemetry',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    projCode: text('proj_code').notNull().references(() => projInfo.projCode), // 게임 격리 FK(§13.2)
+    userId: uuid('user_id').notNull().references(() => users.id),
+    season: integer('season').notNull(),          // 텔레메트리가 요약한 시즌(같은 season 재전송=교체)
+    payload: jsonb('payload').notNull(),           // v1 행동 카운트(불투명 — 서버는 통계 조회만, 게임플레이 불개입)
+    createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
+  },
+  (t) => [
+    uniqueIndex('season_telemetry_proj_user_season_uniq').on(t.projCode, t.userId, t.season), // 同시즌 교체 하드가드(업서트)
+    index('season_telemetry_proj_user_idx').on(t.projCode, t.userId),                          // 사용자별 추이 조회
+  ],
+);
+
 export type ProjInfo = typeof projInfo.$inferSelect;
 export type ServerSetting = typeof serverSetting.$inferSelect;
 export type User = typeof users.$inferSelect;
@@ -360,6 +379,7 @@ export type Ticket = typeof tickets.$inferSelect;
 export type DiagnosticSnapshot = typeof diagnosticSnapshots.$inferSelect;
 export type PurchaseEvent = typeof purchaseEvent.$inferSelect;
 export type SaveBackup = typeof saveBackups.$inferSelect;
+export type SeasonTelemetry = typeof seasonTelemetry.$inferSelect;
 export type AttendancePass = typeof attendancePasses.$inferSelect;
 export type Mail = typeof mails.$inferSelect;
 export type MailBroadcast = typeof mailBroadcasts.$inferSelect;
