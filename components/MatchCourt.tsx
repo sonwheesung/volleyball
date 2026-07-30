@@ -899,21 +899,24 @@ const styles = themedStyles(() => StyleSheet.create({
   },
   markerTxt: { color: '#FFFFFF', fontSize: 11, fontWeight: '900' },
   // 마커 위 포지션 칩 — 원 위쪽에 작게. 색은 인라인(POS_COLOR). 짧아서 세로 겹침에 덜 민감(2026-07-29 사용자).
-  posTag: { position: 'absolute', top: -13, left: -13, width: 56, alignItems: 'center' },
+  //  중앙정렬: 절대배치 자식은 부모 **패딩 박스**(테두리 안쪽) 기준이라 고정 left(-13)면 borderWidth(2.5~3.2)만큼
+  //  오른쪽으로 밀렸다(사용자 2026-07-30 "포지션이 마커 오른쪽으로"). left:'50%'+음수마진은 콘텐츠/보더 박스 중심
+  //  = 마커 시각 중심에 정확히 앉아 테두리 두께 무관하게 중앙정렬(등번호 flex 중앙과 동일 기준).
+  posTag: { position: 'absolute', top: -13, left: '50%', marginLeft: -28, width: 56, alignItems: 'center' },
   posTagTxt: {
     fontSize: 9.5, fontWeight: '900', backgroundColor: 'rgba(8,14,24,0.9)',
     paddingHorizontal: 4, paddingVertical: 0.5, borderRadius: 4, overflow: 'hidden',
   },
   // (반응형 특성 발동 연출은 마커 borderColor tint로 인라인 처리 — 별도 헤일로 레이어 제거, 재정정 2026-07-29 §6.10)
   // 마커 밑 상시 선수명 — 작고 옅은 칩(라이트 코트에서 읽히게 흰 배경)
-  nameTag: { position: 'absolute', top: MR * 2 - 1, left: -27, width: 84, alignItems: 'center' },
+  nameTag: { position: 'absolute', top: MR * 2 - 1, left: '50%', marginLeft: -42, width: 84, alignItems: 'center' },
   nameTagTxt: {
     color: '#DCE6F2', fontSize: 8.5, fontWeight: '800', backgroundColor: 'rgba(8,14,24,0.82)',
     paddingHorizontal: 4, paddingVertical: 0.5, borderRadius: 4, overflow: 'hidden',
   },
   nameTagMine: { color: theme.accent, backgroundColor: 'rgba(8,14,24,0.9)' },
   // 갓 투입된 선수 이름표 — 마커 아래 중앙(골드 칩)
-  subTag: { position: 'absolute', top: MR * 2 + 1, left: -25, width: 80, alignItems: 'center' },
+  subTag: { position: 'absolute', top: MR * 2 + 1, left: '50%', marginLeft: -40, width: 80, alignItems: 'center' },
   subTagTxt: {
     color: '#3D2A00', fontSize: 9.5, fontWeight: '900', backgroundColor: SUB_GOLD,
     paddingHorizontal: 5, paddingVertical: 1, borderRadius: 6, overflow: 'hidden',
