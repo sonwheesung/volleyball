@@ -122,8 +122,9 @@ P부터 새 전개로 매끄럽게 이어진다. 경기 1회 시뮬은 밀리초
 
 ## 4. 개입 규칙 (엔진 기존 한도 재사용)
 
-- **교체 예산**: 세트당 6회(FIVB), 재진입 금지(usedSubIn/usedStarterOut) — **엔진 기존 로직 그대로**. UI가 남은
-  예산을 표시하고 소진 시 버튼 비활성(엔진 no-op을 "먹통"으로 오인 방지).
+- **교체 예산**: 세트당 6회(FIVB). ~~재진입 금지(usedSubIn/usedStarterOut)~~ → **정정(2026-07-30, §4.2)**: 교체선수 B는
+  재진입 금지(usedSubIn)·복귀 선발 A는 재이탈 금지(usedStarterOut)이되, **FIVB 15.6.1 합법 재진입(A가 자기 슬롯·자기 교체선수 B와
+  교대로 세트당 1회)은 허용**(유저 개입 manual만, A→B·B→A 각 예산 −1). UI가 남은 예산을 표시하고 소진 시 버튼 비활성(엔진 no-op을 "먹통"으로 오인 방지).
 - **교체 시점**: 데드볼(랠리 사이)만. 랠리 중 금지.
 - **서브 교체(핀치, 2026-07-12 사용자 요청)**: 교체 시 "서브 교체" 선택 가능 — 엔진 기존 `kind='pinch'`로 적용돼
   **서브권을 잃으면(공격권이 상대로 넘어가면) 자동복원 루프가 원선발로 되돌린다**(~~match.ts 261행~~ → `match.ts` 작전 교체 복원 루프의 `rec.kind === 'pinch' && side !== serving → subOut` — 발견 모드 감사 2026-07-15 정정. 행번호 대신 심볼 참조: 실제 위치는 랠리 루프 상단 "복원" 블록. 리팩터 드리프트 방지).
@@ -170,13 +171,20 @@ P부터 새 전개로 매끄럽게 이어진다. 경기 1회 시뮬은 밀리초
 - **설정 UI(`app/settings.tsx`)**: "게임" 섹션에 "경기 지휘" 2택(감독 자동/구단주 직접) + 정직한 트레이드오프 고지("관전하지 않는 경기에서는 타임아웃·교체 없이 진행돼 불리할 수 있어요"·"변경은 다음 경기부터 적용돼요").
 - **가드 `tools/_gt_coachmode.ts`(신설)**: 스토어 레벨 시나리오(기본 []=전 경기 undefined·setCoachMode(true) 후 forward-only·같은 날 재토글=항목 1개·false 복귀·캐시 bump). 기존 `_dv_manual_side`(엔진 축)와 상보.
 
-### 4.2 FIVB 15.6.1 — 나간 선발의 타슬롯 재진입 차단(2026-07-15, F2 봉인)
+### 4.2 FIVB 15.6.1 — 합법 재진입 허용 + 불법 재진입 차단(2026-07-30 정정)
 
-`subIn()`은 IN 후보가 "이번 세트 이미 아웃된 선발"(`usedStarterOut`)인지 검사하지 않아, 나갔던 선발 X가 같은 세트
-**다른 슬롯**의 IN으로 재진입할 수 있었다(FIVB 15.6.1: 나간 선발은 자기 자리에 자기 교체선수와의 교대로만 복귀 — 합법 복귀 경로는
-`subOut` 복원이 유일). AI 자연 발생은 ~2,000경기 0건이었으나 피로 교체(rest, 전 로스터 스캔)는 이론상 노출, **유저 개입은 UI가
-후보로 보여줘 실제 노출**(iv1이 X를 뺀 뒤 iv2가 X를 타슬롯 IN으로 지정). 수정: `subIn`에 `if (usedStarterOut[side].has(player.id)) return;`
-(개입도 subIn 경유라 자동 no-op 상속). 확장 `checkSubs`(타슬롯 재진입 + 개입 주입 묶음)·`docs/EDGE_CASES.md` EC-SUB-02.
+**~~나간 선발의 타슬롯 재진입 차단(2026-07-15, F2 봉인)~~ → 정정(2026-07-30, 사용자 결정 "실제 배구처럼 쉬게 했다가 다시 넣기"):**
+
+~~`subIn()`은 IN 후보가 "이번 세트 이미 아웃된 선발"(`usedStarterOut`)인지 검사하지 않아, 나갔던 선발 X가 같은 세트 **다른 슬롯**의 IN으로 재진입할 수 있었다(FIVB 15.6.1: 나간 선발은 자기 자리에 자기 교체선수와의 교대로만 복귀 — 합법 복귀 경로는 `subOut` 복원이 유일). … 수정: `subIn`에 `if (usedStarterOut[side].has(player.id)) return;`~~
+— 2026-07-15 F2는 **불법 타슬롯 재진입을 막으려다 FIVB 15.6.1 합법 재진입(자기 슬롯·자기 교체선수와의 교대)까지 통째 봉인**했다. `usedStarterOut` 무조건 차단이라 유저가 선발을 휴식 교체하면 그 세트엔 자기 자리로도 못 돌아옴(다음 세트 자동복귀만). "합법 복귀 경로는 subOut 복원이 유일"은 틀렸다 — subIn(manual) 재진입도 15.6.1 합법 경로다.
+
+**정정 규칙(FIVB 15.6.1 정본):** 선발 A가 B로 교체된 슬롯 S에서, **A는 세트당 1회 자기 슬롯 S로 재진입 가능 — 단 자기 교체선수 B와 교대로만.** 이후 B는 재진입 불가(1회 진입 소진), A는 복귀 후 재이탈 불가(1왕복 소진). 교체 예산(세트당 6): A→B, B→A = 각 1회 소비(총 2/6).
+
+**★ 결정론 안전장치(필수):** 재진입은 **`kind === 'manual'`(유저 개입)일 때만** 허용한다. AI 자동교체(rest/pinch/block/def)는 재진입 경로 진입 금지 — `kind!=='manual'`이라 `isReentry` 항상 false → 무개입 경기 **바이트 동일**(N=4286 AI 경기 digest 불변 실측; 별개로 AI 피로교체 스캔은 활성 교체 슬롯을 이미 건너뛰어 이중 방어). 유저 개입 subIn은 일반 교체=`manual`이라 여기에만 재진입이 열린다.
+
+**구현(`engine/match.ts subIn`):** `isReentry = kind==='manual' && usedStarterOut.has(player) && activeSubs[slot]?.orig.id===player && !isRestorable(active.kind)`. 재진입이면 활성 슬롯이어도 통과(B를 A로 교대)·`activeSubs.delete(slot)`(A는 usedStarterOut 유지=재이탈 금지, B는 usedSubIn 유지=재진입 금지)·예산 −1·`subEvents.push(enter:true, inId:A, outId:B, kind:manual)`. **불법 재진입(타슬롯·`kind≠manual`·자기 교체선수 아님)은 여전히 차단**(구 F2 라인 = `if (usedStarterOut.has(player) && !isReentry) return;`). `ENGINE_VERSION 19→20`(개입 경기만 결과 변동, 무개입 바이트 동일 — 골든 해시 불변, 버전 태그만 갱신).
+
+**UI(`data/matchInterventionView.ts`):** `IvExclusions.reentryPairs`(key=코트의 교체선수 B, value={원선발 A, 슬롯 S}) — 비복원형(manual/rest) 활성 교체이면서 아직 A가 재진입 안 한 쌍만. `outCandidates`가 B를 **뺄 후보로 노출**(reentryPairs 키일 때만), `benchCandidates(pendingOut=B)`가 후보를 **원선발 A 단 1명**으로(B는 자기 짝 A로만 교대). 확장 `checkSubs`(불법 타슬롯 재진입 + 개입 주입 묶음, AI 우주 0)·`_dv_reentry`(합법 재진입 + 3종 불법 차단 + AI 격리)·`_dv_ivbudget` (c)(후보 노출 ⇔ 엔진 수락/거절 정합)·`docs/EDGE_CASES.md` EC-SUB-02.
 
 ### 4.3 표시 스테일 카운트 봉인 — 주입 좌표 오프바이원(2026-07-21, 테스터 실보고)
 

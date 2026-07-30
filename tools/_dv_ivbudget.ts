@@ -2,7 +2,7 @@
 // data/matchInterventionView를 **실제 엔진(simulateMatch)을 오라클로** 구동해 검증한다(허위 오라클 방지).
 //   (a) 같은 데드볼 N연속 교체 → 잔여 예산 즉시 −1씩(스테일 아님)
 //   (b) 재생 진행 후 이중 카운트 없음(합계 불변)
-//   (c) 방금 나간 선수/투입 선수가 후보에서 즉시 제외 = 엔진이 그 재교체를 실제 거절(no-op)
+//   (c) 후보 노출 ⇔ 엔진 수락/거절 정합 — 나간 선발은 일반 벤치후보서 제외, 투입 교체선수 B는 재진입 페어로 outCands 노출(B→원선발 A 재투입 수락, B→타벤치·A 타슬롯은 거절). FIVB 15.6.1(§4.2 정정 2026-07-30)
 //   (d) 소진 경계: subLeft>=2(버튼 활성) ⇔ 엔진 실제 수락 (표시상 여유인데 엔진 거절 케이스 소멸)
 //   (e) 개입 없는(감독 자동) 경기 표시 = 구 산식과 바이트 동일(무회귀)
 //   + A/B 민감도: 버그 재주입(pending 무시, 구 point<=ptIdx-only 산식) 시 (a)/(c) 검사가 반드시 FAIL.
@@ -143,31 +143,42 @@ for (let i = 0; i < 220; i++) {
       check(usedLater === usedAtCoord, `[b] seed=${s.seed} 이중 카운트/소실: at=${usedAtCoord} later=${usedLater}`);
     }
 
-    // (c) 후보 즉시 제외 = 엔진 실제 거절(A/B 오라클): 방금 나간 선수 X는 benchCands에서 빠지고 재투입 시 엔진 no-op,
-    //     방금 투입 B는 outCands에서 빠지고 재교체 시 엔진 no-op.
+    // (c) 후보 노출 ⇔ 엔진 실제 수락/거절 정합(A/B 오라클). FIVB 15.6.1 합법 재진입 반영(2026-07-30, §4.2 정정):
+    //   · 방금 나간 선발 A: pendingOut=null 일반 benchCands엔 없음(재진입은 B를 뺄 때만 A가 후보로 등장).
+    //   · 방금 투입 교체선수 B: **재진입 페어 키** → outCands에 노출(B를 빼 원선발 A를 부를 수 있음). 예전 "B 잔존=버그"에서 정정.
+    //   · B를 뺄 때 benchCands = 원선발 A 단 1명(자기 짝만 교대 — 다른 벤치 C로는 B 못 뺌).
+    //   · 엔진 오라클 ①: B→원선발 A 재투입 → 수락(합법 재진입). ②: B→A 아닌 벤치 C → 거절(활성 슬롯). ③: A를 타슬롯 IN → 거절(EC-SUB-02).
     const cur = s.cur;
     const ex = ivExclusions(sim, 'home', cur, directives);
     const court = courtOf(s, sim);
-    const bench = benchCandidates(s.H, court, s.byId, null, ex);
+    const benchNull = benchCandidates(s.H, court, s.byId, null, ex);
     const outC = outCandidates(court, ex);
-    // 커밋된 첫 쌍
+    // 커밋된 첫 쌍(A→B)
     const firstOut = directives[0].outId!, firstIn = directives[0].inId!;
-    check(!bench.some((p) => p.id === firstOut), `[c] seed=${s.seed} 나간 선발 ${firstOut}가 benchCands에 잔존`);
-    check(!outC.some((p) => p.id === firstIn), `[c] seed=${s.seed} 투입 선수 ${firstIn}가 outCands에 잔존`);
-    // 엔진 오라클: 나간 선발 X를 다른 슬롯에 재투입 시도 → 반드시 거절(FIVB 재진입 금지)
+    check(!benchNull.some((p) => p.id === firstOut), `[c] seed=${s.seed} 나간 선발 ${firstOut}가 일반 benchCands에 잔존`);
+    check(ex.reentryPairs.has(firstIn), `[c] seed=${s.seed} 투입 B ${firstIn}가 reentryPairs에 없음(재진입 페어 누락)`);
+    check(outC.some((p) => p.id === firstIn), `[c] seed=${s.seed} 재진입 가능한 B ${firstIn}가 outCands에서 누락`);
+    const benchForBonly = benchCandidates(s.H, court, s.byId, firstIn, ex);
+    check(benchForBonly.length === 1 && benchForBonly[0].id === firstOut,
+      `[c] seed=${s.seed} B를 뺄 때 후보가 원선발 A 단 1명이 아님(${benchForBonly.map((p) => p.id).join(',') || '없음'})`);
+    // 엔진 오라클 ①: B→원선발 A 재투입 → 수락(합법 재진입)
+    const reentryIv: MatchIntervention = { at: { setNo: cur.setNo, h: cur.h, a: cur.a }, side: 'home', kind: 'sub', outId: firstIn, inId: firstOut, subKind: 'manual' };
+    const reSimA = simulateMatch(s.seed, s.H, s.A, { ...s.opts, interventions: [...directives, reentryIv] });
+    check(applied(reSimA, cur.ptIdx, 'manual', firstOut), `[c-oracle] seed=${s.seed} 합법 재진입(B→원선발 A)이 엔진에서 거절됨`);
+    // 엔진 오라클 ②: B를 A 아닌 벤치 C로 재교체 → 거절(활성 슬롯)
+    const usedInIds = new Set(directives.map((d) => d.inId));
+    const benchC = s.H.find((p) => p.position === (s.byId.get(firstIn)?.position) && !court.some((c) => c.id === p.id) && !usedInIds.has(p.id) && p.id !== firstOut);
+    if (benchC) {
+      const resub: MatchIntervention = { at: { setNo: cur.setNo, h: cur.h, a: cur.a }, side: 'home', kind: 'sub', outId: firstIn, inId: benchC.id, subKind: 'manual' };
+      const reSim = simulateMatch(s.seed, s.H, s.A, { ...s.opts, interventions: [...directives, resub] });
+      check(!applied(reSim, cur.ptIdx, 'manual', benchC.id), `[c-oracle] seed=${s.seed} B를 A아닌 벤치로 재교체가 수락됨(활성 슬롯 거절 위반)`);
+    }
+    // 엔진 오라클 ③: 나간 선발 A를 타슬롯 IN 시도 → 거절(불법 재진입, EC-SUB-02)
     const someSlotOut = court.find((p) => p.position === (s.byId.get(firstOut)?.position) && p.id !== firstIn);
     if (someSlotOut) {
       const reenter: MatchIntervention = { at: { setNo: cur.setNo, h: cur.h, a: cur.a }, side: 'home', kind: 'sub', outId: someSlotOut.id, inId: firstOut, subKind: 'manual' };
       const reSim = simulateMatch(s.seed, s.H, s.A, { ...s.opts, interventions: [...directives, reenter] });
-      check(!applied(reSim, cur.ptIdx, 'manual', firstOut), `[c-oracle] seed=${s.seed} 나간 선발 재진입이 엔진에서 수락됨(가드 배제와 불일치)`);
-    }
-    // 엔진 오라클: 투입 B를 코트에서 다시 빼기 시도(다른 벤치로) → 활성 슬롯이라 거절
-    const usedInIds = new Set(directives.map((d) => d.inId));
-    const benchForB = s.H.find((p) => p.position === (s.byId.get(firstIn)?.position) && !court.some((c) => c.id === p.id) && !usedInIds.has(p.id));
-    if (benchForB) {
-      const resub: MatchIntervention = { at: { setNo: cur.setNo, h: cur.h, a: cur.a }, side: 'home', kind: 'sub', outId: firstIn, inId: benchForB.id, subKind: 'manual' };
-      const reSim = simulateMatch(s.seed, s.H, s.A, { ...s.opts, interventions: [...directives, resub] });
-      check(!applied(reSim, cur.ptIdx, 'manual', benchForB.id), `[c-oracle] seed=${s.seed} 활성 교체 선수 재교체가 엔진에서 수락됨`);
+      check(!applied(reSim, cur.ptIdx, 'manual', firstOut), `[c-oracle] seed=${s.seed} 나간 선발 A의 타슬롯 재진입이 엔진에서 수락됨(EC-SUB-02 위반)`);
     }
   }
 }

@@ -105,6 +105,10 @@ export interface IvExclusions {
   injuryReplInIds: Set<string>; // 부상 교체로 들어온 선수 id(슬롯 잠금, 세트) — outCands.injuryIn
   injurySlots: Set<number>;  // 부상 교체 슬롯 — pinchBlock
   activeSlots: Set<number>;  // 현재 활성(작전) 교체 슬롯(net enter−exit) — pinchBlock
+  // FIVB 15.6.1 합법 재진입 페어링(2026-07-30) — key=현재 코트의 교체선수 B의 id, value={나간 원선발 A, 슬롯 S}.
+  //   비복원형(manual/rest) 활성 교체이면서 **아직 A가 재진입 안 한** 쌍만(pinch/block/def는 자동복원되니 제외). 엔진
+  //   subIn isReentry 조건과 대칭 — B를 뺄 후보로 노출(outCands)·B를 빼면 A를 유일 넣을 후보로(benchCands).
+  reentryPairs: Map<string, { starterId: string; slot: number }>;
 }
 
 export function ivExclusions(sim: SimResult, mineSide: Side, cur: IvCoord, directives: MatchIntervention[]): IvExclusions {
@@ -115,6 +119,11 @@ export function ivExclusions(sim: SimResult, mineSide: Side, cur: IvCoord, direc
   const injuryReplInIds = new Set<string>();
   const injurySlots = new Set<number>();
   const activeSlots = new Set<number>();
+  // 슬롯별 활성 비복원형(manual/rest) 교체 레코드 추적 — 재진입 페어링 산출용. 엔진 subIn과 대칭:
+  //   한 슬롯 S의 tactical 이벤트 시퀀스는 A→B(enter) 뒤 최대 B→A(exit 복원 OR 재진입 enter) 1건뿐(엔진이 A→B→C를 봉인).
+  //   enter#1: rec={starterId:A(outId), subId:B(inId), kind} · enter#2(inId===starterId): A 복귀 → 삭제 · exit: 복원 → 삭제.
+  const restKind = (k: SubEvent['kind']) => k === 'pinch' || k === 'block' || k === 'def';
+  const slotRec = new Map<number, { starterId: string; subId: string; kind: SubEvent['kind'] }>();
   // subEvents는 point 오름차순(엔진 push 순서) — 활성 슬롯 net 계산(enter add/exit delete)이 순서 의존이라 그대로 순회.
   for (const e of sim.subEvents ?? []) {
     if (e.side !== mineSide) continue;
@@ -135,11 +144,21 @@ export function ivExclusions(sim: SimResult, mineSide: Side, cur: IvCoord, direc
       enterInIds.add(e.inId);
       enterOutIds.add(e.outId);
       activeSlots.add(e.slot);
+      const existing = slotRec.get(e.slot);
+      if (existing && e.inId === existing.starterId) slotRec.delete(e.slot); // 재진입 enter — 원선발 A 복귀 → 페어 해소
+      else slotRec.set(e.slot, { starterId: e.outId, subId: e.inId, kind: e.kind });
     } else {
       activeSlots.delete(e.slot); // 복원(OUT) — pending에는 exit 없음(현재 좌표 유저 sub은 enter만). 미래(point>ptIdx) exit는 제외.
+      slotRec.delete(e.slot);     // 복원 → 페어 해소(원선발이 자기 자리로 돌아옴)
     }
   }
-  return { enterInIds, enterOutIds, injuryOutIds, injuryReplInIds, injurySlots, activeSlots };
+  // 남은 활성 비복원형 슬롯 = 재진입 가능한 페어(B가 코트에 있고 A가 아직 안 돌아옴). 복원형(pinch/block/def)은 제외.
+  const reentryPairs = new Map<string, { starterId: string; slot: number }>();
+  for (const [slot, rec] of slotRec) {
+    if (restKind(rec.kind)) continue; // 복원형은 자동복원 — 유저 재진입 대상 아님(엔진 isReentry도 !isRestorable 요구)
+    reentryPairs.set(rec.subId, { starterId: rec.starterId, slot });
+  }
+  return { enterInIds, enterOutIds, injuryOutIds, injuryReplInIds, injurySlots, activeSlots, reentryPairs };
 }
 
 /** 벤치 투입 후보(benchCands) — 내 로스터 − 리베로 − 현재코트 − 이번세트 진입/아웃/부상 − (뺄 선수와 다른 포지션).
@@ -147,6 +166,12 @@ export function ivExclusions(sim: SimResult, mineSide: Side, cur: IvCoord, direc
 export function benchCandidates(
   mySquad: Player[], curSix: Player[], byIdAll: Map<string, Player>, pendingOut: string | null, ex: IvExclusions,
 ): Player[] {
+  // FIVB 15.6.1 재진입: 뺄 선수가 재진입 가능한 교체선수 B(reentryPairs 키)면 — 후보는 **원선발 A 단 1명**(B는 자기 짝 A로만
+  //   교대, 다른 벤치선수 C로는 못 뺌). A는 이번 세트 아웃된 선발(enterOutIds)이라 아래 일반 필터로는 안 나오므로 여기서 직접 노출.
+  if (pendingOut && ex.reentryPairs.has(pendingOut)) {
+    const a = byIdAll.get(ex.reentryPairs.get(pendingOut)!.starterId);
+    return a ? [a] : [];
+  }
   const outPos = pendingOut ? (curSix.find((p) => p.id === pendingOut)?.position ?? byIdAll.get(pendingOut)?.position) : null;
   const onCourt = new Set(curSix.map((p) => p.id));
   return mySquad.filter((p) =>
@@ -154,7 +179,11 @@ export function benchCandidates(
     && (!outPos || p.position === outPos));
 }
 
-/** 코트에서 뺄 후보(outCands) — 현재코트 − 부상교체 투입자(슬롯 잠금) − 복귀선발(재이탈 금지) − 활성 교체 투입자(슬롯 재교체 금지). */
+/** 코트에서 뺄 후보(outCands) — 현재코트 − 부상교체 투입자(슬롯 잠금) − 복귀선발(재이탈 금지) − 활성 교체 투입자(슬롯 재교체 금지).
+ *  단 FIVB 15.6.1 재진입 가능한 교체선수 B(reentryPairs 키)는 enterInIds여도 노출한다(B를 빼서 원선발 A를 부르기 위해). */
 export function outCandidates(curSix: Player[], ex: IvExclusions): Player[] {
-  return curSix.filter((p) => !ex.injuryReplInIds.has(p.id) && !ex.enterInIds.has(p.id) && !ex.enterOutIds.has(p.id));
+  return curSix.filter((p) =>
+    !ex.injuryReplInIds.has(p.id)
+    && (!ex.enterInIds.has(p.id) || ex.reentryPairs.has(p.id)) // 재진입 페어의 B는 뺄 후보로 노출(그 외 활성 교체선수는 제외)
+    && !ex.enterOutIds.has(p.id));
 }
