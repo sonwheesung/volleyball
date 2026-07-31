@@ -580,6 +580,22 @@
   ①벤치 사유 인지(부상/징계/구단주벤치/실력밀림/휴식) ②감정=f(사유,성격,주전 기대치) ③누적 부당벤치→재계약 거부→FA
   ④순위 기반 주전 휴식(#3, 로드매니지먼트). 결정론: 휴식은 forward-pass 밖 라인업 레이어, clinch는 day−1 results-파생
   (순환은 allResults 러닝 순위로 회피) → **관전==순위==생산 일치 검증 0 불일치**. 가드 `simMood`·`simStarters`(9/9)·`_ev_rest`.
+- **[미해결 · 원인 미확정 · 저우선(평소 정상)] 부팅 시 "Something went wrong" Google Play 다이얼로그 (2026-07-31, 테스터 실기기 보고)** —
+  앱을 열 때 **가끔** 검은 스플래시 화면 위로 네이티브 다이얼로그가 뜬다: *"Something went wrong. Check that Google Play is enabled
+  on your device and that you're using an up-to-date version before opening the app. If the problem persists try reinstalling the app."*
+  **앱을 완전 종료(force stop) 후 다시 열면 바로 게임 화면으로 정상 진입**(재현 간헐적). 삼성 One UI + KT.
+  - **확정된 것**: ①**세션 만료 아님** — 세션은 영속 저장·토큰 만료 시에도 **자동 로그아웃 경로가 없다**(`signOut()`는 수동 로그아웃·탈퇴만,
+    `store/useAuthStore.ts`). 그래서 로그인 화면이 다시 안 뜬다(테스터도 "로그인 화면은 최초 1회 뒤 안 나옴" 확인). ②우리 JS 문자열 아님 —
+    **Google Play 서비스가 띄우는 네이티브 다이얼로그**(`GoogleApiAvailability` SERVICE_INVALID류). ③로그인 경로(`lib/googleAuth.ts`
+    `hasPlayServices({showPlayServicesUpdateDialog:true})`)는 **버튼 탭 전용**이라 부팅 자동발화 아님 → 이 케이스의 직접 원인 아님.
+    ④앱 데이터 손상 아님(재시작으로 사라짐 = 기기 Play 서비스의 일시적 재기동 타이밍 문제로 추정).
+  - **미확정(원인 불명 지점)**: 부팅 시 자동 실행되는 Google Play 의존 초기화 **`initAds()`**(AdMob SDK init + UMP `AdsConsent.gatherConsent`)
+    **/ `initIap()`**(RevenueCat = Google Play Billing) — `app/_layout.tsx` 둘 다 fire-and-forget. 이 중 **정확히 어느 네이티브 SDK가 저 다이얼로그를
+    띄우는지 코드만으로 확정 불가**(네이티브 계층). Play Integrity/라이선스 체크는 코드에 없음(배제). 콜드 스타트도 같은 초기화를 도는데 정상인 점은
+    "프로세스 재생성 시점의 Play 서비스 불안정"이라는 추정과 부합하나 미증명.
+  - **정확히 찍으려면**: 팝업 발생 순간의 **기기 logcat**(어느 SDK가 `ConnectionResult` 던지는지)이 필요 — 테스터 협조 대기.
+  - **후보 수정(미착수, 사용자 저우선 판단 2026-07-31)**: (B) 부팅 검은화면에서 Google Play 초기화(광고·결제)를 **홈 도착 후로 지연** →
+    부팅 중 Play 서비스 미접촉으로 원천 차단(세 후보 전부 커버) + 로그인 `showPlayServicesUpdateDialog:false`. **평소 정상이라 보류.**
 
 ---
 

@@ -18,6 +18,10 @@ import { useAuthStore } from '../store/useAuthStore';
 
 const ROSE = '#FF5C8D';
 
+// 클라우드 백업에서 복원 UI 숨김(사용자 2026-07-31). 자동 백업(saveBackup)·핸들러(onServerRestore)는 유지 —
+//   표시만 끈다(플래그로 참조 보존 → 미사용 경고 없음·되살리기 쉬움). true로 바꾸면 "세이브 관리" 섹션 재노출.
+const SHOW_CLOUD_RESTORE = false;
+
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 
 function Row({ icon, tint, label, sub, onPress, danger }: { icon: IoniconName; tint: string; label: string; sub?: string; onPress?: () => void; danger?: boolean }) {
@@ -272,13 +276,17 @@ export default function Settings() {
       </View>
       <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>변경은 다음 경기부터 적용돼요.</Muted>
 
-      <Text style={styles.section}>세이브 관리</Text>
-      <View style={styles.group}>
-        <Row icon="cloud-download-outline" tint={theme.accent} label="클라우드 백업에서 복원"
-          sub="시즌마다 자동 백업된 목록에서 복원 · 현재 진행을 대체해요"
-          onPress={() => { void onServerRestore(); }} />
-      </View>
-      <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>시즌이 끝날 때마다 자동으로 클라우드에 백업돼요(최근 5개). 다이아·결제 재화는 계정에 항상 안전해요.</Muted>
+      {SHOW_CLOUD_RESTORE ? (
+        <>
+          <Text style={styles.section}>세이브 관리</Text>
+          <View style={styles.group}>
+            <Row icon="cloud-download-outline" tint={theme.accent} label="클라우드 백업에서 복원"
+              sub="시즌마다 자동 백업된 목록에서 복원 · 현재 진행을 대체해요"
+              onPress={() => { void onServerRestore(); }} />
+          </View>
+          <Muted style={{ fontSize: 11, marginTop: 6, marginLeft: 2 }}>시즌이 끝날 때마다 자동으로 클라우드에 백업돼요(최근 5개). 다이아·결제 재화는 계정에 항상 안전해요.</Muted>
+        </>
+      ) : null}
 
       <Text style={styles.section}>데이터</Text>
       <View style={styles.group}>

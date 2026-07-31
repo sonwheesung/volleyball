@@ -3,6 +3,7 @@
 // 재사용: useToastQueue()로 push, <ToastHost toasts=.../>를 화면 오버레이 슬롯(Screen overlay)에 건다.
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Animated, StyleSheet, Text, View } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { theme } from './Screen';
 import { themedStyles } from './theme';
 import { subscribeToast } from '../lib/toastBus';
@@ -35,11 +36,14 @@ export function GlobalToastHost() {
   return <ToastHost toasts={toasts} />;
 }
 
-/** 화면 하단 고정 토스트 표시기 — Screen의 overlay 슬롯에 배치(ScrollView 밖 = 뷰포트 고정). */
+/** 화면 하단 고정 토스트 표시기 — Screen의 overlay 슬롯에 배치(ScrollView 밖 = 뷰포트 고정).
+ *  하단은 SafeArea 인셋(안드로이드 내비바·iOS 홈 인디케이터)을 더해 띄운다 — 고정값이면 내비바 뒤로 잘린다
+ *  (테스터 보고 2026-07-31: 경기 보드 "타임아웃 예약 취소" 토스트가 3버튼 내비바에 가려짐). 세이프티존 준수. */
 export function ToastHost({ toasts }: { toasts: ToastItemData[] }) {
+  const insets = useSafeAreaInsets();
   if (!toasts.length) return null;
   return (
-    <View pointerEvents="none" style={styles.host}>
+    <View pointerEvents="none" style={[styles.host, { bottom: insets.bottom + 16 }]}>
       {toasts.map((t) => <Toast key={t.id} text={t.text} />)}
     </View>
   );

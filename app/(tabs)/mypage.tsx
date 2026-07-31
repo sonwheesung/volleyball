@@ -142,7 +142,15 @@ export default function MyPage() {
     const t = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(t);
   }, [counting]);
-  const fmtLeft = (ms: number) => { const s = Math.ceil(ms / 1000); return `${Math.floor(s / 60)}분 ${String(s % 60).padStart(2, '0')}초`; };
+  // 광고 쿨다운 남은 시간 — 시·분·초. 60분을 넘는 쿨다운(2시간)이 "119분"처럼 안 뜨게 시간 단위로 쪼갠다.
+  //   0시간이면 시간 부분은 숨김(사용자 2026-07-31). h≥1일 때만 "N시간" 노출 + 분을 2자리 패딩(가독).
+  const fmtLeft = (ms: number) => {
+    const s = Math.ceil(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = String(s % 60).padStart(2, '0');
+    return h > 0 ? `${h}시간 ${String(m).padStart(2, '0')}분 ${sec}초` : `${m}분 ${sec}초`;
+  };
 
   // 광고 보고 다이아(MONETIZATION §11.1) — 서버 확정 후 캐시 갱신(BACKEND §13.12). AdMob SSV는 EAS 후.
   const watchAd = async () => {
