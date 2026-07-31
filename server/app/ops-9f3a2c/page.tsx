@@ -516,7 +516,7 @@ function OffseasonTab({ api }: { api: Api }) {
         <>
           <div className="oc-grid">
             <Stat ic="📊" k="시즌 리포트 수" v={reports.toLocaleString()} s={`고유 유저 ${distinct.toLocaleString()}명`} />
-            <Stat ic="💎" k="평균 전지훈련 인원" v={String(nnum(agg.avgCamp))} s="완료 시즌당 평균(campCount·랙)" />
+            <Stat ic="💎" k="유저당 평균 전지훈련" v={campUsers > 0 ? (campEvents / campUsers).toFixed(1) : '0'} s={`전지훈련 유저 ${campUsers}명 기준(원장·즉시)`} />
             <Stat ic="🚪" k="평균 방출 수" v={String(nnum(agg.avgReleases))} s="시즌당 방출(releases)" />
             <Stat ic="🛑" k="평균 제명 수" v={String(nnum(agg.avgExpels))} s="시즌당 제명(expels)" />
           </div>
@@ -1206,7 +1206,7 @@ function TelemetryPanel({ api }: { api: Api }) {
         <Stat ic="🎮" k="지휘모드 사용률" v={`${nnum(agg.coachModeRate)}%`} s="경기 직접 지휘 on 비율" />
         <Stat ic="🔁" k="평균 개입 수" v={String(nnum(agg.avgInterventions))} s={`타임아웃 ${nnum(agg.avgTimeouts)} · 교체 수동 ${nnum(agg.avgSubsManual)}·핀치 ${nnum(agg.avgSubsPinch)}`} />
         <Stat ic="🚪" k="평균 방출 수" v={String(nnum(agg.avgReleases))} s={`선발/벤치 지시 ${nnum(agg.avgLineupChanges)} · 제명 ${nnum(agg.avgExpels)}`} />
-        <Stat ic="💎" k="평균 전지훈련 인원" v={String(nnum(agg.avgCamp))} s="완료 시즌당 평균(랙) · 실활동은 오프시즌탭 원장" />
+        <Stat ic="💎" k="유저당 평균 전지훈련" v={nnum(agg.campLedgerUsers) > 0 ? (nnum(agg.campLedgerEvents) / nnum(agg.campLedgerUsers)).toFixed(1) : '0'} s={`전지훈련 유저 ${nnum(agg.campLedgerUsers)}명 기준(원장·즉시)`} />
       </div>
       {topFocus.length > 0 && (
         <div className="oc-card">
