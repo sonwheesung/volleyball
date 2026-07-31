@@ -2,9 +2,9 @@
 //   원천: season_telemetry(비식별 행동 카운트 jsonb). 결정론 격리 유지(통계 메타 — 시드/리플레이 무관).
 //   반환: 전체 집계(agg) + 사용자별 롤업(users, 각 유저의 시즌별 payload 추이). payload는 클라(§13.27) v1 스키마.
 import { NextResponse } from 'next/server';
-import { and, desc, eq } from 'drizzle-orm';
+import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../../../db';
-import { seasonTelemetry, users } from '../../../../db/schema';
+import { seasonTelemetry, users, walletLedger } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
@@ -75,6 +75,19 @@ export async function GET(req: Request) {
     }
     const avg = (sum: number, n: number) => (n > 0 ? Math.round((sum / n) * 100) / 100 : 0);
     const totalWL = sumWins + sumLosses;
+
+    // ── 전지훈련 즉시 집계(원장 권위, §13.27) — campCount(텔레메트리)는 "시즌 종료 시"에만 전송돼 랙이 크다.
+    //   전지훈련은 다이아 지출(reason='camp')이라 원장에 즉시 남으므로, 유저 수·총 횟수·소모 다이아를 원장에서 바로 뽑는다.
+    //   (텔레메트리 avgCamp = 완료 시즌당 평균 — 부차 지표로 유지. 서로 다른 렌즈: 원장=실제 발생, 텔레메트리=완료 시즌 표본)
+    const [campLed] = await db
+      .select({
+        events: sql<number>`count(*)::int`,
+        users: sql<number>`count(distinct ${walletLedger.userId})::int`,
+        diamonds: sql<number>`coalesce(-sum(${walletLedger.delta}), 0)::int`, // 지출은 음수 delta → 양수 소모량으로
+      })
+      .from(walletLedger)
+      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'camp')));
+
     const agg = {
       reports: total,
       avgFinalRank: avg(sumRank, rankN),
@@ -86,6 +99,10 @@ export async function GET(req: Request) {
       avgReleases: avg(sumReleases, total),
       avgExpels: avg(sumExpels, total),
       avgCamp: avg(sumCamp, total),
+      // 전지훈련 원장 즉시 집계(랙 없음 — 다이아 지출 발생 즉시). OffseasonTab 주 지표.
+      campLedgerEvents: campLed?.events ?? 0,   // 총 전지훈련 횟수(=선수당 오프시즌 1회이므로 연인원)
+      campLedgerUsers: campLed?.users ?? 0,     // 전지훈련한 고유 유저 수
+      campDiamonds: campLed?.diamonds ?? 0,     // 전지훈련 소모 다이아 합
       avgSubsManual: avg(sumSubsManual, total),
       avgSubsPinch: avg(sumSubsPinch, total),
       // 플레이 탭: 개입 1회+ 리포트 비율(%)

@@ -485,6 +485,10 @@ function OffseasonTab({ api }: { api: Api }) {
   const distinct = nnum(d?.distinctUsers);
   const reports = nnum(agg.reports);
   const topFocus = (agg.topFocus as { code: string; n: number }[]) ?? [];
+  // 전지훈련 원장 즉시 집계(다이아 지출 발생 즉시 — 텔레메트리 랙 없음). 텔레메트리 게이트와 무관하게 표시.
+  const campUsers = nnum(agg.campLedgerUsers);
+  const campEvents = nnum(agg.campLedgerEvents);
+  const campDiamonds = nnum(agg.campDiamonds);
 
   if (loading) return <Loading />;
   if (!d) return <div className="oc-card"><div className="oc-empty">오프시즌 데이터를 불러오지 못했습니다 (서버·권한 확인).</div></div>;
@@ -496,11 +500,23 @@ function OffseasonTab({ api }: { api: Api }) {
           시즌 종료 시 유저가 남긴 오프시즌 운영 행동 <span className="oc-tag2">자체-롤업(season_telemetry) · 비식별</span> — 전지훈련·방출·제명·훈련 방향. 결정론 격리(시드/리플레이 무관).
         </div>
       </div>
-      {reports === 0 ? <div className="oc-card"><div className="oc-empty">아직 수집된 오프시즌 텔레메트리가 없습니다 (시즌 종료 시 수집 · 서버 배포 후).</div></div> : (
+      {/* 전지훈련 즉시 집계 — 다이아 원장(reason='camp') 권위. 텔레메트리(시즌종료)와 달리 지출 즉시 반영. */}
+      <div className="oc-card">
+        <div className="oc-cardhead"><h3>전지훈련 (다이아 원장 · 즉시)</h3><span className="oc-tag2">wallet_ledger · 랙 없음</span></div>
+        <div className="oc-grid">
+          <Stat ic="🏕️" k="전지훈련 유저 수" v={campUsers.toLocaleString()} s="reason=camp 고유 유저" />
+          <Stat ic="🔁" k="전지훈련 총 횟수" v={campEvents.toLocaleString()} s="선수당 오프시즌 1회 = 연인원" />
+          <Stat ic="💎" k="소모 다이아 합" v={campDiamonds.toLocaleString()} s="전지훈련 다이아 지출" />
+        </div>
+        <div className="oc-mut" style={{ fontSize: 12, marginTop: 8, lineHeight: 1.6 }}>
+          전지훈련은 다이아 지출이라 <b>발생 즉시</b> 원장에 기록됩니다. 아래 텔레메트리 지표(campCount)는 <b>시즌을 끝내야</b> 전송돼 한 시즌 늦습니다 — 0이어도 위 원장이 실제 활동입니다.
+        </div>
+      </div>
+      {reports === 0 ? <div className="oc-card"><div className="oc-empty">아직 수집된 오프시즌 텔레메트리가 없습니다 (시즌 종료 시 수집 · 서버 배포 후). 전지훈련 실활동은 위 <b>다이아 원장</b> 카드 참고.</div></div> : (
         <>
           <div className="oc-grid">
             <Stat ic="📊" k="시즌 리포트 수" v={reports.toLocaleString()} s={`고유 유저 ${distinct.toLocaleString()}명`} />
-            <Stat ic="💎" k="평균 전지훈련 인원" v={String(nnum(agg.avgCamp))} s="오프시즌 전지훈련(campCount)" />
+            <Stat ic="💎" k="평균 전지훈련 인원" v={String(nnum(agg.avgCamp))} s="완료 시즌당 평균(campCount·랙)" />
             <Stat ic="🚪" k="평균 방출 수" v={String(nnum(agg.avgReleases))} s="시즌당 방출(releases)" />
             <Stat ic="🛑" k="평균 제명 수" v={String(nnum(agg.avgExpels))} s="시즌당 제명(expels)" />
           </div>
@@ -1190,7 +1206,7 @@ function TelemetryPanel({ api }: { api: Api }) {
         <Stat ic="🎮" k="지휘모드 사용률" v={`${nnum(agg.coachModeRate)}%`} s="경기 직접 지휘 on 비율" />
         <Stat ic="🔁" k="평균 개입 수" v={String(nnum(agg.avgInterventions))} s={`타임아웃 ${nnum(agg.avgTimeouts)} · 교체 수동 ${nnum(agg.avgSubsManual)}·핀치 ${nnum(agg.avgSubsPinch)}`} />
         <Stat ic="🚪" k="평균 방출 수" v={String(nnum(agg.avgReleases))} s={`선발/벤치 지시 ${nnum(agg.avgLineupChanges)} · 제명 ${nnum(agg.avgExpels)}`} />
-        <Stat ic="💎" k="평균 전지훈련 인원" v={String(nnum(agg.avgCamp))} s="오프시즌 전지훈련 사용" />
+        <Stat ic="💎" k="평균 전지훈련 인원" v={String(nnum(agg.avgCamp))} s="완료 시즌당 평균(랙) · 실활동은 오프시즌탭 원장" />
       </div>
       {topFocus.length > 0 && (
         <div className="oc-card">
