@@ -313,7 +313,7 @@ computedUpto는 비영속 — `set*CacheRaw`가 복원 시 행의 max dayIndex�
 
 **문제(온디바이스 실측 — 에뮬 시즌3→4, [ESPERF] 블록 계측)**: 시즌 시작 로딩(`app/season-start.tsx`의 `endSeason()`)이
 **117.5초**, 그중 **A블록(정산+끝난시즌 리플레이)이 111.5초(95%)**. B `buildDraftContext` 5.7s · C 드래프트+생산 0.2s · D 뉴스/HOF 0.05s.
-(개막 브리지 ~20s는 **별도 조사** — 본 절 범위 밖.)
+(~~개막 브리지 ~20s는 **별도 조사** — 본 절 범위 밖.~~ → **정정(2026-07-31)**: 개막 브리지(`season-opening`) 화면은 삭제됐다(뒷단 허브 §5.6.5로 대체) — 이 별도 조사 항목은 소멸.)
 
 **원인(트레이스 확정)**: endSeason이 **끝난 시즌 리플레이 캐시를 스스로 무효화한 뒤 다시 읽는다**.
 ```
@@ -482,8 +482,9 @@ season-start. endSeason의 스토어 변이(`commitRosters`가 baseVersion 범�
 **금지**, 기존 키 보존으로 `(tabs)`·season-start 리마운트를 막는 게 핵심. 드롭 대상 오프시즌 화면은 beforeRemove
 blocker가 없고, season-start의 blocker는 GO_BACK/POP만 preventDefault라 RESET은 통과한다. reset은 마운트 effect에
 두어 endSeason(PAINT_DELAY 500ms+2×RAF 뒤)보다 **먼저 커밋**되게 하고, 기존 effect(백 차단·타이머)와 **별도 effect**로
-둔다. 스택은 어차피 `season-opening`의 `dismissAll`(멱등, 유지)로 소멸하므로 이 정리는 그 소멸을 endSeason **앞으로**
-당기는 것뿐 — 사용자 흐름·최종 화면은 불변.
+둔다. ~~스택은 어차피 `season-opening`의 `dismissAll`(멱등, 유지)로 소멸하므로~~ → **정정(2026-07-31 — `season-opening` 삭제)**:
+개막 브리지를 폐지하면서 스택은 이제 season-start가 endSeason 완료 후 **`/(tabs)/schedule`로 `replace`**하며 소멸한다. 이 정리는 그 소멸을 endSeason **앞으로**
+당기는 것뿐 — 사용자 흐름·최종 화면은 불변. **정리 effect(키 보존 reset)는 `season-start.tsx`에 그대로 유지**(코드 대조 2026-07-31 — 마운트 effect 살아 있음, #113 병목 102.8→23.2s 제거 근거·§5.6 허브 주석 유효).
 
 **기각 대안(리뷰 판정)**: ①**B안 `enableFreeze` 전역**(react-native-screens로 비활성 화면 렌더 동결) — 스택 전체
 동작을 바꿔 리스크 표면 과다로 반려. ②**D2 enshrine `useDeferredReady`**(enshrine 마운트를 지연) — enshrine 자신이
