@@ -37,7 +37,7 @@ interface ScreenProps {
  *  이 구성에선 안 먹어, 헤더가 이미 소비한 상태바 인셋을 SafeAreaView가 헤더 아래에 **한 번 더** 넣어
  *  ~28dp 고정 빈 band(경기장 배경이 비침)가 생겼다(스크롤해도 남음 = 스크롤 패딩 아님). →
  *  **HeaderShownContext로 명시 처리**: 헤더 있는 화면(전 Tabs/대부분 Stack)은 top 엣지를 빼고(헤더가 상태바 담당),
- *  headerShown:false 세리머니(enshrine·season-opening·champion)만 top 유지(제목이 상태바 밑으로 내려오게).
+ *  headerShown:false 세리머니(enshrine·champion 등)만 top 유지(제목이 상태바 밑으로 내려오게).
  *  ⚠ `useSafeAreaInsets().top`(raw) 직접 패딩 금지 — 헤더 화면에서 이중 패딩. 반드시 이 conditional edges 경유. */
 export function Screen({ title, children, scroll = true, headerRight, overlay, keyboard = false, insetBottom = true }: ScreenProps) {
   useThemeMode(); // 테마 토글 시 리렌더(배경·스크림 갱신)

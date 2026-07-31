@@ -1,11 +1,11 @@
-// 명예의전당 헌액 화면 — 오프시즌 진행 중(드래프트 → season-start endSeason 직후, 전지훈련보다 먼저)
+// 명예의전당 헌액 화면 — 오프시즌 뒷단 허브(일정 탭 §5.6.5)에서 `/enshrine?hub=1`로만 진입.
 // 이번 시즌 새 레전드를 유니폼 + 헌액 번호 일러스트로 기린다(관전형 1순위 — 보는 경험).
-// 순서(2026-07-08 사용자 결정): 헌액(지난 시즌 마무리) → 전지훈련(새 시즌 준비) → 개막 브리지 → 홈.
-// 새 레전드 0명이어도 자동 통과하지 않고 "헌액자 없음" 한 장을 조용히 보여준다(스킵 방지 — 사용자 결정).
+// 정정(2026-07-31 사용자 결정 — 뒷단 체인 완전 폐지): 옛 체인(season-start→헌액→전지훈련→개막 브리지)을
+//   없애 이 화면은 항상 허브 진입이다. done()은 항상 markEnshrineSeen + 일정 복귀(뒤로가기 자유 — 열람 화면이라 잠글 이유 없음).
+// 새 레전드 0명이어도 자동 통과하지 않고 "헌액자 없음" 한 장을 조용히 보여준다(허브·직접 진입 방어용 안전판).
 // docs/BROADCAST_SYSTEM §8.4. 번호 계보(사실)는 같은 구단·같은 번호 과거 레전드만 나열(가짜 인과 금지).
-import { useLocalSearchParams, useRouter, useNavigation } from 'expo-router';
-import { useEffect, useMemo } from 'react';
-import { BackHandler, Pressable, StyleSheet, Text, View } from 'react-native';
+import { useMemo } from 'react';
+import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { Screen } from '../components/Screen';
 import { LegendIllustration } from '../components/LegendIllustration';
 import { teamColors } from '../lib/teamColor';
@@ -18,11 +18,8 @@ import { useGameStore } from '../store/useGameStore';
 import { useOffseasonExit } from '../components/offseasonExit';
 
 export default function Enshrine() {
-  const router = useRouter();
-  // 허브 진입(§5.6.2 뒷단) — 일정 탭 오프시즌 카드에서 열면 `?hub=1`. 그때는 체인(전지훈련으로 replace)이 아니라
-  //   **일정으로 복귀**하고 뒤로가기도 막지 않는다(열람 화면이라 잠글 이유 없음). 체인 진입(season-start→enshrine)은 기존 그대로.
-  const { hub } = useLocalSearchParams<{ hub?: string }>();
-  const inHub = hub === '1';
+  // 항상 허브 진입(§5.6.5 뒷단) — 일정 탭 오프시즌 카드에서 `/enshrine?hub=1`로 연다. 체인 폐지(2026-07-31)로 다른 진입 경로 없음.
+  //   done()은 markEnshrineSeen(뒷단 순차 커서 전진) + 일정 복귀. 뒤로가기도 막지 않는다(열람 화면 — 잠글 이유 없음).
   const exit = useOffseasonExit();
   const season = useGameStore((s) => s.season);
   const my = useGameStore((s) => s.selectedTeamId);
@@ -36,24 +33,10 @@ export default function Enshrine() {
     [hallOfFame, season, my],
   );
 
-  // 헌액 완료 → 다음 단계(전지훈련, chain=1)로. 소비된 오프시즌 스택 정리는 체인 마지막(개막 브리지)이 dismissAll로 수행.
-  //   replace(REPLACE)로 넘어가 헌액 화면은 스택에서 교체된다(뒤로가기로 재노출 안 됨 — beforeRemove가 GO_BACK/POP 차단, B).
-  //   허브 진입(§5.6.5): 헌액 열람 마커(markEnshrineSeen)를 찍어 뒷단 순차 커서가 헌액→전지훈련으로 전진하게 한다(뒤로가기=미열람=헌액 유지).
+  // 헌액 완료 → 열람 마커(markEnshrineSeen)를 찍어 뒷단 순차 커서가 헌액→전지훈련으로 전진하게 하고 일정으로 복귀(exit).
+  //   뒤로가기(미열람)면 마커 미세팅 → 헌액 스텝 유지(§5.6.5 멱등). 잠금 없음 — 열람 화면이라 자유 이탈(체인 폐지 2026-07-31).
   const markEnshrineSeen = useGameStore((s) => s.markEnshrineSeen);
-  const done = () => { if (inHub) { markEnshrineSeen(); exit(); } else router.replace('/training-camp?chain=1'); };
-  // 0명 자동 통과 제거(2026-07-08 사용자 결정) — 아래 "헌액자 없음" 안내 한 장을 보여주고 탭 한 번으로 진행.
-  // 헌액 흐름은 되돌릴 수 없다 — 하드웨어 백·제스처·POP 무력화(B). done()의 replace(REPLACE)만 통과.
-  const navigation = useNavigation();
-  useEffect(() => {
-    if (inHub) return; // 허브 진입은 자유 이탈(잠금은 체인 진입에만 — UI-28 범위 정정 2026-07-24)
-    const onBack = () => true;
-    const sub = BackHandler.addEventListener('hardwareBackPress', onBack);
-    const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
-      const t = e?.data?.action?.type;
-      if (t === 'GO_BACK' || t === 'POP') e.preventDefault();
-    });
-    return () => { sub.remove(); unsub(); };
-  }, [navigation, inHub]);
+  const done = () => { markEnshrineSeen(); exit(); };
 
   // 헌액자 없음 — 조용한 한 장(강제 대기 없이 탭 한 번으로 다음). 스쳐 지나가듯 스킵되지 않게 명시(2026-07-08 사용자 결정).
   if (newLegends.length === 0) {
@@ -65,7 +48,7 @@ export default function Enshrine() {
           <Text style={styles.emptySub}>전당에 새겨질 은퇴 레전드가 나오지 않았습니다.</Text>
         </View>
         <Pressable style={styles.btn} onPress={done}>
-          <Text style={styles.btnTxt}>{inHub ? '오프시즌 준비로 →' : '새 시즌 준비로 →'}</Text>
+          <Text style={styles.btnTxt}>오프시즌 준비로 →</Text>
         </Pressable>
       </Screen>
     );
@@ -101,7 +84,7 @@ export default function Enshrine() {
         })}
       </View>
       <Pressable style={styles.btn} onPress={done}>
-        <Text style={styles.btnTxt}>{inHub ? '오프시즌 준비로 →' : '새 시즌 준비로 →'}</Text>
+        <Text style={styles.btnTxt}>오프시즌 준비로 →</Text>
       </Pressable>
     </Screen>
   );

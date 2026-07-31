@@ -2,7 +2,7 @@
 // 5코스(공격/수비/블로킹/세터/서브) 중 하나로 관련 3스탯을 현재+3·포텐+3(최대 99 — 2026-07-08 사용자 결정 +2/+7→+3/+3 대칭). 선수당 오프시즌 1회.
 // 오프시즌(currentDay 0)에만 — 재시뮬/소급 방지. 현재·포텐 대칭(+3/+3) — 즉효 체감과 성장 여지를 함께(기구매는 레거시 +2/+7 보존, cur/pot 내장).
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useLocalSearchParams, useNavigation, useRouter } from 'expo-router';
+import { useNavigation, useRouter } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { showAlert } from '../components/AppDialog';
 import { BusyOverlay, useBusyRun } from '../components/BusyOverlay';
@@ -28,22 +28,14 @@ const COURSE_KEYS: CampCourse[] = ['attack', 'defense', 'block', 'setter', 'serv
 
 export default function TrainingCamp() {
   const router = useRouter();
-  // 오프시즌 체인 진입(season-start → enshrine → 여기, A3)이면 chain=1 — "새 시즌으로 ▶"로 다음 단계(개막 브리지) 진행.
-  //   순서 변경(2026-07-08 사용자 결정): 헌액이 전지훈련보다 앞. 전지훈련이 체인의 마지막 상호작용 단계.
-  // replace 로 들어와(enshrine에서) 뒤로 가도 앞 단계(헌액/드래프트)를 재노출하지 않음. 비-chain(마이페이지)은 뒤로가기만.
-  const { chain } = useLocalSearchParams<{ chain?: string }>();
-  const inChain = chain === '1';
-  // 체인 완료(전지훈련은 체인의 마지막 상호작용 단계) = 전지훈련을 "마친" 시점 → finishCamp()로 campDoneSeason=season 세팅.
-  //   이 세팅이 없으면 홈 도착 후 schedule 오프시즌 게이트(currentDay===0 && campDoneSeason!==season)가 살아 전지훈련이 2차로 재노출된다(버그).
-  //   비-chain "마치고 개막전으로"(finishToOpener)와 동일하게 캠프 화면 종료가 finishCamp를 부른다 — 게이트의 개막전 숨김(MONETIZATION §11.2)은 그대로 유지.
-  const goNext = () => { // 개막 브리지("새 시즌이 시작됩니다") → 홈. 특별훈련 0회+살수있음이면 건너뜀 확인 먼저(2026-07-17).
-    const go = () => { finishCamp(); router.replace('/season-opening'); };
-    if (skipConditionActive()) confirmSkipSpecialTraining(go); else go();
-  };
+  // 뒷단 체인 완전 폐지(2026-07-31 사용자 결정): 옛 체인 진입 모드·"새 시즌으로 ▶" 분기·개막 브리지 화면을 제거했다.
+  //   이 화면은 이제 항상 비-체인(일정 탭 뒷단 허브 또는 마이페이지)이고, 종료는 항상 finishToOpener(마치고 개막전으로 → 일정 복귀)다.
+  //   전지훈련을 "마친" 시점에 finishCamp()로 campDoneSeason=season 세팅 — 없으면 schedule 오프시즌 게이트(currentDay===0 &&
+  //   campDoneSeason!==season)가 살아 전지훈련이 재노출된다(게이트의 개막전 숨김 MONETIZATION §11.2 유지).
   // 무거운 작업 마스킹(UI-27): finishCamp+귀환(base 재계산)=동기 → useBusyRun, 전지훈련 보내기(서버 차감)=비동기 → sending 로컬 state.
   const busy = useBusyRun();
   const [sending, setSending] = useState<string | null>(null);
-  // 스케줄 오프시즌 게이트에서 진입(비-chain) — 캠프를 마치면 campDoneSeason 세팅 → 스케줄에 개막전(다음 경기) 노출(2026-07-04).
+  // 스케줄 오프시즌 게이트에서 진입 — 캠프를 마치면 campDoneSeason 세팅 → 스케줄에 개막전(다음 경기) 노출(2026-07-04).
   // 귀환은 router.back() 대신 결정론적으로(2026-07-11): back()은 스택 모양에 의존해, 캠프 인스턴스가 여러 장
   // 쌓였거나(중복 진입) 캠프가 스택 루트(프로세스 복원 딥링크)면 "마쳤는데 전지훈련이 또 나오는" 반복 노출이 된다(사용자 제보).
   // dismissAll이 캠프를 전부 걷어 탭으로, 걷을 게 없으면(루트) 일정 탭으로 replace — 어느 스택 모양이든 한 번에 일정으로 귀환.
@@ -84,28 +76,22 @@ export default function TrainingCamp() {
   // 2단계 뒤로가기(2026-07-07 버그수정): 코스 화면(picked!==null)에서 ← / 안드로이드 하드웨어백 / iOS 제스처백은
   //   화면을 pop(일정으로 이탈)하지 말고 선수 목록으로 돌아가야 한다. beforeRemove로 뒤로가기 액션만 가로챈다.
   //   staleness 함정: 리스너 클로저가 초기 picked(null)만 보면 안 됨 → pickedRef를 매 렌더 최신화해 리스너가 fresh 값을 읽는다.
-  //   chain 흐름(goNext=router.replace)은 REPLACE 액션이라 미개입(GO_BACK/POP만 가로챔) — 개막 브리지 진행 안 막힘.
+  //   체인 폐지(2026-07-31): 헤더백/제스처를 숨기던 체인 분기 제거 — 항상 노출(선수 목록에서 뒤로가기=일정 자유 이탈).
   const navigation = useNavigation();
   const pickedRef = useRef<string | null>(null);
   pickedRef.current = picked;
-  // 체인 모드(오프시즌 진행): 헤더 뒤로가기 버튼·iOS 엣지 제스처를 숨겨 소비된 스택(드래프트/FA)으로의 이탈을 원천 차단.
-  //   비-chain(마이페이지·스케줄 게이트)은 기존대로 노출 — 2단계 뒤로가기 동작 유지.
-  useEffect(() => {
-    (navigation as any).setOptions({ headerBackVisible: !inChain, gestureEnabled: !inChain });
-  }, [navigation, inChain]);
   useEffect(() => {
     const unsub = (navigation as any).addListener('beforeRemove', (e: any) => {
       const t = e?.data?.action?.type;
-      if (t !== 'GO_BACK' && t !== 'POP') return; // REPLACE(goNext)·POP_TO_TOP는 통과 — 개막 브리지 진행 안 막힘
-      if (inChain) { e.preventDefault(); return; } // 체인 모드: 뒤로가기 전면 무력화(picked 무관 — 소비된 스택 잔재 이탈 차단)
-      if (pickedRef.current !== null) { // 비-chain 2단계: 코스 화면 → 선수 목록으로(일정 이탈 방지)
+      if (t !== 'GO_BACK' && t !== 'POP') return; // REPLACE·POP_TO_TOP는 통과
+      if (pickedRef.current !== null) { // 2단계: 코스 화면 → 선수 목록으로(일정 이탈 방지)
         e.preventDefault();
         setPicked(null);
         setCourse(null);
       }
     });
     return unsub;
-  }, [navigation, inChain]);
+  }, [navigation]);
 
   // 첫 전지훈련 진입 환영 선물(계정당 1회, 서버 멱등) — 신규 유저가 다이아 0이라 온보딩이 막히던 문제 해결.
   //   applied=true(첫 지급)일 때만 팝업. 오프라인이면 다음 온라인 진입에서 재시도(서버가 진실).
@@ -177,8 +163,6 @@ export default function TrainingCamp() {
           <IconLabel icon="airplane-outline" color={theme.warn}>오프시즌에만 가능</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4 }}>전지훈련은 오프시즌(시즌이 끝난 뒤)에만 보낼 수 있습니다. 이번 시즌을 마치고 다시 오세요.</Muted>
         </Card>
-        {/* 체인 진입인데 day0이 아닌 예외(endSeason 실패 등) — 막다른 화면이 되지 않게 진행 버튼 보장 */}
-        {inChain ? <View style={{ marginTop: 14 }}><Button label="새 시즌으로 ▶" onPress={goNext} /></View> : null}
       </Screen>
     );
   }
@@ -189,14 +173,6 @@ export default function TrainingCamp() {
       <Screen title="전지훈련">
         {busyOverlay}
         {balance}
-        {inChain ? (
-          <Card accent={theme.warn} flat>
-            <IconLabel icon="flag-outline" color={theme.warn}>새 시즌 준비, 마지막 단계</IconLabel>
-            <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
-              영입·드래프트가 끝났습니다. 새 시즌이 시작되기 전, 다이아로 선수를 전지훈련 보낼 수 있습니다. 보낼 선수가 없으면 아래 <Text style={{ color: theme.warn, fontWeight: '800' }}>새 시즌으로 ▶</Text> 로 진행하세요.
-            </Muted>
-          </Card>
-        ) : null}
         <Card accent={theme.good} flat>
           <IconLabel icon="airplane-outline" color={theme.good}>오프시즌 해외 캠프</IconLabel>
           <Muted style={{ fontSize: 13, marginTop: 4, lineHeight: 19 }}>
@@ -208,9 +184,7 @@ export default function TrainingCamp() {
         </Card>
         {/* 진행 버튼은 목록 위(드래프트·트라이아웃과 동일 패턴 — 2026-07-11 사용자 요청) */}
         <View style={{ marginBottom: 6 }}>
-          {inChain
-            ? <Button label="새 시즌으로 ▶" onPress={goNext} />
-            : <Button label="전지훈련 마치고 개막전으로 →" onPress={finishToOpener} />}
+          <Button label="전지훈련 마치고 개막전으로 →" onPress={finishToOpener} />
         </View>
         <IconLabel icon="people-outline" color={theme.accent}>선수 선택</IconLabel>
         <Muted style={{ fontSize: 12.5, marginTop: 2, marginBottom: 2, lineHeight: 18 }}>

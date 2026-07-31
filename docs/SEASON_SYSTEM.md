@@ -403,17 +403,22 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
 - **흐름**: 드래프트(`onFinish`) → `showSeasonStartAd()`(MONETIZATION §3, 첫 시즌 외 광고 — 항상 resolve) →
   `router.replace('/season-start')` → 로딩 표시 → `endSeason()` → ~~`router.replace('/enshrine')` → (헌액 0명이면 통과) 탭.~~
   → **정정(2026-07-08 사용자 결정 — 오프시즌 꼬리 순서 변경)**: `endSeason()` 후
-  **`enshrine`(헌액=지난 시즌 마무리) → `training-camp?chain=1`(전지훈련=새 시즌 준비) → `season-opening`(개막 브리지) → 탭(홈)**.
+  ~~**`enshrine`(헌액=지난 시즌 마무리) → `training-camp?chain=1`(전지훈련=새 시즌 준비) → `season-opening`(개막 브리지) → 탭(홈)**.~~
   과거(은퇴 레전드 기림)를 먼저 마무리하고 미래(선수 강화)를 준비한 뒤 개막하는 서사. ~~구 순서: 전지훈련 → 헌액 → 탭~~
-  (구현상 season-start가 `enshrine`으로 replace, 각 화면이 다음 단계로 `router.replace` 체인, beforeRemove가 GO_BACK/POP 차단·REPLACE/POP_TO_TOP 통과 — UI-28).
+  ~~(구현상 season-start가 `enshrine`으로 replace, 각 화면이 다음 단계로 `router.replace` 체인, beforeRemove가 GO_BACK/POP 차단·REPLACE/POP_TO_TOP 통과 — UI-28).~~
+  → **재정정(2026-07-31 사용자 결정 — 뒷단 체인 완전 폐지)**: `endSeason()` 후 season-start는 이제 **일정 허브로 복귀**
+  (`router.replace('/(tabs)/schedule')`)만 한다. 헌액·전지훈련은 일정 탭 뒷단 허브(§5.6.5 `postHubCurrentStep`: 헌액→전지훈련→개막전으로)가
+  순차 카드로 그리며 전부 뒤로가기 정상. `training-camp?chain=1` 체인 모드·**개막 브리지(`season-opening`) 화면은 삭제**한다
+  (전지훈련 종료가 `finishCamp`+`dismissAll`로 바로 일정 복귀, 개막 브리지 없음). season-start의 로딩 중 back-lock(하드백/POP
+  무력화)·스택 리셋(#113)은 **체인이 아니라 무거운 endSeason 보호**라 유지. UI-28은 뒷단 체인 폐지로 무효(취소선 정정).
 - **⚠ 진입점 3개(2026-07-24, §5.6 허브)**: `endSeason`으로 가는 문(광고 → `/season-start`)은 이제 **드래프트 센터·라이브 드래프트·일정 허브 카드** 셋이다.
   화면 로컬 `useRef` 래치는 화면이 다르면 공유되지 않아 광고 이중 노출을 못 막는다 → **공용 훅 `lib/seasonStart.ts` `useSeasonStartEntry()`**(모듈 레벨 래치)로 통일.
   최종 방어선은 여전히 `store.endSeason`의 `planNextAction(...).kind !== 'seasonOver'` 즉시-return(§6 진행 게이트) — 광고가 두 번 떠도 롤오버는 1회.
 - **⚠ 스택 리셋(`navigation.reset`) 유지**: `season-start.tsx`의 오프시즌 스택 정리(#113, 102.8→23.2s)는 허브 전환 후에도 **지우지 않는다**.
   허브 경로에선 스택이 얕아 no-op처럼 보이지만, 결산→…→드래프트를 push로 훑고 온 세션·구세이브 경로에선 여전히 병목을 제거한다(UI-50 ⑧).
-- **체인 두 안내 화면(2026-07-08 사용자 결정 — 스킵 방지)**:
-  ① **헌액자 0명 안내**(`app/enshrine.tsx`) — 자동 통과하지 않고 "이번 시즌 헌액자는 없습니다." 조용한 한 장(명전 톤) + "새 시즌 준비로 →". 강제 대기·타이머 없이 탭 한 번.
-  ② **개막 브리지**(`app/season-opening.tsx`, 신규) — 전지훈련 종료 → 홈 사이 "시즌이 시작됩니다."를 시즌 연도(`seasonYear(season)`)와 함께 미니멀하게. "개막전으로 →" 탭 한 번으로 `dismissAll`+`replace('/(tabs)')`(소비된 오프시즌 스택 정리). 과한 애니메이션 금지(사용자가 시상식 UI·BGM 별도 작업 예정).
+- ~~**체인 두 안내 화면(2026-07-08 사용자 결정 — 스킵 방지)**~~ → **정정(2026-07-31 — 체인 폐지)**: 아래 ①은 뒷단 허브(§5.6.5)에서만 도달(대상자 없으면 허브 항목 자체가 숨겨져 정상 플레이에선 안 뜸), ②는 **삭제**:
+  ① **헌액자 0명 안내**(`app/enshrine.tsx`) — 자동 통과하지 않고 "이번 시즌 헌액자는 없습니다." 조용한 한 장(명전 톤) + "오프시즌 준비로 →"(일정 복귀). 강제 대기·타이머 없이 탭 한 번. 허브 진입만 남아 방어용 안전판.
+  ② ~~**개막 브리지**(`app/season-opening.tsx`, 신규) — 전지훈련 종료 → 홈 사이 "시즌이 시작됩니다."를 시즌 연도(`seasonYear(season)`)와 함께 미니멀하게. "개막전으로 →" 탭 한 번으로 `dismissAll`+`replace('/(tabs)')`(소비된 오프시즌 스택 정리). 과한 애니메이션 금지(사용자가 시상식 UI·BGM 별도 작업 예정).~~ → **파일 삭제(2026-07-31)**. 전지훈련 종료(`finishCamp` + `dismissAll`/`replace('/(tabs)/schedule')`)가 개막 브리지 없이 바로 일정으로 복귀한다.
 - **⚠ 페인트-전-블록 버그(실기기 발견·교정 2026-06-30)**: 초기 구현은 `InteractionManager.runAfterInteractions`로
   endSeason을 미뤘으나, 이게 **화면 전환 애니메이션/첫 페인트보다 일찍 발화**해 endSeason 동기 블록이
   **직전 화면(드래프트)을 그대로 얼린 채** 돌았다(브랜드 로딩이 끝까지 안 보임 — 45프레임 ≈18s 전수 드래프트 동결 확인).
@@ -457,12 +462,14 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
                      ├─ draft ─────────┤
                      └─ draft-live ────┘
         └─ [새 시즌 시작하기] → 광고 → season-start → endSeason
-             → enshrine → training-camp(chain=1) → season-opening → 개막   ※뒷단 사슬은 유지(UI-28)
+             ~~→ enshrine → training-camp(chain=1) → season-opening → 개막   ※뒷단 사슬은 유지(UI-28)~~
+             → **일정 허브로 복귀**(§5.6.5 뒷단 순차 카드: 헌액→전지훈련→개막전으로, 전부 뒤로가기 정상) — 정정 2026-07-31
 ```
 
 - 이미 허브 패턴이 2곳 있었다: 시상식 복귀(`app/(tabs)/schedule.tsx` 우승 카드), 전지훈련 게이트 카드. 그 문법을 전 단계로 확장한 것.
-- **앞단(pre-rollover)만 허브**다. `endSeason` 이후 뒷단(헌액·전지훈련·개막 브리지)은 롤오버가 끝난 뒤라 되돌아가면
-  상태가 누수되므로 **UI-28 잠금 유지**.
+- ~~**앞단(pre-rollover)만 허브**다. `endSeason` 이후 뒷단(헌액·전지훈련·개막 브리지)은 롤오버가 끝난 뒤라 되돌아가면
+  상태가 누수되므로 **UI-28 잠금 유지**.~~
+  → **정정(2026-07-31 — 뒷단도 완전 허브)**: 앞단·뒷단 **둘 다 허브**다. 뒷단 체인(`enshrine`→`training-camp?chain=1`→`season-opening`)과 개막 브리지 화면을 폐지하고, 뒷단도 일정 탭 순차 단일 카드(§5.6.5)로만 그린다 — 헌액·전지훈련은 열람/1회성 상호작용이라 되돌아가도 누수될 "소비된 결정 상태"가 없다(campDoneSeason·enshrineSeenSeason 시즌-키 마커로 멱등). **UI-28 무효**.
 
 ### 5.6.2 두 위상 — 카드 목록이 다르다
 
@@ -494,7 +501,8 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
    조용히 실패한다(`data/offseason.ts` `cashAfterImports`). 일정 탭에서 무거운 프리뷰를 돌리는 건 비용 폭증이라
    **비권장** → **FA 카드 정적 주의 문구** + 외인/아시아쿼터 화면의 "FA 예산이 달라집니다" 안내로 처리.
 7. **라이브 드래프트 첫 픽 전 이탈** — `confirmedMyCount===0`이면 fast-forward가 안 걸려 처음부터 재생된다.
-   허브에선 이탈이 흔하므로 **재개 선택("이어서 보기 / 처음부터")** 을 제공한다.
+   허브에선 이탈이 흔하므로 재진입 시 확정 픽 지점으로 **자동 fast-forward(이어서 보기)** 한다. ~~+ "처음부터" 수동 버튼 제공~~
+   → **정정(2026-07-31)**: `↺ 처음부터 다시 보기` 수동 버튼은 제거(테스터 UX 정리). 이어서 보기(자동 fast-forward)만 남는다.
 
 > **정정(2026-07-28, 테스터 피드백 — 앞단 표시를 "나란히 목록" → "순차 단일 카드"로)**: 5.6.2 앞단 허브 카드가 5단계를
 > **한 번에 번호 목록으로 나란히** 노출하던 것을, "다음 경기" 카드처럼 **한 번에 한 업무 버튼만** 띄우는 순차 진행으로 바꿨다.
@@ -534,8 +542,9 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
 한 장(2026-07-08 결정)을 보여준다~~ → **허브 목록 자체에서 헌액 스텝을 뺀다.** 순수 헬퍼 `hasEnshrineHonorees(hallOfFame, season)`
 (= `hallOfFame.some(h => h.legend && h.retiredSeason === season-1)`)가 `false`면 `postOffseasonSteps(campDone, hasHonorees)`가
 **헌액 스텝을 제외**하고 전지훈련을 `n:1`로 내린다. `true`면 `[헌액 n:1, 전지훈련 n:2]`. 첫 시즌은 항상 `false` → 전지훈련만.
-- enshrine.tsx의 "헌액자 없음" 안내 한 장 로직은 **화면에 남긴다**(체인/직접 진입 안전판) — 단 **허브에서 항목이 안 뜨므로
-  정상 플레이에선 그 화면으로 가는 진입 경로가 사라진다**(=테스터가 본 "첫 시즌 명전"이 없어짐). WAI.
+- enshrine.tsx의 "헌액자 없음" 안내 한 장 로직은 **화면에 남긴다**(~~체인/직접 진입 안전판~~ → **정정 2026-07-31: 체인 폐지 후
+  허브·직접(딥링크) 진입 방어용만**) — 단 **허브에서 항목이 안 뜨므로 정상 플레이에선 그 화면으로 가는 진입 경로가 사라진다**
+  (=테스터가 본 "첫 시즌 명전"이 없어짐). WAI. enshrine은 이제 오직 `/enshrine?hub=1`(일정 허브)로만 진입하고 done()은 항상 `markEnshrineSeen`+일정 복귀(체인 분기 삭제).
 
 **정정 ② 뒷단도 순차 단일 카드(앞단과 동일 패턴).** ~~`postSteps.map`으로 헌액·전지훈련을 나란히 목록~~ →
 **현재 스텝 하나만** 표시("○○ 하러 가기 →") + **"개막전으로 →"는 항상 표시**(개막 강제 아님, 규칙 2 — `onOpenSeason`
@@ -553,6 +562,11 @@ clinch 카드를 숨긴다**. 스테일 정규 정보가 상단을 점유해 포
 
 `_dv_hub` 확장(§5.6.4): `hasEnshrineHonorees` 진리표(첫시즌 false·대상자 true·A/B 감도) + `postOffseasonSteps` 조건부
 포함(hasHonorees false→헌액 없음·전지훈련 n:1 / true→2스텝) + `postHubCurrentStep` 판정(헌액→전지훈련→완료 전이).
+
+**뒷단 체인 제거 회귀 검사(2026-07-31 추가, §5.6.4 [C]블록)**: ① `app/season-start.tsx`에 `replace('/enshrine')` 잔재 0(일정 허브로 복귀)
+② `app/enshrine.tsx`에 `training-camp?chain=1` 잔재 0 ③ `app/training-camp.tsx`에 `chain === '1'`·`inChain`·`season-opening` 잔재 0
+④ `app/season-opening.tsx` 파일 부재 ⑤ 코드베이스(app/·components/·data/·store/·lib/) `season-opening` 참조 0(_layout Stack.Screen 등록 포함 제거).
+A/B 자가검증: 각 잔재를 되살린 뮤턴트에서 해당 검사 FAIL(사본 복원).
 
 ## 6. 오프시즌 오케스트레이션 (store.endSeason)
 

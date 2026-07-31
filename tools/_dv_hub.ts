@@ -19,6 +19,9 @@
 //   B8 뒷단 헌액 조건부 숨김(§5.6.5): hasEnshrineHonorees 진리표(첫 시즌 false·지난 시즌 레전드 true·season 감도) +
 //      postOffseasonSteps 조건부 포함(대상 없음→전지훈련만 / 있음→헌액+전지훈련) + postHubCurrentStep 순차 전이(헌액→전지훈련→완료)
 //   B8b 헌액 열람 마커 markEnshrineSeen(멱등·시즌-키)
+//   C  뒷단 체인 완전 제거(§5.6.1·§5.6.5, 2026-07-31) — 옛 사슬(season-start→enshrine→training-camp?chain=1→season-opening) 폐지:
+//      C1 season-start가 /enshrine 직행(체인) 없이 일정 허브로 복귀 · C2 enshrine에 training-camp?chain=1 없음
+//      C3 training-camp에 inChain·chain==="1" 없음 · C4 app/season-opening.tsx 파일 부재 · C5 코드베이스 /season-opening 참조 0(_layout 등록 포함)
 //
 // A/B 자가검증(허위 오라클 금지): 구조를 되돌린 뮤턴트에서 반드시 FAIL 해야 한다 —
 //   ① fa.tsx에 `router.push('/draft')` 복원 → A1 FAIL
@@ -28,9 +31,11 @@
 //   ⑤ hasEnshrineHonorees를 `season+1`로 오프바이원 → B8 season 감도 FAIL
 //   ⑥ postOffseasonSteps에서 hasHonorees 무시하고 항상 헌액 포함 → B2 뒷단(대상자 없음) FAIL
 //   ⑦ postHubCurrentStep에서 enshrineSeen 무시 → B8 커서=전지훈련(헌액 후) FAIL
+//   ⑧ season-start에 `replace('/enshrine')` 복원 → C1 FAIL · ⑨ enshrine에 `training-camp?chain=1` 복원 → C2 FAIL
+//   ⑩ training-camp에 `inChain` 복원 → C3 FAIL · ⑪ app/season-opening.tsx 재생성 → C4·C5 FAIL · ⑫ _layout에 season-opening 등록 복원 → C5 FAIL
 import './_gt_mock';
 import Module from 'module';
-import { readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 
 // @expo/vector-icons 스텁 — B7이 components/draftPickGuard(→AppDialog)를 실제로 import해 **동작**을 검사하는데,
@@ -145,6 +150,41 @@ const CHAIN_EDGES: Array<[string, string]> = [
   const entry = read('lib/seasonStart.ts');
   ok(/^let\s+startingLatch/m.test(entry), 'A5 모듈 레벨 래치 없음', '화면 로컬 ref는 진입점 간 공유 안 됨');
   ok(/finally/.test(entry), 'A5 finally 해제 없음', 'UI-31');
+
+  // ── [C] 뒷단 체인 완전 제거 (§5.6.1·§5.6.5, 2026-07-31 사용자 결정) ──
+  // 옛 뒷단 사슬(season-start→enshrine→training-camp?chain=1→season-opening)을 폐지하고 일정 허브(뒷단 순차 카드)로만 진행.
+  console.log('\n[C] 뒷단 체인 제거');
+  // C1 — season-start는 endSeason 후 enshrine로 직행(체인)하지 않고 일정 허브로 복귀
+  const ssSrc = read('app/season-start.tsx');
+  ok(ssSrc.length > 0, 'C1 소스 없음', 'app/season-start.tsx');
+  ok(!/\.replace\(\s*['"`]\/enshrine['"`]\s*\)/.test(ssSrc), 'C1 enshrine 직행 잔재', 'season-start가 endSeason 후 /enshrine으로 replace(체인) — 일정 허브로 복귀해야 한다');
+  ok(/\.replace\(\s*['"`]\/\(tabs\)\/schedule['"`]\s*\)/.test(ssSrc), 'C1 일정 복귀 없음', 'season-start가 endSeason 후 일정 허브로 복귀하지 않는다');
+  // C2 — enshrine은 전지훈련 체인(training-camp?chain=1)으로 넘어가지 않는다(done()은 항상 허브 복귀)
+  const enSrc = read('app/enshrine.tsx');
+  ok(!/training-camp\?chain=1/.test(enSrc), 'C2 전지훈련 체인 잔재', 'enshrine에 training-camp?chain=1 push(체인) 잔재 — done()은 일정 복귀여야 한다');
+  // C3 — training-camp에 chain 모드 잔재 없음(inChain 식별자·chain==="1" 파라미터 분기)
+  const tcSrc = read('app/training-camp.tsx');
+  ok(!/\binChain\b/.test(tcSrc), 'C3 inChain 잔재', 'training-camp chain 모드 식별자');
+  ok(!/chain\s*===\s*['"]1['"]/.test(tcSrc), 'C3 chain===1 잔재', 'training-camp chain 파라미터 분기');
+  // C4 — 개막 브리지 화면 파일 부재
+  ok(!existsSync(join(ROOT, 'app/season-opening.tsx')), 'C4 season-opening 파일 존재', '개막 브리지 화면은 삭제돼야 한다');
+  // C5 — 코드베이스(app/·components/·data/·store/·lib/) /season-opening 라우트 참조 0 + _layout Stack.Screen 등록 제거
+  const SCAN_DIRS = ['app', 'components', 'data', 'store', 'lib'];
+  const offenders: string[] = [];
+  const walk = (dir: string) => {
+    const abs = join(ROOT, dir);
+    if (!existsSync(abs)) return;
+    for (const ent of readdirSync(abs, { withFileTypes: true })) {
+      const rel = `${dir}/${ent.name}`;
+      if (ent.isDirectory()) { walk(rel); continue; }
+      if (!/\.tsx?$/.test(ent.name)) continue;
+      const s = read(rel);
+      if (/\/season-opening/.test(s)) offenders.push(`${rel} (/season-opening 라우트 참조)`);
+      if (rel === 'app/_layout.tsx' && /name=['"`]season-opening['"`]/.test(s)) offenders.push(`${rel} (Stack.Screen 등록)`);
+    }
+  };
+  for (const d of SCAN_DIRS) walk(d);
+  ok(offenders.length === 0, 'C5 season-opening 참조 잔재', offenders.join(' · '));
 
   console.log('\n[B] 런타임 동작');
   const { useGameStore } = await import('../store/useGameStore');

@@ -1,6 +1,6 @@
 import { useRouter } from 'expo-router';
 import { useMemo, useRef, useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { StyleSheet, Text, View } from 'react-native';
 import { Button, Card, IconLabel, Loading, Muted, OvrBadge, PosTag, Screen, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { ExpandableRow } from '../components/ExpandableRow';
 import { buildOffseasonBase } from '../data/draftSetup';
@@ -19,7 +19,6 @@ import { neededPositions } from '../engine/draft';
 import { overallRaw, REVEAL_PRECISE } from '../engine/overall';
 import type { Position } from '../types';
 import { useGameStore } from '../store/useGameStore';
-import { useSeasonStartEntry } from '../lib/seasonStart';
 import { useOffseasonExit } from '../components/offseasonExit';
 import type { Player } from '../types';
 
@@ -74,9 +73,7 @@ export default function DraftCenter() {
 
 function DraftCenterInner() {
   const router = useRouter();
-  const exit = useOffseasonExit(); // 오프시즌 허브 복귀(§5.6)
-  // 새 시즌 시작 진입점 — 화면 로컬 ref가 아니라 **공용 훅**(모듈 래치)이라 일정 허브·라이브와 광고를 중복 노출하지 않는다(UI-50 ⑤).
-  const seasonStart = useSeasonStartEntry();
+  const exit = useOffseasonExit(); // 오프시즌 허브 복귀(§5.6) — 일정으로 나가는 출구(소프트락 봉인, _dv_hub A2)
   const my = useGameStore((s) => s.selectedTeamId)!;
   const season = useGameStore((s) => s.season);
   const resignDecisions = useGameStore((s) => s.resignDecisions);
@@ -129,11 +126,6 @@ function DraftCenterInner() {
     [ctx, my],
   );
 
-  // 광고 뜨기 전 연타 재진입 가드(UI-31)는 useSeasonStartEntry가 **모듈 레벨 래치**로 수행 —
-  //   ~~화면 로컬 startingRef~~(진입점이 3개가 되며 화면 간 공유가 안 돼 광고 이중 노출 위험, UI-50 ⑤).
-  const starting = seasonStart.starting;
-  const onFinish = () => { void seasonStart.start(); };
-
   return (
     <Screen title={`${season + 2}시즌 신인 드래프트`}>
       <Card accent={theme.sky} flat>
@@ -182,12 +174,9 @@ function DraftCenterInner() {
       </Card>
 
       <Button label="라이브 드래프트 진행 →" onPress={() => router.push('/draft-live')} />
+      {/* 시즌 시작(새 시즌)은 라이브 드래프트의 "시즌 시작하기 ▶" 또는 일정 허브에서 한다 — 드래프트 센터의 "지명하지 않고
+          새 시즌 시작" 바로가기는 제거(2026-07-31, 혼란 정리). 일정 복귀는 아래 "오프시즌 준비로 →"(exit) 또는 헤더 뒤로가기. */}
       <Button label="오프시즌 준비로 →" variant="ghost" onPress={exit} />
-      {/* ~~"건너뛰고 찜 순서대로 자동 지명"~~ → 정정(2026-07-24 §5.6): 허브에선 건너뛰기가 상시 가능해지므로 **대행 사실을 명시**한다.
-          실제 코드는 mySelections → draftPicks(찜) → **없으면 AI 로직 그대로** 폴백이라(engine/draft.ts), 찜이 없으면 감독·스카우트가 판단한다. */}
-      <Pressable onPress={onFinish} disabled={starting} style={{ paddingVertical: 8, alignItems: 'center', opacity: starting ? 0.5 : 1 }}>
-        <Text style={{ color: starting ? theme.muted : theme.sky, fontSize: 13, fontWeight: '700' }}>{starting ? '시즌 준비 중…' : '› 지명하지 않고 새 시즌 시작 (감독·스카우트가 대신 지명)'}</Text>
-      </Pressable>
 
       <Title>드래프트 클래스 ({classSorted.length}명)</Title>
       {classSorted.map((p) => {

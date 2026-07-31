@@ -30,7 +30,8 @@ export default function SeasonStart() {
   const ran = useRef(false);
 
   // 로딩(endSeason 실행) 중 하드웨어 백·POP 무력화(C) — 타이머 취소로 endSeason이 안 도는 걸 방지.
-  //   replace('/enshrine')(REPLACE)만 통과시켜 정상 진행.
+  //   ⚠ 이건 뒷단 체인 잠금이 아니라 무거운 endSeason 동기 블록 보호다(체인 폐지 2026-07-31 후에도 유지 — UI-28 무관).
+  //   endSeason 완료 후 replace('/(tabs)/schedule')(REPLACE)만 통과시켜 일정 허브로 복귀.
   const navigation = useNavigation();
   useEffect(() => {
     const onBack = () => true;
@@ -43,7 +44,7 @@ export default function SeasonStart() {
   }, [navigation]);
 
   // 오프시즌 스택 정리를 endSeason 전에 — 커밋 후 동기 렌더 패스가 스택(schedule→recap→tryout→asian→fa)의
-  //   콜드 셀렉터 재계산을 전부 하던 43~103s를 제거(#113, 스택은 어차피 season-opening dismissAll로 소멸).
+  //   콜드 셀렉터 재계산을 전부 하던 43~103s를 제거(#113, 스택은 어차피 오프시즌 화면의 일정 복귀 dismissAll로 소멸).
   //   기존 route 객체(키) 보존으로 (tabs)·season-start 리마운트 방지. endSeason(스토어 변이)보다 먼저
   //   커밋돼야 하며, endSeason은 PAINT_DELAY+2×RAF 뒤라 이 마운트 effect가 선행된다.
   // ⚠ **허브 도입(2026-07-24, §5.6) 후에도 유지한다 — no-op처럼 보여도 지우지 마라.** 허브 경로에선 각 오프시즌
@@ -71,9 +72,10 @@ export default function SeasonStart() {
           ran.current = true;
           try { endSeason(); } catch (e) { logError('seasonStart.endSeason', e); }
           clearInterval(iv);
-          // endSeason 직후 currentDay=0(새 로스터 확정) → 헌액(지난 시즌 마무리) → 전지훈련(A3, day0 제약) → 개막 브리지 → 대시보드.
-          //   순서 변경(2026-07-08 사용자 결정): 과거(헌액=은퇴자 기림)를 먼저 마무리하고 미래(전훈=새 시즌 준비)를 준비한 뒤 개막.
-          router.replace('/enshrine');
+          // endSeason 직후 currentDay=0(새 로스터 확정) → **일정 허브(뒷단 §5.6.5)로 복귀**.
+          //   정정(2026-07-31 사용자 결정 — 뒷단 체인 완전 폐지): 옛 헌액→전지훈련→개막 브리지 사슬을 없애고,
+          //   헌액·전지훈련·개막전은 일정 탭 뒷단 순차 카드(postHubCurrentStep)가 그린다(전부 뒤로가기 정상).
+          router.replace('/(tabs)/schedule');
         });
       });
     }, PAINT_DELAY);

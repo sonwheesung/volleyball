@@ -373,12 +373,8 @@ function DraftLiveInner() {
         </Muted>
       ) : null}
 
-      {/* 재개 선택(§5.6.3 ⑦) — 허브에선 라이브 중간 이탈이 흔하다. 확정 픽이 있으면 마운트 시 그 지점으로 fast-forward하는데,
-          "처음부터 다시 보고 싶다"는 선택지가 없었다. 확정 픽은 그대로 두고 공개만 0으로 되돌린다(결정론 무관 — 표시 상태). */}
-      {confirmedMyCount > 0 && revealed > 0 && !done ? (
-        <Button label="↺ 처음부터 다시 보기" variant="ghost" onPress={() => { setRevealed(0); setPaused(false); }} />
-      ) : null}
-      {/* 첫 픽 전 이탈도 막지 않는다 — 언제든 일정으로 나가고 다시 들어올 수 있다(소프트락 봉인). */}
+      {/* 첫 픽 전 이탈도 막지 않는다 — 언제든 일정으로 나가고 다시 들어올 수 있다(소프트락 봉인). 확정 픽이 있으면
+          마운트 시 그 지점으로 자동 fast-forward(이어서 보기). "↺ 처음부터 다시 보기" 수동 버튼은 제거(2026-07-31). */}
       <Button label="오프시즌 준비로 →" variant="ghost" onPress={exit} />
 
       <ScrollView style={{ marginTop: 10 }}>
