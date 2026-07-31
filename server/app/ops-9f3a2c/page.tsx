@@ -1331,7 +1331,7 @@ function Errors({ api }: { api: Api }) {
         <div className="oc-cardhead"><h3>결제 오류 사유별 <span className="oc-tag2">자체-롤업(서버 로그)</span></h3>
           <CsvBtn onClick={() => downloadCsv('errors-byreason.csv', ['사유(reasonCode)', '건수'], byReason.map((b) => [String(b.reasonCode), nnum(b.n)]))} />
         </div>
-        {loading ? <LoadingRow /> : byReason.length === 0 ? <div className="oc-empty">최근 14일 결제 오류가 없습니다. (결제 실패/거부/에러 시 여기 집계)</div> : (
+        {loading ? <LoadingRow /> : byReason.length === 0 ? <div className="oc-empty">결제 오류가 없습니다. (결제 실패/거부/에러 시 여기 집계)</div> : (
           <table className="oc-table">
             <thead><tr><th>사유 (reasonCode)</th><th style={{ textAlign: 'right' }}>건수</th></tr></thead>
             <tbody>{byReason.map((b, i) => <tr key={i}><td>{String(b.reasonCode)}</td><td style={{ textAlign: 'right', fontWeight: 700, color: 'var(--dg)' }}>{nnum(b.n).toLocaleString()}</td></tr>)}</tbody>
@@ -1339,7 +1339,7 @@ function Errors({ api }: { api: Api }) {
         )}
       </div>
       <div className="oc-card">
-        <div className="oc-cardhead"><h3>최근 오류 로그 <span className="oc-mut">(최근 14일 · {recent.length})</span></h3></div>
+        <div className="oc-cardhead"><h3>최근 오류 로그 <span className="oc-mut">(최신 {recent.length})</span></h3></div>
         {loading ? <LoadingRow /> : recent.length === 0 ? <div className="oc-empty">최근 오류 로그가 없습니다.</div> : (
           <table className="oc-table">
             <thead><tr><th>시각</th><th>단계</th><th>사유</th><th>상품</th><th>유저</th></tr></thead>

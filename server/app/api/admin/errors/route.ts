@@ -3,7 +3,7 @@
 //   [외부-sync] 골격: Sentry(API 실패·서버 오류) / Crashlytics(앱 크래시)는 EAS·API키 후. SENTRY_API_TOKEN 없으면 "미설정" 배지(throw-none).
 //   ※ 로딩/네트워크/로그인 실패 [자체-롤업]은 track() 수신 파이프라인(EAS) 후 — placeholder. 결정론 격리(§8): 순수 관측 메타.
 import { NextResponse } from 'next/server';
-import { and, eq, desc, gte, count } from 'drizzle-orm';
+import { and, eq, desc, gte, count, sql } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { purchaseEvent } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
@@ -20,22 +20,24 @@ export async function GET(req: Request) {
     const url = new URL(req.url);
     const limit = Math.min(100, Math.max(1, Number(url.searchParams.get('limit')) || 50));
     const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
-    const win = new Date(Date.now() - 14 * 86400000);
     const fail = and(eq(purchaseEvent.projCode, PROJ_CODE), eq(purchaseEvent.ok, false));
 
     const [tot] = await db.select({ n: count() }).from(purchaseEvent).where(fail);
     const [tdy] = await db.select({ n: count() }).from(purchaseEvent).where(and(fail, gte(purchaseEvent.createdAt, dayStart)));
 
-    // 최근 14일 실패를 당겨 사유별 집계 + 최근 목록(대규모 시 SQL group by TODO — 관리자 저빈도라 허용)
+    // 사유별 = 전기간 group by(total과 정합 — 14일 창을 걷어내 "누적 N건인데 상세는 빈값" 불일치 제거).
+    //   reasonCode 없으면 outcome, 둘 다 없으면 '(미분류)'. 실패 종류는 소수라 group by 저비용.
+    const reasonKey = sql<string>`coalesce(${purchaseEvent.reasonCode}, ${purchaseEvent.outcome}, '(미분류)')`;
+    const grouped = await db.select({ reasonCode: reasonKey, n: count() })
+      .from(purchaseEvent).where(fail).groupBy(reasonKey).orderBy(desc(count()));
+    const byReason = grouped.map((g) => ({ reasonCode: g.reasonCode, n: g.n }));
+
+    // 최근 목록 = 전기간 최신 limit건(오래된 실패도 진단 가능하게 — 대규모 시 페이지네이션 TODO).
     const rows = await db.select({
       id: purchaseEvent.id, createdAt: purchaseEvent.createdAt, source: purchaseEvent.source, stage: purchaseEvent.stage,
       outcome: purchaseEvent.outcome, reasonCode: purchaseEvent.reasonCode, errorMessage: purchaseEvent.errorMessage,
       productId: purchaseEvent.productId, userId: purchaseEvent.userId,
-    }).from(purchaseEvent).where(and(fail, gte(purchaseEvent.createdAt, win))).orderBy(desc(purchaseEvent.createdAt)).limit(limit);
-
-    const byReasonMap = new Map<string, number>();
-    for (const r of rows) { const k = r.reasonCode || r.outcome || '(미분류)'; byReasonMap.set(k, (byReasonMap.get(k) ?? 0) + 1); }
-    const byReason = Array.from(byReasonMap.entries()).map(([reasonCode, n]) => ({ reasonCode, n })).sort((a, b) => b.n - a.n);
+    }).from(purchaseEvent).where(fail).orderBy(desc(purchaseEvent.createdAt)).limit(limit);
     const recent = rows.map((r) => ({ ...r, userId: mask(r.userId) }));
 
     // [외부-sync] Sentry — 키 있을 때만 pull 골격, 없으면 미설정(화면 안 막음). 실제 pull은 org/project slug 연결(§13.25-B) 후.
