@@ -164,6 +164,16 @@ export async function adStatusToday(userId: string): Promise<{ count: number; la
   return { count: r?.n ?? 0, lastAtMs: r?.lastMs != null ? Number(r.lastMs) : null };
 }
 
+/** 접속 하트비트(DAU 정확화, BACKEND §13.15) — 인증된 포그라운드 콜에서 lastSeenAt을 now()로 찍는다.
+ *  ~~로그인 시에만 lastSeenAt 갱신(하트비트 미구현) → DAU가 "오늘 로그인한 사람"만 셈~~ → GET /api/wallet(=앱이 로그인·포그라운드마다 부르는
+ *  syncWallet)에서 이 함수를 태워 DAU를 "오늘 앱을 켠 사람"으로 정확화(2026-07-31, 테스터: 오늘 테스트했는데 DAU 0 — 세션 영속이라 재로그인 안 함).
+ *  now()는 DB 클럭(로그인과 동일 규약). 탈퇴 유저 제외. 실패는 조용히 무시(지표 부수효과라 본 응답을 막지 않는다). */
+export async function touchLastSeen(userId: string): Promise<void> {
+  try {
+    await db.update(users).set({ lastSeenAt: sql`now()` }).where(and(eq(users.id, userId), isNull(users.deletedAt)));
+  } catch { /* 하트비트 실패는 무시 — DAU 근사, 본 기능 아님 */ }
+}
+
 /** 현재 잔액 + 최근 원장 N건 + 오늘 광고 상태(쿨다운/캡 서버 진실) + 출석 패스 상태(Q2 §2.4).
  *  pass는 순환 import 방지 위해 지연 import(lib/pass → lib/wallet 역참조 회피). */
 export async function getWallet(userId: string, recent = 20) {

@@ -1,6 +1,7 @@
 // /api/admin/stats — 운영 대시보드 지표(BACKEND_SYSTEM §13.15, #46). requireAdmin(fail-closed).
 // 가용 실데이터로 산출: KPI(총가입·최근접속·DAU·신규·탈퇴·비활성·결제전환) + 14일 시계열(신규가입·DAU·매출·광고) + 시간대별 접속.
-//   ※ lastSeenAt은 로그인 시 갱신(하트비트 미구현) → "실시간/시간대별 접속"은 로그인 기준 근사. 매출은 statsDaily(결제 #43 연동 전 0).
+//   ※ lastSeenAt 갱신: 로그인 + **포그라운드 하트비트**(GET /api/wallet=syncWallet, lib/wallet touchLastSeen, 2026-07-31) → DAU="오늘 앱 켠 사람"(재로그인 불필요).
+//     "실시간/시간대별 접속"도 이 하트비트 기준(하트비트 없던 시절엔 로그인 기준 근사였음). 날짜 경계는 UTC(dayStart.setUTCHours). 매출은 statsDaily(결제 #43 연동 전 0).
 //   ※ 업적 달성율은 클라이언트 계산(결정론 격리 — 서버 미보유). 별도 텔레메트리 필요.
 //   ※ 유저/원장을 fetch해 JS 버킷팅 — 대규모 시 SQL group by로 전환(TODO). 관리자 전용·저빈도라 허용.
 import { NextResponse } from 'next/server';
