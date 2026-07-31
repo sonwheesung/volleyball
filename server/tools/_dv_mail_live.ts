@@ -245,6 +245,23 @@ process.env.ADMIN_TOKEN = 'test-admin-token-abcdef0123456789'; // ≥16자(fail-
   const oRecalled = await db.select({ n: sql<number>`count(*)::int` }).from(mails).where(and(eq(mails.projCode, PROJ_CODE), eq(mails.userId, uO.id), eq(mails.sender, 'system:pass'), sql`${mails.recalledAt} is not null`));
   ok(oRecalled[0].n >= 1, `  미수령 우편 recalled_at set(환불 후 수령 봉인) — 실측 ${oRecalled[0].n}통`);
 
+  console.log('── P. [A/B] system:pass 우편은 recallMail 회수 불가(§5.3 sender 가드) — 뮤턴트(가드 제거)면 회수됨 ──');
+  const uP = await makeUser('P');
+  await grantPass(uP.id, `${TAG}_p_txn`, new Date(), 'diamond_pass', false); // day-0 system:pass 우편 발송(미수령)
+  const pMails = await db.select({ id: mails.id }).from(mails).where(and(eq(mails.projCode, PROJ_CODE), eq(mails.userId, uP.id), eq(mails.sender, 'system:pass'), isNull(mails.claimedAt), isNull(mails.recalledAt)));
+  ok(pMails.length >= 1, `  system:pass 미수령 우편 ≥1통 준비 — 실측 ${pMails.length}통`);
+  const pMail = pMails[0].id;
+  // A(가드): admin 회수(recallMail 경유) → 거부·recalled_at 미설정(sender <> 'system:pass')
+  const recP = await (await adminRecall(pMail)).json();
+  const pRow = await db.select({ r: mails.recalledAt }).from(mails).where(eq(mails.id, pMail)).limit(1);
+  ok(recP.ok === false && pRow[0].r === null, `  [A] recallMail(system:pass) → 회수 거부·recalled_at NULL(패스 일일 우편 보호) — 실측 ok ${recP.ok}·recalled ${pRow[0].r}`);
+  // B(뮤턴트): sender 가드를 뺀 raw UPDATE(=회수 쿼리에서 가드 제거) → 같은 우편이 회수됨 → sender 가드가 유일 차단막임을 증명
+  const mut = await db.update(mails).set({ recalledAt: sql`now()` })
+    .where(and(eq(mails.projCode, PROJ_CODE), eq(mails.id, pMail), isNull(mails.claimedAt), isNull(mails.recalledAt)))
+    .returning({ id: mails.id });
+  const pRow2 = await db.select({ r: mails.recalledAt }).from(mails).where(eq(mails.id, pMail)).limit(1);
+  ok(mut.length === 1 && pRow2[0].r !== null, `  [B] 뮤턴트(sender 가드 제거) → 같은 우편 회수됨(가드가 load-bearing) — 실측 rows ${mut.length}·recalled ${!!pRow2[0].r}`);
+
   // ── 정리 — 테스트 유저·우편·패스·원장·관측·브로드캐스트 삭제(FK 순서: receipts→broadcasts) ──
   const testUserIds = (await db.select({ id: users.id }).from(users).where(and(eq(users.projCode, PROJ_CODE), sql`${users.providerId} like ${TAG + '%'}`))).map((r) => r.id);
   if (testUserIds.length) {

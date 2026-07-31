@@ -164,13 +164,13 @@ production 캐시는 롤오버에서 날아간다. **시상식은 `endSeason`에
 | award key | 자산(assets/awards/) | 톤(계열) | bright | 네온 샘플 | 수여 화면 | 패널 좌표 실측 |
 |---|---|---|---|---|---|---|
 | `mvp` | `mvp_stage.webp` | 민트(기본) | `#5FEAD8` | `#24A096` | awards-ceremony(정규 MVP 클라이맥스) | 79.9~95.1% |
-| `finalsMvp` | `finals_mvp_stage.webp` | 민트(유지) | `#5FEAD8` | `#289F9A` | champion-ceremony(챔프전 MVP, §5.3 유일 수여) | 79.9~95.1% |
+| `finalsMvp` | `finals_mvp_stage.webp` | ~~민트(유지)~~ **골드(TONE_GOLD, 적용 완료)** | ~~`#5FEAD8`~~ `#F2C24A` | ~~`#289F9A`~~ `#D59823`(골드) | champion-ceremony(챔프전 MVP, §5.3 유일 수여) | 79.9~95.1% |
 | `rookie` | `rookie_stage.webp` | **블루** | `#5FB8EA` | `#19B8E2` | awards-ceremony(신인상) | 80.0~95.1% |
 | `mostImproved` | `mip_stage.webp` | ~~퍼플~~ **오렌지**(TONE_ORANGE) | ~~`#C77FF2`~~ `#FF9A3D` | ~~`#AC2CE2`~~ `#FCB32A`(선라이즈) | awards-ceremony(기량발전상, footnote ~~`OVR ▲N`~~ → **`시즌 생산 ▲N`**(§9 개편 — value가 OVR델타→생산Δ), **`seasonMode:'yearOnly'`** — 타이틀 ~~8.7%~~ 9.0% 겹침 회피) | 80.0~95.1% |
 | `statLeader` | `statleader_stage.webp` | ~~레드~~ **실버**(TONE_SILVER) | ~~`#F2707F`~~ `#D8DEEA`(플래티넘) | ~~`#CB6D59`(웜레드)~~ `#FEFEFE`(순백→쿨실버 보정) | ~~**후속 배선**(부문 다수 — 수여 UX 설계 필요). 현재는 프리뷰만~~ → **awards-ceremony(부문 기록왕 7비트, §8.1 1안 배선 완료 2026-07-23)** | 80.0~95.1% |
 
-- **finalsMvp 톤 주석(교체 예정)**: 현재 민트 자산이라 톤도 민트 유지. **골드 자산으로 교체 예정** — 교체 시 `TONE_GOLD` 신설 후 그 줄만 톤 교체
-  (자산·톤이 같은 위치에 있어 한 줄 수정). `data/awardPoster.ts` 주석에 명기.
+- ~~**finalsMvp 톤 주석(교체 예정)**: 현재 민트 자산이라 톤도 민트 유지. **골드 자산으로 교체 예정** — 교체 시 `TONE_GOLD` 신설 후 그 줄만 톤 교체
+  (자산·톤이 같은 위치에 있어 한 줄 수정). `data/awardPoster.ts` 주석에 명기.~~ → **정정(2026-07-31 doc↔code 감사, 완료형)**: **이미 골드 자산·`TONE_GOLD` 적용 완료** — `data/awardPoster.ts:35 TONE_GOLD(#F2C24A)` + `:49 finalsMvp: { …, tone: TONE_GOLD }`(골드 자산 2026-07-22 kling 5586_1). "교체 예정"은 스테일.
 - **기록왕(statLeader) 배선 후속 메모**: 정규리그 MVP·신인상·기량발전상·챔프전 MVP는 시즌당 **1명 1상**이라 포스터 1장으로 끝난다. 그러나
   기록왕은 **부문(득점·공격·블로킹·서브·디그·세트·리시브 등)이 다수**라 "누구를 어느 부문으로 몇 장" 보여줄지 수여 UX가 먼저 정해져야 한다
   (부문별 1장씩이면 시상식 비트가 과다 → 관전형 피로). 따라서 이번 웨이브는 **~~레드~~ 실버 톤 템플릿 + 프리뷰 샘플만** 등록하고 수여 화면(awards-ceremony 비트)
@@ -301,7 +301,7 @@ footnote 有 구성이라 패널 세로 예산 가드(풋노트 有 `CFG_FOOT` �
   경기 박스(`BoxLine`)는 롤오버로 소멸한다. 지어내지 않고(추정 금지) **실존 카운트로 대체**:
   - 공격 성공률 → **공격**(킬 `spikes`)
   - 리시브 효율 → **리시브**(`receives` = `recvAtt` 카운트)
-- 포지션 대표 우선(`repRecordLine` 철학): OH/OP=득점·공격·서브·리시브·디그(시안 그대로) · S=득점·**세트**·서브·디그·블로킹 ·
+- 포지션 대표 우선(`repRecordLine` 철학): ~~OH/OP=득점·공격·서브·리시브·디그(시안 그대로)~~ → **정정(2026-07-31 doc↔code 감사)**: **OH=득점·공격·서브·리시브·디그**(시안 그대로) · **OP=득점·공격·블로킹·서브·디그**(OP는 리시브 면제 포지션 CLAUDE 5.3 `·` → 리시브 0 표시 회피, **블로킹 대체** — `awardPoster.ts:90 case 'OP'` 별도 분기) · S=득점·**세트**·서브·디그·블로킹 ·
   MB=득점·공격·**블로킹**·서브·디그 · L=**디그·리시브**·세트·서브·블로킹(득점 무의미 포지션은 대표 기록 앞세움).
 - OVR = 수상자 `overall(getPlayer)`(시즌 시작 base, 표시 스케일 `displayOvr`) — 표시 플러리시. 우리 구단 MVP는 포스터 아래
   "우리 구단의 MVP" 태그(포스터 자체는 민트 자산 톤 유지, 팀색 오염 안 함).

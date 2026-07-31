@@ -90,7 +90,7 @@
 ### 3.1 FA 영입 — 점수(100)→확률 모델 (FA_SYSTEM §2.7, 2026-06-26 사용자 재설계)
 > 단순 "관계 항 추가"를 넘어, FA 수락을 **argmax → 점수(가산/감점 0~100)→확률(완만 S곡선)→정렬·롤·fallback·SIT**로
 > 재설계했다(사용자 결정). 관계(relT)는 그 점수의 **±항**(친구 +·싫은 선수 −). 상세·엣지·동시성은 **FA_SYSTEM §2.7**.
-- 관계 입력: `teamAffinityFor(p, 로컬 rosterIds, get, bonds)`(§2, REL_SCALE_FA=6) → score의 `w.rel·relT·100` 항.
+- 관계 입력: `teamAffinityFor(p, 로컬 rosterIds, get, bonds)`(§2, REL_SCALE_FA=6) → score의 ~~`w.rel·relT·100`~~ → **`relTerm = (w.rel ?? 0) × (c.relT ?? 0)`**(정정 2026-07-31 doc↔code 감사 — **×100 없음**. `engine/faMarket.ts:152`, `offerScore`가 [0,~1] 가중합이라 relTerm도 그 스케일 안의 ±항. 구 "·100"은 100배 오독) 항.
 - 효과: 사용자 시나리오 1·2·3·4가 점수 가산/감점 + 확률로 자연 발생(§4). 여러 팀 오퍼·동시성·시즌아웃 처리는 FA §2.7.3~4.
 
 ### 3.2 재계약 거부 — buildOwnerFx (data/owner.ts)

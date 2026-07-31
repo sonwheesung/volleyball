@@ -292,10 +292,12 @@ export async function sendBroadcast(params: {
 
 export type RecallMailResult = { ok: true } | { ok: false; reason: 'already-claimed' };
 
-/** 회수(§5.3 R2) — recalled_at 소프트마킹(claimed_at IS NULL AND recalled_at IS NULL). 수령분은 회수 불가(재화 이동 완료). */
+/** 회수(§5.3 R2) — recalled_at 소프트마킹(claimed_at IS NULL AND recalled_at IS NULL). 수령분은 회수 불가(재화 이동 완료).
+ *  ★ sender <> 'system:pass' 가드(§5.3·§3.1) — 다이아 패스 일일 스케줄러 우편은 관리자 개별 회수 대상 아님
+ *    (패스 일일분은 환불 클로백의 idem_key LIKE recall만 건드림, §4). 없으면 admin이 pass_daily 우편을 임의 회수해 유저 지급 구멍. */
 export async function recallMail(id: string): Promise<RecallMailResult> {
   const upd = await db.update(mails).set({ recalledAt: sql`now()` })
-    .where(and(eq(mails.projCode, PROJ_CODE), eq(mails.id, id), isNull(mails.claimedAt), isNull(mails.recalledAt)))
+    .where(and(eq(mails.projCode, PROJ_CODE), eq(mails.id, id), isNull(mails.claimedAt), isNull(mails.recalledAt), ne(mails.sender, 'system:pass')))
     .returning({ id: mails.id });
   return upd.length ? { ok: true } : { ok: false, reason: 'already-claimed' };
 }

@@ -29,7 +29,7 @@
 
 - 팀 **스태프 예산 `STAFF_BUDGET = 60000`만**. (감독 + 코치 + 스카우터) 연봉 합 ≤ 예산.
 - 연봉(역량 비례, 실산식 범위 — 2026-07-15 발견 모드 2차 재측정): 감독 13.0k~18.6k · 코치 9.7k~13.6k · 스카우터 7.6k~11.4k
-  (`engine/staff.ts` `headCoachSalary`=8000+round(charisma×1.1)×100 [charisma 45~96] · `assistantSalary`=5000+round(rating×0.9)×100 [rating 52~95] · `scoutSalary`=4000+round(scouting×0.8)×100 [scouting 45~93]).
+  (`engine/staff.ts` `headCoachSalary`= ~~8000+round(charisma×1.1)×100 [charisma 45~96]~~ → **`8000 + round(ovr×1.1)×100 + round(0.4×clamp(reputation,0,100))×100`**(정정 2026-07-31 doc↔code 감사, `staff.ts:183-184`·§9.4 명성 프리미엄 상한 캡·대체 금지) — 파라미터가 구 단일 `charisma` → **3축 OVR**(Phase B)로 승격 + **명성 프리미엄 항** 추가(reputation 0이면 base만) · `assistantSalary`=5000+round(rating×0.9)×100 [rating 52~95] · `scoutSalary`=4000+round(scouting×0.8)×100 [scouting 45~93]).
 - **최고급 풀세트는 예산 초과** → 어디에 투자할지 단장 의사결정(핵심 기둥 4).
 - 영입은 `hireHeadCoach/hireAssistant/hireScout`가 예산·중복을 판정(초과면 false).
 
@@ -168,7 +168,7 @@ AI 팀은 위 기본 스태프가 있는데 **플레이어만 0에서 시작**�
 - **멘탈 코치**: 안정형(consistency↑) · 클러치형(focus↑)
 > 기존 분야(specialty=attack/defense/stamina…) 위에 얹는 **2번째 차원**. 정확한 효과 계수는 튜닝(밸런스 게이트가 정함). 엔진 매핑은 기존 `assistantBoost`/`potRaise`/`ageSlowOf`를 성향별로 분기. **AI는 로스터 상황에 맞는 성향을 픽**(어린 팀=육성형, 노장 팀=노쇠억제형).
 
-**효과 모델(구현 스펙 — balance-neutral 재분배)**: 같은 rating의 효과 총량은 유지하고 **배분만** 성향이 바꾼다(스칼라 지배 방지). `AssistantCoach.type`(신·optional=구세이브 호환) + `StaffEffects.ageBias?`(육성/즉전 나이 타깃, `applyTrainingDay`가 `p.age` vs `p.peakAge`로 해석).
+**효과 모델(구현 스펙 — balance-neutral 재분배)**: 같은 rating의 효과 총량은 유지하고 **배분만** 성향이 바꾼다(스칼라 지배 방지). `AssistantCoach.type`(신·optional=구세이브 호환) + ~~`StaffEffects.ageBias?`~~ **`StaffEffects.boostBias?`**(정정 2026-07-31 doc↔code 감사 — 실제 필드명 `boostBias`, `staff.ts:125`)(육성/즉전 나이 타깃, `applyTrainingDay`가 `p.age` vs `p.peakAge`로 해석).
 
 > **표시명 정정(2026-07-24, BUG-05 — CLAUDE §6 라벨 규칙 미적용분)**: 화면에 렌더되는 문구에서 "노쇠"를 걷어낸다
 > (여자 선수에게 가혹한 표현 — 체젠→"체력재생"과 같은 결). **식별자 `antiaging`·`ageSlow`·설계 문서 용어("노쇠")는 유지**,

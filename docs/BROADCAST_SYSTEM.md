@@ -86,8 +86,8 @@
 - `components/courtDirector.ts` — `buildLiveBanners(rallies, mineSide, names)` 경기 중 실시간 현수막(Phase 3, 순수 파생). `app/match/[id].tsx`가 `score.ptIdx` 도달 시 큐 재생.
   - **반응형 특성 발동 배너(TRAIT_SYSTEM §6.10, 2026-07-27)**: 반응형 3종(조커/유리멘탈/오뚝이) 발동 시 "○○○ · 조커 발동" 현수막 1회가 **라이브 배너 소스에 추가**된다 — `SimResult.reactiveEvents`의 `pointIndex`가 `score.ptIdx`에 도달하면 같은 큐(`BroadcastBanner`)에 push(BannerKind `reactive`). 결과-중립 실시간 사건이라 관전 중 노출 안전.
 - `tools/_dv_livebanner.ts` — 실시간 현수막 가드(prefix 스포일러·세트승자/세트수 정합·빈도·결정론).
-- `engine/clinch.ts` — `detectClinch(standings, remaining)` 매직넘버(Phase 2).
-- `data/milestones.ts` — `detectMatchMilestones()` 추가(경기단위).
+- ~~`engine/clinch.ts` — `detectClinch(standings, remaining)` 매직넘버(Phase 2).~~ → **정정(2026-07-31 doc↔code 감사)**: `data/broadcast.ts`가 `./clinch`(`data/clinch.ts`)의 **`teamClinch`·`teamTitleClinch`**(uptoDay 기반, 전날↔당일 state 전이 비교)를 호출해 PO/우승 확정을 감지한다. (`engine/clinch.ts`는 순수 `clinchStatus(teams,cutoff)`만 export — `detectClinch`라는 심볼은 없음.)
+- ~~`data/milestones.ts` — `detectMatchMilestones()` 추가(경기단위).~~ → **정정(2026-07-31 doc↔code 감사)**: `data/broadcast.ts`가 `../engine/milestones`의 **`personalMilestones(before, after)`** 를 인라인 호출(경기 전후 통산 누적 비교로 기록 경신 배너 산출). `detectMatchMilestones()`·`data/milestones.ts`의 그 심볼은 존재하지 않음.
 - `components/BroadcastBanner.tsx` — 하단 현수막 렌더/애니메이션.
 - `app/match/[id].tsx` — finished 시 결과-결정 현수막 큐 주입.
 - `tools/simBroadcast.ts` — N경기 현수막 발생 빈도·스포일러 누출 0 검증.

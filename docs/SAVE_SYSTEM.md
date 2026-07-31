@@ -18,11 +18,13 @@
 
 ---
 
-## 1. 영속 스키마 (~~59~~ **67** 필드 — 단일 진실)
+## 1. 영속 스키마 (~~59~~ ~~67~~ **76** 필드 — 단일 진실)
 
 > **정정(2026-07-08, 전수조사 #67)**: 실측 67필드(partialize == SAVE_DEFAULTS, `_dv_migrate`가 동치 단언 — 코드끼리는 일치). 구 제목 "59"·saveMigration 주석 "65"는 가산 필드 추가를 따라가지 못한 표기 드리프트. 아래 표에 빠져 있던 `simCache`(§0 시뮬 결과 캐시)·`lastGrowthDay`(num — 성장 리포트 기준일)도 영속 필드다. **필드 수의 정본은 문서 숫자가 아니라 `SAVE_DEFAULTS` 키 집합**(가드 `_dv_migrate`) — 문서 숫자는 참고용.
 
-> **다이아 이코노미 필드**(표 미개별화, 정본=`store/saveMigration.ts SAVE_DEFAULTS`): `diamonds·saveId·campLog·campTrainedThisOffseason·campDoneSeason·pendingCamp·claimedAch·adState`. **`campDoneSeason`**(num, 기본 -1, 2026-07-04 추가): 전지훈련을 "마친" 시즌번호 — 오프시즌↔개막전 게이트(MONETIZATION §11.2). `===season`이면 완료(시즌번호라 새 시즌 자동 리셋). 추가는 §2① 자동 처리(누락=기본값 -1).
+> **정정(2026-07-31, doc↔code 감사)**: ~~67~~ → **76 필드**. §1 서술은 67→68(`interventions`)→69(`coachModeLog`)까지 따라갔으나 이후 가산분(`ceremonyProgress`·`offseasonStep`·`enshrineSeenSeason`·`staffHeadTimeline`·`coachCareerLog`·`coachAsstCareerLog`·`mediaPredictionLog`·`midFires` 등)이 반영 안 됨. 실측 `partialize`==`SAVE_DEFAULTS`==**76키**(`_dv_migrate` §⑤ 동치 단언 PASS). 아래 표에 빠졌던 필드를 이번 감사에서 편입. 재차 강조 — 정본은 `SAVE_DEFAULTS` 키 집합, 숫자는 참고용.
+
+> **다이아 이코노미 필드**(표 미개별화, 정본=`store/saveMigration.ts SAVE_DEFAULTS`): `diamonds·saveId·campLog·campTrainedThisOffseason·campDoneSeason·pendingCamp·claimedAch·adState·enshrineSeenSeason`(2026-07-31 감사 편입 — num, 기본 -1, 뒷단 헌액 열람 마커 §5.6.5). **`campDoneSeason`**(num, 기본 -1, 2026-07-04 추가): 전지훈련을 "마친" 시즌번호 — 오프시즌↔개막전 게이트(MONETIZATION §11.2). `===season`이면 완료(시즌번호라 새 시즌 자동 리셋). 추가는 §2① 자동 처리(누락=기본값 -1).
 
 > 출처: `store/useGameStore.ts` `freshSave`(163-212)·`partialize`(892-945)·`types/index.ts`. 구조가 바뀌면
 > **이 표를 먼저** 갱신한다(DOC_DISCIPLINE). 자료구조 분류가 마이그레이션 정규화기(§3)의 근거다.
@@ -44,6 +46,9 @@
 | `currentDay` | scalar(number) | 0 | 시즌 내 경과일 |
 | `results` | Record<fixtureId, MatchResult{fixtureId,homeSets,awaySets}> | {} | 치른 경기 결과(세트 스코어만 — 랠리는 시드 재생) |
 | `watchProgress` | Record<fixtureId, number> | {} | 관전 이어보기 위치 |
+| `ceremonyProgress` (2026-07-31 감사 편입) | scalar(number) | 0 | 시상식 관람 진행도(§5.3.1 — 앱 재시작 이어보기) |
+| `offseasonStep` (2026-07-31 감사 편입) | scalar(number) | 0 | 비시즌 순차 업무 진행(§5.6.4 — 앱 재시작 후 이어서) |
+| `lastGrowthDay` (2026-07-31 감사 편입) | scalar(number) | -1 | 성장 리포트 모달 마지막 표시일(TRAINING §성장리포트, §0 언급) |
 
 ### 계약·방출·거래
 | 필드 | 자료구조 | 기본 |
@@ -53,8 +58,7 @@
 | `inSeasonTx` | Tx[]{day,teamId,playerId,kind:'sign'\|'release'} | [] |
 | `faPool` | string[] | [] |
 | `resignDecisions` | Record<playerId, boolean> | {} |
-| `faSignings` | string[] | [] |
-| `faAggressive` | scalar(boolean) | false |
+| ~~`faSignings` (string[])~~ · ~~`faAggressive` (scalar boolean)~~ → **`faOffers`** (2026-07-31, doc↔code 감사) | Record<playerId, {salary:number\|'auto', years:1..5, starterGuarantee, promises, aggressive?, counterTolerance?}> | {} (FA 오퍼 다레버 FA_SYSTEM §2.8 — 구 `faSignings[]`+`faAggressive` 대체. `migrateSave`가 구 필드→faOffers 변환[구 aggressive=on이면 aggressive 마커로 ×1.2 재현], §3 `case 'faOffers'` 정규화) |
 | `protectedIds` · `moneyOnlyIds` · `draftPicks` | string[] | [] |
 | `draftSelections` (2026-07-08) | string[] | [] (라이브 드래프트 내 슬롯 순서 확정 픽 — endSeason resolveDraft mySelections. FA/재계약 변경 시 clear. FA_SYSTEM §3.2.1) |
 
@@ -85,9 +89,11 @@
 |---|---|---|
 | `coachPool` | {coaches:Coach[],assistants:AssistantCoach[]} \| null | null |
 | `staffHead` | Record<teamId, coachId> | {} |
+| `staffHeadTimeline` (2026-07-31 감사 편입) | Record<teamId, {fromDay:number, coachId:string\|null}[]> | {} (감독 부임 타임라인 축3 — 재로드 후 시즌 중 영입 forward-only 유지. §3 default 분기 정규화·구세이브=소급 byte 불변) |
 | `staffAssistants` · `staffScouts` | Record<teamId, id[]> | {} |
 | `trainingFocus` | {primary:[id,id],secondary:[id,id,id]} \| null | null (현재 방침 — 표시·UI용) |
 | `focusLog` (A4, v2) | FocusSeg[]{fromDay:number, focus:{primary,secondary}\|null} | [] (훈련 방침 타임라인 — 진화가 소비) |
+| `coachCareerLog` · `coachAsstCareerLog` · `mediaPredictionLog` · `midFires` (2026-07-31 감사 편입, STAFF §9.6-B/D) | 각 배열([]) | [] (감독 명성 — 경력 로그[명성 진실]·전문코치 경량 경력·언론 예상 순위·시즌중 경질 캡처. 전부 additive[누락=[] 무마이그레이션]·`KIND='arr'` 강제) |
 
 ### 구단주 레이어·재정
 | 필드 | 자료구조 | 기본 |
@@ -432,7 +438,7 @@
 > **불변식(§7·§8·§9와 동일)**: 이 기능은 **payload 스키마·`SAVE_VERSION`·`migrate`·`sanitizeSave`·`partialize`를 건드리지 않는다**.
 > 업로드 원천은 §9와 **동일한** `captureReplaySave()` → `buildExportPayload`+`serializeExport`(새 포맷 금지). 복원도 §9.3의 **가져오기 파이프라인 그대로**(`parseImportPayload`→`dryRunImport`→확인→적용). 이 절은 그 파이프라인의 **서버 전송 래퍼**일 뿐이다.
 >
-> **세이브 스키마 불변(핵심)**: "마지막 성공 백업 시즌"은 세이브 payload(§1의 69필드)에 **넣지 않는다** — `partialize`에 필드를 추가하면 코퍼스 박제 규율(§8.2)을 발동시키고 스키마 드리프트를 낳는다. 대신 **AsyncStorage 별도 키**(`baeknyeon-backup-last:<userId>`, 계정별)에 비영속으로 기억한다.
+> **세이브 스키마 불변(핵심)**: "마지막 성공 백업 시즌"은 세이브 payload(§1의 ~~69필드~~ **76필드**, 2026-07-31 감사)에 **넣지 않는다** — `partialize`에 필드를 추가하면 코퍼스 박제 규율(§8.2)을 발동시키고 스키마 드리프트를 낳는다. 대신 **AsyncStorage 별도 키**(`baeknyeon-backup-last:<userId>`, 계정별)에 비영속으로 기억한다.
 
 ### 10.1 API 계약 (서버와 공유 — 고정)
 - `POST /api/save-backup` (Bearer) body `{ season:number, payload:string }` → `{ ok:true, id, keptCount }`. payload = §9.1 봉투 문자열 그대로. 서버는 계정당 **최근 5개** 유지(초과 삭제 = `keptCount`).

@@ -43,9 +43,10 @@ export const tipsForScreen = (screen: string): Tip[] =>
 ```
 
 - **screen 키**(현재): `select-team` · `team-detail` · `tab-schedule` · `tab-dashboard` ·
-  `tab-squad` · `tab-office` · `tab-mypage` · `match`(경기 보드 — 2026-07-14 신설). (확장 시 새 키 추가.)
+  `tab-squad` · `tab-office` · `tryout`(외국인 트라이아웃 — 2026-06-30 신설·2026-07-31 감사 편입) · ~~`tab-mypage`~~(팁 제거됨, 아래) · `match`(경기 보드 — 2026-07-14 신설). (확장 시 새 키 추가.)
   - 2026-06-30 네비 개편: 구 `tab-history`(기록 탭) → `tab-mypage`(마이페이지 탭). `history.intro`/`history.ach`
     **id는 보존**하고 screen 키만 옮김(둘 다 마이페이지 허브에서 발화 — 기록·업적 카드 앵커 그대로 history-top·history-ach).
+  - **정정(2026-07-31 doc↔code 감사)**: 위 `tab-mypage` 팁(`history.intro`/`history.ach`)은 **2026-07-05 제거됨**(사용자 요청 — 온보딩 스텝 과다·어색, `tutorialSteps.ts:72` 주석). id는 미출시 취급(레지스트리에서 삭제), 화면 자체는 유지. 현행 tutorialSteps.ts에 `tab-mypage` 스텝 없음.
 - **id 불변 규칙**: 출시된 id는 고정. 문구만 고치는 건 자유(추적과 무관). 대상이 바뀌면 **새 id**.
 
 ---
@@ -146,8 +147,9 @@ resetTips: () => void;              // 전체 리셋(설정 "튜토리얼 다시
 | tab-schedule | `sched.next` → `sched.calendar` → `sched.results` | 다음 경기(관전) · 캘린더 버튼 · 전 구단 결과 버튼 |
 | tab-dashboard | `dash.overview` → `dash.finance` → `dash.standings` → `dash.news` | 구단 현황 · 재정 카드 · 순위 카드(탭) · 뉴스 카드(탭) |
 | tab-squad | `squad.coach` → `squad.intro` | 감독 카드 · 선수단 목록 |
-| tab-office | `office.intro` → `office.staff` → `office.tx` | 계약 관리 · 스태프 계약 · 시즌 중 FA |
-| tab-mypage | `history.intro` → `history.ach` | 마이페이지 허브 — 기록 카드(→/records-archive: 시즌/통산/명전/연표) · 업적 카드(→/achievements) |
+| tab-office | `office.intro` → `office.staff` → **`office.training`**(2026-07-31 감사 편입) → `office.tx` | 계약 관리 · 스태프 계약 · **훈련 방침** · 시즌 중 FA |
+| tryout (2026-07-31 감사 편입, 2026-06-30 신설) | `tryout.intro` → `tryout.wish` | 외국인 트라이아웃(오프시즌 첫 진입) — 트라이아웃 지명 · 위시리스트 |
+| ~~tab-mypage~~ | ~~`history.intro` → `history.ach`~~ | ~~마이페이지 허브 — 기록 카드 · 업적 카드~~ → **제거됨(2026-07-05 사용자 요청 — 온보딩 스텝 과다·어색, `tutorialSteps.ts:72`. 화면 자체는 유지, 튜토리얼 팁만 뺌)**. 정정 2026-07-31 doc↔code 감사 |
 | match | `match-spectate` → `match.controls` | 경기 보드(첫 관전) — ~~관전 모드 안내~~ 경기 보드 안내(가운데 카드, 2026-07-18 정정) · 하단 컨트롤(스코어박스·⚙개입·나가기) |
 
 > 새 화면/기능이 생기면 그 화면 키 + 새 id를 한 행 추가하면 자동으로 신규 유저 전체·기존 유저 신규분에

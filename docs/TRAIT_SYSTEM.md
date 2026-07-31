@@ -128,7 +128,7 @@ crunch→playRally clutch 플래그 전달, `dynamics.ts:211`이 `p.traits`를 i
 | tank | 강철체력 | 최대 체력(staminaMax)↑ | ✅ | 내구 | tankStaminaMax 1.08 | rally drain 분모(소모↓) |
 | maestro | 황금손 | 세팅 승수↑(세터 유효) | ✅ | 플레이 | maestroSet 1.05 | rally setMul |
 
-- 전부 good·POOL `w=7`. 부정 특성(choke/earlyDecline/glass 2/2/2)은 **불변**(부정 보유율은 메인이 재측정·튜닝).
+- 전부 good·POOL `w=7`. 부정 특성(choke/earlyDecline/glass ~~2/2/2~~ **4/3/4**, 정정 2026-07-31 doc↔code 감사 — `traits.ts:125` POOL 실측, §1과 정합)은 **불변**(부정 보유율은 메인이 재측정·튜닝).
 - 계수는 **소폭 placeholder** — 방향만 확정, 크기는 메인이 sim 후 튜닝. `desc`는 `TRAIT_FX`에서 문자열 합성(§표기 원칙, 가드 `_dv_traitcopy`).
 - 미부여 선수 무영향(접근자 1배) → 기존 결정론 골든(unit 218/218)·rng 스트림 불변 실측.
 
