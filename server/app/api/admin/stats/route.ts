@@ -1,5 +1,6 @@
 // /api/admin/stats — 운영 대시보드 지표(BACKEND_SYSTEM §13.15, #46). requireAdmin(fail-closed).
-// 가용 실데이터로 산출: KPI(총가입·최근접속·DAU·신규·탈퇴·비활성·결제전환) + 14일 시계열(신규가입·DAU·매출·광고) + 시간대별 접속.
+// 가용 실데이터로 산출: KPI(총가입·최근접속·DAU·신규·탈퇴·비활성·결제전환·리텐션 D1/D7/D30 근사) + 14일 시계열(신규가입·DAU·매출·광고) + 시간대별 접속.
+//   ※ D1/D7/D30 = createdAt·lastSeenAt 기반 **근사**(정밀 코호트 아님 — lastSeenAt은 마지막 접속만). 설치일 코호트 매트릭스(리텐션 탭)는 EAS 후.
 //   ※ lastSeenAt 갱신: 로그인 + **포그라운드 하트비트**(GET /api/wallet=syncWallet, lib/wallet touchLastSeen, 2026-07-31) → DAU="오늘 앱 켠 사람"(재로그인 불필요).
 //     "실시간/시간대별 접속"도 이 하트비트 기준(하트비트 없던 시절엔 로그인 기준 근사였음). 날짜 경계는 UTC(dayStart.setUTCHours). 매출은 statsDaily(결제 #43 연동 전 0).
 //   ※ 업적 달성율은 클라이언트 계산(결정론 격리 — 서버 미보유). 별도 텔레메트리 필요.
@@ -38,6 +39,11 @@ export async function GET(req: Request) {
       .where(and(eq(users.projCode, PROJ_CODE), isNull(users.deletedAt)));
     const newUsers = new Array(DAYS).fill(0), dau = new Array(DAYS).fill(0), hourly = new Array(24).fill(0);
     let totalUsers = 0, active30m = 0, dauToday = 0, newToday = 0, inactive = 0, mau = 0, wau = 0;
+    // 리텐션 D1/D7/D30 **근사**(정밀 코호트 아님 — lastSeenAt은 마지막 접속만 줌).
+    //   Dk 분모 = 가입 후 k일+ 지난 유저 · 분자 = 그중 lastSeenAt이 (createdAt + k일) 이후("아직 살아있나"). 분모 0 → null.
+    const RET = [1, 7, 30] as const;
+    const retDen: Record<number, number> = { 1: 0, 7: 0, 30: 0 };
+    const retNum: Record<number, number> = { 1: 0, 7: 0, 30: 0 };
     for (const r of rows) {
       totalUsers++;
       if (r.c) { const i = idx.get(YMD(new Date(r.c))); if (i !== undefined) newUsers[i]++; if (r.c.getTime() >= dayStart.getTime()) newToday++; }
@@ -51,7 +57,15 @@ export async function GET(req: Request) {
         const i = idx.get(YMD(new Date(r.l))); if (i !== undefined) dau[i]++;
         hourly[new Date(r.l).getUTCHours()]++;
       }
+      if (r.c) {
+        const ct = r.c.getTime();
+        for (const k of RET) {
+          const thresh = ct + k * 86400000;
+          if (now >= thresh) { retDen[k]++; if (r.l && r.l.getTime() >= thresh) retNum[k]++; } // 가입 후 k일+ 지난 유저만 분모
+        }
+      }
     }
+    const retPct = (k: number): number | null => (retDen[k] > 0 ? Math.round((retNum[k] / retDen[k]) * 1000) / 10 : null);
 
     // 탈퇴(소프트삭제) 수
     const [wd] = await db.select({ n: count() }).from(users).where(and(eq(users.projCode, PROJ_CODE), isNotNull(users.deletedAt)));
@@ -98,6 +112,7 @@ export async function GET(req: Request) {
       kpi: {
         totalUsers, active30m, dauToday, mau, wau, newToday, withdrawn, inactive,
         revenueToday: revenue[DAYS - 1] ?? 0, adToday, adUsersToday: adUsersToday.size, payers, conversion, errToday,
+        d1: retPct(1), d7: retPct(7), d30: retPct(30), // 리텐션 근사(%) · 분모 0이면 null(표본 부족)
       },
       labels: days.map((d) => d.label),
       series: { newUsers, dau, revenue, ad: adSeries },

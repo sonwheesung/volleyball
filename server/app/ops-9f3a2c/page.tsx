@@ -332,13 +332,13 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === 'overview' && <Overview stats={stats} setting={setting} openTickets={openTickets} />}
         {tab === 'users' && <Users stats={stats} api={api} />}
         {tab === 'retention' && <RetentionPH />}
-        {tab === 'play' && <PlayPH />}
+        {tab === 'play' && <PlayTab api={api} />}
         {tab === 'offseason' && <OffseasonTab api={api} />}
         {tab === 'telemetry' && <TelemetryPanel api={api} />}
         {tab === 'payments' && <Payments stats={stats} api={api} flash={flash} />}
         {tab === 'ads' && <Ads api={api} />}
-        {tab === 'match' && <MatchPH />}
-        {tab === 'players' && <PlayersPH />}
+        {tab === 'match' && <MatchTab api={api} />}
+        {tab === 'players' && <PlayersTab api={api} />}
         {tab === 'achv' && <Achievements api={api} />}
         {tab === 'errors' && <Errors api={api} />}
         {tab === 'coupons' && <Coupons coupons={coupons} api={api} reload={load} flash={flash} />}
@@ -424,8 +424,43 @@ function Placeholder({ icon, title, tag, metrics }: { icon: string; title: strin
 }
 const RetentionPH = () => <Placeholder icon="📈" title="리텐션 코호트 (D1/D3/D7/D14/D30)" tag="EAS 계측 후 · GA4/BigQuery"
   metrics={['설치일 기준 코호트 매트릭스 — app_open 이벤트로 외부(Firebase/GameAnalytics)가 자동 산출', 'BigQuery 코호트 SQL 결과를 서버가 캐시(externalDaily)해 표로 표시', '커스텀 이벤트 아님 — app_open만 정확하면 외부가 계산']} />;
-const PlayPH = () => <Placeholder icon="🎮" title="플레이 — 시즌 진행률 (★배구명가 핵심)" tag="EAS 계측 후 · 자체 track()"
-  metrics={['1·3·5·10시즌 완료율 funnel — season_start/season_end 이벤트 롤업', '평균 시즌 진행 수 · 첫 시즌 완료율', '세션 길이/횟수 — Firebase engagement [외부-sync]']} />;
+// ③ 플레이 탭 — §13.27 season_telemetry 행동 실데이터(2026-07-31). 신 파이프 없음: /api/admin/telemetry가 이미 집계하는
+//   개입/타임아웃/교체/지휘모드 행동만 렌더. "시즌 완료율 funnel"은 시즌 시작/이탈 이벤트가 없어 여전히 EAS-후.
+function PlayTab({ api }: { api: Api }) {
+  const [d, setD] = useState<Json | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { let live = true; setLoading(true); api('/api/admin/telemetry').then((r) => { if (live) { setD(r.body.ok ? r.body : null); setLoading(false); } }); return () => { live = false; }; }, [api]);
+  const agg = (d?.agg as Json) ?? {};
+  const reports = nnum(agg.reports);
+  const distinct = nnum(d?.distinctUsers);
+  const manual = nnum(agg.avgSubsManual), pinch = nnum(agg.avgSubsPinch);
+  if (loading) return <Loading />;
+  if (!d) return <div className="oc-card"><div className="oc-empty">플레이 데이터를 불러오지 못했습니다 (서버·권한 확인).</div></div>;
+  return (
+    <>
+      <div className="oc-card">
+        <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
+          시즌 종료 시 유저의 경기 운영 행동 <span className="oc-tag2">자체-롤업(season_telemetry) · 비식별</span> — 개입·타임아웃·교체·지휘모드. 결정론 격리(시드/리플레이 무관).
+        </div>
+      </div>
+      {reports === 0 ? <div className="oc-card"><div className="oc-empty">아직 수집된 플레이 텔레메트리가 없습니다 (시즌 종료 시 수집 · 서버 배포 후).</div></div> : (
+        <div className="oc-grid">
+          <Stat ic="📊" k="시즌 리포트 수" v={reports.toLocaleString()} s={`고유 유저 ${distinct.toLocaleString()}명`} />
+          <Stat ic="🎮" k="지휘모드 채택률" v={`${nnum(agg.coachModeRate)}%`} s="경기 직접 지휘 on 비율" />
+          <Stat ic="✋" k="개입 1회+ 비율" v={`${nnum(agg.interveneRate)}%`} s="자동 관전 아닌 시즌 비율" />
+          <Stat ic="🔁" k="평균 개입 수" v={String(nnum(agg.avgInterventions))} s={`타임아웃 ${nnum(agg.avgTimeouts)}`} />
+          <Stat ic="🔀" k="평균 교체 (수동/핀치)" v={`${manual} / ${pinch}`} s={`핀치 비중 ${manual + pinch > 0 ? Math.round((pinch / (manual + pinch)) * 100) : 0}%`} />
+          <Stat ic="📋" k="평균 선발/벤치 지시" v={String(nnum(agg.avgLineupChanges))} s="구단주 직접 라인업" />
+        </div>
+      )}
+      <div className="oc-card">
+        <div className="oc-mut" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+          <span className="oc-tag2">EAS 계측 후</span> <b>시즌 진행률 funnel</b>(1·3·5·10시즌 완료율·세션 길이)은 <b>시즌 시작/이탈 이벤트</b>(season_start·app_open engagement)가 필요해 EAS 계측 후 표시됩니다. 위는 시즌 종료 시점 파생 <b>경기 운영 행동량</b>만.
+        </div>
+      </div>
+    </>
+  );
+}
 // ④ 오프시즌 탭 — §13.27 season_telemetry 실데이터 재배선(2026-07-31). 신 파이프 없음:
 //   /api/admin/telemetry가 이미 집계하는 오프시즌 행동(전지훈련·방출·제명·훈련방향)만 필터·렌더.
 //   ※ "단계 도달/이탈 funnel"(tryout→FA→draft 진입률)은 season_telemetry에 단계 진입 이벤트가 없어 여전히 EAS-후.
@@ -478,10 +513,92 @@ function OffseasonTab({ api }: { api: Api }) {
     </>
   );
 }
-const MatchPH = () => <Placeholder icon="🏐" title="경기 데이터" tag="EAS 계측 후 · 자체 track()"
-  metrics={['경기 수 · 평균 경기시간(match_start→match_end durationMs)', '최다 우승팀 · 평균 득점 · 평균 세트(match_end/champion params)', '전부 [자체-롤업] — 결정론 시뮬 결과를 track()으로 1건 전송']} />;
-const PlayersPH = () => <Placeholder icon="👤" title="선수 데이터" tag="EAS 계측 후 · 자체 track()"
-  metrics={['최다 영입 외국인 · 최다 지명 포지션(fa_sign/draft_pick params)', '평균 은퇴 나이(retirement) · 평균 OVR 성장 델타', '전지훈련 이용 비율(special_training 유저/총)']} />;
+// ⑦ 경기 탭 — §13.27 season_telemetry(2026-07-31). v1 payload로 최종순위/우승률 즉시, v2 유입 후 승/패·세트.
+function MatchTab({ api }: { api: Api }) {
+  const [d, setD] = useState<Json | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { let live = true; setLoading(true); api('/api/admin/telemetry').then((r) => { if (live) { setD(r.body.ok ? r.body : null); setLoading(false); } }); return () => { live = false; }; }, [api]);
+  const agg = (d?.agg as Json) ?? {};
+  const reports = nnum(agg.reports);
+  const rankDist = (agg.rankDist as { rank: number; n: number }[]) ?? [];
+  const matchReports = nnum(agg.matchReports); // v2 승패 보유 리포트 수(0이면 정직 노트)
+  if (loading) return <Loading />;
+  if (!d) return <div className="oc-card"><div className="oc-empty">경기 데이터를 불러오지 못했습니다 (서버·권한 확인).</div></div>;
+  return (
+    <>
+      <div className="oc-card">
+        <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
+          시즌 종료 시점 내 팀 경기 성적 <span className="oc-tag2">자체-롤업(season_telemetry) · 비식별</span> — 최종순위·우승·정규시즌 전적. 결정론 격리(시드/리플레이 무관).
+        </div>
+      </div>
+      {reports === 0 ? <div className="oc-card"><div className="oc-empty">아직 수집된 경기 텔레메트리가 없습니다 (시즌 종료 시 수집 · 서버 배포 후).</div></div> : (
+        <>
+          <div className="oc-grid">
+            <Stat ic="📊" k="시즌 리포트 수" v={reports.toLocaleString()} s={`v2 승패 리포트 ${matchReports.toLocaleString()}`} />
+            <Stat ic="🏆" k="우승률" v={`${nnum(agg.championRate)}%`} s="시즌 리포트 중 우승 비율" />
+            <Stat ic="📈" k="평균 최종순위" v={`${nnum(agg.avgFinalRank)}위`} s="내 팀 정규 최종순위 평균" />
+          </div>
+          {rankDist.length > 0 && (
+            <div className="oc-card">
+              <div className="oc-cardhead"><h3>최종순위 분포</h3><CsvBtn onClick={() => downloadCsv('match-rankdist.csv', ['최종순위', '시즌 수'], rankDist.map((r) => [r.rank, r.n]))} /></div>
+              {rankDist.map((r) => { const max = Math.max(1, ...rankDist.map((x) => x.n)); const pct = Math.round((r.n / max) * 100); return (
+                <div className="oc-achrow" key={r.rank}>
+                  <div style={{ flex: 1 }}><div className="t">{r.rank}위</div></div>
+                  <div className="meta"><div className="oc-bar"><i style={{ width: `${pct}%` }} /></div></div>
+                  <div className="pct">{r.n}<div className="cnt">시즌</div></div>
+                </div>
+              ); })}
+            </div>
+          )}
+          {matchReports > 0 ? (
+            <div className="oc-grid">
+              <Stat ic="✅" k="정규시즌 승률" v={`${nnum(agg.winRate)}%`} s="합산 승/(승+패)" />
+              <Stat ic="⚔" k="평균 승 / 패" v={`${nnum(agg.avgWins)} / ${nnum(agg.avgLosses)}`} s={`v2 리포트 ${matchReports.toLocaleString()}개`} />
+              <Stat ic="🏐" k="평균 세트 (획득/실)" v={`${nnum(agg.avgSetsWon)} / ${nnum(agg.avgSetsLost)}`} s="정규시즌 세트 전적" />
+            </div>
+          ) : (
+            <div className="oc-card"><div className="oc-mut" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+              <span className="oc-tag2">payload v2</span> <b>상세 승/패·세트</b>는 <b>다음 빌드부터</b> 수집됩니다(앱 OTA + 테스터 시즌 종료 후 유입). 현재 리포트는 순위·우승만 담은 v1이라 승패 카드는 아직 비어 있습니다. 평균 경기시간(durationMs)은 track 이벤트가 필요해 EAS 계측 후.
+            </div></div>
+          )}
+        </>
+      )}
+    </>
+  );
+}
+// ⑧ 선수 탭 — §13.27 payload v2 로스터 구성(2026-07-31). v2 유입 전엔 안내. 개별 선수 이름·id 전송 0(집계 정수만).
+function PlayersTab({ api }: { api: Api }) {
+  const [d, setD] = useState<Json | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { let live = true; setLoading(true); api('/api/admin/telemetry').then((r) => { if (live) { setD(r.body.ok ? r.body : null); setLoading(false); } }); return () => { live = false; }; }, [api]);
+  const agg = (d?.agg as Json) ?? {};
+  const rosterReports = nnum(agg.rosterReports); // v2 로스터 보유 리포트 수(0이면 안내)
+  if (loading) return <Loading />;
+  if (!d) return <div className="oc-card"><div className="oc-empty">선수 데이터를 불러오지 못했습니다 (서버·권한 확인).</div></div>;
+  return (
+    <>
+      <div className="oc-card">
+        <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
+          시즌 종료 시점 내 팀 로스터 구성 <span className="oc-tag2">자체-롤업(season_telemetry) v2 · 비식별</span> — 집계 정수만(선수 이름·id 전송 0). 결정론 격리(시드/리플레이 무관).
+        </div>
+      </div>
+      {rosterReports > 0 ? (
+        <div className="oc-grid">
+          <Stat ic="📊" k="v2 리포트 수" v={rosterReports.toLocaleString()} s="로스터 구성 담은 리포트" />
+          <Stat ic="👥" k="평균 로스터 인원" v={String(nnum(agg.avgRosterSize))} s="시즌종료 명단 크기" />
+          <Stat ic="🎂" k="평균 나이" v={`${nnum(agg.avgRosterAge)}세`} s="로스터 평균 연령" />
+          <Stat ic="⭐" k="평균 OVR" v={String(nnum(agg.avgRosterOvr))} s="로스터 평균 종합능력" />
+          <Stat ic="🌍" k="평균 외국인 수" v={String(nnum(agg.avgForeignCount))} s="로스터 내 외국인 보유" />
+          <Stat ic="👋" k="시즌당 은퇴 수" v={String(nnum(agg.avgRetirements))} s="내 팀 은퇴 선수" />
+        </div>
+      ) : (
+        <div className="oc-card"><div className="oc-mut" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+          <span className="oc-tag2">payload v2</span> 로스터 구성(평균 인원·나이·OVR·외국인·은퇴)은 <b>다음 빌드부터</b> 수집됩니다(앱 OTA + 테스터 시즌 종료 후 유입). 최다 영입 외국인·포지션 분포 등 세부는 track 이벤트가 필요해 EAS 계측 후.
+        </div></div>
+      )}
+    </>
+  );
+}
 
 // ⑪ 메인 KPI 카드행 — 한 화면 즉시 파악. 가능분(서버/원장)=실값 · 미가용은 "—"+지표별 실블로커 배지.
 //   MAU·WAU는 lastSeenAt 기반 실값(DAU와 동일 규약, 2026-07-31 하트비트 후). 리텐션/플레이=EAS 후, ARPU류=#43 결제 후.
@@ -494,11 +611,12 @@ function MainKpi({ kpi }: { kpi: Json }) {
     { k: '결제 전환율', v: `${nnum(kpi.conversion)}%`, s: `결제자 ${nnum(kpi.payers)}명` },
     { k: '오늘 매출', v: `₩${nnum(kpi.revenueToday).toLocaleString()}`, s: '#43 연동 후 실값' },
   ];
+  // 리텐션 D1/D7/D30 — 근사 실값(kpi.dN이 number면 실값, null이면 표본 부족). lastSeenAt 기반 근사(정밀 코호트는 EAS 후 ② 리텐션 탭).
+  const ret: { k: string; v: unknown }[] = [
+    { k: 'D1', v: kpi.d1 }, { k: 'D7', v: kpi.d7 }, { k: 'D30', v: kpi.d30 },
+  ];
   // 미가용 KPI — 지표별 실제 블로커로 라벨(뭉뚱그린 "EAS 후" 금지).
   const ext: { k: string; blocker: string; hint: string }[] = [
-    { k: 'D1', blocker: 'EAS 계측 후', hint: '설치일 코호트 리텐션 — app_open 이벤트 필요(GA4/BigQuery)' },
-    { k: 'D7', blocker: 'EAS 계측 후', hint: '설치일 코호트 리텐션 — app_open 이벤트 필요(GA4/BigQuery)' },
-    { k: 'D30', blocker: 'EAS 계측 후', hint: '설치일 코호트 리텐션 — app_open 이벤트 필요(GA4/BigQuery)' },
     { k: '평균 플레이', blocker: 'EAS 계측 후', hint: '세션 길이·플레이 이벤트 필요(Firebase engagement)' },
     { k: 'ARPU', blocker: '#43 결제 후', hint: '결제 원장 필요 — 유료 결제(#43) 연동 후' },
     { k: 'ARPPU', blocker: '#43 결제 후', hint: '결제 원장 필요 — 유료 결제(#43) 연동 후' },
@@ -507,6 +625,9 @@ function MainKpi({ kpi }: { kpi: Json }) {
   return (
     <div className="oc-kpirow">
       {real.map((r) => <div className="oc-kpi" key={r.k}><div className="kk">{r.k}</div><div className="kv">{r.v}</div>{r.s ? <div className="ks">{r.s}</div> : null}</div>)}
+      {ret.map((r) => typeof r.v === 'number'
+        ? <div className="oc-kpi" key={r.k} title="가입 코호트 재접속 근사 — lastSeenAt이 (가입일+k일) 이후인 비율. 정밀 코호트 아님(EAS 후 ② 리텐션 탭)."><div className="kk">{r.k} <span style={{ fontSize: 9, color: 'var(--mut)' }}>근사</span></div><div className="kv">{r.v}%</div><div className="ks">근사 · lastSeenAt 기준</div></div>
+        : <div className="oc-kpi ext" key={r.k} title="가입 후 k일+ 지난 유저가 아직 없어 표본 부족(집계 대상 0)."><span className="kbadge">표본 부족</span><div className="kk">{r.k}</div><div className="kv">—</div><div className="ks">가입 후 경과 유저 0</div></div>)}
       {ext.map((e) => <div className="oc-kpi ext" key={e.k} title={e.hint}><span className="kbadge">{e.blocker}</span><div className="kk">{e.k}</div><div className="kv">—</div><div className="ks">{e.blocker.includes('결제') ? '결제-연동' : '외부-sync'}</div></div>)}
     </div>
   );

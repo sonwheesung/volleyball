@@ -1178,6 +1178,9 @@ export const useGameStore = create<GameState>()(
             else if (p.isAsianQuota) prevAsian[tid] = { id, name: p.name };
           }
         }
+        // 시즌 종료 텔레메트리 v2(§13.27): 내 팀 시즌종료 로스터 스냅샷 — **commitPlayerBase(롤오버) 전에** getPlayer로 캡처.
+        //   (롤오버 후 getPlayer는 노쇠·은퇴제외된 다음 시즌 base라 부정확 — read-only 캡처, 결정론·바이트 불변)
+        const myRosterPre: Player[] = (finalR[my] ?? []).map((id) => getPlayer(id)).filter((p): p is Player => !!p);
         // 마일스톤: 티어드 롤링 캡(§1.2 아래) — big도 kind별 상한(league500·club1000·career2000), 비-big 300. 장기 저장 유계.
         // 방어: (season|playerId|text) 정확중복 제거 — 첫 등장 유지(과거 시즌 보존, 신규 중복만 제거). 결정론·내용 무변경(고유키는 통과).
         const rawMs = [...milestones, ...detectSeasonMilestones(season, hallOfFame)];
@@ -1639,11 +1642,17 @@ export const useGameStore = create<GameState>()(
         // 시즌 종료 행동 텔레메트리(BACKEND_SYSTEM §13.27) — 백업과 같은 fire-and-forget(비차단·결정론 격리·store 무접촉).
         //   preTele = 롤오버 전 상태(개입/방출/전지훈련 로그가 위 set으로 리셋되기 전 값). meta는 롤오버 후 archive/expelledLog에
         //   편입될 스칼라라 여기서 계산해 주입(finalRank·champion·이번 시즌 내 팀 제명 수). 절대 await·store 무접촉.
-        void import('../lib/seasonTelemetry').then((m) => m.triggerSeasonTelemetry(preTele, {
+        void import('../lib/seasonTelemetry').then((m) => m.triggerSeasonTelemetry({ ...preTele, rosterPlayers: myRosterPre }, {
           season,
           finalRank: rankOrder.indexOf(my) >= 0 ? rankOrder.indexOf(my) + 1 : null,
           champion: championId === my,
           expels: ctx.expelled.filter((e) => e.teamId === my).length,
+          // v2 — 내 팀 은퇴(ctx.retired ∩ 시즌 최종명단) + 정규시즌 전적(롤오버 전 이미 계산한 스칼라 재사용, careerTotals와 동일 소스)
+          retirements: ctx.retired.filter((id) => (finalR[my] ?? []).includes(id)).length,
+          wins: myRowRec[0],
+          losses: myRowRec[1],
+          setsWon: setsW,
+          setsLost: setsL,
         })).catch(() => {});
       },
 

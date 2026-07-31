@@ -5,12 +5,20 @@
 //   결정론 격리(§1·§8): 텔레메트리는 시드/리플레이/경기결과와 무관한 통계 메타. 세이브 백업(§13.26)과 같은 계층.
 //
 // 성능/비차단: 경기 재구성(simMatch subEvents)을 **하지 않는다** — 개입 로그(interventions)만 훑는 O(개입수) 집계라 값싸다.
-//   ※ 엔진 **자동 교체**(SubKind block/def/injury/rest)는 v1 제외 — (a) 구단주 행동이 아니라 엔진/감독 자동이고,
+//   ※ 엔진 **자동 교체**(SubKind block/def/injury/rest)는 제외 — (a) 구단주 행동이 아니라 엔진/감독 자동이고,
 //     (b) subEvents 재구성이 롤오버 후엔 다음 시즌 로스터라 부정확 → 정확하려면 롤오버 전 동기 재구성(=비차단 위반).
 //     "확실히 못 구하는 지표는 넣지 않는다"(추정/억지매핑 금지). payload가 jsonb라 후속 확장 자유.
+//
+// v2 확장(2026-07-31, §13.27) — 전부 롤오버 직전 상태에서 read-only로 확실히 파생(추정/억지매핑 없음):
+//   · 로스터 구성(rosterSize/avgAge/avgOvr/foreignCount) = 호출부가 commitPlayerBase(롤오버) **직전** finalR[my]의 Player 객체를
+//     캡처해 rosterPlayers로 넘김 → 여기서 overallRaw(read-only·rng 미소비)로 avgOvr, age/isForeign로 나머지 집계.
+//     ⚠ 캡처는 반드시 롤오버 전(commitPlayerBase 후 getPlayer는 노쇠·은퇴제외된 다음 시즌 base라 부정확).
+//   · wins/losses/setsWon/setsLost = 호출부(endSeason)가 롤오버 전 computeStandings/seasonResults로 이미 집계한 스칼라 재사용
+//     (careerTotals 누적과 동일 소스) — 경기 재구성 0. retirements = ctx.retired ∩ finalR[my] 호출부 스칼라. 전부 TelemetryMeta로 주입.
 import type { MatchIntervention } from '../engine/simMatch';
 import type { CoachModeChange } from './dynamics';
-import type { TrainingFocus } from '../types';
+import type { TrainingFocus, Player } from '../types';
+import { overallRaw } from '../engine/overall';
 
 /** computeSeasonTelemetry 입력 — GameState의 read-only 부분집합(롤오버 전 값). 상태를 그대로 넘긴다. */
 export interface TelemetrySource {
@@ -21,6 +29,7 @@ export interface TelemetrySource {
   inSeasonTx: { teamId: string; kind: string }[];     // 시즌 중 이동(방출/영입)
   trainingFocus: TrainingFocus | null;                // 현재 훈련 방향
   campTrainedThisOffseason: string[];                 // 이번 오프시즌 전지훈련 인원
+  rosterPlayers: Player[];                            // v2: 내 팀 시즌종료 로스터 스냅샷(롤오버 전 캡처) — 집계만·read-only
 }
 
 /** 호출부(endSeason)만 아는 스칼라 — 롤오버 후 archive/expelledLog에 들어가는 값이라 계산해 주입. */
@@ -29,10 +38,15 @@ export interface TelemetryMeta {
   finalRank: number | null;   // 내 팀 정규 최종 순위(1-based) · 없으면 null
   champion: boolean;          // 우승 여부
   expels: number;             // 이번 시즌 내 팀 불명예 제명 수(롤오버 시 expelledLog로 편입 — 호출부 계산)
+  retirements: number;        // v2: 이번 시즌 내 팀 은퇴 수(ctx.retired ∩ finalR[my])
+  wins: number;               // v2: 내 팀 정규시즌 승(record[my][0])
+  losses: number;             // v2: 내 팀 정규시즌 패(record[my][1])
+  setsWon: number;            // v2: 내 팀 정규시즌 획득 세트(seasonResults 집계)
+  setsLost: number;           // v2: 내 팀 정규시즌 실 세트
 }
 
 export interface SeasonTelemetryPayload {
-  v: 1;
+  v: 2;
   season: number;
   finalRank: number | null;
   champion: boolean;
@@ -45,6 +59,16 @@ export interface SeasonTelemetryPayload {
   expels: number;          // 이번 시즌 내 팀 불명예 제명 수
   trainingFocus: string | null; // 훈련 방향 코드("primary|secondary" 훈련id) · null=감독 기본
   campCount: number;       // 전지훈련 사용 인원
+  // ── v2 (2026-07-31) ──
+  rosterSize: number;      // 내 팀 시즌종료 로스터 인원
+  avgAge: number;          // 로스터 평균 나이(반올림) · 로스터 0이면 0
+  avgOvr: number;          // 로스터 평균 종합 OVR(overallRaw 반올림) · 로스터 0이면 0
+  foreignCount: number;    // 로스터 외국인 수
+  retirements: number;     // 이번 시즌 내 팀 은퇴 수
+  wins: number;            // 정규시즌 승
+  losses: number;          // 정규시즌 패
+  setsWon: number;         // 정규시즌 획득 세트
+  setsLost: number;        // 정규시즌 실 세트
 }
 
 /** TrainingFocus → 안정 코드 문자열("4,6|1,10,12"). null=null. 비식별 코드(선수·개인정보 0). */
@@ -77,8 +101,19 @@ export function computeSeasonTelemetry(src: TelemetrySource, meta: TelemetryMeta
     (acc, c) => (c.day >= acc.day ? c : acc),
     { day: -1, manual: false },
   ).manual;
+  // v2 로스터 구성 집계 — rosterPlayers를 읽기만(overallRaw는 순수·rng 미소비). 로스터 0이면 avg=0(0분모 방어).
+  const roster = src.rosterPlayers;
+  const rosterSize = roster.length;
+  let sumAge = 0, sumOvr = 0, foreignCount = 0;
+  for (const p of roster) {
+    sumAge += p.age;
+    sumOvr += overallRaw(p);
+    if (p.isForeign) foreignCount++;
+  }
+  const avgAge = rosterSize > 0 ? Math.round(sumAge / rosterSize) : 0;
+  const avgOvr = rosterSize > 0 ? Math.round(sumOvr / rosterSize) : 0;
   return {
-    v: 1,
+    v: 2,
     season: meta.season,
     finalRank: meta.finalRank,
     champion: meta.champion,
@@ -91,5 +126,15 @@ export function computeSeasonTelemetry(src: TelemetrySource, meta: TelemetryMeta
     expels: meta.expels,
     trainingFocus: encodeFocus(src.trainingFocus),
     campCount: src.campTrainedThisOffseason.length,
+    // ── v2 ──
+    rosterSize,
+    avgAge,
+    avgOvr,
+    foreignCount,
+    retirements: meta.retirements,
+    wins: meta.wins,
+    losses: meta.losses,
+    setsWon: meta.setsWon,
+    setsLost: meta.setsLost,
   };
 }

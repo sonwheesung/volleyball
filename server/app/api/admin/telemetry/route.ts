@@ -18,6 +18,8 @@ const SEASONS_PER_USER = 120; // 유저별 시즌 payload 상한(추이 표)
 type P = Record<string, unknown>;
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
 const subOf = (p: P): P => (typeof p.subs === 'object' && p.subs ? (p.subs as P) : {});
+// v1/v2 graceful: 필드가 유한수일 때만 true(옛 payload엔 v2 필드 없음 → 그 행은 v2 집계 분모에서 제외).
+const hasNum = (p: P, k: string): boolean => typeof p[k] === 'number' && Number.isFinite(p[k] as number);
 
 export async function GET(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
@@ -43,15 +45,21 @@ export async function GET(req: Request) {
     let sumRank = 0, rankN = 0, champions = 0, coachModeOn = 0;
     let sumTimeouts = 0, sumInterv = 0, sumLineup = 0, sumReleases = 0, sumExpels = 0, sumCamp = 0;
     let sumSubsManual = 0, sumSubsPinch = 0;
+    let intervenedReports = 0;                 // 개입 1회+ 리포트 수(플레이 탭 interveneRate)
+    const rankBuckets: Record<number, number> = {}; // finalRank 히스토그램(경기 탭 rankDist)
+    // ── v2 집계(분모=해당 v2 필드 보유 행만, v1 저장분 자연 제외) ──
+    let rosterN = 0, sumRosterSize = 0, sumRosterAge = 0, sumRosterOvr = 0, sumForeign = 0, sumRetire = 0;
+    let winsN = 0, sumWins = 0, sumLosses = 0, sumSetsW = 0, sumSetsL = 0;
     const focusCount: Record<string, number> = {};
     for (const r of rows) {
       const p = (r.payload ?? {}) as P;
       const s = subOf(p);
-      if (typeof p.finalRank === 'number') { sumRank += p.finalRank; rankN++; }
+      if (typeof p.finalRank === 'number') { sumRank += p.finalRank; rankN++; rankBuckets[p.finalRank] = (rankBuckets[p.finalRank] ?? 0) + 1; }
       if (p.champion === true) champions++;
       if (p.coachMode === true) coachModeOn++;
       sumTimeouts += num(p.timeouts);
       sumInterv += num(p.interventions);
+      if (num(p.interventions) > 0) intervenedReports++;
       sumLineup += num(p.lineupChanges);
       sumReleases += num(p.releases);
       sumExpels += num(p.expels);
@@ -60,8 +68,13 @@ export async function GET(req: Request) {
       sumSubsPinch += num(s.pinch);
       const f = typeof p.trainingFocus === 'string' ? p.trainingFocus : '(감독 기본)';
       focusCount[f] = (focusCount[f] ?? 0) + 1;
+      // v2 로스터 구성 — rosterSize 보유 = v2 payload
+      if (hasNum(p, 'rosterSize')) { rosterN++; sumRosterSize += num(p.rosterSize); sumRosterAge += num(p.avgAge); sumRosterOvr += num(p.avgOvr); sumForeign += num(p.foreignCount); sumRetire += num(p.retirements); }
+      // v2 정규시즌 전적 — wins 보유 = v2 payload
+      if (hasNum(p, 'wins')) { winsN++; sumWins += num(p.wins); sumLosses += num(p.losses); sumSetsW += num(p.setsWon); sumSetsL += num(p.setsLost); }
     }
     const avg = (sum: number, n: number) => (n > 0 ? Math.round((sum / n) * 100) / 100 : 0);
+    const totalWL = sumWins + sumLosses;
     const agg = {
       reports: total,
       avgFinalRank: avg(sumRank, rankN),
@@ -75,7 +88,24 @@ export async function GET(req: Request) {
       avgCamp: avg(sumCamp, total),
       avgSubsManual: avg(sumSubsManual, total),
       avgSubsPinch: avg(sumSubsPinch, total),
+      // 플레이 탭: 개입 1회+ 리포트 비율(%)
+      interveneRate: total > 0 ? Math.round((intervenedReports / total) * 1000) / 10 : 0,
+      // 경기 탭: 최종순위 히스토그램(1~N위) — 오름차순
+      rankDist: Object.entries(rankBuckets).map(([rank, n]) => ({ rank: Number(rank), n })).sort((a, b) => a.rank - b.rank),
       topFocus: Object.entries(focusCount).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([code, n]) => ({ code, n })),
+      // ── v2(선수 탭 · 경기 탭 승패). *N=해당 필드 보유 리포트 수(v1 저장분 제외). N=0이면 화면이 "다음 빌드부터" 노트. ──
+      rosterReports: rosterN,
+      avgRosterSize: avg(sumRosterSize, rosterN),
+      avgRosterAge: avg(sumRosterAge, rosterN),
+      avgRosterOvr: avg(sumRosterOvr, rosterN),
+      avgForeignCount: avg(sumForeign, rosterN),
+      avgRetirements: avg(sumRetire, rosterN),
+      matchReports: winsN,
+      avgWins: avg(sumWins, winsN),
+      avgLosses: avg(sumLosses, winsN),
+      winRate: totalWL > 0 ? Math.round((sumWins / totalWL) * 1000) / 10 : 0,
+      avgSetsWon: avg(sumSetsW, winsN),
+      avgSetsLost: avg(sumSetsL, winsN),
     };
 
     // ── 사용자별 롤업(시즌별 payload 추이) ──
