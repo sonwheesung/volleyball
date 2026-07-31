@@ -331,7 +331,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {booting ? <Loading label="운영 데이터를 불러오는 중…" /> : <>
         {tab === 'overview' && <Overview stats={stats} setting={setting} openTickets={openTickets} />}
         {tab === 'users' && <Users stats={stats} api={api} />}
-        {tab === 'retention' && <RetentionPH />}
+        {tab === 'retention' && <RetentionTab stats={stats} />}
         {tab === 'play' && <PlayTab api={api} />}
         {tab === 'offseason' && <OffseasonTab api={api} />}
         {tab === 'telemetry' && <TelemetryPanel api={api} />}
@@ -408,22 +408,35 @@ function downloadCsv(name: string, headers: string[], rows: (string | number)[][
   a.remove(); URL.revokeObjectURL(url);
 }
 function CsvBtn({ onClick }: { onClick: () => void }) { return <button className="oc-btn ghost sm" onClick={onClick}>⭳ CSV</button>; }
-
-// 미구현 섹션 placeholder — "무슨 지표를 · 언제(EAS/외부API) 보여줄지"를 명시(ANALYTICS_PLAN §6.2 원천).
-function Placeholder({ icon, title, tag, metrics }: { icon: string; title: string; tag: string; metrics: string[] }) {
+// ② 리텐션 탭 — D1/D3/D7/D14/D30 **근사**(stats route, createdAt·lastSeenAt 기반, 2026-07-31). 정밀 설치일 코호트 매트릭스는 GA4/BigQuery 후.
+function RetentionTab({ stats }: { stats: Json | null }) {
+  const kpi = (stats?.kpi as Json) ?? {};
+  const rows: { k: string; day: string; v: unknown }[] = [
+    { k: 'D1', day: '가입 +1일', v: kpi.d1 }, { k: 'D3', day: '가입 +3일', v: kpi.d3 }, { k: 'D7', day: '가입 +7일', v: kpi.d7 },
+    { k: 'D14', day: '가입 +14일', v: kpi.d14 }, { k: 'D30', day: '가입 +30일', v: kpi.d30 },
+  ];
+  const anyReal = rows.some((r) => typeof r.v === 'number');
   return (
-    <div className="oc-card">
-      <div className="oc-ph">
-        <div className="phi">{icon}</div>
-        <div className="pht">{title}</div>
-        <div className="phbadge">{tag}</div>
-        <ul className="phlist">{metrics.map((m, i) => <li key={i}>{m}</li>)}</ul>
+    <>
+      <div className="oc-card">
+        <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
+          리텐션 <span className="oc-tag2">근사 · lastSeenAt 기준</span> — Dk = 가입 후 k일+ 지난 유저 중 <b>마지막 접속이 (가입일+k일) 이후</b>인 비율("아직 살아있나"). lastSeenAt은 마지막 접속만 주므로 <b>정밀 코호트 매트릭스가 아니다</b>(분모 0이면 표본 부족). 결정론 격리(시드/리플레이 무관).
+        </div>
       </div>
-    </div>
+      <div className="oc-kpirow">
+        {rows.map((r) => typeof r.v === 'number'
+          ? <div className="oc-kpi" key={r.k} title={`${r.day} 이후 접속 유저 비율(근사)`}><div className="kk">{r.k} <span style={{ fontSize: 9, color: 'var(--mut)' }}>근사</span></div><div className="kv">{r.v}%</div><div className="ks">{r.day} · lastSeenAt</div></div>
+          : <div className="oc-kpi ext" key={r.k} title="가입 후 k일+ 지난 유저가 아직 없어 표본 부족(집계 대상 0)."><span className="kbadge">표본 부족</span><div className="kk">{r.k}</div><div className="kv">—</div><div className="ks">{r.day} 경과 유저 0</div></div>)}
+      </div>
+      {!anyReal && <div className="oc-card"><div className="oc-empty">아직 가입 후 경과일이 쌓인 유저가 없어 리텐션을 계산할 표본이 없습니다 (가입 후 최소 1일 경과 필요).</div></div>}
+      <div className="oc-card">
+        <div className="oc-mut" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+          <span className="oc-tag2">GA4/BigQuery 후</span> <b>정밀 설치일 코호트 매트릭스</b>(설치 코호트별 D1~D30 잔존을 격자로 — "3월 설치군의 D7은?")는 <b>app_open 이벤트</b>가 필요해 GA4/BigQuery 연동 후 표시됩니다. 위는 lastSeenAt 하나로 만드는 <b>단일 근사</b>라 코호트 세분·재방문 빈도는 담지 못합니다.
+        </div>
+      </div>
+    </>
   );
 }
-const RetentionPH = () => <Placeholder icon="📈" title="리텐션 코호트 (D1/D3/D7/D14/D30)" tag="EAS 계측 후 · GA4/BigQuery"
-  metrics={['설치일 기준 코호트 매트릭스 — app_open 이벤트로 외부(Firebase/GameAnalytics)가 자동 산출', 'BigQuery 코호트 SQL 결과를 서버가 캐시(externalDaily)해 표로 표시', '커스텀 이벤트 아님 — app_open만 정확하면 외부가 계산']} />;
 // ③ 플레이 탭 — §13.27 season_telemetry 행동 실데이터(2026-07-31). 신 파이프 없음: /api/admin/telemetry가 이미 집계하는
 //   개입/타임아웃/교체/지휘모드 행동만 렌더. "시즌 완료율 funnel"은 시즌 시작/이탈 이벤트가 없어 여전히 EAS-후.
 function PlayTab({ api }: { api: Api }) {

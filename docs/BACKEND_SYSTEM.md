@@ -613,7 +613,12 @@
 > - **③ 플레이 탭**: ~~"시즌 진행률 funnel" placeholder(EAS 후)~~ → **`/api/admin/telemetry` 행동 실데이터**(신 파이프 없음). 렌더 = 시즌당 평균 개입/타임아웃/교체 · 지휘모드(coachMode) 채택률 · **개입 1회+ 유저 비율(`interveneRate`)** · pinch/manual 교체 비. **단 "1·3·5·10시즌 완료율 funnel"은 시즌 시작/이탈 이벤트가 없어 여전히 EAS-후** — 행동량만 정직하게.
 > - **⑦ 경기 탭**: ~~placeholder(EAS 후)~~ → **v1 payload로 즉시**(최종순위 히스토그램 `rankDist`·우승률·평균 순위) + **v2 유입 후 승/패·세트**(`avgWins/avgLosses/winRate/avgSetsWon/avgSetsLost`). v2 미유입 시 승/패 카드는 **정직 노트("상세 승패·세트 = 다음 빌드부터")**. 평균 경기시간(durationMs)은 track 이벤트 필요 → EAS-후.
 > - **⑧ 선수 탭**: ~~placeholder(EAS 후)~~ → **v2 payload 로스터 구성**(평균 로스터 인원·나이·OVR·외국인 보유 수·시즌당 은퇴 수 — `avgRosterSize/avgRosterAge/avgRosterOvr/avgForeignCount/avgRetirements`). v2 유입 전엔 "다음 빌드부터" 안내. 개별 선수 이름·id는 **전송 안 함**(집계 정수만·비식별).
-> - **⑪ 메인 KPI — D1/D7/D30 리텐션 근사**: ~~"—"+"EAS 후"~~ → **`stats.kpi.d1/d7/d30` 실값**(가입 코호트 재접속 근사 — `users` createdAt·lastSeenAt 기반, §13.27 하단 근거). lastSeenAt이 마지막 접속만 주므로 **정밀 코호트 아님을 서브라벨/툴팁에 명시**("근사·lastSeenAt 기준"). 분모(가입 후 k일+ 지난 유저) 0이면 여전히 "—"(표본 부족). 설치일 코호트 매트릭스(② 리텐션 탭)는 그대로 EAS-후.
+> - **⑪ 메인 KPI — D1/D7/D30 리텐션 근사**: ~~"—"+"EAS 후"~~ → **`stats.kpi.d1/d7/d30` 실값**(가입 코호트 재접속 근사 — `users` createdAt·lastSeenAt 기반, §13.27 하단 근거). lastSeenAt이 마지막 접속만 주므로 **정밀 코호트 아님을 서브라벨/툴팁에 명시**("근사·lastSeenAt 기준"). 분모(가입 후 k일+ 지난 유저) 0이면 여전히 "—"(표본 부족).
+>
+> **✅ 리텐션 탭 실데이터화 + 전 탭 매핑 재점검(2026-07-31 후속 · 테스터 "리텐션 탭 비어 보임" 지적)** — placeholder를 근사 실데이터로 승격, 전 탭 전수조사로 매핑 완결:
+> - **② 리텐션 탭**: ~~"설치일 코호트 매트릭스" placeholder(EAS 후)~~ → **`RetentionTab` 근사 실데이터**. stats route `RET=[1,3,7,14,30]`으로 확장(`kpi.d1/d3/d7/d14/d30`, 같은 근사공식·분모 0=null). 탭 상단에 D1/D3/D7/D14/D30 근사 KPI 카드(대시보드 스타일·"근사·lastSeenAt 기준" 라벨), 하단은 **정밀 설치일 코호트 매트릭스 = `GA4/BigQuery 후`** 업그레이드 노트로 축소(app_open 이벤트 필요). 단일 lastSeenAt 근사라 코호트 세분·재방문 빈도는 미포함을 명시.
+> - **전 탭 전수조사 결과**(매핑 가능한데 안 된 것 없음 확인): ① 사용자(가입추이·목록·CSV)·⑤ BM(상품별 다이아·결제전환·rich 결제이벤트)·⑥ 광고(원장 reason=ad 시청건수·시청자·보상)·⑨ 오류(purchaseEvent 사유별·최근로그·Sentry 조건부)·🏆 업적·🎛 텔레메트리·③④⑦⑧ = **전부 실데이터 렌더 정상**(빈 표는 "데이터 없음"이지 미구현 아님). CRUD(쿠폰·공지·노트·우편·문의환불·설정) 완결.
+> - **정직 라벨 규약 확정**(뭉뚱그린 "EAS 후" 금지): `#43 결제 후`(매출·ARPU·ARPPU) · `AdMob 연동 후(EAS)`(광고 노출·eCPM·수익) · `GA4/BigQuery 후`(정밀 코호트 매트릭스·정밀 세션/플레이타임) · `설치 Referrer(EAS) 후`(설치 출처) · Crashlytics=EAS 후.
 
 **핵심 결정 — 모든 걸 우리 화면 한 곳에서(pull-and-cache)**: 관리자가 외부 콘솔(Firebase·RevenueCat·AdMob·Sentry)을 따로 열지 않고 **ops-9f3a2c 한 화면에서 11섹션 전부** 본다. 아키텍처:
 ```

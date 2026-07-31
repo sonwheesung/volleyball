@@ -41,9 +41,9 @@ export async function GET(req: Request) {
     let totalUsers = 0, active30m = 0, dauToday = 0, newToday = 0, inactive = 0, mau = 0, wau = 0;
     // 리텐션 D1/D7/D30 **근사**(정밀 코호트 아님 — lastSeenAt은 마지막 접속만 줌).
     //   Dk 분모 = 가입 후 k일+ 지난 유저 · 분자 = 그중 lastSeenAt이 (createdAt + k일) 이후("아직 살아있나"). 분모 0 → null.
-    const RET = [1, 7, 30] as const;
-    const retDen: Record<number, number> = { 1: 0, 7: 0, 30: 0 };
-    const retNum: Record<number, number> = { 1: 0, 7: 0, 30: 0 };
+    const RET = [1, 3, 7, 14, 30] as const;
+    const retDen: Record<number, number> = { 1: 0, 3: 0, 7: 0, 14: 0, 30: 0 };
+    const retNum: Record<number, number> = { 1: 0, 3: 0, 7: 0, 14: 0, 30: 0 };
     for (const r of rows) {
       totalUsers++;
       if (r.c) { const i = idx.get(YMD(new Date(r.c))); if (i !== undefined) newUsers[i]++; if (r.c.getTime() >= dayStart.getTime()) newToday++; }
@@ -112,7 +112,7 @@ export async function GET(req: Request) {
       kpi: {
         totalUsers, active30m, dauToday, mau, wau, newToday, withdrawn, inactive,
         revenueToday: revenue[DAYS - 1] ?? 0, adToday, adUsersToday: adUsersToday.size, payers, conversion, errToday,
-        d1: retPct(1), d7: retPct(7), d30: retPct(30), // 리텐션 근사(%) · 분모 0이면 null(표본 부족)
+        d1: retPct(1), d3: retPct(3), d7: retPct(7), d14: retPct(14), d30: retPct(30), // 리텐션 근사(%) · 분모 0이면 null(표본 부족)
       },
       labels: days.map((d) => d.label),
       series: { newUsers, dau, revenue, ad: adSeries },
