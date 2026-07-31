@@ -333,7 +333,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === 'users' && <Users stats={stats} api={api} />}
         {tab === 'retention' && <RetentionPH />}
         {tab === 'play' && <PlayPH />}
-        {tab === 'offseason' && <OffseasonPH />}
+        {tab === 'offseason' && <OffseasonTab api={api} />}
         {tab === 'telemetry' && <TelemetryPanel api={api} />}
         {tab === 'payments' && <Payments stats={stats} api={api} flash={flash} />}
         {tab === 'ads' && <Ads api={api} />}
@@ -426,26 +426,88 @@ const RetentionPH = () => <Placeholder icon="📈" title="리텐션 코호트 (D
   metrics={['설치일 기준 코호트 매트릭스 — app_open 이벤트로 외부(Firebase/GameAnalytics)가 자동 산출', 'BigQuery 코호트 SQL 결과를 서버가 캐시(externalDaily)해 표로 표시', '커스텀 이벤트 아님 — app_open만 정확하면 외부가 계산']} />;
 const PlayPH = () => <Placeholder icon="🎮" title="플레이 — 시즌 진행률 (★배구명가 핵심)" tag="EAS 계측 후 · 자체 track()"
   metrics={['1·3·5·10시즌 완료율 funnel — season_start/season_end 이벤트 롤업', '평균 시즌 진행 수 · 첫 시즌 완료율', '세션 길이/횟수 — Firebase engagement [외부-sync]']} />;
-const OffseasonPH = () => <Placeholder icon="🔁" title="오프시즌 funnel — 어디서 이탈하나" tag="EAS 계측 후 · 자체 track()"
-  metrics={['외국인 트라이아웃 → FA 센터 → 드래프트 → 전지훈련 단계별 도달/이탈', 'foreign_tryout_open · fa_open/fa_sign · draft_open/draft_pick · special_training', '단계별 이탈 funnel 집계(gameRollupDaily)']} />;
+// ④ 오프시즌 탭 — §13.27 season_telemetry 실데이터 재배선(2026-07-31). 신 파이프 없음:
+//   /api/admin/telemetry가 이미 집계하는 오프시즌 행동(전지훈련·방출·제명·훈련방향)만 필터·렌더.
+//   ※ "단계 도달/이탈 funnel"(tryout→FA→draft 진입률)은 season_telemetry에 단계 진입 이벤트가 없어 여전히 EAS-후.
+function OffseasonTab({ api }: { api: Api }) {
+  const [d, setD] = useState<Json | null>(null);
+  const [loading, setLoading] = useState(true);
+  useEffect(() => { let live = true; setLoading(true); api('/api/admin/telemetry').then((r) => { if (live) { setD(r.body.ok ? r.body : null); setLoading(false); } }); return () => { live = false; }; }, [api]);
+  const agg = (d?.agg as Json) ?? {};
+  const distinct = nnum(d?.distinctUsers);
+  const reports = nnum(agg.reports);
+  const topFocus = (agg.topFocus as { code: string; n: number }[]) ?? [];
+
+  if (loading) return <Loading />;
+  if (!d) return <div className="oc-card"><div className="oc-empty">오프시즌 데이터를 불러오지 못했습니다 (서버·권한 확인).</div></div>;
+
+  return (
+    <>
+      <div className="oc-card">
+        <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
+          시즌 종료 시 유저가 남긴 오프시즌 운영 행동 <span className="oc-tag2">자체-롤업(season_telemetry) · 비식별</span> — 전지훈련·방출·제명·훈련 방향. 결정론 격리(시드/리플레이 무관).
+        </div>
+      </div>
+      {reports === 0 ? <div className="oc-card"><div className="oc-empty">아직 수집된 오프시즌 텔레메트리가 없습니다 (시즌 종료 시 수집 · 서버 배포 후).</div></div> : (
+        <>
+          <div className="oc-grid">
+            <Stat ic="📊" k="시즌 리포트 수" v={reports.toLocaleString()} s={`고유 유저 ${distinct.toLocaleString()}명`} />
+            <Stat ic="💎" k="평균 전지훈련 인원" v={String(nnum(agg.avgCamp))} s="오프시즌 전지훈련(campCount)" />
+            <Stat ic="🚪" k="평균 방출 수" v={String(nnum(agg.avgReleases))} s="시즌당 방출(releases)" />
+            <Stat ic="🛑" k="평균 제명 수" v={String(nnum(agg.avgExpels))} s="시즌당 제명(expels)" />
+          </div>
+          {topFocus.length > 0 && (
+            <div className="oc-card">
+              <div className="oc-cardhead"><h3>훈련 방향 분포 (상위)</h3><CsvBtn onClick={() => downloadCsv('offseason-focus.csv', ['훈련방향코드', '시즌 수'], topFocus.map((f) => [f.code, f.n]))} /></div>
+              {topFocus.map((f) => { const max = Math.max(1, ...topFocus.map((x) => x.n)); const pct = Math.round((f.n / max) * 100); return (
+                <div className="oc-achrow" key={f.code}>
+                  <div style={{ flex: 1 }}><div className="t">{f.code}</div><div className="d">primary|secondary 훈련id</div></div>
+                  <div className="meta"><div className="oc-bar"><i style={{ width: `${pct}%` }} /></div></div>
+                  <div className="pct">{f.n}<div className="cnt">시즌</div></div>
+                </div>
+              ); })}
+            </div>
+          )}
+        </>
+      )}
+      <div className="oc-card">
+        <div className="oc-mut" style={{ fontSize: 12.5, lineHeight: 1.6 }}>
+          <span className="oc-tag2">EAS 계측 후</span> <b>단계별 도달/이탈 funnel</b>(외국인 트라이아웃 → FA 센터 → 드래프트 진입률·이탈률)은 <b>단계 진입 이벤트</b>(foreign_tryout_open·fa_open·draft_open)가 필요해 EAS 계측 후 표시됩니다. 위는 세이브 파생 <b>행동량</b>(전지훈련·방출·제명·훈련방향)만.
+        </div>
+      </div>
+    </>
+  );
+}
 const MatchPH = () => <Placeholder icon="🏐" title="경기 데이터" tag="EAS 계측 후 · 자체 track()"
   metrics={['경기 수 · 평균 경기시간(match_start→match_end durationMs)', '최다 우승팀 · 평균 득점 · 평균 세트(match_end/champion params)', '전부 [자체-롤업] — 결정론 시뮬 결과를 track()으로 1건 전송']} />;
 const PlayersPH = () => <Placeholder icon="👤" title="선수 데이터" tag="EAS 계측 후 · 자체 track()"
   metrics={['최다 영입 외국인 · 최다 지명 포지션(fa_sign/draft_pick params)', '평균 은퇴 나이(retirement) · 평균 OVR 성장 델타', '전지훈련 이용 비율(special_training 유저/총)']} />;
 
-// ⑪ 메인 KPI 카드행 — 한 화면 즉시 파악. 가능분(서버/원장)=실값 · 외부-sync(MAU·리텐션·ARPU 등)="—"+"EAS 후" 배지.
+// ⑪ 메인 KPI 카드행 — 한 화면 즉시 파악. 가능분(서버/원장)=실값 · 미가용은 "—"+지표별 실블로커 배지.
+//   MAU·WAU는 lastSeenAt 기반 실값(DAU와 동일 규약, 2026-07-31 하트비트 후). 리텐션/플레이=EAS 후, ARPU류=#43 결제 후.
 function MainKpi({ kpi }: { kpi: Json }) {
   const real: { k: string; v: string; s?: string }[] = [
     { k: 'DAU (근사)', v: nnum(kpi.dauToday).toLocaleString(), s: 'lastSeenAt 기준' },
+    { k: 'WAU', v: nnum(kpi.wau).toLocaleString(), s: '최근 7일' },
+    { k: 'MAU', v: nnum(kpi.mau).toLocaleString(), s: '최근 30일' },
     { k: '총 가입', v: nnum(kpi.totalUsers).toLocaleString(), s: `신규 +${nnum(kpi.newToday)}` },
     { k: '결제 전환율', v: `${nnum(kpi.conversion)}%`, s: `결제자 ${nnum(kpi.payers)}명` },
     { k: '오늘 매출', v: `₩${nnum(kpi.revenueToday).toLocaleString()}`, s: '#43 연동 후 실값' },
   ];
-  const ext = ['MAU', 'D1', 'D7', 'D30', '평균 플레이', 'ARPU', 'ARPPU', '월매출'];
+  // 미가용 KPI — 지표별 실제 블로커로 라벨(뭉뚱그린 "EAS 후" 금지).
+  const ext: { k: string; blocker: string; hint: string }[] = [
+    { k: 'D1', blocker: 'EAS 계측 후', hint: '설치일 코호트 리텐션 — app_open 이벤트 필요(GA4/BigQuery)' },
+    { k: 'D7', blocker: 'EAS 계측 후', hint: '설치일 코호트 리텐션 — app_open 이벤트 필요(GA4/BigQuery)' },
+    { k: 'D30', blocker: 'EAS 계측 후', hint: '설치일 코호트 리텐션 — app_open 이벤트 필요(GA4/BigQuery)' },
+    { k: '평균 플레이', blocker: 'EAS 계측 후', hint: '세션 길이·플레이 이벤트 필요(Firebase engagement)' },
+    { k: 'ARPU', blocker: '#43 결제 후', hint: '결제 원장 필요 — 유료 결제(#43) 연동 후' },
+    { k: 'ARPPU', blocker: '#43 결제 후', hint: '결제 원장 필요 — 유료 결제(#43) 연동 후' },
+    { k: '월매출', blocker: '#43 결제 후', hint: '결제 원장 필요 — 유료 결제(#43) 연동 후' },
+  ];
   return (
     <div className="oc-kpirow">
       {real.map((r) => <div className="oc-kpi" key={r.k}><div className="kk">{r.k}</div><div className="kv">{r.v}</div>{r.s ? <div className="ks">{r.s}</div> : null}</div>)}
-      {ext.map((k) => <div className="oc-kpi ext" key={k} title="네이티브 계측(EAS) + 외부 API(GA4·RevenueCat) 연동 후 표시"><span className="kbadge">EAS 후</span><div className="kk">{k}</div><div className="kv">—</div><div className="ks">외부-sync</div></div>)}
+      {ext.map((e) => <div className="oc-kpi ext" key={e.k} title={e.hint}><span className="kbadge">{e.blocker}</span><div className="kk">{e.k}</div><div className="kv">—</div><div className="ks">{e.blocker.includes('결제') ? '결제-연동' : '외부-sync'}</div></div>)}
     </div>
   );
 }
@@ -896,18 +958,26 @@ function PaymentEventsTable({ api }: { api: Api }) {
       </div>
       <div className="oc-mut" style={{ fontSize: 12.5, marginBottom: 10 }}>결제 생애주기 진단(§13.22). "돈 내고 0개"·dropped·수동조정을 단계로 추적. 한 결제 상세는 API <code>?txn=&lt;storeTxnId&gt;</code>.</div>
       {loading ? <LoadingRow /> : rows.length === 0 ? <div className="oc-empty">해당 조건의 이벤트가 없습니다.</div> : (
-        <table className="oc-table">
-          <thead><tr><th>시각</th><th>소스</th><th>단계</th><th>결과</th><th>유저</th><th style={{ textAlign: 'right' }}>다이아</th></tr></thead>
-          <tbody>{rows.map((e) => { const ok = e.ok !== false; const dv = e.diamondsDelta == null ? null : nnum(e.diamondsDelta); return (
+        <div style={{ overflowX: 'auto' }}>
+        <table className="oc-table" style={{ minWidth: 860 }}>
+          <thead><tr><th>시각</th><th>소스</th><th>환경</th><th>타입</th><th>단계</th><th>결과</th><th>유저</th><th>상품 / 가격</th><th style={{ textAlign: 'right' }}>다이아</th></tr></thead>
+          <tbody>{rows.map((e) => { const ok = e.ok !== false; const dv = e.diamondsDelta == null ? null : nnum(e.diamondsDelta);
+            const env = e.environment ? String(e.environment).toUpperCase() : null; const sandbox = env === 'SANDBOX';
+            const price = e.price == null ? null : nnum(e.price); const cur = e.currency ? String(e.currency) : '';
+            return (
             <tr key={e.id as string}>
               <td>{fmtDT(e.createdAt)}</td>
               <td className="oc-mut">{String(e.source)}</td>
+              <td>{env ? <span className="oc-badge" style={sandbox ? { background: 'rgba(242,169,59,0.16)', color: '#f2a93b' } : { background: 'rgba(25,194,174,0.14)', color: 'var(--ac)' }}>{sandbox ? 'SANDBOX' : env === 'PRODUCTION' ? 'PROD' : env}</span> : <span className="oc-mut">—</span>}</td>
+              <td className="oc-mut" style={{ fontSize: 12 }} title={String(e.eventType ?? '')}>{e.eventType ? String(e.eventType) : '—'}</td>
               <td style={{ fontWeight: 600 }}>{String(e.stage)}</td>
               <td><span className={`oc-pill ${ok ? 'g' : 'r'}`}>{String(e.outcome ?? (ok ? 'ok' : 'fail'))}</span>{e.reasonCode ? <span className="oc-mut" style={{ fontSize: 11, marginLeft: 6 }}>{String(e.reasonCode)}</span> : null}</td>
               <td className="oc-mut" title={String(e.userId ?? '')}>{e.userId ? String(e.userId).slice(0, 8) + '…' : '—'}</td>
+              <td className="oc-mut" style={{ fontSize: 12 }} title={String(e.productId ?? '')}>{e.productId ? <span>{String(e.productId)}</span> : <span className="oc-mut">—</span>}{price != null ? <span style={{ marginLeft: 6, color: 'var(--fg)' }}>{price.toLocaleString()}{cur ? ` ${cur}` : ''}</span> : null}</td>
               <td style={{ textAlign: 'right', fontWeight: 700, color: dv == null ? 'var(--mut)' : dv >= 0 ? 'var(--ac)' : '#ff8f8f' }}>{dv == null ? '—' : (dv >= 0 ? '+' : '') + dv.toLocaleString()}</td>
             </tr>); })}</tbody>
         </table>
+        </div>
       )}
     </div>
   );

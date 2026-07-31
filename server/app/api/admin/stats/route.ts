@@ -24,6 +24,8 @@ export async function GET(req: Request) {
     const now = Date.now();
     const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
     const m30 = new Date(now - 30 * 60 * 1000);
+    const mauFrom = new Date(now - 30 * 86400000); // MAU: 최근 30일 내 lastSeenAt(DAU와 동일 규약, 롤링)
+    const wauFrom = new Date(now - 7 * 86400000);  // WAU: 최근 7일 내 lastSeenAt
     const inact = new Date(now - 14 * 86400000); // 14일+ 미접속 = 비활성
     const win = new Date(dayStart.getTime() - (DAYS - 1) * 86400000); // 14일 시계열 시작
 
@@ -35,7 +37,7 @@ export async function GET(req: Request) {
     const rows = await db.select({ c: users.createdAt, l: users.lastSeenAt }).from(users)
       .where(and(eq(users.projCode, PROJ_CODE), isNull(users.deletedAt)));
     const newUsers = new Array(DAYS).fill(0), dau = new Array(DAYS).fill(0), hourly = new Array(24).fill(0);
-    let totalUsers = 0, active30m = 0, dauToday = 0, newToday = 0, inactive = 0;
+    let totalUsers = 0, active30m = 0, dauToday = 0, newToday = 0, inactive = 0, mau = 0, wau = 0;
     for (const r of rows) {
       totalUsers++;
       if (r.c) { const i = idx.get(YMD(new Date(r.c))); if (i !== undefined) newUsers[i]++; if (r.c.getTime() >= dayStart.getTime()) newToday++; }
@@ -43,6 +45,8 @@ export async function GET(req: Request) {
         const lt = r.l.getTime();
         if (lt >= m30.getTime()) active30m++;
         if (lt >= dayStart.getTime()) dauToday++;
+        if (lt >= mauFrom.getTime()) mau++;
+        if (lt >= wauFrom.getTime()) wau++;
         if (lt < inact.getTime()) inactive++;
         const i = idx.get(YMD(new Date(r.l))); if (i !== undefined) dau[i]++;
         hourly[new Date(r.l).getUTCHours()]++;
@@ -92,7 +96,7 @@ export async function GET(req: Request) {
     return NextResponse.json({
       ok: true,
       kpi: {
-        totalUsers, active30m, dauToday, newToday, withdrawn, inactive,
+        totalUsers, active30m, dauToday, mau, wau, newToday, withdrawn, inactive,
         revenueToday: revenue[DAYS - 1] ?? 0, adToday, adUsersToday: adUsersToday.size, payers, conversion, errToday,
       },
       labels: days.map((d) => d.label),
