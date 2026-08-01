@@ -188,6 +188,27 @@ textarea.oc-input{resize:vertical;min-height:44px;font-family:inherit;}
 .oc-ph .phlist li{color:var(--mut);font-size:13px;padding-left:20px;position:relative;line-height:1.5;}
 .oc-ph .phlist li:before{content:"○";position:absolute;left:0;color:var(--bd);}
 .oc-tag2{font-size:11px;font-weight:700;color:var(--vi);background:rgba(155,123,255,.14);border-radius:6px;padding:2px 8px;margin-left:8px;}
+/* ── 반응형(모바일) — 좁은 화면(≤768px)에서만 사이드바를 드로어로, 그리드/패딩/고정폭 축소. 데스크톱은 불변. ── */
+.oc-topleft{display:flex;align-items:center;gap:12px;min-width:0;}
+.oc-burger{display:none;align-items:center;justify-content:center;width:40px;height:40px;border-radius:10px;border:1px solid var(--bd);background:var(--panel);color:var(--tx);font-size:19px;line-height:1;cursor:pointer;flex-shrink:0;}
+.oc-burger:hover{background:var(--bd2);}
+.oc-scrim{position:fixed;inset:0;background:rgba(3,6,11,.62);z-index:55;backdrop-filter:blur(2px);}
+@media(max-width:768px){
+  .oc-shell{grid-template-columns:1fr;}
+  .oc-side{position:fixed;top:0;left:0;z-index:60;width:266px;max-width:84vw;height:100vh;overflow-y:auto;transform:translateX(-100%);transition:transform .22s cubic-bezier(.2,.8,.2,1);box-shadow:0 0 44px rgba(0,0,0,.6);}
+  .oc-side.open{transform:none;}
+  .oc-main{padding:16px 14px;}
+  .oc-burger{display:inline-flex;}
+  .oc-top{gap:12px;margin-bottom:18px;} .oc-h1{font-size:19px;} .oc-crumb{font-size:12px;}
+  .oc-grid{grid-template-columns:repeat(auto-fit,minmax(138px,1fr));gap:10px;margin-bottom:18px;}
+  .oc-kpirow{grid-template-columns:repeat(auto-fit,minmax(126px,1fr));gap:10px;}
+  .oc-card{padding:15px 13px;overflow-x:auto;}
+  .oc-stat{padding:14px;} .oc-stat .v{font-size:23px;} .oc-kpi .kv{font-size:22px;}
+  .oc-frow{flex-direction:column;gap:10px;}
+  .oc-achrow{gap:10px;} .oc-achrow .meta{width:96px;}
+  .oc-modal-bd{padding:22px 12px 30px;} .oc-dl-row{gap:12px;}
+  .oc-seg{display:flex;width:100%;} .oc-segb{flex:1;text-align:center;}
+}
 `;
 
 export default function OpsConsole() {
@@ -272,6 +293,7 @@ const TITLES: Record<Tab, string> = { overview: '대시보드', users: '① 사�
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
+  const [navOpen, setNavOpen] = useState(false); // 모바일 드로어(≤768px). 데스크톱은 CSS로 사이드바 상시 노출 — 이 값 무관.
   const [coupons, setCoupons] = useState<Json[]>([]);
   const [anns, setAnns] = useState<Json[]>([]);
   const [devnotes, setDevnotes] = useState<Json[]>([]);
@@ -303,13 +325,14 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
   return (
     <div className="oc-shell">
-      <aside className="oc-side">
+      {navOpen ? <div className="oc-scrim" onClick={() => setNavOpen(false)} /> : null}
+      <aside className={`oc-side${navOpen ? ' open' : ''}`}>
         <div className="oc-logo" style={{ fontSize: 19, paddingLeft: 6 }}>🏐 운영 콘솔</div>
         <nav className="oc-nav">
           {NAV.map((n, i) => (
             <React.Fragment key={n.id}>
               {n.grp && n.grp !== NAV[i - 1]?.grp ? <div className="oc-navgrp">{n.grp}</div> : null}
-              <button className={`oc-navitem${tab === n.id ? ' on' : ''}`} onClick={() => setTab(n.id)}>
+              <button className={`oc-navitem${tab === n.id ? ' on' : ''}`} onClick={() => { setTab(n.id); setNavOpen(false); }}>
                 <span className="ic">{n.ic}</span>{n.label}
                 {n.id === 'tickets' && openTickets > 0 ? <span className="bdg">{openTickets}</span> : null}
               </button>
@@ -321,9 +344,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
 
       <main className="oc-main">
         <div className="oc-top">
-          <div>
-            <div className="oc-h1">{TITLES[tab]}</div>
-            <div className="oc-crumb">배구명가 · 운영</div>
+          <div className="oc-topleft">
+            <button className="oc-burger" onClick={() => setNavOpen(true)} aria-label="메뉴 열기">☰</button>
+            <div>
+              <div className="oc-h1">{TITLES[tab]}</div>
+              <div className="oc-crumb">배구명가 · 운영</div>
+            </div>
           </div>
           <button className="oc-btn ghost sm" onClick={() => { load(); flash('새로고침됨'); }}>↻ 새로고침</button>
         </div>
