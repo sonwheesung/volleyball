@@ -138,6 +138,7 @@ npx tsx tools/checkRecords.ts              # 통산 리더보드 셀렉터(병�
 npx tsx tools/checkClubRanks.ts            # 구단 정체성 recentRanks 열별 순위=유효 순열(중복/결손 0)·strengthBias 합=0(2026-06-24 중복 버그 가드)
 npx tsx tools/checkSubs.ts                 # 작전 교체 로그(재생 불변식·세트말 net-zero — 부상 교체는 kind:'injury' 영구스왑 예외) + FIVB 규칙(재진입·1왕복·**타슬롯 재진입 EC-SUB-02**) + 개입 주입 묶음(위반 개입 no-op)
 npx tsx tools/_dv_manual_side.ts           # 완전 수동 사이드(MATCH_INTERVENTION §4.1): 미지정 바이트불변·감독 자동TO/교체 억제(TTO·부상 유지)·개입 병행 발화·forward-only·3경로 정합. exit 0/1
+npx tsx tools/_dv_to_nodup.ts              # 좌표-중복 타임아웃 가드(MATCH_INTERVENTION §4.6, 2026-08-01): 감독 자동TO가 이미 부른 좌표에 유저 개입TO 얹으면 no-op(한 데드볼 작전TO 최대 1개). 판정1 좌표TO=1·판정2 A/B(감독좌표 Δ0 vs 자유좌표 Δ+1)·판정3 무개입 바이트동일. exit 0/1
 npx tsx tools/_dv_rotation_replay.ts       # 개입 서브교체 서버 슬롯 도출용 로테이션 재생(reconstructRallies) ↔ 엔진 트레이스 전랠리 대조 + 오프바이원 변이 민감도(app/match/[id].tsx pinchBlock 변경 시 재실행). exit 0/1
 npx tsx tools/_gt_coachmode.ts             # "경기 지휘" 설정 토글(MATCH_INTERVENTION §4.1) 스토어: 기본[]·forward-only·같은날덮어쓰기·false복귀·캐시bump. exit 0/1
 npx tsx tools/_dv_prefix_smoke.ts          # 개입 P 이전 프리픽스 바이트 불변+효과(MATCH_INTERVENTION §3) — 2026-07-21 실행 블록 등재(종전 prose만 있어 배터리 미실행 사각)

@@ -426,6 +426,12 @@ export function simulateMatch(
             subIn(iv.side, slot, inP, iv.subKind === 'pinch' ? 'pinch' : 'manual');
           } else {
             // 타임아웃 — 감독 자동 경로와 별개(임계·streak 무시 강제). 기존 타임아웃 블록의 효과를 그대로 복제.
+            // 감독 자동 TO가 이미 이 좌표에 걸렸으면 내 개입 TO는 중복 — no-op(현실: 한 데드볼 작전 타임아웃 1회).
+            //   감독 자동(manualSide 미설정)+유저 개입 공존 시 같은 점수 작전 TO 2개가 뜨던 버그(2026-08-01, 400경기 100% 재현).
+            //   감독 자동 TO는 그 점수를 만든 랠리의 루프 하단(약 646행)에서 먼저 push되고, 유저 개입 TO는 다음 랠리 루프 상단에서
+            //   처리되므로 이 시점엔 감독 TO가 이미 timeoutEvents에 존재 → some(...)로 감지. 예산도 소진하지 않는다(push·차감 전 배치).
+            //   테크니컬(technical:true)은 작전과 공존 허용이므로 !t.technical만 검사. (userToCoords=유저-유저 / 이 가드=유저-감독 중복용.)
+            if (timeoutEvents.some((t) => !t.technical && t.side === iv.side && t.setNo === setNo && t.home === h && t.away === a)) continue;
             if (timeouts[iv.side] <= 0) continue; // 세트 한도 소진 시 no-op
             const toKey = `${iv.side}:${h}:${a}`; // 같은 데드볼 좌표 중복 커밋 방어(감사 P1) — 세트 예산 이중 소진 차단
             if (userToCoords.has(toKey)) continue;
