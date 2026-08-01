@@ -7,7 +7,7 @@ import { AD_REWARD, AD_DAILY_CAP } from '../../lib/econ'; // 다이아 econ 권�
 
 type Json = Record<string, unknown>;
 // 11섹션 IA(BACKEND_SYSTEM §13.25-D). ①~⑧=분석 그룹 · ⑨=운영 · ⑩⑪=대시보드(overview) 상단.
-type Tab = 'overview' | 'users' | 'retention' | 'play' | 'offseason' | 'telemetry' | 'payments' | 'ads' | 'match' | 'players' | 'achv' | 'errors' | 'coupons' | 'anns' | 'devnotes' | 'mail' | 'settings' | 'tickets';
+type Tab = 'overview' | 'users' | 'retention' | 'play' | 'offseason' | 'telemetry' | 'payments' | 'ads' | 'match' | 'players' | 'achv' | 'errors' | 'coupons' | 'anns' | 'patchnotes' | 'devnotes' | 'mail' | 'settings' | 'tickets';
 
 async function apiCall(path: string, token: string, init?: RequestInit): Promise<{ status: number; body: Json }> {
   // 네트워크 자체 실패(서버 다운·타임아웃·오프라인)면 fetch가 throw — 이걸 안 잡으면 호출부의
@@ -284,12 +284,13 @@ const NAV: { id: Tab; ic: string; label: string; grp?: string }[] = [
   { id: 'errors', ic: '⑨', label: '오류 모니터링', grp: '운영' },
   { id: 'coupons', ic: '🎟', label: '쿠폰', grp: '운영' },
   { id: 'anns', ic: '📢', label: '공지', grp: '운영' },
-  { id: 'devnotes', ic: '📝', label: '노트', grp: '운영' },
+  { id: 'patchnotes', ic: '📋', label: '패치노트', grp: '운영' },
+  { id: 'devnotes', ic: '📝', label: '개발자노트', grp: '운영' },
   { id: 'mail', ic: '📬', label: '우편', grp: '운영' },
   { id: 'tickets', ic: '✉', label: '문의 · 환불', grp: '운영' },
   { id: 'settings', ic: '⚙', label: '운영 설정', grp: '운영' },
 ];
-const TITLES: Record<Tab, string> = { overview: '대시보드', users: '① 사용자 현황', retention: '② 리텐션 코호트', play: '③ 플레이', offseason: '④ 오프시즌 funnel', telemetry: '행동 텔레메트리', payments: '⑤ BM · 수익화', ads: '⑥ 광고', match: '⑦ 경기 데이터', players: '⑧ 선수 데이터', achv: '업적', errors: '⑨ 오류 모니터링', coupons: '쿠폰 관리', anns: '공지 관리', devnotes: '노트 · 패치노트', mail: '우편 관리', settings: '운영 설정', tickets: '문의 · 환불' };
+const TITLES: Record<Tab, string> = { overview: '대시보드', users: '① 사용자 현황', retention: '② 리텐션 코호트', play: '③ 플레이', offseason: '④ 오프시즌 funnel', telemetry: '행동 텔레메트리', payments: '⑤ BM · 수익화', ads: '⑥ 광고', match: '⑦ 경기 데이터', players: '⑧ 선수 데이터', achv: '업적', errors: '⑨ 오류 모니터링', coupons: '쿠폰 관리', anns: '공지 관리', patchnotes: '패치노트', devnotes: '개발자 노트', mail: '우편 관리', settings: '운영 설정', tickets: '문의 · 환불' };
 
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
@@ -369,7 +370,8 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
         {tab === 'errors' && <Errors api={api} />}
         {tab === 'coupons' && <Coupons coupons={coupons} api={api} reload={load} flash={flash} />}
         {tab === 'anns' && <Anns anns={anns} api={api} reload={load} flash={flash} />}
-        {tab === 'devnotes' && <Devnotes devnotes={devnotes} api={api} reload={load} flash={flash} />}
+        {tab === 'patchnotes' && <Devnotes kind="patch" devnotes={devnotes} api={api} reload={load} flash={flash} />}
+        {tab === 'devnotes' && <Devnotes kind="note" devnotes={devnotes} api={api} reload={load} flash={flash} />}
         {tab === 'mail' && <MailPanel api={api} flash={flash} />}
         {tab === 'settings' && <Settings setting={setting} api={api} reload={load} flash={flash} />}
         {tab === 'tickets' && <Tickets tickets={tickets} api={api} reload={load} flash={flash} />}
@@ -1611,20 +1613,23 @@ function Markdown({ src }: { src: string }) {
   return <div className="oc-mdprev">{blocks.length ? blocks : <span className="oc-mut">미리보기가 여기 표시됩니다.</span>}</div>;
 }
 
-function Devnotes({ devnotes, api, reload, flash }: { devnotes: Json[]; api: Api; reload: () => void; flash: (m: string) => void }) {
+// kind별 별도 탭(정정 2026-08-01) — 패치노트 탭(kind='patch')·개발자노트 탭(kind='note')이 각각 자기 kind만
+// 목록·에디터. "＋ 새 글"은 그 kind로 고정 생성(종류 드롭다운 제거). devnotes prop은 전체를 받아 여기서 필터.
+function Devnotes({ kind, devnotes, api, reload, flash }: { kind: 'patch' | 'note'; devnotes: Json[]; api: Api; reload: () => void; flash: (m: string) => void }) {
   const [modal, setModal] = useState<null | 'new' | Json>(null);
+  const scoped = devnotes.filter((d) => (d.kind === 'patch' ? 'patch' : 'note') === kind);
+  const label = kind === 'patch' ? '패치노트' : '개발자 노트';
   return (
     <div className="oc-card">
-      <div className="oc-cardhead"><h3>노트 · 패치노트 <span className="oc-mut">({devnotes.length})</span></h3><button className="oc-btn sm" onClick={() => setModal('new')}>＋ 새 글</button></div>
-      {devnotes.length === 0 ? <div className="oc-empty">작성된 글이 없습니다. 우측 상단 “＋ 새 글”로 만드세요.</div> : (
+      <div className="oc-cardhead"><h3>{label} <span className="oc-mut">({scoped.length})</span></h3><button className="oc-btn sm" onClick={() => setModal('new')}>＋ 새 {label}</button></div>
+      {scoped.length === 0 ? <div className="oc-empty">작성된 {label}가 없습니다. 우측 상단 “＋ 새 {label}”로 만드세요.</div> : (
         <table className="oc-table">
-          <thead><tr><th>제목</th><th>종류</th><th>버전</th><th>상태</th><th>게시일</th></tr></thead>
+          <thead><tr><th>제목</th>{kind === 'patch' ? <th>버전</th> : null}<th>상태</th><th>게시일</th></tr></thead>
           <tbody>
-            {devnotes.map((d) => (
+            {scoped.map((d) => (
               <tr key={String(d.id)} className="clk" onClick={() => setModal(d)}>
                 <td style={{ fontWeight: 700 }}>{String(d.title)}</td>
-                <td>{d.kind === 'patch' ? <span className="oc-badge ac">패치노트</span> : <span className="oc-badge mut">개발자 노트</span>}</td>
-                <td className="oc-mut">{d.appVersion ? `v${String(d.appVersion)}` : '—'}</td>
+                {kind === 'patch' ? <td className="oc-mut">{d.appVersion ? `v${String(d.appVersion)}` : '—'}</td> : null}
                 <td>{d.status === 'published' ? <span className="oc-badge gd">게시</span> : <span className="oc-badge wn">초안</span>}</td>
                 <td className="oc-mut">{d.publishedAt ? String(d.publishedAt).slice(0, 10) : '—'}</td>
               </tr>
@@ -1632,16 +1637,16 @@ function Devnotes({ devnotes, api, reload, flash }: { devnotes: Json[]; api: Api
           </tbody>
         </table>
       )}
-      {modal ? <DevnoteModal note={modal === 'new' ? null : modal} api={api} reload={reload} flash={flash} onClose={() => setModal(null)} /> : null}
+      {modal ? <DevnoteModal kind={kind} note={modal === 'new' ? null : modal} api={api} reload={reload} flash={flash} onClose={() => setModal(null)} /> : null}
     </div>
   );
 }
 
-function DevnoteModal({ note, api, reload, flash, onClose }: { note: Json | null; api: Api; reload: () => void; flash: (m: string) => void; onClose: () => void }) {
+function DevnoteModal({ kind, note, api, reload, flash, onClose }: { kind: 'patch' | 'note'; note: Json | null; api: Api; reload: () => void; flash: (m: string) => void; onClose: () => void }) {
   const isNew = !note;
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
-  const [kind, setKind] = useState<'patch' | 'note'>(note?.kind === 'patch' ? 'patch' : 'note');
+  // kind는 탭에서 고정(드롭다운 제거) — 새 글은 prop, 기존 글은 이미 그 kind로 필터된 행이라 prop과 일치.
   const [title, setTitle] = useState(note ? String(note.title ?? '') : '');
   const [body, setBody] = useState(note ? String(note.body ?? '') : '');
   const [appVersion, setAppVersion] = useState(note?.appVersion ? String(note.appVersion) : '');
@@ -1667,10 +1672,9 @@ function DevnoteModal({ note, api, reload, flash, onClose }: { note: Json | null
     if (r.body.ok) { flash('삭제되었습니다'); reload(); onClose(); } else setErr(`삭제 실패 — ${errMsg(r)}`);
   };
   return (
-    <Modal wide title={isNew ? '새 글' : String(note!.title)} sub={isNew ? '노트 · 패치노트 작성' : status === 'published' ? '게시됨(공개)' : '초안(비공개)'} onClose={onClose}
+    <Modal wide title={isNew ? `새 ${kind === 'patch' ? '패치노트' : '개발자 노트'}` : String(note!.title)} sub={isNew ? `${kind === 'patch' ? '패치노트' : '개발자 노트'} 작성` : status === 'published' ? '게시됨(공개)' : '초안(비공개)'} onClose={onClose}
       footer={<><FooterMsg msg={err} />{!isNew ? <Btn variant="danger" onClick={del} disabled={busy}>삭제</Btn> : null}<Btn variant="ghost" onClick={onClose} disabled={busy}>취소</Btn><Btn onClick={save} disabled={!valid || busy}>{busy ? '처리 중…' : status === 'published' ? '저장 + 게시' : '초안 저장'}</Btn></>}>
       <div className="oc-frow">
-        <div className="oc-fld"><label className="oc-label">종류</label><select className="oc-input" value={kind} onChange={(e) => setKind(e.target.value as 'patch' | 'note')}><option value="note">개발자 노트</option><option value="patch">패치노트</option></select></div>
         {kind === 'patch' ? <div className="oc-fld"><label className="oc-label">앱 버전 (필수)</label><input className="oc-input" placeholder="0.4.0" value={appVersion} onChange={(e) => setAppVersion(e.target.value)} /></div> : null}
         <div className="oc-fld"><label className="oc-label">상태</label><select className="oc-input" value={status} onChange={(e) => setStatus(e.target.value as 'draft' | 'published')}><option value="draft">초안 (비공개)</option><option value="published">게시 (공개)</option></select></div>
       </div>

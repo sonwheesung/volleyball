@@ -13,6 +13,7 @@ import { SpotlightOverlay } from '../../components/Spotlight';
 import { useGameStore } from '../../store/useGameStore';
 import { useAuthStore } from '../../store/useAuthStore';
 import { readDevnotesCache, refreshDevnotes } from '../devnotes';
+import type { DevnoteKind } from '../../lib/server';
 import { useIsFocused } from '@react-navigation/native';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd, unclaimedReward } from '../../engine/diamonds';
 import { evalAchievements } from '../../engine/achievements';
@@ -86,23 +87,29 @@ export default function MyPage() {
   const signOut = useAuthStore((s) => s.signOut);
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
 
-  // 개발자 노트 안읽음 배지(DEVNOTES §3.1) — 캐시 먼저(즉시) → 온라인 갱신(진입 시). 게시글 id 중 readDevnotes에 없는 개수.
+  // 패치노트·개발자 노트 안읽음 배지(DEVNOTES §3.1, kind별 분리 — 정정 2026-08-01) — 캐시 먼저(즉시) → 온라인 갱신(진입 시).
+  //   공유 캐시에서 {id,kind}만 뽑아, 각 kind의 게시글 id 중 readDevnotes(공용, id 기반)에 없는 개수를 카드별로.
   const readDevnotes = useAuthStore((s) => s.readDevnotes);
-  const [devnoteIds, setDevnoteIds] = useState<string[]>([]);
+  const [devnoteRows, setDevnoteRows] = useState<{ id: string; kind: DevnoteKind }[]>([]);
   useEffect(() => {
     let alive = true;
     (async () => {
       const cached = await readDevnotesCache();
-      if (alive && cached) setDevnoteIds(cached.map((d) => d.id));
+      if (alive && cached) setDevnoteRows(cached.map((d) => ({ id: d.id, kind: d.kind })));
       const fresh = await refreshDevnotes();
-      if (alive && fresh) setDevnoteIds(fresh.map((d) => d.id));
+      if (alive && fresh) setDevnoteRows(fresh.map((d) => ({ id: d.id, kind: d.kind })));
     })();
     return () => { alive = false; };
   }, []);
-  const devnoteUnread = useMemo(() => {
+  const { patchUnread, noteUnread } = useMemo(() => {
     const read = new Set(readDevnotes);
-    return devnoteIds.filter((id) => !read.has(id)).length;
-  }, [devnoteIds, readDevnotes]);
+    let patch = 0, note = 0;
+    for (const d of devnoteRows) {
+      if (read.has(d.id)) continue;
+      if (d.kind === 'patch') patch++; else note++;
+    }
+    return { patchUnread: patch, noteUnread: note };
+  }, [devnoteRows, readDevnotes]);
 
   const accountLabel = session
     ? session.displayName || (session.provider === 'dev' ? '개발자 계정' : session.provider === 'google' ? 'Google 계정' : session.provider === 'apple' ? 'Apple 계정' : '계정')
@@ -234,10 +241,15 @@ export default function MyPage() {
           sub="업데이트 · 이벤트 · 안내"
           onPress={() => router.push('/announcements')} />
 
+        <LinkCard icon="document-text-outline" tint={theme.sky} title="패치노트"
+          sub="이번 버전에서 바뀐 것"
+          badge={patchUnread}
+          onPress={() => router.push('/devnotes?kind=patch')} />
+
         <LinkCard icon="sparkles-outline" tint={theme.violet} title="개발자 노트"
-          sub="패치노트 · 개발 이야기"
-          badge={devnoteUnread}
-          onPress={() => router.push('/devnotes')} />
+          sub="개발 이야기 · 다음 예고"
+          badge={noteUnread}
+          onPress={() => router.push('/devnotes?kind=note')} />
 
         <LinkCard icon="bag-handle-outline" tint={theme.sky} title="상점"
           sub={WORLDCUP_ENABLED ? '다이아 구매 · 광고 제거 · 월드컵 시즌 · 구매 복원' : '다이아 구매 · 광고 제거 · 구매 복원'}
