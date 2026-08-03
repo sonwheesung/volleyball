@@ -237,7 +237,7 @@ export default function Mailbox() {
         })
       )}
 
-      <Muted style={styles.footer}>{'운영 보상·이벤트·다이아 패스 우편이 여기로 도착해요.\n우편은 도착 후 30일간 보관됩니다.'}</Muted>
+      <Muted style={styles.footer}>{'운영 보상·이벤트·다이아 패스 우편이 여기로 도착해요.\n보관 기간은 우편마다 달라요 — 남은 기간은 각 우편에 표시돼요.'}</Muted>
     </Screen>
   );
 }

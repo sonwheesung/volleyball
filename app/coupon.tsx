@@ -34,6 +34,7 @@ export default function Coupon() {
           : r.reason === 'expired' ? '사용 기간이 아닌 쿠폰입니다.'
           : r.reason === 'not-eligible' ? '이 계정으로는 사용할 수 없습니다.'
           : r.reason === 'offline' ? '쿠폰 사용은 온라인 연결이 필요합니다. 네트워크 확인 후 다시 시도해 주세요.'
+          : r.reason === 'rate-limited' ? '요청이 너무 많아요. 잠시 후 다시 시도해 주세요.'
           : r.reason === 'unauthorized' ? '로그인이 만료되었습니다. 다시 로그인해 주세요.'
           : r.reason === 'error' ? '처리에 실패했습니다. 잠시 후 다시 시도해 주세요.'
           : '유효하지 않은 쿠폰입니다.', // invalid — 코드없음/타겟불일치 뭉뚱그림

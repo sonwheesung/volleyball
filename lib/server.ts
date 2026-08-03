@@ -192,7 +192,7 @@ export function confirmPurchase(storeTxnId: string, productId: string, ctx?: { r
 // ── 쿠폰 ──
 export type CouponRedeemResult =
   | { ok: true; reward: number; balance: number }
-  | { ok: false; reason: 'invalid' | 'expired' | 'used' | 'not-eligible' | 'offline' | 'unauthorized' | 'error' };
+  | { ok: false; reason: 'invalid' | 'expired' | 'used' | 'not-eligible' | 'offline' | 'unauthorized' | 'rate-limited' | 'error' };
 /** 쿠폰 코드 사용 — 서버 단일 트랜잭션 확정(§13.14). 성공 후 앱은 syncWallet로만 캐시 갱신(낙관적 반영 금지). */
 export async function redeemCoupon(code: string): Promise<CouponRedeemResult> {
   const r = await call<{ reward: number; balance: number }>('/api/coupon/redeem', { method: 'POST', body: JSON.stringify({ code }) });
