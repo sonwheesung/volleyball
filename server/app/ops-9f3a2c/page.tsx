@@ -292,6 +292,16 @@ const NAV: { id: Tab; ic: string; label: string; grp?: string }[] = [
 ];
 const TITLES: Record<Tab, string> = { overview: '대시보드', users: '① 사용자 현황', retention: '② 리텐션 코호트', play: '③ 플레이', offseason: '④ 오프시즌 funnel', telemetry: '행동 텔레메트리', payments: '⑤ BM · 수익화', ads: '⑥ 광고', match: '⑦ 경기 데이터', players: '⑧ 선수 데이터', achv: '업적', errors: '⑨ 오류 모니터링', coupons: '쿠폰 관리', anns: '공지 관리', patchnotes: '패치노트', devnotes: '개발자 노트', mail: '우편 관리', settings: '운영 설정', tickets: '문의 · 환불' };
 
+// 메뉴 ↔ URL 동기화(?tab=<id>) — 새로고침·북마크·뒤로가기로 특정 메뉴 진입(2026-08-04 사용자 요청).
+// 유효하지 않은/없는 값은 overview로. SSR 안전(window 가드 — 클라 컴포넌트지만 초기 렌더는 서버).
+const TAB_IDS = new Set<Tab>(NAV.map((n) => n.id));
+const isTab = (v: string | null): v is Tab => !!v && TAB_IDS.has(v as Tab);
+function tabFromUrl(): Tab {
+  if (typeof window === 'undefined') return 'overview';
+  const v = new URLSearchParams(window.location.search).get('tab');
+  return isTab(v) ? v : 'overview';
+}
+
 function Dashboard({ token, onLogout }: { token: string; onLogout: () => void }) {
   const [tab, setTab] = useState<Tab>('overview');
   const [navOpen, setNavOpen] = useState(false); // 모바일 드로어(≤768px). 데스크톱은 CSS로 사이드바 상시 노출 — 이 값 무관.
@@ -303,6 +313,23 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
   const [stats, setStats] = useState<Json | null>(null);
   const [toast, setToast] = useState('');
   const [booting, setBooting] = useState(true); // 최초 대시보드 로드 — 완료 전 콘텐츠 영역에 로딩 화면(빈 대시보드 깜빡임 방지)
+
+  // 탭 ↔ URL 동기화. 초기값은 SSR 안전을 위해 'overview' 고정 → 마운트 후 URL에서 읽어 맞춘다(하이드레이션 불일치 방지,
+  //   대시보드는 authed 게이트 뒤라 overview가 화면에 깜빡이지 않음). 브라우저 뒤로/앞으로(popstate)도 탭에 반영.
+  useEffect(() => {
+    setTab(tabFromUrl());
+    const onPop = () => setTab(tabFromUrl());
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  // 메뉴 클릭 = 탭 전환 + URL 갱신(pushState → 뒤로가기로 이전 메뉴 복귀). 모바일 드로어도 닫는다.
+  const selectTab = useCallback((id: Tab) => {
+    setTab(id);
+    setNavOpen(false);
+    const u = new URL(window.location.href);
+    u.searchParams.set('tab', id);
+    window.history.pushState({ tab: id }, '', u);
+  }, []);
 
   const api = useCallback((p: string, init?: RequestInit) => apiCall(p, token, init), [token]);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2600); };
@@ -333,7 +360,7 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
           {NAV.map((n, i) => (
             <React.Fragment key={n.id}>
               {n.grp && n.grp !== NAV[i - 1]?.grp ? <div className="oc-navgrp">{n.grp}</div> : null}
-              <button className={`oc-navitem${tab === n.id ? ' on' : ''}`} onClick={() => { setTab(n.id); setNavOpen(false); }}>
+              <button className={`oc-navitem${tab === n.id ? ' on' : ''}`} onClick={() => selectTab(n.id)}>
                 <span className="ic">{n.ic}</span>{n.label}
                 {n.id === 'tickets' && openTickets > 0 ? <span className="bdg">{openTickets}</span> : null}
               </button>
