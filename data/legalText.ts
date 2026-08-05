@@ -5,7 +5,7 @@ export interface LegalDoc { title: string; updated: string; effective: string; i
 
 export const TERMS: LegalDoc = {
   title: '배구명가 이용약관',
-  updated: '2026.07.03',
+  updated: '2026-07-18',
   effective: '서비스 출시일',
   sections: [
     { h: '제1조 (목적)', body: ['본 약관은 "배구명가"(이하 "게임")의 이용과 관련하여 운영자와 이용자의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.'] },
@@ -136,7 +136,7 @@ export const TERMS: LegalDoc = {
 
 export const POLICY: LegalDoc = {
   title: '배구명가 운영정책',
-  updated: '2026.07.03',
+  updated: '2026-07-18',
   effective: '서비스 출시일',
   intro: '운영정책은 이용약관을 보완하며, 실제 운영 기준을 안내합니다. 약관과 정책이 상충할 경우 약관이 우선합니다.',
   sections: [
@@ -184,7 +184,7 @@ export const POLICY: LegalDoc = {
 // 위탁(Supabase 서울·Vercel·RevenueCat)·보존(§13.9)을 반영. ⚠ 출시 전 [보호책임자 연락처]·[시행일] 확정 + 스토어 처리방침 URL 게시.
 export const PRIVACY: LegalDoc = {
   title: '배구명가 개인정보처리방침',
-  updated: '2026-07-17',
+  updated: '2026-08-05',
   effective: '2026-07-17',
   intro: '휘성게임즈(이하 "운영자")는 「개인정보 보호법」 등 관련 법령을 준수하며, "배구명가"(이하 "서비스") 이용자의 개인정보를 아래와 같이 처리합니다. 본 방침은 최소한의 개인정보만 수집하는 것을 원칙으로 합니다.',
   sections: [

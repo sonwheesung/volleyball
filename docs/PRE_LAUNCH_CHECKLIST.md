@@ -9,6 +9,21 @@
 
 ---
 
+## 0. 실측 갱신 요약 (2026-08-05 — 코드/prod 대조)
+
+> 이 문서 본문 주석 중 일부가 뒤처져 있어 실측으로 정정. **진짜 남은 출시 블로커는 대부분 "코드가 아니라 설정·스토어 등록"** 이다.
+
+**🔴 진짜 남은 블로커 (거의 손님 콘솔 작업)**
+1. **#43 결제 활성화** — 코드·키 준비 완료(서버 라우트 `purchase/confirm`·`webhook/revenuecat` ✅ / 클라 `react-native-purchases` 설치 + `lib/iap.ts` 실배선 + `EXPO_PUBLIC_REVENUECAT_API_KEY` 설정됨). **남은 것 = ① Play 콘솔 상품 등록(게이트) ② RC 대시보드 상품/엔타이틀먼트 ③ RC 웹훅 시크릿 prod env ④ 샌드박스 실결제 테스트(PAYMENT_LAUNCH_RUNBOOK A~F).**
+2. **스토어 업데이트 게이트 값** — prod `/api/bootstrap` 실측 **`androidStoreUrl·minVersion·latestVersion` 전부 null**(§4). 관리자 콘솔에서 입력 필요.
+3. **시크릿 최종 회전** — DB 비번(채팅 노출분) 미회전 · JWT/ADMIN 출시직전 채팅-무경유 최종 회전 · **`TELEMETRY_SALT`(오늘 Vercel Pro와 함께, [[telemetry-pseudonymized]]·VERCEL_PRO_LAUNCH_RUNBOOK §2)**.
+
+**🟡 품질**: 앱 버전 `0.1.0`→`1.0.0`(app.json, 재빌드) · 최종 AAB 매니페스트 육안(설정은 이미 정확) · 폰트 XL · 에뮬 전체 시나리오 · iOS Apple 로그인은 **iOS 트랙**(Android 먼저면 블로커 아님) · `expo-device` deviceModel 미수집(부차).
+
+**✅ 체크리스트가 미완으로 적었지만 이미 완료(정정)**: 사업자 정보 기입(privacy/terms 휘성게임즈·손휘성·749-25 채워짐) · 공개 처리방침/운영정책 게시 + 필수항목 정합(2026-08-05) · **Google 소셜 로그인 패키지 설치 + 클라이언트 ID 설정** · IAP/AdMob 네이티브 패키지 설치 · 매니페스트 보안(allowBackup:false·RECORD_AUDIO 차단) · 약관 날짜/포맷 정합(2026-08-05 — ISO 통일·최종수정 갱신, effective는 '서비스 출시일' 유지, 출시일 확정 시 스왑).
+
+---
+
 ## 1. 보안 · 비밀키 회전 🔴
 
 > 개발 중 **채팅/문서에 노출된 비밀키**는 그대로 출시하면 안 된다. 전부 새 값으로 회전 후 `.env.local`(로컬)·Vercel 환경변수(운영)에 반영.

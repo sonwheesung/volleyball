@@ -186,7 +186,7 @@ export default function Privacy() {
         <p style={muted}>본 방침의 내용 추가·삭제·수정이 있을 경우 시행 전 앱 공지사항을 통해 고지합니다.</p>
       </section>
 
-      <p style={{ ...muted, marginTop: 24, fontSize: 13 }}>시행일 2026-07-17</p>
+      <p style={{ ...muted, marginTop: 24, fontSize: 13 }}>시행일 2026-07-17 · 최종 수정 2026-08-05</p>
     </main>
   );
 }
