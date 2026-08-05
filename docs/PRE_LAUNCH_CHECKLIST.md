@@ -16,11 +16,27 @@
 **🔴 진짜 남은 블로커 (거의 손님 콘솔 작업)**
 1. **#43 결제 활성화** — 코드·키 준비 완료(서버 라우트 `purchase/confirm`·`webhook/revenuecat` ✅ / 클라 `react-native-purchases` 설치 + `lib/iap.ts` 실배선 + `EXPO_PUBLIC_REVENUECAT_API_KEY` 설정됨). **남은 것 = ① Play 콘솔 상품 등록(게이트) ② RC 대시보드 상품/엔타이틀먼트 ③ RC 웹훅 시크릿 prod env ④ 샌드박스 실결제 테스트(PAYMENT_LAUNCH_RUNBOOK A~F).**
 2. **스토어 업데이트 게이트 값** — prod `/api/bootstrap` 실측 **`androidStoreUrl·minVersion·latestVersion` 전부 null**(§4). 관리자 콘솔에서 입력 필요.
-3. **시크릿 최종 회전** — DB 비번(채팅 노출분) 미회전 · JWT/ADMIN 출시직전 채팅-무경유 최종 회전 · **`TELEMETRY_SALT`(오늘 Vercel Pro와 함께, [[telemetry-pseudonymized]]·VERCEL_PRO_LAUNCH_RUNBOOK §2)**.
+3. **시크릿 최종 회전** — DB 비번(채팅 노출분) 미회전 · JWT/ADMIN 출시직전 채팅-무경유 최종 회전 · ~~TELEMETRY_SALT~~ **✅ TELEMETRY_SALT 완료(2026-08-05 — Vercel Pro 전환과 함께 prod env 지정·재배포·스모크, [[telemetry-pseudonymized]])**.
+
+> **아래 §0.5 = "운영 승인 시(출시 확정) 진행"** — 스토어 주소/출시일 확정이 트리거라 지금은 대기하고 그때 일괄 처리하는 항목 모음.
 
 **🟡 품질**: 앱 버전 `0.1.0`→`1.0.0`(app.json, 재빌드) · 최종 AAB 매니페스트 육안(설정은 이미 정확) · 폰트 XL · 에뮬 전체 시나리오 · iOS Apple 로그인은 **iOS 트랙**(Android 먼저면 블로커 아님) · `expo-device` deviceModel 미수집(부차).
 
 **✅ 체크리스트가 미완으로 적었지만 이미 완료(정정)**: 사업자 정보 기입(privacy/terms 휘성게임즈·손휘성·749-25 채워짐) · 공개 처리방침/운영정책 게시 + 필수항목 정합(2026-08-05) · **Google 소셜 로그인 패키지 설치 + 클라이언트 ID 설정** · IAP/AdMob 네이티브 패키지 설치 · 매니페스트 보안(allowBackup:false·RECORD_AUDIO 차단) · 약관 날짜/포맷 정합(2026-08-05 — ISO 통일·최종수정 갱신, effective는 '서비스 출시일' 유지, 출시일 확정 시 스왑).
+
+---
+
+## 0.5 운영 승인 시(출시 확정) 진행 — 스토어 주소·실서비스 확정 후 일괄 🔴
+
+> **트리거 = 스토어 심사 승인 / Play 리스팅 URL 확정 / 출시일 확정.** 아래는 "지금 미리 하면 안 되거나(스토어 주소 부재),
+> 출시 직전에 해야 안전한(시크릿 채팅노출 방지)" 항목만 모은 **go-live 체크리스트**. 그 전엔 대기. 사용자 결정(2026-08-05): 스토어 주소 확정 후 진행.
+
+- 🔴 ⬜ **스토어 게이트 값 입력** (관리자 콘솔 `ops-9f3a2c` → 운영 설정) — `androidStoreUrl` = 확정된 Play 리스팅 URL(`play.google.com/store/apps/details?id=<패키지>`) · `latestVersion` = 출시 버전 · `minVersion` = 낮게/비움(문제 시 상향). 현재 셋 다 **null**(prod `/api/bootstrap` 실측) → 업데이트 안내·강제게이트 미작동. 스위치는 있으나 스토어 주소가 없으면 "업데이트" 버튼이 갈 곳이 없음 → **주소 확정이 선행**. (BACKEND §13.16)
+- 🔴 ⬜ **약관 시행일 스왑** — `data/legalText.ts` TERMS·POLICY의 `effective: '서비스 출시일'` → **실제 출시일**로 교체(부칙·web `/terms`·`/privacy` 표기 동반). 출시일 확정 후.
+- 🔴 ⬜ **시크릿 최종 회전(채팅 무경유)** — 출시 직전 본인 터미널 생성값으로 최종 1회 회전: DB 비번(Supabase reset → `DATABASE_URL`·`MIGRATE_DATABASE_URL` 로컬+Vercel 동시 갱신) · `SESSION_JWT_SECRET` · `ADMIN_TOKEN`. 개발 중 채팅 노출분 무효화. (TELEMETRY_SALT는 ✅ 2026-08-05 완료. 상세 §1)
+- 🔴 ⬜ **#43 결제 실활성** — Play 콘솔 상품 등록(게이트) → RC 대시보드 상품/엔타이틀먼트 매핑 → 샌드박스 실결제 테스트 A~F([PAYMENT_LAUNCH_RUNBOOK](./PAYMENT_LAUNCH_RUNBOOK.md)) → 프로덕션 상품 활성. **서버 라우트·클라 SDK·RC 시크릿 env는 이미 준비 완료** — 스토어 상품 등록만 트리거.
+- 🟡 ⬜ **앱 버전 `1.0.0`** — `app.json` `0.1.0`→`1.0.0` + versionCode 범프 + 재빌드(AAB) + 스토어 업로드.
+- 🟢 ⬜ **iOS 트랙(별도)** — `iosStoreUrl` 채움 · Apple 로그인(`expo-apple-authentication`) 추가. Android 선출시면 블로커 아님.
 
 ---
 
