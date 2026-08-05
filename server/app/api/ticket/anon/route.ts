@@ -27,7 +27,10 @@ export const dynamic = 'force-dynamic';
 const CATS = new Set(['bug', 'suggestion', 'question', 'etc', 'refund']);
 const CONTENT_MIN = 5;
 const CONTENT_MAX = 2000;
-const DEFAULT_DAILY_CAP = 50;
+// 총량 캡 기본값. 익명이라 사용자별 구분이 불가능해 프로젝트 전체 합으로 센다.
+// 캡의 역할은 가용성 보장이 아니라 **피해량 제한**이다(스크립트는 어떤 값이든 소진시킬 수 있으므로).
+// 그래서 낮게 잡되, 한 사람이 연달아 몇 건 보내는 정상 버스트는 통과하도록 10으로 둔다.
+const DEFAULT_DAILY_CAP = 10;
 // 익명 유저는 프로젝트당 1행. 문의는 전부 여기 귀속된다(누가 썼는지 서버도 모름).
 const ANON_PROVIDER = 'dev';
 const ANON_PROVIDER_ID = 'anon';
