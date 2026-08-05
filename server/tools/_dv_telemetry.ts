@@ -16,6 +16,7 @@ import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — �
   const { eq, and, like, inArray } = await import('drizzle-orm');
   const { PROJ_CODE } = await import('../lib/proj');
   const { ensureProj } = await import('../lib/wallet');
+  const { analyticsIdFor } = await import('../lib/telemetryId'); // 가명 id 파생(userId FK 제거 — 2026-08-05)
 
   let fail = 0;
   const ok = (c: boolean, m: string) => { if (!c) { console.error('  ✗ FAIL:', m); fail++; } else console.log('  ✓', m); };
@@ -31,7 +32,8 @@ import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — �
   };
   const post = (body: unknown, auth: string | null) => teleRoute.POST(new Request('http://x/api/telemetry', { method: 'POST', headers: hdr(auth), body: typeof body === 'string' ? body : JSON.stringify(body) }));
   const adminGet = (auth: string | null) => adminRoute.GET(new Request('http://x/api/admin/telemetry', { method: 'GET', headers: hdr(auth) }));
-  const rows = async (userId: string) => db.select().from(seasonTelemetry).where(and(eq(seasonTelemetry.projCode, PROJ_CODE), eq(seasonTelemetry.userId, userId)));
+  // 가명 id로 조회 — 텔레메트리엔 userId가 없고 analyticsId(=HMAC(userId))만 있다.
+  const rows = async (userId: string) => db.select().from(seasonTelemetry).where(and(eq(seasonTelemetry.projCode, PROJ_CODE), eq(seasonTelemetry.analyticsId, analyticsIdFor(userId))));
 
   const mkPayload = (over: Partial<Record<string, unknown>> = {}) => ({
     v: 1, season: 5, finalRank: 3, champion: false,
@@ -55,6 +57,12 @@ import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — �
     const p1 = (after1[0]?.payload ?? {}) as Record<string, unknown>;
     ok(p1.interventions === 6 && p1.coachMode === true && (p1.subs as Record<string, unknown>)?.manual === 3, '① payload 내용 정확(개입·지휘모드·subs 저장)');
     ok(after1[0]?.season === 5, '① season 정확(5)');
+
+    console.log('── ①-b 가명화(개인정보 제거): userId 미저장 · analyticsId≠userId · users 조인 불가 ──');
+    const stored = after1[0] as Record<string, unknown>;
+    ok(!('userId' in stored) && !('user_id' in stored), '①-b 저장 행에 userId 컬럼 없음(스키마 가명화)');
+    ok(typeof stored.analyticsId === 'string' && stored.analyticsId === analyticsIdFor(a.userId), '①-b analyticsId = HMAC(userId)(안정적 파생)');
+    ok(stored.analyticsId !== a.userId, '①-b analyticsId ≠ 원본 userId(가명 — 원문 미저장)');
 
     console.log('── ② 같은 (user,season) 재전송 = 업서트(1행 유지·payload 교체) ──');
     const r2 = await (await post({ season: 5, payload: mkPayload({ interventions: 99, champion: true }) }, a.token)).json();
@@ -89,9 +97,10 @@ import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — �
       console.log('  · (skip) admin 집계 응답 ok 아님 — ADMIN_TOKEN 불일치일 수 있음(무토큰 401만 확인)');
     } else {
       ok(nnumOk(adm.agg?.reports), '⑥ agg.reports 존재(≥0)');
-      const mine = (adm.users as Array<{ userId: string; seasons: unknown[] }>).find((u) => u.userId === a.userId);
-      ok(!!mine, '⑥ 사용자 롤업에 테스트 유저 등장');
-      ok(!!mine && mine.seasons.length >= 2, '⑥ 테스트 유저 시즌 추이 2개 이상(5·6·8시즌)');
+      const mine = (adm.users as Array<{ userId: string; name: string | null; seasons: unknown[] }>).find((u) => u.userId === analyticsIdFor(a.userId));
+      ok(!!mine, '⑥ 코호트 롤업에 테스트 유저의 가명 id 등장');
+      ok(!!mine && mine.seasons.length >= 2, '⑥ 가명 코호트 시즌 추이 2개 이상(5·6·8시즌)');
+      ok(!mine || mine.name === null, '⑥ 롤업에 실명(displayName) 없음 — 재식별 불가(가명)');
     }
     ok((await adminGet(null)).status === 401, '⑥ 무토큰 admin GET → 401');
 
@@ -99,14 +108,14 @@ import './_env'; // db 모듈 import 전에 env 주입(호이스팅 순서 — �
     // 라우트 우회 직접 insert 2회(같은 user,season) → UNIQUE 제약이 없었다면 2행. 실제로는 UNIQUE라 2번째가 throw됨을 확인.
     let dupThrew = false;
     try {
-      await db.insert(seasonTelemetry).values({ projCode: PROJ_CODE, userId: a.userId, season: 5, payload: {} });
+      await db.insert(seasonTelemetry).values({ projCode: PROJ_CODE, analyticsId: analyticsIdFor(a.userId), season: 5, payload: {} });
     } catch { dupThrew = true; }
-    ok(dupThrew, '⑦-AB (proj,user,season) UNIQUE가 중복 삽입을 차단 — 라우트 업서트가 없으면 이 제약이 없거나 재전송이 500이 됐을 것(가드 민감)');
+    ok(dupThrew, '⑦-AB (proj,analyticsId,season) UNIQUE가 중복 삽입을 차단 — 라우트 업서트가 없으면 이 제약이 없거나 재전송이 500이 됐을 것(가드 민감)');
   } finally {
     const pref = await db.select({ id: users.id }).from(users).where(and(eq(users.projCode, PROJ_CODE), like(users.providerId, `${PFX}%`)));
     const allIds = Array.from(new Set([...createdIds, ...pref.map((u) => u.id)]));
     if (allIds.length) {
-      await db.delete(seasonTelemetry).where(inArray(seasonTelemetry.userId, allIds));
+      await db.delete(seasonTelemetry).where(inArray(seasonTelemetry.analyticsId, allIds.map(analyticsIdFor)));
       await db.delete(users).where(inArray(users.id, allIds));
     }
     console.log('  ✓ 정리 완료(_DVTELE_ 테스트 계정·텔레메트리 삭제)');

@@ -8,6 +8,7 @@ import { seasonTelemetry } from '../../../db/schema';
 import { requireUserId } from '../../../lib/auth';
 import { ensureProj } from '../../../lib/wallet';
 import { PROJ_CODE } from '../../../lib/proj';
+import { analyticsIdFor } from '../../../lib/telemetryId';
 
 export const dynamic = 'force-dynamic';
 
@@ -39,12 +40,15 @@ export async function POST(req: Request) {
 
     await ensureProj();
 
-    // 업서트 — 같은 (proj,user,season) 재전송 = payload/createdAt 교체(UNIQUE 하드가드와 정합).
+    // 가명 분석 id — userId를 저장하지 않고 HMAC 파생만 저장(개인정보 제거 §privacy, users와 직접 조인 불가).
+    const analyticsId = analyticsIdFor(userId);
+
+    // 업서트 — 같은 (proj,analyticsId,season) 재전송 = payload/createdAt 교체(UNIQUE 하드가드와 정합).
     await db
       .insert(seasonTelemetry)
-      .values({ projCode: PROJ_CODE, userId, season, payload })
+      .values({ projCode: PROJ_CODE, analyticsId, season, payload })
       .onConflictDoUpdate({
-        target: [seasonTelemetry.projCode, seasonTelemetry.userId, seasonTelemetry.season],
+        target: [seasonTelemetry.projCode, seasonTelemetry.analyticsId, seasonTelemetry.season],
         set: { payload, createdAt: new Date() },
       });
 

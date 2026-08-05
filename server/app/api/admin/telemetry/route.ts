@@ -1,10 +1,10 @@
 // /api/admin/telemetry — 시즌 종료 행동 텔레메트리 분석(§13.27). requireAdmin(fail-closed §13.15).
-//   원천: season_telemetry(비식별 행동 카운트 jsonb). 결정론 격리 유지(통계 메타 — 시드/리플레이 무관).
-//   반환: 전체 집계(agg) + 사용자별 롤업(users, 각 유저의 시즌별 payload 추이). payload는 클라(§13.27) v1 스키마.
+//   원천: season_telemetry(가명 행동 카운트 jsonb — analyticsId만, userId FK 없음 → 실명 재식별 불가, 2026-08-05).
+//   반환: 전체 집계(agg) + 코호트별 롤업(analyticsId별 시즌 payload 추이 — 응답 키는 userId 유지하되 값은 가명 id).
 import { NextResponse } from 'next/server';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { db } from '../../../../db';
-import { seasonTelemetry, users, walletLedger } from '../../../../db/schema';
+import { seasonTelemetry, walletLedger } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
@@ -24,18 +24,15 @@ const hasNum = (p: P, k: string): boolean => typeof p[k] === 'number' && Number.
 export async function GET(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   try {
-    // 최신순으로 상한까지 조회(유저 표시명 조인). payload는 작아 JS 집계가 저렴.
+    // 최신순으로 상한까지 조회. **users 조인 없음** — 텔레메트리는 가명(analyticsId)이라 실명 재식별 불가(개인정보 제거).
     const rows = await db
       .select({
-        userId: seasonTelemetry.userId,
-        name: users.displayName,
-        provider: users.provider,
+        analyticsId: seasonTelemetry.analyticsId,
         season: seasonTelemetry.season,
         payload: seasonTelemetry.payload,
         createdAt: seasonTelemetry.createdAt,
       })
       .from(seasonTelemetry)
-      .leftJoin(users, eq(users.id, seasonTelemetry.userId))
       .where(eq(seasonTelemetry.projCode, PROJ_CODE))
       .orderBy(desc(seasonTelemetry.createdAt))
       .limit(FETCH_CAP);
@@ -125,11 +122,12 @@ export async function GET(req: Request) {
       avgSetsLost: avg(sumSetsL, winsN),
     };
 
-    // ── 사용자별 롤업(시즌별 payload 추이) ──
+    // ── 코호트별 롤업(가명 analyticsId별 시즌 payload 추이). 응답 키(userId/name/provider)는 페이지 호환 위해 유지하되
+    //   userId=가명 id, name/provider=null(실명 없음 — 재식별 불가). 화면은 name 없으면 id 앞자리를 표기(익명 라벨). ──
     const byUser = new Map<string, { userId: string; name: string | null; provider: string | null; seasons: Array<{ season: number; createdAt: unknown; payload: P }> }>();
     for (const r of rows) {
-      let u = byUser.get(r.userId);
-      if (!u) { u = { userId: r.userId, name: r.name ?? null, provider: r.provider ?? null, seasons: [] }; byUser.set(r.userId, u); }
+      let u = byUser.get(r.analyticsId);
+      if (!u) { u = { userId: r.analyticsId, name: null, provider: null, seasons: [] }; byUser.set(r.analyticsId, u); }
       if (u.seasons.length < SEASONS_PER_USER) u.seasons.push({ season: r.season, createdAt: r.createdAt, payload: (r.payload ?? {}) as P });
     }
     const usersOut = Array.from(byUser.values())

@@ -355,14 +355,17 @@ export const seasonTelemetry = pgTable(
   {
     id: uuid('id').primaryKey().defaultRandom(),
     projCode: text('proj_code').notNull().references(() => projInfo.projCode), // 게임 격리 FK(§13.2)
-    userId: uuid('user_id').notNull().references(() => users.id),
+    // 가명 분석 id = HMAC(userId, TELEMETRY_SALT) 앞 32hex(lib/telemetryId.ts). **userId FK 아님** —
+    // 계정(users)과 직접 조인 불가하도록 가명처리(2026-08-05, 개인정보 제거). 같은 유저=같은 id라 코호트 추이는 유지되나,
+    // 역산은 별도 관리되는 SALT 필요 → PIPA 가명정보(§28-2 통계 목적). 탈퇴 파기와의 결합도 소멸(여기 userId 없음).
+    analyticsId: text('analytics_id').notNull(),
     season: integer('season').notNull(),          // 텔레메트리가 요약한 시즌(같은 season 재전송=교체)
     payload: jsonb('payload').notNull(),           // v1 행동 카운트(불투명 — 서버는 통계 조회만, 게임플레이 불개입)
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
   },
   (t) => [
-    uniqueIndex('season_telemetry_proj_user_season_uniq').on(t.projCode, t.userId, t.season), // 同시즌 교체 하드가드(업서트)
-    index('season_telemetry_proj_user_idx').on(t.projCode, t.userId),                          // 사용자별 추이 조회
+    uniqueIndex('season_telemetry_proj_aid_season_uniq').on(t.projCode, t.analyticsId, t.season), // 同시즌 교체 하드가드(업서트)
+    index('season_telemetry_proj_aid_idx').on(t.projCode, t.analyticsId),                          // 코호트별 추이 조회
   ],
 );
 
