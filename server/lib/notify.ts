@@ -90,13 +90,17 @@ export interface TicketNotice {
   userId?: string | null;
   platform?: string | null;
   appVersion?: string | null;
+  // ── 멀티프로젝트(익명 문의 /api/ticket/anon) 옵션. 미지정이면 기존 배구명가 동작 그대로 ──
+  projLabel?: string;          // 임베드 username — 어느 앱 문의인지 구분(기본 '배구명가 문의')
+  webhookUrl?: string;         // 프로젝트 전용 채널. 없으면 기존 폴백 체인(TICKET → 결제)
 }
 
 /** 신규 문의 1건 디스코드 통지. 문의 전용 채널(DISCORD_TICKET_WEBHOOK_URL) 없으면 결제 채널로 폴백. no-op·throw-none. */
 export async function notifyTicket(n: TicketNotice): Promise<void> {
-  const url = process.env.DISCORD_TICKET_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || '';
+  // 프로젝트 전용 채널이 주어지면 그쪽, 아니면 기존 폴백 체인(문의 전용 → 결제 채널).
+  const url = n.webhookUrl || process.env.DISCORD_TICKET_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || '';
   const body = (n.content ?? '').slice(0, 1000); // Discord 필드 상한(1024) 안에서 컷
-  await postDiscord(url, '배구명가 문의', {
+  await postDiscord(url, n.projLabel || '배구명가 문의', {
     title: '📨 새 문의',
     color: 0x3498db,
     fields: [
