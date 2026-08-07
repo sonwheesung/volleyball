@@ -221,17 +221,42 @@ prod DB의 `users`·`wallet_ledger` row 수가 **불변**임을 실측(A/B 대�
 
 | # | 단계 | 담당 | 공수 | 비고 |
 |---|---|---|---|---|
-| S1 | Supabase **prod → Pro 전환** | 🧑 카드 결제 | 10분 | $25/월. 연결문자열 불변 = 재배포 불요 |
-| S2 | Supabase **stg 프로젝트 생성**(`volleyball-stg`, 동일 리전, 새 비번) | 🧑 | 15분 | Free 티어로 충분(무료 2개 한도 내) |
-| S3 | stg 연결문자열 2개를 `server/.env.staging`에 **직접 붙여넣기** | 🧑 | 5분 | 양식은 2026-08-03 준비 완료. **채팅 금지** |
-| S4 | stg DB **스키마 생성**(마이그레이션 0000~0005 순차 적용) | 🤖 | 20분 | 빈 DB라 `drizzle-kit migrate` 또는 SQL 직접. `proj_info`·`server_setting` 시드 필요 |
-| S5 | `staging` 브랜치 생성 + push → Vercel Preview 자동배포 확인 | 🤖 | 15분 | main과 동일 코드. 배포 URL 확보 |
+| S1 | Supabase **prod → Pro 전환** | 🧑 카드 결제 | 10분 | ✅ **완료 2026-08-07** — 실청구 $35(§3.5.4) |
+| S2 | Supabase **stg 프로젝트 생성**(`volleyball-stg`) | 🧑 | 15분 | ✅ **완료** — 별도 Free 조직 `Vivace Staging`, ref `pdxdpzujeaxjweskecbv`, **ap-southeast-1(싱가포르)**, PG 17.6 |
+| S3 | stg 연결문자열 2개를 `server/.env.staging`에 **직접 붙여넣기** | 🧑 | 5분 | ✅ **완료** — 값은 사용자만 취급(채팅 미경유). 검증은 포트·프로젝트ref만 출력하는 방식으로 |
+| S4 | stg DB **스키마 생성** + 시드 | 🤖 | 20분 | ✅ **완료** — 18테이블(prod와 이름 완전 일치) + `proj_info`(volleyball·myword)·`server_setting` 시드. **⚠ 아래 함정 참조** |
+| S5 | `staging` 브랜치 생성 + push → Vercel Preview 자동배포 확인 | 🤖 | 15분 | 🔶 브랜치 생성·push 완료, **Preview 미생성 — 아래 함정 참조** |
 | S6 | Vercel **Preview 스코프 env** 등록(stg DB·JWT·ADMIN·CRON) | 🧑 값 입력 | 20분 | ⚠️ 대시보드에서 직접(`env pull` 금지 — 사고이력) |
 | S7 | stg 서버 **스모크**(`/api/devnotes`·`/api/bootstrap` 200) | 🤖 | 10분 | |
 | S8 | **격리 검증**(stg 쓰기 → prod row 수 불변 A/B) | 🤖 | 30분 | 통과 조건 실측. 전용 가드 `_dv_stgisolation` 신설 |
 | S9 | stg 앱 빌드(`EXPO_PUBLIC_SERVER_URL`=stg, RC/AdMob 키 공란) | 🤖 빌드 | 40분 | ⚠️ **아래 3.5.3 결정 필요** |
 | S10 | 실기기 설치 + E2E(로그인→쿠폰→전지훈련) | 🧑🤖 | 30분 | stg DB에만 기록되는지 눈확인 |
 | S11 | 문서화(SERVER_OPS에 stg 배포 절차 추가 + 가드 등재) | 🤖 | 20분 | |
+
+#### ⚠️ S4·S5 실행 중 발견한 함정 2건 (2026-08-07 실측)
+
+**① 빈 DB에는 마이그레이션 파일이 아니라 `drizzle-kit push`를 써야 한다**
+S4 계획은 "마이그레이션 0000~0005 순차 적용"이었으나 **그대로 하면 실패한다.**
+`db/migrations/0000_add_devnotes.sql` 주석이 근거 — *"이 저장소는 그간 `drizzle-kit push`로 스키마를
+provisioning했고 마이그레이션 이력이 없다(첫 이력) … 이미 push로 존재하는 11개 테이블은 건드리지 않고
+devnotes만 추가한다"*. 즉 **0000 이전 11개 테이블(users·wallet_ledger 등)을 만드는 SQL이 어디에도 없다.**
+빈 DB에 파일만 돌리면 FK 참조 대상이 없어 깨진다.
+→ **빈 DB 프로비저닝 = `drizzle-kit push`**(스키마 정의에서 직접 생성), **기존 DB 변경 = 마이그레이션 파일.**
+   두 경로가 다르다는 것을 혼동하지 말 것([[prod-migration-apply-method]]의 prod push-스타일과 같은 뿌리).
+   실행: `cd server && set -a && . ./.env.staging && set +a && npx drizzle-kit push --force`
+   (`drizzle.config.ts`가 `DATABASE_URL`을 읽으므로 stg env 주입으로 대상이 정해진다 — 주입 전 ref 대조 필수)
+**시드 필수**: 모든 테이블이 `proj_code` FK로 `proj_info`에 묶여 있어 **시드 없으면 전 라우트 500.**
+   `proj_info`에 `volleyball`·`myword` 2행 + `server_setting`에 `volleyball` 1행(prod와 동일 구성).
+
+**② `staging` 브랜치를 push해도 Preview가 안 생긴다 — 브랜치 설정 문제가 아니다**
+Vercel 프로젝트가 **Root Directory=`server`** 이고 **"Skip deployments when there are no changes to the
+root directory or its dependencies" = Enabled**. `staging`을 `main`에서 그대로 따서 push하면 `server/` 변경이
+0이라 **빌드 자체가 스킵된다.** Environments 설정은 정상이었다(Production=`main` / Preview=`All unassigned
+git branches`, Ignored Build Step=Automatic).
+→ **Preview를 띄우려면 `server/`를 건드리는 커밋이 필요하다.**
+→ 이 규칙은 평시엔 이득이다(문서·앱만 바꾼 커밋은 서버를 재배포하지 않는다). 배포 브랜치 정책은
+   [[branch-deploy-flow]] 참조 — **`main` push = 즉시 운영 배포**이므로 유저 데이터·머니패스에 닿는
+   `server/app/api`·`server/lib`·`server/db` 변경은 반드시 `staging`을 경유한다(관리자 화면·문서는 예외).
 
 ### 3.5.3 ⚠️ 설계 갈림길 — stg 앱을 어떻게 만들 것인가 (착수 전 결정 필수)
 
