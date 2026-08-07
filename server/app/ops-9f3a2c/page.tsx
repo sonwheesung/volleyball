@@ -69,8 +69,13 @@ select.oc-input option{background:var(--card);color:var(--tx);}
 .oc-btn.sm{padding:7px 12px;font-size:12.5px;border-radius:8px;}
 .oc-err{color:var(--dg);font-size:13px;margin-top:12px;} .oc-ok{color:var(--gd);font-size:13px;margin-top:12px;}
 .oc-shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
-.oc-side{background:var(--panel);border-right:1px solid var(--bd2);padding:20px 14px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;}
-.oc-nav{display:flex;flex-direction:column;gap:4px;margin-top:22px;flex:1;}
+/* sticky+100vh만으론 메뉴가 뷰포트를 넘으면 잘린다(본문 스크롤에 딸려 올라감) — 사이드바 자체를
+   독립 스크롤 컨테이너로. overflow-y는 .oc-nav(목록)에 둬서 로고는 상단 고정, 목록만 굴러간다. */
+.oc-side{background:var(--panel);border-right:1px solid var(--bd2);padding:20px 14px;display:flex;flex-direction:column;position:sticky;top:0;height:100vh;overflow:hidden;}
+.oc-nav{display:flex;flex-direction:column;gap:4px;margin-top:22px;flex:1;overflow-y:auto;min-height:0;overscroll-behavior:contain;scrollbar-width:thin;}
+.oc-nav::-webkit-scrollbar{width:8px;}
+.oc-nav::-webkit-scrollbar-thumb{background:var(--bd2);border-radius:99px;}
+.oc-nav::-webkit-scrollbar-track{background:transparent;}
 .oc-navitem{display:flex;align-items:center;gap:11px;padding:11px 13px;border-radius:10px;color:var(--mut);font-size:14px;font-weight:600;cursor:pointer;border:none;background:transparent;text-align:left;transition:background .12s,color .12s;width:100%;}
 .oc-navitem:hover{background:var(--bd2);color:var(--tx);}
 .oc-navitem.on{background:rgba(25,194,174,.14);color:var(--ac);font-weight:800;}
