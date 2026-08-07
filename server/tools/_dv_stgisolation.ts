@@ -85,7 +85,7 @@ async function main() {
     console.log(fail ? `\n결과: FAIL ${fail}건` : '\n결과: PASS');
     process.exit(fail ? 1 : 0);
   }
-  const r = await withSecret(sDb, async (u) => {
+  const r = await withSecret(sDb, async (u: string) => {
     const sql = postgres(u, { max: 2, prepare: false, connect_timeout: 15 });
     const t = await sql`select count(*)::int as n from information_schema.tables where table_schema = 'public'`;
     const p = await sql`select proj_code from proj_info order by proj_code`;
