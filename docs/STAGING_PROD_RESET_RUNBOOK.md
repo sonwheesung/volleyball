@@ -176,6 +176,83 @@ curl https://volleyball-jet-nine.vercel.app/api/devnotes
 
 ---
 
+## 3.5 stg 3종(앱·서버·DB) 구축 실행 계획 (2026-08-07 수립 — 프로덕션 출시 제출 직후)
+
+> **왜 지금인가**: 2026-08-07 프로덕션 출시를 제출하면서 운영이 "실사용자 환경"이 됐다. 이제부터
+> 운영에서 직접 실험하면 실유저 데이터·원장·매출 통계가 오염된다. **파괴적 검증(세이브 마이그레이션·
+> DB 초기화·결제 웹훅·환불·대량 시뮬)을 안전하게 돌릴 별도 우주**가 필요하다.
+> **전제**: Phase 1(G1~G5 운영 초기화)은 2026-08-07 완료 — 단 **stg 복제는 건너뛰고** 바로 초기화했다
+> (실화폐 결제 0건·실유저 0명 확인 후 JSON 백업 655행으로 갈음). 따라서 stg는 **빈 DB에서 새로 시작**한다.
+
+### 3.5.1 목표 상태 (완료 정의)
+
+| 층 | prod | stg |
+|---|---|---|
+| DB | Supabase `volleyball`(ap-northeast-2, **Pro**) | Supabase `volleyball-stg`(동일 리전, **Free 가능**) |
+| 서버 | `volleyball-jet-nine.vercel.app` (main 자동배포) | Vercel Preview (`staging` 브랜치 자동배포) |
+| 앱 | Play 프로덕션 vc29 (`EXPO_PUBLIC_SERVER_URL`=prod) | 내부 테스트 APK (`…SERVER_URL`=stg Preview URL) |
+| 결제 | RC 실연동 | **RC 키 미주입**(결제 비활성 — 원장 오염 차단) |
+| 알림 | Discord·Sentry 연결 | **미연결**(운영 알림 채널 오염 차단) |
+
+**통과 조건**: stg 앱에서 로그인→다이아 적립→전지훈련 차감이 **stg DB에만** 기록되고,
+prod DB의 `users`·`wallet_ledger` row 수가 **불변**임을 실측(A/B 대조).
+
+### 3.5.2 단계별 공수 (실측 기반 추정)
+
+> 총 **약 3.5~5시간**(사용자 대기시간 제외). 대부분 콘솔 클릭이고 코드 변경은 거의 없다.
+
+| # | 단계 | 담당 | 공수 | 비고 |
+|---|---|---|---|---|
+| S1 | Supabase **prod → Pro 전환** | 🧑 카드 결제 | 10분 | $25/월. 연결문자열 불변 = 재배포 불요 |
+| S2 | Supabase **stg 프로젝트 생성**(`volleyball-stg`, 동일 리전, 새 비번) | 🧑 | 15분 | Free 티어로 충분(무료 2개 한도 내) |
+| S3 | stg 연결문자열 2개를 `server/.env.staging`에 **직접 붙여넣기** | 🧑 | 5분 | 양식은 2026-08-03 준비 완료. **채팅 금지** |
+| S4 | stg DB **스키마 생성**(마이그레이션 0000~0005 순차 적용) | 🤖 | 20분 | 빈 DB라 `drizzle-kit migrate` 또는 SQL 직접. `proj_info`·`server_setting` 시드 필요 |
+| S5 | `staging` 브랜치 생성 + push → Vercel Preview 자동배포 확인 | 🤖 | 15분 | main과 동일 코드. 배포 URL 확보 |
+| S6 | Vercel **Preview 스코프 env** 등록(stg DB·JWT·ADMIN·CRON) | 🧑 값 입력 | 20분 | ⚠️ 대시보드에서 직접(`env pull` 금지 — 사고이력) |
+| S7 | stg 서버 **스모크**(`/api/devnotes`·`/api/bootstrap` 200) | 🤖 | 10분 | |
+| S8 | **격리 검증**(stg 쓰기 → prod row 수 불변 A/B) | 🤖 | 30분 | 통과 조건 실측. 전용 가드 `_dv_stgisolation` 신설 |
+| S9 | stg 앱 빌드(`EXPO_PUBLIC_SERVER_URL`=stg, RC/AdMob 키 공란) | 🤖 빌드 | 40분 | ⚠️ **아래 3.5.3 결정 필요** |
+| S10 | 실기기 설치 + E2E(로그인→쿠폰→전지훈련) | 🧑🤖 | 30분 | stg DB에만 기록되는지 눈확인 |
+| S11 | 문서화(SERVER_OPS에 stg 배포 절차 추가 + 가드 등재) | 🤖 | 20분 | |
+
+### 3.5.3 ⚠️ 설계 갈림길 — stg 앱을 어떻게 만들 것인가 (착수 전 결정 필수)
+
+`EXPO_PUBLIC_*`는 **빌드타임 인라인**이라 런타임 전환이 불가능하다. 세 가지 안:
+
+| 안 | 방법 | 장점 | 단점 |
+|---|---|---|---|
+| **A. 별도 APK**(권장) | `preview` 프로파일 + `EXPO_PUBLIC_SERVER_URL`=stg로 APK 빌드, 사이드로드 | prod 앱과 **완전 분리**(동시 설치 가능하려면 applicationId suffix 필요) | 빌드 1회 ~30분, 매번 재빌드 |
+| B. dev 서버 재포인트 | Expo Go + `EXPO_PUBLIC_SERVER_URL` 오버라이드 | 즉시·무빌드 | **네이티브(결제·광고·구글로그인) 테스트 불가** — Expo Go 한계 |
+| C. 런타임 토글 | 앱 내 개발 화면에서 서버 URL 전환 | 빌드 1개로 양쪽 | **운영 빌드에 서버 전환 코드가 들어감**(보안·오조작 위험). `DEV_TOOLS` 게이트 필수 |
+
+> **권장 = A + B 병행**: 일상 개발은 B(빠름), 네이티브 검증은 A(정확). C는 운영 빌드 오염 위험이라 채택하지 않는다.
+> A 채택 시 **applicationId suffix**(`com.son0925.volleyball.stg`) 결정 필요 — 안 붙이면 prod 앱을 덮어써서
+> 실기기에서 둘 중 하나만 설치된다. suffix를 붙이면 **구글 로그인 OAuth 클라이언트·AdMob 앱 ID를 stg용으로
+> 따로 만들어야** 하므로 공수 +1~2시간. **일단 suffix 없이(덮어쓰기 감수) 시작하고, 필요해지면 분리**를 권장.
+
+### 3.5.4 비용
+
+| 항목 | 월 비용 | 비고 |
+|---|---|---|
+| Supabase prod **Pro** | **$25** | S1. 유료 전환 대상 |
+| Supabase stg | **$0** | Free 티어(무료 2개 중 1개 사용) |
+| Vercel | 기존 Pro 유지 | Preview 배포는 추가 비용 없음 |
+| **합계 증가분** | **+$25/월** | |
+
+> **stg를 Free로 두는 근거**: stg는 실사용자가 없어 무료 티어 한도(0.5GB·동시접속) 안에서 충분하다.
+> 단 **Free는 1주 미사용 시 자동 일시정지**([[prod-migration-apply-method]] 인접 이슈) — 재개는 대시보드 클릭 1회.
+> 이 성가심이 크면 stg도 Pro(+$25)로 올릴 수 있으나 **초기엔 Free 권장**.
+
+### 3.5.5 리스크 · 함정
+
+1. **env 덮어쓰기 사고 재발**([[vercel-link-clobbers-env]]) — `vercel link`/`env pull`을 **절대 실행하지 않는다**. Preview env는 대시보드에서만.
+2. **stg가 운영 원장·알림으로 새는 것** — RC·Discord·Sentry 키를 Preview 스코프에 **넣지 않음**(§2 원칙 6). S8 격리 검증으로 실측 확인.
+3. **마이그레이션 순서** — stg는 빈 DB라 0000부터 순차 적용. prod는 추적 테이블이 없는 push 스타일이라 절차가 다름([[prod-migration-apply-method]]) — **혼동 금지**.
+4. **stg DB 비번 노출 금지** — `.env.staging`에 사용자가 직접 붙여넣고, 셸에서는 변수로만 참조·에코 금지(§0).
+5. **`proj_info` 시드 누락** — 모든 테이블이 `proj_code` FK라 시드가 없으면 서버가 전부 500. S4에 명시 포함.
+
+---
+
 ## 4. 롤백 / 복구
 
 - **G4 이전**: 운영 무손상 — 그냥 중단하면 됨.
