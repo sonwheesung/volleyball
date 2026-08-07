@@ -220,6 +220,13 @@
 > **dev에 한해 로컬 Supabase(Supabase CLI `supabase start`, Postgres 단독) 부활**. 사유: 무료(호스팅 free-tier 프로젝트가
 > 미사용 시 자동 정지되는 성가심 회피) + Docker Desktop 하나로 로컬 DB 완결. **prod는 Supabase 호스팅 유지**(아래 3종 연결 규칙은
 > **호스팅 prod 전용** — 로컬은 PgBouncer 풀러가 없어 6543/`prepare:false`·5432 구분이 없다). dev 셋업 절차는 §13.7.1.
+>
+> **추가(2026-08-07): 환경이 dev/prod 2개 → dev/stg/prod 3개가 됐다.** **stg**는 Supabase **별도 Free 조직
+> `Vivace Staging`**(ref `pdxdpzujeaxjweskecbv`, `ap-southeast-1`)의 독립 프로젝트로, Vercel **Preview(`staging` 브랜치)**
+> 서버가 여기에 붙는다. 연결 규칙은 prod와 동형(6543 런타임 / 5432 마이그레이션)이고, 빈 DB 프로비저닝은
+> **`drizzle-kit push`**(마이그레이션 파일 아님 — RUNBOOK 함정 ①). 🔴 **env는 운영=`Production` 전용 / stg=`Preview`+
+> `staging` 브랜치 지정**으로 분리해야 한다(§13.8 정정 — "Production and Preview"는 stg가 운영 DB에 붙는 사고를 냈다).
+> 환경 매트릭스는 [SERVER_OPS §0](./SERVER_OPS.md), 구축 경위는 [STAGING_PROD_RESET_RUNBOOK §3.5](./STAGING_PROD_RESET_RUNBOOK.md).
 
 - **비밀은 `server/.env.local`**(gitignore됨, 커밋 금지 — M4). `.env.example`은 양식 견본만.
 - **연결 문자열이 3종**(Supabase 대시보드 → Project Settings → Database) — **호스팅 prod 전용**(로컬 dev는 §13.7.1: 풀러 없음, DB 하나뿐):
@@ -247,10 +254,23 @@
 
 ### 13.8 Vercel 배포 (2026-07-02 프로덕션 라이브)
 - **프로덕션 URL**: `https://volleyball-jet-nine.vercel.app` (프로덕션 alias — 배포마다 불변. 배포전용 `...-<hash>-sonws.vercel.app`와 별개).
-- **배포 설정**: Vercel 대시보드 GitHub import(`sonwheesung/volleyball`) · **Root Directory=`server`**(루트가 Expo 앱이라 필수) · Framework=Next.js 자동 · env 3개(`DATABASE_URL` 6543 풀러·`SESSION_JWT_SECRET`·`ADMIN_TOKEN`, Production+Preview). `main` push마다 자동 재배포.
+- **배포 설정**: Vercel 대시보드 GitHub import(`sonwheesung/volleyball`) · **Root Directory=`server`**(루트가 Expo 앱이라 필수) · Framework=Next.js 자동 · env 3개(`DATABASE_URL` 6543 풀러·`SESSION_JWT_SECRET`·`ADMIN_TOKEN`, ~~Production+Preview~~). `main` push마다 자동 재배포.
+  - 🔴 **정정(2026-08-07, stg 신설): 운영 값은 `Production` 전용으로 등록한다.** ~~Production+Preview~~는
+    **stg Preview가 운영 값(특히 `DATABASE_URL`)을 상속**해 **스테이징 서버가 운영 DB에 붙는 사고**를 냈다
+    (응답·화면이 정상이라 눈으로 못 잡고 `/api/health` `dbRef` 지문으로 발견). stg 값은
+    **`Preview` + `staging` 브랜치 지정**으로 별도 등록(브랜치 지정 값이 일반 Preview 값보다 우선), 알림·관측
+    키는 **빈 값으로 덮어** 끈다. 절차·함정 정본 = [STAGING_PROD_RESET_RUNBOOK §3.5.6·함정 ③](./STAGING_PROD_RESET_RUNBOOK.md),
+    운용은 [SERVER_OPS §0·§3.6](./SERVER_OPS.md).
 - **실환경 검증(Opus 4.8)**: 공개 URL `GET /api/health` 200 + `GET /api/wallet` **Vercel 서버리스 → Supabase 6543 풀러 DB 왕복 정상**(balance:0). 서버리스에서 `prepare:false` 필수 확인.
 - **앱 연결**: 루트 `.env`의 `EXPO_PUBLIC_SERVER_URL=https://volleyball-jet-nine.vercel.app`(비밀 아님 → 커밋). 비면 오프라인 모드(§13.6). dev에서 로컬 서버로 바꾸려면 `.env.local`에 `EXPO_PUBLIC_SERVER_URL=http://localhost:3000` 오버라이드(단 실기기·에뮬레이터는 localhost 불가 → Vercel URL 사용).
-- **TODO(출시 전)**: DB 비밀번호 회전(개발 중 채팅 노출분) → Supabase reset 후 `.env.local`·Vercel env 갱신. 2FA는 계정에 활성화됨(복구코드 보관 완료).
+- ~~**TODO(출시 전)**: DB 비밀번호 회전(개발 중 채팅 노출분) → Supabase reset 후 `.env.local`·Vercel env 갱신.~~
+  → ✅ **실행 완료(2026-08-07)**: Supabase reset → `.env.local` 두 줄(`DATABASE_URL` 6543·`MIGRATE_DATABASE_URL` 5432)
+  → Vercel `DATABASE_URL`(Production) → Production 재배포. 절차·실측 함정(전체 연결문자열 필수·`MIGRATE_` 동반 갱신)
+  정본 = [SERVER_OPS §3.5](./SERVER_OPS.md).
+  - ⚠️ **잔여 위험(인지·수용됨)**: 새 값이 **stg DB 비밀번호와 동일**해져 "stg 크리덴셜 하나로 운영 DB가 열리는" 상태다.
+    유저 2명 시점의 위험 대비 비용으로 사용자가 수용했고, **월 1회 정기 회전** 정책의 **다음 회전 때 prod·stg를
+    서로 다른 무작위 값으로 분리**해 끊는다(SERVER_OPS §3.5.2 함정 ③).
+  - 2FA는 계정에 활성화됨(복구코드 보관 완료).
 - **비밀·환경변수 회전 체크리스트(양쪽 동시 갱신 필수 — 한쪽만 돌리면 로그인/검증 전면 실패)**:
   - **구글 클라이언트 ID 회전 시 양쪽 동시 갱신**: 앱 `.env`의 `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID`(빌드 인라인 → EAS 재빌드) **=** 서버 `GOOGLE_OAUTH_CLIENT_IDS`(콤마구분 목록에 같은 웹 클라이언트 ID 포함, `server/lib/googleVerify.ts` audience). 한쪽만 회전하면 audience 불일치로 **모든 구글 로그인이 fail-closed**로 거부된다. (SESSION_JWT_SECRET·ADMIN_TOKEN 회전은 위 §13.8 배포 env — 서버 단독이라 별개.)
 

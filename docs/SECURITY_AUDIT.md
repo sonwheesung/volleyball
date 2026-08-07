@@ -26,6 +26,7 @@
 | 🟡 MEDIUM | 6 | `wallet/earn·spend`가 `resolveUserId`(익명 폴백) 사용 | ✅ 수정+검증(2026-07-07) |
 | ⚪ LOW(잠재) | 7 | `cron/purge` 시크릿 미설정 시 fail-open(프로덕션 시크릿 설정됨 → 라이브 트리거 불가) | ✅ 수정+검증(2026-07-07) |
 | ⚪ LOW | 8 | 방어심화·패키지(세션 만료·상수시간 비교·DB CHECK 등) | ⬜ 미착수 |
+| 🟡 MEDIUM | 9 | **운영 DB 비밀번호 = stg DB 비밀번호(동일 값)** — stg 크리덴셜 하나로 운영 DB가 열림 | 🔶 **인지·수용(2026-08-07)** — 다음 정기 회전(월 1회)에 분리 |
 
 > **라이브 vs 잠재:** #2의 시크릿 fail-open(a)과 #7은 §1 기록(2026-07-04 프로덕션 시크릿 설정+검증)으로
 > **현재 프로덕션에선 완화**됐고 남는 건 코드의 fail-open 패턴(env 슬립 시 재앙 — 잠재 footgun).
@@ -161,6 +162,10 @@
 - **경로:** `server/app/api/cron/purge/route.ts:11-14`
 - **라이브 상태(2026-07-07 재검증):** [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) §1이 `CRON_SECRET`을
   **2026-07-04 Vercel Production+Preview 설정 확인**으로 기록 → **라이브 익스플로잇 닫힘(현재 트리거 불가).**
+  > ⚠ **정정(2026-08-07 — 이 "Production+Preview"를 앞으로의 지침으로 읽지 말 것)**: 당시의 **상태 기록**일 뿐이고,
+  > stg 신설 후 그 스코프는 **금지**다. 운영 값은 **`Production` 전용**, stg 값은 **`Preview` + `staging` 브랜치 지정**으로
+  > 따로 등록한다("Production and Preview"는 **stg Preview가 운영 값을 상속**해 stg 서버가 운영 DB에 붙는 사고를 냈다).
+  > 근거·절차 [STAGING_PROD_RESET_RUNBOOK §3.5.6·함정 ③](./STAGING_PROD_RESET_RUNBOOK.md) · [SERVER_OPS §0](./SERVER_OPS.md).
   남는 건 코드의 fail-open 패턴(env 슬립 시 무방비 — 잠재 footgun). 그래서 🟡 MEDIUM → **⚪ LOW(잠재)** 로 조정.
 - **익스플로잇(코드 패턴):** `if (secret && req.headers... !== Bearer ${secret})` — `CRON_SECRET` 미설정이면 가드 스킵 →
   누구나 `GET /api/cron/purge`로 purge/rollup 잡 트리거. 잡이 가벼워(만료분만 삭제) 영향 작지만,
@@ -185,6 +190,26 @@
 
 ---
 
+## 🟡 9. MEDIUM — 운영 DB 비밀번호가 stg DB 비밀번호와 동일 (2026-08-07 신설)
+
+- **상태:** 🔶 **인지·수용(2026-08-07 사용자 결정)** — 즉시 재회전 대신 **월 1회 정기 회전**의 다음 회차에 해소.
+- **경위:** 2026-08-07 운영 DB 비밀번호를 **회전했다**(개발 중 채팅 노출분 무효화 — [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) §1 ✅).
+  다만 새 값이 **stg DB 비밀번호와 동일**해졌다. 회전 절차·함정 정본은 [SERVER_OPS §3.5](./SERVER_OPS.md)(함정 ③).
+- **위험:** stg는 **보호 수준이 낮은 환경**이다 — 별도 Free 조직, 알림·Sentry 미연결, 격리 검증용 크리덴셜이
+  로컬 `server/.env.staging`에 존재하고 취급 빈도도 높다. **stg 크리덴셜이 하나 새면 그대로 운영 DB 로그인**이 된다.
+  즉 "prod/stg 분리"라는 stg 도입의 전제 자체가 크리덴셜 층에서는 성립하지 않는다.
+  (※ **서버-DB 연결 격리 자체는 정상**이다 — stg 서버는 stg DB만 본다. 실측 [RUNBOOK §3.5.7](./STAGING_PROD_RESET_RUNBOOK.md),
+  상비 가드 `_dv_stgisolation`. 이 항목은 **비밀번호 값의 공유**만을 가리킨다.)
+- **수용 근거(사용자 판단):** 실유저 2명 시점이라 노출 시 피해 규모가 작고, 즉시 재회전은 운영 다운타임 창을
+  다시 여는 비용이 든다. **다음 정기 회전까지의 한시적 수용.**
+- **해소 조건(= 완료 정의):** 다음 월례 회전에서 **prod·stg를 서로 다른 무작위 값**으로 생성해 분리.
+  생성 시 URL 특수문자(`@ : / ? # % &`) 제외 문자셋을 쓴다(연결 문자열 인코딩 사고 원천 차단).
+- **검증:** 회전 후 (i) 운영 `/api/health` `commit` 갱신 + `dbRef` = 운영 지문 (ii) 운영 `/api/bootstrap` 200
+  (iii) `MIGRATE_DATABASE_URL`(5432)까지 접속 확인 — `server/tools/_dv_prodconn.ts`(온디맨드·읽기 전용).
+  **주의**: `_dv_stgisolation.ts`는 stg 전용이라 **운영 회전을 검증하지 못한다**(SERVER_OPS §3.5.1-6 정정).
+
+---
+
 ## 지금 당장 (우선순위)
 
 > **라이브로 열려 있는 실질 최우선 = #1(welcome 무한발행)·#2(b)(dev/apple 백도어)·#3·#4.** 시크릿 3종(#2a·#7)은
@@ -206,6 +231,11 @@
 
 1. **시크릿 3종 재확인 + 최종 회전** — ✅ **ANSWERED(2026-07-07)** — 사용자 Vercel 스크린샷으로 `SESSION_JWT_SECRET`·`ADMIN_TOKEN`·`CRON_SECRET`
    3개 모두 **Production+Preview 설정 확인**. 잔여: 출시 직전 채팅 무경유 최종 회전(`SESSION_JWT_SECRET`·`ADMIN_TOKEN`).
+   > ⚠ **정정(2026-08-07)**: 위 "Production+Preview"는 **2026-07-07 시점의 상태 확인 기록**이지 권장 스코프가 아니다.
+   > stg 신설 후 **운영 값 = `Production` 전용**이 규칙이며, 특히 **시크릿 공유는 금지**다 —
+   > `SESSION_JWT_SECRET`을 stg와 공유하면 **stg에서 발급한 토큰이 운영에서도 유효**해진다(상비 가드 `_dv_stgisolation` 검사 B).
+   > stg에는 **별도 시크릿**을 `Preview` + `staging` 브랜치 지정으로 등록한다. → [RUNBOOK §3.5.6](./STAGING_PROD_RESET_RUNBOOK.md)
+   > (참고: 2026-08-07 현재 **DB 비밀번호는 prod=stg 동일** — 본 문서 **§9 오픈 항목** 참조.)
    (원문 보존) [PRE_LAUNCH_CHECKLIST](./PRE_LAUNCH_CHECKLIST.md) §1이
    `SESSION_JWT_SECRET`·`ADMIN_TOKEN`·`CRON_SECRET` 모두 **2026-07-04 프로덕션 설정+라이브 검증**을 기록했다("미지"가 아님).
    사용자에게 필요한 건 (i) 그 값들이 **지금도** Vercel 프로덕션에 설정돼 있는지 재확인(에이전트/메인은 대시보드 값 조회 불가) +

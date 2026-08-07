@@ -20,6 +20,13 @@ const ok = (c: boolean, m: string) => {
   if (!c) { console.error('  ✗ FAIL:', m); fail++; } else console.log('  ✓', m);
 };
 const skip = (m: string) => console.log('  – SKIP:', m);
+const warn = (m: string) => console.log('  ⚠ WARN:', m);
+
+// **기한부 수용(2026-08-07)**: 운영 DB 비밀번호와 stg DB 비밀번호가 같은 값이다. 사용자가 위험을 인지하고
+//   "현 값 유지 + 월 1회 정기 회전"으로 수용했다(SERVER_OPS §3.5 함정 ③).
+//   영구 FAIL로 두면 가드가 무시되므로(경보 피로) **기한까지는 WARN, 넘기면 FAIL**로 자동 격상한다.
+//   다음 회전 때 prod·stg를 서로 다른 무작위 값으로 끊으면 이 상수는 지운다.
+const PW_SHARED_ACCEPTED_UNTIL = '2026-09-07';
 
 // 사람이 읽히는 더미가 진짜 시크릿으로 통과한 사고(2026-08-07 `stg-admin-token-REPLACE-min-16-random`)를 막는다.
 // "TODO로 시작하는가"만 보면 뚫린다 — 포함 여부 + 길이 + 패턴으로 판정.
@@ -58,6 +65,24 @@ async function main() {
     if (!s) { skip(`${k}: stg에 없음(Vercel에만 있을 수 있음 — 대시보드 확인 필요)`); continue; }
     if (!p) { skip(`${k}: prod 로컬에 없음 — 대조 불가`); continue; }
     ok(fp(p) !== fp(s), `${k} 값이 다름 (prod ${fp(p)} ≠ stg ${fp(s)})`);
+  }
+  // ⚠ A(호스트)만 보면 **DB 비밀번호가 prod↔stg 동일해도 전부 통과**한다(2026-08-07 실사례 —
+  //   회전한 운영 비밀번호가 stg 것과 같아져 "stg 크리덴셜 하나로 운영 DB가 열리는" 상태가 됐다).
+  //   호스트가 달라도 비밀번호가 같으면 유출 시 피해가 양쪽으로 번지므로 별도 검사한다.
+  const pwOf = (u?: string) => { try { return new URL(u!).password; } catch { return ''; } };
+  const pPw = pwOf(pDb), sPw = pwOf(sDb);
+  if (!pPw || !sPw) {
+    skip('DB 비밀번호: 한쪽 파싱 불가 — 대조 생략');
+  } else if (fp(pPw) !== fp(sPw)) {
+    ok(true, `DB 비밀번호가 다름 (prod ${fp(pPw)} ≠ stg ${fp(sPw)})`);
+  } else {
+    const today = new Date().toISOString().slice(0, 10);
+    const msg = `DB 비밀번호가 prod↔stg 동일 (${fp(pPw)}) — stg 크리덴셜 하나로 운영 DB가 열린다`;
+    if (today <= PW_SHARED_ACCEPTED_UNTIL) {
+      warn(`${msg}. 기한부 수용 중(~${PW_SHARED_ACCEPTED_UNTIL}, SERVER_OPS §3.5) — 다음 회전 때 분리할 것`);
+    } else {
+      ok(false, `${msg}. **수용 기한 ${PW_SHARED_ACCEPTED_UNTIL} 경과** — 회전으로 분리하라(SERVER_OPS §3.5.1)`);
+    }
   }
 
   // ── C. 자리표시자가 남아 있지 않은가 ──

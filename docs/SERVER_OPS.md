@@ -6,27 +6,41 @@
 
 ---
 
-## 0. 한 장 요약 — 두 세계
+## 0. 한 장 요약 — ~~두 세계~~ **세 환경**(2026-08-07 stg 신설)
 
 ```
-[개발]  폰/에뮬(Expo Go) ── Expo 8082 ──▶ 앱 ──▶ 로컬 서버 :3000 (next dev) ──▶ 로컬 DB
-[운영]  실제 설치 앱                        앱 ──▶ Vercel (https://volleyball-jet-nine.vercel.app) ──▶ Supabase 호스팅 Postgres
+[개발 dev] 폰/에뮬(Expo Go) ─ Expo 8082 ─▶ 앱 ─▶ 로컬 서버 :3000 (next dev) ─▶ 로컬 DB(:54322)
+[스테이징 stg] 내부 테스트 앱/직접 호출     ─▶ Vercel Preview(`staging` 브랜치)  ─▶ Supabase stg (별도 Free 조직)
+[운영 prod] 실제 설치 앱                    ─▶ Vercel (https://volleyball-jet-nine.vercel.app) ─▶ Supabase 호스팅 Postgres(Pro)
 ```
+
+> ~~"두 세계"(dev/prod)~~ → **정정(2026-08-07): 세 환경.** 2026-08-07 프로덕션 출시 제출로 운영이 "실사용자 환경"이
+> 되면서, 파괴적 검증(세이브 마이그레이션·DB 초기화·결제 웹훅·환불·대량 시뮬)을 안전하게 돌릴 **stg**를 신설했다.
+> 구축 경위·함정·격리 실측은 [STAGING_PROD_RESET_RUNBOOK §3.5](./STAGING_PROD_RESET_RUNBOOK.md).
 
 - 앱이 어느 서버를 보는지는 **`EXPO_PUBLIC_SERVER_URL`**(루트 `.env`, 번들 시점에 박힘)이 결정. 기본값 = **운영 Vercel**.
 - **게임플레이(관전·시즌 시뮬)는 서버 무관 로컬 결정론** — 서버는 재화·계정·결제·콘텐츠(공지/노트)·로그만(CLAUDE §8 격리).
-- 서버 코드는 하나(`server/`), 환경만 갈린다: dev = `next dev` + 로컬 DB / prod = Vercel + Supabase 호스팅.
+- 서버 코드는 하나(`server/`), 환경만 갈린다: dev = `next dev` + 로컬 DB / stg = Vercel Preview + Supabase stg / prod = Vercel + Supabase 호스팅.
 
 ### 환경 매트릭스
 
-| | 개발(dev) | 운영(prod) |
-|---|---|---|
-| 서버 | 로컬 `next dev` :3000 | Vercel(자동 빌드/서버리스) |
-| DB | **로컬**: Supabase CLI(`supabase start`, :54322) — §13.7.1 정본. 포트 막히면 임시 Docker PG(아래 2.1b) | Supabase 호스팅(풀러 :6543 `prepare:false` / 마이그레이션 :5432 — §13.7) |
-| env | `server/.env.development.local`(로컬 DB URL 등 — dev 우선 로드) | Vercel 환경변수(DATABASE_URL·SESSION_JWT_SECRET·ADMIN_TOKEN·CRON_SECRET) + `server/.env.local`(로컬에서 운영 DB 겨냥용) |
-| 앱 지향 | `EXPO_PUBLIC_SERVER_URL=http://<내 LAN IP>:3000`으로 Expo 재시작 | 기본값(루트 `.env`의 Vercel URL) |
-| dev 로그인 | 서버가 dev provider 허용(비프로덕션) → 실 Bearer 발급 | **401 차단**(계정 백도어 방지, SECURITY #2b) → 앱은 `__DEV__` 로컬 폴백 세션(Bearer 없음 = 온라인 기능은 typed 실패) |
-| 스키마 반영 | `drizzle-kit push`(자유) | **마이그레이션 파일**(`generate`+`migrate`) — 운영 후엔 Expand/Contract 3단계([[prod-schema-migration-caution]]) |
+| | 개발(dev) | **스테이징(stg)** | 운영(prod) |
+|---|---|---|---|
+| 서버 | 로컬 `next dev` :3000 | **Vercel Preview**(`staging` 브랜치 자동배포) — `volleyball-git-staging-sonws.vercel.app` | Vercel(자동 빌드/서버리스, `main`) |
+| DB | **로컬**: Supabase CLI(`supabase start`, :54322) — §13.7.1 정본. 포트 막히면 임시 Docker PG(아래 2.1b) | Supabase **별도 Free 조직 `Vivace Staging`** · ref `pdxdpzujeaxjweskecbv` · **`ap-southeast-1`(싱가포르)** · 지문 `06eb5f60fd04` | Supabase 호스팅(**Pro**, ref `vmedwppbpugjnxdfwzoq`, `ap-northeast-2`, 지문 `2b73921d4030`) — 풀러 :6543 `prepare:false` / 마이그레이션 :5432(§13.7) |
+| env | `server/.env.development.local`(로컬 DB URL 등 — dev 우선 로드) | Vercel **`Preview` + `staging` 브랜치 지정** 스코프(12개) + 로컬 `server/.env.staging`. **결제(RC)·알림(Discord)·Sentry는 빈 값/부재 = 의도적 미연결** | Vercel **`Production` 전용** 스코프 + `server/.env.local`(로컬에서 운영 DB 겨냥용) |
+| 접근 | — | **Vercel Authentication 켜짐**(비공개). 앱을 붙일 땐 해제 필요 | 공개 |
+| 앱 지향 | `EXPO_PUBLIC_SERVER_URL=http://<내 LAN IP>:3000`으로 Expo 재시작 | 내부 테스트 빌드에 `EXPO_PUBLIC_SERVER_URL`=stg Preview URL(RUNBOOK §3.5.3 안 A/B) | 기본값(루트 `.env`의 Vercel URL) |
+| 결제 | 스텁 | **미연결**(RC 키 부재 — 운영 원장 오염 차단) | RC 실연동 |
+| 레이트리밋 | off(fail-open) | **off**(Upstash 키 부재 = fail-open) | Upstash 설정 시 on |
+| dev 로그인 | 서버가 dev provider 허용(비프로덕션) → 실 Bearer 발급 | Preview는 `VERCEL_ENV=preview`(비프로덕션) → dev provider 허용 | **401 차단**(계정 백도어 방지, SECURITY #2b) → 앱은 `__DEV__` 로컬 폴백 세션(Bearer 없음 = 온라인 기능은 typed 실패) |
+| 스키마 반영 | `drizzle-kit push`(자유) | `drizzle-kit push`(빈 DB 프로비저닝도 push — RUNBOOK 함정 ①) | **마이그레이션 파일**(`generate`+`migrate`) — 운영 후엔 Expand/Contract 3단계([[prod-schema-migration-caution]]) |
+
+> 🔴 **env 스코프 원칙(2026-08-07 사고에서 확립)**: 운영 값은 **`Production` 전용**으로 등록한다.
+> **"Production and Preview"로 등록하면 stg Preview가 그 값을 상속해 운영 DB·운영 알림 채널에 붙는다**
+> (실제 발생 — 화면·응답이 정상이라 눈으로 못 잡았고 `/api/health`의 `dbRef` 지문으로 잡았다).
+> stg 값은 **`Preview` + `staging` 브랜치 지정**으로 따로 등록(브랜치 지정 값이 일반 Preview 값보다 우선).
+> 절차·함정은 [RUNBOOK §3.5.6 및 함정 ③](./STAGING_PROD_RESET_RUNBOOK.md).
 
 ---
 
@@ -87,7 +101,7 @@ EXPO_PUBLIC_SERVER_URL="http://<LAN IP>:3000" npx expo start --port 8082 -c
 ### 2.5 관리자·콘텐츠 테스트 (개발자 노트·공지·쿠폰)
 - 관리자 페이지: `http://localhost:3000/ops-9f3a2c` — 토큰은 `ADMIN_TOKEN`(서버 env).
 - 노트 작성 → 초안 저장 → **게시 토글** → 앱(마이페이지→개발자 노트)에서 즉시 확인. 임시 PG면 데이터가 컨테이너와 운명 공동체임을 기억.
-- 서버 가드 배터리(README "서버 가드 배터리" — 순수 4 + 라이브 8): 라이브는 dev DB 필요, `tools/_env.ts`가 `.env.development.local` 우선 로드. 임시 PG면 `DATABASE_URL=... npx tsx tools/_dv_*.ts`.
+- 서버 가드 배터리(README "서버 가드 배터리" — ~~순수 4 + 라이브 8~~ → **정정(2026-08-07 실측): 순수 5 + 루프 18**. 루프 중 `_dv_pass`·`_dv_1p1`·`_dv_mail` 3종은 DB 불필요라 "라이브"가 아니다. `_e2e_purchase_live`·`_dv_stgisolation`·`_dv_prodconn`은 체인 밖 온디맨드): 라이브는 dev DB 필요, `tools/_env.ts`가 `.env.development.local` 우선 로드. 임시 PG면 `DATABASE_URL=... npx tsx tools/_dv_*.ts`.
 
 ### 2.6 정리
 ```bash
@@ -100,6 +114,8 @@ docker rm -f dev_pg            # 임시 PG 정리(썼다면)
 ## 3. 운영(배포) 체인
 
 > 원칙: **스키마 먼저, 코드 다음**(additive 마이그레이션이면 순서 무해하나 습관화). 배포는 되돌리기 쉬워도 DB는 아니다.
+> 🔴 **선행**: 유저 데이터·머니패스에 닿는 서버 변경은 `main`에 바로 올리지 않는다 — **§3.6 stg 경유 절차가 먼저**다
+> (`main` push = 즉시 운영 배포).
 
 ### 3.1 prod 마이그레이션
 ```bash
@@ -112,7 +128,11 @@ MIGRATE_DATABASE_URL(:5432 직결)로 npx drizzle-kit migrate   # 풀러(:6543) 
 ```bash
 cd server && npx vercel --prod             # 또는 git push 연동 빌드
 ```
-- 배포 전 체크: `npx tsc --noEmit`(server) 0 · 서버 가드 배터리 그린 · 새 env 키가 생겼으면 **Vercel 환경변수에 먼저 등록**(Production+Preview).
+- 배포 전 체크: `npx tsc --noEmit`(server) 0 · 서버 가드 배터리 그린 · 새 env 키가 생겼으면 **Vercel 환경변수에 먼저 등록**
+  — ~~(Production+Preview)~~ → 🔴 **정정(2026-08-07): 운영 값은 `Production` 전용.**
+  "Production and Preview"로 넣으면 **stg Preview가 운영 값을 상속**해 stg 서버가 운영 DB·운영 알림에 붙는다(실제 사고).
+  stg에 필요한 값은 **`Preview` + `staging` 브랜치 지정**으로 따로 등록하고, 알림·관측 키는 **빈 값으로 덮어** 끈다.
+  → 절차 [RUNBOOK §3.5.6](./STAGING_PROD_RESET_RUNBOOK.md), 사고 경위 = 같은 문서 함정 ③.
 - ⚠ `vercel link`/`env pull`은 `.env.local`을 무경고 덮어씀([[vercel-link-clobbers-env]]) — 실행 전 `cp .env.local .env.local.bak`.
 
 ### 3.3 배포 후 확인 (스모크)
@@ -142,9 +162,19 @@ curl https://volleyball-jet-nine.vercel.app/api/devnotes     # 새 라우트 200
 3. `server/.env.local` **두 줄 다** 교체: `DATABASE_URL`(6543) · `MIGRATE_DATABASE_URL`(5432)
 4. Vercel `DATABASE_URL`(Production 스코프) 갱신 — **연결 문자열 전체**(함정 ①)
 5. **Production 재배포** (env만 바꾸면 옛 값이 계속 쓰인다)
-6. 검증: `server/tools/_dv_stgisolation.ts`(stg 쪽) + 운영 `/api/bootstrap` 200 + row 수 불변
+6. **검증** — ~~`server/tools/_dv_stgisolation.ts`(stg 쪽)~~
+   → **정정(2026-08-07): 그 가드는 운영 DB에 접속하지 않는다**(stg 전용 — A가 깨지면 프로브를 아예 생략한다).
+   운영 비밀번호 회전을 검증하려면 **운영을 실제로 때리는 것**만 유효하다. 아래 3개를 순서대로:
+   1. **새 배포가 라이브인지** — 운영 `/api/health`의 `commit`이 방금 재배포한 커밋과 일치하고 `dbRef`가
+      **운영 지문 `2b73921d4030`** 인지(구 배포가 옛 비밀번호로 떠 있으면 여기서 갈린다 — 함정 ①).
+   2. **런타임 경로(6543)** — 운영 `/api/bootstrap` **200**(DB 왕복이 실제로 성공).
+   3. **마이그레이션 경로(5432)** — `MIGRATE_DATABASE_URL`로도 접속되는지(런타임이 멀쩡해도 여기만 썩는다 — 함정 ②).
+      → **`(cd server && npx tsx tools/_dv_prodconn.ts)`** 로 두 URL 접속을 한 번에 확인
+      (온디맨드 — 배터리 체인 밖, 운영 DB 왕복. 읽기 전용이고 값이 아니라 **지문**만 출력한다).
+   4. (권장) 운영 주요 테이블 row 수 불변 — 회전이 데이터에 영향을 주지 않았음 확인.
 
 stg도 동일(ref `pdxdpzujeaxjweskecbv`, Vercel은 **Preview/`staging` 브랜치 스코프**, staging 재배포).
+stg 쪽 검증은 `_dv_stgisolation.ts` + stg `/api/health` `dbRef 06eb5f60fd04`가 맞다.
 
 #### 3.5.2 실측 함정
 
@@ -155,7 +185,10 @@ stg도 동일(ref `pdxdpzujeaxjweskecbv`, Vercel은 **Preview/`staging` 브랜�
 
 **② `MIGRATE_DATABASE_URL`을 같이 안 바꿔서 조용히 썩는다**
 런타임은 6543만 쓰므로 **서비스는 멀쩡한데** 다음 스키마 변경 때 `28P01(invalid_password)`로 막힌다.
-회전 시 두 줄을 한 세트로 본다. 진단: `_envsafe`로 두 URL 모두 접속 확인.
+회전 시 두 줄을 한 세트로 본다. 진단: ~~`_envsafe`로 두 URL 모두 접속 확인~~
+→ **정정(2026-08-07): `_envsafe`는 env를 안전하게 *읽는* 로더일 뿐 접속 검사 스크립트가 아니다.**
+두 URL 접속 확인은 **`server/tools/_dv_prodconn.ts`** 가 담당한다(`_envsafe`로 값을 읽고
+6543·5432 양쪽에 각각 붙어본 뒤 **지문만** 출력 — 값은 절대 에코하지 않는다).
 
 **③ 새 비밀번호를 옛 것의 변형으로 만들면 회전이 아니다**
 2026-08-07 실사례 — 유출된 값에서 문자 하나만 뺀 값으로 바꿨고, 그 값이 **stg 비밀번호와도 동일**해져
@@ -172,6 +205,37 @@ stg도 동일(ref `pdxdpzujeaxjweskecbv`, Vercel은 **Preview/`staging` 브랜�
 - 값을 옮길 땐 **파일 ↔ 클립보드**만. 채팅·로그·커밋 메시지 경유 금지.
 - **IDE에서 `.env` 줄을 선택한 채 두지 않는다** — 에디터 선택 영역은 어시스턴트에게 전달된다. 복사 후 선택 해제.
 - 비교가 필요하면 값이 아니라 **지문**(`fp()`·`dbRefOf()`)으로 한다.
+
+### 3.6 stg(스테이징) 배포 절차 (2026-08-07 신설 — RUNBOOK S11)
+
+> **왜**: `main` push = **즉시 운영 배포**(Vercel 자동). 실사용자가 있는 지금, 서버 변경을 운영에서 처음 실행하면
+> 그게 곧 실험이다. stg는 **같은 코드·같은 플랫폼·다른 DB**에서 먼저 돌려보는 자리다([[stg-is-prod-mirror-gate]]).
+
+**🔴 `staging` 브랜치 경유 필수 — 유저 데이터·머니패스에 닿는 경로**
+- `server/app/api/**` (라우트) · `server/lib/**` (지갑·인증·결제·알림) · `server/db/**` (스키마·마이그레이션)
+
+**🟢 `main` 직접 가능**
+- 관리자 화면(`server/app/ops-9f3a2c/**`) · 문서(`docs/**`) · 앱 코드(`app/`·`engine/`·`data/` — 서버 무관)
+
+**절차**
+```bash
+git checkout staging && git merge main          # (또는 staging에서 직접 작업)
+# ...변경...
+git push origin staging                          # → Vercel Preview 자동배포
+curl https://volleyball-git-staging-sonws.vercel.app/api/health   # dbRef 06eb5f60fd04(stg) 확인
+# 검증 통과 후
+git checkout main && git merge staging && git push origin main    # 머지 = 운영 배포 승인
+```
+
+**함정**
+- ⚠️ **`server/` 무변경 커밋은 Preview 자체가 안 생긴다.** Vercel 프로젝트가 **Root Directory=`server`** +
+  "Skip deployments when there are no changes to the root directory" **Enabled**이라 빌드가 스킵된다
+  (브랜치 설정 문제로 오해하기 쉬움 — RUNBOOK 함정 ②). 평시엔 이득(문서·앱만 바꾼 커밋은 서버 재배포 안 함).
+- ⚠️ **stg가 운영 DB에 붙어 있지 않은지** 배포 후 `dbRef`로 확인(§0 env 스코프 원칙 · RUNBOOK 함정 ③).
+  새 env를 "Production and Preview"로 추가하는 순간 조용히 재발한다.
+- ⚠️ stg Preview는 **Vercel Authentication 켜짐**(비공개). 브라우저·앱에서 붙이려면 해제해야 한다.
+- 격리 상시 점검: `(cd server && npx tsx tools/_dv_stgisolation.ts)` — **온디맨드**(배터리 밖). 로컬 env만 보므로
+  Vercel 스코프는 위 `dbRef` 확인이 담당.
 
 ---
 

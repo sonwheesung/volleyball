@@ -16,7 +16,9 @@
 **🔴 진짜 남은 블로커 (거의 손님 콘솔 작업)**
 1. ~~#43 결제 활성화~~ **✅ #43 결제 서버 검증 완료(2026-08-06 prod 원장 실측)** — Play 상품 등록·RC 매핑·웹훅 시크릿·샌드박스 실결제 전부 비공개 테스트에서 동작. 실측: **SANDBOX applied 12/12 원장 안착 · webhook 경유 지급 · 멱등(confirm deduped·이중지급 0) · 금액 정확(dia_100~10000 = 1,000~84,000₩) · 잔액 정합(18950→37950)**. purchase 원장 12건 +38,200dia. **go-live 잔여 = ① 프로덕션 상품 활성(스토어 설정 플립) ② 테스트 데이터 초기화(§0.5).** (7/6 합성 테스트 이벤트 52건이 `purchase_event`에 PRODUCTION으로 잔존 — 매출진실=원장이라 무해하나 초기화 대상.)
 2. **스토어 업데이트 게이트 값** — prod `/api/bootstrap` 실측 **`androidStoreUrl·minVersion·latestVersion` 전부 null**(§4). 관리자 콘솔에서 입력 필요.
-3. **시크릿 최종 회전** — DB 비번(채팅 노출분) 미회전 · JWT/ADMIN 출시직전 채팅-무경유 최종 회전 · ~~TELEMETRY_SALT~~ **✅ TELEMETRY_SALT 완료(2026-08-05 — Vercel Pro 전환과 함께 prod env 지정·재배포·스모크, [[telemetry-pseudonymized]])**.
+3. **시크릿 최종 회전** — ~~DB 비번(채팅 노출분) 미회전~~ **✅ DB 비번 회전 완료(2026-08-07 — Supabase reset → 로컬 2줄 + Vercel Production → 재배포, [SERVER_OPS §3.5](./SERVER_OPS.md))**
+   ⚠ 단 **잔여 위험: 새 값 = stg 비번(동일 값)** — 월 1회 정기 회전의 다음 회차에 서로 다른 무작위 값으로 분리(§1) ·
+   JWT/ADMIN 출시직전 채팅-무경유 최종 회전 · ~~TELEMETRY_SALT~~ **✅ TELEMETRY_SALT 완료(2026-08-05 — Vercel Pro 전환과 함께 prod env 지정·재배포·스모크, [[telemetry-pseudonymized]])**.
 
 > **아래 §0.5 = "운영 승인 시(출시 확정) 진행"** — 스토어 주소/출시일 확정이 트리거라 지금은 대기하고 그때 일괄 처리하는 항목 모음.
 
@@ -33,7 +35,7 @@
 
 - 🔴 ⬜ **스토어 게이트 값 입력** (관리자 콘솔 `ops-9f3a2c` → 운영 설정) — `androidStoreUrl` = 확정된 Play 리스팅 URL(`play.google.com/store/apps/details?id=<패키지>`) · `latestVersion` = 출시 버전 · `minVersion` = 낮게/비움(문제 시 상향). 현재 셋 다 **null**(prod `/api/bootstrap` 실측) → 업데이트 안내·강제게이트 미작동. 스위치는 있으나 스토어 주소가 없으면 "업데이트" 버튼이 갈 곳이 없음 → **주소 확정이 선행**. (BACKEND §13.16)
 - 🔴 ⬜ **약관 시행일 스왑** — `data/legalText.ts` TERMS·POLICY의 `effective: '서비스 출시일'` → **실제 출시일**로 교체(부칙·web `/terms`·`/privacy` 표기 동반). 출시일 확정 후.
-- 🔴 ⬜ **시크릿 최종 회전(채팅 무경유)** — 출시 직전 본인 터미널 생성값으로 최종 1회 회전: DB 비번(Supabase reset → `DATABASE_URL`·`MIGRATE_DATABASE_URL` 로컬+Vercel 동시 갱신) · `SESSION_JWT_SECRET` · `ADMIN_TOKEN`. 개발 중 채팅 노출분 무효화. (TELEMETRY_SALT는 ✅ 2026-08-05 완료. 상세 §1)
+- 🔴 🔶 **시크릿 최종 회전(채팅 무경유)** — 출시 직전 본인 터미널 생성값으로 최종 1회 회전: ~~DB 비번(Supabase reset → `DATABASE_URL`·`MIGRATE_DATABASE_URL` 로컬+Vercel 동시 갱신)~~ **✅ DB 비번 2026-08-07 회전 완료**(잔여 위험: 값이 stg와 동일 → 다음 정기 회전에서 분리, §1) · `SESSION_JWT_SECRET` · `ADMIN_TOKEN` **잔여**. 개발 중 채팅 노출분 무효화. (TELEMETRY_SALT는 ✅ 2026-08-05 완료. 상세 §1)
 - 🔴 ⬜ **#43 결제 — 프로덕션 상품 활성만 잔여** — ✅ 결제 파이프라인 서버 검증 완료(2026-08-06, 비공개 테스트 샌드박스 실결제 → webhook 지급 → 원장 12/12 안착·멱등·금액 정합, [PAYMENT_LAUNCH_RUNBOOK](./PAYMENT_LAUNCH_RUNBOOK.md)). go-live에 **Play 콘솔 상품을 프로덕션으로 활성**(스토어 설정 플립)만 남음.
 - 🔴 ⬜ **운영 DB 초기화(테스트 데이터 삭제)** — 승인 후 [STAGING_PROD_RESET_RUNBOOK](./STAGING_PROD_RESET_RUNBOOK.md) 절차대로: stg 복사(백업)→대조→백업→**사용자 명시 승인**→유저 데이터 TRUNCATE(users·wallet_ledger·purchase_event·telemetry·문의·세이브 — 샌드박스 결제/7-6 합성 이벤트 포함)→검증. **설정·관리자 콘텐츠(공지·노트·쿠폰정의·전체우편)는 보존**. ⚠ 실결제 발생 전 1회성. 사용자 계획(2026-08-06 "승인 나면 삭제").
 - 🟡 ⬜ **앱 버전 `1.0.0`** — `app.json` `0.1.0`→`1.0.0` + versionCode 범프 + 재빌드(AAB) + 스토어 업로드.
@@ -47,10 +49,17 @@
 
 > 📋 **백엔드 보안 감사(2026-07-07) → [SECURITY_AUDIT](./SECURITY_AUDIT.md)**: `server/`의 8개 발견(🔴 무한 다이아 발행·🔴 세션 fail-open+로그인 백도어·🟠 레이트리밋/스냅샷·🟡 멱등키/익명폴백/크론)을 상태 체크리스트로 추적. 출시 전 처리 필수 — 특히 아래 세 키의 **프로덕션 실제 설정 여부**가 #2·#7 실심각도를 좌우(SECURITY_AUDIT OPEN QUESTION 1).
 
-- 🔴 ⬜ **DB 비밀번호 회전** — Supabase Dashboard → Database → Reset password → `DATABASE_URL`·`MIGRATE_DATABASE_URL`(로컬 `.env.local` + Vercel env) 갱신. (개발 중 채팅 노출분. 정본 [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) §13.8) — **미완**(로컬까지 동시 갱신 필요, 다음 세션).
+- 🔴 ✅ **DB 비밀번호 회전 — 완료(2026-08-07)** — Supabase Reset password → 로컬 `.env.local` **두 줄**(`DATABASE_URL` 6543 ·
+  `MIGRATE_DATABASE_URL` 5432) → Vercel `DATABASE_URL`(**Production 스코프**) → **Production 재배포**까지 실행.
+  ~~**미완**(로컬까지 동시 갱신 필요, 다음 세션).~~ 절차·실측 함정(연결문자열 전체 필수 / `MIGRATE_` 동반 갱신 / 옛 값 변형 금지)
+  정본 [SERVER_OPS §3.5](./SERVER_OPS.md), 배경 [BACKEND_SYSTEM §13.8](./BACKEND_SYSTEM.md).
+  - ⚠️ **잔여 위험(인지·수용됨)**: 새 값이 **stg DB 비밀번호와 동일**해 "stg 크리덴셜 하나로 운영 DB가 열리는" 상태다.
+    유저 2명 시점의 위험 대비 비용으로 사용자가 수용. **월 1회 정기 회전** 정책의 **다음 회전 때 prod·stg를 서로 다른
+    무작위 값으로 분리**해 해소한다. → [SECURITY_AUDIT](./SECURITY_AUDIT.md) 오픈 항목으로 추적.
 - 🔴 🔶 **`SESSION_JWT_SECRET` 회전** — 세션 토큰 서명키. 회전 시 기존 세션 전부 무효(재로그인) — 출시 전이라 무해. 32바이트+ 랜덤. **2026-07-04 강random으로 회전+Vercel 재배포+라이브 검증(로그인 토큰 발급 정상)**. ⚠️ 단 회전값이 채팅 경유 → **출시 직전 채팅 무경유 값으로 최종 1회 더 회전 필요**.
 - 🔴 🔶 **`ADMIN_TOKEN` 회전** — 관리자 대시보드 마스터키(= 이거 알면 쿠폰 발급·점검·환불 다 됨). 32바이트+ 랜덤, **16자 이상 필수**(`requireAdmin` fail-closed, §13.15). 로컬 dev 값(`dev-admin-token-000`)과 운영 값 분리. **2026-07-04 강random(43자)으로 회전+검증(가짜/무토큰 401 fail-closed)**. ⚠️ 채팅 경유값 → 출시 직전 최종 회전.
 - 🔴 ✅ **`CRON_SECRET`을 Vercel env에 설정** — 미설정 시 크론 라우트가 통과되나 무방비. 스케줄 `0 18 * * *`(3am KST). (§13.10) **2026-07-04 Vercel Production+Preview 설정 확인.**
+  ⚠ 이 "Production+Preview"는 **당시 상태 기록**이며 **현재 권장 스코프가 아니다** — 운영 값은 `Production` 전용, stg는 별도 값을 `Preview`+`staging` 브랜치 지정(§6 정정 참조).
 - 🟡 ⬜ `.env.local`은 **절대 커밋 금지** 재확인(`.gitignore` 차단됨). `.env.example`만 커밋(양식). (§13.4 M4)
 - 🟢 ⬜ Supabase 2FA·복구코드 보관 확인(이미 활성).
 
@@ -108,7 +117,14 @@
 ## 6. 운영 · 인프라 🟡
 
 - 🟡 ⬜ **`EXPO_PUBLIC_SERVER_URL`** = 운영 Vercel URL 확인(현재 `https://volleyball-jet-nine.vercel.app`). 루트 `.env`(커밋됨 — 비밀 아님). (§13.8)
-- 🟡 ⬜ **Vercel 환경변수 전량 확인** — DATABASE_URL(6543 풀러 `prepare:false`)·SESSION_JWT_SECRET·ADMIN_TOKEN·CRON_SECRET (Production+Preview). (§13.7·§13.8)
+- 🟡 ⬜ **Vercel 환경변수 전량 확인** — DATABASE_URL(6543 풀러 `prepare:false`)·SESSION_JWT_SECRET·ADMIN_TOKEN·CRON_SECRET.
+  ~~(Production+Preview)~~ → 🔴 **정정(2026-08-07, stg 신설): 운영 값은 `Production` 전용으로 둔다.**
+  "Production and Preview"면 **stg Preview가 운영 값을 상속**해 **스테이징 서버가 운영 DB에 붙는다**(2026-08-07 실제 발생 —
+  응답·화면이 정상이라 눈으로 못 잡고 `/api/health`의 `dbRef` 지문으로 발견). stg용 값은 **`Preview` + `staging` 브랜치 지정**으로
+  별도 등록하고(브랜치 지정 값이 일반 Preview 값보다 우선), 알림·관측 키(`DISCORD_*`·`SENTRY_DSN`·`UPSTASH_*`/`KV_REST_API_*`)는
+  **stg에 빈 값으로 덮어** 끈다. ⚠ 운영 변수는 **열지 말 것** — Sensitive 변수는 편집 화면에서 값이 비어 보여
+  스코프만 바꾸려다 **빈 값으로 저장해 운영을 끊을 위험**이 있다(덮어쓰기 방식이면 열 필요조차 없다).
+  절차 정본 [STAGING_PROD_RESET_RUNBOOK §3.5.6·함정 ③](./STAGING_PROD_RESET_RUNBOOK.md) · 운용 [SERVER_OPS §0·§3.6](./SERVER_OPS.md). (§13.7·§13.8)
 - 🟢 ⬜ **운영 스키마 변경 주의** — 출시 후 DB 변경은 Expand/Contract 3단계(NOT NULL 추가·rename·삭제 금지). `drizzle-kit generate`+`migrate`(push 아님). ([[prod-schema-migration-caution]], §13.7)
 - 🟢 ⬜ Supabase 요금제·백업 정책 확인(무료 티어 한도).
 - 🟡 ⬜ 📋 **dev 환경 구축(2026-07-07 설계, 미구현 — 온라인 기능 개발 전 필요)** — 현재 dev 앱이 prod Vercel/Supabase 하나에 붙어 보안수정 #2(b)가 dev provider를 401 차단 → 개발자 로그인이 로컬 세션 폴백(UI만 진입)이라 **온라인 기능(지갑·다이아·쿠폰·결제) 테스트 불가**. #43 결제·#46 통계 착수 시 셋업: 두 번째 Supabase 프로젝트=dev DB(무료티어 2개)+마이그레이션 · Vercel `DATABASE_URL` 환경별 분리(Production=prod / Preview·Development=dev, Preview는 `VERCEL_ENV=preview`라 dev 로그인 자동 허용) · dev 앱 `EXPO_PUBLIC_SERVER_URL`=Preview URL 또는 로컬 `npm run dev`. dev DB 생기면 라이브 가드(`walletConcurrency`·`_dv_walletreplay`·`_e2e_backend`) 실행 가능. (정본 [BACKEND_SYSTEM](./BACKEND_SYSTEM.md) §13.24)

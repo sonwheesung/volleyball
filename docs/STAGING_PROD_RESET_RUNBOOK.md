@@ -7,7 +7,11 @@
 > **정본 관계**: 연결 규칙은 [BACKEND_SYSTEM §13.7], 운용 절차는 [SERVER_OPS.md]. 이 문서는 그 위의 **1회성 출시 런북**.
 >
 > ⚠️ **실행 시점**: 이 문서 작성 시점(2026-08-03)엔 **stg 프로젝트가 아직 없다.** 복제本이 곧 백업이므로,
-> **stg 생성·복제·검증이 끝나기 전에는 운영을 절대 건드리지 않는다.**
+> ~~**stg 생성·복제·검증이 끝나기 전에는 운영을 절대 건드리지 않는다.**~~
+> → **정정(2026-08-07): 실제 실행은 이 순서를 따르지 않았다.** 실화폐 결제 0건·실유저 0명을 먼저 확인하고
+> **stg 복제를 건너뛴 채 운영 초기화를 먼저 수행**했다(백업은 pg_dump가 아니라 **JSON 655행**으로 갈음 — §4).
+> stg는 그 뒤 **빈 DB에서 새로 시작**했다. **아래 §1~§2·G1~G5는 "복제 경유" 원본 계획으로 보존**하고,
+> **실제로 일어난 일과 현재 절차는 §3.5(그리고 롤백은 §4)를 정본으로 본다.**
 
 ---
 
@@ -23,9 +27,14 @@
 
 1. **Supabase 운영 A → Pro** 전환 (오늘). 연결문자열 불변 = 재배포 불필요.
 2. **신규 Supabase 프로젝트 B 생성** = `volleyball-stg`
-   - Organization: 운영과 같은 조직(Pro가 조직 단위면 stg도 커버)
-   - Region: **운영과 동일**(지연·정합)
+   - ~~Organization: 운영과 같은 조직(Pro가 조직 단위면 stg도 커버)~~
+     → **정정(2026-08-07 실행): 별도 Free 조직 `Vivace Staging`.** Pro는 **조직 단위 과금 + 프로젝트당 컴퓨트 $10**이라
+     같은 조직에 만들면 월 $10이 조용히 붙는다(§3.5.4 실측). Free 조직은 무료 — 채택.
+   - ~~Region: **운영과 동일**(지연·정합)~~
+     → **정정(2026-08-07 실행): `ap-southeast-1`(싱가포르).** 운영은 `ap-northeast-2`(서울)라 **리전이 다르다.**
+     stg는 실사용자가 없어 지연이 무관하고, 검증 대상은 스키마·로직이라 정합에도 무해하다고 판단.
    - DB Password: **새 강한 값**(운영과 다르게, 메모)
+     → ⚠ **2026-08-07 현재 prod와 stg 비밀번호가 동일**하다(인지·수용된 잔여 위험). 상세·해소 계획은 [SERVER_OPS §3.5.2 함정 ③](./SERVER_OPS.md).
 3. **연결문자열 2개**를 `server/.env.staging`의 TODO 두 줄에 직접 붙여넣기
    - `DATABASE_URL=` ← Transaction pooler(**:6543**)
    - `MIGRATE_DATABASE_URL=` ← Session/Direct(**:5432**)
@@ -53,6 +62,9 @@ G1  stg 스키마+데이터 = 운영 복제      →  G2 복제 검증(row 대�
 ### G1 — 운영 → stg 복제 (백업 겸)
 
 > stg는 **비어 있어야** 한다(별도 `drizzle-kit push` 하지 말 것 — 아래 덤프가 스키마까지 통째로 만든다).
+> ⚠ **단서(2026-08-07 추가): 이 "push 금지"는 아래 운영 덤프 복원 경로 한정**이다. 덤프 없이 stg를 새로 세우는
+> 경로(= 실제로 채택된 §3.5 경로)에서는 **정반대로 `drizzle-kit push`가 유일한 방법**이다 — 저장소에 0000 이전
+> 11개 테이블을 만드는 SQL이 없어 마이그레이션 파일만으로는 빈 DB가 안 선다(함정 ①·§3.5.5-3).
 
 ```bash
 cd server
@@ -231,7 +243,7 @@ prod DB의 `users`·`wallet_ledger` row 수가 **불변**임을 실측(A/B 대�
 | S8 | **격리 검증**(stg 쓰기 → prod row 수 불변 A/B) | 🤖 | 30분 | ✅ **완료 2026-08-07** — §3.5.7 실측표 + 상비 가드 `_dv_stgisolation` 등재(A/B 자가검증 통과) |
 | S9 | stg 앱 빌드(`EXPO_PUBLIC_SERVER_URL`=stg, RC/AdMob 키 공란) | 🤖 빌드 | 40분 | ⚠️ **아래 3.5.3 결정 필요** |
 | S10 | 실기기 설치 + E2E(로그인→쿠폰→전지훈련) | 🧑🤖 | 30분 | stg DB에만 기록되는지 눈확인 |
-| S11 | 문서화(SERVER_OPS에 stg 배포 절차 추가 + 가드 등재) | 🤖 | 20분 | |
+| S11 | 문서화(SERVER_OPS에 stg 배포 절차 추가 + 가드 등재) | 🤖 | 20분 | ✅ **완료 2026-08-07** — [SERVER_OPS](./SERVER_OPS.md) §0 세 환경 매트릭스 + §3.6 stg 배포 절차 신설, 가드 `_dv_stgisolation` 등재(README 검증 루틴, 배터리 밖·온디맨드) |
 
 #### ⚠️ S4·S5 실행 중 발견한 함정 2건 (2026-08-07 실측)
 
@@ -284,9 +296,25 @@ git branches`, Ignored Build Step=Automatic).
 2. **Environments = `Preview` 만**(Production 체크 해제) → **Select a Custom Preview Branch → `staging`**
 3. **Key 입력창에 `.env` 블록을 통째로 붙여넣으면** Vercel이 자동으로 여러 항목으로 쪼갠다(12개를 한 번에).
 4. **빈 값은 유효하며, "그 기능을 stg에서 끈다"는 뜻으로 쓴다** — 코드가 빈 값을 안전한 no-op로 처리하는 걸 확인함:
-   `notify.ts postDiscord` = `if (!url) return` · `sentryGate` = 빈 DSN이면 `false` · `ratelimit.ts` = KV 미설정 시
-   `{ok:true}`(fail-open). 따라서 `DISCORD_WEBHOOK_URL`·`SENTRY_DSN`·`KV_*`·`REDIS_URL`을 **빈 값으로 덮어써**
-   stg 테스트가 운영 알림 채널·운영 Sentry·운영 레이트리밋 카운터에 닿지 않게 한다.
+   `notify.ts postDiscord` = `if (!url) return` · `sentryGate` = 빈 DSN이면 `false` · `ratelimit.ts` = 미설정 시
+   `{ok:true}`(fail-open).
+   ~~따라서 `DISCORD_WEBHOOK_URL`·`SENTRY_DSN`·`KV_*`·`REDIS_URL`을 빈 값으로 덮어쓴다.~~
+   → **정정(2026-08-07 코드 실측): 키 목록이 틀렸다.** 실제로 코드가 읽는 키는 아래가 전부다.
+
+   | 계열 | stg에서 빈 값으로 덮을 키 | 근거(코드) |
+   |---|---|---|
+   | 디스코드 **3종** | `DISCORD_WEBHOOK_URL`(결제·폴백) · `DISCORD_TICKET_WEBHOOK_URL`(문의) · `DISCORD_SIGNUP_WEBHOOK_URL`(가입) | `server/lib/notify.ts` — 문의·가입은 전용 키 없으면 **`DISCORD_WEBHOOK_URL`로 폴백**하므로 폴백 키만 비워도 새지 않지만, 셋 다 비워 의도를 명시한다 |
+   | 디스코드 **동적** | `DISCORD_TICKET_WEBHOOK_URL_<PROJ>`(예: `…_MYWORD`) | `server/app/api/ticket/anon/route.ts` — proj별 채널. **프로젝트가 늘 때마다 키가 늘어난다** |
+   | Sentry | `SENTRY_DSN` | `server/lib/sentryGate.ts`(빈 DSN → `false`) |
+   | 레이트리밋 | `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN` **또는** `KV_REST_API_URL`/`KV_REST_API_TOKEN` | `server/lib/ratelimit.ts` — 두 이름 체계를 **모두 인식**(Vercel KV 통합 프리픽스에 따라 갈림) |
+   | ~~`REDIS_URL`~~ | **해당 없음 — 코드가 읽지 않는다** | grep 결과 참조 0건. Vercel KV 통합이 만들어 놓은 키일 뿐이라 덮어도 무의미 |
+
+   > 🔑 **규칙(앞으로)**: **운영에 새 알림·관측·레이트리밋 키를 추가하면, 같은 키를 stg(Preview/`staging`)에도
+   > 빈 값으로 함께 등록한다.** 안 하면 그 키만 운영 값을 상속해 **stg 테스트가 운영 채널로 샌다**(함정 ③의 재발 형태).
+   >
+   > **현재 상태(2026-08-07 실측)**: Vercel에 `DISCORD_TICKET_WEBHOOK_URL`·`DISCORD_SIGNUP_WEBHOOK_URL`·
+   > `UPSTASH_*`가 **아직 없어서** 지금은 새지 않는다. 즉 이건 **현재 사고가 아니라 미래 함정**이다 —
+   > 그 키들을 운영에 붙이는 순간(문의/가입 채널 분리·레이트리밋 활성화) 이 규칙을 반드시 같이 집행할 것.
 5. `RC_*`(결제)는 원래부터 `Production` 전용이라 stg엔 부재 — 별도 조치 불필요(결제 테스트 시 stg용 RC 앱 필요).
 6. **시크릿은 운영과 절대 공유하지 않는다.** JWT를 공유하면 stg에서 발급한 토큰이 운영에서도 유효해진다.
    등록 전 `fp()` 지문으로 prod↔stg가 서로 다른지 대조할 것.
@@ -376,7 +404,13 @@ git branches`, Ignored Build Step=Automatic).
 
 1. **env 덮어쓰기 사고 재발**([[vercel-link-clobbers-env]]) — `vercel link`/`env pull`을 **절대 실행하지 않는다**. Preview env는 대시보드에서만.
 2. **stg가 운영 원장·알림으로 새는 것** — RC·Discord·Sentry 키를 Preview 스코프에 **넣지 않음**(§2 원칙 6). S8 격리 검증으로 실측 확인.
-3. **마이그레이션 순서** — stg는 빈 DB라 0000부터 순차 적용. prod는 추적 테이블이 없는 push 스타일이라 절차가 다름([[prod-migration-apply-method]]) — **혼동 금지**.
+3. **마이그레이션 순서** — ~~stg는 빈 DB라 0000부터 순차 적용.~~
+   → **정정(2026-08-07 실측, 함정 ①): 빈 DB에 마이그레이션 파일을 순차 적용하면 실패한다.**
+   갈림길은 "빈 DB냐 기존 DB냐"다:
+   - **빈 DB 프로비저닝 = `drizzle-kit push`** (스키마 정의에서 직접 생성). 0000 이전 11개 테이블 생성 SQL이
+     저장소에 없어 파일 경로로는 FK가 깨진다(근거: `server/db/migrations/0000_add_devnotes.sql` 헤더 주석).
+   - **기존 DB 변경 = 마이그레이션 파일**(`generate`+`migrate`). 운영은 추적 테이블이 없는 push 스타일이라
+     누락 SQL 직접 적용 방식([[prod-migration-apply-method]]) — **혼동 금지**.
 4. **stg DB 비번 노출 금지** — `.env.staging`에 사용자가 직접 붙여넣고, 셸에서는 변수로만 참조·에코 금지(§0).
 5. **`proj_info` 시드 누락** — 모든 테이블이 `proj_code` FK라 시드가 없으면 서버가 전부 500. S4에 명시 포함.
 
@@ -385,8 +419,26 @@ git branches`, Ignored Build Step=Automatic).
 ## 4. 롤백 / 복구
 
 - **G4 이전**: 운영 무손상 — 그냥 중단하면 됨.
-- **G4 이후 되돌리려면**: `prod_public_backup_20260803.sql`(G1 덤프)을 운영에 복원. 단 초기화 후 유입된 실데이터가 있으면 충돌 — **출시 전, 유입 없을 때만 의미 있음**. 그래서 초기화는 **실오픈 직전**에.
-- 덤프 파일과 `prod_counts_before_reset_*.txt`는 **작업 후에도 최소 며칠 보관**.
+- ~~**G4 이후 되돌리려면**: `prod_public_backup_20260803.sql`(G1 덤프)을 운영에 복원.~~
+  → **정정(2026-08-07): 그 덤프 파일은 존재하지 않는다.** 실행 환경에 `psql`/`pg_dump`가 없어 G1 경로를 타지
+  않았고(§3.5 전제), 백업은 **서버 드라이버(postgres.js)로 테이블별 JSON을 떠서** 갈음했다.
+- **실제 복구 산출물 (2026-08-07 초기화의 유일한 원본)**
+  - **형식**: 테이블당 JSON 1개, **18파일 · 총 655행**(실측 재확인 2026-08-07: `users` 42 · `wallet_ledger` 215 ·
+    `purchase_event` 341 · `tickets` 12 · `save_backups` 6 · `coupons` 8 · `coupon_redemptions` 5 ·
+    `stats_daily` 14 · `diagnostic_snapshots` 7 · `announcements` 1 · `devnotes` 1 · `proj_info` 2 ·
+    `server_setting` 1 · 나머지 5테이블 0행).
+  - **경로(정본)**: **`C:\project\_backups\prod_backup_260807\`** — ✅ 영구 보관으로 이전 완료(2026-08-07).
+    **리포지토리 밖**이라 실유저 데이터가 커밋될 위험이 구조적으로 없다. 이전 후 18파일·655행 재검증 통과.
+  - ~~원본 위치: 세션 스크래치패드(`…\Temp\claude\…\scratchpad\prod_backup_260807\`)~~ →
+    🚨 **그 경로는 OS 임시 디렉터리라 휘발성이다**(세션 정리·재부팅·디스크 정리로 소멸). 위 영구 경로를 쓴다.
+    둘 다 사라졌다면 복구 수단은 **Supabase Pro 일일 백업**(2026-08-07 전환, §3.5.1-1)뿐이다.
+  - **무결성 확인법**(복구 전 필수): 18파일 전부 `JSON.parse` 성공 + 합계 655행.
+    `attendance_passes`·`mails`·`mail_broadcasts`·`mail_broadcast_receipts`·`season_telemetry` 5개는 **0행이 정상**(2B 빈 배열).
+  - **복원 방법**: SQL 덤프가 아니므로 `psql -f`로는 못 넣는다. FK 순서대로(`proj_info` → `users` → 나머지)
+    드라이버로 재삽입해야 한다(`coupons.target_user_id → users` FK 주의 — 실행 중 발견된 CASCADE 함정과 같은 뿌리).
+  - 단 초기화 후 유입된 실데이터가 있으면 충돌 — **출시 전, 유입 없을 때만 의미 있음**.
+- ~~덤프 파일과 `prod_counts_before_reset_*.txt`~~ → **정정: 위 JSON 18파일**이 그 역할을 겸한다(카운트도 파일에서 산출 가능).
+  **작업 후에도 최소 며칠 보관** — 위 휘발성 경고 참조.
 
 ---
 
