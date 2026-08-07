@@ -80,7 +80,7 @@
 - 🔴 ⬜ **RevenueCat 연동** — `react-native-purchases` SDK(EAS), 로그인 직후 `Purchases.logIn(userId)`(app_user_id=우리 userId — 최대 함정). SKU를 RC 대시보드에 등록. (BACKEND §13.18)
 - 🔴 ⬜ **RC 웹훅 + 폴백** — `POST /api/purchase/webhook/revenuecat`(Authorization 시크릿 검증)·`POST /api/purchase/confirm`(클라 폴백). 멱등키 `purchase:<userId>:<storeTxnId>`. 샌드박스(`environment:SANDBOX`) 필터. (§13.18)
 - 🔴 ⬜ **RC 환불 웹훅** — CANCELLATION/REFUND → 다이아 음수 차감(`refund:<userId>:<storeTxnId>`). 관리자 수동 환불(§13.17)과 이중차감 방지 규칙. (§13.18)
-- 🟡 ⬜ **수입 롤업에 환불 반영** — `rollupRecent`가 `reason='purchase'`만 집계 → 실환불 붙으면 순매출 과대계상. 재무진실=RC 대시보드, KRW 필요 시 RC 웹훅 `price_in_purchased_currency` 적재. (`server/lib/retention.ts` TODO, §13.17·§13.18)
+- 🟡 ✅ **수입 롤업에 환불 반영**(2026-08-07 — 실결제·실환불로 실증 후 수정) — ~~`rollupRecent`가 `reason='purchase'`만 집계 → 실환불 붙으면 순매출 과대계상.~~ 실환불(`dia_500` ₩4,800) 처리 시 다이아 −500은 정상인데 **관리자 "오늘 매출"이 ₩4,800 그대로**(= 예고된 과대계상 실현). **`reverseRevenueKrwOnce(storeTxnId)`** 신설로 환불 웹훅이 `statsDaily.revenueKrw`를 차감 — 금액은 **원구매의 `revenue.krw` 마커 행 price**에서 회수(환불 웹훅 바디는 `price=0`이라 신뢰 금지), `revenue.krw.refund` 마커로 멱등(재전송 이중차감 0), 귀속일=환불일, 음수 클램프 없음. `purchaseCount`·`diamondsPurchased`는 **gross 정의로 고정**(크론 `rollupRecent`가 원장에서 덮어쓰므로 감산 불가) — 환불 측은 `admin/series?metric=refund`로 분리 조회. 가드 `_dv_purchase.ts` **A2**(A/B 민감도 포함). (§13.18 A2·§13.17)
 - 🟢 ⬜ 스토어 결제 크레덴셜(구글 서비스계정·애플 `.p8`)은 **RC 대시보드에 등록**(우리 서버 미보관). 웹훅 시크릿만 `.env`.
 
 ---

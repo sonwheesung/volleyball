@@ -4,7 +4,7 @@
 // **감사 로깅(§13.22)**: 단계마다 purchase_event 1행 — 관찰 전용(fire-and-forget).
 import { NextResponse } from 'next/server';
 import { applyWallet } from '../../../../../lib/wallet';
-import { verifyWebhookAuth, decidePurchaseEvent, refundKey, recordPurchaseRevenue, recordRevenueKrwOnce, priceKrwOf } from '../../../../../lib/revenuecat';
+import { verifyWebhookAuth, decidePurchaseEvent, refundKey, recordPurchaseRevenue, recordRevenueKrwOnce, reverseRevenueKrwOnce, priceKrwOf } from '../../../../../lib/revenuecat';
 import { applyPurchaseGrant, clawbackPass, reversePackBonus } from '../../../../../lib/pass';
 import { logPaymentEventAfter } from '../../../../../lib/paymentLog';
 import { notifyPurchase, notifyRefundDropped } from '../../../../../lib/notify';
@@ -26,6 +26,22 @@ function evMeta(ev: unknown): { rcEventId: string | null; eventType: string | nu
     price: priceKrwOf(e),
     currency: e.currency != null ? String(e.currency) : null,
   };
+}
+
+/** 환불 KRW 차감 + 관측(§13.18 A2) — 팩·패스 환불 공통. 금액은 **원구매 `revenue.krw` 마커**에서 회수한다(실측한 환불
+ *  웹훅 바디는 price=0이라 신뢰 금지). `revenue.krw.refund` 마커 멱등이라 applied·deduped 양쪽에서 불러도 1회만 반영
+ *  (구매 경로가 A1 KRW 보충을 양쪽에서 부르는 것과 대칭 — 첫 배송에서 못 차감했으면 재전송이 메꾼다).
+ *  차감 성공 = 마커행(price=음수) + 이 감사행. 원구매 적재이력이 없으면(no-origin: 샌드박스·비KRW·구매웹훅 미도달)
+ *  마커를 남기지 않으므로 **ok:true·ignored**로만 기록한다(정상 케이스 — ⑨ 오류 지표 ok=false 오염 금지). */
+async function reverseRevenueKrwAndLog(m: ReturnType<typeof evMeta>, userId: string, productId: string, storeTxnId: string): Promise<void> {
+  const rev = await reverseRevenueKrwOnce(storeTxnId);
+  if (rev === 'skipped') return; // 이미 차감됨(재전송) — 무소음
+  logPaymentEventAfter({
+    source: 'webhook',
+    stage: rev === 'reversed' ? 'webhook.revenue.krw.refunded' : 'webhook.revenue.krw.refund.noorigin',
+    ok: true, outcome: rev === 'reversed' ? 'applied' : 'ignored', reasonCode: rev === 'reversed' ? undefined : 'no-origin',
+    ...m, userId, productId, storeTxnId,
+  });
 }
 
 export async function POST(req: Request) {
@@ -77,6 +93,8 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, reason: cb.reason }, { status: 500 });
       }
       logPaymentEventAfter({ source: 'webhook', stage: 'webhook.pass.refund.applied', ok: true, outcome: cb.outcome === 'clawed' ? 'applied' : 'deduped', reasonCode: cb.outcome, ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: -cb.clawback });
+      // 순매출 차감(§13.18 A2) — 패스 지급도 KRW를 적재하므로(위 recordPurchaseRevenue) 환불도 대칭으로 되돌린다. 샌드박스는 적재 자체가 없어 스킵.
+      if (!d.sandbox) await reverseRevenueKrwAndLog(m, d.userId, d.productId, d.storeTxnId);
       if (cb.outcome === 'clawed') afterSafe(() => notifyPurchase({ kind: 'refund', productId: d.productId, diamonds: cb.clawback, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
       return NextResponse.json({ ok: true, applied: cb.outcome === 'clawed', clawback: cb.clawback });
     }
@@ -119,6 +137,10 @@ export async function POST(req: Request) {
       ok: true, outcome: r.applied ? 'applied' : 'deduped',
       ...m, userId: d.userId, productId: d.productId, storeTxnId: d.storeTxnId, diamondsDelta: -(d.diamonds + bonusRev.reversed), balanceAfter: r.balance, price: d.priceKrw,
     });
+    // 순매출 차감(§13.18 A2, 2026-08-07 실환불 실증) — 구버그: 다이아만 회수하고 statsDaily.revenueKrw는 그대로여서 관리자
+    //   "오늘 매출"이 환불 후에도 원가 그대로였다. 금액은 원구매 `revenue.krw` 마커에서 회수(환불 웹훅 바디 price=0).
+    //   applied·deduped 양쪽에서 호출(마커 멱등 — 이중 차감 0). 샌드박스는 적재를 안 했으므로 스킵(D1 3경로 대칭).
+    if (!d.sandbox) await reverseRevenueKrwAndLog(m, d.userId, d.productId, d.storeTxnId);
     if (r.applied) afterSafe(() => notifyPurchase({ kind: 'refund', productId: d.productId, diamonds: d.diamonds + bonusRev.reversed, priceKrw: d.priceKrw, environment: m!.environment, source: 'webhook', userId: d.userId }));
     return NextResponse.json({ ok: true, applied: r.applied, balance: r.balance });
   } catch (e) {

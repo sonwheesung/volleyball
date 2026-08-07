@@ -141,6 +141,51 @@ export async function recordRevenueKrwOnce(storeTxnId: string, priceKrw: number 
   });
 }
 
+/** 환불 시 KRW를 stats_daily에서 **딱 한 번만** 차감(멱등) — `recordRevenueKrwOnce`의 **대칭 짝**(§13.18 A2, 2026-08-07
+ *  실환불 실증). 구버그: `revenueKrw`를 쓰는 함수가 가산 하나뿐이라 실환불 후에도 관리자 "오늘 매출"이 그대로였다(단조 증가).
+ *  ⚠ **금액은 웹훅 바디에서 읽지 않는다** — 실측한 CANCELLATION 이벤트는 `price=0`(가격 미제공)이라 바디를 쓰면 0 차감이
+ *    되어 무의미. 대신 **원구매가 적재할 때 남긴 `revenue.krw` 마커 행의 price**를 storeTxnId로 되찾아 그만큼만 되돌린다
+ *    (불변식: Σ차감 ≤ Σ적재 — 다이아 건수 역산 금지와 같은 결).
+ *  멱등 판별 = `revenue.krw.refund` 마커 존재 여부(구매 마커와 같은 패턴·**새 테이블 금지**). 마커확인+원구매조회+차감+마커
+ *  기록을 한 트랜잭션으로 원자화 → 환불 웹훅 재전송(CANCELLATION 후 REFUND 등)에도 이중 차감 0.
+ *  **귀속일 = 환불일(오늘 UTC)** — 원구매일 소급 수정 아님(스토어·RC 리포트와 같은 contra-revenue 관행, 과거 대시보드 수치
+ *  불변). **음수 클램프 안 함**(GREATEST(0,…) 기각 — 판매 0인 날의 환불을 잘라내면 차감이 영구 소실돼 총매출이 다시
+ *  과대계상된다. 음수 잔액을 clamp 없이 표시하는 §13.17 P0-1과 같은 결).
+ *  **건수·다이아는 여기서 안 건드린다**: `purchaseCount`/`diamondsPurchased`는 크론 `rollupRecent`가 원장 gross로 **덮어쓰는**
+ *  값이라 감산해도 다음 크론이 원복시킨다(사라지는 감산). 정의 = 건수·다이아는 gross, revenueKrw는 net(§13.18 A2).
+ *  ⚠ **부분환불 미지원**(현재 소모성 팩 전액환불만 존재): 항상 원구매 적재액 **전액**을 차감한다. 향후 부분환불 이벤트가
+ *    오면 과다 차감이 되므로, 그때는 바디의 부분 금액을 신뢰하고 마커를 txn당 1행 → **누적 다행**(Σ차감 ≤ Σ적재 검사)으로
+ *    바꿔야 한다.
+ *  반환: 실제 차감/기차감 스킵/원구매 적재이력 없음(no-origin — 마커를 남기지 않아 순서역전 시 재전송이 뒤늦게 차감 가능). */
+export async function reverseRevenueKrwOnce(storeTxnId: string): Promise<'reversed' | 'skipped' | 'no-origin'> {
+  if (!storeTxnId) return 'no-origin';
+  await ensureProj();
+  const day = new Date().toISOString().slice(0, 10); // UTC 달력일 = 환불일 귀속
+  return await db.transaction(async (tx) => {
+    const dup = await tx
+      .select({ id: purchaseEvent.id })
+      .from(purchaseEvent)
+      .where(and(eq(purchaseEvent.projCode, PROJ_CODE), eq(purchaseEvent.storeTxnId, storeTxnId), eq(purchaseEvent.stage, 'revenue.krw.refund')))
+      .limit(1);
+    if (dup.length) return 'skipped' as const;
+    // 원구매 적재액(= 되돌릴 금액). 이 마커는 recordRevenueKrwOnce만 기록하고 txn당 1행이라 자연 유일.
+    const origin = await tx
+      .select({ price: purchaseEvent.price })
+      .from(purchaseEvent)
+      .where(and(eq(purchaseEvent.projCode, PROJ_CODE), eq(purchaseEvent.storeTxnId, storeTxnId), eq(purchaseEvent.stage, 'revenue.krw')))
+      .limit(1);
+    const amount = origin[0]?.price ?? null;
+    if (amount == null || amount <= 0) return 'no-origin' as const; // 적재된 적 없음(샌드박스·비KRW·웹훅 미도달) → 되돌릴 것 없음
+    await tx
+      .insert(statsDaily)
+      .values({ projCode: PROJ_CODE, day, revenueKrw: -amount, purchaseCount: 0, diamondsPurchased: 0 })
+      .onConflictDoUpdate({ target: [statsDaily.projCode, statsDaily.day], set: { revenueKrw: sql`${statsDaily.revenueKrw} - ${amount}`, updatedAt: sql`now()` } });
+    // 차감 멱등 마커(이 stage는 이 함수만 기록). price는 음수로 남겨 관리자 payment-events에서 차감임이 드러나게.
+    await tx.insert(purchaseEvent).values({ projCode: PROJ_CODE, source: 'webhook', stage: 'revenue.krw.refund', ok: true, outcome: 'applied', storeTxnId, price: -amount });
+    return 'reversed' as const;
+  });
+}
+
 /** 매출 **건수·다이아** 롤업 — 지급이 **실제 적용된(applied)** 경우만 1회(멱등: 원장 지급이 1회라 자연 1회). KRW는
  *  recordRevenueKrwOnce로 분리(confirm 선착 시 null→나중 웹훅이 txn 단위 멱등 보충). 관리자 대시보드 매출/전환율 원천. */
 export async function recordPurchaseRevenue(priceKrw: number | null, diamonds: number, storeTxnId: string): Promise<void> {

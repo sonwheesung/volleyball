@@ -253,6 +253,22 @@ export async function createUser(providerId: string, provider: string, ageConfir
   return inserted[0].id;
 }
 
+/** 누적 실가입 수(§13.28) — 이 proj에서 **연령 게이트를 통과한 진짜 가입**(`ageConfirmedAt` not null)만 센다.
+ *  `ageConfirmedAt`은 createUser만 박으므로 ensureUser가 만든 dev/가드 행·익명 문의 유저(provider=anon)는 자연 제외.
+ *  탈퇴 행도 포함 — "누적 가입"의 정의(탈퇴해도 가입은 있었다). 신규 가입 알림의 "N번째" 표기용.
+ *  **throw-none**: 관측용 부수 지표라 실패 시 null(알림은 '—'로 나가고 가입 흐름엔 영향 0). */
+export async function countSignups(): Promise<number | null> {
+  try {
+    const rows = await db
+      .select({ n: sql<number>`count(*)::int` })
+      .from(users)
+      .where(and(eq(users.projCode, PROJ_CODE), sql`${users.ageConfirmedAt} is not null`));
+    return rows[0]?.n ?? null;
+  } catch {
+    return null; // 카운트 실패가 알림/가입을 막지 않는다
+  }
+}
+
 /** 탈퇴 — 가명처리 소프트삭제(AUTH §7.1). providerId 비복원 파기(재로그인 매칭 불가+UNIQUE 슬롯 해제)·비필수 PII null·
  *  deletedAt 마킹. **잔액·원장은 보존**(법정 5년). 멱등: 이미 삭제면 false, 이번에 삭제하면 true. */
 export async function pseudonymizeUser(userId: string): Promise<boolean> {

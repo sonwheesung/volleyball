@@ -6,7 +6,7 @@ process.env.RC_WEBHOOK_SECRET = 'test-secret-abcdef0123456789'; // ≥16자(fail
 process.env.RC_REST_API_KEY = 'test-rc-key-abcdef0123456789'; // confirm 폴백 rcVerifyPurchase가 활성화되게(모듈 const라 import 전 주입) — 실 네트워크는 fetch stub로 대체
 
 (async () => {
-  const { decidePurchaseEvent, verifyWebhookAuth, priceKrwOf, purchaseKey, refundKey, rcVerifyPurchase } = await import('../lib/revenuecat');
+  const { decidePurchaseEvent, verifyWebhookAuth, priceKrwOf, purchaseKey, refundKey, rcVerifyPurchase, recordRevenueKrwOnce, reverseRevenueKrwOnce } = await import('../lib/revenuecat');
   const { productDiamonds, DIAMOND_PRODUCTS } = await import('../lib/products');
   const { db } = await import('../db');
   const { walletLedger, users, statsDaily, purchaseEvent } = await import('../db/schema');
@@ -247,6 +247,46 @@ process.env.RC_REST_API_KEY = 'test-rc-key-abcdef0123456789'; // confirm 폴백 
   // 멱등: 웹훅 재시도(같은 txn) → KRW 이중집계 없음
   await post({ app_user_id: uid, transaction_id: A1_TXN, environment: 'PRODUCTION', type: 'NON_RENEWING_PURCHASE', product_id: 'dia_1000', currency: 'KRW', price_in_purchased_currency: A1_PRICE }, SEC);
   ok((await readStats()).rev - revBefore === A1_PRICE, '  웹훅 재시도 → KRW 그대로(revenue.krw 마커로 멱등, 이중집계 0)');
+
+  console.log('── A2: 환불 시 KRW 차감 = 순매출(§13.18 A2, 2026-08-07 실환불 실증) ──');
+  // prod 실증: dia_500 ₩4,800 실환불 → 다이아 −500은 정상인데 관리자 "오늘 매출"이 ₩4,800 그대로(revenueKrw는 가산 함수뿐).
+  const A2_TXN = '_TEST_TXN_A2', A2_PRICE = 4800, A2_PID = 'dia_500';
+  const revA2Before = (await readStats()).rev, cntA2Before = (await readStats()).cnt, balA2Before = await bal();
+  const g2 = await (await post({ app_user_id: uid, transaction_id: A2_TXN, environment: 'PRODUCTION', type: 'NON_RENEWING_PURCHASE', product_id: A2_PID, currency: 'KRW', price_in_purchased_currency: A2_PRICE }, SEC)).json();
+  ok(g2.ok === true && g2.applied === true, `구매 웹훅(${A2_PID} ₩${A2_PRICE}) → applied true`);
+  ok((await readStats()).rev - revA2Before === A2_PRICE, `  매출 +₩${A2_PRICE} 적재(revenue.krw) — 실측 Δ${(await readStats()).rev - revA2Before}`);
+  // 환불 웹훅은 **prod 실측 형태**로: currency·price 미제공(실 CANCELLATION 3행 전부 price=0) → 바디 가격을 쓰면 0 차감.
+  const a2RefEv = { app_user_id: uid, transaction_id: A2_TXN, environment: 'PRODUCTION', type: 'CANCELLATION', product_id: A2_PID };
+  ok(priceKrwOf(a2RefEv as any) === null, '  (환불 웹훅 바디엔 가격이 없다 — priceKrwOf null. 바디 신뢰 시 차감 0이 될 지점)');
+  const rf2 = await (await post(a2RefEv, SEC)).json();
+  ok(rf2.ok === true && rf2.applied === true, '환불 웹훅(CANCELLATION) → applied true(다이아 회수)');
+  ok(await bal() === balA2Before, `  원장 원복(다이아 회수) — 실측 Δ${await bal() - balA2Before}`);
+  ok((await readStats()).rev - revA2Before === 0, `  ★ 매출 −₩${A2_PRICE} 차감 → 순매출 0 복귀(원구매 revenue.krw 마커 금액으로 회수) — 실측 Δ${(await readStats()).rev - revA2Before}`);
+  ok(await waitEvent(A2_TXN, 'revenue.krw.refund'), '  revenue.krw.refund 멱등 마커 1행(구매 revenue.krw와 대칭)');
+  ok(await waitEvent(A2_TXN, 'webhook.revenue.krw.refunded'), '  webhook.revenue.krw.refunded 감사행(귀속·상품 컨텍스트)');
+  // 멱등 — RC 재전송(REFUND 타입·CANCELLATION 재전송) → 이중 차감 0
+  await post({ ...a2RefEv, type: 'REFUND' }, SEC);
+  await post(a2RefEv, SEC);
+  ok((await readStats()).rev - revA2Before === 0, `  환불 재전송 ×2(REFUND·CANCELLATION) → 이중 차감 0(마커 멱등) — 실측 Δ${(await readStats()).rev - revA2Before}`);
+  ok((await readStats()).cnt - cntA2Before === 1, `  purchaseCount는 gross 유지(1) — 크론 rollupRecent가 원장 gross로 덮어쓰므로 감산 불가(§13.18 A2 정의) — 실측 Δ${(await readStats()).cnt - cntA2Before}`);
+  // [A/B] 구로직(환불 KRW 차감 부재) 재현 — 프로덕션 코드 무변, 같은 시나리오를 lib 호출로 조립: 구매 KRW 적재 + 환불은 원장 회수만.
+  const AB_TXN = '_TEST_TXN_A2AB';
+  const revAbBefore = (await readStats()).rev;
+  await recordRevenueKrwOnce(AB_TXN, A2_PRICE);
+  await applyWallet(uid!, -500, 'refund', refundKey(uid!, AB_TXN), A2_PID); // 구 환불 경로 = 원장 클로백만
+  ok((await readStats()).rev - revAbBefore === A2_PRICE, `  [A/B] 구로직(원장만 회수) → 매출 ₩${A2_PRICE} 잔존 = "환불했는데 오늘 매출 그대로" 버그 재현 — 실측 Δ${(await readStats()).rev - revAbBefore}`);
+  const abRev = await reverseRevenueKrwOnce(AB_TXN);
+  ok(abRev === 'reversed' && (await readStats()).rev - revAbBefore === 0, `  [A/B] 신 함수 적용 → 같은 데이터가 순매출 0(민감도 증명) — 실측 ${abRev}·Δ${(await readStats()).rev - revAbBefore}`);
+  ok(await reverseRevenueKrwOnce(AB_TXN) === 'skipped', '  [A/B] 재호출 → skipped(마커 멱등 — 이중 차감 불가)');
+  // no-origin: 적재 이력 없는 txn → 차감 0(Σ차감 ≤ Σ적재) + 마커 미기록이라 순서역전(환불 선착) 시 나중에 차감 가능
+  const NO_TXN = '_TEST_TXN_A2NOORIG';
+  const revNoBefore = (await readStats()).rev;
+  ok(await reverseRevenueKrwOnce(NO_TXN) === 'no-origin' && (await readStats()).rev - revNoBefore === 0, 'no-origin: 원구매 적재 이력 없는 txn → 차감 0(적재 이상 되돌리지 않음)');
+  await recordRevenueKrwOnce(NO_TXN, 1000);
+  ok(await reverseRevenueKrwOnce(NO_TXN) === 'reversed' && (await readStats()).rev - revNoBefore === 0, '  no-origin은 마커를 안 남김 → 뒤늦게 적재되면 그때 차감 가능(순서역전 복구) — 순 Δ0');
+  // ※ 패스(diamond_pass) 환불의 KRW 대칭 차감은 라우트에 동일 호출로 배선돼 있으나 **이 가드 DB에선 미검증** —
+  //   dev_pg에 attendance_passes·mails 테이블이 없어 패스 경로 자체가 안 돈다(패스 계열은 `_dv_pass_live`가 담당,
+  //   마이그레이션 적용된 DB 필요). 팩 경로와 같은 함수·같은 호출 형태라 위 A2 케이스가 함수 계약을 봉인한다.
 
   console.log('── 부채 상환: 음수 잔액 탈출(게이트 차감 전용 §13.17 P0-1, 결제표면 감사 P1) ──');
   // 머니크리티컬: 게이트가 delta 부호를 미구분해 적립까지 거부하던 음수 탈출 불가 트랩을 A/B로 봉인.

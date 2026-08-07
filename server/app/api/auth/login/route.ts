@@ -7,7 +7,10 @@ import { reportError } from '../../../../lib/observability';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { users } from '../../../../db/schema';
-import { findUserRow, createUser } from '../../../../lib/wallet';
+import { findUserRow, createUser, countSignups } from '../../../../lib/wallet';
+import { afterSafe } from '../../../../lib/afterSafe';
+import { notifySignup } from '../../../../lib/notify';
+import { PROJ_CODE } from '../../../../lib/proj';
 import { signToken } from '../../../../lib/auth';
 import { verifyGoogleIdToken } from '../../../../lib/googleVerify';
 import { checkLimit, clientIp } from '../../../../lib/ratelimit';
@@ -50,6 +53,22 @@ export async function POST(req: Request) {
         return NextResponse.json({ ok: false, reason: 'age-required' }, { status: 400 });
       }
       userId = await createUser(providerId, provider, new Date()); // 연령 확인 시점 기록(AUTH §8.2)
+      // ★ 신규 가입 디스코드 알림(§13.28) — **이 분기만이 "진짜 첫 가입"**이다.
+      //   기존 계정은 위 if(found && !found.deletedAt)에서 잡혀 여기 도달조차 안 하므로 재로그인 무발화가 구조로 보장된다.
+      //   (ensureUser는 저수준 upsert=매 로그인 경로라 알림 자리가 아님 — §13.28 판단 근거)
+      //   afterSafe = **응답 후** 실행 → 가입 응답 지연 0. 콜백 내부는 전부 throw-none(countSignups·notifySignup)이라
+      //   디스코드/DB가 죽어도 가입은 성공한다(관측 채널이 머니패스/사용자 대기 경로를 오염시키지 않는다 §13.22).
+      const newUserId = userId;
+      afterSafe(async () => {
+        await notifySignup({
+          userId: newUserId,
+          provider,
+          platform: str(body.device?.platform),
+          appVersion: str(body.device?.appVersion),
+          totalSignups: await countSignups(), // throw-none(실패 시 null)
+          projCode: PROJ_CODE,
+        });
+      });
     }
     // 진단 기기정보 갱신(§13.17 §A) — 마지막 로그인 기기. lastSeenAt은 DB now()(클럭 일관)
     const d = body.device;

@@ -1,10 +1,11 @@
-// 디스코드 알림 (BACKEND_SYSTEM §13.22) — 결제/환불·신규 문의를 디스코드 채널로 통지.
+// 디스코드 알림 (BACKEND_SYSTEM §13.22·§13.28) — 결제/환불·신규 문의·신규 가입을 디스코드 채널로 통지.
 //
 // 원칙: **웹훅 URL 미설정이면 완전 no-op**(dev·미연결 무해). **절대 throw 없음**(알림 실패가 요청 흐름과 무관).
 //   호출은 라우트에서 `after(() => notifyXxx(...))`로 **응답 후** 실행(응답 지연 0 — 서버리스 freeze 유실 방지 §13.22).
 //   결제 알림은 **정확히 1건**: 웹훅·confirm 중 원장에 실제 반영된(applied=true) 쪽만 → 멱등 dedup으로 중복 없음.
 //   PII 금지(§E): 이메일·이름 없음. userId는 뒤 6자만 마스킹. 문의 본문은 사용자가 직접 쓴 것이라 표시하되 길이 컷.
 //   채널: 결제=`DISCORD_WEBHOOK_URL`. 문의=`DISCORD_TICKET_WEBHOOK_URL`(없으면 결제 채널로 폴백).
+//        가입=`DISCORD_SIGNUP_WEBHOOK_URL`(없으면 결제 채널로 폴백, §13.28).
 
 /** 공통 전송 — url 없으면 no-op, 실패는 삼킴, 4초 타임아웃. */
 async function postDiscord(url: string, username: string, embed: Record<string, unknown>): Promise<void> {
@@ -111,5 +112,38 @@ export async function notifyTicket(n: TicketNotice): Promise<void> {
     ],
     footer: { text: `ticket ${n.ticketId}` },
     timestamp: new Date().toISOString(),
+  });
+}
+
+const PROVIDER_KO: Record<string, string> = { google: '🟢 Google', apple: '🍎 Apple', dev: '🧪 dev' };
+
+export interface SignupNotice {
+  userId: string;              // 표시는 maskUser(뒤 6자) — 원문 절대 미전송
+  provider: string;            // google | apple | dev
+  platform?: string | null;    // android | ios
+  appVersion?: string | null;
+  totalSignups?: number | null; // 누적 실가입 수(countSignups). 조회 실패면 null → '—'
+  projCode?: string | null;    // 멀티프로젝트 채널 오독 방지(§13.2) — footer 표기용
+}
+
+/** 신규 가입(진짜 첫 가입) 1건 디스코드 통지 — §13.28. 로그인 라우트의 **createUser 성공 직후**에서만 호출한다
+ *  (ensureUser=저수준 upsert는 매 로그인 경로라 "가입"이 아님). 재로그인은 findUserRow 히트로 이 분기에 도달조차 안 함.
+ *  채널: DISCORD_SIGNUP_WEBHOOK_URL → DISCORD_WEBHOOK_URL 폴백 → 둘 다 없으면 no-op.
+ *  PII 금지: displayName·이메일·providerId(구글 sub)·userId 원문 미전송(§13.9).
+ *  no-op·throw-none — 라우트에서 afterSafe()로 감싸 **응답 후** 전송(가입 응답 지연 0·실패해도 가입 성공). */
+export async function notifySignup(n: SignupNotice): Promise<void> {
+  const url = process.env.DISCORD_SIGNUP_WEBHOOK_URL || process.env.DISCORD_WEBHOOK_URL || ''; // 호출 시점 읽기
+  await postDiscord(url, '배구명가 가입', {
+    title: '🎉 신규 가입',
+    color: 0x9b59b6,
+    fields: [
+      { name: '가입 경로', value: PROVIDER_KO[n.provider] ?? n.provider ?? '—', inline: true },
+      { name: '기기', value: `${n.platform ?? '—'}${n.appVersion ? ` · v${n.appVersion}` : ''}`, inline: true },
+      // 방금 만든 행이 카운트에 포함되므로 "N번째". 실패(null)면 '—' — 알림 자체는 그대로 나간다.
+      { name: '누적 가입', value: n.totalSignups != null ? `${n.totalSignups.toLocaleString()}번째` : '—', inline: true },
+      { name: '유저', value: maskUser(n.userId), inline: true },
+    ],
+    footer: { text: `proj ${n.projCode ?? '-'}` },
+    timestamp: new Date().toISOString(), // 가입 시각(서버 런타임 — 엔진/시드 무관)
   });
 }

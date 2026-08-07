@@ -17,8 +17,12 @@ export const RETENTION_DAYS = {
 
 /** 최근 2일 결제·신규가입을 stats_daily로 재집계 upsert(멱등). 수입 원본이 파기돼도 여기 집계는 영구 생존. */
 export async function rollupRecent(): Promise<number> {
-  // TODO(#43): 실 결제환불 웹훅 붙으면 reason='refund'를 순매출에서 차감해야 함(현재는 다이아 회수라 매출 무관 — 과대계상 주의).
-  // 결제 원장 일별 집계(현재: 다이아 지급 카운트/합. KRW 매출은 Purchase 테이블 #43 연결 시 채움)
+  // ~~TODO(#43): 실 결제환불 웹훅 붙으면 reason='refund'를 순매출에서 차감~~ → **해소(2026-08-07, §13.18 A2 — 실환불 실증)**:
+  //   여기(크론 재집계)는 **gross 전용**으로 정의 확정 — purchaseCount·diamondsPurchased는 원장 reason='purchase'에서
+  //   **덮어쓰기 upsert**라 환불 감산을 넣어도 다음 크론이 gross로 원복시킨다(사라지는 감산). **순매출(KRW)은 이 함수가
+  //   아예 안 건드리는 statsDaily.revenueKrw에서** 환불 웹훅이 `reverseRevenueKrwOnce(storeTxnId)`로 차감한다
+  //   (원구매 `revenue.krw` 마커 금액 회수 + `revenue.krw.refund` 마커 멱등). 환불 건수·다이아는 admin/series?metric=refund.
+  // 결제 원장 일별 집계(현재: 다이아 지급 카운트/합 = gross. KRW 매출은 revenueKrw 라이터가 별도 — 여기서 미기입)
   // §13.18 D1 — 샌드박스 집계 제외(웹훅·크론·관리자 3경로 대칭): statsDaily의 두 라이터(이벤트 시 증분 recordPurchaseRevenue +
   //   여기 크론 재집계)가 같은 행을 쓰므로, 웹훅이 제외한 샌드박스 지급(ref='<productId>:sandbox')을 이 재집계도 대칭 제외해야
   //   덮어쓰기로 필터가 무효화되지 않는다. reason='purchase' 행의 ref는 실제로 non-null이나 NULL-안전하게 처리.
