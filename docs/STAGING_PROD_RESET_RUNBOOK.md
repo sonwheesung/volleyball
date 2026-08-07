@@ -228,7 +228,7 @@ prod DB의 `users`·`wallet_ledger` row 수가 **불변**임을 실측(A/B 대�
 | S5 | `staging` 브랜치 생성 + push → Vercel Preview 자동배포 확인 | 🤖 | 15분 | ✅ **완료** — `server/` 건드리는 커밋 필요(함정 ②). stg 주소 `volleyball-git-staging-sonws.vercel.app` |
 | S6 | Vercel **Preview 스코프 env** 등록(stg DB·JWT·ADMIN·CRON) | 🧑 값 입력 | 20분 | ✅ **완료** — 12개를 **Preview + `staging` 브랜치 지정**으로. **아래 §3.5.6 방식·함정 ③④ 참조** |
 | S7 | stg 서버 **스모크**(`/api/devnotes`·`/api/bootstrap` 200) | 🤖 | 10분 | ✅ **완료** — `/api/health` 200(dbRef=stg)·`/api/bootstrap` 200(공지 `[]` = 운영과 다른 DB) |
-| S8 | **격리 검증**(stg 쓰기 → prod row 수 불변 A/B) | 🤖 | 30분 | ✅ **통과 2026-08-07** — 아래 §3.5.7 실측표. 가드 `_dv_stgisolation` 등재는 미완 |
+| S8 | **격리 검증**(stg 쓰기 → prod row 수 불변 A/B) | 🤖 | 30분 | ✅ **완료 2026-08-07** — §3.5.7 실측표 + 상비 가드 `_dv_stgisolation` 등재(A/B 자가검증 통과) |
 | S9 | stg 앱 빌드(`EXPO_PUBLIC_SERVER_URL`=stg, RC/AdMob 키 공란) | 🤖 빌드 | 40분 | ⚠️ **아래 3.5.3 결정 필요** |
 | S10 | 실기기 설치 + E2E(로그인→쿠폰→전지훈련) | 🧑🤖 | 30분 | stg DB에만 기록되는지 눈확인 |
 | S11 | 문서화(SERVER_OPS에 stg 배포 절차 추가 + 가드 등재) | 🤖 | 20분 | |
@@ -313,7 +313,16 @@ git branches`, Ignored Build Step=Automatic).
 > 읽기만으로는 "쓰기도 격리됐다"를 증명하지 못하므로 **실제 INSERT를 일으켜** 확인했다(추정 금지 원칙).
 > 익명 문의 라우트의 필드명은 `proj`·`content`(❌`projCode`·`message`)이고, `volleyball`은 allowlist에 없어
 > 404가 정상이다 — `myword`로 보내야 통과한다.
-> **미완**: 이 절차를 상비 가드 `_dv_stgisolation`으로 등재하는 일(S8 잔여).
+
+**상비 가드 `server/tools/_dv_stgisolation.ts`** (✅ 등재 2026-08-07) — `npx tsx tools/_dv_stgisolation.ts`
+격리는 한 번 확인하고 끝나는 게 아니라 **조용히 깨진다**(새 env를 "Production and Preview"로 추가하는 순간 재발).
+검사: **A** DB 호스트 분리 · **B** 시크릿 분리(JWT 공유 시 stg 토큰이 운영에서 유효) · **C** 자리표시자 잔존 ·
+**D** 연결 포트가 운영과 동형(6543) · **E** stg DB 실접속(18테이블·`proj_info` 시드).
+- **A/B 자가검증 완료**: DATABASE_URL을 운영 값으로·ADMIN_TOKEN을 자리표시자로 변이 주입 → 각각 FAIL·exit 1, 원복 후 PASS.
+- 변이 실행 중 발견해 고친 것: **A가 깨진 상태에서 E가 그대로 운영 DB에 접속**했다(읽기 전용이라 무해했으나
+  격리 가드가 운영을 건드리는 건 원칙 위반). 이제 A 실패면 프로브를 생략하고 종료한다.
+- **한계**: 이 가드는 **로컬 env 파일만** 본다. Vercel 대시보드 스코프는 못 본다 —
+  배포된 stg의 `/api/health` `dbRef`로 확인해야 하며, 가드가 그 기대값을 출력해 준다.
 
 ### 3.5.3 ⚠️ 설계 갈림길 — stg 앱을 어떻게 만들 것인가 (착수 전 결정 필수)
 
