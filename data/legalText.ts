@@ -5,8 +5,8 @@ export interface LegalDoc { title: string; updated: string; effective: string; i
 
 export const TERMS: LegalDoc = {
   title: '배구명가 이용약관',
-  updated: '2026-07-18',
-  effective: '서비스 출시일',
+  updated: '2026-08-07',
+  effective: '2026-08-07',
   sections: [
     { h: '제1조 (목적)', body: ['본 약관은 "배구명가"(이하 "게임")의 이용과 관련하여 운영자와 이용자의 권리, 의무 및 책임사항을 규정함을 목적으로 합니다.'] },
     { h: '제2조 (용어의 정의)', body: [
@@ -130,14 +130,14 @@ export const TERMS: LegalDoc = {
       '• 사업장 소재지: 울산광역시 중구 성안5길 22, 2층 204호(성안동)',
       '• 연락처: bjpio113@gmail.com (또는 게임 내 "문의하기")',
     ] },
-    { h: '부칙', body: ['본 약관은 서비스 출시일부터 시행합니다.'] },
+    { h: '부칙', body: ['본 약관은 2026년 8월 7일부터 시행합니다.'] },
   ],
 };
 
 export const POLICY: LegalDoc = {
   title: '배구명가 운영정책',
-  updated: '2026-07-18',
-  effective: '서비스 출시일',
+  updated: '2026-08-07',
+  effective: '2026-08-07',
   intro: '운영정책은 이용약관을 보완하며, 실제 운영 기준을 안내합니다. 약관과 정책이 상충할 경우 약관이 우선합니다.',
   sections: [
     { h: '1. 문의 처리', body: [
