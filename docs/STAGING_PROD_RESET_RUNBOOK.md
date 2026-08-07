@@ -225,10 +225,10 @@ prod DB의 `users`·`wallet_ledger` row 수가 **불변**임을 실측(A/B 대�
 | S2 | Supabase **stg 프로젝트 생성**(`volleyball-stg`) | 🧑 | 15분 | ✅ **완료** — 별도 Free 조직 `Vivace Staging`, ref `pdxdpzujeaxjweskecbv`, **ap-southeast-1(싱가포르)**, PG 17.6 |
 | S3 | stg 연결문자열 2개를 `server/.env.staging`에 **직접 붙여넣기** | 🧑 | 5분 | ✅ **완료** — 값은 사용자만 취급(채팅 미경유). 검증은 포트·프로젝트ref만 출력하는 방식으로 |
 | S4 | stg DB **스키마 생성** + 시드 | 🤖 | 20분 | ✅ **완료** — 18테이블(prod와 이름 완전 일치) + `proj_info`(volleyball·myword)·`server_setting` 시드. **⚠ 아래 함정 참조** |
-| S5 | `staging` 브랜치 생성 + push → Vercel Preview 자동배포 확인 | 🤖 | 15분 | 🔶 브랜치 생성·push 완료, **Preview 미생성 — 아래 함정 참조** |
-| S6 | Vercel **Preview 스코프 env** 등록(stg DB·JWT·ADMIN·CRON) | 🧑 값 입력 | 20분 | ⚠️ 대시보드에서 직접(`env pull` 금지 — 사고이력) |
-| S7 | stg 서버 **스모크**(`/api/devnotes`·`/api/bootstrap` 200) | 🤖 | 10분 | |
-| S8 | **격리 검증**(stg 쓰기 → prod row 수 불변 A/B) | 🤖 | 30분 | 통과 조건 실측. 전용 가드 `_dv_stgisolation` 신설 |
+| S5 | `staging` 브랜치 생성 + push → Vercel Preview 자동배포 확인 | 🤖 | 15분 | ✅ **완료** — `server/` 건드리는 커밋 필요(함정 ②). stg 주소 `volleyball-git-staging-sonws.vercel.app` |
+| S6 | Vercel **Preview 스코프 env** 등록(stg DB·JWT·ADMIN·CRON) | 🧑 값 입력 | 20분 | ✅ **완료** — 12개를 **Preview + `staging` 브랜치 지정**으로. **아래 §3.5.6 방식·함정 ③④ 참조** |
+| S7 | stg 서버 **스모크**(`/api/devnotes`·`/api/bootstrap` 200) | 🤖 | 10분 | ✅ **완료** — `/api/health` 200(dbRef=stg)·`/api/bootstrap` 200(공지 `[]` = 운영과 다른 DB) |
+| S8 | **격리 검증**(stg 쓰기 → prod row 수 불변 A/B) | 🤖 | 30분 | ✅ **통과 2026-08-07** — 아래 §3.5.7 실측표. 가드 `_dv_stgisolation` 등재는 미완 |
 | S9 | stg 앱 빌드(`EXPO_PUBLIC_SERVER_URL`=stg, RC/AdMob 키 공란) | 🤖 빌드 | 40분 | ⚠️ **아래 3.5.3 결정 필요** |
 | S10 | 실기기 설치 + E2E(로그인→쿠폰→전지훈련) | 🧑🤖 | 30분 | stg DB에만 기록되는지 눈확인 |
 | S11 | 문서화(SERVER_OPS에 stg 배포 절차 추가 + 가드 등재) | 🤖 | 20분 | |
@@ -243,8 +243,11 @@ devnotes만 추가한다"*. 즉 **0000 이전 11개 테이블(users·wallet_ledg
 빈 DB에 파일만 돌리면 FK 참조 대상이 없어 깨진다.
 → **빈 DB 프로비저닝 = `drizzle-kit push`**(스키마 정의에서 직접 생성), **기존 DB 변경 = 마이그레이션 파일.**
    두 경로가 다르다는 것을 혼동하지 말 것([[prod-migration-apply-method]]의 prod push-스타일과 같은 뿌리).
-   실행: `cd server && set -a && . ./.env.staging && set +a && npx drizzle-kit push --force`
+   실행: `cd server && DATABASE_URL="$(node -e '…_envsafe로 읽기…')" npx drizzle-kit push --force`
    (`drizzle.config.ts`가 `DATABASE_URL`을 읽으므로 stg env 주입으로 대상이 정해진다 — 주입 전 ref 대조 필수)
+   > 🚫 ~~`set -a && . ./.env.staging && set +a`~~ **금지(2026-08-07 사고)**: 값에 `#`·괄호 등이 있으면
+   > **쉘 파서가 실패하며 그 줄 전체를 stderr로 출력한다 — 비밀번호가 그대로 로그에 남는다.**
+   > env는 반드시 `server/tools/_envsafe.mjs`로 읽는다(함정 ④).
 **시드 필수**: 모든 테이블이 `proj_code` FK로 `proj_info`에 묶여 있어 **시드 없으면 전 라우트 500.**
    `proj_info`에 `volleyball`·`myword` 2행 + `server_setting`에 `volleyball` 1행(prod와 동일 구성).
 
@@ -257,6 +260,60 @@ git branches`, Ignored Build Step=Automatic).
 → 이 규칙은 평시엔 이득이다(문서·앱만 바꾼 커밋은 서버를 재배포하지 않는다). 배포 브랜치 정책은
    [[branch-deploy-flow]] 참조 — **`main` push = 즉시 운영 배포**이므로 유저 데이터·머니패스에 닿는
    `server/app/api`·`server/lib`·`server/db` 변경은 반드시 `staging`을 경유한다(관리자 화면·문서는 예외).
+
+**③ 🚨 Preview는 기본적으로 운영 env를 상속한다 — stg 서버가 운영 DB에 붙는다**
+프로젝트 env 18개 중 대부분이 **"Production and Preview"** 스코프였다(`DATABASE_URL` 포함).
+즉 **staging Preview가 뜨는 순간 운영 DB에 연결된 채로 동작한다.** 화면·응답은 정상이라 눈으로는 못 잡는다.
+실측: 첫 Preview의 `/api/health` → `dbRef 2b73921d4030`(= 운영). 앱 미연결 상태여서 오염은 0이었다.
+→ **해결: 같은 키를 `Preview` + `staging` 브랜치 지정으로 덮어쓴다**(브랜치 지정 값이 일반 Preview 값보다 우선).
+   운영 변수는 **건드리지 않는다** — Sensitive 변수는 편집 화면에서 값이 비어 보여서, 스코프만 바꾸려다
+   **빈 값으로 저장해 운영을 끊을 위험**이 있다. 덮어쓰기 방식이면 운영 변수를 열 필요조차 없다.
+→ **stg를 만들면 반드시 이 검사를 먼저 한다.** 오라클은 §3.5.7.
+
+**④ 🚨 env 값을 임시 스크립트로 파싱하면 시크릿이 샌다 (하루에 3번 재발)**
+① 쉘 `. ./.env.staging` → 파싱 실패 시 줄 전체 stderr 출력 ② 인라인 주석(` # …`)을 값으로 흡수 → URL
+인코딩 후 파싱 실패 → 노출 ③ 값이 `"…"`로 감싸진 걸 안 벗김 → `new URL()` 실패 → **에러가 input 전체를 출력**.
+근인은 전부 "임시 스크립트를 매번 새로 짜다가 방어를 빠뜨림".
+→ **`server/tools/_envsafe.mjs`를 만들어 방어를 한 곳에 모았다.** env 값을 다루는 코드는 예외 없이 이걸 쓴다:
+   `readEnv(path)`(주석 분리+따옴표 제거) · `withSecret(v, fn)`(예외에서 **코드/이름만** 남기고 원문 차단) ·
+   `fp(v)`/`dbRefOf(url)`(값 대신 지문). 직접 정규식 파싱 금지.
+
+### 3.5.6 Vercel Preview env를 거는 실제 방법 (2026-08-07 확립)
+
+1. `Settings → Environment Variables → Add Environment Variable`
+2. **Environments = `Preview` 만**(Production 체크 해제) → **Select a Custom Preview Branch → `staging`**
+3. **Key 입력창에 `.env` 블록을 통째로 붙여넣으면** Vercel이 자동으로 여러 항목으로 쪼갠다(12개를 한 번에).
+4. **빈 값은 유효하며, "그 기능을 stg에서 끈다"는 뜻으로 쓴다** — 코드가 빈 값을 안전한 no-op로 처리하는 걸 확인함:
+   `notify.ts postDiscord` = `if (!url) return` · `sentryGate` = 빈 DSN이면 `false` · `ratelimit.ts` = KV 미설정 시
+   `{ok:true}`(fail-open). 따라서 `DISCORD_WEBHOOK_URL`·`SENTRY_DSN`·`KV_*`·`REDIS_URL`을 **빈 값으로 덮어써**
+   stg 테스트가 운영 알림 채널·운영 Sentry·운영 레이트리밋 카운터에 닿지 않게 한다.
+5. `RC_*`(결제)는 원래부터 `Production` 전용이라 stg엔 부재 — 별도 조치 불필요(결제 테스트 시 stg용 RC 앱 필요).
+6. **시크릿은 운영과 절대 공유하지 않는다.** JWT를 공유하면 stg에서 발급한 토큰이 운영에서도 유효해진다.
+   등록 전 `fp()` 지문으로 prod↔stg가 서로 다른지 대조할 것.
+
+> ⚠️ **자리표시자 함정**: `.env.staging`에 `stg-admin-token-REPLACE-min-16-random` 같은 **사람이 읽히는 더미**가
+> 남아 있었고, "TODO로 시작하는지"만 보던 검사를 통과해 Vercel까지 갈 뻔했다(저장 직전 발견). 보호를 푼 stg에
+> 그대로 올라갔다면 **누구나 그 문자열로 관리자 콘솔에 들어온다.** 판정은 접두어가 아니라
+> **`TODO|REPLACE|CHANGE|EXAMPLE|YOUR` 포함 여부 + 길이 24자 미만 + `-secret-`류 패턴**으로 한다.
+
+### 3.5.7 격리 검증 실측 (S8 통과 — 2026-08-07)
+
+**오라클**: `/api/health`가 `DATABASE_URL`의 **호스트만** sha256 앞 12자로 반환(`dbRef`). 공개 라우트라
+원문은 못 싣지만 **"stg와 prod가 같은 DB인가"는 비교만으로 판정**된다. 기준값 `prod 2b73921d4030` / `stg 06eb5f60fd04`.
+
+| 단계 | 결과 |
+|---|---|
+| env 등록 전 stg `/api/health` | `dbRef 2b73921d4030` → **운영 DB** 🚨 |
+| env 등록 + 재배포 후 | `dbRef 06eb5f60fd04` → **stg DB** ✅ |
+| stg `/api/bootstrap` | `announcements: []` (운영엔 출시 공지 1건) — 독립 2차 증거 |
+| **쓰기 A/B** — stg에 익명 문의 1건 POST | 운영 `tickets` **1 → 1(불변)**, 내용도 그대로 / stg `tickets` **0 → 1** ✅ |
+| 운영 타 테이블 | `users=2`·`wallet_ledger=12`·`purchase_event=15` **전부 불변** ✅ |
+| 사후 | stg 시험 데이터 삭제 → `tickets=0 users=0` 복원 |
+
+> 읽기만으로는 "쓰기도 격리됐다"를 증명하지 못하므로 **실제 INSERT를 일으켜** 확인했다(추정 금지 원칙).
+> 익명 문의 라우트의 필드명은 `proj`·`content`(❌`projCode`·`message`)이고, `volleyball`은 allowlist에 없어
+> 404가 정상이다 — `myword`로 보내야 통과한다.
+> **미완**: 이 절차를 상비 가드 `_dv_stgisolation`으로 등재하는 일(S8 잔여).
 
 ### 3.5.3 ⚠️ 설계 갈림길 — stg 앱을 어떻게 만들 것인가 (착수 전 결정 필수)
 
