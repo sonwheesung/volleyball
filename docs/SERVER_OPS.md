@@ -127,6 +127,52 @@ curl https://volleyball-jet-nine.vercel.app/api/devnotes     # 새 라우트 200
 - **관측**: 서버 오류는 `reportError` 경유(환경 게이트 — 운영 DSN은 `VERCEL_ENV=production|preview`만, BACKEND §13.21-a). **Discord 알림 전환 절차는 [ANALYTICS_PLAN §7](./ANALYTICS_PLAN.md#7-운영-알림-셋업--discord-연동-사용자-직접-셋업-예정)**(방법 A=Sentry 통합 / B=서버 웹훅 직접 / 크래시는 Crashlytics 별도 / `req.json` 500 백로그). 문의는 관리자 티켓 큐.
 - **정기**: 파기 크론(purgeExpired — 보존기간 §13.9), 지갑 대사(라이브 가드 배터리를 운영 DB 겨냥으로 돌릴 땐 `DATABASE_URL=<prod>` 명시 — 테스트 데이터는 프리픽스 자동 정리지만 신중히).
 
+### 3.5 DB 비밀번호 회전 (2026-08-07 확립)
+
+**정책(사용자 결정 2026-08-07): 월 1회 정기 회전 + 유출·사고 시 즉시.** 상시 방어는 회전이 아니라
+"값이 새지 않게 다루는 것"이 담당한다(§3.5.3).
+
+#### 3.5.1 순서 — 틀리면 운영이 끊긴다
+
+비밀번호를 리셋하는 순간 **기존 연결이 전부 죽고**, Vercel은 **재배포해야 새 env를 읽는다**(런타임이 아니라
+배포 시점 주입). 따라서 `리셋 → env 갱신 → 재배포` 사이가 실다운타임이다. 미리 창을 다 열어놓고 연속으로 친다.
+
+1. Supabase `Database → Settings → Reset password` (운영 ref `vmedwppbpugjnxdfwzoq`)
+2. 상단 **Connect** 패널에서 **두 문자열** 복사 — Transaction pooler(**:6543**)와 Session pooler(**:5432**)
+3. `server/.env.local` **두 줄 다** 교체: `DATABASE_URL`(6543) · `MIGRATE_DATABASE_URL`(5432)
+4. Vercel `DATABASE_URL`(Production 스코프) 갱신 — **연결 문자열 전체**(함정 ①)
+5. **Production 재배포** (env만 바꾸면 옛 값이 계속 쓰인다)
+6. 검증: `server/tools/_dv_stgisolation.ts`(stg 쪽) + 운영 `/api/bootstrap` 200 + row 수 불변
+
+stg도 동일(ref `pdxdpzujeaxjweskecbv`, Vercel은 **Preview/`staging` 브랜치 스코프**, staging 재배포).
+
+#### 3.5.2 실측 함정
+
+**① 🚨 Vercel `DATABASE_URL`에 비밀번호만 넣으면 빌드가 죽는다**
+`TypeError: Invalid URL … input: '<비밀번호>'` — Supabase 화면이 비밀번호를 단독으로 보여줘서 그것만 복사하기 쉽다.
+**반드시 `postgresql://` 로 시작하는 전체 문자열**을 넣는다. (2026-08-07 운영 빌드 1회 실패. 실패한 빌드는
+라이브를 교체하지 않으므로 서비스는 안 죽지만, **옛 비밀번호를 쓰는 구 배포가 계속 떠 있어** DB가 끊긴다.)
+
+**② `MIGRATE_DATABASE_URL`을 같이 안 바꿔서 조용히 썩는다**
+런타임은 6543만 쓰므로 **서비스는 멀쩡한데** 다음 스키마 변경 때 `28P01(invalid_password)`로 막힌다.
+회전 시 두 줄을 한 세트로 본다. 진단: `_envsafe`로 두 URL 모두 접속 확인.
+
+**③ 새 비밀번호를 옛 것의 변형으로 만들면 회전이 아니다**
+2026-08-07 실사례 — 유출된 값에서 문자 하나만 뺀 값으로 바꿨고, 그 값이 **stg 비밀번호와도 동일**해져
+"stg 크리덴셜 하나로 운영 DB가 열리는" 상태가 됐다. 사용자 판단으로 **현 값 유지 + 월 1회 회전**으로 수용
+(유저 2명 시점의 위험 대비 비용 판단). 다음 회전 때 **prod·stg를 서로 다른 무작위 값**으로 끊는다.
+> 생성 팁: URL 특수문자(`@ : / ? # % &`)를 뺀 문자셋으로 만들면 연결 문자열 인코딩 사고가 원천 차단된다.
+
+#### 3.5.3 값을 다루는 규칙 (이게 본체다)
+
+비밀번호는 **회전보다 "안 새게 하는 것"** 이 먼저다. 2026-08-07 하루에 3번 샜고 전부 취급 방식 때문이었다.
+- **`server/tools/_envsafe.mjs` 를 쓴다.** 임시 스크립트로 env를 정규식 파싱하지 않는다
+  (주석 흡수·따옴표 미제거·쉘 source 실패가 각각 원문을 stdout/stderr로 뱉었다 — RUNBOOK §3.5 함정 ④).
+- **URL 파서에 시크릿을 그냥 넣지 않는다.** 실패 시 에러 메시지가 input 전체를 출력한다.
+- 값을 옮길 땐 **파일 ↔ 클립보드**만. 채팅·로그·커밋 메시지 경유 금지.
+- **IDE에서 `.env` 줄을 선택한 채 두지 않는다** — 에디터 선택 영역은 어시스턴트에게 전달된다. 복사 후 선택 해제.
+- 비교가 필요하면 값이 아니라 **지문**(`fp()`·`dbRefOf()`)으로 한다.
+
 ---
 
 ## 4. 오늘 기준 상태 메모 (2026-07-15)
