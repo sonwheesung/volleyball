@@ -35,8 +35,9 @@
 > → 첫 득점·첫 승·백점 등 통산 업적이 시즌 끝까지 안 열리던 버그(진단 스냅샷: 4경기 진행·careerTotals 전부 0). **평가 시**
 > `data/careerTotals.achTotals(저장 + 이번 시즌 진행분)`을 쓴다(진행분=endSeason과 동일 leagueProduction/seasonResults/
 > computeStandings, cutoff만 `playedThroughDay`). 적용처: 업적 화면 표시(`app/achievements.tsx`)·수령(`claimAchDiamonds`).
-> 시즌 경계 이중계산 없음(경계에서 stored += 시즌분, 새 시즌 진행분 0 — `_gt_achmid` A/B/C 검증). rehydrate 마이그레이션 시드는
-> stored만(일회성 pre-claim은 과거 누적분만).
+> 시즌 경계 이중계산 없음(경계에서 stored += 시즌분, 새 시즌 진행분 0 — `_gt_achmid` A/B/C 검증). ~~rehydrate 마이그레이션 시드는
+> stored만(일회성 pre-claim은 과거 누적분만).~~ → **정정(2026-08-08)**: rehydrate claim 시드도 **exact**(아래 §입력 배선 참조) —
+> stored만 쓰면 시즌 중 통산 업적이 시드에서 빠져 "신규 달성"으로 다이아가 나가는(유저에게 유리한) 어긋남이 있었다.
 >
 > `careerLog`는 경기 리플레이로 파생 불가(드래프트·영입·면담은 플레이어 액션) — cash·fanScore처럼
 > 스토어 영속 카운터. 드래프트 업적만 예외로 `archive.length`(완료 시즌수)에서 파생.
@@ -56,6 +57,81 @@
 - `ACHIEVEMENTS: Achievement[]` — 카탈로그(id·제목·설명·카테고리·목표치).
 - `evalAchievements(input): AchievementStatus[]` — 각 업적의 `unlocked`(달성) + `progress {cur, target}`.
 - 입력은 평범한 객체(스토어가 조립해 전달). 엔진은 React/스토어 무의존.
+
+## 입력 배선 (`data/achSelect.ts` — 2026-08-08 신설, 운영 버그 수정)
+
+### 사건 — 실유저가 다이아를 못 받았다
+
+마이페이지 **하단 탭 아이콘의 빨간 점**(미수령 업적 알림)이 미수령을 못 잡았다.
+
+| 위치 | 구 입력 | 결과 |
+|---|---|---|
+| `app/(tabs)/_layout.tsx` (탭 빨간 점) | **raw `careerTotals`** | ← 버그 |
+| `app/(tabs)/mypage.tsx` (미수령 N건) | `achTotals` | 정상 |
+| `app/achievements.tsx` (업적 카드) | `achTotals` | 정상 |
+| `store/useGameStore` `claimAchDiamonds`(지급) | `achTotals` | 정상 |
+| `store/useGameStore` rehydrate(구세이브 claim 시드) | **raw `careerTotals`** | ← 두 번째 raw |
+
+`careerTotals`는 `endSeason`에서만 누적되므로 탭 입력은 **시즌 완주(36경기) 시점까지도 0**이다.
+"한 박자 늦음"이 아니라 **시즌 하나 통째**이고, 통산 업적이 열리는 건 첫 시즌뿐이라 신규 유저에겐 **디스커버리 0**.
+
+- **실측(가드 `_gt_achdot --mutant` 재현)**: 1경기 시점 **탭 0 / 카드 6**(`first_point·first_concede·first_ace·first_set_win·first_set_loss·first_match_win`),
+  36경기(시즌 완주)까지도 탭 0 / 카드 9.
+- **운영 실피해**: 유저가 스스로 업적 화면을 찾아 들어가 수령하자 정확히 그 6건(**60💎**)이 지급됐다 — 알림만 없었을 뿐 지급 경로는 정상.
+- **원장·머니패스 무관** — 순수 표시(알림) 레이어 사고. `claimAchDiamonds`는 처음부터 `achTotals`를 썼다.
+
+### 확정 설계 — 셀렉터 접기 + 하한 + 기회주의 캐시
+
+1. **호출부 접기(본론)**: `AchInput` 손 조립을 **`data/achSelect.ts` 하나로** 접는다. 위 5개 호출부 전부 셀렉터 경유.
+   6번째 호출부가 생겨도 같은 어긋남이 재발하지 않게, **UI(`app/`)에서 `evalAchievements` 직접 사용은 구조 가드
+   `_dv_arch` `[ach-eval]` 규칙이 FAIL**로 막는다(CLAUDE §11 UI → 셀렉터 → 엔진).
+   - `mode: 'floor' | 'exact'`.
+   - rehydrate claim 시드(`:1820`)는 raw → **`exact`로 교정**(위 취소선 정정).
+2. **하한(`'floor'`) = 시뮬 0회**: `MatchResult{fixtureId, homeSets, awaySets}`만으로 순수 산술 유도.
+   - 유도 가능: `setsWon`·`setsLost`·`matchWins`·`matchLosses` (유저가 기록한 결과에서 직독)
+   - 유도 **불가**: `points`·`aces`(선수별 생산 = 풀 시뮬 필요) → 저장값 그대로
+   - 커버 업적: `first_set_win`·`first_set_loss`·`first_match_win`·`first_match_loss`·`first_concede`
+     → **첫 경기에서 6개 중 4개가 잡혀 점이 켜진다**(실피해 해소).
+   - **하한 성질(불변식)**: `floor ≤ exact` 필드별 → **거짓 양성 0**. `exact`는 cutoff 이하 *모든* 픽스처를 리플레이하고
+     `results`는 그 부분집합이라 자연히 성립. 업적 `cur`는 totals에 단조 증가.
+   - ⚠ **고아 `fixtureId` 반드시 스킵**: 시즌 롤오버 후 `results`에 남은 키는 `getFixture`가 `undefined`를 준다
+     (`data/standings.ts playedThroughDay`와 같은 패턴). 안 하면 승패 과다 집계로 하한 성질이 붕괴한다.
+3. **정확값 기회주의 캐시**: 마이페이지·업적 화면·수령 경로가 **이미 계산한** `achTotals`를 **비영속** 스토어 필드
+   `achTotalsCache: {teamId, season, cutoff, totals}`에 남기고, 탭은 그 키가 현재 상태와 같을 때만 정확값을 쓴다(아니면 하한).
+   - **반드시 비영속** — 새 영속 필드는 세이브 마이그레이션 체인 부채(SAVE_SYSTEM). `freshSave`에 넣어
+     `selectTeam`·`resetSave`·크래시리셋에서 자동 폐기 + rehydrate(계정 슬롯 전환)에서 명시 폐기.
+   - 탭 점 = 하한 미수령 ∪ (신선하면) 정확값 미수령. 구현은 필드별 `max`(신선 캐시 = 같은 키의 exact이므로 max = exact).
+4. **탭에서 시뮬 트리거 금지**: `_layout.tsx`는 앱 루트에 **상시 마운트**다. `achTotals`를 직접 부르면 콜드 시
+   시즌 전체 재시뮬(폰 20~30s) = 앱 루트 동기 프리즈. 하한 + 캐시된 정확값만 읽는다(가드 C7c가 정적 강제).
+
+### 빨간 점의 의미 = **미수령 기준** (우편과 다른 의도적 예외)
+
+`MAILBOX_SYSTEM.md §6.3`은 우편 배지에서 "미수령 기준 점"을 **nag라며 기각**하고 "확인(read) 기준"을 택했다.
+업적 빨간 점은 그 결정의 **의도적 예외**로 미수령 기준을 유지한다. 근거:
+
+- **우편**: 빨간 점 = "새 소식 있음"(awareness). 안 받아도 우편함에 30일 보존되고 카드 텍스트("받을 우편 N건")가 수령을 따로 유도한다 → 점까지 미수령으로 물리면 이중 재촉.
+- **업적**: 미수령 = **실제 손해**(달성했는데 다이아가 계정에 안 들어옴)이고, 달성 사실 자체가 유저에게 통지되는 다른 경로가 없다.
+  이번 사건이 정확히 그 손해를 냈다(6건 60💎이 유저가 우연히 화면에 들어갈 때까지 지연). **재촉이 정당한 유일한 케이스**라 예외로 둔다.
+- 대신 **관전형 nag 최소화**: 점은 마이페이지 탭 **하나**에만(별도 푸시·모달·인터럽트 없음), `claimedAch` 필터 뒤에서 판정해
+  "눌러도 못 받는 점"을 만들지 않는다.
+
+### 엣지 (반드시 유지)
+
+| 엣지 | 규칙 |
+|---|---|
+| `resetSave`/`selectTeam` | `claimedAch`는 보존, `careerTotals`·`results`는 리셋 → **재시작 유저는 통산 점이 안 뜨는 게 정상**(계정 평생 1회). 반드시 `claimedAch` 필터 뒤에서 판정(가드 C5b). |
+| 수화 전 호출 | `hasUnclaimedAch` useMemo는 `if (!hydrated) return <Loading/>` **앞**에서 실행된다(훅 규칙). `selectedTeamId` null 단락이 freshSave 기본값 오판정을 막는 유일한 가드 — **제거 금지**. |
+| `signOut` | `store/useAuthStore`의 로그아웃은 게임 스토어를 안 건드린다 → 다음 로그인 전 창에 이전 계정 상태가 남는다. 하한은 순수 산술이라 무해, **정확값 캐시는 계정 전환(rehydrate/resetSave) 시 폐기**. |
+| `syncWallet` `earnedAch` 병합 | 비동기(§4). 재설치·기기변경 시 점이 켜졌다 수초 뒤 꺼지는 **깜빡임을 수용**한다 — 첫 sync 전 보류로 만들면 오프라인에서 영영 안 켜진다. |
+| 오프라인/미로그인 | `claimAchDiamonds`가 `offline` 반환. 점은 켜지고 수령은 재시도로 수렴 — 정상 동작. |
+
+### 가드
+
+- **`tools/_gt_achdot.ts`**(신설) — 실 스토어 구동. C1 거짓양성 금지 / **C2 `n ≥ 1 ⇒ tabIds ≥ 1`(이번 버그를 잡는 한 줄)** /
+  C3 오프시즌 하한==정확 / C4 고아키 내성 / C5 claimed 정합(+resetSave) / C6 캐시 신선·stale 폴백 / C7 5개 호출부 배선 정적강제.
+  A/B: `--mutant`(구 raw 배선으로 되돌리면 C2가 FAIL로 뒤집힘) + 소스 변이 2종(하한 유도 제거 → C2 FAIL, 고아 스킵 제거 → C4a FAIL).
+- **`tools/_dv_arch.ts` `[ach-eval]`** — `app/`에서 `evalAchievements` 사용 시 FAIL(구조적 재발 차단).
+- **`tools/_gt_achmid.ts`** — **함수만** 봉인(배선 아님). 이번 사각의 원인이라 헤더에 범위 경고를 박았다.
 
 ## 카테고리·카탈로그 (v5 — 총 86개)
 
@@ -83,6 +159,9 @@
 - 카테고리별 그룹. 달성=강조+체크, 미달성=흐리게+진행바(`cur/target`).
 - 진행치 라벨(`progressLabel`): **달성 시 무조건 "달성"**(2026-07-11 테스터 피드백) — 카운터형(백점돌파 target=100 등)이 완료 시 "100/100"이 아니라 "달성"으로 표기(진행바=`target>1 && !unlocked`와 일관). 미완 카운터는 분수 유지(천점클럽 640/1000), 단발 미달성은 "미달성".
 - 숨김(hidden) 업적 없음(v1) — 전부 목표를 보여줘 자발적 목표 설정을 돕는다.
+- **미수령 알림 3곳**: ①마이페이지 **탭 아이콘 빨간 점**(`app/(tabs)/_layout.tsx` — 하한 모드) ②마이페이지 업적 카드 "N건"
+  (`mypage.tsx` — 정확 모드, 페인트 후 계산) ③업적 화면 카드별 점 + 상단 일괄 버튼(`achievements.tsx` — 정확 모드).
+  세 곳의 입력은 전부 `data/achSelect` 셀렉터가 조립한다(위 §입력 배선).
 
 ## 검증 (tools/simAchievements.ts)
 

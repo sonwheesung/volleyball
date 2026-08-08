@@ -1,15 +1,15 @@
 // 업적 화면 (ACHIEVEMENT_SYSTEM) — 구단주의 장기 발자취를 트로피로.
 // 달성 여부는 저장 없이 세이브 상태(archive/hof/milestones/cash/fanScore)에서 재계산.
 import { useRouter } from 'expo-router';
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
 import { Button, Card, Loading, Muted, Screen, SCREEN_LOADING_MIN_MS, Title, theme, themedStyles, useDeferredReady } from '../components/Screen';
 import { Popup } from '../components/Popup';
 import { showAlert } from '../components/AppDialog';
 import { MeterBar } from '../components/MeterBar';
-import { evalAchievements, achievementSummary, achReward, type AchCategory, type AchStatus } from '../engine/achievements';
+import { achievementSummary, achReward, type AchCategory, type AchStatus } from '../engine/achievements';
 import { unclaimedReward } from '../engine/diamonds';
-import { achTotals } from '../data/careerTotals';
+import { achEvalFor } from '../data/achSelect';
 import { formatMoney } from '../engine/salary';
 import { useGameStore } from '../store/useGameStore';
 
@@ -37,20 +37,25 @@ export default function Achievements() {
 function AchievementsInner() {
   const router = useRouter();
   const myTeamId = useGameStore((s) => s.selectedTeamId) ?? '';
+  const season = useGameStore((s) => s.season);
   const archive = useGameStore((s) => s.archive);
-  const hof = useGameStore((s) => s.hallOfFame);
+  const hallOfFame = useGameStore((s) => s.hallOfFame);
   const milestones = useGameStore((s) => s.milestones);
   const cash = useGameStore((s) => s.cash);
   const fanScore = useGameStore((s) => s.fanScore);
   const careerLog = useGameStore((s) => s.careerLog);
   const careerTotals = useGameStore((s) => s.careerTotals);
   const results = useGameStore((s) => s.results);
+  const noteAchTotals = useGameStore((s) => s.noteAchTotals);
 
-  // 통산 업적을 시즌 중에도 반영: 저장 careerTotals + 이번 시즌 진행분(achTotals). endSeason 누적과 이음매 없음.
-  const statuses = useMemo(
-    () => evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals: achTotals(myTeamId, careerTotals, results) }),
-    [myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals, results],
+  // 통산 업적을 시즌 중에도 반영: 셀렉터 'exact'(저장 careerTotals + 이번 시즌 진행분). endSeason 누적과 이음매 없음.
+  const ev = useMemo(
+    () => achEvalFor({ selectedTeamId: myTeamId, season, archive, hallOfFame, milestones, cash, fanScore, careerLog, careerTotals, results }, 'exact'),
+    [myTeamId, season, archive, hallOfFame, milestones, cash, fanScore, careerLog, careerTotals, results],
   );
+  const statuses = ev.statuses;
+  // 계산한 정확값을 비영속 캐시에 남긴다(탭 빨간 점이 재활용 — 탭은 시뮬을 못 돌린다). **렌더 중이 아니라 커밋 후**(setState-in-render 금지).
+  useEffect(() => { noteAchTotals(ev.key, ev.totals); }, [ev, noteAchTotals]);
   const { done, total } = achievementSummary(statuses);
   const byCat = useMemo(() => {
     const m = new Map<AchCategory, AchStatus[]>();

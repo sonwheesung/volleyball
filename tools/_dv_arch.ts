@@ -10,6 +10,7 @@
 //   추가 규칙:
 //     · engine bare import 금지 — 상대(./·../types)만. react|expo|zustand|react-native 등 = FAIL(node: 빌트인만 예외).
 //     · Math.random 금지(결정론 계층 app/data/engine/lib) — ALLOWLIST(lib/iap·lib/walletKeys·store/useAuthStore)만 예외.
+//     · evalAchievements 는 app/ 에서 사용 금지 — data/achSelect 셀렉터 경유(ACHIEVEMENT §입력 배선, 2026-08-08).
 //     · leagueDisplayDay 는 app/contracts.tsx 만 import 허용(다른 app 파일이 쓰면 FAIL).
 //         ※ 다른 에이전트가 contracts.tsx 를 leagueDisplayDay 에서 떼는 중 — 마이그레이션 끝나면 이 예외 삭제 가능.
 //     · png/이미지 require 는 자산(레이어 간선 아님) — data/faceSheets.ts 포함 무시.
@@ -127,6 +128,13 @@ function analyze(files: Src[]): string[] {
       && /\bimport\b[\s\S]*?\bleagueDisplayDay\b[\s\S]*?\bfrom\b/.test(text)) {
       violations.push(`[leagueDisplayDay] ${f.rel} (app 에서 leagueDisplayDay import 는 contracts.tsx 만 허용)`);
     }
+
+    // evalAchievements 는 UI(app/)에서 직접 호출 금지 — 반드시 셀렉터 data/achSelect 경유(ACHIEVEMENT §입력 배선, 2026-08-08).
+    //   손 조립 호출부가 5군데로 번지면서 2곳이 raw careerTotals(시즌 중 0)를 먹여 탭 빨간 점이 시즌 내내 안 켜졌다
+    //   (운영 실피해 6건 60💎 지연). 입력 조립을 한 곳으로 접고 **구조적으로** 재발을 막는다.
+    if (layer === 'app' && /\bevalAchievements\b/.test(text)) {
+      violations.push(`[ach-eval] ${f.rel} (app 에서 evalAchievements 직접 사용 금지 — data/achSelect 셀렉터 경유)`);
+    }
   }
   return violations;
 }
@@ -166,6 +174,7 @@ function selftest(): number {
     { file: { rel: 'data/_probe.ts', text: `export const r = () => Math.random();` }, tag: '[random] data/_probe.ts' },
     { file: { rel: 'types/_probe.ts', text: `import { overall } from '../engine/overall';` }, tag: '[types-runtime] types/_probe.ts' },
     { file: { rel: 'app/_probe.tsx', text: `import { leagueDisplayDay } from '../data/league';` }, tag: '[leagueDisplayDay] app/_probe.tsx' },
+    { file: { rel: 'app/_probe3.tsx', text: `import { evalAchievements } from '../engine/achievements';\nconst s = evalAchievements({} as never);` }, tag: '[ach-eval] app/_probe3.tsx' },
     { file: { rel: 'store/_probe.ts', text: `import Screen from '../components/Screen';` }, tag: '[layer] store/_probe.ts → components' },
   ];
   const log = (m: string) => process.stdout.write(m + '\n');
@@ -184,7 +193,7 @@ function selftest(): number {
     if (caught) log(`  ✓ 뮤턴트 탐지: ${tag}`);
     else { log(`  ❌ 뮤턴트 미탐지: ${tag} — 결과: ${JSON.stringify(v.filter((s) => s.includes(file.rel)))}`); fail++; }
   }
-  log(`\n${fail ? `❌ ARCH_SELFTEST FAIL (${fail})` : '✅ ARCH_SELFTEST PASS — 정상 오탐0 · 뮤턴트 6종 전부 탐지(A/B 민감도 증명)'}`);
+  log(`\n${fail ? `❌ ARCH_SELFTEST FAIL (${fail})` : `✅ ARCH_SELFTEST PASS — 정상 오탐0 · 뮤턴트 ${MUTANTS.length}종 전부 탐지(A/B 민감도 증명)`}`);
   return fail ? 1 : 0;
 }
 
@@ -197,7 +206,7 @@ function main(): number {
   log('═══ 아키텍처 계층 경계 가드 (_dv_arch) ═══');
   log(`스캔 ${files.length} 파일 (${SCAN_DIRS.join('·')}, 테스트·d.ts·tools 제외)`);
   log(`금지 간선: engine→{data,store,app,components,lib,audio,db} · data→{app,components,store} · lib/store→{app,components} · types→런타임값`);
-  log(`추가: engine bare import 금지 · Math.random 금지(${BAN_RANDOM.join('/')}, allowlist ${[...RANDOM_ALLOW].join('·')}) · leagueDisplayDay=contracts.tsx만`);
+  log(`추가: engine bare import 금지 · Math.random 금지(${BAN_RANDOM.join('/')}, allowlist ${[...RANDOM_ALLOW].join('·')}) · leagueDisplayDay=contracts.tsx만 · evalAchievements=app 금지(data/achSelect 경유)`);
   if (violations.length) { log(`\n위반 ${violations.length}건:`); violations.forEach((v) => log('  ❌ ' + v)); }
   log(`\n${violations.length ? `❌ ARCH_GUARD FAIL (${violations.length})` : `✅ ARCH_GUARD PASS — 금지 간선 0 · 엔진 순수 · 결정론 계층 Math.random 0 · 경계 위반 없음`}`);
   return violations.length ? 1 : 0;

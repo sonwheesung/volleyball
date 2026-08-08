@@ -68,8 +68,9 @@ import { PROTECT_COUNT } from '../engine/compensation';
 import { RETIRE_AGE } from '../engine/retire';
 import type { Contract, DraftPickRecord, ExpelRecord, FAOffer, FocusSeg, ForeignSwapRecord, HofEntry, MatchResult, Milestone, Player, RetireRecord, SeasonArchive, SeasonAwards, TrainableStat, TrainingFocus, Transfer } from '../types';
 import { DEFAULT_FA_OFFER } from '../engine/faMarket';
-import { evalAchievements, achReward } from '../engine/achievements';
-import { achTotals } from '../data/careerTotals';
+import { achReward, type CareerTotals } from '../engine/achievements';
+// 업적 입력 조립은 셀렉터 하나로 접는다(ACHIEVEMENT §입력 배선) — evalAchievements 직접 호출 금지(호출부 드리프트 재발 방지).
+import { achEvalFor, type AchTotalsCache } from '../data/achSelect';
 import { canWatchAd, grantAd, unclaimedReward, applyCamp, applyCampCourse, courseUpgradable, CAMP_COURSES, CAMP_COURSE_COST, CAMP_CUR_GAIN, CAMP_POT_GAIN, CAMP_LEGACY_CUR_GAIN, CAMP_LEGACY_POT_GAIN, WELCOME_DIAMONDS, FRESH_AD_STATE, type AdState, type CampCourse } from '../engine/diamonds';
 import { showRewardedForDiamonds, hasRemoveAds } from '../lib/ads';
 import { earnDiamonds, earnDiamondsBatch, spendDiamonds, getWallet, type PassStatus } from '../lib/server';
@@ -140,6 +141,11 @@ interface GameState {
   enshrineSeenSeason: number;                   // 뒷단 허브에서 명예의전당 헌액을 본 시즌(§5.6.5, campDoneSeason 미러). 시즌번호라 새 시즌 자동 리셋. 기본 -1. 헌액→전지훈련 순차 커서 판정용
   pendingCamp: PendingCamp | null;             // 전지훈련 아웃박스(§13.12 P0-4) — 서버차감↔로컬적용 사이 크래시 복구
   walletBusy: boolean;                         // 다이아 서버 왕복 in-flight 래치(비영속) — 버튼 연타 이중적용 차단(P0-1)
+  // 업적 정확값 통산 기회주의 캐시(ACHIEVEMENT §입력 배선, 2026-08-08) — **비영속**(새 영속 필드 금지: 세이브 마이그레이션 체인 부채).
+  //   화면(마이페이지·업적)·수령 경로가 이미 계산한 achTotals를 {teamId,season,cutoff}와 함께 남기면,
+  //   상시 마운트되는 탭 빨간 점이 키가 신선할 때만 그 정확값을 쓴다(아니면 시뮬 0회 하한). 탭은 절대 achTotals를 직접 부르지 않는다.
+  achTotalsCache: AchTotalsCache | null;
+  noteAchTotals: (key: { teamId: string; season: number; cutoff: number }, totals: CareerTotals) => void; // 정확값 캐시 기록(렌더 밖에서 호출)
   claimedAch: string[];                        // 다이아 수령한 업적 id(1회 지급)
   adState: AdState;                            // 광고 보상 쿨다운/하루상한 상태(메타 — 시드 무관)
   watchAdForDiamonds: () => Promise<{ ok: boolean; reward?: number; reason?: 'cooldown' | 'cap' | 'offline' | 'unauthorized' | 'busy' | 'error' | 'no-ad' }>;
@@ -289,6 +295,8 @@ const freshSave = {
   passStatus: null as PassStatus | null, // 비영속 — 서버 파생(getWallet 편입), 로그인/포그라운드마다 syncWallet가 채움
   unreadMailCount: 0, // 비영속 — 서버 판정(getWallet 편입 + readMail 응답)
   unclaimedMailCount: 0, // 비영속 — 서버 판정
+  // 업적 정확값 통산 캐시(비영속) — freshSave에 두어 selectTeam·resetSave·크래시리셋에서 자동 폐기(계정 전환 시 stale 사용 차단).
+  achTotalsCache: null as AchTotalsCache | null,
   claimedAch: [] as string[],
   adState: { ...FRESH_AD_STATE } as AdState,
   bonds: {} as Record<string, number>,
@@ -406,6 +414,8 @@ export const useGameStore = create<GameState>()(
       hydrated: false,
       saveScopeUserId: null, // 비영속 — 로드된 슬롯의 계정(SAVE_SYSTEM §7.3). skipHydration이라 switchSaveScope 전까진 null
       walletBusy: false, // 비영속 — 다이아 서버 왕복 in-flight 래치(P0-1, 버튼 연타 이중적용 차단)
+      // 업적 정확값 캐시 기록(비영속) — 화면·수령 경로가 achTotals를 이미 계산했을 때만 남긴다. 렌더 중 호출 금지(useEffect/InteractionManager에서).
+      noteAchTotals: (key, totals) => set({ achTotalsCache: { ...key, totals } }),
       onboarded: false,
       supporter: false,
       sfxEnabled: true,
@@ -462,9 +472,11 @@ export const useGameStore = create<GameState>()(
         if (!my) return { granted: 0, reason: 'none' };
         const userId = useAuthStore.getState().session?.userId;
         if (!userId) return { granted: 0, reason: 'offline' };
-        // 통산 업적을 시즌 중에도 실시간 반영: 저장 careerTotals + 이번 시즌 진행분(achTotals). endSeason 누적과 이음매 없음.
-        const statuses = evalAchievements({ myTeamId: my, archive: s.archive, hof: s.hallOfFame, milestones: s.milestones, cash: s.cash, fanScore: s.fanScore, careerLog: s.careerLog, careerTotals: achTotals(my, s.careerTotals, s.results) });
-        const { ids: allUnclaimed } = unclaimedReward(statuses, s.claimedAch);
+        // 통산 업적을 시즌 중에도 실시간 반영: 셀렉터 'exact'(저장 careerTotals + 이번 시즌 진행분). endSeason 누적과 이음매 없음.
+        //   계산한 정확값은 탭 빨간 점이 재활용하도록 비영속 캐시에 남긴다(기회주의 — 탭은 시뮬을 못 돌린다).
+        const ev = achEvalFor(s, 'exact');
+        set({ achTotalsCache: { ...ev.key, totals: ev.totals } });
+        const { ids: allUnclaimed } = unclaimedReward(ev.statuses, s.claimedAch);
         // onlyIds 지정 시 그 업적만 수령(카드별 개별 보상받기) — 미지정이면 미수령 전체 일괄. 미달성 id는 unclaimed에 없어 자동 배제(안전).
         const ids = onlyIds ? allUnclaimed.filter((id) => onlyIds.includes(id)) : allUnclaimed;
         if (!ids.length) return { granted: 0, reason: 'none' };
@@ -1817,10 +1829,15 @@ export const useGameStore = create<GameState>()(
           restoreSimCache((state as { simCache?: import('../data/simCache').SimCache })?.simCache);
           // 다이아 소급 폭탄 방지(§11.3): 기능 이전 세이브면 현 달성 업적을 claimed로 시드(1회) → 이후 신규 달성만 다이아.
           if (consumePendingClaimSeed() && state?.selectedTeamId) {
-            const st = evalAchievements({ myTeamId: state.selectedTeamId, archive: state.archive ?? [], hof: state.hallOfFame ?? [], milestones: state.milestones ?? [], cash: state.cash ?? 0, fanScore: state.fanScore ?? 50, careerLog: state.careerLog, careerTotals: state.careerTotals });
+            // **'exact'로 교정(2026-08-08)**: 구 코드는 raw `careerTotals`(시즌 중 0)로 시드해 **시즌 중 통산 업적을
+            //   시드하지 않았다** → 그 시즌분 통산 업적이 "신규 달성"으로 다이아 지급(유저에게 유리한 어긋남).
+            //   화면·수령이 쓰는 정확값과 같은 기준으로 시드해야 소급 폭탄 방지(§11.3)가 정확해진다.
+            //   base/rosters/simCache 커밋 뒤라 리플레이 가능. 이 경로는 pre-feature 세이브 1회만 탄다.
+            const st = achEvalFor(state, 'exact').statuses;
             useGameStore.setState({ claimedAch: st.filter((x) => x.unlocked).map((x) => x.ach.id) });
           }
-          useGameStore.setState({ hydrated: true });
+          // 업적 정확값 캐시는 슬롯(계정) 전환마다 폐기 — 이전 계정 상태가 남아 탭 점을 오판하지 않게(signOut은 게임 스토어를 안 건드림).
+          useGameStore.setState({ hydrated: true, achTotalsCache: null });
           // 시즌 종료 백업 재시도(SAVE_SYSTEM §10.3) — 슬롯 로드 완료 = "부팅/로그인 후" 시점.
           //   세션당 1회, 현재 세이브가 마지막 백업보다 앞서고 온라인일 때만. fire-and-forget·조용(동적 import로 순환 차단).
           void import('../lib/saveBackup').then((m) => m.retryBackupOnBoot()).catch(() => {});

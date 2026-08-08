@@ -7,8 +7,7 @@ import Ionicons from '@expo/vector-icons/Ionicons';
 import { Loading, theme } from '../../components/Screen';
 import { showAlert } from '../../components/AppDialog';
 import { useGameStore } from '../../store/useGameStore';
-import { evalAchievements } from '../../engine/achievements';
-import { unclaimedReward } from '../../engine/diamonds';
+import { unclaimedAchIds } from '../../data/achSelect';
 
 type IoniconName = ComponentProps<typeof Ionicons>['name'];
 // 선택된 탭은 채워진 아이콘(filled), 나머지는 outline — 색만이 아니라 모양으로도 선택을 확실히 표시
@@ -35,21 +34,33 @@ export default function TabsLayout() {
   const onboarded = useGameStore((s) => s.onboarded);
   const selectedTeamId = useGameStore((s) => s.selectedTeamId);
   const unreadMailCount = useGameStore((s) => s.unreadMailCount); // 마이페이지 탭 빨간 점(MAILBOX §6.3)
-  // 마이페이지 탭 빨간 점에 **미수령 업적 보상**도 반영(2026-07-29 테스터). 탭은 상시 마운트라 콜드 재생(achTotals)은 금지 —
-  //   저장 careerTotals만으로 evalAchievements(순수 읽기, 리플레이 없음). 시즌중 통산업적은 다음 시즌결산에 반영(디스커버리 점만 한 박자 늦음, 무해).
+  // 마이페이지 탭 빨간 점에 **미수령 업적 보상**도 반영(2026-07-29 테스터 · 2026-08-08 재수정).
+  //   ~~저장 careerTotals만으로 evalAchievements~~ → **셀렉터 'floor'**. 구 코드는 스토어 raw `careerTotals`를 넣었는데
+  //   그건 endSeason에서만 누적돼 **시즌 하나 통째로 0**이라(한 박자가 아니다) 첫 시즌 내내 점이 안 켜졌다 —
+  //   통산 업적이 열리는 건 첫 시즌뿐이라 신규 유저 디스커버리 0(운영 실피해: 유저가 수동으로 찾아가 6건 60💎 수령).
+  //   'floor' = 시뮬 0회 하한(results 직독) + 신선한 정확값 캐시. **탭은 앱 루트 상시 마운트라 achTotals(콜드 시즌 재시뮬)는 금지.**
+  //   깜빡임 수용(의도): 재설치·기기변경 직후엔 로컬 claimedAch가 비어 점이 켜졌다가, syncWallet의 서버 earnedAch 합류(§4,
+  //   비동기 수초)로 꺼질 수 있다. 첫 sync 전 보류로 만들면 **오프라인에서 영영 안 켜지므로** 깜빡임을 택한다.
+  const season = useGameStore((s) => s.season);
   const archive = useGameStore((s) => s.archive);
-  const hof = useGameStore((s) => s.hallOfFame);
+  const hallOfFame = useGameStore((s) => s.hallOfFame);
   const milestones = useGameStore((s) => s.milestones);
   const cash = useGameStore((s) => s.cash);
   const fanScore = useGameStore((s) => s.fanScore);
   const careerLog = useGameStore((s) => s.careerLog);
   const careerTotals = useGameStore((s) => s.careerTotals);
+  const results = useGameStore((s) => s.results);
   const claimedAch = useGameStore((s) => s.claimedAch);
+  const achTotalsCache = useGameStore((s) => s.achTotalsCache);
   const hasUnclaimedAch = useMemo(() => {
+    // ⚠ 이 훅은 `if (!hydrated) return <Loading/>` **앞**에서 돈다(훅 규칙). selectedTeamId null 단락이
+    //   수화 전 freshSave 기본값 오판정을 막는 유일한 가드 — 절대 제거하지 말 것.
     if (!selectedTeamId) return false;
-    const statuses = evalAchievements({ myTeamId: selectedTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals });
-    return unclaimedReward(statuses, claimedAch).ids.length > 0;
-  }, [selectedTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals, claimedAch]);
+    return unclaimedAchIds(
+      { selectedTeamId, season, archive, hallOfFame, milestones, cash, fanScore, careerLog, careerTotals, results, claimedAch },
+      'floor', achTotalsCache,
+    ).length > 0;
+  }, [selectedTeamId, season, archive, hallOfFame, milestones, cash, fanScore, careerLog, careerTotals, results, claimedAch, achTotalsCache]);
 
   // 뒤로가기 앱 종료 확인(UI-35, Android 전용) — 탭 루트에서 더 갈 곳이 없을 때만 종료 다이얼로그.
   //   스택 화면(선수·계약 등)이 위에 있으면 canGoBack()=true → 기본 pop을 그대로 둔다(정상 뒤로가기 유지).

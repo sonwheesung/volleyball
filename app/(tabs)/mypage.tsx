@@ -16,8 +16,7 @@ import { readDevnotesCache, refreshDevnotes } from '../devnotes';
 import type { DevnoteKind } from '../../lib/server';
 import { useIsFocused } from '@react-navigation/native';
 import { AD_REWARD, AD_DAILY_CAP, canWatchAd, unclaimedReward } from '../../engine/diamonds';
-import { evalAchievements } from '../../engine/achievements';
-import { achTotals } from '../../data/careerTotals';
+import { achEvalFor } from '../../data/achSelect';
 import { DEV_TOOLS, WORLDCUP_ENABLED } from '../../data/flags';
 import { logError } from '../../lib/log';
 import { hasRemoveAds } from '../../lib/ads';
@@ -59,8 +58,9 @@ export default function MyPage() {
   const adState = useGameStore((s) => s.adState);
   // 수령 가능한 업적 보상 유무 — 없으면 버튼 비활성(색·무동작). achTotals로 시즌중 통산 업적도 반영.
   const myTeamId = useGameStore((s) => s.selectedTeamId) ?? '';
+  const season = useGameStore((s) => s.season);
   const archive = useGameStore((s) => s.archive);
-  const hof = useGameStore((s) => s.hallOfFame);
+  const hallOfFame = useGameStore((s) => s.hallOfFame);
   const milestones = useGameStore((s) => s.milestones);
   const cash = useGameStore((s) => s.cash);
   const fanScore = useGameStore((s) => s.fanScore);
@@ -70,19 +70,23 @@ export default function MyPage() {
   const claimedAch = useGameStore((s) => s.claimedAch);
   const resetSave = useGameStore((s) => s.resetSave);
   const replayOnboarding = useGameStore((s) => s.replayOnboarding);
-  // 미수령 업적 수 — **비동기(페인트 후) 계산**(Task2 fix): achTotals는 콜드 시 production+standings 리플레이(폰 ~20~30s)라
+  // 미수령 업적 수 — **비동기(페인트 후) 계산**(Task2 fix): 'exact'(achTotals)는 콜드 시 production+standings 리플레이(폰 ~20~30s)라
   //   렌더 동기 useMemo면 마이페이지 진입이 프리즈했다. InteractionManager로 상호작용 후 계산 → 빨간 점은 한 박자 뒤 뜬다(무해).
+  //   계산한 정확값은 `noteAchTotals`로 비영속 캐시에 남긴다 → 탭 빨간 점(하한)이 같은 시점 정확값을 재활용(시뮬 0회).
+  const noteAchTotals = useGameStore((s) => s.noteAchTotals);
   const [unclaimedCount, setUnclaimedCount] = useState(0);
   useEffect(() => {
     if (!myTeamId) { setUnclaimedCount(0); return; }
     let cancelled = false;
     const task = InteractionManager.runAfterInteractions(() => {
       if (cancelled) return;
-      const statuses = evalAchievements({ myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals: achTotals(myTeamId, careerTotals, results) });
-      if (!cancelled) setUnclaimedCount(unclaimedReward(statuses, claimedAch).ids.length);
+      const ev = achEvalFor({ selectedTeamId: myTeamId, season, archive, hallOfFame, milestones, cash, fanScore, careerLog, careerTotals, results, claimedAch }, 'exact');
+      if (cancelled) return;
+      noteAchTotals(ev.key, ev.totals);
+      setUnclaimedCount(unclaimedReward(ev.statuses, claimedAch).ids.length);
     });
     return () => { cancelled = true; task.cancel(); };
-  }, [myTeamId, archive, hof, milestones, cash, fanScore, careerLog, careerTotals, results, claimedAch]);
+  }, [myTeamId, season, archive, hallOfFame, milestones, cash, fanScore, careerLog, careerTotals, results, claimedAch, noteAchTotals]);
   const session = useAuthStore((s) => s.session);
   const signOut = useAuthStore((s) => s.signOut);
   const version = (Constants.expoConfig?.version as string) ?? '0.1.0';
