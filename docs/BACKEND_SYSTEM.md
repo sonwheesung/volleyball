@@ -374,7 +374,9 @@
 >   - **결제**(`/api/admin/series?metric=revenue|refund` + `/api/admin/payments`): **일/주/월** 토글 차트(매출[statsDaily, #43 전 0]·결제건수·환불·환불다이아) + **개별 결제/환불 내역 목록**(사용자 목록처럼 — 시각·유저·종류(구매/환불)·상품(ref)·다이아(delta)·잔액, kind 필터·페이지네이션). 건별 KRW는 #43 후.
 >   - **광고**(`/api/admin/series?metric=ad`): **일/주/월/연** 토글. 시청횟수·고유시청자·지급다이아(원장 reason='ad', 1회=+50).
 >   - **업적**(`/api/admin/achievements`): 86개 카탈로그 카테고리별 + **달성율 바**. 원천=`walletLedger(reason='achievement', ref=업적id)` 고유유저/총가입 — 업적 보상 적립이 계정평생 1회(achKey 멱등)라 ref별 고유유저=달성자. **별도 텔레메트리 불필요·결정론 격리 유지**(원장=다이아 진실, 시드/리플레이 무관). 카탈로그(제목)는 ops 페이지가 미러(engine tsconfig 격리 — econ.ts와 동일 정책).
-> - **통계(#46, `/api/admin/stats`)**: 대시보드/사용자용 KPI(총가입·실시간접속(최근30분)·DAU·신규·탈퇴·비활성·결제전환율·광고) + 14일 시계열(신규가입·DAU·매출·광고) + 시간대별. SVG 인라인 차트(그라데이션·베지어, 라이브러리 0). 시계열 일/주/월/연 집계는 `/api/admin/series`(UTC 버킷). ~~**한계**: 진짜 실시간/시간대별은 하트비트 필요(미구현) — lastSeenAt(로그인 시 갱신) 근사.~~ → **하트비트 구현(2026-07-31)**: `GET /api/wallet`(앱이 로그인·포그라운드마다 부르는 `syncWallet`)이 `touchLastSeen`으로 `lastSeenAt=now()` 갱신 → DAU/실시간/시간대별이 "**오늘 앱 켠 사람**" 기준으로 정확화(세션 영속이라 재로그인 안 하는 유저도 포착 — 테스터 "오늘 테스트했는데 DAU 0" 원인 해소). **앱 변경 0(서버만) — Vercel 재배포 즉시 기존 빌드에도 적용.** 날짜 경계는 여전히 UTC(KST 새벽 활동은 UTC 전날로 집계 — 추후 KST 버킷 검토). 다운로드는 Install Referrer(EAS) 후. 매출은 #43 후.
+> - **통계(#46, `/api/admin/stats`)**: 대시보드/사용자용 KPI(총가입·실시간접속(최근30분)·DAU·신규·탈퇴·비활성·결제전환율·광고) + 14일 시계열(신규가입·DAU·매출·광고) + 시간대별. SVG 인라인 차트(그라데이션·베지어, 라이브러리 0). 시계열 일/주/월/연 집계는 `/api/admin/series`(UTC 버킷). ~~**한계**: 진짜 실시간/시간대별은 하트비트 필요(미구현) — lastSeenAt(로그인 시 갱신) 근사.~~ → **하트비트 구현(2026-07-31)**: `GET /api/wallet`(앱이 로그인·포그라운드마다 부르는 `syncWallet`)이 `touchLastSeen`으로 `lastSeenAt=now()` 갱신 → ~~DAU/실시간/시간대별이~~ **DAU가**(→정정 아래) "**오늘 앱 켠 사람**" 기준으로 정확화(세션 영속이라 재로그인 안 하는 유저도 포착 — 테스터 "오늘 테스트했는데 DAU 0" 원인 해소). **앱 변경 0(서버만) — Vercel 재배포 즉시 기존 빌드에도 적용.** 날짜 경계는 여전히 UTC(KST 새벽 활동은 UTC 전날로 집계 — 추후 KST 버킷 검토). 다운로드는 Install Referrer(EAS) 후. 매출은 #43 후.
+>   - **정정 ①(2026-08-08, §13.29 착수 전 코드 실측) — "시간대별 정확화"는 사실이 아니다**: `server/app/api/admin/stats/route.ts`의 `hourly`는 유저 1명당 `lastSeenAt` **단 하나**로 버킷을 찍는다(`hourly[new Date(r.l).getUTCHours()]++`) = **"마지막으로 앱을 켠 시각" 분포**이지 접속 시간대 분포가 아니다. 핑을 촘촘히 넣으면 오히려 "마지막으로 **끈** 시각" 분포가 된다(체류가 길수록 뒤로 밀린다). ⇒ **시간대별 접속 분포는 이벤트 로그(접속 이력 테이블) 또는 일별 롤업이 있어야 산출 가능 — 추후.** 현 차트는 "마지막 접속 시각 분포"로 라벨을 읽어야 한다.
+>   - **정정 ②(2026-08-08) — "실시간(최근 30분)"도 하트비트로 안 고쳐졌다**: `touchLastSeen`을 부르는 곳은 `GET /api/wallet` **단 하나**이고, 그 wallet 호출은 `components/BootGate.tsx`가 **로그인 직후 + AppState 'active' 복귀**에만 쏜다(주기 타이머 없음). ⇒ **앱을 켜놓고 40분 경기를 보는 유저가 "최근 30분" 창에서 사라진다**(가장 몰입한 유저가 가장 안 잡히는 편향). 이 게임은 로컬 우선이라 경기·시즌 진행이 서버를 안 거쳐서, 서버는 다이아가 움직일 때만 흔적을 본다. → **§13.29 접속 핑(경기 시작 이벤트 핑)이 이 구멍을 메운다.**
 
 - **인증 `requireAdmin(req)` — fail-closed(P0-B)** ~~(코드 export명 `requireAdmin`)~~ → **정정(2026-07-31 doc↔code 감사): 실제 export명은 `isAdmin(req)`**(`server/lib/admin.ts:9`) — 문서는 개념명 "requireAdmin"으로 통칭하나 코드 심볼은 `isAdmin`: `Authorization: Bearer <ADMIN_TOKEN>` 상수시간 비교. **`ADMIN_TOKEN` 미설정/짧으면(<16자) 무조건 401/503**(~~크론의 fail-open 패턴 복제 금지~~ → **크론도 이제 fail-closed로 정렬됨**, §13.10 정정 — env 누락=전면 거부). Bearer 헤더라 CSRF 내성(쿠키 인증 미도입). 토큰은 localStorage.
 - **엔드포인트**(전부 requireAdmin): `POST/GET/PATCH/DELETE /api/admin/coupon`(발급/목록/수정/삭제 — 발급 시 code 정규화·reward>0·상한캡·UNIQUE 충돌 4xx, 삭제는 사용기록 FK 있으면 'has-redemptions' 409→비활성화 권장) · `GET /api/admin/coupon/redemptions?couponId=`(**쿠폰 사용 내역 — 누가·언제**, 상세 모달에 표시. 2026-07-04) · 사용자별 다이아 잔액은 `/api/admin/users` 목록 다이아 컬럼·`POST/GET/PATCH/DELETE /api/admin/announcement`(발행/목록/수정/삭제)·`POST/GET /api/admin/setting` · `GET /api/admin/stats`(대시보드 KPI+14일 시계열) · `GET /api/admin/users`(목록·상태필터·페이지네이션) · `GET /api/admin/series?metric=revenue|ad|refund&granularity=day|week|month|year`(UTC 버킷 시계열) · `GET /api/admin/payments?kind=all|purchase|refund`(개별 결제/환불 원장 목록·페이지네이션) · `GET /api/admin/achievements`(업적별 달성유저=원장 ref 고유유저) · `GET /api/admin/payment-events`(결제 단계 감사 로그 조회 — source·fail·txn 필터, §13.22).
@@ -791,3 +793,42 @@
 - **파일**: `server/lib/notify.ts`(`notifySignup` 추가)·`server/lib/wallet.ts`(`countSignups` 추가)·`server/app/api/auth/login/route.ts`(신규 분기에서 `afterSafe(notifySignup)`)·`server/.env.example`(`DISCORD_SIGNUP_WEBHOOK_URL`)·`server/tools/_dv_signup_notify.ts`(가드).
 - **가드 소음 주의(§13.22 문의 알림과 동일 클래스)**: `/api/auth/login`을 태우는 라이브 가드(`_dv_account_live` 등)는 이제 **신규 가입 알림 대상**이 된다. 로컬 dev는 디스코드 env가 비어 있어 no-op이라 무해하지만, **prod env(.env.local)를 실어 라이브 가드를 돌리면 실채널로 샌다** — 기존 `notifyTicket`(문의 가드)과 같은 성질이므로 같은 규율(가드는 dev env로) 적용.
 - **운영(사용자 몫)**: 디스코드 채널 → 연동 → 웹후크 생성 → URL을 **Vercel env `DISCORD_SIGNUP_WEBHOOK_URL`** 에 설정(전용 채널을 원치 않으면 미설정 = 기존 결제 채널로 합류). 미설정이어도 서버는 정상 동작.
+
+### 13.29 접속 핑(하트비트) — 경기 시작 이벤트 핑 (2026-08-08, §13.15 정정 ①②의 후속)
+> **상태**: ✅ 구현(2026-08-08). 설계 독립 리뷰 완료·확정. §13.15의 "하트비트"(=`GET /api/wallet` 부수효과)가 **실시간 접속을 못 잡는다**는 실측(§13.15 정정 ②)을 메운다.
+> 순수 **관측 사이드채널** — 재화·시드·리플레이·게임플레이에 일절 무관(§8 결정론 격리, §13.21·13.22·13.28과 같은 계약). **UI 변화 0 · 유저 조작 요구 0 · 푸시 0**(관전형 기둥 유지).
+
+- **왜 타이머가 아니라 이벤트 핑인가 (핵심 결정 — 주기 타이머는 명시적으로 기각)**:
+  - RN `setInterval`은 **JS 스레드에 묶여** 있다. 관전 중 코어 포화(#122 발열)·시즌 전환 정체 구간(메모리 [시즌 전환 로딩 병목])에서 타이머가 밀린다 ⇒ **가장 무겁게 플레이할 때 가장 적게 잡히는** 최악의 편향(고치려는 문제를 다른 모양으로 재생산).
+  - 유저가 버튼을 누르는 시점은 **앱이 반응하는 순간**이므로 그 편향이 원천적으로 없다.
+  - 배터리·`AppState`('inactive' 오판·타이머 누수·백그라운드 복귀 중복 발사) 함정도 전부 소멸. **`setInterval`·`AppState` 리스너를 추가하지 않는다**(설계상 배제).
+  - `syncWallet` 주기 호출도 기각: 스토어 6필드 `set` → 전역 리렌더(발열 #122 악화) + 쿼리 6개짜리 응답(보호 대상은 `UPDATE` 1건).
+- **오프시즌 스텝 핑 미채택(사용자 결정)**: 오프시즌 구간은 **§13.27 `season_telemetry`가 이미 진행 상황을 알려준다**(중복 파이프 금지). ⇒ **첫 오프시즌(첫 경기 전)은 핑 0건**이 되는데, 그것이 곧 **"첫 경기 전 이탈" 신호**라 해석상 유효하다(빈 값 = 미구현이 아니라 의미 있는 관측).
+- **서버 — `POST /api/heartbeat`**(`server/app/api/heartbeat/route.ts`):
+  - Bearer 인증(`requireUserId` — 익명 폴백 금지 §13.17 P0-5) → `touchLastSeen(userId)` → `{ok:true}`. **그 외 DB 접근 금지**(잔액·원장·패스·우편 조회 없음 — `getWallet`은 쿼리 6개, 여기선 `UPDATE` 1건). 미인증 401. `export const dynamic = 'force-dynamic'`.
+  - **레이트리밋 미적용(의도)**: Bearer 인증이라 남용 표면이 **자기 계정 한정**이고, Upstash 왕복이 보호 대상인 `UPDATE` 1건보다 비싼 **역설**이 된다. 클라 60초 가드가 1차 방어.
+- **클라이언트 — `sendHeartbeat()`**(`lib/server.ts`). **5성질**(가드가 봉인):
+  1. **fire-and-forget** — 반환 타입이 `void`라 호출부가 `await`할 수 없다. 경기 시작이 1ms도 늦으면 안 된다.
+  2. **완전 무음 실패** — 오프라인·401·5xx 어떤 실패도 조용히 삼킨다. ⚠ **`logError` 경로를 우회한다**: 기존 `call()`은 실패 시 `logError` → `lib/log.ts`의 `errorSink` → **기기 진단 롤링 버퍼**(`lib/deviceLog.ts`)로 흘러가, 핑이 실패할 때마다 오류가 쌓여 **문의 진단 스냅샷(§13.20)을 오염**시킨다. 그래서 `call()`을 재사용하지 않고 **전용 fetch**를 쓴다.
+  3. **응답 미파싱** — 본문(`res.json()`/`text()`)을 읽지 않는다(결정론 격리를 **계약 수준에서** 봉인 — 서버 응답이 클라 상태로 흘러들 경로 자체를 없앤다).
+  4. **재시도·큐 없음**(사용자 결정) — 실패하면 그냥 버린다. 관측 지표에 재전송 큐를 다는 건 과설계.
+  5. **최소 간격 가드 60초** — 모듈 스코프 `lastHeartbeatAt`. 유저가 일정↔경기를 빠르게 오갈 때 스팸 방지. 시각은 **발사 시도 시점**에 갱신(실패해도 재시도 안 하므로 동일).
+  - **no-op 조건**: `EXPO_PUBLIC_SERVER_URL` 미설정 또는 **미로그인**(`bearer` 없음)이면 fetch 자체를 안 한다(기존 `lib/server.ts` 규약).
+- **호출 지점(여기 외 금지)**: `app/(tabs)/schedule.tsx` — ① 정규시즌 `onAdvance`("경기 시작"/"관전하러 가기") ② 포스트시즌 "관전하러 가기 →"(`/match/playoff`). 둘 다 `router.push` **직전**에 `void sendHeartbeat()`.
+  - **미배선(의도)**: `app/calendar.tsx`의 포스트시즌 행 탭(이미 치른 경기 재생 포함)·`app/exhibition.tsx`(개발용 샌드박스). 진입점을 늘릴수록 60초 가드가 흡수해 이득이 없고, 스펙 범위를 넘는다.
+- **⚠ 배포 순서 강제 — 서버 라우트 먼저 → 그 다음 OTA**: 역순이면 앱이 **없는 경로(404)** 를 치고, 그 실패가 (무음이라 유저에겐 안 보여도) 라우트가 생길 때까지 계속 헛발사한다. 서버 배포가 `main` push 즉시 운영 반영이므로(메모리 [브랜치·배포 흐름]) **server 머지 → 확인 → OTA** 순서를 지킨다.
+- **구버전 스큐(대시보드 오독 방지)**: OTA 미수신 유저는 핑을 **안 보낸다** ⇒ 배포 직후 `active30m`은 **신·구 빌드 혼재값**(구빌드 유저는 여전히 wallet 호출 시점에만 잡힘). 콘솔의 "실시간 접속" 카드에 **혼재 기간임을 알리는 라벨이 필요**하다(전 유저 OTA 수신 후 해소). 이 기간의 `active30m` 증가분을 유입 증가로 오독하지 말 것.
+- **개인정보 — 처리방침 개정 불필요(감사 대비 근거)**: 핑은 **새 수집 항목이 아니다.** `data/legalText.ts`가 이미 고지한 **"마지막 접속 일시"** 그 필드(`users.lastSeenAt`)를 **덮어쓸 뿐 이력을 남기지 않는다**(접속 로그 테이블 신설 없음 — 행 1개, 값 1개). 수집 항목·목적·보유기간 어느 것도 변하지 않으므로 **처리방침 개정 대상 아님**. ※ 만약 나중에 접속 **이력**(시간대별 분포용 이벤트 로그)을 남기게 되면 그때는 **새 수집 항목**이 되어 고지 갱신이 필요하다 — 그 경계를 여기 명시해 둔다.
+- **범위 — 무엇을 고치고 무엇을 안 고치는가(★ 배포 후 "DAU가 그대로네 = 실패했나" 오판 방지)**:
+  - **고친다** ⓐ **`active30m`(실시간 접속)** — KPI 중 **유일하게 30분 해상도**라 지금 깨져 있다(§13.15 정정 ②). ⓑ **UTC 09:00 = KST 오전 9시 DAU 경계 누락** — `stats` 라우트의 `dayStart.setUTCHours(0,0,0,0)` 때문에 한국 유저의 하루가 **오전 9시에 잘린다**. 08:30 KST에 켜서 10:30까지 논 유저는 새 UTC 일자에 터치가 없어 그날 DAU에서 빠졌는데, 경기 시작 핑이 그 구간을 메운다.
+  - **안 고친다** — **DAU·WAU·MAU·D1~D30은 전부 날짜 해상도**라 "그날 한 번이라도 켰나"만 요구한다. 부팅 시 wallet 호출이 이미 그 조건을 만족하므로 **핑 유무와 무관하게 값이 같다**(위 ⓑ 경계 케이스만 예외). ⇒ **배포 후 DAU가 안 움직이는 것이 정상**이고, 움직여야 하는 건 `active30m`이다.
+  - **시간대별 접속 분포는 여전히 불가**(§13.15 정정 ① — 이벤트/일별 데이터 필요).
+- **체류 시간(플레이타임)은 이번 범위 밖**: 핑 payload에 `elapsed`를 실어 서버가 합산하는 방식이 유력하나, **클램프 상한(한 핑이 대표할 수 있는 최대 체류)** 을 지금 정하면 추정이 된다(CLAUDE §11 "추정 절대 금지"). **실측 세션 분포를 본 뒤** 상한을 확정하고 착수한다. 그때까지 핑 body는 빈 객체(`{}`)로 두어 계약을 열어 둔다.
+- **파일**: `server/app/api/heartbeat/route.ts`(신)·`lib/server.ts`(`sendHeartbeat`)·`app/(tabs)/schedule.tsx`(정규·포스트시즌 2지점)·`server/lib/wallet.ts`(`touchLastSeen` 주석 정정 ③)·`server/app/api/admin/stats/route.ts`(헤더 주석 정정)·`server/tools/_dv_heartbeat.ts`(가드).
+- **검증 — 가드 `server/tools/_dv_heartbeat.ts`**(순수 티어는 DB 없이 항상 실행 · 라이브 티어는 dev DB 있을 때만):
+  - **라우트 계약**: ① 무토큰/위조 토큰 = **401** ② `force-dynamic` 선언 ③ **경량 계약 봉인** — 라우트 소스에 `getWallet`·`ledger`·`passStatus`·`mailCounts`·`balance` 토큰이 **없음**(나중에 누가 `getWallet`을 끼워넣는 회귀 차단) ④ (라이브) 인증 시 `{ok:true}`이고 **응답 키가 정확히 `['ok']`** — 잔액·원장이 실리지 않음 ⑤ (라이브) 호출 후 `users.lastSeenAt`이 실제로 갱신됨.
+  - **클라 5성질**: ⑥ `SERVER_URL` 미설정 = 발사 0 ⑦ 미로그인(`bearer` null) = 발사 0 ⑧ **60초 가드** — 연속 3회 호출에 fetch **1회**(2·3번째 미발사) ⑨ **무음 실패** — fetch reject/401/500 어디서도 **throw 0** 이고 **`logError` 미호출**(=`errorSink` 미호출 + `console.warn('[error:…')` 미출력) ⑩ **응답 미파싱** — 스텁 `Response`의 `json()`·`text()`가 **한 번도 안 불림** ⑪ 반환값이 `undefined`(await 불가 = fire-and-forget).
+  - **A/B 자가검증(허위 오라클 금지)** — 오라클이 "항상 통과"가 아님을 같은 하니스로 증명:
+    - **내장 양성대조**: 같은 실패 `fetch`를 **기존 `call()` 경로**(`getWallet`)로 태우면 `errorSink`·`console.warn`이 **실제로 호출된다** ⇒ ⑨의 스파이가 살아있음(무음 판정이 스파이 고장 때문이 아님).
+    - **내장 양성대조**: ⑧에서 **1번째는 발사된다**(fetch 1회 관측) ⇒ 발사 카운터가 blind가 아님.
+    - **변이 A/B(일회성, 커밋 금지)**: (a) 60초 가드를 제거한 변이 → ⑧이 **FAIL로 뒤집힘**(fetch 3회) (b) 전용 fetch 대신 `call()`을 쓰는 변이(=`logError` 우회 제거) → ⑨가 **FAIL로 뒤집힘**(스파이 적발) (c) 라우트에 `getWallet`을 끼워넣은 변이 → ③이 **FAIL**.

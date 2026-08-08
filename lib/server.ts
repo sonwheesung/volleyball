@@ -71,6 +71,44 @@ async function call<T>(path: string, init?: RequestInit, timeoutMs: number = REQ
   }
 }
 
+// ── 접속 핑(하트비트, BACKEND_SYSTEM §13.29) ──
+// 서버의 "실시간 접속(최근 30분)"이 앱을 켜놓고 관전하는 유저를 놓치던 구멍을 메운다(§13.15 정정 ②).
+// **주기 타이머·AppState 리스너는 쓰지 않는다**(설계상 배제 — RN setInterval은 JS 스레드에 묶여 관전 중 코어 포화·
+// 시즌 전환 정체에서 밀린다 = 가장 무겁게 플레이할 때 가장 적게 잡히는 편향). 유저가 경기 시작을 누르는 순간에만 쏜다.
+//
+// ★ 5성질(가드 server/tools/_dv_heartbeat.ts 가 봉인) — 하나라도 깨면 관전 경험이나 진단 품질이 상한다:
+//  ① fire-and-forget: 반환 타입이 void라 호출부가 await 할 수 없다(경기 시작이 1ms도 늦으면 안 된다).
+//  ② 완전 무음: 오프라인·401·5xx 전부 조용히 삼킨다. **`call()`을 일부러 안 쓴다** — call()은 실패 시 logError를 부르고
+//     그게 lib/log.ts의 errorSink → 기기 진단 롤링 버퍼로 흘러가, 핑 실패가 쌓여 문의 진단 스냅샷(§13.20)을 오염시킨다.
+//  ③ 응답 미파싱: 본문을 읽지 않는다(결정론 격리를 계약 수준에서 봉인 — 서버 값이 클라 상태로 흘러들 경로 자체가 없다).
+//  ④ 재시도·큐 없음: 실패하면 버린다(사용자 결정 — 관측 지표에 재전송 큐는 과설계).
+//  ⑤ 최소 간격 60초: 일정↔경기를 빠르게 오갈 때 스팸 방지. 시각은 **발사 시도 시점**에 갱신(실패해도 재시도 안 하므로 동일).
+const HEARTBEAT_MIN_GAP_MS = 60_000;
+let lastHeartbeatAt = 0;
+
+/** 접속 핑 1발(§13.29). 호출부는 `void sendHeartbeat()`로 쏘고 **절대 await 하지 않는다**.
+ *  서버 미설정·미로그인·60초 내 재호출이면 no-op. 어떤 실패도 무음(throw 0·logError 0). */
+export function sendHeartbeat(): void {
+  if (!SERVER_URL || !bearer) return; // 미설정/미로그인 = no-op(기존 lib/server.ts 규약)
+  const now = Date.now();
+  if (now - lastHeartbeatAt < HEARTBEAT_MIN_GAP_MS) return;
+  lastHeartbeatAt = now;
+  try {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), REQ_TIMEOUT_MS);
+    const done = () => clearTimeout(timer);
+    // 전용 fetch(call() 우회 — 위 성질 ②). 응답은 읽지도 보지도 않는다(성질 ③).
+    void fetch(SERVER_URL + '/api/heartbeat', {
+      method: 'POST',
+      signal: ctrl.signal,
+      headers: { 'content-type': 'application/json', authorization: `Bearer ${bearer}` },
+      body: '{}', // 빈 payload — 체류시간(elapsed) 편입은 §13.29 "범위 밖"(실측 후 클램프 상한 확정)
+    }).then(done, done); // 성공·실패 모두 타이머만 정리하고 침묵(성질 ②④)
+  } catch {
+    /* fetch 자체가 동기 throw 하는 환경도 무음(성질 ②) */
+  }
+}
+
 // ── 인증(AUTH_SYSTEM) ──
 /** 신원 → 자체 Bearer 세션. google=idToken(서버가 검증해 sub 도출) · dev=providerId(기기ID). 개인정보 최소화(이메일·이름 미전송).
  *  성공 시 setServerToken은 호출부(useAuthStore)가. */

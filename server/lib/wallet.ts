@@ -164,9 +164,17 @@ export async function adStatusToday(userId: string): Promise<{ count: number; la
   return { count: r?.n ?? 0, lastAtMs: r?.lastMs != null ? Number(r.lastMs) : null };
 }
 
-/** 접속 하트비트(DAU 정확화, BACKEND §13.15) — 인증된 포그라운드 콜에서 lastSeenAt을 now()로 찍는다.
+/** 접속 하트비트(BACKEND §13.15·§13.29) — 인증된 콜에서 lastSeenAt을 now()로 찍는다.
  *  ~~로그인 시에만 lastSeenAt 갱신(하트비트 미구현) → DAU가 "오늘 로그인한 사람"만 셈~~ → GET /api/wallet(=앱이 로그인·포그라운드마다 부르는
  *  syncWallet)에서 이 함수를 태워 DAU를 "오늘 앱을 켠 사람"으로 정확화(2026-07-31, 테스터: 오늘 테스트했는데 DAU 0 — 세션 영속이라 재로그인 안 함).
+ *
+ *  ★ 정정(2026-08-08, §13.29 착수 전 전수 실측 — 위 서술이 두 군데 부정확했다):
+ *   · **"로그인 시에만 갱신"은 취소선 대상이 아니었다** — `auth/login` 라우트는 지금도 기기정보 갱신과 함께 `lastSeenAt: now()`를
+ *     **무조건** 쓴다(app/api/auth/login/route.ts, `.set({platform,osVersion,appVersion,lastSeenAt})`). 즉 로그인은 여전히 정당한 writer다.
+ *   · **"포그라운드마다"는 사실이 아니다** — GET /api/wallet(syncWallet)을 부르는 곳은 components/BootGate.tsx의
+ *     **로그인 직후 + AppState 'active' 복귀** 두 순간뿐이고 **주기 타이머가 없다**. 그래서 앱을 켜놓고 40분 경기를 보는 유저가
+ *     "최근 30분(active30m)" 창에서 사라진다(§13.15 정정 ②). DAU는 날짜 해상도라 무영향, 깨진 건 active30m뿐.
+ *  ⇒ 현재 writer 전수: ① auth/login ② GET /api/wallet ③ **POST /api/heartbeat(신, §13.29 — 경기 시작 이벤트 핑)**.
  *  now()는 DB 클럭(로그인과 동일 규약). 탈퇴 유저 제외. 실패는 조용히 무시(지표 부수효과라 본 응답을 막지 않는다). */
 export async function touchLastSeen(userId: string): Promise<void> {
   try {

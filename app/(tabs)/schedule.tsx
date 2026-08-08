@@ -27,6 +27,7 @@ import { planNextAction } from '../../engine/advance';
 import { teamOverallRaw, overallRaw, displayOvr } from '../../engine/overall';
 import { dateForDay, formatDate } from '../../lib/calendar';
 import { useSeasonStartEntry } from '../../lib/seasonStart';
+import { sendHeartbeat } from '../../lib/server';
 import { DEV_TOOLS } from '../../data/flags';
 import { useGameStore } from '../../store/useGameStore';
 
@@ -115,6 +116,7 @@ function ScheduleInner() {
       return;
     }
     setDay(nextFixture.dayIndex); // 경기일까지 진행(사이 기간은 자동 훈련/노쇠 재계산)
+    void sendHeartbeat(); // 접속 핑(BACKEND §13.29) — fire-and-forget·무음·60초 가드. await 금지(경기 시작 지연 0)
     router.push(`/match/${nextFixture.id}`);
   };
 
@@ -359,7 +361,10 @@ function ScheduleInner() {
                   </IconLabel>
                   <Row><Text style={{ color: theme.text, fontSize: 16, fontWeight: '700' }}>{name(next.hiId)} vs {name(next.loId)}</Text></Row>
                   {next.mine ? (
-                    <Button label="관전하러 가기 →" onPress={() => router.push(`/match/playoff?po=${next.round}&g=${next.g}&season=${season}`)} />
+                    <Button label="관전하러 가기 →" onPress={() => {
+                      void sendHeartbeat(); // 접속 핑(BACKEND §13.29) — 포스트시즌 경기 진입 지점. 정규시즌 onAdvance와 동일 계약
+                      router.push(`/match/playoff?po=${next.round}&g=${next.g}&season=${season}`);
+                    }} />
                   ) : (
                     // 타 구단 경기 = 결과 확인만(자동 진행). setDay로 슬롯 도달 → 위 시리즈 카드에 결과 공개.
                     // + 탭 지점 직접 피드백(2026-07-12 무피드백 전수조사): 결과가 위쪽 카드에만 조용히 반영돼 "됐나?" 소지 → 스코어 alert.
