@@ -9,26 +9,33 @@ import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
 import { internalScope, isExcluded, internalMeta } from '../../../../lib/internalScope';
+import { kstMd } from '../../../../lib/dates';
 
 export const dynamic = 'force-dynamic';
 
 type Gran = 'day' | 'week' | 'month' | 'year';
 const N: Record<Gran, number> = { day: 30, week: 12, month: 12, year: 5 };
-const MD = (t: number) => { const d = new Date(t); return `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`; };
+// 버킷 경계·라벨은 **KST**(§13.15 시간대 정정 2026-08-08). 종전 UTC 경계는 한국 기준 오전 9시에 하루가 바뀌었다.
+const KST_MS = 9 * 60 * 60_000;
+const MD = (kstWall: number) => kstMd(new Date(kstWall - KST_MS)); // 인자는 KST 벽시계(UTC 필드로 표현) → 실제 순간으로 되돌려 라벨
 
+// ★ 계산은 **KST 벽시계 공간**(now+9h 의 UTC 필드)에서 하고, 경계값만 -9h 해서 실제 UTC 순간으로 되돌린다.
+//   이렇게 해야 "월/연 경계"까지 한국 달력과 맞는다(단순히 9시간 빼는 방식은 월말·연말에 어긋난다).
 function buildBuckets(gran: Gran, now: Date): { label: string; start: number; end: number }[] {
   const out: { label: string; start: number; end: number }[] = [];
   const n = N[gran];
-  const Y = now.getUTCFullYear(), M = now.getUTCMonth(), D = now.getUTCDate();
+  const k = new Date(now.getTime() + KST_MS); // KST 벽시계
+  const Y = k.getUTCFullYear(), M = k.getUTCMonth(), D = k.getUTCDate();
   const today = Date.UTC(Y, M, D);
+  const utc = (kstWall: number) => kstWall - KST_MS; // KST 벽시계 → 실제 UTC 순간
   if (gran === 'day') {
-    for (let i = n - 1; i >= 0; i--) { const s = today - i * 86400000; out.push({ label: MD(s), start: s, end: s + 86400000 }); }
+    for (let i = n - 1; i >= 0; i--) { const s = today - i * 86400000; out.push({ label: MD(s), start: utc(s), end: utc(s + 86400000) }); }
   } else if (gran === 'week') {
-    for (let i = n - 1; i >= 0; i--) { const e = today - (i * 7 - 1) * 86400000; const s = e - 7 * 86400000; out.push({ label: MD(s), start: s, end: e }); }
+    for (let i = n - 1; i >= 0; i--) { const e = today - (i * 7 - 1) * 86400000; const s = e - 7 * 86400000; out.push({ label: MD(s), start: utc(s), end: utc(e) }); }
   } else if (gran === 'month') {
-    for (let i = n - 1; i >= 0; i--) { const s = Date.UTC(Y, M - i, 1); const e = Date.UTC(Y, M - i + 1, 1); out.push({ label: `${new Date(s).getUTCFullYear()}-${String(new Date(s).getUTCMonth() + 1).padStart(2, '0')}`, start: s, end: e }); }
+    for (let i = n - 1; i >= 0; i--) { const s = Date.UTC(Y, M - i, 1); const e = Date.UTC(Y, M - i + 1, 1); out.push({ label: `${new Date(s).getUTCFullYear()}-${String(new Date(s).getUTCMonth() + 1).padStart(2, '0')}`, start: utc(s), end: utc(e) }); }
   } else {
-    for (let i = n - 1; i >= 0; i--) { const s = Date.UTC(Y - i, 0, 1); const e = Date.UTC(Y - i + 1, 0, 1); out.push({ label: String(new Date(s).getUTCFullYear()), start: s, end: e }); }
+    for (let i = n - 1; i >= 0; i--) { const s = Date.UTC(Y - i, 0, 1); const e = Date.UTC(Y - i + 1, 0, 1); out.push({ label: String(new Date(s).getUTCFullYear()), start: utc(s), end: utc(e) }); }
   }
   return out;
 }
@@ -56,10 +63,11 @@ export async function GET(req: Request) {
       return NextResponse.json({ ok: true, metric, gran, labels, count, internal: internalMeta(scope) });
     }
     if (metric === 'revenue') {
-      const fromDay = new Date(bk[0].start).toISOString().slice(0, 10);
+      // statsDaily.day 는 **KST 달력일**(라이터도 KST — revenuecat/retention). 조회 하한도 같은 규약으로 맞춘다.
+      const fromDay = new Date(bk[0].start + KST_MS).toISOString().slice(0, 10);
       const sd = await db.select().from(statsDaily).where(and(eq(statsDaily.projCode, PROJ_CODE), gte(statsDaily.day, fromDay)));
       const revenue = new Array(bk.length).fill(0), purchases = new Array(bk.length).fill(0);
-      for (const s of sd) { const i = bidx(bk, Date.parse(`${String(s.day)}T00:00:00Z`)); if (i >= 0) { revenue[i] += s.revenueKrw; purchases[i] += s.purchaseCount; } }
+      for (const s of sd) { const i = bidx(bk, Date.parse(`${String(s.day).slice(0, 10)}T00:00:00Z`) - KST_MS); if (i >= 0) { revenue[i] += s.revenueKrw; purchases[i] += s.purchaseCount; } }
       // ⚠ statsDaily는 userId 없는 사전 롤업이라 내부 계정을 못 뺀다(§13.30 E) — 응답에 그대로 고지.
       return NextResponse.json({ ok: true, metric, gran, labels, revenue, purchases, internal: internalMeta(scope, ['revenue', 'purchases']) });
     }

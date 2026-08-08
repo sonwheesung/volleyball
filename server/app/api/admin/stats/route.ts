@@ -26,12 +26,14 @@ import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
 import { aggregateUsers, retentionPct } from '../../../../lib/adminStats';
 import { internalScope, isExcluded, internalMeta } from '../../../../lib/internalScope';
+import { kstDayStart, kstYmd, kstMd, kstHour } from '../../../../lib/dates';
 
 export const dynamic = 'force-dynamic';
 
 const DAYS = 14;
-const MD = (d: Date) => `${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`;
-const YMD = (d: Date) => d.toISOString().slice(0, 10);
+// ※ 날짜·시각 버킷은 전부 **KST**(§13.15 시간대 정정 2026-08-08). 종전 UTC는 실측 9시간 밀림이었다.
+const MD = kstMd;
+const YMD = kstYmd;
 
 export async function GET(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
@@ -40,7 +42,7 @@ export async function GET(req: Request) {
     const scope = await internalScope(req);
     const includeInternal = scope.includeInternal;
     const now = Date.now();
-    const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
+    const dayStart = kstDayStart(); // KST 00:00에 해당하는 UTC 순간(종전 UTC 자정 = KST 오전 9시였다)
     // ※ 실시간(30분)·MAU(30일)·WAU(7일)·비활성(14일) 창은 이제 `lib/adminStats.aggregateUsers`가 계산한다(§13.30 G).
     const win = new Date(dayStart.getTime() - (DAYS - 1) * 86400000); // 14일 시계열 시작(원장 조회 하한)
 

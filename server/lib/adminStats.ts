@@ -8,6 +8,9 @@
 // ★ 내부 계정(§13.30): 기본 **제외**. `includeInternal`이면 포함. 제외한 인원수는 `internalExcluded`로 되돌려
 //   화면이 "내부 n명 제외"를 **고지**한다 — 숫자가 조용히 달라지는 게 가장 위험하다.
 
+// dates.ts 는 순수 날짜 산술(db·next·env 무의존)이라 이 모듈의 'DB 무의존' 계약을 깨지 않는다.
+import { kstYmd, kstHour } from './dates';
+
 /** 집계 입력 — users 테이블에서 뽑는 최소 필드(계약). */
 export interface UserRow {
   createdAt: Date | null;
@@ -42,7 +45,8 @@ export interface UserAgg {
 /** 리텐션 근사 구간(일) — §13.15: lastSeenAt 기반 근사이지 정밀 코호트가 아니다. */
 export const RET_DAYS = [1, 3, 7, 14, 30] as const;
 
-const YMD = (d: Date): string => d.toISOString().slice(0, 10);
+// KST 기준(§13.15 시간대 정정) — 라우트가 넘기는 dayKeys 도 KST 날짜라 여기서 같은 규약을 써야 맞물린다.
+const YMD = kstYmd;
 
 /**
  * 내부 계정을 걸러야 하는가 — 원장/이벤트처럼 userId만 있는 행에 쓴다.
@@ -95,7 +99,7 @@ export function aggregateUsers(rows: readonly UserRow[], opts: AggregateOpts): U
       if (lt < inactBefore) inactive++;
       const i = idx.get(YMD(r.lastSeenAt));
       if (i !== undefined) dau[i]++;
-      hourly[r.lastSeenAt.getUTCHours()]++;
+      hourly[kstHour(r.lastSeenAt)]++; // KST 시(0~23)
     }
   }
 

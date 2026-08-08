@@ -27,7 +27,7 @@ export async function rollupRecent(): Promise<number> {
   //   여기 크론 재집계)가 같은 행을 쓰므로, 웹훅이 제외한 샌드박스 지급(ref='<productId>:sandbox')을 이 재집계도 대칭 제외해야
   //   덮어쓰기로 필터가 무효화되지 않는다. reason='purchase' 행의 ref는 실제로 non-null이나 NULL-안전하게 처리.
   const pRows = (await db.execute(sql`
-    SELECT (created_at AT TIME ZONE 'UTC')::date::text AS day,
+    SELECT (created_at AT TIME ZONE 'Asia/Seoul')::date::text AS day,
            count(*)::int AS purchase_count,
            coalesce(sum(delta), 0)::int AS diamonds_purchased
     FROM wallet_ledger
@@ -36,7 +36,7 @@ export async function rollupRecent(): Promise<number> {
       AND created_at >= now() - make_interval(days => 2)
     GROUP BY 1`)) as unknown as Array<{ day: string; purchase_count: number; diamonds_purchased: number }>;
   const uRows = (await db.execute(sql`
-    SELECT (created_at AT TIME ZONE 'UTC')::date::text AS day, count(*)::int AS new_users
+    SELECT (created_at AT TIME ZONE 'Asia/Seoul')::date::text AS day, count(*)::int AS new_users
     FROM users
     WHERE proj_code = ${PROJ_CODE} AND created_at >= now() - make_interval(days => 2)
     GROUP BY 1`)) as unknown as Array<{ day: string; new_users: number }>;

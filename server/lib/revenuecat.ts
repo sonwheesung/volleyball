@@ -3,6 +3,7 @@
 import { and, eq, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { statsDaily, purchaseEvent } from '../db/schema';
+import { kstYmd } from './dates';
 import { PROJ_CODE } from './proj';
 import { ensureProj } from './wallet';
 import { productDiamonds, isPassProduct } from './products';
@@ -123,7 +124,7 @@ export const refundKey = (userId: string, storeTxnId: string) => `refund:${userI
 export async function recordRevenueKrwOnce(storeTxnId: string, priceKrw: number | null): Promise<'recorded' | 'skipped' | 'no-price'> {
   if (priceKrw == null || priceKrw <= 0) return 'no-price';
   await ensureProj();
-  const day = new Date().toISOString().slice(0, 10); // UTC 달력일
+  const day = kstYmd(); // **KST 달력일**(§13.15 시간대 정정 2026-08-08 — 종전 UTC는 한국 오전 9시에 날짜가 바뀌었다)
   return await db.transaction(async (tx) => {
     const dup = await tx
       .select({ id: purchaseEvent.id })

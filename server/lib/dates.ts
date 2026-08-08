@@ -43,3 +43,34 @@ export function diffDays(fromStr: string, toStr: string): number {
 export function maxDateStr(a: string, b: string): string {
   return diffDays(a, b) >= 0 ? b : a;
 }
+
+// ── 운영 지표 시간대(BACKEND_SYSTEM §13.15 · 2026-08-08) ────────────────────────
+// **관리자 콘솔의 모든 날짜·시간 버킷은 KST 기준이다.** 종전엔 전부 UTC라 실측으로 9시간이 밀렸다:
+//   · "시간대별 접속" — 저녁 19시 접속이 10시 칸에 찍혔다(운영자가 이용 시간대를 정반대로 읽는다)
+//   · "오늘" 경계가 UTC 자정 = **KST 오전 9시** — 밤 11시 가입이 다음 날 신규로 넘어가고,
+//     아침 8시에 콘솔을 열면 "오늘 DAU"가 실은 어제 오전 9시부터의 값이었다
+// 서비스 대상이 대한민국 단일 국가(배포 국가 = 대한민국)라 KST 고정이 맞다 — 뷰어 로컬 시간대 추종은 하지 않는다
+//   (운영자가 해외에서 봐도 "우리 유저의 하루"는 한국 시간이어야 판단이 선다).
+const KST_OFFSET_MS = KST_OFFSET_MIN * 60_000;
+
+/** UTC 순간 → KST 벽시계를 UTC 필드로 읽기 위한 시프트 값(내부용 — 이 값을 시각으로 쓰면 안 된다). */
+const toKstFields = (d: Date): Date => new Date(d.getTime() + KST_OFFSET_MS);
+
+/** KST 달력일 'YYYY-MM-DD'. 지표 일자 키의 유일한 출처(statsDaily.day 포함). */
+export const kstYmd = (d: Date = new Date()): string => toKstFields(d).toISOString().slice(0, 10);
+
+/** KST 달력일 'MM-DD'(차트 라벨). */
+export const kstMd = (d: Date = new Date()): string => toKstFields(d).toISOString().slice(5, 10);
+
+/** KST 시(0~23) — "시간대별 접속" 버킷. */
+export const kstHour = (d: Date = new Date()): number => toKstFields(d).getUTCHours();
+
+/** 오늘(KST) 00:00에 해당하는 **UTC 순간**. DB 타임스탬프와 직접 비교하는 경계값. */
+export function kstDayStart(now: Date = new Date()): Date {
+  const k = toKstFields(now);
+  k.setUTCHours(0, 0, 0, 0);
+  return new Date(k.getTime() - KST_OFFSET_MS);
+}
+
+/** KST 달력일 'YYYY-MM-DD' → 그 날 00:00(KST)의 **UTC 순간**. */
+export const kstDayStartOf = (ymd: string): Date => new Date(Date.parse(`${ymd}T00:00:00Z`) - KST_OFFSET_MS);

@@ -978,12 +978,12 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
         <Stat ic="🚪" k="탈퇴" v={nnum(kpi.withdrawn).toLocaleString()} s="계정 삭제" />
       </div>
       <div className="oc-cardhead" style={{ marginBottom: 14 }}>
-        <div className="oc-mut" style={{ fontSize: 13 }}>가입 추이 <span className="oc-tag2">자체-롤업</span> · 설치/DAU·WAU·MAU는 EAS 계측 후(GA4)</div>
+        <div className="oc-mut" style={{ fontSize: 13 }}>가입 추이 <span className="oc-tag2">자체-롤업</span> · <b>모든 날짜·시간은 KST</b>(하루 경계 = 한국 00:00) · 설치/DAU·WAU·MAU는 EAS 계측 후(GA4)</div>
         <div className="oc-row" style={{ gap: 8 }}><GranTabs gran={gran} set={setGran} opts={GR} /><CsvBtn onClick={exportSignups} /></div>
       </div>
       <div className="oc-charts">
         <BarsCard title="신규 가입" value={`${suCount.reduce((a, b) => a + b, 0).toLocaleString()} 합`} labels={suLabels} data={suCount} color="#5b9bff" unit="명" />
-        <BarsCard title="시간대별 접속" value="로그인 기준" labels={HOUR_LABELS} data={hourly} color="#9b7bff" unit="" />
+        <BarsCard title="시간대별 접속 (KST)" value="마지막 접속 시각" labels={HOUR_LABELS} data={hourly} color="#9b7bff" unit="" />
       </div>
       <div className="oc-card">
         <div className="oc-cardhead"><h3>사용자 목록 <span className="oc-mut">({total.toLocaleString()})</span></h3><div className="oc-row" style={{ gap: 8 }}><GranTabs gran={status} set={pick} opts={FILT} /><CsvBtn onClick={exportUsers} /></div></div>
