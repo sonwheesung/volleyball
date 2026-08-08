@@ -318,6 +318,26 @@
 - **부팅 게이트(구현 예정 #56·#57)**: 앱 진입 시 **단일 `/api/bootstrap`** 조회 → `{maintenance, version, announcements}`. 루트 레이아웃 순서 **점검 차단 → 강제버전 차단 → 로그인 벽 → 게임**. 공지사항은 기간제·앱 진입 시에만(무푸시 관전형 유지).
 - 스키마·시드('volleyball' 1행, maintenance=false)는 이번 커밋에 완료. 조회 엔드포인트·클라 게이트는 후속.
 
+> #### 🚨 `minVersion`/`latestVersion`은 **semver**다 — versionCode를 넣으면 전 유저가 잠긴다 (2026-08-08)
+>
+> 비교 대상은 **앱의 `expo.version`(semver, 2026-08-08 기준 `0.1.0`)** 이다 — `components/BootGate.tsx`가
+> `Constants.expoConfig?.version`을 읽어 `lib/bootstrap.ts`의 `cmpVersion`(점 구분 정수 비교)으로 판정한다.
+> **안드로이드 `versionCode`(현재 29)가 아니다.**
+>
+> 관리자 화면의 두 칸은 스토어 업로드 때 올리는 `versionCode`와 숫자가 달라 **헷갈리기 쉽다.**
+> 실수로 `minVersion=29`를 넣으면 `cmpVersion('0.1.0','29') < 0` → **모든 유저가 강제 업데이트 벽**에 갇히고,
+> 스토어엔 그런 버전이 없어 **아무도 앱에 못 들어온다**(서버 값이라 앱 재배포로도 못 푼다 — 관리자 화면에서
+> 되돌려야 회복). 실제로 2026-08-08 값 입력 직전 이 오판을 코드 대조로 잡았다.
+>
+> - ✅ 올바른 예: `0.1.0` · `0.2.0` · `1.0.0`
+> - ❌ 금지: `29` · `v0.1.0` · `0.1.0-beta`(`parseInt`가 `0`으로 떨궈 의도와 달라짐)
+> - **비우면 게이트 꺼짐**(`null`) — 필요 없을 땐 비워두는 게 안전한 기본값이다.
+> - 값 입력 후 **화면 토스트만 믿지 말고** 앱이 받는 응답으로 확인:
+>   `GET /api/bootstrap?projCode=volleyball&platform=android&appVersion=<현재앱버전>` → `version.min/latest`.
+>
+> **2026-08-08 현재 설정**: `min=null` · `latest=null`(유저 전원이 최신이라 게이트 불필요) ·
+> `androidUrl` 설정 완료(배너·강제 화면에서 스토어 이동 가능) · `iosUrl=null`(애플 미출시).
+
 ### 13.12 다이아 서버 진실화 (#42, 2026-07-03 — 독립 리뷰 5구멍 반영)
 > **왜**: 앱 스토어의 다이아 변이 3곳(`watchAdForDiamonds`·`claimAchDiamonds`·`trainingCamp`)이 로컬 산술로 즉시 변이 → 서버 미경유(split-brain 위험). 사용자 최상위 원칙([[server-authoritative-currency]])대로 **서버 확정 후에만 반영**으로 전환. 독립 리뷰(general-purpose, 2026-07-03)가 뼈대 승인 + **5개 정합성 구멍**을 "스텁 핑계로 미루지 말라"고 지적 → 전부 닫음.
 
