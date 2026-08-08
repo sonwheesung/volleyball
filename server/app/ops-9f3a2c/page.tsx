@@ -1111,7 +1111,8 @@ function UserLedger({ api }: { api: Api }) {
         <div className="oc-fld" style={{ flex: 1, minWidth: 220 }}><label className="oc-label">userId</label><input className="oc-input" placeholder="uuid" value={uid} onChange={(e) => setUid(e.target.value)} onKeyDown={(e) => e.key === 'Enter' && lookup()} /></div>
         <div className="oc-fld" style={{ width: 130 }}><label className="oc-label">사유</label><select className="oc-input" value={reason} onChange={(e) => setReason(e.target.value)}>{LEDGER_REASONS.map((o) => <option key={o.v} value={o.v}>{o.l}</option>)}</select></div>
         <div className="oc-fld" style={{ width: 150 }}><label className="oc-label">이후(since)</label><input className="oc-input" type="date" value={since} onChange={(e) => setSince(e.target.value)} /></div>
-        <button className="oc-btn" onClick={lookup} disabled={busy}>{busy ? '조회 중…' : '조회'}</button>
+        {/* min-width: '조회'→'조회 중…' 로 바뀔 때 버튼이 커지며 옆 요소를 밀지 않게(가장 긴 라벨 기준 고정). */}
+        <button className="oc-btn" style={{ minWidth: 96 }} onClick={lookup} disabled={busy}>{busy ? '조회 중…' : '조회'}</button>
       </div>
       {msg ? <div style={{ fontSize: 12.5, color: 'var(--dg)', fontWeight: 700, marginTop: 8 }}>{msg}</div> : null}
       {rows ? (
@@ -1180,7 +1181,8 @@ function ManualAdjust({ api, flash }: { api: Api; flash: (m: string) => void }) 
       </div>
       <div className="oc-fld" style={{ marginTop: 8 }}><label className="oc-label">사유 메모 (감사기록)</label><input className="oc-input" placeholder="예: 익명환불 dropped txn GPA.xxx 회수" value={note} onChange={(e) => setNote(e.target.value)} /></div>
       <div className="oc-row" style={{ gap: 10, marginTop: 10, alignItems: 'center' }}>
-        <button className={`oc-btn${amtNum < 0 ? ' red' : ''}`} onClick={submit} disabled={busy}>{busy ? '처리 중…' : amtNum < 0 ? '회수 실행' : '지급 실행'}</button>
+        {/* min-width: '지급 실행'↔'회수 실행'↔'처리 중…' 3상태 폭이 달라 옆 메시지가 밀리던 것 고정. */}
+        <button className={`oc-btn${amtNum < 0 ? ' red' : ''}`} style={{ minWidth: 116 }} onClick={submit} disabled={busy}>{busy ? '처리 중…' : amtNum < 0 ? '회수 실행' : '지급 실행'}</button>
         {msg ? <span style={{ fontSize: 12.5, color: 'var(--dg)', fontWeight: 700 }}>{msg}</span> : null}
       </div>
     </div>
@@ -1834,7 +1836,7 @@ function MailPanel({ api, flash }: { api: Api; flash: (m: string) => void }) {
                   <td style={{ fontWeight: 700 }}>{String(m.title)}</td>
                   <td>{m.attachType === 'pass' ? <span className="oc-badge ac">🎫 패스</span> : <span className="oc-badge gd">💎 {String(m.attachAmount ?? 0)}</span>}</td>
                   <td>{mailStatusBadge(m)}</td>
-                  <td style={{ textAlign: 'right' }}>{canRecall ? <button className="oc-btn ghost sm" style={{ borderColor: 'var(--dg)', color: 'var(--dg)' }} disabled={busyId === String(m.id)} onClick={() => recall(m)}>{busyId === String(m.id) ? '…' : '회수'}</button> : null}</td>
+                  <td style={{ textAlign: 'right' }}>{canRecall ? <button className="oc-btn ghost sm toggle" style={{ borderColor: 'var(--dg)', color: 'var(--dg)' }} disabled={busyId === String(m.id)} onClick={() => recall(m)}>{busyId === String(m.id) ? '…' : '회수'}</button> : null}</td>
                 </tr>
               );
             })}
