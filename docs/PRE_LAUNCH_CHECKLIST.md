@@ -33,12 +33,18 @@
 > **트리거 = 스토어 심사 승인 / Play 리스팅 URL 확정 / 출시일 확정.** 아래는 "지금 미리 하면 안 되거나(스토어 주소 부재),
 > 출시 직전에 해야 안전한(시크릿 채팅노출 방지)" 항목만 모은 **go-live 체크리스트**. 그 전엔 대기. 사용자 결정(2026-08-05): 스토어 주소 확정 후 진행.
 
-- 🔴 ⬜ **스토어 게이트 값 입력** (관리자 콘솔 `ops-9f3a2c` → 운영 설정) — `androidStoreUrl` = 확정된 Play 리스팅 URL(`play.google.com/store/apps/details?id=<패키지>`) · `latestVersion` = 출시 버전 · `minVersion` = 낮게/비움(문제 시 상향). 현재 셋 다 **null**(prod `/api/bootstrap` 실측) → 업데이트 안내·강제게이트 미작동. 스위치는 있으나 스토어 주소가 없으면 "업데이트" 버튼이 갈 곳이 없음 → **주소 확정이 선행**. (BACKEND §13.16)
+- 🟡 🔶 **스토어 게이트 값 입력** (관리자 콘솔 `ops-9f3a2c` → 운영 설정) — `androidStoreUrl` ✅ **입력됨**(2026-08-08 운영 DB 실측: `play.google.com/store/apps/details?id=com.son0925.volleyball`). ~~셋 다 null~~ → **`latestVersion`·`minVersion`은 여전히 null** = 업데이트 안내·강제게이트 미작동(당장은 무해 — 배포된 빌드가 한 종류라 안내할 대상이 없다). (BACKEND §13.16)
+  - ⚠ **선행 문제: semver가 한 번도 안 올라갔다.** 게이트는 `versionCode`(29)가 아니라 **`app.json`의 `version` semver를 비교**한다(`lib/bootstrap.ts cmpVersion`). 그런데 `version`은 최초 커밋의 `0.1.0`에서 **vc1~vc29 내내 그대로**다(git 실측) → **지금 구 빌드와 신 빌드를 구분할 방법 자체가 없다.** 값을 넣어봐야 전원이 같은 `0.1.0`이라 아무도 안 걸린다.
+  - ⇒ 순서: **다음 AAB에서 semver를 올리고(아래 `1.0.0` 항목) 그때 `latestVersion`을 그 값으로 넣는다.** 그전에 넣을 값은 없다.
+  - ☠ **절대 하지 말 것: `latestVersion`/`minVersion`에 `29` 같은 versionCode를 넣기.** `cmpVersion('0.1.0','29') < 0` 이라 **설치된 전 유저가 즉시 업데이트 벽에 갇힌다**(minVersion이면 진입 불가).
 - 🔴 ⬜ **약관 시행일 스왑** — `data/legalText.ts` TERMS·POLICY의 `effective: '서비스 출시일'` → **실제 출시일**로 교체(부칙·web `/terms`·`/privacy` 표기 동반). 출시일 확정 후.
 - 🔴 🔶 **시크릿 최종 회전(채팅 무경유)** — 출시 직전 본인 터미널 생성값으로 최종 1회 회전: ~~DB 비번(Supabase reset → `DATABASE_URL`·`MIGRATE_DATABASE_URL` 로컬+Vercel 동시 갱신)~~ **✅ DB 비번 2026-08-07 회전 완료**(잔여 위험: 값이 stg와 동일 → 다음 정기 회전에서 분리, §1) · `SESSION_JWT_SECRET` · `ADMIN_TOKEN` **잔여**. 개발 중 채팅 노출분 무효화. (TELEMETRY_SALT는 ✅ 2026-08-05 완료. 상세 §1)
-- 🔴 ⬜ **#43 결제 — 프로덕션 상품 활성만 잔여** — ✅ 결제 파이프라인 서버 검증 완료(2026-08-06, 비공개 테스트 샌드박스 실결제 → webhook 지급 → 원장 12/12 안착·멱등·금액 정합, [PAYMENT_LAUNCH_RUNBOOK](./PAYMENT_LAUNCH_RUNBOOK.md)). go-live에 **Play 콘솔 상품을 프로덕션으로 활성**(스토어 설정 플립)만 남음.
+- 🔴 ⬜ **#43 결제 — 프로덕션 상품 활성만 잔여** — ✅ 결제 파이프라인 서버 검증 완료(2026-08-06, 비공개 테스트 샌드박스 실결제 → webhook 지급 → 원장 12/12 안착·멱등·금액 정합, [PAYMENT_LAUNCH_RUNBOOK](./PAYMENT_LAUNCH_RUNBOOK.md)). ~~go-live에 **Play 콘솔 상품을 프로덕션으로 활성**(스토어 설정 플립)만 남음.~~ → **✅ 확인 완료(2026-08-08, 콘솔·공개 스토어·RC 3중 대조)**: 일회성 제품 8개 전부 활성 구매옵션 1 · RC 7 products 전부 Published + `default` 오퍼링 7 packages · 공개 스토어 페이지에 "광고 포함 · 인앱 구매" 노출 · 개발자 계정 **활성**. 
+  - ⚠ **`diamond_pass`는 반쪽**: Play 콘솔엔 등록·활성(7/27)인데 **RC에는 없고** 앱도 `ATTENDANCE_PASS_ENABLED = __DEV__`라 운영 미노출 → **설계대로의 미완**(DIAMOND_PASS_SYSTEM §9 Phase ③ ②③④ 잔여). 사용자 결정(2026-08-08): **나중에** — 유저가 붙은 뒤 착수. 완주 시 플래그가 JS라 **OTA로 배포 가능**(AAB 재빌드 불필요).
+  - ⚠ **판매자 결제 수단 미인증** — 계좌 ••••5811 `확인 대기중`, Play 콘솔 정책 이슈 1건(**2026-09-06까지 미해결 시 개발자 프로필·앱 삭제**). 소액 입금액 입력이 유일한 해결. 판매가 아니라 **지급**을 막는 건이며, 실결제 파이프라인은 이미 실증됨(7월 매트릭스).
 - 🔴 ⬜ **운영 DB 초기화(테스트 데이터 삭제)** — 승인 후 [STAGING_PROD_RESET_RUNBOOK](./STAGING_PROD_RESET_RUNBOOK.md) 절차대로: stg 복사(백업)→대조→백업→**사용자 명시 승인**→유저 데이터 TRUNCATE(users·wallet_ledger·purchase_event·telemetry·문의·세이브 — 샌드박스 결제/7-6 합성 이벤트 포함)→검증. **설정·관리자 콘텐츠(공지·노트·쿠폰정의·전체우편)는 보존**. ⚠ 실결제 발생 전 1회성. 사용자 계획(2026-08-06 "승인 나면 삭제").
 - 🟡 ⬜ **앱 버전 `1.0.0`** — `app.json` `0.1.0`→`1.0.0` + versionCode 범프 + 재빌드(AAB) + 스토어 업로드.
+  - **릴리즈 규율(2026-08-08 신설)**: 이제부터 **AAB를 낼 때 `versionCode`와 `version`(semver)을 같이 올린다.** versionCode만 올리면 버전 게이트가 영원히 장님이다(위 항목의 실측 근거). 올린 semver를 관리자 콘솔 `latestVersion`에 그대로 넣어야 구 빌드 유저에게 소프트 업데이트 안내가 뜬다.
 - 🟢 ⬜ **iOS 트랙(별도)** — `iosStoreUrl` 채움 · Apple 로그인(`expo-apple-authentication`) 추가. Android 선출시면 블로커 아님.
 
 ---
