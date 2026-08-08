@@ -30,7 +30,7 @@ export async function GET(req: Request) {
 
     const [tot] = await db.select({ n: count() }).from(users).where(where);
     const rows = await db
-      .select({ id: users.id, name: users.displayName, provider: users.provider, balance: users.balance, platform: users.platform, appVersion: users.appVersion, createdAt: users.createdAt, lastSeenAt: users.lastSeenAt, deletedAt: users.deletedAt, internal: users.internal })
+      .select({ id: users.id, name: users.displayName, provider: users.provider, balance: users.balance, platform: users.platform, appVersion: users.appVersion, createdAt: users.createdAt, lastSeenAt: users.lastSeenAt, deletedAt: users.deletedAt, internal: users.internal, email: users.email })
       .from(users).where(where).orderBy(desc(users.createdAt)).limit(limit).offset(offset);
 
     return NextResponse.json({ ok: true, total: tot?.n ?? 0, limit, offset, users: rows });

@@ -7,7 +7,7 @@ import { reportError } from '../../../../lib/observability';
 import { eq, sql } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { users } from '../../../../db/schema';
-import { findUserRow, createUser, countSignups } from '../../../../lib/wallet';
+import { findUserRow, createUser, countSignups, setUserEmail } from '../../../../lib/wallet';
 import { afterSafe } from '../../../../lib/afterSafe';
 import { notifySignup } from '../../../../lib/notify';
 import { PROJ_CODE } from '../../../../lib/proj';
@@ -35,10 +35,12 @@ export async function POST(req: Request) {
       return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
     }
     let providerId: string;
+    let email: string | null = null; // 구글 검증 이메일(AUTH §3.5 — 운영 식별용). dev/apple 경로는 null.
     if (provider === 'google') {
-      const sub = await verifyGoogleIdToken(body.idToken); // 서명·audience·만료 검증 → sub
-      if (!sub) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
-      providerId = sub;
+      const id = await verifyGoogleIdToken(body.idToken); // 서명·audience·만료 검증 → { sub, email }
+      if (!id) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
+      providerId = id.sub;
+      email = id.email;
     } else {
       providerId = typeof body.providerId === 'string' && body.providerId ? body.providerId : 'dev-user-1';
     }
@@ -48,11 +50,15 @@ export async function POST(req: Request) {
     let userId: string;
     if (found && !found.deletedAt) {
       userId = found.id; // 기존 계정 — displayName 미저장(최소수집), ageConfirmedAt 재기록 안 함
+      // 이메일은 **매 로그인 갱신**(AUTH §3.5) — 기존 계정에 소급 채우는 유일한 경로이고, 계정 이메일 변경도 따라간다.
+      //   throw-none: 실패해도 로그인은 성공해야 한다(식별 편의가 머니패스/로그인을 막으면 안 된다 §13.22).
+      if (email) await setUserEmail(userId, email);
     } else {
       if (body.ageConfirmed !== true) {
         return NextResponse.json({ ok: false, reason: 'age-required' }, { status: 400 });
       }
       userId = await createUser(providerId, provider, new Date()); // 연령 확인 시점 기록(AUTH §8.2)
+      if (email) await setUserEmail(userId, email);
       // ★ 신규 가입 디스코드 알림(§13.28) — **이 분기만이 "진짜 첫 가입"**이다.
       //   기존 계정은 위 if(found && !found.deletedAt)에서 잡혀 여기 도달조차 안 하므로 재로그인 무발화가 구조로 보장된다.
       //   (ensureUser는 저수준 upsert=매 로그인 경로라 알림 자리가 아님 — §13.28 판단 근거)

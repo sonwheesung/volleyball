@@ -31,6 +31,10 @@ export const users = pgTable(
     provider: text('provider').notNull().default('dev'), // google | apple | dev
     providerId: text('provider_id').notNull(),
     displayName: text('display_name'), // 표시 이름(비필수 개인정보 — 파기 대상 가능, §13.9)
+    // 로그인 계정 이메일(2026-08-08 신설, AUTH §3.5) — **운영 식별용**. 구글 idToken의 email 클레임에서 취득.
+    //   ⚠ 개인정보다 — 처리방침 §1① 수집 항목에 명시돼 있어야 하고, 탈퇴 시 파기 대상(§13.9 비필수).
+    //   nullable: 기존 계정은 다음 로그인 때 채워지고, email 클레임이 없는 토큰(미검증 등)은 null로 남는다.
+    email: text('email'),
     balance: integer('balance').notNull().default(0), // 영속 다이아 잔액(원장 합과 항상 일치, 환불 시 음수 가능 §13.17)
     // 진단용 기기정보(§13.17) — 로그인 때 갱신되는 "마지막 로그인 기기"(보조). 최소수집(OS·버전). nullable(Expand-only)
     platform: text('platform'), // ios | android | web

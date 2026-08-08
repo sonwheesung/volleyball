@@ -2,7 +2,7 @@
 // 불변식: balance == sum(ledger.delta) 항상. 절대 음수 안 됨(spend는 balance 게이트).
 // 동시성(H2): 서로 다른 동시 spend 2건이 각자 잔액 읽고 통과하는 초과지출을 막으려면 멱등키만으론 부족 —
 //   트랜잭션 안에서 users 행을 FOR UPDATE로 잠가 직렬화한다. 멱등키는 "같은 키 재시도"를 dedupe.
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, ne, isNull, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { users, walletLedger, projInfo } from '../db/schema';
 import { PROJ_CODE } from './proj';
@@ -232,6 +232,17 @@ export async function ensureUser(providerId: string, provider = 'dev', displayNa
     .values({ projCode: PROJ_CODE, provider, providerId, displayName })
     .returning({ id: users.id });
   return inserted[0].id;
+}
+
+/** 로그인 계정 이메일 저장/갱신(AUTH §3.5) — **운영 식별용**. 값이 같으면 쓰지 않는다(불필요 write 회피).
+ *  ★ throw-none: 실패해도 삼킨다. 이메일은 편의 정보라 여기서 터지면 **로그인 자체가 막히는** 게 더 큰 손해다(§13.22).
+ *  ⚠ 개인정보 — 탈퇴 시 파기 대상(§13.9 비필수). 처리방침 §1① 수집 항목에 명시돼 있어야 한다. */
+export async function setUserEmail(userId: string, email: string): Promise<void> {
+  try {
+    await db.update(users).set({ email }).where(and(eq(users.id, userId), ne(users.email, email)));
+  } catch {
+    /* 무음 — 로그인 비차단 */
+  }
 }
 
 /** 개발용 고정 유저 보장(익명 폴백 — Bearer 없을 때). provider=dev. */

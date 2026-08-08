@@ -964,8 +964,8 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
   };
   const FILT = [{ v: 'all', l: '전체' }, { v: 'active', l: '활성' }, { v: 'inactive', l: '비활성' }, { v: 'withdrawn', l: '탈퇴' }];
   const GR = [{ v: 'day', l: '일별' }, { v: 'week', l: '주별' }, { v: 'month', l: '월별' }];
-  const exportUsers = () => downloadCsv(`users-${status}.csv`, ['가입일', '최근접속', '상태', '로그인', '버전', '다이아'],
-    rows.map((u) => [fmtD(u.createdAt), fmtDT(u.lastSeenAt), userStatus(u).label, String(u.provider ?? ''), String(u.appVersion ?? ''), nnum(u.balance)]));
+  const exportUsers = () => downloadCsv(`users-${status}.csv`, ['가입일', '최근접속', '상태', '계정', '로그인', '버전', '다이아', '내부'],
+    rows.map((u) => [fmtD(u.createdAt), fmtDT(u.lastSeenAt), userStatus(u).label, String(u.email ?? ''), String(u.provider ?? ''), String(u.appVersion ?? ''), nnum(u.balance), u.internal ? 'Y' : '']));
   const exportSignups = () => downloadCsv(`signups-${gran}.csv`, ['구간', '가입 수'], suLabels.map((l, i) => [l, suCount[i] ?? 0]));
   return (
     <>
@@ -989,13 +989,18 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
         <div className="oc-cardhead"><h3>사용자 목록 <span className="oc-mut">({total.toLocaleString()})</span></h3><div className="oc-row" style={{ gap: 8 }}><GranTabs gran={status} set={pick} opts={FILT} /><CsvBtn onClick={exportUsers} /></div></div>
         {loading ? <LoadingRow /> : rows.length === 0 ? <div className="oc-empty">해당 조건의 사용자가 없습니다.</div> : (
           <table className="oc-table">
-            <thead><tr><th>가입일</th><th>최근 접속</th><th>상태</th><th>로그인</th><th>버전</th><th style={{ textAlign: 'right' }}>다이아</th><th style={{ textAlign: 'center' }}>내부</th></tr></thead>
+            <thead><tr><th>가입일</th><th>최근 접속</th><th>상태</th><th>계정</th><th>버전</th><th style={{ textAlign: 'right' }}>다이아</th><th style={{ textAlign: 'center' }}>내부</th></tr></thead>
             <tbody>{rows.map((u) => { const st = userStatus(u); const isInt = !!u.internal; const id = u.id as string; return (
               <tr key={id}>
                 <td>{fmtD(u.createdAt)}</td>
                 <td>{fmtDT(u.lastSeenAt)} <span className="oc-mut" style={{ fontSize: 11 }}>· {ago(u.lastSeenAt)}</span></td>
                 <td><span className={`oc-pill ${st.cls}`}>{st.label}</span></td>
-                <td className="oc-mut">{(u.provider as string) || '—'}</td>
+                {/* 계정 식별(AUTH §3.5) — 이메일이 있으면 그것으로, 없으면(구빌드 로그인 전·dev) provider + id 뒷자리로.
+                    id 뒷자리를 같이 보여주는 이유: 이메일이 아직 안 채워진 계정도 **행을 구분**할 수는 있어야 한다. */}
+                <td className="oc-mut" style={{ maxWidth: 220, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={(u.email as string) || `${String(u.provider ?? '')} · ${id}`}>
+                  {(u.email as string) || <span>{(u.provider as string) || '—'} <span style={{ opacity: .6 }}>…{id.slice(-6)}</span></span>}
+                </td>
                 <td className="oc-mut">{(u.appVersion as string) || '—'}</td>
                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{nnum(u.balance).toLocaleString()}</td>
                 <td style={{ textAlign: 'center' }}>

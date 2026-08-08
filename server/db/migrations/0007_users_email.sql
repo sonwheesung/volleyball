@@ -1,0 +1,11 @@
+-- 2026-08-08: users.email — 로그인 계정 이메일 (AUTH_SYSTEM §3.5).
+-- 목적: 관리자 콘솔에서 계정을 **식별**하기 위함. 종전엔 구글 sub 21자리 숫자뿐이라 어느 행이 누군지 알 수 없었다.
+-- ⚠ 개인정보다. 코드만 바꾸면 안 된다 — 개인정보처리방침 §1①(수집 항목)·§2(목적)·§3(보유기간) 개정이 동반돼야 하고,
+--    Play Console '데이터 보안' 설문의 수집 항목도 갱신해야 한다(둘 다 이 마이그레이션과 같은 배포에 묶는다).
+-- 취득: 구글 idToken 의 email 클레임 중 **email_verified=true 인 것만**(미검증 이메일은 소유 확인이 안 돼 식별 근거가 못 됨).
+-- 안전성: Expand-only — nullable 이라 기존 행은 NULL 그대로 두고, 각 계정의 **다음 로그인** 때 채워진다.
+--         쓰는 쪽이 없으면 컬럼이 있어도 동작이 안 바뀐다(롤백 = 무시).
+-- 파기: 탈퇴(소프트삭제) 시 비필수 개인정보로 우선 파기 대상(§13.9).
+-- 멱등: IF NOT EXISTS — 재실행 안전.
+-- 적용: prod 는 MIGRATE_DATABASE_URL(5432) 직결로 트랜잭션 적용(prod-migration-apply-method).
+ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "email" text;
