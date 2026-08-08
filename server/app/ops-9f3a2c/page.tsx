@@ -2,7 +2,7 @@
 // 배구명가 운영 콘솔 (BACKEND_SYSTEM §13.15) — 로그인 게이트 + 대시보드(개요·쿠폰·공지·운영설정·문의/환불).
 // URL은 /admin 아님(추측 차단, 2026-07-04 사용자 요청) — 실제 보안은 ADMIN_TOKEN(requireAdmin fail-closed §13.15).
 // 인라인 스타일 + 내장 <style>(정적 CSS)만 — 외부 스크립트/스타일 0(XSS 표면 최소). 관리자 전용 화면.
-import React, { useCallback, useEffect, useId, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useId, useMemo, useRef, useState } from 'react';
 import { AD_REWARD, AD_DAILY_CAP } from '../../lib/econ'; // 다이아 econ 권위(서버) — ×50/하루8 리터럴 금지(engine/diamonds 미러)
 
 type Json = Record<string, unknown>;
@@ -73,6 +73,11 @@ select.oc-input option{background:var(--card);color:var(--tx);}
    ⚠ 테두리는 :not(.ghost)로만 준다 — .oc-btn.ghost보다 뒤에 오는 규칙이라 그냥 border를 쓰면 ghost의 외곽선을 지워버린다(동일 특이도, 후순위 승). */
 .oc-btn.toggle{min-width:54px;display:inline-flex;align-items:center;justify-content:center;line-height:1;}
 .oc-btn.toggle:not(.ghost){border:1px solid transparent;}
+/* 새로고침 버튼 — 라벨이 '새로고침'↔'불러오는 중…'으로 바뀌므로 폭 고정(열/헤더가 밀리지 않게, .toggle과 같은 이유).
+   아이콘 회전으로 "지금 뭔가 일어나고 있다"를 즉시 보여준다 — 종전엔 시각 피드백이 0이라 눌린 줄도 몰랐다. */
+.oc-btn.refreshbtn{min-width:118px;display:inline-flex;align-items:center;justify-content:center;gap:6px;}
+.oc-btn.refreshbtn .spin{display:inline-block;animation:ocspin .8s linear infinite;}
+@keyframes ocspin{from{transform:rotate(0deg);}to{transform:rotate(360deg);}}
 .oc-err{color:var(--dg);font-size:13px;margin-top:12px;} .oc-ok{color:var(--gd);font-size:13px;margin-top:12px;}
 .oc-shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
 /* sticky+100vh만으론 메뉴가 뷰포트를 넘으면 잘린다(본문 스크롤에 딸려 올라감) — 사이드바 자체를
@@ -342,7 +347,12 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     window.history.pushState({ tab: id }, '', u);
   }, []);
 
-  const api = useCallback((p: string, init?: RequestInit) => apiCall(p, token, init), [token]);
+  // 새로고침 축(§13.15 새로고침 계약) — `nonce`가 바뀌면 `api` 참조가 새로 만들어지고,
+  //   각 탭이 이미 `useEffect(..., [api, ...])`로 자기 데이터를 부르고 있어(17곳) **탭 코드를 안 건드리고 전부 재조회**된다.
+  //   ⚠ 이게 없으면 새로고침이 아래 load()의 공통 6종만 갱신하고 **탭 화면은 그대로**다 — 버튼이 "아무 동작 없어 보이던" 진짜 원인.
+  const [nonce, setNonce] = useState(0);
+  const [refreshing, setRefreshing] = useState(false);
+  const api = useCallback((p: string, init?: RequestInit) => apiCall(p, token, init), [token, nonce]);
   const flash = (m: string) => { setToast(m); setTimeout(() => setToast(''), 2600); };
 
   const load = useCallback(async () => {
@@ -357,7 +367,24 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
     setBooting(false);
   }, [api]);
 
-  useEffect(() => { load(); }, [load]);
+  // 최초 1회만 — `load`는 `api`(=nonce) 의존이라 ref 가드가 없으면 새로고침마다 이중 호출된다.
+  const bootedRef = useRef(false);
+  useEffect(() => { if (bootedRef.current) return; bootedRef.current = true; void load(); }, [load]);
+
+  // 새로고침 = 공통 데이터 **완료까지 기다린 뒤** 탭 재조회 트리거 + 완료 토스트.
+  //   종전엔 `load()`를 await 안 하고 즉시 '새로고침됨'을 띄워, 데이터가 오기도 전에 "끝났다"는 거짓 신호를 줬다.
+  const refreshingRef = useRef(false); // 연타 차단(상태로 하면 doRefresh가 재생성돼 의존성이 흔들린다)
+  const doRefresh = useCallback(async () => {
+    if (refreshingRef.current) return;
+    refreshingRef.current = true; setRefreshing(true);
+    try {
+      await load();               // 공통 6종(쿠폰·공지·노트·설정·문의·통계)
+      setNonce((n) => n + 1);     // 탭별 데이터(업적·오프시즌·BM·광고·시계열…) 재조회
+      flash('새로고침됨');
+    } finally {
+      refreshingRef.current = false; setRefreshing(false);
+    }
+  }, [load]);
 
   // 미처리 = 대기(open) + 확인 중(reviewing). 답변완료·환불완료·레거시(replied/resolved)는 처리됨.
   const openTickets = useMemo(() => tickets.filter((t) => { const s = String(t.status ?? 'open'); return s === 'open' || s === 'reviewing'; }).length, [tickets]);
@@ -390,7 +417,10 @@ function Dashboard({ token, onLogout }: { token: string; onLogout: () => void })
               <div className="oc-crumb">배구명가 · 운영</div>
             </div>
           </div>
-          <button className="oc-btn ghost sm" onClick={() => { load(); flash('새로고침됨'); }}>↻ 새로고침</button>
+          <button className="oc-btn ghost sm refreshbtn" onClick={doRefresh} disabled={refreshing}
+            title={refreshing ? '데이터를 다시 불러오는 중입니다' : '현재 화면의 데이터를 서버에서 다시 불러옵니다'}>
+            <span className={refreshing ? 'spin' : undefined}>↻</span> {refreshing ? '불러오는 중…' : '새로고침'}
+          </button>
         </div>
 
         {booting ? <Loading label="운영 데이터를 불러오는 중…" /> : <>
