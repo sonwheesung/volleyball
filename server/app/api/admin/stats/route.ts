@@ -95,13 +95,16 @@ export async function GET(req: Request) {
     //   서버 오류 = purchaseEvent(ok=false)의 머니패스 실패 건수(현 서버 보유 오류 로그). newUsers는 위 시계열 재사용(이중집계 방지).
     //   baseline(최소 표본)으로 소수 노이즈 차단. 판정만(Discord push는 Cron 배치가 §13.25-E — GET마다 알림 스팸 금지).
     const errFrom = new Date(dayStart.getTime() - 2 * 86400000); // 그제 00:00부터
-    //   ⚠ 내부 계정 제외(§13.30)는 **userId가 있는 이벤트에만** 적용된다 — auth 전 단계 실패는 userId=null이라 귀속 불가(그대로 집계).
-    const errRows = await db.select({ c: purchaseEvent.createdAt, u: purchaseEvent.userId }).from(purchaseEvent)
+    //   ⚠ **오류는 내부 계정도 제외하지 않는다**(§13.30 적용 경계 — 2026-08-08 자체 정정).
+    //     한 번 제외했다가 되돌렸다: ⓐ 오류 모니터링(`/api/admin/errors`)은 진단 목적이라 전건을 보여주는데,
+    //     대시보드 KPI만 빼면 **같은 화면의 두 숫자가 말없이 어긋난다.** ⓑ 더 중요하게, 오류는 오디언스 지표가 아니라
+    //     **"머니패스가 깨졌나"** 신호다 — 개발자 테스트에서 터진 실패도 진짜 실패다. 숨기면 false-negative가 되고,
+    //     반대로 테스트발 알림이 뜨는 건 본인이 아니까 값싸다. **가릴 이유가 없는 쪽으로 판단.**
+    const errRows = await db.select({ c: purchaseEvent.createdAt }).from(purchaseEvent)
       .where(and(eq(purchaseEvent.projCode, PROJ_CODE), eq(purchaseEvent.ok, false), gte(purchaseEvent.createdAt, errFrom)));
     let errToday = 0, errD0 = 0, errD1 = 0; // 오늘 / 어제 / 그제
     const y0 = dayStart.getTime() - 86400000, y1 = dayStart.getTime() - 2 * 86400000;
     for (const r of errRows) { if (!r.c) continue;
-      if (r.u && isExcluded(scope, r.u)) continue;
       const t = r.c.getTime();
       if (t >= dayStart.getTime()) errToday++; else if (t >= y0) errD0++; else if (t >= y1) errD1++; }
     const newD0 = newUsers[DAYS - 2] ?? 0, newD1 = newUsers[DAYS - 3] ?? 0; // 어제 / 그제 신규가입
