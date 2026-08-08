@@ -20,6 +20,19 @@ export function isServerConfigured(): boolean {
   return !!SERVER_URL;
 }
 
+// ── 죽은 토큰 감지(AUTH_SYSTEM §3.4) ───────────────────────────────────────────
+// **Bearer를 실어 보냈는데 401** = 토큰이 죽었다(180일 TTL 만료 · SESSION_JWT_SECRET 회전 · 서버에서 계정 삭제).
+// 이걸 방치하면 로그인 벽이 `session` **객체 유무**만 보기 때문에(BootGate) 유저는 "앱은 열리는데 다이아·쿠폰·백업만
+// 전부 실패하는" 반쪽 상태에 갇힌다 — 토스트는 "다시 로그인하세요"라고 하는데 데려다주는 길이 없다.
+// TTL이 180일이라 **회전을 안 해도 언젠가 전 유저에게 터진다**(2026-08-08 발견).
+//
+// 레이어 규율: lib은 store를 import하지 않는다(store→lib 단방향). 그래서 콜백을 등록받는다 — `useAuthStore`가 signOut을 건다.
+let onUnauthorized: (() => void) | null = null;
+/** 죽은 토큰이 확인되면 부를 콜백 등록(보통 signOut). null로 해제. */
+export function setUnauthorizedHandler(fn: (() => void) | null): void {
+  onUnauthorized = fn;
+}
+
 export type WalletReason = 'purchase' | 'ad' | 'achievement' | 'camp' | 'refund' | 'adjust' | 'coupon' | 'welcome';
 export interface LedgerRow {
   delta: number;
@@ -52,7 +65,18 @@ async function call<T>(path: string, init?: RequestInit, timeoutMs: number = REQ
       },
     });
     clearTimeout(timer);
-    if (res.status === 401) return { ok: false, reason: 'unauthorized', status: 401 };
+    if (res.status === 401) {
+      // ★ **Bearer를 실어 보냈을 때만** 죽은 토큰으로 판정한다(§3.4). 익명 호출(bearer 없음)의 401은
+      //   "로그인이 필요하다"는 **정상 응답**이므로 세션을 건드리면 안 된다.
+      // ★ bearer를 즉시 비우는 게 핵심 — 동시에 날아간 다른 호출들이 죽은 토큰을 재사용해 콜백을 연달아 때리는 것도,
+      //   하트비트(`sendHeartbeat`은 `if (!bearer) return`)가 계속 쏘는 것도 여기서 함께 멈춘다.
+      // ★ 오프라인·타임아웃·5xx는 여기 오지 않는다(catch/아래 분기) — 네트워크가 나빠서 로그아웃되는 일은 없다.
+      if (bearer) {
+        bearer = null;
+        onUnauthorized?.();
+      }
+      return { ok: false, reason: 'unauthorized', status: 401 };
+    }
     let body: any = {};
     try {
       body = await res.json();

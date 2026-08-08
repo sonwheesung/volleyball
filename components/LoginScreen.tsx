@@ -45,6 +45,9 @@ function ProviderButton({ icon, label, onPress, busy, tint }: { icon: React.Comp
 
 export function LoginScreen() {
   const signIn = useAuthStore((s) => s.signIn);
+  // 강제 로그아웃(토큰 만료·시크릿 회전 — AUTH §3.4)이면 **이유를 말해준다.**
+  //   말없이 로그인 화면으로 튕기면 유저는 "왜 로그아웃됐지? 내 구단 날아갔나?"로 읽는다. 구단은 그대로라는 것까지 붙인다.
+  const sessionExpired = useAuthStore((s) => s.sessionExpired);
   const [busy, setBusy] = useState<Provider | null>(null);
   const [err, setErr] = useState<string | null>(null);
   // 만 14세 연령 게이트(AUTH §8) — 최초 가입 경로 확인. 미확인 시 로그인 진행 차단(방침 4조 정합).
@@ -91,6 +94,11 @@ export function LoginScreen() {
           ) : null}
         </View>
 
+        {sessionExpired && !err ? (
+          <Text style={styles.expired}>
+            로그인이 만료되어 다시 로그인이 필요합니다.{'\n'}같은 계정으로 로그인하면 구단이 그대로 이어집니다.
+          </Text>
+        ) : null}
         {err ? <Text style={styles.err}>{err}</Text> : null}
 
         {/* 로그인 전 정책 고지 + 링크(스토어 심사 요건) — 웹 게시본으로 연결. */}
@@ -128,6 +136,7 @@ const styles = themedStyles(() =>
     btn: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 10, backgroundColor: theme.card, borderRadius: 14, paddingVertical: 15, borderWidth: 1, borderColor: theme.border },
     btnLabel: { color: theme.text, fontSize: 15.5, fontWeight: '800' },
     err: { color: theme.bad, fontSize: 13.5, textAlign: 'center', fontWeight: '700', marginTop: -20 },
+    expired: { color: theme.muted, fontSize: 13, textAlign: 'center', fontWeight: '600', lineHeight: 19, marginTop: -20 },
     policyNote: { color: theme.muted, fontSize: 11.5, lineHeight: 18, textAlign: 'center', marginTop: -18 },
     policyLink: { color: theme.accent, textDecorationLine: 'underline', fontWeight: '700' },
     notice: { color: theme.muted, fontSize: 11.5, lineHeight: 18, textAlign: 'center' },

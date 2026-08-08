@@ -4,7 +4,7 @@
 import { create } from 'zustand';
 import { persist, createJSONStorage } from 'zustand/middleware';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import { login as serverLogin, deleteAccount as serverDeleteAccount, setServerToken } from '../lib/server';
+import { login as serverLogin, deleteAccount as serverDeleteAccount, setServerToken, setUnauthorizedHandler } from '../lib/server';
 import { identifyUser, logoutUser } from '../lib/iap';
 import { signInGoogle, signOutGoogle } from '../lib/googleAuth';
 import { getDeviceInfo } from '../lib/device';
@@ -26,6 +26,9 @@ interface AuthState {
   readDevnotes: string[]; // 읽은 개발자 노트/패치노트 id(기기 로컬 — DEVNOTES §3.3, 공지와 동일 논리). 안읽음 배지·재노출 방지.
   dismissedUpdateVersion: string | null; // 닫은 소프트 업데이트 latest(§13.16) — 새 latest 발행 시 재노출
   hydrated: boolean;
+  /** 죽은 토큰(만료·시크릿 회전·서버측 계정 삭제)으로 **강제** 로그아웃됐나 — 로그인 화면이 이유를 알려주는 데만 쓴다.
+   *  영속 안 함(재시작하면 평범한 로그인 화면). 다음 로그인 성공에 해제. */
+  sessionExpired: boolean;
   signIn: (provider: 'google' | 'apple' | 'dev', ageConfirmed?: boolean) => Promise<SignInResult>;
   signOut: () => void;
   deleteAccount: () => Promise<DeleteAccountResult>; // 탈퇴(AUTH §7) — 서버 확정 후 로컬 세션 정리
@@ -59,6 +62,7 @@ export const useAuthStore = create<AuthState>()(
       readDevnotes: [],
       dismissedUpdateVersion: null,
       hydrated: false,
+      sessionExpired: false,
       markAnnouncementsRead: (ids) => set((s) => ({ readAnnouncements: Array.from(new Set([...s.readAnnouncements, ...ids])) })),
       pruneReadAnnouncements: (activeIds) => set((s) => { const a = new Set(activeIds); return { readAnnouncements: s.readAnnouncements.filter((id) => a.has(id)) }; }),
       markDevnoteRead: (id) => set((s) => (s.readDevnotes.includes(id) ? s : { readDevnotes: [...s.readDevnotes, id] })),
@@ -97,7 +101,7 @@ export const useAuthStore = create<AuthState>()(
         }
         const session: Session = { userId: r.userId, provider: r.provider, displayName: r.displayName, token: r.token };
         setServerToken(session.token); // 이후 서버콜에 Bearer
-        set({ session });
+        set({ session, sessionExpired: false }); // 재로그인 성공 = 만료 안내 해제
         await scopeSaveTo(session.userId); // 계정 슬롯 로드(SAVE_SYSTEM §7.3)
         void identifyUser(session.userId); // RC app_user_id=우리 userId 고정(§13.18 최대 함정) — 비동기, 결제 전 완료
         track('login', { provider });
@@ -136,6 +140,14 @@ export const useAuthStore = create<AuthState>()(
       partialize: (s) => ({ session: s.session, deviceId: s.deviceId, readAnnouncements: s.readAnnouncements, readDevnotes: s.readDevnotes, dismissedUpdateVersion: s.dismissedUpdateVersion }),
       onRehydrateStorage: () => (state) => {
         if (state?.session?.token) setServerToken(state.session.token); // 캐시 세션 → 오프라인 진입
+        // 죽은 토큰(만료·시크릿 회전·서버측 계정 삭제) 감지 시 강제 로그아웃 배선(AUTH §3.4).
+        //   재수화 시점에 건다 — Bearer를 다시 넣는 바로 그 자리라 "토큰이 살아있다고 가정하는 지점"과 짝이 맞는다.
+        //   dev-local 합성 세션은 token='' 이라 애초에 Bearer를 안 실어 이 경로를 안 탄다.
+        setUnauthorizedHandler(() => {
+          if (!useAuthStore.getState().session) return; // 이미 로그아웃 상태면 아무것도 안 한다(중복 발화 무해화)
+          useAuthStore.setState({ sessionExpired: true }); // signOut 전에 세워야 로그인 화면이 이유를 안다
+          useAuthStore.getState().signOut();              // 세션 clear → BootGate가 로그인 화면으로 자동 전환
+        });
         // 재시작 복원 경로에서도 RC app_user_id를 우리 userId로 고정(§13.18 최대 함정) — 안 하면 앱 재시작 후
         // 자동 로그인된 유저의 구매가 익명 RC id로 붙어 웹훅 지급이 유저에 안 붙는다. fire-and-forget(graceful·dev no-op).
         if (state?.session?.userId) void identifyUser(state.session.userId);
