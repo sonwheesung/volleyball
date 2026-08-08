@@ -378,6 +378,26 @@
 >   - **정정 ①(2026-08-08, §13.29 착수 전 코드 실측) — "시간대별 정확화"는 사실이 아니다**: `server/app/api/admin/stats/route.ts`의 `hourly`는 유저 1명당 `lastSeenAt` **단 하나**로 버킷을 찍는다(`hourly[new Date(r.l).getUTCHours()]++`) = **"마지막으로 앱을 켠 시각" 분포**이지 접속 시간대 분포가 아니다. 핑을 촘촘히 넣으면 오히려 "마지막으로 **끈** 시각" 분포가 된다(체류가 길수록 뒤로 밀린다). ⇒ **시간대별 접속 분포는 이벤트 로그(접속 이력 테이블) 또는 일별 롤업이 있어야 산출 가능 — 추후.** 현 차트는 "마지막 접속 시각 분포"로 라벨을 읽어야 한다.
 >   - **정정 ②(2026-08-08) — "실시간(최근 30분)"도 하트비트로 안 고쳐졌다**: `touchLastSeen`을 부르는 곳은 `GET /api/wallet` **단 하나**이고, 그 wallet 호출은 `components/BootGate.tsx`가 **로그인 직후 + AppState 'active' 복귀**에만 쏜다(주기 타이머 없음). ⇒ **앱을 켜놓고 40분 경기를 보는 유저가 "최근 30분" 창에서 사라진다**(가장 몰입한 유저가 가장 안 잡히는 편향). 이 게임은 로컬 우선이라 경기·시즌 진행이 서버를 안 거쳐서, 서버는 다이아가 움직일 때만 흔적을 본다. → **§13.29 접속 핑(경기 시작 이벤트 핑)이 이 구멍을 메운다.**
 
+> #### ⚠ 지표 해석 주의 — **내부(운영자) 계정이 통계에 섞여 있다** (2026-08-08 기록)
+>
+> 운영 DB의 유저에 **개발자 본인 계정이 포함**되며, 이를 걸러내는 장치가 **현재 없다**. 출시 초기라 표본이
+> 한 자릿수여서 이 한 계정이 모든 비율 지표를 지배한다 — 콘솔 수치를 읽을 때 반드시 빼고 해석해야 한다.
+>
+> | 계정(id 뒤 6자) | 정체 | 판별 근거 |
+> |---|---|---|
+> | `…092319` | **개발자 본인**(2026-08-07 가입) | 유일하게 결제·환불·쿠폰·문의·세이브백업 이력 보유. WELCOME 쿠폰 사용 + `dia_500` 실결제 후 환불(결제 파이프 검증분) |
+> | 그 외 | 실유저 | — |
+>
+> **오염되는 지표**: 결제 전환율(본인 테스트 결제가 분자 — 2026-08-08 기준 33.3%는 **실질 0%**) · 광고
+> (고유 시청자 1명 = 본인) · 전지훈련/오프시즌 원장 파생(전량 본인) · DAU·WAU·MAU·리텐션 분모.
+>
+> **판별은 id가 아니라 행동 이력으로** — 결제·환불이 찍힌 계정은 현 시점 본인뿐이다. 재설치·계정 삭제로
+> id가 바뀔 수 있으니 **id를 하드코딩한 필터를 만들지 말 것**.
+>
+> **후속(미구현)**: `users`에 내부 계정 플래그(Expand-only) + `/api/admin/stats` 기본 제외 + 콘솔에
+> "내부 포함/제외" 토글. 지금은 표본이 작아 육안 보정으로 충분하나, **실유저가 늘기 전에** 넣어야
+> 시계열이 오염된 채 굳지 않는다.
+
 - **인증 `requireAdmin(req)` — fail-closed(P0-B)** ~~(코드 export명 `requireAdmin`)~~ → **정정(2026-07-31 doc↔code 감사): 실제 export명은 `isAdmin(req)`**(`server/lib/admin.ts:9`) — 문서는 개념명 "requireAdmin"으로 통칭하나 코드 심볼은 `isAdmin`: `Authorization: Bearer <ADMIN_TOKEN>` 상수시간 비교. **`ADMIN_TOKEN` 미설정/짧으면(<16자) 무조건 401/503**(~~크론의 fail-open 패턴 복제 금지~~ → **크론도 이제 fail-closed로 정렬됨**, §13.10 정정 — env 누락=전면 거부). Bearer 헤더라 CSRF 내성(쿠키 인증 미도입). 토큰은 localStorage.
 - **엔드포인트**(전부 requireAdmin): `POST/GET/PATCH/DELETE /api/admin/coupon`(발급/목록/수정/삭제 — 발급 시 code 정규화·reward>0·상한캡·UNIQUE 충돌 4xx, 삭제는 사용기록 FK 있으면 'has-redemptions' 409→비활성화 권장) · `GET /api/admin/coupon/redemptions?couponId=`(**쿠폰 사용 내역 — 누가·언제**, 상세 모달에 표시. 2026-07-04) · 사용자별 다이아 잔액은 `/api/admin/users` 목록 다이아 컬럼·`POST/GET/PATCH/DELETE /api/admin/announcement`(발행/목록/수정/삭제)·`POST/GET /api/admin/setting` · `GET /api/admin/stats`(대시보드 KPI+14일 시계열) · `GET /api/admin/users`(목록·상태필터·페이지네이션) · `GET /api/admin/series?metric=revenue|ad|refund&granularity=day|week|month|year`(UTC 버킷 시계열) · `GET /api/admin/payments?kind=all|purchase|refund`(개별 결제/환불 원장 목록·페이지네이션) · `GET /api/admin/achievements`(업적별 달성유저=원장 ref 고유유저) · `GET /api/admin/payment-events`(결제 단계 감사 로그 조회 — source·fail·txn 필터, §13.22).
 - **레이아웃(2026-07-04)**: 콘텐츠 영역 `.oc-main`은 **max-width 1200 + margin auto 중앙 정렬**(사이드바 이후 영역 기준) — 풀폭은 너비가 넓어 가독성↓(사용자 지적), 좌측 쏠림도 해소. 전 메뉴 공통.
