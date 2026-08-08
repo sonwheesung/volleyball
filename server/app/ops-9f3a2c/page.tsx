@@ -67,6 +67,12 @@ select.oc-input option{background:var(--card);color:var(--tx);}
 .oc-btn:hover{filter:brightness(1.08);} .oc-btn:active{transform:translateY(1px);} .oc-btn:disabled{opacity:.5;cursor:not-allowed;}
 .oc-btn.blue{background:var(--ac2);color:#fff;} .oc-btn.red{background:var(--dg);color:#fff;} .oc-btn.ghost{background:transparent;border:1px solid var(--bd);color:var(--tx);}
 .oc-btn.sm{padding:7px 12px;font-size:12.5px;border-radius:8px;}
+/* 상태 토글 버튼(예: 사용자 목록 '내부') — 상태가 바뀌어도 **박스가 흔들리지 않아야** 한다.
+   흔들림 원인 둘: ① 라벨 글자수('내부' 2자 vs '—' 1자 vs 로딩 '…') ② .ghost에만 있는 1px 테두리(비-ghost는 border:none이라 2px 좁다).
+   → min-width 고정 + 두 상태 모두 1px 테두리(활성은 transparent)로 박스를 동일하게. inline-flex로 라벨 광학 중앙.
+   ⚠ 테두리는 :not(.ghost)로만 준다 — .oc-btn.ghost보다 뒤에 오는 규칙이라 그냥 border를 쓰면 ghost의 외곽선을 지워버린다(동일 특이도, 후순위 승). */
+.oc-btn.toggle{min-width:54px;display:inline-flex;align-items:center;justify-content:center;line-height:1;}
+.oc-btn.toggle:not(.ghost){border:1px solid transparent;}
 .oc-err{color:var(--dg);font-size:13px;margin-top:12px;} .oc-ok{color:var(--gd);font-size:13px;margin-top:12px;}
 .oc-shell{display:grid;grid-template-columns:240px 1fr;min-height:100vh;}
 /* sticky+100vh만으론 메뉴가 뷰포트를 넘으면 잘린다(본문 스크롤에 딸려 올라감) — 사이드바 자체를
@@ -954,7 +960,7 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{nnum(u.balance).toLocaleString()}</td>
                 <td style={{ textAlign: 'center' }}>
                   <button
-                    className={`oc-btn ${isInt ? '' : 'ghost'} sm`}
+                    className={`oc-btn ${isInt ? '' : 'ghost'} sm toggle`}
                     disabled={busyId === id}
                     title={isInt ? '통계에서 제외 중 — 눌러서 실유저로 되돌립니다' : '운영자·QA 계정으로 표시해 통계에서 제외합니다'}
                     onClick={() => toggleInternal(id, !isInt)}
