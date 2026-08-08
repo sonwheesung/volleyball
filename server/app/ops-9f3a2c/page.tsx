@@ -1334,7 +1334,13 @@ function TelemetryPanel({ api }: { api: Api }) {
   );
 }
 
-// ── 업적: 카탈로그 + 달성율(원장 ref 기반) ──
+// ── 업적: 카탈로그 + **보상 수령율**(원장 ref 기반) ──
+//   ⚠ 이건 "달성율"이 아니다. 분자는 `wallet_ledger reason='achievement'`(= 유저가 **보상 버튼을 눌러 받은** 것)이고,
+//   달성 여부 자체는 로컬 세이브에만 있어 서버가 모른다. 즉 **달성했지만 미수령이면 0으로 잡힌다.**
+//   실사례(2026-08-08): 경기 1회면 달성되는 통산 업적 6개가 며칠간 0%였다가, 유저가 수동으로 찾아 들어가
+//   수령하자 그 순간 6건이 한꺼번에 집계됐다. 낮은 수치를 "아무도 못 깼다"로 읽으면 오진이다 —
+//   **"보상 받는 길을 못 찾았다"** 일 수 있고, 실제로 마이페이지 탭 배지가 통산 업적을 못 잡는 버그가 있었다.
+//   진짜 달성율을 보려면 세이브의 달성 상태를 텔레메트리에 실어야 한다(미구현 — 시즌 완주자만 잡히는 한계도 함께).
 function Achievements({ api }: { api: Api }) {
   const [d, setD] = useState<Json | null>(null);
   const [loading, setLoading] = useState(true);
@@ -1347,8 +1353,14 @@ function Achievements({ api }: { api: Api }) {
     <>
       <div className="oc-grid">
         <Stat ic="🏆" k="업적 수" v={String(ACH_CAT.length)} s={`${cats.length}개 카테고리`} />
-        <Stat ic="👥" k="집계 대상" v={total.toLocaleString()} s="현재 사용자(달성율 분모)" />
-        <Stat ic="✅" k="1명+ 달성 업적" v={`${unlockedAny} / ${ACH_CAT.length}`} s="누구든 달성한 업적" />
+        <Stat ic="👥" k="집계 대상" v={total.toLocaleString()} s="현재 사용자(수령율 분모)" />
+        <Stat ic="✅" k="1명+ 수령 업적" v={`${unlockedAny} / ${ACH_CAT.length}`} s="누구든 보상을 받은 업적" />
+      </div>
+      <div className="oc-mut" style={{ fontSize: 12.5, marginTop: 12, marginBottom: 4, lineHeight: 1.6 }}>
+        <span className="oc-tag2">자체-롤업(원장)</span> 아래는 <b>보상 수령율</b>입니다 — <b>달성율이 아닙니다.</b>{' '}
+        분자는 원장 적립(<code>reason=&apos;achievement&apos;</code>) = 유저가 <b>보상 버튼을 눌러 받은</b> 건수이고,
+        달성 여부 자체는 로컬 세이브에만 있어 서버가 알 수 없습니다. <b>달성했지만 미수령이면 0%로 보입니다.</b>{' '}
+        낮은 수치를 &quot;아무도 못 깼다&quot;로 읽지 마세요 — <b>보상 받는 길을 못 찾은 것</b>일 수 있습니다.
       </div>
       {loading ? <div className="oc-card"><LoadingRow /></div> : cats.map((cat) => (
         <div className="oc-card" key={cat}>
