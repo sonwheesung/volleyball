@@ -414,9 +414,9 @@
 > **판별은 id가 아니라 행동 이력으로** — 결제·환불이 찍힌 계정은 현 시점 본인뿐이다. 재설치·계정 삭제로
 > id가 바뀔 수 있으니 **id를 하드코딩한 필터를 만들지 말 것**.
 >
-> **후속(미구현)**: `users`에 내부 계정 플래그(Expand-only) + `/api/admin/stats` 기본 제외 + 콘솔에
-> "내부 포함/제외" 토글. 지금은 표본이 작아 육안 보정으로 충분하나, **실유저가 늘기 전에** 넣어야
-> 시계열이 오염된 채 굳지 않는다.
+> ~~**후속(미구현)**: `users`에 내부 계정 플래그(Expand-only) + `/api/admin/stats` 기본 제외 + 콘솔에
+> "내부 포함/제외" 토글.~~ → **설계 확정·구현: §13.30**(2026-08-08). 위 "육안 보정" 규율은 §13.30 배포 전까지의
+> 잠정 운영 규칙으로 보존한다.
 
 - **인증 `requireAdmin(req)` — fail-closed(P0-B)** ~~(코드 export명 `requireAdmin`)~~ → **정정(2026-07-31 doc↔code 감사): 실제 export명은 `isAdmin(req)`**(`server/lib/admin.ts:9`) — 문서는 개념명 "requireAdmin"으로 통칭하나 코드 심볼은 `isAdmin`: `Authorization: Bearer <ADMIN_TOKEN>` 상수시간 비교. **`ADMIN_TOKEN` 미설정/짧으면(<16자) 무조건 401/503**(~~크론의 fail-open 패턴 복제 금지~~ → **크론도 이제 fail-closed로 정렬됨**, §13.10 정정 — env 누락=전면 거부). Bearer 헤더라 CSRF 내성(쿠키 인증 미도입). 토큰은 localStorage.
 - **엔드포인트**(전부 requireAdmin): `POST/GET/PATCH/DELETE /api/admin/coupon`(발급/목록/수정/삭제 — 발급 시 code 정규화·reward>0·상한캡·UNIQUE 충돌 4xx, 삭제는 사용기록 FK 있으면 'has-redemptions' 409→비활성화 권장) · `GET /api/admin/coupon/redemptions?couponId=`(**쿠폰 사용 내역 — 누가·언제**, 상세 모달에 표시. 2026-07-04) · 사용자별 다이아 잔액은 `/api/admin/users` 목록 다이아 컬럼·`POST/GET/PATCH/DELETE /api/admin/announcement`(발행/목록/수정/삭제)·`POST/GET /api/admin/setting` · `GET /api/admin/stats`(대시보드 KPI+14일 시계열) · `GET /api/admin/users`(목록·상태필터·페이지네이션) · `GET /api/admin/series?metric=revenue|ad|refund&granularity=day|week|month|year`(UTC 버킷 시계열) · `GET /api/admin/payments?kind=all|purchase|refund`(개별 결제/환불 원장 목록·페이지네이션) · `GET /api/admin/achievements`(업적별 달성유저=원장 ref 고유유저) · `GET /api/admin/payment-events`(결제 단계 감사 로그 조회 — source·fail·txn 필터, §13.22).
@@ -872,3 +872,56 @@
     - **내장 양성대조**: 같은 실패 `fetch`를 **기존 `call()` 경로**(`getWallet`)로 태우면 `errorSink`·`console.warn`이 **실제로 호출된다** ⇒ ⑨의 스파이가 살아있음(무음 판정이 스파이 고장 때문이 아님).
     - **내장 양성대조**: ⑧에서 **1번째는 발사된다**(fetch 1회 관측) ⇒ 발사 카운터가 blind가 아님.
     - **변이 A/B(일회성, 커밋 금지)**: (a) 60초 가드를 제거한 변이 → ⑧이 **FAIL로 뒤집힘**(fetch 3회) (b) 전용 fetch 대신 `call()`을 쓰는 변이(=`logError` 우회 제거) → ⑨가 **FAIL로 뒤집힘**(스파이 적발) (c) 라우트에 `getWallet`을 끼워넣은 변이 → ③이 **FAIL**.
+
+---
+
+### 13.30 내부(운영자) 계정 지표 제외 (2026-08-08 설계)
+
+> **상태**: 설계 확정 · 구현 착수. §13.15의 "⚠ 지표 해석 주의" 블록이 남긴 **육안 보정** 규율을 코드 장치로 승격한다.
+> **왜 지금**: 출시 직후 유저가 한 자릿수라 개발자 본인 한 계정이 모든 비율 지표를 지배한다. 실유저가 늘기 전에
+> 넣어야 시계열이 오염된 채 굳지 않는다. 늦게 넣으면 "그때 그 숫자는 진짜였나"를 영영 못 푼다.
+
+**A. 원칙 — 판별은 사람이, 기억은 DB가.**
+`…092319` 같은 **id 하드코딩 필터는 금지**(재설치·탈퇴로 id가 바뀐다 — §13.15 판별 규율). 대신 관리자가
+콘솔에서 계정을 "내부"로 **표시**하고, 그 사실을 DB가 영속한다. 새 내부 계정(테스터 기기·QA)이 생겨도 코드 배포 없이 대응된다.
+
+**B. 스키마 (Expand-only — [[prod-schema-migration-caution]] 준수)**
+`users.internal boolean NOT NULL DEFAULT false`. 기존 행은 default로 즉시 채워지므로 운영 무중단이고, 되돌리려면
+컬럼을 무시하면 그만이다(Contract 불필요). 마이그레이션 `0006_users_internal.sql`.
+
+**C. 집계 규약 — "숨김"이 아니라 "제외 + 고지"**
+- 관리자 통계 라우트는 **기본 제외**(`internal = false`만 집계).
+- `?includeInternal=1`이면 포함 — 내부 계정 자체를 관찰해야 할 때(내 결제 테스트가 원장에 제대로 꽂혔나) 쓴다.
+- 응답에 **`internalExcluded: n`** 을 실어 화면이 "내부 n명 제외" 배지를 띄운다. **숫자가 조용히 달라지는 것이
+  가장 위험**하므로, 제외했다는 사실은 항상 화면에 남는다.
+
+**D. 적용 범위 (Phase 1 = `/api/admin/stats`)**
+| 지표군 | 원천 | 제외 방법 |
+|---|---|---|
+| 총가입·DAU/WAU/MAU·active30m·신규·비활성·탈퇴·리텐션·hourly | `users` | `internal = false` 필터 |
+| 광고(시청횟수·고유시청자·14일 시계열) | `walletLedger.userId` | `internalIds` Set으로 스킵 |
+| 결제자 수·전환율 | `walletLedger.userId` | 동일 (샌드박스 제외와 **중첩** 적용) |
+| 결제 오류(errToday/D0/D1) | `purchaseEvent.userId` | 동일 |
+
+**E. 제외할 수 없는 것 (한계 — 명시하고 화면에 각주)**
+- **매출(`statsDaily.revenueKrw`)** — userId 없는 **사전 롤업**이라 조회 시점에 쪼갤 수 없다. 다만 라이선스
+  테스터 결제는 이미 `:sandbox`로 롤업에서 빠지므로(§13.18 D1), 잔류하는 건 **내부 계정의 실화폐 결제뿐**이다.
+  현재 0건. 후속이 필요해지면 `statsDaily`에 내부분 별도 컬럼(Expand-only)을 얹는다.
+- **행동 텔레메트리(`/api/admin/telemetry`)** — `analyticsId`가 HMAC 가명이라 `users`와 **조인 자체가 불가능**하다
+  (§13.27 가명화의 의도된 대가). 내부 계정 제외를 하려면 전송 시점에 내부 여부를 실어야 하는데, 그건 가명성을
+  약화시킨다 → **하지 않는다.** 텔레메트리 화면에 "내부 계정 포함" 각주를 단다.
+- `/api/admin/{series,achievements,bm}` — Phase 2. Phase 1에서는 **미적용임을 화면에 표기**한다(조용한 불일치 금지).
+
+**F. 소급 정정은 자동이다**
+`stats`는 매 요청마다 `users`·원장에서 재계산하므로, 플래그를 켜는 순간 **과거 14일 시계열·리텐션까지 함께 정정**된다.
+사전 롤업인 매출만 과거가 굳는다(E). 이게 "실유저가 늘기 전에"가 급한 진짜 이유는 아니고 — 급한 이유는
+**내부 계정이 뭐였는지 나중엔 판별이 불가능해지기 때문**이다(§13.15 판별 규율).
+
+**G. 검증**
+- `server/lib/adminStats.ts` — 라우트에 인라인이던 유저 버킷팅 루프를 **순수 함수로 추출**(DB 무의존).
+  CLAUDE §11 SOLID(단일 책임·계약 의존)와 정합이며, 이래야 가드가 DB 없이 A/B를 돌린다.
+- 가드 `server/tools/_dv_internal.ts`:
+  - **① 순수 산수 A/B** — 내부 1명을 섞은 입력에서 `internal` 제외 시 총가입·DAU·전환율이 **정확히 그만큼** 변하고,
+    `includeInternal`이면 원복되는지. 변이(필터 무력화) 주입 시 FAIL로 뒤집혀야 함.
+  - **② 구조 가드** — `admin/stats` 라우트가 `adminStats` 헬퍼를 경유하는지(새 집계가 필터를 빠뜨리는 회귀 차단).
+    `_dv_arch [ach-eval]`와 같은 결의 배선 봉인 — **"함수만 봉인하고 배선은 안 봉인"** 사각(TEST_METHODOLOGY §4)의 재발 방지.

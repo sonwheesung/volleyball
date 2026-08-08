@@ -14,6 +14,9 @@
 //       (예외: UTC 09:00=KST 오전 9시 일자 경계를 걸친 세션 — 그 구간만 핑이 메운다). 배포 후 DAU 불변은 정상이다.
 //   ※ 업적 달성율은 클라이언트 계산(결정론 격리 — 서버 미보유). 별도 텔레메트리 필요.
 //   ※ 유저/원장을 fetch해 JS 버킷팅 — 대규모 시 SQL group by로 전환(TODO). 관리자 전용·저빈도라 허용.
+//   ※ **내부(운영자) 계정 제외(§13.30, 2026-08-08)** — `users.internal` 계정은 **기본 제외**하고 `?includeInternal=1`이면 포함한다.
+//     유저 버킷팅은 순수 모듈 `lib/adminStats.ts`가 하고(가드 `_dv_internal`이 DB 없이 A/B), 원장·이벤트는 `internalIds`로 스킵한다.
+//     ⚠ **매출(statsDaily)만은 제외 불가** — userId 없는 사전 롤업이라 조회 시점에 못 쪼갠다(§13.30 E). 응답 `internalNote`로 고지.
 import { NextResponse } from 'next/server';
 import { and, eq, isNull, isNotNull, notLike, or, gte, count } from 'drizzle-orm';
 import { db } from '../../../../db';
@@ -21,6 +24,7 @@ import { users, statsDaily, walletLedger, purchaseEvent } from '../../../../db/s
 import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
+import { aggregateUsers, retentionPct, isExcludedUser } from '../../../../lib/adminStats';
 
 export const dynamic = 'force-dynamic';
 
@@ -31,53 +35,38 @@ const YMD = (d: Date) => d.toISOString().slice(0, 10);
 export async function GET(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   try {
+    // §13.30 — 내부 계정은 기본 제외. 관찰이 필요할 때만 ?includeInternal=1.
+    const includeInternal = new URL(req.url).searchParams.get('includeInternal') === '1';
     const now = Date.now();
     const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
-    const m30 = new Date(now - 30 * 60 * 1000);
-    const mauFrom = new Date(now - 30 * 86400000); // MAU: 최근 30일 내 lastSeenAt(DAU와 동일 규약, 롤링)
-    const wauFrom = new Date(now - 7 * 86400000);  // WAU: 최근 7일 내 lastSeenAt
-    const inact = new Date(now - 14 * 86400000); // 14일+ 미접속 = 비활성
-    const win = new Date(dayStart.getTime() - (DAYS - 1) * 86400000); // 14일 시계열 시작
+    // ※ 실시간(30분)·MAU(30일)·WAU(7일)·비활성(14일) 창은 이제 `lib/adminStats.aggregateUsers`가 계산한다(§13.30 G).
+    const win = new Date(dayStart.getTime() - (DAYS - 1) * 86400000); // 14일 시계열 시작(원장 조회 하한)
 
     const days: { key: string; label: string }[] = [];
     for (let i = DAYS - 1; i >= 0; i--) { const d = new Date(dayStart.getTime() - i * 86400000); days.push({ key: YMD(d), label: MD(d) }); }
     const idx = new Map(days.map((d, i) => [d.key, i]));
 
-    // 유저(현재 non-deleted) — 신규가입/DAU/시간대/비활성 버킷 원천
-    const rows = await db.select({ c: users.createdAt, l: users.lastSeenAt }).from(users)
+    // 유저(현재 non-deleted) — 신규가입/DAU/시간대/비활성 버킷 원천. 버킷팅은 순수 모듈이 한다(§13.30 G).
+    //   리텐션 D1~D30은 **근사**(정밀 코호트 아님 — lastSeenAt은 마지막 접속만 줌): 분모=가입 후 k일+ 지난 유저,
+    //   분자=그중 lastSeenAt이 (createdAt + k일) 이후("아직 살아있나"). 분모 0 → null.
+    const rows = await db.select({ c: users.createdAt, l: users.lastSeenAt, internal: users.internal }).from(users)
       .where(and(eq(users.projCode, PROJ_CODE), isNull(users.deletedAt)));
-    const newUsers = new Array(DAYS).fill(0), dau = new Array(DAYS).fill(0), hourly = new Array(24).fill(0);
-    let totalUsers = 0, active30m = 0, dauToday = 0, newToday = 0, inactive = 0, mau = 0, wau = 0;
-    // 리텐션 D1/D7/D30 **근사**(정밀 코호트 아님 — lastSeenAt은 마지막 접속만 줌).
-    //   Dk 분모 = 가입 후 k일+ 지난 유저 · 분자 = 그중 lastSeenAt이 (createdAt + k일) 이후("아직 살아있나"). 분모 0 → null.
-    const RET = [1, 3, 7, 14, 30] as const;
-    const retDen: Record<number, number> = { 1: 0, 3: 0, 7: 0, 14: 0, 30: 0 };
-    const retNum: Record<number, number> = { 1: 0, 3: 0, 7: 0, 14: 0, 30: 0 };
-    for (const r of rows) {
-      totalUsers++;
-      if (r.c) { const i = idx.get(YMD(new Date(r.c))); if (i !== undefined) newUsers[i]++; if (r.c.getTime() >= dayStart.getTime()) newToday++; }
-      if (r.l) {
-        const lt = r.l.getTime();
-        if (lt >= m30.getTime()) active30m++;
-        if (lt >= dayStart.getTime()) dauToday++;
-        if (lt >= mauFrom.getTime()) mau++;
-        if (lt >= wauFrom.getTime()) wau++;
-        if (lt < inact.getTime()) inactive++;
-        const i = idx.get(YMD(new Date(r.l))); if (i !== undefined) dau[i]++;
-        hourly[new Date(r.l).getUTCHours()]++;
-      }
-      if (r.c) {
-        const ct = r.c.getTime();
-        for (const k of RET) {
-          const thresh = ct + k * 86400000;
-          if (now >= thresh) { retDen[k]++; if (r.l && r.l.getTime() >= thresh) retNum[k]++; } // 가입 후 k일+ 지난 유저만 분모
-        }
-      }
-    }
-    const retPct = (k: number): number | null => (retDen[k] > 0 ? Math.round((retNum[k] / retDen[k]) * 1000) / 10 : null);
+    const agg = aggregateUsers(
+      rows.map((r) => ({ createdAt: r.c, lastSeenAt: r.l, internal: !!r.internal })),
+      { now, dayStartMs: dayStart.getTime(), dayKeys: days.map((d) => d.key), includeInternal },
+    );
+    const { totalUsers, active30m, dauToday, mau, wau, newToday, inactive, newUsers, dau, hourly, internalExcluded } = agg;
+    const retPct = (k: number) => retentionPct(agg, k);
 
-    // 탈퇴(소프트삭제) 수
-    const [wd] = await db.select({ n: count() }).from(users).where(and(eq(users.projCode, PROJ_CODE), isNotNull(users.deletedAt)));
+    // 내부 계정 id — 원장·이벤트처럼 userId만 있는 행을 거르는 데 쓴다(users와 조인하지 않고 Set으로).
+    const internalRows = includeInternal ? [] : await db.select({ id: users.id }).from(users)
+      .where(and(eq(users.projCode, PROJ_CODE), eq(users.internal, true)));
+    const internalIds = new Set(internalRows.map((r) => r.id));
+
+    // 탈퇴(소프트삭제) 수 — 내부 계정이 탈퇴했다면 그것도 제외(집계 규약 일관).
+    const [wd] = await db.select({ n: count() }).from(users)
+      .where(and(eq(users.projCode, PROJ_CODE), isNotNull(users.deletedAt),
+        ...(includeInternal ? [] : [eq(users.internal, false)])));
     const withdrawn = wd?.n ?? 0;
 
     // 매출 시계열(statsDaily, 결제 #43 연동 전 0)
@@ -90,24 +79,33 @@ export async function GET(req: Request) {
       .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'ad'), gte(walletLedger.createdAt, win)));
     const adSeries = new Array(DAYS).fill(0);
     let adToday = 0; const adUsersToday = new Set<string>();
-    for (const r of adRows) { const i = idx.get(YMD(new Date(r.c))); if (i !== undefined) adSeries[i]++; if (r.c.getTime() >= dayStart.getTime()) { adToday++; adUsersToday.add(r.u); } }
+    for (const r of adRows) {
+      if (isExcludedUser(r.u, internalIds, includeInternal)) continue; // §13.30
+      const i = idx.get(YMD(new Date(r.c))); if (i !== undefined) adSeries[i]++;
+      if (r.c.getTime() >= dayStart.getTime()) { adToday++; adUsersToday.add(r.u); }
+    }
 
     // 결제 전환율(원장 reason='purchase' 고유 결제자 / 총가입) — 결제 #43 전엔 0
     // §13.18 D1 — 샌드박스 집계 제외(웹훅·크론·관리자 3경로 대칭): 샌드박스 결제자(ref='<productId>:sandbox')는 실 결제자 아님 → 분자 제외.
+    // §13.30 — 내부 계정 결제자도 제외(샌드박스 제외와 **중첩** 적용: 본인 라이선스 테스트는 이미 :sandbox로 빠지고,
+    //   본인의 실화폐 검증 결제가 있으면 여기서 빠진다). 분모(totalUsers)도 이미 내부 제외라 비율이 정합.
     const payerRows = await db.selectDistinct({ u: walletLedger.userId }).from(walletLedger)
       .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'purchase'), or(isNull(walletLedger.ref), notLike(walletLedger.ref, '%:sandbox'))));
-    const payers = payerRows.length;
+    const payers = payerRows.filter((r) => !isExcludedUser(r.u, internalIds, includeInternal)).length;
     const conversion = totalUsers > 0 ? Math.round((payers / totalUsers) * 1000) / 10 : 0; // %
 
     // ⑩ 운영 알림(이상징후) — 전일 대비 임계 초과. 진행 중인 "오늘"은 부분치라 노이즈 → **완결된 어제(d0) vs 그제(d1)** 비교.
     //   서버 오류 = purchaseEvent(ok=false)의 머니패스 실패 건수(현 서버 보유 오류 로그). newUsers는 위 시계열 재사용(이중집계 방지).
     //   baseline(최소 표본)으로 소수 노이즈 차단. 판정만(Discord push는 Cron 배치가 §13.25-E — GET마다 알림 스팸 금지).
     const errFrom = new Date(dayStart.getTime() - 2 * 86400000); // 그제 00:00부터
-    const errRows = await db.select({ c: purchaseEvent.createdAt }).from(purchaseEvent)
+    //   ⚠ 내부 계정 제외(§13.30)는 **userId가 있는 이벤트에만** 적용된다 — auth 전 단계 실패는 userId=null이라 귀속 불가(그대로 집계).
+    const errRows = await db.select({ c: purchaseEvent.createdAt, u: purchaseEvent.userId }).from(purchaseEvent)
       .where(and(eq(purchaseEvent.projCode, PROJ_CODE), eq(purchaseEvent.ok, false), gte(purchaseEvent.createdAt, errFrom)));
     let errToday = 0, errD0 = 0, errD1 = 0; // 오늘 / 어제 / 그제
     const y0 = dayStart.getTime() - 86400000, y1 = dayStart.getTime() - 2 * 86400000;
-    for (const r of errRows) { if (!r.c) continue; const t = r.c.getTime();
+    for (const r of errRows) { if (!r.c) continue;
+      if (r.u && isExcludedUser(r.u, internalIds, includeInternal)) continue;
+      const t = r.c.getTime();
       if (t >= dayStart.getTime()) errToday++; else if (t >= y0) errD0++; else if (t >= y1) errD1++; }
     const newD0 = newUsers[DAYS - 2] ?? 0, newD1 = newUsers[DAYS - 3] ?? 0; // 어제 / 그제 신규가입
     const alerts: { key: string; label: string; prev: number; cur: number; deltaPct: number; severity: 'warn' | 'crit' }[] = [];
@@ -127,6 +125,13 @@ export async function GET(req: Request) {
       series: { newUsers, dau, revenue, ad: adSeries },
       hourly,
       alerts,
+      // §13.30 C — "숨김"이 아니라 "제외 + 고지". 화면이 배지로 띄운다(숫자가 조용히 달라지는 게 가장 위험).
+      internal: {
+        excluded: internalExcluded,
+        included: includeInternal,
+        // 제외가 **닿지 않는** 지표 — 화면 각주로 그대로 노출한다(§13.30 E).
+        notApplied: ['revenue', 'telemetry', 'series', 'achievements', 'bm'],
+      },
     });
   } catch (e) {
     reportError(e, 'admin/stats');

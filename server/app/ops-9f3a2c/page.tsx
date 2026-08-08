@@ -689,6 +689,26 @@ function PlayersTab({ api }: { api: Api }) {
   );
 }
 
+// 내부(운영자·QA) 계정 제외 고지 — BACKEND §13.30 C. **"숨김"이 아니라 "제외 + 고지"**:
+//   숫자가 조용히 달라지는 게 가장 위험하므로, 제외했다는 사실과 **제외가 닿지 않는 지표**를 항상 화면에 남긴다.
+//   제외 0명이면 렌더하지 않는다(노이즈).
+function InternalNotice({ stats }: { stats: Json | null }) {
+  const info = (stats?.internal as Json) ?? {};
+  const n = nnum(info.excluded);
+  if (info.included) {
+    return <div className="oc-mut" style={{ fontSize: 12, marginBottom: 12 }}>⚠ <b>내부 계정 포함</b> 모드 — 아래 수치에 운영자·QA 계정이 섞여 있습니다.</div>;
+  }
+  if (n <= 0) return null;
+  return (
+    <div className="oc-mut" style={{ fontSize: 12, marginBottom: 12 }}>
+      내부 계정 <b>{n}명 제외</b>됨 (운영자·QA — 사용자 목록에서 지정).
+      {' '}<span title="userId 없는 사전 롤업이거나 가명화돼 조인이 불가능해 제외가 적용되지 않는 지표입니다(§13.30 E).">
+        단 <b>매출·행동 텔레메트리·업적·시계열(series)</b>에는 제외가 적용되지 않습니다.
+      </span>
+    </div>
+  );
+}
+
 // ⑪ 메인 KPI 카드행 — 한 화면 즉시 파악. 가능분(서버/원장)=실값 · 미가용은 "—"+지표별 실블로커 배지.
 //   MAU·WAU는 lastSeenAt 기반 실값(DAU와 동일 규약, 2026-07-31 하트비트 후). 리텐션/플레이=EAS 후, ARPU류=#43 결제 후.
 function MainKpi({ kpi }: { kpi: Json }) {
@@ -753,6 +773,7 @@ function Overview({ stats, setting, openTickets }: { stats: Json | null; setting
   const dau = narr(series.dau), newUsers = narr(series.newUsers);
   return (
     <>
+      <InternalNotice stats={stats} />
       <MainKpi kpi={kpi} />
       <Alerts alerts={alerts} />
       <div className="oc-grid">
@@ -885,6 +906,16 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
     return () => { live = false; };
   }, [api, status, offset]);
   const pick = (s: string) => { setStatus(s); setOffset(0); };
+  // 내부(운영자·QA) 계정 표시 토글 — BACKEND §13.30. 켜면 이 계정이 관리자 통계에서 빠진다(재화·게임플레이엔 무영향).
+  //   낙관적 반영 금지: 서버 응답을 받은 뒤에만 행을 갱신한다(집계 축이 화면과 어긋나면 판독을 그르친다).
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const toggleInternal = async (id: string, next: boolean) => {
+    setBusyId(id);
+    const r = await api('/api/admin/users', { method: 'PATCH', body: JSON.stringify({ userId: id, internal: next }) });
+    setBusyId(null);
+    if (!r.body.ok) return;
+    setRows((prev) => prev.map((u) => (u.id === id ? { ...u, internal: next } : u)));
+  };
   const FILT = [{ v: 'all', l: '전체' }, { v: 'active', l: '활성' }, { v: 'inactive', l: '비활성' }, { v: 'withdrawn', l: '탈퇴' }];
   const GR = [{ v: 'day', l: '일별' }, { v: 'week', l: '주별' }, { v: 'month', l: '월별' }];
   const exportUsers = () => downloadCsv(`users-${status}.csv`, ['가입일', '최근접속', '상태', '로그인', '버전', '다이아'],
@@ -892,6 +923,7 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
   const exportSignups = () => downloadCsv(`signups-${gran}.csv`, ['구간', '가입 수'], suLabels.map((l, i) => [l, suCount[i] ?? 0]));
   return (
     <>
+      <InternalNotice stats={stats} />
       <div className="oc-grid">
         <Stat ic="👥" k="총 가입자" v={nnum(kpi.totalUsers).toLocaleString()} s={`오늘 신규 +${nnum(kpi.newToday)}`} />
         <Stat ic="🔵" k="오늘 활성(DAU)" v={nnum(kpi.dauToday).toLocaleString()} s="오늘 접속 유저" />
@@ -911,15 +943,23 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
         <div className="oc-cardhead"><h3>사용자 목록 <span className="oc-mut">({total.toLocaleString()})</span></h3><div className="oc-row" style={{ gap: 8 }}><GranTabs gran={status} set={pick} opts={FILT} /><CsvBtn onClick={exportUsers} /></div></div>
         {loading ? <LoadingRow /> : rows.length === 0 ? <div className="oc-empty">해당 조건의 사용자가 없습니다.</div> : (
           <table className="oc-table">
-            <thead><tr><th>가입일</th><th>최근 접속</th><th>상태</th><th>로그인</th><th>버전</th><th style={{ textAlign: 'right' }}>다이아</th></tr></thead>
-            <tbody>{rows.map((u) => { const st = userStatus(u); return (
-              <tr key={u.id as string}>
+            <thead><tr><th>가입일</th><th>최근 접속</th><th>상태</th><th>로그인</th><th>버전</th><th style={{ textAlign: 'right' }}>다이아</th><th style={{ textAlign: 'center' }}>내부</th></tr></thead>
+            <tbody>{rows.map((u) => { const st = userStatus(u); const isInt = !!u.internal; const id = u.id as string; return (
+              <tr key={id}>
                 <td>{fmtD(u.createdAt)}</td>
                 <td>{fmtDT(u.lastSeenAt)} <span className="oc-mut" style={{ fontSize: 11 }}>· {ago(u.lastSeenAt)}</span></td>
                 <td><span className={`oc-pill ${st.cls}`}>{st.label}</span></td>
                 <td className="oc-mut">{(u.provider as string) || '—'}</td>
                 <td className="oc-mut">{(u.appVersion as string) || '—'}</td>
                 <td style={{ textAlign: 'right', fontWeight: 700 }}>{nnum(u.balance).toLocaleString()}</td>
+                <td style={{ textAlign: 'center' }}>
+                  <button
+                    className={`oc-btn ${isInt ? '' : 'ghost'} sm`}
+                    disabled={busyId === id}
+                    title={isInt ? '통계에서 제외 중 — 눌러서 실유저로 되돌립니다' : '운영자·QA 계정으로 표시해 통계에서 제외합니다'}
+                    onClick={() => toggleInternal(id, !isInt)}
+                  >{busyId === id ? '…' : isInt ? '내부' : '—'}</button>
+                </td>
               </tr>); })}</tbody>
           </table>
         )}
