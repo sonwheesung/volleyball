@@ -8,6 +8,7 @@ import { statsDaily, walletLedger, users } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
+import { internalScope, isExcluded, internalMeta } from '../../../../lib/internalScope';
 
 export const dynamic = 'force-dynamic';
 
@@ -43,28 +44,33 @@ export async function GET(req: Request) {
     const bk = buildBuckets(gran, new Date());
     const labels = bk.map((b) => b.label);
 
+    const scope = await internalScope(req); // §13.30 — 내부 계정 제외(signups·ad·refund. revenue는 사전 롤업이라 불가)
+
     if (metric === 'signups') {
       // ① 사용자 현황 — 가입 수(신규/일주월). 소프트삭제 포함(가입은 일어난 사실 — 총 유입).
       const rows = await db.select({ c: users.createdAt }).from(users)
-        .where(and(eq(users.projCode, PROJ_CODE), gte(users.createdAt, new Date(bk[0].start))));
+        .where(and(eq(users.projCode, PROJ_CODE), gte(users.createdAt, new Date(bk[0].start)),
+          ...(scope.includeInternal ? [] : [eq(users.internal, false)])));
       const count = new Array(bk.length).fill(0);
       for (const r of rows) { if (!r.c) continue; const i = bidx(bk, r.c.getTime()); if (i >= 0) count[i]++; }
-      return NextResponse.json({ ok: true, metric, gran, labels, count });
+      return NextResponse.json({ ok: true, metric, gran, labels, count, internal: internalMeta(scope) });
     }
     if (metric === 'revenue') {
       const fromDay = new Date(bk[0].start).toISOString().slice(0, 10);
       const sd = await db.select().from(statsDaily).where(and(eq(statsDaily.projCode, PROJ_CODE), gte(statsDaily.day, fromDay)));
       const revenue = new Array(bk.length).fill(0), purchases = new Array(bk.length).fill(0);
       for (const s of sd) { const i = bidx(bk, Date.parse(`${String(s.day)}T00:00:00Z`)); if (i >= 0) { revenue[i] += s.revenueKrw; purchases[i] += s.purchaseCount; } }
-      return NextResponse.json({ ok: true, metric, gran, labels, revenue, purchases });
+      // ⚠ statsDaily는 userId 없는 사전 롤업이라 내부 계정을 못 뺀다(§13.30 E) — 응답에 그대로 고지.
+      return NextResponse.json({ ok: true, metric, gran, labels, revenue, purchases, internal: internalMeta(scope, ['revenue', 'purchases']) });
     }
     if (metric === 'ad' || metric === 'refund') {
       const rows = await db.select({ c: walletLedger.createdAt, u: walletLedger.userId, d: walletLedger.delta }).from(walletLedger)
         .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, metric), gte(walletLedger.createdAt, new Date(bk[0].start))));
       const cnt = new Array(bk.length).fill(0), diamonds = new Array(bk.length).fill(0);
       const uset = bk.map(() => new Set<string>());
-      for (const r of rows) { if (!r.c) continue; const i = bidx(bk, r.c.getTime()); if (i >= 0) { cnt[i]++; uset[i].add(r.u); diamonds[i] += Math.abs(r.d); } }
-      return NextResponse.json({ ok: true, metric, gran, labels, count: cnt, users: uset.map((s) => s.size), diamonds });
+      for (const r of rows) { if (!r.c) continue; if (isExcluded(scope, r.u)) continue; // §13.30
+        const i = bidx(bk, r.c.getTime()); if (i >= 0) { cnt[i]++; uset[i].add(r.u); diamonds[i] += Math.abs(r.d); } }
+      return NextResponse.json({ ok: true, metric, gran, labels, count: cnt, users: uset.map((s) => s.size), diamonds, internal: internalMeta(scope) });
     }
     return NextResponse.json({ ok: false, reason: 'bad-request' }, { status: 400 });
   } catch (e) {

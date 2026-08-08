@@ -15,8 +15,8 @@
 //   ※ 업적 달성율은 클라이언트 계산(결정론 격리 — 서버 미보유). 별도 텔레메트리 필요.
 //   ※ 유저/원장을 fetch해 JS 버킷팅 — 대규모 시 SQL group by로 전환(TODO). 관리자 전용·저빈도라 허용.
 //   ※ **내부(운영자) 계정 제외(§13.30, 2026-08-08)** — `users.internal` 계정은 **기본 제외**하고 `?includeInternal=1`이면 포함한다.
-//     유저 버킷팅은 순수 모듈 `lib/adminStats.ts`가 하고(가드 `_dv_internal`이 DB 없이 A/B), 원장·이벤트는 `internalIds`로 스킵한다.
-//     ⚠ **매출(statsDaily)만은 제외 불가** — userId 없는 사전 롤업이라 조회 시점에 못 쪼갠다(§13.30 E). 응답 `internalNote`로 고지.
+//     유저 버킷팅은 순수 모듈 `lib/adminStats.ts`가 하고(가드 `_dv_internal`이 DB 없이 A/B), 스코프(내부 id 집합)는 공용 `lib/internalScope.ts`가 유일하게 만든다.
+//     ⚠ **매출(statsDaily)만은 제외 불가** — userId 없는 사전 롤업이라 조회 시점에 못 쪼갠다(§13.30 E). 응답 `internal.notApplied`로 고지.
 import { NextResponse } from 'next/server';
 import { and, eq, isNull, isNotNull, notLike, or, gte, count } from 'drizzle-orm';
 import { db } from '../../../../db';
@@ -24,7 +24,8 @@ import { users, statsDaily, walletLedger, purchaseEvent } from '../../../../db/s
 import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
-import { aggregateUsers, retentionPct, isExcludedUser } from '../../../../lib/adminStats';
+import { aggregateUsers, retentionPct } from '../../../../lib/adminStats';
+import { internalScope, isExcluded, internalMeta } from '../../../../lib/internalScope';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,8 +36,9 @@ const YMD = (d: Date) => d.toISOString().slice(0, 10);
 export async function GET(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   try {
-    // §13.30 — 내부 계정은 기본 제외. 관찰이 필요할 때만 ?includeInternal=1.
-    const includeInternal = new URL(req.url).searchParams.get('includeInternal') === '1';
+    // §13.30 — 내부 계정은 기본 제외. 관찰이 필요할 때만 ?includeInternal=1. 스코프 계산은 공용 헬퍼가 유일하게 한다.
+    const scope = await internalScope(req);
+    const includeInternal = scope.includeInternal;
     const now = Date.now();
     const dayStart = new Date(); dayStart.setUTCHours(0, 0, 0, 0);
     // ※ 실시간(30분)·MAU(30일)·WAU(7일)·비활성(14일) 창은 이제 `lib/adminStats.aggregateUsers`가 계산한다(§13.30 G).
@@ -55,13 +57,8 @@ export async function GET(req: Request) {
       rows.map((r) => ({ createdAt: r.c, lastSeenAt: r.l, internal: !!r.internal })),
       { now, dayStartMs: dayStart.getTime(), dayKeys: days.map((d) => d.key), includeInternal },
     );
-    const { totalUsers, active30m, dauToday, mau, wau, newToday, inactive, newUsers, dau, hourly, internalExcluded } = agg;
+    const { totalUsers, active30m, dauToday, mau, wau, newToday, inactive, newUsers, dau, hourly } = agg;
     const retPct = (k: number) => retentionPct(agg, k);
-
-    // 내부 계정 id — 원장·이벤트처럼 userId만 있는 행을 거르는 데 쓴다(users와 조인하지 않고 Set으로).
-    const internalRows = includeInternal ? [] : await db.select({ id: users.id }).from(users)
-      .where(and(eq(users.projCode, PROJ_CODE), eq(users.internal, true)));
-    const internalIds = new Set(internalRows.map((r) => r.id));
 
     // 탈퇴(소프트삭제) 수 — 내부 계정이 탈퇴했다면 그것도 제외(집계 규약 일관).
     const [wd] = await db.select({ n: count() }).from(users)
@@ -80,7 +77,7 @@ export async function GET(req: Request) {
     const adSeries = new Array(DAYS).fill(0);
     let adToday = 0; const adUsersToday = new Set<string>();
     for (const r of adRows) {
-      if (isExcludedUser(r.u, internalIds, includeInternal)) continue; // §13.30
+      if (isExcluded(scope, r.u)) continue; // §13.30
       const i = idx.get(YMD(new Date(r.c))); if (i !== undefined) adSeries[i]++;
       if (r.c.getTime() >= dayStart.getTime()) { adToday++; adUsersToday.add(r.u); }
     }
@@ -91,7 +88,7 @@ export async function GET(req: Request) {
     //   본인의 실화폐 검증 결제가 있으면 여기서 빠진다). 분모(totalUsers)도 이미 내부 제외라 비율이 정합.
     const payerRows = await db.selectDistinct({ u: walletLedger.userId }).from(walletLedger)
       .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'purchase'), or(isNull(walletLedger.ref), notLike(walletLedger.ref, '%:sandbox'))));
-    const payers = payerRows.filter((r) => !isExcludedUser(r.u, internalIds, includeInternal)).length;
+    const payers = payerRows.filter((r) => !isExcluded(scope, r.u)).length;
     const conversion = totalUsers > 0 ? Math.round((payers / totalUsers) * 1000) / 10 : 0; // %
 
     // ⑩ 운영 알림(이상징후) — 전일 대비 임계 초과. 진행 중인 "오늘"은 부분치라 노이즈 → **완결된 어제(d0) vs 그제(d1)** 비교.
@@ -104,7 +101,7 @@ export async function GET(req: Request) {
     let errToday = 0, errD0 = 0, errD1 = 0; // 오늘 / 어제 / 그제
     const y0 = dayStart.getTime() - 86400000, y1 = dayStart.getTime() - 2 * 86400000;
     for (const r of errRows) { if (!r.c) continue;
-      if (r.u && isExcludedUser(r.u, internalIds, includeInternal)) continue;
+      if (r.u && isExcluded(scope, r.u)) continue;
       const t = r.c.getTime();
       if (t >= dayStart.getTime()) errToday++; else if (t >= y0) errD0++; else if (t >= y1) errD1++; }
     const newD0 = newUsers[DAYS - 2] ?? 0, newD1 = newUsers[DAYS - 3] ?? 0; // 어제 / 그제 신규가입
@@ -126,12 +123,8 @@ export async function GET(req: Request) {
       hourly,
       alerts,
       // §13.30 C — "숨김"이 아니라 "제외 + 고지". 화면이 배지로 띄운다(숫자가 조용히 달라지는 게 가장 위험).
-      internal: {
-        excluded: internalExcluded,
-        included: includeInternal,
-        // 제외가 **닿지 않는** 지표 — 화면 각주로 그대로 노출한다(§13.30 E).
-        notApplied: ['revenue', 'telemetry', 'series', 'achievements', 'bm'],
-      },
+      //   Phase 2(2026-08-08)로 series·achievements·bm까지 제외가 확장돼, 남은 미적용은 매출·텔레메트리 둘뿐이다.
+      internal: internalMeta(scope, ['revenue', 'telemetry']),
     });
   } catch (e) {
     reportError(e, 'admin/stats');

@@ -81,21 +81,38 @@ ok(included.totalUsers === 6, `총가입 6 (실제 ${included.totalUsers})`);
 ok(included.dauToday === 4, `DAU 4 (실제 ${included.dauToday})`);
 ok(included.internalExcluded === 0, `포함 모드의 internalExcluded=0 (실제 ${included.internalExcluded})`);
 
-// ── ③ 배선: 라우트가 순수 모듈을 경유하는가 ──
-console.log('\n[③] 라우트 배선(소스 검사)');
-const routeSrc = readFileSync(join(process.cwd(), 'app/api/admin/stats/route.ts'), 'utf8');
-ok(/from '.*lib\/adminStats'/.test(routeSrc), "stats 라우트가 lib/adminStats를 import");
-ok(/aggregateUsers\(/.test(routeSrc), 'stats 라우트가 aggregateUsers를 호출(자체 루프로 되돌아가지 않음)');
-ok(/includeInternal/.test(routeSrc), 'stats 라우트가 includeInternal 쿼리를 읽음');
-ok(/isExcludedUser\(/.test(routeSrc), '원장·이벤트 경로가 isExcludedUser로 거름');
+// ── ③ 배선: 집계 라우트가 **전부** 스코프를 경유하는가 ──
+//   Phase 1에서 stats만 적용하고 업적·BM·시계열을 빠뜨렸다가 사용자가 화면에서 발견했다.
+//   그래서 "새 집계 라우트가 스코프를 안 쓰면 FAIL"을 소스 수준에서 못 박는다.
+console.log('\n[③] 집계 라우트 배선(소스 검사)');
+const AGG_ROUTES = ['stats', 'achievements', 'series', 'bm'];
+for (const name of AGG_ROUTES) {
+  const src = readFileSync(join(process.cwd(), `app/api/admin/${name}/route.ts`), 'utf8');
+  ok(/from '.*lib\/internalScope'/.test(src), `${name}: lib/internalScope를 import`);
+  ok(/internalScope\(req\)/.test(src), `${name}: internalScope(req)로 스코프 생성`);
+  ok(/internalMeta\(/.test(src), `${name}: 응답에 internalMeta 고지 포함`);
+  // 스코프를 만들어놓고 **쓰지 않는** 구멍 차단 — 제외 조건이든 필터든 최소 한 번은 써야 한다.
+  ok(/isExcluded\(scope|users\.internal, false|eq\(users\.internal/.test(src) || /notInArray\(walletLedger\.userId/.test(src),
+    `${name}: 스코프를 실제 집계에 적용(제외 조건 또는 isExcluded 사용)`);
+}
+const statsSrc = readFileSync(join(process.cwd(), 'app/api/admin/stats/route.ts'), 'utf8');
+ok(/from '.*lib\/adminStats'/.test(statsSrc), 'stats: 순수 집계 모듈 lib/adminStats를 import');
+ok(/aggregateUsers\(/.test(statsSrc), 'stats: aggregateUsers 호출(자체 루프로 되돌아가지 않음)');
 // 회귀 방지: 예전 인라인 루프의 흔적(`totalUsers++`)이 라우트에 되살아나면 배선이 우회된 것.
-ok(!/totalUsers\+\+/.test(routeSrc), '라우트에 인라인 유저 카운트 루프가 없음');
+ok(!/totalUsers\+\+/.test(statsSrc), 'stats: 인라인 유저 카운트 루프가 없음');
+// 스코프 진실이 두 곳으로 갈라지는 것 차단 — 라우트가 자기 손으로 internal id 쿼리를 만들면 안 된다.
+for (const name of AGG_ROUTES) {
+  const src = readFileSync(join(process.cwd(), `app/api/admin/${name}/route.ts`), 'utf8');
+  ok(!/new Set\(\s*\w*[Ii]nternalRows/.test(src), `${name}: 자체 internalIds Set을 만들지 않음(스코프 단일 출처)`);
+}
 const usersSrc = readFileSync(join(process.cwd(), 'app/api/admin/users/route.ts'), 'utf8');
 ok(/export async function PATCH/.test(usersSrc), 'users 라우트에 내부 표시 PATCH 존재');
 ok(/users\.internal/.test(usersSrc), 'users 라우트가 internal 컬럼을 다룸');
+// 개별 레코드 목록은 **제외하지 않는 게 설계**(운영자가 내부 계정 행을 봐야 한다, §13.30 적용 경계).
+ok(!/internalScope\(req\)/.test(usersSrc), 'users 목록은 내부 계정을 숨기지 않음(설계 — 표시만 한다)');
 
 // ── ④ 원장 필터 헬퍼 ──
-console.log('\n[④] isExcludedUser 계약');
+console.log('\n[④] isExcludedUser 계약(순수 모듈)');
 const ids = new Set(['u-int']);
 ok(isExcludedUser('u-int', ids, false) === true, '내부 id는 제외(기본 모드)');
 ok(isExcludedUser('u-real', ids, false) === false, '실유저 id는 통과');

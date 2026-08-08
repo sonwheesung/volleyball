@@ -9,6 +9,7 @@ import { users, walletLedger } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
+import { internalScope, isExcluded, internalMeta } from '../../../../lib/internalScope';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,6 +19,7 @@ const WIN_DAYS: Record<string, number> = { day: 30, week: 84, month: 365 };
 export async function GET(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   try {
+    const scope = await internalScope(req); // §13.30 — 내부 계정 제외(상품별 집계·전환율 전부)
     const url = new URL(req.url);
     const gran = url.searchParams.get('granularity') || 'day';
     const winDays = WIN_DAYS[gran] ?? 30;
@@ -32,6 +34,7 @@ export async function GET(req: Request) {
     const byRef = new Map<string, { grants: number; diamonds: number; payers: Set<string> }>();
     const allPayers = new Set<string>();
     for (const r of rows) {
+      if (isExcluded(scope, r.userId)) continue; // §13.30
       const key = r.ref || '(미지정)';
       let e = byRef.get(key); if (!e) { e = { grants: 0, diamonds: 0, payers: new Set() }; byRef.set(key, e); }
       e.grants++; e.diamonds += Math.max(0, r.delta); e.payers.add(r.userId); allPayers.add(r.userId);
@@ -44,12 +47,16 @@ export async function GET(req: Request) {
     // §13.18 D1 — 샌드박스 집계 제외(웹훅·크론·관리자 3경로 대칭): 샌드박스 결제자는 실 결제자 아님 → 전환율 분자에서 제외.
     const payerAll = await db.selectDistinct({ u: walletLedger.userId }).from(walletLedger)
       .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'purchase'), or(isNull(walletLedger.ref), notLike(walletLedger.ref, '%:sandbox'))));
-    const [tot] = await db.select({ n: count() }).from(users).where(and(eq(users.projCode, PROJ_CODE), isNull(users.deletedAt)));
+    const [tot] = await db.select({ n: count() }).from(users)
+      .where(and(eq(users.projCode, PROJ_CODE), isNull(users.deletedAt),
+        ...(scope.includeInternal ? [] : [eq(users.internal, false)])));
     const totalUsers = tot?.n ?? 0;
-    const payers = payerAll.length;
+    const payers = payerAll.filter((p) => !isExcluded(scope, p.u)).length; // §13.30 — 분자·분모 대칭
     const conversion = totalUsers > 0 ? Math.round((payers / totalUsers) * 1000) / 10 : 0;
 
-    return NextResponse.json({ ok: true, gran, winDays, products, windowPayers: allPayers.size, payers, totalUsers, conversion });
+    return NextResponse.json({ ok: true, gran, winDays, products, windowPayers: allPayers.size, payers, totalUsers, conversion,
+      // KRW 매출은 여기 없고 statsDaily(사전 롤업)라 제외가 안 닿는다 — 화면 각주로 고지(§13.30 E).
+      internal: internalMeta(scope, ['revenue']) });
   } catch (e) {
     reportError(e, 'admin/bm');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });

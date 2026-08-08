@@ -698,6 +698,11 @@ function PlayersTab({ api }: { api: Api }) {
 // 내부(운영자·QA) 계정 제외 고지 — BACKEND §13.30 C. **"숨김"이 아니라 "제외 + 고지"**:
 //   숫자가 조용히 달라지는 게 가장 위험하므로, 제외했다는 사실과 **제외가 닿지 않는 지표**를 항상 화면에 남긴다.
 //   제외 0명이면 렌더하지 않는다(노이즈).
+//   미적용 지표는 **라우트가 알려준 것만** 적는다(화면에 목록을 손으로 박아두면 Phase가 올라가도 옛 문구가 남아 거짓말이 된다 — 2026-08-08 Phase 2에서 실제로 그럴 뻔했다).
+const NOT_APPLIED_LABEL: Record<string, string> = {
+  revenue: '매출', purchases: '결제 건수', telemetry: '행동 텔레메트리',
+  series: '시계열', achievements: '업적', bm: 'BM',
+};
 function InternalNotice({ stats }: { stats: Json | null }) {
   const info = (stats?.internal as Json) ?? {};
   const n = nnum(info.excluded);
@@ -705,12 +710,13 @@ function InternalNotice({ stats }: { stats: Json | null }) {
     return <div className="oc-mut" style={{ fontSize: 12, marginBottom: 12 }}>⚠ <b>내부 계정 포함</b> 모드 — 아래 수치에 운영자·QA 계정이 섞여 있습니다.</div>;
   }
   if (n <= 0) return null;
+  const na = ((info.notApplied as string[]) ?? []).map((k) => NOT_APPLIED_LABEL[k] ?? k);
   return (
     <div className="oc-mut" style={{ fontSize: 12, marginBottom: 12 }}>
       내부 계정 <b>{n}명 제외</b>됨 (운영자·QA — 사용자 목록에서 지정).
-      {' '}<span title="userId 없는 사전 롤업이거나 가명화돼 조인이 불가능해 제외가 적용되지 않는 지표입니다(§13.30 E).">
-        단 <b>매출·행동 텔레메트리·업적·시계열(series)</b>에는 제외가 적용되지 않습니다.
-      </span>
+      {na.length ? <>{' '}<span title="userId 없는 사전 롤업이거나 가명화돼 조인이 불가능해 제외를 적용할 수 없는 지표입니다(§13.30 E).">
+        단 <b>{na.join('·')}</b>에는 적용되지 않습니다.
+      </span></> : null}
     </div>
   );
 }
@@ -1017,6 +1023,7 @@ function Payments({ stats, api, flash }: { stats: Json | null; api: Api; flash: 
   const GR = [{ v: 'day', l: '일별' }, { v: 'week', l: '주별' }, { v: 'month', l: '월별' }];
   return (
     <>
+      <InternalNotice stats={bm} />
       <div className="oc-cardhead" style={{ marginBottom: 18 }}><div className="oc-mut" style={{ fontSize: 13 }}>매출 데이터는 결제 검증(#43) 연동 후 채워집니다.</div><GranTabs gran={gran} set={setGran} opts={GR} /></div>
       <div className="oc-grid">
         <Stat ic="₩" k="총 매출" v={`₩${revTotal.toLocaleString()}`} s={`최근 ${labels.length}구간`} />
@@ -1253,6 +1260,7 @@ function Ads({ api }: { api: Api }) {
   const GR = [{ v: 'day', l: '일별' }, { v: 'week', l: '주별' }, { v: 'month', l: '월별' }, { v: 'year', l: '연별' }];
   return (
     <>
+      <InternalNotice stats={d} />
       <div className="oc-cardhead" style={{ marginBottom: 18 }}><div className="oc-mut" style={{ fontSize: 13 }}>보상광고 시청 <span className="oc-tag2">자체-롤업(원장 reason=ad)</span> · 1회 = 다이아 +{AD_REWARD} (하루 {AD_DAILY_CAP}회 상한)</div><div className="oc-row" style={{ gap: 8 }}><GranTabs gran={gran} set={setGran} opts={GR} /><CsvBtn onClick={() => downloadCsv(`ads-${gran}.csv`, ['구간', '시청 횟수', '고유 시청자'], labels.map((l, i) => [l, count[i] ?? 0, usersA[i] ?? 0]))} /></div></div>
       <div className="oc-grid">
         <Stat ic="📺" k="총 시청 횟수" v={cTotal.toLocaleString()} s={`최근 ${labels.length}구간 합`} />
@@ -1399,6 +1407,7 @@ function Achievements({ api }: { api: Api }) {
   const unlockedAny = ACH_CAT.filter((a) => (counts[a.id] ?? 0) > 0).length;
   return (
     <>
+      <InternalNotice stats={d} />
       <div className="oc-grid">
         <Stat ic="🏆" k="업적 수" v={String(ACH_CAT.length)} s={`${cats.length}개 카테고리`} />
         <Stat ic="👥" k="집계 대상" v={total.toLocaleString()} s="현재 사용자(수령율 분모)" />
