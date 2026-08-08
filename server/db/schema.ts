@@ -40,7 +40,7 @@ export const users = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true }).notNull().defaultNow(),
     deletedAt: timestamp('deleted_at', { withTimezone: true }), // 소프트삭제 — 결제 원장 5년 보존 위해 하드삭제 대신(§13.9). 탈퇴 시 providerId 가명화(AUTH §7)
     ageConfirmedAt: timestamp('age_confirmed_at', { withTimezone: true }), // 만14세 확인 시점(신규 소셜 가입 시 필수·1회 기록, AUTH §8). null=미확인(익명/가드)
-    // 내부(운영자·QA·테스터) 계정 표시 — 관리자 통계에서 **기본 제외**(§13.30). Expand-only(NOT NULL+default라 기존 행 안전).
+    // 내부(운영자·QA·지인·테스터 = **실유저로 세면 안 되는**) 계정 표시 — 관리자 통계에서 **기본 제외**(§13.30). Expand-only(NOT NULL+default라 기존 행 안전).
     //   ⚠ 판별은 사람이 콘솔에서 표시하고 DB가 기억한다. **id를 하드코딩한 필터를 만들지 말 것**(재설치·탈퇴로 id가 바뀐다, §13.15).
     //   게임플레이·재화·결제엔 일절 영향 없음 — 순수 집계 필터 축이다.
     internal: boolean('internal').notNull().default(false),

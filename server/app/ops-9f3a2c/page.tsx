@@ -699,7 +699,7 @@ function PlayersTab({ api }: { api: Api }) {
   );
 }
 
-// 내부(운영자·QA) 계정 제외 고지 — BACKEND §13.30 C. **"숨김"이 아니라 "제외 + 고지"**:
+// 내부(=실유저로 세면 안 되는) 계정 제외 고지 — BACKEND §13.30 C. **"숨김"이 아니라 "제외 + 고지"**:
 //   숫자가 조용히 달라지는 게 가장 위험하므로, 제외했다는 사실과 **제외가 닿지 않는 지표**를 항상 화면에 남긴다.
 //   제외 0명이면 렌더하지 않는다(노이즈).
 //   미적용 지표는 **라우트가 알려준 것만** 적는다(화면에 목록을 손으로 박아두면 Phase가 올라가도 옛 문구가 남아 거짓말이 된다 — 2026-08-08 Phase 2에서 실제로 그럴 뻔했다).
@@ -711,13 +711,13 @@ function InternalNotice({ stats }: { stats: Json | null }) {
   const info = (stats?.internal as Json) ?? {};
   const n = nnum(info.excluded);
   if (info.included) {
-    return <div className="oc-mut" style={{ fontSize: 12, marginBottom: 12 }}>⚠ <b>내부 계정 포함</b> 모드 — 아래 수치에 운영자·QA 계정이 섞여 있습니다.</div>;
+    return <div className="oc-mut" style={{ fontSize: 12, marginBottom: 12 }}>⚠ <b>내부 계정 포함</b> 모드 — 아래 수치에 운영자·QA·지인 계정이 섞여 있습니다.</div>;
   }
   if (n <= 0) return null;
   const na = ((info.notApplied as string[]) ?? []).map((k) => NOT_APPLIED_LABEL[k] ?? k);
   return (
     <div className="oc-mut" style={{ fontSize: 12, marginBottom: 12 }}>
-      내부 계정 <b>{n}명 제외</b>됨 (운영자·QA — 사용자 목록에서 지정).
+      내부 계정 <b>{n}명 제외</b>됨 (운영자·QA·지인 등 실유저로 셀 수 없는 계정 — 사용자 목록에서 지정).
       {na.length ? <>{' '}<span title="userId 없는 사전 롤업이거나 가명화돼 조인이 불가능해 제외를 적용할 수 없는 지표입니다(§13.30 E).">
         단 <b>{na.join('·')}</b>에는 적용되지 않습니다.
       </span></> : null}
@@ -922,7 +922,7 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
     return () => { live = false; };
   }, [api, status, offset]);
   const pick = (s: string) => { setStatus(s); setOffset(0); };
-  // 내부(운영자·QA) 계정 표시 토글 — BACKEND §13.30. 켜면 이 계정이 관리자 통계에서 빠진다(재화·게임플레이엔 무영향).
+  // 내부(운영자·QA·지인 등 실유저로 셀 수 없는) 계정 표시 토글 — BACKEND §13.30. 켜면 이 계정이 관리자 통계에서 빠진다(재화·게임플레이엔 무영향).
   //   낙관적 반영 금지: 서버 응답을 받은 뒤에만 행을 갱신한다(집계 축이 화면과 어긋나면 판독을 그르친다).
   const [busyId, setBusyId] = useState<string | null>(null);
   const toggleInternal = async (id: string, next: boolean) => {
@@ -972,7 +972,7 @@ function Users({ stats, api }: { stats: Json | null; api: Api }) {
                   <button
                     className={`oc-btn ${isInt ? '' : 'ghost'} sm toggle`}
                     disabled={busyId === id}
-                    title={isInt ? '통계에서 제외 중 — 눌러서 실유저로 되돌립니다' : '운영자·QA 계정으로 표시해 통계에서 제외합니다'}
+                    title={isInt ? '통계에서 제외 중 — 눌러서 실유저로 되돌립니다' : '내부 계정(운영자·QA·지인 등 실유저로 셀 수 없는 계정)으로 표시해 통계에서 제외합니다'}
                     onClick={() => toggleInternal(id, !isInt)}
                   >{busyId === id ? '…' : isInt ? '내부' : '—'}</button>
                 </td>
