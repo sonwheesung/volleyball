@@ -85,7 +85,9 @@ ok(included.internalExcluded === 0, `포함 모드의 internalExcluded=0 (실제
 //   Phase 1에서 stats만 적용하고 업적·BM·시계열을 빠뜨렸다가 사용자가 화면에서 발견했다.
 //   그래서 "새 집계 라우트가 스코프를 안 쓰면 FAIL"을 소스 수준에서 못 박는다.
 console.log('\n[③] 집계 라우트 배선(소스 검사)');
-const AGG_ROUTES = ['stats', 'achievements', 'series', 'bm'];
+//   telemetry는 **부분 적용**(원장 파생 campLedger만 제외 가능·가명 텔레메트리는 불가)이지만, 그 부분을 빠뜨리면
+//   오프시즌 탭 주 지표에 내부 계정이 그대로 나온다(2026-08-08 실제 누락) → 같은 배선 검사를 건다.
+const AGG_ROUTES = ['stats', 'achievements', 'series', 'bm', 'telemetry'];
 for (const name of AGG_ROUTES) {
   const src = readFileSync(join(process.cwd(), `app/api/admin/${name}/route.ts`), 'utf8');
   ok(/from '.*lib\/internalScope'/.test(src), `${name}: lib/internalScope를 import`);

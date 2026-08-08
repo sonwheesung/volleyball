@@ -1,13 +1,20 @@
 // /api/admin/telemetry — 시즌 종료 행동 텔레메트리 분석(§13.27). requireAdmin(fail-closed §13.15).
 //   원천: season_telemetry(가명 행동 카운트 jsonb — analyticsId만, userId FK 없음 → 실명 재식별 불가, 2026-08-05).
 //   반환: 전체 집계(agg) + 코호트별 롤업(analyticsId별 시즌 payload 추이 — 응답 키는 userId 유지하되 값은 가명 id).
+//
+//   ※ **내부(운영자) 계정 제외(§13.30) — 이 라우트는 반반이다.** 뭉뚱그리면 틀린다(2026-08-08 실제로 그렇게 적었다가 사용자가 오프시즌 화면에서 잡음):
+//     · **`campLedger*` 3종은 `wallet_ledger(reason='camp')` 파생 = userId가 있다 → 제외 가능·적용함.**
+//       오프시즌 탭의 주 지표(전지훈련 유저·횟수·소모 다이아)라 여기가 안 막히면 화면에 내부 계정이 그대로 보인다.
+//     · **season_telemetry 파생(agg 나머지·users 롤업)은 제외 불가.** analyticsId가 HMAC 가명이라 users와 조인 자체가 안 된다(§13.27의 의도된 대가).
+//       → 응답 `internal.notApplied=['telemetry']`로 고지하고, 화면이 각주로 띄운다.
 import { NextResponse } from 'next/server';
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { and, desc, eq, notInArray, sql } from 'drizzle-orm';
 import { db } from '../../../../db';
 import { seasonTelemetry, walletLedger } from '../../../../db/schema';
 import { isAdmin } from '../../../../lib/admin';
 import { PROJ_CODE } from '../../../../lib/proj';
 import { reportError } from '../../../../lib/observability';
+import { internalScope, internalMeta } from '../../../../lib/internalScope';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,6 +31,7 @@ const hasNum = (p: P, k: string): boolean => typeof p[k] === 'number' && Number.
 export async function GET(req: Request) {
   if (!isAdmin(req)) return NextResponse.json({ ok: false, reason: 'unauthorized' }, { status: 401 });
   try {
+    const scope = await internalScope(req); // §13.30 — campLedger(원장 파생)에만 적용. 텔레메트리 본체는 가명이라 불가.
     // 최신순으로 상한까지 조회. **users 조인 없음** — 텔레메트리는 가명(analyticsId)이라 실명 재식별 불가(개인정보 제거).
     const rows = await db
       .select({
@@ -83,7 +91,9 @@ export async function GET(req: Request) {
         diamonds: sql<number>`coalesce(-sum(${walletLedger.delta}), 0)::int`, // 지출은 음수 delta → 양수 소모량으로
       })
       .from(walletLedger)
-      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'camp')));
+      // §13.30 — 내부 계정 제외. notInArray는 빈 배열이면 SQL이 깨지므로 ids가 있을 때만 건다.
+      .where(and(eq(walletLedger.projCode, PROJ_CODE), eq(walletLedger.reason, 'camp'),
+        ...(scope.ids.size ? [notInArray(walletLedger.userId, [...scope.ids])] : [])));
 
     const agg = {
       reports: total,
@@ -135,7 +145,9 @@ export async function GET(req: Request) {
       .sort((a, b) => b.seasons.length - a.seasons.length)
       .slice(0, USERS_CAP);
 
-    return NextResponse.json({ ok: true, distinctUsers: byUser.size, agg, users: usersOut });
+    // §13.30 — campLedger*는 제외 적용됨. 나머지(텔레메트리 파생)는 가명이라 불가 → 화면 각주로 고지.
+    return NextResponse.json({ ok: true, distinctUsers: byUser.size, agg, users: usersOut,
+      internal: internalMeta(scope, ['telemetry']) });
   } catch (e) {
     reportError(e, 'admin/telemetry');
     return NextResponse.json({ ok: false, reason: 'error' }, { status: 500 });

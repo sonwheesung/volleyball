@@ -517,6 +517,7 @@ function PlayTab({ api }: { api: Api }) {
   if (!d) return <div className="oc-card"><div className="oc-empty">플레이 데이터를 불러오지 못했습니다 (서버·권한 확인).</div></div>;
   return (
     <>
+      <InternalNotice stats={d} />
       <div className="oc-card">
         <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
           시즌 종료 시 유저의 경기 운영 행동 <span className="oc-tag2">자체-롤업(season_telemetry) · 비식별</span> — 개입·타임아웃·교체·지휘모드. 결정론 격리(시드/리플레이 무관).
@@ -561,6 +562,7 @@ function OffseasonTab({ api }: { api: Api }) {
 
   return (
     <>
+      <InternalNotice stats={d} />
       <div className="oc-card">
         <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
           시즌 종료 시 유저가 남긴 오프시즌 운영 행동 <span className="oc-tag2">자체-롤업(season_telemetry) · 비식별</span> — 전지훈련·방출·제명·훈련 방향. 결정론 격리(시드/리플레이 무관).
@@ -621,6 +623,7 @@ function MatchTab({ api }: { api: Api }) {
   if (!d) return <div className="oc-card"><div className="oc-empty">경기 데이터를 불러오지 못했습니다 (서버·권한 확인).</div></div>;
   return (
     <>
+      <InternalNotice stats={d} />
       <div className="oc-card">
         <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
           시즌 종료 시점 내 팀 경기 성적 <span className="oc-tag2">자체-롤업(season_telemetry) · 비식별</span> — 최종순위·우승·정규시즌 전적. 결정론 격리(시드/리플레이 무관).
@@ -672,6 +675,7 @@ function PlayersTab({ api }: { api: Api }) {
   if (!d) return <div className="oc-card"><div className="oc-empty">선수 데이터를 불러오지 못했습니다 (서버·권한 확인).</div></div>;
   return (
     <>
+      <InternalNotice stats={d} />
       <div className="oc-card">
         <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
           시즌 종료 시점 내 팀 로스터 구성 <span className="oc-tag2">자체-롤업(season_telemetry) v2 · 비식별</span> — 집계 정수만(선수 이름·id 전송 0). 결정론 격리(시드/리플레이 무관).
@@ -1311,6 +1315,7 @@ function TelemetryPanel({ api }: { api: Api }) {
 
   return (
     <>
+      <InternalNotice stats={d} />
       <div className="oc-card">
         <div className="oc-mut" style={{ fontSize: 13, lineHeight: 1.6 }}>
           시즌 종료 시 유저가 남긴 운영 행동 요약 <span className="oc-tag2">자체-롤업 · 비식별</span> — 개입·방출·전지훈련·지휘모드. 결정론 격리(시드/리플레이 무관).
