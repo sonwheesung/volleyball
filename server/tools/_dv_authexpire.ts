@@ -108,6 +108,24 @@ async function run(mode: Mode, token: string | null, calls = 1): Promise<{ fires
   ok(/sessionExpired: false/.test(storeSrc), '로그인 성공 시 해제한다');
   ok(/getState\(\)\.session\) return/.test(storeSrc), '이미 로그아웃 상태면 no-op(중복 발화 무해화)');
 
+  console.log('\n[⑦] 이메일 수집 배선 (AUTH §3.5) — SQL NULL 함정 재발 방지');
+  const walletSrc = readFileSync(join(__dirname, '..', 'lib', 'wallet.ts'), 'utf8');
+  const setEmailRaw = walletSrc.match(/export async function setUserEmail[\s\S]*?\n\}/)?.[0] ?? '';
+  // ★ **주석을 걷어내고** 본다 — 이 함정을 설명하는 주석 자체에 `ne(users.email, email)` 문구가 들어 있어서,
+  //   원문 그대로 검사하면 **고쳐 놓고도 FAIL**이 난다(가드를 짜다 실제로 겪음 = 오라클 오탐).
+  const setEmail = setEmailRaw.replace(/\/\/.*$/gm, '');
+  ok(setEmailRaw.length > 0, 'setUserEmail 존재');
+  // ★ 2026-08-08 실제로 밟은 버그: `ne(users.email, email)` 로 "같으면 쓰지 않기"를 넣었더니
+  //   기존 값이 NULL 일 때 `NULL <> 'x'` = NULL 이라 WHERE 를 통과 못 해 **최초 채우기가 통째로 막혔다**.
+  //   정작 채워야 할 계정만 안 채워지는 정반대 결과였고, 화면엔 그냥 "안 됨"으로만 보였다.
+  ok(!/ne\(users\.email/.test(setEmail),
+    'setUserEmail 이 ne(users.email, …) 로 거르지 않음 — NULL 비교는 TRUE 가 아니라 NULL 이라 최초 채우기가 막힌다');
+  const authLoginSrc = readFileSync(join(__dirname, '..', 'app', 'api', 'auth', 'login', 'route.ts'), 'utf8');
+  ok((authLoginSrc.match(/setUserEmail\(/g) ?? []).length >= 2,
+    '로그인 라우트가 **신규·기존 두 분기 모두**에서 setUserEmail 호출(기존 계정 소급 채움 경로)');
+  ok(/email_verified === true/.test(readFileSync(join(__dirname, '..', 'lib', 'googleVerify.ts'), 'utf8')),
+    'googleVerify 는 email_verified=true 인 이메일만 취함');
+
   console.log('\n[⑥] 배선 — LoginScreen이 이유를 표시');
   const loginSrc = readFileSync(join(__dirname, '..', '..', 'components', 'LoginScreen.tsx'), 'utf8');
   ok(/sessionExpired/.test(loginSrc), 'sessionExpired를 구독한다');

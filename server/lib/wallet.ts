@@ -2,7 +2,7 @@
 // 불변식: balance == sum(ledger.delta) 항상. 절대 음수 안 됨(spend는 balance 게이트).
 // 동시성(H2): 서로 다른 동시 spend 2건이 각자 잔액 읽고 통과하는 초과지출을 막으려면 멱등키만으론 부족 —
 //   트랜잭션 안에서 users 행을 FOR UPDATE로 잠가 직렬화한다. 멱등키는 "같은 키 재시도"를 dedupe.
-import { and, eq, ne, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull, sql } from 'drizzle-orm';
 import { db } from '../db';
 import { users, walletLedger, projInfo } from '../db/schema';
 import { PROJ_CODE } from './proj';
@@ -239,7 +239,11 @@ export async function ensureUser(providerId: string, provider = 'dev', displayNa
  *  ⚠ 개인정보 — 탈퇴 시 파기 대상(§13.9 비필수). 처리방침 §1① 수집 항목에 명시돼 있어야 한다. */
 export async function setUserEmail(userId: string, email: string): Promise<void> {
   try {
-    await db.update(users).set({ email }).where(and(eq(users.id, userId), ne(users.email, email)));
+    // ⚠ **SQL NULL 함정(2026-08-08 실제로 밟음)**: 여기 원래 `ne(users.email, email)`로 "같으면 쓰지 않기" 최적화를 넣었는데,
+    //   기존 값이 NULL이면 `NULL <> 'x'` 가 TRUE가 아니라 **NULL**이라 WHERE를 통과하지 못한다 → UPDATE 0행.
+    //   즉 **최초 채우기가 통째로 막혔다**(정작 채워야 할 계정만 안 채워지는 정반대 결과).
+    //   → 조건을 뺀다. 로그인당 UPDATE 1건은 무시할 비용이고, 아끼려다 기능을 죽이는 게 훨씬 비싸다.
+    await db.update(users).set({ email }).where(eq(users.id, userId));
   } catch {
     /* 무음 — 로그인 비차단 */
   }
